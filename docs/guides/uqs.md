@@ -229,13 +229,18 @@ nothing.
 
 ## Listing things
 
-`list` (no argument) prints the kinds it knows about; `list KIND` lists every
-item of that kind - not just processes:
+Each noun lists its own records: `uqs target list`, `uqs runtime list`,
+`uqs job list` and `uqs job attachment list`. `uqs list KIND` lists the stack's
+own tables, and `uqs list` with no argument prints those kinds. Every list takes
+the same flags: `--json`, `--export FILE`, `--sort`, `--reverse` and `-i`.
 
 ```
 uqs list
 uqs list processes
+uqs job list
 ```
+
+The stack's tables (`uqs list KIND`):
 
 - `processes` - every process's `procname`/`proctype`/`port`/`startwithall`,
   resolved and with any `config set` overrides applied - the full set
@@ -251,20 +256,26 @@ uqs list processes
   env `config get`'s placeholder resolution and `torq.sh` itself use)
 - `dependencies` - each process's input tables and who publishes them, so you
   can see what a process needs before starting it on its own
-- `jobs` - every streaming job, normalizer and bounded worker, read from its own
-  q declaration: its kind, process, what it reads and writes (a backfill's
-  source, and its dataset and partition), whether it starts with the stack, and
-  whether it is still a `scaffolded` job `uqs job new` wrote or `written` work.
-  `uqs list jobs --sort state` puts the unfinished scaffolds together
-- `attachments` - every `uqs job attach` attachment: its job, publisher, stack
-  and host, its lifecycle `state` and persist mode, and - separately -
-  `publisher_state`: `running`, `stopped`, or `unreachable`/`unknown` when the
-  host or port cannot be checked. Read-only
 - `backfills` - every attached destination a `uqs job backfill --attach` has run
   into: attachment, destination id, worker, `state` (`running`, `completed`,
   ...), `outcome` and `queryable` - written rows are not queryable until the
   readers reload
   - the latest log, and what to do next. Read-only
+
+A noun's own records:
+
+- `uqs job list` - every streaming job, normalizer and bounded worker, read from
+  its own q declaration: its kind, process, what it reads and writes (a
+  backfill's source, and its dataset and partition), whether it starts with the
+  stack, and whether it is still a `scaffolded` job `uqs job new` wrote or
+  `written` work. `uqs job list --sort state` puts the unfinished scaffolds
+  together
+- `uqs job attachment list` - every `uqs job attach` attachment: its job,
+  publisher, stack and host, its lifecycle `state` and persist mode, and -
+  separately - `publisher_state`: `running`, `stopped`, or
+  `unreachable`/`unknown` when the host or port cannot be checked. Read-only
+- `uqs runtime list` - each runtime: whether it is here, and up
+- `uqs target list` - this machine's deploy targets
 
 `--sort` orders by any column the chosen kind produces, `--reverse` flips it:
 
@@ -347,12 +358,12 @@ tree's overlays on the starter pack. A new runtime is one entry there.
 ```
 uqs --runtime torq start      # or UQS_RUNTIME=torq uqs start
 uqs --runtime torq stop
-uqs list runtimes             # each one: processes, tables, layers, data, ports, what is up
+uqs runtime list             # each one: processes, tables, layers, data, ports, what is up
 uqs runtime diff uqf torq     # what one has that the other lacks
 uqs --runtime crypto runtime prepare   # install the bundles it declares
 ```
 
-`list runtimes` marks the default runtime and the one selected now, and counts
+`runtime list` marks the default runtime and the one selected now, and counts
 what each one's process.csv and schema would hold. It reads the declarations
 rather than starting anything. `runtime diff A B` lists, in each direction, the
 processes, tables, config layers and commands that one runtime has and the other
@@ -1347,6 +1358,15 @@ Noun first (#1727):
   | ------------------------------ | ------------------------------- |
   | `uqs remove output`            | `uqs clean`                     |
   | `uqs remove checkpoint WORKER` | `uqs job checkpoint remove JOB` |
+
+Every noun owns its list (#1728):
+
+  | old                    | new                       |
+  | ---------------------- | ------------------------- |
+  | `uqs list targets`     | `uqs target list`         |
+  | `uqs list runtimes`    | `uqs runtime list`        |
+  | `uqs list jobs`        | `uqs job list`            |
+  | `uqs list attachments` | `uqs job attachment list` |
 
 `--port` is now only ever one process's port (`query`, `schema`);
 `query --tunnel` keeps querying a target through an ssh tunnel from here, so

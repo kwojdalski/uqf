@@ -176,7 +176,6 @@ RULE4_ALLOWLIST = {
 #: Leaves named by a vocabulary verb used with another meaning: a name test
 #: cannot see the meaning, so each is listed until its rename removes the path.
 RULE4_MISUSED = {
-    "list": "#1728",  # one `list KIND` for eleven kinds; each noun owns its list
     "job runs status": "#1733",  # unfinished runs, a list - not a state
     "job runs migrate": "#1737",  # the ledger's upgrade, not `data migrate`'s HDB schema
 }
@@ -190,6 +189,42 @@ def test_rule4_every_leaf_is_named_by_a_vocabulary_verb():
 
 def test_rule4_a_misused_verb_is_listed_until_its_path_goes():
     _hold("rule 4 (misused verbs)", set(RULE4_MISUSED) & set(LEAVES), RULE4_MISUSED)
+
+
+#: Groups that add or remove things but list none, with why (#1728).
+UNLISTED = {
+    "job checkpoint": "a worker has one checkpoint, or none: there is nothing to list",
+}
+
+#: The output flags every `list` takes (#1728).
+LIST_FLAGS = ("--json", "--export", "--sort", "--reverse", "--interactive")
+
+
+def test_every_noun_that_adds_or_removes_a_thing_lists_it():
+    makers = {"add", "new", "remove"}
+    found = set()
+    for path in GROUPS:
+        verbs = {leaf.split()[-1] for leaf in LEAVES if leaf.rsplit(" ", 1)[0] == path}
+        if verbs & makers and "list" not in verbs:
+            found.add(path)
+    assert found == set(UNLISTED)
+
+
+def test_every_list_takes_the_same_output_flags():
+    lists = [c for p, c in LEAVES.items() if p.split()[-1] == "list"]
+    missing = {
+        c.path: [f for f in LIST_FLAGS if c.option(f) is None]
+        for c in lists
+        if any(c.option(f) is None for f in LIST_FLAGS)
+    }
+    assert set(missing) <= set(LIST_FLAGS_PENDING), missing
+
+
+#: Lists that do not take every output flag yet, and the issue that adds them.
+LIST_FLAGS_PENDING = {
+    "job runs list": "#1731",  # the run ledger's own table: no --json/--export/--sort
+    "job contract list": "#1731",  # --json only
+}
 
 
 def test_the_guide_lists_the_same_vocabulary():
@@ -360,6 +395,10 @@ KIND = {
     "query": REPORTS,
     "schema": REPORTS,
     "list": REPORTS,
+    "target list": REPORTS,
+    "runtime list": REPORTS,
+    "job list": REPORTS,
+    "job attachment list": REPORTS,
     "logs": REPORTS,
     "clean": CHANGES,
     "job checkpoint remove": CHANGES,

@@ -32,8 +32,7 @@ from uqs.paths import UqsError, repo_root
 target_app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
-    help="The servers `uqs --target NAME <command>` runs on: add, remove, check, shell. "
-    "`uqs list targets` lists them.",
+    help="The servers `uqs --target NAME <command>` runs on: add, list, remove, check, shell.",
 )
 app.add_typer(target_app, name="target")
 
@@ -53,7 +52,7 @@ def add(
     ] = None,
     label: Annotated[
         list[str] | None,
-        typer.Option("--label", help="key=value, shown by `uqs list targets`; repeatable"),
+        typer.Option("--label", help="key=value, shown by `uqs target list`; repeatable"),
     ] = None,
 ) -> None:
     """Declare a server: its ssh destination and deployment root, nothing else.

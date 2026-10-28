@@ -66,6 +66,7 @@ from uqs.cli import deploy  # noqa: F401
 from uqs.cli import deploy_component  # noqa: F401
 from uqs.cli import deploy_server  # noqa: F401
 from uqs.cli import target  # noqa: F401
+from uqs.cli import lists  # noqa: F401
 
 # isort: on
 import sys

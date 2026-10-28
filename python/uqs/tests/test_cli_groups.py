@@ -93,7 +93,12 @@ def test_job_help_keeps_authoring_apart_from_operations():
     panels = {
         name: getattr(cmd, "rich_help_panel", None) for name, cmd in _group("job").commands.items()
     }
-    assert {n for n, p in panels.items() if p == "Authoring"} == {"new", "remove", "install"}
+    assert {n for n, p in panels.items() if p == "Authoring"} == {
+        "new",
+        "list",
+        "remove",
+        "install",
+    }
     assert {n for n, p in panels.items() if p == "Operations"} == {
         "backfill",
         "preview",
@@ -104,6 +109,7 @@ def test_job_help_keeps_authoring_apart_from_operations():
         "receive",
         "contract",
         "checkpoint",
+        "attachment",
     }
 
 

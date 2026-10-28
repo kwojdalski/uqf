@@ -1,4 +1,4 @@
-"""What each runtime is, read off its declaration: `uqs list runtimes` and
+"""What each runtime is, read off its declaration: `uqs runtime list` and
 `uqs runtime diff` (#763).
 
 Every fact here is computed from what a runtime composes - its process.csv

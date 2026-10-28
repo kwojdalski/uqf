@@ -1,4 +1,4 @@
-"""`uqs list runtimes` and `uqs runtime diff` (#763). The guide's runtime
+"""`uqs runtime list` and `uqs runtime diff` (#763). The guide's runtime
 table is held to the declarations by test_runtime_declarations.py."""
 
 from __future__ import annotations
@@ -77,7 +77,7 @@ def test_an_unknown_runtime_is_refused_naming_the_real_ones():
 
 def test_both_commands_print_json(monkeypatch):
     monkeypatch.delenv("UQS_RUNTIME", raising=False)
-    listed = runner.invoke(cli.app, ["list", "runtimes", "--json"])
+    listed = runner.invoke(cli.app, ["runtime", "list", "--json"])
     assert listed.exit_code == 0, listed.output
     assert [r["runtime"] for r in json.loads(listed.stdout)] == list(RUNTIMES)
     diffed = runner.invoke(cli.app, ["runtime", "diff", "uqf", "torq", "--json"])

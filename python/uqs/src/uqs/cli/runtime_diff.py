@@ -1,6 +1,6 @@
 """`uqs runtime ...`: comparing the declared runtimes (#763).
 
-`uqs list runtimes` lists them; `uqs runtime diff A B` says what one has that
+`uqs runtime list` lists them; `uqs runtime diff A B` says what one has that
 the other lacks - processes, tables, config layers and commands - read off
 both declarations rather than off a table someone keeps by hand.
 """
@@ -22,7 +22,7 @@ runtime_app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
     help="Compare the runtimes (`uqs runtime diff uqf torq`) and install the bundles one "
-    "declares (`uqs runtime prepare`). `uqs list runtimes` lists them.",
+    "declares (`uqs runtime prepare`); `uqs runtime list` lists them.",
 )
 app.add_typer(runtime_app, name="runtime")
 

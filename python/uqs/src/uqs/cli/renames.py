@@ -31,7 +31,7 @@ RENAMED_GLOBAL_FLAGS = frozenset({"--debug"})
 BASE_PORT = {"--port": "--base-port"}
 
 
-def _warn_renamed(old: str, new: str) -> None:
+def warn_renamed(old: str, new: str) -> None:
     log.warning("`{}` is renamed `{}`; the old spelling goes in the next release", old, new)
 
 
@@ -79,7 +79,7 @@ def _rewrite_renamed(
 def _warn_once(warned: set[str], old: str, new: str) -> None:
     if old not in warned:
         warned.add(old)
-        _warn_renamed(old, new)
+        warn_renamed(old, new)
 
 
 def renamed(renames: dict[str, str]) -> type[TyperCommand]:
@@ -108,7 +108,7 @@ def alias_command(group: typer.Typer, old: str, new: str, fn: Callable, **kwargs
 
     @functools.wraps(fn)
     def _alias(*args, **kw):
-        _warn_renamed(old, new)
+        warn_renamed(old, new)
         return fn(*args, **kw)
 
     group.command(old, hidden=True, **kwargs)(_alias)
