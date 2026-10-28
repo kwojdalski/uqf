@@ -221,3 +221,10 @@ def test_the_path_variables_are_the_ones_the_torq_adapter_allows():
 def test_the_trees_own_file_is_a_header_and_nothing_else():
     """Demo sources stay on their fixtures until an operator configures one."""
     assert (UQF_ROOT / "scripts/torqconfig/sources.csv").read_text() == HEADER
+
+
+def test_a_dry_run_stub_says_what_it_would_add_and_writes_nothing(tmp_path):
+    """`uqs config sources stub --dry-run` (#1732)."""
+    app, _, _ = _layers(tmp_path)
+    note = ss.add_stub(paths_for_root(tmp_path, "uqf"), "a", "odbc", TRANSPORTS, dry_run=True)
+    assert note.startswith("would add") and not app.exists()

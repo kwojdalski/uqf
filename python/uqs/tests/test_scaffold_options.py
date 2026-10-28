@@ -17,6 +17,7 @@ import re
 from pathlib import Path
 
 import pytest
+import rename_support
 from typer.testing import CliRunner
 
 from uqs import cli
@@ -177,7 +178,7 @@ def test_a_source_given_its_raw_input_declares_it_apart_from_its_output():
     assert "raw:enlist[`EVENTS]!enlist ([] CREATED_AT:`timestamp$(); PAYLOAD:())" in body
     define = body.split(".qetl.source.define", 1)[1]
     assert "`credential_example`raw!" in define and ";credential_example;raw)" in define
-    assert "columns:`time`px" in body, "the output contract is still --columns"
+    assert "columns:`time`px" in body, "the output contract is still --schema"
     assert "not implemented" in body, "and the mapping between them is the author's query"
 
 
@@ -220,7 +221,7 @@ def _refusals(monkeypatch, *argv: str) -> list[str]:
 def test_raw_table_and_raw_columns_come_together(monkeypatch):
     refused = _refusals(
         monkeypatch,
-        *("fx", "--kind", "backfill", "--dataset", "fx_rates", "--columns", "px:float"),
+        *("fx", "--kind", "backfill", "--dataset", "fx_rates", "--schema", "px:float"),
         *("--raw-table", "EVENTS"),
     )
     assert any("--raw-table and --raw-columns go together" in r for r in refused), refused
@@ -278,14 +279,14 @@ def test_a_scaffolded_source_takes_its_words_from_the_surface(name):
                 "backfill",
                 "--dataset",
                 "x",
-                "--columns",
+                "--schema",
                 "a:float",
                 "--start-with-all",
             ],
             "standing jobs, not a backfill",
         ),
         (
-            ["x", "--publishes", "x", "--columns", "a:float", "--transport", "odbc"],
+            ["x", "--publishes", "x", "--schema", "a:float", "--transport", "odbc"],
             "--transport does not apply to --kind streaming",
         ),
     ],
@@ -317,16 +318,41 @@ def test_without_q_the_contract_surface_step_is_named(tmp_path, monkeypatch):
 
 
 def test_a_backfill_into_a_vendored_table_does_not_redefine_it():
-    """`quote` is the starter pack's table: --columns shape only the new source,
+    """`quote` is the starter pack's table: --schema shape only the new source,
     and the plant gets no second, source-shaped `quote` definition (#1602).
     A derivation, since a passthrough between the two shapes is refused (#1593)."""
     result = CliRunner().invoke(
         cli.app,
         ["job", "new", "qt", "--kind", "backfill", "--dataset", "quote",
-         "--columns", "sym:symbol, bid:float", "--transform", "derive", "--dry-run"],
+         "--schema", "sym:symbol, bid:float", "--transform", "derive", "--dry-run"],
     )  # fmt: skip
     assert result.exit_code == 0, result.output
     assert "create src/etl/sources/qt.q" in result.output
     assert "plant_tables.q" not in result.output
     assert "uqs_catalog.q" not in result.output
     assert "test_stack_tables.q" not in result.output
+
+
+@pytest.mark.parametrize(
+    ("argv", "given", "renames"),
+    [
+        (["--schema", "a:float"], ("a:float", None), []),
+        (["--schema-from", "quote"], (None, "quote"), []),
+        (["--columns", "a:float"], ("a:float", None), [("--columns", "--schema")]),
+        (["--columns-from", "quote"], (None, "quote"), [("--columns-from", "--schema-from")]),
+    ],
+)
+def test_columns_is_the_old_spelling_of_schema(monkeypatch, argv, given, renames):
+    """#1739: --columns is which columns of a table to show (`summary`), so a
+    new table's shape is --schema; the old spellings still work, and say so."""
+    said = rename_support.said(monkeypatch)
+    seen = []
+
+    def resolve_shape(columns, columns_from, definitions):
+        seen.append((columns, columns_from))
+        raise UqsError("stop here")
+
+    monkeypatch.setattr(create.columns_mod, "resolve_shape", resolve_shape)
+    _refusals(monkeypatch, "x", "--publishes", "x", *argv)
+    assert seen == [given]
+    assert said == [rename_support.renamed(*r) for r in renames]

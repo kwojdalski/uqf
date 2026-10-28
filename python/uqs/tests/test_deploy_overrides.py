@@ -1,8 +1,8 @@
 """Named, recorded policy overrides for `uqs deploy push` (#1557), with no server.
 
 Three requirements, and an override for each one: expected_sha256 with
---accept-digest, q_version with --accept-q-version, and a .sha256 beside a
-local artifact with --allow-unpinned. Each override needs a reason. Each is
+--override accept-digest, q_version with --override accept-q-version, and a .sha256 beside a
+local artifact with --override allow-unpinned. Each override needs a reason. Each is
 refused when there is nothing for it to relax. Each relaxes its own requirement
 and nothing else.
 """
@@ -64,26 +64,42 @@ def _report(out: str) -> dict:
 
 
 @pytest.mark.parametrize(
-    ("flag", "needs"),
+    ("name", "needs"),
     [
-        ("--accept-digest", ["--expected-sha256", OTHER]),
-        ("--accept-q-version", ["--q-version", ">=4.1"]),
-        ("--allow-unpinned", []),
+        ("accept-digest", ["--expected-sha256", OTHER]),
+        ("accept-q-version", ["--q-version", ">=4.1"]),
+        ("allow-unpinned", []),
     ],
 )
-def test_each_override_needs_a_reason(flag, needs):
-    with pytest.raises(DeployError, match=f"{flag} needs a reason"):
-        parse_args(_args(Path("a.tar.gz"), *needs, flag, "  "))
-    cfg = parse_args(_args(Path("a.tar.gz"), *needs, flag, " because "))
-    assert getattr(cfg, flag.removeprefix("--").replace("-", "_")) == "because"
+def test_each_override_needs_a_reason(name, needs):
+    with pytest.raises(DeployError, match=f"--override {name} needs --reason"):
+        parse_args(_args(Path("a.tar.gz"), *needs, "--override", name, "--reason", "  "))
+    cfg = parse_args(_args(Path("a.tar.gz"), *needs, "--override", name, "--reason", " because "))
+    assert getattr(cfg, name.replace("-", "_")) == "because"
+
+
+def test_the_old_spelling_still_gives_the_override_and_its_reason():
+    """`--accept-digest REASON` is `--override accept-digest --reason REASON`
+    for one release (#1732)."""
+    cfg = parse_args(_args(Path("a.tar.gz"), "--expected-sha256", OTHER, "--accept-digest", "ok"))
+    assert cfg.accept_digest == "ok"
 
 
 @pytest.mark.parametrize(
     ("args", "said"),
     [
-        (["--accept-digest", "r"], r"--accept-digest relaxes expected_sha256 \(or torq_runtime"),
-        (["--accept-q-version", "r"], "--accept-q-version relaxes q_version, and this"),
-        (["--expected-sha256", OTHER, "--allow-unpinned", "r"], "already pins the artifact"),
+        (
+            ["--override", "accept-digest", "--reason", "r"],
+            r"--override accept-digest relaxes expected_sha256 \(or torq_runtime",
+        ),
+        (
+            ["--override", "accept-q-version", "--reason", "r"],
+            "--override accept-q-version relaxes q_version, and this",
+        ),
+        (
+            ["--expected-sha256", OTHER, "--override", "allow-unpinned", "--reason", "r"],
+            "already pins the artifact",
+        ),
     ],
 )
 def test_an_override_with_nothing_to_relax_is_refused(args, said):
@@ -142,16 +158,18 @@ def test_a_target_sets_the_requirements_and_the_flag_relaxes_one(tmp_path, monke
     (cfg,) = targets.configs("a", "x", {"accept_digest": "rebuilt"}, False, tmp_path)
     assert (cfg.expected_sha256, cfg.q_version, cfg.accept_digest) == (OTHER, ">=4.1", "rebuilt")
     assert cfg.accept_q_version is None
-    assert cfg.sources["accept_digest"] == "--accept-digest"
+    assert cfg.sources["accept_digest"] == "--override accept-digest"
 
 
-# --- --accept-digest ---------------------------------------------------------------
+# --- --override accept-digest ---------------------------------------------------------------
 
 
 def test_a_digest_other_than_expected_is_refused_before_the_server(tmp_path):
     remote = FakeRemote()
     path = _artifact(tmp_path)
-    with pytest.raises(DeployError, match="not the expected_sha256.*--accept-digest") as err:
+    with pytest.raises(
+        DeployError, match="not the expected_sha256.*--override accept-digest"
+    ) as err:
         driver.deploy(parse_args(_args(path, "--expected-sha256", OTHER)), remote)
     assert err.value.stage == "artifact" and remote.scripts == []
 
@@ -159,7 +177,9 @@ def test_a_digest_other_than_expected_is_refused_before_the_server(tmp_path):
 def test_an_accepted_digest_records_the_actual_one_and_the_server_checks_it(tmp_path):
     path = _artifact(tmp_path)
     actual = _digest(path)
-    code, remote, out = _deploy(path, "--expected-sha256", OTHER, "--accept-digest", "rebuilt")
+    code, remote, out = _deploy(
+        path, "--expected-sha256", OTHER, "--override", "accept-digest", "--reason", "rebuilt"
+    )
     report = _report(out)
     assert code == 0 and report["status"] == "deployed", report
     (e,) = report["exceptions"]
@@ -178,7 +198,13 @@ def test_an_accepted_digest_records_the_actual_one_and_the_server_checks_it(tmp_
 def test_a_digest_that_matches_records_the_override_as_not_needed(tmp_path):
     path = _artifact(tmp_path)
     code, _, out = _deploy(
-        path, "--expected-sha256", _digest(path), "--accept-digest", "just in case"
+        path,
+        "--expected-sha256",
+        _digest(path),
+        "--override",
+        "accept-digest",
+        "--reason",
+        "just in case",
     )
     (e,) = _report(out)["exceptions"]
     assert code == 0 and e["override"] == "accept-digest" and e["applied"] is False
@@ -188,15 +214,19 @@ def test_accepting_a_digest_never_excuses_the_sha256_beside_it(tmp_path):
     path = _artifact(tmp_path)
     Path(f"{path}.sha256").write_text("0" * 64 + f"  {path.name}\n")
     with pytest.raises(DeployError, match="does not match"):
-        _deploy(path, "--expected-sha256", OTHER, "--accept-digest", "rebuilt")
+        _deploy(
+            path, "--expected-sha256", OTHER, "--override", "accept-digest", "--reason", "rebuilt"
+        )
 
 
-# --- --allow-unpinned ----------------------------------------------------------------
+# --- --override allow-unpinned ----------------------------------------------------------------
 
 
 def test_a_local_artifact_with_no_sha256_beside_it_is_refused(tmp_path):
     remote = FakeRemote()
-    with pytest.raises(DeployError, match="no .*sha256 beside it.*--allow-unpinned") as err:
+    with pytest.raises(
+        DeployError, match="no .*sha256 beside it.*--override allow-unpinned"
+    ) as err:
         driver.deploy(parse_args(_args(_unpinned(tmp_path))), remote)
     assert err.value.stage == "artifact" and remote.scripts == []
 
@@ -204,7 +234,9 @@ def test_a_local_artifact_with_no_sha256_beside_it_is_refused(tmp_path):
 def test_an_unpinned_artifact_deploys_with_allow_unpinned_and_its_digest_is_recorded(tmp_path):
     path = _unpinned(tmp_path)
     actual = artifact.read_artifact(path).sha256
-    code, remote, out = _deploy(path, "--allow-unpinned", "a development build")
+    code, remote, out = _deploy(
+        path, "--override", "allow-unpinned", "--reason", "a development build"
+    )
     (e,) = _report(out)["exceptions"]
     assert code == 0 and (e["override"], e["applied"]) == ("allow-unpinned", True)
     assert actual in e["observed"]
@@ -218,7 +250,7 @@ def test_an_expected_sha256_pins_an_artifact_with_no_sha256_beside_it(tmp_path):
     assert code == 0 and _report(out)["exceptions"] == []
 
 
-# --- --accept-q-version --------------------------------------------------------------
+# --- --override accept-q-version --------------------------------------------------------------
 
 
 def test_a_q_below_q_version_is_refused_in_preflight(tmp_path):
@@ -229,7 +261,13 @@ def test_a_q_below_q_version_is_refused_in_preflight(tmp_path):
 
 def test_an_accepted_q_version_records_the_version_found(tmp_path):
     code, _, out = _deploy(
-        _artifact(tmp_path), "--q-version", ">=5.1", "--accept-q-version", "site runs 5.0"
+        _artifact(tmp_path),
+        "--q-version",
+        ">=5.1",
+        "--override",
+        "accept-q-version",
+        "--reason",
+        "site runs 5.0",
     )
     report = _report(out)
     assert code == 0 and report["qversion"] == "5.0"
@@ -253,15 +291,15 @@ def test_the_overrides_are_independent(tmp_path):
     path = _artifact(tmp_path)
     with pytest.raises(DeployError, match="not the expected_sha256"):
         _deploy(path, "--expected-sha256", OTHER, "--q-version", ">=5.1",
-                "--accept-q-version", "site runs 5.0")  # fmt: skip
+                "--override", "accept-q-version", "--reason", "site runs 5.0")  # fmt: skip
     with pytest.raises(DeployError, match="q_version requires >=5.1"):
         _deploy(path, "--expected-sha256", OTHER, "--q-version", ">=5.1",
-                "--accept-digest", "rebuilt")  # fmt: skip
+                "--override", "accept-digest", "--reason", "rebuilt")  # fmt: skip
 
 
 # --- what no override bypasses ------------------------------------------------------
 
-EVERY_OVERRIDE = ("--q-version", ">=5.1", "--accept-q-version", "r")
+EVERY_OVERRIDE = ("--q-version", ">=5.1", "--override", "accept-q-version", "--reason", "r")
 
 
 def _repacked(path: Path, extra: str) -> Path:
@@ -285,9 +323,10 @@ def _repacked(path: Path, extra: str) -> Path:
 def test_an_unsafe_member_is_refused_under_every_override(tmp_path, extra, said, pin):
     path = _repacked(_artifact(tmp_path), extra)
     pins = (
-        ("--allow-unpinned", "r") if pin == "unpinned" else ("--expected-sha256", OTHER,
-                                                              "--accept-digest", "r")
-    )  # fmt: skip
+        ("--override", "allow-unpinned", "--reason", "r")
+        if pin == "unpinned"
+        else ("--expected-sha256", OTHER, "--override", "accept-digest", "--reason", "r")
+    )
     remote = FakeRemote()
     with pytest.raises(DeployError, match=said):
         driver.deploy(parse_args(_args(path, *pins, *EVERY_OVERRIDE)), remote)
@@ -304,7 +343,9 @@ def test_an_unsafe_member_is_refused_under_every_override(tmp_path, extra, said,
 )
 def test_the_platform_is_checked_under_every_override(tmp_path, facts, said):
     remote = FakeRemote({"uv python find": _done(facts + "qversion=5.0\ndata=present\n")})
-    args = _args(_unpinned(tmp_path), "--allow-unpinned", "r", *EVERY_OVERRIDE)
+    args = _args(
+        _unpinned(tmp_path), "--override", "allow-unpinned", "--reason", "r", *EVERY_OVERRIDE
+    )
     with pytest.raises(DeployError, match=said):
         driver.deploy(parse_args(args), remote)
 
@@ -317,7 +358,7 @@ def test_the_platform_is_checked_under_every_override(tmp_path, facts, said):
     ],
 )
 def test_smoke_and_verify_run_under_every_override(tmp_path, rules, stage):
-    args = ("--allow-unpinned", "r", *EVERY_OVERRIDE)
+    args = ("--override", "allow-unpinned", "--reason", "r", *EVERY_OVERRIDE)
     code, remote, out = _deploy(_unpinned(tmp_path), *args, rules=rules)
     report = _report(out)
     assert code == 1 and (report["status"], report["stage"]) == ("failed", stage)
@@ -331,15 +372,18 @@ def test_smoke_and_verify_run_under_every_override(tmp_path, rules, stage):
 def test_the_plan_opens_with_the_exceptions(tmp_path):
     path = _artifact(tmp_path)
     _, _, out = _deploy(
-        path, "--dry-run", "--expected-sha256", OTHER, "--accept-digest", "rebuilt",
-        "--q-version", ">=5.1", "--accept-q-version", "site runs 5.0",
+        path, "--dry-run", "--expected-sha256", OTHER, "--q-version", ">=5.1",
+        "--override", "accept-digest", "--override", "accept-q-version",
+        "--reason", "rebuilt; site runs 5.0",
     )  # fmt: skip
     lines = out.splitlines()
     assert lines[0] == "EXCEPTIONS - policy relaxed for this deployment:"
     block = "\n".join(lines[: lines.index("")])
-    assert f"--accept-digest: sha256 {OTHER} required, sha256 {_digest(path)} found" in block
+    assert (
+        f"--override accept-digest: sha256 {OTHER} required, sha256 {_digest(path)} found" in block
+    )
     assert "server still checks the bytes" in block and "reason: rebuilt" in block
-    assert "--accept-q-version: >=5.1 required, 5.0 found; reason: site runs 5.0" in block
+    assert "--override accept-q-version: >=5.1 required, 5.0 found; reason: rebuilt; site" in block
 
 
 def test_a_plan_with_no_override_has_no_exceptions_block(tmp_path):
@@ -349,9 +393,17 @@ def test_a_plan_with_no_override_has_no_exceptions_block(tmp_path):
 
 def test_the_converted_release_override_is_in_the_plans_exceptions(tmp_path):
     path = _artifact(tmp_path, q="4.0")
-    _, _, out = _deploy(path, "--dry-run", "--accept-converted-release", "smoke-tested", q="3.6")
+    _, _, out = _deploy(
+        path,
+        "--dry-run",
+        "--override",
+        "accept-converted-release",
+        "--reason",
+        "smoke-tested",
+        q="3.6",
+    )
     assert out.startswith("EXCEPTIONS")
-    assert "--accept-converted-release: recorded in the release once its smoke test" in out
+    assert "--override accept-converted-release: recorded in the release once its smoke test" in out
 
 
 def test_the_history_records_the_exceptions(tmp_path, monkeypatch):
@@ -360,7 +412,7 @@ def test_the_history_records_the_exceptions(tmp_path, monkeypatch):
     path = _unpinned(tmp_path)
     remote = FakeRemote({**_HEALTHY, "uv python find": _done(SERVER + "data=present\n"),
                          "uqs deploy verify --profile": _verified(True)})  # fmt: skip
-    cfg = parse_args(_args(path, "--allow-unpinned", "dev build"))
+    cfg = parse_args(_args(path, "--override", "allow-unpinned", "--reason", "dev build"))
     code = driver.deploy(
         cfg, remote, out=io.StringIO(), on_report=lambda r: history.record(tmp_path, cfg, r)
     )

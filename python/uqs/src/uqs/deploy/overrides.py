@@ -6,9 +6,11 @@ A target can require an artifact digest (`expected_sha256`) and a q version
 have its `.sha256` beside it. Each requirement has one override that relaxes
 it and nothing else:
 
-    --accept-digest REASON      an artifact whose sha256 is not expected_sha256
-    --accept-q-version REASON   a server q outside q_version
-    --allow-unpinned REASON     an artifact with no .sha256 and no expected_sha256
+    --override accept-digest      an artifact whose sha256 is not expected_sha256
+    --override accept-q-version   a server q outside q_version
+    --override allow-unpinned     an artifact with no .sha256 and no expected_sha256
+
+each with `--reason TEXT` (#1732).
 
 None of them bypasses anything else. The archive's members are still checked
 against its manifest, the platform still has to match, and smoke and verify
@@ -19,7 +21,7 @@ Accepting a digest does not mean trusting the artifact.
 Each override requested lands in one list, `exceptions`. The plan shows it at
 the top, the release's report keeps it, and so does this machine's deploy
 history. `applied` says whether the override was needed: false when the
-requirement was met anyway. --accept-converted-release (#936) is recorded in
+requirement was met anyway. --override accept-converted-release (#936) is recorded in
 the same list.
 """
 
@@ -32,6 +34,15 @@ ACCEPT_DIGEST = "accept-digest"
 ACCEPT_Q_VERSION = "accept-q-version"
 ALLOW_UNPINNED = "allow-unpinned"
 ACCEPT_CONVERTED = "accept-converted-release"
+
+#: Each override, as `--override NAME` gives it, and the requirement it relaxes.
+SKIPS = {
+    ACCEPT_DIGEST: "deploy an artifact whose sha256 is not expected_sha256",
+    ACCEPT_Q_VERSION: "deploy on a server q outside q_version; the version found is recorded",
+    ALLOW_UNPINNED: "deploy a local artifact with no .sha256 beside it and no expected_sha256",
+    ACCEPT_CONVERTED: "start a release converted for an older kdb+ on a q its version check "
+    "cannot confirm, once its smoke test passes there",
+}
 
 
 def _entry(override: str, reason: str, requirement: str, observed: str, applied: bool) -> dict:
@@ -69,8 +80,8 @@ def _pinned(cfg: Config, name: str, sha256: str, pinned: bool, component: str) -
         if not matched and cfg.accept_digest is None:
             raise DeployError(
                 "artifact",
-                f"{name} is {sha256}, not the {key} {expected} - pass --accept-digest REASON "
-                "to deploy it anyway",
+                f"{name} is {sha256}, not the {key} {expected} - pass --override "
+                "accept-digest --reason REASON to deploy it anyway",
             )
         if cfg.accept_digest is not None:
             out.append(
@@ -87,7 +98,7 @@ def _pinned(cfg: Config, name: str, sha256: str, pinned: bool, component: str) -
             raise DeployError(
                 "artifact",
                 f"{name} has no {name}.sha256 beside it and no {key} pins it - pass "
-                "--allow-unpinned REASON to deploy it anyway",
+                "--override allow-unpinned --reason REASON to deploy it anyway",
             )
         if cfg.allow_unpinned is not None:
             observed = f"{whose}sha256 {sha256}, " + ("pinned" if pinned else "no .sha256")
@@ -105,7 +116,7 @@ def _pinned(cfg: Config, name: str, sha256: str, pinned: bool, component: str) -
 
 def for_q(cfg: Config, observed: str) -> list[dict]:
     """The q_version policy for the q preflight ran (`observed`, its .z.K):
-    refused unless --accept-q-version relaxes it, else the exceptions requested.
+    refused unless --override accept-q-version relaxes it, else the exceptions requested.
     A version preflight could not read does not meet any requirement."""
     if cfg.q_version is None:
         return []
@@ -115,7 +126,7 @@ def for_q(cfg: Config, observed: str) -> list[dict]:
         raise DeployError(
             "preflight",
             f"the server's q is {seen}, and q_version requires {cfg.q_version} - pass "
-            "--accept-q-version REASON to deploy on it anyway",
+            "--override accept-q-version --reason REASON to deploy on it anyway",
         )
     if cfg.accept_q_version is None:
         return []
@@ -123,7 +134,7 @@ def for_q(cfg: Config, observed: str) -> list[dict]:
 
 
 def converted(record: dict) -> dict:
-    """--accept-converted-release's record (deploy/converted_override.py), as one
+    """--override accept-converted-release's record (deploy/converted_override.py), as one
     exception."""
     return {
         "override": ACCEPT_CONVERTED,
@@ -144,12 +155,12 @@ def plan_lines(cfg: Config, exceptions: list[dict]) -> list[str]:
             if e["applied"]
             else f"not needed, {e['observed']} found"
         )
-        lines.append(f"  --{e['override']}: {what}; reason: {e['reason']}")
+        lines.append(f"  --override {e['override']}: {what}; reason: {e['reason']}")
         if e["override"] == ACCEPT_DIGEST and e["applied"]:
             lines.append("    the server still checks the bytes it receives against that sha256")
     if cfg.accept_converted_release is not None:
         lines.append(
-            f"  --{ACCEPT_CONVERTED}: recorded in the release once its smoke test passes; "
+            f"  --override {ACCEPT_CONVERTED}: recorded in the release once its smoke test passes; "
             f"reason: {cfg.accept_converted_release}"
         )
     if not lines:

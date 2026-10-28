@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import pytest
 
-from uqs.deploy import history, plan, targets
+from uqs.deploy import history, plan, target_changes, targets
 from uqs.deploy.config import DeployError, make_config
 
 LAYERED = """
@@ -171,10 +171,10 @@ def test_list_targets_shows_the_merged_target_and_its_environment(root):
 
 
 def test_target_add_and_remove_keep_the_shared_layers(root):
-    targets.append(root, "gamma", {"host": "deploy@gamma", "dest": "/srv/g"})
+    target_changes.add(root, "gamma", {"host": "deploy@gamma", "dest": "/srv/g"}, "test")
     (cfg,) = targets.configs("gamma", "x", {}, False, root)
     assert (cfg.profile, cfg.remote_user) == ("essential", "svc")
-    targets.remove(root, "alpha")
+    target_changes.remove(root, "alpha", "test")
     assert sorted(targets.read(root)) == ["beta", "gamma"]
     assert targets.configs("beta", "x", {}, False, root)[0].profile == "essential"
 
@@ -182,5 +182,5 @@ def test_target_add_and_remove_keep_the_shared_layers(root):
 def test_a_file_with_only_shared_layers_takes_its_first_target(root):
     _write(root, '[defaults]\nprofile = "p"\n')
     assert targets.read(root) == {}
-    targets.append(root, "a", {"host": "h", "dest": "/d"})
+    target_changes.add(root, "a", {"host": "h", "dest": "/d"}, "test")
     assert targets.configs("a", "x", {}, False, root)[0].profile == "p"

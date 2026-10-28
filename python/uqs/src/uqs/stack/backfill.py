@@ -70,7 +70,7 @@ def resolve_version(worker: str, version: str | None) -> str:
     if declared.get(worker):
         return str(declared[worker])
     raise UqsError(
-        f"{worker} declares no default source_version - pass --version to say which "
+        f"{worker} declares no default source_version - pass --source-version to say which "
         "release of the source this run records coverage under"
     )
 
@@ -218,8 +218,9 @@ def _live_holder(lock: Path) -> str | None:
     return f"pid {pid}" if pid_alive(int(pid)) else None
 
 
-def clear_checkpoint(paths: UqsPaths, worker: str) -> Path | None:
+def clear_checkpoint(paths: UqsPaths, worker: str, dry_run: bool = False) -> Path | None:
     """Delete `worker`'s checkpoint, returning its path, or None if it had none.
+    With `dry_run`, every check runs and nothing is deleted.
 
     Refused while a run of `worker` may still be live: that run would go on
     writing the cursor it holds in memory, and the delete would not have
@@ -235,8 +236,8 @@ def clear_checkpoint(paths: UqsPaths, worker: str) -> Path | None:
             "Let the run finish, or stop it, then clear the checkpoint."
         )
     path = checkpoint_path(paths, worker)
-    if not path.is_file():
-        return None
+    if not path.is_file() or dry_run:
+        return path if path.is_file() else None
     # The previous generation goes too (`durable_remove`): left behind, it is
     # what the next unreadable checkpoint would fall back to - a cursor from
     # before the clear.

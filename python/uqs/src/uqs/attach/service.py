@@ -57,6 +57,7 @@ def create(
     remote_schema_file: bool = False,
     storage: Storage | None = None,
     runtime: str = "",
+    ssh: str = "",
 ) -> Attachment:
     """An attachment from explicit identity. `stack_id` has no default: it is
     the answer to "which stack", and the incident that produced this workflow
@@ -82,7 +83,7 @@ def create(
     return Attachment(
         name=name,
         stack=Stack(
-            stack_id, host, d_host, d_port, tickerplant, tuple(consumers), user, password_env
+            stack_id, host, d_host, d_port, tickerplant, tuple(consumers), user, password_env, ssh
         ),
         publisher=Publisher(spec.job, spec.procname, runtime, socket.gethostname().lower()),
         tables=spec.tables,

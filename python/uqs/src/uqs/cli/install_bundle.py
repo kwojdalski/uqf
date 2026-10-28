@@ -55,7 +55,7 @@ def install(
     runtime: str | None = None,
 ) -> None:
     if mode is Mode.SYMLINK:
-        _die(bundles.BundleError("a bundle installs as copies only - drop --mode symlink"))
+        _die(bundles.BundleError("a bundle installs as copies only - drop --link"))
         return
     try:
         plan = bundles.plan(bundles.read_bundle(folder), root)
@@ -98,5 +98,5 @@ def install(
     if streaming:
         console.print(f"Start: [green]uqs start {' '.join(streaming)}[/]")
     for worker in workers:
-        run = f"uqs job backfill {worker} --version <v> --from <date> --to <date>"
+        run = f"uqs job backfill {worker} --source-version <v> --from <date> --to <date>"
         console.print(f"Installed, not run: [green]{run}[/]")

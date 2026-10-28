@@ -22,6 +22,7 @@ from uqs.cli.create_kinds import misplaced
 from uqs.cli.create_plant import plant_definitions, plant_tables
 from uqs.cli.create_reaction import scaffold_reaction
 from uqs.cli.regenerate import write_plan
+from uqs.cli.renames import renamed
 from uqs.cli.shared import (
     JOB_AUTHORING_PANEL,
     _die,
@@ -40,7 +41,11 @@ from uqs.scaffold import horizon as horizon_scaffold
 app.add_typer(job_app, name="job")
 
 
-@job_app.command("new", rich_help_panel=JOB_AUTHORING_PANEL)
+@job_app.command(
+    "new",
+    rich_help_panel=JOB_AUTHORING_PANEL,
+    cls=renamed({"--columns": "--schema", "--columns-from": "--schema-from"}),
+)
 def new_job(
     name: Annotated[
         str, typer.Argument(metavar="JOB", help="Job name: a q namespace and a filename")
@@ -92,13 +97,13 @@ def new_job(
     ] = None,
     columns: Annotated[
         str | None,
-        typer.Option("--columns", help="Its table's columns: 'sym:symbol, venue:g#symbol'"),
+        typer.Option("--schema", help="Its table's schema: 'sym:symbol, venue:g#symbol'"),
     ] = None,
     columns_from: Annotated[
         str | None,
         typer.Option(
-            "--columns-from",
-            help="Copy an existing plant table's columns instead of --columns",
+            "--schema-from",
+            help="Copy an existing plant table's schema instead of --schema",
             autocompletion=completion.plant_tables,
         ),
     ] = None,
@@ -200,10 +205,7 @@ def new_job(
         ),
     ] = None,
     writes: Annotated[
-        str | None,
-        typer.Option(
-            "--writes", help="Comma-separated tables the reaction writes (with --triggered-by)"
-        ),
+        str | None, typer.Option("--writes", help="Tables the reaction writes, comma-separated")
     ] = None,
     bundle: Annotated[
         Path | None,
@@ -214,7 +216,7 @@ def new_job(
         ),
     ] = None,
     dry_run: Annotated[
-        bool, typer.Option("--dry-run", help="Print what would be written, write nothing")
+        bool, typer.Option("--dry-run", "-n", help="Print what would be written, write nothing")
     ] = False,
 ) -> None:
     """Scaffold a new ETL job: its q files, its table, and the lists that register them.
@@ -228,23 +230,22 @@ def new_job(
     Streaming, reading two tables and writing one:
 
         uqs job new markout2 --subscribe-to trades,quote \\
-            --publishes my_metric --columns "sym:symbol, px:float"
+            --publishes my_metric --schema "sym:symbol, px:float"
 
-    Bounded worker, with its source and transform - NAME is the base, so this
-    writes worker fx_rates_backfill over source fx_rates (a NAME already ending
-    in _backfill is refused):
+    Bounded worker, with its source and transform - NAME is the base, so this writes worker
+    fx_rates_backfill over source fx_rates (a NAME already ending in _backfill is refused):
 
         uqs job new fx_rates --kind backfill --dataset fx_rates \\
-            --columns "sym:symbol, mid:float" --width 1D
+            --schema "sym:symbol, mid:float" --width 1D
 
     One table in, one out, with the handler written - passthrough or derive:
 
         uqs job new trades_copy --subscribe-to trades --publishes trades_copy_out \\
-            --columns-from trades --transform passthrough
+            --schema-from trades --transform passthrough
 
     Polling feed, as steps `uqs job preview` can run without publishing:
 
-        uqs job new rates_feed --publishes rates --columns "sym:symbol, mid:float" --poll
+        uqs job new rates_feed --publishes rates --schema "sym:symbol, mid:float" --poll
 
     Reaction, run each time a bounded worker publishes a window of demo_deals:
 
@@ -259,8 +260,8 @@ def new_job(
         "--dataset": dataset is not None,
         "--raw-table": raw_table is not None,
         "--raw-columns": raw_columns is not None,
-        "--columns": columns is not None,
-        "--columns-from": columns_from is not None,
+        "--schema": columns is not None,
+        "--schema-from": columns_from is not None,
         "--source": source is not None,
         "--width": width is not None,
         "--procname": procname is not None,
@@ -340,7 +341,7 @@ def new_job(
             if publishes:
                 raise UqsError("a normalizer publishes its own NAME - drop --publishes")
             if not shape:
-                raise UqsError("--kind normalizer needs --columns: its canonical table")
+                raise UqsError("--kind normalizer needs --schema: its canonical table")
             return normalizer.normalizer(
                 name,
                 subs,
@@ -358,7 +359,7 @@ def new_job(
             )
         if kind == "external":
             if not (raw_table and publishes and shape):
-                raise UqsError("--kind external needs --raw-table, --publishes and --columns")
+                raise UqsError("--kind external needs --raw-table, --publishes and --schema")
             return external.external_feed(
                 name,
                 raw_table,

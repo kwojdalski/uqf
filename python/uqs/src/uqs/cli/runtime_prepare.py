@@ -35,7 +35,7 @@ def prepare(
         typer.Option("--bundle", help="A bundle folder beside the declared ones; repeatable"),
     ] = None,
     dry_run: Annotated[
-        bool, typer.Option("--dry-run", help="Show the resolved composition; write nothing")
+        bool, typer.Option("--dry-run", "-n", help="Show the resolved composition; write nothing")
     ] = False,
 ) -> None:
     """Install the selected runtime's declared sidecar bundles into the tree.

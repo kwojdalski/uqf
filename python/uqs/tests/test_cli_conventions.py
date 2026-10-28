@@ -15,9 +15,9 @@ on a listed one that is no longer a violation, so the lists only shrink - the
 way tests/q/peachq_known_gaps.txt does for PeachQ. When a sub-issue lands, the
 test names the rows to delete.
 
-Hidden commands are skipped: rule 6 ships each rename with the old spelling as
-a hidden alias for one release, and an alias is on its way out, not a command
-to hold to the rules.
+Hidden commands and options are skipped: rule 6 ships each rename with the old
+spelling as a hidden alias for one release, and an alias is on its way out, not
+a command or an option to hold to the rules.
 """
 
 from __future__ import annotations
@@ -54,7 +54,12 @@ class Cmd:
 
     @property
     def options(self) -> list:
-        return [p for p in self.command.params if p.param_type_name == "option"]
+        # a hidden option is a renamed one's old spelling (rule 6): on its way out
+        return [
+            p
+            for p in self.command.params
+            if p.param_type_name == "option" and not getattr(p, "hidden", False)
+        ]
 
     def option(self, name: str):
         return next((p for p in self.options if name in p.opts + p.secondary_opts), None)
@@ -142,6 +147,13 @@ DOMAIN_VERBS = {
     "prune": "remove old releases",
     "history": "what was deployed",
     "shell": "open a shell on a target",
+    # a target's own changes (#1756): the core verbs cover add, set and remove
+    "unset": "remove a setting, so the layer beneath's value applies - `set` cannot say it",
+    "rename": "give a thing a new name, keeping what is recorded under the old one",
+    "edit": "change a file in $EDITOR, checked before it is saved",
+    "log": "a record's change history - `logs` is processes' output, `history` deployments",
+    "revert": "undo one recorded change, itself recorded - not `rollback`'s release",
+    "adopt": "take over what was installed by hand, so uqs can drive it",
 }
 
 #: Rule 1: a group named after one of these is a verb with nouns under it.
@@ -220,6 +232,7 @@ def test_rule2_a_process_or_a_job_is_a_positional_called_proc_or_job():
 RULE4_ALLOWLIST = {
     "summary": "#1733",  # -> status
     "data hdb-check": "#1733",  # -> data check
+    "data hdb-alter": "#1733",  # #1755 names it beside hdb-check; #1733 renames both
     "config get": "#1733",  # -> show
     "deploy verify": "#1733",  # -> deploy check
 }
@@ -299,11 +312,13 @@ class Meaning:
 #: text that does not match the pattern is a second meaning.
 OPTIONS = {
     "--allow-dirty": Meaning("accept uncommitted changes", r"uncommitted"),
+    "--apply": Meaning("make the changes; without it, a dry run", r"without it, a dry run"),
     "--arch": Meaning("the servers' CPU architecture", r"x86_64"),
     "--attach": Meaning("a saved attachment, by name", r"attach"),
     "--base-port": Meaning("the stack's base port", r"base port"),
     "--break-lock": Meaning("remove a stale deploy lock", r"deploy lock"),
     "--bundle": Meaning("a sidecar bundle folder", r"bundle"),
+    "--cast": Meaning("cast a column's type", r"cast"),
     "--columns": Meaning("which columns of a table to show", r"`all`"),
     "--command-timeout": Meaning("seconds per remote step", r"remote step"),
     "--connect-timeout": Meaning("ssh/scp seconds", r"ssh/scp"),
@@ -317,6 +332,7 @@ OPTIONS = {
     "--follow": Meaning("keep streaming log lines until Ctrl-C", r"stream"),
     "--force": Meaning("retired: each use gets its own name", None),
     "--from": Meaning("start of a time range", r"start"),
+    "--hdb": Meaning("an HDB directory", r"HDB directory|this database"),
     "--home": Meaning("the ODBC home", r"ODBC home"),
     "--host": Meaning("where a q process listens", r"listen"),
     "--interactive": Meaning("browse the table", r"browse"),
@@ -324,12 +340,14 @@ OPTIONS = {
     "--keep": Meaning("how many newest releases to keep", r"newest"),
     "--last": Meaning("a time range up to now", r"up to now"),
     "--level": Meaning("the lowest log level shown", r"level"),
+    "--limit": Meaning("only the most recent N records", r"most recent"),
     "--lines": Meaning("how many lines of a log to show", r"lines"),
     "--live": Meaning("refuse fixtures", r"fixture"),
     "--mode": Meaning("backfill's validate/plan/run mode", r"validate"),
     "--odbc-home": Meaning("a private ODBC setup", r"ODBC"),
     "--output": Meaning("where to write the output", r"write"),
     "--overwrite": Meaning("replace what is already there", r"replace"),
+    "--override": Meaning("bypass one named check", r"bypass"),
     "--passwd": Meaning("the q password", r"password"),
     "--port": Meaning("one process's port", r"directly"),
     "--print": Meaning("retired: --show-command", None),
@@ -339,11 +357,15 @@ OPTIONS = {
     "--python-runtime": Meaning("a bundled CPython", r"CPython"),
     "--qhome": Meaning("a QHOME", r"QHOME"),
     "--raw": Meaning("retired: --no-gateway / --unresolved", None),
+    "--reach": Meaning("reach the server first; save nothing it cannot reach", r"reach"),
+    "--reason": Meaning("why an --override is acceptable", r"--override"),
     "--remote-user": Meaning("run as this account through sudo", r"sudo"),
+    "--rename": Meaning("rename a column", r"rename"),
     "--reverse": Meaning("sort descending", r"descending"),
-    "--skip-profile-budget-check": Meaning("bypass the budget check", r"budget"),
-    "--skip-q-version-check": Meaning("bypass the q version check", r"q too old"),
+    "--schema": Meaning("tables' columns and their types", r"schema"),
     "--sort": Meaning("sort by a column", r"sort by"),
+    "--ssh": Meaning("the ssh destination of a target", r"ssh destination"),
+    "--table": Meaning("one table to act on", r"this table"),
     "--tables": Meaning("a set of tables", r"tables"),
     "--target": Meaning("run this command on a deployed target", r"instead of this machine"),
     "--timeout": Meaning("seconds for the whole command", r"seconds"),
@@ -360,8 +382,9 @@ OPTIONS = {
 OPTIONS |= {
     name: Meaning(f"a connector's own start option ({name})", r"\((databento|kafka|crypto)")
     for name in (
-        "--api-key", "--brokers", "--group", "--interval-ms", "--oms-socket-path",
-        "--poll-interval-ms", "--symbol", "--symbols", "--top-n-levels", "--topic", "--venues",
+        "--api-key", "--brokers", "--databento-dataset", "--group", "--interval-ms",
+        "--oms-socket-path", "--poll-interval-ms", "--symbol", "--symbols", "--top-n-levels",
+        "--topic", "--venues",
     )
 }  # fmt: skip
 
@@ -378,15 +401,7 @@ SHORT_FLAGS = {
 
 #: (command, option) -> the issue that renames the option there
 RULE3_ALLOWLIST = {
-    # a hidden alias of #1736's positional TARGET, until the alias goes
-    ("deploy push", "--target"): "#1729",
     ("deploy rollback", "--to"): "#1739",
-    ("logs", "--columns"): "#1739",
-    ("job new", "--columns"): "#1739",
-    ("connector start", "--dataset"): "#1739",
-    ("connector restart", "--dataset"): "#1739",
-    ("job install", "--mode"): "#1739",
-    ("job backfill", "--version"): "#1739",
     **{(f"deploy {c}", "--host"): "#1739" for c in ("push", "status", "rollback", "prune")},
 }
 
@@ -461,13 +476,15 @@ KIND = {
     "runtime list": REPORTS,
     "job list": REPORTS,
     "job attachment list": REPORTS,
+    "override list": REPORTS,
     "logs": REPORTS,
     "clean": CHANGES,
     "job checkpoint remove": CHANGES,
     "data replay": CHANGES,
     "data seed": CHANGES,
     "data migrate": CHANGES,
-    "data hdb-check": REPORTS,  # --fix writes, opt-in: #1732 settles --apply-style modes
+    "data hdb-check": REPORTS,  # --apply writes what it reports missing, after asking
+    "data hdb-alter": CHANGES,  # dry run by default; --dry-run/-n says so explicitly
     "config get": REPORTS,
     "config set": CHANGES,
     "config sources stub": CHANGES,
@@ -510,6 +527,13 @@ KIND = {
     "deploy verify": REPORTS,
     "deploy history": REPORTS,
     "target add": CHANGES,
+    "target set": CHANGES,
+    "target unset": CHANGES,
+    "target rename": CHANGES,
+    "target edit": CHANGES,
+    "target revert": CHANGES,
+    "target adopt": CHANGES,
+    "target log": REPORTS,
     "target check": REPORTS,
     "target shell": "opens an interactive shell on the server",
     "target remove": CHANGES,
@@ -517,74 +541,30 @@ KIND = {
 
 #: Every command that asks before acting. ROOT asks before running a command
 #: on a --target.
-ASKS = {ROOT, "job remove", "job install", "job attachment add", "job attachment remove"}
+ASKS = {
+    ROOT, "job remove", "job install", "job attachment add", "job attachment remove",
+    "target adopt", "data hdb-check", "data hdb-alter",
+}  # fmt: skip
 
 #: The cli modules that call a prompt. A new one means a command that asks:
 #: put it in ASKS, then here.
-PROMPTING_MODULES = {"attach", "install", "install_bundle", "remove", "target"}
+PROMPTING_MODULES = {
+    "attach", "hdb_scope", "install", "install_bundle", "remove", "target", "target_adopt",
+    "target_edit",
+}  # fmt: skip
 
 #: leaf -> the issue that adds its --json. Empty since #1731: keep it so.
 RULE5A_ALLOWLIST: dict[str, str] = {}
 
 #: leaf -> the issue that gives it --dry-run/-n (or, for one that changes
 #: nothing, takes its --dry-run away)
-RULE5B_ALLOWLIST = {
-    c: "#1732"
-    for c in (
-        "start",
-        "stop",
-        "restart",
-        "job checkpoint remove",
-        "data replay",
-        "data seed",
-        "data migrate",  # --apply: dry by default
-        "config set",
-        "config sources stub",
-        "runtime prepare",
-        "job receive",
-        "job backfill",  # --mode validate/plan
-        "job preview",  # changes nothing, yet has --dry-run
-        "job new",
-        "job remove",
-        "job install",
-        "job attachment add",
-        "job attachment remove",
-        "job runs upgrade",
-        "job attachment contract approve",
-        "connector start",
-        "connector stop",
-        "connector restart",
-        "setup odbc install",
-        "setup odbc rollback",
-        "deploy build",
-        "deploy component build",
-        "deploy push",
-        "deploy rollback",
-        "deploy prune",
-        "target add",
-        "target remove",
-    )
-}
+RULE5B_ALLOWLIST: dict[str, str] = {}
 
 #: command -> the issue that gives its --yes a -y
-RULE5C_ALLOWLIST = {
-    ROOT: "#1732",
-    "job attachment add": "#1732",
-    "job attachment remove": "#1732",
-}
+RULE5C_ALLOWLIST: dict[str, str] = {}
 
 #: (command, option) -> the issue that folds the bypass into --override NAME --reason
-RULE5D_ALLOWLIST = {
-    ("start", "--skip-q-version-check"): "#1732",
-    ("start", "--skip-profile-budget-check"): "#1732",
-    ("restart", "--skip-q-version-check"): "#1732",
-    ("restart", "--skip-profile-budget-check"): "#1732",
-    ("job attachment add", "--override-reason"): "#1732",
-    ("deploy push", "--accept-converted-release"): "#1732",
-    ("deploy push", "--accept-digest"): "#1732",
-    ("deploy push", "--accept-q-version"): "#1732",
-    ("deploy push", "--allow-unpinned"): "#1732",
-}
+RULE5D_ALLOWLIST: dict[str, str] = {}
 
 
 def _flag(cmd: Cmd, long: str, short: str | None = None) -> bool:
@@ -640,6 +620,17 @@ def test_rule5d_a_bypass_is_override_name_reason():
             if name.startswith("--skip-") or name == "--override-reason" or reason_taking:
                 found.add((cmd.path, name))
     _hold("rule 5d", found, RULE5D_ALLOWLIST)
+
+
+def test_rule5d_every_override_is_named_where_uqs_override_list_finds_it():
+    """A command that takes --override takes the names `uqs override list`
+    shows, and every name listed is taken by the commands it names (#1732)."""
+    from uqs.cli import safety
+
+    taking = {c.path for c in TREE if c.option("--override") is not None}
+    named = {command for b in safety.catalog() for command in b.commands}
+    assert taking == named
+    assert all(c.option("--reason") is not None for c in TREE if c.path in taking)
 
 
 # ------------------------------------------------------------- the lists

@@ -13,6 +13,7 @@ import typer
 from rich.table import Table
 
 from uqs.cli.config import config_app
+from uqs.cli.safety import dry_run_note
 from uqs.cli.shared import _die, _paths, console
 from uqs.model import transports
 from uqs.paths import UqsError
@@ -72,6 +73,9 @@ def sources_stub(
     source: Annotated[
         str, typer.Argument(help="The source, as src/etl/sources/<source>.q names it")
     ],
+    dry_run: Annotated[
+        bool, typer.Option("--dry-run", "-n", help="Show the row it would add; write nothing")
+    ] = False,
 ) -> None:
     """Add a SCAFFOLDED row for SOURCE to the operator's sources.csv (the
     application layer, gitignored). Keeps every row the stack reads now and
@@ -83,6 +87,8 @@ def sources_stub(
         transport = source_settings.declared_transport(
             paths.repo_root, source, transports.default()
         )
-        console.print(source_settings.add_stub(paths, source, transport, names))
+        console.print(source_settings.add_stub(paths, source, transport, names, dry_run))
+        if dry_run:
+            console.print(dry_run_note())
     except UqsError as exc:
         _die(exc)

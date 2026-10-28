@@ -47,7 +47,7 @@ window is cleared.
 registers through `on_writing` and becomes a node in the job graph, where a
 cycle is refused when the file loads. Writing the dataset it watches is refused
 up front for that reason. Every option that shapes a process (`--procname`,
-`--period`, `--profile`, `--columns`, ...) is refused rather than ignored.
+`--period`, `--profile`, `--schema`, ...) is refused rather than ignored.
 
 ```
 scaffold rebuild_positions:

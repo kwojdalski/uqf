@@ -305,6 +305,67 @@ Each layer overrides the one above it in this table:
 - **Listing.** `uqs target list` shows each target with its layers merged. It
   adds an `environment` column when a target names one.
 
+### Changing targets
+
+Edit the file by hand, or change it through `uqs`:
+
+```bash
+uqs target add prd --ssh svc@prd.example --dest /srv/uqf --label tier=prod --reach
+uqs target set prd host=svc@prd2.example connect_timeout=20
+uqs target set prd launch_mode=source launch_python=/opt/py/bin/python3 \
+    launch_env_file=/srv/uqf/current/output/uqs/setenv.sh
+uqs target set prd labels.owner=desk environment=uat
+uqs target unset prd launch_python launch_env_file launch_mode
+uqs target rename prd production
+uqs target remove production
+uqs target edit                    # the whole file, in $VISUAL or $EDITOR
+uqs target log                     # newest first; `uqs target log prd --json`
+uqs target revert last             # or a change's number from the log
+```
+
+`set` takes any key the file accepts, spelt as in the file. A dotted key reaches
+into a table (`labels.owner`). A value is read as TOML when it is one (`20`,
+`true`, `["a", "b"]`, `"20"`), otherwise as text, so `host=svc@prd` needs no
+quotes. `unset` removes a key, so the layer beneath applies. `rename` moves the
+deployments recorded under the old name to the new one, so
+`uqs deploy history NEW` still shows them.
+
+Every change is one transaction:
+
+1. It takes a lock on the file (`deploy_targets.toml.lock`), so two pushes
+   registering at once cannot interleave.
+2. It edits the file's text in place. Comments, blank lines and ordering survive
+   byte for byte outside the table that changed. A table's comment lines
+   directly above its header, with no blank line between, belong to it and go
+   with it on `remove`.
+3. It checks the whole result before writing anything: an unknown key, a named
+   override, a bad value, an undeclared environment, a bad `launch_mode`, or a
+   source-only target missing `launch_python` or `launch_env_file`. A refusal
+   names the line.
+4. With `--reach` (`add`, `set`), it reaches the server as `uqs target check`
+   does, and saves nothing it cannot reach.
+5. It writes a temporary file beside the original and renames it over it, so an
+   interrupted change leaves the old file, never a truncated one.
+6. It appends one entry to the change log, `deploy_targets.log.jsonl` beside the
+   file: the time, user, machine, command, each changed table's block before and
+   after, and the resulting file with its hash.
+
+`--dry-run` (`-n`) on any of them shows the diff and checks it, writing nothing.
+
+**Editing by hand stays first-class.** Every `uqs` command reads the file as it
+is, and an invalid file is refused naming the line and the reason. The change
+log holds the file as `uqs` last left it, so the next `uqs` change that finds it
+different first records an `edited outside uqs` entry with the diff, then
+proceeds. `uqs target log` says when such an edit is waiting to be recorded.
+`uqs target edit` opens a copy, checks it when the editor exits and only then
+swaps it in. An invalid copy reopens with the reason in comments at the top, or
+is discarded on request, leaving the file untouched.
+
+**Reverting.** `uqs target revert N` puts each table change `N` altered back to
+its block before the change, comments included. It is a change like any other:
+checked, logged, and revertible. It is refused when a table has changed again
+since, rather than overwriting the later change.
+
 ## Requirements and named overrides
 
 A target can pin what it deploys and what it deploys onto:
@@ -318,22 +379,23 @@ Push refuses an artifact with any other sha256, and a server whose q, as
 preflight runs it, is outside `q_version`. A local artifact also needs its
 `.sha256` beside it, or an `expected_sha256`. Each requirement has one named
 override that relaxes only it. An override is given on the command line, never
-in a target, and needs a reason:
+in a target, as `--override NAME --reason TEXT` (repeatable, one reason for all;
+`uqs override list` names them):
 
-  | Override                    | Relaxes                                    |
-  | --------------------------- | ------------------------------------------ |
-  | `--accept-digest REASON`    | `expected_sha256`                          |
-  | `--accept-q-version REASON` | `q_version`                                |
-  | `--allow-unpinned REASON`   | the `.sha256` a local artifact must have   |
+  | Override                      | Relaxes                                    |
+  | ----------------------------- | ------------------------------------------ |
+  | `--override accept-digest`    | `expected_sha256`                          |
+  | `--override accept-q-version` | `q_version`                                |
+  | `--override allow-unpinned`   | the `.sha256` a local artifact must have   |
 
-- An override with nothing to relax is refused: `--accept-digest` without
-  `expected_sha256`, `--accept-q-version` without `q_version`,
-  `--allow-unpinned` with `expected_sha256`.
+- An override with nothing to relax is refused: `accept-digest` without
+  `expected_sha256`, `accept-q-version` without `q_version`, `allow-unpinned`
+  with `expected_sha256`.
 - Accepting a digest is not trusting the artifact. Its actual sha256 is
   recorded, and the server checks the bytes it receives against it.
 - No override bypasses the archive's member checks, the OS, architecture and
   Python match, the smoke test or verification.
-- Every override asked for, `--accept-converted-release` included, opens the
+- Every override asked for, `accept-converted-release` included, opens the
   dry-run plan in an `EXCEPTIONS` block. Each is also recorded in the report's
   `exceptions` and in the deploy history, with its reason, what was required,
   what was found and whether it was needed. The report records the server's q as
@@ -393,9 +455,10 @@ uqs deploy push dist/uqf-<release>.tar.gz --host uqf-server --dest /opt/uqf \
   TorQ.
 - **Pinned like a release.** The runtime's `.sha256` must sit beside it, and
   `torq_runtime_sha256` (or `--torq-runtime-sha256`) pins it as
-  `expected_sha256` pins a release. `--accept-digest` and `--allow-unpinned`
-  relax these pins too, and are recorded. Its members are checked as a release's
-  are, and the server checks the bytes it receives.
+  `expected_sha256` pins a release. `--override accept-digest` and
+  `--override allow-unpinned` relax these pins too, and are recorded. Its
+  members are checked as a release's are, and the server checks the bytes it
+  receives.
 - **Installed once, never rewritten.** It goes to
   `<dest>/shared/runtimes/torq/<sha256>/`, beside a marker naming that sha256.
   If the directory is already there, holding exactly that runtime, it is reused
@@ -443,8 +506,8 @@ uqs deploy push dist/uqf-<release>.tar.gz --host uqf-server --dest /opt/uqf \
   The runtime must also be built for the release's OS and architecture, so build
   it on such a host.
 - **Pinned like a release.** `q_runtime_sha256` (or `--q-runtime-sha256`) pins
-  it, and `--accept-digest` and `--allow-unpinned` relax that pin as they do the
-  others, recorded. `q_version` holds it too.
+  it, and `--override accept-digest` and `--override allow-unpinned` relax that
+  pin as they do the others, recorded. `q_version` holds it too.
 - **Installed once, run there.** It goes to `<dest>/shared/runtimes/q/<sha256>/`
   under the same write-once rules as a TorQ runtime. Preflight looks for no q on
   the server. Once installed, the push runs the binary there; if it does not
@@ -501,8 +564,8 @@ uqs deploy push dist/uqf-<release>.tar.gz --host uqf-server --dest /opt/uqf \
 - **For this release.** It must be built for the release's OS, architecture and
   Python `major.minor`, or the push is refused before anything runs.
 - **Pinned like a release.** `python_runtime_sha256` (or
-  `--python-runtime-sha256`) pins it; `--accept-digest` and `--allow-unpinned`
-  relax that pin as they do the others, recorded.
+  `--python-runtime-sha256`) pins it; `--override accept-digest` and
+  `--override allow-unpinned` relax that pin as they do the others, recorded.
 - **Installed once, run there.** It goes to
   `<dest>/shared/runtimes/python/<sha256>/` under the same write-once rules as
   the other runtimes. Preflight looks for no `uv` and no Python on the server;
@@ -588,9 +651,9 @@ uqs --target uat start piggybankgeneralledger1   # asks first; --yes skips the q
 
 - **The same entries.** `uqs target add` appends a `[targets.NAME]` table to
   `deploy_targets.toml`, so one entry serves both `deploy push ARTIFACT TARGET`
-  and `uqs --target`. `uqs target list` and `uqs target remove` read and edit
-  that file, on this machine only: `--target` refuses them. `remove` leaves
-  every other line, comments included, as it was.
+  and `uqs --target`. Every `uqs target` command reads and changes that file on
+  this machine only: `--target` refuses them. See [Changing
+  targets](#changing-targets).
 - **Confirmation.** A command that can change the server, such as `start`,
   `stop`, `restart`, `exec`, `job backfill`, `config set` or `data seed`, asks
   first and names the target. Without a terminal it needs `--yes`. So do
@@ -649,6 +712,45 @@ Both paths must be absolute. A target without `launch_mode`, or with
 `launch_mode = "release"`, is a pushed release as before. Its missing `.venv` is
 reported as such, never run from source instead. Setting either path without
 `launch_mode = "source"` is refused. `uqs deploy push` ignores these three keys.
+
+### Adopting a release copied by hand
+
+A tree copied onto a server with `scp` or `rsync` has no `<dest>/current` link,
+and usually no `.venv` or `deploy.env`. `uqs target adopt` works out what
+driving it needs, and does it:
+
+```bash
+uqs target adopt lvc --ssh svc@lvc.example --dest /srv/uqf                # a dry run (-n says so)
+uqs target adopt lvc --ssh svc@lvc.example --dest /srv/uqf --apply        # asks first
+uqs target adopt lvc --ssh svc@lvc.example --dest /srv/uqf --release /home/svc/uqf \
+    --launch-python /opt/py/bin/python3 --apply --yes
+uqs --target lvc summary
+```
+
+The dry run asks the server, changing nothing on either side:
+
+- whether `<dest>/current` already links to a release. If not, which directory
+  would become one: `--release`, default `<dest>` itself. It would be moved to
+  `<dest>/releases/adopted-<UTC time>`, with `current` linked to it;
+- whether that release launches `uqs` as pushed (`.venv/bin/uqs` and
+  `deploy.env`), or must run from source;
+- for source, the environment file: `--launch-env-file`, else the release's
+  `deploy.env`, else its `output/uqs/setenv.sh`;
+- for source, each candidate Python, tried with that file loaded and the
+  release's source on `PYTHONPATH`: `--launch-python`, else the release's
+  `.venv/bin/python`, else `python3`. The first that imports `uqs.cli` is used;
+- the target block it would save. A path inside the release is saved through
+  `<dest>/current`, so the target follows `current`.
+
+When no Python imports uqf's dependencies, it is refused, naming each probe and
+what it said. Nothing is installed for you.
+
+`--apply` makes the server changes after asking (`--yes` skips the question),
+then saves the target through the [same transaction](#changing-targets) as
+`uqs target add --reach`, and records the release as `adopted` in
+`deploy_history.json`. `uqs deploy history` then shows it, and it is that
+server's default. A release named `adopted-*` is not a release id, so
+`uqs deploy prune` never removes it.
 
 ### Installing an artifact on the server yourself
 
@@ -710,7 +812,9 @@ Every `uqs deploy push` from this machine, deployed or failed, is recorded in
 `deploy_history.json`, beside `deploy_targets.toml` (or wherever
 `UQS_DEPLOY_HISTORY` points). A successful push to a server that no target names
 yet registers one, `<server>-<dest's last folder>`, so it can be driven straight
-away.
+away. The registration goes through the [same transaction](#changing-targets) as
+`uqs target add`, and the push prints the new block and its change number.
+`uqs deploy push --no-register` skips it.
 
 ```bash
 uqs deploy history              # newest first; * marks each server's default
@@ -768,8 +872,8 @@ the first short one. Once the release's `.venv` exists, prepare runs that
 release's own `uqs data hdb-check --json` against the shared HDB:
 
 - **Missing tables or columns** are refused, naming the partitions. With
-  `--fix-hdb`, prepare runs `hdb-check --fix` and checks again. The fix is
-  additive: each missing table is written empty, and each missing column is
+  `--fix-hdb`, prepare runs `hdb-check --apply --yes` and checks again. The fix
+  is additive: each missing table is written empty, and each missing column is
   written as its type's null. It is a thin wrapper over KX's `dbmaint.q` (it
   decides what the declared schema lacks, `dbmaint` writes the columns), checks
   the database afterwards and exits 1 if anything is still missing. It takes no
@@ -995,7 +1099,7 @@ Set each process's value on the server:
 
 ```bash
 uqs --target uat config set stp1 taskset_no 3:5
-uqs --target uat start --show-command stp1
+uqs --target uat start --dry-run stp1
 ```
 
 `config set` writes `python/uqs/process_overrides.csv` (see [changing a
@@ -1004,8 +1108,8 @@ file from `shared/config/python/uqs/process_overrides.csv` when it exists, so
 create it there, with just the header `procname,field,value`, before the first
 `config set`. Values set without it are kept by that release only. A process
 with no value keeps the column empty, and nothing assigns CPUs on its own.
-`start --show-command` shows the start lines the launcher builds, without
-starting anything.
+`start --dry-run` shows the start lines the launcher builds, without starting
+anything.
 
 ## On the server
 
@@ -1081,7 +1185,7 @@ explicit reason:
 
 ```bash
 uqs deploy push dist/uqf-<release>.tar.gz ... \
-  --accept-converted-release "4.0 release, q 3.6 smoke-tested by the desk"
+  --override accept-converted-release --reason "4.0 release, q 3.6 smoke-tested by the desk"
 ```
 
 That means "start this verified, already-converted release", not "skip the

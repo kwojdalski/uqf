@@ -50,19 +50,22 @@ contract_path:statusdir,"/contract.json";
 (hsym `$contract_path) 0: enlist .j.j `contract`binding!(.qetl.io.remote.contract.of `demo_deals_backfill;
     (enlist `conflict_policies)!enlist `append`upsert);
 / the real receiver (scripts/dev/remote_receiver.q), as `uqs job receive` starts it - no readers
-/ to reload here, the writer allowed as this account, the fence a day away
+/ to reload here, the writer allowed as this account, the fence fifteen minutes away: a receiver
+/ this run fails to stop still stops itself then, rather than idling on its port (#1760)
 flags:" -contract ",contract_path," -attachment uat -destid rwtest -hdb ",root,
-    " -max_date ",string[.z.d-1]," -deadline ",string[.z.p+1D]," -readers _none_ -user nobody",
+    " -max_date ",string[.z.d-1]," -deadline ",string[.z.p+0D00:15]," -readers _none_ -user nobody",
     " -journal ",statusdir,"/journal -writers ",string .z.u;
 child:"QHOME=",getenv[`QHOME]," ",Q," scripts/dev/remote_receiver.q -p ",string[port],flags,
       " < /dev/null > ",log_path," 2>&1 & echo $!";
 pid:"J"$first system child;
+stop:{[pid] @[{system"kill ",string x};pid;{[e] (::)}];}
+/ whatever way this process ends - a failed check, an error, the end - the receiver ends with it
+.z.exit:{[code] stop pid}
 ready:0b; tries:0;
 while[(not ready) and tries<100;
     h:@[{hopen (`$":localhost:",string x;200)};port;{0Ni}];
     if[not null h; ready:1b];
     if[not ready; [system"sleep 0.2"; tries+:1]]];
-stop:{[pid] @[{system"kill ",string x};pid;{[e] (::)}];}
 if[not check["the receiver is listening";ready]; [-1 each read0 hsym `$log_path; exit 1]];
 
 / demo_deals rows on the receiver's disk, read from the files as any reader would
@@ -115,7 +118,6 @@ check["the gate refuses the receiver's status - it is not an entry point";st~"re
 st:@[h;(`.qetl.io.remote.forget;`x);{x}];
 check["and the operator's forget";st~"remote_receiver: not an entry point"];
 
-stop pid;
 -1 "";
 -1 $[failures=0; "remote writer: all checks passed"; "remote writer: ",string[failures]," check(s) FAILED"];
 exit failures>0

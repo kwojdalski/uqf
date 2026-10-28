@@ -1,7 +1,7 @@
 """`uqs data replay`: replay a tickerplant log into the HDB.
 
 Registers the `data` group on the app (see cli/shared.py), which
-cli/inspect.py's `hdb-check` joins.
+cli/hdb_check.py's `hdb-check` joins.
 
 What it wraps is TorQ's tickerlogreplay, unchanged. What it adds is aim: which
 log, which database, which schema and which stack, all read from the processes
@@ -88,7 +88,9 @@ def replay(
     ] = None,
     dry_run: Annotated[
         bool,
-        typer.Option("--dry-run", help="Print the resolved plan and the start line; run nothing"),
+        typer.Option(
+            "--dry-run", "-n", help="Print the resolved plan and the start line; run nothing"
+        ),
     ] = False,
 ) -> None:
     """Replay a tickerplant log into the HDB, aimed by what is running.

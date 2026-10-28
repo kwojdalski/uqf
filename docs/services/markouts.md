@@ -48,11 +48,11 @@ A fill with no quote after it keeps a row with a null `ref_price` and
   | `markout_pips` | the markout, in pips                                           |
 
 The backfill writes keyed on **`sym, trade_time, horizon`**. A fill that both
-jobs scored, or a window the backfill writes twice (a second `--version`), is
-replaced, not counted twice. The worker declares `on_conflict replace`: a fill
-in the last seconds of a day has its live rows in the next day's partition and
-the backfill's 1s row in this one, and only replace clears across that boundary,
-so a plain `uqs job backfill` is safe to repeat.
+jobs scored, or a window the backfill writes twice (a second
+`--source-version`), is replaced, not counted twice. The worker declares
+`on_conflict replace`: a fill in the last seconds of a day has its live rows in
+the next day's partition and the backfill's 1s row in this one, and only replace
+clears across that boundary, so a plain `uqs job backfill` is safe to repeat.
 
 ## `demo_markout1`, live
 
@@ -71,7 +71,7 @@ A bounded job: give it a range, and it scores every fill in the HDB inside it.
 
 ```
 export UQF_SOURCE_CRED_HDB_DEMO_MARKOUTS=localhost:<hdb1's port>   # 6053 at the default base port
-uqs job backfill hdb_demo_markouts_backfill --version v1 --from 2026-09-01 --to 2026-09-30
+uqs job backfill hdb_demo_markouts_backfill --source-version v1 --from 2026-09-01 --to 2026-09-30
 uqs logs hdb_demo_markouts_backfill1 -f
 ```
 
@@ -109,7 +109,7 @@ retype, so `uqs data migrate` does not apply: stop the stack, then
 
 ```
 uqs data hdb-check          # reports trades / demo_execution_quality as short of fill_id
-uqs data hdb-check --fix    # adds the column, null, to every older partition
+uqs data hdb-check --apply  # adds the column, null, to every older partition (asks first)
 uqs restart hdb1
 ```
 

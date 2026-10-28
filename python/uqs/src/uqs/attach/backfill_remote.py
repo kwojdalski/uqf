@@ -227,11 +227,13 @@ def receive(
     port: int,
     ipc: Ipc,
     attach_root: Path | None = None,
+    dry_run: bool = False,
 ) -> dict[str, Any]:
     """Start the receiver for the contract `contract_id` approved for `attachment`,
     after admitting its destination against the live stack; what it serves, until
     when, and where it logs. Reads no worker: the contract and its binding are all
-    it knows of the batches."""
+    it knows of the batches. With `dry_run`, every check runs and nothing starts:
+    the pid and the log are None."""
     q = q_interpreter(os.environ)
     if q is None:
         raise UqsError(
@@ -258,6 +260,8 @@ def receive(
     with config.locked(attachment, attach_root):
         require_verified(attachment, attach_root)
         backfill_owner.refuse_while_active(attachment, attach_root)
+        if dry_run:
+            return _served(None, port, dest, contract, binding, co, readers, None)
         access = _access_file(dest, att.stack.user, att.stack.password())
         flags = [
             "-p", str(port), "-U", str(access),
@@ -280,8 +284,13 @@ def receive(
                 stdout=out, stderr=subprocess.STDOUT, start_new_session=True,
             )  # fmt: skip
         backfill_owner.claim(attachment, receiver, proc.pid, dest.identity, attach_root)
+    return _served(proc.pid, port, dest, contract, binding, co, readers, str(log))
+
+
+def _served(pid, port, dest, contract, binding, co, readers, log) -> dict[str, Any]:
+    """What a receiver serves - or, with no pid, would serve."""
     return {
-        "pid": proc.pid,
+        "pid": pid,
         "port": port,
         "attachment": dest.attachment,
         "contract": contract.identity,
@@ -291,7 +300,7 @@ def receive(
         "last_writable_date": co["last_writable_date"],
         "stops_at": co["writes_stop_at"],
         "readers": readers.split(",") if readers else [],
-        "log": str(log),
+        "log": log,
     }
 
 

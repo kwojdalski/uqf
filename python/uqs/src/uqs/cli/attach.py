@@ -44,7 +44,7 @@ from uqs.cli.attach_output import (
     steps_table,
     verdict,
 )
-from uqs.cli.attachment import attachment_app
+from uqs.cli.attachment import OLD_REASON, attachment_app
 from uqs.cli.shared import _debug_requested, _paths
 from uqs.paths import UqsError
 
@@ -68,21 +68,17 @@ JsonOpt = Annotated[
     typer.Option("--json", help="Print one JSON document. Executing needs --yes: it cannot ask."),
 ]
 DryRunOpt = Annotated[
-    bool, typer.Option("--dry-run", help="Run every check and show the plan; change nothing")
+    bool, typer.Option("--dry-run", "-n", help="Run every check and show the plan; change nothing")
 ]
 YesOpt = Annotated[
-    bool,
-    typer.Option(
-        "--yes",
-        help="Do not ask before changing the stack (the plan and results are still shown)",
-    ),
+    bool, typer.Option("--yes", "-y", help="Do not ask first; the plan and results are still shown")
 ]
 
 
 # ------------------------------------------------------- uqs job attachment add
 
 
-@attachment_app.command("add", context_settings=EXTRA_WORDS)
+@attachment_app.command("add", context_settings=EXTRA_WORDS, cls=OLD_REASON)
 def attach(
     ctx: typer.Context,
     name: NameArg,
@@ -149,6 +145,15 @@ def attach(
         str, typer.Option("--tplogdir", help="Pin the tickerplant log directory")
     ] = "",
     schema_file: Annotated[str, typer.Option("--schema-file", help="Pin the schema file")] = "",
+    ssh: Annotated[
+        str | None,
+        typer.Option(
+            "--ssh",
+            help="The ssh destination, USER@HOST, that reaches the stack's files, for `uqs data "
+            "hdb-check` and `hdb-alter --attach` (default: --host as the current user). Changes "
+            "a saved attachment without --replace",
+        ),
+    ] = None,
     replace: Annotated[
         bool,
         typer.Option(
@@ -161,12 +166,14 @@ def attach(
         list[str] | None,
         typer.Option(
             "--override",
-            help="Accept ONE blocker, as CODE:COMPONENT (e.g. TORQ_VERSION:stp1); repeatable. "
-            "It accepts a risk, it does not establish compatibility. Needs --override-reason.",
+            metavar="CODE:COMPONENT",
+            help="Bypass ONE blocker, as CODE:COMPONENT (e.g. TORQ_VERSION:stp1; `uqs override "
+            "list` names the codes); repeatable. It accepts a risk, it does not establish "
+            "compatibility. Needs --reason.",
         ),
     ] = None,
     override_reason: Annotated[
-        str, typer.Option("--override-reason", help="Why the accepted blocker is acceptable")
+        str, typer.Option("--reason", help="Why the --override is acceptable: recorded with it")
     ] = "",
     accept_risks: Annotated[
         bool,
@@ -213,7 +220,7 @@ def attach(
         tickerplant=tickerplant, consumers=tuple(consumer or ()), user=user,
         password_env=password_env, runtime_only=runtime_only,
         remote_schema_file=remote_schema_file, tplogdir=tplogdir,
-        schema_file=schema_file,
+        schema_file=schema_file, ssh=ssh,
     )  # fmt: skip
     try:
         paths = _paths()
@@ -334,6 +341,7 @@ def detach(
         bool,
         typer.Option(
             "--dry-run",
+            "-n",
             help="Run every check, including each process's own removal checks, and change "
             "nothing: the publisher is not stopped and no file is written",
         ),

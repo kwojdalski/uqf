@@ -197,7 +197,7 @@ def test_a_producer_goes_inside_the_dict_or_not_at_all():
 
 
 def test_a_feed_can_publish_onto_an_existing_canonical_table():
-    """#1581: --columns shapes the NEW raw table, which an external feed
+    """#1581: --schema shapes the NEW raw table, which an external feed
     always defines. Onto an existing output they were forwarded to the q job,
     which refused them as shaping nothing - and dropping them is not allowed."""
     plan = external_feed(

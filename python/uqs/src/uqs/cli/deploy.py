@@ -23,6 +23,8 @@ import typer
 from uqs.cli import deploy_components as components
 from uqs.cli import deploy_connection as conn
 from uqs.cli import deploy_policy as policy
+from uqs.cli.renames import renamed
+from uqs.cli.safety import DryRunOpt, OverrideOpt, ReasonOpt
 from uqs.cli.shared import _env_log_level, app, json_refusal
 from uqs.deploy import build as release_build
 from uqs.deploy import config, driver, frontend, history, kafka, targets
@@ -85,7 +87,7 @@ def build(
         ),
     ] = None,
     dry_run: Annotated[
-        bool, typer.Option("--dry-run", help="Print the resolved bundle composition; build nothing")
+        bool, typer.Option("--dry-run", "-n", help="Print the bundle's composition; build nothing")
     ] = False,
     q_target: Annotated[
         str | None,
@@ -157,7 +159,7 @@ def build(
     print(artifact.path)
 
 
-@deploy_app.command("push")
+@deploy_app.command("push", cls=renamed(policy.OLD_SPELLINGS))
 def push(
     ctx: typer.Context,
     artifact: Annotated[
@@ -232,9 +234,7 @@ def push(
         str | None,
         typer.Option("--data-dir", help="Runtime data directory; default: <dest>/shared/data"),
     ] = None,
-    dry_run: Annotated[
-        bool, typer.Option("--dry-run", help="Change nothing; show what would run")
-    ] = False,
+    dry_run: DryRunOpt = False,
     restart: Annotated[
         bool,
         typer.Option(
@@ -294,7 +294,8 @@ def push(
         int, typer.Option("--verify-timeout", help="Readiness deadline, seconds")
     ] = 180,
     allow_dirty: policy.AllowDirty = False,
-    accept_converted_release: policy.AcceptConvertedRelease = None,
+    override: OverrideOpt = None,
+    reason: ReasonOpt = None,
     release_repo: Annotated[
         str | None,
         typer.Option(
@@ -305,9 +306,6 @@ def push(
     ] = None,
     expected_sha256: policy.ExpectedSha256 = None,
     q_version: policy.QVersion = None,
-    accept_digest: policy.AcceptDigest = None,
-    accept_q_version: policy.AcceptQVersion = None,
-    allow_unpinned: policy.AllowUnpinned = None,
     q_mode: components.QMode = components.DEFAULT,
     torq_mode: components.TorqMode = components.DEFAULT,
     python_mode: components.PythonMode = components.DEFAULT,
@@ -349,12 +347,16 @@ def push(
             help="Remove a deploy lock whose holder stopped beating; refused while it beats",
         ),
     ] = False,
+    no_register: conn.NoRegister = False,
 ) -> None:
     """Deploy a release onto a server, on its TorQ and q or bundled ones, and verify it there."""
     options = dict(locals())
-    del options["ctx"], options["target"], options["target_names"]
+    del options["ctx"], options["target"], options["target_names"], options["no_register"]
+    del options["override"], options["reason"]
     code = 0
     try:
+        bypass = policy.bypasses(override, reason)
+        options.update(bypass)
         if target is not None:
             if target_names:
                 raise config.DeployError(
@@ -367,7 +369,7 @@ def push(
                 k: v
                 for k, v in options.items()
                 if k not in targets.GIVEN_SEPARATELY and conn.on_command_line(ctx, k)
-            }
+            } | {k: v for k, v in bypass.items() if v is not None}
             cfgs = targets.configs(names, artifact, given, dry_run, repo_root())
         else:
             for name in ("host", "dest", "profile"):
@@ -381,7 +383,11 @@ def push(
                 log.info("target {}: {}:{}", cfg.target, cfg.host, cfg.dest)
             remote = Remote(cfg.host, cfg.connect_timeout, remote_user=cfg.remote_user)
             code = driver.deploy(
-                cfg, remote, on_report=lambda rep, c=cfg: history.record(repo_root(), c, rep)
+                cfg,
+                remote,
+                on_report=lambda rep, c=cfg: history.record(
+                    repo_root(), c, rep, register=not no_register, say=typer.echo
+                ),
             )
             if code:
                 if len(cfgs) > 1:

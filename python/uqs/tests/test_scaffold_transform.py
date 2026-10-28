@@ -169,7 +169,7 @@ def test_a_streaming_transform_the_scaffold_cannot_write_is_refused(kw, message)
                 "normalizer",
                 "--subscribe-to",
                 "trades",
-                "--columns",
+                "--schema",
                 "a:float",
                 "--transform",
                 "derive",

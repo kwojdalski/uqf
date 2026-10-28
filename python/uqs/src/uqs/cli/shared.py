@@ -61,7 +61,7 @@ JOB_OPERATIONS_PANEL = "Operations"
 data_app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
-    help="Move written data into the HDB and check its shape: replay, seed, migrate, hdb-check.",
+    help="Put data in the HDB, check and change it: replay, seed, migrate, hdb-check, hdb-alter.",
 )
 
 DEFAULT_LOG_LEVEL = "INFO"
@@ -131,7 +131,7 @@ def _configure(
         ),
     ] = None,
     yes: Annotated[
-        bool, typer.Option("--yes", help="With --target: run without asking", hidden=True)
+        bool, typer.Option("--yes", "-y", help="With --target: run without asking")
     ] = False,
     version: Annotated[
         bool,

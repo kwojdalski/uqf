@@ -131,7 +131,7 @@ def start_with_all_field(start_with_all: bool) -> tuple[str, str]:
 def _transform_shapes(
     sub: str, pub: str, columns: Columns | None, definitions: dict[str, str] | None
 ) -> tuple[list[tuple[str, str]], list[tuple[str, str]]]:
-    """`sub`'s and `pub`'s columns without `time`: `pub`'s from --columns when
+    """`sub`'s and `pub`'s columns without `time`: `pub`'s from --schema when
     the scaffold defines it, else from the plant like `sub`'s."""
     defs = definitions or {}
     if sub not in defs:
@@ -139,7 +139,7 @@ def _transform_shapes(
     if columns:
         return without_time(definition_columns(defs[sub])), without_time(as_columns(columns))
     if pub not in defs:
-        raise UqsError(f"--transform needs {pub}'s shape: give --columns, or publish a plant table")
+        raise UqsError(f"--transform needs {pub}'s shape: give --schema, or publish a plant table")
     return without_time(definition_columns(defs[sub])), without_time(definition_columns(defs[pub]))
 
 
@@ -315,19 +315,19 @@ publish:.qetl.job.stream.unwired `{name};
 """
     actions.append(FileAction(STREAM_DIR / f"{name}.q", body))
 
-    # --columns shapes ONE new table. A table that already exists is published
+    # --schema shapes ONE new table. A table that already exists is published
     # onto as it is; two new ones would need two column specs this option
     # cannot carry, so that is refused rather than guessed at.
     if len(new_tables) > 1:
         raise UqsError(
             f"--publishes names {len(new_tables)} tables the plant does not define yet "
-            f"({', '.join(new_tables)}), and --columns can shape only one - scaffold with one "
+            f"({', '.join(new_tables)}), and --schema can shape only one - scaffold with one "
             "new table and add the others to src/etl/plant_tables.q by hand"
         )
     if new_tables:
         if not columns:
             raise UqsError(
-                f"--publishes {new_tables[0]} needs --columns: the plant must define a table "
+                f"--publishes {new_tables[0]} needs --schema: the plant must define a table "
                 "before anything writes to it, or .u.upd discards the rows in silence"
             )
         cols = as_columns(columns)
@@ -344,9 +344,9 @@ publish:.qetl.job.stream.unwired `{name};
         actions += catalog_actions(new_tables[0], cols, notes)
     elif columns:
         raise UqsError(
-            "--columns has nothing to shape: "
+            "--schema has nothing to shape: "
             + (
-                f"{', '.join(pubs)} already defined by the plant - drop --columns"
+                f"{', '.join(pubs)} already defined by the plant - drop --schema"
                 if pubs
                 else "no --publishes, so there is no table to define"
             )

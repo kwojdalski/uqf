@@ -24,17 +24,35 @@ def migrate(
         list[str] | None,
         typer.Option("--cast", help="target column to cast losslessly; repeat for several"),
     ] = None,
+    dry_run: Annotated[
+        bool,
+        typer.Option("--dry-run", "-n", help="Show the migration plan; change nothing"),
+    ] = False,
     apply: Annotated[
         bool,
-        typer.Option("--apply", help="stage, validate, and replace the table partition"),
+        typer.Option(
+            "--apply",
+            hidden=True,
+            help="Write: the default from the next release; until then, say it",
+        ),
     ] = False,
 ) -> None:
-    """Migrate one HDB date/table to this release's schema.
+    """Migrate one HDB date/table to this release's schema: stage, validate,
+    and replace the table partition.
 
-    Dry-run by default. Stop the stack before --apply: TorQ end of day does
-    not share the backfill writer's lock. The old table is retained at the
-    path reported after a successful atomic exchange.
+    Stop the stack first: TorQ end of day does not share the backfill
+    writer's lock. The old table is retained at the path reported after a
+    successful atomic exchange. `--dry-run` shows the plan and writes nothing.
+    Until the next release, writing also needs `--apply`, so a script written
+    when this command was dry by default does not start writing unasked (#1732).
     """
+    if dry_run == apply:
+        _die(UqsError(
+            "--dry-run shows the plan; --apply writes - give one of them. `uqs data "
+            "migrate` was dry by default, and writes by default from the next release"
+            if not dry_run else "--dry-run and --apply contradict each other - give one"
+        ))  # fmt: skip
+        return
     try:
         try:
             day = date.fromisoformat(partition)

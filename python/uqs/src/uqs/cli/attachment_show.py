@@ -11,7 +11,7 @@ from __future__ import annotations
 from uqs.attach import config
 from uqs.cli.attach import EXTRA_WORDS, NameArg, attach, detach
 from uqs.cli.attach_output import redact, secrets_of
-from uqs.cli.attachment import attachment_app
+from uqs.cli.attachment import OLD_REASON, attachment_app
 from uqs.cli.json_out import emit, json_opt
 from uqs.cli.renames import alias_command
 from uqs.cli.shared import JOB_OPERATIONS_PANEL, _die, _paths, console, job_app
@@ -48,7 +48,7 @@ def show(name: NameArg, as_json: ShowJson = False) -> None:
 
 # The verbs that were the noun's only spelling, kept for one release (#1737).
 alias_command(
-    job_app, "attach", "uqs job attachment add", attach,
+    job_app, "attach", "uqs job attachment add", attach, cls=OLD_REASON,
     rich_help_panel=JOB_OPERATIONS_PANEL, context_settings=EXTRA_WORDS,
 )  # fmt: skip
 alias_command(

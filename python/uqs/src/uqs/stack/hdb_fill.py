@@ -82,7 +82,7 @@ def fill_hdb_partitions(paths: UqsPaths) -> bool:
     except subprocess.TimeoutExpired:
         log.warning(
             "HDB partition filler did not finish in {}s and was stopped - a query "
-            "spanning every table may fail until `uqs data hdb-check --fix` is run",
+            "spanning every table may fail until `uqs data hdb-check --apply` is run",
             FILL_HDB_TIMEOUT_S,
         )
         return False

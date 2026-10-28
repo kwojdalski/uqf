@@ -22,14 +22,14 @@ runner = CliRunner()
     [(3, "upgraded 3 run(s)"), (0, "already current")],
 )
 def test_migrate_says_what_it_did(monkeypatch, upgraded, said):
-    monkeypatch.setattr(stack_runs, "migrate", lambda paths: upgraded)
+    monkeypatch.setattr(stack_runs, "migrate", lambda paths, dry_run=False: upgraded)
     result = runner.invoke(cli.app, ["job", "runs", "migrate"])
     assert result.exit_code == 0, result.output
     assert said in result.output
 
 
 def test_a_migrate_refusal_exits_one(monkeypatch):
-    def refuse(paths):
+    def refuse(paths, dry_run=False):
         raise UqsError("not ours to rewrite")
 
     monkeypatch.setattr(stack_runs, "migrate", refuse)
@@ -89,7 +89,7 @@ def test_the_rerun_command_is_one_the_cli_accepts():
     command = stack_runs.rerun_command(_FAILED_RUN)
     assert command == (
         "uqs job backfill demo_deals_backfill --from 2026-09-13T00:00:00 "
-        "--to 2026-09-15T00:00:00 --version v1"
+        "--to 2026-09-15T00:00:00 --source-version v1"
     )
     for bound in (command.split("--from ")[1].split()[0], command.split("--to ")[1].split()[0]):
         timerange.parse_bound("--from", bound)
@@ -164,17 +164,34 @@ def test_show_says_so_when_the_run_had_no_torq_process(monkeypatch):
 
 
 def test_a_fixture_runs_rerun_asks_for_the_fixture_again():
-    """#1082: a run on a fixture records `v1~fixture`, which --version refuses;
+    """#1082: a run on a fixture records `v1~fixture`, which --source-version refuses;
     the command names the release and passes --fixture instead."""
     command = stack_runs.rerun_command({**_FAILED_RUN, "source_version": "v1~fixture"})
     assert command is not None
-    assert command.endswith("--version v1 --fixture")
+    assert command.endswith("--source-version v1 --fixture")
 
 
 def test_a_revised_runs_rerun_names_only_the_release():
     """#1097: a run records `v1@r2` - the worker's revision is its own, so the
     command names the release, and the fixture when it was one."""
-    for recorded, tail in (("v1@r2", "--version v1"), ("v1@r2~fixture", "--version v1 --fixture")):
+    for recorded, tail in (
+        ("v1@r2", "--source-version v1"),
+        ("v1@r2~fixture", "--source-version v1 --fixture"),
+    ):
         command = stack_runs.rerun_command({**_FAILED_RUN, "source_version": recorded})
         assert command is not None
         assert command.endswith(tail), command
+
+
+def test_a_dry_run_upgrade_counts_and_says_so(monkeypatch):
+    """`uqs job runs upgrade --dry-run` (#1732)."""
+    seen = {}
+
+    def migrate(paths, dry_run=False):
+        seen["dry_run"] = dry_run
+        return 2
+
+    monkeypatch.setattr(stack_runs, "migrate", migrate)
+    result = runner.invoke(cli.app, ["job", "runs", "upgrade", "-n"])
+    assert result.exit_code == 0, result.output
+    assert seen == {"dry_run": True} and "would upgrade 2 run(s)" in result.output

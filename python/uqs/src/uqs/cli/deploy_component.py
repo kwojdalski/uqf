@@ -63,12 +63,18 @@ def build(
     output: Output = None,
     arch: Arch = "x86_64",
     python: Python = None,
+    dry_run: Annotated[
+        bool,
+        typer.Option(
+            "--dry-run", "-n", help="Check the component and say what it would build; build nothing"
+        ),
+    ] = False,
 ) -> None:
     """Build a bundled component's artifact: `torq`, TorQ and its starter pack exactly as
     vendored, for --torq-mode bundled; `q`, the pinned PeachQ, for --q-mode bundled;
     `python`, the CPython uv installs for linux --arch, for --python-mode bundled and
     `uqs deploy build --python-runtime`. KX's q is never bundled."""
-    _build("uqs deploy component build", component, output, arch, python)
+    _build("uqs deploy component build", component, output, arch, python, dry_run)
 
 
 @deploy_app.command("build-runtime", hidden=True)
@@ -88,7 +94,12 @@ def build_runtime(
 
 
 def _build(
-    command: str, component: str, output: Path | None, arch: str, python: str | None
+    command: str,
+    component: str,
+    output: Path | None,
+    arch: str,
+    python: str | None,
+    dry_run: bool = False,
 ) -> None:
     if component.lower() in KX_NAMES:
         _failed(command, "arguments", ValueError(q_runtime.KX_REFUSAL))
@@ -100,6 +111,12 @@ def _build(
         )
     root = repo_root()
     out = output or root / DEFAULT_OUTPUT
+    if dry_run:
+        detail = (
+            f" (Python {python or default_python(root)}, {arch})" if component == "python" else ""
+        )
+        print(f"would build the {component} runtime{detail} into {out}; built nothing (dry run)")
+        return
     try:
         if component == "python":
             source = python_runtime.fetch(python or default_python(root), arch)

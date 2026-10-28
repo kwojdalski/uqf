@@ -139,7 +139,7 @@ def test_attachment_is_a_noun_and_no_stage_or_status_command_remains():
     assert "attachments" not in _group(root, "job").commands
     options = {o for p in noun.commands["add"].params for o in getattr(p, "opts", [])}
     assert {"--dry-run", "--no-start", "--json", "--yes", "--accept-risks", "--override",
-            "--override-reason", "--clear-overrides", "--replace"} <= options  # fmt: skip
+            "--reason", "--clear-overrides", "--replace"} <= options  # fmt: skip
     remove = {o for p in noun.commands["remove"].params for o in getattr(p, "opts", [])}
     assert {"--dry-run", "--yes", "--json"} <= remove
     assert "attachments" in listing.LISTABLE_KINDS

@@ -334,9 +334,13 @@ def test_the_dry_run_shows_the_runtime_and_installs_nothing(tmp_path):
 def test_an_unpinned_runtime_is_refused_without_allow_unpinned(tmp_path):
     rt = runtime(tmp_path)
     Path(f"{rt.path}.sha256").unlink()
-    with pytest.raises(DeployError, match="no torq_runtime_sha256 pins it - pass --allow-unpinned"):
+    with pytest.raises(
+        DeployError, match="no torq_runtime_sha256 pins it - pass --override allow-unpinned"
+    ):
         _push(tmp_path, rt)
-    code, _, out = _push(tmp_path, rt, "--allow-unpinned", "a local TorQ build")
+    code, _, out = _push(
+        tmp_path, rt, "--override", "allow-unpinned", "--reason", "a local TorQ build"
+    )
     release, runtime_ = json.loads(out)["exceptions"]
     assert code == 0 and not release["applied"], "the release has its .sha256"
     assert runtime_["applied"] and runtime_["requirement"] == "a .sha256 beside the torq runtime"
@@ -347,7 +351,9 @@ def test_a_runtime_that_is_not_the_pinned_one_is_refused_without_accept_digest(t
     pin = ("--torq-runtime-sha256", "ab" * 32)
     with pytest.raises(DeployError, match="not the torq_runtime_sha256 abab"):
         _push(tmp_path, rt, *pin)
-    code, remote, out = _push(tmp_path, rt, *pin, "--accept-digest", "rebuilt TorQ")
+    code, remote, out = _push(
+        tmp_path, rt, *pin, "--override", "accept-digest", "--reason", "rebuilt TorQ"
+    )
     (e,) = json.loads(out)["exceptions"]
     assert code == 0 and e["observed"] == f"the torq runtime's sha256 {rt.sha256}"
     assert remote.ran(f'if [ "$got" != {rt.sha256} ]'), "the actual bytes are still verified"

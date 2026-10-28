@@ -128,10 +128,21 @@ def query(
     return json.loads(lines[-1])
 
 
-def migrate(paths: UqsPaths, **kw) -> int:
+#: .qetl.run.migrate's test, writing nothing: how many rows it would upgrade.
+_WOULD_MIGRATE = (
+    "{p:hsym `$.qetl.run.table_path[`etl_runs]; $[()~key p; 0; "
+    "(asc cols t:get p)~asc .qetl.run.run_schema; 0; "
+    "(asc cols t)~asc .qetl.run.previous_schema; count t; "
+    '\'"migrate: etl_runs is neither the old shape nor the current one - not ours to rewrite"]}[]'
+)
+
+
+def migrate(paths: UqsPaths, dry_run: bool = False, **kw) -> int:
     """Upgrade a ledger written before etl_runs recorded each run's range and
-    counts, returning how many rows were upgraded - 0 when it was current."""
-    rows = query(paths, "([] upgraded:enlist .qetl.run.migrate[])", attach=False, **kw)
+    counts, returning how many rows were upgraded - 0 when it was current.
+    With `dry_run`, how many would be, and nothing is written."""
+    expr = _WOULD_MIGRATE if dry_run else ".qetl.run.migrate[]"
+    rows = query(paths, f"([] upgraded:enlist {expr})", attach=False, **kw)
     return int(rows[0]["upgraded"])
 
 
@@ -184,7 +195,7 @@ def _as_bound(ledger_value: str, *, upper: bool = False) -> str:
 
 def untagged(version: str) -> str:
     """A run's recorded release without the tags `run_version` appends:
-    `v1@r2~fixture` -> `v1`. The release an operator names (`--version`, the
+    `v1@r2~fixture` -> `v1`. The release an operator names (`--source-version`, the
     sensor's `source_version`) is the untagged one; what the worker writes to
     its ledger and status file is the tagged one (#1315)."""
     return version.removesuffix(FIXTURE_TAG).split(REVISION_TAG)[0]
@@ -210,7 +221,7 @@ def rerun_command(run: dict, attach: str | None = None) -> str | None:
     version = untagged(recorded)
     return (
         f"uqs job backfill {run['worker']} --from {_as_bound(str(run['range_from']))} "
-        f"--to {_as_bound(str(run['range_to']), upper=True)} --version {version}"
+        f"--to {_as_bound(str(run['range_to']), upper=True)} --source-version {version}"
         + (" --fixture" if fixture else "")
         + (f" --attach {attach}" if attach else "")
     )
