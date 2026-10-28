@@ -237,9 +237,23 @@ live_check = ["deals_db"]
 ```
 
 ```bash
-uqs deploy push dist/uqf-<release>.tar.gz --target prod-a --dry-run
-uqs deploy push dist/uqf-<release>.tar.gz --target prod-a,prod-b
+uqs deploy push dist/uqf-<release>.tar.gz prod-a --dry-run
+uqs deploy push dist/uqf-<release>.tar.gz prod-a prod-b
+uqs deploy status prod-a
+uqs deploy rollback prod-a --dry-run
+uqs deploy prune prod-a --keep 3
+uqs deploy history prod-a
 ```
+
+Every `deploy` command that reaches a server takes the target as its TARGET:
+`push ARTIFACT TARGET...`, deploying each in order and stopping at the first
+failure, and `status`, `rollback`, `prune` and `history TARGET`. `status`,
+`rollback` and `prune` also take a server a push from here registered (see
+`uqs deploy history`). `--host`, `--dest`, `--remote-user` and
+`--connect-timeout` remain for a server no target declares, and read the same on
+every command. Given beside a TARGET, they override its values.
+`push --target A,B`, the spelling before #1736, still works for one release and
+prints the new one.
 
 - **The keys.** Each key is a `push` option, spelt as its parameter (`torq_home`
   for `--torq-home`). The values go through the same checks as the flags, and an
@@ -564,10 +578,10 @@ uqs --target uat start piggybankgeneralledger1   # asks first; --yes skips the q
 ```
 
 - **The same entries.** `uqs target add` appends a `[targets.NAME]` table to
-  `deploy_targets.toml`, so one entry serves both `deploy push --target` and
-  `uqs --target`. `uqs list targets` and `uqs target remove` read and edit that
-  file, on this machine only: `--target` refuses them. `remove` leaves every
-  other line, comments included, as it was.
+  `deploy_targets.toml`, so one entry serves both `deploy push ARTIFACT TARGET`
+  and `uqs --target`. `uqs list targets` and `uqs target remove` read and edit
+  that file, on this machine only: `--target` refuses them. `remove` leaves
+  every other line, comments included, as it was.
 - **Confirmation.** A command that can change the server, such as `start`,
   `stop`, `restart`, `raw`, `job backfill`, `config set` or `data seed`, asks
   first and names the target. Without a terminal it needs `--yes`. So do
@@ -806,8 +820,9 @@ its lock is seen, and is refused without `--restart`.
 What a server runs, without ssh-ing in:
 
 ```bash
-uqs deploy status --host uqf-server --dest /opt/uqf
-uqs deploy status --host uqf-server --dest /opt/uqf --json   # to script against
+uqs deploy status prod-a
+uqs deploy status prod-a --json                             # to script against
+uqs deploy status --host uqf-server --dest /opt/uqf         # a server no target declares
 ```
 
 It reports `current` and the release it replaced (revision, build time, dirty or
@@ -827,8 +842,8 @@ It is read-only and never takes the lock, so it is safe during a push. It exits
 To put a server back on an earlier release after it has activated:
 
 ```bash
-uqs deploy rollback --host uqf-server --dest /opt/uqf --dry-run
-uqs deploy rollback --host uqf-server --dest /opt/uqf
+uqs deploy rollback prod-a --dry-run
+uqs deploy rollback prod-a
 ```
 
 It returns to the release the current one replaced, as the current release's
@@ -850,8 +865,8 @@ Every push leaves its release, with its own offline `.venv`, in `releases/`.
 `uqs deploy prune` removes all but the newest `--keep N`, under the deploy lock:
 
 ```bash
-uqs deploy prune --host uqf-server --dest /opt/uqf --keep 3 --dry-run
-uqs deploy prune --host uqf-server --dest /opt/uqf --keep 3
+uqs deploy prune prod-a --keep 3 --dry-run
+uqs deploy prune prod-a --keep 3
 ```
 
 Three releases are never removed, whatever `--keep` is, even 0:

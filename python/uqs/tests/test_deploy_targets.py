@@ -1,5 +1,5 @@
 """Deployment targets in a file (#873): its values go through make_config
-like the flags', a flag given on the command line wins, and --target a,b
+like the flags', a flag given on the command line wins, and `push ARTIFACT a b`
 deploys host by host, stopping at the first failure."""
 
 from __future__ import annotations
@@ -132,12 +132,12 @@ def _push(monkeypatch, root, argv, codes):
 
 
 def test_targets_are_deployed_in_order(root, monkeypatch):
-    r, seen = _push(monkeypatch, root, ["--target", "prod-a,prod-b"], [0, 0])
+    r, seen = _push(monkeypatch, root, ["prod-a", "prod-b"], [0, 0])
     assert r.exit_code == 0 and [c.host for c in seen] == ["deploy@prod-a", "deploy@prod-b"]
 
 
 def test_a_failed_target_stops_the_rest(root, monkeypatch):
-    r, seen = _push(monkeypatch, root, ["--target", "prod-a,prod-b"], [1])
+    r, seen = _push(monkeypatch, root, ["prod-a", "prod-b"], [1])
     assert r.exit_code == 1 and [c.target for c in seen] == ["prod-a"]
 
 
@@ -145,10 +145,23 @@ def test_only_a_flag_given_on_the_command_line_overrides(root, monkeypatch):
     """--verify-timeout left at its default must not erase the file's value -
     and a flag given, even at the default's value, still wins."""
     (root / targets.DECLARATION).write_text(FILE + "verify_timeout = 600\n")
-    _, seen = _push(monkeypatch, root, ["--target", "prod-b"], [0])
+    _, seen = _push(monkeypatch, root, ["prod-b"], [0])
     assert seen[0].verify_timeout == 600
-    _, seen = _push(monkeypatch, root, ["--target", "prod-b", "--verify-timeout", "180"], [0])
+    _, seen = _push(monkeypatch, root, ["prod-b", "--verify-timeout", "180"], [0])
     assert seen[0].verify_timeout == 180 and seen[0].sources["verify_timeout"] == "--verify-timeout"
+
+
+def test_the_old_target_option_still_deploys_and_names_the_new_spelling(root, monkeypatch):
+    """--target A,B, renamed by #1736, works for one release, saying what to type."""
+    r, seen = _push(monkeypatch, root, ["--target", "prod-a,prod-b"], [0, 0])
+    assert r.exit_code == 0 and [c.target for c in seen] == ["prod-a", "prod-b"]
+    assert "uqs deploy push ARTIFACT prod-a prod-b" in r.output
+
+
+def test_targets_given_both_ways_are_refused(root, monkeypatch):
+    r, seen = _push(monkeypatch, root, ["prod-a", "--target", "prod-b"], [0])
+    assert r.exit_code == 1 and not seen
+    assert "not also as --target" in r.output
 
 
 class Untouched:

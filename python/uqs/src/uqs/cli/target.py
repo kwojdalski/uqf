@@ -1,7 +1,7 @@
 """`uqs target ...` and `uqs deploy history`: the servers `uqs --target NAME`
 drives, and what was deployed where (#956).
 
-Targets are the entries `uqs deploy push --target` reads, in
+Targets are the entries `uqs deploy push ARTIFACT TARGET...` reads, in
 deploy_targets.toml (deploy/targets.py): a server is declared once, then
 pushed to and driven from that entry - and a push to a server no target
 names registers one (deploy/history.py). `add` appends a [targets.NAME]
@@ -131,8 +131,13 @@ def remove(name: Annotated[str, typer.Argument(help="The target")]) -> None:
 
 @deploy_app.command("history")
 def deploy_history(
-    server: Annotated[
-        str | None, typer.Argument(help="Only this target or server (host, with or without user@)")
+    target: Annotated[
+        str | None,
+        typer.Argument(
+            metavar="TARGET",
+            help="Only this target, or server (host, with or without user@)",
+            show_default=False,
+        ),
     ] = None,
     limit: Annotated[int, typer.Option("--limit", help="Most recent N")] = 20,
 ) -> None:
@@ -152,8 +157,8 @@ def deploy_history(
     rows = [
         (i, e)
         for i, e in enumerate(entries)
-        if server is None
-        or server in (e.get("target"), e.get("host"), history.server_of(str(e.get("host"))))
+        if target is None
+        or target in (e.get("target"), e.get("host"), history.server_of(str(e.get("host"))))
     ]
     if not rows:
         console.print(f"no deployments recorded in {history.history_path(root)}")

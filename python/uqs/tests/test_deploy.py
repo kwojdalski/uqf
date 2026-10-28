@@ -37,7 +37,9 @@ def parse_args(argv: list[str]) -> Config:
     """The Config `uqs deploy push` makes of `argv`: parsed by the command's
     own options, checked by the make_config it calls."""
     params = _CLI.commands["push"].make_context("push", list(argv)).params
-    params.pop("target", None)  # --target is resolved by targets.configs, not make_config
+    # TARGETs (and the old --target) are resolved by targets.configs, not make_config
+    params.pop("target", None)
+    params.pop("target_names", None)
     return make_config(**params)
 
 
@@ -134,7 +136,7 @@ def test_the_required_arguments_are_host_dest_and_profile(capfd):
 
     r = CliRunner().invoke(cli.app, ["deploy", "push", "a", "--host", "h", "--dest", "/opt/uqf"])
     assert r.exit_code == 1
-    assert "--profile is required, or --target" in r.output + capfd.readouterr().err
+    assert "--profile is required, or a TARGET after ARTIFACT" in r.output + capfd.readouterr().err
     cfg = parse_args(BASE)
     assert (cfg.host, cfg.dest, cfg.profile) == ("uqf-server", "/opt/uqf", "essential")
     assert cfg.data_root == "/opt/uqf/shared/data"
