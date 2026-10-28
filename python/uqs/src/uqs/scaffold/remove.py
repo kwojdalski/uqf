@@ -25,7 +25,7 @@ example and written prose are left, and the reference report lists them.
 
 WHAT IT REFUSES. A job whose file carries no SCAFFOLDED marker any more: it
 has been written, and deleting written work is not undoing a scaffold.
-`--force` overrides that, and nothing else.
+`--even-if-edited` overrides that, and nothing else.
 
 WHAT IT REPORTS (#717). Every line elsewhere in the tree that still names
 what it removes - an example script, a docs page, a diagram, another suite's
@@ -111,7 +111,7 @@ def plan_removal(repo_root: Path, name: str, *, force: bool = False) -> Removal:
     if MARKER not in text and not force:
         raise UqsError(
             f"{job_file} has no {MARKER} marker left - it has been written, and uqs job remove "
-            "only undoes a scaffold. Pass --force to remove it anyway"
+            "only undoes a scaffold. Pass --even-if-edited to remove it anyway"
         )
     if job_file.parent == REACTION_DIR:
         removal = _reaction_removal(repo_root, name, job_file)

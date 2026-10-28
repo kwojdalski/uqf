@@ -134,7 +134,7 @@ def test_schema_drift_between_attachment_and_worker_is_refused(world):
 
 def test_a_port_naming_another_stack_is_refused_and_the_stacks_own_is_fine(world):
     with pytest.raises(
-        UqsError, match="--port 6051 conflicts with attachment pb-uat, which is stack 6000"
+        UqsError, match="--base-port 6051 conflicts with attachment pb-uat, which is stack 6000"
     ):
         attached.resolve(world.paths, "pb-uat", WORKER, port=6051)
     assert attached.resolve(world.paths, "pb-uat", WORKER, port=6000).stack_id == 6000
@@ -355,7 +355,7 @@ def test_cli_run_of_an_unconfigured_source_is_refused_before_anything_starts(wor
 
 
 def test_cli_refuses_a_conflicting_port(world):
-    result = invoke(*COMMON, "--mode", "plan", "--port", "6051")
+    result = invoke(*COMMON, "--mode", "plan", "--base-port", "6051")
     assert result.exit_code != 0
     assert "conflicts with attachment pb-uat" in world.errors[-1]
 

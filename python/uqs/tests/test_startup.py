@@ -1,4 +1,4 @@
-"""Tests for per-process load times (stack/startup.py) and `summary --debug`.
+"""Tests for per-process load times (stack/startup.py) and `uqs --debug summary`.
 
 The log files here are built line for line in torq.q's own shapes - the
 7-field `.lg.format` line and `.lg.banner`'s raw 80-column border - because
@@ -14,6 +14,7 @@ import pytest
 from typer.testing import CliRunner
 
 from uqs import cli
+from uqs.cli import shared
 from uqs.stack import listing, probe, runtime, startup
 from uqs.stack.startup import BANNER_BORDER, Startup
 
@@ -96,11 +97,14 @@ def test_kdb_timestamps_parse_to_the_microsecond():
     assert startup.parse_kdb_timestamp("not a time") is None
 
 
-# ------------------------------------------------------------ summary --debug
+# ------------------------------------------------------------ --debug summary
 
 
 def _summary_with_one_process(monkeypatch) -> list[list[str]]:
     monkeypatch.delenv("LOG_LEVEL", raising=False)
+    # --debug reconfigures logging onto this invocation's stdout, which the
+    # runner closes after it: a later test's log line would hit a closed file.
+    monkeypatch.setattr(shared, "configure_logging", lambda **kw: None)
     completed = type("Completed", (), {"returncode": 0, "stdout": ""})()
     monkeypatch.setattr(runtime, "summary", lambda *_a, **_k: completed)
     monkeypatch.setattr(listing, "configured_ports", lambda *_a, **_k: {})
@@ -120,7 +124,9 @@ def _summary_with_one_process(monkeypatch) -> list[list[str]]:
 
 
 @pytest.mark.parametrize(
-    "argv", [["summary", "--debug"], ["--debug", "summary"]], ids=["command flag", "global flag"]
+    "argv",
+    [["summary", "--debug"], ["--debug", "summary"]],
+    ids=["old command flag", "global flag"],
 )
 def test_debug_adds_each_process_s_load_time(monkeypatch, argv):
     asked = _summary_with_one_process(monkeypatch)

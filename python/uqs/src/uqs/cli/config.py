@@ -22,10 +22,11 @@ from rich.table import Table
 
 from uqs.cli import completion
 from uqs.cli.json_out import emit, json_opt
+from uqs.cli.renames import renamed
 from uqs.cli.shared import (
+    BasePortOpt,
     ExportOpt,
     InteractiveOpt,
-    PortOpt,
     ProcsArg,
     _die,
     _export,
@@ -62,20 +63,20 @@ GetJson = json_opt(
 )
 
 
-@config_app.command("get")
+@config_app.command("get", cls=renamed({"--port": "--base-port", "--raw": "--unresolved"}))
 def config_get(
     procname: Annotated[str, typer.Argument(autocompletion=completion.procname)],
     field: Annotated[str | None, typer.Argument(autocompletion=completion.csv_fields)] = None,
-    port: PortOpt = None,
+    port: BasePortOpt = None,
     raw: Annotated[
-        bool, typer.Option("--raw", help="Show unresolved ${VAR}/{VAR}+N placeholders as-is")
+        bool, typer.Option("--unresolved", help="Show unresolved ${VAR}/{VAR}+N placeholders as-is")
     ] = False,
     export: ExportOpt = None,
     as_json: GetJson = False,
 ) -> None:
     """Show a process's effective process.csv row (or one field of it), with
     ${VAR}/{VAR}+N placeholders (KDBBASEPORT, KDBHDB, ...) resolved against
-    the same env torq.sh itself would use - pass --raw to see them literal.
+    the same env torq.sh itself would use - pass --unresolved to see them literal.
     """
     try:
         row = stack_procs.get_process_config(_paths(), procname, base_port=port, resolve=not raw)
@@ -101,7 +102,7 @@ def config_get(
     _export([{"field": k, "value": v} for k, v in row.items()], export)
 
 
-@app.command("list")
+@app.command("list", cls=renamed({"--port": "--base-port"}))
 def list_items(
     kind: Annotated[
         str | None,
@@ -110,7 +111,7 @@ def list_items(
             autocompletion=completion.list_kinds,
         ),
     ] = None,
-    port: PortOpt = None,
+    port: BasePortOpt = None,
     export: ExportOpt = None,
     sort: Annotated[
         str | None,
@@ -198,14 +199,14 @@ def _json_lines(records: list[dict]) -> None:
     emit({"lines": [{k: r.get(k) for k in _LINE_KEYS} for r in records]})
 
 
-@app.command()
+@app.command(cls=renamed({"-n": "--lines", "--print": "--show-command"}))
 def logs(
     procs: ProcsArg = None,
     follow: Annotated[
         bool, typer.Option("--follow", "-f", help="Keep streaming new lines (Ctrl-C to stop)")
     ] = False,
     lines: Annotated[
-        int, typer.Option("--lines", "-n", help="Lines per process log to show (history)")
+        int, typer.Option("--lines", "-l", help="Lines per process log to show (history)")
     ] = 20,
     level: Annotated[
         str | None,
@@ -234,7 +235,9 @@ def logs(
     ] = None,
     print_only: Annotated[
         bool,
-        typer.Option("--print", help="With --multitail: show its command without running it"),
+        typer.Option(
+            "--show-command", help="With --multitail: show its command without running it"
+        ),
     ] = False,
     channel: Annotated[
         bool,
@@ -335,7 +338,7 @@ def logs(
     given = {
         "--stream": stream is not None,
         "--columns": columns is not None,
-        "--print": print_only,
+        "--show-command": print_only,
     }
     if multitail:
         given = {"--follow": follow, "--level": level is not None}

@@ -77,7 +77,7 @@ CASES: dict[str, tuple[list[str], str]] = {
     "list": (["list"], "processes"),
     "data hdb-check": (["data", "hdb-check"], "present"),
     "runtime diff": (["runtime", "diff", "nosuch1", "nosuch2"], "is not a runtime"),
-    "job receive": (["job", "receive", "--attach", "nosuch"], "--port is required"),
+    "job receive": (["job", "receive", "--attach", "nosuch"], "--listen-port is required"),
     "job backfill": (
         ["job", "backfill", "w", "--from", "2024-01-01", "--to", "2024-01-02"],
         "--json is for --attach",

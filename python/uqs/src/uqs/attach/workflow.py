@@ -289,7 +289,8 @@ def execute(
         out.recovery = (
             [
                 f"{att.publisher.procname} is RUNNING although the attachment no longer "
-                f"verifies: stop it (`uqs stop {att.publisher.procname} --port {att.stack.id}`)",
+                f"verifies: stop it "
+                f"(`uqs stop {att.publisher.procname} --base-port {att.stack.id}`)",
             ]
             if running
             else [f"the publisher ({att.publisher.procname}) was not started"]
@@ -314,7 +315,7 @@ def execute(
             out.recovery = [
                 "the attachment is applied and verified; only the publisher's start failed",
                 f"fix the cause, then re-run {again}, or "
-                f"`uqs start {att.publisher.procname} --port {att.stack.id}`",
+                f"`uqs start {att.publisher.procname} --base-port {att.stack.id}`",
             ]
             return out
         stage("start", "done", f"{att.publisher.procname} on stack {att.stack.id}", t)
@@ -355,7 +356,7 @@ def _reach(
     try:
         stopped = stop_publisher(att, publisher)
     except AttachmentError as exc:
-        out.recovery = [f"{exc}: stop it (`uqs stop {proc} --port {att.stack.id}`)"]
+        out.recovery = [f"{exc}: stop it (`uqs stop {proc} --base-port {att.stack.id}`)"]
     else:
         out.recovery = [f"{proc} was stopped" if stopped else f"{proc} is not running"]
     out.recovery.append(found.action)

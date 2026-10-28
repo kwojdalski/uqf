@@ -14,9 +14,10 @@ from typing import Annotated
 import typer
 
 from uqs.cli import backfill_attached, completion
+from uqs.cli.renames import renamed
 from uqs.cli.shared import (
     JOB_OPERATIONS_PANEL,
-    PortOpt,
+    BasePortOpt,
     _debug_requested,
     _die,
     _paths,
@@ -33,7 +34,11 @@ _BOUND_HELP = (
 )
 
 
-@job_app.command("backfill", rich_help_panel=JOB_OPERATIONS_PANEL)
+@job_app.command(
+    "backfill",
+    rich_help_panel=JOB_OPERATIONS_PANEL,
+    cls=renamed({"--port": "--base-port", "--force": "--any-writer", "--debug": "--debug"}),
+)
 def backfill(
     ctx: typer.Context,
     worker: Annotated[
@@ -108,7 +113,7 @@ def backfill(
     force: Annotated[
         bool,
         typer.Option(
-            "--force",
+            "--any-writer",
             help="With --writer: HOST:PORT is any q process of the stack (e.g. its wdb), and "
             "each date's rows are appended into that process's own HDB over plain IPC. "
             "NOTHING is checked there - no receiver, contract, schema, attachment "
@@ -120,22 +125,14 @@ def backfill(
         bool,
         typer.Option("--json", help="With --attach: print the plan as JSON"),
     ] = False,
-    port: PortOpt = None,
-    debug: Annotated[
-        bool,
-        typer.Option(
-            "--debug",
-            help="Log at DEBUG inside the backfill process too: parsed flags, the "
-            "worker's declaration, every window, each stage's timing",
-        ),
-    ] = False,
+    port: BasePortOpt = None,
     trace: Annotated[
         bool,
         typer.Option(
             "--trace",
             help="Log at TRACE inside the backfill process: every query the source is "
             "sent - the SQL, or the q lambda and its bounds - and the rows and time it "
-            "took. Includes everything --debug shows",
+            "took. Includes everything `uqs --debug` shows",
         ),
     ] = False,
     wait: Annotated[
@@ -163,10 +160,10 @@ def backfill(
     source or writing anything; `--mode dry-run` fetches them and writes
     nothing. Their output is in the process's log, like a run's.
 
-    `--debug` (or `uqs --debug job backfill ...`) starts the process with
+    `uqs --debug job backfill ...` starts the process with
     `-verbose`, so its log - `uqs logs <process>` - carries DEBUG lines.
     `--trace` starts it with `-trace`: every query sent to the source, at TRACE,
-    and the DEBUG lines `--debug` would show, so each query sits beside its
+    and the DEBUG lines `uqs --debug` would show, so each query sits beside its
     window.
 
     The exit code is torq.sh's: whether the process STARTED, not how the run
@@ -174,7 +171,7 @@ def backfill(
     a script or a scheduler wants.
     """
     if force and writer is None:
-        _die(UqsError("--force is for --writer: it writes through the process at HOST:PORT"))
+        _die(UqsError("--any-writer is for --writer: it writes through the process at HOST:PORT"))
         return
     if writer is not None and attach is None:
         _die(UqsError("--writer is for --attach: it names the receiver of an attached destination"))
@@ -205,7 +202,7 @@ def backfill(
             on_conflict=on_conflict,
             as_json=as_json,
             wait=wait,
-            verbose=_debug_requested(ctx, debug),
+            verbose=_debug_requested(ctx),
             trace=trace,
             writer=writer,
             force=force,
@@ -224,7 +221,7 @@ def backfill(
             bound_from,
             bound_to,
             base_port=port,
-            verbose=_debug_requested(ctx, debug),
+            verbose=_debug_requested(ctx),
             trace=trace,
             on_conflict=on_conflict,
             mode=mode,

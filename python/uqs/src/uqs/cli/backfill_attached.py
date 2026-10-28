@@ -202,9 +202,9 @@ def _outcome_text(worker, run_, code, result) -> str:
         )
     if outcome == "written_forced":
         return (
-            f"{head}\n  appended into the writer's HDB WITHOUT CHECKS (--force); no reader was "
-            "told to reload - run `\\l .` on the HDB processes. A re-run of covered windows "
-            "sends nothing, but nothing guards against a duplicate append"
+            f"{head}\n  appended into the writer's HDB WITHOUT CHECKS (--any-writer); no "
+            "reader was told to reload - run `\\l .` on the HDB processes. A re-run of covered "
+            "windows sends nothing, but nothing guards against a duplicate append"
         )
     if outcome == "queryable":
         readers = ", ".join(result.get("readers", [])) or "none"

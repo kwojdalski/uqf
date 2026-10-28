@@ -400,7 +400,7 @@ def test_the_publisher_is_refused_until_verified_and_only_under_its_stack(
     attach_state.refuse_unverified_start(paths, "pb_ledger1", 6000)
     with pytest.raises(UqsError, match="discovery at 6051, not 6001"):
         attach_state.refuse_unverified_start(paths, "pb_ledger1", None)
-    with pytest.raises(UqsError, match="--port 6000"):
+    with pytest.raises(UqsError, match="--base-port 6000"):
         attach_state.refuse_unverified_start(paths, "pb_ledger1", 6100)
     attach_state.refuse_unverified_start(paths, "rdb1 wdb1", None)
     attach_state.refuse_unverified_start(paths, "all", None)

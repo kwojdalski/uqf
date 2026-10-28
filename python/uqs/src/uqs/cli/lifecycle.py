@@ -2,8 +2,7 @@
 
 The commands that drive torq.sh, plus the two advisory warnings that run
 before a start. Split from cli/entry.py, which had grown to 1270 lines across
-twenty-four commands - past the 400 this package holds its modules to, and
-past the point where the file could be read in one sitting.
+twenty-four commands - past the 400 this package holds its modules to.
 
 Commands register onto the shared `app` here rather than onto a sub-Typer,
 so `uqs start` stays `uqs start`: the split is about where the
@@ -19,8 +18,10 @@ import typer
 from uqs.attach import live as _registers_live_check  # noqa: F401 - the start gate's (#1651)
 from uqs.cli import completion
 from uqs.cli.force_stop import ForceOpt, _force_stop
+from uqs.cli.renames import BASE_PORT, renamed
 from uqs.cli.shared import (
-    PortOpt,
+    PASS_THROUGH,
+    BasePortOpt,
     ProcsArg,
     _die,
     _paths,
@@ -241,14 +242,14 @@ def _start_in_foreground(
         raise typer.Exit(code=result.returncode)
 
 
-@app.command()
+@app.command(cls=renamed(BASE_PORT | {"--print": "--show-command"}))
 def start(
     procs: ProcsArg = None,
-    port: PortOpt = None,
+    port: BasePortOpt = None,
     profile: ProfileOpt = None,
     print_only: Annotated[
         bool,
-        typer.Option("--print", help="Show the exact startup command line(s); start nothing"),
+        typer.Option("--show-command", help="Show the exact start line(s); start nothing"),
     ] = False,
     skip_q_version_check: SkipQVersionOpt = None,
     skip_profile_budget_check: SkipProfileBudgetOpt = None,
@@ -291,10 +292,10 @@ def _procnames_started_by(names: str, port: int | None) -> list[str]:
     return stack_logs.resolve_procnames(_paths(), names)
 
 
-@app.command()
+@app.command(cls=renamed(BASE_PORT))
 def up(
     procs: ProcsArg = None,
-    port: PortOpt = None,
+    port: BasePortOpt = None,
     profile: ProfileOpt = None,
     level: LevelOpt = None,
     skip_q_version_check: SkipQVersionOpt = None,
@@ -350,8 +351,8 @@ def up(
     raise typer.Exit(code=exit_code)
 
 
-@app.command()
-def stop(procs: ProcsArg = None, port: PortOpt = None, force: ForceOpt = False) -> None:
+@app.command(cls=renamed(BASE_PORT | {"--force": "--kill"}))
+def stop(procs: ProcsArg = None, port: BasePortOpt = None, force: ForceOpt = False) -> None:
     """Stop every startwithall=1 process (or specific process name(s))."""
     names = _procs(procs)
     _reject_unknown(names)
@@ -360,9 +361,9 @@ def stop(procs: ProcsArg = None, port: PortOpt = None, force: ForceOpt = False) 
     _run_streaming(runtime.stop, names, base_port=port)
 
 
-@app.command()
+@app.command(cls=renamed(BASE_PORT))
 def restart(
-    procs: ProcsArg = None, port: PortOpt = None, skip_q_version_check: SkipQVersionOpt = None
+    procs: ProcsArg = None, port: BasePortOpt = None, skip_q_version_check: SkipQVersionOpt = None
 ) -> None:
     """Restart every startwithall=1 process (or specific process name(s))."""
     overrides = _overrides(skip_q_version_check, None)
@@ -375,7 +376,7 @@ def restart(
 
 
 def _print_startlines(names: str, port: int | None) -> None:
-    """Print the startup command line(s) for `names`, then exit - `start --print`."""
+    """Print the startup command line(s) for `names`, then exit - `start --show-command`."""
     _reject_unknown(names)
     try:
         result = runtime.print_procs(_paths(), names, base_port=port)
@@ -386,8 +387,8 @@ def _print_startlines(names: str, port: int | None) -> None:
     raise typer.Exit(code=result.returncode)
 
 
-@app.command(context_settings={"allow_extra_args": True, "ignore_unknown_options": True})
-def raw(ctx: typer.Context, port: PortOpt = None) -> None:
+@app.command(context_settings=PASS_THROUGH, cls=renamed(BASE_PORT))
+def raw(ctx: typer.Context, port: BasePortOpt = None) -> None:
     """Pass any other torq.sh verb straight through, e.g.:
     `raw -- debug rdb1`, `raw -- qcon gateway1 admin:admin`, `raw -- top feed1`.
     """

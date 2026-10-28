@@ -87,10 +87,10 @@ tell you where rows stop:
   | no `first rows published`     | batches arrive, but the handler publishes nothing                |
 
 **3. Turn on DEBUG for that one process.** Without a restart:
-`uqs query ".qetl.log.debug 1b" --port <port>`. A backfill takes `--debug`
-(`uqs job backfill <worker> --debug ...`), which starts it with `-verbose`.
-DEBUG is per process on purpose: switched on fleet-wide, it buries the one
-worker you are looking at.
+`uqs query ".qetl.log.debug 1b" --port <port>`. A backfill takes the global
+`--debug` (`uqs --debug job backfill <worker> ...`), which starts it with
+`-verbose`. DEBUG is per process on purpose: switched on fleet-wide, it buries
+the one worker you are looking at.
 
 **4. Look inside the running process.** `uqs query --proc <process>` opens a
 qcon session on it by name. From there,

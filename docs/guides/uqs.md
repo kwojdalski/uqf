@@ -157,7 +157,7 @@ deployed): see [Deploying to a server](deploy.md).
 
 `PROCS` is `all` (the default) or one or more process names, each its own word -
 `uqs start posbook1 demo_markout1` - which is what lets TAB complete them. A
-single quoted `"posbook1 demo_markout1"` still works. `--port` sets
+single quoted `"posbook1 demo_markout1"` still works. `--base-port` sets
 `KDBBASEPORT` (default: the runtime's own base port, `6050` for `uqf`; see the
 port table below). `--export FILE` (on `summary`/`query`/`list`/`config get`)
 additionally writes the same rows to `FILE` as CSV or Parquet, format inferred
@@ -167,7 +167,7 @@ from the extension; a result that is not a table, such as `count t`, is refused.
 
 `uqs stop` asks each process to exit (`kill -15`), through the port it listens
 on, so it cannot reach a process stuck before it opened its port, a duplicate
-started by hand, or one that ignores the request. `uqs stop --force [PROCS]`
+started by hand, or one that ignores the request. `uqs stop --kill [PROCS]`
 finds every instance by its command line instead and kills it outright
 (SIGKILL), touching nothing outside this stack. It is the last resort: nothing
 shuts down cleanly, and a tickerplant killed mid-write may leave its log's last
@@ -212,15 +212,15 @@ not off the configuration that describes them:
   | the base port     | the plant's `-stackid`                                         |
 
 A process's start line cannot drift from the process, which is why they are read
-rather than configured. `--port` is not needed either: the plant's `-stackid` is
-the stack.
+rather than configured. `--base-port` is not needed either: the plant's
+`-stackid` is the stack.
 
-Every row in that table is an option (`--dir`, `--schema`, `--hdb`, `--port`),
-and an option that is given wins - supply all four and nothing is asked of the
-machine at all, which is how to replay a log after the stack it came from has
-been stopped. `--proc` picks between plants when more than one is up with a log
-of its own; with exactly one, it is not needed, and with several the command
-refuses rather than ranking them.
+Every row in that table is an option (`--dir`, `--schema`, `--hdb`,
+`--base-port`), and an option that is given wins - supply all four and nothing
+is asked of the machine at all, which is how to replay a log after the stack it
+came from has been stopped. `--proc` picks between plants when more than one is
+up with a log of its own; with exactly one, it is not needed, and with several
+the command refuses rather than ranking them.
 
 **It empties what it writes.** TorQ's replay defaults are kept whole, so the
 tables being replayed are cleared in the partitions the replay touches before it
@@ -462,16 +462,16 @@ holds tables the other does not declare. Each also has its own base port, and
 the spans of ports the runtimes' processes use do not overlap, so `uqs start`
 and `uqs --runtime torq start` run side by side with no flags. That is the
 quickest way to tell whether a problem is TorQ's or this tree's: the same query
-against both at once. `--port` still moves either anywhere.
+against both at once. `--base-port` still moves either anywhere.
 
 Before starting, `start` and `restart` check whether another stack already holds
-a port they need: another runtime, the same runtime on another `--port`, or a
-stack from another checkout of this repository. If one does, the command refuses
-before anything starts, naming the stack and how to stop it:
+a port they need: another runtime, the same runtime on another `--base-port`, or
+a stack from another checkout of this repository. If one does, the command
+refuses before anything starts, naming the stack and how to stop it:
 
 ```
 $ uqs start
-ERROR    | the torq runtime's stack (base port 6050) is already using ports this start needs: stp1 :6050 (pid 4242), ... Stop it with `uqs --runtime torq stop --port 6050`, or start this one elsewhere with --port.
+ERROR    | the torq runtime's stack (base port 6050) is already using ports this start needs: stp1 :6050 (pid 4242), ... Stop it with `uqs --runtime torq stop --base-port 6050`, or start this one elsewhere with --base-port.
 ```
 
 `uqs summary` names the runtime and base port it is reporting on in its title.
@@ -607,8 +607,9 @@ uqs restart rdb1 --skip-q-version-check "..."     # up takes both too
 - `--skip-q-version-check` starts despite a KDB-X older than 5.0 for the tree as
   written. The tree is not converted. A process that cannot load it fails, and
   the failure is in its log.
-- `--skip-profile-budget-check` starts (or `--print`s) a `--profile` past the
-  connection-budget estimate. The licence's own limit is still q's to enforce.
+- `--skip-profile-budget-check` starts (or `--show-command`s) a `--profile` past
+  the connection-budget estimate. The licence's own limit is still q's to
+  enforce.
 
 Each override:
 
@@ -619,8 +620,8 @@ Each override:
   the command, the processes and the runtime.
 
 An override that would skip nothing is refused: `--skip-q-version-check` with
-`--print`, or `--skip-profile-budget-check` without `--profile`. Nothing else
-can be skipped. Port ownership, process names, attachment verification,
+`--show-command`, or `--skip-profile-budget-check` without `--profile`. Nothing
+else can be skipped. Port ownership, process names, attachment verification,
 converted-source integrity and the launcher's checks still refuse. The MCP
 server and the browser never skip anything. Through `uqs --target`, the reason
 is forwarded as given, and the start asks first as always.
@@ -798,7 +799,7 @@ uqs config set monitor1 startwithall 0
 ### Default ports
 
 Base `6050` for the `uqf` runtime (`6150` for `torq`), override with
-`--port <n>`. The vendored infrastructure:
+`--base-port <n>`. The vendored infrastructure:
 
   | Port        | Process       | Role                                                     |
   | ---         | ---           | ---                                                      |
@@ -896,7 +897,7 @@ them through the CLI's own coloured logger:
 
 ```
 uqs logs                          # last 20 lines per process, all processes
-uqs logs stp1 rdb1 -n 50          # last 50 lines each, merged and time-sorted
+uqs logs stp1 rdb1 -l 50          # last 50 lines each, merged and time-sorted
 uqs logs -f                       # the last 20 lines, then live, Ctrl-C to stop
 uqs logs fxorderbookfeed1 -f --level WARNING   # live tail, warnings/errors only
 ```
@@ -918,7 +919,7 @@ side rather than interleaved. It takes the same process names and needs the
 ```
 uqs logs --multitail rdb1 fxpositions1          # a pane for each out_/err_ log, stacked
 uqs logs --multitail all --stream err -c 2      # every process's err_ log, in two columns
-uqs logs --multitail stp1 -n 100 --print        # show the multitail command, run nothing
+uqs logs --multitail stp1 -l 100 --show-command        # show the multitail command, run nothing
 ```
 
 A process that has never started has no log and gets no pane; a name that is not
@@ -994,7 +995,7 @@ registration and publish wiring, and every transform call its rows in and out.
 Two ways to switch it on:
 
 ```
-uqs job backfill <worker> ... --debug                 # a backfill: passes -verbose
+uqs --debug job backfill <worker> ...                 # a backfill: passes -verbose
 uqs raw -- start <procname> -extras -verbose          # any process, at start
 uqs query ".qetl.log.debug 1b" --port <port>              # a process already running, no restart
 ```
@@ -1043,7 +1044,6 @@ itself is doing:
 
 ```
 uqs --debug summary        # this invocation only
-uqs summary --debug        # the same, spelled on the command
 LOG_LEVEL=DEBUG uqs summary   # same, for a shell session
 ```
 
@@ -1141,12 +1141,12 @@ check it is running:
 
 ```
 uqs list processes                      # the registry sees the new processes
-uqs start --print <procname>                    # the exact start line
+uqs start --show-command <procname>                    # the exact start line
 uqs start <procname>                    # streaming jobs
 uqs job backfill <worker> --version v1 --from 2026-09-01 --to 2026-09-02 --mode plan
 uqs job backfill <worker> --version v1 --from 2026-09-01 --to 2026-09-02
 uqs summary --columns status            # up, and Responds: yes
-uqs summary --debug                     # how long each took to load
+uqs --debug summary                     # how long each took to load
 uqs logs <procname> -f
 q tests/run_tests.q
 ```
@@ -1174,7 +1174,7 @@ name none and get the gateway:
 
 ```
 uqs query                          # a session on gateway1, every line routed
-uqs query --raw                    # plain qcon on gateway1, nothing routed
+uqs query --no-gateway             # plain qcon on gateway1, nothing routed
 uqs query --proc rdb1              # qcon localhost:6052:admin:admin, under rlwrap if installed
 uqs query --base-port 7000         # gateway1 in a stack started with --port 7000
 ```
@@ -1196,7 +1196,7 @@ other process types. Three things are not wrapped:
 ```
 uqs query "select count i by sym from trade"   # .gw.syncexec[...;`rdb`hdb]
 uqs query "select from trade" --servers hdb    # history only
-uqs query "tables[]" --raw                     # the gateway's own tables[]
+uqs query "tables[]" --no-gateway              # the gateway's own tables[]
 uqs query "select from trade" --proc rdb1      # rdb1 directly, as typed
 ```
 
@@ -1229,16 +1229,16 @@ machine. For the call, `uqs` opens an ssh tunnel
 `ExitOnForwardFailure`) and closes it afterwards, also on an error or Ctrl-C.
 
 ```
-uqs --runtime peachq-etl query --target dev 'tables[]'               # the gateway, routed
-uqs --runtime peachq-etl query --target dev --proc rdb1 'tables[]'   # rdb1, as typed
-uqs query --target dev --port 6552 'tables[]'                        # a port on the target
-uqs query --target dev                                               # a gateway session
+uqs --runtime peachq-etl query --tunnel dev 'tables[]'               # the gateway, routed
+uqs --runtime peachq-etl query --tunnel dev --proc rdb1 'tables[]'   # rdb1, as typed
+uqs query --tunnel dev --port 6552 'tables[]'                        # a port on the target
+uqs query --tunnel dev                                               # a gateway session
 ```
 
 The port of `--proc` (or of the gateway) comes from the target's deployed
 release: `uqs list processes --json`, run there with its `deploy.env` and the
 `--runtime` given here. It never comes from this checkout. `--port` is a port on
-the target, so neither `--proc` with `--port` nor `--target` with `--host` is
+the target, so neither `--proc` with `--port` nor `--tunnel` with `--host` is
 accepted. Routing works as it does locally. An interactive `--proc` session runs
 qcon as a child process, so the tunnel stays open while the session lasts.
 
@@ -1316,6 +1316,33 @@ The verbs of rule 4:
   | `env`                                         | print variables to source                                 |
   | `build` `push` `rollback` `prune` `history`   | releases and their deployment                             |
   | `shell`                                       | a shell on a target                                       |
+
+### Renamed spellings
+
+Each old spelling below still works for one release, hidden from `--help`, and
+logs its new spelling when used (rule 6). The release after removes it.
+
+One meaning per option name (#1729):
+
+  | old                                                                                     | new                             |
+  | ---                                                                                     | ---                             |
+  | `--port` on `start` `up` `stop` `restart` `raw` `summary` `graph` `list`                | `--base-port`                   |
+  | `--port` on `config get` `data replay` `connector start` `deploy verify` `job backfill` | `--base-port`                   |
+  | `job receive --port`                                                                    | `--listen-port`                 |
+  | `query --target NAME`                                                                   | `query --tunnel NAME`           |
+  | `stop --force`                                                                          | `stop --kill`                   |
+  | `job backfill --force`                                                                  | `job backfill --any-writer`     |
+  | `job remove --force`                                                                    | `job remove --even-if-edited`   |
+  | `logs -n N`                                                                             | `logs --lines N` / `-l N`       |
+  | `start --print`, `logs --print`                                                         | `--show-command`                |
+  | `query --raw`                                                                           | `query --no-gateway`            |
+  | `config get --raw`                                                                      | `config get --unresolved`       |
+  | `summary --debug`, `job backfill --debug`                                               | `uqs --debug summary`, ...      |
+
+`--port` is now only ever one process's port (`query`, `schema`);
+`query --tunnel` keeps querying a target through an ssh tunnel from here, so
+`--export` writes here, where `uqs --target NAME query` runs the whole command
+there.
 
 ## Machine-readable output
 

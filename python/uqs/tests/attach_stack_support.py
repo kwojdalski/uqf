@@ -149,7 +149,7 @@ class IsolatedStack:
 
     def start(self, *names: str) -> None:
         names = names or CORE
-        run = self.uqs("start", *names, "--port", str(self.port))
+        run = self.uqs("start", *names, "--base-port", str(self.port))
         assert run.returncode == 0, run.stdout + run.stderr
         self.started |= set(names)
         self.wait_ready(names)
@@ -157,7 +157,7 @@ class IsolatedStack:
     def stop(self, *names: str) -> None:
         names = names or tuple(self.started)
         if names:
-            self.uqs("stop", *names, "--port", str(self.port))
+            self.uqs("stop", *names, "--base-port", str(self.port))
         self.started -= set(names)
 
     def wait_ready(self, names: tuple[str, ...], seconds: float = 90) -> None:
@@ -186,7 +186,7 @@ class IsolatedStack:
     def teardown(self) -> None:
         """Stop what this stack started, then kill any leftover carrying ITS
         -stackid (never a pattern wider than that)."""
-        self.uqs("stop", "all", "--port", str(self.port))
+        self.uqs("stop", "all", "--base-port", str(self.port))
         deadline = time.monotonic() + 15
         while self.pids() and time.monotonic() < deadline:
             time.sleep(0.5)
