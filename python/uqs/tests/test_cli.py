@@ -37,13 +37,15 @@ from types import ModuleType
 from typing import Any, cast
 
 import pytest
-import typer
-from typer.testing import CliRunner
-from which_support import fake_which
 
 # The CLI is a package of command families now (see cli/entry.py): the `cli`
 # package itself still exposes the assembled `app` and `main`, and each
 # command's own helpers live in the family module that registers it.
+import rename_support
+import typer
+from typer.testing import CliRunner
+from which_support import fake_which
+
 from uqs import cli, runtimes
 from uqs import paths as stack_paths
 from uqs.checks import schema_view
@@ -1273,12 +1275,25 @@ def test_multitail_passes_its_options_to_core_and_execs(monkeypatch):
     build = _patch(monkeypatch, stack_multitail, "multitail_command", result=["multitail", "x"])
     run = _patch(monkeypatch, stack_multitail, "run_multitail")
     result = runner.invoke(
-        cli.app, ["logs", "rdb1 stp1", "--multitail", "--stream", "err", "-c", "2", "-l", "7"]
+        cli.app,
+        ["logs", "rdb1 stp1", "--multitail", "--stream", "err", "--pane-columns", "2", "-l", "7"],
     )
     assert result.exit_code == 0
     assert build.args[1] == "rdb1 stp1"
     assert build.kwargs == {"stream": "err", "columns": 2, "lines": 7}
     assert run.args == (["multitail", "x"],)
+
+
+@pytest.mark.parametrize("old", ["--columns", "-c"])
+def test_multitail_columns_is_the_old_spelling_of_pane_columns(monkeypatch, old):
+    """#1739: --columns is which columns of a table to show (`summary`)."""
+    renames = rename_support.said(monkeypatch)
+    build = _patch(monkeypatch, stack_multitail, "multitail_command", result=["multitail", "x"])
+    _patch(monkeypatch, stack_multitail, "run_multitail")
+    result = runner.invoke(cli.app, ["logs", "--multitail", old, "3"])
+    assert result.exit_code == 0
+    assert build.kwargs["columns"] == 3
+    assert renames == [rename_support.renamed(old, "--pane-columns")]
 
 
 def test_multitail_print_shows_the_command_and_runs_nothing(monkeypatch):
@@ -1371,6 +1386,19 @@ def test_crypto_start_splits_the_comma_separated_lists(monkeypatch):
     assert rec.kwargs["venues"] == ("a", "b", "c"), "whitespace around a name is trimmed"
     assert rec.kwargs["symbols"] == ("X", "Y")
     assert "4242" in result.stdout
+
+
+@pytest.mark.parametrize("option", ["--databento-dataset", "--dataset"])
+def test_databento_start_takes_its_dataset(monkeypatch, option):
+    """#1739: --dataset is the dataset a bounded worker fills (`job new`), so
+    the Databento one is --databento-dataset; --dataset is its old spelling."""
+    renames = rename_support.said(monkeypatch)
+    rec = _patch(monkeypatch, databento_feed, "start_databento_feed", result=7)
+    result = runner.invoke(cli.app, ["connector", "start", "databento", option, "GLBX.MDP3"])
+    assert result.exit_code == 0
+    assert rec.kwargs["dataset"] == "GLBX.MDP3"
+    old = option == "--dataset"
+    assert renames == ([rename_support.renamed("--dataset", "--databento-dataset")] if old else [])
 
 
 def test_crypto_start_drops_empty_entries_rather_than_passing_blanks(monkeypatch):

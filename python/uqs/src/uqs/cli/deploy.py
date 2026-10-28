@@ -86,10 +86,7 @@ def build(
         ),
     ] = None,
     dry_run: Annotated[
-        bool,
-        typer.Option(
-            "--dry-run", "-n", help="Print the resolved bundle composition; build nothing"
-        ),
+        bool, typer.Option("--dry-run", "-n", help="Print the bundle's composition; build nothing")
     ] = False,
     q_target: Annotated[
         str | None,
@@ -349,10 +346,11 @@ def push(
             help="Remove a deploy lock whose holder stopped beating; refused while it beats",
         ),
     ] = False,
+    no_register: conn.NoRegister = False,
 ) -> None:
     """Deploy a release onto a server, on its TorQ and q or bundled ones, and verify it there."""
     options = dict(locals())
-    del options["ctx"], options["target"], options["target_names"]
+    del options["ctx"], options["target"], options["target_names"], options["no_register"]
     del options["override"], options["reason"]
     code = 0
     try:
@@ -384,7 +382,11 @@ def push(
                 log.info("target {}: {}:{}", cfg.target, cfg.host, cfg.dest)
             remote = Remote(cfg.host, cfg.connect_timeout, remote_user=cfg.remote_user)
             code = driver.deploy(
-                cfg, remote, on_report=lambda rep, c=cfg: history.record(repo_root(), c, rep)
+                cfg,
+                remote,
+                on_report=lambda rep, c=cfg: history.record(
+                    repo_root(), c, rep, register=not no_register, say=typer.echo
+                ),
             )
             if code:
                 if len(cfgs) > 1:

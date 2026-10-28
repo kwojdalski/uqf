@@ -34,7 +34,14 @@ from uqs.stack import backfill_wait as stack_backfill_wait
 @job_app.command(
     "backfill",
     rich_help_panel=JOB_OPERATIONS_PANEL,
-    cls=renamed({"--port": "--base-port", "--force": "--any-writer", "--debug": "--debug"}),
+    cls=renamed(
+        {
+            "--port": "--base-port",
+            "--force": "--any-writer",
+            "--debug": "--debug",
+            "--version": "--source-version",
+        }
+    ),
 )
 def backfill(
     ctx: typer.Context,
@@ -53,7 +60,7 @@ def backfill(
     version: Annotated[
         str | None,
         typer.Option(
-            "--version",
+            "--source-version",
             help="The source_version to record coverage under. Optional when the worker "
             "declares a default; a new value re-fetches windows already covered (a restatement)",
         ),
@@ -149,18 +156,20 @@ def backfill(
         ),
     ] = False,
 ) -> None:
-    """Run a bounded worker over [--from, --to), recording coverage under --version.
+    """Run a bounded worker over [--from, --to), recording coverage under --source-version.
 
     The range is required - --from/--to, --date or --last: a backfill that
     guessed one would publish the wrong window and record it as covered.
-    --version is required too unless the worker declares a default
-    source_version - one whose source is never restated. Pass a new --version to
-    re-fetch windows already covered. The process registers with discovery, so
+    --source-version is required too unless the worker declares a default
+    source_version - one whose source is never restated. Pass a new
+    --source-version to re-fetch windows already covered. The process registers with discovery, so
     the fleet has to be up, and it exits when the range is done - follow it with
     `uqs logs <process> -f`.
 
-    e.g. `uqs job backfill demo_deals_backfill --version v1 --from 2026-09-13 --to 2026-09-15`,
-    or one day: `uqs job backfill demo_deals_backfill --version v1 --date 2026-09-13`
+    e.g.
+
+        uqs job backfill demo_deals_backfill --source-version v1 --from 2026-09-13 --to 2026-09-15
+        uqs job backfill demo_deals_backfill --source-version v1 --date 2026-09-13
 
     `--mode plan` lists the windows a run would fetch without opening the
     source or writing anything; `--dry-run` (`--mode dry-run`) fetches them and

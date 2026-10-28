@@ -46,6 +46,9 @@ class Given:
     remote_schema_file: bool = False
     tplogdir: str = ""
     schema_file: str = ""
+    #: how to reach the stack's host over ssh (#1755): set on a saved attachment
+    #: without --replace, since it changes how uqs reaches the stack, not which
+    ssh: str | None = None
 
 
 @dataclass
@@ -123,6 +126,10 @@ def resolve(
     if saved is not None:
         changed = differences(saved, given, root)
         if not changed:
+            if given.ssh is not None and given.ssh != saved.stack.ssh:
+                moved = replace(saved, stack=replace(saved.stack, ssh=given.ssh))
+                said = f"--ssh: {saved.stack.ssh!r} -> {given.ssh!r}"
+                return Resolved(moved, "saved", path, [said])
             return Resolved(saved, "saved", path)
         if not replace_saved:
             raise AttachmentError(
@@ -142,6 +149,7 @@ def resolve(
         user=given.user or config.DEFAULT_USER, password_env=given.password_env or "",
         runtime_only=given.runtime_only, remote_schema_file=given.remote_schema_file,
         storage=Storage(tplogdir=given.tplogdir, schema_file=given.schema_file), runtime=runtime,
+        ssh=given.ssh or "",
     )  # fmt: skip
     if saved is None:
         return Resolved(att, "new", path)
@@ -236,9 +244,13 @@ def execute(
         # nothing to apply, but storage the attachment left unpinned (a wdb that was
         # down, or not among its consumers, when it was saved) is pinned now: a
         # backfill needs the HDB directory and never guesses it
-        if pins := newly_pinned(att, p):
+        pins = newly_pinned(att, p)
+        # a saved attachment's own change (an --ssh) is saved too: it reaches no process
+        own = resolved.changed if resolved.source == "saved" else []
+        if pins or own:
             where = save_planned(att, p, state_dir)
-            stage("save", "done", f"pinned {', '.join(pins)} the stack now reports ({where})", t)
+            said = [f"pinned {', '.join(pins)} the stack now reports"] if pins else []
+            stage("save", "done", f"{'; '.join([*said, *own])} ({where})", t)
         else:
             stage("save", "skipped", "already attached and verified; the publisher is running", t)
         stage("apply", "skipped", "nothing to apply", t)

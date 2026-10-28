@@ -39,14 +39,15 @@ old mode's fields the layers below it set, so none is inherited.
 from __future__ import annotations
 
 import inspect
-import json
 import os
 import re
 import tomllib
 from pathlib import Path
+from typing import Any
 
-from uqs.deploy import components
+from uqs.deploy import components, launch
 from uqs.deploy.config import Config, DeployError, make_config
+from uqs.paths import UqsError
 
 DECLARATION = "deploy_targets.toml"
 DECLARATION_ENV = "UQS_DEPLOY_TARGETS"
@@ -87,8 +88,14 @@ def _load(root: Path) -> dict:
     path = declaration_path(root)
     if not path.is_file():
         raise DeployError("arguments", f"a target needs {path}, which does not exist")
+    return _tables(path.read_text(), path)
+
+
+def _tables(text: str, path: Path) -> dict:
+    """_load's work on the file's text, so a change can be checked before it
+    is written (deploy/target_file.py)."""
     try:
-        data = tomllib.loads(path.read_text())
+        data = tomllib.loads(text)
     except tomllib.TOMLDecodeError as exc:
         raise DeployError("arguments", f"{path}: not TOML ({exc})") from None
     shape = (
@@ -98,9 +105,9 @@ def _load(root: Path) -> dict:
     unknown = sorted(set(data) - {DEFAULTS, ENVIRONMENTS, TARGETS})
     if unknown:
         raise DeployError("arguments", f"{path}: unknown table(s) {', '.join(unknown)} - {shape}")
-    # A file holding only shared layers may have no target yet (`uqs target add`).
-    layered = DEFAULTS in data or ENVIRONMENTS in data
-    found = data.get(TARGETS, {} if layered else None)
+    # A file holding only shared layers may have no target yet (`uqs target add`);
+    # nor may one every target was removed from.
+    found = data.get(TARGETS, {})
     defaults, envs = data.get(DEFAULTS, {}), data.get(ENVIRONMENTS, {})
     tables = (found, envs)
     if not isinstance(defaults, dict) or not all(
@@ -111,9 +118,43 @@ def _load(root: Path) -> dict:
     for layer, settings in shared:
         if ENVIRONMENT in settings:
             raise DeployError(
-                "arguments", f"{layer}: sets environment - only a target names its environment"
+                "arguments",
+                f"{_at(text, path, layer)}{layer}: sets environment - only a target names "
+                "its environment",
             )
     return {DEFAULTS: defaults, ENVIRONMENTS: envs, TARGETS: found}
+
+
+def _header(layer: str) -> str:
+    """The table a layer is declared as: "target prod" -> targets.prod."""
+    kind, _, name = layer.partition(" ")
+    return {"target": f"{TARGETS}.{name}", "environment": f"{ENVIRONMENTS}.{name}"}.get(kind, kind)
+
+
+def line_of(text: str, table: str, key: str | None = None) -> int | None:
+    """The line (from 1) declaring `table` - `targets.prod` - or, given a
+    key, that key's line inside it; None when it is not a [table] header
+    (an inline table, say)."""
+    parts = [re.escape(p) for p in table.split(".")]
+    header = re.compile(r"^\s*\[\s*" + r"\s*\.\s*".join(parts) + r"\s*\]\s*(#.*)?$")
+    lines = text.splitlines()
+    start = next((i for i, ln in enumerate(lines) if header.match(ln)), None)
+    if start is None or key is None:
+        return None if start is None else start + 1
+    setting = re.compile(rf"^\s*{re.escape(key)}\s*[=.]")
+    for i in range(start + 1, len(lines)):
+        if lines[i].lstrip().startswith("["):
+            break
+        if setting.match(lines[i]):
+            return i + 1
+    return start + 1
+
+
+def _at(text: str, path: Path, layer: str, key: str | None = None) -> str:
+    """ "<path>, line N: " for a refusal about `layer`, so a hand edit's
+    mistake is found by its line."""
+    n = line_of(text, _header(layer), key)
+    return f"{path}, line {n}: " if n else f"{path}: "
 
 
 def _layers(data: dict, name: str, path: Path) -> list[tuple[str, dict]]:
@@ -135,9 +176,15 @@ def _layers(data: dict, name: str, path: Path) -> list[tuple[str, dict]]:
 
 def read(root: Path) -> dict[str, dict]:
     """{target: its settings, over its defaults and environment}, from the
-    declaration; refused when absent. A target keeps its `environment` key."""
-    data = _load(root)
+    declaration, every layer checked (validate); refused when absent. A
+    target keeps its `environment` key."""
     path = declaration_path(root)
+    if not path.is_file():
+        raise DeployError("arguments", f"a target needs {path}, which does not exist")
+    return validate(path.read_text(), path)
+
+
+def _merge(data: dict, path: Path) -> dict[str, dict]:
     out = {}
     for name, declared in data[TARGETS].items():
         merged: dict = {}
@@ -149,31 +196,108 @@ def read(root: Path) -> dict[str, dict]:
     return out
 
 
-def _options(layer: str, declared: dict) -> dict:
+#: Stand-ins for the three settings push needs and a target may leave to the
+#: command line, so validate can hold the rest of a target to make_config.
+_STAND_INS = {"host": "validate", "dest": "/validate", "profile": "validate"}
+
+
+def validate(text: str, path: Path) -> dict[str, dict]:
+    """The declaration `text` as read() returns it, refused - naming the
+    line - unless every layer holds only known keys with values push and
+    `uqs --target` accept: an override, an unknown key, an undeclared
+    environment, a bad launch_mode or a source-only target missing a path."""
+    data = _tables(text, path)
+    _options(DEFAULTS, data[DEFAULTS], text, path)
+    for env, settings in data[ENVIRONMENTS].items():
+        _options(f"environment {env}", settings, text, path)
+    for name in data[TARGETS]:
+        where = _at(text, path, f"target {name}")
+        try:
+            options, _, _ = _merged(data, name, path, text)
+            merged = _merge({**data, TARGETS: {name: data[TARGETS][name]}}, path)[name]
+            checked: dict[str, Any] = {**_STAND_INS, **options}
+            make_config(artifact="validate", **checked)
+            launch.settings(name, merged)
+            remote_shape(name, merged)
+        except (DeployError, UqsError) as exc:
+            said = str(exc)
+            if said.startswith(str(path)):
+                raise
+            raise DeployError("arguments", f"{where}target {name}: {_bare(exc, name)}") from None
+        except (TypeError, ValueError) as exc:
+            # make_config compares and splits; a value of the wrong type fails there
+            raise DeployError(
+                "arguments", f"{where}target {name}: a setting has the wrong type ({exc})"
+            ) from None
+    return _merge(data, path)
+
+
+def _bare(exc: Exception, name: str) -> str:
+    """exc's words without a leading "target NAME: ", which validate adds."""
+    return str(exc).removeprefix(f"target {name}: ")
+
+
+def remote_shape(label: str, t: dict) -> None:
+    """The shapes `uqs --target` holds host and dest to, when set: both reach
+    a remote shell."""
+    host, dest = t.get("host"), t.get("dest")
+    if host is not None and (
+        not isinstance(host, str) or host.startswith("-") or any(c.isspace() for c in host)
+    ):
+        raise UqsError(f"target {label}: host {host!r} is not an ssh destination")
+    if dest is not None and (
+        not isinstance(dest, str) or not dest.startswith("/") or any(c.isspace() for c in dest)
+    ):
+        raise UqsError(f"target {label}: dest {dest!r} must be an absolute path without spaces")
+
+
+def _options(layer: str, declared: dict, text: str = "", path: Path | None = None) -> dict:
     """One layer's settings - "defaults", "environment uat", "target prod-a" -
     as make_config's keyword arguments."""
+    where = ""
     overridden = sorted(set(declared) & OVERRIDES)
     if overridden:
+        if path is not None:
+            where = _at(text, path, layer, overridden[0])
         raise DeployError(
             "arguments",
-            f"{layer}: {', '.join(overridden)} - an override is given on the command "
+            f"{where}{layer}: {', '.join(overridden)} - an override is given on the command "
             "line, with its reason, for one push; the file never sets one",
         )
-    unknown = sorted(set(declared) - SETTABLE - NOT_PUSH_OPTIONS)
+    unknown = sorted(set(declared) - SETTABLE - NOT_PUSH_OPTIONS - {ENVIRONMENT})
     if unknown:
+        if path is not None:
+            where = _at(text, path, layer, unknown[0])
         raise DeployError(
             "arguments",
-            f"{layer}: unknown setting(s) {', '.join(unknown)} - the file sets push's "
+            f"{where}{layer}: unknown setting(s) {', '.join(unknown)} - the file sets push's "
             "options, spelt as parameters (torq_home for --torq-home)",
         )
     options = {}
     for key, value in declared.items():
-        if key in NOT_PUSH_OPTIONS:
+        if key in NOT_PUSH_OPTIONS or key == ENVIRONMENT:
             continue
         if key in LISTED_AS_TEXT and isinstance(value, list):
             value = ",".join(str(v) for v in value)
         options[key] = value
     return options
+
+
+def _merged(
+    data: dict, name: str, path: Path, text: str = ""
+) -> tuple[dict, dict[str, str], str | None]:
+    """Target `name`'s push options over its layers, lowest first, with the
+    layer each came from and the runtime it must run."""
+    options: dict = {}
+    sources: dict[str, str] = {}
+    runtime = None
+    for layer, settings in _layers(data, name, path):
+        given = _options(layer, settings, text, path if text else None)
+        components.switch(options, sources, given)
+        options.update(given)
+        sources.update(dict.fromkeys(given, layer))
+        runtime = settings.get("runtime", runtime)
+    return options, sources, runtime
 
 
 def configs(names: str, artifact: str, explicit: dict, dry_run: bool, root: Path) -> list[Config]:
@@ -194,15 +318,7 @@ def configs(names: str, artifact: str, explicit: dict, dry_run: bool, root: Path
         raise DeployError("arguments", f"no target {asked} in {path} - it declares: {known}")
     out = []
     for name in wanted:
-        options: dict = {}
-        sources: dict[str, str] = {}
-        runtime = None
-        for layer, settings in _layers(data, name, path):
-            given = _options(layer, settings)
-            components.switch(options, sources, given)
-            options.update(given)
-            sources.update(dict.fromkeys(given, layer))
-            runtime = settings.get("runtime", runtime)
+        options, sources, runtime = _merged(data, name, path)
         components.switch(options, sources, explicit)
         options.update(explicit)
         sources.update({k: _flag(k) for k in explicit})
@@ -223,51 +339,6 @@ def configs(names: str, artifact: str, explicit: dict, dry_run: bool, root: Path
 
 #: A target's name, as `[targets.NAME]` and `uqs --target NAME` spell it.
 NAME = re.compile(r"[a-z][a-z0-9_-]{0,63}")
-
-
-def _toml(value: object) -> str:
-    """A TOML value for what append writes: strings, ints, string tables.
-    JSON's string escapes are TOML's basic-string escapes."""
-    if isinstance(value, dict):
-        return "{ " + ", ".join(f"{k} = {json.dumps(v)}" for k, v in value.items()) + " }"
-    return json.dumps(value)
-
-
-def append(root: Path, name: str, entry: dict) -> Path:
-    """Add [targets.NAME] at the end of the declaration, creating it if need
-    be. Appended, never rewritten: the operator's comments and other entries
-    are not touched (#956). Empty values are left out."""
-    if not NAME.fullmatch(name):
-        raise DeployError("arguments", f"target name {name!r}: lower-case letters, digits, - and _")
-    path = declaration_path(root)
-    before = path.read_text() if path.is_file() else ""
-    if before and name in read(root):
-        raise DeployError("arguments", f"target {name} is already declared in {path}")
-    lines = [f"[targets.{name}]"] + [f"{k} = {_toml(v)}" for k, v in entry.items() if v]
-    sep = "" if not before or before.endswith("\n\n") else "\n" if before.endswith("\n") else "\n\n"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(before + sep + "\n".join(lines) + "\n")
-    return path
-
-
-def remove(root: Path, name: str, dry_run: bool = False) -> Path:
-    """Delete [targets.NAME]'s lines - its header to the next table - and no
-    others; with `dry_run`, only check that they are there."""
-    path = declaration_path(root)
-    if name not in read(root):
-        raise DeployError("arguments", f"no target {name!r} in {path}")
-    lines = path.read_text().splitlines(keepends=True)
-    header = re.compile(rf"^\s*\[targets\.{re.escape(name)}\]\s*(#.*)?$")
-    start = next((i for i, ln in enumerate(lines) if header.match(ln)), None)
-    if start is None:
-        raise DeployError("arguments", f"{name} is not a [targets.{name}] table in {path}")
-    end = next(
-        (i for i in range(start + 1, len(lines)) if lines[i].lstrip().startswith("[")), len(lines)
-    )
-    if dry_run:
-        return path
-    path.write_text("".join(lines[:start] + lines[end:]))
-    return path
 
 
 def _flag(option: str) -> str:

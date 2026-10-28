@@ -76,11 +76,16 @@ def test_a_refused_attach_without_json_still_logs_to_stdout(tmp_path):
 CASES: dict[str, tuple[list[str], str]] = {
     "list": (["list"], "processes"),
     "target list": (["target", "list"], "["),
+    "target log": (["target", "log"], "edited_outside"),
     "runtime list": (["runtime", "list"], "uqf"),
     "job list": (["job", "list"], "["),
     "job attachment list": (["job", "attachment", "list"], "["),
     "override list": (["override", "list"], "q-version-check"),
     "data hdb-check": (["data", "hdb-check"], "present"),
+    "data hdb-alter": (
+        ["data", "hdb-alter", "pb", "--hdb", "/nonexistent-1755", "--reorder", "a"],
+        "no such directory",
+    ),
     "runtime diff": (["runtime", "diff", "nosuch1", "nosuch2"], "is not a runtime"),
     "job receive": (["job", "receive", "--attach", "nosuch"], "--listen-port is required"),
     "job backfill": (

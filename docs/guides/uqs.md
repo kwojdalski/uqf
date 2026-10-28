@@ -8,7 +8,8 @@ draws the topology.
 ## Contents
 
 - [Quick start](#quick-start)
-- [Reading the database's shape](#reading-the-databases-shape)
+- [Reading the database's shape](#reading-the-databases-shape) --- including
+  [one table, in any HDB](#one-table-in-any-hdb)
 - [Commands](#commands)
 - [Replaying a tickerplant log](#replaying-a-tickerplant-log)
 - [Listing things](#listing-things)
@@ -83,13 +84,16 @@ so the error names whichever table sorts first rather than the partition that is
 actually short.
 
 ```
-uqs data hdb-check         # which partitions are missing what
-uqs data hdb-check --fix   # write each missing table and column, via vendored KX dbmaint
+uqs data hdb-check           # which partitions are missing what
+uqs data hdb-check --apply   # write each missing table and column, via vendored KX dbmaint
 ```
 
-`--fix` is additive and idempotent: a table directory that exists is never
-touched, and a table a partition holds that `database.q` no longer declares is
-left alone - that is history. Running it twice changes nothing the second time.
+`--apply` shows what it would write and asks first (`--yes` skips the question,
+and without a terminal `--apply` needs it). `--fix`, its old spelling, is
+refused with a message naming `--apply`. It is additive and idempotent: a table
+directory that exists is never touched, and a table a partition holds that
+`database.q` no longer declares is left alone - that is history. Running it
+twice changes nothing the second time.
 
 It should rarely be needed by hand, because `bootstrap` now does it on every
 `uqs` command. It is there because the situation is easy to create: each day's
@@ -120,7 +124,7 @@ the pattern, or the shell will try to expand it against your filenames first.
 
 ### Renamed or retyped HDB columns
 
-`hdb-check --fix` does not rewrite existing columns. When a release renames or
+`hdb-check --apply` does not rewrite existing columns. When a release renames or
 changes one, stop the stack and migrate each affected date/table explicitly:
 
 ```
@@ -136,6 +140,132 @@ builds and checks a complete table partition before exchanging it with the old
 one; it prints the old directory's backup path for rollback. A source column not
 named in the current schema must be mapped with `--rename` rather than silently
 dropped. The command refuses segmented HDBs.
+
+### One table, in any HDB
+
+`data migrate` rebuilds one date of THIS runtime's HDB to its declared schema.
+Two commands work on one table across a whole HDB instead - this runtime's, a
+release's, or an attached TorQ stack's, such as a production HDB a backfill
+wrote a table into on a few dates only (#1755):
+
+```
+uqs data hdb-check --attach pb-prod                          # the plan: which dates lack the table
+uqs data hdb-check --attach pb-prod --apply                  # write an empty one there, after asking
+uqs data hdb-alter --attach pb-prod --reorder time,sym,amount,note
+uqs data hdb-alter --attach pb-prod --reorder time,sym,amount,note --apply
+uqs data hdb-alter --attach pb-prod --undo /data/hdb.uqf-alter/20261028D101500123-pb.json --apply
+```
+
+**Which HDB** is named once, by what already knows it - give exactly one:
+
+  | handle                         | the HDB                                                                                     | runs                                     |
+  | ---                            | ---                                                                                         | ---                                      |
+  | `uqs --target NAME data ...`   | the deployed release's own configured HDB                                                   | on the server, from the release          |
+  | `uqs data ... --attach NAME`   | the attachment's pinned `storage.hdb_dir`, else its live wdb's `.wdb.hdbdir`                | on the stack's host, over ssh            |
+  | `uqs data ... --hdb DIR`       | that directory                                                                              | on this machine                          |
+  | none                           | this runtime's own HDB (what `--target` reaches on a server)                                | on this machine                          |
+
+The plan says which was used. Two handles are refused, and so is an attachment
+whose pinned HDB its live wdb contradicts. With `--attach`, the table defaults
+to the attachment's own. A segmented HDB (`par.txt`) is followed into its
+segments.
+
+**`hdb-check --table T`** (or `--attach`, `--hdb`) checks and fills ONE table:
+only partitions lacking it get an empty one, enumerated against the HDB's sym
+file, which an empty table adds nothing to. Its schema is this runtime's
+declaration when the runtime declares the table, else one partition holding it -
+the latest, or `--template YYYY.MM.DD` - taken in its column order and types.
+Partitions holding the table with another shape are refused, never rewritten.
+Without a handle or `--table` it is the whole-runtime check above.
+
+**`hdb-alter [TABLE]`** makes one change per run, in each partition holding the
+table and nowhere else:
+
+  | operation                     | writes                                                     | `--undo`                                                                                                                      |
+  | ---                           | ---                                                        | ---                                                                                                                           |
+  | `--reorder c1,c2,...`         | each partition's `.d`; it must list every existing column  | the journalled `.d`                                                                                                           |
+  | `--rename old=new`            | the column's files renamed, and `.d`                       | renamed back                                                                                                                  |
+  | `--attr col:p\|s\|g\|u\|none` | the column's attribute (its header)                        | the journalled attribute                                                                                                      |
+  | `--cast col:TYPE`             | the column, written beside it and renamed over it          | the original while the run is unfinished; once complete, a cast back (exact only for a lossless cast, which the plan reports) |
+
+A cast to or from symbol is refused: that changes the enumeration. Every run
+checks first that the partitions holding the table agree on its columns, order
+and types, and refuses - naming each shape and the partitions that hold it -
+before any write; `hdb-check --table` repairs a missing table, anything else is
+for a person to decide.
+
+**Dry run first.** Both commands print the plan and write nothing - the HDB and
+how it was resolved, the partitions touched and skipped, each file written or
+renamed, the bytes a cast rewrites, and the journal's path - exiting 0 when the
+plan is valid and 1 when it is refused. `--apply` shows the same plan and asks
+once before the first write; `--yes` skips the question, and without a terminal
+`--apply` without `--yes` is refused. `--json` prints the plan and, after
+`--apply`, the result.
+
+**The journal** is written before the first write, BESIDE the HDB:
+`<hdb>.uqf-alter/<stamp>-<table>.json`, holding the operation and each touched
+partition's previous `.d` and attributes. Not inside it: `\l` loads every
+non-partition entry of a database root as a variable, so a journal directory
+there would stop the HDB loading. A run that stops part way leaves the journal
+`started`; running the same operation again resumes it, skipping partitions
+already changed, and any other change to the table is refused until
+`--undo JOURNAL` reverses it. `--undo` is previewed like any run until
+`--apply`. After the last write, every partition holding the table is read
+again, and the run exits 1 naming any that does not have the target shape.
+
+**Writers and readers**, by handle:
+
+- `--attach`: refused while an attached backfill owns the attachment, or while a
+  wdb writing that HDB reports an end-of-day reload in progress. Afterwards each
+  HDB reader serving the directory is asked to reload, and the ones that did not
+  are reported.
+- `--target` (the release's own HDB): the write holds the HDB write lock uqf's
+  own writers take, so it is refused while one of the release's backfills runs.
+  Afterwards the release's HDB processes are asked to reload.
+- `--hdb`: the plan warns that writers were not checked, and prints the reload
+  command.
+
+None of this coordinates with a native end of day beyond the check above: run it
+outside end of day.
+
+**On the stack's host.** `--attach` runs the commands where the files are. The q
+script (`scripts/gates/hdb_alter.q`) and the vendored `dbmaint.q` it loads are
+copied to a temporary directory there over one ssh session, run with the
+server's own q (`$QCMD`, else `q`, from the account's login shell), and removed
+afterwards - so the host needs q and nothing of uqf. The destination is the
+attachment's `ssh` setting (`uqs job attach NAME --ssh USER@HOST`, which changes
+a saved attachment without `--replace`), else `stack.host` as the current user;
+a stack on this machine needs none. ssh runs with `BatchMode`: a destination it
+cannot reach is refused, naming the setting. The same script runs by hand:
+
+```
+q scripts/gates/hdb_alter.q -hdb /data/hdb -table pb -reorder time,sym,amount,note [-apply]
+```
+
+KDB-X only: PeachQ cannot write a partitioned HDB natively, and the script
+refuses it.
+
+#### On production
+
+For a table a backfill wrote into a production TorQ HDB - present on the dates
+it covered, missing from the rest:
+
+1. Attach the job if it is not attached (`uqs job attach`), with `--ssh` naming
+   an account on the HDB's host that can write it. Check that
+   `ssh -o BatchMode=yes USER@HOST true` works.
+2. Make sure nothing else writes the table: let any attached backfill finish
+   (`uqs list backfills`), and pick a time well away from end of day.
+3. Read the plan: `uqs data hdb-check --attach NAME`. It names the HDB and where
+   that came from - check it is the directory you mean - and the dates that lack
+   the table.
+4. `uqs data hdb-check --attach NAME --apply` writes the empty table there; the
+   final check and the readers' reload follow.
+5. To change the table's layout, plan it with
+   `uqs data hdb-alter --attach NAME --reorder ...` (or `--rename`, `--attr`,
+   `--cast`), read the plan, then add `--apply`. Keep the journal path the plan
+   prints.
+6. If the result is wrong, `uqs data hdb-alter --attach NAME --undo JOURNAL`
+   shows what it would put back; add `--apply`.
 
 ## Commands
 
@@ -940,7 +1070,7 @@ side rather than interleaved. It takes the same process names and needs the
 
 ```
 uqs logs --multitail rdb1 fxpositions1          # a pane for each out_/err_ log, stacked
-uqs logs --multitail all --stream err -c 2      # every process's err_ log, in two columns
+uqs logs --multitail all --stream err --pane-columns 2  # every process's err_ log, in two columns
 uqs logs --multitail stp1 -l 100 --show-command        # show the multitail command, run nothing
 ```
 
@@ -987,25 +1117,25 @@ Every uqf process script - `torq_stream.q` (every streaming job),
 `torq_backfill.q`, `torq_tap.q`, `run_stream.q` - logs the stages where it can
 stall, so the last line in `uqs logs <procname>` says where it stopped:
 
-  | Last line                                                                    | What it means                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-  | ---                                                                          | ---                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-  | `qtorq: loading uqf tree from ...` with no `loaded in` after it              | a q file failed to load - the error follows, or is in `err_<procname>.log`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-  | `starting streaming job`                                                     | the job and what it subscribes to and publishes, logged before anything can block                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-  | `waiting for the tickerplant - if this is the last line, it is not running`  | `stp1` is down: `uqs start stp1`. This used to wait forever in silence                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-  | `subscribing` / `streaming job wired - running`                              | subscribed and running                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-  | no `first batch received` for a table                                        | nothing is arriving on it: its publisher is down or publishes nothing                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-  | `first batch received` but no `first rows published`                         | input arrives and the job publishes nothing from it                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-  | `on_batch failed`                                                            | the job's handler threw, with the table and the error                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-  | `backfill process failed` then `backtrace`                                   | a backfill's error, and where it happened                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-  | `has no credential - refusing to write its fixture` (init)                   | a backfill whose source has no credential was not asked to write the fixture (#1082). Set the source's credential to run live, or pass `--fixture` (`UQF_FIXTURE_WRITES=1`) for a demo run, whose coverage is recorded under `<version>~fixture`                                                                                                                                                                                                                                                                                                                                                                                              |
-  | `no credential - running on the source's fixture` (WARNING)                  | a backfill is publishing the fixture, not live data. The line gives the `sources.csv` row to add (`settings_row`), the variable that overrides it (`UQF_SOURCE_CRED_<SOURCE>`), what the value should be for that source - an ODBC connection string, or `host:port` for kdb+ - and an example. Add the row (`uqs config sources stub SOURCE` starts one), or export the variable in the shell you run `uqs job backfill` from                                                                                                                                                                                                                |
-  | `hdb reload: could not open a handle to every registered hdb` (ERROR)        | a backfill wrote its rows and the running HDB has not reloaded them. `registered` is how many HDBs discovery knows, `opened` how many let this process in; TorQ's own `connection to ... failed: access` line just before says it was refused. A backfill connects as the ETL identity (`appconfig/passwords/metrics.txt`) unless `passwords/backfill.txt` or `<procname>.txt` gives it its own - see its `outbound credential` line at startup. `hdb reload requested` now reports `registered`, `opened` and `reloaded`, so `0 0 0` is "no HDB running"                                                                                     |
-  | `backfill finished with rows a running hdb has not reloaded` (ERROR)         | the run's last reload still fell short of every registered HDB (#1084). The rows are on disk and covered; a running HDB serves them once it reloads or restarts. Until then the run's report says `hdb_unreloaded 1b`, and a refused or failed reload is retried at each later window rather than forgotten. The `hdb reload` line before it says which HDBs were registered, opened and reloaded                                                                                                                                                                                                                                             |
-  | `idle - every window in the range is already covered`                        | nothing to do at this `--version`: coverage says the range is done. A new source release is a new version                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-  | `checkpoint is for another run - starting from the beginning`                | the range or version changed since the last run, so its checkpoint does not apply                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-  | `state file unreadable - using the previous generation` (WARNING)            | a cursor, checkpoint or ledger file did not parse - a crash mid-write, a full disk, a hand edit - and its `.bak` was used instead: at most one page or window is done again                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-  | `load_checkpoint: ... is unreadable ... and so is its .bak`                  | neither generation of a backfill's checkpoint parses. `uqs job checkpoint remove WORKER` starts the run over; windows already in the coverage ledger are still skipped                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-  | `retrying after a transport error`                                           | the source failed transiently; the attempt, backoff and error follow                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+  | Last line                                                                    | What it means                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+  | ---                                                                          | ---                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+  | `qtorq: loading uqf tree from ...` with no `loaded in` after it              | a q file failed to load - the error follows, or is in `err_<procname>.log`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+  | `starting streaming job`                                                     | the job and what it subscribes to and publishes, logged before anything can block                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+  | `waiting for the tickerplant - if this is the last line, it is not running`  | `stp1` is down: `uqs start stp1`. This used to wait forever in silence                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+  | `subscribing` / `streaming job wired - running`                              | subscribed and running                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+  | no `first batch received` for a table                                        | nothing is arriving on it: its publisher is down or publishes nothing                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+  | `first batch received` but no `first rows published`                         | input arrives and the job publishes nothing from it                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+  | `on_batch failed`                                                            | the job's handler threw, with the table and the error                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+  | `backfill process failed` then `backtrace`                                   | a backfill's error, and where it happened                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+  | `has no credential - refusing to write its fixture` (init)                   | a backfill whose source has no credential was not asked to write the fixture (#1082). Set the source's credential to run live, or pass `--fixture` (`UQF_FIXTURE_WRITES=1`) for a demo run, whose coverage is recorded under `<version>~fixture`                                                                                                                                                                                                                                                                                                                                                                                                     |
+  | `no credential - running on the source's fixture` (WARNING)                  | a backfill is publishing the fixture, not live data. The line gives the `sources.csv` row to add (`settings_row`), the variable that overrides it (`UQF_SOURCE_CRED_<SOURCE>`), what the value should be for that source - an ODBC connection string, or `host:port` for kdb+ - and an example. Add the row (`uqs config sources stub SOURCE` starts one), or export the variable in the shell you run `uqs job backfill` from                                                                                                                                                                                                                       |
+  | `hdb reload: could not open a handle to every registered hdb` (ERROR)        | a backfill wrote its rows and the running HDB has not reloaded them. `registered` is how many HDBs discovery knows, `opened` how many let this process in; TorQ's own `connection to ... failed: access` line just before says it was refused. A backfill connects as the ETL identity (`appconfig/passwords/metrics.txt`) unless `passwords/backfill.txt` or `<procname>.txt` gives it its own - see its `outbound credential` line at startup. `hdb reload requested` now reports `registered`, `opened` and `reloaded`, so `0 0 0` is "no HDB running"                                                                                            |
+  | `backfill finished with rows a running hdb has not reloaded` (ERROR)         | the run's last reload still fell short of every registered HDB (#1084). The rows are on disk and covered; a running HDB serves them once it reloads or restarts. Until then the run's report says `hdb_unreloaded 1b`, and a refused or failed reload is retried at each later window rather than forgotten. The `hdb reload` line before it says which HDBs were registered, opened and reloaded                                                                                                                                                                                                                                                    |
+  | `idle - every window in the range is already covered`                        | nothing to do at this `--source-version`: coverage says the range is done. A new source release is a new version                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+  | `checkpoint is for another run - starting from the beginning`                | the range or version changed since the last run, so its checkpoint does not apply                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+  | `state file unreadable - using the previous generation` (WARNING)            | a cursor, checkpoint or ledger file did not parse - a crash mid-write, a full disk, a hand edit - and its `.bak` was used instead: at most one page or window is done again                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+  | `load_checkpoint: ... is unreadable ... and so is its .bak`                  | neither generation of a backfill's checkpoint parses. `uqs job checkpoint remove WORKER` starts the run over; windows already in the coverage ledger are still skipped                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+  | `retrying after a transport error`                                           | the source failed transiently; the attempt, backoff and error follow                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 
 **More detail - the DEBUG level** - adds the process's pid, port and cwd, the
 subscription result, the tables the tickerplant defines, every timer installed,
@@ -1118,7 +1248,7 @@ installed with:
 ```
 uqs job install ../sidecars                        # the wizard
 uqs job install ../sidecars --dry-run              # just the plan
-uqs job install ../sidecars --mode symlink --yes   # no questions, for scripts
+uqs job install ../sidecars --link --yes            # no questions, for scripts
 ```
 
 A file in `src/etl/sources`, `src/etl/workers` or `src/etl/streaming` is already
@@ -1138,14 +1268,14 @@ with the reason:
   runner finds a suite by the tests it holds), so putting one there is a
   decision rather than a copy.
 
-The wizard asks **copy** or **symlink**. A copy is a snapshot the tree owns:
-edit the sidecar and install again. A symlink keeps the sidecar the source of
-truth - edits are live on the next start - but moving or deleting the sidecar
-breaks the tree, so it suits a development checkout only. To ship jobs to a
-server, give the folder a `bundle.json`: see [sidecar
-bundles](sidecar-bundles.md). A file already in place and identical is left
-alone; one that differs is replaced only if you agree, or with `--overwrite`
-(`--yes` alone keeps it).
+The wizard asks **copy** or **symlink** (`--copy` or `--link` to say up front).
+A copy is a snapshot the tree owns: edit the sidecar and install again. A
+symlink keeps the sidecar the source of truth (edits are live on the next
+start), but moving or deleting the sidecar breaks the tree, so it suits a
+development checkout only. To ship jobs to a server, give the folder a
+`bundle.json`: see [sidecar bundles](sidecar-bundles.md). A file already in
+place and identical is left alone; one that differs is replaced only if you
+agree, or with `--overwrite` (`--yes` alone keeps it).
 
 **Every query must be one `--trace` can see.** A polling feed or a backfill
 source that calls its handle directly, as `h(...)`, `h@...` or `h"select ..."`,
@@ -1166,8 +1296,8 @@ check it is running:
 uqs list processes                      # the registry sees the new processes
 uqs start --dry-run <procname>          # the exact start line
 uqs start <procname>                    # streaming jobs
-uqs job backfill <worker> --version v1 --from 2026-09-01 --to 2026-09-02 --mode plan
-uqs job backfill <worker> --version v1 --from 2026-09-01 --to 2026-09-02
+uqs job backfill <worker> --source-version v1 --from 2026-09-01 --to 2026-09-02 --mode plan
+uqs job backfill <worker> --source-version v1 --from 2026-09-01 --to 2026-09-02
 uqs summary --columns status            # up, and Responds: yes
 uqs --debug summary                     # how long each took to load
 uqs logs <procname> -f
@@ -1362,6 +1492,15 @@ The verbs of rule 4:
   | `env`                                         | print variables to source                                 |
   | `build` `push` `rollback` `prune` `history`   | releases and their deployment                             |
   | `shell`                                       | a shell on a target                                       |
+  | `unset` `rename` `edit`                       | a target's settings: remove one, rename it, edit the file |
+  | `log` `revert`                                | a target's change log, and undoing one change in it       |
+  | `adopt`                                       | take over a release copied onto a server by hand          |
+
+Three of these sit beside a near neighbour on purpose (#1756): `log` is a
+record's change history, where `logs` is processes' output and `history` what
+was deployed; `revert` undoes one recorded change and is itself recorded, where
+`rollback` returns a server to its previous release; `unset` removes a setting
+so the layer beneath applies, which no value given to `set` can say.
 
 ### Renamed spellings
 
@@ -1477,24 +1616,25 @@ uqs summary --json | jq -r '.processes[] | select(.status == "down") | .process'
 
 Each command's `--help` names its document. The commands #1731 added:
 
-  | command                            | document                                                                                                                                                                                                       |
-  | ---                                | ---                                                                                                                                                                                                            |
-  | `summary`                          | `{interpreter, processes: [{time, process, status, pid, port, heartbeat, responds, batches, depends_on, inputs, outputs, port_source}], silent, failing, starved: [{process, reasons}], heartbeats_collected}` |
-  | `graph`                            | `{direction, trees: [{process, status, tables, repeat, children}]}`                                                                                                                                            |
-  | `query [PROC] EXPR`                | `{expression, result}`: a table is a list of records                                                                                                                                                           |
-  | `schema [PROC] [TABLE]`            | `{process, port, tables: [{table, rows, columns}]}`, or with a TABLE `{process, port, columns: [{table, column, type, q, attribute}]}`                                                                         |
-  | `logs`                             | `{lines: [{time, host, procname, proctype, loglevel, id, message}]}`; not with `--follow`, `--channel` or `--multitail`                                                                                        |
-  | `config get PROC [FIELD]`          | `{process, fields: [{field, value}]}`, or `{process, field, value}`                                                                                                                                            |
-  | `job gaps`                         | `{job, gaps: [{range_from, range_to}], sessions, refillable, refills: [{worker, range_from, range_to, command}], today_not_refillable}`                                                                        |
-  | `job preview`                      | the preview's own result: `{job, mode, state, live, cursor, next_cursor, advances, fetched, rows, sample, failures, trace}`                                                                                    |
-  | `job runs status`, `job runs list` | `{runs: [{run_id, worker, dataset, status, range_from, range_to, ...}]}`                                                                                                                                       |
-  | `job runs show RUN`                | `{run, facts, logs, rerun}`                                                                                                                                                                                    |
-  | `job runs audit`                   | `{facts: [{run_id, dataset, range_from, range_to, label, text}]}`                                                                                                                                              |
-  | `connector status`                 | `{connectors: [{name, running, pid, log, ...}]}`                                                                                                                                                               |
-  | `setup odbc status`                | `{home, current, previous, versions}`; without `--json` it is now a table                                                                                                                                      |
-  | `deploy verify`                    | its report without the `DEPLOY_VERIFY_OK`/`FAILED` marker line                                                                                                                                                 |
-  | `deploy history`                   | `{deployments: [{default, at, target, host, dest, release, profile, status, stage}]}`                                                                                                                          |
-  | `target check`                     | `{ok, target, host, dest, remote_user, release}`                                                                                                                                                               |
+  | command                                    | document                                                                                                                                                                                                       |
+  | ---                                        | ---                                                                                                                                                                                                            |
+  | `summary`                                  | `{interpreter, processes: [{time, process, status, pid, port, heartbeat, responds, batches, depends_on, inputs, outputs, port_source}], silent, failing, starved: [{process, reasons}], heartbeats_collected}` |
+  | `graph`                                    | `{direction, trees: [{process, status, tables, repeat, children}]}`                                                                                                                                            |
+  | `query [PROC] EXPR`                        | `{expression, result}`: a table is a list of records                                                                                                                                                           |
+  | `schema [PROC] [TABLE]`                    | `{process, port, tables: [{table, rows, columns}]}`, or with a TABLE `{process, port, columns: [{table, column, type, q, attribute}]}`                                                                         |
+  | `logs`                                     | `{lines: [{time, host, procname, proctype, loglevel, id, message}]}`; not with `--follow`, `--channel` or `--multitail`                                                                                        |
+  | `config get PROC [FIELD]`                  | `{process, fields: [{field, value}]}`, or `{process, field, value}`                                                                                                                                            |
+  | `job gaps`                                 | `{job, gaps: [{range_from, range_to}], sessions, refillable, refills: [{worker, range_from, range_to, command}], today_not_refillable}`                                                                        |
+  | `job preview`                              | the preview's own result: `{job, mode, state, live, cursor, next_cursor, advances, fetched, rows, sample, failures, trace}`                                                                                    |
+  | `job runs status`, `job runs list`         | `{runs: [{run_id, worker, dataset, status, range_from, range_to, ...}]}`                                                                                                                                       |
+  | `job runs show RUN`                        | `{run, facts, logs, rerun}`                                                                                                                                                                                    |
+  | `job runs audit`                           | `{facts: [{run_id, dataset, range_from, range_to, label, text}]}`                                                                                                                                              |
+  | `connector status`                         | `{connectors: [{name, running, pid, log, ...}]}`                                                                                                                                                               |
+  | `setup odbc status`                        | `{home, current, previous, versions}`; without `--json` it is now a table                                                                                                                                      |
+  | `deploy verify`                            | its report without the `DEPLOY_VERIFY_OK`/`FAILED` marker line                                                                                                                                                 |
+  | `deploy history`                           | `{deployments: [{default, at, target, host, dest, release, profile, status, stage}]}`                                                                                                                          |
+  | `target check`                             | `{ok, target, host, dest, remote_user, release}`                                                                                                                                                               |
+  | `data hdb-check --table`, `data hdb-alter` | `{ok, hdb, resolved_from, ssh, warnings, plan, result}`: `plan` and `result` are `scripts/gates/hdb_alter.q`'s own documents - partitions, shapes, steps, journal, final check                                 |
 
 ## Installing
 

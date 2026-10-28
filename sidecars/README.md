@@ -34,7 +34,7 @@ Install it, then backfill a week with seed 42:
 uqs job install sidecars/mockups --dry-run
 uqs job install sidecars/mockups --yes
 UQF_SOURCE_CRED_MOCK_TRADES=42 uqs job backfill mock_trades_backfill \
-    --version v1 --from 2026-09-01 --to 2026-09-08
+    --source-version v1 --from 2026-09-01 --to 2026-09-08
 ```
 
 Installing writes into tracked tree files (`plant_tables.q`, the catalog,

@@ -274,7 +274,10 @@ def test_targets_are_listed_by_their_own_noun(server):
     assert isinstance(root, typer.core.TyperGroup)
     group = root.commands["target"]
     assert isinstance(group, typer.core.TyperGroup)
-    assert set(group.commands) == {"add", "list", "remove", "check", "shell"}
+    assert set(group.commands) == {
+        "add", "set", "unset", "rename", "remove", "edit", "log", "revert", "adopt",
+        "list", "check", "shell",
+    }  # fmt: skip
 
 
 def test_mcp_lists_targets_too():
@@ -480,7 +483,8 @@ def test_dry_runs_of_add_and_remove_check_and_write_nothing(server):
         app, ["target", "add", "prod", "--ssh", "svc@prod", "--dest", "/srv/uqf", "-n"]
     )
     assert added.exit_code == 0, added.output
-    assert "would add target prod" in added.output and declared.read_text() == before
+    assert "dry run: target prod added - nothing written" in added.output
+    assert declared.read_text() == before
     bad = runner.invoke(
         app, ["target", "add", "x", "--ssh", "-oProxyCommand=sh", "--dest", "/d", "-n"]
     )

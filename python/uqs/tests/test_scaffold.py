@@ -118,7 +118,7 @@ def test_a_malformed_column_spec_is_refused(spec):
 def test_publishing_without_columns_is_refused():
     """The plant must define a table before anything writes to it: `.u.upd`
     onto an undefined table discards the rows in silence (#288)."""
-    with pytest.raises(UqsError, match="columns"):
+    with pytest.raises(UqsError, match="--schema"):
         jobs.streaming_job("j", [], "my_metric", None)
 
 
@@ -330,9 +330,9 @@ def test_an_existing_table_is_not_defined_twice():
 
 
 def test_columns_are_required_when_something_new_is_written():
-    with pytest.raises(UqsError, match="needs --columns"):
+    with pytest.raises(UqsError, match="needs --schema"):
         backfill.bounded_worker("fx_rates", "fx_rates", None)
-    with pytest.raises(UqsError, match="needs --columns"):
+    with pytest.raises(UqsError, match="needs --schema"):
         backfill.bounded_worker("fx_rates", "fx_rates", None, reuse_source=True)
 
 
@@ -448,7 +448,7 @@ def test_an_ordinary_new_table_name_is_not_reserved():
 
 
 def test_a_job_publishes_onto_an_existing_table_without_redefining_it():
-    """A second producer of a plant table was refused ("needs --columns") and,
+    """A second producer of a plant table was refused ("needs --schema") and,
     given columns, would have defined the table twice."""
     plan = jobs.streaming_job("orders2", [], "orders", None, known_tables=_PLANT)
     (d,) = _declared(plan, "orders2.q")

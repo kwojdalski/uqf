@@ -12,6 +12,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+import rename_support
 from typer.testing import CliRunner
 
 from uqs import cli
@@ -184,12 +185,12 @@ def test_cli_declining_installs_nothing(sidecar: Path, cli_repo: Path) -> None:
 def test_cli_keeps_conflicts_unless_told(sidecar: Path, cli_repo: Path) -> None:
     dest = cli_repo / STREAM_DIR / "acme_spread.q"
     dest.write_text("/ the tree's own version\n")
-    code, out = _run(str(sidecar), "--mode", "copy", "--yes")
+    code, out = _run(str(sidecar), "--copy", "--yes")
     assert code == 0, out
     assert dest.read_text() == "/ the tree's own version\n"
     assert (cli_repo / SOURCE_DIR / "acme.q").is_file()
 
-    code, out = _run(str(sidecar), "--mode", "copy", "--yes", "--overwrite")
+    code, out = _run(str(sidecar), "--copy", "--yes", "--overwrite")
     assert code == 0, out
     assert dest.read_text() == STREAM
 
@@ -197,14 +198,14 @@ def test_cli_keeps_conflicts_unless_told(sidecar: Path, cli_repo: Path) -> None:
 def test_cli_asks_before_replacing(sidecar: Path, cli_repo: Path) -> None:
     dest = cli_repo / STREAM_DIR / "acme_spread.q"
     dest.write_text("/ the tree's own version\n")
-    code, out = _run(str(sidecar), "--mode", "copy", stdin="y\ny\n")
+    code, out = _run(str(sidecar), "--copy", stdin="y\ny\n")
     assert code == 0, out
     assert dest.read_text() == STREAM
 
 
 def test_cli_second_run_has_nothing_to_do(sidecar: Path, cli_repo: Path) -> None:
-    assert _run(str(sidecar), "--mode", "copy", "--yes")[0] == 0
-    code, out = _run(str(sidecar), "--mode", "copy", "--yes")
+    assert _run(str(sidecar), "--copy", "--yes")[0] == 0
+    code, out = _run(str(sidecar), "--copy", "--yes")
     assert code == 0
     assert "Nothing to install" in out
 
@@ -227,7 +228,7 @@ def test_cli_refuses_a_backfill_source_whose_query_trace_cannot_see(
     sidecar: Path, cli_repo: Path
 ) -> None:
     (sidecar / "feeds" / "acme.q").write_text(DIRECT_SOURCE)
-    code, out = _run(str(sidecar), "--mode", "copy", "--yes")
+    code, out = _run(str(sidecar), "--copy", "--yes")
     assert code == 1, out
     assert "refused" in out and "acme.q:2" in out and ".qetl.source.ipc[" in out
     assert not (cli_repo / SOURCE_DIR / "acme.q").exists(), "nothing is installed"
@@ -246,6 +247,18 @@ def test_cli_refuses_a_polling_feed_whose_query_trace_cannot_see(
 def test_cli_installs_a_direct_line_that_says_why(sidecar: Path, cli_repo: Path) -> None:
     exempt = DIRECT_SOURCE.replace(";a;b)}", ";a;b)}  / untraced: the source logs its own")
     (sidecar / "feeds" / "acme.q").write_text(exempt)
-    code, out = _run(str(sidecar), "--mode", "copy", "--yes")
+    code, out = _run(str(sidecar), "--copy", "--yes")
     assert code == 0, out
     assert (cli_repo / SOURCE_DIR / "acme.q").exists()
+
+
+@pytest.mark.parametrize(("old", "new"), [("symlink", "--link"), ("copy", "--copy")])
+def test_cli_mode_is_the_old_spelling_of_link_and_copy(
+    sidecar: Path, cli_repo: Path, monkeypatch, old: str, new: str
+) -> None:
+    """#1739: --mode is backfill's validate/plan/run, so install's is a flag."""
+    said = rename_support.said(monkeypatch)
+    code, out = _run(str(sidecar), "--mode", old, "--yes")
+    assert code == 0, out
+    assert (cli_repo / WORKER_DIR / "acme_backfill.q").is_symlink() is (old == "symlink")
+    assert said == [rename_support.renamed(f"--mode {old}", new)]

@@ -104,7 +104,7 @@ def test_a_partitioned_worker_declares_the_column_holding_its_partition():
 
 
 def test_a_partition_column_outside_the_columns_or_without_a_partition_is_refused():
-    with pytest.raises(UqsError, match="not among --columns"):
+    with pytest.raises(UqsError, match="not among --schema"):
         backfill.bounded_worker("fx", "fx_rates", "px:float", partition="EURUSD")
     with pytest.raises(UqsError, match="needs --partition"):
         backfill.bounded_worker("fx", "fx_rates", "px:float", partition_column="sym")
@@ -114,7 +114,7 @@ _FX_RATES = [("time", "`timestamp$()"), ("sym", "`g#`symbol$()"), ("px", "`float
 
 
 def test_into_an_existing_target_the_partition_column_is_the_targets():
-    """#1599: with the target defined already, --columns shape the new source,
+    """#1599: with the target defined already, --schema shape the new source,
     and publish holds the TARGET's rows to the partition column - so a source
     without it is fine for a derivation, and a target without it is not."""
     plan = backfill.bounded_worker(
@@ -271,19 +271,19 @@ def test_a_normalizer_takes_a_profile_too():
                 "backfill",
                 "--dataset",
                 "x",
-                "--columns",
+                "--schema",
                 "a:float",
                 "--period",
                 "0D00:00:01",
             ],
             "--period",
         ),
-        (["x", "--publishes", "x", "--columns", "a:float", "--partition", "EURUSD"], "--partition"),
-        (["x", "--publishes", "x", "--columns", "a:float", "--check"], "--check"),
-        (["x", "--publishes", "x", "--columns", "a:float", "--width", "2D"], "--width"),
-        (["x", "--publishes", "x", "--columns", "a:float", "--source", "s"], "--source"),
-        (["x", "--publishes", "x", "--columns", "a:float", "--dataset", "d"], "--dataset"),
-        (["x", "--kind", "normalizer", "--columns", "a:float", "--width", "2D"], "--width"),
+        (["x", "--publishes", "x", "--schema", "a:float", "--partition", "EURUSD"], "--partition"),
+        (["x", "--publishes", "x", "--schema", "a:float", "--check"], "--check"),
+        (["x", "--publishes", "x", "--schema", "a:float", "--width", "2D"], "--width"),
+        (["x", "--publishes", "x", "--schema", "a:float", "--source", "s"], "--source"),
+        (["x", "--publishes", "x", "--schema", "a:float", "--dataset", "d"], "--dataset"),
+        (["x", "--kind", "normalizer", "--schema", "a:float", "--width", "2D"], "--width"),
         (
             [
                 "x",
@@ -291,7 +291,7 @@ def test_a_normalizer_takes_a_profile_too():
                 "backfill",
                 "--dataset",
                 "x",
-                "--columns",
+                "--schema",
                 "a:float",
                 "--profile",
                 "fx",
@@ -344,7 +344,7 @@ def test_a_job_publishing_several_tables_needs_dataset_to_choose():
     [
         ("nope", None, None, "'nope' is not a streaming job"),
         ("crypto_markout", "trades", None, "trades is not a table crypto_markout publishes"),
-        ("crypto_markout", None, "a:float", "drop --columns"),
+        ("crypto_markout", None, "a:float", "drop --schema"),
         ("cross", None, None, "publishes nothing"),
     ],
 )
@@ -479,7 +479,7 @@ def test_a_transform_registered_under_transforms_is_loaded_before_workers():
 
 
 def test_a_twin_reuses_an_existing_source_without_columns_it_never_passed():
-    """#1582: a twin's columns come from its job's table, not from --columns.
+    """#1582: a twin's columns come from its job's table, not from --schema.
     When its source and table both exist already, nothing is shaped by them,
     so they are not a reason to refuse the plan."""
     plan = create_backfill.backfill_plan(

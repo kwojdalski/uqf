@@ -79,7 +79,7 @@ def _list_or(value: str | None, default: tuple[str, ...]) -> tuple[str, ...]:
 def _start_databento(o: dict[str, Any]) -> str:
     pid = databento_feed.start_databento_feed(
         _paths(),
-        dataset=_or(o["dataset"], databento_feed.DEFAULT_DATASET),
+        dataset=_or(o["databento_dataset"], databento_feed.DEFAULT_DATASET),
         symbols=_list_or(o["symbols"], tuple(databento_feed.DEFAULT_SYMBOLS)),
         api_key=o["api_key"],
     )
@@ -140,7 +140,7 @@ class _Feed:
 
 FEEDS: dict[str, _Feed] = {
     "databento": _Feed(
-        ("dataset", "symbols", "api_key"),
+        ("databento_dataset", "symbols", "api_key"),
         _start_databento,
         lambda paths: databento_feed.stop_databento_feed(paths),
         lambda paths: databento_feed.databento_feed_status(paths),
@@ -213,10 +213,14 @@ def _opt(help_: str, feeds: str):
     return typer.Option(help=f"{help_} ({feeds})", show_default=False)
 
 
-@connector_app.command("start", cls=renamed({"--port": "--base-port"}))
+@connector_app.command(
+    "start", cls=renamed({"--port": "--base-port", "--dataset": "--databento-dataset"})
+)
 def start(
     name: FeedArg,
-    dataset: Annotated[str | None, _opt("Databento dataset, e.g. XNAS.ITCH", "databento")] = None,
+    databento_dataset: Annotated[
+        str | None, _opt("Databento dataset, e.g. XNAS.ITCH", "databento")
+    ] = None,
     api_key: Annotated[
         str | None,
         _opt(f"API key; defaults to ${databento_feed.DATABENTO_API_KEY_ENV}", "databento"),
@@ -244,12 +248,7 @@ def start(
         int | None, _opt("Poll interval in milliseconds", "crypto-fills")
     ] = None,
     base_port: Annotated[int | None, _opt("Stack base port", "crypto, crypto-fills")] = None,
-    dry_run: Annotated[
-        bool,
-        typer.Option(
-            "--dry-run", "-n", help="Check the options and say what would start; start nothing"
-        ),
-    ] = False,
+    dry_run: DryRunOpt = False,
 ) -> None:
     """Start a feed publishing onto the running stack's tickerplant.
 
@@ -263,7 +262,7 @@ def start(
     already-running cryptorust OMS.
     """
     _start(name, {
-        "dataset": dataset,
+        "databento_dataset": databento_dataset,
         "api_key": api_key,
         "brokers": brokers,
         "topic": topic,
@@ -313,10 +312,7 @@ def _would(name: str, action: str) -> None:
 
 
 @connector_app.command("stop")
-def stop(
-    name: FeedArg,
-    dry_run: DryRunOpt = False,
-) -> None:
+def stop(name: FeedArg, dry_run: DryRunOpt = False) -> None:
     """Stop a feed started by `uqs connector start`."""
     if dry_run:
         _would(name, f"stop {name}")
@@ -338,7 +334,9 @@ def _takes_start_options(fn: Any) -> Any:
     return fn
 
 
-@connector_app.command("restart", cls=renamed({"--port": "--base-port"}))
+@connector_app.command(
+    "restart", cls=renamed({"--port": "--base-port", "--dataset": "--databento-dataset"})
+)
 @_takes_start_options
 def restart(name: str, dry_run: bool = False, **options: Any) -> None:
     """Stop a feed if it is running, then start it again - with exactly

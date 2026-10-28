@@ -4,9 +4,13 @@ drives, and what was deployed where (#956).
 Targets are the entries `uqs deploy push ARTIFACT TARGET...` reads, in
 deploy_targets.toml (deploy/targets.py): a server is declared once, then
 pushed to and driven from that entry - and a push to a server no target
-names registers one (deploy/history.py). `add` appends a [targets.NAME]
-table rather than rewriting the file, so comments and other entries are never
-touched; `remove` deletes that one table.
+names registers one (deploy/history.py).
+
+Every change - add, set, unset, rename, remove, edit, revert, adopt, and a
+push's registration - is one transaction (deploy/target_changes.py): locked,
+made to the file's text so comments and order survive, validated whole,
+written atomically and recorded in the change log `uqs target log` reads.
+The file may still be edited by hand; the next change records that edit.
 
 `uqs --target NAME <command>` itself is handled by the entry point before any
 command parses (cli/entry.py), because what follows it is the SERVER's
@@ -16,7 +20,9 @@ command line, for the server's uqs to parse.
 from __future__ import annotations
 
 import re
+import shlex
 import sys
+from collections.abc import Callable
 from typing import Annotated
 
 import typer
@@ -24,16 +30,16 @@ from rich.table import Table
 
 from uqs.cli.deploy import deploy_app
 from uqs.cli.json_out import emit, json_opt
-from uqs.cli.safety import dry_run_note
 from uqs.cli.shared import _die, app, console
-from uqs.deploy import control, history, targets
+from uqs.deploy import control, history, target_changelog, target_changes, target_file
 from uqs.deploy.config import DeployError
 from uqs.paths import UqsError, repo_root
 
 target_app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
-    help="The servers `uqs --target NAME <command>` runs on: add, list, remove, check, shell.",
+    help="The servers `uqs --target NAME <command>` runs on: add, set, list, check, log, "
+    "adopt, shell.",
 )
 app.add_typer(target_app, name="target")
 
@@ -42,62 +48,200 @@ _LABEL = re.compile(r"([A-Za-z0-9_.-]+)=(\S*)")
 Name = Annotated[str, typer.Argument(help="A target, or a server: its latest deployment")]
 
 
-@target_app.command("add")
-def add(
-    name: Annotated[str, typer.Argument(help="What to call it: `uqs --target NAME ...`")],
-    ssh: Annotated[str, typer.Option("--ssh", help="ssh destination: user@host, or a Host alias")],
-    dest: Annotated[str, typer.Option("--dest", help="Where `uqs deploy push` installs, absolute")],
-    remote_user: Annotated[
-        str | None,
-        typer.Option("--remote-user", help="Run commands as this account (`sudo -n -iu`)"),
-    ] = None,
-    label: Annotated[
-        list[str] | None,
-        typer.Option("--label", help="key=value, shown by `uqs target list`; repeatable"),
-    ] = None,
-    dry_run: Annotated[
-        bool, typer.Option("--dry-run", "-n", help="Check the entry and show it; write nothing")
-    ] = False,
-) -> None:
-    """Declare a server: its ssh destination and deployment root, nothing else.
-    Processes, ports and configuration are read from the server when used. A
-    push registers its server itself; this is for one deployed some other way."""
+Reach = Annotated[
+    bool,
+    typer.Option(
+        "--reach",
+        help="Reach the server first, as `uqs target check` does, and save nothing it cannot reach",
+    ),
+]
+DryRun = Annotated[
+    bool,
+    typer.Option("--dry-run", "-n", help="Show the change and check it; write nothing"),
+]
+
+
+def _command(*words: str) -> str:
+    """The command as the change log records it."""
+    return shlex.join(["uqs", "target", *words])
+
+
+def _reach(merged: dict, name: str | None) -> None:
+    """--reach: the changed target, as it would be saved, answers over ssh."""
+    if name is None or name not in merged:
+        return
+    try:
+        r = control.remote_from(name, merged[name])
+        release = control.current_release(r)
+    except UqsError as exc:
+        raise DeployError("arguments", f"not saved: {exc}") from None
+    console.print(f"[green]✓[/] reached {name} ({r.describe()}): release {release}")
+
+
+def _done(result: target_changes.Result, said: str, dry_run: bool) -> None:
+    """Report a change: what it did, each changed table before and after,
+    and its number in the log."""
+    if result.outside is not None:
+        verb = "will record" if dry_run else "recorded"
+        console.print(
+            f"[yellow]![/] {result.path} was edited outside uqs since its last change - "
+            f"{verb} that first (`uqs target log`)"
+        )
+    if result.entry is None:
+        console.print(f"nothing to change: {said}")
+        return
+    console.print(result.entry["diff"].rstrip("\n"), markup=False, highlight=False)
+    if dry_run:
+        console.print(f"dry run: {said} - nothing written")
+        return
+    number = len(target_changelog.read_log(repo_root()))
+    console.print(f"[green]✓[/] {said} in {result.path} (change {number}, `uqs target log`)")
+
+
+def _change(run: Callable[[], target_changes.Result], said: str, dry_run: bool) -> None:
+    try:
+        result = run()
+    except (DeployError, UqsError) as exc:
+        _die(UqsError(str(exc)))
+        return
+    _done(result, said, dry_run)
+
+
+def _labels(label: list[str] | None) -> dict[str, str]:
     labels: dict[str, str] = {}
     for pair in label or []:
         m = _LABEL.fullmatch(pair)
         if m is None:
             _die(UqsError(f"--label {pair!r}: give key=value"))
-            return
-        labels[m.group(1)] = m.group(2)
+        else:
+            labels[m.group(1)] = m.group(2)
+    return labels
+
+
+Ssh = Annotated[str, typer.Option("--ssh", help="The ssh destination: user@host, or a Host alias")]
+Dest = Annotated[str, typer.Option("--dest", help="Where `uqs deploy push` installs, absolute")]
+RemoteUser = Annotated[
+    str | None,
+    typer.Option("--remote-user", help="Run commands as this account (`sudo -n -iu`)"),
+]
+
+
+@target_app.command("add")
+def add(
+    name: Annotated[str, typer.Argument(help="What to call it: `uqs --target NAME ...`")],
+    ssh: Ssh,
+    dest: Dest,
+    remote_user: RemoteUser = None,
+    label: Annotated[
+        list[str] | None,
+        typer.Option("--label", help="key=value, shown by `uqs target list`; repeatable"),
+    ] = None,
+    reach: Reach = False,
+    dry_run: DryRun = False,
+) -> None:
+    """Declare a server: its ssh destination and deployment root, nothing else.
+    Processes, ports and configuration are read from the server when used. A
+    push registers its server itself; this is for one deployed some other way.
+    Other settings: `uqs target set`."""
+    labels = _labels(label)
     if remote_user is not None and not _ACCOUNT.fullmatch(remote_user):
         _die(UqsError(f"--remote-user {remote_user!r} is not an account name"))
-    root = repo_root()
-    path = targets.declaration_path(root)
-    before = path.read_text() if path.is_file() else None
     entry = {"host": ssh, "dest": dest, "remote_user": remote_user, "labels": labels or None}
-    try:
-        targets.append(root, name, entry)
-        control.remote_for(name, root)
-    except (DeployError, UqsError) as exc:
-        _restore(path, before)
-        _die(UqsError(str(exc)))
-        return
-    if dry_run:  # checked as a real add is - remote_for reads the file - then undone
-        _restore(path, before)
-        shown = ", ".join(f"{k}={v}" for k, v in entry.items() if v)
-        console.print(f"would add target {name} ({shown}) to {path}", markup=False)
-        console.print(dry_run_note())
-        return
-    console.print(f"[green]✓[/] target {name} added to {path}")
-    console.print(f"  try: uqs --target {name} summary")
+    words = [name, "--ssh", ssh, "--dest", dest]
+    words += ["--remote-user", remote_user] if remote_user else []
+    words += [w for pair in label or [] for w in ("--label", pair)]
+    _change(
+        lambda: target_changes.add(
+            repo_root(), name, entry, _command("add", *words),
+            check=_reach if reach else None, dry_run=dry_run,
+        ),
+        f"target {name} added",
+        dry_run,
+    )  # fmt: skip
+    if not dry_run:
+        console.print(f"  try: uqs --target {name} summary")
 
 
-def _restore(path, before: str | None) -> None:
-    """Put the declaration back as it was before an add."""
-    if before is None:
-        path.unlink(missing_ok=True)
-    else:
-        path.write_text(before)
+_PAIR = re.compile(r"([a-z_][a-z0-9_]*(?:\.[A-Za-z0-9_.-]+)?)=(.*)", re.S)
+_KEY = re.compile(r"[a-z_][a-z0-9_]*(?:\.[A-Za-z0-9_.-]+)?")
+
+
+@target_app.command("set")
+def set_(
+    name: Annotated[str, typer.Argument(help="The target")],
+    pairs: Annotated[
+        list[str],
+        typer.Argument(
+            metavar="KEY=VALUE...",
+            help="Settings, spelt as in the file: host=deploy@prod connect_timeout=20 "
+            'launch_mode=source labels.tier=uat live_check=\'["a", "b"]\'. A VALUE is '
+            'read as TOML when it is one (20, true, [..], "quoted"), else as text',
+            show_default=False,
+        ),
+    ],
+    reach: Reach = False,
+    dry_run: DryRun = False,
+) -> None:
+    """Change settings of one target in place - any key the file accepts,
+    including launch_mode, launch_python, launch_env_file, connect_timeout
+    and environment. The rest of the file, comments included, is untouched."""
+    changes: dict[str, object] = {}
+    for pair in pairs:
+        m = _PAIR.fullmatch(pair)
+        if m is None:
+            _die(UqsError(f"{pair!r}: give KEY=VALUE, the key as the file spells it"))
+            return
+        changes[m.group(1)] = target_file.parse_value(m.group(2))
+    _change(
+        lambda: target_changes.set_keys(
+            repo_root(), name, changes, _command("set", name, *pairs),
+            check=_reach if reach else None, dry_run=dry_run,
+        ),
+        f"target {name} set {', '.join(changes)}",
+        dry_run,
+    )  # fmt: skip
+
+
+@target_app.command("unset")
+def unset(
+    name: Annotated[str, typer.Argument(help="The target")],
+    keys: Annotated[
+        list[str],
+        typer.Argument(metavar="KEY...", help="Settings to remove: launch_python labels.tier"),
+    ],
+    dry_run: DryRun = False,
+) -> None:
+    """Remove settings from one target, so it takes the layer beneath's
+    value ([defaults], its environment) or push's default."""
+    for key in keys:
+        if not _KEY.fullmatch(key):
+            _die(UqsError(f"{key!r} is not a key as the file spells it"))
+    changes = dict.fromkeys(keys, target_file.UNSET)
+    _change(
+        lambda: target_changes.set_keys(
+            repo_root(), name, changes, _command("unset", name, *keys),
+            kind="unset", dry_run=dry_run,
+        ),
+        f"target {name} unset {', '.join(keys)}",
+        dry_run,
+    )  # fmt: skip
+
+
+@target_app.command("rename")
+def rename(
+    old: Annotated[str, typer.Argument(metavar="OLD", help="The target")],
+    new: Annotated[str, typer.Argument(metavar="NEW", help="Its new name")],
+    dry_run: DryRun = False,
+) -> None:
+    """Rename a target in place. The deployments recorded under its old name
+    are recorded under the new one, so `uqs deploy history NEW` shows them."""
+    _change(
+        lambda: target_changes.rename(
+            repo_root(), old, new, _command("rename", old, new), dry_run=dry_run
+        ),
+        f"target {old} renamed {new}",
+        dry_run,
+    )
 
 
 CheckJson = json_opt('{"ok": true, "target", "host", "dest", "remote_user", "release"}')
@@ -144,22 +288,15 @@ def shell(
 
 @target_app.command("remove")
 def remove(
-    name: Annotated[str, typer.Argument(help="The target")],
-    dry_run: Annotated[
-        bool, typer.Option("--dry-run", "-n", help="Check it is declared; remove nothing")
-    ] = False,
+    name: Annotated[str, typer.Argument(help="The target")], dry_run: DryRun = False
 ) -> None:
-    """Delete one target's [targets.NAME] table; every other line stays."""
-    try:
-        path = targets.remove(repo_root(), name, dry_run)
-    except DeployError as exc:
-        _die(UqsError(str(exc)))
-        return
-    if dry_run:
-        console.print(f"would remove target {name} from {path}", markup=False)
-        console.print(dry_run_note())
-        return
-    console.print(f"[green]✓[/] target {name} removed from {path}")
+    """Delete one target's table, and the comment directly above it; every
+    other line stays. `uqs target revert` brings it back."""
+    _change(
+        lambda: target_changes.remove(repo_root(), name, _command("remove", name), dry_run=dry_run),
+        f"target {name} removed",
+        dry_run,
+    )
 
 
 HistoryJson = json_opt(
@@ -245,6 +382,7 @@ def forward(name: str, yes: bool, args: list[str], *, interactive: bool) -> int:
             "give the target once: `uqs --target NAME query` runs the query on the server, "
             "`uqs query --tunnel NAME` runs it here through an ssh tunnel"
         )
+    args = control.confirmed_on_server(args, yes)
     r = control.remote_for(name, repo_root())
     shown = " ".join(["uqs", *args])
     if control.changes_the_server(args) and not yes:

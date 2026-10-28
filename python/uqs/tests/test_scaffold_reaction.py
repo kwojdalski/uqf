@@ -143,8 +143,8 @@ def _refusal(argv: list[str], monkeypatch) -> str:
         (["--period", "0D00:00:01"], "--period does not apply to a reaction"),
         (["--kind", "backfill"], "--kind does not apply to a reaction"),
         (["--procname", "x1"], "--procname does not apply to a reaction"),
-        # #1578: --columns-from was not tracked, so it was silently ignored.
-        (["--columns-from", "does_not_exist"], "--columns-from does not apply to a reaction"),
+        # #1578: --schema-from was not tracked, so it was silently ignored.
+        (["--schema-from", "does_not_exist"], "--schema-from does not apply to a reaction"),
     ],
 )
 def test_process_options_are_refused_not_ignored(extra, message, monkeypatch):

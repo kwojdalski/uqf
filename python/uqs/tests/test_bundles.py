@@ -324,7 +324,7 @@ def test_cli_dry_run_writes_nothing(bundle: Path, cli_repo: Path) -> None:
 
 
 def test_cli_refuses_symlink_for_a_bundle(bundle: Path, cli_repo: Path) -> None:
-    code, _out = _run(str(bundle), "--mode", "symlink", "--yes")
+    code, _out = _run(str(bundle), "--link", "--yes")
     assert code == 1
     assert not (cli_repo / LEDGER).exists()
 

@@ -13,7 +13,7 @@ If your rows come from a timer rather than a subscription you want
 
 ```bash
 uqs job new spreadmon --subscribe-to fx_orderbook \
-    --publishes spread_bps --columns "sym:symbol, spread:float"
+    --publishes spread_bps --schema "sym:symbol, spread:float"
 ```
 
 `--subscribe-to` is what makes it an etl rather than a feed. It takes a
@@ -81,9 +81,9 @@ handler too:
 
 ```
 uqs job new trades_echo --subscribe-to trades --publishes trades_copy \
-    --columns-from trades --transform passthrough
+    --schema-from trades --transform passthrough
 uqs job new trades_notional --subscribe-to trades --publishes notional \
-    --columns "sym:symbol, notional:float" --transform derive
+    --schema "sym:symbol, notional:float" --transform derive
 ```
 
 Both write an `on_batch` that accepts only the subscribed table (another one is

@@ -15,7 +15,7 @@ a subscription.
 
 ```
 uqs connector start databento                                  # XNAS.ITCH, AAPL/MSFT
-uqs connector start databento --dataset XNAS.ITCH --symbols AAPL,TSLA
+uqs connector start databento --databento-dataset XNAS.ITCH --symbols AAPL,TSLA
 uqs connector status databento
 uqs connector stop databento
 ```

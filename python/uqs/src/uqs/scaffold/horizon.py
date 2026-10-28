@@ -1,7 +1,7 @@
 """Scaffolding a horizon job: an event evaluated once its horizon has passed (#949).
 
 `uqs job new NAME --kind horizon --subscribe-to EVENTS,REFERENCE --horizon 0D00:00:10
---columns ...` writes one file: the two inputs (each table's whole plant
+--schema ...` writes one file: the two inputs (each table's whole plant
 schema, to narrow), the output table NAME, a scoring function that throws until
 written, the two-input `.qetl.transform` it is declared as, and the
 `.qetl.job.stream.at_horizons` that registers the job - see
@@ -88,7 +88,7 @@ def horizon_job(
     if publishes:
         raise UqsError("a horizon job publishes its own NAME - drop --publishes")
     if not columns:
-        raise UqsError("--kind horizon needs --columns: the table it publishes")
+        raise UqsError("--kind horizon needs --schema: the table it publishes")
     if not horizon:
         raise UqsError(
             f"--kind horizon needs --horizon, a q timespan such as 0D00:00:10, not {horizon!r}"
@@ -125,7 +125,7 @@ def horizon_job(
         # output with nothing left is `([] )`, which the transform registry
         # refuses at load as not an unkeyed table (#1596).
         raise UqsError(
-            "--columns must name at least one column besides time: the plant stamps "
+            "--schema must name at least one column besides time: the plant stamps "
             "time itself, so a horizon job publishing time alone has no payload"
         )
     ev = [(c, lit.replace("`g#", "")) for c, lit in source_columns[events]]
