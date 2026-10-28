@@ -1,4 +1,4 @@
-"""The external connectors: `uqs connector start|stop|status NAME`.
+"""The external connectors: `uqs connector start|stop|restart|status|logs NAME`.
 
 Databento, Kafka, and cryptorust's two recorders each drive a process this
 repository does not own, publishing onto the running stack's tickerplant. They
@@ -8,14 +8,21 @@ they are one group of their own rather than lifecycle commands. Called
 `connector` rather than `feed` (#1417) because a feed is also a TorQ-managed q
 process here; these supervise the publisher OUTSIDE the plant.
 
-One `start` for every feed, rather than a sub-app per feed, because all four
-have the same three verbs. Each feed's options are its own: one given to a
+One `start` for every feed, rather than a sub-app per feed, because every
+feed has the same five verbs. Each feed's options are its own: one given to a
 feed it does not belong to is refused by name, as `uqs job new` refuses an
 option for another kind.
+
+The whole lifecycle lives in this group rather than as `uqs start
+connector:NAME` beside the stack's verbs (#1734): a connector is not a torq.sh
+process, so it shares none of `start`'s options (`--profile`, `--follow`, the
+skips) while each feed has start options of its own, and #1738's rule 1 is
+noun, then verb. Its log is one plain file, not a TorQ out_/err_ pair.
 """
 
 from __future__ import annotations
 
+import functools
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Annotated, Any
@@ -26,7 +33,7 @@ from rich.table import Table
 from uqs.cli import completion
 from uqs.cli.json_out import emit, json_opt, snake
 from uqs.cli.renames import renamed
-from uqs.cli.safety import dry_run_note
+from uqs.cli.safety import DryRunOpt, dry_run_note
 from uqs.cli.shared import _die, _paths, app, console
 from uqs.external import crypto, databento_feed, kafka_feed
 from uqs.external.crypto import (
@@ -44,7 +51,8 @@ from uqs.paths import UqsError
 connector_app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
-    help="External connectors: start, stop and check the publishers outside the plant "
+    help="External connectors: start, stop, restart, check and read the logs of the "
+    "publishers outside the plant "
     "(databento, kafka, crypto, crypto-fills) that write into its tickerplant. These "
     "supervise external processes, not the TorQ-managed q processes `uqs start` runs.",
 )
@@ -254,8 +262,7 @@ def start(
     `crypto_sim_fills`, real executions into `crypto_trades`; needs an
     already-running cryptorust OMS.
     """
-    feed = _feed(name)
-    options = {
+    _start(name, {
         "dataset": dataset,
         "api_key": api_key,
         "brokers": brokers,
@@ -269,7 +276,12 @@ def start(
         "symbol": symbol,
         "poll_interval_ms": poll_interval_ms,
         "port": base_port,
-    }
+    }, dry_run)  # fmt: skip
+
+
+def _start(name: str, options: dict[str, Any], dry_run: bool = False, verb: str = "start") -> None:
+    """Start feed `name` with the options given (refusing any not its own), or dry-run it."""
+    feed = _feed(name)
     given = {k: v for k, v in options.items() if v is not None}
     for option in given:
         if option not in feed.options:
@@ -279,7 +291,7 @@ def start(
     if dry_run:
         shown = {k: ("***" if k == "api_key" else v) for k, v in given.items()}
         settings = ", ".join(f"{k}={v}" for k, v in shown.items()) or "its defaults"
-        _would(name, f"start {name} with {settings}")
+        _would(name, f"{verb} {name} with {settings}")
         return
     try:
         message = feed.start({k: given.get(k) for k in feed.options})
@@ -303,9 +315,7 @@ def _would(name: str, action: str) -> None:
 @connector_app.command("stop")
 def stop(
     name: FeedArg,
-    dry_run: Annotated[
-        bool, typer.Option("--dry-run", "-n", help="Say what would stop; stop nothing")
-    ] = False,
+    dry_run: DryRunOpt = False,
 ) -> None:
     """Stop a feed started by `uqs connector start`."""
     if dry_run:
@@ -317,6 +327,34 @@ def stop(
         _die(exc)
         return
     console.print(f"{name} feed stopped")
+
+
+def _takes_start_options(fn: Any) -> Any:
+    """`fn` with `start`'s parameters, so `restart` takes exactly its options
+    and cannot drift from them; `fn` keeps its own name and help."""
+    doc, name = fn.__doc__, fn.__name__
+    functools.update_wrapper(fn, start)
+    fn.__doc__, fn.__name__, fn.__qualname__ = doc, name, name
+    return fn
+
+
+@connector_app.command("restart", cls=renamed({"--port": "--base-port"}))
+@_takes_start_options
+def restart(name: str, dry_run: bool = False, **options: Any) -> None:
+    """Stop a feed if it is running, then start it again - with exactly
+    `start`'s options, which are not remembered from the last start."""
+    feed = _feed(name)
+    given = {"port" if k == "base_port" else k: v for k, v in options.items()}
+    if dry_run:
+        return _start(name, given, dry_run=True, verb="restart")
+    try:
+        if feed.status(_paths()).get("running") == "True":
+            feed.stop(_paths())
+            console.print(f"{name} feed stopped")
+    except UqsError as exc:
+        _die(exc)
+        return
+    _start(name, given)
 
 
 StatusJson = json_opt(

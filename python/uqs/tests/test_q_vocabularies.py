@@ -74,7 +74,7 @@ def test_q_levels_keep_their_order_once_mapped():
 
 
 def test_the_level_choices_are_derived_from_the_order():
-    """The `--level` completion and help on `logs` and `up` read these, so no
+    """The `--level` completion and help on `logs` and `start --follow` read these, so no
     command restates the list."""
     assert logs.LEVEL_CHOICES == tuple(sorted(logs._LEVEL_ORDER, key=logs._LEVEL_ORDER.__getitem__))
     assert all(choice in logs.LEVEL_HELP for choice in logs.LEVEL_CHOICES)

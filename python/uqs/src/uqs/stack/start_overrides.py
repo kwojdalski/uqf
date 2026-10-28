@@ -43,8 +43,8 @@ NAMES = {
 FLAGS = {field: f"--override {name}" for field, name in NAMES.items()}
 #: The commands that take each override (`uqs override list`).
 COMMANDS = {
-    "q_version": ("start", "up", "restart"),
-    "profile_budget": ("start", "up"),
+    "q_version": ("start", "restart"),
+    "profile_budget": ("start", "restart"),
 }
 CONSEQUENCES = {
     "q_version": "the q is older than the tree as written needs: processes may die on "

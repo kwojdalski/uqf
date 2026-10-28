@@ -1,34 +1,26 @@
-"""The advisory warnings and notes that run before a start (#290, #900), split
-from cli/lifecycle.py to keep that module within this package's 400 lines.
-None of them refuses anything: each says what the operator may not expect.
+"""The advisory warnings a start prints before it runs - never a refusal.
+
+Each looks at the fleet the start will leave and names a problem the plant
+would not: a subscriber with no producer, more connections than the licence
+lets one process hold, proctypes monitor1 cannot watch. None can fail the
+command. Split from cli/lifecycle.py, which holds its modules to 400 lines.
 """
 
 from __future__ import annotations
 
-from uqs.attach import live as _registers_live_check  # noqa: F401 - the start gate's (#1651)
-from uqs.cli.shared import (
-    _paths,
-    console,
-    log,
-)
+from uqs.cli.shared import _paths, console, log
 from uqs.model import dependencies, profiles
 from uqs.stack import alive, deployment, listing
 from uqs.stack import procs as procs_model
 
 
-def _running(port: int | None) -> set[str]:
+def running(port: int | None) -> set[str]:
     """The processes `summary` reports up. Raises when it cannot say; each
     caller decides what that means for it."""
     return alive.running(_paths(), base_port=port)
 
 
-def _selected(names: str, profile: str | None) -> list[str] | None:
-    """A profile start's resolved set - what TorQ is let discover
-    (stack/deployment.py) - or None for a start that only adds to it."""
-    return names.split() if profile is not None else None
-
-
-def _warn_about_unfed_inputs(procs: str, port: int | None) -> None:
+def unfed_inputs(procs: str, port: int | None) -> None:
     """Say so when what is being started subscribes to a table nothing
     running publishes.
 
@@ -49,9 +41,9 @@ def _warn_about_unfed_inputs(procs: str, port: int | None) -> None:
         names = [p for p in procs.split() if p != "all"]
         if not names:
             return  # `start all` brings up every startwithall=1 producer too
-        running = _running(port)
+        up = running(port)
         warnings = [
-            line for name in names for line in dependencies.unfed_inputs(name, running | set(names))
+            line for name in names for line in dependencies.unfed_inputs(name, up | set(names))
         ]
     except Exception as exc:  # noqa: BLE001 - see docstring: never block a start
         # loguru formats with str.format, not %-interpolation: the `%s` this
@@ -64,7 +56,7 @@ def _warn_about_unfed_inputs(procs: str, port: int | None) -> None:
         console.print(f"[yellow]warning[/] {line}")
 
 
-def _note_monitor_coverage(verb: str, names: str, profile: str | None = None) -> None:
+def monitor_coverage(verb: str, names: str, profile: str | None = None) -> None:
     """Name the proctypes monitor1 gives up under the connection budget (#620).
 
     Their processes get no heartbeat subscription, and heartbeat.q cannot
@@ -77,7 +69,8 @@ def _note_monitor_coverage(verb: str, names: str, profile: str | None = None) ->
     have, while the one it had went unnamed (#1318).
     """
     try:
-        selected = deployment.planned(_paths(), [verb, *names.split()], _selected(names, profile))
+        chosen = names.split() if profile is not None else None
+        selected = deployment.planned(_paths(), [verb, *names.split()], chosen)
         dropped = procs_model.monitor_dropped_proctypes(_paths(), selected)
         limit = profiles.licence_limit()
     except Exception as exc:  # noqa: BLE001 - see docstring: never block a start
@@ -91,7 +84,7 @@ def _note_monitor_coverage(verb: str, names: str, profile: str | None = None) ->
         )
 
 
-def _warn_about_connection_cap(procs: str, port: int | None) -> None:
+def connection_cap(procs: str, port: int | None) -> None:
     """Say so when the fleet this start produces is bigger than the licence
     lets one process hold handles for.
 
@@ -108,7 +101,7 @@ def _warn_about_connection_cap(procs: str, port: int | None) -> None:
     want on a full kdb+/KDB-X licence.
     """
     try:
-        running = _running(port)
+        up = running(port)
         if procs.strip() == "all":
             starting = {
                 row["procname"]
@@ -117,7 +110,7 @@ def _warn_about_connection_cap(procs: str, port: int | None) -> None:
             }
         else:
             starting = {p for p in procs.split() if p != "all"}
-        total = len(running | starting)
+        total = len(up | starting)
         limit = profiles.licence_limit()
     except Exception as exc:  # noqa: BLE001 - see docstring: never block a start
         log.debug("connection-cap warning skipped: {}", exc)

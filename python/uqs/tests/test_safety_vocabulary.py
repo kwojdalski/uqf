@@ -18,7 +18,9 @@ runner = CliRunner()
 
 
 def test_given_refuses_an_unknown_name_and_a_reason_alone():
-    with pytest.raises(UqsError, match="has no override 'nope'.*takes: q-version-check"):
+    with pytest.raises(
+        UqsError, match="has no override 'nope'.*takes: profile-budget-check, q-version-check"
+    ):
         safety.given("restart", ["nope"], "x")
     with pytest.raises(UqsError, match="none was given"):
         safety.given("start", None, "a reason with nothing to excuse")
@@ -27,7 +29,7 @@ def test_given_refuses_an_unknown_name_and_a_reason_alone():
 
 def test_override_list_names_each_command_and_what_it_bypasses():
     rows = {b.name: b for b in safety.catalog()}
-    assert rows["profile-budget-check"].commands == ("start", "up")
+    assert rows["profile-budget-check"].commands == ("start", "restart")
     assert rows["accept-digest"].commands == ("deploy push",)
     assert (
         "TORQ_VERSION:COMPONENT" in rows and "job attach" in rows["TORQ_VERSION:COMPONENT"].commands

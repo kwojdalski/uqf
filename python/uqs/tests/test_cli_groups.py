@@ -53,7 +53,7 @@ def _group(*path: str) -> TyperGroup:
         (("job", "runs"), {"status", "list", "show", "audit", "migrate"}),
         (("setup",), {"odbc"}),
         (("setup", "odbc"), {"install", "status", "env", "rollback"}),
-        (("connector",), {"start", "stop", "status"}),
+        (("connector",), {"start", "stop", "restart", "status", "logs"}),
     ],
 )
 def test_every_moved_command_is_at_its_new_path(path, expected):

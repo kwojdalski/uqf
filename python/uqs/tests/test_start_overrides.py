@@ -131,10 +131,10 @@ def test_an_override_that_would_skip_nothing_is_refused(kw, says):
         )
 
 
-def test_restart_takes_no_budget_override():
-    """Only a profile's set has a budget estimate, and restart takes no profile."""
-    with pytest.raises(UqsError, match="has no override 'profile-budget-check'"):
-        start_override_opts.overrides_from("restart", ["profile-budget-check"], "x")
+def test_restart_takes_the_budget_override_as_start_does():
+    """#1734 gave restart start's options, --profile among them."""
+    got = start_override_opts.overrides_from("restart", ["profile-budget-check"], "x", profile="fx")
+    assert got.profile_budget == "x"
 
 
 def test_the_cli_refuses_an_irrelevant_combination_before_starting(monkeypatch):
