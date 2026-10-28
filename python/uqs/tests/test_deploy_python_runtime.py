@@ -213,7 +213,7 @@ ABSENT = {
     " -I -c ": _done("UQF_PYTHON 3.14.9 cpython\n"),
     "glibc=$(getconf": _done(SERVER + "glibc=2.35\ndata=present\n"),
     "deploy_smoke.q": _done("DEPLOY_SMOKE_OK\n"),
-    "uqs data hdb-check": _done('{"hdb": "/data/hdb", "present": false}\n'),
+    "uqs data check": _done('{"hdb": "/data/hdb", "present": false}\n'),
     "--ports-free": _done(json.dumps({"busy": {}}) + "\nDEPLOY_VERIFY_OK\n"),
     "uqs deploy verify --profile": _verified(True),
 }

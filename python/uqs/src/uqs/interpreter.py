@@ -347,7 +347,7 @@ def interpreter_status(
 ) -> InterpreterStatus:
     """The interpreter, described - never refused.
 
-    For `uqs list env` and `uqs summary`, which only read: an operator looking
+    For `uqs list env` and `uqs status`, which only read: an operator looking
     at a fleet needs to see which q runs it, and a reporting command that died
     on a problem would hide exactly the thing worth reporting.
     """

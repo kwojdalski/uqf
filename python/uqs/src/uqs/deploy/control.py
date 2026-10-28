@@ -70,19 +70,22 @@ DEFAULT_CONNECT_TIMEOUT = 10
 #: but an in-place update or delete on every rdb and hdb (#1663).
 READ_ONLY: frozenset[tuple[str, str | None]] = frozenset(
     {
-        ("summary", None),
+        ("status", None),
+        ("summary", None),  # `status`'s name before #1733
         ("graph", None),
         ("job", "gaps"),
         ("job", "preview"),
         ("schema", None),
         ("list", None),
         ("logs", None),
+        ("config", "show"),
         ("config", "get"),
         ("runtime", "diff"),
         ("runtime", "list"),
         ("job", "list"),
         ("connector", "status"),
         ("deploy", "status"),
+        ("deploy", "check"),
         ("deploy", "verify"),
     }
 )
@@ -90,7 +93,7 @@ READ_ONLY: frozenset[tuple[str, str | None]] = frozenset(
 #: and ask THERE, through the ssh terminal - or take their own --yes (#1755).
 #: Asking here as well would ask twice, the first time before the plan is shown.
 CONFIRMS_ON_SERVER: frozenset[tuple[str, str]] = frozenset(
-    {("data", "hdb-check"), ("data", "hdb-alter")}
+    {("data", "check"), ("data", "alter"), ("data", "hdb-check"), ("data", "hdb-alter")}
 )
 #: Read-only three deep: `config sources check` reads, `config sources stub`
 #: writes a file; `job runs upgrade` and `setup odbc install` write.
@@ -242,7 +245,7 @@ def changes_the_server(args: Sequence[str]) -> bool:
         return False
     if ("--dry-run" in args or "-n" in args) and words[:2] != ("job", "backfill"):
         return False
-    if words[:1] == ("summary",) and ("-i" in args or "--interactive" in args):
+    if words[:1] in (("status",), ("summary",)) and ("-i" in args or "--interactive" in args):
         return True  # its browser starts, stops and restarts processes with single keys
     if words in READ_ONLY_DEEP or words[:2] in CONFIRMS_ON_SERVER:
         return False

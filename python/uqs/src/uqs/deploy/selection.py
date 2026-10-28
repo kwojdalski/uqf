@@ -85,7 +85,7 @@ def started_by(profile: str, extra: Sequence[str]) -> list[str]:
 
 
 def verify_args(sel: Selection, live: bool) -> list[str]:
-    """`uqs deploy verify`'s flags for a selection; none without one."""
+    """`uqs deploy check`'s flags for a selection; none without one."""
     argv = []
     if sel.processes:
         argv += ["--procs", ",".join(sel.processes)]
@@ -95,8 +95,13 @@ def verify_args(sel: Selection, live: bool) -> list[str]:
 
 
 def verify_command(profile: str, sel: Selection, live: bool, *extra: str) -> str:
-    """The shell command a release verifies itself with, from its own root.
-    A release from before #835, which had no `uqs deploy verify`, is not a
-    supported rollback target (#1648)."""
-    argv = ["--profile", profile, *extra, *verify_args(sel, live)]
-    return ".venv/bin/uqs deploy verify " + " ".join(q(a) for a in argv)
+    """The shell command a release verifies itself with, from its own root:
+    `uqs deploy check`, or, on a release from before #1733 - a rollback's
+    target - `uqs deploy verify`, the name it had then. A release from before
+    #835, which had neither, is not a supported rollback target (#1648)."""
+    argv = " ".join(q(a) for a in ["--profile", profile, *extra, *verify_args(sel, live)])
+    return (
+        "if .venv/bin/uqs deploy check --help >/dev/null 2>&1; "
+        f"then .venv/bin/uqs deploy check {argv}; "
+        f"else .venv/bin/uqs deploy verify {argv}; fi"
+    )

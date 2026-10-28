@@ -1,4 +1,4 @@
-"""The graph columns of `uqs summary`: what each process depends on, reads and
+"""The graph columns of `uqs status`: what each process depends on, reads and
 writes, rendered as cells.
 
 Split out of cli/summary.py, which had reached the package's 400-line module

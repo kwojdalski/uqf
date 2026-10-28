@@ -1,4 +1,4 @@
-"""What `uqs data hdb-check` and `uqs data hdb-alter` share: an HDB's tables,
+"""What `uqs data check` and `uqs data alter` share: an HDB's tables,
 checked, filled and changed one table at a time, dry run first (#1755).
 
 Which HDB is named once, by what already knows it - never a path to remember:

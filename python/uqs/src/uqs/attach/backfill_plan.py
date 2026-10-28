@@ -85,7 +85,7 @@ def _writers(att: Attachment, obs: Observation, dest: Destination) -> list[str]:
 
 def readers_of(att: Attachment, obs: Observation, hdb_dir: Path, ipc: Ipc) -> list[Reader]:
     """Every HDB process discovery lists, and whether it serves `hdb_dir`: the
-    reload targets of an attached backfill, and of `uqs data hdb-alter --attach`."""
+    reload targets of an attached backfill, and of `uqs data alter --attach`."""
     out: list[Reader] = []
     for svc in obs.others:
         if svc["proctype"] != "hdb":

@@ -910,8 +910,8 @@ whether it serves the table, because **a partitioned HDB takes its table list
 from its latest partition**: a table written only into an older date stays
 invisible until the latest partition holds it too. On a freshly attached table
 that is the case until the stack's next end of day writes it (or
-`uqs data hdb-check --attach NAME --apply` fills it), and the run says so by
-name instead of reporting success.
+`uqs data check --attach NAME --apply` fills it), and the run says so by name
+instead of reporting success.
 
 `written_not_queryable` is retryable without writing anything: run the same
 command again. Every window is covered, so the worker is idle, the readers are
@@ -1031,8 +1031,8 @@ What the containers do not show:
   operator restarts them, after which they subscribe to every table the
   tickerplant has; the workflow never restarts a process it did not start.
 - **Older HDB partitions lack the table** until repaired after the first end of
-  day: `uqs data hdb-check --attach NAME --apply` writes an empty table into
-  just the partitions lacking it, on the stack's host ([one table, in any
+  day: `uqs data check --attach NAME --apply` writes an empty table into just
+  the partitions lacking it, on the stack's host ([one table, in any
   HDB](uqs.md#one-table-in-any-hdb)). The plan warns with `HDB_HISTORY`.
 - **Connection cap.** Under a licence with a connection limit (the KDB-X
   community licence allows 16 per process), an attachment adds one persistent

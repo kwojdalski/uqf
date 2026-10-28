@@ -365,7 +365,7 @@ scaffold bug: report it, don't work around it.
    and `uv run python scripts/gates/check_q_traps.py`.
 5. Run it for real:
    - `uqs start NAME -f`, which starts it and follows its log;
-   - `uqs summary`, which should show it `up` and wired;
+   - `uqs status`, which should show it `up` and wired;
    - or on stock kdb+ with `q scripts/processes/run_stream.q -job NAME`, which
      starts its in-tree producers itself.
 
@@ -377,8 +377,8 @@ Work from the outside in. Most problems stop at step 1 or 2. The full runbook is
 `docs/guides/when-it-breaks.md`, and its answers are summarised in
 `uqf-operations.md`.
 
-1. **Is it running, and wired?** `uqs summary` shows each process's status
-   beside what it subscribes to and publishes. A process that's `up` but idle is
+1. **Is it running, and wired?** `uqs status` shows each process's status beside
+   what it subscribes to and publishes. A process that's `up` but idle is
    usually one whose producer isn't running: nothing errors. Start it through a
    profile (`uqs start --profile NAME`), which pulls in its producers.
 2. **What does its log say?** `uqs logs <proc> --level ERROR`, or `-f` to
@@ -400,7 +400,7 @@ Work from the outside in. Most problems stop at step 1 or 2. The full runbook is
    `src/etl/init.q`, `.qetl.job.stream.wire` the job to a recorder, and call
    `.qpipe.job.<job>.on_batch` with a batch you build.
 6. **A backfill has exited by the time you look.**
-   - `uqs job runs status` lists runs that never finished.
+   - `uqs job runs list --unfinished` lists runs that never finished.
    - `uqs job runs show <run_id>` gives the facts, the log paths and the command
      that resumes.
    - Re-running the same command **is** the resume: covered windows are skipped.
@@ -410,7 +410,7 @@ Work from the outside in. Most problems stop at step 1 or 2. The full runbook is
    `uqs config sources check <source>`. Its stages are credential → tls →
    connect → schema → read → output, each with its own diagnostic.
 9. **HDB errors** such as `./<date>/<table>. OS reports: No such file`:
-   `uqs data hdb-check`, then `--fix`.
+   `uqs data check`, then `--fix`.
 
 --------------------------------------------------------------------------------
 

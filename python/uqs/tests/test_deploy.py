@@ -280,7 +280,7 @@ _HEALTHY = {
     "uv python find": _done(SERVER + "data=present\n"),
     "deploy_smoke.q": _done("DEPLOY_SMOKE_OK\n"),
     # a server with no HDB yet: nothing for the release's hdb-check to judge (#870)
-    "uqs data hdb-check": _done('{"hdb": "/data/hdb", "present": false}\n'),
+    "uqs data check": _done('{"hdb": "/data/hdb", "present": false}\n'),
     "--ports-free": _done(json.dumps({"busy": {}}) + "\n" + verify.OK_MARKER + "\n"),
 }
 

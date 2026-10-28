@@ -64,7 +64,7 @@ _PUB_RE = re.compile(
 #: It matters here because every streaming job is its own process and every
 #: one of them opens a handle to stp1. Exceed it and the plant does not
 #: complain: it resets the connection, the process wedges in the retry loop
-#: in scripts/processes/torq_stream.q, and `uqs summary` reports it
+#: in scripts/processes/torq_stream.q, and `uqs status` reports it
 #: `up` because that is a PID check. Which jobs run then depends on which
 #: sixteen won the race to start (#285).
 LICENCE_CONNECTION_LIMIT = 16

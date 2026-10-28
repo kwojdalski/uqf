@@ -38,13 +38,13 @@ def fill_hdb_partitions(paths: UqsPaths) -> bool:
     is never touched, and a table or column a partition holds that
     database.q no longer declares is left alone - that is history, and
     deleting history is not this function's business. A column whose
-    declared TYPE changed is reported by `uqs data hdb-check`, not
+    declared TYPE changed is reported by `uqs data check`, not
     repaired here.
 
     NEVER FAILS A BOOTSTRAP. Every `uqs` command bootstraps, so a
     problem here - no q on the path, an HDB mid-write, a permissions
     fault - must not stop an operator stopping the stack or reading a log.
-    It is reported and stepped over; `uqs data hdb-check` says the same
+    It is reported and stepped over; `uqs data check` says the same
     thing on demand, and the smoke lane says it about a running stack.
     """
     hdb_root = paths.hdb_dir
@@ -82,14 +82,14 @@ def fill_hdb_partitions(paths: UqsPaths) -> bool:
     except subprocess.TimeoutExpired:
         log.warning(
             "HDB partition filler did not finish in {}s and was stopped - a query "
-            "spanning every table may fail until `uqs data hdb-check --apply` is run",
+            "spanning every table may fail until `uqs data check --apply` is run",
             FILL_HDB_TIMEOUT_S,
         )
         return False
     if result.returncode != 0:
         log.warning(
             "could not fill HDB partitions ({}) - a query spanning every table "
-            "may fail until `uqs data hdb-check` is run: {}",
+            "may fail until `uqs data check` is run: {}",
             result.returncode,
             (result.stderr or result.stdout).strip()[:300],
         )

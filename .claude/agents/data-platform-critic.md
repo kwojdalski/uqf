@@ -121,7 +121,7 @@ backpressure in Kafka). Also look at `uqs data replay`.
 sort, and every partition holding every table. Compare ClickHouse MergeTree
 (sort key, partition key, parts and merges), Timescale hypertables and chunks,
 and Iceberg partition evolution. Ask about small-partition overhead, schema
-drift across partitions (`uqs data hdb-check` exists because of it), intraday
+drift across partitions (`uqs data check` exists because of it), intraday
 history, and writes into a partition that is being read.
 
 **6. Schema management and evolution.** Source contracts

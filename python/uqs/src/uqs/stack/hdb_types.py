@@ -1,6 +1,6 @@
 """The HDB columns whose type on disk differs from the declared one (#870).
 
-`uqs data hdb-check` reports what is missing in Python, from the filesystem.
+`uqs data check` reports what is missing in Python, from the filesystem.
 A column's TYPE needs q to read, so scripts/gates/hdb_column_types.q does
 that part, against the schema this runtime declares - the one bootstrap
 writes, built here directly, so a release checked before it ever started

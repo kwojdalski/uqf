@@ -137,7 +137,7 @@ def resolve_plant(procname: str | None = None, timeout: float | None = None) -> 
         running = ", ".join(p.procname for p in plants) or "none"
         raise UqsError(
             f"no tickerplant named {procname!r} is running with a log directory "
-            f"(running plants: {running}) - `uqs summary` shows the fleet"
+            f"(running plants: {running}) - `uqs status` shows the fleet"
         )
     if not plants:
         raise UqsError(

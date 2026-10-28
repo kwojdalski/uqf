@@ -58,7 +58,7 @@ MONITOR_EXTRA_CONNECTIONS = tuple(
 # limit, not a per-direction one, and monitor1 spends it on OUTBOUND handles.
 # INBOUND_RESERVE is what it must NOT spend on subscriptions, so it can still
 # answer - a monitor sized exactly to the cap has no slot left to accept a
-# connection, `uqs summary`'s heartbeat query is refused, and the
+# connection, `uqs status`'s heartbeat query is refused, and the
 # Heartbeat column is empty for the entire fleet.
 
 #: The order proctypes are given up in when the budget cannot hold them all,
@@ -138,7 +138,7 @@ def monitor_connection_plan(
     monitor1 opens one handle per process it monitors, and the licence caps a
     q process at LICENCE_CONNECTION_LIMIT concurrent connections. Left
     untrimmed on this tree it wants 32 - so it saturates, and a saturated
-    monitor cannot ACCEPT the handle `uqs summary` needs to read
+    monitor cannot ACCEPT the handle `uqs status` needs to read
     `.hb.hb`. The failure is silent and total: heartbeats are still collected,
     and nothing can read them.
 
@@ -198,7 +198,7 @@ def monitor_connection_plan(
 #: discovery, which hands it to monitor1 WITHOUT connecting (procupdate,
 #: connect=0b), and the retry timer is what connects it. Only the per-attempt
 #: lines go. A process that should be up and is not still shows - as `down`
-#: and an ageing heartbeat in `uqs summary`, the signal that was always the
+#: and an ageing heartbeat in `uqs status`, the signal that was always the
 #: real one.
 MONITOR_QUIET_EXTRAS = "-.servers.DEBUG 0"
 
@@ -218,7 +218,7 @@ def monitor_dropped(
     """The proctypes monitor1 gives up for the fleet in `rows` - the same plan
     monitor_connection_extras applies, so what is reported is what happens.
 
-    For `uqs start` and `uqs summary` to say out loud (#620): a dropped
+    For `uqs start` and `uqs status` to say out loud (#620): a dropped
     proctype's processes have no heartbeat subscription, which `heartbeat.q`
     cannot report because it never subscribed - the gap is otherwise invisible
     exactly where it matters.

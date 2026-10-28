@@ -568,7 +568,7 @@ the status directory, with the facts each window reported. `uqs job runs` reads
 it back. No stack needs to be up, because the worker has exited by then:
 
 ```bash
-uqs job runs status                     # runs that began and never finished - interrupted ones
+uqs job runs list --unfinished                     # runs that began and never finished - interrupted ones
 uqs job runs list                       # every run, newest first: its range, window width and counts
 uqs job runs show RUN_ID                # one run, and what it recorded about each window
 uqs job runs audit fx_rates --from 2026-09-11 --to 2026-09-12

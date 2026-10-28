@@ -505,7 +505,7 @@ def _summary_ok(monkeypatch, *, rows=None, returncode=0, health=None):
 
 def test_summary_renders_and_propagates_the_exit_code(monkeypatch):
     _summary_ok(monkeypatch, returncode=2)
-    result = runner.invoke(cli.app, ["summary"])
+    result = runner.invoke(cli.app, ["status"])
     assert result.exit_code == 2
 
 
@@ -516,7 +516,7 @@ def test_summary_survives_a_port_map_it_cannot_build(monkeypatch):
     _patch(monkeypatch, listing, "configured_ports", raises=UqsError("no process.csv"))
     _patch(monkeypatch, listing, "heartbeat_states", result={})
     rec = _patch(monkeypatch, listing, "summary_rows", result=[])
-    result = runner.invoke(cli.app, ["summary"])
+    result = runner.invoke(cli.app, ["status"])
     assert result.exit_code == 0
     assert rec.args[1] == {}, "an unbuildable port map becomes empty, not fatal"
 
@@ -529,7 +529,7 @@ def test_summary_distinguishes_unreachable_monitoring_from_a_healthy_fleet(monke
     _patch(monkeypatch, listing, "configured_ports", result={})
     _patch(monkeypatch, listing, "heartbeat_states", raises=UqsError("monitor1 down"))
     rec = _patch(monkeypatch, listing, "summary_rows", result=[])
-    result = runner.invoke(cli.app, ["summary"])
+    result = runner.invoke(cli.app, ["status"])
     assert rec.args[2] is None, "unreachable monitoring is None, not an empty dict"
     assert "could not be reached" in result.stdout
 
@@ -544,7 +544,7 @@ def test_an_unreachable_but_running_monitor_is_not_called_stopped(monkeypatch):
     _patch(monkeypatch, listing, "configured_ports", result={})
     _patch(monkeypatch, listing, "heartbeat_states", result=None)
     _patch(monkeypatch, listing, "summary_rows", result=[_row(Process="monitor1", Status="up")])
-    result = runner.invoke(cli.app, ["summary"])
+    result = runner.invoke(cli.app, ["status"])
     assert "connection cap" in result.stdout
     assert "is not running" not in result.stdout
     assert "uqs start monitor1" not in result.stdout, "it is already running"
@@ -557,7 +557,7 @@ def test_a_genuinely_stopped_monitor_still_says_to_start_it(monkeypatch):
     _patch(monkeypatch, listing, "configured_ports", result={})
     _patch(monkeypatch, listing, "heartbeat_states", result=None)
     _patch(monkeypatch, listing, "summary_rows", result=[_row(Process="monitor1", Status="down")])
-    result = runner.invoke(cli.app, ["summary"])
+    result = runner.invoke(cli.app, ["status"])
     # Rich hard-wraps the panel text, so a phrase can straddle a newline.
     flat = " ".join(result.stdout.split())
     assert "is not running" in flat
@@ -574,7 +574,7 @@ def test_summary_shows_the_graph_by_default(monkeypatch):
     `--columns status` while one who never learns they exist cannot."""
     monkeypatch.setenv("COLUMNS", "220")
     _summary_ok(monkeypatch, rows=[_row()])
-    result = runner.invoke(cli.app, ["summary"])
+    result = runner.invoke(cli.app, ["status"])
     flat = " ".join(result.stdout.split())
     for column in SUMMARY_GRAPH_COLUMNS:
         assert column in flat
@@ -595,7 +595,7 @@ def test_a_job_dropping_batches_is_failing_though_up_and_heartbeat_ok(monkeypatc
         "last_failure_at": "2026.10.08D10:00:00",
     }
     _summary_ok(monkeypatch, rows=[_row(Process="cross1")], health={"cross1": record})
-    result = runner.invoke(cli.app, ["summary"])
+    result = runner.invoke(cli.app, ["status"])
     flat = " ".join(result.stdout.split())
     assert "failing (7)" in flat
     assert "1 streaming job(s) failed a batch since their last beat" in flat
@@ -615,7 +615,7 @@ def test_a_process_that_does_not_answer_is_shown_and_named(monkeypatch):
         "probe_all",
         result={"rdb1": probe.ProbeResult("ok", 4.0), "hdb1": probe.ProbeResult("timeout")},
     )
-    result = runner.invoke(cli.app, ["summary", "--columns", "status"])
+    result = runner.invoke(cli.app, ["status", "--columns", "status"])
     assert result.exit_code == 0, result.output
     assert "Responds" in result.output
     assert "4ms" in result.output
@@ -625,7 +625,7 @@ def test_a_process_that_does_not_answer_is_shown_and_named(monkeypatch):
 def test_probe_timeout_zero_skips_the_probe(monkeypatch):
     _summary_ok(monkeypatch, rows=[_row()])
     rec = _patch(monkeypatch, probe, "probe_all", result={})
-    result = runner.invoke(cli.app, ["summary", "--columns", "status", "--probe-timeout", "0"])
+    result = runner.invoke(cli.app, ["status", "--columns", "status", "--probe-timeout", "0"])
     assert result.exit_code == 0, result.output
     assert rec.calls == []
 
@@ -644,7 +644,7 @@ def test_columns_all_adds_the_graph(monkeypatch):
     # to assert on the columns rather than on Rich's truncation of them.
     monkeypatch.setenv("COLUMNS", "220")
     _summary_ok(monkeypatch, rows=[_row()])
-    result = runner.invoke(cli.app, ["summary", "--columns", "all"])
+    result = runner.invoke(cli.app, ["status", "--columns", "all"])
     flat = " ".join(result.stdout.split())
     for column in SUMMARY_GRAPH_COLUMNS:
         assert column in flat
@@ -665,7 +665,7 @@ def test_an_unknown_column_is_refused_with_the_available_ones(monkeypatch):
     """A typo in a column name must not silently render a narrower table -
     the reader would conclude the data is missing, not the column name wrong."""
     _summary_ok(monkeypatch, rows=[_row()])
-    result = runner.invoke(cli.app, ["summary", "--columns", "Process,Bogus"])
+    result = runner.invoke(cli.app, ["status", "--columns", "Process,Bogus"])
     assert result.exit_code == 1
 
 
@@ -729,7 +729,7 @@ def test_summary_passes_a_default_timeout_to_both_blocking_calls(monkeypatch):
     _patch(monkeypatch, listing, "configured_ports", result={})
     rec_hb = _patch(monkeypatch, listing, "heartbeat_states", result={})
     _patch(monkeypatch, listing, "summary_rows", result=[])
-    assert runner.invoke(cli.app, ["summary"]).exit_code == 0
+    assert runner.invoke(cli.app, ["status"]).exit_code == 0
     assert rec_summary.kwargs["timeout"] is not None
     assert rec_summary.kwargs["timeout"] <= summary.SUMMARY_TIMEOUT_SECONDS
     assert 0 < rec_hb.kwargs["timeout"] <= summary.SUMMARY_TIMEOUT_SECONDS
@@ -747,7 +747,7 @@ def test_the_timeout_is_one_budget_not_one_per_call(monkeypatch):
     # drains between the two calls without the test sleeping.
     ticks = iter([0.0, 4.0, 8.0, 12.0, 16.0, 20.0])
     monkeypatch.setattr(summary_table.time, "monotonic", lambda: next(ticks))
-    runner.invoke(cli.app, ["summary", "--timeout", "10"])
+    runner.invoke(cli.app, ["status", "--timeout", "10"])
     assert rec_hb.kwargs["timeout"] < 10, "the heartbeat query gets the remainder"
 
 
@@ -758,7 +758,7 @@ def test_a_zero_timeout_waits_forever(monkeypatch):
     _patch(monkeypatch, listing, "configured_ports", result={})
     rec_hb = _patch(monkeypatch, listing, "heartbeat_states", result={})
     _patch(monkeypatch, listing, "summary_rows", result=[])
-    runner.invoke(cli.app, ["summary", "--timeout", "0"])
+    runner.invoke(cli.app, ["status", "--timeout", "0"])
     assert rec_summary.kwargs["timeout"] is None
     assert rec_hb.kwargs["timeout"] == 0
 
@@ -773,13 +773,13 @@ def test_an_exhausted_budget_never_hands_out_zero(monkeypatch):
     _patch(monkeypatch, listing, "summary_rows", result=[])
     ticks = iter([0.0, 99.0, 99.0, 99.0, 99.0, 99.0])
     monkeypatch.setattr(summary_table.time, "monotonic", lambda: next(ticks))
-    runner.invoke(cli.app, ["summary", "--timeout", "10"])
+    runner.invoke(cli.app, ["status", "--timeout", "10"])
     assert rec_hb.kwargs["timeout"] >= 1
 
 
 def test_a_timed_out_summary_exits_one_rather_than_hanging(monkeypatch):
     _patch(monkeypatch, runtime, "summary", raises=UqsError("did not finish within 10s"))
-    assert runner.invoke(cli.app, ["summary"]).exit_code == 1
+    assert runner.invoke(cli.app, ["status"]).exit_code == 1
 
 
 # --------------------------------------------------- the connection cap
@@ -861,14 +861,14 @@ def test_summary_plans_the_monitor_note_for_the_recorded_deployment(monkeypatch)
     _summary_ok(monkeypatch)
     _patch(monkeypatch, deployment, "members", result=("stp1", "monitor1", "cryptomock1"))
     rec = _patch(monkeypatch, stack_procs, "monitor_dropped_proctypes", result=[])
-    assert runner.invoke(cli.app, ["summary"]).exit_code == 0
+    assert runner.invoke(cli.app, ["status"]).exit_code == 0
     assert rec.args[1] == ("stp1", "monitor1", "cryptomock1")
 
 
 def test_summary_names_what_monitor1_cannot_watch(monkeypatch):
     _summary_ok(monkeypatch)
     _patch(monkeypatch, stack_procs, "monitor_dropped_proctypes", result=["reporter"])
-    result = runner.invoke(cli.app, ["summary"])
+    result = runner.invoke(cli.app, ["status"])
     assert "monitor1 cannot watch reporter" in result.stdout
 
 
@@ -882,7 +882,7 @@ def test_the_cap_warning_never_blocks_a_start(monkeypatch):
 
 def test_summary_refusal_exits_one(monkeypatch):
     _patch(monkeypatch, runtime, "summary", raises=UqsError("no stack"))
-    assert runner.invoke(cli.app, ["summary"]).exit_code == 1
+    assert runner.invoke(cli.app, ["status"]).exit_code == 1
 
 
 def _row(**kw):
@@ -903,7 +903,7 @@ def test_a_configured_port_is_marked_as_a_different_claim(monkeypatch):
     only thing carrying that distinction to the reader, and a table that
     printed both identically would be quietly misleading."""
     _summary_ok(monkeypatch, rows=[_row(Status="down", PID="-", PortSource="configured")])
-    result = runner.invoke(cli.app, ["summary"])
+    result = runner.invoke(cli.app, ["status"])
     assert "come from process.csv" in result.stdout
 
 
@@ -913,7 +913,7 @@ def test_a_running_process_with_no_heartbeat_is_explained_not_left_blank(monkeyp
     simply never subscribed. Saying so beats a dash the reader has to guess
     at."""
     _summary_ok(monkeypatch, rows=[_row(Heartbeat="-"), _row(Process="hdb1", Heartbeat="ok")])
-    result = runner.invoke(cli.app, ["summary"])
+    result = runner.invoke(cli.app, ["status"])
     assert "No heartbeat collected for 1 running" in result.stdout
     assert "rdb1" in result.stdout
 
@@ -923,14 +923,14 @@ def test_a_down_process_with_no_heartbeat_is_not_reported_as_unheard(monkeypatch
     a stopped one would send the reader looking for a monitoring fault that
     is really just a stopped process."""
     _summary_ok(monkeypatch, rows=[_row(Status="down", Heartbeat="-")])
-    result = runner.invoke(cli.app, ["summary"])
+    result = runner.invoke(cli.app, ["status"])
     assert "No heartbeat collected" not in result.stdout
 
 
 @pytest.mark.parametrize("state", ["ok", "warning", "error", "not collected"])
 def test_every_heartbeat_state_renders(monkeypatch, state):
     _summary_ok(monkeypatch, rows=[_row(Heartbeat=state)])
-    result = runner.invoke(cli.app, ["summary"])
+    result = runner.invoke(cli.app, ["status"])
     assert result.exit_code == 0
 
 
@@ -1086,7 +1086,7 @@ def test_config_get_prints_one_field_when_asked(monkeypatch):
     _patch(
         monkeypatch, stack_procs, "get_process_config", result={"procname": "rdb1", "port": "6052"}
     )
-    result = runner.invoke(cli.app, ["config", "get", "rdb1", "port"])
+    result = runner.invoke(cli.app, ["config", "show", "rdb1", "port"])
     assert result.exit_code == 0
     assert "6052" in result.stdout
 
@@ -1096,9 +1096,9 @@ def test_config_get_resolves_placeholders_unless_raw_is_given(monkeypatch):
     "{KDBBASEPORT}+2". Wiring it backwards would show the wrong one with no
     other symptom."""
     rec = _patch(monkeypatch, stack_procs, "get_process_config", result={})
-    runner.invoke(cli.app, ["config", "get", "rdb1"])
+    runner.invoke(cli.app, ["config", "show", "rdb1"])
     assert rec.kwargs["resolve"] is True
-    runner.invoke(cli.app, ["config", "get", "rdb1", "--unresolved"])
+    runner.invoke(cli.app, ["config", "show", "rdb1", "--unresolved"])
     assert rec.kwargs["resolve"] is False
 
 
@@ -1683,7 +1683,7 @@ def test_a_logs_refusal_exits_one(monkeypatch):
 
 def test_a_config_get_refusal_exits_one(monkeypatch):
     _patch(monkeypatch, stack_procs, "get_process_config", raises=UqsError("no such process"))
-    assert runner.invoke(cli.app, ["config", "get", "nope"]).exit_code == 1
+    assert runner.invoke(cli.app, ["config", "show", "nope"]).exit_code == 1
 
 
 # ------------------------------------------------------------------- app
@@ -1699,7 +1699,7 @@ def test_every_command_is_reachable_and_documented():
         "start",
         "stop",
         "restart",
-        "summary",
+        "status",
         "query",
         "schema",
         "logs",
@@ -1778,7 +1778,7 @@ def test_the_debug_flag_wins_over_the_environment(monkeypatch):
     levels: list[Any] = []
     monkeypatch.setattr(shared, "configure_logging", lambda **kw: levels.append(kw.get("level")))
     _summary_ok(monkeypatch)
-    assert runner.invoke(cli.app, ["--debug", "summary"]).exit_code == 0
+    assert runner.invoke(cli.app, ["--debug", "status"]).exit_code == 0
     assert levels == ["DEBUG"], "the callback reconfigures to DEBUG"
 
 
@@ -1788,7 +1788,7 @@ def test_no_debug_flag_leaves_the_level_alone(monkeypatch):
     levels: list[Any] = []
     monkeypatch.setattr(shared, "configure_logging", lambda **kw: levels.append(kw.get("level")))
     _summary_ok(monkeypatch)
-    assert runner.invoke(cli.app, ["summary"]).exit_code == 0
+    assert runner.invoke(cli.app, ["status"]).exit_code == 0
     assert levels == []
 
 
@@ -1827,7 +1827,7 @@ def test_summary_says_at_debug_why_the_port_map_is_missing(monkeypatch):
     _patch(monkeypatch, listing, "heartbeat_states", result={})
     _patch(monkeypatch, listing, "summary_rows", result=[])
     captured = _debug_log(monkeypatch, summary_table)
-    assert runner.invoke(cli.app, ["summary"]).exit_code == 0
+    assert runner.invoke(cli.app, ["status"]).exit_code == 0
     assert any("no process.csv" in m for m in captured.messages)
 
 
@@ -1841,7 +1841,7 @@ def test_summary_says_at_debug_why_heartbeats_are_missing(monkeypatch):
     _patch(monkeypatch, listing, "heartbeat_states", raises=UqsError("monitor1 is not declared"))
     _patch(monkeypatch, listing, "summary_rows", result=[])
     captured = _debug_log(monkeypatch, summary_table)
-    assert runner.invoke(cli.app, ["summary"]).exit_code == 0
+    assert runner.invoke(cli.app, ["status"]).exit_code == 0
     assert any("monitor1 is not declared" in m for m in captured.messages)
 
 
@@ -1853,7 +1853,7 @@ def test_summary_distinguishes_unreachable_from_undeclared_at_debug(monkeypatch)
     _patch(monkeypatch, listing, "heartbeat_states", result=None)
     _patch(monkeypatch, listing, "summary_rows", result=[])
     captured = _debug_log(monkeypatch, summary_table)
-    assert runner.invoke(cli.app, ["summary"]).exit_code == 0
+    assert runner.invoke(cli.app, ["status"]).exit_code == 0
     assert any("monitor1 not reached" in m for m in captured.messages)
 
 
@@ -1862,7 +1862,7 @@ def test_summary_counts_the_rows_it_parsed_at_debug(monkeypatch):
     otherwise: the table just looks short."""
     _summary_ok(monkeypatch, rows=[_row(), _row(Process="hdb1", Status="down")])
     captured = _debug_log(monkeypatch, summary_table)
-    assert runner.invoke(cli.app, ["summary"]).exit_code == 0
+    assert runner.invoke(cli.app, ["status"]).exit_code == 0
     assert any("1 up, 1 down" in m for m in captured.messages)
 
 
@@ -2517,7 +2517,7 @@ def test_summary_says_which_q_runs_the_fleet(monkeypatch, tmp_path, answer, budg
     q = _stand_in_q(tmp_path, answer)
     monkeypatch.setenv("QCMD", str(q))
     monkeypatch.delenv("UQS_LICENCE_CONNECTIONS", raising=False)
-    result = runner.invoke(cli.app, ["summary"])
+    result = runner.invoke(cli.app, ["status"])
     assert result.exit_code == 0, result.output
     # Rich wraps the long temporary path mid-word, so compare with every
     # whitespace character removed.
@@ -2530,7 +2530,7 @@ def test_summary_warns_on_a_q_that_will_not_say_and_still_prints(monkeypatch, tm
     _summary_ok(monkeypatch)
     q = _stand_in_q(tmp_path, "banner")
     monkeypatch.setenv("QCMD", str(q))
-    result = runner.invoke(cli.app, ["summary"])
+    result = runner.invoke(cli.app, ["status"])
     assert result.exit_code == 0, "a reading command reports a problem, it does not refuse"
     flat = "".join(result.output.split())
     assert "".join(f"warning: could not ask {q}: could not tell which q".split()) in flat
@@ -2539,7 +2539,7 @@ def test_summary_warns_on_a_q_that_will_not_say_and_still_prints(monkeypatch, tm
 def test_summary_with_no_q_reports_not_runnable(monkeypatch, tmp_path):
     _summary_ok(monkeypatch)
     monkeypatch.setenv("QCMD", str(tmp_path / "no-such-q"))
-    result = runner.invoke(cli.app, ["summary"])
+    result = runner.invoke(cli.app, ["status"])
     assert result.exit_code == 0, result.output
     assert "not runnable" in result.output
 
@@ -2581,7 +2581,7 @@ _SORTABLE = [
 def test_summary_sorts_a_numeric_column_numerically(monkeypatch):
     # As text "6100" < "659"; numerically 659 < 6052 < 6100.
     _summary_ok(monkeypatch, rows=[dict(r) for r in _SORTABLE])
-    result = runner.invoke(cli.app, ["summary", "--columns", "Process,Port", "--sort", "port"])
+    result = runner.invoke(cli.app, ["status", "--columns", "Process,Port", "--sort", "port"])
     assert result.exit_code == 0, result.output
     assert _order(result.output, ["tap1", "rdb1", "hdb1"]) == ["rdb1", "hdb1", "tap1"]
 
@@ -2596,7 +2596,7 @@ def test_summary_reverse_sorts_descending(monkeypatch):
 
 def test_summary_without_sort_keeps_the_listing_order(monkeypatch):
     _summary_ok(monkeypatch, rows=[dict(r) for r in _SORTABLE])
-    result = runner.invoke(cli.app, ["summary", "--columns", "Process,Port"])
+    result = runner.invoke(cli.app, ["status", "--columns", "Process,Port"])
     assert _order(result.output, ["tap1", "rdb1", "hdb1"]) == ["tap1", "rdb1", "hdb1"]
 
 
@@ -2611,7 +2611,7 @@ def test_summary_sorts_by_a_column_it_does_not_show(monkeypatch):
             row["Inputs"] = inputs[row["Process"]]
 
     monkeypatch.setattr(summary_table, "attach_graph_columns", attach)
-    result = runner.invoke(cli.app, ["summary", "--columns", "Process,Port", "--sort", "inputs"])
+    result = runner.invoke(cli.app, ["status", "--columns", "Process,Port", "--sort", "inputs"])
     assert result.exit_code == 0, result.output
     assert _order(result.output, ["tap1", "rdb1", "hdb1"]) == ["hdb1", "rdb1", "tap1"]
     assert "Inputs" not in result.output, "sorted on, not displayed"
@@ -2624,7 +2624,7 @@ def test_summary_interactive_re_reads_the_fleet_on_a_timer(monkeypatch, argv, ev
     """-i re-reads every 2s by default; --every changes it and 0 turns it off."""
     _summary_ok(monkeypatch, rows=[dict(r) for r in _SORTABLE])
     shown = _browsed(monkeypatch)
-    result = runner.invoke(cli.app, ["summary", "-i", *argv])
+    result = runner.invoke(cli.app, ["status", "-i", *argv])
     assert result.exit_code == 0, result.output
     (browsed,) = shown
     assert browsed["every"] == every
@@ -2641,7 +2641,7 @@ def test_summary_refuses_an_unknown_sort_column_before_doing_any_work(monkeypatc
         raise typer.Exit(code=1)
 
     monkeypatch.setattr(summary_columns, "_die", die)
-    result = runner.invoke(cli.app, ["summary", "--sort", "nope"])
+    result = runner.invoke(cli.app, ["status", "--sort", "nope"])
     assert result.exit_code == 1
     assert len(said) == 1 and said[0].startswith("cannot sort by 'nope'")
     assert "Process" in said[0], "the error names the columns that exist"

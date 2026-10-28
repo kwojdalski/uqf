@@ -21,7 +21,7 @@ from rich.table import Table
 
 from uqs.cli import completion
 from uqs.cli.json_out import emit, json_opt
-from uqs.cli.renames import renamed
+from uqs.cli.renames import alias_command, renamed
 from uqs.cli.safety import dry_run_note
 from uqs.cli.shared import (
     BasePortOpt,
@@ -41,15 +41,15 @@ from uqs.stack import logs as stack_logs
 from uqs.stack import multitail as stack_multitail
 from uqs.stack import procs as stack_procs
 
-#: `uqs config get/set`: one process's process.csv row, read resolved or
+#: `uqs config show/set`: one process's process.csv row, read resolved or
 #: changed through process_overrides.csv. `uqs list overrides` and
 #: `uqs list fields` stay kinds of `list` (cli/lists.py), the stack's own
 #: tables.
 config_app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
-    help="Read (get) or set a process's process.csv fields (persisted to "
-    "process_overrides.csv), and the sources the stack reads (sources).",
+    help="A process's process.csv fields: show them, or set one (persisted to "
+    "process_overrides.csv); and the sources the stack reads (sources).",
 )
 app.add_typer(config_app, name="config")
 
@@ -59,7 +59,11 @@ GetJson = json_opt(
 )
 
 
-@config_app.command("get", cls=renamed({"--port": "--base-port", "--raw": "--unresolved"}))
+#: The old spellings `config show` still takes (#1729).
+_SHOW_RENAMES = {"--port": "--base-port", "--raw": "--unresolved"}
+
+
+@config_app.command("show", cls=renamed(_SHOW_RENAMES))
 def config_get(
     procname: Annotated[
         str, typer.Argument(metavar="PROC", help="The process", autocompletion=completion.procname)
@@ -326,3 +330,7 @@ def logs(
             stack_logs.print_recent_logs(_paths(), _procs(procs), lines=lines, min_level=level)
     except UqsError as exc:
         _die(exc)
+
+
+#: Its name before #1733: `show` is one record, `get` was the same thing.
+alias_command(config_app, "get", "uqs config show", config_get, cls=renamed(_SHOW_RENAMES))

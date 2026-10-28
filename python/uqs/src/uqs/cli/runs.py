@@ -36,8 +36,8 @@ from uqs.stack import runs as stack_runs
 runs_app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
-    help="The run ledger: list every run, status of the unfinished ones, show one run's "
-    "facts, audit one window across runs, upgrade a ledger an older uqs wrote.",
+    help="The run ledger: list every run (or the unfinished ones), show one run's facts, "
+    "audit one window across runs, upgrade a ledger an older uqs wrote.",
 )
 job_app.add_typer(runs_app, name="runs", rich_help_panel=JOB_OPERATIONS_PANEL)
 
@@ -122,40 +122,50 @@ def _print(
     _show(table, interactive)
 
 
-@runs_app.command("status")
-def status(
-    interactive: InteractiveOpt = False, attach: AttachOpt = None, as_json: RunsJson = False
-) -> None:
-    """Runs that began and never finished.
-
-    Includes runs whose process has died: `running` on a run whose process is
-    gone means that execution was interrupted, which is what this is for.
-    """
-    try:
-        rows = stack_runs.unfinished(_paths(), **_where(attach))
-    except UqsError as exc:
-        _die(exc)
-        return
-    if as_json:
-        emit({"runs": [_record(r, _RUN_COLUMNS) for r in rows]})
-        return
-    _print("unfinished runs", rows, _RUN_COLUMNS, "no unfinished runs", interactive)
-
-
 @runs_app.command("list")
 def list_runs(
-    interactive: InteractiveOpt = False, attach: AttachOpt = None, as_json: RunsJson = False
+    interactive: InteractiveOpt = False,
+    attach: AttachOpt = None,
+    unfinished: Annotated[
+        bool,
+        typer.Option(
+            "--unfinished",
+            help="Only runs that began and never finished, interrupted ones included",
+        ),
+    ] = False,
+    as_json: RunsJson = False,
 ) -> None:
-    """Every run in the ledger, newest first."""
+    """Every run in the ledger, newest first - or, with --unfinished, the runs
+    that began and never finished.
+
+    `--unfinished` includes runs whose process has died: `running` on a run
+    whose process is gone means that execution was interrupted, which is what
+    it is for. It was `uqs job runs status` (#1733).
+    """
     try:
-        rows = stack_runs.history(_paths(), **_where(attach))
+        rows = (stack_runs.unfinished if unfinished else stack_runs.history)(
+            _paths(), **_where(attach)
+        )
     except UqsError as exc:
         _die(exc)
         return
     if as_json:
         emit({"runs": [_record(r, _RUN_COLUMNS) for r in rows]})
         return
-    _print("runs", rows, _RUN_COLUMNS, "no runs recorded", interactive)
+    if unfinished:
+        _print("unfinished runs", rows, _RUN_COLUMNS, "no unfinished runs", interactive)
+    else:
+        _print("runs", rows, _RUN_COLUMNS, "no runs recorded", interactive)
+
+
+def _unfinished(
+    interactive: InteractiveOpt = False, attach: AttachOpt = None, as_json: RunsJson = False
+) -> None:
+    """`job runs list --unfinished`, under the name it had before #1733."""
+    list_runs(interactive=interactive, attach=attach, unfinished=True, as_json=as_json)
+
+
+alias_command(runs_app, "status", "uqs job runs list --unfinished", _unfinished)
 
 
 @runs_app.command("upgrade")

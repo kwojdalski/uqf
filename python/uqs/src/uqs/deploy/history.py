@@ -113,7 +113,7 @@ def _target_for(root: Path, cfg: Config, register: bool, say: Callable[[str], No
     say(
         f"registered target {name} in {done.path} (`uqs target log {name}`: change "
         f"{number}; `uqs deploy push --no-register` skips this):\n{block.rstrip()}\n"
-        f"  try: uqs --target {name} summary"
+        f"  try: uqs --target {name} status"
     )
     return name
 

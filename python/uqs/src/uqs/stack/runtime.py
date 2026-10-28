@@ -306,7 +306,7 @@ def query(
 
 def export_table(rows: Any, path: Path) -> None:
     """Write *rows* to *path* as CSV or Parquet, format inferred from the
-    file extension. *rows* is either a list[dict] (list_items/config get's
+    file extension. *rows* is either a list[dict] (list_items/config show's
     own shape) or a polars.DataFrame (what kola's query() returns for a
     table-shaped q result - kola is a Polars interface to q, so this is
     already the native return type for `select ... from t`, no conversion

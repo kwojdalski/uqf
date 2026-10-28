@@ -212,7 +212,7 @@ the checkout: they load a copy in `output/uqs-peachq-etl/qtree`:
   rename. A failed preparation leaves the previous tree as it was, records the
   reason in `qtree-failed.json`, and starts nothing. `qtree.json` records what
   was converted.
-- **Rebuilding.** An unchanged checkout reuses the tree. `stop` and `summary`
+- **Rebuilding.** An unchanged checkout reuses the tree. `stop` and `status`
   never rebuild it.
 - **What is never written.** The checkout and the vendored TorQ trees.
 

@@ -80,7 +80,7 @@ def monitor_coverage(verb: str, names: str, profile: str | None = None) -> None:
         console.print(
             f"[yellow]note[/] monitor1 cannot watch {', '.join(dropped)}: the "
             f"{limit}-connection licence budget leaves no slot for them, so their "
-            "processes run with no heartbeat in `uqs summary`"
+            "processes run with no heartbeat in `uqs status`"
         )
 
 

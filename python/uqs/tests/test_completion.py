@@ -97,7 +97,7 @@ def test_sort_offers_the_columns_of_the_kind_already_typed():
 
 
 def test_config_fields_complete_after_the_process():
-    assert complete("uqs config get rdb1 ") == list(PROCESS_CSV_FIELDS)
+    assert complete("uqs config show rdb1 ") == list(PROCESS_CSV_FIELDS)
     assert complete("uqs config set rdb1 ") == list(PROCESS_CSV_FIELDS)
 
 

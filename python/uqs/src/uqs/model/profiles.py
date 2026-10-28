@@ -10,7 +10,7 @@ disk, easy to forget you changed.
 
 Past the cap nothing complains. The plant RESETS the extra connection, the
 process wedges in its retry loop in scripts/processes/torq_stream.q, and
-`uqs summary` still reports it `up` because that is a PID check. Which jobs
+`uqs status` still reports it `up` because that is a PID check. Which jobs
 actually run then depends on which fourteen won the race to start (#285).
 
 A PROFILE NAMES LEAVES, NOT PROCESSES. `arbitrage` is `crossarb1` and

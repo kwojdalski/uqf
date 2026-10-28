@@ -43,7 +43,7 @@ log = get_logger()
 #   monitor1 - TorQ ships it startwithall=0, so out of the box nothing runs
 #   `.hb.checkheartbeat` and `.hb.hb` is a table nobody fills. Every process
 #   still PUBLISHES its heartbeat regardless; the collector is the missing
-#   half. `uqs summary`'s Heartbeat column, and the frontend health
+#   half. `uqs status`'s Heartbeat column, and the frontend health
 #   view behind it, therefore reported "not collected" on a fully healthy
 #   stack - a monitoring surface that is only ever populated if an operator
 #   knows to start one more process by hand is not monitoring.

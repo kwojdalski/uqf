@@ -1,6 +1,6 @@
 """One table's maintenance across an HDB: the front end of scripts/gates/hdb_alter.q (#1755).
 
-`uqs data hdb-alter` and `uqs data hdb-check --table` are thin: every decision
+`uqs data alter` and `uqs data check --table` are thin: every decision
 about the database - which partitions hold the table, whether they agree, what
 each would be written, the journal, the undo, the final check - is the q
 script's, so the same script can be copied to a host with no uqf on it and run
@@ -38,7 +38,7 @@ DBMAINT = Path("lib") / "kx-dbmaint" / "dbmaint.q"
 #: The operations that change a table; one per run.
 CHANGES = ("reorder", "rename", "attr", "cast")
 #: Every operation the script takes: the consistency check alone, the fill
-#: behind `hdb-check --table`, the changes, and the undo of one.
+#: behind `data check --table`, the changes, and the undo of one.
 OPERATIONS = ("check", "fill", *CHANGES, "undo")
 
 #: Seconds a run may take: a cast rewrites a column in every partition.

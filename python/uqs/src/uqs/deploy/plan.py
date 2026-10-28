@@ -76,7 +76,7 @@ def plan(
         "ports     "
         + " ".join(
             [
-                f"uqs deploy verify --profile {cfg.profile} --ports-free",
+                f"uqs deploy check --profile {cfg.profile} --ports-free",
                 *verify_args(Selection(processes=sel.processes), False),
             ]
         ),
@@ -84,7 +84,7 @@ def plan(
         "verify    "
         + " ".join(
             [
-                f"uqs deploy verify --profile {cfg.profile} --deadline {cfg.verify_timeout}",
+                f"uqs deploy check --profile {cfg.profile} --deadline {cfg.verify_timeout}",
                 *verify_args(sel, cfg.live),
             ]
         ),

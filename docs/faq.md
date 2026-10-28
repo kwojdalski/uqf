@@ -16,7 +16,7 @@ sits *around* those processes:
   | History and backfills  | replay a tickerplant log, or write your own loader                            | bounded workers (`.qetl.job.bounded`): a window range, written through `.qetl.io`, recorded in a coverage ledger (`.qetl.coverage`) so a re-run redoes only gaps                                                                 |
   | A table on the plant   | define it in `database.q`; `.u.upd` onto an undefined one drops rows silently | defined from what jobs declare they publish; a job refuses to start when a table it publishes is missing                                                                                                                         |
   | Adding one             | write the script, add the row, pick a free port                               | `uqs job new` scaffolds it; no registration step - the port, the process row and the job graph are derived                                                                                                                       |
-  | Operating it           | `torq.sh start`, `stop`, `summary`, per process                               | `uqs`: start profiles held to the licence's connection budget, `up`, `logs`, `query PROC`, `summary`; `.qetl.log` adds DEBUG, TRACE and key=value fields to `.lg`, and one level vocabulary across both                          |
+  | Operating it           | `torq.sh start`, `stop`, `status`, per process                                | `uqs`: start profiles held to the licence's connection budget, `up`, `logs`, `query PROC`, `status`; `.qetl.log` adds DEBUG, TRACE and key=value fields to `.lg`, and one level vocabulary across both                           |
 
 The slide version is [the deck](presentation/uqf.qmd); why the framework is
 shaped this way is [the pipeline
@@ -70,7 +70,7 @@ stack](guides/uqs.md).
 Work from the outside in. Each step answers a narrower question than the one
 before, and most problems stop at the first two.
 
-**1. Is it running, and is it wired to anything?** `uqs summary` shows every
+**1. Is it running, and is it wired to anything?** `uqs status` shows every
 process's status next to what it subscribes to, what it publishes, and which
 processes it therefore needs running. A job that is `up` but idle is usually a
 job whose inputs nobody is producing, and this column says so.
@@ -105,15 +105,15 @@ page](scaffolding/etl.md#testing-it-without-a-stack). To run it as a real
 process on stock kdb+, use `scripts/processes/run_stream.q`.
 
 **A backfill** has exited by the time you look, so read what it left on disk:
-`uqs job runs status` for runs that never finished, `uqs job runs list` for
-every run and its outcome, and `uqs job runs show <run_id>` for one run's facts,
-its log files and the command that resumes it. [When it
-breaks](guides/when-it-breaks.md) walks the whole recovery. All of this lives in
-the status directory, `$UQF_STATUS_DIR`.
+`uqs job runs list --unfinished` for runs that never finished,
+`uqs job runs list` for every run and its outcome, and
+`uqs job runs show <run_id>` for one run's facts, its log files and the command
+that resumes it. [When it breaks](guides/when-it-breaks.md) walks the whole
+recovery. All of this lives in the status directory, `$UQF_STATUS_DIR`.
 
 **Query errors from the HDB** such as
 `./2026.01.07/arbitrage. OS reports: No such file or directory` mean a partition
-is missing a table or column: `uqs data hdb-check` names which.
+is missing a table or column: `uqs data check` names which.
 
 **Before tracing q by hand**, run
 [`qlinter`](https://github.com/kwojdalski/q-lint) on the file. Several of this

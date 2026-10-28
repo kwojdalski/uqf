@@ -144,10 +144,10 @@ def test_connector_status_prints_running_as_a_bool(monkeypatch):
 def test_config_get_prints_fields_or_one_field(monkeypatch):
     row = {"procname": "rdb1", "port": "6002"}
     monkeypatch.setattr(stack_procs, "get_process_config", lambda *_a, **_k: row)
-    doc = _doc(["config", "get", "rdb1"])
+    doc = _doc(["config", "show", "rdb1"])
     assert doc["fields"] == [{"field": "procname", "value": "rdb1"},
                              {"field": "port", "value": "6002"}]  # fmt: skip
-    assert _doc(["config", "get", "rdb1", "port"])["value"] == "6002"
+    assert _doc(["config", "show", "rdb1", "port"])["value"] == "6002"
 
 
 def test_logs_prints_the_lines(monkeypatch):
@@ -219,6 +219,6 @@ def test_summary_json_carries_the_lines_under_the_table(monkeypatch):
         failing=[],
     )  # fmt: skip
     monkeypatch.setattr(summary_cli, "gather", lambda *_a: gathered)
-    doc = _doc(["summary"])
+    doc = _doc(["status"])
     assert doc["processes"] == [{"process": "rdb1", "status": "up", "port": 6002}]
     assert doc["silent"] == ["rdb1"] and doc["heartbeats_collected"] is False

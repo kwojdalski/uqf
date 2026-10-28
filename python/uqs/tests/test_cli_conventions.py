@@ -136,6 +136,7 @@ DOMAIN_VERBS = {
     "replay": "replay a tickerplant log into the HDB",
     "seed": "copy another runtime's HDB",
     "migrate": "migrate an HDB partition's schema",
+    "alter": "change one table in every HDB partition holding it",
     "upgrade": "bring a store an older uqs wrote up to today's layout",
     "diff": "compare two runtimes",
     "prepare": "install the bundles a runtime declares",
@@ -229,19 +230,11 @@ def test_rule2_a_process_or_a_job_is_a_positional_called_proc_or_job():
 
 
 #: leaf path -> the issue that renames it
-RULE4_ALLOWLIST = {
-    "summary": "#1733",  # -> status
-    "data hdb-check": "#1733",  # -> data check
-    "data hdb-alter": "#1733",  # #1755 names it beside hdb-check; #1733 renames both
-    "config get": "#1733",  # -> show
-    "deploy verify": "#1733",  # -> deploy check
-}
+RULE4_ALLOWLIST: dict[str, str] = {}
 
 #: Leaves named by a vocabulary verb used with another meaning: a name test
 #: cannot see the meaning, so each is listed until its rename removes the path.
-RULE4_MISUSED = {
-    "job runs status": "#1733",  # unfinished runs, a list - not a state
-}
+RULE4_MISUSED: dict[str, str] = {}
 
 
 def test_rule4_every_leaf_is_named_by_a_vocabulary_verb():
@@ -467,7 +460,7 @@ KIND = {
     "stop": CHANGES,
     "restart": CHANGES,
     "exec": "passes any verb through to torq.sh",
-    "summary": REPORTS,
+    "status": REPORTS,
     "graph": REPORTS,
     "query": REPORTS,
     "schema": REPORTS,
@@ -483,9 +476,9 @@ KIND = {
     "data replay": CHANGES,
     "data seed": CHANGES,
     "data migrate": CHANGES,
-    "data hdb-check": REPORTS,  # --apply writes what it reports missing, after asking
-    "data hdb-alter": CHANGES,  # dry run by default; --dry-run/-n says so explicitly
-    "config get": REPORTS,
+    "data check": REPORTS,  # --apply writes what it reports missing, after asking
+    "data alter": CHANGES,  # dry run by default; --dry-run/-n says so explicitly
+    "config show": REPORTS,
     "config set": CHANGES,
     "config sources stub": CHANGES,
     "config sources check": REPORTS,
@@ -501,7 +494,6 @@ KIND = {
     "job attachment add": CHANGES,
     "job attachment remove": CHANGES,
     "job attachment show": REPORTS,
-    "job runs status": REPORTS,
     "job runs list": REPORTS,
     "job runs upgrade": CHANGES,
     "job runs show": REPORTS,
@@ -524,7 +516,7 @@ KIND = {
     "deploy status": REPORTS,
     "deploy rollback": CHANGES,
     "deploy prune": CHANGES,
-    "deploy verify": REPORTS,
+    "deploy check": REPORTS,
     "deploy history": REPORTS,
     "target add": CHANGES,
     "target set": CHANGES,
@@ -543,7 +535,7 @@ KIND = {
 #: on a --target.
 ASKS = {
     ROOT, "job remove", "job install", "job attachment add", "job attachment remove",
-    "target adopt", "data hdb-check", "data hdb-alter",
+    "target adopt", "data check", "data alter",
 }  # fmt: skip
 
 #: The cli modules that call a prompt. A new one means a command that asks:

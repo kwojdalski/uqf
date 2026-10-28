@@ -6,12 +6,12 @@ partitioned query then fails on the first short one. A release that CHANGES a
 column's type meets partitions storing the old one - a migration, which no
 fill can make right.
 
-prepare runs the release's own `uqs data hdb-check --json` against the shared
+prepare runs the release's own `uqs data check --json` against the shared
 HDB, once its .venv exists, so the release judges the HDB by its own schema:
 
   - a column whose type changed is always refused, naming each one;
   - missing tables or columns are refused unless --fix-hdb, which runs
-    `hdb-check --apply --yes` (additive and idempotent: an empty copy of each missing
+    `data check --apply --yes` (additive and idempotent: an empty copy of each missing
     table, each missing column as its type's null) and checks again.
 
 A dry run cannot run the release's code - nothing of it is on the server yet -
@@ -82,7 +82,7 @@ def planned(dep: Deployment, manifest: dict) -> str:
 def _check(dep: Deployment, release: str, fix: bool) -> dict:
     argv = "--apply --yes --json" if fix else "--json"
     r = dep.remote.run(
-        script(*dep.in_release(release, f".venv/bin/uqs data hdb-check {argv}")),
+        script(*dep.in_release(release, f".venv/bin/uqs data check {argv}")),
         dep.cfg.command_timeout,
         "hdb",
     )
@@ -91,12 +91,12 @@ def _check(dep: Deployment, release: str, fix: bool) -> dict:
         return json.loads(out[out.index("{") :])
     except ValueError:
         raise DeployError(
-            "hdb", f"the release's hdb-check printed no result: {diagnostic(r)}"
+            "hdb", f"the release's data check printed no result: {diagnostic(r)}"
         ) from None
 
 
 def check(dep: Deployment, release: str) -> dict:
-    """The release's hdb-check against the shared HDB; refuses what a
+    """The release's data check against the shared HDB; refuses what a
     deployment must not start on. Returns what the report records."""
     found = _check(dep, release, fix=False)
     if not found.get("present"):
@@ -129,5 +129,5 @@ def check(dep: Deployment, release: str) -> dict:
         )
     after = _check(dep, release, fix=True)
     if after.get("missing_tables") or after.get("missing_columns"):
-        raise DeployError("hdb", "hdb-check --apply left tables or columns missing")
+        raise DeployError("hdb", "data check --apply left tables or columns missing")
     return {**result, "hdb": "filled", "filled": missing}

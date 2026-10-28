@@ -1,4 +1,4 @@
-"""`uqs summary -i`'s row actions: start, stop and restart the highlighted process.
+"""`uqs status -i`'s row actions: start, stop and restart the highlighted process.
 
 One key each - s, x, r - acting on the row's `Process`. Each runs torq.sh as
 `uqs start/stop/restart <procname>` does, with its output captured rather

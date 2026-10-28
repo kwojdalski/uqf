@@ -159,7 +159,7 @@ The next `uqs` command picks up any of them.
   | start       | `torq.sh start <proc>` / `start all` | `uqs start --profile fx,arbitrage`: named sets of processes                                                                                                                                |
   | connections | found out at runtime                 | every profile is checked against the licence's budget (16 − 2 = 14 on the community licence; set `UQS_LICENCE_CONNECTIONS` for a larger one)                                               |
   | watch       | tail the log files                   | `uqs start -f`: starts the processes and streams every log to the console; Ctrl-C stops them                                                                                               |
-  | inspect     | `torq.sh summary`                    | `uqs summary` · `logs` · `query --proc`                                                                                                                                                    |
+  | inspect     | `torq.sh summary`                    | `uqs status` · `logs` · `query --proc`                                                                                                                                                     |
   | config      | edit the csv                         | `uqs config set <proc> <key> <value>`, persisted and regenerated                                                                                                                           |
   | logging     | `.lg`: ERROR / ERR / WARN / INF      | `.qetl.log` on top of it: adds DEBUG and TRACE, key=value fields, and one vocabulary                                                                                                       |
 
@@ -278,7 +278,7 @@ cannot disagree about the maths.
   | live data path   | plant, rdb, wdb, sort, hdb                         | the same; a streaming job's output is a plant table like any other                                                                               |
   | history writes   | tickerplant log replay                             | `.qetl.io` managers: `memory`, `discard`, `hdb` (`io_hdb.q`) - rows land in the partition of their own date                                      |
   | HDB safety       | none for a second writer                           | a write lock per root with stale-holder breaking; refuses today's partition; stage-and-swap with crash recovery                                  |
-  | HDB shape        | `.Q.chk` for the partition wdb writes              | every command bootstraps `fill_hdb_partitions.q` (over vendored KX `dbmaint.q`); `uqs data hdb-check` finds missing tables and columns           |
+  | HDB shape        | `.Q.chk` for the partition wdb writes              | every command bootstraps `fill_hdb_partitions.q` (over vendored KX `dbmaint.q`); `uqs data check` finds missing tables and columns               |
   | completeness     | none                                               | the coverage ledger `etl_coverage`: a backfill skips what it covers and fills the gaps                                                           |
   | removing data    | `housekeeping1`: zips and deletes logs and tplogs  | `housekeeping1` untouched; `.qetl.retention` is declared per dataset, dry-run by default, ledger-aware                                           |
 
@@ -298,8 +298,8 @@ cannot disagree about the maths.
   | Question                   | TorQ                                            | uqf                                                                                                |
   | ---                        | ---                                             | ---                                                                                                |
   | is the process there?      | `monitor1` (heartbeats, log messages)           | kept; started with the stack, with a connection budget under the licence cap (`monitor_budget.py`) |
-  | is it making progress?     | `.hb` heartbeats                                | `.qetl.hb` for workers; `uqs summary` also warns "up, but idle" from the declared graph            |
-  | did its batches succeed?   | an `upd` error is trapped, the process stays up | `.qetl.stream_health` counts batches and failures; `uqs summary` shows them with no q              |
+  | is it making progress?     | `.hb` heartbeats                                | `.qetl.hb` for workers; `uqs status` also warns "up, but idle" from the declared graph             |
+  | did its batches succeed?   | an `upd` error is trapped, the process stays up | `.qetl.stream_health` counts batches and failures; `uqs status` shows them with no q               |
   | is the data complete?      | `dqc1`, `dqe1` (not started by default)         | `dqc` untouched; DQE gains metatable queries; the coverage ledger answers it for backfills         |
   | scheduled checks           | `reporter1` with the site's `reporter.csv`      | generated checks, one per declared output, thresholds explicit, logged at most once a minute       |
   | is the source reachable?   | n/a                                             | `uqs config sources check`: credential, tls, connect, schema, read, output; redacted               |

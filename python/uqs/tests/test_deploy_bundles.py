@@ -129,7 +129,7 @@ _HEALTHY = {
     "uv python find": _done(SERVER),
     "deploy_smoke.q": _done("DEPLOY_SMOKE_OK\n"),
     # a server with no HDB yet: nothing for the release's hdb-check to judge (#870)
-    "uqs data hdb-check": _done('{"hdb": "/data/hdb", "present": false}\n'),
+    "uqs data check": _done('{"hdb": "/data/hdb", "present": false}\n'),
     "--ports-free": _done(json.dumps({"busy": {}}) + "\n" + verify.OK_MARKER + "\n"),
     "uqs deploy verify --profile": _verified(True),
 }
@@ -222,7 +222,7 @@ def test_live_requires_live_sources_on_the_server_and_in_verification(tmp_path):
     (prepare,) = remote.stage("prepare")
     assert "export UQS_REQUIRE_LIVE_SOURCES=1" in prepare
     (check,) = remote.stage("verify")
-    assert check.rstrip().endswith(" --live")
+    assert check.rstrip().endswith(" --live; fi")
 
 
 def test_without_live_nothing_is_required(tmp_path):
@@ -341,13 +341,15 @@ def test_an_env_file_in_a_bundle_never_reaches_an_artifact():
     assert payload.is_excluded("python/uqs/process_overrides.csv")
 
 
-def test_a_release_verifies_itself_with_uqs_deploy_verify_only():
-    """#1648: the selection is comma-joined for `uqs deploy verify`, and a
-    release from before #835 (scripts/deploy_verify.py) is no longer asked for."""
+def test_a_release_verifies_itself_with_uqs_deploy_check_or_verify():
+    """#1648: the selection is comma-joined, and a release from before #835
+    (scripts/deploy_verify.py) is no longer asked for. #1733: `deploy check`,
+    or `deploy verify` on a release from before it - a rollback's target."""
     sel = Selection(processes=["piggy_spread1", "fxfeed1"], tables=["piggy_tape"])
     command = verify_command("fx", sel, True, "--deadline", "60")
+    args = "--profile fx --deadline 60 --procs piggy_spread1,fxfeed1 --tables piggy_tape --live"
     assert command == (
-        ".venv/bin/uqs deploy verify --profile fx --deadline 60 "
-        "--procs piggy_spread1,fxfeed1 --tables piggy_tape --live"
+        "if .venv/bin/uqs deploy check --help >/dev/null 2>&1; "
+        f"then .venv/bin/uqs deploy check {args}; else .venv/bin/uqs deploy verify {args}; fi"
     )
     assert "deploy_verify.py" not in command

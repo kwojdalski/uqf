@@ -32,7 +32,7 @@ draws the topology.
 ```
 ./install.sh               # once: checks prerequisites, puts `uqs` on your PATH
 uqs start all              # every startwithall=1 process
-uqs summary                # status table
+uqs status                # status table
 uqs stop all               # stop every startwithall=1 process
 ```
 
@@ -84,8 +84,8 @@ so the error names whichever table sorts first rather than the partition that is
 actually short.
 
 ```
-uqs data hdb-check           # which partitions are missing what
-uqs data hdb-check --apply   # write each missing table and column, via vendored KX dbmaint
+uqs data check           # which partitions are missing what
+uqs data check --apply   # write each missing table and column, via vendored KX dbmaint
 ```
 
 `--apply` shows what it would write and asks first (`--yes` skips the question,
@@ -124,13 +124,13 @@ the pattern, or the shell will try to expand it against your filenames first.
 
 ### Renamed or retyped HDB columns
 
-`hdb-check --apply` does not rewrite existing columns. When a release renames or
-changes one, stop the stack and migrate each affected date/table explicitly:
+`data check --apply` does not rewrite existing columns. When a release renames
+or changes one, stop the stack and migrate each affected date/table explicitly:
 
 ```
 uqs data migrate trade 2026-01-01 --rename old_price:price --cast price --dry-run
 uqs data migrate trade 2026-01-01 --rename old_price:price --cast price --apply
-uqs data hdb-check
+uqs data check
 uqs restart hdb1
 ```
 
@@ -149,11 +149,11 @@ release's, or an attached TorQ stack's, such as a production HDB a backfill
 wrote a table into on a few dates only (#1755):
 
 ```
-uqs data hdb-check --attach pb-prod                          # the plan: which dates lack the table
-uqs data hdb-check --attach pb-prod --apply                  # write an empty one there, after asking
-uqs data hdb-alter --attach pb-prod --reorder time,sym,amount,note
-uqs data hdb-alter --attach pb-prod --reorder time,sym,amount,note --apply
-uqs data hdb-alter --attach pb-prod --undo /data/hdb.uqf-alter/20261028D101500123-pb.json --apply
+uqs data check --attach pb-prod                          # the plan: which dates lack the table
+uqs data check --attach pb-prod --apply                  # write an empty one there, after asking
+uqs data alter --attach pb-prod --reorder time,sym,amount,note
+uqs data alter --attach pb-prod --reorder time,sym,amount,note --apply
+uqs data alter --attach pb-prod --undo /data/hdb.uqf-alter/20261028D101500123-pb.json --apply
 ```
 
 **Which HDB** is named once, by what already knows it - give exactly one:
@@ -256,17 +256,17 @@ it covered, missing from the rest:
    `ssh -o BatchMode=yes USER@HOST true` works.
 2. Make sure nothing else writes the table: let any attached backfill finish
    (`uqs list backfills`), and pick a time well away from end of day.
-3. Read the plan: `uqs data hdb-check --attach NAME`. It names the HDB and where
+3. Read the plan: `uqs data check --attach NAME`. It names the HDB and where
    that came from - check it is the directory you mean - and the dates that lack
    the table.
-4. `uqs data hdb-check --attach NAME --apply` writes the empty table there; the
+4. `uqs data check --attach NAME --apply` writes the empty table there; the
    final check and the readers' reload follow.
 5. To change the table's layout, plan it with
-   `uqs data hdb-alter --attach NAME --reorder ...` (or `--rename`, `--attr`,
+   `uqs data alter --attach NAME --reorder ...` (or `--rename`, `--attr`,
    `--cast`), read the plan, then add `--apply`. Keep the journal path the plan
    prints.
-6. If the result is wrong, `uqs data hdb-alter --attach NAME --undo JOURNAL`
-   shows what it would put back; add `--apply`.
+6. If the result is wrong, `uqs data alter --attach NAME --undo JOURNAL` shows
+   what it would put back; add `--apply`.
 
 ## Commands
 
@@ -293,7 +293,7 @@ deployed): see [Deploying to a server](deploy.md).
 `uqs start posbook1 demo_markout1` - which is what lets TAB complete them. A
 single quoted `"posbook1 demo_markout1"` still works. `--base-port` sets
 `KDBBASEPORT` (default: the runtime's own base port, `6050` for `uqf`; see the
-port table below). `--export FILE` (on `summary`/`query`/`list`/`config get`)
+port table below). `--export FILE` (on `status`/`query`/`list`/`config show`)
 additionally writes the same rows to `FILE` as CSV or Parquet, format inferred
 from the extension; a result that is not a table, such as `count t`, is refused.
 
@@ -378,16 +378,16 @@ The stack's tables (`uqs list KIND`):
 
 - `processes` - every process's `procname`/`proctype`/`port`/`startwithall`,
   resolved and with any `config set` overrides applied - the full set
-  `config get`/`config set`/`start <procname>` accept, without already needing
+  `config show`/`config set`/`start <procname>` accept, without already needing
   to know a name ahead of time - plus the `inputs` and `outputs` its job
   declares: the tables it subscribes to and publishes, or for a backfill worker
-  the dataset it fills. The same declarations `summary`'s graph columns come
+  the dataset it fills. The same declarations `status`'s graph columns come
   from, but readable without a running stack
 - `fields` - `process.csv`'s valid columns (what `config set`'s `FIELD` argument
   accepts)
 - `overrides` - every `config set` override currently in effect
 - `env` - `build_env()`'s resolved `KDBBASEPORT`/`KDBHDB`/... values (the same
-  env `config get`'s placeholder resolution and `torq.sh` itself use)
+  env `config show`'s placeholder resolution and `torq.sh` itself use)
 - `dependencies` - each process's input tables and who publishes them, so you
   can see what a process needs before starting it on its own
 - `backfills` - every attached destination a `uqs job backfill --attach` has run
@@ -425,12 +425,12 @@ unknown column is refused with the ones that listing has. The order reaches
 `--export` too.
 
 `--interactive` (`-i`) opens the table in a browser instead of printing it, and
-filters its rows as you type. On `list`, `summary`, `job runs list`,
-`job runs status`, `job gaps` and `schema`:
+filters its rows as you type. On `list`, `status`, `job runs list`,
+`job runs list --unfinished`, `job gaps` and `schema`:
 
 ```
 uqs list processes -i      # type "hdb" to keep the hdb rows
-uqs summary -i             # "down" for what is down, "up warn" for both at once
+uqs status -i             # "down" for what is down, "up warn" for both at once
 uqs job runs list -i       # Enter prints the run you picked, for `uqs job runs show`
 ```
 
@@ -442,7 +442,7 @@ tab-separated; Escape exits printing nothing. It needs a terminal, and refuses
 in a pipe rather than hang. `--sort` still decides the order, and `--export`
 writes every row, not just the ones a filter left.
 
-`uqs summary -i` also acts on the highlighted process: `s` starts it, `x` stops
+`uqs status -i` also acts on the highlighted process: `s` starts it, `x` stops
 it, `r` restarts it, and the table re-reads itself when that finishes; `R`
 re-reads it on demand. It also re-reads the fleet every 2 seconds on its own,
 keeping the filter and the highlighted row; `--every 10` slows that down and
@@ -560,7 +560,7 @@ with no connection cap and no licence needed. Its binary is your `QCMD` when
 that is PeachQ, otherwise the pinned build from `scripts/peachq.py`'s cache,
 built into the cache the first time (`uqs.interpreter.peachq_binary`). That
 stack alone gets that `QCMD`; your shell's own `QCMD` and `PATH` are left alone,
-and `summary` names the interpreter on its first line. KDB-X stays the default
+and `status` names the interpreter on its first line. KDB-X stays the default
 and the interpreter everything here is verified against.
 
 ```
@@ -631,7 +631,7 @@ $ uqs start
 ERROR    | the torq runtime's stack (base port 6050) is already using ports this start needs: stp1 :6050 (pid 4242), ... Stop it with `uqs --runtime torq stop --base-port 6050`, or start this one elsewhere with --base-port.
 ```
 
-`uqs summary` names the runtime and base port it is reporting on in its title.
+`uqs status` names the runtime and base port it is reporting on in its title.
 
 On `torq`, `list processes` shows the 23 starter-pack processes. `essential`
 leaves out `feed1`, so nothing publishes; `feed` adds it, so `trade` and `quote`
@@ -653,7 +653,7 @@ says what each profile holds of them - so which profiles fit, and which only fit
 alone.
 
 A profile names the processes you actually came for; everything they read is
-derived from the same dependency graph `summary`'s **Depends on** column uses:
+derived from the same dependency graph `status`'s **Depends on** column uses:
 
 ```
 uqs list profiles
@@ -803,7 +803,7 @@ warning superbook1 subscribes to `market_data`, which no running process
         publishes - start `uqs start marketdata1`.
 ```
 
-and `summary` says the same about processes that are already up:
+and `status` says the same about processes that are already up:
 
 ```
 2 running process(es) have an input nothing running publishes - up, but idle:
@@ -831,7 +831,7 @@ exists for: it starts that set and is checked against the budget first, where a
 positional start is only warned about. See [the cross-arbitrage
 service](../services/cross-arbitrage.md).
 
-`summary` opens with one line saying which q runs the fleet, and the connection
+`status` opens with one line saying which q runs the fleet, and the connection
 budget that follows from it:
 
 ```
@@ -844,15 +844,15 @@ The implementation is asked of the binary, which is the only thing that says it
 other than the pinned build. `uqs list env` carries the answer as its
 `q_impl (binary)` row.
 
-`summary` shows the whole graph, not just the unsatisfied part of it, in three
+`status` shows the whole graph, not just the unsatisfied part of it, in three
 columns derived from the same declarations:
 
 ```
-uqs summary                     # all ten columns
-uqs summary --columns status    # the seven status ones, for a narrow terminal
-uqs summary --columns "Process,Depends on,Inputs,Outputs"
-uqs summary --sort Port         # by any column, numeric-aware; --reverse for descending
-uqs summary --sort Status --columns status
+uqs status                     # all ten columns
+uqs status --columns status    # the seven status ones, for a narrow terminal
+uqs status --columns "Process,Depends on,Inputs,Outputs"
+uqs status --sort Port         # by any column, numeric-aware; --reverse for descending
+uqs status --sort Status --columns status
 ```
 
 `--sort` takes any column, shown or not, and sorts as `uqs list --sort` does.
@@ -891,7 +891,7 @@ handshake within `--probe-timeout` (0.5s by default):
   | `reset`    | it dropped the connection - what a process past its connection cap does to a new handle                                                                      |
   | `rejected` | it closed the connection without answering: it refused the credentials                                                                                       |
   | `refused`  | nothing is listening on its port                                                                                                                             |
-  | `-`        | not probed: the process is down, or `summary`'s own budget ran out                                                                                           |
+  | `-`        | not probed: the process is down, or `status`'s own budget ran out                                                                                            |
 
 Any `up` process that does not answer is also named in a red line under the
 table.
@@ -908,16 +908,16 @@ says what each job's batches did since its last uptime beat (once a minute):
 runs no streaming job. A failing job is also named under the table with its last
 error, and `uqs job gaps <job>` lists the span it dropped.
 
-### summary --timeout
+### status --timeout
 
-`summary` gets **one budget for the whole command** (120s by default): listing
+`status` gets **one budget for the whole command** (120s by default): listing
 the processes, asking `monitor1` for heartbeats, and probing each process. Any
 of them could otherwise hang - `monitor1` at its connection cap accepts a
 connection and never answers.
 
 ```
-uqs summary --timeout 10   # fail fast
-uqs summary --timeout 0    # wait forever
+uqs status --timeout 10   # fail fast
+uqs status --timeout 0    # wait forever
 ```
 
 The listing goes first and the heartbeat lookup gets what is left (at least one
@@ -935,15 +935,15 @@ not be reached".
 
 Upstream ships `monitor1` with `startwithall=0`; uqs turns it on
 (`VENDORED_STARTWITHALL_OVERLAY` in `stack/procs.py`). It is the only process
-that collects heartbeats, so without it `summary`'s Heartbeat column reads "not
+that collects heartbeats, so without it `status`'s Heartbeat column reads "not
 collected" on a healthy stack.
 
 - **Under the community licence, coverage is partial.** A q process may hold 16
-  connections, and a monitor with none left cannot accept the query `summary`
+  connections, and a monitor with none left cannot accept the query `status`
   reads heartbeats with. So `stack/monitor_budget.py` stops monitoring
   `sortworker`, `reporter`, `housekeeping`, `feed`, then `metrics` processes
   until the rest fit. Those show `-` in the Heartbeat column. `uqs start`,
-  `restart` and `summary` each print one line naming the proctypes given up,
+  `restart` and `status` each print one line naming the proctypes given up,
   counting only types something in the fleet runs as. The fleet is the one the
   start brings up - a profile's resolved set, or the set the last profile start
   recorded - not the `startwithall=1` rows, so `--profile crypto`, whose
@@ -992,12 +992,12 @@ bundles keep their rows in `python/uqs/bundle_overrides.csv`; `config set`
 changes only this host's file and takes precedence over bundle rows.
 
 ```
-uqs config get fxfeed1
-uqs config get fxfeed1 startwithall
+uqs config show fxfeed1
+uqs config show fxfeed1 startwithall
 uqs config set fxfeed1 startwithall 0
 ```
 
-`config get` resolves placeholders as `torq.sh` does at start time -
+`config show` resolves placeholders as `torq.sh` does at start time -
 `load=${KDBHDB}` to the real path, `port={KDBBASEPORT}+3` to `6053`;
 `--unresolved` shows the literal value.
 
@@ -1206,12 +1206,12 @@ Two limits apply when grouping lines by these fields:
 itself is doing:
 
 ```
-uqs --debug summary        # this invocation only
-LOG_LEVEL=DEBUG uqs summary   # same, for a shell session
+uqs --debug status        # this invocation only
+LOG_LEVEL=DEBUG uqs status   # same, for a shell session
 ```
 
 `NO_COLOR=1` turns colour off; `FORCE_COLOR=1` keeps it through a pipe. On
-`summary`, `--debug` says why a column is blank:
+`status`, `--debug` says why a column is blank:
 
 ```
 summary base_port=6050 torqdata=.../output/uqs
@@ -1308,8 +1308,8 @@ uqs start --dry-run <procname>          # the exact start line
 uqs start <procname>                    # streaming jobs
 uqs job backfill <worker> --source-version v1 --from 2026-09-01 --to 2026-09-02 --mode plan
 uqs job backfill <worker> --source-version v1 --from 2026-09-01 --to 2026-09-02
-uqs summary --columns status            # up, and Responds: yes
-uqs --debug summary                     # how long each took to load
+uqs status --columns status            # up, and Responds: yes
+uqs --debug status                     # how long each took to load
 uqs logs <procname> -f
 q tests/run_tests.q
 ```
@@ -1413,7 +1413,7 @@ options is refused.
 
 ## MCP server
 
-`uqs-mcp` exposes the CLI's operations as MCP tools (`uqs_start`, `uqs_summary`,
+`uqs-mcp` exposes the CLI's operations as MCP tools (`uqs_start`, `uqs_status`,
 `uqs_query`, ... - [`mcp.py`](../../python/uqs/src/uqs/mcp.py) has the list),
 for an MCP client to drive the stack. `exec` is not exposed. Point the client's
 server command at:
@@ -1497,6 +1497,7 @@ The verbs of rule 4:
   | `export` `approve`                            | a receiver contract, on each side                         |
   | `replay` `seed` `migrate`                     | move data into the HDB                                    |
   | `upgrade`                                     | bring a store an older uqs wrote up to today's layout     |
+  | `alter`                                       | change one table in every HDB partition holding it        |
   | `diff` `prepare`                              | compare runtimes; install a runtime's bundles             |
   | `stub`                                        | add a placeholder source row                              |
   | `env`                                         | print variables to source                                 |
@@ -1519,21 +1520,21 @@ logs its new spelling when used (rule 6). The release after removes it.
 
 One meaning per option name (#1729):
 
-  | old                                                                                     | new                             |
-  | ---                                                                                     | ---                             |
-  | `--port` on `start` `stop` `restart` `exec` `summary` `graph` `list`                    | `--base-port`                   |
-  | `--port` on `config get` `data replay` `connector start` `deploy verify` `job backfill` | `--base-port`                   |
-  | `job receive --port`                                                                    | `--listen-port`                 |
-  | `query --target NAME`                                                                   | `query --tunnel NAME`           |
-  | `stop --force`                                                                          | `stop --kill`                   |
-  | `job backfill --force`                                                                  | `job backfill --any-writer`     |
-  | `job remove --force`                                                                    | `job remove --even-if-edited`   |
-  | `logs -n N`                                                                             | `logs --lines N` / `-l N`       |
-  | `start --print`                                                                         | `start --dry-run` (#1732)       |
-  | `logs --print`                                                                          | `--show-command`                |
-  | `query --raw`                                                                           | `query --no-gateway`            |
-  | `config get --raw`                                                                      | `config get --unresolved`       |
-  | `summary --debug`, `job backfill --debug`                                               | `uqs --debug summary`, ...      |
+  | old                                                                                     | new                              |
+  | ---                                                                                     | ---                              |
+  | `--port` on `start` `stop` `restart` `exec` `summary` `graph` `list`                    | `--base-port`                    |
+  | `--port` on `config get` `data replay` `connector start` `deploy verify` `job backfill` | `--base-port`                    |
+  | `job receive --port`                                                                    | `--listen-port`                  |
+  | `query --target NAME`                                                                   | `query --tunnel NAME`            |
+  | `stop --force`                                                                          | `stop --kill`                    |
+  | `job backfill --force`                                                                  | `job backfill --any-writer`      |
+  | `job remove --force`                                                                    | `job remove --even-if-edited`    |
+  | `logs -n N`                                                                             | `logs --lines N` / `-l N`        |
+  | `start --print`                                                                         | `start --dry-run` (#1732)        |
+  | `logs --print`                                                                          | `--show-command`                 |
+  | `query --raw`                                                                           | `query --no-gateway`             |
+  | `config get --raw`                                                                      | `config show --unresolved`       |
+  | `summary --debug`, `job backfill --debug`                                               | `uqs --debug status`, ...        |
 
 Noun first (#1727):
 
@@ -1563,7 +1564,7 @@ The thing acted on is positional (#1730):
 stack is PROC, any other is the expression or table, so
 `uqs query 'count quote'` still asks the gateway and `uqs schema 'crypto*'`
 still reads rdb1. A job or worker is JOB in every command (`job backfill JOB`,
-`job attachment contract export JOB`), a process PROC (`config get PROC`).
+`job attachment contract export JOB`), a process PROC (`config show PROC`).
 
 Fewer, regular top-level commands (#1734):
 
@@ -1621,6 +1622,23 @@ ledger up to today's columns; it is not `data migrate`, which changes one HDB
 partition's schema. Each group's help names every command in it, held by
 `test_cli_conventions.py`.
 
+A fixed verb vocabulary (#1733):
+
+  | old                   | new                              |
+  | --------------------- | -------------------------------- |
+  | `uqs summary`         | `uqs status`                     |
+  | `uqs data hdb-check`  | `uqs data check`                 |
+  | `uqs data hdb-alter`  | `uqs data alter`                 |
+  | `uqs config get`      | `uqs config show`                |
+  | `uqs deploy verify`   | `uqs deploy check`               |
+  | `uqs job runs status` | `uqs job runs list --unfinished` |
+
+`status` is the state of something running, `check` a probe that exits non-zero
+on a problem, `list` many records and `show` one. A push or rollback asks a
+release for `deploy check`, or for `deploy verify` on a release from before it.
+The MCP tool `uqs_summary` is `uqs_status`, and `uqs_summary` stays for one
+release.
+
 `--port` is now only ever one process's port (`query`, `schema`);
 `query --tunnel` keeps querying a target through an ssh tunnel from here, so
 `--export` writes here, where `uqs --target NAME query` runs the whole command
@@ -1636,30 +1654,30 @@ exit code 1, so stdout always parses:
 
 ```bash
 uqs job runs list --json | jq -r '.runs[] | select(.status == "failed") | .run_id'
-uqs summary --json | jq -r '.processes[] | select(.status == "down") | .process'
+uqs status --json | jq -r '.processes[] | select(.status == "down") | .process'
 ```
 
 Each command's `--help` names its document. The commands #1731 added:
 
-  | command                                    | document                                                                                                                                                                                                       |
-  | ---                                        | ---                                                                                                                                                                                                            |
-  | `summary`                                  | `{interpreter, processes: [{time, process, status, pid, port, heartbeat, responds, batches, depends_on, inputs, outputs, port_source}], silent, failing, starved: [{process, reasons}], heartbeats_collected}` |
-  | `graph`                                    | `{direction, trees: [{process, status, tables, repeat, children}]}`                                                                                                                                            |
-  | `query [PROC] EXPR`                        | `{expression, result}`: a table is a list of records                                                                                                                                                           |
-  | `schema [PROC] [TABLE]`                    | `{process, port, tables: [{table, rows, columns}]}`, or with a TABLE `{process, port, columns: [{table, column, type, q, attribute}]}`                                                                         |
-  | `logs`                                     | `{lines: [{time, host, procname, proctype, loglevel, id, message}]}`; not with `--follow`, `--channel` or `--multitail`                                                                                        |
-  | `config get PROC [FIELD]`                  | `{process, fields: [{field, value}]}`, or `{process, field, value}`                                                                                                                                            |
-  | `job gaps`                                 | `{job, gaps: [{range_from, range_to}], sessions, refillable, refills: [{worker, range_from, range_to, command}], today_not_refillable}`                                                                        |
-  | `job preview`                              | the preview's own result: `{job, mode, state, live, cursor, next_cursor, advances, fetched, rows, sample, failures, trace}`                                                                                    |
-  | `job runs status`, `job runs list`         | `{runs: [{run_id, worker, dataset, status, range_from, range_to, ...}]}`                                                                                                                                       |
-  | `job runs show RUN`                        | `{run, facts, logs, rerun}`                                                                                                                                                                                    |
-  | `job runs audit`                           | `{facts: [{run_id, dataset, range_from, range_to, label, text}]}`                                                                                                                                              |
-  | `connector status`                         | `{connectors: [{name, running, pid, log, ...}]}`                                                                                                                                                               |
-  | `setup odbc status`                        | `{home, current, previous, versions}`; without `--json` it is now a table                                                                                                                                      |
-  | `deploy verify`                            | its report without the `DEPLOY_VERIFY_OK`/`FAILED` marker line                                                                                                                                                 |
-  | `deploy history`                           | `{deployments: [{default, at, target, host, dest, release, profile, status, stage}]}`                                                                                                                          |
-  | `target check`                             | `{ok, target, host, dest, remote_user, release}`                                                                                                                                                               |
-  | `data hdb-check --table`, `data hdb-alter` | `{ok, hdb, resolved_from, ssh, warnings, plan, result}`: `plan` and `result` are `scripts/gates/hdb_alter.q`'s own documents - partitions, shapes, steps, journal, final check                                 |
+  | command                                     | document                                                                                                                                                                                                       |
+  | ---                                         | ---                                                                                                                                                                                                            |
+  | `status`                                    | `{interpreter, processes: [{time, process, status, pid, port, heartbeat, responds, batches, depends_on, inputs, outputs, port_source}], silent, failing, starved: [{process, reasons}], heartbeats_collected}` |
+  | `graph`                                     | `{direction, trees: [{process, status, tables, repeat, children}]}`                                                                                                                                            |
+  | `query [PROC] EXPR`                         | `{expression, result}`: a table is a list of records                                                                                                                                                           |
+  | `schema [PROC] [TABLE]`                     | `{process, port, tables: [{table, rows, columns}]}`, or with a TABLE `{process, port, columns: [{table, column, type, q, attribute}]}`                                                                         |
+  | `logs`                                      | `{lines: [{time, host, procname, proctype, loglevel, id, message}]}`; not with `--follow`, `--channel` or `--multitail`                                                                                        |
+  | `config show PROC [FIELD]`                  | `{process, fields: [{field, value}]}`, or `{process, field, value}`                                                                                                                                            |
+  | `job gaps`                                  | `{job, gaps: [{range_from, range_to}], sessions, refillable, refills: [{worker, range_from, range_to, command}], today_not_refillable}`                                                                        |
+  | `job preview`                               | the preview's own result: `{job, mode, state, live, cursor, next_cursor, advances, fetched, rows, sample, failures, trace}`                                                                                    |
+  | `job runs list [--unfinished]`              | `{runs: [{run_id, worker, dataset, status, range_from, range_to, ...}]}`                                                                                                                                       |
+  | `job runs show RUN`                         | `{run, facts, logs, rerun}`                                                                                                                                                                                    |
+  | `job runs audit`                            | `{facts: [{run_id, dataset, range_from, range_to, label, text}]}`                                                                                                                                              |
+  | `connector status`                          | `{connectors: [{name, running, pid, log, ...}]}`                                                                                                                                                               |
+  | `setup odbc status`                         | `{home, current, previous, versions}`; without `--json` it is now a table                                                                                                                                      |
+  | `deploy check`                              | its report without the `DEPLOY_VERIFY_OK`/`FAILED` marker line                                                                                                                                                 |
+  | `deploy history`                            | `{deployments: [{default, at, target, host, dest, release, profile, status, stage}]}`                                                                                                                          |
+  | `target check`                              | `{ok, target, host, dest, remote_user, release}`                                                                                                                                                               |
+  | `data check --table`, `data alter`          | `{ok, hdb, resolved_from, ssh, warnings, plan, result}`: `plan` and `result` are `scripts/gates/hdb_alter.q`'s own documents - partitions, shapes, steps, journal, final check                                 |
 
 ## Installing
 
@@ -1679,7 +1697,7 @@ uqs --install-completion      # bash, zsh, fish or PowerShell - detected
 ```
 
 TAB then completes process names, `--profile` names, `list` kinds and `--sort`
-columns, `config get`/`config set` fields and the plant's tables, all read from
+columns, `config show`/`config set` fields and the plant's tables, all read from
 the same registry the commands resolve against. `uqs --show-completion` prints
 the script instead. From a script or CI there is no tty to detect the shell
 from, and the install fails with `Shell None is not supported.`

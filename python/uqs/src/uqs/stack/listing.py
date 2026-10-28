@@ -64,7 +64,7 @@ def _worker_datasets(paths: UqsPaths) -> dict[str, str]:
 def _list_processes(paths: UqsPaths, base_port: int | None) -> list[dict[str, str]]:
     """Every process.csv row, resolved, with the tables it reads and writes.
 
-    Inputs and outputs come from the same declarations `uqs summary`'s graph
+    Inputs and outputs come from the same declarations `uqs status`'s graph
     columns and the generated `database.q` do, so the three cannot disagree.
     Static: this is what each process is declared to read and write, not
     whether anything is feeding it. A vendored TorQ process declares no edges
@@ -124,7 +124,7 @@ def _binary_impl(status: InterpreterStatus) -> str:
 
 
 def interpreter_line(status: InterpreterStatus | None = None) -> str:
-    """One line for the top of `uqs summary`: which q runs the fleet, and the
+    """One line for the top of `uqs status`: which q runs the fleet, and the
     connection budget that follows from it.
 
     The budget is what decides whether a 20-process fleet is fine (PeachQ, no
@@ -148,7 +148,7 @@ def _list_dependencies(paths: UqsPaths, base_port: int) -> list[dict[str, str]]:
 
     Static: it reads the registry, not the fleet, so it answers "what would
     this process need" rather than "is it being fed". `uqs start` and
-    `uqs summary` answer the second, because only they know what is
+    `uqs status` answer the second, because only they know what is
     running.
     """
     return dependency_rows()
@@ -219,7 +219,7 @@ def list_items(paths: UqsPaths, kind: str, base_port: int | None = None) -> list
 # summary parsing - TorQ's own `summary` output, with the ports it leaves out
 # ---------------------------------------------------------------------------
 
-#: The columns `uqs summary` shows, in order.
+#: The columns `uqs status` shows, in order.
 SUMMARY_COLUMNS = ("Time", "Process", "Status", "PID", "Port", "Heartbeat")
 
 #: Columns derived from the process GRAPH rather than from the process listing.

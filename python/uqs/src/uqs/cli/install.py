@@ -175,7 +175,7 @@ def _next_steps(declarations: list[Declaration], sidecar_tests: list[Path]) -> P
             "Run a worker (the fleet must be up)",
             f"uqs job backfill {worker} --source-version v1 --from 2026-09-01 --to 2026-09-02",
         )
-    step("Each one answers", "uqs summary --columns status   (Responds: yes)")
+    step("Each one answers", "uqs status --columns status   (Responds: yes)")
     step("How long each took to load", "uqs --debug summary")
     step("Their logs", f"uqs logs {procs} -f")
     step("The whole suite", "q tests/run_tests.q")

@@ -1,4 +1,4 @@
-"""`uqs summary`: the status table, and the graph beside it.
+"""`uqs status`: the status table, and the graph beside it.
 
 Its own module because it is the largest single command in the CLI by a
 distance - a status table, a derived process graph, a shared timeout budget
@@ -16,7 +16,7 @@ from rich.table import Table
 
 from uqs.cli import completion
 from uqs.cli.json_out import emit, json_opt
-from uqs.cli.renames import renamed
+from uqs.cli.renames import alias_command, renamed
 from uqs.cli.shared import (
     BasePortOpt,
     ExportOpt,
@@ -128,7 +128,11 @@ def _json(rows: list[dict], gathered, status) -> None:
     })  # fmt: skip
 
 
-@app.command(cls=renamed({"--port": "--base-port", "--debug": "--debug"}))
+#: The old spellings `status` still takes (#1729).
+_RENAMES = {"--port": "--base-port", "--debug": "--debug"}
+
+
+@app.command("status", cls=renamed(_RENAMES))
 def summary(
     ctx: typer.Context,
     port: BasePortOpt = None,
@@ -343,3 +347,7 @@ def summary(
         )
     _export(rows, export)
     raise typer.Exit(code=result.returncode)
+
+
+#: Its name before #1733: `status` is the state of something running.
+alias_command(app, "summary", "uqs status", summary, cls=renamed(_RENAMES))
