@@ -80,9 +80,9 @@ each profile's slots and whether it fits; `all` doesn't fit.
   | logs                                           | `<data>/logs/out_<proc>.log`, `err_<proc>.log`; read them with `uqs logs` |
   | a flattened tree for a `peachq-etl` runtime    | `<data>/qtree`, rebuilt only when its source changes                      |
 
-`uqs remove output` deletes runtime state. `uqs remove checkpoint WORKER`
-restarts a worker's range from its beginning on purpose; you rarely need it,
-because re-running a backfill resumes it.
+`uqs clean` deletes runtime state. `uqs job checkpoint remove WORKER` restarts a
+worker's range from its beginning on purpose; you rarely need it, because
+re-running a backfill resumes it.
 
 ## Recovery, in brief
 

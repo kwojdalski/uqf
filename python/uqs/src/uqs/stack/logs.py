@@ -312,7 +312,7 @@ def follow_during(
     A log that already exists is the previous run's, followed from its end;
     when the process starts, TorQ points the alias at this run's file and the
     follower (stack/follow.py) moves there and reads it from its first line. A
-    log that does not exist yet - a first run, or after `uqs remove output` -
+    log that does not exist yet - a first run, or after `uqs clean` -
     is waited for here and read from its first line once it appears.
     """
     expected = _expected_log_files(paths, procnames)

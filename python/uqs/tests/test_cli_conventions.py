@@ -114,6 +114,7 @@ DOMAIN_VERBS = {
     "stop": "the stack's lifecycle (also a connector's)",
     "restart": "the stack's lifecycle",
     "logs": "read processes' logs",
+    "clean": "delete the runtime state the stack wrote",
     "query": "run a q expression on a process",
     "graph": "draw the process graph",
     "schema": "describe a process's tables",
@@ -151,9 +152,7 @@ GROUP_VERBS = set(CORE_VERBS) | {"start", "stop", "restart", "delete", "get", "c
 
 
 #: group path -> the issue that renames it
-RULE1_ALLOWLIST = {
-    "remove": "#1727",  # remove output / remove checkpoint -> clean, job checkpoint ...
-}
+RULE1_ALLOWLIST: dict[str, str] = {}
 
 
 def test_rule1_no_group_is_named_after_a_verb():
@@ -169,8 +168,6 @@ RULE4_ALLOWLIST = {
     "up": "#1734",  # -> start --follow
     "raw": "#1734",  # torq.sh pass-through
     "summary": "#1733",  # -> status
-    "remove output": "#1727",  # -> clean
-    "remove checkpoint": "#1727",  # -> job checkpoint ...
     "data hdb-check": "#1733",  # -> data check
     "config get": "#1733",  # -> show
     "deploy verify": "#1733",  # -> deploy check
@@ -364,8 +361,8 @@ KIND = {
     "schema": REPORTS,
     "list": REPORTS,
     "logs": REPORTS,
-    "remove output": CHANGES,
-    "remove checkpoint": CHANGES,
+    "clean": CHANGES,
+    "job checkpoint remove": CHANGES,
     "data replay": CHANGES,
     "data seed": CHANGES,
     "data migrate": CHANGES,
@@ -434,7 +431,7 @@ RULE5B_ALLOWLIST = {
         "up",
         "stop",
         "restart",
-        "remove checkpoint",
+        "job checkpoint remove",
         "data replay",
         "data seed",
         "data migrate",  # --apply: dry by default
