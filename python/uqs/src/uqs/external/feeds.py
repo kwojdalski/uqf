@@ -1,4 +1,4 @@
-"""Finding external publishers: the feeds `uqs connector start|stop|status` knows.
+"""Finding external publishers: the feeds `uqs connector start|stop|restart|status|logs` knows.
 
 Databento, Kafka and the cryptorust recorders are listed in cli/external.py by
 hand, each with its own start options. A feed scaffolded with

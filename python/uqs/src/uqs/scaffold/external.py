@@ -12,7 +12,7 @@ This writes both halves:
                                                  and publishing are done
   python/uqs/src/uqs/external/NAME_feed.py       its lifecycle (the shared
                                                  DetachedProcess) and a FEED that
-                                                 `uqs connector start|stop|status`
+                                                 `uqs connector start|stop|restart|status|logs`
                                                  finds without a CLI edit
   python/uqs/tests/test_NAME_streamer.py         a failing test, as every scaffold
   the raw table, and the q job NAME              via scaffold/jobs.streaming_job:
@@ -232,7 +232,7 @@ if __name__ == "__main__":  # pragma: no cover - process entry point
 def _feed(name: str, raw_table: str, publishes: str) -> str:
     return f'''"""{name}_feed.py - start, stop and report the {name} publisher.
 
-A process outside TorQ: not a process.csv row, so `uqs connector start|stop|status
+A process outside TorQ: not a process.csv row, so `uqs connector start|stop|restart|status|logs
 {name}` drives it, through FEED below - the CLI finds it without an edit.
 """
 

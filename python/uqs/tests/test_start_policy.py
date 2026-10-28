@@ -99,7 +99,7 @@ def test_profile_resolution_refuses_with_a_reason(names, extra, says):
 FROM, TO = datetime(2026, 9, 13, tzinfo=UTC), datetime(2026, 9, 15, tzinfo=UTC)
 
 #: Every way into torq.sh that starts q processes: `uqs start`, `uqs restart`,
-#: `uqs job backfill`, and `uqs raw -- start ...` (run_torq_sh as given).
+#: `uqs job backfill`, and `uqs exec -- start ...` (run_torq_sh as given).
 STARTERS = {
     "start": lambda p: runtime.start(p, "rdb1"),
     "restart": lambda p: runtime.restart(p, "rdb1"),
