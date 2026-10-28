@@ -19,6 +19,7 @@ from pathlib import Path
 
 import pytest
 from typer.testing import CliRunner
+from which_support import fake_which
 
 from uqs import runtimes
 from uqs.cli import app, query_target
@@ -348,11 +349,7 @@ def test_the_gateway_session_runs_through_the_tunnel(server, died, monkeypatch):
 
 def test_qcon_runs_as_a_child_through_the_tunnel(server, died, monkeypatch):
     ran = {}
-    # shutil is one module everywhere: the fake takes which()'s keywords too, as
-    # uqs.interpreter calls it with `path=` while resolving q (#1753).
-    monkeypatch.setattr(
-        query_target.shutil, "which", lambda n, **_kw: "/x/qcon" if n == "qcon" else None
-    )
+    fake_which(monkeypatch, {"qcon": "/x/qcon"})
 
     def run(argv, check=False):
         ran["argv"] = argv
