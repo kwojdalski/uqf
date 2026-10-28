@@ -184,7 +184,7 @@ def _next_steps(declarations: list[Declaration], sidecar_tests: list[Path]) -> P
         )
     notes += [
         "[bold]Down or not answering?[/] Check [cyan]output/uqs/logs/err_<procname>.log[/], "
-        "or run it in the foreground: [green]uqs raw -- debug <procname>[/].",
+        "or run it in the foreground: [green]uqs exec -- debug <procname>[/].",
         "[bold]Commit[/] what [cyan]git status[/] now shows, derived files included - "
         "CI checks they are current.",
     ]

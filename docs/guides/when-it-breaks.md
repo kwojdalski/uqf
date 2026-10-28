@@ -123,7 +123,7 @@ that failed to load to a tickerplant that was never up.
 uqs start <procname>
 ```
 
-or `uqs up <procname>` to start it and watch its log in the foreground.
+or `uqs start <procname> -f` to start it and watch its log in the foreground.
 
 ### 4. Decide what to do about the gap
 

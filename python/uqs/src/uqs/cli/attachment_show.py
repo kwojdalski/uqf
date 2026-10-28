@@ -11,9 +11,10 @@ from __future__ import annotations
 from uqs.attach import config
 from uqs.cli.attach import EXTRA_WORDS, NameArg, attach, detach
 from uqs.cli.attach_output import redact, secrets_of
+from uqs.cli.attachment import attachment_app
 from uqs.cli.json_out import emit, json_opt
 from uqs.cli.renames import alias_command
-from uqs.cli.shared import JOB_OPERATIONS_PANEL, _die, _paths, attachment_app, console, job_app
+from uqs.cli.shared import JOB_OPERATIONS_PANEL, _die, _paths, console, job_app
 from uqs.paths import UqsError
 from uqs.stack import attach_state
 

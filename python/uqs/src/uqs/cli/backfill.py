@@ -44,6 +44,7 @@ def backfill(
     worker: Annotated[
         str,
         typer.Argument(
+            metavar="JOB",
             help="The bounded worker to run, e.g. demo_deals_backfill",
             autocompletion=completion.backfill_workers,
         ),

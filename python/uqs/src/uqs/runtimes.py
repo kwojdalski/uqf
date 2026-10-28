@@ -60,9 +60,10 @@ class Runtime:
     #: rather than an operator's start.
     profiles: tuple[str, ...] = ()
     #: The q implementation the stack runs on: `kdbx`, the reference, or
-    #: `peachq`. A PeachQ runtime gets its binary from scripts/peachq.py and
-    #: UQF_Q_IMPL=peachq for its own stack only - nothing global, nothing on
-    #: PATH - and no licence budget, PeachQ having no connection cap (#764).
+    #: `peachq`. A PeachQ runtime gets its binary as QCMD for its own stack
+    #: only (uqs.interpreter.peachq_binary: $QCMD when it is PeachQ, else the
+    #: pinned build) - nothing global, nothing on PATH - and no licence
+    #: budget, PeachQ having no connection cap (#764).
     interpreter: str = "kdbx"
     #: Which q the stack's processes load. `source` is this tree as written.
     #: `flattened` is a copy bootstrap prepares under the runtime's data

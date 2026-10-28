@@ -1,7 +1,7 @@
 # Python tests that cannot pass with PeachQ as the q, each with why.
 #
 # python/conftest.py marks every test listed here as a strict xfail when
-# UQF_Q_IMPL=peachq, as CI's PeachQ lane runs it. A listed test that now
+# $QCMD answers as PeachQ, as CI's PeachQ lane runs it. A listed test that now
 # passes fails the run, as an unlisted one that fails does - so this list
 # only shrinks, like tests/q/peachq_known_gaps.txt. Format: `nodeid  # reason`.
 

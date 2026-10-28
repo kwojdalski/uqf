@@ -65,7 +65,7 @@ DEFAULT_CONNECT_TIMEOUT = 10
 
 #: Commands that read and never change the server, as (command, subcommand);
 #: None covers every subcommand. Anything else asks before it runs. `query` is
-#: not one: --proc, --port and --no-gateway send any q as typed, and even the gateway's
+#: not one: PROC, --port and --no-gateway send any q as typed, and even the gateway's
 #: routed form passes `.gw.*` calls and `\` commands through and runs anything
 #: but an in-place update or delete on every rdb and hdb (#1663).
 READ_ONLY: frozenset[tuple[str, str | None]] = frozenset(

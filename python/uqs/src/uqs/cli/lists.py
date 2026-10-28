@@ -21,6 +21,7 @@ import typer
 from rich.table import Table
 
 from uqs.cli import completion
+from uqs.cli.attachment import attachment_app
 from uqs.cli.renames import BASE_PORT, renamed, warn_renamed
 from uqs.cli.runtime_diff import runtime_app
 from uqs.cli.shared import (
@@ -34,7 +35,6 @@ from uqs.cli.shared import (
     _show,
     _sorted_items,
     app,
-    attachment_app,
     console,
     job_app,
 )

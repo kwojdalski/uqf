@@ -44,7 +44,8 @@ from uqs.cli.attach_output import (
     steps_table,
     verdict,
 )
-from uqs.cli.shared import _debug_requested, _paths, attachment_app
+from uqs.cli.attachment import attachment_app
+from uqs.cli.shared import _debug_requested, _paths
 from uqs.paths import UqsError
 
 

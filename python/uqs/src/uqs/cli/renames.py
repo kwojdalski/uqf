@@ -26,6 +26,10 @@ log = get_logger()
 #: here or a `renamed(...)` on its command; the release after removes both.
 RENAMED_GLOBAL_FLAGS = frozenset({"--debug"})
 
+#: ctx.meta's list of the values an old option gave a positional (`--proc
+#: rdb1` -> PROC rdb1), so a command can tell a named PROC from a guessed one.
+MOVED_KEY = "uqs.renames.moved"
+
 #: `--port` meant the stack's base port on most commands; it is `--base-port`
 #: now, and `--port` is only ever one process's port (#1729).
 BASE_PORT = {"--port": "--base-port"}
@@ -36,18 +40,24 @@ def warn_renamed(old: str, new: str) -> None:
 
 
 def _rewrite_renamed(
-    args: list[str], renames: dict[str, str], command_path: str, root: typer.Context | None
+    args: list[str],
+    renames: dict[str, str],
+    command_path: str,
+    root: typer.Context | None,
+    moved: list[str] | None = None,
 ) -> list[str]:
     """`args` with every old option spelling in `renames` replaced by its new
     one, each warned about once. Stops at `--`, after which nothing is an
-    option. `--debug` given after a command moves to the global flag."""
+    option. `--debug` given after a command moves to the global flag. An old
+    option whose new spelling is a positional (`--proc` -> `PROC`) gives its
+    value as the first word, where the command's first positional is."""
     out: list[str] = []
+    front: list[str] = []
     warned: set[str] = set()
     rest = iter(args)
     for arg in rest:
         if arg == "--":
-            out += [arg, *rest]
-            return out
+            return front + out + [arg, *rest]
         name, eq, value = arg.partition("=")
         if name in RENAMED_GLOBAL_FLAGS and name in renames:
             command = command_path.partition(" ")[2]
@@ -61,6 +71,12 @@ def _rewrite_renamed(
             shared.configure_logging(component="uqs", level="DEBUG")
             continue
         new = renames.get(name)
+        if new is not None and name.startswith("--") and not new.startswith("-"):
+            _warn_once(warned, name, f"{command_path} {new}")
+            front.append(value if eq else next(rest, ""))
+            if moved is not None:
+                moved.append(front[-1])
+            continue
         if new is not None and name.startswith("--"):
             _warn_once(warned, name, new)
             out.append(new + eq + value)
@@ -73,7 +89,7 @@ def _rewrite_renamed(
                 out.append(arg[len(short) :])
             continue
         out.append(arg)
-    return out
+    return front + out
 
 
 def _warn_once(warned: set[str], old: str, new: str) -> None:
@@ -87,7 +103,8 @@ def renamed(renames: dict[str, str]) -> type[TyperCommand]:
     `renames` (old -> new) still parse, hidden from --help, each logging its
     new spelling. A short old spelling (`-n`) matches only as its own word or
     with its value attached (`-n20`). `--debug` -> `--debug` moves a
-    per-command `--debug` to the global one."""
+    per-command `--debug` to the global one, and a new spelling with no dash
+    names the first positional (`--proc` -> `PROC`)."""
 
     class Renamed(TyperCommand):
         #: old spelling -> new, read by the tests
@@ -96,7 +113,9 @@ def renamed(renames: dict[str, str]) -> type[TyperCommand]:
         def parse_args(self, ctx, args):
             root = ctx.find_root()
             path = ctx.command_path
-            return super().parse_args(ctx, _rewrite_renamed(list(args), renames, path, root))
+            moved = ctx.meta.setdefault(MOVED_KEY, [])
+            args = _rewrite_renamed(list(args), renames, path, root, moved)
+            return super().parse_args(ctx, args)
 
     Renamed.renames = dict(renames)
     return Renamed

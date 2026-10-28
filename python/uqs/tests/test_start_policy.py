@@ -99,7 +99,7 @@ def test_profile_resolution_refuses_with_a_reason(names, extra, says):
 FROM, TO = datetime(2026, 9, 13, tzinfo=UTC), datetime(2026, 9, 15, tzinfo=UTC)
 
 #: Every way into torq.sh that starts q processes: `uqs start`, `uqs restart`,
-#: `uqs job backfill`, and `uqs raw -- start ...` (run_torq_sh as given).
+#: `uqs job backfill`, and `uqs exec -- start ...` (run_torq_sh as given).
 STARTERS = {
     "start": lambda p: runtime.start(p, "rdb1"),
     "restart": lambda p: runtime.restart(p, "rdb1"),
@@ -115,10 +115,10 @@ def old_q(monkeypatch, tmp_path):
     decl = dataclasses.replace(paths.runtime_declaration, q_tree="source")
     monkeypatch.setattr(type(paths), "runtime_declaration", property(lambda _s: decl))
     q = tmp_path / "q"
-    q.write_text("#!/bin/sh\necho '4.1'\n")
+    # KDB-X when asked which q it is, 4.1 when asked its version.
+    q.write_text("#!/bin/sh\n/usr/bin/grep -q load_natives \"$1\" && echo kdbx || echo '4.1'\n")
     q.chmod(0o755)
     monkeypatch.setenv("QCMD", str(q))
-    monkeypatch.delenv("UQF_Q_IMPL", raising=False)
     interpreter.q_version.cache_clear()
     yield paths
     interpreter.q_version.cache_clear()

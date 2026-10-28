@@ -24,9 +24,10 @@ from rich.table import Table
 from uqs import paths as stack_paths
 from uqs import runtimes
 from uqs.cli import completion, table_browser
+from uqs.cli.renames import MOVED_KEY
 from uqs.logger import configure_logging, get_logger, json_requested
 from uqs.paths import UqsError
-from uqs.stack import runtime
+from uqs.stack import listing, runtime
 
 app = typer.Typer(
     no_args_is_help=True,
@@ -44,27 +45,13 @@ log = get_logger()
 job_app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
-    help="ETL jobs: write them into the tree (new, list, remove, install) and operate on "
-    "them - backfill a bounded worker, preview a polling feed, find a streaming "
-    "job's gaps, receive another machine's batches, reset a worker's checkpoint, read "
-    "its runs, and put it on a TorQ stack already running (attachment).",
+    help="ETL jobs: write them into the tree (new, list, remove, install) and operate on them "
+    "- backfill, preview a feed, find its gaps, receive another machine's batches, a "
+    "worker's checkpoint and runs, and its attachment to a TorQ stack already running.",
 )
 #: The two help panels `uqs job --help` lists its commands under.
 JOB_AUTHORING_PANEL = "Authoring"
 JOB_OPERATIONS_PANEL = "Operations"
-
-#: `uqs job attachment ...`: a job put on a TorQ stack already running, as a
-#: noun (#1737) - add and remove it (attach.py, once `job attach` and `job
-#: detach`), show and list it (attach.py, lists.py), and the receiver contracts
-#: approved for it (receiver_contract.py). Here because three modules register
-#: on it.
-attachment_app = typer.Typer(
-    no_args_is_help=True,
-    add_completion=False,
-    help="Attachments: a job put on a TorQ stack already running - add, remove, show, "
-    "list, and the receiver contracts approved for one (contract).",
-)
-job_app.add_typer(attachment_app, name="attachment", rich_help_panel=JOB_OPERATIONS_PANEL)
 
 #: `uqs data ...`: moving data the stack has already written into where it
 #: belongs, and checking the result - replaying a tickerplant log into the HDB
@@ -74,8 +61,7 @@ job_app.add_typer(attachment_app, name="attachment", rich_help_panel=JOB_OPERATI
 data_app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
-    help="Move written data into the HDB and check its shape: replay, seed, migrate "
-    "(one partition's schema), hdb-check.",
+    help="Move written data into the HDB and check its shape: replay, seed, migrate, hdb-check.",
 )
 
 DEFAULT_LOG_LEVEL = "INFO"
@@ -380,3 +366,35 @@ def _run_streaming(result_fn, *args, **kwargs) -> None:
         _die(exc)
         return
     raise typer.Exit(code=result.returncode)
+
+
+#: The process a command acts on, as its first positional (#1730).
+ProcArg = Annotated[
+    str | None,
+    typer.Argument(
+        metavar="[PROC]",
+        help="The process, by name, e.g. rdb1",
+        autocompletion=completion.procname,
+        show_default=False,
+    ),
+]
+
+
+def _proc_first(
+    ctx: typer.Context, proc: str | None, rest: str | None, port_given: bool
+) -> tuple[str | None, str | None]:
+    """`CMD [PROC] [X]` given one word: PROC if it names a process of this stack
+    and no --port was given, else X (`uqs query 'count quote'` asks the gateway).
+    A word the old `--proc` gave is PROC whatever it names, so a typo is refused."""
+    if proc is None or rest is not None or proc in ctx.meta.get(MOVED_KEY, ()):
+        return proc, rest
+    if port_given or proc not in _known_procs():
+        return None, proc
+    return proc, None
+
+
+def _known_procs() -> set[str]:
+    try:
+        return set(listing.configured_ports(_paths(), None))
+    except Exception:  # noqa: BLE001 - no registry: no word names a process
+        return set()

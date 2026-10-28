@@ -20,8 +20,9 @@ import typer
 
 from uqs.attach import receiver_contract
 from uqs.cli import completion
+from uqs.cli.attachment import attachment_app
 from uqs.cli.renames import alias_command
-from uqs.cli.shared import JOB_OPERATIONS_PANEL, _die, _paths, attachment_app, console, job_app
+from uqs.cli.shared import JOB_OPERATIONS_PANEL, _die, _paths, console, job_app
 from uqs.paths import UqsError
 
 contract_app = typer.Typer(
@@ -45,6 +46,7 @@ def export(
     worker: Annotated[
         str,
         typer.Argument(
+            metavar="JOB",
             help="The bounded worker whose batches the receiver will take",
             autocompletion=completion.backfill_workers,
         ),

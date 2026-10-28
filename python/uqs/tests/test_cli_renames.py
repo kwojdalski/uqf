@@ -27,6 +27,8 @@ RENAMED = [
     ("stop", "--port", "--base-port"),
     ("stop", "--force", "--kill"),
     ("restart", "--port", "--base-port"),
+    ("restart", "--print", "--show-command"),
+    ("exec", "--port", "--base-port"),
     ("raw", "--port", "--base-port"),
     ("summary", "--port", "--base-port"),
     ("graph", "--port", "--base-port"),
@@ -39,6 +41,7 @@ RENAMED = [
     ("config get", "--raw", "--unresolved"),
     ("data replay", "--port", "--base-port"),
     ("connector start", "--port", "--base-port"),
+    ("connector restart", "--port", "--base-port"),
     ("deploy verify", "--port", "--base-port"),
     ("job backfill", "--port", "--base-port"),
     ("job backfill", "--force", "--any-writer"),
@@ -169,3 +172,39 @@ def test_a_kind_that_moved_to_its_noun_still_lists_under_list(monkeypatch):
     assert said == [("uqs list runtimes", "uqs runtime list")]
     kinds = runner.invoke(cli.app, ["list", "--json"]).stdout
     assert "runtimes" not in kinds and "processes" in kinds
+
+
+@pytest.mark.parametrize(
+    ("args", "proc", "rest"),
+    [
+        (["rdb1"], "rdb1", None),  # names a process: PROC
+        (["count quote"], None, "count quote"),  # does not: the expression
+        (["rdb1", "count quote"], "rdb1", "count quote"),
+    ],
+)
+def test_a_lone_word_is_proc_only_when_it_names_a_process(monkeypatch, args, proc, rest):
+    from uqs.cli import shared
+
+    monkeypatch.setattr(shared, "_known_procs", lambda: {"rdb1", "gateway1"})
+    ctx = typer.Context(typer.main.get_command(cli.app))
+    first, second = (args + [None])[:2]
+    assert shared._proc_first(ctx, first, second, port_given=False) == (proc, rest)
+
+
+def test_the_old_proc_option_names_the_process_whatever_it_is(monkeypatch):
+    """`--proc nope1` was a process name, so it is refused as one rather than
+    guessed to be an expression."""
+    from uqs.cli import shared
+
+    said = []
+    monkeypatch.setattr(renames, "warn_renamed", lambda o, n: said.append((o, n)))
+    monkeypatch.setattr(shared, "_known_procs", lambda: {"rdb1"})
+    ctx = typer.Context(_command("query"))
+    args = _command("query").renames
+    moved = ctx.meta.setdefault(renames.MOVED_KEY, [])
+    got = renames._rewrite_renamed(
+        ["count quote", "--proc", "nope1"], args, "uqs query", None, moved
+    )
+    assert got == ["nope1", "count quote"] and moved == ["nope1"]
+    assert shared._proc_first(ctx, "nope1", None, port_given=False) == ("nope1", None)
+    assert said == [("--proc", "uqs query PROC")]

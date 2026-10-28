@@ -364,7 +364,7 @@ scaffold bug: report it, don't work around it.
 4. Run `q tests/run_tests.q`, `uv run pytest -q`, `qlinter` on the new files,
    and `uv run python scripts/gates/check_q_traps.py`.
 5. Run it for real:
-   - `uqs up NAME`, which starts it and its log;
+   - `uqs start NAME -f`, which starts it and follows its log;
    - `uqs summary`, which should show it `up` and wired;
    - or on stock kdb+ with `q scripts/processes/run_stream.q -job NAME`, which
      starts its in-tree producers itself.
@@ -392,7 +392,7 @@ Work from the outside in. Most problems stop at step 1 or 2. The full runbook is
    | `on_batch failed`             | the handler threw: the table and error are on the line |
 3. **DEBUG for that one process:**
    `uqs query ".qetl.log.debug 1b" --port <port>` (G2).
-4. **Look inside it:** `uqs query --proc <proc>` opens a session. There:
+4. **Look inside it:** `uqs query <proc>` opens a session. There:
    - `` .qetl.job.stream.def `job `` is its declaration;
    - `.qpipe.job.<job>` is its state;
    - `.qtorq.received` and `.qtorq.published` count rows per table.

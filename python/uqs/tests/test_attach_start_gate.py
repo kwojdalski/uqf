@@ -281,7 +281,7 @@ def test_uqs_job_attach_start_refuses(unverified):
 
 
 def test_a_backfill_style_start_is_gated_too(unverified):
-    """`uqs job backfill`/`replay`/`raw` call run_torq_sh with their own args."""
+    """`uqs job backfill`/`replay`/`exec` call run_torq_sh with their own args."""
     with pytest.raises(UqsError, match="publisher of attachment ex-uat"):
         runtime.run_torq_sh(default_paths(), ["start", PUBLISHER, "-extras", "-x"], STACK)
 

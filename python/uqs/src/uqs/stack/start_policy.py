@@ -9,7 +9,7 @@ They live here now, below every front end:
   - a name that is not a process, a q too old for the tree, and ports another
     stack holds are refused by refuse_start, which `runtime.run_torq_sh`
     applies to every `start` and `restart` - so neither a front end nor
-    another launcher of q processes (`uqs job backfill`, `uqs replay`, `uqs raw`)
+    another launcher of q processes (`uqs job backfill`, `uqs replay`, `uqs exec`)
     can skip them (#964); `stop` refuses an unknown name itself;
   - a profile is resolved here, with its refusals: an undeclared profile, a
     set past the licence's connection budget, a member the runtime lacks.
@@ -108,6 +108,21 @@ def resolve_profiles(
     on the whole set: a profile that fits plus names that do not is still a
     start that wedges.
     """
+    members, what = profile_members(paths, names, extra)
+    problem = profiles.over_budget_procs(members, what)
+    if problem and not start_overrides.skipped(
+        paths, overrides, "profile_budget", "start", " ".join(members)
+    ):
+        raise UqsError(problem)
+    return members, what
+
+
+def profile_members(
+    paths: UqsPaths, names: str, extra: Sequence[str] = ()
+) -> tuple[tuple[str, ...], str]:
+    """`resolve_profiles` without the budget: the set a profile names, for
+    `uqs stop --profile`, which a set too big to start must still be able to
+    stop (#1734). Refuses what this runtime does not declare or have."""
     wanted = [name.strip() for name in names.split(",") if name.strip()]
     if not wanted:
         raise UqsError("--profile needs at least one name")
@@ -125,10 +140,5 @@ def resolve_profiles(
     what = f"profile(s) {', '.join(sorted(wanted))}" + (
         f" with {', '.join(added)}" if added else ""
     )
-    problem = profiles.over_budget_procs(members, what)
     runtime_profiles.refuse_what_the_runtime_lacks(paths, members, what)
-    if problem and not start_overrides.skipped(
-        paths, overrides, "profile_budget", "start", " ".join(members)
-    ):
-        raise UqsError(problem)
     return members, what
