@@ -22,6 +22,7 @@ draws the topology.
   elsewhere](#installing-jobs-from-elsewhere)
 - [MCP server](#mcp-server)
 - [Other commands](#other-commands)
+- [CLI conventions](#cli-conventions)
 - [Installing](#installing)
 
 ## Quick start
@@ -1266,6 +1267,54 @@ Anything `torq.sh` itself supports but isn't wrapped as its own subcommand above
 `debug <processname>` to run one process in the foreground for troubleshooting,
 `top <processname>` - is available via `raw -- <args>`, which passes straight
 through to `lib/torq/torq.sh`.
+
+## CLI conventions
+
+How `uqs` commands are named and what they take. Not every command follows them
+yet: [`test_cli_conventions.py`](../../python/uqs/tests/test_cli_conventions.py)
+holds rules 1, 3, 4 and 5 over the command tree, with a list of today's
+exceptions, each naming the issue that removes it (#1738). It fails on a new
+command that breaks a rule, and on a listed exception that has since been fixed.
+
+1. **Noun, then verb.** A group is a noun and a leaf is a verb on it:
+   `uqs job backfill demo_deals_backfill`. Only the stack's own lifecycle
+   (`start`, `stop`, `restart`, `status`, `logs`) is a top-level verb.
+2. **The thing acted on is positional; a filter is an option.**
+   `uqs job gaps demo_markout --from 2026-09-13 --to 2026-09-14`.
+3. **One meaning per option name**, and one long name per short flag: `--port`
+   is one process's port (`uqs query --port 6052 'count quote'`), the stack's
+   base port is `--base-port`, and `-n` is `--dry-run`.
+4. **A fixed verb vocabulary**: the table below.
+5. **Uniform flags.** `--json`, one JSON document on stdout, on every command
+   that reports (`uqs runtime diff uqf torq --json`); `--dry-run`/`-n` on every
+   command that changes state (`uqs remove output -n`); `--yes`/`-y` on every
+   command that asks (`uqs job remove NAME -y`). A check is bypassed only with
+   `--override NAME --reason TEXT`.
+6. **A rename ships with a hidden alias for one release**, which prints the new
+   spelling; the release after removes it.
+
+The verbs of rule 4:
+
+  | verb                                          | means                                                     |
+  | ---                                           | ---                                                       |
+  | `status`                                      | the state of something running or installed               |
+  | `check`                                       | actively probe; exit non-zero on a problem                |
+  | `list`                                        | many records                                              |
+  | `show`                                        | one record                                                |
+  | `set`                                         | change one setting                                        |
+  | `add` `remove`                                | create or delete one thing                                |
+  | `start` `stop` `restart` `logs`               | the stack's lifecycle, and a connector's                  |
+  | `query` `graph` `schema`                      | read a running stack                                      |
+  | `new` `install`                               | write a job into the tree, or place one built elsewhere   |
+  | `backfill` `preview` `gaps` `audit` `receive` | operate a job and its runs                                |
+  | `attach` `detach`                             | put a job on a TorQ stack already running, or take it off |
+  | `export` `approve`                            | a receiver contract, on each side                         |
+  | `replay` `seed` `migrate`                     | move data into the HDB                                    |
+  | `diff` `prepare`                              | compare runtimes; install a runtime's bundles             |
+  | `stub`                                        | add a placeholder source row                              |
+  | `env`                                         | print variables to source                                 |
+  | `build` `push` `rollback` `prune` `history`   | releases and their deployment                             |
+  | `shell`                                       | a shell on a target                                       |
 
 ## Installing
 
