@@ -109,3 +109,32 @@ def test_the_old_spelling_still_works_end_to_end(monkeypatch):
     assert seen["lines"] == 7
     assert "multitail x" in result.stdout
     assert said == [("--print", "--show-command"), ("-n", "--lines")]
+
+
+@pytest.mark.parametrize(
+    ("old", "new", "target"),
+    [
+        (["remove", "output", "--dry-run"], "uqs clean", "clean"),
+        (["remove", "checkpoint", "w"], "uqs job checkpoint remove", "clear_checkpoint"),
+    ],
+)
+def test_a_moved_command_still_runs_at_its_old_path(monkeypatch, old, new, target):
+    """The old `uqs remove ...` group (#1727), hidden, logging the new path."""
+    from uqs.stack import backfill as stack_backfill
+    from uqs.stack import clean as stack_clean
+
+    module = stack_clean if target == "clean" else stack_backfill
+    returns = [] if target == "clean" else None
+    calls = []
+
+    def fake(*args, **kwargs):
+        calls.append(args)
+        return returns
+
+    monkeypatch.setattr(module, target, fake)
+    said = []
+    monkeypatch.setattr(renames, "_warn_renamed", lambda o, n: said.append(n))
+    result = runner.invoke(cli.app, old)
+    assert result.exit_code == 0, result.output
+    assert calls and said == [new]
+    assert _command("remove").hidden

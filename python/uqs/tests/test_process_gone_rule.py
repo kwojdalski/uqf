@@ -1,6 +1,6 @@
 """One rule: is the q process a file names provably dead? (#726, #1362)
 
-`uqs job backfill --wait`, `uqs remove checkpoint` (`_live_holder`, for a backfill
+`uqs job backfill --wait`, `uqs job checkpoint remove` (`_live_holder`, for a backfill
 lock) and the frontend's status reader all call uqs.liveness. The Airflow
 sensor cannot - uqf_airflow_provider does not depend on uqs - so it carries a
 copy, uqf_airflow_provider.liveness. These tests hold that copy to the
@@ -47,7 +47,7 @@ def _dead_pid() -> int:
 
 
 def _lock_gone(tmp_path: Path, pid: int, host: str) -> bool:
-    """`uqs remove checkpoint`'s answer, from a lock laid out as q writes one."""
+    """`uqs job checkpoint remove`'s answer, from a lock laid out as q writes one."""
     lock = tmp_path / "w.lock"
     lock.mkdir()
     (lock / "owner").write_text(json.dumps({"pid": pid, "started": "", "host": host}))
@@ -74,7 +74,7 @@ def test_every_reader_answers_alike(case, tmp_path):
         "airflow provider's copy": provider_liveness.process_gone(host, pid),
         "airflow sensor": sensor_gone(status),
         "frontend status": frontend_gone(status),
-        "uqs remove checkpoint": _lock_gone(tmp_path, pid, host),
+        "uqs job checkpoint remove": _lock_gone(tmp_path, pid, host),
     }
     assert answers == dict.fromkeys(answers, gone), f"{case}: {answers}"
 

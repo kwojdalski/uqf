@@ -1208,12 +1208,12 @@ def test_raw_propagates_the_exit_code(monkeypatch):
     assert runner.invoke(cli.app, ["raw", "--", "debug", "rdb1"]).exit_code == 7
 
 
-# ---------------------------------------------------------- remove output
+# ------------------------------------------------------------------ clean
 
 
 def test_remove_output_delegates(monkeypatch):
     rec = _patch(monkeypatch, stack_clean, "clean", result=[])
-    assert runner.invoke(cli.app, ["remove", "output"]).exit_code == 0
+    assert runner.invoke(cli.app, ["clean"]).exit_code == 0
     assert len(rec.calls) == 1
 
 
@@ -1230,14 +1230,14 @@ def test_remove_output_delegates(monkeypatch):
 def test_remove_output_passes_its_flags_through(monkeypatch, argv, expected):
     """The flags have to arrive as given - a dropped --dry-run deletes."""
     rec = _patch(monkeypatch, stack_clean, "clean", result=[])
-    assert runner.invoke(cli.app, ["remove", "output", *argv]).exit_code == 0
+    assert runner.invoke(cli.app, ["clean", *argv]).exit_code == 0
     assert rec.calls[-1][1] == expected
 
 
 def test_remove_output_reports_what_it_removed(monkeypatch):
     rec_result = [(Path("/data/logs"), 800), (Path("/data/tplogs"), 200)]
     _patch(monkeypatch, stack_clean, "clean", result=rec_result)
-    result = runner.invoke(cli.app, ["remove", "output", "--dry-run"])
+    result = runner.invoke(cli.app, ["clean", "--dry-run"])
     assert result.exit_code == 0
     assert "would remove 2 entries" in result.output
     assert "logs" in result.output
@@ -2242,16 +2242,13 @@ def test_a_name_beside_a_profile_that_the_runtime_lacks_is_refused(monkeypatch):
     assert "needs fxfeed1, which the torq runtime does not have" in said[0]
 
 
-@pytest.mark.parametrize("gone", ["clean", "clear-checkpoint"])
-def test_the_old_removal_commands_are_gone(gone):
-    """One group, `uqs remove`, rather than an alias left behind for each."""
-    assert runner.invoke(cli.app, [gone]).exit_code != 0
-
-
-def test_remove_lists_what_it_can_remove():
-    result = runner.invoke(cli.app, ["remove", "--help"])
-    assert result.exit_code == 0
-    assert "output" in result.output and "checkpoint" in result.output
+def test_the_removal_commands_are_noun_first():
+    """`uqs clean` and `uqs job checkpoint remove` (#1727): `uqs remove` was a
+    verb with nouns under it, one level from `uqs job remove`."""
+    assert runner.invoke(cli.app, ["clean", "--help"]).exit_code == 0
+    assert runner.invoke(cli.app, ["job", "checkpoint", "remove", "--help"]).exit_code == 0
+    assert runner.invoke(cli.app, ["clear-checkpoint"]).exit_code != 0
+    assert " remove " not in runner.invoke(cli.app, ["--help"]).output
 
 
 # ---------------------------------------------- which q the fleet runs (#518)
