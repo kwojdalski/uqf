@@ -83,7 +83,9 @@ def _writers(att: Attachment, obs: Observation, dest: Destination) -> list[str]:
     return sorted(writers)
 
 
-def _readers(att: Attachment, obs: Observation, dest: Destination, ipc: Ipc) -> list[Reader]:
+def readers_of(att: Attachment, obs: Observation, hdb_dir: Path, ipc: Ipc) -> list[Reader]:
+    """Every HDB process discovery lists, and whether it serves `hdb_dir`: the
+    reload targets of an attached backfill, and of `uqs data hdb-alter --attach`."""
     out: list[Reader] = []
     for svc in obs.others:
         if svc["proctype"] != "hdb":
@@ -108,7 +110,7 @@ def _readers(att: Attachment, obs: Observation, dest: Destination, ipc: Ipc) -> 
             out.append(
                 Reader(who, port, False, f"stack {answer.get('stackid')}, not {att.stack.id}")
             )
-        elif not _same_dir(str(answer.get("hdbdir", "")), dest.hdb_dir):
+        elif not _same_dir(str(answer.get("hdbdir", "")), hdb_dir):
             out.append(
                 Reader(who, port, False, f"serves {answer.get('hdbdir') or 'an unknown directory'}")
             )
@@ -129,7 +131,7 @@ def admit(att: Attachment, dest: Destination, ipc: Ipc) -> Admission:
     obs, structural = observe(att, ipc)
     if structural:
         raise UqsError("; ".join(f"{f.component}: {f.message}" for f in structural))
-    return Admission(_writers(att, obs, dest), _readers(att, obs, dest, ipc), obs)
+    return Admission(_writers(att, obs, dest), readers_of(att, obs, dest.hdb_dir, ipc), obs)
 
 
 def partitions_on_disk(dest: Destination, dates: list[date]) -> list[dict[str, Any]]:

@@ -55,7 +55,7 @@ With `-keep`, the destination is an ordinary HDB: `q <its path>` loads it, and
 
 ```bash
 uqs job new hdb_transfer --kind backfill --transport local --dataset trades_copy \
-    --columns 'trade_id:long,sym:symbol,price:float,size:long,side:symbol,notional:float'
+    --schema 'trade_id:long,sym:symbol,price:float,size:long,side:symbol,notional:float'
 ```
 
 That wrote the skeleton: a source, a worker, the `trades_copy` table in
@@ -75,7 +75,7 @@ That wrote the skeleton: a source, a worker, the `trades_copy` table in
 
   ```bash
   export UQF_SOURCE_CRED_HDB_TRANSFER=/data/source_hdb
-  uqs job backfill hdb_transfer_backfill --from 2026-01-05 --to 2026-01-08 --version v1 --wait
+  uqs job backfill hdb_transfer_backfill --from 2026-01-05 --to 2026-01-08 --source-version v1 --wait
   ```
 
 - **Without the stack.** `scripts/dev/run_backfill.q` runs the same worker in

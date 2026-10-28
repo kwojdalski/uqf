@@ -611,7 +611,7 @@ instead:
 
 ```bash
 uqs job backfill piggybank_ledger_backfill --attach pb-uat \
-    --from 2026-10-01 --to 2026-10-02 --version historical-v1 \
+    --from 2026-10-01 --to 2026-10-02 --source-version historical-v1 \
     --on-conflict replace --mode plan          # then --mode dry-run, then run
 ```
 
@@ -669,7 +669,7 @@ uqs job receive --contract 3f9a0c2e --attach pb-uat --listen-port 7090
 
 # etl-host: extract, and send each window to the receiver
 uqs job backfill piggybank_ledger_backfill --attach pb-uat --writer uat-host:7090 \
-    --from 2026-10-01 --to 2026-10-02 --version historical-v1 --wait
+    --from 2026-10-01 --to 2026-10-02 --source-version historical-v1 --wait
 ```
 
 #### The receiver contract
@@ -791,7 +791,7 @@ stack's user and password.
 ```bash
 uqs job backfill piggybank_ledger_backfill --attach pb-uat \
     --writer uat-host:6055 --force \
-    --from 2026-10-01 --to 2026-10-02 --version historical-v1 --wait
+    --from 2026-10-01 --to 2026-10-02 --source-version historical-v1 --wait
 ```
 
 The extractor sends each date's rows as a q lambda that the wdb evaluates. The
@@ -819,11 +819,12 @@ Nothing is checked on the stack's side:
 ### What `plan` reports, and what it refuses
 
 The source, the half-open UTC range, the windows and which are already covered
-at this `--version` (read from the destination's own ledger), the conflict
-policy, the native date partitions the fetched windows fall on and whether each
-exists, the processes that write the destination, the HDB readers a reload would
-reach, and where the run would write beside the root. `--json` prints the same.
-It starts no worker and creates no directory, ledger, checkpoint or symbol file.
+at this `--source-version` (read from the destination's own ledger), the
+conflict policy, the native date partitions the fetched windows fall on and
+whether each exists, the processes that write the destination, the HDB readers a
+reload would reach, and where the run would write beside the root. `--json`
+prints the same. It starts no worker and creates no directory, ledger,
+checkpoint or symbol file.
 
 It refuses, naming the cause: an attachment that is not `verified` (including a
 detached one), a stack that `--base-port` names differently, no pinned or
@@ -899,8 +900,8 @@ whether it serves the table, because **a partitioned HDB takes its table list
 from its latest partition**: a table written only into an older date stays
 invisible until the latest partition holds it too. On a freshly attached table
 that is the case until the stack's next end of day writes it (or
-`uqs data hdb-check --fix` fills it), and the run says so by name instead of
-reporting success.
+`uqs data hdb-check --attach NAME --apply` fills it), and the run says so by
+name instead of reporting success.
 
 `written_not_queryable` is retryable without writing anything: run the same
 command again. Every window is covered, so the worker is idle, the readers are
@@ -1020,9 +1021,9 @@ What the containers do not show:
   operator restarts them, after which they subscribe to every table the
   tickerplant has; the workflow never restarts a process it did not start.
 - **Older HDB partitions lack the table** until repaired after the first end of
-  day: `uqs data hdb-check --fix` (dbmaint,
-  [#1428](https://github.com/kwojdalski/uqf/pull/1428)). The plan warns with
-  `HDB_HISTORY`.
+  day: `uqs data hdb-check --attach NAME --apply` writes an empty table into
+  just the partitions lacking it, on the stack's host ([one table, in any
+  HDB](uqs.md#one-table-in-any-hdb)). The plan warns with `HDB_HISTORY`.
 - **Connection cap.** Under a licence with a connection limit (the KDB-X
   community licence allows 16 per process), an attachment adds one persistent
   publisher connection to the tickerplant and one to discovery. Preflight does

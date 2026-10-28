@@ -19,7 +19,7 @@ This writes both halves:
                                                  subscribes to the raw table,
                                                  publishes --publishes
 
-The raw table and the published one start with the same --columns: the q job
+The raw table and the published one start with the same --schema: the q job
 is where they come to differ, as databento1 folds 40 per-level columns into
 four vectors. Both are defined, so neither half can publish into a table the
 plant discards in silence.
@@ -84,7 +84,7 @@ def external_feed(
 
     # The q half is an ordinary etl job; it is told the raw table exists so it
     # does not refuse a subscription to a table this same plan defines.
-    # --columns always shapes the NEW raw table; they shape the output too
+    # --schema always shapes the NEW raw table; they shape the output too
     # only when the output is new - onto an existing table the q job is given
     # none, or it refuses them as shaping nothing (#1581).
     job = streaming_job(

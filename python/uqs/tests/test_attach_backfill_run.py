@@ -428,7 +428,9 @@ def test_a_reader_that_reloads_but_does_not_serve_the_table_is_not_queryable(wor
     assert code == 3 and result["outcome"] == "written_not_queryable", started.log.read_text()
     (why,) = result["failed_readers"]
     assert why.startswith("hdb1: reloaded, but its HDB does not define imported_trades yet")
-    assert "next end of day" in why and "hdb-check --fix" in why, "it says how to fix it"
+    assert "next end of day" in why and "hdb-check --attach NAME --apply" in why, (
+        "it says how to fix it"
+    )
     assert not (started.state_dir / "etl_ready").exists()
     world.reader.forget_table(False)
     second, _ = run(world)
@@ -514,7 +516,7 @@ def _cli(*argv: str):
             "2015-01-07T09:00",
             "--to",
             "2015-01-07T11:00",
-            "--version",
+            "--source-version",
             "v1",
             "--on-conflict",
             "replace",

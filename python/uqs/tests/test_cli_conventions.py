@@ -15,9 +15,9 @@ on a listed one that is no longer a violation, so the lists only shrink - the
 way tests/q/peachq_known_gaps.txt does for PeachQ. When a sub-issue lands, the
 test names the rows to delete.
 
-Hidden commands are skipped: rule 6 ships each rename with the old spelling as
-a hidden alias for one release, and an alias is on its way out, not a command
-to hold to the rules.
+Hidden commands and options are skipped: rule 6 ships each rename with the old
+spelling as a hidden alias for one release, and an alias is on its way out, not
+a command or an option to hold to the rules.
 """
 
 from __future__ import annotations
@@ -54,7 +54,12 @@ class Cmd:
 
     @property
     def options(self) -> list:
-        return [p for p in self.command.params if p.param_type_name == "option"]
+        # a hidden option is a renamed one's old spelling (rule 6): on its way out
+        return [
+            p
+            for p in self.command.params
+            if p.param_type_name == "option" and not getattr(p, "hidden", False)
+        ]
 
     def option(self, name: str):
         return next((p for p in self.options if name in p.opts + p.secondary_opts), None)
@@ -207,6 +212,7 @@ def test_rule2_a_process_or_a_job_is_a_positional_called_proc_or_job():
 RULE4_ALLOWLIST = {
     "summary": "#1733",  # -> status
     "data hdb-check": "#1733",  # -> data check
+    "data hdb-alter": "#1733",  # #1755 names it beside hdb-check; #1733 renames both
     "config get": "#1733",  # -> show
     "deploy verify": "#1733",  # -> deploy check
 }
@@ -293,6 +299,7 @@ OPTIONS = {
     "--base-port": Meaning("the stack's base port", r"base port"),
     "--break-lock": Meaning("remove a stale deploy lock", r"deploy lock"),
     "--bundle": Meaning("a sidecar bundle folder", r"bundle"),
+    "--cast": Meaning("cast a column's type", r"cast"),
     "--columns": Meaning("which columns of a table to show", r"`all`"),
     "--command-timeout": Meaning("seconds per remote step", r"remote step"),
     "--connect-timeout": Meaning("ssh/scp seconds", r"ssh/scp"),
@@ -306,6 +313,7 @@ OPTIONS = {
     "--follow": Meaning("keep streaming log lines until Ctrl-C", r"stream"),
     "--force": Meaning("retired: each use gets its own name", None),
     "--from": Meaning("start of a time range", r"start"),
+    "--hdb": Meaning("an HDB directory", r"HDB directory|this database"),
     "--home": Meaning("the ODBC home", r"ODBC home"),
     "--host": Meaning("where a q process listens", r"listen"),
     "--interactive": Meaning("browse the table", r"browse"),
@@ -331,11 +339,14 @@ OPTIONS = {
     "--raw": Meaning("retired: --no-gateway / --unresolved", None),
     "--reach": Meaning("reach the server first; save nothing it cannot reach", r"reach"),
     "--remote-user": Meaning("run as this account through sudo", r"sudo"),
+    "--rename": Meaning("rename a column", r"rename"),
     "--reverse": Meaning("sort descending", r"descending"),
+    "--schema": Meaning("tables' columns and their types", r"schema"),
     "--skip-profile-budget-check": Meaning("bypass the budget check", r"budget"),
     "--skip-q-version-check": Meaning("bypass the q version check", r"q too old"),
     "--sort": Meaning("sort by a column", r"sort by"),
     "--ssh": Meaning("the ssh destination of a target", r"ssh destination"),
+    "--table": Meaning("one table to act on", r"this table"),
     "--tables": Meaning("a set of tables", r"tables"),
     "--target": Meaning("run this command on a deployed target", r"instead of this machine"),
     "--timeout": Meaning("seconds for the whole command", r"seconds"),
@@ -352,8 +363,9 @@ OPTIONS = {
 OPTIONS |= {
     name: Meaning(f"a connector's own start option ({name})", r"\((databento|kafka|crypto)")
     for name in (
-        "--api-key", "--brokers", "--group", "--interval-ms", "--oms-socket-path",
-        "--poll-interval-ms", "--symbol", "--symbols", "--top-n-levels", "--topic", "--venues",
+        "--api-key", "--brokers", "--databento-dataset", "--group", "--interval-ms",
+        "--oms-socket-path", "--poll-interval-ms", "--symbol", "--symbols", "--top-n-levels",
+        "--topic", "--venues",
     )
 }  # fmt: skip
 
@@ -370,15 +382,7 @@ SHORT_FLAGS = {
 
 #: (command, option) -> the issue that renames the option there
 RULE3_ALLOWLIST = {
-    # a hidden alias of #1736's positional TARGET, until the alias goes
-    ("deploy push", "--target"): "#1729",
     ("deploy rollback", "--to"): "#1739",
-    ("logs", "--columns"): "#1739",
-    ("job new", "--columns"): "#1739",
-    ("connector start", "--dataset"): "#1739",
-    ("connector restart", "--dataset"): "#1739",
-    ("job install", "--mode"): "#1739",
-    ("job backfill", "--version"): "#1739",
     **{(f"deploy {c}", "--host"): "#1739" for c in ("push", "status", "rollback", "prune")},
 }
 
@@ -459,7 +463,8 @@ KIND = {
     "data replay": CHANGES,
     "data seed": CHANGES,
     "data migrate": CHANGES,
-    "data hdb-check": REPORTS,  # --fix writes, opt-in: #1732 settles --apply-style modes
+    "data hdb-check": REPORTS,  # --apply writes what it reports missing, after asking
+    "data hdb-alter": CHANGES,  # dry run by default; --dry-run/-n says so explicitly
     "config get": REPORTS,
     "config set": CHANGES,
     "config sources stub": CHANGES,
@@ -515,12 +520,16 @@ KIND = {
 
 #: Every command that asks before acting. ROOT asks before running a command
 #: on a --target.
-ASKS = {ROOT, "job remove", "job install", "job attach", "job detach", "target adopt"}
+ASKS = {
+    ROOT, "job remove", "job install", "job attach", "job detach", "target adopt",
+    "data hdb-check", "data hdb-alter",
+}  # fmt: skip
 
 #: The cli modules that call a prompt. A new one means a command that asks:
 #: put it in ASKS, then here.
 PROMPTING_MODULES = {
-    "attach", "install", "install_bundle", "remove", "target", "target_adopt", "target_edit",
+    "attach", "hdb_scope", "install", "install_bundle", "remove", "target", "target_adopt",
+    "target_edit",
 }  # fmt: skip
 
 #: leaf -> the issue that adds its --json. Empty since #1731: keep it so.

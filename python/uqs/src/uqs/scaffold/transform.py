@@ -154,7 +154,7 @@ def check_passthrough_shapes(
         f"{sub} has {', '.join(f'{c}:{t}' for c, t in have)}; "
         f"{pub} has {', '.join(f'{c}:{t}' for c, t in want)} (time aside). "
         f"Use --transform derive to reshape them"
-        + (f", or --columns-from {sub} to define {pub} as a copy" if not want else "")
+        + (f", or --schema-from {sub} to define {pub} as a copy" if not want else "")
     )
 
 

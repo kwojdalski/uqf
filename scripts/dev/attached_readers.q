@@ -25,7 +25,7 @@
 / HDB answers by re-mapping its database - and then ask it whether it SERVES the dataset. A reload
 / that succeeds is not queryable: a partitioned HDB takes its table list from its LATEST partition,
 / so a table written only into an older date is invisible to it until the latest partition holds the
-/ table too (a native end of day writes it; `uqs data hdb-check --fix` fills it).
+/ table too (a native end of day writes it; `uqs data hdb-check --attach NAME --apply` fills it).
 / @param user the user to connect as
 / @param pass its password
 / @param dataset the table the run wrote
@@ -37,7 +37,7 @@
     if[10h=type h; :(0b;"cannot connect: ",h)];
     res:.[{[h;ds] h(`reload;.z.d);
             $[h({[t] t in tables[]};ds); (1b;"");
-              (0b;"reloaded, but its HDB does not define ",string[ds]," yet: an HDB takes its tables from its latest partition, which does not hold it - it appears after the stack's next end of day writes the table, or once the latest partition is filled (uqs data hdb-check --fix)")]};
+              (0b;"reloaded, but its HDB does not define ",string[ds]," yet: an HDB takes its tables from its latest partition, which does not hold it - it appears after the stack's next end of day writes the table, or once the latest partition is filled (uqs data hdb-check --attach NAME --apply)")]};
           (h;dataset);{[e] (0b;"reload failed: ",e)}];
     @[hclose;h;{[e] (::)}];
     res}

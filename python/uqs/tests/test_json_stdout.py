@@ -81,6 +81,10 @@ CASES: dict[str, tuple[list[str], str]] = {
     "job list": (["job", "list"], "["),
     "job attachment list": (["job", "attachment", "list"], "["),
     "data hdb-check": (["data", "hdb-check"], "present"),
+    "data hdb-alter": (
+        ["data", "hdb-alter", "pb", "--hdb", "/nonexistent-1755", "--reorder", "a"],
+        "no such directory",
+    ),
     "runtime diff": (["runtime", "diff", "nosuch1", "nosuch2"], "is not a runtime"),
     "job receive": (["job", "receive", "--attach", "nosuch"], "--listen-port is required"),
     "job backfill": (

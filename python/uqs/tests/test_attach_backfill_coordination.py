@@ -34,7 +34,16 @@ def world(monkeypatch, tmp_path):
     return make_world(monkeypatch, tmp_path)
 
 
-COMMON = ["--attach", "pb-uat", "--from", "2026-09-11", "--to", "2026-09-13", "--version", "v1"]
+COMMON = [
+    "--attach",
+    "pb-uat",
+    "--from",
+    "2026-09-11",
+    "--to",
+    "2026-09-13",
+    "--source-version",
+    "v1",
+]
 
 
 def invoke(*argv):

@@ -79,6 +79,9 @@ class Stack:
     consumers: tuple[str, ...] = ()
     user: str = DEFAULT_USER
     password_env: str = ""
+    #: where `uqs data hdb-check/hdb-alter --attach` ssh to, to reach the HDB's files
+    #: ("" = `host`, as the current user; this machine when `host` is it)
+    ssh: str = ""
 
     def password(self) -> str:
         if not self.password_env:

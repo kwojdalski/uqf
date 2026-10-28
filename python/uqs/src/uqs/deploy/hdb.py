@@ -11,7 +11,7 @@ HDB, once its .venv exists, so the release judges the HDB by its own schema:
 
   - a column whose type changed is always refused, naming each one;
   - missing tables or columns are refused unless --fix-hdb, which runs
-    `hdb-check --fix` (additive and idempotent: an empty copy of each missing
+    `hdb-check --apply --yes` (additive and idempotent: an empty copy of each missing
     table, each missing column as its type's null) and checks again.
 
 A dry run cannot run the release's code - nothing of it is on the server yet -
@@ -80,7 +80,7 @@ def planned(dep: Deployment, manifest: dict) -> str:
 
 
 def _check(dep: Deployment, release: str, fix: bool) -> dict:
-    argv = "--fix --json" if fix else "--json"
+    argv = "--apply --yes --json" if fix else "--json"
     r = dep.remote.run(
         script(*dep.in_release(release, f".venv/bin/uqs data hdb-check {argv}")),
         dep.cfg.command_timeout,
@@ -129,5 +129,5 @@ def check(dep: Deployment, release: str) -> dict:
         )
     after = _check(dep, release, fix=True)
     if after.get("missing_tables") or after.get("missing_columns"):
-        raise DeployError("hdb", "hdb-check --fix left tables or columns missing")
+        raise DeployError("hdb", "hdb-check --apply left tables or columns missing")
     return {**result, "hdb": "filled", "filled": missing}

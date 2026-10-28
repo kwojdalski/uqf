@@ -13,7 +13,7 @@ process that stays up.
 
 ```bash
 uqs job new fxprobe --kind backfill --dataset fx_probe \
-    --columns "sym:symbol, mid:float" --width 1D
+    --schema "sym:symbol, mid:float" --width 1D
 ```
 
 `--dataset` is the table it fills, and it is **required** --- a backfill with no
@@ -31,16 +31,16 @@ left empty and marked `SCAFFOLDED`, so `.qetl.transform.verify` fails the suite
 until both are written.
 
 When the adapter reads different columns from those it returns, `--raw-table`
-and `--raw-columns` declare its physical side apart from `--columns`:
+and `--raw-columns` declare its physical side apart from `--schema`:
 
 ```bash
 uqs job new events --kind backfill --dataset events --transport odbc \
-    --columns "sym:symbol, px:float" \
+    --schema "sym:symbol, px:float" \
     --raw-table EVENTS --raw-columns "CREATED_AT:timestamp, PAYLOAD:any"
 ```
 
 The source then declares `raw`, which `uqs config sources check` holds the
-physical table to, while the query's rows are held to `--columns` (see
+physical table to, while the query's rows are held to `--schema` (see
 [ODBC](../guides/odbc.md#verifying)). Names keep the source's own case, and
 `any` is a column whose type isn't checked. The mapping from one to the other is
 the query you write: it is never guessed.
@@ -49,7 +49,7 @@ the query you write: it is never guessed.
 refills the table the job publishes, which is what `uqs job gaps JOB` looks for.
 The dataset and columns are taken from the job's declaration and the plant's
 definition rather than given, so the twin writes the right table by
-construction. `--columns` is refused, and so is a `--dataset` the job does not
+construction. `--schema` is refused, and so is a `--dataset` the job does not
 publish. A job that publishes several tables needs `--dataset` to pick one.
 
 When the job declares the transform it applies (`transform` in its
@@ -189,17 +189,18 @@ A backfill takes its window as flags and registers with discovery, so the fleet
 has to be up:
 
 ```bash
-uqs job backfill fxprobe_backfill --version v1 --from 2026-09-13 --to 2026-09-15 --fixture
+uqs job backfill fxprobe_backfill --source-version v1 --from 2026-09-13 --to 2026-09-15 --fixture
 ```
 
 `--fixture` because a scaffolded source has no credential yet: a run that would
 write its fixture is refused unless asked for, and records its coverage under
 `v1~fixture` rather than `v1` (#1082). Once the credential is set, drop it.
 
-`--from` and `--to` are required: `uqs` refuses without them, and the process
+A range is required - `--from`/`--to`, `--date` or `--last`, read the way every
+`uqs` command reads a time range: `uqs` refuses without one, and the process
 itself refuses and names every missing flag at once, because a backfill that
 silently defaulted its range would publish the wrong window and record coverage
-for it. `--version` is required too unless the worker declares a
+for it. `--source-version` is required too unless the worker declares a
 `source_version` --- see
 [`pipeline-declarations.md`](../reference/pipeline-declarations.md).
 
@@ -211,7 +212,7 @@ worker's declaration, each stage's timing and every window as it starts and
 publishes:
 
 ```bash
-uqs --debug job backfill fxprobe_backfill --version v1 --from 2026-09-13 --to 2026-09-15 --fixture
+uqs --debug job backfill fxprobe_backfill --source-version v1 --from 2026-09-13 --to 2026-09-15 --fixture
 ```
 
 ## Then

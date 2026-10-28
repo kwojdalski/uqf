@@ -325,7 +325,16 @@ def invoke(*argv: str):
     return runner.invoke(cli.app, ["job", "backfill", WORKER, *argv], catch_exceptions=False)
 
 
-COMMON = ["--attach", "pb-uat", "--from", "2026-09-11", "--to", "2026-09-13", "--version", "v1"]
+COMMON = [
+    "--attach",
+    "pb-uat",
+    "--from",
+    "2026-09-11",
+    "--to",
+    "2026-09-13",
+    "--source-version",
+    "v1",
+]
 
 
 def test_coverage_ending_mid_window_still_plans_the_windows_it_leaves_and_their_dates(world):
@@ -379,7 +388,9 @@ def test_cli_plan_prints_the_report_and_json_matches(world, monkeypatch):
 
 
 def test_json_without_attach_is_refused(world):
-    result = invoke("--from", "2026-09-11", "--to", "2026-09-13", "--version", "v1", "--json")
+    result = invoke(
+        "--from", "2026-09-11", "--to", "2026-09-13", "--source-version", "v1", "--json"
+    )
     assert result.exit_code != 0 and "--json is for --attach" in world.errors[-1]
 
 
