@@ -273,6 +273,9 @@ def _export(rows, export: Path | None) -> None:
     except UqsError as exc:
         _die(exc)
         return
+    if json_requested():  # stdout is the one JSON document
+        log.info("exported to {}", export)
+        return
     console.print(f"[green]exported to {export}[/]")
 
 
@@ -380,10 +383,9 @@ ProcArg = Annotated[
 def _proc_first(
     ctx: typer.Context, proc: str | None, rest: str | None, port_given: bool
 ) -> tuple[str | None, str | None]:
-    """`CMD [PROC] [X]` with one word given: it is PROC when it names a process
-    of this stack and no --port was given, else it is X - so `uqs query 'count
-    quote'` still asks the gateway, and `uqs query rdb1` opens rdb1. A word the
-    old `--proc` gave is PROC whatever it names, so an unknown one is refused."""
+    """`CMD [PROC] [X]` given one word: PROC if it names a process of this stack
+    and no --port was given, else X (`uqs query 'count quote'` asks the gateway).
+    A word the old `--proc` gave is PROC whatever it names, so a typo is refused."""
     if proc is None or rest is not None or proc in ctx.meta.get(MOVED_KEY, ()):
         return proc, rest
     if port_given or proc not in _known_procs():

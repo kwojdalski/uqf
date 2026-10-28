@@ -118,6 +118,33 @@ def parser(log: RunLog):
     return parse
 
 
+def _history(chosen: RunLog, lines: int) -> list[dict[str, str]]:
+    """The last `lines` lines of a run's log as records, in the file's own order and
+    unfiltered: emit applies --level, and never to a line with none."""
+    parse = parser(chosen)
+    tail = chosen.path.read_text(errors="replace").splitlines()[-lines:] if lines else []
+    return [rec for line in tail if (rec := parse(line)) is not None]
+
+
+def recent(
+    paths: UqsPaths,
+    attachment: str,
+    *,
+    worker: str | None = None,
+    run: str | None = None,
+    lines: int = 20,
+    min_level: str | None = None,
+) -> list[dict[str, str]]:
+    """The lines `show` prints without `follow`, as records - `uqs logs --attach --json`."""
+    logs.min_level_name(min_level)
+    return [
+        rec
+        for rec in _history(select(paths, attachment, worker, run), lines)
+        if rec.get("unleveled")
+        or logs._passes_level(logs._LOGURU_LEVEL.get(rec["loglevel"], "INFO"), min_level)
+    ]
+
+
 def show(
     paths: UqsPaths,
     attachment: str,
@@ -134,9 +161,7 @@ def show(
     chosen = select(paths, attachment, worker, run)
     parse = parser(chosen)
     files = [chosen.path]
-    # in the file's own order, unfiltered: emit applies --level, and never to a line with none
-    tail = chosen.path.read_text(errors="replace").splitlines()[-lines:] if lines else []
-    history = [rec for line in tail if (rec := parse(line)) is not None]
+    history = _history(chosen, lines)
     if follow:
         logs._follow(files, min_level, history=lambda: history, parse=parse)
         return
