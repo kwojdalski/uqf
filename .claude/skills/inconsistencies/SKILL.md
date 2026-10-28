@@ -168,7 +168,7 @@ Work through the ranked list one item at a time. For each:
 ## After Review
 
 When the user types `done` or all items are reviewed: - Apply any pending edits. -
-Run `./q tests/run_tests.q` (and real KDB-X if available) before committing. -
+Run `q tests/run_tests.q` (and real KDB-X if available) before committing. -
 Commit each changed file: `Fix: standardise <what> across <modules>` - Report:
 how many reviewed, how many fixed, which files changed.
 

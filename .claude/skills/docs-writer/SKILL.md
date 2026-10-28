@@ -295,7 +295,7 @@ One paragraph: the scenario this guide targets (e.g., "use this when adding a ne
 
 ```bash
 # concrete command
-./q tests/run_tests.q
+q tests/run_tests.q
 ````
 
 Explanation of what happens and what to expect.

@@ -85,25 +85,27 @@ in the main checkout.
    again. Hosted CI cannot run the KDB-X gates (q-tests, q-coverage, q-docs,
    contract-surface, q-facts). This runs only the ones whose `files:` scope the
    branch's diff from `origin/master` touches - each over the whole tree - and
-   records a `KDB-X-gates: <tree> hooks=<ids>` trailer; `--all` runs every one,
-   and a branch that needs none records nothing. A Python-only change needs only
-   contract-surface, plus q-facts where it touches what q-facts generates -
-   seconds, not the q suite; a `.q` change needs all of them; a doc needs q-docs
-   only if it has a `q-example:` block. CI's "KDB-X attestation" check works out
-   the same set from the PR's merge base and fails the PR unless its head tree
-   carries trailers covering every hook in it (#1014, #1543); a trailer without
-   `hooks=` counts as all of them. A rebase changes the tree, so it needs a
-   fresh run. A head behind master still passes while master's commits since the
-   merge base touch no judged path; the check names the path when one does, and
-   only then must master be merged in and the tree attested again (#1687). The
-   only way past it is the `kdbx-attestation-override` PR label, for a change no
-   KDB-X run can judge (docs-only, no KDB-X available): the check then passes
-   with a warning that names the label, so the override stays on the record.
+   records a `KDB-X-gates: <tree> hooks=<ids>` trailer, with `q-tests=` and
+   `q-coverage=` each a digest of the subset the change reaches or `all`;
+   `--all` runs every hook, and a branch that needs none records nothing. A
+   Python-only change needs only contract-surface, plus q-facts where it touches
+   what q-facts generates - seconds, not the q suite; a `.q` change needs all of
+   them; a doc needs q-docs only if it has a `q-example:` block. CI's "KDB-X
+   attestation" check works out the same set from the PR's merge base and fails
+   the PR unless its head tree carries trailers covering every hook in it
+   (#1014, #1543); a trailer without `hooks=` counts as all of them. A rebase
+   changes the tree, so it needs a fresh run. A head behind master still passes
+   while master's commits since the merge base touch no judged path; the check
+   names the path when one does, and only then must master be merged in and the
+   tree attested again (#1687). The only way past it is the
+   `kdbx-attestation-override` PR label, for a change no KDB-X run can judge
+   (docs-only, no KDB-X available): the check then passes with a warning that
+   names the label, so the override stays on the record.
 
    `scripts/dev/ship.sh <pr> issue-<number>` does the rest once a PR may merge:
    it attests only when the check needs it, merges master in only for a conflict
    or a judged change on master, waits for "Repository checks" to pass, and
-   merges.
+   merges, then starts the whole-suite coverage run on master.
 
 Only triage without edits (reading code, commenting, labelling) may stay in the
 main checkout.

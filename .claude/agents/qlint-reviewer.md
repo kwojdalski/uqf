@@ -100,9 +100,8 @@ know what it does, then give one verdict:
 
 **Check against a running q whenever the verdict depends on q's behaviour.**
 Examples: whether an expression throws, what type it returns, or what a
-right-to-left parse actually binds. Use `~/.kx/bin/q` (KDB-X) first and `./q`
-(PeachQ) second; they can disagree, and if they do, say so. Keep the check
-minimal:
+right-to-left parse actually binds. Use `$QCMD` (KDB-X) first and a PeachQ
+second; they can disagree, and if they do, say so. Keep the check minimal:
 
 ```bash
 echo '<expression>' | ~/.kx/bin/q -q
