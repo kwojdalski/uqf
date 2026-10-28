@@ -6,7 +6,7 @@ What is real:
 
   - the Python: the CPython uv installed that runs these tests (sys.base_prefix,
     python-build-standalone), packed by `python_runtime.build_runtime` exactly
-    as `uqs deploy build-runtime python` packs one - the host's OS and
+    as `uqs deploy component build python` packs one - the host's OS and
     architecture, since a test can only run what this host runs;
   - the artifact: `build.build_artifact`, as `uqs deploy build` calls it, over
     this checkout's release files (payload.tracked_files), with the uqs wheel

@@ -51,7 +51,7 @@ TorqRuntime = Annotated[
     typer.Option(
         "--torq-runtime",
         metavar="FILE",
-        help="With --torq-mode bundled: the TorQ runtime `uqs deploy build-runtime torq` made",
+        help="With --torq-mode bundled: the TorQ runtime `uqs deploy component build torq` made",
     ),
 ]
 TorqRuntimeSha256 = Annotated[
@@ -67,7 +67,7 @@ QRuntime = Annotated[
     typer.Option(
         "--q-runtime",
         metavar="FILE",
-        help="With --q-mode bundled: the PeachQ runtime `uqs deploy build-runtime q` made",
+        help="With --q-mode bundled: the PeachQ runtime `uqs deploy component build q` made",
     ),
 ]
 QRuntimeSha256 = Annotated[
@@ -83,7 +83,7 @@ PythonRuntime = Annotated[
     typer.Option(
         "--python-runtime",
         metavar="FILE",
-        help="With --python-mode bundled: the CPython `uqs deploy build-runtime python` made; "
+        help="With --python-mode bundled: the CPython `uqs deploy component build python` made; "
         "default: the one the release carries",
     ),
 ]
@@ -102,7 +102,7 @@ CarriedPythonRuntime = Annotated[
     typer.Option(
         "--python-runtime",
         metavar="FILE",
-        help="Carry this CPython (`uqs deploy build-runtime python`) in the release, for "
+        help="Carry this CPython (`uqs deploy component build python`) in the release, for "
         "scripts/install_release.py, or a push with --python-mode bundled, to make .venv "
         "from; built for --arch and --python",
     ),

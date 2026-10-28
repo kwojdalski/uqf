@@ -241,7 +241,7 @@ def test_the_cli_runs_the_whole_lifecycle_under_setup_odbc(tmp_path, qhome):
         # Unwrapped: rich wraps at the terminal's width, which a test does not set.
         said = installed.output.replace("\n", "")
         assert f"load it with: . {home}/current/{odbc_home.ENV_FILE}" in said
-    status = json.loads(uqs("status").stdout)
+    status = json.loads(uqs("status", "--json").stdout)
     assert (status["current"], status["previous"]) == ("testodbc-2.0", "testodbc-1.0")
     env = uqs("env")
     assert env.exit_code == 0
@@ -249,7 +249,10 @@ def test_the_cli_runs_the_whole_lifecycle_under_setup_odbc(tmp_path, qhome):
     rolled = uqs("rollback")
     assert rolled.exit_code == 0
     assert "current is testodbc-1.0 again" in " ".join(rolled.output.split())
-    assert json.loads(uqs("status").stdout)["current"] == "testodbc-1.0"
+    assert json.loads(uqs("status", "--json").stdout)["current"] == "testodbc-1.0"
+    shown = uqs("status").stdout.splitlines()  # without --json, a table
+    assert any("testodbc-1.0" in line and "current" in line for line in shown)
+    assert any("testodbc-2.0" in line and "previous" in line for line in shown)
 
 
 def test_setup_odbc_env_without_a_version_names_the_new_install_command(tmp_path, monkeypatch):

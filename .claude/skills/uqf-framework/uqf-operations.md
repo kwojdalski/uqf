@@ -107,8 +107,10 @@ Deployment targets Linux. Push needs TorQ and q already on the server
 
 ```bash
 uqs deploy build [--q-target 4.0] [--bundle DIR]   # an artifact, from a commit
+uqs deploy push dist/uqf-<release>.tar.gz prod-a   # a target in deploy_targets.toml
 uqs deploy push dist/uqf-<release>.tar.gz --host H --dest /opt/uqf \
     --torq-home ... --torq-app-home ... --qcmd ... --qhome ... --profile essential
+uqs deploy status|rollback|prune|history prod-a    # every server command takes a TARGET
 ```
 
 Push runs: 1. preflight; 2. transfer; 3. prepare (an offline Python environment

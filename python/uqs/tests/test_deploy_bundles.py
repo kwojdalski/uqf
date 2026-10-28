@@ -28,7 +28,9 @@ def parse_args(argv: list[str]) -> Config:
     """The Config `uqs deploy push` makes of `argv`: parsed by the command's
     own options, checked by the make_config it calls."""
     params = _CLI.commands["push"].make_context("push", list(argv)).params
-    params.pop("target", None)  # --target is resolved by targets.configs, not make_config
+    # TARGETs (and the old --target) are resolved by targets.configs, not make_config
+    params.pop("target", None)
+    params.pop("target_names", None)
     return make_config(**params)
 
 

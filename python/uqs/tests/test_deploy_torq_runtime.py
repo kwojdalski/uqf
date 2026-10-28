@@ -1,4 +1,4 @@
-"""A bundled TorQ (#1557, step 5): the runtime artifact `uqs deploy build-runtime
+"""A bundled TorQ (#1557, step 5): the runtime artifact `uqs deploy component build
 torq` makes of lib/ - byte-identical, content-addressed, checked whole - and a
 push with `torq_mode = "bundled"`: its refusals, its pins, what it sends the
 server, and what it records. The server side - the write-once install, prune
@@ -367,13 +367,30 @@ def test_the_cli_builds_a_runtime(tmp_path, monkeypatch):
     from typer.testing import CliRunner
 
     from uqs import cli
-    from uqs.cli import deploy_runtime
+    from uqs.cli import deploy_component
 
     repo = vendored(tmp_path / "repo")
-    monkeypatch.setattr(deploy_runtime, "repo_root", lambda: repo)
-    r = CliRunner().invoke(cli.app, ["deploy", "build-runtime", "torq"])
+    monkeypatch.setattr(deploy_component, "repo_root", lambda: repo)
+    r = CliRunner().invoke(cli.app, ["deploy", "component", "build", "torq"])
     assert r.exit_code == 0, r.output
     (built,) = list((repo / "dist").glob("torq-runtime-*.tar.gz"))
     assert str(built) in r.output
-    r = CliRunner().invoke(cli.app, ["deploy", "build-runtime", "python"])
+    r = CliRunner().invoke(cli.app, ["deploy", "component", "build", "python"])
     assert r.exit_code == 1
+
+
+def test_the_old_build_runtime_name_still_builds_and_names_the_new_one(tmp_path, monkeypatch):
+    """`uqs deploy build-runtime`, renamed `deploy component build` by #1740,
+    works for one release, saying what to type instead - and is hidden."""
+    from typer.testing import CliRunner
+
+    from uqs import cli
+    from uqs.cli import deploy_component
+
+    repo = vendored(tmp_path / "repo")
+    monkeypatch.setattr(deploy_component, "repo_root", lambda: repo)
+    r = CliRunner().invoke(cli.app, ["deploy", "build-runtime", "torq"])
+    assert r.exit_code == 0, r.output
+    assert "uqs deploy component build torq" in r.output
+    assert list((repo / "dist").glob("torq-runtime-*.tar.gz"))
+    assert "build-runtime" not in CliRunner().invoke(cli.app, ["deploy", "--help"]).output

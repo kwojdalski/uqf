@@ -9,6 +9,7 @@ import typer
 from rich.table import Table
 
 from uqs import timerange
+from uqs.cli.json_out import emit, json_opt
 from uqs.cli.shared import (
     JOB_OPERATIONS_PANEL,
     DateOpt,
@@ -80,6 +81,33 @@ def widen_to_grain(ledger_value: str, align_ns: int | None, *, upper: bool = Fal
     return f"{datetime.fromtimestamp(seconds, UTC):%Y-%m-%dT%H:%M:%S}.{sub:09d}"
 
 
+GapsJson = json_opt(
+    '{"job", "gaps": [{range_from, range_to}], "sessions", "refillable": bool, '
+    '"refills": [{worker, range_from, range_to, command}], "today_not_refillable": bool}'
+)
+
+
+def refills(holes: list[dict], twins: dict) -> tuple[list[dict], bool]:
+    """The backfill that refills each gap, per twin worker, and whether today's part was cut."""
+    advised, cut = refillable(holes, _utc_today())
+    out = []
+    for worker, align in twins.items() if advised else ():
+        try:
+            version = f" --version {stack_backfill.resolve_version(worker, None)}"
+        except UqsError:
+            # No declared default: the source release is the operator's to
+            # name, so it is shown as one to fill in, not guessed.
+            version = " --version <V>"
+        for hole in advised:
+            start = stack_runs._as_bound(widen_to_grain(str(hole["range_from"]), align))
+            end = stack_runs._as_bound(
+                widen_to_grain(str(hole["range_to"]), align, upper=True), upper=True
+            )
+            command = f"uqs job backfill {worker} --from {start} --to {end}{version}"
+            out.append({"worker": worker, "range_from": start, "range_to": end, "command": command})
+    return out, cut
+
+
 @job_app.command("gaps", rich_help_panel=JOB_OPERATIONS_PANEL)
 def gaps(
     job: Annotated[str, typer.Argument(help="The streaming job, e.g. markout")],
@@ -88,6 +116,7 @@ def gaps(
     day: DateOpt = None,
     last: LastOpt = None,
     interactive: InteractiveOpt = False,
+    as_json: GapsJson = False,
 ) -> None:
     """Where in [--from, --to) a streaming job was not up and subscribed.
 
@@ -106,6 +135,17 @@ def gaps(
         holes, twins, sessions = stack_uptime.gaps(_paths(), job, bound_from, bound_to)
     except UqsError as exc:
         _die(exc)
+        return
+    if as_json:
+        found, cut = refills(holes, twins)
+        emit({
+            "job": job,
+            "gaps": [{"range_from": h["range_from"], "range_to": h["range_to"]} for h in holes],
+            "sessions": sessions,
+            "refillable": bool(twins),
+            "refills": found,
+            "today_not_refillable": cut,
+        })  # fmt: skip
         return
     if not holes:
         console.print(f"[green]{job} was up throughout[/] - no gaps in the range")
@@ -127,24 +167,11 @@ def gaps(
             "refilled from here"
         )
         return
-    advised, cut = refillable(holes, _utc_today())
-    if advised:
+    found, cut = refills(holes, twins)
+    if found:
         console.print("\n[bold]refill[/] - re-running is idempotent: covered windows are skipped")
-    for worker, align in twins.items() if advised else ():
-        try:
-            version = f" --version {stack_backfill.resolve_version(worker, None)}"
-        except UqsError:
-            # No declared default: the source release is the operator's to
-            # name, so it is shown as one to fill in, not guessed.
-            version = " --version <V>"
-        for hole in advised:
-            start = widen_to_grain(str(hole["range_from"]), align)
-            end = widen_to_grain(str(hole["range_to"]), align, upper=True)
-            command = (
-                f"uqs job backfill {worker} --from {stack_runs._as_bound(start)} "
-                f"--to {stack_runs._as_bound(end, upper=True)}{version}"
-            )
-            console.print(f"  {command}", soft_wrap=True)
+    for refill in found:
+        console.print(f"  {refill['command']}", soft_wrap=True)
     if cut:
         console.print(
             "[yellow]today's part of these gaps is not refillable yet[/]: a backfill cannot "

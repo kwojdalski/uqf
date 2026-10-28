@@ -226,13 +226,16 @@ def run(
     tables: list[str] | None = None,
     live: bool = False,
     ports_free: bool = False,
+    marker: bool = True,
 ) -> int:
-    """Check the profile, print the result and its marker; the exit code."""
+    """Check the profile, print the result and - unless not `marker`, for
+    `--json` - its marker line; the exit code."""
     expected, pipelines = _expected(profile, port, procs)
     if ports_free:
         busy = busy_ports(expected, _listening)
         print(json.dumps({"profile": profile, "busy": busy}))
-        print(FAILED_MARKER if busy else OK_MARKER)
+        if marker:
+            print(FAILED_MARKER if busy else OK_MARKER)
         return 1 if busy else 0
 
     def query(expr: str, port: int) -> object:
@@ -248,5 +251,6 @@ def run(
         "processes": [asdict(r) for r in results],
     }
     print(json.dumps(report))
-    print(OK_MARKER if passed else FAILED_MARKER)
+    if marker:
+        print(OK_MARKER if passed else FAILED_MARKER)
     return 0 if passed else 1

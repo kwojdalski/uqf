@@ -2,7 +2,7 @@
 `python_mode = "bundled"` and for an offline install with no Python of the
 host's (scripts/install_release.py).
 
-    uqs deploy build-runtime python [--arch x86_64] [--python 3.14]
+    uqs deploy component build python [--arch x86_64] [--python 3.14]
 
 has uv install the CPython it would give any project - python-build-standalone,
 `uv python install cpython-<python>-linux-<arch>-gnu`, into uv's own Python
@@ -182,7 +182,7 @@ def read_runtime(path: Path) -> PythonRuntime:
         raise ReleaseError(
             "artifact",
             f"{path.name} is not a Python runtime of format {FORMAT} (kind {m.get('kind')!r}, "
-            f"format {m.get('format')!r}) - build one with `uqs deploy build-runtime python`",
+            f"format {m.get('format')!r}) - build one with `uqs deploy component build python`",
         )
     if m.get("interpreter") not in m["files"]:
         raise ReleaseError("artifact", f"{path.name} lacks its interpreter {m.get('interpreter')}")
