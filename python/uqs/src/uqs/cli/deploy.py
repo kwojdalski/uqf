@@ -348,10 +348,11 @@ def push(
             help="Remove a deploy lock whose holder stopped beating; refused while it beats",
         ),
     ] = False,
+    no_register: conn.NoRegister = False,
 ) -> None:
     """Deploy a release onto a server, on its TorQ and q or bundled ones, and verify it there."""
     options = dict(locals())
-    del options["ctx"], options["target"], options["target_names"]
+    del options["ctx"], options["target"], options["target_names"], options["no_register"]
     code = 0
     try:
         if target is not None:
@@ -380,7 +381,11 @@ def push(
                 log.info("target {}: {}:{}", cfg.target, cfg.host, cfg.dest)
             remote = Remote(cfg.host, cfg.connect_timeout, remote_user=cfg.remote_user)
             code = driver.deploy(
-                cfg, remote, on_report=lambda rep, c=cfg: history.record(repo_root(), c, rep)
+                cfg,
+                remote,
+                on_report=lambda rep, c=cfg: history.record(
+                    repo_root(), c, rep, register=not no_register, say=typer.echo
+                ),
             )
             if code:
                 if len(cfgs) > 1:
