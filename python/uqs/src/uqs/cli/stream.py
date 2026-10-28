@@ -13,6 +13,7 @@ from typing import Annotated
 import typer
 from rich.table import Table
 
+from uqs.cli.json_out import emit, json_opt
 from uqs.cli.shared import JOB_OPERATIONS_PANEL, _die, _paths, console, job_app
 from uqs.paths import UqsError
 from uqs.stack import stream_preview
@@ -37,6 +38,14 @@ def _print_trace(lines: list) -> None:
     for level, source, message in lines:
         console.print(f"[dim]{level} {source}[/] ", end="")
         console.print(render_query_trace(message), markup=False, highlight=False)
+
+
+PreviewJson = json_opt(
+    '{"job", "mode", "state": previewed/idle/invalid, "live", "cursor", "next_cursor", '
+    '"advances", "fetched", "rows": {table: count}, "sample": {table: [row, ...]}, '
+    '"failures": [...], "trace": [{level, source, message}]} - '
+    'with --last, also "window" and "kept"'
+)
 
 
 @job_app.command("preview", rich_help_panel=JOB_OPERATIONS_PANEL)
@@ -69,6 +78,7 @@ def preview(
             "are untouched, and this is not the running job's next page.",
         ),
     ] = None,
+    as_json: PreviewJson = False,
 ) -> None:
     """One page of a polling feed: what it would publish, and where its cursor
     would move - with nothing published and no cursor saved.
@@ -81,8 +91,15 @@ def preview(
         last_ns = None if last is None else stream_preview.duration_ns(last)
         r = stream_preview.preview(_paths(), job, sample, trace=trace, last_ns=last_ns)
     except UqsError as exc:
-        _print_trace(getattr(exc, "trace", []))
+        if not as_json:
+            _print_trace(getattr(exc, "trace", []))
         _die(exc)
+        return
+    if as_json:
+        traced = [{"level": lv, "source": src, "message": m} for lv, src, m in r.get("trace", [])]
+        emit(r | {"job": job, "trace": traced})
+        if r["state"] == "invalid":
+            raise typer.Exit(code=1)
         return
     _print_trace(r.get("trace", []))
     mode = "dry run" if dry_run else "preview"

@@ -16,10 +16,13 @@ import typer
 
 from uqs.cli import deploy_connection as conn
 from uqs.cli.deploy import _failed, deploy_app
+from uqs.cli.json_out import json_opt
 from uqs.cli.renames import renamed
+from uqs.cli.shared import _die, json_refusal
 from uqs.deploy import config, prune, rollback, status, verify
 from uqs.deploy.prune import RELEASE_ID
 from uqs.deploy.remote import Remote
+from uqs.paths import UqsError
 
 
 def _server(ctx, target, host, dest, remote_user, connect_timeout, **timeouts):
@@ -154,6 +157,12 @@ def prune_cmd(
     raise typer.Exit(code=code)
 
 
+VerifyJson = json_opt(
+    '{"profile", "passed", "reason", "processes": [{process, port, pipeline, ok, error, ...}]} '
+    '- with --ports-free, {"profile", "busy": {process: port}}; no marker line'
+)
+
+
 @deploy_app.command("verify", cls=renamed({"--port": "--base-port"}))
 def verify_cmd(
     profile: Annotated[str, typer.Option("--profile", help="The profile the release started")],
@@ -174,16 +183,31 @@ def verify_cmd(
             "--ports-free", help="Only check that nothing listens on the profile's ports yet"
         ),
     ] = False,
+    as_json: VerifyJson = False,
 ) -> None:
-    """Run on the server, from a release: does every process the profile promises answer?"""
-    code = verify.run(
-        profile,
-        deadline=deadline,
-        query_timeout=query_timeout,
-        port=port,
-        procs=[p for p in procs.split(",") if p],
-        tables=[t for t in tables.split(",") if t],
-        live=live,
-        ports_free=ports_free,
-    )
+    """Run on the server, from a release: does every process the profile promises answer?
+
+    Prints one JSON object, then DEPLOY_VERIFY_OK or DEPLOY_VERIFY_FAILED on a
+    line of its own, which `uqs deploy push` reads; `--json` leaves the marker
+    out, so stdout is the one document."""
+    try:
+        code = verify.run(
+            profile,
+            deadline=deadline,
+            query_timeout=query_timeout,
+            port=port,
+            procs=[p for p in procs.split(",") if p],
+            tables=[t for t in tables.split(",") if t],
+            live=live,
+            ports_free=ports_free,
+            marker=not as_json,
+        )
+    except UqsError as exc:  # an unknown profile or process
+        _die(exc)
+        return
+    except SystemExit as exc:  # a profile process with no port: verify's own refusal
+        if not as_json:
+            raise
+        json_refusal(str(exc.code))
+        code = 1
     raise typer.Exit(code=code)

@@ -18,6 +18,7 @@ from uqs import paths as stack_paths
 from uqs.checks import schema_view
 from uqs.checks.schema_view import DEFAULT_PROC
 from uqs.cli import completion
+from uqs.cli.json_out import emit, json_opt
 from uqs.cli.shared import (
     ExportOpt,
     InteractiveOpt,
@@ -31,7 +32,6 @@ from uqs.cli.shared import (
     app,
     console,
     data_app,
-    log,
 )
 from uqs.paths import UqsError
 from uqs.stack import hdb_fill, hdb_shape, hdb_types
@@ -128,6 +128,12 @@ def hdb_check(
     raise typer.Exit(code=1)
 
 
+SchemaJson = json_opt(
+    '{"process", "port", "tables": [{table, rows, columns}]} - given a TABLE, '
+    '{"process", "port", "columns": [{table, column, type, q, attribute}]}'
+)
+
+
 @app.command()
 def schema(
     table: Annotated[
@@ -166,6 +172,7 @@ def schema(
             help="with -i, re-read the process every this many seconds; 0 turns it off",
         ),
     ] = SCHEMA_REFRESH_SECONDS,
+    as_json: SchemaJson = False,
 ) -> None:
     """Show the tables in a running process, or one table's columns and types.
 
@@ -179,8 +186,8 @@ def schema(
     try:
         target = port if port is not None else schema_view.resolve_port(paths, proc, base_port)
     except UqsError as exc:
-        log.error("{}", exc)
-        raise typer.Exit(code=1) from exc
+        _die(exc)
+        return
 
     where = f"{proc}" if port is None else f"port {target}"
     creds = {"user": user, "passwd": passwd}
@@ -192,26 +199,31 @@ def schema(
         matched = schema_view.match_tables(table, target, host=host, **creds) if table else []
         if table and not matched:
             available = schema_view.table_names(target, host=host, **creds)
-            log.error(
-                "nothing matches {!r} on {} - it has: {}",
-                table,
-                where,
-                ", ".join(sorted(available)),
+            raise UqsError(
+                f"nothing matches {table!r} on {where} - it has: {', '.join(sorted(available))}"
             )
-            raise typer.Exit(code=1)
         rows = (
-            [r for name in matched for r in schema_view.columns(name, target, host=host, **creds)]
+            [
+                {"table": name, **r}
+                for name in matched
+                for r in schema_view.columns(name, target, host=host, **creds)
+            ]
             if table
             else schema_view.overview(target, host=host, **creds)
         )
-    except typer.Exit:
-        raise
     except UqsError as exc:
-        log.error("{}", exc)
-        raise typer.Exit(code=1) from exc
+        _die(exc)
+        return
     except Exception as exc:  # kola raises its own connect/query errors
-        log.error("could not read the schema from {} ({}): {}", where, target, exc)
-        raise typer.Exit(code=1) from exc
+        _die(UqsError(f"could not read the schema from {where} ({target}): {exc}"))
+        return
+    # --export writes what it always has: a TABLE's columns, without the table's name
+    exported = [{k: v for k, v in r.items() if k != "table"} for r in rows] if table else rows
+    if as_json:
+        emit({"process": proc if port is None else None, "port": target,
+              "columns" if table else "tables": rows})  # fmt: skip
+        _export(exported, export)
+        return
 
     def column_table(name: str) -> Table:
         rendered = Table(title=f"{name} on {where}")
@@ -270,4 +282,4 @@ def schema(
                 f"[dim]{len(empty)} empty: {', '.join(empty)}. Declared and carrying "
                 "nothing - normal before a feed publishes, a gap afterwards.[/]"
             )
-    _export(rows, export)
+    _export(exported, export)

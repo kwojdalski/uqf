@@ -24,6 +24,7 @@ import typer
 from rich.table import Table
 
 from uqs.cli import completion
+from uqs.cli.json_out import emit, json_opt, snake
 from uqs.cli.renames import renamed
 from uqs.cli.shared import _die, _paths, app, console
 from uqs.external import crypto, databento_feed, kafka_feed
@@ -287,6 +288,21 @@ def stop(name: FeedArg) -> None:
     console.print(f"{name} feed stopped")
 
 
+StatusJson = json_opt(
+    '{"connectors": [{name, running: bool, pid: int or null, log, ...each feed\'s own fields}]}'
+)
+
+
+def _status_record(name: str, fields: dict[str, str]) -> dict:
+    """One feed's status table as a record: `running` a bool, `pid` an int or null."""
+    record: dict = {"name": name}
+    for key, value in fields.items():
+        record[snake(key)] = value
+    record["running"] = fields.get("running") == "True"
+    record["pid"] = int(fields["pid"]) if fields.get("pid", "").isdigit() else None
+    return record
+
+
 @connector_app.command("status")
 def status(
     name: Annotated[
@@ -296,13 +312,20 @@ def status(
             autocompletion=completion.choices(*FEEDS),
         ),
     ] = None,
+    as_json: StatusJson = False,
 ) -> None:
     """Whether a feed is running, its pid, and where its log lives."""
+    found = []
     for each in [name] if name is not None else list(FEEDS):
         feed = _feed(each)
-        table = Table(title=feed.title)
+        found.append((each, feed.title, feed.status(_paths())))
+    if as_json:
+        emit({"connectors": [_status_record(each, fields) for each, _, fields in found]})
+        return
+    for _, title, fields in found:
+        table = Table(title=title)
         table.add_column("field")
         table.add_column("value")
-        for k, v in feed.status(_paths()).items():
+        for k, v in fields.items():
             table.add_row(k, v)
         console.print(table)
