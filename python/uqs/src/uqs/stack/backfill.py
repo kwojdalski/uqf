@@ -70,7 +70,7 @@ def resolve_version(worker: str, version: str | None) -> str:
     if declared.get(worker):
         return str(declared[worker])
     raise UqsError(
-        f"{worker} declares no default source_version - pass --version to say which "
+        f"{worker} declares no default source_version - pass --source-version to say which "
         "release of the source this run records coverage under"
     )
 

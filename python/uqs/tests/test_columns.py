@@ -4,7 +4,7 @@
 
 * every table plant_tables.q and the vendored database.q define parses into
   types it describes, and renders back to the same columns;
-* the `--columns` mini-language can say every shape plant_tables.q uses,
+* the `--schema` mini-language can say every shape plant_tables.q uses,
   vector columns and grouped non-`sym` columns included;
 * each type's `meta` character and sample value are what q itself reports -
   checked against a running q, since a wrong character is refused only when

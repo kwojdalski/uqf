@@ -42,7 +42,7 @@ def multitail_command(
     if stream not in MULTITAIL_STREAMS:
         raise UqsError(f"--stream {stream!r} is not one of {', '.join(sorted(MULTITAIL_STREAMS))}")
     if columns < 1:
-        raise UqsError(f"--columns must be at least 1, not {columns}")
+        raise UqsError(f"--pane-columns must be at least 1, not {columns}")
     if lines < 0:
         raise UqsError(f"--lines must not be negative, not {lines}")
     procnames = resolve_procnames(paths, procs)

@@ -7,12 +7,18 @@ the conventions test (test_cli_conventions.py) sees only the new one. A
 renamed command keeps its old path through `alias_command()`, hidden. Both log
 the new spelling every time the old one is used. The release after removes
 the row or the alias.
+
+A rename whose new spelling depends on the old one's value (`job install
+--mode symlink` -> `--link`) cannot be rewritten by name: it keeps the old
+option as a hidden one, `old_spelling()`, which the command reads and warns
+about itself.
 """
 
 from __future__ import annotations
 
 import functools
 from collections.abc import Callable
+from typing import Any
 
 import typer
 from typer.core import TyperCommand
@@ -131,3 +137,10 @@ def alias_command(group: typer.Typer, old: str, new: str, fn: Callable, **kwargs
         return fn(*args, **kw)
 
     group.command(old, hidden=True, **kwargs)(_alias)
+
+
+def old_spelling(new: str, *old: str) -> Any:
+    """The hidden option that keeps `old` parsing for one release, where the
+    new spelling depends on its value and so `renamed()` cannot map it; the
+    command reads it and calls `warn_renamed` with the spelling to use."""
+    return typer.Option(*old, hidden=True, help=f"Renamed: {new}")

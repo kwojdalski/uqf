@@ -46,13 +46,13 @@ tests it holds, so naming it is the whole of adding it.
 
 ```
 uqs job new markout2 --subscribe-to trades,quote \
-    --publishes my_metric --columns "sym:symbol, px:float"
+    --publishes my_metric --schema "sym:symbol, px:float"
 
 uqs job new fx_rates --kind backfill --dataset fx_rates \
-    --columns "sym:symbol, mid:float" --width 1D
+    --schema "sym:symbol, mid:float" --width 1D
 
 uqs job new fx_rates_1h --kind backfill --dataset fx_rates_1h \
-    --source fx_rates --columns "sym:symbol, mid:float" --width 0D01
+    --source fx_rates --schema "sym:symbol, mid:float" --width 0D01
 ```
 
 `--transport odbc` scaffolds a backfill source read from a database instead of a
@@ -68,13 +68,13 @@ undoes a scaffold. Where q is installed, `uqs job new` also re-exports the
 contract surface; without it, it prints the command to run.
 
 The third is a second worker over the second's source: an existing source or
-table is reused, not rewritten. `--columns` is required whenever a new source or
+table is reused, not rewritten. `--schema` is required whenever a new source or
 table is written, and refused otherwise. Two workers cannot fill one dataset
 without a partition - see [below](#filling-one-dataset-with-several-workers).
 
 A streaming job follows the same rule for what it publishes: `--publishes` takes
 a comma list, a table the plant already defines is published onto without
-`--columns`, and `--columns` shapes the one new table. Its `--subscribe-to` must
+`--schema`, and `--schema` shapes the one new table. Its `--subscribe-to` must
 name tables the plant defines, so a producer is scaffolded before its consumer.
 
 `--dry-run` prints what it would write and writes nothing. `kind` is derived for
@@ -96,7 +96,7 @@ until written - the batch
 drives the job with to hold every table it publishes to its plant table:
 
 ```
-uqs job new dxprobe --subscribe-to trades --publishes dx_t --columns "sym:symbol, v:float"
+uqs job new dxprobe --subscribe-to trades --publishes dx_t --schema "sym:symbol, v:float"
 q tests/run_tests.q
 ```
 
@@ -194,7 +194,7 @@ Two ship: `executions` (`trades` + `crypto_trades`) and `market_data` (`quote` +
 `fx_orderbook` + `crypto_book`), which is how `posbook1` holds FX and crypto
 positions in one book without knowing either market's tape format. A third
 market is a mapping in a normalizer, not a branch in a consumer.
-`uqs job new NAME --kind normalizer --subscribe-to a,b --columns ...` scaffolds
+`uqs job new NAME --kind normalizer --subscribe-to a,b --schema ...` scaffolds
 one: the canonical table NAME, and per source its schema, a throwing mapping and
 a typed example row, so the file loads while each mapping stays red.
 
@@ -555,7 +555,7 @@ wrong window and record it as covered. The source version is required too,
 unless the worker declares a default `source_version`:
 
 ```
-uqs job backfill fx_rates_backfill --version v1 --from 2026-09-11 --to 2026-09-16 --fixture
+uqs job backfill fx_rates_backfill --source-version v1 --from 2026-09-11 --to 2026-09-16 --fixture
 ```
 
 Both ask for the fixture (`UQF_FIXTURE_WRITES`, `--fixture`): a run with no

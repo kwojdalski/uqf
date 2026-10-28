@@ -514,7 +514,7 @@ def _cli(*argv: str):
             "2015-01-07T09:00",
             "--to",
             "2015-01-07T11:00",
-            "--version",
+            "--source-version",
             "v1",
             "--on-conflict",
             "replace",

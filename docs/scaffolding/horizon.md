@@ -10,11 +10,11 @@ the scoring. `demo_markout` and `crypto_markout` are horizon jobs.
 
 ```bash
 uqs job new fill_marks --kind horizon --subscribe-to executions,market_data \
-    --horizon 0D00:01:00 --columns "sym:symbol, horizon:timespan, markout_bps:float"
+    --horizon 0D00:01:00 --schema "sym:symbol, horizon:timespan, markout_bps:float"
 ```
 
 `--subscribe-to` takes two tables: the events first, then the reference.
-`--horizon` is how long an event waits, as a q timespan. `--columns` shapes the
+`--horizon` is how long an event waits, as a q timespan. `--schema` shapes the
 new table it publishes, named after the job. `--profile` or `--unprofiled`
 decides where it starts, as for any standing job.
 

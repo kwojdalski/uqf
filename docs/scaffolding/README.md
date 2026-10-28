@@ -84,11 +84,11 @@ in `UNPROFILED` with a reason. Backfills are exempt --- see
 
 ## Table columns
 
-`--columns` spells a new table as `name:type` pairs, and each is written into
+`--schema` spells a new table as `name:type` pairs, and each is written into
 `plant_tables.q` as the q column it stands for:
 
 ```
---columns "sym:symbol, venue:g#symbol, px:float, bid_prices:list"
+--schema "sym:symbol, venue:g#symbol, px:float, bid_prices:list"
 ```
 
 `sym` is grouped (`` `g#`symbol$() ``) without asking. Any other column is
@@ -103,12 +103,12 @@ one place, `python/uqs/src/uqs/scaffold/columns.py`. A test holds it to the
 When the new table is shaped like one the plant already has, copy it instead:
 
 ```bash
-uqs job new spread2 --subscribe-to quote --publishes spread2 --columns-from fx_orderbook
+uqs job new spread2 --subscribe-to quote --publishes spread2 --schema-from fx_orderbook
 ```
 
-`--columns-from TABLE` takes that table's columns exactly, attributes included,
+`--schema-from TABLE` takes that table's columns exactly, attributes included,
 from `plant_tables.q` or the vendored `database.q`, and is refused alongside
-`--columns`.
+`--schema`.
 
 ## Before you run it
 

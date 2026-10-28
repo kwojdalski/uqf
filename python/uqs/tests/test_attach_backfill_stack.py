@@ -33,7 +33,7 @@ DEFINITION = (
     "imported_trades:([] time:`timestamp$(); sym:`symbol$(); venue:`symbol$(); "
     "price:`float$(); size:`long$(); side:`long$())"
 )
-RANGE = ["--from", "2015-01-07T09:00", "--to", "2015-01-07T11:00", "--version", "v1"]
+RANGE = ["--from", "2015-01-07T09:00", "--to", "2015-01-07T11:00", "--source-version", "v1"]
 MODE = ["--on-conflict", "replace"]
 
 

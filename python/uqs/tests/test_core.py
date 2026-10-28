@@ -1179,7 +1179,11 @@ def test_multitail_refuses_when_there_is_nothing_to_show(fake_paths: UqsPaths):
 
 @pytest.mark.parametrize(
     ("kwargs", "message"),
-    [({"stream": "stdout"}, "--stream"), ({"columns": 0}, "--columns"), ({"lines": -1}, "--lines")],
+    [
+        ({"stream": "stdout"}, "--stream"),
+        ({"columns": 0}, "--pane-columns"),
+        ({"lines": -1}, "--lines"),
+    ],
 )
 def test_multitail_refuses_bad_options(fake_paths: UqsPaths, kwargs, message):
     _touch_logs(fake_paths, "out_stp1.log")

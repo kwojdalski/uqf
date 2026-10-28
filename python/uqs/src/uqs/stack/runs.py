@@ -184,7 +184,7 @@ def _as_bound(ledger_value: str, *, upper: bool = False) -> str:
 
 def untagged(version: str) -> str:
     """A run's recorded release without the tags `run_version` appends:
-    `v1@r2~fixture` -> `v1`. The release an operator names (`--version`, the
+    `v1@r2~fixture` -> `v1`. The release an operator names (`--source-version`, the
     sensor's `source_version`) is the untagged one; what the worker writes to
     its ledger and status file is the tagged one (#1315)."""
     return version.removesuffix(FIXTURE_TAG).split(REVISION_TAG)[0]
@@ -210,7 +210,7 @@ def rerun_command(run: dict, attach: str | None = None) -> str | None:
     version = untagged(recorded)
     return (
         f"uqs job backfill {run['worker']} --from {_as_bound(str(run['range_from']))} "
-        f"--to {_as_bound(str(run['range_to']), upper=True)} --version {version}"
+        f"--to {_as_bound(str(run['range_to']), upper=True)} --source-version {version}"
         + (" --fixture" if fixture else "")
         + (f" --attach {attach}" if attach else "")
     )

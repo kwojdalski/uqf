@@ -160,13 +160,13 @@ def bounded_worker(
     needs_columns = define_table or not reuse_source
     if needs_columns and not columns:
         raise UqsError(
-            f"--kind backfill needs --columns: they declare the new source {src!r}'s fields "
+            f"--kind backfill needs --schema: they declare the new source {src!r}'s fields "
             f"and, if {dataset!r} is not yet a plant table, its definition"
         )
     if columns and not needs_columns:
         raise UqsError(
-            f"--columns has nothing to shape: source {src!r} and table {dataset!r} both "
-            "exist already - drop --columns"
+            f"--schema has nothing to shape: source {src!r} and table {dataset!r} both "
+            "exist already - drop --schema"
         )
     if shared is not None and not reuse_source:
         # The columns a twin is given are its job's PUBLISHED table, the
@@ -192,12 +192,12 @@ def bounded_worker(
     transport = transports.get(transport or transports.default()).name
     cols = as_columns(columns) if columns else []
     # Publish holds the DATASET's rows to the partition column, so it must be
-    # one of the output's: --columns when they define the dataset, the
+    # one of the output's: --schema when they define the dataset, the
     # existing dataset's columns when they shape only a new source (#1599).
     if partition_column and define_table and cols:
         if partition_column not in [c for c, _ in cols]:
             raise UqsError(
-                f"--partition-column {partition_column!r} is not among --columns "
+                f"--partition-column {partition_column!r} is not among --schema "
                 f"({', '.join(c for c, _ in cols)}) - name the column that holds the partition"
             )
     elif partition_column and target_columns is not None:

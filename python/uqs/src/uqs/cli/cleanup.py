@@ -104,7 +104,7 @@ def remove_checkpoint(
 
     Refused while a run of the worker may still be live. The checkpoint is
     only where a run resumes: windows already in the coverage ledger are
-    still skipped. To fetch those again, run under a new --version.
+    still skipped. To fetch those again, run under a new --source-version.
 
     e.g. `uqs job checkpoint remove demo_deals_backfill`
     """
