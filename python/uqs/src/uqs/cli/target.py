@@ -1,7 +1,7 @@
 """`uqs target ...` and `uqs deploy history`: the servers `uqs --target NAME`
 drives, and what was deployed where (#956).
 
-Targets are the entries `uqs deploy push --target` reads, in
+Targets are the entries `uqs deploy push ARTIFACT TARGET...` reads, in
 deploy_targets.toml (deploy/targets.py): a server is declared once, then
 pushed to and driven from that entry - and a push to a server no target
 names registers one (deploy/history.py). `add` appends a [targets.NAME]
@@ -23,6 +23,7 @@ import typer
 from rich.table import Table
 
 from uqs.cli.deploy import deploy_app
+from uqs.cli.json_out import emit, json_opt
 from uqs.cli.shared import _die, app, console
 from uqs.deploy import control, history, targets
 from uqs.deploy.config import DeployError
@@ -31,8 +32,7 @@ from uqs.paths import UqsError, repo_root
 target_app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
-    help="The servers `uqs --target NAME <command>` runs on: add, remove, check, shell. "
-    "`uqs list targets` lists them.",
+    help="The servers `uqs --target NAME <command>` runs on: add, list, remove, check, shell.",
 )
 app.add_typer(target_app, name="target")
 
@@ -52,7 +52,7 @@ def add(
     ] = None,
     label: Annotated[
         list[str] | None,
-        typer.Option("--label", help="key=value, shown by `uqs list targets`; repeatable"),
+        typer.Option("--label", help="key=value, shown by `uqs target list`; repeatable"),
     ] = None,
 ) -> None:
     """Declare a server: its ssh destination and deployment root, nothing else.
@@ -85,8 +85,11 @@ def add(
     console.print(f"  try: uqs --target {name} summary")
 
 
+CheckJson = json_opt('{"ok": true, "target", "host", "dest", "remote_user", "release"}')
+
+
 @target_app.command("check")
-def check(name: Name) -> None:
+def check(name: Name, as_json: CheckJson = False) -> None:
     """Reach the target and name the release it runs. Says which part failed:
     ssh, or no release under its dest."""
     try:
@@ -94,6 +97,12 @@ def check(name: Name) -> None:
         release = control.current_release(r)
     except UqsError as exc:
         _die(exc)
+        return
+    if as_json:
+        emit({
+            "ok": True, "target": r.name, "host": r.host, "dest": r.dest,
+            "remote_user": r.remote_user, "release": release,
+        })  # fmt: skip
         return
     console.print(f"[green]✓[/] {r.name} ({r.describe()}) runs release {release}")
 
@@ -129,12 +138,24 @@ def remove(name: Annotated[str, typer.Argument(help="The target")]) -> None:
     console.print(f"[green]✓[/] target {name} removed from {path}")
 
 
+HistoryJson = json_opt(
+    '{"deployments": [{default: bool, at, target, host, dest, release, profile, status, '
+    "stage}]}, newest first"
+)
+
+
 @deploy_app.command("history")
 def deploy_history(
-    server: Annotated[
-        str | None, typer.Argument(help="Only this target or server (host, with or without user@)")
+    target: Annotated[
+        str | None,
+        typer.Argument(
+            metavar="TARGET",
+            help="Only this target, or server (host, with or without user@)",
+            show_default=False,
+        ),
     ] = None,
     limit: Annotated[int, typer.Option("--limit", help="Most recent N")] = 20,
+    as_json: HistoryJson = False,
 ) -> None:
     """Show deployment history recorded on this machine, newest first.
 
@@ -152,9 +173,18 @@ def deploy_history(
     rows = [
         (i, e)
         for i, e in enumerate(entries)
-        if server is None
-        or server in (e.get("target"), e.get("host"), history.server_of(str(e.get("host"))))
+        if target is None
+        or target in (e.get("target"), e.get("host"), history.server_of(str(e.get("host"))))
     ]
+    if as_json:
+        keys = ("at", "target", "host", "dest", "release", "profile", "status", "stage")
+        emit({
+            "deployments": [
+                {"default": i in defaults, **{k: e.get(k) for k in keys}}
+                for i, e in reversed(rows[-limit:])
+            ]
+        })  # fmt: skip
+        return
     if not rows:
         console.print(f"no deployments recorded in {history.history_path(root)}")
         return
@@ -184,11 +214,12 @@ def forward(name: str, yes: bool, args: list[str], *, interactive: bool) -> int:
         raise UqsError("`uqs target ...` manages this machine's targets - run it without --target")
     if words[:2] == ("list", "targets"):
         raise UqsError("`uqs list targets` lists this machine's targets - run it without --target")
-    if words[:1] == ("query",) and any(a == "--target" or a.startswith("--target=") for a in args):
-        # Each --target means a different machine runs the query (#1561).
+    tunnel = ("--tunnel", "--target")  # --target: query's old spelling (#1729)
+    if words[:1] == ("query",) and any(a.partition("=")[0] in tunnel for a in args):
+        # Each names a different machine to run the query on (#1561).
         raise UqsError(
-            "give --target once: `uqs --target NAME query` runs the query on the server, "
-            "`uqs query --target NAME` runs it here through an ssh tunnel"
+            "give the target once: `uqs --target NAME query` runs the query on the server, "
+            "`uqs query --tunnel NAME` runs it here through an ssh tunnel"
         )
     r = control.remote_for(name, repo_root())
     shown = " ".join(["uqs", *args])

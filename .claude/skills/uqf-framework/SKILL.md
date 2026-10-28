@@ -226,9 +226,9 @@ Apply the rules below. Each cites the file that holds or enforces it.
 - **G1** Log through `.qetl.log.info|warn|err|dbg|trc[id;text;fields]`, where
   `fields` is a dict (`src/etl/core/log.q`). Not `-1`, `0N!` or `.lg` (L1).
 - **G2** DEBUG is per process, switched on at runtime with
-  `uqs query ".qetl.log.debug 1b" --port <port>`. A backfill takes `--debug`, or
-  `--trace` for every source query. Never switch it on fleet-wide
-  (`docs/faq.md`).
+  `uqs query ".qetl.log.debug 1b" --port <port>`. A backfill takes the global
+  `--debug` (`uqs --debug job backfill ...`), or `--trace` for every source
+  query. Never switch it on fleet-wide (`docs/faq.md`).
 
 ## q traps that cost this tree real time (Q)
 
@@ -392,7 +392,7 @@ Work from the outside in. Most problems stop at step 1 or 2. The full runbook is
    | `on_batch failed`             | the handler threw: the table and error are on the line |
 3. **DEBUG for that one process:**
    `uqs query ".qetl.log.debug 1b" --port <port>` (G2).
-4. **Look inside it:** `uqs query --proc <proc>` opens a session. There:
+4. **Look inside it:** `uqs query <proc>` opens a session. There:
    - `` .qetl.job.stream.def `job `` is its declaration;
    - `.qpipe.job.<job>` is its state;
    - `.qtorq.received` and `.qtorq.published` count rows per table.

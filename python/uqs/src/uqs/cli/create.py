@@ -22,7 +22,7 @@ from uqs.cli.create_kinds import misplaced
 from uqs.cli.create_plant import plant_definitions, plant_tables
 from uqs.cli.create_reaction import scaffold_reaction
 from uqs.cli.regenerate import write_plan
-from uqs.cli.renames import from_old, old_spelling
+from uqs.cli.renames import renamed
 from uqs.cli.shared import (
     JOB_AUTHORING_PANEL,
     _die,
@@ -41,9 +41,15 @@ from uqs.scaffold import horizon as horizon_scaffold
 app.add_typer(job_app, name="job")
 
 
-@job_app.command("new", rich_help_panel=JOB_AUTHORING_PANEL)
+@job_app.command(
+    "new",
+    rich_help_panel=JOB_AUTHORING_PANEL,
+    cls=renamed({"--columns": "--schema", "--columns-from": "--schema-from"}),
+)
 def new_job(
-    name: Annotated[str, typer.Argument(help="Job name: a q namespace and a filename")],
+    name: Annotated[
+        str, typer.Argument(metavar="JOB", help="Job name: a q namespace and a filename")
+    ],
     kind: Annotated[
         str,
         typer.Option(
@@ -101,8 +107,6 @@ def new_job(
             autocompletion=completion.plant_tables,
         ),
     ] = None,
-    old_columns: Annotated[str | None, old_spelling("--schema", "--columns")] = None,
-    old_columns_from: Annotated[str | None, old_spelling("--schema-from", "--columns-from")] = None,
     source: Annotated[
         str | None, typer.Option("--source", help="Source name (backfill; defaults to NAME)")
     ] = None,
@@ -228,9 +232,8 @@ def new_job(
         uqs job new markout2 --subscribe-to trades,quote \\
             --publishes my_metric --schema "sym:symbol, px:float"
 
-    Bounded worker, with its source and transform - NAME is the base, so this
-    writes worker fx_rates_backfill over source fx_rates (a NAME already ending
-    in _backfill is refused):
+    Bounded worker, with its source and transform - NAME is the base, so this writes worker
+    fx_rates_backfill over source fx_rates (a NAME already ending in _backfill is refused):
 
         uqs job new fx_rates --kind backfill --dataset fx_rates \\
             --schema "sym:symbol, mid:float" --width 1D
@@ -248,8 +251,6 @@ def new_job(
 
         uqs job new rebuild_positions --triggered-by demo_deals --writes positions
     """
-    columns = from_old(columns, old_columns, "--columns", "--schema")
-    columns_from = from_old(columns_from, old_columns_from, "--columns-from", "--schema-from")
     subs = [s.strip() for s in (subscribe_to or "").split(",") if s.strip()]
     repo_root = _paths().repo_root
     used = {

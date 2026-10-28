@@ -99,6 +99,6 @@ has a worked handler and the dispatcher's guarantees.
 
 ## Listing and removing
 
-`uqs list jobs` shows it with kind `reaction`, the dataset it reads, the process
+`uqs job list` shows it with kind `reaction`, the dataset it reads, the process
 it runs in, and `triggered`. `uqs job remove rebuild_positions` takes out the
 file and the test, and nothing else.

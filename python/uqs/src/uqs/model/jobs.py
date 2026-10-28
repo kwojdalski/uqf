@@ -1,4 +1,4 @@
-"""Every ETL job the tree declares, as rows: what `uqs list jobs` shows.
+"""Every ETL job the tree declares, as rows: what `uqs job list` shows.
 
 The process table (`uqs list processes`) answers "what runs where"; this
 answers "what jobs are there": each streaming job, normalizer and bounded
@@ -9,7 +9,7 @@ processes that publish what it watches.
 
 `state` says whether a job is still a scaffold: its file carries the
 SCAFFOLDED marker `uqs job new` writes and nothing clears until it is written.
-It is the list `uqs job remove` will act on without --force.
+It is the list `uqs job remove` will act on without --even-if-edited.
 """
 
 from __future__ import annotations

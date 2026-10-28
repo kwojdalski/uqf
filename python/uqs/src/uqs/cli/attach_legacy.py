@@ -10,7 +10,7 @@ from uqs.cli.attach_output import Output
 MIGRATION = {
     "plan": ("uqs job attach {name} --dry-run", "the same options; saves nothing"),
     "validate": ("uqs job attach {name} --dry-run", "exits 1 on a blocker"),
-    "status": ("uqs list attachments", "or `uqs job attach {name} --dry-run` for the plan"),
+    "status": ("uqs job attachment list", "or `uqs job attach {name} --dry-run` for the plan"),
     "apply": ("uqs job attach {name} --no-start", "applies and verifies"),
     "verify": ("uqs job attach {name} --no-start", "re-checks; applies nothing twice"),
     "start": ("uqs job attach {name}", "re-verifies, then starts the publisher"),

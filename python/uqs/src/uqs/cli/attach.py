@@ -6,7 +6,7 @@ preflight, shows the plan, asks, then saves, applies, verifies and starts the
 publisher - each stage the existing one in uqs.attach, run in order by
 workflow.execute; `--dry-run` stops after the plan and changes nothing.
 `detach` stops the publisher and reverses what is safe to reverse. The
-inventory is `uqs list attachments` (stack/attach_state.py).
+inventory is `uqs job attachment list` (stack/attach_state.py).
 
 Every string printed here passes through `redact` first: the plan, the stage
 results, the errors and the debug detail, in tables and in `--json`.
@@ -196,7 +196,7 @@ def attach(
     A new attachment needs --job and --stack-id; a saved one is reused by name.
     Replaces the stage commands plan, validate, status, apply, verify and start.
     """
-    debug = _debug_requested(ctx, False)
+    debug = _debug_requested(ctx)
     out = Output(as_json, debug)
     out.doc = {"attachment": name, "dry_run": dry_run}
     refuse_legacy(out, "job attach", name, ctx.args)
@@ -343,7 +343,7 @@ def detach(
     stack drifted or ownership cannot be shown, nothing is removed and what a
     person has to do is listed.
     """
-    out = Output(as_json, _debug_requested(ctx, False))
+    out = Output(as_json, _debug_requested(ctx))
     out.doc = {"attachment": name, "dry_run": dry_run}
     refuse_legacy(out, "job detach", name, ctx.args)
     began = time.monotonic()

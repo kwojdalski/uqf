@@ -142,7 +142,7 @@ def resolve_procnames(paths: UqsPaths, procs: str) -> list[str]:
     docstring conflated the two by calling both "just skipped".
 
     Only the log commands route through here, because only they need the
-    names expanded. `start`/`stop`/`restart`/`start --print` check the same thing
+    names expanded. `start`/`stop`/`restart`/`start --show-command` check the same thing
     without expanding, via `procs.assert_known_procnames`.
     """
     if procs == "all":
@@ -312,7 +312,7 @@ def follow_during(
     A log that already exists is the previous run's, followed from its end;
     when the process starts, TorQ points the alias at this run's file and the
     follower (stack/follow.py) moves there and reads it from its first line. A
-    log that does not exist yet - a first run, or after `uqs remove output` -
+    log that does not exist yet - a first run, or after `uqs clean` -
     is waited for here and read from its first line once it appears.
     """
     expected = _expected_log_files(paths, procnames)

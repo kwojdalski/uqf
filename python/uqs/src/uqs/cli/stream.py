@@ -14,12 +14,10 @@ import typer
 from rich.table import Table
 
 from uqs import timerange
+from uqs.cli.json_out import emit, json_opt
+from uqs.cli.range_options import DateOpt, LastOpt, RangeFromOpt, RangeToOpt
 from uqs.cli.shared import (
     JOB_OPERATIONS_PANEL,
-    DateOpt,
-    LastOpt,
-    RangeFromOpt,
-    RangeToOpt,
     _die,
     _paths,
     console,
@@ -50,6 +48,14 @@ def _print_trace(lines: list) -> None:
         console.print(render_query_trace(message), markup=False, highlight=False)
 
 
+PreviewJson = json_opt(
+    '{"job", "mode", "state": previewed/idle/invalid, "live", "cursor", "next_cursor", '
+    '"advances", "fetched", "rows": {table: count}, "sample": {table: [row, ...]}, '
+    '"failures": [...], "trace": [{level, source, message}]} - '
+    'with --last, also "window" and "kept"'
+)
+
+
 @job_app.command("preview", rich_help_panel=JOB_OPERATIONS_PANEL)
 def preview(
     job: Annotated[str, typer.Argument(help="A polling feed - a streaming job that declares poll")],
@@ -75,6 +81,7 @@ def preview(
     range_to: RangeToOpt = None,
     day: DateOpt = None,
     last: LastOpt = None,
+    as_json: PreviewJson = False,
 ) -> None:
     """One page of a polling feed: what it would publish, and where its cursor
     would move - with nothing published and no cursor saved.
@@ -95,8 +102,15 @@ def preview(
         )
         r = stream_preview.preview(_paths(), job, sample, trace=trace, window=window)
     except UqsError as exc:
-        _print_trace(getattr(exc, "trace", []))
+        if not as_json:
+            _print_trace(getattr(exc, "trace", []))
         _die(exc)
+        return
+    if as_json:
+        traced = [{"level": lv, "source": src, "message": m} for lv, src, m in r.get("trace", [])]
+        emit(r | {"job": job, "trace": traced})
+        if r["state"] == "invalid":
+            raise typer.Exit(code=1)
         return
     _print_trace(r.get("trace", []))
     mode = "dry run" if dry_run else "preview"

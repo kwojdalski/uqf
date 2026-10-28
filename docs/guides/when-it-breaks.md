@@ -83,7 +83,7 @@ publish is fetched again.
 - A **checkpoint** for a different range or version is ignored, and the run
   starts from the beginning of its own range (`checkpoint is for another run`).
 
-You need `uqs remove checkpoint <worker>` only to restart a range from its
+You need `uqs job checkpoint remove <worker>` only to restart a range from its
 beginning on purpose. It refuses while a run of that worker may still be live.
 
 ### 4. Confirm

@@ -16,7 +16,7 @@ sits *around* those processes:
   | History and backfills  | replay a tickerplant log, or write your own loader                            | bounded workers (`.qetl.job.bounded`): a window range, written through `.qetl.io`, recorded in a coverage ledger (`.qetl.coverage`) so a re-run redoes only gaps                                                                 |
   | A table on the plant   | define it in `database.q`; `.u.upd` onto an undefined one drops rows silently | defined from what jobs declare they publish; a job refuses to start when a table it publishes is missing                                                                                                                         |
   | Adding one             | write the script, add the row, pick a free port                               | `uqs job new` scaffolds it; no registration step - the port, the process row and the job graph are derived                                                                                                                       |
-  | Operating it           | `torq.sh start`, `stop`, `summary`, per process                               | `uqs`: start profiles held to the licence's connection budget, `up`, `logs`, `query --proc`, `summary`; `.qetl.log` adds DEBUG, TRACE and key=value fields to `.lg`, and one level vocabulary across both                        |
+  | Operating it           | `torq.sh start`, `stop`, `summary`, per process                               | `uqs`: start profiles held to the licence's connection budget, `up`, `logs`, `query PROC`, `summary`; `.qetl.log` adds DEBUG, TRACE and key=value fields to `.lg`, and one level vocabulary across both                          |
 
 The slide version is [the deck](presentation/uqf.qmd); why the framework is
 shaped this way is [the pipeline
@@ -87,13 +87,13 @@ tell you where rows stop:
   | no `first rows published`     | batches arrive, but the handler publishes nothing                |
 
 **3. Turn on DEBUG for that one process.** Without a restart:
-`uqs query ".qetl.log.debug 1b" --port <port>`. A backfill takes `--debug`
-(`uqs job backfill <worker> --debug ...`), which starts it with `-verbose`.
-DEBUG is per process on purpose: switched on fleet-wide, it buries the one
-worker you are looking at.
+`uqs query ".qetl.log.debug 1b" --port <port>`. A backfill takes the global
+`--debug` (`uqs --debug job backfill <worker> ...`), which starts it with
+`-verbose`. DEBUG is per process on purpose: switched on fleet-wide, it buries
+the one worker you are looking at.
 
-**4. Look inside the running process.** `uqs query --proc <process>` opens a
-qcon session on it by name. From there,
+**4. Look inside the running process.** `uqs query <process>` opens a qcon
+session on it by name. From there,
 `.qetl.job.stream.def `<job>` is its declaration, `.qpipe.job.<job>` holds its state, and `.qtorq.received` / `.qtorq.published\`
 count the rows in and out per table.
 

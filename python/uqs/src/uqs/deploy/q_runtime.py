@@ -1,7 +1,7 @@
 """The q runtime artifact (#1557, step 6): the pinned PeachQ, for
 `q_mode = "bundled"`.
 
-    uqs deploy build-runtime q
+    uqs deploy component build q
 
 finds the PeachQ scripts/peachq.json pins - in its cache, or built into it
 (scripts/peachq.py, the same resolver every PeachQ lane uses) - and writes,
@@ -147,7 +147,7 @@ def read_runtime(path: Path) -> QRuntime:
         raise ReleaseError(
             "artifact",
             f"{path.name} is not a q runtime of format {FORMAT} (kind {m.get('kind')!r}, "
-            f"format {m.get('format')!r}) - build one with `uqs deploy build-runtime q`",
+            f"format {m.get('format')!r}) - build one with `uqs deploy component build q`",
         )
     if m.get("implementation") != PEACHQ:
         raise ReleaseError(

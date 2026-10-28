@@ -81,7 +81,7 @@ def _carried(pkg: Artifact) -> PythonRuntime:
         raise DeployError(
             "arguments",
             f"python_mode is bundled, and needs python_runtime: the artifact `uqs deploy "
-            f"build-runtime python` makes - {pkg.path.name} carries none (build it with "
+            f"component build python` makes - {pkg.path.name} carries none (build it with "
             "`uqs deploy build --python-runtime FILE` to carry one)",
         )
     log.info("the bundled Python is the one {} carries: {}", pkg.path.name, rt.sha256[:12])

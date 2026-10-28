@@ -75,9 +75,13 @@ def test_a_refused_attach_without_json_still_logs_to_stdout(tmp_path):
 #: document must carry.
 CASES: dict[str, tuple[list[str], str]] = {
     "list": (["list"], "processes"),
+    "target list": (["target", "list"], "["),
+    "runtime list": (["runtime", "list"], "uqf"),
+    "job list": (["job", "list"], "["),
+    "job attachment list": (["job", "attachment", "list"], "["),
     "data hdb-check": (["data", "hdb-check"], "present"),
     "runtime diff": (["runtime", "diff", "nosuch1", "nosuch2"], "is not a runtime"),
-    "job receive": (["job", "receive", "--attach", "nosuch"], "--port is required"),
+    "job receive": (["job", "receive", "--attach", "nosuch"], "--listen-port is required"),
     "job backfill": (
         ["job", "backfill", "w", "--from", "2024-01-01", "--to", "2024-01-02"],
         "--json is for --attach",
@@ -93,6 +97,27 @@ CASES: dict[str, tuple[list[str], str]] = {
         ["deploy", "status", "--host", "nosuch.invalid", "--dest", "relative/dest"],
         "must be an absolute path",
     ),
+    # #1731: every reporting command
+    "summary": (["summary", "--columns", "nosuch"], "unknown summary column"),
+    "graph": (["graph", "nosuchproc", "--offline"], "no process 'nosuchproc'"),
+    "query": (["query"], "--json needs an expression"),
+    "schema": (["schema", "nosuchproc", "trade"], "is not a declared process"),
+    "logs": (["logs", "--follow"], "--follow does not apply"),
+    "config get": (["config", "get", "nosuchproc"], "unknown process"),
+    "job gaps": (["job", "gaps", "demo_markout", "--from", "bad", "--to", "2024-01-02"], "bad"),
+    "job preview": (["job", "preview", "nosuch-x"], "is not a streaming job name"),
+    "job runs status": (["job", "runs", "status", "--attach", "nosuch"], "no attachment"),
+    "job runs list": (["job", "runs", "list", "--attach", "nosuch"], "no attachment"),
+    "job runs show": (["job", "runs", "show", "r", "--attach", "nosuch"], "no attachment"),
+    "job runs audit": (["job", "runs", "audit", "d", "--from", "bad", "--to", "2024-01-02"], "bad"),
+    "connector status": (["connector", "status", "nosuch"], "no feed 'nosuch'"),
+    "setup odbc status": (
+        ["setup", "odbc", "status", "--home", "/nonexistent-1731"],
+        "cannot read",
+    ),
+    "deploy verify": (["deploy", "verify", "--profile", "nosuch"], "unknown profile"),
+    "deploy history": (["deploy", "history", "nosuch-server-1731"], "deployments"),
+    "target check": (["target", "check", "nosuch"], "no target or deployed server"),
 }
 #: --json commands with no offline case, and why.
 NO_OFFLINE_CASE = {

@@ -21,6 +21,7 @@ from typing import Annotated
 import typer
 
 from uqs.cli import deploy_components as components
+from uqs.cli import deploy_connection as conn
 from uqs.cli import deploy_policy as policy
 from uqs.cli.shared import _env_log_level, app, json_refusal
 from uqs.deploy import build as release_build
@@ -155,14 +156,6 @@ def build(
     print(artifact.path)
 
 
-def _on_command_line(ctx: typer.Context, name: str) -> bool:
-    """Was option `name` given on the command line, rather than defaulted?
-    By the source's name: typer carries its own click, whose ParameterSource
-    is not click.core's, so an identity check against that never matches."""
-    source = ctx.get_parameter_source(name)
-    return source is not None and source.name == "COMMANDLINE"
-
-
 @deploy_app.command("push")
 def push(
     ctx: typer.Context,
@@ -173,13 +166,18 @@ def push(
             "a release tag CI published (.github/workflows/release.yml)"
         ),
     ],
-    host: Annotated[
-        str | None,
-        typer.Option("--host", help="ssh destination, as your ssh config knows it"),
+    target_names: Annotated[
+        list[str] | None,
+        typer.Argument(
+            metavar="TARGET...",
+            help="Targets in deploy_targets.toml (or $UQS_DEPLOY_TARGETS), deployed in "
+            "order, stopping at the first failure; a flag given here wins over a target's "
+            "value. None: --host, --dest and --profile say it all",
+            show_default=False,
+        ),
     ] = None,
-    dest: Annotated[
-        str | None, typer.Option("--dest", help="Absolute directory on the server")
-    ] = None,
+    host: conn.Host = None,
+    dest: conn.Dest = None,
     profile: Annotated[
         str | None, typer.Option("--profile", help="The uqs profile to start, e.g. essential")
     ] = None,
@@ -188,18 +186,11 @@ def push(
         typer.Option(
             "--target",
             metavar="NAME,...",
-            help="Targets declared in deploy_targets.toml (or $UQS_DEPLOY_TARGETS); "
-            "deployed in order, stopping at the first failure. A flag given here wins",
+            hidden=True,
+            help="Renamed: give the targets after ARTIFACT (`uqs deploy push ARTIFACT A B`)",
         ),
     ] = None,
-    remote_user: Annotated[
-        str | None,
-        typer.Option(
-            "--remote-user",
-            help="Run the deployment as this account through `sudo -n -iu`; ssh and scp "
-            "stay the --host login",
-        ),
-    ] = None,
+    remote_user: conn.RemoteUser = None,
     torq_home: Annotated[
         str | None, typer.Option("--torq-home", help="An existing TorQ on the server (TORQHOME)")
     ] = None,
@@ -291,9 +282,7 @@ def push(
     live_check_timeout: Annotated[
         int, typer.Option("--live-check-timeout", help="Every live check together, seconds")
     ] = 120,
-    connect_timeout: Annotated[
-        int, typer.Option("--connect-timeout", help="ssh/scp, seconds")
-    ] = 10,
+    connect_timeout: conn.ConnectTimeout = conn.DEFAULT_CONNECT_TIMEOUT,
     command_timeout: Annotated[
         int, typer.Option("--command-timeout", help="Each remote step, seconds")
     ] = 900,
@@ -362,20 +351,29 @@ def push(
 ) -> None:
     """Deploy a release onto a server, on its TorQ and q or bundled ones, and verify it there."""
     options = dict(locals())
-    del options["ctx"], options["target"]
+    del options["ctx"], options["target"], options["target_names"]
     code = 0
     try:
-        if target:
+        if target is not None:
+            if target_names:
+                raise config.DeployError(
+                    "arguments", "give the targets after ARTIFACT, not also as --target"
+                )
+            conn.renamed_target_option(target)
+        names = ",".join(target_names or []) or target
+        if names:
             given = {
                 k: v
                 for k, v in options.items()
-                if k not in targets.GIVEN_SEPARATELY and _on_command_line(ctx, k)
+                if k not in targets.GIVEN_SEPARATELY and conn.on_command_line(ctx, k)
             }
-            cfgs = targets.configs(target, artifact, given, dry_run, repo_root())
+            cfgs = targets.configs(names, artifact, given, dry_run, repo_root())
         else:
             for name in ("host", "dest", "profile"):
                 if options[name] is None:
-                    raise config.DeployError("arguments", f"--{name} is required, or --target")
+                    raise config.DeployError(
+                        "arguments", f"--{name} is required, or a TARGET after ARTIFACT"
+                    )
             cfgs = [config.make_config(**options)]
         for cfg in cfgs:
             if cfg.target:

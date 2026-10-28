@@ -9,7 +9,7 @@ is read from where uqs keeps it:
 - the layout: ``uqs.paths.paths_for_root``, so UQS_RUNTIME, UQS_DATA_ROOT
   and TORQHOME move the frontend's view exactly as they move the stack;
 - the base port: KDBBASEPORT in the ``setenv.sh`` bootstrap writes beside
-  process.csv - what torq.sh started the fleet with, ``--port`` included -
+  process.csv - what torq.sh started the fleet with, ``uqs start --base-port`` included -
   else, before the first bootstrap, the runtime's declared base port;
 - process.csv: the generated one (``UqsPaths.generated_procs``);
 - the gateway: its row of that process.csv, host and port, else localhost

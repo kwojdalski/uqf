@@ -20,14 +20,18 @@ import typer
 
 from uqs.cli import completion
 from uqs.cli import query_target as via_target
+from uqs.cli.json_out import emit, json_opt
+from uqs.cli.renames import renamed
 from uqs.cli.shared import (
     ExportOpt,
+    ProcArg,
     QHostOpt,
     QPasswdOpt,
     QUserOpt,
     _die,
     _export,
     _paths,
+    _proc_first,
     app,
     console,
     log,
@@ -50,7 +54,7 @@ def _exec_qcon(host: str, port: int, user: str, passwd: str) -> None:
             UqsError(
                 "qcon is not on PATH. It ships with kdb+ rather than with this "
                 "repository (macOS: it is beside q in your KDB-X install). "
-                'Without it, `uqs query --proc <name> "<expr>"` still works over IPC.'
+                'Without it, `uqs query <name> "<expr>"` still works over IPC.'
             )
         )
         return
@@ -67,7 +71,7 @@ def _exec_qcon(host: str, port: int, user: str, passwd: str) -> None:
         _die(UqsError(f"could not start {argv[0]}: {exc}"))
 
 
-#: The hosts `--proc` can resolve against: this machine's.
+#: The hosts PROC can resolve against: this machine's.
 _LOCAL_HOSTS = ("localhost", "127.0.0.1")
 
 
@@ -118,7 +122,7 @@ def _gateway_session(
     where = f"{host}:{port}" if via is None else via.where
     console.print(
         f"gateway1 at {where} - each line runs as .gw.syncexec[...;{types}]. "
-        "\\\\ or Ctrl-D to leave; uqs query --raw for plain qcon.",
+        "\\\\ or Ctrl-D to leave; uqs query --no-gateway for plain qcon.",
         markup=False,
         style="dim",
     )
@@ -138,9 +142,16 @@ def _gateway_session(
         _die(UqsError(f"could not open a session on gateway1 at {where}: {said}"))
 
 
-@app.command()
+QueryJson = json_opt(
+    '{"expression", "result"} - a table as [{column: value}], a dictionary as an object, '
+    "a list as an array, a time as ISO text. Needs an expression"
+)
+
+
+@app.command(cls=renamed({"--raw": "--no-gateway", "--target": "--tunnel", "--proc": "PROC"}))
 def query(
     ctx: typer.Context,
+    proc: ProcArg = None,
     expr: Annotated[
         str | None,
         typer.Argument(
@@ -148,28 +159,23 @@ def query(
             "interactive session on the process"
         ),
     ] = None,
-    proc: Annotated[
-        str | None,
-        typer.Option(
-            help=f"process to query, by name, e.g. rdb1 (default: {stack_gateway.DEFAULT_PROC})",
-            autocompletion=completion.procname,
-        ),
-    ] = None,
     port: Annotated[
         int | None,
         typer.Option(
-            help="port to query directly, instead of naming --proc",
+            help="port to query directly, instead of naming PROC",
             autocompletion=completion.process_ports,
         ),
     ] = None,
     base_port: Annotated[
         int | None,
-        typer.Option(help="stack base port --proc is resolved against (default: the runtime's)"),
+        typer.Option(help="stack base port PROC is resolved against (default: the runtime's)"),
     ] = None,
     host: QHostOpt = "localhost",
     target: Annotated[
         str | None,
         typer.Option(
+            "--tunnel",
+            metavar="TARGET",
             help="deployment target (deploy_targets.toml) to query from here, through an "
             "ssh tunnel opened for the call; ports are the target's release's own",
         ),
@@ -183,7 +189,7 @@ def query(
     raw: Annotated[
         bool,
         typer.Option(
-            "--raw",
+            "--no-gateway",
             help="with the gateway: send as typed, not through .gw.syncexec "
             "(and, with no expression, open plain qcon)",
         ),
@@ -196,11 +202,14 @@ def query(
         ),
     ] = None,
     export: ExportOpt = None,
+    as_json: QueryJson = False,
 ) -> None:
     """Run a q expression against a running process - or, with no expression,
     open an interactive session on it.
 
-    Name the process with `--proc rdb1`, or give its `--port`. With neither it
+    Name the process first, `uqs query rdb1 'count quote'`, or give its
+    `--port`. A lone word that names a process is PROC; any other is the
+    expression. With neither it
     asks the gateway, gateway1 - the fleet's front door, and the one process
     whose answer does not depend on which part of the day the data is in.
 
@@ -209,24 +218,30 @@ def query(
     `--servers` names other process types - and so is every line of its
     interactive session. A `.gw.*` call or a `\\` command is sent as typed; an
     in-place `update`/`delete ... from `t` is refused (it would change live
-    data); `--raw` sends anything as typed. Any other process gets qcon.
+    data); `--no-gateway` sends anything as typed. Any other process gets qcon.
 
     Results print as q's console prints them; `--render kola` shows the
     Python objects kola makes of them instead. `--export` always writes the
     data itself.
 
-    `--target NAME` asks a deployed target instead, from this machine: an
+    `--tunnel TARGET` asks a deployed target instead, from this machine: an
     ssh tunnel to it opens on a free loopback port for the call and closes
-    after, and `--proc` (or the gateway) is resolved to a port by the
-    target's own release. `--port` is then a port on the target.
+    after, and PROC (or the gateway) is resolved to a port by the
+    target's own release. `--port` is then a port on the target. `uqs
+    --target TARGET query` runs the whole command on the target instead; with
+    --tunnel, `--export` writes here.
     """
     try:
         render = stack_render.renderer(render)
     except UqsError as exc:
         _die(exc)
         return
+    proc, expr = _proc_first(ctx, proc, expr, port is not None)
     if proc is not None and port is not None:
-        _die(UqsError("name the process to query once: --proc NAME or --port N, not both"))
+        _die(UqsError("name the process to query once: PROC or --port N, not both"))
+        return
+    if as_json and expr is None:
+        _die(UqsError("--json needs an expression whose result it can print"))
         return
     if proc is None and port is None:
         proc = stack_gateway.DEFAULT_PROC
@@ -234,24 +249,20 @@ def query(
     if target is not None:
         if getattr(ctx.get_parameter_source("host"), "name", None) != "DEFAULT":
             _die(
-                UqsError("--target names the machine to query - give --target or --host, not both")
+                UqsError("--tunnel names the machine to query - give --tunnel or --host, not both")
             )
             return
         try:
             with via_target.connect(target, proc, port, base_port, user, passwd) as via:
                 _ask(expr, routed, via_target.LOOPBACK, via.port, user, passwd,
-                     servers, render, export, via)  # fmt: skip
+                     servers, render, export, via, as_json=as_json)  # fmt: skip
         except UqsError as exc:
             _die(exc)
         return
     if proc is not None and host not in _LOCAL_HOSTS:
-        # --proc reads this machine's registry and process list, so on another
+        # PROC reads this machine's registry and process list, so on another
         # host both the port and the up/down check would describe the wrong one.
-        _die(
-            UqsError(
-                "--proc looks the port up in this machine's stack - give --port for another host"
-            )
-        )
+        _die(UqsError("PROC is looked up in this machine's stack - give --port for another host"))
         return
     if port is None:
         try:
@@ -260,7 +271,7 @@ def query(
             _die(exc)
             return
         log.debug("query {} -> {}:{}", proc, host, port)
-    _ask(expr, routed, host, port, user, passwd, servers, render, export)
+    _ask(expr, routed, host, port, user, passwd, servers, render, export, as_json=as_json)
 
 
 def _ask(
@@ -274,6 +285,8 @@ def _ask(
     render: str,
     export,
     via: via_target.Via | None = None,
+    *,
+    as_json: bool = False,
 ) -> None:
     """Run `expr` - or, with none, a session - on host:port: the gateway's
     routing when `routed`. `via` is the target reached through a tunnel."""
@@ -289,12 +302,13 @@ def _ask(
             return
         _exec_qcon(host, port, user, passwd)
         return
-    # --export needs the data, not its picture, so it always takes kola's.
-    size = stack_render.console_size() if render == stack_render.Q and export is None else None
+    # --export and --json need the data, not its picture, so they take kola's.
+    picture = render == stack_render.Q and export is None and not as_json
+    size = stack_render.console_size() if picture else None
     # Who lays the answer out: runtime.query wraps it for a process asked
     # directly, while a routed expression carries its own layout - the
     # gateway's deferred reply skips any wrapper (stack/gateway.expression).
-    wrap_size = size
+    wrap_size, shown = size, expr
     if routed:
         try:
             expr = stack_gateway.expression(expr, servers, size)
@@ -309,8 +323,12 @@ def _ask(
         if via is not None:
             _die(via.failed(exc))
             return
-        log.error("query failed: {}", exc)
-        raise typer.Exit(code=1) from exc
+        _die(UqsError(f"query failed: {exc}"))
+        return
+    if as_json:
+        _export(result, export)  # first: a result it cannot write is refused alone
+        emit({"expression": shown, "result": result})
+        return
     if size is not None:
         _show_q(stack_render.text(result))
         return

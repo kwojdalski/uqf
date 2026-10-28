@@ -24,7 +24,8 @@ import typer
 from rich.table import Table
 
 from uqs.cli import completion
-from uqs.cli.renames import from_old, old_spelling
+from uqs.cli.json_out import emit, json_opt, snake
+from uqs.cli.renames import renamed
 from uqs.cli.shared import _die, _paths, app, console
 from uqs.external import crypto, databento_feed, kafka_feed
 from uqs.external.crypto import (
@@ -203,7 +204,9 @@ def _opt(help_: str, feeds: str):
     return typer.Option(help=f"{help_} ({feeds})", show_default=False)
 
 
-@connector_app.command("start")
+@connector_app.command(
+    "start", cls=renamed({"--port": "--base-port", "--dataset": "--databento-dataset"})
+)
 def start(
     name: FeedArg,
     databento_dataset: Annotated[
@@ -235,8 +238,7 @@ def start(
     poll_interval_ms: Annotated[
         int | None, _opt("Poll interval in milliseconds", "crypto-fills")
     ] = None,
-    port: Annotated[int | None, _opt("Stack base port", "crypto, crypto-fills")] = None,
-    dataset: Annotated[str | None, old_spelling("--databento-dataset", "--dataset")] = None,
+    base_port: Annotated[int | None, _opt("Stack base port", "crypto, crypto-fills")] = None,
 ) -> None:
     """Start a feed publishing onto the running stack's tickerplant.
 
@@ -250,7 +252,6 @@ def start(
     already-running cryptorust OMS.
     """
     feed = _feed(name)
-    databento_dataset = from_old(databento_dataset, dataset, "--dataset", "--databento-dataset")
     options = {
         "databento_dataset": databento_dataset,
         "api_key": api_key,
@@ -264,12 +265,13 @@ def start(
         "oms_socket_path": oms_socket_path,
         "symbol": symbol,
         "poll_interval_ms": poll_interval_ms,
-        "port": port,
+        "port": base_port,
     }
     given = {k: v for k, v in options.items() if v is not None}
     for option in given:
         if option not in feed.options:
-            _die(UqsError(f"--{option.replace('_', '-')} does not apply to feed {name}"))
+            flag = "base-port" if option == "port" else option.replace("_", "-")
+            _die(UqsError(f"--{flag} does not apply to feed {name}"))
             return
     try:
         message = feed.start({k: given.get(k) for k in feed.options})
@@ -290,6 +292,21 @@ def stop(name: FeedArg) -> None:
     console.print(f"{name} feed stopped")
 
 
+StatusJson = json_opt(
+    '{"connectors": [{name, running: bool, pid: int or null, log, ...each feed\'s own fields}]}'
+)
+
+
+def _status_record(name: str, fields: dict[str, str]) -> dict:
+    """One feed's status table as a record: `running` a bool, `pid` an int or null."""
+    record: dict = {"name": name}
+    for key, value in fields.items():
+        record[snake(key)] = value
+    record["running"] = fields.get("running") == "True"
+    record["pid"] = int(fields["pid"]) if fields.get("pid", "").isdigit() else None
+    return record
+
+
 @connector_app.command("status")
 def status(
     name: Annotated[
@@ -299,13 +316,20 @@ def status(
             autocompletion=completion.choices(*FEEDS),
         ),
     ] = None,
+    as_json: StatusJson = False,
 ) -> None:
     """Whether a feed is running, its pid, and where its log lives."""
+    found = []
     for each in [name] if name is not None else list(FEEDS):
         feed = _feed(each)
-        table = Table(title=feed.title)
+        found.append((each, feed.title, feed.status(_paths())))
+    if as_json:
+        emit({"connectors": [_status_record(each, fields) for each, _, fields in found]})
+        return
+    for _, title, fields in found:
+        table = Table(title=title)
         table.add_column("field")
         table.add_column("value")
-        for k, v in feed.status(_paths()).items():
+        for k, v in fields.items():
             table.add_row(k, v)
         console.print(table)

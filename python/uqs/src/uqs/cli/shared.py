@@ -24,10 +24,10 @@ from rich.table import Table
 from uqs import paths as stack_paths
 from uqs import runtimes
 from uqs.cli import completion, table_browser
+from uqs.cli.renames import MOVED_KEY
 from uqs.logger import configure_logging, get_logger, json_requested
 from uqs.paths import UqsError
-from uqs.stack import runtime
-from uqs.timerange import BOUND_FORMS
+from uqs.stack import listing, runtime
 
 app = typer.Typer(
     no_args_is_help=True,
@@ -45,7 +45,7 @@ log = get_logger()
 job_app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
-    help="ETL jobs: write them into the tree (new, remove, install) and operate on "
+    help="ETL jobs: write them into the tree (new, list, remove, install) and operate on "
     "them - backfill a bounded worker, preview a polling feed, find a streaming "
     "job's gaps, read the run ledger.",
 )
@@ -100,7 +100,12 @@ def _configure(
     ctx: typer.Context,
     debug: Annotated[
         bool,
-        typer.Option("--debug", help="Log at DEBUG. Same as LOG_LEVEL=DEBUG, and wins over it."),
+        typer.Option(
+            "--debug",
+            help="Log at DEBUG. Same as LOG_LEVEL=DEBUG, and wins over it. `summary` adds "
+            "how long each process took to load; `job backfill` starts its process with "
+            "-verbose, so its own log carries DEBUG lines too.",
+        ),
     ] = False,
     runtime_name: Annotated[
         str | None,
@@ -120,7 +125,7 @@ def _configure(
             "--target",
             help=(
                 "Run the command on a deployed release instead of this machine: a target "
-                "from deploy_targets.toml (`uqs list targets`). Add --yes to skip the "
+                "from deploy_targets.toml (`uqs target list`). Add --yes to skip the "
                 "confirmation a command that changes the server asks for."
             ),
         ),
@@ -165,8 +170,8 @@ def _configure(
     if debug:
         configure_logging(component="uqs", level="DEBUG")
     # Kept for commands that do more than log louder in debug mode - `summary`
-    # adds a section - so `uqs --debug summary` and `uqs summary --debug` are
-    # the same request.
+    # adds a section. `uqs summary --debug`, the old spelling, sets it too
+    # (renamed()).
     ctx.obj = {"debug": debug}
 
 
@@ -194,21 +199,25 @@ def _job(ctx: typer.Context) -> None:
     )
 
 
-def _debug_requested(ctx: typer.Context, flag: bool) -> bool:
-    """Whether debug was asked for in any of the three ways it can be: the
-    command's own `--debug`, the global one, or LOG_LEVEL=DEBUG."""
-    parent = ctx.parent.obj if ctx.parent is not None else None
-    return flag or bool((parent or {}).get("debug")) or _env_log_level() == "DEBUG"
+def _debug_requested(ctx: typer.Context) -> bool:
+    """Whether debug was asked for: the global `--debug` (which a command's
+    own `--debug`, its old spelling, sets too) or LOG_LEVEL=DEBUG."""
+    root = ctx.find_root().obj
+    return bool((root or {}).get("debug")) or _env_log_level() == "DEBUG"
 
 
-PortOpt = Annotated[
+BasePortOpt = Annotated[
     int | None,
     typer.Option(
-        "--port",
-        help="KDBBASEPORT - shifts every process's port. Default: the runtime's own "
+        "--base-port",
+        help="The stack's base port, KDBBASEPORT - shifts every process's port. "
+        "Default: the runtime's own "
         + ", ".join(f"{r.name} {r.base_port}" for r in runtimes.RUNTIMES.values()),
     ),
 ]
+#: The context_settings of a command that passes words it does not know on.
+PASS_THROUGH = {"allow_extra_args": True, "ignore_unknown_options": True}
+
 ProcsArg = Annotated[
     list[str] | None,
     typer.Argument(
@@ -228,34 +237,6 @@ ExportOpt = Annotated[
 QHostOpt = Annotated[str, typer.Option("--host", help="Host the q process listens on")]
 QUserOpt = Annotated[str, typer.Option("--user", help="User to log in to the q process as")]
 QPasswdOpt = Annotated[str, typer.Option("--passwd", help="Password for --user")]
-
-
-#: A time range, the one way every command takes it (#1735): --from/--to,
-#: --date or --last, resolved by uqs.timerange.resolve.
-RangeFromOpt = Annotated[
-    str | None,
-    typer.Option(
-        "--from", help=f"Start of the time range, included. A date or a timestamp: {BOUND_FORMS}"
-    ),
-]
-RangeToOpt = Annotated[
-    str | None,
-    typer.Option("--to", help="End of the time range, exclusive. A date or a timestamp, as --from"),
-]
-DateOpt = Annotated[
-    str | None,
-    typer.Option(
-        "--date",
-        help="One day, 2026-09-13 or 2026.09.13: the same as --from D --to D+1",
-    ),
-]
-LastOpt = Annotated[
-    str | None,
-    typer.Option(
-        "--last",
-        help="A DURATION up to now - 30s, 5m, 2h, 7d: the same as --from now-DURATION --to now",
-    ),
-]
 
 
 InteractiveOpt = Annotated[
@@ -291,6 +272,9 @@ def _export(rows, export: Path | None) -> None:
         runtime.export_table(rows, export)
     except UqsError as exc:
         _die(exc)
+        return
+    if json_requested():  # stdout is the one JSON document
+        log.info("exported to {}", export)
         return
     console.print(f"[green]exported to {export}[/]")
 
@@ -382,3 +366,35 @@ def _run_streaming(result_fn, *args, **kwargs) -> None:
         _die(exc)
         return
     raise typer.Exit(code=result.returncode)
+
+
+#: The process a command acts on, as its first positional (#1730).
+ProcArg = Annotated[
+    str | None,
+    typer.Argument(
+        metavar="[PROC]",
+        help="The process, by name, e.g. rdb1",
+        autocompletion=completion.procname,
+        show_default=False,
+    ),
+]
+
+
+def _proc_first(
+    ctx: typer.Context, proc: str | None, rest: str | None, port_given: bool
+) -> tuple[str | None, str | None]:
+    """`CMD [PROC] [X]` given one word: PROC if it names a process of this stack
+    and no --port was given, else X (`uqs query 'count quote'` asks the gateway).
+    A word the old `--proc` gave is PROC whatever it names, so a typo is refused."""
+    if proc is None or rest is not None or proc in ctx.meta.get(MOVED_KEY, ()):
+        return proc, rest
+    if port_given or proc not in _known_procs():
+        return None, proc
+    return proc, None
+
+
+def _known_procs() -> set[str]:
+    try:
+        return set(listing.configured_ports(_paths(), None))
+    except Exception:  # noqa: BLE001 - no registry: no word names a process
+        return set()

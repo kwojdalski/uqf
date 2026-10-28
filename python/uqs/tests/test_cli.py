@@ -50,6 +50,7 @@ from uqs.checks import schema_view
 from uqs.cli import (
     create_backfill,
     lifecycle,
+    lists,
     shared,
     summary,
     summary_columns,
@@ -190,7 +191,7 @@ def _known_procs(monkeypatch):
     monkeypatch.setattr(stack_procs, "list_process_names", lambda _paths: ["rdb1", "stp1"])
 
 
-@pytest.mark.parametrize("command", ["start", "stop", "restart", "start --print", "up"])
+@pytest.mark.parametrize("command", ["start", "stop", "restart", "start --show-command", "up"])
 def test_an_unknown_process_is_refused_before_anything_runs(monkeypatch, _known_procs, command):
     """A typo must not reach torq.sh.
 
@@ -346,32 +347,32 @@ def test_a_lifecycle_command_passes_the_process_names_through(monkeypatch, comma
     assert rec.args[1] == "rdb1 hdb1"
 
 
-@pytest.mark.parametrize("command", ["start", "stop", "restart", "start --print"])
+@pytest.mark.parametrize("command", ["start", "stop", "restart", "start --show-command"])
 def test_the_port_option_reaches_core(monkeypatch, command):
     """A dropped --port silently drives the DEFAULT stack.
 
     That is the worst shape of wiring bug available here: every command
     succeeds, against the wrong fleet.
     """
-    fn = "print_procs" if command == "start --print" else command
+    fn = "print_procs" if command == "start --show-command" else command
     rec = _patch(monkeypatch, runtime, fn, result=Completed())
-    runner.invoke(cli.app, [*command.split(), "--port", "7000"])
+    runner.invoke(cli.app, [*command.split(), "--base-port", "7000"])
     assert rec.kwargs["base_port"] == 7000
 
 
-@pytest.mark.parametrize("command", ["start", "stop", "restart", "start --print"])
+@pytest.mark.parametrize("command", ["start", "stop", "restart", "start --show-command"])
 def test_a_failing_subprocess_exit_code_survives(monkeypatch, command):
     """The property CI depends on. A non-zero torq.sh must not become a
     zero `uqs`."""
-    fn = "print_procs" if command == "start --print" else command
+    fn = "print_procs" if command == "start --show-command" else command
     _patch(monkeypatch, runtime, fn, result=Completed(returncode=3))
     result = runner.invoke(cli.app, command.split())
     assert result.exit_code == 3
 
 
-@pytest.mark.parametrize("command", ["start", "stop", "restart", "start --print"])
+@pytest.mark.parametrize("command", ["start", "stop", "restart", "start --show-command"])
 def test_a_refusal_exits_one_rather_than_raising(monkeypatch, command):
-    fn = "print_procs" if command == "start --print" else command
+    fn = "print_procs" if command == "start --show-command" else command
     _patch(monkeypatch, runtime, fn, raises=UqsError("no such process"))
     result = runner.invoke(cli.app, command.split())
     assert result.exit_code == 1
@@ -890,14 +891,15 @@ def test_query_turns_a_driver_error_into_an_exit_code(monkeypatch):
 def test_schema_resolves_a_named_process_to_a_port(monkeypatch):
     resolve = _patch(monkeypatch, schema_view, "resolve_port", result=6052)
     overview = _patch(monkeypatch, schema_view, "overview", result=[])
-    runner.invoke(cli.app, ["schema", "--proc", "hdb1"])
+    monkeypatch.setattr(shared, "_known_procs", lambda: {"rdb1", "hdb1"})
+    runner.invoke(cli.app, ["schema", "hdb1"])
     assert resolve.args[1] == "hdb1"
     assert overview.args[0] == 6052, "the resolved port is what gets queried"
 
 
 def test_an_explicit_port_skips_resolution_entirely(monkeypatch):
     """--port is documented as reading that port DIRECTLY instead of
-    resolving --proc, so resolution must not happen at all."""
+    resolving PROC, so resolution must not happen at all."""
     resolve = _patch(monkeypatch, schema_view, "resolve_port", result=9999)
     overview = _patch(monkeypatch, schema_view, "overview", result=[])
     runner.invoke(cli.app, ["schema", "--port", "1234"])
@@ -930,7 +932,7 @@ def test_a_pattern_matching_nothing_exits_one_and_names_what_exists(monkeypatch)
 
 def test_an_unknown_process_exits_one(monkeypatch):
     _patch(monkeypatch, schema_view, "resolve_port", raises=UqsError("rbd1 is not declared"))
-    assert runner.invoke(cli.app, ["schema", "--proc", "rbd1"]).exit_code == 1
+    assert runner.invoke(cli.app, ["schema", "rbd1", "trade"]).exit_code == 1
 
 
 def _browsed(monkeypatch) -> list[dict]:
@@ -994,7 +996,7 @@ def test_config_get_resolves_placeholders_unless_raw_is_given(monkeypatch):
     rec = _patch(monkeypatch, stack_procs, "get_process_config", result={})
     runner.invoke(cli.app, ["config", "get", "rdb1"])
     assert rec.kwargs["resolve"] is True
-    runner.invoke(cli.app, ["config", "get", "rdb1", "--raw"])
+    runner.invoke(cli.app, ["config", "get", "rdb1", "--unresolved"])
     assert rec.kwargs["resolve"] is False
 
 
@@ -1038,7 +1040,7 @@ def test_list_with_no_kind_shows_the_kinds_rather_than_failing(monkeypatch):
     result = runner.invoke(cli.app, ["list"])
     assert result.exit_code == 0
     for kind in LISTABLE_KINDS:
-        assert kind in result.stdout
+        assert (kind in result.stdout) is (kind not in lists.MOVED)
 
 
 def test_list_renders_the_items_of_a_kind(monkeypatch):
@@ -1172,7 +1174,7 @@ def test_multitail_passes_its_options_to_core_and_execs(monkeypatch):
     run = _patch(monkeypatch, stack_multitail, "run_multitail")
     result = runner.invoke(
         cli.app,
-        ["logs", "rdb1 stp1", "--multitail", "--stream", "err", "--pane-columns", "2", "-n", "7"],
+        ["logs", "rdb1 stp1", "--multitail", "--stream", "err", "--pane-columns", "2", "-l", "7"],
     )
     assert result.exit_code == 0
     assert build.args[1] == "rdb1 stp1"
@@ -1189,13 +1191,13 @@ def test_multitail_columns_is_the_old_spelling_of_pane_columns(monkeypatch, old)
     result = runner.invoke(cli.app, ["logs", "--multitail", old, "3"])
     assert result.exit_code == 0
     assert build.kwargs["columns"] == 3
-    assert renames == [rename_support.renamed("--columns", "--pane-columns")]
+    assert renames == [rename_support.renamed(old, "--pane-columns")]
 
 
 def test_multitail_print_shows_the_command_and_runs_nothing(monkeypatch):
     _patch(monkeypatch, stack_multitail, "multitail_command", result=["multitail", "-t", "a b"])
     run = _patch(monkeypatch, stack_multitail, "run_multitail")
-    result = runner.invoke(cli.app, ["logs", "--multitail", "--print"])
+    result = runner.invoke(cli.app, ["logs", "--multitail", "--show-command"])
     assert result.exit_code == 0
     assert "multitail -t 'a b'" in result.stdout
     assert run.calls == []
@@ -1223,12 +1225,12 @@ def test_raw_propagates_the_exit_code(monkeypatch):
     assert runner.invoke(cli.app, ["raw", "--", "debug", "rdb1"]).exit_code == 7
 
 
-# ---------------------------------------------------------- remove output
+# ------------------------------------------------------------------ clean
 
 
 def test_remove_output_delegates(monkeypatch):
     rec = _patch(monkeypatch, stack_clean, "clean", result=[])
-    assert runner.invoke(cli.app, ["remove", "output"]).exit_code == 0
+    assert runner.invoke(cli.app, ["clean"]).exit_code == 0
     assert len(rec.calls) == 1
 
 
@@ -1245,14 +1247,14 @@ def test_remove_output_delegates(monkeypatch):
 def test_remove_output_passes_its_flags_through(monkeypatch, argv, expected):
     """The flags have to arrive as given - a dropped --dry-run deletes."""
     rec = _patch(monkeypatch, stack_clean, "clean", result=[])
-    assert runner.invoke(cli.app, ["remove", "output", *argv]).exit_code == 0
+    assert runner.invoke(cli.app, ["clean", *argv]).exit_code == 0
     assert rec.calls[-1][1] == expected
 
 
 def test_remove_output_reports_what_it_removed(monkeypatch):
     rec_result = [(Path("/data/logs"), 800), (Path("/data/tplogs"), 200)]
     _patch(monkeypatch, stack_clean, "clean", result=rec_result)
-    result = runner.invoke(cli.app, ["remove", "output", "--dry-run"])
+    result = runner.invoke(cli.app, ["clean", "--dry-run"])
     assert result.exit_code == 0
     assert "would remove 2 entries" in result.output
     assert "logs" in result.output
@@ -1436,7 +1438,7 @@ def test_feed_status_with_no_name_shows_every_feed(monkeypatch):
     ("argv", "message"),
     [
         (["--stream", "err"], "--stream needs --multitail"),
-        (["--print"], "--print needs --multitail"),
+        (["--show-command"], "--show-command needs --multitail"),
         (["--multitail", "-f"], "--follow does not apply with --multitail"),
         (["--multitail", "--level", "ERROR"], "--level does not apply with --multitail"),
     ],
@@ -1829,11 +1831,11 @@ def test_export_without_an_expression_is_refused(monkeypatch):
     assert any("--export needs an expression" in m for m in errors.messages), errors.messages
 
 
-# ------------------------------------------------- query --proc (by name)
+# ------------------------------------------------- query PROC (by name)
 
 
 def _conn(monkeypatch, *, running=("rdb1",), ports=None):
-    """Patch what query --proc reads - the port map and the up/down check - and
+    """Patch what query PROC reads - the port map and the up/down check - and
     capture the exec instead of replacing the test process."""
     seen: dict[str, Any] = {}
     ports = ports if ports is not None else {"rdb1": "6052", "hdb1": "6053"}
@@ -1857,16 +1859,14 @@ def _conn(monkeypatch, *, running=("rdb1",), ports=None):
 
 def test_query_proc_opens_qcon_on_the_named_process_port(monkeypatch):
     seen = _conn(monkeypatch)
-    result = runner.invoke(cli.app, ["query", "--proc", "rdb1"])
+    result = runner.invoke(cli.app, ["query", "rdb1"])
     assert result.exit_code == 0, result.output
     assert seen["argv"] == ["rlwrap", "qcon", "localhost:6052:admin:admin"]
 
 
 def test_query_proc_resolves_the_port_at_the_stacks_base_port(monkeypatch):
     seen = _conn(monkeypatch)
-    runner.invoke(
-        cli.app, ["query", "--proc", "rdb1", "--base-port", "7000", "--user", "u", "--passwd", "p"]
-    )
+    runner.invoke(cli.app, ["query", "rdb1", "--base-port", "7000", "--user", "u", "--passwd", "p"])
     assert seen["base"] == 7000
     assert seen["argv"][-1] == "localhost:6052:u:p"
 
@@ -1874,7 +1874,7 @@ def test_query_proc_resolves_the_port_at_the_stacks_base_port(monkeypatch):
 def test_query_proc_refuses_an_unknown_process_by_name(monkeypatch):
     errors = _error_log(monkeypatch)
     seen = _conn(monkeypatch)
-    assert runner.invoke(cli.app, ["query", "--proc", "nope1"]).exit_code == 1
+    assert runner.invoke(cli.app, ["query", "nope1", "1+1"]).exit_code == 1
     assert "argv" not in seen
     assert any("not a declared process" in m for m in errors.messages), errors.messages
 
@@ -1883,7 +1883,7 @@ def test_query_proc_refuses_a_stopped_process_and_says_how_to_start_it(monkeypat
     """qcon's own refusal reads the same as a wrong port; this names the cause."""
     errors = _error_log(monkeypatch)
     seen = _conn(monkeypatch, running=())
-    assert runner.invoke(cli.app, ["query", "--proc", "hdb1"]).exit_code == 1
+    assert runner.invoke(cli.app, ["query", "hdb1"]).exit_code == 1
     assert "argv" not in seen
     assert any("uqs start hdb1" in m for m in errors.messages), errors.messages
 
@@ -1891,7 +1891,7 @@ def test_query_proc_refuses_a_stopped_process_and_says_how_to_start_it(monkeypat
 def test_query_proc_still_connects_when_it_cannot_tell_what_is_running(monkeypatch):
     """The up/down check is advisory; qcon says for itself if nothing listens."""
     seen = _conn(monkeypatch, running=RuntimeError("ps failed"))
-    assert runner.invoke(cli.app, ["query", "--proc", "rdb1"]).exit_code == 0
+    assert runner.invoke(cli.app, ["query", "rdb1"]).exit_code == 0
     assert seen["argv"][-1] == "localhost:6052:admin:admin"
 
 
@@ -1899,7 +1899,7 @@ def test_query_proc_without_qcon_installed_says_what_still_works(monkeypatch):
     errors = _error_log(monkeypatch)
     _conn(monkeypatch)
     monkeypatch.setattr(query_cli.shutil, "which", lambda name: None)
-    assert runner.invoke(cli.app, ["query", "--proc", "rdb1"]).exit_code == 1
+    assert runner.invoke(cli.app, ["query", "rdb1"]).exit_code == 1
     assert any("not on PATH" in m for m in errors.messages), errors.messages
 
 
@@ -1907,9 +1907,9 @@ def test_query_refuses_both_proc_and_port(monkeypatch):
     """Both at once is ambiguous: which one did they mean?"""
     errors = _error_log(monkeypatch)
     monkeypatch.setattr(runtime, "query", lambda *a, **k: pytest.fail("should not query"))
-    argv = ["query", "select 1", "--proc", "rdb1", "--port", "6052"]
+    argv = ["query", "rdb1", "select 1", "--port", "6052"]
     assert runner.invoke(cli.app, argv).exit_code == 1
-    assert any("--proc NAME or --port N" in m for m in errors.messages), errors.messages
+    assert any("PROC or --port N" in m for m in errors.messages), errors.messages
 
 
 def test_query_with_neither_asks_the_gateway_through_syncexec(monkeypatch):
@@ -1955,14 +1955,14 @@ def test_a_routed_query_is_laid_out_by_the_gateway_not_wrapped_again(monkeypatch
 def test_raw_sends_to_the_gateway_as_typed(monkeypatch):
     _conn(monkeypatch, running=("gateway1",), ports={"gateway1": "6057"})
     rec = _patch(monkeypatch, runtime, "query", result="42")
-    assert runner.invoke(cli.app, ["query", "tables[]", "--raw"]).exit_code == 0
+    assert runner.invoke(cli.app, ["query", "tables[]", "--no-gateway"]).exit_code == 0
     assert rec.args[0] == "tables[]"
 
 
 def test_a_select_on_another_process_is_sent_as_typed(monkeypatch):
     _conn(monkeypatch)
     rec = _patch(monkeypatch, runtime, "query", result="42")
-    assert runner.invoke(cli.app, ["query", "select from trade", "--proc", "rdb1"]).exit_code == 0
+    assert runner.invoke(cli.app, ["query", "rdb1", "select from trade"]).exit_code == 0
     assert rec.args[0] == "select from trade"
 
 
@@ -2039,19 +2039,19 @@ def test_raw_with_nothing_opens_plain_qcon_on_the_gateway(monkeypatch):
     monkeypatch.setattr(
         query_cli.stack_gateway, "query_session", lambda *a, **k: pytest.fail("not the session")
     )
-    assert runner.invoke(cli.app, ["query", "--raw"]).exit_code == 0
+    assert runner.invoke(cli.app, ["query", "--no-gateway"]).exit_code == 0
     assert any("6057" in part for part in seen["argv"])
 
 
 @pytest.mark.parametrize("expr", [[], ["count trade"]])
 def test_query_proc_refuses_another_host(monkeypatch, expr):
-    """--proc reads THIS machine's registry and process list. Pointed at
+    """PROC reads THIS machine's registry and process list. Pointed at
     another host it refused a process that was up there, or queried it on a
     port and up/down state read here (#504)."""
     errors = _error_log(monkeypatch)
     seen = _conn(monkeypatch)
     monkeypatch.setattr(runtime, "query", lambda *a, **k: pytest.fail("should not query"))
-    argv = ["query", *expr, "--proc", "rdb1", "--host", "box2"]
+    argv = ["query", "rdb1", *expr, "--host", "box2"]
     assert runner.invoke(cli.app, argv).exit_code == 1
     assert "argv" not in seen
     assert any("give --port for another host" in m for m in errors.messages), errors.messages
@@ -2067,7 +2067,7 @@ def test_query_port_still_reaches_another_host(monkeypatch):
 def test_query_proc_runs_an_expression_on_the_named_process(monkeypatch):
     _conn(monkeypatch)
     rec = _patch(monkeypatch, runtime, "query", result="42")
-    result = runner.invoke(cli.app, ["query", "count trade", "--proc", "rdb1"])
+    result = runner.invoke(cli.app, ["query", "rdb1", "count trade"])
     assert result.exit_code == 0, result.output
     assert rec.args[:2] == ("count trade", 6052)
 
@@ -2270,16 +2270,13 @@ def test_a_name_beside_a_profile_that_the_runtime_lacks_is_refused(monkeypatch):
     assert "needs fxfeed1, which the torq runtime does not have" in said[0]
 
 
-@pytest.mark.parametrize("gone", ["clean", "clear-checkpoint"])
-def test_the_old_removal_commands_are_gone(gone):
-    """One group, `uqs remove`, rather than an alias left behind for each."""
-    assert runner.invoke(cli.app, [gone]).exit_code != 0
-
-
-def test_remove_lists_what_it_can_remove():
-    result = runner.invoke(cli.app, ["remove", "--help"])
-    assert result.exit_code == 0
-    assert "output" in result.output and "checkpoint" in result.output
+def test_the_removal_commands_are_noun_first():
+    """`uqs clean` and `uqs job checkpoint remove` (#1727): `uqs remove` was a
+    verb with nouns under it, one level from `uqs job remove`."""
+    assert runner.invoke(cli.app, ["clean", "--help"]).exit_code == 0
+    assert runner.invoke(cli.app, ["job", "checkpoint", "remove", "--help"]).exit_code == 0
+    assert runner.invoke(cli.app, ["clear-checkpoint"]).exit_code != 0
+    assert " remove " not in runner.invoke(cli.app, ["--help"]).output
 
 
 # ---------------------------------------------- which q the fleet runs (#518)

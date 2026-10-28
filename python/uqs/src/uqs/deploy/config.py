@@ -143,16 +143,16 @@ class Config:
     q_mode: str = components.EXISTING
     torq_mode: str = components.EXISTING
     python_mode: str = components.EXISTING
-    #: torq_mode bundled's: the TorQ runtime artifact (`uqs deploy build-runtime
+    #: torq_mode bundled's: the TorQ runtime artifact (`uqs deploy component build
     #: torq`), a local path, and the sha256 a target pins it to
     torq_runtime: str | None = None
     torq_runtime_sha256: str | None = None
-    #: q_mode bundled's: the q runtime artifact (`uqs deploy build-runtime q`,
+    #: q_mode bundled's: the q runtime artifact (`uqs deploy component build q`,
     #: PeachQ only), a local path, and the sha256 a target pins it to
     q_runtime: str | None = None
     q_runtime_sha256: str | None = None
     #: python_mode bundled's: the Python runtime artifact (`uqs deploy
-    #: build-runtime python`), a local path, and the sha256 a target pins it to
+    #: component build python`), a local path, and the sha256 a target pins it to
     python_runtime: str | None = None
     python_runtime_sha256: str | None = None
 

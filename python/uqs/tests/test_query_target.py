@@ -160,30 +160,30 @@ def _calls(server: Path) -> list[str]:
 
 
 def test_target_with_host_is_refused(server, died, asked):
-    result = _invoke("--target", "dev", "--host", "box", "1+1")
+    result = _invoke("--tunnel", "dev", "--host", "box", "1+1")
     assert isinstance(result.exception, Died)
-    assert "give --target or --host, not both" in str(result.exception)
+    assert "give --tunnel or --host, not both" in str(result.exception)
     assert not asked and not (server / "log" / "calls").exists()
 
 
 def test_target_with_proc_and_port_is_refused(server, died, asked):
-    result = _invoke("--target", "dev", "--proc", "rdb1", "--port", "5000", "1+1")
-    assert "--proc NAME or --port N, not both" in str(result.exception)
+    result = _invoke("--tunnel", "dev", "rdb1", "1+1", "--port", "5000")
+    assert "PROC or --port N, not both" in str(result.exception)
     assert not (server / "log" / "calls").exists()
 
 
 def test_global_and_query_target_together_are_refused(server):
-    with pytest.raises(UqsError, match="give --target once"):
-        target_cli.forward("dev", False, ["query", "--target", "dev", "1+1"], interactive=False)
-    with pytest.raises(UqsError, match="give --target once"):
+    with pytest.raises(UqsError, match="give the target once"):
+        target_cli.forward("dev", False, ["query", "--tunnel", "dev", "1+1"], interactive=False)
+    with pytest.raises(UqsError, match="give the target once"):
         target_cli.forward("dev", False, ["query", "--target=dev"], interactive=False)
 
 
 def test_split_global_leaves_a_query_scoped_target_to_query():
-    assert control.split_global(["--runtime", "x", "query", "--target", "dev", "1"]) == (
+    assert control.split_global(["--runtime", "x", "query", "--tunnel", "dev", "1"]) == (
         None,
         False,
-        ["--runtime", "x", "query", "--target", "dev", "1"],
+        ["--runtime", "x", "query", "--tunnel", "dev", "1"],
     )
 
 
@@ -200,7 +200,7 @@ def test_the_chosen_runtime_and_base_port_are_passed_on(server):
     r = control.remote_for("dev", Path("."))
     tunnel.remote_ports(r, "peachq-etl", 9000)
     assert (server / "log" / "uqs.args").read_text().split() == [
-        "--runtime", "peachq-etl", "list", "processes", "--json", "--port", "9000",
+        "--runtime", "peachq-etl", "list", "processes", "--json", "--base-port", "9000",
     ]  # fmt: skip
 
 
@@ -223,7 +223,7 @@ def test_output_that_is_not_the_json_list_is_refused():
 
 
 def test_an_unknown_target_is_refused(server, died):
-    result = _invoke("--target", "nope", "1+1")
+    result = _invoke("--tunnel", "nope", "1+1")
     assert "no target or deployed server 'nope'" in str(result.exception)
 
 
@@ -231,7 +231,7 @@ def test_an_unknown_target_is_refused(server, died):
 
 
 def test_default_goes_to_the_targets_gateway_routed(server, asked, died):
-    result = _invoke("--target", "dev", "--render", "kola", "1+1")
+    result = _invoke("--tunnel", "dev", "--render", "kola", "1+1")
     assert result.exit_code == 0, result.output
     (call,) = asked
     assert call["host"] == "127.0.0.1" and call["port"] != 17007
@@ -243,11 +243,9 @@ def test_default_goes_to_the_targets_gateway_routed(server, asked, died):
     assert _gone(_tunnel_pid(server)), "the tunnel is closed after the query"
 
 
-@pytest.mark.parametrize(
-    ("args", "remote"), [(["--proc", "rdb1"], 17002), (["--port", "6552"], 6552)]
-)
+@pytest.mark.parametrize(("args", "remote"), [(["rdb1"], 17002), (["--port", "6552"], 6552)])
 def test_an_explicit_proc_or_port_is_asked_directly(server, asked, died, args, remote):
-    result = _invoke("--target", "dev", *args, "--render", "kola", "count quote")
+    result = _invoke("--tunnel", "dev", *args, "--render", "kola", "count quote")
     assert result.exit_code == 0, result.output
     assert asked[0]["expr"] == "count quote", "not routed through .gw.syncexec"
     assert f":127.0.0.1:{remote} " in _calls(server)[-1]
@@ -260,7 +258,7 @@ def test_the_tunnel_closes_when_the_query_fails_and_hides_the_password(server, d
         raise ConnectionError(f"handshake rejected for user:{passwd}")
 
     monkeypatch.setattr(query_mod.runtime, "query", refuse)
-    result = _invoke("--target", "dev", "--passwd", "s3cret", "--render", "kola", "1+1")
+    result = _invoke("--tunnel", "dev", "--passwd", "s3cret", "--render", "kola", "1+1")
     said = str(result.exception)
     assert "query on gateway1 on target dev (port 17007, via ssh) failed" in said
     assert "s3cret" not in said and "***" in said
@@ -272,13 +270,13 @@ def test_the_tunnel_closes_on_ctrl_c(server, died, monkeypatch):
         raise KeyboardInterrupt
 
     monkeypatch.setattr(query_mod.runtime, "query", interrupted)
-    _invoke("--target", "dev", "--render", "kola", "1+1")
+    _invoke("--tunnel", "dev", "--render", "kola", "1+1")
     assert _gone(_tunnel_pid(server))
 
 
 def test_a_forward_that_cannot_be_set_up_is_a_clear_error(server, died, monkeypatch, asked):
     monkeypatch.setenv("FAKE_TUNNEL_FAIL", "1")
-    result = _invoke("--target", "dev", "1+1")
+    result = _invoke("--tunnel", "dev", "1+1")
     said = str(result.exception)
     assert "could not open an ssh tunnel to target dev (svc@dev.example) for port 17007" in said
     assert "Address already in use" in said and not asked
@@ -342,7 +340,7 @@ def test_the_gateway_session_runs_through_the_tunnel(server, died, monkeypatch):
         return 0
 
     monkeypatch.setattr(query_mod.stack_gateway, "query_session", session)
-    result = _invoke("--target", "dev")
+    result = _invoke("--tunnel", "dev")
     assert result.exit_code == 0, result.output
     assert seen["host"] == "127.0.0.1" and seen["up"]
     assert _gone(_tunnel_pid(server))
@@ -359,7 +357,7 @@ def test_qcon_runs_as_a_child_through_the_tunnel(server, died, monkeypatch):
 
     monkeypatch.setattr(query_target.subprocess, "run", run)
     monkeypatch.setattr(query_mod.os, "execvp", lambda *a: pytest.fail("exec'd the tunnel away"))
-    result = _invoke("--target", "dev", "--proc", "rdb1")
+    result = _invoke("--tunnel", "dev", "rdb1")
     assert result.exit_code == 0, result.output
     assert ran["argv"][0] == "qcon" and ran["argv"][1].startswith("127.0.0.1:")
     assert ran["up"] and _gone(_tunnel_pid(server))
@@ -371,12 +369,12 @@ def test_qcon_runs_as_a_child_through_the_tunnel(server, died, monkeypatch):
 def test_without_target_nothing_tunnels(monkeypatch, asked, died):
     monkeypatch.setattr(tunnel, "tunnel", lambda *a, **k: pytest.fail("tunnelled"))
     monkeypatch.setattr(query_mod, "_proc_port", lambda proc, base: {"rdb1": 5002}[proc])
-    assert _invoke("--proc", "rdb1", "--render", "kola", "1+1").exit_code == 0
+    assert _invoke("rdb1", "--render", "kola", "1+1").exit_code == 0
     assert asked[-1] == {"expr": "1+1", "port": 5002, "host": "localhost", "render": None}
     assert _invoke("--host", "box", "--port", "6000", "--render", "kola", "1+1").exit_code == 0
     assert asked[-1]["host"] == "box" and asked[-1]["port"] == 6000
-    result = _invoke("--host", "box", "--proc", "rdb1", "1+1")
-    assert "--proc looks the port up in this machine's stack" in str(result.exception)
+    result = _invoke("--host", "box", "rdb1", "1+1")
+    assert "PROC is looked up in this machine's stack" in str(result.exception)
 
 
 def test_without_target_a_failed_query_still_exits_1_as_before(monkeypatch):

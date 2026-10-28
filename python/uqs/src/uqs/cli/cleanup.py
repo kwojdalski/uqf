@@ -1,14 +1,14 @@
-"""`uqs remove ...`: deleting runtime state the stack wrote.
+"""Deleting runtime state the stack wrote, noun first (#1727):
 
-One group for what used to be two top-level commands, `clean` and
-`clear-checkpoint`, because both answer the same question - "make it forget
-this" - and differ only in what is forgotten:
+    uqs clean                       output/uqs/: logs, tplogs, wdb, the copied sample data
+    uqs job checkpoint remove JOB   one bounded worker's resume point
 
-    uqs remove output      output/uqs/: logs, tplogs, wdb, the copied sample data
-    uqs remove checkpoint  one bounded worker's resume point
-
-Neither touches the repository - `uqs job remove` undoes a scaffold, and stays
-under `job` beside `job new`, which it is the inverse of.
+These were `uqs remove output` and `uqs remove checkpoint`: a verb with nouns
+under it, one level from `uqs job remove`, which undoes a scaffold - so a user
+after "delete a worker's checkpoint" found `job remove` first. The checkpoint
+sits under `job` now, beside the `job backfill` whose state it resets. Neither
+touches the repository. The old paths stay for one release as a hidden
+`remove` group, each logging its new spelling.
 """
 
 from __future__ import annotations
@@ -18,17 +18,22 @@ from typing import Annotated
 import typer
 
 from uqs.cli import completion
-from uqs.cli.shared import _die, _paths, app, console
+from uqs.cli.renames import alias_command
+from uqs.cli.shared import JOB_OPERATIONS_PANEL, _die, _paths, app, console, job_app
 from uqs.paths import UqsError
 from uqs.stack import backfill as stack_backfill
 from uqs.stack import clean as stack_clean
 
-remove_app = typer.Typer(
+checkpoint_app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
-    help="Delete runtime state: output/uqs/, or a backfill worker's checkpoint.",
+    help="A bounded worker's checkpoint, where its next run resumes: remove.",
 )
-app.add_typer(remove_app, name="remove")
+job_app.add_typer(checkpoint_app, name="checkpoint", rich_help_panel=JOB_OPERATIONS_PANEL)
+
+#: The old verb group, hidden, for one release (#1727).
+remove_app = typer.Typer(no_args_is_help=True, add_completion=False, hidden=True)
+app.add_typer(remove_app, name="remove", hidden=True)
 
 
 DryRunOpt = Annotated[
@@ -54,13 +59,13 @@ def _human_bytes(size: int) -> str:
     return f"{value:.1f}G"
 
 
-@remove_app.command("output")
-def remove_output(match: MatchOpt = None, dry_run: DryRunOpt = False) -> None:
+@app.command("clean")
+def clean(match: MatchOpt = None, dry_run: DryRunOpt = False) -> None:
     """Wipe output/uqs/ (logs, tplogs, wdb, the copied sample data).
 
     `--match` narrows it to the entries whose path under output/uqs/ matches a
-    regex - `remove output --match '^logs$'` for the logs alone, `remove output
-    --match 'out_rdb1'` for one process's files wherever they sit. A directory that
+    regex - `clean --match '^logs$'` for the logs alone, `clean --match
+    'out_rdb1'` for one process's files wherever they sit. A directory that
     matches goes whole; one that does not is descended into.
 
     `--dry-run` lists what would go, with sizes, and removes nothing. Worth
@@ -84,11 +89,12 @@ def remove_output(match: MatchOpt = None, dry_run: DryRunOpt = False) -> None:
     )
 
 
-@remove_app.command("checkpoint")
+@checkpoint_app.command("remove")
 def remove_checkpoint(
     worker: Annotated[
         str,
         typer.Argument(
+            metavar="JOB",
             help="The bounded worker whose checkpoint to delete, e.g. demo_deals_backfill",
             autocompletion=completion.backfill_workers,
         ),
@@ -100,7 +106,7 @@ def remove_checkpoint(
     only where a run resumes: windows already in the coverage ledger are
     still skipped. To fetch those again, run under a new --source-version.
 
-    e.g. `uqs remove checkpoint demo_deals_backfill`
+    e.g. `uqs job checkpoint remove demo_deals_backfill`
     """
     try:
         path = stack_backfill.clear_checkpoint(_paths(), worker)
@@ -111,3 +117,7 @@ def remove_checkpoint(
         console.print(f"{worker} has no checkpoint - nothing to clear", markup=False)
     else:
         console.print(f"cleared {worker}'s checkpoint ({path})", markup=False)
+
+
+alias_command(remove_app, "output", "uqs clean", clean)
+alias_command(remove_app, "checkpoint", "uqs job checkpoint remove", remove_checkpoint)

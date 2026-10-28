@@ -26,7 +26,7 @@ WHAT IS DELIBERATELY NOT HERE. Removing output: deleting logs, tplogs, wdb and
 the copied sample data. It is the one orchestrator verb whose blast radius is
 data rather than process state, and an HTTP route for it - reachable by
 anyone who can reach the port, on a deployment whose identity is a header
-anyone can set - is not something this seam should offer. `uqs remove output`
+anyone can set - is not something this seam should offer. `uqs clean`
 remains, where the person running it is at a terminal on the host.
 """
 

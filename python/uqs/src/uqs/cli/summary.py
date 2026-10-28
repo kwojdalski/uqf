@@ -15,10 +15,12 @@ import typer
 from rich.table import Table
 
 from uqs.cli import completion
+from uqs.cli.json_out import emit, json_opt
+from uqs.cli.renames import renamed
 from uqs.cli.shared import (
+    BasePortOpt,
     ExportOpt,
     InteractiveOpt,
-    PortOpt,
     _debug_requested,
     _die,
     _export,
@@ -30,9 +32,8 @@ from uqs.cli.shared import (
 )
 from uqs.cli.summary_actions import process_actions
 from uqs.cli.summary_columns import resolve_columns, resolve_sort_column
-from uqs.cli.summary_table import gather, render
+from uqs.cli.summary_table import gather, record, render
 from uqs.interpreter import interpreter_status
-from uqs.logger import configure_logging
 from uqs.model import dependencies, profiles
 from uqs.paths import UqsError
 from uqs.stack import deployment, listing, probe, startup
@@ -102,10 +103,36 @@ def _note_monitor_coverage() -> None:
         )
 
 
-@app.command()
+SummaryJson = json_opt(
+    '{"interpreter", "processes": [{time, process, status, pid, port, heartbeat, responds, '
+    'batches, depends_on: [], inputs: [], outputs: [], port_source}], "silent": [process], '
+    '"failing": [{job, process, ...}], "starved": [{process, reasons}], "heartbeats_collected"}'
+)
+
+
+def _json(rows: list[dict], gathered, status) -> None:
+    """The table and what is printed under it, as one document."""
+    up = {row["Process"] for row in rows if row["Status"] == "up"}
+    emit({
+        "interpreter": {
+            "declared": status.declared, "binary": status.binary,
+            "actual": status.actual, "problem": status.problem,
+        },
+        "processes": [record(row) for row in rows],
+        "silent": gathered.silent,
+        "failing": gathered.failing,
+        "starved": [
+            {"process": p, "reasons": list(r)}
+            for p, r in sorted(dependencies.starved_processes(up).items())
+        ],
+        "heartbeats_collected": gathered.heartbeats is not None,
+    })  # fmt: skip
+
+
+@app.command(cls=renamed({"--port": "--base-port", "--debug": "--debug"}))
 def summary(
     ctx: typer.Context,
-    port: PortOpt = None,
+    port: BasePortOpt = None,
     export: ExportOpt = None,
     columns: Annotated[
         str | None,
@@ -139,16 +166,6 @@ def summary(
             ),
         ),
     ] = probe.DEFAULT_PROBE_TIMEOUT,
-    debug: Annotated[
-        bool,
-        typer.Option(
-            "--debug",
-            help=(
-                "Log at DEBUG, and add how long each process took to load, "
-                "read from its own log. Same as `uqs --debug summary`."
-            ),
-        ),
-    ] = False,
     sort: Annotated[
         str | None,
         typer.Option(
@@ -171,6 +188,7 @@ def summary(
             help="with -i, re-read the fleet every this many seconds; 0 turns it off",
         ),
     ] = SUMMARY_REFRESH_SECONDS,
+    as_json: SummaryJson = False,
 ) -> None:
     """Status table for every process in process.csv, with its declared graph.
 
@@ -186,14 +204,12 @@ def summary(
     out, numerically where the column is numeric (`Port`, `PID`) and with
     empty cells last. The order reaches `--export` too.
 
-    Run with `--debug` (or LOG_LEVEL=DEBUG) to see where each column came
+    Run as `uqs --debug summary` (or LOG_LEVEL=DEBUG) to see where each column came
     from: the two lookups below degrade rather than fail, so on the default
     level a missing port map and an unreachable monitor1 look the same as a
     stack that simply has nothing to report. Debug also prints how long each
     process took to load - see stack/startup.py for how that is measured.
     """
-    if debug:
-        configure_logging(component="uqs", level="DEBUG")
     chosen = resolve_columns(columns)
     sort_column = resolve_sort_column(sort)
     # The columns whose data has to be gathered: those shown, and the one
@@ -213,6 +229,10 @@ def summary(
     # Which q runs the fleet and the connection budget that follows (#518):
     # a 20-process fleet is fine on PeachQ and wedged past the cap on KDB-X.
     status = interpreter_status(stack_env.with_interpreter(paths))
+    if as_json:
+        _json(rows, gathered, status)
+        _export(rows, export)
+        raise typer.Exit(code=result.returncode)
     console.print(listing.interpreter_line(status), style="dim", markup=False)
     if status.problem:
         console.print(f"warning: {status.problem}", style="yellow", markup=False)
@@ -228,7 +248,7 @@ def summary(
         ),
         every=every or None,
     )
-    if _debug_requested(ctx, debug):
+    if _debug_requested(ctx):
         _print_startups(paths.log_dir, [row["Process"] for row in rows])
     if silent:
         # Up by PID, and silent when asked: the case neither Status nor a

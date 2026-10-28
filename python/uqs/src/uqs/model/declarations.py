@@ -296,7 +296,7 @@ class Reaction:
 
     NOT a Declaration: a reaction has no process of its own - it runs inside
     whichever process publishes `dataset` - so it must never reach the process
-    registry. It is read for `uqs list jobs` and `uqs job remove` alone.
+    registry. It is read for `uqs job list` and `uqs job remove` alone.
     """
 
     name: str

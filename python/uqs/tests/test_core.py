@@ -200,7 +200,7 @@ def test_an_invalid_regex_is_refused_before_anything_is_removed(fake_paths: UqsP
 
 
 def test_no_match_still_removes_the_whole_directory(fake_paths: UqsPaths):
-    """Unchanged behaviour: `uqs remove output` with no flags is the old wipe."""
+    """Unchanged behaviour: `uqs clean` with no flags is the old wipe."""
     _tree(fake_paths.torqdata)
     stack_clean.clean(fake_paths)
     assert not fake_paths.torqdata.exists()
@@ -540,7 +540,7 @@ def test_a_site_column_is_a_new_plain_name(value, message, fake_paths: UqsPaths,
 def test_a_site_launcher_finds_its_column_in_the_printed_start(
     fake_paths: UqsPaths, monkeypatch, tmp_path: Path
 ):
-    """`uqs start --print` through a launcher that looks taskset_no up the
+    """`uqs start --show-command` through a launcher that looks taskset_no up the
     way the UAT torq.sh does - by header, as the vendored getfield does. With
     no such column that lookup is `print $}`, an awk syntax error for every
     process; declared, a configured row prints its CPUs and an unconfigured

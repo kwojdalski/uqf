@@ -2,7 +2,7 @@
 directory, and what a run there would do - decided before anything runs.
 
 `uqs job backfill` writes into the HDB of the uqf runtime it belongs to
-(`KDBHDB`); `--port` changes which stack it registers with, not where the rows
+(`KDBHDB`); `--base-port` changes which stack it registers with, not where the rows
 go. A backfill for a dataset an attachment publishes must therefore name its
 destination out loud, and take it from the saved attachment - the stack id, the
 storage the stack reported and that `verify` has since checked - never from a
@@ -218,9 +218,9 @@ def resolve(
         )
     if port is not None and port != att.stack.id:
         raise UqsError(
-            f"--port {port} conflicts with attachment {att.name}, which is stack "
-            f"{att.stack.id}: --attach takes the stack from the attachment, so drop --port "
-            f"or pass --port {att.stack.id}"
+            f"--base-port {port} conflicts with attachment {att.name}, which is stack "
+            f"{att.stack.id}: --attach takes the stack from the attachment, so drop --base-port "
+            f"or pass --base-port {att.stack.id}"
         )
     require_verified(att.name, attach_root)
     decl = declaration(paths, worker)

@@ -1,4 +1,4 @@
-"""`uqs list jobs`: every declared job, read from its declaration.
+"""`uqs job list`: every declared job, read from its declaration.
 
 Held against the reader the process registry is built from, so the list can
 neither miss a job the registry knows nor invent one; and against scaffolds

@@ -32,6 +32,7 @@ def export(
     worker: Annotated[
         str,
         typer.Argument(
+            metavar="JOB",
             help="The bounded worker whose batches the receiver will take",
             autocompletion=completion.backfill_workers,
         ),
@@ -108,7 +109,8 @@ def approve(
         f"approved contract {contract.identity} ({contract.dataset}) for attachment {attach}: "
         f"into {b['hdb_dir']}, writer {', '.join(b['users'])}, "
         f"policies {', '.join(b['conflict_policies'])}, at most {b['max_rows']} rows a message; "
-        f"`uqs job receive --contract {contract.identity} --attach {attach} --port PORT` serves it",
+        f"`uqs job receive --contract {contract.identity} --attach {attach} "
+        "--listen-port PORT` serves it",
         markup=False,
     )
 

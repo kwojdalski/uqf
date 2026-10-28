@@ -130,7 +130,7 @@ def test_status_dir_is_qs_rule(tmp_path):
 
 
 def test_checkpoint_path_is_qs_rule(tmp_path, monkeypatch):
-    """`uqs remove checkpoint` deletes the file q's checkpoint_path names:
+    """`uqs job checkpoint remove` deletes the file q's checkpoint_path names:
     `<worker>.checkpoint` in lock_dir, which is the status directory."""
     state = ".qetl.job.bounded.state"
     assert q_definition("backfill_state.q", "lock_dir") == (

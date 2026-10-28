@@ -9,12 +9,9 @@ from typing import Annotated
 import typer
 
 from uqs import timerange
-from uqs.cli.renames import renamed
+from uqs.cli.range_options import DateOpt, LastOpt, RangeFromOpt, RangeToOpt
+from uqs.cli.renames import warn_renamed
 from uqs.cli.shared import (
-    DateOpt,
-    LastOpt,
-    RangeFromOpt,
-    RangeToOpt,
     _die,
     _paths,
     console,
@@ -78,7 +75,7 @@ def seed(
     """
     try:
         if from_runtime is None and range_from in RUNTIMES:
-            renamed(f"--from {range_from}", f"--from-runtime {range_from}")
+            warn_renamed(f"--from {range_from}", f"--from-runtime {range_from}")
             from_runtime, range_from = range_from, None
         if from_runtime is None:
             raise UqsError(
@@ -94,7 +91,9 @@ def seed(
                 raise UqsError(f"--dates cannot be given with a time range - {timerange.USAGE}")
             range_from, range_to = dates_as_range(dates)
             bounds = (("--from", range_from), ("--to", range_to))
-            renamed(f"--dates {dates}", " ".join(f"{f} {v}" for f, v in bounds if v) or "no range")
+            warn_renamed(
+                f"--dates {dates}", " ".join(f"{f} {v}" for f, v in bounds if v) or "no range"
+            )
         first, last_day = timerange.resolve(
             range_from, range_to, day, last, open_ended=True
         ).partition_dates()

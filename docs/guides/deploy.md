@@ -237,9 +237,23 @@ live_check = ["deals_db"]
 ```
 
 ```bash
-uqs deploy push dist/uqf-<release>.tar.gz --target prod-a --dry-run
-uqs deploy push dist/uqf-<release>.tar.gz --target prod-a,prod-b
+uqs deploy push dist/uqf-<release>.tar.gz prod-a --dry-run
+uqs deploy push dist/uqf-<release>.tar.gz prod-a prod-b
+uqs deploy status prod-a
+uqs deploy rollback prod-a --dry-run
+uqs deploy prune prod-a --keep 3
+uqs deploy history prod-a
 ```
+
+Every `deploy` command that reaches a server takes the target as its TARGET:
+`push ARTIFACT TARGET...`, deploying each in order and stopping at the first
+failure, and `status`, `rollback`, `prune` and `history TARGET`. `status`,
+`rollback` and `prune` also take a server a push from here registered (see
+`uqs deploy history`). `--host`, `--dest`, `--remote-user` and
+`--connect-timeout` remain for a server no target declares, and read the same on
+every command. Given beside a TARGET, they override its values.
+`push --target A,B`, the spelling before #1736, still works for one release and
+prints the new one.
 
 - **The keys.** Each key is a `push` option, spelt as its parameter (`torq_home`
   for `--torq-home`). The values go through the same checks as the flags, and an
@@ -250,7 +264,7 @@ uqs deploy push dist/uqf-<release>.tar.gz --target prod-a,prod-b
   dry-run plan says which settings came from the target and which from a flag.
 - **Several targets.** `--target a,b` deploys them in order, host by host, and
   stops at the first failure.
-- **`labels`.** Free-form `key = "value"` pairs that `uqs list targets` shows.
+- **`labels`.** Free-form `key = "value"` pairs that `uqs target list` shows.
   Nothing deploys them.
 
 ### Shared settings: defaults and environments
@@ -288,7 +302,7 @@ Each layer overrides the one above it in this table:
   through the same checks as the flags.
 - **Never in a file.** No layer may set the artifact, `--dry-run`, or a named
   override.
-- **Listing.** `uqs list targets` shows each target with its layers merged. It
+- **Listing.** `uqs target list` shows each target with its layers merged. It
   adds an `environment` column when a target names one.
 
 ## Requirements and named overrides
@@ -359,10 +373,13 @@ finds it. A push that sets no mode is the source-only push it always was.
 
 With `torq_mode = "bundled"`, the push ships TorQ itself: `lib/torq` and
 `lib/torq-finance-starter-pack` exactly as vendored, in a runtime artifact of
-their own. Many releases share one runtime, so it is built separately:
+their own. Many releases share one runtime, so it is built separately, by
+`uqs deploy component build`. A bundled component's runtime is not a stack
+runtime (`uqs --runtime`), which is why the command is not named for it. Its
+name before #1740, `uqs deploy build-runtime`, still works for one release.
 
 ```bash
-uqs deploy build-runtime torq      # dist/torq-runtime-<version>-<id>.tar.gz
+uqs deploy component build torq      # dist/torq-runtime-<version>-<id>.tar.gz
 uqs deploy push dist/uqf-<release>.tar.gz --host uqf-server --dest /opt/uqf \
   --profile essential --torq-mode bundled \
   --torq-runtime dist/torq-runtime-5.2.12-<id>.tar.gz
@@ -404,7 +421,7 @@ kdb+) is licensed to the server it runs on, so it is never bundled. It stays
 `existing`, with its licence in `QHOME`.
 
 ```bash
-uqs deploy build-runtime q         # dist/q-runtime-peachq-<commit>-<os>-<arch>.tar.gz
+uqs deploy component build q         # dist/q-runtime-peachq-<commit>-<os>-<arch>.tar.gz
 uqs --runtime peachq deploy build
 uqs deploy push dist/uqf-<release>.tar.gz --host uqf-server --dest /opt/uqf \
   --profile capture --torq-mode bundled --torq-runtime dist/torq-runtime-<...>.tar.gz \
@@ -453,7 +470,7 @@ architecture and Python version, in a runtime artifact of its own. The server
 then needs no `uv` and no Python 3.14.
 
 ```bash
-uqs deploy build-runtime python --arch x86_64 --python 3.14
+uqs deploy component build python --arch x86_64 --python 3.14
                                    # dist/python-runtime-3.14.<n>-linux-x86_64.tar.gz
 uqs deploy push dist/uqf-<release>.tar.gz --host uqf-server --dest /opt/uqf \
   --profile essential --torq-mode bundled --torq-runtime dist/torq-runtime-<...>.tar.gz \
@@ -526,7 +543,7 @@ unpacked release, on the Python it carries. Each `.venv` must be the bundled
 interpreter's and run `uqs --version`.
 
 - **What is real.** The CPython is the one uv installed that runs the tests,
-  packed by the same code as `build-runtime python`, so the host's OS and
+  packed by the same code as `component build python`, so the host's OS and
   architecture rather than Linux. The artifact is `build_artifact` over this
   checkout's release files, with the `uqs` wheel built by `uv build --offline`.
   Its dependencies are the wheels of what `uqs --version` imports, packed from
@@ -559,15 +576,15 @@ uqs target add uat --ssh svc@uat.example --dest /opt/efx/uat/uqf --label env=uat
 uqs target check uat                       # ssh works; names the running release
 uqs --target uat summary
 uqs --target uat logs piggybankgeneralledger1 -f
-uqs --target uat --yes query --proc rdb1 'select [20] from piggybank_general_ledger'
+uqs --target uat --yes query rdb1 'select [20] from piggybank_general_ledger'
 uqs --target uat start piggybankgeneralledger1   # asks first; --yes skips the question
 ```
 
 - **The same entries.** `uqs target add` appends a `[targets.NAME]` table to
-  `deploy_targets.toml`, so one entry serves both `deploy push --target` and
-  `uqs --target`. `uqs list targets` and `uqs target remove` read and edit that
-  file, on this machine only: `--target` refuses them. `remove` leaves every
-  other line, comments included, as it was.
+  `deploy_targets.toml`, so one entry serves both `deploy push ARTIFACT TARGET`
+  and `uqs --target`. `uqs target list` and `uqs target remove` read and edit
+  that file, on this machine only: `--target` refuses them. `remove` leaves
+  every other line, comments included, as it was.
 - **Confirmation.** A command that can change the server, such as `start`,
   `stop`, `restart`, `raw`, `job backfill`, `config set` or `data seed`, asks
   first and names the target. Without a terminal it needs `--yes`. So do
@@ -583,10 +600,10 @@ uqs --target uat start piggybankgeneralledger1   # asks first; --yes skips the q
     launch `uqs`. The error names what is missing: the CLI, the environment
     file, the interpreter, the source, or the interpreter's dependencies;
   - the remote command failed, with its own output and exit code.
-- **Querying from here instead.** `uqs query --target NAME` runs the query on
+- **Querying from here instead.** `uqs query --tunnel NAME` runs the query on
   this machine through an ssh tunnel to the target, with ports from the target's
   release. See [A deployed target, from
-  here](uqs.md#a-deployed-target-from-here). `uqs --target X query --target Y`
+  here](uqs.md#a-deployed-target-from-here). `uqs --target X query --tunnel Y`
   is refused.
 
 ### A release `uqs deploy push` did not install
@@ -636,7 +653,7 @@ dependency as a locked wheel, and an installer that needs only the server's
 it carries the interpreter too, so the server needs no Python 3.14:
 
 ```bash
-uqs deploy build-runtime python --arch x86_64
+uqs deploy component build python --arch x86_64
 uqs deploy build --arch x86_64 --python-runtime dist/python-runtime-3.14.<n>-linux-x86_64.tar.gz
 ```
 
@@ -806,8 +823,9 @@ its lock is seen, and is refused without `--restart`.
 What a server runs, without ssh-ing in:
 
 ```bash
-uqs deploy status --host uqf-server --dest /opt/uqf
-uqs deploy status --host uqf-server --dest /opt/uqf --json   # to script against
+uqs deploy status prod-a
+uqs deploy status prod-a --json                             # to script against
+uqs deploy status --host uqf-server --dest /opt/uqf         # a server no target declares
 ```
 
 It reports `current` and the release it replaced (revision, build time, dirty or
@@ -827,8 +845,8 @@ It is read-only and never takes the lock, so it is safe during a push. It exits
 To put a server back on an earlier release after it has activated:
 
 ```bash
-uqs deploy rollback --host uqf-server --dest /opt/uqf --dry-run
-uqs deploy rollback --host uqf-server --dest /opt/uqf
+uqs deploy rollback prod-a --dry-run
+uqs deploy rollback prod-a
 ```
 
 It returns to the release the current one replaced, as the current release's
@@ -850,8 +868,8 @@ Every push leaves its release, with its own offline `.venv`, in `releases/`.
 `uqs deploy prune` removes all but the newest `--keep N`, under the deploy lock:
 
 ```bash
-uqs deploy prune --host uqf-server --dest /opt/uqf --keep 3 --dry-run
-uqs deploy prune --host uqf-server --dest /opt/uqf --keep 3
+uqs deploy prune prod-a --keep 3 --dry-run
+uqs deploy prune prod-a --keep 3
 ```
 
 Three releases are never removed, whatever `--keep` is, even 0:
@@ -971,7 +989,7 @@ Set each process's value on the server:
 
 ```bash
 uqs --target uat config set stp1 taskset_no 3:5
-uqs --target uat start --print stp1
+uqs --target uat start --show-command stp1
 ```
 
 `config set` writes `python/uqs/process_overrides.csv` (see [changing a
@@ -980,8 +998,8 @@ file from `shared/config/python/uqs/process_overrides.csv` when it exists, so
 create it there, with just the header `procname,field,value`, before the first
 `config set`. Values set without it are kept by that release only. A process
 with no value keeps the column empty, and nothing assigns CPUs on its own.
-`start --print` shows the start lines the launcher builds, without starting
-anything.
+`start --show-command` shows the start lines the launcher builds, without
+starting anything.
 
 ## On the server
 

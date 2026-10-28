@@ -43,10 +43,10 @@ class Runtime:
     #: gateway1's access list, DQE's metatable queries and monitor1's
     #: connection budget. Without it the starter pack runs as it ships.
     overlays: bool
-    #: KDBBASEPORT when `--port` is not given: every process listens on it
+    #: KDBBASEPORT when `--base-port` is not given: every process listens on it
     #: plus its offset (scripts/processes/process_ports.csv). Each runtime's
     #: span of ports is clear of every other's, so two runtimes run side by
-    #: side with no flags (#761); `--port` still moves one anywhere.
+    #: side with no flags (#761); `--base-port` still moves one anywhere.
     base_port: int
     #: Which of this tree's pipelines a runtime with `pipelines` has: None
     #: for every one, or a profile's name for that profile's processes and
@@ -97,7 +97,7 @@ class Runtime:
             )
 
     def resolve_base_port(self, base_port: int | None) -> int:
-        """KDBBASEPORT: `base_port` when given (`--port`), else this runtime's."""
+        """KDBBASEPORT: `base_port` when given (`--base-port`), else this runtime's."""
         return self.base_port if base_port is None else base_port
 
 

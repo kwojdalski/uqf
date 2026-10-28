@@ -61,7 +61,7 @@ def test_a_process_already_typed_is_not_offered_again():
 
 
 def test_process_names_still_complete_after_an_option():
-    assert complete("uqs start posbook1 --port 6050 demo_m") == ["demo_markout1"]
+    assert complete("uqs start posbook1 --base-port 6050 demo_m") == ["demo_markout1"]
 
 
 def test_several_processes_reach_the_stack_as_one_space_separated_string(monkeypatch):
@@ -104,7 +104,7 @@ def test_config_fields_complete_after_the_process():
 def test_a_port_is_offered_with_the_process_it_belongs_to():
     ports = listing.configured_ports(stack_paths.default_paths())
     assert ports["fxpositions1"] in complete("uqs query --port ")
-    assert "fxpositions1" in complete("uqs query --proc ")
+    assert "fxpositions1" in complete("uqs query ")
 
 
 def test_fixed_choices_complete():

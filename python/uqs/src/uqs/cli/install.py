@@ -23,7 +23,7 @@ from uqs.checks.traced_queries import untraced_lines
 from uqs.cli import install_bundle
 from uqs.cli.create_plant import plant_tables as _plant_tables
 from uqs.cli.regenerate import _DERIVED, _regenerate_derived
-from uqs.cli.renames import old_spelling, renamed
+from uqs.cli.renames import old_spelling, warn_renamed
 from uqs.cli.shared import (
     JOB_AUTHORING_PANEL,
     _die,
@@ -167,7 +167,7 @@ def _next_steps(declarations: list[Declaration], sidecar_tests: list[Path]) -> P
         steps.add_row(f"{len(steps.rows) + 1}.", what, command)
 
     step("The registry sees them", "uqs list processes")
-    step("The exact start line", f"uqs start --print {procs}")
+    step("The exact start line", f"uqs start --show-command {procs}")
     if streaming or not workers:
         step("Start them", f"uqs start {procs}")
     for worker in workers:
@@ -176,7 +176,7 @@ def _next_steps(declarations: list[Declaration], sidecar_tests: list[Path]) -> P
             f"uqs job backfill {worker} --source-version v1 --from 2026-09-01 --to 2026-09-02",
         )
     step("Each one answers", "uqs summary --columns status   (Responds: yes)")
-    step("How long each took to load", "uqs summary --debug")
+    step("How long each took to load", "uqs --debug summary")
     step("Their logs", f"uqs logs {procs} -f")
     step("The whole suite", "q tests/run_tests.q")
 
@@ -257,7 +257,7 @@ def install_jobs(
     """
     mode = None if link is None else (Mode.SYMLINK if link else Mode.COPY)
     if old_mode is not None:
-        renamed(f"--mode {old_mode.value}", "--link" if old_mode is Mode.SYMLINK else "--copy")
+        warn_renamed(f"--mode {old_mode.value}", "--link" if old_mode is Mode.SYMLINK else "--copy")
         mode = old_mode if mode is None else mode
     repo_root = _paths().repo_root
     sidecar = sidecar.resolve()

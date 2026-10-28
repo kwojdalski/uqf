@@ -282,7 +282,7 @@ def list_process_names(paths: UqsPaths) -> list[str]:
 def assert_known_procnames(paths: UqsPaths, procs: str) -> None:
     """Refuse a lifecycle selector naming a process that does not exist.
 
-    `start`/`stop`/`restart`/`start --print` used to hand `procs` straight to the
+    `start`/`stop`/`restart`/`start --show-command` used to hand `procs` straight to the
     vendored torq.sh on the grounds that it owns its own handling of an
     unknown name. It does, but badly, and the cost is paid before you see it:
     `uqs start xyz` first printed a licence-cap warning whose arithmetic

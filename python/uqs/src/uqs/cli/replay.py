@@ -19,10 +19,9 @@ from rich.table import Table
 
 from uqs import timerange
 from uqs.cli import completion
+from uqs.cli.range_options import DateOpt, RangeFromOpt, RangeToOpt
+from uqs.cli.renames import renamed
 from uqs.cli.shared import (
-    DateOpt,
-    RangeFromOpt,
-    RangeToOpt,
     _die,
     _paths,
     app,
@@ -44,14 +43,15 @@ def _day(day: str | None, range_from: str | None, range_to: str | None) -> str |
     return window.day("data replay replays").strftime("%Y.%m.%d")
 
 
-@data_app.command("replay")
+@data_app.command("replay", cls=renamed({"--port": "--base-port", "--proc": "PROC"}))
 def replay(
     proc: Annotated[
         str | None,
-        typer.Option(
-            "--proc",
+        typer.Argument(
+            metavar="[PROC]",
             help="Which running tickerplant's log to replay. Only needed when more than one is up",
             autocompletion=completion.procname,
+            show_default=False,
         ),
     ] = None,
     day: DateOpt = None,
@@ -82,6 +82,7 @@ def replay(
     port: Annotated[
         int | None,
         typer.Option(
+            "--base-port",
             help="Stack base port. Default: the -stackid the plant is running under",
         ),
     ] = None,

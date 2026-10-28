@@ -119,6 +119,7 @@ DOMAIN_VERBS = {
     "stop": "the stack's lifecycle (also a connector's)",
     "restart": "the stack's lifecycle",
     "logs": "read processes' logs",
+    "clean": "delete the runtime state the stack wrote",
     "query": "run a q expression on a process",
     "graph": "draw the process graph",
     "schema": "describe a process's tables",
@@ -156,14 +157,44 @@ GROUP_VERBS = set(CORE_VERBS) | {"start", "stop", "restart", "delete", "get", "c
 
 
 #: group path -> the issue that renames it
-RULE1_ALLOWLIST = {
-    "remove": "#1727",  # remove output / remove checkpoint -> clean, job checkpoint ...
-}
+RULE1_ALLOWLIST: dict[str, str] = {}
 
 
 def test_rule1_no_group_is_named_after_a_verb():
     found = {path for path in GROUPS if path.split()[-1] in GROUP_VERBS}
     _hold("rule 1", found, RULE1_ALLOWLIST)
+
+
+# ------------------------------------------------- rule 2: what is acted on
+
+
+#: The words a positional naming a process or a job is NOT called: one is PROC
+#: (or PROCS), the other JOB (#1730).
+NOT_THE_NAME = {"WORKER", "PROCNAME"}
+
+#: Options naming a process or a job, kept because they filter rather than name
+#: what the command acts on, with why.
+RULE2_FILTERS = {
+    ("logs", "--worker"): "with --attach: whose run in the attachment - a worker or a receiver",
+}
+
+
+def _metavar(param) -> str:
+    return (param.metavar or param.name.upper()).strip("[].")
+
+
+def test_rule2_a_process_or_a_job_is_a_positional_called_proc_or_job():
+    misnamed = {
+        (path, _metavar(p))
+        for path, c in LEAVES.items()
+        for p in c.command.params
+        if p.param_type_name == "argument" and _metavar(p) in NOT_THE_NAME
+    }
+    assert not misnamed
+    named = {
+        (c.path, _long(p)) for c in TREE for p in c.options if _long(p) in ("--proc", "--worker")
+    }
+    assert named == set(RULE2_FILTERS)
 
 
 # --------------------------------------------------------- rule 4: verb names
@@ -174,18 +205,14 @@ RULE4_ALLOWLIST = {
     "up": "#1734",  # -> start --follow
     "raw": "#1734",  # torq.sh pass-through
     "summary": "#1733",  # -> status
-    "remove output": "#1727",  # -> clean
-    "remove checkpoint": "#1727",  # -> job checkpoint ...
     "data hdb-check": "#1733",  # -> data check
     "config get": "#1733",  # -> show
     "deploy verify": "#1733",  # -> deploy check
-    "deploy build-runtime": "#1740",  # a verb glued to a noun
 }
 
 #: Leaves named by a vocabulary verb used with another meaning: a name test
 #: cannot see the meaning, so each is listed until its rename removes the path.
 RULE4_MISUSED = {
-    "list": "#1728",  # one `list KIND` for eleven kinds; each noun owns its list
     "job runs status": "#1733",  # unfinished runs, a list - not a state
     "job runs migrate": "#1737",  # the ledger's upgrade, not `data migrate`'s HDB schema
 }
@@ -201,10 +228,46 @@ def test_rule4_a_misused_verb_is_listed_until_its_path_goes():
     _hold("rule 4 (misused verbs)", set(RULE4_MISUSED) & set(LEAVES), RULE4_MISUSED)
 
 
+#: Groups that add or remove things but list none, with why (#1728).
+UNLISTED = {
+    "job checkpoint": "a worker has one checkpoint, or none: there is nothing to list",
+}
+
+#: The output flags every `list` takes (#1728).
+LIST_FLAGS = ("--json", "--export", "--sort", "--reverse", "--interactive")
+
+
+def test_every_noun_that_adds_or_removes_a_thing_lists_it():
+    makers = {"add", "new", "remove"}
+    found = set()
+    for path in GROUPS:
+        verbs = {leaf.split()[-1] for leaf in LEAVES if leaf.rsplit(" ", 1)[0] == path}
+        if verbs & makers and "list" not in verbs:
+            found.add(path)
+    assert found == set(UNLISTED)
+
+
+def test_every_list_takes_the_same_output_flags():
+    lists = [c for p, c in LEAVES.items() if p.split()[-1] == "list"]
+    missing = {
+        c.path: [f for f in LIST_FLAGS if c.option(f) is None]
+        for c in lists
+        if any(c.option(f) is None for f in LIST_FLAGS)
+    }
+    assert set(missing) <= set(LIST_FLAGS_PENDING), missing
+
+
+#: Lists that do not take every output flag yet, and the issue that adds them.
+LIST_FLAGS_PENDING = {
+    "job runs list": "#1731",  # the run ledger's own table: no --json/--export/--sort
+    "job contract list": "#1731",  # --json only
+}
+
+
 def test_the_guide_lists_the_same_vocabulary():
     """The guide's verb table and the lists above are one vocabulary."""
     text = GUIDE.read_text()
-    section = text.split("\n## CLI conventions\n", 1)[1].split("\n## ", 1)[0]
+    section = text.split("\n## CLI conventions\n", 1)[1].split("\n## ", 1)[0].split("\n### ", 1)[0]
     rows = re.findall(r"^\s*\|\s*(`[^|]*`)\s*\|", section, flags=re.M)
     documented = {w for row in rows for w in re.findall(r"`([a-z-]+)`", row)}
     assert documented == set(CORE_VERBS) | set(DOMAIN_VERBS)
@@ -255,8 +318,8 @@ OPTIONS = {
     "--passwd": Meaning("the q password", r"password"),
     "--port": Meaning("one process's port", r"directly"),
     "--print": Meaning("retired: --show-command", None),
-    "--proc": Meaning("one process, by name", r"process|tickerplant"),
     "--profile": Meaning("a start profile", r"profile"),
+    "--show-command": Meaning("show the command, run nothing", r"show"),
     "--python": Meaning("the servers' Python version", r"major\.minor"),
     "--python-runtime": Meaning("a bundled CPython", r"CPython"),
     "--qhome": Meaning("a QHOME", r"QHOME"),
@@ -286,42 +349,11 @@ SHORT_FLAGS = {
     "-f": "--follow",
     "-o": "--output",
     "-c": "--columns",
+    "-l": "--lines",
 }
 
 #: (command, option) -> the issue that renames the option there
 RULE3_ALLOWLIST = {
-    # --port as the stack's base port, or a listen port (#1729)
-    **{
-        (c, "--port"): "#1729"
-        for c in (
-            "start",
-            "up",
-            "stop",
-            "restart",
-            "raw",
-            "summary",
-            "graph",
-            "list",
-            "data replay",
-            "config get",
-            "job receive",
-            "job backfill",
-            "connector start",
-            "deploy verify",
-        )
-    },
-    ("query", "--target"): "#1729",
-    ("deploy push", "--target"): "#1729",
-    ("stop", "--force"): "#1729",
-    ("job backfill", "--force"): "#1729",
-    ("job remove", "--force"): "#1729",
-    ("start", "--print"): "#1729",
-    ("logs", "--print"): "#1729",
-    ("query", "--raw"): "#1729",
-    ("config get", "--raw"): "#1729",
-    ("summary", "--debug"): "#1729",
-    ("job backfill", "--debug"): "#1729",
-    ("logs", "-n"): "#1729",  # lines, not --dry-run
     ("deploy rollback", "--to"): "#1739",
     **{(f"deploy {c}", "--host"): "#1739" for c in ("push", "status", "rollback", "prune")},
 }
@@ -394,9 +426,13 @@ KIND = {
     "query": REPORTS,
     "schema": REPORTS,
     "list": REPORTS,
+    "target list": REPORTS,
+    "runtime list": REPORTS,
+    "job list": REPORTS,
+    "job attachment list": REPORTS,
     "logs": REPORTS,
-    "remove output": CHANGES,
-    "remove checkpoint": CHANGES,
+    "clean": CHANGES,
+    "job checkpoint remove": CHANGES,
     "data replay": CHANGES,
     "data seed": CHANGES,
     "data migrate": CHANGES,
@@ -433,7 +469,7 @@ KIND = {
     "setup odbc env": "prints shell exports, for eval",
     "deploy build": CHANGES,
     "deploy push": CHANGES,
-    "deploy build-runtime": CHANGES,
+    "deploy component build": CHANGES,
     "deploy status": REPORTS,
     "deploy rollback": CHANGES,
     "deploy prune": CHANGES,
@@ -453,29 +489,8 @@ ASKS = {ROOT, "job remove", "job install", "job attach", "job detach"}
 #: put it in ASKS, then here.
 PROMPTING_MODULES = {"attach", "install", "install_bundle", "remove", "target"}
 
-#: leaf -> the issue that adds its --json
-RULE5A_ALLOWLIST = {
-    c: "#1731"
-    for c in (
-        "summary",
-        "graph",
-        "query",
-        "schema",
-        "logs",
-        "config get",
-        "job gaps",
-        "job preview",
-        "job runs status",
-        "job runs list",
-        "job runs show",
-        "job runs audit",
-        "connector status",
-        "setup odbc status",
-        "deploy verify",
-        "deploy history",
-        "target check",
-    )
-}
+#: leaf -> the issue that adds its --json. Empty since #1731: keep it so.
+RULE5A_ALLOWLIST: dict[str, str] = {}
 
 #: leaf -> the issue that gives it --dry-run/-n (or, for one that changes
 #: nothing, takes its --dry-run away)
@@ -486,7 +501,7 @@ RULE5B_ALLOWLIST = {
         "up",
         "stop",
         "restart",
-        "remove checkpoint",
+        "job checkpoint remove",
         "data replay",
         "data seed",
         "data migrate",  # --apply: dry by default
@@ -508,7 +523,7 @@ RULE5B_ALLOWLIST = {
         "setup odbc install",
         "setup odbc rollback",
         "deploy build",
-        "deploy build-runtime",
+        "deploy component build",
         "deploy push",
         "deploy rollback",
         "deploy prune",

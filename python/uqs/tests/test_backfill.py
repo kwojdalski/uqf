@@ -106,7 +106,7 @@ def test_the_command_reaches_start_with_parsed_bounds(monkeypatch):
 
     monkeypatch.setattr(backfill, "start", fake)
     argv = ["job", "backfill", "demo_deals_backfill", "--source-version", "v1"]
-    argv += ["--from", "2026-09-13", "--to", "2026-09-15", "--port", "7000"]
+    argv += ["--from", "2026-09-13", "--to", "2026-09-15", "--base-port", "7000"]
     result = runner.invoke(cli.app, argv)
     assert result.exit_code == 0, result.output
     assert seen == {
@@ -121,7 +121,8 @@ def test_the_command_reaches_start_with_parsed_bounds(monkeypatch):
 
 @pytest.mark.parametrize("argv_debug", [["--debug"], []])
 def test_debug_starts_the_process_verbose(monkeypatch, argv_debug):
-    """Both spellings: the command's own --debug, and the global one."""
+    """Both spellings: the global --debug, and the command's own - its old
+    spelling, kept for one release (#1729)."""
     seen = {}
 
     def fake(
@@ -314,7 +315,7 @@ def test_a_refusal_exits_one_rather_than_raising():
     assert not isinstance(result.exception, UqsError)
 
 
-# --- remove checkpoint ------------------------------------------------------
+# --- job checkpoint remove ---------------------------------------------------
 
 WORKER = "demo_deals_backfill"
 
@@ -391,16 +392,16 @@ def test_a_lock_left_by_an_exited_run_does_not_block_clearing(status):
 
 def test_remove_checkpoint_reports_what_it_did(status):
     (status / f"{WORKER}.checkpoint").write_text("{}")
-    result = runner.invoke(cli.app, ["remove", "checkpoint", WORKER])
+    result = runner.invoke(cli.app, ["job", "checkpoint", "remove", WORKER])
     assert result.exit_code == 0, result.output
     assert "cleared demo_deals_backfill's checkpoint" in result.output
-    again = runner.invoke(cli.app, ["remove", "checkpoint", WORKER])
+    again = runner.invoke(cli.app, ["job", "checkpoint", "remove", WORKER])
     assert "has no checkpoint" in again.output
 
 
 def test_remove_checkpoint_refusal_exits_one(status):
     _lock(status, {"pid": os.getpid(), "host": socket.gethostname()})
-    result = runner.invoke(cli.app, ["remove", "checkpoint", WORKER])
+    result = runner.invoke(cli.app, ["job", "checkpoint", "remove", WORKER])
     assert result.exit_code == 1
     assert not isinstance(result.exception, UqsError)
 

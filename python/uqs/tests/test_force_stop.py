@@ -1,4 +1,4 @@
-"""uqs stop --force (#875): every instance of a stack's process, found by its
+"""uqs stop --kill (#875): every instance of a stack's process, found by its
 command line, gets SIGKILL - and nothing else does.
 
 The fakes pin the rules. The last test kills real processes: dummies whose
@@ -117,8 +117,8 @@ def test_the_cli_reports_each_pid_and_fails_when_one_survives(monkeypatch):
         return lambda paths, names, base_port=None: [force_stop.Killed("rdb1", 11, gone)]
 
     monkeypatch.setattr(force_stop, "kill", outcome(True))
-    ok = runner.invoke(cli.app, ["stop", "rdb1", "--force"])
+    ok = runner.invoke(cli.app, ["stop", "rdb1", "--kill"])
     assert ok.exit_code == 0 and "rdb1: killed pid 11" in ok.stdout
     monkeypatch.setattr(force_stop, "kill", outcome(False))
-    bad = runner.invoke(cli.app, ["stop", "rdb1", "--force"])
+    bad = runner.invoke(cli.app, ["stop", "rdb1", "--kill"])
     assert bad.exit_code == 1 and "rdb1: still running pid 11" in bad.stdout

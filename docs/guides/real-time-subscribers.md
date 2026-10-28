@@ -25,7 +25,7 @@ all.
   | `crypto` | `6265`              | `6257`                |
   | `fx`     | `6365`              | `6357`                |
 
-`--port` moves both, as it moves every process.
+`--base-port` moves both, as it moves every process.
 
 **The login is `rts`.** `sctp1` is started with its own access list: the starter
 pack's logins plus the users in

@@ -14,13 +14,11 @@ import typer
 from rich.table import Table
 
 from uqs import timerange
+from uqs.cli.json_out import emit, json_opt
+from uqs.cli.range_options import DateOpt, LastOpt, RangeFromOpt, RangeToOpt
 from uqs.cli.shared import (
     JOB_OPERATIONS_PANEL,
-    DateOpt,
     InteractiveOpt,
-    LastOpt,
-    RangeFromOpt,
-    RangeToOpt,
     _die,
     _paths,
     _show,
@@ -65,6 +63,22 @@ AttachOpt = Annotated[
 ]
 
 
+RunsJson = json_opt('{"runs": [{run_id, worker, dataset, status, range_from, ...}]}')
+FactsJson = json_opt('{"facts": [{run_id, dataset, range_from, range_to, label, text}]}')
+ShowJson = json_opt(
+    '{"run": {run_id, worker, ...}, "facts": [...], "logs": [path, ...], "rerun": command}'
+)
+
+
+def _record(row: dict, columns: tuple[str, ...]) -> dict:
+    """One ledger row as JSON: the table's columns, a whole-number count as an int."""
+    out = {}
+    for col in columns:
+        value = row.get(col)
+        out[col] = int(value) if isinstance(value, float) and value.is_integer() else value
+    return out
+
+
 def _where(attach: str | None) -> dict:
     """The `directory=` for the ledger reads: the attached destination's, or none (the default)."""
     if attach is None:
@@ -103,7 +117,9 @@ def _print(
 
 
 @runs_app.command("status")
-def status(interactive: InteractiveOpt = False, attach: AttachOpt = None) -> None:
+def status(
+    interactive: InteractiveOpt = False, attach: AttachOpt = None, as_json: RunsJson = False
+) -> None:
     """Runs that began and never finished.
 
     Includes runs whose process has died: `running` on a run whose process is
@@ -114,16 +130,24 @@ def status(interactive: InteractiveOpt = False, attach: AttachOpt = None) -> Non
     except UqsError as exc:
         _die(exc)
         return
+    if as_json:
+        emit({"runs": [_record(r, _RUN_COLUMNS) for r in rows]})
+        return
     _print("unfinished runs", rows, _RUN_COLUMNS, "no unfinished runs", interactive)
 
 
 @runs_app.command("list")
-def list_runs(interactive: InteractiveOpt = False, attach: AttachOpt = None) -> None:
+def list_runs(
+    interactive: InteractiveOpt = False, attach: AttachOpt = None, as_json: RunsJson = False
+) -> None:
     """Every run in the ledger, newest first."""
     try:
         rows = stack_runs.history(_paths(), **_where(attach))
     except UqsError as exc:
         _die(exc)
+        return
+    if as_json:
+        emit({"runs": [_record(r, _RUN_COLUMNS) for r in rows]})
         return
     _print("runs", rows, _RUN_COLUMNS, "no runs recorded", interactive)
 
@@ -151,6 +175,7 @@ def migrate() -> None:
 def show(
     run_id: Annotated[str, typer.Argument(help="A run id, from `uqs job runs list`")],
     attach: AttachOpt = None,
+    as_json: ShowJson = False,
 ) -> None:
     """One run, and every fact it recorded about what it published."""
     try:
@@ -160,6 +185,15 @@ def show(
         return
     if not run:
         _die(UqsError(f"no run {run_id} in the ledger"))
+        return
+    if as_json:
+        emit({
+            "run": _record(run[0], _RUN_COLUMNS),
+            "facts": [_record(f, _FACT_COLUMNS) for f in facts],
+            "logs": [str(_where(attach)["directory"] / "logs")] if attach
+            else [str(p) for p in stack_runs.log_files(_paths(), run[0])],
+            "rerun": stack_runs.rerun_command(run[0], attach) or None,
+        })  # fmt: skip
         return
     _print("run", run, _RUN_COLUMNS, "")
     _print("facts", facts, _FACT_COLUMNS, "this run recorded no facts")
@@ -199,6 +233,7 @@ def audit(
     range_to: RangeToOpt = None,
     day: DateOpt = None,
     last: LastOpt = None,
+    as_json: FactsJson = False,
 ) -> None:
     """Every fact recorded about one window, from every run that published it.
 
@@ -210,5 +245,8 @@ def audit(
         rows = stack_runs.audit(_paths(), dataset, *window.bounds)
     except UqsError as exc:
         _die(exc)
+        return
+    if as_json:
+        emit({"facts": [_record(r, _FACT_COLUMNS) for r in rows]})
         return
     _print(f"{dataset} {window}", rows, _FACT_COLUMNS, "no facts for that window")

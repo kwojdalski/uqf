@@ -107,7 +107,7 @@ def test_an_unverified_publisher_is_refused_by_every_start_that_launches_it(att,
 @pytest.mark.parametrize("port", [None, 6100])
 def test_a_verified_publisher_is_refused_under_another_stack(att, args, port):
     with_state(att, "verified")
-    with pytest.raises(UqsError, match=f"on stack {STACK}.*--port {STACK}"):
+    with pytest.raises(UqsError, match=f"on stack {STACK}.*--base-port {STACK}"):
         start_policy.refuse_start(default_paths(), args, port)
 
 
@@ -244,7 +244,7 @@ def test_the_cli_refuses(unverified, argv, monkeypatch):
     monkeypatch.setattr(
         shared, "log", SimpleNamespace(error=lambda m, *a: said.append(m.format(*a)))
     )
-    result = CliRunner().invoke(cli.app, [*argv, "--port", str(STACK)])
+    result = CliRunner().invoke(cli.app, [*argv, "--base-port", str(STACK)])
     assert result.exit_code == 1
     assert any("publisher of attachment ex-uat" in line for line in said), said
 
