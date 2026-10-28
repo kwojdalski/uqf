@@ -24,7 +24,7 @@ from typer.testing import CliRunner
 
 from uqs import cli, mcp
 from uqs import paths as stack_paths
-from uqs.cli import lifecycle
+from uqs.cli import start_warnings
 from uqs.interpreter import q_interpreter
 from uqs.model import profiles
 from uqs.paths import UqsError, UqsPaths
@@ -128,7 +128,7 @@ def test_the_cli_hands_a_profile_start_its_set(paths, monkeypatch):
     monkeypatch.setattr(runtime, "start", start)
     printed = subprocess.CompletedProcess([], 0, "", "")
     monkeypatch.setattr(runtime, "print_procs", lambda *_a, **_k: printed)
-    monkeypatch.setattr(lifecycle, "_running", lambda _port: set())
+    monkeypatch.setattr(start_warnings, "running", lambda _port: set())
     runner = CliRunner()
     assert runner.invoke(cli.app, ["start", "--profile", "essential"]).exit_code == 0
     assert runner.invoke(cli.app, ["start", "sortworker2"]).exit_code == 0

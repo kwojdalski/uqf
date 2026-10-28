@@ -586,7 +586,7 @@ uqs --target uat start piggybankgeneralledger1   # asks first; --yes skips the q
   that file, on this machine only: `--target` refuses them. `remove` leaves
   every other line, comments included, as it was.
 - **Confirmation.** A command that can change the server, such as `start`,
-  `stop`, `restart`, `raw`, `job backfill`, `config set` or `data seed`, asks
+  `stop`, `restart`, `exec`, `job backfill`, `config set` or `data seed`, asks
   first and names the target. Without a terminal it needs `--yes`. So do
   `query`, which can send any q, and `summary -i`, whose browser starts and
   stops processes. Read-only commands run directly: `summary`, `logs`, `schema`,

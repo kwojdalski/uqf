@@ -112,7 +112,8 @@ CORE_VERBS = {
 DOMAIN_VERBS = {
     "start": "the stack's lifecycle (also a connector's)",
     "stop": "the stack's lifecycle (also a connector's)",
-    "restart": "the stack's lifecycle",
+    "restart": "the stack's lifecycle (also a connector's)",
+    "exec": "run any other torq.sh verb, passed straight through",
     "logs": "read processes' logs",
     "clean": "delete the runtime state the stack wrote",
     "query": "run a q expression on a process",
@@ -197,8 +198,6 @@ def test_rule2_a_process_or_a_job_is_a_positional_called_proc_or_job():
 
 #: leaf path -> the issue that renames it
 RULE4_ALLOWLIST = {
-    "up": "#1734",  # -> start --follow
-    "raw": "#1734",  # torq.sh pass-through
     "summary": "#1733",  # -> status
     "data hdb-check": "#1733",  # -> data check
     "config get": "#1733",  # -> show
@@ -295,6 +294,7 @@ OPTIONS = {
     "--dry-run": Meaning("show what would change, change nothing", r"nothing|dry"),
     "--every": Meaning("re-read every N seconds", r"re-read"),
     "--export": Meaning("also write the rows to FILE", r"write output to FILE"),
+    "--follow": Meaning("keep streaming log lines until Ctrl-C", r"stream"),
     "--force": Meaning("retired: each use gets its own name", None),
     "--from": Meaning("start of a time range", r"start"),
     "--home": Meaning("the ODBC home", r"ODBC home"),
@@ -303,6 +303,7 @@ OPTIONS = {
     "--json": Meaning("one JSON document on stdout", r"JSON"),
     "--keep": Meaning("how many newest releases to keep", r"newest"),
     "--level": Meaning("the lowest log level shown", r"level"),
+    "--lines": Meaning("how many lines of a log to show", r"lines"),
     "--live": Meaning("refuse fixtures", r"fixture"),
     "--mode": Meaning("backfill's validate/plan/run mode", r"validate"),
     "--odbc-home": Meaning("a private ODBC setup", r"ODBC"),
@@ -333,6 +334,16 @@ OPTIONS = {
     "--yes": Meaning("do not ask", r"ask"),
 }
 
+#: A connector's start options, shared by `connector start` and `connector
+#: restart` - one function's parameters, so one meaning by construction.
+OPTIONS |= {
+    name: Meaning(f"a connector's own start option ({name})", r"\((databento|kafka|crypto)")
+    for name in (
+        "--api-key", "--brokers", "--group", "--interval-ms", "--oms-socket-path",
+        "--poll-interval-ms", "--symbol", "--symbols", "--top-n-levels", "--topic", "--venues",
+    )
+}  # fmt: skip
+
 #: Every short flag, and the one long name it abbreviates.
 SHORT_FLAGS = {
     "-n": "--dry-run",
@@ -353,6 +364,7 @@ RULE3_ALLOWLIST = {
     ("logs", "--columns"): "#1739",
     ("job new", "--columns"): "#1739",
     ("connector start", "--dataset"): "#1739",
+    ("connector restart", "--dataset"): "#1739",
     ("job install", "--mode"): "#1739",
     ("job backfill", "--version"): "#1739",
     **{(f"deploy {c}", "--host"): "#1739" for c in ("push", "status", "rollback", "prune")},
@@ -417,10 +429,9 @@ REPORTS, CHANGES = "reports", "changes"
 #: the command is neither: its output belongs to something else.
 KIND = {
     "start": CHANGES,
-    "up": CHANGES,
     "stop": CHANGES,
     "restart": CHANGES,
-    "raw": "passes any verb through to torq.sh",
+    "exec": "passes any verb through to torq.sh",
     "summary": REPORTS,
     "graph": REPORTS,
     "query": REPORTS,
@@ -462,7 +473,9 @@ KIND = {
     "job contract list": REPORTS,
     "connector start": CHANGES,
     "connector stop": CHANGES,
+    "connector restart": CHANGES,
     "connector status": REPORTS,
+    "connector logs": REPORTS,
     "setup odbc install": CHANGES,
     "setup odbc rollback": CHANGES,
     "setup odbc status": REPORTS,
@@ -498,7 +511,6 @@ RULE5B_ALLOWLIST = {
     c: "#1732"
     for c in (
         "start",
-        "up",
         "stop",
         "restart",
         "job checkpoint remove",
@@ -520,6 +532,7 @@ RULE5B_ALLOWLIST = {
         "job contract approve",
         "connector start",
         "connector stop",
+        "connector restart",
         "setup odbc install",
         "setup odbc rollback",
         "deploy build",
@@ -539,9 +552,8 @@ RULE5C_ALLOWLIST = {ROOT: "#1732", "job attach": "#1732", "job detach": "#1732"}
 RULE5D_ALLOWLIST = {
     ("start", "--skip-q-version-check"): "#1732",
     ("start", "--skip-profile-budget-check"): "#1732",
-    ("up", "--skip-q-version-check"): "#1732",
-    ("up", "--skip-profile-budget-check"): "#1732",
     ("restart", "--skip-q-version-check"): "#1732",
+    ("restart", "--skip-profile-budget-check"): "#1732",
     ("job attach", "--override-reason"): "#1732",
     ("deploy push", "--accept-converted-release"): "#1732",
     ("deploy push", "--accept-digest"): "#1732",

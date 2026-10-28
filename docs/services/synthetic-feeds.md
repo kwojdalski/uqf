@@ -73,6 +73,6 @@ uqs query \
     "select ts:time,sym,bid_prices,bid_sizes,ask_prices,ask_sizes from fx_orderbook" --port 6052
 ```
 
-After an EOD writedown (`raw -- eod`/`wdb1`'s own cycle, or just leaving the
+After an EOD writedown (`exec -- eod`/`wdb1`'s own cycle, or just leaving the
 demo running past midnight) `fx_orderbook` rows land in the HDB alongside
 `quote`/`trade`, queryable the same way.

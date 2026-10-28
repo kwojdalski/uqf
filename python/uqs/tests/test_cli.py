@@ -29,6 +29,7 @@ opens a socket or touches output/.
 
 from __future__ import annotations
 
+import json
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -49,7 +50,9 @@ from uqs.cli import (
     create_backfill,
     lifecycle,
     lists,
+    renames,
     shared,
+    start_warnings,
     summary,
     summary_columns,
     summary_graph,
@@ -189,7 +192,9 @@ def _known_procs(monkeypatch):
     monkeypatch.setattr(stack_procs, "list_process_names", lambda _paths: ["rdb1", "stp1"])
 
 
-@pytest.mark.parametrize("command", ["start", "stop", "restart", "start --show-command", "up"])
+@pytest.mark.parametrize(
+    "command", ["start", "stop", "restart", "start --show-command", "start -f", "restart -f", "up"]
+)
 def test_an_unknown_process_is_refused_before_anything_runs(monkeypatch, _known_procs, command):
     """A typo must not reach torq.sh.
 
@@ -256,10 +261,18 @@ def test_known_selectors_still_pass_through(monkeypatch, _known_procs, selector)
     assert rec.args[1] == selector
 
 
-def _up(monkeypatch, args: list[str], already: set[str] | Exception, rows=()):
-    """Run `uqs up` with the stack faked: the follow starts, then returns as a
-    Ctrl-C would. Returns the start and stop recorders and the follow call."""
-    start = _patch(monkeypatch, runtime, "start", result=Completed())
+def _up(
+    monkeypatch,
+    args: list[str],
+    already: set[str] | Exception,
+    rows=(),
+    command: tuple[str, ...] = ("start", "--follow"),
+):
+    """Run `uqs start --follow` with the stack faked: the follow starts, then
+    returns as a Ctrl-C would. Returns the launch and stop recorders and the
+    follow call. `command` is `restart --follow`, or the `up` alias."""
+    start = _patch(monkeypatch, runtime, command[0] if command[0] != "up" else "start",
+                   result=Completed())  # fmt: skip
     stop = _patch(monkeypatch, runtime, "stop", result=Completed())
     monkeypatch.setattr(stack_logs, "resolve_procnames", lambda paths, names: names.split())
     monkeypatch.setattr(listing, "list_items", lambda *a, **kw: list(rows))
@@ -277,7 +290,7 @@ def _up(monkeypatch, args: list[str], already: set[str] | Exception, rows=()):
         start_fn()
 
     monkeypatch.setattr(stack_logs, "follow_during", fake_follow)
-    result = runner.invoke(cli.app, ["up", *args])
+    result = runner.invoke(cli.app, [*command, *args])
     return result, start, stop, follow
 
 
@@ -326,7 +339,7 @@ def test_a_failed_start_still_stops_what_it_started_and_keeps_its_exit_code(monk
     monkeypatch.setattr(
         stack_logs, "follow_during", lambda paths, procnames, start_fn, min_level=None: start_fn()
     )
-    result = runner.invoke(cli.app, ["up", "rdb1"])
+    result = runner.invoke(cli.app, ["start", "rdb1", "-f"])
     assert start.calls, "it started"
     assert result.exit_code == 3, "the start's own failure is what the command reports"
     assert stop.args[1] == "rdb1"
@@ -336,6 +349,88 @@ def test_up_passes_the_level_filter_to_the_stream(monkeypatch):
     result, _, _, follow = _up(monkeypatch, ["rdb1", "--level", "WARNING"], already=set())
     assert result.exit_code == 0, result.output
     assert follow["min_level"] == "WARNING"
+
+
+def test_restart_follow_restarts_and_on_ctrl_c_stops_what_was_not_running(monkeypatch):
+    """`restart -f` is `start -f` for a fleet already up (#1734): what was
+    running before it began is left running."""
+    result, restart, stop, follow = _up(
+        monkeypatch, ["rdb1", "fxpositions1"], already={"rdb1"}, command=("restart", "-f")
+    )
+    assert result.exit_code == 0, result.output
+    assert restart.args[1] == "rdb1 fxpositions1"
+    assert follow["procnames"] == ["rdb1", "fxpositions1"]
+    assert stop.args[1] == "fxpositions1"
+
+
+def test_up_is_a_hidden_alias_of_start_follow_that_names_it(monkeypatch):
+    said = []
+    monkeypatch.setattr(renames, "warn_renamed", lambda old, new: said.append((old, new)))
+    result, start, stop, follow = _up(
+        monkeypatch, ["rdb1", "--level", "ERROR"], already=set(), command=("up",)
+    )
+    assert result.exit_code == 0, result.output
+    assert start.args[1] == "rdb1" and follow["min_level"] == "ERROR"
+    assert stop.args[1] == "rdb1"
+    assert said == [("up", "uqs start --follow")]
+    assert _command("up").hidden
+
+
+@pytest.mark.parametrize(
+    ("args", "refusal"),
+    [
+        (["start", "--level", "ERROR"], "--level needs --follow"),
+        (["restart", "--level", "ERROR"], "--level needs --follow"),
+        (["start", "-f", "--show-command"], "--show-command does not apply with --follow"),
+    ],
+)
+def test_a_follow_only_option_without_follow_is_refused(monkeypatch, args, refusal):
+    said = _refusals(monkeypatch, lifecycle)
+    rec = _patch(monkeypatch, runtime, args[0], result=Completed())
+    assert runner.invoke(cli.app, args).exit_code == 1
+    assert said == [refusal]
+    assert rec.calls == []
+
+
+def _command(*path: str) -> Any:
+    """The registered command at `path`, off the Typer object."""
+    command: Any = typer.main.get_command(cli.app)
+    for name in path:
+        command = command.commands[name]
+    return command
+
+
+def _options(path: str) -> set[str]:
+    return {p.name for p in _command(path).params}
+
+
+def test_start_and_restart_take_one_option_set_and_stop_its_selection():
+    """#1734: `restart` lacked `--profile` and the budget check `start` had."""
+    assert _options("start") == _options("restart")
+    selection = {"procs", "port", "profile"}
+    assert selection <= _options("stop") and selection <= _options("start")
+    assert _options("stop") - selection == {"force"}
+
+
+def test_restart_with_a_profile_hands_torq_its_set(monkeypatch):
+    rec = _patch(monkeypatch, runtime, "restart", result=Completed())
+    monkeypatch.setattr(
+        lifecycle.start_policy, "resolve_profiles", lambda *a, **kw: (("rdb1", "stp1"), "fx")
+    )
+    assert runner.invoke(cli.app, ["restart", "--profile", "fx"]).exit_code == 0
+    assert rec.args[1] == "rdb1 stp1"
+    assert rec.kwargs["selected"] == ["rdb1", "stp1"]
+
+
+def test_stop_with_a_profile_stops_its_set_whatever_its_budget(monkeypatch):
+    """A set too big to start must still be stoppable: stop resolves the
+    profile without the budget check `start` refuses on."""
+    rec = _patch(monkeypatch, runtime, "stop", result=Completed())
+    monkeypatch.setattr(
+        lifecycle.start_policy, "profile_members", lambda *a, **kw: (("rdb1", "stp1"), "fx")
+    )
+    assert runner.invoke(cli.app, ["stop", "--profile", "fx"]).exit_code == 0
+    assert rec.args[1] == "rdb1 stp1"
 
 
 @pytest.mark.parametrize("command", ["start", "stop", "restart"])
@@ -1193,21 +1288,31 @@ def test_a_multitail_refusal_exits_one(monkeypatch):
     assert runner.invoke(cli.app, ["logs", "nope", "--multitail"]).exit_code == 1
 
 
-# -------------------------------------------------------------------- raw
+# ------------------------------------------------------------------- exec
 
 
-def test_raw_passes_every_extra_argument_through_verbatim(monkeypatch):
-    """`raw` exists to reach torq.sh verbs this CLI does not model. Dropping
+@pytest.mark.parametrize("command", ["exec", "raw"])
+def test_exec_passes_every_extra_argument_through_verbatim(monkeypatch, command):
+    """`exec` exists to reach torq.sh verbs this CLI does not model. Dropping
     or reordering the arguments would make it useless in a way no other
-    command's failure resembles."""
+    command's failure resembles. `raw` is its old name, kept for a release."""
     rec = _patch(monkeypatch, runtime, "run_torq_sh", result=Completed())
-    runner.invoke(cli.app, ["raw", "--", "qcon", "gateway1", "admin:admin"])
+    runner.invoke(cli.app, [command, "--", "qcon", "gateway1", "admin:admin"])
     assert rec.args[1] == ["qcon", "gateway1", "admin:admin"]
 
 
-def test_raw_propagates_the_exit_code(monkeypatch):
+def test_exec_propagates_the_exit_code(monkeypatch):
     _patch(monkeypatch, runtime, "run_torq_sh", result=Completed(returncode=7))
-    assert runner.invoke(cli.app, ["raw", "--", "debug", "rdb1"]).exit_code == 7
+    assert runner.invoke(cli.app, ["exec", "--", "debug", "rdb1"]).exit_code == 7
+
+
+def test_raw_names_exec_and_is_hidden(monkeypatch):
+    said = []
+    monkeypatch.setattr(renames, "warn_renamed", lambda old, new: said.append((old, new)))
+    _patch(monkeypatch, runtime, "run_torq_sh", result=Completed())
+    runner.invoke(cli.app, ["raw", "--", "debug", "rdb1"])
+    assert said == [("raw", "uqs exec")]
+    assert _command("raw").hidden
 
 
 # ------------------------------------------------------------------ clean
@@ -1321,6 +1426,77 @@ def test_crypto_fills_stop_and_status_render(monkeypatch):
     result = runner.invoke(cli.app, ["connector", "status", "crypto-fills"])
     assert result.exit_code == 0
     assert "running" in result.stdout
+
+
+def _crypto_running(monkeypatch, running: bool, log: Path | None = None) -> None:
+    fields = {"running": str(running), "pid": "42" if running else ""}
+    if log is not None:
+        fields["log"] = str(log)
+    _patch(monkeypatch, crypto, "crypto_recorder_status", result=fields)
+
+
+@pytest.mark.parametrize("running", [True, False])
+def test_connector_restart_stops_a_running_feed_then_starts_it_with_the_options(
+    monkeypatch, running
+):
+    """#1734: the connector lifecycle has restart, taking exactly start's options."""
+    _crypto_running(monkeypatch, running)
+    stop = _patch(monkeypatch, crypto, "stop_crypto_recorder")
+    start = _patch(monkeypatch, crypto, "start_crypto_recorder", result=7)
+    result = runner.invoke(
+        cli.app, ["connector", "restart", "crypto", "--venues", "a,b", "--base-port", "7000"]
+    )
+    assert result.exit_code == 0, result.output
+    assert len(stop.calls) == (1 if running else 0), "a stopped feed is only started"
+    assert start.kwargs["venues"] == ("a", "b") and start.kwargs["base_port"] == 7000
+
+
+def test_connector_restart_refuses_another_feeds_option_before_stopping(monkeypatch):
+    _crypto_running(monkeypatch, True)
+    start = _patch(monkeypatch, crypto, "start_crypto_recorder", result=7)
+    _patch(monkeypatch, crypto, "stop_crypto_recorder")
+    assert runner.invoke(cli.app, ["connector", "restart", "crypto", "--topic", "t"]).exit_code == 1
+    assert start.calls == []
+
+
+def test_connector_restart_and_start_take_one_option_set():
+    names = {c: {p.name for p in _command("connector", c).params} for c in ("start", "restart")}
+    assert names["start"] == names["restart"]
+
+
+def test_connector_logs_shows_the_tail_of_the_log_its_status_names(monkeypatch, tmp_path):
+    log = tmp_path / "crypto.log"
+    log.write_text("".join(f"line {i}\n" for i in range(30)))
+    _crypto_running(monkeypatch, True, log)
+    result = runner.invoke(cli.app, ["connector", "logs", "crypto", "-l", "3"])
+    assert result.exit_code == 0, result.output
+    assert result.stdout == "line 27\nline 28\nline 29\n"
+    as_json = runner.invoke(cli.app, ["connector", "logs", "crypto", "--lines", "2", "--json"])
+    assert json.loads(as_json.stdout) == {
+        "name": "crypto",
+        "log": str(log),
+        "lines": ["line 28", "line 29"],
+    }
+
+
+def test_connector_logs_follow_reads_the_same_file(monkeypatch, tmp_path):
+    from uqs.stack import follow as log_follow
+
+    log = tmp_path / "crypto.log"
+    log.write_text("x\n")
+    _crypto_running(monkeypatch, True, log)
+    rec = _patch(monkeypatch, log_follow, "follow")
+    assert runner.invoke(cli.app, ["connector", "logs", "crypto", "-f", "-l", "5"]).exit_code == 0
+    assert rec.args[:2] == (log, 5)
+
+
+def test_connector_logs_before_a_first_start_says_so(monkeypatch, tmp_path):
+    from uqs.cli import connector_logs
+
+    _crypto_running(monkeypatch, False, tmp_path / "never.log")
+    said = _refusals(monkeypatch, connector_logs)
+    assert runner.invoke(cli.app, ["connector", "logs", "crypto"]).exit_code == 1
+    assert "has it been started?" in said[0]
 
 
 def test_a_crypto_fills_refusal_exits_one(monkeypatch):
@@ -1492,7 +1668,7 @@ def test_every_command_is_reachable_and_documented():
         "query",
         "schema",
         "logs",
-        "raw",
+        "exec",
         "config",
         "data",
         "job",
@@ -1661,7 +1837,7 @@ def test_a_skipped_dependency_warning_keeps_its_reason(monkeypatch):
     why the warning was skipped explained nothing."""
     _patch(monkeypatch, alive, "running", raises=RuntimeError("fleet unreachable"))
     _patch(monkeypatch, runtime, "start", result=Completed())
-    captured = _debug_log(monkeypatch, lifecycle)
+    captured = _debug_log(monkeypatch, start_warnings)
     assert runner.invoke(cli.app, ["start", "rdb1"]).exit_code == 0
     assert any("fleet unreachable" in m for m in captured.messages)
     assert not any("%s" in m for m in captured.messages)

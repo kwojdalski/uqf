@@ -1,6 +1,6 @@
 """flink_vwap_feed.py - start, stop and report the flink_vwap publisher.
 
-A process outside TorQ: not a process.csv row, so `uqs connector start|stop|status
+A process outside TorQ: not a process.csv row, so `uqs connector start|stop|restart|status|logs
 flink_vwap` drives it, through FEED below - the CLI finds it without an edit.
 """
 
