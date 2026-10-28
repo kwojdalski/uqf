@@ -9,12 +9,13 @@ from __future__ import annotations
 
 import json
 import subprocess
+from datetime import timedelta
 from pathlib import Path
 
 import pytest
 from typer.testing import CliRunner
 
-from uqs import cli
+from uqs import cli, timerange
 from uqs.paths import UqsError, default_paths
 from uqs.stack import stream_preview
 
@@ -86,7 +87,7 @@ def test_no_q_is_said_plainly(monkeypatch):
 
 def invoke(monkeypatch, answer: dict):
     monkeypatch.setattr(
-        stream_preview, "preview", lambda paths, job, sample, trace=False, last_ns=None: answer
+        stream_preview, "preview", lambda paths, job, sample, trace=False, window=None: answer
     )
     return runner.invoke(cli.app, ["job", "preview", "vectorize2"], env={"COLUMNS": "200"})
 
@@ -174,7 +175,7 @@ def test_a_fetch_that_hangs_shows_the_query_it_hung_on(monkeypatch):
 def test_the_command_prints_a_traced_query_as_a_block(monkeypatch):
     traced = {**PAGE, "trace": stream_preview.trace_lines(f"{SENT}\n{RETURNED}\n")}
     monkeypatch.setattr(
-        stream_preview, "preview", lambda paths, job, sample, trace=False, last_ns=None: traced
+        stream_preview, "preview", lambda paths, job, sample, trace=False, window=None: traced
     )
     result = runner.invoke(
         cli.app, ["job", "preview", "vectorize2", "--trace"], env={"COLUMNS": "200"}
@@ -185,7 +186,7 @@ def test_the_command_prints_a_traced_query_as_a_block(monkeypatch):
 
 
 def test_the_command_prints_the_trace_of_a_failed_preview(monkeypatch):
-    def fail(paths, job, sample, trace=False, last_ns=None):
+    def fail(paths, job, sample, trace=False, window=None):
         raise stream_preview.PreviewFailed(
             "preview vectorize2: source down", stream_preview.trace_lines(f"{SENT}\n{FAILED}\n")
         )
@@ -214,27 +215,6 @@ RECENT = {
 }
 
 
-@pytest.mark.parametrize(
-    ("raw", "ns"),
-    [
-        ("30s", 30 * 10**9),
-        ("5m", 300 * 10**9),
-        ("2h", 7200 * 10**9),
-        ("1d", 86400 * 10**9),
-        ("500ms", 500 * 10**6),
-        (" 30s ", 30 * 10**9),
-    ],
-)
-def test_a_duration_is_read_as_nanoseconds(raw, ns):
-    assert stream_preview.duration_ns(raw) == ns
-
-
-@pytest.mark.parametrize("raw", ["0s", "-5s", "30", "s", "1.5m", "30sec", "3w", ""])
-def test_a_malformed_or_empty_duration_is_refused(raw):
-    with pytest.raises(UqsError, match="--last"):
-        stream_preview.duration_ns(raw)
-
-
 def test_without_last_the_script_previews_the_next_page(monkeypatch):
     sent = fake_q(monkeypatch, PAGE)
     stream_preview.preview(default_paths(), "vectorize2", 1)
@@ -244,15 +224,49 @@ def test_without_last_the_script_previews_the_next_page(monkeypatch):
 
 def test_last_asks_q_for_the_recent_window(monkeypatch):
     sent = fake_q(monkeypatch, RECENT)
-    stream_preview.preview(default_paths(), "vectorize2", 1, last_ns=30 * 10**9)
+    window = timerange.resolve(None, None, last="30s")
+    stream_preview.preview(default_paths(), "vectorize2", 1, window=window)
     assert ".qetl.job.stream.preview_recent[`vectorize2;1;`timespan$30000000000]" in sent["script"]
+
+
+def test_a_window_given_outright_asks_q_for_that_window(monkeypatch):
+    sent = fake_q(monkeypatch, {**RECENT, "mode": "window"})
+    window = timerange.resolve(None, None, day="2026-10-05")
+    stream_preview.preview(default_paths(), "vectorize2", 1, window=window)
+    assert (
+        ".qetl.job.stream.preview_window[`vectorize2;1;"
+        "2026.10.05D00:00:00.000000000;2026.10.06D00:00:00.000000000]"
+    ) in sent["script"]
+
+
+def test_the_command_hands_its_range_to_the_preview(monkeypatch):
+    seen: dict = {}
+
+    def fake(paths, job, sample, trace=False, window=None):
+        seen["window"] = window
+        return {**RECENT, "mode": "window"}
+
+    monkeypatch.setattr(stream_preview, "preview", fake)
+    argv = [
+        "job",
+        "preview",
+        "vectorize2",
+        "--from",
+        "2026-10-05T10:00",
+        "--to",
+        "2026-10-05T11:00",
+    ]
+    result = runner.invoke(cli.app, argv)
+    assert result.exit_code == 0, result.output
+    assert seen["window"] == timerange.resolve("2026-10-05T10:00", "2026-10-05T11:00")
+    assert "sample of vectorize2" in " ".join(result.output.split())
 
 
 def test_the_command_says_a_recent_sample_is_not_the_next_page(monkeypatch):
     seen: dict = {}
 
-    def fake(paths, job, sample, trace=False, last_ns=None):
-        seen["last_ns"] = last_ns
+    def fake(paths, job, sample, trace=False, window=None):
+        seen["last"] = window and window.last
         return RECENT
 
     monkeypatch.setattr(stream_preview, "preview", fake)
@@ -260,7 +274,7 @@ def test_the_command_says_a_recent_sample_is_not_the_next_page(monkeypatch):
         cli.app, ["job", "preview", "vectorize2", "--last", "30s", "--sample", "1"]
     )
     assert result.exit_code == 0, result.output
-    assert seen["last_ns"] == 30 * 10**9
+    assert seen["last"] == timedelta(seconds=30)
     out = " ".join(result.output.split())
     assert "recent-data sample of vectorize2" in out
     assert "not the running job's next page" in out
@@ -273,7 +287,7 @@ def test_a_full_page_is_flagged(monkeypatch):
     monkeypatch.setattr(
         stream_preview,
         "preview",
-        lambda paths, job, sample, trace=False, last_ns=None: {**RECENT, "limited": True},
+        lambda paths, job, sample, trace=False, window=None: {**RECENT, "limited": True},
     )
     result = runner.invoke(cli.app, ["job", "preview", "vectorize2", "--last", "30s"])
     assert "the page was full" in result.output
@@ -291,7 +305,7 @@ def test_an_empty_window_says_so(monkeypatch):
     monkeypatch.setattr(
         stream_preview,
         "preview",
-        lambda paths, job, sample, trace=False, last_ns=None: {
+        lambda paths, job, sample, trace=False, window=None: {
             **RECENT,
             "state": "idle",
             "kept": 0,

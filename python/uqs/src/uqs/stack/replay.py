@@ -60,11 +60,6 @@ HDB_PROCTYPE = "hdb"
 #: a file per table per period plus the `stpmeta` table that names them.
 _LOG_DIR = re.compile(r"^(?P<procname>.+)_(?P<date>\d{4}\.\d{2}\.\d{2})$")
 
-#: A date as either q writes it or ISO writes it. Accepting both because the
-#: log directories are named the q way and everything else in this CLI takes
-#: the ISO one (see stack/backfill.parse_bound).
-_DATE = re.compile(r"^(\d{4})[.-](\d{2})[.-](\d{2})$")
-
 
 def _switch(command: str, name: str) -> str | None:
     """The value of `-name` on a command line, or None when it is not there.
@@ -175,19 +170,6 @@ def running_hdb_dir(base_port: int, timeout: float | None = None) -> Path:
         f"no hdb process is running under stackid {base_port}, so there is no database "
         "to write into - start one with `uqs start hdb1`, or name it with --hdb"
     )
-
-
-def parse_date(text: str) -> str:
-    """A date as the log directories spell it: 2026.09.23.
-
-    Takes the ISO form too, because every other date this CLI reads is ISO
-    (stack/backfill.parse_bound) and a reader who types one there will type
-    one here.
-    """
-    match = _DATE.match(text.strip())
-    if match is None:
-        raise UqsError(f"--date must be 2026.09.23 or 2026-09-23; got {text!r}")
-    return ".".join(match.groups())
 
 
 def log_dirs(plant: RunningPlant) -> list[Path]:
