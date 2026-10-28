@@ -109,7 +109,7 @@ retype, so `uqs data migrate` does not apply: stop the stack, then
 
 ```
 uqs data hdb-check          # reports trades / demo_execution_quality as short of fill_id
-uqs data hdb-check --fix    # adds the column, null, to every older partition
+uqs data hdb-check --apply  # adds the column, null, to every older partition (asks first)
 uqs restart hdb1
 ```
 

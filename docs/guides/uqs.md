@@ -8,7 +8,8 @@ draws the topology.
 ## Contents
 
 - [Quick start](#quick-start)
-- [Reading the database's shape](#reading-the-databases-shape)
+- [Reading the database's shape](#reading-the-databases-shape) --- including
+  [one table, in any HDB](#one-table-in-any-hdb)
 - [Commands](#commands)
 - [Replaying a tickerplant log](#replaying-a-tickerplant-log)
 - [Listing things](#listing-things)
@@ -83,13 +84,16 @@ so the error names whichever table sorts first rather than the partition that is
 actually short.
 
 ```
-uqs data hdb-check         # which partitions are missing what
-uqs data hdb-check --fix   # write each missing table and column, via vendored KX dbmaint
+uqs data hdb-check           # which partitions are missing what
+uqs data hdb-check --apply   # write each missing table and column, via vendored KX dbmaint
 ```
 
-`--fix` is additive and idempotent: a table directory that exists is never
-touched, and a table a partition holds that `database.q` no longer declares is
-left alone - that is history. Running it twice changes nothing the second time.
+`--apply` shows what it would write and asks first (`--yes` skips the question,
+and without a terminal `--apply` needs it). `--fix`, its old spelling, is
+refused with a message naming `--apply`. It is additive and idempotent: a table
+directory that exists is never touched, and a table a partition holds that
+`database.q` no longer declares is left alone - that is history. Running it
+twice changes nothing the second time.
 
 It should rarely be needed by hand, because `bootstrap` now does it on every
 `uqs` command. It is there because the situation is easy to create: each day's
@@ -120,7 +124,7 @@ the pattern, or the shell will try to expand it against your filenames first.
 
 ### Renamed or retyped HDB columns
 
-`hdb-check --fix` does not rewrite existing columns. When a release renames or
+`hdb-check --apply` does not rewrite existing columns. When a release renames or
 changes one, stop the stack and migrate each affected date/table explicitly:
 
 ```
@@ -136,6 +140,132 @@ builds and checks a complete table partition before exchanging it with the old
 one; it prints the old directory's backup path for rollback. A source column not
 named in the current schema must be mapped with `--rename` rather than silently
 dropped. The command refuses segmented HDBs.
+
+### One table, in any HDB
+
+`data migrate` rebuilds one date of THIS runtime's HDB to its declared schema.
+Two commands work on one table across a whole HDB instead - this runtime's, a
+release's, or an attached TorQ stack's, such as a production HDB a backfill
+wrote a table into on a few dates only (#1755):
+
+```
+uqs data hdb-check --attach pb-prod                          # the plan: which dates lack the table
+uqs data hdb-check --attach pb-prod --apply                  # write an empty one there, after asking
+uqs data hdb-alter --attach pb-prod --reorder time,sym,amount,note
+uqs data hdb-alter --attach pb-prod --reorder time,sym,amount,note --apply
+uqs data hdb-alter --attach pb-prod --undo /data/hdb.uqf-alter/20261028D101500123-pb.json --apply
+```
+
+**Which HDB** is named once, by what already knows it - give exactly one:
+
+  | handle                         | the HDB                                                                                     | runs                                     |
+  | ---                            | ---                                                                                         | ---                                      |
+  | `uqs --target NAME data ...`   | the deployed release's own configured HDB                                                   | on the server, from the release          |
+  | `uqs data ... --attach NAME`   | the attachment's pinned `storage.hdb_dir`, else its live wdb's `.wdb.hdbdir`                | on the stack's host, over ssh            |
+  | `uqs data ... --hdb DIR`       | that directory                                                                              | on this machine                          |
+  | none                           | this runtime's own HDB (what `--target` reaches on a server)                                | on this machine                          |
+
+The plan says which was used. Two handles are refused, and so is an attachment
+whose pinned HDB its live wdb contradicts. With `--attach`, the table defaults
+to the attachment's own. A segmented HDB (`par.txt`) is followed into its
+segments.
+
+**`hdb-check --table T`** (or `--attach`, `--hdb`) checks and fills ONE table:
+only partitions lacking it get an empty one, enumerated against the HDB's sym
+file, which an empty table adds nothing to. Its schema is this runtime's
+declaration when the runtime declares the table, else one partition holding it -
+the latest, or `--template YYYY.MM.DD` - taken in its column order and types.
+Partitions holding the table with another shape are refused, never rewritten.
+Without a handle or `--table` it is the whole-runtime check above.
+
+**`hdb-alter [TABLE]`** makes one change per run, in each partition holding the
+table and nowhere else:
+
+  | operation                     | writes                                                     | `--undo`                                                                                                                      |
+  | ---                           | ---                                                        | ---                                                                                                                           |
+  | `--reorder c1,c2,...`         | each partition's `.d`; it must list every existing column  | the journalled `.d`                                                                                                           |
+  | `--rename old=new`            | the column's files renamed, and `.d`                       | renamed back                                                                                                                  |
+  | `--attr col:p\|s\|g\|u\|none` | the column's attribute (its header)                        | the journalled attribute                                                                                                      |
+  | `--cast col:TYPE`             | the column, written beside it and renamed over it          | the original while the run is unfinished; once complete, a cast back (exact only for a lossless cast, which the plan reports) |
+
+A cast to or from symbol is refused: that changes the enumeration. Every run
+checks first that the partitions holding the table agree on its columns, order
+and types, and refuses - naming each shape and the partitions that hold it -
+before any write; `hdb-check --table` repairs a missing table, anything else is
+for a person to decide.
+
+**Dry run first.** Both commands print the plan and write nothing - the HDB and
+how it was resolved, the partitions touched and skipped, each file written or
+renamed, the bytes a cast rewrites, and the journal's path - exiting 0 when the
+plan is valid and 1 when it is refused. `--apply` shows the same plan and asks
+once before the first write; `--yes` skips the question, and without a terminal
+`--apply` without `--yes` is refused. `--json` prints the plan and, after
+`--apply`, the result.
+
+**The journal** is written before the first write, BESIDE the HDB:
+`<hdb>.uqf-alter/<stamp>-<table>.json`, holding the operation and each touched
+partition's previous `.d` and attributes. Not inside it: `\l` loads every
+non-partition entry of a database root as a variable, so a journal directory
+there would stop the HDB loading. A run that stops part way leaves the journal
+`started`; running the same operation again resumes it, skipping partitions
+already changed, and any other change to the table is refused until
+`--undo JOURNAL` reverses it. `--undo` is previewed like any run until
+`--apply`. After the last write, every partition holding the table is read
+again, and the run exits 1 naming any that does not have the target shape.
+
+**Writers and readers**, by handle:
+
+- `--attach`: refused while an attached backfill owns the attachment, or while a
+  wdb writing that HDB reports an end-of-day reload in progress. Afterwards each
+  HDB reader serving the directory is asked to reload, and the ones that did not
+  are reported.
+- `--target` (the release's own HDB): the write holds the HDB write lock uqf's
+  own writers take, so it is refused while one of the release's backfills runs.
+  Afterwards the release's HDB processes are asked to reload.
+- `--hdb`: the plan warns that writers were not checked, and prints the reload
+  command.
+
+None of this coordinates with a native end of day beyond the check above: run it
+outside end of day.
+
+**On the stack's host.** `--attach` runs the commands where the files are. The q
+script (`scripts/gates/hdb_alter.q`) and the vendored `dbmaint.q` it loads are
+copied to a temporary directory there over one ssh session, run with the
+server's own q (`$QCMD`, else `q`, from the account's login shell), and removed
+afterwards - so the host needs q and nothing of uqf. The destination is the
+attachment's `ssh` setting (`uqs job attach NAME --ssh USER@HOST`, which changes
+a saved attachment without `--replace`), else `stack.host` as the current user;
+a stack on this machine needs none. ssh runs with `BatchMode`: a destination it
+cannot reach is refused, naming the setting. The same script runs by hand:
+
+```
+q scripts/gates/hdb_alter.q -hdb /data/hdb -table pb -reorder time,sym,amount,note [-apply]
+```
+
+KDB-X only: PeachQ cannot write a partitioned HDB natively, and the script
+refuses it.
+
+#### On production
+
+For a table a backfill wrote into a production TorQ HDB - present on the dates
+it covered, missing from the rest:
+
+1. Attach the job if it is not attached (`uqs job attach`), with `--ssh` naming
+   an account on the HDB's host that can write it. Check that
+   `ssh -o BatchMode=yes USER@HOST true` works.
+2. Make sure nothing else writes the table: let any attached backfill finish
+   (`uqs list backfills`), and pick a time well away from end of day.
+3. Read the plan: `uqs data hdb-check --attach NAME`. It names the HDB and where
+   that came from - check it is the directory you mean - and the dates that lack
+   the table.
+4. `uqs data hdb-check --attach NAME --apply` writes the empty table there; the
+   final check and the readers' reload follow.
+5. To change the table's layout, plan it with
+   `uqs data hdb-alter --attach NAME --reorder ...` (or `--rename`, `--attr`,
+   `--cast`), read the plan, then add `--apply`. Keep the journal path the plan
+   prints.
+6. If the result is wrong, `uqs data hdb-alter --attach NAME --undo JOURNAL`
+   shows what it would put back; add `--apply`.
 
 ## Commands
 
@@ -1456,24 +1586,25 @@ uqs summary --json | jq -r '.processes[] | select(.status == "down") | .process'
 
 Each command's `--help` names its document. The commands #1731 added:
 
-  | command                            | document                                                                                                                                                                                                       |
-  | ---                                | ---                                                                                                                                                                                                            |
-  | `summary`                          | `{interpreter, processes: [{time, process, status, pid, port, heartbeat, responds, batches, depends_on, inputs, outputs, port_source}], silent, failing, starved: [{process, reasons}], heartbeats_collected}` |
-  | `graph`                            | `{direction, trees: [{process, status, tables, repeat, children}]}`                                                                                                                                            |
-  | `query [PROC] EXPR`                | `{expression, result}`: a table is a list of records                                                                                                                                                           |
-  | `schema [PROC] [TABLE]`            | `{process, port, tables: [{table, rows, columns}]}`, or with a TABLE `{process, port, columns: [{table, column, type, q, attribute}]}`                                                                         |
-  | `logs`                             | `{lines: [{time, host, procname, proctype, loglevel, id, message}]}`; not with `--follow`, `--channel` or `--multitail`                                                                                        |
-  | `config get PROC [FIELD]`          | `{process, fields: [{field, value}]}`, or `{process, field, value}`                                                                                                                                            |
-  | `job gaps`                         | `{job, gaps: [{range_from, range_to}], sessions, refillable, refills: [{worker, range_from, range_to, command}], today_not_refillable}`                                                                        |
-  | `job preview`                      | the preview's own result: `{job, mode, state, live, cursor, next_cursor, advances, fetched, rows, sample, failures, trace}`                                                                                    |
-  | `job runs status`, `job runs list` | `{runs: [{run_id, worker, dataset, status, range_from, range_to, ...}]}`                                                                                                                                       |
-  | `job runs show RUN`                | `{run, facts, logs, rerun}`                                                                                                                                                                                    |
-  | `job runs audit`                   | `{facts: [{run_id, dataset, range_from, range_to, label, text}]}`                                                                                                                                              |
-  | `connector status`                 | `{connectors: [{name, running, pid, log, ...}]}`                                                                                                                                                               |
-  | `setup odbc status`                | `{home, current, previous, versions}`; without `--json` it is now a table                                                                                                                                      |
-  | `deploy verify`                    | its report without the `DEPLOY_VERIFY_OK`/`FAILED` marker line                                                                                                                                                 |
-  | `deploy history`                   | `{deployments: [{default, at, target, host, dest, release, profile, status, stage}]}`                                                                                                                          |
-  | `target check`                     | `{ok, target, host, dest, remote_user, release}`                                                                                                                                                               |
+  | command                                    | document                                                                                                                                                                                                       |
+  | ---                                        | ---                                                                                                                                                                                                            |
+  | `summary`                                  | `{interpreter, processes: [{time, process, status, pid, port, heartbeat, responds, batches, depends_on, inputs, outputs, port_source}], silent, failing, starved: [{process, reasons}], heartbeats_collected}` |
+  | `graph`                                    | `{direction, trees: [{process, status, tables, repeat, children}]}`                                                                                                                                            |
+  | `query [PROC] EXPR`                        | `{expression, result}`: a table is a list of records                                                                                                                                                           |
+  | `schema [PROC] [TABLE]`                    | `{process, port, tables: [{table, rows, columns}]}`, or with a TABLE `{process, port, columns: [{table, column, type, q, attribute}]}`                                                                         |
+  | `logs`                                     | `{lines: [{time, host, procname, proctype, loglevel, id, message}]}`; not with `--follow`, `--channel` or `--multitail`                                                                                        |
+  | `config get PROC [FIELD]`                  | `{process, fields: [{field, value}]}`, or `{process, field, value}`                                                                                                                                            |
+  | `job gaps`                                 | `{job, gaps: [{range_from, range_to}], sessions, refillable, refills: [{worker, range_from, range_to, command}], today_not_refillable}`                                                                        |
+  | `job preview`                              | the preview's own result: `{job, mode, state, live, cursor, next_cursor, advances, fetched, rows, sample, failures, trace}`                                                                                    |
+  | `job runs status`, `job runs list`         | `{runs: [{run_id, worker, dataset, status, range_from, range_to, ...}]}`                                                                                                                                       |
+  | `job runs show RUN`                        | `{run, facts, logs, rerun}`                                                                                                                                                                                    |
+  | `job runs audit`                           | `{facts: [{run_id, dataset, range_from, range_to, label, text}]}`                                                                                                                                              |
+  | `connector status`                         | `{connectors: [{name, running, pid, log, ...}]}`                                                                                                                                                               |
+  | `setup odbc status`                        | `{home, current, previous, versions}`; without `--json` it is now a table                                                                                                                                      |
+  | `deploy verify`                            | its report without the `DEPLOY_VERIFY_OK`/`FAILED` marker line                                                                                                                                                 |
+  | `deploy history`                           | `{deployments: [{default, at, target, host, dest, release, profile, status, stage}]}`                                                                                                                          |
+  | `target check`                             | `{ok, target, host, dest, remote_user, release}`                                                                                                                                                               |
+  | `data hdb-check --table`, `data hdb-alter` | `{ok, hdb, resolved_from, ssh, warnings, plan, result}`: `plan` and `result` are `scripts/gates/hdb_alter.q`'s own documents - partitions, shapes, steps, journal, final check                                 |
 
 ## Installing
 

@@ -77,7 +77,6 @@ READ_ONLY: frozenset[tuple[str, str | None]] = frozenset(
         ("schema", None),
         ("list", None),
         ("logs", None),
-        ("data", "hdb-check"),
         ("config", "get"),
         ("runtime", "diff"),
         ("runtime", "list"),
@@ -86,6 +85,12 @@ READ_ONLY: frozenset[tuple[str, str | None]] = frozenset(
         ("deploy", "status"),
         ("deploy", "verify"),
     }
+)
+#: Commands that change the server only with --apply, and then show their plan
+#: and ask THERE, through the ssh terminal - or take their own --yes (#1755).
+#: Asking here as well would ask twice, the first time before the plan is shown.
+CONFIRMS_ON_SERVER: frozenset[tuple[str, str]] = frozenset(
+    {("data", "hdb-check"), ("data", "hdb-alter")}
 )
 #: Read-only three deep: `config sources check` reads, `config sources stub`
 #: writes a file; `job runs migrate` and `setup odbc install` write.
@@ -190,6 +195,20 @@ def split_global(argv: Sequence[str]) -> tuple[str | None, bool, list[str]]:
     return target, yes, rest
 
 
+def confirmed_on_server(args: Sequence[str], yes: bool) -> list[str]:
+    """`args` for a CONFIRMS_ON_SERVER command under --target: --attach and --hdb
+    refused (each names an HDB, and --target named the release's own), and the
+    global --yes passed on, so one --yes answers the server's question (#1755)."""
+    args = list(args)
+    if command_words(args)[:2] not in CONFIRMS_ON_SERVER:
+        return args
+    if any(a.partition("=")[0] in ("--attach", "--hdb") for a in args):
+        raise UqsError("give one of --target, --attach and --hdb: each names an HDB")
+    if yes and "--apply" in args and not {"--yes", "-y"} & set(args):
+        args.append("--yes")
+    return args
+
+
 def command_words(args: Sequence[str]) -> tuple[str, ...]:
     """Up to three command words: the leading non-option words of `args`,
     past the global options and --runtime's value."""
@@ -220,7 +239,7 @@ def changes_the_server(args: Sequence[str]) -> bool:
         return False
     if words[:1] == ("summary",) and ("-i" in args or "--interactive" in args):
         return True  # its browser starts, stops and restarts processes with single keys
-    if words in READ_ONLY_DEEP:
+    if words in READ_ONLY_DEEP or words[:2] in CONFIRMS_ON_SERVER:
         return False
     sub = words[1] if len(words) > 1 else None
     if words[:2] == ("config", "sources"):

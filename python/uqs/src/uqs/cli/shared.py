@@ -61,7 +61,7 @@ JOB_OPERATIONS_PANEL = "Operations"
 data_app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
-    help="Move written data into the HDB and check its shape: replay, seed, hdb-check.",
+    help="Move data into the HDB, check and change its tables: replay, seed, hdb-check, hdb-alter.",
 )
 
 DEFAULT_LOG_LEVEL = "INFO"

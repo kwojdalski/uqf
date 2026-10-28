@@ -382,6 +382,7 @@ def forward(name: str, yes: bool, args: list[str], *, interactive: bool) -> int:
             "give the target once: `uqs --target NAME query` runs the query on the server, "
             "`uqs query --tunnel NAME` runs it here through an ssh tunnel"
         )
+    args = control.confirmed_on_server(args, yes)
     r = control.remote_for(name, repo_root())
     shown = " ".join(["uqs", *args])
     if control.changes_the_server(args) and not yes:
