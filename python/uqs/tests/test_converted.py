@@ -137,7 +137,8 @@ def test_the_override_never_excuses_a_damaged_release(tmp_path):
 def _q(tmp_path: Path, version: str) -> Path:
     q = tmp_path / "bin" / "q"
     q.parent.mkdir(parents=True, exist_ok=True)
-    q.write_text(f"#!/bin/sh\necho {version}\n")
+    # KDB-X when asked which q it is (#1753), `version` when asked its version.
+    q.write_text(f'#!/bin/sh\ngrep -q load_natives "$1" && echo kdbx || echo {version}\n')
     q.chmod(q.stat().st_mode | stat.S_IEXEC)
     return q
 
@@ -150,7 +151,7 @@ def _paths(monkeypatch, root: Path, q_tree: str):
 
 
 def _env(q: Path) -> dict[str, str]:
-    env = {k: v for k, v in os.environ.items() if k not in ("UQF_Q_IMPL", "QCMD")}
+    env = {k: v for k, v in os.environ.items() if k != "QCMD"}
     return {**env, "QCMD": str(q)}
 
 

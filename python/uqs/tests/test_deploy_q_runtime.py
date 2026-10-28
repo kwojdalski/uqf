@@ -25,6 +25,8 @@ from uqs.deploy import build as release_build
 from uqs.deploy.artifact import ReleaseError
 from uqs.deploy.config import DeployError, make_config
 
+ROOT = Path(__file__).resolve().parents[3]
+
 BASE: dict[str, Any] = {"artifact": "x", "host": "h", "dest": "/srv/uqf", "profile": "capture"}
 COMMIT = "a872e258f59ae218c8c516485d7d49607e6386ec"
 
@@ -118,10 +120,11 @@ def test_the_cli_refuses_kx_by_name(capfd):
     assert "KX's q is never bundled" in r.output + capfd.readouterr().err
 
 
-def test_uqf_peachq_is_never_bundled(tmp_path):
-    """A binary of no recorded provenance: a runtime says what it was built from."""
-    with pytest.raises(ReleaseError, match="UQF_PEACHQ names a binary of no recorded provenance"):
-        q_runtime.pinned_peachq(tmp_path, {"UQF_PEACHQ": "/opt/q", "UQF_PEACHQ_REASON": "x"})
+def test_a_removed_variable_is_refused_rather_than_bundled(tmp_path):
+    """UQF_PEACHQ once named a binary of no recorded provenance; it is refused
+    by the resolver itself now (#1753), and a runtime is built from the pin."""
+    with pytest.raises(ReleaseError, match="no pinned PeachQ to bundle: UQF_PEACHQ is no longer"):
+        q_runtime.pinned_peachq(ROOT / "scripts", {"UQF_PEACHQ": "/opt/q"})
 
 
 def test_the_pinned_peachq_comes_from_scripts_peachq(tmp_path):
@@ -320,13 +323,15 @@ def test_deploy_env_names_the_bundled_q(tmp_path):
     assert code == 0
     home = f"/opt/uqf/shared/runtimes/q/{rt.sha256}"
     env = env_of(remote)
-    assert env[1:6] == [
-        f"export QCMD={home}/q",
-        f"export QHOME={home}",
-        "export UQF_Q_IMPL=peachq",
-        f"export UQF_PEACHQ={home}/q",
-        f"export UQF_PEACHQ_REASON='the bundled q runtime {rt.sha256}, PeachQ {COMMIT}'",
-    ]
+    assert env[1:3] == [f"export QCMD={home}/q", f"export QHOME={home}"]
+    assert not any(line.startswith("export UQF_") and "PEACHQ" in line for line in env)
+
+
+def test_the_q_runtime_names_qcmd_and_qhome_and_nothing_else(tmp_path):
+    """#1753: which q it is, the binary says; deploy.env need not."""
+    rt = runtime(tmp_path)
+    home = f"/opt/uqf/shared/runtimes/q/{rt.sha256}"
+    assert rt.env("/opt/uqf") == [("QCMD", f"{home}/q"), ("QHOME", home)]
 
 
 def test_preflight_looks_for_no_q_on_the_server(tmp_path):
