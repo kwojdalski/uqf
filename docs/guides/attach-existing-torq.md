@@ -34,7 +34,7 @@ uqs job attach pb-uat --job pb_general_ledger --bundle ../piggybank \
     --stack-id 6000 --consumer rdb1 --consumer wdb1 --dry-run
 uqs job attach pb-uat --job pb_general_ledger --bundle ../piggybank \
     --stack-id 6000 --consumer rdb1 --consumer wdb1
-uqs list attachments                # attachment state and publisher state, per attachment
+uqs job attachment list                # attachment state and publisher state, per attachment
 uqs job detach pb-uat --dry-run
 uqs job detach pb-uat
 ```
@@ -379,16 +379,16 @@ own `on_timer` or `on_batch` orders its own steps. None of it is exactly-once.
 
 ### Migration from the stage commands
 
-  | Before                                   | Now                                                        |
-  | ---------------------------------------- | ---------------------------------------------------------- |
-  | `uqs job attach plan NAME ...`           | `uqs job attach NAME ... --dry-run`                        |
-  | `uqs job attach validate NAME`           | `uqs job attach NAME --dry-run`                            |
-  | `uqs job attach apply NAME`              | `uqs job attach NAME --no-start`                           |
-  | `uqs job attach verify NAME`             | `uqs job attach NAME --no-start`                           |
-  | `uqs job attach start NAME`              | `uqs job attach NAME`                                      |
-  | `uqs job attach status NAME`             | `uqs list attachments`, or `uqs job attach NAME --dry-run` |
-  | `uqs job attach detach NAME [--dry-run]` | `uqs job detach NAME [--dry-run]`                          |
-  | `plan --no-save`                         | `--dry-run`                                                |
+  | Before                                   | Now                                                           |
+  | ---------------------------------------- | ----------------------------------------------------------    |
+  | `uqs job attach plan NAME ...`           | `uqs job attach NAME ... --dry-run`                           |
+  | `uqs job attach validate NAME`           | `uqs job attach NAME --dry-run`                               |
+  | `uqs job attach apply NAME`              | `uqs job attach NAME --no-start`                              |
+  | `uqs job attach verify NAME`             | `uqs job attach NAME --no-start`                              |
+  | `uqs job attach start NAME`              | `uqs job attach NAME`                                         |
+  | `uqs job attach status NAME`             | `uqs job attachment list`, or `uqs job attach NAME --dry-run` |
+  | `uqs job attach detach NAME [--dry-run]` | `uqs job detach NAME [--dry-run]`                             |
+  | `plan --no-save`                         | `--dry-run`                                                   |
 
 The old forms are refused with the command that replaced them.
 

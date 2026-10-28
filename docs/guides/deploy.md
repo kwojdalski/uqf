@@ -264,7 +264,7 @@ prints the new one.
   dry-run plan says which settings came from the target and which from a flag.
 - **Several targets.** `--target a,b` deploys them in order, host by host, and
   stops at the first failure.
-- **`labels`.** Free-form `key = "value"` pairs that `uqs list targets` shows.
+- **`labels`.** Free-form `key = "value"` pairs that `uqs target list` shows.
   Nothing deploys them.
 
 ### Shared settings: defaults and environments
@@ -302,7 +302,7 @@ Each layer overrides the one above it in this table:
   through the same checks as the flags.
 - **Never in a file.** No layer may set the artifact, `--dry-run`, or a named
   override.
-- **Listing.** `uqs list targets` shows each target with its layers merged. It
+- **Listing.** `uqs target list` shows each target with its layers merged. It
   adds an `environment` column when a target names one.
 
 ## Requirements and named overrides
@@ -582,7 +582,7 @@ uqs --target uat start piggybankgeneralledger1   # asks first; --yes skips the q
 
 - **The same entries.** `uqs target add` appends a `[targets.NAME]` table to
   `deploy_targets.toml`, so one entry serves both `deploy push ARTIFACT TARGET`
-  and `uqs --target`. `uqs list targets` and `uqs target remove` read and edit
+  and `uqs --target`. `uqs target list` and `uqs target remove` read and edit
   that file, on this machine only: `--target` refuses them. `remove` leaves
   every other line, comments included, as it was.
 - **Confirmation.** A command that can change the server, such as `start`,

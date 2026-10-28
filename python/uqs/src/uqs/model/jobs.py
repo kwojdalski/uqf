@@ -1,4 +1,4 @@
-"""Every ETL job the tree declares, as rows: what `uqs list jobs` shows.
+"""Every ETL job the tree declares, as rows: what `uqs job list` shows.
 
 The process table (`uqs list processes`) answers "what runs where"; this
 answers "what jobs are there": each streaming job, normalizer and bounded

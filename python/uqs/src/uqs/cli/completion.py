@@ -139,6 +139,17 @@ def list_columns(ctx: typer.Context) -> list[str]:
     return list(rows[0]) if rows else []
 
 
+def columns_of(kind: str) -> Callable[..., Candidates]:
+    """`--sort`'s completer for a list of one fixed `kind` (`uqs target list`)."""
+
+    @_never_raises
+    def columns() -> list[str]:
+        rows = listing.list_items(stack_paths.default_paths(), kind)
+        return list(rows[0]) if rows else []
+
+    return columns
+
+
 @_never_raises
 def csv_fields() -> list[str]:
     return list(process_csv_fields())

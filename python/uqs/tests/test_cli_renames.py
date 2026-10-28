@@ -14,7 +14,7 @@ import typer
 from typer.testing import CliRunner
 
 from uqs import cli
-from uqs.cli import renames
+from uqs.cli import lists, renames
 from uqs.stack import multitail as stack_multitail
 
 runner = CliRunner()
@@ -109,3 +109,48 @@ def test_the_old_spelling_still_works_end_to_end(monkeypatch):
     assert seen["lines"] == 7
     assert "multitail x" in result.stdout
     assert said == [("--print", "--show-command"), ("-n", "--lines")]
+
+
+@pytest.mark.parametrize(
+    ("old", "new", "target"),
+    [
+        (["remove", "output", "--dry-run"], "uqs clean", "clean"),
+        (["remove", "checkpoint", "w"], "uqs job checkpoint remove", "clear_checkpoint"),
+    ],
+)
+def test_a_moved_command_still_runs_at_its_old_path(monkeypatch, old, new, target):
+    """The old `uqs remove ...` group (#1727), hidden, logging the new path."""
+    from uqs.stack import backfill as stack_backfill
+    from uqs.stack import clean as stack_clean
+
+    module = stack_clean if target == "clean" else stack_backfill
+    returns = [] if target == "clean" else None
+    calls = []
+
+    def fake(*args, **kwargs):
+        calls.append(args)
+        return returns
+
+    monkeypatch.setattr(module, target, fake)
+    said = []
+    monkeypatch.setattr(renames, "warn_renamed", lambda o, n: said.append(n))
+    result = runner.invoke(cli.app, old)
+    assert result.exit_code == 0, result.output
+    assert calls and said == [new]
+    assert _command("remove").hidden
+
+
+def test_a_kind_that_moved_to_its_noun_still_lists_under_list(monkeypatch):
+    """`uqs list runtimes` -> `uqs runtime list` (#1728), for one release."""
+    from uqs.stack import listing
+
+    monkeypatch.setitem(listing.LISTABLE_KINDS, "runtimes", lambda *_a: [{"runtime": "uqf"}])
+    said = []
+    monkeypatch.setattr(lists, "warn_renamed", lambda o, n: said.append((o, n)))
+    old = runner.invoke(cli.app, ["list", "runtimes", "--json"])
+    new = runner.invoke(cli.app, ["runtime", "list", "--json"])
+    assert old.exit_code == new.exit_code == 0, old.output
+    assert old.stdout == new.stdout
+    assert said == [("uqs list runtimes", "uqs runtime list")]
+    kinds = runner.invoke(cli.app, ["list", "--json"]).stdout
+    assert "runtimes" not in kinds and "processes" in kinds

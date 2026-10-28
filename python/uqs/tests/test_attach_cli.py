@@ -1,4 +1,4 @@
-"""`uqs job attach NAME`, `uqs job detach NAME` and `uqs list attachments` as an
+"""`uqs job attach NAME`, `uqs job detach NAME` and `uqs job attachment list` as an
 operator runs them (#1424, #1457).
 
 The stack is a scripted one that keeps state (attach_support.FakeStack); what is
@@ -480,7 +480,7 @@ def test_debug_goes_through_remote_dispatch():
     assert rest == ["--debug", "job", "attach", "pb-uat", "--dry-run"]
     remote = control.Remote("uat", "uat-host", "/srv/uqf")
     assert "--debug job attach pb-uat --dry-run" in control.remote_command(remote, rest)
-    assert not control.changes_the_server(["list", "attachments"])
+    assert not control.changes_the_server(["job", "attachment", "list"])
 
 
 def test_debug_does_not_turn_on_the_publishers_runtime_logging(world, monkeypatch):
@@ -519,7 +519,9 @@ def test_detach_before_publication_rolls_back_and_says_so(world):
 
 
 def _list(*extra: str):
-    return CliRunner().invoke(cli.app, ["list", "attachments", *extra], catch_exceptions=False)
+    return CliRunner().invoke(
+        cli.app, ["job", "attachment", "list", *extra], catch_exceptions=False
+    )
 
 
 def test_list_attachments_shows_attachment_and_publisher_state_separately(world, monkeypatch):
