@@ -77,8 +77,8 @@ job whose inputs nobody is producing, and this column says so.
 
 **2. What does its log say?** `uqs logs <process> -f` follows it
 (`uqs logs --multitail <process>` gives one pane per log file, and
-`uqs up <process>` starts it and streams its log in the foreground). Three lines
-tell you where rows stop:
+`uqs start <process> -f` starts it and streams its log in the foreground). Three
+lines tell you where rows stop:
 
   | Last line you see             | Means                                                            |
   | ---                           | ---                                                              |

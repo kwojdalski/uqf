@@ -33,8 +33,9 @@ between them:
   q-docs               the ```q blocks in docs/ marked `<!-- q-example: ... -->`,
                        one q process per document. The q lane CI runs on
                        PeachQ, which needs no licence.
-  q-docs-peachq        q-docs again on PeachQ: $UQF_PEACHQ if set, else the
-                       pinned build, built into the cache on first use.
+  q-docs-peachq        q-docs again on PeachQ: --peachq PATH, else $QCMD if it
+                       is PeachQ, else the pinned build, built into the cache
+                       on first use.
                        Required beside KDB-X, not instead of it, until the
                        two are compatible enough for one to stand for both.
   q-two-instances      a second kdb+ process is started on the starter
@@ -82,7 +83,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
@@ -96,20 +97,13 @@ REPO = Path(__file__).resolve().parent.parent
 Q_CMD = os.environ.get("QCMD") or "q"
 QHOME = os.environ.get("QHOME", str(Path.home() / ".kx"))
 
-#: Which implementation $QCMD is declared to be - `kdbx` unless UQF_Q_IMPL
-#: says `peachq` - and the script that asks the binary itself. Restated from
-#: uqs.interpreter for the reason Q_CMD is; test_interpreter.py holds the two
-#: equal. PeachQ runs only when chosen out loud: `peachq` needs QCMD, and a
-#: binary that is not what was declared is refused before any lane runs, so a
-#: green suite always says which interpreter made it green.
-Q_IMPL_ENV = "UQF_Q_IMPL"
 Q_IMPLS = ("kdbx", "peachq")
 
-#: The PeachQ resolver: $UQF_PEACHQ if set, else the pinned build from the
-#: cache, built on first use (scripts/peachq.py). Loaded by path, as this file
-#: is run from anywhere and scripts/ is no package. It hands an absolute path
-#: to the lanes that run on PeachQ and to nothing else: QCMD stays the one q
-#: every other lane uses, and PeachQ is never put on PATH.
+#: The PeachQ resolver: the pinned build from the cache, built on first use
+#: (scripts/peachq.py). Loaded by path, as this file is run from anywhere and
+#: scripts/ is no package. `peachq_binary` below hands what it chooses to the
+#: lanes that run on PeachQ and to nothing else: QCMD stays the one q every
+#: other lane uses, and PeachQ is never put on PATH.
 _spec = importlib.util.spec_from_file_location(
     "uqf_peachq", Path(__file__).resolve().with_name("peachq.py")
 )
@@ -117,25 +111,14 @@ assert _spec and _spec.loader
 peachq = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(peachq)
 IDENTIFY_SCRIPT = peachq.IDENTIFY_SCRIPT
-PEACHQ_ENV = peachq.OVERRIDE_ENV
+#: The variables that chose an interpreter before #1753, refused (#1753).
+REMOVED_ENV = peachq.REMOVED_ENV
 
 
-def check_interpreter(env: dict[str, str] | None = None) -> str | None:
-    """The declared implementation, once the binary has confirmed it; None
-    when there is no runnable q (the lanes report that themselves). Raises
-    SystemExit naming the mismatch otherwise."""
+def identify(q: str, env: Mapping[str, str] | None = None) -> str:
+    """Which q `q` is, as it answers: `kdbx` or `peachq`. Raises SystemExit,
+    with what it printed, when it answers neither."""
     source = os.environ if env is None else env
-    declared = (source.get(Q_IMPL_ENV) or "kdbx").strip().lower()
-    if declared not in Q_IMPLS:
-        raise SystemExit(f"{Q_IMPL_ENV}={declared!r} - it is one of {', '.join(Q_IMPLS)}")
-    if declared == "peachq" and not source.get("QCMD"):
-        raise SystemExit(
-            f"{Q_IMPL_ENV}=peachq needs QCMD set to the PeachQ binary - "
-            "a bare `q` on PATH is never taken to be PeachQ"
-        )
-    q = shutil.which(source.get("QCMD") or "q", path=source.get("PATH"))
-    if q is None:
-        return None
     with tempfile.TemporaryDirectory() as tmp:
         script = Path(tmp) / "identify.q"
         script.write_text(IDENTIFY_SCRIPT)
@@ -145,6 +128,7 @@ def check_interpreter(env: dict[str, str] | None = None) -> str | None:
             text=True,
             timeout=30,
             env={**source, "QHOME": source.get("QHOME", QHOME)},
+            stdin=subprocess.DEVNULL,
             check=False,
         )
     actual = (result.stdout.strip().splitlines()[-1:] or [""])[0]
@@ -153,14 +137,74 @@ def check_interpreter(env: dict[str, str] | None = None) -> str | None:
             f"could not tell which q {q} is (exit {result.returncode}): "
             f"{(result.stdout + result.stderr).strip()[:200]!r}"
         )
-    if actual != declared:
-        hint = (
-            f"set {Q_IMPL_ENV}=peachq to run it knowingly"
-            if actual == "peachq"
-            else "point QCMD at the PeachQ binary"
-        )
-        raise SystemExit(f"{q} is {actual}, but {Q_IMPL_ENV} declares {declared} - {hint}")
     return actual
+
+
+#: The binaries already warned about, so each is named once per run.
+_WARNED: set[Path] = set()
+
+
+def warn_if_unpinned(q: str) -> None:
+    """One warning naming `q` and the pin, when `q` is a PeachQ other than the
+    pinned build - uqs.interpreter.warn_if_unpinned's, in peachq.py's words."""
+    resolved = Path(q).resolve()
+    if resolved in _WARNED:
+        return
+    _WARNED.add(resolved)
+    message = peachq.unpinned_warning(resolved)
+    if message:
+        print(f"warning: {message}", file=sys.stderr, flush=True)
+
+
+def refuse_removed(env: Mapping[str, str] | None = None) -> None:
+    """SystemExit naming each variable REMOVED_ENV names that is set."""
+    problem = peachq.removed_variables_problem(os.environ if env is None else env)
+    if problem:
+        raise SystemExit(problem)
+
+
+def check_interpreter(env: Mapping[str, str] | None = None) -> str | None:
+    """Which q $QCMD is, as the binary answers; None when there is no
+    runnable q (the lanes report that themselves). Refuses a removed variable
+    first, and a binary that answers neither. A PeachQ that is not the
+    pinned build is named in a warning."""
+    source = os.environ if env is None else env
+    refuse_removed(source)
+    q = shutil.which(source.get("QCMD") or "q", path=source.get("PATH"))
+    if q is None:
+        return None
+    actual = identify(q, source)
+    if actual == "peachq":
+        warn_if_unpinned(q)
+    return actual
+
+
+def peachq_binary(env: Mapping[str, str] | None = None, override: str | None = None) -> Path:
+    """The PeachQ the PeachQ lanes run on - uqs.interpreter.peachq_binary's
+    rule, restated because a bare python3 cannot import uqs, and held equal
+    to it by test_interpreter.py:
+
+    1. `override` (--peachq PATH), which must identify as PeachQ;
+    2. $QCMD, when it answers as PeachQ;
+    3. the pinned build, from scripts/peachq.py's cache, built on first use.
+
+    Raises peachq.PeachQError when none can be had."""
+    source = os.environ if env is None else env
+    refuse_removed(source)
+    if override:
+        found = shutil.which(override, path=source.get("PATH"))
+        if found is None:
+            raise peachq.PeachQError(f"--peachq {override} is not a runnable file")
+        actual = identify(found, source)
+        if actual != "peachq":
+            raise peachq.PeachQError(f"--peachq {override} is {actual}, not PeachQ")
+        warn_if_unpinned(found)
+        return Path(found)
+    q = shutil.which(source.get("QCMD") or "q", path=source.get("PATH"))
+    if q is not None and identify(q, source) == "peachq":
+        warn_if_unpinned(q)
+        return Path(q)
+    return peachq.resolve(dict(source))
 
 
 class LaneFailed(Exception):
@@ -177,7 +221,7 @@ def _run(
     lane: str,
     argv: list[str],
     *,
-    env: dict[str, str] | None = None,
+    env: Mapping[str, str] | None = None,
     timeout: float | None = None,
     stdin_open: bool = False,
 ) -> None:
@@ -219,7 +263,7 @@ def _q(
     lane: str,
     script: str,
     *args: str,
-    env: dict[str, str] | None = None,
+    env: Mapping[str, str] | None = None,
     timeout: float | None = None,
     stdin_open: bool = False,
 ) -> None:
@@ -244,18 +288,18 @@ def lane_q_unit(qargs: Sequence[str] = ()) -> None:
     _q("q-unit", "tests/run_tests.q", *qargs)
 
 
-def lane_q_unit_peachq() -> None:
+def lane_q_unit_peachq(override: str | None = None) -> None:
     """The whole q suite on PeachQ, flattened, against its known gaps (#863).
 
     What CI blocks on: a hosted runner has PeachQ, not KDB-X. PeachQ rejects
     nested contexts, so scripts/portable/full_suite.py flattens a copy first
     and holds the result to tests/q/peachq_known_gaps.txt - a failure not
     listed fails the lane, and so does a listed test that passes. The binary
-    is found as q-docs-peachq finds it, never $QCMD, which may be KDB-X.
+    is `peachq_binary`'s, as q-docs-peachq's is: $QCMD only when it is PeachQ.
     """
     _banner("q-unit-peachq: the whole suite on PeachQ, flattened, against its known gaps")
     try:
-        binary = peachq.resolve()
+        binary = peachq_binary(override=override)
     except peachq.PeachQError as exc:
         raise SystemExit(f"q-unit-peachq: {exc}") from None
     # As several PeachQ processes at once (#1694): the suite alone was CI's
@@ -377,7 +421,7 @@ def lane_q_docs() -> None:
     # through sys.modules, and an unregistered module is not there.
     sys.modules[spec.name] = docex
     spec.loader.exec_module(docex)
-    impl = (os.environ.get(Q_IMPL_ENV) or "kdbx").strip().lower()
+    impl = check_interpreter() or "kdbx"
     with tempfile.TemporaryDirectory() as tmp:
         sessions, skipped = docex.write_sessions(REPO, Path(tmp), impl)
         for block in skipped:
@@ -389,7 +433,7 @@ def lane_q_docs() -> None:
                 _q(f"q-docs:{session.stem}", str(session), env={"UQF_STATUS_DIR": statusdir})
 
 
-def lane_q_docs_peachq() -> None:
+def lane_q_docs_peachq(override: str | None = None) -> None:
     """q-docs a second time, on PeachQ.
 
     Both interpreters are required for now, and neither result stands in for
@@ -398,20 +442,21 @@ def lane_q_docs_peachq() -> None:
     the two are compatible enough for one to vouch for both. A child process,
     not a call, because Q_CMD and the interpreter check are fixed at import.
 
-    The binary is $UQF_PEACHQ when set, else the pinned build, fetched and
-    built into the cache on first use. Any failure to provide it fails the
+    The binary is `peachq_binary`'s: --peachq PATH, else $QCMD when it is
+    PeachQ, else the pinned build, fetched and built into the cache on first
+    use. Any failure to provide it fails the
     lane, never skips it: the doc blocks run on PeachQ AND KDB-X until the
     two are compatible enough for one to stand for both.
     """
     _banner("q-docs-peachq: the q blocks in docs/ on PeachQ")
     try:
-        binary = peachq.resolve()
+        binary = peachq_binary(override=override)
     except peachq.PeachQError as exc:
         raise SystemExit(f"q-docs-peachq: {exc}") from None
     _run(
         "q-docs-peachq",
         [sys.executable, str(Path(__file__).resolve()), "q-docs"],
-        env={Q_IMPL_ENV: "peachq", "QCMD": str(binary)},
+        env={"QCMD": str(binary)},
     )
 
 
@@ -714,6 +759,9 @@ LANES: dict[str, Callable[[], None]] = {
 #: The lanes that pass arguments argparse does not know on to their q script.
 QARGS_LANES = ("q-unit", "q-coverage")
 
+#: The lanes that run on PeachQ, and so take --peachq PATH.
+PEACHQ_LANES = ("q-unit-peachq", "q-docs-peachq")
+
 #: The attach tests; the ones that start an isolated stack run only with
 #: UQS_ATTACH_STACK_TEST, which the attach-stack lane sets.
 ATTACH_TESTS = sorted((REPO / "python" / "uqs" / "tests").glob("test_attach_*.py"))
@@ -745,12 +793,12 @@ Run the lane matching the layer you changed. `all` is for a release,
 not for an edit.
 
 The interpreter comes from $QCMD (default `q` on PATH) and $QHOME (default
-~/.kx). There is no fallback: see README.md#requirements. PeachQ runs only
-when chosen: UQF_Q_IMPL=peachq with QCMD naming its binary, and the binary is
-checked against that choice before any lane starts. q-docs-peachq is the
-exception that runs on BOTH: KDB-X for the lanes, PeachQ for a second run of
-the doc blocks - $UQF_PEACHQ if set, else the pinned build from
+~/.kx), and nothing else. There is no fallback: see README.md#requirements.
+Which q it is - KDB-X or PeachQ - is asked of the binary before any lane
+starts. q-unit-peachq and q-docs-peachq run on PeachQ whatever $QCMD is:
+--peachq PATH if given, else $QCMD if it is PeachQ, else the pinned build from
 scripts/peachq.json, fetched and built into ~/.cache/uqf/peachq on first use.
+A PeachQ that is not the pinned build is used, and named in a warning.
 """
 
 
@@ -783,6 +831,15 @@ def main(argv: list[str] | None = None) -> int:
     smoke.add_argument(
         "--timeout-ms", type=int, default=None, help="per-connection timeout (default 5000)"
     )
+    parser.add_argument(
+        "--peachq",
+        metavar="PATH",
+        default=None,
+        help=(
+            "the PeachQ binary for " + " and ".join(PEACHQ_LANES) + " (default: $QCMD if it is "
+            "PeachQ, else the pinned build)"
+        ),
+    )
     # q-unit and q-coverage only: anything argparse does not know goes on to
     # their q script as it is, e.g. `q-unit -files test_a.q,test_b.q`.
     args, qargs = parser.parse_known_args(argv)
@@ -797,6 +854,8 @@ def main(argv: list[str] | None = None) -> int:
         )
 
     lanes = ALL if args.lane == "all" else [args.lane]
+    if args.peachq and not set(lanes) & set(PEACHQ_LANES):
+        parser.error(f"--peachq applies to {' and '.join(PEACHQ_LANES)} (and all) only")
     impl = check_interpreter()
     if impl is not None:
         _banner(f"interpreter: {impl} ({Q_CMD})")
@@ -808,6 +867,10 @@ def main(argv: list[str] | None = None) -> int:
                 lane_q_unit(args.qargs)
             elif name == "q-coverage":
                 lane_q_coverage(args.qargs)
+            elif name == "q-unit-peachq":
+                lane_q_unit_peachq(args.peachq)
+            elif name == "q-docs-peachq":
+                lane_q_docs_peachq(args.peachq)
             else:
                 LANES[name]()
     except LaneFailed as failure:

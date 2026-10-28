@@ -81,7 +81,7 @@ def _kdb_or_uqs_format(record: Any) -> str:
     which prints the record and a traceback and DROPS the message.
 
     That was live: replacing the global sink was safe while `logs` was a
-    leaf command, and `up` is `start` plus `logs -f` and keeps logging
+    leaf command, and `start -f` is `start` plus `logs -f` and keeps logging
     afterwards. Starting a stack whose data directory needed moving printed
     eight tracebacks and none of the message saying what to run.
 
@@ -108,7 +108,7 @@ def _format_kdb_time(t: str) -> str:
 
 def log_sink() -> Any:
     """(Re)configure the shared loguru logger for the duration of a `logs`
-    or `up` stream, overriding whatever format main()'s
+    or `start -f` stream, overriding whatever format main()'s
     configure_logging(component="uqs") set up for the rest of the CLI.
 
     The format is a CALLABLE, not a string: this sink receives kdb log lines

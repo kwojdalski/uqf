@@ -115,8 +115,7 @@ def _json(rows: list[dict], gathered, status) -> None:
     up = {row["Process"] for row in rows if row["Status"] == "up"}
     emit({
         "interpreter": {
-            "declared": status.declared, "binary": status.binary,
-            "actual": status.actual, "problem": status.problem,
+            "binary": status.binary, "actual": status.actual, "problem": status.problem,
         },
         "processes": [record(row) for row in rows],
         "silent": gathered.silent,

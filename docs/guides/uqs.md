@@ -148,9 +148,11 @@ operating it (`backfill`, `preview`, `gaps`, and `runs` for the run ledger), and
 putting it on a TorQ stack that is already running (`attach` and `detach`, see
 [attaching to an existing TorQ](attach-existing-torq.md)). `uqs setup` prepares
 the machine the stack runs on - `uqs setup odbc` installs, loads and rolls back
-a private ODBC setup. `uqs connector` starts, stops and checks the external
+a private ODBC setup. `uqs connector` runs the whole lifecycle of the external
 publishers - databento, kafka, the cryptorust recorders - which are processes
-outside TorQ, not the q processes `uqs start` manages.
+outside TorQ, not the q processes `uqs start` manages: `start`, `stop`,
+`restart` (with `start`'s options, which are not remembered), `status`, and
+`logs NAME [-f] [-l N]`, which shows the one plain log file `status` names.
 
 Putting a release on a server is `uqs deploy` (`history` lists what this machine
 deployed): see [Deploying to a server](deploy.md).
@@ -414,12 +416,12 @@ start.
 
 `peachq` is `torq`'s stack on [PeachQ](https://github.com/peachq-org/peachq),
 the MIT-licensed q interpreter, rather than KDB-X: the starter pack as it ships,
-with no connection cap and no licence needed. Its binary comes from
-`scripts/peachq.py`: `UQF_PEACHQ` if set (with `UQF_PEACHQ_REASON`), otherwise
-the pinned build from the cache, built into the cache the first time. That stack
-alone gets `UQF_Q_IMPL=peachq` and that `QCMD`. Your shell's own `QCMD` and
-`PATH` are left alone, and `summary` names the interpreter on its first line.
-KDB-X stays the default and the interpreter everything here is verified against.
+with no connection cap and no licence needed. Its binary is your `QCMD` when
+that is PeachQ, otherwise the pinned build from `scripts/peachq.py`'s cache,
+built into the cache the first time (`uqs.interpreter.peachq_binary`). That
+stack alone gets that `QCMD`; your shell's own `QCMD` and `PATH` are left alone,
+and `summary` names the interpreter on its first line. KDB-X stays the default
+and the interpreter everything here is verified against.
 
 ```
 uqs --runtime peachq start --profile capture
@@ -523,7 +525,9 @@ members, infrastructure first, then the names, each started once. They are not
 widened to what they read - a name whose producer is missing is warned about, as
 on a plain start - and `all` cannot be added. The budget below is checked on the
 whole combined set, so a profile that fits plus names that take it past the cap
-is refused before anything starts. `uqs up` takes the same combination.
+is refused before anything starts. `restart`, `start --follow` and
+`stop --profile` take the same combination; `stop` resolves the set without the
+budget, so a set too big to start can still be stopped.
 
 The uqf runtime's profiles, against the community licence's fourteen slots
 (`uqs list profiles` reports the same against this machine's licence):
@@ -559,10 +563,10 @@ has (see the table). On that licence it is refused like any profile over the
 cap. On a q licence that allows more concurrent connections, say how many with
 `UQS_LICENCE_CONNECTIONS` and it starts: that setting is the budget every start
 is held to - `--profile`, `uqs list profiles`' `fits` column and the
-positional-start warning. On PeachQ (`UQF_Q_IMPL=peachq`, see the README's
-Requirements) there is no cap at all, so `all` starts as it is. `all` leaves out
-`crypto`, because the mock replaces cryptorust's recorders rather than joining
-them; ask for it with `--profile all,crypto`.
+positional-start warning. On PeachQ (`QCMD` naming a PeachQ binary, see the
+README's Requirements) there is no cap at all, so `all` starts as it is. `all`
+leaves out `crypto`, because the mock replaces cryptorust's recorders rather
+than joining them; ask for it with `--profile all,crypto`.
 
 Profiles never change `startwithall`, so `start all` is untouched. A closure
 stops at a table fed from outside the stack: `fx` needs `crypto_book` but does
@@ -612,7 +616,7 @@ that one check by name and give the reason:
 ```bash
 uqs start rdb1 --skip-q-version-check "checking which jobs load on uat's 4.1"
 uqs start --profile fx --skip-profile-budget-check "full licence on this host"
-uqs restart rdb1 --skip-q-version-check "..."     # up takes both too
+uqs restart rdb1 --skip-q-version-check "..."     # restart takes both too
 ```
 
 - `--skip-q-version-check` starts despite a KDB-X older than 5.0 for the tree as
@@ -690,8 +694,10 @@ interpreter: kdbx (/Users/me/.kx/bin/q) - 16 connections
 interpreter: peachq (/opt/peachq/q) - no connection cap
 ```
 
-The implementation is asked of the binary; when it disagrees with `UQF_Q_IMPL`,
-a warning follows. `uqs list env` carries both as rows.
+The implementation is asked of the binary, which is the only thing that says it
+(#1753); a binary that will not say is named in a warning, and so is a PeachQ
+other than the pinned build. `uqs list env` carries the answer as its
+`q_impl (binary)` row.
 
 `summary` shows the whole graph, not just the unsatisfied part of it, in three
 columns derived from the same declarations:
@@ -792,10 +798,10 @@ collected" on a healthy stack.
   reads heartbeats with. So `stack/monitor_budget.py` stops monitoring
   `sortworker`, `reporter`, `housekeeping`, `feed`, then `metrics` processes
   until the rest fit. Those show `-` in the Heartbeat column. `uqs start`,
-  `restart`, `up` and `summary` each print one line naming the proctypes given
-  up, counting only types something in the fleet runs as. The fleet is the one
-  the start brings up - a profile's resolved set, or the set the last profile
-  start recorded - not the `startwithall=1` rows, so `--profile crypto`, whose
+  `restart` and `summary` each print one line naming the proctypes given up,
+  counting only types something in the fleet runs as. The fleet is the one the
+  start brings up - a profile's resolved set, or the set the last profile start
+  recorded - not the `startwithall=1` rows, so `--profile crypto`, whose
   seventeen processes fit, keeps `feed` and hears `cryptomock1`. On a fully
   licensed kdb+/KDB-X, or on PeachQ, nothing is dropped.
 - **uqf's standing ETLs (`metrics`) are monitored too**; `backfill` workers are
@@ -955,15 +961,16 @@ a stack near its licence connection limit, name processes rather than `all`.
 `-f` reads the files, so it is the one to use when a process is not running or
 is not a TorQ process, such as the external feeds.
 
-**`uqs up` is the foreground form of all this**: it starts what `start` would -
-the same names, `all`, or `--profile` - then streams those processes' logs to
-this console until Ctrl-C, which stops what it started, the way
-`docker compose up` does. The console is the run.
+**`uqs start --follow` (`-f`) is the foreground form of all this**: it starts
+what `start` would - the same names, `all`, or `--profile` - then streams those
+processes' logs to this console until Ctrl-C, which stops what it started, the
+way `docker compose up` does. The console is the run. `restart -f` does the same
+after a restart. It was `uqs up`, which still works for a release.
 
 ```
-uqs up                        # the default set, streamed; Ctrl-C stops it
-uqs up rdb1 fxpositions1      # just these
-uqs up --profile fx --level WARNING
+uqs start -f                          # the default set, streamed; Ctrl-C stops it
+uqs start rdb1 fxpositions1 -f        # just these
+uqs start --profile fx -f --level WARNING
 ```
 
 What a process prints while it loads is shown too. Processes already running
@@ -1007,7 +1014,7 @@ Two ways to switch it on:
 
 ```
 uqs --debug job backfill <worker> ...                 # a backfill: passes -verbose
-uqs raw -- start <procname> -extras -verbose          # any process, at start
+uqs exec -- start <procname> -extras -verbose         # any process, at start
 uqs query ".qetl.log.debug 1b" --port <port>              # a process already running, no restart
 ```
 
@@ -1164,7 +1171,7 @@ q tests/run_tests.q
 
 A process that is `down` or not answering: read
 `output/uqs/logs/err_<procname>.log`, or run it in the foreground with
-`uqs raw -- debug <procname>`. Commit what `git status` shows afterwards,
+`uqs exec -- debug <procname>`. Commit what `git status` shows afterwards,
 derived files included - CI checks they are current.
 
 ## Connecting
@@ -1263,7 +1270,7 @@ options is refused.
 
 `uqs-mcp` exposes the CLI's operations as MCP tools (`uqs_start`, `uqs_summary`,
 `uqs_query`, ... - [`mcp.py`](../../python/uqs/src/uqs/mcp.py) has the list),
-for an MCP client to drive the stack. `raw` is not exposed. Point the client's
+for an MCP client to drive the stack. `exec` is not exposed. Point the client's
 server command at:
 
 ```
@@ -1278,8 +1285,8 @@ unrunnable profile.
 
 Anything `torq.sh` itself supports but isn't wrapped as its own subcommand above -
 `debug <processname>` to run one process in the foreground for troubleshooting,
-`top <processname>` - is available via `raw -- <args>`, which passes straight
-through to `lib/torq/torq.sh`.
+`top <processname>` - is available via `exec -- <args>`, which passes straight
+through to `lib/torq/torq.sh`. It was `raw`, which still works for a release.
 
 ## CLI conventions
 
@@ -1319,6 +1326,7 @@ The verbs of rule 4:
   | `add` `remove`                                | create or delete one thing                                |
   | `start` `stop` `restart` `logs`               | the stack's lifecycle, and a connector's                  |
   | `clean`                                       | delete the runtime state the stack wrote                  |
+  | `exec`                                        | run any other torq.sh verb, passed straight through       |
   | `query` `graph` `schema`                      | read a running stack                                      |
   | `new` `install`                               | write a job into the tree, or place one built elsewhere   |
   | `backfill` `preview` `gaps` `audit` `receive` | operate a job and its runs                                |
@@ -1349,7 +1357,7 @@ One meaning per option name (#1729):
 
   | old                                                                                     | new                             |
   | ---                                                                                     | ---                             |
-  | `--port` on `start` `up` `stop` `restart` `raw` `summary` `graph` `list`                | `--base-port`                   |
+  | `--port` on `start` `stop` `restart` `exec` `summary` `graph` `list`                    | `--base-port`                   |
   | `--port` on `config get` `data replay` `connector start` `deploy verify` `job backfill` | `--base-port`                   |
   | `job receive --port`                                                                    | `--listen-port`                 |
   | `query --target NAME`                                                                   | `query --tunnel NAME`           |
@@ -1391,6 +1399,23 @@ stack is PROC, any other is the expression or table, so
 `uqs query 'count quote'` still asks the gateway and `uqs schema 'crypto*'`
 still reads rdb1. A job or worker is JOB in every command (`job backfill JOB`,
 `job contract export JOB`), a process PROC (`config get PROC`).
+
+Fewer, regular top-level commands (#1734):
+
+  | old                   | new                      |
+  | --------------------- | ------------------------ |
+  | `uqs up [PROC...]`    | `uqs start -f [PROC...]` |
+  | `uqs raw -- VERB ...` | `uqs exec -- VERB ...`   |
+
+`start`, `restart` and `stop` take one option set: the processes positionally,
+`--profile` and `--base-port` on all three; `start` and `restart` add the same
+`--follow`/`-f`, `--level`, `--show-command` and checks, so `restart -f` is
+`start -f` for a fleet already up. `stop` adds `--kill` instead. A connector's
+whole lifecycle is its own group,
+`uqs connector start|stop|restart|status|logs NAME`, not the stack's verbs with
+a `connector:` prefix: a connector is no torq.sh process, so it takes none of
+`start`'s options and has start options of its own, and rule 1 puts the noun
+first.
 
 `--port` is now only ever one process's port (`query`, `schema`);
 `query --tunnel` keeps querying a target through an ssh tunnel from here, so

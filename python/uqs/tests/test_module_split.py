@@ -174,7 +174,8 @@ def test_the_leaves_stay_leaves():
     """A leaf that imported a folder could close a cycle through it."""
     source = (PKG / "src" / "uqs" / "interpreter.py").read_text()
     reached = {m.group(1) or m.group(2) for m in _IMPORT.finditer(source)}
-    assert reached <= {"paths"}, reached
+    # logger reaches nothing of uqs beyond itself, as paths already relies on.
+    assert reached <= {"paths", "logger"}, reached
     for leaf in ("runtimes.py", "timefmt.py", "liveness.py", "portexpr.py"):
         source = (PKG / "src" / "uqs" / leaf).read_text()
         assert not {m.group(1) or m.group(2) for m in _IMPORT.finditer(source)}, leaf

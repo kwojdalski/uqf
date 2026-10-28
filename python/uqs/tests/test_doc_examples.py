@@ -121,7 +121,7 @@ def test_a_session_loads_only_what_its_blocks_use(tmp_path, body, loads):
 # ------------------------------------------- a table's display, run in q (#515)
 #
 # The comparison itself is q (`.docex.display`), so these need an interpreter -
-# KDB-X, or PeachQ when UQF_Q_IMPL says so. Without one they skip; the q-docs
+# $QCMD, KDB-X or PeachQ as it answers. Without one they skip; the q-docs
 # lane still runs the docs' own table transcripts every CI run.
 
 TABLE = """q)([] sym:`EURUSD`GBPUSD; px:1.1 1.27; n:1 2)
