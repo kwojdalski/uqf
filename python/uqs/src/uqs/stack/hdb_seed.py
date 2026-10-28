@@ -38,7 +38,9 @@ def seed(
     partitions, so a table the source lacked a column of is rectangular.
     """
     if target.runtime == source.runtime:
-        raise UqsError(f"--from {source.runtime} is the runtime being seeded - name another")
+        raise UqsError(
+            f"--from-runtime {source.runtime} is the runtime being seeded - name another"
+        )
     src_hdb, dst_hdb = source.hdb_dir, target.hdb_dir
     if not src_hdb.is_dir():
         raise UqsError(
@@ -48,7 +50,7 @@ def seed(
     if not (dst_hdb.is_dir() and target.generated_schema.is_file()):
         raise UqsError(f"the {target.runtime} runtime is not bootstrapped: no {dst_hdb}")
     if first is not None and last is not None and first > last:
-        raise UqsError(f"--dates {first}..{last} is empty: it starts after it ends")
+        raise UqsError(f"no partition date lies in the range: {first} is after {last}")
     q = q_interpreter()
     if q is None:
         raise UqsError("seeding needs q, and no interpreter is runnable - set QCMD")

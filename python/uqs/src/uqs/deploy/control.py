@@ -142,15 +142,18 @@ def remote_for(name: str | None, root: Path) -> Remote:
             f"{what} - targets in {targets.declaration_path(root)}: {known}; "
             "`uqs deploy history` shows the deployments"
         )
+    return remote_from(label, t)
+
+
+def remote_from(label: str, t: dict) -> Remote:
+    """A Remote from a target's merged settings `t`, which name host and
+    dest: a declared target, or one `uqs target add --check` is about to save."""
     absent = [k for k in ("host", "dest") if not t.get(k)]
     if absent:
         raise UqsError(f"target {label} sets no {', '.join(absent)}")
-    host, dest, user = str(t["host"]), str(t["dest"]), t.get("remote_user")
     # The same shapes make_config holds a push to: both reach a remote shell.
-    if host.startswith("-") or any(c.isspace() for c in host):
-        raise UqsError(f"target {label}: host {host!r} is not an ssh destination")
-    if not dest.startswith("/") or any(c.isspace() for c in dest):
-        raise UqsError(f"target {label}: dest {dest!r} must be an absolute path without spaces")
+    targets.remote_shape(label, t)
+    host, dest, user = str(t["host"]), str(t["dest"]), t.get("remote_user")
     mode, python, env_file = settings(label, t)
     return Remote(
         label, host, dest, str(user) if user else None,

@@ -12,7 +12,7 @@ What is real:
     this checkout's release files (payload.tracked_files), with the uqs wheel
     built from this tree by `uv build --offline` and, as its
     locked dependencies, the wheels of what `uqs --version` imports - typer,
-    rich, loguru and their requirements - packed from this environment's
+    rich, loguru, tomlkit and their requirements - packed from this environment's
     installed distributions, with their hashes in requirements.txt;
   - the server side: the push's own scripts run by bash - the write-once
     runtime installs, the probes, transfer and prepare - and the installer run
@@ -70,7 +70,7 @@ SOURCE = Path(sys.base_prefix)
 RID = "20261026T000000Z-0123456789ab"
 #: What `uqs --version` imports beyond uqs itself: uqs.cli's import-time
 #: third-party packages, measured; their requirements join them.
-ROOTS = ("typer", "rich", "loguru", "packaging")
+ROOTS = ("typer", "rich", "loguru", "packaging", "tomlkit")
 #: A sitecustomize: every connect and name lookup is logged, then refused.
 GUARD = """
 import os, socket

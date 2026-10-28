@@ -169,7 +169,7 @@ def _printed_command(output: str) -> str:
 def test_a_nanosecond_gap_is_widened_to_the_microsecond_backfill_carries(monkeypatch):
     """The start rounds down and the end up: the refill covers the whole hole,
     and `parse_bound`, which stops at the microsecond, accepts both."""
-    from uqs.stack import backfill
+    from uqs import timerange
 
     result = _gaps_cli(monkeypatch, [_NS_HOLE], ["hdb_demo_markouts_backfill"])
     assert result.exit_code == 0, result.output
@@ -177,10 +177,10 @@ def test_a_nanosecond_gap_is_widened_to_the_microsecond_backfill_carries(monkeyp
     assert "--from 2026.09.13D10:00:01.123456000 --to 2026.09.13D10:04:07.987655000" in command, (
         command
     )
-    assert backfill.parse_bound("--from", command.split("--from ")[1].split()[0]) == datetime(
+    assert timerange.parse_bound("--from", command.split("--from ")[1].split()[0]) == datetime(
         2026, 9, 13, 10, 0, 1, 123456, tzinfo=UTC
     )
-    assert backfill.parse_bound("--to", command.split("--to ")[1].split()[0]) == datetime(
+    assert timerange.parse_bound("--to", command.split("--to ")[1].split()[0]) == datetime(
         2026, 9, 13, 10, 4, 7, 987655, tzinfo=UTC
     )
 

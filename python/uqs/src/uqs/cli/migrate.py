@@ -26,7 +26,10 @@ def migrate(
     ] = None,
     apply: Annotated[
         bool,
-        typer.Option("--apply", help="stage, validate, and replace the table partition"),
+        typer.Option(
+            "--apply",
+            help="Stage, validate, and replace the table partition; without it, a dry run",
+        ),
     ] = False,
 ) -> None:
     """Migrate one HDB date/table to this release's schema.

@@ -17,6 +17,7 @@ from typer.testing import CliRunner
 
 from uqs import cli
 from uqs import paths as stack_paths
+from uqs.cli import replay as cli_replay
 from uqs.paths import UqsError
 from uqs.stack import replay, runtime
 
@@ -166,16 +167,56 @@ def test_a_tplogdir_that_does_not_exist_names_the_plant_that_claims_it(logs):
         replay.log_dirs(missing)
 
 
-@pytest.mark.parametrize("text", ["2026.09.23", "2026-09-23"])
-def test_a_date_is_taken_in_either_spelling(text):
-    """The log directories are named the q way; every other date this CLI
-    reads is ISO."""
-    assert replay.parse_date(text) == "2026.09.23"
+@pytest.mark.parametrize(
+    "given",
+    [
+        ["--date", "2026.09.23"],
+        ["--date", "2026-09-23"],
+        ["--from", "2026-09-23", "--to", "2026-09-24"],
+        ["--from", "2026.09.23D00:00", "--to", "2026.09.24"],
+    ],
+)
+def test_the_day_is_given_as_any_range_that_is_one_whole_day(monkeypatch, given):
+    """The log directories are named the q way; the range is the one every
+    command takes (#1735)."""
+    seen = {}
+
+    def plan(**kw):
+        seen.update(kw)
+        raise UqsError("stop here")
+
+    monkeypatch.setattr(replay, "plan", plan)
+    runner.invoke(cli.app, ["data", "replay", *given])
+    assert seen["date"] == "2026.09.23"
 
 
-def test_a_date_that_is_neither_is_refused_by_shape():
-    with pytest.raises(UqsError, match="--date must be"):
-        replay.parse_date("23/09/2026")
+def test_no_day_is_the_plants_newest(monkeypatch):
+    seen = {}
+
+    def plan(**kw):
+        seen.update(kw)
+        raise UqsError("stop here")
+
+    monkeypatch.setattr(replay, "plan", plan)
+    runner.invoke(cli.app, ["data", "replay"])
+    assert seen["date"] is None
+
+
+@pytest.mark.parametrize(
+    "given",
+    [
+        ["--from", "2026-09-23", "--to", "2026-09-25"],
+        ["--from", "2026-09-23T06:00", "--to", "2026-09-24T06:00"],
+    ],
+)
+def test_a_range_that_is_not_one_whole_day_is_refused(monkeypatch, given):
+    """`_die` logs through loguru, which CliRunner cannot capture: the refusal
+    is read off the error it was handed."""
+    refused = []
+    monkeypatch.setattr(replay, "plan", lambda **kw: refused.append("planned"))
+    monkeypatch.setattr(cli_replay, "_die", lambda exc: refused.append(str(exc)))
+    runner.invoke(cli.app, ["data", "replay", *given])
+    assert refused and refused[0].startswith("data replay replays one whole day")
 
 
 def test_the_flags_are_the_switches_tickerlogreplay_reads():
