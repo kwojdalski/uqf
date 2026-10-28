@@ -716,18 +716,10 @@ def _identify(q: str) -> str:
     return _peachq_module().identify(q)
 
 
-def _peachq() -> str | None:
-    """A PeachQ already on this machine; never built here. The pinned build
-    first: an older one left in the cache can differ from it, and CI has only
-    the pinned one."""
-    pinned = _peachq_module().load_pin()["commit"]
-    candidates = [os.environ.get("UQF_PEACHQ", "")]
-    cache = Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "uqf" / "peachq"
-    builds = sorted(cache.glob("*/q"), key=lambda p: (not p.parent.name.startswith(pinned), p))
-    candidates += [str(p) for p in builds]
-    return next(
-        (c for c in candidates if c and Path(c).is_file() and _identify(c) == "peachq"), None
-    )
+def _peachq(request: pytest.FixtureRequest) -> str:
+    """The `peachq` fixture's PeachQ (conftest.py): --peachq PATH, else $QCMD
+    when it is PeachQ, else the pinned build - one rule, uqs.interpreter's."""
+    return str(request.getfixturevalue("peachq"))
 
 
 def _kdbx() -> str | None:
@@ -737,9 +729,9 @@ def _kdbx() -> str | None:
 
 INTERPRETERS = {
     "peachq": _peachq,
-    "kdbx": _kdbx,
+    "kdbx": lambda _request: _kdbx(),
     # The server-equivalent 4.0 build, where one is installed.
-    "kdb40": lambda: os.environ.get("UQF_KDB40") or None,
+    "kdb40": lambda _request: os.environ.get("UQF_KDB40") or None,
 }
 
 NESTED_PROBE = '\\d .nest.probe\nf:{x+1}\n\\d .\n-1 "NESTED_OK";\nexit 0\n'
@@ -753,8 +745,8 @@ def _accepts_nested(q: str, tmp: Path) -> bool:
     return "NESTED_OK" in _run_q(q, tmp, probe).stdout
 
 
-def _q_for(name: str, tmp: Path) -> tuple[str, bool]:
-    q = INTERPRETERS[name]()
+def _q_for(name: str, tmp: Path, request: pytest.FixtureRequest) -> tuple[str, bool]:
+    q = INTERPRETERS[name](request)
     if not q:
         pytest.skip(f"no {name} interpreter on this machine")
     return q, _accepts_nested(q, tmp)
@@ -774,8 +766,8 @@ def _run_q(q: str, cwd: Path, script: Path) -> subprocess.CompletedProcess:
 
 @pytest.mark.parametrize("interp", sorted(INTERPRETERS))
 @pytest.mark.parametrize("fixture", sorted(FIXTURES))
-def test_converted_fixtures_compute_what_the_originals_do(interp, fixture, tmp_path):
-    q, nested_ok = _q_for(interp, tmp_path)
+def test_converted_fixtures_compute_what_the_originals_do(interp, fixture, tmp_path, request):
+    q, nested_ok = _q_for(interp, tmp_path, request)
     trees = {"converted": converted(FIXTURES[fixture])}
     if nested_ok:
         trees["original"] = FIXTURES[fixture]
@@ -790,8 +782,8 @@ def test_converted_fixtures_compute_what_the_originals_do(interp, fixture, tmp_p
 
 
 @pytest.mark.parametrize("interp", sorted(INTERPRETERS))
-def test_the_converted_status_and_interval_modules_work(interp, tmp_path, capsys):
-    q, nested_ok = _q_for(interp, tmp_path)
+def test_the_converted_status_and_interval_modules_work(interp, tmp_path, capsys, request):
+    q, nested_ok = _q_for(interp, tmp_path, request)
     out = tmp_path / "portable"
     corpus = nested_corpus()
     root = tmp_path / "nested"
@@ -834,11 +826,11 @@ def _our_globals(path: str, toks: list, st, lam) -> tuple[set[str], set[str]]:
 
 
 @pytest.mark.parametrize("interp", sorted(INTERPRETERS))
-def test_bindings_agree_with_qs_own_parser(interp, tmp_path):
+def test_bindings_agree_with_qs_own_parser(interp, tmp_path, request):
     """For every lambda in a nested context in the tree, the names the
     converter qualifies are exactly the globals q itself lists for it -
     `(value f) 3` - less builtins and qSQL columns (which q may list too)."""
-    q, _ = _q_for(interp, tmp_path)
+    q, _ = _q_for(interp, tmp_path, request)
     files = subprocess.run(
         ["git", "-C", str(REPO), "ls-files", "*.q"], capture_output=True, text=True, check=True
     ).stdout.split()

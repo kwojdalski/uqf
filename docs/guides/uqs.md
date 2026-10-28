@@ -416,12 +416,12 @@ start.
 
 `peachq` is `torq`'s stack on [PeachQ](https://github.com/peachq-org/peachq),
 the MIT-licensed q interpreter, rather than KDB-X: the starter pack as it ships,
-with no connection cap and no licence needed. Its binary comes from
-`scripts/peachq.py`: `UQF_PEACHQ` if set (with `UQF_PEACHQ_REASON`), otherwise
-the pinned build from the cache, built into the cache the first time. That stack
-alone gets `UQF_Q_IMPL=peachq` and that `QCMD`. Your shell's own `QCMD` and
-`PATH` are left alone, and `summary` names the interpreter on its first line.
-KDB-X stays the default and the interpreter everything here is verified against.
+with no connection cap and no licence needed. Its binary is your `QCMD` when
+that is PeachQ, otherwise the pinned build from `scripts/peachq.py`'s cache,
+built into the cache the first time (`uqs.interpreter.peachq_binary`). That
+stack alone gets that `QCMD`; your shell's own `QCMD` and `PATH` are left alone,
+and `summary` names the interpreter on its first line. KDB-X stays the default
+and the interpreter everything here is verified against.
 
 ```
 uqs --runtime peachq start --profile capture
@@ -563,10 +563,10 @@ has (see the table). On that licence it is refused like any profile over the
 cap. On a q licence that allows more concurrent connections, say how many with
 `UQS_LICENCE_CONNECTIONS` and it starts: that setting is the budget every start
 is held to - `--profile`, `uqs list profiles`' `fits` column and the
-positional-start warning. On PeachQ (`UQF_Q_IMPL=peachq`, see the README's
-Requirements) there is no cap at all, so `all` starts as it is. `all` leaves out
-`crypto`, because the mock replaces cryptorust's recorders rather than joining
-them; ask for it with `--profile all,crypto`.
+positional-start warning. On PeachQ (`QCMD` naming a PeachQ binary, see the
+README's Requirements) there is no cap at all, so `all` starts as it is. `all`
+leaves out `crypto`, because the mock replaces cryptorust's recorders rather
+than joining them; ask for it with `--profile all,crypto`.
 
 Profiles never change `startwithall`, so `start all` is untouched. A closure
 stops at a table fed from outside the stack: `fx` needs `crypto_book` but does
@@ -694,8 +694,10 @@ interpreter: kdbx (/Users/me/.kx/bin/q) - 16 connections
 interpreter: peachq (/opt/peachq/q) - no connection cap
 ```
 
-The implementation is asked of the binary; when it disagrees with `UQF_Q_IMPL`,
-a warning follows. `uqs list env` carries both as rows.
+The implementation is asked of the binary, which is the only thing that says it
+(#1753); a binary that will not say is named in a warning, and so is a PeachQ
+other than the pinned build. `uqs list env` carries the answer as its
+`q_impl (binary)` row.
 
 `summary` shows the whole graph, not just the unsatisfied part of it, in three
 columns derived from the same declarations:

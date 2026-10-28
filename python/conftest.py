@@ -23,7 +23,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
 #: Tests that cannot pass with PeachQ as the q, each with why: strict xfails
-#: when UQF_Q_IMPL=peachq, so a listed test that passes fails the run too.
+#: when $QCMD answers as PeachQ, so a listed test that passes fails the run too.
 PEACHQ_GAPS = REPO_ROOT / "python" / "peachq_known_gaps.txt"
 
 
@@ -39,8 +39,11 @@ def peachq_gaps() -> dict[str, str]:
 
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
     """On PeachQ, hold each listed test to failing: CI's PeachQ lane runs every
-    Python test with PeachQ as the q, and this list is what keeps it blocking."""
-    if os.environ.get("UQF_Q_IMPL") != "peachq":
+    Python test with PeachQ as the q, and this list is what keeps it blocking.
+    Which q that is, the binary says (#1753): QCMD naming PeachQ is enough."""
+    from uqs.interpreter import PEACHQ, q_impl
+
+    if q_impl() != PEACHQ:
         return
     gaps = peachq_gaps()
     for item in items:
