@@ -1,4 +1,4 @@
-"""`uqs query --target NAME`: a process on a deployed target, reached from
+"""`uqs query --tunnel NAME`: a process on a deployed target, reached from
 this machine through an ssh tunnel (#1561).
 
 The global `uqs --target NAME query ...` (deploy/control.py) runs `uqs query`
@@ -52,7 +52,7 @@ def list_args(runtime: str | None, base_port: int | None) -> list[str]:
     was chosen here, so the release's own deploy.env otherwise decides."""
     args = ["--runtime", runtime] if runtime else []
     args += ["list", "processes", "--json"]
-    return args + (["--port", str(base_port)] if base_port is not None else [])
+    return args + (["--base-port", str(base_port)] if base_port is not None else [])
 
 
 def remote_ports(

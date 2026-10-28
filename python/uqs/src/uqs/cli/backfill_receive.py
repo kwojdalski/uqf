@@ -1,6 +1,6 @@
 """The two halves of a backfill whose HDB is on another machine (#1650).
 
-`uqs job receive --contract ID --attach NAME --port P`, on the stack's machine,
+`uqs job receive --contract ID --attach NAME --listen-port P`, on the stack's machine,
 starts the receiver for a receiver contract approved there (`uqs job contract`);
 `uqs job backfill WORKER --attach NAME --writer HOST:P ...`, on the source's
 machine, extracts and sends to it. What each decides is in
@@ -16,6 +16,7 @@ from typing import Annotated
 import typer
 
 from uqs.attach import backfill_remote, backfill_run, config, service
+from uqs.cli.renames import renamed
 from uqs.cli.shared import JOB_OPERATIONS_PANEL, _die, _paths, console, job_app
 from uqs.paths import UqsError
 
@@ -46,14 +47,18 @@ def extract(
         _die(UqsError("--fixture is refused with --attach: a fixture in a native HDB is data"))
         return
     if port is not None:
-        _die(UqsError("--port is not taken with --writer: the receiver's address is the stack's"))
+        _die(
+            UqsError(
+                "--base-port is not taken with --writer: the receiver's address is the stack's"
+            )
+        )
         return
     if force:
         if on_conflict not in (None, "append"):
             _die(
                 UqsError(
-                    f"--force only appends: --on-conflict {on_conflict} would need to read what "
-                    "the writer holds, and nothing is read there"
+                    f"--any-writer only appends: --on-conflict {on_conflict} would need to "
+                    "read what the writer holds, and nothing is read there"
                 )
             )
             return
@@ -102,7 +107,9 @@ def extract(
     raise typer.Exit(code=code)
 
 
-@job_app.command("receive", rich_help_panel=JOB_OPERATIONS_PANEL)
+@job_app.command(
+    "receive", rich_help_panel=JOB_OPERATIONS_PANEL, cls=renamed({"--port": "--listen-port"})
+)
 def receive(
     attach: Annotated[
         str, typer.Option("--attach", help="The saved, verified attachment whose HDB it writes")
@@ -116,7 +123,7 @@ def receive(
         ),
     ] = None,
     port: Annotated[
-        int | None, typer.Option("--port", help="The port the extractor connects to")
+        int | None, typer.Option("--listen-port", help="The port the extractor connects to")
     ] = None,
     stop: Annotated[
         bool,
@@ -135,7 +142,7 @@ def receive(
     attachment here (#1717), and takes the row limit and the permitted conflict
     policies from that approval. It admits the attachment's destination against the
     live stack as `uqs job backfill --attach` does - the pinned HDB, its writers and
-    readers, the end-of-day fence - then listens on --port for the extractor
+    readers, the end-of-day fence - then listens on --listen-port for the extractor
     (`uqs job backfill WORKER --attach NAME --writer THIS-HOST:PORT ...` on the
     source's machine). Every batch is checked against the contract - dataset,
     columns and types, window column, row key, partition, conflict policy - and
@@ -152,7 +159,11 @@ def receive(
             console.print(f"stopped: {names}", markup=False)
         raise typer.Exit(code=0)
     if port is None:
-        _die(UqsError("--port is required to start a receiver: the port the extractor connects to"))
+        _die(
+            UqsError(
+                "--listen-port is required to start a receiver: the port the extractor connects to"
+            )
+        )
         return
     if contract is None:
         _die(

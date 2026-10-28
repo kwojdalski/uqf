@@ -4,7 +4,7 @@ An attached backfill (backfill_run) writes the stack's HDB from the machine it
 runs on, so the HDB must be on that machine. When the source's driver and
 credentials must stay somewhere else, the two halves run apart:
 
-  receive   on the STACK's machine: `uqs job receive --contract ID --attach NAME --port P`.
+  receive   on the STACK's machine: `uqs job receive --contract ID --attach NAME --listen-port P`.
             Takes the receiver contract approved there (uqs.attach.receiver_contract)
             - never the worker, whose code that machine need not have - and admits
             its destination exactly as an attached backfill does: the verified
@@ -63,7 +63,7 @@ WRITER_PASSWORD_ENV = "UQF_ATTACH_WRITER_PASSWORD"
 #: The receiver's batch journal and access file, in the destination's state directory.
 JOURNAL = "remote_journal"
 ACCESS = "receiver.access"
-#: --force: the HDB a destination names when the attachment pins none - the
+#: --any-writer: the HDB a destination names when the attachment pins none - the
 #: writer's own `.wdb.hdbdir`, resolved by that process - and the prefix that keeps a
 #: forced destination's identity, and so its coverage, apart from a checked one.
 FORCED_HDB = ".wdb.hdbdir"
@@ -131,7 +131,7 @@ def forced_destination(
     writer: str,
     attach_root: Path | None = None,
 ) -> Destination:
-    """`--force`: the process at `writer` itself, with nothing about it checked.
+    """`--any-writer`: the process at `writer` itself, with nothing about it checked.
 
     The attachment is read for its stack's credential and nothing else: it need not
     be verified, pin an HDB or publish the dataset. The rows go wherever that process
@@ -238,7 +238,7 @@ def receive(
             "no q interpreter - set $QCMD, or put q on PATH; the receiver is a q process"
         )
     if not 0 < port < 65536:
-        raise UqsError(f"--port {port} is not a port")
+        raise UqsError(f"--listen-port {port} is not a port")
     contract, binding, dest, record = receiver_contract.approved(
         paths, attachment, contract_id, attach_root
     )

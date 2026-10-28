@@ -140,9 +140,9 @@ def wait_for(check, what: str, seconds: float = 150.0) -> None:
 
 
 def restart(stack, name: str) -> None:
-    stack.uqs("stop", name, "--port", str(stack.port))
+    stack.uqs("stop", name, "--base-port", str(stack.port))
     time.sleep(1.0)
-    run = stack.uqs("start", name, "--port", str(stack.port))
+    run = stack.uqs("start", name, "--base-port", str(stack.port))
     assert run.returncode == 0, run.stdout + run.stderr
 
 

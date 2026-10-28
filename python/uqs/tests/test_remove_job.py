@@ -282,7 +282,7 @@ def test_a_fresh_scaffold_leaves_nothing_naming_it(tree):
 
 def test_an_example_and_a_docs_page_naming_it_are_listed(tree):
     """The acceptance case: hdb_transfer has an example script and a docs page,
-    which --force would otherwise have left stale."""
+    which --even-if-edited would otherwise have left stale."""
     for rel in ("scripts/examples/hdb_transfer_example.q", "docs/scaffolding/hdb-transfer.md"):
         (tree / rel).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(UQF_ROOT / rel, tree / rel)

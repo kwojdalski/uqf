@@ -196,7 +196,7 @@ def attach(
     A new attachment needs --job and --stack-id; a saved one is reused by name.
     Replaces the stage commands plan, validate, status, apply, verify and start.
     """
-    debug = _debug_requested(ctx, False)
+    debug = _debug_requested(ctx)
     out = Output(as_json, debug)
     out.doc = {"attachment": name, "dry_run": dry_run}
     refuse_legacy(out, "job attach", name, ctx.args)
@@ -343,7 +343,7 @@ def detach(
     stack drifted or ownership cannot be shown, nothing is removed and what a
     person has to do is listed.
     """
-    out = Output(as_json, _debug_requested(ctx, False))
+    out = Output(as_json, _debug_requested(ctx))
     out.doc = {"attachment": name, "dry_run": dry_run}
     refuse_legacy(out, "job detach", name, ctx.args)
     began = time.monotonic()

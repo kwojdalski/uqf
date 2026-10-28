@@ -188,7 +188,7 @@ def _known_procs(monkeypatch):
     monkeypatch.setattr(stack_procs, "list_process_names", lambda _paths: ["rdb1", "stp1"])
 
 
-@pytest.mark.parametrize("command", ["start", "stop", "restart", "start --print", "up"])
+@pytest.mark.parametrize("command", ["start", "stop", "restart", "start --show-command", "up"])
 def test_an_unknown_process_is_refused_before_anything_runs(monkeypatch, _known_procs, command):
     """A typo must not reach torq.sh.
 
@@ -344,32 +344,32 @@ def test_a_lifecycle_command_passes_the_process_names_through(monkeypatch, comma
     assert rec.args[1] == "rdb1 hdb1"
 
 
-@pytest.mark.parametrize("command", ["start", "stop", "restart", "start --print"])
+@pytest.mark.parametrize("command", ["start", "stop", "restart", "start --show-command"])
 def test_the_port_option_reaches_core(monkeypatch, command):
     """A dropped --port silently drives the DEFAULT stack.
 
     That is the worst shape of wiring bug available here: every command
     succeeds, against the wrong fleet.
     """
-    fn = "print_procs" if command == "start --print" else command
+    fn = "print_procs" if command == "start --show-command" else command
     rec = _patch(monkeypatch, runtime, fn, result=Completed())
-    runner.invoke(cli.app, [*command.split(), "--port", "7000"])
+    runner.invoke(cli.app, [*command.split(), "--base-port", "7000"])
     assert rec.kwargs["base_port"] == 7000
 
 
-@pytest.mark.parametrize("command", ["start", "stop", "restart", "start --print"])
+@pytest.mark.parametrize("command", ["start", "stop", "restart", "start --show-command"])
 def test_a_failing_subprocess_exit_code_survives(monkeypatch, command):
     """The property CI depends on. A non-zero torq.sh must not become a
     zero `uqs`."""
-    fn = "print_procs" if command == "start --print" else command
+    fn = "print_procs" if command == "start --show-command" else command
     _patch(monkeypatch, runtime, fn, result=Completed(returncode=3))
     result = runner.invoke(cli.app, command.split())
     assert result.exit_code == 3
 
 
-@pytest.mark.parametrize("command", ["start", "stop", "restart", "start --print"])
+@pytest.mark.parametrize("command", ["start", "stop", "restart", "start --show-command"])
 def test_a_refusal_exits_one_rather_than_raising(monkeypatch, command):
-    fn = "print_procs" if command == "start --print" else command
+    fn = "print_procs" if command == "start --show-command" else command
     _patch(monkeypatch, runtime, fn, raises=UqsError("no such process"))
     result = runner.invoke(cli.app, command.split())
     assert result.exit_code == 1
@@ -992,7 +992,7 @@ def test_config_get_resolves_placeholders_unless_raw_is_given(monkeypatch):
     rec = _patch(monkeypatch, stack_procs, "get_process_config", result={})
     runner.invoke(cli.app, ["config", "get", "rdb1"])
     assert rec.kwargs["resolve"] is True
-    runner.invoke(cli.app, ["config", "get", "rdb1", "--raw"])
+    runner.invoke(cli.app, ["config", "get", "rdb1", "--unresolved"])
     assert rec.kwargs["resolve"] is False
 
 
@@ -1169,7 +1169,7 @@ def test_multitail_passes_its_options_to_core_and_execs(monkeypatch):
     build = _patch(monkeypatch, stack_multitail, "multitail_command", result=["multitail", "x"])
     run = _patch(monkeypatch, stack_multitail, "run_multitail")
     result = runner.invoke(
-        cli.app, ["logs", "rdb1 stp1", "--multitail", "--stream", "err", "-c", "2", "-n", "7"]
+        cli.app, ["logs", "rdb1 stp1", "--multitail", "--stream", "err", "-c", "2", "-l", "7"]
     )
     assert result.exit_code == 0
     assert build.args[1] == "rdb1 stp1"
@@ -1180,7 +1180,7 @@ def test_multitail_passes_its_options_to_core_and_execs(monkeypatch):
 def test_multitail_print_shows_the_command_and_runs_nothing(monkeypatch):
     _patch(monkeypatch, stack_multitail, "multitail_command", result=["multitail", "-t", "a b"])
     run = _patch(monkeypatch, stack_multitail, "run_multitail")
-    result = runner.invoke(cli.app, ["logs", "--multitail", "--print"])
+    result = runner.invoke(cli.app, ["logs", "--multitail", "--show-command"])
     assert result.exit_code == 0
     assert "multitail -t 'a b'" in result.stdout
     assert run.calls == []
@@ -1408,7 +1408,7 @@ def test_feed_status_with_no_name_shows_every_feed(monkeypatch):
     ("argv", "message"),
     [
         (["--stream", "err"], "--stream needs --multitail"),
-        (["--print"], "--print needs --multitail"),
+        (["--show-command"], "--show-command needs --multitail"),
         (["--multitail", "-f"], "--follow does not apply with --multitail"),
         (["--multitail", "--level", "ERROR"], "--level does not apply with --multitail"),
     ],
@@ -1927,7 +1927,7 @@ def test_a_routed_query_is_laid_out_by_the_gateway_not_wrapped_again(monkeypatch
 def test_raw_sends_to_the_gateway_as_typed(monkeypatch):
     _conn(monkeypatch, running=("gateway1",), ports={"gateway1": "6057"})
     rec = _patch(monkeypatch, runtime, "query", result="42")
-    assert runner.invoke(cli.app, ["query", "tables[]", "--raw"]).exit_code == 0
+    assert runner.invoke(cli.app, ["query", "tables[]", "--no-gateway"]).exit_code == 0
     assert rec.args[0] == "tables[]"
 
 
@@ -2011,7 +2011,7 @@ def test_raw_with_nothing_opens_plain_qcon_on_the_gateway(monkeypatch):
     monkeypatch.setattr(
         query_cli.stack_gateway, "query_session", lambda *a, **k: pytest.fail("not the session")
     )
-    assert runner.invoke(cli.app, ["query", "--raw"]).exit_code == 0
+    assert runner.invoke(cli.app, ["query", "--no-gateway"]).exit_code == 0
     assert any("6057" in part for part in seen["argv"])
 
 

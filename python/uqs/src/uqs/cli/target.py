@@ -189,11 +189,12 @@ def forward(name: str, yes: bool, args: list[str], *, interactive: bool) -> int:
         raise UqsError("`uqs target ...` manages this machine's targets - run it without --target")
     if words[:2] == ("list", "targets"):
         raise UqsError("`uqs list targets` lists this machine's targets - run it without --target")
-    if words[:1] == ("query",) and any(a == "--target" or a.startswith("--target=") for a in args):
-        # Each --target means a different machine runs the query (#1561).
+    tunnel = ("--tunnel", "--target")  # --target: query's old spelling (#1729)
+    if words[:1] == ("query",) and any(a.partition("=")[0] in tunnel for a in args):
+        # Each names a different machine to run the query on (#1561).
         raise UqsError(
-            "give --target once: `uqs --target NAME query` runs the query on the server, "
-            "`uqs query --target NAME` runs it here through an ssh tunnel"
+            "give the target once: `uqs --target NAME query` runs the query on the server, "
+            "`uqs query --tunnel NAME` runs it here through an ssh tunnel"
         )
     r = control.remote_for(name, repo_root())
     shown = " ".join(["uqs", *args])

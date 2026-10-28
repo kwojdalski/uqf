@@ -114,7 +114,7 @@ def instances(
 ) -> dict[str, list[int]]:
     """Every local process this stack declares, with EVERY pid whose command
     line matches it, oldest first - a duplicate started by hand included.
-    status_table reports the newest, as torq.sh does; `uqs stop --force`
+    status_table reports the newest, as torq.sh does; `uqs stop --kill`
     kills them all (stack/force_stop.py)."""
     try:
         commands = _command_lines(timeout)

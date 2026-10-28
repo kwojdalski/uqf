@@ -1,4 +1,4 @@
-"""`uqs stop --force`'s option and report; the killing is uqs.stack.force_stop."""
+"""`uqs stop --kill`'s option and report; the killing is uqs.stack.force_stop."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from uqs.stack import force_stop
 ForceOpt = Annotated[
     bool,
     typer.Option(
-        "--force",
+        "--kill",
         help="SIGKILL every instance, found by command line rather than by its port - "
         "for a process stuck before it opened its port, a duplicate, or one that ignores "
         "a normal stop. The last resort: no clean shutdown, and a tickerplant may leave "

@@ -1,6 +1,6 @@
 """Whether another stack already holds the ports a start needs (#762).
 
-Two runtimes - or one runtime started twice on different `--port`s - can be
+Two runtimes - or one runtime started twice on different `--base-port`s - can be
 on one machine at once. When their port spans overlap, a start used to fail
 process by process with bind errors that named no cause. This finds the
 other stack first and refuses by name.
@@ -91,7 +91,7 @@ def describe(paths: UqsPaths, holder: Holder) -> tuple[str, str]:
     for runtime in RUNTIMES.values():
         if holder.data_dir == paths.repo_root / "output" / runtime.data_dir:
             flag = "" if runtime.name == DEFAULT_RUNTIME else f" --runtime {runtime.name}"
-            port = "" if holder.stackid == runtime.base_port else f" --port {holder.stackid}"
+            port = "" if holder.stackid == runtime.base_port else f" --base-port {holder.stackid}"
             return (
                 f"the {runtime.name} runtime's stack (base port {holder.stackid})",
                 f"Stop it with `uqs{flag} stop{port}`",
@@ -122,5 +122,5 @@ def refuse_if_taken(paths: UqsPaths, base_port: int | None, procs: str = "all") 
     more = f" and {len(taken) - 5} more" if len(taken) > 5 else ""
     raise UqsError(
         f"{what} is already using ports this start needs: {shown}{more}. "
-        f"{stop}, or start this one elsewhere with --port."
+        f"{stop}, or start this one elsewhere with --base-port."
     )

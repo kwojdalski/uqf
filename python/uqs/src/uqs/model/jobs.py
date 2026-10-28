@@ -9,7 +9,7 @@ processes that publish what it watches.
 
 `state` says whether a job is still a scaffold: its file carries the
 SCAFFOLDED marker `uqs job new` writes and nothing clears until it is written.
-It is the list `uqs job remove` will act on without --force.
+It is the list `uqs job remove` will act on without --even-if-edited.
 """
 
 from __future__ import annotations

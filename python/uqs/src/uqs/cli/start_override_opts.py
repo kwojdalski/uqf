@@ -34,7 +34,7 @@ SkipProfileBudgetOpt = Annotated[
         "--skip-profile-budget-check",
         metavar="REASON",
         help=(
-            "Start (or --print) a --profile past the connection-budget estimate, for "
+            "Start (or --show-command) a --profile past the connection-budget estimate, for "
             "this command only, giving why. Warned and recorded; the licence's own "
             "limit is still enforced by q."
         ),
@@ -53,7 +53,7 @@ def overrides_from(
     skip nothing here - or a UqsError."""
     if skip_q_version is not None and print_only:
         raise UqsError(
-            "--skip-q-version-check with --print: a preview starts nothing, so no "
+            "--skip-q-version-check with --show-command: a preview starts nothing, so no "
             "q version is checked - drop one of them"
         )
     if skip_profile_budget is not None and profile is None:

@@ -20,6 +20,7 @@ import typer
 
 from uqs.cli import completion
 from uqs.cli import query_target as via_target
+from uqs.cli.renames import renamed
 from uqs.cli.shared import (
     ExportOpt,
     QHostOpt,
@@ -118,7 +119,7 @@ def _gateway_session(
     where = f"{host}:{port}" if via is None else via.where
     console.print(
         f"gateway1 at {where} - each line runs as .gw.syncexec[...;{types}]. "
-        "\\\\ or Ctrl-D to leave; uqs query --raw for plain qcon.",
+        "\\\\ or Ctrl-D to leave; uqs query --no-gateway for plain qcon.",
         markup=False,
         style="dim",
     )
@@ -138,7 +139,7 @@ def _gateway_session(
         _die(UqsError(f"could not open a session on gateway1 at {where}: {said}"))
 
 
-@app.command()
+@app.command(cls=renamed({"--raw": "--no-gateway", "--target": "--tunnel"}))
 def query(
     ctx: typer.Context,
     expr: Annotated[
@@ -170,6 +171,8 @@ def query(
     target: Annotated[
         str | None,
         typer.Option(
+            "--tunnel",
+            metavar="TARGET",
             help="deployment target (deploy_targets.toml) to query from here, through an "
             "ssh tunnel opened for the call; ports are the target's release's own",
         ),
@@ -183,7 +186,7 @@ def query(
     raw: Annotated[
         bool,
         typer.Option(
-            "--raw",
+            "--no-gateway",
             help="with the gateway: send as typed, not through .gw.syncexec "
             "(and, with no expression, open plain qcon)",
         ),
@@ -209,16 +212,18 @@ def query(
     `--servers` names other process types - and so is every line of its
     interactive session. A `.gw.*` call or a `\\` command is sent as typed; an
     in-place `update`/`delete ... from `t` is refused (it would change live
-    data); `--raw` sends anything as typed. Any other process gets qcon.
+    data); `--no-gateway` sends anything as typed. Any other process gets qcon.
 
     Results print as q's console prints them; `--render kola` shows the
     Python objects kola makes of them instead. `--export` always writes the
     data itself.
 
-    `--target NAME` asks a deployed target instead, from this machine: an
+    `--tunnel TARGET` asks a deployed target instead, from this machine: an
     ssh tunnel to it opens on a free loopback port for the call and closes
     after, and `--proc` (or the gateway) is resolved to a port by the
-    target's own release. `--port` is then a port on the target.
+    target's own release. `--port` is then a port on the target. `uqs
+    --target TARGET query` runs the whole command on the target instead; with
+    --tunnel, `--export` writes here.
     """
     try:
         render = stack_render.renderer(render)
@@ -234,7 +239,7 @@ def query(
     if target is not None:
         if getattr(ctx.get_parameter_source("host"), "name", None) != "DEFAULT":
             _die(
-                UqsError("--target names the machine to query - give --target or --host, not both")
+                UqsError("--tunnel names the machine to query - give --tunnel or --host, not both")
             )
             return
         try:

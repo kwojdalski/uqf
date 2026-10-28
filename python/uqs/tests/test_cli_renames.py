@@ -1,0 +1,111 @@
+"""Old spellings a rename keeps for one release (#1738 rule 6, #1729).
+
+Each renamed option still parses under its old name, hidden from --help, and
+logs the new spelling when used. The release after removes the row in
+`renamed(...)` - and this file's case for it.
+"""
+
+from __future__ import annotations
+
+from typing import Any
+
+import pytest
+import typer
+from typer.testing import CliRunner
+
+from uqs import cli
+from uqs.cli import renames
+from uqs.stack import multitail as stack_multitail
+
+runner = CliRunner()
+
+#: (command path, old spelling, new spelling): every rename #1729 made.
+RENAMED = [
+    ("start", "--port", "--base-port"),
+    ("start", "--print", "--show-command"),
+    ("up", "--port", "--base-port"),
+    ("stop", "--port", "--base-port"),
+    ("stop", "--force", "--kill"),
+    ("restart", "--port", "--base-port"),
+    ("raw", "--port", "--base-port"),
+    ("summary", "--port", "--base-port"),
+    ("graph", "--port", "--base-port"),
+    ("list", "--port", "--base-port"),
+    ("logs", "-n", "--lines"),
+    ("logs", "--print", "--show-command"),
+    ("query", "--raw", "--no-gateway"),
+    ("query", "--target", "--tunnel"),
+    ("config get", "--port", "--base-port"),
+    ("config get", "--raw", "--unresolved"),
+    ("data replay", "--port", "--base-port"),
+    ("connector start", "--port", "--base-port"),
+    ("deploy verify", "--port", "--base-port"),
+    ("job backfill", "--port", "--base-port"),
+    ("job backfill", "--force", "--any-writer"),
+    ("job receive", "--port", "--listen-port"),
+    ("job remove", "--force", "--even-if-edited"),
+]
+
+
+def _command(path: str):
+    command: Any = typer.main.get_command(cli.app)
+    for word in path.split():
+        command = command.commands[word]
+    return command
+
+
+def _names(command) -> set[str]:
+    return {opt for p in command.params for opt in (*p.opts, *p.secondary_opts)}
+
+
+@pytest.mark.parametrize(("path", "old", "new"), RENAMED)
+def test_the_old_spelling_is_hidden_and_maps_to_the_new(path, old, new):
+    command = _command(path)
+    assert new in _names(command)
+    assert old not in _names(command), f"`{path} {old}` still has a meaning of its own"
+    assert command.renames[old] == new
+
+
+@pytest.mark.parametrize("path", ["summary", "job backfill"])
+def test_a_commands_own_debug_is_the_global_one(path):
+    assert "--debug" not in _names(_command(path))
+    assert _command(path).renames["--debug"] == "--debug"
+
+
+def test_old_spellings_are_rewritten_and_each_warned_about_once(monkeypatch):
+    said = []
+    monkeypatch.setattr(renames, "_warn_renamed", lambda old, new: said.append((old, new)))
+    table = {"--port": "--base-port", "-n": "--lines"}
+    got = renames._rewrite_renamed(
+        ["rdb1", "--port", "7000", "--port=7001", "-n20", "-n", "5", "--", "--port"],
+        table,
+        "uqs logs",
+        None,
+    )
+    assert got == ["rdb1", "--base-port", "7000", "--base-port=7001",
+                   "--lines", "20", "--lines", "5", "--", "--port"]  # fmt: skip
+    assert said == [("--port", "--base-port"), ("-n", "--lines")]
+
+
+def test_a_new_spelling_is_left_alone(monkeypatch):
+    said = []
+    monkeypatch.setattr(renames, "_warn_renamed", lambda old, new: said.append((old, new)))
+    args = ["--base-port", "7000", "--no-gateway"]
+    assert renames._rewrite_renamed(args, {"--port": "--base-port"}, "uqs x", None) == args
+    assert said == []
+
+
+def test_the_old_spelling_still_works_end_to_end(monkeypatch):
+    seen = {}
+    monkeypatch.setattr(
+        stack_multitail,
+        "multitail_command",
+        lambda paths, procs, **kw: seen.update(kw) or ["multitail", "x"],
+    )
+    said = []
+    monkeypatch.setattr(renames, "_warn_renamed", lambda old, new: said.append((old, new)))
+    result = runner.invoke(cli.app, ["logs", "--multitail", "--print", "-n", "7"])
+    assert result.exit_code == 0, result.output
+    assert seen["lines"] == 7
+    assert "multitail x" in result.stdout
+    assert said == [("--print", "--show-command"), ("-n", "--lines")]

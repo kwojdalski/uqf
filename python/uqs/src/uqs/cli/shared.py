@@ -99,7 +99,12 @@ def _configure(
     ctx: typer.Context,
     debug: Annotated[
         bool,
-        typer.Option("--debug", help="Log at DEBUG. Same as LOG_LEVEL=DEBUG, and wins over it."),
+        typer.Option(
+            "--debug",
+            help="Log at DEBUG. Same as LOG_LEVEL=DEBUG, and wins over it. `summary` adds "
+            "how long each process took to load; `job backfill` starts its process with "
+            "-verbose, so its own log carries DEBUG lines too.",
+        ),
     ] = False,
     runtime_name: Annotated[
         str | None,
@@ -164,8 +169,8 @@ def _configure(
     if debug:
         configure_logging(component="uqs", level="DEBUG")
     # Kept for commands that do more than log louder in debug mode - `summary`
-    # adds a section - so `uqs --debug summary` and `uqs summary --debug` are
-    # the same request.
+    # adds a section. `uqs summary --debug`, the old spelling, sets it too
+    # (renamed()).
     ctx.obj = {"debug": debug}
 
 
@@ -193,21 +198,25 @@ def _job(ctx: typer.Context) -> None:
     )
 
 
-def _debug_requested(ctx: typer.Context, flag: bool) -> bool:
-    """Whether debug was asked for in any of the three ways it can be: the
-    command's own `--debug`, the global one, or LOG_LEVEL=DEBUG."""
-    parent = ctx.parent.obj if ctx.parent is not None else None
-    return flag or bool((parent or {}).get("debug")) or _env_log_level() == "DEBUG"
+def _debug_requested(ctx: typer.Context) -> bool:
+    """Whether debug was asked for: the global `--debug` (which a command's
+    own `--debug`, its old spelling, sets too) or LOG_LEVEL=DEBUG."""
+    root = ctx.find_root().obj
+    return bool((root or {}).get("debug")) or _env_log_level() == "DEBUG"
 
 
-PortOpt = Annotated[
+BasePortOpt = Annotated[
     int | None,
     typer.Option(
-        "--port",
-        help="KDBBASEPORT - shifts every process's port. Default: the runtime's own "
+        "--base-port",
+        help="The stack's base port, KDBBASEPORT - shifts every process's port. "
+        "Default: the runtime's own "
         + ", ".join(f"{r.name} {r.base_port}" for r in runtimes.RUNTIMES.values()),
     ),
 ]
+#: The context_settings of a command that passes words it does not know on.
+PASS_THROUGH = {"allow_extra_args": True, "ignore_unknown_options": True}
+
 ProcsArg = Annotated[
     list[str] | None,
     typer.Argument(

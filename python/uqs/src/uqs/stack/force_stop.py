@@ -1,4 +1,4 @@
-"""`uqs stop --force`: kill a stack's q processes outright (#875).
+"""`uqs stop --kill`: kill a stack's q processes outright (#875).
 
 `uqs stop` is torq.sh's stop: `kill -15` to the pid LISTENING on each
 process's configured port. That misses three cases this does not:

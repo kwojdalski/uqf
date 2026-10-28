@@ -325,8 +325,8 @@ lines a second beside the one ERROR; the feed now sends them to DEBUG
 topic, which kfk.q hands to a no-op callback, so a feed with no group permission
 logged nothing at all; the feed now takes those messages too.
 
-`--uqs` is a command prefix and `--port` belongs after `uqs start`, so a stack
-on another base port needs a small wrapper that inserts it. The SSH-tunnel
+`--uqs` is a command prefix and `--base-port` belongs after `uqs start`, so a
+stack on another base port needs a small wrapper that inserts it. The SSH-tunnel
 variant was not run.
 
 ## Cleaning up

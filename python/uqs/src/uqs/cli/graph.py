@@ -24,7 +24,8 @@ from rich.text import Text
 from rich.tree import Tree
 
 from uqs.cli import completion
-from uqs.cli.shared import InteractiveOpt, PortOpt, _die, _paths, app, console, log
+from uqs.cli.renames import renamed
+from uqs.cli.shared import BasePortOpt, InteractiveOpt, _die, _paths, app, console, log
 from uqs.cli.table_filter import match_row, terms
 from uqs.model import process_graph
 from uqs.model.process_graph import Direction, Node
@@ -118,7 +119,7 @@ def describe(name: str, info: dict[str, dict[str, str]], status: dict[str, str])
     return text
 
 
-@app.command()
+@app.command(cls=renamed({"--port": "--base-port"}))
 def graph(
     proc: Annotated[
         str | None,
@@ -138,7 +139,7 @@ def graph(
         bool,
         typer.Option("--offline", help="Do not ask the fleet what is up; draw the graph alone."),
     ] = False,
-    port: PortOpt = None,
+    port: BasePortOpt = None,
     interactive: InteractiveOpt = False,
 ) -> None:
     """Every process and who feeds whom, as a tree, with the tables on each edge.

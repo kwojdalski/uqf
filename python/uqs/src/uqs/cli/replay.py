@@ -18,6 +18,7 @@ import typer
 from rich.table import Table
 
 from uqs.cli import completion
+from uqs.cli.renames import renamed
 from uqs.cli.shared import _die, _paths, app, console, data_app
 from uqs.paths import UqsError
 from uqs.stack import replay as stack_replay
@@ -25,7 +26,7 @@ from uqs.stack import replay as stack_replay
 app.add_typer(data_app, name="data")
 
 
-@data_app.command("replay")
+@data_app.command("replay", cls=renamed({"--port": "--base-port"}))
 def replay(
     proc: Annotated[
         str | None,
@@ -66,6 +67,7 @@ def replay(
     port: Annotated[
         int | None,
         typer.Option(
+            "--base-port",
             help="Stack base port. Default: the -stackid the plant is running under",
         ),
     ] = None,

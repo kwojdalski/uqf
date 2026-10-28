@@ -16,6 +16,7 @@ import typer
 
 from uqs.cli import deploy_connection as conn
 from uqs.cli.deploy import _failed, deploy_app
+from uqs.cli.renames import renamed
 from uqs.deploy import config, prune, rollback, status, verify
 from uqs.deploy.prune import RELEASE_ID
 from uqs.deploy.remote import Remote
@@ -153,12 +154,12 @@ def prune_cmd(
     raise typer.Exit(code=code)
 
 
-@deploy_app.command("verify")
+@deploy_app.command("verify", cls=renamed({"--port": "--base-port"}))
 def verify_cmd(
     profile: Annotated[str, typer.Option("--profile", help="The profile the release started")],
     deadline: Annotated[float, typer.Option("--deadline", help="Seconds")] = 180.0,
     query_timeout: Annotated[int, typer.Option("--query-timeout", help="Seconds per query")] = 5,
-    port: Annotated[int | None, typer.Option("--port", help="The stack's base port")] = None,
+    port: Annotated[int | None, typer.Option("--base-port", help="The stack's base port")] = None,
     procs: Annotated[
         str,
         typer.Option("--procs", metavar="NAME,...", help="Processes beyond the profile"),

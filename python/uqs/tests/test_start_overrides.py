@@ -144,7 +144,9 @@ def test_the_cli_refuses_an_irrelevant_combination_before_starting(monkeypatch):
 
     monkeypatch.setattr(shared, "log", Log())
     monkeypatch.setattr(runtime, "start", lambda *_a, **_k: pytest.fail("started"))
-    result = runner.invoke(cli.app, ["start", "rdb1", "--print", "--skip-q-version-check", "x"])
+    result = runner.invoke(
+        cli.app, ["start", "rdb1", "--show-command", "--skip-q-version-check", "x"]
+    )
     assert result.exit_code != 0
     assert any("a preview starts nothing" in m for m in said)
 
