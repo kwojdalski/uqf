@@ -53,7 +53,9 @@ app.add_typer(config_app, name="config")
 
 @config_app.command("get", cls=renamed({"--port": "--base-port", "--raw": "--unresolved"}))
 def config_get(
-    procname: Annotated[str, typer.Argument(autocompletion=completion.procname)],
+    procname: Annotated[
+        str, typer.Argument(metavar="PROC", help="The process", autocompletion=completion.procname)
+    ],
     field: Annotated[str | None, typer.Argument(autocompletion=completion.csv_fields)] = None,
     port: BasePortOpt = None,
     raw: Annotated[
@@ -84,7 +86,9 @@ def config_get(
 
 @config_app.command("set")
 def config_set(
-    procname: Annotated[str, typer.Argument(autocompletion=completion.procname)],
+    procname: Annotated[
+        str, typer.Argument(metavar="PROC", help="The process", autocompletion=completion.procname)
+    ],
     field: Annotated[str, typer.Argument(autocompletion=completion.csv_fields)],
     value: str,
 ) -> None:
@@ -192,6 +196,14 @@ def logs(
     `--attach` reads an attached backfill's or receiver's run instead, which is
     no TorQ process: `logs --attach pb-uat --worker piggybank_ledger_backfill -f`
     (#1725). Its q errors and RESULT line are shown whatever `--level` says.
+
+    What the options combine with (#1730): the PROCS are what is read, every
+    option a filter on how. `--attach NAME` replaces PROCS - one attachment's
+    run, narrowed by `--worker` (a worker, or <dataset>.receiver) and `--run`,
+    which need it. `--channel` and `--multitail` each read PROCS another way:
+    `--id` needs `--channel`; `--stream`, `--columns` and `--show-command` need
+    `--multitail`. `--follow`, `--lines` and `--level` go with the files and
+    with `--attach`.
     """
     if attach is None:
         for option, used in {"--worker": worker, "--run": run}.items():

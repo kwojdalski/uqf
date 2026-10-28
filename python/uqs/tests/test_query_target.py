@@ -167,8 +167,8 @@ def test_target_with_host_is_refused(server, died, asked):
 
 
 def test_target_with_proc_and_port_is_refused(server, died, asked):
-    result = _invoke("--tunnel", "dev", "--proc", "rdb1", "--port", "5000", "1+1")
-    assert "--proc NAME or --port N, not both" in str(result.exception)
+    result = _invoke("--tunnel", "dev", "rdb1", "1+1", "--port", "5000")
+    assert "PROC or --port N, not both" in str(result.exception)
     assert not (server / "log" / "calls").exists()
 
 
@@ -243,9 +243,7 @@ def test_default_goes_to_the_targets_gateway_routed(server, asked, died):
     assert _gone(_tunnel_pid(server)), "the tunnel is closed after the query"
 
 
-@pytest.mark.parametrize(
-    ("args", "remote"), [(["--proc", "rdb1"], 17002), (["--port", "6552"], 6552)]
-)
+@pytest.mark.parametrize(("args", "remote"), [(["rdb1"], 17002), (["--port", "6552"], 6552)])
 def test_an_explicit_proc_or_port_is_asked_directly(server, asked, died, args, remote):
     result = _invoke("--tunnel", "dev", *args, "--render", "kola", "count quote")
     assert result.exit_code == 0, result.output
@@ -359,7 +357,7 @@ def test_qcon_runs_as_a_child_through_the_tunnel(server, died, monkeypatch):
 
     monkeypatch.setattr(query_target.subprocess, "run", run)
     monkeypatch.setattr(query_mod.os, "execvp", lambda *a: pytest.fail("exec'd the tunnel away"))
-    result = _invoke("--tunnel", "dev", "--proc", "rdb1")
+    result = _invoke("--tunnel", "dev", "rdb1")
     assert result.exit_code == 0, result.output
     assert ran["argv"][0] == "qcon" and ran["argv"][1].startswith("127.0.0.1:")
     assert ran["up"] and _gone(_tunnel_pid(server))
@@ -371,12 +369,12 @@ def test_qcon_runs_as_a_child_through_the_tunnel(server, died, monkeypatch):
 def test_without_target_nothing_tunnels(monkeypatch, asked, died):
     monkeypatch.setattr(tunnel, "tunnel", lambda *a, **k: pytest.fail("tunnelled"))
     monkeypatch.setattr(query_mod, "_proc_port", lambda proc, base: {"rdb1": 5002}[proc])
-    assert _invoke("--proc", "rdb1", "--render", "kola", "1+1").exit_code == 0
+    assert _invoke("rdb1", "--render", "kola", "1+1").exit_code == 0
     assert asked[-1] == {"expr": "1+1", "port": 5002, "host": "localhost", "render": None}
     assert _invoke("--host", "box", "--port", "6000", "--render", "kola", "1+1").exit_code == 0
     assert asked[-1]["host"] == "box" and asked[-1]["port"] == 6000
-    result = _invoke("--host", "box", "--proc", "rdb1", "1+1")
-    assert "--proc looks the port up in this machine's stack" in str(result.exception)
+    result = _invoke("--host", "box", "rdb1", "1+1")
+    assert "PROC is looked up in this machine's stack" in str(result.exception)
 
 
 def test_without_target_a_failed_query_still_exits_1_as_before(monkeypatch):

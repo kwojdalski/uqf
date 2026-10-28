@@ -576,7 +576,7 @@ uqs target add uat --ssh svc@uat.example --dest /opt/efx/uat/uqf --label env=uat
 uqs target check uat                       # ssh works; names the running release
 uqs --target uat summary
 uqs --target uat logs piggybankgeneralledger1 -f
-uqs --target uat --yes query --proc rdb1 'select [20] from piggybank_general_ledger'
+uqs --target uat --yes query rdb1 'select [20] from piggybank_general_ledger'
 uqs --target uat start piggybankgeneralledger1   # asks first; --yes skips the question
 ```
 

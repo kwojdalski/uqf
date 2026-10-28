@@ -27,7 +27,7 @@ in `.github/workflows/ci.yml`).
   | stop                                                   | `uqs stop [NAME...]` (`--force` for a process that won't stop)                                |
   | status, wiring, heartbeats, batch health               | `uqs summary`                                                                                 |
   | who feeds whom                                         | `uqs graph`                                                                                   |
-  | a q expression on a process                            | `uqs query "expr" --port P` / `uqs query --proc NAME` (interactive)                           |
+  | a q expression on a process                            | `uqs query "expr" --port P` / `uqs query PROC` (interactive)                                  |
   | a table's columns in a running process                 | `uqs schema`                                                                                  |
   | logs                                                   | `uqs logs NAME --level ERROR`, `-f`, `--multitail`                                            |
   | list processes, profiles, runtimes, overrides, env     | `uqs list KIND` (no argument lists the kinds)                                                 |

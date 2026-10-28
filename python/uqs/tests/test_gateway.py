@@ -29,7 +29,7 @@ def test_everything_is_routed_but_a_gateway_call_or_a_system_command(expr, sent)
 @pytest.mark.parametrize("expr", ["delete from `trade", "update px:0 from `trade where sym=`X"])
 def test_an_in_place_change_is_refused(expr):
     """Routed, it would change the RDB's live data."""
-    with pytest.raises(UqsError, match="--proc"):
+    with pytest.raises(UqsError, match="name the process first"):
         gateway.expression(expr)
 
 
@@ -78,7 +78,7 @@ def test_a_failing_line_is_reported_and_the_session_goes_on():
 
 def test_a_refused_line_is_reported_not_sent():
     n, _, failed = _run(["delete from `trade"])
-    assert n == 0 and "--proc" in failed[0]
+    assert n == 0 and "name the process first" in failed[0]
 
 
 def test_ctrl_c_abandons_the_line_not_the_session():

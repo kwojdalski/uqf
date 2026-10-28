@@ -160,6 +160,38 @@ def test_rule1_no_group_is_named_after_a_verb():
     _hold("rule 1", found, RULE1_ALLOWLIST)
 
 
+# ------------------------------------------------- rule 2: what is acted on
+
+
+#: The words a positional naming a process or a job is NOT called: one is PROC
+#: (or PROCS), the other JOB (#1730).
+NOT_THE_NAME = {"WORKER", "PROCNAME"}
+
+#: Options naming a process or a job, kept because they filter rather than name
+#: what the command acts on, with why.
+RULE2_FILTERS = {
+    ("logs", "--worker"): "with --attach: whose run in the attachment - a worker or a receiver",
+}
+
+
+def _metavar(param) -> str:
+    return (param.metavar or param.name.upper()).strip("[].")
+
+
+def test_rule2_a_process_or_a_job_is_a_positional_called_proc_or_job():
+    misnamed = {
+        (path, _metavar(p))
+        for path, c in LEAVES.items()
+        for p in c.command.params
+        if p.param_type_name == "argument" and _metavar(p) in NOT_THE_NAME
+    }
+    assert not misnamed
+    named = {
+        (c.path, _long(p)) for c in TREE for p in c.options if _long(p) in ("--proc", "--worker")
+    }
+    assert named == set(RULE2_FILTERS)
+
+
 # --------------------------------------------------------- rule 4: verb names
 
 
@@ -279,7 +311,6 @@ OPTIONS = {
     "--passwd": Meaning("the q password", r"password"),
     "--port": Meaning("one process's port", r"directly"),
     "--print": Meaning("retired: --show-command", None),
-    "--proc": Meaning("one process, by name", r"process|tickerplant"),
     "--profile": Meaning("a start profile", r"profile"),
     "--show-command": Meaning("show the command, run nothing", r"show"),
     "--python": Meaning("the servers' Python version", r"major\.minor"),
