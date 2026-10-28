@@ -15,6 +15,7 @@ import typer
 from rich.table import Table
 
 from uqs.cli import completion
+from uqs.cli.json_out import emit, json_opt
 from uqs.cli.shared import (
     ExportOpt,
     InteractiveOpt,
@@ -30,7 +31,7 @@ from uqs.cli.shared import (
 )
 from uqs.cli.summary_actions import process_actions
 from uqs.cli.summary_columns import resolve_columns, resolve_sort_column
-from uqs.cli.summary_table import gather, render
+from uqs.cli.summary_table import gather, record, render
 from uqs.interpreter import interpreter_status
 from uqs.logger import configure_logging
 from uqs.model import dependencies, profiles
@@ -102,6 +103,32 @@ def _note_monitor_coverage() -> None:
         )
 
 
+SummaryJson = json_opt(
+    '{"interpreter", "processes": [{time, process, status, pid, port, heartbeat, responds, '
+    'batches, depends_on: [], inputs: [], outputs: [], port_source}], "silent": [process], '
+    '"failing": [{job, process, ...}], "starved": [{process, reasons}], "heartbeats_collected"}'
+)
+
+
+def _json(rows: list[dict], gathered, status) -> None:
+    """The table and what is printed under it, as one document."""
+    up = {row["Process"] for row in rows if row["Status"] == "up"}
+    emit({
+        "interpreter": {
+            "declared": status.declared, "binary": status.binary,
+            "actual": status.actual, "problem": status.problem,
+        },
+        "processes": [record(row) for row in rows],
+        "silent": gathered.silent,
+        "failing": gathered.failing,
+        "starved": [
+            {"process": p, "reasons": list(r)}
+            for p, r in sorted(dependencies.starved_processes(up).items())
+        ],
+        "heartbeats_collected": gathered.heartbeats is not None,
+    })  # fmt: skip
+
+
 @app.command()
 def summary(
     ctx: typer.Context,
@@ -171,6 +198,7 @@ def summary(
             help="with -i, re-read the fleet every this many seconds; 0 turns it off",
         ),
     ] = SUMMARY_REFRESH_SECONDS,
+    as_json: SummaryJson = False,
 ) -> None:
     """Status table for every process in process.csv, with its declared graph.
 
@@ -213,6 +241,10 @@ def summary(
     # Which q runs the fleet and the connection budget that follows (#518):
     # a 20-process fleet is fine on PeachQ and wedged past the cap on KDB-X.
     status = interpreter_status(stack_env.with_interpreter(paths))
+    if as_json:
+        _json(rows, gathered, status)
+        _export(rows, export)
+        raise typer.Exit(code=result.returncode)
     console.print(listing.interpreter_line(status), style="dim", markup=False)
     if status.problem:
         console.print(f"warning: {status.problem}", style="yellow", markup=False)
