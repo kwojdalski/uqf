@@ -37,7 +37,7 @@ Four rules, each a failure on its own:
 A `\\d` that opens a nested context is refused by check_nested_contexts.py.
 
 EDGES COME FROM `qlinter analyze graph` (#1690): q-lint's file graph over the
-library files, mapped to modules. The pinned qlinter (.qlinter-version, 0.14.16)
+library files, mapped to modules. The pinned qlinter (.qlinter-version, 0.14.17)
 draws it; scripts/gates/qlint_graph.py finds the binary and refuses, naming
 what is needed, when it cannot. Until 0.14.15 a regex reader did this; both
 found the same 31 edges on this tree when the pin moved.
