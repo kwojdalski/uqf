@@ -93,7 +93,7 @@ def _proc_port(procname: str, base_port: int | None) -> int:
     # connection will say for itself whether anything is listening.
     try:
         up = procname in alive.running(paths, base_port=base_port)
-    except Exception as exc:  # noqa: BLE001 - see comment above
+    except (UqsError, OSError) as exc:  # ps failed or timed out, or is missing
         log.debug("could not tell whether {} is running: {}", procname, exc)
         up = True
     if not up:
@@ -233,10 +233,10 @@ def query(
     """
     try:
         render = stack_render.renderer(render)
+        proc, expr = _proc_first(ctx, proc, expr, port is not None)
     except UqsError as exc:
         _die(exc)
         return
-    proc, expr = _proc_first(ctx, proc, expr, port is not None)
     if proc is not None and port is not None:
         _die(UqsError("name the process to query once: PROC or --port N, not both"))
         return

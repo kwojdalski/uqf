@@ -12,6 +12,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from which_support import fake_which
 
 from uqs.stack import envfiles
 from uqs.stack.envfiles import load_env_files, parse_dotenv
@@ -21,7 +22,7 @@ def fake_direnv(
     monkeypatch: pytest.MonkeyPatch, *, stdout: str = "", returncode: int = 0, stderr: str = ""
 ) -> list:
     calls: list = []
-    monkeypatch.setattr(envfiles.shutil, "which", lambda name: "/usr/bin/direnv")
+    fake_which(monkeypatch, {"direnv": "/usr/bin/direnv"})
 
     def run(argv, **kwargs):
         calls.append((argv, kwargs))
@@ -134,7 +135,7 @@ def test_without_direnv_the_envrc_is_skipped_not_sourced(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
     (tmp_path / ".envrc").write_text("export KEY=x\n")
-    monkeypatch.setattr(envfiles.shutil, "which", lambda name: None)
+    fake_which(monkeypatch)
 
     def must_not_run(*args, **kwargs):
         raise AssertionError("nothing may execute .envrc without direnv's approval check")
