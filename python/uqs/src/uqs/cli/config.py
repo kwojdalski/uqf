@@ -13,7 +13,6 @@ listing these commands exactly where they were before the split.
 
 from __future__ import annotations
 
-import json
 import shlex
 from typing import Annotated
 
@@ -26,30 +25,25 @@ from uqs.cli.renames import renamed
 from uqs.cli.shared import (
     BasePortOpt,
     ExportOpt,
-    InteractiveOpt,
     ProcsArg,
     _die,
     _export,
     _paths,
     _procs,
-    _show,
-    _sorted_items,
     app,
     console,
 )
-from uqs.deploy import targets
 from uqs.paths import UqsError
-from uqs.stack import attached_logs, listing
+from uqs.stack import attached_logs
 from uqs.stack import channel as stack_channel
 from uqs.stack import logs as stack_logs
 from uqs.stack import multitail as stack_multitail
 from uqs.stack import procs as stack_procs
-from uqs.stack.listing import LISTABLE_KINDS
 
 #: `uqs config get/set`: one process's process.csv row, read resolved or
 #: changed through process_overrides.csv. `uqs list overrides` and
-#: `uqs list fields` stay kinds of `list`, where they share its --sort,
-#: --export and completion with every other kind.
+#: `uqs list fields` stay kinds of `list` (cli/lists.py), the stack's own
+#: tables.
 config_app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
@@ -65,7 +59,9 @@ GetJson = json_opt(
 
 @config_app.command("get", cls=renamed({"--port": "--base-port", "--raw": "--unresolved"}))
 def config_get(
-    procname: Annotated[str, typer.Argument(autocompletion=completion.procname)],
+    procname: Annotated[
+        str, typer.Argument(metavar="PROC", help="The process", autocompletion=completion.procname)
+    ],
     field: Annotated[str | None, typer.Argument(autocompletion=completion.csv_fields)] = None,
     port: BasePortOpt = None,
     raw: Annotated[
@@ -102,78 +98,11 @@ def config_get(
     _export([{"field": k, "value": v} for k, v in row.items()], export)
 
 
-@app.command("list", cls=renamed({"--port": "--base-port"}))
-def list_items(
-    kind: Annotated[
-        str | None,
-        typer.Argument(
-            help="What to list - run with no argument to see every kind",
-            autocompletion=completion.list_kinds,
-        ),
-    ] = None,
-    port: BasePortOpt = None,
-    export: ExportOpt = None,
-    sort: Annotated[
-        str | None,
-        typer.Option(
-            "--sort",
-            help="Sort by this column (case-insensitive, numeric-aware).",
-            autocompletion=completion.list_columns,
-        ),
-    ] = None,
-    reverse: Annotated[
-        bool, typer.Option("--reverse", help="Sort descending. Only meaningful with --sort.")
-    ] = False,
-    interactive: InteractiveOpt = False,
-    as_json: Annotated[
-        bool, typer.Option("--json", help="Print the rows as a JSON list, for a script.")
-    ] = False,
-) -> None:
-    """List every item of KIND - run with no argument to see the available
-    kinds. Not just processes: 'fields' lists process.csv's valid config set
-    columns, 'overrides' lists every process_overrides.csv entry currently
-    set, 'env' lists build_env()'s resolved KDBBASEPORT/KDBHDB/... values,
-    'targets' lists this machine's deploy_targets.toml.
-
-    `--sort` takes any column the chosen kind produces, which differ between
-    kinds. The order reaches `--export` too, so an exported CSV matches what
-    was on screen.
-    """
-    if kind is None:
-        if as_json:
-            print(json.dumps(sorted(LISTABLE_KINDS)))
-        else:
-            console.print(f"Available kinds: {', '.join(sorted(LISTABLE_KINDS))}")
-        return
-    try:
-        items = listing.list_items(_paths(), kind, base_port=port)
-    except UqsError as exc:
-        _die(exc)
-        return
-    if kind == "targets" and not items and not as_json:
-        console.print(
-            f"no targets in {targets.declaration_path(_paths().repo_root)} - add one with "
-            "`uqs target add`, or `uqs deploy push` to a server"
-        )
-        return
-    items = _sorted_items(items, sort, reverse)
-    if as_json:
-        print(json.dumps(items, indent=2))
-        _export(items, export)
-        return
-    table = Table(title=f"{kind} ({len(items)})")
-    if items:
-        for col in items[0]:
-            table.add_column(col)
-        for item in items:
-            table.add_row(*item.values())
-    _show(table, interactive)
-    _export(items, export)
-
-
 @config_app.command("set")
 def config_set(
-    procname: Annotated[str, typer.Argument(autocompletion=completion.procname)],
+    procname: Annotated[
+        str, typer.Argument(metavar="PROC", help="The process", autocompletion=completion.procname)
+    ],
     field: Annotated[str, typer.Argument(autocompletion=completion.csv_fields)],
     value: str,
 ) -> None:
@@ -293,6 +222,14 @@ def logs(
     `--attach` reads an attached backfill's or receiver's run instead, which is
     no TorQ process: `logs --attach pb-uat --worker piggybank_ledger_backfill -f`
     (#1725). Its q errors and RESULT line are shown whatever `--level` says.
+
+    What the options combine with (#1730): the PROCS are what is read, every
+    option a filter on how. `--attach NAME` replaces PROCS - one attachment's
+    run, narrowed by `--worker` (a worker, or <dataset>.receiver) and `--run`,
+    which need it. `--channel` and `--multitail` each read PROCS another way:
+    `--id` needs `--channel`; `--stream`, `--columns` and `--show-command` need
+    `--multitail`. `--follow`, `--lines` and `--level` go with the files and
+    with `--attach`.
     """
     if as_json:
         for option, used in {

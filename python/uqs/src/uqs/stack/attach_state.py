@@ -272,9 +272,9 @@ def publisher_extras(paths: UqsPaths, procs: str) -> list[str]:
     return ["-.servers.DISCOVERY", named[0].remote_discovery]
 
 
-# ------------------------------------------------------- `uqs list attachments`
+# ------------------------------------------------------- `uqs job attachment list`
 
-#: What a TCP connect to the publisher's port says, as `list attachments` shows it.
+#: What a TCP connect to the publisher's port says, as `job attachment list` shows it.
 RUNNING, STOPPED, UNREACHABLE, UNKNOWN = "running", "stopped", "unreachable", "unknown"
 
 

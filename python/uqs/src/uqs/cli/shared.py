@@ -24,9 +24,10 @@ from rich.table import Table
 from uqs import paths as stack_paths
 from uqs import runtimes
 from uqs.cli import completion, table_browser
+from uqs.cli.renames import MOVED_KEY
 from uqs.logger import configure_logging, get_logger, json_requested
 from uqs.paths import UqsError
-from uqs.stack import runtime
+from uqs.stack import listing, runtime
 
 app = typer.Typer(
     no_args_is_help=True,
@@ -44,7 +45,7 @@ log = get_logger()
 job_app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
-    help="ETL jobs: write them into the tree (new, remove, install) and operate on "
+    help="ETL jobs: write them into the tree (new, list, remove, install) and operate on "
     "them - backfill a bounded worker, preview a polling feed, find a streaming "
     "job's gaps, read the run ledger.",
 )
@@ -124,7 +125,7 @@ def _configure(
             "--target",
             help=(
                 "Run the command on a deployed release instead of this machine: a target "
-                "from deploy_targets.toml (`uqs list targets`). Add --yes to skip the "
+                "from deploy_targets.toml (`uqs target list`). Add --yes to skip the "
                 "confirmation a command that changes the server asks for."
             ),
         ),
@@ -365,3 +366,35 @@ def _run_streaming(result_fn, *args, **kwargs) -> None:
         _die(exc)
         return
     raise typer.Exit(code=result.returncode)
+
+
+#: The process a command acts on, as its first positional (#1730).
+ProcArg = Annotated[
+    str | None,
+    typer.Argument(
+        metavar="[PROC]",
+        help="The process, by name, e.g. rdb1",
+        autocompletion=completion.procname,
+        show_default=False,
+    ),
+]
+
+
+def _proc_first(
+    ctx: typer.Context, proc: str | None, rest: str | None, port_given: bool
+) -> tuple[str | None, str | None]:
+    """`CMD [PROC] [X]` given one word: PROC if it names a process of this stack
+    and no --port was given, else X (`uqs query 'count quote'` asks the gateway).
+    A word the old `--proc` gave is PROC whatever it names, so a typo is refused."""
+    if proc is None or rest is not None or proc in ctx.meta.get(MOVED_KEY, ()):
+        return proc, rest
+    if port_given or proc not in _known_procs():
+        return None, proc
+    return proc, None
+
+
+def _known_procs() -> set[str]:
+    try:
+        return set(listing.configured_ports(_paths(), None))
+    except Exception:  # noqa: BLE001 - no registry: no word names a process
+        return set()

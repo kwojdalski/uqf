@@ -57,8 +57,8 @@ typing `meta` at a q prompt:
 uqs schema                  # every table on rdb1, with row and column counts
 uqs schema fx_orderbook         # one table's columns, types and attributes
 uqs schema 'crypto*'        # every table matching a pattern, one block each
-uqs schema --proc hdb1      # the history instead of today
-uqs schema --port 6052      # a port directly, skipping --proc resolution
+uqs schema hdb1             # the history instead of today
+uqs schema --port 6052      # a port directly, skipping PROC resolution
 uqs schema -i               # browse it, re-read every 5 seconds
 uqs schema -i --every 1     # faster; --every 0 re-reads only on R
 ```
@@ -72,7 +72,7 @@ next tick tries again. `R` re-reads at once.
 ### Missing partitions
 
 ```
-$ uqs schema --proc hdb1
+$ uqs schema hdb1
 could not read the schema from hdb1 (6053):
   "./2015.01.07/arbitrage. OS reports: No such file or directory"
 ```
@@ -220,9 +220,9 @@ rather than configured. `--base-port` is not needed either: the plant's
 Every row in that table is an option (`--dir`, `--schema`, `--hdb`,
 `--base-port`), and an option that is given wins - supply all four and nothing
 is asked of the machine at all, which is how to replay a log after the stack it
-came from has been stopped. `--proc` picks between plants when more than one is
-up with a log of its own; with exactly one, it is not needed, and with several
-the command refuses rather than ranking them.
+came from has been stopped. `uqs data replay PROC` picks between plants when
+more than one is up with a log of its own; with exactly one, it is not needed,
+and with several the command refuses rather than ranking them.
 
 **It empties what it writes.** TorQ's replay defaults are kept whole, so the
 tables being replayed are cleared in the partitions the replay touches before it
@@ -231,13 +231,18 @@ nothing.
 
 ## Listing things
 
-`list` (no argument) prints the kinds it knows about; `list KIND` lists every
-item of that kind - not just processes:
+Each noun lists its own records: `uqs target list`, `uqs runtime list`,
+`uqs job list` and `uqs job attachment list`. `uqs list KIND` lists the stack's
+own tables, and `uqs list` with no argument prints those kinds. Every list takes
+the same flags: `--json`, `--export FILE`, `--sort`, `--reverse` and `-i`.
 
 ```
 uqs list
 uqs list processes
+uqs job list
 ```
+
+The stack's tables (`uqs list KIND`):
 
 - `processes` - every process's `procname`/`proctype`/`port`/`startwithall`,
   resolved and with any `config set` overrides applied - the full set
@@ -253,20 +258,26 @@ uqs list processes
   env `config get`'s placeholder resolution and `torq.sh` itself use)
 - `dependencies` - each process's input tables and who publishes them, so you
   can see what a process needs before starting it on its own
-- `jobs` - every streaming job, normalizer and bounded worker, read from its own
-  q declaration: its kind, process, what it reads and writes (a backfill's
-  source, and its dataset and partition), whether it starts with the stack, and
-  whether it is still a `scaffolded` job `uqs job new` wrote or `written` work.
-  `uqs list jobs --sort state` puts the unfinished scaffolds together
-- `attachments` - every `uqs job attach` attachment: its job, publisher, stack
-  and host, its lifecycle `state` and persist mode, and - separately -
-  `publisher_state`: `running`, `stopped`, or `unreachable`/`unknown` when the
-  host or port cannot be checked. Read-only
 - `backfills` - every attached destination a `uqs job backfill --attach` has run
   into: attachment, destination id, worker, `state` (`running`, `completed`,
   ...), `outcome` and `queryable` - written rows are not queryable until the
   readers reload
   - the latest log, and what to do next. Read-only
+
+A noun's own records:
+
+- `uqs job list` - every streaming job, normalizer and bounded worker, read from
+  its own q declaration: its kind, process, what it reads and writes (a
+  backfill's source, and its dataset and partition), whether it starts with the
+  stack, and whether it is still a `scaffolded` job `uqs job new` wrote or
+  `written` work. `uqs job list --sort state` puts the unfinished scaffolds
+  together
+- `uqs job attachment list` - every `uqs job attach` attachment: its job,
+  publisher, stack and host, its lifecycle `state` and persist mode, and -
+  separately - `publisher_state`: `running`, `stopped`, or
+  `unreachable`/`unknown` when the host or port cannot be checked. Read-only
+- `uqs runtime list` - each runtime: whether it is here, and up
+- `uqs target list` - this machine's deploy targets
 
 `--sort` orders by any column the chosen kind produces, `--reverse` flips it:
 
@@ -349,12 +360,12 @@ tree's overlays on the starter pack. A new runtime is one entry there.
 ```
 uqs --runtime torq start      # or UQS_RUNTIME=torq uqs start
 uqs --runtime torq stop
-uqs list runtimes             # each one: processes, tables, layers, data, ports, what is up
+uqs runtime list             # each one: processes, tables, layers, data, ports, what is up
 uqs runtime diff uqf torq     # what one has that the other lacks
 uqs --runtime crypto runtime prepare   # install the bundles it declares
 ```
 
-`list runtimes` marks the default runtime and the one selected now, and counts
+`runtime list` marks the default runtime and the one selected now, and counts
 what each one's process.csv and schema would hold. It reads the declarations
 rather than starting anything. `runtime diff A B` lists, in each direction, the
 processes, tables, config layers and commands that one runtime has and the other
@@ -840,8 +851,8 @@ uqs config set fxfeed1 startwithall 0
 ```
 
 `config get` resolves placeholders as `torq.sh` does at start time -
-`load=${KDBHDB}` to the real path, `port={KDBBASEPORT}+3` to `6053`; `--raw`
-shows the literal value.
+`load=${KDBHDB}` to the real path, `port={KDBBASEPORT}+3` to `6053`;
+`--unresolved` shows the literal value.
 
 Valid `FIELD`s are `process.csv`'s own columns: `host`, `port`, `proctype`,
 `procname`, `U`, `localtime`, `g`, `T`, `w`, `load`, `startwithall`, `extras`,
@@ -1180,7 +1191,7 @@ name none and get the gateway:
 ```
 uqs query                          # a session on gateway1, every line routed
 uqs query --no-gateway             # plain qcon on gateway1, nothing routed
-uqs query --proc rdb1              # qcon localhost:6052:admin:admin, under rlwrap if installed
+uqs query rdb1                     # qcon localhost:6052:admin:admin, under rlwrap if installed
 uqs query --base-port 7000         # gateway1 in a stack started with --port 7000
 ```
 
@@ -1195,14 +1206,15 @@ other process types. Three things are not wrapped:
 - an in-place `update` or
   `delete ... from `trade` is **refused** - routed, it would change the RDB's live data. The copy form, `update
   ... from
-  trade`, is routed like any query; to change a table, name its process with `--proc\`;
-- with `--raw`, nothing is: the gateway gets exactly what you typed.
+  trade`, is routed like any query; to change a table, name its process first (`uqs
+  query rdb1 ...\`);
+- with `--no-gateway`, nothing is: the gateway gets exactly what you typed.
 
 ```
 uqs query "select count i by sym from trade"   # .gw.syncexec[...;`rdb`hdb]
 uqs query "select from trade" --servers hdb    # history only
 uqs query "tables[]" --no-gateway              # the gateway's own tables[]
-uqs query "select from trade" --proc rdb1      # rdb1 directly, as typed
+uqs query rdb1 "select from trade"             # rdb1 directly, as typed
 ```
 
 In the session, `\\` (q's own), `exit` or Ctrl-D leaves; Ctrl-C drops the line
@@ -1235,17 +1247,17 @@ machine. For the call, `uqs` opens an ssh tunnel
 
 ```
 uqs --runtime peachq-etl query --tunnel dev 'tables[]'               # the gateway, routed
-uqs --runtime peachq-etl query --tunnel dev --proc rdb1 'tables[]'   # rdb1, as typed
+uqs --runtime peachq-etl query --tunnel dev rdb1 'tables[]'          # rdb1, as typed
 uqs query --tunnel dev --port 6552 'tables[]'                        # a port on the target
 uqs query --tunnel dev                                               # a gateway session
 ```
 
-The port of `--proc` (or of the gateway) comes from the target's deployed
-release: `uqs list processes --json`, run there with its `deploy.env` and the
-`--runtime` given here. It never comes from this checkout. `--port` is a port on
-the target, so neither `--proc` with `--port` nor `--tunnel` with `--host` is
-accepted. Routing works as it does locally. An interactive `--proc` session runs
-qcon as a child process, so the tunnel stays open while the session lasts.
+The port of PROC (or of the gateway) comes from the target's deployed release:
+`uqs list processes --json`, run there with its `deploy.env` and the `--runtime`
+given here. It never comes from this checkout. `--port` is a port on the target,
+so neither PROC with `--port` nor `--tunnel` with `--host` is accepted. Routing
+works as it does locally. An interactive PROC session runs qcon as a child
+process, so the tunnel stays open while the session lasts.
 
 This is not `uqs --target NAME query ...`, which runs `uqs query` on the server
 ([deploy guide](deploy.md#driving-a-deployed-release-from-your-machine)). Each
@@ -1354,6 +1366,29 @@ Noun first (#1727):
   | `uqs remove output`            | `uqs clean`                     |
   | `uqs remove checkpoint WORKER` | `uqs job checkpoint remove JOB` |
 
+Every noun owns its list (#1728):
+
+  | old                    | new                       |
+  | ---------------------- | ------------------------- |
+  | `uqs list targets`     | `uqs target list`         |
+  | `uqs list runtimes`    | `uqs runtime list`        |
+  | `uqs list jobs`        | `uqs job list`            |
+  | `uqs list attachments` | `uqs job attachment list` |
+
+The thing acted on is positional (#1730):
+
+  | old                                    | new                                |
+  | ---                                    | ---                                |
+  | `uqs query EXPR --proc rdb1`           | `uqs query rdb1 EXPR`              |
+  | `uqs schema TABLE --proc hdb1`         | `uqs schema hdb1 TABLE`            |
+  | `uqs data replay --proc stp1`          | `uqs data replay stp1`             |
+
+`query` and `schema` take `[PROC] [X]`: a lone word that names a process of this
+stack is PROC, any other is the expression or table, so
+`uqs query 'count quote'` still asks the gateway and `uqs schema 'crypto*'`
+still reads rdb1. A job or worker is JOB in every command (`job backfill JOB`,
+`job contract export JOB`), a process PROC (`config get PROC`).
+
 Fewer, regular top-level commands (#1734):
 
   | old                   | new                      |
@@ -1395,8 +1430,8 @@ Each command's `--help` names its document. The commands #1731 added:
   | ---                                | ---                                                                                                                                                                                                            |
   | `summary`                          | `{interpreter, processes: [{time, process, status, pid, port, heartbeat, responds, batches, depends_on, inputs, outputs, port_source}], silent, failing, starved: [{process, reasons}], heartbeats_collected}` |
   | `graph`                            | `{direction, trees: [{process, status, tables, repeat, children}]}`                                                                                                                                            |
-  | `query EXPR`                       | `{expression, result}`: a table is a list of records                                                                                                                                                           |
-  | `schema [TABLE]`                   | `{process, port, tables: [{table, rows, columns}]}`, or with a TABLE `{process, port, columns: [{table, column, type, q, attribute}]}`                                                                         |
+  | `query [PROC] EXPR`                | `{expression, result}`: a table is a list of records                                                                                                                                                           |
+  | `schema [PROC] [TABLE]`            | `{process, port, tables: [{table, rows, columns}]}`, or with a TABLE `{process, port, columns: [{table, column, type, q, attribute}]}`                                                                         |
   | `logs`                             | `{lines: [{time, host, procname, proctype, loglevel, id, message}]}`; not with `--follow`, `--channel` or `--multitail`                                                                                        |
   | `config get PROC [FIELD]`          | `{process, fields: [{field, value}]}`, or `{process, field, value}`                                                                                                                                            |
   | `job gaps`                         | `{job, gaps: [{range_from, range_to}], sessions, refillable, refills: [{worker, range_from, range_to, command}], today_not_refillable}`                                                                        |

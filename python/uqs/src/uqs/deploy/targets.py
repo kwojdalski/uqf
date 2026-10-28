@@ -68,7 +68,7 @@ SETTABLE = frozenset(inspect.signature(make_config).parameters) - PER_RUN
 #: launches uqs (deploy/control.py, #1642).
 LAUNCH_KEYS = frozenset({"launch_mode", "launch_python", "launch_env_file"})
 #: Keys a target may hold that are not push options: the runtime it must run
-#: (checked against the artifact's), labels, which `uqs list targets` shows
+#: (checked against the artifact's), labels, which `uqs target list` shows
 #: and nothing deploys (#956), and the launch keys.
 NOT_PUSH_OPTIONS = frozenset({"runtime", "labels"}) | LAUNCH_KEYS
 #: The file's tables. Only a target names its environment.

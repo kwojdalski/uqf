@@ -86,7 +86,7 @@ def run_qcon(host: str, port: int, user: str, passwd: str) -> None:
     if shutil.which("qcon") is None:
         raise UqsError(
             "qcon is not on PATH. It ships with kdb+ rather than with this repository "
-            "(macOS: it is beside q in your KDB-X install). `uqs query --tunnel NAME --proc "
+            "(macOS: it is beside q in your KDB-X install). `uqs query --tunnel NAME "
             '<name> "<expr>"` still works over IPC.'
         )
     argv = runtime.qcon_command(host, port, user, passwd, rlwrap=shutil.which("rlwrap") is not None)

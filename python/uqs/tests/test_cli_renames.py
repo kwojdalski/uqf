@@ -14,7 +14,7 @@ import typer
 from typer.testing import CliRunner
 
 from uqs import cli
-from uqs.cli import renames
+from uqs.cli import lists, renames
 from uqs.stack import multitail as stack_multitail
 
 runner = CliRunner()
@@ -77,7 +77,7 @@ def test_a_commands_own_debug_is_the_global_one(path):
 
 def test_old_spellings_are_rewritten_and_each_warned_about_once(monkeypatch):
     said = []
-    monkeypatch.setattr(renames, "_warn_renamed", lambda old, new: said.append((old, new)))
+    monkeypatch.setattr(renames, "warn_renamed", lambda old, new: said.append((old, new)))
     table = {"--port": "--base-port", "-n": "--lines"}
     got = renames._rewrite_renamed(
         ["rdb1", "--port", "7000", "--port=7001", "-n20", "-n", "5", "--", "--port"],
@@ -92,7 +92,7 @@ def test_old_spellings_are_rewritten_and_each_warned_about_once(monkeypatch):
 
 def test_a_new_spelling_is_left_alone(monkeypatch):
     said = []
-    monkeypatch.setattr(renames, "_warn_renamed", lambda old, new: said.append((old, new)))
+    monkeypatch.setattr(renames, "warn_renamed", lambda old, new: said.append((old, new)))
     args = ["--base-port", "7000", "--no-gateway"]
     assert renames._rewrite_renamed(args, {"--port": "--base-port"}, "uqs x", None) == args
     assert said == []
@@ -106,7 +106,7 @@ def test_the_old_spelling_still_works_end_to_end(monkeypatch):
         lambda paths, procs, **kw: seen.update(kw) or ["multitail", "x"],
     )
     said = []
-    monkeypatch.setattr(renames, "_warn_renamed", lambda old, new: said.append((old, new)))
+    monkeypatch.setattr(renames, "warn_renamed", lambda old, new: said.append((old, new)))
     result = runner.invoke(cli.app, ["logs", "--multitail", "--print", "-n", "7"])
     assert result.exit_code == 0, result.output
     assert seen["lines"] == 7
@@ -136,8 +136,60 @@ def test_a_moved_command_still_runs_at_its_old_path(monkeypatch, old, new, targe
 
     monkeypatch.setattr(module, target, fake)
     said = []
-    monkeypatch.setattr(renames, "_warn_renamed", lambda o, n: said.append(n))
+    monkeypatch.setattr(renames, "warn_renamed", lambda o, n: said.append(n))
     result = runner.invoke(cli.app, old)
     assert result.exit_code == 0, result.output
     assert calls and said == [new]
     assert _command("remove").hidden
+
+
+def test_a_kind_that_moved_to_its_noun_still_lists_under_list(monkeypatch):
+    """`uqs list runtimes` -> `uqs runtime list` (#1728), for one release."""
+    from uqs.stack import listing
+
+    monkeypatch.setitem(listing.LISTABLE_KINDS, "runtimes", lambda *_a: [{"runtime": "uqf"}])
+    said = []
+    monkeypatch.setattr(lists, "warn_renamed", lambda o, n: said.append((o, n)))
+    old = runner.invoke(cli.app, ["list", "runtimes", "--json"])
+    new = runner.invoke(cli.app, ["runtime", "list", "--json"])
+    assert old.exit_code == new.exit_code == 0, old.output
+    assert old.stdout == new.stdout
+    assert said == [("uqs list runtimes", "uqs runtime list")]
+    kinds = runner.invoke(cli.app, ["list", "--json"]).stdout
+    assert "runtimes" not in kinds and "processes" in kinds
+
+
+@pytest.mark.parametrize(
+    ("args", "proc", "rest"),
+    [
+        (["rdb1"], "rdb1", None),  # names a process: PROC
+        (["count quote"], None, "count quote"),  # does not: the expression
+        (["rdb1", "count quote"], "rdb1", "count quote"),
+    ],
+)
+def test_a_lone_word_is_proc_only_when_it_names_a_process(monkeypatch, args, proc, rest):
+    from uqs.cli import shared
+
+    monkeypatch.setattr(shared, "_known_procs", lambda: {"rdb1", "gateway1"})
+    ctx = typer.Context(typer.main.get_command(cli.app))
+    first, second = (args + [None])[:2]
+    assert shared._proc_first(ctx, first, second, port_given=False) == (proc, rest)
+
+
+def test_the_old_proc_option_names_the_process_whatever_it_is(monkeypatch):
+    """`--proc nope1` was a process name, so it is refused as one rather than
+    guessed to be an expression."""
+    from uqs.cli import shared
+
+    said = []
+    monkeypatch.setattr(renames, "warn_renamed", lambda o, n: said.append((o, n)))
+    monkeypatch.setattr(shared, "_known_procs", lambda: {"rdb1"})
+    ctx = typer.Context(_command("query"))
+    args = _command("query").renames
+    moved = ctx.meta.setdefault(renames.MOVED_KEY, [])
+    got = renames._rewrite_renamed(
+        ["count quote", "--proc", "nope1"], args, "uqs query", None, moved
+    )
+    assert got == ["nope1", "count quote"] and moved == ["nope1"]
+    assert shared._proc_first(ctx, "nope1", None, port_given=False) == ("nope1", None)
+    assert said == [("--proc", "uqs query PROC")]

@@ -75,6 +75,10 @@ def test_a_refused_attach_without_json_still_logs_to_stdout(tmp_path):
 #: document must carry.
 CASES: dict[str, tuple[list[str], str]] = {
     "list": (["list"], "processes"),
+    "target list": (["target", "list"], "["),
+    "runtime list": (["runtime", "list"], "uqf"),
+    "job list": (["job", "list"], "["),
+    "job attachment list": (["job", "attachment", "list"], "["),
     "data hdb-check": (["data", "hdb-check"], "present"),
     "runtime diff": (["runtime", "diff", "nosuch1", "nosuch2"], "is not a runtime"),
     "job receive": (["job", "receive", "--attach", "nosuch"], "--listen-port is required"),
@@ -97,7 +101,7 @@ CASES: dict[str, tuple[list[str], str]] = {
     "summary": (["summary", "--columns", "nosuch"], "unknown summary column"),
     "graph": (["graph", "nosuchproc", "--offline"], "no process 'nosuchproc'"),
     "query": (["query"], "--json needs an expression"),
-    "schema": (["schema", "--proc", "nosuchproc"], "is not a declared process"),
+    "schema": (["schema", "nosuchproc", "trade"], "is not a declared process"),
     "logs": (["logs", "--follow"], "--follow does not apply"),
     "config get": (["config", "get", "nosuchproc"], "unknown process"),
     "job gaps": (["job", "gaps", "demo_markout", "--from", "bad", "--to", "2024-01-02"], "bad"),

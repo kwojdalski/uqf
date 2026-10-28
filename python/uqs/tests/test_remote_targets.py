@@ -214,11 +214,18 @@ def test_target_management_is_never_forwarded(server):
         target_cli.forward("uat", True, ["target", "check", "uat"], interactive=False)
 
 
-@pytest.mark.parametrize("args", [["list", "targets"], ["--debug", "list", "targets", "--json"]])
-def test_listing_targets_is_never_forwarded(server, args):
-    """`list` is read-only and so forwarded, but the targets are this
+@pytest.mark.parametrize(
+    ("args", "said"),
+    [
+        (["target", "list"], "manages this machine's targets"),
+        (["--debug", "target", "list", "--json"], "manages this machine's targets"),
+        (["list", "targets"], "lists this machine's targets"),  # the old spelling (#1728)
+    ],
+)
+def test_listing_targets_is_never_forwarded(server, args, said):
+    """A list is read-only and so forwarded, but the targets are this
     machine's: a remote's deploy_targets.toml is not what was asked for."""
-    with pytest.raises(UqsError, match="lists this machine's targets - run it without --target"):
+    with pytest.raises(UqsError, match=f"{said} - run it without --target"):
         target_cli.forward("uat", True, args, interactive=False)
 
 
@@ -234,7 +241,7 @@ def test_list_targets_shows_each_target_and_its_last_deployment(server, tmp_path
         declared.read_text() + '\n[targets.prod]\nhost = "p"\ndest = "/srv/p"\n'
         'remote_user = "efx"\nlabels = { env = "prod" }\n'
     )
-    result = CliRunner().invoke(app, ["list", "targets", "--json"])
+    result = CliRunner().invoke(app, ["target", "list", "--json"])
     assert result.exit_code == 0, result.output
     rows = {r["target"]: r for r in json.loads(result.output)}
     assert list(rows) == ["bare", "down", "prod", "uat"]
@@ -242,28 +249,29 @@ def test_list_targets_shows_each_target_and_its_last_deployment(server, tmp_path
     assert rows["prod"]["as"] == "efx" and rows["prod"]["labels"] == "env=prod"
     assert rows["uat"]["last deployed"].startswith("r7 (")
     assert rows["down"]["last deployed"] == ""
-    table = CliRunner().invoke(app, ["list", "targets"], terminal_width=200).output
+    table = CliRunner().invoke(app, ["target", "list"], terminal_width=200).output
     assert "last deployed" in table and "svc@uat.example" in table
 
 
 def test_list_targets_with_none_declared_says_how_to_add_one(tmp_path, monkeypatch):
     monkeypatch.setenv(targets.DECLARATION_ENV, str(tmp_path / "deploy_targets.toml"))
-    result = CliRunner().invoke(app, ["list", "targets"], terminal_width=200)
+    result = CliRunner().invoke(app, ["target", "list"], terminal_width=200)
     said = " ".join(result.output.split())  # rich wraps the long path
     assert result.exit_code == 0 and "add one with `uqs target add`" in said
 
 
-def test_list_targets_is_a_listable_kind_and_target_list_is_gone(server):
+def test_targets_are_listed_by_their_own_noun(server):
+    """`uqs target list` (#1728); `targets` stays a kind for MCP's uqs_list and
+    the old `uqs list targets`, for one release."""
     from uqs.stack.listing import LISTABLE_KINDS
 
     assert "targets" in LISTABLE_KINDS
-    old = CliRunner().invoke(app, ["target", "list"])
-    assert old.exit_code != 0 and "No such command" in old.output
+    assert CliRunner().invoke(app, ["target", "list"]).exit_code == 0
     root = typer.main.get_command(app)
     assert isinstance(root, typer.core.TyperGroup)
     group = root.commands["target"]
     assert isinstance(group, typer.core.TyperGroup)
-    assert set(group.commands) == {"add", "remove", "check", "shell"}
+    assert set(group.commands) == {"add", "list", "remove", "check", "shell"}
 
 
 def test_mcp_lists_targets_too():

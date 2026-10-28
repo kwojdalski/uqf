@@ -161,7 +161,7 @@ def defaults(root: Path) -> set[int]:
 
 
 def target_rows(root: Path) -> list[dict[str, str]]:
-    """`uqs list targets`: every declared target - where it is, as whom, its
+    """`uqs target list`: every declared target - where it is, as whom, its
     labels - and the release last deployed there from this machine. The
     environment column appears only when a target names one (#1557)."""
     if not targets.declaration_path(root).is_file():
@@ -196,6 +196,6 @@ def _list_targets(paths: UqsPaths, base_port: int | None) -> list[dict[str, str]
         raise UqsError(str(exc)) from exc
 
 
-#: `uqs list targets` (#1556). Registered from here, not in stack/listing.py,
+#: `uqs target list` (#1556). Registered from here, not in stack/listing.py,
 #: because stack/ sits below deploy/ and may not read a deploy declaration.
 listing.LISTABLE_KINDS["targets"] = _list_targets

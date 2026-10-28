@@ -53,7 +53,7 @@ def test_writes_registers_with_on_writing_instead():
 
 
 def test_what_it_writes_is_read_back_by_the_tree_reader():
-    """reaction_calls is what `uqs list jobs` and `uqs job remove` read; a
+    """reaction_calls is what `uqs job list` and `uqs job remove` read; a
     template it cannot parse would be a reaction nothing lists."""
     for writes, expected in (((), ()), (["a", "b"], ("a", "b")), (["p"], ("p",))):
         [found] = reaction_calls(_plan(writes=writes).actions[0].body)
