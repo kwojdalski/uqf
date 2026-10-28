@@ -43,7 +43,7 @@ class ApplyRefused(AttachmentError):
         super().__init__(
             "refused: "
             + "; ".join(f"{f.code} ({f.component})" for f in findings)
-            + " - `uqs job attach NAME --dry-run` shows the detail"
+            + " - `uqs job attachment add NAME --dry-run` shows the detail"
         )
 
 
@@ -115,7 +115,7 @@ def refuse_detaching(name: str, state: str) -> None:
         raise AttachmentError(
             f"attachment {name} is detaching: a detach is in progress or was interrupted. "
             "The publisher is stopped and its start gate is closed. Run "
-            f"`uqs job detach {name}` to finish it, then attach again."
+            f"`uqs job attachment remove {name}` to finish it, then attach again."
         )
 
 
@@ -361,7 +361,7 @@ def _failure(m: Manifest, result: ApplyResult, exc: Exception) -> str:
     return (
         f"apply stopped: {exc}. The stack is partially changed (no cross-process atomicity is "
         f"claimed). done: {done or 'nothing'}; outcome unknown: {pending or 'none'}; "
-        f"failed: {failed or 'none'}. Re-run `uqs job attach {m.attachment}` (it is "
+        f"failed: {failed or 'none'}. Re-run `uqs job attachment add {m.attachment}` (it is "
         f"idempotent and resolves unknown steps by asking the process), or "
-        f"`uqs job detach {m.attachment}` to reverse."
+        f"`uqs job attachment remove {m.attachment}` to reverse."
     )

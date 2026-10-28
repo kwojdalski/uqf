@@ -1,8 +1,13 @@
-"""`uqs job contract ...`: the receiver contracts a remote HDB receiver writes under (#1717).
+"""`uqs job attachment contract ...`: the receiver contracts a remote HDB
+receiver writes under (#1717).
 
 `export` runs where the worker is and prints its contract; `approve` runs on the
 stack's machine and binds it to an attachment's destination; `list` shows what is
 approved there. What a contract is, and why, is in uqs.attach.receiver_contract.
+
+Under `job attachment` because a contract is approved FOR an attachment (#1737);
+it was `uqs job contract ...`, which stays for one release, hidden, each command
+logging its new spelling.
 """
 
 from __future__ import annotations
@@ -15,6 +20,8 @@ import typer
 
 from uqs.attach import receiver_contract
 from uqs.cli import completion
+from uqs.cli.attachment import attachment_app
+from uqs.cli.renames import alias_command
 from uqs.cli.safety import dry_run_note
 from uqs.cli.shared import JOB_OPERATIONS_PANEL, _die, _paths, console, job_app
 from uqs.paths import UqsError
@@ -22,10 +29,17 @@ from uqs.paths import UqsError
 contract_app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
-    help="Receiver contracts: export one where a worker is, approve it where its HDB is, so "
-    "`uqs job receive` writes the worker's rows without the worker's code.",
+    help="Receiver contracts: export one where a worker is, approve it for an attachment "
+    "where its HDB is, list those approved - so `uqs job receive` writes the worker's rows "
+    "without the worker's code.",
 )
-job_app.add_typer(contract_app, name="contract", rich_help_panel=JOB_OPERATIONS_PANEL)
+attachment_app.add_typer(contract_app, name="contract")
+
+#: The old path, `uqs job contract ...`, hidden, for one release (#1737).
+legacy_contract_app = typer.Typer(no_args_is_help=True, add_completion=False, hidden=True)
+job_app.add_typer(
+    legacy_contract_app, name="contract", hidden=True, rich_help_panel=JOB_OPERATIONS_PANEL
+)
 
 
 @contract_app.command("export")
@@ -48,7 +62,8 @@ def export(
     extraction machine. The contract is data: the dataset, its columns and types,
     the timestamp column, the row key, the partition and the conflict policies the
     declarations admit, with an identity that changes whenever any of them does.
-    Take the file to the stack's machine and `uqs job contract approve` it there.
+    Take the file to the stack's machine and `uqs job attachment contract approve`
+    it there.
     """
     try:
         contract = receiver_contract.export(_paths(), worker)
@@ -65,7 +80,9 @@ def export(
 
 @contract_app.command("approve")
 def approve(
-    file: Annotated[Path, typer.Argument(help="The contract file `uqs job contract export` wrote")],
+    file: Annotated[
+        Path, typer.Argument(help="The contract file `uqs job attachment contract export` wrote")
+    ],
     attach: Annotated[
         str, typer.Option("--attach", help="The saved, verified attachment whose HDB it may write")
     ],
@@ -149,3 +166,7 @@ def list_(
             f"  approved {b.get('approved_at')} by {b.get('approved_by')}",
             markup=False,
         )
+
+
+for _verb, _fn in (("export", export), ("approve", approve), ("list", list_)):
+    alias_command(legacy_contract_app, _verb, f"uqs job attachment contract {_verb}", _fn)

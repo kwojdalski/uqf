@@ -108,7 +108,7 @@ def resolve(name: str, ipc: Ipc, root: Path | None = None, host: Host = HOST) ->
             raise AttachmentError(
                 f"attachment {name} pins its HDB at {pinned}, but {said}: which directory is "
                 "the HDB is ambiguous, so nothing is planned. Re-plan the attachment "
-                f"(`uqs job attach {name}`) once they agree"
+                f"(`uqs job attachment add {name}`) once they agree"
             )
         source = f"attachment {name}'s pinned storage.hdb_dir"
         return AttachedHdb(att, pinned, source, ssh, setting, obs, warnings)
@@ -120,7 +120,7 @@ def resolve(name: str, ipc: Ipc, root: Path | None = None, host: Host = HOST) ->
         )  # fmt: skip
         raise AttachmentError(
             f"attachment {name} pins no HDB (storage.hdb_dir is empty) and {what} - pin it "
-            f"by re-running `uqs job attach {name}` while its wdb is up"
+            f"by re-running `uqs job attachment add {name}` while its wdb is up"
         )
     (proc, hdb), *_ = live.items()
     return AttachedHdb(att, hdb, f"the live {proc}'s .wdb.hdbdir (attachment {name} pins none)",

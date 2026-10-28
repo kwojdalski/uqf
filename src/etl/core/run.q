@@ -167,7 +167,7 @@
     absent:.qetl.run.run_schema where not .qetl.run.run_schema in live;
     extra:live where not live in .qetl.run.run_schema;
     if[(asc live)~asc .qetl.run.previous_schema;
-        '"require_run_schema: etl_runs predates the run's range and counts - run `uqs job runs migrate` once"];
+        '"require_run_schema: etl_runs predates the run's range and counts - run `uqs job runs upgrade` once"];
     if[count absent;
         '"require_run_schema: etl_runs is missing ",(", " sv string absent),
          " - built to a different shape, and reads here would return nulls"];
@@ -345,7 +345,7 @@
 
 / Upgrade a run ledger written before the range and counts columns.
 / .
-/ The one-off a refusing require_run_schema names, as `uqs job runs migrate`. Old
+/ The one-off a refusing require_run_schema names, as `uqs job runs upgrade`. Old
 / rows get nulls in the new columns - what they were asked to do was never
 / recorded, and inventing it would be worse than saying so. Run once: a
 / ledger already at the current shape is left alone.

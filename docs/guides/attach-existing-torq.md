@@ -1,19 +1,27 @@
 # Attaching a job to an existing TorQ stack
 
 A uqf job can publish into a TorQ stack that this checkout did not start: a
-running fleet with its own tickerplant, rdb, wdb and hdb. `uqs job attach` makes
-that explicit and reversible. It sets up the two things the job's process needs
-from the stack: the **stack's identity** (its base port, `-stackid` /
-`KDBBASEPORT`, from which every process port and the discovery address follow)
-and the **table** (a tickerplant publishes only tables it was started with). It
-lives under `job` because the unit is a job and its tables;
-[`connector`](uqs.md) is for external publishers that are not q processes.
+running fleet with its own tickerplant, rdb, wdb and hdb.
+`uqs job attachment add` makes that explicit and reversible. It sets up the two
+things the job's process needs from the stack: the **stack's identity** (its
+base port, `-stackid` / `KDBBASEPORT`, from which every process port and the
+discovery address follow) and the **table** (a tickerplant publishes only tables
+it was started with). It lives under `job` because the unit is a job and its
+tables; [`connector`](uqs.md) is for external publishers that are not q
+processes.
 
 ```text
-uqs job attach NAME --dry-run   preflight + plan; changes nothing
-uqs job attach NAME             preflight + plan, ask, then apply -> verify -> start
-uqs job detach NAME             stop the publisher, reverse what is safe to
+uqs job attachment add NAME --dry-run   preflight + plan; changes nothing
+uqs job attachment add NAME             preflight + plan, ask, then apply -> verify -> start
+uqs job attachment remove NAME          stop the publisher, reverse what is safe to
+uqs job attachment show NAME            what was saved for it, and its state now
+uqs job attachment list                 every attachment and its state
 ```
+
+An attachment is a noun with its own commands (#1737): `uqs job attach` and
+`uqs job detach` were its `add` and `remove`, and `uqs job contract` its
+`contract`. The old spellings still work for one release, hidden from `--help`,
+each logging the new one.
 
 What it guarantees:
 
@@ -30,13 +38,13 @@ What it guarantees:
 ## Walkthrough
 
 ```bash
-uqs job attach pb-uat --job pb_general_ledger --bundle ../piggybank \
+uqs job attachment add pb-uat --job pb_general_ledger --bundle ../piggybank \
     --stack-id 6000 --consumer rdb1 --consumer wdb1 --dry-run
-uqs job attach pb-uat --job pb_general_ledger --bundle ../piggybank \
+uqs job attachment add pb-uat --job pb_general_ledger --bundle ../piggybank \
     --stack-id 6000 --consumer rdb1 --consumer wdb1
 uqs job attachment list                # attachment state and publisher state, per attachment
-uqs job detach pb-uat --dry-run
-uqs job detach pb-uat
+uqs job attachment remove pb-uat --dry-run
+uqs job attachment remove pb-uat
 ```
 
 `--dry-run` resolves the configuration, reads the stack and prints the plan: the
@@ -71,8 +79,8 @@ A new attachment needs `--job` and `--stack-id`; `--host` (default `localhost`),
 reused by name. Options that contradict the saved ones are refused; `--replace`
 rebuilds it from them, keeping its manifest and accepted risks, and is refused
 while the manifest holds changes on another stack or for other tables.
-Credentials are redacted from every output. `uqs job attach --help` lists the
-rest.
+Credentials are redacted from every output. `uqs job attachment add --help`
+lists the rest.
 
 ### A publisher on this machine, a stack on another (#1651)
 
@@ -85,11 +93,11 @@ the stack's machine.
 
 - **The publisher is told the stack's discovery.** A TorQ process finds
   discovery through its process.csv, whose discovery row is this machine's.
-  Every start of the publisher, `uqs job attach` or a bare `uqs start`, adds
-  `-extras -.servers.DISCOVERY :HOST:PORT` from the attachment, so it registers
-  with the stack's discovery and gets the tickerplant from there. `-extras`
-  reaches every process of one start, so the publisher is started on its own; a
-  start that names it beside other processes is refused.
+  Every start of the publisher, `uqs job attachment add` or a bare `uqs start`,
+  adds `-extras -.servers.DISCOVERY :HOST:PORT` from the attachment, so it
+  registers with the stack's discovery and gets the tickerplant from there.
+  `-extras` reaches every process of one start, so the publisher is started on
+  its own; a start that names it beside other processes is refused.
 
 - **The stack's processes are asked where discovery lists them**, not at
   `--host`. A loopback name in that listing means the stack's own machine, so it
@@ -129,16 +137,17 @@ the stack's machine.
   The plan's `RUNTIME_ONLY` warning and verify's output both say that a
   tickerplant restart drops the registration and the attachment must be
   re-applied. With the stack elsewhere they add that nothing on this machine is
-  told of that restart: stop the publisher, then run `uqs job attach NAME`.
-  `uqs job attach` re-verifies that the tickerplant still holds the table before
-  it starts the publisher. So does every other start of it (`uqs start`, a
-  profile, the MCP server, the browser): for a runtime-only attachment or a
-  stack on another machine, the start gate asks the tickerplant, with the
-  read-only `probe` and a 3-second timeout, whether each attached table is still
-  one of its tables and its pub/sub tables. A table it lost refuses the start,
-  naming the table, the stack and `uqs job attach NAME` to re-apply. A stack
-  that does not answer refuses it too: unknown is not read as registered. An
-  attachment on this machine with schema-file persistence is not asked.
+  told of that restart: stop the publisher, then run
+  `uqs job attachment add NAME`. `uqs job attachment add` re-verifies that the
+  tickerplant still holds the table before it starts the publisher. So does
+  every other start of it (`uqs start`, a profile, the MCP server, the browser):
+  for a runtime-only attachment or a stack on another machine, the start gate
+  asks the tickerplant, with the read-only `probe` and a 3-second timeout,
+  whether each attached table is still one of its tables and its pub/sub tables.
+  A table it lost refuses the start, naming the table, the stack and
+  `uqs job attachment add NAME` to re-apply. A stack that does not answer
+  refuses it too: unknown is not read as registered. An attachment on this
+  machine with schema-file persistence is not asked.
 
 #### Durable registration through the tickerplant
 
@@ -315,7 +324,7 @@ own `on_timer` or `on_batch` orders its own steps. None of it is exactly-once.
 
   The reconnect restores the publish handle only. A runtime-only registration is
   still lost with the restart, so re-apply the attachment
-  (`uqs job attach NAME`) as above.
+  (`uqs job attachment add NAME`) as above.
 
 - **An in-doubt page is settled, not blindly resent.** A marker found at the
   start of a tick means the previous page was interrupted between the publish
@@ -379,16 +388,16 @@ own `on_timer` or `on_batch` orders its own steps. None of it is exactly-once.
 
 ### Migration from the stage commands
 
-  | Before                                   | Now                                                           |
-  | ---------------------------------------- | ----------------------------------------------------------    |
-  | `uqs job attach plan NAME ...`           | `uqs job attach NAME ... --dry-run`                           |
-  | `uqs job attach validate NAME`           | `uqs job attach NAME --dry-run`                               |
-  | `uqs job attach apply NAME`              | `uqs job attach NAME --no-start`                              |
-  | `uqs job attach verify NAME`             | `uqs job attach NAME --no-start`                              |
-  | `uqs job attach start NAME`              | `uqs job attach NAME`                                         |
-  | `uqs job attach status NAME`             | `uqs job attachment list`, or `uqs job attach NAME --dry-run` |
-  | `uqs job attach detach NAME [--dry-run]` | `uqs job detach NAME [--dry-run]`                             |
-  | `plan --no-save`                         | `--dry-run`                                                   |
+  | Before                                   | Now                                                         |
+  | ---------------------------------------- | ----------------------------------------------------------- |
+  | `uqs job attach plan NAME ...`           | `uqs job attachment add NAME ... --dry-run`                 |
+  | `uqs job attach validate NAME`           | `uqs job attachment add NAME --dry-run`                     |
+  | `uqs job attach apply NAME`              | `uqs job attachment add NAME --no-start`                    |
+  | `uqs job attach verify NAME`             | `uqs job attachment add NAME --no-start`                    |
+  | `uqs job attach start NAME`              | `uqs job attachment add NAME`                               |
+  | `uqs job attach status NAME`             | `uqs job attachment show NAME`, or `... add NAME --dry-run` |
+  | `uqs job attach detach NAME [--dry-run]` | `uqs job attachment remove NAME [--dry-run]`                |
+  | `plan --no-save`                         | `--dry-run`                                                 |
 
 The old forms are refused with the command that replaced them.
 
@@ -424,7 +433,7 @@ before it runs, so an interruption leaves an unknown outcome, never an
 unrecorded change. Re-running asks the process about each unknown step, and a
 stack that already matches is left alone. A failed step is reported with what is
 done, unknown and failed; nothing is rolled back behind your back. Run
-`uqs job attach NAME` again, or `uqs job detach NAME`.
+`uqs job attachment add NAME` again, or `uqs job attachment remove NAME`.
 
 The manifest records each operation's ownership: `created` (this attachment made
 it and may remove it), `existing` (never removed), or `shared` (another
@@ -507,18 +516,18 @@ own publisher running, which is what a started attachment looks like. Passing
 makes the attachment `verified`; a failed re-verification takes it back to
 `applied`.
 
-The gate is not just `uqs job attach`. `stack/start_policy.refuse_start`, below
-`uqs start`, the MCP server and the browser's start route, refuses the
-attachment's publisher unless the attachment is `verified` **and** the start is
-under its stack id. A bare `uqs start pb_ledger1` would use the runtime's
-default base port, and is refused with the right command named. `uqs start`,
-`start all` and `restart all` are gated too: `all` is expanded first to the
-startwithall=1 processes it launches, and a job declared `start_with_all 1b` is
-one of them. The gate fails closed: a publisher whose `manifest.json` cannot be
-read (permissions, truncated, no `state`) is refused, and an `attachment.json`
-that cannot be read refuses every start, since its publisher cannot be known.
-Make the file readable again, or move the folder out of the attachments
-directory if the attachment is gone.
+The gate is not just `uqs job attachment add`.
+`stack/start_policy.refuse_start`, below `uqs start`, the MCP server and the
+browser's start route, refuses the attachment's publisher unless the attachment
+is `verified` **and** the start is under its stack id. A bare
+`uqs start pb_ledger1` would use the runtime's default base port, and is refused
+with the right command named. `uqs start`, `start all` and `restart all` are
+gated too: `all` is expanded first to the startwithall=1 processes it launches,
+and a job declared `start_with_all 1b` is one of them. The gate fails closed: a
+publisher whose `manifest.json` cannot be read (permissions, truncated, no
+`state`) is refused, and an `attachment.json` that cannot be read refuses every
+start, since its publisher cannot be known. Make the file readable again, or
+move the folder out of the attachments directory if the attachment is gone.
 
 ### Detach
 
@@ -556,7 +565,7 @@ blocker can be accepted explicitly where the table says so; this is the
 supported alternative to editing the validation code.
 
 ```bash
-uqs job attach pb-uat --job pb_general_ledger --stack-id 6000 \
+uqs job attachment add pb-uat --job pb_general_ledger --stack-id 6000 \
     --override TORQ_VERSION:discovery1 --override TORQ_VERSION:stp1 \
     --override TORQ_VERSION:rdb1 --override TORQ_VERSION:wdb1 \
     --reason "Reviewed against the site's TorQ build" --yes --accept-risks
@@ -652,9 +661,9 @@ driver and credentials, and written into the HDB of the stack on `uat-host`:
 ```bash
 # etl-host: attach (this records the stack, its HDB and the table), then export
 # the worker's receiver contract
-uqs job attach pb-uat --job pb_general_ledger --bundle ../piggybank --stack-id 6000 \
+uqs job attachment add pb-uat --job pb_general_ledger --bundle ../piggybank --stack-id 6000 \
     --host uat-host --consumer rdb1 --consumer wdb1 --yes
-uqs job contract export piggybank_ledger_backfill --output ledger.contract.json
+uqs job attachment contract export piggybank_ledger_backfill --output ledger.contract.json
 
 # carry both to uat-host, into its $UQS_DATA_ROOT/attachments (here /srv/uqs): the
 # attachment's directory holds no secret - the password comes from the variable
@@ -663,8 +672,8 @@ scp -r "$UQS_DATA_ROOT/attachments/pb-uat" uat-host:/srv/uqs/attachments/
 scp ledger.contract.json uat-host:
 
 # uat-host: approve the contract for the attachment, then start the receiver
-uqs job contract approve ledger.contract.json --attach pb-uat --conflict upsert --conflict replace
-uqs job contract list --attach pb-uat          # its identity, e.g. 3f9a0c2e7b1d4a56
+uqs job attachment contract approve ledger.contract.json --attach pb-uat --conflict upsert --conflict replace
+uqs job attachment contract list --attach pb-uat          # its identity, e.g. 3f9a0c2e7b1d4a56
 uqs job receive --contract 3f9a0c2e --attach pb-uat --listen-port 7090
 
 # etl-host: extract, and send each window to the receiver
@@ -674,7 +683,7 @@ uqs job backfill piggybank_ledger_backfill --attach pb-uat --writer uat-host:709
 
 #### The receiver contract
 
-`uqs job contract export WORKER` runs a q that loads the worker
+`uqs job attachment contract export WORKER` runs a q that loads the worker
 (`scripts/dev/receiver_contract.q`) and derives the contract from its
 declarations (`.qetl.io.remote.contract.of`). It is never written by hand:
 
@@ -689,8 +698,8 @@ declarations (`.qetl.io.remote.contract.of`). It is never written by hand:
   | `conflict_policies`                                         | every strategy the declarations admit. `replace` needs a window column, and a partition column for a partitioned worker    |
   | `origin`                                                    | the worker, source and transform it came from, for the operator to read                                                    |
 
-`uqs job contract approve FILE --attach NAME` runs on the stack's machine. It
-refuses, and stores nothing, in any of these cases:
+`uqs job attachment contract approve FILE --attach NAME` runs on the stack's
+machine. It refuses, and stores nothing, in any of these cases:
 
 - the contract is malformed, of an unsupported version, or altered since export;
 - the attachment is not `verified`;
@@ -768,7 +777,7 @@ batch staged for longer than ten minutes. Resending is safe: a chunk sent twice
 replaces itself, and a committed batch answers `duplicate` at its first chunk.
 
 A running receiver holds the attachment's owner record on the stack's machine,
-so `uqs job detach` there refuses while it runs.
+so `uqs job attachment remove` there refuses while it runs.
 `uqs job receive --attach NAME --stop` stops it. An extractor elsewhere then
 fails its next window without covering it, and the next run, once a receiver is
 back, sends it again.
@@ -879,8 +888,9 @@ checks do not, by themselves, certify direct native-HDB writes.
   host, stack id and canonical HDB path, so coverage recorded for one HDB cannot
   suppress a run into another. The run's log is in its `logs/`.
 - While a run is alive its owner record sits in the attachment's folder
-  (`backfills/<worker>.owner.json`) and `uqs job detach` refuses; the run
-  removes it when it finishes, and a record whose process is gone owns nothing.
+  (`backfills/<worker>.owner.json`) and `uqs job attachment remove` refuses; the
+  run removes it when it finishes, and a record whose process is gone owns
+  nothing.
 
 ### Written, covered, queryable
 
@@ -944,12 +954,12 @@ whatever order attachments sharing the file are removed in.
 ([above](#durable-registration-through-the-tickerplant)). `--runtime-only` skips
 it.
 
-  | State                                                  | A tickerplant restart                                                                                       |
-  | ------------------------------                         | -------------------------------------------------------------------------------------------                 |
-  | applied, `schema-file` or `remote-schema-file` persist | the block recreates the table and its ownership record                                                      |
-  | applied, `--runtime-only`                              | the table is gone; `--dry-run` reports `registration-lost`, verify fails, `uqs job attach NAME` restores it |
-  | rolled back                                            | the block went with the registration: the table does not come back                                          |
-  | detached after publication                             | the block stayed, so the table comes back and its logs replay                                               |
+  | State                                                  | A tickerplant restart                                                                                               |
+  | ------------------------------                         | -------------------------------------------------------------------------------------------                         |
+  | applied, `schema-file` or `remote-schema-file` persist | the block recreates the table and its ownership record                                                              |
+  | applied, `--runtime-only`                              | the table is gone; `--dry-run` reports `registration-lost`, verify fails, `uqs job attachment add NAME` restores it |
+  | rolled back                                            | the block went with the registration: the table does not come back                                                  |
+  | detached after publication                             | the block stayed, so the table comes back and its logs replay                                                       |
 
 End of day needs nothing extra: the tickerplant re-reads its tables then, and
 the wdb hands its table list to the sort process.
@@ -977,14 +987,14 @@ would need `--network-address` for this host to be the client.
 Each scenario checks its effect on the stack's own processes, through their
 published ports, not through `uqs`:
 
-  | Scenario                                                                                  | Checked on the stack                                                                                                                                                                                                                                                                                                                                                                       |
-  | --------------------------------------------------------------------------                | --------------------------------------------------------------------------                                                                                                                                                                                                                                                                                                                 |
-  | a publisher on uat-client, attached `--runtime-only`                                      | the table on stp1, its rows counted there and in rdb1, a handle back from discovery                                                                                                                                                                                                                                                                                                        |
-  | a publisher name the stack cannot resolve: `ADVERTISED_UNRESOLVABLE`                      | nothing registered, no ownership record                                                                                                                                                                                                                                                                                                                                                    |
-  | a name that resolves to an address nothing answers on: `PUBLISHER_UNREACHABLE_FROM_STACK` | discovery lists the publisher with no handle; the publisher is stopped and the attachment back to `applied`                                                                                                                                                                                                                                                                                |
-  | `uqs stop` of the publisher on uat-client, then the tickerplant, rdb and wdb restarted    | the publisher gone from uat-client while every stack process still answers; then the table gone; `--dry-run` reports `registration-lost`; `uqs job attach` registers it again and rows flow                                                                                                                                                                                                |
-  | a bare `uqs start` after that restart                                                     | refused, naming the re-apply: the start path re-asks the stack ([#1673](https://github.com/kwojdalski/uqf/pull/1673))                                                                                                                                                                                                                                                                      |
-  | `uqs job receive` on uat-stack, `uqs job backfill --writer` on uat-client                 | uat-stack has no copy of the bundle: the contract is exported on uat-client and approved on uat-stack. The day's rows counted on uat-stack's disk, coverage on uat-client, a rerun that writes nothing, no HDB on uat-client. hdb1 serves them where it maps a partitioned HDB; PeachQ's maps none, so there the run ends `written_not_queryable` with the reader's failure reported apart |
+  | Scenario                                                                                  | Checked on the stack                                                                                                                                                                                                                                                                                                                                                                               |
+  | --------------------------------------------------------------------------                | --------------------------------------------------------------------------                                                                                                                                                                                                                                                                                                                         |
+  | a publisher on uat-client, attached `--runtime-only`                                      | the table on stp1, its rows counted there and in rdb1, a handle back from discovery                                                                                                                                                                                                                                                                                                                |
+  | a publisher name the stack cannot resolve: `ADVERTISED_UNRESOLVABLE`                      | nothing registered, no ownership record                                                                                                                                                                                                                                                                                                                                                            |
+  | a name that resolves to an address nothing answers on: `PUBLISHER_UNREACHABLE_FROM_STACK` | discovery lists the publisher with no handle; the publisher is stopped and the attachment back to `applied`                                                                                                                                                                                                                                                                                        |
+  | `uqs stop` of the publisher on uat-client, then the tickerplant, rdb and wdb restarted    | the publisher gone from uat-client while every stack process still answers; then the table gone; `--dry-run` reports `registration-lost`; `uqs job attachment add` registers it again and rows flow                                                                                                                                                                                                |
+  | a bare `uqs start` after that restart                                                     | refused, naming the re-apply: the start path re-asks the stack ([#1673](https://github.com/kwojdalski/uqf/pull/1673))                                                                                                                                                                                                                                                                              |
+  | `uqs job receive` on uat-stack, `uqs job backfill --writer` on uat-client                 | uat-stack has no copy of the bundle: the contract is exported on uat-client and approved on uat-stack. The day's rows counted on uat-stack's disk, coverage on uat-client, a rerun that writes nothing, no HDB on uat-client. hdb1 serves them where it maps a partitioned HDB; PeachQ's maps none, so there the run ends `written_not_queryable` with the reader's failure reported apart         |
 
 The lane found that a publisher attached to a stack elsewhere looked for
 discovery on its own machine; the discovery address above is the fix. It also
@@ -1043,4 +1053,4 @@ What the containers do not show:
   ([#1451](https://github.com/kwojdalski/uqf/issues/1451)). TorQ's own fix, a
   per-table trap in the wdb's writedown, belongs upstream.
 - **Open bugs** in the workflow are tracked as [GitHub issues titled
-  `uqs job attach`](https://github.com/kwojdalski/uqf/issues?q=is%3Aissue+is%3Aopen+%22uqs+job+attach%22).
+  `uqs job attachment add`](https://github.com/kwojdalski/uqf/issues?q=is%3Aissue+is%3Aopen+%22uqs+job+attach%22).

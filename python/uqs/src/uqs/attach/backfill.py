@@ -61,7 +61,7 @@ PLAN_SCRIPT = Path("scripts") / "dev" / "attached_plan.q"
 STATE_SUBDIR = backfill_status.STATE_SUBDIR
 #: How an unpinned HDB gets pinned, said wherever its absence refuses a run.
 _PIN = (
-    " - re-run `uqs job attach {name}` while a wdb of the stack is up: it pins the HDB "
+    " - re-run `uqs job attachment add {name}` while a wdb of the stack is up: it pins the HDB "
     "directory that wdb reports"
 )
 _TABLE_LINE = re.compile(r"^(?:\.qetl\.plant\.)?([a-z_][a-z0-9_]*):\(\[\]")
@@ -182,7 +182,8 @@ def require_verified(attachment: str, attach_root: Path | None = None) -> None:
     if state != VERIFIED:
         raise UqsError(
             f"attachment {attachment} is {state}, not {VERIFIED}: a backfill needs the "
-            f"attachment's identity and storage checked (`uqs job attach verify {attachment}`)"
+            f"attachment's identity and storage checked "
+            f"(`uqs job attachment add {attachment} --no-start`)"
             + (
                 " - a detached attachment's stack is not ours to write"
                 if state == "detached"

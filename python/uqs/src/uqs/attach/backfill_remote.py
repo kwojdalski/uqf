@@ -23,8 +23,8 @@ The receiver authenticates with q's own -U file, written for the attachment's
 stack user and password and readable only by this account. The extractor
 connects as that user: one attachment, one credential, on both machines.
 The attachment must carry the same name on both, because the grant is by name.
-The contract is exported on the source's machine (`uqs job contract export W`) and
-approved on the stack's (`uqs job contract approve FILE --attach NAME`).
+The contract is exported on the source's machine (`uqs job attachment contract export W`) and
+approved on the stack's (`uqs job attachment contract approve FILE --attach NAME`).
 """
 
 from __future__ import annotations

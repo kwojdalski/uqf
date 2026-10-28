@@ -86,7 +86,7 @@ def test_a_table_the_tickerplant_lost_refuses_the_start(monkeypatch, lost):
     text = str(caught.value)
     assert f"{gone} is no longer registered on stp1" in text
     assert f"stack {STACK} at uat-box.example" in text
-    assert "Re-apply with `uqs job attach ex-uat`" in text and "Nothing was started" in text
+    assert "Re-apply with `uqs job attachment add ex-uat`" in text and "Nothing was started" in text
 
 
 @pytest.mark.parametrize("down", ["discovery", "tickerplant"])
@@ -97,7 +97,7 @@ def test_a_stack_that_does_not_answer_refuses_the_start(monkeypatch, down):
         start()
     text = str(caught.value)
     assert f"still registered on stack {STACK} at uat-box.example cannot be told" in text
-    assert "Connection refused" in text and "`uqs job attach ex-uat`" in text
+    assert "Connection refused" in text and "`uqs job attachment add ex-uat`" in text
 
 
 def test_an_unset_password_variable_refuses_rather_than_passes(monkeypatch):

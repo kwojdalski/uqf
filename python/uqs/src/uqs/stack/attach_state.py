@@ -1,6 +1,6 @@
 """Where attachments are kept, and the one question the start path asks of them.
 
-`uqs job attach` (uqs.attach) keeps one folder per attachment: its saved
+`uqs job attachment add` (uqs.attach) keeps one folder per attachment: its saved
 configuration and its operation manifest. The START PATH has to consult them -
 a publisher whose attachment has not been verified, or one started under the
 wrong base port, must be refused wherever the start comes from (`uqs start`,
@@ -215,28 +215,28 @@ def refuse_unverified_start(paths: UqsPaths, procs: str, base_port: int | None) 
                 f"{pub.procname} is the publisher of attachment {pub.attachment} (stack "
                 f"{pub.stack_id}), whose manifest is unreadable: {pub.problem}. It stays "
                 "stopped until that file is readable again - it records what apply changed on "
-                f"the stack, so restore it rather than delete it - and `uqs job attach "
+                f"the stack, so restore it rather than delete it - and `uqs job attachment add "
                 f"{pub.attachment}` has verified it. Nothing was started."
             )
         if pub.state != VERIFIED:
             raise UqsError(
                 f"{pub.procname} is the publisher of attachment {pub.attachment} (stack "
                 f"{pub.stack_id}), which is {pub.state}: it may start once "
-                f"`uqs job attach {pub.attachment}` has verified it"
+                f"`uqs job attachment add {pub.attachment}` has verified it"
             )
         if effective != pub.stack_id:
             raise UqsError(
                 f"{pub.procname} belongs to attachment {pub.attachment} on stack {pub.stack_id}; "
                 f"started under base port {effective} it would look for discovery at "
                 f"{effective + 1}, not {pub.stack_id + 1}. Start it with "
-                f"`uqs job attach {pub.attachment}`, or --base-port {pub.stack_id}"
+                f"`uqs job attachment add {pub.attachment}`, or --base-port {pub.stack_id}"
             )
         if live_check is None:
             raise UqsError(
                 f"{pub.procname} is the publisher of attachment {pub.attachment} (stack "
                 f"{pub.stack_id}), and whether its tables are still registered there cannot "
                 "be checked: uqs.attach.live is not loaded by this front end. Start it with "
-                f"`uqs start` or `uqs job attach {pub.attachment}`. Nothing was started."
+                f"`uqs start` or `uqs job attachment add {pub.attachment}`. Nothing was started."
             )
         live_check(pub.attachment)
 
@@ -267,7 +267,8 @@ def publisher_extras(paths: UqsPaths, procs: str) -> list[str]:
         raise UqsError(
             f"{', '.join(p.procname for p in named)} publishes to a stack on another machine and "
             "is told that stack's discovery when it starts, which no other process may be: "
-            f"start it on its own (`uqs job attach {named[0].attachment}`). Nothing was started."
+            f"start it on its own (`uqs job attachment add {named[0].attachment}`). "
+            "Nothing was started."
         )
     return ["-.servers.DISCOVERY", named[0].remote_discovery]
 

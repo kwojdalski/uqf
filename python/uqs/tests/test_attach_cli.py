@@ -1,5 +1,5 @@
-"""`uqs job attach NAME`, `uqs job detach NAME` and `uqs job attachment list` as an
-operator runs them (#1424, #1457).
+"""`uqs job attachment add|remove|show NAME` and `uqs job attachment list` as an
+operator runs them (#1424, #1457, #1737).
 
 The stack is a scripted one that keeps state (attach_support.FakeStack); what is
 under test is what the commands ask, print, refuse, change and exit with. The
@@ -94,7 +94,9 @@ def new(fake, *extra: str) -> list[str]:
 
 def run(*argv: str, debug: bool = False, **kw):
     pre = ["--debug"] if debug else []
-    return CliRunner().invoke(cli.app, [*pre, "job", *argv], catch_exceptions=False, **kw)
+    return CliRunner().invoke(
+        cli.app, [*pre, "job", "attachment", *argv], catch_exceptions=False, **kw
+    )
 
 
 def changes(fake) -> list[tuple[str, str]]:
@@ -128,23 +130,61 @@ def _group(command, *path: str) -> TyperGroup:
     return command
 
 
-def test_attach_and_detach_are_commands_and_no_stage_or_status_command_remains():
-    job = _group(typer.main.get_command(cli.app), "job")
-    assert {"attach", "detach"} <= set(job.commands)
-    for word in ("attach", "detach"):
-        assert not isinstance(job.commands[word], TyperGroup), word
-    assert "attachments" not in job.commands
-    options = {o for p in job.commands["attach"].params for o in getattr(p, "opts", [])}
+def test_attachment_is_a_noun_and_no_stage_or_status_command_remains():
+    root = typer.main.get_command(cli.app)
+    noun = _group(root, "job", "attachment")
+    assert {"add", "remove", "show", "list", "contract"} <= set(noun.commands)
+    for word in ("add", "remove", "show"):
+        assert not isinstance(noun.commands[word], TyperGroup), word
+    assert "attachments" not in _group(root, "job").commands
+    options = {o for p in noun.commands["add"].params for o in getattr(p, "opts", [])}
     assert {"--dry-run", "--no-start", "--json", "--yes", "--accept-risks", "--override",
             "--reason", "--clear-overrides", "--replace"} <= options  # fmt: skip
-    detach = {o for p in job.commands["detach"].params for o in getattr(p, "opts", [])}
-    assert {"--dry-run", "--yes", "--json"} <= detach
+    remove = {o for p in noun.commands["remove"].params for o in getattr(p, "opts", [])}
+    assert {"--dry-run", "--yes", "--json"} <= remove
     assert "attachments" in listing.LISTABLE_KINDS
+
+
+def test_the_old_verbs_are_hidden_aliases_that_name_the_new_spelling(world, monkeypatch):
+    """`job attach`, `job detach` and `job contract ...` still run for one
+    release, hidden from --help, each logging its new spelling (#1737)."""
+    from uqs.cli import renames
+
+    warned: list[tuple[str, str]] = []
+    monkeypatch.setattr(renames, "warn_renamed", lambda old, new: warned.append((old, new)))
+    job = _group(typer.main.get_command(cli.app), "job")
+    for old in ("attach", "detach", "contract"):
+        assert job.commands[old].hidden, old
+    assert run_old("attach", *new(world, "--dry-run")).exit_code == 0
+    assert run_old("detach", "pb-uat", "--dry-run").exit_code == 1, "nothing saved by a dry run"
+    done = run_old("contract", "list", "--attach", "pb-uat", "--json")
+    assert done.exit_code == 0 and json.loads(done.output) == []
+    assert warned == [
+        ("attach", "uqs job attachment add"),
+        ("detach", "uqs job attachment remove"),
+        ("list", "uqs job attachment contract list"),
+    ]
+
+
+def run_old(*argv: str):
+    return CliRunner().invoke(cli.app, ["job", *argv], catch_exceptions=False)
+
+
+def test_show_is_one_attachment_saved_and_now(world):
+    assert run("add", *new(world), "--yes").exit_code == 0
+    doc = json.loads(run("show", "pb-uat", "--json").output)
+    assert doc["attachment"]["name"] == "pb-uat"
+    assert doc["attachment"]["publisher"]["job"] == "pb_general_ledger"
+    assert doc["state"]["attachment"] == "pb-uat" and doc["state"]["state"] == "verified"
+    human = flat(run("show", "pb-uat").output)
+    assert "state: verified" in human and "pb_general_ledger" in human
+    missing = run("show", "nosuch")
+    assert missing.exit_code == 1 and "nosuch" in " ".join(world.errors)
 
 
 @pytest.mark.parametrize("stage", STAGES)
 def test_every_old_stage_command_is_refused_with_the_command_that_replaced_it(world, stage):
-    result = run("attach", stage, "pb-uat")
+    result = run_old("attach", stage, "pb-uat")
     assert result.exit_code == 1
     message = world.errors[-1]
     assert f"`uqs job attach {stage}` was replaced" in message
@@ -157,7 +197,7 @@ def test_every_old_stage_command_is_refused_with_the_command_that_replaced_it(wo
 
 
 def test_a_dry_run_shows_the_plan_and_changes_nothing(world):
-    result = run("attach", *new(world, "--dry-run"))
+    result = run("add", *new(world, "--dry-run"))
     assert result.exit_code == 0, result.output
     text = flat(result.output)
     assert "Affected components" in text and "Changes attach would make" in text
@@ -168,7 +208,7 @@ def test_a_dry_run_shows_the_plan_and_changes_nothing(world):
 
 def test_a_dry_run_of_a_blocked_stack_exits_one_and_still_saves_nothing(world):
     world.named("stp1")["multilog"] = "singular"
-    result = run("attach", *new(world, "--dry-run", "--json"))
+    result = run("add", *new(world, "--dry-run", "--json"))
     assert result.exit_code == 1
     data = json.loads(result.output)
     assert data["ok"] is False and data["dry_run"] is True
@@ -177,50 +217,50 @@ def test_a_dry_run_of_a_blocked_stack_exits_one_and_still_saves_nothing(world):
 
 
 def test_a_dry_run_of_a_saved_attachment_leaves_every_file_as_it_was(world):
-    assert run("attach", *new(world, "--no-start", "--yes")).exit_code == 0
+    assert run("add", *new(world, "--no-start", "--yes")).exit_code == 0
     before, calls = snapshot(world.state_dir), len(changes(world))
-    assert run("attach", "pb-uat", "--dry-run").exit_code == 0
-    assert run("detach", "pb-uat", "--dry-run").exit_code == 0
+    assert run("add", "pb-uat", "--dry-run").exit_code == 0
+    assert run("remove", "pb-uat", "--dry-run").exit_code == 0
     assert snapshot(world.state_dir) == before
     assert len(changes(world)) == calls, "detach's own removal checks ran as dry runs only"
 
 
 @pytest.mark.parametrize("extra", [[], ["--dry-run"]])
 def test_attach_refuses_an_attachment_whose_detach_is_in_progress_and_changes_nothing(world, extra):
-    assert run("attach", *new(world, "--no-start", "--yes")).exit_code == 0
+    assert run("add", *new(world, "--no-start", "--yes")).exit_code == 0
     path = world.state_dir / "pb-uat" / "manifest.json"
     m = Manifest.load("pb-uat", world.state_dir)
     m.set_state("detaching", "set by the test")
     before, calls = snapshot(world.state_dir), len(changes(world))
-    result = run("attach", "pb-uat", "--yes", *extra)
+    result = run("add", "pb-uat", "--yes", *extra)
     assert result.exit_code != 0
     text = flat(result.output + " ".join(world.errors))
-    assert "is detaching" in text and "uqs job detach pb-uat" in text
+    assert "is detaching" in text and "uqs job attachment remove pb-uat" in text
     assert snapshot(world.state_dir) == before and path.is_file()
     assert len(changes(world)) == calls
 
 
 def test_a_dry_run_detach_creates_no_lock_file(world):
-    assert run("attach", *new(world, "--no-start", "--yes")).exit_code == 0
+    assert run("add", *new(world, "--no-start", "--yes")).exit_code == 0
     lock = world.state_dir / "pb-uat" / ".lock"
     lock.unlink()
-    result = run("detach", "pb-uat", "--dry-run")
+    result = run("remove", "pb-uat", "--dry-run")
     assert result.exit_code == 0, result.output
     assert not lock.exists()
     assert "dry run: nothing was changed" in flat(result.output)
 
 
 def test_a_dry_run_shows_the_manifest_and_a_registration_the_stack_lost(world):
-    assert run("attach", *new(world, "--yes", "--no-start")).exit_code == 0
+    assert run("add", *new(world, "--yes", "--no-start")).exit_code == 0
     stp = world.named("stp1")
     stp["schemas"].pop(TABLE)  # a tickerplant restart without a persisted schema
     stp["owned"].pop(TABLE)
-    data = json.loads(run("attach", "pb-uat", "--dry-run", "--json").output)["plan"]
+    data = json.loads(run("add", "pb-uat", "--dry-run", "--json").output)["plan"]
     assert data["manifest"]["state"] == "verified"
     assert any(
         line.startswith("registration-lost: stp1 no longer holds") for line in data["health"]
     )
-    human = flat(run("attach", "pb-uat", "--dry-run").output)
+    human = flat(run("add", "pb-uat", "--dry-run").output)
     assert "registration-lost" in human and "Manifest: verified" in human
 
 
@@ -228,7 +268,7 @@ def test_a_dry_run_shows_the_manifest_and_a_registration_the_stack_lost(world):
 
 
 def test_attach_asks_first_and_changes_nothing_on_no(world):
-    result = run("attach", *new(world), input="n\n")
+    result = run("add", *new(world), input="n\n")
     assert result.exit_code != 0
     assert "Attach pb-uat to stack 6000 as above?" in flat(result.output)
     assert "Affected components" in result.output, "the plan is shown before the question"
@@ -236,7 +276,7 @@ def test_attach_asks_first_and_changes_nothing_on_no(world):
 
 
 def test_attach_applies_verifies_and_starts_in_that_order(world):
-    result = run("attach", *new(world, "--yes"))
+    result = run("add", *new(world, "--yes"))
     assert result.exit_code == 0, result.output
     assert changes(world) == [
         ("stp_register", "stp1"), ("consumer_attach", "rdb1"), ("consumer_attach", "wdb1"),
@@ -249,7 +289,7 @@ def test_attach_applies_verifies_and_starts_in_that_order(world):
 
 
 def test_the_stages_are_reported_in_order_in_json(world):
-    result = run("attach", *new(world, "--yes", "--json"))
+    result = run("add", *new(world, "--yes", "--json"))
     assert result.exit_code == 0, result.output
     data = json.loads(result.output)
     assert [s["stage"] for s in data["stages"]] == ["save", "apply", "verify", "start"]
@@ -258,7 +298,7 @@ def test_the_stages_are_reported_in_order_in_json(world):
 
 
 def test_no_start_leaves_a_verified_attachment_and_a_stopped_publisher(world):
-    result = run("attach", *new(world, "--yes", "--no-start", "--json"))
+    result = run("add", *new(world, "--yes", "--no-start", "--json"))
     assert result.exit_code == 0, result.output
     data = json.loads(result.output)
     last = data["stages"][-1]
@@ -267,15 +307,15 @@ def test_no_start_leaves_a_verified_attachment_and_a_stopped_publisher(world):
 
 
 def test_a_rerun_converges_without_a_second_registration_or_publisher(world):
-    assert run("attach", *new(world, "--yes")).exit_code == 0
+    assert run("add", *new(world, "--yes")).exit_code == 0
     first = changes(world)
-    again = run("attach", *new(world, "--yes", "--json"))
+    again = run("add", *new(world, "--yes", "--json"))
     assert again.exit_code == 0, again.output
     data = json.loads(again.output)
     assert changes(world) == first, "nothing was registered or subscribed twice"
     assert world.started == ["pb_ledger1"], "the publisher was not started twice"
     assert [s["status"] for s in data["stages"]] == ["skipped", "skipped", "done", "skipped"]
-    assert run("attach", "pb-uat", "--yes").exit_code == 0, "by name alone, too"
+    assert run("add", "pb-uat", "--yes").exit_code == 0, "by name alone, too"
 
 
 def saved_storage(fake) -> dict:
@@ -288,23 +328,23 @@ def test_a_rerun_of_a_running_attachment_pins_the_hdb_it_left_unpinned(world):
     must pin the directory even though there is nothing to apply."""
     wdb = world.named("wdb1")
     hdbdir, wdb["hdbdir"] = wdb["hdbdir"], ""
-    assert run("attach", *new(world, "--yes")).exit_code == 0
+    assert run("add", *new(world, "--yes")).exit_code == 0
     assert saved_storage(world)["hdb_dir"] == ""
     wdb["hdbdir"] = hdbdir
     first = changes(world)
-    result = run("attach", "pb-uat", "--yes", "--json")
+    result = run("add", "pb-uat", "--yes", "--json")
     assert result.exit_code == 0, result.output
     stages = json.loads(result.output)["stages"]
     assert [s["status"] for s in stages] == ["done", "skipped", "done", "skipped"]
     assert "pinned hdb_dir" in stages[0]["detail"]
     assert saved_storage(world)["hdb_dir"] == "/data/hdb"
     assert changes(world) == first and world.started == ["pb_ledger1"]
-    again = json.loads(run("attach", "pb-uat", "--yes", "--json").output)["stages"]
+    again = json.loads(run("add", "pb-uat", "--yes", "--json").output)["stages"]
     assert again[0]["status"] == "skipped", "a pinned directory is never re-pinned"
 
 
 def test_an_attachment_without_its_wdb_pins_the_hdb_an_unmanaged_wdb_reports(world):
-    assert run("attach", *new(world, "--consumer", "rdb1", "--yes")).exit_code == 0
+    assert run("add", *new(world, "--consumer", "rdb1", "--yes")).exit_code == 0
     storage = saved_storage(world)
     assert storage["hdb_dir"] == "/data/hdb" and storage["wdb_savedir"] == "/data/wdbhdb"
 
@@ -313,14 +353,14 @@ def test_wdbs_outside_the_attachment_that_disagree_pin_nothing(world):
     other = dict(world.named("wdb1"), procname="wdb2", port=6006, hdbdir=":/elsewhere")
     world.add(other)
     world.refresh_discovery()
-    assert run("attach", *new(world, "--consumer", "rdb1", "--yes")).exit_code == 0
+    assert run("add", *new(world, "--consumer", "rdb1", "--yes")).exit_code == 0
     assert saved_storage(world)["hdb_dir"] == ""
 
 
 def test_a_rerun_after_no_start_applies_nothing_and_then_starts(world):
-    assert run("attach", *new(world, "--yes", "--no-start")).exit_code == 0
+    assert run("add", *new(world, "--yes", "--no-start")).exit_code == 0
     first = changes(world)
-    result = run("attach", "pb-uat", "--yes", "--json")
+    result = run("add", "pb-uat", "--yes", "--json")
     assert result.exit_code == 0, result.output
     steps = json.loads(result.output)["apply"]["steps"]
     assert {s["outcome"] for s in steps} == {"already"}
@@ -328,22 +368,22 @@ def test_a_rerun_after_no_start_applies_nothing_and_then_starts(world):
 
 
 def test_a_stack_that_changed_after_the_preview_is_refused_at_execution(world):
-    assert run("attach", *new(world, "--dry-run")).exit_code == 0
+    assert run("add", *new(world, "--dry-run")).exit_code == 0
     world.named("stp1")["multilog"] = "singular"
-    result = run("attach", *new(world, "--yes"))
+    result = run("add", *new(world, "--yes"))
     assert result.exit_code == 1
     assert any("LOGGING_MODE" in m and "Nothing was changed" in m for m in world.errors)
     assert changes(world) == [] and not world.state_dir.exists()
 
 
 def test_conflicting_options_for_a_saved_attachment_are_refused_unless_replaced(world):
-    assert run("attach", *new(world, "--yes", "--no-start")).exit_code == 0
+    assert run("add", *new(world, "--yes", "--no-start")).exit_code == 0
     moved = new(world, "--yes")
     moved[moved.index("6000")] = "6100"
-    refused = run("attach", *moved)
+    refused = run("add", *moved)
     assert refused.exit_code == 1
     assert any("saved with other settings" in m and "--stack-id" in m for m in world.errors)
-    replaced = run("attach", *moved, "--replace")
+    replaced = run("add", *moved, "--replace")
     assert replaced.exit_code == 1, "its manifest holds changes on stack 6000"
     assert any("detach it first" in m for m in world.errors)
     assert config.load("pb-uat").stack.id == 6000
@@ -351,7 +391,7 @@ def test_conflicting_options_for_a_saved_attachment_are_refused_unless_replaced(
 
 
 def test_a_new_attachment_needs_a_job_and_a_stack_id(world):
-    result = run("attach", "pb-uat", "--dry-run")
+    result = run("add", "pb-uat", "--dry-run")
     assert result.exit_code == 1
     assert any("needs --job and --stack-id" in m for m in world.errors)
 
@@ -359,17 +399,19 @@ def test_a_new_attachment_needs_a_job_and_a_stack_id(world):
 def test_a_partial_apply_exits_nonzero_with_recovery_and_starts_nothing(world, monkeypatch):
     cut = FaultIpc(world, [("consumer_attach", 1, "before")])
     monkeypatch.setattr(service, "ipc_for", lambda att: cut)
-    result = run("attach", *new(world, "--yes"))
+    result = run("add", *new(world, "--yes"))
     assert result.exit_code == 1
     text = flat(result.output)
     assert "the publisher was not started" in text
-    assert "`uqs job attach pb-uat`" in text and "`uqs job detach pb-uat`" in text
+    assert (
+        "`uqs job attachment add pb-uat`" in text and "`uqs job attachment remove pb-uat`" in text
+    )
     assert world.started == []
     m = Manifest.load("pb-uat")
     assert m.state == "partial"
     assert [o.status for o in m.operations] == ["done", "done", "pending"], "the records stay"
     monkeypatch.setattr(service, "ipc_for", lambda att: world)
-    assert run("attach", "pb-uat", "--yes").exit_code == 0, "and the same command recovers"
+    assert run("add", "pb-uat", "--yes").exit_code == 0, "and the same command recovers"
     assert world.started == ["pb_ledger1"]
 
 
@@ -378,7 +420,7 @@ def test_a_failed_verify_prevents_startup(world, monkeypatch):
     monkeypatch.setattr(
         verifying, "run", lambda *a: real(*a) + [verifying.Check("rdb1: injected", False, "x")]
     )
-    result = run("attach", *new(world, "--yes", "--json"))
+    result = run("add", *new(world, "--yes", "--json"))
     assert result.exit_code == 1
     data = json.loads(result.output)
     assert data["ok"] is False and data["stages"][-1]["stage"] == "verify"
@@ -391,7 +433,7 @@ def test_a_failed_start_is_reported_with_its_recovery(world, monkeypatch):
         raise config.AttachmentError("pb_ledger1 did not start (exit 3)")
 
     monkeypatch.setattr(publisher.UqsPublisher, "start", boom)
-    result = run("attach", *new(world, "--yes"))
+    result = run("add", *new(world, "--yes"))
     assert result.exit_code == 1
     assert "only the publisher's start failed" in flat(result.output)
     assert Manifest.load("pb-uat").state == "verified"
@@ -401,12 +443,12 @@ def test_a_failed_start_is_reported_with_its_recovery(world, monkeypatch):
 
 
 def test_json_execution_without_yes_refuses_with_a_json_error(world):
-    result = run("attach", *new(world, "--json"))
+    result = run("add", *new(world, "--json"))
     assert result.exit_code == 1
     data = json.loads(result.output)
     assert data["ok"] is False and "--yes" in data["error"]
     assert changes(world) == [] and not world.state_dir.exists()
-    detach = run("detach", "pb-uat", "--json")
+    detach = run("remove", "pb-uat", "--json")
     assert detach.exit_code == 1 and json.loads(detach.output)["ok"] is False
 
 
@@ -430,7 +472,7 @@ def test_the_credential_is_redacted_in_every_output_mode(world, monkeypatch, mod
     disc["services"].append(
         {"procname": "gw1", "proctype": "gateway", "hpup": f":testhost:6007:admin:{SECRET}"}
     )
-    result = run("attach", *new(world, "--password-env", "ATTACH_PW", *mode), debug=debug)
+    result = run("add", *new(world, "--password-env", "ATTACH_PW", *mode), debug=debug)
     assert result.exit_code == 0, result.output
     assert SECRET not in result.output and not any(SECRET in m for m in world.errors)
     if "--json" in mode:
@@ -454,7 +496,7 @@ def test_an_error_carrying_the_credential_is_redacted(world, monkeypatch):
 
     monkeypatch.setattr(service, "make_plan", leak)
     for extra in ([], ["--json"]):
-        result = run("attach", *new(world, "--password-env", "ATTACH_PW", "--dry-run", *extra))
+        result = run("add", *new(world, "--password-env", "ATTACH_PW", "--dry-run", *extra))
         assert result.exit_code == 1
         assert SECRET not in result.output and not any(SECRET in m for m in world.errors)
     assert json.loads(result.output)["ok"] is False
@@ -464,7 +506,7 @@ def test_an_error_carrying_the_credential_is_redacted(world, monkeypatch):
 
 
 def test_debug_adds_resolution_checks_and_timings(world):
-    result = run("attach", *new(world, "--yes", "--no-start"), debug=True)
+    result = run("add", *new(world, "--yes", "--no-start"), debug=True)
     assert result.exit_code == 0, result.output
     text = flat(result.output)
     assert "debug: configuration: new" in text and "debug: resolved: stack 6000" in text
@@ -474,12 +516,12 @@ def test_debug_adds_resolution_checks_and_timings(world):
 
 def test_debug_goes_through_remote_dispatch():
     target, yes, rest = control.split_global(
-        ["--debug", "--target", "uat", "job", "attach", "pb-uat", "--dry-run"]
+        ["--debug", "--target", "uat", "job", "attachment", "add", "pb-uat", "--dry-run"]
     )
     assert (target, yes) == ("uat", False)
-    assert rest == ["--debug", "job", "attach", "pb-uat", "--dry-run"]
+    assert rest == ["--debug", "job", "attachment", "add", "pb-uat", "--dry-run"]
     remote = control.Remote("uat", "uat-host", "/srv/uqf")
-    assert "--debug job attach pb-uat --dry-run" in control.remote_command(remote, rest)
+    assert "--debug job attachment add pb-uat --dry-run" in control.remote_command(remote, rest)
     assert not control.changes_the_server(["job", "attachment", "list"])
 
 
@@ -496,7 +538,7 @@ def test_debug_does_not_turn_on_the_publishers_runtime_logging(world, monkeypatc
     monkeypatch.setattr(runtime, "start", fake_start)
     monkeypatch.setattr(publisher.UqsPublisher, "start", REAL_START)
     monkeypatch.delenv("LOG_LEVEL", raising=False)
-    result = run("attach", *new(world, "--yes"), debug=True)
+    result = run("add", *new(world, "--yes"), debug=True)
     assert result.exit_code == 0, result.output
     assert seen == [("pb_ledger1", 6000, {"capture": True})], "no extras, no -debug/-verbose"
     assert "LOG_LEVEL" not in os.environ
@@ -506,8 +548,8 @@ def test_debug_does_not_turn_on_the_publishers_runtime_logging(world, monkeypatc
 
 
 def test_detach_before_publication_rolls_back_and_says_so(world):
-    assert run("attach", *new(world, "--yes")).exit_code == 0
-    result = run("detach", "pb-uat", "--yes", "--json")
+    assert run("add", *new(world, "--yes")).exit_code == 0
+    result = run("remove", "pb-uat", "--yes", "--json")
     assert result.exit_code == 0, result.output
     data = json.loads(result.output)
     assert data["outcome"] == "rolled_back" and data["publisher_stopped"] is True
@@ -525,7 +567,7 @@ def _list(*extra: str):
 
 
 def test_list_attachments_shows_attachment_and_publisher_state_separately(world, monkeypatch):
-    assert run("attach", *new(world, "--yes", "--no-start")).exit_code == 0
+    assert run("add", *new(world, "--yes", "--no-start")).exit_code == 0
     monkeypatch.setattr(attach_state, "_port_state", lambda host, port: ("stopped", ""))
     before = snapshot(world.state_dir)
     result = _list("--json")

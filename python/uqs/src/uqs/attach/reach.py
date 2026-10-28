@@ -96,7 +96,7 @@ def unreachable(att: Attachment, where: str, reason: str) -> Finding:
             f"{pub} at {where} refuses the credential the stack on {att.stack.host} connects "
             "with (q's `access`)",
             f"add the stack's TorQ user to {pub}'s access list (passwords/accesslist.txt), "
-            f"then run `uqs job attach {att.name}` again",
+            f"then run `uqs job attachment add {att.name}` again",
             {"address": where},
         )
     return Finding(
@@ -105,7 +105,7 @@ def unreachable(att: Attachment, where: str, reason: str) -> Finding:
         pub,
         f"the stack on {att.stack.host} cannot connect back to {pub} at {where}: {reason}",
         f"open {where} to the stack's machine (firewall, routing, the name's address there), "
-        f"then run `uqs job attach {att.name}` again",
+        f"then run `uqs job attachment add {att.name}` again",
         {"address": where},
     )
 
@@ -141,7 +141,7 @@ def unresponsive(att: Attachment, port: int, reason: str) -> Finding:
         f"{pub} listens on {PUBLISHER_HOST}:{port} but {reason}: it has not finished "
         "starting, so whether it and the stack reach each other is not known",
         f"find where {pub}'s startup stops (its TorQ log), fix that, then run "
-        f"`uqs job attach {att.name}` again",
+        f"`uqs job attachment add {att.name}` again",
         {"address": f"{PUBLISHER_HOST}:{port}"},
     )
 
@@ -157,7 +157,7 @@ def _outbound(att: Attachment, target: Endpoint, reason: str) -> Finding:
             f"{target.procname} at {where} refuses the credential {pub} connects with "
             "(its .servers.USERPASS; q's `access`), so its rows would never be published",
             f"give {pub} a credential {target.procname}'s access list accepts (passwords/"
-            f"<name>.txt in its TorQ config), then run `uqs job attach {att.name}` again",
+            f"<name>.txt in its TorQ config), then run `uqs job attachment add {att.name}` again",
             facts,
         )
     return Finding(
@@ -165,7 +165,7 @@ def _outbound(att: Attachment, target: Endpoint, reason: str) -> Finding:
         OUTBOUND,
         pub,
         f"{pub} cannot connect to {target.procname} at {where}: {reason}",
-        f"open {where} to this machine, then run `uqs job attach {att.name}` again",
+        f"open {where} to this machine, then run `uqs job attachment add {att.name}` again",
         facts,
     )
 

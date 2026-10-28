@@ -61,7 +61,7 @@
 //   partial      1  some windows failed; those are neither written nor covered
 //   failed       1  the run did not do its job
 //
-// While it runs it holds the run owner record named by -owner, which `uqs job attach detach` reads: an
+// While it runs it holds the run owner record named by -owner, which `uqs job attachment remove` reads: an
 // attachment with a live owner cannot be detached. It removes it on the way out; a run that dies leaves
 // a record whose pid is gone, which reads as no owner.
 

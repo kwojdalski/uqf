@@ -2,7 +2,7 @@
 
 The gate (stack/attach_state.py) sits in start_policy.refuse_start, which
 runtime.run_torq_sh applies first - so `uqs start`/`restart`, the MCP server,
-the browser's lifecycle route and `uqs job attach` all reach it. Two
+the browser's lifecycle route and `uqs job attachment add` all reach it. Two
 holes are pinned here:
 
   - #1441: `all` (and a bare `uqs start`/`restart`, which torq.sh reads as
@@ -168,7 +168,7 @@ def test_an_unreadable_manifest_refuses_its_publisher(att, damage, args, chmod_b
     text = str(caught.value)
     assert f"{PUBLISHER} is the publisher of attachment ex-uat" in text
     assert "whose manifest is unreadable" in text and str(path) in text
-    assert "uqs job attach ex-uat` has verified it" in text
+    assert "uqs job attachment add ex-uat` has verified it" in text
     # ...and only its publisher: a start that does not launch it is not stopped.
     start_policy.refuse_start(default_paths(), ["start", "rdb1"], None)
 

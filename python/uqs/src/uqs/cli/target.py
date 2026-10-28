@@ -38,8 +38,8 @@ from uqs.paths import UqsError, repo_root
 target_app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
-    help="The servers `uqs --target NAME <command>` runs on: add, set, list, check, log, "
-    "adopt, shell.",
+    help="The servers `uqs --target NAME <command>` runs on: add, set, unset, rename, remove, "
+    "edit, list, check, log, revert, adopt, shell.",
 )
 app.add_typer(target_app, name="target")
 

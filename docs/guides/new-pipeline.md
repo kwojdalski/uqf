@@ -583,7 +583,7 @@ ends: `windows_planned`, `windows_completed`, `windows_failed` and
 run whose row could not be closed fails: its status file reads `failed`, names
 the open row's `run_id`, and says the run ledger could not record the outcome. A
 ledger written before these columns existed stops the next backfill with
-`etl_runs predates the run's range and counts`; run `uqs job runs migrate` once,
+`etl_runs predates the run's range and counts`; run `uqs job runs upgrade` once,
 and earlier runs keep blanks where nothing was recorded.
 
 `audit` is the question run identity exists to answer: whether two

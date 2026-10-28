@@ -243,12 +243,12 @@ TABLE = "remote_trades"
 
 
 def attach_args(world: World, name: str, *extra: str) -> list[str]:
-    """`uqs job attach NAME` for the fixture feed, against the stack on uat-stack.
+    """`uqs job attachment add NAME` for the fixture feed, against the stack on uat-stack.
 
     wdb1 is a consumer so that the attachment pins the stack's HDB: the same
     attachment names the destination of test_4's remote writer (#1650)."""
     return [
-        "job", "attach", name, "--job", FEED_JOB, "--bundle", BUNDLE,
+        "job", "attachment", "add", name, "--job", FEED_JOB, "--bundle", BUNDLE,
         "--stack-id", str(world.base), "--host", "uat-stack", "--consumer", "rdb1",
         "--consumer", "wdb1", "--runtime-only", "--yes", *extra,
     ]  # fmt: skip

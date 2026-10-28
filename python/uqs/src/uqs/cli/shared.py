@@ -45,9 +45,9 @@ log = get_logger()
 job_app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
-    help="ETL jobs: write them into the tree (new, list, remove, install) and operate on "
-    "them - backfill a bounded worker, preview a polling feed, find a streaming "
-    "job's gaps, read the run ledger.",
+    help="ETL jobs: write them into the tree (new, list, remove, install) and operate on them "
+    "- backfill, preview a feed, find its gaps, receive another machine's batches, a "
+    "worker's checkpoint and runs, and its attachment to a TorQ stack already running.",
 )
 #: The two help panels `uqs job --help` lists its commands under.
 JOB_AUTHORING_PANEL = "Authoring"
@@ -61,7 +61,7 @@ JOB_OPERATIONS_PANEL = "Operations"
 data_app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
-    help="Move data into the HDB, check and change its tables: replay, seed, hdb-check, hdb-alter.",
+    help="Put data in the HDB, check and change it: replay, seed, migrate, hdb-check, hdb-alter.",
 )
 
 DEFAULT_LOG_LEVEL = "INFO"

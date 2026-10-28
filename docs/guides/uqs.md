@@ -233,10 +233,11 @@ script (`scripts/gates/hdb_alter.q`) and the vendored `dbmaint.q` it loads are
 copied to a temporary directory there over one ssh session, run with the
 server's own q (`$QCMD`, else `q`, from the account's login shell), and removed
 afterwards - so the host needs q and nothing of uqf. The destination is the
-attachment's `ssh` setting (`uqs job attach NAME --ssh USER@HOST`, which changes
-a saved attachment without `--replace`), else `stack.host` as the current user;
-a stack on this machine needs none. ssh runs with `BatchMode`: a destination it
-cannot reach is refused, naming the setting. The same script runs by hand:
+attachment's `ssh` setting (`uqs job attachment add NAME --ssh USER@HOST`, which
+changes a saved attachment without `--replace`), else `stack.host` as the
+current user; a stack on this machine needs none. ssh runs with `BatchMode`: a
+destination it cannot reach is refused, naming the setting. The same script runs
+by hand:
 
 ```
 q scripts/gates/hdb_alter.q -hdb /data/hdb -table pb -reorder time,sym,amount,note [-apply]
@@ -250,8 +251,8 @@ refuses it.
 For a table a backfill wrote into a production TorQ HDB - present on the dates
 it covered, missing from the rest:
 
-1. Attach the job if it is not attached (`uqs job attach`), with `--ssh` naming
-   an account on the HDB's host that can write it. Check that
+1. Attach the job if it is not attached (`uqs job attachment add`), with `--ssh`
+   naming an account on the HDB's host that can write it. Check that
    `ssh -o BatchMode=yes USER@HOST true` works.
 2. Make sure nothing else writes the table: let any attached backfill finish
    (`uqs list backfills`), and pick a time well away from end of day.
@@ -275,14 +276,15 @@ and options. The sections below cover what `--help` cannot.
 Three groups gather what is not a lifecycle command. `uqs job` is everything
 about one ETL job: writing it into the tree (`new`, `remove`, `install`) and
 operating it (`backfill`, `preview`, `gaps`, and `runs` for the run ledger), and
-putting it on a TorQ stack that is already running (`attach` and `detach`, see
-[attaching to an existing TorQ](attach-existing-torq.md)). `uqs setup` prepares
-the machine the stack runs on - `uqs setup odbc` installs, loads and rolls back
-a private ODBC setup. `uqs connector` runs the whole lifecycle of the external
-publishers - databento, kafka, the cryptorust recorders - which are processes
-outside TorQ, not the q processes `uqs start` manages: `start`, `stop`,
-`restart` (with `start`'s options, which are not remembered), `status`, and
-`logs NAME [-f] [-l N]`, which shows the one plain log file `status` names.
+putting it on a TorQ stack that is already running (`attachment add` and
+`attachment remove`, see [attaching to an existing
+TorQ](attach-existing-torq.md)). `uqs setup` prepares the machine the stack runs
+on - `uqs setup odbc` installs, loads and rolls back a private ODBC setup.
+`uqs connector` runs the whole lifecycle of the external publishers - databento,
+kafka, the cryptorust recorders - which are processes outside TorQ, not the q
+processes `uqs start` manages: `start`, `stop`, `restart` (with `start`'s
+options, which are not remembered), `status`, and `logs NAME [-f] [-l N]`, which
+shows the one plain log file `status` names.
 
 Putting a release on a server is `uqs deploy` (`history` lists what this machine
 deployed): see [Deploying to a server](deploy.md).
@@ -402,8 +404,8 @@ A noun's own records:
   stack, and whether it is still a `scaffolded` job `uqs job new` wrote or
   `written` work. `uqs job list --sort state` puts the unfinished scaffolds
   together
-- `uqs job attachment list` - every `uqs job attach` attachment: its job,
-  publisher, stack and host, its lifecycle `state` and persist mode, and -
+- `uqs job attachment list` - every `uqs job attachment add` attachment: its
+  job, publisher, stack and host, its lifecycle `state` and persist mode, and -
   separately - `publisher_state`: `running`, `stopped`, or
   `unreachable`/`unknown` when the host or port cannot be checked. Read-only
 - `uqs runtime list` - each runtime: whether it is here, and up
@@ -501,6 +503,14 @@ rather than starting anything. `runtime diff A B` lists, in each direction, the
 processes, tables, config layers and commands that one runtime has and the other
 doesn't. Both take `--json`. `runtime prepare` installs the [sidecar
 bundles](sidecar-bundles.md#bundles-a-runtime-declares) a runtime declares.
+
+`runtime prepare` and `job install` are one installer with two ways in.
+`uqs job install FOLDER` installs one bundle, and asks first;
+`uqs --runtime R runtime prepare` does the same install, without asking, for
+every bundle `runtime_bundles.json` lists for R, and takes R off any installed
+bundle it no longer lists. `job install` also takes a plain folder of jobs that
+is not a bundle ([below](#installing-jobs-from-elsewhere)); `runtime prepare`
+takes only bundles.
 
   |                | `uqf` (default)                                                         | `torq`                                                            | `peachq`            | `crypto`                                                                                        | `fx`                                                                                        | `peachq-etl`                                                                        |
   | ---            | ---                                                                     | ---                                                               | ---                 | ---                                                                                             | ---                                                                                         | ---                                                                                 |
@@ -1484,9 +1494,9 @@ The verbs of rule 4:
   | `query` `graph` `schema`                      | read a running stack                                      |
   | `new` `install`                               | write a job into the tree, or place one built elsewhere   |
   | `backfill` `preview` `gaps` `audit` `receive` | operate a job and its runs                                |
-  | `attach` `detach`                             | put a job on a TorQ stack already running, or take it off |
   | `export` `approve`                            | a receiver contract, on each side                         |
   | `replay` `seed` `migrate`                     | move data into the HDB                                    |
+  | `upgrade`                                     | bring a store an older uqs wrote up to today's layout     |
   | `diff` `prepare`                              | compare runtimes; install a runtime's bundles             |
   | `stub`                                        | add a placeholder source row                              |
   | `env`                                         | print variables to source                                 |
@@ -1553,7 +1563,7 @@ The thing acted on is positional (#1730):
 stack is PROC, any other is the expression or table, so
 `uqs query 'count quote'` still asks the gateway and `uqs schema 'crypto*'`
 still reads rdb1. A job or worker is JOB in every command (`job backfill JOB`,
-`job contract export JOB`), a process PROC (`config get PROC`).
+`job attachment contract export JOB`), a process PROC (`config get PROC`).
 
 Fewer, regular top-level commands (#1734):
 
@@ -1587,7 +1597,7 @@ One safety vocabulary (#1732):
 
 Every command that changes state now takes `--dry-run`/`-n`, among them `stop`,
 `restart`, `config set`, `data seed`, `job receive`, `job backfill`
-(`--mode dry-run`), `job runs migrate`, `job contract approve`,
+(`--mode dry-run`), `job runs upgrade`, `job attachment contract approve`,
 `connector start`/`stop`/`restart`, `setup odbc install`/`rollback`,
 `deploy component build` and `target add`/`remove`. The old
 `--accept-...`/`--skip-...` options each took their own reason; given together,
@@ -1595,6 +1605,21 @@ their reasons are joined into the one `--reason`. `data migrate` was dry unless
 `--apply`: for one release it refuses to run with neither `--dry-run` nor
 `--apply`, so a script written for the old default does not start writing, and
 the release after writes by default.
+
+Group help that matches its commands, and no colliding names (#1737):
+
+  | old                         | new                                    |
+  | --------------------------- | -------------------------------------- |
+  | `uqs job attach NAME`       | `uqs job attachment add NAME`          |
+  | `uqs job detach NAME`       | `uqs job attachment remove NAME`       |
+  | `uqs job contract VERB ...` | `uqs job attachment contract VERB ...` |
+  | `uqs job runs migrate`      | `uqs job runs upgrade`                 |
+
+An attachment is a noun now, with `add`, `remove`, `show` and `list`, and the
+receiver contracts approved for one under it. `job runs upgrade` brings the run
+ledger up to today's columns; it is not `data migrate`, which changes one HDB
+partition's schema. Each group's help names every command in it, held by
+`test_cli_conventions.py`.
 
 `--port` is now only ever one process's port (`query`, `schema`);
 `query --tunnel` keeps querying a target through an ssh tunnel from here, so

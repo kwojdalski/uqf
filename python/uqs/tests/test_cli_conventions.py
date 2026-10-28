@@ -131,13 +131,12 @@ DOMAIN_VERBS = {
     "gaps": "a job's missing ranges",
     "audit": "one window across runs",
     "receive": "take an extractor's batches into an HDB",
-    "attach": "put a job on a running TorQ stack",
-    "detach": "take it off again",
     "export": "write a record out for another machine",
     "approve": "accept a record another machine exported",
     "replay": "replay a tickerplant log into the HDB",
     "seed": "copy another runtime's HDB",
     "migrate": "migrate an HDB partition's schema",
+    "upgrade": "bring a store an older uqs wrote up to today's layout",
     "diff": "compare two runtimes",
     "prepare": "install the bundles a runtime declares",
     "stub": "add a placeholder row",
@@ -171,6 +170,27 @@ RULE1_ALLOWLIST: dict[str, str] = {}
 def test_rule1_no_group_is_named_after_a_verb():
     found = {path for path in GROUPS if path.split()[-1] in GROUP_VERBS}
     _hold("rule 1", found, RULE1_ALLOWLIST)
+
+
+# ------------------------------------------------------------- group help
+
+
+def _named(word: str, text: str) -> bool:
+    """`word` in `text` as itself: `check` is not named by `hdb-check`."""
+    return re.search(rf"(?<![\w-]){re.escape(word)}(?![\w-])", text) is not None
+
+
+def test_every_group_help_names_every_command_in_it():
+    """A group's one line of help, the one `uqs --help` shows beside it, names
+    each command the group holds (#1737): `data`'s said "replay, seed,
+    hdb-check" while it also held `migrate`. Hidden aliases are not held."""
+    unnamed = {
+        path: [n for n, sub in group.command.commands.items()
+               if not getattr(sub, "hidden", False) and not _named(n, group.command.help or "")]
+        for path, group in GROUPS.items()
+    }  # fmt: skip
+    unnamed = {path: names for path, names in unnamed.items() if names}
+    assert not unnamed, f"group help that does not name these commands: {unnamed}"
 
 
 # ------------------------------------------------- rule 2: what is acted on
@@ -221,7 +241,6 @@ RULE4_ALLOWLIST = {
 #: cannot see the meaning, so each is listed until its rename removes the path.
 RULE4_MISUSED = {
     "job runs status": "#1733",  # unfinished runs, a list - not a state
-    "job runs migrate": "#1737",  # the ledger's upgrade, not `data migrate`'s HDB schema
 }
 
 
@@ -267,7 +286,7 @@ def test_every_list_takes_the_same_output_flags():
 #: Lists that do not take every output flag yet, and the issue that adds them.
 LIST_FLAGS_PENDING = {
     "job runs list": "#1731",  # the run ledger's own table: no --json/--export/--sort
-    "job contract list": "#1731",  # --json only
+    "job attachment contract list": "#1731",  # --json only
 }
 
 
@@ -479,16 +498,17 @@ KIND = {
     "job new": CHANGES,
     "job remove": CHANGES,
     "job install": CHANGES,
-    "job attach": CHANGES,
-    "job detach": CHANGES,
+    "job attachment add": CHANGES,
+    "job attachment remove": CHANGES,
+    "job attachment show": REPORTS,
     "job runs status": REPORTS,
     "job runs list": REPORTS,
-    "job runs migrate": CHANGES,
+    "job runs upgrade": CHANGES,
     "job runs show": REPORTS,
     "job runs audit": REPORTS,
-    "job contract export": "prints the contract, a document another machine approves",
-    "job contract approve": CHANGES,
-    "job contract list": REPORTS,
+    "job attachment contract export": "prints the contract, a document another machine approves",
+    "job attachment contract approve": CHANGES,
+    "job attachment contract list": REPORTS,
     "connector start": CHANGES,
     "connector stop": CHANGES,
     "connector restart": CHANGES,
@@ -522,8 +542,8 @@ KIND = {
 #: Every command that asks before acting. ROOT asks before running a command
 #: on a --target.
 ASKS = {
-    ROOT, "job remove", "job install", "job attach", "job detach", "target adopt",
-    "data hdb-check", "data hdb-alter",
+    ROOT, "job remove", "job install", "job attachment add", "job attachment remove",
+    "target adopt", "data hdb-check", "data hdb-alter",
 }  # fmt: skip
 
 #: The cli modules that call a prompt. A new one means a command that asks:

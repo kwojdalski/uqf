@@ -9,7 +9,7 @@
 / .
 / A RECEIVER CONTRACT is those facts and nothing else - no code, no path, no
 / credential. It is DERIVED from the worker's declarations on the machine that
-/ has them (.qetl.io.remote.contract.of, via `uqs job contract export`), never
+/ has them (.qetl.io.remote.contract.of, via `uqs job attachment contract export`), never
 / written by hand, and it is versioned so a receiver refuses a shape it does
 / not understand before anything is written. Its identity (a digest of the
 / canonical contract) is uqs's to compute, where the contract is exported and
@@ -192,7 +192,7 @@
     }
 
 / Read a contract a receiver was started with: the approved record uqs
-/ stores (`uqs job contract approve`), whose contract is checked by
+/ stores (`uqs job attachment contract approve`), whose contract is checked by
 / .qetl.io.remote.contract.require and whose binding may narrow its policies.
 / @param path a file symbol naming the record's JSON
 / @return the contract, as require returns it, with the binding's policies

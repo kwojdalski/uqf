@@ -1,9 +1,12 @@
 """`uqs job runs ...`: reading the run ledger - which execution produced what.
 
 A group inside `job` (#1417), plural because it inspects runs rather than
-launching one. Read-only: every command here asks the ledger
-in the status directory a question and prints the answer; see stack/runs.py
-for why that means a short-lived q and not a running process.
+launching one. Every command here but `upgrade` asks the ledger in the status
+directory a question and prints the answer; see stack/runs.py for why that
+means a short-lived q and not a running process. `upgrade` brings a ledger an
+older uqs wrote up to today's columns; it was `job runs migrate`, which read
+as `data migrate`'s HDB schema migration (#1737), and that spelling stays for
+one release.
 """
 
 from __future__ import annotations
@@ -16,6 +19,7 @@ from rich.table import Table
 from uqs import timerange
 from uqs.cli.json_out import emit, json_opt
 from uqs.cli.range_options import DateOpt, LastOpt, RangeFromOpt, RangeToOpt
+from uqs.cli.renames import alias_command
 from uqs.cli.safety import dry_run_note
 from uqs.cli.shared import (
     JOB_OPERATIONS_PANEL,
@@ -32,7 +36,8 @@ from uqs.stack import runs as stack_runs
 runs_app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
-    help="Read the run ledger: unfinished runs, one run's facts, one window across runs.",
+    help="The run ledger: list every run, status of the unfinished ones, show one run's "
+    "facts, audit one window across runs, upgrade a ledger an older uqs wrote.",
 )
 job_app.add_typer(runs_app, name="runs", rich_help_panel=JOB_OPERATIONS_PANEL)
 
@@ -153,8 +158,8 @@ def list_runs(
     _print("runs", rows, _RUN_COLUMNS, "no runs recorded", interactive)
 
 
-@runs_app.command("migrate")
-def migrate(
+@runs_app.command("upgrade")
+def upgrade(
     dry_run: Annotated[
         bool,
         typer.Option("--dry-run", "-n", help="Count the runs it would upgrade; write nothing"),
@@ -178,6 +183,9 @@ def migrate(
         console.print(f"upgraded {upgraded} run(s) - the ledger is current", markup=False)
     else:
         console.print("the run ledger is already current - nothing to do", markup=False)
+
+
+alias_command(runs_app, "migrate", "uqs job runs upgrade", upgrade)
 
 
 @runs_app.command("show")

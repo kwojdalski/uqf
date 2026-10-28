@@ -209,16 +209,30 @@ def test_a_stored_approval_that_was_edited_is_refused(world, exported):
 
 def test_export_approve_and_list_from_the_command_line(world, exported, tmp_path):
     out = tmp_path / "contract.json"
-    done = runner.invoke(cli.app, ["job", "contract", "export", WORKER, "--output", str(out)])
+    done = runner.invoke(
+        cli.app, ["job", "attachment", "contract", "export", WORKER, "--output", str(out)]
+    )
     assert done.exit_code == 0, done.output
     assert json.loads(out.read_text())["identity"] == exported.identity
     done = runner.invoke(
         cli.app,
-        ["job", "contract", "approve", str(out), "--attach", "pb-uat", "--conflict", "upsert"],
+        [
+            "job",
+            "attachment",
+            "contract",
+            "approve",
+            str(out),
+            "--attach",
+            "pb-uat",
+            "--conflict",
+            "upsert",
+        ],
     )
     assert done.exit_code == 0, done.output
     assert f"approved contract {exported.identity}" in done.output
-    done = runner.invoke(cli.app, ["job", "contract", "list", "--attach", "pb-uat", "--json"])
+    done = runner.invoke(
+        cli.app, ["job", "attachment", "contract", "list", "--attach", "pb-uat", "--json"]
+    )
     assert done.exit_code == 0, done.output
     [record] = json.loads(done.output)
     assert record["binding"]["conflict_policies"] == ["upsert"]
@@ -227,6 +241,8 @@ def test_export_approve_and_list_from_the_command_line(world, exported, tmp_path
 def test_approving_a_malformed_file_fails_and_stores_nothing(world, tmp_path):
     bad = tmp_path / "contract.json"
     bad.write_text(json.dumps({"format": rc.FORMAT, "version": 9}))
-    done = runner.invoke(cli.app, ["job", "contract", "approve", str(bad), "--attach", "pb-uat"])
+    done = runner.invoke(
+        cli.app, ["job", "attachment", "contract", "approve", str(bad), "--attach", "pb-uat"]
+    )
     assert done.exit_code == 1
     assert not rc.approved_dir("pb-uat").exists()

@@ -69,7 +69,7 @@ def catalog() -> list[Bypass]:
     ]
     rows += [Bypass(name, ("deploy push",), skips) for name, skips in deploy.SKIPS.items()]
     rows += [
-        Bypass(f"{code}:COMPONENT", ("job attach",), policy.risk)
+        Bypass(f"{code}:COMPONENT", ("job attachment add",), policy.risk)
         for code, policy in sorted(POLICY.items())
         if policy.overridable
     ]

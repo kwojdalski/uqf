@@ -45,7 +45,7 @@ if[not null @[{hopen (`$":localhost:",string x;200)};port;{0Ni}];
     [-2 "run_remote_writer: port ",string[port]," is already in use - not this run's receiver"; exit 1]];
 log_path:statusdir,"/remote_receiver.log";
 / the receiver contract the destination's operator approved, derived here from the worker's
-/ declarations as `uqs job contract export` derives it (#1717): the receiver loads no worker
+/ declarations as `uqs job attachment contract export` derives it (#1717): the receiver loads no worker
 contract_path:statusdir,"/contract.json";
 (hsym `$contract_path) 0: enlist .j.j `contract`binding!(.qetl.io.remote.contract.of `demo_deals_backfill;
     (enlist `conflict_policies)!enlist `append`upsert);

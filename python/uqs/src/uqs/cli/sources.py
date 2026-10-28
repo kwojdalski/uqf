@@ -22,7 +22,8 @@ from uqs.stack import source_settings
 sources_app = typer.Typer(
     add_completion=False,
     invoke_without_command=True,
-    help="Show which sources.csv the stack reads, and each configured source - never a secret.",
+    help="Show which sources.csv the stack reads, and each configured source - never a "
+    "secret; check one against its declaration, or stub a placeholder row.",
 )
 config_app.add_typer(sources_app, name="sources")
 

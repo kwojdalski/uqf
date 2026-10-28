@@ -111,7 +111,7 @@ def run_ssh(
         raise UqsError(
             f"cannot reach {destination} over ssh ({setting}): {said or 'ssh exited 255'} - "
             f"check that `ssh -o BatchMode=yes {destination} true` works, or set it with "
-            "`uqs job attach NAME --ssh USER@HOST`. Nothing was run."
+            "`uqs job attachment add NAME --ssh USER@HOST`. Nothing was run."
         )
     if result.returncode in (NO_TEMP, NO_Q):
         said = (result.stderr or "").strip() or "no temporary directory"

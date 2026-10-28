@@ -183,8 +183,8 @@ def test_a_revised_runs_rerun_names_only_the_release():
         assert command.endswith(tail), command
 
 
-def test_a_dry_run_migrate_counts_and_says_so(monkeypatch):
-    """`uqs job runs migrate --dry-run` (#1732)."""
+def test_a_dry_run_upgrade_counts_and_says_so(monkeypatch):
+    """`uqs job runs upgrade --dry-run` (#1732)."""
     seen = {}
 
     def migrate(paths, dry_run=False):
@@ -192,6 +192,6 @@ def test_a_dry_run_migrate_counts_and_says_so(monkeypatch):
         return 2
 
     monkeypatch.setattr(stack_runs, "migrate", migrate)
-    result = runner.invoke(cli.app, ["job", "runs", "migrate", "-n"])
+    result = runner.invoke(cli.app, ["job", "runs", "upgrade", "-n"])
     assert result.exit_code == 0, result.output
     assert seen == {"dry_run": True} and "would upgrade 2 run(s)" in result.output

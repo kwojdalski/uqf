@@ -1,4 +1,4 @@
-"""What `uqs job attach` and `uqs job detach` print (#1457): the plan tables,
+"""What `uqs job attachment add` and `uqs job attachment remove` print (#1457): the plan tables,
 the stage results, and the redaction every one of them passes through.
 
 Every string printed - in a table, in a line, in `--json`, in an error or in
