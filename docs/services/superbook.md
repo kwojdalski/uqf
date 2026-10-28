@@ -1,7 +1,7 @@
 # Consolidated FX book and arbitrage
 
 Processes: `marketdata1`, `superbook1` and `arbitrage1` - start them with
-`uqs up --profile arbitrage`.
+`uqs start --profile arbitrage -f`.
 
 The superbook combines **directly quoted** liquidity for the same currency pair
 across sources. It preserves source identity on every level so an arbitrage row

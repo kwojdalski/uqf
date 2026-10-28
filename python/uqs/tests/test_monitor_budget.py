@@ -134,7 +134,7 @@ def _fleet(monkeypatch, rows, overrides=None, connections=("rdb", "metrics", "so
     monkeypatch.setattr(
         monitor_budget, "_vendored_monitor_connections", lambda paths: list(connections)
     )
-    monkeypatch.delenv("UQF_Q_IMPL", raising=False)
+    monkeypatch.setattr("uqs.model.profiles.q_impl", lambda env=None: "kdbx")
     monkeypatch.delenv("UQS_LICENCE_CONNECTIONS", raising=False)
 
 

@@ -19,32 +19,32 @@ in `.github/workflows/ci.yml`).
 
 ## Command map
 
-  | Need                                                   | Command                                                                                              |
-  | ---                                                    | ---                                                                                                  |
-  | start a set of processes, with what they depend on     | `uqs start --profile NAME [extra procs]`                                                             |
-  | start one process, or several                          | `uqs start NAME...`                                                                                  |
-  | start and follow its log in the foreground             | `uqs up NAME` / `uqs up --profile NAME`                                                              |
-  | stop                                                   | `uqs stop [NAME...]` (`--force` for a process that won't stop)                                       |
-  | status, wiring, heartbeats, batch health               | `uqs summary`                                                                                        |
-  | who feeds whom                                         | `uqs graph`                                                                                          |
-  | a q expression on a process                            | `uqs query "expr" --port P` / `uqs query PROC` (interactive)                                         |
-  | a table's columns in a running process                 | `uqs schema`                                                                                         |
-  | logs                                                   | `uqs logs NAME --level ERROR`, `-f`, `--multitail`                                                   |
-  | list processes, profiles, runtimes, overrides, env     | `uqs list KIND` (no argument lists the kinds)                                                        |
-  | a bounded worker over a range                          | `uqs [--debug] job backfill WORKER --from T --to T --source-version V [--wait] [--trace]`            |
-  | runs: unfinished, one run, one window                  | `uqs job runs status`, `uqs job runs show RUN_ID`, `uqs job runs list`                               |
-  | holes in a streaming job's output, and refill commands | `uqs job gaps JOB --from T --to T`                                                                   |
-  | scaffold, remove or install a job                      | `uqs job new`, `uqs job remove`, `uqs job install`                                                   |
-  | a source checked live                                  | `uqs config sources check SOURCE... [--odbc-home DIR]`                                               |
-  | a source's `sources.csv` row                           | `uqs config sources`, `uqs config sources stub SOURCE`                                               |
-  | the HDB's shape against the schema                     | `uqs data hdb-check [--fix]`                                                                         |
-  | replay a tickerplant log into the HDB                  | `uqs data replay`                                                                                    |
-  | compare runtimes; install a runtime's bundles          | `uqs runtime diff A B`, `uqs runtime prepare`                                                        |
-  | external publishers                                    | `uqs connector start|stop|status databento|kafka|crypto|crypto-fills`                                |
-  | deploy                                                 | `uqs deploy build`, `uqs deploy push`, `uqs deploy verify`, rollback and prune                       |
+  | Need                                                   | Command                                                                                                              |
+  | ---                                                    | ---                                                                                                                  |
+  | start a set of processes, with what they depend on     | `uqs start --profile NAME [extra procs]`                                                                             |
+  | start one process, or several                          | `uqs start NAME...`                                                                                                  |
+  | start and follow its log in the foreground             | `uqs start NAME -f` / `uqs start --profile NAME -f`                                                                  |
+  | stop                                                   | `uqs stop [NAME...]` (`--force` for a process that won't stop)                                                       |
+  | status, wiring, heartbeats, batch health               | `uqs summary`                                                                                                        |
+  | who feeds whom                                         | `uqs graph`                                                                                                          |
+  | a q expression on a process                            | `uqs query "expr" --port P` / `uqs query PROC` (interactive)                                                         |
+  | a table's columns in a running process                 | `uqs schema`                                                                                                         |
+  | logs                                                   | `uqs logs NAME --level ERROR`, `-f`, `--multitail`                                                                   |
+  | list processes, profiles, runtimes, overrides, env     | `uqs list KIND` (no argument lists the kinds)                                                                        |
+  | a bounded worker over a range                          | `uqs [--debug] job backfill WORKER --from T --to T --source-version V [--wait] [--trace]`                            |
+  | runs: unfinished, one run, one window                  | `uqs job runs status`, `uqs job runs show RUN_ID`, `uqs job runs list`                                               |
+  | holes in a streaming job's output, and refill commands | `uqs job gaps JOB --from T --to T`                                                                                   |
+  | scaffold, remove or install a job                      | `uqs job new`, `uqs job remove`, `uqs job install`                                                                   |
+  | a source checked live                                  | `uqs config sources check SOURCE... [--odbc-home DIR]`                                                               |
+  | a source's `sources.csv` row                           | `uqs config sources`, `uqs config sources stub SOURCE`                                                               |
+  | the HDB's shape against the schema                     | `uqs data hdb-check [--fix]`                                                                                         |
+  | replay a tickerplant log into the HDB                  | `uqs data replay`                                                                                                    |
+  | compare runtimes; install a runtime's bundles          | `uqs runtime diff A B`, `uqs runtime prepare`                                                                        |
+  | external publishers                                    | `uqs connector start|stop|restart|status|logs databento|kafka|crypto|crypto-fills`                                   |
+  | deploy                                                 | `uqs deploy build`, `uqs deploy push`, `uqs deploy verify`, rollback and prune                                       |
 
 Anything else is passed through to TorQ's launcher with
-`uqs raw -- <torq.sh verb>`.
+`uqs exec -- <torq.sh verb>`.
 
 ## Runtimes and profiles
 

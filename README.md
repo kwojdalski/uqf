@@ -29,11 +29,11 @@ QCMD=/path/to/q QHOME=/path/to/qhome scripts/test.py q-unit
 ```
 
 **PeachQ is opt-in.** [PeachQ](https://peachq.org) is an MIT-licensed q
-interpreter, used only when chosen out loud --- `UQF_Q_IMPL=peachq` plus `QCMD`
-([details](docs/reference/environment.md#peachq)):
+interpreter, used only when chosen out loud --- `QCMD` naming its binary, which
+is asked which q it is ([details](docs/reference/environment.md#peachq)):
 
 ```
-UQF_Q_IMPL=peachq QCMD=/path/to/peachq/q scripts/test.py q-unit
+QCMD=/path/to/peachq/q scripts/test.py q-unit
 ```
 
 Run everything from the repository root; the load scripts use relative paths.

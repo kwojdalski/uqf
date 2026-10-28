@@ -175,8 +175,11 @@ sources before a job connects.
 tree's layers, plus the bundles declared for it. It has no uqf pipelines of its
 own. The `peachq` runtime is unchanged and still runs the capture stack only.
 
+Its binary is `QCMD` when that is PeachQ, else the pinned build (a PeachQ other
+than the pinned build is used, and named in a warning):
+
 ```bash
-export UQF_PEACHQ=/path/to/peachq/q UQF_PEACHQ_REASON='why not the pinned build'
+export QCMD=/path/to/peachq/q    # or leave QCMD alone for the pinned build
 uqs --runtime peachq-etl runtime prepare --bundle ../synthpq --dry-run
 uqs --runtime peachq-etl runtime prepare --bundle ../synthpq
 uqs --runtime peachq-etl start --profile capture

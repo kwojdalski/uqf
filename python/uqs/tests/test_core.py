@@ -3,7 +3,6 @@ import io
 import os
 import re
 import shlex
-import shutil
 import subprocess
 import sys
 from dataclasses import replace
@@ -11,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from which_support import fake_which
 
 from uqs import paths as stack_paths
 from uqs.external import crypto
@@ -82,7 +82,7 @@ _FIXTURE_VENDORED = {"discovery1", "stp1"}
 
 
 def test_bootstrap_appends_fxfeed1_without_touching_vendored_csv(fake_paths: UqsPaths, monkeypatch):
-    monkeypatch.setattr(shutil, "which", lambda _tool: "/usr/bin/true")
+    fake_which(monkeypatch, other="/usr/bin/true")
 
     env = runtime.bootstrap(fake_paths, base_port=7000)
 
@@ -104,13 +104,13 @@ def test_bootstrap_appends_fxfeed1_without_touching_vendored_csv(fake_paths: Uqs
 def test_bootstrap_writes_dqe_its_query_list(fake_paths: UqsPaths, monkeypatch):
     """The generated copy dqe1 is pointed at (stack/dqe.py), written beside
     process.csv and database.q on every bootstrap."""
-    monkeypatch.setattr(shutil, "which", lambda _tool: "/usr/bin/true")
+    fake_which(monkeypatch, other="/usr/bin/true")
     runtime.bootstrap(fake_paths, base_port=7000)
     assert "meta_fx_orderbook_by_sym" in fake_paths.generated_dqe_config.read_text()
 
 
 def test_bootstrap_is_idempotent(fake_paths: UqsPaths, monkeypatch):
-    monkeypatch.setattr(shutil, "which", lambda _tool: "/usr/bin/true")
+    fake_which(monkeypatch, other="/usr/bin/true")
 
     runtime.bootstrap(fake_paths, base_port=7000)
     runtime.bootstrap(fake_paths, base_port=7000)  # must not raise (e.g. copytree onto itself)
@@ -120,7 +120,7 @@ def test_bootstrap_is_idempotent(fake_paths: UqsPaths, monkeypatch):
 
 
 def test_clean_removes_generated_data_dir(fake_paths: UqsPaths, monkeypatch):
-    monkeypatch.setattr(shutil, "which", lambda _tool: "/usr/bin/true")
+    fake_which(monkeypatch, other="/usr/bin/true")
 
     runtime.bootstrap(fake_paths, base_port=7000)
     assert fake_paths.torqdata.exists()
@@ -414,7 +414,7 @@ def test_bootstrap_refuses_an_override_on_disk_torq_sh_would_eval(
 ):
     """Written by hand, or before the setter refused one: named at bootstrap,
     never handed to torq.sh's eval."""
-    monkeypatch.setattr(shutil, "which", lambda _tool, path=None: "/usr/bin/true")
+    fake_which(monkeypatch, other="/usr/bin/true")
     fake_paths.overrides_path.parent.mkdir(parents=True)
     fake_paths.overrides_path.write_text("procname,field,value\nfxfeed1,qcmd,touch x; q\n")
     with pytest.raises(UqsError, match=r"fxfeed1\.qcmd value 'touch x; q' .* shell"):
@@ -434,7 +434,7 @@ def test_bootstrap_refuses_an_override_on_disk_torq_sh_would_split(
 ):
     """Written before the setter refused one: named at bootstrap, not found as
     a start whose qcmd is the second half of extras."""
-    monkeypatch.setattr(shutil, "which", lambda _tool, path=None: "/usr/bin/true")
+    fake_which(monkeypatch, other="/usr/bin/true")
     fake_paths.overrides_path.parent.mkdir(parents=True)
     fake_paths.overrides_path.write_text(
         'procname,field,value\nfxfeed1,extras,"-pairs EURUSD,USDJPY"\n'
@@ -449,7 +449,7 @@ def test_set_process_config_survives_bootstrap_and_flows_into_generated_csv(
 ):
     import csv
 
-    monkeypatch.setattr(shutil, "which", lambda _tool: "/usr/bin/true")
+    fake_which(monkeypatch, other="/usr/bin/true")
 
     base_rows = {r["procname"]: r for r in stack_procs.effective_process_rows(fake_paths)}
     assert base_rows["fxfeed1"]["startwithall"] == "1"  # unaffected by the override below
@@ -474,7 +474,7 @@ def _generated_csv(paths: UqsPaths) -> tuple[list[str], dict[str, dict[str, str]
 
 
 def test_without_a_declared_site_column_the_header_is_torqs_own(fake_paths: UqsPaths, monkeypatch):
-    monkeypatch.setattr(shutil, "which", lambda _tool, path=None: "/usr/bin/true")
+    fake_which(monkeypatch, other="/usr/bin/true")
     monkeypatch.delenv("UQS_PROCESS_FIELDS", raising=False)
     runtime.bootstrap(fake_paths)
     header, _ = _generated_csv(fake_paths)
@@ -490,7 +490,7 @@ def test_a_declared_site_column_is_on_every_row_and_empty_unless_set(
     """taskset_no, as a UAT launcher reads it: the values configured reach
     process.csv unchanged, every other row has the column empty - never a
     CPU nobody chose - and both survive the next regeneration."""
-    monkeypatch.setattr(shutil, "which", lambda _tool, path=None: "/usr/bin/true")
+    fake_which(monkeypatch, other="/usr/bin/true")
     monkeypatch.setenv("UQS_PROCESS_FIELDS", "taskset_no")
     stack_procs.set_process_config(fake_paths, "fxfeed1", "taskset_no", "3")
     stack_procs.set_process_config(fake_paths, "stp1", "taskset_no", "3:5")
@@ -511,7 +511,7 @@ def test_an_undeclared_site_column_is_refused_naming_the_declaration(
     """Set without UQS_PROCESS_FIELDS, or left in the overrides where it is no
     longer declared: refused by name, not a column invented or a csv
     writer's ValueError."""
-    monkeypatch.setattr(shutil, "which", lambda _tool, path=None: "/usr/bin/true")
+    fake_which(monkeypatch, other="/usr/bin/true")
     monkeypatch.delenv("UQS_PROCESS_FIELDS", raising=False)
     with pytest.raises(UqsError, match="unknown process.csv field: 'taskset_no' .*PROCESS_FIELDS"):
         stack_procs.set_process_config(fake_paths, "fxfeed1", "taskset_no", "3")
@@ -527,7 +527,7 @@ def test_an_undeclared_site_column_is_refused_naming_the_declaration(
     [("extras", "already one of process.csv's own columns"), ("task set", "'set'"), ("a=b", "")],
 )
 def test_a_site_column_is_a_new_plain_name(value, message, fake_paths: UqsPaths, monkeypatch):
-    monkeypatch.setattr(shutil, "which", lambda _tool, path=None: "/usr/bin/true")
+    fake_which(monkeypatch, other="/usr/bin/true")
     monkeypatch.setenv("UQS_PROCESS_FIELDS", value)
     if value == "task set":  # two names, both plain: declared, not refused
         runtime.bootstrap(fake_paths)
@@ -545,7 +545,7 @@ def test_a_site_launcher_finds_its_column_in_the_printed_start(
     no such column that lookup is `print $}`, an awk syntax error for every
     process; declared, a configured row prints its CPUs and an unconfigured
     one prints nothing, with no error either way."""
-    monkeypatch.setattr(shutil, "which", lambda _tool, path=None: "/usr/bin/true")
+    fake_which(monkeypatch, other="/usr/bin/true")
     launcher = tmp_path / "site" / "torq.sh"
     launcher.parent.mkdir()
     launcher.write_text(
@@ -569,7 +569,7 @@ def test_a_site_launcher_finds_its_column_in_the_printed_start(
 
 
 def test_bootstrap_generates_schema_with_the_fx_orderbook_table(fake_paths: UqsPaths, monkeypatch):
-    monkeypatch.setattr(shutil, "which", lambda _tool: "/usr/bin/true")
+    fake_which(monkeypatch, other="/usr/bin/true")
 
     runtime.bootstrap(fake_paths, base_port=7000)
 
@@ -650,7 +650,7 @@ def test_the_torq_runtime_runs_the_vendored_process_csv_unchanged(fake_paths: Uq
 
 def test_the_torq_runtime_bootstraps_on_the_vendored_schema(fake_paths: UqsPaths, monkeypatch):
     # The tools torq.sh needs are found; q is not, so the HDB filler skips.
-    monkeypatch.setattr(shutil, "which", lambda t, path=None: None if t == "q" else "/usr/bin/true")
+    fake_which(monkeypatch, {"q": None}, other="/usr/bin/true")
     torq = _torq(fake_paths)
     runtime.bootstrap(torq)
     assert torq.generated_schema.read_text() == (fake_paths.torqapphome / "database.q").read_text()
@@ -677,7 +677,7 @@ def test_bootstrap_writes_gateway1_an_access_list_with_the_ordinary_users(
 ):
     """The vendored logins, then each ordinary user - who can log in at the
     gateway and nowhere else, so .pm can hold them to getdata."""
-    monkeypatch.setattr(shutil, "which", lambda _tool: "/usr/bin/true")
+    fake_which(monkeypatch, other="/usr/bin/true")
     users = fake_paths.scripts_dir / "torqconfig" / "permissions" / "gateway_users.csv"
     users.parent.mkdir(parents=True)
     users.write_text("user,password,role\nanalyst,secret,analyst\nadmin,other,analyst\n")
@@ -727,12 +727,9 @@ def _generated_qcmds(fake_paths: UqsPaths, monkeypatch, qcmd: str | None) -> dic
     """Bootstrap over a vendored process.csv whose rows spell the default
     interpreter every way TorQ allows, plus one custom one; the qcmd column
     of what it generates, by procname."""
-    monkeypatch.setattr(shutil, "which", lambda _tool, path=None: "/usr/bin/true")
+    fake_which(monkeypatch, other="/usr/bin/true")
     if qcmd is None:
         monkeypatch.delenv("QCMD", raising=False)
-        # Without QCMD there is no PeachQ to name: a run on PeachQ (CI's lane)
-        # sets UQF_Q_IMPL, which refuses an unset QCMD.
-        monkeypatch.delenv("UQF_Q_IMPL", raising=False)
     else:
         monkeypatch.setenv("QCMD", qcmd)
     vendored = fake_paths.torqapphome / "appconfig" / "process.csv"
@@ -771,7 +768,7 @@ def test_without_qcmd_default_rows_still_run_q(fake_paths: UqsPaths, monkeypatch
 
 def test_an_operators_qcmd_override_beats_the_global_one(fake_paths: UqsPaths, monkeypatch):
     """Applied after the default is resolved - so one to bare `q` is kept too."""
-    monkeypatch.setattr(shutil, "which", lambda _tool, path=None: "/usr/bin/true")
+    fake_which(monkeypatch, other="/usr/bin/true")
     (fake_paths.torqapphome / "appconfig" / "process.csv").write_text(
         "host,port,proctype,procname,U,localtime,g,T,w,load,startwithall,extras,qcmd\n"
         "localhost,1,discovery,discovery1,,1,0,,,discovery.q,1,,q\n"
@@ -797,7 +794,7 @@ def test_the_exported_qcmd_agrees_with_the_generated_rows(fake_paths: UqsPaths, 
 
 
 def test_bootstrap_repoints_stp1_schemafile_at_generated_copy(fake_paths: UqsPaths, monkeypatch):
-    monkeypatch.setattr(shutil, "which", lambda _tool: "/usr/bin/true")
+    fake_which(monkeypatch, other="/usr/bin/true")
 
     runtime.bootstrap(fake_paths, base_port=7000)
 
@@ -1195,7 +1192,7 @@ def test_multitail_refuses_bad_options(fake_paths: UqsPaths, kwargs, message):
 
 
 def test_run_multitail_without_the_binary_names_the_install_and_the_fallback(monkeypatch):
-    monkeypatch.setattr(stack_multitail.shutil, "which", lambda _: None)
+    fake_which(monkeypatch)
     with pytest.raises(UqsError) as excinfo:
         stack_multitail.run_multitail(["multitail", "-f", "x.log"])
     assert "brew install multitail" in str(excinfo.value)
@@ -1205,7 +1202,7 @@ def test_run_multitail_without_the_binary_names_the_install_and_the_fallback(mon
 def test_run_multitail_execs_the_binary_with_the_argv(monkeypatch):
     """exec, not a child: multitail needs the terminal to itself."""
     seen = []
-    monkeypatch.setattr(stack_multitail.shutil, "which", lambda _: "/usr/bin/multitail")
+    fake_which(monkeypatch, {"multitail": "/usr/bin/multitail"})
     monkeypatch.setattr(
         stack_multitail.os, "execv", lambda binary, argv: seen.append((binary, argv))
     )
@@ -2402,8 +2399,10 @@ def _monitor_connections(rows: list[dict[str, str]]) -> list[str]:
 def _community_licence(monkeypatch):
     """The real tree on the community licence, with no operator overrides:
     the budget the committed profiles are sized for."""
-    for name in ("UQF_Q_IMPL", "UQS_LICENCE_CONNECTIONS", "UQS_RUNTIME"):
+    for name in ("UQS_LICENCE_CONNECTIONS", "UQS_RUNTIME"):
         monkeypatch.delenv(name, raising=False)
+    # Whichever q runs the suite (CI's is PeachQ, which has no cap).
+    monkeypatch.setattr("uqs.model.profiles.q_impl", lambda env=None: "kdbx")
     monkeypatch.setattr(stack_procs, "_read_overrides", lambda paths: {})
 
 
@@ -2456,7 +2455,7 @@ def test_bootstrap_plans_monitor1_for_the_set_it_is_handed(fake_paths: UqsPaths,
         seen.append(selected)
         return compose(paths, default_qcmd=default_qcmd, selected=selected)
 
-    monkeypatch.setattr(shutil, "which", lambda _tool, path=None: "/usr/bin/true")
+    fake_which(monkeypatch, other="/usr/bin/true")
     monkeypatch.setattr(runtime, "effective_process_rows", record)
     runtime.bootstrap(fake_paths, base_port=7000, selected=("discovery1", "stp1"))
     runtime.bootstrap(fake_paths, base_port=7000)

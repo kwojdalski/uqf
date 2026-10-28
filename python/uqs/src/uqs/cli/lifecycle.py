@@ -1,8 +1,10 @@
-"""Starting, stopping and inspecting the fleet as processes.
+"""Starting, stopping and restarting the fleet as processes.
 
-The commands that drive torq.sh, plus the two advisory warnings that run
-before a start. Split from cli/entry.py, which had grown to 1270 lines across
-twenty-four commands - past the 400 this package holds its modules to.
+The commands that drive torq.sh: `start`, `restart` and `stop`, which share
+one option set (#1734), and `exec`, any other torq.sh verb. The warnings a
+start prints are cli/start_warnings.py; `--follow` is cli/start_follow.py.
+Split from cli/entry.py, which had grown to 1270 lines across twenty-four
+commands - past the 400 this package holds its modules to.
 
 Commands register onto the shared `app` here rather than onto a sub-Typer,
 so `uqs start` stays `uqs start`: the split is about where the
@@ -11,14 +13,14 @@ code lives, not about what anyone types.
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Any
 
 import typer
 
 from uqs.attach import live as _registers_live_check  # noqa: F401 - the start gate's (#1651)
-from uqs.cli import completion
+from uqs.cli import completion, start_follow, start_warnings
 from uqs.cli.force_stop import ForceOpt, _force_stop
-from uqs.cli.renames import BASE_PORT, renamed
+from uqs.cli.renames import BASE_PORT, alias_command, renamed
 from uqs.cli.shared import (
     PASS_THROUGH,
     BasePortOpt,
@@ -31,127 +33,15 @@ from uqs.cli.shared import (
     console,
     log,
 )
+from uqs.cli.start_follow import FollowOpt, LevelOpt
 from uqs.cli.start_override_opts import SkipProfileBudgetOpt, SkipQVersionOpt
 from uqs.cli.start_override_opts import parsed as _overrides
-from uqs.model import dependencies, profiles
+from uqs.cli.start_warnings import running as _running
+from uqs.model import profiles
 from uqs.paths import UqsError
-from uqs.stack import alive, deployment, listing, runtime, start_policy
-from uqs.stack import logs as stack_logs
 from uqs.stack import procs as procs_model
+from uqs.stack import runtime, start_policy
 from uqs.stack.start_overrides import NONE, Overrides
-
-
-def _running(port: int | None) -> set[str]:
-    """The processes `summary` reports up. Raises when it cannot say; each
-    caller decides what that means for it."""
-    return alive.running(_paths(), base_port=port)
-
-
-def _warn_about_unfed_inputs(procs: str, port: int | None) -> None:
-    """Say so when what is being started subscribes to a table nothing
-    running publishes.
-
-    A subscriber started without its producer subscribes SUCCESSFULLY - the
-    table is defined on the plant either way - then heartbeats and reports
-    `up` while receiving nothing, with no error and no symptom but an
-    output table that stays empty (#290).
-
-    Advisory only, and deliberately so: starting a subscriber before its
-    feed is how you avoid missing the first batch, and some tables come
-    from outside the process list entirely. Processes named in this same
-    invocation count as present, so starting a whole chain is silent.
-
-    Never fails the command. A warning that cannot be produced - the fleet
-    is unreachable, the registry cannot be read - must not stop a start.
-    """
-    try:
-        names = [p for p in procs.split() if p != "all"]
-        if not names:
-            return  # `start all` brings up every startwithall=1 producer too
-        running = _running(port)
-        warnings = [
-            line for name in names for line in dependencies.unfed_inputs(name, running | set(names))
-        ]
-    except Exception as exc:  # noqa: BLE001 - see docstring: never block a start
-        # loguru formats with str.format, not %-interpolation: the `%s` this
-        # used to carry printed literally and the exception was dropped, so
-        # the one line explaining why the warning was skipped explained
-        # nothing.
-        log.debug("dependency warning skipped: {}", exc)
-        return
-    for line in warnings:
-        console.print(f"[yellow]warning[/] {line}")
-
-
-def _note_monitor_coverage(verb: str, names: str, profile: str | None = None) -> None:
-    """Name the proctypes monitor1 gives up under the connection budget (#620).
-
-    Their processes get no heartbeat subscription, and heartbeat.q cannot
-    report what it never subscribed to - so without this the gap shows only
-    as a `-` nobody can read. Advisory, and never blocks a start.
-
-    Planned for the fleet THIS start brings up - the set bootstrap is about
-    to be handed (stack/deployment.planned) - not the `startwithall=1` rows:
-    under `--profile crypto` those named a gap the profile's fleet does not
-    have, while the one it had went unnamed (#1318).
-    """
-    try:
-        selected = deployment.planned(_paths(), [verb, *names.split()], _selected(names, profile))
-        dropped = procs_model.monitor_dropped_proctypes(_paths(), selected)
-        limit = profiles.licence_limit()
-    except Exception as exc:  # noqa: BLE001 - see docstring: never block a start
-        log.debug("monitor coverage note skipped: {}", exc)
-        return
-    if dropped:
-        console.print(
-            f"[yellow]note[/] monitor1 cannot watch {', '.join(dropped)}: the "
-            f"{limit}-connection licence budget leaves no slot for them, so their "
-            "processes run with no heartbeat in `uqs summary`"
-        )
-
-
-def _warn_about_connection_cap(procs: str, port: int | None) -> None:
-    """Say so when the fleet this start produces is bigger than the licence
-    lets one process hold handles for.
-
-    The licence caps a q process at `profiles.licence_limit()` concurrent
-    connections - 16 on the community licence, none on PeachQ, unless
-    UQS_LICENCE_CONNECTIONS says. Every streaming job opens a handle to stp1 and monitor1
-    opens one per process it watches, so past that count the cap - not the
-    configuration - decides what works. The plant does not complain: it
-    resets the extra connection, the process wedges in its retry loop, and
-    `summary` still reports it `up` because that is a PID check.
-
-    Advisory only, and never fails the command: the limit is a property of
-    the licence, not a mistake, and a bigger fleet is a legitimate thing to
-    want on a full kdb+/KDB-X licence.
-    """
-    try:
-        running = _running(port)
-        if procs.strip() == "all":
-            starting = {
-                row["procname"]
-                for row in listing.list_items(_paths(), "processes", base_port=port)
-                if row.get("startwithall") == "1"
-            }
-        else:
-            starting = {p for p in procs.split() if p != "all"}
-        total = len(running | starting)
-        limit = profiles.licence_limit()
-    except Exception as exc:  # noqa: BLE001 - see docstring: never block a start
-        log.debug("connection-cap warning skipped: {}", exc)
-        return
-    if limit is None or total <= limit:
-        return
-    console.print(
-        f"[yellow]warning[/] this start leaves {total} processes running, past the "
-        f"{limit} concurrent connections this licence allows "
-        "one q process. Handles past the cap are reset, not refused: the process "
-        "wedges in its retry loop and still reports `up`, and monitor1 may become "
-        "unreachable so the Heartbeat column empties. Start a subset, or stop what "
-        "you are not using."
-    )
-
 
 ProfileOpt = Annotated[
     str | None,
@@ -214,43 +104,82 @@ def _selected(names: str, profile: str | None) -> list[str] | None:
     return names.split() if profile is not None else None
 
 
-def _start(
-    names: str, port: int | None, profile: str | None = None, overrides: Overrides = NONE
-) -> None:
+def _launch_checks(verb: str, names: str, port: int | None, profile: str | None) -> None:
+    """What runs before torq.sh is asked to start anything: the name check,
+    then the advisory warnings, which count the requested set."""
     _reject_unknown(names)
-    _warn_about_unfed_inputs(names, port)
-    _warn_about_connection_cap(names, port)
-    _note_monitor_coverage("start", names, profile)
-    selected = _selected(names, profile)
-    _run_streaming(runtime.start, names, base_port=port, selected=selected, skips=overrides)
+    start_warnings.unfed_inputs(names, port)
+    start_warnings.connection_cap(names, port)
+    start_warnings.monitor_coverage(verb, names, profile)
 
 
-def _start_in_foreground(
-    names: str, port: int | None, profile: str | None = None, overrides: Overrides = NONE
+ShowCommandOpt = Annotated[
+    bool,
+    typer.Option("--show-command", help="Show the exact start line(s); start nothing"),
+]
+
+#: The options `start` and `restart` share, word for word (#1734): the
+#: selection `stop` takes too - PROC..., --profile, --base-port - and what a
+#: launch adds to it. A test holds the two signatures equal.
+_LAUNCH_RENAMES = BASE_PORT | {"--print": "--show-command"}
+
+
+def _launch(
+    verb: str,
+    procs: list[str] | None,
+    port: int | None,
+    profile: str | None,
+    follow: bool,
+    level: str | None,
+    print_only: bool,
+    skip_q_version_check: str | None,
+    skip_profile_budget_check: str | None,
 ) -> None:
-    """`_start`, minus its ending: _run_streaming always exits the command,
-    and `up` has the whole run still to stream after the start returns."""
-    _reject_unknown(names)
-    _warn_about_unfed_inputs(names, port)
-    _warn_about_connection_cap(names, port)
-    _note_monitor_coverage("start", names, profile)
-    selected = _selected(names, profile)
-    result = runtime.start(
-        _paths(), names, base_port=port, capture=False, selected=selected, skips=overrides
+    """`start` and `restart`, which differ only in the torq.sh verb they run."""
+    if level is not None and not follow:
+        _die(UqsError("--level needs --follow"))
+    if print_only and follow:
+        _die(UqsError("--show-command does not apply with --follow"))
+    overrides = _overrides(
+        skip_q_version_check, skip_profile_budget_check, profile=profile, print_only=print_only
     )
-    if result.returncode != 0:
-        raise typer.Exit(code=result.returncode)
+    names = _names_to_start(procs, profile, overrides)
+    if print_only:
+        _print_startlines(names, port)
+        return
+    launch = runtime.start if verb == "start" else runtime.restart
+    selected = _selected(names, profile)
+    kwargs: dict[str, Any] = {"base_port": port, "selected": selected, "skips": overrides}
+    if not follow:
+        _launch_checks(verb, names, port, profile)
+        _run_streaming(launch, names, **kwargs)
+        return
+    try:
+        wanted = start_follow.procnames_started_by(names, port)
+    except UqsError as exc:
+        _die(exc)
+        return
+    try:
+        already: set[str] | None = _running(port)
+    except (UqsError, OSError) as exc:  # not knowing only widens the stop
+        log.debug("could not tell what was already running: {}", exc)
+        already = None
+
+    def before() -> None:
+        _launch_checks(verb, names, port, profile)
+        start_follow.in_foreground(lambda **kw: launch(_paths(), names, **kwargs, **kw))()
+
+    start_follow.follow(wanted, already, before, port, level)
 
 
-@app.command(cls=renamed(BASE_PORT | {"--print": "--show-command"}))
+@app.command(cls=renamed(_LAUNCH_RENAMES))
 def start(
     procs: ProcsArg = None,
     port: BasePortOpt = None,
     profile: ProfileOpt = None,
-    print_only: Annotated[
-        bool,
-        typer.Option("--show-command", help="Show the exact start line(s); start nothing"),
-    ] = False,
+    follow: FollowOpt = False,
+    level: LevelOpt = None,
+    print_only: ShowCommandOpt = False,
     skip_q_version_check: SkipQVersionOpt = None,
     skip_profile_budget_check: SkipProfileBudgetOpt = None,
 ) -> None:
@@ -259,41 +188,41 @@ def start(
     `--profile fx` starts a named set instead: its leaves and everything they
     read, resolved from the dependency graph rather than listed by hand.
     `--profile essential vectorize1` starts the set plus the names given.
+
+    `--follow` (`-f`) is the foreground form, the way `docker compose up` is:
+    it streams every started process's log until Ctrl-C, then stops what it
+    started - `start -f`, `start rdb1 fxpositions1 -f`, `start --profile fx -f
+    --level WARNING`. What was already running is left running.
     """
-    overrides = _overrides(
-        skip_q_version_check, skip_profile_budget_check, profile=profile, print_only=print_only
-    )
-    names = _names_to_start(procs, profile, overrides)
-    if print_only:
-        _print_startlines(names, port)
-        return
-    _start(names, port, profile, overrides)
+    _launch(
+        "start", procs, port, profile, follow, level, print_only,
+        skip_q_version_check, skip_profile_budget_check,
+    )  # fmt: skip
 
 
-LevelOpt = Annotated[
-    str | None,
-    typer.Option(
-        help=stack_logs.LEVEL_HELP,
-        autocompletion=completion.choices(*stack_logs.LEVEL_CHOICES),
-    ),
-]
+@app.command(cls=renamed(_LAUNCH_RENAMES))
+def restart(
+    procs: ProcsArg = None,
+    port: BasePortOpt = None,
+    profile: ProfileOpt = None,
+    follow: FollowOpt = False,
+    level: LevelOpt = None,
+    print_only: ShowCommandOpt = False,
+    skip_q_version_check: SkipQVersionOpt = None,
+    skip_profile_budget_check: SkipProfileBudgetOpt = None,
+) -> None:
+    """Restart every startwithall=1 process (or specific process name(s)).
+
+    Takes exactly `start`'s options: `--profile` restarts a named set,
+    `--follow` streams the restarted processes' logs until Ctrl-C.
+    """
+    _launch(
+        "restart", procs, port, profile, follow, level, print_only,
+        skip_q_version_check, skip_profile_budget_check,
+    )  # fmt: skip
 
 
-def _procnames_started_by(names: str, port: int | None) -> list[str]:
-    """The processes a start of `names` covers: `all` is every startwithall=1
-    row, anything else is the names themselves - checked, so a typo fails
-    before anything starts rather than as a log nobody ever writes."""
-    if names.strip() == "all":
-        return [
-            row["procname"]
-            for row in listing.list_items(_paths(), "processes", base_port=port)
-            if row.get("startwithall") == "1"
-        ]
-    return stack_logs.resolve_procnames(_paths(), names)
-
-
-@app.command(cls=renamed(BASE_PORT))
-def up(
+def _up(
     procs: ProcsArg = None,
     port: BasePortOpt = None,
     profile: ProfileOpt = None,
@@ -301,78 +230,50 @@ def up(
     skip_q_version_check: SkipQVersionOpt = None,
     skip_profile_budget_check: SkipProfileBudgetOpt = None,
 ) -> None:
-    """Start, and stream every started process's log to this console until
-    Ctrl-C - which stops what this started. `up`, `up rdb1 fxpositions1`,
-    `up --profile fx`, `up --profile essential vectorize1`, `up --level WARNING`.
+    """`start --follow`, under the name it had before #1734."""
+    _launch(
+        "start", procs, port, profile, True, level, False,
+        skip_q_version_check, skip_profile_budget_check,
+    )  # fmt: skip
 
-    The foreground form of `start` + `logs -f`, the way `docker compose up`
-    is: the console is the run. Processes that were already running when it
-    began are left running; if `summary` cannot say which those were, Ctrl-C
-    stops everything this was asked to start.
-    """
-    overrides = _overrides(skip_q_version_check, skip_profile_budget_check, profile=profile)
-    names = _names_to_start(procs, profile, overrides)
+
+alias_command(app, "up", "uqs start --follow", _up, cls=renamed(BASE_PORT))
+
+
+def _names_to_stop(procs: list[str] | None, profile: str | None) -> str:
+    """What torq.sh is asked to stop: as `_names_to_start`, but with no
+    budget - a profile too big to start must still be stoppable."""
+    if profile is None:
+        return _procs(procs)
     try:
-        wanted = _procnames_started_by(names, port)
+        members, _ = start_policy.profile_members(_paths(), profile, procs or [])
     except UqsError as exc:
         _die(exc)
-        return
-    try:
-        already: set[str] | None = _running(port)
-    except Exception as exc:  # noqa: BLE001 - not knowing only widens the stop
-        log.debug("could not tell what was already running: {}", exc)
-        already = None
-    # Ctrl-C ends the stream normally. A failed start ends it early - and
-    # still stops what did start, because the console is the run.
-    exit_code = 0
-    try:
-        stack_logs.follow_during(
-            _paths(),
-            wanted,
-            lambda: _start_in_foreground(names, port, profile, overrides),
-            min_level=level,
-        )
-    except UqsError as exc:
-        log.error("{}", exc)
-        exit_code = 1
-    except typer.Exit as exc:
-        exit_code = exc.exit_code
-    started = [p for p in wanted if already is None or p not in already]
-    if not started:
-        console.print("[dim]every process was already running; leaving them up[/]")
-    else:
-        console.print(f"[dim]stopping what this started: {' '.join(started)}[/]")
-        try:
-            result = runtime.stop(_paths(), " ".join(started), base_port=port, capture=False)
-            exit_code = exit_code or result.returncode
-        except UqsError as exc:
-            log.error("{}", exc)
-            exit_code = exit_code or 1
-    raise typer.Exit(code=exit_code)
+        raise  # unreachable: _die exits
+    return " ".join(members)
 
 
 @app.command(cls=renamed(BASE_PORT | {"--force": "--kill"}))
-def stop(procs: ProcsArg = None, port: BasePortOpt = None, force: ForceOpt = False) -> None:
-    """Stop every startwithall=1 process (or specific process name(s))."""
-    names = _procs(procs)
+def stop(
+    procs: ProcsArg = None,
+    port: BasePortOpt = None,
+    profile: Annotated[
+        str | None,
+        typer.Option(
+            "--profile",
+            help="Comma-separated named start set(s) to stop - see `uqs list profiles`. "
+            "Process names given as well are added to the set",
+            autocompletion=completion.profiles,
+        ),
+    ] = None,
+    force: ForceOpt = False,
+) -> None:
+    """Stop every startwithall=1 process (or specific process name(s), or a profile's)."""
+    names = _names_to_stop(procs, profile)
     _reject_unknown(names)
     if force:
         _force_stop(names, port)
     _run_streaming(runtime.stop, names, base_port=port)
-
-
-@app.command(cls=renamed(BASE_PORT))
-def restart(
-    procs: ProcsArg = None, port: BasePortOpt = None, skip_q_version_check: SkipQVersionOpt = None
-) -> None:
-    """Restart every startwithall=1 process (or specific process name(s))."""
-    overrides = _overrides(skip_q_version_check, None)
-    names = _procs(procs)
-    _reject_unknown(names)
-    _warn_about_unfed_inputs(names, port)
-    _warn_about_connection_cap(names, port)
-    _note_monitor_coverage("restart", names)
-    _run_streaming(runtime.restart, names, base_port=port, skips=overrides)
 
 
 def _print_startlines(names: str, port: int | None) -> None:
@@ -387,10 +288,9 @@ def _print_startlines(names: str, port: int | None) -> None:
     raise typer.Exit(code=result.returncode)
 
 
-@app.command(context_settings=PASS_THROUGH, cls=renamed(BASE_PORT))
-def raw(ctx: typer.Context, port: BasePortOpt = None) -> None:
-    """Pass any other torq.sh verb straight through, e.g.:
-    `raw -- debug rdb1`, `raw -- qcon gateway1 admin:admin`, `raw -- top feed1`.
+def _exec(ctx: typer.Context, port: BasePortOpt = None) -> None:
+    """Run any other torq.sh verb, passed straight through, e.g.:
+    `exec -- debug rdb1`, `exec -- qcon gateway1 admin:admin`, `exec -- top feed1`.
     """
     try:
         result = runtime.run_torq_sh(_paths(), ctx.args, base_port=port, capture=False)
@@ -398,3 +298,7 @@ def raw(ctx: typer.Context, port: BasePortOpt = None) -> None:
         _die(exc)
         return
     raise typer.Exit(code=result.returncode)
+
+
+app.command("exec", context_settings=PASS_THROUGH, cls=renamed(BASE_PORT))(_exec)
+alias_command(app, "raw", "uqs exec", _exec, context_settings=PASS_THROUGH, cls=renamed(BASE_PORT))

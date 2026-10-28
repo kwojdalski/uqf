@@ -5,18 +5,18 @@ its job file. The mapping once lived in a transform file nothing in that
 closure named, and the process came up with an empty topic registry: every
 record was dead-lettered as `no_mapping`. These hold the closure and the load.
 
-The q half needs an interpreter and skips without one: $QCMD (or $UQF_PEACHQ).
+The q half needs an interpreter and skips without one: $QCMD, else q on PATH
+(uqs.interpreter.q_interpreter), so its result says which q it ran on.
 """
 
 from __future__ import annotations
 
-import os
-import shutil
 import subprocess
 from pathlib import Path
 
 import pytest
 
+from uqs.interpreter import q_interpreter
 from uqs.model import load_plan
 from uqs.paths import UqsError
 
@@ -89,10 +89,10 @@ def test_the_example_bundle_adds_a_topic_and_a_process_without_touching_the_tree
 
 
 def _q() -> str:
-    q = os.environ.get("QCMD") or os.environ.get("UQF_PEACHQ")
-    if not q or not shutil.which(q):
-        pytest.skip("no q interpreter - set $QCMD or $UQF_PEACHQ")
-    return q
+    q = q_interpreter()
+    if q is None:
+        pytest.skip("no q interpreter - set $QCMD, or put q on PATH")
+    return str(q)
 
 
 #: kafka_flow1's selected load, then one record through it.

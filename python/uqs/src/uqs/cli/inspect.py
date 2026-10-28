@@ -191,10 +191,10 @@ def schema(
     `uqs schema hdb1 trade`: a lone word that names a process is PROC, any
     other is TABLE (`uqs schema 'crypto*'` reads rdb1).
     """
-    proc, table = _proc_first(ctx, proc, table, port is not None)
-    proc = proc or DEFAULT_PROC
     paths = stack_paths.default_paths()
     try:
+        proc, table = _proc_first(ctx, proc, table, port is not None)
+        proc = proc or DEFAULT_PROC
         target = port if port is not None else schema_view.resolve_port(paths, proc, base_port)
     except UqsError as exc:
         _die(exc)

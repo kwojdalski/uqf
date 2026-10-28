@@ -7,6 +7,7 @@ import shutil
 from pathlib import Path
 
 import pytest
+from which_support import fake_which
 
 from uqs import paths as stack_paths
 from uqs.model import profiles
@@ -22,7 +23,7 @@ ROOT = Path(__file__).resolve().parents[3]
 def pinned(monkeypatch, tmp_path):
     """peachq_binary as if the resolver had answered, without fetching or building."""
     binary = tmp_path / "peachq" / "q"
-    monkeypatch.setattr(stack_env, "peachq_binary", lambda scripts_dir: binary)
+    monkeypatch.setattr(stack_env, "peachq_binary", lambda **_kw: binary)
     return binary
 
 
@@ -58,7 +59,6 @@ def test_the_peachq_runtime_starts_only_what_runs_on_peachq():
 def test_only_the_peachq_runtime_gets_an_interpreter_of_its_own(pinned):
     assert stack_env.interpreter_env(stack_paths.paths_for_root(ROOT, "torq")) == {}
     assert stack_env.interpreter_env(stack_paths.paths_for_root(ROOT, "peachq")) == {
-        "UQF_Q_IMPL": "peachq",
         "QCMD": str(pinned),
         "QINIT": str(ROOT / "scripts" / "peachq_init.q"),
     }
@@ -75,7 +75,7 @@ def test_the_peachq_init_file_exists_and_only_fills_gaps():
 def test_build_env_stays_pure_and_never_resolves_a_binary(monkeypatch, tmp_path):
     """Listings call build_env for every runtime: it must not fetch or build."""
 
-    def resolve(scripts_dir):
+    def resolve(**_kw):
         raise AssertionError("build_env resolved PeachQ")
 
     monkeypatch.setattr(stack_env, "peachq_binary", resolve)
@@ -90,11 +90,11 @@ def test_bootstrap_hands_torq_sh_and_setenv_the_peachq_binary(pinned, monkeypatc
     (root / "lib" / "torq").mkdir(parents=True)
     (root / "lib" / "torq" / "torq.q").touch()
     (root / "src" / "etl").mkdir(parents=True)
-    monkeypatch.setattr(shutil, "which", lambda t, path=None: None if t == "q" else "/usr/bin/true")
+    fake_which(monkeypatch, {"q": None}, other="/usr/bin/true")
     monkeypatch.setattr(runtime, "fill_hdb_partitions", lambda paths: False)
     p = stack_paths.paths_for_root(root, "peachq")
     env = runtime.bootstrap(p)
-    assert (env["QCMD"], env["UQF_Q_IMPL"]) == (str(pinned), "peachq")
+    assert env["QCMD"] == str(pinned)
     assert f'export QCMD="{pinned}"' in p.generated_setenv.read_text()
     with p.generated_procs.open(newline="") as f:
         assert {r["qcmd"] for r in csv.DictReader(f)} == {str(pinned)}, "every row runs PeachQ"
@@ -102,21 +102,30 @@ def test_bootstrap_hands_torq_sh_and_setenv_the_peachq_binary(pinned, monkeypatc
 
 def test_the_peachq_runtime_is_held_to_no_licence_budget(monkeypatch):
     monkeypatch.delenv("UQS_LICENCE_CONNECTIONS", raising=False)
-    monkeypatch.delenv("UQF_Q_IMPL", raising=False)
+    monkeypatch.setattr(profiles, "q_impl", lambda env=None: "kdbx")
     monkeypatch.setenv("UQS_RUNTIME", "peachq")
     assert profiles.licence_limit() is None
     monkeypatch.setenv("UQS_RUNTIME", "torq")
     assert profiles.licence_limit() is not None
 
 
-def test_a_resolver_refusal_is_a_uqs_error_naming_the_runtime(monkeypatch, tmp_path):
-    """The real resolver, told to use a binary that is not there."""
-    stack_env.peachq_binary.cache_clear()
-    monkeypatch.setenv("UQF_PEACHQ", str(tmp_path / "nope"))
-    monkeypatch.setenv("UQF_PEACHQ_REASON", "a test")
-    monkeypatch.delenv("UQF_PEACHQ_COMMIT", raising=False)
-    try:
-        with pytest.raises(UqsError, match="the peachq runtime needs a PeachQ binary: UQF_PEACHQ="):
-            stack_env.peachq_binary(ROOT / "scripts")
-    finally:
-        stack_env.peachq_binary.cache_clear()
+def test_a_resolver_refusal_is_a_uqs_error_naming_the_runtime(monkeypatch):
+    def unavailable(**_kw):
+        raise UqsError("no PeachQ: offline, and the cache is cold")
+
+    monkeypatch.setattr(stack_env, "peachq_binary", unavailable)
+    with pytest.raises(
+        UqsError, match="the peachq runtime needs a PeachQ binary: no PeachQ: offline"
+    ):
+        stack_env.interpreter_env(stack_paths.paths_for_root(ROOT, "peachq"))
+
+
+def test_the_runtime_takes_qcmd_when_it_is_peachq(monkeypatch, tmp_path):
+    """One PeachQ lookup (#1753): QCMD on PeachQ is the runtime's binary too,
+    so a deployed runtime's deploy.env needs nothing beside QCMD."""
+    q = tmp_path / "q"
+    q.write_text("#!/bin/sh\necho peachq\n")
+    q.chmod(0o755)
+    monkeypatch.setenv("QCMD", str(q))
+    env = stack_env.interpreter_env(stack_paths.paths_for_root(ROOT, "peachq"))
+    assert env["QCMD"] == str(q)

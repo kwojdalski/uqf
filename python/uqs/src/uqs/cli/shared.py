@@ -394,7 +394,7 @@ def _proc_first(
 
 
 def _known_procs() -> set[str]:
-    try:
+    try:  # only no registry (no vendored process.csv) means no names (#1759)
         return set(listing.configured_ports(_paths(), None))
-    except Exception:  # noqa: BLE001 - no registry: no word names a process
+    except FileNotFoundError:
         return set()
