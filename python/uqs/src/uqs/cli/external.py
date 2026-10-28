@@ -25,6 +25,7 @@ from rich.table import Table
 
 from uqs.cli import completion
 from uqs.cli.json_out import emit, json_opt, snake
+from uqs.cli.renames import renamed
 from uqs.cli.shared import _die, _paths, app, console
 from uqs.external import crypto, databento_feed, kafka_feed
 from uqs.external.crypto import (
@@ -203,7 +204,7 @@ def _opt(help_: str, feeds: str):
     return typer.Option(help=f"{help_} ({feeds})", show_default=False)
 
 
-@connector_app.command("start")
+@connector_app.command("start", cls=renamed({"--port": "--base-port"}))
 def start(
     name: FeedArg,
     dataset: Annotated[str | None, _opt("Databento dataset, e.g. XNAS.ITCH", "databento")] = None,
@@ -233,7 +234,7 @@ def start(
     poll_interval_ms: Annotated[
         int | None, _opt("Poll interval in milliseconds", "crypto-fills")
     ] = None,
-    port: Annotated[int | None, _opt("Stack base port", "crypto, crypto-fills")] = None,
+    base_port: Annotated[int | None, _opt("Stack base port", "crypto, crypto-fills")] = None,
 ) -> None:
     """Start a feed publishing onto the running stack's tickerplant.
 
@@ -260,12 +261,13 @@ def start(
         "oms_socket_path": oms_socket_path,
         "symbol": symbol,
         "poll_interval_ms": poll_interval_ms,
-        "port": port,
+        "port": base_port,
     }
     given = {k: v for k, v in options.items() if v is not None}
     for option in given:
         if option not in feed.options:
-            _die(UqsError(f"--{option.replace('_', '-')} does not apply to feed {name}"))
+            flag = "base-port" if option == "port" else option.replace("_", "-")
+            _die(UqsError(f"--{flag} does not apply to feed {name}"))
             return
     try:
         message = feed.start({k: given.get(k) for k in feed.options})

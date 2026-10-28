@@ -198,7 +198,7 @@ def test_rule4_a_misused_verb_is_listed_until_its_path_goes():
 def test_the_guide_lists_the_same_vocabulary():
     """The guide's verb table and the lists above are one vocabulary."""
     text = GUIDE.read_text()
-    section = text.split("\n## CLI conventions\n", 1)[1].split("\n## ", 1)[0]
+    section = text.split("\n## CLI conventions\n", 1)[1].split("\n## ", 1)[0].split("\n### ", 1)[0]
     rows = re.findall(r"^\s*\|\s*(`[^|]*`)\s*\|", section, flags=re.M)
     documented = {w for row in rows for w in re.findall(r"`([a-z-]+)`", row)}
     assert documented == set(CORE_VERBS) | set(DOMAIN_VERBS)
@@ -251,6 +251,7 @@ OPTIONS = {
     "--print": Meaning("retired: --show-command", None),
     "--proc": Meaning("one process, by name", r"process|tickerplant"),
     "--profile": Meaning("a start profile", r"profile"),
+    "--show-command": Meaning("show the command, run nothing", r"show"),
     "--python": Meaning("the servers' Python version", r"major\.minor"),
     "--python-runtime": Meaning("a bundled CPython", r"CPython"),
     "--qhome": Meaning("a QHOME", r"QHOME"),
@@ -279,42 +280,13 @@ SHORT_FLAGS = {
     "-f": "--follow",
     "-o": "--output",
     "-c": "--columns",
+    "-l": "--lines",
 }
 
 #: (command, option) -> the issue that renames the option there
 RULE3_ALLOWLIST = {
-    # --port as the stack's base port, or a listen port (#1729)
-    **{
-        (c, "--port"): "#1729"
-        for c in (
-            "start",
-            "up",
-            "stop",
-            "restart",
-            "raw",
-            "summary",
-            "graph",
-            "list",
-            "data replay",
-            "config get",
-            "job receive",
-            "job backfill",
-            "connector start",
-            "deploy verify",
-        )
-    },
-    ("query", "--target"): "#1729",
+    # a hidden alias of #1736's positional TARGET, until the alias goes
     ("deploy push", "--target"): "#1729",
-    ("stop", "--force"): "#1729",
-    ("job backfill", "--force"): "#1729",
-    ("job remove", "--force"): "#1729",
-    ("start", "--print"): "#1729",
-    ("logs", "--print"): "#1729",
-    ("query", "--raw"): "#1729",
-    ("config get", "--raw"): "#1729",
-    ("summary", "--debug"): "#1729",
-    ("job backfill", "--debug"): "#1729",
-    ("logs", "-n"): "#1729",  # lines, not --dry-run
     ("deploy rollback", "--to"): "#1739",
     ("logs", "--columns"): "#1739",
     ("job new", "--columns"): "#1739",

@@ -443,8 +443,8 @@ def test_the_publisher_is_never_started_under_the_runtimes_default_port(att, sta
         attach_state.refuse_unverified_start(paths, "pb_ledger1", None)
     text = str(caught.value)
     assert f"discovery at {default_port + 1}, not 6001" in text
-    assert "`uqs job attach pb-uat`" in text and "--port 6000" in text
-    with pytest.raises(UqsError, match="--port 6000"):
+    assert "`uqs job attach pb-uat`" in text and "--base-port 6000" in text
+    with pytest.raises(UqsError, match="--base-port 6000"):
         attach_state.refuse_unverified_start(paths, "pb_ledger1", 6100)
 
 

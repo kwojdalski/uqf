@@ -189,7 +189,9 @@ def seeded(monkeypatch, tmp_path):
     seen: dict = {"renamed": []}
     monkeypatch.setattr(cli_seed, "_paths", lambda: _paths(tmp_path, "torq"))
     monkeypatch.setattr(cli_seed.runtime, "bootstrap", lambda p: None)
-    monkeypatch.setattr(cli_seed, "renamed", lambda old, new: seen["renamed"].append((old, new)))
+    monkeypatch.setattr(
+        cli_seed, "warn_renamed", lambda old, new: seen["renamed"].append((old, new))
+    )
     monkeypatch.setattr(cli_seed, "_die", lambda exc: seen.setdefault("refused", str(exc)))
 
     def seed(target, source, tables, first, last, overwrite):

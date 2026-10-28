@@ -90,7 +90,7 @@ def test_another_runtime_on_our_ports_is_refused_by_name(stack):
     message = str(exc.value)
     assert "the uqf runtime's stack (base port 6150)" in message
     assert "rdb1 :6152 (pid 4242)" in message
-    assert "`uqs stop --port 6150`" in message
+    assert "`uqs stop --base-port 6150`" in message
 
 
 def test_a_stack_on_other_ports_is_no_conflict(stack):
@@ -108,14 +108,14 @@ def test_this_stack_s_own_processes_are_not_a_conflict(stack):
 
 
 def test_the_same_runtime_on_another_port_is_named_with_its_port(stack):
-    """This runtime, started earlier with --port 6148: its a2 holds 6152."""
+    """This runtime, started earlier with --base-port 6148: its a2 holds 6152."""
     paths, lines = stack
     ours = _procfile(paths.torqdata, {"a2": "{KDBBASEPORT}+4"})
     lines.append((7, _line(6148, "a2", ours)))
     with pytest.raises(UqsError) as exc:
         occupancy.refuse_if_taken(paths, None)
     assert "the torq runtime's stack (base port 6148)" in str(exc.value)
-    assert "`uqs --runtime torq stop --port 6148`" in str(exc.value)
+    assert "`uqs --runtime torq stop --base-port 6148`" in str(exc.value)
 
 
 def test_only_the_processes_being_started_are_checked(stack):

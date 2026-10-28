@@ -540,7 +540,7 @@ def test_a_site_column_is_a_new_plain_name(value, message, fake_paths: UqsPaths,
 def test_a_site_launcher_finds_its_column_in_the_printed_start(
     fake_paths: UqsPaths, monkeypatch, tmp_path: Path
 ):
-    """`uqs start --print` through a launcher that looks taskset_no up the
+    """`uqs start --show-command` through a launcher that looks taskset_no up the
     way the UAT torq.sh does - by header, as the vendored getfield does. With
     no such column that lookup is `print $}`, an awk syntax error for every
     process; declared, a configured row prints its CPUs and an unconfigured

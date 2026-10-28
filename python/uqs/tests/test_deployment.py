@@ -132,7 +132,9 @@ def test_the_cli_hands_a_profile_start_its_set(paths, monkeypatch):
     runner = CliRunner()
     assert runner.invoke(cli.app, ["start", "--profile", "essential"]).exit_code == 0
     assert runner.invoke(cli.app, ["start", "sortworker2"]).exit_code == 0
-    assert runner.invoke(cli.app, ["start", "--profile", "essential", "--print"]).exit_code == 0
+    assert (
+        runner.invoke(cli.app, ["start", "--profile", "essential", "--show-command"]).exit_code == 0
+    )
     members, _ = start_policy.resolve_profiles(paths, "essential")
     assert [c["selected"] for c in calls[:2]] == [list(members), None]
     assert len(calls) == 2, "--print starts nothing, so it records nothing"

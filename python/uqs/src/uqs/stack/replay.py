@@ -18,9 +18,9 @@ day nobody asked for. The plant's own start line cannot drift from the plant:
 `-tplogdir`, `-schemafile` and `-stackid` are on it, and `ps` reports them.
 
 That is also where the stack's base port comes from. Every other command
-defaults `--port` to its runtime's base port and is wrong on a stack that
+defaults `--base-port` to its runtime's base port and is wrong on a stack that
 was started with another; here the running plant's `-stackid` IS the answer, so
-`--port` is only needed when it is being overridden on purpose.
+`--base-port` is only needed when it is being overridden on purpose.
 
 WHAT IS DELIBERATELY NOT DECIDED HERE. `emptytables`, `clean`, `sortafterreplay`
 and the rest keep TorQ's defaults, which means the replay EMPTIES the tables it
@@ -303,7 +303,7 @@ class ReplayPlan:
             ("log", str(self.log_dir), source),
             ("hdb", str(self.hdb_dir), "hdb process" if self.plant else "--hdb"),
             ("schema", str(self.schema_file), source if self.plant else "--schema"),
-            ("base port", str(self.base_port), "-stackid" if self.plant else "--port"),
+            ("base port", str(self.base_port), "-stackid" if self.plant else "--base-port"),
             ("tables", ", ".join(self.tables) if self.tables else "all", "--table"),
         ]
 

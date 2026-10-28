@@ -600,10 +600,10 @@ uqs --target uat start piggybankgeneralledger1   # asks first; --yes skips the q
     launch `uqs`. The error names what is missing: the CLI, the environment
     file, the interpreter, the source, or the interpreter's dependencies;
   - the remote command failed, with its own output and exit code.
-- **Querying from here instead.** `uqs query --target NAME` runs the query on
+- **Querying from here instead.** `uqs query --tunnel NAME` runs the query on
   this machine through an ssh tunnel to the target, with ports from the target's
   release. See [A deployed target, from
-  here](uqs.md#a-deployed-target-from-here). `uqs --target X query --target Y`
+  here](uqs.md#a-deployed-target-from-here). `uqs --target X query --tunnel Y`
   is refused.
 
 ### A release `uqs deploy push` did not install
@@ -989,7 +989,7 @@ Set each process's value on the server:
 
 ```bash
 uqs --target uat config set stp1 taskset_no 3:5
-uqs --target uat start --print stp1
+uqs --target uat start --show-command stp1
 ```
 
 `config set` writes `python/uqs/process_overrides.csv` (see [changing a
@@ -998,8 +998,8 @@ file from `shared/config/python/uqs/process_overrides.csv` when it exists, so
 create it there, with just the header `procname,field,value`, before the first
 `config set`. Values set without it are kept by that release only. A process
 with no value keeps the column empty, and nothing assigns CPUs on its own.
-`start --print` shows the start lines the launcher builds, without starting
-anything.
+`start --show-command` shows the start lines the launcher builds, without
+starting anything.
 
 ## On the server
 

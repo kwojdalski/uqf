@@ -229,7 +229,7 @@ def refuse_unverified_start(paths: UqsPaths, procs: str, base_port: int | None) 
                 f"{pub.procname} belongs to attachment {pub.attachment} on stack {pub.stack_id}; "
                 f"started under base port {effective} it would look for discovery at "
                 f"{effective + 1}, not {pub.stack_id + 1}. Start it with "
-                f"`uqs job attach {pub.attachment}`, or --port {pub.stack_id}"
+                f"`uqs job attach {pub.attachment}`, or --base-port {pub.stack_id}"
             )
         if live_check is None:
             raise UqsError(

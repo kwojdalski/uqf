@@ -32,8 +32,8 @@ Run the new release beside the old one, then move clients to it:
 
 1. **Start the new release on another base port.** Every process's port is
    `{KDBBASEPORT}+offset` (`scripts/processes/process_ports.csv`).
-   `uqs start --port` moves the whole stack, and each runtime's span of ports
-   already avoids every other's. The new release gets its own discovery,
+   `uqs start --base-port` moves the whole stack, and each runtime's span of
+   ports already avoids every other's. The new release gets its own discovery,
    tickerplant, rdb and gateway on that base.
 2. **Verify it there**, with the release's own verifier, as today.
 3. **Move the clients** (below).

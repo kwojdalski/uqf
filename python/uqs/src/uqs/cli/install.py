@@ -160,7 +160,7 @@ def _next_steps(declarations: list[Declaration], sidecar_tests: list[Path]) -> P
         steps.add_row(f"{len(steps.rows) + 1}.", what, command)
 
     step("The registry sees them", "uqs list processes")
-    step("The exact start line", f"uqs start --print {procs}")
+    step("The exact start line", f"uqs start --show-command {procs}")
     if streaming or not workers:
         step("Start them", f"uqs start {procs}")
     for worker in workers:
@@ -169,7 +169,7 @@ def _next_steps(declarations: list[Declaration], sidecar_tests: list[Path]) -> P
             f"uqs job backfill {worker} --version v1 --from 2026-09-01 --to 2026-09-02",
         )
     step("Each one answers", "uqs summary --columns status   (Responds: yes)")
-    step("How long each took to load", "uqs summary --debug")
+    step("How long each took to load", "uqs --debug summary")
     step("Their logs", f"uqs logs {procs} -f")
     step("The whole suite", "q tests/run_tests.q")
 

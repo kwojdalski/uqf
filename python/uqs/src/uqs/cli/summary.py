@@ -16,10 +16,11 @@ from rich.table import Table
 
 from uqs.cli import completion
 from uqs.cli.json_out import emit, json_opt
+from uqs.cli.renames import renamed
 from uqs.cli.shared import (
+    BasePortOpt,
     ExportOpt,
     InteractiveOpt,
-    PortOpt,
     _debug_requested,
     _die,
     _export,
@@ -33,7 +34,6 @@ from uqs.cli.summary_actions import process_actions
 from uqs.cli.summary_columns import resolve_columns, resolve_sort_column
 from uqs.cli.summary_table import gather, record, render
 from uqs.interpreter import interpreter_status
-from uqs.logger import configure_logging
 from uqs.model import dependencies, profiles
 from uqs.paths import UqsError
 from uqs.stack import deployment, listing, probe, startup
@@ -129,10 +129,10 @@ def _json(rows: list[dict], gathered, status) -> None:
     })  # fmt: skip
 
 
-@app.command()
+@app.command(cls=renamed({"--port": "--base-port", "--debug": "--debug"}))
 def summary(
     ctx: typer.Context,
-    port: PortOpt = None,
+    port: BasePortOpt = None,
     export: ExportOpt = None,
     columns: Annotated[
         str | None,
@@ -166,16 +166,6 @@ def summary(
             ),
         ),
     ] = probe.DEFAULT_PROBE_TIMEOUT,
-    debug: Annotated[
-        bool,
-        typer.Option(
-            "--debug",
-            help=(
-                "Log at DEBUG, and add how long each process took to load, "
-                "read from its own log. Same as `uqs --debug summary`."
-            ),
-        ),
-    ] = False,
     sort: Annotated[
         str | None,
         typer.Option(
@@ -214,14 +204,12 @@ def summary(
     out, numerically where the column is numeric (`Port`, `PID`) and with
     empty cells last. The order reaches `--export` too.
 
-    Run with `--debug` (or LOG_LEVEL=DEBUG) to see where each column came
+    Run as `uqs --debug summary` (or LOG_LEVEL=DEBUG) to see where each column came
     from: the two lookups below degrade rather than fail, so on the default
     level a missing port map and an unreachable monitor1 look the same as a
     stack that simply has nothing to report. Debug also prints how long each
     process took to load - see stack/startup.py for how that is measured.
     """
-    if debug:
-        configure_logging(component="uqs", level="DEBUG")
     chosen = resolve_columns(columns)
     sort_column = resolve_sort_column(sort)
     # The columns whose data has to be gathered: those shown, and the one
@@ -260,7 +248,7 @@ def summary(
         ),
         every=every or None,
     )
-    if _debug_requested(ctx, debug):
+    if _debug_requested(ctx):
         _print_startups(paths.log_dir, [row["Process"] for row in rows])
     if silent:
         # Up by PID, and silent when asked: the case neither Status nor a

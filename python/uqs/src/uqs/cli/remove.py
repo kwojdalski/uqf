@@ -14,12 +14,15 @@ from typing import Annotated
 import typer
 
 from uqs.cli.regenerate import _DERIVED, _export_contract_surface, _regenerate_derived
+from uqs.cli.renames import renamed
 from uqs.cli.shared import JOB_AUTHORING_PANEL, _die, _paths, console, job_app
 from uqs.paths import CONTRACT_SURFACE_SCRIPT, UqsError
 from uqs.scaffold.remove import plan_removal
 
 
-@job_app.command("remove", rich_help_panel=JOB_AUTHORING_PANEL)
+@job_app.command(
+    "remove", rich_help_panel=JOB_AUTHORING_PANEL, cls=renamed({"--force": "--even-if-edited"})
+)
 def remove_job(
     name: Annotated[str, typer.Argument(help="The job, as uqs job new named it")],
     dry_run: Annotated[
@@ -28,7 +31,8 @@ def remove_job(
     force: Annotated[
         bool,
         typer.Option(
-            "--force", help="Remove it even though it has been written (no SCAFFOLDED left)"
+            "--even-if-edited",
+            help="Remove it even though it has been written (no SCAFFOLDED left)",
         ),
     ] = False,
     yes: Annotated[bool, typer.Option("--yes", "-y", help="Do not ask before removing")] = False,
@@ -46,7 +50,7 @@ def remove_job(
     A table the job published is kept when anything else in the tree uses it,
     and a backfill's source is kept when another worker reads it. A job whose
     SCAFFOLDED markers are gone has been written, and is refused without
-    --force.
+    --even-if-edited.
 
     Every other line that still names what goes - an example, a docs page, a
     diagram - is listed with its line number and left alone; --strict refuses

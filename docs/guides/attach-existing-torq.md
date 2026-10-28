@@ -605,8 +605,9 @@ Detach's refusals are destructive-cleanup protections and cannot be overridden.
 ## Backfilling into the attached stack's HDB
 
 `uqs job backfill` writes into the HDB of the uqf runtime it belongs to
-(`KDBHDB`); `--port` changes which stack it registers with, not where the rows
-go. `--attach NAME` names the destination from the saved attachment instead:
+(`KDBHDB`); `--base-port` changes which stack it registers with, not where the
+rows go. `--attach NAME` names the destination from the saved attachment
+instead:
 
 ```bash
 uqs job backfill piggybank_ledger_backfill --attach pb-uat \
@@ -664,7 +665,7 @@ scp ledger.contract.json uat-host:
 # uat-host: approve the contract for the attachment, then start the receiver
 uqs job contract approve ledger.contract.json --attach pb-uat --conflict upsert --conflict replace
 uqs job contract list --attach pb-uat          # its identity, e.g. 3f9a0c2e7b1d4a56
-uqs job receive --contract 3f9a0c2e --attach pb-uat --port 7090
+uqs job receive --contract 3f9a0c2e --attach pb-uat --listen-port 7090
 
 # etl-host: extract, and send each window to the receiver
 uqs job backfill piggybank_ledger_backfill --attach pb-uat --writer uat-host:7090 \
@@ -825,12 +826,12 @@ reach, and where the run would write beside the root. `--json` prints the same.
 It starts no worker and creates no directory, ledger, checkpoint or symbol file.
 
 It refuses, naming the cause: an attachment that is not `verified` (including a
-detached one), a stack that `--port` names differently, no pinned or existing
-HDB directory, a dataset the attachment does not publish, a table whose columns
-differ from the worker's, a worker with its own IO manager, `--fixture`, a
-source with no credential configured (its fixture would be written into a native
-HDB), a wdb or rdb reporting another HDB directory, no wdb reporting the pinned
-one, an HDB reader that listens but does not answer, and everything under
+detached one), a stack that `--base-port` names differently, no pinned or
+existing HDB directory, a dataset the attachment does not publish, a table whose
+columns differ from the worker's, a worker with its own IO manager, `--fixture`,
+a source with no credential configured (its fixture would be written into a
+native HDB), a wdb or rdb reporting another HDB directory, no wdb reporting the
+pinned one, an HDB reader that listens but does not answer, and everything under
 coordination below. Nothing falls back to uqf's own HDB. An HDB reader that is
 not running is not an error: it serves nothing now and maps the partitions when
 it starts.

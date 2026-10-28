@@ -19,6 +19,7 @@ from rich.table import Table
 
 from uqs import timerange
 from uqs.cli import completion
+from uqs.cli.renames import renamed
 from uqs.cli.shared import (
     DateOpt,
     RangeFromOpt,
@@ -44,7 +45,7 @@ def _day(day: str | None, range_from: str | None, range_to: str | None) -> str |
     return window.day("data replay replays").strftime("%Y.%m.%d")
 
 
-@data_app.command("replay")
+@data_app.command("replay", cls=renamed({"--port": "--base-port"}))
 def replay(
     proc: Annotated[
         str | None,
@@ -82,6 +83,7 @@ def replay(
     port: Annotated[
         int | None,
         typer.Option(
+            "--base-port",
             help="Stack base port. Default: the -stackid the plant is running under",
         ),
     ] = None,

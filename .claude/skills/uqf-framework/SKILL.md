@@ -226,9 +226,9 @@ Apply the rules below. Each cites the file that holds or enforces it.
 - **G1** Log through `.qetl.log.info|warn|err|dbg|trc[id;text;fields]`, where
   `fields` is a dict (`src/etl/core/log.q`). Not `-1`, `0N!` or `.lg` (L1).
 - **G2** DEBUG is per process, switched on at runtime with
-  `uqs query ".qetl.log.debug 1b" --port <port>`. A backfill takes `--debug`, or
-  `--trace` for every source query. Never switch it on fleet-wide
-  (`docs/faq.md`).
+  `uqs query ".qetl.log.debug 1b" --port <port>`. A backfill takes the global
+  `--debug` (`uqs --debug job backfill ...`), or `--trace` for every source
+  query. Never switch it on fleet-wide (`docs/faq.md`).
 
 ## q traps that cost this tree real time (Q)
 

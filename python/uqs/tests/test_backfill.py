@@ -105,7 +105,7 @@ def test_the_command_reaches_start_with_parsed_bounds(monkeypatch):
 
     monkeypatch.setattr(backfill, "start", fake)
     argv = ["job", "backfill", "demo_deals_backfill", "--version", "v1"]
-    argv += ["--from", "2026-09-13", "--to", "2026-09-15", "--port", "7000"]
+    argv += ["--from", "2026-09-13", "--to", "2026-09-15", "--base-port", "7000"]
     result = runner.invoke(cli.app, argv)
     assert result.exit_code == 0, result.output
     assert seen == {
@@ -120,7 +120,8 @@ def test_the_command_reaches_start_with_parsed_bounds(monkeypatch):
 
 @pytest.mark.parametrize("argv_debug", [["--debug"], []])
 def test_debug_starts_the_process_verbose(monkeypatch, argv_debug):
-    """Both spellings: the command's own --debug, and the global one."""
+    """Both spellings: the global --debug, and the command's own - its old
+    spelling, kept for one release (#1729)."""
     seen = {}
 
     def fake(

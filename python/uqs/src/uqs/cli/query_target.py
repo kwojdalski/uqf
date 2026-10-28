@@ -1,4 +1,4 @@
-"""`uqs query --target NAME`: what the query command needs to reach a process
+"""`uqs query --tunnel NAME`: what the query command needs to reach a process
 on a deployed target through an ssh tunnel (#1561). The tunnel and the
 remote port lookup are deploy/tunnel.py's; this is the CLI's side - the
 target named, its port resolved, the connection's errors worded without the
@@ -86,7 +86,7 @@ def run_qcon(host: str, port: int, user: str, passwd: str) -> None:
     if shutil.which("qcon") is None:
         raise UqsError(
             "qcon is not on PATH. It ships with kdb+ rather than with this repository "
-            "(macOS: it is beside q in your KDB-X install). `uqs query --target NAME --proc "
+            "(macOS: it is beside q in your KDB-X install). `uqs query --tunnel NAME --proc "
             '<name> "<expr>"` still works over IPC.'
         )
     argv = runtime.qcon_command(host, port, user, passwd, rlwrap=shutil.which("rlwrap") is not None)

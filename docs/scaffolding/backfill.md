@@ -211,7 +211,7 @@ worker's declaration, each stage's timing and every window as it starts and
 publishes:
 
 ```bash
-uqs job backfill fxprobe_backfill --version v1 --from 2026-09-13 --to 2026-09-15 --fixture --debug
+uqs --debug job backfill fxprobe_backfill --version v1 --from 2026-09-13 --to 2026-09-15 --fixture
 ```
 
 ## Then
