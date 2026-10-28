@@ -2,6 +2,17 @@
 
 Daily stable snapshots of this repository. Newest first.
 
+## Unreleased
+
+- **Breaking: `QCMD` is the only interpreter variable (#1753).** Which q it is,
+  KDB-X or PeachQ, is asked of the binary. `UQF_Q_IMPL`, `UQF_PEACHQ` and
+  `UQF_PEACHQ_REASON` are refused by `uqs`, `scripts/test.py`, pytest and
+  deploy's preflight, each naming its replacement: `QCMD=<binary>`, or
+  `--peachq PATH` (`scripts/test.py`, pytest) for the PeachQ lanes alone beside
+  KDB-X. A PeachQ that is not the pinned build is used and named in one warning.
+  `deploy.env` now writes only `QCMD` and `QHOME`: **a release deployed before
+  this sets the removed variables, so redeploy it.** Unset them in your shell.
+
 ## stable/2026-10-21
 
 **Overview.** A week of work, 59 merged PRs. The headline additions: attaching

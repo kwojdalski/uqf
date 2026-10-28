@@ -11,13 +11,34 @@ would find the server's own (`body`).
 
 from __future__ import annotations
 
+import shlex
+
+from uqs.interpreter import REMOVED_ENV
+
+
+def _removed_checks() -> str:
+    """A refusal for each variable that chose an interpreter before #1753,
+    set in the server account's environment (its profile, say): the release's
+    own uqs would refuse it at its first command, so the push refuses it
+    before it changes anything, naming what replaces it."""
+    return "".join(
+        f'[ -z "${{{name}+set}}" ] || fail '
+        + shlex.quote(f"{name} is set on the server, and is no longer read - {hint}; unset it")
+        + "\n"
+        for name, hint in REMOVED_ENV.items()
+    )
+
+
 #: The preflight checks, run on the server. Read-only - safe under --dry-run.
 #: Each failure says what is missing on stderr and exits 1; the facts the
 #: caller decides on (data present, a current release, a held lock) come
 #: back on stdout as name=value lines.
-PREFLIGHT = r"""
+PREFLIGHT = (
+    r"""
 fail() { echo "$*" >&2; exit 1; }
-echo "user=$(id -un)"
+"""
+    + _removed_checks()
+    + r"""echo "user=$(id -un)"
 if [ -n "$expected_user" ] && [ "$(id -un)" != "$expected_user" ]; then
   fail "running as $(id -un), not $expected_user"
 fi
@@ -119,6 +140,7 @@ if [ -d "$lock" ]; then
   echo "locked=$(head -n 1 "$lock/owner" 2>/dev/null || echo unknown), last beat ${age}s ago"
 fi
 """
+)
 
 #: Where PREFLIGHT resolves and runs the server's q: from the first line to
 #: the second, exclusive. A push with a bundled q leaves it out.

@@ -49,15 +49,14 @@ COPY python/uqf_airflow_provider/pyproject.toml python/uqf_airflow_provider/READ
 RUN uv sync --package uqs --no-install-workspace
 
 COPY . /uqf
-# The one q of this machine is PeachQ, said out loud: QCMD names it and
-# UQF_Q_IMPL declares it, which is what `uqs job receive` starts its receiver
-# with. Every runtime's data lives under /data.
+# The one q of this machine is PeachQ, said out loud: QCMD names it, and it
+# answers as PeachQ when asked (#1753) - which is what `uqs job receive`
+# starts its receiver with. Every runtime's data lives under /data.
 RUN uv sync --package uqs \
     && ln -s /opt/venv/bin/uqs /usr/local/bin/uqs \
     && ln -s "$(uv run --no-project scripts/peachq.py)" /usr/local/bin/peachq \
     && mkdir -p /data
 ENV QCMD=/usr/local/bin/peachq \
-    UQF_Q_IMPL=peachq \
     UQS_DATA_ROOT=/data
 
 # Nothing runs until the lane says so: it starts the stack with `docker exec`,

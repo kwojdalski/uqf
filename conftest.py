@@ -23,6 +23,8 @@ from __future__ import annotations
 
 import os
 
+import pytest
+
 #: The variables with which git tells a child process which repository,
 #: index and work tree to use.
 GIT_LOCATION_VARS = (
@@ -68,6 +70,15 @@ def _shards():
 
 
 def pytest_addoption(parser):
+    parser.addoption(
+        "--peachq",
+        default=None,
+        metavar="PATH",
+        help=(
+            "the PeachQ binary for the tests that run on PeachQ (the `peachq` fixture); "
+            "default: $QCMD if it is PeachQ, else the pinned build (scripts/peachq.py)"
+        ),
+    )
     group = parser.getgroup("shards", "split the suite across CI runners by module")
     group.addoption("--shard", default=None, help="run shard I of N, as I/N")
     group.addoption(
@@ -79,14 +90,19 @@ def pytest_addoption(parser):
 
 
 def pytest_configure(config):
+    # The variables that chose an interpreter before #1753 are refused here,
+    # once, rather than by every test that reaches uqs.interpreter.
+    from uqs.interpreter import removed_variables_problem
+
+    removed = removed_variables_problem()
+    if removed:
+        raise pytest.UsageError(removed)
     config.addinivalue_line(
         "markers",
         "shard_apart: a shard unit of its own, not its module's (scripts/dev/pytest_shards.py)",
     )
     spec = config.getoption("--shard")
     if spec:
-        import pytest
-
         try:
             config._uqf_shard = _shards().parse_shard(spec)
         except ValueError as exc:
@@ -111,3 +127,24 @@ def pytest_collection_modifyitems(config, items):
     if dropped:
         config.hook.pytest_deselected(items=dropped)
     items[:] = keep
+
+
+# --- the PeachQ the PeachQ tests run on (#1753) ------------------------------
+
+
+@pytest.fixture(scope="session")
+def peachq(request):
+    """THE PeachQ for a test that must run on PeachQ, whatever $QCMD is:
+    uqs.interpreter.peachq_binary - --peachq PATH, else $QCMD when it is
+    PeachQ, else the pinned build, built on first use. Skips, saying why, only
+    when none of those can be had; a --peachq that is not PeachQ fails."""
+    from uqs.interpreter import peachq_binary
+    from uqs.paths import UqsError
+
+    override = request.config.getoption("--peachq")
+    try:
+        return peachq_binary(override=override)
+    except UqsError as exc:
+        if override:
+            pytest.fail(str(exc))
+        pytest.skip(str(exc))

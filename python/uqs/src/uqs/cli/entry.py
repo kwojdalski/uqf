@@ -75,6 +75,7 @@ import sys
 from uqs.cli.shared import _env_log_level, app
 from uqs.cli.zsh_completion import patch_zsh_completion_script
 from uqs.deploy import control
+from uqs.interpreter import removed_variables_problem
 from uqs.logger import configure_logging, get_logger
 from uqs.paths import UqsError
 from uqs.stack.envfiles import load_repo_env_files
@@ -90,6 +91,12 @@ def main() -> None:
     # set LOG_LEVEL, and a warning about the files needs a logger to land in.
     load_repo_env_files()
     configure_logging(component="uqs", level=_env_log_level())
+    # The variables that chose an interpreter before #1753 (QCMD alone does
+    # now): refused before any command, so none of them is silently ignored.
+    removed = removed_variables_problem()
+    if removed:
+        log.error("{}", removed)
+        sys.exit(1)
     # Before app(): --install-completion and --show-completion are handled
     # inside it, and both read the template this swaps out.
     patch_zsh_completion_script()
