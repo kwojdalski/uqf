@@ -260,6 +260,25 @@
     if[not span>0D; '"preview_recent: span must be positive - got ",string span];
     .qetl.job.stream.run_preview[job;n;span]}
 
+/ Preview the rows of a polling feed in a window given outright: what
+/ preview_recent does for [now - span, now), for [window_start, window_end)
+/ - `uqs job preview --from/--to` and `--date` (#1735). The window can lie
+/ anywhere the source still holds; the saved cursor is not read and the live
+/ poll is not changed.
+/ @param job the job's name
+/ @param n how many rows of each table to return as a sample
+/ @param window_start the window's first instant, a timestamp
+/ @param window_end the instant after its last, a timestamp after window_start
+/ @return preview_recent's dict, with mode `window
+/ @throws error for bounds that are not timestamps, an empty window, a feed
+/   with its own cursor and no start_cursor, or anything preview throws
+.qetl.job.stream.preview_window:{[job;n;window_start;window_end]
+    if[not (-12h=type window_start) and -12h=type window_end;
+        '"preview_window: the bounds must be timestamps - got ",.Q.s1 (window_start;window_end)];
+    if[not window_start<window_end;
+        '"preview_window: the window is empty - ",string[window_start]," is not before ",string window_end];
+    .qetl.job.stream.run_preview[job;n;(window_start;window_end)]}
+
 / Private: preview's guard, the page, and `close` either way.
 / @private
 .qetl.job.stream.run_preview:{[job;n;span]
@@ -286,12 +305,13 @@
          "declare poll`start_cursor [instant] -> the cursor just before instant"];
     {[instant] instant-1}}
 
-/ Private: the window a recent-data preview covers, from one captured instant.
+/ Private: the window a windowed preview covers - for a span, the span up to
+/ one captured instant; for a (start;end) pair of timestamps, that pair.
 / @private
 .qetl.job.stream.recent_window:{[job;span]
     / `from` is a qSQL keyword, so neither bound is named after its key
-    window_end:.z.p;
-    window_start:window_end-span;
+    window_end:$[-16h=type span; .z.p; last span];
+    window_start:$[-16h=type span; window_end-span; first span];
     start:.qetl.job.stream.start_cursor_of[job];
     `from`to`start_cursor`end_cursor!(window_start;window_end;start window_start;start window_end)}
 
@@ -308,7 +328,8 @@
     after_start and not after_end}
 
 / Private: preview's body, between the guard and `close`. `span` is (::)
-/ for the next page after the saved cursor, else the recent window's length.
+/ for the next page after the saved cursor, else the recent window's length,
+/ or the (start;end) of a window given outright.
 / @private
 .qetl.job.stream.preview_page:{[job;n;span]
     p:(.qetl.job.stream.def job)`poll;
@@ -324,7 +345,7 @@
     if[recent; context,:`window`page_limit!(window`from`to;limit)];
     fetched:.qetl.log.with_context[context;p`fetch;enlist current];
     page:$[recent; fetched where .qetl.job.stream.in_window[job;window;fetched]; fetched];
-    base:`job`mode`live`cursor`fetched!(job;$[recent; `recent; `next_page];.qetl.job.stream.liveness[job];current;count fetched);
+    base:`job`mode`live`cursor`fetched!(job;$[not recent; `next_page; -16h=type span; `recent; `window];.qetl.job.stream.liveness[job];current;count fetched);
     if[recent;
         base,:`window`kept`page_limit`limited!(window;count page;limit;(not null limit) and limit<=count fetched)];
     if[0=count page;

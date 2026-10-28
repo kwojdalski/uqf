@@ -41,13 +41,13 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+from uqs import timerange
 from uqs.attach.backfill import Destination
 from uqs.attach.config import Attachment
 from uqs.attach.facts import Host
 from uqs.attach.remote import Ipc, IpcError
 from uqs.attach.topology import Observation, Proc
 from uqs.paths import UqsError
-from uqs.stack import backfill as stack_backfill
 
 #: How near end of day a run may start: before the next roll, and after the last.
 EOD_GUARD = timedelta(hours=1)
@@ -132,9 +132,7 @@ def _moment(text: str) -> datetime | None:
     is cut to the microsecond instead, which no fence measured in minutes can
     feel (#1650: the remote-stack lane's wdb on Linux was refused for it)."""
     return (
-        stack_backfill.parse_bound("writer clock", _PAST_MICROSECOND.sub(r"\1", text))
-        if text
-        else None
+        timerange.parse_bound("writer clock", _PAST_MICROSECOND.sub(r"\1", text)) if text else None
     )
 
 

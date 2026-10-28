@@ -41,7 +41,9 @@ def seed(
     is written: the schema comparison is the copy's own, and is not run.
     """
     if target.runtime == source.runtime:
-        raise UqsError(f"--from {source.runtime} is the runtime being seeded - name another")
+        raise UqsError(
+            f"--from-runtime {source.runtime} is the runtime being seeded - name another"
+        )
     src_hdb, dst_hdb = source.hdb_dir, target.hdb_dir
     if not src_hdb.is_dir():
         raise UqsError(
@@ -49,7 +51,7 @@ def seed(
             "or backfill into it, before seeding from it"
         )
     if first is not None and last is not None and first > last:
-        raise UqsError(f"--dates {first}..{last} is empty: it starts after it ends")
+        raise UqsError(f"no partition date lies in the range: {first} is after {last}")
     if dry_run:
         return _plan(src_hdb, tables, first, last)
     if not (dst_hdb.is_dir() and target.generated_schema.is_file()):

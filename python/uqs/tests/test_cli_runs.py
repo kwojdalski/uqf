@@ -84,7 +84,7 @@ _FAILED_RUN = {
 def test_the_rerun_command_is_one_the_cli_accepts():
     """The ledger spells nanoseconds, which fromisoformat refuses: printed
     as-is, the command would fail when pasted."""
-    from uqs.stack import backfill
+    from uqs import timerange
 
     command = stack_runs.rerun_command(_FAILED_RUN)
     assert command == (
@@ -92,17 +92,17 @@ def test_the_rerun_command_is_one_the_cli_accepts():
         "--to 2026-09-15T00:00:00 --version v1"
     )
     for bound in (command.split("--from ")[1].split()[0], command.split("--to ")[1].split()[0]):
-        backfill.parse_bound("--from", bound)
+        timerange.parse_bound("--from", bound)
 
 
 def test_a_sub_second_bound_keeps_every_digit_as_a_q_literal():
-    from uqs.stack import backfill
+    from uqs import timerange
 
     run = {**_FAILED_RUN, "range_from": "2026-09-13T06:30:00.123456000"}
     command = stack_runs.rerun_command(run)
     assert command is not None
     assert "--from 2026.09.13D06:30:00.123456000" in command
-    parsed = backfill.parse_bound("--from", "2026.09.13D06:30:00.123456000")
+    parsed = timerange.parse_bound("--from", "2026.09.13D06:30:00.123456000")
     assert parsed.microsecond == 123456
 
 
@@ -121,10 +121,10 @@ def test_a_sub_second_bound_keeps_every_digit_as_a_q_literal():
     ],
 )
 def test_a_bound_is_rounded_outwards_to_the_microsecond(ledger, upper, bound):
-    from uqs.stack import backfill
+    from uqs import timerange
 
     assert stack_runs._as_bound(ledger, upper=upper) == bound
-    backfill.parse_bound("--to" if upper else "--from", bound)
+    timerange.parse_bound("--to" if upper else "--from", bound)
 
 
 def test_a_nanosecond_run_range_reruns_over_a_range_that_covers_it():

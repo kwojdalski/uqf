@@ -453,9 +453,13 @@ compare it with `uqf` on the same history, copy `uqf`'s partitions of the tables
 both declare:
 
 ```
-uqs --runtime torq data seed --from uqf                       # every table torq declares
-uqs --runtime torq data seed --from uqf --tables trade,quote --dates 2026-09-01..2026-09-30
+uqs --runtime torq data seed --from-runtime uqf     # every table torq declares
+uqs --runtime torq data seed --from-runtime uqf --tables trade,quote --from 2026-09-01 --to 2026-10-01
 ```
+
+The partitions copied are those whose date lies in the [time
+range](#cli-conventions); either bound may be left off. `--from RUNTIME` and
+`--dates FIRST..LAST` are the old spellings, kept for one release.
 
 Each symbol column is re-enumerated against the target's sym file. A plain copy
 of the partition directories would decode, in the target, to whatever its sym
@@ -1318,6 +1322,21 @@ command that breaks a rule, and on a listed exception that has since been fixed.
    first, except a backfill's, which starts a process to fetch.
 6. **A rename ships with a hidden alias for one release**, which prints the new
    spelling; the release after removes it.
+
+A time range is given one way, on every command that takes one (`job backfill`,
+`job gaps`, `job preview`, `job runs audit`, `data seed`, `data replay`), and
+read by one parser, `uqs.timerange`:
+
+- `--from A --to B` is `[A, B)`: `B` is excluded. A bound is a date or a
+  timestamp, ISO-8601 or a q literal - `2026-09-13`, `2026-09-13T06:00`,
+  `2026-09-13T06:00+02:00`, `2026.09.13D06:00` - and is UTC without an offset;
+- `--date D` is one day, `--from D --to D+1`;
+- `--last DURATION` is up to now, `--from now-DURATION --to now`: `30s`, `5m`,
+  `2h`, `7d`, `500ms`.
+
+A command whose unit is coarser takes the range in that unit: `data replay`
+replays one day's log, so its range must be one whole day; `data seed` copies
+the date partitions whose date lies in the range.
 
 The verbs of rule 4:
 
