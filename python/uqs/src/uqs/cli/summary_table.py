@@ -1,4 +1,4 @@
-"""`uqs summary`'s table: gathering its rows, and rendering them.
+"""`uqs status`'s table: gathering its rows, and rendering them.
 
 Apart from the command so the same two steps can run again - `summary -i`
 re-reads the fleet after each start, stop or restart it makes - and because
@@ -137,7 +137,7 @@ def render(rows: list[dict[str, str]], chosen: list[str], port: int | None) -> T
     the runtime and base port they describe."""
     declared = _paths().runtime_declaration
     base = declared.resolve_base_port(port)
-    table = Table(title=f"uqs summary ({declared.name} runtime, base port {base})")
+    table = Table(title=f"uqs status ({declared.name} runtime, base port {base})")
     for col in chosen:
         # The graph cells are pre-wrapped at their commas by graph_cell, so
         # Rich must not wrap them again at whatever width is left over - that

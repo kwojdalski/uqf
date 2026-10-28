@@ -1,6 +1,6 @@
 """Fleet health: what process.csv declares, against what actually answers.
 
-Before this, fleet health existed only as the ``uqs summary`` CLI, which
+Before this, fleet health existed only as the ``uqs status`` CLI, which
 shells out to ``torq.sh`` and inspects **local OS processes**; exposing it
 over HTTP needed backend work of its own.
 

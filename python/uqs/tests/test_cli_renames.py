@@ -201,6 +201,37 @@ def test_the_ledger_upgrade_runs_at_both_spellings_and_the_old_names_the_new(mon
     assert said == ([] if words[-1] == "upgrade" else ["uqs job runs upgrade"])
 
 
+@pytest.mark.parametrize(
+    ("old", "new"),
+    [
+        ("summary", "status"),
+        ("data hdb-check", "data check"),
+        ("data hdb-alter", "data alter"),
+        ("config get", "config show"),
+        ("deploy verify", "deploy check"),
+    ],
+)
+def test_a_renamed_verb_keeps_its_old_name_hidden(old, new):
+    """#1733: one meaning per verb; each old name stays one release, hidden,
+    taking exactly the new command's options."""
+    assert _command(old).hidden and not _command(new).hidden
+    assert _names(_command(old)) == _names(_command(new))
+
+
+def test_job_runs_status_is_list_unfinished(monkeypatch):
+    from uqs.stack import runs as stack_runs
+
+    monkeypatch.setattr(stack_runs, "unfinished", lambda *_a, **_k: [])
+    monkeypatch.setattr(stack_runs, "history", lambda *_a, **_k: pytest.fail("the history"))
+    said = []
+    monkeypatch.setattr(renames, "warn_renamed", lambda o, n: said.append(n))
+    old = runner.invoke(cli.app, ["job", "runs", "status", "--json"])
+    new = runner.invoke(cli.app, ["job", "runs", "list", "--unfinished", "--json"])
+    assert old.exit_code == new.exit_code == 0, old.output
+    assert old.stdout == new.stdout
+    assert said == ["uqs job runs list --unfinished"]
+
+
 def test_a_kind_that_moved_to_its_noun_still_lists_under_list(monkeypatch):
     """`uqs list runtimes` -> `uqs runtime list` (#1728), for one release."""
     from uqs.stack import listing

@@ -17,7 +17,7 @@ import typer
 from uqs.cli import deploy_connection as conn
 from uqs.cli.deploy import _failed, deploy_app
 from uqs.cli.json_out import json_opt
-from uqs.cli.renames import renamed
+from uqs.cli.renames import alias_command, renamed
 from uqs.cli.shared import _die, json_refusal
 from uqs.deploy import config, prune, rollback, status, verify
 from uqs.deploy.prune import RELEASE_ID
@@ -164,7 +164,7 @@ VerifyJson = json_opt(
 )
 
 
-@deploy_app.command("verify", cls=renamed({"--port": "--base-port"}))
+@deploy_app.command("check", cls=renamed({"--port": "--base-port"}))
 def verify_cmd(
     profile: Annotated[str, typer.Option("--profile", help="The profile the release started")],
     deadline: Annotated[float, typer.Option("--deadline", help="Seconds")] = 180.0,
@@ -212,3 +212,11 @@ def verify_cmd(
         json_refusal(str(exc.code))
         code = 1
     raise typer.Exit(code=code)
+
+
+#: Its name before #1733: `check` actively probes and exits non-zero on a problem.
+#: An older release on a server has only `verify`, which a rollback runs
+#: (deploy/selection.py's verify_command asks for whichever it has).
+alias_command(
+    deploy_app, "verify", "uqs deploy check", verify_cmd, cls=renamed({"--port": "--base-port"})
+)

@@ -7,7 +7,7 @@ Deploying is two commands, run separately (#773, #778):
 - `uqs deploy push` puts that artifact on a Linux server that already has TorQ
   and the finance starter pack installed. It starts a `uqs` profile there and
   checks that every process answers before it calls the deployment done. The
-  check is `uqs deploy verify`, which `push` runs on the server from the release
+  check is `uqs deploy check`, which `push` runs on the server from the release
   itself.
 
 One artifact can go to any number of servers. The server installs it without a
@@ -102,7 +102,7 @@ TorQ. A release built with `--kafka-home` loads its `kfk` in the server's q
 before starting, and `--odbc-home` needs that setup on the server.
 
 Outside the contract: `netstat` and `column`, which `torq.sh summary` uses to
-show each process's port and lay the table out. Without them `uqs summary` lacks
+show each process's port and lay the table out. Without them `uqs status` lacks
 those columns; nothing the push or a process needs depends on them.
 
 ## Building a release
@@ -643,7 +643,7 @@ checkout's.
 ```bash
 uqs target add uat --ssh svc@uat.example --dest /opt/efx/uat/uqf --label env=uat
 uqs target check uat                       # ssh works; names the running release
-uqs --target uat summary
+uqs --target uat status
 uqs --target uat logs piggybankgeneralledger1 -f
 uqs --target uat --yes query rdb1 'select [20] from piggybank_general_ledger'
 uqs --target uat start piggybankgeneralledger1   # asks first; --yes skips the question
@@ -657,8 +657,8 @@ uqs --target uat start piggybankgeneralledger1   # asks first; --yes skips the q
 - **Confirmation.** A command that can change the server, such as `start`,
   `stop`, `restart`, `exec`, `job backfill`, `config set` or `data seed`, asks
   first and names the target. Without a terminal it needs `--yes`. So do
-  `query`, which can send any q, and `summary -i`, whose browser starts and
-  stops processes. Read-only commands run directly: `summary`, `logs`, `schema`,
+  `query`, which can send any q, and `status -i`, whose browser starts and stops
+  processes. Read-only commands run directly: `status`, `logs`, `schema`,
   `list`, `graph`, `job gaps` and `job runs show`.
 - **ssh.** It runs with `BatchMode`, so a missing key or an unknown host key
   fails rather than prompts. Host-key checking is whatever your `ssh_config`
@@ -724,7 +724,7 @@ uqs target adopt lvc --ssh svc@lvc.example --dest /srv/uqf                # a dr
 uqs target adopt lvc --ssh svc@lvc.example --dest /srv/uqf --apply        # asks first
 uqs target adopt lvc --ssh svc@lvc.example --dest /srv/uqf --release /home/svc/uqf \
     --launch-python /opt/py/bin/python3 --apply --yes
-uqs --target lvc summary
+uqs --target lvc status
 ```
 
 The dry run asks the server, changing nothing on either side:
@@ -819,7 +819,7 @@ away. The registration goes through the [same transaction](#changing-targets) as
 ```bash
 uqs deploy history              # newest first; * marks each server's default
 uqs deploy history uat.example  # one server, or one target
-uqs --target uat.example summary   # a server name: its latest successful deployment
+uqs --target uat.example status   # a server name: its latest successful deployment
 uqs target shell                # a shell in the most recent deployment
 uqs target shell uat            # ... or in a given target or server
 ```
@@ -855,7 +855,7 @@ Each stage stops the deployment if it fails:
   | restart   | with `--restart`, the previous release's processes stop. Their replacements take the same ports, so an upgrade has downtime: `downtime` in the report                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
   | ports     | nothing else listens on the profile's ports                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
   | start     | `uqs start --profile <profile>` from the new release                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-  | verify    | `uqs deploy verify`: within `--verify-timeout`, every process the profile resolves to, except a one-shot that exits by design (`tpreplay1`), answers `.proc.procname` with its own name over q IPC. **Every pipeline process** must pass both the library check (a forward prices correctly) and the ETL check (every transform's examples pass); other processes are checked for whichever they load                                                                                                                                                                                                                                               |
+  | verify    | `uqs deploy check`: within `--verify-timeout`, every process the profile resolves to, except a one-shot that exits by design (`tpreplay1`), answers `.proc.procname` with its own name over q IPC. **Every pipeline process** must pass both the library check (a forward prices correctly) and the ETL check (every transform's examples pass); other processes are checked for whichever they load                                                                                                                                                                                                                                                |
   | report    | `deploy-report.json` is written into the release **before** activation, and a failed write fails the deployment: the next upgrade reads it to know which processes to stop                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
   | activate  | `current` moves to the new release in a single rename. The previous release stays where it was                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 
@@ -869,10 +869,10 @@ how the rollback went. Any unsuccessful deployment exits 1.
 Releases share the HDB in the data directory. A release that adds a table or a
 column meets older partitions without it, and a partitioned query then fails on
 the first short one. Once the release's `.venv` exists, prepare runs that
-release's own `uqs data hdb-check --json` against the shared HDB:
+release's own `uqs data check --json` against the shared HDB:
 
 - **Missing tables or columns** are refused, naming the partitions. With
-  `--fix-hdb`, prepare runs `hdb-check --apply --yes` and checks again. The fix
+  `--fix-hdb`, prepare runs `data check --apply --yes` and checks again. The fix
   is additive: each missing table is written empty, and each missing column is
   written as its type's null. It is a thin wrapper over KX's `dbmaint.q` (it
   decides what the declared schema lacks, `dbmaint` writes the columns), checks
@@ -966,7 +966,7 @@ and moves `current` only once the target's own verifier passes. A target that
 does not verify is stopped, and the current release's processes are started and
 verified again, so the server ends where it began. Nothing is deleted.
 
-A target is verified with `uqs deploy verify`, so a release from before that
+A target is verified with `uqs deploy check`, so a release from before that
 command existed (#835) cannot be a rollback target: its verification fails and
 the rollback is undone as above. Nor can an artifact whose manifest names no
 runtime, or one this uqs does not know: `push` refuses it at stage `artifact`.
@@ -1126,7 +1126,7 @@ anything.
 hand on the server should source it from the release:
 
 ```bash
-cd /opt/uqf/current && source ./deploy.env && .venv/bin/uqs summary
+cd /opt/uqf/current && source ./deploy.env && .venv/bin/uqs status
 ```
 
 It exports `TORQHOME` and `TORQAPPHOME`, the existing TorQ and starter pack,

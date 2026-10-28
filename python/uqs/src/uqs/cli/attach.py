@@ -150,7 +150,7 @@ def attach(
         typer.Option(
             "--ssh",
             help="The ssh destination, USER@HOST, that reaches the stack's files, for `uqs data "
-            "hdb-check` and `hdb-alter --attach` (default: --host as the current user). Changes "
+            "check` and `alter --attach` (default: --host as the current user). Changes "
             "a saved attachment without --replace",
         ),
     ] = None,

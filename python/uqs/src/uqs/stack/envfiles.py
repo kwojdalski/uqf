@@ -46,7 +46,7 @@ _KEY = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 _DIRENV_INTERNAL = "DIRENV_"
 
 #: Long enough for an .envrc that runs a command, short enough that a hung one
-#: does not hang `uqs summary`.
+#: does not hang `uqs status`.
 _DIRENV_TIMEOUT_S = 30.0
 
 

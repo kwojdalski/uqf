@@ -125,7 +125,7 @@ def _summary_with_one_process(monkeypatch) -> list[list[str]]:
 
 @pytest.mark.parametrize(
     "argv",
-    [["summary", "--debug"], ["--debug", "summary"]],
+    [["summary", "--debug"], ["--debug", "status"]],
     ids=["old command flag", "global flag"],
 )
 def test_debug_adds_each_process_s_load_time(monkeypatch, argv):
@@ -139,13 +139,13 @@ def test_debug_adds_each_process_s_load_time(monkeypatch, argv):
 def test_log_level_debug_adds_the_load_times_too(monkeypatch):
     asked = _summary_with_one_process(monkeypatch)
     monkeypatch.setenv("LOG_LEVEL", "DEBUG")
-    assert runner.invoke(cli.app, ["summary", "--columns", "status"]).exit_code == 0
+    assert runner.invoke(cli.app, ["status", "--columns", "status"]).exit_code == 0
     assert asked == [["rdb1"]]
 
 
 def test_a_plain_summary_reads_no_logs(monkeypatch):
     asked = _summary_with_one_process(monkeypatch)
-    result = runner.invoke(cli.app, ["summary", "--columns", "status"])
+    result = runner.invoke(cli.app, ["status", "--columns", "status"])
     assert result.exit_code == 0, result.output
     assert asked == []
     assert "Load time" not in result.output

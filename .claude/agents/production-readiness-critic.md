@@ -116,7 +116,7 @@ checked and found sound. An area you skipped is not an area that passed.
 5. **Observability and alerting.**
    - What tells a human that something is wrong *without them looking*: metrics,
      alerts, a pager.
-   - Whether `uqs summary`, the browser and the logs are pull-only.
+   - Whether `uqs status`, the browser and the logs are pull-only.
    - For each silent failure, how long until someone notices: a stalled feed, a
      stale quote, a gap in a streaming job, an owed reaction, a failed backfill.
 6. **Capacity and growth.**
@@ -152,7 +152,7 @@ checked and found sound. An area you skipped is not an area that passed.
 - **Run things.** KDB-X:
   `QLIC=~/.kx QHOME=~/.kx/q ~/.kx/bin/q script.q -q < /dev/null`. Python:
   `uv run python …`. CLI: `uv run uqs … --help`.
-- **Read the generated configuration** (`uqs list env`, `uqs config get`), not
+- **Read the generated configuration** (`uqs list env`, `uqs config show`), not
   just the code that generates it.
 - **Quote what a command printed.** Every number must be measured.
 - **Check open issues first:** `gh issue list --state open --limit 100`. A

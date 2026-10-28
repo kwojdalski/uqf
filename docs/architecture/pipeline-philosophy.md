@@ -39,7 +39,7 @@ the framework falls out of preferring the second:
 - **`run_id` is the null guid outside a run**, rather than an invented identity.
   Absent attribution is visibly absent; wrong attribution reads as correct.
 
-The same instinct governs reporting outside the ledger. `uqs summary`
+The same instinct governs reporting outside the ledger. `uqs status`
 distinguishes three heartbeat states --- a value, `-` (the collector is up and
 has no row for this process), and `not collected` (nothing is collecting at all) ---
 because rendering the last two identically would turn a monitoring gap into an
@@ -221,7 +221,7 @@ other things (a source's files, a table) remains an operator's act, and nothing
 in the framework assumes old rows are gone.
 
 **Schema change has two paths.** A column or table *added* to the schema reaches
-older partitions through `uqs data hdb-check --apply`
+older partitions through `uqs data check --apply`
 ([`stack/hdb_shape.py`](../../python/uqs/src/uqs/stack/hdb_shape.py)). A column
 whose *type* changes, or that is *renamed*, needs an explicit offline migration:
 `uqs data migrate` rebuilds one date/table from named renames and lossless

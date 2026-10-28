@@ -61,7 +61,7 @@ JOB_OPERATIONS_PANEL = "Operations"
 data_app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
-    help="Put data in the HDB, check and change it: replay, seed, migrate, hdb-check, hdb-alter.",
+    help="Put data in the HDB, check and change it: replay, seed, migrate, check, alter.",
 )
 
 DEFAULT_LOG_LEVEL = "INFO"
@@ -74,7 +74,7 @@ def _env_log_level() -> str:
     docs/reference/environment.md names it a variable this package reads, but
     until now the only thing that read it was the `logged_function` trace
     decorator - `configure_logging` was called with a hardcoded INFO, so
-    `LOG_LEVEL=DEBUG uqs summary` printed exactly what INFO did. A
+    `LOG_LEVEL=DEBUG uqs status` printed exactly what INFO did. A
     documented knob that does nothing is worse than no knob, because the
     reader concludes there is nothing to see rather than that the switch is
     unwired.
@@ -339,7 +339,7 @@ def _sorted_items[Row: dict](items: list[Row], sort: str | None, reverse: bool) 
     processes` has procname/proctype/port/startwithall, `list env` has
     name/value, `summary` has Process/Status/PID/... - so there is no fixed
     set to validate against and an unknown name has to name the real ones
-    back. Shared by `uqs list --sort` and `uqs summary --sort`.
+    back. Shared by `uqs list --sort` and `uqs status --sort`.
 
     Numeric columns sort numerically. `port` is a string like "6051", and
     lexicographically "6100" sorts before "659" - which looks like the sort

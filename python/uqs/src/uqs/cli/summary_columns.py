@@ -1,4 +1,4 @@
-"""Which columns `uqs summary` shows, and which one it sorts by.
+"""Which columns `uqs status` shows, and which one it sorts by.
 
 Split out of cli/summary.py, which had reached the package's 400-line module
 limit when `--sort` was added. Both turn what the reader typed into the

@@ -31,13 +31,13 @@ everything else --- and it can be named on its own:
 
 ```bash
 uqs start fxpositions1        # or just `uqs start` for the whole fleet
-uqs summary                   # lists it with its port and heartbeat
+uqs status                   # lists it with its port and heartbeat
 uqs logs -f fxpositions1
 uqs restart fxpositions1
 ```
 
 Reading the book needs no handle of your own --- `--port` is the one
-`uqs summary` shows for it (`KDBBASEPORT`+39, so 6089 on a default stack):
+`uqs status` shows for it (`KDBBASEPORT`+39, so 6089 on a default stack):
 
 ```bash
 uqs query --port 6089 "0!.qpipe.job.fx_positions.positions"

@@ -1,6 +1,6 @@
 """The shared HDB against a release's schema during a deployment (#870).
 
-prepare's check is the release's own `uqs data hdb-check --json`, faked here
+prepare's check is the release's own `uqs data check --json`, faked here
 by what it prints. The dry run's listing (LIST_PY) runs for real, with bash
 and python3, against an HDB under tmp_path. The q type check runs on PeachQ:
 the `peachq` fixture's (conftest.py), the pinned build unless chosen otherwise.
@@ -73,7 +73,7 @@ def test_fix_hdb_fills_and_checks_again():
     remote = FakeRemote(SHORT, fixed=CLEAN)
     got = hdb.check(_dep(remote, fix_hdb=True), "/r")
     assert got["hdb"] == "filled" and got["filled"]["tables"] == {"2026.01.01": ["book"]}
-    assert "data hdb-check --apply --yes --json" in remote.scripts[-1]
+    assert "data check --apply --yes --json" in remote.scripts[-1]
 
 
 def test_fix_hdb_that_leaves_a_gap_is_refused():

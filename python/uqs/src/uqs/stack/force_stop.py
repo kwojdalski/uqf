@@ -9,7 +9,7 @@ process's configured port. That misses three cases this does not:
     is signalled;
   - a process that ignores SIGTERM.
 
-So the processes are found the way `uqs summary` finds them - by command line,
+So the processes are found the way `uqs status` finds them - by command line,
 `-stackid <base port> -proctype <type> -procname <name>` (stack/alive.py) -
 and EVERY matching pid gets SIGKILL. Nothing else is touched: another stack's
 processes carry another -stackid, and a stray q carries none.

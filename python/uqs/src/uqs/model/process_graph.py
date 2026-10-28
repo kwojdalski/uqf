@@ -2,7 +2,7 @@
 
 An edge runs from a producer to a consumer and carries the tables the one
 publishes and the other subscribes to - the same declarations behind
-`uqs summary`'s graph columns (dependencies.py), so the two cannot disagree.
+`uqs status`'s graph columns (dependencies.py), so the two cannot disagree.
 A table from outside the stack (EXTERNAL_PRODUCERS) and a bounded worker's
 source get a producer named the way `Depends on` names them,
 `(<table>: external)`.

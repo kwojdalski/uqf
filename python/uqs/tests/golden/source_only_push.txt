@@ -193,7 +193,7 @@ if [ -d /opt/uqf/deploy.lock ]; then date +%s > /opt/uqf/deploy.lock/heartbeat; 
 set -euo pipefail
 cd /opt/uqf/releases/20261007T000000Z-0123456789ab
 source ./deploy.env
-.venv/bin/uqs data hdb-check --json
+.venv/bin/uqs data check --json
 
 =====
 [lock]
@@ -230,7 +230,7 @@ if [ -d /opt/uqf/deploy.lock ]; then date +%s > /opt/uqf/deploy.lock/heartbeat; 
 set -euo pipefail
 cd /opt/uqf/releases/20261007T000000Z-0123456789ab
 source ./deploy.env
-.venv/bin/uqs deploy verify --profile essential --ports-free
+if .venv/bin/uqs deploy check --help >/dev/null 2>&1; then .venv/bin/uqs deploy check --profile essential --ports-free; else .venv/bin/uqs deploy verify --profile essential --ports-free; fi
 
 =====
 [start]
@@ -249,7 +249,7 @@ if [ -d /opt/uqf/deploy.lock ]; then date +%s > /opt/uqf/deploy.lock/heartbeat; 
 set -euo pipefail
 cd /opt/uqf/releases/20261007T000000Z-0123456789ab
 source ./deploy.env
-.venv/bin/uqs deploy verify --profile essential --deadline 180
+if .venv/bin/uqs deploy check --help >/dev/null 2>&1; then .venv/bin/uqs deploy check --profile essential --deadline 180; else .venv/bin/uqs deploy verify --profile essential --deadline 180; fi
 
 =====
 [lock]

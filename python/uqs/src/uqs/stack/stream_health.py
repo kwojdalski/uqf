@@ -1,4 +1,4 @@
-"""What a streaming job's batches did: `uqs summary`'s Batches column (#832).
+"""What a streaming job's batches did: `uqs status`'s Batches column (#832).
 
 A batch handler that throws is trapped by TorQ, so the process stays up and
 its heartbeat stays green while it drops every batch. Status (a pid) and

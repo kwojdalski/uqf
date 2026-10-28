@@ -172,4 +172,4 @@ def adopt_(
         f"[green]✓[/] adopted {current} as target {name} in {done.path} "
         f"(change {number}, `uqs target log`)"
     )
-    console.print(f"  try: uqs --target {name} summary")
+    console.print(f"  try: uqs --target {name} status")

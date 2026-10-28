@@ -1,7 +1,7 @@
 """`uqs graph`: every process and who feeds whom, as a tree.
 
 The trees come from model/process_graph.py; this draws them. Each process is
-coloured by whether it is up - the same status `uqs summary` reads - unless
+coloured by whether it is up - the same status `uqs status` reads - unless
 `--offline` skips asking, and each edge is labelled with the tables it
 carries, so a reader sees not just that demo_markout1 needs the plant but which
 of its tables.
@@ -93,7 +93,7 @@ def rich_trees(trees: list[Node], status: dict[str, str], direction: Direction) 
 
 
 def live_status(port: int | None) -> dict[str, str]:
-    """{procname: up/down}, as `uqs summary` reads it; empty when the fleet cannot say."""
+    """{procname: up/down}, as `uqs status` reads it; empty when the fleet cannot say."""
     paths = _paths()
     try:
         result = runtime.summary(paths, base_port=port, timeout=30)
@@ -170,7 +170,7 @@ def graph(
     "if this stops, what starves". `--upstream` turns it over: "what must be
     up for this to work". A process reached twice is drawn once and marked
     the second time, so the tree is the size of the graph. Colours are up
-    (green) and down (red), from the same check as `uqs summary`.
+    (green) and down (red), from the same check as `uqs status`.
     """
     paths = _paths()
     try:

@@ -1,4 +1,4 @@
-"""`uqs deploy verify`: is a deployed profile actually up? (#773, #835)
+"""`uqs deploy check` (formerly verify): is a deployed profile actually up? (#773, #835)
 
 `uqs deploy push` runs this ON THE SERVER, from the release's own
 environment, after `uqs start --profile ...` has returned. A start command

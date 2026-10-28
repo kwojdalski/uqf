@@ -91,6 +91,7 @@ def _release(dest: Path, rid: str, torq, rt: q_runtime.QRuntime, log: Path, **re
     verified = json.dumps({"passed": True, "reason": "", "processes": []})
     uqs.write_text(
         "#!/bin/bash\n"
+        '[ "$3" = --help ] && exit 0  # `deploy check --help`: it has the command\n'
         f'echo "{rid} $1 $QCMD" >> {log}\n'
         f"if [ \"$1\" = deploy ]; then echo '{verified}'; echo {OK_MARKER}; fi\n"
     )

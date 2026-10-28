@@ -100,8 +100,14 @@ def uqs_restart(procs: str = "all", port: int | None = None) -> str:
 
 
 @mcp.tool
+def uqs_status(port: int | None = None) -> str:
+    """Status table (up/down, pid, port) for every process in process.csv - `uqs status`."""
+    return _run(runtime.summary, base_port=port)
+
+
+@mcp.tool
 def uqs_summary(port: int | None = None) -> str:
-    """Status table (up/down, pid, port) for every process in process.csv."""
+    """Renamed uqs_status, as `uqs summary` is now `uqs status` (#1733); kept one release."""
     return _run(runtime.summary, base_port=port)
 
 

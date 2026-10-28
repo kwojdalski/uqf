@@ -53,7 +53,7 @@ the switch has to hand it over rather than duplicate it.
   | ---                                                   | ---                                                        | ---                                                                                                                      | ---                                                                                                                                                                           |
   | the tickerplant (`stp1`)                              | today's log under `tplogs/`                                | two writers to one log interleave records, and a replay of it is then wrong                                              | each release logs to a directory of its own release id; the new one's rdb replays the old one's log, read-only, then subscribes to its own                                    |
   | end of day (`wdb1`, `sort1` and the sortworkers)      | the HDB partition for the day that just ended, and `sym`   | two writers append the same day twice, and both append to the HDB's `sym` file                                           | only the release that is `current` at end of day runs end of day: the switch is refused within a window of the roll, and the new release starts with end of day disabled      |
-  | `uqs data hdb-check --apply` and the bootstrap fill   | empty tables and null columns in old partitions, and `sym` | additive and idempotent, but they race end of day's writes to `sym`                                                      | already serialised by the deploy lock for a push; the new release's bootstrap must not fill while the old release's end of day runs                                           |
+  | `uqs data check --apply` and the bootstrap fill       | empty tables and null columns in old partitions, and `sym` | additive and idempotent, but they race end of day's writes to `sym`                                                      | already serialised by the deploy lock for a push; the new release's bootstrap must not fill while the old release's end of day runs                                           |
   | a bounded worker (`uqs job backfill`)                 | partitions of past days, and `sym`                         | not started by a push, so the switch never starts one; one already running keeps writing through the old release's stack | the switch refuses while a worker holds its lock in the status directory, the same lock `uqs job backfill` takes                                                              |
 
 Shared and safe, because each already takes its own lock or is only read:
@@ -64,7 +64,7 @@ Shared and safe, because each already takes its own lock or is only read:
 
 `stream_health_<job>.txt` is not safe. It is one file per job, so two copies of
 a job overwrite each other's. During the overlap, the soak (#869) and
-`uqs summary` would read whichever wrote last. Each record already names the
+`uqs status` would read whichever wrote last. Each record already names the
 process and pid that wrote it, so readers have to keep to the release they
 check.
 

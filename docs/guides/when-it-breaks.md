@@ -11,7 +11,7 @@ this page is the order to read things in.
 ### 1. See that it did not finish
 
 ```
-uqs job runs status
+uqs job runs list --unfinished
 ```
 
 lists every run that began and never finished. That includes runs whose process
@@ -90,7 +90,7 @@ beginning on purpose. It refuses while a run of that worker may still be live.
 
 `uqs job runs show <new_run_id>` should show `completed` with no failed windows,
 or `idle` if every window was already covered. Rows in the RDB or HDB are where
-[the FAQ](../faq.md#where-do-a-backfills-rows-end-up) says. `uqs data hdb-check`
+[the FAQ](../faq.md#where-do-a-backfills-rows-end-up) says. `uqs data check`
 reports a partition missing a table or column.
 
 ## A streaming job died
@@ -98,7 +98,7 @@ reports a partition missing a table or column.
 ### 1. See which one
 
 ```
-uqs summary
+uqs status
 ```
 
 shows every process's status beside what it subscribes to and publishes. A job
@@ -155,7 +155,7 @@ Two things to know about the answer:
 - **It records uptime and failed batches, not output.** A job that was up but
   received nothing, or published nothing, shows no gap. One whose batches threw
   does, from its last beat before the failure to the first beat after a batch
-  succeeds; `uqs summary` shows such a job as `failing` in its Batches column.
+  succeeds; `uqs status` shows such a job as `failing` in its Batches column.
 - **A gap can be wider than the outage, never narrower.** A session's end is its
   last beat, recorded once a minute (`.qetl.uptime.period`), so a gap can start
   up to a minute before the job really stopped. Refilling a little extra costs

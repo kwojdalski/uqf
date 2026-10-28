@@ -159,7 +159,7 @@ def add(
         dry_run,
     )  # fmt: skip
     if not dry_run:
-        console.print(f"  try: uqs --target {name} summary")
+        console.print(f"  try: uqs --target {name} status")
 
 
 _PAIR = re.compile(r"([a-z_][a-z0-9_]*(?:\.[A-Za-z0-9_.-]+)?)=(.*)", re.S)

@@ -1,4 +1,4 @@
-"""`uqs data hdb-alter`: change one table across an HDB - reorder, rename,
+"""`uqs data alter`: change one table across an HDB - reorder, rename,
 attribute, cast, or undo one of those - dry run by default (#1755).
 
 Only partitions holding the table are touched; partitions that disagree on
@@ -17,6 +17,7 @@ import typer
 from uqs.cli import completion
 from uqs.cli.hdb_scope import ApplyOpt, AttachOpt, HdbOpt, YesOpt, _table, resolve, run_scoped
 from uqs.cli.json_out import json_opt
+from uqs.cli.renames import alias_command
 from uqs.cli.shared import _die, data_app
 from uqs.paths import UqsError
 from uqs.stack.hdb_alter import Request
@@ -27,7 +28,7 @@ AlterJson = json_opt(
 )
 
 
-@data_app.command("hdb-alter")
+@data_app.command("alter")
 def hdb_alter(
     table: Annotated[
         str | None,
@@ -75,10 +76,10 @@ def hdb_alter(
 
     One operation per run: --reorder, --rename, --attr, --cast, or --undo of
     an earlier run. Name the HDB with --attach NAME (run on the stack's host),
-    --hdb DIR, or `uqs --target NAME data hdb-alter ...` for a release's own;
+    --hdb DIR, or `uqs --target NAME data alter ...` for a release's own;
     with none, this runtime's. Shows the plan and writes nothing unless
     --apply, which asks first (--yes does not). Refused when the partitions
-    holding the table disagree on its columns, order or types - `hdb-check`
+    holding the table disagree on its columns, order or types - `data check`
     repairs a missing table, anything else is for a person to decide.
     """
     given = {"reorder": reorder, "rename": rename, "attr": attr, "cast": cast, "undo": undo}
@@ -99,3 +100,7 @@ def hdb_alter(
         run_scoped(handle, req, apply=apply, yes=yes, as_json=as_json, what=what)
     except UqsError as exc:
         _die(exc)
+
+
+#: Its name before #1733, beside `hdb-check`: `alter` is a domain verb.
+alias_command(data_app, "hdb-alter", "uqs data alter", hdb_alter)

@@ -1,4 +1,4 @@
-"""`uqs data hdb-check`: which HDB partitions lack a table or a column, and -
+"""`uqs data check`: which HDB partitions lack a table or a column, and -
 with --apply, after asking - the empty table or null column written in.
 
 Two scopes (#1755). Without --table, --attach or --hdb it judges this
@@ -32,13 +32,14 @@ from uqs.cli.hdb_scope import (
     resolve,
     run_scoped,
 )
+from uqs.cli.renames import alias_command
 from uqs.cli.shared import _die, _paths, console, data_app
 from uqs.paths import UqsError
 from uqs.stack import hdb_alter, hdb_fill, hdb_shape, hdb_types
 from uqs.stack.hdb_alter import Request
 
 
-@data_app.command("hdb-check")
+@data_app.command("check")
 def hdb_check(
     table: Annotated[
         str | None,
@@ -75,13 +76,13 @@ def hdb_check(
     holding the same columns; a gap fails the whole query, naming whichever
     table sorts first. Without --table, --attach or --hdb: this runtime's HDB,
     against every table it declares. With one: that table alone, in the HDB
-    they name (`uqs --target NAME data hdb-check` is a release's own). --apply
+    they name (`uqs --target NAME data check` is a release's own). --apply
     shows the plan, asks, and writes only what is missing - additive: a table
     directory or column file that exists is never touched.
     """
     if fix:
         _die(UqsError(
-            "--fix is now --apply (#1732): `uqs data hdb-check --apply` shows what it would "
+            "--fix is now --apply (#1732): `uqs data check --apply` shows what it would "
             "write and asks first; add --yes where nothing can ask"
         ))  # fmt: skip
         return
@@ -167,9 +168,13 @@ def _whole_runtime(*, apply: bool, yes: bool, as_json: bool) -> None:
             f"declared {c['declared']}[/] - a migration, never filled"
         )
     console.print(
-        "\n[dim]`uqs data hdb-check --apply` writes an empty copy of each missing "
+        "\n[dim]`uqs data check --apply` writes an empty copy of each missing "
         "table, and each missing column as its declared type's null, after asking. Additive: "
         "an existing table directory or column file is never touched, and a column whose "
         "declared TYPE changed is not repaired here.[/]"
     )
     raise typer.Exit(code=1)
+
+
+#: Its name before #1733: `check` actively probes and exits non-zero on a problem.
+alias_command(data_app, "hdb-check", "uqs data check", hdb_check)

@@ -186,7 +186,7 @@ process list runs out.
 
 The failure is silent, which is the part worth knowing. `stp1` does not log the
 refusal, the shut-out process retries forever inside `torq_stream.q`'s
-initialisation, and because `uqs summary` is a PID check it reports that process
+initialisation, and because `uqs status` is a PID check it reports that process
 as `up`. Nothing anywhere says the stack is short. What you get instead is a
 topology decided by start order - whichever sixteen processes won the race that
 boot - which changes every time. It was found the hard way when `fxpositions1`
@@ -341,6 +341,6 @@ and `database.q` are never written to.
 ![The vendored process.csv and database.q read fresh on every command, extended, and written to generated copies the stack actually runs on](../diagrams/config-generation.svg)
 
 `bootstrap()` (`python/uqs/src/uqs/stack/runtime.py`) regenerates both files on
-every command - `start`, `stop`, `summary`, everything - so nothing here is a
+every command - `start`, `stop`, `status`, everything - so nothing here is a
 one-time setup step; the generated files are always a fresh function of the
 vendored tree plus whatever's in the three small, git-tracked extension files.

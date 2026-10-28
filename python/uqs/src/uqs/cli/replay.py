@@ -1,7 +1,7 @@
 """`uqs data replay`: replay a tickerplant log into the HDB.
 
 Registers the `data` group on the app (see cli/shared.py), which
-cli/hdb_check.py's `hdb-check` joins.
+cli/hdb_check.py's `data check` joins.
 
 What it wraps is TorQ's tickerlogreplay, unchanged. What it adds is aim: which
 log, which database, which schema and which stack, all read from the processes

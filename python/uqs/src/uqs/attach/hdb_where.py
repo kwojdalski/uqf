@@ -1,4 +1,4 @@
-"""An attachment's HDB, for `uqs data hdb-check` / `hdb-alter --attach NAME` (#1755).
+"""An attachment's HDB, for `uqs data check` / `alter --attach NAME` (#1755).
 
 The operator names the attachment, not a path: every attachment already knows
 its HDB, and asking a person to remember production paths is how the wrong

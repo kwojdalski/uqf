@@ -12,7 +12,7 @@ are stamped by the same `.proc.cp[]` clock.
 Read from the log rather than asked over IPC on purpose. Asking each process
 for `.proc.starttimeUTC` would open a handle per process, and a process at its
 licence connection cap accepts the TCP connection and never answers - the
-same hang `uqs summary` already budgets a timeout against for monitor1.
+same hang `uqs status` already budgets a timeout against for monitor1.
 
 WHICH FILE. `out_<proc>.log` is an alias onto the CURRENT file, and TorQ rolls
 the log daily by default (`.proc.logroll`), so after midnight the alias points
