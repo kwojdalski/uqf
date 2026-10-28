@@ -52,7 +52,7 @@ def refuse_start(
     The processes are the words between the verb and torq.sh's first flag
     (`-extras`, `-csv`): `uqs job backfill` starts `<procname> -extras ...`.
 
-    The publisher of an attachment (`uqs job attach`, #1424) is refused here
+    The publisher of an attachment (`uqs job attachment add`, #1424) is refused here
     too, unless the attachment is verified and the start is under its stack id.
     """
     if not args or args[0] not in STARTING_VERBS:

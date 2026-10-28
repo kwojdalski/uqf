@@ -47,7 +47,8 @@ from uqs.stack import procs as stack_procs
 config_app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
-    help="Read or set a process's process.csv fields (persisted to process_overrides.csv).",
+    help="Read (get) or set a process's process.csv fields (persisted to "
+    "process_overrides.csv), and the sources the stack reads (sources).",
 )
 app.add_typer(config_app, name="config")
 

@@ -264,7 +264,7 @@
     / begin_run tolerates any failure, so a ledger it cannot write - one from
     / before etl_runs gained its range and counts columns - would leave this
     / run untracked without a word. Failing the backfill names the fix
-    / (`uqs job runs migrate`) instead.
+    / (`uqs job runs upgrade`) instead.
     / Not on a dry run, which records no run - attaching can create the ledger.
     if[.qetl.job.bounded.runtime.allows`record_run; .qetl.run.attach[]];
     t1:.z.p;

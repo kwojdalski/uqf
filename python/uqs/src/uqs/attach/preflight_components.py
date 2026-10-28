@@ -278,7 +278,8 @@ def runtime_only(att: Attachment, facts: Facts) -> str:
     its tickerplant restart, so the re-apply is the operator's to make."""
     said = (
         "runtime-only: restarting the tickerplant DROPS the registration; the attachment "
-        f"then reports registration-lost and must be re-applied (`uqs job attach {att.name}`)"
+        "then reports registration-lost and must be re-applied "
+        f"(`uqs job attachment add {att.name}`)"
     )
     if facts.host.is_local(att.stack.host):
         return said

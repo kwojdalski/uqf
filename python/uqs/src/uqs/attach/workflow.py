@@ -1,4 +1,4 @@
-"""`uqs job attach NAME` as functions (#1457): which attachment a command line
+"""`uqs job attachment add NAME` as functions (#1457): which attachment a command line
 means, and the stages that execute it, in order.
 
 One command runs the whole workflow: resolve the configuration, preflight,
@@ -162,7 +162,7 @@ def _refuse_moving(saved: Attachment, att: Attachment, state_dir: Path | None) -
             f"attachment {saved.name} is {m.state} on stack {saved.stack.id}, and its manifest "
             "records what it changed there - the record detach reverses from. A replacement "
             "may not point it at another stack, job or tables: detach it first "
-            f"(`uqs job detach {saved.name}`), or attach under another name"
+            f"(`uqs job attachment remove {saved.name}`), or attach under another name"
         )
 
 
@@ -224,7 +224,7 @@ def execute(
     includes running the same command again.
     """
     att, out, name, host = resolved.att, Outcome(), resolved.att.name, host or Host()
-    again, back = f"`uqs job attach {name}`", f"`uqs job detach {name}`"
+    again, back = f"`uqs job attachment add {name}`", f"`uqs job attachment remove {name}`"
     running = already_running(att, p, state_dir)
 
     def stage(what: str, status: str, detail: str, began: float) -> Stage:

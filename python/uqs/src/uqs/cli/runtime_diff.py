@@ -22,7 +22,8 @@ runtime_app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
     help="Compare the runtimes (`uqs runtime diff uqf torq`) and install the bundles one "
-    "declares (`uqs runtime prepare`); `uqs runtime list` lists them.",
+    "declares (`uqs runtime prepare`: `uqs job install` for each); `uqs runtime list` "
+    "lists them.",
 )
 app.add_typer(runtime_app, name="runtime")
 

@@ -1,6 +1,6 @@
 """#1651, criterion 1: a publisher on this machine attached to a stack on another.
 
-`uqs job attach` runs on uat-client and starts the fixture feed there, with
+`uqs job attachment add` runs on uat-client and starts the fixture feed there, with
 runtime-only persistence; the stack is on uat-stack. Whether the rows arrived is
 asked of the stack's own tickerplant and rdb, from this host.
 """

@@ -95,10 +95,11 @@ def backfill(
         str | None,
         typer.Option(
             "--attach",
-            help="Backfill into the native HDB of this saved attachment (`uqs job attach`), "
-            "taking the stack and the destination from it. plan lists the windows, the native "
-            "date partitions, the writers and the readers to reload, and changes nothing; run "
-            "and dry-run admit afresh and start the runner (completed historical dates only)",
+            help="Backfill into the native HDB of this saved attachment "
+            "(`uqs job attachment add`), taking the stack and the destination from it. plan "
+            "lists the windows, the native date partitions, the writers and the readers to "
+            "reload, and changes nothing; run and dry-run admit afresh and start the runner "
+            "(completed historical dates only)",
         ),
     ] = None,
     writer: Annotated[

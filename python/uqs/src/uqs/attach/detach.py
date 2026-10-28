@@ -310,8 +310,8 @@ def _rollback(
             f"rollback stopped: {exc}. "
             f"Done: {[s.op + ' ' + s.process for s in result.steps] or 'nothing'}; "
             f"still in place: {left or 'nothing'}. Cross-process atomicity is not claimed: run "
-            f"`uqs job detach {att.name}` again (every step is safe to repeat), or remove "
-            "the rest by hand."
+            f"`uqs job attachment remove {att.name}` again (every step is safe to repeat), or "
+            "remove the rest by hand."
         ) from None
     m.set_state("rolled_back", f"{len(result.steps)} step(s)")
     return result

@@ -40,12 +40,24 @@ def receiving(world: World) -> World:
     # the attachment the client made, carried to the stack's machine as it stands
     copy_between(world.client, world.stack, "/data/attachments", "feed-uat")
     exported = world.client.uqs(
-        "job", "contract", "export", WORKER, "--output", "/tmp/remote_trades.contract.json"
+        "job",
+        "attachment",
+        "contract",
+        "export",
+        WORKER,
+        "--output",
+        "/tmp/remote_trades.contract.json",
     )
     assert exported.returncode == 0, exported.stdout + exported.stderr
     copy_between(world.client, world.stack, "/tmp", "remote_trades.contract.json")
     code, approved = world.stack.uqs_json(
-        "job", "contract", "approve", "/tmp/remote_trades.contract.json", "--attach", "feed-uat"
+        "job",
+        "attachment",
+        "contract",
+        "approve",
+        "/tmp/remote_trades.contract.json",
+        "--attach",
+        "feed-uat",
     )
     assert code == 0, approved
     world.contract = approved["contract"]["identity"]

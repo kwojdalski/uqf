@@ -78,7 +78,7 @@ def check(name: str, ipc: Ipc | None = None, host: Host | None = None) -> None:
             f"{att.publisher.procname} is the publisher of attachment {att.name}, and "
             f"{', '.join(gone)} {'is' if len(gone) == 1 else 'are'} no longer registered on "
             f"{where} (stack {att.stack.id} at {att.stack.host}): the tickerplant has "
-            f"restarted or changed since it was verified. Re-apply with `uqs job attach "
+            f"restarted or changed since it was verified. Re-apply with `uqs job attachment add "
             f"{att.name}`. Nothing was started."
         )
 
@@ -87,8 +87,8 @@ def _unknown(att: Attachment, reason: str) -> UqsError:
     return UqsError(
         f"{att.publisher.procname} is the publisher of attachment {att.name}, and whether its "
         f"tables are still registered on stack {att.stack.id} at {att.stack.host} cannot be "
-        f"told: {reason}. A start is refused until the stack answers; then run `uqs job "
-        f"attach {att.name}`. Nothing was started."
+        f"told: {reason}. A start is refused until the stack answers; then run "
+        f"`uqs job attachment add {att.name}`. Nothing was started."
     )
 
 

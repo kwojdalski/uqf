@@ -1,12 +1,18 @@
-"""`uqs job attach NAME` and `uqs job detach NAME`: a job on a TorQ stack that
-already exists (#1424, #1457).
+"""`uqs job attachment add|remove|show NAME`: a job on a TorQ stack that
+already exists (#1424, #1457, #1737).
 
-One command per direction. `attach` resolves the configuration, runs the
+One command per direction. `add` resolves the configuration, runs the
 preflight, shows the plan, asks, then saves, applies, verifies and starts the
 publisher - each stage the existing one in uqs.attach, run in order by
 workflow.execute; `--dry-run` stops after the plan and changes nothing.
-`detach` stops the publisher and reverses what is safe to reverse. The
-inventory is `uqs job attachment list` (stack/attach_state.py).
+`remove` stops the publisher and reverses what is safe to reverse. `show`
+(attachment_show.py) is one attachment; the inventory is `uqs job attachment
+list` (stack/attach_state.py).
+
+`add` and `remove` were `uqs job attach` and `uqs job detach`, verbs whose
+noun was spelled three other ways (`list attachments`, `--attach`, `job
+contract`); attachment is the noun now (#1737), and the old spellings stay for
+one release, hidden, each logging the new one.
 
 Every string printed here passes through `redact` first: the plan, the stage
 results, the errors and the debug detail, in tables and in `--json`.
@@ -38,7 +44,7 @@ from uqs.cli.attach_output import (
     steps_table,
     verdict,
 )
-from uqs.cli.shared import JOB_OPERATIONS_PANEL, _debug_requested, _paths, job_app
+from uqs.cli.shared import _debug_requested, _paths, attachment_app
 from uqs.paths import UqsError
 
 
@@ -72,10 +78,10 @@ YesOpt = Annotated[
 ]
 
 
-# ----------------------------------------------------------------- uqs job attach
+# ------------------------------------------------------- uqs job attachment add
 
 
-@job_app.command("attach", rich_help_panel=JOB_OPERATIONS_PANEL, context_settings=EXTRA_WORDS)
+@attachment_app.command("add", context_settings=EXTRA_WORDS)
 def attach(
     ctx: typer.Context,
     name: NameArg,
@@ -199,7 +205,7 @@ def attach(
     debug = _debug_requested(ctx)
     out = Output(as_json, debug)
     out.doc = {"attachment": name, "dry_run": dry_run}
-    refuse_legacy(out, "job attach", name, ctx.args)
+    refuse_legacy(out, "job attachment add", name, ctx.args)
     began = time.monotonic()
     given = workflow.Given(
         job=job, bundle=bundle, stack_id=stack_id, host=host, discovery=discovery,
@@ -316,10 +322,10 @@ def attach(
     out.finish(ok=False, recovery=outcome.recovery, error=message)
 
 
-# ----------------------------------------------------------------- uqs job detach
+# ---------------------------------------------------- uqs job attachment remove
 
 
-@job_app.command("detach", rich_help_panel=JOB_OPERATIONS_PANEL, context_settings=EXTRA_WORDS)
+@attachment_app.command("remove", context_settings=EXTRA_WORDS)
 def detach(
     ctx: typer.Context,
     name: NameArg,
@@ -345,7 +351,7 @@ def detach(
     """
     out = Output(as_json, _debug_requested(ctx))
     out.doc = {"attachment": name, "dry_run": dry_run}
-    refuse_legacy(out, "job detach", name, ctx.args)
+    refuse_legacy(out, "job attachment remove", name, ctx.args)
     began = time.monotonic()
     try:
         att = config.load(name)

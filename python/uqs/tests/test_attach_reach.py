@@ -203,7 +203,7 @@ def test_runtime_only_on_a_remote_stack_says_the_re_apply_is_the_operators(bundl
     shown = plan.build(att, fake, ROOT, facts.Facts(host=HERE))
     (warned,) = [f.message for f in shown.findings if f.code == "RUNTIME_ONLY"]
     assert "restarting the tickerplant DROPS the registration" in warned
-    assert "must be re-applied (`uqs job attach pb-uat`)" in warned
+    assert "must be re-applied (`uqs job attachment add pb-uat`)" in warned
     assert "The stack is on uat-box.example" in warned
 
     out = _run(att, fake, tmp_path, Publisher())

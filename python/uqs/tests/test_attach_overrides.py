@@ -520,7 +520,9 @@ def world(monkeypatch, tmp_path, bundle):
 
 
 def invoke(*argv: str, **kw):
-    return CliRunner().invoke(cli.app, ["job", "attach", *argv], catch_exceptions=False, **kw)
+    return CliRunner().invoke(
+        cli.app, ["job", "attachment", "add", *argv], catch_exceptions=False, **kw
+    )
 
 
 def plan_args(bundle: Path) -> list[str]:

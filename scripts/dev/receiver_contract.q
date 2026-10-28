@@ -2,7 +2,7 @@
 //
 //   q scripts/dev/receiver_contract.q -worker W
 //
-// Run by `uqs job contract export W` (uqs.attach.receiver_contract) on the machine that has the
+// Run by `uqs job attachment contract export W` (uqs.attach.receiver_contract) on the machine that has the
 // worker's declarations: it loads that worker alone and prints .qetl.io.remote.contract.of as one
 // line of JSON, which uqs gives its identity. Nothing is written. Exits 2, naming the cause, for a
 // worker it cannot load or derive a contract from.

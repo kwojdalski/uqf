@@ -88,11 +88,12 @@ READ_ONLY: frozenset[tuple[str, str | None]] = frozenset(
     }
 )
 #: Read-only three deep: `config sources check` reads, `config sources stub`
-#: writes a file; `job runs migrate` and `setup odbc install` write.
+#: writes a file; `job runs upgrade` and `setup odbc install` write.
 READ_ONLY_DEEP = frozenset(
     {
         ("config", "sources", "check"),
         ("job", "attachment", "list"),
+        ("job", "attachment", "show"),
         ("job", "runs", "status"),
         ("job", "runs", "list"),
         ("job", "runs", "show"),

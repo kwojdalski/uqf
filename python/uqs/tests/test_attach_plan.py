@@ -608,7 +608,7 @@ def cli_stack(monkeypatch, tmp_path):
 
 
 def invoke(*argv: str):
-    return CliRunner().invoke(cli.app, ["job", "attach", *argv], catch_exceptions=False)
+    return CliRunner().invoke(cli.app, ["job", "attachment", "add", *argv], catch_exceptions=False)
 
 
 def test_a_new_attachment_needs_a_job_and_a_stack_id(cli_stack):
@@ -649,7 +649,9 @@ def test_a_dry_run_exits_nonzero_on_a_blocker_and_zero_when_clean(cli_stack, bun
 
 
 def test_a_detach_of_an_unknown_attachment_says_so(cli_stack):
-    result = CliRunner().invoke(cli.app, ["job", "detach", "nope"], catch_exceptions=False)
+    result = CliRunner().invoke(
+        cli.app, ["job", "attachment", "remove", "nope"], catch_exceptions=False
+    )
     assert result.exit_code != 0 and any("no attachment 'nope'" in m for m in cli_stack.errors)
 
 

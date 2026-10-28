@@ -8,11 +8,11 @@ WITHOUT the job's code: the stack's machine need not have the source, transform
 or worker that produced the rows. A RECEIVER CONTRACT carries those facts and
 nothing else.
 
-  export    on the machine with the worker: `uqs job contract export W`. q loads
+  export    on the machine with the worker: `uqs job attachment contract export W`. q loads
             the worker and derives the contract from its declarations
             (scripts/dev/receiver_contract.q, .qetl.io.remote.contract.of), so
             it is never a hand-kept copy; this adds its identity.
-  approve   on the stack's machine: `uqs job contract approve FILE --attach NAME`.
+  approve   on the stack's machine: `uqs job attachment contract approve FILE --attach NAME`.
             Validates the contract, checks it against the attachment - which
             must be verified, publish the dataset in the contract's shape and pin
             an HDB here - and stores it beside the attachment, BOUND to that
@@ -193,7 +193,9 @@ def parse(doc: Any, *, require_identity: bool = True) -> Contract:
                 "it was altered after it was exported - export it again"
             )
     elif require_identity:
-        raise ContractError("contract: no identity - export it with `uqs job contract export`")
+        raise ContractError(
+            "contract: no identity - export it with `uqs job attachment contract export`"
+        )
     return Contract({**doc, "identity": expected})
 
 
@@ -323,8 +325,8 @@ def approved(
     if not found:
         raise UqsError(
             f"no contract {identity} is approved for attachment {attachment}: export it where "
-            f"the worker is (`uqs job contract export WORKER > FILE`), then approve it here "
-            f"(`uqs job contract approve FILE --attach {attachment}`)"
+            "the worker is (`uqs job attachment contract export WORKER > FILE`), then approve "
+            f"it here (`uqs job attachment contract approve FILE --attach {attachment}`)"
         )
     if len(found) > 1:
         raise UqsError(

@@ -4,6 +4,12 @@ The declaration is runtime_bundles.json (stack/runtime_bundles.py); `--bundle`
 adds folders to it for one run. The composition is resolved the way
 `uqs deploy build` resolves it, every bundle is planned and checked before
 the first is installed, and nothing is started, queried or backfilled.
+
+One installer, two ways in (#1737): `uqs job install FOLDER` installs one
+bundle; this installs every bundle a runtime declares through the same
+bundles.plan and bundles.install, then takes the runtime off any installed
+bundle it no longer declares. It asks nothing - the declaration is the
+answer - where `job install` asks before writing.
 """
 
 from __future__ import annotations
@@ -33,6 +39,9 @@ def prepare(
     ] = False,
 ) -> None:
     """Install the selected runtime's declared sidecar bundles into the tree.
+
+    The same install `uqs job install BUNDLE` does, once per bundle that
+    runtime_bundles.json lists for the runtime, without asking.
 
     `uqs --runtime crypto runtime prepare` installs what runtime_bundles.json
     lists for crypto, so its jobs, their dependencies and their tables are in

@@ -245,6 +245,8 @@ def install_jobs(
     copies, idempotently - see docs/guides/sidecar-bundles.md.
 
         uqs job install ../piggybank-bundle --yes
+
+    `uqs runtime prepare` installs every bundle a runtime declares the same way.
     """
     repo_root = _paths().repo_root
     sidecar = sidecar.resolve()

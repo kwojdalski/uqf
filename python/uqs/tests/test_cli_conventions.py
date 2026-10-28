@@ -125,13 +125,12 @@ DOMAIN_VERBS = {
     "gaps": "a job's missing ranges",
     "audit": "one window across runs",
     "receive": "take an extractor's batches into an HDB",
-    "attach": "put a job on a running TorQ stack",
-    "detach": "take it off again",
     "export": "write a record out for another machine",
     "approve": "accept a record another machine exported",
     "replay": "replay a tickerplant log into the HDB",
     "seed": "copy another runtime's HDB",
     "migrate": "migrate an HDB partition's schema",
+    "upgrade": "bring a store an older uqs wrote up to today's layout",
     "diff": "compare two runtimes",
     "prepare": "install the bundles a runtime declares",
     "stub": "add a placeholder row",
@@ -160,6 +159,27 @@ def test_rule1_no_group_is_named_after_a_verb():
     _hold("rule 1", found, RULE1_ALLOWLIST)
 
 
+# ------------------------------------------------------------- group help
+
+
+def _named(word: str, text: str) -> bool:
+    """`word` in `text` as itself: `check` is not named by `hdb-check`."""
+    return re.search(rf"(?<![\w-]){re.escape(word)}(?![\w-])", text) is not None
+
+
+def test_every_group_help_names_every_command_in_it():
+    """A group's one line of help, the one `uqs --help` shows beside it, names
+    each command the group holds (#1737): `data`'s said "replay, seed,
+    hdb-check" while it also held `migrate`. Hidden aliases are not held."""
+    unnamed = {
+        path: [n for n, sub in group.command.commands.items()
+               if not getattr(sub, "hidden", False) and not _named(n, group.command.help or "")]
+        for path, group in GROUPS.items()
+    }  # fmt: skip
+    unnamed = {path: names for path, names in unnamed.items() if names}
+    assert not unnamed, f"group help that does not name these commands: {unnamed}"
+
+
 # --------------------------------------------------------- rule 4: verb names
 
 
@@ -177,7 +197,6 @@ RULE4_ALLOWLIST = {
 #: cannot see the meaning, so each is listed until its rename removes the path.
 RULE4_MISUSED = {
     "job runs status": "#1733",  # unfinished runs, a list - not a state
-    "job runs migrate": "#1737",  # the ledger's upgrade, not `data migrate`'s HDB schema
 }
 
 
@@ -223,7 +242,7 @@ def test_every_list_takes_the_same_output_flags():
 #: Lists that do not take every output flag yet, and the issue that adds them.
 LIST_FLAGS_PENDING = {
     "job runs list": "#1731",  # the run ledger's own table: no --json/--export/--sort
-    "job contract list": "#1731",  # --json only
+    "job attachment contract list": "#1731",  # --json only
 }
 
 
@@ -419,16 +438,17 @@ KIND = {
     "job new": CHANGES,
     "job remove": CHANGES,
     "job install": CHANGES,
-    "job attach": CHANGES,
-    "job detach": CHANGES,
+    "job attachment add": CHANGES,
+    "job attachment remove": CHANGES,
+    "job attachment show": REPORTS,
     "job runs status": REPORTS,
     "job runs list": REPORTS,
-    "job runs migrate": CHANGES,
+    "job runs upgrade": CHANGES,
     "job runs show": REPORTS,
     "job runs audit": REPORTS,
-    "job contract export": "prints the contract, a document another machine approves",
-    "job contract approve": CHANGES,
-    "job contract list": REPORTS,
+    "job attachment contract export": "prints the contract, a document another machine approves",
+    "job attachment contract approve": CHANGES,
+    "job attachment contract list": REPORTS,
     "connector start": CHANGES,
     "connector stop": CHANGES,
     "connector status": REPORTS,
@@ -452,7 +472,7 @@ KIND = {
 
 #: Every command that asks before acting. ROOT asks before running a command
 #: on a --target.
-ASKS = {ROOT, "job remove", "job install", "job attach", "job detach"}
+ASKS = {ROOT, "job remove", "job install", "job attachment add", "job attachment remove"}
 
 #: The cli modules that call a prompt. A new one means a command that asks:
 #: put it in ASKS, then here.
@@ -483,10 +503,10 @@ RULE5B_ALLOWLIST = {
         "job new",
         "job remove",
         "job install",
-        "job attach",
-        "job detach",
-        "job runs migrate",
-        "job contract approve",
+        "job attachment add",
+        "job attachment remove",
+        "job runs upgrade",
+        "job attachment contract approve",
         "connector start",
         "connector stop",
         "setup odbc install",
@@ -502,7 +522,11 @@ RULE5B_ALLOWLIST = {
 }
 
 #: command -> the issue that gives its --yes a -y
-RULE5C_ALLOWLIST = {ROOT: "#1732", "job attach": "#1732", "job detach": "#1732"}
+RULE5C_ALLOWLIST = {
+    ROOT: "#1732",
+    "job attachment add": "#1732",
+    "job attachment remove": "#1732",
+}
 
 #: (command, option) -> the issue that folds the bypass into --override NAME --reason
 RULE5D_ALLOWLIST = {
@@ -511,7 +535,7 @@ RULE5D_ALLOWLIST = {
     ("up", "--skip-q-version-check"): "#1732",
     ("up", "--skip-profile-budget-check"): "#1732",
     ("restart", "--skip-q-version-check"): "#1732",
-    ("job attach", "--override-reason"): "#1732",
+    ("job attachment add", "--override-reason"): "#1732",
     ("deploy push", "--accept-converted-release"): "#1732",
     ("deploy push", "--accept-digest"): "#1732",
     ("deploy push", "--accept-q-version"): "#1732",

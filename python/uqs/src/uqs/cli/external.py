@@ -43,7 +43,7 @@ from uqs.paths import UqsError
 connector_app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
-    help="External connectors: start, stop and check the publishers outside the plant "
+    help="External connectors: start, stop and status of the publishers outside the plant "
     "(databento, kafka, crypto, crypto-fills) that write into its tickerplant. These "
     "supervise external processes, not the TorQ-managed q processes `uqs start` runs.",
 )

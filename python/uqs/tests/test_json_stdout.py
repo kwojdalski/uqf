@@ -1,6 +1,6 @@
 """`--json` means one JSON document on stdout, refusals included (#1685).
 
-A refused `uqs job attach X --json` wrote its `ERROR | refused...` log line to
+A refused `uqs job attachment add X --json` wrote its `ERROR | refused...` log line to
 stdout ahead of the document, so `json.loads(stdout)` - or jq, or anything that
 shells out - failed on exactly the case a caller most needs to read. The console
 log sink now goes to stderr whenever the command line carries `--json`; without
@@ -51,7 +51,7 @@ def _uqs(tmp_path, *argv: str) -> subprocess.CompletedProcess[str]:
 
 
 def test_a_refused_attach_with_json_prints_one_parseable_document(tmp_path):
-    run = _uqs(tmp_path, "job", "attach", "nosuch-1685", "--json")
+    run = _uqs(tmp_path, "job", "attachment", "add", "nosuch-1685", "--json")
     assert run.returncode == 1
     doc = json.loads(run.stdout)  # the whole of stdout, nothing before it
     assert doc["ok"] is False
@@ -62,7 +62,7 @@ def test_a_refused_attach_with_json_prints_one_parseable_document(tmp_path):
 
 def test_a_refused_attach_without_json_still_logs_to_stdout(tmp_path):
     """Human output is unchanged: only --json moves the log sink."""
-    run = _uqs(tmp_path, "job", "attach", "nosuch-1685")
+    run = _uqs(tmp_path, "job", "attachment", "add", "nosuch-1685")
     assert run.returncode == 1
     assert "ERROR" in run.stdout
     assert "needs --job and --stack-id" in run.stdout
@@ -86,13 +86,17 @@ CASES: dict[str, tuple[list[str], str]] = {
         ["job", "backfill", "w", "--from", "2024-01-01", "--to", "2024-01-02"],
         "--json is for --attach",
     ),
-    "job attach": (["job", "attach", "nosuch"], "needs --job"),
-    "job contract approve": (
-        ["job", "contract", "approve", "nosuch.json", "--attach", "nosuch"],
+    "job attachment add": (["job", "attachment", "add", "nosuch"], "needs --job"),
+    "job attachment contract approve": (
+        ["job", "attachment", "contract", "approve", "nosuch.json", "--attach", "nosuch"],
         "cannot read nosuch.json",
     ),
-    "job contract list": (["job", "contract", "list", "--attach", "nosuch"], "[]"),
-    "job detach": (["job", "detach", "nosuch"], "no attachment 'nosuch'"),
+    "job attachment contract list": (
+        ["job", "attachment", "contract", "list", "--attach", "nosuch"],
+        "[]",
+    ),
+    "job attachment show": (["job", "attachment", "show", "nosuch"], "no attachment 'nosuch'"),
+    "job attachment remove": (["job", "attachment", "remove", "nosuch"], "no attachment 'nosuch'"),
     "deploy status": (
         ["deploy", "status", "--host", "nosuch.invalid", "--dest", "relative/dest"],
         "must be an absolute path",
@@ -128,6 +132,8 @@ NO_OFFLINE_CASE = {
 
 def _json_commands() -> set[str]:
     def walk(cmd, path):
+        if getattr(cmd, "hidden", False):
+            return  # an old spelling kept for one release: its new one has the case
         subs = getattr(cmd, "commands", None)
         if subs:
             for name, sub in subs.items():
@@ -160,8 +166,8 @@ def test_json_stdout_is_exactly_one_document(tmp_path, command):
 @pytest.mark.parametrize(
     ("argv", "expected"),
     [
-        (["job", "attach", "x", "--json"], True),
-        (["job", "attach", "x"], False),
+        (["job", "attachment", "add", "x", "--json"], True),
+        (["job", "attachment", "add", "x"], False),
         (["query", "--", "--json"], False),  # after --, an argument, not an option
         (["--json", "--", "x"], True),
         (["--jsonl"], False),
@@ -172,7 +178,7 @@ def test_json_requested_reads_the_options_only(argv, expected):
 
 
 def test_the_console_sink_is_stderr_when_json_is_asked_for(monkeypatch, capsys):
-    monkeypatch.setattr(sys, "argv", ["uqs", "job", "attach", "x", "--json"])
+    monkeypatch.setattr(sys, "argv", ["uqs", "job", "attachment", "add", "x", "--json"])
     logcore.setup_logging(level="INFO", colored_output=False)
     logger.error("refused: something")
     captured = capsys.readouterr()
@@ -181,7 +187,7 @@ def test_the_console_sink_is_stderr_when_json_is_asked_for(monkeypatch, capsys):
 
 
 def test_the_console_sink_is_stdout_without_json(monkeypatch, capsys):
-    monkeypatch.setattr(sys, "argv", ["uqs", "job", "attach", "x"])
+    monkeypatch.setattr(sys, "argv", ["uqs", "job", "attachment", "add", "x"])
     logcore.setup_logging(level="INFO", colored_output=False)
     logger.error("refused: something")
     assert "refused: something" in capsys.readouterr().out

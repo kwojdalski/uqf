@@ -162,7 +162,7 @@ def test_migrate_upgrades_a_ledger_from_before_the_range_and_counts(tmp_path, pa
         check=False,
     )
     assert result.returncode == 0, result.stdout + result.stderr
-    with pytest.raises(UqsError, match="uqs job runs migrate"):
+    with pytest.raises(UqsError, match="uqs job runs upgrade"):
         runs.history(paths, directory=tmp_path)
     assert runs.migrate(paths, directory=tmp_path) == 1
     (row,) = runs.history(paths, directory=tmp_path)

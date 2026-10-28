@@ -25,7 +25,6 @@ from uqs.cli.renames import BASE_PORT, renamed, warn_renamed
 from uqs.cli.runtime_diff import runtime_app
 from uqs.cli.shared import (
     JOB_AUTHORING_PANEL,
-    JOB_OPERATIONS_PANEL,
     BasePortOpt,
     ExportOpt,
     InteractiveOpt,
@@ -35,6 +34,7 @@ from uqs.cli.shared import (
     _show,
     _sorted_items,
     app,
+    attachment_app,
     console,
     job_app,
 )
@@ -50,14 +50,6 @@ MOVED = {
     "jobs": "uqs job list",
     "attachments": "uqs job attachment list",
 }
-
-#: `uqs job attachment ...`: the attachments `uqs job attach` makes.
-attachment_app = typer.Typer(
-    no_args_is_help=True,
-    add_completion=False,
-    help="Attachments: jobs put on a TorQ stack already running (`uqs job attach`): list.",
-)
-job_app.add_typer(attachment_app, name="attachment", rich_help_panel=JOB_OPERATIONS_PANEL)
 
 ReverseOpt = Annotated[
     bool, typer.Option("--reverse", help="Sort descending. Only meaningful with --sort.")

@@ -10,7 +10,7 @@
 // bounds, the readers and the HDB are the verified ones, and nothing is read from $KDBHDB.
 //
 // IT LOADS NO JOB (#1717). What the batches look like comes from -contract, the receiver contract the
-// stack's operator approved (`uqs job contract approve`): the dataset, its columns and types, the
+// stack's operator approved (`uqs job attachment contract approve`): the dataset, its columns and types, the
 // timestamp column the HDB is partitioned by, the window column, row key, partition and the conflict
 // policies the approval permits (.qetl.io.remote.contract.read). No source, transform or worker
 // declaration is loaded - this machine need not have the job's code - and a contract that is malformed

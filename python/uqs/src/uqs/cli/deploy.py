@@ -35,7 +35,8 @@ from uqs.stack import runtime_bundles
 deploy_app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
-    help="Deploy uqf onto a server with an existing TorQ: build a release, push it, verify it.",
+    help="Deploy uqf onto a server with an existing TorQ: build a release (and each "
+    "component), push it, verify it, see its status and history, rollback, prune.",
 )
 app.add_typer(deploy_app, name="deploy")
 

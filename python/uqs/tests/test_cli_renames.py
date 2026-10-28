@@ -140,6 +140,21 @@ def test_a_moved_command_still_runs_at_its_old_path(monkeypatch, old, new, targe
     assert _command("remove").hidden
 
 
+@pytest.mark.parametrize("words", [["job", "runs", "upgrade"], ["job", "runs", "migrate"]])
+def test_the_ledger_upgrade_runs_at_both_spellings_and_the_old_names_the_new(monkeypatch, words):
+    """`job runs migrate` -> `job runs upgrade` (#1737): the run ledger's own
+    upgrade, no longer spelled like `data migrate`'s HDB schema migration."""
+    from uqs.stack import runs as stack_runs
+
+    monkeypatch.setattr(stack_runs, "migrate", lambda paths: 0)
+    said = []
+    monkeypatch.setattr(renames, "warn_renamed", lambda o, n: said.append(n))
+    result = runner.invoke(cli.app, words)
+    assert result.exit_code == 0, result.output
+    assert "already current" in result.output
+    assert said == ([] if words[-1] == "upgrade" else ["uqs job runs upgrade"])
+
+
 def test_a_kind_that_moved_to_its_noun_still_lists_under_list(monkeypatch):
     """`uqs list runtimes` -> `uqs runtime list` (#1728), for one release."""
     from uqs.stack import listing

@@ -25,14 +25,15 @@ setup_app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
     help="Infrastructure setup: prepare what the stack needs on this machine - "
-    "a private ODBC setup. Changes no running process.",
+    "a private ODBC setup (odbc). Changes no running process.",
 )
 app.add_typer(setup_app, name="setup")
 
 odbc_app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
-    help="A private ODBC setup: install an approved package, load it, roll it back.",
+    help="A private ODBC setup: install an approved package, its status, the env to "
+    "load it, rollback.",
 )
 setup_app.add_typer(odbc_app, name="odbc")
 

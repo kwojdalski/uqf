@@ -112,7 +112,8 @@ def test_detach_before_publication_puts_the_file_and_the_live_rules_back(stack, 
     csv = stack.pack / "appconfig" / "sort.csv"
     state = stack.root / "attachments"
     att = attachment(stack, tmp_path, LEDGER_Q + "\n" + DECLARED)
-    # saved with the storage the plan saw, as `uqs job attach` does: detach reads it for evidence
+    # saved with the storage the plan saw, as `uqs job attachment add` does: detach reads
+    # it for evidence
     service.save_planned(att, plan.build(att, stack.ipc(), ROOT), state)
     att = config.load("pb-uat", state)
     applying.apply(att, stack.ipc(), ROOT, state_dir=state)

@@ -319,10 +319,10 @@ def test_an_untested_version_is_refused_accepted_applied_and_the_acceptance_goes
 
 
 def test_the_cli_previews_executes_reruns_and_detaches_a_real_stack(stack, bundle):
-    """`uqs job attach NAME --dry-run`, then the same without it, then again,
-    then `uqs job detach` - as subprocesses, the way an operator runs them."""
-    cmd = ["job", "attach", "pb-uat", "--job", "pb_general_ledger", "--bundle", str(bundle),
-           "--stack-id", str(stack.port), "--host", "127.0.0.1",
+    """`uqs job attachment add NAME --dry-run`, then the same without it, then again,
+    then `uqs job attachment remove` - as subprocesses, the way an operator runs them."""
+    cmd = ["job", "attachment", "add", "pb-uat", "--job", "pb_general_ledger",
+           "--bundle", str(bundle), "--stack-id", str(stack.port), "--host", "127.0.0.1",
            "--discovery", f"127.0.0.1:{stack.port + 1}"]  # fmt: skip
     schema_before = stack.schema_file.read_bytes()
 
@@ -347,13 +347,13 @@ def test_the_cli_previews_executes_reruns_and_detaches_a_real_stack(stack, bundl
     assert facts_of(stack) == after, "the re-run changed nothing"
 
     manifest = (state(stack) / "pb-uat" / "manifest.json").read_bytes()
-    dry = stack.uqs("job", "detach", "pb-uat", "--dry-run", "--json")
+    dry = stack.uqs("job", "attachment", "remove", "pb-uat", "--dry-run", "--json")
     assert dry.returncode == 0, dry.stdout + dry.stderr
     assert json.loads(dry.stdout)["outcome"] == "rolled_back"
     assert (state(stack) / "pb-uat" / "manifest.json").read_bytes() == manifest
     assert facts_of(stack) == after
 
-    gone = stack.uqs("job", "detach", "pb-uat", "--yes", "--json")
+    gone = stack.uqs("job", "attachment", "remove", "pb-uat", "--yes", "--json")
     assert gone.returncode == 0, gone.stdout + gone.stderr
     assert json.loads(gone.stdout)["outcome"] == "rolled_back"
     assert TABLE not in stack.q("stp1", "string each tables[]")

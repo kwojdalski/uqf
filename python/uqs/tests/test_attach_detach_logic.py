@@ -726,7 +726,9 @@ def test_an_ipc_error_after_the_publisher_stopped_leaves_the_start_gate_closed(
             host=LOCAL,
             state_dir=state,
         )
-    assert "uqs job detach pb-uat" in str(caught.value), "the message says how to recover"
+    assert "uqs job attachment remove pb-uat" in str(caught.value), (
+        "the message says how to recover"
+    )
     assert "publisher stopped" in log
     assert Manifest.load("pb-uat", state).state in ("detaching", "rollback_partial")
     assert not gate_open(att, state, monkeypatch)
@@ -741,7 +743,7 @@ def test_a_stack_that_cannot_be_read_after_the_publisher_stopped_leaves_the_gate
     fake.down.add(6000)
     with pytest.raises(AttachmentError, match="cannot be read") as caught:
         detach_(att, fake, state, Publisher(log, running=True))
-    assert "uqs job detach pb-uat" in str(caught.value)
+    assert "uqs job attachment remove pb-uat" in str(caught.value)
     assert Manifest.load("pb-uat", state).state == "detaching"
     assert not gate_open(att, state, monkeypatch)
     fake.down.clear()
@@ -833,7 +835,7 @@ def test_apply_refuses_an_attachment_that_is_detaching_and_changes_nothing(world
     m = Manifest.load("pb-uat", state)
     m.set_state("detaching", "set by the test")
     before = stack_state(fake)
-    with pytest.raises(AttachmentError, match="is detaching.*uqs job detach pb-uat"):
+    with pytest.raises(AttachmentError, match="is detaching.*uqs job attachment remove pb-uat"):
         apply_(att, fake, state)
     assert stack_state(fake) == before
     assert Manifest.load("pb-uat", state).state == "detaching"

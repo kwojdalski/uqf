@@ -157,7 +157,7 @@
 / .
 / So a table that needs its own rule declares it here, beside the table, with
 / `sorting`: the sort columns in order, each with its attribute (` for none).
-/ `uqs job attach` writes exactly these rows to the stack's sort.csv - and
+/ `uqs job attachment add` writes exactly these rows to the stack's sort.csv - and
 / refuses when the stack already has other rows for the table.
 
 / Declared sort rules: (table; column) -> attribute, in sort order.

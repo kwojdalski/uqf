@@ -46,11 +46,25 @@ job_app = typer.Typer(
     add_completion=False,
     help="ETL jobs: write them into the tree (new, list, remove, install) and operate on "
     "them - backfill a bounded worker, preview a polling feed, find a streaming "
-    "job's gaps, read the run ledger.",
+    "job's gaps, receive another machine's batches, reset a worker's checkpoint, read "
+    "its runs, and put it on a TorQ stack already running (attachment).",
 )
 #: The two help panels `uqs job --help` lists its commands under.
 JOB_AUTHORING_PANEL = "Authoring"
 JOB_OPERATIONS_PANEL = "Operations"
+
+#: `uqs job attachment ...`: a job put on a TorQ stack already running, as a
+#: noun (#1737) - add and remove it (attach.py, once `job attach` and `job
+#: detach`), show and list it (attach.py, lists.py), and the receiver contracts
+#: approved for it (receiver_contract.py). Here because three modules register
+#: on it.
+attachment_app = typer.Typer(
+    no_args_is_help=True,
+    add_completion=False,
+    help="Attachments: a job put on a TorQ stack already running - add, remove, show, "
+    "list, and the receiver contracts approved for one (contract).",
+)
+job_app.add_typer(attachment_app, name="attachment", rich_help_panel=JOB_OPERATIONS_PANEL)
 
 #: `uqs data ...`: moving data the stack has already written into where it
 #: belongs, and checking the result - replaying a tickerplant log into the HDB
@@ -60,7 +74,8 @@ JOB_OPERATIONS_PANEL = "Operations"
 data_app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
-    help="Move written data into the HDB and check its shape: replay, seed, hdb-check.",
+    help="Move written data into the HDB and check its shape: replay, seed, migrate "
+    "(one partition's schema), hdb-check.",
 )
 
 DEFAULT_LOG_LEVEL = "INFO"

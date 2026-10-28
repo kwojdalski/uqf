@@ -100,5 +100,6 @@ def interrupted(att: Attachment, m: Manifest, why: str, dry_run: bool) -> str:
         f"detach stopped: {why}. {att.publisher.procname} is stopped and attachment {att.name} "
         "is not `verified`, so the publisher cannot be started again (the start gate stays "
         f"closed). What was reversed so far is recorded in the manifest. Make the stack "
-        f"readable, then run `uqs job detach {att.name}` again (every step is safe to repeat)."
+        f"readable, then run `uqs job attachment remove {att.name}` again (every step is safe "
+        "to repeat)."
     )
