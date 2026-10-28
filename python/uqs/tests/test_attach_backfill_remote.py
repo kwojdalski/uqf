@@ -12,9 +12,10 @@ from __future__ import annotations
 import shutil
 import socket
 import time
+from pathlib import Path
 
 import pytest
-from attach_backfill_support import UQF_ROOT, save_attachment
+from attach_backfill_support import UQF_ROOT, free_port, save_attachment
 from test_attach_backfill_run import (  # noqa: F401
     FROM,
     FUTURE,
@@ -51,20 +52,22 @@ def approved(world, exported) -> str:  # noqa: F811
     return receiver_contract.approve(world.paths, exported, "pb-uat")["contract"]["identity"]
 
 
-def _free_port() -> int:
-    with socket.socket() as s:
-        s.bind(("127.0.0.1", 0))
-        return s.getsockname()[1]
+def _serving(started: dict) -> str:
+    """Wait for the receiver `receive` started to say it is serving; its log so far.
 
-
-def _listening(port: int) -> bool:
-    for _ in range(150):
-        try:
-            socket.create_connection(("127.0.0.1", port), 0.2).close()
-            return True
-        except OSError:
-            time.sleep(0.2)
-    return False
+    An open port is not that signal: q binds `-p` before it loads remote_receiver.q,
+    so the port accepts while the script is still loading src/ - and before it has
+    printed a line - which under load is long enough to read an empty log (#1746).
+    The receiver's own readiness signal is the line it prints once it serves."""
+    log = Path(started["log"])
+    deadline = time.monotonic() + 60
+    while time.monotonic() < deadline:
+        text = log.read_text()
+        if "remote_receiver: serving" in text:
+            assert _accepting(started["port"]), text
+            return text
+        time.sleep(0.1)
+    pytest.fail(f"the receiver never said it was serving:\n{log.read_text()}")
 
 
 @pytest.mark.parametrize("bad", ["localhost", "localhost:0", "host:99999", "a b:1", ":5000"])
@@ -74,11 +77,11 @@ def test_a_writer_that_is_not_host_and_port_is_refused(bad):
 
 
 def test_a_backfill_extracted_here_is_written_by_the_stacks_receiver(world, approved):  # noqa: F811
-    port = _free_port()
+    port = free_port()
     started = backfill_remote.receive(world.paths, "pb-uat", approved, port=port, ipc=world.stack)
     receiver_log = started["log"]
     try:
-        assert _listening(port), open(receiver_log).read()
+        _serving(started)
         assert started["readers"] == [f"hdb1@localhost:{world.reader.port}"]
         # the extractor's own attachment directory: on another machine it would be its own
         theirs = world.tmp / "extractor-attachments"
@@ -117,7 +120,7 @@ def test_an_extractor_with_no_receiver_fails_and_covers_nothing(world):  # noqa:
     world.monkeypatch.setenv(config.ATTACH_DIR_ENV, str(theirs))
     run_, _ = backfill_remote.launch_remote(
         world.paths, "pb-uat", WORKER, "v1", FROM, TO,
-        writer=f"localhost:{_free_port()}", mode="run", on_conflict="replace",
+        writer=f"localhost:{free_port()}", mode="run", on_conflict="replace",
     )  # fmt: skip
     code, _ = backfill_run.follow(run_, timeout=120)
     assert code == 2, run_.log.read_text()
@@ -129,9 +132,9 @@ def test_a_receiver_holds_detach_off_until_it_is_stopped(world, approved):  # no
     from uqs.attach import backfill_owner
     from uqs.attach.config import AttachmentError
 
-    port = _free_port()
+    port = free_port()
     started = backfill_remote.receive(world.paths, "pb-uat", approved, port=port, ipc=world.stack)
-    assert _listening(port), open(started["log"]).read()
+    _serving(started)
     with pytest.raises(AttachmentError, match="imported_trades.receiver"):
         backfill_owner.refuse_while_active("pb-uat")
     stopped = backfill_remote.stop_receivers("pb-uat")
@@ -161,7 +164,7 @@ def _accepting(port: int) -> bool:
 
 def _refused_receive(world, approved, match, exc=UqsError):  # noqa: F811
     with pytest.raises(exc, match=match):
-        backfill_remote.receive(world.paths, "pb-uat", approved, port=_free_port(), ipc=world.stack)
+        backfill_remote.receive(world.paths, "pb-uat", approved, port=free_port(), ipc=world.stack)
     assert backfill_owner.active("pb-uat") == [], "nothing was started"
 
 
@@ -190,13 +193,13 @@ def test_a_receiver_is_not_started_for_a_wdb_that_reports_another_hdb(world, app
 
 
 def test_a_second_receiver_for_the_attachment_is_refused(world, approved):  # noqa: F811
-    port = _free_port()
+    port = free_port()
     started = backfill_remote.receive(world.paths, "pb-uat", approved, port=port, ipc=world.stack)
     try:
-        assert _listening(port), open(started["log"]).read()
+        _serving(started)
         with pytest.raises(AttachmentError, match="has an attached backfill running"):
             backfill_remote.receive(
-                world.paths, "pb-uat", approved, port=_free_port(), ipc=world.stack
+                world.paths, "pb-uat", approved, port=free_port(), ipc=world.stack
             )
         assert [r["pid"] for r in backfill_owner.active("pb-uat")] == [started["pid"]]
     finally:
@@ -210,9 +213,9 @@ def test_a_killed_receiver_is_replaced_and_the_rerun_fills_the_hdb(world, approv
     import os
     import signal
 
-    port = _free_port()
+    port = free_port()
     first = backfill_remote.receive(world.paths, "pb-uat", approved, port=port, ipc=world.stack)
-    assert _listening(port), open(first["log"]).read()
+    _serving(first)
     os.kill(first["pid"], signal.SIGKILL)
     for _ in range(50):
         if not _accepting(port):
@@ -229,10 +232,10 @@ def test_a_killed_receiver_is_replaced_and_the_rerun_fills_the_hdb(world, approv
     assert code != 0, failed.log.read_text()
     assert not (failed.state_dir / "etl_coverage").exists(), "a dead receiver covers nothing"
     world.monkeypatch.setenv(config.ATTACH_DIR_ENV, str(world.attach_dir))
-    port = _free_port()
+    port = free_port()
     second = backfill_remote.receive(world.paths, "pb-uat", approved, port=port, ipc=world.stack)
     try:
-        assert _listening(port), open(second["log"]).read()
+        _serving(second)
         world.monkeypatch.setenv(config.ATTACH_DIR_ENV, str(theirs))
         rerun, _ = backfill_remote.launch_remote(
             world.paths, "pb-uat", WORKER, "v1", FROM, TO,
@@ -268,12 +271,11 @@ def _checkout_without_jobs(world):  # noqa: F811
 
 def test_a_checkout_with_no_job_definitions_receives_the_backfill(world, approved):  # noqa: F811
     receiving = _checkout_without_jobs(world)
-    port = _free_port()
+    port = free_port()
     started = backfill_remote.receive(receiving, "pb-uat", approved, port=port, ipc=world.stack)
     receiver_log = started["log"]
     try:
-        assert _listening(port), open(receiver_log).read()
-        assert f"under contract {approved}" in open(receiver_log).read()
+        assert f"under contract {approved}" in _serving(started)
         theirs = world.tmp / "extractor-attachments"
         shutil.copytree(world.attach_dir, theirs, ignore=shutil.ignore_patterns("backfills"))
         world.monkeypatch.setenv(config.ATTACH_DIR_ENV, str(theirs))
@@ -297,10 +299,10 @@ def test_a_policy_the_approval_does_not_permit_writes_and_covers_nothing(world, 
     ident = receiver_contract.approve(
         world.paths, exported, "pb-uat", conflict_policies=["upsert"]
     )["contract"]["identity"]
-    port = _free_port()
+    port = free_port()
     started = backfill_remote.receive(world.paths, "pb-uat", ident, port=port, ipc=world.stack)
     try:
-        assert _listening(port), open(started["log"]).read()
+        _serving(started)
         assert started["conflict_policies"] == ["upsert"]
         theirs = world.tmp / "extractor-attachments"
         shutil.copytree(world.attach_dir, theirs, ignore=shutil.ignore_patterns("backfills"))

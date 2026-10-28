@@ -8,12 +8,15 @@ cli/summary.py had reached the package's module budget.
 from __future__ import annotations
 
 import math
+import re
 import subprocess
 import time
 from dataclasses import dataclass, field
 
 from rich.table import Table
+from rich.text import Text
 
+from uqs.cli.json_out import snake
 from uqs.cli.shared import _lines, _paths, _sorted_items, log
 from uqs.cli.summary_graph import attach_graph_columns
 from uqs.paths import UqsError
@@ -173,3 +176,20 @@ def render(rows: list[dict[str, str]], chosen: list[str], port: int | None) -> T
         }
         table.add_row(*(rendered.get(col, "") for col in chosen))
     return table
+
+
+def record(row: dict[str, str]) -> dict:
+    """One row as `summary --json` prints it: no markup, the graph columns as
+    lists, PID and Port as ints, and a blank or `-` cell as null."""
+    out: dict = {}
+    for key, value in row.items():
+        text = Text.from_markup(value).plain.strip() if isinstance(value, str) else value
+        if key in SUMMARY_GRAPH_COLUMNS:
+            out[snake(key)] = [
+                p.strip() for p in re.split(r"[,\n]", text) if p.strip() not in ("", "-")
+            ]
+        elif key in ("PID", "Port"):
+            out[snake(key)] = int(text) if str(text).isdigit() else None
+        else:
+            out[snake(key)] = None if text in ("", "-") else text
+    return out

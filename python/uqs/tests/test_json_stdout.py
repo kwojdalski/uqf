@@ -97,6 +97,27 @@ CASES: dict[str, tuple[list[str], str]] = {
         ["deploy", "status", "--host", "nosuch.invalid", "--dest", "relative/dest"],
         "must be an absolute path",
     ),
+    # #1731: every reporting command
+    "summary": (["summary", "--columns", "nosuch"], "unknown summary column"),
+    "graph": (["graph", "nosuchproc", "--offline"], "no process 'nosuchproc'"),
+    "query": (["query"], "--json needs an expression"),
+    "schema": (["schema", "--proc", "nosuchproc"], "is not a declared process"),
+    "logs": (["logs", "--follow"], "--follow does not apply"),
+    "config get": (["config", "get", "nosuchproc"], "unknown process"),
+    "job gaps": (["job", "gaps", "demo_markout", "--from", "bad", "--to", "2024-01-02"], "bad"),
+    "job preview": (["job", "preview", "nosuch-x"], "is not a streaming job name"),
+    "job runs status": (["job", "runs", "status", "--attach", "nosuch"], "no attachment"),
+    "job runs list": (["job", "runs", "list", "--attach", "nosuch"], "no attachment"),
+    "job runs show": (["job", "runs", "show", "r", "--attach", "nosuch"], "no attachment"),
+    "job runs audit": (["job", "runs", "audit", "d", "--from", "bad", "--to", "2024-01-02"], "bad"),
+    "connector status": (["connector", "status", "nosuch"], "no feed 'nosuch'"),
+    "setup odbc status": (
+        ["setup", "odbc", "status", "--home", "/nonexistent-1731"],
+        "cannot read",
+    ),
+    "deploy verify": (["deploy", "verify", "--profile", "nosuch"], "unknown profile"),
+    "deploy history": (["deploy", "history", "nosuch-server-1731"], "deployments"),
+    "target check": (["target", "check", "nosuch"], "no target or deployed server"),
 }
 #: --json commands with no offline case, and why.
 NO_OFFLINE_CASE = {
