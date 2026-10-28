@@ -123,7 +123,7 @@ class Config:
 
     #: deploy an artifact built from uncommitted changes (#872)
     allow_dirty: bool = False
-    #: --accept-converted-release's reason: start a converted release on a q
+    #: --override accept-converted-release's reason: start a converted release on a q
     #: its version check cannot confirm, after smoke passes there (#936)
     accept_converted_release: str | None = None
     #: owner/name whose releases a tag ARTIFACT names; default: origin's
@@ -325,7 +325,7 @@ def make_config(
             python_runtime=python_runtime,
         )
         components.check(modes, locals())
-        accepted = pins.reason("--accept-converted-release", accept_converted_release)
+        accepted = pins.reason("--override accept-converted-release", accept_converted_release)
     except ValueError as exc:
         raise DeployError("arguments", str(exc)) from None
     path = _required_absolute("--dest", dest)

@@ -202,7 +202,7 @@ def _known_procs(monkeypatch):
 
 
 @pytest.mark.parametrize(
-    "command", ["start", "stop", "restart", "start --show-command", "start -f", "restart -f", "up"]
+    "command", ["start", "stop", "restart", "start --dry-run", "start -f", "restart -f", "up"]
 )
 def test_an_unknown_process_is_refused_before_anything_runs(monkeypatch, _known_procs, command):
     """A typo must not reach torq.sh.
@@ -390,7 +390,7 @@ def test_up_is_a_hidden_alias_of_start_follow_that_names_it(monkeypatch):
     [
         (["start", "--level", "ERROR"], "--level needs --follow"),
         (["restart", "--level", "ERROR"], "--level needs --follow"),
-        (["start", "-f", "--show-command"], "--show-command does not apply with --follow"),
+        (["start", "-f", "--dry-run"], "--dry-run does not apply with --follow"),
     ],
 )
 def test_a_follow_only_option_without_follow_is_refused(monkeypatch, args, refusal):
@@ -418,7 +418,7 @@ def test_start_and_restart_take_one_option_set_and_stop_its_selection():
     assert _options("start") == _options("restart")
     selection = {"procs", "port", "profile"}
     assert selection <= _options("stop") and selection <= _options("start")
-    assert _options("stop") - selection == {"force"}
+    assert _options("stop") - selection == {"force", "dry_run"}
 
 
 def test_restart_with_a_profile_hands_torq_its_set(monkeypatch):
@@ -449,32 +449,32 @@ def test_a_lifecycle_command_passes_the_process_names_through(monkeypatch, comma
     assert rec.args[1] == "rdb1 hdb1"
 
 
-@pytest.mark.parametrize("command", ["start", "stop", "restart", "start --show-command"])
+@pytest.mark.parametrize("command", ["start", "stop", "restart", "start --dry-run"])
 def test_the_port_option_reaches_core(monkeypatch, command):
     """A dropped --port silently drives the DEFAULT stack.
 
     That is the worst shape of wiring bug available here: every command
     succeeds, against the wrong fleet.
     """
-    fn = "print_procs" if command == "start --show-command" else command
+    fn = "print_procs" if command == "start --dry-run" else command
     rec = _patch(monkeypatch, runtime, fn, result=Completed())
     runner.invoke(cli.app, [*command.split(), "--base-port", "7000"])
     assert rec.kwargs["base_port"] == 7000
 
 
-@pytest.mark.parametrize("command", ["start", "stop", "restart", "start --show-command"])
+@pytest.mark.parametrize("command", ["start", "stop", "restart", "start --dry-run"])
 def test_a_failing_subprocess_exit_code_survives(monkeypatch, command):
     """The property CI depends on. A non-zero torq.sh must not become a
     zero `uqs`."""
-    fn = "print_procs" if command == "start --show-command" else command
+    fn = "print_procs" if command == "start --dry-run" else command
     _patch(monkeypatch, runtime, fn, result=Completed(returncode=3))
     result = runner.invoke(cli.app, command.split())
     assert result.exit_code == 3
 
 
-@pytest.mark.parametrize("command", ["start", "stop", "restart", "start --show-command"])
+@pytest.mark.parametrize("command", ["start", "stop", "restart", "start --dry-run"])
 def test_a_refusal_exits_one_rather_than_raising(monkeypatch, command):
-    fn = "print_procs" if command == "start --show-command" else command
+    fn = "print_procs" if command == "start --dry-run" else command
     _patch(monkeypatch, runtime, fn, raises=UqsError("no such process"))
     result = runner.invoke(cli.app, command.split())
     assert result.exit_code == 1
@@ -1106,7 +1106,7 @@ def test_config_set_reports_what_it_wrote(monkeypatch):
     rec = _patch(monkeypatch, stack_procs, "set_process_config")
     result = runner.invoke(cli.app, ["config", "set", "rdb1", "startwithall", "1"])
     assert result.exit_code == 0
-    assert rec.args[1:] == ("rdb1", "startwithall", "1")
+    assert rec.args[1:] == ("rdb1", "startwithall", "1", False)
 
 
 def test_config_set_refuses_a_comma_before_writing(monkeypatch):

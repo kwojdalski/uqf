@@ -93,7 +93,7 @@ def test_a_release_whose_q_is_not_what_was_built_is_refused(tmp_path, damage, me
 
 
 def test_a_q_older_than_the_target_needs_the_deployments_override(tmp_path):
-    with pytest.raises(UqsError, match="--accept-converted-release"):
+    with pytest.raises(UqsError, match="--override accept-converted-release"):
         converted.recognise(_release(tmp_path), "3.6", {})
 
 
@@ -104,7 +104,7 @@ def test_the_override_starts_it_for_its_own_attempt_only(tmp_path):
     assert evidence is not None and evidence.override is not None
     assert evidence.override["reason"].startswith("smoke passed")
     for env in ({}, {converted.ATTEMPT_VAR: "another-attempt"}):
-        with pytest.raises(UqsError, match="--accept-converted-release"):
+        with pytest.raises(UqsError, match="--override accept-converted-release"):
             converted.recognise(root, "3.6", env)
 
 

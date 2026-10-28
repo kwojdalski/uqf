@@ -231,7 +231,7 @@ def create(specs: list[str], reason: str, findings: list[Finding], operator: str
     something observed, or it would be a standing waiver for whatever comes.
     """
     if specs and not reason.strip():
-        raise OverrideError('an override needs a reason: pass --override-reason "..."')
+        raise OverrideError('an override needs a reason: pass --reason "..."')
     made: list[Override] = []
     now = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
     for spec in specs:

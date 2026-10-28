@@ -16,6 +16,7 @@ from rich.table import Table
 from uqs import timerange
 from uqs.cli.json_out import emit, json_opt
 from uqs.cli.range_options import DateOpt, LastOpt, RangeFromOpt, RangeToOpt
+from uqs.cli.renames import DROPPED, renamed
 from uqs.cli.shared import (
     JOB_OPERATIONS_PANEL,
     _die,
@@ -56,19 +57,14 @@ PreviewJson = json_opt(
 )
 
 
-@job_app.command("preview", rich_help_panel=JOB_OPERATIONS_PANEL)
+@job_app.command(
+    "preview", rich_help_panel=JOB_OPERATIONS_PANEL, cls=renamed({"--dry-run": DROPPED})
+)
 def preview(
     job: Annotated[str, typer.Argument(help="A polling feed - a streaming job that declares poll")],
     sample: Annotated[
         int, typer.Option("--sample", min=1, max=1000, help="Rows of each table to show")
     ] = 5,
-    dry_run: Annotated[
-        bool,
-        typer.Option(
-            "--dry-run",
-            help="A preview is always dry: nothing published, no cursor saved.",
-        ),
-    ] = True,
     trace: Annotated[
         bool,
         typer.Option(
@@ -113,7 +109,6 @@ def preview(
             raise typer.Exit(code=1)
         return
     _print_trace(r.get("trace", []))
-    mode = "dry run" if dry_run else "preview"
     recent = r.get("mode") in ("recent", "window")
     if recent:
         what = "recent-data sample" if r.get("mode") == "recent" else "sample"
@@ -122,7 +117,7 @@ def preview(
             "nothing published, saved cursor untouched"
         )
     else:
-        console.print(f"[bold]{mode} of {job}[/] - nothing published, no cursor saved")
+        console.print(f"[bold]preview of {job}[/] - nothing published, no cursor saved")
     console.print(f"source  {_LIVE.get(r.get('live', 'unknown'), r.get('live'))}")
     if recent:
         window = r.get("window", {})

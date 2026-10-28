@@ -185,13 +185,20 @@ def describe(paths: UqsPaths, transports: tuple[str, ...]) -> tuple[Path | None,
     return path, out
 
 
-def add_stub(paths: UqsPaths, source: str, transport: str, transports: tuple[str, ...]) -> str:
+def add_stub(
+    paths: UqsPaths,
+    source: str,
+    transport: str,
+    transports: tuple[str, ...],
+    dry_run: bool = False,
+) -> str:
     """Give `source` a SCAFFOLDED row in the application layer's file.
 
     That layer replaces every lower one whole, so a new application file
     starts as a copy of the file selected now - the stub never hides the
     rows the stack was reading. A source that already has a row keeps it: an
-    operator's value is never overwritten. Returns what was done.
+    operator's value is never overwritten. Returns what was done - or, with
+    `dry_run`, what would be, writing nothing.
     """
     if transport not in transports:
         raise UqsError(f"--transport must be one of {', '.join(transports)}, not {transport!r}")
@@ -200,12 +207,14 @@ def add_stub(paths: UqsPaths, source: str, transport: str, transports: tuple[str
     rows = read(current, transports) if current else []
     if any(r.source == source for r in rows):
         return f"{source} already has a row in {current} - left as it is"
+    copied = f", starting from a copy of {current}" if current and current != app else ""
+    if dry_run:
+        return f"would add a {STUB} row for {source} to {app}{copied}"
     text = current.read_text(encoding="utf-8") if current else ",".join(COLUMNS) + "\n"
     if not text.endswith("\n"):
         text += "\n"
     app.parent.mkdir(parents=True, exist_ok=True)
     app.write_text(f"{text}{source},{transport},{STUB},\n", encoding="utf-8")
-    copied = f", starting from a copy of {current}" if current and current != app else ""
     return f"added a {STUB} row for {source} to {app}{copied}"
 
 

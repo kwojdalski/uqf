@@ -81,7 +81,8 @@ def rollback_cmd(
         ),
     ] = None,
     dry_run: Annotated[
-        bool, typer.Option("--dry-run", help="Print what would stop and start; change nothing")
+        bool,
+        typer.Option("--dry-run", "-n", help="Print what would stop and start; change nothing"),
     ] = False,
     host: conn.Host = None,
     dest: conn.Dest = None,
@@ -132,7 +133,7 @@ def prune_cmd(
     ],
     target: conn.Target = None,
     dry_run: Annotated[
-        bool, typer.Option("--dry-run", help="List what would be removed; remove nothing")
+        bool, typer.Option("--dry-run", "-n", help="List what would be removed; remove nothing")
     ] = False,
     host: conn.Host = None,
     dest: conn.Dest = None,

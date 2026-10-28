@@ -85,6 +85,14 @@ def backfill(
             autocompletion=completion.choices(*stack_backfill.MODES),
         ),
     ] = None,
+    dry_run: Annotated[
+        bool,
+        typer.Option(
+            "--dry-run",
+            "-n",
+            help="Fetch and transform every window, and write nothing: --mode dry-run",
+        ),
+    ] = False,
     fixture: Annotated[
         bool,
         typer.Option(
@@ -164,8 +172,8 @@ def backfill(
         uqs job backfill demo_deals_backfill --source-version v1 --date 2026-09-13
 
     `--mode plan` lists the windows a run would fetch without opening the
-    source or writing anything; `--mode dry-run` fetches them and writes
-    nothing. Their output is in the process's log, like a run's.
+    source or writing anything; `--dry-run` (`--mode dry-run`) fetches them and
+    writes nothing. Their output is in the process's log, like a run's.
 
     `uqs --debug job backfill ...` starts the process with
     `-verbose`, so its log - `uqs logs <process>` - carries DEBUG lines.
@@ -177,6 +185,11 @@ def backfill(
     ended. `--wait` follows the run to its outcome and exits with that - what
     a script or a scheduler wants.
     """
+    if dry_run:
+        if mode not in (None, "dry-run"):
+            _die(UqsError(f"--dry-run is --mode dry-run: not with --mode {mode}"))
+            return
+        mode = "dry-run"
     if force and writer is None:
         _die(UqsError("--any-writer is for --writer: it writes through the process at HOST:PORT"))
         return

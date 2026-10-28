@@ -271,3 +271,16 @@ def test_setup_odbc_env_without_a_version_names_the_new_install_command(tmp_path
     result = CliRunner().invoke(cli.app, ["setup", "odbc", "env", "--home", str(tmp_path / "odbc")])
     assert result.exit_code == 1
     assert said == [f"{tmp_path / 'odbc'} has no current version - `uqs setup odbc install` first"]
+
+
+def test_dry_runs_check_and_change_nothing(tmp_path, qhome):
+    """`uqs setup odbc install/rollback --dry-run` (#1732)."""
+    home = tmp_path / "odbc"
+    old, new = _package(tmp_path, "1.0"), _package(tmp_path, "2.0")
+    _approve(home, old, new)
+    planned = odbc_home.install(home, old, qhome, dry_run=True)
+    assert planned.name == "testodbc-1.0" and not planned.exists()
+    odbc_home.install(home, old, qhome)
+    odbc_home.install(home, new, qhome)
+    assert odbc_home.rollback(home, dry_run=True).name == "testodbc-1.0"
+    assert odbc_home.status(home)["current"] == "testodbc-2.0"

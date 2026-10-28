@@ -11,6 +11,7 @@ import typer
 from uqs import timerange
 from uqs.cli.range_options import DateOpt, LastOpt, RangeFromOpt, RangeToOpt
 from uqs.cli.renames import warn_renamed
+from uqs.cli.safety import dry_run_note
 from uqs.cli.shared import (
     _die,
     _paths,
@@ -61,6 +62,10 @@ def seed(
         bool,
         typer.Option("--overwrite", help="Replace a partition's table this runtime already holds"),
     ] = False,
+    dry_run: Annotated[
+        bool,
+        typer.Option("--dry-run", "-n", help="Name the partitions it would copy; write nothing"),
+    ] = False,
 ) -> None:
     """Copy another runtime's HDB partitions of the tables both declare into
     this runtime's (`--runtime`), re-enumerating every symbol against this
@@ -99,13 +104,17 @@ def seed(
         ).partition_dates()
         target = _paths()
         source = paths_for_root(target.repo_root, from_runtime)
-        runtime.bootstrap(target)
+        if not dry_run:
+            runtime.bootstrap(target)
         wanted = [t.strip() for t in tables.split(",") if t.strip()] if tables else None
-        report = hdb_seed.seed(target, source, wanted, first, last_day, overwrite)
+        report = hdb_seed.seed(target, source, wanted, first, last_day, overwrite, dry_run)
     except UqsError as exc:
         _die(exc)
         return
     console.print(report, markup=False, highlight=False)
+    if dry_run:
+        console.print(dry_run_note())
+        return
     console.print(
         f"[dim]a running {target.runtime} HDB sees new partitions once reloaded - "
         "`uqs restart hdb1`[/]"

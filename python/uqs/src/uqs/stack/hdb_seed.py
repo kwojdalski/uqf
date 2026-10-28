@@ -28,6 +28,7 @@ def seed(
     first: date | None = None,
     last: date | None = None,
     overwrite: bool = False,
+    dry_run: bool = False,
 ) -> str:
     """Copy `source`'s HDB partitions of `tables` (every table the target
     declares when None), dated `first`..`last` inclusive, into `target`'s.
@@ -36,6 +37,8 @@ def seed(
     read. Returns the script's report; raises naming the table and column
     when a schema differs, with nothing written. Then fills the target's
     partitions, so a table the source lacked a column of is rectangular.
+    With `dry_run`, the source's partitions in range are named and nothing
+    is written: the schema comparison is the copy's own, and is not run.
     """
     if target.runtime == source.runtime:
         raise UqsError(
@@ -47,10 +50,12 @@ def seed(
             f"the {source.runtime} runtime has no HDB at {src_hdb} - start it once, "
             "or backfill into it, before seeding from it"
         )
-    if not (dst_hdb.is_dir() and target.generated_schema.is_file()):
-        raise UqsError(f"the {target.runtime} runtime is not bootstrapped: no {dst_hdb}")
     if first is not None and last is not None and first > last:
         raise UqsError(f"no partition date lies in the range: {first} is after {last}")
+    if dry_run:
+        return _plan(src_hdb, tables, first, last)
+    if not (dst_hdb.is_dir() and target.generated_schema.is_file()):
+        raise UqsError(f"the {target.runtime} runtime is not bootstrapped: no {dst_hdb}")
     q = q_interpreter()
     if q is None:
         raise UqsError("seeding needs q, and no interpreter is runnable - set QCMD")
@@ -71,3 +76,19 @@ def seed(
         raise UqsError(why[-1] if why else f"seeding failed (exit {result.returncode})")
     fill_hdb_partitions(target)
     return result.stdout.strip()
+
+
+def _plan(src_hdb, tables: list[str] | None, first: date | None, last: date | None) -> str:
+    """A dry run's report: the source partitions in range, and the tables."""
+    days = sorted(
+        d.name
+        for d in src_hdb.iterdir()
+        if d.is_dir()
+        and len(d.name) == 10
+        and d.name.replace(".", "").isdigit()
+        and (first is None or d.name >= first.strftime("%Y.%m.%d"))
+        and (last is None or d.name <= last.strftime("%Y.%m.%d"))
+    )
+    which = ", ".join(tables) if tables else "every table this runtime declares"
+    span = f"{days[0]}..{days[-1]}" if days else "none"
+    return f"would copy {len(days)} partition(s) ({span}) of {which} from {src_hdb}"

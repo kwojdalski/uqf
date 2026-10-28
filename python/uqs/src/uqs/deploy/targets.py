@@ -321,7 +321,7 @@ def configs(names: str, artifact: str, explicit: dict, dry_run: bool, root: Path
         options, sources, runtime = _merged(data, name, path)
         components.switch(options, sources, explicit)
         options.update(explicit)
-        sources.update({k: "--" + k.replace("_", "-") for k in explicit})
+        sources.update({k: _flag(k) for k in explicit})
         absent = [k for k in ("host", "dest", "profile") if options.get(k) is None]
         if absent:
             raise DeployError(
@@ -339,3 +339,10 @@ def configs(names: str, artifact: str, explicit: dict, dry_run: bool, root: Path
 
 #: A target's name, as `[targets.NAME]` and `uqs --target NAME` spell it.
 NAME = re.compile(r"[a-z][a-z0-9_-]{0,63}")
+
+
+def _flag(option: str) -> str:
+    """How `option` is given on the command line: `--override NAME` for one of
+    the named overrides (#1732), `--name` for anything else."""
+    name = option.replace("_", "-")
+    return f"--override {name}" if option in OVERRIDES else f"--{name}"

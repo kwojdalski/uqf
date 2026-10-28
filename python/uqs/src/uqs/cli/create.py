@@ -216,7 +216,7 @@ def new_job(
         ),
     ] = None,
     dry_run: Annotated[
-        bool, typer.Option("--dry-run", help="Print what would be written, write nothing")
+        bool, typer.Option("--dry-run", "-n", help="Print what would be written, write nothing")
     ] = False,
 ) -> None:
     """Scaffold a new ETL job: its q files, its table, and the lists that register them.

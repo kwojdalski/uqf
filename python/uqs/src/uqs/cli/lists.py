@@ -20,7 +20,7 @@ from typing import Annotated
 import typer
 from rich.table import Table
 
-from uqs.cli import completion
+from uqs.cli import completion, safety
 from uqs.cli.renames import BASE_PORT, renamed, warn_renamed
 from uqs.cli.runtime_diff import runtime_app
 from uqs.cli.shared import (
@@ -68,10 +68,11 @@ JsonOpt = Annotated[
 _SORT_HELP = "Sort by this column (case-insensitive, numeric-aware)."
 
 
-def _print(kind, base_port, export, sort, reverse, interactive, as_json) -> None:
-    """List `kind` as a table, or as JSON, sorted and exported as asked."""
+def _print(kind, base_port, export, sort, reverse, interactive, as_json, rows=None) -> None:
+    """List `kind` - or `rows()`, when given - as a table, or as JSON, sorted
+    and exported as asked."""
     try:
-        items = listing.list_items(_paths(), kind, base_port=base_port)
+        items = rows() if rows else listing.list_items(_paths(), kind, base_port=base_port)
     except UqsError as exc:
         _die(exc)
         return
@@ -96,11 +97,15 @@ def _print(kind, base_port, export, sort, reverse, interactive, as_json) -> None
     _export(items, export)
 
 
-def _noun_list(kind: str, doc: str) -> Callable[..., None]:
-    """The `list` command of the noun whose rows are `kind`."""
+def _noun_list(
+    kind: str, doc: str, rows: Callable[[], list[dict]] | None = None, columns=()
+) -> Callable[..., None]:
+    """The `list` command of the noun whose rows are `kind` - or `rows()`, whose
+    `columns` --sort completes."""
+    columns = completion.choices(*columns) if rows else completion.columns_of(kind)
     sort_opt = Annotated[
         str | None,
-        typer.Option("--sort", help=_SORT_HELP, autocompletion=completion.columns_of(kind)),
+        typer.Option("--sort", help=_SORT_HELP, autocompletion=columns),
     ]
 
     def command(
@@ -110,7 +115,7 @@ def _noun_list(kind: str, doc: str) -> Callable[..., None]:
         interactive: InteractiveOpt = False,
         as_json: JsonOpt = False,
     ) -> None:
-        _print(kind, None, export, sort, reverse, interactive, as_json)
+        _print(kind, None, export, sort, reverse, interactive, as_json, rows)
 
     command.__doc__ = doc + "\n\n`--sort` takes any of its columns; the order reaches `--export`."
     return command
@@ -125,6 +130,31 @@ job_app.command("list", rich_help_panel=JOB_AUTHORING_PANEL)(
 )
 attachment_app.command("list")(
     _noun_list("attachments", "List every attachment: its state, and whether its publisher runs.")
+)
+
+#: `uqs override ...`: the named checks a command can bypass (#1732).
+override_app = typer.Typer(
+    no_args_is_help=True,
+    add_completion=False,
+    help="Overrides: the checks a command bypasses with `--override NAME --reason TEXT`: list.",
+)
+app.add_typer(override_app, name="override")
+
+
+def _bypasses() -> list[dict]:
+    return [
+        {"override": b.name, "commands": ", ".join(b.commands), "effect": b.skips}
+        for b in safety.catalog()
+    ]
+
+
+override_app.command("list")(
+    _noun_list(
+        "named overrides",
+        "List every named override: the commands that take it, and the check it bypasses.",
+        _bypasses,
+        ("override", "commands", "effect"),
+    )
 )
 
 

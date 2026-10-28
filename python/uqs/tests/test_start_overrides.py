@@ -59,7 +59,7 @@ def test_the_q_version_override_skips_only_that_check_and_records_it(old_q):
         old_q, ["start", "rdb1"], None, Overrides(q_version="testing 4.1 compatibility")
     )
     (entry,) = _record(old_q)
-    assert entry["override"] == "--skip-q-version-check"
+    assert entry["override"] == "--override q-version-check"
     assert entry["reason"] == "testing 4.1 compatibility"
     assert (entry["command"], entry["processes"]) == ("start", "rdb1")
     assert entry["runtime"] == old_q.runtime
@@ -92,7 +92,7 @@ def test_the_runtime_passes_the_override_through_to_the_policy(old_q, monkeypatc
 
 @pytest.mark.parametrize("reason", ["", "   "])
 def test_an_override_needs_a_reason(reason):
-    with pytest.raises(UqsError, match="--skip-q-version-check needs a reason"):
+    with pytest.raises(UqsError, match="--override q-version-check needs --reason"):
         Overrides(q_version=reason)
 
 
@@ -106,7 +106,7 @@ def test_the_budget_override_skips_only_the_estimate(old_q, monkeypatch):
     )
     assert members
     (entry,) = _record(old_q)
-    assert entry["override"] == "--skip-profile-budget-check"
+    assert entry["override"] == "--override profile-budget-check"
     # An undeclared profile is still refused, override or not.
     with pytest.raises(UqsError, match="nosuchprofile"):
         start_policy.resolve_profiles(
@@ -117,17 +117,24 @@ def test_the_budget_override_skips_only_the_estimate(old_q, monkeypatch):
 @pytest.mark.parametrize(
     ("kw", "says"),
     [
-        (dict(skip_q_version="x", print_only=True), "a preview starts nothing"),
-        (dict(skip_profile_budget="x"), "needs --profile"),
+        (dict(names=["q-version-check"], print_only=True), "a dry run starts nothing"),
+        (dict(names=["profile-budget-check"]), "needs --profile"),
+        (dict(names=["no-such-check"]), "has no override 'no-such-check'"),
+        (dict(names=["q-version-check"], reason=" "), "needs --reason"),
+        (dict(names=[]), "none was given"),
     ],
 )
 def test_an_override_that_would_skip_nothing_is_refused(kw, says):
     with pytest.raises(UqsError, match=says):
         start_override_opts.overrides_from(
-            kw.get("skip_q_version"),
-            kw.get("skip_profile_budget"),
-            print_only=kw.get("print_only", False),
+            "start", kw["names"], kw.get("reason", "x"), print_only=kw.get("print_only", False)
         )
+
+
+def test_restart_takes_the_budget_override_as_start_does():
+    """#1734 gave restart start's options, --profile among them."""
+    got = start_override_opts.overrides_from("restart", ["profile-budget-check"], "x", profile="fx")
+    assert got.profile_budget == "x"
 
 
 def test_the_cli_refuses_an_irrelevant_combination_before_starting(monkeypatch):
@@ -145,10 +152,10 @@ def test_the_cli_refuses_an_irrelevant_combination_before_starting(monkeypatch):
     monkeypatch.setattr(shared, "log", Log())
     monkeypatch.setattr(runtime, "start", lambda *_a, **_k: pytest.fail("started"))
     result = runner.invoke(
-        cli.app, ["start", "rdb1", "--show-command", "--skip-q-version-check", "x"]
+        cli.app, ["start", "rdb1", "--dry-run", "--override", "q-version-check", "--reason", "x"]
     )
     assert result.exit_code != 0
-    assert any("a preview starts nothing" in m for m in said)
+    assert any("a dry run starts nothing" in m for m in said)
 
 
 def test_the_cli_hands_the_reason_to_the_stack(monkeypatch):
@@ -159,13 +166,28 @@ def test_the_cli_hands_the_reason_to_the_stack(monkeypatch):
         raise SystemExit(0)
 
     monkeypatch.setattr(runtime, "start", start)
+    args = ["start", "rdb1", "--override", "q-version-check", "--reason", "old q on uat"]
+    runner.invoke(cli.app, args)
+    assert seen["skips"] == Overrides(q_version="old q on uat")
+
+
+def test_the_old_skip_flag_still_gives_the_override_for_one_release(monkeypatch):
+    """`--skip-q-version-check REASON` is `--override q-version-check --reason
+    REASON` (#1732), hidden, until the next release."""
+    seen = {}
+
+    def start(_paths, names, **kw):
+        seen.update(kw)
+        raise SystemExit(0)
+
+    monkeypatch.setattr(runtime, "start", start)
     runner.invoke(cli.app, ["start", "rdb1", "--skip-q-version-check", "old q on uat"])
     assert seen["skips"] == Overrides(q_version="old q on uat")
 
 
 def test_a_remote_start_forwards_the_reason_intact():
     reason = "uat's q is 4.1; $(not run)"
-    args = ["start", "rdb1", "--skip-q-version-check", reason]
+    args = ["start", "rdb1", "--override", "q-version-check", "--reason", reason]
     assert control.changes_the_server(args)
     r = control.Remote("uat", "h", "/srv/uqf", remote_user="svc")
     script = shlex.split(control.remote_command(r, args))[-1]  # what the account's bash runs

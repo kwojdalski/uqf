@@ -130,7 +130,7 @@ def _run(
         start_env: dict[str, str] = {}
         if cfg.accept_converted_release is not None:
             log.warning(
-                "--accept-converted-release: starting release {} on q {}: {}",
+                "--override accept-converted-release: starting release {} on q {}: {}",
                 rid,
                 facts.get("qversion") or "of unknown version",
                 cfg.accept_converted_release,

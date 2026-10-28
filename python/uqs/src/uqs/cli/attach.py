@@ -38,6 +38,7 @@ from uqs.cli.attach_output import (
     steps_table,
     verdict,
 )
+from uqs.cli.renames import renamed
 from uqs.cli.shared import JOB_OPERATIONS_PANEL, _debug_requested, _paths, job_app
 from uqs.paths import UqsError
 
@@ -61,21 +62,18 @@ JsonOpt = Annotated[
     typer.Option("--json", help="Print one JSON document. Executing needs --yes: it cannot ask."),
 ]
 DryRunOpt = Annotated[
-    bool, typer.Option("--dry-run", help="Run every check and show the plan; change nothing")
+    bool, typer.Option("--dry-run", "-n", help="Run every check and show the plan; change nothing")
 ]
 YesOpt = Annotated[
-    bool,
-    typer.Option(
-        "--yes",
-        help="Do not ask before changing the stack (the plan and results are still shown)",
-    ),
+    bool, typer.Option("--yes", "-y", help="Do not ask first; the plan and results are still shown")
 ]
 
 
 # ----------------------------------------------------------------- uqs job attach
 
 
-@job_app.command("attach", rich_help_panel=JOB_OPERATIONS_PANEL, context_settings=EXTRA_WORDS)
+@job_app.command("attach", rich_help_panel=JOB_OPERATIONS_PANEL, context_settings=EXTRA_WORDS,
+                 cls=renamed({"--override-reason": "--reason"}))  # fmt: skip
 def attach(
     ctx: typer.Context,
     name: NameArg,
@@ -164,12 +162,14 @@ def attach(
         list[str] | None,
         typer.Option(
             "--override",
-            help="Accept ONE blocker, as CODE:COMPONENT (e.g. TORQ_VERSION:stp1); repeatable. "
-            "It accepts a risk, it does not establish compatibility. Needs --override-reason.",
+            metavar="CODE:COMPONENT",
+            help="Bypass ONE blocker, as CODE:COMPONENT (e.g. TORQ_VERSION:stp1; `uqs override "
+            "list` names the codes); repeatable. It accepts a risk, it does not establish "
+            "compatibility. Needs --reason.",
         ),
     ] = None,
     override_reason: Annotated[
-        str, typer.Option("--override-reason", help="Why the accepted blocker is acceptable")
+        str, typer.Option("--reason", help="Why the --override is acceptable: recorded with it")
     ] = "",
     accept_risks: Annotated[
         bool,
@@ -337,6 +337,7 @@ def detach(
         bool,
         typer.Option(
             "--dry-run",
+            "-n",
             help="Run every check, including each process's own removal checks, and change "
             "nothing: the publisher is not stopped and no file is written",
         ),

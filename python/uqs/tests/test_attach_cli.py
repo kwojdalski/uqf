@@ -136,7 +136,7 @@ def test_attach_and_detach_are_commands_and_no_stage_or_status_command_remains()
     assert "attachments" not in job.commands
     options = {o for p in job.commands["attach"].params for o in getattr(p, "opts", [])}
     assert {"--dry-run", "--no-start", "--json", "--yes", "--accept-risks", "--override",
-            "--override-reason", "--clear-overrides", "--replace"} <= options  # fmt: skip
+            "--reason", "--clear-overrides", "--replace"} <= options  # fmt: skip
     detach = {o for p in job.commands["detach"].params for o in getattr(p, "opts", [])}
     assert {"--dry-run", "--yes", "--json"} <= detach
     assert "attachments" in listing.LISTABLE_KINDS

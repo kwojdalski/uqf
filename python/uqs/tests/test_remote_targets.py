@@ -126,6 +126,9 @@ def test_the_target_is_read_from_the_global_options_only(argv, expected):
         (["config", "sources", "stub"], True),
         (["data", "seed"], True),
         (["some-command-added-later"], True),
+        (["stop", "--dry-run"], False),
+        (["config", "set", "rdb1", "port", "1", "-n"], False),
+        (["job", "backfill", "demo_deals_backfill", "--dry-run"], True),
     ],
 )
 def test_what_changes_the_server_asks_first(args, changes):
@@ -468,3 +471,25 @@ def test_shell_opens_in_the_release_with_its_environment(server):
     done = subprocess.run(["bash", "-c", script], capture_output=True, text=True, check=False)
     assert done.returncode == 0, done.stderr
     assert "uat r7" in done.stdout and "/current/.venv/bin/uqs" in done.stdout
+
+
+def test_dry_runs_of_add_and_remove_check_and_write_nothing(server):
+    """`uqs target add/remove --dry-run` (#1732): an add is checked as a real
+    one is - a bad ssh destination is still refused - and the file is unchanged."""
+    declared = Path(os.environ[targets.DECLARATION_ENV])
+    before = declared.read_text()
+    runner = CliRunner()
+    added = runner.invoke(
+        app, ["target", "add", "prod", "--ssh", "svc@prod", "--dest", "/srv/uqf", "-n"]
+    )
+    assert added.exit_code == 0, added.output
+    assert "dry run: target prod added - nothing written" in added.output
+    assert declared.read_text() == before
+    bad = runner.invoke(
+        app, ["target", "add", "x", "--ssh", "-oProxyCommand=sh", "--dest", "/d", "-n"]
+    )
+    assert bad.exit_code and declared.read_text() == before
+    some = next(iter(targets.read(Path("."))))
+    removed = runner.invoke(app, ["target", "remove", some, "--dry-run"])
+    assert removed.exit_code == 0, removed.output
+    assert declared.read_text() == before

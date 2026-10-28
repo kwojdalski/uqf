@@ -15,6 +15,7 @@ import typer
 
 from uqs.attach import receiver_contract
 from uqs.cli import completion
+from uqs.cli.safety import dry_run_note
 from uqs.cli.shared import JOB_OPERATIONS_PANEL, _die, _paths, console, job_app
 from uqs.paths import UqsError
 
@@ -79,6 +80,10 @@ def approve(
     max_rows: Annotated[
         int, typer.Option("--max-rows", help="The most rows one message may carry")
     ] = receiver_contract.DEFAULT_MAX_ROWS,
+    dry_run: Annotated[
+        bool,
+        typer.Option("--dry-run", "-n", help="Check it and show the record; store nothing"),
+    ] = False,
     as_json: Annotated[
         bool, typer.Option("--json", help="Print the approved record as JSON")
     ] = False,
@@ -96,8 +101,9 @@ def approve(
     try:
         contract = receiver_contract.load_file(file)
         record = receiver_contract.approve(
-            _paths(), contract, attach, conflict_policies=conflict, max_rows=max_rows
-        )
+            _paths(), contract, attach, conflict_policies=conflict, max_rows=max_rows,
+            dry_run=dry_run,
+        )  # fmt: skip
     except UqsError as exc:
         _die(exc)
         return
@@ -106,13 +112,16 @@ def approve(
         return
     b = record["binding"]
     console.print(
-        f"approved contract {contract.identity} ({contract.dataset}) for attachment {attach}: "
+        f"{'would approve' if dry_run else 'approved'} contract {contract.identity} "
+        f"({contract.dataset}) for attachment {attach}: "
         f"into {b['hdb_dir']}, writer {', '.join(b['users'])}, "
         f"policies {', '.join(b['conflict_policies'])}, at most {b['max_rows']} rows a message; "
         f"`uqs job receive --contract {contract.identity} --attach {attach} "
         "--listen-port PORT` serves it",
         markup=False,
     )
+    if dry_run:
+        console.print(dry_run_note())
 
 
 @contract_app.command("list")

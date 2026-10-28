@@ -21,6 +21,7 @@ from uqs.attach import live as _registers_live_check  # noqa: F401 - the start g
 from uqs.cli import completion, start_follow, start_warnings
 from uqs.cli.force_stop import ForceOpt, _force_stop
 from uqs.cli.renames import BASE_PORT, alias_command, renamed
+from uqs.cli.safety import OverrideOpt, ReasonOpt, dry_run_note
 from uqs.cli.shared import (
     PASS_THROUGH,
     BasePortOpt,
@@ -34,7 +35,7 @@ from uqs.cli.shared import (
     log,
 )
 from uqs.cli.start_follow import FollowOpt, LevelOpt
-from uqs.cli.start_override_opts import SkipProfileBudgetOpt, SkipQVersionOpt
+from uqs.cli.start_override_opts import OLD_SPELLINGS as OLD_SKIPS
 from uqs.cli.start_override_opts import parsed as _overrides
 from uqs.cli.start_warnings import running as _running
 from uqs.model import profiles
@@ -113,15 +114,17 @@ def _launch_checks(verb: str, names: str, port: int | None, profile: str | None)
     start_warnings.monitor_coverage(verb, names, profile)
 
 
-ShowCommandOpt = Annotated[
+DryRunOpt = Annotated[
     bool,
-    typer.Option("--show-command", help="Show the exact start line(s); start nothing"),
+    typer.Option("--dry-run", "-n", help="Show the exact start line(s); start nothing"),
 ]
 
 #: The options `start` and `restart` share, word for word (#1734): the
 #: selection `stop` takes too - PROC..., --profile, --base-port - and what a
-#: launch adds to it. A test holds the two signatures equal.
-_LAUNCH_RENAMES = BASE_PORT | {"--print": "--show-command"}
+#: launch adds to it. A test holds the two signatures equal. --print, then
+#: --show-command, are --dry-run, and the --skip-...-check bypasses are
+#: --override NAME --reason (#1732).
+_LAUNCH_RENAMES = BASE_PORT | {"--print": "--dry-run", "--show-command": "--dry-run"} | OLD_SKIPS
 
 
 def _launch(
@@ -132,17 +135,15 @@ def _launch(
     follow: bool,
     level: str | None,
     print_only: bool,
-    skip_q_version_check: str | None,
-    skip_profile_budget_check: str | None,
+    override: list[str] | None,
+    reason: str | None,
 ) -> None:
     """`start` and `restart`, which differ only in the torq.sh verb they run."""
     if level is not None and not follow:
         _die(UqsError("--level needs --follow"))
     if print_only and follow:
-        _die(UqsError("--show-command does not apply with --follow"))
-    overrides = _overrides(
-        skip_q_version_check, skip_profile_budget_check, profile=profile, print_only=print_only
-    )
+        _die(UqsError("--dry-run does not apply with --follow"))
+    overrides = _overrides(verb, override, reason, profile=profile, print_only=print_only)
     names = _names_to_start(procs, profile, overrides)
     if print_only:
         _print_startlines(names, port)
@@ -179,9 +180,9 @@ def start(
     profile: ProfileOpt = None,
     follow: FollowOpt = False,
     level: LevelOpt = None,
-    print_only: ShowCommandOpt = False,
-    skip_q_version_check: SkipQVersionOpt = None,
-    skip_profile_budget_check: SkipProfileBudgetOpt = None,
+    print_only: DryRunOpt = False,
+    override: OverrideOpt = None,
+    reason: ReasonOpt = None,
 ) -> None:
     """Start every startwithall=1 process (or specific process name(s)).
 
@@ -196,7 +197,7 @@ def start(
     """
     _launch(
         "start", procs, port, profile, follow, level, print_only,
-        skip_q_version_check, skip_profile_budget_check,
+        override, reason,
     )  # fmt: skip
 
 
@@ -207,9 +208,9 @@ def restart(
     profile: ProfileOpt = None,
     follow: FollowOpt = False,
     level: LevelOpt = None,
-    print_only: ShowCommandOpt = False,
-    skip_q_version_check: SkipQVersionOpt = None,
-    skip_profile_budget_check: SkipProfileBudgetOpt = None,
+    print_only: DryRunOpt = False,
+    override: OverrideOpt = None,
+    reason: ReasonOpt = None,
 ) -> None:
     """Restart every startwithall=1 process (or specific process name(s)).
 
@@ -218,7 +219,7 @@ def restart(
     """
     _launch(
         "restart", procs, port, profile, follow, level, print_only,
-        skip_q_version_check, skip_profile_budget_check,
+        override, reason,
     )  # fmt: skip
 
 
@@ -227,17 +228,17 @@ def _up(
     port: BasePortOpt = None,
     profile: ProfileOpt = None,
     level: LevelOpt = None,
-    skip_q_version_check: SkipQVersionOpt = None,
-    skip_profile_budget_check: SkipProfileBudgetOpt = None,
+    override: OverrideOpt = None,
+    reason: ReasonOpt = None,
 ) -> None:
     """`start --follow`, under the name it had before #1734."""
     _launch(
         "start", procs, port, profile, True, level, False,
-        skip_q_version_check, skip_profile_budget_check,
+        override, reason,
     )  # fmt: skip
 
 
-alias_command(app, "up", "uqs start --follow", _up, cls=renamed(BASE_PORT))
+alias_command(app, "up", "uqs start --follow", _up, cls=renamed(BASE_PORT | OLD_SKIPS))
 
 
 def _names_to_stop(procs: list[str] | None, profile: str | None) -> str:
@@ -267,17 +268,30 @@ def stop(
         ),
     ] = None,
     force: ForceOpt = False,
+    dry_run: Annotated[
+        bool,
+        typer.Option("--dry-run", "-n", help="Name what would be stopped; stop nothing"),
+    ] = False,
 ) -> None:
     """Stop every startwithall=1 process (or specific process name(s), or a profile's)."""
     names = _names_to_stop(procs, profile)
     _reject_unknown(names)
+    if dry_run:
+        try:
+            wanted = start_follow.procnames_started_by(names, port)
+        except UqsError as exc:
+            _die(exc)
+            return
+        console.print(f"would {'kill' if force else 'stop'}: {' '.join(wanted)}", markup=False)
+        console.print(dry_run_note())
+        return
     if force:
         _force_stop(names, port)
     _run_streaming(runtime.stop, names, base_port=port)
 
 
 def _print_startlines(names: str, port: int | None) -> None:
-    """Print the startup command line(s) for `names`, then exit - `start --show-command`."""
+    """Print the startup command line(s) for `names`, then exit - `start --dry-run`."""
     _reject_unknown(names)
     try:
         result = runtime.print_procs(_paths(), names, base_port=port)

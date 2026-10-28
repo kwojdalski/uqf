@@ -19,6 +19,7 @@ import typer
 
 from uqs.cli import completion
 from uqs.cli.renames import alias_command
+from uqs.cli.safety import dry_run_note
 from uqs.cli.shared import JOB_OPERATIONS_PANEL, _die, _paths, app, console, job_app
 from uqs.paths import UqsError
 from uqs.stack import backfill as stack_backfill
@@ -99,6 +100,10 @@ def remove_checkpoint(
             autocompletion=completion.backfill_workers,
         ),
     ],
+    dry_run: Annotated[
+        bool,
+        typer.Option("--dry-run", "-n", help="Name the checkpoint that would go; delete nothing"),
+    ] = False,
 ) -> None:
     """Delete a bounded worker's checkpoint, so its next run starts at --from.
 
@@ -109,12 +114,15 @@ def remove_checkpoint(
     e.g. `uqs job checkpoint remove demo_deals_backfill`
     """
     try:
-        path = stack_backfill.clear_checkpoint(_paths(), worker)
+        path = stack_backfill.clear_checkpoint(_paths(), worker, dry_run)
     except UqsError as exc:
         _die(exc)
         return
     if path is None:
         console.print(f"{worker} has no checkpoint - nothing to clear", markup=False)
+    elif dry_run:
+        console.print(f"would clear {worker}'s checkpoint ({path})", markup=False)
+        console.print(dry_run_note())
     else:
         console.print(f"cleared {worker}'s checkpoint ({path})", markup=False)
 

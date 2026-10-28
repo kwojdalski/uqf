@@ -80,6 +80,7 @@ CASES: dict[str, tuple[list[str], str]] = {
     "runtime list": (["runtime", "list"], "uqf"),
     "job list": (["job", "list"], "["),
     "job attachment list": (["job", "attachment", "list"], "["),
+    "override list": (["override", "list"], "q-version-check"),
     "data hdb-check": (["data", "hdb-check"], "present"),
     "data hdb-alter": (
         ["data", "hdb-alter", "pb", "--hdb", "/nonexistent-1755", "--reorder", "a"],

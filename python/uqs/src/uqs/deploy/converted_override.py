@@ -1,4 +1,4 @@
-"""--accept-converted-release (#936): the override a deployment writes into a
+"""--override accept-converted-release (#936): the override a deployment writes into a
 converted release once its smoke test has passed on the server's q.
 
 `uqs start` checks it (stack/converted.py): it holds only for the attempt

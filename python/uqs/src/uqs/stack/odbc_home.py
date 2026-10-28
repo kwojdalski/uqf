@@ -196,8 +196,10 @@ def current(home: Path) -> Path | None:
     return link.resolve() if link.is_symlink() else None
 
 
-def install(home: Path, archive: Path, managed_qhome: Path) -> Path:
+def install(home: Path, archive: Path, managed_qhome: Path, dry_run: bool = False) -> Path:
     """Install `archive` into `home` and make it current; return its directory.
+    With `dry_run`, the approval and platform are checked and the directory it
+    would install to is returned; nothing is extracted or written.
 
     Refused, before anything is written, when the archive's sha256 is not in
     the home's approved list, or its manifest disagrees with that list, with
@@ -219,6 +221,13 @@ def install(home: Path, archive: Path, managed_qhome: Path) -> Path:
             f"{archive.name} is approved for {row['platform']}; this machine is {host_platform()}"
         )
     versions = home / "versions"
+    if dry_run:
+        planned = versions / f"{row['name']}-{row['version']}"
+        if planned.exists():
+            raise UqsError(
+                f"{planned.name} is already installed - `uqs setup odbc status` shows it"
+            )
+        return planned
     versions.mkdir(parents=True, exist_ok=True)
     staged = versions / f".staging-{digest[:12]}"
     shutil.rmtree(staged, ignore_errors=True)
@@ -247,12 +256,15 @@ def install(home: Path, archive: Path, managed_qhome: Path) -> Path:
     return target
 
 
-def rollback(home: Path) -> Path:
-    """Make `previous` current again, and current previous; return it."""
+def rollback(home: Path, dry_run: bool = False) -> Path:
+    """Make `previous` current again, and current previous; return it - with
+    `dry_run`, only return it."""
     prev, now = home / "previous", current(home)
     if not prev.is_symlink() or now is None:
         raise UqsError(f"{home} has no previous version to return to")
     back = prev.resolve()
+    if dry_run:
+        return back
     _point(home, "previous", now)
     _point(home, "current", back)
     return back

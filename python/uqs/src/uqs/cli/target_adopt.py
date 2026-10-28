@@ -87,6 +87,12 @@ def adopt_(
             "without it, a dry run that writes nothing on either side",
         ),
     ] = False,
+    dry_run: Annotated[
+        bool,
+        typer.Option(
+            "--dry-run", "-n", help="Show what it would do and change nothing (the default)"
+        ),
+    ] = False,
     yes: Annotated[
         bool, typer.Option("--yes", "-y", help="Do not ask before changing the server")
     ] = False,
@@ -95,6 +101,9 @@ def adopt_(
     what the server holds, how it would launch uqs and the target it would
     save. --apply links it as DEST/current, saves the target - checked by
     reaching it - and records it in `uqs deploy history`."""
+    if dry_run and do_it:
+        _die(UqsError("--dry-run and --apply contradict each other - give one"))
+        return
     root = repo_root()
     try:
         declared = targets.read(root) if targets.declaration_path(root).is_file() else {}

@@ -379,22 +379,23 @@ Push refuses an artifact with any other sha256, and a server whose q, as
 preflight runs it, is outside `q_version`. A local artifact also needs its
 `.sha256` beside it, or an `expected_sha256`. Each requirement has one named
 override that relaxes only it. An override is given on the command line, never
-in a target, and needs a reason:
+in a target, as `--override NAME --reason TEXT` (repeatable, one reason for all;
+`uqs override list` names them):
 
-  | Override                    | Relaxes                                    |
-  | --------------------------- | ------------------------------------------ |
-  | `--accept-digest REASON`    | `expected_sha256`                          |
-  | `--accept-q-version REASON` | `q_version`                                |
-  | `--allow-unpinned REASON`   | the `.sha256` a local artifact must have   |
+  | Override                      | Relaxes                                    |
+  | ----------------------------- | ------------------------------------------ |
+  | `--override accept-digest`    | `expected_sha256`                          |
+  | `--override accept-q-version` | `q_version`                                |
+  | `--override allow-unpinned`   | the `.sha256` a local artifact must have   |
 
-- An override with nothing to relax is refused: `--accept-digest` without
-  `expected_sha256`, `--accept-q-version` without `q_version`,
-  `--allow-unpinned` with `expected_sha256`.
+- An override with nothing to relax is refused: `accept-digest` without
+  `expected_sha256`, `accept-q-version` without `q_version`, `allow-unpinned`
+  with `expected_sha256`.
 - Accepting a digest is not trusting the artifact. Its actual sha256 is
   recorded, and the server checks the bytes it receives against it.
 - No override bypasses the archive's member checks, the OS, architecture and
   Python match, the smoke test or verification.
-- Every override asked for, `--accept-converted-release` included, opens the
+- Every override asked for, `accept-converted-release` included, opens the
   dry-run plan in an `EXCEPTIONS` block. Each is also recorded in the report's
   `exceptions` and in the deploy history, with its reason, what was required,
   what was found and whether it was needed. The report records the server's q as
@@ -454,9 +455,10 @@ uqs deploy push dist/uqf-<release>.tar.gz --host uqf-server --dest /opt/uqf \
   TorQ.
 - **Pinned like a release.** The runtime's `.sha256` must sit beside it, and
   `torq_runtime_sha256` (or `--torq-runtime-sha256`) pins it as
-  `expected_sha256` pins a release. `--accept-digest` and `--allow-unpinned`
-  relax these pins too, and are recorded. Its members are checked as a release's
-  are, and the server checks the bytes it receives.
+  `expected_sha256` pins a release. `--override accept-digest` and
+  `--override allow-unpinned` relax these pins too, and are recorded. Its
+  members are checked as a release's are, and the server checks the bytes it
+  receives.
 - **Installed once, never rewritten.** It goes to
   `<dest>/shared/runtimes/torq/<sha256>/`, beside a marker naming that sha256.
   If the directory is already there, holding exactly that runtime, it is reused
@@ -504,8 +506,8 @@ uqs deploy push dist/uqf-<release>.tar.gz --host uqf-server --dest /opt/uqf \
   The runtime must also be built for the release's OS and architecture, so build
   it on such a host.
 - **Pinned like a release.** `q_runtime_sha256` (or `--q-runtime-sha256`) pins
-  it, and `--accept-digest` and `--allow-unpinned` relax that pin as they do the
-  others, recorded. `q_version` holds it too.
+  it, and `--override accept-digest` and `--override allow-unpinned` relax that
+  pin as they do the others, recorded. `q_version` holds it too.
 - **Installed once, run there.** It goes to `<dest>/shared/runtimes/q/<sha256>/`
   under the same write-once rules as a TorQ runtime. Preflight looks for no q on
   the server. Once installed, the push runs the binary there; if it does not
@@ -562,8 +564,8 @@ uqs deploy push dist/uqf-<release>.tar.gz --host uqf-server --dest /opt/uqf \
 - **For this release.** It must be built for the release's OS, architecture and
   Python `major.minor`, or the push is refused before anything runs.
 - **Pinned like a release.** `python_runtime_sha256` (or
-  `--python-runtime-sha256`) pins it; `--accept-digest` and `--allow-unpinned`
-  relax that pin as they do the others, recorded.
+  `--python-runtime-sha256`) pins it; `--override accept-digest` and
+  `--override allow-unpinned` relax that pin as they do the others, recorded.
 - **Installed once, run there.** It goes to
   `<dest>/shared/runtimes/python/<sha256>/` under the same write-once rules as
   the other runtimes. Preflight looks for no `uv` and no Python on the server;
@@ -718,7 +720,7 @@ and usually no `.venv` or `deploy.env`. `uqs target adopt` works out what
 driving it needs, and does it:
 
 ```bash
-uqs target adopt lvc --ssh svc@lvc.example --dest /srv/uqf                # a dry run
+uqs target adopt lvc --ssh svc@lvc.example --dest /srv/uqf                # a dry run (-n says so)
 uqs target adopt lvc --ssh svc@lvc.example --dest /srv/uqf --apply        # asks first
 uqs target adopt lvc --ssh svc@lvc.example --dest /srv/uqf --release /home/svc/uqf \
     --launch-python /opt/py/bin/python3 --apply --yes
@@ -1097,7 +1099,7 @@ Set each process's value on the server:
 
 ```bash
 uqs --target uat config set stp1 taskset_no 3:5
-uqs --target uat start --show-command stp1
+uqs --target uat start --dry-run stp1
 ```
 
 `config set` writes `python/uqs/process_overrides.csv` (see [changing a
@@ -1106,8 +1108,8 @@ file from `shared/config/python/uqs/process_overrides.csv` when it exists, so
 create it there, with just the header `procname,field,value`, before the first
 `config set`. Values set without it are kept by that release only. A process
 with no value keeps the column empty, and nothing assigns CPUs on its own.
-`start --show-command` shows the start lines the launcher builds, without
-starting anything.
+`start --dry-run` shows the start lines the launcher builds, without starting
+anything.
 
 ## On the server
 
@@ -1183,7 +1185,7 @@ explicit reason:
 
 ```bash
 uqs deploy push dist/uqf-<release>.tar.gz ... \
-  --accept-converted-release "4.0 release, q 3.6 smoke-tested by the desk"
+  --override accept-converted-release --reason "4.0 release, q 3.6 smoke-tested by the desk"
 ```
 
 That means "start this verified, already-converted release", not "skip the

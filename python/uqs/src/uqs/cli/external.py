@@ -33,6 +33,7 @@ from rich.table import Table
 from uqs.cli import completion
 from uqs.cli.json_out import emit, json_opt, snake
 from uqs.cli.renames import renamed
+from uqs.cli.safety import DryRunOpt, dry_run_note
 from uqs.cli.shared import _die, _paths, app, console
 from uqs.external import crypto, databento_feed, kafka_feed
 from uqs.external.crypto import (
@@ -247,6 +248,7 @@ def start(
         int | None, _opt("Poll interval in milliseconds", "crypto-fills")
     ] = None,
     base_port: Annotated[int | None, _opt("Stack base port", "crypto, crypto-fills")] = None,
+    dry_run: DryRunOpt = False,
 ) -> None:
     """Start a feed publishing onto the running stack's tickerplant.
 
@@ -273,11 +275,11 @@ def start(
         "symbol": symbol,
         "poll_interval_ms": poll_interval_ms,
         "port": base_port,
-    })  # fmt: skip
+    }, dry_run)  # fmt: skip
 
 
-def _start(name: str, options: dict[str, Any]) -> None:
-    """Start feed `name` with the options given, refusing any not its own."""
+def _start(name: str, options: dict[str, Any], dry_run: bool = False, verb: str = "start") -> None:
+    """Start feed `name` with the options given (refusing any not its own), or dry-run it."""
     feed = _feed(name)
     given = {k: v for k, v in options.items() if v is not None}
     for option in given:
@@ -285,6 +287,11 @@ def _start(name: str, options: dict[str, Any]) -> None:
             flag = "base-port" if option == "port" else option.replace("_", "-")
             _die(UqsError(f"--{flag} does not apply to feed {name}"))
             return
+    if dry_run:
+        shown = {k: ("***" if k == "api_key" else v) for k, v in given.items()}
+        settings = ", ".join(f"{k}={v}" for k, v in shown.items()) or "its defaults"
+        _would(name, f"{verb} {name} with {settings}")
+        return
     try:
         message = feed.start({k: given.get(k) for k in feed.options})
     except UqsError as exc:
@@ -293,9 +300,23 @@ def _start(name: str, options: dict[str, Any]) -> None:
     console.print(message)
 
 
+def _would(name: str, action: str) -> None:
+    """A connector dry run's lines: what it would do, and whether it runs now."""
+    try:
+        running = _feed(name).status(_paths()).get("running") == "True"
+    except UqsError as exc:
+        _die(exc)
+        return
+    console.print(f"would {action} - it is {'running' if running else 'not running'}", markup=False)
+    console.print(dry_run_note())
+
+
 @connector_app.command("stop")
-def stop(name: FeedArg) -> None:
+def stop(name: FeedArg, dry_run: DryRunOpt = False) -> None:
     """Stop a feed started by `uqs connector start`."""
+    if dry_run:
+        _would(name, f"stop {name}")
+        return
     try:
         _feed(name).stop(_paths())
     except UqsError as exc:
@@ -317,10 +338,13 @@ def _takes_start_options(fn: Any) -> Any:
     "restart", cls=renamed({"--port": "--base-port", "--dataset": "--databento-dataset"})
 )
 @_takes_start_options
-def restart(name: str, **options: Any) -> None:
+def restart(name: str, dry_run: bool = False, **options: Any) -> None:
     """Stop a feed if it is running, then start it again - with exactly
     `start`'s options, which are not remembered from the last start."""
     feed = _feed(name)
+    given = {"port" if k == "base_port" else k: v for k, v in options.items()}
+    if dry_run:
+        return _start(name, given, dry_run=True, verb="restart")
     try:
         if feed.status(_paths()).get("running") == "True":
             feed.stop(_paths())
@@ -328,7 +352,7 @@ def restart(name: str, **options: Any) -> None:
     except UqsError as exc:
         _die(exc)
         return
-    _start(name, {"port" if k == "base_port" else k: v for k, v in options.items()})
+    _start(name, given)
 
 
 StatusJson = json_opt(

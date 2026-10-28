@@ -45,7 +45,7 @@ class Report:
     soak: dict | None = None
 
     #: the q preflight ran (.z.K), and every policy override asked for
-    #: (deploy/overrides.py, #1557) - --accept-converted-release's included
+    #: (deploy/overrides.py, #1557) - --override accept-converted-release's included
     qversion: str | None = None
     exceptions: list[dict] = field(default_factory=list)
 

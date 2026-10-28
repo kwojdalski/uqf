@@ -112,7 +112,7 @@ class Artifact:
     sha256: str
     manifest: dict
     #: whether a .sha256 sat beside the archive to check it against; an
-    #: unpinned one is only deployed with --allow-unpinned (#1557)
+    #: unpinned one is only deployed with --override allow-unpinned (#1557)
     pinned: bool = True
 
     @property
@@ -299,7 +299,7 @@ def compatible(target: dict, facts: dict[str, str], *, accept_converted: bool = 
     glibc (getconf GNU_LIBC_VERSION), python (the major.minor uv finds
     there, or a bundled Python's), qversion (its q's .z.K) and, for a
     bundled q, qimpl. target["glibc"] is the floor the release's wheels set.
-    `accept_converted` is --accept-converted-release: a release converted for
+    `accept_converted` is --override accept-converted-release: a release converted for
     a newer kdb+ than the server's is then left to its smoke test (#936).
     """
     problems = []
@@ -336,8 +336,8 @@ def compatible(target: dict, facts: dict[str, str], *, accept_converted: bool = 
     if converted_for and not accept_converted and _older(version, converted_for):
         problems.append(
             f"the server's q is kdb+ {version}, older than the kdb+ {converted_for} the "
-            "release was converted for - deploy with --accept-converted-release REASON to "
-            "start it once its smoke test passes there"
+            "release was converted for - deploy with --override accept-converted-release "
+            "--reason REASON to start it once its smoke test passes there"
         )
     if facts.get("python") != target["python"]:
         problems.append(

@@ -22,14 +22,14 @@ runner = CliRunner()
     [(3, "upgraded 3 run(s)"), (0, "already current")],
 )
 def test_migrate_says_what_it_did(monkeypatch, upgraded, said):
-    monkeypatch.setattr(stack_runs, "migrate", lambda paths: upgraded)
+    monkeypatch.setattr(stack_runs, "migrate", lambda paths, dry_run=False: upgraded)
     result = runner.invoke(cli.app, ["job", "runs", "migrate"])
     assert result.exit_code == 0, result.output
     assert said in result.output
 
 
 def test_a_migrate_refusal_exits_one(monkeypatch):
-    def refuse(paths):
+    def refuse(paths, dry_run=False):
         raise UqsError("not ours to rewrite")
 
     monkeypatch.setattr(stack_runs, "migrate", refuse)
@@ -181,3 +181,17 @@ def test_a_revised_runs_rerun_names_only_the_release():
         command = stack_runs.rerun_command({**_FAILED_RUN, "source_version": recorded})
         assert command is not None
         assert command.endswith(tail), command
+
+
+def test_a_dry_run_migrate_counts_and_says_so(monkeypatch):
+    """`uqs job runs migrate --dry-run` (#1732)."""
+    seen = {}
+
+    def migrate(paths, dry_run=False):
+        seen["dry_run"] = dry_run
+        return 2
+
+    monkeypatch.setattr(stack_runs, "migrate", migrate)
+    result = runner.invoke(cli.app, ["job", "runs", "migrate", "-n"])
+    assert result.exit_code == 0, result.output
+    assert seen == {"dry_run": True} and "would upgrade 2 run(s)" in result.output

@@ -559,7 +559,7 @@ supported alternative to editing the validation code.
 uqs job attach pb-uat --job pb_general_ledger --stack-id 6000 \
     --override TORQ_VERSION:discovery1 --override TORQ_VERSION:stp1 \
     --override TORQ_VERSION:rdb1 --override TORQ_VERSION:wdb1 \
-    --override-reason "Reviewed against the site's TorQ build" --yes --accept-risks
+    --reason "Reviewed against the site's TorQ build" --yes --accept-risks
 ```
 
 **An override accepts a risk. It does not establish compatibility.** Accepting
@@ -567,8 +567,8 @@ uqs job attach pb-uat --job pb_general_ledger --stack-id 6000 \
 
 - **Scoped**: `CODE:COMPONENT`, one finding on one process. There is no blanket
   `--force`.
-- **A reason is mandatory** (`--override-reason`); the override records who
-  accepted it, when, and the facts it was accepted against.
+- **A reason is mandatory** (`--reason`, formerly `--override-reason`); the
+  override records who accepted it, when, and the facts it was accepted against.
 - **Still visible**: shown as `accepted` with the failure risk and what the
   operator must do, in the plan and the verify checks.
 - **Void when the facts change** (another TorQ version, another missing sort
