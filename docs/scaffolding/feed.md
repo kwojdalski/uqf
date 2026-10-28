@@ -198,6 +198,9 @@ written, nothing is published, and the live poll's lookback and period are
 unchanged. The output says it is a recent-data sample, not the running job's
 next page. It shows the window, the temporary cursor, the rows fetched and kept,
 and the page limit; `--trace` puts the window and the limit on every query line.
+A window further back is given the way every command takes a time range -
+`--from 2026-10-05T10:00 --to 2026-10-05T11:00`, or `--date 2026-10-05`. It is
+previewed the same way, from that window's start.
 
 The starting cursor is the feed's own. A timestamp cursor needs nothing: it
 starts 1ns before the instant. A feed with its own `load`, `save` and `advances`

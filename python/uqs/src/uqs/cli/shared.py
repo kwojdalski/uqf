@@ -27,6 +27,7 @@ from uqs.cli import completion, table_browser
 from uqs.logger import configure_logging, get_logger, json_requested
 from uqs.paths import UqsError
 from uqs.stack import runtime
+from uqs.timerange import BOUND_FORMS
 
 app = typer.Typer(
     no_args_is_help=True,
@@ -227,6 +228,40 @@ ExportOpt = Annotated[
 QHostOpt = Annotated[str, typer.Option("--host", help="Host the q process listens on")]
 QUserOpt = Annotated[str, typer.Option("--user", help="User to log in to the q process as")]
 QPasswdOpt = Annotated[str, typer.Option("--passwd", help="Password for --user")]
+
+
+#: A time range, the one way every command takes it (#1735): --from/--to,
+#: --date or --last, resolved by uqs.timerange.resolve.
+RangeFromOpt = Annotated[
+    str | None,
+    typer.Option(
+        "--from", help=f"Start of the time range, included. A date or a timestamp: {BOUND_FORMS}"
+    ),
+]
+RangeToOpt = Annotated[
+    str | None,
+    typer.Option("--to", help="End of the time range, exclusive. A date or a timestamp, as --from"),
+]
+DateOpt = Annotated[
+    str | None,
+    typer.Option(
+        "--date",
+        help="One day, 2026-09-13 or 2026.09.13: the same as --from D --to D+1",
+    ),
+]
+LastOpt = Annotated[
+    str | None,
+    typer.Option(
+        "--last",
+        help="A DURATION up to now - 30s, 5m, 2h, 7d: the same as --from now-DURATION --to now",
+    ),
+]
+
+
+def renamed(old: str, new: str) -> None:
+    """Rule 6 of #1738: a renamed option's old spelling still works, hidden, for
+    one release - and says, every time it is used, what to type instead."""
+    log.warning("{} is renamed {}; the old spelling goes in the next release", old, new)
 
 
 InteractiveOpt = Annotated[

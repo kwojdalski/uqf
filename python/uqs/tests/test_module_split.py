@@ -118,7 +118,16 @@ def test_every_exempt_module_still_exists_and_is_still_over():
 #: `runtimes`, `timefmt`, `liveness` and `portexpr`, which import nothing at all.
 #: `timefmt` and `liveness` must stay that way: uqf_frontend's read path
 #: imports them (#1326, #1362).
-LEAVES = {"paths", "logger", "interpreter", "runtimes", "timefmt", "liveness", "portexpr"}
+LEAVES = {
+    "paths",
+    "logger",
+    "interpreter",
+    "runtimes",
+    "timefmt",
+    "timerange",
+    "liveness",
+    "portexpr",
+}
 #: `generated` sits under everything: modules written from the q tree
 #: (uqs.generated.q_facts, #818), which import nothing from this package -
 #: so any layer may read them and none of them can close a cycle.
@@ -175,6 +184,10 @@ def test_the_leaves_stay_leaves():
     source = (PKG / "src" / "uqs" / "interpreter.py").read_text()
     reached = {m.group(1) or m.group(2) for m in _IMPORT.finditer(source)}
     assert reached <= {"paths"}, reached
+    # uqs.timerange (#1735): the one time-range parser, for every layer
+    source = (PKG / "src" / "uqs" / "timerange.py").read_text()
+    reached = {m.group(1) or m.group(2) for m in _IMPORT.finditer(source)}
+    assert reached <= {"paths", "timefmt"}, reached
     for leaf in ("runtimes.py", "timefmt.py", "liveness.py", "portexpr.py"):
         source = (PKG / "src" / "uqs" / leaf).read_text()
         assert not {m.group(1) or m.group(2) for m in _IMPORT.finditer(source)}, leaf

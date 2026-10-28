@@ -13,10 +13,15 @@ from typing import Annotated
 
 import typer
 
+from uqs import timerange
 from uqs.cli import backfill_attached, completion
 from uqs.cli.shared import (
     JOB_OPERATIONS_PANEL,
+    DateOpt,
+    LastOpt,
     PortOpt,
+    RangeFromOpt,
+    RangeToOpt,
     _debug_requested,
     _die,
     _paths,
@@ -26,11 +31,6 @@ from uqs.cli.shared import (
 from uqs.paths import UqsError
 from uqs.stack import backfill as stack_backfill
 from uqs.stack import backfill_wait as stack_backfill_wait
-
-_BOUND_HELP = (
-    "A date or datetime: 2026-09-13, 2026-09-13T06:00, 2026-09-13T06:00+02:00, "
-    "or a q timestamp such as 2026.09.13D06:00. No offset means UTC"
-)
 
 
 @job_app.command("backfill", rich_help_panel=JOB_OPERATIONS_PANEL)
@@ -43,12 +43,10 @@ def backfill(
             autocompletion=completion.backfill_workers,
         ),
     ],
-    range_from: Annotated[
-        str, typer.Option("--from", help=f"Inclusive start of the range. {_BOUND_HELP}")
-    ],
-    range_to: Annotated[
-        str, typer.Option("--to", help=f"Exclusive end of the range. {_BOUND_HELP}")
-    ],
+    range_from: RangeFromOpt = None,
+    range_to: RangeToOpt = None,
+    day: DateOpt = None,
+    last: LastOpt = None,
     version: Annotated[
         str | None,
         typer.Option(
@@ -150,14 +148,16 @@ def backfill(
 ) -> None:
     """Run a bounded worker over [--from, --to), recording coverage under --version.
 
-    The range is required: a backfill that guessed one would publish the wrong
-    window and record it as covered. --version is required too unless the
-    worker declares a default source_version - one whose source is never
-    restated. Pass a new --version to re-fetch windows already covered. The process registers with
-    discovery, so the fleet has to be up, and it exits when the range is
-    done - follow it with `uqs logs <process> -f`.
+    The range is required - --from/--to, --date or --last: a backfill that
+    guessed one would publish the wrong window and record it as covered.
+    --version is required too unless the worker declares a default
+    source_version - one whose source is never restated. Pass a new --version to
+    re-fetch windows already covered. The process registers with discovery, so
+    the fleet has to be up, and it exits when the range is done - follow it with
+    `uqs logs <process> -f`.
 
-    e.g. `uqs job backfill demo_deals_backfill --version v1 --from 2026-09-13 --to 2026-09-15`
+    e.g. `uqs job backfill demo_deals_backfill --version v1 --from 2026-09-13 --to 2026-09-15`,
+    or one day: `uqs job backfill demo_deals_backfill --version v1 --date 2026-09-13`
 
     `--mode plan` lists the windows a run would fetch without opening the
     source or writing anything; `--mode dry-run` fetches them and writes
@@ -185,11 +185,14 @@ def backfill(
     if wait and mode in stack_backfill.NO_STATUS_MODES:
         _die(UqsError(f"--wait has nothing to wait for with --mode {mode}: it writes no status"))
         return
+    try:
+        bound_from, bound_to = timerange.resolve(range_from, range_to, day, last).bounds
+    except UqsError as exc:
+        _die(exc)
+        return
     if attach is not None:
         try:
             resolved = stack_backfill.resolve_version(worker, version)
-            bound_from = stack_backfill.parse_bound("--from", range_from)
-            bound_to = stack_backfill.parse_bound("--to", range_to)
         except UqsError as exc:
             _die(exc)
             return
@@ -214,8 +217,6 @@ def backfill(
     try:
         paths = _paths()
         resolved = stack_backfill.resolve_version(worker, version)
-        bound_from = stack_backfill.parse_bound("--from", range_from)
-        bound_to = stack_backfill.parse_bound("--to", range_to)
         launched_at = datetime.now(UTC)
         result = stack_backfill.start(
             paths,

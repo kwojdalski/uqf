@@ -13,9 +13,14 @@ from typing import Annotated
 import typer
 from rich.table import Table
 
+from uqs import timerange
 from uqs.cli.shared import (
     JOB_OPERATIONS_PANEL,
+    DateOpt,
     InteractiveOpt,
+    LastOpt,
+    RangeFromOpt,
+    RangeToOpt,
     _die,
     _paths,
     _show,
@@ -23,7 +28,6 @@ from uqs.cli.shared import (
     job_app,
 )
 from uqs.paths import UqsError
-from uqs.stack import backfill as stack_backfill
 from uqs.stack import runs as stack_runs
 
 runs_app = typer.Typer(
@@ -191,8 +195,10 @@ def _print_next_steps(run: dict, attach: str | None = None) -> None:
 @runs_app.command("audit")
 def audit(
     dataset: Annotated[str, typer.Argument(help="The dataset, e.g. demo_deals")],
-    range_from: Annotated[str, typer.Option("--from", help="The window's start")],
-    range_to: Annotated[str, typer.Option("--to", help="The window's end, exclusive")],
+    range_from: RangeFromOpt = None,
+    range_to: RangeToOpt = None,
+    day: DateOpt = None,
+    last: LastOpt = None,
 ) -> None:
     """Every fact recorded about one window, from every run that published it.
 
@@ -200,13 +206,9 @@ def audit(
     window agree, which is the question run identity exists to answer.
     """
     try:
-        rows = stack_runs.audit(
-            _paths(),
-            dataset,
-            stack_backfill.parse_bound("--from", range_from),
-            stack_backfill.parse_bound("--to", range_to),
-        )
+        window = timerange.resolve(range_from, range_to, day, last)
+        rows = stack_runs.audit(_paths(), dataset, *window.bounds)
     except UqsError as exc:
         _die(exc)
         return
-    _print(f"{dataset} [{range_from}, {range_to})", rows, _FACT_COLUMNS, "no facts for that window")
+    _print(f"{dataset} {window}", rows, _FACT_COLUMNS, "no facts for that window")

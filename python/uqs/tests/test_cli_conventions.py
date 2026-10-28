@@ -226,6 +226,7 @@ OPTIONS = {
     "--columns": Meaning("which columns of a table to show", r"`all`"),
     "--command-timeout": Meaning("seconds per remote step", r"remote step"),
     "--connect-timeout": Meaning("ssh/scp seconds", r"ssh/scp"),
+    "--date": Meaning("one day of a time range: --from D --to D+1", r"--from D --to D\+1"),
     "--dataset": Meaning("the dataset a bounded worker fills", r"table it fills"),
     "--debug": Meaning("log at DEBUG", r"^Log at DEBUG\. Same as LOG_LEVEL"),
     "--dest": Meaning("the absolute directory on the server", r"absolute"),
@@ -239,6 +240,7 @@ OPTIONS = {
     "--interactive": Meaning("browse the table", r"browse"),
     "--json": Meaning("one JSON document on stdout", r"JSON"),
     "--keep": Meaning("how many newest releases to keep", r"newest"),
+    "--last": Meaning("a time range up to now", r"up to now"),
     "--level": Meaning("the lowest log level shown", r"level"),
     "--live": Meaning("refuse fixtures", r"fixture"),
     "--mode": Meaning("backfill's validate/plan/run mode", r"validate"),
@@ -314,7 +316,6 @@ RULE3_ALLOWLIST = {
     ("summary", "--debug"): "#1729",
     ("job backfill", "--debug"): "#1729",
     ("logs", "-n"): "#1729",  # lines, not --dry-run
-    ("data seed", "--from"): "#1739",
     ("deploy rollback", "--to"): "#1739",
     ("logs", "--columns"): "#1739",
     ("job new", "--columns"): "#1739",

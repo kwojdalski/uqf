@@ -8,9 +8,14 @@ from typing import Annotated
 import typer
 from rich.table import Table
 
+from uqs import timerange
 from uqs.cli.shared import (
     JOB_OPERATIONS_PANEL,
+    DateOpt,
     InteractiveOpt,
+    LastOpt,
+    RangeFromOpt,
+    RangeToOpt,
     _die,
     _paths,
     _show,
@@ -78,8 +83,10 @@ def widen_to_grain(ledger_value: str, align_ns: int | None, *, upper: bool = Fal
 @job_app.command("gaps", rich_help_panel=JOB_OPERATIONS_PANEL)
 def gaps(
     job: Annotated[str, typer.Argument(help="The streaming job, e.g. markout")],
-    range_from: Annotated[str, typer.Option("--from", help="Start of the range to check")],
-    range_to: Annotated[str, typer.Option("--to", help="End of the range, exclusive")],
+    range_from: RangeFromOpt = None,
+    range_to: RangeToOpt = None,
+    day: DateOpt = None,
+    last: LastOpt = None,
     interactive: InteractiveOpt = False,
 ) -> None:
     """Where in [--from, --to) a streaming job was not up and subscribed.
@@ -95,8 +102,7 @@ def gaps(
     a minute wider than the real outage - never narrower.
     """
     try:
-        bound_from = stack_backfill.parse_bound("--from", range_from)
-        bound_to = stack_backfill.parse_bound("--to", range_to)
+        bound_from, bound_to = timerange.resolve(range_from, range_to, day, last).bounds
         holes, twins, sessions = stack_uptime.gaps(_paths(), job, bound_from, bound_to)
     except UqsError as exc:
         _die(exc)
