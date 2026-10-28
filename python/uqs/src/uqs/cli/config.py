@@ -21,6 +21,7 @@ import typer
 from rich.table import Table
 
 from uqs.cli import completion
+from uqs.cli.json_out import emit, json_opt
 from uqs.cli.renames import renamed
 from uqs.cli.shared import (
     BasePortOpt,
@@ -57,6 +58,11 @@ config_app = typer.Typer(
 app.add_typer(config_app, name="config")
 
 
+GetJson = json_opt(
+    '{"process", "fields": [{field, value}]} - or, given a FIELD, {"process", "field", "value"}'
+)
+
+
 @config_app.command("get", cls=renamed({"--port": "--base-port", "--raw": "--unresolved"}))
 def config_get(
     procname: Annotated[str, typer.Argument(autocompletion=completion.procname)],
@@ -66,6 +72,7 @@ def config_get(
         bool, typer.Option("--unresolved", help="Show unresolved ${VAR}/{VAR}+N placeholders as-is")
     ] = False,
     export: ExportOpt = None,
+    as_json: GetJson = False,
 ) -> None:
     """Show a process's effective process.csv row (or one field of it), with
     ${VAR}/{VAR}+N placeholders (KDBBASEPORT, KDBHDB, ...) resolved against
@@ -75,6 +82,13 @@ def config_get(
         row = stack_procs.get_process_config(_paths(), procname, base_port=port, resolve=not raw)
     except UqsError as exc:
         _die(exc)
+        return
+    if as_json and field is not None:
+        emit({"process": procname, "field": field, "value": row.get(field, "")})
+        return
+    if as_json:
+        emit({"process": procname, "fields": [{"field": k, "value": v} for k, v in row.items()]})
+        _export([{"field": k, "value": v} for k, v in row.items()], export)
         return
     if field is not None:
         console.print(row.get(field, ""))
@@ -174,6 +188,17 @@ def config_set(
     console.print(f"{procname}.{field} = {value}")
 
 
+LogsJson = json_opt(
+    '{"lines": [{time, host, procname, proctype, loglevel, id, message}]} - the history '
+    "only: not with --follow, --channel or --multitail"
+)
+_LINE_KEYS = ("time", "host", "procname", "proctype", "loglevel", "id", "message")
+
+
+def _json_lines(records: list[dict]) -> None:
+    emit({"lines": [{k: r.get(k) for k in _LINE_KEYS} for r in records]})
+
+
 @app.command(cls=renamed({"-n": "--lines", "--print": "--show-command"}))
 def logs(
     procs: ProcsArg = None,
@@ -252,6 +277,7 @@ def logs(
             "stamp (e.g. 20261027T1304)",
         ),
     ] = None,
+    as_json: LogsJson = False,
 ) -> None:
     """Tail out_/err_*.log for one or more processes through the same
     colorized logger the CLI itself uses, instead of raw per-process files -
@@ -268,6 +294,15 @@ def logs(
     no TorQ process: `logs --attach pb-uat --worker piggybank_ledger_backfill -f`
     (#1725). Its q errors and RESULT line are shown whatever `--level` says.
     """
+    if as_json:
+        for option, used in {
+            "--follow": follow,
+            "--channel": channel,
+            "--multitail": multitail,
+        }.items():
+            if used:
+                _die(UqsError(f"--json prints the history: {option} does not apply with it"))
+                return
     if attach is None:
         for option, used in {"--worker": worker, "--run": run}.items():
             if used is not None:
@@ -280,6 +315,11 @@ def logs(
                 _die(UqsError(f"{option} does not apply with --attach, which reads one run's log"))
                 return
         try:
+            if as_json:
+                _json_lines(attached_logs.recent(
+                    _paths(), attach, worker=worker, run=run, lines=lines, min_level=level
+                ))  # fmt: skip
+                return
             attached_logs.show(
                 _paths(), attach, worker=worker, run=run,
                 follow=follow, lines=lines, min_level=level,
@@ -318,6 +358,8 @@ def logs(
                 console.print(shlex.join(argv), markup=False, highlight=False, soft_wrap=True)
                 return
             stack_multitail.run_multitail(argv)
+        elif as_json:
+            _json_lines(stack_logs.get_recent_logs(_paths(), _procs(procs), lines, level))
         elif follow:
             stack_logs.follow_logs(_paths(), _procs(procs), min_level=level, lines=lines)
         else:

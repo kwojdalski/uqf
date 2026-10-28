@@ -9,13 +9,14 @@ home's layout and what env.sh sets.
 
 from __future__ import annotations
 
-import json
 import os
 from pathlib import Path
 from typing import Annotated
 
 import typer
+from rich.table import Table
 
+from uqs.cli.json_out import emit, json_opt
 from uqs.cli.shared import _die, app, console
 from uqs.paths import UqsError
 from uqs.stack import odbc_home
@@ -73,13 +74,29 @@ def rollback(home: Home) -> None:
     console.print(f"current is {version.name} again")
 
 
+StatusJson = json_opt('{"home", "current", "previous", "versions": [name, ...]}')
+
+
 @odbc_app.command("status")
-def status(home: Home) -> None:
+def status(home: Home, as_json: StatusJson = False) -> None:
     """The installed versions, and which is current and previous."""
     try:
-        print(json.dumps(odbc_home.status(home), indent=2))
+        found = odbc_home.status(home)
     except OSError as exc:
         _die(UqsError(f"cannot read {home}: {exc}"))
+        return
+    if as_json:
+        emit(found)
+        return
+    table = Table(title=f"ODBC versions in {found['home']}")
+    table.add_column("version")
+    table.add_column("")
+    for name in found["versions"]:
+        mark = {found["current"]: "current", found["previous"]: "previous"}.get(name, "")
+        table.add_row(name, mark)
+    console.print(table)
+    if not found["versions"]:
+        console.print("[dim]nothing installed - `uqs setup odbc install` first[/]")
 
 
 @odbc_app.command("env")

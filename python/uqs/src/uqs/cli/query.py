@@ -20,6 +20,7 @@ import typer
 
 from uqs.cli import completion
 from uqs.cli import query_target as via_target
+from uqs.cli.json_out import emit, json_opt
 from uqs.cli.renames import renamed
 from uqs.cli.shared import (
     ExportOpt,
@@ -139,6 +140,12 @@ def _gateway_session(
         _die(UqsError(f"could not open a session on gateway1 at {where}: {said}"))
 
 
+QueryJson = json_opt(
+    '{"expression", "result"} - a table as [{column: value}], a dictionary as an object, '
+    "a list as an array, a time as ISO text. Needs an expression"
+)
+
+
 @app.command(cls=renamed({"--raw": "--no-gateway", "--target": "--tunnel"}))
 def query(
     ctx: typer.Context,
@@ -199,6 +206,7 @@ def query(
         ),
     ] = None,
     export: ExportOpt = None,
+    as_json: QueryJson = False,
 ) -> None:
     """Run a q expression against a running process - or, with no expression,
     open an interactive session on it.
@@ -233,6 +241,9 @@ def query(
     if proc is not None and port is not None:
         _die(UqsError("name the process to query once: --proc NAME or --port N, not both"))
         return
+    if as_json and expr is None:
+        _die(UqsError("--json needs an expression whose result it can print"))
+        return
     if proc is None and port is None:
         proc = stack_gateway.DEFAULT_PROC
     routed = proc == stack_gateway.DEFAULT_PROC and not raw
@@ -245,7 +256,7 @@ def query(
         try:
             with via_target.connect(target, proc, port, base_port, user, passwd) as via:
                 _ask(expr, routed, via_target.LOOPBACK, via.port, user, passwd,
-                     servers, render, export, via)  # fmt: skip
+                     servers, render, export, via, as_json=as_json)  # fmt: skip
         except UqsError as exc:
             _die(exc)
         return
@@ -265,7 +276,7 @@ def query(
             _die(exc)
             return
         log.debug("query {} -> {}:{}", proc, host, port)
-    _ask(expr, routed, host, port, user, passwd, servers, render, export)
+    _ask(expr, routed, host, port, user, passwd, servers, render, export, as_json=as_json)
 
 
 def _ask(
@@ -279,6 +290,8 @@ def _ask(
     render: str,
     export,
     via: via_target.Via | None = None,
+    *,
+    as_json: bool = False,
 ) -> None:
     """Run `expr` - or, with none, a session - on host:port: the gateway's
     routing when `routed`. `via` is the target reached through a tunnel."""
@@ -294,12 +307,13 @@ def _ask(
             return
         _exec_qcon(host, port, user, passwd)
         return
-    # --export needs the data, not its picture, so it always takes kola's.
-    size = stack_render.console_size() if render == stack_render.Q and export is None else None
+    # --export and --json need the data, not its picture, so they take kola's.
+    picture = render == stack_render.Q and export is None and not as_json
+    size = stack_render.console_size() if picture else None
     # Who lays the answer out: runtime.query wraps it for a process asked
     # directly, while a routed expression carries its own layout - the
     # gateway's deferred reply skips any wrapper (stack/gateway.expression).
-    wrap_size = size
+    wrap_size, shown = size, expr
     if routed:
         try:
             expr = stack_gateway.expression(expr, servers, size)
@@ -314,8 +328,12 @@ def _ask(
         if via is not None:
             _die(via.failed(exc))
             return
-        log.error("query failed: {}", exc)
-        raise typer.Exit(code=1) from exc
+        _die(UqsError(f"query failed: {exc}"))
+        return
+    if as_json:
+        _export(result, export)  # first: a result it cannot write is refused alone
+        emit({"expression": shown, "result": result})
+        return
     if size is not None:
         _show_q(stack_render.text(result))
         return
