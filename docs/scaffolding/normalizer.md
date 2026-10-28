@@ -14,7 +14,7 @@ that job to write considerably more of it.
 ```bash
 uqs job new all_fills --kind normalizer \
     --subscribe-to trades,crypto_trades \
-    --columns "sym:symbol, venue:symbol, size:float"
+    --schema "sym:symbol, venue:symbol, size:float"
 ```
 
 **Do not pass `--publishes`.** A normalizer publishes the table it is named for,
@@ -25,7 +25,7 @@ $ uqs job new all_fills --kind normalizer --subscribe-to trades,crypto_trades --
 a normalizer publishes its own NAME - drop --publishes
 ```
 
-So `--columns` describes the **canonical output**, and each subscribed table is
+So `--schema` describes the **canonical output**, and each subscribed table is
 an input whose shape is read from the plant schema.
 
 ```

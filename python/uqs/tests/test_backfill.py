@@ -13,6 +13,7 @@ import subprocess
 from datetime import UTC, datetime, timedelta
 
 import pytest
+import rename_support
 from typer.testing import CliRunner
 
 from uqs import cli
@@ -104,7 +105,7 @@ def test_the_command_reaches_start_with_parsed_bounds(monkeypatch):
         return type("Completed", (), {"returncode": 0})()
 
     monkeypatch.setattr(backfill, "start", fake)
-    argv = ["job", "backfill", "demo_deals_backfill", "--version", "v1"]
+    argv = ["job", "backfill", "demo_deals_backfill", "--source-version", "v1"]
     argv += ["--from", "2026-09-13", "--to", "2026-09-15", "--port", "7000"]
     result = runner.invoke(cli.app, argv)
     assert result.exit_code == 0, result.output
@@ -143,7 +144,7 @@ def test_debug_starts_the_process_verbose(monkeypatch, argv_debug):
     # The global flag reconfigures logging for the whole process, which would
     # leak DEBUG output into every later test's captured stdout.
     monkeypatch.setattr(shared, "configure_logging", lambda **kw: None)
-    argv = ["job", "backfill", "demo_deals_backfill", "--version", "v1"]
+    argv = ["job", "backfill", "demo_deals_backfill", "--source-version", "v1"]
     argv += ["--from", "2026-09-13", "--to", "2026-09-15", *argv_debug]
     prefix = [] if argv_debug else ["--debug"]
     result = runner.invoke(cli.app, [*prefix, *argv])
@@ -193,7 +194,15 @@ def test_the_cli_passes_fixture_through(monkeypatch):
         return type("Completed", (), {"returncode": 0})()
 
     monkeypatch.setattr(backfill, "start", fake)
-    argv = ["job", "backfill", "demo_deals_backfill", "--version", "v2", "--from", "2026-09-13"]
+    argv = [
+        "job",
+        "backfill",
+        "demo_deals_backfill",
+        "--source-version",
+        "v2",
+        "--from",
+        "2026-09-13",
+    ]
     argv += ["--to", "2026-09-15", "--fixture"]
     result = runner.invoke(cli.app, argv)
     assert result.exit_code == 0, result.output
@@ -220,7 +229,15 @@ def test_the_cli_passes_on_conflict_through(monkeypatch):
         return type("Completed", (), {"returncode": 0})()
 
     monkeypatch.setattr(backfill, "start", fake)
-    argv = ["job", "backfill", "demo_deals_backfill", "--version", "v2", "--from", "2026-09-13"]
+    argv = [
+        "job",
+        "backfill",
+        "demo_deals_backfill",
+        "--source-version",
+        "v2",
+        "--from",
+        "2026-09-13",
+    ]
     argv += ["--to", "2026-09-15", "--on-conflict", "replace"]
     result = runner.invoke(cli.app, argv)
     assert result.exit_code == 0, result.output
@@ -261,18 +278,18 @@ def test_trace_on_the_command_line_reaches_the_process(monkeypatch):
         return type("Completed", (), {"returncode": 0})()
 
     monkeypatch.setattr(backfill, "start", fake)
-    argv = ["job", "backfill", "demo_deals_backfill", "--version", "v1"]
+    argv = ["job", "backfill", "demo_deals_backfill", "--source-version", "v1"]
     argv += ["--from", "2026-09-13", "--to", "2026-09-15", "--trace"]
     result = runner.invoke(cli.app, argv)
     assert result.exit_code == 0, result.output
     assert seen == {"verbose": False, "trace": True}
 
 
-@pytest.mark.parametrize("missing", ["--version", "--from", "--to"])
+@pytest.mark.parametrize("missing", ["--source-version", "--from", "--to"])
 def test_every_part_of_the_range_is_required(monkeypatch, missing):
     """No default range, anywhere: a guessed one would be recorded as covered."""
     monkeypatch.setattr(backfill, "start", lambda *a, **k: pytest.fail("must not start"))
-    args = {"--version": "v1", "--from": "2026-09-13", "--to": "2026-09-15"}
+    args = {"--source-version": "v1", "--from": "2026-09-13", "--to": "2026-09-15"}
     del args[missing]
     argv = ["job", "backfill", "demo_deals_backfill", *[x for kv in args.items() for x in kv]]
     assert runner.invoke(cli.app, argv).exit_code != 0
@@ -285,7 +302,7 @@ def test_a_refusal_exits_one_rather_than_raising():
             "job",
             "backfill",
             "nope",
-            "--version",
+            "--source-version",
             "v1",
             "--from",
             "2026-09-13",
@@ -427,7 +444,15 @@ def test_the_cli_passes_the_mode_through(monkeypatch):
         return type("Completed", (), {"returncode": 0})()
 
     monkeypatch.setattr(backfill, "start", fake)
-    argv = ["job", "backfill", "demo_deals_backfill", "--version", "v2", "--from", "2026-09-13"]
+    argv = [
+        "job",
+        "backfill",
+        "demo_deals_backfill",
+        "--source-version",
+        "v2",
+        "--from",
+        "2026-09-13",
+    ]
     argv += ["--to", "2026-09-15", "--mode", "plan"]
     result = runner.invoke(cli.app, argv)
     assert result.exit_code == 0, result.output
@@ -445,7 +470,9 @@ def test_a_worker_with_a_declared_default_needs_no_version():
 
 def test_a_worker_with_no_default_refuses_a_missing_version():
     """Deals can be restated upstream, so the release must be named."""
-    with pytest.raises(UqsError, match="declares no default source_version - pass --version"):
+    with pytest.raises(
+        UqsError, match="declares no default source_version - pass --source-version"
+    ):
         backfill.resolve_version("demo_deals_backfill", None)
 
 
@@ -621,7 +648,7 @@ def test_the_command_exits_with_the_runs_outcome_under_wait(monkeypatch):
     )
     owed = "1 reaction(s) owed over 1 window(s) (rebuild_positions)"
     monkeypatch.setattr(backfill_wait, "wait_for_outcome", lambda *a, **k: ("failed", 1, owed))
-    argv = ["job", "backfill", "demo_deals_backfill", "--version", "v1"]
+    argv = ["job", "backfill", "demo_deals_backfill", "--source-version", "v1"]
     argv += ["--from", "2026-09-13", "--to", "2026-09-15", "--wait"]
     result = runner.invoke(cli.app, argv)
     assert result.exit_code == 1, result.output
@@ -656,9 +683,29 @@ def test_wait_with_a_mode_that_writes_no_status_is_refused(monkeypatch):
 
     monkeypatch.setattr(backfill, "start", lambda *a, **k: started.append(a))
     monkeypatch.setattr(cli_backfill, "_die", die)
-    argv = ["job", "backfill", "demo_deals_backfill", "--version", "v1"]
+    argv = ["job", "backfill", "demo_deals_backfill", "--source-version", "v1"]
     argv += ["--from", "2026-09-13", "--to", "2026-09-15", "--wait", "--mode", "plan"]
     result = runner.invoke(cli.app, argv)
     assert result.exit_code == 1
     assert refused and "nothing to wait for" in refused[0]
     assert started == []
+
+
+@pytest.mark.parametrize("option", ["--source-version", "--version"])
+def test_version_is_the_old_spelling_of_source_version(monkeypatch, option):
+    """#1739: `uqs --version` prints uqs's version, so the source release a
+    backfill records coverage under is --source-version."""
+    said = rename_support.said(monkeypatch)
+    seen = {}
+
+    def fake(paths, worker, version, *a, **k):
+        seen["version"] = version
+        return type("Completed", (), {"returncode": 0})()
+
+    monkeypatch.setattr(backfill, "start", fake)
+    argv = ["job", "backfill", "demo_deals_backfill", option, "v7", "--date", "2026-09-13"]
+    result = runner.invoke(cli.app, argv)
+    assert result.exit_code == 0, result.output
+    assert seen["version"] == "v7"
+    renames = [rename_support.renamed("--version", "--source-version")]
+    assert said == (renames if option == "--version" else [])

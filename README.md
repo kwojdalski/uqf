@@ -84,7 +84,7 @@ uv run uqs query "count fx_orderbook" --port 6052   # 6052 = base port + 2 = rdb
 is covered. It registers with discovery, so the fleet above has to be up:
 
 ```
-uv run uqs job backfill demo_deals_backfill --version v1 --from 2026-09-13 --to 2026-09-15 --fixture
+uv run uqs job backfill demo_deals_backfill --source-version v1 --from 2026-09-13 --to 2026-09-15 --fixture
 ```
 
 `--from` and `--to` are required and UTC; `--fixture` is for the demo's built-in
@@ -96,15 +96,15 @@ lists every file it would create or append to without writing any of them:
 ```
 # a streaming job: reads quote, publishes a table of its own
 uv run uqs job new spread_stats --subscribe-to quote \
-    --publishes spread_stats --columns "sym:symbol, spread_pips:float" --dry-run
+    --publishes spread_stats --schema "sym:symbol, spread_pips:float" --dry-run
 
 # a feed: subscribes to nothing, publishes on a timer
 uv run uqs job new rates_feed --publishes rates \
-    --columns "sym:symbol, mid:float" --dry-run
+    --schema "sym:symbol, mid:float" --dry-run
 
 # a bounded worker, with its source and transform, one day per window
 uv run uqs job new eod_rates --kind backfill --dataset eod_rates \
-    --columns "sym:symbol, mid:float" --width 1D --dry-run
+    --schema "sym:symbol, mid:float" --width 1D --dry-run
 ```
 
 The scaffold is meant to fail until you fill it in; [Adding a data

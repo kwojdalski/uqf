@@ -31,7 +31,7 @@ in `.github/workflows/ci.yml`).
   | a table's columns in a running process                 | `uqs schema`                                                                                  |
   | logs                                                   | `uqs logs NAME --level ERROR`, `-f`, `--multitail`                                            |
   | list processes, profiles, runtimes, overrides, env     | `uqs list KIND` (no argument lists the kinds)                                                 |
-  | a bounded worker over a range                          | `uqs job backfill WORKER --from T --to T --version V [--wait] [--debug|--trace]`              |
+  | a bounded worker over a range                          | `uqs job backfill WORKER --from T --to T --source-version V [--wait] [--debug|--trace]`       |
   | runs: unfinished, one run, one window                  | `uqs job runs status`, `uqs job runs show RUN_ID`, `uqs job runs list`                        |
   | holes in a streaming job's output, and refill commands | `uqs job gaps JOB --from T --to T`                                                            |
   | scaffold, remove or install a job                      | `uqs job new`, `uqs job remove`, `uqs job install`                                            |

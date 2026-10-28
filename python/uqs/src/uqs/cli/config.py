@@ -21,6 +21,7 @@ import typer
 from rich.table import Table
 
 from uqs.cli import completion
+from uqs.cli.renames import from_old, old_spelling
 from uqs.cli.shared import (
     ExportOpt,
     InteractiveOpt,
@@ -203,10 +204,11 @@ def logs(
             autocompletion=completion.choices("out", "err", "both"),
         ),
     ] = None,
-    columns: Annotated[
+    pane_columns: Annotated[
         int | None,
-        typer.Option("--columns", "-c", help="With --multitail: split the panes into N columns"),
+        typer.Option("--pane-columns", help="With --multitail: lay the panes out in N columns"),
     ] = None,
+    columns: Annotated[int | None, old_spelling("--pane-columns", "--columns", "-c")] = None,
     print_only: Annotated[
         bool,
         typer.Option("--print", help="With --multitail: show its command without running it"),
@@ -292,9 +294,10 @@ def logs(
             if used:
                 _die(UqsError(f"{option} does not apply with --channel, which is always live"))
                 return
+    pane_columns = from_old(pane_columns, columns, "--columns", "--pane-columns")
     given = {
         "--stream": stream is not None,
-        "--columns": columns is not None,
+        "--pane-columns": pane_columns is not None,
         "--print": print_only,
     }
     if multitail:
@@ -309,7 +312,11 @@ def logs(
             stack_channel.follow_channel(_paths(), _procs(procs), ids=ids or (), min_level=level)
         elif multitail:
             argv = stack_multitail.multitail_command(
-                _paths(), _procs(procs), stream=stream or "both", columns=columns or 1, lines=lines
+                _paths(),
+                _procs(procs),
+                stream=stream or "both",
+                columns=pane_columns or 1,
+                lines=lines,
             )
             if print_only:
                 console.print(shlex.join(argv), markup=False, highlight=False, soft_wrap=True)

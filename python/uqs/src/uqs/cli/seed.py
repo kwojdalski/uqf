@@ -9,6 +9,7 @@ from typing import Annotated
 import typer
 
 from uqs import timerange
+from uqs.cli.renames import renamed
 from uqs.cli.shared import (
     DateOpt,
     LastOpt,
@@ -18,7 +19,6 @@ from uqs.cli.shared import (
     _paths,
     console,
     data_app,
-    renamed,
 )
 from uqs.paths import UqsError, paths_for_root
 from uqs.runtimes import RUNTIMES

@@ -132,11 +132,11 @@ def gaps(
         console.print("\n[bold]refill[/] - re-running is idempotent: covered windows are skipped")
     for worker, align in twins.items() if advised else ():
         try:
-            version = f" --version {stack_backfill.resolve_version(worker, None)}"
+            version = f" --source-version {stack_backfill.resolve_version(worker, None)}"
         except UqsError:
             # No declared default: the source release is the operator's to
             # name, so it is shown as one to fill in, not guessed.
-            version = " --version <V>"
+            version = " --source-version <V>"
         for hole in advised:
             start = widen_to_grain(str(hole["range_from"]), align)
             end = widen_to_grain(str(hole["range_to"]), align, upper=True)

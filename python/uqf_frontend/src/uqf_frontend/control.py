@@ -366,7 +366,7 @@ def _require_utc(name: str, raw: str) -> dt.datetime:
     Identical reasoning to the coverage endpoint's: a naive timestamp is read
     as the server's local time, and a backfill an hour wide of where the
     caller meant records coverage for the wrong window. And the rule
-    `uqs job backfill` applies to its own bounds (uqs.stack.backfill): a datetime
+    `uqs job backfill` applies to its own bounds (uqs.timerange): a datetime
     stops at the microsecond, and `fromisoformat` would keep the first six
     digits of a finer fraction without a word - a range 789 ns short of the
     one the caller sent, recorded as covered.

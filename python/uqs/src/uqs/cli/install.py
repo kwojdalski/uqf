@@ -20,10 +20,17 @@ from rich.table import Table
 from rich.text import Text
 
 from uqs.checks.traced_queries import untraced_lines
-from uqs.cli import completion, install_bundle
+from uqs.cli import install_bundle
 from uqs.cli.create_plant import plant_tables as _plant_tables
 from uqs.cli.regenerate import _DERIVED, _regenerate_derived
-from uqs.cli.shared import JOB_AUTHORING_PANEL, _die, _paths, console, job_app
+from uqs.cli.renames import old_spelling, renamed
+from uqs.cli.shared import (
+    JOB_AUTHORING_PANEL,
+    _die,
+    _paths,
+    console,
+    job_app,
+)
 from uqs.model.declarations import Declaration, declaration_calls, read_file, symbols
 from uqs.model.pipeline import PipelineKind
 from uqs.paths import UqsError
@@ -166,7 +173,7 @@ def _next_steps(declarations: list[Declaration], sidecar_tests: list[Path]) -> P
     for worker in workers:
         step(
             "Run a worker (the fleet must be up)",
-            f"uqs job backfill {worker} --version v1 --from 2026-09-01 --to 2026-09-02",
+            f"uqs job backfill {worker} --source-version v1 --from 2026-09-01 --to 2026-09-02",
         )
     step("Each one answers", "uqs summary --columns status   (Responds: yes)")
     step("How long each took to load", "uqs summary --debug")
@@ -205,12 +212,11 @@ def install_jobs(
             dir_okay=True,
         ),
     ],
-    mode: Annotated[
-        Mode | None,
+    link: Annotated[
+        bool | None,
         typer.Option(
-            "--mode",
-            help="copy or symlink. Omit to be asked",
-            autocompletion=completion.choices(*(m.value for m in Mode)),
+            "--link/--copy",
+            help="Symlink the files into the tree, or copy them. Omit to be asked",
             show_default=False,
         ),
     ] = None,
@@ -223,9 +229,12 @@ def install_jobs(
     yes: Annotated[
         bool,
         typer.Option(
-            "--yes", "-y", help="Ask nothing (needs --mode); conflicts are kept unless --overwrite"
+            "--yes",
+            "-y",
+            help="Ask nothing (needs --link or --copy); conflicts are kept unless --overwrite",
         ),
     ] = False,
+    old_mode: Annotated[Mode | None, old_spelling("--link or --copy", "--mode")] = None,
 ) -> None:
     """Install sources, workers and streaming jobs from a folder outside the tree.
 
@@ -238,7 +247,7 @@ def install_jobs(
 
         uqs job install ../sidecars
 
-        uqs job install ../sidecars --mode symlink --yes
+        uqs job install ../sidecars --link --yes
 
     A folder holding bundle.json is a BUNDLE: its jobs plus the plant tables,
     catalog entries and process overrides they need, installed together as
@@ -246,6 +255,10 @@ def install_jobs(
 
         uqs job install ../piggybank-bundle --yes
     """
+    mode = None if link is None else (Mode.SYMLINK if link else Mode.COPY)
+    if old_mode is not None:
+        renamed(f"--mode {old_mode.value}", "--link" if old_mode is Mode.SYMLINK else "--copy")
+        mode = old_mode if mode is None else mode
     repo_root = _paths().repo_root
     sidecar = sidecar.resolve()
     if bundles.is_bundle(sidecar):
@@ -300,7 +313,7 @@ def install_jobs(
 
     if mode is None:
         if yes:
-            _die(UqsError("--yes asks nothing, so it needs --mode copy or --mode symlink"))
+            _die(UqsError("--yes asks nothing, so it needs --link or --copy"))
             return
         mode = _ask_mode()
     replace = _resolve_conflicts(items, overwrite, yes, repo_root)

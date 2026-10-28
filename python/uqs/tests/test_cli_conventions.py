@@ -15,9 +15,9 @@ on a listed one that is no longer a violation, so the lists only shrink - the
 way tests/q/peachq_known_gaps.txt does for PeachQ. When a sub-issue lands, the
 test names the rows to delete.
 
-Hidden commands are skipped: rule 6 ships each rename with the old spelling as
-a hidden alias for one release, and an alias is on its way out, not a command
-to hold to the rules.
+Hidden commands and options are skipped: rule 6 ships each rename with the old
+spelling as a hidden alias for one release, and an alias is on its way out, not
+a command or an option to hold to the rules.
 """
 
 from __future__ import annotations
@@ -54,7 +54,12 @@ class Cmd:
 
     @property
     def options(self) -> list:
-        return [p for p in self.command.params if p.param_type_name == "option"]
+        # a hidden option is a renamed one's old spelling (rule 6): on its way out
+        return [
+            p
+            for p in self.command.params
+            if p.param_type_name == "option" and not getattr(p, "hidden", False)
+        ]
 
     def option(self, name: str):
         return next((p for p in self.options if name in p.opts + p.secondary_opts), None)
@@ -258,6 +263,7 @@ OPTIONS = {
     "--raw": Meaning("retired: --no-gateway / --unresolved", None),
     "--remote-user": Meaning("run as this account through sudo", r"sudo"),
     "--reverse": Meaning("sort descending", r"descending"),
+    "--schema": Meaning("tables' columns and their types", r"schema"),
     "--skip-profile-budget-check": Meaning("bypass the budget check", r"budget"),
     "--skip-q-version-check": Meaning("bypass the q version check", r"q too old"),
     "--sort": Meaning("sort by a column", r"sort by"),
@@ -317,11 +323,6 @@ RULE3_ALLOWLIST = {
     ("job backfill", "--debug"): "#1729",
     ("logs", "-n"): "#1729",  # lines, not --dry-run
     ("deploy rollback", "--to"): "#1739",
-    ("logs", "--columns"): "#1739",
-    ("job new", "--columns"): "#1739",
-    ("connector start", "--dataset"): "#1739",
-    ("job install", "--mode"): "#1739",
-    ("job backfill", "--version"): "#1739",
     **{(f"deploy {c}", "--host"): "#1739" for c in ("push", "status", "rollback", "prune")},
 }
 

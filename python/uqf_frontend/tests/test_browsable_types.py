@@ -1,6 +1,6 @@
 """The set of browsable column types has one authority: catalog.QType (#1364).
 
-`uqs job new --columns qty:int` is accepted by the scaffold, the gates then
+`uqs job new --schema qty:int` is accepted by the scaffold, the gates then
 require the new table to be described, and the browser's catalog used to
 answer 500 for every table because it did not know `int`. Three homes held
 the set - the scaffold's types, catalog.QType, and the browser's api.ts - and

@@ -920,7 +920,7 @@ side rather than interleaved. It takes the same process names and needs the
 
 ```
 uqs logs --multitail rdb1 fxpositions1          # a pane for each out_/err_ log, stacked
-uqs logs --multitail all --stream err -c 2      # every process's err_ log, in two columns
+uqs logs --multitail all --stream err --pane-columns 2  # every process's err_ log, in two columns
 uqs logs --multitail stp1 -n 100 --print        # show the multitail command, run nothing
 ```
 
@@ -980,7 +980,7 @@ stall, so the last line in `uqs logs <procname>` says where it stopped:
   | `no credential - running on the source's fixture` (WARNING)                  | a backfill is publishing the fixture, not live data. The line gives the `sources.csv` row to add (`settings_row`), the variable that overrides it (`UQF_SOURCE_CRED_<SOURCE>`), what the value should be for that source - an ODBC connection string, or `host:port` for kdb+ - and an example. Add the row (`uqs config sources stub SOURCE` starts one), or export the variable in the shell you run `uqs job backfill` from                                                                                                                                                                                                            |
   | `hdb reload: could not open a handle to every registered hdb` (ERROR)        | a backfill wrote its rows and the running HDB has not reloaded them. `registered` is how many HDBs discovery knows, `opened` how many let this process in; TorQ's own `connection to ... failed: access` line just before says it was refused. A backfill connects as the ETL identity (`appconfig/passwords/metrics.txt`) unless `passwords/backfill.txt` or `<procname>.txt` gives it its own - see its `outbound credential` line at startup. `hdb reload requested` now reports `registered`, `opened` and `reloaded`, so `0 0 0` is "no HDB running"                                                                                 |
   | `backfill finished with rows a running hdb has not reloaded` (ERROR)         | the run's last reload still fell short of every registered HDB (#1084). The rows are on disk and covered; a running HDB serves them once it reloads or restarts. Until then the run's report says `hdb_unreloaded 1b`, and a refused or failed reload is retried at each later window rather than forgotten. The `hdb reload` line before it says which HDBs were registered, opened and reloaded                                                                                                                                                                                                                                         |
-  | `idle - every window in the range is already covered`                        | nothing to do at this `--version`: coverage says the range is done. A new source release is a new version                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+  | `idle - every window in the range is already covered`                        | nothing to do at this `--source-version`: coverage says the range is done. A new source release is a new version                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
   | `checkpoint is for another run - starting from the beginning`                | the range or version changed since the last run, so its checkpoint does not apply                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
   | `state file unreadable - using the previous generation` (WARNING)            | a cursor, checkpoint or ledger file did not parse - a crash mid-write, a full disk, a hand edit - and its `.bak` was used instead: at most one page or window is done again                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
   | `load_checkpoint: ... is unreadable ... and so is its .bak`                  | neither generation of a backfill's checkpoint parses. `uqs remove checkpoint WORKER` starts the run over; windows already in the coverage ledger are still skipped                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
@@ -1098,7 +1098,7 @@ installed with:
 ```
 uqs job install ../sidecars                        # the wizard
 uqs job install ../sidecars --dry-run              # just the plan
-uqs job install ../sidecars --mode symlink --yes   # no questions, for scripts
+uqs job install ../sidecars --link --yes            # no questions, for scripts
 ```
 
 A file in `src/etl/sources`, `src/etl/workers` or `src/etl/streaming` is already
@@ -1118,14 +1118,14 @@ with the reason:
   runner finds a suite by the tests it holds), so putting one there is a
   decision rather than a copy.
 
-The wizard asks **copy** or **symlink**. A copy is a snapshot the tree owns:
-edit the sidecar and install again. A symlink keeps the sidecar the source of
-truth - edits are live on the next start - but moving or deleting the sidecar
-breaks the tree, so it suits a development checkout only. To ship jobs to a
-server, give the folder a `bundle.json`: see [sidecar
-bundles](sidecar-bundles.md). A file already in place and identical is left
-alone; one that differs is replaced only if you agree, or with `--overwrite`
-(`--yes` alone keeps it).
+The wizard asks **copy** or **symlink** (`--copy` or `--link` to say up front).
+A copy is a snapshot the tree owns: edit the sidecar and install again. A
+symlink keeps the sidecar the source of truth (edits are live on the next
+start), but moving or deleting the sidecar breaks the tree, so it suits a
+development checkout only. To ship jobs to a server, give the folder a
+`bundle.json`: see [sidecar bundles](sidecar-bundles.md). A file already in
+place and identical is left alone; one that differs is replaced only if you
+agree, or with `--overwrite` (`--yes` alone keeps it).
 
 **Every query must be one `--trace` can see.** A polling feed or a backfill
 source that calls its handle directly, as `h(...)`, `h@...` or `h"select ..."`,
@@ -1146,8 +1146,8 @@ check it is running:
 uqs list processes                      # the registry sees the new processes
 uqs start --print <procname>                    # the exact start line
 uqs start <procname>                    # streaming jobs
-uqs job backfill <worker> --version v1 --from 2026-09-01 --to 2026-09-02 --mode plan
-uqs job backfill <worker> --version v1 --from 2026-09-01 --to 2026-09-02
+uqs job backfill <worker> --source-version v1 --from 2026-09-01 --to 2026-09-02 --mode plan
+uqs job backfill <worker> --source-version v1 --from 2026-09-01 --to 2026-09-02
 uqs summary --columns status            # up, and Responds: yes
 uqs summary --debug                     # how long each took to load
 uqs logs <procname> -f

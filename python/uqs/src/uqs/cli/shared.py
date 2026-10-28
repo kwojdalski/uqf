@@ -258,12 +258,6 @@ LastOpt = Annotated[
 ]
 
 
-def renamed(old: str, new: str) -> None:
-    """Rule 6 of #1738: a renamed option's old spelling still works, hidden, for
-    one release - and says, every time it is used, what to type instead."""
-    log.warning("{} is renamed {}; the old spelling goes in the next release", old, new)
-
-
 InteractiveOpt = Annotated[
     bool,
     typer.Option(

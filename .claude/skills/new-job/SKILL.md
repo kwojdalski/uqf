@@ -40,38 +40,38 @@ expensive to undo.
 ```bash
 # continuous: subscribes to two tables, publishes one
 uqs job new markout2 --subscribe-to trades,quote \
-    --publishes my_metric --columns "sym:symbol, px:float" --dry-run
+    --publishes my_metric --schema "sym:symbol, px:float" --dry-run
 
 # continuous FEED: subscribes to nothing, publishes on a timer
-uqs job new tickfeed --publishes ticks --columns "sym:symbol, px:float"
+uqs job new tickfeed --publishes ticks --schema "sym:symbol, px:float"
 
 # bounded worker: source + worker + transform together
 uqs job new fx_rates --kind backfill --dataset fx_rates \
-    --columns "sym:symbol, mid:float" --width 1D
+    --schema "sym:symbol, mid:float" --width 1D
 
 # the same, reading a database over ODBC rather than a q process
 uqs job new ledger --kind backfill --dataset ledger \
-    --columns "sym:symbol, amt:float" --transport odbc
+    --schema "sym:symbol, amt:float" --transport odbc
 
 # an adapter that reads other columns than it returns: declare the physical side
-# (`raw`) - the source check holds the table to it, and the rows to --columns
+# (`raw`) - the source check holds the table to it, and the rows to --schema
 uqs job new events --kind backfill --dataset events --transport odbc \
-    --columns "sym:symbol, px:float" \
+    --schema "sym:symbol, px:float" \
     --raw-table EVENTS --raw-columns "CREATED_AT:timestamp, PAYLOAD:any"
 
 # a second worker over that source, into its own dataset: the source is reused
 uqs job new fx_rates_1h --kind backfill --dataset fx_rates_1h \
-    --source fx_rates --columns "sym:symbol, mid:float" --width 0D01
+    --source fx_rates --schema "sym:symbol, mid:float" --width 0D01
 
 # normalizer: several tables carrying one fact, one canonical table out -
 # NAME is that table, and each source gets a .qetl.transform mapping and an example
 uqs job new ticks --kind normalizer --subscribe-to quote,trades \
-    --columns "source_time:timestamp, sym:symbol, px:float" --dry-run
+    --schema "source_time:timestamp, sym:symbol, px:float" --dry-run
 
 # horizon: each event evaluated once --horizon has passed (a markout), against
 # a reference table - events first, then reference
 uqs job new fill_marks --kind horizon --subscribe-to executions,market_data \
-    --horizon 0D00:01:00 --columns "sym:symbol, markout_bps:float" --dry-run
+    --horizon 0D00:01:00 --schema "sym:symbol, markout_bps:float" --dry-run
 
 # reaction: recompute each time a bounded worker publishes a window of a dataset.
 # No process of its own - it runs in the worker's. --writes puts it in the job graph
@@ -130,14 +130,13 @@ they may have opinions about.
 
 `kind` is derived for a streaming job --- no `--subscribe-to` means a feed ---
 so do not ask for it. `--publishes` takes a comma list. A table the plant
-already defines is published onto as it is - no `--columns`, and none is
-accepted - so `--columns` (or `--columns-from TABLE`, which copies an existing
-plant table's shape exactly; `venue:g#symbol` groups a column other than `sym`,
-`x:list` is a vector column) shapes the one NEW table, and two new tables in one
-scaffold are refused. `--subscribe-to` must name tables the plant defines
-(`plant_tables.q` or the vendored `quote`/`trade`): a typo is refused rather
-than scaffolded into a job that never receives a row, so scaffold a producer
-before its consumer.
+already defines is published onto as it is - no `--schema`, and none is accepted -
+so `--schema` (or `--schema-from TABLE`, which copies an existing plant table's
+shape exactly; `venue:g#symbol` groups a column other than `sym`, `x:list` is a
+vector column) shapes the one NEW table, and two new tables in one scaffold are
+refused. `--subscribe-to` must name tables the plant defines (`plant_tables.q`
+or the vendored `quote`/`trade`): a typo is refused rather than scaffolded into
+a job that never receives a row, so scaffold a producer before its consumer.
 
 ## Step 2 --- what the scaffold deliberately leaves broken
 

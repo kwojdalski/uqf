@@ -24,6 +24,7 @@ import typer
 from rich.table import Table
 
 from uqs.cli import completion
+from uqs.cli.renames import from_old, old_spelling
 from uqs.cli.shared import _die, _paths, app, console
 from uqs.external import crypto, databento_feed, kafka_feed
 from uqs.external.crypto import (
@@ -68,7 +69,7 @@ def _list_or(value: str | None, default: tuple[str, ...]) -> tuple[str, ...]:
 def _start_databento(o: dict[str, Any]) -> str:
     pid = databento_feed.start_databento_feed(
         _paths(),
-        dataset=_or(o["dataset"], databento_feed.DEFAULT_DATASET),
+        dataset=_or(o["databento_dataset"], databento_feed.DEFAULT_DATASET),
         symbols=_list_or(o["symbols"], tuple(databento_feed.DEFAULT_SYMBOLS)),
         api_key=o["api_key"],
     )
@@ -129,7 +130,7 @@ class _Feed:
 
 FEEDS: dict[str, _Feed] = {
     "databento": _Feed(
-        ("dataset", "symbols", "api_key"),
+        ("databento_dataset", "symbols", "api_key"),
         _start_databento,
         lambda paths: databento_feed.stop_databento_feed(paths),
         lambda paths: databento_feed.databento_feed_status(paths),
@@ -205,7 +206,9 @@ def _opt(help_: str, feeds: str):
 @connector_app.command("start")
 def start(
     name: FeedArg,
-    dataset: Annotated[str | None, _opt("Databento dataset, e.g. XNAS.ITCH", "databento")] = None,
+    databento_dataset: Annotated[
+        str | None, _opt("Databento dataset, e.g. XNAS.ITCH", "databento")
+    ] = None,
     api_key: Annotated[
         str | None,
         _opt(f"API key; defaults to ${databento_feed.DATABENTO_API_KEY_ENV}", "databento"),
@@ -233,6 +236,7 @@ def start(
         int | None, _opt("Poll interval in milliseconds", "crypto-fills")
     ] = None,
     port: Annotated[int | None, _opt("Stack base port", "crypto, crypto-fills")] = None,
+    dataset: Annotated[str | None, old_spelling("--databento-dataset", "--dataset")] = None,
 ) -> None:
     """Start a feed publishing onto the running stack's tickerplant.
 
@@ -246,8 +250,9 @@ def start(
     already-running cryptorust OMS.
     """
     feed = _feed(name)
+    databento_dataset = from_old(databento_dataset, dataset, "--dataset", "--databento-dataset")
     options = {
-        "dataset": dataset,
+        "databento_dataset": databento_dataset,
         "api_key": api_key,
         "brokers": brokers,
         "topic": topic,

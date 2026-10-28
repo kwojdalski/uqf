@@ -103,7 +103,7 @@ def test_the_cli_prints_each_gap_and_the_backfill_that_refills_it(monkeypatch):
     assert "2026-09-13T10:20:00.000000000" in result.output
     assert (
         "uqs job backfill hdb_demo_markouts_backfill --from 2026-09-13T10:00:00 "
-        "--to 2026-09-13T10:20:00 --version <V>"
+        "--to 2026-09-13T10:20:00 --source-version <V>"
     ) in result.output
 
 
@@ -142,7 +142,7 @@ def test_a_gap_across_midnight_into_today_is_refilled_up_to_midnight(monkeypatch
     result = _gaps_cli(monkeypatch, [hole], ["hdb_demo_markouts_backfill"])
     assert (
         "uqs job backfill hdb_demo_markouts_backfill --from 2026-09-13T23:00:00 "
-        "--to 2026-09-14T00:00:00 --version <V>"
+        "--to 2026-09-14T00:00:00 --source-version <V>"
     ) in result.output
     assert "after end of day" in result.output
 
@@ -150,7 +150,7 @@ def test_a_gap_across_midnight_into_today_is_refilled_up_to_midnight(monkeypatch
 def test_a_gap_before_today_is_advised_whole_and_nothing_is_said_about_today(monkeypatch):
     monkeypatch.setattr(gaps_cli, "_utc_today", lambda: date(2026, 9, 14))
     result = _gaps_cli(monkeypatch, [_HOLE], ["hdb_demo_markouts_backfill"])
-    assert "--to 2026-09-13T10:20:00 --version <V>" in result.output
+    assert "--to 2026-09-13T10:20:00 --source-version <V>" in result.output
     assert "after end of day" not in result.output
 
 
@@ -222,7 +222,7 @@ def test_an_end_a_nanosecond_before_midnight_rounds_up_into_the_next_day(monkeyp
         "range_to": "2026-09-13T23:59:59.999999999",
     }
     result = _gaps_cli(monkeypatch, [hole], ["hdb_demo_markouts_backfill"])
-    assert "--from 2026-09-13T23:00:00 --to 2026-09-14T00:00:00 --version" in result.output
+    assert "--from 2026-09-13T23:00:00 --to 2026-09-14T00:00:00 --source-version" in result.output
 
 
 # --- a bar-building twin is advised a range on its grid (#1323) --------------
@@ -273,7 +273,9 @@ def test_a_grain_that_does_not_divide_the_epoch_gap_lands_on_qs_grid(upper):
 def test_the_advised_exec_bars_refill_is_minute_aligned_and_widened(monkeypatch):
     result = _gaps_cli(monkeypatch, [_NS_HOLE], {"hdb_exec_bars_backfill": _MINUTE_NS})
     command = _printed_command(result.output)
-    assert "--from 2026-09-13T10:00:00 --to 2026-09-13T10:05:00 --version" in command, command
+    assert "--from 2026-09-13T10:00:00 --to 2026-09-13T10:05:00 --source-version" in command, (
+        command
+    )
 
 
 def test_the_advised_exec_bars_refill_is_accepted_by_init(monkeypatch, status):
