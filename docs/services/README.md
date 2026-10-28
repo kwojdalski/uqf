@@ -6,10 +6,11 @@ where rows are made to what is computed from them. A card with **Details** links
 to a full page on how it is built and why.
 
 The fastest way to see a group running is its start profile:
-`uqs up --profile fx` starts what the FX chain needs and streams its logs. The
-whole stack is `uqs start`. Starting and stopping, config and logs are covered
-in [running the uqf stack](../guides/uqs.md). Ports, subscriptions and the full
-table list are in the generated [process table](../reference/processes.md).
+`uqs start --profile fx -f` starts what the FX chain needs and streams its logs.
+The whole stack is `uqs start`. Starting and stopping, config and logs are
+covered in [running the uqf stack](../guides/uqs.md). Ports, subscriptions and
+the full table list are in the generated [process
+table](../reference/processes.md).
 
 ![How the stack's processes differ: where their rows come from, then what they do with the tables they read](../diagrams/services-showcase.svg)
 
