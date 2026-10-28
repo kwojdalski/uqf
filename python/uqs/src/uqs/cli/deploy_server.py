@@ -1,7 +1,11 @@
 """`uqs deploy status`, `rollback`, `prune` and `verify`: commands about a
 server that already runs a release, beside cli/deploy.py's build and push,
 which make and install one. status, rollback and prune read what the server's
-own pushes recorded; verify runs ON the server, from inside a release."""
+own pushes recorded; verify runs ON the server, from inside a release.
+
+status, rollback and prune name their server as a TARGET, or by the
+connection flags for one no target declares (cli/deploy_connection.py, #1736).
+"""
 
 from __future__ import annotations
 
@@ -10,38 +14,26 @@ from typing import Annotated
 
 import typer
 
+from uqs.cli import deploy_connection as conn
 from uqs.cli.deploy import _failed, deploy_app
 from uqs.deploy import config, prune, rollback, status, verify
 from uqs.deploy.prune import RELEASE_ID
 from uqs.deploy.remote import Remote
 
-Host = Annotated[str, typer.Option("--host", help="ssh destination, as your ssh config knows it")]
-Dest = Annotated[str, typer.Option("--dest", help="Absolute directory on the server")]
-RemoteUser = Annotated[
-    str | None,
-    typer.Option("--remote-user", help="Run the steps as this account (`sudo -n -iu`)"),
-]
-ConnectTimeout = Annotated[int, typer.Option("--connect-timeout", help="ssh/scp, seconds")]
 
-
-def _server(host: str, dest: str, remote_user: str | None, connect_timeout: int, **timeouts):
-    # profile is unused: each release's own report names the profile it runs
-    cfg = config.make_config(
-        artifact="",
-        host=host,
-        dest=dest,
-        profile="unused",
-        remote_user=remote_user,
-        connect_timeout=connect_timeout,
-        **timeouts,
+def _server(ctx, target, host, dest, remote_user, connect_timeout, **timeouts):
+    connection = conn.server(
+        ctx, target, host=host, dest=dest, remote_user=remote_user, connect_timeout=connect_timeout
     )
+    # profile is unused: each release's own report names the profile it runs
+    cfg = config.make_config(artifact="", profile="unused", **connection, **timeouts)
     return cfg, Remote(cfg.host, cfg.connect_timeout, remote_user=cfg.remote_user)
 
 
 @deploy_app.command("status")
 def status_cmd(
-    host: Host,
-    dest: Dest,
+    ctx: typer.Context,
+    target: conn.Target = None,
     as_json: Annotated[
         bool, typer.Option("--json", help="Print the status as JSON, to script against")
     ] = False,
@@ -52,15 +44,17 @@ def status_cmd(
     health_timeout: Annotated[
         int, typer.Option("--health-timeout", help="How long processes have to answer, seconds")
     ] = 10,
-    remote_user: RemoteUser = None,
-    connect_timeout: ConnectTimeout = 10,
+    host: conn.Host = None,
+    dest: conn.Dest = None,
+    remote_user: conn.RemoteUser = None,
+    connect_timeout: conn.ConnectTimeout = conn.DEFAULT_CONNECT_TIMEOUT,
 ) -> None:
     """What a server runs: its current and previous releases, the last
     deployment's outcome, whether current's processes answer, and the lock.
     Read-only; it never takes the lock."""
     try:
         cfg, remote = _server(
-            host, dest, remote_user, connect_timeout, verify_timeout=health_timeout
+            ctx, target, host, dest, remote_user, connect_timeout, verify_timeout=health_timeout
         )
         result = status.status(cfg, remote, health=health)
     except config.DeployError as exc:
@@ -72,8 +66,8 @@ def status_cmd(
 
 @deploy_app.command("rollback")
 def rollback_cmd(
-    host: Host,
-    dest: Dest,
+    ctx: typer.Context,
+    target: conn.Target = None,
     to: Annotated[
         str | None,
         typer.Option(
@@ -82,11 +76,13 @@ def rollback_cmd(
             help="The release to return to; default: the one current replaced",
         ),
     ] = None,
-    remote_user: RemoteUser = None,
     dry_run: Annotated[
         bool, typer.Option("--dry-run", help="Print what would stop and start; change nothing")
     ] = False,
-    connect_timeout: ConnectTimeout = 10,
+    host: conn.Host = None,
+    dest: conn.Dest = None,
+    remote_user: conn.RemoteUser = None,
+    connect_timeout: conn.ConnectTimeout = conn.DEFAULT_CONNECT_TIMEOUT,
     command_timeout: Annotated[
         int, typer.Option("--command-timeout", help="Each remote step, seconds")
     ] = 900,
@@ -108,6 +104,8 @@ def rollback_cmd(
         _failed("uqs deploy rollback", "arguments", ValueError(f"--to {to!r} is not a release id"))
     try:
         cfg, remote = _server(
+            ctx,
+            target,
             host,
             dest,
             remote_user,
@@ -124,16 +122,18 @@ def rollback_cmd(
 
 @deploy_app.command("prune")
 def prune_cmd(
-    host: Host,
-    dest: Dest,
+    ctx: typer.Context,
     keep: Annotated[
         int, typer.Option("--keep", min=0, help="How many of the newest releases to keep")
     ],
-    remote_user: RemoteUser = None,
+    target: conn.Target = None,
     dry_run: Annotated[
         bool, typer.Option("--dry-run", help="List what would be removed; remove nothing")
     ] = False,
-    connect_timeout: ConnectTimeout = 10,
+    host: conn.Host = None,
+    dest: conn.Dest = None,
+    remote_user: conn.RemoteUser = None,
+    connect_timeout: conn.ConnectTimeout = conn.DEFAULT_CONNECT_TIMEOUT,
     command_timeout: Annotated[
         int, typer.Option("--command-timeout", help="Each remote step, seconds")
     ] = 900,
@@ -145,7 +145,7 @@ def prune_cmd(
     stayed and why, what went, and the bytes freed."""
     try:
         cfg, remote = _server(
-            host, dest, remote_user, connect_timeout, command_timeout=command_timeout
+            ctx, target, host, dest, remote_user, connect_timeout, command_timeout=command_timeout
         )
         code = prune.prune(cfg, remote, keep=keep, dry_run=dry_run)
     except config.DeployError as exc:

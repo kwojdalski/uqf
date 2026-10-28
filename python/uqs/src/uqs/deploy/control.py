@@ -1,6 +1,6 @@
 """`uqs --target NAME ...`: run a command on a deployed release, over ssh (#956).
 
-The target is one already declared for `uqs deploy push --target`, in
+The target is one already declared for `uqs deploy push ARTIFACT TARGET`, in
 deploy_targets.toml (deploy/targets.py), so a server is described once and
 both pushed to and driven from that one entry. Only three of its keys matter
 here: `host` (the ssh destination), `dest` (where push installed) and

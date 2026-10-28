@@ -86,7 +86,7 @@ def _load(root: Path) -> dict:
     targets}. Each key's name is checked by configs, layer by layer."""
     path = declaration_path(root)
     if not path.is_file():
-        raise DeployError("arguments", f"--target needs {path}, which does not exist")
+        raise DeployError("arguments", f"a target needs {path}, which does not exist")
     try:
         data = tomllib.loads(path.read_text())
     except tomllib.TOMLDecodeError as exc:
