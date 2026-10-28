@@ -65,7 +65,7 @@ reads.
 
 Each runtime has its own data directory and ports, so two can run at once. A
 process's port is base + its offset in `scripts/processes/process_ports.csv`;
-for example rdb1 is base + 2, so 6052. `uqs list runtimes` is authoritative.
+for example rdb1 is base + 2, so 6052. `uqs runtime list` is authoritative.
 
 **Connection budget:** the licence allows 16 concurrent connections, and 2 are
 held back, so 14 slots. Each started process uses one. `uqs list profiles` shows

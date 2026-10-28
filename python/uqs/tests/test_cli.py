@@ -48,6 +48,7 @@ from uqs.checks import schema_view
 from uqs.cli import (
     create_backfill,
     lifecycle,
+    lists,
     shared,
     summary,
     summary_columns,
@@ -1036,7 +1037,7 @@ def test_list_with_no_kind_shows_the_kinds_rather_than_failing(monkeypatch):
     result = runner.invoke(cli.app, ["list"])
     assert result.exit_code == 0
     for kind in LISTABLE_KINDS:
-        assert kind in result.stdout
+        assert (kind in result.stdout) is (kind not in lists.MOVED)
 
 
 def test_list_renders_the_items_of_a_kind(monkeypatch):

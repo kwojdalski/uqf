@@ -44,7 +44,7 @@ log = get_logger()
 job_app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
-    help="ETL jobs: write them into the tree (new, remove, install) and operate on "
+    help="ETL jobs: write them into the tree (new, list, remove, install) and operate on "
     "them - backfill a bounded worker, preview a polling feed, find a streaming "
     "job's gaps, read the run ledger.",
 )
@@ -124,7 +124,7 @@ def _configure(
             "--target",
             help=(
                 "Run the command on a deployed release instead of this machine: a target "
-                "from deploy_targets.toml (`uqs list targets`). Add --yes to skip the "
+                "from deploy_targets.toml (`uqs target list`). Add --yes to skip the "
                 "confirmation a command that changes the server asks for."
             ),
         ),
