@@ -108,6 +108,8 @@ docs/_site/
 /runtime_bundles.json
 /deploy_targets.toml
 /deploy_history.json
+/deploy_targets.log.jsonl
+/deploy_targets.toml.lock
 
 # Host process settings (and bundle-installed rows), never repository defaults.
 /python/uqs/process_overrides.csv
