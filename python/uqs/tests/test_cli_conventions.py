@@ -143,6 +143,13 @@ DOMAIN_VERBS = {
     "prune": "remove old releases",
     "history": "what was deployed",
     "shell": "open a shell on a target",
+    # a target's own changes (#1756): the core verbs cover add, set and remove
+    "unset": "remove a setting, so the layer beneath's value applies - `set` cannot say it",
+    "rename": "give a thing a new name, keeping what is recorded under the old one",
+    "edit": "change a file in $EDITOR, checked before it is saved",
+    "log": "a record's change history - `logs` is processes' output, `history` deployments",
+    "revert": "undo one recorded change, itself recorded - not `rollback`'s release",
+    "adopt": "take over what was installed by hand, so uqs can drive it",
 }
 
 #: Rule 1: a group named after one of these is a verb with nouns under it.
@@ -280,6 +287,7 @@ class Meaning:
 #: text that does not match the pattern is a second meaning.
 OPTIONS = {
     "--allow-dirty": Meaning("accept uncommitted changes", r"uncommitted"),
+    "--apply": Meaning("make the changes; without it, a dry run", r"without it, a dry run"),
     "--arch": Meaning("the servers' CPU architecture", r"x86_64"),
     "--attach": Meaning("a saved attachment, by name", r"attach"),
     "--base-port": Meaning("the stack's base port", r"base port"),
@@ -305,6 +313,7 @@ OPTIONS = {
     "--keep": Meaning("how many newest releases to keep", r"newest"),
     "--last": Meaning("a time range up to now", r"up to now"),
     "--level": Meaning("the lowest log level shown", r"level"),
+    "--limit": Meaning("only the most recent N records", r"most recent"),
     "--lines": Meaning("how many lines of a log to show", r"lines"),
     "--live": Meaning("refuse fixtures", r"fixture"),
     "--mode": Meaning("backfill's validate/plan/run mode", r"validate"),
@@ -320,11 +329,13 @@ OPTIONS = {
     "--python-runtime": Meaning("a bundled CPython", r"CPython"),
     "--qhome": Meaning("a QHOME", r"QHOME"),
     "--raw": Meaning("retired: --no-gateway / --unresolved", None),
+    "--reach": Meaning("reach the server first; save nothing it cannot reach", r"reach"),
     "--remote-user": Meaning("run as this account through sudo", r"sudo"),
     "--reverse": Meaning("sort descending", r"descending"),
     "--skip-profile-budget-check": Meaning("bypass the budget check", r"budget"),
     "--skip-q-version-check": Meaning("bypass the q version check", r"q too old"),
     "--sort": Meaning("sort by a column", r"sort by"),
+    "--ssh": Meaning("the ssh destination of a target", r"ssh destination"),
     "--tables": Meaning("a set of tables", r"tables"),
     "--target": Meaning("run this command on a deployed target", r"instead of this machine"),
     "--timeout": Meaning("seconds for the whole command", r"seconds"),
@@ -490,6 +501,13 @@ KIND = {
     "deploy verify": REPORTS,
     "deploy history": REPORTS,
     "target add": CHANGES,
+    "target set": CHANGES,
+    "target unset": CHANGES,
+    "target rename": CHANGES,
+    "target edit": CHANGES,
+    "target revert": CHANGES,
+    "target adopt": CHANGES,
+    "target log": REPORTS,
     "target check": REPORTS,
     "target shell": "opens an interactive shell on the server",
     "target remove": CHANGES,
@@ -497,11 +515,13 @@ KIND = {
 
 #: Every command that asks before acting. ROOT asks before running a command
 #: on a --target.
-ASKS = {ROOT, "job remove", "job install", "job attach", "job detach"}
+ASKS = {ROOT, "job remove", "job install", "job attach", "job detach", "target adopt"}
 
 #: The cli modules that call a prompt. A new one means a command that asks:
 #: put it in ASKS, then here.
-PROMPTING_MODULES = {"attach", "install", "install_bundle", "remove", "target"}
+PROMPTING_MODULES = {
+    "attach", "install", "install_bundle", "remove", "target", "target_adopt", "target_edit",
+}  # fmt: skip
 
 #: leaf -> the issue that adds its --json. Empty since #1731: keep it so.
 RULE5A_ALLOWLIST: dict[str, str] = {}
@@ -541,8 +561,7 @@ RULE5B_ALLOWLIST = {
         "deploy push",
         "deploy rollback",
         "deploy prune",
-        "target add",
-        "target remove",
+        "target adopt",  # --apply: dry by default, as #1756 specifies
     )
 }
 

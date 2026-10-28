@@ -55,6 +55,16 @@ ConnectTimeout = Annotated[
     int, typer.Option("--connect-timeout", help="ssh/scp, seconds; overrides TARGET's")
 ]
 DEFAULT_CONNECT_TIMEOUT = control.DEFAULT_CONNECT_TIMEOUT
+#: A push to a server no target names declares one (deploy/history.py), as a
+#: change `uqs target log` records (#1756); this says not to.
+NoRegister = Annotated[
+    bool,
+    typer.Option(
+        "--no-register",
+        help="Do not declare a target for a server no target names (by default a "
+        "successful push adds one, through `uqs target add`'s checks and change log)",
+    ),
+]
 
 
 def on_command_line(ctx: typer.Context, name: str) -> bool:

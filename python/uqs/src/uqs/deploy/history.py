@@ -9,8 +9,12 @@ operator's record of what THEY pushed and where, so it needs no ssh to read.
 
 A push to a host and dest that no target names yet registers one, named
 <server>-<dest's last folder>, so the next `uqs --target` needs no `uqs target
-add`. A
-target that already points there is reused, never duplicated.
+add`. A target that already points there is reused, never duplicated. The
+registration is a change like `uqs target add`'s (deploy/target_changes.py):
+validated, written atomically, in the change log, and its block printed;
+`uqs deploy push --no-register` skips it (#1756). A release copied onto a
+server by hand and taken over with `uqs target adopt` is recorded here too,
+as "adopted", so it is that server's default like a deployment.
 
 THE DEFAULT PER SERVER is that server's most recent successful deployment:
 `uqs --target HOST` (a host, rather than a target's name) resolves to it, and
@@ -25,11 +29,12 @@ from __future__ import annotations
 import json
 import os
 import re
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Protocol
 
-from uqs.deploy import targets
+from uqs.deploy import target_changelog, target_changes, targets
 from uqs.deploy.config import Config, DeployError
 from uqs.logger import get_logger
 from uqs.paths import UqsError, UqsPaths
@@ -41,6 +46,9 @@ HISTORY = "deploy_history.json"
 HISTORY_ENV = "UQS_DEPLOY_HISTORY"
 #: Oldest entries go first past this many; a list, not an archive.
 KEEP = 1000
+#: The statuses that leave a release running on its server: what a server's
+#: default and a target's "last deployed" are chosen from.
+INSTALLED = frozenset({"deployed", target_changelog.ADOPTED})
 
 
 def history_path(root: Path) -> Path:
@@ -75,14 +83,17 @@ def server_of(host: str) -> str:
     return host.rsplit("@", 1)[-1]
 
 
-def _target_for(root: Path, cfg: Config) -> str | None:
-    """The target naming cfg's host and dest, registering one if none does."""
+def _target_for(root: Path, cfg: Config, register: bool, say: Callable[[str], None]) -> str | None:
+    """The target naming cfg's host and dest, registering one if none does
+    (unless `register` is off), and saying so through `say`."""
     if cfg.target:
         return cfg.target
     declared = targets.read(root) if targets.declaration_path(root).is_file() else {}
     for name, t in sorted(declared.items()):
         if t.get("host") == cfg.host and t.get("dest") == cfg.dest:
             return name
+    if not register:
+        return None
     # <server>-<dest's last folder>: never the bare server name, which means
     # that server's latest deployment, whichever dest it went to.
     raw = f"{server_of(cfg.host)}-{cfg.dest.rstrip('/').rsplit('/', 1)[-1]}"
@@ -93,9 +104,42 @@ def _target_for(root: Path, cfg: Config) -> str | None:
     while name in declared:
         name, n = f"{base[:56]}-{n}", n + 1
     entry = {"host": cfg.host, "dest": cfg.dest, "remote_user": cfg.remote_user}
-    path = targets.append(root, name, entry)
-    log.info("registered target {} in {}: uqs --target {} summary", name, path, name)
+    done = target_changes.add(
+        root, name, entry, f"uqs deploy push to {cfg.host}:{cfg.dest}",
+        kind=target_changelog.REGISTERED,
+    )  # fmt: skip
+    number = len(target_changelog.read_log(root))
+    block = done.entry["tables"][0]["after"] if done.entry else ""
+    say(
+        f"registered target {name} in {done.path} (`uqs target log {name}`: change "
+        f"{number}; `uqs deploy push --no-register` skips this):\n{block.rstrip()}\n"
+        f"  try: uqs --target {name} summary"
+    )
     return name
+
+
+def rename_target(root: Path, old: str, new: str) -> None:
+    """The deployments recorded under target `old` recorded under `new`
+    (`uqs target rename`), so its history follows it."""
+    entries = read(root)
+    if any(e.get("target") == old for e in entries):
+        for e in entries:
+            if e.get("target") == old:
+                e["target"] = new
+        _write(root, entries)
+
+
+def record_adopted(
+    root: Path, name: str, host: str, dest: str, user: str | None, release: str
+) -> None:
+    """`uqs target adopt --apply`: the release it linked as current, as that
+    server's latest installation."""
+    entry = {
+        "at": datetime.now(UTC).isoformat(timespec="seconds"),
+        "target": name, "host": host, "dest": dest, "remote_user": user,
+        "release": release, "status": target_changelog.ADOPTED, "stage": None,
+    }  # fmt: skip
+    _write(root, [*read(root), entry])
 
 
 class Reported(Protocol):
@@ -104,11 +148,25 @@ class Reported(Protocol):
     def as_dict(self) -> dict: ...
 
 
-def record(root: Path, cfg: Config, report: Reported, now: datetime | None = None) -> None:
-    """Append this push to the history; register its target when it deployed."""
+def record(
+    root: Path,
+    cfg: Config,
+    report: Reported,
+    now: datetime | None = None,
+    *,
+    register: bool = True,
+    say: Callable[[str], None] = log.info,
+) -> None:
+    """Append this push to the history; register its target when it
+    deployed, unless `register` is off."""
     r = report.as_dict()
+    name = cfg.target
+    if r.get("status") == "deployed":
+        try:
+            name = _target_for(root, cfg, register, say)
+        except (OSError, DeployError) as exc:
+            log.warning("the server was not registered as a target: {}", exc)
     try:
-        name = _target_for(root, cfg) if r.get("status") == "deployed" else cfg.target
         entry = {
             "at": (now or datetime.now(UTC)).isoformat(timespec="seconds"),
             "target": name,
@@ -138,7 +196,7 @@ def latest(root: Path, server: str | None = None) -> dict | None:
     """The most recent successful deployment - to `server` (a host, with or
     without its user@) when given."""
     for e in reversed(read(root)):
-        if e.get("status") != "deployed":
+        if e.get("status") not in INSTALLED:
             continue
         if server is None or server in (e.get("host"), server_of(str(e.get("host")))):
             return e
@@ -154,7 +212,7 @@ def defaults(root: Path) -> set[int]:
     for i in range(len(entries) - 1, -1, -1):
         e = entries[i]
         key = (e.get("host"), e.get("dest"))
-        if e.get("status") == "deployed" and key not in seen:
+        if e.get("status") in INSTALLED and key not in seen:
             seen.add(key)
             out.add(i)
     return out
@@ -168,7 +226,7 @@ def target_rows(root: Path) -> list[dict[str, str]]:
         return []
     declared = targets.read(root)
     deployed = {
-        (e.get("host"), e.get("dest")): e for e in read(root) if e.get("status") == "deployed"
+        (e.get("host"), e.get("dest")): e for e in read(root) if e.get("status") in INSTALLED
     }
     envs = any(targets.ENVIRONMENT in t for t in declared.values())
     rows = []
