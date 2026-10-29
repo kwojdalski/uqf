@@ -72,15 +72,18 @@ Kafka topic by `external/kafka_feed.py`, deduplicated on the record's
 books cryptorust's `kafka-market-data-recorder` publishes to
 `cryptorust.book_snapshots`, five levels a side in wide columns, deduplicated on
 the record's (topic; partition; offset). Reads `kafka_message`, publishes
-`crypto_book_snapshot`. In the `crypto` profile; needs `kafka_feed1`.
+`crypto_book_snapshot`. The `sidecars/cryptorust` bundle's, so it is in no
+profile and starts when named; needs `kafka_feed1`.
 [Details](kafka.md#cryptorust-book-snapshots)
 
 **`flink_vwap1` · VWAP windows from Apache Flink** --- per-sym one-minute VWAP
 windows computed by a PyFlink job in `external/flink_vwap_streamer.py`, each
 published once: a window Flink emits again is dropped on `(sym; window_end)`.
-Reads `flink_vwap_raw`, publishes `flink_vwap`. Start it with
-`uqs start flink_vwap1`, then `uqs connector start flink_vwap`, which needs
-`apache-flink` and Java.
+Reads `flink_vwap_raw`, publishes `flink_vwap`. The q side is the
+`sidecars/flink` bundle, tied to one outside system and so not in the tree:
+`uqs job install sidecars/flink`, then `uqs start flink_vwap1` and
+`uqs connector start flink_vwap`, which needs `apache-flink` and Java and
+refuses, naming the install command, until the bundle is in.
 
 ## Normalisers
 
@@ -200,10 +203,12 @@ process over IPC.
 a DuckDB file over ODBC, a day at a time.
 
 **`databento_backfill1` · Databento history** --- past MBP-10 depth over ODBC,
-folded with the same transform `databento1` applies live.
+folded with the same transform `databento1` applies live. The
+`sidecars/databento` bundle's, with `databento1`.
 
 **`crypto_market_data_backfill1` · recorded crypto** --- cryptorust's recorded
-crypto books and trades replayed from DuckDB, an hour at a time.
+crypto books and trades replayed from DuckDB, an hour at a time. The
+`sidecars/cryptorust` bundle's, with its source and `crypto_market_data` table.
 [Details](crypto-recorder.md)
 
 **`hdb_demo_markouts_backfill1` · markouts from history** --- the HDB's fills

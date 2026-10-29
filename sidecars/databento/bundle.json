@@ -1,0 +1,1 @@
+{"name": "databento", "version": "0.1.0", "description": "The q side of the Databento MBP-10 integration: the databento_mbp10 ODBC source, the eq_orderbook fold, databento1 (live) and databento_backfill1. The Python feed handler stays in uqs (uqs connector start databento)"}

@@ -38,7 +38,7 @@
     .qunit.assertEquals[c`version;last .qetl.io.remote.contract.versions;"the version this tree writes"]};
 
 .qt.qetl.io.remote.contract.test_a_nested_column_carries_the_plants_element_type:{[t]
-    c:.qetl.io.remote.contract.of `crypto_market_data_backfill;
+    c:.qetl.io.remote.contract.of `hdb_crypto_book_backfill;
     ty:(`$first each c`columns)!raze last each c`columns;
     .qunit.assertEquals[ty`bid_prices;"F";"a () column is typed by .qetl.plant.nested"]};
 

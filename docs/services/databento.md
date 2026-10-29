@@ -6,6 +6,19 @@ inspecting the stack as a whole is in [running the uqf stack](../guides/uqs.md).
 
 ![The Databento handler publishes raw MBP-10 rows to stp1; databento1 subscribes, folds them with the same .qetl.transform the ODBC backfill applies, and publishes eq_orderbook](../diagrams/databento.svg)
 
+**Install the q half first.** Everything on the q side of this page -
+`databento_mbp10`, `databento1`, `eq_orderbook`, the ODBC source and the
+backfill `databento_backfill1` - is the `sidecars/databento` bundle, kept out of
+the tree because it is tied to one outside system:
+
+```
+uqs job install sidecars/databento --dry-run
+uqs job install sidecars/databento --yes
+```
+
+`uqs connector start databento` refuses, naming that command, until the bundle
+is installed. The Python handler itself stays in `uqs` for now.
+
 `uqs connector start databento`/`stop`/`status` subscribe to
 [Databento](https://databento.com) and stream MBP-10 into this stack. It is the
 live counterpart to the ODBC backfill in

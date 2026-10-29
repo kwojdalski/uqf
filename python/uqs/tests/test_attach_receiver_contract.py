@@ -52,17 +52,24 @@ def _body(contract: rc.Contract, **change) -> dict:
 
 def test_the_contract_is_derived_from_the_workers_declarations(exported):
     assert exported.dataset == DATASET
-    assert exported.body["time_column"] == "source_time", "the source's time column"
-    assert exported.body["row_key"] == ["venue", "sym", "source_time", "latency_count"]
+    assert exported.body["time_column"] == "deal_time", "the source's time column"
+    assert exported.body["row_key"] == ["deal_id"]
     assert exported.body["origin"] == {
         "worker": WORKER,
-        "source": "crypto_market_data",
-        "transform": "crypto_market_data",
+        "source": "duckdb_deals",
+        "transform": "duckdb_deals_passthrough",
     }
     # what the HDB stores, read independently from the plant table's text
     assert exported.stored_columns == plant_table().as_pairs()
-    nested = dict(exported.columns)
-    assert nested["bid_prices"] == "F", "a () column carries the element type the plant declares"
+
+
+def test_a_nested_column_carries_the_element_type_the_plant_declares():
+    """A () column in the contract is typed by the plant's nested[...] line - held on
+    a tree worker whose dataset has list columns."""
+    if q_interpreter(os.environ) is None:
+        pytest.skip("no q interpreter - set $QCMD, or put q on PATH")
+    nested = dict(rc.export(paths_for_root(UQF_ROOT), "hdb_crypto_book_backfill").columns)
+    assert nested["bid_prices"] == "F"
 
 
 def test_the_identity_is_a_digest_of_the_contents(exported):
@@ -113,7 +120,7 @@ def test_a_contract_missing_a_key_is_refused(exported):
 
 
 def test_a_contract_altered_after_export_is_refused(exported):
-    body = {**exported.body, "time_column": "local_time"}
+    body = {**exported.body, "time_column": "sym"}
     with pytest.raises(rc.ContractError, match="altered after it was exported"):
         rc.parse(body)
 
@@ -166,9 +173,9 @@ def test_a_dataset_the_attachment_does_not_publish_is_refused(world, exported):
 
 
 def test_a_contract_whose_shape_the_attachment_does_not_have_is_refused(world, exported):
-    cols = [[n, "j" if n == "latency_ms" else t] for n, t in exported.columns]
+    cols = [[n, "j" if n == "notional" else t] for n, t in exported.columns]
     drifted = rc.parse(_body(exported, columns=cols))
-    with pytest.raises(UqsError, match="column latency_ms is type 'j', expected 'f'"):
+    with pytest.raises(UqsError, match="column notional is type 'j', expected 'f'"):
         rc.approve(world.paths, drifted, "pb-uat")
 
 

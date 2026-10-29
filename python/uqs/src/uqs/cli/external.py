@@ -3,7 +3,8 @@
 Databento, Kafka, and cryptorust's two recorders each drive a process this
 repository does not own, publishing onto the running stack's tickerplant. They
 do not go through torq.sh or process.csv - the q half of each (databento1,
-kafka_flow1, ...) is an ordinary pipeline row that `uqs start` brings up - so
+kafka_flow1, ...) is an ordinary pipeline row that `uqs start` brings up, for
+databento and flink_vwap one a sidecar bundle installs first - so
 they are one group of their own rather than lifecycle commands. Called
 `connector` rather than `feed` (#1417) because a feed is also a TorQ-managed q
 process here; these supervise the publisher OUTSIDE the plant.
@@ -252,7 +253,8 @@ def start(
 ) -> None:
     """Start a feed publishing onto the running stack's tickerplant.
 
-    databento: live MBP-10 onto `databento_mbp10`, folded by databento1.
+    databento: live MBP-10 onto `databento_mbp10`, folded by databento1; needs the
+    databento bundle (`uqs job install sidecars/databento`).
     kafka: a topic onto `kafka_message`, decoded and deduplicated by kafka_flow1; needs
     a reachable broker and `confluent-kafka` (the uqs `kafka` extra).
     crypto: a sibling cryptorust checkout's order-book recorder into

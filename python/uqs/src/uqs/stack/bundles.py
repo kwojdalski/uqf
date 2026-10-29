@@ -237,6 +237,16 @@ def read_ledger(root: Path) -> dict[str, dict]:
         raise BundleError(f"{LEDGER} is not JSON ({exc}) - fix or remove it by hand") from None
 
 
+def require_installed(root: Path, name: str, needed_by: str) -> None:
+    """Refuse, naming the install command, unless bundle `name` is in the tree:
+    a publisher started without its bundle sends rows to a table nothing defines."""
+    if name not in read_ledger(root):
+        raise BundleError(
+            f"{needed_by} needs the {name} bundle, which is not installed in this checkout "
+            f"- run `uqs job install sidecars/{name}` first"
+        )
+
+
 def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 

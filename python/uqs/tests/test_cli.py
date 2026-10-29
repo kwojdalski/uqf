@@ -1919,7 +1919,7 @@ def test_every_real_worker_is_read():
         "demo_deals": "demo_deals_backfill",
         "event_tape": "demo_events_backfill",
         "imported_trades": "upstream_trades_backfill",
-        "eq_orderbook": "eq_orderbook_backfill",
+        "duckdb_deals": "duckdb_deals_backfill",
     }.items():
         assert create_backfill.workers_filling(root, dataset) == [worker]
 

@@ -12,6 +12,10 @@
 //     sample of rows per symbol - the transform is the part that could be
 //     silently wrong while every count still matched.
 //
+// The worker is the databento bundle's: install it first
+// (uqs job install sidecars/databento), or there is no databento_mbp10
+// source for the credential check below to find.
+//
 // Not a qUnit suite and not in the default lane, for smoke_external_metadata.q's
 // reasons: it needs a driver, a database file and minutes of fetching.
 // It SKIPs, exit 0, when either is missing.

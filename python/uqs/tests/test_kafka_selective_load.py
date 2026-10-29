@@ -55,10 +55,7 @@ def test_a_topic_declaration_pulls_in_the_transform_it_maps_through():
 
 
 def test_every_topic_is_claimed_by_the_job_whose_file_declares_it(plan):
-    assert plan.topics == {
-        "uqf.client.flow": "kafka_flow",
-        "cryptorust.book_snapshots": "crypto_book_decoder",
-    }
+    assert plan.topics == {"uqf.client.flow": "kafka_flow"}
     extra = {"src/etl/transforms/zz_map.q": SIDE_MAP, "src/etl/streaming/zz_decoder.q": SIDE_JOB}
     assert load_plan.load_plan(REPO, extra).topics["zz.topic"] == "zz_decoder"
     assert '.qetl.load.topics[`$"uqf.client.flow"]:`kafka_flow' in load_plan.render(plan)
@@ -80,10 +77,21 @@ def test_the_example_bundle_adds_a_topic_and_a_process_without_touching_the_tree
     assert with_bundle.select(["examplequotes1"]) == [rel]
     assert with_bundle.topics == {
         "uqf.client.flow": "kafka_flow",
-        "cryptorust.book_snapshots": "crypto_book_decoder",
         "example.quotes": "example_quotes_decoder",
     }
     # and no other process's closure changes
+    for proc in plan.procs:
+        assert with_bundle.for_proc(proc) == plan.for_proc(proc), proc
+
+
+def test_the_cryptorust_bundle_decoder_loads_alone_with_its_mapping(plan):
+    """Its mapping, topic and job are one file (a bundle has no transforms
+    directory), so its process loads that file and no other."""
+    rel = "src/etl/streaming/crypto_book_decoder.q"
+    text = (REPO / "sidecars" / "cryptorust" / "crypto_book_decoder.q").read_text()
+    with_bundle = load_plan.load_plan(REPO, {rel: text})
+    assert with_bundle.select(["crypto_book_decoder1"]) == [rel]
+    assert with_bundle.topics["cryptorust.book_snapshots"] == "crypto_book_decoder"
     for proc in plan.procs:
         assert with_bundle.for_proc(proc) == plan.for_proc(proc), proc
 

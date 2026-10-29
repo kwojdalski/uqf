@@ -276,7 +276,7 @@
 / How a transform output departs from the plant table it writes.
 / .
 / The plant has two conventions for a job's output, and a worker may follow
-/ either: `shape` (a writer that keeps `time` - eq_orderbook, the hdb_* bar
+/ either: `shape` (a writer that keeps `time` - the hdb_* bar
 / workers) or `published` (the plant table minus `time`, which the HDB writer
 / sets from the source's clock). Anything else is a hand-written copy that
 / will not follow the plant when a column is added, retyped or reordered.
@@ -337,13 +337,13 @@
 
 .qt.qpipe.worker_runs.test_a_hand_copied_output_is_a_departure:{[t]
     / The gate must be able to fail: each way a copy drifts.
-    base:.qetl.plant.published `crypto_market_data;
-    .qunit.assertEquals[.qt.qpipe.worker_runs.departure[base;`crypto_market_data];"";"the derived output agrees"];
-    .qunit.assertEquals[.qt.qpipe.worker_runs.departure[.qetl.plant.shape `eq_orderbook;`eq_orderbook];"";"the time-keeping convention agrees"];
-    retyped:update latency_count:`float$() from base;
+    base:.qetl.plant.published `crypto_execution_quality;
+    .qunit.assertEquals[.qt.qpipe.worker_runs.departure[base;`crypto_execution_quality];"";"the derived output agrees"];
+    .qunit.assertEquals[.qt.qpipe.worker_runs.departure[.qetl.plant.shape `crypto_book_1s;`crypto_book_1s];"";"the time-keeping convention agrees"];
+    retyped:update markout_bps:`long$() from base;
     reordered:(reverse cols base)#base;
     extra:update added:`long$() from base;
-    dropped:(cols[base] except `trade_side)#base;
-    found:.qt.qpipe.worker_runs.departure[;`crypto_market_data] each (retyped;reordered;extra;dropped);
+    dropped:(cols[base] except `ref_price)#base;
+    found:.qt.qpipe.worker_runs.departure[;`crypto_execution_quality] each (retyped;reordered;extra;dropped);
     .qunit.assertTrue[all 0<count each found;"a retyped, reordered, extended or shortened copy is each refused"];
-    .qunit.assertTrue[(first found) like "crypto_market_data output is *";"and the message names the table"]};
+    .qunit.assertTrue[(first found) like "crypto_execution_quality output is *";"and the message names the table"]};

@@ -51,10 +51,6 @@ log = get_logger()
 #: is dead - held by a test, the same way the other exemption lists in this
 #: tree are.
 EXTERNAL_PRODUCERS: dict[str, str] = {
-    "databento_mbp10": (
-        "the external Databento feed handler (`uqs connector start databento`) "
-        "or a `databento_backfill1` run"
-    ),
     "kafka_message": (
         "a Kafka consumer: the q feed kafka_feed1, or the legacy Python one "
         "(`uqs connector start kafka`). There is no backfill alternative: "
@@ -63,8 +59,27 @@ EXTERNAL_PRODUCERS: dict[str, str] = {
     ),
     "crypto_book": "cryptorust's kdb recorder, which cryptomock1 stands in for",
     "crypto_trades": "cryptorust's kdb recorder, which cryptomock1 stands in for",
-    "flink_vwap_raw": "the external flink_vwap feed (`uqs connector start flink_vwap`)",
 }
+
+#: The same, for the tables a SIDECAR BUNDLE's jobs subscribe to. The bundle
+#: carries the job and the table, but not the outside publisher that feeds it
+#: (a bundle cannot declare an external process yet, #1776), so uqs names the
+#: publisher here. Merged into EXTERNAL_PRODUCERS below, so every reader sees
+#: one list; separate only because a checkout without the bundle has no
+#: subscriber, and `test_no_external_producer_entry_is_dead` holds this list
+#: to "its bundle exists" instead of "something subscribes".
+SIDECAR_EXTERNAL_PRODUCERS: dict[str, tuple[str, str]] = {
+    "databento_mbp10": (
+        "databento",
+        "the external Databento feed handler (`uqs connector start databento`) "
+        "or a `databento_backfill1` run",
+    ),
+    "flink_vwap_raw": (
+        "flink",
+        "the external flink_vwap feed (`uqs connector start flink_vwap`)",
+    ),
+}
+EXTERNAL_PRODUCERS.update({t: why for t, (_bundle, why) in SIDECAR_EXTERNAL_PRODUCERS.items()})
 
 
 def producers_by_table(pipelines: Iterable[Any] = PIPELINES) -> dict[str, set[str]]:

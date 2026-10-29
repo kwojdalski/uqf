@@ -48,8 +48,6 @@ describe[`crypto_sim_fills]:
     "Simulated (paper) fills from cryptorust's OMS fill model, run against live market data - not confirmed executions; those are crypto_trades. Kept apart so a P&L number always says which of the two it came from";
 describe[`crypto_trades]:
     "Real confirmed exchange executions recorded from the OMS";
-describe[`eq_orderbook]:
-    "Live Databento MBP-10 folded into the book shape by databento1, using the same .qetl.transform transform the ODBC backfill applies - so a live row and a backfilled one are the same shape";
 describe[`demo_deals]:
     "Generic analogue of an external relational deal source, landed by the demo_deals_backfill bounded worker. Synthetic by design - the real source is bank-internal and out of scope for this repository";
 describe[`etl_coverage]:
@@ -112,8 +110,6 @@ describe[`economic_calendar]:
 / The reason is data rather than a comment so the test can require one: a
 / hidden table with no reason is how "we forgot" gets recorded as a decision.
 hidden:(`symbol$())!();
-hidden[`databento_mbp10]:
-    "the RAW Databento feed, published by an external Python handler and consumed only by databento1, which folds it into eq_orderbook. A desk browsing a book wants the folded one; this is the input to that fold";
 hidden[`fx_position_open]:
     "fxpositions1's book as each day opens (#943), published so a restart restores the carried positions from the day's log. A record for recovery, not a view: fx_position is the book to browse";
 hidden[`position_open]:
@@ -157,16 +153,14 @@ unbounded[`fx_markout]:
     enlist "a row per component per horizon per execution - about 18 rows a second at one execution a second, not ticks; its policy row is due once a desk reads it through the gateway";
 unbounded[`fx_markout_wide]:
     enlist "a row per horizon per execution - about 4 rows a second at one execution a second, not ticks; its policy row is due once a desk reads it through the gateway";
-unbounded[`flink_vwap]:
-    enlist "one row per sym per one-minute window Flink closes - a few thousand a day";
 unbounded[`deal_positions]:
     enlist "one row per pair per published window of demo_deals";
 unbounded[`kafka_dead_letter]:
     enlist "NOT YET ASSESSED (#1481): empty on a healthy topic and one row per undecodable record otherwise, so its volume is the producer's, not ours. Read with no time range until a querypolicy.csv row has a measured basis";
 unbounded[`imported_trades]:
     enlist "NOT YET ASSESSED (#1363): found by the catalog gate once it counted worker datasets; a backfilled sample, not a feed - its policy row is due with a measured basis";
-unbounded[`arbitrage`cross_arbitrage`crypto_book`crypto_sim_fills`crypto_trades`eq_orderbook`demo_deals`event_tape`executions`fx_position`market_data`orders`position`fx_orderbook`superbook`trades`wide_orderbook`client_flow`crypto_market_data`trades_copy`crypto_book_snapshot]:
-    21#enlist "NOT YET ASSESSED (#889): browsable before this list existed; read with no time range or byte limit, only max_rows, until a querypolicy.csv row with a measured basis replaces this";
+unbounded[`arbitrage`cross_arbitrage`crypto_book`crypto_sim_fills`crypto_trades`demo_deals`event_tape`executions`fx_position`market_data`orders`position`fx_orderbook`superbook`trades`wide_orderbook`client_flow`trades_copy]:
+    18#enlist "NOT YET ASSESSED (#889): browsable before this list existed; read with no time range or byte limit, only max_rows, until a querypolicy.csv row with a measured basis replaces this";
 
 / The browsable surface: every described table that is not hidden.
 / .
@@ -200,21 +194,13 @@ surface:{[]
     "One client FX trade consumed off a Kafka topic, deduplicated by kafka_flow1 on the (topic;partition;offset) the record carries - so a broker redelivery does not show the desk the same trade twice. Carries those coordinates, so any row can be traced back to the exact Kafka record";
 .qcat.describe[`kafka_dead_letter]:
     "A Kafka record kafka_flow1 could not turn into a row, kept instead of dropped: its coordinates, key and payload exactly as received, a reason (no_mapping, empty_payload, malformed or mapping) and what the decoder said. The count by reason is the health of a topic";
-.qcat.describe[`crypto_market_data]:
-    "One moment of a crypto pair on one venue, replayed out of cryptorust's own recorded DuckDB capture: five book levels a side as vectors, the trade printed alongside them, and both clocks - the venue's source_time and the recorder's local_time, whose difference is the wire lag. The repeatable counterpart to crypto_book, which the same recorder fills live and which carries source_time but not the recorder's local_time";
 .qcat.describe[`trades_copy]:
     "One trade copied out of another kdb+ HDB on this machine by hdb_transfer_backfill, with its notional (price times size, in the quote currency) added on the way - the worked example of moving data from one kdb+ database into another; scripts/examples/hdb_transfer_example.q runs it end to end";
 .qcat.describe[`crypto_execution_quality]:
     "Post-trade markout per real crypto fill per horizon, in bps against the best mid across venues; a null markout_bps means no venue had a live book at that horizon, not a zero markout";
 .qcat.describe[`last_value]:
     "One change to a pair's current price: the newest level-0 bid, ask and mid across sources, FX and crypto, with the source that quoted it and its own source_time. Appended only when a newer book replaces the held one, so read the latest row per sym (select by sym) for the one shared current price";
-.qcat.hidden[`flink_vwap_raw]:
-    "the RAW flink_vwap records, published by flink_vwap_streamer.py outside q and read only by flink_vwap, which reshapes them into flink_vwap";
-.qcat.describe[`flink_vwap]:
-    "Volume-weighted average price, total volume and trade count for one sym over one tumbling window, computed by an Apache Flink job outside q; each window appears once, keyed by its window_end";
 .qcat.describe[`fx_markout]:
     "One component of one execution at one horizon, from the normalized FX markout calculation: the markout against the reference mid, the execution residual, each cross leg's allocation, or the reconciling residual (kind), in pips, with the prices behind it - a row per (venue, fill_id, horizon, kind, step)";
 .qcat.describe[`fx_markout_wide]:
     "One execution at one horizon, from the normalized FX markout calculation: the markout, the execution residual and the reconciling residual side by side, with up to three cross legs and their allocations - the wide layout of fx_markout, a row per (venue, fill_id, horizon)";
-.qcat.describe[`crypto_book_snapshot]:
-    "One sampled full order book from cryptorust's Kafka book snapshots (cryptorust.book_snapshots), decoded by crypto_book_decoder1 and deduplicated on the (topic;partition;offset) the record carries: the top five levels a side as wide columns (bid_px0 is the best bid, ask_sz4 the size at the fifth ask), null where a side is shorter, with the exchange, local and sampling clocks and the Kafka record's broker_time. Not crypto_book, which is the kdb recorder's vector-shaped book";

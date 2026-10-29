@@ -19,7 +19,8 @@ Two directions, because each catches a different failure:
   the direction a generator would give for free and a hand-written page
   otherwise never gets.
 
-Scope is the *operator's* surface: ``src/``, ``scripts/``, each package's
+Scope is the *operator's* surface: ``src/``, ``scripts/``, ``sidecars/`` (a
+bundle's code reads its own variables once installed), each package's
 ``src/``, ``web/``, and the smoke scripts under ``tests/q/``. Fixtures are
 excluded on purpose - ``tests/q/test_worker_config.q`` sets eleven throwaway
 keys to prove the precedence order, and demanding rows for ``UQF_X`` and
@@ -41,7 +42,7 @@ DOC = REPO / "docs" / "reference" / "environment.md"
 
 #: Directories whose reads are an operator's business. `web/` is included
 #: because a Vite config's `process.env` is as much a knob as a q `getenv`.
-SCOPE_DIRS = ("src", "scripts", "web")
+SCOPE_DIRS = ("src", "scripts", "sidecars", "web")
 #: Package sources, found rather than listed so a new workspace member is
 #: covered the day it is added instead of the day someone remembers.
 PACKAGE_SRC_GLOB = "python/*/src"

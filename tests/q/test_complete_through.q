@@ -1,9 +1,7 @@
 / test_complete_through.q - a source says how far it can vouch for its data
-/ (.qetl.source.complete_through_of, clip_to_complete), planning clips to it,
-/ and crypto_market_data reports the bound of a shard glob (#1187, #1186).
-/ .
-/ No driver and no DuckDB file: the crypto bound is checked by replacing
-/ .qetl.io.odbc.run_sql for the length of one test.
+/ (.qetl.source.complete_through_of, clip_to_complete), and planning clips to it
+/ (#1187). The crypto_market_data shard-glob bound (#1186) is tested with that
+/ source, in the cryptorust bundle (sidecars/cryptorust).
 
 
 / The bound the test source reports; moved by a test to model a feed advancing.
@@ -195,39 +193,3 @@
 .qt.qetl.source.complete_through.test_a_live_run_with_no_handle_is_refused_not_read_as_closed:{[t]
     .qunit.assertThrows[{.qetl.source.complete_through_of[`ct_src;0Ni;1b]};(::);
         "complete_through: ct_src is live but has no open handle to ask";"null is not closed data"]};
-
-/ --- crypto_market_data (#1186) ---------------------------------------------
-
-/ Run niladic `f` with run_sql answering `newest` (milliseconds, or null) and
-/ the capture glob set, restoring both whether or not it throws.
-.qt.qetl.source.complete_through.with_shards:{[newest;f]
-    keep:.qetl.io.odbc.run_sql;
-    setenv[`UQF_CRYPTO_CAPTURE_GLOB;"/rec/data/live*.parquet"];
-    `.qetl.io.odbc.run_sql set {[n;h;sql] .qt.qetl.source.complete_through.sql:sql; ([] newest:enlist n)}[newest];
-    r:@[f;::;{[e] (`failed;e)}];
-    `.qetl.io.odbc.run_sql set keep;
-    setenv[`UQF_CRYPTO_CAPTURE_GLOB;""];
-    if[(0h=type r) and `failed~first r; 'last r];
-    r}
-
-.qt.qetl.source.complete_through.test_the_shard_glob_is_complete_through_the_newest_finished_row:{[t]
-    / 21:30 on 2026.09.11 in epoch milliseconds
-    r:.qt.qetl.source.complete_through.with_shards[1789162200000;{.qpipe.source.crypto_market_data.complete_through 7i}];
-    .qunit.assertEquals[r;2026.09.11D21:30:00.000000000;
-        "the unfinished shard holds rows from there on, so a window may end at it, not past it"];
-    .qunit.assertTrue[0<count ss[.qt.qetl.source.complete_through.sql;"FROM read_parquet('/rec/data/live"];
-        "the bound is read from the finished shards the glob matches"]};
-
-.qt.qetl.source.complete_through.test_a_window_into_the_unfinished_shard_is_clipped:{[t]
-    r:.qt.qetl.source.complete_through.with_shards[1789162200000;{
-        .qetl.source.clip_to_complete[`crypto_market_data_backfill;`crypto_market_data;7i;1b;2026.09.11D22:00:00.000000000]}];
-    .qunit.assertEquals[r;2026.09.11D21:30:00.000000000;"21:00-22:00 is planned only to 21:30"]};
-
-.qt.qetl.source.complete_through.test_no_finished_shard_means_nothing_is_complete:{[t]
-    r:.qt.qetl.source.complete_through.with_shards[0N;{
-        .qetl.source.clip_to_complete[`crypto_market_data_backfill;`crypto_market_data;7i;1b;2026.09.11D22:00:00.000000000]}];
-    .qunit.assertEquals[r;-0Wp;"an empty glob is not a finished capture"]};
-
-.qt.qetl.source.complete_through.test_without_a_glob_the_capture_is_closed_data:{[t]
-    .qunit.assertEquals[.qpipe.source.crypto_market_data.complete_through 7i;0Wp;
-        "the named table or view of a finished capture is not clipped"]};

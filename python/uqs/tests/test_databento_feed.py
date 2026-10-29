@@ -19,7 +19,6 @@ around a third-party client.
 from __future__ import annotations
 
 import os
-import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -31,6 +30,14 @@ from uqs.external.lifecycle import process_identity
 from uqs.paths import UqsError, UqsPaths
 
 REPO = Path(__file__).resolve().parents[3]
+#: The databento bundle's own folder: the tree holds its files only once
+#: `uqs job install sidecars/databento` has run, and these tests need neither.
+BUNDLE = REPO / "sidecars" / "databento"
+SOURCE_Q = str(BUNDLE / "databento_mbp10.q")
+
+
+def _fields() -> list[str]:
+    return contract_fields("/", SOURCE_Q)
 
 
 @dataclass
@@ -80,7 +87,7 @@ def test_the_field_order_comes_from_the_q_declaration():
     to the source contract and forgotten here would transpose two columns
     of the same type without raising anything.
     """
-    fields = contract_fields(str(REPO))
+    fields = _fields()
     assert fields[:7] == [
         "ts_event",
         "symbol",
@@ -107,17 +114,20 @@ def test_the_fields_line_up_with_the_plant_table_column_for_column():
     where the source contract says `symbol`; the rest is position for
     position.
     """
-    from uqs.model.schemas import definition
+    from uqs.model import schemas
 
-    table = re.findall(r"(\w+):", definition("databento_mbp10").split(":", 1)[1])
+    found = schemas.definitions_in((BUNDLE / "tables.q").read_text())
+    table = schemas.column_names(
+        schemas.definition_from(found, "databento_mbp10", "sidecars/databento/tables.q")
+    )
     expected = ["symbol" if c == "sym" else c for c in table if c != "time"]
-    assert contract_fields(str(REPO)) == expected
+    assert _fields() == expected
 
 
 def test_no_time_column_is_produced():
     """The tickerplant stamps its own on receipt and rejects a row that
     carries one - one column too wide is a length error, not a warning."""
-    fields = contract_fields(str(REPO))
+    fields = _fields()
     assert "time" not in fields
     assert "time" not in rows_from_records([_record()], fields)
 
@@ -125,7 +135,7 @@ def test_no_time_column_is_produced():
 def test_every_column_is_a_list_even_for_one_record():
     """`.u.upd` derives the row count from column length, so a bare atom
     for a single record is the bug that reads as a silent no-op."""
-    fields = contract_fields(str(REPO))
+    fields = _fields()
     cols = rows_from_records([_record()], fields)
     assert set(cols) == set(fields)
     assert all(isinstance(v, list) for v in cols.values())
@@ -133,7 +143,7 @@ def test_every_column_is_a_list_even_for_one_record():
 
 
 def test_every_record_contributes_one_entry_per_column():
-    fields = contract_fields(str(REPO))
+    fields = _fields()
     cols = rows_from_records([_record(), _record(), _record()], fields)
     assert all(len(v) == 3 for v in cols.values())
 
@@ -142,7 +152,7 @@ def test_every_record_contributes_one_entry_per_column():
 
 
 def test_levels_land_in_their_own_numbered_columns():
-    fields = contract_fields(str(REPO))
+    fields = _fields()
     cols = rows_from_records([_record()], fields)
     assert cols["bid_px_00"] == [100.0]
     assert cols["bid_px_09"] == [109.0]
@@ -156,7 +166,7 @@ def test_a_thin_book_is_padded_with_nulls_not_zeros():
     ones must be null: zero is a price, and a zero bid would read as a
     real quote to everything downstream.
     """
-    fields = contract_fields(str(REPO))
+    fields = _fields()
     cols = rows_from_records([_record(levels=3)], fields)
     assert cols["bid_px_02"] == [102.0]
     assert cols["bid_px_03"] == [None]
@@ -165,7 +175,7 @@ def test_a_thin_book_is_padded_with_nulls_not_zeros():
 
 
 def test_a_record_with_no_levels_still_produces_every_column():
-    fields = contract_fields(str(REPO))
+    fields = _fields()
     cols = rows_from_records([_record(levels=0)], fields)
     assert len(cols) == len(fields)
     assert cols["bid_px_00"] == [None]
@@ -189,10 +199,26 @@ def _paths(tmp_path: Path) -> UqsPaths:
     )
 
 
+def _install_ledger(root: Path, name: str) -> None:
+    """The ledger entry `uqs job install sidecars/<name>` leaves, nothing more."""
+    ledger = root / "src" / "etl" / "installed_bundles.json"
+    ledger.parent.mkdir(parents=True, exist_ok=True)
+    ledger.write_text(f'{{"{name}": {{"version": "0.1.0"}}}}')
+
+
+def test_starting_without_the_bundle_names_the_install_command(tmp_path):
+    """The raw table and databento1 are the databento bundle's: a feed started
+    without them would publish into a table nothing defines."""
+    with pytest.raises(UqsError) as exc:
+        databento_feed.start_databento_feed(_paths(tmp_path), api_key="k")
+    assert "uqs job install sidecars/databento" in str(exc.value)
+
+
 def test_starting_without_an_api_key_refuses_and_names_the_variable(tmp_path, monkeypatch):
     """Refuse before spawning, not after the first call fails - the order
     `.qetl.job.bounded.init` follows for the same reason."""
     monkeypatch.delenv(databento_feed.DATABENTO_API_KEY_ENV, raising=False)
+    _install_ledger(tmp_path, "databento")
     with pytest.raises(UqsError) as exc:
         databento_feed.start_databento_feed(_paths(tmp_path))
     assert databento_feed.DATABENTO_API_KEY_ENV in str(exc.value)

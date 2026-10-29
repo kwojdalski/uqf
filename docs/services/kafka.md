@@ -296,10 +296,12 @@ nothing reports it; a decoder started later catches up from the log.
 
 cryptorust's `kafka-market-data-recorder` publishes sampled full books to
 `cryptorust.book_snapshots` (key `venue:symbol`). `crypto_book_decoder1`
-([`crypto_book_decoder.q`](../../src/etl/streaming/crypto_book_decoder.q),
-mapping [`kafka_crypto_book.q`](../../src/etl/transforms/kafka_crypto_book.q))
-decodes them into `crypto_book_snapshot`. Subscribe with a consumer and the
-decoder side by side (a walkthrough: [streaming cryptorust's
+(`crypto_book_decoder.q`, with its mapping `kafka_crypto_book`, in the
+`sidecars/cryptorust` bundle: `uqs job install sidecars/cryptorust`) decodes
+them into `crypto_book_snapshot`. The bundle holds it because the payload is
+cryptorust's own format; the Kafka machinery it runs on, `.qetl.kafka.decoder`,
+is the tree's. Subscribe with a consumer and the decoder side by side (a
+walkthrough: [streaming cryptorust's
 books](../guides/cryptorust-kafka-books.md)):
 
 ```

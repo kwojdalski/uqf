@@ -150,7 +150,7 @@ def require_loaded_before_workers(repo_root: Path, twin_of: str, transform: str)
         f"under {' or '.join(d.as_posix() for d in BEFORE_WORKERS)} - the tree loads "
         "workers before streaming jobs, so the twin's worker could not find it. Move "
         f"{transform}'s .qetl.transform.define into src/etl/transforms/ first, as "
-        "src/etl/transforms/eq_orderbook.q does for eq_orderbook"
+        "src/etl/transforms/book_liquidity.q does for book_liquidity_snapshot"
     )
 
 

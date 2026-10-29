@@ -8,7 +8,7 @@ a q process cannot hold a Databento subscription, and TorQ only drives q.
 
 **It carries bytes and decides nothing.** Databento's MBP-10 records go onto
 the tickerplant in the source contract's own field order, unfolded and
-unrenamed, and ``databento1`` (``src/etl/streaming/eq_orderbook.q``)
+unrenamed, and ``databento1`` (``eq_orderbook.q`` in the databento bundle)
 applies ``.qetl.transform.apply[`eq_orderbook;...]`` - the same transform the ODBC
 backfill uses - to fold forty per-level columns into four vectors.
 
@@ -43,9 +43,13 @@ from pathlib import Path
 from uqs.external.lifecycle import DetachedProcess
 from uqs.logger import get_logger
 from uqs.paths import UqsError, UqsPaths
+from uqs.stack import bundles
 from uqs.stack.procs import get_process_config
 
 log = get_logger()
+
+#: The sidecar bundle holding its q half: the raw table and databento1.
+BUNDLE = "databento"
 
 #: The raw table the handler publishes onto. `databento1` subscribes to it.
 DATABENTO_RAW_TABLE = "databento_mbp10"
@@ -88,8 +92,10 @@ def start_databento_feed(
     Refuses rather than starting a second one, and refuses without an API
     key rather than starting a process that will fail its first call - the
     same "resolve what can fail before any work happens" order
-    ``.qetl.job.bounded.init`` follows.
+    ``.qetl.job.bounded.init`` follows. The q half (the raw table, databento1)
+    is the databento bundle's, so a checkout without it is refused first.
     """
+    bundles.require_installed(paths.repo_root, BUNDLE, "the databento feed")
     if is_databento_feed_running(paths):
         # Before the API-key check, so a second start says why it is refused.
         raise UqsError("the databento feed is already running - stop it first")

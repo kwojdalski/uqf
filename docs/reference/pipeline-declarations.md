@@ -29,7 +29,9 @@ A private transform may stay beside its job. A shared transform belongs in
 `src/etl/transforms/<name>.q`, under `.qpipe.transform.<name>`; the loader reads
 sources, shared transforms, bounded workers and streaming jobs in that order.
 For example, both Databento jobs use the `eq_orderbook` transform without
-requiring either job to own the other's computation.
+requiring either job to own the other's computation. (They are the
+`sidecars/databento` bundle's, and a bundle has no transforms directory, so the
+transform sits in the source's file, which both jobs reach.)
 
 Framework services use the same root: `.qetl.io`, `.qetl.dag`, `.qetl.reaction`,
 `.qetl.coverage`, `.qetl.run`, `.qetl.retention`, `.qetl.cfg`,

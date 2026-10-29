@@ -1,0 +1,1 @@
+{"name": "flink", "version": "0.1.0", "description": "The q side of the Apache Flink VWAP integration: flink_vwap1 deduplicates the windows an outside Flink job closes. The Python publisher stays in uqs (uqs connector start flink_vwap)"}

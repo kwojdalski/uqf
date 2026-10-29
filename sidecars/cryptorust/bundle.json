@@ -1,0 +1,1 @@
+{"name": "cryptorust", "version": "0.1.0", "description": "The q side of the cryptorust integration: its recorded DuckDB capture (crypto_market_data and its backfill) and its Kafka book snapshots (crypto_book_decoder1, crypto_book_snapshot). The Rust recorders stay launched by uqs (uqs connector start crypto)"}

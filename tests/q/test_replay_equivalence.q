@@ -150,10 +150,9 @@
     `script`tick!(.qt.qpipe.replay_equivalence.liquidity_script;{[j;n] .qpipe.job.book_liquidity_1m.close_ready n}))
 
 / Replaying jobs deliberately not scripted: job -> why.
-.qt.qpipe.replay_equivalence.excluded:`fx_positions`kafka_flow`crypto_book_decoder!(
+.qt.qpipe.replay_equivalence.excluded:`fx_positions`kafka_flow!(
     "its time-based rule is the breach throttle on the timer's .z.p (fresh_breaches), and a tick is not a logged row; no event script yet";
-    "no time-based rule; replayed raw rows are held for on_replayed (test_kafka_flow); no event script yet";
-    "the same decoder machinery as kafka_flow (.qetl.kafka.decoder): no time-based rule, raw rows held for on_replayed; no event script yet")
+    "no time-based rule; replayed raw rows are held for on_replayed (test_kafka_flow); no event script yet")
 
 .qt.qpipe.replay_equivalence.recorder:{[j;t;x]
     d:.qetl.job.stream.def j;

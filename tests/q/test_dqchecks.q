@@ -157,37 +157,26 @@
 .qt.qf.mkt.dqchecks.live_quotes:{[b] ([] time:count[b]#2026.01.01D00:00:00.000000000; sym:count[b]#`X; bid_prices:b`bid_prices; bid_sizes:b`bid_sizes; ask_prices:b`ask_prices; ask_sizes:b`ask_sizes)};
 .qt.qf.mkt.dqchecks.live_crossed:{[b] count select from .qf.mkt.check_market_data_quality[.qt.qf.mkt.dqchecks.live_quotes[b];1000] where status=`crossed};
 
-.qt.qf.mkt.dqchecks.gates_crossed:{[crypto_f;eq_f]
-    cb:.qpipe.transform.crypto_market_data.to_book crypto_f;
-    eb:.qetl.transform.apply[`eq_orderbook;enlist[`batch]!enlist eq_f];
-    c:count select from .qpipe.job.crypto_market_data_backfill.quality_check[cb] where check=`crossed_book;
-    e:count select from .qpipe.job.eq_orderbook_backfill.quality_check[eb] where check=`crossed_top_of_book;
-    (.qt.qf.mkt.dqchecks.live_crossed[cb];c;.qt.qf.mkt.dqchecks.live_crossed[eb];e)};
+/ One level-0 book as the live check reads it. The backfill gates that must agree with it
+/ (crypto_market_data_backfill, eq_orderbook_backfill) are held to the same cases by the
+/ cryptorust and databento bundles' own tests, against this same live check.
+.qt.qf.mkt.dqchecks.book:{[bid;ask;bsz] ([] bid_prices:enlist enlist bid; bid_sizes:enlist enlist bsz; ask_prices:enlist enlist ask; ask_sizes:enlist enlist 100f)};
 
-.qt.qf.mkt.dqchecks.test_a_locked_book_is_not_crossed_on_any_path:{[t]
-    cf:update bid_price_1:ask_price_1 from .qpipe.source.crypto_market_data.fixture[];
-    ef:update bid_px_00:ask_px_00 from .qpipe.source.databento_mbp10.fixture[] where i=3;
-    .qunit.assertEquals[.qt.qf.mkt.dqchecks.gates_crossed[cf;ef];0 0 0 0;"locked (bid = ask): live check, crypto gate, eq gate all pass it"]};
+.qt.qf.mkt.dqchecks.test_a_locked_book_is_not_crossed_on_the_live_check:{[t]
+    .qunit.assertEquals[.qt.qf.mkt.dqchecks.live_crossed .qt.qf.mkt.dqchecks.book[1.1;1.1;100f];0;"locked (bid = ask) passes"]};
 
-.qt.qf.mkt.dqchecks.test_a_one_sided_book_is_not_crossed_on_any_path:{[t]
-    cf:update bid_price_1:0n from .qpipe.source.crypto_market_data.fixture[];
-    ef:update bid_px_00:0n from .qpipe.source.databento_mbp10.fixture[] where i=3;
-    .qunit.assertEquals[.qt.qf.mkt.dqchecks.gates_crossed[cf;ef];0 0 0 0;"one-sided: absent, not crossed, on every path"]};
+.qt.qf.mkt.dqchecks.test_a_one_sided_book_is_not_crossed_on_the_live_check:{[t]
+    .qunit.assertEquals[.qt.qf.mkt.dqchecks.live_crossed .qt.qf.mkt.dqchecks.book[0n;1.1;100f];0;"one-sided: absent, not crossed"]};
 
-.qt.qf.mkt.dqchecks.test_a_crossed_book_is_crossed_on_every_path:{[t]
-    cf:update bid_price_1:ask_price_1+1f from .qpipe.source.crypto_market_data.fixture[] where i=0;
-    ef:update bid_px_00:ask_px_00+1f from .qpipe.source.databento_mbp10.fixture[] where i=3;
-    r:.qt.qf.mkt.dqchecks.gates_crossed[cf;ef];
-    .qunit.assertEquals[r;1 1 1 1;"bid above ask: flagged by the live check and both gates"]};
+.qt.qf.mkt.dqchecks.test_a_crossed_book_is_crossed_on_the_live_check:{[t]
+    .qunit.assertEquals[.qt.qf.mkt.dqchecks.live_crossed .qt.qf.mkt.dqchecks.book[1.2;1.1;100f];1;"bid above ask is flagged"]};
 
-/ #1210: a level 0 at a positive price but zero size is absent on every path -
-/ so a zero-size bid above the ask is one-sided (live check), never crossed.
-.qt.qf.mkt.dqchecks.test_a_zero_size_top_is_absent_not_crossed_on_any_path:{[t]
-    cf:update bid_price_1:ask_price_1+1f, bid_size_1:0f from .qpipe.source.crypto_market_data.fixture[] where i=0;
-    ef:update bid_px_00:ask_px_00+1f, bid_sz_00:0 from .qpipe.source.databento_mbp10.fixture[] where i=3;
-    .qunit.assertEquals[.qt.qf.mkt.dqchecks.gates_crossed[cf;ef];0 0 0 0;"zero-size top bid: not crossed on the live check or either gate"];
-    cb:.qpipe.transform.crypto_market_data.to_book cf;
-    r:.qf.mkt.check_market_data_quality[.qt.qf.mkt.dqchecks.live_quotes[cb];1000];
+/ #1210: a level 0 at a positive price but zero size is absent - so a zero-size bid
+/ above the ask is one-sided (live check), never crossed.
+.qt.qf.mkt.dqchecks.test_a_zero_size_top_is_absent_not_crossed_on_the_live_check:{[t]
+    b:.qt.qf.mkt.dqchecks.book[1.2;1.1;0f];
+    .qunit.assertEquals[.qt.qf.mkt.dqchecks.live_crossed b;0;"zero-size top bid: not crossed"];
+    r:.qf.mkt.check_market_data_quality[.qt.qf.mkt.dqchecks.live_quotes b;1000];
     .qunit.assertEquals[count select from r where status=`one_sided;1;"the live check calls the zero-size top one_sided"]};
 
 .qt.qf.mkt.dqchecks.test_crossed_top_rule:{[t]

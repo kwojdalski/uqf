@@ -52,7 +52,7 @@
 .qt.qetl.kafka.decoder.test_a_define_with_no_job_cannot_take_over_an_owned_topic:{[t]
     .qt.qetl.kafka.decoder.claim[`example.a;`job_a];
     before:.qetl.kafka.topic.registry;
-    .qunit.assertThrows[.qetl.kafka.topic.define[`example.a];`mapping`output!(`kafka_crypto_book;`crypto_book_snapshot);"*example.a is owned by job_a, not a define with no job*";
+    .qunit.assertThrows[.qetl.kafka.topic.define[`example.a];`mapping`output!(`kafka_client_flow;`client_flow);"*example.a is owned by job_a, not a define with no job*";
         "an owner is named, and so is the lack of one"];
     .qunit.assertEquals[.qetl.kafka.topic.registry;before;"and the registry is untouched"];
     .qunit.assertEquals[.qetl.kafka.topic.owned `job_a;enlist `example.a;"job_a still owns it"];

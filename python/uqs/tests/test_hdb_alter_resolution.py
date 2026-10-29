@@ -91,7 +91,7 @@ def test_the_attachment_s_ssh_setting_wins_and_a_local_stack_needs_none(stack, m
 def test_the_table_defaults_to_the_attachment_s_own(stack):
     fake, hdb = stack
     save_attachment("pb", hdb)
-    assert hdb_where.resolve("pb", fake).table == "crypto_market_data"
+    assert hdb_where.resolve("pb", fake).table == "duckdb_deals"
 
 
 # ------------------------------------------------------------------ writers
@@ -101,7 +101,7 @@ def test_a_live_backfill_owner_is_refused(stack):
     fake, hdb = stack
     save_attachment("pb", hdb)
     where = hdb_where.resolve("pb", fake)
-    backfill_owner.claim("pb", "crypto_market_data_backfill", os.getpid(), "abc")
+    backfill_owner.claim("pb", "duckdb_deals_backfill", os.getpid(), "abc")
     with pytest.raises(AttachmentError, match="attached backfill running"):
         hdb_where.refuse_running_writers(where, fake)
 

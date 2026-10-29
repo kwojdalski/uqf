@@ -161,7 +161,7 @@ reporting.
 a live duplicate. The DuckDB timestamp literal existed twice, byte for byte:
 
 ```
-  q       epoch_ns_literal, in the databento_mbp10 source   src/etl/sources/databento_mbp10.q
+  q       epoch_ns_literal, in the databento_mbp10 source   sidecars/databento/databento_mbp10.q
   q       epoch_ns_literal, in the duckdb_deals source      src/etl/sources/duckdb_deals.q
 
   Shared behaviour: a q timestamp as DuckDB's make_timestamp_ns(<epoch ns>),

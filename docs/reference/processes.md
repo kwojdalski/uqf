@@ -9,7 +9,7 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 [docs/guides/uqs.md](../guides/uqs.md); for the topology diagrams see
 [architecture/stack.md](../architecture/stack.md).
 
-**23 vendored processes** plus **46 uqf processes** — 69 in total. Ports are shown at the default base port 6050; every one is `{KDBBASEPORT}+offset`, so a different base shifts them all together.
+**23 vendored processes** plus **41 uqf processes** — 64 in total. Ports are shown at the default base port 6050; every one is `{KDBBASEPORT}+offset`, so a different base shifts them all together.
 
 ## uqf's own processes
 
@@ -26,20 +26,17 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 | `demo_markout1` | 6081 | etl | `processes/torq_stream.q` | `demo_execution_quality` | `trades`, `quote` | `demo_execution_quality` |
 | `deals_backfill1` | 6082 | backfill | `processes/torq_backfill.q` | — | — | — |
 | `events_backfill1` | 6083 | backfill | `processes/torq_backfill.q` | — | — | — |
-| `databento1` | 6084 | etl | `processes/torq_stream.q` | `eq_orderbook` | `databento_mbp10` | `eq_orderbook` |
 | `cryptomock1` | 6085 | feed | `processes/torq_stream.q` | — | — | `crypto_book`, `crypto_trades` |
 | `executions1` | 6086 | normalizer | `processes/torq_stream.q` | `executions` | `trades`, `crypto_trades`, `orders` | `executions` |
 | `fxordersfeed1` | 6088 | feed | `processes/torq_stream.q` | `orders` | — | `orders` |
 | `fxpositions1` | 6089 | etl | `processes/torq_stream.q` | — | `executions` | `fx_position`, `fx_limit_breach`, `fx_position_open`, `config_change` |
-| `databento_backfill1` | 6090 | backfill | `processes/torq_backfill.q` | — | — | — |
 | `upstream_backfill1` | 6091 | backfill | `processes/torq_backfill.q` | — | — | — |
 | `marketdata1` | 6092 | normalizer | `processes/torq_stream.q` | `market_data` | `quote`, `fx_orderbook`, `crypto_book` | `market_data` |
 | `superbook1` | 6093 | etl | `processes/torq_stream.q` | `superbook` | `market_data` | `superbook`, `config_change` |
 | `arbitrage1` | 6094 | etl | `processes/torq_stream.q` | `arbitrage` | `superbook` | `arbitrage` |
 | `crossarb1` | 6095 | etl | `processes/torq_stream.q` | `cross_arbitrage` | `superbook` | `cross_arbitrage`, `config_change` |
 | `duckdb_deals_backfill1` | 6096 | backfill | `processes/torq_backfill.q` | — | — | — |
-| `kafka_flow1` | 6097 | etl | `processes/torq_stream.q` | `client_flow` | `kafka_message` | `client_flow`, `kafka_dead_letter` |
-| `crypto_market_data_backfill1` | 6098 | backfill | `processes/torq_backfill.q` | — | — | — |
+| `kafka_flow1` | 6097 | etl | `processes/torq_stream.q` | — | `kafka_message` | `client_flow`, `kafka_dead_letter` |
 | `hdb_demo_markouts_backfill1` | 6099 | backfill | `processes/torq_backfill.q` | — | — | — |
 | `hdb_transfer_backfill1` | 6100 | backfill | `processes/torq_backfill.q` | — | — | — |
 | `crypto_markout1` | 6101 | etl | `processes/torq_stream.q` | `crypto_execution_quality` | `crypto_trades`, `crypto_book` | `crypto_execution_quality` |
@@ -47,7 +44,6 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 | `last_value1` | 6103 | etl | `processes/torq_stream.q` | `last_value` | `market_data` | `last_value` |
 | `exec_bars1` | 6104 | etl | `processes/torq_stream.q` | `exec_bar` | `executions` | `exec_bar` |
 | `hdb_exec_bars_backfill1` | 6105 | backfill | `processes/torq_backfill.q` | — | — | — |
-| `flink_vwap1` | 6106 | etl | `processes/torq_stream.q` | `flink_vwap` | `flink_vwap_raw` | `flink_vwap` |
 | `crypto_book_1s1` | 6107 | etl | `processes/torq_stream.q` | `crypto_book_1s` | `crypto_book` | `crypto_book_1s` |
 | `hdb_crypto_book_backfill1` | 6108 | backfill | `processes/torq_backfill.q` | — | — | — |
 | `order_quality1` | 6109 | etl | `processes/torq_stream.q` | `order_quality` | `order_outcomes` | `order_quality` |
@@ -60,7 +56,6 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 | `hdb_fx_markout_wide_backfill1` | 6116 | backfill | `processes/torq_backfill.q` | — | — | — |
 | `hdb_fx_markouts_backfill1` | 6117 | backfill | `processes/torq_backfill.q` | — | — | — |
 | `kafka_feed1` | 6118 | feed | `processes/torq_stream.q` | `kafka_message` | — | `kafka_message` |
-| `crypto_book_decoder1` | 6119 | etl | `processes/torq_stream.q` | `crypto_book_snapshot` | `kafka_message` | `crypto_book_snapshot`, `kafka_dead_letter` |
 
 ### Why a row deviates from the defaults
 
@@ -73,12 +68,10 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 - **`demo_markout1`** — compares its own clock against incoming data timestamps (the process_ready cutoff), and .u.upd stamps those in UTC. It reads .z.p directly for that reason, so it needs no localtime override - it used to carry localtime:0 instead, which fixed the arithmetic by starting one process on a different clock from the other twenty-two
 - **`deals_backfill1`** — bounded: runs a window range and exits, so it must not start with the stack
 - **`events_backfill1`** — bounded: see deals_backfill1
-- **`databento1`** — folds live Databento MBP-10 into the book shape. The raw rows are published by an EXTERNAL Python feed handler (external/databento_feed.py) - a q process cannot hold a Databento subscription - so databento_mbp10 has a schema row but no producer in this list. That is also why startwithall:0: on a default start nothing publishes the table it subscribes to, so it held one of the sixteen licensed plant connections (#285) to consume nothing. Start it with the feed handler
 - **`cryptomock1`** — stands in for cryptorust's two kdb recorders. startwithall:0: start it INSTEAD of them, never as well as - it publishes onto the same two tables, and an invented ladder or fill must not interleave with a real one
 - **`executions1`** — every fill as one tape: trades, crypto_trades and filled orders -> executions
 - **`fxordersfeed1`** — synthetic order flow, most of which never becomes a fill - fxpositions1's input
 - **`fxpositions1`** — net exposure by (sym, book, product) with limit breaches. Runs here AND standalone under processes/run_stream.q on stock kdb+ - a job is TorQ-free code and the runner decides the transport, so being runnable without TorQ is no reason not to be startable with it
-- **`databento_backfill1`** — bounded: reads Databento MBP-10 over ODBC and folds it with the same transform databento1 applies live
 - **`upstream_backfill1`** — bounded: reads an upstream q process over IPC
 - **`marketdata1`** — every venue's book in one shape, with source identity and the source's own time: FX from quote and fx_orderbook, crypto from crypto_book. posbook1 marks positions to its level-0 mids, so it starts with the stack; superbook1 merges the FX books by pair for the arbitrage chain, which stays on demand (`uqs start --profile arbitrage`, #285)
 - **`superbook1`** — latest source books merged by pair; stale liquidity expires on a timer. Middle of the marketdata1 chain - see there
@@ -86,7 +79,6 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 - **`crossarb1`** — the direct book against a synthetic route through other pairs (EURJPY against EURUSD x USDJPY), where arbitrage1 compares two sources on the SAME pair. Reads superbook like arbitrage1, so it is the second consumer of the marketdata1 chain rather than a fifth link - see there. startwithall:0 for that chain's reason (#285), and note that the chain plus this one is four more plant connections than the default start holds: start `--profile arbitrage`, which is that set, rather than adding them to a running default
 - **`duckdb_deals_backfill1`** — bounded: copies mock FX deals from a DuckDB file over ODBC, a day at a time
 - **`kafka_flow1`** — decodes the Kafka records on kafka_message into each declared topic's plant table (client_flow for the client trade topic), deduplicated on (topic;partition;offset), and sends what it cannot decode to kafka_dead_letter - including every topic no decoder job has claimed. The records are published by a consumer - the q feed kafka_feed1, or the legacy Python one - so kafka_message has no producer in a default start. That is why it does not start with the stack: it would hold one of the sixteen licensed plant connections to consume nothing. Start it with the consumer
-- **`crypto_market_data_backfill1`** — bounded: replays cryptorust's recorded crypto book and trade capture from a DuckDB file over ODBC, an hour at a time
 - **`hdb_demo_markouts_backfill1`** — bounded: marks out the HDB's fills against its quotes, into demo_execution_quality
 - **`hdb_transfer_backfill1`** — bounded - copies trades from a kdb+ HDB on this machine into trades_copy, adding notional; the HDB-to-HDB example
 - **`crypto_markout1`** — markouts on real crypto fills, in bps against the best mid across venues. Not started with the stack: its inputs come from cryptorust's recorders, or from cryptomock1 in their place, neither of which starts by default - `uqs start --profile crypto` brings it up with the mock
@@ -94,7 +86,6 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 - **`last_value1`** — the newest top of book per sym, FX and crypto, as a published table: read the last row per sym (select by sym) for one shared answer to the current price instead of each consumer's own cache; on demand, in the fx profile
 - **`exec_bars1`** — time bars over the unified fills tape; the window is the fill's source_time
 - **`hdb_exec_bars_backfill1`** — bounded: rebuilds the fill bars from the HDB's executions with the aggregation exec_bars1 applies live
-- **`flink_vwap1`** — publishes each per-symbol VWAP window an Apache Flink job closes, once, dropping windows Flink emits again after a restart or replay. The raw rows come from an EXTERNAL Python process (external/flink_vwap_feed.py) - Flink runs outside q - so flink_vwap_raw has no producer in this list and this does not start with the stack. Start it with `uqs connector start flink_vwap`
 - **`crypto_book_1s1`** — last book state per venue and sym per second; the window is the update's source_time, not the plant's time
 - **`hdb_crypto_book_backfill1`** — bounded: rebuilds the one-second book snapshots from the HDB's crypto_book with the pick crypto_book_1s1 applies live
 - **`order_quality1`** — rolling fill and reject ratios per book over the last 1m, 5m and 1h
@@ -107,7 +98,6 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 - **`hdb_fx_markout_wide_backfill1`** — bounded: marks out the HDB's executions against its market_data, into fx_markout_wide, with the calculation fxmarkoutwide1 applies live
 - **`hdb_fx_markouts_backfill1`** — bounded: marks out the HDB's executions against its market_data, into fx_markout, with the calculation fx_markout1 applies live
 - **`kafka_feed1`** — the native q Kafka consumer (KX kfk, pinned v1.6.6): publishes every record undecoded onto kafka_message, committing offsets only after the publish returned. Needs UQF_KFK_HOME and UQF_KAFKA_BROKERS, so it is started on demand, never with the stack. The Python consumer (uqs connector start kafka) publishes the same table; run one per group
-- **`crypto_book_decoder1`** — decodes cryptorust's Kafka book snapshots (topic cryptorust.book_snapshots) from kafka_message into crypto_book_snapshot, the top five levels a side as wide columns, deduplicated on (topic;partition;offset), and sends what it cannot decode to kafka_dead_letter. The records come from a Kafka consumer (kafka_feed1 with UQF_KAFKA_TOPICS=cryptorust.book_snapshots), so it does not start with the stack: it would hold a plant connection to consume nothing
 
 ## Tables these processes publish
 
@@ -120,21 +110,18 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 | `cross_arbitrage` | `plant_tables.q` | `crossarb1` |
 | `crypto_book` | `plant_tables.q` | `cryptomock1` |
 | `crypto_book_1s` | `plant_tables.q` | `crypto_book_1s1` |
-| `crypto_book_snapshot` | `plant_tables.q` | `crypto_book_decoder1` |
 | `crypto_execution_quality` | `plant_tables.q` | `crypto_markout1` |
 | `crypto_trades` | `plant_tables.q` | `cryptomock1` |
 | `demo_execution_quality` | `plant_tables.q` | `demo_markout1` |
-| `eq_orderbook` | `plant_tables.q` | `databento1` |
 | `exec_bar` | `plant_tables.q` | `exec_bars1` |
 | `executions` | `plant_tables.q` | `executions1` |
-| `flink_vwap` | `plant_tables.q` | `flink_vwap1` |
 | `fx_limit_breach` | `plant_tables.q` | `fxpositions1` |
 | `fx_markout` | `plant_tables.q` | `fxmarkout1` |
 | `fx_markout_wide` | `plant_tables.q` | `fxmarkoutwide1` |
 | `fx_orderbook` | `plant_tables.q` | `fxorderbookfeed1` |
 | `fx_position` | `plant_tables.q` | `fxpositions1` |
 | `fx_position_open` | `plant_tables.q` | `fxpositions1` |
-| `kafka_dead_letter` | `plant_tables.q` | `crypto_book_decoder1`, `kafka_flow1` |
+| `kafka_dead_letter` | `plant_tables.q` | `kafka_flow1` |
 | `kafka_message` | `plant_tables.q` | `kafka_feed1` |
 | `last_value` | `plant_tables.q` | `last_value1` |
 | `market_data` | `plant_tables.q` | `marketdata1` |

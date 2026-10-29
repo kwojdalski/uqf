@@ -39,7 +39,7 @@
 / @param source the source that could not be reached
 / @param e the opener's error text
 / @return the message to throw, never longer than q will carry
-/ @eg 256>count .qetl.job.bounded.connect_error[`crypto_market_data;"driver not loaded"]  ->  1b
+/ @eg 256>count .qetl.job.bounded.connect_error[`duckdb_deals;"driver not loaded"]  ->  1b
 .qetl.job.bounded.connect_error:{[source;e]
     msg:"connect: ",string[source]," unreachable - ",e,
         ". Not falling back to the fixture: that would record synthetic data as covered";
