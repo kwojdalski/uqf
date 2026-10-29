@@ -70,6 +70,9 @@ _MANIFEST_KEYS = frozenset({"name", "version", "description"})
 _TABLE = re.compile(r"^(?:\.qetl\.plant\.)?([a-z_][a-z0-9_]*):\(\[\]")
 _CONTRACT = re.compile(r"^(?:\.qetl\.plant\.)?(nested|sorting)\[`([a-z_][a-z0-9_]*);")
 _DESCRIBE = re.compile(r"^\.qcat\.describe\[`([a-z_][a-z0-9_]*)\]:")
+#: A raw table a desk should not browse (the input to a fold) is hidden with its
+#: reason rather than described, as the tree's own are.
+_HIDDEN = re.compile(r"^\.qcat\.hidden\[`([a-z_][a-z0-9_]*)\]:")
 #: A bundle cannot add querypolicy.csv rows, so a reason its table is browsable
 #: unbounded is how it meets the catalog's policy-or-reason rule (#889).
 _UNBOUNDED = re.compile(r"^\.qcat\.unbounded\[`([a-z_][a-z0-9_]*)\]:")
@@ -159,9 +162,9 @@ def _qualified(line: str) -> str:  # a tables.q line as the tree holds it
 
 
 def catalog_lines(bundle: Bundle, tables: list[str], described: set[str]) -> list[str]:
-    """catalog.q's lines, every bundle table described exactly once and
-    nothing the tree already describes described again. An unbounded reason
-    may name only a table this bundle defines."""
+    """catalog.q's lines, every bundle table described (or hidden, with a
+    reason) exactly once and nothing the tree already describes described
+    again. An unbounded reason may name only a table this bundle defines."""
     lines, seen = _lines(bundle.addition(CATALOG)), []
     for n, line in enumerate(lines, 1):
         where = f"{bundle.name}/{CATALOG}:{n}"
@@ -174,19 +177,23 @@ def catalog_lines(bundle: Bundle, tables: list[str], described: set[str]) -> lis
                     f"{where}: .qcat.unbounded for {u.group(1)}, which this bundle does not define"
                 )
             continue
-        m = _DESCRIBE.match(line)
+        m = _DESCRIBE.match(line) or _HIDDEN.match(line)
         if not m:
             raise BundleError(
-                f'{where}: expected .qcat.describe[`table]:"..." or .qcat.unbounded[`table]:"..."'
-                " (fully qualified)"
+                f'{where}: expected .qcat.describe[`table]:"...", .qcat.hidden[`table]:"..." or '
+                '.qcat.unbounded[`table]:"..." (fully qualified)'
             )
         if m.group(1) in described or m.group(1) in seen:
             raise BundleError(f"{where}: {m.group(1)} is already described")
+        if _HIDDEN.match(line) and m.group(1) not in tables:
+            raise BundleError(
+                f"{where}: .qcat.hidden for {m.group(1)}, which this bundle does not define"
+            )
         seen.append(m.group(1))
     if missing := [t for t in tables if t not in seen]:
         raise BundleError(
-            f"{bundle.name}: {', '.join(missing)} defined in {TABLES} but not described in "
-            f"{CATALOG} - the catalog refuses a table that is neither described nor hidden"
+            f"{bundle.name}: {', '.join(missing)} defined in {TABLES} but neither described nor "
+            f"hidden in {CATALOG} - the catalog refuses a table that is neither"
         )
     return lines
 
@@ -303,8 +310,14 @@ def plan(bundle: Bundle, root: Path) -> Plan:
     known = bundle_shadowing.known_tables(root, outside)
     table_body, tables = table_lines(bundle, known)
     catalog_text = without_block((root / CATALOG_FILE).read_text(), bundle.name, str(CATALOG_FILE))
-    described = {m.group(1) for ln in catalog_text.splitlines() if (m := _DESCRIBE.match(ln))}
-    described |= set(re.findall(r"^\s*describe\[`([a-z_][a-z0-9_]*)\]", catalog_text, re.M))
+    described = {
+        m.group(1)
+        for ln in catalog_text.splitlines()
+        if (m := _DESCRIBE.match(ln) or _HIDDEN.match(ln))
+    }
+    described |= set(
+        re.findall(r"^\s*(?:describe|hidden)\[`([a-z_][a-z0-9_]*)\]", catalog_text, re.M)
+    )
     catalog_body = catalog_lines(bundle, tables, described)
     procnames = {
         d.procname

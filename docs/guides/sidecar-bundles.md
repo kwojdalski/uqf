@@ -16,7 +16,8 @@ piggybank/
   test_*.q                 its tests: run by `scripts/test.py bundles`
   tables.q                 optional: plant tables, nested[...] contracts and
                            sorting[...] rules
-  catalog.q                optional: .qcat.describe entries for those tables,
+  catalog.q                optional: .qcat.describe (or .qcat.hidden, for a raw
+                           table) entries for those tables,
                            and .qcat.unbounded reasons
   process_overrides.csv    optional: procname,field,value for its own processes
 ```
@@ -28,10 +29,9 @@ decoder, its topics (`sidecars/kafka_example`, [Kafka](../services/kafka.md)): a
 process loads only the files its jobs reach, and the file's own definitions are
 always among them. `tables.q` takes one `name:([]...)`, `nested[...]` or
 `sorting[...]` ([sort rules](attach-existing-torq.md#sort-rules)) line per
-entry, and `catalog.q` must describe every table it defines. A bundle cannot add
-rows to `querypolicy.csv`, so a table of its own that the browser may read
-without a policy needs a
-`.qcat.unbounded[`table\]:"reason"` line in `catalog.q\`.
+entry, and `catalog.q` must describe every table it defines, or hide it with
+`.qcat.hidden[`table\]:"reason"` when it is the raw input to a fold. A bundle cannot add rows to `querypolicy.csv`, so a table of its own that the browser may read without a policy needs a `.qcat.unbounded\[`table\]:"reason"`
+line in `catalog.q\`.
 
 ## Scaffold a bundle job
 

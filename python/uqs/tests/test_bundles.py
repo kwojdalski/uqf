@@ -195,7 +195,24 @@ def test_a_described_table_is_refused(bundle: Path, repo: Path) -> None:
 
 def test_an_undescribed_table_is_refused(bundle: Path, repo: Path) -> None:
     (bundle / "catalog.q").unlink()
-    with pytest.raises(BundleError, match="not described"):
+    with pytest.raises(BundleError, match="neither described nor hidden"):
+        bundles.plan(bundles.read_bundle(bundle), repo)
+
+
+def test_a_raw_table_may_be_hidden_with_its_reason(bundle: Path, repo: Path) -> None:
+    """The input to a fold is hidden from the catalog, as the tree's own are."""
+    hidden = '.qcat.hidden[`piggy_tape]:"the raw tape, read only by a fold"\n'
+    (bundle / "catalog.q").write_text(hidden)
+    _install(bundle, repo)
+    assert hidden.strip() in (repo / CATALOG_FILE).read_text()
+
+
+def test_hiding_a_table_the_bundle_does_not_define_is_refused(bundle: Path, repo: Path) -> None:
+    (bundle / "catalog.q").write_text(CATALOG + '.qcat.hidden[`quote]:"not mine"\n')
+    with pytest.raises(BundleError, match="quote is already described"):
+        bundles.plan(bundles.read_bundle(bundle), repo)
+    (bundle / "catalog.q").write_text(CATALOG + '.qcat.hidden[`other]:"not mine"\n')
+    with pytest.raises(BundleError, match="other, which this bundle does not define"):
         bundles.plan(bundles.read_bundle(bundle), repo)
 
 
