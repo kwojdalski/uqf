@@ -139,7 +139,10 @@ system"l scripts/dev/attached_readers.q";
     if[d`act;
         / taken BEFORE the reload is asked: what it maps is what was on disk then
         asked:.z.p;
-        r:.qdev.attached.reload_all[];
+        / every claim this release will let through, an earlier run's included (#1773): the readers
+        / must serve the dates of all of them, or the watermark does not move
+        rel:.qetl.coverage.release_dates[.qetl.coverage.unready;asked];
+        r:.qdev.attached.reload_all[exec date from rel where dataset=.qdev.attached.dataset];
         s:.qetl.io.acknowledged[s;r];
         `.qdev.attached.last_failed set r`failed;
         if[not s`dirty; .qetl.coverage.release_ready asked];
@@ -301,6 +304,7 @@ if[not (::)~decl`io;
 remote:`writer in key o;
 forced:remote and `force in key o;
 .qdev.attached.dataset:decl`dataset;
+.qdev.attached.shape:.qdev.attached.shape_of (.qetl.transform.def decl`transform)`output;
 $[remote;
     [bounds:enlist[`destination]!enlist `$first o`destid;
      call:@[.qdev.attached.writer_call;o;{[e] -1 e; exit 2}];

@@ -340,7 +340,7 @@
 .qetl.coverage.claims:{[ds;part;release;at]
     p:hsym `$.qetl.coverage.ledger_path[];
     t:$[()~key p; 0#([] dataset:`symbol$(); partition:`symbol$(); source_version:`symbol$();
-          range_from:`timestamp$(); range_to:`timestamp$(); recorded_at:`timestamp$(); superseded_at:`timestamp$());
+          range_from:`timestamp$(); range_to:`timestamp$(); rows_published:`long$(); recorded_at:`timestamp$(); superseded_at:`timestamp$());
         .qetl.job.bounded.state.durable_get .qetl.coverage.ledger_path[]];
     select range_from, range_to from t
         where dataset=ds, partition=part, source_version=release,
@@ -722,6 +722,33 @@
     c:.qetl.coverage.claims_at[ds;part;version;.z.p];
     $[0=count c; 0b; null w; 1b; any w<c`recorded_at]}
 
+/ The dates a release would make queryable, per key (#1773). release_ready moves a
+/ watermark, and a watermark releases EVERY current claim recorded before it - an earlier
+/ run's claims whose reload never succeeded as well as this run's - so a deployment that
+/ checks its readers serve the data must check the dates of all of them, not only the
+/ windows it wrote itself.
+/ .
+/ A claim spans [range_from; range_to): its dates run from the date of range_from to the
+/ date of the last instant it covers, range_to less one nanosecond, so a window ending at
+/ midnight does not claim the next day. A claim that published no rows is skipped: it
+/ asserts a window was looked at, and leaves no partition behind to check. What would
+/ bring them back: a writer that creates an empty partition for an empty window.
+/ @param ks table dataset, partition, source_version - the keys being released
+/ @param at the instant the release is for: claims recorded after it are not released
+/ @return table dataset, partition, source_version, date - distinct, sorted by key then date
+/ @eg .qetl.coverage.release_dates[([] dataset:enlist `no_such; partition:enlist `; source_version:enlist `v1);.z.p]  ->  an empty table
+.qetl.coverage.release_dates:{[ks;at]
+    out:([] dataset:`symbol$(); partition:`symbol$(); source_version:`symbol$(); date:`date$());
+    if[0=count ks; :out];
+    per:{[at;k]
+        w:(.qetl.coverage.ready_table[])[k]`ready_at;
+        c:.qetl.coverage.claims_at[k`dataset;k`partition;k`source_version;at];
+        c:select from c where rows_published>0;
+        if[not null w; c:select from c where recorded_at>w];
+        ds:distinct raze {[f;t] d0:`date$f; d0+til 1+(`date$t-1)-d0}'[c`range_from;c`range_to];
+        ([] dataset:count[ds]#k`dataset; partition:count[ds]#k`partition; source_version:count[ds]#k`source_version; date:asc ds)}[at];
+    raze per each 0!distinct ks}
+
 / The coverage claims a reader can query now: claims as `claims` returns
 / them, recorded at or before the key's readiness watermark. What /query's
 / require_coverage composes (#1094), read on the gateway like `claims`.
@@ -741,9 +768,9 @@
 .qetl.coverage.claims_at:{[ds;part;release;at]
     p:hsym `$.qetl.coverage.ledger_path[];
     t:$[()~key p; 0#([] dataset:`symbol$(); partition:`symbol$(); source_version:`symbol$();
-          range_from:`timestamp$(); range_to:`timestamp$(); recorded_at:`timestamp$(); superseded_at:`timestamp$());
+          range_from:`timestamp$(); range_to:`timestamp$(); rows_published:`long$(); recorded_at:`timestamp$(); superseded_at:`timestamp$());
         .qetl.job.bounded.state.durable_get .qetl.coverage.ledger_path[]];
-    select range_from, range_to, recorded_at from t
+    select range_from, range_to, rows_published, recorded_at from t
         where dataset=ds, partition=part, source_version=release,
               recorded_at<=at, at<superseded_at, range_to>range_from}
 

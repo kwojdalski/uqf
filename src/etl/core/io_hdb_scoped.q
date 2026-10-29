@@ -21,7 +21,7 @@
 /   every table the latest partition holds - right for a database uqf owns, a
 /   rewrite of dates and tables nobody asked about in one it does not. The
 /   cost, stated in docs/guides/attach-existing-torq.md: an older partition that
-/   lacks the table is not filled (`uqs data hdb-check --apply` does it, as for any
+/   lacks the table is not filled (`uqs data check --apply` does it, as for any
 /   table added to a running stack).
 / .
 / It is .qetl.io.hdb underneath, so the lock, the staging area beside the
