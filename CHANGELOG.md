@@ -2,16 +2,54 @@
 
 Daily stable snapshots of this repository. Newest first.
 
-## Unreleased
+## stable/2026-10-29
+
+**Overview.** Eight days, 145 merged PRs. The headline: the uqs CLI redesign
+(#1738), which gives every command one grammar - noun first, the thing acted on
+positional, one meaning per option, a fixed verb vocabulary - with the old
+spellings kept as hidden, logged aliases for one release. Also: `QCMD` as the
+only interpreter variable, deploys built from content-addressed bundled
+runtimes, attaching to and backfilling a TorQ stack on another machine, and CI
+cut from about ten minutes to under two.
 
 - **Breaking: `QCMD` is the only interpreter variable (#1753).** Which q it is,
   KDB-X or PeachQ, is asked of the binary. `UQF_Q_IMPL`, `UQF_PEACHQ` and
   `UQF_PEACHQ_REASON` are refused by `uqs`, `scripts/test.py`, pytest and
-  deploy's preflight, each naming its replacement: `QCMD=<binary>`, or
-  `--peachq PATH` (`scripts/test.py`, pytest) for the PeachQ lanes alone beside
-  KDB-X. A PeachQ that is not the pinned build is used and named in one warning.
-  `deploy.env` now writes only `QCMD` and `QHOME`: **a release deployed before
-  this sets the removed variables, so redeploy it.** Unset them in your shell.
+  deploy's preflight, each naming its replacement. `deploy.env` now writes only
+  `QCMD` and `QHOME`: **a release deployed before this sets the removed
+  variables, so redeploy it.** Unset them in your shell.
+
+**Changes by area**
+
+- **`python/uqs` CLI (#1727-#1740, #1768):** `uqs clean`, `status`,
+  `data check`/`data alter` (scoped HDB maintenance, #1755), `config show`,
+  `deploy check`, `deploy component build`, `start --follow`, `exec`, connector
+  restart/logs, every noun owning its `list`, positional `PROC`/`JOB`, one time
+  range (`--from/--to`, `--date`, `--last`), `--json` everywhere, and one safety
+  vocabulary (`--dry-run/-n`, `--yes/-y`, `--override NAME --reason`). Deploy
+  commands take a `TARGET`; `--host` is `--ssh` and `rollback --to` is
+  `--release`. A test over the Typer tree holds the conventions, with no
+  exceptions left.
+- **Deploy (#1557, #1646, #1713, #1756):** layered configuration, recorded
+  policy overrides, bundled TorQ, PeachQ and Python runtimes, an offline
+  installer with a host contract, the frontend carried prebuilt, and
+  `uqs target set/unset/rename/edit/log/revert/adopt` as validated, atomic
+  changes. `uqs query --target` tunnels to a deployed target.
+- **Remote stacks (#1650, #1651, #1717, #1746, #1760):** attach a local
+  publisher to a stack on another machine, extract a backfill there and commit
+  it through the stack's own writer, and start the receiver from an approved
+  contract rather than a worker. Receivers no longer leak.
+- **`src/etl`, scaffolding:** about forty `uqs job new` refusals for scaffolds
+  that would previously be written broken (#1566-#1602), Kafka fixes (offsets,
+  provenance, retention), and refusal of bad book data (#1501-#1503).
+- **CI and tests:** four balanced Python shards, parallel PeachQ suites, q
+  suites selected from qlinter's dependency graph, a blocking KDB-X attestation
+  whose q-coverage is scoped to the modules a change reaches (#1719), and
+  `scripts/dev/ship.sh` to merge a PR. qlinter pinned at 0.14.17.
+- **`docs/`, `.claude/`:** the guides, reference, skills and agents brought in
+  line with the new CLI spellings and `QCMD`.
+
+**Files changed:** 608 files changed, 49473 insertions(+), 5667 deletions(-)
 
 ## stable/2026-10-21
 
