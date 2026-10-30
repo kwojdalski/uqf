@@ -5,7 +5,7 @@
 //   q scripts/examples/hdb_order_quality_example.q -keep    keep what it wrote, under build/
 //
 // No TorQ and no running stack: everything it writes is under one directory
-// in build/, removed at the end unless -keep. The q-scripts lane runs it, and
+// in build/, removed at the end unless -keep. The worked-examples test runs it, and
 // it exits 1 unless the run completes and publishes at least one row - so a
 // quality check or a derive the scaffold left throwing fails it until written.
 // Written by `uqs job new hdb_order_quality --kind backfill`; grown with the job.
@@ -36,7 +36,7 @@ published:{[] .qetl.source.local_read[dst;`order_quality;range_from;range_to]}
 / spaces or quotes, and an unquoted `rm -rf` would split it into other paths.
 quoted:{[path] "'",ssr[path;"'";"'\"'\"'"],"'"}
 
-/ Exit 1 with a message when a check fails, so the q-scripts lane fails too.
+/ Exit 1 with a message when a check fails, so the worked-examples test fails too.
 check:{[ok;what] $[ok; -1 "  ok    ",what; [-1 "  FAIL  ",what; exit 1]]}
 
 \d .

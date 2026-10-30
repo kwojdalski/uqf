@@ -35,8 +35,15 @@ REPO = Path(__file__).resolve().parents[2]
 #: pytest-testmon's database, at the rootdir it records against.
 TESTMON_DATA = REPO / ".testmondata"
 
-FULL = ["uv", "run", "pytest", "-q", "-n", "auto", "--dist", "loadgroup"]
-TESTMON = ["uv", "run", "pytest", "-q", "--testmon"]
+#: The tests a q hook runs at commit (the q_backend marker, conftest.py) are
+#: left out of both modes: q-tests runs the worked examples and q-docs and
+#: q-docs-peachq the docs' q blocks, each on the interpreter it requires, and
+#: a commit that fired both hooks would otherwise run them twice (#1808). A
+#: plain `uv run pytest`, and CI, run them with everything else.
+NOT_Q_HOOKS = ["-m", "not q_backend"]
+
+FULL = ["uv", "run", "pytest", "-q", "-n", "auto", "--dist", "loadgroup", *NOT_Q_HOOKS]
+TESTMON = ["uv", "run", "pytest", "-q", "--testmon", *NOT_Q_HOOKS]
 
 
 def staged_files() -> list[str]:

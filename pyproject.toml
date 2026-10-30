@@ -113,6 +113,8 @@ root = [
     "python/uqs/tests",
     # The remote-stack lane's helpers, imported by its tests by bare name.
     "tests/remote",
+    # qrun_support.py, the q-running tests' shared runner, likewise (#1808).
+    "tests/qrun",
 ]
 
 # No [tool.ty.rules] block, deliberately.
@@ -174,4 +176,7 @@ testpaths = [
     "scripts/portable/tests",
     # scripts/dev/bundle_suite.py, which runs sidecar bundles' own tests.
     "scripts/dev/tests",
+    # The q scripts run as tests - worked examples, the docs' q blocks - and
+    # what their runner promises (#1808): what scripts/test.py's lanes ran.
+    "tests/qrun",
 ]

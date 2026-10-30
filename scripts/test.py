@@ -26,18 +26,6 @@ between them:
                        test that depends on running after another one fails
   q-examples           every documented @eg runs, in its own process, since
                        many examples change state.
-  q-scripts            every worked example under scripts/examples/, each
-                       run as a script in its own process. Nothing ran these
-                       before; the first commit to add one found a false
-                       claim in plant_tables.q that had stood untested.
-  q-docs               the ```q blocks in docs/ marked `<!-- q-example: ... -->`,
-                       one q process per document. The q lane CI runs on
-                       PeachQ, which needs no licence.
-  q-docs-peachq        q-docs again on PeachQ: --peachq PATH, else $QCMD if it
-                       is PeachQ, else the pinned build, built into the cache
-                       on first use.
-                       Required beside KDB-X, not instead of it, until the
-                       two are compatible enough for one to stand for both.
   q-two-instances      a second kdb+ process is started on the starter
                        pack's HDB and a bounded worker moves trades out of
                        it - the only lane in which a worker's LIVE path runs.
@@ -63,6 +51,16 @@ between them:
                        every local run depend on a remote host being up.
 
 Exits non-zero on the first failing lane.
+
+LANES MOVING TO PYTEST (#1808). pytest is becoming the one interface for
+running tests, with qUnit and q coverage as the backends it drives, and each
+lane moves once - its callers switched and its code here removed in the same
+change, so no test has two runners (#891). Moved so far, with the selector
+that runs each now:
+
+  q-scripts      uv run pytest tests/qrun/test_worked_examples.py
+  q-docs         uv run pytest tests/qrun/test_doc_blocks.py -m kdbx
+  q-docs-peachq  uv run pytest tests/qrun/test_doc_blocks.py -m peachq
 
 WHY PYTHON RATHER THAN SHELL. The shell version had three bugs waiting to
 happen that are simply absent here: a lane's temp directory was cleaned up
@@ -295,7 +293,8 @@ def lane_q_unit_peachq(override: str | None = None) -> None:
     nested contexts, so scripts/portable/full_suite.py flattens a copy first
     and holds the result to tests/q/peachq_known_gaps.txt - a failure not
     listed fails the lane, and so does a listed test that passes. The binary
-    is `peachq_binary`'s, as q-docs-peachq's is: $QCMD only when it is PeachQ.
+    is `peachq_binary`'s, as the `peachq` pytest fixture's is: $QCMD only when it
+    is PeachQ.
     """
     _banner("q-unit-peachq: the whole suite on PeachQ, flattened, against its known gaps")
     try:
@@ -348,116 +347,6 @@ def lane_q_examples() -> None:
     # take locks and open runs, and none of that may leak into another lane.
     with tempfile.TemporaryDirectory() as statusdir:
         _q("q-examples", "tests/q/run_examples.q", env={"UQF_STATUS_DIR": statusdir})
-
-
-#: The slowest example takes well under a second; one still running after this
-#: is waiting on something - a timer, a connection - and a hung lane is not a
-#: useful way to say so.
-EXAMPLE_TIMEOUT = 120
-# Examples whose own `exit` is the only way out: a timer replay that races
-# stdin EOF against its next tick (#1338). They get a stdin that never ends
-# and check themselves in .z.exit, so a replay cut short exits non-zero.
-STDIN_OPEN_EXAMPLES = frozenset({"timer_replay_example"})
-
-
-def lane_q_scripts() -> None:
-    """Every worked example under scripts/examples/, each in its own process.
-
-    The ONE runner of the examples (#891): a pytest module used to run them
-    as well, with its own glob (`*_example.q`) and its own process handling,
-    so a fix to either never reached the other.
-
-    These are scripts a reader runs by hand to see the library work end to
-    end, and until this lane existed NOTHING ran them - five of them, none
-    executed by any suite, gate or hook. `find src scripts` does scan them
-    for `@eg` blocks, but none of these files has one: an example script is
-    a top-level narrative, not a documented function.
-
-    That gap was not theoretical. The first commit to add a scenario here
-    found `plant_tables.q` claiming its `quotes` table was usable by
-    `cross_book_at` "with no reshaping", when `cross_book_at` refuses it
-    outright for a missing `ts`. A prose claim about two halves of this tree
-    fitting together, false for as long as it stood, because nothing ever
-    called one half with the other's table.
-
-    Each runs in its own process: they load src/init.q, define top-level
-    tables and insert into them, and a shared process would let one
-    example's rows reach the next. A non-zero exit fails the lane, which is
-    the whole point - the scripts already narrate through .qetl.log, so the
-    output is the report.
-    """
-    _banner("q-scripts: every worked example under scripts/examples/")
-    # From REPO, not the current directory: `python3 scripts/test.py` run
-    # from anywhere else would otherwise find no examples and stop here.
-    scripts = sorted(p.relative_to(REPO) for p in (REPO / "scripts" / "examples").glob("*.q"))
-    if not scripts:  # pragma: no cover - the directory is not empty
-        raise SystemExit("q-scripts: no examples found under scripts/examples/")
-    for script in scripts:
-        with tempfile.TemporaryDirectory() as statusdir:
-            _q(
-                f"q-scripts:{script.stem}",
-                str(script),
-                env={"UQF_STATUS_DIR": statusdir},
-                timeout=EXAMPLE_TIMEOUT,
-                stdin_open=script.stem in STDIN_OPEN_EXAMPLES,
-            )
-
-
-def lane_q_docs() -> None:
-    """The ```q blocks in docs/ that are marked to run, one q process per
-    document - see scripts/dev/doc_examples.py for the markers.
-
-    On PeachQ this is the one q lane a hosted CI runner can have: KDB-X needs
-    a licence, PeachQ does not. A block correct on KDB-X that PeachQ cannot
-    run is marked `kdbx-only` with the reason, and named here as skipped.
-    """
-    _banner("q-docs: the q blocks in docs/ that are marked to run")
-    spec = importlib.util.spec_from_file_location(
-        "doc_examples", REPO / "scripts" / "dev" / "doc_examples.py"
-    )
-    assert spec and spec.loader
-    docex = importlib.util.module_from_spec(spec)
-    # Registered before running it: its dataclass resolves annotations
-    # through sys.modules, and an unregistered module is not there.
-    sys.modules[spec.name] = docex
-    spec.loader.exec_module(docex)
-    impl = check_interpreter() or "kdbx"
-    with tempfile.TemporaryDirectory() as tmp:
-        sessions, skipped = docex.write_sessions(REPO, Path(tmp), impl)
-        for block in skipped:
-            print(f"skipped on {impl}: {block.where} (kdbx-only: {block.kdbx_only})")
-        if not sessions:
-            raise SystemExit("q-docs: no q blocks in docs/ are marked to run")
-        for session in sessions:
-            with tempfile.TemporaryDirectory() as statusdir:
-                _q(f"q-docs:{session.stem}", str(session), env={"UQF_STATUS_DIR": statusdir})
-
-
-def lane_q_docs_peachq(override: str | None = None) -> None:
-    """q-docs a second time, on PeachQ.
-
-    Both interpreters are required for now, and neither result stands in for
-    the other. KDB-X is the reference; PeachQ is used for part of the tree -
-    the doc blocks, and CI, where KDB-X cannot run - and is held to it until
-    the two are compatible enough for one to vouch for both. A child process,
-    not a call, because Q_CMD and the interpreter check are fixed at import.
-
-    The binary is `peachq_binary`'s: --peachq PATH, else $QCMD when it is
-    PeachQ, else the pinned build, fetched and built into the cache on first
-    use. Any failure to provide it fails the
-    lane, never skips it: the doc blocks run on PeachQ AND KDB-X until the
-    two are compatible enough for one to stand for both.
-    """
-    _banner("q-docs-peachq: the q blocks in docs/ on PeachQ")
-    try:
-        binary = peachq_binary(override=override)
-    except peachq.PeachQError as exc:
-        raise SystemExit(f"q-docs-peachq: {exc}") from None
-    _run(
-        "q-docs-peachq",
-        [sys.executable, str(Path(__file__).resolve()), "q-docs"],
-        env={"QCMD": str(binary)},
-    )
 
 
 def lane_q_two_instances() -> None:
@@ -739,9 +628,6 @@ LANES: dict[str, Callable[[], None]] = {
     "q-unit-peachq": lane_q_unit_peachq,
     "q-order": lane_q_order,
     "q-examples": lane_q_examples,
-    "q-scripts": lane_q_scripts,
-    "q-docs": lane_q_docs,
-    "q-docs-peachq": lane_q_docs_peachq,
     "q-backfill-process": lane_q_backfill_process,
     "q-two-instances": lane_q_two_instances,
     "q-remote-writer": lane_q_remote_writer,
@@ -760,7 +646,7 @@ LANES: dict[str, Callable[[], None]] = {
 QARGS_LANES = ("q-unit", "q-coverage")
 
 #: The lanes that run on PeachQ, and so take --peachq PATH.
-PEACHQ_LANES = ("q-unit-peachq", "q-docs-peachq")
+PEACHQ_LANES = ("q-unit-peachq",)
 
 #: The attach tests; the ones that start an isolated stack run only with
 #: UQS_ATTACH_STACK_TEST, which the attach-stack lane sets.
@@ -790,7 +676,7 @@ not for an edit.
 The interpreter comes from $QCMD (default `q` on PATH) and $QHOME (default
 ~/.kx), and nothing else. There is no fallback: see README.md#requirements.
 Which q it is - KDB-X or PeachQ - is asked of the binary before any lane
-starts. q-unit-peachq and q-docs-peachq run on PeachQ whatever $QCMD is:
+starts. q-unit-peachq runs on PeachQ whatever $QCMD is:
 --peachq PATH if given, else $QCMD if it is PeachQ, else the pinned build from
 scripts/peachq.json, fetched and built into ~/.cache/uqf/peachq on first use.
 A PeachQ that is not the pinned build is used, and named in a warning.
@@ -861,8 +747,6 @@ def main(argv: list[str] | None = None) -> int:
                 lane_q_coverage(args.qargs)
             elif name == "q-unit-peachq":
                 lane_q_unit_peachq(args.peachq)
-            elif name == "q-docs-peachq":
-                lane_q_docs_peachq(args.peachq)
             else:
                 LANES[name]()
     except LaneFailed as failure:

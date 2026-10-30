@@ -159,7 +159,8 @@ So after scaffolding, the tree is in a known state:
   the two below.
 - A backfill's `scripts/examples/<name>_example.q` runs the worker on its
   fixture into a throwaway HDB, no stack: `q scripts/examples/<name>_example.q`
-  is the first check that it publishes at all. The q-scripts lane runs it.
+  is the first check that it publishes at all.
+  tests/qrun/test_worked_examples.py runs it.
 - A new streaming job or normalizer is in **no profile** unless you said which:
   `--profile NAME` adds it to one in `python/uqs/src/uqs/model/profiles.py`, and
   `--unprofiled "REASON"` exempts it in `UNPROFILED`. Ask the user which - it is

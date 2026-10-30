@@ -166,6 +166,22 @@ scripts/test.py all       # every lane except the coverage lanes and the live-st
 One lane per layer; run the one matching what you changed.
 `scripts/test.py --help` lists every lane.
 
+pytest is becoming the one way to run every test, with qUnit and q coverage as
+the backends it drives (#1808); the lanes move to it one at a time, each leaving
+`scripts/test.py` as it moves. Those that have, and how to select them:
+
+```
+uv run pytest                                      # everything; a test whose interpreter is missing skips, saying so
+uv run pytest -m "not q_backend"                   # without the q scripts run as tests (what the python-tests hook runs)
+uv run pytest tests/qrun/test_worked_examples.py   # every scripts/examples/*.q (was q-scripts), on KDB-X
+uv run pytest tests/qrun/test_doc_blocks.py -m kdbx     # the docs' marked q blocks on KDB-X (was q-docs)
+uv run pytest tests/qrun/test_doc_blocks.py -m peachq   # ... and on PeachQ (was q-docs-peachq); --peachq PATH picks one
+```
+
+`-m kdbx` and `-m peachq` select by interpreter. `--require-q kdbx` (or
+`peachq`) turns a skip for a missing interpreter into a failure: the hooks pass
+it, so a gate that cannot run its tests fails instead of passing empty.
+
 `scripts/test.py coverage` measures what the suites **execute**: line coverage
 for Python, statement and branch coverage for q through the [`.cov`
 library](scripts/dev/coverage.q). `q-coverage` is the gate: it fails when the

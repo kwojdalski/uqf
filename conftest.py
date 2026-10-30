@@ -21,7 +21,9 @@ pytest-xdist worker or a running stack reads.
 
 from __future__ import annotations
 
+import functools
 import os
+from pathlib import Path
 
 import pytest
 
@@ -54,12 +56,28 @@ for _name in STATE_LOCATION_VARS:
     os.environ.pop(_name, None)
 
 
+#: The markers the q-running tests are selected by (#1808). `-m kdbx` and
+#: `-m peachq` pick an interpreter; `--require-q IMPL` makes a missing one a
+#: failure. q_backend is how the python-tests hook leaves out what the q hooks
+#: run (scripts/dev/python_tests_hook.py), so a commit runs each test once.
+MARKERS = (
+    "kdbx: runs on KDB-X, the q $QCMD names (the `kdbx` fixture); skips when $QCMD is "
+    "not KDB-X, fails instead with --require-q kdbx",
+    "peachq: runs on PeachQ (the `peachq` fixture); skips when no PeachQ can be had, "
+    "fails instead with --require-q peachq",
+    "q_backend: runs a q script as its test - a worked example, a doc's q blocks; a q "
+    "pre-commit hook runs it at commit, so the python-tests hook leaves it out",
+)
+
+#: The interpreters --require-q takes.
+REQUIRABLE_Q = ("kdbx", "peachq")
+
+
 # --- sharding across CI runners (#1696, scripts/dev/pytest_shards.py) ------------
 
 
 def _shards():
     import importlib.util
-    from pathlib import Path
 
     path = Path(__file__).with_name("scripts") / "dev" / "pytest_shards.py"
     spec = importlib.util.spec_from_file_location("pytest_shards", path)
@@ -77,6 +95,18 @@ def pytest_addoption(parser):
         help=(
             "the PeachQ binary for the tests that run on PeachQ (the `peachq` fixture); "
             "default: $QCMD if it is PeachQ, else the pinned build (scripts/peachq.py)"
+        ),
+    )
+    parser.addoption(
+        "--require-q",
+        action="append",
+        choices=REQUIRABLE_Q,
+        default=[],
+        metavar="IMPL",
+        help=(
+            "fail, rather than skip, a test that needs this interpreter (kdbx: the q $QCMD "
+            "names, answering as KDB-X; peachq: the `peachq` fixture's) when it cannot be "
+            "had - what a gate that selects q tests passes. Repeatable"
         ),
     )
     group = parser.getgroup("shards", "split the suite across CI runners by module")
@@ -101,6 +131,8 @@ def pytest_configure(config):
         "markers",
         "shard_apart: a shard unit of its own, not its module's (scripts/dev/pytest_shards.py)",
     )
+    for marker in MARKERS:
+        config.addinivalue_line("markers", marker)
     spec = config.getoption("--shard")
     if spec:
         try:
@@ -109,8 +141,6 @@ def pytest_configure(config):
             raise pytest.UsageError(str(exc)) from None
     path = config.getoption("--store-shard-durations")
     if path:
-        from pathlib import Path
-
         config.pluginmanager.register(_shards().Recorder(Path(path)), "shard-durations")
 
 
@@ -127,6 +157,41 @@ def pytest_collection_modifyitems(config, items):
     if dropped:
         config.hook.pytest_deselected(items=dropped)
     items[:] = keep
+
+
+# --- the tests PeachQ is known to fail (python/peachq_known_gaps.txt) ---------
+
+#: Tests that cannot pass with PeachQ as the q, each with why: strict xfails
+#: when $QCMD answers as PeachQ, so a listed test that passes fails the run too.
+#: Here, at the root, so it reaches every testpath - tests/qrun/ as well as
+#: python/.
+PEACHQ_GAPS = Path(__file__).with_name("python") / "peachq_known_gaps.txt"
+
+
+@functools.cache
+def peachq_gaps() -> dict[str, str]:
+    """{nodeid: reason} from PEACHQ_GAPS."""
+    gaps: dict[str, str] = {}
+    for line in PEACHQ_GAPS.read_text().splitlines():
+        if line.strip() and not line.startswith("#"):
+            nodeid, _, reason = line.partition("  # ")
+            gaps[nodeid.strip()] = reason.strip()
+    return gaps
+
+
+@pytest.hookimpl(tryfirst=True)
+def pytest_runtest_setup(item):
+    """On PeachQ, hold each listed test to failing: CI's PeachQ job runs every
+    test with PeachQ as the q, and this list is what keeps it blocking. Which q
+    that is, the binary says (#1753) - asked here, as a listed test is about to
+    run, and not at collection, which must start no q (#1808)."""
+    reason = peachq_gaps().get(item.nodeid)
+    if reason is None:
+        return
+    from uqs.interpreter import PEACHQ, q_impl
+
+    if q_impl() == PEACHQ:
+        item.add_marker(pytest.mark.xfail(reason=f"PeachQ: {reason}", strict=True))
 
 
 # --- the PeachQ the PeachQ tests run on (#1753) ------------------------------
@@ -147,4 +212,47 @@ def peachq(request):
     except UqsError as exc:
         if override:
             pytest.fail(str(exc))
-        pytest.skip(str(exc))
+        _unavailable(request, "peachq", str(exc))
+
+
+def _unavailable(request, impl: str, why: str):
+    """Skip the test - or fail it when the run requires `impl` (--require-q):
+    a gate that selected tests on an interpreter it cannot have must fail, not
+    pass with everything skipped."""
+    if impl in request.config.getoption("--require-q"):
+        pytest.fail(f"{why} (this run requires {impl}: --require-q {impl})", pytrace=False)
+    pytest.skip(why)
+
+
+# --- KDB-X, the reference (#1808) ---------------------------------------------
+
+
+@pytest.fixture(scope="session")
+def qcmd(request):
+    """The q $QCMD names (else q on PATH), whichever implementation it is.
+    Skips without one - fails instead with --require-q kdbx."""
+    from uqs.interpreter import q_interpreter
+
+    q = q_interpreter()
+    if q is None:
+        _unavailable(
+            request, "kdbx", "no q interpreter - set $QCMD, or put q on PATH (README#requirements)"
+        )
+    return q
+
+
+@pytest.fixture(scope="session")
+def kdbx(request, qcmd):
+    """The q $QCMD names, when it answers as KDB-X - the reference this tree is
+    verified on. Skips otherwise, saying what $QCMD is; fails instead with
+    --require-q kdbx."""
+    from uqs.interpreter import KDBX, identified
+    from uqs.paths import UqsError
+
+    try:
+        impl = identified(qcmd)
+    except UqsError as exc:
+        _unavailable(request, "kdbx", str(exc))
+    if impl != KDBX:
+        _unavailable(request, "kdbx", f"$QCMD ({qcmd}) is {impl}, not KDB-X")
+    return qcmd

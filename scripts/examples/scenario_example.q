@@ -18,7 +18,7 @@
 // so the scenario taught the wrong column names for the tables this stack
 // actually publishes. env/ was deleted; this is the half worth keeping,
 // rewritten against src/etl/plant_tables.q and run by
-// `scripts/test.py q-scripts` on every commit, which env/seed.q never was.
+// tests/qrun/test_worked_examples.py on every commit, which env/seed.q never was.
 //
 // The ccy_exposure step is the one worth watching: PLN has no direct USD
 // quote here, so ccy_exposure_in bridges through EUR - the same multi-leg

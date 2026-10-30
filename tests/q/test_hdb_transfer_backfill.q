@@ -1,7 +1,7 @@
 / test_hdb_transfer_backfill.q - the HDB-to-HDB example job: source
 / hdb_transfer read from a kdb+ HDB's files, worker hdb_transfer_backfill
 / (.qt.qpipe.job.hdb_transfer_backfill). The whole run, source HDB to destination HDB in a fresh
-/ process, is scripts/examples/hdb_transfer_example.q, in the q-scripts lane.
+/ process, is scripts/examples/hdb_transfer_example.q, run by tests/qrun/test_worked_examples.py.
 
 
 .qt.qpipe.job.hdb_transfer_backfill.root:`:build/test_hdb_transfer_source

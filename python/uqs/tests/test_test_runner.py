@@ -1,4 +1,4 @@
-"""Tests for scripts/test.py's smoke lane options, and the q-docs-peachq lane.
+"""Tests for scripts/test.py's smoke lane options, its PeachQ lane and its q arguments.
 
 The lane runs tests/q/smoke_external_metadata.q, which reads its sources off
 its own command line. These check that --targets, --tables and --timeout-ms
@@ -67,48 +67,42 @@ def test_the_smoke_options_are_refused_for_another_lane(ran):
     assert ran == []
 
 
-def test_q_docs_peachq_fails_rather_than_skips_when_peachq_cannot_be_had(ran, monkeypatch):
-    """PeachQ is required beside KDB-X, so a resolver failure fails the lane."""
+def test_q_unit_peachq_fails_rather_than_skips_when_peachq_cannot_be_had(ran, monkeypatch):
+    """The lane CI blocks on: a resolver failure fails it."""
 
     def unavailable(env=None, override=None):
         raise runner.peachq.PeachQError("offline, and the cache is cold")
 
     monkeypatch.setattr(runner, "peachq_binary", unavailable)
-    with pytest.raises(SystemExit, match="q-docs-peachq: offline"):
-        runner.main(["q-docs-peachq"])
+    with pytest.raises(SystemExit, match="q-unit-peachq: offline"):
+        runner.main(["q-unit-peachq"])
 
 
-def _docs_peachq_calls(monkeypatch) -> tuple[list, list]:
+def test_peachq_names_the_binary_for_the_peachq_lane(monkeypatch):
+    """KDB-X plus a custom PeachQ: --peachq PATH, not an inherited variable -
+    and the global QCMD is left alone."""
     calls, asked = [], []
     monkeypatch.setattr(runner, "check_interpreter", lambda env=None: None)
-    monkeypatch.setattr(runner, "_run", lambda lane, argv, *, env=None: calls.append((argv, env)))
+    monkeypatch.setattr(runner, "_run", lambda lane, argv, *, env=None: calls.append(argv))
 
     def binary(env=None, override=None):
         asked.append(override)
         return Path(override or "/cache/peachq/q")
 
     monkeypatch.setattr(runner, "peachq_binary", binary)
-    return calls, asked
-
-
-def test_q_docs_peachq_reruns_q_docs_with_qcmd_alone(monkeypatch):
-    """The child gets PeachQ as QCMD and nothing else (#1753): it asks the
-    binary which q it is. The path reaches that lane and no other."""
-    calls, asked = _docs_peachq_calls(monkeypatch)
-    assert runner.main(["q-docs-peachq"]) == 0
-    [(argv, env)] = calls
-    assert argv[1:] == [str(SCRIPT), "q-docs"]
-    assert env == {"QCMD": "/cache/peachq/q"}
-    assert asked == [None]
-    assert runner.Q_CMD != "/cache/peachq/q", "the global QCMD is left alone"
-
-
-def test_peachq_names_the_binary_for_the_peachq_lanes(monkeypatch):
-    """KDB-X plus a custom PeachQ: --peachq PATH, not an inherited variable."""
-    calls, asked = _docs_peachq_calls(monkeypatch)
-    assert runner.main(["q-docs-peachq", "--peachq", "/opt/pq/q"]) == 0
+    assert runner.main(["q-unit-peachq", "--peachq", "/opt/pq/q"]) == 0
     assert asked == ["/opt/pq/q"]
-    assert calls[0][1] == {"QCMD": "/opt/pq/q"}
+    [argv] = calls
+    assert argv[argv.index("--q") + 1] == "/opt/pq/q"
+    assert runner.Q_CMD != "/opt/pq/q"
+
+
+def test_the_lanes_moved_to_pytest_are_gone():
+    """q-scripts, q-docs and q-docs-peachq run under pytest now
+    (tests/qrun/), and only there (#1808): no lane runs them a second way."""
+    for lane in ("q-scripts", "q-docs", "q-docs-peachq"):
+        assert lane not in runner.LANES
+        assert lane not in runner.ALL
 
 
 def test_peachq_is_refused_for_a_lane_that_would_ignore_it(ran):
