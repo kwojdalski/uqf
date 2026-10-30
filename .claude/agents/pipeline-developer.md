@@ -187,7 +187,7 @@ Two registry facts that changed under you, and that a job no longer states:
 - Then the repository gates, each run individually with its real exit code
   visible --- **never through a pipe**, because `cmd | tail` reports `tail`'s
   status and a failing gate reads as a pass: `check_q_traps.py`,
-  `check_etl_layering.py`, `contract_surface.py check`,
+  `check_etl_layering.py`, `derive.py contract-surface --check`,
   `derive.py operational-docs --check`.
 
 ## Rules

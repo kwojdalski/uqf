@@ -76,7 +76,6 @@ PROCESS_PORTS_FILE = PROCESS_SCRIPTS_DIR / "process_ports.csv"
 #: registry (the process table, src/etl/generated/pipeline_dag.q). CI runs it
 #: with --check, so a registry edit that is not followed by it fails the build.
 DERIVE_SCRIPT = Path("scripts/generate/derive.py")
-CONTRACT_SURFACE_SCRIPT = Path("scripts/generate/contract_surface.py")
 
 #: This package. Spelled here rather than as a string literal in the modules
 #: that need it, which a package rename would silently break.

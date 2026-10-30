@@ -221,6 +221,12 @@ class Target:
         return " ".join((self.python, PROG, self.name, *args))
 
 
+def usage(name: str, message: str) -> int:
+    """Refuse a combination of options argparse cannot express; exit status 2."""
+    print(f"{PROG} {name}: error: {message}", file=sys.stderr)
+    return 2
+
+
 def _hint(name: str) -> str:
     return f"run `{TARGETS[name].command()}`"
 
@@ -284,6 +290,68 @@ def _operational_docs(args: argparse.Namespace) -> int:
     return settle(files, check=args.check, hint=_hint("operational-docs"))
 
 
+def _contract_surface_options(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "-o",
+        "--out",
+        type=Path,
+        help="write to this directory instead of the committed baseline (not with --check)",
+    )
+
+
+def _contract_surface(args: argparse.Namespace) -> int:
+    """docs/reference/surfaces/current/: every public function, table, process,
+    variable and transport, from the tree q loads under KDB-X (contract_surface).
+
+    --check is not a byte comparison: it reads the committed surface back and
+    reports the CONTRACT difference - "is_covered gained an argument" is
+    actionable, "line 2118 differs" is not - so an interpreter upgrade that
+    changes nothing public changes nothing here."""
+    if args.check and args.out is not None:
+        return usage("contract-surface", "--out names where to write; --check writes nothing")
+    _uqs()
+    contract = load("contract_surface")
+    if args.check:
+        return _contract_surface_check(contract)
+    surface = contract.build_surface()
+    out = args.out or contract.BASELINE
+    with tempfile.TemporaryDirectory() as tmp:
+        contract.write_surface(Path(tmp), surface)
+        files = [Output(out / name, (Path(tmp) / name).read_bytes()) for name in contract.FILES]
+    write(files)
+    names = sum(len(v) for v in surface.get("functions", {}).values())
+    print(
+        f"{rel(out)}/: {len(surface.get('namespaces', []))} namespace(s), "
+        f"{names} name(s), {len(surface.get('tables', {}))} table(s), "
+        f"{len(surface.get('processes', []))} process(es), "
+        f"{len(surface.get('variables', []))} env var(s)"
+    )
+    return 0
+
+
+def _contract_surface_check(contract: ModuleType) -> int:
+    baseline = rel(contract.BASELINE)
+    missing = [f for f in contract.FILES if not (contract.BASELINE / f).is_file()]
+    if missing:
+        print(
+            f"{baseline}/ is missing {', '.join(missing)} - {_hint('contract-surface')}",
+            file=sys.stderr,
+        )
+        return 1
+    committed = contract.read_surface(contract.BASELINE)
+    lines = contract.diff_surfaces(committed, contract.build_surface(), "committed", "current")
+    if not lines:
+        print(f"{baseline} matches this tree's contract surface")
+        return 0
+    print(f"{baseline} is stale:", file=sys.stderr)
+    print("\n".join(lines), file=sys.stderr)
+    print(
+        f"\nIf the change is intended, rerun:\n  {TARGETS['contract-surface'].command()}",
+        file=sys.stderr,
+    )
+    return 1
+
+
 #: Every target, by name. Added to by hand: there is no discovery.
 TARGETS: dict[str, Target] = {
     t.name: t
@@ -305,6 +373,12 @@ TARGETS: dict[str, Target] = {
             "processes.md, the pipeline DAG, the load plan, the port lock and the "
             "uqs guide's profile table, from the pipeline registry",
             _operational_docs,
+        ),
+        Target(
+            "contract-surface",
+            "docs/reference/surfaces/current/, this tree's public contract surface (needs KDB-X)",
+            _contract_surface,
+            _contract_surface_options,
         ),
     )
 }

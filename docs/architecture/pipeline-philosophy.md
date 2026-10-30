@@ -101,7 +101,7 @@ silent. So the second copy is generated, or checked, or both:
   | `docs/man.q`                       | the qDoc blocks in `src/`         | read when it loads; nothing to check   |
   | `docs/reference/processes.md`      | the pipeline registry             | `derive.py operational-docs --check`   |
   | `docs/reference/environment.md`    | the code that reads each variable | `check_env_reference.py`               |
-  | the contract surface               | the loaded q tree                 | `contract_surface.py check`            |
+  | the contract surface               | the loaded q tree                 | `derive.py contract-surface --check`   |
 
 Where a thing genuinely must be declared by hand, the declaration is verified
 against the code it describes: `verify_pipeline_edges` reads each pipeline's

@@ -29,6 +29,7 @@ from uqs.interpreter import q_interpreter
 
 UQF_ROOT = Path(__file__).resolve().parents[3]
 SCRIPT = UQF_ROOT / "scripts" / "generate" / "contract_surface.py"
+DERIVE = UQF_ROOT / "scripts" / "generate" / "derive.py"
 BASELINE = UQF_ROOT / "docs" / "reference" / "surfaces" / "current"
 
 # Loaded by path rather than imported, because `scripts/` is not a package on
@@ -63,7 +64,7 @@ def baseline() -> dict:
     assert BASELINE.is_dir(), (
         f"{BASELINE} is missing. It is tracked, so this means the path here is "
         f"stale - not that the baseline is optional. Regenerate with "
-        f"`contract_surface.py export` if it was genuinely deleted."
+        f"`derive.py contract-surface` if it was genuinely deleted."
     )
     return contract_surface.read_surface(BASELINE)
 
@@ -178,7 +179,7 @@ def test_the_export_is_deterministic(tmp_path: Path) -> None:
     for run in ("first", "second"):
         out = tmp_path / run
         result = subprocess.run(
-            [sys.executable, str(SCRIPT), "export", "--out", str(out)],
+            [sys.executable, str(DERIVE), "contract-surface", "--out", str(out)],
             cwd=UQF_ROOT,
             capture_output=True,
             timeout=180,
@@ -204,7 +205,7 @@ def test_the_committed_baseline_matches_this_tree() -> None:
     if q_interpreter() is None:
         pytest.skip("no KDB-X interpreter")
     result = subprocess.run(
-        [sys.executable, str(SCRIPT), "check"],
+        [sys.executable, str(DERIVE), "contract-surface", "--check"],
         cwd=UQF_ROOT,
         capture_output=True,
         timeout=180,

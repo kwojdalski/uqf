@@ -150,7 +150,7 @@ three generated artefacts and two gates notice:
 
 ```bash
 scripts/test.py q-unit
-uv run python scripts/generate/contract_surface.py export
+uv run python scripts/generate/derive.py contract-surface
 ```
 
 The `man.q` registry gate is what caught the `config` → `cfg` rename leaving

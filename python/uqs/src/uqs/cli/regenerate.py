@@ -14,11 +14,7 @@ from pathlib import Path
 from uqs.cli.shared import _die, console
 from uqs.interpreter import q_interpreter
 from uqs.model.plant_metadata import PLANT_SCHEMA_SCRIPT
-from uqs.paths import (
-    CONTRACT_SURFACE_SCRIPT,
-    DERIVE_SCRIPT,
-    UqsError,
-)
+from uqs.paths import DERIVE_SCRIPT, UqsError
 from uqs.scaffold import write
 from uqs.scaffold.plan import ScaffoldPlan
 
@@ -29,6 +25,8 @@ from uqs.scaffold.plan import ScaffoldPlan
 #: qDoc blocks when it loads, so a scaffold's new comments are in it with
 #: nothing to regenerate. Each is the arguments after `python`, the script's
 #: path relative to the tree's root.
+#: The contract surface, which a scaffold makes stale too but which needs q.
+_CONTRACT_SURFACE = (str(DERIVE_SCRIPT), "contract-surface")
 _DERIVED: tuple[tuple[str, ...], ...] = (
     (str(PLANT_SCHEMA_SCRIPT),),
     (str(DERIVE_SCRIPT), "operational-docs"),
@@ -71,7 +69,7 @@ def _export_contract_surface(repo_root: Path) -> subprocess.CompletedProcess[str
     if q_interpreter() is None:
         return None
     return subprocess.run(
-        [sys.executable, str(repo_root / CONTRACT_SURFACE_SCRIPT), "export"],
+        [sys.executable, str(repo_root / DERIVE_SCRIPT), *_CONTRACT_SURFACE[1:]],
         cwd=repo_root,
         capture_output=True,
         text=True,
@@ -84,8 +82,7 @@ def write_plan(plan: ScaffoldPlan, repo_root: Path, *, dry_run: bool) -> None:
     makes stale. The same for every shape."""
     console.print(plan.render())
     console.print(
-        "  then regenerate: "
-        + ", ".join((*(" ".join(d) for d in _DERIVED), str(CONTRACT_SURFACE_SCRIPT)))
+        "  then regenerate: " + ", ".join(" ".join(d) for d in (*_DERIVED, _CONTRACT_SURFACE))
     )
     if dry_run:
         console.print("[dim]--dry-run: nothing written[/]")
@@ -110,11 +107,11 @@ def write_plan(plan: ScaffoldPlan, repo_root: Path, *, dry_run: bool) -> None:
     surface = _export_contract_surface(repo_root)
     if surface is None:
         console.print(
-            f"[yellow]no q on PATH[/] - run `uv run python {CONTRACT_SURFACE_SCRIPT} export` where "
+            f"[yellow]no q on PATH[/] - run `{derived_command(_CONTRACT_SURFACE)}` where "
             "q is installed, or the contract-surface hook fails on the next commit"
         )
     elif surface.returncode == 0:
-        console.print(f"[green]regenerated[/] via {CONTRACT_SURFACE_SCRIPT}")
+        console.print(f"[green]regenerated[/] via {' '.join(_CONTRACT_SURFACE)}")
     else:
         console.print(
             f"[red]could not export the contract surface[/] - the new files may not load in q:\n"

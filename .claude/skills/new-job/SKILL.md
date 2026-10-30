@@ -122,7 +122,7 @@ the licence's connection budget, and the profile tests pin the default set.
 
 After writing, `uqs job new` regenerates the derived files and, where q is
 installed, re-exports the contract surface. Without q it says so, and the
-`contract-surface` hook fails until `contract_surface.py export` is run.
+`contract-surface` hook fails until `derive.py contract-surface` is run.
 
 **Always `--dry-run` first** and show the user what it would write. It appends
 to `plant_tables.q` and the table list in `test_stack_tables.q`, which are files

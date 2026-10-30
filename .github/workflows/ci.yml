@@ -123,15 +123,15 @@ jobs:
         # is every run, and the contract-surface pre-commit hook is then the
         # only thing verifying the surface.
         #
-        # The same interpreter rule as contract_surface.py itself ($QCMD,
+        # The same interpreter rule as the contract-surface target itself ($QCMD,
         # else q on PATH - TorQ's rule).
         if: ${{ !cancelled() }}
         shell: bash
         run: |
           if command -v "${QCMD:-q}" >/dev/null; then
-            uv run python scripts/generate/contract_surface.py check
+            uv run python scripts/generate/derive.py contract-surface --check
           else
-            echo "::warning::No KDB-X on this runner; the contract surface in docs/reference/surfaces/current/ was NOT checked. Run 'uv run python scripts/generate/contract_surface.py check' locally before merging."
+            echo "::warning::No KDB-X on this runner; the contract surface in docs/reference/surfaces/current/ was NOT checked. Run 'uv run python scripts/generate/derive.py contract-surface --check' locally before merging."
             echo "The contract surface (docs/reference/surfaces/current/) was not checked: no KDB-X on this runner. The contract-surface pre-commit hook checks it locally." >> "$GITHUB_STEP_SUMMARY"
           fi
       - name: Check the ETL core does not depend on its declarations

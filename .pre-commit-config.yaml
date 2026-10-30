@@ -322,8 +322,8 @@ repos:
         # warning. `check`, not `export`: the check compares contracts, so an
         # interpreter upgrade that changes nothing public changes nothing.
         # To accept an intended change:
-        #   uv run python scripts/generate/contract_surface.py export
-        entry: uv run python scripts/generate/contract_surface.py check
+        #   uv run python scripts/generate/derive.py contract-surface
+        entry: uv run python scripts/generate/derive.py contract-surface --check
         language: system
         pass_filenames: false
         # q for functions and tables, the Python registry for processes, the

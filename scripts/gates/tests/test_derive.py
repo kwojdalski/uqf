@@ -214,6 +214,7 @@ GENERATORS = {
     "table-properties": "uqs.stack.gateway_access",
     "diagrams": "render_diagrams",
     "operational-docs": "generate_operational_docs",
+    "contract-surface": "contract_surface",
 }
 
 
@@ -284,3 +285,37 @@ def test_writing_is_atomic_per_file(tmp_path, monkeypatch):
     monkeypatch.setattr(os, "replace", lambda a, b: seen.append(Path(b).name) or real(a, b))
     derive.write([derive.text(path, "new\n")])
     assert seen == ["a.txt"]
+
+
+# --------------------------------------------------------- contract-surface
+
+
+def test_contract_surface_refuses_out_with_check(capsys):
+    assert derive.main(["contract-surface", "--check", "--out", "/nowhere"]) == 2
+    assert "--check writes nothing" in capsys.readouterr().err
+
+
+def test_contract_surface_check_reports_the_contract_difference(monkeypatch, capsys):
+    """A semantic diff, not a byte diff: a gained parameter is named as one."""
+    contract = derive.load("contract_surface")
+    committed = contract.read_surface(contract.BASELINE)
+    current = {**committed, "functions": {k: list(v) for k, v in committed["functions"].items()}}
+    ns = sorted(current["functions"])[0]
+    entry = dict(current["functions"][ns][0])
+    entry["name"] = "a_function_no_tree_has"
+    current["functions"][ns] = [*current["functions"][ns], entry]
+    monkeypatch.setattr(contract, "build_surface", lambda: current)
+    before = {p.name: p.read_bytes() for p in contract.BASELINE.iterdir()}
+    assert derive.main(["contract-surface", "--check"]) == 1
+    err = capsys.readouterr().err
+    assert "## Only in current (1)" in err and "a_function_no_tree_has" in err
+    assert "derive.py contract-surface" in err
+    assert {p.name: p.read_bytes() for p in contract.BASELINE.iterdir()} == before
+
+
+def test_contract_surface_check_names_a_missing_file(tmp_path, monkeypatch, capsys):
+    contract = derive.load("contract_surface")
+    monkeypatch.setattr(contract, "BASELINE", tmp_path)
+    assert derive.main(["contract-surface", "--check"]) == 1
+    assert "is missing functions.csv" in capsys.readouterr().err
+    assert list(tmp_path.iterdir()) == []
