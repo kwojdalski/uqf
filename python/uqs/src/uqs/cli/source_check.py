@@ -14,6 +14,7 @@ from typing import Annotated
 import typer
 from rich.table import Table
 
+from uqs.cli.safety import ReadOnly
 from uqs.cli.shared import _die, _paths, console
 from uqs.cli.sources import sources_app
 from uqs.paths import UqsError
@@ -22,7 +23,7 @@ from uqs.stack import live_check, odbc_home
 _STATUS = {"ok": "[green]ok[/]", "empty": "[yellow]empty[/]", "failed": "[bold red]failed[/]"}
 
 
-@sources_app.command("check")
+@sources_app.command("check", cls=ReadOnly)
 def sources_check(
     sources: Annotated[list[str], typer.Argument(help="The sources to check, by name")],
     timeout: Annotated[

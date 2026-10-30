@@ -17,6 +17,7 @@ from uqs.checks.schema_view import DEFAULT_PROC
 from uqs.cli import completion
 from uqs.cli.json_out import emit, json_opt
 from uqs.cli.renames import renamed
+from uqs.cli.safety import ReadOnly
 from uqs.cli.shared import (
     ExportOpt,
     InteractiveOpt,
@@ -44,7 +45,7 @@ SchemaJson = json_opt(
 )
 
 
-@app.command(cls=renamed({"--proc": "PROC"}))
+@app.command(cls=renamed({"--proc": "PROC"}, ReadOnly))
 def schema(
     ctx: typer.Context,
     proc: Annotated[
