@@ -341,11 +341,11 @@ repos:
         # q_facts.py, which cannot import uqs (#1362). KDB-X only, like the
         # contract surface: it FAILS without an interpreter rather than
         # skipping. To accept an intended change:
-        #   uv run python scripts/generate/q_facts.py
-        entry: uv run python scripts/generate/q_facts.py --check
+        #   uv run python scripts/generate/derive.py q-facts
+        entry: uv run python scripts/generate/derive.py q-facts --check
         language: system
         pass_filenames: false
-        files: '\.q$|^python/uqs/src/uqs/generated/|^python/uqf_airflow_provider/src/uqf_airflow_provider/q_facts\.py$|^scripts/generate/(q_facts\.py|export_q_facts\.q)$'
+        files: '\.q$|^python/uqs/src/uqs/generated/|^python/uqf_airflow_provider/src/uqf_airflow_provider/q_facts\.py$|^scripts/generate/(derive\.py|q_facts\.py|export_q_facts\.q)$'
 
       - id: plant-schema
         name: Check the plant schema metadata matches what q evaluates

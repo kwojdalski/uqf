@@ -215,6 +215,7 @@ GENERATORS = {
     "diagrams": "render_diagrams",
     "operational-docs": "generate_operational_docs",
     "contract-surface": "contract_surface",
+    "q-facts": "q_facts",
 }
 
 
@@ -319,3 +320,32 @@ def test_contract_surface_check_names_a_missing_file(tmp_path, monkeypatch, caps
     assert derive.main(["contract-surface", "--check"]) == 1
     assert "is missing functions.csv" in capsys.readouterr().err
     assert list(tmp_path.iterdir()) == []
+
+
+# ------------------------------------------------------------------ q-facts
+
+
+def test_q_facts_check_reports_a_changed_fact_and_writes_nothing(monkeypatch, capsys):
+    """Without q: the export is replaced by the committed values, one changed."""
+    q_facts = derive.load("q_facts")
+    from uqs.generated import q_facts as committed
+
+    facts = {name: getattr(committed, name, None) for name in q_facts.FACTS}
+    facts = {k: (list(v) if isinstance(v, tuple) else v) for k, v in facts.items()}
+    facts["LOG_LEVELS"] = [*committed.LOG_LEVELS, "CHATTY"]
+    monkeypatch.setattr(q_facts, "export", lambda: facts)
+    path = next(iter(q_facts.MODULES))
+    before = path.read_bytes()
+    assert derive.main(["q-facts", "--check"]) == 1
+    err = capsys.readouterr().err
+    assert "generated/q_facts.py is stale" in err and '"CHATTY"' in err
+    assert path.read_bytes() == before
+
+
+def test_q_facts_without_q_refuses(monkeypatch):
+    q_facts = derive.load("q_facts")
+    import uqs.interpreter
+
+    monkeypatch.setattr(uqs.interpreter, "q_interpreter", lambda env=None: None)
+    with pytest.raises(SystemExit, match="no q interpreter"):
+        q_facts.export()

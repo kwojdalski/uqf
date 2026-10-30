@@ -352,6 +352,17 @@ def _contract_surface_check(contract: ModuleType) -> int:
     return 1
 
 
+def _q_facts(args: argparse.Namespace) -> int:
+    """python/uqs/src/uqs/generated/q_facts.py and the Airflow provider's copy:
+    the q values uqs reads without q, printed by the tree loaded under KDB-X
+    (q_facts). No fallback interpreter - it refuses without one."""
+    _uqs()
+    q_facts = load("q_facts")
+    facts = q_facts.export()
+    modules = [text(path, q_facts.render(facts, path)) for path in q_facts.MODULES]
+    return settle(modules, check=args.check, hint=_hint("q-facts"))
+
+
 #: Every target, by name. Added to by hand: there is no discovery.
 TARGETS: dict[str, Target] = {
     t.name: t
@@ -379,6 +390,11 @@ TARGETS: dict[str, Target] = {
             "docs/reference/surfaces/current/, this tree's public contract surface (needs KDB-X)",
             _contract_surface,
             _contract_surface_options,
+        ),
+        Target(
+            "q-facts",
+            "the q facts uqs and the Airflow provider read without q (needs KDB-X)",
+            _q_facts,
         ),
     )
 }
