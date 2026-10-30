@@ -17,7 +17,7 @@ import typer
 from rich.table import Table
 
 from uqs.cli.json_out import emit, json_opt
-from uqs.cli.safety import dry_run_note
+from uqs.cli.safety import ChangesState, ReadOnly, dry_run_note
 from uqs.cli.shared import _die, app, console
 from uqs.paths import UqsError
 from uqs.stack import odbc_home
@@ -44,7 +44,7 @@ Home = Annotated[
 ]
 
 
-@odbc_app.command("install")
+@odbc_app.command("install", cls=ChangesState)
 def install(
     package: Annotated[Path, typer.Argument(help="The package, a .tar.gz with package.json")],
     home: Home,
@@ -73,7 +73,7 @@ def install(
     console.print(f"installed {version.name}; load it with: . {home}/current/{odbc_home.ENV_FILE}")
 
 
-@odbc_app.command("rollback")
+@odbc_app.command("rollback", cls=ChangesState)
 def rollback(
     home: Home,
     dry_run: Annotated[
@@ -97,7 +97,7 @@ def rollback(
 StatusJson = json_opt('{"home", "current", "previous", "versions": [name, ...]}')
 
 
-@odbc_app.command("status")
+@odbc_app.command("status", cls=ReadOnly)
 def status(home: Home, as_json: StatusJson = False) -> None:
     """The installed versions, and which is current and previous."""
     try:
@@ -119,7 +119,7 @@ def status(home: Home, as_json: StatusJson = False) -> None:
         console.print("[dim]nothing installed - `uqs setup odbc install` first[/]")
 
 
-@odbc_app.command("env")
+@odbc_app.command("env", cls=ReadOnly)
 def env(home: Home) -> None:
     """The current version's variables, as shell exports."""
     version = odbc_home.current(home)

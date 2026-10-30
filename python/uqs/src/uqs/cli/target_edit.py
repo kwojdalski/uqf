@@ -15,6 +15,7 @@ from pathlib import Path
 
 import typer
 
+from uqs.cli.safety import ChangesState
 from uqs.cli.shared import _die, console
 from uqs.cli.target import DryRun, _command, _done, target_app
 from uqs.deploy import target_changes, targets
@@ -37,7 +38,7 @@ def _strip_note(text: str) -> str:
     return "".join(lines)
 
 
-@target_app.command("edit")
+@target_app.command("edit", cls=ChangesState)
 def edit(dry_run: DryRun = False) -> None:
     """Edit the file in $VISUAL or $EDITOR: a copy, checked when the editor
     exits and only then swapped in. An invalid copy reopens with the reason

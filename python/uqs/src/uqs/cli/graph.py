@@ -26,6 +26,7 @@ from rich.tree import Tree
 from uqs.cli import completion
 from uqs.cli.json_out import emit, json_opt
 from uqs.cli.renames import renamed
+from uqs.cli.safety import ReadOnly
 from uqs.cli.shared import BasePortOpt, InteractiveOpt, _die, _paths, app, console, log
 from uqs.cli.table_filter import match_row, terms
 from uqs.model import process_graph
@@ -140,7 +141,7 @@ def tree_records(trees: list[Node], status: dict[str, str]) -> list[dict]:
     ]
 
 
-@app.command(cls=renamed({"--port": "--base-port"}))
+@app.command(cls=renamed({"--port": "--base-port"}, ReadOnly))
 def graph(
     proc: Annotated[
         str | None,

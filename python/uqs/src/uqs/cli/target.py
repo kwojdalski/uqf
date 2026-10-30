@@ -30,7 +30,9 @@ from rich.table import Table
 
 from uqs.cli.deploy import deploy_app
 from uqs.cli.json_out import emit, json_opt
+from uqs.cli.safety import ChangesState, ReadOnly
 from uqs.cli.shared import _die, app, console
+from uqs.cli.target_confirm import changes_the_server, confirmed_on_server
 from uqs.deploy import control, history, target_changelog, target_changes, target_file
 from uqs.deploy.config import DeployError
 from uqs.paths import UqsError, repo_root
@@ -126,7 +128,7 @@ RemoteUser = Annotated[
 ]
 
 
-@target_app.command("add")
+@target_app.command("add", cls=ChangesState)
 def add(
     name: Annotated[str, typer.Argument(help="What to call it: `uqs --target NAME ...`")],
     ssh: Ssh,
@@ -166,7 +168,7 @@ _PAIR = re.compile(r"([a-z_][a-z0-9_]*(?:\.[A-Za-z0-9_.-]+)?)=(.*)", re.S)
 _KEY = re.compile(r"[a-z_][a-z0-9_]*(?:\.[A-Za-z0-9_.-]+)?")
 
 
-@target_app.command("set")
+@target_app.command("set", cls=ChangesState)
 def set_(
     name: Annotated[str, typer.Argument(help="The target")],
     pairs: Annotated[
@@ -202,7 +204,7 @@ def set_(
     )  # fmt: skip
 
 
-@target_app.command("unset")
+@target_app.command("unset", cls=ChangesState)
 def unset(
     name: Annotated[str, typer.Argument(help="The target")],
     keys: Annotated[
@@ -227,7 +229,7 @@ def unset(
     )  # fmt: skip
 
 
-@target_app.command("rename")
+@target_app.command("rename", cls=ChangesState)
 def rename(
     old: Annotated[str, typer.Argument(metavar="OLD", help="The target")],
     new: Annotated[str, typer.Argument(metavar="NEW", help="Its new name")],
@@ -247,7 +249,7 @@ def rename(
 CheckJson = json_opt('{"ok": true, "target", "host", "dest", "remote_user", "release"}')
 
 
-@target_app.command("check")
+@target_app.command("check", cls=ReadOnly)
 def check(name: Name, as_json: CheckJson = False) -> None:
     """Reach the target and name the release it runs. Says which part failed:
     ssh, or no release under its dest."""
@@ -266,7 +268,7 @@ def check(name: Name, as_json: CheckJson = False) -> None:
     console.print(f"[green]✓[/] {r.name} ({r.describe()}) runs release {release}")
 
 
-@target_app.command("shell")
+@target_app.command("shell", cls=ChangesState)
 def shell(
     name: Annotated[
         str | None,
@@ -286,7 +288,7 @@ def shell(
     raise typer.Exit(code=code)
 
 
-@target_app.command("remove")
+@target_app.command("remove", cls=ChangesState)
 def remove(
     name: Annotated[str, typer.Argument(help="The target")], dry_run: DryRun = False
 ) -> None:
@@ -305,7 +307,7 @@ HistoryJson = json_opt(
 )
 
 
-@deploy_app.command("history")
+@deploy_app.command("history", cls=ReadOnly)
 def deploy_history(
     target: Annotated[
         str | None,
@@ -382,10 +384,10 @@ def forward(name: str, yes: bool, args: list[str], *, interactive: bool) -> int:
             "give the target once: `uqs --target NAME query` runs the query on the server, "
             "`uqs query --tunnel NAME` runs it here through an ssh tunnel"
         )
-    args = control.confirmed_on_server(args, yes)
+    args = confirmed_on_server(args, yes)
     r = control.remote_for(name, repo_root())
     shown = " ".join(["uqs", *args])
-    if control.changes_the_server(args) and not yes:
+    if changes_the_server(args) and not yes:
         if not interactive:
             raise UqsError(
                 f"`{shown}` may change {r.name} ({r.describe()}) - pass --yes "

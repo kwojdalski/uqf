@@ -11,7 +11,7 @@ import typer
 from uqs import timerange
 from uqs.cli.range_options import DateOpt, LastOpt, RangeFromOpt, RangeToOpt
 from uqs.cli.renames import warn_renamed
-from uqs.cli.safety import dry_run_note
+from uqs.cli.safety import ChangesState, dry_run_note
 from uqs.cli.shared import (
     _die,
     _paths,
@@ -36,7 +36,7 @@ def dates_as_range(text: str) -> tuple[str | None, str | None]:
     return lo, (date.fromisoformat(hi) + timedelta(days=1)).isoformat() if hi else None
 
 
-@data_app.command("seed")
+@data_app.command("seed", cls=ChangesState)
 def seed(
     from_runtime: Annotated[
         str | None,

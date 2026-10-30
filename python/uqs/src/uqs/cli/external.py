@@ -37,7 +37,7 @@ from rich.table import Table
 from uqs.cli import completion
 from uqs.cli.json_out import emit, json_opt, snake
 from uqs.cli.renames import renamed
-from uqs.cli.safety import DryRunOpt, dry_run_note
+from uqs.cli.safety import ChangesState, DryRunOpt, ReadOnly, dry_run_note
 from uqs.cli.shared import _die, _paths, app, console
 from uqs.external.feeds import ExternalFeed, check_options, discover
 from uqs.paths import UqsError
@@ -63,12 +63,16 @@ FeedArg = Annotated[
     ),
 ]
 
-#: Each option's old spellings, for their one-release window (cli/renames.py).
-_RENAMED = {
-    alias: option.flag
-    for option, _takers in check_options(FEEDS).values()
-    for alias in option.aliases
-}
+#: `start` and `restart`'s class: each option's old spellings, for their
+#: one-release window (cli/renames.py, #1729), and their mark (#1780).
+_START = renamed(
+    {
+        alias: option.flag
+        for option, _takers in check_options(FEEDS).values()
+        for alias in option.aliases
+    },
+    ChangesState,
+)
 
 
 def _feed(name: str) -> ExternalFeed:
@@ -109,7 +113,7 @@ def start(name: str, dry_run: bool = False, **options: Any) -> None:
 
 
 start.__signature__ = _start_signature()  # ty: ignore[unresolved-attribute]
-start = connector_app.command("start", cls=renamed(_RENAMED))(start)
+start = connector_app.command("start", cls=_START)(start)
 
 
 def _start(name: str, options: dict[str, Any], dry_run: bool = False, verb: str = "start") -> None:
@@ -145,7 +149,7 @@ def _would(name: str, action: str) -> None:
     console.print(dry_run_note())
 
 
-@connector_app.command("stop")
+@connector_app.command("stop", cls=ChangesState)
 def stop(name: FeedArg, dry_run: DryRunOpt = False) -> None:
     """Stop a feed started by `uqs connector start`."""
     if dry_run:
@@ -168,7 +172,7 @@ def _takes_start_options(fn: Any) -> Any:
     return fn
 
 
-@connector_app.command("restart", cls=renamed(_RENAMED))
+@connector_app.command("restart", cls=_START)
 @_takes_start_options
 def restart(name: str, dry_run: bool = False, **options: Any) -> None:
     """Stop a feed if it is running, then start it again - with exactly
@@ -201,7 +205,7 @@ def _status_record(name: str, fields: dict[str, str]) -> dict:
     return record
 
 
-@connector_app.command("status")
+@connector_app.command("status", cls=ReadOnly)
 def status(
     name: Annotated[
         str | None,

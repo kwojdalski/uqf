@@ -7,6 +7,11 @@
   the command's named overrides (`uqs override list`), repeatable, and one
   reason covers the overrides given with it. Each is warned about and recorded
   where its command records anything.
+- An `Effect` on every command, carried by its Click class (`cls=ReadOnly`,
+  `cls=ChangesState`, `cls=ConfirmsOnServer`, or `renamed(..., effect=...)`):
+  whether it may change the machine it runs on. `uqs --target` reads it to
+  decide whether to ask first (cli/target_confirm.py, #1780), so a command
+  states it once, where it is declared, and no list repeats it.
 
 The options are declared here once, so their names, short flags and help are
 the same on every command; test_cli_conventions.py holds the commands to them.
@@ -15,9 +20,11 @@ the same on every command; test_cli_conventions.py holds the commands to them.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import StrEnum
 from typing import Annotated
 
 import typer
+from typer.core import TyperCommand
 
 from uqs.paths import UqsError
 
@@ -41,6 +48,29 @@ ReasonOpt = Annotated[
     str | None,
     typer.Option("--reason", help="Why the --override is acceptable: recorded with it"),
 ]
+
+
+class Effect(StrEnum):
+    """What a command may do to the machine it runs on (#1780)."""
+
+    #: reads, and never changes anything
+    READ_ONLY = "read-only"
+    #: changes the server only with --apply, and then shows its plan and asks
+    #: there - or takes its own --yes (#1755)
+    CONFIRMS_ON_SERVER = "confirms-on-server"
+    #: may change state: start or stop a process, write a file, run any q
+    CHANGES_STATE = "changes-state"
+
+
+def marked(effect: Effect, base: type[TyperCommand] = TyperCommand) -> type[TyperCommand]:
+    """`base` carrying `effect`: the `cls=` of a command. Typer wraps the
+    command's function, so the mark is on the Click class, which survives."""
+    return type(base.__name__, (base,), {"effect": effect})
+
+
+ReadOnly = marked(Effect.READ_ONLY)
+ConfirmsOnServer = marked(Effect.CONFIRMS_ON_SERVER)
+ChangesState = marked(Effect.CHANGES_STATE)
 
 
 def dry_run_note() -> str:

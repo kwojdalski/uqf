@@ -22,7 +22,7 @@ from rich.table import Table
 from uqs.cli import completion
 from uqs.cli.json_out import emit, json_opt
 from uqs.cli.renames import alias_command, renamed
-from uqs.cli.safety import dry_run_note
+from uqs.cli.safety import ChangesState, ReadOnly, dry_run_note
 from uqs.cli.shared import (
     BasePortOpt,
     ExportOpt,
@@ -63,7 +63,7 @@ GetJson = json_opt(
 _SHOW_RENAMES = {"--port": "--base-port", "--raw": "--unresolved"}
 
 
-@config_app.command("show", cls=renamed(_SHOW_RENAMES))
+@config_app.command("show", cls=renamed(_SHOW_RENAMES, ReadOnly))
 def config_get(
     procname: Annotated[
         str, typer.Argument(metavar="PROC", help="The process", autocompletion=completion.procname)
@@ -104,7 +104,7 @@ def config_get(
     _export([{"field": k, "value": v} for k, v in row.items()], export)
 
 
-@config_app.command("set")
+@config_app.command("set", cls=ChangesState)
 def config_set(
     procname: Annotated[
         str, typer.Argument(metavar="PROC", help="The process", autocompletion=completion.procname)
@@ -149,7 +149,8 @@ def _json_lines(records: list[dict]) -> None:
             "--print": "--show-command",
             "--columns": "--pane-columns",
             "-c": "--pane-columns",
-        }
+        },
+        ReadOnly,
     )
 )
 def logs(
