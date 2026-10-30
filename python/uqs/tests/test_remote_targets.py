@@ -139,6 +139,28 @@ def test_the_target_is_read_from_the_global_options_only(argv, expected):
         (["job", "attachment", "contract", "approve", "x"], True),
         # read-only, and unlisted until each command carried its own mark
         (["deploy", "history"], False),
+        # an option's VALUE is no dry run and no help: the server's parser gives
+        # it to --reason, and really starts rdb1 (#1780)
+        (["start", "rdb1", "--override", "q-version-check", "--reason", "--dry-run"], True),
+        (["start", "rdb1", "--override", "q-version-check", "--reason", "-n"], True),
+        (["start", "rdb1", "--override", "q-version-check", "--reason", "--help"], True),
+        (["start", "rdb1", "--override", "q-version-check", "--reason", "-h"], True),
+        (["start", "rdb1", "--override", "q-version-check", "--reason=--dry-run"], True),
+        # after `--` every word is positional, as Click reads it
+        (["config", "set", "rdb1", "port", "1", "--", "--dry-run"], True),
+        (["start", "rdb1", "--dry-run"], False),
+        (["--help"], False),
+        (["job", "--help"], False),
+        (["--runtime", "fx", "status"], False),
+        (["exec", "rdb1", "1+1"], True),
+        # what does not parse here asks: the server may read it otherwise
+        (["status", "--no-such-option"], True),
+        (["stop", "--no-such-option", "x", "--dry-run"], True),
+        (["stop", "--dry-run", "--no-such-option"], True),
+        (["start", "-h"], True),  # -h is no help flag in this CLI: it does not parse
+        (["job"], True),  # a group, no command
+        (["job", "runs", "show", "abc", "--dry-run"], True),  # show takes no --dry-run
+        ([], False),
     ],
 )
 def test_what_changes_the_server_asks_first(args, changes):
@@ -254,6 +276,38 @@ def test_ssh_never_prompts_and_never_skips_host_key_checks():
 def test_a_change_without_a_terminal_needs_yes(server):
     with pytest.raises(UqsError, match="may change uat .* pass --yes"):
         target_cli.forward("uat", False, ["stop", "rdb1"], interactive=False)
+
+
+def test_an_option_value_does_not_skip_confirmation(server):
+    """The reproduction of #1780: `--reason --dry-run` gives --reason a value;
+    it is no dry run, so without a terminal it needs --yes."""
+    args = ["start", "rdb1", "--override", "q-version-check", "--reason", "--dry-run"]
+    with pytest.raises(UqsError, match="may change uat .* pass --yes"):
+        target_cli.forward("uat", False, args, interactive=False)
+
+
+def test_a_dry_run_is_parsed_as_the_server_parses_it():
+    """The local parse reads what the server's would: --reason takes the word."""
+    args = ["start", "rdb1", "--override", "q-version-check", "--reason", "--dry-run"]
+    p = target_confirm.parse(args)
+    assert p is not None and p.path == ("start",)
+    assert p.given("--reason") == "--dry-run" and p.given("--dry-run") is False
+
+
+def test_connector_logs_runs_without_a_prompt_or_yes(server, capfd, monkeypatch):
+    def no(*_a, **_k):
+        raise AssertionError("asked")
+
+    monkeypatch.setattr(target_cli.typer, "confirm", no)
+    assert target_cli.forward("uat", False, ["connector", "logs", "kafka"], interactive=False) == 0
+    assert "[logs]" in capfd.readouterr().out
+
+
+def test_classifying_warns_of_no_old_spelling(capfd):
+    """Parsing to decide whether to ask rewrites an old spelling silently: the
+    server's uqs warns about it, once."""
+    assert target_confirm.changes_the_server(["graph", "--port", "6000"]) is False
+    assert "renamed" not in capfd.readouterr().err
 
 
 def test_a_change_with_yes_runs(server, capfd):

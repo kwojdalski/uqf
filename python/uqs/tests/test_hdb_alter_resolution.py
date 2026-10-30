@@ -189,11 +189,14 @@ def test_with_no_handle_it_is_this_runtime_s_configured_hdb(monkeypatch):
     assert "this runtime's HDB" in handle.source
 
 
-@pytest.mark.parametrize("command", ["hdb-check", "hdb-alter"])
-def test_target_runs_both_commands_on_the_release_asking_there(command, monkeypatch):
+@pytest.mark.parametrize(
+    ("command", "options"), [("hdb-check", []), ("hdb-alter", ["pb", "--reorder", "a,b"])]
+)
+def test_target_runs_both_commands_on_the_release_asking_there(command, options, monkeypatch):
     """`--target` routes both, unclassified as changing the server: each shows its
-    plan and asks THERE; the global --yes reaches the command as its own."""
-    args = ["data", command, "pb", "--reorder", "a,b", "--apply"]
+    plan and asks THERE; the global --yes reaches the command as its own. Each
+    with its own words: one it does not take does not parse, and asks (#1780)."""
+    args = ["data", command, *options, "--apply"]
     assert not target_confirm.changes_the_server(args)
     seen = {}
     remote = control.Remote("uat", "uat-host", "/srv/uqf")
@@ -202,7 +205,9 @@ def test_target_runs_both_commands_on_the_release_asking_there(command, monkeypa
     target.forward("uat", True, args, interactive=False)
     assert seen["args"] == [*args, "--yes"]
     sent = control.remote_command(remote, seen["args"])
-    assert f"data {command} pb" in sent and "--hdb" not in sent, "the release's own HDB"
+    assert " ".join(["data", command, *options]) in sent and "--hdb" not in sent, (
+        "the release's own HDB"
+    )
 
 
 @pytest.mark.parametrize("handle", ["--attach", "--hdb"])
