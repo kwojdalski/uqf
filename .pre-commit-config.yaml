@@ -356,11 +356,11 @@ repos:
         # without q; this checks its CONTENT against q. KDB-X or PeachQ: the
         # exporter loads plant_tables.q alone. FAILS without an interpreter.
         # To accept an intended change:
-        #   uv run python scripts/generate/plant_schema.py
-        entry: uv run python scripts/generate/plant_schema.py --check
+        #   uv run python scripts/generate/derive.py plant-schema
+        entry: uv run python scripts/generate/derive.py plant-schema --check
         language: system
         pass_filenames: false
-        files: '^src/etl/plant_tables\.q$|^src/etl/generated/plant_schema\.json$|^scripts/generate/(plant_schema\.py|export_plant_schema\.q)$|^python/uqs/src/uqs/model/plant_metadata(_gen)?\.py$'
+        files: '^src/etl/plant_tables\.q$|^src/etl/generated/plant_schema\.json$|^scripts/generate/(derive\.py|export_plant_schema\.q)$|^python/uqs/src/uqs/model/plant_metadata(_gen)?\.py$'
 
       - id: table-properties
         name: Check the getdata table list matches the plant tables and workers' datasets

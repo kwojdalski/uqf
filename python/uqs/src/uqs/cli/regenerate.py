@@ -13,7 +13,6 @@ from pathlib import Path
 
 from uqs.cli.shared import _die, console
 from uqs.interpreter import q_interpreter
-from uqs.model.plant_metadata import PLANT_SCHEMA_SCRIPT
 from uqs.paths import DERIVE_SCRIPT, UqsError
 from uqs.scaffold import write
 from uqs.scaffold.plan import ScaffoldPlan
@@ -28,7 +27,7 @@ from uqs.scaffold.plan import ScaffoldPlan
 #: The contract surface, which a scaffold makes stale too but which needs q.
 _CONTRACT_SURFACE = (str(DERIVE_SCRIPT), "contract-surface")
 _DERIVED: tuple[tuple[str, ...], ...] = (
-    (str(PLANT_SCHEMA_SCRIPT),),
+    (str(DERIVE_SCRIPT), "plant-schema"),
     (str(DERIVE_SCRIPT), "operational-docs"),
 )
 

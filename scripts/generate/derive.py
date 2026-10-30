@@ -363,6 +363,45 @@ def _q_facts(args: argparse.Namespace) -> int:
     return settle(modules, check=args.check, hint=_hint("q-facts"))
 
 
+def _plant_schema_options(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--force", action="store_true", help="regenerate even when current (not with --check)"
+    )
+    parser.add_argument(
+        "--root", type=Path, default=None, help="the tree to generate for (default: this one)"
+    )
+
+
+def _plant_schema(args: argparse.Namespace) -> int:
+    """src/etl/generated/plant_schema.json: the plant tables' schemas as q
+    evaluates plant_tables.q, on KDB-X or PeachQ (uqs.model.plant_metadata_gen).
+
+    Writing regenerates only when the recorded fingerprint says it is stale,
+    so a current tree needs no q; --force asks q regardless. --check always
+    asks q and compares, writing nothing."""
+    if args.check and args.force:
+        return usage("plant-schema", "--force writes; --check writes nothing")
+    _uqs()
+    from uqs.model import plant_metadata_gen
+    from uqs.model.plant_metadata import PLANT_SCHEMA_FILE, SchemaMetadataError, _guidance
+
+    root = (args.root or REPO).resolve()
+    path = root / PLANT_SCHEMA_FILE
+    try:
+        if not args.check:
+            if args.force:
+                wrote = plant_metadata_gen.write(root)
+            else:
+                wrote = plant_metadata_gen.ensure(root)
+            print(f"wrote {rel(path)}" if wrote else f"{rel(path)} is unchanged")
+            return 0
+        generated = plant_metadata_gen.generate(root)
+    except SchemaMetadataError as exc:
+        print(f"plant-schema: {exc}", file=sys.stderr)
+        return 1
+    return compare([text(path, generated)], _guidance(root))
+
+
 #: Every target, by name. Added to by hand: there is no discovery.
 TARGETS: dict[str, Target] = {
     t.name: t
@@ -395,6 +434,13 @@ TARGETS: dict[str, Target] = {
             "q-facts",
             "the q facts uqs and the Airflow provider read without q (needs KDB-X)",
             _q_facts,
+        ),
+        Target(
+            "plant-schema",
+            "src/etl/generated/plant_schema.json, the plant tables as q evaluates them "
+            "(needs KDB-X or PeachQ when stale)",
+            _plant_schema,
+            _plant_schema_options,
         ),
     )
 }

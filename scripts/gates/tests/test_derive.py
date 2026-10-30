@@ -216,6 +216,7 @@ GENERATORS = {
     "operational-docs": "generate_operational_docs",
     "contract-surface": "contract_surface",
     "q-facts": "q_facts",
+    "plant-schema": "uqs.model.plant_metadata_gen",
 }
 
 
@@ -349,3 +350,47 @@ def test_q_facts_without_q_refuses(monkeypatch):
     monkeypatch.setattr(uqs.interpreter, "q_interpreter", lambda env=None: None)
     with pytest.raises(SystemExit, match="no q interpreter"):
         q_facts.export()
+
+
+# ------------------------------------------------------------- plant-schema
+
+
+def test_plant_schema_refuses_force_with_check(capsys):
+    assert derive.main(["plant-schema", "--check", "--force"]) == 2
+    assert "--check writes nothing" in capsys.readouterr().err
+
+
+def test_plant_schema_write_needs_no_q_when_current(monkeypatch, capsys):
+    """The fingerprint says current, so q is never asked and nothing is written."""
+    from uqs.model import plant_metadata_gen
+
+    monkeypatch.setattr(plant_metadata_gen, "export", lambda *a, **k: pytest.fail("ran q"))
+    assert derive.main(["plant-schema"]) == 0
+    assert "plant_schema.json is unchanged" in capsys.readouterr().out
+
+
+def test_plant_schema_check_reports_a_difference_and_writes_nothing(monkeypatch, capsys):
+    from uqs.model import plant_metadata_gen
+    from uqs.model.plant_metadata import PLANT_SCHEMA_FILE
+
+    path = REPO / PLANT_SCHEMA_FILE
+    committed = path.read_text()
+    monkeypatch.setattr(
+        plant_metadata_gen, "generate", lambda root: committed.replace('"tables"', '"tablez"')
+    )
+    assert derive.main(["plant-schema", "--check"]) == 1
+    err = capsys.readouterr().err
+    assert "plant_schema.json is stale" in err and "derive.py plant-schema" in err
+    assert path.read_text() == committed
+
+
+def test_plant_schema_reports_a_refusal_without_a_traceback(monkeypatch, capsys):
+    from uqs.model import plant_metadata_gen
+    from uqs.model.plant_metadata import SchemaMetadataError
+
+    def no_q(root):
+        raise SchemaMetadataError("no q interpreter - set $QCMD, or put q on PATH")
+
+    monkeypatch.setattr(plant_metadata_gen, "generate", no_q)
+    assert derive.main(["plant-schema", "--check"]) == 1
+    assert "plant-schema: no q interpreter" in capsys.readouterr().err
