@@ -343,12 +343,43 @@
 / @private
 .qetl.run.given:{[d;k;fallback] $[k in key d; d k; fallback]}
 
+/ What `migrate` would do to the run ledger on disk, and why - writing nothing.
+/ .
+/ THE ONE DECISION about whether etl_runs is absent, current, the previous shape
+/ or neither (#1782). `migrate` acts on it and `uqs job runs upgrade --dry-run`
+/ prints it; Python used to carry its own copy of the test, which a change to
+/ one shape list could leave disagreeing with the other.
+/ .
+/ Read-only by construction: it takes no lock and creates no directory, so a
+/ preview touches no file. A refusal is RETURNED (action `refuse, with its
+/ reason) rather than thrown, so a caller can show it; an unreadable file
+/ still throws, and that must stay a failure, never "nothing to migrate".
+/ @return a dictionary: state (`absent, `current, `previous or `unsupported),
+/   needed (1b only when rows would be rewritten), action (`none, `upgrade or
+/   `refuse), rows (how many rows `upgrade rewrites, else 0) and refusal (the
+/   reason as a string, empty unless action is `refuse)
+/ @throws error when the ledger file exists but cannot be read
+/ @eg .qetl.run.migration_plan[]  ->  `state`needed`action`rows`refusal!(`absent;0b;`none;0;"")
+.qetl.run.migration_plan:{[]
+    path:hsym `$.qetl.run.table_path[`etl_runs];
+    if[()~key path; :`state`needed`action`rows`refusal!(`absent;0b;`none;0;"")];
+    t:get path;
+    c:asc cols t;
+    if[c~asc .qetl.run.run_schema; :`state`needed`action`rows`refusal!(`current;0b;`none;0;"")];
+    if[c~asc .qetl.run.previous_schema; :`state`needed`action`rows`refusal!(`previous;1b;`upgrade;count t;"")];
+    `state`needed`action`rows`refusal!(`unsupported;0b;`refuse;0;
+        "migrate: etl_runs is neither the old shape nor the current one - not ours to rewrite")}
+
 / Upgrade a run ledger written before the range and counts columns.
 / .
 / The one-off a refusing require_run_schema names, as `uqs job runs upgrade`. Old
 / rows get nulls in the new columns - what they were asked to do was never
 / recorded, and inventing it would be worse than saying so. Run once: a
 / ledger already at the current shape is left alone.
+/ .
+/ The decision is `migration_plan`'s, taken AGAIN inside the lock: a preview
+/ shown earlier is never trusted, because another process may have upgraded
+/ (or replaced) the ledger since.
 / @return how many rows were upgraded, 0 when there was nothing to do
 / @throws error when the ledger is neither the old shape nor the current one
 / @eg .qetl.run.migrate[]
@@ -356,11 +387,10 @@
     path:hsym `$.qetl.run.table_path[`etl_runs];
     if[()~key path; :0];
     .qetl.run.under_lock[{[path]
+        plan:.qetl.run.migration_plan[];
+        if[`refuse~plan`action; 'plan`refusal];
+        if[not plan`needed; :0];
         t:get path;
-        c:cols t;
-        if[(asc c)~asc .qetl.run.run_schema; :0];
-        if[not (asc c)~asc .qetl.run.previous_schema;
-            '"migrate: etl_runs is neither the old shape nor the current one - not ours to rewrite"];
         t:update dataset:`, source_version:`, range_from:0Np, range_to:0Np, width:0Nn,
             windows_planned:0N, windows_completed:0N, windows_failed:0N, rows_published:0N from t;
         path set .qetl.run.run_schema xcols t;
