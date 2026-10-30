@@ -35,15 +35,12 @@ from uqs.runtimes import RUNTIMES
 
 log = get_logger()
 
-#: The components that can be bundled so far, in the order they install.
-BUNDLABLE = ("torq", "q", "python")
-
 
 def attach(cfg: Config, dep: Deployment, pkg: Artifact) -> list[dict]:
     """Each bundled runtime onto `dep`, after `dep.runtime` is the release's;
     the policy exceptions their pins needed."""
     exceptions: list[dict] = []
-    for component in BUNDLABLE:
+    for component in components.COMPONENTS:
         if getattr(cfg, components.mode_key(component)) != components.BUNDLED:
             continue
         path = getattr(cfg, f"{component}_runtime")
@@ -109,7 +106,7 @@ def _fits(rt: QRuntime, pkg: Artifact, runtime: str) -> None:
 
 
 def _runtimes(dep: Deployment) -> list[tuple[str, runtime_install.Runtime]]:
-    found = ((c, getattr(dep, f"{c}_runtime")) for c in BUNDLABLE)
+    found = ((c, getattr(dep, f"{c}_runtime")) for c in components.COMPONENTS)
     return [(c, rt) for c, rt in found if rt is not None]
 
 
