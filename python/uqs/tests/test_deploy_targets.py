@@ -229,3 +229,33 @@ def test_a_push_records_itself_and_registers_its_server(root, monkeypatch, tmp_p
     (entry,) = history.read(tmp_path)
     assert (entry["target"], entry["release"]) == ("uat-example-uat", "r42")
     assert targets.read(tmp_path)["uat-example-uat"]["dest"] == "/srv/uat"
+
+
+# --- the overrides a target file may not set, from overrides.SKIPS (#1794) --
+
+
+def test_every_override_is_a_per_run_option_and_nothing_else_is():
+    """Both directions: an override missing here becomes a key a target file
+    may set - a standing bypass - and a stale one names nothing."""
+    import inspect
+
+    from uqs.deploy import overrides
+
+    assert {n.replace("-", "_") for n in overrides.SKIPS} == targets.OVERRIDES
+    assert targets.OVERRIDES <= set(inspect.signature(make_config).parameters)
+    assert not targets.OVERRIDES & targets.SETTABLE
+
+
+def test_a_new_override_is_refused_in_a_target_file_without_naming_it_twice(monkeypatch):
+    """OVERRIDES is derived, not restated: an override added to SKIPS alone
+    is already one a target file may not set."""
+    import importlib
+
+    from uqs.deploy import overrides
+
+    monkeypatch.setitem(overrides.SKIPS, "accept-something-new", "a test's override")
+    try:
+        assert "accept_something_new" in importlib.reload(targets).OVERRIDES
+    finally:
+        monkeypatch.undo()
+        importlib.reload(targets)
