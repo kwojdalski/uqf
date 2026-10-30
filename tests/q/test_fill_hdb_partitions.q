@@ -1,5 +1,5 @@
 // test_fill_hdb_partitions.q - scripts/gates/fill_hdb_partitions.q, the HDB
-// repair behind `uqs data hdb-check --fix` and `--fix-hdb` (.qt.qproc.fillhdb).
+// repair behind `uqs data check --apply` and `uqs deploy push --fix-hdb` (.qt.qproc.fillhdb).
 //
 // The script is a thin schema-driven wrapper around KX's dbmaint.q
 // (lib/kx-dbmaint, #1423). It exits when it has run, so it cannot be loaded:

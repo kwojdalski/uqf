@@ -822,7 +822,7 @@
 / A source configured live is opened for the length of the call, only so its
 / complete_through can clip the plan exactly as a run would (#1201): a plan
 / that listed windows the run then clips away would be wrong on precisely the
-/ growing-source case, and uqs job backfill --plan and anything polling it
+/ growing-source case, and uqs job backfill --mode plan and anything polling it
 / (Airflow, a gaps report) would believe it. An unreachable live source
 / therefore fails the plan, as it fails the run. The fixture is never clipped.
 / @param worker the worker's name

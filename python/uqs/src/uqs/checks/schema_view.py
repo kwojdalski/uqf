@@ -19,6 +19,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from uqs.generated.q_facts import Q_TYPE_NAMES
 from uqs.logger import get_logger
 from uqs.paths import UqsError, UqsPaths
 from uqs.stack.listing import _list_processes
@@ -32,30 +33,14 @@ log = get_logger()
 #: has the history but only the tables that have been written down by EOD.
 DEFAULT_PROC = "rdb1"
 
-#: q's type characters, as `meta` reports them. Kept here rather than
-#: imported from uqf_frontend.catalog: that enum exists to decide how the
-#: gateway COERCES a filter value and only covers the types it can accept,
-#: while this is for a human reading a table shape and has to name whatever
-#: q hands back, including the ones no filter will ever take.
+#: q's type characters, as `meta` reports them, named - q's own names
+#: (uqs.generated.q_facts, #1785) with "general" laid over the blank. Not
+#: uqf_frontend.catalog's map: that one exists to decide how the gateway
+#: COERCES a filter value and only covers the types it can accept, while this
+#: is for a human reading a table shape and has to name whatever q hands back,
+#: including the ones no filter will ever take.
 TYPE_NAMES = {
-    "b": "boolean",
-    "g": "guid",
-    "x": "byte",
-    "h": "short",
-    "i": "int",
-    "j": "long",
-    "e": "real",
-    "f": "float",
-    "c": "char",
-    "s": "symbol",
-    "p": "timestamp",
-    "m": "month",
-    "d": "date",
-    "z": "datetime",
-    "n": "timespan",
-    "u": "minute",
-    "v": "second",
-    "t": "time",
+    **Q_TYPE_NAMES,
     # A general (mixed or nested) column. q reports it as a SPACE, which is
     # invisible in any rendering - the same character that silently broke the
     # contract surface's CSV until it was quoted. Named here so a reader sees
@@ -64,10 +49,11 @@ TYPE_NAMES = {
     "": "general",
 }
 
-#: Attribute characters `meta` reports, expanded. An attribute is a promise
-#: about the column's order or uniqueness that q relies on for lookup speed,
-#: so it is worth showing: a `g` that has silently gone is a performance
-#: cliff with no error attached.
+#: Attribute characters `meta` reports, expanded: a presentation overlay on
+#: q's attributes (q_facts.Q_ATTRIBUTES, which test_q_types holds its keys to).
+#: An attribute is a promise about the column's order or uniqueness that q
+#: relies on for lookup speed, so it is worth showing: a `g` that has silently
+#: gone is a performance cliff with no error attached.
 ATTR_NAMES = {
     "g": "grouped",
     "s": "sorted",

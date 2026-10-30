@@ -1,4 +1,4 @@
-"""`uqs data hdb-check --table` and `uqs data hdb-alter`, end to end on a real q (#1755).
+"""`uqs data check --table` and `uqs data alter`, end to end on a real q (#1755).
 
 Each case builds a temporary HDB with q: five date partitions, `pb` on the last
 three only (a backfilled table), `other` on all five, both enumerated against
@@ -99,11 +99,11 @@ def test_a_dry_run_writes_nothing_and_creates_no_journal(world):
     hdb = world.build()
     before = digest(hdb)
     for argv in (
-        ["hdb-alter", "pb", "--reorder", "n,amt,sym,time"],
-        ["hdb-alter", "pb", "--rename", "amt=amount"],
-        ["hdb-alter", "pb", "--attr", "sym:g"],
-        ["hdb-alter", "pb", "--cast", "n:long"],
-        ["hdb-check", "--table", "pb"],
+        ["alter", "pb", "--reorder", "n,amt,sym,time"],
+        ["alter", "pb", "--rename", "amt=amount"],
+        ["alter", "pb", "--attr", "sym:g"],
+        ["alter", "pb", "--cast", "n:long"],
+        ["check", "--table", "pb"],
     ):
         result = run_uqs("data", *argv, "--hdb", str(hdb))
         assert result.exit_code == 0, (argv, result.output, world.errors)
@@ -114,7 +114,7 @@ def test_a_dry_run_writes_nothing_and_creates_no_journal(world):
 
 def test_the_plan_names_the_hdb_its_source_and_the_partitions(world):
     hdb = world.build()
-    result = run_uqs("data", "hdb-alter", "pb", "--hdb", str(hdb), "--reorder", "n,amt,sym,time",
+    result = run_uqs("data", "alter", "pb", "--hdb", str(hdb), "--reorder", "n,amt,sym,time",
                  "--json")  # fmt: skip
     d = doc(result)
     assert d["ok"] and d["resolved_from"] == "--hdb" and d["hdb"] == str(hdb.resolve())
@@ -131,7 +131,7 @@ def test_the_plan_names_the_hdb_its_source_and_the_partitions(world):
 def test_check_table_apply_adds_the_empty_table_only_where_missing(world):
     hdb = world.build()
     before = digest(hdb)
-    result = run_uqs("data", "hdb-check", "--hdb", str(hdb), "--table", "pb", "--apply", "--yes",
+    result = run_uqs("data", "check", "--hdb", str(hdb), "--table", "pb", "--apply", "--yes",
                  "--json")  # fmt: skip
     d = doc(result)
     assert result.exit_code == 0 and d["result"]["status"] == "applied", d
@@ -149,13 +149,13 @@ def test_check_table_apply_adds_the_empty_table_only_where_missing(world):
 def test_reorder_then_undo_restores_every_file(world):
     hdb = world.build()
     before = {k: v for k, v in digest(hdb).items() if ".uqf-alter" not in k}
-    applied = run_uqs("data", "hdb-alter", "pb", "--hdb", str(hdb), "--reorder", "n,amt,sym,time",
+    applied = run_uqs("data", "alter", "pb", "--hdb", str(hdb), "--reorder", "n,amt,sym,time",
                   "--apply", "--yes", "--json")  # fmt: skip
     d = doc(applied)
     assert applied.exit_code == 0 and d["result"]["final_check"]["clean"], d
     changed = {k for k, v in digest(hdb).items() if before.get(k) not in (None, v)}
     assert changed == {str(hdb / day / "pb" / ".d") for day in d["plan"]["partitions_touched"]}
-    undone = run_uqs("data", "hdb-alter", "--hdb", str(hdb), "--undo", d["plan"]["journal"],
+    undone = run_uqs("data", "alter", "--hdb", str(hdb), "--undo", d["plan"]["journal"],
                  "--apply", "--yes")  # fmt: skip
     assert undone.exit_code == 0, (undone.output[-600:], world.errors)
     assert {k: v for k, v in digest(hdb).items() if ".uqf-alter" not in k} == before
@@ -167,9 +167,7 @@ def test_reorder_then_undo_restores_every_file(world):
 def test_apply_without_a_terminal_and_without_yes_is_refused(world):
     hdb = world.build()
     before = digest(hdb)
-    result = run_uqs(
-        "data", "hdb-alter", "pb", "--hdb", str(hdb), "--rename", "amt=amount", "--apply"
-    )
+    result = run_uqs("data", "alter", "pb", "--hdb", str(hdb), "--rename", "amt=amount", "--apply")
     assert result.exit_code == 1
     assert any("needs a terminal" in e and "--yes" in e for e in world.errors)
     assert digest(hdb) == before
@@ -178,7 +176,7 @@ def test_apply_without_a_terminal_and_without_yes_is_refused(world):
 def test_partitions_that_disagree_are_refused_naming_each_shape(world):
     hdb = world.build(skew=True)
     before = digest(hdb)
-    result = run_uqs("data", "hdb-alter", "pb", "--hdb", str(hdb), "--cast", "n:long", "--apply",
+    result = run_uqs("data", "alter", "pb", "--hdb", str(hdb), "--cast", "n:long", "--apply",
                  "--yes", "--json")  # fmt: skip
     d = doc(result)
     assert result.exit_code == 1 and not d["ok"]
@@ -230,12 +228,12 @@ def attached(world, monkeypatch):
 
 def test_attach_plans_and_applies_on_the_stack_s_host_and_reloads_its_readers(world, attached):
     hdb = attached.hdb
-    plan = run_uqs("data", "hdb-alter", "--attach", "pb", "--reorder", "n,amt,sym,time", "--json")
+    plan = run_uqs("data", "alter", "--attach", "pb", "--reorder", "n,amt,sym,time", "--json")
     d = doc(plan)
     assert plan.exit_code == 0 and d["ok"], (plan.output, world.errors)
     assert d["ssh"] == "testhost" and "pinned storage.hdb_dir" in d["resolved_from"]
     assert d["plan"]["table"] == "pb", "the attachment's own table, when none is named"
-    applied = run_uqs("data", "hdb-alter", "--attach", "pb", "--reorder", "n,amt,sym,time",
+    applied = run_uqs("data", "alter", "--attach", "pb", "--reorder", "n,amt,sym,time",
                   "--apply", "--yes", "--json")  # fmt: skip
     r = doc(applied)["result"]
     assert applied.exit_code == 0 and r["final_check"]["clean"], (applied.output, world.errors)
@@ -250,7 +248,7 @@ def test_attach_plans_and_applies_on_the_stack_s_host_and_reloads_its_readers(wo
 def test_attach_refuses_while_a_backfill_owns_the_attachment(world, attached):
     before = digest(attached.hdb)
     backfill_owner.claim("pb", "pb_backfill", os.getpid(), "abc")
-    result = run_uqs("data", "hdb-check", "--attach", "pb", "--apply", "--yes")
+    result = run_uqs("data", "check", "--attach", "pb", "--apply", "--yes")
     assert result.exit_code == 1
     assert any("attached backfill running" in e for e in world.errors), world.errors
     assert digest(attached.hdb) == before

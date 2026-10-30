@@ -15,7 +15,7 @@ actually run then depends on which fourteen won the race to start (#285).
 
 A PROFILE NAMES LEAVES, NOT PROCESSES. `arbitrage` is `crossarb1` and
 `arbitrage1`; everything they need is derived from
-`dependencies.depends_on_by_process()`, the same graph `summary`'s
+`dependencies.depends_on_by_process()`, the same graph `uqs status`'s
 "Depends on" column and its "up, but idle" warning are built from. A
 hand-kept list of processes would be a second copy of that graph, free to
 disagree with it the first time a job gains an input - which is the failure

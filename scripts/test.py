@@ -738,14 +738,14 @@ LANES: dict[str, Callable[[], None]] = {
     "q-unit": lane_q_unit,
     "q-unit-peachq": lane_q_unit_peachq,
     "q-order": lane_q_order,
-    "q-metatables-hdb": lane_q_metatables_hdb,
-    "q-backfill-process": lane_q_backfill_process,
     "q-examples": lane_q_examples,
     "q-scripts": lane_q_scripts,
     "q-docs": lane_q_docs,
     "q-docs-peachq": lane_q_docs_peachq,
+    "q-backfill-process": lane_q_backfill_process,
     "q-two-instances": lane_q_two_instances,
     "q-remote-writer": lane_q_remote_writer,
+    "q-metatables-hdb": lane_q_metatables_hdb,
     "python": lane_python,
     "bundles": lane_bundles,
     "q-coverage": lane_q_coverage,
@@ -766,27 +766,22 @@ PEACHQ_LANES = ("q-unit-peachq", "q-docs-peachq")
 #: UQS_ATTACH_STACK_TEST, which the attach-stack lane sets.
 ATTACH_TESTS = sorted((REPO / "python" / "uqs" / "tests").glob("test_attach_*.py"))
 
-#: `all` is every lane except smoke, stack-smoke, attach-stack, remote-stack, q-coverage
-#: and coverage.
-#: coverage runs the q suite a second time under instrumentation;
-#: stack-smoke needs a licence, free ports and a couple of minutes because
-#: it starts the actual stack. Both are worth asking for and neither is
-#: worth paying for on every release run.
-ALL = [
-    "q-unit",
-    "q-unit-peachq",
-    "q-order",
-    "q-examples",
-    "q-scripts",
-    "q-docs",
-    "q-docs-peachq",
-    "q-backfill-process",
-    "q-two-instances",
-    "q-remote-writer",
-    "q-metatables-hdb",
-    "python",
-    "bundles",
-]
+#: The lanes `all` leaves out, each with its reason. Every other lane is in
+#: the release run: a lane added to LANES is in `all` unless it is named here,
+#: never left out by being forgotten (#1794).
+EXCLUDED_FROM_ALL: dict[str, str] = {
+    "q-coverage": "runs the q suite a second time, under instrumentation",
+    "coverage": "runs the q suite a second time, under instrumentation, and pytest again",
+    "smoke": "checks live external sources named by --targets; with none it only skips",
+    "stack-smoke": "needs a licence, free ports and a couple of minutes: it starts the stack",
+    "attach-stack": "starts isolated TorQ stacks on KDB-X, about a minute each",
+    "remote-stack": "needs Docker: the stack and its client run in containers",
+}
+
+#: `all`, in LANES' order.
+ALL = [lane for lane in LANES if lane not in EXCLUDED_FROM_ALL]
+
+ALL_HELP = "which suite to run; 'all' is every lane except " + ", ".join(EXCLUDED_FROM_ALL)
 
 EPILOG = """\
 Run the lane matching the layer you changed. `all` is for a release,
@@ -812,10 +807,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "lane",
         choices=[*LANES, "all"],
-        help=(
-            "which suite to run; 'all' is every lane except smoke, stack-smoke, "
-            "attach-stack, remote-stack, q-coverage and coverage"
-        ),
+        help=ALL_HELP,
     )
     smoke = parser.add_argument_group("smoke lane only")
     smoke.add_argument(

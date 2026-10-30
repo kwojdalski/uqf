@@ -24,9 +24,16 @@ from uqf_frontend.errors import (
     QueryTimedOut,
 )
 
-#: Substrings q/TorQ puts in an error when the gateway is mid-EOD-reload.
-#: It must be surfaced as a transient state, not a failure.
-_RELOADING_MARKERS = ("eod", "reload", "not available")
+#: The text the vendored TorQ gateway (lib/torq/code/processes/gateway.q)
+#: sends a client when an EOD reload refuses or fails its query - surfaced as
+#: a transient state, not a failure. Its two messages, verbatim and lower
+#: case: a looser marker turned permanent errors that merely mentioned
+#: "reload" or "not available" into a 503 the browser polled forever.
+#: test_reload_markers.py holds this to that file in both directions.
+_RELOADING_MARKERS = (
+    "unable to query multiple servers during eod reload",
+    "query did not return prior to eod reload",
+)
 _TIMEOUT_MARKERS = ("timeout", "timed out")
 
 

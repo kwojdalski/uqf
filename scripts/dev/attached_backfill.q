@@ -30,7 +30,7 @@
 //                readers; this process extracts, files coverage here and writes no HDB
 //   -writer_user the user the receiver is reached as; its password is $UQF_ATTACH_WRITER_PASSWORD
 //
-// With -force as well (`uqs job backfill --writer HOST:PORT --force`), -writer is ANY q process of the
+// With -force as well (`uqs job backfill --writer HOST:PORT --any-writer`), -writer is ANY q process of the
 // stack - its wdb - running none of uqf's code: each date's rows are sent as a lambda that process
 // evaluates, appending them into its own HDB (`.wdb.hdbdir`, or -force_hdb when it is not _own_).
 // NOTHING is checked there: no receiver, contract, schema, date fence or batch journal, so a retry or

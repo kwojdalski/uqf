@@ -24,6 +24,19 @@ dataset_columns:{[d] cols .qetl.transform.output_schema first exec transform fro
 dataset_time:{[d] $[`time in dataset_columns d; `time; first exec window_column from .qetl.job.bounded.worker_cfg where dataset=d]}
 dataset_instrument:{[d] $[`sym in dataset_columns d; `sym; `]}
 
+/ q's column types and attributes (#1785): the vocabulary uqs's attachment
+/ check, schema view, plant metadata, scaffold and the browser's catalog share.
+/ q has no list of its type NAMES, so they are written here once - and each is
+/ held to q: its cast must make the type whose .Q.t character it is paired
+/ with, and every character .Q.t has (the space, a general list, aside) must
+/ be named exactly once. The attributes are what `attr` reports for each.
+type_names:`boolean`guid`byte`short`int`long`real`float`char`symbol`timestamp`month`date`datetime`timespan`minute`second`time;
+type_chars:{[n] .Q.t type n$()} each type_names;
+if[not (asc type_chars)~asc distinct .Q.t except " ";
+    -2 "export_q_facts: the type names cast to \"",type_chars,"\", not every type .Q.t has (\"",(distinct .Q.t except " "),"\")";
+    exit 1];
+attributes:attr each (`s#0 1;`u#0 1;`p#0 0 1;`g#0 1);
+
 / name -> a list of symbols, in q's own order, or a string.
 facts:(!) . flip (
     (`IO_STRATEGIES;        .qetl.io.strategies);
@@ -49,7 +62,10 @@ facts:(!) . flip (
     (`CFG_ENV_PREFIX;         .qetl.cfg.env_prefix);
     (`SOURCE_CREDENTIAL_PREFIX; .qetl.source.credential_prefix);
     (`FIXTURE_TAG;            .qetl.source.fixture_tag);
-    (`REVISION_TAG;           .qetl.job.bounded.runtime.revision_tag))
+    (`REVISION_TAG;           .qetl.job.bounded.runtime.revision_tag);
+    (`Q_TYPE_NAMES;           (`$enlist each type_chars)!type_names);
+    (`Q_TYPE_CHARS;           type_names!`$enlist each type_chars);
+    (`Q_ATTRIBUTES;           attributes))
 
 \d .
 
