@@ -108,7 +108,7 @@ jobs:
         # once run, and master was red for it. Loud rather than silent, but
         # still a gate that protected nothing. The other three gates here are
         # stdlib-only and do not need the workspace.
-        run: uv run python scripts/generate/generate_operational_docs.py --check
+        run: uv run python scripts/generate/derive.py operational-docs --check
       - name: Check the committed contract surface is current
         # WP2 (#139): docs/reference/surfaces/current/ is this tree's
         # half of the contract lock. A committed baseline nothing verifies

@@ -185,13 +185,14 @@ def _imports_after(*argv: str) -> set[str]:
     is what is being measured, and without needing the interpreter.
     """
     probe = (
-        "import runpy, subprocess, sys\n"
+        "import contextlib, io, runpy, subprocess, sys\n"
         "def refuse(*args, **kwargs):\n"
         "    raise RuntimeError('no processes in this probe')\n"
         "subprocess.run = subprocess.Popen = refuse\n"
         f"sys.argv = ['derive.py', *{list(argv)!r}]\n"
         "try:\n"
-        f"    runpy.run_path({str(SCRIPT)!r}, run_name='__main__')\n"
+        "    with contextlib.redirect_stdout(io.StringIO()):\n"
+        f"        runpy.run_path({str(SCRIPT)!r}, run_name='__main__')\n"
         "except (SystemExit, RuntimeError):\n"
         "    pass\n"
         "print('\\n'.join(sorted(sys.modules)))\n"
@@ -212,6 +213,7 @@ def _imports_after(*argv: str) -> set[str]:
 GENERATORS = {
     "table-properties": "uqs.stack.gateway_access",
     "diagrams": "render_diagrams",
+    "operational-docs": "generate_operational_docs",
 }
 
 

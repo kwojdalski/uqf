@@ -97,9 +97,9 @@ silent. So the second copy is generated, or checked, or both:
 
   | Derived thing                      | From                              | Held by                                |
   | ---                                | ---                               | ---                                    |
-  | `src/etl/generated/pipeline_dag.q` | `NON_JOB_PIPELINES`               | `generate_operational_docs.py --check` |
+  | `src/etl/generated/pipeline_dag.q` | `NON_JOB_PIPELINES`               | `derive.py operational-docs --check`   |
   | `docs/man.q`                       | the qDoc blocks in `src/`         | read when it loads; nothing to check   |
-  | `docs/reference/processes.md`      | the pipeline registry             | `generate_operational_docs.py --check` |
+  | `docs/reference/processes.md`      | the pipeline registry             | `derive.py operational-docs --check`   |
   | `docs/reference/environment.md`    | the code that reads each variable | `check_env_reference.py`               |
   | the contract surface               | the loaded q tree                 | `contract_surface.py check`            |
 

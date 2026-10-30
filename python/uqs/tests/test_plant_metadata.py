@@ -344,5 +344,5 @@ def test_every_scaffold_and_install_command_regenerates_it_first():
     from uqs.cli.regenerate import _DERIVED
     from uqs.model.plant_metadata import PLANT_SCHEMA_SCRIPT
 
-    assert _DERIVED[0] == PLANT_SCHEMA_SCRIPT
+    assert _DERIVED[0] == (str(PLANT_SCHEMA_SCRIPT),)
     assert (ROOT / PLANT_SCHEMA_SCRIPT).is_file()

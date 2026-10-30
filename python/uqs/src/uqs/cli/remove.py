@@ -86,9 +86,10 @@ def remove_job(
         return
     removal.apply(repo_root)
     console.print(f"\n[green]removed {removal.name}[/]")
-    for script, regen in zip(_DERIVED, _regenerate_derived(repo_root), strict=True):
+    for derived, regen in zip(_DERIVED, _regenerate_derived(repo_root), strict=True):
         state = "regenerated" if regen.returncode == 0 else "[red]could not regenerate[/]"
-        console.print(f"{state} via {script}{'' if regen.returncode == 0 else ':' + regen.stderr}")
+        said = "" if regen.returncode == 0 else ":" + regen.stderr
+        console.print(f"{state} via {' '.join(derived)}{said}")
     if _export_contract_surface(repo_root) is None:
         console.print(
             f"[yellow]no q on PATH[/] - run `uv run python {CONTRACT_SURFACE_SCRIPT} export` where "

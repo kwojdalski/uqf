@@ -273,6 +273,17 @@ def _diagrams(args: argparse.Namespace) -> int:
     return code
 
 
+def _operational_docs(args: argparse.Namespace) -> int:
+    """The process table, the pipeline DAG and load plan q reads, the port
+    lock and the uqs guide's profile table - all from the pipeline registry
+    (generate_operational_docs). It refuses, naming them, when the declared
+    dataflow edges disagree with the q scripts."""
+    _uqs()
+    docs = load("generate_operational_docs")
+    files = [text(path, content) for path, content in docs.outputs()]
+    return settle(files, check=args.check, hint=_hint("operational-docs"))
+
+
 #: Every target, by name. Added to by hand: there is no discovery.
 TARGETS: dict[str, Target] = {
     t.name: t
@@ -288,6 +299,12 @@ TARGETS: dict[str, Target] = {
             _diagrams,
             _diagrams_options,
             python="python3",
+        ),
+        Target(
+            "operational-docs",
+            "processes.md, the pipeline DAG, the load plan, the port lock and the "
+            "uqs guide's profile table, from the pipeline registry",
+            _operational_docs,
         ),
     )
 }

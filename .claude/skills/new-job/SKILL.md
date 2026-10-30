@@ -266,7 +266,7 @@ Say this back to the user, because it is the part that surprises people:
   Python tests that used to pin every process and table (`test_core.py`,
   `test_schemas.py`) derive them from the registry and from that q list.
 - **No regeneration step.** `uqs job new` reruns
-  `scripts/generate/generate_operational_docs.py` itself, and `docs/man.q` reads
+  `scripts/generate/derive.py operational-docs` itself, and `docs/man.q` reads
   the new qDoc blocks when it loads.
 - **No hand-copied source for a second worker.** An existing source is reused
   rather than rewritten, and an existing table is not defined again. A dataset

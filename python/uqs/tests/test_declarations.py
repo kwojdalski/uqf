@@ -123,7 +123,7 @@ def test_the_lock_keeps_every_row_it_had():
 
 
 def test_the_committed_lock_covers_every_process():
-    """What generate_operational_docs.py --check enforces in CI, held here too:
+    """What `derive.py operational-docs --check` enforces in CI, held here too:
     a process the lock lacks has an offset that moves as others are added."""
     locked = registry.read_port_lock(Path(__file__).resolve().parents[3])
     assert {p.procname for p in PIPELINES} <= set(locked)
