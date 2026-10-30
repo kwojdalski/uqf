@@ -194,7 +194,7 @@ jobs:
         # .qetl.cfg.env_name and appears in no source file, so grep is not a
         # substitute for this page.
         if: ${{ !cancelled() }}
-        run: python3 scripts/gates/check_env_reference.py --check
+        run: python3 scripts/gates/check.py env-reference
       - name: Check the pipeline declaration reference lists every key
         # docs/reference/pipeline-declarations.md is hand-written, like the
         # environment page, and for the same reason drifts the day a key is

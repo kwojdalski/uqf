@@ -3,7 +3,7 @@
 The one operator-facing list. Hand-written, because "required or optional",
 "what happens when it is unset" and "who sets it" are judgements no generator
 can read off the code --- and machine-checked for completeness by
-`scripts/gates/check_env_reference.py`, so it cannot quietly fall behind.
+`scripts/gates/check.py env-reference`, so it cannot quietly fall behind.
 
 Read this table as the operator's surface. Two things make it non-obvious
 without it:
@@ -38,7 +38,7 @@ without it:
   `scripts/test.py`, the browser app) reads the OS environment only.
   `.env.example` therefore lists only what `.qdata.cfg` reads, and sorts the
   rest by theme (secrets, per-run arguments, deployment wiring, developer
-  knobs); `check_env_reference.py` refuses any other key in it.
+  knobs); `check.py env-reference` refuses any other key in it.
 
 ## Read by this repository
 
@@ -300,8 +300,8 @@ its binary. `HOME` is read only to locate `~/.kx`.
 
 ## How this page is kept honest
 
-`scripts/gates/check_env_reference.py --check` runs in CI and fails the build
-when the code and this page disagree, in either direction:
+`scripts/gates/check.py env-reference` runs in CI and fails the build when the
+code and this page disagree, in either direction:
 
 - a variable read by `src/`, `scripts/`, a package's `src/`, `web/` or the smoke
   script and **not** listed here;

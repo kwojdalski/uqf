@@ -25,7 +25,9 @@ WHAT THE COMMAND OWNS, and every check shares:
     (a wrong root otherwise reads as a tree with nothing in it to break a
     rule);
   - the report: each finding on stderr, with the file and line the rule
-    gives it; a one-line summary on stdout when there are none;
+    gives it; a one-line summary on stdout when there are none. A rule whose
+    findings are grouped with advice per group (env-reference) prints its
+    own, to the same streams;
   - the exit status: 0 when the rule holds, 1 when it does not or the check
     could not run, 2 for a usage error. A check that crashes is reported as
     one that could not run - never as one that found nothing.
@@ -118,6 +120,13 @@ def _registry_enlist(enlist: ModuleType, root: Path) -> int:
     )
 
 
+def _env_reference(env: ModuleType, root: Path) -> int:
+    """docs/reference/environment.md and .env.example agree with the code that
+    reads the environment, both ways. The rule reports its own findings,
+    grouped by direction with what to do about each."""
+    return env.run(root)
+
+
 @dataclass(frozen=True)
 class Check:
     name: str
@@ -151,6 +160,12 @@ CHECKS: dict[str, Check] = {
             "every write that adds to a q registry under src/ stores its value enlisted",
             "registry_enlist",
             _registry_enlist,
+        ),
+        Check(
+            "env-reference",
+            "docs/reference/environment.md and .env.example match the variables the code reads",
+            "env_reference",
+            _env_reference,
         ),
     )
 }

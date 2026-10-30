@@ -61,7 +61,7 @@ def test_the_checks_are_the_ones_registered_by_hand():
 def test_this_checkout_passes_each_check(capsys, name):
     rc, out, err = _main(capsys, name)
     assert rc == 0, err
-    assert out.startswith(f"{name}: "), out
+    assert out.strip(), "a check that passes says so on stdout"
 
 
 # -------------------------------------------------------------------- usage

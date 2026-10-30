@@ -202,7 +202,7 @@ Apply the rules below. Each cites the file that holds or enforces it.
   | `src/etl/generated/load_plan.q`, `pipeline_dag.q`, `docs/reference/processes.md`, `process_ports.csv`, `docs/guides/uqs.md` tables | the declarations               | `uv run python scripts/generate/generate_operational_docs.py` (`--check` in CI) |
   | `docs/reference/surfaces/current/`                                                                                                 | the loaded q tree              | `uv run python scripts/generate/contract_surface.py export`                     |
   | rendered `docs/diagrams/*.svg`                                                                                                     | `docs/diagrams/*.d2`           | `scripts/generate/render_diagrams.py`                                           |
-  | `docs/reference/environment.md`                                                                                                    | the code reading each variable | checked by `scripts/gates/check_env_reference.py`                               |
+  | `docs/reference/environment.md`                                                                                                    | the code reading each variable | checked by `scripts/gates/check.py env-reference`                               |
 
 - **D2** A name or call that docs mention is checked against the q source
   (`scripts/gates/check_doc_references.py`). Renaming a function means updating

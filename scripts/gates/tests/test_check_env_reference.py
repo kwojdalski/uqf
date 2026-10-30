@@ -1,4 +1,4 @@
-"""Tests for `scripts/gates/check_env_reference.py`'s .env.example check.
+"""Tests for the env-reference rule, `scripts/gates/policy/env_reference.py`.
 
 The gate had no tests at all, which for a checker means nobody has seen it
 fail - the repository's own recurring failure mode (a hook scoped to nothing,
@@ -14,13 +14,14 @@ import importlib.util
 import sys
 from pathlib import Path
 
+REPO = Path(__file__).resolve().parents[3]
+
 _SPEC = importlib.util.spec_from_file_location(
-    "check_env_reference",
-    Path(__file__).resolve().parents[3] / "scripts" / "gates" / "check_env_reference.py",
+    "env_reference", REPO / "scripts" / "gates" / "policy" / "env_reference.py"
 )
 assert _SPEC and _SPEC.loader
 cer = importlib.util.module_from_spec(_SPEC)
-sys.modules["check_env_reference"] = cer
+sys.modules["env_reference"] = cer
 _SPEC.loader.exec_module(cer)
 
 
@@ -28,7 +29,7 @@ def test_only_the_dotenv_reader_s_variables_count_as_read_from_dotenv():
     """`.qdata.cfg` is the one reader with a file fallback. The check must
     rest on that pattern alone - a variable read by os.environ.get or getenv
     is NOT read from .env, however documented it is."""
-    names = cer.dotenv_read_names()
+    names = cer.dotenv_read_names(REPO)
     assert "DATABENTO_DATA_DIR" in names
     assert "UQF_FRONTEND_GATEWAY_PASSWD" not in names, "read by Settings.from_env, not from .env"
     assert "UQF_STATUS_DIR" not in names, "read by getenv in status.q"
@@ -38,12 +39,12 @@ def test_the_example_file_parses_keys_and_ignores_comments(monkeypatch, tmp_path
     example = tmp_path / ".env.example"
     example.write_text("# comment\n\nA=1\n  B = two  \n# C=not a key\nNOEQUALS\n")
     monkeypatch.setattr(cer, "ENV_EXAMPLE", example)
-    assert cer.env_example_keys() == {"A", "B"}
+    assert cer.env_example_keys(REPO) == {"A", "B"}
 
 
 def test_a_missing_example_file_is_an_empty_set_not_an_error(monkeypatch, tmp_path):
     monkeypatch.setattr(cer, "ENV_EXAMPLE", tmp_path / "absent")
-    assert cer.env_example_keys() == set()
+    assert cer.env_example_keys(REPO) == set()
 
 
 def _run_with_example(monkeypatch, tmp_path, text: str) -> tuple[int, str]:
@@ -53,16 +54,15 @@ def _run_with_example(monkeypatch, tmp_path, text: str) -> tuple[int, str]:
     example = tmp_path / ".env.example"
     example.write_text(text)
     monkeypatch.setattr(cer, "ENV_EXAMPLE", example)
-    monkeypatch.setattr(sys, "argv", ["check_env_reference.py"])
     err = io.StringIO()
     with redirect_stderr(err):
-        rc = cer.main()
+        rc = cer.run(REPO)
     return rc, err.getvalue()
 
 
 def test_the_real_example_file_passes():
     """The committed file is the reference; the gate must accept it."""
-    assert cer.env_example_keys() <= cer.dotenv_read_names()
+    assert cer.env_example_keys(REPO) <= cer.dotenv_read_names(REPO)
 
 
 def test_the_variable_that_is_read_from_dotenv_is_accepted(monkeypatch, tmp_path):
@@ -123,7 +123,7 @@ def test_the_documented_gateway_port_is_the_one_the_code_actually_defaults_to():
     """
     from uqf_frontend.config import Settings
 
-    reference = Path(__file__).resolve().parents[3] / "docs" / "reference" / "environment.md"
+    reference = REPO / "docs" / "reference" / "environment.md"
     # `lstrip` because the markdown formatter indents tables by two spaces,
     # which every renderer still reads as a table and this test did not.
     row = next(
@@ -153,9 +153,9 @@ def test_every_variable_build_env_exports_is_consumed_by_something():
     `-stackid <port>` to nobody, while torq.sh and launchprocess.sh built that
     flag themselves out of KDBBASEPORT.
     """
-    produced = cer.produced_names()
+    produced = cer.produced_names(REPO)
     assert produced, "parsed no keys out of build_env - the dict literal moved"
-    unconsumed = {n for n, files in cer.producer_consumers(produced).items() if not files}
+    unconsumed = {n for n, files in cer.producer_consumers(REPO, produced).items() if not files}
     assert not unconsumed, f"exported by build_env, consumed by nothing: {sorted(unconsumed)}"
 
 
@@ -167,7 +167,7 @@ def test_the_vendored_process_csv_counts_as_a_consumer():
 
     A false positive on a live variable is worse than the hole the check was
     added to close, because it teaches the reader to disbelieve the gate."""
-    consumers = cer.producer_consumers({"KDBAPPCODE"})
+    consumers = cer.producer_consumers(REPO, {"KDBAPPCODE"})
     assert any(f.endswith("process.csv") for f in consumers["KDBAPPCODE"]), consumers["KDBAPPCODE"]
 
 
@@ -180,7 +180,7 @@ def test_a_variable_used_only_by_the_vendored_test_harness_is_not_consumed():
     KDBTESTS is the control: it appears all over that harness AND in
     lib/torq/torq.q, which every process loads, so it stays consumed."""
     assert "lib/torq/tests/" in cer.NON_CONSUMERS
-    files = cer.producer_consumers({"KDBTESTS"})["KDBTESTS"]
+    files = cer.producer_consumers(REPO, {"KDBTESTS"})["KDBTESTS"]
     assert files, "KDBTESTS is read by lib/torq/torq.q and must count as consumed"
     assert not any("lib/torq/tests/" in f for f in files), files
 
@@ -191,3 +191,11 @@ def test_the_mac_launcher_is_not_a_consumer_because_it_assigns_the_variable():
     a hit there could never show that OUR exported value is wanted. Keeping it
     in scope would have made KDBSTACKID look live for ever."""
     assert any("start_torq_demo_mac" in skip for skip in cer.NON_CONSUMERS)
+
+
+def test_self_names_this_file_where_it_sits_in_the_tree():
+    """The gate skips its own source, whose regexes name example variables.
+    It finds itself by its place in the tree checked, so that place must be
+    where it really is."""
+    assert REPO / cer.SELF == Path(str(cer.__file__)).resolve()
+    assert str(cer.SELF) not in {f for fs in cer.read_names(REPO).values() for f in fs}
