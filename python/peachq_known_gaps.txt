@@ -28,3 +28,4 @@ python/uqs/tests/test_hdb_alter_cli.py::test_the_plan_names_the_hdb_its_source_a
 
 python/uqs/tests/test_gaps.py::test_the_hole_between_two_sessions_and_the_twin_that_refills_it  # PeachQ's .j.j writes a timestamp with q's `D` separator where KDB-X writes JSON's `T`, so the hole's bounds come back as 2026-09-13D10:00 rather than 2026-09-13T10:00
 python/uqs/tests/test_attach_sorting_q.py::test_the_declared_rule_is_written_reloaded_and_sorts_with_torqs_own_code  # PeachQ sorts a splayed table on disk but TorQ's applyattr (@[dir;col;`p#]) leaves no attribute on it
+python/uqs/tests/test_deploy_verify_contract.py::test_qs_answer_reaches_the_verdict_it_means[passing-ok]  # PeachQ result differs: two registered transforms fail their examples on PeachQ (see .qt.qetl.transform.test_every_registered_transform_passes_its_examples in tests/q/peachq_known_gaps.txt), so verify_all over the whole tree is 0b there

@@ -102,7 +102,7 @@ describe[`reference_data]:
 describe[`order_routing]:
     "Routing decisions, one row per (order, venue) - not 1:1 with orders, since an order can split. DECLARED, NOT YET PRODUCED - nothing in this tree routes";
 describe[`connections]:
-    "Venue connection registry, one row per venue link. NOT process liveness, which is .qetl.hb and `uqs summary`. DECLARED, NOT YET PRODUCED";
+    "Venue connection registry, one row per venue link. NOT process liveness, which is .qetl.hb and `uqs status`. DECLARED, NOT YET PRODUCED";
 describe[`economic_calendar]:
     "Scheduled macro releases, actual null until the event fires. DECLARED, NOT YET PRODUCED - needs an external data source and a licence for it";
 

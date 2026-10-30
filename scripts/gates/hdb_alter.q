@@ -21,7 +21,7 @@
 / Without -apply nothing is written, not even the journal: the run prints the
 / plan and exits 0 when it is valid, 1 when it is refused. With -apply the
 / same plan is carried out. The script never asks: a person runs `uqs data
-/ hdb-alter` / `hdb-check`, which show the plan and ask before -apply.
+/ alter` / `check`, which show the plan and ask before -apply.
 / .
 / WHY NOT dbmaint's OWN reordercols, renamecol, castcol, setattrcol. They walk
 / every partition dbmaint's allpaths names and fail on the first that lacks
@@ -124,7 +124,7 @@ if[(op in `reorder`rename`attr`cast`undo) and 0=count arg; refuse "-",string[op]
 
 / dbmaint.q, found from this script's own path, as fill_hdb_partitions.q finds
 / it: scripts/gates/ is two levels below the tree holding lib/ in a checkout, a
-/ release, and the temporary directory `uqs data hdb-alter --attach` copies
+/ release, and the temporary directory `uqs data alter --attach` copies
 / both into on a stack's host.
 script_dir:{[f] $[0=count i:where "/"=f; ""; (1+last i)#f]} string .z.f;
 dbmaint_file:hsym `$script_dir,"../../lib/kx-dbmaint/dbmaint.q";
