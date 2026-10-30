@@ -42,5 +42,12 @@ Start the q job with the stack (or `uqs start NAME1`), then the publisher with
 `uqs connector start NAME`. `uqs connector status NAME` shows whether it's
 running and where its log is.
 
+The scaffolded `NAME_feed.py` writes no host, port or credential of its own: it
+imports them from `uqs.external.connection`, as every connector does, and lists
+the shared `--tp-credential` option. The credential is `--tp-credential`, else
+`UQF_TP_CREDENTIAL`, else the starter pack's labelled demo login ([connector
+configuration](../reference/environment.md#connector-configuration)). A start,
+or a dry run, refuses a raw table `plant_tables.q` does not define.
+
 `uqs job remove NAME` takes all of it out again: both Python files, their test,
 the q job, and both tables when nothing else uses them.

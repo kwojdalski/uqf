@@ -135,17 +135,37 @@ def _start(name: str, options: dict[str, Any], dry_run: bool = False, verb: str 
         if option not in own:
             _die(UqsError(f"--{option.replace('_', '-')} does not apply to feed {name}"))
             return
+    try:
+        # Bindings first (#1786), dry run or not: a topic or table that binds
+        # to nothing is refused here, not left to the detached process's log.
+        resolved = feed.check_bindings(_paths(), given)
+    except UqsError as exc:
+        _die(exc)
+        return
     if dry_run:
-        shown = {k: ("***" if o.secret else given[k]) for k, o in own.items() if k in given}
-        settings = ", ".join(f"{k}={v}" for k, v in shown.items()) or "its defaults"
-        _would(name, f"{verb} {name} with {settings}")
+        _would(name, f"{verb} {name} with {_settings(feed, given)}")
         return
     try:
-        pid = feed.start(_paths(), feed.start_options(given))
+        pid = feed.start(_paths(), resolved)
     except UqsError as exc:
         _die(exc)
         return
     console.print(feed.started(pid))
+
+
+def _settings(feed: ExternalFeed, given: dict[str, Any]) -> str:
+    """A dry run's settings: each option given, or taken from its variable
+    (named), a secret as ***. The defaults are not listed."""
+    shown = []
+    for option in feed.options:
+        origin = option.origin(given.get(option.name))
+        if origin == "default":
+            continue
+        value = "***" if option.secret else option.value(given.get(option.name))
+        if isinstance(value, tuple):
+            value = ",".join(value)
+        shown.append(f"{option.name}={value}" + ("" if origin == option.flag else f" ({origin})"))
+    return ", ".join(shown) or "its defaults"
 
 
 def _would(name: str, action: str) -> None:

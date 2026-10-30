@@ -39,30 +39,65 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from uqs.external.feeds import ExternalFeed, FeedOption
+from uqs.external import connection
+from uqs.external.feeds import ExternalFeed, FeedOption, split
 from uqs.external.kafka_streamer import KAFKA_RAW_TABLE
 from uqs.external.lifecycle import DetachedProcess
 from uqs.logger import get_logger
-from uqs.paths import UqsPaths
+from uqs.model import load_plan
+from uqs.paths import UqsError, UqsPaths
 from uqs.stack import kafka_extra
-from uqs.stack.procs import get_process_config
 
 log = get_logger()
 
-#: Same credential the q feeds, the cryptorust recorder and every other
-#: external publisher use: stp1 enforces access control on every connection, and
-#: appconfig/passwords/feed.txt already resolves to one accesslist.txt
-#: accepts. Reused rather than adding another password file.
-KAFKA_FEED_CREDENTIAL = "feed:pass"
-
+#: The bootstrap servers, read from the variable the native q feed kafka_feed1
+#: reads (src/etl/streaming/kafka_feed.q): one cluster, configured once.
+BROKERS_ENV = "UQF_KAFKA_BROKERS"
+#: The DEMO default when neither --brokers nor $UQF_KAFKA_BROKERS is given: a
+#: local broker. kafka_feed1 has none, and refuses to start without the variable.
 DEFAULT_BROKERS = "localhost:9092"
-DEFAULT_TOPIC = "uqf.client.flow"
+
+#: The topics, read from kafka_feed1's variable too. Unset, BOTH consumers take
+#: every topic a decoder job declares (`.qetl.kafka.topic.define`), read from
+#: the same q declarations - see `declared_topics` - so neither keeps a list.
+TOPICS_ENV = "UQF_KAFKA_TOPICS"
 
 #: The consumer group. Fixed rather than random BECAUSE the committed offsets
 #: belong to the group: a fresh group id on every start would re-read the
 #: whole topic each time, which the q dedupe would then have to absorb in
 #: full. A stable group is what makes a restart resume.
+#:
+#: Deliberately NOT kafka_feed1's (`uqf-kafka-q`, and $UQF_KAFKA_GROUP is not
+#: read here): the two consumers are alternatives, and sharing a group would
+#: split the partitions between them (#1786).
 DEFAULT_GROUP = "uqf-kafka-flow"
+
+
+def declared_topics(paths: UqsPaths) -> dict[str, str]:
+    """{topic: the decoder job that declares it}, from the tree's q - what
+    kafka_feed1 calls `.qetl.kafka.topic.known[]`, read by the load plan."""
+    return load_plan.load_plan(paths.repo_root).topics
+
+
+def check_topics(paths: UqsPaths, topic: str | None) -> tuple[str, ...]:
+    """The topics to consume: `topic` (comma separated), else every declared
+    one - refused, as kafka_feed1 refuses them, when one names no decoder."""
+    declared = declared_topics(paths)
+    if not declared:
+        raise UqsError(
+            "no decoder job declares a Kafka topic (.qetl.kafka.topic.define) - "
+            "there is nothing to consume; kafka_flow.q declares uqf.client.flow"
+        )
+    if topic is None:
+        return tuple(sorted(declared))
+    topics = split(topic)
+    if bad := [t for t in topics if t not in declared]:
+        raise UqsError(
+            f"kafka: {', '.join(bad)} is declared by no decoder job - kafka_flow1 would "
+            f"dead-letter every record. The declared topics are {', '.join(sorted(declared))}; "
+            "check the spelling, or install the bundle whose decoder declares it"
+        )
+    return topics
 
 
 def _process(paths: UqsPaths) -> DetachedProcess:
@@ -80,22 +115,25 @@ def start_kafka_feed(
     paths: UqsPaths,
     *,
     brokers: str = DEFAULT_BROKERS,
-    topic: str = DEFAULT_TOPIC,
+    topic: str | None = None,
     group: str = DEFAULT_GROUP,
+    credential: str | None = None,
 ) -> int:
     """Start the consumer against the running stack's tickerplant.
 
-    Refuses rather than starting a second one: two consumers in the same
-    group would split the partitions between them, so the second would look
-    like it worked while each received half the topic.
+    `topic` None is every declared topic; `credential` None resolves as
+    external/connection.py says. Refuses rather than starting a second one:
+    two consumers in the same group would split the partitions between them,
+    so the second would look like it worked while each received half the topic.
 
     Refused, before anything starts, when confluent-kafka (the uqs `kafka`
     extra) is not installed: the detached streamer would only say so in its
-    log, after the PID file was written.
+    log, after the PID file was written - as is a topic no decoder declares.
     """
     kafka_extra.require()
-    stp1 = get_process_config(paths, "stp1")
-    port = stp1.get("port") or paths.runtime_declaration.resolve_base_port(None)
+    topics = ",".join(check_topics(paths, topic))
+    port = connection.tickerplant_port(paths)
+    tp_credential = connection.tp_credential(credential)
 
     runner = Path(__file__).resolve().parent / "kafka_streamer.py"
     # This interpreter, the one kafka_extra just checked: a release's .venv
@@ -105,15 +143,15 @@ def start_kafka_feed(
         sys.executable,
         str(runner),
         "--host",
-        "localhost",
+        connection.TP_HOST,
         "--port",
         str(port),
         "--credential",
-        KAFKA_FEED_CREDENTIAL,
+        tp_credential,
         "--brokers",
         brokers,
         "--topic",
-        topic,
+        topics,
         "--group",
         group,
         "--table",
@@ -123,7 +161,7 @@ def start_kafka_feed(
     proc = _process(paths)
     pid = proc.start(cmd, cwd=paths.repo_root)
     log.info(
-        f"started the kafka feed (pid {pid}), {topic} on {brokers} "
+        f"started the kafka feed (pid {pid}), {topics} on {brokers} "
         f"-> stp1:{port} {KAFKA_RAW_TABLE} - logging to {proc.log_path}"
     )
     return pid
@@ -148,9 +186,17 @@ def kafka_feed_status(paths: UqsPaths) -> dict[str, str]:
     )
 
 
+def _check(paths: UqsPaths, options: Mapping[str, Any]) -> None:
+    check_topics(paths, options["topic"])
+
+
 def _start(paths: UqsPaths, options: Mapping[str, Any]) -> int:
     return start_kafka_feed(
-        paths, brokers=options["brokers"], topic=options["topic"], group=options["group"]
+        paths,
+        brokers=options["brokers"],
+        topic=options["topic"],
+        group=options["group"],
+        credential=options["tp_credential"],
     )
 
 
@@ -161,12 +207,26 @@ FEED = ExternalFeed(
     lambda paths: stop_kafka_feed(paths),
     lambda paths: kafka_feed_status(paths),
     options=(
-        FeedOption("brokers", "bootstrap.servers of the cluster", default=DEFAULT_BROKERS),
-        FeedOption("topic", "Topic to consume", default=DEFAULT_TOPIC),
         FeedOption(
-            "group", "Consumer group id - the committed offsets belong to it", default=DEFAULT_GROUP
+            "brokers",
+            f"bootstrap.servers of the cluster; default ${BROKERS_ENV}, else {DEFAULT_BROKERS}",
+            default=DEFAULT_BROKERS,
+            env=BROKERS_ENV,
         ),
+        FeedOption(
+            "topic",
+            f"Topic(s) to consume, comma separated; default ${TOPICS_ENV}, else every "
+            "topic a decoder job declares",
+            env=TOPICS_ENV,
+        ),
+        FeedOption(
+            "group",
+            f"Consumer group id - the committed offsets belong to it (default {DEFAULT_GROUP})",
+            default=DEFAULT_GROUP,
+        ),
+        connection.TP_CREDENTIAL,
     ),
+    check=_check,
     produces={
         KAFKA_RAW_TABLE: (
             "a Kafka consumer: the q feed kafka_feed1, or the legacy Python one "

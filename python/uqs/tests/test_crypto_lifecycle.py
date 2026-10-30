@@ -26,7 +26,7 @@ from typing import Any
 
 import pytest
 
-from uqs.external import crypto
+from uqs.external import connection, crypto
 from uqs.paths import UqsError, UqsPaths
 
 
@@ -51,7 +51,7 @@ def fake_build(monkeypatch):
     """Record cargo invocations, spawn `sleep` in place of the recorder, and
     kill whatever was spawned when the test ends."""
     record: dict[str, Any] = {"builds": [], "spawned": [], "returncode": 0, "stderr": ""}
-    monkeypatch.setattr(crypto, "get_process_config", lambda p, n, base_port: {"port": "6051"})
+    monkeypatch.setattr(connection, "get_process_config", lambda p, n, base_port: {"port": "6051"})
 
     def run(cmd, **kw):
         record["builds"].append((cmd, kw))
