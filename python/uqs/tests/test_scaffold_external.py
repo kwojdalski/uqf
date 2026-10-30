@@ -3,6 +3,7 @@ raw table, and the q job that reshapes it - written, found, and removed."""
 
 from __future__ import annotations
 
+import re
 import shutil
 import subprocess
 import sys
@@ -193,8 +194,10 @@ real = pkgutil.iter_modules
 pkgutil.iter_modules = lambda path: [*real(path), types.SimpleNamespace(name="ws_feed")]
 from typer.testing import CliRunner
 from uqs import cli
-print(CliRunner().invoke(cli.app, ["connector", "start", "--help"], terminal_width=200).output)
-print(CliRunner().invoke(cli.app, ["connector", "restart", "ws", "-n", "--ws-url", "y"]).output)
+def run(*argv):
+    print(CliRunner().invoke(cli.app, list(argv), env={"COLUMNS": "300"}).output)
+run("connector", "start", "--help")
+run("connector", "restart", "ws", "-n", "--ws-url", "y")
 """
 
 
@@ -210,8 +213,10 @@ def test_a_scaffolded_feed_with_options_reaches_connector_start_help():
         timeout=120,
     )
     assert done.returncode == 0, done.stderr
-    assert "--ws-url" in done.stdout and "Websocket to subscribe to (ws)" in done.stdout
-    assert "would restart ws with ws_url=y" in done.stdout
+    # CI forces colour: compare the text without its escape codes
+    out = re.sub(r"\x1b\[[0-9;]*m", "", done.stdout)
+    assert "--ws-url" in out and "Websocket to subscribe to (ws)" in out
+    assert "would restart ws with ws_url=y" in out
 
 
 def test_a_feed_can_publish_onto_an_existing_canonical_table():
