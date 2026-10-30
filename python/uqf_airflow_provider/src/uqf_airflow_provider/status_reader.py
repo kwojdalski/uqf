@@ -41,8 +41,8 @@ FILENAME_SUFFIX = STATUS_FILE_SUFFIX
 #: `.qetl.status.status_states`.
 STATES = STATUS_STATES
 
-#: The keys this reader requires - a subset of what status.q writes; the
-#: test suite checks each one is written.
+#: The keys this reader requires - deliberately a subset of what q writes,
+#: STATUS_FIELDS (`.qetl.status.fields`); the test suite checks it is one.
 FIELDS = (
     "worker",
     "instance_id",
