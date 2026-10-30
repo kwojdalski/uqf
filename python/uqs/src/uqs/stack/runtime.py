@@ -142,7 +142,7 @@ def run_torq_sh(
     `timeout` is seconds to wait before giving up, or None to wait forever -
     which is the right default for `start`/`stop`, whose whole job is to wait
     for something slow. A read-only command that an operator runs to find out
-    what is going on should not be the thing that hangs, so `summary` sets
+    what is going on should not be the thing that hangs, so `uqs status` sets
     one.
 
     `selected` is a profile start's set: what TorQ discovers (stack/deployment.py).

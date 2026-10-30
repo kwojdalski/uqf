@@ -1,4 +1,4 @@
-"""`uqs deploy push --jobs/--live` and `uqs deploy verify`'s bundle checks (#800),
+"""`uqs deploy push --jobs/--live` and `uqs deploy check`'s bundle checks (#800),
 with no server: a fake remote answers each script by a marker it contains.
 """
 
@@ -128,7 +128,7 @@ def _artifact(tmp_path: Path, bundles: dict | None = BUNDLES) -> Path:
 _HEALTHY = {
     "uv python find": _done(SERVER),
     "deploy_smoke.q": _done("DEPLOY_SMOKE_OK\n"),
-    # a server with no HDB yet: nothing for the release's hdb-check to judge (#870)
+    # a server with no HDB yet: nothing for the release's `uqs data check` to judge (#870)
     "uqs data check": _done('{"hdb": "/data/hdb", "present": false}\n'),
     "--ports-free": _done(json.dumps({"busy": {}}) + "\n" + verify.OK_MARKER + "\n"),
     "uqs deploy verify --profile": _verified(True),

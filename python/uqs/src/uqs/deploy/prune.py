@@ -31,7 +31,7 @@ import json
 import re
 import sys
 
-from uqs.deploy.bundled import BUNDLABLE
+from uqs.deploy.components import COMPONENTS
 from uqs.deploy.config import Config, DeployError
 from uqs.deploy.remote import Transport, q
 from uqs.deploy.stages import Deployment
@@ -44,11 +44,9 @@ RELEASE_ID = re.compile(r"\d{8}T\d{6}Z-[0-9a-f]{12}")
 
 #: Where every component's runtimes live, under --dest.
 RUNTIMES_ROOT = "shared/runtimes"
-#: The components a runtime is bundled for.
-RUNTIME_COMPONENTS = BUNDLABLE
 #: A runtime, as prune names it: its component, then the sha256 of the
 #: archive it came from.
-RUNTIME_ID = re.compile(rf"({'|'.join(RUNTIME_COMPONENTS)})/[0-9a-f]{{64}}")
+RUNTIME_ID = re.compile(rf"({'|'.join(COMPONENTS)})/[0-9a-f]{{64}}")
 
 #: Every release under argv[1], with `current` (argv[2]) resolved, and the
 #: runtimes under argv[3]'s component directories (argv[4:]): one JSON object.
@@ -106,7 +104,7 @@ def _runtimes_dir(dep: Deployment) -> str:
 
 
 def _listing(dep: Deployment) -> dict:
-    kinds = " ".join(RUNTIME_COMPONENTS)
+    kinds = " ".join(COMPONENTS)
     out = dep.run(
         "prune",
         "listing the releases",

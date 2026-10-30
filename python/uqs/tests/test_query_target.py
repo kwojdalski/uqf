@@ -1,4 +1,4 @@
-"""`uqs query --target NAME` over an ssh tunnel (#1561).
+"""`uqs query --tunnel NAME` over an ssh tunnel (#1561).
 
 No real host is reached: a stand-in `ssh` on PATH runs the remote command
 locally against a fake release (whose `uqs list processes --json` prints the

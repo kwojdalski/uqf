@@ -38,7 +38,7 @@
 /   -verbose  optional: switch the DEBUG level on for this process - the parsed
 /             flags, the worker's declaration, the windows it will cut, every
 /             window as it starts and publishes, and each stage's timing.
-/             `uqs job backfill --debug` passes it. Not TorQ's own -debug, which
+/             `uqs --debug job backfill` passes it. Not TorQ's own -debug, which
 /             also stops the log going to its file.
 /   -trace    optional: switch the TRACE level on - every query the source is
 /             sent, the SQL statement or the q lambda and its bounds, before

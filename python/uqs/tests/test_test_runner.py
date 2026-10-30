@@ -209,3 +209,20 @@ def test_q_coverage_writes_the_map_from_a_whole_run(monkeypatch, tmp_path):
     assert runner.main(["q-coverage", "-map", "out.txt"]) == 0
     assert calls == [("-map", "out.txt")]
     assert record.read_text() == "all\n"
+
+
+# --- `all` is every lane but the ones excluded with a reason (#1794) ---------
+
+
+def test_every_lane_is_in_all_or_excluded_from_it_with_a_reason():
+    """Both directions: a new lane is in the release run unless it is
+    excluded by name with its reason, and an exclusion naming no lane is
+    stale."""
+    assert set(runner.EXCLUDED_FROM_ALL) <= set(runner.LANES)
+    assert all(reason.strip() for reason in runner.EXCLUDED_FROM_ALL.values())
+    assert runner.ALL == [lane for lane in runner.LANES if lane not in runner.EXCLUDED_FROM_ALL]
+
+
+def test_alls_help_names_what_it_leaves_out():
+    help_text = runner.ALL_HELP
+    assert all(lane in help_text for lane in runner.EXCLUDED_FROM_ALL)

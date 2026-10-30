@@ -184,3 +184,19 @@ def test_rows_of_the_new_types_serialise(browse_port):
         {"i": 1, "h": 3, "c": "a", "d": dt.date(2026, 1, 1), "t": dt.time(0, 0, 1, 250000)},
         {"i": 2, "h": 4, "c": "b", "d": dt.date(2026, 1, 2), "t": dt.time(0, 0, 2)},
     ]
+
+
+def test_the_catalog_s_characters_are_q_s_for_every_qtype_but_list():
+    """`_QTYPE_BY_CHAR` is q's own character -> name map (uqs.generated.q_facts,
+    #1785) kept to QType's words: every QType but LIST has its q character, and a
+    q type QType does not name - byte, real, month, ... - is refused (None)."""
+    from uqf_frontend.catalog import _QTYPE_BY_CHAR
+    from uqs.generated.q_facts import Q_TYPE_NAMES
+
+    assert {q.value for q in _QTYPE_BY_CHAR.values()} == {q.value for q in QType} - {"list"}
+    for char, qtype in _QTYPE_BY_CHAR.items():
+        assert Q_TYPE_NAMES[char] == qtype.value
+    unsupported = {c for c, n in Q_TYPE_NAMES.items() if n not in {q.value for q in QType}}
+    assert unsupported == set("xemzuv")
+    assert all(_qtype(c) is None for c in unsupported)
+    assert _qtype("F") is QType.LIST and _qtype(" ") is QType.LIST

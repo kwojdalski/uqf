@@ -258,7 +258,7 @@ def monitor_connection_extras(
     kept, dropped = monitor_connection_plan(connections, fleet, profiles.licence_limit())
     if dropped:
         # DEBUG, not INFO: process.csv is composed several times per command,
-        # so at INFO this printed three times above every `summary` table. It
+        # so at INFO this printed three times above every `uqs status` table. It
         # is a standing property of the licence, not news.
         log.debug(
             "monitor1 gives up {} to stay inside its connection budget, so it can "
