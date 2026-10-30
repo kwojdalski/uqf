@@ -149,10 +149,11 @@ def _tree(tmp_path: Path) -> Path:
     return tmp_path
 
 
-def test_a_job_file_is_the_whole_registration(tmp_path):
+def test_a_job_file_is_the_whole_registration(tmp_path, plant_tree):
     """The point of the change: drop a job and a worker into the tree and both
     are processes, with ports, and nothing else was edited."""
     root = _tree(tmp_path)
+    plant_tree(root, (root / TABLES_FILE).read_text())  # q evaluates which tables it owns
     (root / STREAM_DIR / "tick.q").write_text(
         ".qetl.job.stream.define[`tick;`procname`subscribe_to`publishes`period`on_timer`start_with_all!(\n"
         "    `tick1;`symbol$();enlist `ticks;0D00:00:01;.qpipe.job.tick.on_timer;1b)];\n"

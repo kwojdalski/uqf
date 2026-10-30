@@ -38,7 +38,7 @@ from uqs.model.pipeline import (
     Pipeline,
     PipelineKind,
 )
-from uqs.paths import PROCESS_PORTS_FILE, TABLES_FILE, repo_root
+from uqs.paths import PROCESS_PORTS_FILE, repo_root
 from uqs.runtimes import DEFAULT_RUNTIME, RUNTIMES
 
 #: The default runtime's base port. Every other default is that runtime's
@@ -110,11 +110,11 @@ def render_port_lock(locked: dict[str, int], offsets: dict[str, int]) -> str:
 
 
 def _plant_tables(root: Path) -> set[str]:
-    # Imported here: schemas resolves its file at import, and this module is
+    # As q evaluated plant_tables.q (#1781). Imported here: this module is
     # imported by everything, so a module-scope import would fix the order.
-    from uqs.model.schemas import _DEFINITION
+    from uqs.model import plant_metadata
 
-    return {m.group(1) for m in _DEFINITION.finditer((root / TABLES_FILE).read_text())}
+    return set(plant_metadata.load(root).own())
 
 
 def _owned_tables(declarations: list[Declaration], plant: set[str]) -> dict[str, str | None]:

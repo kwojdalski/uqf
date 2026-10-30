@@ -196,7 +196,7 @@ def test_stale_metadata_is_refused_with_regeneration_guidance(tmp_path):
     [
         (lambda t: "{not json", "is not valid"),
         (
-            lambda t: t.replace('"exporter_version": 1', '"exporter_version": 0'),
+            lambda t: t.replace('"exporter_version": 2', '"exporter_version": 0'),
             "exporter version 0",
         ),
         (lambda t: t.replace('"tables"', '"tablez"'), "is not valid"),

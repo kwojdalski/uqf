@@ -311,8 +311,7 @@ def plan(bundle: Bundle, root: Path) -> Plan:
     if not items:
         raise BundleError(f"bundle {bundle.name} declares no source, worker or streaming job")
 
-    outside = without_block((root / TABLES_FILE).read_text(), bundle.name, str(TABLES_FILE))
-    known = bundle_shadowing.known_tables(root, outside)
+    known = bundle_shadowing.known_tables(root, bundle.name)
     table_body, tables = table_lines(bundle, known)
     catalog_text = without_block((root / CATALOG_FILE).read_text(), bundle.name, str(CATALOG_FILE))
     described = {
@@ -376,6 +375,7 @@ def install(p: Plan, root: Path, runtime: str | None = None) -> dict:
         entry["runtimes"] = sorted({*previous.get("runtimes", []), *([runtime] if runtime else [])})
     ledger[p.bundle.name] = entry
     (root / LEDGER).write_text(json.dumps(ledger, indent=2, sort_keys=True) + "\n")
+    bundle_shadowing.evaluate_tables(root, p.bundle.name)
     return entry
 
 

@@ -55,7 +55,7 @@ PLANT_SCHEMA_SCRIPT = Path("scripts/generate/plant_schema.py")
 
 #: Bumped when the JSON's shape or the exporter's meaning changes, so every
 #: committed file built by an older exporter reads as stale.
-EXPORTER_VERSION = 1
+EXPORTER_VERSION = 2
 #: The q that exports, relative to the tree of the uqs doing the reading.
 EXPORTER = Path("scripts/generate/export_plant_schema.q")
 #: The vendored starter pack's schema when $TORQAPPHOME is unset - the same
@@ -171,6 +171,8 @@ class Metadata:
     tables: dict[str, Table]
     #: the vendored fingerprint the file was made with
     vendored_print: str
+    #: every other name plant_tables.q binds in .qetl.plant: its API and registries
+    bindings: frozenset[str] = frozenset()
 
     def own(self) -> dict[str, Table]:
         """This tree's plant tables, in definition order."""
@@ -184,6 +186,8 @@ class Metadata:
         q evaluates it on demand, once per process; without q that is refused,
         naming the command, never answered from the wrong pack's tables."""
         schema = schema or vendored_schema(self.root)
+        if not schema.is_file():  # no pack, no tables: what adopt_vendored does
+            return {}
         printed = vendored_fingerprint(schema)
         if printed == self.vendored_print:
             return {n: t for n, t in self.tables.items() if t.vendored}
@@ -248,9 +252,12 @@ def load(root: Path | None = None) -> Metadata:
     if not path.is_file():
         raise SchemaMetadataError(f"no plant schema metadata at {path} - {_guidance(root)}")
     try:
-        data, tables = _parse(path.read_text())
-        version, prints = data["exporter_version"], data["fingerprint"]
-        recorded_tree, recorded_vendored = prints["tree"], prints["vendored"]
+        data = json.loads(path.read_text())
+        version = data["exporter_version"]
+        if version == EXPORTER_VERSION:
+            _, tables = _parse(path.read_text())
+            prints, bindings = data["fingerprint"], frozenset(data["bindings"])
+            recorded_tree, recorded_vendored = prints["tree"], prints["vendored"]
     except (OSError, ValueError, KeyError, TypeError) as exc:
         raise SchemaMetadataError(f"{path} is not valid ({exc!r}) - {_guidance(root)}") from None
     if version != EXPORTER_VERSION:
@@ -263,7 +270,7 @@ def load(root: Path | None = None) -> Metadata:
             f"{path} is stale: {root / TABLES_FILE} (or the exporter) changed since it "
             f"was generated - {_guidance(root)}"
         )
-    found = Metadata(root, tables, recorded_vendored)
+    found = Metadata(root, tables, recorded_vendored, bindings)
     _CACHE[key] = found
     return found
 
