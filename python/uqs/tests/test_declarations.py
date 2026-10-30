@@ -78,7 +78,7 @@ def test_a_worker_with_no_procname_runs_as_its_name_and_1():
 
 
 def test_a_worker_carries_the_source_it_reads_and_the_dataset_it_writes():
-    """What `uqs summary` shows for a backfill: without these its row was all
+    """What `uqs status` shows for a backfill: without these its row was all
     dashes, the same as a process that touches nothing."""
     d = _one(".qetl.job.bounded.define[`w;`source`dataset`width`transform!(`s;`d;1D;`x)];")
     assert (d.source, d.dataset) == ("s", "d")

@@ -143,9 +143,9 @@ def test_the_service_account_runs_a_source_release_too():
         launch_mode=launch.SOURCE, launch_python="/opt/py/bin/python3",
         launch_env_file="/etc/uqf/uat.env",
     )  # fmt: skip
-    command = control.remote_command(r, ["summary"])
+    command = control.remote_command(r, ["status"])
     assert command.startswith("sudo -n -iu svc bash -c ")
-    assert "/opt/py/bin/python3 -m uqs summary" in command
+    assert "/opt/py/bin/python3 -m uqs status" in command
 
 
 def test_the_shell_puts_the_interpreter_and_source_first(server):
@@ -180,9 +180,9 @@ def test_invalid_launch_settings_are_refused(tmp_path, monkeypatch, settings, sa
 def test_a_pushed_release_target_is_unchanged():
     r = control.Remote("uat", "h", "/srv/uqf", remote_user="svc")
     assert r.launch_mode == launch.RELEASE
-    command = control.remote_command(r, ["summary"])
+    command = control.remote_command(r, ["status"])
     assert command.startswith("sudo -n -iu svc bash -c ")
-    assert ".venv/bin/uqs summary" in command and "-m uqs" not in command
+    assert ".venv/bin/uqs status" in command and "-m uqs" not in command
 
 
 def test_push_reads_a_source_target_without_refusing_its_launch_keys(server):

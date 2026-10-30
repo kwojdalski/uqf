@@ -110,8 +110,8 @@ class QType(StrEnum):
 
 
 #: Operators a caller may name. Each maps to an entry in the q-side operator
-#: dictionary in queries.SELECT - adding one here without adding it there is
-#: caught by test_queries.py.
+#: dictionary, browse_ops in scripts/torqcode/gateway/browse.q - adding one here
+#: without adding it there is caught by test_security.py.
 OPERATORS = frozenset({"eq", "ne", "lt", "le", "gt", "ge", "in"})
 
 #: Operators that take a list rather than a scalar.

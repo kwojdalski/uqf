@@ -108,7 +108,7 @@ def test_the_repair_runs_from_a_release_with_nothing_else_of_the_checkout(tmp_pa
 
 
 def test_a_column_of_another_type_is_reported_and_the_deployment_refuses_it(tmp_path, q_binary):
-    """The repair never converts; `hdb-check` reports it; prepare refuses it,
+    """The repair never converts; `data check` reports it; prepare refuses it,
     with or without --fix-hdb."""
     tree = _release_tree(tmp_path)
     (tmp_path / "build.q").write_text(BUILD)

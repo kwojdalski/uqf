@@ -14,8 +14,8 @@ registry it should have landed in. The handlers are then called, and must
 throw "not implemented": a scaffold that loads but does nothing is the
 failure the templates exist to prevent.
 
-Needs q, so it skips without one - like test_example_scripts.py. Run it with
-the q lanes, where the interpreter is.
+Needs q, so it skips without one. Run it with the q lanes, where the
+interpreter is.
 """
 
 from __future__ import annotations

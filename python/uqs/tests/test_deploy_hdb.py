@@ -24,7 +24,7 @@ def _done(stdout: str = "", rc: int = 0) -> subprocess.CompletedProcess:
 
 
 class FakeRemote:
-    """Answers hdb-check by its arguments; records every script."""
+    """Answers `uqs data check` by its arguments; records every script."""
 
     def __init__(self, check: dict, fixed: dict | None = None) -> None:
         self.check, self.fixed = check, fixed

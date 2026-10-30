@@ -102,7 +102,7 @@ def _configure(
         bool,
         typer.Option(
             "--debug",
-            help="Log at DEBUG. Same as LOG_LEVEL=DEBUG, and wins over it. `summary` adds "
+            help="Log at DEBUG. Same as LOG_LEVEL=DEBUG, and wins over it. `status` adds "
             "how long each process took to load; `job backfill` starts its process with "
             "-verbose, so its own log carries DEBUG lines too.",
         ),
@@ -169,8 +169,8 @@ def _configure(
     # environment because it is the more deliberate of the two.
     if debug:
         configure_logging(component="uqs", level="DEBUG")
-    # Kept for commands that do more than log louder in debug mode - `summary`
-    # adds a section. `uqs summary --debug`, the old spelling, sets it too
+    # Kept for commands that do more than log louder in debug mode - `status`
+    # adds a section. `uqs status --debug`, the old spelling, sets it too
     # (renamed()).
     ctx.obj = {"debug": debug}
 
@@ -337,7 +337,7 @@ def _sorted_items[Row: dict](items: list[Row], sort: str | None, reverse: bool) 
     The column is matched case-insensitively against the keys the rows
     actually have, because those differ per command and per kind - `list
     processes` has procname/proctype/port/startwithall, `list env` has
-    name/value, `summary` has Process/Status/PID/... - so there is no fixed
+    name/value, `status` has Process/Status/PID/... - so there is no fixed
     set to validate against and an unknown name has to name the real ones
     back. Shared by `uqs list --sort` and `uqs status --sort`.
 
