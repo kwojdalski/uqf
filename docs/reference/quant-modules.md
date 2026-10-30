@@ -2,8 +2,8 @@
 
 What each module under `src/` is for, the namespace it loads into, and the
 conventions every one of them follows. The per-function reference is the
-[qDoc](#browsable-api-docs) block on each function, collected in
-[`man.q`](../man.q) --- this page is the inventory above that.
+[qDoc](#api-reference) block on each function, rendered as the [q
+API](q-api/index.md) pages --- this page is the inventory above that.
 
 Each module loads into one of seven domain namespaces under `.qf` after
 `src/init.q` --- `.qf.px`, `.qf.mkt`, `.qf.exec`, `.qf.port`, `.qf.math`,
@@ -26,9 +26,8 @@ nesting (`.qf.*` as much as `.qpipe.*`); any tool listing namespaces goes
 through it rather than scanning the root for a `q` prefix.
 
 Every module has a matching test file, and every function carries a
-[qDoc](#browsable-api-docs) block with `@param`/`@return`/`@eg` --- those are
-the per-function reference, so the table below only says what each module is
-*for*.
+[qDoc](#api-reference) block with `@param`/`@return`/`@eg` --- those are the
+per-function reference, so the table below only says what each module is *for*.
 
   | Module                                                                             | Namespace     | For                                                                                                                                                        | Tests                                          |
   | ---                                                                                | ---           | ---                                                                                                                                                        | ---                                            |
@@ -219,24 +218,17 @@ gap:`sym`time xasc flip flip (mk_row[t0;`EURUSD;1.10];mk_row[t1;`EURUSD;1.12];mk
 exec status from .qf.exec.cross_markout_attribution[gap;`USDPLN;1;t0;t1;10000;1] where kind in `leg`residual
 ```
 
-## Browsable API docs
+## API reference
 
-Every function in `src/*.q` has a
+Every function in `src/**/*.q` has a
 [qDoc](https://www.timestored.com/qstudio/help/qdoc) comment block (`@param`,
-`@return`, `@throws`, `@eg`). Generate HTML from them with:
+`@return`, `@throws`, `@eg`). The site's [q API](q-api/index.md) pages are
+rendered from those blocks, one page per module, by every `quarto render` of
+`docs/`. Rendering needs a q (`$QCMD`, else `q` on PATH): the pages are
+generated into `docs/reference/q-api/` and never committed. They show the
+comments as staged in git, so stage an edit to see it.
 
 ```
-brew install openjdk                        # or any JDK 8+
-curl -LO https://www.timestored.com/qstudio/files/qstudio.jar   # ~120MB, place at repo root
-./scripts/dev/gen-docs.sh                   # writes build/docs/index.html (gitignored)
+cd docs && quarto render                       # the whole site, q API included
+python3 scripts/generate/q_api_docs.py         # just the q API pages
 ```
-
-`qstudio.jar` bundles a small q linter that `gen-docs.sh` runs as a side effect
-(`build/docs/lint.csv`, `lint.html`). It checks each file in isolation, so
-cross-module calls between namespaces (e.g. `forwards.q` calling
-`.qf.px.ccy_pair_legs`) show up as expected "undeclared variable" false
-positives.
-
-TimeStored's own docs give the CLI as `QDocMain <sourceFolder> <targetFolder>`;
-that order is backwards. The working one, baked into `gen-docs.sh`, is
-`QDocMain <targetFolder> <sourceFolder>`.

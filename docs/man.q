@@ -6,12 +6,14 @@
 // lines of register* calls below the helpers, every q change had to rerun it,
 // and a hook and a CI step existed only to catch the times nobody did. The
 // comments are the source, so this file reads them when it loads instead.
-.man.funcs:([] fullname:(); ns:(); description:(); name:(); other:());
-.man.registerFunc:{`.man.funcs insert `fullname`ns`description`name`other!(),/:x};
+.man.funcs:([] fullname:(); ns:(); description:(); name:(); other:(); file:());
+.man.registerFunc:{`.man.funcs insert `fullname`ns`description`name`other`file!(),/:x};
 .man.args:([] fullname:(); tag:(); param:(); description:());
 .man.registerArg:{`.man.args insert `fullname`tag`param`description!(),/:x};
-.man.files:([] title:(); author:(); namespaces:(); header:());
-.man.registerFile:{`.man.files insert `title`author`namespaces`header!(),/:x};
+/ title is the basename and is not unique (src/init.q, src/etl/init.q); file is
+/ the path the scan read, relative to where it ran, and is.
+.man.files:([] title:(); author:(); namespaces:(); header:(); file:());
+.man.registerFile:{`.man.files insert `title`author`namespaces`header`file!(),/:x};
 .man.filetags:([] title:(); tag:(); val:());
 .man.registerFileTag:{`.man.filetags insert `title`tag`val!(),/:x};
 / Every fullname whose qDoc block carries @private: plumbing, not API. They are
@@ -65,17 +67,24 @@
 / ---------------------------------------------------------------------
 / READING THE qDoc COMMENTS
 / .
-/ The rules are the ones the generator applied, kept exactly - its output and
-/ this scan were compared row for row (1008 functions, 2011 arguments, 78
-/ files, same order) before the generator was removed:
+/ The rules began as the ones the generator applied - its output and this scan
+/ were compared row for row (1008 functions, 2011 arguments, 78 files, same
+/ order) before the generator was removed - and were extended for the API
+/ pages scripts/generate/q_api_docs.py renders (#1799):
 /   - a definition is `name:` at column 0 inside a `\d .ns` file, or a
 /     fully qualified `.ns.name:`
 /   - a run of definitions with no blank line between them shares the one
 /     comment block above the run
 /   - `/ .` is a blank line inside a comment (a line of only `/` would open a
-/     block comment); a line of only `\` ends the block
+/     block comment); a line of only `\` ends the block. In a description
+/     or a file header it ends a paragraph, kept as a newline
 /   - @param, @return, @throws, @eg and @private are tags; a comment line
-/     after a tag continues the last @eg
+/     after a tag continues THAT tag. It used to continue the last @eg only,
+/     which dropped 488 continuation lines of @param, @return and @throws
+/     and appended the rest to whichever example came before them
+/   - every @return is kept, so a block that says two things it returns
+/     shows both rather than whichever came last
+/   - every record carries the path of the file it was read from
 /   - @private marks plumbing, not API: the name goes to .man.private and is
 /     not registered (#627). It replaced a rule that names starting `_` were
 /     private, which never applied - no q identifier starts with `_`
@@ -126,6 +135,16 @@ tag:{[s]
 / ^\s*/+[ \t]?(.*)$   -> the body, or "" when not a comment
 comment:{[s] i:slashes[s]; if[i<0; :""]; if[(i<count s) and s[i] in " \t"; i+:1]; i _s}
 iscomment:{[s] 0<=slashes[s]}
+/ Comment bodies to paragraphs: "" (a `/ .` line) ends one; the lines of a
+/ paragraph are joined by a space and the paragraphs by a newline.
+paras:{[ls]
+    ps:(); cur:(); i:0;
+    while[i<count ls;
+        ln:ls i;
+        $[0=count ln; [if[count cur; ps,:enlist " " sv cur]; cur:()]; cur,:enlist ln];
+        i+:1];
+    if[count cur; ps,:enlist " " sv cur];
+    $[count ps; "\n" sv ps; ""]}
 
 / One file's (title; namespaces; docs), docs a list of dicts.
 parsefile:{[path]
@@ -148,27 +167,32 @@ parsefile:{[path]
                 while[(j>=0) and ("/"=first lstrip ls j) and not "\\"~strip[ls j]; blk,:enlist ls j; j-:1];
                 blk:reverse blk;
                 if[count blk;
-                    d:`fullname`ns`description`params`returns`throws`examples`private!(nsthis,".",name;nsthis;"";();"";();();0b);
-                    prose:(); seen:0b;
+                    d:`fullname`ns`description`params`returns`throws`examples`private!(nsthis,".",name;nsthis;"";();();();();0b);
+                    prose:(); seen:0b; last_:"";
                     k:0;
                     while[k<count blk;
                         raw:blk k; t:tag[raw];
                         $[count t;
-                            [seen:1b; kind:t 0; rest:strip[t 1];
+                            [seen:1b; kind:t 0; rest:strip[t 1]; last_:kind;
                              $[kind~"param";
                                  [ws_:where rest in ws; pn:$[count ws_; (first ws_)#rest; rest]; pd:$[count ws_; lstrip[(first ws_)_rest]; ""];
                                   d[`params],:enlist (pn;pd)];
-                               kind~"return"; d[`returns]:rest;
+                               kind~"return"; d[`returns],:enlist rest;
                                kind~"throws"; d[`throws],:enlist rest;
                                kind~"private"; d[`private]:1b;
                                d[`examples],:enlist rest]];
                           seen;
                             [body:strip[comment[raw]];
-                             if[(0<count body) and (not body~enlist ".") and 0<count d`examples;
-                                 d[`examples;-1+count d`examples]:strip[(last d`examples)," ",body]]];
+                             if[(0<count body) and not body~enlist ".";
+                                 $[last_~"param";
+                                     [p:last d`params; d[`params]:(-1_d`params),enlist (p 0;strip[(p 1)," ",body])];
+                                   last_ in ("return";"throws";"eg");
+                                     [fld:`returns`throws`examples ("return";"throws";"eg")?last_;
+                                      d[fld]:(-1_d fld),enlist strip[(last d fld)," ",body]];
+                                   ::]]];
                           [body:strip[comment[raw]]; prose,:enlist $[body~enlist "."; ""; body]]];
                         k+:1];
-                    d[`description]:strip[" " sv prose where 0<count each prose];
+                    d[`description]:paras[prose];
                     if[(d`private) or (count d`params) or (count d`returns) or (count d`examples) or (count d`throws) or count d`description;
                         out,:enlist d]]];
             i+:1]];
@@ -179,7 +203,7 @@ header:{[path]
     ls:read0 hsym `$path; prose:();
     i:0; while[(i<count ls) and "/"=first lstrip ls i;
         body:strip[comment[ls i]]; prose,:enlist $[body~enlist "."; ""; body]; i+:1];
-    strip[" " sv prose where 0<count each prose]}
+    paras[prose]}
 
 / Every .q file under dir, in the generator's order: path parts compared in
 / turn, so a directory sorts before a same-named file (core/ before core.q).
@@ -196,17 +220,19 @@ scansrc:{[dir]
     {[f]
         r:parsefile[f]; docs:r 2;
         priv:docs where docs@\:`private;
-        .man.private,:priv@\:`fullname;
+        / Guarded: on PeachQ, appending an empty `@\:` result added an empty
+        / item per file, so .man.private held 80 entries naming nothing.
+        if[count priv; .man.private,:priv@\:`fullname];
         docs:docs where not docs@\:`private;
         if[0=count docs; :()];
-        registerFile[(r 0;"";"|" sv r 1;header[f])];
-        {[d]
-            registerFunc (d`fullname;d`ns;d`description;d`fullname;$[count d`examples; first d`examples; ""]);
+        registerFile[(r 0;"";"|" sv r 1;header[f];f)];
+        {[f;d]
+            registerFunc (d`fullname;d`ns;d`description;d`fullname;$[count d`examples; first d`examples; ""];f);
             {[fn;p] registerArg (fn;"param";p 0;p 1)}[d`fullname] each d`params;
-            if[count d`returns; registerArg[(d`fullname;"return";"";d`returns)]];
+            {[fn;x] registerArg (fn;"return";"";x)}[d`fullname] each d`returns;
             {[fn;x] registerArg (fn;"throws";"";x)}[d`fullname] each d`throws;
             {[fn;x] registerArg (fn;"eg";"";x)}[d`fullname] each d`examples;
-            } each docs} each qfiles dir;
+            }[f] each docs} each qfiles dir;
     count .man.funcs}
 
 \d .

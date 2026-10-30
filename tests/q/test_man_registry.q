@@ -205,3 +205,43 @@
     .qunit.assertEquals[docs@\:`private;01b;"only the tagged one is private"];
     .qunit.assertEquals[(last docs)`examples;enlist ".mantestprobe.helper[]";
         "@private is a tag, not a continuation of the @eg above it"]};
+
+/ A block whose tags run over several lines, read by the same parser (#1799).
+.qt.man.registry.continuation_probe:{[]
+    f:"build/mantest_continuation_probe.q";
+    system"mkdir -p build";
+    (hsym `$f) 0: ("/ probe.q - the file header.";"/ .";"/ Its second paragraph.";"";
+        "\\d .mantestcont";"/ First paragraph of the description";"/ continues here.";"/ .";
+        "/ Second paragraph.";"/ @param x the first";"/   argument, continued";
+        "/ @return a value";"/   over two lines";"/ @eg .mantestcont.f[1]";"/   -> 1";
+        "/ @throws when x is";"/   negative";"f:{[x] x}";"\\d .");
+    r:.man.parsefile f;
+    h:.man.header f;
+    hdel hsym `$f;
+    (first r 2;h)}
+
+.qt.man.registry.test_a_continuation_line_belongs_to_the_tag_above_it:{[t]
+    d:first .qt.man.registry.continuation_probe[];
+    .qunit.assertEquals[d`params;enlist (enlist "x";"the first argument, continued");"a @param continues"];
+    .qunit.assertEquals[d`returns;enlist "a value over two lines";"a @return continues"];
+    .qunit.assertEquals[d`examples;enlist ".mantestcont.f[1] -> 1";"an @eg continues"];
+    .qunit.assertEquals[d`throws;enlist "when x is negative";
+        "a @throws after an @eg continues the @throws, not the example"]};
+
+.qt.man.registry.test_a_description_keeps_its_paragraphs:{[t]
+    r:.qt.man.registry.continuation_probe[];
+    .qunit.assertEquals[(r 0)`description;"First paragraph of the description continues here.\nSecond paragraph.";
+        "`/ .` ends a paragraph, kept as a newline"];
+    .qunit.assertEquals[r 1;"probe.q - the file header.\nIts second paragraph.";"and in a file header"]};
+
+.qt.man.registry.test_every_record_names_its_file:{[t]
+    / The basename is not unique - src/pricing/cross.q and
+    / src/etl/streaming/cross.q - so the path is what tells two files apart.
+    .qunit.assertEquals[exec count i from .man.funcs where 0=count each file;0;"every function has a file"];
+    .qunit.assertTrue[all (exec file from .man.funcs) in exec file from .man.files;"and it is a file the scan read"];
+    .qunit.assertEquals[exec first file from .man.funcs where fullname like ".qf.px.fwd_simple";"src/pricing/forwards.q";
+        "the path as scanned, relative to the root"]};
+
+.qt.man.registry.test_private_names_are_all_names:{[t]
+    / On PeachQ an empty `@\:` result appended an empty item per file.
+    .qunit.assertEquals[distinct type each .man.private;enlist 10h;"every private entry is a name"]};

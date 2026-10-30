@@ -96,6 +96,10 @@ EXCLUDED_DIRS = {
     # Plans written BEFORE the work, kept afterwards as the reasoning. They
     # name things that did not exist when written, which is the point.
     "migrations",
+    # docs/reference/q-api/: written from the qDoc blocks themselves at render
+    # time and gitignored (scripts/generate/q_api_docs.py), so a stale local
+    # copy from an earlier render would be checked against today's code.
+    "q-api",
 }
 
 #: Individual files excluded, with the reason each is exempt.

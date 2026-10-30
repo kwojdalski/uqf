@@ -570,9 +570,7 @@
 / that takes a lock and then finds its configuration wrong has to release it
 / again; one that connects and then fails the contract has burned a
 / connection for nothing.
-/ @param worker the worker's name
-/ @param run_spec dict of source_version, range_from, range_to
-/ @return the run specification, as stored
+/ .
 / A GUARD, with the work in init_body below (#492).
 / .
 / init TAKES the instance lock and then keeps going - credential lookup,

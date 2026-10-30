@@ -57,10 +57,6 @@
 
 / The sub-ranges of [range_from;range_to) that `covered` does not cover.
 / An empty result means fully covered.
-/ @param from_ts start of the requested range
-/ @param to_ts end of the requested range, exclusive
-/ @param covered a table of intervals, need not be composed
-/ @return a table of uncovered intervals
 / Parameters are from_ts/to_ts, NOT range_from/range_to, deliberately: those
 / are column names on the interval tables below, and a qSQL where-clause
 / comparing a column to a parameter of the same name compares the column to

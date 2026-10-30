@@ -17,6 +17,11 @@ on:
     paths:
       - "docs/**"
       - ".github/workflows/docs.yml"
+      # The q API pages are written from these at render time.
+      - "src/**/*.q"
+      - "scripts/generate/q_api_docs.py"
+      - "scripts/generate/export_api_reference.q"
+      - "scripts/peachq.json"
   workflow_dispatch:
 
 permissions:
@@ -41,6 +46,22 @@ jobs:
         uses: quarto-dev/quarto-actions/setup@v2
         with:
           version: "1.10.18"
+      - name: Restore PeachQ built from its pinned commit
+        # The render's pre-render step writes the q API pages from the qDoc
+        # comments (scripts/generate/q_api_docs.py), which needs a q. PeachQ
+        # is the one a hosted runner can have; same pin and cache as ci.yml.
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/uqf/peachq
+          key: peachq-${{ hashFiles('scripts/peachq.json') }}-${{ runner.os }}-${{ runner.arch }}
+      - name: Provide PeachQ for the q API pages
+        # Builds the pinned commit on a cold cache (about 40s). Through QCMD
+        # only, as everywhere else: nothing is put on PATH.
+        shell: bash
+        run: |
+          set -euo pipefail
+          bin="$(python3 scripts/peachq.py)"
+          echo "QCMD=$bin" >> "$GITHUB_ENV"
       - name: Render docs/
         working-directory: docs
         run: quarto render
