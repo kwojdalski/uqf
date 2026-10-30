@@ -14,11 +14,11 @@ neither lands nor complains, so the gap is invisible from every side - see
 
 from __future__ import annotations
 
-import re
 from collections.abc import Iterable
 from typing import Any
 
 from uqs.logger import get_logger
+from uqs.model import plant_metadata
 from uqs.model.registry import PIPELINES
 from uqs.model.schemas import (
     _definitions as _table_definitions,
@@ -38,12 +38,6 @@ def _published_tables(pipelines: Iterable[Any]) -> set[str]:
     return set(_publishers(pipelines))
 
 
-#: `name:([]...)` at the start of a line in a generated database.q. Same
-#: convention model/schemas.py reads plant_tables.q by, applied to the merged
-#: file so vendored definitions count too.
-_GENERATED_DEFINITION = re.compile(r"^(?:\.qetl\.plant\.)?([a-z_0-9]+):\(\[\]", re.MULTILINE)
-
-
 def undefined_published_tables(paths: UqsPaths) -> list[str]:
     """Tables a pipeline publishes that the generated database.q never defines.
 
@@ -57,8 +51,7 @@ def undefined_published_tables(paths: UqsPaths) -> list[str]:
     prove it FIRES. A gate whose logic lives in the only test that runs it
     has never been shown to catch anything.
     """
-    generated = _generated_schema_content(paths)
-    defined = set(_GENERATED_DEFINITION.findall(generated))
+    defined = set(declared_shape(paths, overlays=True))
     return sorted(
         f"{table} (published by {', '.join(sorted(by))})"
         for table, by in _publishers(PIPELINES).items()
@@ -117,3 +110,29 @@ def _generated_schema_content(paths: UqsPaths) -> str:
     wanted = plant_tables(paths.runtime_declaration)
     definitions = [owned[t] for t in sorted(owned) if wanted is None or t in wanted]
     return vendored.rstrip("\n") + "\n" + "".join(d + "\n" for d in definitions)
+
+
+def declared_shape(paths: UqsPaths, *, overlays: bool | None = None) -> dict[str, list[str]]:
+    """{table: its columns in order} the runtime's schema file declares, as q
+    evaluated them (#1781): the starter pack's tables, plus - for a runtime
+    with overlays - the ones of this tree's that `_generated_schema_content`
+    puts beside them. The same choice hdb_types.declared_schema makes, read
+    from metadata rather than from the composed file's text.
+
+    `overlays` forces the composed answer (True) whatever the runtime says.
+    """
+    # The tree uqs was imported from, as _generated_schema_content's own
+    # tables are (#1163); the starter pack the runtime actually loads.
+    meta = plant_metadata.load()
+    shape = {n: t.column_names for n, t in meta.vendored(paths.torqapphome / "database.q").items()}
+    composed = paths.runtime_declaration.overlays if overlays is None else overlays
+    if not composed:
+        return shape
+    from uqs.model.runtime_members import plant_tables
+
+    wanted = plant_tables(paths.runtime_declaration)
+    own = meta.own()
+    for name in sorted(own):
+        if wanted is None or name in wanted:
+            shape[name] = own[name].column_names
+    return shape

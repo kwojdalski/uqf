@@ -21,14 +21,11 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from uqs.external import kafka_streamer
+from uqs.external import connection, kafka_streamer
 from uqs.external.kafka_example.broker import Broker
 from uqs.external.kafka_example.lifecycle_wait import wait_gone
 from uqs.external.lifecycle import DetachedProcess
 from uqs.paths import UqsError
-
-#: The credential every external publisher presents to stp1 (see external/kafka_feed.py).
-STP_CREDENTIAL = "feed:pass"
 
 
 @dataclass
@@ -63,7 +60,7 @@ class Feed:
             cmd = [
                 sys.executable, str(runner),
                 "--host", "localhost", "--port", str(self.stp_port),
-                "--credential", STP_CREDENTIAL,
+                "--credential", connection.tp_credential(),
                 "--brokers", self.broker.bootstrap,
                 "--topic", topics, "--group", self.group,
                 "--table", kafka_streamer.KAFKA_RAW_TABLE,

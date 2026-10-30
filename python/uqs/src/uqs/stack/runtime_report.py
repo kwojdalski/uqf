@@ -8,18 +8,14 @@ the diff cannot drift from what `uqs --runtime X start` would start.
 
 from __future__ import annotations
 
-import re
 from pathlib import Path
 
 from uqs.paths import UqsError, UqsPaths, paths_for_root, runtime_from_env
 from uqs.runtimes import DEFAULT_RUNTIME, RUNTIMES, UQF_ONLY_COMMANDS
 from uqs.stack import alive
 from uqs.stack.env import build_env
-from uqs.stack.hdb_types import declared_schema
+from uqs.stack.hdb_shape import declared_tables
 from uqs.stack.procs import effective_process_rows
-
-#: A table definition at the start of a line in a q schema: `trade:([]...`.
-_TABLE = re.compile(r"^([A-Za-z]\w*):\(\[", re.MULTILINE)
 
 #: The configuration layers TorQ loads, by the variable that adds each.
 _LAYERS = {
@@ -36,7 +32,7 @@ def processes(paths: UqsPaths) -> list[str]:
 
 def tables(paths: UqsPaths) -> list[str]:
     """The tables the runtime's schema defines: the one stp1 is given."""
-    return sorted(set(_TABLE.findall(declared_schema(paths))))
+    return sorted(declared_tables(paths))
 
 
 def layers(paths: UqsPaths) -> list[str]:

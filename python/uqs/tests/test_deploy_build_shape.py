@@ -38,12 +38,24 @@ def _copy_tree(into: Path) -> Path:
     return into
 
 
+def _evaluate(tree: Path, pack: Path, monkeypatch) -> None:
+    """What a bundle install does to the staged tree's schema metadata: q
+    evaluates its plant_tables.q, beside the starter pack the build reads
+    (#1781)."""
+    from uqs.model import plant_metadata_gen
+
+    with monkeypatch.context() as m:
+        m.setenv(TORQAPPHOME_ENV, str(pack))
+        plant_metadata_gen.write(tree)
+
+
 @pytest.fixture
-def staged(tmp_path: Path) -> Path:
+def staged(tmp_path: Path, q_binary, monkeypatch) -> Path:
     """A staged release tree: this checkout plus one extra table, no lib/."""
     tree = _copy_tree(tmp_path / "tree")
     target = tree / TABLES_FILE
     target.write_text(target.read_text() + STAGED_DEF + "\n")
+    _evaluate(tree, ROOT / "lib" / "torq-finance-starter-pack", monkeypatch)
     return tree
 
 
@@ -66,6 +78,7 @@ def test_an_explicit_starter_pack_is_still_respected(staged, tmp_path, monkeypat
     pack = tmp_path / "pack"
     pack.mkdir()
     (pack / "database.q").write_text("custom_base:([]time:`timestamp$(); sym:`symbol$())\n")
+    _evaluate(staged, pack, monkeypatch)
     monkeypatch.setenv(TORQAPPHOME_ENV, str(pack))
     shape = declared_shape(staged, "uqf", ROOT)
     assert shape is not None

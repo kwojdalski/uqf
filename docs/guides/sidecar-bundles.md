@@ -38,6 +38,16 @@ describe every table it defines, or hide it with
 `.qcat.hidden[`table\]:"reason"` when it is the raw input to a fold. A bundle cannot add rows to `querypolicy.csv`, so a table of its own that the browser may read without a policy needs a `.qcat.unbounded\[`table\]:"reason"`
 line in `catalog.q\`.
 
+Before it installs, a bundle's `tables.q` is only read as text, line by line,
+and never run: the line forms above are the whole grammar, and anything else is
+refused. Once installed, its tables are q's to describe. The install has q
+evaluate `src/etl/plant_tables.q` again and rewrite
+`src/etl/generated/plant_schema.json`, the schema metadata every uqs command
+reads instead of the q text (#1781). So installing a bundle needs a q
+interpreter (`$QCMD`), and so does building a release with `--bundle`. If the
+rewrite fails, the bundle stays installed and every schema read reports the
+metadata as stale and names the command that rewrites it.
+
 ### Connectors
 
 A bundle can carry the process outside the plant that feeds its raw table, as
@@ -186,7 +196,10 @@ Credentials never enter an artifact. On the server, put them in
 - `scripts/torqconfig/sources.csv`: what each source connects to, naming the
   variable that holds any secret (`uqs config sources`);
 - `secrets.env`: the `NAME=VALUE` lines for those variables. `deploy.env`
-  sources it, and a deployment refuses it if others can read it.
+  sources it, and a deployment refuses it if others can read it. A bundle's
+  connector presents the tickerplant credential every connector shares:
+  `UQF_TP_CREDENTIAL` here replaces the starter pack's demo login ([connector
+  configuration](../reference/environment.md#connector-configuration)).
 
 ODBC sources also need a driver set up: see [ODBC](odbc.md).
 

@@ -12,10 +12,9 @@ import threading
 import time
 from typing import Any
 
-from uqs.external import kafka_streamer
+from uqs.external import connection, kafka_streamer
 from uqs.external.kafka_example import rdb
 from uqs.external.kafka_example.batch import TOPICS, extra_batch
-from uqs.external.kafka_example.feeds import STP_CREDENTIAL
 from uqs.external.kafka_example.kclient import GROUP_1, GROUP_2, GROUP_3, client_config
 from uqs.external.kafka_example.report import Fail, Report, wait_until
 from uqs.external.kafka_example.verify import (
@@ -98,8 +97,8 @@ def doomed_consume(ctx: Context, stp_port: int, n: int) -> int:
     from confluent_kafka import Consumer  # ty: ignore[unresolved-import]
 
     fields = kafka_streamer.contract_fields(str(ctx.feed.repo_root))
-    user, _, password = STP_CREDENTIAL.partition(":")
-    q = kola.Q("localhost", stp_port, user=user, passwd=password)
+    user, _, password = connection.tp_credential().partition(":")
+    q = kola.Q(connection.TP_HOST, stp_port, user=user, passwd=password)
     q.connect()
     consumer = Consumer(
         ctx.cfg(

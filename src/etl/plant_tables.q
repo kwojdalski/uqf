@@ -8,13 +8,17 @@
 / them (it globs `git ls-files '*.q'`), and the contract surface listed four
 / tables when the system had thirteen.
 / .
-/ HOW THIS FILE IS USED, which is two ways on purpose:
+/ HOW THIS FILE IS USED - always LOADED as q, never read as text by Python:
 / .
-/   read as TEXT  uqs's _generated_schema_content() appends
-/                 these definitions to a copy of the vendored database.q and
-/                 points stp1's -schemafile at the copy. The vendored file is
-/                 never edited.
-/   LOADED as q   tests/q/test_stack_tables.q loads it and checks the tables
+/   by uqs        scripts/generate/export_plant_schema.q loads this file alone
+/                 and exports every table's evaluated schema to
+/                 src/etl/generated/plant_schema.json (#1781). uqs reads that:
+/                 its _generated_schema_content() writes each definition back
+/                 from it beside a copy of the vendored database.q, and points
+/                 stp1's -schemafile at the copy. The vendored file is never
+/                 edited. Change a table, regenerate:
+/                 uv run python scripts/generate/plant_schema.py
+/   by q tests    tests/q/test_stack_tables.q loads it and checks the tables
 /                 parse and carry the columns their consumers expect, and
 /                 scripts/generate/export_contract_surface.q loads it so these tables
 /                 appear in the contract surface alongside the ETL ledgers.
@@ -31,9 +35,9 @@
 / .
 / NAMESPACED in q, BARE on the plant. Loaded as q - src/etl/init.q loads it -
 / every definition lands in .qetl.plant, so a process that loads src/ gets no
-/ root tables of these names to shadow, or be mistaken for, live data. Read as
-/ text, uqs copies each `name:([]...)` line into stp1's schema file, where it
-/ is a bare table name, the form the vendored database.q uses.
+/ root tables of these names to shadow, or be mistaken for, live data. In
+/ stp1's schema file uqs writes each as a bare table name, the form the
+/ vendored database.q uses.
 / .
 / The lookups come FIRST and the tables last, with no closing `\d .`: `uqs job
 / new` appends a new table's line to the end of this file, and \l restores the
