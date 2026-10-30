@@ -6,7 +6,9 @@ flink_vwap` drives it, through FEED below - the CLI finds it without an edit.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from pathlib import Path
+from typing import Any
 
 from uqs.external.feeds import ExternalFeed
 from uqs.external.lifecycle import DetachedProcess
@@ -31,7 +33,7 @@ def _process(paths: UqsPaths) -> DetachedProcess:
     )
 
 
-def start(paths: UqsPaths) -> int:
+def start(paths: UqsPaths, options: Mapping[str, Any]) -> int:
     bundles.require_installed(paths.repo_root, BUNDLE, "the flink_vwap feed")
     port = get_process_config(paths, "stp1")["port"]
     runner = Path(__file__).resolve().parent / "flink_vwap_streamer.py"
@@ -64,4 +66,10 @@ def status(paths: UqsPaths) -> dict[str, str]:
     )
 
 
-FEED = ExternalFeed("flink_vwap", start, stop, status)
+FEED = ExternalFeed(
+    "flink_vwap",
+    start,
+    stop,
+    status,
+    produces={RAW_TABLE: "the external flink_vwap feed (`uqs connector start flink_vwap`)"},
+)

@@ -98,4 +98,4 @@ def test_starting_the_feed_without_the_bundle_names_the_install_command(tmp_path
         orchestrator_dir=tmp_path / "python" / "uqs",
     )
     with pytest.raises(UqsError, match="uqs job install sidecars/flink"):
-        flink_vwap_feed.start(paths)
+        flink_vwap_feed.start(paths, {})

@@ -24,7 +24,7 @@ from uqs.model import dependencies, profiles
 from uqs.model import infra as infra_sets
 from uqs.model.pipeline import PipelineKind
 from uqs.model.registry import PIPELINES
-from uqs.paths import UqsError, paths_for_root
+from uqs.paths import UqsError, paths_for_root, repo_root
 from uqs.runtimes import RUNTIMES
 from uqs.stack import procs
 
@@ -64,7 +64,7 @@ def test_every_profile_is_closed_over_its_inputs(name):
     unfed = []
     for procname in sorted(members):
         for table in dependencies.inputs_by_process().get(procname, ()):
-            if table in dependencies.EXTERNAL_PRODUCERS:
+            if table in dependencies.external_producers(repo_root()):
                 continue
             if not producers.get(table, set()) & members:
                 unfed.append(f"{procname} <- {table}")
