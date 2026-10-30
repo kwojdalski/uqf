@@ -15,7 +15,7 @@ from contextlib import asynccontextmanager
 from typing import Any
 
 import polars as pl
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -81,6 +81,33 @@ def _refused(status_code: int, error: str, detail: str) -> JSONResponse:
     )
 
 
+def run_policy(request: Request, table: str | None = None) -> None:
+    """Run the app's policy for this request. The identity is CLAIMED, never
+    verified - see authz.IDENTITY_HEADER."""
+    enforce(
+        request.app.state.policy,
+        Request_(
+            identity=request.headers.get(authz.IDENTITY_HEADER, authz.ANONYMOUS),
+            path=request.url.path,
+            table=table,
+        ),
+    )
+
+
+def guard(request: Request) -> None:
+    """The seam, as a dependency of every route the app has.
+
+    Installed on the app rather than called by each handler, so a route added
+    later cannot forget it, and runs before the handler reads anything. The
+    one way out is `authz.unguarded` on the endpoint itself. A route whose
+    table is only known from its input - /query's body, /coverage's dataset -
+    calls `run_policy` again with that table once it has it.
+    """
+    route = request.scope.get("route")
+    if authz.unguarded_reason(getattr(route, "endpoint", None)) is None:
+        run_policy(request)
+
+
 def create_app(
     gateway: Gateway | None = None,
     settings: Settings | None = None,
@@ -132,6 +159,7 @@ def create_app(
         summary="Validated, parameterised access to the uqf TorQ gateway",
         version="0.1.0",
         lifespan=lifespan,
+        dependencies=[Depends(guard)],
     )
     app.state.settings = settings
     app.state.gateway = gateway
@@ -144,21 +172,6 @@ def create_app(
     app.state.fleet = fleet
     app.state.policy = policy
     app.state.capture = scheduler
-
-    def authorise(request: Request, table: str | None = None) -> None:
-        """Run the seam for this request. One call per route, so "was this
-        authorised" has exactly one answer per request.
-
-        The identity is CLAIMED, never verified - see authz.IDENTITY_HEADER.
-        """
-        enforce(
-            policy,
-            Request_(
-                identity=request.headers.get(authz.IDENTITY_HEADER, authz.ANONYMOUS),
-                path=request.url.path,
-                table=table,
-            ),
-        )
 
     @app.middleware("http")
     async def guard_writes(request: Request, call_next):  # noqa: ANN001, ANN202
@@ -193,6 +206,7 @@ def create_app(
         )
 
     @app.get("/health", response_model=HealthResponse)
+    @authz.unguarded("liveness probe - carries no data and no identity")
     def gateway_health() -> HealthResponse:
         # Not named `health`: that would shadow the health module imported
         # above, and health.check() in ops_processes would resolve to this
@@ -249,9 +263,11 @@ def create_app(
         )
 
     @app.get("/catalog", response_model=CatalogResponse)
+    @authz.unguarded(
+        "describes the queryable surface and carries no data - a caller "
+        "refused it could not find out why"
+    )
     def get_catalog() -> CatalogResponse:
-        # Not behind the seam, on purpose: it describes the queryable surface
-        # and carries no data, and a caller refused it could not find out why.
         return CatalogResponse(
             tables=[
                 TableInfo(
@@ -273,17 +289,15 @@ def create_app(
         )
 
     @app.get("/ops/queue", response_model=OpsTableResponse)
-    def ops_queue(request: Request) -> OpsTableResponse:
+    def ops_queue() -> OpsTableResponse:
         """Pending and running queries on the gateway."""
-        authorise(request)
         return OpsTableResponse(
             rows=_rows(gateway.call(ops.QUEUE)), poll_seconds=ops.POLL_SECONDS["queue"]
         )
 
     @app.get("/ops/connections", response_model=ConnectionsResponse)
-    def ops_connections(request: Request) -> ConnectionsResponse:
+    def ops_connections() -> ConnectionsResponse:
         """Which backend handles the gateway has, and who is connected."""
-        authorise(request)
         return ConnectionsResponse(
             servers=_rows(gateway.call(ops.SERVERS)),
             clients=_rows(gateway.call(ops.CLIENTS)),
@@ -291,13 +305,12 @@ def create_app(
         )
 
     @app.get("/ops/usage", response_model=UsageResponse)
-    def ops_usage(request: Request, limit: int = 500) -> UsageResponse:
+    def ops_usage(limit: int = 500) -> UsageResponse:
         """Fleet-wide query log, assembled here because none exists in q.
 
         `unreachable` is part of the response rather than an error: one process
         being down must not blank the view for the other nine.
         """
-        authorise(request)
         capped = min(limit, settings.max_rows)
         rows, unreachable = ops.merge_usage(fleet.per_process(ops.USAGE, capped))
         return UsageResponse(
@@ -309,7 +322,7 @@ def create_app(
         )
 
     @app.get("/ops/clients", response_model=UsageResponse)
-    def ops_clients(request: Request, limit: int = 500) -> UsageResponse:
+    def ops_clients(limit: int = 500) -> UsageResponse:
         """Every client connected to any process in the fleet.
 
         Distinct from `/ops/connections`, which reports the GATEWAY's clients.
@@ -327,7 +340,6 @@ def create_app(
         unreachable, and a second identical model would be two places for one
         idea.
         """
-        authorise(request)
         capped = min(limit, settings.max_rows)
         rows, unreachable = ops.merge_process_clients(fleet.per_process(ops.PROCESS_CLIENTS))
         return UsageResponse(
@@ -339,14 +351,13 @@ def create_app(
         )
 
     @app.get("/ops/processes", response_model=FleetHealthResponse)
-    def ops_processes(request: Request) -> FleetHealthResponse:
+    def ops_processes() -> FleetHealthResponse:
         """Fleet health for every process process.csv declares.
 
         Liveness comes from an IPC probe rather than OS process inspection,
         so the same mechanism works whether or not the process is on this
         machine - see health.py for why that matters.
         """
-        authorise(request)
         if settings.process_csv is None:
             raise ValidationFailed(
                 "fleet health needs UQF_FRONTEND_STACK_ROOT set to the stack, whose "
@@ -371,14 +382,13 @@ def create_app(
         )
 
     @app.get("/ops/backfill", response_model=BackfillStatusResponse)
-    def ops_backfill(request: Request) -> BackfillStatusResponse:
+    def ops_backfill() -> BackfillStatusResponse:
         """Backfill and Airflow task status, read from the files q writes.
 
         Read from disk rather than from the gateway because q writes these
         and nothing publishes them over IPC. Carries only q's own facts -
         see status.py on the authority boundary this deliberately does not cross.
         """
-        authorise(request)
         directory = status.status_directory(settings)
         statuses, unreadable = status.read_dir(directory)
         return BackfillStatusResponse(
@@ -408,14 +418,15 @@ def create_app(
         """
         # The dataset as the table: a policy refusing a table must refuse its
         # coverage too, or /coverage reads round what /query refuses.
-        authorise(request, table=dataset)
+        run_policy(request, table=dataset)
         return _coverage(gateway, dataset, partition, source_version, range_from, range_to)
 
     @app.post("/query", response_model=QueryResponse)
     def run_query(req: QueryRequest, request: Request) -> QueryResponse:
         tbl = tables.table(req.table)
-        # after catalog.table, so an unknown table is a 422 rather than a 403
-        authorise(request, table=tbl.name)
+        # After catalog.table, so an unknown table is a 422 rather than a 403
+        # from a table policy. `guard` has already asked about the path.
+        run_policy(request, table=tbl.name)
         columns, operators, values = queries.build_filters(
             tbl, [(f.column, f.op, f.value) for f in req.filters]
         )
@@ -424,7 +435,7 @@ def create_app(
             # The coverage dataset is read too, so it is authorised as a
             # table in its own right: otherwise a 409's gaps disclose the
             # coverage of a dataset /coverage would refuse with 403 (#1044).
-            authorise(request, table=req.require_coverage.dataset)
+            run_policy(request, table=req.require_coverage.dataset)
             _enforce_coverage(gateway, req.require_coverage)
 
         capped = min(req.limit, settings.max_rows)
@@ -449,18 +460,17 @@ def create_app(
     # added later cannot forget it - a kill switch is only worth having if it
     # cannot be bypassed by inattention.
     #
-    # They also pass through `authorise` like every read, so a deployment
-    # that installs a real policy gets one seam rather than two.
+    # They also pass through `guard` like every read, so a deployment that
+    # installs a real policy gets one seam rather than two.
 
     @app.get("/control", response_model=ControlStatusResponse)
-    def control_status(request: Request) -> ControlStatusResponse:
+    def control_status() -> ControlStatusResponse:
         """Whether writes are on, and what can be set.
 
         A GET, and deliberately not itself gated: a UI needs to know whether
         to render controls at all, and making it discover that by provoking a
         403 on a real action is a poor way to find out.
         """
-        authorise(request)
         enabled = settings.enable_writes
         return ControlStatusResponse(
             writes_enabled=enabled,
@@ -471,9 +481,8 @@ def create_app(
         )
 
     @app.post("/control/process/{action}", response_model=CommandResponse)
-    def control_lifecycle(action: str, req: LifecycleRequest, request: Request) -> CommandResponse:
+    def control_lifecycle(action: str, req: LifecycleRequest) -> CommandResponse:
         """Start, stop or restart processes (action is start|stop|restart)."""
-        authorise(request)
         result = control.lifecycle(settings, action, req.procs)
         return CommandResponse(
             action=result.action,
@@ -484,11 +493,8 @@ def create_app(
         )
 
     @app.put("/control/process/{procname}/config", response_model=ProcessConfigResponse)
-    def control_process_config(
-        procname: str, req: ProcessConfigRequest, request: Request
-    ) -> ProcessConfigResponse:
+    def control_process_config(procname: str, req: ProcessConfigRequest) -> ProcessConfigResponse:
         """Persist one process.csv field override, applied on the next start."""
-        authorise(request)
         row = control.set_process_field(settings, procname, req.field_name, req.value)
         return ProcessConfigResponse(
             procname=procname,
@@ -497,16 +503,14 @@ def create_app(
         )
 
     @app.put("/control/worker-config", response_model=WorkerConfigResponse)
-    def control_worker_config(req: WorkerConfigRequest, request: Request) -> WorkerConfigResponse:
+    def control_worker_config(req: WorkerConfigRequest) -> WorkerConfigResponse:
         """Set a `.qetl.cfg` override in the live process the gateway addresses."""
-        authorise(request)
         out = control.set_worker_config(gateway, settings, req.key, req.value)
         return WorkerConfigResponse(**out)
 
     @app.post("/control/backfill", response_model=BackfillStartedResponse)
-    def control_backfill(req: BackfillRequest, request: Request) -> BackfillStartedResponse:
+    def control_backfill(req: BackfillRequest) -> BackfillStartedResponse:
         """Launch a bounded worker over a range. Detached; watch /ops/backfill."""
-        authorise(request)
         out = control.start_backfill(
             settings,
             worker=req.worker,
