@@ -237,6 +237,42 @@ def _table_properties(args: argparse.Namespace) -> int:
     return settle([rows], check=args.check, hint=_hint("table-properties"))
 
 
+def _diagrams_options(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--require",
+        action="store_true",
+        help="fail, rather than skip, when d2 is absent or is not D2_VERSION (CI)",
+    )
+    parser.add_argument(
+        "--print-version",
+        action="store_true",
+        help="print D2_VERSION and exit (the CI workflow installs that release)",
+    )
+
+
+def _diagrams(args: argparse.Namespace) -> int:
+    """docs/diagrams/*.svg, rendered from their .d2 by the pinned d2 - and
+    skipped, saying so, under any other d2 unless --require (render_diagrams)."""
+    diagrams = load("render_diagrams")
+    if args.print_version:
+        print(diagrams.D2_VERSION)
+        return 0
+    sources = diagrams.sources()
+    if not sources:
+        # Refusing to report success over an empty set: a moved directory
+        # must fail loudly rather than quietly gate nothing.
+        print(f"error: no .d2 sources under {rel(diagrams.DIAGRAMS)}", file=sys.stderr)
+        return 1
+    stop = diagrams.verdict(len(sources), require=args.require)
+    if stop is not None:
+        return stop
+    svgs = [Output(s.with_suffix(".svg"), diagrams.rendered(s), source=s) for s in sources]
+    code = settle(svgs, check=args.check, hint=_hint("diagrams"))
+    if args.check and code == 0:
+        print(f"diagrams: {len(svgs)} diagram(s) match their sources (d2 {diagrams.D2_VERSION})")
+    return code
+
+
 #: Every target, by name. Added to by hand: there is no discovery.
 TARGETS: dict[str, Target] = {
     t.name: t
@@ -245,6 +281,13 @@ TARGETS: dict[str, Target] = {
             "table-properties",
             "getdata's table list, from the plant tables and the workers' datasets",
             _table_properties,
+        ),
+        Target(
+            "diagrams",
+            "docs/diagrams/*.svg, rendered from their .d2 sources by the pinned d2",
+            _diagrams,
+            _diagrams_options,
+            python="python3",
         ),
     )
 }

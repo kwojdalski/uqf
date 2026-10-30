@@ -203,7 +203,7 @@ repos:
 
       - id: rendered-diagrams
         name: Check the rendered diagrams match their d2 sources
-        entry: python3 scripts/generate/render_diagrams.py --check
+        entry: python3 scripts/generate/derive.py diagrams --check
         language: system
         pass_filenames: false
         files: ^docs/diagrams/

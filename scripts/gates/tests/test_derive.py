@@ -211,6 +211,7 @@ def _imports_after(*argv: str) -> set[str]:
 #: Each target's generator: the domain module it asks for its outputs.
 GENERATORS = {
     "table-properties": "uqs.stack.gateway_access",
+    "diagrams": "render_diagrams",
 }
 
 
@@ -223,6 +224,11 @@ def test_running_a_target_loads_its_generator_and_no_other(name):
     loaded = _imports_after(name, "--check")
     assert GENERATORS[name] in loaded
     assert not loaded & (set(GENERATORS.values()) - {GENERATORS[name]})
+
+
+def test_diagrams_needs_no_workspace():
+    """It runs under CI's and the hook's bare python3: nothing from uqs."""
+    assert not {m for m in _imports_after("diagrams", "--check") if m.split(".")[0] == "uqs"}
 
 
 def test_help_imports_no_generator():

@@ -14,7 +14,7 @@ could actually work?
 <!-- Source: docs/diagrams/superbook-chain.d2, the same diagram the superbook
      guide embeds. The fan-out from `superbook` is the part this guide is
      about, and a second diagram of it would be a second thing to keep in
-     step. Rendered by scripts/generate/render_diagrams.py (CI --check). -->
+     step. Rendered by `scripts/generate/derive.py diagrams` (CI --check). -->
 
 ![The chain top to bottom, with arbitrage1 and crossarb1 both subscribing to superbook and publishing separate tables](../diagrams/superbook-chain.svg)
 
