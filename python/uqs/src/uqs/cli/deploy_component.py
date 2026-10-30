@@ -17,6 +17,7 @@ from typing import Annotated
 import typer
 
 from uqs.cli.deploy import _failed, deploy_app
+from uqs.cli.safety import ChangesState
 from uqs.deploy import python_runtime, q_runtime, torq_runtime
 from uqs.deploy.artifact import PLATFORMS, ReleaseError
 from uqs.deploy.build import DEFAULT_OUTPUT
@@ -57,7 +58,7 @@ Python = Annotated[
 ]
 
 
-@component_app.command("build")
+@component_app.command("build", cls=ChangesState)
 def build(
     component: Component,
     output: Output = None,
@@ -77,7 +78,7 @@ def build(
     _build("uqs deploy component build", component, output, arch, python, dry_run)
 
 
-@deploy_app.command("build-runtime", hidden=True)
+@deploy_app.command("build-runtime", hidden=True, cls=ChangesState)
 def build_runtime(
     component: Component,
     output: Output = None,

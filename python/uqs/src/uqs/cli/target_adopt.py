@@ -10,6 +10,7 @@ from typing import Annotated
 
 import typer
 
+from uqs.cli.safety import ChangesState
 from uqs.cli.shared import _die, console
 from uqs.cli.target import _ACCOUNT, RemoteUser, Ssh, _command, _reach, target_app
 from uqs.deploy import (
@@ -49,7 +50,7 @@ def _say(s: adopt.Survey, r: control.Remote) -> None:
         console.print(f"  python       {p.source}: {where} - {verdict}", highlight=False)
 
 
-@target_app.command("adopt")
+@target_app.command("adopt", cls=ChangesState)
 def adopt_(
     name: Annotated[str, typer.Argument(help="What to call it: `uqs --target NAME ...`")],
     ssh: Ssh,

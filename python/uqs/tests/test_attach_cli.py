@@ -23,7 +23,7 @@ from uqs import cli
 from uqs.attach import config, facts, plan, publisher, service
 from uqs.attach import verify as verifying
 from uqs.attach.manifest import Manifest
-from uqs.cli import attach_legacy, shared
+from uqs.cli import attach_legacy, shared, target_confirm
 from uqs.deploy import control
 from uqs.paths import repo_root
 from uqs.stack import attach_state, listing, runtime
@@ -522,7 +522,7 @@ def test_debug_goes_through_remote_dispatch():
     assert rest == ["--debug", "job", "attachment", "add", "pb-uat", "--dry-run"]
     remote = control.Remote("uat", "uat-host", "/srv/uqf")
     assert "--debug job attachment add pb-uat --dry-run" in control.remote_command(remote, rest)
-    assert not control.changes_the_server(["job", "attachment", "list"])
+    assert not target_confirm.changes_the_server(["job", "attachment", "list"])
 
 
 def test_debug_does_not_turn_on_the_publishers_runtime_logging(world, monkeypatch):
