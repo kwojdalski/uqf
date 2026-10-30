@@ -576,8 +576,8 @@ uqs job attachment add pb-uat --job pb_general_ledger --stack-id 6000 \
 
 - **Scoped**: `CODE:COMPONENT`, one finding on one process. There is no blanket
   `--force`.
-- **A reason is mandatory** (`--reason`, formerly `--override-reason`); the
-  override records who accepted it, when, and the facts it was accepted against.
+- **A reason is mandatory** (`--reason`); the override records who accepted it,
+  when, and the facts it was accepted against.
 - **Still visible**: shown as `accepted` with the failure risk and what the
   operator must do, in the plan and the verify checks.
 - **Void when the facts change** (another TorQ version, another missing sort

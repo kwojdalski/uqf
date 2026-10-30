@@ -249,13 +249,15 @@ They answer two different questions:
 
 The runtime defines the menu; a profile is one order from it.
 
-There are four runtimes:
+There are six runtimes (`uqs runtime list`):
 
   | Runtime             | What exists                                                                                                                              |
   | ---                 | ---                                                                                                                                      |
   | `uqf` (the default) | the TorQ starter pack plus everything this repository adds: its pipelines and tables, and its overlays and config layers                 |
   | `torq`              | the starter pack exactly as it ships, with nothing of uqf's. Use it to see TorQ itself, or to tell whether a problem is TorQ's or uqf's. |
   | `crypto`, `fx`      | the starter pack and uqf's layers, with only one profile's pipelines and the tables they use: a focused stack with an HDB of its own     |
+  | `peachq`            | the starter pack as it ships, on PeachQ rather than KDB-X                                                                                |
+  | `peachq-etl`        | experimental: `peachq`'s capture stack plus its declared sidecar bundles' jobs, on PeachQ                                                |
 
 Each runtime keeps its own data directory, so switching between them never mixes
 their HDBs, and its own ports, so two can run at once.
