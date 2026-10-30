@@ -17,6 +17,7 @@
 # reports a difference as not comparable rather than as a verdict (#968).
 platform: Linux-x86_64
 
+.qt.qetl.attached.test_an_uncovered_older_date_is_not_checked  # peachq-lacks: not yet narrowed - .Q.dpft throws writing this fixture's three-partition layout, which KDB-X writes (#1773)
 .qt.qetl.dag.test_a_derived_reaction_is_not_drawn_asserted  # peachq-lacks: not yet narrowed - it throws 'type on code KDB-X accepts
 .qt.qetl.dag.test_d2_declares_every_external_node_before_using_it  # peachq-lacks: not yet narrowed - it throws 'type on code KDB-X accepts
 .qt.qetl.dag.test_d2_draws_an_asserted_reaction_dashed  # peachq-lacks: not yet narrowed - it throws 'type on code KDB-X accepts
