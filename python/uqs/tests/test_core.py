@@ -25,7 +25,7 @@ from uqs.model.pipeline import (
 )
 from uqs.model.pipelines import PIPELINE_OFFSETS, PROCESS_CSV_FIELDS
 from uqs.model.registry import PIPELINES
-from uqs.paths import UqsError, UqsPaths, check_data_dir_was_migrated
+from uqs.paths import UqsError, UqsPaths, check_data_dir_was_migrated, repo_root
 from uqs.stack import clean as stack_clean
 from uqs.stack import deployment, hdb_types, listing, monitor_budget, runtime
 from uqs.stack import logs as stack_logs
@@ -1737,7 +1737,7 @@ def test_generated_schema_covers_every_published_table(fake_paths: UqsPaths):
             assert pipeline.schema in generated, pipeline.procname
     # and every table plant_tables.q defines, including the ones only an
     # outside producer writes (crypto_sim_fills from cryptorust's recorder,
-    # databento_mbp10 from the live feed handler) - no list names them
+    # kafka_message from a Kafka consumer) - no list names them
     for definition in schemas._definitions().values():
         assert definition in generated, definition.split(":")[0]
 
@@ -2041,16 +2041,17 @@ def test_every_on_demand_plant_client_still_has_a_producer_to_start_with():
         for table in pipeline.published_tables:
             producers.setdefault(table, set()).add(pipeline.procname)
     declared = {p.procname for p in PIPELINES}
+    external = dependencies.external_producers(repo_root())
     for pipeline in PIPELINES:
         if pipeline.startwithall == "1" or pipeline.subscribes_dynamic:
             continue
         for table in pipeline.subscribed_tables:
             # A table fed from outside the stack has no in-stack producer by
-            # definition. Read from dependencies.EXTERNAL_PRODUCERS rather
-            # than named here: this was a hardcoded `databento_mbp10` until a
+            # definition. Read from what the connectors produce rather than
+            # named here: this was a hardcoded `databento_mbp10` until a
             # second external feed arrived, and a list that has to be
             # remembered in two places is one that will be updated in one.
-            if table in dependencies.EXTERNAL_PRODUCERS:
+            if table in external:
                 continue
             assert producers.get(table, set()) & declared, (
                 f"{pipeline.procname} is on-demand and subscribes to {table!r}, "

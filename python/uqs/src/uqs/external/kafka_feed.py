@@ -5,7 +5,7 @@ A q process *can* hold a Kafka subscription - KX's ``kfk`` interface wraps
 same envelope and remains for hosts where the native library is not built.
 Pick one per consumer group.
 
-Like the Databento handler and the cryptorust recorders next door, this is
+Like the cryptorust recorders next door, this is
 not a ``process.csv`` row: it opens its own kdb+ IPC handle straight to the
 tickerplant and calls ``.u.upd``, so it is started and stopped here rather
 than by ``torq.sh``.
@@ -35,8 +35,11 @@ and no native ``kfk`` library.
 from __future__ import annotations
 
 import sys
+from collections.abc import Mapping
 from pathlib import Path
+from typing import Any
 
+from uqs.external.feeds import ExternalFeed, FeedOption
 from uqs.external.kafka_streamer import KAFKA_RAW_TABLE
 from uqs.external.lifecycle import DetachedProcess
 from uqs.logger import get_logger
@@ -46,8 +49,8 @@ from uqs.stack.procs import get_process_config
 
 log = get_logger()
 
-#: Same credential the q feeds, the cryptorust recorder and the Databento
-#: handler use: stp1 enforces access control on every connection, and
+#: Same credential the q feeds, the cryptorust recorder and every other
+#: external publisher use: stp1 enforces access control on every connection, and
 #: appconfig/passwords/feed.txt already resolves to one accesslist.txt
 #: accepts. Reused rather than adding another password file.
 KAFKA_FEED_CREDENTIAL = "feed:pass"
@@ -143,3 +146,33 @@ def kafka_feed_status(paths: UqsPaths) -> dict[str, str]:
     return _process(paths).status(
         publishes=KAFKA_RAW_TABLE, **{"decoded and deduplicated by": "kafka_flow1"}
     )
+
+
+def _start(paths: UqsPaths, options: Mapping[str, Any]) -> int:
+    return start_kafka_feed(
+        paths, brokers=options["brokers"], topic=options["topic"], group=options["group"]
+    )
+
+
+FEED = ExternalFeed(
+    "kafka",
+    _start,
+    # Looked up when called, so what this module holds at call time is what runs.
+    lambda paths: stop_kafka_feed(paths),
+    lambda paths: kafka_feed_status(paths),
+    options=(
+        FeedOption("brokers", "bootstrap.servers of the cluster", default=DEFAULT_BROKERS),
+        FeedOption("topic", "Topic to consume", default=DEFAULT_TOPIC),
+        FeedOption(
+            "group", "Consumer group id - the committed offsets belong to it", default=DEFAULT_GROUP
+        ),
+    ),
+    produces={
+        KAFKA_RAW_TABLE: (
+            "a Kafka consumer: the q feed kafka_feed1, or the legacy Python one "
+            "(`uqs connector start kafka`). There is no backfill alternative: "
+            "replaying a topic from offset 0 is Kafka's own answer to that, and it "
+            "needs the same broker"
+        ),
+    },
+)

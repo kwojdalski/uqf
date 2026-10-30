@@ -161,7 +161,7 @@
 / and a batch is whatever the plant delivered together. One venue's crossed
 / book must not withhold the other venues' good ones - posbook1 marks
 / positions to these mids, and a gap in them is worse than a missing bad row.
-/ The bad row is withheld, logged and counted (`uqs summary` shows the job
+/ The bad row is withheld, logged and counted (`uqs status` shows the job
 / failing), and the next snapshot for that (sym, source) replaces the book.
 .qetl.job.stream.normalize[`market_data;`procname`output`input`start_with_all`note`check`on_fail!(
     `marketdata1;

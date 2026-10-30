@@ -118,6 +118,20 @@ def test_a_staged_bundle_job_file_is_refused_naming_its_bundle(tmp_path, monkeyp
     assert "src/etl/sources/pb.q (bundle pb)" in capsys.readouterr().out
 
 
+def test_a_staged_bundle_connector_copy_is_refused_naming_its_bundle(tmp_path, monkeypatch, capsys):
+    """#1776: a bundle's connectors are copied into the tree as its q files are,
+    and listed under `connectors` - so they stay out of git the same way."""
+    root = _repo(tmp_path, monkeypatch)
+    copy = root / "src/etl/connectors/pb/pb_feed.py"
+    copy.parent.mkdir(parents=True)
+    copy.write_text("FEED = None\n")
+    ledger = {"pb": {"files": {}, "connectors": ["src/etl/connectors/pb/pb_feed.py"]}}
+    (root / gate.LEDGER).write_text(json.dumps(ledger) + "\n")
+    subprocess.run(["git", "-C", str(root), "add", str(copy)], check=True)
+    assert gate.main() == 1
+    assert "src/etl/connectors/pb/pb_feed.py (bundle pb)" in capsys.readouterr().out
+
+
 def test_the_staged_ledger_is_refused(tmp_path, monkeypatch, capsys):
     root = _repo(tmp_path, monkeypatch)
     _install_files(root, "pb")

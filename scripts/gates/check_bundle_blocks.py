@@ -13,7 +13,8 @@ so a block present only in the working tree, where prepare is allowed to
 put it, does not fail a commit of other files.
 
 The blocks are one of the three things an install writes (#926). It also
-copies the bundle's job files under src/etl/ and records them in the ledger,
+copies the bundle's job files under src/etl/, and its Python connectors under
+src/etl/connectors/<bundle>/ (#1776), and records both in the ledger,
 src/etl/installed_bundles.json. Neither carries a marker, so the ledger in the
 working tree is what says which files are a bundle's: a commit staging the
 ledger, or any file it lists, is refused too. The process overrides file is
@@ -77,7 +78,13 @@ def staged_bundle_files() -> list[str]:
         ledger = json.loads(ledger_path.read_text())
     except ValueError:
         ledger = {}
-    owners = {f: name for name, entry in ledger.items() for f in entry.get("files", {})}
+    # A bundle's job files, and its connectors' copies (#1776), are both the
+    # bundle's: neither may become repository content.
+    owners = {
+        f: name
+        for name, entry in ledger.items()
+        for f in [*entry.get("files", {}), *entry.get("connectors", [])]
+    }
     found += [f"{f} (bundle {owners[f]})" for f in sorted(staged) if f in owners]
     if LEDGER in staged:
         found.append(f"{LEDGER} (the bundle ledger)")

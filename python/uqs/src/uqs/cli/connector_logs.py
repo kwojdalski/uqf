@@ -53,7 +53,7 @@ def logs(
     """Show a feed's log, the file `connector status` names.
 
     The feed's own output, as it wrote it: `connector logs kafka`,
-    `connector logs crypto -f`, `connector logs databento -l 200`.
+    `connector logs crypto -f`, `connector logs crypto-fills -l 200`.
     """
     if as_json and follow:
         _die(UqsError("--json prints the history: --follow does not apply with it"))

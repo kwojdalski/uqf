@@ -29,7 +29,7 @@ stands in for. cryptomock1's own declaration says: "start it INSTEAD of them,
 never as well as - it publishes onto the same two tables, and an invented
 ladder or fill must not interleave with a real one". A mechanical closure
 over `posbook1` pulls cryptomock1 in and would recommend exactly that
-interleaving. So a table in `dependencies.EXTERNAL_PRODUCERS` counts as
+interleaving. So a table in `dependencies.external_producers` counts as
 satisfied, and the mock is reachable only by naming it - which is the
 documented workflow, and why `crypto` is a profile of its own.
 
@@ -63,7 +63,7 @@ from collections.abc import Iterable
 
 from uqs.interpreter import PEACHQ, q_impl
 from uqs.model.dependencies import (
-    EXTERNAL_PRODUCERS,
+    external_producers,
     inputs_by_process,
     producers_by_table,
 )
@@ -75,7 +75,7 @@ from uqs.model.pipeline_edges import (
     VENDORED_PLANT_CLIENTS,
 )
 from uqs.model.registry import PIPELINES
-from uqs.paths import UqsError, runtime_from_env
+from uqs.paths import UqsError, repo_root, runtime_from_env
 from uqs.runtimes import RUNTIMES
 
 #: What each profile is FOR, keyed by name, valued by the leaves it wants.
@@ -135,7 +135,7 @@ NEEDS_LARGER_LICENCE: dict[str, str] = {
 
 #: Standing processes no profile reaches, and why each is deliberate.
 #:
-#: The same shape as EXTERNAL_PRODUCERS and the catalog's hidden list: an
+#: The same shape as a connector's `produces` and the catalog's hidden list: an
 #: exemption carries its reason, so "nobody got round to it" cannot pass as
 #: "deliberately not in a set". A process that is in neither a profile nor
 #: here fails `test_every_standing_process_is_reachable`.
@@ -248,7 +248,7 @@ def closure(leaves: Iterable[str]) -> set[str]:
     """Every uqf process `leaves` need, themselves included.
 
     Walks inputs to the processes that publish them, transitively. A table in
-    `EXTERNAL_PRODUCERS` is treated as already fed and its in-stack producer
+    `external_producers` is treated as already fed and its in-stack producer
     is NOT pulled in - the module docstring says why that matters rather than
     merely being tidy.
 
@@ -258,6 +258,7 @@ def closure(leaves: Iterable[str]) -> set[str]:
     """
     inputs = inputs_by_process()
     producers = producers_by_table()
+    external = external_producers(repo_root())
     seen: set[str] = set()
     pending = list(leaves)
     while pending:
@@ -266,7 +267,7 @@ def closure(leaves: Iterable[str]) -> set[str]:
             continue
         seen.add(procname)
         for table in inputs.get(procname, ()):
-            if table in EXTERNAL_PRODUCERS:
+            if table in external:
                 continue
             pending.extend(sorted(producers.get(table, ())))
     return seen

@@ -23,6 +23,7 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
+from uqs.model.connectors import feed_names
 from uqs.runtimes import RUNTIMES
 from uqs.stack import bundles
 from uqs.stack.bundle_blocks import BundleError
@@ -108,6 +109,8 @@ def plan_all(members: list[Member], root: Path) -> list[bundles.Plan]:
     owner: dict[str, str] = {}
     for p in plans:
         claims = [str(i.destination) for i in p.jobs] + [f"table {t}" for t in p.tables]
+        claims += [f"connector {n}" for c in p.connectors if c.name.endswith("_feed.py")
+                   for n in feed_names(c)]  # fmt: skip
         for claim in claims:
             if claim in owner and owner[claim] != p.bundle.name:
                 raise BundleError(f"bundles {owner[claim]} and {p.bundle.name} both claim {claim}")

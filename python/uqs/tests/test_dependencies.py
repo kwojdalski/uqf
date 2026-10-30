@@ -7,6 +7,8 @@ from pathlib import Path
 
 from uqs.model import dependencies
 from uqs.model.registry import PIPELINES
+from uqs.model.schemas import _DEFINITION
+from uqs.paths import TABLES_FILE
 
 #: Every pipeline by procname, for the tests that look one up.
 BY_NAME = {p.procname: p for p in PIPELINES}
@@ -16,7 +18,7 @@ def test_every_declared_input_has_a_named_source():
     """No input table may be a dead end.
 
     A process subscribing to a table with neither a declared producer nor
-    an EXTERNAL_PRODUCERS entry is one that can never receive anything, and
+    a connector that produces it is one that can never receive anything, and
     nothing else in the tree would say so - the subscription itself
     succeeds, because the table is defined on the plant either way.
     """
@@ -27,31 +29,23 @@ def test_every_declared_input_has_a_named_source():
         )
 
 
-def test_no_external_producer_entry_is_dead():
-    """The other direction, so the exemption list cannot rot.
+def test_every_produced_table_is_one_the_tree_or_a_bundle_defines():
+    """The other direction, so what the connectors produce cannot rot (#1776).
 
-    An entry naming a table nothing subscribes to excuses nothing, and left
-    in place it would silently excuse whatever later takes that name - the
-    same failure mode RUNS_WITHOUT_A_PROCESS and WORKERS_WITHOUT_A_PROCESS
-    are guarded against.
+    A connector's `produces` names a table the stack's tables define, or one
+    its sidecar bundle's tables.q does. Subscription is not required: the list
+    is derived, so it includes tables nothing subscribes to - crypto_sim_fills,
+    paper fills nothing in the tree reads - and a `produces` naming a table no
+    file defines would silently excuse whatever later takes that name.
     """
-    subscribed = {t for tables in dependencies.inputs_by_process().values() for t in tables}
-    in_tree = set(dependencies.EXTERNAL_PRODUCERS) - set(dependencies.SIDECAR_EXTERNAL_PRODUCERS)
-    dead = in_tree - subscribed
-    assert not dead, f"EXTERNAL_PRODUCERS entries nothing subscribes to: {sorted(dead)}"
-
-
-def test_no_sidecar_external_producer_entry_is_dead():
-    """A sidecar's entry has no subscriber in a checkout without its bundle, so
-    it is held to the bundle: the folder exists, and its tables.q defines the
-    table the entry names."""
     root = Path(__file__).resolve().parents[3]
-    for table, (bundle, _why) in dependencies.SIDECAR_EXTERNAL_PRODUCERS.items():
-        tables = root / "sidecars" / bundle / "tables.q"
-        assert tables.is_file(), f"{table}: no bundle sidecars/{bundle}"
-        assert any(line.startswith(f"{table}:([]") for line in tables.read_text().splitlines()), (
-            f"sidecars/{bundle}/tables.q does not define {table}"
-        )
+    defined = set(_DEFINITION.findall((root / TABLES_FILE).read_text()))
+    for tables in sorted((root / "sidecars").glob("*/tables.q")):
+        defined |= set(_DEFINITION.findall(tables.read_text()))
+    produced = dependencies.external_producers(root)
+    assert produced, "the tree's own connectors produce tables"
+    undefined = sorted(set(produced) - defined)
+    assert not undefined, f"connectors produce tables no tables file defines: {undefined}"
 
 
 def test_a_consumer_started_alone_is_warned_about():

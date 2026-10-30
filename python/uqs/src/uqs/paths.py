@@ -51,6 +51,10 @@ TABLES_FILE = ETL_DIR / "plant_tables.q"
 #: What each installed sidecar bundle put in the tree, and which runtimes it
 #: is in (stack/bundles.py writes it; model/runtime_members.py reads it).
 BUNDLE_LEDGER = ETL_DIR / "installed_bundles.json"
+#: Where an installed bundle's connectors are copied, one folder per bundle, and
+#: imported from - never from the bundle's own folder (stack/bundle_connectors.py,
+#: #1776). Not named *_DIR: those are the folders `uqs job new` writes q into.
+INSTALLED_CONNECTORS = ETL_DIR / "connectors"
 
 #: The desk catalog's authored half: what each table is for, and which are
 #: deliberately not browsable. Loaded by gateway1 (VENDORED_LOAD_OVERLAY in
@@ -176,20 +180,10 @@ class UqsPaths:
         return self.orchestrator_dir / "crypto_fills_recorder.pid"
 
     @property
-    def databento_feed_pid_path(self) -> Path:
-        """The live Databento handler's pid file.
-
-        Beside the crypto recorders' because it is the same kind of thing:
-        an external publisher this repository starts, which torq.sh knows
-        nothing about and so cannot stop.
-        """
-        return self.orchestrator_dir / "databento_feed.pid"
-
-    @property
     def kafka_feed_pid_path(self) -> Path:
         """The Kafka consumer's pid file.
 
-        Beside the Databento handler's, and for the same reason: an external
+        Beside the crypto recorders', and for the same reason: an external
         publisher this repository starts, which torq.sh knows nothing about
         and so cannot stop.
         """

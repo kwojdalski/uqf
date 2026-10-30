@@ -63,7 +63,7 @@ from uqs.cli import (
     table_browser,
 )
 from uqs.cli import query as query_cli
-from uqs.external import crypto, databento_feed, kafka_feed
+from uqs.external import crypto, kafka_feed
 from uqs.external.crypto import (
     CRYPTO_FILLS_RECORDER_TABLE,
     CRYPTO_REAL_FILLS_RECORDER_TABLE,
@@ -1388,19 +1388,6 @@ def test_crypto_start_splits_the_comma_separated_lists(monkeypatch):
     assert "4242" in result.stdout
 
 
-@pytest.mark.parametrize("option", ["--databento-dataset", "--dataset"])
-def test_databento_start_takes_its_dataset(monkeypatch, option):
-    """#1739: --dataset is the dataset a bounded worker fills (`job new`), so
-    the Databento one is --databento-dataset; --dataset is its old spelling."""
-    renames = rename_support.said(monkeypatch)
-    rec = _patch(monkeypatch, databento_feed, "start_databento_feed", result=7)
-    result = runner.invoke(cli.app, ["connector", "start", "databento", option, "GLBX.MDP3"])
-    assert result.exit_code == 0
-    assert rec.kwargs["dataset"] == "GLBX.MDP3"
-    old = option == "--dataset"
-    assert renames == ([rename_support.renamed("--dataset", "--databento-dataset")] if old else [])
-
-
 def test_crypto_start_drops_empty_entries_rather_than_passing_blanks(monkeypatch):
     """A trailing comma is an ordinary typo, and a blank venue name reaches
     the recorder as a connection attempt to nothing."""
@@ -1546,7 +1533,7 @@ def test_a_crypto_stop_refusal_exits_one(monkeypatch):
     assert runner.invoke(cli.app, ["connector", "stop", "crypto"]).exit_code == 1
 
 
-def test_kafka_and_databento_start_with_their_own_defaults(monkeypatch):
+def test_kafka_starts_with_its_own_defaults(monkeypatch):
     """Every feed's options are optional at the CLI, so each feed's defaults
     are filled in by the feed, not left as None for it to trip over."""
     kafka = _patch(monkeypatch, kafka_feed, "start_kafka_feed", result=7)
@@ -1556,13 +1543,6 @@ def test_kafka_and_databento_start_with_their_own_defaults(monkeypatch):
         "topic": "t",
         "group": kafka_feed.DEFAULT_GROUP,
     }
-    databento = _patch(monkeypatch, databento_feed, "start_databento_feed", result=8)
-    assert (
-        runner.invoke(cli.app, ["connector", "start", "databento", "--symbols", "A, B"]).exit_code
-        == 0
-    )
-    assert databento.kwargs["symbols"] == ("A", "B")
-    assert databento.kwargs["dataset"] == databento_feed.DEFAULT_DATASET
 
 
 def test_a_zero_or_empty_feed_option_reaches_the_feed_as_typed(monkeypatch):
@@ -1605,7 +1585,6 @@ def test_a_feed_refuses_an_option_or_name_it_does_not_have(monkeypatch, argv, me
 
 def test_feed_status_with_no_name_shows_every_feed(monkeypatch):
     for module, fn in (
-        (databento_feed, "databento_feed_status"),
         (kafka_feed, "kafka_feed_status"),
         (crypto, "crypto_recorder_status"),
         (crypto, "crypto_fills_recorder_status"),
@@ -1613,7 +1592,7 @@ def test_feed_status_with_no_name_shows_every_feed(monkeypatch):
         _patch(monkeypatch, module, fn, result={"running": fn})
     result = runner.invoke(cli.app, ["connector", "status"])
     assert result.exit_code == 0
-    for title in ("databento feed", "kafka feed", "crypto recorder", "crypto fills recorder"):
+    for title in ("kafka feed", "crypto recorder", "crypto fills recorder"):
         assert title in result.stdout
 
 
