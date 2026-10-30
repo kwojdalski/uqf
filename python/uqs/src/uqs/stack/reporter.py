@@ -249,7 +249,7 @@ def deployment_tables(runtime: Runtime, selected: Iterable[str] | None = None) -
 
 
 def _defines_column(table: str, column: str) -> bool:
-    return re.search(rf"[\] ;]{re.escape(column)}:", schemas.definition(table)) is not None
+    return column in schemas.columns(table)
 
 
 def reporter_plan(

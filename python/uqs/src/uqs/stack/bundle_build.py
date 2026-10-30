@@ -21,6 +21,7 @@ import json
 import sys
 from pathlib import Path
 
+from uqs.model import plant_metadata_gen
 from uqs.paths import UqsError, repo_root
 
 
@@ -38,6 +39,9 @@ def _install(folders: list[str], runtime: str | None = None) -> dict:
         # left: a second bundle declaring the first one's job or table is
         # then refused as the conflict it is.
         entries[bundle.name] = bundles.install(bundles.plan(bundle, root), root, runtime)
+    # The release reads its plant schemas without q, so q evaluates the
+    # installed tables now, in the staged tree (#1781).
+    plant_metadata_gen.ensure(root, create=False)
     return entries
 
 

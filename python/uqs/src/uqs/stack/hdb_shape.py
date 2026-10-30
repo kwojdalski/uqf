@@ -42,30 +42,36 @@ around KX's dbmaint.q (`lib/kx-dbmaint`).
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
 from pathlib import Path
 
 from uqs.logger import get_logger
-from uqs.model import schemas
+from uqs.paths import UqsError, UqsPaths
 
 log = get_logger()
 
 #: A partition directory: a date, the only scheme this stack writes.
 _PARTITION = re.compile(r"^\d{4}\.\d{2}\.\d{2}$")
 
-#: `name:([]...)` at the start of a line in the generated database.q - the
-#: same convention model/schemas.py and model/plant_schema.py read by, applied to the
-#: merged file so vendored tables count too.
-_DEFINITION = re.compile(r"^(?:\.qetl\.plant\.)?([a-z_0-9]+):\(\[\]", re.MULTILINE)
-
 
 def partitions(hdb_root: Path) -> list[str]:
-    """Every partition directory in the HDB, oldest first.
+    """Every partition directory in a CONVENTIONAL HDB's root, oldest first.
 
     Sorted because the report reads as a history - the oldest partition is
     short by the most, and seeing that ordering is most of the diagnosis.
+
+    The root alone, so refused for a segmented database: its partitions are
+    in the segments `par.txt` names, and which of them q maps is its load's
+    to say (stack/hdb_layout.py, #1783) - a root with no partition of its own
+    would otherwise read as a database with nothing wrong.
     """
     if not hdb_root.is_dir():
         return []
+    if (hdb_root / "par.txt").exists():
+        raise UqsError(
+            f"{hdb_root} is a segmented HDB (par.txt): its partitions are in the segments "
+            "it names, which only q's load finds - set $QCMD to a KDB-X q to inspect it"
+        )
     return sorted(
         entry.name
         for entry in hdb_root.iterdir()
@@ -73,15 +79,16 @@ def partitions(hdb_root: Path) -> list[str]:
     )
 
 
-def declared_tables(generated_schema: str) -> set[str]:
-    """Every table the generated database.q defines.
+def declared_tables(paths: UqsPaths) -> set[str]:
+    """Every table the runtime's database.q defines.
 
-    The generated file, not the q source: it is what the tickerplant
+    The runtime's schema, not plant_tables.q alone: it is what the tickerplant
     loads, so it is also what every process expects the HDB to hold. A
     table defined in plant_tables.q but never reaching database.q is
-    #287's bug, and a different check catches that one.
+    #287's bug, and a different check catches that one. Read from what q
+    evaluated (plant_schema.declared_shape), never the file's text (#1781).
     """
-    return set(_DEFINITION.findall(generated_schema))
+    return set(declared_columns(paths))
 
 
 #: An HDB's shape as `listing` reads it: {partition: {table: its columns}}.
@@ -152,18 +159,16 @@ def describe(short: dict[str, set[str]]) -> str:
     return "\n".join(lines)
 
 
-def declared_columns(generated_schema: str) -> dict[str, list[str]]:
-    """{table: its declared columns, in declaration order}.
-
-    Scans to the matching `)` rather than to the end of the line, so a
-    definition wrapped across lines is read whole. Order is kept because a
+def declared_columns(paths: UqsPaths) -> dict[str, list[str]]:
+    """{table: its declared columns, in declaration order}, for the runtime
+    at `paths` - as q evaluated them, so a definition's spacing or line
+    breaks cannot hide a table or a column (#1781). Order is kept because a
     report that lists columns in schema order is readable beside the file
     the reader will open next; nothing here depends on it.
     """
-    return {
-        match.group(1): list(dict.fromkeys(schemas.column_names(generated_schema[match.start() :])))
-        for match in _DEFINITION.finditer(generated_schema)
-    }
+    from uqs.model.plant_schema import declared_shape
+
+    return declared_shape(paths)
 
 
 def table_columns(table_dir: Path) -> set[str]:
@@ -180,11 +185,14 @@ def table_columns(table_dir: Path) -> set[str]:
     """
     if not table_dir.is_dir():
         return set()
-    return {
-        entry.name.removesuffix("#")
-        for entry in table_dir.iterdir()
-        if entry.is_file() and entry.name != ".d"
-    }
+    return column_names(entry.name for entry in table_dir.iterdir() if entry.is_file())
+
+
+def column_names(files: Iterable[str]) -> set[str]:
+    """The columns a splayed table's files make, by table_columns' rule: the
+    one rule, whether the names come from this listing or from q's
+    (stack/hdb_layout.py)."""
+    return {name.removesuffix("#") for name in files if name != ".d"}
 
 
 def column_gaps(hdb_root: Path, declared: dict[str, list[str]]) -> dict[str, dict[str, set[str]]]:
@@ -232,14 +240,13 @@ def main(argv: list[str] | None = None) -> int:
     import sys
 
     from uqs.paths import UqsError, paths_for_root, repo_root
-    from uqs.stack.hdb_types import declared_schema
 
     args = list(sys.argv[1:] if argv is None else argv)
     if len(args) != 3 or args[0] != "declared" or args[1] != "--runtime":
         print("usage: hdb_shape declared --runtime NAME", file=sys.stderr)
         return 2
     try:
-        shape = declared_columns(declared_schema(paths_for_root(repo_root(), args[2])))
+        shape = declared_columns(paths_for_root(repo_root(), args[2]))
     except (UqsError, OSError, ValueError) as exc:
         print(f"hdb_shape: {exc}", file=sys.stderr)
         return 1

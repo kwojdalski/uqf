@@ -1,18 +1,20 @@
-"""Reads the tickerplant table definitions out of `src/etl/plant_tables.q`.
+"""The tickerplant tables this tree declares, as q evaluates `src/etl/plant_tables.q`.
 
-**The definitions themselves live in q, not here.** This module used to hold
-them as Python string literals, which meant q source that no q parser read
-until `stp1` started: a typo surfaced as a failed tickerplant rather than a
-failed commit, `check_q_traps.py` never scanned them (it globs
-``git ls-files '*.q'``), and the contract surface reported four tables when
-the system had thirteen.
+**The definitions themselves live in q, not here.** This module once held
+them as Python string literals, then read them out of the q file's TEXT by
+matching `name:([]...)` - which lost any table written `name: ([]...)`, or
+across lines, though q loads both the same (#1781). Now q is asked:
+`uqs.model.plant_metadata` holds what q evaluated, checked current against
+the file on every read, and the readers below answer from it. A table q
+does not define is not here; one q defines is, however it is spelled.
 
-So this file is now a *reader*. The q file is the single source of truth, and
-a caller asks for a table by name with `definition` - which is the same
-generate-or-check discipline the rest of the tree follows: the definition
-exists once, and anything that needs it derives from that one place. There
-are deliberately no per-table constants: each was a second spelling of a
-lookup, and a table added to the q file did not get one.
+`definition` is that evaluated schema written back as one q statement - what
+stp1's schema file is given - so the plant's copy is derived from q too.
+
+TEXT READERS REMAIN for callers that read a tree they are EDITING or a bundle
+before it is installed (the scaffold, `uqs job attachment`): `definitions_in`,
+`column_pairs`, `column_names` and `_DEFINITION`. They see only the one-line
+`name:([]...)` form those callers write; #1781's second part moves the rest.
 """
 
 from __future__ import annotations
@@ -20,6 +22,7 @@ from __future__ import annotations
 import re
 
 from uqs.logger import get_logger
+from uqs.model import plant_metadata
 from uqs.paths import TABLES_FILE, repo_root
 
 log = get_logger()
@@ -56,24 +59,14 @@ def definitions_in(text: str) -> dict[str, str]:
 
 
 def _definitions() -> dict[str, str]:
-    """{table name: its one-line q definition}, read from the q file.
+    """{table name: its q definition}, every table this tree defines, as q
+    evaluated it (uqs.model.plant_metadata) - in definition order.
 
-    Read at import and cached in the constants below rather than on every
-    call: these are consulted while generating `database.q`, which
-    `bootstrap()` does on *every* uqs command. `uqs deploy build` reads a
-    STAGED release's by running uqs from it (deploy/build.py's tree_python,
-    #1163), so this always reads the tree uqs was imported from.
+    Raises SchemaMetadataError, saying how to regenerate, when the metadata
+    is missing or was made from another plant_tables.q: an incomplete schema
+    here becomes a tickerplant without tables.
     """
-    if not TABLES_Q.is_file():  # pragma: no cover - a broken checkout
-        raise FileNotFoundError(f"table definitions not found at {TABLES_Q}")
-    found = definitions_in(TABLES_Q.read_text())
-    if not found:  # pragma: no cover - guarded by test_schemas.py
-        raise ValueError(
-            f"{TABLES_Q} defines no tables - the `name:([]...)` convention this "
-            "reader matches on has changed, and every generated database.q "
-            "would silently lose uqf's tables"
-        )
-    return found
+    return {name: t.definition() for name, t in plant_metadata.load().own().items()}
 
 
 def definition_from(found: dict[str, str], table: str, source: str) -> str:
@@ -90,7 +83,7 @@ def definition(table: str) -> str:
     `_generated_schema_content` becomes a tickerplant without the table, and
     the first symptom is a feed failing to publish.
     """
-    return definition_from(_definitions(), table, TABLES_Q.name)
+    return plant_metadata.load().table(table).definition()
 
 
 #: One `name:literal` column of a `([]...)` body, split at the top level.
@@ -132,13 +125,10 @@ def column_names(definition_text: str) -> list[str]:
 
 
 def columns(table: str) -> list[str]:
-    """`table`'s column names in declared order, from the tree's plant_tables.q."""
-    return column_names(definition(table))
-
-
-_DEFS = _definitions()
+    """`table`'s column names in declared order, as q evaluated them."""
+    return plant_metadata.load().table(table).column_names
 
 
 def table_names() -> set[str]:
-    """Every table plant_tables.q defines."""
-    return set(_DEFS)
+    """Every table plant_tables.q defines, as q evaluated it."""
+    return set(plant_metadata.load().own())

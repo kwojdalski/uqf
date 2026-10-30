@@ -57,8 +57,9 @@ Getting this table into a real, on-disk database took no changes to
 the RDB has, so a brand new table only needs two things:
 
 1. **Schema** - `uqs.model.plant_schema._generated_schema_content()` appends the
-   `fx_orderbook` table definition to a *copy* of the vendored `database.q`
-   (written to `output/uqs/database.q` on every `bootstrap()`, same
+   `fx_orderbook` table definition, written back from what q evaluated
+   (`src/etl/generated/plant_schema.json`), to a *copy* of the vendored
+   `database.q` (written to `output/uqs/database.q` on every `bootstrap()`, same
    generate-never-edit approach as `process.csv`), and
    `uqs.stack.procs._composed_rows()` repoints `stp1`'s `-schemafile` extras arg
    at that copy instead of the vendored file.
