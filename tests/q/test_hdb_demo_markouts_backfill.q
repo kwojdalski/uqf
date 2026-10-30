@@ -272,7 +272,7 @@
         "two fills x two horizons survive, and a re-run still replaces rather than duplicates"]};
 
 .qt.qpipe.job.hdb_demo_markouts_backfill.test_a_legacy_fill_without_an_id_still_scores_and_keys:{[t]
-    / A partition written before the column holds null ids (hdb-check --apply):
+    / A partition written before the column holds null ids (data check --apply):
     / the row scores, keyed as it was by sym and time.
     f:.qt.qpipe.job.hdb_demo_markouts_backfill.scored[.qt.qpipe.job.hdb_demo_markouts_backfill.twin_fills[2#`]];
     .qunit.assertEquals[(count f;distinct f`fill_id);(4;enlist `);"null ids pass through, unmapped"]};

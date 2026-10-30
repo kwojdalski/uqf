@@ -16,7 +16,7 @@ seconds, so a table filling up can be watched. A timed re-read is quiet: it
 keeps the filter and the highlighted row, notes the time under the filter box,
 and says something only when the read fails. A tick that lands while an
 action or another read is still running is skipped rather than queued.
-A command may also hand in ROW ACTIONS - `summary` gives s/x/r to start, stop
+A command may also hand in ROW ACTIONS - `status` gives s/x/r to start, stop
 and restart the highlighted process. Then a letter is a command, not a filter
 character, so the table holds focus and `/` opens the filter; Enter or Escape
 there returns to the table. Each action runs in a worker thread, so the screen
