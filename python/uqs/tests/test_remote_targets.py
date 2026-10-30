@@ -129,6 +129,13 @@ def test_the_target_is_read_from_the_global_options_only(argv, expected):
         (["stop", "--dry-run"], False),
         (["config", "set", "rdb1", "port", "1", "-n"], False),
         (["job", "backfill", "demo_deals_backfill", "--dry-run"], True),
+        # read-only, and missing from the lists until #1780
+        (["connector", "logs", "kafka"], False),
+        (["connector", "logs", "kafka", "-f"], False),
+        (["override", "list"], False),
+        (["job", "attachment", "contract", "list"], False),
+        (["job", "attachment", "contract", "export", "-o", "c.json"], True),
+        (["job", "attachment", "contract", "approve", "x"], True),
     ],
 )
 def test_what_changes_the_server_asks_first(args, changes):

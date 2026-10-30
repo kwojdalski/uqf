@@ -87,6 +87,8 @@ READ_ONLY: frozenset[tuple[str, str | None]] = frozenset(
         ("deploy", "status"),
         ("deploy", "check"),
         ("deploy", "verify"),
+        ("connector", "logs"),
+        ("override", "list"),
     }
 )
 #: Commands that change the server only with --apply, and then show their plan
@@ -95,8 +97,9 @@ READ_ONLY: frozenset[tuple[str, str | None]] = frozenset(
 CONFIRMS_ON_SERVER: frozenset[tuple[str, str]] = frozenset(
     {("data", "check"), ("data", "alter"), ("data", "hdb-check"), ("data", "hdb-alter")}
 )
-#: Read-only three deep: `config sources check` reads, `config sources stub`
-#: writes a file; `job runs upgrade` and `setup odbc install` write.
+#: Read-only three or four deep: `config sources check` reads, `config sources
+#: stub` writes a file; `job runs upgrade` and `setup odbc install` write, and
+#: `job attachment contract export` writes a file with -o.
 READ_ONLY_DEEP = frozenset(
     {
         ("config", "sources", "check"),
@@ -108,6 +111,7 @@ READ_ONLY_DEEP = frozenset(
         ("job", "runs", "audit"),
         ("setup", "odbc", "status"),
         ("setup", "odbc", "env"),
+        ("job", "attachment", "contract", "list"),
     }
 )
 
@@ -214,7 +218,7 @@ def confirmed_on_server(args: Sequence[str], yes: bool) -> list[str]:
 
 
 def command_words(args: Sequence[str]) -> tuple[str, ...]:
-    """Up to three command words: the leading non-option words of `args`,
+    """Up to four command words: the leading non-option words of `args`,
     past the global options and --runtime's value."""
     words: list[str] = []
     skip = False
@@ -228,7 +232,7 @@ def command_words(args: Sequence[str]) -> tuple[str, ...]:
                 break
         else:
             words.append(a)
-            if len(words) == 3:
+            if len(words) == 4:
                 break
     return tuple(words)
 
@@ -247,7 +251,9 @@ def changes_the_server(args: Sequence[str]) -> bool:
         return False
     if words[:1] in (("status",), ("summary",)) and ("-i" in args or "--interactive" in args):
         return True  # its browser starts, stops and restarts processes with single keys
-    if words in READ_ONLY_DEEP or words[:2] in CONFIRMS_ON_SERVER:
+    if words[:3] in READ_ONLY_DEEP or words[:4] in READ_ONLY_DEEP:
+        return False
+    if words[:2] in CONFIRMS_ON_SERVER:
         return False
     sub = words[1] if len(words) > 1 else None
     if words[:2] == ("config", "sources"):
