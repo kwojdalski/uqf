@@ -1,4 +1,4 @@
-/ test_book_liquidity_job.q - the registered one-minute liquidity job and its backfill twin (#1397).
+/ test_book_liquidity_1m.q - the registered one-minute liquidity job and its backfill twin (#1397).
 / .
 / Drives the REAL job, book_liquidity_1m1 (.qpipe.job.book_liquidity_1m), through its
 / bars-kind handlers with a moved clock and a recorder for publish, so the shell and

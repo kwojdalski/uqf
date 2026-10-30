@@ -272,9 +272,9 @@ def test_browse_brings_back_the_cap_the_policy_set(browse_port):
     [
         ("stop: query timeout", QueryTimedOut),
         ("request timed out", QueryTimedOut),
-        ("EOD in progress", GatewayReloading),
-        ("gateway reload running", GatewayReloading),
-        ("service not available", GatewayReloading),
+        ("error: unable to query multiple servers during eod reload", GatewayReloading),
+        ("error: query did not return prior to eod reload", GatewayReloading),
+        ("service not available", QueryRejected),
         ("type", QueryRejected),
     ],
 )

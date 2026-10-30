@@ -10,7 +10,7 @@ from __future__ import annotations
 
 #: The vendored TorQ processes every profile needs: the plant itself, service
 #: discovery, the databases, the writedown path, the gateway and the
-#: monitoring that makes `summary`'s Heartbeat column answer.
+#: monitoring that makes `uqs status`'s Heartbeat column answer.
 #:
 #: Taken from the vendored rows that start by default today rather than
 #: chosen afresh, so a profile start produces the same infrastructure a

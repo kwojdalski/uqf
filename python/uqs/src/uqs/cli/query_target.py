@@ -52,7 +52,7 @@ class Via:
     def failed(self, exc: object) -> UqsError:
         return UqsError(
             f"query on {self.where} failed: {self.scrub(exc)} - is it running there? "
-            f"`uqs --target {self.target} summary` shows"
+            f"`uqs --target {self.target} status` shows"
         )
 
 

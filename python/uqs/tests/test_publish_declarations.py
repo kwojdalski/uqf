@@ -3,7 +3,7 @@
 `publishes` is what the runner, the registry and the generated diagrams all
 read as the job's output. Nothing on the publish path checks it:
 `.qetl.job.stream.wire` accepts any publisher, so a job that publishes into a table
-it never declared runs fine, and the registry, the DAG and `uqs summary` all
+it never declared runs fine, and the registry, the DAG and `uqs status` all
 describe an output set that is not the real one.
 
 This reads the calls back out of each job file and compares. It can only do

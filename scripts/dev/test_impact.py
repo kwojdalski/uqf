@@ -103,18 +103,19 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 
 
-def _load_qlint_graph():
+def _load_gate(name: str):
     spec = importlib.util.spec_from_file_location(
-        "qlint_graph", Path(__file__).resolve().parents[1] / "gates" / "qlint_graph.py"
+        name, Path(__file__).resolve().parents[1] / "gates" / f"{name}.py"
     )
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
-    sys.modules.setdefault("qlint_graph", module)
+    sys.modules.setdefault(name, module)
     spec.loader.exec_module(module)
     return module
 
 
-qlint_graph = _load_qlint_graph()
+qlint_graph = _load_gate("qlint_graph")
+check_etl_layering = _load_gate("check_etl_layering")
 
 #: The suites, as tests/lib/support.q's .qt.support.suite_files globs them.
 SUITE_DIR = "tests/q"
@@ -138,14 +139,16 @@ FULL_SUITE = {
 CORE_DIR = "src/etl/core/"
 #: An entry point's last name segment: how a declaration registers.
 ENTRY_POINT = re.compile(r"^(define|register\w*|declare\w*|watch)$")
-#: Declaration directories: every top-level call in them registers something.
-DECLARATION_DIRS = (
-    "src/etl/sources/",
-    "src/etl/transforms/",
-    "src/etl/workers/",
-    "src/etl/streaming/",
-    "src/etl/reactions/",
-)
+
+
+def declaration_dirs(root: Path) -> tuple[str, ...]:
+    """Declaration directories under `root`, each `src/etl/<name>/`: every
+    top-level call in them registers something. check_etl_layering's, not a
+    list kept here - one left a new directory unscanned (#1794)."""
+    return tuple(
+        f"{d.relative_to(root).as_posix()}/" for d in check_etl_layering.declaring_dirs(root)
+    )
+
 
 #: Files outside the suites whose `dynamic` entries (names reached by a value
 #: computed at run time) have been read and found not to hide a dependent,
@@ -653,9 +656,10 @@ def unregistered_calls(tree: Tree) -> list[str]:
     core_names = {
         name for f in tree.texts if f.startswith(CORE_DIR) for name in definitions(tree.texts[f])
     }
+    declaring = declaration_dirs(tree.root)
     out = []
     for f in sorted(tree.texts):
-        if not f.startswith(DECLARATION_DIRS):
+        if not f.startswith(declaring):
             continue
         for i, line in enumerate(scan(tree.texts[f])[0], 1):
             if not line[:1] == "." or _DEF.match(line):

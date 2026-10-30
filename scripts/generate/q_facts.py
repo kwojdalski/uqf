@@ -71,6 +71,9 @@ FACTS = {
         "what precedes a worker's output revision in a release - "
         ".qetl.job.bounded.runtime.revision_tag"
     ),
+    "Q_TYPE_NAMES": "q's type characters (`meta`'s `t`) -> the names a cast takes (#1785)",
+    "Q_TYPE_CHARS": "the names a q cast takes -> q's type characters (#1785)",
+    "Q_ATTRIBUTES": "q's column attributes, as `attr` and `meta`'s `a` report them (#1785)",
 }
 
 #: Each generated module: the package that reads it, and the facts it carries.

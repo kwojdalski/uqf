@@ -1,5 +1,5 @@
 // test_hdb_alter.q - scripts/gates/hdb_alter.q, the standalone script behind
-// `uqs data hdb-alter` and `uqs data hdb-check --table` (.qt.qproc.hdbalter, #1755).
+// `uqs data alter` and `uqs data check --table` (.qt.qproc.hdbalter, #1755).
 //
 // The script exits when it has run, so each test runs it as a child q over a
 // temporary HDB built here: five date partitions, the table `pb` on the last
@@ -99,7 +99,7 @@
     .qunit.assertTrue[0<p`bytes_rewritten;"a cast says how many bytes it rewrites"];
     .qunit.assertEquals[p`status;"planned";"and nothing more"]};
 
-/ --- hdb-check --table: the fill ------------------------------------------------
+/ --- data check --table: the fill -----------------------------------------------
 
 .qt.qproc.hdbalter.test_fill_adds_the_empty_table_only_where_missing:{[t]
     root:.qt.qproc.hdbalter.build[];
