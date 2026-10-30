@@ -1,4 +1,4 @@
-// test_demo_tables.q - the tickerplant table declarations in
+// test_stack_tables.q - the tickerplant table declarations in
 // src/etl/plant_tables.q (.qt.qetl.plant.tables).
 //
 // These definitions used to be Python string literals. Nothing parsed them

@@ -2,7 +2,7 @@
 
 A refusal the remote command printed on stdout, with ssh's own notices on
 stderr, must reach the operator at each remote path - the sudo preflight,
-the live check, the port check, the hdb-check and `uqs --target`'s check -
+the live check, the port check, the HDB check and `uqs --target`'s check -
 and the notices must not stand in its place.
 """
 

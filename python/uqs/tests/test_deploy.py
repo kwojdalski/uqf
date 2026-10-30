@@ -1,4 +1,4 @@
-"""`uqs deploy push` and `uqs deploy verify` (#773, #835), with no server.
+"""`uqs deploy push` and `uqs deploy check` (#773, #835), with no server.
 
 ssh and scp are replaced by a fake that records every script and answers by
 what the script does, so the stages, their order and their failures are
@@ -279,7 +279,7 @@ def test_a_dry_run_changes_nothing_and_shows_the_plan(tmp_path):
 _HEALTHY = {
     "uv python find": _done(SERVER + "data=present\n"),
     "deploy_smoke.q": _done("DEPLOY_SMOKE_OK\n"),
-    # a server with no HDB yet: nothing for the release's hdb-check to judge (#870)
+    # a server with no HDB yet: nothing for the release's `uqs data check` to judge (#870)
     "uqs data check": _done('{"hdb": "/data/hdb", "present": false}\n'),
     "--ports-free": _done(json.dumps({"busy": {}}) + "\n" + verify.OK_MARKER + "\n"),
 }

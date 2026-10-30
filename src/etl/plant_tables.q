@@ -18,7 +18,7 @@
 /                 stp1's -schemafile at the copy. The vendored file is never
 /                 edited. Change a table, regenerate:
 /                 uv run python scripts/generate/plant_schema.py
-/   by q tests    tests/q/test_demo_tables.q loads it and checks the tables
+/   by q tests    tests/q/test_stack_tables.q loads it and checks the tables
 /                 parse and carry the columns their consumers expect, and
 /                 scripts/generate/export_contract_surface.q loads it so these tables
 /                 appear in the contract surface alongside the ETL ledgers.
