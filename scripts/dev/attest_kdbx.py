@@ -102,8 +102,11 @@ REPO = Path(__file__).resolve().parents[2]
 #: still loads the real check.
 _SOURCE = REPO
 
-#: The hooks that need KDB-X, which hosted CI skips.
-HOOKS = ("q-tests", "q-coverage", "q-docs", "contract-surface", "q-facts")
+#: The hooks that need a q, which hosted CI skips - exactly the ones ci.yml's
+#: no-q branch adds to SKIP, which test_check_kdbx_attestation.py holds equal
+#: in both directions: one skipped there and missing here ran nowhere that was
+#: checked (plant-schema, #1794).
+HOOKS = ("q-tests", "q-coverage", "q-docs", "contract-surface", "q-facts", "plant-schema")
 
 #: The pre-commit CI runs the hooks with.
 PRE_COMMIT = "pre-commit==4.6.2"
