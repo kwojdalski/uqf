@@ -137,9 +137,23 @@ def test_the_type_check_finds_a_column_stored_as_another_type(peachq, tmp_path):
         "`:hdb/2026.01.02/book/ set .Q.en[`:hdb] ([] sym:`a`b; px:1 2);\nexit 0\n"
     )
     (tmp_path / "schema.q").write_text("book:([] sym:`symbol$(); px:`float$())\n")
+    # the partitions it reads are named to it - hdb_layout.q's, in `data check`
+    (tmp_path / "partitions.txt").write_text("hdb/2026.01.01\nhdb/2026.01.02\n")
     subprocess.run([str(peachq), "mk.q", "-q"], cwd=tmp_path, check=True, stdin=subprocess.DEVNULL)
     out = subprocess.run(
-        [str(peachq), str(script), "hdb", "schema.q", "-q"],
+        [str(peachq), str(script), "partitions.txt", "schema.q", "-q"],
         cwd=tmp_path, capture_output=True, text=True, stdin=subprocess.DEVNULL, check=False,
     ).stdout.splitlines()  # fmt: skip
-    assert out == ["type_change|2026.01.02|book|px|j|f", "DONE"]
+    assert out == ["type_change|hdb/2026.01.02|book|px|j|f", "DONE"]
+
+
+def test_the_dry_run_does_not_judge_a_segmented_hdb_by_its_root(tmp_path):
+    """A segmented HDB's partitions are in its segments, which only q's load
+    finds: the listing says so rather than reporting a root with no partition
+    as a database with nothing to fill (#1783)."""
+    root = tmp_path / "uqs" / "hdb"
+    root.mkdir(parents=True)
+    (root / "par.txt").write_text(f"{tmp_path / 's1'}\n")
+    dep = _dep(LocalRemote(), data_dir=str(tmp_path))
+    line = hdb.planned(dep, {"hdb_shape": {"quote": ["time", "sym"]}})
+    assert line.startswith("not judged - a segmented HDB (par.txt)")

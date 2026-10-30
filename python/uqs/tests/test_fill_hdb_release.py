@@ -130,14 +130,16 @@ def test_a_column_of_another_type_is_reported_and_the_deployment_refuses_it(tmp_
     )
     assert fixed.returncode == 0, fixed.stdout + fixed.stderr
     assert px.read_bytes() == before, "a mistyped column is never rewritten"
+    listed = tmp_path / "partitions.txt"
+    listed.write_text("".join(f"{p}\n" for p in sorted(hdb_root.glob("2026.*"))))
     found = _q(
         q_binary,
         ROOT,
         str(ROOT / "scripts/gates/hdb_column_types.q"),
-        str(hdb_root),
+        str(listed),
         str(schema),
     )
-    assert "type_change|2026.01.01|book|px|f|j" in found.stdout
+    assert f"type_change|{hdb_root}/2026.01.01|book|px|f|j" in found.stdout
 
     report = {
         "present": True,

@@ -33,11 +33,16 @@ from uqs.stack import hdb_shape
 
 #: The HDB at argv[1] as hdb_shape.listing reads one: {partition: {table:
 #: [columns]}}, by the same rules - date-named partitions, a column per file
-#: but `.d`, a nested column's `#` file folded into it. {} for no HDB.
+#: but `.d`, a nested column's `#` file folded into it. {} for no HDB. A
+#: segmented one (par.txt) prints SEGMENTED instead: its partitions are in
+#: the segments, which only q's load finds - prepare's data check asks it.
 LIST_PY = r"""
 import json, os, re, sys
 root = sys.argv[1]
 out = {}
+if os.path.isfile(os.path.join(root, "par.txt")):
+    print("SEGMENTED")
+    sys.exit(0)
 if os.path.isdir(root):
     for p in sorted(os.listdir(root)):
         if not re.match(r"^\d{4}\.\d{2}\.\d{2}$", p) or not os.path.isdir(os.path.join(root, p)):
@@ -66,7 +71,10 @@ def planned(dep: Deployment, manifest: dict) -> str:
     if not declared:
         return "not judged - the artifact records no hdb_shape (built before #870)"
     out = dep.run("preflight", "listing the HDB", f"python3 -c {q(LIST_PY)} {q(hdb_root(dep))}")
-    tables, columns = hdb_shape.shape_gaps(json.loads(out.strip().splitlines()[-1]), declared)
+    last = out.strip().splitlines()[-1]
+    if last == "SEGMENTED":
+        return "not judged - a segmented HDB (par.txt) is judged by q's own load in prepare"
+    tables, columns = hdb_shape.shape_gaps(json.loads(last), declared)
     if not tables and not columns:
         return "every partition holds every declared table and column; types checked in prepare"
     n_tables = sum(len(t) for t in tables.values())
