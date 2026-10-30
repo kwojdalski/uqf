@@ -17,7 +17,7 @@ import typer
 
 from uqs.attach import backfill_remote, backfill_run, config, service
 from uqs.cli.renames import renamed
-from uqs.cli.safety import dry_run_note
+from uqs.cli.safety import ChangesState, dry_run_note
 from uqs.cli.shared import JOB_OPERATIONS_PANEL, _die, _paths, console, job_app
 from uqs.paths import UqsError
 
@@ -109,7 +109,9 @@ def extract(
 
 
 @job_app.command(
-    "receive", rich_help_panel=JOB_OPERATIONS_PANEL, cls=renamed({"--port": "--listen-port"})
+    "receive",
+    rich_help_panel=JOB_OPERATIONS_PANEL,
+    cls=renamed({"--port": "--listen-port"}, ChangesState),
 )
 def receive(
     attach: Annotated[

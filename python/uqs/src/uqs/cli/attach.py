@@ -32,7 +32,7 @@ import typer
 from uqs.attach import config, service, workflow
 from uqs.attach import detach as detaching
 from uqs.attach import publisher as publishing
-from uqs.cli import shared
+from uqs.cli import safety, shared
 from uqs.cli.attach_legacy import refuse_legacy
 from uqs.cli.attach_output import (
     Output,
@@ -333,7 +333,7 @@ def attach(
 # ---------------------------------------------------- uqs job attachment remove
 
 
-@attachment_app.command("remove", context_settings=EXTRA_WORDS)
+@attachment_app.command("remove", context_settings=EXTRA_WORDS, cls=safety.ChangesState)
 def detach(
     ctx: typer.Context,
     name: NameArg,

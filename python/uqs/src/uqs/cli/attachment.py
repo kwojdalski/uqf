@@ -10,6 +10,7 @@ from __future__ import annotations
 import typer
 
 from uqs.cli.renames import renamed
+from uqs.cli.safety import ChangesState
 from uqs.cli.shared import JOB_OPERATIONS_PANEL, job_app
 
 #: A job put on a TorQ stack already running, as a noun: once `job attach` and
@@ -22,6 +23,6 @@ attachment_app = typer.Typer(
 )
 
 #: `add`, and its old spelling `job attach`: `--override-reason` is `--reason` (#1732)
-OLD_REASON = renamed({"--override-reason": "--reason"})
+OLD_REASON = renamed({"--override-reason": "--reason"}, ChangesState)
 
 job_app.add_typer(attachment_app, name="attachment", rich_help_panel=JOB_OPERATIONS_PANEL)

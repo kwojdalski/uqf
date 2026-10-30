@@ -15,6 +15,7 @@ import typer
 from rich.table import Table
 
 from uqs.cli.json_out import emit, json_opt
+from uqs.cli.safety import ChangesState, ReadOnly
 from uqs.cli.shared import _die, console
 from uqs.cli.target import DryRun, _change, _command, target_app
 from uqs.deploy import target_changelog, target_changes
@@ -33,7 +34,7 @@ def _about(entry: dict, name: str) -> bool:
     )
 
 
-@target_app.command("log")
+@target_app.command("log", cls=ReadOnly)
 def log_(
     name: Annotated[
         str | None,
@@ -98,7 +99,7 @@ def log_(
     console.print(table)
 
 
-@target_app.command("revert")
+@target_app.command("revert", cls=ChangesState)
 def revert(
     change: Annotated[
         str,

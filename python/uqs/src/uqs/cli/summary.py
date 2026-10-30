@@ -17,6 +17,7 @@ from rich.table import Table
 from uqs.cli import completion
 from uqs.cli.json_out import emit, json_opt
 from uqs.cli.renames import alias_command, renamed
+from uqs.cli.safety import ReadOnly
 from uqs.cli.shared import (
     BasePortOpt,
     ExportOpt,
@@ -132,7 +133,7 @@ def _json(rows: list[dict], gathered, status) -> None:
 _RENAMES = {"--port": "--base-port", "--debug": "--debug"}
 
 
-@app.command("status", cls=renamed(_RENAMES))
+@app.command("status", cls=renamed(_RENAMES, ReadOnly))
 def summary(
     ctx: typer.Context,
     port: BasePortOpt = None,
