@@ -1,6 +1,6 @@
 """`uqs status`'s table: gathering its rows, and rendering them.
 
-Apart from the command so the same two steps can run again - `summary -i`
+Apart from the command so the same two steps can run again - `status -i`
 re-reads the fleet after each start, stop or restart it makes - and because
 cli/summary.py had reached the package's module budget.
 """
@@ -133,7 +133,7 @@ def gather(
 
 
 def render(rows: list[dict[str, str]], chosen: list[str], port: int | None) -> Table:
-    """The rows as the coloured Rich table `summary` prints, titled with
+    """The rows as the coloured Rich table `status` prints, titled with
     the runtime and base port they describe."""
     declared = _paths().runtime_declaration
     base = declared.resolve_base_port(port)
@@ -179,7 +179,7 @@ def render(rows: list[dict[str, str]], chosen: list[str], port: int | None) -> T
 
 
 def record(row: dict[str, str]) -> dict:
-    """One row as `summary --json` prints it: no markup, the graph columns as
+    """One row as `status --json` prints it: no markup, the graph columns as
     lists, PID and Port as ints, and a blank or `-` cell as null."""
     out: dict = {}
     for key, value in row.items():

@@ -60,6 +60,8 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
+from uqs.generated.q_facts import Q_TYPE_NAMES
+
 if TYPE_CHECKING:  # queries imports Table and QType from here at runtime
     from uqf_frontend.gateway import Gateway
 
@@ -110,8 +112,8 @@ class QType(StrEnum):
 
 
 #: Operators a caller may name. Each maps to an entry in the q-side operator
-#: dictionary in queries.SELECT - adding one here without adding it there is
-#: caught by test_queries.py.
+#: dictionary, browse_ops in scripts/torqcode/gateway/browse.q - adding one here
+#: without adding it there is caught by test_security.py.
 OPERATORS = frozenset({"eq", "ne", "lt", "le", "gt", "ge", "in"})
 
 #: Operators that take a list rather than a scalar.
@@ -182,22 +184,12 @@ class Table:
 #: column makes every table unbuildable. Tested now against a table with rows
 #: in it, which is the only version of this test that means anything.
 #:
-#: Spelled out rather than derived from QType, so a lowercase character
-#: nothing here knows about is refused by name instead of silently becoming
-#: something filterable.
+#: q's own character -> name map (uqs.generated.q_facts, #1785) kept to the
+#: names QType lists: QType is the explicit subset, so a lowercase character
+#: whose type it does not name is refused by name instead of silently
+#: becoming something filterable.
 _QTYPE_BY_CHAR: dict[str, QType] = {
-    "p": QType.TIMESTAMP,
-    "n": QType.TIMESPAN,
-    "f": QType.FLOAT,
-    "j": QType.LONG,
-    "i": QType.INT,
-    "h": QType.SHORT,
-    "c": QType.CHAR,
-    "d": QType.DATE,
-    "t": QType.TIME,
-    "s": QType.SYMBOL,
-    "b": QType.BOOLEAN,
-    "g": QType.GUID,
+    char: QType(name) for char, name in Q_TYPE_NAMES.items() if name in {q.value for q in QType}
 }
 
 
@@ -331,8 +323,8 @@ class Catalog:
                 skipped.setdefault(
                     table,
                     f"{table}.{row['column']}: meta reports type character {char!r}, "
-                    "which this layer cannot coerce - add it to QType and "
-                    "_QTYPE_BY_CHAR (and web/src/api.ts ColumnType), or the column "
+                    "which this layer cannot coerce - add it to QType "
+                    "(and web/src/api.ts ColumnType), or the column "
                     "cannot be filtered on safely",
                 )
                 continue

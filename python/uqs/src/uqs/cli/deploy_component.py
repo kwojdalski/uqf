@@ -21,6 +21,7 @@ from uqs.cli.safety import ChangesState
 from uqs.deploy import python_runtime, q_runtime, torq_runtime
 from uqs.deploy.artifact import PLATFORMS, ReleaseError
 from uqs.deploy.build import DEFAULT_OUTPUT
+from uqs.deploy.components import COMPONENTS
 from uqs.deploy.payload import default_python
 from uqs.interpreter import KDBX
 from uqs.logger import get_logger
@@ -34,9 +35,6 @@ component_app = typer.Typer(
     help="A release's bundled components - TorQ, q (PeachQ), Python: build their artifacts.",
 )
 deploy_app.add_typer(component_app, name="component")
-
-#: The components that can be bundled.
-COMPONENTS = ("torq", "q", "python")
 
 #: What an operator may call KX's q: refused by name, never "no such runtime".
 KX_NAMES = frozenset({KDBX, "kx", "kdb", "kdb+"})

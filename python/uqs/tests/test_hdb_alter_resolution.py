@@ -1,4 +1,4 @@
-"""Which HDB `uqs data hdb-check` / `hdb-alter` act on, and the refusals before any q runs (#1755).
+"""Which HDB `uqs data check` / `alter` act on, and the refusals before any q runs (#1755).
 
 No q here: the resolution from --target, --attach and --hdb, the writers check,
 the reader reload and ssh's own failure are all decided in Python. What the q
@@ -190,7 +190,7 @@ def test_with_no_handle_it_is_this_runtime_s_configured_hdb(monkeypatch):
 
 
 @pytest.mark.parametrize(
-    ("command", "options"), [("hdb-check", []), ("hdb-alter", ["pb", "--reorder", "a,b"])]
+    ("command", "options"), [("check", []), ("alter", ["pb", "--reorder", "a,b"])]
 )
 def test_target_runs_both_commands_on_the_release_asking_there(command, options, monkeypatch):
     """`--target` routes both, unclassified as changing the server: each shows its
@@ -213,7 +213,7 @@ def test_target_runs_both_commands_on_the_release_asking_there(command, options,
 @pytest.mark.parametrize("handle", ["--attach", "--hdb"])
 def test_target_with_another_handle_is_refused(handle):
     with pytest.raises(UqsError, match="one of --target, --attach and --hdb"):
-        target.forward("uat", False, ["data", "hdb-alter", "pb", handle, "x"], interactive=False)
+        target.forward("uat", False, ["data", "alter", "pb", handle, "x"], interactive=False)
 
 
 def test_fix_is_refused_naming_apply(monkeypatch):
@@ -221,6 +221,6 @@ def test_fix_is_refused_naming_apply(monkeypatch):
     monkeypatch.setattr(shared, "log", type("L", (), {
         "error": lambda self, m, *a: errors.append(m.format(*a)),
         "__getattr__": lambda self, n: lambda *a, **k: None})())  # fmt: skip
-    result = CliRunner().invoke(app, ["data", "hdb-check", "--fix"])
+    result = CliRunner().invoke(app, ["data", "check", "--fix"])
     assert result.exit_code == 1
     assert errors and "--apply" in errors[0]

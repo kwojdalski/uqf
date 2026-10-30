@@ -44,7 +44,7 @@ from uqs.stack.listing import (
     MONITOR_PROCNAME,
 )
 
-#: Seconds `summary` will spend gathering its table before giving up.
+#: Seconds `status` will spend gathering its table before giving up.
 #:
 #: It is a read-only command an operator runs to find out what is going on,
 #: which makes it the worst possible thing to hang: the one time you run it
@@ -59,7 +59,7 @@ from uqs.stack.listing import (
 #: anyone means by a ten-second timeout.
 SUMMARY_TIMEOUT_SECONDS = 120.0
 
-#: How often `summary -i` re-reads the fleet: often enough that a process
+#: How often `status -i` re-reads the fleet: often enough that a process
 #: going down shows within a glance, without anyone pressing R. A re-read
 #: that takes longer than this - a wedged process holding a probe up to
 #: --probe-timeout - just skips the ticks it overlaps, so a slow fleet is

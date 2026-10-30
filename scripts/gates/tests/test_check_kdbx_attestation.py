@@ -393,6 +393,9 @@ def test_attest_records_the_tree_only_when_every_hook_passes(repo, monkeypatch):
 # --- scoped attestation: only the hooks whose scope the change touches ------
 
 ALL = sorted(attest.HOOKS)
+#: What a .q change outside the plant tables needs: every KDB-X hook but
+#: plant-schema, whose scope is plant_tables.q and what it generates.
+Q_HOOKS = [h for h in ALL if h != "plant-schema"]
 
 
 @pytest.mark.parametrize(
@@ -403,9 +406,11 @@ ALL = sorted(attest.HOOKS)
         (["python/uqs/src/uqs/cli.py", "scripts/gates/check_x.py"], ["contract-surface"]),
         # ... and q-facts too where it touches what q-facts generates.
         (["python/uqs/src/uqs/generated/q_facts.py"], ["contract-surface", "q-facts"]),
-        # q: every KDB-X hook.
-        (["src/foundation/stats.q"], ALL),
-        (["python/uqs/src/uqs/cli.py", "src/a.q"], ALL),
+        # q: every KDB-X hook but plant-schema ...
+        (["src/foundation/stats.q"], Q_HOOKS),
+        (["python/uqs/src/uqs/cli.py", "src/a.q"], Q_HOOKS),
+        # ... which the plant tables add.
+        (["src/etl/plant_tables.q"], ALL),
         # Docs: only a document with a q-example block, and only q-docs.
         (["docs/guides/operations.md", "README.md"], []),
         (["docs/guides/new-pipeline.md"], ["q-docs"]),
@@ -444,7 +449,7 @@ def test_a_trailer_that_misses_a_needed_hook_is_refused(repo, tmp_path, capsys):
     ok, why = check.report(base, head)
     assert not ok
     assert "does not cover q-coverage, q-docs, q-tests" in why
-    assert f"needed: {', '.join(ALL)}" in why and "covers: contract-surface, q-facts" in why
+    assert f"needed: {', '.join(Q_HOOKS)}" in why and "covers: contract-surface, q-facts" in why
     code, out, _ = _main(base, head, tmp_path, capsys)
     assert code == 1 and "::error title=KDB-X attestation::" in out
 
@@ -473,7 +478,7 @@ def test_attestations_of_one_tree_add_up(repo):
     commit(repo, "src/a.q", "a:1\n")
     attest_here(repo, ["q-tests", "q-coverage"])
     head = attest_here(repo, ["contract-surface", "q-docs", "q-facts"])
-    assert check.attested(head) == set(attest.HOOKS)
+    assert check.attested(head) == set(Q_HOOKS)
     assert check.report(base, head)[0]
 
 
@@ -545,15 +550,33 @@ def test_attest_needs_what_the_check_needs(repo, monkeypatch):
     base = sh(repo, "rev-parse", "HEAD")
     commit(repo, "src/a.q", "a:1\n")
     head = commit(repo, "python/uqs/src/uqs/generated/q_facts.py", "x = 1\n")
-    assert attest.needed(base) == check.needed_hooks(check.changed_paths(base, head)) == ALL
+    assert attest.needed(base) == check.needed_hooks(check.changed_paths(base, head)) == Q_HOOKS
 
 
-def test_ci_skips_every_kdbx_hook_where_it_has_no_q():
-    """A KDB-X hook CI forgot to SKIP would fail every hosted run."""
+def _ci_skips_without_q() -> list[str]:
+    """The hooks ci.yml's no-q branch adds to SKIP."""
     ci = (_ROOT / ".github/workflows/ci.yml").read_text()
-    skip = next(line for line in ci.splitlines() if "SKIP=$SKIP," in line)
-    named = skip.split("SKIP=$SKIP,")[1].split('"')[0].split(",")
-    assert set(attest.HOOKS) <= set(named)
+    skip = [line for line in ci.splitlines() if "SKIP=$SKIP," in line]
+    assert len(skip) == 1, "ci.yml should add the KDB-X hooks to SKIP in one place"
+    return skip[0].split("SKIP=$SKIP,")[1].split('"')[0].split(",")
+
+
+def test_ci_skips_exactly_the_attested_hooks_where_it_has_no_q():
+    """Both directions (#1794). A KDB-X hook CI forgot to SKIP would fail
+    every hosted run; a hook CI skips that attest_kdbx.HOOKS lacks runs
+    nowhere anything checks - plant-schema was one."""
+    named = _ci_skips_without_q()
+    assert len(named) == len(set(named))
+    assert set(named) == set(attest.HOOKS)
+
+
+def test_every_attested_hook_is_defined_in_the_pre_commit_config():
+    """A HOOKS entry naming no hook would attest a check that never ran."""
+    import yaml
+
+    config = yaml.safe_load((_ROOT / ".pre-commit-config.yaml").read_text())
+    ids = {hook["id"] for repo in config["repos"] for hook in repo["hooks"]}
+    assert set(attest.HOOKS) <= ids
 
 
 # --- q-tests ran a subset of the q suites (#1690 step 4) --------------------
@@ -793,7 +816,7 @@ def test_the_trailer_is_1703s_with_what_q_coverage_ran(repo, monkeypatch, files,
     assert _attest_once(repo, monkeypatch, files)[0] == 0
     tree = sh(repo, "rev-parse", "HEAD^{tree}")
     trailer = sh(repo, "log", "-1", f"--format=%(trailers:key={check.TRAILER},valueonly)").strip()
-    assert trailer == f"{tree} hooks={','.join(ALL)} q-tests={record} q-coverage=all"
+    assert trailer == f"{tree} hooks={','.join(Q_HOOKS)} q-tests={record} q-coverage=all"
 
 
 def test_q_tests_without_q_coverage_runs_its_own_q_unit(repo, monkeypatch):
@@ -885,7 +908,7 @@ def test_attest_hands_q_coverage_its_subset_and_records_its_digest(repo, monkeyp
     assert envs["q-coverage"][impact.COVERAGE_DECIDED_ENV] == COV_LINE
     tree = sh(repo, "rev-parse", "HEAD^{tree}")
     assert _trailer(repo) == (
-        f"{tree} hooks={','.join(ALL)} q-tests={impact.digest(SUBSET)} q-coverage={COV_RECORD}"
+        f"{tree} hooks={','.join(Q_HOOKS)} q-tests={impact.digest(SUBSET)} q-coverage={COV_RECORD}"
     )
     body = sh(repo, "log", "-1", "--format=%B")
     assert "q-coverage judged: src/a.q" in body

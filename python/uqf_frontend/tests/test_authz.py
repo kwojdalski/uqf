@@ -180,8 +180,9 @@ def test_the_policy_receives_the_route_path_and_table():
 
     c, _ = client(policy=spy)
     c.post("/query", json={"table": "position", "filters": []})
-    assert seen[0].path == "/query"
-    assert seen[0].table == "position"
+    # Twice: `guard` asks about the path before the handler runs, and the
+    # handler asks about the table once the body has named it.
+    assert [(r.path, r.table) for r in seen] == [("/query", None), ("/query", "position")]
 
 
 def test_health_and_catalog_are_not_behind_the_seam():
@@ -194,33 +195,125 @@ def test_health_and_catalog_are_not_behind_the_seam():
 
 
 # --- every route goes through the seam -------------------------------------
+#
+# The guarantee is structural: the policy runs as an app-wide dependency, so a
+# route added later is behind the seam without doing anything. The only way
+# out is the `authz.unguarded` marker on the endpoint itself. These tests read
+# the routes FastAPI actually built, not handler source text - a comment
+# quoting the call, or a call made after the data read, used to pass (#1794).
 
-#: Routes that answer without asking the policy, and why - the two
-#: test_health_and_catalog_are_not_behind_the_seam pins. Neither carries data.
+#: Routes the policy may not see, and why - pinned by
+#: test_health_and_catalog_are_not_behind_the_seam. Compared with the markers
+#: in both directions, so neither a new opt-out nor a stale entry passes.
 UNGUARDED = {
     "/health": "liveness probe - no data, no identity",
     "/catalog": "describes the queryable surface - a refused caller must be able to see why",
 }
 
 
-def test_every_route_but_the_exempt_ones_calls_authorise():
-    """authz.py promises every request passes through one place. /coverage
-    did not, so a deny_tables policy was bypassed through it.
-    A route added without `authorise(request...)` fails here, unless it is
-    listed in UNGUARDED with its reason."""
-    import inspect
-
+def _api_routes():
     from fastapi.routing import APIRoute
 
     app_ = create_app(gateway=FakeGateway({}), settings=Settings(), fleet=FakeFleet())
-    missing = [
-        route.path
-        for route in app_.routes
-        if isinstance(route, APIRoute)
-        and route.path not in UNGUARDED
-        and "authorise(request" not in inspect.getsource(route.endpoint)
-    ]
+    return [route for route in app_.routes if isinstance(route, APIRoute)]
+
+
+def _dependency_calls(route) -> list:
+    return [d.call for d in route.dependant.dependencies]
+
+
+def test_every_route_carries_the_policy_dependency():
+    """authz.py promises every request passes through one place. /coverage
+    once did not, so a deny_tables policy was bypassed through it."""
+    from uqf_frontend.app import guard
+
+    missing = [r.path for r in _api_routes() if guard not in _dependency_calls(r)]
     assert missing == []
+
+
+def test_the_opt_outs_are_exactly_the_marked_routes():
+    """A route answers without the policy only by carrying the marker, and
+    the marked set is UNGUARDED - a marker added, or one removed, fails here."""
+    marked = {
+        r.path: authz.unguarded_reason(r.endpoint)
+        for r in _api_routes()
+        if authz.unguarded_reason(r.endpoint) is not None
+    }
+    assert set(marked) == set(UNGUARDED)
+    assert all(marked.values()), "an opt-out must give its reason"
+
+
+def _deny_all(req: Request_) -> str | None:
+    return f"{req.path} is refused to everyone"
+
+
+#: A well-formed request per guarded route, so the refusal is the policy's
+#: and not a 422 - valid before and after the seam moved into a dependency.
+SAMPLES: dict[tuple[str, str], dict] = {
+    ("GET", "/ops/queue"): {},
+    ("GET", "/ops/connections"): {},
+    ("GET", "/ops/usage"): {},
+    ("GET", "/ops/clients"): {},
+    ("GET", "/ops/processes"): {},
+    ("GET", "/ops/backfill"): {},
+    ("GET", "/coverage"): {
+        "params": {"dataset": "fx_quotes", "partition": "", "source_version": "v1"}
+    },
+    ("POST", "/query"): {"json": {"table": "trades", "filters": []}},
+    ("GET", "/control"): {},
+    ("POST", "/control/process/{action}"): {"json": {"procs": "rdb1"}},
+    ("PUT", "/control/process/{procname}/config"): {"json": {"field": "port", "value": "1"}},
+    ("PUT", "/control/worker-config"): {"json": {"key": "k", "value": "v"}},
+    ("POST", "/control/backfill"): {
+        "json": {
+            "worker": "w",
+            "source_version": "v1",
+            "range_from": "2026-01-01T00:00:00Z",
+            "range_to": "2026-01-02T00:00:00Z",
+        }
+    },
+}
+
+
+def _guarded() -> set[tuple[str, str]]:
+    return {
+        (method, r.path)
+        for r in _api_routes()
+        if authz.unguarded_reason(r.endpoint) is None
+        for method in r.methods
+    }
+
+
+def test_samples_cover_exactly_the_guarded_routes():
+    """So the deny-all test below cannot skip a new route, nor keep one that
+    is gone."""
+    assert set(SAMPLES) == _guarded()
+
+
+@pytest.mark.parametrize(("method", "path"), sorted(SAMPLES))
+def test_a_deny_all_policy_refuses_every_guarded_route(method, path):
+    """Each route refused with 403, and before any data is read."""
+    c, gw = client(policy=_deny_all)
+    url = path.replace("{action}", "start").replace("{procname}", "rdb1")
+    resp = c.request(method, url, **SAMPLES[(method, path)])
+    assert resp.status_code == 403, resp.text
+    assert resp.json()["error"] == "Forbidden"
+    metadata = {queries.CATALOG, queries.SCHEMA}
+    assert [p for p, _, _ in gw.routed if p not in metadata] == []
+    assert [p for p, _ in gw.calls if p not in metadata] == []
+
+
+@pytest.mark.parametrize("path", sorted(UNGUARDED))
+def test_a_deny_all_policy_never_sees_the_opt_outs(path):
+    seen: list[str] = []
+
+    def spy(req: Request_) -> str | None:
+        seen.append(req.path)
+        return "refused"
+
+    c, _ = client(policy=spy)
+    assert c.get(path).status_code == 200
+    assert seen == []
 
 
 def test_a_denied_table_is_refused_on_coverage_too():

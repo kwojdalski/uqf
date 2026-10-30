@@ -147,9 +147,12 @@ extend-exclude = ["lib", ".claude/worktrees"]
 # first-party. Run from inside a member, ruff infers this from the src layout;
 # run from the workspace root it cannot, and every intra-package import gets
 # treated as third-party - which silently reformats 13 files' import blocks.
+# One entry per `members` above; python/uqs/tests/test_workspace_members.py
+# holds them to it.
 src = [
     "python/uqs/src",
     "python/uqf_frontend/src",
+    "python/uqf_airflow_provider/src",
 ]
 
 [tool.ruff.lint]

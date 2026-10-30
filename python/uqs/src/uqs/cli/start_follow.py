@@ -3,7 +3,7 @@
 Starts what `start` (or `restart`) would, streams every started process's log
 to this console until Ctrl-C, then stops what the command brought up - the way
 `docker compose up` does. Processes that were already running when it began are
-left running; if `summary` cannot say which those were, Ctrl-C stops everything
+left running; if `status` cannot say which those were, Ctrl-C stops everything
 the command was asked for.
 
 This was `uqs up`, a command of its own with its own option set (#1734). It is

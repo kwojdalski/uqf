@@ -6,7 +6,8 @@ Typer parses anything - so the old name is in no --help and no signature, and
 the conventions test (test_cli_conventions.py) sees only the new one. A
 renamed command keeps its old path through `alias_command()`, hidden. Both log
 the new spelling every time the old one is used. The release after removes
-the row or the alias.
+the row or the alias. Each old spelling's window is a row in
+rename_expiry.py, which a test holds to that one release (#1796).
 
 A rename whose new spelling depends on the old one's value (`job install
 --mode symlink` -> `--link`) cannot be rewritten by name: it keeps the old

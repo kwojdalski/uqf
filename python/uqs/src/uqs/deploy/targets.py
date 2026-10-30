@@ -45,7 +45,7 @@ import tomllib
 from pathlib import Path
 from typing import Any
 
-from uqs.deploy import components, launch
+from uqs.deploy import components, launch, overrides
 from uqs.deploy.config import Config, DeployError, flag, make_config
 from uqs.paths import UqsError
 
@@ -53,10 +53,10 @@ DECLARATION = "deploy_targets.toml"
 DECLARATION_ENV = "UQS_DEPLOY_TARGETS"
 #: The named policy overrides (deploy/overrides.py, #1557): each relaxes a
 #: requirement for one push, with its reason, so none is ever a target's
-#: standing setting.
-OVERRIDES = frozenset(
-    {"accept_digest", "accept_q_version", "allow_unpinned", "accept_converted_release"}
-)
+#: standing setting. Derived from overrides.SKIPS, as make_config spells them:
+#: one listed here by hand would let an override added there alone become a
+#: key a target file may set (#1794).
+OVERRIDES = frozenset(name.replace("-", "_") for name in overrides.SKIPS)
 #: What push passes configs() itself: what is deployed, and whether it is a
 #: rehearsal.
 GIVEN_SEPARATELY = frozenset({"artifact", "dry_run"})
