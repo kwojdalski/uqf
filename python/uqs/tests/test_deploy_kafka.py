@@ -22,7 +22,7 @@ from test_deploy import _HEALTHY, ARGS, FakeRemote, _done, _verified, parse_args
 from uqs.deploy import artifact, driver, kafka
 from uqs.deploy import build as release_build
 from uqs.deploy.artifact import ReleaseError
-from uqs.external import kafka_feed
+from uqs.external import connection, kafka_feed
 from uqs.paths import UqsError
 from uqs.stack import kafka_extra
 
@@ -379,7 +379,9 @@ def no_extra(monkeypatch):
 
 
 def test_the_connector_refuses_without_the_extra_naming_it(no_extra, tmp_path, monkeypatch):
-    monkeypatch.setattr(kafka_feed, "get_process_config", lambda *a: pytest.fail("looked for stp1"))
+    monkeypatch.setattr(
+        connection, "get_process_config", lambda *a, **k: pytest.fail("looked for stp1")
+    )
     with pytest.raises(UqsError) as exc:
         kafka_feed.start_kafka_feed(None)  # ty: ignore[invalid-argument-type]
     msg = str(exc.value)
@@ -415,7 +417,7 @@ def test_the_kafka_example_reports_the_missing_extra(no_extra, capsys):
 def test_the_connector_runs_in_the_interpreter_that_was_checked(tmp_path, monkeypatch):
     """Not `uv run`: on a server it would sync the release's venv to the lock."""
     monkeypatch.setattr(kafka_extra, "available", lambda: True)
-    monkeypatch.setattr(kafka_feed, "get_process_config", lambda *a: {"port": 6550})
+    monkeypatch.setattr(connection, "get_process_config", lambda *a, **k: {"port": 6550})
     started = {}
 
     class Proc:
@@ -428,7 +430,7 @@ def test_the_connector_runs_in_the_interpreter_that_was_checked(tmp_path, monkey
     monkeypatch.setattr(kafka_feed, "_process", lambda paths: Proc())
 
     class Paths:
-        repo_root = tmp_path
+        repo_root = Path(__file__).resolve().parents[3]  # its declared Kafka topics
 
     assert kafka_feed.start_kafka_feed(Paths()) == 42  # ty: ignore[invalid-argument-type]
     import sys

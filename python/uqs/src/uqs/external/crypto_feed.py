@@ -11,7 +11,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from uqs.external import crypto
+from uqs.external import connection, crypto
 from uqs.external.crypto import (
     CRYPTO_FILLS_RECORDER_DEFAULT_POLL_MS,
     CRYPTO_FILLS_RECORDER_DEFAULT_SYMBOL,
@@ -45,6 +45,7 @@ def _start_recorder(paths: UqsPaths, options: Mapping[str, Any]) -> int:
         symbols=options["symbols"],
         top_n_levels=options["top_n_levels"],
         interval_ms=options["interval_ms"],
+        credential=options["tp_credential"],
     )
 
 
@@ -55,6 +56,7 @@ def _start_fills_recorder(paths: UqsPaths, options: Mapping[str, Any]) -> int:
         oms_socket_path=options["oms_socket_path"],
         symbol=options["symbol"],
         poll_interval_ms=options["poll_interval_ms"],
+        credential=options["tp_credential"],
     )
 
 
@@ -87,6 +89,7 @@ FEEDS = (
                 default=1000,
             ),
             BASE_PORT,
+            connection.TP_CREDENTIAL,
         ),  # fmt: skip
         produces={CRYPTO_RECORDER_TABLE: RECORDER},
         title="crypto recorder status",
@@ -114,6 +117,7 @@ FEEDS = (
                 default=CRYPTO_FILLS_RECORDER_DEFAULT_POLL_MS,
             ),
             BASE_PORT,
+            connection.TP_CREDENTIAL,
         ),  # fmt: skip
         produces={
             CRYPTO_REAL_FILLS_RECORDER_TABLE: RECORDER,

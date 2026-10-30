@@ -11,10 +11,10 @@ import os
 import subprocess
 from pathlib import Path
 
+from uqs.external import connection
 from uqs.external.lifecycle import DetachedProcess
 from uqs.logger import get_logger
 from uqs.paths import UqsError, UqsPaths
-from uqs.stack.procs import get_process_config
 
 log = get_logger()
 
@@ -31,13 +31,9 @@ log = get_logger()
 
 CRYPTORUST_ROOT_ENV = "CRYPTORUST_ROOT"
 
-# The demo's own accesslist.txt convention (see torq_cross_etl.q's proctype-
-# borrowing comment for the same mechanism from the q side): stp1 enforces
-# access control on every incoming connection via .z.pw, and
-# appconfig/passwords/feed.txt already resolves to a credential
-# accesslist.txt accepts - reused here rather than adding a new password
-# file to the vendored tree.
-CRYPTO_RECORDER_CREDENTIAL = "feed:pass"
+# stp1 enforces access control on every incoming connection via .z.pw; the
+# credential both recorders present is the one every connector shares,
+# resolved by external/connection.py (#1786) - never a password of their own.
 CRYPTO_RECORDER_TABLE = "crypto_book"
 CRYPTO_RECORDER_DEFAULT_VENUES = ("binance_spot",)
 CRYPTO_RECORDER_DEFAULT_SYMBOLS = ("BTC-USDT", "ETH-USDT")
@@ -77,7 +73,7 @@ def _crypto_recorder_config_yaml(
         f"venues:\n{venues_yaml}\n"
         "kdb_market_data_recorder:\n"
         "  enabled: true\n"
-        "  host: localhost\n"
+        f"  host: {connection.TP_HOST}\n"
         f"  port: {stp1_port}\n"
         f'  credential: "{credential}"\n'
         f"  table: {table}\n"
@@ -105,10 +101,12 @@ def start_crypto_recorder(
     symbols: tuple[str, ...] = CRYPTO_RECORDER_DEFAULT_SYMBOLS,
     top_n_levels: int = 5,
     interval_ms: int = 1000,
+    credential: str | None = None,
 ) -> int:
     """Build (if needed) and launch cryptorust's kdb-market-data-recorder,
     pointed at this demo's own stp1, publishing into `crypto_book` (defined
-    in src/etl/plant_tables.q). Returns the spawned PID.
+    in src/etl/plant_tables.q). `credential` None resolves as
+    external/connection.py says. Returns the spawned PID.
     """
     root = cryptorust_root(paths)
     if not (root / "Cargo.toml").is_file():
@@ -119,15 +117,20 @@ def start_crypto_recorder(
     if is_crypto_recorder_running(paths):
         raise UqsError("crypto recorder is already running - stop it first")
 
-    stp1 = get_process_config(paths, "stp1", base_port=base_port)
+    port = connection.tickerplant_port(paths, base_port)
+    tp_credential = connection.tp_credential(credential)
 
     paths.torqdata.mkdir(parents=True, exist_ok=True)
-    paths.crypto_recorder_config_path.write_text(
+    config = paths.crypto_recorder_config_path
+    # Owner-only before the credential is written into it.
+    config.touch(mode=0o600, exist_ok=True)
+    config.chmod(0o600)
+    config.write_text(
         _crypto_recorder_config_yaml(
-            stp1_port=int(stp1["port"]),
+            stp1_port=port,
             venues=list(venues),
             symbols=list(symbols),
-            credential=CRYPTO_RECORDER_CREDENTIAL,
+            credential=tp_credential,
             table=CRYPTO_RECORDER_TABLE,
             top_n_levels=top_n_levels,
             interval_ms=interval_ms,
@@ -229,6 +232,7 @@ def start_crypto_fills_recorder(
     oms_socket_path: str = DEFAULT_OMS_SOCKET_PATH,
     symbol: str = CRYPTO_FILLS_RECORDER_DEFAULT_SYMBOL,
     poll_interval_ms: int = CRYPTO_FILLS_RECORDER_DEFAULT_POLL_MS,
+    credential: str | None = None,
 ) -> int:
     """Build (if needed) and launch cryptorust's kdb-fills-recorder,
     pointed at this demo's own stp1 - publishes SIMULATED (paper) fills
@@ -238,7 +242,8 @@ def start_crypto_fills_recorder(
     source differs. `oms_socket_path` must point at an already-running
     cryptorust service's IPC socket (its own `ipc.socket_path` config,
     default /tmp/beacon.sock) - this recorder has no exchange connectors
-    of its own, it only polls that socket. Returns the spawned PID.
+    of its own, it only polls that socket. `credential` None resolves as
+    external/connection.py says. Returns the spawned PID.
     """
     root = cryptorust_root(paths)
     if not (root / "Cargo.toml").is_file():
@@ -249,7 +254,8 @@ def start_crypto_fills_recorder(
     if is_crypto_fills_recorder_running(paths):
         raise UqsError("crypto fills recorder is already running - stop it first")
 
-    stp1 = get_process_config(paths, "stp1", base_port=base_port)
+    port = connection.tickerplant_port(paths, base_port)
+    tp_credential = connection.tp_credential(credential)
 
     # same PyO3/system-Python workaround as start_crypto_recorder above.
     env = {**os.environ, "PYO3_USE_ABI3_FORWARD_COMPATIBILITY": "1"}
@@ -273,11 +279,11 @@ def start_crypto_fills_recorder(
             "--oms-socket-path",
             oms_socket_path,
             "--kdb-host",
-            "localhost",
+            connection.TP_HOST,
             "--kdb-port",
-            str(stp1["port"]),
+            str(port),
             "--kdb-credential",
-            CRYPTO_RECORDER_CREDENTIAL,
+            tp_credential,
             "--kdb-table",
             CRYPTO_FILLS_RECORDER_TABLE,
             "--real-kdb-table",

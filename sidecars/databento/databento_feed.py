@@ -46,22 +46,16 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
+from uqs.external import connection
 from uqs.external.feeds import ExternalFeed, FeedOption
 from uqs.external.lifecycle import DetachedProcess
 from uqs.logger import get_logger
 from uqs.paths import UqsError, UqsPaths
-from uqs.stack.procs import get_process_config
 
 log = get_logger()
 
 #: The raw table the handler publishes onto. `databento1` subscribes to it.
 DATABENTO_RAW_TABLE = "databento_mbp10"
-
-#: Same credential the q feeds and the cryptorust recorder use: stp1
-#: enforces access control on every connection, and appconfig/passwords/
-#: feed.txt already resolves to one accesslist.txt accepts. Reused rather
-#: than adding another password file to the vendored tree.
-DATABENTO_FEED_CREDENTIAL = "feed:pass"
 
 #: Databento's own env var name, so an existing export just works.
 DATABENTO_API_KEY_ENV = "DATABENTO_API_KEY"
@@ -95,6 +89,7 @@ def start_databento_feed(
     dataset: str = DEFAULT_DATASET,
     symbols: tuple[str, ...] = DEFAULT_SYMBOLS,
     api_key: str | None = None,
+    credential: str | None = None,
 ) -> int:
     """Start the handler against the running stack's tickerplant.
 
@@ -103,7 +98,8 @@ def start_databento_feed(
     same "resolve what can fail before any work happens" order
     ``.qetl.job.bounded.init`` follows. The q half (the raw table, databento1)
     is installed with this module, from the same bundle (#1776): without the
-    bundle there is no `databento` connector to start.
+    bundle there is no `databento` connector to start. `credential` - stp1's,
+    not Databento's - None resolves as uqs.external.connection says.
     """
     if is_databento_feed_running(paths):
         # Before the API-key check, so a second start says why it is refused.
@@ -117,8 +113,8 @@ def start_databento_feed(
             "against a fixture."
         )
 
-    stp1 = get_process_config(paths, "stp1")
-    port = stp1.get("port") or paths.runtime_declaration.resolve_base_port(None)
+    port = connection.tickerplant_port(paths)
+    tp_credential = connection.tp_credential(credential)
 
     runner = Path(__file__).resolve().parent / "databento_streamer.py"
     cmd = [
@@ -129,11 +125,11 @@ def start_databento_feed(
         "python",
         str(runner),
         "--host",
-        "localhost",
+        connection.TP_HOST,
         "--port",
         str(port),
         "--credential",
-        DATABENTO_FEED_CREDENTIAL,
+        tp_credential,
         "--dataset",
         dataset,
         "--symbols",
@@ -174,6 +170,7 @@ def _start(paths: UqsPaths, options: Mapping[str, Any]) -> int:
         dataset=options["databento_dataset"],
         symbols=options["symbols"],
         api_key=options["api_key"],
+        credential=options["tp_credential"],
     )
 
 
@@ -190,8 +187,14 @@ FEED = ExternalFeed(
             default=DEFAULT_DATASET,
             aliases=("--dataset",),  # renamed in #1739; goes in the release after
         ),
-        FeedOption("api_key", f"API key; defaults to ${DATABENTO_API_KEY_ENV}", secret=True),
+        FeedOption(
+            "api_key",
+            f"API key; defaults to ${DATABENTO_API_KEY_ENV}",
+            secret=True,
+            env=DATABENTO_API_KEY_ENV,
+        ),
         FeedOption("symbols", "Comma-separated symbols", default=DEFAULT_SYMBOLS, many=True),
+        connection.TP_CREDENTIAL,
     ),
     produces={
         DATABENTO_RAW_TABLE: (
