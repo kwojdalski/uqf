@@ -52,6 +52,15 @@ PY_ROOTS = (
     "sidecars",
 )
 
+#: Files whose strings ARE old spellings, by design: they name the spellings in
+#: order to retire them, so every entry would read as guidance here.
+LEDGERS = {
+    "python/uqs/src/uqs/cli/rename_expiry.py": (
+        "RENAMED_AFTER lists each old spelling with the stable tag it shipped "
+        "in; test_cli_rename_expiry holds it to the CLI tree (#1796)"
+    ),
+}
+
 #: (where, the old spelling as written) -> why it is named there on purpose.
 #: `where` is a file under the tree, or `uqs <path> --help` for help text.
 KEPT = {
@@ -202,9 +211,24 @@ def python_findings() -> list[tuple[str, int, list[str], str]]:
         (str(path.relative_to(UQF_ROOT)), n, words, why)
         for root in PY_ROOTS
         for path in sorted((UQF_ROOT / root).rglob("*.py"))
+        if str(path.relative_to(UQF_ROOT)) not in LEDGERS
         for n, words in python_references(path.read_text(errors="replace"))
         if (why := old_spelling(words)) is not None
     ]
+
+
+def test_every_ledger_exists_and_still_names_old_spellings():
+    """A LEDGERS entry is a file that exists and still names an old spelling,
+    or it is removed, so the exemption cannot outlive its reason."""
+    for rel in LEDGERS:
+        path = UQF_ROOT / rel
+        assert path.is_file(), rel
+        named = [
+            words
+            for _, words in python_references(path.read_text(errors="replace"))
+            if old_spelling(words) is not None
+        ]
+        assert named, f"{rel} no longer names an old spelling - remove it from LEDGERS"
 
 
 def help_findings() -> list[tuple[str, list[str], str]]:
