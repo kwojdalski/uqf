@@ -17,6 +17,7 @@ from uqs import timerange
 from uqs.cli import backfill_attached, completion
 from uqs.cli.range_options import DateOpt, LastOpt, RangeFromOpt, RangeToOpt
 from uqs.cli.renames import renamed
+from uqs.cli.safety import ChangesState
 from uqs.cli.shared import (
     JOB_OPERATIONS_PANEL,
     BasePortOpt,
@@ -40,7 +41,8 @@ from uqs.stack import backfill_wait as stack_backfill_wait
             "--force": "--any-writer",
             "--debug": "--debug",
             "--version": "--source-version",
-        }
+        },
+        ChangesState,
     ),
 )
 def backfill(

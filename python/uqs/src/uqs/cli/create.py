@@ -15,7 +15,7 @@ from typing import Annotated
 
 import typer
 
-from uqs.cli import completion
+from uqs.cli import completion, safety
 from uqs.cli.create_backfill import backfill_plan
 from uqs.cli.create_bundle import planning_root, refuse_tree_only, write_bundle_plan
 from uqs.cli.create_kinds import misplaced
@@ -44,7 +44,7 @@ app.add_typer(job_app, name="job")
 @job_app.command(
     "new",
     rich_help_panel=JOB_AUTHORING_PANEL,
-    cls=renamed({"--columns": "--schema", "--columns-from": "--schema-from"}),
+    cls=renamed({"--columns": "--schema", "--columns-from": "--schema-from"}, safety.ChangesState),
 )
 def new_job(
     name: Annotated[

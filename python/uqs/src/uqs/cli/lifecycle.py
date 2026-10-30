@@ -21,7 +21,7 @@ from uqs.attach import live as _registers_live_check  # noqa: F401 - the start g
 from uqs.cli import completion, start_follow, start_warnings
 from uqs.cli.force_stop import ForceOpt, _force_stop
 from uqs.cli.renames import BASE_PORT, alias_command, renamed
-from uqs.cli.safety import OverrideOpt, ReasonOpt, dry_run_note
+from uqs.cli.safety import ChangesState, OverrideOpt, ReasonOpt, dry_run_note
 from uqs.cli.shared import (
     PASS_THROUGH,
     BasePortOpt,
@@ -173,7 +173,7 @@ def _launch(
     start_follow.follow(wanted, already, before, port, level)
 
 
-@app.command(cls=renamed(_LAUNCH_RENAMES))
+@app.command(cls=renamed(_LAUNCH_RENAMES, ChangesState))
 def start(
     procs: ProcsArg = None,
     port: BasePortOpt = None,
@@ -201,7 +201,7 @@ def start(
     )  # fmt: skip
 
 
-@app.command(cls=renamed(_LAUNCH_RENAMES))
+@app.command(cls=renamed(_LAUNCH_RENAMES, ChangesState))
 def restart(
     procs: ProcsArg = None,
     port: BasePortOpt = None,
@@ -254,7 +254,7 @@ def _names_to_stop(procs: list[str] | None, profile: str | None) -> str:
     return " ".join(members)
 
 
-@app.command(cls=renamed(BASE_PORT | {"--force": "--kill"}))
+@app.command(cls=renamed(BASE_PORT | {"--force": "--kill"}, ChangesState))
 def stop(
     procs: ProcsArg = None,
     port: BasePortOpt = None,
@@ -314,5 +314,5 @@ def _exec(ctx: typer.Context, port: BasePortOpt = None) -> None:
     raise typer.Exit(code=result.returncode)
 
 
-app.command("exec", context_settings=PASS_THROUGH, cls=renamed(BASE_PORT))(_exec)
+app.command("exec", context_settings=PASS_THROUGH, cls=renamed(BASE_PORT, ChangesState))(_exec)
 alias_command(app, "raw", "uqs exec", _exec, context_settings=PASS_THROUGH, cls=renamed(BASE_PORT))

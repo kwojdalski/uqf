@@ -11,6 +11,7 @@ from rich.table import Table
 from uqs import timerange
 from uqs.cli.json_out import emit, json_opt
 from uqs.cli.range_options import DateOpt, LastOpt, RangeFromOpt, RangeToOpt
+from uqs.cli.safety import ReadOnly
 from uqs.cli.shared import (
     JOB_OPERATIONS_PANEL,
     InteractiveOpt,
@@ -105,7 +106,7 @@ def refills(holes: list[dict], twins: dict) -> tuple[list[dict], bool]:
     return out, cut
 
 
-@job_app.command("gaps", rich_help_panel=JOB_OPERATIONS_PANEL)
+@job_app.command("gaps", rich_help_panel=JOB_OPERATIONS_PANEL, cls=ReadOnly)
 def gaps(
     job: Annotated[str, typer.Argument(help="The streaming job, e.g. markout")],
     range_from: RangeFromOpt = None,

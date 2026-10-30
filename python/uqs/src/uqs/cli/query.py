@@ -22,6 +22,7 @@ from uqs.cli import completion
 from uqs.cli import query_target as via_target
 from uqs.cli.json_out import emit, json_opt
 from uqs.cli.renames import renamed
+from uqs.cli.safety import ChangesState
 from uqs.cli.shared import (
     ExportOpt,
     ProcArg,
@@ -148,7 +149,12 @@ QueryJson = json_opt(
 )
 
 
-@app.command(cls=renamed({"--raw": "--no-gateway", "--target": "--tunnel", "--proc": "PROC"}))
+@app.command(
+    cls=renamed(
+        {"--raw": "--no-gateway", "--target": "--tunnel", "--proc": "PROC"},
+        ChangesState,
+    )
+)
 def query(
     ctx: typer.Context,
     proc: ProcArg = None,

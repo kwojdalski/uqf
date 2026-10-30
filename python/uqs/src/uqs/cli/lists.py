@@ -113,14 +113,16 @@ def _noun_list(
     return command
 
 
-target_app.command("list")(_noun_list("targets", "List this machine's deploy targets."))
-runtime_app.command("list")(
+target_app.command("list", cls=safety.ReadOnly)(
+    _noun_list("targets", "List this machine's deploy targets.")
+)
+runtime_app.command("list", cls=safety.ReadOnly)(
     _noun_list("runtimes", "List the runtimes: whether each is here, and up.")
 )
-job_app.command("list", rich_help_panel=JOB_AUTHORING_PANEL)(
+job_app.command("list", rich_help_panel=JOB_AUTHORING_PANEL, cls=safety.ReadOnly)(
     _noun_list("jobs", "List every streaming job, normalizer and bounded worker in the tree.")
 )
-attachment_app.command("list")(
+attachment_app.command("list", cls=safety.ReadOnly)(
     _noun_list("attachments", "List every attachment: its state, and whether its publisher runs.")
 )
 
@@ -140,7 +142,7 @@ def _bypasses() -> list[dict]:
     ]
 
 
-override_app.command("list")(
+override_app.command("list", cls=safety.ReadOnly)(
     _noun_list(
         "named overrides",
         "List every named override: the commands that take it, and the check it bypasses.",
@@ -154,7 +156,7 @@ def _kinds() -> list[str]:
     return sorted(k for k in listing.LISTABLE_KINDS if k not in MOVED)
 
 
-@app.command("list", cls=renamed(BASE_PORT))
+@app.command("list", cls=renamed(BASE_PORT, safety.ReadOnly))
 def list_items(
     kind: Annotated[
         str | None,
