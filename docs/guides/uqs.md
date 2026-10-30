@@ -95,6 +95,18 @@ directory that exists is never touched, and a table a partition holds that
 `database.q` no longer declares is left alone - that is history. Running it
 twice changes nothing the second time.
 
+The partitions it judges are the ones q maps: it loads the HDB in one q process
+(`scripts/gates/hdb_layout.q`) and reads `.Q.pv` and `.Q.pd` back. In a
+segmented HDB, whose root holds `par.txt`, each partition is named by the
+segment holding it (`<segment>/<date>`), and a date held by two segments is
+checked in both, as every query reads both. A segment `par.txt` names that does
+not exist or cannot be read, and partition directories in a root beside
+`par.txt`, are refused by name before anything is written - q loads past a
+missing segment without a word. Without a KDB-X q (none on `PATH`, or `$QCMD`
+naming PeachQ, whose `\l` maps no partitioned database) the check reads the
+root's own date directories instead, and refuses a segmented HDB rather than
+judging it by its root (#1783).
+
 It should rarely be needed by hand, because `bootstrap` now does it on every
 `uqs` command. It is there because the situation is easy to create: each day's
 partition holds whatever tables existed when it was written, so **every table

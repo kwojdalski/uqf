@@ -10,6 +10,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
+from uqs.paths import UqsError
 from uqs.stack import hdb_shape
 
 SCHEMA = """\
@@ -37,8 +40,21 @@ def test_partitions_are_dated_directories_and_nothing_else(tmp_path):
     """`sym` is the enumeration domain every symbol column points into, not
     a partition; counting it would report it short of every table."""
     root = _hdb(tmp_path, {"2015.01.07": ["quote"], "2026.09.20": ["quote"]})
-    (root / "par.txt").write_text("/some/where\n")
+    (root / "notes").write_text("not a partition\n")
+    (root / "2026.09.21.bak").mkdir()
     assert hdb_shape.partitions(root) == ["2015.01.07", "2026.09.20"]
+
+
+def test_a_segmented_root_is_refused_not_listed(tmp_path):
+    """par.txt puts the partitions in the segments it names. The root alone
+    is not the database, so listing it would report a segmented HDB whole
+    without reading any of it (#1783): stack/hdb_layout.py asks q instead."""
+    root = _hdb(tmp_path, {})
+    (root / "par.txt").write_text("/some/where\n")
+    with pytest.raises(UqsError, match="segmented HDB"):
+        hdb_shape.partitions(root)
+    with pytest.raises(UqsError, match="segmented HDB"):
+        hdb_shape.listing(root)
 
 
 def test_partitions_are_oldest_first(tmp_path):

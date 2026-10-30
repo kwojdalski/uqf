@@ -254,9 +254,11 @@
     r:.qt.qproc.fillhdb.run[root;schema];
     .qunit.assertEquals[r 1;0;"the filler has nothing to fill there"];
     .qunit.assertEquals[.qt.qproc.fillhdb.snapshot[root,"/2026.01.02"];before;"the mistyped partition is byte-identical"];
-    c:system "env ",.qt.support.q_interpreter[]," scripts/gates/hdb_column_types.q ",root," ",root,
-        ".database.q -q < /dev/null";
-    .qunit.assertTrue[any c like "type_change|2026.01.02|book|qty|j|f";
+    / the partitions it reads are named to it: hdb_layout.q's, in `uqs data check` (#1783)
+    (hsym `$root,".partitions") 0: (root,"/2026.01.01";root,"/2026.01.02");
+    c:system "env ",.qt.support.q_interpreter[]," scripts/gates/hdb_column_types.q ",root,
+        ".partitions ",root,".database.q -q < /dev/null";
+    .qunit.assertTrue[any c like "type_change|",root,"/2026.01.02|book|qty|j|f";
         "hdb_column_types.q reports it: stored as j, declared f"]};
 
 .qt.qproc.fillhdb.test_the_destructive_dbmaint_operations_are_not_reachable:{[t]

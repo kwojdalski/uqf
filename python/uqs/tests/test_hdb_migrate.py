@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 
 from uqs.paths import UqsError, UqsPaths
-from uqs.stack import hdb_migrate, hdb_types
+from uqs.stack import hdb_layout, hdb_migrate, hdb_types
 
 ROOT = Path(__file__).resolve().parents[3]
 DAY = date(2026, 1, 1)
@@ -94,7 +94,8 @@ def test_rename_and_lossless_type_change_keep_rows_and_a_rollback_copy(hdb, q_bi
     assert "price_type=9" in result.stdout
     assert "prices=12 13f" in result.stdout
     assert "EURUSD`USDJPY" in result.stdout
-    assert hdb_types.type_changes(hdb, hdb.torqapphome / "database.q") == []
+    found = hdb_layout.inspect(hdb, hdb.hdb_dir).dirs
+    assert hdb_types.type_changes(hdb, hdb.torqapphome / "database.q", found) == []
 
 
 def test_an_unmapped_source_column_is_refused_without_replacing_it(hdb):
