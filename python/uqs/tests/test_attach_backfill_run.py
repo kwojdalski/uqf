@@ -9,6 +9,7 @@ and where they do not, what the run leaves behind, and who owns the attachment w
 from __future__ import annotations
 
 import os
+import shutil
 import socket
 import subprocess
 import time
@@ -86,7 +87,7 @@ def upstream():
 class FakeReader:
     """A q process that answers `reload` the way a TorQ HDB does, and says it was asked."""
 
-    def __init__(self, tmp: Path, name: str) -> None:
+    def __init__(self, tmp: Path, name: str, hdb: Path | None = None) -> None:
         self.port = _free_port()
         self.flag = tmp / f"{name}.refuse"
         self.log = tmp / f"{name}.reloads"
@@ -94,12 +95,23 @@ class FakeReader:
         self.hide = tmp / f"{name}.hide"
         script.write_text(
             f'flag:hsym `$"{self.flag}"; hide:hsym `$"{self.hide}"; trail:hsym `$"{self.log}";\n'
-            f"{DATASET}:([] time:`timestamp$());\n"
-            'reload:{[x] if[not ()~key flag; \'"injected: this reader refuses to reload"];\n'
+            + (
+                # a real database, as a TorQ HDB holds one: the table list comes from its latest
+                # partition, and a reload re-maps it - so what it serves is what is on disk (#1773)
+                f'root:"{hdb}"; system "l ",root;\n'
+                if hdb is not None
+                else f"{DATASET}:([] time:`timestamp$());\n"
+            )
+            + 'reload:{[x] if[not ()~key flag; \'"injected: this reader refuses to reload"];\n'
             '  h:hopen trail; h "reload\\n"; hclose h;\n'
-            f"  $[()~key hide; `{DATASET} set ([] time:`timestamp$());\n"
-            f'    value "delete {DATASET} from `."];\n'
-            "  1b};\n"
+            + ('  system "l ",root;\n' if hdb is not None else "")
+            + (
+                f'  if[not ()~key hide; @[{{value "delete {DATASET} from `."}};::;{{[e] ::}}]];\n'
+                if hdb is not None
+                else f"  $[()~key hide; `{DATASET} set ([] time:`timestamp$());\n"
+                f'    value "delete {DATASET} from `."];\n'
+            )
+            + "  1b};\n"
         )
         q = q_interpreter(os.environ)
         self.process = subprocess.Popen(
@@ -148,7 +160,7 @@ def world(monkeypatch, tmp_path, upstream):
     for var in ("UQF_MODE", "UQF_ON_CONFLICT", "UQF_FIXTURE_WRITES"):
         monkeypatch.delenv(var, raising=False)
     monkeypatch.setattr(coordination, "HOST", Host(local_names=("testhost",)))
-    reader = FakeReader(tmp_path, "hdb1")
+    reader = FakeReader(tmp_path, "hdb1", hdb)
     stack = HdbStack(hdb, reader_ports={"hdb1": reader.port})
     stack.state_over = {n: dict(FUTURE) | {"partition": "2090.01.01"} for n in ("rdb1", "wdb1")}
     monkeypatch.setattr(service, "ipc_for", lambda att: stack)
@@ -208,6 +220,20 @@ def run(world, *, mode="run"):
         mode=mode,
         on_conflict="replace",
     )
+
+
+def q_run(tmp: Path, source: str) -> None:
+    script = tmp / "edit.q"
+    script.write_text(source + "; exit 0\n")
+    done = subprocess.run(
+        [str(q_interpreter(os.environ)), str(script), "-q"],
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+    assert done.returncode == 0, done.stdout + done.stderr
 
 
 def read_rows(hdb: Path, day: str) -> int:
@@ -428,9 +454,10 @@ def test_a_reader_that_reloads_but_does_not_serve_the_table_is_not_queryable(wor
     assert code == 3 and result["outcome"] == "written_not_queryable", started.log.read_text()
     (why,) = result["failed_readers"]
     assert why.startswith("hdb1: reloaded, but its HDB does not define imported_trades yet")
-    assert "next end of day" in why and "hdb-check --attach NAME --apply" in why, (
-        "it says how to fix it"
+    assert "next end of day" in why and "uqs data check --attach NAME --apply" in why, (
+        "it says how to fix it, with the command as it is called now"
     )
+    assert "hdb-check" not in why
     assert not (started.state_dir / "etl_ready").exists()
     world.reader.forget_table(False)
     second, _ = run(world)
@@ -577,3 +604,115 @@ def test_the_listing_and_the_run_ledger_show_the_attached_run(world):
         "the re-run command names the destination, or it would write uqf's HDB"
     )
     assert str(started.state_dir / "logs") in shown.replace("\n", "")
+
+
+# ------------------------------------ queryable means the COVERED dates are served (#1773)
+#
+# The reader reloads, and its table list (from the latest partition) names the table - and a query
+# over a covered date still fails, because that date's own partition lacks the table or a column.
+# Each of these leaves the run written and covered, readiness unreleased, and exit 3.
+
+LATER = "2015.01.09"
+
+
+def _written_then_unreleased(world):
+    """Rows written and covered, readiness never released: the reader refused the first time."""
+    world.reader.refuse()
+    started, _ = run(world)
+    code, _ = backfill_run.follow(started, timeout=120)
+    assert code == 3, started.log.read_text()
+    world.reader.refuse(False)
+    return started
+
+
+def _with_a_later_partition_holding_the_table(world):
+    """The latest partition holds the table, so the reader LISTS it, whatever a covered date has."""
+    shutil.copytree(world.hdb / "2015.01.07" / DATASET, world.hdb / LATER / DATASET)
+
+
+def _rerun(world):
+    started, _ = run(world)
+    code, result = backfill_run.follow(started, timeout=120)
+    return started, code, result
+
+
+def test_a_covered_date_without_the_table_is_not_queryable_though_the_table_is_listed(world):
+    first = _written_then_unreleased(world)
+    _with_a_later_partition_holding_the_table(world)
+    day = world.hdb / "2015.01.07" / DATASET
+    kept = world.tmp / "kept"
+    shutil.move(day, kept)
+    started, code, result = _rerun(world)
+    assert code == 3 and result["outcome"] == "written_not_queryable", started.log.read_text()
+    (why,) = result["failed_readers"]
+    assert why.startswith("hdb1: reloaded, but cannot serve imported_trades for the covered dates")
+    assert "2015.01.07: no imported_trades directory" in why, "reader, date and table are named"
+    assert "uqs data check --attach NAME --apply" in why
+    assert (first.state_dir / "etl_coverage").is_file(), "coverage stays"
+    assert not (first.state_dir / "etl_ready").exists(), "readiness does not advance"
+
+
+def test_after_a_repair_a_rerun_releases_readiness_without_rewriting_rows(world):
+    first = _written_then_unreleased(world)
+    _with_a_later_partition_holding_the_table(world)
+    day = world.hdb / "2015.01.07" / DATASET
+    kept = world.tmp / "kept"
+    shutil.move(day, kept)
+    _, code, _ = _rerun(world)
+    assert code == 3
+    shutil.move(kept, day)
+    written = snapshot(day)
+    started, code, result = _rerun(world)
+    assert code == 0 and result["outcome"] == "queryable", started.log.read_text()
+    assert result["state"] == "idle", "nothing was fetched again"
+    assert snapshot(day) == written, "the rows were not rewritten"
+    assert (first.state_dir / "etl_ready").is_file(), "readiness advanced"
+
+
+def test_a_covered_date_missing_a_column_is_not_queryable(world):
+    first = _written_then_unreleased(world)
+    _with_a_later_partition_holding_the_table(world)
+    d = world.hdb / "2015.01.07" / DATASET
+    q_run(world.tmp, f'p:`$":{d}/.d"; p set (get p) except `size')
+    started, code, result = _rerun(world)
+    assert code == 3 and result["outcome"] == "written_not_queryable", started.log.read_text()
+    (why,) = result["failed_readers"]
+    assert "2015.01.07: imported_trades lacks column(s) size" in why
+    assert not (first.state_dir / "etl_ready").exists()
+
+
+def test_a_covered_date_with_an_incompatible_column_type_is_not_queryable(world):
+    first = _written_then_unreleased(world)
+    _with_a_later_partition_holding_the_table(world)
+    d = world.hdb / "2015.01.07" / DATASET
+    q_run(world.tmp, f'p:`$":{d}/size"; p set `int$get p')
+    started, code, result = _rerun(world)
+    assert code == 3 and result["outcome"] == "written_not_queryable", started.log.read_text()
+    (why,) = result["failed_readers"]
+    assert "2015.01.07: imported_trades has incompatible type for size" in why
+    assert not (first.state_dir / "etl_ready").exists()
+
+
+def test_one_reader_failing_leaves_no_qualified_readiness(world):
+    second = FakeReader(world.tmp, "hdb2", world.hdb)
+    world.stack = HdbStack(
+        world.hdb, other=world.hdb, reader_ports={"hdb1": world.reader.port, "hdb2": second.port}
+    )
+    world.stack.state_over = {
+        n: dict(FUTURE) | {"partition": "2090.01.01"} for n in ("rdb1", "wdb1")
+    }
+    world.monkeypatch.setattr(service, "ipc_for", lambda att: world.stack)
+    try:
+        second.forget_table()
+        started, _ = run(world)
+        code, result = backfill_run.follow(started, timeout=120)
+        assert code == 3 and result["outcome"] == "written_not_queryable", started.log.read_text()
+        (why,) = result["failed_readers"]
+        assert why.startswith("hdb2: reloaded, but its HDB does not define imported_trades yet")
+        assert not (started.state_dir / "etl_ready").exists(), "one reader short: nothing is ready"
+        second.forget_table(False)
+        again, code, result = _rerun(world)
+        assert code == 0 and result["outcome"] == "queryable", again.log.read_text()
+        assert (started.state_dir / "etl_ready").is_file()
+    finally:
+        second.stop()

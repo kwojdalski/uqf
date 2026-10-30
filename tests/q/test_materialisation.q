@@ -658,3 +658,48 @@
     .qetl.coverage.mark_ready[.qt.qetl.coverage.rdy[`rdy_d];2026.10.10D11:00];
     .qunit.assertEquals[(.qetl.coverage.ready_table[])[`dataset`partition`source_version!(`rdy_d;`;`v1)]`ready_at;2026.10.10D12:00;
         "a late, older release does not unready what a newer one showed"]};
+
+/ --- the dates a release lets through (#1773) -------------------------------
+/ release_ready releases EVERY current claim recorded before the watermark, so the dates to verify
+/ are those of all of them, an earlier run's included - not only the current run's windows.
+
+.qt.qetl.coverage.test_release_dates_follow_half_open_claims:{[t]
+    .qt.support.reset_coverage_ledger[];
+    / [Sep 10 22:00; Sep 11 02:00) spans two dates; [Sep 12 00:00; Sep 13 00:00) is Sep 12 alone
+    .qetl.coverage.stage_completion[`rel_a;`;`v1;2026.09.10D22:00;2026.09.11D02:00;5];
+    .qetl.coverage.stage_completion[`rel_a;`;`v1;2026.09.12D00:00;2026.09.13D00:00;5];
+    r:.qetl.coverage.release_dates[.qt.qetl.coverage.rdy[`rel_a];.z.p];
+    .qunit.assertEquals[r`date;2026.09.10 2026.09.11 2026.09.12;"a window ending at midnight does not claim the next day"]};
+
+.qt.qetl.coverage.test_release_dates_skip_a_claim_that_published_nothing:{[t]
+    .qt.support.reset_coverage_ledger[];
+    .qetl.coverage.stage_completion[`rel_b;`;`v1;2026.09.10D00:00;2026.09.11D00:00;0];
+    .qetl.coverage.stage_completion[`rel_b;`;`v1;2026.09.11D00:00;2026.09.12D00:00;3];
+    .qunit.assertEquals[(.qetl.coverage.release_dates[.qt.qetl.coverage.rdy[`rel_b];.z.p])`date;enlist 2026.09.11;
+        "an empty window leaves no partition to check"]};
+
+.qt.qetl.coverage.test_release_dates_cover_an_earlier_runs_unreleased_claims:{[t]
+    .qt.support.reset_coverage_ledger[];
+    .qetl.coverage.stage_completion[`rel_c;`;`v1;2026.09.10D00:00;2026.09.11D00:00;4];
+    / the earlier run's reload failed: no watermark moved. This run adds another window.
+    .qetl.coverage.stage_completion[`rel_c;`;`v1;2026.09.14D00:00;2026.09.15D00:00;4];
+    .qunit.assertEquals[(.qetl.coverage.release_dates[.qt.qetl.coverage.rdy[`rel_c];.z.p])`date;2026.09.10 2026.09.14;
+        "the watermark would release both, so both dates are checked"]};
+
+.qt.qetl.coverage.test_release_dates_leave_out_what_the_watermark_already_released:{[t]
+    .qt.support.reset_coverage_ledger[];
+    .qetl.coverage.stage_completion[`rel_d;`;`v1;2026.09.10D00:00;2026.09.11D00:00;4];
+    .qetl.coverage.mark_ready[.qt.qetl.coverage.rdy[`rel_d];.z.p];
+    .qetl.coverage.stage_completion[`rel_d;`;`v1;2026.09.14D00:00;2026.09.15D00:00;4];
+    .qunit.assertEquals[(.qetl.coverage.release_dates[.qt.qetl.coverage.rdy[`rel_d];.z.p])`date;enlist 2026.09.14;
+        "only claims recorded after the old watermark are being released"]};
+
+.qt.qetl.coverage.test_release_dates_ignore_other_keys_and_withdrawn_claims:{[t]
+    .qt.support.reset_coverage_ledger[];
+    .qetl.coverage.stage_completion[`rel_e;`;`v1;2026.09.10D00:00;2026.09.11D00:00;4];
+    .qetl.coverage.stage_completion[`rel_e;`;`v2;2026.09.12D00:00;2026.09.13D00:00;4];
+    .qetl.coverage.stage_completion[`rel_e;`;`v1;2026.09.20D00:00;2026.09.21D00:00;4];
+    .qetl.coverage.supersede[`rel_e;`;`v1;2026.09.20D00:00;2026.09.21D00:00];
+    .qunit.assertEquals[(.qetl.coverage.release_dates[.qt.qetl.coverage.rdy[`rel_e];.z.p])`date;enlist 2026.09.10;
+        "another source_version's claim and a withdrawn one are not released"];
+    .qunit.assertEquals[count .qetl.coverage.release_dates[0#.qt.qetl.coverage.rdy[`rel_e];.z.p];0;"no keys, no dates"]};

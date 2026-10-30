@@ -913,6 +913,17 @@ that is the case until the stack's next end of day writes it (or
 `uqs data check --attach NAME --apply` fills it), and the run says so by name
 instead of reporting success.
 
+Listing the table is not enough either (#1773). "Queryable" means a query
+restricted to the **covered dates** is served, so the runner also inspects each
+reader, by metadata only (no row scan): the latest partition holds the table,
+and every date spanned by the claims being released has the table's directory
+with the expected columns and types. The claims released are all the current
+ones recorded since the key's last readiness release, so an earlier run's
+unverified windows are checked too. A date that fails is named with the reader,
+the table and what is missing; coverage stays and readiness does not advance.
+Unrestricted queries over older dates that nobody covered are not promised:
+`uqs data check --apply` fills those.
+
 `written_not_queryable` is retryable without writing anything: run the same
 command again. Every window is covered, so the worker is idle, the readers are
 asked again, and the readiness record advances only when each has answered.
