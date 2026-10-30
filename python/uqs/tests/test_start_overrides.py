@@ -17,7 +17,7 @@ from typer.testing import CliRunner
 
 from uqs import cli, interpreter
 from uqs import paths as stack_paths
-from uqs.cli import shared, start_override_opts
+from uqs.cli import shared, start_override_opts, target_confirm
 from uqs.deploy import control
 from uqs.paths import UqsError
 from uqs.stack import occupancy, runtime, start_policy
@@ -188,7 +188,7 @@ def test_the_old_skip_flag_still_gives_the_override_for_one_release(monkeypatch)
 def test_a_remote_start_forwards_the_reason_intact():
     reason = "uat's q is 4.1; $(not run)"
     args = ["start", "rdb1", "--override", "q-version-check", "--reason", reason]
-    assert control.changes_the_server(args)
+    assert target_confirm.changes_the_server(args)
     r = control.Remote("uat", "h", "/srv/uqf", remote_user="svc")
     script = shlex.split(control.remote_command(r, args))[-1]  # what the account's bash runs
     assert shlex.split(script.rsplit("exec ", 1)[1]) == [".venv/bin/uqs", *args]

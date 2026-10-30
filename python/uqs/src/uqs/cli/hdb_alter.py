@@ -18,6 +18,7 @@ from uqs.cli import completion
 from uqs.cli.hdb_scope import ApplyOpt, AttachOpt, HdbOpt, YesOpt, _table, resolve, run_scoped
 from uqs.cli.json_out import json_opt
 from uqs.cli.renames import alias_command
+from uqs.cli.safety import ConfirmsOnServer
 from uqs.cli.shared import _die, data_app
 from uqs.paths import UqsError
 from uqs.stack.hdb_alter import Request
@@ -28,7 +29,7 @@ AlterJson = json_opt(
 )
 
 
-@data_app.command("alter")
+@data_app.command("alter", cls=ConfirmsOnServer)
 def hdb_alter(
     table: Annotated[
         str | None,

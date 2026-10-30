@@ -17,6 +17,7 @@ import typer
 
 from uqs.cli.external import FeedArg, _feed, connector_app
 from uqs.cli.json_out import emit, json_opt
+from uqs.cli.safety import ReadOnly
 from uqs.cli.shared import _die, _paths
 from uqs.paths import UqsError
 from uqs.stack import follow as log_follow
@@ -40,7 +41,7 @@ LogsJson = json_opt(
 )
 
 
-@connector_app.command("logs")
+@connector_app.command("logs", cls=ReadOnly)
 def logs(
     name: FeedArg,
     follow: Annotated[
