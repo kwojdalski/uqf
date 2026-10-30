@@ -9,11 +9,25 @@ the uqf stack](../guides/uqs.md).
 ![The consumer polls the topic, publishes to stp1 and only then commits the offset; kafka_flow1 subscribes, compares each record with a per-topic, per-partition high-water mark held in process state, publishes only new records as client_flow and the ones it cannot decode as kafka_dead_letter](../diagrams/kafka.svg)
 
 ```
-uqs connector start kafka                                      # localhost:9092, uqf.client.flow
-uqs connector start kafka --brokers broker:9092 --topic fx.deals --group uqf-kafka-flow
+uqs connector start kafka                                      # $UQF_KAFKA_BROKERS or localhost:9092, every declared topic
+uqs connector start kafka --brokers broker:9092 --topic uqf.client.flow --group uqf-kafka-flow
 uqs connector status kafka
 uqs connector stop kafka
 ```
+
+The Python consumer reads the same two variables as `kafka_feed1` below, so one
+cluster is configured once: `--brokers`, else `UQF_KAFKA_BROKERS`, else the demo
+default `localhost:9092`; `--topic`, else `UQF_KAFKA_TOPICS`, else **every topic
+a decoder job declares** (`.qetl.kafka.topic.define`) --- `kafka_feed1`'s
+default, read from the same q declarations rather than kept as a second list. A
+topic no decoder declares is refused before anything starts, as `kafka_feed1`
+refuses it, naming the declared ones: its records would only be dead-lettered.
+The consumer group is deliberately **not** shared: this one defaults to
+`uqf-kafka-flow`, `kafka_feed1` to `uqf-kafka-q`, and `UQF_KAFKA_GROUP` is read
+by the q feed only, so the two alternatives never split one group's partitions.
+The tickerplant credential is every connector's (`--tp-credential`,
+`UQF_TP_CREDENTIAL`, see [connector
+configuration](../reference/environment.md#connector-configuration)).
 
 A runnable end-to-end example - a disposable broker, synthetic crypto trades, a
 decoder in a sidecar bundle and a verifier that queries the RDB - is

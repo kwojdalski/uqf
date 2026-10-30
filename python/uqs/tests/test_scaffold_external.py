@@ -190,6 +190,8 @@ exec(compile(sys.stdin.read(), "ws_feed.py", "exec"), module.__dict__)
 option = feeds.FeedOption("ws_url", "Websocket to subscribe to", default="wss://x")
 module.FEED = dataclasses.replace(module.FEED, options=(option,))
 sys.modules["uqs.external.ws_feed"] = module
+# ws_raw is in the plan's scratch tree, not this one's plant_tables.q (#1786)
+feeds.unplanted = lambda feed, root: []
 real = pkgutil.iter_modules
 pkgutil.iter_modules = lambda path: [*real(path), types.SimpleNamespace(name="ws_feed")]
 from typer.testing import CliRunner
