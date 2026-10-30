@@ -202,7 +202,7 @@ def test_the_folders_are_layers(folder):
     The one that matters is `model/` importing nothing: it is the DECLARED
     shape of the stack - which pipelines exist, what tables they write, what
     depends on what - and it has to be readable without the code that starts
-    processes. `uqs summary` on a dead fleet, the generated docs and the
+    processes. `uqs status` on a dead fleet, the generated docs and the
     scaffolder all rely on that, and each would fail in a different confusing
     way if a `stack/` import crept in.
     """

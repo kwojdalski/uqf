@@ -1,7 +1,7 @@
-"""`uqs deploy status`, `rollback`, `prune` and `verify`: commands about a
+"""`uqs deploy status`, `rollback`, `prune` and `check`: commands about a
 server that already runs a release, beside cli/deploy.py's build and push,
 which make and install one. status, rollback and prune read what the server's
-own pushes recorded; verify runs ON the server, from inside a release.
+own pushes recorded; check runs ON the server, from inside a release.
 
 status, rollback and prune name their server as a TARGET, or by the
 connection flags for one no target declares (cli/deploy_connection.py, #1736).
