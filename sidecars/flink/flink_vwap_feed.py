@@ -14,15 +14,12 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
+from uqs.external import connection
 from uqs.external.feeds import ExternalFeed
 from uqs.external.lifecycle import DetachedProcess
 from uqs.paths import UqsPaths
-from uqs.stack.procs import get_process_config
 
 RAW_TABLE = "flink_vwap_raw"
-
-#: The tickerplant credential every external publisher uses; stp1 checks it.
-CREDENTIAL = "feed:pass"
 
 
 def _process(paths: UqsPaths) -> DetachedProcess:
@@ -34,7 +31,10 @@ def _process(paths: UqsPaths) -> DetachedProcess:
 
 
 def start(paths: UqsPaths, options: Mapping[str, Any]) -> int:
-    port = get_process_config(paths, "stp1")["port"]
+    """stp1's host, port and credential are every connector's
+    (uqs.external.connection): `options` holds --tp-credential, resolved."""
+    port = connection.tickerplant_port(paths)
+    credential = connection.tp_credential(options["tp_credential"])
     runner = Path(__file__).resolve().parent / "flink_vwap_streamer.py"
     cmd = [
         "uv",
@@ -44,11 +44,11 @@ def start(paths: UqsPaths, options: Mapping[str, Any]) -> int:
         "python",
         str(runner),
         "--host",
-        "localhost",
+        connection.TP_HOST,
         "--port",
         str(port),
         "--credential",
-        CREDENTIAL,
+        credential,
         "--table",
         RAW_TABLE,
     ]
@@ -70,5 +70,6 @@ FEED = ExternalFeed(
     start,
     stop,
     status,
+    options=(connection.TP_CREDENTIAL,),
     produces={RAW_TABLE: "the external flink_vwap feed (`uqs connector start flink_vwap`)"},
 )

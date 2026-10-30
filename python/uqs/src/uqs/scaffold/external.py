@@ -215,15 +215,12 @@ from pathlib import Path
 from collections.abc import Mapping
 from typing import Any
 
+from uqs.external import connection
 from uqs.external.feeds import ExternalFeed
 from uqs.external.lifecycle import DetachedProcess
 from uqs.paths import UqsPaths
-from uqs.stack.procs import get_process_config
 
 RAW_TABLE = "{raw_table}"
-
-#: The tickerplant credential every external publisher uses; stp1 checks it.
-CREDENTIAL = "feed:pass"
 
 
 def _process(paths: UqsPaths) -> DetachedProcess:
@@ -235,15 +232,20 @@ def _process(paths: UqsPaths) -> DetachedProcess:
 
 
 def start(paths: UqsPaths, options: Mapping[str, Any]) -> int:
-    """`options` holds every option FEED declares, defaults applied - none yet:
-    add a FeedOption to FEED's options= and it is a `connector start` option."""
-    port = get_process_config(paths, "stp1")["port"]
+    """`options` holds every option FEED declares, defaults applied: add a
+    FeedOption to FEED's options= and it is a `connector start` option.
+
+    stp1's host, port and credential are every connector's, so they are not
+    written here (uqs.external.connection): --tp-credential, else
+    $UQF_TP_CREDENTIAL, else the starter pack's demo login."""
+    port = connection.tickerplant_port(paths)
+    credential = connection.tp_credential(options["tp_credential"])
     runner = Path(__file__).resolve().parent / "{name}_streamer.py"
     cmd = [
         "uv", "run", "--project", str(paths.repo_root / "python" / "uqs"),
         "python", str(runner),
-        "--host", "localhost", "--port", str(port),
-        "--credential", CREDENTIAL, "--table", RAW_TABLE,
+        "--host", connection.TP_HOST, "--port", str(port),
+        "--credential", credential, "--table", RAW_TABLE,
     ]
     return _process(paths).start(cmd, cwd=paths.repo_root)
 
@@ -263,6 +265,7 @@ FEED = ExternalFeed(
     start,
     stop,
     status,
+    options=(connection.TP_CREDENTIAL,),
     produces={{RAW_TABLE: "the external {name} feed (`uqs connector start {name}`)"}},
 )
 '''

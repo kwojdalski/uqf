@@ -26,6 +26,7 @@ from __future__ import annotations
 import importlib
 import importlib.util
 import inspect
+import os
 import pkgutil
 import sys
 from collections.abc import Callable, Iterable, Mapping
@@ -36,7 +37,8 @@ from typing import Any
 
 from uqs.logger import get_logger
 from uqs.model.connectors import bundle_connectors, feed_names, feed_produces
-from uqs.paths import UqsError, UqsPaths
+from uqs.model.schemas import definitions_in
+from uqs.paths import TABLES_FILE, UqsError, UqsPaths
 
 log = get_logger()
 
@@ -51,7 +53,10 @@ def split(text: str) -> tuple[str, ...]:
 
 @dataclass(frozen=True)
 class FeedOption:
-    """One start option. `top_n_levels` is `--top-n-levels` on the command line."""
+    """One start option. `top_n_levels` is `--top-n-levels` on the command line.
+
+    Its value resolves in one order (#1786): given, else `$env` when it names a
+    variable that is set, else `default` - see external/connection.py."""
 
     name: str
     help: str
@@ -61,19 +66,44 @@ class FeedOption:
     secret: bool = False  # masked as *** in a dry run
     #: old spellings kept for one release after a rename (#1738 rule 6, cli/renames.py)
     aliases: tuple[str, ...] = ()
+    #: the environment variable that supplies it when it is not given ("" for none)
+    env: str = ""
+    #: called with (value, where it came from) before a start or a dry run;
+    #: raises UqsError - naming the origin, never a secret's value - to refuse it
+    validate: Callable[[Any, str], None] | None = None
 
     @property
     def flag(self) -> str:
         return "--" + self.name.replace("_", "-")
 
-    def value(self, given: Any) -> Any:
+    def _from_env(self, environ: Mapping[str, str] | None) -> str | None:
+        if not self.env:
+            return None
+        text = (os.environ if environ is None else environ).get(self.env, "")
+        return text if text.strip() else None
+
+    def origin(self, given: Any, environ: Mapping[str, str] | None = None) -> str:
+        """Where the value for `given` comes from: the flag, `$env`, or "default"."""
+        if given is not None:
+            return self.flag
+        return f"${self.env}" if self._from_env(environ) is not None else "default"
+
+    def value(self, given: Any, environ: Mapping[str, str] | None = None) -> Any:
         """What `start` receives for `given`, the value as typed (None: not given).
 
         `is None`, not truthiness: `--interval-ms 0` or `--symbols ""` was typed,
-        and reaches the feed as typed rather than as the default."""
+        and reaches the feed as typed rather than as the default. Not given, a
+        set `$env` comes before the default."""
         if given is None:
-            return self.default
-        return split(given) if self.many else given
+            given = self._from_env(environ)
+            if given is None:
+                return self.default
+        if self.type is int and isinstance(given, str):
+            try:
+                given = int(given)
+            except ValueError:
+                raise UqsError(f"{self.flag}: ${self.env} is not an integer") from None
+        return split(given) if self.many and isinstance(given, str) else given
 
 
 @dataclass(frozen=True)
@@ -97,13 +127,48 @@ class ExternalFeed:
     def status_title(self) -> str:
         return self.title or f"{self.name} feed status"
 
+    #: called with (paths, the start options) before a start or a dry run, to
+    #: refuse a setting that binds to nothing - a topic no decoder declares
+    check: Callable[[UqsPaths, Mapping[str, Any]], None] | None = None
+
     def start_options(self, given: Mapping[str, Any]) -> dict[str, Any]:
-        """Every declared option for `start`: as given, else its default."""
+        """Every declared option for `start`: as given, else `$env`, else its default."""
         return {o.name: o.value(given.get(o.name)) for o in self.options}
+
+    def check_bindings(self, paths: UqsPaths, given: Mapping[str, Any]) -> dict[str, Any]:
+        """The start options for `given`, refused (UqsError) unless what they and
+        the feed bind to agrees: each option's own check, every table the feed
+        `produces` defined in the plant, then the feed's `check`.
+
+        Run before a start and by a dry run, so a mismatch is an error naming
+        the fix rather than a publisher whose rows the tickerplant drops."""
+        for option in self.options:
+            if option.validate is not None:
+                given_value = given.get(option.name)
+                option.validate(option.value(given_value), option.origin(given_value))
+        options = self.start_options(given)
+        if missing := unplanted(self, paths.repo_root):
+            raise UqsError(
+                f"feed {self.name} publishes {', '.join(missing)}, which {TABLES_FILE} "
+                "does not define - the tickerplant would refuse every row. Install the "
+                "bundle that declares it (`uqs job install BUNDLE`), or correct the "
+                "table its connector names"
+            )
+        if self.check is not None:
+            self.check(paths, options)
+        return options
 
     def started(self, pid: int) -> str:
         message = f"{self.name} feed started (pid {pid})"
         return f"{message} - {self.started_note}" if self.started_note else message
+
+
+def unplanted(feed: ExternalFeed, root: Path) -> list[str]:
+    """The tables `feed` produces that the tree's plant_tables.q does not define,
+    read now - an installed bundle's tables are added to it."""
+    path = root / TABLES_FILE
+    defined = definitions_in(path.read_text()) if path.is_file() else {}
+    return sorted(set(feed.produces) - set(defined))
 
 
 def _feeds_in(module: ModuleType) -> tuple[ExternalFeed, ...]:
@@ -170,6 +235,12 @@ def check_options(feeds: Mapping[str, ExternalFeed]) -> dict[str, tuple[FeedOpti
                 out[option.name] = (option, [feed.name])
                 continue
             first, takers = out[option.name]
+            if first.env != option.env:
+                raise UqsError(
+                    f"{option.flag} is declared by feeds {takers[0]} and {feed.name} with "
+                    f"different variables (${first.env or '-'} and ${option.env or '-'}) - "
+                    "one CLI option reads one"
+                )
             if (first.type, first.many) != (option.type, option.many):
                 raise UqsError(
                     f"{option.flag} is declared by feeds {takers[0]} and {feed.name} with "

@@ -63,7 +63,7 @@ from uqs.cli import (
     table_browser,
 )
 from uqs.cli import query as query_cli
-from uqs.external import crypto, kafka_feed
+from uqs.external import connection, crypto, kafka_feed
 from uqs.external.crypto import (
     CRYPTO_FILLS_RECORDER_TABLE,
     CRYPTO_REAL_FILLS_RECORDER_TABLE,
@@ -133,6 +133,9 @@ class _Paths:
     orchestrator_dir: Path = Path("TORQDATA/orchestrator")
     #: Never written here, so deployment.members() finds no set (#1318).
     generated_deployment: Path = Path("TORQDATA/deployment.txt")
+    #: The real tree: `connector start` reads its plant tables and Kafka
+    #: topics before a start (#1786).
+    repo_root: Path = Path(__file__).resolve().parents[3]
 
     @property
     def runtime_declaration(self) -> runtimes.Runtime:
@@ -1536,12 +1539,16 @@ def test_a_crypto_stop_refusal_exits_one(monkeypatch):
 def test_kafka_starts_with_its_own_defaults(monkeypatch):
     """Every feed's options are optional at the CLI, so each feed's defaults
     are filled in by the feed, not left as None for it to trip over."""
+    for name in ("UQF_KAFKA_BROKERS", "UQF_KAFKA_TOPICS", "UQF_TP_CREDENTIAL"):
+        monkeypatch.delenv(name, raising=False)
     kafka = _patch(monkeypatch, kafka_feed, "start_kafka_feed", result=7)
-    assert runner.invoke(cli.app, ["connector", "start", "kafka", "--topic", "t"]).exit_code == 0
+    argv = ["connector", "start", "kafka", "--topic", "uqf.client.flow"]
+    assert runner.invoke(cli.app, argv).exit_code == 0
     assert kafka.kwargs == {
         "brokers": kafka_feed.DEFAULT_BROKERS,
-        "topic": "t",
+        "topic": "uqf.client.flow",
         "group": kafka_feed.DEFAULT_GROUP,
+        "credential": connection.DEMO_TP_CREDENTIAL,
     }
 
 

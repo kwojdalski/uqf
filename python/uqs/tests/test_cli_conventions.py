@@ -378,7 +378,7 @@ OPTIONS |= {
     for name in (
         "--api-key", "--brokers", "--databento-dataset", "--group", "--interval-ms",
         "--oms-socket-path", "--poll-interval-ms", "--symbol", "--symbols", "--top-n-levels",
-        "--topic", "--venues",
+        "--topic", "--tp-credential", "--venues",
     )
 }  # fmt: skip
 

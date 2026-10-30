@@ -186,7 +186,10 @@ Credentials never enter an artifact. On the server, put them in
 - `scripts/torqconfig/sources.csv`: what each source connects to, naming the
   variable that holds any secret (`uqs config sources`);
 - `secrets.env`: the `NAME=VALUE` lines for those variables. `deploy.env`
-  sources it, and a deployment refuses it if others can read it.
+  sources it, and a deployment refuses it if others can read it. A bundle's
+  connector presents the tickerplant credential every connector shares:
+  `UQF_TP_CREDENTIAL` here replaces the starter pack's demo login ([connector
+  configuration](../reference/environment.md#connector-configuration)).
 
 ODBC sources also need a driver set up: see [ODBC](odbc.md).
 
