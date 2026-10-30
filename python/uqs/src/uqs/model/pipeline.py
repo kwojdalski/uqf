@@ -188,15 +188,16 @@ class Pipeline:
         """
         if self.table is None:
             return None
-        from uqs.model.schemas import _DEFS
+        from uqs.model.schemas import _definitions
 
-        if self.table not in _DEFS:
+        defined = _definitions()
+        if self.table not in defined:
             raise KeyError(
                 f"{self.procname}: declares table {self.table!r}, which "
                 "src/etl/plant_tables.q does not define - the "
                 "plant would discard its rows without an error"
             )
-        return _DEFS[self.table]
+        return defined[self.table]
 
     @property
     def subscribed_tables(self) -> tuple[str, ...]:

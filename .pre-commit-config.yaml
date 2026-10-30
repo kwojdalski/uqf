@@ -347,6 +347,21 @@ repos:
         pass_filenames: false
         files: '\.q$|^python/uqs/src/uqs/generated/|^python/uqf_airflow_provider/src/uqf_airflow_provider/q_facts\.py$|^scripts/generate/(q_facts\.py|export_q_facts\.q)$'
 
+      - id: plant-schema
+        name: Check the plant schema metadata matches what q evaluates
+        # uqs reads the plant tables' columns, types, attributes, nested element
+        # types and sort rules from src/etl/generated/plant_schema.json, which
+        # q exports from plant_tables.q - never by matching the q text, which
+        # lost `name: ([]...)` (#1781). Every read checks the file's fingerprint
+        # without q; this checks its CONTENT against q. KDB-X or PeachQ: the
+        # exporter loads plant_tables.q alone. FAILS without an interpreter.
+        # To accept an intended change:
+        #   uv run python scripts/generate/plant_schema.py
+        entry: uv run python scripts/generate/plant_schema.py --check
+        language: system
+        pass_filenames: false
+        files: '^src/etl/plant_tables\.q$|^src/etl/generated/plant_schema\.json$|^scripts/generate/(plant_schema\.py|export_plant_schema\.q)$|^python/uqs/src/uqs/model/plant_metadata(_gen)?\.py$'
+
       - id: table-properties
         name: Check the getdata table list matches the plant tables and workers' datasets
         # scripts/torqconfig/dataaccess/tableproperties.csv is generated (#1363):

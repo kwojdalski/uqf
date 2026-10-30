@@ -91,7 +91,7 @@ def hdb_check(
             handle = resolve(attach, hdb)
             name = _table(handle, table)
             schema = hdb_types.declared_schema(handle.paths)
-            declared = hdb_shape.declared_tables(schema)
+            declared = hdb_shape.declared_tables(handle.paths)
             with hdb_alter.declaration(schema, name, declared) as decl:
                 day = template.replace("-", ".") if template else None
                 req = Request(handle.hdb, name, "fill", schema=decl, template=day)
@@ -126,10 +126,9 @@ def _whole_runtime(*, apply: bool, yes: bool, as_json: bool) -> None:
         paths.generated_schema.parent.mkdir(parents=True, exist_ok=True)
         paths.generated_schema.write_text(schema)
         hdb_fill.fill_hdb_partitions(paths)
-    expected = hdb_shape.declared_tables(schema)
-    short, thin = hdb_shape.shape_gaps(
-        hdb_shape.listing(hdb_root), hdb_shape.declared_columns(schema)
-    )
+    declared = hdb_shape.declared_columns(paths)
+    expected = set(declared)
+    short, thin = hdb_shape.shape_gaps(hdb_shape.listing(hdb_root), declared)
     with tempfile.TemporaryDirectory() as tmp:
         schema_file = Path(tmp) / "database.q"
         schema_file.write_text(schema)

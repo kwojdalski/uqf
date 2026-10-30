@@ -1707,6 +1707,15 @@ def test_tap_and_the_on_demand_chain_do_not_autostart():
     assert not unpinned, f"these start with the stack but are not in always_on: {unpinned}"
 
 
+def _real_starter_pack_schema(paths: UqsPaths) -> None:
+    """The starter pack's real database.q in the stand-in: its tables are read
+    from q's metadata (#1781), which answers only for the file it was made from."""
+    from uqs.model.plant_metadata import vendored_schema
+    from uqs.paths import repo_root
+
+    (paths.torqapphome / "database.q").write_text(vendored_schema(repo_root()).read_text())
+
+
 def test_generated_schema_covers_every_published_table(fake_paths: UqsPaths):
     """Both directions, because for a long time this ran only one.
 
@@ -1723,6 +1732,7 @@ def test_generated_schema_covers_every_published_table(fake_paths: UqsPaths):
     So the direction that matters is the other one: every table a pipeline
     sends rows to has a definition the tickerplant will load.
     """
+    _real_starter_pack_schema(fake_paths)
     undefined = plant_schema.undefined_published_tables(fake_paths)
     assert not undefined, (
         "published with no definition in the generated database.q, so stp1 "
@@ -2078,6 +2088,7 @@ def test_a_pipeline_publishing_an_undefined_table_is_reported(
         publishes=("fx_position", "a_table_nothing_defines"),
     )
     monkeypatch.setattr(plant_schema, "PIPELINES", (*PIPELINES, invented))
+    _real_starter_pack_schema(fake_paths)
 
     undefined = plant_schema.undefined_published_tables(fake_paths)
     assert len(undefined) == 1, undefined
