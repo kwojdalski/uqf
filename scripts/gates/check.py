@@ -127,6 +127,18 @@ def _env_reference(env: ModuleType, root: Path) -> int:
     return env.run(root)
 
 
+def _declaration_reference(decl: ModuleType, root: Path) -> int:
+    """docs/reference/pipeline-declarations.md has a row for every key the
+    declaring q files list, and no row for a key they never mention (#1331)."""
+    findings = decl.check((root / decl.PAGE).read_text(), root / decl.CORE)
+    return report(
+        "declaration-reference",
+        findings,
+        f"every declared key has a row in {decl.PAGE}, every row a key",
+        footer=f"\n{len(findings)} problem(s) in {decl.PAGE}",
+    )
+
+
 @dataclass(frozen=True)
 class Check:
     name: str
@@ -166,6 +178,12 @@ CHECKS: dict[str, Check] = {
             "docs/reference/environment.md and .env.example match the variables the code reads",
             "env_reference",
             _env_reference,
+        ),
+        Check(
+            "declaration-reference",
+            "docs/reference/pipeline-declarations.md matches the keys the declaring q files list",
+            "declaration_reference",
+            _declaration_reference,
         ),
     )
 }

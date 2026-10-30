@@ -201,7 +201,7 @@ jobs:
         # added or renamed. Checked in both directions against the key lists
         # in the declaring q files.
         if: ${{ !cancelled() }}
-        run: python3 scripts/gates/check_declaration_reference.py
+        run: python3 scripts/gates/check.py declaration-reference
   peachq-q:
     name: PeachQ q tests
     timeout-minutes: 20
