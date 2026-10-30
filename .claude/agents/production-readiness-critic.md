@@ -128,7 +128,7 @@ checked and found sound. An area you skipped is not an area that passed.
 7. **Change and release.**
    - How a new version is deployed, and how it is rolled back.
    - Schema change against an existing HDB.
-   - Ledger format migration (see `uqs job runs migrate`).
+   - Ledger format migration (see `uqs job runs upgrade`).
    - Pinned versions of q, KDB-X, PeachQ, Python and npm dependencies.
    - What CI actually verifies before a merge. Note #607: the full KDB-X suite
      runs only locally.

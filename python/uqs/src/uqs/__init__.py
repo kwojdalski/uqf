@@ -8,9 +8,9 @@ _previous_hook = _sys.excepthook
 
 
 def _schema_metadata_hook(kind, exc, tb):  # type: ignore[no-untyped-def]
-    """Stale or missing plant schema metadata stops uqs as soon as the job
-    registry is built - at import, before any command can catch it (#1781).
-    It says what to run, so print that alone, not a traceback around it."""
+    """Stale or missing plant schema metadata refuses, naming the command that
+    regenerates it (#1781). Where no command catches it - a script, an import -
+    print that alone, not a traceback around it."""
     from uqs.model.plant_metadata import SchemaMetadataError
 
     if isinstance(exc, SchemaMetadataError):

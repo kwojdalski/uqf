@@ -46,6 +46,7 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
+from uqs.generated.q_facts import Q_ATTRIBUTES, Q_TYPE_NAMES
 from uqs.paths import ETL_DIR, TABLES_FILE, TORQAPPHOME_ENV, UqsError, repo_root
 
 #: What q evaluates TABLES_FILE (and the starter pack's database.q) to declare.
@@ -62,30 +63,13 @@ EXPORTER = Path("scripts/generate/export_plant_schema.q")
 #: default as `.qetl.plant.vendored_path` in plant_tables.q.
 VENDORED_DEFAULT = Path("lib/torq-finance-starter-pack/database.q")
 
-#: q's type characters and the type names a definition casts with; " " is a
-#: general list, written `()`. Anything else is refused at export.
-Q_TYPES = {
-    "b": "boolean",
-    "g": "guid",
-    "x": "byte",
-    "h": "short",
-    "i": "int",
-    "j": "long",
-    "e": "real",
-    "f": "float",
-    "c": "char",
-    "s": "symbol",
-    "p": "timestamp",
-    "m": "month",
-    "d": "date",
-    "z": "datetime",
-    "n": "timespan",
-    "u": "minute",
-    "v": "second",
-    "t": "time",
-}
+#: q's type characters and the type names a definition casts with, as q exports
+#: them (uqs.generated.q_facts, #1785); " " is a general list, written `()`.
+#: Anything else is refused at export.
+Q_TYPES = Q_TYPE_NAMES
 GENERAL = " "
-ATTRIBUTES = ("", "s", "u", "p", "g")
+#: q's attributes, "" for none.
+ATTRIBUTES = ("", *Q_ATTRIBUTES)
 
 REGENERATE = "python -m uqs.model.plant_metadata_gen"
 
@@ -146,10 +130,55 @@ def _combine(*parts: str) -> str:
     return hashlib.sha256("\0".join(parts).encode()).hexdigest()
 
 
+def _uncommented(line: str) -> str:
+    """`line` without a trailing q comment: a `/` after whitespace, outside a
+    string literal."""
+    quoted = escaped = False
+    for i, c in enumerate(line):
+        if quoted:
+            escaped, quoted = (not escaped and c == "\\"), quoted and (escaped or c != '"')
+        elif c == '"':
+            quoted = True
+        elif c == "/" and i and line[i - 1] in " \t":
+            return line[:i]
+    return line
+
+
+def q_code(text: str) -> str:
+    """q source with its comments gone, as q reads them: `/` line comments, a
+    line of only `/` opening a block comment to a line of only `\\`, a line of
+    only `\\` ending the script, and trailing ` /` comments. Blank lines and
+    trailing spaces go too. For FRESHNESS ONLY - a comment edit leaves the
+    metadata current; it never decides what a table is (q does)."""
+    out, block = [], False
+    for raw in text.splitlines():
+        line = raw.rstrip()
+        if block:
+            block = line != "\\"
+            continue
+        if line == "/":
+            block = True
+            continue
+        if line == "\\":
+            break
+        if line.startswith("/"):
+            continue
+        if code := _uncommented(line).rstrip():
+            out.append(code)
+    return "\n".join(out)
+
+
 def tree_fingerprint(root: Path) -> str:
-    """plant_tables.q at `root`, the exporter and its version."""
+    """plant_tables.q at `root` as q code - its comments do not count, so
+    editing one leaves the metadata current - the exporter and its version."""
     exporter = _sha(repo_root() / EXPORTER)
-    return _combine(f"v{EXPORTER_VERSION}", exporter, _sha(root / TABLES_FILE))
+    plant = root / TABLES_FILE
+    code = (
+        hashlib.sha256(q_code(plant.read_text()).encode()).hexdigest()
+        if plant.is_file()
+        else "absent"
+    )
+    return _combine(f"v{EXPORTER_VERSION}", exporter, code)
 
 
 def vendored_fingerprint(vendored: Path) -> str:

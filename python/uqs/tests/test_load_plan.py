@@ -2,7 +2,8 @@
 of its own jobs, read as text, written down as src/etl/generated/load_plan.q.
 
 The q half - init.q loading only the plan, against a schema without `quote` -
-runs in test_selective_load.py, which needs an interpreter.
+runs in test_peachq_pipelines.py, which needs an interpreter; which files a
+selection names is tests/q/test_declaration_load.q's.
 """
 
 from __future__ import annotations
@@ -149,3 +150,35 @@ def test_a_transform_namespace_beside_its_define_is_not_a_second_definition():
             "src/etl/streaming/zz_t.q": TRANSFORM.format(name="zz_t"),
         },
     )
+
+
+def _init_q_declaration_dirs() -> tuple[str, ...]:
+    """The directories src/etl/init.q globs its declarations from, in order."""
+    import re
+
+    text = (REPO / "src" / "etl" / "init.q").read_text()
+    m = re.search(r'^\.qetl\.load\.declarations\s+"src/etl/",/:\(([^)]*)\)', text, re.MULTILINE)
+    assert m, "init.q no longer loads its declarations by .qetl.load.declarations"
+    return tuple(re.findall(r'"(\w+)"', m.group(1)))
+
+
+def test_the_declaration_dirs_are_init_qs_in_its_order():
+    """DIRS restates init.q for the load order. A directory init.q loads and
+    DIRS lacks is a file a job's closure misses; one DIRS keeps and init.q
+    dropped is a file the plan loads that the tree does not (#1794)."""
+    assert load_plan.DIRS == _init_q_declaration_dirs()
+
+
+def test_the_declaration_dirs_are_every_declaring_directory_on_disk():
+    """Every src/etl/ subdirectory but core/ and generated/ holds declarations
+    (scripts/gates/check_etl_layering.py's declaring_dirs): a new one on disk
+    that DIRS does not name is a file no plan loads."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "check_etl_layering", REPO / "scripts" / "gates" / "check_etl_layering.py"
+    )
+    assert spec and spec.loader
+    layering = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(layering)
+    assert set(load_plan.DIRS) == {d.name for d in layering.declaring_dirs(REPO)}

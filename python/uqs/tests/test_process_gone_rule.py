@@ -29,9 +29,9 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
+
 from uqf_airflow_provider import liveness as provider_liveness
 from uqf_airflow_provider.sensor import process_gone as sensor_gone
-
 from uqf_frontend.status import _process_gone as frontend_gone
 from uqs import liveness
 from uqs.stack.backfill import _live_holder

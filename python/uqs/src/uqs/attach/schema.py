@@ -26,32 +26,15 @@ import hashlib
 import re
 from dataclasses import dataclass
 
+from uqs.generated.q_facts import Q_TYPE_CHARS, Q_TYPE_NAMES
 from uqs.model import plant_metadata
 from uqs.model.declarations import split_top_level
 from uqs.model.qnames import Q_WORDS
 from uqs.paths import UqsError
 
-#: q's type names and the char `meta` reports for them. A mixed list is " ".
-TYPE_CHARS = {
-    "boolean": "b",
-    "guid": "g",
-    "byte": "x",
-    "short": "h",
-    "int": "i",
-    "long": "j",
-    "real": "e",
-    "float": "f",
-    "char": "c",
-    "symbol": "s",
-    "timestamp": "p",
-    "month": "m",
-    "date": "d",
-    "datetime": "z",
-    "timespan": "n",
-    "minute": "u",
-    "second": "v",
-    "time": "t",
-}
+#: q's type names and the char `meta` reports for them, as q exports them
+#: (uqs.generated.q_facts, #1785). A mixed list is " ".
+TYPE_CHARS = Q_TYPE_CHARS
 MIXED = " "
 #: A nested column's element type, as the plant's `nested[...]` writes it: `meta`'s upper-case char.
 NESTED_CHARS = frozenset(c.upper() for c in TYPE_CHARS.values())
@@ -112,12 +95,14 @@ class TableSpec:
         """The q a schema file holds for this table: one `name:([]...)` line."""
         parts = []
         for name, char in self.columns:
-            ty = next((k for k, v in TYPE_CHARS.items() if v == char), None)
+            ty = Q_TYPE_NAMES.get(char)
             parts.append(f"{name}:()" if char == MIXED or char.isupper() else f"{name}:`{ty}$()")
         return f"{self.name}:([] {'; '.join(parts)})"
 
 
-#: The attributes a sort.csv row may name, as TorQ's `.sort.getsortcsv` allows them.
+#: The attributes a sort.csv row may name, as TorQ's `.sort.getsortcsv` allows them -
+#: TorQ's rule, kept here: today every q attribute (q_facts.Q_ATTRIBUTES), held to
+#: them by test_q_types, in the order the refusal names them.
 SORT_ATTRIBUTES = ("", "p", "s", "g", "u")
 _SORTING_LINE = re.compile(r"^(?:\.qetl\.plant\.)?sorting\[`([a-z_][a-z0-9_]*);(.*)\]\s*;?\s*$")
 

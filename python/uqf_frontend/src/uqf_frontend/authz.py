@@ -30,6 +30,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from typing import Any, TypeVar
 
 from uqf_frontend.errors import Forbidden
 
@@ -42,6 +43,8 @@ __all__ = [
     "deny_paths",
     "deny_tables",
     "enforce",
+    "unguarded",
+    "unguarded_reason",
 ]
 
 #: Header carrying the caller's claimed identity. Claimed, not verified -
@@ -115,6 +118,34 @@ def deny_tables(tables: set[str]) -> Policy:
         return None
 
     return policy
+
+
+#: The attribute `unguarded` sets on an endpoint.
+_UNGUARDED = "__uqf_unguarded__"
+
+_F = TypeVar("_F", bound=Callable[..., Any])
+
+
+def unguarded(reason: str) -> Callable[[_F], _F]:
+    """Mark a route's endpoint as answering without asking the policy.
+
+    The policy runs as an app-wide dependency, so every route is behind the
+    seam unless it says otherwise - here, on the endpoint itself, with its
+    reason. A route added later is guarded without doing anything.
+    """
+    if not reason:
+        raise ValueError("an unguarded route must say why")
+
+    def mark(endpoint: _F) -> _F:
+        setattr(endpoint, _UNGUARDED, reason)
+        return endpoint
+
+    return mark
+
+
+def unguarded_reason(endpoint: object) -> str | None:
+    """Why *endpoint* is outside the seam, or None when it is behind it."""
+    return getattr(endpoint, _UNGUARDED, None)
 
 
 def enforce(policy: Policy, request: Request_) -> None:

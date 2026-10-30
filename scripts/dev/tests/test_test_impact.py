@@ -660,3 +660,31 @@ def test_all_is_unchanged_by_the_map(tmp_path):
     root = _map_root(tmp_path)
     cov = ti.coverage_for(ti.Plan(None, "the selector says ALL: x"), ["src/a.q"], root)
     assert cov.files is None and cov.line == "ALL" and cov.record == "all" and cov.added == []
+
+
+# --- declaration directories, from the layering gate (#1794) ----------------
+
+
+def test_a_new_declaring_directory_is_scanned_without_naming_it_here(tmp_path):
+    """The declaring directories are check_etl_layering's - every src/etl/
+    subdirectory but core/ and generated/ - not a list kept here, so a call
+    into core from a directory added later is still checked."""
+    for d in ("core", "generated", "sources", "rollups"):
+        (tmp_path / "src" / "etl" / d).mkdir(parents=True)
+    texts = {
+        "src/etl/core/x.q": ".qetl.rollup.add:{[x] x}\n",
+        "src/etl/rollups/r.q": ".qetl.rollup.add[`r]\n",
+        "src/etl/generated/g.q": ".qetl.rollup.add[`g]\n",
+    }
+    tree = ti.Tree(
+        root=tmp_path,
+        files=sorted(texts),
+        texts=texts,
+        runner=set(),
+        children=set(),
+        nodes={},
+        deps={},
+        dynamic={},
+        literals={},
+    )
+    assert ti.unregistered_calls(tree) == ["src/etl/rollups/r.q:1: .qetl.rollup.add"]

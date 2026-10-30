@@ -38,6 +38,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+
 from uqf_airflow_provider.sensor import (
     FIXTURE_TAG,
     REVISION_TAG,

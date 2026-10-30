@@ -78,7 +78,7 @@ def test_a_worker_with_no_procname_runs_as_its_name_and_1():
 
 
 def test_a_worker_carries_the_source_it_reads_and_the_dataset_it_writes():
-    """What `uqs summary` shows for a backfill: without these its row was all
+    """What `uqs status` shows for a backfill: without these its row was all
     dashes, the same as a process that touches nothing."""
     d = _one(".qetl.job.bounded.define[`w;`source`dataset`width`transform!(`s;`d;1D;`x)];")
     assert (d.source, d.dataset) == ("s", "d")
@@ -149,11 +149,10 @@ def _tree(tmp_path: Path) -> Path:
     return tmp_path
 
 
-def test_a_job_file_is_the_whole_registration(tmp_path, plant_tree):
+def test_a_job_file_is_the_whole_registration(tmp_path):
     """The point of the change: drop a job and a worker into the tree and both
     are processes, with ports, and nothing else was edited."""
     root = _tree(tmp_path)
-    plant_tree(root, (root / TABLES_FILE).read_text())  # q evaluates which tables it owns
     (root / STREAM_DIR / "tick.q").write_text(
         ".qetl.job.stream.define[`tick;`procname`subscribe_to`publishes`period`on_timer`start_with_all!(\n"
         "    `tick1;`symbol$();enlist `ticks;0D00:00:01;.qpipe.job.tick.on_timer;1b)];\n"
@@ -163,7 +162,8 @@ def test_a_job_file_is_the_whole_registration(tmp_path, plant_tree):
     )
     built = {p.procname: p for p in registry.build_pipelines(root)}
     assert set(built) == {"tap1", "tick1", "w1"}
-    assert (built["tick1"].table, built["tick1"].startwithall) == ("ticks", "1")
+    # which of these the tree defines is asked of q's metadata only on use (#1781)
+    assert (built["tick1"].sole_publisher_of, built["tick1"].startwithall) == (("ticks",), "1")
     assert (built["w1"].worker, built["w1"].startwithall) == ("w", "0")
     assert (built["tap1"].offset, built["tick1"].offset, built["w1"].offset) == (28, 29, 30)
 

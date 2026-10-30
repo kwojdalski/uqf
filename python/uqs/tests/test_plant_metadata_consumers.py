@@ -35,15 +35,26 @@ def tree(tmp_path: Path, plant_tree) -> Path:
 def test_the_scaffold_readers_see_a_table_however_it_is_spelled(tree):
     from uqs.cli.create_backfill import defined_tables
     from uqs.cli.create_plant import plant_definitions, plant_tables
-    from uqs.model.registry import _plant_tables
 
     paths = paths_for_root(tree)
     assert {"spaced", "ladder"} <= defined_tables(tree)
-    assert {"spaced", "ladder"} <= _plant_tables(tree)
     assert {"spaced", "ladder"} <= plant_tables(paths, tree)
     assert plant_definitions(paths, tree)["spaced"] == (
         "spaced:([]time:`timestamp$(); sym:`g#`symbol$(); px:`float$())"
     )
+
+
+def test_a_jobs_owned_table_is_one_q_says_the_tree_defines():
+    """Ownership is resolved on use, from q's metadata - not while the
+    registry is built, which every command does."""
+    from uqs.model import schemas
+    from uqs.model.pipeline import Pipeline, PipelineKind
+    from uqs.model.registry import PIPELINES
+
+    owned = [p.owned_table for p in PIPELINES if p.owned_table]
+    assert owned and set(owned) <= schemas.table_names()
+    job = Pipeline("x1", "x.q", PipelineKind.ETL, sole_publisher_of=("trades", "quote"))
+    assert job.owned_table == "trades"  # quote is the starter pack's, not this tree's
 
 
 def test_the_plant_runtimes_names_are_qs(tree):
@@ -105,9 +116,8 @@ def test_a_stale_tree_is_refused_by_name_not_read_as_text(tree):
         defined_tables(tree)
 
 
-def test_stale_metadata_stops_uqs_with_one_line_not_a_traceback():
-    """The registry reads the tree's tables at import, so stale metadata stops
-    every command there - saying what to run, without a traceback around it."""
+def test_an_uncaught_stale_refusal_is_one_line_not_a_traceback():
+    """A refusal no command catches still says what to run, and nothing else."""
     import subprocess
     import sys
 
@@ -119,3 +129,43 @@ def test_stale_metadata_stops_uqs_with_one_line_not_a_traceback():
     r = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, timeout=60)
     assert r.returncode == 1
     assert r.stderr == "uqs: stale - regenerate it\n"
+
+
+STALE = """\
+import sys
+from uqs.model import plant_metadata
+plant_metadata.tree_fingerprint = lambda root: "stale"  # every read now finds it stale
+sys.argv = ["uqs", *sys.argv[1:]]
+from uqs.cli import main
+main()
+"""
+
+
+def _uqs_on_a_stale_tree(tmp_path: Path, *argv: str):
+    import os
+    import subprocess
+    import sys
+
+    script = tmp_path / "stale_uqs.py"
+    script.write_text(STALE)
+    env = {k: v for k, v in os.environ.items() if not k.startswith("UQF_")}
+    return subprocess.run(
+        [sys.executable, str(script), *argv], capture_output=True, text=True, env=env, timeout=120
+    )
+
+
+@pytest.mark.parametrize("argv", [["--help"], ["status"], ["graph"]], ids=" ".join)
+def test_a_stale_tree_still_runs_what_needs_no_schema(tmp_path, argv):
+    """Building the registry needs no metadata - only ownership does, asked
+    on use - so a stale tree stops only what reads schemas."""
+    r = _uqs_on_a_stale_tree(tmp_path, *argv)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "stale" not in r.stdout + r.stderr
+
+
+def test_a_stale_tree_refuses_a_schema_read_by_name(tmp_path):
+    r = _uqs_on_a_stale_tree(tmp_path, "runtime", "diff", "uqf", "torq", "--json")
+    assert r.returncode == 1
+    out = r.stdout + r.stderr
+    assert "plant_schema.json is stale" in out
+    assert plant_metadata.REGENERATE in out

@@ -109,7 +109,7 @@ def remote_for(name: str | None, root: Path) -> Remote:
 
 def remote_from(label: str, t: dict) -> Remote:
     """A Remote from a target's merged settings `t`, which name host and
-    dest: a declared target, or one `uqs target add --check` is about to save."""
+    dest: a declared target, or one `uqs target add --reach` is about to save."""
     absent = [k for k in ("host", "dest") if not t.get(k)]
     if absent:
         raise UqsError(f"target {label} sets no {', '.join(absent)}")

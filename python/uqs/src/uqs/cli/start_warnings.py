@@ -15,7 +15,7 @@ from uqs.stack import procs as procs_model
 
 
 def running(port: int | None) -> set[str]:
-    """The processes `summary` reports up. Raises when it cannot say; each
+    """The processes `status` reports up. Raises when it cannot say; each
     caller decides what that means for it."""
     return alive.running(_paths(), base_port=port)
 
@@ -94,7 +94,7 @@ def connection_cap(procs: str, port: int | None) -> None:
     opens one per process it watches, so past that count the cap - not the
     configuration - decides what works. The plant does not complain: it
     resets the extra connection, the process wedges in its retry loop, and
-    `summary` still reports it `up` because that is a PID check.
+    `uqs status` still reports it `up` because that is a PID check.
 
     Advisory only, and never fails the command: the limit is a property of
     the licence, not a mistake, and a bigger fleet is a legitimate thing to

@@ -1,6 +1,6 @@
 """Can each process answer at all, within a deadline measured per process.
 
-`summary`'s Status column comes from a PID lookup, and a hung process still
+`uqs status`'s Status column comes from a PID lookup, and a hung process still
 has a PID. Its Heartbeat column comes from monitor1, which only notices after
 a tolerance of missed beats. Neither answers "will this process respond to me
 now", which is what this does, for every process that is up.
@@ -121,7 +121,7 @@ def attach_probe_column(
     Only a REPORTED port is probed: a configured one belongs to a process
     that is down, which the Status column already says. The probe's timeout
     is also capped by what is left of the command's own budget, so it cannot
-    push `summary` past `--timeout`.
+    push `uqs status` past `--timeout`.
     """
     targets = {
         row["Process"]: int(row["Port"])
