@@ -6,7 +6,6 @@
 # only shrinks, like tests/q/peachq_known_gaps.txt. Format: `nodeid  # reason`.
 
 python/uqs/tests/test_columns.py::test_every_type_agrees_with_q  # PeachQ result differs: a column type's q literal does not read back as the type KDB-X gives it
-python/uqs/tests/test_q_types.py::test_the_type_vocabulary_is_what_q_casts_and_reports  # PeachQ has no guid cast: `guid$() throws 'guid, so q cannot confirm the guid type's name (every other type casts as KDB-X's does)
 
 
 
