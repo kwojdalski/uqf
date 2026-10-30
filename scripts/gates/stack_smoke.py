@@ -126,7 +126,7 @@ def main() -> int:
     # the kdb+ error names an arbitrary table instead of the short
     # partition (#348). Cheap: a directory listing per partition.
     hdb_root = paths.torqdata / "hdb"
-    short = hdb_shape.gaps(hdb_root, hdb_shape.declared_tables(paths.generated_schema.read_text()))
+    short = hdb_shape.gaps(hdb_root, hdb_shape.declared_tables(paths))
     if short:
         problems.append(
             stack_smoke.SmokeFinding(

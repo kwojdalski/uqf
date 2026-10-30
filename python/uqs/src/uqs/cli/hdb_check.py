@@ -94,7 +94,7 @@ def hdb_check(
             handle = resolve(attach, hdb)
             name = _table(handle, table)
             schema = hdb_types.declared_schema(handle.paths)
-            declared = hdb_shape.declared_tables(schema)
+            declared = hdb_shape.declared_tables(handle.paths)
             with hdb_alter.declaration(schema, name, declared) as decl:
                 day = template.replace("-", ".") if template else None
                 req = Request(handle.hdb, name, "fill", schema=decl, template=day)
@@ -140,8 +140,9 @@ def _whole_runtime(*, apply: bool, yes: bool, as_json: bool) -> None:
         except UqsError as exc:
             _die(exc)
             return
-    expected = hdb_shape.declared_tables(schema)
-    short, thin = hdb_shape.shape_gaps(layout.listing, hdb_shape.declared_columns(schema))
+    declared = hdb_shape.declared_columns(paths)
+    expected = set(declared)
+    short, thin = hdb_shape.shape_gaps(layout.listing, declared)
     with tempfile.TemporaryDirectory() as tmp:
         schema_file = Path(tmp) / "database.q"
         schema_file.write_text(schema)

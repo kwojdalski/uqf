@@ -46,18 +46,12 @@ from collections.abc import Iterable
 from pathlib import Path
 
 from uqs.logger import get_logger
-from uqs.model import schemas
-from uqs.paths import UqsError
+from uqs.paths import UqsError, UqsPaths
 
 log = get_logger()
 
 #: A partition directory: a date, the only scheme this stack writes.
 _PARTITION = re.compile(r"^\d{4}\.\d{2}\.\d{2}$")
-
-#: `name:([]...)` at the start of a line in the generated database.q - the
-#: same convention model/schemas.py and model/plant_schema.py read by, applied to the
-#: merged file so vendored tables count too.
-_DEFINITION = re.compile(r"^(?:\.qetl\.plant\.)?([a-z_0-9]+):\(\[\]", re.MULTILINE)
 
 
 def partitions(hdb_root: Path) -> list[str]:
@@ -85,15 +79,16 @@ def partitions(hdb_root: Path) -> list[str]:
     )
 
 
-def declared_tables(generated_schema: str) -> set[str]:
-    """Every table the generated database.q defines.
+def declared_tables(paths: UqsPaths) -> set[str]:
+    """Every table the runtime's database.q defines.
 
-    The generated file, not the q source: it is what the tickerplant
+    The runtime's schema, not plant_tables.q alone: it is what the tickerplant
     loads, so it is also what every process expects the HDB to hold. A
     table defined in plant_tables.q but never reaching database.q is
-    #287's bug, and a different check catches that one.
+    #287's bug, and a different check catches that one. Read from what q
+    evaluated (plant_schema.declared_shape), never the file's text (#1781).
     """
-    return set(_DEFINITION.findall(generated_schema))
+    return set(declared_columns(paths))
 
 
 #: An HDB's shape as `listing` reads it: {partition: {table: its columns}}.
@@ -164,18 +159,16 @@ def describe(short: dict[str, set[str]]) -> str:
     return "\n".join(lines)
 
 
-def declared_columns(generated_schema: str) -> dict[str, list[str]]:
-    """{table: its declared columns, in declaration order}.
-
-    Scans to the matching `)` rather than to the end of the line, so a
-    definition wrapped across lines is read whole. Order is kept because a
+def declared_columns(paths: UqsPaths) -> dict[str, list[str]]:
+    """{table: its declared columns, in declaration order}, for the runtime
+    at `paths` - as q evaluated them, so a definition's spacing or line
+    breaks cannot hide a table or a column (#1781). Order is kept because a
     report that lists columns in schema order is readable beside the file
     the reader will open next; nothing here depends on it.
     """
-    return {
-        match.group(1): list(dict.fromkeys(schemas.column_names(generated_schema[match.start() :])))
-        for match in _DEFINITION.finditer(generated_schema)
-    }
+    from uqs.model.plant_schema import declared_shape
+
+    return declared_shape(paths)
 
 
 def table_columns(table_dir: Path) -> set[str]:
@@ -247,14 +240,13 @@ def main(argv: list[str] | None = None) -> int:
     import sys
 
     from uqs.paths import UqsError, paths_for_root, repo_root
-    from uqs.stack.hdb_types import declared_schema
 
     args = list(sys.argv[1:] if argv is None else argv)
     if len(args) != 3 or args[0] != "declared" or args[1] != "--runtime":
         print("usage: hdb_shape declared --runtime NAME", file=sys.stderr)
         return 2
     try:
-        shape = declared_columns(declared_schema(paths_for_root(repo_root(), args[2])))
+        shape = declared_columns(paths_for_root(repo_root(), args[2]))
     except (UqsError, OSError, ValueError) as exc:
         print(f"hdb_shape: {exc}", file=sys.stderr)
         return 1

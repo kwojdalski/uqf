@@ -15,11 +15,8 @@ import pytest
 from uqs.paths import UqsError
 from uqs.stack import hdb_shape
 
-SCHEMA = """\
-quote:([]time:`timestamp$(); sym:`symbol$(); bid:`float$())
-trades:([]time:`timestamp$(); sym:`symbol$(); px:`float$())
-arbitrage:([]time:`timestamp$(); sym:`symbol$(); active:`boolean$())
-"""
+#: What a runtime declares, for the gap logic: the declared set is data here.
+DECLARED = {"quote", "trades", "arbitrage"}
 
 
 def _hdb(root: Path, layout: dict[str, list[str]]) -> Path:
@@ -30,10 +27,17 @@ def _hdb(root: Path, layout: dict[str, list[str]]) -> Path:
     return root
 
 
-def test_declared_tables_come_from_the_generated_schema():
-    """The generated database.q, because it is what the tickerplant loads
-    and therefore what every process expects the HDB to hold."""
-    assert hdb_shape.declared_tables(SCHEMA) == {"quote", "trades", "arbitrage"}
+def test_declared_tables_are_the_runtimes_schema_as_q_evaluated_it():
+    """The runtime's database.q - the starter pack's tables and this tree's -
+    because it is what the tickerplant loads and therefore what every
+    process expects the HDB to hold. Read from q's metadata (#1781)."""
+    from uqs.model import plant_metadata
+    from uqs.paths import paths_for_root, repo_root
+
+    declared = hdb_shape.declared_tables(paths_for_root(repo_root(), "uqf"))
+    meta = plant_metadata.load()
+    assert {"quote", "trade"} <= declared
+    assert set(meta.own()) <= declared
 
 
 def test_partitions_are_dated_directories_and_nothing_else(tmp_path):
@@ -72,7 +76,7 @@ def test_a_rectangular_database_has_no_gaps(tmp_path):
             "2026.09.20": ["quote", "trades", "arbitrage"],
         },
     )
-    assert hdb_shape.gaps(root, hdb_shape.declared_tables(SCHEMA)) == {}
+    assert hdb_shape.gaps(root, DECLARED) == {}
 
 
 def test_the_partition_that_is_short_is_named_with_what_it_lacks(tmp_path):
@@ -83,7 +87,7 @@ def test_the_partition_that_is_short_is_named_with_what_it_lacks(tmp_path):
         tmp_path,
         {"2015.01.07": ["quote"], "2026.09.20": ["quote", "trades", "arbitrage"]},
     )
-    short = hdb_shape.gaps(root, hdb_shape.declared_tables(SCHEMA))
+    short = hdb_shape.gaps(root, DECLARED)
     assert short == {"2015.01.07": {"trades", "arbitrage"}}
 
 
@@ -95,7 +99,7 @@ def test_a_table_nobody_declares_any_more_is_not_reported(tmp_path):
         tmp_path,
         {"2015.01.07": ["quote", "trades", "arbitrage", "retired_table"]},
     )
-    assert hdb_shape.gaps(root, hdb_shape.declared_tables(SCHEMA)) == {}
+    assert hdb_shape.gaps(root, DECLARED) == {}
 
 
 def test_a_missing_hdb_is_not_a_gap(tmp_path):
@@ -138,11 +142,6 @@ def test_the_smoke_lane_reports_an_unrectangular_hdb_as_its_own_kind():
 
 # --- columns: the same fault one level down ------------------------------
 
-COLUMN_SCHEMA = """\
-book:([]time:`timestamp$(); sym:`g#`symbol$(); px:`float$(); venue:`symbol$())
-quotes:([]time:`timestamp$(); sym:`symbol$(); bid_prices:(); bid_sizes:())
-"""
-
 
 def _splay(table_dir: Path, columns: list[str], nested: tuple[str, ...] = ()) -> Path:
     """A splayed table on disk: one file per column, plus `.d`.
@@ -160,12 +159,14 @@ def _splay(table_dir: Path, columns: list[str], nested: tuple[str, ...] = ()) ->
     return table_dir
 
 
-def test_declared_columns_are_read_in_order_with_attributes_tolerated():
-    """`` sym:`g#`symbol$() `` declares a column named sym; the `g#` sits on
-    the value, and a reader that stopped at the backtick would invent one."""
-    declared = hdb_shape.declared_columns(COLUMN_SCHEMA)
-    assert declared["book"] == ["time", "sym", "px", "venue"]
-    assert declared["quotes"] == ["time", "sym", "bid_prices", "bid_sizes"]
+def test_declared_columns_are_read_in_order_with_attributes_and_nested_columns():
+    """`` sym:`g#`symbol$() `` declares a column named sym, and a nested `()`
+    column is one column - in the order q holds them."""
+    from uqs.paths import paths_for_root, repo_root
+
+    declared = hdb_shape.declared_columns(paths_for_root(repo_root(), "uqf"))
+    assert declared["mkt_orderbook"] == ["time", "sym", "bid_prices", "ask_prices"]
+    assert declared["quote"][:2] == ["time", "sym"]
 
 
 def test_a_nested_column_is_one_column_not_two(tmp_path):

@@ -1,13 +1,13 @@
 """Tests for the reader in `uqs.model.schemas`.
 
 The tickerplant table definitions live in `src/etl/plant_tables.q`, and
-this module reads them out by table name. Two things can go wrong with that
-arrangement, and neither announces itself:
+this module answers for them by table name - from what q evaluated
+(uqs.model.plant_metadata, #1781; test_plant_metadata.py holds that half).
+Two things can go wrong with that arrangement, and neither announces itself:
 
-* **The reader stops matching.** If the `name:([]...)` convention in the q
-  file changes, the regex finds nothing, every generated `database.q` loses
-  uqf's tables, and the first symptom is a feed failing to publish into a
-  table the tickerplant does not have.
+* **A table goes missing.** Every generated `database.q` loses it, and the
+  first symptom is a feed failing to publish into a table the tickerplant
+  does not have.
 * **A shape a consumer relies on breaks.** The wide book's levels must stay
   paired and contiguous, and nothing but a test reads them.
 """
@@ -92,9 +92,11 @@ def test_no_definition_carries_rows():
 # --- one parser of the declaration format (#1392) ---------------------------
 #
 # plant_contract, scaffold/columns, gateway_access and hdb_shape each used to
-# split a `([]...)` body their own way. They read one parser now; these hold
-# each of them to the same columns on the tree's own text AND on a release
-# written by `uqs deploy build --q-target 4.0`, which prefixes `.qetl.plant.`.
+# split a `([]...)` body their own way. The tree's tables now come from q's
+# metadata (#1781); the TEXT readers that remain - for a bundle's tables.q
+# before install, and the scaffold's tree - are held here to the same columns
+# on the tree's own text AND on a release written by `uqs deploy build
+# --q-target 4.0`, which prefixes `.qetl.plant.`.
 
 
 def _bare(text: str) -> str:
@@ -110,11 +112,9 @@ def _prefixed(text: str) -> str:
 def test_every_reader_gets_the_same_columns_from_any_spelling(spell):
     from uqs.external.plant_contract import plant_table_fields
     from uqs.scaffold.columns import definition_columns
-    from uqs.stack.hdb_shape import declared_columns
 
     text = spell(schemas.TABLES_Q.read_text())
     repo = str(schemas.TABLES_Q.parents[2])
-    declared = declared_columns(text)
     found = schemas.definitions_in(text)
     assert set(found) == EXPECTED_TABLES
     for table, line in found.items():
@@ -123,7 +123,7 @@ def test_every_reader_gets_the_same_columns_from_any_spelling(spell):
         assert schemas.column_names(line) == names
         assert [n for n, _ in definition_columns(line)] == names
         assert plant_table_fields(repo, table, text=text) == [n for n in names if n != "time"]
-        assert declared[table] == list(dict.fromkeys(names))
+        assert plant_table_fields(repo, table) == [n for n in names if n != "time"]
 
 
 def test_gateway_access_reads_the_shared_columns():
