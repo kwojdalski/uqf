@@ -150,7 +150,7 @@ jobs:
         # PeachQ cannot switch into a nested context, so this tree defines
         # every name fully qualified from the root (#1411).
         if: ${{ !cancelled() }}
-        run: python3 scripts/gates/check_nested_contexts.py
+        run: python3 scripts/gates/check.py nested-contexts
       - name: Check q modules stay under their line budget
         # The q counterpart of test_module_split.py (#970): a file over the
         # limit splits, or is listed with a reason and a cap that only shrinks.

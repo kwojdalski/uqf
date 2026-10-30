@@ -100,6 +100,15 @@ def _q_module_size(size: ModuleType, root: Path) -> int:
     )
 
 
+def _nested_contexts(nested: ModuleType, root: Path) -> int:
+    """No `\\d` names more than one level, in the tree's own q (#1411)."""
+    return report(
+        "nested-contexts",
+        nested.problems(root),
+        f"no `\\d` names more than one level in {', '.join(nested.SCOPE)}",
+    )
+
+
 @dataclass(frozen=True)
 class Check:
     name: str
@@ -121,6 +130,12 @@ CHECKS: dict[str, Check] = {
             "every q module under src/ stays within its line budget, or its listed cap",
             "q_module_size",
             _q_module_size,
+        ),
+        Check(
+            "nested-contexts",
+            "no `\\d` in this tree's own q names more than one level",
+            "nested_contexts",
+            _nested_contexts,
         ),
     )
 }

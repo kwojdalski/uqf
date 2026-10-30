@@ -154,7 +154,7 @@ repos:
       # not only what is staged - one list, in the gate itself.
       - id: nested-contexts
         name: Refuse a \d context more than one level deep
-        entry: python3 scripts/gates/check_nested_contexts.py
+        entry: python3 scripts/gates/check.py nested-contexts
         language: system
         pass_filenames: false
         always_run: true

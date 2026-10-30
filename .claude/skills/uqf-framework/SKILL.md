@@ -269,7 +269,7 @@ invariants, is `uqf-q-traps.md`.
   state makes another suite pass or fail by order.
 - **V5** Code must work on KDB-X and on PeachQ. PeachQ can't load nested `\d`
   contexts: define every name fully qualified from the root (`\d .` at most, one
-  level at most - `check_nested_contexts.py`); only `tests/` is still flattened
+  level at most - `check.py nested-contexts`); only `tests/` is still flattened
   for it (`scripts/portable/flatten_contexts.py`). A test it can't run goes into
   `tests/q/peachq_known_gaps.txt` or `python/peachq_known_gaps.txt`, with the
   reason. Both lists are held both ways: a listed test that passes fails the

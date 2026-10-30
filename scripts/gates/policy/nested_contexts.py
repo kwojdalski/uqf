@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Refuse a `\\d` that names more than one level, in this repository's own q (#1411).
 
 PeachQ cannot switch into a nested working context (`\\d .qf.px`,
@@ -19,16 +18,13 @@ list to bring it under the rule; tests/ joins when its own conversion lands
 about: a site's declarations written nested still load on KDB-X, and
 uqs deploy build converts them for kdb+ 4.0.
 
-    python3 scripts/gates/check_nested_contexts.py
+    python3 scripts/gates/check.py nested-contexts
 """
 
 from __future__ import annotations
 
 import re
-import sys
 from pathlib import Path
-
-REPO = Path(__file__).resolve().parents[2]
 
 #: The one list. Directories are scanned for `.q` (and `.md`/`.qmd` q fences);
 #: a file is scanned as itself.
@@ -52,7 +48,7 @@ _FENCE_OPEN = re.compile(r"^\s*```+\s*q\s*$")
 _FENCE_CLOSE = re.compile(r"^\s*```+\s*$")
 
 
-def files(root: Path = REPO, scope: tuple[str, ...] = SCOPE) -> list[Path]:
+def files(root: Path, scope: tuple[str, ...] = SCOPE) -> list[Path]:
     out: list[Path] = []
     for entry in scope:
         path = root / entry
@@ -82,7 +78,7 @@ def q_lines(path: Path) -> list[tuple[int, str]]:
     return out
 
 
-def problems(root: Path = REPO, scope: tuple[str, ...] = SCOPE) -> list[str]:
+def problems(root: Path, scope: tuple[str, ...] = SCOPE) -> list[str]:
     found = []
     for path in files(root, scope):
         for n, line in q_lines(path):
@@ -93,17 +89,3 @@ def problems(root: Path = REPO, scope: tuple[str, ...] = SCOPE) -> list[str]:
                     "(`.qpipe.job.x.f:{...}`), with at most a one-level `\\d .name`"
                 )
     return found
-
-
-def main() -> int:
-    found = problems()
-    for p in found:
-        print(p, file=sys.stderr)
-    if found:
-        return 1
-    print(f"check_nested_contexts: no `\\d` names more than one level in {', '.join(SCOPE)}")
-    return 0
-
-
-if __name__ == "__main__":
-    sys.exit(main())
