@@ -286,7 +286,7 @@
 / otherwise the most that can be said from its transport alone.
 / @param source a registered source
 / @return the example, as a string
-/ @eg .qetl.source.credential_example `crypto_market_data  ->  "DRIVER=DuckDB;Database=/path/live.duckdb;access_mode=READ_ONLY"
+/ @eg .qetl.source.credential_example `duckdb_deals  ->  "DRIVER=DuckDB;Database=/path/fx_deals.duckdb;access_mode=READ_ONLY"
 / @eg .qetl.source.credential_example `demo_deals  ->  "localhost:5010"
 / .
 / Tests the VALUE, not `in key d`, and that is not defensive coding. The

@@ -475,7 +475,9 @@ def test_a_twin_whose_transform_registers_after_workers_is_refused():
 
 
 def test_a_transform_registered_under_transforms_is_loaded_before_workers():
-    create_backfill.require_loaded_before_workers(UQF_ROOT, "eq_orderbook", "eq_orderbook")
+    create_backfill.require_loaded_before_workers(
+        UQF_ROOT, "book_liquidity_snapshot", "book_liquidity_snapshot"
+    )
 
 
 def test_a_twin_reuses_an_existing_source_without_columns_it_never_passed():

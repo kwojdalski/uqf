@@ -1515,14 +1515,15 @@ def test_pipeline_offsets_are_stable():
         "events_backfill1": 33,
         # Appended last so the eleven above keep their ports; a new
         # pipeline inserted mid-list renumbers everything after it.
-        "databento1": 34,
+        # 34 was databento1, now the databento bundle's: its row stays in
+        # process_ports.csv, so installing the bundle gives it the same port.
         "cryptomock1": 35,
         "executions1": 36,
         # 37 was marks1, retired: its row stays in process_ports.csv so the
         # offset is never handed to anything else.
         "fxordersfeed1": 38,
         "fxpositions1": 39,
-        "databento_backfill1": 40,
+        # 40 is databento_backfill1, the same bundle's.
         "upstream_backfill1": 41,
         "marketdata1": 42,
         "superbook1": 43,
@@ -1668,7 +1669,7 @@ def test_tap_and_the_on_demand_chain_do_not_autostart():
         p.procname for p in backfills if p.startwithall != "0"
     ]
     # tap1 is a diagnostic subscriber, cryptomock1 a mock. cross1, widefeed1,
-    # vectorize1, databento1 and the direct-arbitrage chain are on demand for
+    # vectorize1 and the direct-arbitrage chain are on demand for
     # a different reason: the licence allows a q process sixteen inbound
     # connections and the default start would want more (#285). Each is a
     # leaf or a closed pair, so shedding it strands nothing - which is held
@@ -1679,7 +1680,6 @@ def test_tap_and_the_on_demand_chain_do_not_autostart():
         "cross1",
         "widefeed1",
         "vectorize1",
-        "databento1",
         "superbook1",
         "arbitrage1",
         "crossarb1",
@@ -2023,7 +2023,7 @@ def test_the_connection_budget_check_fires_when_the_default_start_grows(
     assert 'startwithall="0"' in budget[0]
     # the ones this tree sheds on purpose have to be in the list, or the
     # message sends the reader looking in the wrong place
-    for shed in ("cross1", "widefeed1", "vectorize1", "databento1"):
+    for shed in ("cross1", "widefeed1", "vectorize1"):
         assert shed in budget[0]
 
 

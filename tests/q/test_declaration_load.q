@@ -15,8 +15,8 @@
     }
 
 .qt.qetl.load.test_names_resolve_in_load_order_whatever_order_they_come_in:{[t]
-    a:.qetl.load.files `superbook1`eq_orderbook;
-    .qunit.assertEquals[a;.qetl.load.files `eq_orderbook`superbook1;"order-free"];
+    a:.qetl.load.files `superbook1`exec_bars;
+    .qunit.assertEquals[a;.qetl.load.files `exec_bars`superbook1;"order-free"];
     .qunit.assertEquals[a;.qetl.load.order where .qetl.load.order in a;"init.q's order"];
     }
 
@@ -38,9 +38,9 @@
     }
 
 .qt.qetl.load.test_a_source_selection_and_a_job_selection_load_together:{[t]
-    .qetl.load.only:enlist `eq_orderbook;
+    .qetl.load.only:enlist `exec_bars;
     .qetl.load.only_sources:enlist `duckdb_deals;
-    want:.qetl.load.order where .qetl.load.order in .qetl.load.files[`eq_orderbook],.qetl.load.source_files `duckdb_deals;
+    want:.qetl.load.order where .qetl.load.order in .qetl.load.files[`exec_bars],.qetl.load.source_files `duckdb_deals;
     r:@[.qetl.load.selected;();{x}];
     delete only, only_sources from `.qetl.load;
     .qunit.assertEquals[r;want;"both selections, in init.q's order"]};

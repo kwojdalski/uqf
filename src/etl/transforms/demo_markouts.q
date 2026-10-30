@@ -15,7 +15,7 @@
 /     receipt time (invariant 1); a backfill has no receipt, so it writes
 /     trade_time+horizon, the earliest the live row could have been stamped.
 / .
-/ The worked example belongs to the transform, as eq_orderbook.q's does.
+/ The worked example belongs to the transform, as the transforms beside it do.
 
 \d .
 

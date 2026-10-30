@@ -16,7 +16,7 @@ import subprocess
 import time
 
 import pytest
-from attach_backfill_support import WORKER, facts_of, make_world, plan_with
+from attach_backfill_support import DATASET, WORKER, facts_of, make_world, plan_with
 from attach_support import SORT_DEFAULT, probe
 from typer.testing import CliRunner
 
@@ -172,15 +172,15 @@ def test_a_sort_config_this_writer_would_not_reproduce_is_refused(world):
     ]
     refused(
         world,
-        "wdb1's sort.csv sorts crypto_market_data by \\['time'\\] with attributes .*'time': 'g'",
+        f"wdb1's sort.csv sorts {DATASET} by \\['time'\\] with attributes .*'time': 'g'",
     )
 
 
 def test_a_table_with_its_own_sort_row_is_judged_by_that_row(world):
     world.stack.named("wdb1")["sortrows"] = [
         {"tabname": "default", "att": "g", "col": "time", "sort": True},
-        {"tabname": "crypto_market_data", "att": "p", "col": "sym", "sort": True},
-        {"tabname": "crypto_market_data", "att": "", "col": "time", "sort": True},
+        {"tabname": DATASET, "att": "p", "col": "sym", "sort": True},
+        {"tabname": DATASET, "att": "", "col": "time", "sort": True},
     ]
     assert plan_with(world, facts_of())["coordination"]["wdb"] == "wdb1"
 

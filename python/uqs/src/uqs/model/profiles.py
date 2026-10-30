@@ -143,17 +143,9 @@ NEEDS_LARGER_LICENCE: dict[str, str] = {
 #: Backfills are not here and do not need to be: they are bounded, hold no
 #: plant connection and belong to no standing set.
 UNPROFILED: dict[str, str] = {
-    "databento1": (
-        "a live external feed - its rows come from the Databento handler "
-        "(`uqs connector start databento`), so it is started with that or not at all"
-    ),
     "kafka_flow1": (
         "a live external feed - its rows come from a Kafka consumer (the q feed "
         "kafka_feed1, or `uqs connector start kafka`), so it is started with that or not at all"
-    ),
-    "crypto_book_decoder1": (
-        "a live external feed - its rows come from a Kafka consumer (kafka_feed1 with "
-        "UQF_KAFKA_TOPICS=cryptorust.book_snapshots), so it is started with that or not at all"
     ),
     "kafka_feed1": (
         "a live external feed - it consumes a Kafka topic with KX's kfk library "
@@ -190,10 +182,6 @@ UNPROFILED: dict[str, str] = {
     "alert_sink1": (
         "an outbound sink that needs a webhook URL (UQF_SOURCE_CRED_ALERT_SINK) "
         "and refuses to run without one, so it starts only when asked"
-    ),
-    "flink_vwap1": (
-        "a live external feed - its rows come from the Flink job (`uqs connector "
-        "start flink_vwap`), so it is started with that or not at all"
     ),
     "fxmarkout1": (
         "on demand: it needs an executions and a market_data source a site "

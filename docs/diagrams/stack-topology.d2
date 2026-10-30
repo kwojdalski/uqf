@@ -110,7 +110,6 @@ jobs: "uqf streaming jobs — one declaration each under src/etl/streaming/" {
   fxordersfeed1: "fxordersfeed1 :6088\nsynthetic order flow,\nmost of it never fills" { class: feed }
 
   cryptomock1: "cryptomock1 :6085\nstands in for cryptorust\npublishes only, on demand" { class: feed }
-  databento1: "databento1 :6084\nlive MBP-10 → book\nsame fold as the backfill" { class: job }
   executions1: "executions1 :6086\nnormalizer: fills as one\nsubscribes + publishes" { class: job }
   marketdata1: "marketdata1 :6092\nnormalizer: one book shape\nFX and crypto books" { class: job }
 
@@ -127,8 +126,6 @@ jobs: "uqf streaming jobs — one declaration each under src/etl/streaming/" {
   tap1: "tap1 :6078\nsubscribe and log\nits own torq_tap.q" { class: job }
   kafka_feed1: "kafka_feed1 :6118\nnative q Kafka consumer (KX kfk),\nenvelopes only, on demand" { class: job }
   kafka_flow1: "kafka_flow1 :6097\nclient FX flow off Kafka,\ndeduplicated, on demand" { class: job }
-  crypto_book_decoder1: "crypto_book_decoder1 :6119\ncryptorust books off Kafka,\nwide, on demand" { class: job }
-  flink_vwap1: "flink_vwap1 :6106\nVWAP windows from Flink,\ndeduplicated, on demand" { class: job }
   crypto_markout1: "crypto_markout1 :6101\ncrypto fills marked out\nagainst the best mid, on demand" { class: job }
   alert_sink1: "alert_sink1 :6102\nfx_limit_breach out to a webhook,\nat least once, on demand" { class: job }
   exec_bars1: "exec_bars1 :6104\none-minute fill bars off\nexecutions, on demand" { class: job }
@@ -138,7 +135,7 @@ jobs: "uqf streaming jobs — one declaration each under src/etl/streaming/" {
   fxmarkoutwide1: "fxmarkoutwide1 :6115\nnormalized FX markouts (wide),\non demand" { class: job }
   order_outcomes1: "order_outcomes1 :6110\nnormalizer: order sources\nas one contract, on demand" { class: job }
   crypto_book_1s1: "crypto_book_1s1 :6107\none-second book snapshots off\ncrypto_book, crypto profile" { class: job }
-  legend: "Gold publishes only.\nGreen subscribes, and all but\ncross1 republish.\n\ndatabento1's, kafka_flow1's and\nflink_vwap1's inputs come from\nexternal Python handlers,\nnot from a process in this diagram." { class: band }
+  legend: "Gold publishes only.\nGreen subscribes, and all but\ncross1 republish.\n\nkafka_flow1's input comes from an\nexternal Python handler, not from\na process in this diagram.\n\nThe sidecar bundles' processes\n(databento1, crypto_book_decoder1,\nflink_vwap1) exist once installed\nand are not drawn." { class: band }
 }
 
 runner: "One script for all but tap1 — scripts/processes/torq_stream.q" {
@@ -170,7 +167,7 @@ downstream: "Storage, the gateway, and the bounded half" {
 
   storage: "rdb1 :6052 — today's ticks\nwdb1 :6055 → sort1 :6056 → sortworker1/2\nhdb1 :6053 · hdb2 :6054 — on disk" { class: store }
   gw: "gateway1 :6057\nthe only door in\n\nmonitor1 :6059 - a handle per process it\nwatches, the connection budget's biggest user\nhousekeeping1 :6061 · metrics1 :6068\ndiscovery1 :6051 - processes find each other\nthrough it, the deployment's started ones only" { class: store }
-  backfills: "deals_backfill1 :6082 · events_backfill1 :6083\ndatabento_backfill1 :6090 · upstream_backfill1 :6091\nduckdb_deals_backfill1 :6096 · crypto_market_data_backfill1 :6098\nhdb_demo_markouts_backfill1 :6099 - marks out the HDB's fills\nhdb_transfer_backfill1 :6100 - copies a local HDB's trades\nhdb_exec_bars_backfill1 :6105 - rebuilds the fill bars\nhdb_crypto_book_backfill1 :6108 - rebuilds the book snapshots\nhdb_order_quality_backfill1 :6111 - rebuilds the order-quality series\nhdb_book_liquidity_1m_backfill1 :6113 - rebuilds the minute liquidity\nhdb_fx_markouts_backfill1 :6117 - marks out the HDB's executions\nhdb_fx_markout_wide_backfill1 :6116 - the same, wide\nscripts/processes/torq_backfill.q\n\nBounded workers, and they never touch the\ntickerplant: .qetl.io writes into their own\nprocess. One worker file each, under\nsrc/etl/workers/." { class: job }
+  backfills: "deals_backfill1 :6082 · events_backfill1 :6083\nupstream_backfill1 :6091 · duckdb_deals_backfill1 :6096\nhdb_demo_markouts_backfill1 :6099 - marks out the HDB's fills\nhdb_transfer_backfill1 :6100 - copies a local HDB's trades\nhdb_exec_bars_backfill1 :6105 - rebuilds the fill bars\nhdb_crypto_book_backfill1 :6108 - rebuilds the book snapshots\nhdb_order_quality_backfill1 :6111 - rebuilds the order-quality series\nhdb_book_liquidity_1m_backfill1 :6113 - rebuilds the minute liquidity\nhdb_fx_markouts_backfill1 :6117 - marks out the HDB's executions\nhdb_fx_markout_wide_backfill1 :6116 - the same, wide\nscripts/processes/torq_backfill.q\n\nBounded workers, and they never touch the\ntickerplant: .qetl.io writes into their own\nprocess. One worker file each, under\nsrc/etl/workers/." { class: job }
 }
 
 jobs -> runner.qtorq: "run under" { style.stroke: "#3d7a5a" }

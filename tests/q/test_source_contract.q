@@ -520,8 +520,8 @@
         "prose after a comment marker is not code"]};
 
 .qt.qetl.source.test_a_source_can_declare_what_its_credential_looks_like:{[t]
-    .qunit.assertEquals[.qetl.source.credential_example `crypto_market_data;
-        "DRIVER=DuckDB;Database=/path/live.duckdb;access_mode=READ_ONLY";
+    .qunit.assertEquals[.qetl.source.credential_example `duckdb_deals;
+        "DRIVER=DuckDB;Database=/path/fx_deals.duckdb;access_mode=READ_ONLY";
         "DuckDB is embedded: a path and a mode, with no host, user or password"]};
 
 .qt.qetl.source.test_a_source_that_declares_none_falls_back_to_its_transport:{[t]

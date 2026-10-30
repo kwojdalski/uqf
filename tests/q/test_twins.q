@@ -17,7 +17,15 @@
 
 / stream job -> (stream transform; twin transform; twin input name for each stream input)
 / Stream transform input -> twin transform input, where they differ.
-.qt.qpipe.twins.renames:(`demo_markout`eq_orderbook`exec_bars`crypto_book_1s`order_quality`book_liquidity_1m`fx_markout`fx_markout_wide)!(`trades`quotes!`trades`quote;()!();enlist[`tape]!enlist `executions;enlist[`book]!enlist `book;()!();enlist[`books]!enlist `books;()!();()!())
+.qt.qpipe.twins.renames:(`demo_markout`exec_bars`crypto_book_1s`order_quality`book_liquidity_1m`fx_markout`fx_markout_wide)!(`trades`quotes!`trades`quote;enlist[`tape]!enlist `executions;enlist[`book]!enlist `book;()!();enlist[`books]!enlist `books;()!();()!())
+
+/ A bundle's twin pair lists its own renaming, as .qt.qpipe.job.<job>.twin_renames in its test file
+/ (the databento bundle's eq_orderbook is one): a name the job's suite owns has no load order, and the
+/ tree's dictionary above cannot take an entry from a file that may not be installed. Or :: when it has none.
+.qt.qpipe.twins.own_renames:{[j] @[get;` sv .qt.support.job_suite[j],`twin_renames;{[e] ::}]}
+
+/ The renaming for a stream job with a twin: the tree's, else its own test file's.
+.qt.qpipe.twins.renames_of:{[j] $[j in key .qt.qpipe.twins.renames; .qt.qpipe.twins.renames j; .qt.qpipe.twins.own_renames j]}
 
 / Twins whose equivalence is a live run, not an example: the twin reads the RAW orders and
 / applies the adapter itself, so its inputs are not the stream transform's and `agrees` cannot
@@ -28,13 +36,16 @@
 / transform as the declaration names it.
 .qt.qpipe.twins.pair:{[job]
     twin:first .qetl.uptime.twins job;
-    ((.qetl.job.stream.def job)`transform;(.qetl.job.bounded.def twin)`transform;.qt.qpipe.twins.renames job)}
+    ((.qetl.job.stream.def job)`transform;(.qetl.job.bounded.def twin)`transform;.qt.qpipe.twins.renames_of job)}
 
 .qt.qpipe.twins.with_twins:{[] js:key .qetl.job.stream.jobs; js where 0<count each .qetl.uptime.twins each js}
 
 .qt.qpipe.twins.test_every_twin_pair_is_listed:{[t]
-    .qunit.assertEquals[asc .qt.qpipe.twins.with_twins[];asc key .qt.qpipe.twins.renames;
-        "a stream job with a twin is listed here, so its equivalence is checked"]};
+    listed:{[j] (j in key .qt.qpipe.twins.renames) or 99h=type .qt.qpipe.twins.own_renames j};
+    .qunit.assertEquals[.qt.qpipe.twins.with_twins[] where not listed each .qt.qpipe.twins.with_twins[];`symbol$();
+        "a stream job with a twin is listed here (or names its renames in its own test file), so its equivalence is checked"];
+    .qunit.assertEquals[(key .qt.qpipe.twins.renames) except .qt.qpipe.twins.with_twins[];`symbol$();
+        "and nothing listed here has lost its twin"]};
 
 / The twin's transform reproduces each of the stream transform's examples.
 .qt.qpipe.twins.test_a_stream_job_with_a_twin_declares_its_transform:{[t]
@@ -68,19 +79,6 @@
 .qt.qpipe.twins.test_the_fx_markout_twins_score_as_the_live_jobs_do:{[t]
     .qunit.assertTrue[.qt.qpipe.twins.agrees[`fx_markout];"hdb_fx_markouts_long gives the live long layout's rows on its examples"];
     .qunit.assertTrue[.qt.qpipe.twins.agrees[`fx_markout_wide];"hdb_fx_markouts_wide gives the live wide layout's rows on its examples"]};
-
-.qt.qpipe.twins.test_the_eq_orderbook_twin_applies_the_same_transform:{[t]
-    .qunit.assertTrue[.qt.qpipe.twins.agrees[`eq_orderbook];"one transform, shared"]};
-
-/ #1076: the backfill writes the fold to the HDB as it is, so the fold is
-/ the plant's table - ts_event included - or historical partitions lack a
-/ column the live ones carry, and `time` means event time in one and
-/ receipt time in the other.
-.qt.qpipe.twins.test_the_eq_orderbook_backfill_writes_the_plant_shape:{[t]
-    f:.qpipe.transform.eq_orderbook.to_book .qpipe.source.databento_mbp10.fixture[];
-    .qunit.assertEquals[cols f;cols .qetl.plant.shape `eq_orderbook;"the plant's columns, in its order, ts_event included"];
-    .qunit.assertEquals[.qetl.plant.problems[`eq_orderbook;![f;();0b;enlist `time]];();"with its types, nested columns included"];
-    .qunit.assertEquals[f`time;f`ts_event;"history has no receipt time: time is the event time"]};
 
 .qt.qpipe.twins.test_the_exec_bars_twin_cuts_and_aggregates_as_the_live_job_does:{[t]
     .qunit.assertTrue[.qt.qpipe.twins.agrees[`exec_bars];"hdb_exec_bars gives the live bars on the live transform's example"]};

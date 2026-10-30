@@ -55,7 +55,7 @@
 / The regression, stated as itself: fxpositions1's two tables against a
 / plant carrying the nineteen a generated database.q used to define.
 .qt.qtorq.pipeline.test_the_fx_positions_pair_against_a_plant_that_forgot_them:{[t]
-    h:.qt.qtorq.pipeline.plant[`crypto_book`crypto_trades`eq_orderbook`demo_execution_quality`executions`mkt_orderbook`orders`position`quote`quotes`trade`trades`wide_orderbook];
+    h:.qt.qtorq.pipeline.plant[`crypto_book`crypto_trades`demo_execution_quality`executions`mkt_orderbook`orders`position`quote`quotes`trade`trades`wide_orderbook];
     .qunit.assertThrows[{.qtorq.assert_publishable[x;`fx_position`fx_limit_breach]};h;
         "*discarded without an error*";
         "the message says what happens to the rows, not just that a table is absent"]};

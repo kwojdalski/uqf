@@ -342,7 +342,7 @@
     / threw 254, and the half explaining WHY a backfill refuses was the part
     / dropped: an operator saw "...which would " and nothing after it.
     e:@[{.qetl.io.odbc.require_available[]};::;{[x] x}];
-    m:.qetl.job.bounded.connect_error[`crypto_market_data;e];
+    m:.qetl.job.bounded.connect_error[`duckdb_deals;e];
     .qunit.assertEquals[m;@[{'x};m;{[x] x}];
         "what connect throws is what an operator reads - not a prefix of it"]};
 

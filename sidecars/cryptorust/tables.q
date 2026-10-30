@@ -1,0 +1,10 @@
+/ crypto_market_data_backfill1's target: one recorded crypto book-and-trade
+/ update, replayed from cryptorust's data/live.duckdb. Carries BOTH
+/ clocks - source_time is the venue's stamp, local_time the recorder's, and
+/ `time` is the plant's - because the lag between them is what a recorded
+/ capture exists to measure, and crypto_book has room for none of it.
+crypto_market_data:([]time:`timestamp$(); sym:`g#`symbol$(); venue:`symbol$(); source_time:`timestamp$(); local_time:`timestamp$(); is_snapshot:`boolean$(); bid_prices:(); bid_sizes:(); ask_prices:(); ask_sizes:(); latency_ms:`float$(); latency_min_ms:`float$(); latency_count:`long$(); trade_price:`float$(); trade_size:`float$(); trade_side:`symbol$())
+nested[`crypto_market_data;`bid_prices`bid_sizes`ask_prices`ask_sizes!"FFFF"];
+
+/ crypto_book_decoder1's output: one sampled full book from cryptorust's Kafka book snapshots, the top five levels a side in wide columns (bid_px0 is the best bid; a level the record did not carry is a null float). source_time is the exchange's clock, local_time cryptorust's receive clock, sampled_time the moment the recorder sampled the book, time the plant's. topic, partition, offset and broker_time are the record's provenance (the Kafka contract, docs/services/kafka.md): a restart reads the coordinates back to know what it handled, and broker_time is the Kafka record's timestamp, never the exchange's. crypto_book is a different table: the kdb recorder's vector-shaped book.
+crypto_book_snapshot:([]time:`timestamp$(); sym:`g#`symbol$(); venue:`symbol$(); source_time:`timestamp$(); local_time:`timestamp$(); sampled_time:`timestamp$(); bid_px0:`float$(); bid_px1:`float$(); bid_px2:`float$(); bid_px3:`float$(); bid_px4:`float$(); bid_sz0:`float$(); bid_sz1:`float$(); bid_sz2:`float$(); bid_sz3:`float$(); bid_sz4:`float$(); ask_px0:`float$(); ask_px1:`float$(); ask_px2:`float$(); ask_px3:`float$(); ask_px4:`float$(); ask_sz0:`float$(); ask_sz1:`float$(); ask_sz2:`float$(); ask_sz3:`float$(); ask_sz4:`float$(); broker_time:`timestamp$(); topic:`symbol$(); partition:`long$(); offset:`long$())

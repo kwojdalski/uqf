@@ -16,7 +16,8 @@ Two consumers read Kafka, and a release carries neither unless asked:
            the release's wheels (uqs.deploy.payload); `uqs connector start
            kafka` refuses without it (uqs.stack.kafka_extra).
 
-The decoders (kafka_flow1, crypto_book_decoder1, a sidecar's) read plant rows
+The decoders (kafka_flow1, a sidecar's such as the cryptorust bundle's
+crypto_book_decoder1) read plant rows
 and need neither. Brokers, groups and credentials stay runtime configuration
 (UQF_KAFKA_*): nothing here reads or records one.
 

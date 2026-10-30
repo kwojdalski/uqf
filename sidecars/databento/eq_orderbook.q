@@ -6,7 +6,7 @@
 / .qf.mkt.cross_book_at read.
 / .
 / IT DOES NOT DEFINE THE FOLD. `.qetl.transform.define[`eq_orderbook;...]` already
-/ exists, declared by src/etl/transforms/eq_orderbook.q with its own
+/ exists, declared by databento_mbp10.q beside the source, with its own
 / worked examples, because both jobs need exactly this transformation
 / over exactly this contract. A live path that re-implemented it - here, or
 / worse in the Python feed handler - would be a second place for the same

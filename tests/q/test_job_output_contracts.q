@@ -120,7 +120,7 @@
 / job -> a niladic function pushing input the job acts on. Each driver
 / runs after .qt.qetl.job.stream.reset[], which empties job state and wires every job
 / to .qt.qetl.job.stream.recorder.
-.qt.qpipe.job_output_contracts.drivers:`demo_markout`posbook`vectorize`eq_orderbook`fx_positions`executions`market_data`superbook`arbitrage`cross_arbitrage`exec_bars!(
+.qt.qpipe.job_output_contracts.drivers:`demo_markout`posbook`vectorize`fx_positions`executions`market_data`superbook`arbitrage`cross_arbitrage`exec_bars!(
     {[] .qpipe.job.demo_markout.on_batch[`trades;([] time:enlist .qt.qetl.job.stream.d 0; sym:enlist `EURUSD; side:enlist 1;
             trade_price:enlist 1.1; size:enlist 1e6; pip_factor:enlist 10000; fill_id:enlist `f1)];
         .qpipe.job.demo_markout.on_batch[`quote;([] time:enlist .qt.qetl.job.stream.d 1; sym:enlist `EURUSD;
@@ -131,7 +131,6 @@
         / and the day ends, so its opening book is published too (#943)
         .qetl.job.stream.snapshot `posbook};
     {[] .qpipe.job.vectorize.on_batch[`wide_orderbook;.qt.qetl.job.stream.wide_row[]]};
-    {[] .qpipe.job.eq_orderbook.on_batch[`databento_mbp10;.qt.qetl.job.stream.mbp10_batch[]]};
     {[] .qpipe.job.fx_positions.load_limits .qt.qetl.job.stream.mk_limits[];
         .qt.qetl.job.stream.to_fx_positions .qt.qetl.job.stream.orders_batch[];
         .qpipe.job.fx_positions.on_timer[];

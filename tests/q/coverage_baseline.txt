@@ -30,10 +30,6 @@
 # webhook.post is the seam alert_sink.post calls, for the same reason (#987)
 .qetl.webhook.post
 .qetl.io.odbc.with_connection
-.qpipe.source.crypto_market_data.query
-.qpipe.source.databento_mbp10.adapt
-.qpipe.source.databento_mbp10.query
-.qpipe.source.databento_mbp10.select_list
 .qpipe.source.demo_events.query
 .qpipe.source.duckdb_deals.query
 .qpipe.source.hdb_executions.query
@@ -94,7 +90,6 @@
 # shell's own function, so a swap cannot happen per worker. That check does not
 # reduce coverage - reading a parse tree never enters the function - which is
 # why the lifecycle test above was still needed to take these names off.
-.qpipe.transform.eq_orderbook.example_book
 .qetl.run.history
 .qdata.getBySymbolDate
 .qdata.pqModule

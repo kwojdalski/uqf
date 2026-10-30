@@ -30,14 +30,16 @@ LEVELS = 10
 CONTRACT_Q = "src/etl/sources/databento_mbp10.q"
 
 
-def contract_fields(repo_root: str) -> list[str]:
+def contract_fields(repo_root: str, q_file: str = CONTRACT_Q) -> list[str]:
     """The source contract's field order, parsed out of its q declaration.
 
     Reading the q rather than duplicating the list is the same discipline
     `model/schemas.py` follows for the table definitions: one place to change, and
-    a mismatch is impossible rather than merely unlikely.
+    a mismatch is impossible rather than merely unlikely. `q_file` is where
+    the databento bundle's source sits once installed; a test points it at
+    the bundle's own folder.
     """
-    text = open(os.path.join(repo_root, CONTRACT_Q), encoding="utf-8").read()
+    text = open(os.path.join(repo_root, q_file), encoding="utf-8").read()
     # columns:`ts_event`symbol`action`side`price`size`sequence,level_fields
     head = next(
         line for line in text.splitlines() if re.match(r"(?:\.[A-Za-z_][\w.]*\.)?columns:", line)

@@ -51,10 +51,10 @@ def test_a_closure_takes_in_the_peer_job_whose_helpers_it_calls(plan):
 
 
 def test_a_closure_takes_in_sources_transforms_and_reactions(plan):
-    assert plan.for_job("eq_orderbook") == [
-        "src/etl/sources/databento_mbp10.q",
-        "src/etl/transforms/eq_orderbook.q",
-        "src/etl/streaming/eq_orderbook.q",
+    assert plan.for_job("hdb_exec_bars_backfill") == [
+        "src/etl/sources/hdb_executions.q",
+        "src/etl/transforms/exec_bars.q",
+        "src/etl/workers/hdb_exec_bars_backfill.q",
     ]
     # rebuild_positions watches demo_deals, which this worker writes.
     assert "src/etl/reactions/rebuild_positions.q" in plan.for_job("demo_deals_backfill")
@@ -86,8 +86,8 @@ def test_the_infrastructure_only_selection_loads_nothing(plan):
 
 
 def test_a_selection_is_in_load_order_whatever_order_it_names(plan):
-    forward = plan.select(["superbook1", "eq_orderbook"])
-    assert forward == plan.select(["eq_orderbook", "superbook1"])
+    forward = plan.select(["superbook1", "hdb_exec_bars_backfill"])
+    assert forward == plan.select(["hdb_exec_bars_backfill", "superbook1"])
     order = [f.path for f in plan.files]
     assert forward == sorted(forward, key=order.index)
 

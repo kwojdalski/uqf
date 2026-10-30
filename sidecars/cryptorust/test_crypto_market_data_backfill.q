@@ -277,3 +277,95 @@
     .qpipe.job.crypto_market_data_backfill.run[];
     r:.qpipe.job.crypto_market_data_backfill.run[];
     .qunit.assertEquals[(r`state;count value `crypto_market_data);(`idle;6);"already covered: nothing fetched, nothing duplicated"]};
+
+/ --- the shard glob's completeness bound (#1186) ---------------------------------
+/ No driver and no DuckDB file: the bound is checked by replacing
+/ .qetl.io.odbc.run_sql for the length of one test.
+
+/ Run niladic `f` with run_sql answering `newest` (milliseconds, or null) and
+/ the capture glob set, restoring both whether or not it throws.
+.qt.qpipe.job.crypto_market_data_backfill.with_shards:{[newest;f]
+    keep:.qetl.io.odbc.run_sql;
+    setenv[`UQF_CRYPTO_CAPTURE_GLOB;"/rec/data/live*.parquet"];
+    `.qetl.io.odbc.run_sql set {[n;h;sql] .qt.qpipe.job.crypto_market_data_backfill.sql:sql; ([] newest:enlist n)}[newest];
+    r:@[f;::;{[e] (`failed;e)}];
+    `.qetl.io.odbc.run_sql set keep;
+    setenv[`UQF_CRYPTO_CAPTURE_GLOB;""];
+    if[(0h=type r) and `failed~first r; 'last r];
+    r}
+
+.qt.qpipe.job.crypto_market_data_backfill.test_the_shard_glob_is_complete_through_the_newest_finished_row:{[t]
+    / 21:30 on 2026.09.11 in epoch milliseconds
+    r:.qt.qpipe.job.crypto_market_data_backfill.with_shards[1789162200000;{.qpipe.source.crypto_market_data.complete_through 7i}];
+    .qunit.assertEquals[r;2026.09.11D21:30:00.000000000;
+        "the unfinished shard holds rows from there on, so a window may end at it, not past it"];
+    .qunit.assertTrue[0<count ss[.qt.qpipe.job.crypto_market_data_backfill.sql;"FROM read_parquet('/rec/data/live"];
+        "the bound is read from the finished shards the glob matches"]};
+
+.qt.qpipe.job.crypto_market_data_backfill.test_a_window_into_the_unfinished_shard_is_clipped:{[t]
+    r:.qt.qpipe.job.crypto_market_data_backfill.with_shards[1789162200000;{
+        .qetl.source.clip_to_complete[`crypto_market_data_backfill;`crypto_market_data;7i;1b;2026.09.11D22:00:00.000000000]}];
+    .qunit.assertEquals[r;2026.09.11D21:30:00.000000000;"21:00-22:00 is planned only to 21:30"]};
+
+.qt.qpipe.job.crypto_market_data_backfill.test_no_finished_shard_means_nothing_is_complete:{[t]
+    r:.qt.qpipe.job.crypto_market_data_backfill.with_shards[0N;{
+        .qetl.source.clip_to_complete[`crypto_market_data_backfill;`crypto_market_data;7i;1b;2026.09.11D22:00:00.000000000]}];
+    .qunit.assertEquals[r;-0Wp;"an empty glob is not a finished capture"]};
+
+.qt.qpipe.job.crypto_market_data_backfill.test_without_a_glob_the_capture_is_closed_data:{[t]
+    .qunit.assertEquals[.qpipe.source.crypto_market_data.complete_through 7i;0Wp;
+        "the named table or view of a finished capture is not clipped"]};
+
+/ --- one rule for a crossed book: the live check and this backfill's gate -----
+
+/ (#1176) "is this book crossed" has one rule (.qf.mkt.crossed_top), so the live check
+/ and the backfill gate agree on a locked, a one-sided and a crossed book. These cases
+/ lived in the tree's test_dqchecks.q while the tree held the worker (#1775).
+.qt.qpipe.job.crypto_market_data_backfill.live_quotes:{[b] ([] time:count[b]#2026.01.01D00:00:00.000000000; sym:count[b]#`X; bid_prices:b`bid_prices; bid_sizes:b`bid_sizes; ask_prices:b`ask_prices; ask_sizes:b`ask_sizes)}
+
+/ The live check's crossed count and the gate's, for one fixture variant.
+.qt.qpipe.job.crypto_market_data_backfill.gate_crossed:{[f]
+    b:.qpipe.transform.crypto_market_data.to_book f;
+    live:count select from .qf.mkt.check_market_data_quality[.qt.qpipe.job.crypto_market_data_backfill.live_quotes b;1000] where status=`crossed;
+    gate:count select from .qpipe.job.crypto_market_data_backfill.quality_check[b] where check=`crossed_book;
+    (live;gate)}
+
+.qt.qpipe.job.crypto_market_data_backfill.test_a_locked_book_is_not_crossed_on_the_live_check_or_the_gate:{[t]
+    f:update bid_price_1:ask_price_1 from .qpipe.source.crypto_market_data.fixture[];
+    .qunit.assertEquals[.qt.qpipe.job.crypto_market_data_backfill.gate_crossed f;0 0;"locked (bid = ask): both pass it"]};
+
+.qt.qpipe.job.crypto_market_data_backfill.test_a_one_sided_book_is_not_crossed_on_the_live_check_or_the_gate:{[t]
+    f:update bid_price_1:0n from .qpipe.source.crypto_market_data.fixture[];
+    .qunit.assertEquals[.qt.qpipe.job.crypto_market_data_backfill.gate_crossed f;0 0;"one-sided: absent, not crossed, on both"]};
+
+.qt.qpipe.job.crypto_market_data_backfill.test_a_crossed_book_is_crossed_on_the_live_check_and_the_gate:{[t]
+    f:update bid_price_1:ask_price_1+1f from .qpipe.source.crypto_market_data.fixture[] where i=0;
+    .qunit.assertEquals[.qt.qpipe.job.crypto_market_data_backfill.gate_crossed f;1 1;"bid above ask: flagged by both"]};
+
+/ #1210: a level 0 at a positive price but zero size is absent on every path.
+.qt.qpipe.job.crypto_market_data_backfill.test_a_zero_size_top_is_absent_not_crossed_on_the_live_check_or_the_gate:{[t]
+    f:update bid_price_1:ask_price_1+1f, bid_size_1:0f from .qpipe.source.crypto_market_data.fixture[] where i=0;
+    .qunit.assertEquals[.qt.qpipe.job.crypto_market_data_backfill.gate_crossed f;0 0;"zero-size top bid: not crossed on either"];
+    b:.qpipe.transform.crypto_market_data.to_book f;
+    r:.qf.mkt.check_market_data_quality[.qt.qpipe.job.crypto_market_data_backfill.live_quotes b;1000];
+    .qunit.assertEquals[count select from r where status=`one_sided;1;"the live check calls the zero-size top one_sided"]};
+
+/ --- what the tree's shared suites held of this worker ------------------------
+
+/ test_io_remote_contract.q: a () column is typed by .qetl.plant.nested.
+.qt.qpipe.job.crypto_market_data_backfill.test_a_nested_column_carries_the_plants_element_type:{[t]
+    c:.qetl.io.remote.contract.of `crypto_market_data_backfill;
+    ty:(`$first each c`columns)!raze last each c`columns;
+    .qunit.assertEquals[ty`bid_prices;"F";"a () column is typed by .qetl.plant.nested"]};
+
+/ test_source_contract.q: a source can declare what its credential looks like.
+.qt.qpipe.job.crypto_market_data_backfill.test_the_source_declares_what_its_credential_looks_like:{[t]
+    .qunit.assertEquals[.qetl.source.credential_example `crypto_market_data;
+        "DRIVER=DuckDB;Database=/path/live.duckdb;access_mode=READ_ONLY";
+        "DuckDB is embedded: a path and a mode, with no host, user or password"]};
+
+/ test_etl_lifecycle.q: the connect error survives being thrown intact, for this source's name too.
+.qt.qpipe.job.crypto_market_data_backfill.test_the_connect_error_survives_a_throw_intact:{[t]
+    e:@[{.qetl.io.odbc.require_available[]};::;{[x] x}];
+    m:.qetl.job.bounded.connect_error[`crypto_market_data;e];
+    .qunit.assertEquals[m;@[{'x};m;{[x] x}];"what connect throws is what an operator reads - not a prefix of it"]};

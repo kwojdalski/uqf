@@ -12,9 +12,18 @@ brew install kafka && brew services start kafka        # localhost:9092
 kafka-topics --create --topic cryptorust.book_snapshots --bootstrap-server localhost:9092
 ```
 
+- The cryptorust bundle, which carries `crypto_book_decoder1` and the
+  `crypto_book_snapshot` table:
+
+  ```
+  uqs job install sidecars/cryptorust --dry-run
+  uqs job install sidecars/cryptorust --yes
+  ```
+
 - The `kfk` v1.6.6 library in `UQF_KFK_HOME` (for example `~/.local/kfk`,
   holding `kfk.q`, `libkfk.so` and `librdkafka.1.dylib`). Build steps: [Kafka
   page](../services/kafka.md#the-q-feed-kafka_feed1).
+
 - After a pull that changes `python/uqs/pyproject.toml`, reinstall the CLI.
   Without it, a command such as `--interactive` fails with "No module named
   textual".
@@ -66,9 +75,9 @@ venue's stamp) or `sampled_time`. cryptorust samples every 100 ms
 (`--interval-ms`), and `kafka_feed1` polls every 200 ms. The table has `sym`,
 `venue`, `source_time`, `local_time`, `sampled_time`, `bid_px0..4`,
 `bid_sz0..4`, `ask_px0..4`, `ask_sz0..4`, `broker_time` (Kafka's record
-timestamp, not the venue's), `topic`, `partition` and `offset`
-([definition](../../src/etl/plant_tables.q)). `broker_time` was added by the
-[provenance
+timestamp, not the venue's), `topic`, `partition` and `offset` (defined in the
+bundle's `tables.q`, `sidecars/cryptorust/tables.q`). `broker_time` was added by
+the [provenance
 contract](../services/kafka.md#provenance-what-every-decoded-row-says-about-its-record):
 after pulling it, roll the day or set the old `crypto_book_snapshot` log segment
 aside (the `length` row below) before restarting `rdb1`.

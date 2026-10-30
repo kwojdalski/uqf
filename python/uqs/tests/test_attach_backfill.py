@@ -44,10 +44,10 @@ runner = CliRunner()
 
 
 def test_a_plant_table_with_nested_columns_is_read_with_its_element_types() -> None:
-    """crypto_market_data's book columns are untyped `()` with their element types on
+    """crypto_book's book columns are untyped `()` with their element types on
     a separate nested[...] line; reading the table without them refused every
     worker whose dataset has list columns (#1451 tightened parse_definition)."""
-    spec = attached._table_in(UQF_ROOT / "src/etl/plant_tables.q", "crypto_market_data")
+    spec = attached._table_in(UQF_ROOT / "src/etl/plant_tables.q", "crypto_book")
     assert spec is not None
 
 
@@ -117,7 +117,7 @@ def test_a_dataset_the_attachment_does_not_publish_is_refused(world):
     other = parse_definition("demo_other:([]time:`timestamp$(); sym:`g#`symbol$(); px:`float$())")
     save_attachment("pb-uat", world.hdb, table=other)
     with pytest.raises(
-        UqsError, match="writes crypto_market_data, which attachment pb-uat does not publish"
+        UqsError, match=f"writes {DATASET}, which attachment pb-uat does not publish"
     ):
         attached.resolve(world.paths, "pb-uat", WORKER)
 

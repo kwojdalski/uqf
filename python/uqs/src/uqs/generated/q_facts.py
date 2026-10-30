@@ -95,11 +95,9 @@ STATUS_FILE_SUFFIX: str = ".txt"
 BOUNDED_DATASET_TIME_COLUMNS: dict[str, str] = {
     "book_liquidity_1m": "time",
     "crypto_book_1s": "time",
-    "crypto_market_data": "source_time",
     "demo_deals": "deal_time",
     "demo_execution_quality": "time",
     "duckdb_deals": "deal_time",
-    "eq_orderbook": "time",
     "event_tape": "time",
     "exec_bar": "time",
     "fx_markout": "time",
@@ -113,11 +111,9 @@ BOUNDED_DATASET_TIME_COLUMNS: dict[str, str] = {
 BOUNDED_DATASET_INSTRUMENT_COLUMNS: dict[str, str] = {
     "book_liquidity_1m": "sym",
     "crypto_book_1s": "sym",
-    "crypto_market_data": "sym",
     "demo_deals": "sym",
     "demo_execution_quality": "sym",
     "duckdb_deals": "sym",
-    "eq_orderbook": "sym",
     "event_tape": "sym",
     "exec_bar": "sym",
     "fx_markout": "sym",

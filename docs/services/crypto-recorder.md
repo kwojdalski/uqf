@@ -48,6 +48,12 @@ this demo's own `feed:pass` credential (see `appconfig/passwords/ feed.txt`) to
 authenticate against `stp1`'s access-list, same as any other feed process here -
 no separate cryptorust-side credential to set up.
 
+The q side of what is specific to cryptorust - its recorded DuckDB capture
+(`crypto_market_data_backfill1`) and its Kafka book snapshots
+(`crypto_book_decoder1`) - is the `sidecars/cryptorust` bundle. The books and
+fills above need none of it: `crypto_book`, `crypto_trades` and
+`crypto_sim_fills` are the tree's, whoever publishes them.
+
 The same books can also come over Kafka: [streaming cryptorust's order
 books](../guides/cryptorust-kafka-books.md).
 

@@ -157,3 +157,6 @@
     .qetl.job.stream.reset `crypto_book_decoder;
     .qt.qpipe.job.crypto_book_decoder.push[0 0j;0 1j;(.qt.qpipe.job.crypto_book_decoder.full;"not json")];
     }
+
+/ test_replay_equivalence.q scripts the tree's replaying jobs or excludes them with a reason; a bundle's says so here.
+.qt.qpipe.job.crypto_book_decoder.replay_excluded:"the same decoder machinery as kafka_flow (.qetl.kafka.decoder): no time-based rule, raw rows held for on_replayed; no event script yet"

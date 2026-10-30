@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from pathlib import Path
 
 from uqs.model import dependencies
 from uqs.model.registry import PIPELINES
@@ -35,8 +36,22 @@ def test_no_external_producer_entry_is_dead():
     are guarded against.
     """
     subscribed = {t for tables in dependencies.inputs_by_process().values() for t in tables}
-    dead = set(dependencies.EXTERNAL_PRODUCERS) - subscribed
+    in_tree = set(dependencies.EXTERNAL_PRODUCERS) - set(dependencies.SIDECAR_EXTERNAL_PRODUCERS)
+    dead = in_tree - subscribed
     assert not dead, f"EXTERNAL_PRODUCERS entries nothing subscribes to: {sorted(dead)}"
+
+
+def test_no_sidecar_external_producer_entry_is_dead():
+    """A sidecar's entry has no subscriber in a checkout without its bundle, so
+    it is held to the bundle: the folder exists, and its tables.q defines the
+    table the entry names."""
+    root = Path(__file__).resolve().parents[3]
+    for table, (bundle, _why) in dependencies.SIDECAR_EXTERNAL_PRODUCERS.items():
+        tables = root / "sidecars" / bundle / "tables.q"
+        assert tables.is_file(), f"{table}: no bundle sidecars/{bundle}"
+        assert any(line.startswith(f"{table}:([]") for line in tables.read_text().splitlines()), (
+            f"sidecars/{bundle}/tables.q does not define {table}"
+        )
 
 
 def test_a_consumer_started_alone_is_warned_about():
@@ -138,9 +153,9 @@ def test_depends_on_names_processes_not_tables():
 def test_a_table_produced_outside_the_process_list_is_named_as_external():
     """ "nothing in this list provides it" and "nothing provides it" are
     different facts, and only one of them is a problem. Dropping the edge
-    would report databento1 as depending on nothing at all."""
+    would report kafka_flow1 as depending on nothing but the q feed."""
     depends = dependencies.depends_on_by_process()
-    assert any("external" in d for d in depends["databento1"])
+    assert any("external" in d for d in depends["kafka_flow1"])
 
 
 def test_a_process_is_never_its_own_dependency():

@@ -24,8 +24,10 @@ from uqs.interpreter import q_interpreter
 from uqs.paths import paths_for_root
 
 UQF_ROOT = Path(__file__).resolve().parents[3]
-WORKER = "crypto_market_data_backfill"
-DATASET = "crypto_market_data"
+#: A tree worker over an ODBC source with a fixture on 2026.09.11: the shape the attached
+#: backfill needs, with nothing outside the tree (the crypto worker is the cryptorust bundle's).
+WORKER = "duckdb_deals_backfill"
+DATASET = "duckdb_deals"
 FROM = datetime(2026, 9, 11, tzinfo=UTC)
 TO = datetime(2026, 9, 13, tzinfo=UTC)
 
@@ -139,7 +141,7 @@ def make_world(monkeypatch, tmp_path):
     monkeypatch.setenv(config.ATTACH_DIR_ENV, str(attach_dir))
     monkeypatch.setenv("UQF_STATUS_DIR", str(status))
     # a developer shell may hold the credential: these tests mean the unconfigured source
-    monkeypatch.setenv("UQF_SOURCE_CRED_CRYPTO_MARKET_DATA", "")
+    monkeypatch.setenv("UQF_SOURCE_CRED_DUCKDB_DEALS", "")
     errors = _ErrorLog()
     monkeypatch.setattr(shared, "log", errors)
     stack = HdbStack(hdb)

@@ -347,23 +347,6 @@
 .qetl.plant.mkt_orderbook:([]time:`timestamp$(); sym:`g#`symbol$(); bid_prices:(); ask_prices:())
 .qetl.plant.nested[`mkt_orderbook;`bid_prices`ask_prices!"FF"];
 
-/ Databento MBP-10 as the live feed handler publishes it - the source
-/ contract's own fields, so a live row and an ODBC-backfilled row are the
-/ same shape by construction. Written by the external Python feed handler
-/ rather than by any q process (see external/databento_feed.py), the same way
-/ crypto_book below is written by cryptorust.
-/ .
-/ Forty per-level columns because that is what Databento sends; folding
-/ them into four vectors is databento1's job, not this table's.
-.qetl.plant.databento_mbp10:([]time:`timestamp$(); ts_event:`timestamp$(); sym:`g#`symbol$(); action:`symbol$(); side:`symbol$(); price:`float$(); size:`long$(); sequence:`long$(); bid_px_00:`float$(); bid_sz_00:`long$(); ask_px_00:`float$(); ask_sz_00:`long$(); bid_px_01:`float$(); bid_sz_01:`long$(); ask_px_01:`float$(); ask_sz_01:`long$(); bid_px_02:`float$(); bid_sz_02:`long$(); ask_px_02:`float$(); ask_sz_02:`long$(); bid_px_03:`float$(); bid_sz_03:`long$(); ask_px_03:`float$(); ask_sz_03:`long$(); bid_px_04:`float$(); bid_sz_04:`long$(); ask_px_04:`float$(); ask_sz_04:`long$(); bid_px_05:`float$(); bid_sz_05:`long$(); ask_px_05:`float$(); ask_sz_05:`long$(); bid_px_06:`float$(); bid_sz_06:`long$(); ask_px_06:`float$(); ask_sz_06:`long$(); bid_px_07:`float$(); bid_sz_07:`long$(); ask_px_07:`float$(); ask_sz_07:`long$(); bid_px_08:`float$(); bid_sz_08:`long$(); ask_px_08:`float$(); ask_sz_08:`long$(); bid_px_09:`float$(); bid_sz_09:`long$(); ask_px_09:`float$(); ask_sz_09:`long$())
-
-/ The folded book, republished by databento1 - the shape .qf.mkt and
-/ .qf.mkt.cross_book_at read. Carries `ts_event` as well as `time`: the
-/ tickerplant stamps `time` on receipt, and a book that knew only when it
-/ ARRIVED could not tell a stale feed from a fast one.
-.qetl.plant.eq_orderbook:([]time:`timestamp$(); sym:`g#`symbol$(); ts_event:`timestamp$(); action:`symbol$(); side:`symbol$(); price:`float$(); size:`long$(); sequence:`long$(); bid_prices:(); bid_sizes:(); ask_prices:(); ask_sizes:())
-.qetl.plant.nested[`eq_orderbook;`bid_prices`bid_sizes`ask_prices`ask_sizes!"FJFJ"];
-
 / Every Kafka record a consumer delivered, undecoded - the ENVELOPE (#1481).
 / One row per DELIVERY, so a record the broker sent twice is here twice; that is
 / deliberate. This table is the audit trail the decoded tables are checked
@@ -581,14 +564,6 @@
 / can be traced to the exact record it came from. `broker_time` is the broker's clock.
 .qetl.plant.client_flow:([]time:`timestamp$(); broker_time:`timestamp$(); sym:`g#`symbol$(); side:`symbol$(); qty:`float$(); price:`float$(); client:`symbol$(); trade_id:`long$(); topic:`symbol$(); partition:`long$(); offset:`long$())
 
-/ crypto_market_data_backfill1's target: one recorded crypto book-and-trade
-/ update, replayed from cryptorust's data/live.duckdb. Carries BOTH
-/ clocks - source_time is the venue's stamp, local_time the recorder's, and
-/ `time` is the plant's - because the lag between them is what a recorded
-/ capture exists to measure, and crypto_book above has room for none of it.
-.qetl.plant.crypto_market_data:([]time:`timestamp$(); sym:`g#`symbol$(); venue:`symbol$(); source_time:`timestamp$(); local_time:`timestamp$(); is_snapshot:`boolean$(); bid_prices:(); bid_sizes:(); ask_prices:(); ask_sizes:(); latency_ms:`float$(); latency_min_ms:`float$(); latency_count:`long$(); trade_price:`float$(); trade_size:`float$(); trade_side:`symbol$())
-.qetl.plant.nested[`crypto_market_data;`bid_prices`bid_sizes`ask_prices`ask_sizes!"FFFF"];
-
 / rebuild_positions' output (a reaction on demo_deals): the net notional per
 / pair for each published window, written through demo_deals_backfill's own
 / IO manager - so into the HDB under `uqs job backfill`. `time` is the window's
@@ -603,12 +578,6 @@
 
 / last_value1's output. <one line: what a row means>
 .qetl.plant.last_value:([]time:`timestamp$(); sym:`g#`symbol$(); market:`symbol$(); source:`symbol$(); source_time:`timestamp$(); bid:`float$(); ask:`float$(); mid:`float$())
-
-/ flink_vwap's raw records, as flink_vwap_streamer.py publishes them from outside q.
-.qetl.plant.flink_vwap_raw:([]time:`timestamp$(); sym:`g#`symbol$(); window_end:`timestamp$(); vwap:`float$(); volume:`float$(); n:`long$())
-
-/ flink_vwap1's output: one closed Flink window per sym, published once.
-.qetl.plant.flink_vwap:([]time:`timestamp$(); sym:`g#`symbol$(); window_end:`timestamp$(); vwap:`float$(); volume:`float$(); n:`long$())
 
 / fxmarkout1's output (#1395): the normalized FX markout calculation, one row per execution,
 / horizon and component. kind is `total (the markout against the reference mid), `execution (the
@@ -635,6 +604,3 @@
 / is the source's own code, verbatim. book, product and venue are the grouping
 / dimensions and are null where the source gives none: venue is never inferred.
 .qetl.plant.order_outcomes:([]time:`timestamp$(); source_time:`timestamp$(); source:`symbol$(); request_id:`symbol$(); source_status:`symbol$(); outcome:`symbol$(); book:`symbol$(); product:`symbol$(); venue:`symbol$())
-
-/ crypto_book_decoder1's output: one sampled full book from cryptorust's Kafka book snapshots, the top five levels a side in wide columns (bid_px0 is the best bid; a level the record did not carry is a null float). source_time is the exchange's clock, local_time cryptorust's receive clock, sampled_time the moment the recorder sampled the book, time the plant's. topic, partition, offset and broker_time are the record's provenance (the Kafka contract, docs/services/kafka.md): a restart reads the coordinates back to know what it handled, and broker_time is the Kafka record's timestamp, never the exchange's. crypto_book is a different table: the kdb recorder's vector-shaped book.
-.qetl.plant.crypto_book_snapshot:([]time:`timestamp$(); sym:`g#`symbol$(); venue:`symbol$(); source_time:`timestamp$(); local_time:`timestamp$(); sampled_time:`timestamp$(); bid_px0:`float$(); bid_px1:`float$(); bid_px2:`float$(); bid_px3:`float$(); bid_px4:`float$(); bid_sz0:`float$(); bid_sz1:`float$(); bid_sz2:`float$(); bid_sz3:`float$(); bid_sz4:`float$(); ask_px0:`float$(); ask_px1:`float$(); ask_px2:`float$(); ask_px3:`float$(); ask_px4:`float$(); ask_sz0:`float$(); ask_sz1:`float$(); ask_sz2:`float$(); ask_sz3:`float$(); ask_sz4:`float$(); broker_time:`timestamp$(); topic:`symbol$(); partition:`long$(); offset:`long$())
