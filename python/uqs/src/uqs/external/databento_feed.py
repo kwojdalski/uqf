@@ -38,8 +38,11 @@ is the transport:
 from __future__ import annotations
 
 import os
+from collections.abc import Mapping
 from pathlib import Path
+from typing import Any
 
+from uqs.external.feeds import ExternalFeed, FeedOption
 from uqs.external.lifecycle import DetachedProcess
 from uqs.logger import get_logger
 from uqs.paths import UqsError, UqsPaths
@@ -157,3 +160,37 @@ def databento_feed_status(paths: UqsPaths) -> dict[str, str]:
     return _process(paths).status(
         publishes=DATABENTO_RAW_TABLE, **{"folded by": "databento1 -> eq_orderbook"}
     )
+
+
+def _start(paths: UqsPaths, options: Mapping[str, Any]) -> int:
+    return start_databento_feed(
+        paths,
+        dataset=options["databento_dataset"],
+        symbols=options["symbols"],
+        api_key=options["api_key"],
+    )
+
+
+FEED = ExternalFeed(
+    "databento",
+    _start,
+    # Looked up when called, so what this module holds at call time is what runs.
+    lambda paths: stop_databento_feed(paths),
+    lambda paths: databento_feed_status(paths),
+    options=(
+        FeedOption(
+            "databento_dataset",
+            "Databento dataset, e.g. XNAS.ITCH",
+            default=DEFAULT_DATASET,
+            aliases=("--dataset",),  # renamed in #1739; goes in the release after
+        ),
+        FeedOption("api_key", f"API key; defaults to ${DATABENTO_API_KEY_ENV}", secret=True),
+        FeedOption("symbols", "Comma-separated symbols", default=DEFAULT_SYMBOLS, many=True),
+    ),
+    produces={
+        DATABENTO_RAW_TABLE: (
+            "the external Databento feed handler (`uqs connector start databento`) "
+            "or a `databento_backfill1` run"
+        ),
+    },
+)
