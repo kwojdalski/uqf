@@ -27,6 +27,7 @@ from attach_backfill_support import (
     save_attachment,
 )
 from test_attach_backfill_run import (  # noqa: F401
+    DATASET,
     FROM,
     FUTURE,
     TABLE,
@@ -154,6 +155,45 @@ def test_a_backfill_extracted_here_is_written_by_the_stacks_receiver(world, appr
     code, result = backfill_run.follow(again, timeout=180)
     assert code == 0 and result["state"] == "idle", again.log.read_text()
     assert read_rows(world.hdb, "2015.01.07") == rows, "a covered range sends nothing"
+
+
+def test_a_receiver_whose_reader_cannot_serve_a_written_date_withholds_readiness(
+    world,  # noqa: F811
+    approved,  # noqa: F811
+    receivers,  # noqa: F811
+):
+    """The receiver verifies the dates its journal holds (#1773), not only the reload."""
+    port = free_port()
+    started = receivers.start(world.paths, "pb-uat", approved, port=port, ipc=world.stack)
+    _serving(started)
+    theirs = world.tmp / "extractor-attachments"
+    shutil.copytree(world.attach_dir, theirs, ignore=shutil.ignore_patterns("backfills"))
+    world.monkeypatch.setenv(config.ATTACH_DIR_ENV, str(theirs))
+
+    def go():
+        launched, _ = backfill_remote.launch_remote(
+            world.paths, "pb-uat", WORKER, "v1", FROM, TO,
+            writer=f"localhost:{port}", mode="run", on_conflict="replace",
+        )  # fmt: skip
+        code, result = backfill_run.follow(launched, timeout=180)
+        return launched, code, result
+
+    world.reader.refuse()
+    first, code, _ = go()
+    assert code == 3, first.log.read_text()
+    world.reader.refuse(False)
+    # the latest partition holds the table, so the reader lists it; the covered date does not
+    shutil.copytree(world.hdb / "2015.01.07" / DATASET, world.hdb / "2015.01.09" / DATASET)
+    day = world.hdb / "2015.01.07" / DATASET
+    shutil.move(day, world.tmp / "kept")
+    again, code, result = go()
+    assert code == 3 and result["outcome"] == "written_not_queryable", again.log.read_text()
+    assert "2015.01.07: no imported_trades directory" in again.log.read_text() + str(result)
+    assert not (first.state_dir / "etl_ready").exists(), "readiness does not advance"
+    shutil.move(world.tmp / "kept", day)
+    fixed, code, result = go()
+    assert code == 0 and result["outcome"] == "queryable", fixed.log.read_text()
+    assert (first.state_dir / "etl_ready").is_file()
 
 
 def test_an_extractor_with_no_receiver_fails_and_covers_nothing(world):  # noqa: F811

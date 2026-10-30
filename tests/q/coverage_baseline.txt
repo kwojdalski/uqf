@@ -93,3 +93,9 @@
 .qetl.run.history
 .qdata.getBySymbolDate
 .qdata.pqModule
+
+# reload_one asks a reader over IPC (hopen, `reload, then the inspection of #1773): it needs a
+# running HDB process. Its reader-side half, .qdev.attached.inspect, is entered by
+# test_attached_readers.q, and the whole of it, on real q processes with a fake HDB reader, by
+# python/uqs/tests/test_attach_backfill_run.py and test_attach_backfill_remote.py.
+.qdev.attached.reload_one

@@ -17,6 +17,13 @@
 # reports a difference as not comparable rather than as a verdict (#968).
 platform: Linux-x86_64
 
+.qt.qetl.attached.test_a_covered_date_missing_a_column_is_named  # peachq-lacks: .Q.dpft, which the fixture uses to write its partitioned database; the check under test runs on a KDB-X HDB reader (#1773)
+.qt.qetl.attached.test_a_covered_date_with_an_incompatible_column_type_is_named  # peachq-lacks: .Q.dpft, which the fixture uses to write its partitioned database; the check under test runs on a KDB-X HDB reader (#1773)
+.qt.qetl.attached.test_a_covered_older_date_without_the_table_is_named  # peachq-lacks: .Q.dpft, which the fixture uses to write its partitioned database; the check under test runs on a KDB-X HDB reader (#1773)
+.qt.qetl.attached.test_a_database_holding_every_covered_date_has_no_problem  # peachq-lacks: .Q.dpft, which the fixture uses to write its partitioned database; the check under test runs on a KDB-X HDB reader (#1773)
+.qt.qetl.attached.test_a_latest_partition_without_the_table_is_named  # peachq-lacks: .Q.dpft, which the fixture uses to write its partitioned database; the check under test runs on a KDB-X HDB reader (#1773)
+.qt.qetl.attached.test_an_uncovered_older_date_is_not_checked  # peachq-lacks: .Q.dpft, which the fixture uses to write its partitioned database; the check under test runs on a KDB-X HDB reader (#1773)
+.qt.qetl.attached.test_every_failing_date_is_reported_together  # peachq-lacks: .Q.dpft, which the fixture uses to write its partitioned database; the check under test runs on a KDB-X HDB reader (#1773)
 .qt.qetl.dag.test_a_derived_reaction_is_not_drawn_asserted  # peachq-lacks: not yet narrowed - it throws 'type on code KDB-X accepts
 .qt.qetl.dag.test_d2_declares_every_external_node_before_using_it  # peachq-lacks: not yet narrowed - it throws 'type on code KDB-X accepts
 .qt.qetl.dag.test_d2_draws_an_asserted_reaction_dashed  # peachq-lacks: not yet narrowed - it throws 'type on code KDB-X accepts

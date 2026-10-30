@@ -51,6 +51,17 @@ if[not all `contract`attachment in key opts:.Q.opt .z.x;
 
 .qdev.receiver.required:`destid`hdb`max_date`deadline`readers`user`journal`writers
 
+/ The dates this receiver has committed rows for, for the dataset it serves: what its readers must be
+/ able to serve (#1773). The extractor's coverage ledger is not here, so the journal - which persists, and
+/ holds every committed window with its range - stands in for the claims being released. A window that
+/ committed no rows left no partition and is skipped; [from; to) is half-open, so a window ending at
+/ midnight does not name the next day.
+/ @return the dates, sorted
+.qdev.receiver.written_dates:{[]
+    j:select range_from, range_to from .qetl.io.remote.journal
+        where dataset=.qdev.attached.dataset, state=`committed, rows>0, not null range_from, not null range_to, range_to>range_from;
+    asc distinct raze {[f;t] d0:`date$f; d0+til 1+(`date$t-1)-d0}'[j`range_from;j`range_to]}
+
 / The receiver's on_ready: on a run's final call, ask every reader whatever is owed - an earlier
 / run's reload may have failed before this process restarted - and mid-run as .qetl.io.due says.
 / Throws on a final call that leaves a reader without the rows, so the extractor is told the rows
@@ -61,7 +72,7 @@ if[not all `contract`attachment in key opts:.Q.opt .z.x;
     s:.qdev.attached.reload_state;
     act:$[status`final; 1b; (.qetl.io.due[s;status;.z.p;.qdev.attached.reload_interval[]])`act];
     if[not act; `.qdev.attached.reload_state set @[s;`dirty;|;0<status`finished]; :0b];
-    r:.qdev.attached.reload_all[];
+    r:.qdev.attached.reload_all[.qdev.receiver.written_dates[]];
     `.qdev.attached.reload_state set .qetl.io.acknowledged[`dirty`last!(0b;.z.p);r];
     `.qdev.attached.last_failed set r`failed;
     if[.qdev.attached.reload_state`dirty;
@@ -85,6 +96,7 @@ mgr:.[.qetl.io.hdb_scoped;(root;col;bounds);{[e] -1 "remote_receiver: ",e; exit 
 .qdev.attached.reach_user:first o`user;
 / the batch a worker publishes, as the contract describes it
 schema:.qetl.io.remote.contract.schema contract;
+.qdev.attached.shape:.qdev.attached.shape_of schema;
 max_rows:$[`max_rows in key o; "J"$first o`max_rows; 100000];
 / a window larger than one message arrives in chunks (io_remote_chunks.q): how many rows may wait
 if[`max_staged_rows in key o; .qetl.io.remote.max_staged_rows:"J"$first o`max_staged_rows];

@@ -72,6 +72,7 @@ qetl.coverage,partitions_of,function,1,ds
 qetl.coverage,persist,function,1,
 qetl.coverage,ready_claims,function,4,ds part release at
 qetl.coverage,ready_path,function,1,
+qetl.coverage,release_dates,function,2,ks at
 qetl.coverage,release_ready,function,1,at
 qetl.coverage,reload,function,1,
 qetl.coverage,require_covered,function,6,ds part version as_of from_ts to_ts
