@@ -16,6 +16,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import sys
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -24,7 +25,8 @@ from typer.testing import CliRunner
 
 from uqs import cli
 from uqs.cli import hdb_check
-from uqs.paths import UqsPaths
+from uqs.paths import UqsError, UqsPaths
+from uqs.stack import hdb_layout
 
 ROOT = Path(__file__).resolve().parents[3]
 
@@ -138,7 +140,9 @@ def data_check(
     q, env = q_binary
     monkeypatch.setenv("QCMD", q)
     monkeypatch.setenv("QHOME", env["QHOME"])
-    result = CliRunner().invoke(cli.app, ["data", "check", "--json"], env={"COLUMNS": "300"})
+    argv = ["data", "check", "--json"]
+    monkeypatch.setattr(sys, "argv", ["uqs", *argv])  # what json_requested reads
+    result = CliRunner().invoke(cli.app, argv, env={"COLUMNS": "300"})
     out = result.stdout
     return result.exit_code, json.loads(out[out.index("{") :])
 
@@ -196,7 +200,6 @@ def test_an_empty_hdb_has_no_partition_to_be_short(fixtures, q_binary, tmp_path,
     assert code == 0
 
 
-@pytest.mark.xfail(strict=True, reason="#1783: the check lists only the root, so sees no partition")
 def test_a_segmented_hdb_is_judged_in_its_segments(fixtures, q_binary, tmp_path, monkeypatch):
     """Every partition q discovers is judged, in the segment that holds it."""
     code, doc = data_check(monkeypatch, fixtures, "seg", tmp_path, q_binary)
@@ -208,7 +211,6 @@ def test_a_segmented_hdb_is_judged_in_its_segments(fixtures, q_binary, tmp_path,
     assert code == 1
 
 
-@pytest.mark.xfail(strict=True, reason="#1783: the type check reads only the root's partitions")
 def test_a_segmented_hdb_has_its_column_types_checked(fixtures, q_binary, tmp_path, monkeypatch):
     """The stored types are read where the partitions are, too: trade's px is
     a float in s2, and a runtime declaring it a long is told so."""
@@ -222,7 +224,6 @@ def test_a_segmented_hdb_has_its_column_types_checked(fixtures, q_binary, tmp_pa
     assert code == 1
 
 
-@pytest.mark.xfail(strict=True, reason="#1783: the check lists only the root, so sees no partition")
 def test_a_date_in_two_segments_is_judged_in_each(fixtures, q_binary, tmp_path, monkeypatch):
     """q reads a date from every segment holding it, so each copy must be
     whole: the s1 copy of 2026.01.02 lacking trade fails a query on that day."""
@@ -236,7 +237,6 @@ def test_a_date_in_two_segments_is_judged_in_each(fixtures, q_binary, tmp_path, 
     assert code == 1
 
 
-@pytest.mark.xfail(strict=True, reason="#1783: a segment that does not exist passes unmentioned")
 def test_a_segment_that_does_not_exist_is_named(fixtures, q_binary, tmp_path, monkeypatch):
     """q loads past it without a word, which is how data goes missing quietly."""
     code, doc = data_check(monkeypatch, fixtures, "missing", tmp_path, q_binary)
@@ -246,7 +246,6 @@ def test_a_segment_that_does_not_exist_is_named(fixtures, q_binary, tmp_path, mo
     assert "does not exist" in doc["error"]
 
 
-@pytest.mark.xfail(strict=True, reason="#1783: an unreadable segment passes unmentioned")
 def test_a_segment_q_cannot_read_is_named(fixtures, q_binary, tmp_path, monkeypatch):
     code, doc = data_check(monkeypatch, fixtures, "locked", tmp_path, q_binary)
     assert code == 1
@@ -255,7 +254,6 @@ def test_a_segment_q_cannot_read_is_named(fixtures, q_binary, tmp_path, monkeypa
     assert "Permission denied" in doc["error"]
 
 
-@pytest.mark.xfail(strict=True, reason="#1783: root partitions q ignores are judged instead")
 def test_partitions_beside_par_txt_are_refused_as_q_refuses_them(
     fixtures, q_binary, tmp_path, monkeypatch
 ):
@@ -273,3 +271,50 @@ def test_the_check_writes_nothing(fixtures, q_binary, tmp_path, monkeypatch, fix
     before = _snapshot(fixtures)
     data_check(monkeypatch, fixtures, fixture, tmp_path, q_binary)
     assert _snapshot(fixtures) == before
+
+
+# ------------------------------------------------- the inspection, against q
+
+
+@pytest.mark.parametrize("fixture", ["conv", "seg", "split", "empty"])
+def test_the_partitions_are_the_ones_q_maps(fixtures, q_binary, tmp_path, monkeypatch, fixture):
+    """One partition per (.Q.pd, .Q.pv) pair q loads, each in its directory,
+    and q's own table list - nothing found that q does not map, and nothing
+    q maps left out."""
+    q, env = q_binary
+    monkeypatch.setenv("QCMD", q)
+    monkeypatch.setenv("QHOME", env["QHOME"])
+    hdb = fixtures / fixture / "hdb"
+    view = q_view(q_binary, hdb, tmp_path)
+    layout = hdb_layout.inspect(_paths(fixtures, fixture, tmp_path, SCHEMA), hdb)
+    assert layout.source == "q"
+    expect = [Path(d if d != "." else hdb) / p for d, p in zip(view["pd"], view["pv"], strict=True)]
+    assert sorted(layout.dirs.values()) == sorted(expect)
+    assert layout.tables == view["tables"]
+    assert layout.segmented == (hdb / "par.txt").exists()
+
+
+def test_a_q_that_does_not_finish_is_a_refusal_not_an_empty_hdb(fixtures, tmp_path, monkeypatch):
+    """A failed inspection is never read as a database with no partitions,
+    which `data check` would report as having nothing wrong."""
+    fake = tmp_path / "q"
+    fake.write_text("#!/bin/sh\necho 'q: killed' >&2\nexit 3\n")
+    fake.chmod(0o755)
+    monkeypatch.setenv("QCMD", str(fake))
+    monkeypatch.setattr(hdb_layout, "identified", lambda q: "kdbx")
+    with pytest.raises(UqsError, match="did not finish: q: killed"):
+        hdb_layout.inspect(_paths(fixtures, "conv", tmp_path, SCHEMA), fixtures / "conv" / "hdb")
+
+
+def test_without_q_a_conventional_root_is_listed_and_a_segmented_one_refused(
+    fixtures, tmp_path, monkeypatch
+):
+    """The filesystem listing stands in only where it sees the whole database."""
+    monkeypatch.setattr(hdb_layout, "q_interpreter", lambda env: None)
+    conv = fixtures / "conv" / "hdb"
+    layout = hdb_layout.inspect(_paths(fixtures, "conv", tmp_path, SCHEMA), conv)
+    assert layout.source == "filesystem"
+    assert layout.listing["2026.01.01"] == {"quote": ["bid", "sym"]}
+    assert layout.dirs["2026.01.02"] == conv / "2026.01.02"
+    with pytest.raises(UqsError, match="segmented HDB"):
+        hdb_layout.inspect(_paths(fixtures, "seg", tmp_path, SCHEMA), fixtures / "seg" / "hdb")

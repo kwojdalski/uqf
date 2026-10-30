@@ -3,8 +3,10 @@ with --apply, after asking - the empty table or null column written in.
 
 Two scopes (#1755). Without --table, --attach or --hdb it judges this
 runtime's own HDB against every table this runtime declares, as it always
-has: stack/hdb_shape.py reads the shape, scripts/gates/fill_hdb_partitions.q
-fills it, stack/hdb_types.py compares the stored types. With any of them it
+has: stack/hdb_layout.py asks q which partitions there are (in the segments
+par.txt names, for a segmented database - #1783), stack/hdb_shape.py judges
+what they hold, scripts/gates/fill_hdb_partitions.q fills it, and
+stack/hdb_types.py compares the stored types. With any of them it
 checks ONE table in the HDB they name - an attached stack's, say, where
 filling uqf's whole schema would add tables production never asked for - and
 fills only the partitions lacking it, from this runtime's declaration of the
@@ -35,7 +37,7 @@ from uqs.cli.hdb_scope import (
 from uqs.cli.renames import alias_command
 from uqs.cli.shared import _die, _paths, console, data_app
 from uqs.paths import UqsError
-from uqs.stack import hdb_alter, hdb_fill, hdb_shape, hdb_types
+from uqs.stack import hdb_alter, hdb_fill, hdb_layout, hdb_shape, hdb_types
 from uqs.stack.hdb_alter import Request
 
 
@@ -114,6 +116,12 @@ def _whole_runtime(*, apply: bool, yes: bool, as_json: bool) -> None:
             console.print(f"[yellow]no HDB at {hdb_root}[/] - nothing to check")
         return
     schema = hdb_types.declared_schema(paths)
+    try:
+        # before any write: a layout q cannot load whole is refused, never filled
+        layout = hdb_layout.inspect(paths, hdb_root)
+    except UqsError as exc:
+        _die(exc)
+        return
     if apply:
         try:
             handle = resolve(None, None)
@@ -126,15 +134,18 @@ def _whole_runtime(*, apply: bool, yes: bool, as_json: bool) -> None:
         paths.generated_schema.parent.mkdir(parents=True, exist_ok=True)
         paths.generated_schema.write_text(schema)
         hdb_fill.fill_hdb_partitions(paths)
+        try:
+            layout = hdb_layout.inspect(paths, hdb_root)
+        except UqsError as exc:
+            _die(exc)
+            return
     expected = hdb_shape.declared_tables(schema)
-    short, thin = hdb_shape.shape_gaps(
-        hdb_shape.listing(hdb_root), hdb_shape.declared_columns(schema)
-    )
+    short, thin = hdb_shape.shape_gaps(layout.listing, hdb_shape.declared_columns(schema))
     with tempfile.TemporaryDirectory() as tmp:
         schema_file = Path(tmp) / "database.q"
         schema_file.write_text(schema)
         try:
-            changed = hdb_types.type_changes(paths, schema_file)
+            changed = hdb_types.type_changes(paths, schema_file, layout.dirs)
         except UqsError as exc:
             _die(exc)
             return
@@ -142,6 +153,8 @@ def _whole_runtime(*, apply: bool, yes: bool, as_json: bool) -> None:
         print(json.dumps({
             "hdb": str(hdb_root),
             "present": True,
+            "segmented": layout.segmented,
+            "partitions": len(layout.listing),
             "missing_tables": {p: sorted(t) for p, t in short.items()},
             "missing_columns": {p: {t: sorted(c) for t, c in by.items()} for p, by in thin.items()},
             "types_checked": changed is not None,
@@ -153,9 +166,11 @@ def _whole_runtime(*, apply: bool, yes: bool, as_json: bool) -> None:
     if changed is None:
         console.print("[dim]column types not checked: no q interpreter[/]")
     if not short and not thin and not changed:
+        where = " in the segments par.txt names" if layout.segmented else ""
         console.print(
             f"[green]{hdb_shape.describe(short)}, "
-            f"and every declared column[/] ({len(expected)} tables)"
+            f"and every declared column[/] ({len(expected)} tables, "
+            f"{len(layout.listing)} partitions{where})"
         )
         return
     if short:
