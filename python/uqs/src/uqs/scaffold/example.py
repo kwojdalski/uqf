@@ -8,7 +8,7 @@ after scaffolding can be
     q scripts/examples/<name>_example.q
 
 which runs the worker once on its fixture into a throwaway HDB under build/,
-prints what it published, and exits 1 if that is nothing. The q-scripts lane
+prints what it published, and exits 1 if that is nothing. tests/qrun/test_worked_examples.py
 runs every script in that directory, so the example is exercised from the
 first commit.
 
@@ -27,7 +27,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-#: Where worked examples live; the q-scripts lane globs `*.q` here.
+#: Where worked examples live; tests/qrun/test_worked_examples.py globs `*.q` here.
 EXAMPLES_DIR = Path("scripts/examples")
 
 #: (physical table, [(column, q type literal)]): a source's raw contract.
@@ -140,7 +140,7 @@ def example_body(
 //   q {example_path(name).as_posix()} -keep    keep what it wrote, under build/
 //
 // No TorQ and no running stack: everything it writes is under one directory
-// in build/, removed at the end unless -keep. The q-scripts lane runs it, and
+// in build/, removed at the end unless -keep. The worked-examples test runs it, and
 // it exits 1 unless the run completes and publishes at least one row - so a
 // quality check or a derive the scaffold left throwing fails it until written.
 // Written by `uqs job new {name} --kind backfill`; grow it with the job.
@@ -171,7 +171,7 @@ published:{{[] .qetl.source.local_read[dst;`{dataset};range_from;range_to]}}
 / spaces or quotes, and an unquoted `rm -rf` would split it into other paths.
 quoted:{{[path] "'",ssr[path;"'";"'\\"'\\"'"],"'"}}
 
-/ Exit 1 with a message when a check fails, so the q-scripts lane fails too.
+/ Exit 1 with a message when a check fails, so the worked-examples test fails too.
 check:{{[ok;what] $[ok; -1 "  ok    ",what; [-1 "  FAIL  ",what; exit 1]]}}
 
 \\d .

@@ -259,13 +259,6 @@ jobs:
           "$bin" "$RUNNER_TEMP/peachq-smoke.q" -q
           echo "PEACHQ_BIN=$bin" >> "$GITHUB_ENV"
           echo "PeachQ: built from peachq-org/peachq@$(python3 scripts/peachq.py --commit)" >> "$GITHUB_STEP_SUMMARY"
-      - name: Run the marked q blocks in docs/ on PeachQ
-        # A block marked `<!-- q-example: ... -->` is a claim that it runs;
-        # this holds every one to it. Blocking: a marked block that fails
-        # here is either wrong, or correct on KDB-X only - and then it says
-        # so with `kdbx-only: REASON` rather than being unmarked.
-        if: ${{ !cancelled() && env.PEACHQ_BIN != '' }}
-        run: QCMD="$PEACHQ_BIN" python3 scripts/test.py q-docs
       - name: Run the whole qUnit suite on PeachQ, flattened (blocking)
         # The q tests CI can hold a merge to. This runner has no KDB-X, and
         # PeachQ rejects nested contexts, so scripts/portable/full_suite.py
@@ -368,7 +361,7 @@ jobs:
       - name: Run the Python tests that need a q, on PeachQ (blocking)
         # Without KDB-X, every Python test that starts a q skips in the hooks
         # above. With PeachQ as the q they run, held to
-        # python/peachq_known_gaps.txt both ways (python/conftest.py), as the
+        # python/peachq_known_gaps.txt both ways (conftest.py), as the
         # q suite is to its own list: a failure not listed fails the build, and
         # so does a listed test that passes. UQF_PEACHQ_STACK_TEST also starts
         # a PeachQ stack from a copy of the tree (test_peachq_pipelines.py).
@@ -381,7 +374,12 @@ jobs:
         # which this job replaces in CI. -n auto: in parallel (pytest-xdist);
         # --dist loadgroup keeps the tests marked xdist_group (the whole-stack
         # ones) on one worker.
-        run: QCMD="$PEACHQ_BIN" uv run pytest -q -n auto --dist loadgroup --shard "${{ matrix.shard }}/4" --store-shard-durations "$RUNNER_TEMP/durations-${{ matrix.shard }}.json"
+        #
+        # tests/qrun/ is a testpath too: the docs' marked q blocks run here,
+        # their `peachq` half (#1808) - what `scripts/test.py q-docs` ran in
+        # the job above. --require-q peachq fails a test that cannot have
+        # PeachQ rather than skipping it; the KDB-X half skips, visibly.
+        run: QCMD="$PEACHQ_BIN" uv run pytest -q -n auto --dist loadgroup --require-q peachq --shard "${{ matrix.shard }}/4" --store-shard-durations "$RUNNER_TEMP/durations-${{ matrix.shard }}.json"
       - name: Keep this shard's module durations
         # What scripts/dev/test_module_durations.json is refreshed from: CI's
         # own times, which differ from a laptop's (#1696). Merge the four with

@@ -27,8 +27,8 @@ q scripts/examples/hdb_transfer_example.q -keep    # keep both databases to look
      already in the coverage ledger;
    - **all three days:** only the third day is fetched.
 4. **Reads the destination back from disk** and checks it against the source row
-   for row. It exits 1 on any difference, which is why the `q-scripts` test lane
-   runs it.
+   for row. It exits 1 on any difference, which is why the worked-examples test
+   (`tests/qrun/test_worked_examples.py`) runs it.
 
 ```
 == 3. run it

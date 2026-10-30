@@ -1,7 +1,8 @@
 """The q-example markers in docs/, checked without q.
 
 scripts/dev/doc_examples.py turns marked ```q blocks into q sessions for the
-q-docs lane. Running them needs an interpreter; reading the markers does not,
+q-docs tests (tests/qrun/test_doc_blocks.py). Running them needs an
+interpreter; reading the markers does not,
 so a marker that says nothing runnable - a typo'd mode, a marker adrift from
 its fence, a transcript with no `q)` line - fails here, in the Python lane
 every CI run has.
@@ -30,7 +31,7 @@ DOC = Path("docs/x.md")
 
 def test_every_marker_in_the_docs_is_well_formed():
     blocks = docex.all_blocks()
-    assert blocks, "nothing is marked, so the q-docs lane would run nothing"
+    assert blocks, "nothing is marked, so test_doc_blocks.py would run nothing"
     assert {b.mode for b in blocks} == {"run", "transcript"}
 
 
@@ -121,8 +122,8 @@ def test_a_session_loads_only_what_its_blocks_use(tmp_path, body, loads):
 # ------------------------------------------- a table's display, run in q (#515)
 #
 # The comparison itself is q (`.docex.display`), so these need an interpreter -
-# $QCMD, KDB-X or PeachQ as it answers. Without one they skip; the q-docs
-# lane still runs the docs' own table transcripts every CI run.
+# $QCMD, KDB-X or PeachQ as it answers. Without one they skip; tests/qrun/test_doc_blocks.py
+# still runs the docs' own table transcripts every CI run.
 
 TABLE = """q)([] sym:`EURUSD`GBPUSD; px:1.1 1.27; n:1 2)
 sym    px   n
