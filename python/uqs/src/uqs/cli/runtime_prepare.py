@@ -22,13 +22,14 @@ from rich.table import Table
 
 from uqs.cli.regenerate import _DERIVED, _regenerate_derived
 from uqs.cli.runtime_diff import runtime_app
+from uqs.cli.safety import ChangesState
 from uqs.cli.shared import _die, _paths, console
 from uqs.paths import UqsError
 from uqs.stack import qtree, runtime_bundles
 from uqs.stack.bundle_blocks import BundleError
 
 
-@runtime_app.command("prepare")
+@runtime_app.command("prepare", cls=ChangesState)
 def prepare(
     bundle: Annotated[
         list[Path] | None,

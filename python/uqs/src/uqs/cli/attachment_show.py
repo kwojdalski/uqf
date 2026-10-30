@@ -14,6 +14,7 @@ from uqs.cli.attach_output import redact, secrets_of
 from uqs.cli.attachment import OLD_REASON, attachment_app
 from uqs.cli.json_out import emit, json_opt
 from uqs.cli.renames import alias_command
+from uqs.cli.safety import ReadOnly
 from uqs.cli.shared import JOB_OPERATIONS_PANEL, _die, _paths, console, job_app
 from uqs.paths import UqsError
 from uqs.stack import attach_state
@@ -21,7 +22,7 @@ from uqs.stack import attach_state
 ShowJson = json_opt('{"attachment": {name, stack, publisher, tables, ...}, "state": {...}}')
 
 
-@attachment_app.command("show")
+@attachment_app.command("show", cls=ReadOnly)
 def show(name: NameArg, as_json: ShowJson = False) -> None:
     """One attachment: what was saved for it, and its state now.
 

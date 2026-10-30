@@ -20,7 +20,7 @@ from typer.testing import CliRunner
 from uqs.attach import backfill_owner, hdb_where
 from uqs.attach.config import AttachmentError
 from uqs.attach.facts import Host
-from uqs.cli import hdb_scope, shared, target
+from uqs.cli import hdb_scope, shared, target, target_confirm
 from uqs.cli.shared import app
 from uqs.deploy import control
 from uqs.paths import UqsError, paths_for_root
@@ -194,7 +194,7 @@ def test_target_runs_both_commands_on_the_release_asking_there(command, monkeypa
     """`--target` routes both, unclassified as changing the server: each shows its
     plan and asks THERE; the global --yes reaches the command as its own."""
     args = ["data", command, "pb", "--reorder", "a,b", "--apply"]
-    assert not control.changes_the_server(args)
+    assert not target_confirm.changes_the_server(args)
     seen = {}
     remote = control.Remote("uat", "uat-host", "/srv/uqf")
     monkeypatch.setattr(control, "remote_for", lambda name, root: remote)

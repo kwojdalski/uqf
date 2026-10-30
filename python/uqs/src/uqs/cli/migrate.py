@@ -7,12 +7,13 @@ from typing import Annotated
 
 import typer
 
+from uqs.cli.safety import ChangesState
 from uqs.cli.shared import _die, _paths, console, data_app
 from uqs.paths import UqsError
 from uqs.stack import hdb_migrate
 
 
-@data_app.command("migrate")
+@data_app.command("migrate", cls=ChangesState)
 def migrate(
     table: Annotated[str, typer.Argument(help="the declared HDB table")],
     partition: Annotated[str, typer.Argument(help="one partition date, YYYY-MM-DD")],

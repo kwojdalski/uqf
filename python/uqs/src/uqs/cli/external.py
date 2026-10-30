@@ -34,7 +34,7 @@ from rich.table import Table
 from uqs.cli import completion
 from uqs.cli.json_out import emit, json_opt, snake
 from uqs.cli.renames import renamed
-from uqs.cli.safety import DryRunOpt, dry_run_note
+from uqs.cli.safety import ChangesState, DryRunOpt, ReadOnly, dry_run_note
 from uqs.cli.shared import _die, _paths, app, console
 from uqs.external import crypto, databento_feed, kafka_feed
 from uqs.external.crypto import (
@@ -58,6 +58,8 @@ connector_app = typer.Typer(
     "supervise external processes, not the TorQ-managed q processes `uqs start` runs.",
 )
 app.add_typer(connector_app, name="connector")
+#: `start` and `restart`'s class: their old spellings (#1729), and their mark (#1780)
+_START = renamed({"--port": "--base-port", "--dataset": "--databento-dataset"}, ChangesState)
 
 
 def _split(text: str) -> tuple[str, ...]:
@@ -214,9 +216,7 @@ def _opt(help_: str, feeds: str):
     return typer.Option(help=f"{help_} ({feeds})", show_default=False)
 
 
-@connector_app.command(
-    "start", cls=renamed({"--port": "--base-port", "--dataset": "--databento-dataset"})
-)
+@connector_app.command("start", cls=_START)
 def start(
     name: FeedArg,
     databento_dataset: Annotated[
@@ -313,7 +313,7 @@ def _would(name: str, action: str) -> None:
     console.print(dry_run_note())
 
 
-@connector_app.command("stop")
+@connector_app.command("stop", cls=ChangesState)
 def stop(name: FeedArg, dry_run: DryRunOpt = False) -> None:
     """Stop a feed started by `uqs connector start`."""
     if dry_run:
@@ -336,9 +336,7 @@ def _takes_start_options(fn: Any) -> Any:
     return fn
 
 
-@connector_app.command(
-    "restart", cls=renamed({"--port": "--base-port", "--dataset": "--databento-dataset"})
-)
+@connector_app.command("restart", cls=_START)
 @_takes_start_options
 def restart(name: str, dry_run: bool = False, **options: Any) -> None:
     """Stop a feed if it is running, then start it again - with exactly
@@ -372,7 +370,7 @@ def _status_record(name: str, fields: dict[str, str]) -> dict:
     return record
 
 
-@connector_app.command("status")
+@connector_app.command("status", cls=ReadOnly)
 def status(
     name: Annotated[
         str | None,

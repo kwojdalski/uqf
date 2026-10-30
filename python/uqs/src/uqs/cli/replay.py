@@ -21,6 +21,7 @@ from uqs import timerange
 from uqs.cli import completion
 from uqs.cli.range_options import DateOpt, RangeFromOpt, RangeToOpt
 from uqs.cli.renames import renamed
+from uqs.cli.safety import ChangesState
 from uqs.cli.shared import (
     _die,
     _paths,
@@ -43,7 +44,7 @@ def _day(day: str | None, range_from: str | None, range_to: str | None) -> str |
     return window.day("data replay replays").strftime("%Y.%m.%d")
 
 
-@data_app.command("replay", cls=renamed({"--port": "--base-port", "--proc": "PROC"}))
+@data_app.command("replay", cls=renamed({"--port": "--base-port", "--proc": "PROC"}, ChangesState))
 def replay(
     proc: Annotated[
         str | None,

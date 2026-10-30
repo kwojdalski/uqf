@@ -19,7 +19,7 @@ import typer
 
 from uqs.cli import completion
 from uqs.cli.renames import alias_command
-from uqs.cli.safety import dry_run_note
+from uqs.cli.safety import ChangesState, dry_run_note
 from uqs.cli.shared import JOB_OPERATIONS_PANEL, _die, _paths, app, console, job_app
 from uqs.paths import UqsError
 from uqs.stack import backfill as stack_backfill
@@ -60,7 +60,7 @@ def _human_bytes(size: int) -> str:
     return f"{value:.1f}G"
 
 
-@app.command("clean")
+@app.command("clean", cls=ChangesState)
 def clean(match: MatchOpt = None, dry_run: DryRunOpt = False) -> None:
     """Wipe output/uqs/ (logs, tplogs, wdb, the copied sample data).
 
@@ -90,7 +90,7 @@ def clean(match: MatchOpt = None, dry_run: DryRunOpt = False) -> None:
     )
 
 
-@checkpoint_app.command("remove")
+@checkpoint_app.command("remove", cls=ChangesState)
 def remove_checkpoint(
     worker: Annotated[
         str,

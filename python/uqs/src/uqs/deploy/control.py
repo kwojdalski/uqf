@@ -33,8 +33,9 @@ Three failures are told apart, because each needs a different fix:
   - the remote uqs failed: its own exit code and its own words, passed through.
 
 A command that may change the server asks first, naming the target, or takes
-`--yes`. READ_ONLY lists those that cannot; anything unlisted asks, so a new
-command is safe before anyone classifies it.
+`--yes`. Each command's own mark says whether it may (cli/target_confirm.py,
+#1780); an unmarked or unknown one asks, so a new command is safe before
+anyone classifies it.
 """
 
 from __future__ import annotations
@@ -62,58 +63,6 @@ from uqs.paths import UqsError
 #: What ssh exits with when it, rather than the remote command, failed.
 SSH_FAILED = 255
 DEFAULT_CONNECT_TIMEOUT = 10
-
-#: Commands that read and never change the server, as (command, subcommand);
-#: None covers every subcommand. Anything else asks before it runs. `query` is
-#: not one: PROC, --port and --no-gateway send any q as typed, and even the gateway's
-#: routed form passes `.gw.*` calls and `\` commands through and runs anything
-#: but an in-place update or delete on every rdb and hdb (#1663).
-READ_ONLY: frozenset[tuple[str, str | None]] = frozenset(
-    {
-        ("status", None),
-        ("summary", None),  # `status`'s name before #1733
-        ("graph", None),
-        ("job", "gaps"),
-        ("job", "preview"),
-        ("schema", None),
-        ("list", None),
-        ("logs", None),
-        ("config", "show"),
-        ("config", "get"),
-        ("runtime", "diff"),
-        ("runtime", "list"),
-        ("job", "list"),
-        ("connector", "status"),
-        ("deploy", "status"),
-        ("deploy", "check"),
-        ("deploy", "verify"),
-        ("connector", "logs"),
-        ("override", "list"),
-    }
-)
-#: Commands that change the server only with --apply, and then show their plan
-#: and ask THERE, through the ssh terminal - or take their own --yes (#1755).
-#: Asking here as well would ask twice, the first time before the plan is shown.
-CONFIRMS_ON_SERVER: frozenset[tuple[str, str]] = frozenset(
-    {("data", "check"), ("data", "alter"), ("data", "hdb-check"), ("data", "hdb-alter")}
-)
-#: Read-only three or four deep: `config sources check` reads, `config sources
-#: stub` writes a file; `job runs upgrade` and `setup odbc install` write, and
-#: `job attachment contract export` writes a file with -o.
-READ_ONLY_DEEP = frozenset(
-    {
-        ("config", "sources", "check"),
-        ("job", "attachment", "list"),
-        ("job", "attachment", "show"),
-        ("job", "runs", "status"),
-        ("job", "runs", "list"),
-        ("job", "runs", "show"),
-        ("job", "runs", "audit"),
-        ("setup", "odbc", "status"),
-        ("setup", "odbc", "env"),
-        ("job", "attachment", "contract", "list"),
-    }
-)
 
 
 @dataclass(frozen=True)
@@ -203,20 +152,6 @@ def split_global(argv: Sequence[str]) -> tuple[str | None, bool, list[str]]:
     return target, yes, rest
 
 
-def confirmed_on_server(args: Sequence[str], yes: bool) -> list[str]:
-    """`args` for a CONFIRMS_ON_SERVER command under --target: --attach and --hdb
-    refused (each names an HDB, and --target named the release's own), and the
-    global --yes passed on, so one --yes answers the server's question (#1755)."""
-    args = list(args)
-    if command_words(args)[:2] not in CONFIRMS_ON_SERVER:
-        return args
-    if any(a.partition("=")[0] in ("--attach", "--hdb") for a in args):
-        raise UqsError("give one of --target, --attach and --hdb: each names an HDB")
-    if yes and "--apply" in args and not {"--yes", "-y"} & set(args):
-        args.append("--yes")
-    return args
-
-
 def command_words(args: Sequence[str]) -> tuple[str, ...]:
     """Up to four command words: the leading non-option words of `args`,
     past the global options and --runtime's value."""
@@ -235,30 +170,6 @@ def command_words(args: Sequence[str]) -> tuple[str, ...]:
             if len(words) == 4:
                 break
     return tuple(words)
-
-
-def changes_the_server(args: Sequence[str]) -> bool:
-    """Whether `args` may change the server. Help never does, nor a dry run -
-    every command that changes state takes --dry-run/-n (#1732) - but a
-    backfill's, which starts a process to fetch; an unclassified command is
-    assumed to."""
-    if "--help" in args or "-h" in args:
-        return False
-    words = command_words(args)
-    if not words:
-        return False
-    if ("--dry-run" in args or "-n" in args) and words[:2] != ("job", "backfill"):
-        return False
-    if words[:1] in (("status",), ("summary",)) and ("-i" in args or "--interactive" in args):
-        return True  # its browser starts, stops and restarts processes with single keys
-    if words[:3] in READ_ONLY_DEEP or words[:4] in READ_ONLY_DEEP:
-        return False
-    if words[:2] in CONFIRMS_ON_SERVER:
-        return False
-    sub = words[1] if len(words) > 1 else None
-    if words[:2] == ("config", "sources"):
-        return True
-    return (words[0], None) not in READ_ONLY and (words[0], sub) not in READ_ONLY
 
 
 def remote_command(r: Remote, args: Sequence[str]) -> str:

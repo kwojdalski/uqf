@@ -20,7 +20,7 @@ from uqs import timerange
 from uqs.cli.json_out import emit, json_opt
 from uqs.cli.range_options import DateOpt, LastOpt, RangeFromOpt, RangeToOpt
 from uqs.cli.renames import alias_command
-from uqs.cli.safety import dry_run_note
+from uqs.cli.safety import ChangesState, ReadOnly, dry_run_note
 from uqs.cli.shared import (
     JOB_OPERATIONS_PANEL,
     InteractiveOpt,
@@ -122,7 +122,7 @@ def _print(
     _show(table, interactive)
 
 
-@runs_app.command("list")
+@runs_app.command("list", cls=ReadOnly)
 def list_runs(
     interactive: InteractiveOpt = False,
     attach: AttachOpt = None,
@@ -168,7 +168,7 @@ def _unfinished(
 alias_command(runs_app, "status", "uqs job runs list --unfinished", _unfinished)
 
 
-@runs_app.command("upgrade")
+@runs_app.command("upgrade", cls=ChangesState)
 def upgrade(
     dry_run: Annotated[
         bool,
@@ -198,7 +198,7 @@ def upgrade(
 alias_command(runs_app, "migrate", "uqs job runs upgrade", upgrade)
 
 
-@runs_app.command("show")
+@runs_app.command("show", cls=ReadOnly)
 def show(
     run_id: Annotated[str, typer.Argument(help="A run id, from `uqs job runs list`")],
     attach: AttachOpt = None,
@@ -253,7 +253,7 @@ def _print_next_steps(run: dict, attach: str | None = None) -> None:
         )
 
 
-@runs_app.command("audit")
+@runs_app.command("audit", cls=ReadOnly)
 def audit(
     dataset: Annotated[str, typer.Argument(help="The dataset, e.g. demo_deals")],
     range_from: RangeFromOpt = None,

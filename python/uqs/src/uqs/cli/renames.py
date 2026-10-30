@@ -124,7 +124,9 @@ def _warn_once(warned: set[str], old: str, new: str) -> None:
         warn_renamed(old, new)
 
 
-def renamed(renames: Mapping[str, str | tuple[str, str]]) -> type[TyperCommand]:
+def renamed(
+    renames: Mapping[str, str | tuple[str, str]], mark: type[TyperCommand] = TyperCommand
+) -> type[TyperCommand]:
     """`cls=` for a command whose options were renamed: the old spellings in
     `renames` (old -> new) still parse, hidden from --help, each logging its
     new spelling. A short old spelling (`-n`) matches only as its own word or
@@ -132,7 +134,9 @@ def renamed(renames: Mapping[str, str | tuple[str, str]]) -> type[TyperCommand]:
     per-command `--debug` to the global one, and a new spelling with no dash
     names the first positional (`--proc` -> `PROC`). A pair names a bypass:
     `--skip-q-version-check R` -> `--override q-version-check`, its value the
-    --reason (#1732)."""
+    --reason (#1732). `mark` is the command's class from safety (`ReadOnly`,
+    `ChangesState`, `ConfirmsOnServer`), so the effect it states carries over;
+    an alias leaves it out and takes its new name's (`alias_command`)."""
 
     class Renamed(TyperCommand):
         #: old spelling -> new, read by the tests
@@ -146,19 +150,27 @@ def renamed(renames: Mapping[str, str | tuple[str, str]]) -> type[TyperCommand]:
             return super().parse_args(ctx, args)
 
     Renamed.renames = dict(renames)
-    return Renamed
+    # The mark as a second base, after Renamed: its `effect`, Renamed's parse.
+    return Renamed if mark is TyperCommand else type("Renamed", (Renamed, mark), {})
 
 
 def alias_command(group: typer.Typer, old: str, new: str, fn: Callable, **kwargs) -> None:
     """Register `fn` on `group` under its old name `old` too, hidden from
-    --help, logging `new` - the full new spelling - each time it is used."""
+    --help, logging `new` - the full new spelling - each time it is used. The
+    alias takes the new command's mark (safety.Effect): its class names the
+    new command's path, `alias_of`, which `effect_of` follows, so an alias is
+    classified as its new name is with nothing to keep in step."""
 
     @functools.wraps(fn)
     def _alias(*args, **kw):
         warn_renamed(old, new)
         return fn(*args, **kw)
 
-    group.command(old, hidden=True, **kwargs)(_alias)
+    base = kwargs.pop("cls", TyperCommand)
+    path = tuple(new.split()[1:])  # `uqs job runs list --unfinished` -> job runs list
+    path = path[: next((i for i, w in enumerate(path) if w.startswith("-")), len(path))]
+    cls = type(base.__name__, (base,), {"alias_of": path})
+    group.command(old, hidden=True, cls=cls, **kwargs)(_alias)
 
 
 def old_spelling(new: str, *old: str) -> Any:

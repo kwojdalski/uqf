@@ -13,6 +13,7 @@ from typing import Annotated
 import typer
 from rich.table import Table
 
+from uqs.cli.safety import ReadOnly
 from uqs.cli.shared import _die, _paths, app, console
 from uqs.paths import UqsError
 from uqs.runtimes import RUNTIMES
@@ -30,7 +31,7 @@ app.add_typer(runtime_app, name="runtime")
 _NAMES = list(RUNTIMES)
 
 
-@runtime_app.command("diff")
+@runtime_app.command("diff", cls=ReadOnly)
 def runtime_diff(
     a: Annotated[str, typer.Argument(help="A runtime", autocompletion=lambda: _NAMES)],
     b: Annotated[str, typer.Argument(help="Another runtime", autocompletion=lambda: _NAMES)],

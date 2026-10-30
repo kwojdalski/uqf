@@ -13,7 +13,7 @@ import typer
 from rich.table import Table
 
 from uqs.cli.config import config_app
-from uqs.cli.safety import dry_run_note
+from uqs.cli.safety import ChangesState, dry_run_note
 from uqs.cli.shared import _die, _paths, console
 from uqs.model import transports
 from uqs.paths import UqsError
@@ -68,7 +68,7 @@ def sources_show(ctx: typer.Context) -> None:
     console.print(table)
 
 
-@sources_app.command("stub")
+@sources_app.command("stub", cls=ChangesState)
 def sources_stub(
     source: Annotated[
         str, typer.Argument(help="The source, as src/etl/sources/<source>.q names it")

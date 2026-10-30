@@ -20,8 +20,9 @@ import typer
 import typer.core
 from typer.testing import CliRunner
 
-from uqs.cli import app
+from uqs.cli import app, target_confirm
 from uqs.cli import target as target_cli
+from uqs.cli.safety import ChangesState, Effect, ReadOnly
 from uqs.deploy import control, history, targets
 from uqs.paths import UqsError
 
@@ -136,20 +137,67 @@ def test_the_target_is_read_from_the_global_options_only(argv, expected):
         (["job", "attachment", "contract", "list"], False),
         (["job", "attachment", "contract", "export", "-o", "c.json"], True),
         (["job", "attachment", "contract", "approve", "x"], True),
+        # read-only, and unlisted until each command carried its own mark
+        (["deploy", "history"], False),
     ],
 )
 def test_what_changes_the_server_asks_first(args, changes):
-    assert control.changes_the_server(args) is changes
+    assert target_confirm.changes_the_server(args) is changes
 
 
-def test_every_read_only_entry_names_a_real_command():
-    """A renamed command must not leave a stale entry that silently classifies
-    nothing - nor one that classifies a new, writing command as read-only."""
-    runner = CliRunner()
-    for command, sub in sorted(control.READ_ONLY, key=str):
-        words = [command, *([sub] if sub else [])]
-        result = runner.invoke(app, [*words, "--help"])
-        assert result.exit_code == 0, f"uqs {' '.join(words)}: {result.output}"
+def test_every_command_is_marked():
+    """Each command states whether it may change the server, where it is
+    declared (#1780): one that does not would ask under --target forever, and
+    nobody would know it was never classified."""
+    assert target_confirm.unmarked() == []
+
+
+def test_an_unmarked_command_is_named():
+    probe = typer.Typer()
+    probe.command("reads", cls=ReadOnly)(lambda: None)
+    probe.command("writes", cls=ChangesState)(lambda: None)
+    probe.command("forgotten")(lambda: None)
+    assert target_confirm.unmarked(typer.main.get_command(probe)) == ["forgotten"]
+
+
+@pytest.mark.parametrize(
+    ("old", "new"),
+    [
+        (["summary"], ["status"]),
+        (["config", "get"], ["config", "show"]),
+        (["deploy", "verify"], ["deploy", "check"]),
+        (["data", "hdb-check"], ["data", "check"]),
+        (["data", "hdb-alter"], ["data", "alter"]),
+        (["job", "runs", "status"], ["job", "runs", "list"]),
+        (["job", "runs", "migrate"], ["job", "runs", "upgrade"]),
+        (["job", "contract", "list"], ["job", "attachment", "contract", "list"]),
+        (["job", "contract", "export"], ["job", "attachment", "contract", "export"]),
+        (["job", "attach"], ["job", "attachment", "add"]),
+        (["remove", "output"], ["clean"]),
+        (["up"], ["start"]),
+        (["raw"], ["exec"]),
+    ],
+)
+def test_a_hidden_old_name_is_classified_as_its_new_one(old, new):
+    """An alias takes its new name's mark (renames.alias_command), so it needs
+    no entry of its own and cannot be left behind when the alias goes."""
+    alias, current = target_confirm.find(old), target_confirm.find(new)
+    assert alias.hidden and not current.hidden
+    assert target_confirm.effect_of(alias) is target_confirm.effect_of(current) is not None
+    assert target_confirm.changes_the_server(old) is target_confirm.changes_the_server(new)
+
+
+def test_the_marks_say_what_each_kind_of_command_does():
+    effects = {
+        "status": Effect.READ_ONLY,
+        "connector logs": Effect.READ_ONLY,
+        "data check": Effect.CONFIRMS_ON_SERVER,
+        "query": Effect.CHANGES_STATE,
+        "exec": Effect.CHANGES_STATE,
+        "job attachment contract export": Effect.CHANGES_STATE,
+    }
+    for path, effect in effects.items():
+        assert target_confirm.effect_of(target_confirm.find(path.split())) is effect, path
 
 
 def test_arguments_reach_the_release_intact_with_its_deploy_env(server):
