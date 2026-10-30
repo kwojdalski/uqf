@@ -167,3 +167,55 @@ FIXTURE_TAG: str = "~fixture"
 
 #: what precedes a worker's output revision in a release - .qetl.job.bounded.runtime.revision_tag
 REVISION_TAG: str = "@r"
+
+#: q's type characters (`meta`'s `t`) -> the names a cast takes (#1785)
+Q_TYPE_NAMES: dict[str, str] = {
+    "b": "boolean",
+    "g": "guid",
+    "x": "byte",
+    "h": "short",
+    "i": "int",
+    "j": "long",
+    "e": "real",
+    "f": "float",
+    "c": "char",
+    "s": "symbol",
+    "p": "timestamp",
+    "m": "month",
+    "d": "date",
+    "z": "datetime",
+    "n": "timespan",
+    "u": "minute",
+    "v": "second",
+    "t": "time",
+}
+
+#: the names a q cast takes -> q's type characters (#1785)
+Q_TYPE_CHARS: dict[str, str] = {
+    "boolean": "b",
+    "guid": "g",
+    "byte": "x",
+    "short": "h",
+    "int": "i",
+    "long": "j",
+    "real": "e",
+    "float": "f",
+    "char": "c",
+    "symbol": "s",
+    "timestamp": "p",
+    "month": "m",
+    "date": "d",
+    "datetime": "z",
+    "timespan": "n",
+    "minute": "u",
+    "second": "v",
+    "time": "t",
+}
+
+#: q's column attributes, as `attr` and `meta`'s `a` report them (#1785)
+Q_ATTRIBUTES: tuple[str, ...] = (
+    "s",
+    "u",
+    "p",
+    "g",
+)

@@ -46,6 +46,7 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
+from uqs.generated.q_facts import Q_ATTRIBUTES, Q_TYPE_NAMES
 from uqs.paths import ETL_DIR, TABLES_FILE, TORQAPPHOME_ENV, UqsError, repo_root
 
 #: What q evaluates TABLES_FILE (and the starter pack's database.q) to declare.
@@ -62,30 +63,13 @@ EXPORTER = Path("scripts/generate/export_plant_schema.q")
 #: default as `.qetl.plant.vendored_path` in plant_tables.q.
 VENDORED_DEFAULT = Path("lib/torq-finance-starter-pack/database.q")
 
-#: q's type characters and the type names a definition casts with; " " is a
-#: general list, written `()`. Anything else is refused at export.
-Q_TYPES = {
-    "b": "boolean",
-    "g": "guid",
-    "x": "byte",
-    "h": "short",
-    "i": "int",
-    "j": "long",
-    "e": "real",
-    "f": "float",
-    "c": "char",
-    "s": "symbol",
-    "p": "timestamp",
-    "m": "month",
-    "d": "date",
-    "z": "datetime",
-    "n": "timespan",
-    "u": "minute",
-    "v": "second",
-    "t": "time",
-}
+#: q's type characters and the type names a definition casts with, as q exports
+#: them (uqs.generated.q_facts, #1785); " " is a general list, written `()`.
+#: Anything else is refused at export.
+Q_TYPES = Q_TYPE_NAMES
 GENERAL = " "
-ATTRIBUTES = ("", "s", "u", "p", "g")
+#: q's attributes, "" for none.
+ATTRIBUTES = ("", *Q_ATTRIBUTES)
 
 REGENERATE = "python -m uqs.model.plant_metadata_gen"
 

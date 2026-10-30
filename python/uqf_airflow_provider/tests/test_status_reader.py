@@ -12,6 +12,7 @@ import re
 from pathlib import Path
 
 import pytest
+
 from uqf_airflow_provider import q_facts
 from uqf_airflow_provider.status_reader import (
     FIELDS,
