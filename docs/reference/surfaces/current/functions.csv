@@ -672,6 +672,7 @@ qetl.run,is_running,function,1,
 qetl.run,meta_schema,value,,
 qetl.run,meta_table,function,1,
 qetl.run,migrate,function,1,
+qetl.run,migration_plan,function,1,
 qetl.run,mint,function,1,
 qetl.run,not_ended,value,,
 qetl.run,of_run,function,1,id

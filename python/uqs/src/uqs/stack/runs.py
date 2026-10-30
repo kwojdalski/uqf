@@ -122,27 +122,34 @@ def query(
         )
     lines = [line for line in result.stdout.splitlines() if line.startswith("[")]
     if result.returncode != 0 or not lines:
-        raise UqsError(
-            f"reading the run ledger failed:\n{(result.stdout + result.stderr).strip()[-1500:]}"
-        )
+        # The first line is q's own message (a refusal's reason, #1782) and
+        # the tail is the deepest frames; a long trace keeps both ends.
+        text = (result.stdout + result.stderr).strip()
+        shown = text if len(text) <= 1500 else f"{text[:300]}\n...\n{text[-1200:]}"
+        raise UqsError(f"reading the run ledger failed:\n{shown}")
     return json.loads(lines[-1])
 
 
-#: .qetl.run.migrate's test, writing nothing: how many rows it would upgrade.
-_WOULD_MIGRATE = (
-    "{p:hsym `$.qetl.run.table_path[`etl_runs]; $[()~key p; 0; "
-    "(asc cols t:get p)~asc .qetl.run.run_schema; 0; "
-    "(asc cols t)~asc .qetl.run.previous_schema; count t; "
-    '\'"migrate: etl_runs is neither the old shape nor the current one - not ours to rewrite"]}[]'
-)
+def migration_plan(paths: UqsPaths, **kw) -> dict:
+    """What `.qetl.run.migration_plan[]` says `migrate` would do: its state,
+    action, row count and refusal. q decides; this only asks (#1782)."""
+    (plan,) = query(paths, "enlist .qetl.run.migration_plan[]", attach=False, **kw)
+    return plan
 
 
 def migrate(paths: UqsPaths, dry_run: bool = False, **kw) -> int:
     """Upgrade a ledger written before etl_runs recorded each run's range and
     counts, returning how many rows were upgraded - 0 when it was current.
-    With `dry_run`, how many would be, and nothing is written."""
-    expr = _WOULD_MIGRATE if dry_run else ".qetl.run.migrate[]"
-    rows = query(paths, f"([] upgraded:enlist {expr})", attach=False, **kw)
+    With `dry_run`, how many would be, and nothing is written.
+
+    The dry run is q's plan, shown; a plan that refuses raises, as the real
+    thing would. Apply re-plans inside q's lock and never sees this plan."""
+    if dry_run:
+        plan = migration_plan(paths, **kw)
+        if plan["action"] == "refuse":
+            raise UqsError(str(plan["refusal"]))
+        return int(plan["rows"])
+    rows = query(paths, "([] upgraded:enlist .qetl.run.migrate[])", attach=False, **kw)
     return int(rows[0]["upgraded"])
 
 

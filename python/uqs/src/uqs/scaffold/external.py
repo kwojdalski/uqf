@@ -1,10 +1,11 @@
 """Scaffold an external publisher: `uqs job new NAME --kind external` (#715).
 
 Real data mostly enters the stack from something a q process cannot hold a
-subscription to - a Kafka topic, a vendor's websocket, a broker's API. The two
-that exist (Databento, Kafka) are each a pair: a Python process outside q that
-holds the subscription and publishes the raw records onto the tickerplant, and
-an ordinary q streaming job that subscribes to that raw table and reshapes it.
+subscription to - a Kafka topic, a vendor's websocket, a broker's API. The
+ones that exist (Kafka, and the sidecar bundles' connectors) are each a pair:
+a Python process outside q that holds the subscription and publishes the raw
+records onto the tickerplant, and an ordinary q streaming job that subscribes
+to that raw table and reshapes it.
 This writes both halves:
 
   python/uqs/src/uqs/external/NAME_streamer.py   the process: one function to
@@ -13,15 +14,19 @@ This writes both halves:
   python/uqs/src/uqs/external/NAME_feed.py       its lifecycle (the shared
                                                  DetachedProcess) and a FEED that
                                                  `uqs connector start|stop|restart|status|logs`
-                                                 finds without a CLI edit
+                                                 finds without a CLI edit - and
+                                                 whose `produces` tells the stack
+                                                 the raw table is fed from outside
+                                                 it (#888, #1776), so nothing
+                                                 else is edited for that
   python/uqs/tests/test_NAME_streamer.py         a failing test, as every scaffold
   the raw table, and the q job NAME              via scaffold/jobs.streaming_job:
                                                  subscribes to the raw table,
                                                  publishes --publishes
 
 The raw table and the published one start with the same --schema: the q job
-is where they come to differ, as databento1 folds 40 per-level columns into
-four vectors. Both are defined, so neither half can publish into a table the
+is where they come to differ, as a fold of forty per-level columns into four
+vectors would. Both are defined, so neither half can publish into a table the
 plant discards in silence.
 """
 
@@ -38,11 +43,6 @@ from uqs.scaffold.plan import FileAction, ScaffoldPlan, WriteMode
 
 EXTERNAL_DIR = "python/uqs/src/uqs/external"
 PY_TEST_DIR = "python/uqs/tests"
-#: Where the stack learns that a table is fed from outside it (#888): without
-#: an entry, every start of the new job warns that nothing feeds its input,
-#: and test_dependencies refuses the tree.
-DEPENDENCIES_FILE = Path("python/uqs/src/uqs/model/dependencies.py")
-PRODUCERS_HEAD = "EXTERNAL_PRODUCERS: dict[str, str] = {"
 
 
 def external_files(name: str) -> list[str]:
@@ -118,7 +118,6 @@ def external_feed(
             f'read only by {name}, which reshapes them into {publishes}";\n',
             mode=WriteMode.APPEND,
         ),
-        FileAction(DEPENDENCIES_FILE, producer_entry(name, raw_table), mode=WriteMode.APPEND),
     ]
     python = [
         FileAction(Path(f"{EXTERNAL_DIR}/{name}_streamer.py"), _streamer(name, raw_table, fields)),
@@ -132,33 +131,6 @@ def external_feed(
         *job.notes,
     ]
     return ScaffoldPlan(name=name, actions=raw + python + job.actions, notes=notes)
-
-
-def producer_entry(name: str, raw_table: str) -> str:
-    """The EXTERNAL_PRODUCERS line naming `raw_table`'s outside publisher."""
-    return f'    "{raw_table}": "the external {name} feed (`uqs connector start {name}`)",\n'
-
-
-def with_producer(existing: str, entry: str) -> str:
-    """dependencies.py with `entry` as the last item of EXTERNAL_PRODUCERS.
-
-    Refuses rather than guesses when the dict is not where it was: an entry
-    appended at the end of the module would be a syntax error, or a second
-    dictionary nothing reads."""
-    lines = existing.splitlines(keepends=True)
-    heads = [i for i, line in enumerate(lines) if line.startswith(PRODUCERS_HEAD)]
-    if len(heads) != 1:
-        raise UqsError(f"{DEPENDENCIES_FILE} has no single `{PRODUCERS_HEAD}` - add it by hand")
-    end = next((i for i in range(heads[0] + 1, len(lines)) if lines[i].rstrip() == "}"), None)
-    if end is None:
-        raise UqsError(f"{DEPENDENCIES_FILE}: EXTERNAL_PRODUCERS has no closing `}}` line")
-    return "".join(lines[:end] + [entry] + lines[end:])
-
-
-def without_producer(existing: str, raw_table: str) -> str:
-    """dependencies.py without `raw_table`'s one-line EXTERNAL_PRODUCERS entry."""
-    head = f'    "{raw_table}": "the external '
-    return "".join(line for line in existing.splitlines(keepends=True) if not line.startswith(head))
 
 
 def _streamer(name: str, raw_table: str, fields: list[str]) -> str:
@@ -240,6 +212,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from collections.abc import Mapping
+from typing import Any
+
 from uqs.external.feeds import ExternalFeed
 from uqs.external.lifecycle import DetachedProcess
 from uqs.paths import UqsPaths
@@ -259,7 +234,9 @@ def _process(paths: UqsPaths) -> DetachedProcess:
     )
 
 
-def start(paths: UqsPaths) -> int:
+def start(paths: UqsPaths, options: Mapping[str, Any]) -> int:
+    """`options` holds every option FEED declares, defaults applied - none yet:
+    add a FeedOption to FEED's options= and it is a `connector start` option."""
     port = get_process_config(paths, "stp1")["port"]
     runner = Path(__file__).resolve().parent / "{name}_streamer.py"
     cmd = [
@@ -281,7 +258,13 @@ def status(paths: UqsPaths) -> dict[str, str]:
     )
 
 
-FEED = ExternalFeed("{name}", start, stop, status)
+FEED = ExternalFeed(
+    "{name}",
+    start,
+    stop,
+    status,
+    produces={{RAW_TABLE: "the external {name} feed (`uqs connector start {name}`)"}},
+)
 '''
 
 

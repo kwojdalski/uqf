@@ -111,12 +111,13 @@ def test_fixed_choices_complete():
     assert complete("uqs logs --level W") == ["WARNING"]
     assert complete("uqs logs --multitail --stream ") == ["out", "err", "both"]
     assert complete("uqs connector start ") == [
-        "databento",
-        "kafka",
         "crypto",
         "crypto-fills",
-        "flink_vwap",
-    ]
+        "kafka",
+    ], (
+        "in discovery order: by module, then as each module declares them - and a bundle's \
+connector only once the bundle is installed"
+    )
     assert complete("uqs job new x --kind ") == list(SCAFFOLD_KINDS)
 
 

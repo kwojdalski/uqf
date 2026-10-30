@@ -195,3 +195,34 @@ def test_a_dry_run_upgrade_counts_and_says_so(monkeypatch):
     result = runner.invoke(cli.app, ["job", "runs", "upgrade", "-n"])
     assert result.exit_code == 0, result.output
     assert seen == {"dry_run": True} and "would upgrade 2 run(s)" in result.output
+
+
+def test_the_dry_run_prints_what_q_planned_and_never_applies(monkeypatch):
+    calls = []
+
+    def plan(paths, dry_run=False):
+        calls.append(dry_run)
+        return 4
+
+    monkeypatch.setattr(stack_runs, "migrate", plan)
+    result = runner.invoke(cli.app, ["job", "runs", "upgrade", "--dry-run"])
+    assert result.exit_code == 0, result.output
+    assert "would upgrade 4 run(s)" in result.output
+    assert calls == [True]
+
+
+def test_a_refusing_dry_run_exits_one(monkeypatch):
+    def refuse(paths, dry_run=False):
+        raise UqsError("migrate: etl_runs is neither the old shape nor the current one")
+
+    monkeypatch.setattr(stack_runs, "migrate", refuse)
+    result = runner.invoke(cli.app, ["job", "runs", "upgrade", "-n"])
+    assert result.exit_code == 1
+
+
+def test_runs_py_carries_no_schema_classification_of_its_own():
+    import inspect
+
+    src = inspect.getsource(stack_runs)
+    assert "_WOULD_MIGRATE" not in src
+    assert "previous_schema" not in src and "run_schema" not in src

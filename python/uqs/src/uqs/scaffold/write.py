@@ -17,7 +17,7 @@ from uqs import paths
 from uqs.model.declarations import read_declarations, read_file_text
 from uqs.model.registry import NON_JOB_PIPELINES
 from uqs.paths import STACK_TABLES_LIST, STACK_TABLES_TEST, STREAM_DIR, WORKER_DIR, UqsError
-from uqs.scaffold import external, profile
+from uqs.scaffold import profile
 from uqs.scaffold.docs import SHOWCASE_PAGE, with_card
 from uqs.scaffold.plan import FileAction, ScaffoldPlan, WriteMode
 
@@ -176,8 +176,6 @@ def _appended(existing: str, action: FileAction) -> str:
         return profile.apply(existing, action)
     if action.path == SHOWCASE_PAGE:
         return with_card(existing, action.body, action.anchor)
-    if action.path == external.DEPENDENCIES_FILE:
-        return external.with_producer(existing, action.body)
     return existing.rstrip("\n") + "\n" + action.body
 
 

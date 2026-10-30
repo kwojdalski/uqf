@@ -18,6 +18,9 @@ workstation drift apart. A bundle declares them beside its jobs:
                                table of its own is browsable without a policy
       process_overrides.csv    optional: procname,field,value for the
                                bundle's OWN processes
+      *_feed.py, *_streamer.py optional: its connectors, the publishers outside
+                               the plant that feed its tables (stack/
+                               bundle_connectors.py) - copied in with the q
 
 INSTALLING IS IDEMPOTENT. The additions go into the tree files as one block
 per bundle between `/ BEGIN bundle <name>` and `/ END bundle <name>`, and a
@@ -45,7 +48,7 @@ from pathlib import Path
 from uqs.model.declarations import read_file
 from uqs.model.pipeline import PipelineKind
 from uqs.paths import BUNDLE_LEDGER, CATALOG_FILE, TABLES_FILE
-from uqs.stack import bundle_shadowing
+from uqs.stack import bundle_connectors, bundle_shadowing
 from uqs.stack import install as stack_install
 from uqs.stack import overrides as override_files
 from uqs.stack.bundle_blocks import BundleError, with_block, without_block
@@ -237,16 +240,6 @@ def read_ledger(root: Path) -> dict[str, dict]:
         raise BundleError(f"{LEDGER} is not JSON ({exc}) - fix or remove it by hand") from None
 
 
-def require_installed(root: Path, name: str, needed_by: str) -> None:
-    """Refuse, naming the install command, unless bundle `name` is in the tree:
-    a publisher started without its bundle sends rows to a table nothing defines."""
-    if name not in read_ledger(root):
-        raise BundleError(
-            f"{needed_by} needs the {name} bundle, which is not installed in this checkout "
-            f"- run `uqs job install sidecars/{name}` first"
-        )
-
-
 def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
@@ -284,6 +277,8 @@ class Plan:
     overrides: list[tuple[str, str, str]]
     #: tree files the previous install of this bundle owned and this one does not
     stale: list[Path] = field(default_factory=list)
+    #: the bundle's connector files (stack/bundle_connectors.py), copied on install
+    connectors: list[Path] = field(default_factory=list)
 
 
 def _owned(root: Path, ledger: dict[str, dict], name: str) -> set[Path]:
@@ -339,7 +334,8 @@ def plan(bundle: Bundle, root: Path) -> Plan:
     overrides = override_rows(bundle, procnames)
     stale = sorted(p for p in mine if p not in {i.destination for i in items} and p.suffix == ".q")
     bundle_shadowing.refuse(root, items, stale)
-    return Plan(bundle, items, tests, tables, table_body, catalog_body, overrides, stale)
+    feeds = bundle_connectors.check(bundle.name, bundle.root, root, tables)
+    return Plan(bundle, items, tests, tables, table_body, catalog_body, overrides, stale, feeds)
 
 
 def install(p: Plan, root: Path, runtime: str | None = None) -> dict:
@@ -372,6 +368,9 @@ def install(p: Plan, root: Path, runtime: str | None = None) -> dict:
         "jobs": jobs(p),
         "tables": p.tables,
         "overrides": [list(row) for row in p.overrides],
+        "connectors": bundle_connectors.install(
+            p.bundle.name, p.connectors, root, previous.get("connectors", [])
+        ),
     }
     if runtime is not None or "runtimes" in previous:
         entry["runtimes"] = sorted({*previous.get("runtimes", []), *([runtime] if runtime else [])})

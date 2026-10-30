@@ -27,59 +27,57 @@ prevents.
 from __future__ import annotations
 
 from collections.abc import Iterable
+from pathlib import Path
 from typing import Any
 
 from uqs.logger import get_logger
+from uqs.model.connectors import CONNECTOR_DIR, bundle_connectors, feed_produces
 from uqs.model.plant_schema import _publishers
 from uqs.model.registry import PIPELINES
+from uqs.paths import repo_root
 
 log = get_logger()
 
-#: Tables that ALSO come from something outside the process list, and what
-#: that something is.
-#:
-#: Additive, not a fallback. `crypto_book` and `crypto_trades` have a
-#: declared producer (`cryptomock1`) *and* an external one (cryptorust's
-#: recorder, which the mock exists to stand in for), and the recorder is
-#: the normal case - cryptomock1 is off by default precisely so the two do
-#: not interleave. Treating the declared producer as the only one would
-#: make `marketdata1` and `executions1` warn on every healthy stack, and a
-#: warning that is usually wrong is one an operator learns to scroll past,
-#: which costs more than it saves.
-#:
-#: Every key must be a table something actually subscribes to, or the entry
-#: is dead - held by a test, the same way the other exemption lists in this
-#: tree are.
-EXTERNAL_PRODUCERS: dict[str, str] = {
-    "kafka_message": (
-        "a Kafka consumer: the q feed kafka_feed1, or the legacy Python one "
-        "(`uqs connector start kafka`). There is no backfill alternative: "
-        "replaying a topic from offset 0 is Kafka's own answer to that, and it "
-        "needs the same broker"
-    ),
-    "crypto_book": "cryptorust's kdb recorder, which cryptomock1 stands in for",
-    "crypto_trades": "cryptorust's kdb recorder, which cryptomock1 stands in for",
-}
 
-#: The same, for the tables a SIDECAR BUNDLE's jobs subscribe to. The bundle
-#: carries the job and the table, but not the outside publisher that feeds it
-#: (a bundle cannot declare an external process yet, #1776), so uqs names the
-#: publisher here. Merged into EXTERNAL_PRODUCERS below, so every reader sees
-#: one list; separate only because a checkout without the bundle has no
-#: subscriber, and `test_no_external_producer_entry_is_dead` holds this list
-#: to "its bundle exists" instead of "something subscribes".
-SIDECAR_EXTERNAL_PRODUCERS: dict[str, tuple[str, str]] = {
-    "databento_mbp10": (
-        "databento",
-        "the external Databento feed handler (`uqs connector start databento`) "
-        "or a `databento_backfill1` run",
-    ),
-    "flink_vwap_raw": (
-        "flink",
-        "the external flink_vwap feed (`uqs connector start flink_vwap`)",
-    ),
-}
-EXTERNAL_PRODUCERS.update({t: why for t, (_bundle, why) in SIDECAR_EXTERNAL_PRODUCERS.items()})
+def external_producers(root: Path) -> dict[str, str]:
+    """Every table a discovered connector says it produces, and who produces it.
+
+    Tables that ALSO come from something outside the process list, and what
+    that something is - each connector's own `produces` (#1776), so a
+    connector is the one place that says what it feeds, and a list kept by
+    hand beside them cannot drift.
+
+    Additive, not a fallback. `crypto_book` and `crypto_trades` have a
+    declared producer (`cryptomock1`) *and* an external one (cryptorust's
+    recorder, which the mock exists to stand in for), and the recorder is
+    the normal case - cryptomock1 is off by default precisely so the two do
+    not interleave. Treating the declared producer as the only one would
+    make `marketdata1` and `executions1` warn on every healthy stack, and a
+    warning that is usually wrong is one an operator learns to scroll past,
+    which costs more than it saves.
+
+    Read from each module's text rather than by importing it: `model/` sits
+    below `external/` and imports nothing above it (test_module_split.py).
+    `external.feeds.discover` refuses a module whose text and import disagree.
+
+    The tree's own connectors, and every installed bundle's (#1776) - so a
+    bundle's raw table is excused only while the bundle is installed. A
+    bundle connector whose text cannot be read is left out, with a warning,
+    rather than stopping every command that warns about dependencies.
+    """
+    out: dict[str, str] = {}
+    own = sorted((root / CONNECTOR_DIR).glob("*_feed.py"))
+    for path in [*own, *bundle_connectors(root).values()]:
+        try:
+            produced = feed_produces(path)
+        except (OSError, ValueError) as exc:
+            if path in own:
+                raise
+            log.warning("a bundle connector is not read: {}", exc)
+            continue
+        for table, who in produced.items():
+            out[table] = f"{out[table]} or {who}" if table in out else who
+    return out
 
 
 def producers_by_table(pipelines: Iterable[Any] = PIPELINES) -> dict[str, set[str]]:
@@ -129,15 +127,16 @@ def depends_on_by_process(pipelines: Iterable[Any] = PIPELINES) -> dict[str, tup
     "what table does this need"; this answers "and who do I have to start to
     get it", which is the question behind every `up, but idle` process.
 
-    A table produced from outside the process list entirely - Databento's
+    A table produced from outside the process list entirely - a vendor's
     feed handler, cryptorust's recorder - resolves to the name in
-    EXTERNAL_PRODUCERS rather than being dropped, because "nothing in this
+    `external_producers` rather than being dropped, because "nothing in this
     list provides it" and "nothing provides it" are different facts and only
     one of them is a problem. A process never lists itself: a normalizer that
     republishes onto a table it also reads would otherwise appear to be its
     own dependency.
     """
     producers = producers_by_table(pipelines)
+    external = external_producers(repo_root())
     out: dict[str, tuple[str, ...]] = {}
     for procname, tables in inputs_by_process(pipelines).items():
         names: list[str] = []
@@ -145,7 +144,7 @@ def depends_on_by_process(pipelines: Iterable[Any] = PIPELINES) -> dict[str, tup
             for source in sorted(producers.get(table, set())):
                 if source != procname and source not in names:
                     names.append(source)
-            if table in EXTERNAL_PRODUCERS and table not in names:
+            if table in external and table not in names:
                 names.append(f"({table}: external)")
         if names:
             out[procname] = tuple(names)
@@ -159,10 +158,10 @@ def worker_edges(
     from what its bounded worker declares.
 
     Kept apart from `inputs_by_process` deliberately. A worker's source is a
-    system outside the stack - a DuckDB file, another q process, Databento -
+    system outside the stack - a DuckDB file, another q process, a vendor's API -
     not a plant table, so nothing in the process list publishes it. Folding it
     in would have `starved_processes` report every running backfill as
-    unfed, the warning-that-is-usually-wrong EXTERNAL_PRODUCERS exists to
+    unfed, the warning-that-is-usually-wrong `external_producers` exists to
     avoid. The source is labelled as one, so it does not read as a table.
     """
     out = {}
@@ -185,12 +184,13 @@ def dependency_rows(pipelines: Iterable[Any] = PIPELINES) -> list[dict[str, str]
     a process's inputs read together.
     """
     producers = producers_by_table(pipelines)
+    external = external_producers(repo_root())
     rows: list[dict[str, str]] = []
     for procname, tables in sorted(inputs_by_process(pipelines).items()):
         for table in tables:
             sources = sorted(producers.get(table, set()))
-            if table in EXTERNAL_PRODUCERS:
-                sources.append(EXTERNAL_PRODUCERS[table])
+            if table in external:
+                sources.append(external[table])
             rows.append(
                 {
                     "process": procname,
@@ -215,11 +215,12 @@ def unfed_inputs(
     than warning about a process it starts in the same breath.
 
     A table with no declared producer at all is reported with what to start
-    instead, from EXTERNAL_PRODUCERS, rather than as an error - some tables
+    instead, from `external_producers`, rather than as an error - some tables
     genuinely come from outside the process list.
     """
     running = set(running)
     producers = producers_by_table(pipelines)
+    externals = external_producers(repo_root())
     lines: list[str] = []
     for table in inputs_by_process(pipelines).get(procname, ()):
         declared = producers.get(table, set())
@@ -228,7 +229,7 @@ def unfed_inputs(
         # An external source means the table may well be flowing from
         # outside this stack, so this is context rather than a fault, and
         # it is said that way.
-        external = EXTERNAL_PRODUCERS.get(table)
+        external = externals.get(table)
         if declared:
             names = " ".join(sorted(declared))
             line = (

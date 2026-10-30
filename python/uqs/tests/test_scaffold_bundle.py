@@ -135,15 +135,25 @@ def test_a_job_named_like_a_test_is_refused_before_writing(tmp_path, monkeypatch
     assert not folder.exists()
 
 
-def test_an_external_feed_is_refused_into_a_bundle(tmp_path, monkeypatch, tree_files):
-    """#1570: a bundle cannot carry the Python publisher an external feed needs,
-    so it was dropped and the bundle's job subscribed to a table nothing feeds."""
+def test_an_external_feed_lands_in_a_bundle_with_its_connector(tmp_path, monkeypatch, tree_files):
+    """#1776 (was #1570's refusal): a bundle carries its connectors, so an
+    external scaffold writes NAME_feed.py, NAME_streamer.py and their test into
+    the bundle beside the q job and the raw table - and nothing into uqs."""
     folder = tmp_path / "mockups"
     argv = ["audit_ext", "--kind", "external", "--raw-table", "audit_ext_raw",
             "--publishes", "audit_ext_out", "--schema", "sym:symbol, px:float"]  # fmt: skip
     _out, refused = _job_new([*argv, "--bundle", str(folder)], monkeypatch)
-    assert any("Python publisher" in r for r in refused), refused
-    assert not folder.exists()
+    assert refused == []
+    names = {p.name for p in folder.iterdir()}
+    assert {"audit_ext_feed.py", "audit_ext_streamer.py", "test_audit_ext_streamer.py"} <= names
+    assert "audit_ext_raw:([]" in (folder / "tables.q").read_text()
+    test = (folder / "test_audit_ext_streamer.py").read_text()
+    assert "import audit_ext_streamer" in test and "uqs.external" not in test, (
+        "the test imports the streamer from beside the installed connector"
+    )
+    feed = (folder / "audit_ext_feed.py").read_text()
+    assert 'produces={RAW_TABLE: "the external audit_ext feed' in feed
+    assert not list((UQF_ROOT / "python/uqs").rglob("*audit_ext*")), "nothing into uqs"
 
 
 def test_two_appends_to_a_new_bundle_file_both_land(tmp_path):

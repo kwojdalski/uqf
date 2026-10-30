@@ -25,7 +25,7 @@
 / the cryptorust pattern: it opens its own IPC handle to stp1 and calls
 / .u.upd, so it is started by the orchestrator rather than by torq.sh and
 / has no process.csv row of its own. See
-/ python/uqs/src/uqs/external/databento_feed.py.
+/ this bundle's databento_feed.py, installed beside it (#1776).
 / .
 / THE VENUE CLOCK IS KEPT, DELIBERATELY
 / .
@@ -100,4 +100,4 @@
         enlist `eq_orderbook;
         .qpipe.job.eq_orderbook.on_batch;
         `eq_orderbook;
-        "folds live Databento MBP-10 into the book shape. The raw rows are published by an EXTERNAL Python feed handler (external/databento_feed.py) - a q process cannot hold a Databento subscription - so databento_mbp10 has a schema row but no producer in this list. That is also why startwithall:0: on a default start nothing publishes the table it subscribes to, so it held one of the sixteen licensed plant connections (#285) to consume nothing. Start it with the feed handler")];
+        "folds live Databento MBP-10 into the book shape. The raw rows are published by an EXTERNAL Python feed handler (this bundle's databento_feed.py) - a q process cannot hold a Databento subscription - so databento_mbp10 has a schema row but no producer in this list. That is also why startwithall:0: on a default start nothing publishes the table it subscribes to, so it held one of the sixteen licensed plant connections (#285) to consume nothing. Start it with the feed handler")];

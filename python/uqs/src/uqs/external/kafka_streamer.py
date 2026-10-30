@@ -7,8 +7,8 @@ hosts where the native library is not built. Never run both against one group.
 
 Run by `kafka_feed.start_kafka_feed`, not imported by the CLI: it is a
 process, and its dependency (``confluent-kafka``) is optional - the rest of
-the orchestrator must import without it, the same standing
-``databento_streamer`` has next door.
+the orchestrator must import without it, the same standing every bundle
+connector's streamer has.
 
 **It publishes envelopes and decodes nothing.** One row per record on
 ``kafka_message``: topic, partition, offset, key, the broker's timestamp and

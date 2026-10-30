@@ -1,6 +1,10 @@
 """The live Databento feed handler - an external, non-TorQ publisher.
 
-Like the cryptorust recorders next door, this is not a process.csv row: it
+The databento bundle's connector (#1776), installed with its q half into
+src/etl/connectors/databento/ - beside databento_streamer.py, which `start`
+runs from there - and never loaded from the bundle's own folder.
+
+Like uqs's cryptorust recorders, this is not a process.csv row: it
 opens its own kdb+ IPC handle straight to the tickerplant and calls
 ``.u.upd``, so it is started and stopped here rather than by ``torq.sh``.
 The reason is the same one that keeps cryptorust out of the process table -
@@ -38,18 +42,17 @@ is the transport:
 from __future__ import annotations
 
 import os
+from collections.abc import Mapping
 from pathlib import Path
+from typing import Any
 
+from uqs.external.feeds import ExternalFeed, FeedOption
 from uqs.external.lifecycle import DetachedProcess
 from uqs.logger import get_logger
 from uqs.paths import UqsError, UqsPaths
-from uqs.stack import bundles
 from uqs.stack.procs import get_process_config
 
 log = get_logger()
-
-#: The sidecar bundle holding its q half: the raw table and databento1.
-BUNDLE = "databento"
 
 #: The raw table the handler publishes onto. `databento1` subscribes to it.
 DATABENTO_RAW_TABLE = "databento_mbp10"
@@ -67,10 +70,16 @@ DEFAULT_DATASET = "XNAS.ITCH"
 DEFAULT_SYMBOLS = ("AAPL", "MSFT")
 
 
+def pid_path(paths: UqsPaths) -> Path:
+    """The handler's pid file, beside the other external publishers': it is
+    one torq.sh knows nothing about and so cannot stop."""
+    return paths.orchestrator_dir / "databento_feed.pid"
+
+
 def _process(paths: UqsPaths) -> DetachedProcess:
     return DetachedProcess(
         "the databento feed",
-        paths.databento_feed_pid_path,
+        pid_path(paths),
         paths.log_dir / "databento_feed.log",
     )
 
@@ -93,9 +102,9 @@ def start_databento_feed(
     key rather than starting a process that will fail its first call - the
     same "resolve what can fail before any work happens" order
     ``.qetl.job.bounded.init`` follows. The q half (the raw table, databento1)
-    is the databento bundle's, so a checkout without it is refused first.
+    is installed with this module, from the same bundle (#1776): without the
+    bundle there is no `databento` connector to start.
     """
-    bundles.require_installed(paths.repo_root, BUNDLE, "the databento feed")
     if is_databento_feed_running(paths):
         # Before the API-key check, so a second start says why it is refused.
         raise UqsError("the databento feed is already running - stop it first")
@@ -157,3 +166,37 @@ def databento_feed_status(paths: UqsPaths) -> dict[str, str]:
     return _process(paths).status(
         publishes=DATABENTO_RAW_TABLE, **{"folded by": "databento1 -> eq_orderbook"}
     )
+
+
+def _start(paths: UqsPaths, options: Mapping[str, Any]) -> int:
+    return start_databento_feed(
+        paths,
+        dataset=options["databento_dataset"],
+        symbols=options["symbols"],
+        api_key=options["api_key"],
+    )
+
+
+FEED = ExternalFeed(
+    "databento",
+    _start,
+    # Looked up when called, so what this module holds at call time is what runs.
+    lambda paths: stop_databento_feed(paths),
+    lambda paths: databento_feed_status(paths),
+    options=(
+        FeedOption(
+            "databento_dataset",
+            "Databento dataset, e.g. XNAS.ITCH",
+            default=DEFAULT_DATASET,
+            aliases=("--dataset",),  # renamed in #1739; goes in the release after
+        ),
+        FeedOption("api_key", f"API key; defaults to ${DATABENTO_API_KEY_ENV}", secret=True),
+        FeedOption("symbols", "Comma-separated symbols", default=DEFAULT_SYMBOLS, many=True),
+    ),
+    produces={
+        DATABENTO_RAW_TABLE: (
+            "the external Databento feed handler (`uqs connector start databento`) "
+            "or a `databento_backfill1` run"
+        ),
+    },
+)
