@@ -99,7 +99,7 @@ def build_env(paths: UqsPaths, base_port: int | None = None) -> dict[str, str]:
 def interpreter_env(paths: UqsPaths) -> dict[str, str]:
     """QCMD for a runtime that declares PeachQ (#764), or {}.
 
-    For that runtime's stack only: what torq.sh, the HDB filler and `summary`
+    For that runtime's stack only: what torq.sh, the HDB filler and `uqs status`
     see for it, never the operator's shell, and nothing goes on PATH. A
     KDB-X runtime gets {}: the operator's own QCMD stands, as it always has.
 

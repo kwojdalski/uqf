@@ -1,4 +1,4 @@
-"""Tests for per-process load times (stack/startup.py) and `uqs --debug summary`.
+"""Tests for per-process load times (stack/startup.py) and `uqs --debug status`.
 
 The log files here are built line for line in torq.q's own shapes - the
 7-field `.lg.format` line and `.lg.banner`'s raw 80-column border - because

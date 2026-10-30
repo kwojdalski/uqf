@@ -20,6 +20,7 @@ import functools
 import re
 from dataclasses import dataclass
 
+from uqs.generated.q_facts import Q_TYPE_CHARS
 from uqs.model import schemas
 from uqs.model.qnames import Q_WORDS
 from uqs.paths import TABLES_FILE, UqsError, repo_root
@@ -54,19 +55,29 @@ class ColumnType:
     sample: str
 
 
+def _typed(name: str, sample: str) -> ColumnType:
+    """A typed column of q's type `name`: its literal and `meta` character are
+    q's (uqs.generated.q_facts, #1785), so only the sample is the scaffold's."""
+    return ColumnType(name, f"`{name}$()", Q_TYPE_CHARS[name], sample)
+
+
+#: The types a scaffold OFFERS - a deliberate subset of q's: each must be one
+#: the browser's catalog can type (test_browsable_types.py), and a type left
+#: out (byte, real, month, datetime, minute, second, guid) is refused by name.
 TYPES: tuple[ColumnType, ...] = (
-    ColumnType("timestamp", "`timestamp$()", "p", "2026.01.01D00:00:00.000000000"),
-    ColumnType("symbol", "`symbol$()", "s", "`SCAFFOLD"),
-    ColumnType("float", "`float$()", "f", "1.0"),
-    ColumnType("long", "`long$()", "j", "1j"),
-    ColumnType("int", "`int$()", "i", "1i"),
-    ColumnType("short", "`short$()", "h", "1h"),
-    ColumnType("boolean", "`boolean$()", "b", "0b"),
-    ColumnType("char", "`char$()", "c", '" "'),
-    ColumnType("date", "`date$()", "d", "2026.01.01"),
-    ColumnType("time", "`time$()", "t", "00:00:00.000"),
-    ColumnType("timespan", "`timespan$()", "n", "0D00:00:01"),
+    _typed("timestamp", "2026.01.01D00:00:00.000000000"),
+    _typed("symbol", "`SCAFFOLD"),
+    _typed("float", "1.0"),
+    _typed("long", "1j"),
+    _typed("int", "1i"),
+    _typed("short", "1h"),
+    _typed("boolean", "0b"),
+    _typed("char", '" "'),
+    _typed("date", "2026.01.01"),
+    _typed("time", "00:00:00.000"),
+    _typed("timespan", "0D00:00:01"),
     #: A general column: what a vector-valued table uses (fx_orderbook's bid_prices).
+    #: The scaffold's own name - q calls none of its types `list`.
     ColumnType("list", "()", " ", "1 2 3f"),
 )
 

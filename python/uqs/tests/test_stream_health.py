@@ -1,4 +1,4 @@
-"""uqs summary's Batches column (#832): a streaming job whose batches throw is
+"""uqs status's Batches column (#832): a streaming job whose batches throw is
 `failing`, though its process is up and its heartbeat ok.
 
 The file is written by src/etl/core/stream_health.q and read here with its
