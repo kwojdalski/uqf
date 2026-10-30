@@ -15,7 +15,7 @@ EVERY table a desk may browse is listed: the browser reads through getdata
 (#889), and getdata serves no table it is not told about. What a desk may
 browse is the plant tables plus the datasets bounded workers write (#1363),
 and the file is DERIVED from both - `table_properties_rows`, written by
-scripts/generate/tableproperties.py and held by its --check. A plant table gets
+`scripts/generate/derive.py table-properties` and held by its --check. A plant table gets
 `time` as its time column and `sym` as its instrument column where it has one;
 a worker dataset gets what q's transform output says (generated/q_facts.py).
 Listing a table is not granting it: the gateway's query policies decide who

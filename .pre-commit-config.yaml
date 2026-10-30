@@ -369,11 +369,11 @@ repos:
         # nothing the catalog offers is refused by TorQ's checktablename. It
         # needs no q - the workers' datasets are in the committed q_facts.py.
         # To accept an intended change:
-        #   uv run python scripts/generate/tableproperties.py
-        entry: uv run python scripts/generate/tableproperties.py --check
+        #   uv run python scripts/generate/derive.py table-properties
+        entry: uv run python scripts/generate/derive.py table-properties --check
         language: system
         pass_filenames: false
-        files: '^src/etl/plant_tables\.q$|^scripts/torqconfig/dataaccess/tableproperties\.csv$|^python/uqs/src/uqs/(generated/q_facts|stack/gateway_access)\.py$|^scripts/generate/tableproperties\.py$'
+        files: '^src/etl/plant_tables\.q$|^scripts/torqconfig/dataaccess/tableproperties\.csv$|^python/uqs/src/uqs/(generated/q_facts|stack/gateway_access)\.py$|^scripts/generate/derive\.py$'
 
       - id: q-coverage
         name: Check every function a test should reach is reached

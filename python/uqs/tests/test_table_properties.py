@@ -42,7 +42,7 @@ def _paths(root: Path) -> UqsPaths:
 
 def test_the_committed_file_is_the_derived_one() -> None:
     assert _tree_rows() == gateway_access.table_properties_rows(), (
-        "rerun scripts/generate/tableproperties.py"
+        "run `uv run python scripts/generate/derive.py table-properties`"
     )
 
 
