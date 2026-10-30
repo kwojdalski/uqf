@@ -36,6 +36,10 @@ RENAMED_GLOBAL_FLAGS = frozenset({"--debug"})
 #: rdb1` -> PROC rdb1), so a command can tell a named PROC from a guessed one.
 MOVED_KEY = "uqs.renames.moved"
 
+#: ctx.meta's flag for a parse that only reads the arguments (`uqs --target`
+#: deciding whether to ask, #1780): old spellings rewritten, nothing warned.
+QUIET_KEY = "uqs.renames.quiet"
+
 #: The new spelling of a flag that is gone because it did nothing (`job preview
 #: --dry-run`: a preview is always dry), so the old one is accepted and ignored.
 DROPPED = ""
@@ -55,16 +59,19 @@ def _rewrite_renamed(
     command_path: str,
     root: typer.Context | None,
     moved: list[str] | None = None,
+    quiet: bool = False,
 ) -> list[str]:
     """`args` with every old option spelling in `renames` replaced by its new
     one, each warned about once. Stops at `--`, after which nothing is an
     option. `--debug` given after a command moves to the global flag. An old
     option whose new spelling is a positional (`--proc` -> `PROC`) gives its
-    value as the first word, where the command's first positional is."""
+    value as the first word, where the command's first positional is. `quiet`
+    rewrites without a warning or a change to logging: a parse that only reads
+    the arguments, as completion and `uqs --target` do (#1780)."""
     out: list[str] = []
     front: list[str] = []
     reasons: list[str] = []
-    warned: set[str] = set()
+    warned: set[str] = set(renames) if quiet else set()  # all warned: none is
     rest = iter(args)
     for arg in rest:
         if arg == "--":
@@ -77,6 +84,8 @@ def _rewrite_renamed(
             reasons.append(value if eq else next(rest, ""))
             continue
         if name in RENAMED_GLOBAL_FLAGS and name in renames:
+            if quiet:
+                continue
             command = command_path.partition(" ")[2]
             _warn_once(warned, f"uqs {command} {name}", f"uqs {name} {command}")
             if root is not None and isinstance(root.obj, dict):
@@ -89,7 +98,8 @@ def _rewrite_renamed(
             continue
         new = renames.get(name)
         if new == DROPPED and name.startswith("--"):
-            log.warning("`{}` does nothing here and goes in the next release; drop it", name)
+            if not quiet:
+                log.warning("`{}` does nothing here and goes in the next release; drop it", name)
             continue
         if isinstance(new, str) and name.startswith("--") and not new.startswith("-"):
             _warn_once(warned, name, f"{command_path} {new}")
@@ -124,7 +134,9 @@ def _warn_once(warned: set[str], old: str, new: str) -> None:
         warn_renamed(old, new)
 
 
-def renamed(renames: Mapping[str, str | tuple[str, str]]) -> type[TyperCommand]:
+def renamed(
+    renames: Mapping[str, str | tuple[str, str]], mark: type[TyperCommand] = TyperCommand
+) -> type[TyperCommand]:
     """`cls=` for a command whose options were renamed: the old spellings in
     `renames` (old -> new) still parse, hidden from --help, each logging its
     new spelling. A short old spelling (`-n`) matches only as its own word or
@@ -132,7 +144,9 @@ def renamed(renames: Mapping[str, str | tuple[str, str]]) -> type[TyperCommand]:
     per-command `--debug` to the global one, and a new spelling with no dash
     names the first positional (`--proc` -> `PROC`). A pair names a bypass:
     `--skip-q-version-check R` -> `--override q-version-check`, its value the
-    --reason (#1732)."""
+    --reason (#1732). `mark` is the command's class from safety (`ReadOnly`,
+    `ChangesState`, `ConfirmsOnServer`), so the effect it states carries over;
+    an alias leaves it out and takes its new name's (`alias_command`)."""
 
     class Renamed(TyperCommand):
         #: old spelling -> new, read by the tests
@@ -142,23 +156,32 @@ def renamed(renames: Mapping[str, str | tuple[str, str]]) -> type[TyperCommand]:
             root = ctx.find_root()
             path = ctx.command_path
             moved = ctx.meta.setdefault(MOVED_KEY, [])
-            args = _rewrite_renamed(list(args), renames, path, root, moved)
+            quiet = ctx.resilient_parsing or ctx.meta.get(QUIET_KEY, False)
+            args = _rewrite_renamed(list(args), renames, path, root, moved, quiet)
             return super().parse_args(ctx, args)
 
     Renamed.renames = dict(renames)
-    return Renamed
+    # The mark as a second base, after Renamed: its `effect`, Renamed's parse.
+    return Renamed if mark is TyperCommand else type("Renamed", (Renamed, mark), {})
 
 
 def alias_command(group: typer.Typer, old: str, new: str, fn: Callable, **kwargs) -> None:
     """Register `fn` on `group` under its old name `old` too, hidden from
-    --help, logging `new` - the full new spelling - each time it is used."""
+    --help, logging `new` - the full new spelling - each time it is used. The
+    alias takes the new command's mark (safety.Effect): its class names the
+    new command's path, `alias_of`, which `effect_of` follows, so an alias is
+    classified as its new name is with nothing to keep in step."""
 
     @functools.wraps(fn)
     def _alias(*args, **kw):
         warn_renamed(old, new)
         return fn(*args, **kw)
 
-    group.command(old, hidden=True, **kwargs)(_alias)
+    base = kwargs.pop("cls", TyperCommand)
+    path = tuple(new.split()[1:])  # `uqs job runs list --unfinished` -> job runs list
+    path = path[: next((i for i, w in enumerate(path) if w.startswith("-")), len(path))]
+    cls = type(base.__name__, (base,), {"alias_of": path})
+    group.command(old, hidden=True, cls=cls, **kwargs)(_alias)
 
 
 def old_spelling(new: str, *old: str) -> Any:

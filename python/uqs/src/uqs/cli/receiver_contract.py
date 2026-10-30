@@ -22,7 +22,7 @@ from uqs.attach import receiver_contract
 from uqs.cli import completion
 from uqs.cli.attachment import attachment_app
 from uqs.cli.renames import alias_command
-from uqs.cli.safety import dry_run_note
+from uqs.cli.safety import ChangesState, ReadOnly, dry_run_note
 from uqs.cli.shared import JOB_OPERATIONS_PANEL, _die, _paths, console, job_app
 from uqs.paths import UqsError
 
@@ -42,7 +42,7 @@ job_app.add_typer(
 )
 
 
-@contract_app.command("export")
+@contract_app.command("export", cls=ChangesState)
 def export(
     worker: Annotated[
         str,
@@ -78,7 +78,7 @@ def export(
         console.print(said, markup=False)
 
 
-@contract_app.command("approve")
+@contract_app.command("approve", cls=ChangesState)
 def approve(
     file: Annotated[
         Path, typer.Argument(help="The contract file `uqs job attachment contract export` wrote")
@@ -141,7 +141,7 @@ def approve(
         console.print(dry_run_note())
 
 
-@contract_app.command("list")
+@contract_app.command("list", cls=ReadOnly)
 def list_(
     attach: Annotated[str, typer.Option("--attach", help="The attachment whose approvals to list")],
     as_json: Annotated[bool, typer.Option("--json", help="Print them as JSON")] = False,

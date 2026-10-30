@@ -18,6 +18,7 @@ from uqs.cli import deploy_connection as conn
 from uqs.cli.deploy import _failed, deploy_app
 from uqs.cli.json_out import json_opt
 from uqs.cli.renames import alias_command, renamed
+from uqs.cli.safety import ChangesState, ReadOnly
 from uqs.cli.shared import _die, json_refusal
 from uqs.deploy import config, prune, rollback, status, verify
 from uqs.deploy.prune import RELEASE_ID
@@ -34,7 +35,7 @@ def _server(ctx, target, host, dest, remote_user, connect_timeout, **timeouts):
     return cfg, Remote(cfg.host, cfg.connect_timeout, remote_user=cfg.remote_user)
 
 
-@deploy_app.command("status", cls=renamed(conn.OLD_SPELLINGS))
+@deploy_app.command("status", cls=renamed(conn.OLD_SPELLINGS, ReadOnly))
 def status_cmd(
     ctx: typer.Context,
     target: conn.Target = None,
@@ -70,7 +71,9 @@ def status_cmd(
 
 #: `--to` names a release here, and only here, while everywhere else it ends a
 #: time range: `--release` since #1768, the old spelling parsing for one release.
-@deploy_app.command("rollback", cls=renamed(conn.OLD_SPELLINGS | {"--to": "--release"}))
+@deploy_app.command(
+    "rollback", cls=renamed(conn.OLD_SPELLINGS | {"--to": "--release"}, ChangesState)
+)
 def rollback_cmd(
     ctx: typer.Context,
     target: conn.Target = None,
@@ -129,7 +132,7 @@ def rollback_cmd(
     raise typer.Exit(code=code)
 
 
-@deploy_app.command("prune", cls=renamed(conn.OLD_SPELLINGS))
+@deploy_app.command("prune", cls=renamed(conn.OLD_SPELLINGS, ChangesState))
 def prune_cmd(
     ctx: typer.Context,
     keep: Annotated[
@@ -168,7 +171,7 @@ VerifyJson = json_opt(
 )
 
 
-@deploy_app.command("check", cls=renamed({"--port": "--base-port"}))
+@deploy_app.command("check", cls=renamed({"--port": "--base-port"}, ReadOnly))
 def verify_cmd(
     profile: Annotated[str, typer.Option("--profile", help="The profile the release started")],
     deadline: Annotated[float, typer.Option("--deadline", help="Seconds")] = 180.0,

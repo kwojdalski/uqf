@@ -24,7 +24,7 @@ from uqs.cli import deploy_components as components
 from uqs.cli import deploy_connection as conn
 from uqs.cli import deploy_policy as policy
 from uqs.cli.renames import renamed
-from uqs.cli.safety import DryRunOpt, OverrideOpt, ReasonOpt
+from uqs.cli.safety import ChangesState, DryRunOpt, OverrideOpt, ReasonOpt
 from uqs.cli.shared import _env_log_level, app, json_refusal
 from uqs.deploy import build as release_build
 from uqs.deploy import config, driver, frontend, history, kafka, targets
@@ -57,7 +57,7 @@ def _failed(prefix: str, stage: str, exc: Exception) -> None:
     raise typer.Exit(code=1)
 
 
-@deploy_app.command("build")
+@deploy_app.command("build", cls=ChangesState)
 def build(
     output: Annotated[
         Path | None,
@@ -159,7 +159,7 @@ def build(
     print(artifact.path)
 
 
-@deploy_app.command("push", cls=renamed(policy.OLD_SPELLINGS | conn.OLD_SPELLINGS))
+@deploy_app.command("push", cls=renamed(policy.OLD_SPELLINGS | conn.OLD_SPELLINGS, ChangesState))
 def push(
     ctx: typer.Context,
     artifact: Annotated[

@@ -35,13 +35,14 @@ from uqs.cli.hdb_scope import (
     run_scoped,
 )
 from uqs.cli.renames import alias_command
+from uqs.cli.safety import ConfirmsOnServer
 from uqs.cli.shared import _die, _paths, console, data_app
 from uqs.paths import UqsError
 from uqs.stack import hdb_alter, hdb_fill, hdb_layout, hdb_shape, hdb_types
 from uqs.stack.hdb_alter import Request
 
 
-@data_app.command("check")
+@data_app.command("check", cls=ConfirmsOnServer)
 def hdb_check(
     table: Annotated[
         str | None,

@@ -24,6 +24,7 @@ from uqs.cli import install_bundle
 from uqs.cli.create_plant import plant_tables as _plant_tables
 from uqs.cli.regenerate import _DERIVED, _regenerate_derived
 from uqs.cli.renames import old_spelling, warn_renamed
+from uqs.cli.safety import ChangesState
 from uqs.cli.shared import (
     JOB_AUTHORING_PANEL,
     _die,
@@ -200,7 +201,7 @@ def _next_steps(declarations: list[Declaration], sidecar_tests: list[Path]) -> P
     )
 
 
-@job_app.command("install", rich_help_panel=JOB_AUTHORING_PANEL)
+@job_app.command("install", rich_help_panel=JOB_AUTHORING_PANEL, cls=ChangesState)
 def install_jobs(
     sidecar: Annotated[
         Path,
