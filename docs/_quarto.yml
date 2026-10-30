@@ -16,6 +16,10 @@
 project:
   type: website
   output-dir: _site
+  # The q API pages under reference/q-api/ are not in git: this writes them
+  # from the qDoc comments before every render, local or CI, and needs a q
+  # ($QCMD, else q on PATH). scripts/generate/q_api_docs.py says why.
+  pre-render: python3 ../scripts/generate/q_api_docs.py
   render:
     - "**/*.md"
     # The Quarto deck, listed because the glob above is .md only. It renders
@@ -131,6 +135,11 @@ website:
           - reference/environment.md
           - reference/processes.md
           - reference/pipeline-declarations.md
+          # Generated before every render (project.pre-render above) from the
+          # qDoc comments: one page per src/ module, gitignored.
+          - section: "q API"
+            href: reference/q-api/index.md
+            contents: "reference/q-api/src/**"
       - text: "Slide deck"
         href: presentation/uqf.qmd
 

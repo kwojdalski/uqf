@@ -46,6 +46,7 @@
 
 / name -> its declaration, ENLISTED, for the reason .qetl.job.stream.jobs enlists.
 .qetl.job.stream.bars.registry:(`symbol$())!();
+
 .qetl.job.stream.registries:distinct .qetl.job.stream.registries,`.qetl.job.stream.bars.registry;
 
 / What every bars job declares.

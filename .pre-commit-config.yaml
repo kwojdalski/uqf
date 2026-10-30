@@ -311,7 +311,7 @@ repos:
         entry: uv run python scripts/gates/check_doc_links.py --allow-missing
         language: system
         pass_filenames: false
-        files: '^docs/.*\.(md|qmd)$|^docs/_quarto\.yml$|^scripts/gates/check_doc_links\.py$'
+        files: '^docs/.*\.(md|qmd)$|^docs/_quarto\.yml$|^docs/man\.q$|^scripts/gates/check_doc_links\.py$|^scripts/generate/(q_api_docs\.py|export_api_reference\.q)$'
       - id: contract-surface
         name: Check the committed contract surface matches the tree
         # docs/reference/surfaces/current/ used to be checked in CI alone,
