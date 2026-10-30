@@ -1,5 +1,5 @@
 / hdb_reload.q - ask one HDB reader to reload its database, as a native end of
-/ day does, after `uqs data hdb-alter --attach` changed it (#1755).
+/ day does, after `uqs data alter --attach` changed it (#1755).
 / .
 / Sent over IPC as one lambda by uqs.attach.hdb_where to each HDB process that
 / serves the attachment's HDB directory (hdb_reader.q decides which). TorQ's

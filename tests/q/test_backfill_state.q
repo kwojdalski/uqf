@@ -329,7 +329,7 @@
     .qt.qetl.job.bounded.state.truncate_checkpoint[w];
     e:.qunit.assertThrows[.qetl.job.bounded.state.load_checkpoint[w;];.qt.qetl.job.bounded.state.ckpt_spec;"load_checkpoint: *";
         "refused, never a quiet restart from the beginning"];
-    .qunit.assertTrue[e like "*uqs remove checkpoint ckpt_unreadable*";"and it says how to start over"]};
+    .qunit.assertTrue[e like "*uqs job checkpoint remove ckpt_unreadable*";"and it says how to start over"]};
 
 .qt.qetl.job.bounded.state.test_clearing_a_checkpoint_removes_its_previous_generation:{[t]
     w:`ckpt_cleared;

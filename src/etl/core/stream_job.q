@@ -396,7 +396,7 @@
 / A check that THROWS is a failure of the whole batch under either choice:
 / rows nobody could vouch for are not published. Every withheld batch is
 / logged with its failures and counted in .qetl.stream_health, which is what
-/ shows the job as failing in `uqs summary`.
+/ shows the job as failing in `uqs status`.
 / @private
 .qetl.job.stream.checked:{[job;chk;mode;publisher;t;x]
     r:@[{[chk;x] (1b;chk x)}[chk];x;{[e] (0b;e)}];
@@ -551,7 +551,7 @@
 / Private: the job's on_batch, counting every batch in .qetl.stream_health
 / and logging a failure with its table before re-raising it. Re-raised, the
 / error still reaches the caller; counted, a job that drops every batch is
-/ a gap in `uqs job gaps` and `failing` in `uqs summary` rather than a process
+/ a gap in `uqs job gaps` and `failing` in `uqs status` rather than a process
 / that looks healthy (#832).
 / @private
 .qetl.job.stream.guarded:{[job;f;t;x]

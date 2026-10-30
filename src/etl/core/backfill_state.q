@@ -603,7 +603,7 @@
     / redone rather than skipped - and is refused when that fails too, naming
     / how to start over, rather than quietly restarting from the beginning.
     saved:@[.qetl.job.bounded.state.durable_read["load_checkpoint";path;];.qetl.job.bounded.state.read_json_dict;
-        {[w;e] 'e," - `uqs remove checkpoint ",string[w],"` starts the run over"}[worker]];
+        {[w;e] 'e," - `uqs job checkpoint remove ",string[w],"` starts the run over"}[worker]];
     / Compare PARSED values, not strings. .j.j writes a timestamp as ISO
     / ("2026-09-13T00:00:00.000000000") while `string` on a q timestamp
     / gives "2026.09.13D00:00:00.000000000" - so a string comparison fails
