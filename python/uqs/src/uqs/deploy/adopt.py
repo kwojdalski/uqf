@@ -21,7 +21,7 @@ adopt works that out by asking the server, in one read-only round trip:
 
 A dry run stops there, having written nothing on either side. With --apply,
 it makes the server changes (after asking), saves the target through the
-same transaction as `uqs target add --check` (deploy/target_changes.py), and
+same transaction as `uqs target add --reach` (deploy/target_changes.py), and
 records the release as "adopted" in this machine's deployment history, so
 `uqs deploy history` shows it and `uqs --target NAME` reaches it. A release
 named adopted-* is not a release id, so `uqs deploy prune` never removes it.

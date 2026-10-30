@@ -1,4 +1,4 @@
-"""`uqs summary -i`'s start/stop/restart keys, and the browser that runs them."""
+"""`uqs status -i`'s start/stop/restart keys, and the browser that runs them."""
 
 from __future__ import annotations
 
@@ -67,7 +67,7 @@ def test_a_table_without_a_process_column_is_refused(monkeypatch):
 
 
 def sample(status: str = "down") -> Table:
-    table = Table(title="uqs summary")
+    table = Table(title="uqs status")
     for col in ("Process", "Status"):
         table.add_column(col)
     table.add_row("rdb1", f"[red]{status}[/]")

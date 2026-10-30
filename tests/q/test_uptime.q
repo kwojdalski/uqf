@@ -181,7 +181,7 @@
     file:hsym `$.qt.qetl.uptime.dir,"/stream_health_demo_markout.txt";
     got:.j.k first read0 file;
     .qunit.assertEquals[(got`failing;got`failed;got`last_error;`$got`process);
-        (1b;1f;"stale shape";.qetl.run.proc_name[]);"failing, with the count and why, for uqs summary"];
+        (1b;1f;"stale shape";.qetl.run.proc_name[]);"failing, with the count and why, for uqs status"];
     .qetl.job.stream.guarded[`demo_markout;{[t;x] x};`tbl;()];
     .qetl.uptime.beat[];
     .qunit.assertFalse[(.j.k first read0 file)`failing;"a beat with no failure since clears it"]};

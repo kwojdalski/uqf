@@ -2,7 +2,8 @@
 of its own jobs, read as text, written down as src/etl/generated/load_plan.q.
 
 The q half - init.q loading only the plan, against a schema without `quote` -
-runs in test_selective_load.py, which needs an interpreter.
+runs in test_peachq_pipelines.py, which needs an interpreter; which files a
+selection names is tests/q/test_declaration_load.q's.
 """
 
 from __future__ import annotations

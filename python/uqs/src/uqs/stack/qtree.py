@@ -22,7 +22,7 @@ A tree is published only once it is proven:
 
 What was converted is in REPORT beside the tree; a refusal is in FAILED. An
 unchanged source (FINGERPRINT over every copied file and the converter) reuses
-the published tree, so a `stop` or `summary` does not convert again.
+the published tree, so a `stop` or `status` does not convert again.
 """
 
 from __future__ import annotations
