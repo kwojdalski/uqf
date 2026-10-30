@@ -6,18 +6,24 @@ inspecting the stack as a whole is in [running the uqf stack](../guides/uqs.md).
 
 ![The Databento handler publishes raw MBP-10 rows to stp1; databento1 subscribes, folds them with the same .qetl.transform the ODBC backfill applies, and publishes eq_orderbook](../diagrams/databento.svg)
 
-**Install the q half first.** Everything on the q side of this page -
-`databento_mbp10`, `databento1`, `eq_orderbook`, the ODBC source and the
-backfill `databento_backfill1` - is the `sidecars/databento` bundle, kept out of
-the tree because it is tied to one outside system:
+**Install the bundle first.** Everything on this page - `databento_mbp10`,
+`databento1`, `eq_orderbook`, the ODBC source, the backfill
+`databento_backfill1`, and the Python handler itself (`databento_feed.py` and
+the `databento_streamer.py` it runs) - is the `sidecars/databento` bundle, kept
+out of the tree because it is tied to one outside system:
 
 ```
 uqs job install sidecars/databento --dry-run
 uqs job install sidecars/databento --yes
 ```
 
-`uqs connector start databento` refuses, naming that command, until the bundle
-is installed. The Python handler itself stays in `uqs` for now.
+The handler is installed with the q half, from the same snapshot, into
+`src/etl/connectors/databento/`, and runs from there - never from the bundle's
+folder, so the streamer and the table it writes columns into by position are
+always one version. Until the bundle is installed there is no `databento`
+connector: `uqs connector start databento` reports an unknown connector, and
+`--databento-dataset` and `--api-key` are unknown options. Editing the bundle's
+`databento_feed.py` changes nothing until it is installed again.
 
 `uqs connector start databento`/`stop`/`status` subscribe to
 [Databento](https://databento.com) and stream MBP-10 into this stack. It is the

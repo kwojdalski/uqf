@@ -77,3 +77,21 @@ def test_every_sidecar_bundle_carries_its_own_tests() -> None:
     assert found, "sidecars/ holds no bundle - the lane would test nothing"
     bare = [f.name for f in found if not list(f.glob("test_*.q"))]
     assert not bare, f"bundle(s) with no test_*.q: {bare}"
+
+
+def test_a_bundles_python_tests_go_beside_uqs_own(tree: Path, bundle: Path) -> None:
+    """#1776: a bundle's test_*.py run with pytest in the throwaway tree, beside
+    uqs's tests so its conftest applies - and its connectors are not tests."""
+    (bundle / "mock_feed.py").write_text("FEED = None\n")
+    (bundle / "test_mock_feed.py").write_text("def test_x():\n    pass\n")
+    copied = suite.python_tests(bundle, "mockups", tree)
+    assert copied == [tree / suite.PY_TEST_DIR / "bundle_mockups" / "test_mock_feed.py"]
+    assert copied[0].is_file()
+
+
+def test_every_moved_connector_test_is_a_bundles() -> None:
+    """The databento and flink connectors' tests moved with them (#1776): the
+    lane runs them, so they must be where it looks."""
+    for name, test in (("databento", "test_databento_feed.py"),
+                       ("flink", "test_flink_vwap_streamer.py")):  # fmt: skip
+        assert (suite.SIDECARS / name / test).is_file(), f"{name} lost {test}"

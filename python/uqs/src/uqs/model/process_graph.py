@@ -3,7 +3,7 @@
 An edge runs from a producer to a consumer and carries the tables the one
 publishes and the other subscribes to - the same declarations behind
 `uqs status`'s graph columns (dependencies.py), so the two cannot disagree.
-A table from outside the stack (EXTERNAL_PRODUCERS) and a bounded worker's
+A table from outside the stack (`dependencies.external_producers`) and a bounded worker's
 source get a producer named the way `Depends on` names them,
 `(<table>: external)`.
 
@@ -30,6 +30,7 @@ from typing import Any, Literal
 
 from uqs.model import dependencies
 from uqs.model.registry import PIPELINES
+from uqs.paths import repo_root
 
 Direction = Literal["downstream", "upstream"]
 
@@ -59,11 +60,12 @@ def edges(pipelines: Iterable[Any] = PIPELINES) -> list[Edge]:
     """Every producer -> consumer edge, with the tables it carries."""
     pipelines = list(pipelines)
     producers = dependencies.producers_by_table(pipelines)
+    external = dependencies.external_producers(repo_root())
     carried: dict[tuple[str, str], list[str]] = defaultdict(list)
     for consumer, tables in dependencies.inputs_by_process(pipelines).items():
         for table in tables:
             sources = [p for p in sorted(producers.get(table, set())) if p != consumer]
-            if table in dependencies.EXTERNAL_PRODUCERS:
+            if table in external:
                 sources.append(f"({table}: external)")
             for producer in sources:
                 carried[(producer, consumer)].append(table)

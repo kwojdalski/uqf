@@ -55,7 +55,7 @@
 / column that exists is never rewritten, whatever is in it. A table or a
 / column a partition holds and database.q no longer declares is left alone:
 / that is history, and deleting history is not this script's business. A
-/ column whose declared TYPE changed is reported by `uqs data hdb-check`
+/ column whose declared TYPE changed is reported by `uqs data check`
 / and not touched here - "the declaration changed" and "the bytes on disk are
 / wrong" are different claims, and only a person can tell which. dbmaint's
 / castcol, renamecol, deletecol and rentable load with the file and are called

@@ -20,16 +20,21 @@ piggybank/
                            table) entries for those tables,
                            and .qcat.unbounded reasons
   process_overrides.csv    optional: procname,field,value for its own processes
+  *_feed.py                optional: a connector - the publisher outside the
+                           plant that feeds one of its tables (FEED = ...)
+  *_streamer.py            optional: the process a *_feed.py starts
+  test_*.py                its Python tests: run by `scripts/test.py bundles`
 ```
 
 Each `.q` file is placed by what it declares, as `uqs job install` does for any
-folder. `test_*.q` and every non-`.q` file (`.env`, logs, data) stay out of the
-tree. A job's own file may also hold the transforms it uses and, for a Kafka
-decoder, its topics (`sidecars/kafka_example`, [Kafka](../services/kafka.md)): a
-process loads only the files its jobs reach, and the file's own definitions are
-always among them. `tables.q` takes one `name:([]...)`, `nested[...]` or
-`sorting[...]` ([sort rules](attach-existing-torq.md#sort-rules)) line per
-entry, and `catalog.q` must describe every table it defines, or hide it with
+folder. `test_*.q`, `test_*.py` and every other non-`.q` file (`.env`, logs,
+data) stay out of the tree, except the bundle's connectors (below). A job's own
+file may also hold the transforms it uses and, for a Kafka decoder, its topics
+(`sidecars/kafka_example`, [Kafka](../services/kafka.md)): a process loads only
+the files its jobs reach, and the file's own definitions are always among them.
+`tables.q` takes one `name:([]...)`, `nested[...]` or `sorting[...]` ([sort
+rules](attach-existing-torq.md#sort-rules)) line per entry, and `catalog.q` must
+describe every table it defines, or hide it with
 `.qcat.hidden[`table\]:"reason"` when it is the raw input to a fold. A bundle cannot add rows to `querypolicy.csv`, so a table of its own that the browser may read without a policy needs a `.qcat.unbounded\[`table\]:"reason"`
 line in `catalog.q\`.
 
@@ -42,6 +47,35 @@ reads instead of the q text (#1781). So installing a bundle needs a q
 interpreter (`$QCMD`), and so does building a release with `--bundle`. If the
 rewrite fails, the bundle stays installed and every schema read reports the
 metadata as stale and names the command that rewrites it.
+
+### Connectors
+
+A bundle can carry the process outside the plant that feeds its raw table, as
+`sidecars/databento` and `sidecars/flink` do: a `NAME_feed.py` declaring
+`FEED = ExternalFeed(...)` - its start options and the tables it `produces` -
+and the `NAME_streamer.py` it starts beside itself. Every top-level `*.py` but
+`test_*.py` is copied, at install, into `src/etl/connectors/<bundle>/` and
+listed under `"connectors"` in the bundle's ledger entry;
+`uqs connector start|stop|restart|status|logs NAME` then knows the connector,
+with its options, and the dependency warnings know what it feeds.
+
+- **Installed, never loaded in place.** Only the copies listed in the ledger are
+  imported, so a connector and the job, table and schema it feeds are always one
+  version: editing the bundle's `*_feed.py` changes nothing until the bundle is
+  installed again. A release carries the copies as it carries the q files.
+- **Checked at install.** A feed's name must not be one `uqs` or another bundle
+  already has, and every table it `produces` must be one the bundle's `tables.q`
+  defines.
+- **Imports.** A connector may import `uqs` and the standard library at module
+  level and must do nothing else when imported - it is imported on every `uqs`
+  command. Anything else (`databento`, `pyflink`) is imported inside the process
+  it starts: a bundle cannot add Python dependencies to `uqs`.
+- **A broken one stays its own.** A connector that raises on import is reported
+  by name - by `uqs connector status`, and by any command naming it - and every
+  other connector still works.
+
+`uqs job new NAME --kind external --bundle FOLDER` writes `NAME_feed.py`,
+`NAME_streamer.py` and their test into the bundle, and nothing into `uqs`.
 
 ## Scaffold a bundle job
 
@@ -71,9 +105,10 @@ python3 scripts/test.py bundles               # every bundle under sidecars/
 uv run python scripts/dev/bundle_suite.py ../piggybank
 ```
 
-Each bundle is installed into a temporary copy of the checkout, its `test_*.q`
-files are added to the suite, and the whole q suite runs there. The checkout is
-never written to.
+Each bundle is installed into a temporary copy of the checkout, its `test_*.py`
+run with pytest against the installed connectors, its `test_*.q` files are added
+to the suite, and the whole q suite runs there. The checkout is never written
+to.
 
 ## Install into a checkout
 
@@ -86,12 +121,13 @@ The q additions go between `/ BEGIN bundle <name>` and `/ END bundle <name>` in
 `plant_tables.q` and `uqs_catalog.q`. A bundle's `process_overrides.csv` rows go
 into the ignored `python/uqs/bundle_overrides.csv`; host settings stay in
 `python/uqs/process_overrides.csv` and take precedence when the stack starts.
-`src/etl/installed_bundles.json` records what each bundle installed.
-Reinstalling is idempotent, and an upgrade replaces only the bundle's own files.
-A conflict with the tree or another bundle is refused before anything is
-written. That includes a source or transform the tree already registers (q would
-silently keep one of the two) and a table named like one of the TorQ starter
-pack's own (`quote`, `trade`).
+`src/etl/installed_bundles.json` records what each bundle installed: its job
+`files`, `tables`, `overrides` and `connectors`. The commit hook refuses staging
+any of them. Reinstalling is idempotent, and an upgrade replaces only the
+bundle's own files. A conflict with the tree or another bundle is refused before
+anything is written. That includes a source or transform the tree already
+registers (q would silently keep one of the two) and a table named like one of
+the TorQ starter pack's own (`quote`, `trade`).
 
 ## Bundles a runtime declares
 

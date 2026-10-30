@@ -10,6 +10,7 @@ before anything is written.
 
 from __future__ import annotations
 
+import filecmp
 from pathlib import Path
 
 import typer
@@ -18,6 +19,7 @@ from rich.table import Table
 
 from uqs.cli.regenerate import _DERIVED, _regenerate_derived
 from uqs.cli.shared import _die, console
+from uqs.paths import INSTALLED_CONNECTORS
 from uqs.stack import bundles
 from uqs.stack.install import Mode, Status
 
@@ -42,6 +44,8 @@ def _summary(plan: bundles.Plan, root: Path) -> Table:
         table.add_row("catalog entries", "scripts/processes/uqs_catalog.q", "block")
     for proc, fld, value in plan.overrides:
         table.add_row(f"{proc} {fld}={value}", str(bundles.OVERRIDES_FILE), "override")
+    for source in plan.connectors:
+        table.add_row(source.name, str(INSTALLED_CONNECTORS / plan.bundle.name), "connector")
     return table
 
 
@@ -68,7 +72,12 @@ def install(
     if dry_run:
         console.print("[dim]--dry-run: nothing installed[/]")
         return
-    changes = any(i.status is not Status.SAME for i in plan.jobs) or plan.stale
+    copies = [(s, root / INSTALLED_CONNECTORS / plan.bundle.name / s.name) for s in plan.connectors]
+    changes = (
+        any(i.status is not Status.SAME for i in plan.jobs)
+        or plan.stale
+        or any(not (c.is_file() and filecmp.cmp(s, c, shallow=False)) for s, c in copies)
+    )
     if not yes and not Confirm.ask(
         f"Install bundle {plan.bundle.name} {plan.bundle.version}?", default=True, console=console
     ):
@@ -83,7 +92,8 @@ def install(
     console.print(
         f"[green]✓[/] bundle {plan.bundle.name} {entry['version']}: "
         f"{len(entry['files'])} job file(s), {len(entry['tables'])} table(s), "
-        f"{len(entry['overrides'])} override(s)" + ("" if changes else " - unchanged")
+        f"{len(entry['overrides'])} override(s), {len(entry['connectors'])} connector file(s)"
+        + ("" if changes else " - unchanged")
     )
     for script, regen in zip(_DERIVED, _regenerate_derived(root), strict=True):
         if regen.returncode:

@@ -1,6 +1,6 @@
 {
   "exporter_version": 1,
-  "fingerprint": {"tree": "73c408730d56f900be8574c4b7974ca8aee832d18bd7d76bf4849abf63da0be2", "vendored": "0451360a4020ccc547841455188558ec27d4a0af40947d659bef0b622a724a1c"},
+  "fingerprint": {"tree": "f9995e31aa6ad55b115c71a532128620f50819204a3bb1c4147fe07b6c3b67d8", "vendored": "0451360a4020ccc547841455188558ec27d4a0af40947d659bef0b622a724a1c"},
   "tables": {
     "quote": {"vendored": true, "columns": [{"name": "time", "type": "p", "attribute": ""}, {"name": "sym", "type": "s", "attribute": "g"}, {"name": "bid", "type": "f", "attribute": ""}, {"name": "ask", "type": "f", "attribute": ""}, {"name": "bsize", "type": "j", "attribute": ""}, {"name": "asize", "type": "j", "attribute": ""}, {"name": "mode", "type": "c", "attribute": ""}, {"name": "ex", "type": "c", "attribute": ""}, {"name": "src", "type": "s", "attribute": ""}], "nested": {}, "sorting": []},
     "trade": {"vendored": true, "columns": [{"name": "time", "type": "p", "attribute": ""}, {"name": "sym", "type": "s", "attribute": "g"}, {"name": "price", "type": "f", "attribute": ""}, {"name": "size", "type": "i", "attribute": ""}, {"name": "stop", "type": "b", "attribute": ""}, {"name": "cond", "type": "c", "attribute": ""}, {"name": "ex", "type": "c", "attribute": ""}, {"name": "side", "type": "s", "attribute": ""}], "nested": {}, "sorting": []},

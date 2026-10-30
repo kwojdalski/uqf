@@ -2,22 +2,24 @@
 
 A process outside TorQ: not a process.csv row, so `uqs connector start|stop|restart|status|logs
 flink_vwap` drives it, through FEED below - the CLI finds it without an edit.
+
+The flink bundle's connector (#1776): installed with its q half into
+src/etl/connectors/flink/, beside flink_vwap_streamer.py, which `start` runs
+from there. Without the bundle there is no flink_vwap connector at all.
 """
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from pathlib import Path
+from typing import Any
 
 from uqs.external.feeds import ExternalFeed
 from uqs.external.lifecycle import DetachedProcess
 from uqs.paths import UqsPaths
-from uqs.stack import bundles
 from uqs.stack.procs import get_process_config
 
 RAW_TABLE = "flink_vwap_raw"
-
-#: The sidecar bundle holding its q half: the raw table and flink_vwap1.
-BUNDLE = "flink"
 
 #: The tickerplant credential every external publisher uses; stp1 checks it.
 CREDENTIAL = "feed:pass"
@@ -31,8 +33,7 @@ def _process(paths: UqsPaths) -> DetachedProcess:
     )
 
 
-def start(paths: UqsPaths) -> int:
-    bundles.require_installed(paths.repo_root, BUNDLE, "the flink_vwap feed")
+def start(paths: UqsPaths, options: Mapping[str, Any]) -> int:
     port = get_process_config(paths, "stp1")["port"]
     runner = Path(__file__).resolve().parent / "flink_vwap_streamer.py"
     cmd = [
@@ -64,4 +65,10 @@ def status(paths: UqsPaths) -> dict[str, str]:
     )
 
 
-FEED = ExternalFeed("flink_vwap", start, stop, status)
+FEED = ExternalFeed(
+    "flink_vwap",
+    start,
+    stop,
+    status,
+    produces={RAW_TABLE: "the external flink_vwap feed (`uqs connector start flink_vwap`)"},
+)

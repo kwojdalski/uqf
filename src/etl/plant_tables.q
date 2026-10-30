@@ -432,7 +432,7 @@
 / rows off this table with zero reshaping.
 / fill_id (#1080) is the fill's identity: unique per fill, so a keyed consumer
 / never collapses two fills that share a time, sym and price. Null in a
-/ partition written before the column existed (uqs data hdb-check --apply adds it).
+/ partition written before the column existed (uqs data check --apply adds it).
 .qetl.plant.trades:([]time:`timestamp$(); sym:`g#`symbol$(); side:`long$(); trade_price:`float$(); size:`float$(); pip_factor:`long$(); fill_id:`symbol$())
 
 / posbook1's output: weighted-average-cost positions, republished onto the
@@ -520,7 +520,7 @@
 /   reference_data   .qf.px.ccy_pair_legs already derives base/quote. Needs a
 /                    loader, and a decision on where the static data lives.
 /   connections      VENUE connections, not process ones: .qetl.hb and
-/                    `uqs summary` already answer process liveness, and this
+/                    `uqs status` already answer process liveness, and this
 /                    must not become a second spelling of that.
 /   predictions      needs a model. Nothing in this tree produces one.
 /   order_routing    needs a router. Nothing in this tree routes.
@@ -550,7 +550,7 @@
 .qetl.plant.order_routing:([]time:`timestamp$(); order_id:`long$(); venue:`symbol$(); routed_size:`float$(); routing_reason:`symbol$())
 
 / Venue connection registry - one row per venue link, not per process.
-/ Process liveness is .qetl.hb's heartbeat and `uqs summary`; this is the
+/ Process liveness is .qetl.hb's heartbeat and `uqs status`; this is the
 / upstream side, which nothing in this tree talks to yet.
 .qetl.plant.connections:([]time:`timestamp$(); venue:`g#`symbol$(); host:`symbol$(); port:`long$(); status:`symbol$(); last_heartbeat:`timestamp$())
 

@@ -37,6 +37,25 @@
     .qunit.assertEquals[count r;0;
         "every transform reproduces its expected tables, deterministically, and handles empty input: ",.Q.s1 r]};
 
+/ `uqs deploy check` reads verify_all's result over IPC (python/uqs/src/uqs/deploy/verify.py's
+/ ETL_EXPR): its boolean `passed`, one row per example of every transform. A
+/ `passed` of another type, or a result missing it, is refused there as a
+/ failed check - so a change to either is a change to that contract, and
+/ fails here first. python/uqs/tests/test_deploy_verify_contract.py runs the
+/ expression itself (#1784).
+.qt.qetl.transform.test_verify_all_answers_the_columns_deploy_check_reads:{[t]
+    r:.qetl.transform.verify_all[];
+    .qunit.assertEquals[exec c!t from meta r;`example`passed`detail`transform!"sbCs";
+        "verify_all is a table of example, boolean passed, detail and transform"];
+    .qunit.assertTrue[(count r)>count .qetl.transform.defined[];
+        "one row per example and one empty case for every transform, so never fewer rows than transforms"]};
+
+.qt.qetl.transform.test_a_failing_example_is_a_false_passed_in_verify_all:{[t]
+    .qetl.transform.define[`xf_wrong_mid;.qt.qetl.transform.decl[{[q] select sym, mid:bid from q};.qt.qetl.transform.good_example[]]];
+    r:select from .qetl.transform.verify_all[] where transform=`xf_wrong_mid;
+    .qunit.assertEquals[r`passed;01b;"the example that disagrees is 0b; the empty case still passes"];
+    .qunit.assertEquals[all exec passed from .qetl.transform.verify_all[];0b;"so the all deploy check takes is 0b"]};
+
 .qt.qetl.transform.test_the_stream_jobs_and_backfill_workers_all_declare_a_transform:{[t]
     want:`demo_execution_quality`cross_quotes`position`mkt_orderbook`demo_deals_passthrough`demo_events_passthrough;
     .qunit.assertEquals[all want in .qetl.transform.defined[];1b;"each shipped job's transform is registered"]};

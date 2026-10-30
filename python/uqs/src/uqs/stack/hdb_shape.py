@@ -42,10 +42,11 @@ around KX's dbmaint.q (`lib/kx-dbmaint`).
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
 from pathlib import Path
 
 from uqs.logger import get_logger
-from uqs.paths import UqsPaths
+from uqs.paths import UqsError, UqsPaths
 
 log = get_logger()
 
@@ -54,13 +55,23 @@ _PARTITION = re.compile(r"^\d{4}\.\d{2}\.\d{2}$")
 
 
 def partitions(hdb_root: Path) -> list[str]:
-    """Every partition directory in the HDB, oldest first.
+    """Every partition directory in a CONVENTIONAL HDB's root, oldest first.
 
     Sorted because the report reads as a history - the oldest partition is
     short by the most, and seeing that ordering is most of the diagnosis.
+
+    The root alone, so refused for a segmented database: its partitions are
+    in the segments `par.txt` names, and which of them q maps is its load's
+    to say (stack/hdb_layout.py, #1783) - a root with no partition of its own
+    would otherwise read as a database with nothing wrong.
     """
     if not hdb_root.is_dir():
         return []
+    if (hdb_root / "par.txt").exists():
+        raise UqsError(
+            f"{hdb_root} is a segmented HDB (par.txt): its partitions are in the segments "
+            "it names, which only q's load finds - set $QCMD to a KDB-X q to inspect it"
+        )
     return sorted(
         entry.name
         for entry in hdb_root.iterdir()
@@ -174,11 +185,14 @@ def table_columns(table_dir: Path) -> set[str]:
     """
     if not table_dir.is_dir():
         return set()
-    return {
-        entry.name.removesuffix("#")
-        for entry in table_dir.iterdir()
-        if entry.is_file() and entry.name != ".d"
-    }
+    return column_names(entry.name for entry in table_dir.iterdir() if entry.is_file())
+
+
+def column_names(files: Iterable[str]) -> set[str]:
+    """The columns a splayed table's files make, by table_columns' rule: the
+    one rule, whether the names come from this listing or from q's
+    (stack/hdb_layout.py)."""
+    return {name.removesuffix("#") for name in files if name != ".d"}
 
 
 def column_gaps(hdb_root: Path, declared: dict[str, list[str]]) -> dict[str, dict[str, set[str]]]:

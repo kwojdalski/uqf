@@ -3,8 +3,9 @@ raw table, and the q job that reshapes it - written, found, and removed."""
 
 from __future__ import annotations
 
-import ast
+import re
 import shutil
+import subprocess
 import sys
 import types
 from pathlib import Path
@@ -14,10 +15,11 @@ from typer.testing import CliRunner
 
 from uqs import cli
 from uqs.external import feeds
+from uqs.model import dependencies
 from uqs.paths import CATALOG_FILE, STACK_TABLES_TEST, TABLES_FILE, UqsError
 from uqs.scaffold import write
 from uqs.scaffold.docs import SHOWCASE_PAGE, STACK_PAGE
-from uqs.scaffold.external import DEPENDENCIES_FILE, external_feed, external_files, with_producer
+from uqs.scaffold.external import external_feed, external_files
 from uqs.scaffold.profile import PROFILES_FILE
 from uqs.scaffold.remove import plan_removal
 
@@ -89,7 +91,9 @@ def test_the_generated_publisher_sends_a_list_of_columns_in_field_order(monkeypa
 
 def test_the_feed_module_declares_itself_for_the_cli():
     feed = _body(_plan(), "ws_feed.py")
-    assert 'FEED = ExternalFeed("ws", start, stop, status)' in feed
+    assert "FEED = ExternalFeed(" in feed
+    assert "def start(paths: UqsPaths, options: Mapping[str, Any]) -> int:" in feed
+    assert 'produces={RAW_TABLE: "the external ws feed (`uqs connector start ws`)"}' in feed
 
 
 @pytest.mark.parametrize(
@@ -102,7 +106,7 @@ def test_a_raw_table_that_exists_or_doubles_the_output_is_refused(raw, message):
 
 
 def test_discover_finds_a_module_that_declares_a_feed(monkeypatch):
-    feed = feeds.ExternalFeed("fake", lambda p: 1, lambda p: None, lambda p: {})
+    feed = feeds.ExternalFeed("fake", lambda p, o: 1, lambda p: None, lambda p: {})
     module = types.ModuleType("uqs.external.fake_feed")
     module.FEED = feed  # ty: ignore[unresolved-attribute]
     monkeypatch.setitem(sys.modules, "uqs.external.fake_feed", module)
@@ -115,8 +119,9 @@ def test_discover_finds_a_module_that_declares_a_feed(monkeypatch):
     assert feeds.discover()["fake"] is feed
 
 
-def test_the_hand_listed_feeds_declare_nothing_and_collide_with_nothing():
-    assert set(feeds.discover()).isdisjoint({"databento", "kafka", "crypto", "crypto-fills"})
+def test_every_connector_declares_itself():
+    """#1776: no feed is hand-wired into the CLI any more."""
+    assert {"kafka", "crypto", "crypto-fills"} <= set(feeds.discover())
 
 
 def test_raw_table_is_refused_on_another_kind_and_required_on_external():
@@ -135,7 +140,6 @@ def tree(tmp_path: Path) -> Path:
         PROFILES_FILE,
         STACK_PAGE,
         SHOWCASE_PAGE,
-        DEPENDENCIES_FILE,
     ):
         (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(UQF_ROOT / rel, tmp_path / rel)
@@ -151,7 +155,6 @@ def test_scaffold_then_remove_leaves_the_tree_as_it_was(tree):
         STACK_PAGE,
         SHOWCASE_PAGE,
         CATALOG_FILE,
-        DEPENDENCIES_FILE,
     ]
     before = {p: (tree / p).read_text() for p in watched}
     write.apply_plan(_plan(), tree)
@@ -160,40 +163,60 @@ def test_scaffold_then_remove_leaves_the_tree_as_it_was(tree):
     assert not any((tree / f).exists() for f in external_files("ws")), "the Python pair goes"
     assert not (tree / "src/etl/streaming/ws.q").exists()
     after = {p: (tree / p).read_text() for p in watched}
-    assert after == before, "tables, lists, catalog and EXTERNAL_PRODUCERS restored"
-
-
-def _producers(text: str) -> dict[str, str]:
-    """EXTERNAL_PRODUCERS as dependencies.py's text defines it."""
-    for node in ast.parse(text).body:
-        if (
-            isinstance(node, ast.AnnAssign)
-            and getattr(node.target, "id", "") == "EXTERNAL_PRODUCERS"
-        ):
-            assert node.value is not None
-            return ast.literal_eval(node.value)
-    raise AssertionError("no EXTERNAL_PRODUCERS")
+    assert after == before, "tables, lists and catalog restored"
+    assert dependencies.external_producers(tree) == {}, "what it produced went with its module"
 
 
 def test_a_scaffolded_feed_names_its_raw_table_where_the_stack_looks(tree):
     """#888: the raw table is fed from outside the stack, and the two places
-    that must say so - EXTERNAL_PRODUCERS, which `uqs start` and
-    test_dependencies read, and the catalog, which test_catalog.q reads - do,
-    without a hand edit."""
-    before = _producers((tree / DEPENDENCIES_FILE).read_text())
+    that must say so do, without a hand edit: the feed's own `produces`, which
+    `uqs start` and test_dependencies read (#1776), and the catalog, which
+    test_catalog.q reads. dependencies.py is not edited."""
+    assert dependencies.external_producers(tree) == {}
     write.apply_plan(_plan(), tree)
-    after = _producers((tree / DEPENDENCIES_FILE).read_text())
-    assert after == {**before, "ws_raw": "the external ws feed (`uqs connector start ws`)"}
+    assert dependencies.external_producers(tree) == {
+        "ws_raw": "the external ws feed (`uqs connector start ws`)"
+    }
     catalog = (tree / CATALOG_FILE).read_text()
     assert ".qcat.hidden[`ws_raw]:" in catalog and ".qcat.describe[`ws_quotes]" in catalog
 
 
-def test_a_producer_goes_inside_the_dict_or_not_at_all():
-    text = (UQF_ROOT / DEPENDENCIES_FILE).read_text()
-    entry = '    "x_raw": "the external x feed (`uqs connector start x`)",\n'
-    assert _producers(with_producer(text, entry))["x_raw"].startswith("the external x feed")
-    with pytest.raises(UqsError, match="EXTERNAL_PRODUCERS"):
-        with_producer("x = 1\n", entry)
+#: Run in a process of its own: the CLI builds `connector start` at import.
+_HELP_WITH_A_SCAFFOLDED_FEED = """
+import dataclasses, pkgutil, sys, types
+from uqs.external import feeds
+module = types.ModuleType("uqs.external.ws_feed")
+exec(compile(sys.stdin.read(), "ws_feed.py", "exec"), module.__dict__)
+option = feeds.FeedOption("ws_url", "Websocket to subscribe to", default="wss://x")
+module.FEED = dataclasses.replace(module.FEED, options=(option,))
+sys.modules["uqs.external.ws_feed"] = module
+real = pkgutil.iter_modules
+pkgutil.iter_modules = lambda path: [*real(path), types.SimpleNamespace(name="ws_feed")]
+from typer.testing import CliRunner
+from uqs import cli
+def run(*argv):
+    print(CliRunner().invoke(cli.app, list(argv), env={"COLUMNS": "300"}).output)
+run("connector", "start", "--help")
+run("connector", "restart", "ws", "-n", "--ws-url", "y")
+"""
+
+
+def test_a_scaffolded_feed_with_options_reaches_connector_start_help():
+    """#1776: a feed declares its options, and `connector start` and `restart`
+    take them - no CLI edit, which only option-less feeds could do before."""
+    done = subprocess.run(
+        [sys.executable, "-c", _HELP_WITH_A_SCAFFOLDED_FEED],
+        input=_body(_plan(), "ws_feed.py"),
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=120,
+    )
+    assert done.returncode == 0, done.stderr
+    # CI forces colour: compare the text without its escape codes
+    out = re.sub(r"\x1b\[[0-9;]*m", "", done.stdout)
+    assert "--ws-url" in out and "Websocket to subscribe to (ws)" in out
+    assert "would restart ws with ws_url=y" in out
 
 
 def test_a_feed_can_publish_onto_an_existing_canonical_table():

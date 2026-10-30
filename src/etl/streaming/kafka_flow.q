@@ -97,7 +97,7 @@
 / Publish decoded rows onto the plant table a topic declared.
 / .
 / One literal branch per output table, and that is the convention rather than an
-/ oversight: the registry, the DAG and `uqs summary` read each job's publishes
+/ oversight: the registry, the DAG and `uqs status` read each job's publishes
 / and its publish calls as literals (test_publish_declarations.py), so a table
 / reached through a variable would be an output nothing could see. A topic
 / whose output is a new table adds its name to `publishes` below AND a branch

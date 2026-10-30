@@ -208,7 +208,7 @@ def summary(
     out, numerically where the column is numeric (`Port`, `PID`) and with
     empty cells last. The order reaches `--export` too.
 
-    Run as `uqs --debug summary` (or LOG_LEVEL=DEBUG) to see where each column came
+    Run as `uqs --debug status` (or LOG_LEVEL=DEBUG) to see where each column came
     from: the two lookups below degrade rather than fail, so on the default
     level a missing port map and an unreachable monitor1 look the same as a
     stack that simply has nothing to report. Debug also prints how long each

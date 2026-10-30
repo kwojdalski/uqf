@@ -38,14 +38,17 @@ from uqs.model.plant_metadata import (
     vendored_fingerprint,
     vendored_schema,
 )
-from uqs.paths import TABLES_FILE, repo_root
+from uqs.paths import TABLES_FILE, TORQAPPHOME_ENV, repo_root
 
 
-def export(root: Path) -> dict:
-    """Run the exporter over the tree at `root`; return what q printed."""
+def export(root: Path, vendored: Path | None = None) -> dict:
+    """Run the exporter over the tree at `root` - beside the starter pack
+    `vendored` (a database.q) when given; return what q printed."""
     from uqs.interpreter import q_interpreter
 
     env = os.environ.copy()
+    if vendored is not None:
+        env[TORQAPPHOME_ENV] = str(vendored.parent)
     q = q_interpreter(env)
     if q is None:
         raise SchemaMetadataError(

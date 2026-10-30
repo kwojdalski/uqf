@@ -110,12 +110,12 @@ them near-copies.
 
 `databento1` (the `sidecars/databento` bundle's) is the newest subscriber and
 the only one whose input comes from outside q entirely: an external Python
-handler (`external/databento_feed.py`) holds a live Databento subscription and
-publishes raw MBP-10 onto `databento_mbp10`, and `databento1` folds it into
-`eq_orderbook` with the same `.qetl.transform` transform the ODBC backfill
-applies. The handler is not a process here, for the reason cryptorust is not: a
-q process cannot hold that subscription, so it is started by
-`uqs connector start databento` rather than by `torq.sh`.
+handler (the bundle's `databento_feed.py`, installed with it) holds a live
+Databento subscription and publishes raw MBP-10 onto `databento_mbp10`, and
+`databento1` folds it into `eq_orderbook` with the same `.qetl.transform`
+transform the ODBC backfill applies. The handler is not a process here, for the
+reason cryptorust is not: a q process cannot hold that subscription, so it is
+started by `uqs connector start databento` rather than by `torq.sh`.
 
 `kafka_flow1` is the second subscriber fed from outside its own process, and it
 exists to answer a question `databento1` never has to. Its input comes from a

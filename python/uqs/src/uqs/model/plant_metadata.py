@@ -177,15 +177,31 @@ class Metadata:
         return {n: t for n, t in self.tables.items() if not t.vendored}
 
     def vendored(self, schema: Path | None = None) -> dict[str, Table]:
-        """The starter pack's tables, refused unless the metadata was made
-        from `schema` (default: the one the exporter would load)."""
+        """The starter pack's tables (default: the pack the exporter would load).
+
+        The pack the metadata was made from answers from it, with no q. Any
+        other - a server's own $TORQAPPHOME, say - is not this tree's code, so
+        q evaluates it on demand, once per process; without q that is refused,
+        naming the command, never answered from the wrong pack's tables."""
         schema = schema or vendored_schema(self.root)
-        if vendored_fingerprint(schema) != self.vendored_print:
-            raise SchemaMetadataError(
-                f"{self.root / PLANT_SCHEMA_FILE} was not generated from {schema} - the "
-                f"vendored tables it records may differ; {_guidance(self.root)}"
-            )
-        return {n: t for n, t in self.tables.items() if t.vendored}
+        printed = vendored_fingerprint(schema)
+        if printed == self.vendored_print:
+            return {n: t for n, t in self.tables.items() if t.vendored}
+        if printed not in _OTHER_PACKS:
+            from uqs.model import plant_metadata_gen
+
+            try:
+                found = plant_metadata_gen.export(self.root, vendored=schema)
+            except SchemaMetadataError as exc:
+                raise SchemaMetadataError(
+                    f"{self.root / PLANT_SCHEMA_FILE} was not generated from {schema}, and q "
+                    f"could not evaluate it: {exc}; {_guidance(self.root)}"
+                ) from None
+            plant_metadata_gen._check(found)
+            _OTHER_PACKS[printed] = _parse(json.dumps({"tables": {
+                t.pop("name"): t for t in found["tables"] if t["vendored"]
+            }}))[1]  # fmt: skip
+        return _OTHER_PACKS[printed]
 
     def table(self, name: str) -> Table:
         """One of this tree's own tables, or a refusal naming them."""
@@ -208,6 +224,8 @@ def _parse(text: str) -> tuple[dict, dict[str, Table]]:
 
 
 _CACHE: dict[tuple, Metadata] = {}
+#: Starter packs other than the metadata's, as q evaluated them: fingerprint -> tables.
+_OTHER_PACKS: dict[str, dict[str, Table]] = {}
 
 
 def _stamp(path: Path) -> tuple[int, int] | None:

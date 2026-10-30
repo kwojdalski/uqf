@@ -16,9 +16,13 @@ A job belongs in `src/etl/` when it runs on what this repository provides:
 generated feeds, the stack's own tables, or a reference example of a transport.
 It belongs in a bundle when it is tied to **one outside system** that may not be
 present: another project, a vendor account, an external engine. The three
-integration bundles below are that second kind. Each carries only the q side;
-the Python launcher stays in `uqs` (`uqs connector start ...`) and refuses,
-naming `uqs job install sidecars/<name>`, until the bundle is installed.
+integration bundles below are that second kind. `databento` and `flink` also
+carry their Python connector (`*_feed.py` and the `*_streamer.py` it runs),
+installed with their q into `src/etl/connectors/<bundle>/`: until the bundle is
+installed, `uqs connector start databento|flink_vwap` is an unknown connector
+(#1776). cryptorust's recorders stay in `uqs`
+(`uqs connector start crypto|crypto-fills`), because the tables they publish
+stay in the tree.
 
 ## cryptorust
 

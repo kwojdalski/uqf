@@ -54,8 +54,23 @@ IDENTITY_EXPR = ".proc.procname"
 #: The same forward deploy_smoke.q checks offline; 0n where no library is loaded.
 LIBRARY_EXPR = "@[{.qf.px.fwd_simple[1.1;0.05;0.02;1f]};::;0n]"
 LIBRARY_EXPECTED = 1.1323529411764708
-#: 1b or 0b where the ETL tree is loaded; 0N where it is not.
-ETL_EXPR = "@[{all exec passed from .qetl.transform.verify_all[]};::;0n]"
+#: What `.qetl.transform.verify_all[]` said, checked on the process (#1784):
+#: 1b or 0b - `all` of its boolean `passed` column - where the ETL tree is
+#: loaded, 0n where it is not, and a string saying why when it threw or
+#: answered something else. The trap used to answer 0n for all three, so a
+#: verify_all that threw read as "not loaded", which a process outside the
+#: pipelines passes with. Only `passed` is read, so only its shape is checked;
+#: test_deploy_verify_contract.py runs this against the tree under KDB-X.
+ETL_EXPR = (
+    "$[@[{100h=type get x};`.qetl.transform.verify_all;0b];"
+    "@[{r:.qetl.transform.verify_all[];"
+    '$[0=count r;"verify_all verified no transform";'
+    'not 98h=type r;"verify_all answered type ",string[type r],", not a table";'
+    'not `passed in cols r;"verify_all answered no passed column";'
+    'not 1h=type r`passed;"verify_all\'s passed is type ",string[type r`passed],", not boolean";'
+    'all r`passed]};::;{"verify_all threw: ",x}];'
+    "0n]"
+)
 #: 1b where a missing credential is refused rather than read as the fixture.
 LIVE_EXPR = "@[{.qetl.source.live_required[]};::;0n]"
 #: The process that must carry every plant table.
@@ -105,8 +120,7 @@ def check_process(proc: ProcessCheck, query: Query, live: bool = False) -> Proce
         proc.library = "ok"
     else:
         proc.library = f"wrong: {value!r}, expected {LIBRARY_EXPECTED!r}"
-    etl = query(ETL_EXPR, proc.port)
-    proc.etl = "not loaded" if _is_null(etl) else ("ok" if bool(etl) else "failed")
+    proc.etl = etl_verdict(query(ETL_EXPR, proc.port))
     if proc.pipeline:
         # a pipeline process loads both; "not loaded" is a broken process
         missing = [c for c, v in (("library", proc.library), ("ETL", proc.etl)) if v != "ok"]
@@ -117,9 +131,23 @@ def check_process(proc: ProcessCheck, query: Query, live: bool = False) -> Proce
         proc.ok = not missing
         proc.error = "" if proc.ok else f"pipeline process: {' and '.join(missing)} check not ok"
         return proc
-    proc.ok = not proc.library.startswith("wrong") and proc.etl != "failed"
+    proc.ok = not proc.library.startswith("wrong") and not proc.etl.startswith("failed")
     proc.error = "" if proc.ok else "a library or ETL check failed"
     return proc
+
+
+def etl_verdict(answer: object) -> str:
+    """ETL_EXPR's answer as a check: "ok", "failed" (an example failed), "not
+    loaded", or "failed: why" - for q's own reason, and for any answer that is
+    not one ETL_EXPR gives, which must never read as `ok` the way any truthy
+    value used to."""
+    if isinstance(answer, bool):
+        return "ok" if answer else "failed"
+    if answer is None or (isinstance(answer, (int, float)) and _is_null(answer)):
+        return "not loaded"
+    if isinstance(answer, str):
+        return f"failed: {answer}"
+    return f"failed: malformed answer {type(answer).__name__} {answer!r:.80}"
 
 
 #: q's int and long nulls as kola decodes them: an ordinary int, and truthy (#1654).

@@ -56,7 +56,7 @@ from uqs.paths import (
 )
 from uqs.scaffold.docs import SHOWCASE_PAGE, STACK_PAGE, without_stubs
 from uqs.scaffold.example import GENERATED_BY, example_path
-from uqs.scaffold.external import DEPENDENCIES_FILE, external_files, without_producer
+from uqs.scaffold.external import external_files
 from uqs.scaffold.profile import PROFILES_FILE
 from uqs.scaffold.references import Reference, stale_references
 
@@ -154,20 +154,14 @@ def plan_removal(repo_root: Path, name: str, *, force: bool = False) -> Removal:
         tables = list(symbols(fields.get("publishes", "")))
         # An external feed (#715): its Python publisher, the feed module the CLI
         # discovers, their test - and the raw table the publisher writes, which
-        # is the job's subscription.
+        # is the job's subscription. What the feed produces goes with its module
+        # (#1776): there is no list elsewhere to edit.
         py_files = [Path(f) for f in external_files(job) if (repo_root / f).is_file()]
         if py_files:
             removal.deletes += py_files
             gone |= set(py_files)
             raw = list(symbols(fields.get("subscribe_to", "")))
             tables = raw + tables
-            for table in raw:
-                _edit(
-                    removal,
-                    repo_root,
-                    DEPENDENCIES_FILE,
-                    lambda t, tb=table: without_producer(t, tb),
-                )
 
     gone |= _remove_test(removal, repo_root, job)
 

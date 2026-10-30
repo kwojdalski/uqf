@@ -12,7 +12,7 @@
 /               failed batch, so the span a job dropped becomes a gap that
 /               `uqs job gaps` reports, with the twin that refills it
 /   on disk     stream_health_<job>.txt in the status directory, one JSON
-/               object written on each beat - what `uqs summary`'s Batches
+/               object written on each beat - what `uqs status`'s Batches
 /               column reads, with no q - and, for a polling feed, the
 /               pages it republished as possibly duplicated (#1651)
 / .

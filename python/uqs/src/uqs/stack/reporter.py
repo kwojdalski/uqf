@@ -56,9 +56,9 @@ from dataclasses import dataclass
 
 from uqs.logger import get_logger
 from uqs.model import schemas
-from uqs.model.dependencies import EXTERNAL_PRODUCERS, outputs_by_process
+from uqs.model.dependencies import external_producers, outputs_by_process
 from uqs.model.runtime_members import _bundle_split, pipeline_procnames, plant_tables
-from uqs.paths import UqsError, UqsPaths
+from uqs.paths import UqsError, UqsPaths, repo_root
 from uqs.runtimes import Runtime
 from uqs.stack import deployment
 
@@ -227,7 +227,7 @@ UQF_REPORTER_CHECKS: tuple[ReporterCheck, ...] = (
 def deployment_tables(runtime: Runtime, selected: Iterable[str] | None = None) -> set[str]:
     """The tables `runtime` has a producer for: those its pipeline processes
     publish, those of the sidecar bundles installed for it, and the tables it
-    holds that a producer outside the stack writes (EXTERNAL_PRODUCERS).
+    holds that a producer outside the stack writes (`external_producers`).
     `selected`, a deployment set (stack/deployment.py), narrows the processes
     and bundles to those in it; None is every one."""
     members = pipeline_procnames(runtime)
@@ -244,7 +244,7 @@ def deployment_tables(runtime: Runtime, selected: Iterable[str] | None = None) -
     published |= included_tables
     held = plant_tables(runtime)
     held = (schemas.table_names() - excluded_tables) if held is None else held
-    published |= held & set(EXTERNAL_PRODUCERS)
+    published |= held & set(external_producers(repo_root()))
     return published & held
 
 

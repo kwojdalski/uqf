@@ -210,15 +210,34 @@ def test_invalid_metadata_is_refused(tmp_path, damage, why):
         plant_metadata.load(root)
 
 
-def test_vendored_tables_answer_only_for_the_starter_pack_they_came_from(tmp_path):
+def test_another_starter_pack_is_never_answered_from_this_ones_tables(tmp_path, monkeypatch):
+    """A pack the metadata was not made from (a server's own $TORQAPPHOME)
+    needs q to evaluate it; without q that is refused, naming the command."""
     other = tmp_path / "database.q"
     other.write_text("quote:([]time:`timestamp$(); sym:`symbol$())\n")
     meta = plant_metadata.load()
     assert "quote" in meta.vendored(ROOT / VENDORED_DEFAULT)
-    with pytest.raises(SchemaMetadataError, match="was not generated from"):
+
+    def no_q(root, vendored=None):
+        raise SchemaMetadataError("no q interpreter")
+
+    monkeypatch.setattr(plant_metadata_gen, "export", no_q)
+    with pytest.raises(SchemaMetadataError, match=f"was not generated from.*{REGENERATE}"):
         meta.vendored(other)
     # this tree's own tables do not depend on it
     assert meta.table("trades")
+
+
+def test_another_starter_pack_is_evaluated_by_q(tmp_path, q_binary):
+    pack = tmp_path / "pack"
+    pack.mkdir()
+    (pack / "database.q").write_text("custom:([]time:`timestamp$(); sym:`g#`symbol$())\n")
+    found = plant_metadata.load().vendored(pack / "database.q")
+    assert list(found) == ["custom"]
+    assert [(c.name, c.type, c.attribute) for c in found["custom"].columns] == [
+        ("time", "p", ""),
+        ("sym", "s", "g"),
+    ]
 
 
 def test_a_failed_generation_leaves_the_previous_file(tmp_path, q_binary, pack):
