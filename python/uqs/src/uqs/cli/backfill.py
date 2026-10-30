@@ -15,6 +15,7 @@ import typer
 
 from uqs import timerange
 from uqs.cli import backfill_attached, completion
+from uqs.cli.pipelines import needs_pipelines
 from uqs.cli.range_options import DateOpt, LastOpt, RangeFromOpt, RangeToOpt
 from uqs.cli.renames import renamed
 from uqs.cli.safety import ChangesState
@@ -42,7 +43,7 @@ from uqs.stack import backfill_wait as stack_backfill_wait
             "--debug": "--debug",
             "--version": "--source-version",
         },
-        ChangesState,
+        needs_pipelines("runs this tree's bounded workers", ChangesState),
     ),
 )
 def backfill(

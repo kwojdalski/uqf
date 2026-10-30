@@ -53,6 +53,7 @@ from uqs.cli import (
     create_backfill,
     lifecycle,
     lists,
+    pipelines,
     renames,
     shared,
     start_warnings,
@@ -2414,9 +2415,7 @@ def _refusals(monkeypatch, module: ModuleType) -> list[str]:
     return said
 
 
-@pytest.mark.parametrize(
-    "command", ["graph", "job backfill", "job gaps", "job runs", "job preview", "connector"]
-)
+@pytest.mark.parametrize("command", sorted(pipelines.pipelines_only()))
 def test_the_torq_runtime_refuses_the_commands_only_uqf_has(monkeypatch, command):
     monkeypatch.setenv("UQS_RUNTIME", "uqf")  # restored afterwards: --runtime sets it
     said = _refusals(monkeypatch, shared)

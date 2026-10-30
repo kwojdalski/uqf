@@ -13,6 +13,7 @@ from typing import Annotated
 import typer
 from rich.table import Table
 
+from uqs.cli.pipelines import pipelines_only
 from uqs.cli.safety import ReadOnly
 from uqs.cli.shared import _die, _paths, app, console
 from uqs.paths import UqsError
@@ -42,7 +43,7 @@ def runtime_diff(
     """What runtime A has that B does not, and the reverse: processes, tables,
     config layers, and the commands only some runtimes run."""
     try:
-        sections = runtime_report.diff(_paths().repo_root, a, b)
+        sections = runtime_report.diff(_paths().repo_root, a, b, pipelines_only())
     except UqsError as exc:
         _die(exc)
         return

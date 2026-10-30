@@ -15,6 +15,7 @@ from rich.table import Table
 
 from uqs import timerange
 from uqs.cli.json_out import emit, json_opt
+from uqs.cli.pipelines import needs_pipelines
 from uqs.cli.range_options import DateOpt, LastOpt, RangeFromOpt, RangeToOpt
 from uqs.cli.renames import DROPPED, renamed
 from uqs.cli.safety import ReadOnly
@@ -61,7 +62,10 @@ PreviewJson = json_opt(
 @job_app.command(
     "preview",
     rich_help_panel=JOB_OPERATIONS_PANEL,
-    cls=renamed({"--dry-run": DROPPED}, ReadOnly),
+    cls=renamed(
+        {"--dry-run": DROPPED},
+        needs_pipelines("previews this tree's streaming jobs", ReadOnly),
+    ),
 )
 def preview(
     job: Annotated[str, typer.Argument(help="A polling feed - a streaming job that declares poll")],

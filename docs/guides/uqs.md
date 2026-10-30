@@ -648,8 +648,9 @@ ERROR    | the torq runtime's stack (base port 6050) is already using ports this
 On `torq`, `list processes` shows the 23 starter-pack processes. `essential`
 leaves out `feed1`, so nothing publishes; `feed` adds it, so `trade` and `quote`
 come in. Commands that work only on this tree's pipelines refuse, with the
-reason: `graph`, `job backfill`, `job gaps`, `job runs`, `job preview` and
-`connector`. So does a profile `torq` doesn't declare:
+reason - `graph`, `job backfill`, `job gaps`, `job preview`, `job runs`,
+`job checkpoint remove` and `connector`; `uqs runtime diff uqf torq` lists them,
+read off the commands themselves. So does a profile `torq` doesn't declare:
 
 ```
 $ uqs --runtime torq start --profile fx
