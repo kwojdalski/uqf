@@ -155,7 +155,7 @@ jobs:
         # The q counterpart of test_module_split.py (#970): a file over the
         # limit splits, or is listed with a reason and a cap that only shrinks.
         if: ${{ !cancelled() }}
-        run: python3 scripts/gates/check_q_module_size.py
+        run: python3 scripts/gates/check.py q-module-size
       - name: Check every q registry stores its values enlisted
         # A dict of same-keyed dicts collapses into a table on its first
         # insert, and the next differently-shaped entry is refused (#1028).
