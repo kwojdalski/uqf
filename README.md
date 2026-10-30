@@ -87,11 +87,13 @@ is covered. It registers with discovery, so the fleet above has to be up:
 uv run uqs job backfill demo_deals_backfill --source-version v1 --from 2026-09-13 --to 2026-09-15 --fixture
 ```
 
-`--from` and `--to` are required and UTC; `--fixture` is for the demo's built-in
-fixture data ([why](docs/guides/new-pipeline.md)).
+The range is required - `--from`/`--to` (end excluded), `--date` or `--last` -
+and UTC without an offset; `--fixture` is for the demo's built-in fixture data
+([why](docs/guides/new-pipeline.md)).
 
-**Add a pipeline.** `uqs job new` scaffolds one of three shapes, and `--dry-run`
-lists every file it would create or append to without writing any of them:
+**Add a pipeline.** `uqs job new` scaffolds one of [seven
+shapes](docs/scaffolding/README.md), and `--dry-run` lists every file it would
+create or append to without writing any of them:
 
 ```
 # a streaming job: reads quote, publishes a table of its own
@@ -158,7 +160,7 @@ Component READMEs: [`python/uqs/`](python/uqs/README.md) (the stack CLI),
 ```
 scripts/test.py q-unit    # the deterministic qUnit suite
 scripts/test.py python    # orchestrator and frontend
-scripts/test.py all       # every lane except the two coverage lanes, smoke and stack-smoke
+scripts/test.py all       # every lane except the coverage lanes and the live-stack lanes
 ```
 
 One lane per layer; run the one matching what you changed.

@@ -20,6 +20,9 @@ src/uqs/
   external/    processes this tree starts but does not own (crypto recorder,
                Databento feed)
   checks/      read-only diagnostics: smoke test, HDB shape, live plant schema
+  attach/      `uqs job attachment`: attaching a job to a stack that already runs
+  deploy/      `uqs deploy`: building a release and putting it on a server
+  generated/   modules written from the q tree; never edited by hand
   logger/      the CLI's own loguru logging
   mcp.py       the `uqs-mcp` server: the same operations as MCP tools
 tests/         flat, one module per source module
@@ -28,11 +31,12 @@ tests/         flat, one module per source module
 The folders are layers, and imports only point down:
 
 ```
-logger/ paths.py           depend on nothing in this package
-model/            -> paths, logger
-stack/            -> model, paths, logger
-external/ checks/ -> stack, model, paths, logger
-scaffold/ cli/    -> whatever they need below them
+logger/ paths.py (and the other leaf modules)  depend on nothing in this package
+generated/                                     imports nothing from it
+model/                                         -> generated
+stack/                                         -> model, generated
+external/ checks/ scaffold/ deploy/ attach/    -> stack, model, generated
+cli/                                           -> all of the above
 ```
 
 `model/` importing from `stack/` would mean the stack's declared shape could not
