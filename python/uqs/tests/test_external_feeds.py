@@ -10,7 +10,6 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from uqs import cli
 from uqs.external import feeds
 from uqs.model import dependencies
 from uqs.paths import UqsError
@@ -97,14 +96,15 @@ def test_titles_and_start_messages():
     assert _feed("f", started_note="n").started(3) == "f feed started (pid 3) - n"
 
 
-def test_the_dry_run_masks_a_secret_option(monkeypatch):
-    from uqs.external import databento_feed
+def test_the_dry_run_masks_a_secret_option(monkeypatch, capsys):
+    from uqs.cli import external as cli_external
 
-    monkeypatch.setattr(databento_feed, "databento_feed_status", lambda p: {"running": "False"})
-    argv = ["connector", "start", "databento", "-n", "--api-key", "K", "--symbols", "A,B"]
-    result = runner.invoke(cli.app, argv)
-    assert result.exit_code == 0, result.output
-    assert "api_key=***, symbols=A,B" in result.stdout and "K," not in result.stdout
+    feed = _feed("vault", feeds.FeedOption("api_key", "Key", secret=True),
+                 feeds.FeedOption("symbols", "Symbols", many=True))  # fmt: skip
+    monkeypatch.setitem(cli_external.FEEDS, "vault", feed)
+    cli_external._start("vault", {"api_key": "K", "symbols": "A,B"}, dry_run=True)
+    out = capsys.readouterr().out
+    assert "would start vault with api_key=***, symbols=A,B" in out and "K," not in out
 
 
 # --- what a connector produces, read from its text --------------------------

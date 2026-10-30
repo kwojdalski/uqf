@@ -60,8 +60,9 @@ Each of these needs a feed handler outside q, because a q process can't hold the
 subscription itself.
 
 **`databento1` · live Databento depth** --- Databento's MBP-10 updates,
-published by `external/databento_feed.py`, folded into the stack's book shape.
-Reads `databento_mbp10`, publishes `eq_orderbook`. [Details](databento.md)
+published by the bundle's `databento_feed.py`, folded into the stack's book
+shape. Reads `databento_mbp10`, publishes `eq_orderbook`.
+[Details](databento.md)
 
 **`kafka_flow1` · client flow from Kafka** --- client FX trades consumed off a
 Kafka topic by `external/kafka_feed.py`, deduplicated on the record's
@@ -77,13 +78,14 @@ profile and starts when named; needs `kafka_feed1`.
 [Details](kafka.md#cryptorust-book-snapshots)
 
 **`flink_vwap1` · VWAP windows from Apache Flink** --- per-sym one-minute VWAP
-windows computed by a PyFlink job in `external/flink_vwap_streamer.py`, each
+windows computed by a PyFlink job in the bundle's `flink_vwap_streamer.py`, each
 published once: a window Flink emits again is dropped on `(sym; window_end)`.
 Reads `flink_vwap_raw`, publishes `flink_vwap`. The q side is the
 `sidecars/flink` bundle, tied to one outside system and so not in the tree:
 `uqs job install sidecars/flink`, then `uqs start flink_vwap1` and
-`uqs connector start flink_vwap`, which needs `apache-flink` and Java and
-refuses, naming the install command, until the bundle is in.
+`uqs connector start flink_vwap`, which needs `apache-flink` and Java. The
+connector is the bundle's too, installed with it: until the bundle is in, there
+is no `flink_vwap` connector.
 
 ## Normalisers
 

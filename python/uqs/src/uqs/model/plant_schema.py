@@ -93,8 +93,8 @@ def _generated_schema_content(paths: UqsPaths) -> str:
     vendored = (paths.torqapphome / "database.q").read_text()
     # EVERY table plant_tables.q defines. That file is the list of the
     # tables this tree puts on the plant - what its jobs publish, and what
-    # the producers outside it publish (the Databento feed handler into
-    # databento_mbp10, cryptorust's recorder into crypto_sim_fills) - so it is
+    # the producers outside it publish (the Kafka consumer into
+    # kafka_message, cryptorust's recorder into crypto_sim_fills) - so it is
     # the whole answer, with nothing to add by name. That no published table
     # is missing from it is held by test_generated_schema_covers_every_
     # published_table: .u.upd onto a table the plant was never told about

@@ -1,7 +1,7 @@
 / Databento MBP-10 as the live feed handler publishes it - the source
 / contract's own fields, so a live row and an ODBC-backfilled row are the
 / same shape by construction. Written by the external Python feed handler
-/ rather than by any q process (see external/databento_feed.py), the same way
+/ rather than by any q process (see this bundle's databento_feed.py), the same way
 / crypto_book below is written by cryptorust.
 / .
 / Forty per-level columns because that is what Databento sends; folding

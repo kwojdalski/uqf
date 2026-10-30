@@ -14,30 +14,42 @@ None of those needs an API key, a network or a tickerplant to test, which
 is exactly why `rows_from_records` was separated from the socket. The
 subscription loop itself is not tested here: it is four lines of plumbing
 around a third-party client.
+
+The databento bundle's own Python tests (#1776): scripts/dev/bundle_suite.py
+installs the bundle into a throwaway tree and runs them there, against the
+INSTALLED copies in src/etl/connectors/databento/ - the module the CLI
+discovered, and its streamer beside it on sys.path.
 """
 
 from __future__ import annotations
 
+import importlib
 import os
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
+import rename_support  # python/uqs/tests' helper: bundle_suite.py runs this from there
+from typer.testing import CliRunner
 
-from uqs.external import databento_feed
-from uqs.external.databento_streamer import contract_fields, rows_from_records
+from uqs import cli
+from uqs.cli import external as cli_external
 from uqs.external.lifecycle import process_identity
-from uqs.paths import UqsError, UqsPaths
+from uqs.paths import TABLES_FILE, UqsError, UqsPaths, repo_root
 
-REPO = Path(__file__).resolve().parents[3]
-#: The databento bundle's own folder: the tree holds its files only once
-#: `uqs job install sidecars/databento` has run, and these tests need neither.
-BUNDLE = REPO / "sidecars" / "databento"
-SOURCE_Q = str(BUNDLE / "databento_mbp10.q")
+#: The installed connector, as discovery imported it - what the CLI runs.
+databento_feed = sys.modules[cli_external.FEEDS["databento"].start.__module__]
+#: Its streamer, beside it: bundle_suite.py puts the installed folder on sys.path.
+streamer = importlib.import_module("databento_streamer")
+contract_fields, rows_from_records = streamer.contract_fields, streamer.rows_from_records
+
+runner = CliRunner()
 
 
 def _fields() -> list[str]:
-    return contract_fields("/", SOURCE_Q)
+    """The installed source contract's fields, where the streamer reads them."""
+    return contract_fields(str(repo_root()))
 
 
 @dataclass
@@ -105,7 +117,7 @@ def test_the_field_order_comes_from_the_q_declaration():
 def test_the_fields_line_up_with_the_plant_table_column_for_column():
     """The test above checks the fields against numbers written in Python.
     This one checks them against what `.u.upd` writes into: the
-    `databento_mbp10` table in plant_tables.q. The streamer derives its level
+    `databento_mbp10` table the bundle put in plant_tables.q. The streamer derives its level
     columns rather than reading them (LEVELS and the four prefixes), so a q
     change to the level count or a level column would otherwise misalign
     every row after it with nothing raising.
@@ -116,9 +128,9 @@ def test_the_fields_line_up_with_the_plant_table_column_for_column():
     """
     from uqs.model import schemas
 
-    found = schemas.definitions_in((BUNDLE / "tables.q").read_text())
+    found = schemas.definitions_in((repo_root() / TABLES_FILE).read_text())
     table = schemas.column_names(
-        schemas.definition_from(found, "databento_mbp10", "sidecars/databento/tables.q")
+        schemas.definition_from(found, "databento_mbp10", str(TABLES_FILE))
     )
     expected = ["symbol" if c == "sym" else c for c in table if c != "time"]
     assert _fields() == expected
@@ -199,26 +211,10 @@ def _paths(tmp_path: Path) -> UqsPaths:
     )
 
 
-def _install_ledger(root: Path, name: str) -> None:
-    """The ledger entry `uqs job install sidecars/<name>` leaves, nothing more."""
-    ledger = root / "src" / "etl" / "installed_bundles.json"
-    ledger.parent.mkdir(parents=True, exist_ok=True)
-    ledger.write_text(f'{{"{name}": {{"version": "0.1.0"}}}}')
-
-
-def test_starting_without_the_bundle_names_the_install_command(tmp_path):
-    """The raw table and databento1 are the databento bundle's: a feed started
-    without them would publish into a table nothing defines."""
-    with pytest.raises(UqsError) as exc:
-        databento_feed.start_databento_feed(_paths(tmp_path), api_key="k")
-    assert "uqs job install sidecars/databento" in str(exc.value)
-
-
 def test_starting_without_an_api_key_refuses_and_names_the_variable(tmp_path, monkeypatch):
     """Refuse before spawning, not after the first call fails - the order
     `.qetl.job.bounded.init` follows for the same reason."""
     monkeypatch.delenv(databento_feed.DATABENTO_API_KEY_ENV, raising=False)
-    _install_ledger(tmp_path, "databento")
     with pytest.raises(UqsError) as exc:
         databento_feed.start_databento_feed(_paths(tmp_path))
     assert databento_feed.DATABENTO_API_KEY_ENV in str(exc.value)
@@ -228,27 +224,27 @@ def test_a_stale_pid_file_does_not_report_running(tmp_path):
     """A pid file outlives a crash. Reporting `running` from its mere
     existence is how a dead feed looks healthy."""
     paths = _paths(tmp_path)
-    paths.databento_feed_pid_path.write_text("999999")
+    databento_feed.pid_path(paths).write_text("999999")
     assert databento_feed.is_databento_feed_running(paths) is False
 
 
 def test_an_unparseable_pid_file_is_not_running(tmp_path):
     paths = _paths(tmp_path)
-    paths.databento_feed_pid_path.write_text("not-a-pid")
+    databento_feed.pid_path(paths).write_text("not-a-pid")
     assert databento_feed.is_databento_feed_running(paths) is False
 
 
 def test_the_live_process_reports_running(tmp_path):
     paths = _paths(tmp_path)
-    paths.databento_feed_pid_path.write_text(f"{os.getpid()}\n{process_identity(os.getpid())}\n")
+    databento_feed.pid_path(paths).write_text(f"{os.getpid()}\n{process_identity(os.getpid())}\n")
     assert databento_feed.is_databento_feed_running(paths) is True
 
 
 def test_stopping_when_nothing_runs_is_quiet_and_clears_the_pid(tmp_path):
     paths = _paths(tmp_path)
-    paths.databento_feed_pid_path.write_text("999999")
+    databento_feed.pid_path(paths).write_text("999999")
     databento_feed.stop_databento_feed(paths)
-    assert not paths.databento_feed_pid_path.exists()
+    assert not databento_feed.pid_path(paths).exists()
 
 
 def test_status_names_what_folds_the_rows(tmp_path):
@@ -269,5 +265,62 @@ def test_the_streamer_script_it_launches_exists():
     The failure it would have produced is the expensive kind: `uv run python
     <missing path>` exits non-zero with the feed's PID file already written,
     so the orchestrator reports a running feed that is not running."""
-    runner = Path(databento_feed.__file__).resolve().parent / "databento_streamer.py"
+    runner = Path(str(databento_feed.__file__)).resolve().parent / "databento_streamer.py"
     assert runner.is_file(), f"the streamer databento_feed launches is missing: {runner}"
+
+
+def test_its_pid_file_is_where_uqs_kept_it(tmp_path):
+    """The same file on disk as before the move (#1776): a feed started by an
+    older uqs is still found, and stopped, by this one."""
+    paths = _paths(tmp_path)
+    assert databento_feed.pid_path(paths) == paths.orchestrator_dir / "databento_feed.pid"
+
+
+def test_the_connector_runs_from_its_installed_copy():
+    """Never from the bundle's folder: the q half and this one are one version."""
+    installed = repo_root() / "src" / "etl" / "connectors" / "databento" / "databento_feed.py"
+    assert Path(str(databento_feed.__file__)).resolve() == installed.resolve()
+
+
+# --------------------------------------------------- through the CLI (#1739)
+
+
+def _patch(monkeypatch, name: str, result=None):
+    calls: list[dict] = []
+
+    def fake(*args, **kwargs):
+        calls.append(kwargs)
+        return result
+
+    monkeypatch.setattr(databento_feed, name, fake)
+    return calls
+
+
+@pytest.mark.parametrize("option", ["--databento-dataset", "--dataset"])
+def test_databento_start_takes_its_dataset(monkeypatch, option):
+    """#1739: --dataset is the dataset a bounded worker fills (`job new`), so
+    the Databento one is --databento-dataset; --dataset is its old spelling."""
+    renames = rename_support.said(monkeypatch)
+    calls = _patch(monkeypatch, "start_databento_feed", result=7)
+    result = runner.invoke(cli.app, ["connector", "start", "databento", option, "GLBX.MDP3"])
+    assert result.exit_code == 0, result.output
+    assert calls[0]["dataset"] == "GLBX.MDP3"
+    old = option == "--dataset"
+    assert renames == ([rename_support.renamed("--dataset", "--databento-dataset")] if old else [])
+
+
+def test_databento_starts_with_its_own_defaults(monkeypatch):
+    calls = _patch(monkeypatch, "start_databento_feed", result=8)
+    result = runner.invoke(cli.app, ["connector", "start", "databento", "--symbols", "A, B"])
+    assert result.exit_code == 0, result.output
+    assert calls[0]["symbols"] == ("A", "B")
+    assert calls[0]["dataset"] == databento_feed.DEFAULT_DATASET
+    assert "databento feed started (pid 8)" in result.stdout
+
+
+def test_the_dry_run_masks_the_api_key(monkeypatch):
+    monkeypatch.setattr(databento_feed, "databento_feed_status", lambda p: {"running": "False"})
+    argv = ["connector", "start", "databento", "-n", "--api-key", "K", "--symbols", "A,B"]
+    result = runner.invoke(cli.app, argv)
+    assert result.exit_code == 0, result.output
+    assert "api_key=***, symbols=A,B" in result.stdout and "K," not in result.stdout
