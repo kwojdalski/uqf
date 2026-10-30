@@ -22,7 +22,7 @@ from rich.text import Text
 from uqs.checks.traced_queries import untraced_lines
 from uqs.cli import install_bundle
 from uqs.cli.create_plant import plant_tables as _plant_tables
-from uqs.cli.regenerate import _DERIVED, _regenerate_derived
+from uqs.cli.regenerate import _DERIVED, _regenerate_derived, derived_command
 from uqs.cli.renames import old_spelling, warn_renamed
 from uqs.cli.safety import ChangesState
 from uqs.cli.shared import (
@@ -342,12 +342,12 @@ def install_jobs(
 
     # A file that does not parse, or a job whose edges do not resolve, is
     # refused by the generators - which is the earliest the tree can say so.
-    for script, regen in zip(_DERIVED, _regenerate_derived(repo_root), strict=True):
+    for derived, regen in zip(_DERIVED, _regenerate_derived(repo_root), strict=True):
         if regen.returncode == 0:
-            console.print(f"[green]✓[/] regenerated via {script}")
+            console.print(f"[green]✓[/] regenerated via {' '.join(derived)}")
         else:
             console.print(
-                f"[red]✗ could not regenerate[/] - run `python3 {script}` "
+                f"[red]✗ could not regenerate[/] - run `{derived_command(derived)}` "
                 f"and fix what it reports:\n{regen.stdout}{regen.stderr}"
             )
 

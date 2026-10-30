@@ -17,7 +17,7 @@
 /                 from it beside a copy of the vendored database.q, and points
 /                 stp1's -schemafile at the copy. The vendored file is never
 /                 edited. Change a table, regenerate:
-/                 uv run python scripts/generate/plant_schema.py
+/                 uv run python scripts/generate/derive.py plant-schema
 /   by q tests    tests/q/test_stack_tables.q loads it and checks the tables
 /                 parse and carry the columns their consumers expect, and
 /                 scripts/generate/export_contract_surface.q loads it so these tables

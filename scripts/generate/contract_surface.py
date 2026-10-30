@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Export this tree's public contract surface, and diff two exports.
+"""This tree's public contract surface: exported, read back and compared.
 
 The half of WP2 (#139, "lock the contracts before implementation ports") that
 does **not** need the authority checkout. Locking contracts means comparing
@@ -7,10 +7,17 @@ two surfaces; this produces one of them mechanically, so when the other tree
 is readable the comparison is a diff rather than a person reading 29 q
 namespaces and nine Python modules side by side.
 
-Two subcommands:
+Writing the committed surface and checking it is current are derive.py's
+`contract-surface` target, which this module renders for:
 
-    export              write this tree's surface as JSON
-    diff A.json B.json  report what differs, by kind
+    uv run python scripts/generate/derive.py contract-surface             # export
+    uv run python scripts/generate/derive.py contract-surface --out DIR   # export elsewhere
+    uv run python scripts/generate/derive.py contract-surface --check     # contract diff
+
+Comparing two arbitrary surfaces is an audit, not a generation step, so it is
+this script's own command:
+
+    uv run python scripts/generate/contract_surface.py diff A B
 
 WHAT COUNTS AS A CONTRACT. A public function's name, rank and parameter names;
 a table's columns and types; a process name and its port offset; an
@@ -26,7 +33,7 @@ returns a wrong number - a defect this repository has already shipped and
 fixed once.
 
 The q half is produced by `scripts/generate/export_contract_surface.q`, which must run
-under KDB-X; this script invokes it and merges the result.
+under KDB-X; `build_surface` invokes it and merges the result.
 """
 
 from __future__ import annotations
@@ -478,62 +485,16 @@ def diff_surfaces(a: dict[str, Any], b: dict[str, Any], a_name: str, b_name: str
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    ap = argparse.ArgumentParser(
+        description="Report the contract differences between two exported surfaces. "
+        "Exporting and checking this tree's own surface is "
+        "`scripts/generate/derive.py contract-surface [--check]`."
+    )
     sub = ap.add_subparsers(dest="command", required=True)
-
-    exp = sub.add_parser("export", help="write this tree's contract surface as CSV")
-    exp.add_argument("-o", "--out", type=Path, help="output directory (default: the baseline)")
-
     dif = sub.add_parser("diff", help="report contract differences between two exports")
     dif.add_argument("a", type=Path, help="a surface directory")
     dif.add_argument("b", type=Path, help="a surface directory")
-
-    sub.add_parser(
-        "check",
-        help="fail if the committed baseline no longer matches this tree",
-    )
-
     args = ap.parse_args()
-
-    if args.command == "export":
-        surface = build_surface()
-        out = args.out or BASELINE
-        write_surface(out, surface)
-        fns = sum(len(v) for v in surface.get("functions", {}).values())
-        print(
-            f"wrote {out}/: {len(surface.get('namespaces', []))} namespace(s), "
-            f"{fns} name(s), {len(surface.get('tables', {}))} table(s), "
-            f"{len(surface.get('processes', []))} process(es), "
-            f"{len(surface.get('variables', []))} env var(s)"
-        )
-        return 0
-
-    if args.command == "check":
-        missing = [f for f in FILES if not (BASELINE / f).is_file()]
-        if missing:
-            print(
-                f"{BASELINE.relative_to(REPO)}/ is missing {', '.join(missing)} - run "
-                f"`contract_surface.py export`",
-                file=sys.stderr,
-            )
-            return 1
-        committed = read_surface(BASELINE)
-        current = build_surface()
-        lines = diff_surfaces(committed, current, "committed", "current")
-        if not lines:
-            print(f"{BASELINE.relative_to(REPO)} matches this tree's contract surface")
-            return 0
-        # Report the CONTRACT difference, not a JSON diff. "is_covered gained
-        # an argument" is actionable; "line 2118 differs" is not, and the
-        # latter is what a plain file comparison would have said.
-        print(f"{BASELINE.relative_to(REPO)} is stale:", file=sys.stderr)
-        print("\n".join(lines), file=sys.stderr)
-        print(
-            "\nIf the change is intended, rerun:\n"
-            "  uv run python scripts/generate/contract_surface.py export",
-            file=sys.stderr,
-        )
-        return 1
 
     a = read_surface(args.a)
     b = read_surface(args.b)

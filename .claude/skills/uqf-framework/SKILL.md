@@ -199,9 +199,9 @@ Apply the rules below. Each cites the file that holds or enforces it.
 
   | Derived                                                                                                                            | From                           | Regenerate / check                                                              |
   | ---                                                                                                                                | ---                            | ---                                                                             |
-  | `src/etl/generated/load_plan.q`, `pipeline_dag.q`, `docs/reference/processes.md`, `process_ports.csv`, `docs/guides/uqs.md` tables | the declarations               | `uv run python scripts/generate/generate_operational_docs.py` (`--check` in CI) |
-  | `docs/reference/surfaces/current/`                                                                                                 | the loaded q tree              | `uv run python scripts/generate/contract_surface.py export`                     |
-  | rendered `docs/diagrams/*.svg`                                                                                                     | `docs/diagrams/*.d2`           | `scripts/generate/render_diagrams.py`                                           |
+  | `src/etl/generated/load_plan.q`, `pipeline_dag.q`, `docs/reference/processes.md`, `process_ports.csv`, `docs/guides/uqs.md` tables | the declarations               | `uv run python scripts/generate/derive.py operational-docs` (`--check` in CI)   |
+  | `docs/reference/surfaces/current/`                                                                                                 | the loaded q tree              | `uv run python scripts/generate/derive.py contract-surface`                     |
+  | rendered `docs/diagrams/*.svg`                                                                                                     | `docs/diagrams/*.d2`           | `python3 scripts/generate/derive.py diagrams`                                   |
   | `docs/reference/environment.md`                                                                                                    | the code reading each variable | checked by `scripts/gates/check_env_reference.py`                               |
 
 - **D2** A name or call that docs mention is checked against the q source

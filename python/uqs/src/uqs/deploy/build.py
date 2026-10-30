@@ -86,7 +86,7 @@ log = get_logger()
 
 #: Where a staged tree records the bundles installed into it (uqs.stack.bundles).
 BUNDLE_LEDGER = "src/etl/installed_bundles.json"
-GENERATOR = "scripts/generate/generate_operational_docs.py"
+GENERATOR = ("scripts/generate/derive.py", "operational-docs")
 #: Tracked beyond the allowlist, staged for the generator, never packaged.
 STAGED_EXTRA = ("docs",)
 
@@ -165,7 +165,7 @@ def stage_bundles(
             *("-m", "uqs.stack.bundle_build", "install", "--runtime", runtime, *folders),
         )
     )
-    step("regenerating the derived files", str(staged / GENERATOR))
+    step("regenerating the derived files", str(staged / GENERATOR[0]), *GENERATOR[1:])
     streaming = [
         job["procname"]
         for entry in record.values()

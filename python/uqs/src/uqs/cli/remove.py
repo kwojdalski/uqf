@@ -13,11 +13,17 @@ from typing import Annotated
 
 import typer
 
-from uqs.cli.regenerate import _DERIVED, _export_contract_surface, _regenerate_derived
+from uqs.cli.regenerate import (
+    _CONTRACT_SURFACE,
+    _DERIVED,
+    _export_contract_surface,
+    _regenerate_derived,
+    derived_command,
+)
 from uqs.cli.renames import renamed
 from uqs.cli.safety import ChangesState
 from uqs.cli.shared import JOB_AUTHORING_PANEL, _die, _paths, console, job_app
-from uqs.paths import CONTRACT_SURFACE_SCRIPT, UqsError
+from uqs.paths import UqsError
 from uqs.scaffold.remove import plan_removal
 
 
@@ -86,11 +92,12 @@ def remove_job(
         return
     removal.apply(repo_root)
     console.print(f"\n[green]removed {removal.name}[/]")
-    for script, regen in zip(_DERIVED, _regenerate_derived(repo_root), strict=True):
+    for derived, regen in zip(_DERIVED, _regenerate_derived(repo_root), strict=True):
         state = "regenerated" if regen.returncode == 0 else "[red]could not regenerate[/]"
-        console.print(f"{state} via {script}{'' if regen.returncode == 0 else ':' + regen.stderr}")
+        said = "" if regen.returncode == 0 else ":" + regen.stderr
+        console.print(f"{state} via {' '.join(derived)}{said}")
     if _export_contract_surface(repo_root) is None:
         console.print(
-            f"[yellow]no q on PATH[/] - run `uv run python {CONTRACT_SURFACE_SCRIPT} export` where "
+            f"[yellow]no q on PATH[/] - run `{derived_command(_CONTRACT_SURFACE)}` where "
             "q is installed"
         )

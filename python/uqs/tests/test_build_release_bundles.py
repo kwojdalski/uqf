@@ -88,7 +88,8 @@ def _tools(files: list[str], fail_install: bool = False):
             return _done(json.dumps({"piggy_quote": ["time", "sym"]}))
         if "needs" in argv:
             return _done(json.dumps({"piggy_spread1": ["piggy_spread1", "fxfeed1"]}))
-        if argv[-1].endswith(release_build.GENERATOR):
+        script, target = release_build.GENERATOR
+        if argv[-1] == target and argv[-2].endswith(script):
             return _done()
         raise AssertionError(argv)
 

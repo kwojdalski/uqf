@@ -1,7 +1,7 @@
 ---
 # Render: quarto render docs/presentation/uqf.qmd
 # Every picture is a docs/diagrams/*.d2 source rendered by
-# scripts/generate/render_diagrams.py - edit the .d2, never the .svg, and
+# `scripts/generate/derive.py diagrams` - edit the .d2, never the .svg, and
 # the deck picks the change up on its next render.
 title: "uqf"
 subtitle: "Streaming jobs and backfills on TorQ, without writing TorQ processes"

@@ -153,7 +153,7 @@ Two consequences of writing names in full:
    (`uv run python scripts/gates/check_module_deps.py`).
 4. A cross-file call is a new edge: add it to `ALLOWED` in the same change.
 5. Regenerate the contract surface
-   (`uv run python scripts/generate/contract_surface.py export`).
+   (`uv run python scripts/generate/derive.py contract-surface`).
 
 ## Code outside this repository
 

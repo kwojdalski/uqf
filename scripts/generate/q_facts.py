@@ -19,14 +19,15 @@ other derived artefact here (docs/man.q, the contract surface).
 KDB-X only, like the contract surface: the ETL tree does not load on PeachQ,
 and a hosted runner has no KDB-X, so the hook runs this locally.
 
-    uv run python scripts/generate/q_facts.py           # write
-    uv run python scripts/generate/q_facts.py --check   # fail if stale
+It is derive.py's `q-facts` target; this module exports and renders, and
+derive.py compares or writes:
+
+    uv run python scripts/generate/derive.py q-facts           # write
+    uv run python scripts/generate/derive.py q-facts --check   # fail if stale
 """
 
 from __future__ import annotations
 
-import argparse
-import difflib
 import json
 import os
 import subprocess
@@ -147,38 +148,3 @@ def render(facts: dict[str, list[str] | str | dict[str, str]], out_path: Path) -
         check=True,
     )
     return formatted.stdout
-
-
-def main() -> int:
-    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--check", action="store_true", help="fail if the committed module is stale")
-    args = ap.parse_args()
-    facts = export()
-    stale = 0
-    for out_path in MODULES:
-        generated = render(facts, out_path)
-        rel = out_path.relative_to(REPO)
-        if not args.check:
-            out_path.parent.mkdir(parents=True, exist_ok=True)
-            out_path.write_text(generated)
-            print(f"wrote {rel}")
-            continue
-        committed = out_path.read_text() if out_path.is_file() else ""
-        if committed == generated:
-            print(f"{rel} matches the q tree")
-            continue
-        stale = 1
-        print(f"{rel} is stale - rerun scripts/generate/q_facts.py:", file=sys.stderr)
-        sys.stderr.writelines(
-            difflib.unified_diff(
-                committed.splitlines(keepends=True),
-                generated.splitlines(keepends=True),
-                fromfile="committed",
-                tofile="generated",
-            )
-        )
-    return stale
-
-
-if __name__ == "__main__":
-    sys.exit(main())

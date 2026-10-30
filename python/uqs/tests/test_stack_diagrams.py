@@ -5,7 +5,7 @@ the topology one names its own authority: docs/reference/processes.md,
 GENERATED from the pipeline registry - "if this diagram and that table
 disagree, the table is right". Until this test nothing compared them, and
 they had drifted: a backfill under a name no process has, jobs added since
-and never drawn. render_diagrams.py --check proves only that each .svg
+and never drawn. `derive.py diagrams --check` proves only that each .svg
 renders from its .d2.
 
 Two rules, for each diagram:

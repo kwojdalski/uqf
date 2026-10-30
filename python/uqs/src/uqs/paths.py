@@ -71,11 +71,11 @@ CATALOG_FILE = PROCESS_SCRIPTS_DIR / "uqs_catalog.q"
 #: other processes being added around it.
 PROCESS_PORTS_FILE = PROCESS_SCRIPTS_DIR / "process_ports.csv"
 
-#: Regenerates the files derived from the registry (the process table and
-#: src/etl/generated/pipeline_dag.q). CI runs it with --check, so a registry
-#: edit that is not followed by this fails the build.
-OPERATIONAL_DOCS_SCRIPT = Path("scripts/generate/generate_operational_docs.py")
-CONTRACT_SURFACE_SCRIPT = Path("scripts/generate/contract_surface.py")
+#: The repository's one command for derived artifacts, `derive.py TARGET
+#: [--check]` (#1804): `operational-docs` regenerates the files derived from the
+#: registry (the process table, src/etl/generated/pipeline_dag.q). CI runs it
+#: with --check, so a registry edit that is not followed by it fails the build.
+DERIVE_SCRIPT = Path("scripts/generate/derive.py")
 
 #: This package. Spelled here rather than as a string literal in the modules
 #: that need it, which a package rename would silently break.

@@ -79,9 +79,9 @@ Use for: Garman-Kohlhagen (`options.q`), CIRP forwards (`forwards.q`), VaR
 ## Composition
 
 <!-- Diagrams are d2, rendered to a committed SVG. Write the source to
-     docs/diagrams/<topic>.d2, run `python3 scripts/generate/render_diagrams.py`,
+     docs/diagrams/<topic>.d2, run `python3 scripts/generate/derive.py diagrams`,
      and embed the .svg here. Never paste mermaid, and never hand-edit an
-     .svg: CI re-renders and compares (`render_diagrams.py --check`). -->
+     .svg: CI re-renders and compares (`derive.py diagrams --check`). -->
 
 docs/diagrams/<topic>.d2:
 
