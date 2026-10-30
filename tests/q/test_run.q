@@ -339,6 +339,80 @@
     .qunit.assertThrows[{[x] .qetl.run.migrate[]};::;"migrate: etl_runs is neither*";
         "a shape it does not know is not its to rewrite"]};
 
+/ --- migration_plan: q is the one authority on what migrate would do (#1782) ---
+
+/ The plan for each of the four states a ledger on disk can be in, as
+/ (state; needed; action; rows) - the refusal is asserted by its text where it matters.
+.qt.qetl.run.plan_of:{[] p:.qetl.run.migration_plan[]; (p`state;p`needed;p`action;p`rows)}
+
+/ Every file and directory under the status directory, with the ledger's bytes:
+/ what a preview must leave exactly as it found it.
+.qt.qetl.run.snapshot:{[]
+    d:.qetl.job.bounded.state.lock_dir[];
+    (asc system"find ",.qetl.job.bounded.state.shell_word[d]," 2>/dev/null";
+     $[()~key f:hsym `$.qetl.run.table_path `etl_runs; (); md5 "c"$read1 f])}
+
+.qt.qetl.run.test_plan_of_a_missing_ledger_is_nothing_to_do:{[t]
+    .qunit.assertEquals[.qt.qetl.run.plan_of[];(`absent;0b;`none;0);"no file: absent, nothing to migrate"];
+    .qunit.assertEquals[(.qetl.run.migration_plan[])`refusal;"";"and nothing to refuse"]};
+
+.qt.qetl.run.test_plan_of_a_current_ledger_is_nothing_to_do:{[t]
+    .qetl.run.begin[`w1;.qt.qetl.run.spec[]];
+    .qunit.assertEquals[.qt.qetl.run.plan_of[];(`current;0b;`none;0);"current shape: no migration"]};
+
+.qt.qetl.run.test_plan_of_the_previous_shape_counts_the_rows_to_upgrade:{[t]
+    (hsym `$.qetl.run.table_path `etl_runs) set 3#.qt.qetl.run.old_ledger[];
+    .qunit.assertEquals[.qt.qetl.run.plan_of[];(`previous;1b;`upgrade;3);"the supported previous shape: upgrade every row"]};
+
+.qt.qetl.run.test_plan_of_an_unsupported_ledger_carries_the_refusal:{[t]
+    (hsym `$.qetl.run.table_path `etl_runs) set ([] run_id:enlist 0Ng; worker:enlist `w);
+    p:.qetl.run.migration_plan[];
+    .qunit.assertEquals[(p`state;p`needed;p`action;p`rows);(`unsupported;0b;`refuse;0);"refused, not rewritten"];
+    .qunit.assertEquals[p`refusal;"migrate: etl_runs is neither the old shape nor the current one - not ours to rewrite";
+        "the reason migrate itself throws"]};
+
+.qt.qetl.run.test_plan_writes_nothing_in_any_state:{[t]
+    f:hsym `$.qetl.run.table_path `etl_runs;
+    / absent: no ledger file and no lock directory may appear
+    before:.qt.qetl.run.snapshot[];
+    .qetl.run.migration_plan[];
+    .qunit.assertEquals[.qt.qetl.run.snapshot[];before;"absent: the preview created nothing"];
+    {[f;ledger]
+        f set ledger;
+        before:.qt.qetl.run.snapshot[];
+        .qetl.run.migration_plan[];
+        .qunit.assertEquals[.qt.qetl.run.snapshot[];before;"the preview left the directory and the ledger as it found them"]}[f;] each
+        (3#.qt.qetl.run.old_ledger[]; ([] run_id:enlist 0Ng; worker:enlist `w))};
+
+.qt.qetl.run.test_migrate_does_what_the_plan_said:{[t]
+    (hsym `$.qetl.run.table_path `etl_runs) set 2#.qt.qetl.run.old_ledger[];
+    p:.qetl.run.migration_plan[];
+    .qunit.assertEquals[.qetl.run.migrate[];p`rows;"apply upgrades exactly the rows the preview counted"];
+    .qunit.assertEquals[(.qetl.run.migration_plan[])`action;`none;"and the plan afterwards has nothing to do"]};
+
+.qt.qetl.run.test_migrate_replans_rather_than_trusting_an_earlier_plan:{[t]
+    f:hsym `$.qetl.run.table_path `etl_runs;
+    f set .qt.qetl.run.old_ledger[];
+    stale:.qetl.run.migration_plan[];
+    / Another process gets there first, and replaces the ledger with a shape
+    / the stale plan knew nothing about: apply must refuse, not rewrite.
+    f set ([] run_id:enlist 0Ng; worker:enlist `w);
+    .qunit.assertEquals[stale`action;`upgrade;"the earlier plan said upgrade"];
+    .qunit.assertThrows[{[x] .qetl.run.migrate[]};::;"migrate: etl_runs is neither*";
+        "the state is inspected again before writing"];
+    / ... or has already upgraded it: nothing left to do, not a second upgrade.
+    f set .qetl.run.run_schema xcols update dataset:`, source_version:`, range_from:0Np, range_to:0Np, width:0Nn,
+        windows_planned:0N, windows_completed:0N, windows_failed:0N, rows_published:0N from .qt.qetl.run.old_ledger[];
+    .qunit.assertEquals[.qetl.run.migrate[];0;"already upgraded since the plan: nothing to do"]};
+
+.qt.qetl.run.test_an_unreadable_ledger_fails_the_plan_instead_of_reading_as_nothing_to_do:{[t]
+    (hsym `$.qetl.run.table_path `etl_runs) 0: enlist "not a q file";
+    / The text is the interpreter's own (a read error differs by build), so the
+    / pattern is open - but it throws at all, where a swallowing eval would
+    / have returned the "absent" plan.
+    .qunit.assertThrows[{[x] .qetl.run.migration_plan[]};::;"*";
+        "a ledger q cannot read is a failure, never 'nothing to migrate'"]};
+
 / --- process identity: the one read of TorQ's .proc (#619) ----------------
 / .
 / .qetl.run.proc_name is the only place src/ reads .proc.procname

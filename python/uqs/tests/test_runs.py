@@ -201,3 +201,119 @@ def test_a_bound_reaches_q_as_the_same_instant_in_utc():
     assert runs.to_q_timestamp(datetime(2026, 9, 13)) == "2026.09.13D00:00:00.000000000", (
         "a naive datetime is UTC here, not this machine's local time"
     )
+
+
+# --- the migration plan: q decides, Python shows it (#1782) -------------------
+
+_LOAD_RUN = "".join(
+    f"\\l src/{f}\n"
+    for f in (
+        "init.q",
+        "etl/core/backfill_state.q",
+        "etl/core/intervals.q",
+        "etl/core/materialisation.q",
+        "etl/core/run.q",
+        "etl/core/status.q",
+    )
+)
+
+_PREVIOUS = (
+    "([] run_id:enlist 0Ng; worker:enlist `old_worker; process:enlist `p; host:enlist `h; "
+    "pid:enlist 1i; started_at:enlist .z.p; ended_at:enlist .z.p; status:enlist `completed)"
+)
+_STATES = {
+    "missing": None,
+    "current": ".qetl.run.attach[]; .qetl.run.begin[`w;()!()]",
+    "previous": f'(hsym `$"%s/etl_runs") set {_PREVIOUS}',
+    "unsupported": '(hsym `$"%s/etl_runs") set ([] run_id:enlist 0Ng; worker:enlist `w)',
+}
+
+
+def _ledger_in(directory: Path, state: str) -> None:
+    body = _STATES[state]
+    if body is None:
+        return
+    q = q_interpreter(os.environ)
+    if q is None:
+        pytest.skip("no q interpreter - set $QCMD, or put q on PATH")
+    script = directory.parent / f"{directory.name}.q"
+    script.write_text(_LOAD_RUN + (body % directory if "%s" in body else body) + "\nexit 0\n")
+    result = subprocess.run(
+        [str(q), str(script), "-q"],
+        cwd=UQF_ROOT,
+        env={**os.environ, "UQF_STATUS_DIR": str(directory)},
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def _snapshot(directory: Path) -> dict[str, bytes | None]:
+    """Every path under `directory` and every file's bytes: what a preview must not change."""
+    return {
+        str(p.relative_to(directory)): p.read_bytes() if p.is_file() else None
+        for p in sorted(directory.rglob("*"))
+    }
+
+
+@pytest.mark.parametrize(
+    ("state", "expected"),
+    [
+        ("missing", ("absent", False, "none", 0)),
+        ("current", ("current", False, "none", 0)),
+        ("previous", ("previous", True, "upgrade", 1)),
+        ("unsupported", ("unsupported", False, "refuse", 0)),
+    ],
+)
+def test_the_plan_is_q_s_classification_of_each_state(tmp_path, paths, state, expected):
+    d = tmp_path / "status"
+    d.mkdir()
+    _ledger_in(d, state)
+    plan = runs.migration_plan(paths, directory=d)
+    assert (plan["state"], plan["needed"], plan["action"], plan["rows"]) == expected
+    assert bool(plan["refusal"]) == (state == "unsupported")
+
+
+@pytest.mark.parametrize("state", ["missing", "current", "previous", "unsupported"])
+def test_a_dry_run_touches_no_file(tmp_path, paths, state):
+    d = tmp_path / "status"
+    d.mkdir()
+    _ledger_in(d, state)
+    before = _snapshot(d)
+    try:
+        runs.migrate(paths, dry_run=True, directory=d)
+    except UqsError:
+        assert state == "unsupported"
+    assert _snapshot(d) == before, "a preview must not create, change or delete anything"
+
+
+@pytest.mark.parametrize("state", ["missing", "current", "previous"])
+def test_preview_and_apply_agree_on_the_row_count(tmp_path, paths, state):
+    d = tmp_path / "status"
+    d.mkdir()
+    _ledger_in(d, state)
+    previewed = runs.migrate(paths, dry_run=True, directory=d)
+    assert runs.migrate(paths, directory=d) == previewed
+
+
+def test_an_unsupported_ledger_is_refused_by_preview_and_apply_with_q_s_text(tmp_path, paths):
+    d = tmp_path / "status"
+    d.mkdir()
+    _ledger_in(d, "unsupported")
+    expected = "migrate: etl_runs is neither the old shape nor the current one"
+    with pytest.raises(UqsError, match=expected):
+        runs.migrate(paths, dry_run=True, directory=d)
+    with pytest.raises(UqsError, match=expected):
+        runs.migrate(paths, directory=d)
+
+
+def test_a_q_failure_is_a_failure_not_nothing_to_migrate(tmp_path, paths):
+    """A ledger file q cannot read must not preview as 0 rows."""
+    d = tmp_path / "status"
+    d.mkdir()
+    (d / "etl_runs").write_bytes(b"not a q file")
+    with pytest.raises(UqsError, match="reading the run ledger failed"):
+        runs.migrate(paths, dry_run=True, directory=d)
