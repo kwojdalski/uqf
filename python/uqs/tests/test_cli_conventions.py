@@ -32,8 +32,9 @@ import pytest
 import typer.main
 
 import uqs.cli.entry  # noqa: F401 - registers every command on the app
-from uqs.cli import shared
+from uqs.cli import safety, shared
 from uqs.cli.shared import app
+from uqs.cli.target_confirm import effect_of
 
 ROOT = "uqs"  # the label the root group's own options are reported under
 GUIDE = Path(__file__).resolve().parents[3] / "docs" / "guides" / "uqs.md"
@@ -448,96 +449,51 @@ def test_rule3_every_option_says_what_it_means():
 
 # ------------------------------------------------------ rule 5: uniform flags
 
-REPORTS, CHANGES = "reports", "changes"
+REPORTS, CONFIRMS, CHANGES = "reports", "confirms", "changes"
 
-#: Every visible leaf, as reporting or changing state - decided by hand, because
-#: a heuristic over names would be wrong. A third kind is a string saying why
-#: the command is neither: its output belongs to something else.
-KIND = {
-    "start": CHANGES,
-    "stop": CHANGES,
-    "restart": CHANGES,
-    "exec": "passes any verb through to torq.sh",
-    "status": REPORTS,
-    "graph": REPORTS,
-    "query": REPORTS,
-    "schema": REPORTS,
-    "list": REPORTS,
-    "target list": REPORTS,
-    "runtime list": REPORTS,
-    "job list": REPORTS,
-    "job attachment list": REPORTS,
-    "override list": REPORTS,
-    "logs": REPORTS,
-    "clean": CHANGES,
-    "job checkpoint remove": CHANGES,
-    "data replay": CHANGES,
-    "data seed": CHANGES,
-    "data migrate": CHANGES,
-    "data check": REPORTS,  # --apply writes what it reports missing, after asking
-    "data alter": CHANGES,  # dry run by default; --dry-run/-n says so explicitly
-    "config show": REPORTS,
-    "config set": CHANGES,
-    "config sources stub": CHANGES,
-    "config sources check": REPORTS,
-    "runtime diff": REPORTS,
-    "runtime prepare": CHANGES,
-    "job receive": CHANGES,
-    "job backfill": CHANGES,
-    "job gaps": REPORTS,
-    "job preview": REPORTS,
-    "job new": CHANGES,
-    "job remove": CHANGES,
-    "job install": CHANGES,
-    "job attachment add": CHANGES,
-    "job attachment remove": CHANGES,
-    "job attachment show": REPORTS,
-    "job runs list": REPORTS,
-    "job runs upgrade": CHANGES,
-    "job runs show": REPORTS,
-    "job runs audit": REPORTS,
-    "job attachment contract export": "prints the contract, a document another machine approves",
-    "job attachment contract approve": CHANGES,
-    "job attachment contract list": REPORTS,
-    "connector start": CHANGES,
-    "connector stop": CHANGES,
-    "connector restart": CHANGES,
-    "connector status": REPORTS,
-    "connector logs": REPORTS,
-    "setup odbc install": CHANGES,
-    "setup odbc rollback": CHANGES,
-    "setup odbc status": REPORTS,
-    "setup odbc env": "prints shell exports, for eval",
-    "deploy build": CHANGES,
-    "deploy push": CHANGES,
-    "deploy component build": CHANGES,
-    "deploy status": REPORTS,
-    "deploy rollback": CHANGES,
-    "deploy prune": CHANGES,
-    "deploy check": REPORTS,
-    "deploy history": REPORTS,
-    "target add": CHANGES,
-    "target set": CHANGES,
-    "target unset": CHANGES,
-    "target rename": CHANGES,
-    "target edit": CHANGES,
-    "target revert": CHANGES,
-    "target adopt": CHANGES,
-    "target log": REPORTS,
-    "target check": REPORTS,
-    "target shell": "opens an interactive shell on the server",
-    "target remove": CHANGES,
+#: A command's kind follows from the Effect its Click class carries
+#: (cli/safety.py, #1780), so a new command is classified by declaring it: a
+#: read-only one reports, a confirms-on-server one reports its plan and, with
+#: --apply, changes the server after asking, and a changes-state one changes.
+BY_EFFECT = {
+    safety.Effect.READ_ONLY: REPORTS,
+    safety.Effect.CONFIRMS_ON_SERVER: CONFIRMS,
+    safety.Effect.CHANGES_STATE: CHANGES,
 }
 
-#: Every command that asks before acting. ROOT asks before running a command
-#: on a --target.
-ASKS = {
-    ROOT, "job remove", "job install", "job attachment add", "job attachment remove",
-    "target adopt", "data check", "data alter",
-}  # fmt: skip
+#: The third kind, which no Effect states: a command whose output belongs to
+#: something else, so --json and --dry-run do not apply. Each says why.
+OWN_OUTPUT = {
+    "exec": "passes any verb through to torq.sh",
+    "job attachment contract export": "prints the contract, a document another machine approves",
+    "setup odbc env": "prints shell exports, for eval",
+    "target shell": "opens an interactive shell on the server",
+}
+
+#: Changes-state commands that report and take no --dry-run, with why: rule 5a
+#: holds them, 5b does not.
+NO_DRY_RUN = {
+    "query": "runs any q on a process - so it may change it, which is its Effect - and "
+    "what it changes is the expression's: there is nothing to check without running it",
+}
+
+
+def _kind(path: str) -> str | None:
+    """`path`'s kind: OWN_OUTPUT's reason, or the one its Effect states."""
+    if path in OWN_OUTPUT:
+        return OWN_OUTPUT[path]
+    return BY_EFFECT.get(effect_of(LEAVES[path].command))
+
+
+#: Every command that asks before acting: ROOT asks before running a command on
+#: a --target, a confirms-on-server command before --apply writes, and any
+#: other that takes --yes says so by taking it.
+ASKS = {c.path for c in TREE if c.path in LEAVES and _kind(c.path) == CONFIRMS} | {
+    c.path for c in TREE if c.option("--yes") is not None
+}
 
 #: The cli modules that call a prompt. A new one means a command that asks:
-#: put it in ASKS, then here.
+#: give it --yes/-y, then list the module here.
 PROMPTING_MODULES = {
     "attach", "hdb_scope", "install", "install_bundle", "remove", "target", "target_adopt",
     "target_edit",
@@ -563,30 +519,45 @@ def _flag(cmd: Cmd, long: str, short: str | None = None) -> bool:
 
 
 def test_rule5_every_leaf_is_classified():
-    assert set(KIND) == set(LEAVES), (
-        f"unclassified: {sorted(set(LEAVES) - set(KIND))}; gone: {sorted(set(KIND) - set(LEAVES))}"
-    )
+    """Every leaf has a kind - its Effect, or a row of the third kind - and
+    every hand-kept row names a leaf of the kind it claims to except."""
+    unmarked = sorted(p for p in LEAVES if _kind(p) is None)
+    assert not unmarked, f"no Effect on: {unmarked} - give each its cls= from cli/safety.py"
+    gone = sorted((set(OWN_OUTPUT) | set(NO_DRY_RUN)) - set(LEAVES))
+    assert not gone, f"no such command any more - delete its row: {gone}"
+    stale = sorted(p for p in NO_DRY_RUN if BY_EFFECT.get(effect_of(LEAVES[p].command)) != CHANGES)
+    assert not stale, f"NO_DRY_RUN rows that no longer change state - delete them: {stale}"
 
 
 def test_rule5a_every_reporting_command_has_json():
-    found = {p for p, c in LEAVES.items() if KIND.get(p) == REPORTS and not _flag(c, "--json")}
+    """What reports - read-only, a confirms-on-server plan, a NO_DRY_RUN row."""
+    found = {
+        p
+        for p, c in LEAVES.items()
+        if (_kind(p) in (REPORTS, CONFIRMS) or p in NO_DRY_RUN) and not _flag(c, "--json")
+    }
     _hold("rule 5a", found, RULE5A_ALLOWLIST)
 
 
 def test_rule5b_dry_run_n_exactly_on_what_changes_state():
+    """A confirms-on-server command is a dry run without --apply, so it may
+    spell that out (`data alter --dry-run`) or not (`data check`): with -n."""
     found = set()
     for path, cmd in LEAVES.items():
-        changes = KIND.get(path) == CHANGES
-        if changes and not _flag(cmd, "--dry-run", "-n"):
+        kind = _kind(path)
+        if kind == CHANGES and path not in NO_DRY_RUN and not _flag(cmd, "--dry-run", "-n"):
             found.add(path)
-        if not changes and _flag(cmd, "--dry-run"):
+        elif kind == CONFIRMS and _flag(cmd, "--dry-run") and not _flag(cmd, "--dry-run", "-n"):
+            found.add(path)
+        elif kind not in (CHANGES, CONFIRMS) and _flag(cmd, "--dry-run"):
+            found.add(path)
+        elif path in NO_DRY_RUN and _flag(cmd, "--dry-run"):
             found.add(path)
     _hold("rule 5b", found, RULE5B_ALLOWLIST)
 
 
 def test_rule5c_yes_y_exactly_on_what_asks():
-    with_yes = {c.path for c in TREE if _flag(c, "--yes")}
-    assert with_yes <= ASKS, f"--yes on a command not in ASKS: {sorted(with_yes - ASKS)}"
+    assert ROOT in ASKS, "the root group asks before running a command on a --target"
     found = {c.path for c in TREE if c.path in ASKS and not _flag(c, "--yes", "-y")}
     _hold("rule 5c", found, RULE5C_ALLOWLIST)
 

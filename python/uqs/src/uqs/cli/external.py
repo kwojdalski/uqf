@@ -36,6 +36,7 @@ from rich.table import Table
 
 from uqs.cli import completion
 from uqs.cli.json_out import emit, json_opt, snake
+from uqs.cli.pipelines import needs_pipelines
 from uqs.cli.renames import renamed
 from uqs.cli.safety import ChangesState, DryRunOpt, ReadOnly, dry_run_note
 from uqs.cli.shared import _die, _paths, app, console
@@ -70,6 +71,9 @@ FeedArg = Annotated[
     ),
 ]
 
+#: What every `connector` command needs: a runtime without it refuses them.
+_PLANT = "publishes this tree's tables into the plant"
+
 #: `start` and `restart`'s class: each option's old spellings, for their
 #: one-release window (cli/renames.py, #1729), and their mark (#1780).
 _START = renamed(
@@ -78,7 +82,7 @@ _START = renamed(
         for option, _takers in check_options(FEEDS).values()
         for alias in option.aliases
     },
-    ChangesState,
+    needs_pipelines(_PLANT, ChangesState),
 )
 
 
@@ -179,7 +183,7 @@ def _would(name: str, action: str) -> None:
     console.print(dry_run_note())
 
 
-@connector_app.command("stop", cls=ChangesState)
+@connector_app.command("stop", cls=needs_pipelines(_PLANT, ChangesState))
 def stop(name: FeedArg, dry_run: DryRunOpt = False) -> None:
     """Stop a feed started by `uqs connector start`."""
     if dry_run:
@@ -236,7 +240,7 @@ def _status_record(name: str, fields: dict[str, str]) -> dict:
     return record
 
 
-@connector_app.command("status", cls=ReadOnly)
+@connector_app.command("status", cls=needs_pipelines(_PLANT, ReadOnly))
 def status(
     name: Annotated[
         str | None,

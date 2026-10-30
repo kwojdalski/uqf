@@ -72,127 +72,29 @@ INSTALL_HINT = (
     f"    or set ${QLINTER_ENV} to a built binary"
 )
 
-#: q reserved words that are realistic parameter names. Deliberately NOT the
-#: full 182-name list: a checker for `.q` files wants the names someone would
-#: plausibly reach for, and flagging `count` or `select` as a parameter name
-#: would be noise. Every name here has either already bitten this repository
-#: or is an obvious candidate for a window/table/config variable.
-#: .
-#: The second block was added after `prior` - a plausible name for a
-#: previous value - aborted heartbeat.q at load time with a bare `'prior`.
-#: That was the EIGHTH collision here, and the list had seven of them. So
-#: every name below was checked against `key `.q` in a live KDB-X rather
-#: than recalled: adding one that is NOT reserved would make this rule
-#: report a correct name, which is how a checker earns being ignored.
-#: .
-#: The third block came from `eval` - a name so obviously a builtin in
-#: hindsight that the list not having it is the point. It aborted
-#: singlestore_odbc.q at load time, which was the NINTH collision here and
-#: the first this checker did not already know about.
+#: q's own words - `.Q.res` and every name in the `.q` context - which the one
+#: rule that reads this, reserved-name-in-embedded-q, refuses as a column name
+#: in a q table literal built in Python: a table literal's column names are
+#: assignments, so EVERY one of these throws `'assign`, and none is noise.
+#: It began as the names someone would plausibly reach for, recalled rather
+#: than read, and so held two that are not q words (`fill`, `find`) and missed
+#: eighty-three that are (#1795). The list is now all of them: KDB-X's, plus
+#: PeachQ's one word KDB-X lacks (`rlike`), since the PeachQ lane loads the
+#: same tree. scripts/ cannot import uqs, so it stays a copy;
+#: python/uqs/tests/test_qnames.py holds it equal to uqs.model.qnames.Q_WORDS
+#: and to a running q, in both directions.
 RISKY_PARAM_NAMES = frozenset(
-    {
-        "desc",
-        "tables",
-        "sv",
-        "load",
-        "save",
-        "count",
-        "first",
-        "last",
-        "type",
-        "key",
-        "value",
-        "max",
-        "min",
-        "sum",
-        "avg",
-        "get",
-        "set",
-        "next",
-        "prev",
-        "cols",
-        "meta",
-        "like",
-        "in",
-        "within",
-        "bin",
-        "cut",
-        "fill",
-        "find",
-        "group",
-        "iasc",
-        "idesc",
-        "insert",
-        "upsert",
-        "med",
-        "mod",
-        "neg",
-        "not",
-        "null",
-        "or",
-        "and",
-        "raze",
-        "read0",
-        "read1",
-        "reverse",
-        "rotate",
-        "select",
-        "show",
-        "signum",
-        "ss",
-        "ssr",
-        "string",
-        "sublist",
-        "system",
-        "til",
-        "trim",
-        "union",
-        "var",
-        "where",
-        "xbar",
-        "xcol",
-        "xkey",
-        "abs",
-        "all",
-        "any",
-        "asc",
-        "attr",
-        "delete",
-        "distinct",
-        "div",
-        "each",
-        "enlist",
-        "eval",
-        "exec",
-        "exit",
-        "exp",
-        "floor",
-        "flip",
-        "hopen",
-        "hclose",
-        "inv",
-        "log",
-        "lower",
-        "upper",
-        "sqrt",
-        "reval",
-        "update",
-        "wsum",
-        "wavg",
-        "prior",
-        "deltas",
-        "ratios",
-        "differ",
-        "sums",
-        "prds",
-        "rank",
-        "except",
-        "inter",
-        "cross",
-        "ceiling",
-        "xcols",
-        "parse",
-    }
+    """abs acos aj aj0 ajf ajf0 all and any asc asin asof atan attr avg avgs bin binr by
+    ceiling cols cor cos count cov cross csv cut delete deltas desc dev differ distinct div
+    do dsave each ej ema enlist eval except exec exit exp fby fills first fkeys flip floor
+    from get getenv group gtime hclose hcount hdel hopen hsym iasc idesc if ij ijf in insert
+    inter inv key keys last like lj ljf load log lower lsq ltime ltrim mavg max maxs mcount
+    md5 mdev med meta min mins mmax mmin mmu mod msum neg next not null or over parse peach
+    pj prd prds prev prior rand rank ratios raze read0 read1 reciprocal reval reverse rlike
+    rload rotate rsave rtrim save scan scov sdev select set setenv show signum sin sqrt ss
+    ssr string sublist sum sums sv svar system tables tan til trim type uj ujf ungroup union
+    update upper upsert use value var view views vs wavg where while within wj wj1 wsum ww
+    xasc xbar xcol xcols xdesc xexp xgroup xkey xlog xprev xrank""".split()
 )
 
 
