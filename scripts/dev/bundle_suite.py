@@ -11,7 +11,10 @@ bundle's tests. This does, without touching the checkout:
      `uqs job install` would;
   3. copies the bundle's test_*.q into tests/q/ - there is no list to add them
      to, and a test that enters a namespace with `\\d` is refused (below);
-  4. runs the WHOLE q suite there - which also proves the installed bundle
+  4. runs the bundle's own Python tests (its test_*.py) with pytest there,
+     against the installed connector copies (#1776) - copied beside uqs's
+     tests, so its fixtures and helpers apply;
+  5. runs the WHOLE q suite there - which also proves the installed bundle
      leaves every other test passing.
 
     uv run python scripts/dev/bundle_suite.py                    # every bundle under sidecars/
@@ -34,7 +37,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from uqs.paths import TEST_DIR
+from uqs.paths import INSTALLED_CONNECTORS, PACKAGE_DIR, TEST_DIR
 from uqs.scaffold import write
 from uqs.scaffold.plan import FileAction, ScaffoldPlan
 from uqs.stack import bundles
@@ -99,6 +102,39 @@ def install(folder: Path, tree: Path) -> list[str]:
     return [a.path.name for a in actions]
 
 
+#: Where a bundle's Python tests go in the throwaway tree: beside uqs's own, so
+#: its conftest fixtures and helpers apply to them.
+PY_TEST_DIR = PACKAGE_DIR / "tests"
+
+
+def python_tests(folder: Path, name: str, tree: Path) -> list[Path]:
+    """Copy the bundle's test_*.py into the tree; return where they went."""
+    tests = sorted(folder.glob("test_*.py"))
+    if not tests:
+        return []
+    into = tree / PY_TEST_DIR / f"bundle_{name}"
+    into.mkdir(parents=True, exist_ok=True)
+    for test in tests:
+        shutil.copy2(test, into / test.name)
+    return [into / t.name for t in tests]
+
+
+def run_python(name: str, tests: list[Path], tree: Path, timeout: float) -> int:
+    """pytest over `tests` in `tree`: uqs imported from the tree's own source (so
+    `repo_root()` is the tree, and discovery finds the installed connectors),
+    and the bundle's installed connector folder importable by module name."""
+    path = [str(tree / PACKAGE_DIR / "src"), str(tree / INSTALLED_CONNECTORS / name)]
+    env = dict(os.environ, PYTHONPATH=os.pathsep.join(path))
+    return subprocess.run(
+        [sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", *map(str, tests)],
+        cwd=tree,
+        env=env,
+        stdin=subprocess.DEVNULL,
+        timeout=timeout,
+        check=False,
+    ).returncode
+
+
 def run(folder: Path, q: str, timeout: float) -> int:
     with tempfile.TemporaryDirectory(prefix="uqf-bundle-suite-") as tmp:
         tree = Path(tmp)
@@ -111,6 +147,12 @@ def run(folder: Path, q: str, timeout: float) -> int:
         print(f"== {folder.name}: installed; its tests: {' '.join(added) or 'none'} ==", flush=True)
         if not added:
             print(f"{folder.name}: carries no test_*.q - nothing of its own was run", flush=True)
+        name = bundles.read_bundle(folder).name
+        if tests := python_tests(folder, name, tree):
+            print(f"== {folder.name}: its Python tests ==", flush=True)
+            if run_python(name, tests, tree, timeout) != 0:
+                print(f"{folder.name}: its Python tests failed", file=sys.stderr)
+                return 1
         r = subprocess.run(
             [q, "tests/run_tests.q", "-q"],
             cwd=tree,

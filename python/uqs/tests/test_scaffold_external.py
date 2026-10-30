@@ -120,7 +120,7 @@ def test_discover_finds_a_module_that_declares_a_feed(monkeypatch):
 
 def test_every_connector_declares_itself():
     """#1776: no feed is hand-wired into the CLI any more."""
-    assert {"databento", "kafka", "crypto", "crypto-fills", "flink_vwap"} <= set(feeds.discover())
+    assert {"kafka", "crypto", "crypto-fills"} <= set(feeds.discover())
 
 
 def test_raw_table_is_refused_on_another_kind_and_required_on_external():

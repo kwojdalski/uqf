@@ -5,7 +5,7 @@ A q process *can* hold a Kafka subscription - KX's ``kfk`` interface wraps
 same envelope and remains for hosts where the native library is not built.
 Pick one per consumer group.
 
-Like the Databento handler and the cryptorust recorders next door, this is
+Like the cryptorust recorders next door, this is
 not a ``process.csv`` row: it opens its own kdb+ IPC handle straight to the
 tickerplant and calls ``.u.upd``, so it is started and stopped here rather
 than by ``torq.sh``.
@@ -49,8 +49,8 @@ from uqs.stack.procs import get_process_config
 
 log = get_logger()
 
-#: Same credential the q feeds, the cryptorust recorder and the Databento
-#: handler use: stp1 enforces access control on every connection, and
+#: Same credential the q feeds, the cryptorust recorder and every other
+#: external publisher use: stp1 enforces access control on every connection, and
 #: appconfig/passwords/feed.txt already resolves to one accesslist.txt
 #: accepts. Reused rather than adding another password file.
 KAFKA_FEED_CREDENTIAL = "feed:pass"

@@ -1,17 +1,27 @@
-"""The flink_vwap publisher (python/uqs/src/uqs/external/flink_vwap_streamer.py).
+"""The flink_vwap publisher (the flink bundle's flink_vwap_streamer.py, #1776).
 
 No Flink and no tickerplant: Flink's result rows are plain tuples here, which
 is what a pyflink Row unpacks to.
+
+The flink bundle's own Python tests: scripts/dev/bundle_suite.py installs the
+bundle into a throwaway tree and runs them there, against the INSTALLED copies
+in src/etl/connectors/flink/ - the feed module the CLI discovered, and the
+streamer beside it on sys.path.
 """
 
+import importlib
 import re
+import sys
 from datetime import datetime
 from pathlib import Path
 
-from uqs.external import flink_vwap_streamer
+from uqs.cli import external as cli_external
 from uqs.external.plant_contract import plant_table_fields
+from uqs.paths import TABLES_FILE, repo_root
 
-REPO = Path(__file__).resolve().parents[3]
+REPO = repo_root()
+#: The installed streamer: bundle_suite.py puts the installed folder on sys.path.
+flink_vwap_streamer = importlib.import_module("flink_vwap_streamer")
 
 ROWS = [
     ("EURUSD", datetime(2026, 10, 9, 9, 1), 1.1012, 3_000_000.0, 7),
@@ -26,9 +36,8 @@ def test_each_row_is_published_as_its_own_batch_keyed_by_fields():
 
 
 def plant_text() -> str:
-    """The flink bundle's tables.q: the tree holds `flink_vwap_raw` in plant_tables.q
-    only once `uqs job install sidecars/flink` has run, and the declaration is the same."""
-    return (REPO / "sidecars/flink/tables.q").read_text()
+    """The tree's plant_tables.q, which holds `flink_vwap_raw` once the bundle is installed."""
+    return (REPO / TABLES_FILE).read_text()
 
 
 def plant_order(text: str | None = None) -> list[str]:
@@ -81,21 +90,10 @@ def test_the_window_query_selects_fields_in_order():
     assert sql.index("AS sym") < sql.index("window_end,") < sql.index("AS vwap")
 
 
-def test_starting_the_feed_without_the_bundle_names_the_install_command(tmp_path):
-    """flink_vwap_raw and flink_vwap1 are the flink bundle's: without them the
-    publisher would send to a table the tickerplant does not define."""
-    import pytest
-
-    from uqs.external import flink_vwap_feed
-    from uqs.paths import UqsError, UqsPaths
-
-    paths = UqsPaths(
-        repo_root=tmp_path,
-        torqhome=tmp_path / "lib" / "torq",
-        torqapphome=tmp_path / "app",
-        torqdata=tmp_path / "output" / "uqs",
-        scripts_dir=tmp_path / "scripts",
-        orchestrator_dir=tmp_path / "python" / "uqs",
-    )
-    with pytest.raises(UqsError, match="uqs job install sidecars/flink"):
-        flink_vwap_feed.start(paths, {})
+def test_the_feed_runs_its_streamer_from_beside_its_installed_copy():
+    """The feed is discovered from src/etl/connectors/flink/, never the bundle's
+    folder, and `start` runs the streamer that was installed with it."""
+    feed = sys.modules[cli_external.FEEDS["flink_vwap"].start.__module__]
+    installed = REPO / "src" / "etl" / "connectors" / "flink"
+    assert Path(str(feed.__file__)).resolve() == (installed / "flink_vwap_feed.py").resolve()
+    assert Path(str(flink_vwap_streamer.__file__)).resolve().parent == installed.resolve()

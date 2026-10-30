@@ -1,10 +1,11 @@
 """Scaffold an external publisher: `uqs job new NAME --kind external` (#715).
 
 Real data mostly enters the stack from something a q process cannot hold a
-subscription to - a Kafka topic, a vendor's websocket, a broker's API. The two
-that exist (Databento, Kafka) are each a pair: a Python process outside q that
-holds the subscription and publishes the raw records onto the tickerplant, and
-an ordinary q streaming job that subscribes to that raw table and reshapes it.
+subscription to - a Kafka topic, a vendor's websocket, a broker's API. The
+ones that exist (Kafka, and the sidecar bundles' connectors) are each a pair:
+a Python process outside q that holds the subscription and publishes the raw
+records onto the tickerplant, and an ordinary q streaming job that subscribes
+to that raw table and reshapes it.
 This writes both halves:
 
   python/uqs/src/uqs/external/NAME_streamer.py   the process: one function to
@@ -24,8 +25,8 @@ This writes both halves:
                                                  publishes --publishes
 
 The raw table and the published one start with the same --schema: the q job
-is where they come to differ, as databento1 folds 40 per-level columns into
-four vectors. Both are defined, so neither half can publish into a table the
+is where they come to differ, as a fold of forty per-level columns into four
+vectors would. Both are defined, so neither half can publish into a table the
 plant discards in silence.
 """
 

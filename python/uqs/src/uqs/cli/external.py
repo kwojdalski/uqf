@@ -40,25 +40,32 @@ from uqs.cli.renames import renamed
 from uqs.cli.safety import DryRunOpt, dry_run_note
 from uqs.cli.shared import _die, _paths, app, console
 from uqs.external.feeds import ExternalFeed, check_options, discover
-from uqs.paths import UqsError
+from uqs.paths import UqsError, repo_root
 
 connector_app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
     help="External connectors: start, stop, restart, status and logs of the "
     "publishers outside the plant "
-    "(databento, kafka, crypto, crypto-fills) that write into its tickerplant. These "
-    "supervise external processes, not the TorQ-managed q processes `uqs start` runs.",
+    "(kafka, crypto, crypto-fills, and those installed bundles carry) that write into its "
+    "tickerplant. These supervise external processes, not the TorQ-managed q processes "
+    "`uqs start` runs.",
 )
 app.add_typer(connector_app, name="connector")
 
-#: Every connector, as its module declares it (external/feeds.py, #1776).
-FEEDS: dict[str, ExternalFeed] = discover()
+#: Installed bundle connectors that did not load, and why: each is reported
+#: by name - in `status`, and to whoever names it - and every other one works.
+BROKEN: dict[str, str] = {}
+
+#: Every connector, as its module declares it (external/feeds.py, #1776): uqs's
+#: own, and those of the sidecar bundles installed in this tree.
+FEEDS: dict[str, ExternalFeed] = discover(repo_root(), BROKEN)
 
 FeedArg = Annotated[
     str,
     typer.Argument(
-        help="databento, kafka, crypto (order books) or crypto-fills (the bot's fills)",
+        help="kafka, crypto (order books), crypto-fills (the bot's fills), or one an "
+        "installed bundle carries - `connector status` lists them",
         autocompletion=completion.choices(*FEEDS),
     ),
 ]
@@ -72,6 +79,9 @@ _RENAMED = {
 
 
 def _feed(name: str) -> ExternalFeed:
+    if name in BROKEN:
+        _die(UqsError(BROKEN[name]))
+        raise typer.Exit(code=1)
     if name not in FEEDS:
         _die(UqsError(f"no feed {name!r} - the feeds are {', '.join(FEEDS)}"))
         raise typer.Exit(code=1)
@@ -95,8 +105,6 @@ def _start_signature() -> inspect.Signature:
 def start(name: str, dry_run: bool = False, **options: Any) -> None:
     """Start a feed publishing onto the running stack's tickerplant.
 
-    databento: live MBP-10 onto `databento_mbp10`, folded by databento1; needs the
-    databento bundle (`uqs job install sidecars/databento`).
     kafka: a topic onto `kafka_message`, decoded and deduplicated by kafka_flow1; needs
     a reachable broker and `confluent-kafka` (the uqs `kafka` extra).
     crypto: a sibling cryptorust checkout's order-book recorder into
@@ -104,6 +112,8 @@ def start(name: str, dry_run: bool = False, **options: Any) -> None:
     crypto-fills: cryptorust's fills recorder - paper fills into
     `crypto_sim_fills`, real executions into `crypto_trades`; needs an
     already-running cryptorust OMS.
+    A sidecar bundle can carry a connector of its own: installing the bundle
+    adds it here, with its options.
     """
     _start(name, options, dry_run)
 
@@ -187,7 +197,8 @@ def restart(name: str, dry_run: bool = False, **options: Any) -> None:
 
 
 StatusJson = json_opt(
-    '{"connectors": [{name, running: bool, pid: int or null, log, ...each feed\'s own fields}]}'
+    '{"connectors": [{name, running: bool, pid: int or null, log, ...each feed\'s own fields}], '
+    '"broken": [{name, error}] only when an installed connector did not load}'
 )
 
 
@@ -217,8 +228,12 @@ def status(
     for each in [name] if name is not None else list(FEEDS):
         feed = _feed(each)
         found.append((each, feed.status_title, feed.status(_paths())))
+    broken = {} if name is not None else BROKEN
     if as_json:
-        emit({"connectors": [_status_record(each, fields) for each, _, fields in found]})
+        doc: dict = {"connectors": [_status_record(each, fields) for each, _, fields in found]}
+        if broken:
+            doc["broken"] = [{"name": n, "error": why} for n, why in broken.items()]
+        emit(doc)
         return
     for _, title, fields in found:
         table = Table(title=title)
@@ -227,3 +242,5 @@ def status(
         for k, v in fields.items():
             table.add_row(k, v)
         console.print(table)
+    for why in dict.fromkeys(broken.values()):
+        console.print(why, style="red", markup=False)

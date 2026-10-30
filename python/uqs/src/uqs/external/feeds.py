@@ -8,8 +8,14 @@ the tables it publishes onto, and how to start, stop and read it. The CLI builds
 with options reaches the CLI with no edit to it, and `uqs job remove` takes one
 away by deleting its module.
 
+A sidecar bundle carries its own connectors (#1776): `*_feed.py` modules beside
+its q jobs, copied into src/etl/connectors/<bundle>/ when it is installed and
+listed in the bundle ledger, which is where `discover(root)` finds them. They
+may import `uqs` and the standard library at module level and nothing else,
+and must do nothing at import: they are imported on every CLI run.
+
 What a connector `produces` is read twice, on purpose: by importing it here,
-and from its text by `model.dependencies.external_producers`, which sits below
+and from its text by `model.connectors` (for `dependencies.external_producers`), below
 this layer and so cannot import it. `discover()` refuses a module where the two
 disagree, so the dependency warnings cannot describe a connector other than the
 one that runs.
@@ -18,16 +24,21 @@ one that runs.
 from __future__ import annotations
 
 import importlib
+import importlib.util
 import inspect
 import pkgutil
+import sys
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import ModuleType
 from typing import Any
 
-from uqs.model.dependencies import feed_produces
+from uqs.logger import get_logger
+from uqs.model.connectors import bundle_connectors, feed_names, feed_produces
 from uqs.paths import UqsError, UqsPaths
+
+log = get_logger()
 
 #: The parameters `connector start` has of its own; no option may take their names.
 RESERVED_OPTIONS = frozenset({"name", "dry_run"})
@@ -131,9 +142,12 @@ def _check_produces(module: ModuleType, feeds: tuple[ExternalFeed, ...]) -> None
         return
     imported = {t: who for feed in feeds for t, who in feed.produces.items()}
     try:
-        read = feed_produces(Path(path))
+        read, named = feed_produces(Path(path)), feed_names(Path(path))
     except ValueError as exc:
         raise UqsError(str(exc)) from None
+    if named != [feed.name for feed in feeds]:
+        raise UqsError(f"{module.__name__}: its feeds are named {[f.name for f in feeds]}, "
+                       f"its text names {named} - write each name as a string literal")  # fmt: skip
     if read != imported:
         raise UqsError(
             f"{module.__name__}: what its feeds produce differs from what its text says - "
@@ -170,7 +184,46 @@ def _shape(option: FeedOption) -> str:
     return f"{option.type.__name__}{', many' if option.many else ''}"
 
 
-def discover() -> dict[str, ExternalFeed]:
+def discover(
+    root: Path | None = None, broken: dict[str, str] | None = None
+) -> dict[str, ExternalFeed]:
+    """Every feed a `uqs.external.*_feed` module declares, by name - and, given
+    the tree's `root`, every feed an installed bundle's connectors declare.
+
+    A bundle connector is imported from its copy in the tree, and only when
+    the bundle ledger lists it, so nothing runs from a folder that merely
+    exists. Its failure stays its own: this runs whenever the CLI is imported,
+    so a connector that raises on import, collides with another's name or
+    disagrees on a shared option is left out and recorded in `broken`
+    ({feed name, or bundle/module when its text names none: why}) while every
+    other connector registers. uqs's own connectors are refused outright.
+    """
+    found = _from_package()
+    if root is None:
+        return found
+    for key, path in bundle_connectors(root).items():
+        bundle = key.split("/")[0]
+        try:
+            module = _load(f"uqs_bundle_{bundle}_{path.stem}", path)
+            candidate = dict(found)
+            for feed in _feeds_in(module):
+                if feed.name in candidate:
+                    raise UqsError(f"feed {feed.name!r} is declared twice - rename one")
+                candidate[feed.name] = feed
+            check_options(candidate)
+        except (Exception, SystemExit) as exc:  # one bundle's fault is reported, not raised
+            reason = (f"connector {path.relative_to(root)} (bundle {bundle}) does not load: "
+                      f"{type(exc).__name__}: {exc}")  # fmt: skip
+            if broken is None:
+                log.warning(reason)
+            else:
+                broken.update(dict.fromkeys(_names_or(path, key), reason))
+            continue
+        found = candidate
+    return found
+
+
+def _from_package() -> dict[str, ExternalFeed]:
     """Every feed a `uqs.external.*_feed` module declares, by name."""
     import uqs.external as package
 
@@ -184,3 +237,27 @@ def discover() -> dict[str, ExternalFeed]:
             found[feed.name] = feed
     check_options(found)
     return found
+
+
+def _load(name: str, path: Path) -> ModuleType:
+    """The module at `path`, imported under `name` - which carries the bundle,
+    so two bundles' modules cannot collide."""
+    spec = importlib.util.spec_from_file_location(name, path)
+    if spec is None or spec.loader is None:
+        raise UqsError(f"{path} is not a Python module")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    try:
+        spec.loader.exec_module(module)
+    except BaseException:
+        sys.modules.pop(name, None)
+        raise
+    return module
+
+
+def _names_or(path: Path, key: str) -> list[str]:
+    """The feed names `path`'s text declares, or `key` when it names none."""
+    try:
+        return feed_names(path) or [key]
+    except OSError, ValueError, SyntaxError:
+        return [key]

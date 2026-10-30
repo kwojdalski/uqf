@@ -24,6 +24,7 @@ throwaway copy of the tree.
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import tempfile
 from collections.abc import Iterator
@@ -42,6 +43,7 @@ from uqs.paths import (
     WORKER_DIR,
     UqsError,
 )
+from uqs.scaffold.external import EXTERNAL_DIR, PY_TEST_DIR
 from uqs.scaffold.plan import FileAction, ScaffoldPlan, WriteMode
 from uqs.stack import bundles
 
@@ -129,14 +131,12 @@ def into_bundle(plan: ScaffoldPlan, bundle_dir: Path) -> ScaffoldPlan:
     dropped: list[Path] = []
     for action in plan.actions:
         target = _destination(action, bundle_dir)
-        if target is None and action.path.suffix == ".py":
-            # An external feed's publisher is Python, which a bundle neither
-            # carries nor installs: the bundle would hold a job subscribed to
-            # a table nothing ever publishes (#1570).
-            raise UqsError(
-                f"--bundle cannot carry {action.path.name}: a bundle holds q jobs, not an "
-                "external feed's Python publisher - scaffold --kind external into the tree"
-            )
+        if target is not None and action.path.suffix == ".py":
+            # An external feed's publisher, its feed module and their test: a
+            # bundle carries its connectors (#1776), installed with its q. The
+            # test runs beside the installed copies (scripts/dev/bundle_suite.py),
+            # where the streamer is a top-level module, not uqs.external's.
+            action = FileAction(action.path, connector_text(action.body), action.mode)
         if target is None:
             dropped.append(action.path)
             continue
@@ -165,6 +165,7 @@ def into_bundle(plan: ScaffoldPlan, bundle_dir: Path) -> ScaffoldPlan:
             note = note.split(" - or,")[0] + " - a bundle describes every table it defines"
         for old, new in renamed.items():
             note = note.replace(old, new)
+        note = note.replace(f"{EXTERNAL_DIR}/", f"{bundle_dir}/")
         notes.append(note)
     if dropped:
         notes.append(
@@ -178,9 +179,18 @@ def into_bundle(plan: ScaffoldPlan, bundle_dir: Path) -> ScaffoldPlan:
     return ScaffoldPlan(plan.name, actions, notes)
 
 
+def connector_text(body: str) -> str:
+    """A scaffolded connector file as a bundle holds it: what it imported from
+    uqs.external, where the tree's own connectors live, it imports from beside
+    itself."""
+    return re.sub(r"^from uqs\.external import (\w+_streamer)$", r"import \1", body, flags=re.M)
+
+
 def _destination(action: FileAction, bundle_dir: Path) -> Path | None:
     """Where in the bundle `action` goes, or None when a bundle carries no such thing."""
     path = action.path
+    if path.suffix == ".py" and str(path.parent) in (EXTERNAL_DIR, PY_TEST_DIR):
+        return bundle_dir / path.name
     if action.mode is WriteMode.CREATE and (path.parent in _JOB_DIRS or path.parent == TEST_DIR):
         return bundle_dir / path.name
     if path == TABLES_FILE:

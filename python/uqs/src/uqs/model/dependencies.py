@@ -26,22 +26,17 @@ prevents.
 
 from __future__ import annotations
 
-import ast
-import functools
 from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
 from uqs.logger import get_logger
+from uqs.model.connectors import CONNECTOR_DIR, bundle_connectors, feed_produces
 from uqs.model.plant_schema import _publishers
 from uqs.model.registry import PIPELINES
-from uqs.paths import PACKAGE_DIR, repo_root
+from uqs.paths import repo_root
 
 log = get_logger()
-
-#: Where this tree's own connectors sit: the uqs.external package, whose
-#: `*_feed.py` modules each declare a FEED (external/feeds.py).
-CONNECTOR_DIR = PACKAGE_DIR / "src" / "uqs" / "external"
 
 
 def external_producers(root: Path) -> dict[str, str]:
@@ -64,77 +59,24 @@ def external_producers(root: Path) -> dict[str, str]:
     Read from each module's text rather than by importing it: `model/` sits
     below `external/` and imports nothing above it (test_module_split.py).
     `external.feeds.discover` refuses a module whose text and import disagree.
+
+    The tree's own connectors, and every installed bundle's (#1776) - so a
+    bundle's raw table is excused only while the bundle is installed. A
+    bundle connector whose text cannot be read is left out, with a warning,
+    rather than stopping every command that warns about dependencies.
     """
     out: dict[str, str] = {}
-    for path in sorted((root / CONNECTOR_DIR).glob("*_feed.py")):
-        for table, who in feed_produces(path).items():
-            out[table] = f"{out[table]} or {who}" if table in out else who
-    return out
-
-
-def feed_produces(path: Path) -> dict[str, str]:
-    """{table: who} from every `ExternalFeed(..., produces={...})` in `path`'s text.
-
-    Raises ValueError for a `produces=` that is not a dict of string literals
-    or module-level string constants - this module's own, or one it imports
-    by name from a sibling module."""
-    stat = path.stat()
-    return dict(_feed_produces(str(path), stat.st_mtime_ns, stat.st_size))
-
-
-@functools.lru_cache(maxsize=64)
-def _feed_produces(path: str, _mtime: int, _size: int) -> tuple[tuple[str, str], ...]:
-    tree = ast.parse(Path(path).read_text(encoding="utf-8"))
-    names = _constants(tree, Path(path).parent)
-    out: list[tuple[str, str]] = []
-    for node in ast.walk(tree):
-        if not (isinstance(node, ast.Call) and _callee(node.func) == "ExternalFeed"):
+    own = sorted((root / CONNECTOR_DIR).glob("*_feed.py"))
+    for path in [*own, *bundle_connectors(root).values()]:
+        try:
+            produced = feed_produces(path)
+        except (OSError, ValueError) as exc:
+            if path in own:
+                raise
+            log.warning("a bundle connector is not read: {}", exc)
             continue
-        for keyword in node.keywords:
-            if keyword.arg != "produces":
-                continue
-            value = keyword.value
-            if not isinstance(value, ast.Dict) or any(k is None for k in value.keys):
-                raise ValueError(f"{path}: a feed's produces= must be a dict literal")
-            for k, v in zip(value.keys, value.values, strict=True):
-                out.append((_text(k, names, path), _text(v, names, path)))
-    return tuple(out)
-
-
-def _callee(func: ast.expr) -> str:
-    return func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", "")
-
-
-def _text(node: ast.expr | None, names: dict[str, str], path: str) -> str:
-    if isinstance(node, ast.Constant) and isinstance(node.value, str):
-        return node.value
-    if isinstance(node, ast.Name) and node.id in names:
-        return names[node.id]
-    raise ValueError(
-        f"{path}: a feed's produces= holds {ast.unparse(node) if node else '**'}, which is "
-        "not a string literal or a module-level string constant - model/dependencies.py "
-        "reads it without importing the connector"
-    )
-
-
-def _constants(tree: ast.Module, folder: Path, follow: bool = True) -> dict[str, str]:
-    """Module-level `NAME = "text"` bindings, and names imported from a sibling."""
-    out: dict[str, str] = {}
-    for node in tree.body:
-        target = node.targets[0] if isinstance(node, ast.Assign) and len(node.targets) == 1 else (
-            node.target if isinstance(node, ast.AnnAssign) else None
-        )  # fmt: skip
-        value = getattr(node, "value", None)
-        if isinstance(target, ast.Name) and isinstance(value, ast.Constant):
-            if isinstance(value.value, str):
-                out[target.id] = value.value
-        elif follow and isinstance(node, ast.ImportFrom) and node.module:
-            sibling = folder / f"{node.module.rsplit('.', 1)[-1]}.py"
-            if node.module.startswith("uqs.external.") and sibling.is_file():
-                theirs = _constants(ast.parse(sibling.read_text(encoding="utf-8")), folder, False)
-                for alias in node.names:
-                    if alias.name in theirs:
-                        out[alias.asname or alias.name] = theirs[alias.name]
+        for table, who in produced.items():
+            out[table] = f"{out[table]} or {who}" if table in out else who
     return out
 
 
@@ -185,7 +127,7 @@ def depends_on_by_process(pipelines: Iterable[Any] = PIPELINES) -> dict[str, tup
     "what table does this need"; this answers "and who do I have to start to
     get it", which is the question behind every `up, but idle` process.
 
-    A table produced from outside the process list entirely - Databento's
+    A table produced from outside the process list entirely - a vendor's
     feed handler, cryptorust's recorder - resolves to the name in
     `external_producers` rather than being dropped, because "nothing in this
     list provides it" and "nothing provides it" are different facts and only
@@ -216,7 +158,7 @@ def worker_edges(
     from what its bounded worker declares.
 
     Kept apart from `inputs_by_process` deliberately. A worker's source is a
-    system outside the stack - a DuckDB file, another q process, Databento -
+    system outside the stack - a DuckDB file, another q process, a vendor's API -
     not a plant table, so nothing in the process list publishes it. Folding it
     in would have `starved_processes` report every running backfill as
     unfed, the warning-that-is-usually-wrong `external_producers` exists to

@@ -1737,7 +1737,7 @@ def test_generated_schema_covers_every_published_table(fake_paths: UqsPaths):
             assert pipeline.schema in generated, pipeline.procname
     # and every table plant_tables.q defines, including the ones only an
     # outside producer writes (crypto_sim_fills from cryptorust's recorder,
-    # databento_mbp10 from the live feed handler) - no list names them
+    # kafka_message from a Kafka consumer) - no list names them
     for definition in schemas._definitions().values():
         assert definition in generated, definition.split(":")[0]
 

@@ -1,6 +1,6 @@
 """The lifecycle every external publisher shares: a detached process and its pid file.
 
-Databento, Kafka and cryptorust's two recorders are processes this repository
+Kafka, cryptorust's two recorders and bundles' connectors are processes this repository
 starts but TorQ does not - they are not `process.csv` rows - so each needs
 the same four things: start it detached with its output in a log, remember
 its pid, say whether it is still alive, and stop it. Each feed module carried
@@ -10,10 +10,10 @@ says beyond running/pid/log (#715).
 
 What the copies differed on is kept as a choice, not flattened:
 
-  new_session   Databento and Kafka start in a new session, so a shell's
+  new_session   Kafka and the bundle feeds start in a new session, so a shell's
                 Ctrl-C or hang-up does not reach them; the cryptorust
                 recorders never did, and still do not.
-  stop          a feed with no pid file logs "not running" (Databento, Kafka)
+  stop          a feed with no pid file logs "not running" (Kafka, the bundles')
                 or raises it (the recorders) - `missing_ok` says which.
 
 The pid file holds the pid and, on its second line, the process's identity -
