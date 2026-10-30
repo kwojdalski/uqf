@@ -109,6 +109,15 @@ def _nested_contexts(nested: ModuleType, root: Path) -> int:
     )
 
 
+def _registry_enlist(enlist: ModuleType, root: Path) -> int:
+    """Every write that adds to a q registry under src/ stores it enlisted (#1030)."""
+    return report(
+        "registry-enlist",
+        enlist.problems(root),
+        f"every registry write enlists, {len(enlist.NOT_DICTS)} hold no dicts",
+    )
+
+
 @dataclass(frozen=True)
 class Check:
     name: str
@@ -136,6 +145,12 @@ CHECKS: dict[str, Check] = {
             "no `\\d` in this tree's own q names more than one level",
             "nested_contexts",
             _nested_contexts,
+        ),
+        Check(
+            "registry-enlist",
+            "every write that adds to a q registry under src/ stores its value enlisted",
+            "registry_enlist",
+            _registry_enlist,
         ),
     )
 }

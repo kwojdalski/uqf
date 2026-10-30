@@ -34,7 +34,7 @@
 / table - and markout's declaration, which carries an on_batch the feeds do
 / not, was refused with a bare 'mismatch naming nothing. Enlisting each
 / declaration keeps the values a general list, so a job may declare whatever
-/ its shape needs. scripts/gates/check_registry_enlist.py holds every
+/ its shape needs. `scripts/gates/check.py registry-enlist` holds every
 / registry under src/ to this (#1030).
 .qetl.job.stream.jobs:(`symbol$())!();
 
