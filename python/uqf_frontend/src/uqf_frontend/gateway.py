@@ -302,13 +302,22 @@ FAKE_CATALOG: list[dict[str, str]] = [
 #: state no live stack is ever in, and hid a bug that made the whole catalog
 #: unbuildable against a populated fx_orderbook. `ask_sizes` keeps the blank so both
 #: spellings stay covered.
+#:
+#: Each table here is either q's WHOLE table or a deliberate projection of it,
+#: and FAKE_SCHEMA_SHAPES says which (#1784). test_fake_schema_contract.py holds
+#: a complete one to q's columns in q's order with compatible types, and a
+#: projection to columns q has, with compatible types - against the contract
+#: surface, which is exported from the loaded tree. So a column q adds, drops,
+#: renames or retypes fails there rather than leaving this double describing a
+#: table no stack serves.
 FAKE_SCHEMA: list[dict[str, str]] = [
     {"table": "trades", "column": "time", "kind": "p"},
     {"table": "trades", "column": "sym", "kind": "s"},
     {"table": "trades", "column": "side", "kind": "j"},
     {"table": "trades", "column": "trade_price", "kind": "f"},
     {"table": "trades", "column": "size", "kind": "f"},
-    {"table": "trades", "column": "pip_factor", "kind": "f"},
+    {"table": "trades", "column": "pip_factor", "kind": "j"},
+    {"table": "trades", "column": "fill_id", "kind": "s"},
     {"table": "fx_orderbook", "column": "time", "kind": "p"},
     {"table": "fx_orderbook", "column": "sym", "kind": "s"},
     {"table": "fx_orderbook", "column": "bid_prices", "kind": "F"},
@@ -328,6 +337,17 @@ FAKE_SCHEMA: list[dict[str, str]] = [
     {"table": "etl_coverage", "column": "superseded_at", "kind": "p"},
     {"table": "etl_coverage", "column": "run_id", "kind": "g"},
 ]
+
+#: Whether each FAKE_SCHEMA table is q's whole table ("complete") or a subset
+#: of its columns ("projection"). `position` is the one projection: the tests
+#: that use it need a few numeric columns, not the eight-column book, and a
+#: projection still has to name only columns q has.
+FAKE_SCHEMA_SHAPES: dict[str, str] = {
+    "trades": "complete",
+    "fx_orderbook": "complete",
+    "position": "projection",
+    "etl_coverage": "complete",
+}
 
 
 class FakeGateway:
