@@ -1,9 +1,5 @@
-"""Tests for scripts/test.py's smoke lane options, its PeachQ lane and its q arguments.
-
-The lane runs tests/q/smoke_external_metadata.q, which reads its sources off
-its own command line. These check that --targets, --tables and --timeout-ms
-reach it as those flags, and are refused for every other lane.
-"""
+"""Tests for what is left of scripts/test.py: its q-coverage lane's arguments,
+and that the lanes moved to pytest are gone from it (#1808)."""
 
 from __future__ import annotations
 
@@ -33,99 +29,21 @@ def ran(monkeypatch) -> list[tuple[str, str, tuple[str, ...]]]:
     return calls
 
 
-def test_the_smoke_options_reach_the_script_as_its_own_flags(ran):
-    argv = ["smoke", "--targets", "h1:5010", "h2:5011", "--tables", "quote:sym,bid", "trade:sym"]
-    assert runner.main([*argv, "--timeout-ms", "3000"]) == 0
-    assert ran == [
-        (
-            "smoke",
-            "tests/q/smoke_external_metadata.q",
-            (
-                "-targets",
-                "h1:5010",
-                "h2:5011",
-                "-tables",
-                "quote:sym,bid",
-                "trade:sym",
-                "-timeout_ms",
-                "3000",
-            ),
-        )
-    ]
-
-
-def test_smoke_with_no_options_passes_no_flags_so_the_script_can_skip(ran):
-    """An unconfigured checkout is SKIP, not a failure."""
-    assert runner.main(["smoke"]) == 0
-    assert ran == [("smoke", "tests/q/smoke_external_metadata.q", ())]
-
-
-def test_the_smoke_options_are_refused_for_another_lane(ran):
-    with pytest.raises(SystemExit) as exc:
-        runner.main(["python", "--targets", "h1:5010"])
-    assert exc.value.code == 2
-    assert ran == []
-
-
-def test_q_unit_peachq_fails_rather_than_skips_when_peachq_cannot_be_had(ran, monkeypatch):
-    """The lane CI blocks on: a resolver failure fails it."""
-
-    def unavailable(env=None, override=None):
-        raise runner.peachq.PeachQError("offline, and the cache is cold")
-
-    monkeypatch.setattr(runner, "peachq_binary", unavailable)
-    with pytest.raises(SystemExit, match="q-unit-peachq: offline"):
-        runner.main(["q-unit-peachq"])
-
-
-def test_peachq_names_the_binary_for_the_peachq_lane(monkeypatch):
-    """KDB-X plus a custom PeachQ: --peachq PATH, not an inherited variable -
-    and the global QCMD is left alone."""
-    calls, asked = [], []
-    monkeypatch.setattr(runner, "check_interpreter", lambda env=None: None)
-    monkeypatch.setattr(runner, "_run", lambda lane, argv, *, env=None: calls.append(argv))
-
-    def binary(env=None, override=None):
-        asked.append(override)
-        return Path(override or "/cache/peachq/q")
-
-    monkeypatch.setattr(runner, "peachq_binary", binary)
-    assert runner.main(["q-unit-peachq", "--peachq", "/opt/pq/q"]) == 0
-    assert asked == ["/opt/pq/q"]
-    [argv] = calls
-    assert argv[argv.index("--q") + 1] == "/opt/pq/q"
-    assert runner.Q_CMD != "/opt/pq/q"
-
-
 def test_the_lanes_moved_to_pytest_are_gone():
-    """q-scripts, q-docs and q-docs-peachq run under pytest now
-    (tests/qrun/), and only there (#1808): no lane runs them a second way."""
-    for lane in ("q-scripts", "q-docs", "q-docs-peachq"):
+    """These run under pytest now (tests/qrun/), and only there (#1808): no
+    lane runs them a second way."""
+    moved = ("q-scripts", "q-docs", "q-docs-peachq", "q-examples", "q-backfill-process",
+             "q-two-instances", "q-remote-writer", "q-metatables-hdb", "q-unit", "q-order",
+             "q-unit-peachq", "bundles", "smoke", "attach-stack", "remote-stack",
+             "stack-smoke")  # fmt: skip
+    for lane in moved:
         assert lane not in runner.LANES
         assert lane not in runner.ALL
 
 
-def test_peachq_is_refused_for_a_lane_that_would_ignore_it(ran):
-    with pytest.raises(SystemExit) as exc:
-        runner.main(["q-unit", "--peachq", "/opt/pq/q"])
-    assert exc.value.code == 2
-    assert ran == []
-
-
-def test_q_unit_passes_its_own_arguments_to_the_runner(ran):
-    """How the q-tests hook runs the suites test_impact.py selects (#1690)."""
-    assert runner.main(["q-unit", "-files", "test_a.q,test_b.q"]) == 0
-    assert ran == [("q-unit", "tests/run_tests.q", ("-files", "test_a.q,test_b.q"))]
-
-
-def test_q_unit_without_arguments_runs_the_whole_suite(ran):
-    assert runner.main(["q-unit"]) == 0
-    assert ran == [("q-unit", "tests/run_tests.q", ())]
-
-
 def test_another_lane_refuses_arguments_it_would_drop(ran):
     with pytest.raises(SystemExit) as exc:
-        runner.main(["q-examples", "-files", "test_a.q"])
+        runner.main(["python", "-files", "test_a.q"])
     assert exc.value.code == 2
     assert ran == []
 

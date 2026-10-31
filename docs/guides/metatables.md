@@ -269,8 +269,8 @@ not mutate DQEDB or change DQE's retention policy. No TorQ files are patched.
 ## Verification
 
 ```sh
-scripts/test.py q-unit
-scripts/test.py q-metatables-hdb
+uv run pytest tests/qrun/test_q_suite.py::test_the_q_suite_passes
+uv run pytest tests/qrun/test_process_runners.py -k metatables-hdb
 ```
 
 The second command creates and cleans up a disposable two-date, enumerated HDB

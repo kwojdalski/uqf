@@ -721,7 +721,7 @@ def test_the_q_tests_hook_runs_the_selection():
     config = (_ROOT / ".pre-commit-config.yaml").read_text()
     hook = config.split("- id: q-tests", 1)[1].split("- id:", 1)[0]
     assert "scripts/dev/test_impact.py --hook" in hook
-    assert "scripts/test.py q-unit -files" in hook
+    assert 'test_the_q_suite_passes --q-files "${selection#-files }"' in hook
 
 
 @pytest.mark.parametrize(
@@ -843,12 +843,15 @@ def test_the_q_tests_hook_skips_q_unit_only_when_attest_says_so():
     guard = f'if [ "${{{attest.FROM_COVERAGE_ENV}:-}}" = 1 ]; then'
     assert guard in hook
     skipped, rest = hook.split(guard, 1)[1].split("else", 1)
-    assert "scripts/test.py" not in skipped  # nothing runs in its place
-    assert "scripts/test.py q-unit" in rest.split("fi\n", 1)[0]
-    # q-examples and the worked examples (pytest's, #1808) run either way
+    assert "test_q_suite" not in skipped  # nothing runs in its place
+    assert "tests/qrun/test_q_suite.py::test_the_q_suite_passes" in rest.split("fi\n", 1)[0]
+    # the documented and worked examples (pytest's, #1808) run either way,
+    # with the suite only when a selection put it in `suite`
     tail = rest.split("fi\n", 1)[1]
-    assert "scripts/test.py q-examples" in tail
-    assert "--require-q kdbx tests/qrun/test_worked_examples.py" in tail
+    assert (
+        '--require-q kdbx ${suite[@]+"${suite[@]}"} tests/qrun/test_documented_examples.py '
+        "tests/qrun/test_worked_examples.py" in tail
+    )
 
 
 def test_the_coverage_run_records_outcomes_and_seeds_as_the_plain_run_does():

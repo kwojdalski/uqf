@@ -185,7 +185,11 @@ def test_each_q_hook_runs_its_tests_through_pytest_and_no_lane_runs_them_too() -
     python-tests hook leaves the q_backend tests to them."""
     config = (REPO / ".pre-commit-config.yaml").read_text()
     q_tests = _hook(config, "q-tests")
-    assert "--require-q kdbx tests/qrun/test_worked_examples.py" in q_tests
+    assert "tests/qrun/test_documented_examples.py tests/qrun/test_worked_examples.py" in q_tests
+    assert "tests/qrun/test_q_suite.py::test_the_q_suite_passes --q-files" in q_tests
+    assert "scripts/test.py q-unit" not in q_tests
+    assert "--require-q kdbx" in q_tests
+    assert "scripts/test.py q-examples" not in q_tests
     assert "q-scripts" not in q_tests.replace("q-scripts lane", "")
     assert "-m kdbx --require-q kdbx tests/qrun/test_doc_blocks.py" in _hook(config, "q-docs")
     assert "-m peachq --require-q peachq tests/qrun/test_doc_blocks.py" in _hook(
@@ -195,8 +199,14 @@ def test_each_q_hook_runs_its_tests_through_pytest_and_no_lane_runs_them_too() -
     assert 'NOT_Q_HOOKS = ["-m", "not q_backend"]' in hook
     assert hook.count("*NOT_Q_HOOKS]") == 2, "both modes leave them out"
     test_py = (REPO / "scripts/test.py").read_text()
-    for gone in ("lane_q_scripts", "lane_q_docs", "scripts/examples", "doc_examples"):
-        assert gone not in test_py
+    gone = ("lane_q_scripts", "lane_q_docs", "scripts/examples", "doc_examples",
+            "run_examples.q", "run_backfill_process.q", "run_two_instances.q",
+            "run_remote_writer.q", "run_metatables_hdb.q", "run_tests.q",
+            "full_suite.py", "UQF_TEST_ORDER", "bundle_suite.py",
+            "smoke_external_metadata.q", "tests/remote/Dockerfile", "UQS_ATTACH_STACK_TEST",
+            "lane_stack_smoke", "lane_remote_stack")  # fmt: skip
+    for name in gone:
+        assert name not in test_py
 
 
 def test_nothing_else_runs_the_worked_examples() -> None:
@@ -207,3 +217,18 @@ def test_nothing_else_runs_the_worked_examples() -> None:
         cwd=REPO, capture_output=True, text=True, check=False,
     ).stdout.split()  # fmt: skip
     assert users == ["tests/qrun/test_worked_examples.py"]
+
+
+# ------------------------------------------------------------ opt-in markers
+
+
+def test_an_opt_in_test_skips_unless_its_marker_is_selected(tmp_path: Path) -> None:
+    """The release, live_stack, docker and external tests start nothing in an
+    ordinary run: they skip, saying how to select them, and -m runs them."""
+    env = {k: v for k, v in os.environ.items() if not k.startswith("PYTEST_")}
+    plain = _pytest("tests/remote/test_1_reach_back.py", env=env)
+    assert plain.returncode == 0, plain.stdout + plain.stderr
+    assert "opt-in: select it with -m docker" in plain.stdout
+    assert " passed" not in plain.stdout and " failed" not in plain.stdout
+    smoke = _pytest("tests/qrun/test_external_smoke.py", "-m", "external", env=env)
+    assert "no --smoke-targets" in smoke.stdout, smoke.stdout

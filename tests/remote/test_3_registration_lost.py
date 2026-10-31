@@ -24,6 +24,10 @@ from remote_world import (
     wait_for,
 )
 
+#: Opt-in (-m docker), and every scenario on one xdist worker: they share one
+#: session's machines and run in file order.
+pytestmark = [pytest.mark.docker, pytest.mark.xdist_group("remote-stack")]
+
 
 @pytest.fixture(scope="module")
 def restarted(world: World) -> World:

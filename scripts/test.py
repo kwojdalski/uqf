@@ -1,66 +1,40 @@
 #!/usr/bin/env python3
-"""test.py - the test lane dispatcher.
+"""test.py - what is left of the test lane dispatcher (#1808).
 
-The rule: "Use the suite that matches the changed layer: q-unit for q
-behaviour, q-backfill-process for bounded process behaviour, and the
-focused Python suites for orchestration."
+pytest is becoming the one interface for running tests, with qUnit and q
+coverage as the backends it drives. Each lane moves once - its callers
+switched and its code here removed in the same change, so no test has two
+runners (#891). Moved so far, with the selector that runs each now:
 
-D5 deliberately did NOT build a dispatcher when the only lane was q-unit: a
-dispatcher with one option is worse than no dispatcher. There are several
-genuinely different lanes now, so it earns its place.
+  q-unit         uv run pytest tests/qrun/test_q_suite.py::test_the_q_suite_passes
+                 (--q-files a.q,b.q for the suites a change reaches)
+  q-order        uv run pytest tests/qrun/test_q_suite.py -m release
+  q-unit-peachq  uv run pytest tests/qrun/test_q_suite.py -m peachq
+  q-scripts      uv run pytest tests/qrun/test_worked_examples.py
+  q-docs         uv run pytest tests/qrun/test_doc_blocks.py -m kdbx
+  q-docs-peachq  uv run pytest tests/qrun/test_doc_blocks.py -m peachq
+  q-examples     uv run pytest tests/qrun/test_documented_examples.py
+  q-backfill-process, q-two-instances, q-remote-writer, q-metatables-hdb
+                 uv run pytest tests/qrun/test_process_runners.py
+                 (-k two-instances etc. for one of them)
+  bundles        uv run pytest tests/qrun/test_bundle_suites.py -m release
+  smoke          uv run pytest tests/qrun/test_external_smoke.py -m external
+                 --smoke-targets HOST:PORT --smoke-tables TABLE:COL,COL
+  attach-stack   uv run pytest -m live_stack
+  remote-stack   uv run pytest tests/remote -m docker
 
-The lanes differ in WHAT THEY PROVE, which is the whole point of choosing
-between them:
+What is still here:
 
-  q-unit               deterministic q behaviour, in one process, no I/O
-                       beyond a temp status directory. Fast, hermetic, and
-                       the only lane the commit hook runs.
-  q-unit-peachq        the whole q suite on PeachQ, after flattening nested
-                       contexts (scripts/portable/full_suite.py), held to
-                       tests/q/peachq_known_gaps.txt both ways. The q-unit
-                       lane CI BLOCKS on, on PeachQ, where KDB-X cannot run.
-  attach-stack         the attach workflow (#1424) on isolated TorQ stacks: real
-                       processes, own ports and data. Needs KDB-X; not in `all`.
-  q-metatables-hdb     metatable queries against a temporary partitioned HDB.
-  q-order              the q suite again, suites in the opposite order, so a
-                       test that depends on running after another one fails
-  q-examples           every documented @eg runs, in its own process, since
-                       many examples change state.
-  q-two-instances      a second kdb+ process is started on the starter
-                       pack's HDB and a bounded worker moves trades out of
-                       it - the only lane in which a worker's LIVE path runs.
-  q-remote-writer      a second kdb+ process owns an HDB and a bounded worker
-                       here writes into it over IPC (#1650): admission, a
-                       lost acknowledgement, and coverage after commit.
-  q-backfill-process   the bounded lifecycle end to end - locks, resumption
-                       and coverage - which needs a real filesystem and real
-                       child processes to be worth anything.
-  remote-stack         a TorQ stack in a Docker container standing in for another
-                       machine, attached to from a second one (#1650, #1651):
-                       publish, reach back, registration lost, remote writer.
-                       Needs Docker; PeachQ in the containers. Not in `all`.
-  python               orchestration and the BFF.
+  python               orchestration and the BFF: `uv run pytest`, now.
   q-coverage           the q half of `coverage`: fails when a function no
                        test enters is not in tests/q/coverage_baseline.txt,
                        or when a baseline entry is covered after all
   coverage             what the suites actually execute, q and Python both.
-  smoke                the live external check. Explicitly NOT part of
-                       any other lane: the deterministic suite proves local
-                       behaviour, not that a configured external service is
-                       reachable or compatible, and folding it in would make
-                       every local run depend on a remote host being up.
+
+stack-smoke was never a test: it checks a RUNNING stack, and is
+`uv run python scripts/gates/stack_smoke.py` (#1808).
 
 Exits non-zero on the first failing lane.
-
-LANES MOVING TO PYTEST (#1808). pytest is becoming the one interface for
-running tests, with qUnit and q coverage as the backends it drives, and each
-lane moves once - its callers switched and its code here removed in the same
-change, so no test has two runners (#891). Moved so far, with the selector
-that runs each now:
-
-  q-scripts      uv run pytest tests/qrun/test_worked_examples.py
-  q-docs         uv run pytest tests/qrun/test_doc_blocks.py -m kdbx
-  q-docs-peachq  uv run pytest tests/qrun/test_doc_blocks.py -m peachq
 
 WHY PYTHON RATHER THAN SHELL. The shell version had three bugs waiting to
 happen that are simply absent here: a lane's temp directory was cleaned up
@@ -99,9 +73,8 @@ Q_IMPLS = ("kdbx", "peachq")
 
 #: The PeachQ resolver: the pinned build from the cache, built on first use
 #: (scripts/peachq.py). Loaded by path, as this file is run from anywhere and
-#: scripts/ is no package. `peachq_binary` below hands what it chooses to the
-#: lanes that run on PeachQ and to nothing else: QCMD stays the one q every
-#: other lane uses, and PeachQ is never put on PATH.
+#: scripts/ is no package. What still uses it here is the interpreter check:
+#: the PeachQ lanes now run under pytest, through its `peachq` fixture.
 _spec = importlib.util.spec_from_file_location(
     "uqf_peachq", Path(__file__).resolve().with_name("peachq.py")
 )
@@ -177,34 +150,6 @@ def check_interpreter(env: Mapping[str, str] | None = None) -> str | None:
     return actual
 
 
-def peachq_binary(env: Mapping[str, str] | None = None, override: str | None = None) -> Path:
-    """The PeachQ the PeachQ lanes run on - uqs.interpreter.peachq_binary's
-    rule, restated because a bare python3 cannot import uqs, and held equal
-    to it by test_interpreter.py:
-
-    1. `override` (--peachq PATH), which must identify as PeachQ;
-    2. $QCMD, when it answers as PeachQ;
-    3. the pinned build, from scripts/peachq.py's cache, built on first use.
-
-    Raises peachq.PeachQError when none can be had."""
-    source = os.environ if env is None else env
-    refuse_removed(source)
-    if override:
-        found = shutil.which(override, path=source.get("PATH"))
-        if found is None:
-            raise peachq.PeachQError(f"--peachq {override} is not a runnable file")
-        actual = identify(found, source)
-        if actual != "peachq":
-            raise peachq.PeachQError(f"--peachq {override} is {actual}, not PeachQ")
-        warn_if_unpinned(found)
-        return Path(found)
-    q = shutil.which(source.get("QCMD") or "q", path=source.get("PATH"))
-    if q is not None and identify(q, source) == "peachq":
-        warn_if_unpinned(q)
-        return Path(q)
-    return peachq.resolve(dict(source))
-
-
 class LaneFailed(Exception):
     """A lane exited non-zero. Carries the lane name, which a bare exit code
     does not - the shell version made the caller guess."""
@@ -278,254 +223,11 @@ def _banner(text: str) -> None:
 # ------------------------------------------------------------------- lanes
 
 
-def lane_q_unit(qargs: Sequence[str] = ()) -> None:
-    """The qUnit suite; `qargs` go to tests/run_tests.q as they are -
-    `-files a.q,b.q` runs only the suites those files define (#1690), which is
-    how the q-tests hook runs what scripts/dev/test_impact.py selects."""
-    _banner("q-unit: deterministic qUnit suite" + (f" ({' '.join(qargs)})" if qargs else ""))
-    _q("q-unit", "tests/run_tests.q", *qargs)
-
-
-def lane_q_unit_peachq(override: str | None = None) -> None:
-    """The whole q suite on PeachQ, flattened, against its known gaps (#863).
-
-    What CI blocks on: a hosted runner has PeachQ, not KDB-X. PeachQ rejects
-    nested contexts, so scripts/portable/full_suite.py flattens a copy first
-    and holds the result to tests/q/peachq_known_gaps.txt - a failure not
-    listed fails the lane, and so does a listed test that passes. The binary
-    is `peachq_binary`'s, as the `peachq` pytest fixture's is: $QCMD only when it
-    is PeachQ.
-    """
-    _banner("q-unit-peachq: the whole suite on PeachQ, flattened, against its known gaps")
-    try:
-        binary = peachq_binary(override=override)
-    except peachq.PeachQError as exc:
-        raise SystemExit(f"q-unit-peachq: {exc}") from None
-    # As several PeachQ processes at once (#1694): the suite alone was CI's
-    # slowest step. Four is the hosted runner's vCPU count.
-    shards = str(min(4, os.cpu_count() or 1))
-    _run(
-        "q-unit-peachq",
-        [sys.executable, "scripts/portable/full_suite.py", "--q", str(binary), "--bundles",
-         "--shards", shards],
-    )  # fmt: skip
-
-
-def lane_q_order() -> None:
-    _banner("q-order: the same suite, in the opposite order")
-    # Four tests here once passed on run_tests.q's hand-written namespace
-    # order alone: each scanned live global state that other suites mutate,
-    # so whichever ran first decided the answer. They were fixed to ask about
-    # the tree rather than about the process, and this is what keeps them
-    # fixed - a new dependency on running after some other suite fails here
-    # rather than the next time anyone touches that list.
-    _q("q-order", "tests/run_tests.q", env={"UQF_TEST_ORDER": "reverse"})
-
-
-def lane_q_backfill_process() -> None:
-    _banner("q-backfill-process: bounded lifecycle on a real filesystem")
-    # A fresh status directory per run, so this lane never reads state a
-    # previous run left behind - a stale lock would make the single-instance
-    # test pass for the wrong reason.
-    with tempfile.TemporaryDirectory() as statusdir:
-        _q(
-            "q-backfill-process",
-            "tests/q/run_backfill_process.q",
-            env={"UQF_STATUS_DIR": statusdir},
-        )
-
-
-def lane_q_metatables_hdb() -> None:
-    _banner("q-metatables-hdb: metatable queries against a temporary HDB")
-    with tempfile.TemporaryDirectory() as hdb:
-        _q("q-metatables-hdb", "tests/q/run_metatables_hdb.q", hdb)
-
-
-def lane_q_examples() -> None:
-    _banner("q-examples: every documented @eg runs")
-    # Its own process and its own status directory: examples stage coverage,
-    # take locks and open runs, and none of that may leak into another lane.
-    with tempfile.TemporaryDirectory() as statusdir:
-        _q("q-examples", "tests/q/run_examples.q", env={"UQF_STATUS_DIR": statusdir})
-
-
-def lane_q_two_instances() -> None:
-    _banner("q-two-instances: data moved between two kdb+ processes")
-    # The upstream is a second q process on a port; its own status directory
-    # keeps this run's locks and checkpoints away from every other lane's.
-    with tempfile.TemporaryDirectory() as statusdir:
-        _q("q-two-instances", "tests/q/run_two_instances.q", env={"UQF_STATUS_DIR": statusdir})
-
-
-def lane_q_remote_writer() -> None:
-    _banner("q-remote-writer: a backfill extracted here and written by another process")
-    with tempfile.TemporaryDirectory() as statusdir:
-        _q("q-remote-writer", "tests/q/run_remote_writer.q", env={"UQF_STATUS_DIR": statusdir})
-
-
 def lane_python() -> None:
     _banner("python: orchestrator and frontend")
     # In parallel (pytest-xdist); --dist loadgroup keeps each xdist_group -
     # the tests that start a whole stack - on one worker.
     _run("python", ["uv", "run", "pytest", "-q", "-n", "auto", "--dist", "loadgroup"])
-
-
-def lane_bundles() -> None:
-    """Each sidecar bundle's own tests, installed into a throwaway tree.
-
-    A bundle's test_*.q never enter the tree, so no other lane runs them.
-    scripts/dev/bundle_suite.py copies the checkout, installs the bundle with
-    the real installer, lists its tests in nsList and runs the whole suite.
-    """
-    _banner("bundles: each sidecar bundle's tests, installed into a throwaway tree")
-    _run("bundles", ["uv", "run", "python", "scripts/dev/bundle_suite.py", "--q", Q_CMD])
-
-
-def lane_smoke(flags: Sequence[str] = ()) -> None:
-    """`flags` are the script's own: -targets, -tables, -timeout_ms. With
-    none, it reports SKIP and exits 0 - an unconfigured checkout is not a
-    failure."""
-    _banner("smoke: live external metadata check")
-    _q("smoke", "tests/q/smoke_external_metadata.q", *flags)
-
-
-def smoke_flags(targets: Sequence[str], tables: Sequence[str], timeout_ms: int | None) -> list[str]:
-    """The smoke lane's options as the q script's own flags."""
-    flags: list[str] = []
-    if targets:
-        flags += ["-targets", *targets]
-    if tables:
-        flags += ["-tables", *tables]
-    if timeout_ms is not None:
-        flags += ["-timeout_ms", str(timeout_ms)]
-    return flags
-
-
-def lane_stack_smoke() -> None:
-    """Start the real stack and check it is actually doing something.
-
-    The only lane that runs PROCESSES rather than functions, and the only
-    one that can catch a job whose computation is correct and whose wiring
-    is not - which is every ETL bug this tree has had (#298). Restarts the
-    stack, watches it, and fails if a running pipeline's declared output
-    has no rows or a running process wrote to its error log meanwhile.
-    """
-    _banner("stack-smoke: the running stack publishes and stays quiet")
-    # uv run, not sys.executable: the gate imports uqs, which
-    # needs the workspace environment, the same way lane_python does.
-    _run("stack-smoke", ["uv", "run", "python", "scripts/gates/stack_smoke.py"])
-
-
-def lane_attach_stack() -> None:
-    """The attach workflow (#1424) against real TorQ processes.
-
-    Starts isolated stacks - the starter pack as it ships, on a port span
-    nothing else uses, with their own data directory and copy of the pack - and
-    plans, applies, publishes through, restarts and detaches a table on them.
-    Needs KDB-X and about a minute per stack, so like stack-smoke it is asked
-    for, not part of `all`. The tests skip without UQS_ATTACH_STACK_TEST, which
-    is what this lane sets.
-    """
-    _banner("attach-stack: attaching a job's table to an existing TorQ stack")
-    _run(
-        "attach-stack",
-        ["uv", "run", "pytest", "-q", *(str(p.relative_to(REPO)) for p in ATTACH_TESTS)],
-        env={"UQS_ATTACH_STACK_TEST": "1"},
-    )
-
-
-#: The remote-stack lane's image: one per checkout state, rebuilt from cached
-#: layers when the tree changed (tests/remote/Dockerfile).
-REMOTE_IMAGE = "uqf-remote-stack:latest"
-REMOTE_LABEL = "uqf-remote-run"
-
-
-def _remote_context(tmp: Path) -> Path:
-    """The build context: the files git sees in the working tree (tracked, and
-    untracked but not ignored), so .venv, output/ and caches stay out. Written
-    with tarfile rather than tar, which on macOS adds extended attributes the
-    Docker daemon refuses."""
-    import tarfile
-
-    listed = subprocess.run(
-        ["git", "ls-files", "-co", "--exclude-standard", "-z"],
-        cwd=REPO,
-        capture_output=True,
-        check=True,
-    ).stdout.decode()
-    context = tmp / "context.tar"
-    # GNU, not PAX, and the Dockerfile first: docker tells an archive from a
-    # Dockerfile by parsing the first entry out of 1024 bytes, which a PAX
-    # extended header leaves too few of.
-    with tarfile.open(context, "w", format=tarfile.GNU_FORMAT) as tar:
-        tar.add(REPO / "tests/remote/Dockerfile", arcname="tests/remote/Dockerfile")
-        for name in filter(None, listed.split("\0")):
-            if name == "tests/remote/Dockerfile":
-                continue
-            path = REPO / name
-            if path.is_symlink() or path.is_file():
-                tar.add(path, arcname=name, recursive=False)
-    return context
-
-
-def _remote_sweep(run: str) -> None:
-    """Remove the containers and networks this run created - by its label, and
-    nothing else on the Docker host."""
-    label = f"label={REMOTE_LABEL}={run}"
-    for kind, listing in (("container", ["ps", "-aq"]), ("network", ["network", "ls", "-q"])):
-        ids = subprocess.run(
-            ["docker", *listing, "--filter", label], capture_output=True, text=True, check=False
-        ).stdout.split()
-        if ids:
-            remove = ["rm", "-f"] if kind == "container" else ["network", "rm"]
-            subprocess.run(["docker", *remove, *ids], capture_output=True, check=False)
-
-
-def lane_remote_stack() -> None:
-    """A TorQ stack on another machine, attached to from this tree (#1650, #1651).
-
-    The machines are Docker containers from tests/remote/Dockerfile (Linux
-    x86_64, PeachQ from the pin): uat-stack runs the stack, uat-client runs
-    `uqs`, the publisher and the extractor, and uat-laptop is a machine the
-    stack cannot resolve. tests/remote/remote_world.py says why `uqs` runs in a
-    container rather than on this host. The scenarios check their effects on
-    the stack through its published ports.
-
-    Builds the image (cached layers make a rebuild after an edit quick), runs
-    tests/remote with pytest, and removes this run's containers and networks
-    whatever happened. Everything it writes on this host is under one temp
-    directory. Needs Docker; asked for, not part of `all`.
-    """
-    _banner("remote-stack: a TorQ stack on another machine, in Docker")
-    if (
-        shutil.which("docker") is None
-        or subprocess.run(["docker", "info"], capture_output=True, check=False).returncode
-    ):
-        raise SystemExit("remote-stack: needs a running Docker (docker info failed)")
-    run = f"lane-{os.getpid()}"
-    with tempfile.TemporaryDirectory(prefix="uqf-remote-") as tmp:
-        try:
-            with open(_remote_context(Path(tmp)), "rb") as context:
-                built = subprocess.run(
-                    ["docker", "build", "--platform", "linux/amd64",
-                     "-f", "tests/remote/Dockerfile", "-t", REMOTE_IMAGE, "-"],
-                    stdin=context, check=False, timeout=3600,
-                )  # fmt: skip
-            if built.returncode:
-                raise LaneFailed("remote-stack", built.returncode)
-            _run(
-                "remote-stack",
-                ["uv", "run", "pytest", "-v", "-rs", "-p", "no:randomly",
-                 "-p", "no:cacheprovider", "--basetemp", f"{tmp}/pytest", "tests/remote"],
-                env={
-                    "UQF_REMOTE_STACK_TEST": "1",
-                    "UQF_REMOTE_IMAGE": REMOTE_IMAGE,
-                    "UQF_REMOTE_RUN": run,
-                },
-                timeout=3600,
-            )  # fmt: skip
-        finally:
-            _remote_sweep(run)
 
 
 # ---------------------------------------------------------------- coverage
@@ -624,33 +326,13 @@ def lane_coverage() -> None:
 # ------------------------------------------------------------------ dispatch
 
 LANES: dict[str, Callable[[], None]] = {
-    "q-unit": lane_q_unit,
-    "q-unit-peachq": lane_q_unit_peachq,
-    "q-order": lane_q_order,
-    "q-examples": lane_q_examples,
-    "q-backfill-process": lane_q_backfill_process,
-    "q-two-instances": lane_q_two_instances,
-    "q-remote-writer": lane_q_remote_writer,
-    "q-metatables-hdb": lane_q_metatables_hdb,
     "python": lane_python,
-    "bundles": lane_bundles,
     "q-coverage": lane_q_coverage,
     "coverage": lane_coverage,
-    "smoke": lane_smoke,
-    "stack-smoke": lane_stack_smoke,
-    "attach-stack": lane_attach_stack,
-    "remote-stack": lane_remote_stack,
 }
 
 #: The lanes that pass arguments argparse does not know on to their q script.
-QARGS_LANES = ("q-unit", "q-coverage")
-
-#: The lanes that run on PeachQ, and so take --peachq PATH.
-PEACHQ_LANES = ("q-unit-peachq",)
-
-#: The attach tests; the ones that start an isolated stack run only with
-#: UQS_ATTACH_STACK_TEST, which the attach-stack lane sets.
-ATTACH_TESTS = sorted((REPO / "python" / "uqs" / "tests").glob("test_attach_*.py"))
+QARGS_LANES = ("q-coverage",)
 
 #: The lanes `all` leaves out, each with its reason. Every other lane is in
 #: the release run: a lane added to LANES is in `all` unless it is named here,
@@ -658,10 +340,6 @@ ATTACH_TESTS = sorted((REPO / "python" / "uqs" / "tests").glob("test_attach_*.py
 EXCLUDED_FROM_ALL: dict[str, str] = {
     "q-coverage": "runs the q suite a second time, under instrumentation",
     "coverage": "runs the q suite a second time, under instrumentation, and pytest again",
-    "smoke": "checks live external sources named by --targets; with none it only skips",
-    "stack-smoke": "needs a licence, free ports and a couple of minutes: it starts the stack",
-    "attach-stack": "starts isolated TorQ stacks on KDB-X, about a minute each",
-    "remote-stack": "needs Docker: the stack and its client run in containers",
 }
 
 #: `all`, in LANES' order.
@@ -676,10 +354,9 @@ not for an edit.
 The interpreter comes from $QCMD (default `q` on PATH) and $QHOME (default
 ~/.kx), and nothing else. There is no fallback: see README.md#requirements.
 Which q it is - KDB-X or PeachQ - is asked of the binary before any lane
-starts. q-unit-peachq runs on PeachQ whatever $QCMD is:
---peachq PATH if given, else $QCMD if it is PeachQ, else the pinned build from
-scripts/peachq.json, fetched and built into ~/.cache/uqf/peachq on first use.
-A PeachQ that is not the pinned build is used, and named in a warning.
+starts. A PeachQ that is not the pinned build is used, and named in a
+warning. The tests that run on PeachQ whatever $QCMD is are pytest's now
+(the `peachq` fixture, --peachq PATH).
 """
 
 
@@ -695,36 +372,10 @@ def main(argv: list[str] | None = None) -> int:
         choices=[*LANES, "all"],
         help=ALL_HELP,
     )
-    smoke = parser.add_argument_group("smoke lane only")
-    smoke.add_argument(
-        "--targets", nargs="+", default=[], metavar="HOST:PORT", help="sources to check"
-    )
-    smoke.add_argument(
-        "--tables",
-        nargs="+",
-        default=[],
-        metavar="TABLE:COL,COL",
-        help="each table and the columns it must still have",
-    )
-    smoke.add_argument(
-        "--timeout-ms", type=int, default=None, help="per-connection timeout (default 5000)"
-    )
-    parser.add_argument(
-        "--peachq",
-        metavar="PATH",
-        default=None,
-        help=(
-            "the PeachQ binary for " + " and ".join(PEACHQ_LANES) + " (default: $QCMD if it is "
-            "PeachQ, else the pinned build)"
-        ),
-    )
-    # q-unit and q-coverage only: anything argparse does not know goes on to
-    # their q script as it is, e.g. `q-unit -files test_a.q,test_b.q`.
+    # q-coverage only: anything argparse does not know goes on to its q
+    # script as it is, e.g. `q-coverage -files test_a.q -modules src/a.q`.
     args, qargs = parser.parse_known_args(argv)
     args.qargs = qargs
-    flags = smoke_flags(args.targets, args.tables, args.timeout_ms)
-    if flags and args.lane != "smoke":
-        parser.error("--targets, --tables and --timeout-ms apply to the smoke lane only")
     if args.qargs and args.lane not in QARGS_LANES:
         parser.error(
             f"unrecognized arguments: {' '.join(qargs)} "
@@ -732,21 +383,13 @@ def main(argv: list[str] | None = None) -> int:
         )
 
     lanes = ALL if args.lane == "all" else [args.lane]
-    if args.peachq and not set(lanes) & set(PEACHQ_LANES):
-        parser.error(f"--peachq applies to {' and '.join(PEACHQ_LANES)} (and all) only")
     impl = check_interpreter()
     if impl is not None:
         _banner(f"interpreter: {impl} ({Q_CMD})")
     try:
         for name in lanes:
-            if name == "smoke":
-                lane_smoke(flags)
-            elif name == "q-unit":
-                lane_q_unit(args.qargs)
-            elif name == "q-coverage":
+            if name == "q-coverage":
                 lane_q_coverage(args.qargs)
-            elif name == "q-unit-peachq":
-                lane_q_unit_peachq(args.peachq)
             else:
                 LANES[name]()
     except LaneFailed as failure:

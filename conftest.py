@@ -67,7 +67,20 @@ MARKERS = (
     "fails instead with --require-q peachq",
     "q_backend: runs a q script as its test - a worked example, a doc's q blocks; a q "
     "pre-commit hook runs it at commit, so the python-tests hook leaves it out",
+    "q_suite: runs the whole qUnit suite (minutes): the q-tests hook and CI's PeachQ q job "
+    "run it, and CI's sharded Python job leaves it to that job",
 )
+
+#: Markers a test runs under only when asked for: such a test skips, saying
+#: how to select it, unless the `-m` expression names its marker. Each with
+#: why it is not part of an ordinary run.
+OPT_IN = {
+    "release": "a release check, minutes long: the q suite again in reverse order, and "
+    "each sidecar bundle installed into a copy with the whole suite run there",
+    "live_stack": "starts isolated TorQ stacks on KDB-X (the attach workflow), about a minute each",
+    "docker": "starts Docker containers standing in for other machines (tests/remote)",
+    "external": "checks live external sources, named with --smoke-targets",
+}
 
 #: The interpreters --require-q takes.
 REQUIRABLE_Q = ("kdbx", "peachq")
@@ -109,6 +122,22 @@ def pytest_addoption(parser):
             "had - what a gate that selects q tests passes. Repeatable"
         ),
     )
+    parser.addoption(
+        "--q-files",
+        default=None,
+        metavar="A.q,B.q",
+        help=(
+            "run only the qUnit suites these tests/q files define (tests/run_tests.q -files): "
+            "the q-tests hook passes scripts/dev/test_impact.py's selection"
+        ),
+    )
+    smoke = parser.getgroup("smoke", "the external smoke check (-m external)")
+    smoke.addoption("--smoke-targets", nargs="+", default=[], metavar="HOST:PORT",
+                    help="the sources to check")  # fmt: skip
+    smoke.addoption("--smoke-tables", nargs="+", default=[], metavar="TABLE:COL,COL",
+                    help="each table and the columns it must still have")  # fmt: skip
+    smoke.addoption("--smoke-timeout-ms", type=int, default=None,
+                    help="per-connection timeout (default 5000)")  # fmt: skip
     group = parser.getgroup("shards", "split the suite across CI runners by module")
     group.addoption("--shard", default=None, help="run shard I of N, as I/N")
     group.addoption(
@@ -133,6 +162,8 @@ def pytest_configure(config):
     )
     for marker in MARKERS:
         config.addinivalue_line("markers", marker)
+    for marker, why in OPT_IN.items():
+        config.addinivalue_line("markers", f"{marker}: opt-in, select with -m {marker}: {why}")
     spec = config.getoption("--shard")
     if spec:
         try:
@@ -145,6 +176,7 @@ def pytest_configure(config):
 
 
 def pytest_collection_modifyitems(config, items):
+    _skip_unasked_opt_ins(config, items)
     spec = config.getoption("--shard")
     if not spec:
         return
@@ -157,6 +189,17 @@ def pytest_collection_modifyitems(config, items):
     if dropped:
         config.hook.pytest_deselected(items=dropped)
     items[:] = keep
+
+
+def _skip_unasked_opt_ins(config, items) -> None:
+    """Skip each test with an OPT_IN marker its run's `-m` does not name."""
+    import re
+
+    asked = set(re.findall(r"[A-Za-z_]\w*", config.getoption("markexpr") or ""))
+    for item in items:
+        for marker in OPT_IN.keys() - asked:
+            if item.get_closest_marker(marker):
+                item.add_marker(pytest.mark.skip(reason=f"opt-in: select it with -m {marker}"))
 
 
 # --- the tests PeachQ is known to fail (python/peachq_known_gaps.txt) ---------

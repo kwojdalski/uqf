@@ -25,7 +25,7 @@ Every entry point, the running stack included, finds q the way TorQ does:
 `~/.kx/bin/q`). To choose an interpreter, set `$QCMD` and `$QHOME`:
 
 ```
-QCMD=/path/to/q QHOME=/path/to/qhome scripts/test.py q-unit
+QCMD=/path/to/q QHOME=/path/to/qhome uv run pytest tests/qrun/test_q_suite.py
 ```
 
 **PeachQ is opt-in.** [PeachQ](https://peachq.org) is an MIT-licensed q
@@ -33,7 +33,7 @@ interpreter, used only when chosen out loud --- `QCMD` naming its binary, which
 is asked which q it is ([details](docs/reference/environment.md#peachq)):
 
 ```
-QCMD=/path/to/peachq/q scripts/test.py q-unit
+QCMD=/path/to/peachq/q uv run pytest tests/qrun/test_q_suite.py -m peachq --require-q peachq
 ```
 
 Run everything from the repository root; the load scripts use relative paths.
@@ -112,11 +112,10 @@ uv run uqs job new eod_rates --kind backfill --dataset eod_rates \
 The scaffold is meant to fail until you fill it in; [Adding a data
 pipeline](docs/guides/new-pipeline.md) walks one through end to end.
 
-**Check it all still works.** One lane per layer, listed under
-[Testing](#testing):
+**Check it all still works.** Selectors are listed under [Testing](#testing):
 
 ```
-./scripts/test.py all
+uv run pytest
 ```
 
 ## Components
@@ -157,14 +156,7 @@ Component READMEs: [`python/uqs/`](python/uqs/README.md) (the stack CLI),
 
 ## Testing
 
-```
-scripts/test.py q-unit    # the deterministic qUnit suite
-scripts/test.py python    # orchestrator and frontend
-scripts/test.py all       # every lane except the coverage lanes and the live-stack lanes
-```
-
-One lane per layer; run the one matching what you changed.
-`scripts/test.py --help` lists every lane.
+`scripts/test.py` keeps `q-coverage` and `coverage` for now (below).
 
 pytest is becoming the one way to run every test, with qUnit and q coverage as
 the backends it drives (#1808); the lanes move to it one at a time, each leaving
@@ -173,10 +165,24 @@ the backends it drives (#1808); the lanes move to it one at a time, each leaving
 ```
 uv run pytest                                      # everything; a test whose interpreter is missing skips, saying so
 uv run pytest -m "not q_backend"                   # without the q scripts run as tests (what the python-tests hook runs)
+uv run pytest tests/qrun/test_q_suite.py::test_the_q_suite_passes   # the qUnit suite on KDB-X (was q-unit);
+                                                   # --q-files test_a.q,test_b.q runs only those files' suites
+uv run pytest tests/qrun/test_q_suite.py -m release     # the same suites in reverse order (was q-order), opt-in
+uv run pytest tests/qrun/test_q_suite.py -m peachq      # the whole suite on PeachQ, held to its known gaps (was q-unit-peachq)
 uv run pytest tests/qrun/test_worked_examples.py   # every scripts/examples/*.q (was q-scripts), on KDB-X
 uv run pytest tests/qrun/test_doc_blocks.py -m kdbx     # the docs' marked q blocks on KDB-X (was q-docs)
 uv run pytest tests/qrun/test_doc_blocks.py -m peachq   # ... and on PeachQ (was q-docs-peachq); --peachq PATH picks one
+uv run pytest tests/qrun/test_documented_examples.py   # every @eg in src/ and scripts/ (was q-examples)
+uv run pytest tests/qrun/test_process_runners.py       # real processes, a second q, a temp HDB (was q-backfill-process,
+                                                       # q-two-instances, q-remote-writer, q-metatables-hdb; -k one of those)
+uv run pytest -m release                           # release checks: the q suite reversed, each sidecar bundle installed and tested
+uv run pytest -m live_stack                        # the attach workflow on isolated TorQ stacks (was attach-stack)
+uv run pytest tests/remote -m docker               # a stack on another machine, in Docker (was remote-stack)
+uv run pytest tests/qrun/test_external_smoke.py -m external --smoke-targets HOST:PORT --smoke-tables TABLE:COL,COL
 ```
+
+`release`, `live_stack`, `docker` and `external` are opt-in: a test carrying one
+skips, saying how to select it, unless `-m` names it.
 
 `-m kdbx` and `-m peachq` select by interpreter. `--require-q kdbx` (or
 `peachq`) turns a skip for a missing interpreter into a failure: the hooks pass

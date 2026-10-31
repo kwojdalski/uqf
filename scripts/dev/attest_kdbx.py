@@ -37,7 +37,8 @@ its per-test outcomes (tests/lib/support.q's write_outcomes), and q-tests'
 q-unit verdict is read from them: any test that did not pass there - inside
 the selection or not - fails q-tests, and a run that recorded no outcome is
 no verdict. The q-tests hook is then told (UQF_Q_UNIT_FROM_COVERAGE=1) to run
-only q-examples and the worked examples (tests/qrun/test_worked_examples.py).
+only the documented and worked examples (tests/qrun/test_documented_examples.py,
+test_worked_examples.py).
 The trailer is unchanged: q-tests=<digest>
 still names the selection, and every suite in it ran and passed - in the
 whole-suite process, as on master, rather than alone. That stands for a
@@ -198,7 +199,7 @@ RESULTS_ENV = "UQF_TEST_RESULTS"
 FAILURES_ENV = "UQF_TEST_FAILURES"
 
 #: Set for the q-tests hook when its q-unit verdict has already been taken from
-#: the q-coverage run (#1704): the hook then runs q-examples and the worked examples only.
+#: the q-coverage run (#1704): the hook then runs the documented and worked examples only.
 FROM_COVERAGE_ENV = "UQF_Q_UNIT_FROM_COVERAGE"
 
 

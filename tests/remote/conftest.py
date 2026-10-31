@@ -1,9 +1,11 @@
-"""The remote-stack lane's machines, started once for the session and removed after.
+"""The remote-stack tests' machines, started once for the session and removed after.
 
-Opt-in: these tests run only under `python3 scripts/test.py remote-stack`, which
-builds the image and sets UQF_REMOTE_STACK_TEST and UQF_REMOTE_IMAGE. They are
-not under any of pyproject.toml's testpaths, so a plain `uv run pytest` never
-collects them and never needs Docker.
+Opt-in: `uv run pytest tests/remote -m docker` (conftest.py's OPT_IN at the
+root); it was scripts/test.py's remote-stack lane until #1808. Selected, they
+need a running Docker and fail without one; not selected, they skip and start
+nothing. The image is built from this checkout (remote_world.build_image)
+unless UQF_REMOTE_IMAGE names one, and every container and network this run
+made is removed by its label afterwards, whatever happened.
 """
 
 from __future__ import annotations
@@ -11,21 +13,16 @@ from __future__ import annotations
 from collections.abc import Iterator
 
 import pytest
-from remote_world import ENABLED, IMAGE, World, build, teardown
-
-
-def pytest_collection_modifyitems(config, items):
-    if ENABLED and IMAGE:
-        return
-    skip = pytest.mark.skip(
-        reason="starts Docker containers: run `python3 scripts/test.py remote-stack`"
-    )
-    for item in items:
-        item.add_marker(skip)
+from remote_world import PREBUILT, World, build, build_image, docker_problem, teardown
 
 
 @pytest.fixture(scope="session")
-def world() -> Iterator[World]:
+def world(tmp_path_factory: pytest.TempPathFactory) -> Iterator[World]:
+    problem = docker_problem()
+    if problem:
+        pytest.fail(f"the remote-stack tests need Docker: {problem}", pytrace=False)
+    if not PREBUILT:
+        build_image(tmp_path_factory.mktemp("remote-image"))
     built: World | None = None
     try:
         built = build()

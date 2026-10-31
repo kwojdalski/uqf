@@ -107,7 +107,7 @@ uqs job new mock_quotes --publishes mock_quotes \
 ## Testing
 
 ```bash
-python3 scripts/test.py bundles
+uv run pytest tests/qrun/test_bundle_suites.py -m release
 ```
 
 Each bundle is installed into a temporary copy of the checkout and the whole q

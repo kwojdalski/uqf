@@ -224,12 +224,13 @@ repos:
           - -c
           - |
             set -euo pipefail
-            # Through scripts/test.py, not a lookup of its own. This hook used
-            # to find q itself - PATH, then ~/.kx/bin/q, then PeachQ at ./q and
-            # ./peachq/q - which was the third different answer in this repo
-            # to "which interpreter", and the only one that fell back to
-            # something the tree is not verified on. test.py's rule is the
-            # README's: $QCMD if you set it, otherwise q on PATH, as TorQ does.
+            # Through pytest (#1808), whose `kdbx` fixture finds q the README's
+            # way: $QCMD if you set it, otherwise q on PATH, as TorQ does, and
+            # asks it which q it is. This hook once found q itself - PATH, then
+            # ~/.kx/bin/q, then PeachQ at ./q - the only lookup in this repo
+            # that fell back to something the tree is not verified on.
+            # --require-q kdbx: without KDB-X every test here would skip, and
+            # the hook would pass having run nothing.
             #
             # Only the suites the change reaches (#1690): test_impact.py reads
             # q-lint's dependency graph and selects for origin/master...HEAD
@@ -239,35 +240,37 @@ repos:
             # cannot run (no graph-capable qlinter; see .qlinter-version),
             # or when UQF_Q_TESTS_FULL=1. attest_kdbx.py hands its own
             # decision over in UQF_Q_TESTS_SELECTION, so the run is the one
-            # its trailer records. The full suite still runs on master.
+            # its trailer records. The selection reaches tests/run_tests.q as
+            # --q-files. The full suite still runs on master.
             #
             # In an attestation the suite runs ONCE (#1704): attest_kdbx.py
             # runs q-coverage first, which executes every test, reads the
             # outcomes it records, and fails q-tests itself on any test that
             # did not pass. It then sets UQF_Q_UNIT_FROM_COVERAGE=1 and only
             # the rest of this hook runs. A commit never sets it.
+            #
+            # The rest: every documented @eg (tests/q/run_examples.q) and the
+            # worked examples under scripts/examples/, each run as a script.
+            # The python-tests hook leaves all of these out
+            # (-m "not q_backend"), so a commit runs each once, here. Nothing
+            # ran the worked examples until the q-scripts lane existed, and
+            # the first scenario added there found a false claim in
+            # plant_tables.q about `quotes` being usable by cross_book_at
+            # unreshaped.
+            suite=()
             if [ "${UQF_Q_UNIT_FROM_COVERAGE:-}" = 1 ]; then
               echo "== q-unit: verdict taken from the q-coverage run (attest_kdbx.py) =="
             else
               selection=$(python3 scripts/dev/test_impact.py --hook)
               case "$selection" in
-                ALL) python3 scripts/test.py q-unit ;;
+                ALL) suite=(tests/qrun/test_q_suite.py::test_the_q_suite_passes) ;;
                 NONE) echo "== q-unit: no suite reaches this change - none run ==" ;;
-                -files\ *) python3 scripts/test.py q-unit -files "${selection#-files }" ;;
+                -files\ *) suite=(tests/qrun/test_q_suite.py::test_the_q_suite_passes --q-files "${selection#-files }") ;;
                 *) echo "q-tests: unexpected selection: $selection" >&2; exit 1 ;;
               esac
             fi
-            python3 scripts/test.py q-examples
-            # The worked examples under scripts/examples/, run as scripts -
-            # by pytest, which owns them (#1808): the python-tests hook leaves
-            # them out (-m "not q_backend"), so a commit runs each once, here,
-            # on KDB-X. --require-q kdbx: without it they would skip, and the
-            # hook would pass having run nothing. Nothing ran them until the
-            # q-scripts lane existed, and the first scenario added there found
-            # a false claim in plant_tables.q about `quotes` being usable by
-            # cross_book_at unreshaped.
-            uv run pytest -q -n auto --dist loadgroup --require-q kdbx tests/qrun/test_worked_examples.py
-        files: '\.q$|^tests/qrun/(qrun_support|test_worked_examples)\.py$'
+            uv run pytest -q -n auto --dist loadgroup --require-q kdbx ${suite[@]+"${suite[@]}"} tests/qrun/test_documented_examples.py tests/qrun/test_worked_examples.py
+        files: '\.q$|^tests/qrun/(qrun_support|test_q_suite|test_documented_examples|test_worked_examples)\.py$'
         pass_filenames: false
 
       # The ```q blocks in docs/ marked `<!-- q-example: ... -->`; CI runs the
