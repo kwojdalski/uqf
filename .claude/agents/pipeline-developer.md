@@ -181,7 +181,8 @@ Two registry facts that changed under you, and that a job no longer states:
 - New tests assert a reference value or a provable identity --- a round trip, a
   decomposition that sums, an interval algebra that composes --- not "didn't
   throw". Use fully-qualified timestamp literals.
-- After any change: `scripts/test.py q-unit`, and
+- After any change:
+  `uv run pytest tests/qrun/test_q_suite.py::test_the_q_suite_passes`, and
   `uv run pytest tests/qrun/test_process_runners.py -k backfill-process` when
   you touch the bounded-worker lifecycle or anything a spawned backfill process
   loads.

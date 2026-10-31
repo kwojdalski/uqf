@@ -341,16 +341,16 @@ flattened for it.
 
 ## Testing and gates {.smaller .scrollable}
 
-  |                    | TorQ                           | uqf                                                                                                                                                         |
-  | ---                | ---                            | ---                                                                                                                                                         |
-  | q tests            | `lib/torq/tests`               | qUnit, vendored in `tests/lib`: 95 files under `tests/q`, one suite, run by `tests/run_tests.q`                                                             |
-  | other interpreter  | n/a                            | `q-unit-peachq`: the suite on PeachQ, held to `peachq_known_gaps.txt` both ways                                                                             |
-  | Python             | n/a                            | 124 test files under `python/uqs/tests`, plus the frontend and Airflow provider                                                                             |
-  | KDB-X              | n/a                            | hosted CI has no licence; `attest_kdbx.py` records a run against the tree's sha, checked advisorily                                                         |
-  | layering           | n/a                            | `check_etl_layering.py`: `core/` never reads `sources/`, `workers/`, `streaming/`; only `.qtorq` knows TorQ; `.lg`, `.servers`, `.proc` each have one owner |
-  | q hygiene          | n/a                            | `qlinter` pinned in `.qlinter-version`; `check_q_traps.py`; a module size cap                                                                               |
-  | generated files    | n/a                            | processes.md, `pipeline_dag.q`, diagrams and the contract surface are regenerated and compared in CI                                                        |
-  | docs               | n/a                            | every `.q*` function named in prose exists; every link and anchor resolves; every `@eg` runs                                                                |
+  |                    | TorQ                           | uqf                                                                                                                                                            |
+  | ---                | ---                            | ---                                                                                                                                                            |
+  | q tests            | `lib/torq/tests`               | qUnit, vendored in `tests/lib`: 95 files under `tests/q`, one suite, run by `tests/run_tests.q`                                                                |
+  | other interpreter  | n/a                            | `test_q_suite.py -m peachq`: the suite on PeachQ, held to `peachq_known_gaps.txt` both ways                                                                    |
+  | Python             | n/a                            | 124 test files under `python/uqs/tests`, plus the frontend and Airflow provider                                                                                |
+  | KDB-X              | n/a                            | hosted CI has no licence; `attest_kdbx.py` records a run against the tree's sha, checked advisorily                                                            |
+  | layering           | n/a                            | `check_etl_layering.py`: `core/` never reads `sources/`, `workers/`, `streaming/`; only `.qtorq` knows TorQ; `.lg`, `.servers`, `.proc` each have one owner    |
+  | q hygiene          | n/a                            | `qlinter` pinned in `.qlinter-version`; `check_q_traps.py`; a module size cap                                                                                  |
+  | generated files    | n/a                            | processes.md, `pipeline_dag.q`, diagrams and the contract surface are regenerated and compared in CI                                                           |
+  | docs               | n/a                            | every `.q*` function named in prose exists; every link and anchor resolves; every `@eg` runs                                                                   |
 
 ## What uqf deliberately does not change {.smaller}
 
