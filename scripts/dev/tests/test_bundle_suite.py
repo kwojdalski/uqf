@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from uqs.paths import CATALOG_FILE, SOURCE_DIR, TABLES_FILE, TEST_DIR
+from uqs.paths import CATALOG_FILE, SOURCE_DIR, TEST_DIR
 
 _SPEC = importlib.util.spec_from_file_location(
     "bundle_suite", Path(__file__).resolve().parents[1] / "bundle_suite.py"
@@ -25,10 +25,10 @@ _SPEC.loader.exec_module(suite)
 
 
 @pytest.fixture
-def tree(tmp_path: Path) -> Path:
+def tree(tmp_path: Path, plant_tree) -> Path:
     root = tmp_path / "tree"
     (root / SOURCE_DIR).mkdir(parents=True)
-    (root / TABLES_FILE).write_text("\\d .qetl.plant\n")
+    plant_tree(root)
     (root / CATALOG_FILE).parent.mkdir(parents=True)
     (root / CATALOG_FILE).write_text("\\d .qcat\n")
     (root / "python/uqs").mkdir(parents=True)

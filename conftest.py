@@ -148,3 +148,38 @@ def peachq(request):
         if override:
             pytest.fail(str(exc))
         pytest.skip(str(exc))
+
+
+@pytest.fixture
+def plant_tree():
+    """Write a stand-in tree's src/etl/plant_tables.q that q can load - this
+    tree's plant runtime (the API before its first table) plus `tables`, each
+    `name:([]...)` line qualified under .qetl.plant - and have q evaluate it
+    into the tree's schema metadata (#1781). Every reader of a tree's plant
+    reads that metadata, never the text, so a stand-in needs it too. Skips
+    the test when there is no q interpreter."""
+    import re
+    from pathlib import Path
+
+    from uqs.interpreter import q_interpreter
+    from uqs.model import plant_metadata_gen
+    from uqs.paths import TABLES_FILE, repo_root
+
+    if q_interpreter() is None:
+        pytest.skip("no q interpreter - a stand-in plant tree is evaluated by q")
+    real = (repo_root() / TABLES_FILE).read_text().splitlines(keepends=True)
+    first = next(i for i, ln in enumerate(real) if re.match(r"^\.qetl\.plant\.\w+:\(\[\]", ln))
+    runtime = "".join(real[:first])
+
+    def write(root: Path, tables: str = "") -> Path:
+        lines = [
+            (".qetl.plant." + ln if re.match(r"^[a-z_]\w*:\(\[\]", ln) else ln)
+            for ln in tables.splitlines(keepends=True)
+            if ln.strip() != "\\d .qetl.plant"
+        ]
+        (root / TABLES_FILE).parent.mkdir(parents=True, exist_ok=True)
+        (root / TABLES_FILE).write_text(runtime + "".join(lines))
+        plant_metadata_gen.write(root)
+        return root
+
+    return write

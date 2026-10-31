@@ -19,7 +19,7 @@ from uqs import cli
 from uqs import paths as stack_paths
 from uqs.cli import install as cli_install
 from uqs.cli.regenerate import _DERIVED
-from uqs.paths import SOURCE_DIR, STREAM_DIR, TABLES_FILE, WORKER_DIR
+from uqs.paths import SOURCE_DIR, STREAM_DIR, WORKER_DIR
 from uqs.stack import install
 from uqs.stack.install import Kind, Mode, Status
 
@@ -32,15 +32,14 @@ STREAM = (
 
 
 @pytest.fixture
-def repo(tmp_path: Path) -> Path:
+def repo(tmp_path: Path, plant_tree) -> Path:
     root = tmp_path / "repo"
     for directory in (SOURCE_DIR, WORKER_DIR, STREAM_DIR):
         (root / directory).mkdir(parents=True)
     (root / STREAM_DIR / "quotes.q").write_text(
         ".qetl.job.stream.define[`quotes;`procname`publishes!(`quotes1;enlist `quote)];\n"
     )
-    (root / TABLES_FILE).parent.mkdir(parents=True, exist_ok=True)
-    (root / TABLES_FILE).write_text("quote:([]time:`timestamp$();sym:`symbol$())\n")
+    plant_tree(root, "quote:([]time:`timestamp$();sym:`symbol$())\n")
     return root
 
 

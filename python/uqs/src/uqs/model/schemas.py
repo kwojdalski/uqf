@@ -11,10 +11,12 @@ does not define is not here; one q defines is, however it is spelled.
 `definition` is that evaluated schema written back as one q statement - what
 stp1's schema file is given - so the plant's copy is derived from q too.
 
-TEXT READERS REMAIN for callers that read a tree they are EDITING or a bundle
-before it is installed (the scaffold, `uqs job attachment`): `definitions_in`,
-`column_pairs`, `column_names` and `_DEFINITION`. They see only the one-line
-`name:([]...)` form those callers write; #1781's second part moves the rest.
+TEXT READERS REMAIN only where there is no evaluated plant to ask: a bundle's
+`tables.q` before it is installed (never run, so read as the strict one-line
+`name:([]...)` grammar a bundle may use - plant_contract's `text=`), and the
+column LITERALS the scaffold writes back out (`column_pairs`). `definitions_in`,
+`column_names` and `_DEFINITION` serve those, and tests that check the text a
+scaffold wrote. No reader of a tree's plant uses them (#1781).
 """
 
 from __future__ import annotations
