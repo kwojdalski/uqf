@@ -16,14 +16,13 @@ and the vendored database.q to a round trip through these functions.
 
 from __future__ import annotations
 
-import functools
 import re
 from dataclasses import dataclass
 
 from uqs.generated.q_facts import Q_TYPE_CHARS
-from uqs.model import schemas
+from uqs.model import plant_metadata, schemas
 from uqs.model.qnames import Q_WORDS
-from uqs.paths import TABLES_FILE, UqsError, repo_root
+from uqs.paths import TABLES_FILE, UqsError
 
 #: The column every plant table leads with: `.u.upd` stamps it, and every
 #: consumer reads it positionally.
@@ -306,16 +305,11 @@ def table_definition(table: str, columns: list[tuple[str, str]]) -> str:
     return f"{table}:([]{body})"
 
 
-#: A `.qetl.plant` binding that is not an unkeyed table: the plant runtime's
-#: own API (`schema`, `shape`, `nested`, ...) and its keyed registries.
-_RUNTIME_BINDING = re.compile(r"^\.qetl\.plant\.([A-Za-z_][A-Za-z0-9_]*):(?!\(\[\])", re.MULTILINE)
-
-
-@functools.cache
 def plant_runtime_names() -> frozenset[str]:
-    """The names plant_tables.q binds to something other than a table - read
-    from its definitions, so a helper added there is reserved with it (#1597)."""
-    return frozenset(_RUNTIME_BINDING.findall((repo_root() / TABLES_FILE).read_text()))
+    """The names plant_tables.q binds to something other than a table - its API
+    (`schema`, `shape`, `nested`, ...) and keyed registries - as q evaluated it
+    (#1781), so a helper added there is reserved with it (#1597)."""
+    return plant_metadata.load().bindings
 
 
 def plant_table_definition(table: str, columns: list[tuple[str, str]]) -> str:

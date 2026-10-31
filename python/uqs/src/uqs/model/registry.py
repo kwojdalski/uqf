@@ -38,7 +38,7 @@ from uqs.model.pipeline import (
     Pipeline,
     PipelineKind,
 )
-from uqs.paths import PROCESS_PORTS_FILE, TABLES_FILE, repo_root
+from uqs.paths import PROCESS_PORTS_FILE, repo_root
 from uqs.runtimes import DEFAULT_RUNTIME, RUNTIMES
 
 #: The default runtime's base port. Every other default is that runtime's
@@ -109,36 +109,26 @@ def render_port_lock(locked: dict[str, int], offsets: dict[str, int]) -> str:
     return _PORT_LOCK_HEADER + "".join(f"{name},{offset}\n" for name, offset in rows)
 
 
-def _plant_tables(root: Path) -> set[str]:
-    # Imported here: schemas resolves its file at import, and this module is
-    # imported by everything, so a module-scope import would fix the order.
-    from uqs.model.schemas import _DEFINITION
+def _sole_publishes(declarations: list[Declaration]) -> dict[str, tuple[str, ...]]:
+    """procname -> the tables it publishes that no other job does.
 
-    return {m.group(1) for m in _DEFINITION.finditer((root / TABLES_FILE).read_text())}
-
-
-def _owned_tables(declarations: list[Declaration], plant: set[str]) -> dict[str, str | None]:
-    """procname -> the one table whose schema it owns, if exactly one.
-
-    Ownership is what processes.md's "owns" column shows and where a
+    Half of ownership - what processes.md's "owns" column shows and where a
     pipeline's `schema` comes from: a table this tree defines that no other
-    job publishes. A job publishing onto the vendored `quote` owns nothing;
-    one sharing `config_change` still owns its own table; one with two
-    tables of its own is reported as owning neither, which is how the
-    registry has always described those.
+    job publishes. Which of these the tree DEFINES is q's answer, read from
+    the schema metadata only when ownership is asked (Pipeline.owned_table),
+    so building the registry - which every uqs command does - needs none
+    (#1781). A job publishing onto the vendored `quote` owns nothing; one
+    sharing `config_change` still owns its own table; one with two tables of
+    its own owns neither, which is how the registry has always described those.
     """
     publishers: dict[str, int] = {}
     for d in declarations:
         for table in d.publishes:
             publishers[table] = publishers.get(table, 0) + 1
-    owned: dict[str, str | None] = {}
-    for d in declarations:
-        own = [t for t in d.publishes if t in plant and publishers[t] == 1]
-        owned[d.procname] = own[0] if len(own) == 1 else None
-    return owned
+    return {d.procname: tuple(t for t in d.publishes if publishers[t] == 1) for d in declarations}
 
 
-def _pipeline(d: Declaration, table: str | None, offset: int) -> Pipeline:
+def _pipeline(d: Declaration, sole: tuple[str, ...], offset: int) -> Pipeline:
     if d.kind is PipelineKind.BACKFILL:
         return Pipeline(
             procname=d.procname,
@@ -159,7 +149,7 @@ def _pipeline(d: Declaration, table: str | None, offset: int) -> Pipeline:
         script=STREAM_RUNNER_SCRIPT,
         kind=d.kind,
         loads_qtorq=True,
-        table=table,
+        sole_publisher_of=sole,
         # Deferred rather than copied: the edges are resolved from the same
         # declaration by pipeline_edges, which RAISES when there is none to
         # read - the guard against a pipeline resolving to no tables (#288).
@@ -179,8 +169,8 @@ def build_pipelines(root: Path) -> tuple[Pipeline, ...]:
     if duplicates:
         raise ValueError(f"procnames claimed more than once: {duplicates}")
     offsets = allocate_offsets(names, read_port_lock(root))
-    owned = _owned_tables(declarations, _plant_tables(root))
-    built = [_pipeline(d, owned[d.procname], offsets[d.procname]) for d in declarations]
+    sole = _sole_publishes(declarations)
+    built = [_pipeline(d, sole[d.procname], offsets[d.procname]) for d in declarations]
     built += [replace(p, offset=offsets[p.procname]) for p in NON_JOB_PIPELINES]
     return tuple(sorted(built, key=lambda p: p.offset or 0))
 

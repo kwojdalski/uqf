@@ -44,5 +44,9 @@ if[count k:.qschema.keyed[];
     -2 "export_plant_schema: keyed table(s) ",(", " sv string k)," in .qetl.plant - a plant table is unkeyed; the schema metadata does not carry keyed tables";
     exit 1];
 
--1 .j.j enlist[`tables]!enlist .qschema.table each .qetl.plant.names[];
+/ Every other name plant_tables.q binds in .qetl.plant - its API and its
+/ registries - which a table may not take (#1597): `uqs job new` refuses them.
+.qschema.bindings:{[] string asc ((key `.qetl.plant) except `) except .qetl.plant.names[]}
+
+-1 .j.j `tables`bindings!(.qschema.table each .qetl.plant.names[]; .qschema.bindings[]);
 exit 0
