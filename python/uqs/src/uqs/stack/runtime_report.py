@@ -8,10 +8,12 @@ the diff cannot drift from what `uqs --runtime X start` would start.
 
 from __future__ import annotations
 
+from collections.abc import Collection
+from functools import partial
 from pathlib import Path
 
 from uqs.paths import UqsError, UqsPaths, paths_for_root, runtime_from_env
-from uqs.runtimes import DEFAULT_RUNTIME, RUNTIMES, UQF_ONLY_COMMANDS
+from uqs.runtimes import DEFAULT_RUNTIME, RUNTIMES
 from uqs.stack import alive
 from uqs.stack.env import build_env
 from uqs.stack.hdb_shape import declared_tables
@@ -41,9 +43,12 @@ def layers(paths: UqsPaths) -> list[str]:
     return [label for var, label in _LAYERS.items() if env.get(var)]
 
 
-def commands(paths: UqsPaths) -> list[str]:
-    """The commands only some runtimes run, that this one does."""
-    return sorted(UQF_ONLY_COMMANDS) if paths.runtime_declaration.pipelines else []
+def commands(paths: UqsPaths, pipelines_only: Collection[str] = ()) -> list[str]:
+    """The commands only some runtimes run, that this one does: of
+    `pipelines_only` - the commands marked as needing this tree's pipelines,
+    which the CLI reads off its own tree (cli.pipelines.pipelines_only) - all,
+    on a runtime with them, else none."""
+    return sorted(pipelines_only) if paths.runtime_declaration.pipelines else []
 
 
 def list_runtimes(paths: UqsPaths, base_port: int | None = None) -> list[dict[str, str]]:
@@ -85,14 +90,18 @@ DIFF_SECTIONS = {
 }
 
 
-def diff(root: Path, a: str, b: str) -> dict[str, dict[str, list[str]]]:
-    """For each section, what `a` has that `b` does not, and the reverse."""
+def diff(
+    root: Path, a: str, b: str, pipelines_only: Collection[str] = ()
+) -> dict[str, dict[str, list[str]]]:
+    """For each section, what `a` has that `b` does not, and the reverse.
+    `pipelines_only` is the commands section's input, as `commands` takes it."""
     for name in (a, b):
         if name not in RUNTIMES:
             raise UqsError(f"{name!r} is not a runtime - choose from {', '.join(RUNTIMES)}")
     pa, pb = paths_for_root(root, a), paths_for_root(root, b)
     out: dict[str, dict[str, list[str]]] = {}
-    for section, read in DIFF_SECTIONS.items():
+    readers = {**DIFF_SECTIONS, "commands": partial(commands, pipelines_only=pipelines_only)}
+    for section, read in readers.items():
         left, right = read(pa), read(pb)
         out[section] = {
             f"only_{a}": [x for x in left if x not in right],

@@ -9,19 +9,40 @@ So this loads the tree, asks q for each name on the same inputs, and compares.
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
 
 from uqs.generated.q_facts import FIXTURE_TAG, REVISION_TAG
-from uqs.interpreter import q_interpreter
+from uqs.interpreter import KDBX, q_impl, q_interpreter
 from uqs.model.qnames import Q_WORDS, config_env_var, credential_var
 from uqs.stack import runs
 
 UQF_ROOT = Path(__file__).resolve().parents[3]
+
+#: The one word PeachQ keeps that KDB-X does not (the PeachQ lane loads the
+#: same tree, so Q_WORDS and the traps gate carry it; the flattener does not).
+PEACHQ_ONLY = frozenset({"rlike"})
+
+
+def _script(name: str, relpath: str):
+    """A module under scripts/, loaded by path: scripts/ is not a package, and
+    its gates cannot import uqs - so their copies are compared here."""
+    spec = importlib.util.spec_from_file_location(name, UQF_ROOT / relpath)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    sys.modules.setdefault(name, module)
+    spec.loader.exec_module(module)
+    return module
+
+
+RISKY_PARAM_NAMES = _script("check_q_traps", "scripts/gates/check_q_traps.py").RISKY_PARAM_NAMES
+BUILTINS = _script("flatten_contexts", "scripts/portable/flatten_contexts.py").BUILTINS
 
 KEYS = ["dry_run", "backfill_from", "Mixed_Case"]
 SOURCES = ["demo_deals", "duckdb_deals", "FX"]
@@ -93,3 +114,29 @@ def test_the_q_words_python_refuses_are_the_ones_q_keeps(from_q):
     release that adds a keyword must add it here too. A subset, not equal:
     the list covers KDB-X and PeachQ, and PeachQ lacks some KDB-X words."""
     assert set(from_q["q_words"]) <= Q_WORDS
+
+
+def test_the_q_words_are_exactly_what_kdbx_keeps_and_peachqs_own(from_q):
+    """The other direction (#1795): a word in Q_WORDS that no q keeps refuses a
+    correct name. Only KDB-X can say so - PeachQ lacks some of its words."""
+    if q_impl() != KDBX:
+        pytest.skip("the exact set is KDB-X's; on PeachQ only the subset above holds")
+    assert Q_WORDS - PEACHQ_ONLY == set(from_q["q_words"])
+
+
+def test_the_traps_gate_refuses_every_q_word_and_nothing_else(from_q):
+    """check_q_traps.py's reserved-name-in-embedded-q rule reads
+    RISKY_PARAM_NAMES: a q word missing from it lets `([] word: ...)` reach a
+    live process as `'assign`, and a name that is no q word is reported for
+    nothing (#1795). It held `fill` and `find`, which are neither."""
+    assert set(from_q["q_words"]) <= RISKY_PARAM_NAMES, "q words the gate misses"
+    if q_impl() == KDBX:
+        assert RISKY_PARAM_NAMES - PEACHQ_ONLY <= set(from_q["q_words"]), "not q words"
+    assert RISKY_PARAM_NAMES == Q_WORDS
+
+
+def test_the_flatteners_builtins_are_the_q_words_less_peachqs_own():
+    """flatten_contexts.py never qualifies these: one missing is a call inside
+    a nested context rewritten into a global that does not exist - `use` was
+    (#1795); one too many is a context's own global left unqualified."""
+    assert BUILTINS == Q_WORDS - PEACHQ_ONLY

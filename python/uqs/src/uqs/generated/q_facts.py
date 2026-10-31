@@ -79,6 +79,25 @@ STATUS_TERMINAL_STATES: tuple[str, ...] = (
     "failed",
 )
 
+#: every key of a worker's status file, in order - .qetl.status.fields
+STATUS_FIELDS: tuple[str, ...] = (
+    "worker",
+    "instance_id",
+    "state",
+    "source_version",
+    "range_from",
+    "range_to",
+    "cursor",
+    "rows_published",
+    "windows_completed",
+    "reactions_owed",
+    "error",
+    "updated_at",
+    "pid",
+    "host",
+    "run_id",
+)
+
 #: the states a worker's process exits 0 for - .qetl.job.bounded.exit_code
 STATUS_SUCCESS_STATES: tuple[str, ...] = (
     "idle",

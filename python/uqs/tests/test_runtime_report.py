@@ -10,8 +10,9 @@ import pytest
 from typer.testing import CliRunner
 
 from uqs import cli
+from uqs.cli.pipelines import pipelines_only
 from uqs.paths import UqsError, paths_for_root
-from uqs.runtimes import DEFAULT_RUNTIME, RUNTIMES, UQF_ONLY_COMMANDS
+from uqs.runtimes import DEFAULT_RUNTIME, RUNTIMES
 from uqs.stack import alive, runtime_report
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -57,12 +58,13 @@ def test_running_counts_only_this_runtimes_processes(monkeypatch):
 
 
 def test_the_diff_says_what_uqf_adds_to_the_starter_pack():
-    d = runtime_report.diff(ROOT, "uqf", "torq")
+    d = runtime_report.diff(ROOT, "uqf", "torq", pipelines_only())
     assert all(not side["only_torq"] for side in d.values()), "torq adds nothing of its own"
     assert "fx_orderbook" in d["tables"]["only_uqf"]
     assert "fxfeed1" in d["processes"]["only_uqf"]
     assert d["layers"]["only_uqf"] == ["uqf service layer"]
-    assert d["commands"]["only_uqf"] == sorted(UQF_ONLY_COMMANDS)
+    assert d["commands"]["only_uqf"] == sorted(pipelines_only())
+    assert "job backfill" in d["commands"]["only_uqf"]
 
 
 def test_a_runtime_diffed_with_itself_differs_in_nothing():

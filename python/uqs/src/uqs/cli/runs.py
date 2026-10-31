@@ -18,6 +18,7 @@ from rich.table import Table
 
 from uqs import timerange
 from uqs.cli.json_out import emit, json_opt
+from uqs.cli.pipelines import needs_pipelines
 from uqs.cli.range_options import DateOpt, LastOpt, RangeFromOpt, RangeToOpt
 from uqs.cli.renames import alias_command
 from uqs.cli.safety import ChangesState, ReadOnly, dry_run_note
@@ -32,6 +33,9 @@ from uqs.cli.shared import (
 )
 from uqs.paths import UqsError
 from uqs.stack import runs as stack_runs
+
+#: What every `job runs` command needs: a runtime without it refuses them.
+_LEDGER = "reads this tree's run ledger"
 
 runs_app = typer.Typer(
     no_args_is_help=True,
@@ -122,7 +126,7 @@ def _print(
     _show(table, interactive)
 
 
-@runs_app.command("list", cls=ReadOnly)
+@runs_app.command("list", cls=needs_pipelines(_LEDGER, ReadOnly))
 def list_runs(
     interactive: InteractiveOpt = False,
     attach: AttachOpt = None,
@@ -165,10 +169,16 @@ def _unfinished(
     list_runs(interactive=interactive, attach=attach, unfinished=True, as_json=as_json)
 
 
-alias_command(runs_app, "status", "uqs job runs list --unfinished", _unfinished)
+alias_command(
+    runs_app,
+    "status",
+    "uqs job runs list --unfinished",
+    _unfinished,
+    cls=needs_pipelines(_LEDGER),
+)
 
 
-@runs_app.command("upgrade", cls=ChangesState)
+@runs_app.command("upgrade", cls=needs_pipelines(_LEDGER, ChangesState))
 def upgrade(
     dry_run: Annotated[
         bool,
@@ -195,10 +205,10 @@ def upgrade(
         console.print("the run ledger is already current - nothing to do", markup=False)
 
 
-alias_command(runs_app, "migrate", "uqs job runs upgrade", upgrade)
+alias_command(runs_app, "migrate", "uqs job runs upgrade", upgrade, cls=needs_pipelines(_LEDGER))
 
 
-@runs_app.command("show", cls=ReadOnly)
+@runs_app.command("show", cls=needs_pipelines(_LEDGER, ReadOnly))
 def show(
     run_id: Annotated[str, typer.Argument(help="A run id, from `uqs job runs list`")],
     attach: AttachOpt = None,
@@ -253,7 +263,7 @@ def _print_next_steps(run: dict, attach: str | None = None) -> None:
         )
 
 
-@runs_app.command("audit", cls=ReadOnly)
+@runs_app.command("audit", cls=needs_pipelines(_LEDGER, ReadOnly))
 def audit(
     dataset: Annotated[str, typer.Argument(help="The dataset, e.g. demo_deals")],
     range_from: RangeFromOpt = None,

@@ -13,6 +13,7 @@ from pathlib import Path
 
 import pytest
 
+from uqf_airflow_provider import q_facts
 from uqf_airflow_provider.status_reader import (
     FIELDS,
     FILENAME_PREFIX,
@@ -84,12 +85,10 @@ def test_terminal_states_match_the_q_transitions():
 def test_every_field_this_reader_requires_is_one_q_writes():
     """A subset, not equality: this reader is narrower than the file on
     purpose. A required field q stopped writing would make every file
-    malformed, and the sensor fail every task."""
-    src = STATUS_Q.read_text()
-    block = src[src.index("write_status:{") :]
-    payload = block[block.index("payload:") : block.index("values_:")]
-    q_fields = set(re.findall(r"`(\w+)", payload))
-    assert set(FIELDS) <= q_fields, f"required here, never written: {set(FIELDS) - q_fields}"
+    malformed, and the sensor fail every task. STATUS_FIELDS is q's own
+    `.qetl.status.fields`, generated (#1795)."""
+    written = set(q_facts.STATUS_FIELDS)
+    assert set(FIELDS) <= written, f"required here, never written: {set(FIELDS) - written}"
 
 
 def test_status_file_name_matches_the_q_writer():
