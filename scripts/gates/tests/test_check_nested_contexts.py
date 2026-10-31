@@ -1,4 +1,5 @@
-"""check_nested_contexts.py: no `\\d` names more than one level (#1411)."""
+"""The nested-contexts rule, `scripts/gates/policy/nested_contexts.py`: no `\\d` names
+more than one level (#1411)."""
 
 from __future__ import annotations
 
@@ -9,11 +10,11 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[3]
 
 _SPEC = importlib.util.spec_from_file_location(
-    "check_nested_contexts", REPO / "scripts" / "gates" / "check_nested_contexts.py"
+    "nested_contexts", REPO / "scripts" / "gates" / "policy" / "nested_contexts.py"
 )
 assert _SPEC and _SPEC.loader
 cnc = importlib.util.module_from_spec(_SPEC)
-sys.modules["check_nested_contexts"] = cnc
+sys.modules["nested_contexts"] = cnc
 _SPEC.loader.exec_module(cnc)
 
 
@@ -25,7 +26,7 @@ def _tree(tmp_path: Path, files: dict[str, str]) -> Path:
 
 
 def test_the_real_tree_is_clean():
-    assert cnc.problems() == []
+    assert cnc.problems(REPO) == []
 
 
 def test_the_scope_is_one_list_that_names_what_it_scans():

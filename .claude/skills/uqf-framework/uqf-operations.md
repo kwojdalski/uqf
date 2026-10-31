@@ -143,7 +143,7 @@ Check a source with `uqs config sources check SOURCE`.
 
 KDB-X is what everything is verified against. PeachQ, an open q implementation
 used in CI, can't load nested `\d` contexts, so no `\d` in `src/`, `scripts/`,
-`sidecars/` or `docs/` names more than one level (`check_nested_contexts.py`).
+`sidecars/` or `docs/` names more than one level (`check.py nested-contexts`).
 CI runs the q suite on PeachQ (`scripts/portable/full_suite.py --bundles`; only
 `tests/` is still flattened first), against `tests/q/peachq_known_gaps.txt`.
 Python tests that need a q run on PeachQ, against

@@ -1,4 +1,4 @@
-"""Tests for `scripts/gates/check_q_module_size.py` (#970)."""
+"""Tests for the q-module-size rule, `scripts/gates/policy/q_module_size.py` (#970)."""
 
 from __future__ import annotations
 
@@ -6,13 +6,14 @@ import importlib.util
 import sys
 from pathlib import Path
 
+REPO = Path(__file__).resolve().parents[3]
+
 _SPEC = importlib.util.spec_from_file_location(
-    "check_q_module_size",
-    Path(__file__).resolve().parents[3] / "scripts" / "gates" / "check_q_module_size.py",
+    "q_module_size", REPO / "scripts" / "gates" / "policy" / "q_module_size.py"
 )
 assert _SPEC and _SPEC.loader
 gate = importlib.util.module_from_spec(_SPEC)
-sys.modules["check_q_module_size"] = gate
+sys.modules["q_module_size"] = gate
 _SPEC.loader.exec_module(gate)
 
 
@@ -25,7 +26,7 @@ def _tree(root: Path, sizes: dict[str, int]) -> Path:
 
 
 def test_the_real_tree_is_clean():
-    assert gate.problems() == []
+    assert gate.problems(REPO) == []
 
 
 def test_a_file_over_the_limit_is_named(tmp_path, monkeypatch):

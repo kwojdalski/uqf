@@ -176,7 +176,7 @@ no processes/IPC/tables).
   qualified from the root (`.qf.px.fwd_simple:{...}`), never inside a
   `\d .qf.<domain>` block (and so for the ETL: no `\d` in `src/`, `scripts/`,
   `sidecars/` or the docs names more than one level, which PeachQ cannot load -
-  `check_nested_contexts.py` refuses one). A lambda therefore names its own
+  `check.py nested-contexts` refuses one). A lambda therefore names its own
   siblings in full too, since unqualified globals resolve at the root. The quant
   library is exactly seven namespaces under `.qf` - `.qf.px` (pricing and
   conventions), `.qf.mkt` (market-book analytics), `.qf.exec` (execution quality

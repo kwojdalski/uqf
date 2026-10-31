@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Hold every q registry under src/ to the enlist idiom (#1030).
 
 A q dictionary of same-keyed dictionaries collapses into a keyed table on its
@@ -25,16 +24,13 @@ only shrinks: an entry naming a registry that no longer exists fails.
 Writes that replace the whole registry (a reset, a filter, `_`) are not
 additions and are not checked.
 
-    python3 scripts/gates/check_registry_enlist.py
+    python3 scripts/gates/check.py registry-enlist
 """
 
 from __future__ import annotations
 
 import re
-import sys
 from pathlib import Path
-
-REPO = Path(__file__).resolve().parents[2]
 
 #: (file from the repo root, registry name) -> why its values are not dicts.
 NOT_DICTS: dict[tuple[str, str], str] = {
@@ -99,7 +95,7 @@ _ONE_VALUE = ("indexed", "amended")
 _DICT_OF_ENTRIES = re.compile(r"!\s*enlist\s+enlist\b")
 
 
-def problems(root: Path = REPO) -> list[str]:
+def problems(root: Path) -> list[str]:
     out: list[str] = []
     found = registries(root)
     for (rel, name), path in found.items():
@@ -138,17 +134,3 @@ def problems(root: Path = REPO) -> list[str]:
             f"NOT_DICTS lists {key[1]} in {key[0]}, which declares no such registry - remove it"
         )
     return out
-
-
-def main() -> int:
-    found = problems()
-    for p in found:
-        print(p, file=sys.stderr)
-    if found:
-        return 1
-    print(f"check_registry_enlist: every registry write enlists, {len(NOT_DICTS)} hold no dicts")
-    return 0
-
-
-if __name__ == "__main__":
-    sys.exit(main())
