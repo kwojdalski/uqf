@@ -289,4 +289,6 @@
 // The vendored runNsTests, kept once, so loading this file twice does not
 // capture the replacement as the original.
 if[not `run_ns_tests_vendored in key `.qt.support; .qt.support.run_ns_tests_vendored:.qunit.runNsTests];
-.qunit.runNsTests:.qt.support.run_ns_tests;
+/ isolated: the suite's hooks cannot leave the environment or cwd behind -
+/ see SUITE ISOLATION in support.q.
+.qunit.runNsTests:.qt.support.isolated_run_ns_tests;
