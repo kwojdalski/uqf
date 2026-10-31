@@ -76,3 +76,43 @@
 .qt.harness.seed.test_the_isolated_variables_include_those_read_and_those_set:{[t]
     .qunit.assertTrue[all `UQS_REQUIRE_LIVE_SOURCES`UQF_STATUS_DIR in .qt.support.env_names;
         "one the tree reads (the contract surface) and one only tests set"]};
+
+/ --- suite isolation (#1818) -------------------------------------------------
+/ A suite's beforeNamespace/afterNamespace hooks run outside any test, so the
+/ per-test restore above never saw them: a variable a suite set there leaked
+/ into every suite after it (#1814). runNsTests now restores the environment
+/ and the cwd round each suite.
+
+/ Two fixture suites: the first sets UQF_STATUS_DIR and moves the cwd in its
+/ beforeNamespace and leaves both; the second records what it then sees.
+.qt.harness.seed.define_leaky_suites:{[]
+    / a fresh pair each time: a hook one test adds must not reach the next
+    if[`suite_env in key `.qt.fixture; ![`.qt.fixture;();0b;enlist `suite_env]];
+    `.qt.fixture.suite_env.leaky.beforeNamespace_leak set {setenv[`UQF_STATUS_DIR;"/nonexistent/leaked_by_a_suite"]; system"cd tests"};
+    `.qt.fixture.suite_env.leaky.test_runs set {[t] .qunit.assertTrue[1b;"ran"]};
+    `.qt.fixture.suite_env.later.seen set ();
+    `.qt.fixture.suite_env.later.test_records set {[t] `.qt.fixture.suite_env.later.seen set (getenv `UQF_STATUS_DIR;raze system"cd"); .qunit.assertTrue[1b;"ran"]};
+    }
+
+.qt.harness.seed.test_what_a_suite_sets_in_beforeNamespace_does_not_reach_a_later_suite:{[t]
+    before:(getenv `UQF_STATUS_DIR;raze system"cd");
+    .qt.harness.seed.define_leaky_suites[];
+    r:raze .qunit.runNsTests each `.qt.fixture.suite_env.leaky`.qt.fixture.suite_env.later;
+    .qunit.assertEquals[(r`status;.qt.fixture.suite_env.later.seen;(getenv `UQF_STATUS_DIR;raze system"cd"));
+        (`pass`pass;before;before);
+        "the later suite saw the variable and cwd as they were before the leaky suite, and so does this test"]};
+
+.qt.harness.seed.test_a_suite_whose_hook_throws_is_still_restored:{[t]
+    before:(getenv `UQF_STATUS_DIR;raze system"cd");
+    .qt.harness.seed.define_leaky_suites[];
+    `.qt.fixture.suite_env.leaky.afterNamespace_throw set {'"suite hook failed"};
+    / trapped rather than assertThrows: the nested run resets the runner's
+    / assertion state, so every assertion here comes after it
+    err:@[{.qunit.runNsTests x; "no error"};`.qt.fixture.suite_env.leaky;{[e] e}];
+    .qunit.assertEquals[err;"setUpErrorsuite hook failed";"the runner still reports the failed hook"];
+    .qunit.assertEquals[(getenv `UQF_STATUS_DIR;raze system"cd");before;
+        "the variable and cwd its beforeNamespace changed are put back all the same"]};
+
+.qt.harness.seed.test_every_suite_runs_isolated:{[t]
+    .qunit.assertEquals[.qunit.runNsTests;.qt.support.isolated_run_ns_tests;
+        "the runner's per-suite entry point is the isolating one"]};
