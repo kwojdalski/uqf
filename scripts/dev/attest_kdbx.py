@@ -37,7 +37,8 @@ its per-test outcomes (tests/lib/support.q's write_outcomes), and q-tests'
 q-unit verdict is read from them: any test that did not pass there - inside
 the selection or not - fails q-tests, and a run that recorded no outcome is
 no verdict. The q-tests hook is then told (UQF_Q_UNIT_FROM_COVERAGE=1) to run
-only q-examples and the worked examples (tests/qrun/test_worked_examples.py).
+only the documented and worked examples (tests/qrun/test_documented_examples.py,
+test_worked_examples.py).
 The trailer is unchanged: q-tests=<digest>
 still names the selection, and every suite in it ran and passed - in the
 whole-suite process, as on master, rather than alone. That stands for a
@@ -52,7 +53,7 @@ defined in the production files the change reaches
 q-tests runs the whole suite, when no suite or no production file is reached,
 or when the change touches the coverage tool, its driver or its baseline. A
 subset that finds a judged function never entered is no verdict:
-scripts/test.py q-coverage then runs the whole suite and its verdict stands,
+tests/qrun/test_q_coverage.py then runs the whole suite and its verdict stands,
 so a function only a suite outside the subset enters can never fail a change.
 `q-coverage=<sha256>` records the subset (test_impact.coverage_digest: its
 suite files and its modules) and CI's check recomputes it from the same map;
@@ -80,8 +81,8 @@ be current - only when master has changed a judged path since the branch
 forked, which is when the check would refuse it.
 
 Refuses a dirty tree, untracked files included since the hooks see them (what
-is tested must be what is committed), and any interpreter scripts/test.py does
-not identify as KDB-X.
+is tested must be what is committed), and any interpreter that does not
+identify as KDB-X.
 
     uv run python scripts/dev/attest_kdbx.py [--all] [--base REF]
 """
@@ -128,8 +129,15 @@ def _load(name: str, rel: str):
     return module
 
 
-def _test_py():
-    return _load("uqf_test_lanes", "scripts/test.py")
+def interpreter() -> str | None:
+    """Which q $QCMD (else q on PATH) is, as the binary answers - `kdbx` or
+    `peachq` - or None when there is no runnable q (uqs.interpreter, the rule
+    pytest's `kdbx` fixture applies). A variable #1753 removed is refused."""
+    from uqs.interpreter import identified, q_interpreter, refuse_removed
+
+    refuse_removed()
+    q = q_interpreter()
+    return None if q is None else identified(q)
 
 
 def git(*args: str) -> str:
@@ -161,7 +169,7 @@ def q_coverage_plan(base: str, plan):
     return impact.coverage_for(plan, impact.changed_paths(base, REPO), REPO)
 
 
-#: Where scripts/test.py q-coverage writes what decided it - `subset` or `all`
+#: Where tests/qrun/test_q_coverage.py writes what decided it - `subset` or `all`
 #: (a subset that found something hands its verdict to the whole suite).
 COVERAGE_RAN_ENV = "UQF_Q_COVERAGE_RAN"
 
@@ -198,7 +206,7 @@ RESULTS_ENV = "UQF_TEST_RESULTS"
 FAILURES_ENV = "UQF_TEST_FAILURES"
 
 #: Set for the q-tests hook when its q-unit verdict has already been taken from
-#: the q-coverage run (#1704): the hook then runs q-examples and the worked examples only.
+#: the q-coverage run (#1704): the hook then runs the documented and worked examples only.
 FROM_COVERAGE_ENV = "UQF_Q_UNIT_FROM_COVERAGE"
 
 
@@ -284,7 +292,10 @@ def refusal() -> str | None:
     why = dirt()
     if why:
         return why
-    impl = _test_py().check_interpreter()
+    try:
+        impl = interpreter()
+    except Exception as exc:  # noqa: BLE001 - a refusal names what was wrong
+        return f"cannot tell which q this is: {exc}"
     if impl is None:
         return "no q interpreter ($QCMD, else q on PATH)"
     if impl != "kdbx":

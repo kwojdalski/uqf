@@ -17,8 +17,8 @@ files, their tests, the table and the catalog entry - and drops the ones that
 register a job with the TREE: test_stack_tables.q, the process docs,
 profiles, the example script. Those describe the tree's own
 jobs, and installing a bundle never writes them. The bundle's tests run
-through `scripts/test.py bundles`, which installs each bundle into a
-throwaway copy of the tree.
+through `uv run pytest tests/qrun/test_bundle_suites.py -m release`, which
+installs each bundle into a throwaway copy of the tree.
 """
 
 from __future__ import annotations
@@ -174,7 +174,7 @@ def into_bundle(plan: ScaffoldPlan, bundle_dir: Path) -> ScaffoldPlan:
         )
     notes.append(
         f"see what installing it would do: uqs job install {bundle_dir} --dry-run; "
-        "its tests run with: python3 scripts/test.py bundles"
+        "its tests run with: uv run pytest tests/qrun/test_bundle_suites.py -m release"
     )
     return ScaffoldPlan(plan.name, actions, notes)
 

@@ -782,8 +782,8 @@ so `uqs job attachment remove` there refuses while it runs.
 fails its next window without covering it, and the next run, once a receiver is
 back, sends it again.
 
-`scripts/test.py q-remote-writer` runs the receiver and an extractor between two
-processes.
+`uv run pytest tests/qrun/test_process_runners.py -k remote-writer` runs the
+receiver and an extractor between two processes.
 
 Reactions of the backfilled dataset (`rebuild_positions`, for example) write
 through the same manager and are refused, and recorded as owed: they belong on
@@ -977,10 +977,10 @@ the wdb hands its table list to the sort process.
 
 ## Testing against a remote stack
 
-`python3 scripts/test.py remote-stack` puts the stack on another machine. It
-needs Docker, and is run when asked for, never as part of `all`. The machines
-are containers built from `tests/remote/Dockerfile`: Linux x86_64, with PeachQ
-built from the pin.
+`uv run pytest tests/remote -m docker` puts the stack on another machine. It
+needs Docker, and runs only when asked for (`-m docker`). The machines are
+containers built from `tests/remote/Dockerfile`: Linux x86_64, with PeachQ built
+from the pin.
 
 - `uat-stack` runs discovery, the tickerplant, rdb1, hdb1 and wdb1
   (`uqs --runtime peachq start`). Its ports are published to this host. TorQ's

@@ -6,7 +6,7 @@
 //   > The deterministic suite proves local behaviour, NOT that a configured
 //   > external service is reachable or compatible.
 //
-// Deliberately NOT part of q-unit or `test.py all`. Folding it in would make
+// Deliberately NOT part of q-unit or any ordinary run (pytest -m external). Folding it in would make
 // every local run depend on a remote host being up, and - worse - would
 // train everyone to treat a red suite as "the network again", which is how a
 // real schema change gets ignored.
@@ -52,7 +52,8 @@
 /   q tests/q/smoke_external_metadata.q -targets host:port [host:port ...]
 /       -tables table:col,col [table:col,col ...] [-timeout_ms 5000]
 / .
-/ scripts/test.py smoke passes them as --targets, --tables and --timeout-ms.
+/ tests/qrun/test_external_smoke.py passes its --smoke-targets, --smoke-tables
+/ and --smoke-timeout-ms options as these (-m external).
 / They were UQF_SMOKE_* environment variables, with ';' between entries -
 / which needed quoting in any shell, and outlived the run they were set for.
 / Read straight off the command line rather than through .qetl.cfg: this

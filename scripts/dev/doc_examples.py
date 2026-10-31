@@ -2,7 +2,7 @@
 """doc_examples.py - the q blocks in docs/ that a reader is told will run.
 
 A ```q block in the docs is a claim, and until this existed nothing checked
-one: the q-examples lane runs the @eg lines in q docstrings, but not a line
+one: tests/qrun/test_documented_examples.py runs the @eg lines in q docstrings, but not a line
 of Markdown. Most blocks cannot run on their own - they need a running stack,
 an HDB, ODBC, or are fragments of a larger file - so blocks are OPTED IN, one
 HTML comment above the fence, invisible when rendered:

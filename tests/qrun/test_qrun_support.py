@@ -1,11 +1,11 @@
 """What the q-running tests under tests/qrun/ promise about running q (#1808).
 
-They replaced scripts/test.py's q-scripts, q-docs and q-docs-peachq lanes, and
-these hold what the lanes guaranteed and what moving them must not lose: a q
-error fails even when q exits 0, a hung script is stopped with everything it
-started, an interpreter a gate requires fails the gate when it is missing
-rather than skipping it, and collecting the suite runs no q and changes
-nothing in the checkout.
+They replaced scripts/test.py's lanes, and these hold what the lanes
+guaranteed and what moving them must not lose: a q error fails even when q
+exits 0, a hung script is stopped with everything it started, an interpreter
+a gate requires fails the gate when it is missing rather than skipping it,
+collecting the suite runs no q and changes nothing in the checkout, and each
+test has one runner.
 """
 
 from __future__ import annotations
@@ -185,7 +185,11 @@ def test_each_q_hook_runs_its_tests_through_pytest_and_no_lane_runs_them_too() -
     python-tests hook leaves the q_backend tests to them."""
     config = (REPO / ".pre-commit-config.yaml").read_text()
     q_tests = _hook(config, "q-tests")
-    assert "--require-q kdbx tests/qrun/test_worked_examples.py" in q_tests
+    assert "tests/qrun/test_documented_examples.py tests/qrun/test_worked_examples.py" in q_tests
+    assert "tests/qrun/test_q_suite.py::test_the_q_suite_passes --q-files" in q_tests
+    assert "scripts/test.py q-unit" not in q_tests
+    assert "--require-q kdbx" in q_tests
+    assert "scripts/test.py q-examples" not in q_tests
     assert "q-scripts" not in q_tests.replace("q-scripts lane", "")
     assert "-m kdbx --require-q kdbx tests/qrun/test_doc_blocks.py" in _hook(config, "q-docs")
     assert "-m peachq --require-q peachq tests/qrun/test_doc_blocks.py" in _hook(
@@ -194,9 +198,20 @@ def test_each_q_hook_runs_its_tests_through_pytest_and_no_lane_runs_them_too() -
     hook = (REPO / "scripts/dev/python_tests_hook.py").read_text()
     assert 'NOT_Q_HOOKS = ["-m", "not q_backend"]' in hook
     assert hook.count("*NOT_Q_HOOKS]") == 2, "both modes leave them out"
-    test_py = (REPO / "scripts/test.py").read_text()
-    for gone in ("lane_q_scripts", "lane_q_docs", "scripts/examples", "doc_examples"):
-        assert gone not in test_py
+    coverage = _hook(config, "q-coverage")
+    assert "-m coverage --require-q kdbx tests/qrun/test_q_coverage.py" in coverage
+
+
+def test_the_second_dispatcher_is_gone() -> None:
+    """pytest is the one test interface (#1808): scripts/test.py, and every
+    hook, workflow and script that called it, are gone."""
+    assert not (REPO / "scripts/test.py").exists()
+    callers = subprocess.run(
+        ["git", "grep", "-l", "-E", r"(python3?|uv run python) scripts/test\.py",
+         "--", ".pre-commit-config.yaml", ".github", "scripts", "python", "tests"],
+        cwd=REPO, capture_output=True, text=True, check=False,
+    ).stdout.split()  # fmt: skip
+    assert callers == []
 
 
 def test_nothing_else_runs_the_worked_examples() -> None:
@@ -207,3 +222,18 @@ def test_nothing_else_runs_the_worked_examples() -> None:
         cwd=REPO, capture_output=True, text=True, check=False,
     ).stdout.split()  # fmt: skip
     assert users == ["tests/qrun/test_worked_examples.py"]
+
+
+# ------------------------------------------------------------ opt-in markers
+
+
+def test_an_opt_in_test_skips_unless_its_marker_is_selected(tmp_path: Path) -> None:
+    """The release, live_stack, docker and external tests start nothing in an
+    ordinary run: they skip, saying how to select them, and -m runs them."""
+    env = {k: v for k, v in os.environ.items() if not k.startswith("PYTEST_")}
+    plain = _pytest("tests/remote/test_1_reach_back.py", env=env)
+    assert plain.returncode == 0, plain.stdout + plain.stderr
+    assert "opt-in: select it with -m docker" in plain.stdout
+    assert " passed" not in plain.stdout and " failed" not in plain.stdout
+    smoke = _pytest("tests/qrun/test_external_smoke.py", "-m", "external", env=env)
+    assert "no --smoke-targets" in smoke.stdout, smoke.stdout

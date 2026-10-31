@@ -66,9 +66,9 @@ uqf-airflow-provider = { workspace = true }
 # lives here because the dev group is shared across the workspace.
 dev = [
     "pytest>=9.1.1",
-    # `scripts/test.py coverage`. A dev dependency rather than something
-    # fetched on demand, so the coverage number is reproducible from the
-    # lockfile like every other result here.
+    # `uv run pytest --cov` ([tool.coverage.run]). A dev dependency rather
+    # than something fetched on demand, so the coverage number is
+    # reproducible from the lockfile like every other result here.
     "pytest-cov>=7.0",
     "ruff==0.16.2",
     # Pinned exactly, like ruff: a type checker that changes its mind between
@@ -160,6 +160,14 @@ src = [
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
 
+[tool.coverage.run]
+# What `uv run pytest --cov` measures: each member's src/ rather than the whole
+# of python/, which would also measure the TEST files and report them at ~100%
+# - dragging the headline up by thirteen points while saying nothing about the
+# code under test. pytest-cov combines the xdist workers' data into one report.
+# The q half is the coverage gate, `uv run pytest -m coverage` (#1808).
+source = ["python/uqs/src", "python/uqf_frontend/src", "python/uqf_airflow_provider/src"]
+
 [tool.pytest.ini_options]
 # All three members' suites, so `uv run pytest` from the repo root is the
 # single command that runs every Python test. The pre-commit hook relies on
@@ -177,6 +185,9 @@ testpaths = [
     # scripts/dev/bundle_suite.py, which runs sidecar bundles' own tests.
     "scripts/dev/tests",
     # The q scripts run as tests - worked examples, the docs' q blocks - and
-    # what their runner promises (#1808): what scripts/test.py's lanes ran.
+    # what their runner promises (#1808): what scripts/test.py's lanes ran,
+    # before pytest became the one test interface.
     "tests/qrun",
+    # The remote-stack scenarios: Docker machines, opt-in (-m docker).
+    "tests/remote",
 ]

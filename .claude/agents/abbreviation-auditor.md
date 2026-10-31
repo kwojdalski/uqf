@@ -149,7 +149,7 @@ If the maintainer acts on a finding, these must all be rerun --- a rename breaks
 three generated artefacts and two gates notice:
 
 ```bash
-scripts/test.py q-unit
+uv run pytest tests/qrun/test_q_suite.py::test_the_q_suite_passes
 uv run python scripts/generate/derive.py contract-surface
 ```
 

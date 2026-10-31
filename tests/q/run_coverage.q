@@ -1,7 +1,7 @@
 / run_coverage.q - whole-suite coverage, through the same .cov library an
 / interactive caller uses.
 / .
-/ `scripts/test.py coverage` runs this. It is deliberately a thin driver and
+/ tests/qrun/test_q_coverage.py runs this (`uv run pytest -m coverage`). It is deliberately a thin driver and
 / not a second implementation: there was one of those, a Python tool that
 / instrumented the source FILES before they loaded, and two instrumenters for
 / one language is the duplication this repository has an auditor for.
@@ -62,7 +62,7 @@ known:.cov.targets (enlist `namespaces)!enlist namespaces;
 / q-tests' suites, and for each function judged a file that enters it
 / (tests/q/coverage_map.txt). Both or neither. A function the subset finds
 / newly never entered is not a verdict - the map may be stale - so it exits 3
-/ and scripts/test.py q-coverage runs the whole suite, whose verdict stands. A
+/ and tests/qrun/test_q_coverage.py runs the whole suite, whose verdict stands. A
 / baseline entry the subset enters is one the whole suite enters too: that
 / fails here (exit 1), as it would there.
 / .

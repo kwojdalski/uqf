@@ -4,7 +4,7 @@ PeachQ was dropped once because it was found by a fallback nobody chose, so a
 suite could pass on it and read as a KDB-X pass. Nothing falls back to it now:
 QCMD naming a PeachQ binary is the choice, and the binary - not a variable
 beside it - says which q it is. These hold that, the one PeachQ lookup the
-PeachQ lanes share (and its copy in scripts/test.py, which must not drift),
+PeachQ tests share,
 the one warning an unpinned PeachQ gets, and the refusal of every variable
 that chose an interpreter before.
 
@@ -35,13 +35,14 @@ from uqs.interpreter import (
 from uqs.paths import UqsError
 from uqs.stack import listing
 
-SCRIPT = Path(__file__).resolve().parents[3] / "scripts" / "test.py"
-_spec = importlib.util.spec_from_file_location("uqf_test_runner_interp", SCRIPT)
+SCRIPTS = Path(__file__).resolve().parents[3] / "scripts"
+#: scripts/peachq.py, which runs under a bare python3 and cannot import uqs.
+_spec = importlib.util.spec_from_file_location("uqf_peachq_interp", SCRIPTS / "peachq.py")
 assert _spec and _spec.loader
-runner = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(runner)
+peachq_script = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(peachq_script)
 
-PIN = json.loads((SCRIPT.parent / "peachq.json").read_text())["commit"]
+PIN = json.loads((SCRIPTS / "peachq.json").read_text())["commit"]
 
 
 def _fake_q(tmp_path: Path, answer: str, impl: str | None = None) -> Path:
@@ -86,7 +87,6 @@ def warnings(monkeypatch) -> list[str]:
 
     monkeypatch.setattr(interpreter, "log", Log())
     monkeypatch.setattr(interpreter, "_WARNED", set())
-    monkeypatch.setattr(runner, "_WARNED", set())
     return seen
 
 
@@ -139,7 +139,7 @@ def test_an_answer_that_is_neither_is_refused_with_what_it_printed(tmp_path):
     ("name", "replacement"),
     [
         ("UQF_Q_IMPL", "asked which q it is - set QCMD=<binary> alone"),
-        ("UQF_PEACHQ", r"set QCMD=<binary> .*or pass --peachq PATH \(scripts/test.py, pytest\)"),
+        ("UQF_PEACHQ", r"set QCMD=<binary> .*or pass --peachq PATH \(pytest\)"),
         ("UQF_PEACHQ_REASON", "not the pinned build is named in a warning instead"),
     ],
 )
@@ -152,17 +152,15 @@ def test_each_removed_variable_is_refused_naming_its_replacement(tmp_path, name,
         q_impl(env)
     with pytest.raises(UqsError, match=message):
         peachq_binary(env)
-    with pytest.raises(SystemExit, match=message):
-        runner.check_interpreter(env)
-    with pytest.raises(SystemExit, match=message):
-        runner.peachq_binary(env)
     assert interpreter_status(env).problem is not None
 
 
 def test_scripts_spell_the_removed_variables_as_uqs_does():
-    """scripts/peachq.py cannot import uqs; scripts/test.py takes its list."""
-    assert runner.REMOVED_ENV == REMOVED_ENV
-    assert runner.peachq.removed_variables_problem(
+    """scripts/peachq.py cannot import uqs, and restates the refusal and the
+    question a binary is asked."""
+    assert peachq_script.REMOVED_ENV == REMOVED_ENV
+    assert peachq_script.IDENTIFY_SCRIPT == interpreter.IDENTIFY_SCRIPT
+    assert peachq_script.removed_variables_problem(
         {"UQF_PEACHQ": "x"}
     ) == interpreter.removed_variables_problem({"UQF_PEACHQ": "x"})
 
@@ -234,7 +232,7 @@ def test_the_pinned_peachq_is_used_without_a_word(tmp_path, warnings):
 @pytest.fixture
 def resolver(monkeypatch, tmp_path) -> Path:
     """scripts/peachq.py's resolve, answering the pinned build as if cached,
-    for uqs and for scripts/test.py alike."""
+    for uqs."""
     (tmp_path / "cache").mkdir()
     cached = _pinned(_fake_q(tmp_path / "cache", "peachq"))
 
@@ -242,14 +240,13 @@ def resolver(monkeypatch, tmp_path) -> Path:
         return cached
 
     monkeypatch.setattr(interpreter.peachq_module(), "resolve", resolve)
-    monkeypatch.setattr(runner.peachq, "resolve", resolve)
     return cached
 
 
 def _outcome(call) -> str:
     try:
         return str(call())
-    except UqsError, SystemExit, runner.peachq.PeachQError:
+    except UqsError, SystemExit, peachq_script.PeachQError:
         return "refused"
 
 
@@ -265,11 +262,9 @@ def _outcome(call) -> str:
         ("kdbx", "missing", "refused"),
     ],
 )
-def test_peachq_binary_and_its_copy_in_scripts_test_py_agree(
-    tmp_path, resolver, warnings, qcmd, override, expected
-):
+def test_peachq_binary_chooses_by_the_rule(tmp_path, resolver, warnings, qcmd, override, expected):
     """KDB-X alone: the pinned build. QCMD on PeachQ: QCMD. --peachq: that,
-    if it is PeachQ. scripts/test.py restates the rule; both answer alike."""
+    if it is PeachQ."""
     binaries = {
         "kdbx": _fake_q(tmp_path, "kdbx"),
         "peachq": _fake_q(tmp_path, "peachq"),
@@ -287,7 +282,6 @@ def test_peachq_binary_and_its_copy_in_scripts_test_py_agree(
         "refused": "refused",
     }[expected]
     assert _outcome(lambda: peachq_binary(env, override=chosen)) == want
-    assert _outcome(lambda: runner.peachq_binary(env, override=chosen)) == want
 
 
 def test_a_resolver_refusal_is_a_uqs_error(monkeypatch, tmp_path):
@@ -299,40 +293,6 @@ def test_a_resolver_refusal_is_a_uqs_error(monkeypatch, tmp_path):
     monkeypatch.setattr(module, "resolve", unavailable)
     with pytest.raises(UqsError, match="no PeachQ: offline"):
         peachq_binary({"PATH": str(tmp_path)})
-
-
-# ------------------------------------------------------- scripts/test.py
-
-
-def test_the_runner_asks_the_same_question():
-    """Restated there because a bare python3 cannot import uqs."""
-    assert runner.IDENTIFY_SCRIPT == interpreter.IDENTIFY_SCRIPT
-    assert runner.Q_IMPLS == interpreter.Q_IMPLS
-
-
-@pytest.mark.parametrize("answer", ["kdbx", "peachq"])
-def test_the_runner_reports_what_the_binary_says(tmp_path, warnings, answer):
-    q = _fake_q(tmp_path, answer)
-    assert runner.check_interpreter(_env(QCMD=str(q))) == answer
-
-
-def test_the_runner_refuses_a_binary_that_will_not_say(tmp_path):
-    q = _fake_q(tmp_path, "banner", impl="banner")
-    with pytest.raises(SystemExit, match="could not tell which q"):
-        runner.check_interpreter(_env(QCMD=str(q)))
-
-
-def test_the_runner_leaves_a_missing_q_to_the_lanes(tmp_path):
-    assert runner.check_interpreter(_env(QCMD=str(tmp_path / "nothing"))) is None
-
-
-def test_the_runner_names_an_unpinned_peachq_once(tmp_path, warnings, capsys):
-    q = _fake_q(tmp_path, "peachq")
-    runner.check_interpreter(_env(QCMD=str(q)))
-    runner.check_interpreter(_env(QCMD=str(q)))
-    err = capsys.readouterr().err
-    assert err.count("warning:") == 1
-    assert str(q.resolve()) in err and PIN in err
 
 
 # ------------------------------------------- reporting it: uqs list env / summary
@@ -398,7 +358,7 @@ def test_the_version_is_asked_of_the_binary(tmp_path):
 def test_install_sh_draws_the_line_where_the_predicate_does():
     """install.sh is bash, run before uqs exists, so it states the threshold
     itself; this holds the two equal."""
-    text = (SCRIPT.parents[1] / "install.sh").read_text()
+    text = (SCRIPTS.parent / "install.sh").read_text()
     import re
 
     found = re.findall(r"\(\( \$\{qversion%%\.\*\} < (\d+) \)\)", text)

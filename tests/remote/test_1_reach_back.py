@@ -24,6 +24,10 @@ from remote_world import (
     stp_tables,
 )
 
+#: Opt-in (-m docker), and every scenario on one xdist worker: they share one
+#: session's machines and run in file order.
+pytestmark = [pytest.mark.docker, pytest.mark.xdist_group("remote-stack")]
+
 
 def test_the_stacks_machine_reaches_this_host_through_host_docker_internal(world: World):
     """Colima's host.docker.internal is this host's loopback: the route the

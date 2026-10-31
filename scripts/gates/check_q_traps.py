@@ -52,7 +52,7 @@ REPO = Path(__file__).resolve().parents[2]
 EXCLUDED_PREFIXES = ("lib/", "build/")
 
 #: Where to find the linter. `$QLINTER` first so a checkout can point at a
-#: build that is not on PATH, which is the same escape hatch scripts/test.py
+#: build that is not on PATH, which is the same escape hatch pytest
 #: gives for the q interpreter.
 QLINTER_ENV = "QLINTER"
 

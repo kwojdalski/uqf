@@ -628,7 +628,7 @@ Add `tests/q/test_fx_rates_backfill.q`, defining its tests under
 whole path and no `\d` (the scaffold writes it that way). Then:
 
 ```
-scripts/test.py q-unit
+uv run pytest tests/qrun/test_q_suite.py::test_the_q_suite_passes
 ```
 
 Worth covering beyond the happy path: a second run is idle; a version bump
@@ -637,7 +637,8 @@ not bridged by a window spanning it; a contract-breaking source records **no**
 coverage rather than publishing nulls; a dry run publishes nothing; and each of
 the five contract methods actually delegates.
 
-`scripts/test.py coverage` will tell you which of those you missed.
+`uv run pytest -m coverage tests/qrun/test_q_coverage.py` will tell you which of
+those you missed.
 
 None of that runs your `query`. The unit suite never sets a credential, so a
 worker there runs on its fixture, and the query lambda is never sent anywhere.
@@ -645,10 +646,11 @@ To see it run against a real second process, follow
 [`tests/q/run_two_instances.q`](../../tests/q/run_two_instances.q): start a
 plain q process holding the upstream table, set
 `UQF_SOURCE_CRED_<SOURCE>=host:port`, and run the worker
-(`scripts/test.py q-two-instances` does exactly this for `upstream_trades`). One
-trap that only shows up there: write `` from `trade ``, never `from trade`. The
-lambda carries the `.qpipe.source.fx_rates` context it was defined under across
-the wire, so a bare name resolves in that namespace on the remote and throws;
+(`uv run pytest tests/qrun/test_process_runners.py -k two-instances` does
+exactly this for `upstream_trades`). One trap that only shows up there: write
+`` from `trade ``, never `from trade`. The lambda carries the
+`.qpipe.source.fx_rates` context it was defined under across the wire, so a bare
+name resolves in that namespace on the remote and throws;
 `test_source_contract.q` refuses it.
 
 ## Recomputing on an upstream publish

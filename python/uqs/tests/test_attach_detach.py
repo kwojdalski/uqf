@@ -1,6 +1,6 @@
 """Detach, rollback, drift refusal and restart behaviour on a REAL TorQ 5.2.12 stack (#1424).
 
-Opt-in (UQS_ATTACH_STACK_TEST=1 / `python3 scripts/test.py attach-stack`). Each
+Opt-in (`uv run pytest -m live_stack`). Each
 test has its own stack: the starter pack as it ships, its own ports, data and
 copy of the pack - so a test may restart its tickerplant, edit its schema file
 and publish, and nobody else's stack is involved.

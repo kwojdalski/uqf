@@ -239,8 +239,8 @@ README's Testing section, kept short.
 > *2026-10-06.* `docs/guides/ci.md` sat among the user guides and on the docs
 > site, mostly describing the workflow, its pinned tool versions and its gates.
 > Asked for: "that's something that is onto us not end users". The page was
-> deleted rather than moved, and the README points at `scripts/test.py --help`
-> for the lane list.
+> deleted rather than moved, and the README lists the test selectors
+> (`scripts/test.py --help` until #1808).
 
 **Name the dependencies a documented command needs**, including the ones that
 are missing, rather than assuming the reader has them.

@@ -181,9 +181,11 @@ Two registry facts that changed under you, and that a job no longer states:
 - New tests assert a reference value or a provable identity --- a round trip, a
   decomposition that sums, an interval algebra that composes --- not "didn't
   throw". Use fully-qualified timestamp literals.
-- After any change: `scripts/test.py q-unit`, and
-  `scripts/test.py q-backfill-process` when you touch the bounded-worker
-  lifecycle or anything a spawned backfill process loads.
+- After any change:
+  `uv run pytest tests/qrun/test_q_suite.py::test_the_q_suite_passes`, and
+  `uv run pytest tests/qrun/test_process_runners.py -k backfill-process` when
+  you touch the bounded-worker lifecycle or anything a spawned backfill process
+  loads.
 - Then the repository gates, each run individually with its real exit code
   visible --- **never through a pipe**, because `cmd | tail` reports `tail`'s
   status and a failing gate reads as a pass: `check_q_traps.py`,

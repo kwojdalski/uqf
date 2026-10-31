@@ -19,7 +19,7 @@
 / .
 / Run from the repository root:
 /   UQF_STATUS_DIR=$(mktemp -d) q tests/q/run_examples.q
-/ or through `scripts/test.py q-examples`.
+/ or through `uv run pytest tests/qrun/test_documented_examples.py`.
 
 \l tests/lib/qunit.q
 \l tests/lib/support.q

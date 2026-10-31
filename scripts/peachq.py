@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""peachq.py - the pinned PeachQ, found or built, for the lanes that run on it.
+"""peachq.py - the pinned PeachQ, found or built, for what runs on it.
 
 PeachQ is an MIT-licensed q. KDB-X stays the interpreter this tree targets;
 PeachQ is a SECOND interpreter that a few gates (the q-docs-peachq hook
-locally, the PeachQ steps in CI) are required to pass on too. A lane takes $QCMD when it
-is PeachQ, or a binary passed with --peachq (uqs.interpreter.peachq_binary,
-and its copy in scripts/test.py); otherwise this module provides the pinned
+locally, the PeachQ steps in CI) are required to pass on too. A test takes
+$QCMD when it is PeachQ, or a binary passed with --peachq
+(uqs.interpreter.peachq_binary); otherwise this module provides the pinned
 build, in this order:
 
   1. The cache, ${XDG_CACHE_HOME:-~/.cache}/uqf/peachq/<entry>/q, an entry
@@ -37,10 +37,10 @@ PeachQ that is not the pinned build is used when named through QCMD or
 --peachq, and `unpinned_warning` says so.
 
 Nothing here puts PeachQ on PATH or touches QCMD: the caller gets an
-absolute path and hands it to the one lane that asked for it.
+absolute path and hands it to whatever asked for it.
 
-Standard library only: scripts/test.py runs under a bare python3 that cannot
-import uqs, and loads this file by path.
+Standard library only: CI runs it under a bare python3 that cannot import
+uqs, before the workspace exists.
 
 Usage:
     python3 scripts/peachq.py            # print the binary's path, building if needed
@@ -68,12 +68,12 @@ COMMIT_ENV = "UQF_PEACHQ_COMMIT"
 #: The variables that chose an interpreter before #1753, each with what
 #: replaces it, refused when set. uqs.interpreter.REMOVED_ENV spells the same
 #: list - this file cannot import uqs - and test_interpreter.py holds the two
-#: equal; scripts/test.py takes it from here.
+#: equal.
 REMOVED_ENV = {
     "UQF_Q_IMPL": "the binary is asked which q it is - set QCMD=<binary> alone",
     "UQF_PEACHQ": (
         "set QCMD=<binary> to run everything on that PeachQ, or pass --peachq PATH "
-        "(scripts/test.py, pytest) for the PeachQ lanes alone"
+        "(pytest) for the PeachQ tests alone"
     ),
     "UQF_PEACHQ_REASON": (
         "a PeachQ in QCMD that is not the pinned build is named in a warning instead"
@@ -93,8 +93,8 @@ FETCH_TIMEOUT = 600
 BUILD_TIMEOUT = 1800
 CACHE_ENV = "XDG_CACHE_HOME"
 
-#: Asks a binary which q it is. scripts/test.py takes it from here, and
-#: test_interpreter.py holds it equal to uqs.interpreter's.
+#: Asks a binary which q it is; test_interpreter.py holds it equal to
+#: uqs.interpreter's.
 IDENTIFY_SCRIPT = '-1 $[-7h=type @[value;`.pq.load_natives;{0N}];"kdbx";"peachq"];\nexit 0\n'
 
 _COMMIT = re.compile(r"[0-9a-f]{40}")
