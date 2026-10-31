@@ -1,17 +1,23 @@
 #!/usr/bin/env python3
-"""Render `docs/diagrams/*.d2` to SVG, and check the committed SVGs are current.
+"""Render `docs/diagrams/*.d2` to SVG: the `diagrams` target of derive.py.
+
+    python3 scripts/generate/derive.py diagrams                    # render
+    python3 scripts/generate/derive.py diagrams --check            # compare
+    python3 scripts/generate/derive.py diagrams --check --require  # CI: never skip
+    python3 scripts/generate/derive.py diagrams --print-version    # D2_VERSION
 
 An `.svg` committed beside its `.d2` is a derived artefact, and this tree
 already knows what happens to those without a gate: `docs/man.q` called
 itself generated for months while covering 78 of 348 functions, because
 nothing re-ran the generator. So this is the same shape as
-`contract_surface.py check` - edit the source, forget the render, and the
+the contract-surface check - edit the source, forget the render, and the
 build says so.
 
 WHY A BYTE COMPARISON IS SAFE HERE. d2 is deterministic for a given version:
 rendering the same `.d2` twice produces identical bytes (verified before this
 gate was written), so `--check` can compare the file rather than parse the
-SVG.
+SVG. The target renders each source into a temporary directory and hands the
+bytes to derive.py, which compares them or writes them.
 
 WHY A VERSION MISMATCH SKIPS RATHER THAN FAILS. Different d2 releases lay out
 and emit differently, so the same source renders to different - equally
@@ -20,6 +26,7 @@ contributor's d2 version, not a stale diagram, and the fix it implied
 (re-render and commit) would start a churn war between two developers on
 different versions. So the gate runs only when the renderer matches
 D2_VERSION below; otherwise it says which version it wanted and passes.
+That policy is `verdict` below, and the target applies it before rendering.
 
 CI is the exception to both skips: it installs the pinned d2 and passes
 `--require`, under which an absent or different d2 FAILS. Before that CI never
@@ -33,8 +40,6 @@ commit so a real diagram change is never buried in it.
 
 from __future__ import annotations
 
-import argparse
-import filecmp
 import shutil
 import subprocess
 import sys
@@ -67,90 +72,40 @@ def render(source: Path, target: Path) -> None:
     subprocess.run(["d2", str(source), str(target)], check=True, capture_output=True)
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "--check",
-        action="store_true",
-        help="fail if a committed .svg differs from a fresh render",
-    )
-    parser.add_argument(
-        "--require",
-        action="store_true",
-        help="fail, rather than skip, when d2 is absent or is not D2_VERSION (CI)",
-    )
-    parser.add_argument(
-        "--print-version",
-        action="store_true",
-        help="print D2_VERSION and exit (the CI workflow installs that release)",
-    )
-    args = parser.parse_args()
+def rendered(source: Path) -> bytes:
+    """`source` rendered by d2, as bytes; nothing in the tree is written.
 
-    if args.print_version:
-        print(D2_VERSION)
-        return 0
+    Rendered under the committed SVG's own name, in a temporary directory,
+    as the comparison always was.
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        fresh = Path(tmp) / source.with_suffix(".svg").name
+        render(source, fresh)
+        return fresh.read_bytes()
 
-    srcs = sources()
-    if not srcs:
-        # Refusing to report success over an empty set, the same way
-        # check_etl_layering.py does: a moved directory must fail loudly
-        # rather than quietly gate nothing.
-        print(f"error: no .d2 sources under {DIAGRAMS.relative_to(REPO)}", file=sys.stderr)
-        return 1
 
+def verdict(count: int, *, require: bool) -> int | None:
+    """Whether this machine's d2 may render: None to go ahead, else the exit
+    status to stop with - 0 to skip, saying why, or 1 under `require`.
+
+    `count` is the number of sources, for the skip message.
+    """
     version = installed_version()
-    if args.require and version != D2_VERSION:
+    if require and version != D2_VERSION:
         print(
-            f"render_diagrams: --require needs d2 {D2_VERSION} but found "
+            f"diagrams: --require needs d2 {D2_VERSION} but found "
             f"{version or 'no d2 on PATH'}; refusing to skip the check",
             file=sys.stderr,
         )
         return 1
     if version is None:
-        print(f"render_diagrams: no d2 on PATH; {len(srcs)} diagram(s) left as committed")
+        print(f"diagrams: no d2 on PATH; {count} diagram(s) left as committed")
         return 0
     if version != D2_VERSION:
         print(
-            f"render_diagrams: d2 {version} is installed but the committed SVGs were "
+            f"diagrams: d2 {version} is installed but the committed SVGs were "
             f"rendered with {D2_VERSION}; skipping rather than reporting a version "
             f"difference as a stale diagram"
         )
         return 0
-
-    if not args.check:
-        for source in srcs:
-            render(source, source.with_suffix(".svg"))
-            print(f"render_diagrams: wrote {source.with_suffix('.svg').relative_to(REPO)}")
-        return 0
-
-    stale: list[str] = []
-    for source in srcs:
-        committed = source.with_suffix(".svg")
-        if not committed.is_file():
-            stale.append(f"{committed.relative_to(REPO)} is missing")
-            continue
-        with tempfile.TemporaryDirectory() as tmp:
-            fresh = Path(tmp) / committed.name
-            render(source, fresh)
-            # shallow=False: the sizes can match while the content differs,
-            # and a same-size edit is exactly the case a diagram gate is for
-            # (a renamed box, a re-coloured edge).
-            if not filecmp.cmp(fresh, committed, shallow=False):
-                stale.append(
-                    f"{committed.relative_to(REPO)} is stale - "
-                    f"{source.relative_to(REPO)} has changed since it was rendered"
-                )
-
-    if stale:
-        print("render_diagrams: committed SVGs do not match their sources:", file=sys.stderr)
-        for line in stale:
-            print(f"  {line}", file=sys.stderr)
-        print("\nRun: python3 scripts/generate/render_diagrams.py", file=sys.stderr)
-        return 1
-
-    print(f"render_diagrams: {len(srcs)} diagram(s) match their sources (d2 {version})")
-    return 0
-
-
-if __name__ == "__main__":
-    sys.exit(main())
+    return None

@@ -383,7 +383,7 @@ def test_every_scaffold_and_install_command_regenerates_it_first():
     """`uqs job new|remove|install` and `uqs runtime prepare` run _DERIVED in
     order; the metadata comes first, since the docs generator reads it."""
     from uqs.cli.regenerate import _DERIVED
-    from uqs.model.plant_metadata import PLANT_SCHEMA_SCRIPT
+    from uqs.paths import DERIVE_SCRIPT
 
-    assert _DERIVED[0] == PLANT_SCHEMA_SCRIPT
-    assert (ROOT / PLANT_SCHEMA_SCRIPT).is_file()
+    assert _DERIVED[0] == (str(DERIVE_SCRIPT), "plant-schema")
+    assert (ROOT / DERIVE_SCRIPT).is_file()

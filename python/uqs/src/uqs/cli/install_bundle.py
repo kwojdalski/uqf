@@ -17,7 +17,7 @@ import typer
 from rich.prompt import Confirm
 from rich.table import Table
 
-from uqs.cli.regenerate import _DERIVED, _regenerate_derived
+from uqs.cli.regenerate import _DERIVED, _regenerate_derived, derived_command
 from uqs.cli.shared import _die, console
 from uqs.paths import INSTALLED_CONNECTORS
 from uqs.stack import bundles
@@ -95,14 +95,14 @@ def install(
         f"{len(entry['overrides'])} override(s), {len(entry['connectors'])} connector file(s)"
         + ("" if changes else " - unchanged")
     )
-    for script, regen in zip(_DERIVED, _regenerate_derived(root), strict=True):
+    for derived, regen in zip(_DERIVED, _regenerate_derived(root), strict=True):
         if regen.returncode:
             console.print(
-                f"[red]✗ could not regenerate[/] - run `python3 {script}`:\n"
+                f"[red]✗ could not regenerate[/] - run `{derived_command(derived)}`:\n"
                 f"{regen.stdout}{regen.stderr}"
             )
             raise typer.Exit(code=1)
-        console.print(f"[green]✓[/] regenerated via {script}")
+        console.print(f"[green]✓[/] regenerated via {' '.join(derived)}")
     streaming = [j["procname"] for j in entry["jobs"] if j["kind"] == "streaming"]
     workers = [j["name"] for j in entry["jobs"] if j["kind"] == "worker"]
     if streaming:

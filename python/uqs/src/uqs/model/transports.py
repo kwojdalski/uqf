@@ -2,7 +2,7 @@
 
 `.qetl.source.transport` in src/etl/core/source_transports.q is the registry:
 one row per transport, with its operations and the words an operator and the
-scaffold need. `scripts/generate/contract_surface.py export` writes the words
+scaffold need. `scripts/generate/derive.py contract-surface` writes the words
 - never the operations - to docs/reference/surfaces/current/transports.csv,
 and its `check` fails when q and that file disagree. So this module reads a
 generated file rather than keeping a list of its own (#616), and needs no q
@@ -42,7 +42,7 @@ def load(root: Path | None = None) -> tuple[Transport, ...]:
     if not path.is_file():
         raise UqsError(
             f"{TRANSPORTS_FILE} is missing - regenerate the contract surface with "
-            "`uv run python scripts/generate/contract_surface.py export`"
+            "`uv run python scripts/generate/derive.py contract-surface`"
         )
     with path.open(newline="", encoding="utf-8") as handle:
         return tuple(

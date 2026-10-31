@@ -27,11 +27,12 @@ and renames it over the old, and refuses when the inputs change while q runs,
 so a failure leaves the previous file - which the fingerprint then calls
 stale - and never metadata for a code snapshot it was not made from.
 
-    python -m uqs.model.plant_metadata_gen           # regenerate if stale (q only then)
-    python -m uqs.model.plant_metadata_gen --force   # regenerate (needs q)
-    python -m uqs.model.plant_metadata_gen --check   # fail unless q agrees (needs q)
+    uv run python scripts/generate/derive.py plant-schema           # if stale (q only then)
+    uv run python scripts/generate/derive.py plant-schema --force   # regenerate (needs q)
+    uv run python scripts/generate/derive.py plant-schema --check   # q must agree (needs q)
 
-(uqs.model.plant_metadata_gen does the writing; this module only reads.)
+(uqs.model.plant_metadata_gen does the writing, and a bundle install calls it
+directly; this module only reads.)
 
 WHAT IS NOT HERE: a running database's tables (ask the database - this is
 what is DECLARED), and keyed tables (a plant table is unkeyed; the exporter
@@ -47,12 +48,10 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from uqs.generated.q_facts import Q_ATTRIBUTES, Q_TYPE_NAMES
-from uqs.paths import ETL_DIR, TABLES_FILE, TORQAPPHOME_ENV, UqsError, repo_root
+from uqs.paths import DERIVE_SCRIPT, ETL_DIR, TABLES_FILE, TORQAPPHOME_ENV, UqsError, repo_root
 
 #: What q evaluates TABLES_FILE (and the starter pack's database.q) to declare.
 PLANT_SCHEMA_FILE = ETL_DIR / "generated" / "plant_schema.json"
-#: The script form of the generator, which `uqs job new|remove|install` run.
-PLANT_SCHEMA_SCRIPT = Path("scripts/generate/plant_schema.py")
 
 #: Bumped when the JSON's shape or the exporter's meaning changes, so every
 #: committed file built by an older exporter reads as stale.
@@ -71,7 +70,8 @@ GENERAL = " "
 #: q's attributes, "" for none.
 ATTRIBUTES = ("", *Q_ATTRIBUTES)
 
-REGENERATE = "python -m uqs.model.plant_metadata_gen"
+#: The command that regenerates it: derive.py's plant-schema target (#1804).
+REGENERATE = f"uv run python {DERIVE_SCRIPT} plant-schema"
 
 
 class SchemaMetadataError(UqsError):

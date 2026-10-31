@@ -1,5 +1,6 @@
-"""Tests for `scripts/generate/render_diagrams.py` - and mostly for the two ways it
-can pass while checking nothing.
+"""Tests for the `diagrams` target of `scripts/generate/derive.py`, whose renderer
+is `scripts/generate/render_diagrams.py` - and mostly for the two ways it can
+pass while checking nothing.
 
 The gate's whole job is to fail when a committed `.svg` no longer matches
 its `.d2`, and it has two deliberate escape hatches: no `d2` on PATH, and a
@@ -26,14 +27,17 @@ import pytest
 REPO = Path(__file__).resolve().parents[3]
 
 # scripts/ is not a package, so the script is loaded by path - the same
-# idiom test_check_doc_references.py uses, and for the same reason.
+# idiom test_check_doc_references.py uses, and for the same reason. The
+# renderer is loaded through derive.load, so a test patches the very module
+# the target uses.
 _SPEC = importlib.util.spec_from_file_location(
-    "render_diagrams", REPO / "scripts" / "generate" / "render_diagrams.py"
+    "derive", REPO / "scripts" / "generate" / "derive.py"
 )
 assert _SPEC and _SPEC.loader
-render_diagrams = importlib.util.module_from_spec(_SPEC)
-sys.modules["render_diagrams"] = render_diagrams
-_SPEC.loader.exec_module(render_diagrams)
+derive = importlib.util.module_from_spec(_SPEC)
+sys.modules["derive"] = derive
+_SPEC.loader.exec_module(derive)
+render_diagrams = derive.load("render_diagrams")
 
 
 def _renderable() -> bool:
@@ -58,18 +62,15 @@ def diagram_dir(tmp_path, monkeypatch):
 def _check() -> int:
     """Run the gate in check mode.
 
-    argv is set here rather than in each test because main() parses it, and
-    a test that left a stale argv behind would hand the next one a different
-    mode - which reads as the gate being wrong rather than the test.
+    One helper for every mode, so a test cannot hand the target a different
+    mode by accident - which would read as the gate being wrong rather than
+    the test.
     """
     return _run("--check")
 
 
 def _run(*args: str) -> int:
-    import unittest.mock
-
-    with unittest.mock.patch.object(sys, "argv", ["render_diagrams", *args]):
-        return render_diagrams.main()
+    return derive.main(["diagrams", *args])
 
 
 def _write_source(directory: Path, label: str = "one") -> Path:
@@ -87,9 +88,12 @@ def test_a_stale_svg_is_reported(diagram_dir, capsys):
     render_diagrams.render(source, source.with_suffix(".svg"))
     # The edit a contributor forgets to re-render.
     _write_source(diagram_dir, label="one, renamed")
+    svg = source.with_suffix(".svg")
+    committed = svg.read_bytes()
 
     assert _check() == 1
-    assert "is stale" in capsys.readouterr().err
+    assert "sample.d2 has changed since it was rendered" in capsys.readouterr().err
+    assert svg.read_bytes() == committed, "--check rewrote the stale SVG"
 
 
 @requires_d2
@@ -97,6 +101,7 @@ def test_a_missing_svg_is_reported(diagram_dir, capsys):
     _write_source(diagram_dir)
     assert _check() == 1
     assert "is missing" in capsys.readouterr().err
+    assert not (diagram_dir / "sample.svg").exists(), "--check rendered into the tree"
 
 
 @requires_d2

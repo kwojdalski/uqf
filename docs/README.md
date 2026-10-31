@@ -3,9 +3,9 @@
 ## System overview
 
 <!-- Source: docs/diagrams/repo-overview.d2. Rendered by
-     scripts/generate/render_diagrams.py; edit the .d2 and re-render, never the
-     .svg. Its --check only compares where the pinned d2 is installed, which CI
-     is not. -->
+     `scripts/generate/derive.py diagrams`; edit the .d2 and re-render, never
+     the .svg. Its --check compares only where the pinned d2 is installed, which
+     CI installs. -->
 
 ![uqf on one page, top to bottom: the outside world (live feeds, batch sources, Airflow, the browser); src/, plain q that never loads TorQ; the TorQ runners in scripts/processes; and the running stack - with the Python and web surfaces alongside](diagrams/repo-overview.svg)
 
@@ -55,6 +55,6 @@ or an architecture note, and only its purpose decides where it goes.
   `quarto render docs/presentation/uqf.qmd`; the HTML is not committed.
 - [`diagrams/`](diagrams/) --- the d2 source of every diagram in these pages and
   its rendered SVG, each embedded in the page it illustrates.
-  `scripts/generate/render_diagrams.py --check` reports an SVG that no longer
-  matches its source, but only where the pinned d2 version is installed; CI has
-  no d2, so there it skips.
+  `python3 scripts/generate/derive.py diagrams --check` reports an SVG that no
+  longer matches its source, but only where the pinned d2 version is installed;
+  CI installs it and passes `--require`, so there it cannot skip.

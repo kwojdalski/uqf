@@ -213,7 +213,7 @@ removed or moved function breaks three generated artefacts:
 ```bash
 scripts/test.py q-unit
 scripts/test.py python
-uv run python scripts/generate/contract_surface.py export
+uv run python scripts/generate/derive.py contract-surface
 ```
 
 If the remedy was a shared fixture rather than a unification, the fixture itself

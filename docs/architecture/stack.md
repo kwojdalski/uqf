@@ -81,7 +81,7 @@ Who connects to whom over IPC. Solid arrows are `.u.upd` publishes or
 discovery/registration only.
 
 <!-- Source: docs/diagrams/stack-topology.d2. Rendered by
-     scripts/generate/render_diagrams.py, which CI runs with --check.
+     `scripts/generate/derive.py diagrams`, which CI runs with --check.
      Do not edit the .svg. -->
 
 ![Who connects to whom in the running stack: the uqf streaming jobs, the one runner they share, the tickerplant, and storage](../diagrams/stack-topology.svg)
