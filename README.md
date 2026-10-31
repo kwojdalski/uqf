@@ -156,50 +156,47 @@ Component READMEs: [`python/uqs/`](python/uqs/README.md) (the stack CLI),
 
 ## Testing
 
-`scripts/test.py` keeps `q-coverage` and `coverage` for now (below).
-
-pytest is becoming the one way to run every test, with qUnit and q coverage as
-the backends it drives (#1808); the lanes move to it one at a time, each leaving
-`scripts/test.py` as it moves. Those that have, and how to select them:
+pytest is the one way to run every test (#1808). qUnit stays the q suite's
+framework and `.cov` its coverage instrumenter: pytest drives them, as it drives
+the worked examples, the docs' q blocks and the checks that need real processes.
 
 ```
-uv run pytest                                      # everything; a test whose interpreter is missing skips, saying so
+uv run pytest -n auto --dist loadgroup             # everything; a test whose interpreter is missing skips, saying so
 uv run pytest -m "not q_backend"                   # without the q scripts run as tests (what the python-tests hook runs)
-uv run pytest tests/qrun/test_q_suite.py::test_the_q_suite_passes   # the qUnit suite on KDB-X (was q-unit);
+uv run pytest tests/qrun/test_q_suite.py::test_the_q_suite_passes   # the qUnit suite on KDB-X;
                                                    # --q-files test_a.q,test_b.q runs only those files' suites
-uv run pytest tests/qrun/test_q_suite.py -m release     # the same suites in reverse order (was q-order), opt-in
-uv run pytest tests/qrun/test_q_suite.py -m peachq      # the whole suite on PeachQ, held to its known gaps (was q-unit-peachq)
-uv run pytest tests/qrun/test_worked_examples.py   # every scripts/examples/*.q (was q-scripts), on KDB-X
-uv run pytest tests/qrun/test_doc_blocks.py -m kdbx     # the docs' marked q blocks on KDB-X (was q-docs)
-uv run pytest tests/qrun/test_doc_blocks.py -m peachq   # ... and on PeachQ (was q-docs-peachq); --peachq PATH picks one
-uv run pytest tests/qrun/test_documented_examples.py   # every @eg in src/ and scripts/ (was q-examples)
-uv run pytest tests/qrun/test_process_runners.py       # real processes, a second q, a temp HDB (was q-backfill-process,
-                                                       # q-two-instances, q-remote-writer, q-metatables-hdb; -k one of those)
+uv run pytest tests/qrun/test_q_suite.py -m peachq      # the whole suite on PeachQ, held to its known gaps
+uv run pytest tests/qrun/test_worked_examples.py   # every scripts/examples/*.q, on KDB-X
+uv run pytest tests/qrun/test_doc_blocks.py -m kdbx     # the docs' marked q blocks on KDB-X
+uv run pytest tests/qrun/test_doc_blocks.py -m peachq   # ... and on PeachQ; --peachq PATH picks one
+uv run pytest tests/qrun/test_documented_examples.py   # every @eg in src/ and scripts/
+uv run pytest tests/qrun/test_process_runners.py       # real processes, a second q, a temp HDB
+uv run pytest -m coverage tests/qrun/test_q_coverage.py   # the q coverage gate (below)
 uv run pytest -m release                           # release checks: the q suite reversed, each sidecar bundle installed and tested
-uv run pytest -m live_stack                        # the attach workflow on isolated TorQ stacks (was attach-stack)
-uv run pytest tests/remote -m docker               # a stack on another machine, in Docker (was remote-stack)
+uv run pytest -m live_stack                        # the attach workflow on isolated TorQ stacks
+uv run pytest tests/remote -m docker               # a stack on another machine, in Docker
 uv run pytest tests/qrun/test_external_smoke.py -m external --smoke-targets HOST:PORT --smoke-tables TABLE:COL,COL
 ```
 
-`release`, `live_stack`, `docker` and `external` are opt-in: a test carrying one
-skips, saying how to select it, unless `-m` names it.
+`coverage`, `release`, `live_stack`, `docker` and `external` are opt-in: a test
+carrying one skips, saying how to select it, unless `-m` names it.
 
 `-m kdbx` and `-m peachq` select by interpreter. `--require-q kdbx` (or
 `peachq`) turns a skip for a missing interpreter into a failure: the hooks pass
 it, so a gate that cannot run its tests fails instead of passing empty.
 
-`scripts/test.py coverage` measures what the suites **execute**: line coverage
-for Python, statement and branch coverage for q through the [`.cov`
-library](scripts/dev/coverage.q). `q-coverage` is the gate: it fails when the
-set of functions nothing enters differs from `tests/q/coverage_baseline.txt` in
-either direction. At commit and in an attestation it judges only the production
-files a change reaches, running q-tests' suites plus, for each function judged,
-a suite that enters it according to `tests/q/coverage_map.txt`; a subset that
-finds a function never entered hands the verdict to a whole-suite run. The whole
-suite, judging every function, runs on master's tip through
-`python3 scripts/dev/master_coverage.py` on a machine with KDB-X:
-`scripts/dev/ship.sh` starts it after each merge, and it also refreshes the map
-(`--write-map tests/q/coverage_map.txt`) (#1719).
+Coverage measures what the suites **execute**: line coverage for Python
+(`uv run pytest --cov`, measuring each member's `src/`), statement and branch
+coverage for q through the [`.cov` library](scripts/dev/coverage.q). The q half
+is the gate (`-m coverage`): it fails when the set of functions nothing enters
+differs from `tests/q/coverage_baseline.txt` in either direction. At commit and
+in an attestation it judges only the production files a change reaches, running
+q-tests' suites plus, for each function judged, a suite that enters it according
+to `tests/q/coverage_map.txt`; a subset that finds a function never entered
+hands the verdict to a whole-suite run. The whole suite, judging every function,
+runs on master's tip through `python3 scripts/dev/master_coverage.py` on a
+machine with KDB-X: `scripts/dev/ship.sh` starts it after each merge, and it
+also refreshes the map (`--write-map tests/q/coverage_map.txt`) (#1719).
 
 ## Licensing
 

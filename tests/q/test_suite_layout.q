@@ -269,7 +269,7 @@
 
 / --- coverage of a subset: -modules (#1719) --------------------------------
 / `q tests/q/run_coverage.q -files a.q -modules src/x.q` runs a's suites and
-/ judges only what src/x.q defines; scripts/test.py q-coverage hands any
+/ judges only what src/x.q defines; tests/qrun/test_q_coverage.py hands any
 / failure of it to a run of the whole suite.
 
 .qt.harness.layout.test_the_modules_option_is_read_from_the_command_line:{[t]

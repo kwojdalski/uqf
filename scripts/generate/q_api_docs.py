@@ -143,7 +143,7 @@ def checkout(files: list[str], dest: Path) -> None:
 
 
 def q_command() -> tuple[str, dict[str, str]]:
-    """$QCMD, else `q` on PATH - the rule scripts/test.py and uqs follow."""
+    """$QCMD, else `q` on PATH - the rule pytest and uqs follow."""
     env = os.environ.copy()
     name = env.get("QCMD") or "q"
     exe = shutil.which(name)

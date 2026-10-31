@@ -263,8 +263,8 @@ invariants, is `uqf-q-traps.md`.
   `--q-files a.q,b.q` for a subset, `-m peachq` for PeachQ), the worked and
   documented examples, the docs' q blocks (`-m kdbx` / `-m peachq`) and the
   process checks. `release`, `live_stack`, `docker` and `external` tests are
-  opt-in (`-m <marker>`). `scripts/test.py` keeps only `q-coverage` and
-  `coverage`.
+  opt-in (`-m <marker>`), and so is the q coverage gate (`-m coverage`). There
+  is no `scripts/test.py`.
 - **V3** Assert the message, not just the throw. Use
   `.qunit.assertThrows[f;arg;"*expected text*";"why"]`. `assertError` passes on
   a typo in the test itself (`CLAUDE.md`).

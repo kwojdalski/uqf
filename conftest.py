@@ -80,6 +80,7 @@ OPT_IN = {
     "live_stack": "starts isolated TorQ stacks on KDB-X (the attach workflow), about a minute each",
     "docker": "starts Docker containers standing in for other machines (tests/remote)",
     "external": "checks live external sources, named with --smoke-targets",
+    "coverage": "the q coverage gate: the whole q suite again, under instrumentation",
 }
 
 #: The interpreters --require-q takes.
@@ -130,6 +131,18 @@ def pytest_addoption(parser):
             "run only the qUnit suites these tests/q files define (tests/run_tests.q -files): "
             "the q-tests hook passes scripts/dev/test_impact.py's selection"
         ),
+    )
+    parser.addoption(
+        "--q-modules",
+        default=None,
+        metavar="src/x.q,...",
+        help="with --q-files and -m coverage: judge only the functions these files define",
+    )
+    parser.addoption(
+        "--q-coverage-map",
+        default=None,
+        metavar="PATH",
+        help="with -m coverage, on a whole run: write tests/q/coverage_map.txt's content there",
     )
     smoke = parser.getgroup("smoke", "the external smoke check (-m external)")
     smoke.addoption("--smoke-targets", nargs="+", default=[], metavar="HOST:PORT",

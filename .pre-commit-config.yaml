@@ -413,9 +413,10 @@ repos:
             # whole run; the rest of the tree is judged by the whole run on
             # master (scripts/dev/master_coverage.py).
             #
-            # Through scripts/test.py for the same reason the hook above is:
-            # one rule for which interpreter ($QCMD, else q on PATH), never a
-            # fallback to something the tree is not verified on.
+            # Through pytest (tests/qrun/test_q_coverage.py, #1808) for the
+            # same reason the hook above is: one rule for which interpreter
+            # ($QCMD, else q on PATH), never a fallback to something the tree
+            # is not verified on; --require-q kdbx fails a run without KDB-X.
             #
             # It roughly doubles the time a q commit takes (~14s on top of
             # the suite's own ~13s). If that becomes the reason people reach
@@ -424,13 +425,15 @@ repos:
             # noticing months later that nothing calls a function.
             selection=$(python3 scripts/dev/test_impact.py --coverage-hook)
             case "$selection" in
-              ALL) python3 scripts/test.py q-coverage ;;
+              ALL) subset=() ;;
               # -files a.q,b.q -modules src/x.q,...: no spaces in either list
-              -files\ *\ -modules\ *) read -ra words <<< "$selection"; python3 scripts/test.py q-coverage "${words[@]}" ;;
+              -files\ *\ -modules\ *) read -ra words <<< "$selection"; subset=(--q-files "${words[1]}" --q-modules "${words[3]}") ;;
               *) echo "q-coverage: unexpected selection: $selection" >&2; exit 1 ;;
             esac
-        # The baseline too: an edit to it alone changes what this judges.
-        files: '\.q$|^tests/q/coverage_baseline\.txt$'
+            uv run pytest -q -m coverage --require-q kdbx tests/qrun/test_q_coverage.py ${subset[@]+"${subset[@]}"}
+        # The baseline too: an edit to it alone changes what this judges; and
+        # the pytest module and the decision it makes (#1808).
+        files: '\.q$|^tests/q/coverage_baseline\.txt$|^tests/qrun/(qrun_support|q_coverage|test_q_coverage)\.py$'
         pass_filenames: false
 
   - repo: https://github.com/pre-commit/pre-commit-hooks
