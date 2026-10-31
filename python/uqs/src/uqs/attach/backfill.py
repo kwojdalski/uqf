@@ -42,7 +42,15 @@ from typing import Any
 from uqs.attach import config
 from uqs.attach.config import Attachment, AttachmentError
 from uqs.attach.manifest import Manifest
-from uqs.attach.schema import SchemaError, TableSpec, differences, parse_definition, parse_nested
+from uqs.attach.schema import (
+    SchemaError,
+    TableSpec,
+    differences,
+    parse_definition,
+    parse_nested,
+    spec_of,
+)
+from uqs.model import plant_metadata
 from uqs.model.declarations import Declaration, read_declarations
 from uqs.paths import TABLES_FILE, UqsError, UqsPaths
 from uqs.stack import backfill as stack_backfill
@@ -157,13 +165,18 @@ def _table_in(path: Path, table: str) -> TableSpec | None:
 
 def worker_table(paths: UqsPaths, att: Attachment, dataset: str) -> TableSpec | None:
     """The table definition the worker's dataset has: the attachment's bundle
-    first (its own `tables.q`), else this tree's `plant_tables.q`."""
+    first (its own `tables.q`, read as text: it is not installed here), else
+    this tree's, as q evaluated `plant_tables.q` (#1781)."""
     folder = att.origin.get("folder")
     if folder:
         found = _table_in(Path(folder) / "tables.q", dataset)
         if found is not None:
             return found
-    return _table_in(paths.repo_root / TABLES_FILE, dataset)
+    try:
+        own = plant_metadata.load(paths.repo_root).own()
+        return spec_of(own[dataset]) if dataset in own else None
+    except (plant_metadata.SchemaMetadataError, SchemaError) as exc:
+        raise AttachmentError(f"{TABLES_FILE}: table {dataset}: {exc}") from None
 
 
 def canonical(path: str) -> Path:

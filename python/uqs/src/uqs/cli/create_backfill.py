@@ -11,6 +11,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from uqs.model import plant_metadata
 from uqs.model.declarations import (
     declaration_calls,
     read_declarations,
@@ -18,8 +19,7 @@ from uqs.model.declarations import (
     symbols,
 )
 from uqs.model.pipeline import PipelineKind
-from uqs.model.schemas import _DEFINITION
-from uqs.paths import ETL_DIR, SOURCE_DIR, TABLES_FILE, WORKER_DIR, UqsError
+from uqs.paths import ETL_DIR, SOURCE_DIR, WORKER_DIR, UqsError
 from uqs.scaffold import worker
 from uqs.scaffold.columns import (
     PHYSICAL_NAME,
@@ -54,9 +54,9 @@ def workers_filling(repo_root: Path, dataset: str, partition: str | None = None)
 
 
 def defined_tables(repo_root: Path) -> set[str]:
-    """The plant tables the q file defines, read from the tree being written
-    into rather than the one this package was imported from."""
-    return {m.group(1) for m in _DEFINITION.finditer((repo_root / TABLES_FILE).read_text())}
+    """The plant tables the q file defines, as q evaluated them (#1781) - the
+    tree being written into rather than the one this package was imported from."""
+    return set(plant_metadata.load(repo_root).own())
 
 
 def twin_target(

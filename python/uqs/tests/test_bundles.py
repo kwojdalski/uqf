@@ -40,11 +40,11 @@ TREE_CATALOG = (
 
 
 @pytest.fixture
-def repo(tmp_path: Path) -> Path:
+def repo(tmp_path: Path, plant_tree) -> Path:
     root = tmp_path / "repo"
     for directory in (SOURCE_DIR, WORKER_DIR, STREAM_DIR):
         (root / directory).mkdir(parents=True)
-    (root / TABLES_FILE).write_text(TREE_TABLES)
+    plant_tree(root, TREE_TABLES)
     (root / CATALOG_FILE).parent.mkdir(parents=True)
     (root / CATALOG_FILE).write_text(TREE_CATALOG)
     (root / OVERRIDES_FILE).parent.mkdir(parents=True)
