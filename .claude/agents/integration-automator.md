@@ -74,8 +74,8 @@ not invent a fourth mechanism.
    q code (a list in `.qetl.io.strategies`, a table's columns) and Python must
    run without q, export it under KDB-X into a committed, generated module, and
    add the `--check` to the hooks so a q change fails the commit until it is
-   regenerated. Precedent: `scripts/generate/q_facts.py` writes
-   `python/uqs/src/uqs/generated/q_facts.py` from
+   regenerated. Precedent: `derive.py q-facts` (`scripts/generate/q_facts.py`)
+   writes `python/uqs/src/uqs/generated/q_facts.py` from
    `scripts/generate/export_q_facts.q`. Add a fact to THAT exporter rather than
    writing a new generator; the contract surface
    (`scripts/generate/contract_surface.py`) is the same shape.
@@ -83,7 +83,7 @@ not invent a fourth mechanism.
    at import time in a place that cannot read a file, a format the authority
    cannot express - keep the copy and add a test or gate that loads both and
    fails when they differ, naming both files. Precedent:
-   `scripts/gates/check_env_reference.py`, both directions. Say in the copy's
+   `scripts/gates/check.py env-reference`, both directions. Say in the copy's
    comment which file is the authority and which gate holds it there.
 
 ## What to hunt

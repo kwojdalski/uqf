@@ -123,7 +123,7 @@ def test_the_lock_keeps_every_row_it_had():
 
 
 def test_the_committed_lock_covers_every_process():
-    """What generate_operational_docs.py --check enforces in CI, held here too:
+    """What `derive.py operational-docs --check` enforces in CI, held here too:
     a process the lock lacks has an offset that moves as others are added."""
     locked = registry.read_port_lock(Path(__file__).resolve().parents[3])
     assert {p.procname for p in PIPELINES} <= set(locked)
@@ -162,7 +162,8 @@ def test_a_job_file_is_the_whole_registration(tmp_path):
     )
     built = {p.procname: p for p in registry.build_pipelines(root)}
     assert set(built) == {"tap1", "tick1", "w1"}
-    assert (built["tick1"].table, built["tick1"].startwithall) == ("ticks", "1")
+    # which of these the tree defines is asked of q's metadata only on use (#1781)
+    assert (built["tick1"].sole_publisher_of, built["tick1"].startwithall) == (("ticks",), "1")
     assert (built["w1"].worker, built["w1"].startwithall) == ("w", "0")
     assert (built["tap1"].offset, built["tick1"].offset, built["w1"].offset) == (28, 29, 30)
 

@@ -8,7 +8,7 @@ across sources. It preserves source identity on every level so an arbitrage row
 can name where to buy and where to sell.
 
 <!-- Source: docs/diagrams/superbook-chain.d2. Rendered by
-     scripts/generate/render_diagrams.py, which CI runs with --check. -->
+     `scripts/generate/derive.py diagrams`, which CI runs with --check. -->
 
 ![The chain top to bottom: the quote and fx_orderbook tables into marketdata1, which publishes market_data; superbook1 subscribes to that and publishes superbook; arbitrage1 and crossarb1 both subscribe to superbook and publish arbitrage and cross_arbitrage](../diagrams/superbook-chain.svg)
 

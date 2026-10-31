@@ -100,8 +100,12 @@ CLAIMS = {
 }
 
 #: Names q's parser owns: never a context's global, so never qualified (and
-#: assigning one is refused). kdb+ 4.0's `.q` namespace and `.Q.res`, plus the
-#: qSQL words.
+#: assigning one is refused). KDB-X's `.q` namespace and `.Q.res`, plus the
+#: qSQL words - `use` and `ww` among them, so a call to either inside a nested
+#: context is not rewritten into a global that does not exist (#1795).
+#: scripts/ cannot import uqs, so this is a copy: python/uqs/tests/
+#: test_qnames.py holds it equal to uqs.model.qnames.Q_WORDS less PeachQ's
+#: own `rlike`, which the tree never calls.
 BUILTINS = frozenset(
     """abs acos aj aj0 ajf ajf0 all and any asc asin asof atan attr avg avgs bin binr by
     ceiling cols cor cos count cov cross csv cut delete deltas desc dev differ distinct div
@@ -112,8 +116,8 @@ BUILTINS = frozenset(
     pj prd prds prev prior rand rank ratios raze read0 read1 reciprocal reval reverse rload
     rotate rsave rtrim save scan scov sdev select set setenv show signum sin sqrt ss ssr
     string sublist sum sums sv svar system tables tan til trim type uj ujf ungroup union
-    update upper upsert value var view views vs wavg where while within wj wj1 wsum xasc
-    xbar xcol xcols xdesc xexp xgroup xkey xlog xprev xrank""".split()
+    update upper upsert use value var view views vs wavg where while within wj wj1 wsum ww
+    xasc xbar xcol xcols xdesc xexp xgroup xkey xlog xprev xrank""".split()
 )
 QSQL_START = frozenset({"select", "exec", "update", "delete"})
 IMPLICIT = frozenset({"x", "y", "z"})

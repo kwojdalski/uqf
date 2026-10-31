@@ -1,4 +1,5 @@
-"""Tests for `scripts/gates/check_declaration_reference.py` (#1331).
+"""Tests for the declaration-reference rule, `scripts/gates/policy/declaration_reference.py`
+(#1331).
 
 The gate held only five of the page's eight kind sections to their q files:
 the Horizon, Bars and Rolling-window sections were never read, so a required
@@ -17,16 +18,18 @@ from pathlib import Path
 
 import pytest
 
+REPO = Path(__file__).resolve().parents[3]
+
 _SPEC = importlib.util.spec_from_file_location(
-    "check_declaration_reference",
-    Path(__file__).resolve().parents[3] / "scripts" / "gates" / "check_declaration_reference.py",
+    "declaration_reference", REPO / "scripts" / "gates" / "policy" / "declaration_reference.py"
 )
 assert _SPEC and _SPEC.loader
 gate = importlib.util.module_from_spec(_SPEC)
-sys.modules["check_declaration_reference"] = gate
+sys.modules["declaration_reference"] = gate
 _SPEC.loader.exec_module(gate)
 
-PAGE = gate.PAGE.read_text()
+PAGE = (REPO / gate.PAGE).read_text()
+CORE = REPO / gate.CORE
 
 #: section heading -> a key its q file REQUIRES
 KINDS = {
@@ -44,14 +47,14 @@ def _section_edit(heading: str, edit) -> str:
 
 
 def test_the_real_page_agrees_with_the_tree():
-    assert gate.check(PAGE) == []
+    assert gate.check(PAGE, CORE) == []
 
 
 @pytest.mark.parametrize("heading", sorted(KINDS))
 def test_a_required_key_without_a_row_fails(heading):
     key = KINDS[heading]
     page = _section_edit(heading, lambda s: re.sub(rf"(?m)^\s*\| `{key}` .*\n", "", s))
-    assert any(f"declares `{key}` but the page has no row" in p for p in gate.check(page))
+    assert any(f"declares `{key}` but the page has no row" in p for p in gate.check(page, CORE))
 
 
 @pytest.mark.parametrize("heading", sorted(KINDS))
@@ -62,25 +65,25 @@ def test_a_row_for_a_key_the_kind_never_takes_fails(heading):
             "  | `procname` ", "  | `no_such_key` | no | x | y | z |\n  | `procname` ", 1
         ),
     )
-    assert any("describes `no_such_key`" in p for p in gate.check(page))
+    assert any("describes `no_such_key`" in p for p in gate.check(page, CORE))
 
 
 def test_an_optional_key_on_a_continuation_line_is_read():
     # horizon.q's optional_keys runs onto a second, indented line.
     page = _section_edit("## Horizon job", lambda s: re.sub(r"(?m)^\s*\| `lookback` .*\n", "", s))
-    assert any("declares `lookback`" in p for p in gate.check(page))
+    assert any("declares `lookback`" in p for p in gate.check(page, CORE))
 
 
 def test_every_key_list_in_core_belongs_to_a_block():
     covered = {
         (path.name, name)
         for file, lists, _ in gate.BLOCKS.values()
-        for path in gate.CORE.glob(file)
+        for path in CORE.glob(file)
         for name in lists
     }
     found = {
         (path.name, name)
-        for path in sorted(gate.CORE.glob("*.q"))
+        for path in sorted(CORE.glob("*.q"))
         for name in gate.DECLARATION_LIST.findall(path.read_text())
     }
     assert found, "no key lists found - has the declaring code moved?"

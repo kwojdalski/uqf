@@ -10,6 +10,7 @@ skips without one.
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
@@ -21,6 +22,27 @@ from uqs.paths import UqsError, paths_for_root
 from uqs.stack import runs
 
 UQF_ROOT = Path(__file__).resolve().parents[3]
+
+
+def q_loads(script: Path) -> tuple[str, ...]:
+    """The files a q script loads, in order: its `system"l ..."` and `\\l ...`
+    lines, read as q reads them - one load per line, at its start."""
+    loads = []
+    for line in script.read_text().splitlines():
+        if m := re.match(r'^\s*(?:system\s*"l\s+([^"]+)"|\\l\s+(\S+))', line):
+            loads.append((m.group(1) or m.group(2)).strip())
+    return tuple(loads)
+
+
+def test_the_ledgers_load_list_is_the_one_read_runs_q_proves():
+    """read_runs.q is the proof that this subset is enough to read the ledger
+    from a fresh process (#1795): a file one side loads and the other does
+    not is either a `uqs job runs` that fails with a q name error, or a proof
+    that no longer proves what ships."""
+    proof = q_loads(UQF_ROOT / "tests" / "q" / "read_runs.q")
+    assert proof, "read_runs.q loads nothing this test can read"
+    assert runs._LOADS == proof
+
 
 _WRITE = """
 \\l src/init.q

@@ -157,12 +157,11 @@ def _configure(
                 )
             )
         os.environ[runtimes.RUNTIME_ENV] = runtime_name
-    try:
-        declared = runtimes.RUNTIMES[stack_paths.runtime_from_env()]
+    try:  # refused here, before any command reads it
+        stack_paths.runtime_from_env()
     except UqsError as exc:
         _die(exc)
         return
-    _refuse_without_pipelines(declared, ctx.invoked_subcommand or "")
     # main() has already configured logging from the environment so that
     # anything logged during Typer's own startup lands somewhere. Re-running
     # it here is what makes --debug take effect, and the flag wins over the
@@ -173,30 +172,6 @@ def _configure(
     # adds a section. `uqs status --debug`, the old spelling, sets it too
     # (renamed()).
     ctx.obj = {"debug": debug}
-
-
-def _refuse_without_pipelines(declared: runtimes.Runtime, command: str) -> None:
-    """Refuse `command` - its path, `graph` or `job backfill` - on a runtime
-    without this tree's pipelines, when UQF_ONLY_COMMANDS lists it."""
-    needs = runtimes.UQF_ONLY_COMMANDS.get(command)
-    if not declared.pipelines and needs:
-        _die(
-            UqsError(
-                f"`uqs {command}` {needs}; "
-                f"the {declared.name} runtime has none of this tree's pipelines. "
-                f"Use --runtime {runtimes.DEFAULT_RUNTIME}"
-            )
-        )
-
-
-@job_app.callback()
-def _job(ctx: typer.Context) -> None:
-    # The root callback has already chosen the runtime (and refused a bad
-    # one); it sees only `job`, and `job new` works on any runtime, so the
-    # operations that need this tree's pipelines are refused here, by path.
-    _refuse_without_pipelines(
-        runtimes.RUNTIMES[stack_paths.runtime_from_env()], f"job {ctx.invoked_subcommand}"
-    )
 
 
 def _debug_requested(ctx: typer.Context) -> bool:

@@ -10,7 +10,7 @@ This runs scripts/generate/export_q_facts.q under KDB-X, which loads the tree
 and prints the values themselves, and writes them as a Python module. The
 module is committed, so uqs imports it without q.
 
-The status file's facts (its states and its name, #1362) go to a second
+The status file's facts (its states, its keys and its name, #1362) go to a second
 module too, inside uqf_airflow_provider: that package runs in Airflow's own
 environment and does not depend on uqs, so it cannot import the first. `--check` regenerates it in
 memory and fails when the committed file differs - the same contract as every
@@ -19,14 +19,15 @@ other derived artefact here (docs/man.q, the contract surface).
 KDB-X only, like the contract surface: the ETL tree does not load on PeachQ,
 and a hosted runner has no KDB-X, so the hook runs this locally.
 
-    uv run python scripts/generate/q_facts.py           # write
-    uv run python scripts/generate/q_facts.py --check   # fail if stale
+It is derive.py's `q-facts` target; this module exports and renders, and
+derive.py compares or writes:
+
+    uv run python scripts/generate/derive.py q-facts           # write
+    uv run python scripts/generate/derive.py q-facts --check   # fail if stale
 """
 
 from __future__ import annotations
 
-import argparse
-import difflib
 import json
 import os
 import subprocess
@@ -52,6 +53,7 @@ FACTS = {
     "ETL_RUN_META_COLUMNS": "the run facts ledger's columns - cols .qetl.run.init_meta[]",
     "STATUS_STATES": "every state a worker's status file may record - .qetl.status.status_states",
     "STATUS_TERMINAL_STATES": "the states that end a run - .qetl.status.terminal_states",
+    "STATUS_FIELDS": "every key of a worker's status file, in order - .qetl.status.fields",
     "STATUS_SUCCESS_STATES": (
         "the states a worker's process exits 0 for - .qetl.job.bounded.exit_code"
     ),
@@ -147,38 +149,3 @@ def render(facts: dict[str, list[str] | str | dict[str, str]], out_path: Path) -
         check=True,
     )
     return formatted.stdout
-
-
-def main() -> int:
-    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--check", action="store_true", help="fail if the committed module is stale")
-    args = ap.parse_args()
-    facts = export()
-    stale = 0
-    for out_path in MODULES:
-        generated = render(facts, out_path)
-        rel = out_path.relative_to(REPO)
-        if not args.check:
-            out_path.parent.mkdir(parents=True, exist_ok=True)
-            out_path.write_text(generated)
-            print(f"wrote {rel}")
-            continue
-        committed = out_path.read_text() if out_path.is_file() else ""
-        if committed == generated:
-            print(f"{rel} matches the q tree")
-            continue
-        stale = 1
-        print(f"{rel} is stale - rerun scripts/generate/q_facts.py:", file=sys.stderr)
-        sys.stderr.writelines(
-            difflib.unified_diff(
-                committed.splitlines(keepends=True),
-                generated.splitlines(keepends=True),
-                fromfile="committed",
-                tofile="generated",
-            )
-        )
-    return stale
-
-
-if __name__ == "__main__":
-    sys.exit(main())

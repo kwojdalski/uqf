@@ -15,6 +15,19 @@ from uqs.paths import UqsError, UqsPaths
 from uqs.stack import hdb_layout, hdb_migrate, hdb_types
 
 ROOT = Path(__file__).resolve().parents[3]
+
+
+def test_the_lock_modules_are_the_ones_the_lock_script_loads():
+    """LOCK_MODULES is what _lock_code flattens for PeachQ, and hdb_lock.q's
+    own `\\l` lines are what runs (#1795): a module only one of them names is
+    loaded unflattened, or flattened for nothing."""
+    from test_runs import q_loads
+
+    proof = q_loads(ROOT / "scripts" / hdb_migrate.LOCK_SCRIPT)
+    assert proof, "hdb_lock.q loads nothing this test can read"
+    assert hdb_migrate.LOCK_MODULES == proof
+
+
 DAY = date(2026, 1, 1)
 SCHEMA = "trade:([] time:`timestamp$(); sym:`g#`symbol$(); price:`float$())\n"
 BUILD = """\

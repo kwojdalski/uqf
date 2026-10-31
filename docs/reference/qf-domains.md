@@ -123,7 +123,7 @@ message changed.
 kdb+ 4.0 cannot switch into a nested context (nor could PeachQ before v0.89),
 and this tree opens none: no `\d` names more than one level, in `src/`,
 `scripts/`, `sidecars/` or the q blocks of `docs/`
-([`check_nested_contexts.py`](../../scripts/gates/check_nested_contexts.py)
+([`check.py nested-contexts`](../../scripts/gates/policy/nested_contexts.py)
 holds the one list of what it scans). Every name is defined from the root, fully
 qualified (`.qf.px.growth_simple:{[r;t] ...}`), and a lambda names its own
 siblings and constants in full too, because a lambda defined from the root
@@ -153,7 +153,7 @@ Two consequences of writing names in full:
    (`uv run python scripts/gates/check_module_deps.py`).
 4. A cross-file call is a new edge: add it to `ALLOWED` in the same change.
 5. Regenerate the contract surface
-   (`uv run python scripts/generate/contract_surface.py export`).
+   (`uv run python scripts/generate/derive.py contract-surface`).
 
 ## Code outside this repository
 

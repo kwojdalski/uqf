@@ -50,7 +50,8 @@ jobs:
         # The rendered-diagrams check compares each committed .svg with a
         # fresh render, and used to skip with "no d2 on PATH" on every CI run
         # because nothing installed it (#1369). The version is read from
-        # render_diagrams.py (D2_VERSION) so it has one home; the sha256 is
+        # render_diagrams.py (D2_VERSION), through `derive.py diagrams
+        # --print-version`, so it has one home; the sha256 is
         # for that release's linux-amd64 tarball (the release publishes no
         # checksum file), so a bump of D2_VERSION fails here until the hash
         # is updated on purpose.
@@ -59,7 +60,7 @@ jobs:
           D2_SHA256: 5669ddc46b99e942cc96078f4a4e36d5e62103348f4c05179ede27802fdd87a9
         run: |
           set -euo pipefail
-          D2_VERSION="$(python3 scripts/generate/render_diagrams.py --print-version)"
+          D2_VERSION="$(python3 scripts/generate/derive.py diagrams --print-version)"
           curl -sSfL "https://github.com/terrastruct/d2/releases/download/${D2_VERSION}/d2-${D2_VERSION}-linux-amd64.tar.gz" -o /tmp/d2.tar.gz
           echo "${D2_SHA256}  /tmp/d2.tar.gz" | sha256sum -c -
           tar xzf /tmp/d2.tar.gz -C /tmp
@@ -107,7 +108,7 @@ jobs:
         # once run, and master was red for it. Loud rather than silent, but
         # still a gate that protected nothing. The other three gates here are
         # stdlib-only and do not need the workspace.
-        run: uv run python scripts/generate/generate_operational_docs.py --check
+        run: uv run python scripts/generate/derive.py operational-docs --check
       - name: Check the committed contract surface is current
         # WP2 (#139): docs/reference/surfaces/current/ is this tree's
         # half of the contract lock. A committed baseline nothing verifies
@@ -122,15 +123,15 @@ jobs:
         # is every run, and the contract-surface pre-commit hook is then the
         # only thing verifying the surface.
         #
-        # The same interpreter rule as contract_surface.py itself ($QCMD,
+        # The same interpreter rule as the contract-surface target itself ($QCMD,
         # else q on PATH - TorQ's rule).
         if: ${{ !cancelled() }}
         shell: bash
         run: |
           if command -v "${QCMD:-q}" >/dev/null; then
-            uv run python scripts/generate/contract_surface.py check
+            uv run python scripts/generate/derive.py contract-surface --check
           else
-            echo "::warning::No KDB-X on this runner; the contract surface in docs/reference/surfaces/current/ was NOT checked. Run 'uv run python scripts/generate/contract_surface.py check' locally before merging."
+            echo "::warning::No KDB-X on this runner; the contract surface in docs/reference/surfaces/current/ was NOT checked. Run 'uv run python scripts/generate/derive.py contract-surface --check' locally before merging."
             echo "The contract surface (docs/reference/surfaces/current/) was not checked: no KDB-X on this runner. The contract-surface pre-commit hook checks it locally." >> "$GITHUB_STEP_SUMMARY"
           fi
       - name: Check the ETL core does not depend on its declarations
@@ -150,18 +151,18 @@ jobs:
         # PeachQ cannot switch into a nested context, so this tree defines
         # every name fully qualified from the root (#1411).
         if: ${{ !cancelled() }}
-        run: python3 scripts/gates/check_nested_contexts.py
+        run: python3 scripts/gates/check.py nested-contexts
       - name: Check q modules stay under their line budget
         # The q counterpart of test_module_split.py (#970): a file over the
         # limit splits, or is listed with a reason and a cap that only shrinks.
         if: ${{ !cancelled() }}
-        run: python3 scripts/gates/check_q_module_size.py
+        run: python3 scripts/gates/check.py q-module-size
       - name: Check every q registry stores its values enlisted
         # A dict of same-keyed dicts collapses into a table on its first
         # insert, and the next differently-shaped entry is refused (#1028).
         # The enlist idiom was prose in three files; this holds it (#1030).
         if: ${{ !cancelled() }}
-        run: python3 scripts/gates/check_registry_enlist.py
+        run: python3 scripts/gates/check.py registry-enlist
       - name: Check the rendered diagrams match their d2 sources
         # An .svg committed beside its .d2 is a derived artefact, and this
         # tree knows what happens to those without a gate - docs/man.q once
@@ -171,7 +172,7 @@ jobs:
         # installs the pinned d2 above and passes --require, so here it can
         # fail but not skip.
         if: ${{ !cancelled() }}
-        run: python3 scripts/generate/render_diagrams.py --check --require
+        run: python3 scripts/generate/derive.py diagrams --check --require
       - name: Check the diagram port labels match the stack
         # stack-topology.d2 hand-copies every procname and port; this reads
         # them from process_ports.csv and the vendored process.csv (#1369).
@@ -194,14 +195,14 @@ jobs:
         # .qetl.cfg.env_name and appears in no source file, so grep is not a
         # substitute for this page.
         if: ${{ !cancelled() }}
-        run: python3 scripts/gates/check_env_reference.py --check
+        run: python3 scripts/gates/check.py env-reference
       - name: Check the pipeline declaration reference lists every key
         # docs/reference/pipeline-declarations.md is hand-written, like the
         # environment page, and for the same reason drifts the day a key is
         # added or renamed. Checked in both directions against the key lists
         # in the declaring q files.
         if: ${{ !cancelled() }}
-        run: python3 scripts/gates/check_declaration_reference.py
+        run: python3 scripts/gates/check.py declaration-reference
   peachq-q:
     name: PeachQ q tests
     timeout-minutes: 20
@@ -420,6 +421,22 @@ jobs:
         uses: quarto-dev/quarto-actions/setup@v2
         with:
           version: "1.10.18"
+      - name: Restore PeachQ built from its pinned commit
+        # The render's pre-render step writes the q API pages under
+        # docs/reference/q-api/ from the qDoc comments, which needs a q
+        # (scripts/generate/q_api_docs.py). Same pin and cache as peachq-q.
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/uqf/peachq
+          key: peachq-${{ hashFiles('scripts/peachq.json') }}-${{ runner.os }}-${{ runner.arch }}
+      - name: Provide PeachQ for the q API pages
+        # Builds the pinned commit on a cold cache (about 40s). Through QCMD
+        # only, as everywhere else: nothing is put on PATH.
+        shell: bash
+        run: |
+          set -euo pipefail
+          bin="$(python3 scripts/peachq.py)"
+          echo "QCMD=$bin" >> "$GITHUB_ENV"
       - name: Check every link and anchor in docs/ resolves
         # WITHOUT --allow-missing, which the pre-commit hook passes. The
         # hook's flag exists so a q developer without Quarto is not blocked;

@@ -18,9 +18,17 @@ from typing import Annotated
 import typer
 
 from uqs.cli import completion
+from uqs.cli.pipelines import needs_pipelines
 from uqs.cli.renames import alias_command
 from uqs.cli.safety import ChangesState, dry_run_note
-from uqs.cli.shared import JOB_OPERATIONS_PANEL, _die, _paths, app, console, job_app
+from uqs.cli.shared import (
+    JOB_OPERATIONS_PANEL,
+    _die,
+    _paths,
+    app,
+    console,
+    job_app,
+)
 from uqs.paths import UqsError
 from uqs.stack import backfill as stack_backfill
 from uqs.stack import clean as stack_clean
@@ -60,6 +68,10 @@ def _human_bytes(size: int) -> str:
     return f"{value:.1f}G"
 
 
+#: What `job checkpoint remove` needs: only this tree's bounded workers keep one.
+_CHECKPOINT = "resets this tree's bounded workers' checkpoints"
+
+
 @app.command("clean", cls=ChangesState)
 def clean(match: MatchOpt = None, dry_run: DryRunOpt = False) -> None:
     """Wipe output/uqs/ (logs, tplogs, wdb, the copied sample data).
@@ -90,7 +102,7 @@ def clean(match: MatchOpt = None, dry_run: DryRunOpt = False) -> None:
     )
 
 
-@checkpoint_app.command("remove", cls=ChangesState)
+@checkpoint_app.command("remove", cls=needs_pipelines(_CHECKPOINT, ChangesState))
 def remove_checkpoint(
     worker: Annotated[
         str,
@@ -128,4 +140,10 @@ def remove_checkpoint(
 
 
 alias_command(remove_app, "output", "uqs clean", clean)
-alias_command(remove_app, "checkpoint", "uqs job checkpoint remove", remove_checkpoint)
+alias_command(
+    remove_app,
+    "checkpoint",
+    "uqs job checkpoint remove",
+    remove_checkpoint,
+    cls=needs_pipelines(_CHECKPOINT),
+)

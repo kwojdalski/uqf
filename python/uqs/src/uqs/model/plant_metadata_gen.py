@@ -7,19 +7,19 @@ PeachQ, and prints JSON; this checks it, renders it with the fingerprints of
 the inputs it was made from, and writes it through a temporary file and an
 atomic rename. It refuses when the inputs change while q runs, and a failure
 leaves the previous file in place - which the fingerprint then calls stale.
+derive.py's plant-schema target is the command; a bundle install calls
+ensure() itself.
 
-    python -m uqs.model.plant_metadata_gen           # regenerate if stale (q only then)
-    python -m uqs.model.plant_metadata_gen --force   # regenerate (needs q)
-    python -m uqs.model.plant_metadata_gen --check   # fail unless q agrees (needs q)
+    uv run python scripts/generate/derive.py plant-schema           # ensure(): regenerate if stale
+    uv run python scripts/generate/derive.py plant-schema --force   # write(): regenerate (needs q)
+    uv run python scripts/generate/derive.py plant-schema --check   # generate(): compare (needs q)
 """
 
 from __future__ import annotations
 
-import difflib
 import json
 import os
 import subprocess
-import sys
 import tempfile
 from pathlib import Path
 
@@ -30,9 +30,7 @@ from uqs.model.plant_metadata import (
     GENERAL,
     PLANT_SCHEMA_FILE,
     Q_TYPES,
-    REGENERATE,
     SchemaMetadataError,
-    _guidance,
     is_current,
     tree_fingerprint,
     vendored_fingerprint,
@@ -109,6 +107,7 @@ def render(root: Path, found: dict, vendored: Path) -> str:
             "tree": tree_fingerprint(root),
             "vendored": vendored_fingerprint(vendored),
         },
+        "bindings": sorted(found.get("bindings") or []),
     }
     out = ["{"]
     for k, v in head.items():
@@ -180,42 +179,3 @@ def ensure(root: Path | None = None, *, create: bool = True) -> bool:
     if is_current(root) or not (create or (root / PLANT_SCHEMA_FILE).is_file()):
         return False
     return write(root)
-
-
-def main(argv: list[str] | None = None) -> int:
-    import argparse
-
-    ap = argparse.ArgumentParser(prog=REGENERATE, description=__doc__.split("\n\n")[0])
-    ap.add_argument("--check", action="store_true", help="fail unless q makes the same file")
-    ap.add_argument("--force", action="store_true", help="regenerate even when current")
-    ap.add_argument("--root", type=Path, default=None, help="the tree (default: this uqs's)")
-    args = ap.parse_args(argv)
-    root = (args.root or repo_root()).resolve()
-    path = root / PLANT_SCHEMA_FILE
-    try:
-        if not args.check:
-            wrote = write(root) if args.force else ensure(root)
-            print(f"{'wrote' if wrote else 'unchanged'}: {path}")
-            return 0
-        generated = generate(root)
-    except SchemaMetadataError as exc:
-        print(f"plant_metadata: {exc}", file=sys.stderr)
-        return 1
-    committed = path.read_text() if path.is_file() else ""
-    if committed == generated:
-        print(f"{PLANT_SCHEMA_FILE} matches what q evaluates")
-        return 0
-    print(f"{PLANT_SCHEMA_FILE} is stale - {_guidance(root)}:", file=sys.stderr)
-    sys.stderr.writelines(
-        difflib.unified_diff(
-            committed.splitlines(keepends=True),
-            generated.splitlines(keepends=True),
-            fromfile="committed",
-            tofile="generated",
-        )
-    )
-    return 1
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())

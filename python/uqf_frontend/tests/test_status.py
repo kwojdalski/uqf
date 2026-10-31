@@ -1,8 +1,8 @@
 """Reading q's backfill status files.
 
-The load-bearing test here is test_reader_field_set_matches_the_q_writer: the
-format is defined in src/etl/core/status.q and consumed here, and nothing
-but a test keeps the two in step.
+The format is defined in src/etl/core/status.q and consumed here. Its fields
+are q's own: status.FIELDS is the generated STATUS_FIELDS (#1795), which the
+q-facts hook holds to `.qetl.status.fields`.
 """
 
 from __future__ import annotations
@@ -57,23 +57,6 @@ def write_status_file(directory: Path, instance: str, **overrides) -> Path:
 
 
 # --- the contract between the two languages -------------------------------
-
-
-def test_reader_field_set_matches_the_q_writer():
-    """The format lives in src/etl/core/status.q. If a field is added on
-    one side only, the two silently disagree - q writes something the reader
-    drops, or the reader demands something q never sends. This parses the q
-    source so that cannot happen quietly.
-    """
-    src = STATUS_Q.read_text()
-    block = src[src.index("write_status:{") :]
-    payload = block[block.index("payload:") : block.index("values_:")]
-    q_fields = re.findall(r"`(\w+)", payload)
-    assert set(q_fields) == set(status.FIELDS), (
-        f"q writer and Python reader disagree; only in q: "
-        f"{set(q_fields) - set(status.FIELDS)}, only in Python: "
-        f"{set(status.FIELDS) - set(q_fields)}"
-    )
 
 
 def test_reader_states_match_the_q_writer():

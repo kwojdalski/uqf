@@ -20,7 +20,7 @@ from typing import Annotated
 import typer
 from rich.table import Table
 
-from uqs.cli.regenerate import _DERIVED, _regenerate_derived
+from uqs.cli.regenerate import _DERIVED, _regenerate_derived, derived_command
 from uqs.cli.runtime_diff import runtime_app
 from uqs.cli.safety import ChangesState
 from uqs.cli.shared import _die, _paths, console
@@ -92,9 +92,9 @@ def prepare(
     except (BundleError, OSError) as exc:
         _die(BundleError(str(exc)))
         return
-    for script, regen in zip(_DERIVED, _regenerate_derived(paths.repo_root), strict=True):
+    for derived, regen in zip(_DERIVED, _regenerate_derived(paths.repo_root), strict=True):
         if regen.returncode:
-            console.print(f"[red]✗ could not regenerate[/] - run `python3 {script}`")
+            console.print(f"[red]✗ could not regenerate[/] - run `{derived_command(derived)}`")
             raise typer.Exit(code=1)
     console.print(
         f"[green]✓[/] runtime {runtime}: {len(members)} bundle(s). Nothing was started - "

@@ -6,7 +6,7 @@ as written. flatten_contexts.py rewrites a copy that needs none; this runs the
 full suite - tests/run_tests.q, every suite - on that copy:
 
   1. flatten what still needs it (CONVERTED, now nothing): src/, scripts/,
-     sidecars/ and tests/ open no nested context (check_nested_contexts.py), so
+     sidecars/ and tests/ open no nested context (check.py nested-contexts), so
      every file loads on PeachQ exactly as written. That is also the nearest
      executable evidence, without a 4.0 binary, that the tests run on 4.0
      (#1412).
@@ -62,7 +62,7 @@ GAPS = REPO / "tests" / "q" / "peachq_known_gaps.txt"
 FLATTENER = REPO / "scripts" / "portable" / "flatten_contexts.py"
 BUNDLE_SUITE = REPO / "scripts" / "dev" / "bundle_suite.py"
 #: What is flattened: nothing. src/, scripts/ and sidecars/ open no nested context
-#: (#1411, check_nested_contexts.py) and neither does tests/ (#1412); every file loads
+#: (#1411, check.py nested-contexts) and neither does tests/ (#1412); every file loads
 #: on PeachQ as it stands. lib/ is never flattened.
 CONVERTED: tuple[str, ...] = ()
 #: How a reason starts (#986): PeachQ lacks something, this tree relies on

@@ -758,6 +758,7 @@ qetl.source,validate_fixture,function,1,source
 qetl.source,validate_live,function,2,source h
 qetl.source,zone_names,value,,
 qetl.source,zone_table,table,,
+qetl.status,fields,value,,
 qetl.status,file_path,function,1,instance_id
 qetl.status,file_prefix,value,,
 qetl.status,file_suffix,value,,

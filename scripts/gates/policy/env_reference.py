@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Keep ``docs/reference/environment.md`` and the code's actual environment surface in
 agreement, in both directions.
 
@@ -25,20 +24,19 @@ bundle's code reads its own variables once installed), each package's
 excluded on purpose - ``tests/q/test_worker_config.q`` sets eleven throwaway
 keys to prove the precedence order, and demanding rows for ``UQF_X`` and
 ``UQF_ONLY_YAML`` would bury the twenty-three variables that matter.
+
+    python3 scripts/gates/check.py env-reference
 """
 
 from __future__ import annotations
 
-import argparse
 import re
 import sys
 from pathlib import Path
 
-# parents[2], not parent.parent: this file sits one level deeper since
-# scripts/ was foldered (#241). Getting it wrong does not raise - it
-# resolves to scripts/ and the checker reports over an empty tree.
-REPO = Path(__file__).resolve().parents[2]
-DOC = REPO / "docs" / "reference" / "environment.md"
+#: Every path below is relative to the repository root, which
+#: scripts/gates/check.py resolves and passes in.
+DOC = Path("docs/reference/environment.md")
 
 #: Directories whose reads are an operator's business. `web/` is included
 #: because a Vite config's `process.env` is as much a knob as a q `getenv`.
@@ -101,7 +99,7 @@ LITERAL_READS = (
 #: and is silently ignored everywhere else.
 DOTENV_READ = LITERAL_READS[-1]
 
-ENV_EXAMPLE = REPO / ".env.example"
+ENV_EXAMPLE = Path(".env.example")
 
 #: A whole-line q comment. `worker_config.q`'s own `@eg` line reads
 #: `.qetl.cfg.explain[`backfill_from]`, which made the first run of this gate
@@ -126,7 +124,7 @@ QWCFG_READ = re.compile(
 #: and, per `producer_consumers` below, required to have a consumer SOMEWHERE.
 #: Exempting them from both directions is what let `KDBSTACKID` sit here for
 #: months exporting `-stackid <port>` to nobody.
-ENV_PRODUCER = REPO / "python" / "uqs" / "src" / "uqs" / "stack" / "env.py"
+ENV_PRODUCER = Path("python/uqs/src/uqs/stack/env.py")
 
 #: Where a produced variable may legitimately be consumed. Mostly the vendored
 #: trees: `build_env` exists to feed them, so `lib/` is the answer for nearly
@@ -171,42 +169,45 @@ EXPANSION = re.compile(r"\$\{?([A-Z][A-Z0-9_]*)\}?")
 #: This file. Its own regexes contain example variable names, and scanning
 #: itself made the first run report a variable called NAME - the same
 #: self-inclusion bug `test_module_split.py` hit when it demanded the facade
-#: export a symbol named `thing`.
-SELF = Path(__file__).resolve()
+#: export a symbol named `thing`. Named by its place in the tree, not by
+#: `__file__`, because the tree checked need not be the one this file runs
+#: from (`check.py env-reference --root DIR`): a copy of this file in DIR is
+#: as much this file as the one running.
+SELF = Path("scripts/gates/policy/env_reference.py")
 
 #: Read to locate the interpreter and the user's home, not to configure
 #: anything. Documented under "Prerequisites", which is prose, not a row.
 PREREQUISITES = frozenset({"HOME", "QHOME", "PATH"})
 
 
-def scanned_files() -> list[Path]:
+def scanned_files(root: Path) -> list[Path]:
     """Every file whose environment reads this gate holds the doc to."""
     out: list[Path] = []
-    roots = [REPO / d for d in SCOPE_DIRS]
-    roots += sorted(REPO.glob(PACKAGE_SRC_GLOB))
-    for root in roots:
-        if not root.is_dir():
+    roots = [root / d for d in SCOPE_DIRS]
+    roots += sorted(root.glob(PACKAGE_SRC_GLOB))
+    for scope in roots:
+        if not scope.is_dir():
             continue
-        for path in sorted(root.rglob("*")):
+        for path in sorted(scope.rglob("*")):
             if path.is_file() and path.suffix in SCANNED_SUFFIXES:
                 if "node_modules" in path.parts or ".venv" in path.parts:
                     continue
-                if path.resolve() == SELF:
+                if path.relative_to(root) == SELF:
                     continue
                 out.append(path)
-    out += [REPO / f for f in EXTRA_FILES if (REPO / f).is_file()]
+    out += [root / f for f in EXTRA_FILES if (root / f).is_file()]
     return out
 
 
-def read_names() -> dict[str, list[str]]:
+def read_names(root: Path) -> dict[str, list[str]]:
     """Variable name -> the files that read it, for a message that names a
     file rather than leaving the reader to grep for it."""
     found: dict[str, list[str]] = {}
-    for path in scanned_files():
+    for path in scanned_files(root):
         text = path.read_text(encoding="utf-8", errors="replace")
         if path.suffix == ".q":
             text = Q_COMMENT_LINE.sub("", text)
-        rel = str(path.relative_to(REPO))
+        rel = str(path.relative_to(root))
         names = set()
         for pattern in LITERAL_READS:
             for m in pattern.findall(text):
@@ -218,15 +219,16 @@ def read_names() -> dict[str, list[str]]:
     return found
 
 
-def produced_names() -> set[str]:
+def produced_names(root: Path) -> set[str]:
     """The keys `build_env` returns, parsed from its own dict literal."""
-    if not ENV_PRODUCER.is_file():
+    producer = root / ENV_PRODUCER
+    if not producer.is_file():
         return set()
-    text = ENV_PRODUCER.read_text(encoding="utf-8")
+    text = producer.read_text(encoding="utf-8")
     return set(re.findall(r'^\s*"([A-Z][A-Z0-9_]*)":\s', text, re.MULTILINE))
 
 
-def producer_consumers(produced: set[str]) -> dict[str, list[str]]:
+def producer_consumers(root: Path, produced: set[str]) -> dict[str, list[str]]:
     """{produced variable: files that consume it}, excluding NON_CONSUMERS.
 
     Separate from `read_names` because the scope is different in both
@@ -240,19 +242,20 @@ def producer_consumers(produced: set[str]) -> dict[str, list[str]]:
     is on a path this repository actually executes.
     """
     found: dict[str, list[str]] = {name: [] for name in produced}
+    producer = (root / ENV_PRODUCER).resolve()
     for root_name in CONSUMER_ROOTS:
-        root = REPO / root_name
-        if not root.is_dir():
+        scope = root / root_name
+        if not scope.is_dir():
             continue
-        for path in sorted(root.rglob("*")):
+        for path in sorted(scope.rglob("*")):
             if not path.is_file() or path.suffix not in CONSUMER_SUFFIXES:
                 continue
-            rel = str(path.relative_to(REPO))
+            rel = str(path.relative_to(root))
             if any(skip in rel for skip in NON_CONSUMERS):
                 continue
             if "node_modules" in path.parts or ".venv" in path.parts:
                 continue
-            if path.resolve() in (SELF, ENV_PRODUCER.resolve()):
+            if path.relative_to(root) == SELF or path.resolve() == producer:
                 continue
             try:
                 text = path.read_text(encoding="utf-8", errors="replace")
@@ -267,7 +270,7 @@ def producer_consumers(produced: set[str]) -> dict[str, list[str]]:
     return found
 
 
-def documented() -> tuple[set[str], set[str]]:
+def documented(root: Path) -> tuple[set[str], set[str]]:
     """(exact names, prefixes) declared by the doc's table rows.
 
     Only table rows count. Prose may name anything it likes - the stale check
@@ -275,7 +278,7 @@ def documented() -> tuple[set[str], set[str]]:
     """
     exact: set[str] = set()
     prefixes: set[str] = set()
-    for line in DOC.read_text(encoding="utf-8").splitlines():
+    for line in (root / DOC).read_text(encoding="utf-8").splitlines():
         # `lstrip` because the formatter indents tables by two spaces, which
         # is still a table to any markdown renderer (a block may be indented
         # up to three) but was not to this parser: the whole page read as
@@ -294,10 +297,10 @@ def documented() -> tuple[set[str], set[str]]:
     return exact, prefixes
 
 
-def dotenv_read_names() -> set[str]:
+def dotenv_read_names(root: Path) -> set[str]:
     """Every variable that `.qdata.cfg` reads - the only way .env is read."""
     names: set[str] = set()
-    for path in scanned_files():
+    for path in scanned_files(root):
         if path.suffix != ".q":
             continue
         text = Q_COMMENT_LINE.sub("", path.read_text(encoding="utf-8", errors="replace"))
@@ -305,12 +308,13 @@ def dotenv_read_names() -> set[str]:
     return names
 
 
-def env_example_keys() -> set[str]:
+def env_example_keys(root: Path) -> set[str]:
     """The KEY=VALUE keys in .env.example, ignoring comments and blanks."""
-    if not ENV_EXAMPLE.is_file():
+    example = root / ENV_EXAMPLE
+    if not example.is_file():
         return set()
     keys: set[str] = set()
-    for line in ENV_EXAMPLE.read_text(encoding="utf-8").splitlines():
+    for line in example.read_text(encoding="utf-8").splitlines():
         line = line.strip()
         if not line or line.startswith("#") or "=" not in line:
             continue
@@ -318,22 +322,17 @@ def env_example_keys() -> set[str]:
     return keys
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "--check",
-        action="store_true",
-        help="accepted for symmetry with the other doc gates; this script only ever checks",
-    )
-    parser.parse_args()
-
-    if not DOC.is_file():
-        print(f"error: {DOC.relative_to(REPO)} is missing", file=sys.stderr)
+def run(root: Path) -> int:
+    """Report every disagreement between the page and the code under `root`;
+    the exit status. The findings are grouped by direction, each group with
+    what to do about it, so the rule reports them itself."""
+    if not (root / DOC).is_file():
+        print(f"error: {DOC} is missing", file=sys.stderr)
         return 1
 
-    reads = read_names()
-    produced = produced_names()
-    exact, prefixes = documented()
+    reads = read_names(root)
+    produced = produced_names(root)
+    exact, prefixes = documented(root)
 
     def is_documented(name: str) -> bool:
         return name in exact or any(name.startswith(p) for p in prefixes)
@@ -344,7 +343,7 @@ def main() -> int:
         if name not in PREREQUISITES and not is_documented(name)
     }
     missing_produced = sorted(name for name in produced if not is_documented(name))
-    consumers = producer_consumers(produced)
+    consumers = producer_consumers(root, produced)
     unconsumed = sorted(name for name, files in consumers.items() if not files)
     stale = sorted(
         name
@@ -398,8 +397,8 @@ def main() -> int:
     # then reports it missing while the file plainly contains it. The four
     # themes that must stay out (secrets, per-run arguments, deployment
     # wiring, developer knobs) are explained in the file's own header.
-    dotenv_only = dotenv_read_names()
-    wrong_file = sorted(k for k in env_example_keys() if k not in dotenv_only)
+    dotenv_only = dotenv_read_names(root)
+    wrong_file = sorted(k for k in env_example_keys(root) if k not in dotenv_only)
     if wrong_file:
         problems += len(wrong_file)
         print("\nIn .env.example, but not read from .env by anything:", file=sys.stderr)
@@ -427,7 +426,3 @@ def main() -> int:
         f"{len(prefixes)} pattern(s)."
     )
     return 0
-
-
-if __name__ == "__main__":
-    sys.exit(main())

@@ -1,4 +1,5 @@
-"""Guards on `scripts/generate/generate_operational_docs.py`.
+"""Guards on `scripts/generate/generate_operational_docs.py`, the generator of
+derive.py's `operational-docs` target.
 
 The decision those questions record: operational docs are generated at
 build, committed so a clone has them, and checked in CI — and where the
@@ -20,14 +21,17 @@ import sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[3]
+DERIVE = REPO / "scripts" / "generate" / "derive.py"
 GENERATOR = REPO / "scripts" / "generate" / "generate_operational_docs.py"
 GENERATED = REPO / "docs" / "reference" / "processes.md"
 
-_spec = importlib.util.spec_from_file_location("gen_ops_docs", GENERATOR)
+_spec = importlib.util.spec_from_file_location("derive", DERIVE)
 assert _spec and _spec.loader
-gen = importlib.util.module_from_spec(_spec)
-sys.modules["gen_ops_docs"] = gen
-_spec.loader.exec_module(gen)
+derive = importlib.util.module_from_spec(_spec)
+sys.modules["derive"] = derive
+_spec.loader.exec_module(derive)
+# Through derive.load, so a test that patches it patches what the target runs.
+gen = derive.load("generate_operational_docs")
 
 from uqs.model.pipelines import PIPELINE_OFFSETS  # noqa: E402
 from uqs.model.registry import PIPELINES  # noqa: E402
@@ -47,7 +51,7 @@ def test_the_committed_document_matches_the_registry():
     construction rather than by coincidence.
     """
     result = subprocess.run(
-        [sys.executable, str(GENERATOR), "--check"],
+        [sys.executable, str(DERIVE), "operational-docs", "--check"],
         capture_output=True,
         text=True,
         cwd=REPO,
@@ -68,8 +72,7 @@ def test_check_fails_on_a_stale_document(monkeypatch, capsys):
     monkeypatch.setattr(
         gen, "render", lambda: committed.replace("# uqf stack processes", "# Edited by hand", 1)
     )
-    monkeypatch.setattr(sys, "argv", [str(GENERATOR), "--check"])
-    assert gen.main() == 1
+    assert derive.main(["operational-docs", "--check"]) == 1
     err = capsys.readouterr().err
     assert "docs/reference/processes.md is stale" in err
     assert GENERATED.read_text() == committed

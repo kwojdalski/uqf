@@ -27,6 +27,7 @@ import re
 from dataclasses import dataclass
 
 from uqs.generated.q_facts import Q_TYPE_CHARS, Q_TYPE_NAMES
+from uqs.model import plant_metadata
 from uqs.model.declarations import split_top_level
 from uqs.model.qnames import Q_WORDS
 from uqs.paths import UqsError
@@ -219,6 +220,21 @@ def parse_definition(line: str, nested: dict[str, str] | None = None) -> TableSp
         columns.append((label, char))
     spec = TableSpec(name, tuple(columns))
     check_publishable(spec)
+    return spec
+
+
+def spec_of(table: plant_metadata.Table) -> TableSpec:
+    """The spec of a table q has evaluated (#1781): its columns in order, a nested
+    one by its declared element type, and its sort rule - refused as
+    `parse_definition` and `check_sorting` refuse, but never read from text."""
+    columns = tuple(
+        (c.name, _nested_char(table.name, c.name, table.nested.get(c.name)) if c.type == MIXED
+         else c.type)
+        for c in table.columns
+    )  # fmt: skip
+    spec = TableSpec(table.name, columns, table.sorting)
+    check_publishable(spec)
+    check_sorting(spec)
     return spec
 
 

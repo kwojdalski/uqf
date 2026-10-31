@@ -31,7 +31,7 @@ reference](../reference/pipeline-declarations.md).
 There is no registry entry - the process is read from the job's own declaration.
 
 <!-- Source: docs/diagrams/scaffolding.d2. Rendered by
-     scripts/generate/render_diagrams.py, which CI runs with --check. -->
+     `scripts/generate/derive.py diagrams`, which CI runs with --check. -->
 
 ![What uqs job new writes, in five bands: the plan, the files it creates, the two files it appends to, what globs each one up afterwards, and the handler and test left deliberately red](../diagrams/scaffolding.svg)
 
@@ -144,7 +144,7 @@ all seven shapes; what follows here is what the two shells actually are, which
 is what you need before writing into either.
 
 <!-- Source: docs/diagrams/pipeline-decision.d2. Rendered by
-     scripts/generate/render_diagrams.py, which CI runs with --check. -->
+     `scripts/generate/derive.py diagrams`, which CI runs with --check. -->
 
 ![A decision tree: known range or not chooses the bounded worker or the streaming shell; whether it reads another table chooses a feed or an etl; whether it publishes a new table decides if columns must be declared; every path ends at the same uqs job new command and the same three remaining steps](../diagrams/pipeline-decision.svg)
 

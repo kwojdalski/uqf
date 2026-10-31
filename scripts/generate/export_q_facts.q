@@ -47,6 +47,7 @@ facts:(!) . flip (
     / The status file every worker writes and four readers poll (#1362).
     (`STATUS_STATES;          .qetl.status.status_states);
     (`STATUS_TERMINAL_STATES; .qetl.status.terminal_states);
+    (`STATUS_FIELDS;          .qetl.status.fields);
     / The states a reader may call success: the ones the worker's process
     / exits 0 for, so a reader and the exit code cannot disagree (#609).
     (`STATUS_SUCCESS_STATES;  .qetl.status.status_states where 0i=.qetl.job.bounded.exit_code each .qetl.status.status_states);

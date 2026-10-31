@@ -1,4 +1,4 @@
-"""Tests for `scripts/gates/check_registry_enlist.py` (#1030)."""
+"""Tests for the registry-enlist rule, `scripts/gates/policy/registry_enlist.py` (#1030)."""
 
 from __future__ import annotations
 
@@ -8,13 +8,14 @@ from pathlib import Path
 
 import pytest
 
+REPO = Path(__file__).resolve().parents[3]
+
 _SPEC = importlib.util.spec_from_file_location(
-    "check_registry_enlist",
-    Path(__file__).resolve().parents[3] / "scripts" / "gates" / "check_registry_enlist.py",
+    "registry_enlist", REPO / "scripts" / "gates" / "policy" / "registry_enlist.py"
 )
 assert _SPEC and _SPEC.loader
 gate = importlib.util.module_from_spec(_SPEC)
-sys.modules["check_registry_enlist"] = gate
+sys.modules["registry_enlist"] = gate
 _SPEC.loader.exec_module(gate)
 
 
@@ -31,7 +32,7 @@ def no_exemptions(monkeypatch):
 
 
 def test_the_real_tree_is_clean():
-    assert gate.problems() == []
+    assert gate.problems(REPO) == []
 
 
 def test_an_enlisted_indexed_write_passes(tmp_path, no_exemptions):
