@@ -422,6 +422,22 @@ jobs:
         uses: quarto-dev/quarto-actions/setup@v2
         with:
           version: "1.10.18"
+      - name: Restore PeachQ built from its pinned commit
+        # The render's pre-render step writes the q API pages under
+        # docs/reference/q-api/ from the qDoc comments, which needs a q
+        # (scripts/generate/q_api_docs.py). Same pin and cache as peachq-q.
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/uqf/peachq
+          key: peachq-${{ hashFiles('scripts/peachq.json') }}-${{ runner.os }}-${{ runner.arch }}
+      - name: Provide PeachQ for the q API pages
+        # Builds the pinned commit on a cold cache (about 40s). Through QCMD
+        # only, as everywhere else: nothing is put on PATH.
+        shell: bash
+        run: |
+          set -euo pipefail
+          bin="$(python3 scripts/peachq.py)"
+          echo "QCMD=$bin" >> "$GITHUB_ENV"
       - name: Check every link and anchor in docs/ resolves
         # WITHOUT --allow-missing, which the pre-commit hook passes. The
         # hook's flag exists so a q developer without Quarto is not blocked;

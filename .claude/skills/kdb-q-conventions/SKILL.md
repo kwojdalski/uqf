@@ -355,50 +355,32 @@ above the function, with no blank line in between:
 someFunc:{[name;other] ...};
 ```
 
-Verified empirically (not just from TimeStored's docs, which got the CLI arg
-order backwards - see below) by actually downloading `qstudio.jar` and running
-`com.timestored.qdoc.QDocMain` against a scratch file:
+`docs/man.q` reads these blocks into its registry, and the site's q API pages
+(`docs/reference/q-api/`, one per module) are rendered from that registry by
+`scripts/generate/q_api_docs.py` before every `quarto render`. The rules it
+reads by:
 
-- qDoc parses lines starting with a **single** `/` as doc content
-  (`@param`/`@return`/`@throws`/`@eg`/`@author`/etc, JavaDoc-style); `//` lines
-  are picked up only as a weak fallback one-line description when no proper `/`
-  block exists. Every doc block in this repo uses single `/`.
+- Lines starting with `/` are doc content; `@param`, `@return`, `@throws`, `@eg`
+  and `@private` are its tags. A comment line after a tag continues THAT tag, so
+  a long `@param` or `@throws` can wrap.
 - **Every doc block needs a plain description line before any `@` tag**, even a
-  short one - a block that starts directly with `@param` renders with a blank
-  "short description" in the generated index (this happened to `d1`/`d2` in
-  `options.q` originally; fixed by adding a one-line lead-in).
+  short one - a block that starts directly with `@param` has no description on
+  its q API page.
+- `/ .` is a blank line inside a comment (a line of only `/` opens a block
+  comment); in a description it ends a paragraph.
+- A run of definitions with no blank line between them shares the one block
+  above the run - so leave a blank line after a documented definition when the
+  next line assigns something else, or the block documents both. A name
+  documented in two places is refused by the page generator.
+- One `@return` per block, and each `@param` once: the page generator refuses a
+  block that says either twice, which is how two blocks run together show up.
 - **A helper that is plumbing, not API, ends its block with `/ @private`**
   (#627), conventionally after a `/ Private: ...` description. `docs/man.q` then
-  leaves it out of the registry and records it in `.man.private`, and the
-  contract surface (`docs/reference/surfaces/current/functions.csv`) omits it,
-  so refactoring it is not a contract change. Its `@eg` lines still run. Tag
-  only what no other module or job file is told to call: a helper a guide tells
-  job authors to use is API, whatever its comment says.
-- A file-level doc block (single-`/` lines, ending in a lone `/ .` line) goes
-  **before** the file's first definition at the top of the file and becomes that
-  file's description in the generated docs.
-- The CLI is
-  `java -cp qstudio.jar com.timestored.qdoc.QDocMain <target> <source>`.
-  TimeStored's own help page states the reverse order (`<source> <target>`) -
-  that is wrong; passing it that way silently writes qDoc's own output files
-  into your source folder and finds nothing to document.
-  `scripts/dev/gen-docs.sh` has the verified order baked in.
-- qDoc documents each namespace separately per source file in its nav
-  (`.qf.px (options.q)`, `.qf.port (risk.q)`, ...) - one page per file, since
-  each file now has its own distinct namespace.
-- **Never write a literal `<` in doc text** (descriptions, `@return`, `@throws`,
-  etc.) - qDoc drops it and everything after it into the HTML unescaped, so a
-  naive HTML parser treats `<=0` or `<rd` as the start of a tag and the rest of
-  that line silently vanishes from the rendered page (this happened to `ncdf`'s
-  `@return`, `carry_return`'s description, and `sweep_price`'s `@throws` - all
-  originally used `<` or `<=`). A bare `>` is fine (confirmed via
-  `book_crossed`'s "bid>ask" rendering intact). Rephrase in words ("x is at most
-  y", "targetSize is not positive") instead of using the character.
-- qstudio.jar also runs a bundled linter as a side effect (`docs/lint.csv`),
-  which throws a lot of `UNDECLARED_VAR` false positives for this repo
-  specifically, because it lints each file in isolation and can't see that e.g.
-  `.qf.px.df_cont` (from `rates.q`) is available once both files are loaded via
-  `src/init.q` and `options.q` calls it qualified. Safe to ignore those; do look
-  at anything else it flags.
-
-See the README's Documentation section for the actual `gen-docs.sh` usage.
+  leaves it out of the registry and the q API pages and records it in
+  `.man.private`, and the contract surface
+  (`docs/reference/surfaces/current/functions.csv`) omits it, so refactoring it
+  is not a contract change. Its `@eg` lines still run. Tag only what no other
+  module or job file is told to call: a helper a guide tells job authors to use
+  is API, whatever its comment says.
+- A file-level doc block (single-`/` lines at the top of the file, before its
+  first definition) becomes that module's introduction on its q API page.

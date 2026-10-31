@@ -62,7 +62,6 @@ platform: Linux-x86_64
 .qt.qetl.source.local.test_a_segmented_hdb_is_read_across_its_segments  # peachq-lacks: a splayed `set` re-enumerates an enumerated column against a domain it writes beside the table as `sym`, whatever its own domain, so positions written against another file are not kept
 .qt.qetl.source.local.test_symbols_are_decoded_against_the_hdbs_own_sym_file  # peachq-lacks: a splayed `set` re-enumerates an enumerated column against a domain it writes beside the table as `sym`, whatever its own domain, so positions written against another file are not kept
 
-.qt.man.registry.test_every_private_name_exists  # peachq-lacks: not yet narrowed - it throws 'type on code KDB-X accepts
 
 .qt.qf.util.metatables.test_reconcile_flags_lost_rows_on_a_date_with_no_observations  # peachq-lacks: not yet narrowed - it throws 'type on code KDB-X accepts
 .qt.qf.util.metatables.test_reconcile_ignores_superseded_claims  # peachq-lacks: not yet narrowed - it throws 'type on code KDB-X accepts

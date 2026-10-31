@@ -91,6 +91,7 @@
 
 / name -> its declaration, ENLISTED, for the reason .qetl.job.stream.jobs enlists.
 .qetl.job.stream.rolling.registry:(`symbol$())!();
+
 .qetl.job.stream.registries:distinct .qetl.job.stream.registries,`.qetl.job.stream.rolling.registry;
 
 / What every rolling job declares.

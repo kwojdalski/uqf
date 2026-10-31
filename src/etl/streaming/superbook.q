@@ -68,7 +68,6 @@
     state}
 
 / Flatten one side without merging liquidity belonging to different sources.
-/ @param rows current source snapshots for one pair
 / .
 / side is a BOOK side, `bid or `ask, as everywhere else in the library. It
 / was 1/-1 once, which read as trade direction - where 1 is a buy, and a buy
