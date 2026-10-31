@@ -24,9 +24,6 @@ actual/
 /q
 /peachq/
 
-# local qStudio jar kept alongside the repo to run it
-/qstudio.jar
-
 # build output from tools this tree does not build itself - today the q-lint-rs
 # wheels. The rule was removed in #383 along with scripts/dev/build.sh, whose
 # output it had been added for; that was right about the script and wrong
@@ -60,7 +57,7 @@ __pycache__/
 *.swp
 *.swo
 
-# generated documentation - regenerate with scripts/dev/gen-docs.sh
+# scratch output from scripts and tests (a worker's example HDB, test probes)
 build/
 
 .venv/
@@ -96,6 +93,9 @@ tplog/
 # Quarto's rendered docs site. docs/_quarto.yml exists so the link gate can
 # ask a real renderer to resolve every link; the output is a build artifact.
 docs/_site/
+# The q API pages, written from the qDoc comments before every render by
+# scripts/generate/q_api_docs.py (Quarto's pre-render); built, never committed.
+docs/reference/q-api/
 
 # What external sources connect to on THIS machine (#718): TorQ's application
 # config layer, which wins over the tree's scripts/torqconfig/sources.csv a

@@ -202,7 +202,7 @@ Apply the rules below. Each cites the file that holds or enforces it.
   | `src/etl/generated/load_plan.q`, `pipeline_dag.q`, `docs/reference/processes.md`, `process_ports.csv`, `docs/guides/uqs.md` tables | the declarations               | `uv run python scripts/generate/derive.py operational-docs` (`--check` in CI)   |
   | `docs/reference/surfaces/current/`                                                                                                 | the loaded q tree              | `uv run python scripts/generate/derive.py contract-surface`                     |
   | rendered `docs/diagrams/*.svg`                                                                                                     | `docs/diagrams/*.d2`           | `python3 scripts/generate/derive.py diagrams`                                   |
-  | `docs/reference/environment.md`                                                                                                    | the code reading each variable | checked by `scripts/gates/check_env_reference.py`                               |
+  | `docs/reference/environment.md`                                                                                                    | the code reading each variable | checked by `scripts/gates/check.py env-reference`                               |
 
 - **D2** A name or call that docs mention is checked against the q source
   (`scripts/gates/check_doc_references.py`). Renaming a function means updating
@@ -269,7 +269,7 @@ invariants, is `uqf-q-traps.md`.
   state makes another suite pass or fail by order.
 - **V5** Code must work on KDB-X and on PeachQ. PeachQ can't load nested `\d`
   contexts: define every name fully qualified from the root (`\d .` at most, one
-  level at most - `check_nested_contexts.py`); only `tests/` is still flattened
+  level at most - `check.py nested-contexts`); only `tests/` is still flattened
   for it (`scripts/portable/flatten_contexts.py`). A test it can't run goes into
   `tests/q/peachq_known_gaps.txt` or `python/peachq_known_gaps.txt`, with the
   reason. Both lists are held both ways: a listed test that passes fails the

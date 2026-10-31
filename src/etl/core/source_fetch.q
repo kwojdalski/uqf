@@ -10,7 +10,6 @@
 
 / How far a source can vouch for its data, in UTC (see COMPLETE THROUGH in
 / source_registry.q).
-/ @param source a registered source name
 / .
 / Whether the run is on the fixture is stated, never read off the handle: a
 / null handle means "closed data" on the fixture and "nobody opened the source

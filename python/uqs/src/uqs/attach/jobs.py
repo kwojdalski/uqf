@@ -7,7 +7,8 @@ Two sources, one answer:
     bundle's `tables.q`, read as text. Nothing is installed in this checkout -
     the point of attaching is that the stack is somewhere else.
   * the checkout's own tree (no `--bundle`): the job as already installed or
-    shipped here, its tables from `src/etl/plant_tables.q`.
+    shipped here, its tables as q evaluated `src/etl/plant_tables.q`
+    (uqs.model.plant_metadata, #1781) - never its text.
 
 The tables an attachment registers are the job's `publishes` that the job's
 source DEFINES. A table the job publishes that nothing here defines (the
@@ -18,6 +19,7 @@ exists on the stack instead.
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from dataclasses import dataclass, replace
 from pathlib import Path
 
@@ -29,9 +31,11 @@ from uqs.attach.schema import (
     parse_definition,
     parse_nested,
     parse_sorting,
+    spec_of,
 )
+from uqs.model import plant_metadata
 from uqs.model.declarations import Declaration, read_file
-from uqs.paths import UqsError
+from uqs.paths import TABLES_FILE, UqsError
 from uqs.stack import bundles
 
 _TABLE_LINE = re.compile(r"^(?:\.qetl\.plant\.)?([a-z_][a-z0-9_]*):\(\[\]")
@@ -119,38 +123,41 @@ def from_bundle(job: str, folder: Path) -> JobSpec:
     tables_q = folder / bundles.TABLES
     where = f"bundle {bundle.name}/{bundles.TABLES}"
     text = tables_q.read_text() if tables_q.is_file() else ""
+    defined, nested, sorting = _definitions(text), _nested(text, where), _sorting(text, where)
     return _build(
-        decl, _definitions(text), where, bundle, _nested(text, where), _sorting(text, where)
+        decl,
+        set(defined),
+        lambda t: _spec(t, defined[t], where, nested.get(t, {}), sorting.get(t, ())),
+        bundle,
     )
 
 
 def from_tree(job: str, root: Path) -> JobSpec:
     """`job` as this checkout's tree declares it."""
     from uqs.model.declarations import read_declarations
-    from uqs.paths import TABLES_FILE
 
     decl = _pick(read_declarations(root), job, "this tree")
     if not decl.publishes:
         raise AttachmentError(f"{job} publishes nothing, so there is nothing to attach")
-    text, where = (root / TABLES_FILE).read_text(), str(TABLES_FILE)
-    return _build(
-        decl, _definitions(text), where, None, _nested(text, where), _sorting(text, where)
-    )
+    try:
+        own = plant_metadata.load(root).own()
+    except plant_metadata.SchemaMetadataError as exc:
+        raise AttachmentError(str(exc)) from None
+    return _build(decl, set(own), lambda t: _evaluated(own[t]), None)
+
+
+def _evaluated(table: plant_metadata.Table) -> TableSpec:
+    """A tree table's spec, from what q evaluated (#1781) - never its text."""
+    try:
+        return spec_of(table)
+    except SchemaError as exc:
+        raise AttachmentError(f"{TABLES_FILE}: table {table.name}: {exc}") from None
 
 
 def _build(
-    decl: Declaration,
-    defined: dict[str, str],
-    where: str,
-    bundle,
-    nested: dict[str, dict[str, str]],
-    sorting: dict[str, tuple[tuple[str, str], ...]] | None = None,
+    decl: Declaration, defined: set[str], spec: Callable[[str], TableSpec], bundle
 ) -> JobSpec:
-    tables = tuple(
-        _spec(t, defined[t], where, nested.get(t, {}), (sorting or {}).get(t, ()))
-        for t in decl.publishes
-        if t in defined
-    )
+    tables = tuple(spec(t) for t in decl.publishes if t in defined)
     external = tuple(t for t in decl.publishes if t not in defined)
     origin = (
         {"bundle": bundle.name, "version": bundle.version, "folder": str(bundle.root)}

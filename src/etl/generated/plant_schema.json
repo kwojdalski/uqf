@@ -1,6 +1,7 @@
 {
-  "exporter_version": 1,
-  "fingerprint": {"tree": "8aca6fab6574d3de7cb767d3a629555c80e0d47e2c51e69fbc285a9f3606e0f3", "vendored": "0451360a4020ccc547841455188558ec27d4a0af40947d659bef0b622a724a1c"},
+  "exporter_version": 2,
+  "fingerprint": {"tree": "81ba84347c02d940af0274d950467391da8ac4568fcf040b29828d77d0680577", "vendored": "7de5d30c058a4b267890d61175454ec625ee381b5625ea70d333f4945d1e7ae2"},
+  "bindings": ["adopt_vendored", "column_problems", "columns", "elements", "materialise", "names", "nested", "nested_columns", "own", "problems", "published", "schema", "shape", "sort_rules", "sorting", "undeclared", "vendored", "vendored_path"],
   "tables": {
     "quote": {"vendored": true, "columns": [{"name": "time", "type": "p", "attribute": ""}, {"name": "sym", "type": "s", "attribute": "g"}, {"name": "bid", "type": "f", "attribute": ""}, {"name": "ask", "type": "f", "attribute": ""}, {"name": "bsize", "type": "j", "attribute": ""}, {"name": "asize", "type": "j", "attribute": ""}, {"name": "mode", "type": "c", "attribute": ""}, {"name": "ex", "type": "c", "attribute": ""}, {"name": "src", "type": "s", "attribute": ""}], "nested": {}, "sorting": []},
     "trade": {"vendored": true, "columns": [{"name": "time", "type": "p", "attribute": ""}, {"name": "sym", "type": "s", "attribute": "g"}, {"name": "price", "type": "f", "attribute": ""}, {"name": "size", "type": "i", "attribute": ""}, {"name": "stop", "type": "b", "attribute": ""}, {"name": "cond", "type": "c", "attribute": ""}, {"name": "ex", "type": "c", "attribute": ""}, {"name": "side", "type": "s", "attribute": ""}], "nested": {}, "sorting": []},

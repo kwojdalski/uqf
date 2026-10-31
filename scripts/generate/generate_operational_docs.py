@@ -151,7 +151,7 @@ def render() -> str:
             else (", ".join(f"`{t}`" for t in p.subscribed_tables) or "—")
         )
         pubs = ", ".join(f"`{t}`" for t in p.published_tables) or "—"
-        owns = f"`{p.table}`" if p.table else "—"
+        owns = f"`{p.owned_table}`" if p.owned_table else "—"
         lines.append(
             f"| `{p.procname}` | {DEFAULT_BASE_PORT + PIPELINE_OFFSETS[p.procname]} | {p.kind} | "
             f"`{p.script}` | {owns} | {subs} | {pubs} |"

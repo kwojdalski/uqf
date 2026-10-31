@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Hold docs/reference/pipeline-declarations.md to the declaring q code.
 
 The page is hand-written, because "what this key means and when it is
@@ -17,18 +16,18 @@ can describe them, and cannot describe one that no longer exists. A kind
 that forwards `.qetl.job.stream.passthrough` accepts stream_job.q's
 `passthrough_keys` without naming them, so those count as mentioned (#1232).
 
-    python3 scripts/gates/check_declaration_reference.py
+    python3 scripts/gates/check.py declaration-reference
 """
 
 from __future__ import annotations
 
 import re
-import sys
 from pathlib import Path
 
-REPO = Path(__file__).resolve().parents[2]
-PAGE = REPO / "docs" / "reference" / "pipeline-declarations.md"
-CORE = REPO / "src" / "etl" / "core"
+#: Both relative to the repository root, which scripts/gates/check.py
+#: resolves and passes in.
+PAGE = Path("docs/reference/pipeline-declarations.md")
+CORE = Path("src/etl/core")
 
 #: section heading prefix -> (declaring file, or a glob where the namespace
 #: spans files (`.qetl.source`, #970), the key lists it defines, keys a list
@@ -79,7 +78,7 @@ def section_keys(page: str, heading: str) -> list[str]:
     return [m.group(1) for line in body.splitlines() if (m := _ROW_KEY.match(line))]
 
 
-def check(page: str, core: Path = CORE) -> list[str]:
+def check(page: str, core: Path) -> list[str]:
     """Every disagreement between `page` and the declaring files in `core`."""
     problems: list[str] = []
     # A kind that forwards `.qetl.job.stream.passthrough decl` accepts every
@@ -101,18 +100,3 @@ def check(page: str, core: Path = CORE) -> list[str]:
                     f"{heading[3:]}: the page describes `{k}`, which {file} never mentions"
                 )
     return problems
-
-
-def main() -> int:
-    problems = check(PAGE.read_text())
-    for p in problems:
-        print(p, file=sys.stderr)
-    if problems:
-        print(f"\n{len(problems)} problem(s) in {PAGE.relative_to(REPO)}", file=sys.stderr)
-        return 1
-    print(f"{PAGE.relative_to(REPO)}: every declared key has a row, every row a key")
-    return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())

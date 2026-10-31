@@ -106,6 +106,9 @@ class Pipeline:
     script: str
     kind: PipelineKind
     table: str | None = None  # the table it publishes onto the tickerplant, if any
+    #: a job's tables no other job publishes (model/registry.py); `owned_table`
+    #: is the one of them the tree defines
+    sole_publisher_of: tuple[str, ...] = ()
     # Only whether to LOAD the library. There was once a second flag to skip
     # publish-edge verification for a pipeline publishing through
     # .qtorq.publish; the check now reads the table at that call site, so
@@ -186,18 +189,33 @@ class Pipeline:
         rows in silence (#288), so a pipeline naming a table nobody defined is
         a mistake to report, not a None to pass along.
         """
-        if self.table is None:
+        table = self.owned_table
+        if table is None:
             return None
         from uqs.model.schemas import _definitions
 
         defined = _definitions()
-        if self.table not in defined:
+        if table not in defined:
             raise KeyError(
-                f"{self.procname}: declares table {self.table!r}, which "
+                f"{self.procname}: declares table {table!r}, which "
                 "src/etl/plant_tables.q does not define - the "
                 "plant would discard its rows without an error"
             )
-        return defined[self.table]
+        return defined[table]
+
+    @property
+    def owned_table(self) -> str | None:
+        """The one table whose schema this pipeline owns: `table` where it is
+        stated; for a job, the one of `sole_publisher_of` this tree defines, as
+        q evaluated plant_tables.q (#1781). Resolved here, on use, so building
+        the registry never needs the schema metadata; asking a stale tree
+        refuses, naming the command that regenerates it."""
+        if self.table is not None or not self.sole_publisher_of:
+            return self.table
+        from uqs.model import schemas
+
+        own = [t for t in self.sole_publisher_of if t in schemas.table_names()]
+        return own[0] if len(own) == 1 else None
 
     @property
     def subscribed_tables(self) -> tuple[str, ...]:

@@ -102,7 +102,7 @@ otherfunc:{x+1}  / becomes .otherfunc (root)
 ```
 
 `\d` may open ONE level (`\d .qmodule`); a nested one (`\d .a.b`) is refused by
-`check_nested_contexts.py` because PeachQ cannot load it. Every file in `src/`
+`check.py nested-contexts` because PeachQ cannot load it. Every file in `src/`
 therefore writes its names the third way, fully qualified from the root, into
 one of the seven domain namespaces (`.qf.math`, `.qf.px`, `.qf.exec`, etc. - see
 this skill's Layout section for the full list), which several files share, or

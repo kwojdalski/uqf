@@ -3,15 +3,19 @@ which runtime it is, so a new runtime is one RUNTIMES entry."""
 
 from __future__ import annotations
 
+import inspect
 import re
+import types
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 import pytest
 from typer.testing import CliRunner
 
 from uqs import cli, runtimes
 from uqs import paths as stack_paths
-from uqs.cli import shared
+from uqs.cli import pipelines, shared
 from uqs.paths import UqsError
 from uqs.runtimes import Runtime
 from uqs.stack import runtime_profiles
@@ -69,7 +73,11 @@ def test_a_runtime_without_overlays_has_no_service_layer(with_probe, tmp_path):
     assert env["UQS_RUNTIME"] == "probe"
 
 
-@pytest.mark.parametrize("command", sorted(runtimes.UQF_ONLY_COMMANDS))
+#: Every visible command marked `pipelines.needs_pipelines`, read off the tree.
+PIPELINES_ONLY = pipelines.pipelines_only()
+
+
+@pytest.mark.parametrize("command", sorted(PIPELINES_ONLY))
 def test_a_runtime_without_pipelines_refuses_their_commands_by_its_own_name(
     with_probe, monkeypatch, command
 ):
@@ -84,6 +92,124 @@ def test_a_runtime_without_pipelines_refuses_their_commands_by_its_own_name(
     result = CliRunner().invoke(cli.app, ["--runtime", "probe", *command.split()])
     assert result.exit_code == 1
     assert "the probe runtime has none of this tree's pipelines" in said[0]
+
+
+def test_the_refusal_names_the_command_and_what_it_needs(with_probe, monkeypatch):
+    monkeypatch.setenv("UQS_RUNTIME", "uqf")
+    said: list[str] = []
+
+    def die(exc):
+        said.append(str(exc))
+        raise SystemExit(1)
+
+    monkeypatch.setattr(shared, "_die", die)
+    CliRunner().invoke(cli.app, ["--runtime", "probe", "job", "runs", "list"])
+    assert said == [
+        f"`uqs job runs list` {PIPELINES_ONLY['job runs list']}; the probe runtime has none "
+        "of this tree's pipelines. Use --runtime uqf"
+    ]
+
+
+def test_a_runtime_with_pipelines_parses_a_marked_command_as_ever():
+    result = CliRunner().invoke(cli.app, ["--runtime", "uqf", "job", "runs", "list", "--help"])
+    assert result.exit_code == 0, result.output
+
+
+# ------------------------------------------------- which commands are marked
+
+#: The modules that read or run this tree's own pipelines - its bounded
+#: workers and their checkpoints, the run ledger, its streaming jobs' preview,
+#: its connectors and its process graph. A command whose code reaches one
+#: needs them, so carries `needs_pipelines`; each is reached by a marked one.
+PIPELINE_MODULES = {
+    "uqs.external.feeds",
+    "uqs.model.process_graph",
+    "uqs.stack.backfill",
+    "uqs.stack.runs",
+    "uqs.stack.stream_preview",
+}
+
+#: Commands that reach a pipeline module but run on any runtime, with why.
+#: Empty today: keep each row's reason, so the exception is argued.
+REACHES_BUT_RUNS_ANYWHERE: dict[str, str] = {}
+
+
+def _reaches(fn: Callable) -> set[str]:
+    """The uqs modules `fn` reaches: the modules, and the modules of the
+    functions, classes and values, it names - following the cli/ functions it
+    calls, so a command reaches what its helpers do."""
+    reached: set[str] = set()
+    seen: set[int] = set()
+    todo = [fn]
+    while todo:
+        f = inspect.unwrap(todo.pop())
+        if id(f) in seen or not isinstance(f, types.FunctionType):
+            continue
+        seen.add(id(f))
+        codes = [f.__code__]
+        while codes:
+            code = codes.pop()
+            codes += [c for c in code.co_consts if isinstance(c, types.CodeType)]
+            for name in code.co_names:
+                value = f.__globals__.get(name)
+                if isinstance(value, types.ModuleType):
+                    reached.add(value.__name__)
+                elif isinstance(value, types.FunctionType) and value.__module__.startswith(
+                    "uqs.cli"
+                ):
+                    todo.append(value)
+                elif isinstance(value, (types.FunctionType, type)):
+                    reached.add(value.__module__)
+                elif isinstance(value, dict):  # a registry: FEEDS, by name
+                    reached |= {type(v).__module__ for v in value.values()}
+    return reached
+
+
+def _leaves(cmd: Any = None, path: tuple[str, ...] = ()) -> dict[str, Any]:
+    """Every command, hidden aliases too, by path."""
+    from uqs.cli import target_confirm
+
+    cmd = cmd if cmd is not None else target_confirm.root_command()
+    subs = target_confirm.subcommands(cmd)
+    if not subs:
+        return {" ".join(path): cmd}
+    return {p: c for n, s in subs.items() for p, c in _leaves(s, (*path, n)).items()}
+
+
+def test_every_command_that_reaches_the_pipelines_is_marked():
+    """A command that needs this tree's pipelines and is not marked runs on
+    torq against processes and tables that do not exist: refuse it instead."""
+    reach = {
+        path: _reaches(c.callback) & PIPELINE_MODULES
+        for path, c in _leaves().items()
+        if not getattr(c, "alias_of", None)
+    }
+    unmarked = sorted(
+        f"{path} (reaches {', '.join(sorted(mods))})"
+        for path, mods in reach.items()
+        if mods and path not in PIPELINES_ONLY and path not in REACHES_BUT_RUNS_ANYWHERE
+    )
+    assert not unmarked, f"mark these cls=needs_pipelines(WHY, effect): {unmarked}"
+    stale = sorted(p for p in PIPELINES_ONLY if not reach.get(p))
+    assert not stale, f"marked, but reach none of PIPELINE_MODULES - unmark or add it: {stale}"
+    unreached = PIPELINE_MODULES - {m for p in PIPELINES_ONLY for m in reach[p]}
+    assert not unreached, f"no marked command reaches these - delete them: {unreached}"
+    gone = sorted(set(REACHES_BUT_RUNS_ANYWHERE) - {p for p, mods in reach.items() if mods})
+    assert not gone, f"no longer reach the pipelines - delete these rows: {gone}"
+
+
+def test_an_alias_needs_what_its_new_name_needs():
+    """`alias_command` takes no mark from its new name, so it is given the same."""
+    from uqs.cli import target_confirm
+
+    differ = {
+        path: alias.alias_of
+        for path, alias in _leaves().items()
+        if getattr(alias, "alias_of", None)
+        and getattr(alias, "needs_pipelines", None)
+        != getattr(target_confirm.canonical(alias)[0], "needs_pipelines", None)
+    }
+    assert not differ, f"aliases marked unlike their new name: {differ}"
 
 
 def test_every_runtime_declares_profiles_that_exist():

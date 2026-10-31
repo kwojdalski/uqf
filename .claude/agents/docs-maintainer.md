@@ -74,7 +74,7 @@ append a rule you inferred; only ones the maintainer actually stated.
   change that is wrong, not the position.
 - **The gates that touch docs**, so you know what will fail:
   `check_doc_references.py`, `derive.py operational-docs --check`,
-  `check_env_reference.py`. `docs/man.q` needs none: it reads the qDoc comments
+  `check.py env-reference`. `docs/man.q` needs none: it reads the qDoc comments
   in `src/` when it loads.
 
 ## Rules

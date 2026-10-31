@@ -17,9 +17,8 @@ exactly the cross-layer inference the split forbids. A caller wanting those must
 ask Airflow.
 
 The format is defined by ``.qetl.status.write_status`` in
-``src/etl/core/status.q``. Its states and file name come from q itself,
-generated into ``uqs.generated.q_facts`` (#1362); its field set is held to
-the writer's by ``test_status.py``.
+``src/etl/core/status.q``. Its states, fields and file name come from q
+itself, generated into ``uqs.generated.q_facts`` (#1362, #1795).
 """
 
 from __future__ import annotations
@@ -35,6 +34,7 @@ from uqf_frontend.errors import ValidationFailed
 # Leaves of uqs, both importing nothing else from it: this module is on a
 # read path, which must not load the orchestrator (see pyproject.toml).
 from uqs.generated.q_facts import (
+    STATUS_FIELDS,
     STATUS_FILE_PREFIX,
     STATUS_FILE_SUFFIX,
     STATUS_STATES,
@@ -59,26 +59,8 @@ STATES = STATUS_STATES
 #: Terminal states — a run in one of these will not change again.
 TERMINAL_STATES = STATUS_TERMINAL_STATES
 
-#: Every field the writer emits. Asserted against the q side in tests, so
-#: adding a field on one side without the other fails rather than silently
-#: dropping data.
-FIELDS = (
-    "worker",
-    "instance_id",
-    "state",
-    "source_version",
-    "range_from",
-    "range_to",
-    "cursor",
-    "rows_published",
-    "windows_completed",
-    "reactions_owed",
-    "error",
-    "updated_at",
-    "pid",
-    "host",
-    "run_id",
-)
+#: Every field the writer emits - `.qetl.status.fields`, from q itself.
+FIELDS = STATUS_FIELDS
 
 
 @dataclass(frozen=True)

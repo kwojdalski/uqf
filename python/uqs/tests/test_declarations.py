@@ -162,7 +162,8 @@ def test_a_job_file_is_the_whole_registration(tmp_path):
     )
     built = {p.procname: p for p in registry.build_pipelines(root)}
     assert set(built) == {"tap1", "tick1", "w1"}
-    assert (built["tick1"].table, built["tick1"].startwithall) == ("ticks", "1")
+    # which of these the tree defines is asked of q's metadata only on use (#1781)
+    assert (built["tick1"].sole_publisher_of, built["tick1"].startwithall) == (("ticks",), "1")
     assert (built["w1"].worker, built["w1"].startwithall) == ("w", "0")
     assert (built["tap1"].offset, built["tick1"].offset, built["w1"].offset) == (28, 29, 30)
 

@@ -48,7 +48,7 @@ lacks a verb q registers. A new kind starts there.
 Every declaring function refuses a bad declaration **when the file loads**,
 naming the key, so a mistake below surfaces the first time the tree is loaded
 rather than part-way through a run.
-`scripts/gates/check_declaration_reference.py` holds the key tables on this page
+`scripts/gates/check.py declaration-reference` holds the key tables on this page
 to the key lists in the q source, in both directions.
 
 ## Fixture, examples and run spec

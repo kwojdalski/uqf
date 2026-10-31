@@ -10,7 +10,7 @@ This runs scripts/generate/export_q_facts.q under KDB-X, which loads the tree
 and prints the values themselves, and writes them as a Python module. The
 module is committed, so uqs imports it without q.
 
-The status file's facts (its states and its name, #1362) go to a second
+The status file's facts (its states, its keys and its name, #1362) go to a second
 module too, inside uqf_airflow_provider: that package runs in Airflow's own
 environment and does not depend on uqs, so it cannot import the first. `--check` regenerates it in
 memory and fails when the committed file differs - the same contract as every
@@ -53,6 +53,7 @@ FACTS = {
     "ETL_RUN_META_COLUMNS": "the run facts ledger's columns - cols .qetl.run.init_meta[]",
     "STATUS_STATES": "every state a worker's status file may record - .qetl.status.status_states",
     "STATUS_TERMINAL_STATES": "the states that end a run - .qetl.status.terminal_states",
+    "STATUS_FIELDS": "every key of a worker's status file, in order - .qetl.status.fields",
     "STATUS_SUCCESS_STATES": (
         "the states a worker's process exits 0 for - .qetl.job.bounded.exit_code"
     ),

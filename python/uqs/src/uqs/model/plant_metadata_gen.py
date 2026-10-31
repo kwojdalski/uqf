@@ -107,6 +107,7 @@ def render(root: Path, found: dict, vendored: Path) -> str:
             "tree": tree_fingerprint(root),
             "vendored": vendored_fingerprint(vendored),
         },
+        "bindings": sorted(found.get("bindings") or []),
     }
     out = ["{"]
     for k, v in head.items():

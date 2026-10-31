@@ -144,6 +144,19 @@
 .qetl.status.file_prefix:"airflow_status_"
 .qetl.status.file_suffix:".txt"
 
+/ The keys of every status file, in the order write_status writes them. Named
+/ here rather than inside write_status so the readers take them from q: the
+/ q-facts generator exports them as STATUS_FIELDS (#1795).
+/ pid and host say WHICH process wrote it: a reader on the same host whose
+/ pid is gone knows a `running file is abandoned rather than slow - the
+/ heartbeat dies with the process, and nothing else would ever say so.
+/ run_id is the .qetl.run execution, "" before it opens and on a rehearsal.
+/ reactions_owed: what a derived dataset is still waiting for - a run that
+/ leaves any is `partial, so `failed here, and this says why (#632).
+.qetl.status.fields:`worker`instance_id`state`source_version`range_from`range_to,
+    `cursor`rows_published`windows_completed`reactions_owed`error`updated_at,
+    `pid`host`run_id
+
 / The path of an instance's status file.
 / @param instance_id the process instance, e.g. `demo_markout1
 / @return the path, as a string
@@ -214,16 +227,8 @@
     dir:.qetl.status.status_dir[];
     / mkdir -p is idempotent, and cheaper than checking first.
     system"mkdir -p ",dir;
-    / pid and host say WHICH process wrote it: a reader on the same host whose
-    / pid is gone knows a `running file is abandoned rather than slow - the
-    / heartbeat dies with the process, and nothing else would ever say so.
-    / run_id is the .qetl.run execution, "" before it opens and on a rehearsal.
     run:@[{.qetl.run.current[]};::;{0Ng}];
-    / reactions_owed: what a derived dataset is still waiting for - a run
-    / that leaves any is `partial, so `failed here, and this says why (#632).
-    payload:`worker`instance_id`state`source_version`range_from`range_to,
-            `cursor`rows_published`windows_completed`reactions_owed`error`updated_at,
-            `pid`host`run_id;
+    / one value per .qetl.status.fields, in its order
     values_:(worker;instance_id;state;spec`source_version;
              spec`range_from;spec`range_to;
              progress`cursor;progress`rows_published;progress`windows_completed;
@@ -231,7 +236,7 @@
              err;.z.p;.z.i;string .z.h;$[null run; ""; string run]);
     target:.qetl.status.file_path[instance_id];
     tmp:target,".tmp";
-    (hsym `$tmp) 0: enlist .j.j payload!values_;
+    (hsym `$tmp) 0: enlist .j.j .qetl.status.fields!values_;
     / atomic on the same filesystem, so a polling reader sees the old file or
     / the new one, never a partial write
     system"mv ",tmp," ",target;

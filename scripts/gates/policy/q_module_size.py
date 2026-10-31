@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Hold every q module under src/ to a line budget (#970).
 
 Python has this in python/uqs/tests/test_module_split.py (400 lines); q had
@@ -16,16 +15,12 @@ Two rules, each a failure on its own:
 
 Generated files are not held to it: they are rewritten, never edited.
 
-    python3 scripts/gates/check_q_module_size.py
+    python3 scripts/gates/check.py q-module-size
 """
 
 from __future__ import annotations
 
-import sys
 from pathlib import Path
-
-REPO = Path(__file__).resolve().parents[2]
-SRC = REPO / "src"
 
 #: Lines a q module may have without an entry in ALLOWED.
 LIMIT = 800
@@ -34,7 +29,7 @@ LIMIT = 800
 #: cap, so the allowlist can only shrink.
 ALLOWED: dict[str, tuple[int, str]] = {
     "src/etl/core/bounded_worker.q": (
-        1616,
+        1614,
         "the bounded-worker lifecycle (define, plan, run, retry, cleanup) in one namespace; "
         "the next split after source_contract.q (#970), not yet done",
     ),
@@ -53,7 +48,8 @@ def line_count(path: Path) -> int:
     return len(path.read_text().splitlines())
 
 
-def problems(root: Path = REPO) -> list[str]:
+def problems(root: Path) -> list[str]:
+    """Every breach of the budget under `root`/src, one message each."""
     out: list[str] = []
     seen: set[str] = set()
     for path in sorted((root / "src").rglob("*.q")):
@@ -80,17 +76,3 @@ def problems(root: Path = REPO) -> list[str]:
     for rel in sorted(set(ALLOWED) - seen):
         out.append(f"ALLOWED lists {rel}, which does not exist - remove it")
     return out
-
-
-def main() -> int:
-    found = problems()
-    for p in found:
-        print(p, file=sys.stderr)
-    if found:
-        return 1
-    print(f"check_q_module_size: every q module under {LIMIT} lines, {len(ALLOWED)} exempt")
-    return 0
-
-
-if __name__ == "__main__":
-    sys.exit(main())

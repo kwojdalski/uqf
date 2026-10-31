@@ -55,7 +55,7 @@ PLANT_SCHEMA_FILE = ETL_DIR / "generated" / "plant_schema.json"
 
 #: Bumped when the JSON's shape or the exporter's meaning changes, so every
 #: committed file built by an older exporter reads as stale.
-EXPORTER_VERSION = 1
+EXPORTER_VERSION = 2
 #: The q that exports, relative to the tree of the uqs doing the reading.
 EXPORTER = Path("scripts/generate/export_plant_schema.q")
 #: The vendored starter pack's schema when $TORQAPPHOME is unset - the same
@@ -130,10 +130,55 @@ def _combine(*parts: str) -> str:
     return hashlib.sha256("\0".join(parts).encode()).hexdigest()
 
 
+def _uncommented(line: str) -> str:
+    """`line` without a trailing q comment: a `/` after whitespace, outside a
+    string literal."""
+    quoted = escaped = False
+    for i, c in enumerate(line):
+        if quoted:
+            escaped, quoted = (not escaped and c == "\\"), quoted and (escaped or c != '"')
+        elif c == '"':
+            quoted = True
+        elif c == "/" and i and line[i - 1] in " \t":
+            return line[:i]
+    return line
+
+
+def q_code(text: str) -> str:
+    """q source with its comments gone, as q reads them: `/` line comments, a
+    line of only `/` opening a block comment to a line of only `\\`, a line of
+    only `\\` ending the script, and trailing ` /` comments. Blank lines and
+    trailing spaces go too. For FRESHNESS ONLY - a comment edit leaves the
+    metadata current; it never decides what a table is (q does)."""
+    out, block = [], False
+    for raw in text.splitlines():
+        line = raw.rstrip()
+        if block:
+            block = line != "\\"
+            continue
+        if line == "/":
+            block = True
+            continue
+        if line == "\\":
+            break
+        if line.startswith("/"):
+            continue
+        if code := _uncommented(line).rstrip():
+            out.append(code)
+    return "\n".join(out)
+
+
 def tree_fingerprint(root: Path) -> str:
-    """plant_tables.q at `root`, the exporter and its version."""
+    """plant_tables.q at `root` as q code - its comments do not count, so
+    editing one leaves the metadata current - the exporter and its version."""
     exporter = _sha(repo_root() / EXPORTER)
-    return _combine(f"v{EXPORTER_VERSION}", exporter, _sha(root / TABLES_FILE))
+    plant = root / TABLES_FILE
+    code = (
+        hashlib.sha256(q_code(plant.read_text()).encode()).hexdigest()
+        if plant.is_file()
+        else "absent"
+    )
+    return _combine(f"v{EXPORTER_VERSION}", exporter, code)
 
 
 def vendored_fingerprint(vendored: Path) -> str:
@@ -155,6 +200,8 @@ class Metadata:
     tables: dict[str, Table]
     #: the vendored fingerprint the file was made with
     vendored_print: str
+    #: every other name plant_tables.q binds in .qetl.plant: its API and registries
+    bindings: frozenset[str] = frozenset()
 
     def own(self) -> dict[str, Table]:
         """This tree's plant tables, in definition order."""
@@ -168,6 +215,8 @@ class Metadata:
         q evaluates it on demand, once per process; without q that is refused,
         naming the command, never answered from the wrong pack's tables."""
         schema = schema or vendored_schema(self.root)
+        if not schema.is_file():  # no pack, no tables: what adopt_vendored does
+            return {}
         printed = vendored_fingerprint(schema)
         if printed == self.vendored_print:
             return {n: t for n, t in self.tables.items() if t.vendored}
@@ -232,9 +281,12 @@ def load(root: Path | None = None) -> Metadata:
     if not path.is_file():
         raise SchemaMetadataError(f"no plant schema metadata at {path} - {_guidance(root)}")
     try:
-        data, tables = _parse(path.read_text())
-        version, prints = data["exporter_version"], data["fingerprint"]
-        recorded_tree, recorded_vendored = prints["tree"], prints["vendored"]
+        data = json.loads(path.read_text())
+        version = data["exporter_version"]
+        if version == EXPORTER_VERSION:
+            _, tables = _parse(path.read_text())
+            prints, bindings = data["fingerprint"], frozenset(data["bindings"])
+            recorded_tree, recorded_vendored = prints["tree"], prints["vendored"]
     except (OSError, ValueError, KeyError, TypeError) as exc:
         raise SchemaMetadataError(f"{path} is not valid ({exc!r}) - {_guidance(root)}") from None
     if version != EXPORTER_VERSION:
@@ -247,7 +299,7 @@ def load(root: Path | None = None) -> Metadata:
             f"{path} is stale: {root / TABLES_FILE} (or the exporter) changed since it "
             f"was generated - {_guidance(root)}"
         )
-    found = Metadata(root, tables, recorded_vendored)
+    found = Metadata(root, tables, recorded_vendored, bindings)
     _CACHE[key] = found
     return found
 
