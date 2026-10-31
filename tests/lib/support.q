@@ -502,12 +502,18 @@
 // which root tables exist.
 .qt.support.snapshot:{[] `env`timer`tables!(.qt.support.env_names!getenv each .qt.support.env_names;system"t";tables `.)}
 
+// Put back the variables `env` held: only what changed is written.
+// @param env a dictionary of variable names to values, as snapshot takes it
+.qt.support.restore_env:{[env]
+    now:getenv each key env;
+    changed:where not env~'now;
+    if[count changed; setenv'[changed;env changed]];
+    }
+
 // Put back what `snapshot` took: only what changed is written.
 // @param s a snapshot
 .qt.support.restore:{[s]
-    now:getenv each key s`env;
-    changed:where not (s`env)~'now;
-    if[count changed; setenv'[changed;(s`env) changed]];
+    .qt.support.restore_env s`env;
     if[not (s`timer)=system"t"; system"t ",string s`timer];
     made:(tables `.) except s`tables;
     if[count made; ![`.;();0b;made]];
@@ -526,6 +532,38 @@ if[not `run_test_unisolated in key `.qt.support; .qt.support.run_test_unisolated
     r}
 
 .qunit.runTest:.qt.support.isolated_run_test;
+
+// ------------------------------------------------------ SUITE ISOLATION
+//
+// The per-test wrapper above does not reach a suite's beforeNamespace_* and
+// afterNamespace_* hooks: the runner calls them from runNsTests, outside any
+// runTest. A variable a suite set there - UQF_STATUS_DIR, most often -
+// stayed set for every suite after it, and a suite could pass or fail on
+// which ran before it (#1814, #1818). So runNsTests is wrapped as runTest is
+// (discovery.q installs it, after defining the runNsTests it wraps): the
+// environment (the same variables) and the working directory are taken
+// before the suite's first hook and put back after its last, whether it
+// passed, failed or threw. Tables and the timer are left to the per-test
+// restore: what a suite's beforeNamespace builds for its tests is its own to
+// tear down.
+
+// What the harness restores after each suite: the environment and the cwd.
+.qt.support.suite_snapshot:{[] `env`cwd!(.qt.support.env_names!getenv each .qt.support.env_names;raze system"cd")}
+
+// Put back what `suite_snapshot` took.
+// @param s a suite snapshot
+.qt.support.suite_restore:{[s]
+    .qt.support.restore_env s`env;
+    if[not (s`cwd)~raze system"cd"; system"cd ",s`cwd];
+    }
+
+// Private: one suite, isolated - see SUITE ISOLATION above.
+// @private
+.qt.support.isolated_run_ns_tests:{[ns]
+    s:.qt.support.suite_snapshot[];
+    r:@[.qt.support.run_ns_tests;ns;{[s;e] .qt.support.suite_restore s; 'e}[s]];
+    .qt.support.suite_restore s;
+    r}
 
 // The run spec a worker with no credential stores once `init` has it: the
 // same, under the release tagged as the fixture's (#1082).
