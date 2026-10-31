@@ -269,7 +269,9 @@ jobs:
         # now passes - the list only shrinks (#863).
         if: ${{ !cancelled() && env.PEACHQ_BIN != '' }}
         timeout-minutes: 10
-        run: QCMD="$PEACHQ_BIN" python3 scripts/test.py q-unit-peachq
+        # tests/qrun/test_q_suite.py drives it (#1808), and --require-q peachq
+        # fails it, rather than skipping, should PeachQ not be had.
+        run: QCMD="$PEACHQ_BIN" uv run pytest -q -rs --require-q peachq -m "q_suite and peachq" tests/qrun/test_q_suite.py
 
   peachq-python:
     name: PeachQ Python tests (${{ matrix.shard }}/4)
@@ -380,7 +382,9 @@ jobs:
         # their `peachq` half (#1808) - what `scripts/test.py q-docs` ran in
         # the job above. --require-q peachq fails a test that cannot have
         # PeachQ rather than skipping it; the KDB-X half skips, visibly.
-        run: QCMD="$PEACHQ_BIN" uv run pytest -q -n auto --dist loadgroup --require-q peachq --shard "${{ matrix.shard }}/4" --store-shard-durations "$RUNNER_TEMP/durations-${{ matrix.shard }}.json"
+        # -m "not q_suite": the whole qUnit suite on PeachQ is the "PeachQ q
+        # tests" job's, which runs it once rather than in a shard here.
+        run: QCMD="$PEACHQ_BIN" uv run pytest -q -n auto --dist loadgroup --require-q peachq -m "not q_suite" --shard "${{ matrix.shard }}/4" --store-shard-durations "$RUNNER_TEMP/durations-${{ matrix.shard }}.json"
       - name: Keep this shard's module durations
         # What scripts/dev/test_module_durations.json is refreshed from: CI's
         # own times, which differ from a laptop's (#1696). Merge the four with

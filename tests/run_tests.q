@@ -68,7 +68,7 @@ nsList:.qt.support.selected_suites[nsList;.z.x];
 / .qetl.job.bounded fixture workers reaching a documentation ratchet, a
 / test-registered source reaching a namespace check, .qetl.dag.jobs reaching
 / a registry scan - and each was fixed to ask about the tree rather than
-/ about the process. This is what keeps them fixed: `scripts/test.py q-order`
+/ about the process. This is what keeps them fixed: `pytest -m release` (test_q_suite.py)
 / runs the whole suite reversed, and a test that quietly grows a dependency
 / on running after some other suite fails there rather than years later.
 / .

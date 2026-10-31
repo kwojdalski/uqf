@@ -1,4 +1,4 @@
-// try_acquire.q - a child process for the q-backfill-process lane. Prints
+// try_acquire.q - a child process for run_backfill_process.q. Prints
 // REFUSED or ACQUIRED, so the parent can assert on mutual exclusion rather
 // than on an exit code that a load error would also produce.
 \l src/etl/core/status.q
