@@ -115,7 +115,7 @@ UNVERIFIED+=("source credentials and ODBC drivers: uqs config sources check")
 if ((DEV)); then
     need git "$(pkg git git)"
     want cargo "qlinter $QLINT_VERSION for the q-traps hook: https://rustup.rs, then cargo install --git https://github.com/kwojdalski/q-lint --tag $QLINT_VERSION --locked"
-    want make "building PeachQ for the q-docs-peachq hook: $(pkg build-essential 'xcode-select --install')"
+    want make "building PeachQ for the q-docs-peachq hook (and the peachq tests): $(pkg build-essential 'xcode-select --install')"
     want d2 "rendering diagrams (render-diagrams hook): https://d2lang.com"
     want quarto "checking docs links (check-doc-links hook): https://quarto.org"
 fi

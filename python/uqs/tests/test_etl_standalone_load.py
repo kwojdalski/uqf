@@ -3,7 +3,8 @@
 The worked examples under scripts/examples/ used to be run here too, as
 well as by `scripts/test.py`'s q-scripts lane - two runners, each claiming
 to be the only one, with different discovery and process handling (#891).
-The lane is now their one runner. What stays here tests something else.
+The lane was then their one runner, and tests/qrun/test_worked_examples.py
+is now (#1808). What stays here tests something else.
 
 KDB-X specifically, not any q: this tree targets KDB-X alone, so the test
 skips rather than substituting another interpreter - a pass obtained from

@@ -3,7 +3,9 @@
 It once assigned its handler to `.z.time` (a read-only clock) instead of
 `.z.ts`, replayed no tick, and the q-scripts lane still passed, because q
 exits 0 at stdin EOF. The example now exits non-zero when the process ends
-before every tick replayed; these tests hold both directions.
+before every tick replayed. That the complete replay passes is
+tests/qrun/test_worked_examples.py's to show - it runs every example, this one
+with a stdin that never ends (#1808); this holds the other direction.
 """
 
 from __future__ import annotations
@@ -42,27 +44,6 @@ def _workdir(tmp_path: Path) -> Path:
     """
     (tmp_path / "src").symlink_to(UQF_ROOT / "src", target_is_directory=True)
     return tmp_path
-
-
-def test_complete_replay_exits_zero_with_every_tick(tmp_path: Path) -> None:
-    q, env = _q()
-    read_fd, write_fd = os.pipe()  # stdin that never reaches EOF
-    try:
-        done = subprocess.run(
-            [q, str(EXAMPLE), "-q"],
-            cwd=_workdir(tmp_path),
-            env=env,
-            stdin=read_fd,
-            capture_output=True,
-            text=True,
-            timeout=TIMEOUT_SECONDS,
-            check=False,
-        )
-    finally:
-        os.close(read_fd)
-        os.close(write_fd)
-    assert done.returncode == 0, done.stderr
-    assert done.stdout.count("|tick ") == 8
 
 
 def test_handler_on_the_clock_instead_of_the_timer_fails(tmp_path: Path) -> None:

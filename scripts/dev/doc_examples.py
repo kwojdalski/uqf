@@ -28,8 +28,9 @@ namespaces, and the ETL stack (`torq_pipeline.q`, `src/etl/init.q`) too when
 one names `.qetl` or `.qpipe`. A block that uses neither runs on a bare q -
 which is what lets it run on an interpreter the library does not load on.
 
-scripts/test.py's q-docs lane runs what `write_sessions` writes. Run by a bare
-python3, like test.py itself, so this imports nothing outside the stdlib.
+tests/qrun/test_doc_blocks.py runs what `write_session` writes, a test per
+document on each interpreter (#1808). Run by a bare python3 as well (the hook
+scope check loads it), so this imports nothing outside the stdlib.
 """
 
 from __future__ import annotations
@@ -207,6 +208,19 @@ def session_q(blocks: list[Block], block_files: list[Path]) -> str:
     return "\n".join([*head, *body, *tail]) + "\n"
 
 
+def write_session(blocks: list[Block], out_dir: Path, n: int = 0) -> Path:
+    """One document's `blocks` as one q script under `out_dir`, each block in a
+    file of its own beside it; `n` keeps two documents' files apart."""
+    files = []
+    for block in blocks:
+        f = out_dir / f"doc{n}_{block.line}.q"
+        f.write_text(transcript_q(block.body) if block.mode == "transcript" else block.body + "\n")
+        files.append(f)
+    session = out_dir / f"doc{n}_{re.sub(r'[^A-Za-z0-9]+', '_', str(blocks[0].path))}.q"
+    session.write_text(session_q(blocks, files))
+    return session
+
+
 def write_sessions(root: Path, out_dir: Path, impl: str) -> tuple[list[Path], list[Block]]:
     """One q script per document under `out_dir`, and the blocks skipped on
     `impl` because they are KDB-X only."""
@@ -217,18 +231,9 @@ def write_sessions(root: Path, out_dir: Path, impl: str) -> tuple[list[Path], li
             skipped.append(block)
             continue
         by_doc.setdefault(block.path, []).append(block)
-    sessions = []
-    for n, (doc, blocks) in enumerate(sorted(by_doc.items())):
-        files = []
-        for block in blocks:
-            f = out_dir / f"doc{n}_{block.line}.q"
-            f.write_text(
-                transcript_q(block.body) if block.mode == "transcript" else block.body + "\n"
-            )
-            files.append(f)
-        session = out_dir / f"doc{n}_{re.sub(r'[^A-Za-z0-9]+', '_', str(doc))}.q"
-        session.write_text(session_q(blocks, files))
-        sessions.append(session)
+    sessions = [
+        write_session(blocks, out_dir, n) for n, (_, blocks) in enumerate(sorted(by_doc.items()))
+    ]
     return sessions, skipped
 
 

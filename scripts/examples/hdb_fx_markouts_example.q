@@ -9,7 +9,7 @@
 //   q scripts/examples/hdb_fx_markouts_example.q -keep    keep what it wrote, under build/
 //
 // No TorQ and no running stack: everything it writes is under one directory
-// in build/, removed at the end unless -keep. The q-scripts lane runs it, and
+// in build/, removed at the end unless -keep. The worked-examples test runs it, and
 // it exits 1 unless each run completes and publishes at least one row.
 //
 // TWO RUNS, KEPT APART. Both workers read one source over one window, so the
@@ -67,7 +67,7 @@ own_state:{[]
 / spaces or quotes, and an unquoted `rm -rf` would split it into other paths.
 quoted:{[path] "'",ssr[path;"'";"'\"'\"'"],"'"}
 
-/ Exit 1 with a message when a check fails, so the q-scripts lane fails too.
+/ Exit 1 with a message when a check fails, so the worked-examples test fails too.
 check:{[ok;what] $[ok; -1 "  ok    ",what; [-1 "  FAIL  ",what; exit 1]]}
 
 \d .

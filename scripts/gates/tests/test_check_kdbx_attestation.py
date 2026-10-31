@@ -845,9 +845,10 @@ def test_the_q_tests_hook_skips_q_unit_only_when_attest_says_so():
     skipped, rest = hook.split(guard, 1)[1].split("else", 1)
     assert "scripts/test.py" not in skipped  # nothing runs in its place
     assert "scripts/test.py q-unit" in rest.split("fi\n", 1)[0]
-    # q-examples and q-scripts run either way
+    # q-examples and the worked examples (pytest's, #1808) run either way
     tail = rest.split("fi\n", 1)[1]
-    assert "scripts/test.py q-examples" in tail and "scripts/test.py q-scripts" in tail
+    assert "scripts/test.py q-examples" in tail
+    assert "--require-q kdbx tests/qrun/test_worked_examples.py" in tail
 
 
 def test_the_coverage_run_records_outcomes_and_seeds_as_the_plain_run_does():

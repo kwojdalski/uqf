@@ -2,8 +2,8 @@
 """peachq.py - the pinned PeachQ, found or built, for the lanes that run on it.
 
 PeachQ is an MIT-licensed q. KDB-X stays the interpreter this tree targets;
-PeachQ is a SECOND interpreter that a few lanes (q-docs-peachq locally, the
-PeachQ steps in CI) are required to pass on too. A lane takes $QCMD when it
+PeachQ is a SECOND interpreter that a few gates (the q-docs-peachq hook
+locally, the PeachQ steps in CI) are required to pass on too. A lane takes $QCMD when it
 is PeachQ, or a binary passed with --peachq (uqs.interpreter.peachq_binary,
 and its copy in scripts/test.py); otherwise this module provides the pinned
 build, in this order:

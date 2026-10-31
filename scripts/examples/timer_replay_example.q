@@ -169,8 +169,8 @@ system "t ",string tick_ms;
 / Self-check (#1338): the process ending before every tick replayed - stdin
 / at EOF, or a handler that never fires, as when this was assigned to the
 / read-only clock .z.time instead of .z.ts - must be a failure, not a quiet
-/ exit 0. The complete path exits 0 above, and q-scripts (scripts/test.py)
-/ keeps stdin open for this example so EOF cannot cut the replay short.
+/ exit 0. The complete path exits 0 above, and
+/ tests/qrun/test_worked_examples.py keeps stdin open for this example so EOF cannot cut the replay short.
 replay_failed:0b;
 .z.exit:{[code]
     if[(not replay_failed) and cnt<n_ticks;

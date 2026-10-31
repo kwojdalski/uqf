@@ -67,7 +67,7 @@ run:{[from_ts;to_ts]
 / spaces or quotes, and an unquoted `rm -rf` would split it into other paths.
 quoted:{[path] "'",ssr[path;"'";"'\"'\"'"],"'"}
 
-/ Exit 1 with a message when a check fails, so the q-scripts lane fails too.
+/ Exit 1 with a message when a check fails, so the worked-examples test fails too.
 check:{[ok;what] $[ok; -1 "  ok    ",what; [-1 "  FAIL  ",what; exit 1]]}
 
 \d .
