@@ -240,11 +240,13 @@ with the calculation `fxmarkout1` applies live, replacing its rows under (venue;
 fill_id; horizon; kind; step). [Details](fx-markout.md)
 
 **`hdb_fx_markout_wide_backfill1` · FX markouts from the HDB, wide** --- the
-same, into `fx_markout_wide` under (venue; fill_id; horizon).
-[Details](fx-markout.md) **`hdb_order_quality_backfill1` · the rolling
-order-quality series, from the HDB** --- the bounded twin of `order_quality1`.
-For each aligned hour it reads the HDB's `orders` and the longest window's worth
-before it (`hdb_orders` source), runs them through the live pair's own adapter
+same, into `fx_markout_wide` under (venue; fill_id; horizon). Worked example of
+both: `q scripts/examples/hdb_fx_markouts_example.q`. [Details](fx-markout.md)
+
+**`hdb_order_quality_backfill1` · the rolling order-quality series, from the
+HDB** --- the bounded twin of `order_quality1`. For each aligned hour it reads
+the HDB's `orders` and the longest window's worth before it (`hdb_orders`
+source), runs them through the live pair's own adapter
 (`order_outcomes_from_orders`) and statistic (`order_quality`), and writes
 `order_quality` at every five-second grid point, replacing the live rows under
 `book, window, as_of`. `uqs job gaps order_quality` names it. An hour with no

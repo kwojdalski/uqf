@@ -233,6 +233,9 @@ calculation and layout and add one thing the live job cannot have: `time` is
 `source_time` plus the furthest horizon, the earliest a live row could have been
 stamped. `on_conflict` is `replace` on `source_time`, so a window the live job
 also scored is replaced, not doubled.
+`q scripts/examples/hdb_fx_markouts_example.q` runs both on the source's
+fixture, each with its own status directory and destination HDB, and reads
+`fx_markout` and `fx_markout_wide` back from disk.
 
 ## Adding a source
 
