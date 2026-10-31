@@ -49,11 +49,11 @@ def make_bundle(where: Path, name: str, job: str | None = None, table: str | Non
 
 
 @pytest.fixture
-def repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+def repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, plant_tree) -> Path:
     root = tmp_path / "repo"
     for directory in (SOURCE_DIR, WORKER_DIR, STREAM_DIR):
         (root / directory).mkdir(parents=True)
-    (root / TABLES_FILE).write_text("\\d .qetl.plant\nquote:([]time:`timestamp$())\n")
+    plant_tree(root, "quote:([]time:`timestamp$())\n")
     (root / CATALOG_FILE).parent.mkdir(parents=True)
     (root / CATALOG_FILE).write_text('\\d .qcat\ndescribe[`quote]:"q";\n\\d .\n')
     (root / OVERRIDES_FILE).parent.mkdir(parents=True)

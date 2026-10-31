@@ -4,7 +4,7 @@ with the argument count shown.
 
 There were already gates keeping the DERIVED documentation honest -
 ``docs/man.q`` reads the qDoc blocks when it loads, and
-``check_env_reference.py`` holds the environment page to the code that reads
+``check.py env-reference`` holds the environment page to the code that reads
 each variable. Nothing held the *prose* to anything. A guide could name
 ``.qetl.coverage.stage_coverage``, a function that has never existed, and every gate
 would pass: the name appears in no generated artifact, so no generator
@@ -96,6 +96,10 @@ EXCLUDED_DIRS = {
     # Plans written BEFORE the work, kept afterwards as the reasoning. They
     # name things that did not exist when written, which is the point.
     "migrations",
+    # docs/reference/q-api/: written from the qDoc blocks themselves at render
+    # time and gitignored (scripts/generate/q_api_docs.py), so a stale local
+    # copy from an earlier render would be checked against today's code.
+    "q-api",
 }
 
 #: Individual files excluded, with the reason each is exempt.

@@ -192,11 +192,51 @@ def test_stale_metadata_is_refused_with_regeneration_guidance(tmp_path):
 
 
 @pytest.mark.parametrize(
+    "edit",
+    [
+        lambda t: t.replace("/ plant_tables.q", "/ plant_tables.q (reworded)", 1),
+        lambda t: t + "/ a new comment at the end\n\n",
+        lambda t: t.replace(
+            ".qetl.plant.trades:([]", "/ a line comment before trades\n.qetl.plant.trades:([]", 1
+        ),
+        lambda t: re.sub(r"(\.qetl\.plant\.trades:\(\[\].*)$", r"\1  / trailing", t, flags=re.M),
+        lambda t: t + "/\na block comment\n.qetl.plant.not_a_table:([]time:`timestamp$())\n\\\n",
+    ],
+    ids=["reworded", "appended", "line-before", "trailing", "block"],
+)
+def test_a_comment_only_edit_keeps_the_metadata_fresh(tmp_path, edit):
+    root = _tree(tmp_path)
+    plant = root / TABLES_FILE
+    text = plant.read_text()
+    plant.write_text(edit(text))
+    assert plant.read_text() != text
+    assert "trades" in plant_metadata.load(root).own()
+
+
+@pytest.mark.parametrize(
+    "edit",
+    [
+        lambda t: t.replace("fill_id:`symbol$())", "fill_id:`symbol$(); venue:`symbol$())", 1),
+        lambda t: t.replace('"plant: no table "', '"plant: no such table "', 1),  # in a string
+    ],
+    ids=["column", "string"],
+)
+def test_a_code_edit_makes_the_metadata_stale(tmp_path, edit):
+    root = _tree(tmp_path)
+    plant = root / TABLES_FILE
+    text = plant.read_text()
+    plant.write_text(edit(text))
+    assert plant.read_text() != text
+    with pytest.raises(SchemaMetadataError, match="is stale"):
+        plant_metadata.load(root)
+
+
+@pytest.mark.parametrize(
     ("damage", "why"),
     [
         (lambda t: "{not json", "is not valid"),
         (
-            lambda t: t.replace('"exporter_version": 1', '"exporter_version": 0'),
+            lambda t: t.replace('"exporter_version": 2', '"exporter_version": 0'),
             "exporter version 0",
         ),
         (lambda t: t.replace('"tables"', '"tablez"'), "is not valid"),
@@ -260,7 +300,8 @@ def test_inputs_changing_while_q_runs_are_refused(tmp_path, monkeypatch):
     found = {"tables": []}
 
     def export(where: Path) -> dict:
-        (where / TABLES_FILE).write_text((where / TABLES_FILE).read_text() + "/ edited\n")
+        plant = where / TABLES_FILE
+        plant.write_text(plant.read_text() + ".qetl.plant.late:([]time:`timestamp$())\n")
         return found
 
     monkeypatch.setattr(plant_metadata_gen, "export", export)

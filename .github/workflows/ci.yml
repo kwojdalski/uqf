@@ -150,18 +150,18 @@ jobs:
         # PeachQ cannot switch into a nested context, so this tree defines
         # every name fully qualified from the root (#1411).
         if: ${{ !cancelled() }}
-        run: python3 scripts/gates/check_nested_contexts.py
+        run: python3 scripts/gates/check.py nested-contexts
       - name: Check q modules stay under their line budget
         # The q counterpart of test_module_split.py (#970): a file over the
         # limit splits, or is listed with a reason and a cap that only shrinks.
         if: ${{ !cancelled() }}
-        run: python3 scripts/gates/check_q_module_size.py
+        run: python3 scripts/gates/check.py q-module-size
       - name: Check every q registry stores its values enlisted
         # A dict of same-keyed dicts collapses into a table on its first
         # insert, and the next differently-shaped entry is refused (#1028).
         # The enlist idiom was prose in three files; this holds it (#1030).
         if: ${{ !cancelled() }}
-        run: python3 scripts/gates/check_registry_enlist.py
+        run: python3 scripts/gates/check.py registry-enlist
       - name: Check the rendered diagrams match their d2 sources
         # An .svg committed beside its .d2 is a derived artefact, and this
         # tree knows what happens to those without a gate - docs/man.q once
@@ -194,14 +194,14 @@ jobs:
         # .qetl.cfg.env_name and appears in no source file, so grep is not a
         # substitute for this page.
         if: ${{ !cancelled() }}
-        run: python3 scripts/gates/check_env_reference.py --check
+        run: python3 scripts/gates/check.py env-reference
       - name: Check the pipeline declaration reference lists every key
         # docs/reference/pipeline-declarations.md is hand-written, like the
         # environment page, and for the same reason drifts the day a key is
         # added or renamed. Checked in both directions against the key lists
         # in the declaring q files.
         if: ${{ !cancelled() }}
-        run: python3 scripts/gates/check_declaration_reference.py
+        run: python3 scripts/gates/check.py declaration-reference
   peachq-q:
     name: PeachQ q tests
     timeout-minutes: 20
@@ -422,6 +422,22 @@ jobs:
         uses: quarto-dev/quarto-actions/setup@v2
         with:
           version: "1.10.18"
+      - name: Restore PeachQ built from its pinned commit
+        # The render's pre-render step writes the q API pages under
+        # docs/reference/q-api/ from the qDoc comments, which needs a q
+        # (scripts/generate/q_api_docs.py). Same pin and cache as peachq-q.
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/uqf/peachq
+          key: peachq-${{ hashFiles('scripts/peachq.json') }}-${{ runner.os }}-${{ runner.arch }}
+      - name: Provide PeachQ for the q API pages
+        # Builds the pinned commit on a cold cache (about 40s). Through QCMD
+        # only, as everywhere else: nothing is put on PATH.
+        shell: bash
+        run: |
+          set -euo pipefail
+          bin="$(python3 scripts/peachq.py)"
+          echo "QCMD=$bin" >> "$GITHUB_ENV"
       - name: Check every link and anchor in docs/ resolves
         # WITHOUT --allow-missing, which the pre-commit hook passes. The
         # hook's flag exists so a q developer without Quarto is not blocked;
