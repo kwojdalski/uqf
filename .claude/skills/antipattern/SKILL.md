@@ -61,7 +61,7 @@ Scan for the following, in order of severity:
 - Single-key dict construction via `` `key!value `` on an atom key --- collides
   with q's enum overload (type 20h); must be `(enlist key)!(enlist value)`
 - A `\d` that names more than one level (` \d .qf.px `, ` \d .qpipe.job.x `) ---
-  PeachQ cannot load one and `check_nested_contexts.py` refuses it. Define names
+  PeachQ cannot load one and `check.py nested-contexts` refuses it. Define names
   fully qualified from the root (`.qpipe.job.<worker name>.facts:{...}`), with a
   `\d .` at most. A new namespace beside the seven `.qf.<domain>` ones is the
   same mistake; a bounded worker's namespace is `.qpipe.job.<worker name>`,

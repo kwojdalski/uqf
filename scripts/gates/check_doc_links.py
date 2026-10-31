@@ -2,7 +2,7 @@
 """Check that every relative link and cross-reference in ``docs/`` resolves.
 
 The gap this closes. ``check_doc_references.py`` holds the prose to the q
-functions it names; ``check_declaration_reference.py`` holds the declaration
+functions it names; ``check.py declaration-reference`` holds the declaration
 page to the declared keys; ``generate_*.py --check`` hold the generated
 artifacts to their sources. Nothing held a *link* to anything. A page could
 point at ``../guides/gone.md`` and every gate passed, because a path that

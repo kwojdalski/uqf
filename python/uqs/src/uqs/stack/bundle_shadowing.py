@@ -5,25 +5,44 @@ Split from stack/bundles.py, which holds the plan these checks refuse inside.
 
 from __future__ import annotations
 
-import re
 from pathlib import Path
 
+from uqs.model import plant_metadata
 from uqs.model.load_plan import load_plan
 from uqs.paths import UqsError, paths_for_root
 from uqs.stack.bundle_blocks import BundleError
 from uqs.stack.install import Item
 
-#: `name:([]...)` as bundles.py reads a plant table.
-_TABLE = re.compile(r"^(?:\.qetl\.plant\.)?([a-z_][a-z0-9_]*):\(\[\]")
+
+def known_tables(root: Path, bundle: str) -> set[str]:
+    """The plant tables the tree at `root` defines outside `bundle`'s own block -
+    every one but those its ledger entry says it installed - plus those of the
+    TorQ starter pack's database.q (quote, trade...), which a bundle table of the
+    same name would redefine at the next load. The pack adds none when absent.
+
+    The tree's side as q evaluated it (#1781): trusted code, already installed.
+    The bundle's own tables.q is read as text by bundles.table_lines, never run."""
+    from uqs.stack.bundles import read_ledger
+
+    try:
+        meta = plant_metadata.load(root)
+        theirs = meta.vendored(paths_for_root(root).torqapphome / "database.q")
+    except plant_metadata.SchemaMetadataError as exc:
+        raise BundleError(str(exc)) from None
+    mine = set(read_ledger(root).get(bundle, {}).get("tables", []))
+    return (set(meta.own()) - mine) | set(theirs)
 
 
-def known_tables(root: Path, tree_text: str) -> set[str]:
-    """The plant tables `tree_text` defines plus those of the TorQ starter pack's
-    database.q (quote, trade...), which a bundle table of the same name would
-    redefine at the next load. The pack adds none when absent (no lib/)."""
-    path = paths_for_root(root).torqapphome / "database.q"
-    text = tree_text + (path.read_text() if path.is_file() else "")
-    return {m.group(1) for ln in text.splitlines() if (m := _TABLE.match(ln))}
+def evaluate_tables(root: Path, bundle: str) -> None:
+    """After `bundle` is installed: q evaluates the tree's plant tables again
+    (#1781), so the next plan, and every reader, sees what it installed. A tree
+    that carries no schema metadata at all (a stand-in) is left as it is."""
+    from uqs.model import plant_metadata_gen
+
+    try:
+        plant_metadata_gen.ensure(root, create=False)
+    except plant_metadata.SchemaMetadataError as exc:
+        raise BundleError(f"bundle {bundle} is installed, but {exc}") from None
 
 
 def refuse(root: Path, items: list[Item], stale: list[Path]) -> None:
