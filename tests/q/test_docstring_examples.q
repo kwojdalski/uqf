@@ -55,6 +55,11 @@
 
 / --- fixtures for the examples that need one -----------------------------
 
+/ The status directory the examples read, emptied by bind_fixtures. This
+/ process's own, so a q-unit run and a run_examples.q run side by side never
+/ empty each other's.
+.qt.man.examples.status_dir:first system"mktemp -d"
+
 / Twelve @eg lines reference a `tape`, `quotes`, `requests` or `b` that only
 / exists in a caller's session. They were reported as `error` and tolerated,
 / because - as this file used to say - inventing a fixture for each would be
@@ -71,6 +76,17 @@
 / saying that, since an @eg a reader cannot paste is worse documentation
 / than one that goes unchecked.
 .qt.man.examples.bind_fixtures:{[]
+    / An EMPTY status directory, as a fresh process has. Examples such as
+    / .qetl.run.migration_plan[] document what they return before any run has
+    / been recorded, and they read wherever UQF_STATUS_DIR points. Other
+    / suites point it at build/test-status in their beforeNamespace hooks,
+    / which run outside the harness's per-test restore, and leave an etl_runs
+    / ledger there. Inherited, that made these tests pass only when this suite
+    / ran first, and fail in reverse order (#1814). The harness puts the
+    / variable back after each test, so this setting does not leak out either.
+    setenv[`UQF_STATUS_DIR;.qt.man.examples.status_dir];
+    system"rm -rf ",.qt.man.examples.status_dir;
+    system"mkdir -p ",.qt.man.examples.status_dir;
     / Two shapes, two names. The hit family needs a `hit` column and the
     / reject family a `reject` one; each already has a builder, and the docs
     / now name whichever they require rather than calling both `requests`.
