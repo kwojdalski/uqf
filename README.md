@@ -112,11 +112,10 @@ uv run uqs job new eod_rates --kind backfill --dataset eod_rates \
 The scaffold is meant to fail until you fill it in; [Adding a data
 pipeline](docs/guides/new-pipeline.md) walks one through end to end.
 
-**Check it all still works.** One lane per layer, listed under
-[Testing](#testing):
+**Check it all still works.** Selectors are listed under [Testing](#testing):
 
 ```
-./scripts/test.py all
+uv run pytest
 ```
 
 ## Components
@@ -157,13 +156,7 @@ Component READMEs: [`python/uqs/`](python/uqs/README.md) (the stack CLI),
 
 ## Testing
 
-```
-scripts/test.py python    # orchestrator and frontend
-scripts/test.py all       # every lane except the coverage lanes and the live-stack lanes
-```
-
-One lane per layer; run the one matching what you changed.
-`scripts/test.py --help` lists every lane.
+`scripts/test.py` keeps `q-coverage` and `coverage` for now (below).
 
 pytest is becoming the one way to run every test, with qUnit and q coverage as
 the backends it drives (#1808); the lanes move to it one at a time, each leaving
@@ -182,7 +175,14 @@ uv run pytest tests/qrun/test_doc_blocks.py -m peachq   # ... and on PeachQ (was
 uv run pytest tests/qrun/test_documented_examples.py   # every @eg in src/ and scripts/ (was q-examples)
 uv run pytest tests/qrun/test_process_runners.py       # real processes, a second q, a temp HDB (was q-backfill-process,
                                                        # q-two-instances, q-remote-writer, q-metatables-hdb; -k one of those)
+uv run pytest -m release                           # release checks: the q suite reversed, each sidecar bundle installed and tested
+uv run pytest -m live_stack                        # the attach workflow on isolated TorQ stacks (was attach-stack)
+uv run pytest tests/remote -m docker               # a stack on another machine, in Docker (was remote-stack)
+uv run pytest tests/qrun/test_external_smoke.py -m external --smoke-targets HOST:PORT --smoke-tables TABLE:COL,COL
 ```
+
+`release`, `live_stack`, `docker` and `external` are opt-in: a test carrying one
+skips, saying how to select it, unless `-m` names it.
 
 `-m kdbx` and `-m peachq` select by interpreter. `--require-q kdbx` (or
 `peachq`) turns a skip for a missing interpreter into a failure: the hooks pass

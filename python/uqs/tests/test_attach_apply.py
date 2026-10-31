@@ -1,6 +1,6 @@
 """Apply, verify and publish on a REAL TorQ 5.2.12 stack (#1424).
 
-Opt-in (UQS_ATTACH_STACK_TEST=1 / `python3 scripts/test.py attach-stack`). Each
+Opt-in (`uv run pytest -m live_stack`). Each
 test gets its own stack - the starter pack as it ships, its own ports and data
 - because applying changes it; a stack starts in a few seconds. The publisher
 is what a job's process does: `.u.upd` on the tickerplant.

@@ -1,9 +1,5 @@
-"""Tests for scripts/test.py's smoke lane options, its PeachQ lane and its q arguments.
-
-The lane runs tests/q/smoke_external_metadata.q, which reads its sources off
-its own command line. These check that --targets, --tables and --timeout-ms
-reach it as those flags, and are refused for every other lane.
-"""
+"""Tests for what is left of scripts/test.py: its q-coverage lane's arguments,
+and that the lanes moved to pytest are gone from it (#1808)."""
 
 from __future__ import annotations
 
@@ -33,46 +29,13 @@ def ran(monkeypatch) -> list[tuple[str, str, tuple[str, ...]]]:
     return calls
 
 
-def test_the_smoke_options_reach_the_script_as_its_own_flags(ran):
-    argv = ["smoke", "--targets", "h1:5010", "h2:5011", "--tables", "quote:sym,bid", "trade:sym"]
-    assert runner.main([*argv, "--timeout-ms", "3000"]) == 0
-    assert ran == [
-        (
-            "smoke",
-            "tests/q/smoke_external_metadata.q",
-            (
-                "-targets",
-                "h1:5010",
-                "h2:5011",
-                "-tables",
-                "quote:sym,bid",
-                "trade:sym",
-                "-timeout_ms",
-                "3000",
-            ),
-        )
-    ]
-
-
-def test_smoke_with_no_options_passes_no_flags_so_the_script_can_skip(ran):
-    """An unconfigured checkout is SKIP, not a failure."""
-    assert runner.main(["smoke"]) == 0
-    assert ran == [("smoke", "tests/q/smoke_external_metadata.q", ())]
-
-
-def test_the_smoke_options_are_refused_for_another_lane(ran):
-    with pytest.raises(SystemExit) as exc:
-        runner.main(["python", "--targets", "h1:5010"])
-    assert exc.value.code == 2
-    assert ran == []
-
-
 def test_the_lanes_moved_to_pytest_are_gone():
     """These run under pytest now (tests/qrun/), and only there (#1808): no
     lane runs them a second way."""
     moved = ("q-scripts", "q-docs", "q-docs-peachq", "q-examples", "q-backfill-process",
              "q-two-instances", "q-remote-writer", "q-metatables-hdb", "q-unit", "q-order",
-             "q-unit-peachq")  # fmt: skip
+             "q-unit-peachq", "bundles", "smoke", "attach-stack", "remote-stack",
+             "stack-smoke")  # fmt: skip
     for lane in moved:
         assert lane not in runner.LANES
         assert lane not in runner.ALL
@@ -80,7 +43,7 @@ def test_the_lanes_moved_to_pytest_are_gone():
 
 def test_another_lane_refuses_arguments_it_would_drop(ran):
     with pytest.raises(SystemExit) as exc:
-        runner.main(["bundles", "-files", "test_a.q"])
+        runner.main(["python", "-files", "test_a.q"])
     assert exc.value.code == 2
     assert ran == []
 

@@ -140,5 +140,5 @@ skill](../../.claude/skills/new-job/SKILL.md):
 3. the docstrings --- `docs/man.q` reads them when it loads
 
 Then `uv run pytest tests/qrun/test_q_suite.py::test_the_q_suite_passes`, and
-`scripts/test.py stack-smoke` against a real stack, which is the only thing that
-proves the wiring.
+`uv run python scripts/gates/stack_smoke.py` against a real stack, which is the
+only thing that proves the wiring.
