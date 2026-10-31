@@ -259,10 +259,10 @@ invariants, is `uqf-q-traps.md`.
   writes only under its own `tmp_path`, never into the checkout, and one that
   must not share (a whole stack on fixed ports) carries
   `@pytest.mark.xdist_group("torq-stack")`. Named lanes run with
-  `uv run python scripts/test.py <lane>`: `q-unit`, `q-unit-peachq`,
-  `q-examples`, `bundles`, `python`, `smoke`. Lanes are moving into pytest
-  (#1808): the worked examples are `tests/qrun/test_worked_examples.py`, the
-  docs' q blocks `tests/qrun/test_doc_blocks.py` (`-m kdbx` / `-m peachq`).
+  `uv run python scripts/test.py <lane>`: `q-unit`, `q-unit-peachq`, `bundles`,
+  `python`, `smoke`. Lanes are moving into pytest (#1808): the worked examples
+  are `tests/qrun/test_worked_examples.py`, the docs' q blocks
+  `tests/qrun/test_doc_blocks.py` (`-m kdbx` / `-m peachq`).
 - **V3** Assert the message, not just the throw. Use
   `.qunit.assertThrows[f;arg;"*expected text*";"why"]`. `assertError` passes on
   a typo in the test itself (`CLAUDE.md`).

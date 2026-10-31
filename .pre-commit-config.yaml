@@ -257,17 +257,17 @@ repos:
                 *) echo "q-tests: unexpected selection: $selection" >&2; exit 1 ;;
               esac
             fi
-            python3 scripts/test.py q-examples
-            # The worked examples under scripts/examples/, run as scripts -
-            # by pytest, which owns them (#1808): the python-tests hook leaves
-            # them out (-m "not q_backend"), so a commit runs each once, here,
-            # on KDB-X. --require-q kdbx: without it they would skip, and the
-            # hook would pass having run nothing. Nothing ran them until the
-            # q-scripts lane existed, and the first scenario added there found
-            # a false claim in plant_tables.q about `quotes` being usable by
-            # cross_book_at unreshaped.
-            uv run pytest -q -n auto --dist loadgroup --require-q kdbx tests/qrun/test_worked_examples.py
-        files: '\.q$|^tests/qrun/(qrun_support|test_worked_examples)\.py$'
+            # Every documented @eg (tests/q/run_examples.q) and the worked
+            # examples under scripts/examples/, run as scripts - by pytest,
+            # which owns them (#1808): the python-tests hook leaves them out
+            # (-m "not q_backend"), so a commit runs each once, here, on
+            # KDB-X. --require-q kdbx: without it they would skip, and the
+            # hook would pass having run nothing. Nothing ran the worked
+            # examples until the q-scripts lane existed, and the first
+            # scenario added there found a false claim in plant_tables.q about
+            # `quotes` being usable by cross_book_at unreshaped.
+            uv run pytest -q -n auto --dist loadgroup --require-q kdbx tests/qrun/test_documented_examples.py tests/qrun/test_worked_examples.py
+        files: '\.q$|^tests/qrun/(qrun_support|test_documented_examples|test_worked_examples)\.py$'
         pass_filenames: false
 
       # The ```q blocks in docs/ marked `<!-- q-example: ... -->`; CI runs the
