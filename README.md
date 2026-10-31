@@ -176,6 +176,9 @@ uv run pytest -m "not q_backend"                   # without the q scripts run a
 uv run pytest tests/qrun/test_worked_examples.py   # every scripts/examples/*.q (was q-scripts), on KDB-X
 uv run pytest tests/qrun/test_doc_blocks.py -m kdbx     # the docs' marked q blocks on KDB-X (was q-docs)
 uv run pytest tests/qrun/test_doc_blocks.py -m peachq   # ... and on PeachQ (was q-docs-peachq); --peachq PATH picks one
+uv run pytest tests/qrun/test_documented_examples.py   # every @eg in src/ and scripts/ (was q-examples)
+uv run pytest tests/qrun/test_process_runners.py       # real processes, a second q, a temp HDB (was q-backfill-process,
+                                                       # q-two-instances, q-remote-writer, q-metatables-hdb; -k one of those)
 ```
 
 `-m kdbx` and `-m peachq` select by interpreter. `--require-q kdbx` (or
