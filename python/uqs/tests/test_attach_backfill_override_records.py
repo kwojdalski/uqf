@@ -17,7 +17,7 @@ from pathlib import Path
 
 import attach_backfill_support as support
 import pytest
-from attach_backfill_support import WORKER, facts_of, make_world, stub_runner_popen
+from attach_backfill_support import WORKER, facts_of, make_world
 from test_attach_backfill_eod_override import IN_FENCE, REASON, WAIVED
 from typer.testing import CliRunner
 
@@ -66,7 +66,7 @@ def _popen(world, record: list, *, fail: bool = False):
             raise FileNotFoundError(2, "No such file or directory", argv[0])
         return _Started()
 
-    stub_runner_popen(world.monkeypatch, popen)
+    world.monkeypatch.setattr(backfill_run.subprocess, "Popen", popen)
 
 
 def _launch(world, mode="run", **kw):
