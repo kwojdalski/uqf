@@ -16,8 +16,9 @@ arguments (nothing for ALL, which is the runner without them).
 The q-tests hook and scripts/dev/attest_kdbx.py run what `--hook` (plan())
 decides: the suites `origin/master...HEAD`, plus what is being committed,
 reaches - or the whole suite when this says ALL, cannot run, or
-UQF_Q_TESTS_FULL=1. An attestation records the subset by its digest, and CI's
-check makes the same selection to verify it (scripts/gates/check_kdbx_attestation.py).
+UQF_Q_TESTS_FULL=1 or UQF_HOOKS_FULL=1 is set. An attestation records the
+subset by its digest, and CI's check makes the same selection to verify it
+(scripts/gates/check_kdbx_attestation.py).
 
 Needs a qlinter with `qlinter analyze graph` - scripts/gates/qlint_graph.py
 says which and where it looks - and refuses without one rather than guess.
@@ -289,6 +290,34 @@ def covers(lit: str, path: str, known: set[str]) -> bool:
     if path.startswith(lit.rstrip("/") + "/"):
         return True
     return lit not in known and path.startswith(lit)
+
+
+def q_readers(paths: Iterable[str], root: Path = REPO) -> dict[str, list[str]]:
+    """{path: the q files naming it by a path literal} for each path that is
+    not a .q file - the edge select() walks a data file from - and {path:
+    [path]} for a .q file. Read without drawing the graph: no qlinter, about
+    a second. For callers that only need to know whether a q process can read
+    a file at all: which Python tests a commit reaches
+    (scripts/dev/python_tests_hook.py, #1879) and whether CI's q job runs
+    (scripts/dev/ci_scope.py). Vendored lib/ is not read, as in build()."""
+    files = tracked(root)
+    dirs = {str(p) for f in files for p in Path(f).parents if str(p) != "."}
+    known = set(files) | dirs
+    tops = {f.split("/", 1)[0] for f in files}
+    lits = {
+        f: path_literals((root / f).read_text(errors="replace"), tops)
+        for f in files
+        if f.endswith(".q") and not f.startswith("lib/")
+    }
+    out: dict[str, list[str]] = {}
+    for path in paths:
+        if path.endswith(".q"):
+            out[path] = [path]
+            continue
+        out[path] = sorted(
+            f for f, ls in lits.items() if any("/" in x and covers(x, path, known) for x in ls)
+        )
+    return out
 
 
 def definitions(text: str) -> list[str]:
@@ -820,6 +849,19 @@ def uncommitted(root: Path = REPO) -> list[str]:
 BASE = "origin/master"
 #: `1` runs the whole q suite whatever changed.
 FULL_ENV = "UQF_Q_TESTS_FULL"
+#: `1` runs every commit hook in full (scripts/dev/hooks_full.py, #1879): the
+#: whole q suite among them.
+HOOKS_FULL_ENV = "UQF_HOOKS_FULL"
+
+
+def full_requested() -> str | None:
+    """The variable asking for the whole q suite, when one does."""
+    for name in (FULL_ENV, HOOKS_FULL_ENV):
+        if os.environ.get(name) == "1":
+            return name
+    return None
+
+
 #: The decision attest_kdbx.py made, handed to the hook it runs - one
 #: selection per attestation, the one its trailer records, not a second one
 #: worked out inside the hook.
@@ -897,10 +939,11 @@ def _changed(base: str, root: Path, with_uncommitted: bool) -> list[str]:
 
 
 def plan(base: str = BASE, root: Path = REPO, *, with_uncommitted: bool = True) -> Plan:
-    """What the q-tests gate runs here: the whole suite under FULL_ENV, else
-    what `base...HEAD` (and, in a hook, the commit being made) reaches."""
-    if os.environ.get(FULL_ENV) == "1":
-        return Plan(None, f"${FULL_ENV}=1")
+    """What the q-tests gate runs here: the whole suite under FULL_ENV or
+    HOOKS_FULL_ENV, else what `base...HEAD` (and, in a hook, the commit being
+    made) reaches."""
+    if name := full_requested():
+        return Plan(None, f"${name}=1")
     try:
         changed = _changed(base, root, with_uncommitted)
     except subprocess.CalledProcessError as e:
@@ -912,7 +955,7 @@ def hook_line(root: Path = REPO) -> Plan:
     """The q-tests hook's decision: the one attest_kdbx.py handed over, else
     plan() - which falls back to the whole suite, never to nothing."""
     decided = os.environ.get(DECIDED_ENV)
-    if decided is not None and os.environ.get(FULL_ENV) != "1":
+    if decided is not None and not full_requested():
         return parse_line(decided)
     return plan(root=root)
 
@@ -1106,13 +1149,13 @@ def parse_coverage_line(line: str) -> CoveragePlan:
 
 def coverage_hook_line(root: Path = REPO) -> CoveragePlan:
     """The q-coverage hook's decision: the one attest_kdbx.py handed over,
-    else the whole suite under FULL_ENV, else coverage_for what `BASE...HEAD`
+    else the whole suite under FULL_ENV or HOOKS_FULL_ENV, else coverage_for what `BASE...HEAD`
     and the commit being made reach."""
     decided = os.environ.get(COVERAGE_DECIDED_ENV)
-    if decided is not None and os.environ.get(FULL_ENV) != "1":
+    if decided is not None and not full_requested():
         return parse_coverage_line(decided)
-    if os.environ.get(FULL_ENV) == "1":
-        return CoveragePlan(None, None, f"${FULL_ENV}=1")
+    if name := full_requested():
+        return CoveragePlan(None, None, f"${name}=1")
     try:
         changed = _changed(BASE, root, True)
     except subprocess.CalledProcessError as e:
@@ -1148,7 +1191,8 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help=(
             f"the q-tests hook's line: ALL, NONE or `-files ...`, for {BASE}...HEAD and "
-            f"what is uncommitted; ALL when ${FULL_ENV}=1 or the selector cannot run; "
+            f"what is uncommitted; ALL when ${FULL_ENV}=1 or ${HOOKS_FULL_ENV}=1, or the "
+            f"selector cannot run; "
             f"${DECIDED_ENV} if set. Always exits 0 with a line"
         ),
     )

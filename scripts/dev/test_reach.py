@@ -1,0 +1,420 @@
+"""What each Python test reads and starts, beside testmon's record (#1879).
+
+testmon records the Python each test EXECUTES, and selects by it. What it
+cannot see is everything else a test depends on: a file it reads as data (a
+CSV, a document, a .q read as text), a directory it lists (a gate that globs
+src/), and a process it starts (a q, a gate run as a script, a shell starting
+a TorQ stack). That is what decides which tests a commit of anything but
+Python reaches, and this records it the way testmon records its own: as the
+tests run, per test, into a file at the repository root.
+
+    uv run pytest --record-reach .testreach.json ...   # what the python-tests hook passes
+
+`--record-reach PATH` merges into PATH, replacing what it held for each test
+that ran. Under xdist each worker writes its part beside PATH and the
+controller merges them.
+
+WHO IS CHARGED WITH WHAT IS SEEN (an `owner`):
+
+* the test running - its setup, call and teardown;
+* the fixture being set up, while it is: a session fixture's q starts once,
+  under whichever test needs it first, so it is the FIXTURE's, and every
+  test whose fixture closure holds that fixture inherits it;
+* the test module, while it is imported at collection.
+
+A test reaches what it and every owner it inherits from saw (`reach`).
+
+WHAT IS SEEN, through Python's audit hooks (sys.addaudithook):
+
+* `reads` - files under the repository opened for reading. Not .py files:
+  executing Python is testmon's record, and the import machinery opens every
+  module it loads, whoever asked for it first;
+* `lists` - directories under the repository listed (os.listdir, os.scandir,
+  which os.walk and pathlib's glob use, and glob.glob's fixed prefix);
+* `starts` - the kinds of process started (subprocess.Popen, os.posix_spawn,
+  os.system, os.exec*), by the program run (`kind_of`):
+    git     reads the repository's file list; only adding or removing a file
+            can change what it sees, so it counts as listing the root when
+            it runs inside the repository;
+    python  a Python child - a gate run as a script, `uv run`, uqs: what it
+            reads and imports is not seen, so it is taken to reach any file;
+    q       a q, or a shell (torq.sh starts one): reaches .q and shell files,
+            and what a q file names by a path literal (test_impact.q_readers);
+    other   anything else: reaches any file - but for a few programs that
+            read none of it (ps, hostname, ...), which are not recorded;
+* `scripts` - the repository .py files a Python child was started on.
+
+What this cannot see, the python-tests hook does not pretend to: a file read
+by a cached loader is charged to the first test that loaded it in each
+worker, and a Python child's own reads are not seen at all (hence `python`
+reaching everything). CI runs the whole suite on every pull request.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import re
+import sys
+from collections import defaultdict
+from collections.abc import Iterable
+from pathlib import Path
+
+import pytest
+
+REPO = Path(__file__).resolve().parents[2]
+
+#: The record, beside testmon's .testmondata (both gitignored).
+RECORD = REPO / ".testreach.json"
+VERSION = 1
+
+#: Not charged to anyone: tooling, caches and what the tests themselves write.
+_IGNORED_DIRS = {
+    ".git",
+    ".venv",
+    "__pycache__",
+    ".pytest_cache",
+    ".ruff_cache",
+    "node_modules",
+    "output",
+    ".claude",
+}
+_IGNORED_SUFFIXES = (".py", ".pyc", ".pyi", ".so")
+_IGNORED_NAMES = {".testmondata", ".testmondata-wal", ".testmondata-shm"}
+
+#: Programs that run another program: classified by what they run.
+_WRAPPERS = {"env", "timeout", "nice", "nohup", "stdbuf", "exec", "command", "time"}
+_PYTHON = {"uv", "uvx", "uqs", "pytest", "pre-commit", "pip"}
+_SHELLS = {"bash", "sh", "zsh", "dash"}
+_DURATION = re.compile(r"^\d+(\.\d+)?[smhd]?$")
+#: Programs that read no file of the repository: not recorded at all.
+_INERT = {
+    "ps", "pgrep", "pkill", "kill", "lsof", "hostname", "uname", "which", "sleep", "id",
+    "whoami", "true", "false", "date", "getconf", "sysctl", "sw_vers", "nproc", "tty",
+}  # fmt: skip
+
+KINDS = ("git", "python", "q", "other")
+
+
+def kind_of(argv: list[str], qcmd: str | None = None) -> str:
+    """What kind of process `argv` starts (see the module docstring)."""
+    words = [w for w in argv if w]
+    while words:
+        name = os.path.basename(words[0])
+        if name in _WRAPPERS:
+            # its options, VAR=value and a duration (timeout 30) before the program
+            words = words[1:]
+            while words and (
+                words[0].startswith("-") or "=" in words[0] or _DURATION.match(words[0])
+            ):
+                words = words[1:]
+            continue
+        if name in _INERT:
+            return "inert"
+        if name == "git":
+            return "git"
+        if name.startswith("python") or name in _PYTHON or words[0] == sys.executable:
+            return "python"
+        if name in ("q", "peachq") or (qcmd and words[0] == qcmd) or name.endswith(".sh"):
+            return "q"
+        if name in _SHELLS:
+            return "q"
+        return "other"
+    return "other"
+
+
+def _rel(path: object, base: str | None = None) -> str | None:
+    """`path` relative to the repository, or None when it is not in it or is
+    not worth recording."""
+    if isinstance(path, bytes):
+        path = os.fsdecode(path)
+    elif isinstance(path, os.PathLike):
+        path = os.fspath(path)
+    if not isinstance(path, str):
+        return None  # a file descriptor
+    full = os.path.normpath(os.path.join(base or os.getcwd(), path))
+    root = str(REPO)
+    if full == root:
+        return "."
+    if not full.startswith(root + os.sep):
+        return None
+    rel = full[len(root) + 1 :]
+    parts = rel.split(os.sep)
+    if _IGNORED_DIRS.intersection(parts) or parts[-1] in _IGNORED_NAMES:
+        return None
+    return "/".join(parts)
+
+
+def _glob_prefix(pattern: str) -> str:
+    """The directory a glob pattern lists from: its components before the first wildcard."""
+    parts = []
+    for part in pattern.replace(os.sep, "/").split("/"):
+        if any(c in part for c in "*?["):
+            break
+        parts.append(part)
+    return "/".join(parts) or "."
+
+
+class Recorder:
+    """The pytest plugin: charges what each owner reads, lists and starts."""
+
+    def __init__(self, path: Path, worker: str | None = None) -> None:
+        self.path = path
+        self.worker = worker
+        self.stack: list[str] = []
+        self.owners: dict[str, dict[str, set[str]]] = defaultdict(lambda: defaultdict(set))
+        self.tests: dict[str, list[str]] = {}
+        self.qcmd = os.environ.get("QCMD")
+        self._busy = False
+
+    # --- what is seen -----------------------------------------------------
+    def _charge(self, field: str, value: str) -> None:
+        if self.stack:
+            self.owners[self.stack[-1]][field].add(value)
+
+    def audit(self, event: str, args: tuple) -> None:
+        if self._busy or not self.stack:
+            return
+        self._busy = True
+        try:
+            self._audit(event, args)
+        except Exception:  # an audit hook that raises aborts what it audits
+            pass
+        finally:
+            self._busy = False
+
+    def _audit(self, event: str, args: tuple) -> None:
+        if event == "open":
+            path, mode, flags = args
+            if isinstance(mode, str):
+                if not ("r" in mode or "+" in mode):
+                    return
+            elif isinstance(flags, int) and flags & (os.O_WRONLY | os.O_RDWR) == os.O_WRONLY:
+                return
+            rel = _rel(path)
+            if rel and rel != "." and not rel.endswith(_IGNORED_SUFFIXES):
+                self._charge("reads", rel)
+        elif event in ("os.listdir", "os.scandir"):
+            rel = _rel(args[0] if args and args[0] is not None else ".")
+            if rel:
+                self._charge("lists", rel)
+        elif event in ("glob.glob", "glob.glob/2"):
+            root = args[2] if event == "glob.glob/2" and len(args) > 2 else None
+            rel = _rel(_glob_prefix(os.fspath(args[0])), os.fspath(root) if root else None)
+            if rel:
+                self._charge("lists", rel)
+        elif event == "subprocess.Popen":
+            executable, argv, cwd, _env = args
+            if isinstance(argv, (str, bytes)):
+                argv = os.fsdecode(argv).split()
+            argv = [os.fsdecode(a) if isinstance(a, bytes) else str(a) for a in argv or []]
+            if executable is not None and argv:
+                argv = [os.fsdecode(executable), *argv[1:]]
+            self._start(argv, os.fsdecode(cwd) if cwd is not None else None)
+        elif event in ("os.posix_spawn", "os.exec", "os.spawn"):
+            path, argv = args[1:3] if event == "os.spawn" else args[0:2]
+            argv = list(argv or [])
+            self._start([os.fsdecode(path), *[str(a) for a in argv[1:]]], None)
+        elif event == "os.system":
+            self._start(os.fsdecode(args[0]).split(), None)
+
+    def _start(self, argv: list[str], cwd: str | None) -> None:
+        kind = kind_of(argv, self.qcmd)
+        if kind == "inert":
+            return
+        self._charge("starts", kind)
+        if kind == "git" and _rel(cwd or ".") is not None:
+            self._charge("lists", ".")
+        if kind == "python":
+            for word in argv[1:]:
+                rel = _rel(word, cwd) if word.endswith(".py") else None
+                if rel and os.path.isfile(REPO / rel):
+                    self._charge("scripts", rel)
+
+    # --- who is charged ---------------------------------------------------
+    def _push(self, owner: str) -> None:
+        self.stack.append(owner)
+
+    def _pop(self) -> None:
+        self.stack.pop()
+
+    @pytest.hookimpl(wrapper=True)
+    def pytest_make_collect_report(self, collector):
+        if not isinstance(collector, pytest.Module):
+            return (yield)
+        self._push(module_key(collector.nodeid))
+        try:
+            return (yield)
+        finally:
+            self._pop()
+
+    @pytest.hookimpl(wrapper=True)
+    def pytest_runtest_protocol(self, item, nextitem):
+        nodeid = test_id(item.nodeid, item.keywords)
+        keys = [nodeid, module_key(item.nodeid)]
+        info = getattr(item, "_fixtureinfo", None)
+        for defs in getattr(info, "name2fixturedefs", {}).values():
+            if defs:
+                keys.append(fixture_key(defs[-1].baseid, defs[-1].argname))
+        self.tests[nodeid] = keys
+        self._push(nodeid)
+        try:
+            return (yield)
+        finally:
+            self._pop()
+
+    @pytest.hookimpl(wrapper=True)
+    def pytest_fixture_setup(self, fixturedef, request):
+        self._push(fixture_key(fixturedef.baseid, fixturedef.argname))
+        try:
+            return (yield)
+        finally:
+            self._pop()
+
+    # --- the record -------------------------------------------------------
+    def data(self) -> dict:
+        owners = {
+            key: {f: sorted(v) for f, v in sorted(fields.items()) if v}
+            for key, fields in self.owners.items()
+        }
+        return {"owners": {k: v for k, v in owners.items() if v}, "tests": self.tests}
+
+    def pytest_sessionfinish(self, session) -> None:
+        if self.worker:
+            part = self.path.with_name(f"{self.path.name}.{self.worker}.part")
+            part.write_text(json.dumps(self.data()))
+            return
+        parts = sorted(self.path.parent.glob(f"{self.path.name}.*.part"))
+        merged = merge(load(self.path), [self.data(), *(json.loads(p.read_text()) for p in parts)])
+        tmp = self.path.with_name(f".{self.path.name}.{os.getpid()}")
+        tmp.write_text(json.dumps(merged, indent=0, sort_keys=True))
+        os.replace(tmp, self.path)
+        for p in parts:
+            p.unlink(missing_ok=True)
+
+
+_ACTIVE: list[Recorder] = []
+_INSTALLED = False
+
+
+def _audit(event: str, args: tuple) -> None:
+    if _ACTIVE:
+        _ACTIVE[-1].audit(event, args)
+
+
+def install(recorder: Recorder) -> None:
+    """Make `recorder` the one the (once-installed) audit hook reports to."""
+    global _INSTALLED
+    if not _INSTALLED:
+        sys.addaudithook(_audit)
+        _INSTALLED = True
+    _ACTIVE[:] = [recorder]
+
+
+def module_key(nodeid: str) -> str:
+    return "module:" + nodeid.split("::", 1)[0]
+
+
+def fixture_key(baseid: str, argname: str) -> str:
+    return f"fixture:{baseid}::{argname}"
+
+
+def test_id(nodeid: str, keywords: Iterable[str] = ()) -> str:
+    """The id collection gives a test: xdist's loadgroup adds `@<group>` to a
+    grouped test's, which is dropped (as scripts/dev/pytest_shards.py does)."""
+    return re.sub(r"@[\w.-]+$", "", nodeid) if "xdist_group" in keywords else nodeid
+
+
+# --- reading the record -----------------------------------------------------
+
+
+def load(path: Path = RECORD) -> dict | None:
+    """The record at `path`, or None when there is none this can read."""
+    try:
+        data = json.loads(path.read_text())
+    except OSError, ValueError:
+        return None
+    if not isinstance(data, dict) or data.get("version") != VERSION:
+        return None
+    return data
+
+
+def merge(old: dict | None, runs: list[dict]) -> dict:
+    """`old` with each run's tests replaced and its owners' sightings added.
+
+    A test's own entry is replaced - it ran, and this is what it does now. A
+    module's or fixture's is added to, never narrowed: a run of a few tests
+    sets up only some of what a fixture can do."""
+    owners: dict[str, dict[str, set[str]]] = defaultdict(lambda: defaultdict(set))
+    tests: dict[str, list[str]] = dict((old or {}).get("tests", {}))
+    ran = {t for run in runs for t in run.get("tests", {})}
+    for key, fields in (old or {}).get("owners", {}).items():
+        if key in ran:
+            continue
+        for f, values in fields.items():
+            owners[key][f].update(values)
+    for run in runs:
+        tests.update(run.get("tests", {}))
+        for key, fields in run.get("owners", {}).items():
+            for f, values in fields.items():
+                owners[key][f].update(values)
+    return {
+        "version": VERSION,
+        "owners": {k: {f: sorted(v) for f, v in sorted(fs.items())} for k, fs in owners.items()},
+        "tests": tests,
+    }
+
+
+def reach(record: dict, nodeid: str) -> dict[str, set[str]]:
+    """Everything `nodeid` and the owners it inherits from saw."""
+    out: dict[str, set[str]] = defaultdict(set)
+    for key in record["tests"].get(nodeid, [nodeid]):
+        for f, values in record["owners"].get(key, {}).items():
+            out[f].update(values)
+    return out
+
+
+def _under(path: str, directory: str) -> bool:
+    return directory == "." or path == directory or path.startswith(directory.rstrip("/") + "/")
+
+
+def reached(
+    record: dict,
+    changes: list[tuple[str, str]],
+    q_reads: dict[str, list[str]],
+) -> dict[str, str]:
+    """{nodeid: why} for the tests that `changes` - (git status letter, path)
+    pairs - reach by the record. A .py path is testmon's, except as a script
+    a test started (`scripts`). `q_reads` is test_impact.q_readers' answer
+    for the non-Python paths: which q files name each."""
+    out: dict[str, str] = {}
+    for nodeid in record["tests"]:
+        seen = reach(record, nodeid)
+        for status, path in changes:
+            why = _why(seen, status, path, q_reads)
+            if why:
+                out[nodeid] = why
+                break
+    return out
+
+
+def _why(seen: dict[str, set[str]], status: str, path: str, q_reads: dict[str, list[str]]):
+    starts = seen.get("starts", set())
+    if path.endswith(".py"):
+        return f"starts {path}" if path in seen.get("scripts", ()) else None
+    if path in seen.get("reads", ()):
+        return f"reads {path}"
+    if status in "AD" and any(_under(path, d) for d in seen.get("lists", ())):
+        return f"lists the directory of {path}"
+    if "other" in starts:
+        return "starts a process this cannot see into"
+    if "python" in starts:
+        return "starts a Python child, whose reads are not recorded"
+    if "q" in starts and (path.endswith((".q", ".sh")) or q_reads.get(path)):
+        return f"starts a q, which {'loads' if path.endswith('.q') else 'reads'} {path}"
+    return None
+
+
+def starters(record: dict, kind: str) -> set[str]:
+    """The tests that start a process of `kind`."""
+    return {t for t in record["tests"] if kind in reach(record, t).get("starts", set())}

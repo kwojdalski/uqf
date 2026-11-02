@@ -49,6 +49,7 @@ PRE_COMMIT_COPIES = {
     ".github/workflows/ci.yml": CI,
     "install.sh": 'PRE_COMMIT="pre-commit==4.6.2"\n',
     "scripts/dev/attest_kdbx.py": 'PRE_COMMIT = "pre-commit==4.6.2"\n',
+    "scripts/dev/hooks_full.py": 'PRE_COMMIT = "pre-commit==4.6.2"\n',
 }
 
 
@@ -80,6 +81,7 @@ def test_a_bump_of_the_authority_alone_names_every_copy_left_behind(tmp_path):
     assert [line.split(":")[:2] for line in out] == [
         ["install.sh", "1"],
         ["scripts/dev/attest_kdbx.py", "1"],
+        ["scripts/dev/hooks_full.py", "1"],
     ]
     assert all("authority .github/workflows/ci.yml:8 pins '4.7.0'" in line for line in out)
 
