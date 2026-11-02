@@ -9,7 +9,9 @@ own as `Guardrail` values, beside the code that enforces them:
     each waived per component as `CODE:COMPONENT`.
 
 `registry()` gathers them in that order, and refuses two with one id;
-`uqs override list` (cli/safety.catalog) reads it. This module imports none of
+`uqs override list` (cli/safety.catalog) reads it, and so does
+cli/skip_options.py, which gives a command a `--skip-<id>` option for each
+guardrail of it declared with `skip_flag`. This module imports none of
 its owners at load, so every owner can import it.
 """
 
@@ -43,6 +45,10 @@ class Guardrail:
     overridable: bool = True
     #: whether a waiver names one component (`CODE:COMPONENT`) rather than the whole command
     component_scoped: bool = False
+    #: whether each of `commands` takes a generated `--skip-<id>` option for it
+    #: (cli/skip_options.py, #1826) beside `--override`. Off unless the command
+    #: honours the waiver at run time: a flag that skips nothing is never shown.
+    skip_flag: bool = False
 
     def __post_init__(self) -> None:
         if not isinstance(self.id, str) or not ID_PATTERN.fullmatch(self.id):
@@ -55,6 +61,10 @@ class Guardrail:
             raise ValueError(f"guardrail {self.id}: a command is named twice: {self.commands}")
         if not isinstance(self.description, str) or not self.description.strip():
             raise ValueError(f"guardrail {self.id}: the description is empty")
+        if self.skip_flag and not self.overridable:
+            raise ValueError(
+                f"guardrail {self.id}: one that is not overridable gets no --skip flag"
+            )
 
     @property
     def name(self) -> str:
