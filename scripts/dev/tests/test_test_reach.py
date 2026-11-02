@@ -75,6 +75,7 @@ def test_a_glob_lists_from_its_fixed_prefix():
 _INNER = """
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -101,6 +102,11 @@ def test_reads_and_lists():
     os.listdir(REPO / "docs")
 
 
+def test_starts_a_python_child_that_reads():
+    code = "open(" + repr(str(REPO / "CHANGELOG.md")) + ").read()"
+    subprocess.run([sys.executable, "-c", code], check=True)
+
+
 def test_starts_git():
     subprocess.run(["git", "--version"], cwd=REPO, capture_output=True, check=True)
 
@@ -121,7 +127,9 @@ def recorded(tmp_path_factory):
     out = tmp_path / "reach.json"
     recorder = reach.Recorder(out)
     before = list(reach._ACTIVE)
+    environ = dict(os.environ)
     reach.install(recorder)
+    recorder.watch_children()
     try:
         code = pytest.main(
             [str(test_file), "-q", "-p", "no:cacheprovider", "-p", "no:xdist",
@@ -130,6 +138,8 @@ def recorded(tmp_path_factory):
         )  # fmt: skip
     finally:
         reach._ACTIVE[:] = before
+        os.environ.clear()
+        os.environ.update(environ)
     assert code == 0
     data = reach.load(out)
     assert data is not None
@@ -151,6 +161,13 @@ def test_a_test_s_own_reads_lists_and_starts_are_its(recorded):
     assert git["starts"] == {"git"} and "." in git["lists"]
 
 
+def test_a_python_child_s_reads_are_its_test_s_and_it_is_no_unseen_start(recorded):
+    data, mod = recorded
+    seen = reach.reach(data, f"{mod}::test_starts_a_python_child_that_reads")
+    assert "CHANGELOG.md" in seen["reads"]
+    assert "python" not in seen.get("starts", ())
+
+
 def test_what_the_module_reads_at_import_reaches_all_its_tests(recorded):
     data, mod = recorded
     assert all("LICENSE" in reach.reach(data, t)["reads"] for t in data["tests"])
@@ -162,8 +179,12 @@ def test_reached_picks_by_the_record(recorded):
         f"{mod}::test_uses_the_fixture",
         f"{mod}::test_also_uses_it",
     }
-    # a new file at the root: only the test whose git listed the root
-    assert set(reach.reached(data, [("A", "NEW.md")], {})) == {f"{mod}::test_starts_git"}
+    # a new file at the root: the test whose git listed the root - and the
+    # one whose Python child did, importing from its working directory - not
+    # the tests that only read files
+    added = set(reach.reached(data, [("A", "NEW.md")], {}))
+    assert f"{mod}::test_starts_git" in added
+    assert f"{mod}::test_uses_the_fixture" not in added
     assert reach.reached(data, [("M", "docs/README.md")], {}) == {}
 
 

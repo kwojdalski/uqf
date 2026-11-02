@@ -36,8 +36,12 @@ WHAT IS SEEN, through Python's audit hooks (sys.addaudithook):
     git     reads the repository's file list; only adding or removing a file
             can change what it sees, so it counts as listing the root when
             it runs inside the repository;
-    python  a Python child - a gate run as a script, `uv run`, uqs: what it
-            reads and imports is not seen, so it is taken to reach any file;
+    python  a Python child - a gate run as a script, `uv run`, uqs. While
+            a run records, every Python child records itself too
+            (reach_child/sitecustomize.py, through PYTHONPATH) and what it
+            reads, lists and starts is charged to the test that started it.
+            One handed an environment without that is not seen, and is
+            taken to reach any file;
     q       a q, qlinter, or a shell (torq.sh starts a q): reaches .q and
             shell files, qlinter's .qlinter* settings, and what a q file names
             by a path literal (test_impact.q_readers);
@@ -67,6 +71,11 @@ REPO = Path(__file__).resolve().parents[2]
 
 #: The record, beside testmon's .testmondata (both gitignored).
 RECORD = REPO / ".testreach.json"
+#: Put first on a recorded run's PYTHONPATH: its sitecustomize.py records each
+#: Python child (scripts/dev/reach_child/sitecustomize.py).
+CHILD_DIR = Path(__file__).resolve().parent / "reach_child"
+#: `<directory>|<token>`: where children write, and whose owner file to read.
+CHILD_ENV = "UQF_REACH_CHILD"
 VERSION = 1
 
 #: Not charged to anyone: tooling, caches and what the tests themselves write.
@@ -167,11 +176,31 @@ class Recorder:
         self.tests: dict[str, list[str]] = {}
         self.qcmd = os.environ.get("QCMD")
         self._busy = False
+        #: Where Python children write what they see (CHILD_DIR/sitecustomize.py),
+        #: and under which name this process tells them the running owner.
+        self.children = path.with_name(f"{path.name}.children")
+        self.token = worker or "main"
+
+    def watch_children(self) -> None:
+        """Have every Python started from here record itself: CHILD_DIR first
+        on PYTHONPATH, and CHILD_ENV saying where to write. Set once, in the
+        process that runs the tests; a test that hands a child a fresh
+        environment leaves that child unseen, and it is charged as one."""
+        self.children.mkdir(parents=True, exist_ok=True)
+        path = os.environ.get("PYTHONPATH")
+        os.environ["PYTHONPATH"] = os.pathsep.join(p for p in (str(CHILD_DIR), path) if p)
+        os.environ[CHILD_ENV] = f"{self.children}|{self.token}"
+        self._tell_children()
+
+    def _tell_children(self) -> None:
+        if self.children.is_dir():
+            (self.children / f"{self.token}.owner").write_text(self.stack[-1] if self.stack else "")
 
     # --- what is seen -----------------------------------------------------
-    def _charge(self, field: str, value: str) -> None:
-        if self.stack:
-            self.owners[self.stack[-1]][field].add(value)
+    def _charge(self, field: str, value: str, owner: str | None = None) -> None:
+        owner = owner or (self.stack[-1] if self.stack else None)
+        if owner:
+            self.owners[owner][field].add(value)
 
     def audit(self, event: str, args: tuple) -> None:
         if self._busy or not self.stack:
@@ -205,13 +234,14 @@ class Recorder:
             if rel:
                 self._charge("lists", rel)
         elif event == "subprocess.Popen":
-            executable, argv, cwd, _env = args
+            executable, argv, cwd, env = args
             if isinstance(argv, (str, bytes)):
                 argv = os.fsdecode(argv).split()
             argv = [os.fsdecode(a) if isinstance(a, bytes) else str(a) for a in argv or []]
             if executable is not None and argv:
                 argv = [os.fsdecode(executable), *argv[1:]]
-            self._start(argv, os.fsdecode(cwd) if cwd is not None else None)
+            seen = CHILD_ENV in (os.environ if env is None else env)
+            self._start(argv, os.fsdecode(cwd) if cwd is not None else None, seen)
         elif event in ("os.posix_spawn", "os.exec", "os.spawn"):
             path, argv = args[1:3] if event == "os.spawn" else args[0:2]
             argv = list(argv or [])
@@ -219,25 +249,55 @@ class Recorder:
         elif event == "os.system":
             self._start(os.fsdecode(args[0]).split(), None)
 
-    def _start(self, argv: list[str], cwd: str | None) -> None:
+    def _start(
+        self, argv: list[str], cwd: str | None, seen: bool = False, owner: str | None = None
+    ) -> None:
+        """A process started. A Python child that records itself (`seen`)
+        is not charged as a start: what it reads arrives from its own record."""
         kind = kind_of(argv, self.qcmd)
         if kind == "inert":
             return
-        self._charge("starts", kind)
+        if not (kind == "python" and seen):
+            self._charge("starts", kind, owner)
         if kind == "git" and _rel(cwd or ".") is not None:
-            self._charge("lists", ".")
+            self._charge("lists", ".", owner)
         if kind == "python":
             for word in argv[1:]:
                 rel = _rel(word, cwd) if word.endswith(".py") else None
                 if rel and os.path.isfile(REPO / rel):
-                    self._charge("scripts", rel)
+                    self._charge("scripts", rel, owner)
+
+    def _read_children(self) -> None:
+        """Charge what this process's Python children wrote to the owner each
+        was started under, and remove their files."""
+        for f in sorted(self.children.glob(f"{self.token}.*.child")):
+            lines = f.read_text(errors="replace").splitlines()
+            f.unlink(missing_ok=True)
+            if not lines:
+                continue
+            owner = lines[0]
+            for line in lines[1:]:
+                kind, _, value = line.partition("\t")
+                if kind == "read":
+                    rel = _rel(value)
+                    if rel and rel != "." and not rel.endswith(_IGNORED_SUFFIXES):
+                        self._charge("reads", rel, owner)
+                elif kind == "list":
+                    rel = _rel(value)
+                    if rel:
+                        self._charge("lists", rel, owner)
+                elif kind == "start":
+                    inherits, cwd, argv = (value.split("\t", 2) + ["", ""])[:3]
+                    self._start(argv.split("\x1f"), cwd or None, inherits == "1", owner)
 
     # --- who is charged ---------------------------------------------------
     def _push(self, owner: str) -> None:
         self.stack.append(owner)
+        self._tell_children()
 
     def _pop(self) -> None:
         self.stack.pop()
+        self._tell_children()
 
     @pytest.hookimpl(wrapper=True)
     def pytest_make_collect_report(self, collector):
@@ -281,6 +341,7 @@ class Recorder:
         return {"owners": {k: v for k, v in owners.items() if v}, "tests": self.tests}
 
     def pytest_sessionfinish(self, session) -> None:
+        self._read_children()
         if self.worker:
             part = self.path.with_name(f"{self.path.name}.{self.worker}.part")
             part.write_text(json.dumps(self.data()))

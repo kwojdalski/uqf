@@ -227,6 +227,7 @@ def pytest_configure(config):
         worker = getattr(config, "workerinput", {}).get("workerid")
         recorder = test_reach.Recorder(Path(reach).resolve(), worker)
         test_reach.install(recorder)
+        recorder.watch_children()
         config.pluginmanager.register(recorder, "test-reach")
 
 
