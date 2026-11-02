@@ -27,6 +27,7 @@ import json
 from dataclasses import dataclass, fields
 from datetime import UTC, datetime
 
+from uqs.guardrails import Guardrail
 from uqs.logger import get_logger
 from uqs.paths import UqsError, UqsPaths
 
@@ -34,24 +35,27 @@ log = get_logger()
 
 #: Every override's use, one JSON object a line, in the runtime's data directory.
 OVERRIDES_LOG = "start_overrides.jsonl"
-#: Each override's name, as `--override NAME` gives it (#1732).
-NAMES = {
-    "q_version": "q-version-check",
-    "profile_budget": "profile-budget-check",
+_START = ("start", "restart")
+#: The refusals a start may skip, by Overrides field; each id is the name
+#: `--override NAME` gives (#1732, #1825).
+GUARDRAILS = {
+    "q_version": Guardrail(
+        "q-version-check",
+        _START,
+        "the q is older than the tree as written needs: processes may die on "
+        "their first nested context, the failure only in their logs",
+    ),
+    "profile_budget": Guardrail(
+        "profile-budget-check",
+        _START,
+        "the set may exceed the licence's connections: the plant resets the "
+        "extra handles and those processes wedge while reporting up",
+    ),
 }
+#: Each override's name, by Overrides field.
+NAMES = {field: g.id for field, g in GUARDRAILS.items()}
 #: Each override as it is spelled on the command line - the warning's and the log's.
 FLAGS = {field: f"--override {name}" for field, name in NAMES.items()}
-#: The commands that take each override (`uqs override list`).
-COMMANDS = {
-    "q_version": ("start", "restart"),
-    "profile_budget": ("start", "restart"),
-}
-CONSEQUENCES = {
-    "q_version": "the q is older than the tree as written needs: processes may die on "
-    "their first nested context, the failure only in their logs",
-    "profile_budget": "the set may exceed the licence's connections: the plant resets the "
-    "extra handles and those processes wedge while reporting up",
-}
 
 
 @dataclass(frozen=True)
@@ -87,7 +91,7 @@ def skipped(paths: UqsPaths, overrides: Overrides, which: str, verb: str, procs:
         reason,
         verb,
         procs,
-        CONSEQUENCES[which],
+        GUARDRAILS[which].description,
     )
     entry = {
         "at": datetime.now(UTC).isoformat(timespec="seconds"),
