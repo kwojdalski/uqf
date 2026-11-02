@@ -79,3 +79,9 @@
     .qt.support.reset_coverage_ledger[];
     .qunit.assertThrows[{.qetl.verify.run[`demo_deals;()!();.qt.qetl.verify.report.from;.qt.qetl.verify.report.to;::;1b]};::;
         "verify: refusing to run - this process already holds a coverage ledger, so it is not a throwaway q";"refused before any capture"]};
+
+.qt.qetl.verify.report.test_every_result_is_one_of_the_three_verdicts_in_the_declared_order:{[t]
+    r:.qetl.verify.run[`demo_deals;.qt.qetl.verify.report.sc[];.qt.qetl.verify.report.from;.qt.qetl.verify.report.to;.qt.qetl.verify.report.reader;0b];
+    .qunit.assertEquals[r[`checks]`category;.qetl.verify.categories;"the categories a report lists"];
+    .qunit.assertTrue[all (r[`checks]`status) in .qetl.verify.statuses;"and no status is a fourth word"];
+    .qunit.assertTrue[all (r[`behaviours]`status) in .qetl.verify.statuses;"nor a behaviour's"]};
