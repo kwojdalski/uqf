@@ -20,15 +20,20 @@ uqs job new spreadmon --subscribe-to fx_orderbook \
 comma-separated list --- subscribing to two tables is legal and common
 (`demo_markout1` reads `trades` and `quote`).
 
+<!-- scaffold-transcript: spreadmon --subscribe-to fx_orderbook --publishes spread_bps --schema "sym:symbol, spread:float" -->
 ```
 scaffold spreadmon:
-  create src/etl/streaming/spreadmon.q (32 lines)
-  append to src/etl/plant_tables.q (3 lines)
-  append to tests/q/test_stack_tables.q (1 line)
-  append to scripts/processes/uqs_catalog.q (2 lines)
-  create tests/q/test_spreadmon.q (20 lines)
-  append to tests/run_tests.q (1 line)
+  create src/etl/streaming/spreadmon.q
+  append to src/etl/plant_tables.q
+  append to tests/q/test_stack_tables.q
+  append to scripts/processes/uqs_catalog.q
+  create tests/q/test_spreadmon.q
+  append to docs/architecture/stack.md
+  append to docs/services/README.md
+  note: describe spread_bps: replace its SCAFFOLDED line in scripts/processes/uqs_catalog.q - or, if the desk should not see it, delete that line and add the table to .qcat.hidden with the reason
   note: implement .qpipe.job.spreadmon.on_batch, then replace the scaffolded test
+  note: describe spreadmon1: replace its SCAFFOLDED card in docs/services/README.md and its SCAFFOLDED comment in docs/architecture/stack.md
+  note: add spreadmon1 to a profile (--profile NAME), or exempt it with --unprofiled REASON - `uqs list profiles` shows the sets and their connection budget
   note: start it with its producers: fx_orderbook
 ```
 

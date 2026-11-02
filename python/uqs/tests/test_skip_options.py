@@ -15,8 +15,8 @@ import json
 import pytest
 import typer
 import typer.main
+from plain_cli import PlainRunner
 from typer.core import TyperGroup
-from typer.testing import CliRunner
 
 from uqs import cli
 from uqs.cli import renames, safety, skip_options
@@ -26,7 +26,7 @@ from uqs.deploy import config, control, targets
 from uqs.guardrails import Guardrail
 from uqs.paths import UqsError
 
-runner = CliRunner()
+runner = PlainRunner()
 
 GUARD = Guardrail(
     "test-guard",
