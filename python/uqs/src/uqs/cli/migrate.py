@@ -7,7 +7,7 @@ from typing import Annotated
 
 import typer
 
-from uqs.cli.safety import ChangesState
+from uqs.cli.safety import ChangesState, dry_run_note
 from uqs.cli.shared import _die, _paths, console, data_app
 from uqs.paths import UqsError
 from uqs.stack import hdb_migrate
@@ -72,3 +72,5 @@ def migrate(
     console.print(report, markup=False, highlight=False)
     if apply:
         console.print("[dim]restart hdb1 to load the migrated partition[/]")
+    else:
+        console.print(dry_run_note())

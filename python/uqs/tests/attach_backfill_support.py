@@ -368,3 +368,21 @@ class Receivers:
     def stop_all(self) -> None:
         for pid in dict.fromkeys([*self.pids, *receivers_under(self.root)]):
             stop_process(pid)
+
+
+def stub_runner_popen(monkeypatch, popen) -> None:
+    """Replace the Popen backfill_run starts its runner with - and only that one.
+
+    Patching `backfill_run.subprocess.Popen` patched the shared `subprocess`
+    module, so every other child the launch starts got the double too: on a
+    machine with no /proc/mounts, attach/facts.py's `mount` (run through
+    `subprocess.run`, which needs a real Popen) failed every one of these tests.
+    """
+    import subprocess
+    from types import SimpleNamespace
+
+    from uqs.attach import backfill_run
+
+    monkeypatch.setattr(
+        backfill_run, "subprocess", SimpleNamespace(**{**vars(subprocess), "Popen": popen})
+    )

@@ -18,7 +18,7 @@ from pathlib import Path
 
 import attach_backfill_support as support
 import pytest
-from attach_backfill_support import WORKER, facts_of, make_world, plan_with
+from attach_backfill_support import WORKER, facts_of, make_world, plan_with, stub_runner_popen
 from plain_cli import PlainRunner
 from test_attach_backfill_findings import CASES, EOD, _expect
 
@@ -239,9 +239,7 @@ def launcher(world, monkeypatch):
     """backfill_run.launch with no q: the command line it would start is recorded."""
     started: list[list[str]] = []
     monkeypatch.setattr(backfill_run, "q_interpreter", lambda env=None: Path("/bin/false"))
-    monkeypatch.setattr(
-        backfill_run.subprocess, "Popen", lambda argv, **kw: started.append(argv) or _Started()
-    )
+    stub_runner_popen(monkeypatch, lambda argv, **kw: started.append(argv) or _Started())
     monkeypatch.setattr(planning, "evaluate", lambda *a, **k: facts_of())
 
     def launch(mode="run", **kw):

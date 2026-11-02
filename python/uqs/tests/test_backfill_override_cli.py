@@ -20,7 +20,7 @@ from pathlib import Path
 
 import attach_backfill_support as support
 import pytest
-from attach_backfill_support import WORKER, facts_of, make_world
+from attach_backfill_support import WORKER, facts_of, make_world, stub_runner_popen
 from plain_cli import PlainRunner
 from test_attach_backfill_eod_override import IN_FENCE, REASON
 
@@ -47,9 +47,7 @@ def world(monkeypatch, tmp_path):
     monkeypatch.setattr(backfill_run, "q_interpreter", lambda env=None: Path("/bin/false"))
     monkeypatch.setattr(planning, "evaluate", lambda *a, **k: facts_of())
     w.started = []
-    monkeypatch.setattr(
-        backfill_run.subprocess, "Popen", lambda argv, **kw: w.started.append(argv) or _Started()
-    )
+    stub_runner_popen(monkeypatch, lambda argv, **kw: w.started.append(argv) or _Started())
     yield w
     backfill_owner.release("pb-uat", WORKER)
 

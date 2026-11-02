@@ -25,6 +25,7 @@ from uqs.stack import (
     deployment,
     gateway_access,
     qtree,
+    start_lines,
     start_overrides,
     start_policy,
 )
@@ -279,9 +280,13 @@ def print_procs(
     paths: UqsPaths,
     procs: str = "all",
     base_port: int | None = None,
-    capture: bool = True,
-):
-    return run_torq_sh(paths, ["print", procs], base_port=base_port, capture=capture)
+    selected: Sequence[str] | None = None,
+) -> subprocess.CompletedProcess[str]:
+    """What `torq.sh print` shows for `procs`, composed without bootstrapping:
+    a dry run writes nothing (stack/start_lines.py, #1880)."""
+    lines = start_lines.plan(paths, procs, base_port, selected)
+    text = "".join(f"{line.printed()}\n" for line in lines)
+    return subprocess.CompletedProcess(["print", procs], 0, text, "")
 
 
 def qcon_command(host: str, port: int, user: str, passwd: str, *, rlwrap: bool) -> list[str]:

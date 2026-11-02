@@ -186,7 +186,8 @@ def parse(args: Sequence[str]) -> Parsed | None:
 def changes_the_server(args: Sequence[str]) -> bool:
     """Whether `args` may change the server, read from the parsed command:
     never with help, nor a dry run - every command that changes state takes
-    --dry-run/-n (#1732) - but a backfill's, which starts a process to fetch;
+    --dry-run/-n (#1732), and tests/test_dry_run_tree.py runs each one's to
+    show it writes nothing (#1880) - but a backfill's, which starts a process to fetch;
     a read-only or confirms-on-server command does not, except `status
     --interactive`; anything else, or anything that does not parse, may."""
     p = parse(args)

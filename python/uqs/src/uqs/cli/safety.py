@@ -81,9 +81,11 @@ ConfirmsOnServer = marked(Effect.CONFIRMS_ON_SERVER)
 ChangesState = marked(Effect.CHANGES_STATE)
 
 
-def dry_run_note() -> str:
-    """The line a dry run ends with."""
-    return "[dim]dry run: nothing was changed. Run it again without --dry-run.[/]"
+def dry_run_note(rerun: str = "without --dry-run") -> str:
+    """The line every dry run ends with, whatever it found - something to do or
+    nothing (#1880). `rerun` is how to act on it: a command whose dry run is its
+    default, without --apply, says "with --apply"."""
+    return f"[dim]dry run: nothing was changed. Run it again {rerun}.[/]"
 
 
 def registry() -> tuple[Guardrail, ...]:
