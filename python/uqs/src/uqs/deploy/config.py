@@ -133,8 +133,9 @@ class Config:
     #: the runtime the target expects the artifact to run; None: the artifact's
     runtime: str | None = None
 
-    #: deploy an artifact built from uncommitted changes (#872)
-    allow_dirty: bool = False
+    #: --override allow-dirty's reason: deploy an artifact built from
+    #: uncommitted changes (#872, #1852); None: refused
+    allow_dirty: str | None = None
     #: --override accept-converted-release's reason: start a converted release on a q
     #: its version check cannot confirm, after smoke passes there (#936)
     accept_converted_release: str | None = None
@@ -168,8 +169,9 @@ class Config:
     python_runtime: str | None = None
     python_runtime_sha256: str | None = None
 
-    #: fill the shared HDB's missing tables and columns in prepare (#870)
-    fix_hdb: bool = False
+    #: --override fix-hdb's reason: fill the shared HDB's missing tables and
+    #: columns in prepare (#870, #1852); None: refused
+    fix_hdb: str | None = None
 
     #: after activation, keep the newest this many releases (#866); None keeps all
     keep: int | None = None
@@ -177,8 +179,9 @@ class Config:
     #: seconds to let data flow after verify, then require every started
     #: streaming job to have beaten and none to be failing (#869); None skips it
     soak: int | None = None
-    #: remove a deploy lock whose holder has stopped beating (#867)
-    break_lock: bool = False
+    #: --override break-lock's reason: remove a deploy lock whose holder has
+    #: stopped beating (#867, #1852); None: refused
+    break_lock: str | None = None
 
     @property
     def data_root(self) -> str:
@@ -265,7 +268,7 @@ def make_config(
     command_timeout: int = 900,
     smoke_timeout: int = 120,
     verify_timeout: int = 180,
-    allow_dirty: bool = False,
+    allow_dirty: str | None = None,
     accept_converted_release: str | None = None,
     release_repo: str | None = None,
     expected_sha256: str | None = None,
@@ -282,10 +285,10 @@ def make_config(
     q_runtime_sha256: str | None = None,
     python_runtime: str | None = None,
     python_runtime_sha256: str | None = None,
-    fix_hdb: bool = False,
+    fix_hdb: str | None = None,
     keep: int | None = None,
     soak: int | None = None,
-    break_lock: bool = False,
+    break_lock: str | None = None,
 ) -> Config:
     """A Config from `uqs deploy push`'s options - each value checked, since
     every one of them ends up inside a script the server's shell runs."""

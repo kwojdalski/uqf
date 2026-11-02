@@ -88,12 +88,16 @@ def dry_run_note() -> str:
 
 def registry() -> tuple[Guardrail, ...]:
     """Every guardrail, from the modules that enforce them, in a fixed order:
-    start, deployment, attachment, attached backfill. Gathered here, in the
-    front end, because uqs/guardrails.py is a leaf every layer imports and must
-    import none."""
+    start, deployment, attachment, attached backfill, then (#1852) the forced
+    writer, the q conversion and job removal. Gathered here, in the front end,
+    because uqs/guardrails.py is a leaf every layer imports and must import
+    none."""
+    from uqs.attach import backfill_forced as forced
     from uqs.attach import backfill_policy as backfill
     from uqs.attach import overrides as attach
     from uqs.deploy import overrides as deploy
+    from uqs.deploy import portable
+    from uqs.scaffold import remove_policy as remove
     from uqs.stack import start_overrides as start
 
     return aggregate(
@@ -102,6 +106,10 @@ def registry() -> tuple[Guardrail, ...]:
             deploy.GUARDRAILS,
             attach.GUARDRAILS,
             backfill.GUARDRAILS,
+            # #1852: the bypasses that were bare flags, each with its owner
+            forced.GUARDRAILS,
+            portable.GUARDRAILS,
+            remove.GUARDRAILS,
         ],
     )
 

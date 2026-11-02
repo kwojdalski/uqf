@@ -15,12 +15,13 @@ from typing import Annotated
 import typer
 
 from uqs.cli import deploy_connection as conn
+from uqs.cli import deploy_policy as policy
 from uqs.cli.deploy import _failed, deploy_app
 from uqs.cli.json_out import json_opt
 from uqs.cli.renames import alias_command, renamed
-from uqs.cli.safety import ChangesState, ReadOnly
+from uqs.cli.safety import ChangesState, OverrideOpt, ReadOnly, ReasonOpt
 from uqs.cli.shared import _die, json_refusal
-from uqs.deploy import config, prune, rollback, status, verify
+from uqs.deploy import config, overrides, prune, rollback, status, verify
 from uqs.deploy.prune import RELEASE_ID
 from uqs.deploy.remote import Remote
 from uqs.paths import UqsError
@@ -72,7 +73,10 @@ def status_cmd(
 #: `--to` names a release here, and only here, while everywhere else it ends a
 #: time range: `--release` since #1768, the old spelling parsing for one release.
 @deploy_app.command(
-    "rollback", cls=renamed(conn.OLD_SPELLINGS | {"--to": "--release"}, ChangesState)
+    "rollback",
+    cls=renamed(
+        conn.OLD_SPELLINGS | {"--to": "--release"} | policy.ROLLBACK_OLD_SPELLINGS, ChangesState
+    ),
 )
 def rollback_cmd(
     ctx: typer.Context,
@@ -99,13 +103,8 @@ def rollback_cmd(
     verify_timeout: Annotated[
         int, typer.Option("--verify-timeout", help="Readiness deadline, seconds")
     ] = 180,
-    break_lock: Annotated[
-        bool,
-        typer.Option(
-            "--break-lock",
-            help="Remove a deploy lock whose holder stopped beating; refused while it beats",
-        ),
-    ] = False,
+    override: OverrideOpt = None,
+    reason: ReasonOpt = None,
 ) -> None:
     """Put a server back on an earlier release: stop current's processes, start
     and verify the target's, then move `current`. A target that fails to verify
@@ -115,6 +114,7 @@ def rollback_cmd(
             "uqs deploy rollback", "arguments", ValueError(f"--release {to!r} is not a release id")
         )
     try:
+        waived = policy.waived("deploy rollback", override, reason)
         cfg, remote = _server(
             ctx,
             target,
@@ -124,7 +124,7 @@ def rollback_cmd(
             connect_timeout,
             command_timeout=command_timeout,
             verify_timeout=verify_timeout,
-            break_lock=break_lock,
+            break_lock=waived.get(overrides.BREAK_LOCK),
         )
         code = rollback.rollback(cfg, remote, to=to, dry_run=dry_run)
     except config.DeployError as exc:

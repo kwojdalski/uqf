@@ -1571,23 +1571,23 @@ logs its new spelling when used (rule 6). The release after removes it.
 
 One meaning per option name (#1729):
 
-  | old                                                                                     | new                              |
-  | ---                                                                                     | ---                              |
-  | `--port` on `start` `stop` `restart` `exec` `summary` `graph` `list`                    | `--base-port`                    |
-  | `--port` on `config get` `data replay` `connector start` `deploy verify` `job backfill` | `--base-port`                    |
-  | `job receive --port`                                                                    | `--listen-port`                  |
-  | `query --target NAME`                                                                   | `query --tunnel NAME`            |
-  | `stop --force`                                                                          | `stop --kill`                    |
-  | `job backfill --force`                                                                  | `job backfill --any-writer`      |
-  | `job remove --force`                                                                    | `job remove --even-if-edited`    |
-  | `logs -n N`                                                                             | `logs --lines N` / `-l N`        |
-  | `start --print`                                                                         | `start --dry-run` (#1732)        |
-  | `logs --print`                                                                          | `--show-command`                 |
-  | `query --raw`                                                                           | `query --no-gateway`             |
-  | `config get --raw`                                                                      | `config show --unresolved`       |
-  | `summary --debug`, `job backfill --debug`                                               | `uqs --debug status`, ...        |
-  | `--host` on `deploy push` `status` `rollback` `prune`                                   | `--ssh` (#1768)                  |
-  | `deploy rollback --to RELEASE`                                                          | `--release RELEASE` (#1768)      |
+  | old                                                                                     | new                                            |
+  | ---                                                                                     | ---                                            |
+  | `--port` on `start` `stop` `restart` `exec` `summary` `graph` `list`                    | `--base-port`                                  |
+  | `--port` on `config get` `data replay` `connector start` `deploy verify` `job backfill` | `--base-port`                                  |
+  | `job receive --port`                                                                    | `--listen-port`                                |
+  | `query --target NAME`                                                                   | `query --tunnel NAME`                          |
+  | `stop --force`                                                                          | `stop --kill`                                  |
+  | `job backfill --force`                                                                  | `job backfill --override any-writer` (#1852)   |
+  | `job remove --force`                                                                    | `job remove --override even-if-edited` (#1852) |
+  | `logs -n N`                                                                             | `logs --lines N` / `-l N`                      |
+  | `start --print`                                                                         | `start --dry-run` (#1732)                      |
+  | `logs --print`                                                                          | `--show-command`                               |
+  | `query --raw`                                                                           | `query --no-gateway`                           |
+  | `config get --raw`                                                                      | `config show --unresolved`                     |
+  | `summary --debug`, `job backfill --debug`                                               | `uqs --debug status`, ...                      |
+  | `--host` on `deploy push` `status` `rollback` `prune`                                   | `--ssh` (#1768)                                |
+  | `deploy rollback --to RELEASE`                                                          | `--release RELEASE` (#1768)                    |
 
 Noun first (#1727):
 
@@ -1659,6 +1659,25 @@ their reasons are joined into the one `--reason`. `data migrate` was dry unless
 `--apply`: for one release it refuses to run with neither `--dry-run` nor
 `--apply`, so a script written for the old default does not start writing, and
 the release after writes by default.
+
+Every bypass is a named override with a reason (#1852): the bare flags that
+lifted a refusal and recorded no reason are `--override NAME --reason TEXT`,
+each in `uqs override list`, warned about and recorded where the command records
+anything (`deploy push` in its plan's EXCEPTIONS and the release's report):
+
+  | old                                                  | new                                          |
+  | ---                                                  | ---                                          |
+  | `deploy build` `deploy push --allow-dirty`           | `--override allow-dirty --reason R`          |
+  | `deploy build --allow-computed-names`                | `--override allow-computed-names --reason R` |
+  | `deploy push --fix-hdb`                              | `--override fix-hdb --reason R`              |
+  | `deploy push` `deploy rollback --break-lock`         | `--override break-lock --reason R`           |
+  | `job backfill --any-writer`                          | `--override any-writer --reason R`           |
+  | `job remove --even-if-edited`                        | `--override even-if-edited --reason R`       |
+
+An old flag given without `--reason` still works for one release: its record
+says it was given as the old flag, which records no reason.
+`job attachment add --override CODE:COMPONENT` is checked as every other
+command's is.
 
 Group help that matches its commands, and no colliding names (#1737):
 

@@ -313,12 +313,12 @@ class Meaning:
 #: Every option name more than one command uses, with its one meaning. A help
 #: text that does not match the pattern is a second meaning.
 OPTIONS = {
-    "--allow-dirty": Meaning("accept uncommitted changes", r"uncommitted"),
+    "--allow-dirty": Meaning("retired: --override allow-dirty", None),
     "--apply": Meaning("make the changes; without it, a dry run", r"without it, a dry run"),
     "--arch": Meaning("the servers' CPU architecture", r"x86_64"),
     "--attach": Meaning("a saved attachment, by name", r"attach"),
     "--base-port": Meaning("the stack's base port", r"base port"),
-    "--break-lock": Meaning("remove a stale deploy lock", r"deploy lock"),
+    "--break-lock": Meaning("retired: --override break-lock", None),
     "--bundle": Meaning("a sidecar bundle folder", r"bundle"),
     "--cast": Meaning("cast a column's type", r"cast"),
     "--columns": Meaning("which columns of a table to show", r"`all`"),
@@ -521,6 +521,17 @@ RULE5C_ALLOWLIST: dict[str, str] = {}
 #: (command, option) -> the issue that folds the bypass into --override NAME --reason
 RULE5D_ALLOWLIST: dict[str, str] = {}
 
+#: The option names that read as a bypass (#1852): each lifts a refusal, and so
+#: is `--override NAME --reason TEXT` instead - a guardrail `uqs override list`
+#: shows, warned about and recorded with its reason.
+BYPASS_SHAPED = ("--allow-", "--break-", "--any-", "--even-if-", "--accept-", "--fix-")
+
+#: (command, option) -> why an option shaped like a bypass lifts no refusal.
+NOT_A_BYPASS: dict[tuple[str, str], str] = {
+    ("job attachment add", "--accept-risks"): "a confirmation, like --yes: it waives "
+    "nothing itself - each risk it confirms was waived by --override CODE:COMPONENT --reason",
+}
+
 
 def _flag(cmd: Cmd, long: str, short: str | None = None) -> bool:
     param = cmd.option(long)
@@ -590,9 +601,33 @@ def _bypasses(tree: list[Cmd]) -> set[tuple[str, str]]:
             name = _long(param)
             reason_taking = (param.metavar or "").upper() == "REASON" and name != "--reason"
             handwritten_skip = name.startswith("--skip-") and not skip_options.is_generated(param)
-            if handwritten_skip or name == "--override-reason" or reason_taking:
+            shaped = name.startswith(BYPASS_SHAPED) and (cmd.path, name) not in NOT_A_BYPASS
+            if handwritten_skip or name == "--override-reason" or reason_taking or shaped:
                 found.add((cmd.path, name))
     return found
+
+
+def test_rule5d_a_bypass_shaped_flag_is_caught(monkeypatch):
+    """#1852: `--allow-dirty` beside `--override` was invisible to the rule."""
+    small = typer.Typer()
+
+    @small.command("push", cls=safety.ChangesState)
+    def push(
+        allow_dirty: bool = typer.Option(False, "--allow-dirty"),
+        fix_it: bool = typer.Option(False, "--fix-it"),
+        dry_run: bool = typer.Option(False, "--dry-run"),
+    ) -> None: ...
+
+    @small.command("other", cls=safety.ChangesState)
+    def other() -> None: ...
+
+    tree = list(_walk(typer.main.get_command(small), []))
+    assert _bypasses(tree) == {("push", "--allow-dirty"), ("push", "--fix-it")}
+
+
+def test_rule5d_every_exemption_names_a_live_option():
+    gone = {k for k in NOT_A_BYPASS if k[0] not in LEAVES or LEAVES[k[0]].option(k[1]) is None}
+    assert not gone, f"NOT_A_BYPASS rows for options that are gone - delete them: {gone}"
 
 
 def test_rule5d_a_bypass_is_override_name_reason():

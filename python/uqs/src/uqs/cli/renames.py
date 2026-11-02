@@ -18,7 +18,7 @@ about itself.
 from __future__ import annotations
 
 import functools
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
 import typer
@@ -45,6 +45,21 @@ QUIET_KEY = "uqs.renames.quiet"
 #: --dry-run`: a preview is always dry), so the old one is accepted and ignored.
 DROPPED = ""
 
+
+#: An old bypass FLAG - `--allow-dirty`, taking no value - now `--override
+#: NAME --reason TEXT` (#1852): `{"--allow-dirty": bypass_flag("allow-dirty")}`.
+#: Rewritten to `--override allow-dirty`; with no `--reason` given, one saying
+#: the old flag recorded none is supplied, so the old spelling still works for
+#: its one release and the record says how it was asked for.
+def bypass_flag(name: str) -> tuple[str, str, str]:
+    return ("--override", name, "")
+
+
+def legacy_reason(old: str) -> str:
+    """The --reason recorded for an old bypass flag given without one."""
+    return f"given as {old}, which records no reason"
+
+
 #: `--port` meant the stack's base port on most commands; it is `--base-port`
 #: now, and `--port` is only ever one process's port (#1729).
 BASE_PORT = {"--port": "--base-port"}
@@ -56,7 +71,7 @@ def warn_renamed(old: str, new: str) -> None:
 
 def _rewrite_renamed(
     args: list[str],
-    renames: Mapping[str, str | tuple[str, str]],
+    renames: Mapping[str, str | tuple[str, ...]],
     command_path: str,
     root: typer.Context | None,
     moved: list[str] | None = None,
@@ -72,13 +87,21 @@ def _rewrite_renamed(
     out: list[str] = []
     front: list[str] = []
     reasons: list[str] = []
+    flags: list[str] = []
     warned: set[str] = set(renames) if quiet else set()  # all warned: none is
+    head = args[: args.index("--")] if "--" in args else args
+    has_reason = any(a == "--reason" or a.startswith("--reason=") for a in head)
     rest = iter(args)
     for arg in rest:
         if arg == "--":
-            return front + out + _reason(reasons) + [arg, *rest]
+            return front + out + _reason(reasons, flags, has_reason) + [arg, *rest]
         name, eq, value = arg.partition("=")
         bypass = renames.get(name)
+        if isinstance(bypass, tuple) and len(bypass) == 3 and name.startswith("--"):
+            _warn_once(warned, name, f"{bypass[0]} {bypass[1]} --reason REASON")
+            out += list(bypass[:2])
+            flags.append(name)
+            continue
         if isinstance(bypass, tuple) and name.startswith("--"):
             _warn_once(warned, name, f"{' '.join(bypass)} --reason REASON")
             out += list(bypass)
@@ -121,12 +144,17 @@ def _rewrite_renamed(
                 out.append(arg[len(short) :])
             continue
         out.append(arg)
-    return front + out + _reason(reasons)
+    return front + out + _reason(reasons, flags, has_reason)
 
 
-def _reason(reasons: list[str]) -> list[str]:
-    """The one --reason the old per-override options' reasons become (#1732)."""
-    return ["--reason", "; ".join(reasons)] if reasons else []
+def _reason(reasons: list[str], flags: Sequence[str] = (), has_reason: bool = False) -> list[str]:
+    """The one --reason the old per-override options' reasons become (#1732);
+    for old bypass flags that took none (#1852), one saying so - unless the
+    command line gives its own --reason, which then covers them."""
+    if not reasons and (has_reason or not flags):
+        return []
+    said = reasons + ([legacy_reason(", ".join(flags))] if flags and not has_reason else [])
+    return ["--reason", "; ".join(said)]
 
 
 def _warn_once(warned: set[str], old: str, new: str) -> None:
@@ -136,7 +164,7 @@ def _warn_once(warned: set[str], old: str, new: str) -> None:
 
 
 def renamed(
-    renames: Mapping[str, str | tuple[str, str]], mark: type[TyperCommand] = TyperCommand
+    renames: Mapping[str, str | tuple[str, ...]], mark: type[TyperCommand] = TyperCommand
 ) -> type[TyperCommand]:
     """`cls=` for a command whose options were renamed: the old spellings in
     `renames` (old -> new) still parse, hidden from --help, each logging its
@@ -145,13 +173,15 @@ def renamed(
     per-command `--debug` to the global one, and a new spelling with no dash
     names the first positional (`--proc` -> `PROC`). A pair names a bypass:
     `--skip-q-version-check R` -> `--override q-version-check`, its value the
-    --reason (#1732). `mark` is the command's class from safety (`ReadOnly`,
-    `ChangesState`, `ConfirmsOnServer`), so the effect it states carries over;
+    --reason (#1732). A `bypass_flag(NAME)` names an old bypass FLAG, which
+    takes no value: `--allow-dirty` -> `--override allow-dirty` (#1852). `mark`
+    is the command's class from safety (`ReadOnly`, `ChangesState`,
+    `ConfirmsOnServer`), so the effect it states carries over;
     an alias leaves it out and takes its new name's (`alias_command`)."""
 
     class Renamed(TyperCommand):
         #: old spelling -> new, read by the tests
-        renames: dict[str, str | tuple[str, str]] = {}
+        renames: dict[str, str | tuple[str, ...]] = {}
 
         def parse_args(self, ctx, args):
             root = ctx.find_root()

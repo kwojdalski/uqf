@@ -215,10 +215,13 @@ class Server:
             raise DeployError(
                 "preflight",
                 f"another deployment holds {self.lock} ({facts['locked']}). If it died, "
-                "--break-lock removes it - refused while its holder still beats",
+                "--override break-lock --reason REASON removes it - refused while its holder "
+                "still beats",
             )
         if facts.get("locked"):
-            log.warning("{} is held ({}); --break-lock will try it", self.lock, facts["locked"])
+            log.warning(
+                "{} is held ({}); --override break-lock will try it", self.lock, facts["locked"]
+            )
         return facts
 
     def previous_processes(self, previous: str) -> tuple[str, list[str], list[str]]:
@@ -266,7 +269,7 @@ class Server:
 
     def take_lock(self, command: str = "push") -> None:
         """Hold deploy.lock, recording who holds it (uqs.deploy.lock); with
-        --break-lock, first remove one whose holder has stopped beating."""
+        --override break-lock, first remove one whose holder has stopped beating."""
         self.locker.take(command, self.release)
 
     def beat(self) -> None:

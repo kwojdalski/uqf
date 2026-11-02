@@ -22,13 +22,14 @@ from test_attach_backfill_findings import _emitted_codes
 from test_backfill_override_cli import ARGV
 
 from uqs import cli
-from uqs.attach import backfill_policy
+from uqs.attach import backfill_forced, backfill_policy
 from uqs.attach import overrides as attach
 from uqs.cli import safety, skip_options, target_confirm
 from uqs.cli import target as target_cli
-from uqs.deploy import control
+from uqs.deploy import control, portable
 from uqs.deploy import overrides as deploy
 from uqs.paths import UqsError, repo_root
+from uqs.scaffold import remove_policy as remove
 from uqs.stack import start_overrides as start
 
 SRC = Path(__file__).resolve().parents[1] / "src" / "uqs"
@@ -42,12 +43,15 @@ def _tree(path: Path) -> ast.Module:
 
 
 def test_every_guardrail_belongs_to_an_owner_that_enforces_it():
-    """The registry is the four owners' declarations and nothing else."""
+    """The registry is its owners' declarations and nothing else."""
     owned = [
         *start.GUARDRAILS.values(),
         *deploy.GUARDRAILS,
         *attach.GUARDRAILS,
         *backfill_policy.GUARDRAILS,
+        *backfill_forced.GUARDRAILS,
+        *portable.GUARDRAILS,
+        *remove.GUARDRAILS,
     ]
     assert list(safety.registry()) == owned
 

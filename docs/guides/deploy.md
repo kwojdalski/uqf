@@ -173,16 +173,16 @@ uqs deploy build --frontend web/dist
 
 The target defaults to Linux on x86_64 with the Python `requires-python` names.
 Pass `--arch aarch64` or `--python 3.14` for others. Uncommitted changes are
-refused unless you pass `--allow-dirty`, which the manifest records. Building
-needs `uv`, and network access to fetch the wheels.
+refused unless you pass `--override allow-dirty --reason TEXT`, which the
+manifest records. Building needs `uv`, and network access to fetch the wheels.
 
 ## Artifacts built by CI
 
 `.github/workflows/release.yml` builds the artifacts for a tag `v*`, or for a
 tag given to its manual run. It builds them only after `ci.yml`'s checks pass on
-that commit, and never with `--allow-dirty`. Each release gets two: the plain
-artifact, and one with its q converted for kdb+ 4.0 (`--q-target 4.0`). Each
-comes with its `.sha256` and `.manifest.json`. Deploy one by tag or by URL:
+that commit, and never with `--override allow-dirty`. Each release gets two: the
+plain artifact, and one with its q converted for kdb+ 4.0 (`--q-target 4.0`).
+Each comes with its `.sha256` and `.manifest.json`. Deploy one by tag or by URL:
 
 ```bash
 uqs deploy push v1.4.0 --ssh uqf-server --dest /opt/uqf ... --dry-run
@@ -197,7 +197,8 @@ uqs deploy push https://github.com/<owner>/uqf/releases/download/v1.4.0/uqf-<rel
   is, before anything reaches the server. A token in `GH_TOKEN` or
   `GITHUB_TOKEN` is sent for a private repository.
 - **Dirty artifacts.** `push` refuses an artifact built from uncommitted changes
-  (`dirty: true`) unless given `--allow-dirty`.
+  (`dirty: true`) unless given `--override allow-dirty --reason TEXT`, which the
+  plan's EXCEPTIONS block and the release's report record with its reason.
 
 ## A first deployment
 
@@ -878,19 +879,20 @@ the first short one. Once the release's `.venv` exists, prepare runs that
 release's own `uqs data check --json` against the shared HDB:
 
 - **Missing tables or columns** are refused, naming the partitions. With
-  `--fix-hdb`, prepare runs `data check --apply --yes` and checks again. The fix
-  is additive: each missing table is written empty, and each missing column is
-  written as its type's null. It is a thin wrapper over KX's `dbmaint.q` (it
-  decides what the declared schema lacks, `dbmaint` writes the columns), checks
-  the database afterwards and exits 1 if anything is still missing. It takes no
-  HDB lock, is not transactional, and does not reload a running HDB.
+  `--override fix-hdb --reason TEXT`, prepare runs `data check --apply --yes`
+  and checks again. The fix is additive: each missing table is written empty,
+  and each missing column is written as its type's null. It is a thin wrapper
+  over KX's `dbmaint.q` (it decides what the declared schema lacks, `dbmaint`
+  writes the columns), checks the database afterwards and exits 1 if anything is
+  still missing. It takes no HDB lock, is not transactional, and does not reload
+  a running HDB.
 - **A column whose type changed** is always refused, naming it. That is a
   migration, which no fill makes right.
 
 `--dry-run` cannot run the release, because none of it is on the server yet. It
 compares a listing of the server's HDB with the tables and columns
-`uqs deploy build` recorded in the manifest, and says what `--fix-hdb` would
-fill. Column types need q, so they are checked in prepare.
+`uqs deploy build` recorded in the manifest, and says what `--override fix-hdb`
+would fill. Column types need q, so they are checked in prepare.
 
 ## Soaking before activation
 
@@ -1246,8 +1248,8 @@ killed mid-run leaves the lock behind. The next run refuses it, naming the
 holder and how long ago it last beat. Preflight and `uqs deploy status` show the
 same.
 
-`--break-lock` on `push` or `rollback` removes the lock, but only once its
-holder is gone. It is refused while either of these holds:
+`--override break-lock --reason TEXT` on `push` or `rollback` removes the lock,
+but only once its holder is gone. It is refused while either of these holds:
 
 - **The heartbeat is fresh.** The holder records how long it may go between
   beats, from its own longest step: `--command-timeout`, by default, plus a

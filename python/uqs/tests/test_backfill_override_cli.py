@@ -127,7 +127,7 @@ def test_each_spelling_admits_a_fenced_local_backfill_as_one_waiver(
         ),
         (
             ["--override", "active-date", "--reason", REASON],
-            "`uqs job backfill` has no override 'active-date' - it takes: eod-fence",
+            "`uqs job backfill` has no override 'active-date' - it takes: any-writer, eod-fence",
         ),
         (
             ["--override", "q-version-check", "--reason", REASON],
