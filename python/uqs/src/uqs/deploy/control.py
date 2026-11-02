@@ -47,7 +47,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from uqs.deploy import history, targets
-from uqs.deploy.config import DeployError
+from uqs.deploy.config import DEFAULT_CONNECT_TIMEOUT, DeployError
 from uqs.deploy.launch import (
     NO_RELEASE,
     RELEASE,
@@ -62,7 +62,6 @@ from uqs.paths import UqsError
 
 #: What ssh exits with when it, rather than the remote command, failed.
 SSH_FAILED = 255
-DEFAULT_CONNECT_TIMEOUT = 10
 
 
 @dataclass(frozen=True)
@@ -88,6 +87,12 @@ def remote_for(name: str | None, root: Path) -> Remote:
     """What `--target name` means: a declared target; else a server, as its
     most recent successful deployment (deploy/history.py); with no name, the
     most recent deployment of all. A refusal names what is known."""
+    return remote_from(*settings_for(name, root))
+
+
+def settings_for(name: str | None, root: Path) -> tuple[str, dict]:
+    """remote_for's (label, settings): a declared target's merged settings,
+    or the history entry of the server `name` was last deployed to."""
     try:
         declared = targets.read(root) if targets.declaration_path(root).is_file() else {}
         last = history.latest(root, name) if name not in declared else None
@@ -104,7 +109,7 @@ def remote_for(name: str | None, root: Path) -> Remote:
             f"{what} - targets in {targets.declaration_path(root)}: {known}; "
             "`uqs deploy history` shows the deployments"
         )
-    return remote_from(label, t)
+    return label, t
 
 
 def remote_from(label: str, t: dict) -> Remote:
