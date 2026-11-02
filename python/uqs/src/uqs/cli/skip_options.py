@@ -30,7 +30,7 @@ from __future__ import annotations
 import contextvars
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, TypeGuard
 
 from typer.core import TyperCommand, TyperOption
 
@@ -83,25 +83,32 @@ def _help(g: Guardrail) -> str:
     return ". ".join(parts)
 
 
-def option(g: Guardrail) -> TyperOption:
+class GuardrailOption(TyperOption):
+    """A generated option: a TyperOption that knows the guardrail it waives."""
+
+    def __init__(self, guardrail: Guardrail, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        self.guardrail = guardrail
+
+
+def option(g: Guardrail) -> GuardrailOption:
     """`g`'s generated option, marked with the guardrail it waives."""
     name = _PARAM + g.id.lower().replace("-", "_")
     if g.component_scoped:
-        opt = TyperOption(
-            param_decls=[name, flag(g)], multiple=True, metavar="COMPONENT", help=_help(g)
+        return GuardrailOption(
+            g, param_decls=[name, flag(g)], multiple=True, metavar="COMPONENT", help=_help(g)
         )
-    else:
-        opt = TyperOption(param_decls=[name, flag(g)], is_flag=True, default=False, help=_help(g))
-    opt.guardrail = g  # type: ignore[attr-defined]
-    return opt
+    return GuardrailOption(
+        g, param_decls=[name, flag(g)], is_flag=True, default=False, help=_help(g)
+    )
 
 
 #: The options built for each (command, its declared guardrails): one object
 #: each, because Click orders what it parses by the parameters' identity.
-_BUILT: dict[tuple[str, tuple[Guardrail, ...]], tuple[TyperOption, ...]] = {}
+_BUILT: dict[tuple[str, tuple[Guardrail, ...]], tuple[GuardrailOption, ...]] = {}
 
 
-def options_for(command: str) -> tuple[TyperOption, ...]:
+def options_for(command: str) -> tuple[GuardrailOption, ...]:
     """`command`'s generated options - refusing two guardrails that would
     spell one flag (`TORQ_VERSION` and `torq-version`)."""
     gs = declared(command)
@@ -118,9 +125,9 @@ def options_for(command: str) -> tuple[TyperOption, ...]:
     return _BUILT[key]
 
 
-def is_generated(param: Any) -> bool:
+def is_generated(param: object) -> TypeGuard[GuardrailOption]:
     """Whether `param` is a generated option, not one a signature declares."""
-    return isinstance(getattr(param, "guardrail", None), Guardrail)
+    return isinstance(param, GuardrailOption)
 
 
 def command_of(cmd: Any, ctx: Any) -> str:
@@ -136,7 +143,7 @@ def command_of(cmd: Any, ctx: Any) -> str:
     return " ".join(reversed(words))
 
 
-def generated(cmd: Any, command: str) -> tuple[TyperOption, ...]:
+def generated(cmd: Any, command: str) -> tuple[GuardrailOption, ...]:
     """The generated options of `cmd`, the command `command` names - refusing
     one it already spells, and any on a command that takes no --override and
     --reason for them to become."""
@@ -144,7 +151,7 @@ def generated(cmd: Any, command: str) -> tuple[TyperOption, ...]:
     own = {o for p in cmd.params for o in (*p.opts, *p.secondary_opts)}
     own |= set(getattr(cmd, "renames", None) or ())
     for opt in opts:
-        g = opt.guardrail  # type: ignore[attr-defined]
+        g = opt.guardrail
         if flag(g) in own:
             raise ValueError(
                 f"`uqs {command}` already has {flag(g)}: guardrail {g.id} cannot add it"
@@ -161,7 +168,7 @@ class SkipOptions(TyperCommand):
     """A command class taking its generated options: in its help, its
     completion and its parse, and handed to `safety.given`, never to the body."""
 
-    def _generated(self, ctx: Any) -> tuple[TyperOption, ...]:
+    def _generated(self, ctx: Any) -> tuple[GuardrailOption, ...]:
         return generated(self, command_of(self, ctx))
 
     def get_params(self, ctx: Any) -> list[Any]:
@@ -176,7 +183,7 @@ class SkipOptions(TyperCommand):
         rest = super().parse_args(ctx, args)
         given: list[tuple[str, str]] = []
         for opt in self._generated(ctx):
-            g, value = opt.guardrail, ctx.params.pop(opt.name, None)  # type: ignore[attr-defined]
+            g, value = opt.guardrail, ctx.params.pop(opt.name, None)
             if g.component_scoped:
                 given += [(f"{g.id}:{c}", f"{flag(g)} {c}") for c in value or ()]
             elif value:
