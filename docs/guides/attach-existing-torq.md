@@ -593,8 +593,16 @@ uqs job attachment add pb-uat --no-start-with-all  # registered, started on dema
   `--password-env` names; the gate reads it there, so it must be set in the
   environment `torq.sh` runs in, and registration is refused while it is not set
   here. Row, launcher, manifest, plan and `--json` output hold the variable's
-  name at most. The publisher's own TorQ credential is the stack's passwords
-  files, as for every other process.
+  name at most.
+- **Authentication follows the site's TorQ application** - the one the process
+  file is in, which a native start's `${TORQAPPHOME}` names - by the same rule
+  as a `uqs start` of the publisher
+  ([`KDBSECURE`](../reference/environment.md)). With `KDBSECURE` set to a
+  directory, the row has no `-U` and the launcher exports `UQF_SITE_AUTH=1` and
+  `KDBSECURE`, so the site's loader and `.pm` stand. Otherwise the process file
+  must be in that application's `appconfig/`, beside `passwords/accesslist.txt`,
+  and the row's `-U` names that list. Run the add again after setting or
+  unsetting `KDBSECURE`: it rewrites the row and the launcher.
 - **Ownership is a record, not a marker.** Nothing but the row goes into the
   file. The manifest's `registrations` records the exact row text written and
   the launcher's hash. Every other byte of the file is kept: header and column
@@ -614,6 +622,8 @@ uqs job attachment add pb-uat --no-start-with-all  # registered, started on dema
   - lists several tickerplants and no `--tickerplant` was given, or not the
     attachment's;
   - holds the attachment's row, or its launcher, changed by someone else since;
+  - is not in a TorQ application's `appconfig/` that has the starter pack's
+    access list, and `KDBSECURE` is not set;
   - lacks a column the row needs.
 
 The plan names every file attaching writes, the machine it is on, its writer

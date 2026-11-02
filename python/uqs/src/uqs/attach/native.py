@@ -45,6 +45,7 @@ from uqs.attach.manifest import Manifest, now
 from uqs.attach.registry import Registry, write
 from uqs.attach.topology import TICKERPLANT, Observation
 from uqs.portexpr import resolve
+from uqs.stack.attached_publisher import with_auth
 
 CODE = "PROCESS_REGISTRY"
 ROW, LAUNCHER = "process_row", "launcher"
@@ -90,11 +91,13 @@ def target(att: Attachment, root: Path, port: PublisherPort, state_dir: Path | N
         raise AttachmentError(f"the port of {att.publisher.procname} cannot be worked out")
     launcher = native_row.launcher_path(att, state_dir)
     native_row.refuse_unsafe_path(launcher)
+    how = native_row.site_auth(att)
     env = native_row.tree_env(paths)
     values = native_row.row_values(att, uqf, port.port - att.stack.id, launcher, env)
+    (values,) = with_auth([values], [att.publisher.procname], how)
     return Target(
         reg, att.publisher.procname, values.get("proctype", ""), port.port, reg.row(values),
-        launcher, native_row.launcher_text(att, env, state_dir),
+        launcher, native_row.launcher_text(att, env | how.env(), state_dir),
     )  # fmt: skip
 
 
