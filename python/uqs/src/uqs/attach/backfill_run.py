@@ -32,8 +32,8 @@ from uqs.paths import UqsError, UqsPaths
 from uqs.stack import backfill as stack_backfill
 from uqs.stack import runs
 from uqs.stack.backfill_status import result_line
+from uqs.stack.run_modes import EXECUTION_MODES
 
-RUN_MODES = ("run", "dry-run")
 #: How the runner is handed the password of the readers it is to ask to reload.
 REACH_PASSWORD_ENV = "UQF_ATTACH_REACH_PASSWORD"
 #: The runner's exit code for rows that are written and covered but not yet queryable.
@@ -147,8 +147,8 @@ def launch(
     attachment already has a run or there is no q. The state directory is created here and only
     here.
     """
-    if mode not in RUN_MODES:
-        raise UqsError(f"--mode {mode} is not an execution mode ({', '.join(RUN_MODES)})")
+    if mode not in EXECUTION_MODES:
+        raise UqsError(f"--mode {mode} is not an execution mode ({', '.join(EXECUTION_MODES)})")
     q = q_interpreter(os.environ)
     if q is None:
         raise UqsError("no q interpreter - set $QCMD, or put q on PATH; the run is a q process")

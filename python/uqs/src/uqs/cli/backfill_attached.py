@@ -20,6 +20,7 @@ from uqs.cli import backfill_receive
 from uqs.cli.shared import _die, _paths, console
 from uqs.paths import UqsError
 from uqs.stack import backfill as stack_backfill
+from uqs.stack.run_modes import MODES
 
 
 def run(
@@ -42,8 +43,8 @@ def run(
 ) -> None:
     """Validate, plan or run a backfill into `attachment`'s native HDB; non-zero on a refusal."""
     mode = mode or "run"
-    if mode not in (*attached.READ_ONLY_MODES, *attached.EXECUTION_MODES):
-        _die(UqsError(f"--mode {mode!r} is not one of validate, plan, dry-run, run"))
+    if mode not in MODES:
+        _die(UqsError(f"--mode {mode!r} is not one of {', '.join(MODES)}"))
         return
     if writer is not None:
         backfill_receive.extract(
