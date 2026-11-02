@@ -1,4 +1,4 @@
-// run_backfill_process.q - the q-backfill-process lane.
+// run_backfill_process.q - the bounded lifecycle across real processes.
 //
 // What separates this lane from q-unit is not the assertions but the
 // ENVIRONMENT. These checks are meaningless in-process:
@@ -11,7 +11,7 @@
 //     same-process resume never discards its own in-memory state, so it
 //     cannot show that the state on disk was sufficient.
 //
-// Run via `scripts/test.py q-backfill-process`, which gives each run a fresh
+// Run via tests/qrun/test_process_runners.py, which gives each run a fresh
 // UQF_STATUS_DIR - a stale directory would make a leftover lock look like a
 // passing exclusion test.
 

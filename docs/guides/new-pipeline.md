@@ -645,10 +645,11 @@ To see it run against a real second process, follow
 [`tests/q/run_two_instances.q`](../../tests/q/run_two_instances.q): start a
 plain q process holding the upstream table, set
 `UQF_SOURCE_CRED_<SOURCE>=host:port`, and run the worker
-(`scripts/test.py q-two-instances` does exactly this for `upstream_trades`). One
-trap that only shows up there: write `` from `trade ``, never `from trade`. The
-lambda carries the `.qpipe.source.fx_rates` context it was defined under across
-the wire, so a bare name resolves in that namespace on the remote and throws;
+(`uv run pytest tests/qrun/test_process_runners.py -k two-instances` does
+exactly this for `upstream_trades`). One trap that only shows up there: write
+`` from `trade ``, never `from trade`. The lambda carries the
+`.qpipe.source.fx_rates` context it was defined under across the wire, so a bare
+name resolves in that namespace on the remote and throws;
 `test_source_contract.q` refuses it.
 
 ## Recomputing on an upstream publish

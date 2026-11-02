@@ -225,7 +225,7 @@ Write in this order, and run the suite between each:
 
 ```bash
 q tests/run_tests.q                       # the suite; the scaffolded test must be gone
-uv run python scripts/test.py q-examples  # every @eg you wrote actually runs
+uv run pytest tests/qrun/test_documented_examples.py  # every @eg you wrote actually runs
 uv run pytest python/ -q                  # the declaration reads back as a process
 uv run python scripts/gates/check_q_traps.py
 ```

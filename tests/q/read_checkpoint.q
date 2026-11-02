@@ -1,4 +1,4 @@
-// read_checkpoint.q - a child process for the q-backfill-process lane. Loads
+// read_checkpoint.q - a child process for run_backfill_process.q. Loads
 // only what it needs and reports the cursor it would resume from, sharing
 // nothing with the parent but the status directory.
 \l src/etl/core/status.q

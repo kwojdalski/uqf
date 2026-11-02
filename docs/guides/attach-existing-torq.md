@@ -782,8 +782,8 @@ so `uqs job attachment remove` there refuses while it runs.
 fails its next window without covering it, and the next run, once a receiver is
 back, sends it again.
 
-`scripts/test.py q-remote-writer` runs the receiver and an extractor between two
-processes.
+`uv run pytest tests/qrun/test_process_runners.py -k remote-writer` runs the
+receiver and an extractor between two processes.
 
 Reactions of the backfilled dataset (`rebuild_positions`, for example) write
 through the same manager and are refused, and recorded as owed: they belong on

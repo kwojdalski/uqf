@@ -98,9 +98,11 @@ def test_peachq_names_the_binary_for_the_peachq_lane(monkeypatch):
 
 
 def test_the_lanes_moved_to_pytest_are_gone():
-    """q-scripts, q-docs and q-docs-peachq run under pytest now
-    (tests/qrun/), and only there (#1808): no lane runs them a second way."""
-    for lane in ("q-scripts", "q-docs", "q-docs-peachq"):
+    """These run under pytest now (tests/qrun/), and only there (#1808): no
+    lane runs them a second way."""
+    moved = ("q-scripts", "q-docs", "q-docs-peachq", "q-examples", "q-backfill-process",
+             "q-two-instances", "q-remote-writer", "q-metatables-hdb")  # fmt: skip
+    for lane in moved:
         assert lane not in runner.LANES
         assert lane not in runner.ALL
 
@@ -125,7 +127,7 @@ def test_q_unit_without_arguments_runs_the_whole_suite(ran):
 
 def test_another_lane_refuses_arguments_it_would_drop(ran):
     with pytest.raises(SystemExit) as exc:
-        runner.main(["q-examples", "-files", "test_a.q"])
+        runner.main(["q-order", "-files", "test_a.q"])
     assert exc.value.code == 2
     assert ran == []
 

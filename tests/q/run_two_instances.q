@@ -17,7 +17,7 @@
 / back, the transform reshapes them, coverage is recorded, a second run is
 / idle, and a restatement re-fetches only what it withdrew.
 / .
-/ Its own lane (`scripts/test.py q-two-instances`) rather than a q-unit test,
+/ Its own process (tests/qrun/test_process_runners.py) rather than a q-unit test,
 / for the reason run_backfill_process is: it needs a second process and a
 / port, which the hermetic suite must not.
 

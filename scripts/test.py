@@ -2,7 +2,7 @@
 """test.py - the test lane dispatcher.
 
 The rule: "Use the suite that matches the changed layer: q-unit for q
-behaviour, q-backfill-process for bounded process behaviour, and the
+behaviour, the process checks for bounded process behaviour, and the
 focused Python suites for orchestration."
 
 D5 deliberately did NOT build a dispatcher when the only lane was q-unit: a
@@ -21,20 +21,8 @@ between them:
                        lane CI BLOCKS on, on PeachQ, where KDB-X cannot run.
   attach-stack         the attach workflow (#1424) on isolated TorQ stacks: real
                        processes, own ports and data. Needs KDB-X; not in `all`.
-  q-metatables-hdb     metatable queries against a temporary partitioned HDB.
   q-order              the q suite again, suites in the opposite order, so a
                        test that depends on running after another one fails
-  q-examples           every documented @eg runs, in its own process, since
-                       many examples change state.
-  q-two-instances      a second kdb+ process is started on the starter
-                       pack's HDB and a bounded worker moves trades out of
-                       it - the only lane in which a worker's LIVE path runs.
-  q-remote-writer      a second kdb+ process owns an HDB and a bounded worker
-                       here writes into it over IPC (#1650): admission, a
-                       lost acknowledgement, and coverage after commit.
-  q-backfill-process   the bounded lifecycle end to end - locks, resumption
-                       and coverage - which needs a real filesystem and real
-                       child processes to be worth anything.
   remote-stack         a TorQ stack in a Docker container standing in for another
                        machine, attached to from a second one (#1650, #1651):
                        publish, reach back, registration lost, remote writer.
@@ -61,6 +49,10 @@ that runs each now:
   q-scripts      uv run pytest tests/qrun/test_worked_examples.py
   q-docs         uv run pytest tests/qrun/test_doc_blocks.py -m kdbx
   q-docs-peachq  uv run pytest tests/qrun/test_doc_blocks.py -m peachq
+  q-examples     uv run pytest tests/qrun/test_documented_examples.py
+  q-backfill-process, q-two-instances, q-remote-writer, q-metatables-hdb
+                 uv run pytest tests/qrun/test_process_runners.py
+                 (-k two-instances etc. for one of them)
 
 WHY PYTHON RATHER THAN SHELL. The shell version had three bugs waiting to
 happen that are simply absent here: a lane's temp directory was cleaned up
@@ -320,47 +312,6 @@ def lane_q_order() -> None:
     # fixed - a new dependency on running after some other suite fails here
     # rather than the next time anyone touches that list.
     _q("q-order", "tests/run_tests.q", env={"UQF_TEST_ORDER": "reverse"})
-
-
-def lane_q_backfill_process() -> None:
-    _banner("q-backfill-process: bounded lifecycle on a real filesystem")
-    # A fresh status directory per run, so this lane never reads state a
-    # previous run left behind - a stale lock would make the single-instance
-    # test pass for the wrong reason.
-    with tempfile.TemporaryDirectory() as statusdir:
-        _q(
-            "q-backfill-process",
-            "tests/q/run_backfill_process.q",
-            env={"UQF_STATUS_DIR": statusdir},
-        )
-
-
-def lane_q_metatables_hdb() -> None:
-    _banner("q-metatables-hdb: metatable queries against a temporary HDB")
-    with tempfile.TemporaryDirectory() as hdb:
-        _q("q-metatables-hdb", "tests/q/run_metatables_hdb.q", hdb)
-
-
-def lane_q_examples() -> None:
-    _banner("q-examples: every documented @eg runs")
-    # Its own process and its own status directory: examples stage coverage,
-    # take locks and open runs, and none of that may leak into another lane.
-    with tempfile.TemporaryDirectory() as statusdir:
-        _q("q-examples", "tests/q/run_examples.q", env={"UQF_STATUS_DIR": statusdir})
-
-
-def lane_q_two_instances() -> None:
-    _banner("q-two-instances: data moved between two kdb+ processes")
-    # The upstream is a second q process on a port; its own status directory
-    # keeps this run's locks and checkpoints away from every other lane's.
-    with tempfile.TemporaryDirectory() as statusdir:
-        _q("q-two-instances", "tests/q/run_two_instances.q", env={"UQF_STATUS_DIR": statusdir})
-
-
-def lane_q_remote_writer() -> None:
-    _banner("q-remote-writer: a backfill extracted here and written by another process")
-    with tempfile.TemporaryDirectory() as statusdir:
-        _q("q-remote-writer", "tests/q/run_remote_writer.q", env={"UQF_STATUS_DIR": statusdir})
 
 
 def lane_python() -> None:
@@ -627,11 +578,6 @@ LANES: dict[str, Callable[[], None]] = {
     "q-unit": lane_q_unit,
     "q-unit-peachq": lane_q_unit_peachq,
     "q-order": lane_q_order,
-    "q-examples": lane_q_examples,
-    "q-backfill-process": lane_q_backfill_process,
-    "q-two-instances": lane_q_two_instances,
-    "q-remote-writer": lane_q_remote_writer,
-    "q-metatables-hdb": lane_q_metatables_hdb,
     "python": lane_python,
     "bundles": lane_bundles,
     "q-coverage": lane_q_coverage,

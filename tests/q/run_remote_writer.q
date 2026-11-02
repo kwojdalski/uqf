@@ -13,7 +13,7 @@
 / the next run and acknowledged as a duplicate rather than appended twice, and
 / finish over the wire finishes the destination's partitions.
 / .
-/ Its own lane (`scripts/test.py q-remote-writer`), as run_two_instances is:
+/ Its own process (tests/qrun/test_process_runners.py), as run_two_instances is:
 / it needs a second process and a port.
 
 \l src/init.q
