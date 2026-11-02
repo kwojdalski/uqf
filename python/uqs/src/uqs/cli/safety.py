@@ -19,13 +19,13 @@ the same on every command; test_cli_conventions.py holds the commands to them.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from enum import StrEnum
 from typing import Annotated
 
 import typer
 from typer.core import TyperCommand
 
+from uqs.guardrails import Guardrail, aggregate
 from uqs.paths import UqsError
 
 DryRunOpt = Annotated[
@@ -78,32 +78,23 @@ def dry_run_note() -> str:
     return "[dim]dry run: nothing was changed. Run it again without --dry-run.[/]"
 
 
-@dataclass(frozen=True)
-class Bypass:
-    """One named override: the commands that take it, and what it skips."""
-
-    name: str
-    commands: tuple[str, ...]
-    skips: str
-
-
-def catalog() -> list[Bypass]:
-    """Every named override a command takes, read from where each is enforced."""
-    from uqs.attach.overrides import POLICY
+def registry() -> tuple[Guardrail, ...]:
+    """Every guardrail, from the modules that enforce them, in a fixed order:
+    start, deployment, attachment. Gathered here, in the front end, because
+    uqs/guardrails.py is a leaf every layer imports and must import none."""
+    from uqs.attach import overrides as attach
     from uqs.deploy import overrides as deploy
     from uqs.stack import start_overrides as start
 
-    rows = [
-        Bypass(start.NAMES[field], commands, start.CONSEQUENCES[field])
-        for field, commands in start.COMMANDS.items()
-    ]
-    rows += [Bypass(name, ("deploy push",), skips) for name, skips in deploy.SKIPS.items()]
-    rows += [
-        Bypass(f"{code}:COMPONENT", ("job attachment add",), policy.risk)
-        for code, policy in sorted(POLICY.items())
-        if policy.overridable
-    ]
-    return rows
+    return aggregate(
+        [tuple(start.GUARDRAILS.values()), deploy.GUARDRAILS, attach.GUARDRAILS],
+    )
+
+
+def catalog() -> list[Guardrail]:
+    """Every named override a command takes: the overridable guardrails, read
+    from where each is enforced (`registry`)."""
+    return [g for g in registry() if g.overridable]
 
 
 def given(command: str, names: list[str] | None, reason: str | None) -> dict[str, str]:

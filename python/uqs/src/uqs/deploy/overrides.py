@@ -29,20 +29,36 @@ from __future__ import annotations
 
 from uqs.deploy.artifact import Artifact, meets
 from uqs.deploy.config import Config, DeployError
+from uqs.guardrails import Guardrail
 
 ACCEPT_DIGEST = "accept-digest"
 ACCEPT_Q_VERSION = "accept-q-version"
 ALLOW_UNPINNED = "allow-unpinned"
 ACCEPT_CONVERTED = "accept-converted-release"
 
-#: Each override, as `--override NAME` gives it, and the requirement it relaxes.
-SKIPS = {
-    ACCEPT_DIGEST: "deploy an artifact whose sha256 is not expected_sha256",
-    ACCEPT_Q_VERSION: "deploy on a server q outside q_version; the version found is recorded",
-    ALLOW_UNPINNED: "deploy a local artifact with no .sha256 beside it and no expected_sha256",
-    ACCEPT_CONVERTED: "start a release converted for an older kdb+ on a q its version check "
-    "cannot confirm, once its smoke test passes there",
-}
+_PUSH = ("deploy push",)
+#: Each override, as `--override NAME` gives it, and the requirement it relaxes (#1825).
+GUARDRAILS = (
+    Guardrail(ACCEPT_DIGEST, _PUSH, "deploy an artifact whose sha256 is not expected_sha256"),
+    Guardrail(
+        ACCEPT_Q_VERSION,
+        _PUSH,
+        "deploy on a server q outside q_version; the version found is recorded",
+    ),
+    Guardrail(
+        ALLOW_UNPINNED,
+        _PUSH,
+        "deploy a local artifact with no .sha256 beside it and no expected_sha256",
+    ),
+    Guardrail(
+        ACCEPT_CONVERTED,
+        _PUSH,
+        "start a release converted for an older kdb+ on a q its version check "
+        "cannot confirm, once its smoke test passes there",
+    ),
+)
+#: {name: what it relaxes}, as the options and a target file's refusals read them.
+SKIPS = {g.id: g.description for g in GUARDRAILS}
 
 
 def _entry(override: str, reason: str, requirement: str, observed: str, applied: bool) -> dict:
