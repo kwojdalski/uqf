@@ -276,18 +276,21 @@ def _lines(result) -> int:
 
 def _die(exc: UqsError) -> None:
     log.error("{}", exc)
-    json_refusal(str(exc))
+    details = getattr(exc, "json_details", None)
+    json_refusal(str(exc), details() if callable(details) else None)
     raise typer.Exit(code=1)
 
 
-def json_refusal(message: str) -> None:
+def json_refusal(message: str, details: dict | None = None) -> None:
     """With --json, the refusal as the one JSON document stdout carries (#1685).
 
     The log line has gone to stderr (uqs.logger.json_requested); without this
     a refused --json command would leave stdout empty, and a caller parsing it
-    would read a refusal as a broken pipe. Nothing without --json."""
+    would read a refusal as a broken pipe. Nothing without --json. `details` are
+    what a structured refusal adds beside its message - a backfill coordination
+    refusal's `findings` (#1827) - and never replace `ok` or `error`."""
     if json_requested():
-        print(json.dumps({"ok": False, "error": message}, indent=2))
+        print(json.dumps({**(details or {}), "ok": False, "error": message}, indent=2))
 
 
 def _sort_key(value: object):
