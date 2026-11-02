@@ -11,8 +11,12 @@ the registry and docs, and nothing would notice.
 This loads the ETL tree in q, the way a process does, and diffs q's own
 registries against the parser, field by field, for every job:
 
-    streaming job, normalizer   procname, subscribe_to, publishes
-    bounded worker              procname, dataset, source_version
+    streaming job, normalizer   procname, subscribe_to, publishes, transform
+    bounded worker              procname, dataset, source_version, source, transform
+
+`source` is what `stack/capabilities.refuse_unsupported` picks the PeachQ gate
+by, and `transform` what `uqs job new --twin-of` copies, so a parser that
+misread either would make a wrong decision with nothing to notice it.
 
 Not `start_with_all` or `note`: those are deployment facts only the registry
 reads, and q's declaration functions validate and then drop them, so there is
@@ -44,10 +48,10 @@ _DUMP = """
 \\l src/init.q
 \\l src/etl/init.q
 s:{[j] d:.qetl.job.stream.def j;
-    `procname`subscribe_to`publishes!(d`procname;(),d`subscribe_to;(),d`publishes)
+    `procname`subscribe_to`publishes`transform!(d`procname;(),d`subscribe_to;(),d`publishes;d`transform)
   } each key .qetl.job.stream.jobs;
 b:{[w] c:.qetl.job.bounded.def w;
-    `procname`dataset`source_version!(c`procname;c`dataset;c`source_version)
+    `procname`dataset`source_version`source`transform!(c`procname;c`dataset;c`source_version;c`source;c`transform)
   } each .qetl.job.bounded.defined[];
 -1 .j.j `stream`bounded!((key .qetl.job.stream.jobs)!s;(.qetl.job.bounded.defined[])!b);
 exit 0
@@ -60,12 +64,18 @@ def _parser_view(root: Path) -> dict[str, dict[str, dict]]:
     bounded: dict[str, dict] = {}
     for d in read_declarations(root):
         if d.kind is PipelineKind.BACKFILL:
-            bounded[d.name] = {"procname": d.procname, "source_version": d.source_version}
+            bounded[d.name] = {
+                "procname": d.procname,
+                "source_version": d.source_version,
+                "source": d.source,
+                "transform": d.transform,
+            }
         else:
             stream[d.name] = {
                 "procname": d.procname,
                 "subscribe_to": sorted(d.subscribe_to),
                 "publishes": sorted(d.publishes),
+                "transform": d.transform,
             }
     for path in sorted((root / WORKER_DIR).glob("*.q")):
         for fn, name, fields in declaration_calls(path.read_text()):
@@ -135,6 +145,10 @@ def _q_view() -> dict:
 def test_the_parser_reads_every_job_the_way_q_loads_it():
     q = _q_view()
     assert q["stream"] and q["bounded"], "q loaded no jobs - the comparison would be vacuous"
+    # source and transform are compared too, so q must hand back some
+    assert all(w["source"] for w in q["bounded"].values()), "a worker with no source"
+    assert any(w["transform"] for w in q["bounded"].values())
+    assert any(j["transform"] for j in q["stream"].values())
     assert differences(_parser_view(UQF_ROOT), q) == []
 
 
@@ -155,4 +169,38 @@ def test_a_disagreement_is_reported_not_passed_over():
     assert differences(parser, q) == [
         "stream job b: q loads it, the parser does not see it",
         "stream job a.publishes: parser ['t'], q ['u']",
+    ]
+
+
+def test_a_source_or_transform_the_parser_misreads_is_reported():
+    """The two fields Python decides by - the capability gate by `source`,
+    `uqs job new --twin-of` by `transform` - are compared like the rest."""
+    parser = {
+        "stream": {"j": {"procname": "j1", "subscribe_to": [], "publishes": [], "transform": ""}},
+        "bounded": {
+            "w": {
+                "procname": "w1",
+                "dataset": "d",
+                "source_version": "",
+                "source": "wrong",
+                "transform": "",
+            }
+        },
+    }
+    q = {
+        "stream": {"j": {"procname": "j1", "subscribe_to": [], "publishes": [], "transform": "xf"}},
+        "bounded": {
+            "w": {
+                "procname": "w1",
+                "dataset": "d",
+                "source_version": "",
+                "source": "right",
+                "transform": "xf",
+            }
+        },
+    }
+    assert differences(parser, q) == [
+        "stream job j.transform: parser '', q 'xf'",
+        "bounded job w.source: parser 'wrong', q 'right'",
+        "bounded job w.transform: parser '', q 'xf'",
     ]
