@@ -47,6 +47,28 @@
     if[.qetl.io.odbc.loaded[]; :1b];
     @[{system"l odbc.k"; .qetl.io.odbc.loaded[]};::;{[e] 0b}]}
 
+/ Can this interpreter load a shared library (`2:`)? The ODBC client is one, so a
+/ static build - PeachQ's - can never reach a driver. Asked by trying a library
+/ that does not exist: a static build answers "static-dlopen...", any other says
+/ the file is missing. Never throws. The same expression
+/ python/uqs/src/uqs/stack/capabilities.py's PROBE asks of a bare q (it cannot
+/ load this tree), held to this one by test_peachq_pipelines.
+/ @return 1b when `2:` can load a library, 0b on a static build
+/ @eg .qetl.io.odbc.native_loadable[]
+.qetl.io.odbc.native_loadable:{[]
+    not (@[{`:./uqs_no_such_library 2:(`f;1)};::;{x}]) like "static-dlopen*"}
+
+/ Refuse before anything is claimed, locked or written when this interpreter
+/ cannot load a shared library - the preflight of the odbc transport (see
+/ .qetl.source.preflight). The driver may be absent on a machine that CAN load
+/ one, and a worker then runs on its fixture; a static build can do neither.
+/ @return 1b
+/ @throws error when `2:` is unavailable
+.qetl.io.odbc.require_native:{[]
+    if[not .qetl.io.odbc.native_loadable[];
+        '"qetl.io.odbc: this q cannot load a shared library (2:), so no ODBC driver - run it on a q that can (a KDB-X or -glibc build)"];
+    1b}
+
 / Refuse, naming what is missing.
 / .
 / Called by every function below that needs the driver, so the message is

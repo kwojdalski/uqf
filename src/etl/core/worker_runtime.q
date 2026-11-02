@@ -160,6 +160,44 @@
         attempt+:1];
     `state`kind`attempts`result`error!(`failed;`transport;cap;::;last outcome)}
 
+/ ------------------------------------------------- HOW A DATASET IS READ
+/ .
+/ The columns getdata reads a dataset a worker writes by (#1869), exported to
+/ uqs as q_facts.BOUNDED_DATASET_TIME_COLUMNS and ..._INSTRUMENT_COLUMNS. A
+/ dataset that is a plant table is read as the plant says
+/ (.qetl.plant.read_time_column, src/etl/plant_tables.q): that definition is
+/ the shape stored, whatever the worker's own output omits - duckdb_deals'
+/ transform leaves `time` out, the HDB writer stamps it, and the plant table
+/ is read by it. Any other dataset is stored as its transform's output with
+/ `time` stamped by the same writer when the output has none.
+
+/ The columns a dataset's worker output has.
+/ @param d the dataset
+/ @return the column names, from the first worker that writes it
+.qetl.job.bounded.dataset_columns:{[d]
+    cols .qetl.transform.output_schema first exec transform from .qetl.job.bounded.worker_cfg where dataset=d}
+
+/ The time column a dataset is read by.
+/ @param d the dataset
+/ @return `time, as a plant table or the HDB writer's stamp gives it
+/ @throws error when a dataset's output has neither it nor its source's time column to stamp it from
+/ @eg .qetl.job.bounded.read_time_column `duckdb_deals  ->  `time
+.qetl.job.bounded.read_time_column:{[d]
+    if[d in .qetl.plant.names[]; :.qetl.plant.read_time_column d];
+    c:.qetl.job.bounded.dataset_columns[d];
+    stamp:(.qetl.source.def first exec source from .qetl.job.bounded.worker_cfg where dataset=d)`time_column;
+    if[not (.qetl.plant.time_column in c) or stamp in c;
+        '"read_time_column: ",string[d]," has neither ",string[.qetl.plant.time_column]," nor ",string[stamp]," to be read by"];
+    .qetl.plant.time_column}
+
+/ The instrument column a dataset is read by, or a null symbol.
+/ @param d the dataset
+/ @return a plant table's own, else `sym where the output has one
+/ @eg .qetl.job.bounded.read_instrument_column `order_quality  ->  `book
+.qetl.job.bounded.read_instrument_column:{[d]
+    if[d in .qetl.plant.names[]; :.qetl.plant.read_instrument_column d];
+    .qetl.plant.instrument_in[d;.qetl.job.bounded.dataset_columns[d]]}
+
 / ------------------------------------------------------------- RUN MODES
 / .
 / What a bounded run is asked to do, each mode defined by what it may TOUCH:
@@ -176,6 +214,13 @@
 / and .qetl.job.bounded.plan_only are separate entry points - so the gate
 / below only has to hold the line between dry_run and run.
 .qetl.job.bounded.runtime.modes:`validate`plan`dry_run`run
+
+/ The modes that open no source, write nothing and leave no status file: the
+/ two above that never reach the window loop. The one place the split is
+/ written (#1867): the attached backfill refuses them, and uqs derives from
+/ q_facts.READ_ONLY_RUN_MODES which of a run's modes start a runner, wait for an
+/ outcome or need a capability. Every other mode in `modes` executes.
+.qetl.job.bounded.runtime.read_only_modes:`validate`plan
 
 / EVERY durable effect a run makes, named once. A mode other than `run makes
 / none of them, and an effect not on this list cannot be gated at all - so a
@@ -724,77 +769,5 @@
     n:.qetl.coverage.supersede[cfg`dataset;cfg`partition;v;w`range_from;w`range_to];
     .qetl.log.info[worker;"live rows replace a fixture run's window";`range_from`range_to`claims!(w`range_from;w`range_to;n)];
     rows}
-
-/ ---------------------------------------------------------- DEPENDENCIES
-
-/ worker -> the TorQ process types it needs a connection to.
-.qetl.job.bounded.runtime.declared_dependencies:(`symbol$())!();
-
-/ Declare what a worker needs before it can run.
-/ @eg .qetl.job.bounded.runtime.declare_dependencies[`markout_backfill;`tickerplant`hdb]
-.qetl.job.bounded.runtime.declare_dependencies:{[worker;procs]
-    .qetl.job.bounded.runtime.declared_dependencies[worker]:procs;
-    procs}
-
-/ Private: which process types currently have a live connection.
-/ .
-/ Reads TorQ's .servers.SERVERS when it is loaded, and returns empty
-/ otherwise. Wrapped because this file is unit-tested outside a TorQ process,
-/ where .servers does not exist at all - and an unwrapped read would make
-/ every test here depend on a running stack.
-/ .
-/ Overridable via connected_override so a test can present a fleet without
-/ one.
-/ @private
-.qetl.job.bounded.runtime.connected_override:();
-
-/ The proctypes currently reachable in the fleet.
-/ .
-/ Empty when TorQ is absent, which makes require_dependencies report every
-/ declared dependency as missing and refuse to start - the direction a total
-/ function has to pick, so that a broken probe stops a worker at init rather
-/ than letting it run blind.
-/ @return a symbol vector of proctypes, empty outside a TorQ process
-/ @eg .qetl.job.bounded.runtime.connected[]
-.qetl.job.bounded.runtime.connected:{[]
-    if[count .qetl.job.bounded.runtime.connected_override; :.qetl.job.bounded.runtime.connected_override];
-    @[{exec distinct proctype from .servers.SERVERS where not null w};::;{`symbol$()}]}
-
-/ Fail at INITIALISATION when a declared dependency is unavailable.
-/ .
-/ At init, not at first use: a worker that starts, runs for twenty minutes
-/ and then discovers the hdb was never reachable has already published a
-/ partial window and burned the operator's time. Reports every missing
-/ dependency at once, for the same reason require_contract does.
-/ @throws error naming every unavailable dependency
-.qetl.job.bounded.runtime.require_dependencies:{[worker]
-    needed:.qetl.job.bounded.runtime.declared_dependencies[worker];
-    if[0=count needed; :worker];
-    live:.qetl.job.bounded.runtime.connected[];
-    missing:needed where not needed in live;
-    .[{.qetl.log.dbg[x;y;z]};(worker;"dependencies";`needed`connected`missing!(needed;live;missing));::];
-    if[count missing;
-        '"require_dependencies: ",string[worker]," cannot start - no connection to ",
-         (", " sv string missing),
-         " (declared dependencies must resolve through .servers at init)"];
-    worker}
-
-/ Fail at initialisation when an upstream dataset is not published for the
-/ requested range (the "coverage precondition").
-/ .
-/ Distinct from needs_fetch above, which asks about THIS worker's own output.
-/ This asks about its INPUT: a markout backfill over a range whose trades are
-/ not yet published would compute markouts against missing trades and record
-/ coverage saying it had done so.
-/ .
-/ The upstream's partition is a SEPARATE parameter from this worker's own,
-/ and deliberately so: a per-symbol markout worker may depend on a trades
-/ dataset that is unpartitioned, or partitioned differently. Assuming the two
-/ share a partitioning would check the wrong slice and admit a run whose
-/ input is missing.
-/ @param upstream_part the upstream's partition, or ` when it has none
-/ @throws error naming the missing upstream ranges
-.qetl.job.bounded.runtime.require_upstream:{[upstream;upstream_part;version;as_of;from_ts;to_ts]
-    .qetl.coverage.require_covered[upstream;upstream_part;version;as_of;from_ts;to_ts]}
 
 \d .

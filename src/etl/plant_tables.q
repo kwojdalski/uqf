@@ -94,6 +94,56 @@
             $[t in .qetl.plant.vendored; .qetl.plant.vendored_path; "src/etl/plant_tables.q"]];
     cs#s}
 
+/ ------------------------------------------------- HOW A TABLE IS READ
+/ .
+/ The columns a table is read by, declared once (#1869): the primary time
+/ column and the instrument column that scripts/torqconfig/dataaccess/
+/ tableproperties.csv gives getdata, and that uqs reads from q_facts.py. They
+/ live with the schema because a plant table's shape is written here and nowhere
+/ else, and a plant table is read by streaming jobs that have no worker; the
+/ datasets a worker writes that are NOT plant tables take the same rule over
+/ their output (.qetl.job.bounded.read_columns).
+
+/ The time column every plant table is read by. Every table leads with it (the
+/ tickerplant stamps it), and the HDB writer adds it to a batch that has none,
+/ as a copy of the source's time column (.qetl.io.hdb_rows) - so a table that
+/ carries another time too, as duckdb_deals does with `deal_time`, is still read
+/ by this one.
+.qetl.plant.time_column:`time
+
+/ The tables whose instrument column is not `sym, and what it is. A table not
+/ named here is read by `sym where it has one, else by none.
+.qetl.plant.instrument_exceptions:(enlist `order_quality)!enlist `book
+
+/ The instrument column of a table with these columns.
+/ @param t the table's name
+/ @param c the table's columns
+/ @return the exception's column, `sym where c has one, else a null symbol
+/ @throws error when the exception names a column c lacks
+/ @eg .qetl.plant.instrument_in[`order_quality;`time`book`n]  ->  `book
+.qetl.plant.instrument_in:{[t;c]
+    if[t in key .qetl.plant.instrument_exceptions;
+        e:.qetl.plant.instrument_exceptions t;
+        if[not e in c; '"plant: instrument_exceptions names ",string[e]," for ",string[t],", which has no such column"];
+        :e];
+    $[`sym in c; `sym; `]}
+
+/ The time column a plant table is read by.
+/ @param t the table's name
+/ @return .qetl.plant.time_column
+/ @throws error when the table does not carry it
+/ @eg .qetl.plant.read_time_column `orders  ->  `time
+.qetl.plant.read_time_column:{[t]
+    if[not .qetl.plant.time_column in cols .qetl.plant.schema t;
+        '"plant: ",string[t]," has no ",string[.qetl.plant.time_column]," column to read it by"];
+    .qetl.plant.time_column}
+
+/ The instrument column a plant table is read by, or a null symbol.
+/ @param t the table's name
+/ @return its instrument column
+/ @eg .qetl.plant.read_instrument_column `order_quality  ->  `book
+.qetl.plant.read_instrument_column:{[t] .qetl.plant.instrument_in[t;cols .qetl.plant.schema t]}
+
 / ------------------------------------------------------ NESTED COLUMNS
 / .
 / A column declared `()` holds a list per row - a ladder of prices, a route

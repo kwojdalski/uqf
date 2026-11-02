@@ -22,6 +22,12 @@ RUN_MODES: tuple[str, ...] = (
     "run",
 )
 
+#: the run modes that open no source and write nothing - .qetl.job.bounded.runtime.read_only_modes
+READ_ONLY_RUN_MODES: tuple[str, ...] = (
+    "validate",
+    "plan",
+)
+
 #: the levels .qetl.log writes, least to most severe - .qetl.log.levels
 LOG_LEVELS: tuple[str, ...] = (
     "TRACE",
@@ -110,13 +116,13 @@ STATUS_FILE_PREFIX: str = "airflow_status_"
 #: a status file's name after the instance id - .qetl.status.file_suffix
 STATUS_FILE_SUFFIX: str = ".txt"
 
-#: dataset -> time column getdata reads it by (#1363)
+#: dataset -> time column getdata reads it by - .qetl.job.bounded.read_time_column
 BOUNDED_DATASET_TIME_COLUMNS: dict[str, str] = {
     "book_liquidity_1m": "time",
     "crypto_book_1s": "time",
-    "demo_deals": "deal_time",
+    "demo_deals": "time",
     "demo_execution_quality": "time",
-    "duckdb_deals": "deal_time",
+    "duckdb_deals": "time",
     "event_tape": "time",
     "exec_bar": "time",
     "fx_markout": "time",
@@ -126,7 +132,7 @@ BOUNDED_DATASET_TIME_COLUMNS: dict[str, str] = {
     "trades_copy": "time",
 }
 
-#: dataset -> its instrument column, empty if none (#1363)
+#: dataset -> its instrument column, empty if none - .qetl.job.bounded.read_instrument_column
 BOUNDED_DATASET_INSTRUMENT_COLUMNS: dict[str, str] = {
     "book_liquidity_1m": "sym",
     "crypto_book_1s": "sym",
@@ -138,8 +144,23 @@ BOUNDED_DATASET_INSTRUMENT_COLUMNS: dict[str, str] = {
     "fx_markout": "sym",
     "fx_markout_wide": "sym",
     "imported_trades": "sym",
-    "order_quality": "",
+    "order_quality": "book",
     "trades_copy": "sym",
+}
+
+#: source -> its transport, as its declaration resolved it (#1865)
+SOURCE_TRANSPORTS: dict[str, str] = {
+    "demo_deals": "ipc",
+    "demo_events": "ipc",
+    "duckdb_deals": "odbc",
+    "hdb_crypto_book": "ipc",
+    "hdb_demo_markouts": "ipc",
+    "hdb_executions": "ipc",
+    "hdb_fx_markouts": "ipc",
+    "hdb_market_data": "ipc",
+    "hdb_orders": "ipc",
+    "hdb_transfer": "local",
+    "upstream_trades": "ipc",
 }
 
 #: the worker-config layers, most significant first - .qetl.cfg.sources

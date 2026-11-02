@@ -292,9 +292,9 @@ def test_every_held_plant_table_is_listed_for_getdata(tmp_path: Path, monkeypatc
 WORKER = ".qetl.job.bounded.define[`w;`source`dataset`width`procname!(`s;`d;1D;`w1)];\n"
 
 
-def _worker(root: Path, text: str, transport: str = "ipc"):
-    (root / "src" / "etl" / "sources").mkdir(parents=True, exist_ok=True)
-    (root / "src" / "etl" / "sources" / "s.q").write_text(f"transport:`{transport}\n")
+def _worker(root: Path, text: str, transport: str, monkeypatch):
+    """A worker over source `s`, which q resolves to `transport`."""
+    monkeypatch.setattr(capabilities.q_facts, "SOURCE_TRANSPORTS", {"s": transport})
     (decl,) = read_file_text(text, root / "w.q")
     return decl
 
@@ -316,21 +316,39 @@ def test_what_a_worker_needs_depends_on_its_source_and_the_mode(
     """An HDB write needs nothing: io_hdb.q writes and finishes partitions on
     PeachQ itself. Only an ODBC driver - a shared library - is out of reach."""
     monkeypatch.setattr(capabilities.transports, "default", lambda root: "ipc")
-    decl = _worker(tmp_path, WORKER, transport)
+    decl = _worker(tmp_path, WORKER, transport, monkeypatch)
     assert [cap for cap, _why in capabilities.requirements(tmp_path, decl, mode)] == needs
 
 
-def test_a_bundle_source_in_a_file_of_another_name_is_still_found(tmp_path, monkeypatch):
+def test_a_source_q_does_not_list_reads_as_the_default_transport(tmp_path, monkeypatch):
+    """Its own q refuses an ODBC one it cannot reach (.qetl.source.preflight)."""
     monkeypatch.setattr(capabilities.transports, "default", lambda root: "ipc")
-    decl = _worker(tmp_path, WORKER)
-    (tmp_path / "src" / "etl" / "sources" / "s.q").unlink()
-    (tmp_path / "src" / "etl" / "sources" / "pb.q").write_text("source_name:`s\ntransport:`odbc\n")
-    assert [c for c, _ in capabilities.requirements(tmp_path, decl, None)] == ["native"]
+    decl = _worker(tmp_path, WORKER, "odbc", monkeypatch)
+    monkeypatch.setattr(capabilities.q_facts, "SOURCE_TRANSPORTS", {})
+    assert capabilities.requirements(tmp_path, decl, None) == []
+
+
+def test_every_source_in_the_tree_that_q_reads_through_odbc_is_gated():
+    """The facts are q's, so a transport written inside the define dict, not
+    on a `transport:` line, is gated as well as any other."""
+    odbc = {s for s, t in capabilities.q_facts.SOURCE_TRANSPORTS.items() if t == "odbc"}
+    assert "duckdb_deals" in odbc
+    for source in odbc:
+        decl = read_file_text(WORKER.replace("`s;", f"`{source};"), REPO / "w.q")[0]
+        assert capabilities.requirements(REPO, decl, None), source
+
+
+def test_the_probe_asks_what_q_asks_for_native_loading():
+    """PROBE runs on a bare q that cannot load the tree, so its expression is a
+    copy of .qetl.io.odbc.native_loadable; this holds the two together."""
+    q = (REPO / "src" / "etl" / "core" / "singlestore_odbc.q").read_text()
+    expression = capabilities.PROBE.split(":", 1)[1].split(";\n", 1)[0]
+    assert expression in q
 
 
 def test_a_worker_the_interpreter_cannot_run_is_refused_before_it_starts(tmp_path, monkeypatch):
-    decl = _worker(tmp_path, WORKER, "odbc")
     monkeypatch.setattr(capabilities.transports, "default", lambda root: "ipc")
+    decl = _worker(tmp_path, WORKER, "odbc", monkeypatch)
     monkeypatch.setattr(capabilities, "read_declarations", lambda root: [decl])
     monkeypatch.setattr(capabilities, "with_interpreter", lambda paths: {"QCMD": "/pq/q"})
     monkeypatch.setattr(
@@ -357,6 +375,21 @@ def test_peachq_reports_what_it_cannot_do(peachq):
     have = capabilities.probe(str(peachq))
     assert set(have) == set(capabilities.CAPABILITIES)
     assert all(isinstance(v, bool) for v in have.values()), "an answer for each, never a guess"
+
+
+def test_q_and_the_probe_agree_on_loading_a_shared_library(peachq, tmp_path):
+    """.qetl.io.odbc.native_loadable (what refuses an ODBC worker before it locks
+    anything) answers as PROBE does, on the real binary."""
+    q = (REPO / "src" / "etl" / "core" / "singlestore_odbc.q").read_text()
+    start = q.index(".qetl.io.odbc.native_loadable:{[]")
+    body = q[start : q.index("\n\n", start)]
+    script = tmp_path / "native.q"
+    script.write_text(f'{body}\n-1 "native=",string .qetl.io.odbc.native_loadable[];\nexit 0\n')
+    ran = subprocess.run(
+        [str(peachq), str(script), "-q"], capture_output=True, text=True, timeout=60, check=False
+    )
+    capabilities.probe.cache_clear()
+    assert ran.stdout.strip() == f"native={int(capabilities.probe(str(peachq))['native'])}"
 
 
 def test_this_checkouts_tree_converts_and_loads_on_peachq(peachq, tmp_path, monkeypatch):

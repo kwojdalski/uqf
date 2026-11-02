@@ -80,6 +80,27 @@
         '"transport ",string[name]," is not registered - the transports are ",", " sv string .qetl.source.transports[]];
     .qetl.source.transport name}
 
+/ What a transport needs of the process BEFORE a worker reading through it
+/ claims the process or takes its lock: a function of no arguments that throws
+/ when the process cannot reach it, per transport. A transport with no entry
+/ needs nothing. Dispatch by the table, not a branch on a name (#616) - the
+/ transport's own module registers its row below.
+/ @eg .qetl.source.transport_preflight[`odbc][]
+.qetl.source.transport_preflight:(enlist `odbc)!enlist {[] .qetl.io.odbc.require_native[]}
+
+/ Refuse a source whose transport this process cannot reach, before a worker
+/ takes anything for it (#1865). Only a source with a credential is refused:
+/ without one the worker runs on the source's fixture and opens nothing, which
+/ a static build can do as well as any other.
+/ @param source a registered source
+/ @return 1b
+/ @throws error from the transport's preflight
+.qetl.source.preflight:{[source]
+    tr:(.qetl.source.def source)`transport;
+    if[(tr in key .qetl.source.transport_preflight) and .qetl.source.has_credentials source;
+        .qetl.source.transport_preflight[tr][]];
+    1b}
+
 / A source's transport row.
 / @param source a registered source
 / @return dict of transport_fields

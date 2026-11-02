@@ -136,3 +136,48 @@
     m:(.qetl.source.transport_def `local)[`metadata][root;`trades];
     .qunit.assertTrue[.qt.qetl.source.transport.is_meta_shape[m];"the same shape as every other transport"];
     .qunit.assertEquals[m`c;`date`time`sym`px;"the HDB table's own columns"]};
+
+/ ------------------------------------------------------------ preflight (#1865)
+
+/ A source whose transport is written ONLY inside its define dict - no
+/ `transport:` line anywhere - so a text reader would see the default.
+.qt.qetl.source.transport.dict_source:{[] `source`table_name`time_column`row_key`columns`types`query`fixture`tz`transport!
+    (`pf_dict;`pf_t;`time;`time;enlist `time;enlist "p";
+     {[h;a;b] ([] time:`timestamp$())};
+     {[] ([] time:`timestamp$())};
+     `UTC;`odbc)}
+
+/ Run f with the interpreter answering whether it can load a shared library.
+.qt.qetl.source.transport.with_native:{[native;f]
+    keep:.qetl.io.odbc.native_loadable;
+    .qetl.io.odbc.native_loadable:{[n;u] n}[native];
+    r:@[f;::;{(`threw;x)}];
+    .qetl.io.odbc.native_loadable:keep;
+    r}
+
+.qt.qetl.source.transport.test_a_transport_set_only_in_the_define_dict_is_the_sources_transport:{[t]
+    .qetl.source.define[`pf_dict;.qt.qetl.source.transport.dict_source[]];
+    r:(.qetl.source.def `pf_dict)`transport;
+    .qt.support.drop_rows[`.qetl.source.sources;`pf_dict];
+    .qunit.assertEquals[r;`odbc;"the registry holds what the dict said, the fact uqs's capability gate reads"]};
+
+.qt.qetl.source.transport.test_a_live_odbc_source_is_refused_when_q_cannot_load_a_library:{[t]
+    .qetl.source.define[`pf_dict;.qt.qetl.source.transport.dict_source[]];
+    setenv[`UQF_SOURCE_CRED_PF_DICT;"DRIVER=test"];
+    r:.qt.qetl.source.transport.with_native[0b;{.qetl.source.preflight `pf_dict}];
+    ok:.qt.qetl.source.transport.with_native[1b;{.qetl.source.preflight `pf_dict}];
+    .qt.support.drop_rows[`.qetl.source.sources;`pf_dict];
+    .qunit.assertEquals[r;(`threw;"qetl.io.odbc: this q cannot load a shared library (2:), so no ODBC driver - run it on a q that can (a KDB-X or -glibc build)");
+        "a static build says what it lacks"];
+    .qunit.assertEquals[ok;1b;"a q that can load a library goes on to look for the driver"]};
+
+.qt.qetl.source.transport.test_an_odbc_source_with_no_credential_runs_on_its_fixture_anywhere:{[t]
+    .qetl.source.define[`pf_dict;.qt.qetl.source.transport.dict_source[]];
+    setenv[`UQF_SOURCE_CRED_PF_DICT;""];
+    r:.qt.qetl.source.transport.with_native[0b;{.qetl.source.preflight `pf_dict}];
+    .qt.support.drop_rows[`.qetl.source.sources;`pf_dict];
+    .qunit.assertEquals[r;1b;"nothing is opened, so a static build has nothing to refuse"]};
+
+.qt.qetl.source.transport.test_a_source_on_another_transport_has_nothing_to_refuse:{[t]
+    r:.qt.qetl.source.transport.with_native[0b;{.qetl.source.preflight `demo_deals}];
+    .qunit.assertEquals[r;1b;"an ipc source needs no shared library"]};

@@ -84,7 +84,7 @@ def test_every_q_type_round_trips_through_every_full_consumer(char, name):
     assert spec.columns[1] == ("x", char)
     assert attach.parse_definition(spec.definition()) == spec
     column = plant_metadata.Column("x", char, "")
-    table = plant_metadata.Table("t", False, (column,), {}, ())
+    table = plant_metadata.Table("t", False, (column,), {}, (), "time", "")
     assert table.definition() == f"t:([]x:`{name}$())"
 
 

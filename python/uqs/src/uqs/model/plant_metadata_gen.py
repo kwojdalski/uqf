@@ -123,6 +123,8 @@ def render(root: Path, found: dict, vendored: Path) -> str:
             ],
             "nested": t["nested"] or {},
             "sorting": [list(p) for p in t["sorting"]],
+            "time_column": t["time_column"],
+            "instrument_column": t["instrument_column"],
         }
         rows.append(f"    {json.dumps(t['name'])}: {json.dumps(body)}")
     out.append(",\n".join(rows))

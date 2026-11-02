@@ -130,3 +130,15 @@
     .qpipe.job.duckdb_deals_backfill.run[];
     r:.qpipe.job.duckdb_deals_backfill.run[];
     .qunit.assertEquals[(r`state;count value `duckdb_deals);(`idle;5);"already covered: nothing fetched, nothing duplicated"]};
+
+/ --- a live run this q cannot make is refused before it takes anything (#1865) ---
+
+.qt.qpipe.job.duckdb_deals_backfill.test_a_live_run_on_a_q_without_shared_libraries_takes_no_lock:{[t]
+    setenv[`UQF_SOURCE_CRED_DUCKDB_DEALS;"DRIVER=test"];
+    keep:.qetl.io.odbc.native_loadable;
+    .qetl.io.odbc.native_loadable:{[] 0b};
+    r:@[.qpipe.job.duckdb_deals_backfill.init;.qt.qpipe.job.duckdb_deals_backfill.spec_for[`v1;1;6];{(`threw;x)}];
+    .qetl.io.odbc.native_loadable:keep;
+    .qunit.assertEquals[first r;`threw;"init refused"];
+    .qunit.assertTrue[(last r) like "qetl.io.odbc: this q cannot load a shared library*";"naming the missing capability"];
+    .qunit.assertEquals[key hsym `$.qetl.job.bounded.state.lock_path `duckdb_deals_backfill;();"and no lock directory was created"]};
