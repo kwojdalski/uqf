@@ -177,6 +177,13 @@
 / below only has to hold the line between dry_run and run.
 .qetl.job.bounded.runtime.modes:`validate`plan`dry_run`run
 
+/ The modes that open no source, write nothing and leave no status file: the
+/ two above that never reach the window loop. The one place the split is
+/ written (#1867): the attached backfill refuses them, and uqs derives from
+/ q_facts.READ_ONLY_RUN_MODES which of a run's modes start a runner, wait for an
+/ outcome or need a capability. Every other mode in `modes` executes.
+.qetl.job.bounded.runtime.read_only_modes:`validate`plan
+
 / EVERY durable effect a run makes, named once. A mode other than `run makes
 / none of them, and an effect not on this list cannot be gated at all - so a
 / new one must be added here, which is the point: dry runs used to leak

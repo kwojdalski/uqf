@@ -169,6 +169,13 @@
     seen:{[m] .qetl.cfg.set_override[`mode;m]; .qetl.job.bounded.runtime.mode[]} each ("validate";"plan";"DRY_RUN";"run");
     .qunit.assertEquals[seen;`validate`plan`dry_run`run;"each mode reads back, case-insensitively"]};
 
+/ The split uqs reads as q_facts.READ_ONLY_RUN_MODES and attached_backfill.q refuses (#1867).
+.qt.qetl.job.bounded.runtime.test_the_read_only_modes_are_modes_that_never_reach_the_window_loop:{[t]
+    ro:.qetl.job.bounded.runtime.read_only_modes;
+    .qunit.assertEquals[ro except .qetl.job.bounded.runtime.modes;`symbol$();"every read-only mode is one of the modes"];
+    .qunit.assertTrue[(count .qetl.job.bounded.runtime.modes)>count ro;"at least one mode executes"];
+    .qunit.assertEquals[.qetl.job.bounded.runtime.modes except ro;`dry_run`run;"the executing modes are the two that open the source"]};
+
 .qt.qetl.job.bounded.runtime.test_an_unknown_mode_is_refused_by_name:{[t]
     .qetl.cfg.set_override[`mode;"rehearse"];
     .qunit.assertThrows[{.qetl.job.bounded.runtime.mode[]};::;"mode: rehearse is not one of*";"a typo fails rather than running for real"]};
