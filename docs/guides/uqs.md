@@ -977,8 +977,8 @@ Every port is the stack's base port plus a fixed offset. The base is the
 runtime's own (`uqs list --help` names each), and `--base-port <n>` overrides
 it. `uqs list processes` prints every process's port at the base in effect,
 vendored and uqf's alike; uqf's own take the offsets the vendored ones leave
-free, and the generated [process table](../reference/processes.md) lists them
-with their ports at the default base.
+free. The generated [process table](../reference/processes.md) lists both, each
+with its port at the default base.
 
 ## Changing a process's config
 
