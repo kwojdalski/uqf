@@ -207,7 +207,14 @@
         ".qetl.io.odbc.window_query[h;`deals;`deal_time;`deal_id`rate;from_ts;to_ts]";
         ".qdata.getBySymbolDate[`AAPL;2026.02.25]";
         ".qpipe.job.alert_sink.post[`$\":http://localhost:9/hook\";\"{}\"]";
-        ".qetl.webhook.post[\"http://localhost:9/hook\";\"{}\"]");
+        ".qetl.webhook.post[\"http://localhost:9/hook\";\"{}\"]";
+        ".qetl.verify.require_isolated[]";
+        ".qetl.verify.in_sandbox[{[x] x+1};enlist 1]";
+        ".qetl.verify.check_cursor[`demo_deals_feed]`status";
+        ".qetl.verify.check_publish_recovery[`demo_deals_feed]`status";
+        ".qetl.verify.check_retries[`demo_deals_backfill;2026.09.11D00:00:00.000000000;2026.09.12D00:00:00.000000000]`status";
+        ".qetl.verify.check_conflict[`demo_deals_backfill;.qpipe.source.demo_deals.fixture[];2026.09.11D00:00:00.000000000;2026.09.16D00:00:00.000000000]`status";
+        ".qetl.verify.check_coverage[`demo_deals_backfill;2026.09.11D00:00:00.000000000;2026.09.14D00:00:00.000000000;3]`status");
     reason:(
         "sends .u.upd over a tickerplant handle";
         "sends .u.upd over a tickerplant handle";
@@ -217,7 +224,14 @@
         "opens an ODBC connection, which needs a licensed driver this tree does not require";
         "opens a Databento parquet file, which exists only where that data has been downloaded";
         "POSTs to a webhook, which needs an HTTP endpoint listening (#947)";
-        "POSTs to a webhook, which needs an HTTP endpoint listening (#987)"))
+        "POSTs to a webhook, which needs an HTTP endpoint listening (#987)";
+        "refuses outside a throwaway q, and this runner holds a coverage ledger; `uqs job check` runs it in its own q (#1851)";
+        "refuses outside a throwaway q, and this runner holds a coverage ledger; `uqs job check` runs it in its own q (#1851)";
+        "refuses outside a throwaway q, and this runner holds a coverage ledger; `uqs job check` runs it in its own q (#1851)";
+        "refuses outside a throwaway q, and this runner holds a coverage ledger; `uqs job check` runs it in its own q (#1851)";
+        "refuses outside a throwaway q, and this runner holds a coverage ledger; `uqs job check` runs it in its own q (#1851)";
+        "refuses outside a throwaway q, and this runner holds a coverage ledger; `uqs job check` runs it in its own q (#1851)";
+        "refuses outside a throwaway q, and this runner holds a coverage ledger; `uqs job check` runs it in its own q (#1851)"))
 
 / Private: drop a trailing prose gloss - "1.016667 (2024 is a leap year)".
 / Both forms are tried by classify below rather than only the stripped one,

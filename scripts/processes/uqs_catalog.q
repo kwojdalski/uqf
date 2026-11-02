@@ -205,3 +205,5 @@ surface:{[]
     "One component of one execution at one horizon, from the normalized FX markout calculation: the markout against the reference mid, the execution residual, each cross leg's allocation, or the reconciling residual (kind), in pips, with the prices behind it - a row per (venue, fill_id, horizon, kind, step)";
 .qcat.describe[`fx_markout_wide]:
     "One execution at one horizon, from the normalized FX markout calculation: the markout, the execution residual and the reconciling residual side by side, with up to three cross legs and their allocations - the wide layout of fx_markout, a row per (venue, fill_id, horizon)";
+.qcat.describe[`demo_deals]:
+    "One dealt trade from the demo deal source: its id, the time it was dealt, the pair, the side, the notional and the rate - a row per deal";

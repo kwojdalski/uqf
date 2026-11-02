@@ -248,6 +248,37 @@
     `.qetl.plant.sort_rules upsert ([] table:(count rule)#table_name; column:key rule; att:value rule);
     table_name}
 
+/ ------------------------------------------------------ EQUIVALENCE BASIS
+/ .
+/ Several jobs can fill one table - a polling feed and a backfill. They share its
+/ schema, which says nothing about what "the same rows" means, and
+/ `uqs job check` will not guess. A table that several jobs fill declares it here,
+/ beside the table, with `equivalence`:
+/   events       every row is a fact; producers must return the same multiset of rows
+/   revisions    each row is a revision of a key; they must return the same revisions
+/   final_state  only the last row per key matters
+/ A table with none is not compared across producers: that reads UNVERIFIED.
+
+/ The bases a table may declare.
+.qetl.plant.bases:`events`revisions`final_state
+
+/ Declared equivalence bases: table -> basis.
+.qetl.plant.equivalence_of:(`symbol$())!`symbol$()
+
+/ Declare what equivalence of a table's producers means. Call it after the table's line.
+/ @param table_name the table, as a symbol
+/ @param basis one of `events`revisions`final_state
+/ @return table_name
+/ @throws error naming a basis that is none of those, or a table declared twice
+/ @eg .qetl.plant.bases  ->  `events`revisions`final_state
+.qetl.plant.equivalence:{[table_name;basis]
+    if[not basis in .qetl.plant.bases;
+        '"equivalence: ",string[table_name],"'s basis ",.Q.s1[basis]," is none of ",", " sv string .qetl.plant.bases];
+    if[table_name in key .qetl.plant.equivalence_of;
+        '"equivalence: ",string[table_name]," already declares a basis"];
+    .qetl.plant.equivalence_of[table_name]:basis;
+    table_name}
+
 / What is wrong with `rows` as a page for plant table `table_name`: its
 / columns and their order against what a job publishes there, each column's
 / type, and each nested column's every row against its declared element type
@@ -658,3 +689,11 @@
 / is the source's own code, verbatim. book, product and venue are the grouping
 / dimensions and are null where the source gives none: venue is never inferred.
 .qetl.plant.order_outcomes:([]time:`timestamp$(); source_time:`timestamp$(); source:`symbol$(); request_id:`symbol$(); source_status:`symbol$(); outcome:`symbol$(); book:`symbol$(); product:`symbol$(); venue:`symbol$())
+
+/ demo_deals_feed1's output: one dealt trade from the demo_deals source - its id, the
+/ time it was dealt, the pair, the side, the notional and the rate - the same rows
+/ demo_deals_backfill windows into this dataset, which `uqs job check demo_deals` compares.
+.qetl.plant.demo_deals:([]time:`timestamp$(); deal_id:`long$(); deal_time:`timestamp$(); sym:`g#`symbol$(); side:`symbol$(); notional:`float$(); rate:`float$())
+/ Each deal is one fact and the dataset never revises one, so the feed and the
+/ backfill are equivalent when they return the same deals, each the same number of times.
+.qetl.plant.equivalence[`demo_deals;`events];

@@ -143,6 +143,11 @@ NEEDS_LARGER_LICENCE: dict[str, str] = {
 #: Backfills are not here and do not need to be: they are bounded, hold no
 #: plant connection and belong to no standing set.
 UNPROFILED: dict[str, str] = {
+    "demo_deals_feed1": (
+        "on demand: the streaming twin of deals_backfill1 over the demo_deals source, the "
+        "example pair `uqs job check demo_deals` verifies - `uqs start demo_deals_feed1`, "
+        "never with the stack"
+    ),
     "kafka_flow1": (
         "a live external feed - its rows come from a Kafka consumer (the q feed "
         "kafka_feed1, or `uqs connector start kafka`), so it is started with that or not at all"

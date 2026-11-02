@@ -35,7 +35,9 @@ BASE = 6050
 #: Pipelines each diagram leaves out on purpose, and why. Everything else in
 #: PIPELINES must appear in it.
 OMITTED: dict[str, dict[str, str]] = {
-    "stack-topology.d2": {},
+    "stack-topology.d2": {
+        "demo_deals_feed1": "an on-demand example twin of deals_backfill1; it adds no new shape",
+    },
     "stack-dataflow.d2": {
         # which process writes which TABLE through the tickerplant: a bounded
         # worker writes through .qetl.io into its own process instead, and
@@ -45,6 +47,7 @@ OMITTED: dict[str, dict[str, str]] = {
             for p in PIPELINES
             if p.kind.value == "backfill"
         },
+        "demo_deals_feed1": "an on-demand example twin of deals_backfill1; it adds no new shape",
         "tap1": "subscribes and logs; it writes no table",
         "alert_sink1": "an outbound sink - reads fx_limit_breach, writes no table",
     },

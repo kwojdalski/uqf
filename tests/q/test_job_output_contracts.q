@@ -52,6 +52,12 @@
 
 .qt.qpipe.job_output_contracts.beforeNamespace_read_the_plant:{[] `.qt.qpipe.job_output_contracts.shapes set .qt.qpipe.job_output_contracts.plant[];}
 
+/ Every driver runs a real job, and a polling feed with a row_key writes its
+/ in-flight marker under the status directory: a suite-local one, never the
+/ unset default `/status` a non-root runner cannot create (#1851). The harness
+/ puts the variable back after the suite.
+.qt.qpipe.job_output_contracts.beforeNamespace_isolate_status:{[] setenv[`UQF_STATUS_DIR;"build/test-status-job-output-contracts"];}
+
 / The plant's columns and type characters for `tbl`, without `time`.
 .qt.qpipe.job_output_contracts.want:{[tbl]
     m:select from 0!meta .qt.qpipe.job_output_contracts.shapes tbl where c<>`time;

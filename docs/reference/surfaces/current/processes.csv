@@ -8,6 +8,7 @@ crypto_book_1s1,metrics,57,crypto_book,crypto_book_1s
 crypto_markout1,metrics,51,crypto_book crypto_trades,crypto_execution_quality
 cryptomock1,feed,35,,crypto_book crypto_trades
 deals_backfill1,backfill,32,,
+demo_deals_feed1,feed,70,,demo_deals
 demo_markout1,metrics,31,quote trades,demo_execution_quality
 duckdb_deals_backfill1,backfill,46,,
 events_backfill1,backfill,33,,

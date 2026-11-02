@@ -183,9 +183,10 @@
     .qunit.assertEquals[.qetl.job.bounded.read_instrument_column `order_quality;`book;"the plant's declared exception"]};
 
 .qt.qetl.job.bounded.runtime.test_a_dataset_that_is_not_a_plant_table_is_read_by_its_output:{[t]
-    .qunit.assertEquals[`demo_deals in .qetl.plant.names[];0b;"demo_deals has no plant table"];
-    .qunit.assertEquals[.qetl.job.bounded.read_time_column `demo_deals;`time;"stamped from deal_time by the HDB writer"];
-    .qunit.assertEquals[.qetl.job.bounded.read_instrument_column `demo_deals;`sym;"its output carries sym"]};
+    / imported_trades, not demo_deals: demo_deals is a plant table since #1851.
+    .qunit.assertEquals[`imported_trades in .qetl.plant.names[];0b;"imported_trades has no plant table"];
+    .qunit.assertEquals[.qetl.job.bounded.read_time_column `imported_trades;`time;"stamped by the HDB writer"];
+    .qunit.assertEquals[.qetl.job.bounded.read_instrument_column `imported_trades;`sym;"its output carries sym"]};
 
 .qt.qetl.job.bounded.runtime.test_an_unknown_mode_is_refused_by_name:{[t]
     .qetl.cfg.set_override[`mode;"rehearse"];

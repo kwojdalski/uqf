@@ -9,8 +9,8 @@ plus uqf's own additions (`fxfeed1`, `fxorderbookfeed1`, `widefeed1`, `cross1`,
 `fxpositions1`, `marketdata1`, `superbook1`, `arbitrage1`, `crossarb1`,
 `crypto_markout1`, `alert_sink1`, `last_value1`, `exec_bars1`,
 `crypto_book_1s1`, `order_quality1`, `fxmarkout1`, `fxmarkoutwide1`,
-`order_outcomes1`, `book_liquidity_1m1`), and twelve bounded backfill processes
-(`deals_backfill1`, `events_backfill1`, `upstream_backfill1`,
+`order_outcomes1`, `book_liquidity_1m1`, `demo_deals_feed1`), and twelve bounded
+backfill processes (`deals_backfill1`, `events_backfill1`, `upstream_backfill1`,
 `duckdb_deals_backfill1`, `hdb_demo_markouts_backfill1`,
 `hdb_transfer_backfill1`, `hdb_exec_bars_backfill1`,
 `hdb_crypto_book_backfill1`, `hdb_order_quality_backfill1`,
