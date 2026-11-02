@@ -7,11 +7,15 @@ own as `Guardrail` values, beside the code that enforces them:
   - deploy/overrides.py: the deployment requirements `deploy push` may relax;
   - attach/overrides.py: the attachment finding codes, from its POLICY table,
     each waived per component as `CODE:COMPONENT`.
+  - attach/backfill_policy.py: `eod-fence`, the end-of-day fence an
+    attached `job backfill` may waive (#1828), with a generated --skip-eod-fence.
 
 cli/safety.registry() gathers them in that order through `aggregate`, which
-refuses two with one id; `uqs override list` (cli/safety.catalog) reads it.
-This module imports nothing from this package, so every layer may import it
-(test_module_split holds it to that).
+refuses two with one id; `uqs override list` (cli/safety.catalog) reads it, and so
+does cli/skip_options.py, which gives a command a `--skip-<id>` option for
+each guardrail of it declared with `skip_flag`. This module imports nothing
+from this package, so every layer may import it (test_module_split holds it
+to that).
 """
 
 from __future__ import annotations
@@ -44,6 +48,10 @@ class Guardrail:
     overridable: bool = True
     #: whether a waiver names one component (`CODE:COMPONENT`) rather than the whole command
     component_scoped: bool = False
+    #: whether each of `commands` takes a generated `--skip-<id>` option for it
+    #: (cli/skip_options.py, #1826) beside `--override`. Off unless the command
+    #: honours the waiver at run time: a flag that skips nothing is never shown.
+    skip_flag: bool = False
 
     def __post_init__(self) -> None:
         if not isinstance(self.id, str) or not ID_PATTERN.fullmatch(self.id):
@@ -56,6 +64,10 @@ class Guardrail:
             raise ValueError(f"guardrail {self.id}: a command is named twice: {self.commands}")
         if not isinstance(self.description, str) or not self.description.strip():
             raise ValueError(f"guardrail {self.id}: the description is empty")
+        if self.skip_flag and not self.overridable:
+            raise ValueError(
+                f"guardrail {self.id}: one that is not overridable gets no --skip flag"
+            )
 
     @property
     def name(self) -> str:

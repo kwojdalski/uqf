@@ -34,20 +34,33 @@ time is a list nobody reads.
 Each blocker is a structured `Finding` (#1827): a stable kebab-case id, the component it is
 about (a procname, or the HDB directory), the facts observed and the message. `POLICY` says,
 for every id, whether it could ever be accepted. Only end-of-day timing could: missing
-evidence and unsupported capabilities never can. Nothing here skips a finding yet - the
-refusal (`CoordinationRefused`) carries them so that a later change can. backfill_policy.py
-holds the ids, their policy and the results.
+evidence and unsupported capabilities never can.
+
+`eod-fence` alone may be waived (#1828, `--skip-eod-fence`): `assess(..., waived=...)` lifts
+those findings, kept as `accepted`, and removes the end-of-day write deadline; every other
+blocker still refuses. backfill_policy.py holds the ids, their policy and the guardrail.
 """
 
 from __future__ import annotations
 
+import dataclasses
 import re
+from collections.abc import Mapping
 from datetime import date, datetime, timedelta
 from typing import Any
 
 from uqs import timerange
 from uqs.attach.backfill import Destination
-from uqs.attach.backfill_policy import POLICY, Assessment, Coordination, CoordinationRefused
+from uqs.attach.backfill_policy import (
+    EOD_FENCE,
+    POLICY,
+    Assessment,
+    Coordination,
+    CoordinationRefused,
+    check_waivers,
+    lift,
+    lifted_note,
+)
 from uqs.attach.config import Attachment
 from uqs.attach.facts import Host, filesystem_of
 from uqs.attach.findings import Finding
@@ -352,22 +365,33 @@ def assess(
     dates: list[date],
     *,
     guard: timedelta = EOD_GUARD,
+    waived: Mapping[str, str] | None = None,
 ) -> Coordination:
     """Coordination facts for `dest`, or a `CoordinationRefused` listing every blocker.
 
+    `waived` ({id: reason}; only `eod-fence`) lifts those findings, kept as `accepted`; the
+    rest still refuse. A waived fence also has no write deadline, whether or not it fired now.
+
     Read-only: one `writer_state` call per process that writes the destination.
     """
+    waivers = check_waivers(waived)
     found = examine(att, dest, obs, writers, ipc, dates, guard=guard)
-    if found.blockers:
+    blockers, accepted = lift(found.blockers, waivers)
+    if blockers:
         raise CoordinationRefused(
             f"a backfill into {dest.hdb_dir} (attachment {att.name}) cannot be coordinated "
-            "with its native writers:\n  - " + "\n  - ".join(f.message for f in found.blockers),
-            found.blockers,
+            "with its native writers:\n  - "
+            + "\n  - ".join(f.message for f in blockers)
+            + lifted_note(waivers, accepted),
+            blockers,
             found.coordination,
+            accepted,
         )
     if found.coordination is None:
         raise UqsError(
             f"a backfill into {dest.hdb_dir} (attachment {att.name}) cannot be coordinated: "
             "no wdb among its writers reported its active date, clock and next roll"
         )
-    return found.coordination
+    return dataclasses.replace(
+        found.coordination, eod_fence_bypassed=EOD_FENCE in waivers, accepted=accepted
+    )

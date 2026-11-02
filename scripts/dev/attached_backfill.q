@@ -16,7 +16,8 @@
 //                read as another's
 //   -attachment  the attachment's name, for the log and the owner record
 //   -max_date    the last date this run may write (the native writers' active date, less one)
-//   -deadline    no write after this instant: where the end-of-day fence begins
+//   -deadline    no write after this instant: where the end-of-day fence begins; 0Wp when the fence
+//                was waived (--skip-eod-fence), so no write is refused for the time
 //   -owner       the run owner record to write while running and remove on the way out
 //   -readers     name@host:port,... - the HDB readers that serve the destination (verified by the
 //                launcher), the only processes told to reload; _none_ when there are none
@@ -102,11 +103,16 @@ if[not `worker in key opts:.Q.opt .z.x;
     if[not (last "/" vs d) like "*",destid; '"attached_backfill: UQF_STATUS_DIR ",d," is not the directory for destination ",destid];
     d}
 
-/ The fence handed to the writer.
+/ The fence handed to the writer. -deadline 0Wp is a waived end-of-day fence (`--skip-eod-fence`,
+/ #1828): no instant passes it, so no write is refused for the time; -max_date is never waived.
 / @param opts the parsed command line
 / @return dict of max_date, deadline and destination
+/ @throws error when -deadline is not a timestamp: a null one would refuse every write, unexplained
 .qdev.attached.bounds:{[opts]
-    `max_date`deadline`destination!("D"$first opts`max_date;"P"$first opts`deadline;`$first opts`destid)}
+    text:first opts`deadline;
+    deadline:$["0Wp"~text; 0Wp; "P"$text];
+    if[null deadline; '"-deadline ",text," is not a timestamp (0Wp for none)"];
+    `max_date`deadline`destination!("D"$first opts`max_date;deadline;`$first opts`destid)}
 
 / Record who is running into which destination.
 / @param opts the parsed command line

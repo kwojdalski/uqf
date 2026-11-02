@@ -19,7 +19,7 @@ from uqs.attach.config import Attachment, Publisher, Stack, Storage
 from uqs.attach.facts import Host
 from uqs.attach.manifest import Manifest
 from uqs.attach.remote import Endpoint, IpcError
-from uqs.cli import shared
+from uqs.cli import backfill_attached, shared
 from uqs.interpreter import q_interpreter
 from uqs.paths import paths_for_root
 
@@ -144,6 +144,9 @@ def make_world(monkeypatch, tmp_path):
     monkeypatch.setenv("UQF_SOURCE_CRED_DUCKDB_DEALS", "")
     errors = _ErrorLog()
     monkeypatch.setattr(shared, "log", errors)
+    # bound at import, so not the patch above: its waiver warning would otherwise go to a sink an
+    # earlier CliRunner left closed, and print a timestamped logging error into the output
+    monkeypatch.setattr(backfill_attached, "log", errors)
     stack = HdbStack(hdb)
     # the scripted stack's host is 'testhost': it is this machine as far as these tests go
     monkeypatch.setattr(coordination, "HOST", Host(local_names=("testhost",)))
