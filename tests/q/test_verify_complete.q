@@ -18,7 +18,7 @@
 .qt.qetl.verify.complete.test_a_destination_holding_every_record_in_scope_passes:{[t]
     r:.qt.qetl.verify.complete.run .qt.qetl.verify.complete.fixture[];
     .qunit.assertEquals[(r`status;r`counts);(`PASS;3 3);"the three EURUSD deals, found in the destination"];
-    .qunit.assertTrue[(r`basis) like "demo_deals, fixture, complete through (no cutoff: closed data) (not declared: closed by default); scope (,`sym)!,`EURUSD on deal_time in [2026.09.11D00:00:00.000000000; 2026.09.20D00:00:00.000000000); keyed on deal_id*";
+    .qunit.assertEquals[r`basis;"demo_deals, fixture, complete through (no cutoff: closed data) (not declared: closed by default); scope ",.Q.s1[.qt.qetl.verify.complete.scope]," on deal_time in [2026.09.11D00:00:00.000000000; 2026.09.20D00:00:00.000000000); keyed on deal_id; destination as the reader returned it";
         "the basis names the source, its cutoff, scope and bounds"]};
 
 .qt.qetl.verify.complete.test_records_of_other_scopes_neither_help_nor_hurt:{[t]
