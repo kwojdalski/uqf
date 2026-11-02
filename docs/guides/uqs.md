@@ -1471,8 +1471,15 @@ command that breaks a rule, and on a listed exception that has since been fixed.
    (`uqs job remove NAME -y`). A check is bypassed only with
    `--override NAME --reason TEXT`: NAME is one of the command's own, which
    `uqs override list` shows, repeatable, with one reason for all of them,
-   warned about and recorded. Through `uqs --target`, a `--dry-run` asks nothing
-   first, except a backfill's, which starts a process to fetch.
+   warned about and recorded. A guardrail is declared once, as a `Guardrail`
+   beside the code that enforces it (`uqs/guardrails.py` lists the owners), and
+   one declared with `skip_flag=True` also gives each command it names
+   `--skip-<id>`, generated with its help and completion from the declaration
+   (`cli/skip_options.py`): `uqs job backfill --skip-eod-fence` is
+   `--override eod-fence`, read by the same `safety.given`, and `uqs --target`
+   sends it as that. A guardrail gets the flag only once its command honours the
+   waiver at run time. Through `uqs --target`, a `--dry-run` asks nothing first,
+   except a backfill's, which starts a process to fetch.
 6. **A rename ships with a hidden alias for one release**, which prints the new
    spelling; the release after removes it.
 

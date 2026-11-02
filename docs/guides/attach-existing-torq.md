@@ -865,22 +865,7 @@ and refuse (listing every blocker together) when they cannot establish it:
 - **End-of-day fence.** Within an hour before the next roll, within an hour
   after the last, or while a reload is open (all on the wdb's clock), a run is
   refused; a run that is under way stops writing when the fence begins. Only
-  the timing can be waived: `--skip-eod-fence --reason TEXT` (plan, dry run
-  and run with `--attach`; not with `--writer`) admits the run within the
-  window and gives it no write deadline. The plan then says "EOD fence
-  bypassed; no EOD write deadline" and keeps the lifted finding as `accepted`.
-  A reload in progress, the active date and an unknown clock still refuse.
-  The waiver is for that one invocation and is never saved with the attachment:
-  the next backfill without the flag is fenced again. A dry run or run that uses
-  it first appends an entry to `backfill_overrides.jsonl` in the destination's
-  state directory (below), fsynced before the runner starts, and does not start
-  if that fails. The entry holds the override, the reason, who and on which host,
-  when, the command (rebuilt from the run's arguments, never with a credential),
-  the mode, the destination, the run's bounds, the accepted findings with their
-  observed facts, and `requested`/`needed`: a waiver given when no finding of it
-  fired is kept as `needed: false`. It is never rewritten; an `outcome` entry
-  with the same `run` (the log's name) is appended when the process cannot be
-  started or `--wait` follows it to its end. `--mode plan` records nothing.
+  this timing can be waived ([below](#waiving-the-end-of-day-fence)).
 - **Nothing working in place.** A `compression` process is a blocker;
   `housekeeping` is a warning. A `sort.csv` that would order or attribute the
   table differently from the finished partitions is a blocker.
@@ -888,6 +873,52 @@ and refuse (listing every blocker together) when they cannot establish it:
 Not coordinated, and not claimed to be: a person running `dbmaint` or q against
 the directory, or an end of day started by hand during a run. Attachment safety
 checks do not, by themselves, certify direct native-HDB writes.
+
+### Waiving the end-of-day fence
+
+The fence's timing, and nothing else in this section, can be waived for one
+invocation, with a reason:
+
+```bash
+uqs job backfill JOB --attach NAME --from START --to END \
+  --skip-eod-fence --reason "Approved maintenance window"
+```
+
+`--override eod-fence` is the same waiver, and `uqs override list` names it. It
+is taken by `--mode plan`, `--dry-run` and a run on the machine that holds the
+attachment. It is refused without `--attach`, with `--writer` (the receiver
+fences each batch itself and is never told of a waiver) and with
+`--mode validate`. Through `uqs --target NAME`, it is sent as
+`--override eod-fence`.
+
+It admits the run within the fence and gives the runner no write deadline. The
+plan and the run say "EOD fence bypassed; no EOD write deadline" where they
+would say when writes stop, and keep each lifted finding as `accepted`, with the
+reason. Everything else still refuses or still happens:
+
+- completed history: the last writable date, which bounds the runner's writes,
+  and the active write date;
+- a reload in progress, and a writer that does not answer or does not report its
+  clock or active date;
+- the table's schema, one run per attachment, the local filesystem and symbol
+  coordination above, and nothing working in place;
+- coverage, and the readers' reload after the run.
+
+Nor does it coordinate what nothing does: `dbmaint` or q run against the
+directory by hand, or an end of day started by hand during the run.
+
+The waiver is never saved with the attachment: the next backfill without the
+flag is fenced again. A dry run or run that uses it first appends an entry to
+`<status dir>/attached/<attachment>-<id>/backfill_overrides.jsonl`, fsynced
+before the runner starts, and does not start if that fails; `--mode plan`
+records nothing. The entry holds the override and reason, who and on which host,
+when, the command (rebuilt from the run's arguments, never with a credential),
+the mode, the destination, the run's bounds, the accepted findings with their
+observed facts, and `needed`, false when no finding of it fired. It is never
+rewritten: an `outcome` entry with the same `run` (the log's name) follows when
+the process cannot be started or `--wait` follows it to its end.
+`uqs job attachment show NAME` lists the entries (`backfill_overrides` in its
+`--json`).
 
 ### How the writes are made
 
@@ -968,9 +999,9 @@ asked again, and the readiness record advances only when each has answered.
   errors and the closing `RESULT` line are shown whatever `--level` says.
 - `uqs job runs list | status | show --attach NAME` - the destination's run
   ledger; `show` prints the re-run command with `--attach` in it.
-- `uqs job attachment show NAME` - ends with every waiver a backfill into the
-  attachment's destination used (`backfill_overrides` in `--json`), read from
-  `<status dir>/attached/<attachment>-<id>/backfill_overrides.jsonl`.
+- `uqs job attachment show NAME` - ends with every
+  [waiver](#waiving-the-end-of-day-fence) a backfill into the attachment's
+  destination used.
 - `uqs job backfill ... --attach NAME --mode plan` shows `reload owed` when an
   earlier run left rows written and covered but not yet queryable.
 
