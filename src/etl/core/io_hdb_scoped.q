@@ -44,6 +44,26 @@
 .qetl.io.scoped_days:{[partition_col;batch]
     `date$$[`time in cols batch; batch`time; batch partition_col]}
 
+/ Refuse rows dated after the destination's completed history. The one bound no waiver lifts
+/ (#1828, #1866): scoped_check applies it after the deadline, and the --any-writer path of
+/ scripts/dev/attached_backfill.q, which checks nothing else, applies this alone.
+/ @param bounds dict with at least max_date (the last date that may be written) and destination (for messages)
+/ @param partition_col the manager's partition column
+/ @param target the table
+/ @param batch the rows
+/ @param window_to the window's exclusive end, or 0Np for an unkeyed write
+/ @return the last date the write would touch
+/ @throws error naming the bound that was crossed
+/ @eg .qetl.io.scoped_check_date[`max_date`destination!(2026.01.31;`dest1);`time;`t;([] time:enlist 2026.01.30D12:00);0Np]
+.qetl.io.scoped_check_date:{[bounds;partition_col;target;batch;window_to]
+    days:.qetl.io.scoped_days[partition_col;batch];
+    last_day:max days,$[null window_to; `date$(); enlist `date$window_to-1];
+    if[last_day>bounds`max_date;
+        '"hdb_scoped: ",string[target]," would write ",string[last_day]," into ",string[bounds`destination],
+         ", whose completed history ends ",string[bounds`max_date],
+         " - later dates belong to the native writers and end of day"];
+    last_day}
+
 / Private: refuse a write the bounds forbid, before anything is touched.
 / @param bounds dict of max_date, deadline and destination
 / @param partition_col the manager's partition column
@@ -56,12 +76,7 @@
     if[.z.p>bounds`deadline;
         '"hdb_scoped: ",string[target]," - the end-of-day fence began at ",string[bounds`deadline],
          " for ",string[bounds`destination],"; no further writes"];
-    days:.qetl.io.scoped_days[partition_col;batch];
-    last_day:max days,$[null window_to; `date$(); enlist `date$window_to-1];
-    if[last_day>bounds`max_date;
-        '"hdb_scoped: ",string[target]," would write ",string[last_day]," into ",string[bounds`destination],
-         ", whose completed history ends ",string[bounds`max_date],
-         " - later dates belong to the native writers and end of day"]}
+    .qetl.io.scoped_check_date[bounds;partition_col;target;batch;window_to]}
 
 / A manager for an explicit, existing HDB root, fenced by `bounds`.
 / @param root the HDB directory, as a file symbol; it must exist

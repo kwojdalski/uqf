@@ -9,6 +9,7 @@ admission asks each writer.
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import os
 import socket
@@ -16,7 +17,15 @@ import subprocess
 import time
 
 import pytest
-from attach_backfill_support import DATASET, WORKER, facts_of, make_world, plan_with
+from attach_backfill_support import (
+    DATASET,
+    WORKER,
+    facts_of,
+    make_world,
+    plan_with,
+    save_attachment,
+    tree_table,
+)
 from attach_support import SORT_DEFAULT, probe
 from typer.testing import CliRunner
 
@@ -183,6 +192,40 @@ def test_a_table_with_its_own_sort_row_is_judged_by_that_row(world):
         {"tabname": DATASET, "att": "", "col": "time", "sort": True},
     ]
     assert plan_with(world, facts_of())["coordination"]["wdb"] == "wdb1"
+
+
+def _declare(world, rule):
+    """The attachment as `uqs job attachment add` would have left it for a table that declares
+    `rule` (#1861): the same table, its sort rule set."""
+    save_attachment("pb-uat", world.hdb, table=dataclasses.replace(tree_table(), sort=rule))
+
+
+def test_a_sort_csv_matching_the_declared_rule_is_not_a_finding(world):
+    _declare(world, (("time", "s"), ("sym", "")))
+    world.stack.named("wdb1")["sortrows"] = [
+        {"tabname": DATASET, "att": "s", "col": "time", "sort": True},
+        {"tabname": DATASET, "att": "", "col": "sym", "sort": True},
+    ]
+    assert plan_with(world, facts_of())["coordination"]["wdb"] == "wdb1"
+
+
+def test_a_sort_csv_that_misses_the_declared_rule_is_refused_with_the_rule_in_the_facts(world):
+    _declare(world, (("time", "s"),))
+    # the writer's default - sym then time, p# on sym - is what a declared rule replaces
+    world.stack.named("wdb1")["sortrows"] = [
+        {"tabname": DATASET, "att": "p", "col": "sym", "sort": True},
+        {"tabname": DATASET, "att": "", "col": "time", "sort": True},
+    ]
+    message = refused(world, f"wdb1's sort.csv sorts {DATASET} by \\['sym', 'time'\\]")
+    assert "this writer sorts by ['time'] with {'time': 's'}" in message
+
+
+def test_a_table_declaring_no_rule_is_still_held_to_sym_then_time(world):
+    world.stack.named("wdb1")["sortrows"] = [
+        {"tabname": DATASET, "att": "s", "col": "time", "sort": True},
+    ]
+    message = refused(world, f"wdb1's sort.csv sorts {DATASET} by \\['time'\\]")
+    assert "this writer sorts by ['sym', 'time'] with {'sym': 'p'}" in message
 
 
 def test_an_rdb_that_saves_itself_is_only_held_to_its_trading_date(world):
