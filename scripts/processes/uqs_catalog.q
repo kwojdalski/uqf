@@ -159,8 +159,9 @@ unbounded[`kafka_dead_letter]:
     enlist "NOT YET ASSESSED (#1481): empty on a healthy topic and one row per undecodable record otherwise, so its volume is the producer's, not ours. Read with no time range until a querypolicy.csv row has a measured basis";
 unbounded[`imported_trades]:
     enlist "NOT YET ASSESSED (#1363): found by the catalog gate once it counted worker datasets; a backfilled sample, not a feed - its policy row is due with a measured basis";
-unbounded[`arbitrage`cross_arbitrage`crypto_book`crypto_sim_fills`crypto_trades`demo_deals`event_tape`executions`fx_position`market_data`orders`position`fx_orderbook`superbook`trades`wide_orderbook`client_flow`trades_copy]:
-    18#enlist "NOT YET ASSESSED (#889): browsable before this list existed; read with no time range or byte limit, only max_rows, until a querypolicy.csv row with a measured basis replaces this";
+/ One reason for many tables: its length is the list's own, never a typed count (#1840).
+unbounded,:{x!(count x)#enlist y}[`arbitrage`cross_arbitrage`crypto_book`crypto_sim_fills`crypto_trades`demo_deals`event_tape`executions`fx_position`market_data`orders`position`fx_orderbook`superbook`trades`wide_orderbook`client_flow`trades_copy;
+    "NOT YET ASSESSED (#889): browsable before this list existed; read with no time range or byte limit, only max_rows, until a querypolicy.csv row with a measured basis replaces this"];
 
 / The browsable surface: every described table that is not hidden.
 / .

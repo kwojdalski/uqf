@@ -34,7 +34,8 @@ _spec.loader.exec_module(derive)
 gen = derive.load("generate_operational_docs")
 
 from uqs.model.pipelines import PIPELINE_OFFSETS  # noqa: E402
-from uqs.model.registry import PIPELINES  # noqa: E402
+from uqs.model.registry import DEFAULT_BASE_PORT, PIPELINES  # noqa: E402
+from uqs.portexpr import resolve  # noqa: E402
 
 
 def test_the_generator_and_its_output_both_exist():
@@ -136,11 +137,22 @@ def test_the_vendored_count_is_read_not_remembered():
     a number nobody re-counts. This asserts the generator reports the read
     value rather than a literal.
     """
-    vendored = gen._vendored_procnames()
+    vendored = [r["procname"] for r in gen._vendored_rows()]
     text = GENERATED.read_text()
     assert f"**{len(vendored)} vendored processes**" in text
     ours = {p.procname for p in PIPELINES}
     assert not (set(vendored) & ours), "uqf's own processes must not be counted as vendored"
+
+
+def test_the_vendored_ports_are_resolved_from_their_rows():
+    """Each vendored process is listed with its port at the default base, read
+    from its own process.csv cell - the hand-kept table this replaced (#1837)
+    had already dropped reporter1 and the dq processes."""
+    text = GENERATED.read_text()
+    for row in gen._vendored_rows():
+        port = resolve(row["port"], {"KDBBASEPORT": str(DEFAULT_BASE_PORT)})
+        assert port is not None, f"{row['procname']}'s port cell {row['port']!r} does not resolve"
+        assert f"| `{row['procname']}` | {port} | {row['proctype']} |" in text
 
 
 def test_the_prose_architecture_doc_is_consistent_with_the_registry():

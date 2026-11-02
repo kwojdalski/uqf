@@ -25,6 +25,8 @@ def _load(name: str, rel: str):
 check = _load("check_kdbx_attestation", "scripts/gates/check_kdbx_attestation.py")
 attest = _load("attest_kdbx", "scripts/dev/attest_kdbx.py")
 impact = _load("test_impact", "scripts/dev/test_impact.py")
+#: The repository's Python, from its one authority (#1838).
+PYTHON = _load("tool_pins", "scripts/gates/policy/tool_pins.py").pinned("python")
 
 
 @pytest.fixture(autouse=True)
@@ -323,7 +325,7 @@ def test_ci_runs_the_check_as_a_blocking_step():
     assert "advisory" not in job.lower() and "::warning" not in job
     assert "continue-on-error" not in job
     run = (
-        "uv run --no-project --python 3.14 python scripts/gates/check_kdbx_attestation.py "
+        f"uv run --no-project --python {PYTHON} python scripts/gates/check_kdbx_attestation.py "
         '"$BASE" "$HEAD" "$GITHUB_STEP_SUMMARY"'
     )
     assert f"run: {run}\n" in job
@@ -868,8 +870,9 @@ def test_the_coverage_run_records_outcomes_and_seeds_as_the_plain_run_does():
 def test_ci_runs_the_check_on_the_repositorys_python():
     """test_impact.py is 3.14 code (`except A, B:`); the runner's python3 is older."""
     wf = _attestation_workflow()
-    assert 'python-version: "3.14"' in wf
-    assert "uv run --no-project --python 3.14 python scripts/gates/check_kdbx_attestation.py" in wf
+    assert f'python-version: "{PYTHON}"' in wf
+    run = f"uv run --no-project --python {PYTHON} python scripts/gates/check_kdbx_attestation.py"
+    assert run in wf
 
 
 # --- q-coverage over what the change reaches (#1719) -------------------------

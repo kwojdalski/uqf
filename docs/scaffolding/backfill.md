@@ -69,26 +69,27 @@ NAME is the base the files are named from, twin or not: the worker is
 `_backfill` is refused, saying what to pass instead, rather than doubling the
 suffix.
 
+<!-- scaffold-transcript: fxprobe --kind backfill --dataset fx_probe --schema "sym:symbol, mid:float" --width 1D -->
 ```
 scaffold fxprobe_backfill:
-  create src/etl/sources/fxprobe.q (60 lines)
-  create src/etl/workers/fxprobe_backfill.q (28 lines)
-  append to src/etl/plant_tables.q (3 lines)
-  append to tests/q/test_stack_tables.q (1 line)
-  create tests/q/test_fxprobe_backfill.q (13 lines)
-  append to tests/run_tests.q (1 line)
-  create scripts/examples/fxprobe_example.q (64 lines)
-  append to docs/architecture/stack.md (2 lines)
-  append to docs/services/README.md (1 line)
-  append to scripts/processes/uqs_catalog.q (2 lines)
+  create src/etl/sources/fxprobe.q
+  create src/etl/workers/fxprobe_backfill.q
+  append to src/etl/plant_tables.q
+  append to tests/q/test_stack_tables.q
+  create tests/q/test_fxprobe_backfill.q
+  create scripts/examples/fxprobe_example.q
+  append to docs/architecture/stack.md
+  append to docs/services/README.md
+  append to scripts/processes/uqs_catalog.q
   note: write .qpipe.source.fxprobe.query - parameterised, never concatenated (see src/etl/core/source_contract.q)
   note: write .qpipe.source.fxprobe.fixture - deterministic, same contract as the live source
   note: declared columns: time, sym, mid
-  note: to go live, give fxprobe a row in sources.csv - `uqs config sources stub fxprobe` adds one to fill in (host:port of the q process to read from); UQF_SOURCE_CRED_FXPROBE overrides it for one run. With neither, the worker runs on the fixture, and warns that it is
+  note: to go live, give fxprobe a row in sources.csv - `uqs config sources stub fxprobe` adds one to fill in (host:port, or host:port:user:password); UQF_SOURCE_CRED_FXPROBE overrides it for one run. With neither, the worker runs on the fixture, and warns that it is
   note: the window is half-open [from;to): >= on the lower bound, < on the upper
-  note: optional: a quality check that fails a window on bad rows (`check`) - see quality_check in src/etl/workers/demo_deals_backfill.q
+  note: optional: a quality check that fails a window on bad rows - rerun with --check, or see quality_check in src/etl/workers/demo_deals_backfill.q
   note: see it run: q scripts/examples/fxprobe_example.q - on the fixture, no stack
   note: describe fxprobe_backfill1: replace its SCAFFOLDED card in docs/services/README.md and its SCAFFOLDED comment in docs/architecture/stack.md
+  note: describe fx_probe: replace its SCAFFOLDED line in scripts/processes/uqs_catalog.q - or, if the desk should not see it, delete that line and add the table to .qcat.hidden with the reason
 ```
 
 **Two q files, not one**, and the process is named for the worker

@@ -31,6 +31,7 @@ from uqs.cli.shared import (
 from uqs.paths import UqsError
 from uqs.stack import backfill as stack_backfill
 from uqs.stack import backfill_wait as stack_backfill_wait
+from uqs.stack import run_modes
 
 
 @job_app.command(
@@ -85,7 +86,7 @@ def backfill(
             help="validate: check the worker and range, open nothing. plan: also list the "
             "windows a run would fetch, from the ledgers, read-only. dry-run: also fetch and "
             "transform, and write nothing. run (the default): all of it",
-            autocompletion=completion.choices(*stack_backfill.MODES),
+            autocompletion=completion.choices(*run_modes.MODES),
         ),
     ] = None,
     dry_run: Annotated[
@@ -203,7 +204,7 @@ def backfill(
     if as_json and attach is None:
         _die(UqsError("--json is for --attach: it prints the attached admission plan"))
         return
-    if wait and mode in stack_backfill.NO_STATUS_MODES:
+    if wait and mode in run_modes.READ_ONLY_MODES:
         _die(UqsError(f"--wait has nothing to wait for with --mode {mode}: it writes no status"))
         return
     try:

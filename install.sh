@@ -60,7 +60,7 @@ done
 FORMER_NAMES=(uqf-stack torq-orchestrator torq-demo)
 PACKAGE="python/uqs"
 COMMAND="uqs"
-PRE_COMMIT="pre-commit==4.6.2" # the version .github/workflows/ci.yml runs
+PRE_COMMIT="pre-commit==4.6.2" # ci.yml's; the tool-pins check holds them equal
 read -r QLINT_VERSION <.qlinter-version # the qlinter CI and the q-traps hook pin
 NODE_RANGE="^22.13 || ^24 || >=26" # web/package.json "engines"
 
