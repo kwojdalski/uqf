@@ -142,9 +142,6 @@ def make_world(monkeypatch, tmp_path):
     monkeypatch.setenv("UQF_STATUS_DIR", str(status))
     # a developer shell may hold the credential: these tests mean the unconfigured source
     monkeypatch.setenv("UQF_SOURCE_CRED_DUCKDB_DEALS", "")
-    # A local disk, as tmp_path is. Read for real, macOS runs `mount` through the
-    # subprocess.Popen the launch tests stub, and gets their stand-in back.
-    monkeypatch.setattr(coordination, "filesystem_of", lambda path: "local")
     errors = _ErrorLog()
     monkeypatch.setattr(shared, "log", errors)
     # bound at import, so not the patch above: its waiver warning would otherwise go to a sink an
