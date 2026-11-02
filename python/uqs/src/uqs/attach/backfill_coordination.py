@@ -30,21 +30,27 @@ against the directory, or an end of day started by hand during a run, cannot be 
 outside. Admission is evidence about the native writers, not a guarantee about the
 directory. Every blocker is reported together, because a list of refusals fixed one at a
 time is a list nobody reads.
+
+Each blocker is a structured `Finding` (#1827): a stable kebab-case id, the component it is
+about (a procname, or the HDB directory), the facts observed and the message. `POLICY` says,
+for every id, whether it could ever be accepted. Only end-of-day timing could: missing
+evidence and unsupported capabilities never can. Nothing here skips a finding yet - the
+refusal (`CoordinationRefused`) carries them so that a later change can. backfill_policy.py
+holds the ids, their policy and the results.
 """
 
 from __future__ import annotations
 
 import re
-import subprocess
-from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
-from pathlib import Path
 from typing import Any
 
 from uqs import timerange
 from uqs.attach.backfill import Destination
+from uqs.attach.backfill_policy import POLICY, Assessment, Coordination, CoordinationRefused
 from uqs.attach.config import Attachment
-from uqs.attach.facts import Host
+from uqs.attach.facts import Host, filesystem_of
+from uqs.attach.findings import Finding
 from uqs.attach.remote import Ipc, IpcError
 from uqs.attach.topology import Observation, Proc
 from uqs.paths import UqsError
@@ -62,61 +68,16 @@ NETWORK_FILESYSTEMS = ("nfs", "nfs4", "cifs", "smbfs", "smb3", "afpfs", "webdav"
 HOST = Host()
 
 
-@dataclass
-class Coordination:
-    """What coordination established for a destination."""
-
-    wdb: str
-    active_date: date
-    now: datetime
-    next_roll: datetime
-    guard_minutes: int
-    filesystem: str
-    writers: list[str] = field(default_factory=list)
-    warnings: list[str] = field(default_factory=list)
-
-    def as_dict(self) -> dict[str, Any]:
-        return {
-            "mechanism": "kdb+ serialises sym-file extension for every .Q.en writer (local "
-            "filesystem); completed historical dates only; end-of-day fence. uqf adds no lock "
-            "the native writers honour",
-            "wdb": self.wdb,
-            "filesystem": self.filesystem,
-            "active_date": self.active_date.isoformat(),
-            "last_writable_date": (self.active_date - timedelta(days=1)).isoformat(),
-            "writes_stop_at": (self.next_roll - timedelta(minutes=self.guard_minutes)).isoformat(),
-            "now": self.now.isoformat(),
-            "next_roll": self.next_roll.isoformat(),
-            "eod_guard_minutes": self.guard_minutes,
-            "writers": self.writers,
-            "warnings": self.warnings,
-        }
-
-
-def filesystem_of(path: Path) -> str:
-    """The type of the filesystem `path` is on, or "unknown" - best effort, from the
-    mount table, longest mount point first."""
-    try:
-        if Path("/proc/mounts").is_file():
-            rows = [
-                (fields[1], fields[2])
-                for fields in (
-                    line.split() for line in Path("/proc/mounts").read_text().splitlines()
-                )
-                if len(fields) >= 3
-            ]
-        else:
-            out = subprocess.run(["mount"], capture_output=True, text=True, timeout=10, check=False)
-            rows = [(m.group(1), m.group(2)) for m in re.finditer(r" on (.+?) \((\w+)", out.stdout)]
-    except OSError, subprocess.SubprocessError:
-        return "unknown"
-    real = str(path.resolve())
-    best = max(
-        (r for r in rows if real == r[0] or real.startswith(r[0].rstrip("/") + "/")),
-        key=lambda r: len(r[0]),
-        default=None,
+def _blocker(code: str, component: str, message: str, **facts: object) -> Finding:
+    """A coordination blocker: `code` must be in POLICY, `facts` what was observed."""
+    return Finding(
+        "blocker",
+        code,
+        component,
+        message,
+        action=POLICY[code].action,
+        facts={k: "" if v is None else str(v) for k, v in facts.items()},
     )
-    return best[1] if best else "unknown"
 
 
 #: The digits of a q timestamp's fraction past the microsecond.
@@ -141,19 +102,25 @@ def _day(text: str) -> date | None:
     return moment.date() if moment else None
 
 
-def _state(proc: Proc, ipc: Ipc, blockers: list[str]) -> dict[str, Any] | None:
+def _state(proc: Proc, ipc: Ipc, blockers: list[Finding]) -> dict[str, Any] | None:
     try:
         return ipc.call(proc.endpoint, "writer_state", {})
     except IpcError as exc:
         blockers.append(
-            f"{proc.procname} does not answer writer_state ({exc.reason}): what it writes, and "
-            "when, cannot be established"
+            _blocker(
+                "writer-unreachable",
+                proc.procname,
+                f"{proc.procname} does not answer writer_state ({exc.reason}): what it writes, "
+                "and when, cannot be established",
+                endpoint=f"{proc.endpoint.host}:{proc.endpoint.port}",
+                reason=exc.reason,
+            )
         )
         return None
 
 
 def _sort_config(
-    att: Attachment, dest: Destination, writers: list[Proc], blockers: list[str]
+    att: Attachment, dest: Destination, writers: list[Proc], blockers: list[Finding]
 ) -> None:
     """The wdb's sort.csv must describe the order this writer produces.
 
@@ -175,19 +142,35 @@ def _sort_config(
         want_attrs = {"sym": "p"} if "sym" in columns else {}
         if sorted_by != order or attrs != want_attrs:
             blockers.append(
-                f"{proc.procname}'s sort.csv sorts {dest.dataset} by {sorted_by or 'nothing'} "
-                f"with attributes {attrs or 'none'}; this writer sorts by {order} with "
-                f"{want_attrs or 'none'} and drops every other attribute from a partition it "
-                "rewrites"
+                _blocker(
+                    "sort-policy",
+                    proc.procname,
+                    f"{proc.procname}'s sort.csv sorts {dest.dataset} by "
+                    f"{sorted_by or 'nothing'} with attributes {attrs or 'none'}; this writer "
+                    f"sorts by {order} with {want_attrs or 'none'} and drops every other "
+                    "attribute from a partition it rewrites",
+                    table=dest.dataset,
+                    sort_row="own" if own else "default",
+                    sorted_by=",".join(sorted_by),
+                    attributes=",".join(f"{c}#{a}" for c, a in attrs.items()),
+                    expected_sorted_by=",".join(order),
+                    expected_attributes=",".join(f"{c}#{a}" for c, a in want_attrs.items()),
+                )
             )
 
 
-def _others(obs: Observation, blockers: list[str], warnings: list[str]) -> None:
+def _others(obs: Observation, blockers: list[Finding], warnings: list[str]) -> None:
     for svc in obs.others:
         if svc["proctype"] in IN_PLACE_PROCTYPES:
             blockers.append(
-                f"{svc['procname']} ({svc['proctype']}) works on HDB partitions in place, by date "
-                "age, outside any lock: a backfilled partition could be compressed mid-write"
+                _blocker(
+                    "in-place-maintenance",
+                    svc["procname"],
+                    f"{svc['procname']} ({svc['proctype']}) works on HDB partitions in place, by "
+                    "date age, outside any lock: a backfilled partition could be compressed "
+                    "mid-write",
+                    proctype=svc["proctype"],
+                )
             )
         elif svc["proctype"] in MAYBE_PROCTYPES:
             warnings.append(
@@ -197,7 +180,7 @@ def _others(obs: Observation, blockers: list[str], warnings: list[str]) -> None:
 
 
 def _fence(
-    state: dict[str, Any], dates: list[date], guard: timedelta, blockers: list[str]
+    state: dict[str, Any], dates: list[date], guard: timedelta, blockers: list[Finding]
 ) -> tuple[date | None, datetime | None, datetime | None]:
     """One writer's active date and end-of-day fence: blockers appended, facts returned."""
     who = state.get("procname", "a writer")
@@ -205,39 +188,159 @@ def _fence(
     known = [d for d in (_day(state.get("partition", "")), eod_date) if d is not None]
     if state.get("proctype") == "wdb" and len(known) < 2 or eod_date is None:
         blockers.append(
-            f"{who} does not report which date it is writing: the active write date cannot be "
-            "excluded"
+            _blocker(
+                "active-date-unknown",
+                who,
+                f"{who} does not report which date it is writing: the active write date cannot "
+                "be excluded",
+                proctype=state.get("proctype"),
+                partition=state.get("partition"),
+                eod_date=state.get("eod_date"),
+            )
         )
     active = min(known) if known else None
     if active is not None:
         touched = [d.isoformat() for d in dates if d >= active]
         if touched:
             blockers.append(
-                f"{', '.join(touched)} is not completed history: {who} is writing {active} and "
-                "native end of day will write it. Only dates before it can be backfilled"
+                _blocker(
+                    "active-date",
+                    who,
+                    f"{', '.join(touched)} is not completed history: {who} is writing {active} "
+                    "and native end of day will write it. Only dates before it can be "
+                    "backfilled",
+                    active_date=active.isoformat(),
+                    touched_dates=",".join(touched),
+                )
             )
     now, roll = _moment(state.get("now", "")), _moment(state.get("next_roll", ""))
     if now is None or roll is None:
         blockers.append(
-            f"{who} does not report its clock and next roll: the end-of-day fence is unknown"
+            _blocker(
+                "clock-unknown",
+                who,
+                f"{who} does not report its clock and next roll: the end-of-day fence is unknown",
+                now=state.get("now"),
+                next_roll=state.get("next_roll"),
+            )
         )
         return active, now, roll
     minutes = int(guard.total_seconds() // 60)
+    to_roll = int((roll - now).total_seconds() // 60)
     if roll - now < guard:
         blockers.append(
-            f"end of day is at {roll.isoformat()}, {int((roll - now).total_seconds() // 60)} "
-            f"minutes away on {who}'s clock; reloads, sorts and merges cluster there "
-            f"(guard {minutes} minutes)"
+            _blocker(
+                "eod-fence",
+                who,
+                f"end of day is at {roll.isoformat()}, {to_roll} minutes away on {who}'s clock; "
+                f"reloads, sorts and merges cluster there (guard {minutes} minutes)",
+                window="overdue" if roll <= now else "before-roll",
+                now=now.isoformat(),
+                next_roll=roll.isoformat(),
+                minutes_to_roll=to_roll,
+                guard_minutes=minutes,
+            )
         )
     since = now - (roll - timedelta(days=1))
     if since < guard:
         blockers.append(
-            f"{who}'s last end of day was {int(since.total_seconds() // 60)} minutes ago: its "
-            "sort, merge and reload may still be running"
+            _blocker(
+                "eod-fence",
+                who,
+                f"{who}'s last end of day was {int(since.total_seconds() // 60)} minutes ago: "
+                "its sort, merge and reload may still be running",
+                window="after-roll",
+                now=now.isoformat(),
+                next_roll=roll.isoformat(),
+                minutes_since_roll=int(since.total_seconds() // 60),
+                guard_minutes=minutes,
+            )
         )
     if state.get("reloadcomplete") is False:
-        blockers.append(f"{who} has an end-of-day reload in progress")
+        blockers.append(
+            _blocker(
+                "reload-in-progress",
+                who,
+                f"{who} has an end-of-day reload in progress",
+                reloadcomplete=False,
+            )
+        )
     return active, now, roll
+
+
+def examine(
+    att: Attachment,
+    dest: Destination,
+    obs: Observation,
+    writers: list[str],
+    ipc: Ipc,
+    dates: list[date],
+    *,
+    guard: timedelta = EOD_GUARD,
+) -> Assessment:
+    """Every coordination finding for `dest`, and the facts established, without refusing.
+
+    Read-only: one `writer_state` call per process that writes the destination. `assess` is
+    this plus the refusal; nothing here decides whether a finding may be accepted.
+    """
+    blockers: list[Finding] = []
+    warnings: list[str] = []
+    named = {p.procname: p for p in [*obs.consumers, *obs.unmanaged] if p.up}
+    states = {n: _state(named[n], ipc, blockers) for n in writers if n in named}
+    answered = {n: s for n, s in states.items() if s is not None}
+    hdb = str(dest.hdb_dir)
+    if not HOST.is_local(att.stack.host):
+        blockers.append(
+            _blocker(
+                "remote-host",
+                hdb,
+                f"the stack runs on {att.stack.host}, not this machine: {dest.hdb_dir} here is "
+                "not necessarily the directory its writers use",
+                host=att.stack.host,
+            )
+        )
+    kind = filesystem_of(dest.hdb_dir)
+    if kind in NETWORK_FILESYSTEMS:
+        blockers.append(
+            _blocker(
+                "network-filesystem",
+                hdb,
+                f"{dest.hdb_dir} is on a {kind} filesystem: kdb+'s serialisation of the sym file "
+                "relies on local file locking",
+                filesystem=kind,
+            )
+        )
+    _sort_config(att, dest, [p for p in named.values() if p.procname in writers], blockers)
+    if (dest.hdb_dir / "par.txt").exists():
+        blockers.append(
+            _blocker(
+                "segmented-hdb",
+                hdb,
+                f"{dest.hdb_dir} is segmented (par.txt): partitions live outside it",
+                par_txt=dest.hdb_dir / "par.txt",
+            )
+        )
+    _others(obs, blockers, warnings)
+    fences = [_fence(s, dates, guard, blockers) for s in answered.values()]
+    actives = [a for a, _, _ in fences if a is not None]
+    nows = [n for _, n, _ in fences if n is not None]
+    rolls = [r for _, _, r in fences if r is not None]
+    wdbs = [n for n, s in answered.items() if s.get("proctype") == "wdb"]
+    coordination = (
+        Coordination(
+            wdbs[0],
+            min(actives),
+            nows[0],
+            min(rolls),
+            int(guard.total_seconds() // 60),
+            kind,
+            sorted(answered),
+            warnings,
+        )
+        if actives and nows and rolls and wdbs
+        else None
+    )
+    return Assessment(blockers, warnings, coordination)
 
 
 def assess(
@@ -250,47 +353,21 @@ def assess(
     *,
     guard: timedelta = EOD_GUARD,
 ) -> Coordination:
-    """Coordination facts for `dest`, or a refusal listing every blocker.
+    """Coordination facts for `dest`, or a `CoordinationRefused` listing every blocker.
 
     Read-only: one `writer_state` call per process that writes the destination.
     """
-    blockers: list[str] = []
-    warnings: list[str] = []
-    named = {p.procname: p for p in [*obs.consumers, *obs.unmanaged] if p.up}
-    states = {n: _state(named[n], ipc, blockers) for n in writers if n in named}
-    answered = {n: s for n, s in states.items() if s is not None}
-    if not HOST.is_local(att.stack.host):
-        blockers.append(
-            f"the stack runs on {att.stack.host}, not this machine: {dest.hdb_dir} here is not "
-            "necessarily the directory its writers use"
-        )
-    kind = filesystem_of(dest.hdb_dir)
-    if kind in NETWORK_FILESYSTEMS:
-        blockers.append(
-            f"{dest.hdb_dir} is on a {kind} filesystem: kdb+'s serialisation of the sym file "
-            "relies on local file locking"
-        )
-    _sort_config(att, dest, [p for p in named.values() if p.procname in writers], blockers)
-    if (dest.hdb_dir / "par.txt").exists():
-        blockers.append(f"{dest.hdb_dir} is segmented (par.txt): partitions live outside it")
-    _others(obs, blockers, warnings)
-    fences = [_fence(s, dates, guard, blockers) for s in answered.values()]
-    if blockers:
-        raise UqsError(
+    found = examine(att, dest, obs, writers, ipc, dates, guard=guard)
+    if found.blockers:
+        raise CoordinationRefused(
             f"a backfill into {dest.hdb_dir} (attachment {att.name}) cannot be coordinated "
-            "with its native writers:\n  - " + "\n  - ".join(blockers)
+            "with its native writers:\n  - " + "\n  - ".join(f.message for f in found.blockers),
+            found.blockers,
+            found.coordination,
         )
-    active = min(a for a, _, _ in fences if a is not None)
-    now = next(n for _, n, _ in fences if n is not None)
-    roll = min(r for _, _, r in fences if r is not None)
-    wdbs = [n for n, s in answered.items() if s.get("proctype") == "wdb"]
-    return Coordination(
-        wdbs[0],
-        active,
-        now,
-        roll,
-        int(guard.total_seconds() // 60),
-        kind,
-        sorted(answered),
-        warnings,
-    )
+    if found.coordination is None:
+        raise UqsError(
+            f"a backfill into {dest.hdb_dir} (attachment {att.name}) cannot be coordinated: "
+            "no wdb among its writers reported its active date, clock and next roll"
+        )
+    return found.coordination

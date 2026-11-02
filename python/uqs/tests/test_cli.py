@@ -572,7 +572,7 @@ def test_a_genuinely_stopped_monitor_still_says_to_start_it(monkeypatch):
 
 
 def test_summary_shows_the_graph_by_default(monkeypatch):
-    """These were opt-in first, because nine columns do not fit an
+    """These were opt-in first, because the full set does not fit an
     eighty-column terminal. That was the wrong trade: a column nobody knows
     about answers nothing, and a reader on a narrow terminal can say
     `--columns status` while one who never learns they exist cannot."""

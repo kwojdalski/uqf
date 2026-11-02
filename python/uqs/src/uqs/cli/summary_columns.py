@@ -22,7 +22,7 @@ def resolve_columns(requested: str | None) -> list[str]:
     """The columns to render, from a comma-separated `--columns` value.
 
     The graph columns are ON by default. They were opt-in first, on the
-    grounds that nine columns do not fit an eighty-column terminal - which is
+    grounds that the full set does not fit an eighty-column terminal - which is
     true, and was still the wrong trade: a column nobody knows about answers
     nothing, and "what feeds this" is the question that follows "is it
     running" almost every time. A reader on a narrow terminal can say
