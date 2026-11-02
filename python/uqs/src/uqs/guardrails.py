@@ -7,6 +7,8 @@ own as `Guardrail` values, beside the code that enforces them:
   - deploy/overrides.py: the deployment requirements `deploy push` may relax;
   - attach/overrides.py: the attachment finding codes, from its POLICY table,
     each waived per component as `CODE:COMPONENT`.
+  - attach/backfill_policy.py: `eod-fence`, the end-of-day fence an
+    attached `job backfill` may waive (#1828), with a generated --skip-eod-fence.
 
 cli/safety.registry() gathers them in that order through `aggregate`, which
 refuses two with one id; `uqs override list` (cli/safety.catalog) reads it, and so

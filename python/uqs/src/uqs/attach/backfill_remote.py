@@ -254,6 +254,8 @@ def receive(
         )
     admission = admit(att, dest, ipc)
     assert admission.observation is not None
+    # never waived: `uqs job receive` takes no override, so the receiver always has its
+    # end-of-day deadline (an extractor's --skip-eod-fence is refused before it gets here)
     co = assess(att, dest, admission.observation, admission.writers, ipc, []).as_dict()
     readers = ",".join(f"{r.procname}@{att.stack.host}:{r.port}" for r in admission.reload_targets)
     receiver = f"{contract.dataset}.receiver"
