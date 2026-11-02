@@ -104,6 +104,7 @@
 \l src/etl/core/verify_capture.q
 \l src/etl/core/verify_snapshot.q
 \l src/etl/core/verify_compare.q
+\l src/etl/core/verify_complete.q
 / Every plant table's schema, before any job that publishes or reads one.
 \l src/etl/plant_tables.q
 
