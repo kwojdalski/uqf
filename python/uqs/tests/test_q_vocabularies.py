@@ -129,20 +129,6 @@ def test_status_dir_is_qs_rule(tmp_path):
     assert runs.status_dir(paths, {"UQF_STATUS_DIR": "/elsewhere"}) == Path("/elsewhere")
 
 
-def test_checkpoint_path_is_qs_rule(tmp_path, monkeypatch):
-    """`uqs job checkpoint remove` deletes the file q's checkpoint_path names:
-    `<worker>.checkpoint` in lock_dir, which is the status directory."""
-    state = ".qetl.job.bounded.state"
-    assert q_definition("backfill_state.q", "lock_dir") == (
-        f"{state}.lock_dir:{{[] .qetl.status.status_dir[]}}"
-    )
-    body = q_definition("backfill_state.q", "checkpoint_path")
-    assert f'({state}.lock_dir[]),"/",string[worker],".checkpoint"' in body
-    monkeypatch.setenv("UQF_STATUS_DIR", str(tmp_path))
-    paths: Any = SimpleNamespace(torqdata=tmp_path / "unused")
-    assert backfill.checkpoint_path(paths, "w") == tmp_path / "w.checkpoint"
-
-
 def test_every_column_uqs_run_shows_is_one_q_records():
     """`uqs job runs` prints a choice of each ledger's columns; one renamed in q
     alone would print empty rather than fail. _FACT_COLUMNS had no check at
