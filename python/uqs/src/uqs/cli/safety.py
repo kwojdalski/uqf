@@ -6,7 +6,9 @@
 - `--override NAME --reason TEXT` for every bypass of a check: NAME is one of
   the command's named overrides (`uqs override list`), repeatable, and one
   reason covers the overrides given with it. Each is warned about and recorded
-  where its command records anything.
+  where its command records anything. A guardrail declared with `skip_flag`
+  also gives each of its commands `--skip-<id>`, another spelling of the
+  same override (cli/skip_options.py, #1826), which `given` reads too.
 - An `Effect` on every command, carried by its Click class (`cls=ReadOnly`,
   `cls=ChangesState`, `cls=ConfirmsOnServer`, or `renamed(..., effect=...)`):
   whether it may change the machine it runs on. `uqs --target` reads it to
@@ -25,6 +27,7 @@ from typing import Annotated
 import typer
 from typer.core import TyperCommand
 
+from uqs.cli import skip_options
 from uqs.guardrails import Guardrail, aggregate
 from uqs.paths import UqsError
 
@@ -62,9 +65,14 @@ class Effect(StrEnum):
     CHANGES_STATE = "changes-state"
 
 
-def marked(effect: Effect, base: type[TyperCommand] = TyperCommand) -> type[TyperCommand]:
+def marked(
+    effect: Effect, base: type[TyperCommand] = skip_options.SkipOptions
+) -> type[TyperCommand]:
     """`base` carrying `effect`: the `cls=` of a command. Typer wraps the
-    command's function, so the mark is on the Click class, which survives."""
+    command's function, so the mark is on the Click class, which survives.
+    It takes its registry-generated `--skip-<id>` options (skip_options)."""
+    if not issubclass(base, skip_options.SkipOptions):
+        base = type(base.__name__, (skip_options.SkipOptions, base), {})
     return type(base.__name__, (base,), {"effect": effect})
 
 
@@ -98,21 +106,54 @@ def catalog() -> list[Guardrail]:
 
 
 def given(command: str, names: list[str] | None, reason: str | None) -> dict[str, str]:
-    """{override: reason} for the `--override`s given to `command` - refused,
-    as a UqsError, for a name `command` does not take, an override without a
-    reason, or a reason with no override."""
-    names = list(names or ())
+    """{override: reason} for the `--override`s given to `command`, and the
+    `--skip-<id>`s generated for it (skip_options), as one: `--skip-eod-fence`
+    is `eod-fence`, `--skip-torq-version stp1` is `TORQ_VERSION:stp1`. Refused,
+    as a UqsError: a name `command` does not take - unknown, another command's,
+    or not overridable - a component missing where the guardrail is waived per
+    component or given where it is not, one guardrail asked for both ways, an
+    override without a reason, or a reason with no override. The same waiver
+    given twice, by either spelling, is one."""
+    asked = skip_options.requested(command, names)
     text = (reason or "").strip()
-    if not names:
+    if not asked:
         if reason is not None:
             raise UqsError("--reason says why an --override is acceptable, and none was given")
         return {}
     if not text:
-        raise UqsError(f"--override {names[0]} needs --reason: say why the check is bypassed")
-    known = sorted(b.name for b in catalog() if command in b.commands)
-    for name in names:
-        if name not in known:
-            raise UqsError(
-                f"`uqs {command}` has no override {name!r} - it takes: {', '.join(known)}"
+        raise UqsError(f"{asked[0][1]} needs --reason: say why the check is bypassed")
+    every = {g.id: g for g in registry()}
+    known = sorted(g.name for g in every.values() if g.overridable and command in g.commands)
+    whole = {name: spelling for name, spelling in asked if ":" not in name}
+    out: dict[str, str] = {}
+    for name, spelling in asked:
+        gid, sep, component = name.partition(":")
+        g = every.get(gid)
+        if g is None or command not in g.commands:
+            whose = (
+                f" (it is {', '.join(f'`uqs {c}`' for c in g.commands)}'s)" if g is not None else ""
             )
-    return dict.fromkeys(names, text)
+            raise UqsError(
+                f"`uqs {command}` has no override {name!r}{whose} - it takes: "
+                + (", ".join(known) or "none")
+            )
+        if not g.overridable:
+            raise UqsError(f"{g.id} is never overridden: {g.risk or g.description}")
+        if g.component_scoped and (
+            not component or component != component.strip() or ":" in component
+        ):
+            raise UqsError(
+                f"{spelling}: {g.id} is waived for one component - give {g.id}:COMPONENT"
+            )
+        if not g.component_scoped and sep:
+            if gid in whole:
+                raise UqsError(
+                    f"conflicting requests for {g.id}: {whole[gid]} waives it for the whole "
+                    f"command, {spelling} for one component - give it once"
+                )
+            raise UqsError(
+                f"{spelling}: {g.id} is waived for the whole command, not one component - "
+                f"give --override {g.id}"
+            )
+        out[name] = text
+    return out

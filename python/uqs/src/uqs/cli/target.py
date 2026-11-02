@@ -32,6 +32,7 @@ from uqs.cli.deploy import deploy_app
 from uqs.cli.json_out import emit, json_opt
 from uqs.cli.safety import ChangesState, ReadOnly
 from uqs.cli.shared import _die, app, console
+from uqs.cli.skip_options import forwarded
 from uqs.cli.target_confirm import changes_the_server, confirmed_on_server
 from uqs.deploy import control, history, target_changelog, target_changes, target_file
 from uqs.deploy.config import DeployError
@@ -384,7 +385,8 @@ def forward(name: str, yes: bool, args: list[str], *, interactive: bool) -> int:
             "give the target once: `uqs --target NAME query` runs the query on the server, "
             "`uqs query --tunnel NAME` runs it here through an ssh tunnel"
         )
-    args = confirmed_on_server(args, yes)
+    # a --skip-<id> goes as its --override, which an older server's uqs takes (#1826)
+    args = confirmed_on_server(forwarded(args), yes)
     r = control.remote_for(name, repo_root())
     shown = " ".join(["uqs", *args])
     if changes_the_server(args) and not yes:
