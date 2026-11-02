@@ -90,18 +90,24 @@
     if[count k; :k];
     $[(not null source) and source in key .qetl.source.sources; (),(.qetl.source.def source)`row_key; `symbol$()]}
 
-/ Every producer that fills `dataset`: the streaming jobs that publish it and the
-/ bounded workers whose dataset it is.
+/ Every producer that fills `dataset`, as the job graph says: .qetl.dag.producers, built
+/ from the streaming jobs' `publishes`, the bounded workers' `dataset` and the reactions'
+/ outputs. Nothing here groups producers a second time. The graph is rebuilt from the
+/ registries for the call and put back as it was, so asking changes nothing.
 / @param dataset the dataset, a symbol
-/ @return a table producer, mode (`stream or `bounded), source, key_cols (the row
-/   key, from the producer or else its source; read it as `(),`, since a table
+/ @return a table producer, mode (`stream, `bounded or `reaction), source, key_cols (the
+/   row key, from the producer or else its source; read it as `(),`, since a table
 /   column of one-symbol lists comes back as atoms), declared (the output schema its
 /   declaration states, or (::))
 / @eg .qetl.verify.producers[`demo_deals]`mode  ->  `stream`bounded
 .qetl.verify.producers:{[dataset]
-    sjobs:{[d;j] d in (.qetl.job.stream.def j)`publishes}[dataset] each .qetl.job.stream.defined[];
-    streams:.qetl.job.stream.defined[] where sjobs;
-    workers:.qetl.job.bounded.defined[] where dataset={(.qetl.job.bounded.def x)`dataset} each .qetl.job.bounded.defined[];
+    keep:.qetl.dag.jobs;
+    .qetl.dag.adopt_all[];
+    names:.qetl.dag.producers dataset;
+    .qetl.dag.jobs::keep;
+    streams:names inter .qetl.job.stream.defined[];
+    workers:names inter .qetl.job.bounded.defined[];
+    others:names except streams,workers;
     srow:{[j]
         d:.qetl.job.stream.def j;
         p:$[`poll in key d; d`poll; ()!()];
@@ -112,7 +118,8 @@
         c:.qetl.job.bounded.def w;
         `producer`mode`source`key_cols`declared!(w;`bounded;c`source;.qetl.verify.key_of[c`target_key;c`source];
             .qetl.transform.output_schema c`transform)};
-    rows:(srow each streams),brow each workers;
+    orow:{[j] `producer`mode`source`key_cols`declared!(j;`reaction;`;`symbol$();(::))};
+    rows:(srow each streams),(brow each workers),orow each others;
     flip `producer`mode`source`key_cols`declared!(
         `symbol$rows@\:`producer; `symbol$rows@\:`mode; `symbol$rows@\:`source; rows@\:`key_cols; rows@\:`declared)}
 

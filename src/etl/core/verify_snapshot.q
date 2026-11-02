@@ -45,6 +45,10 @@
 / @return a capture result, with `error` set when the capture threw
 / @eg (.qetl.verify.capture_one[`producer`mode!(`demo_deals_feed;`stream);`demo_deals;2026.09.11D00:00:00.000000000;2026.09.12D00:00:00.000000000])`fetched  ->  1
 .qetl.verify.capture_one:{[prod;dataset;from_ts;to_ts]
+    if[`reaction=prod`mode;
+        r:.qetl.verify.capture_result[prod`producer;`reaction];
+        r[`error]:string[prod`producer]," is a reaction: it runs on a published window and its output is not captured here";
+        :r];
     r:$[`stream=prod`mode;
         .[.qetl.verify.capture_stream;(prod`producer;dataset;from_ts;to_ts);{[e] (`capture_failed;e)}];
         .[.qetl.verify.capture_bounded;(prod`producer;from_ts;to_ts);{[e] (`capture_failed;e)}]];

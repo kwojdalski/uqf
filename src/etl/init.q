@@ -105,6 +105,9 @@
 \l src/etl/core/verify_snapshot.q
 \l src/etl/core/verify_compare.q
 \l src/etl/core/verify_complete.q
+\l src/etl/core/verify_behaviour.q
+\l src/etl/core/verify_behaviour_bounded.q
+\l src/etl/core/verify_report.q
 / Every plant table's schema, before any job that publishes or reads one.
 \l src/etl/plant_tables.q
 

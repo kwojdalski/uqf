@@ -69,11 +69,12 @@
     `symbol$();
     enlist `demo_deals;
     0D00:00:01;
-    `fetch`normalize`next_cursor`source`close!(
+    `fetch`normalize`next_cursor`source`close`row_key!(
         .qpipe.job.demo_deals_feed.fetch;
         .qpipe.job.demo_deals_feed.normalize;
         .qpipe.job.demo_deals_feed.next_cursor;
         `demo_deals;
-        .qpipe.job.demo_deals_feed.close);
+        .qpipe.job.demo_deals_feed.close;
+        `deal_id);
     `demo_deals_passthrough;
     "polling feed over the demo_deals source, the streaming twin of demo_deals_backfill - started on demand, as an example of the pair `uqs job verify` checks")];

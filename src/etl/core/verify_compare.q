@@ -103,9 +103,11 @@
 /   findings (the differences, the producer that differs from the first named) and basis
 / @eg .qetl.verify.cross_mode[`demo_deals;.qetl.verify.capture[`demo_deals;2026.09.11D00:00:00.000000000;2026.09.14D00:00:00.000000000]]`status  ->  `PASS
 .qetl.verify.cross_mode:{[dataset;cap]
-    p:cap`producers;
+    p0:cap`producers;
+    p:select from p0 where mode in `stream`bounded;
     names:p`producer;
-    if[2>count names; :.qetl.verify.unverified "one producer (",(", " sv string names),") - there is nothing to compare it with"];
+    if[0=count names; :.qetl.verify.unverified "no producer that can be captured fills ",string dataset];
+    if[1=count names; :.qetl.verify.unverified "one producer (",string[first names],") - there is nothing to compare it with"];
     basis:$[dataset in key .qetl.verify.basis_of; .qetl.verify.basis_of dataset; `];
     if[null basis; :.qetl.verify.unverified "equivalence basis undeclared - the dataset declares whether events, revisions or its final state must match (.qetl.verify.declare_basis)"];
     got:{[c;n] first c n}[cap`captures] each names;

@@ -24,9 +24,20 @@
 .qt.qetl.verify.schema.test_both_producers_of_the_demo_deals_dataset_are_found:{[t]
     p:.qetl.verify.producers .qt.qetl.verify.schema.deals;
     .qunit.assertEquals[(p`producer;p`mode);(`demo_deals_feed`demo_deals_backfill;`stream`bounded);
-        "the polling feed that publishes the table and the worker whose dataset it is"];
-    .qunit.assertEquals[(),/:p`key_cols;(enlist `deal_id;enlist `deal_id);
+        "the job graph's producers: the polling feed and the worker whose dataset it is"];
+    .qunit.assertEquals[2#(),/:p`key_cols;(enlist `deal_id;enlist `deal_id);
         "each takes its row key from the source it reads, neither declaring one of its own"]};
+
+.qt.qetl.verify.schema.test_the_grouping_is_the_job_graphs_own:{[t]
+    keep:.qetl.dag.jobs;
+    .qetl.dag.adopt_all[];
+    graph:.qetl.dag.producers `demo_deals;
+    .qetl.dag.jobs::keep;
+    .qunit.assertEquals[(.qetl.verify.producers `demo_deals)`producer;graph;"no second grouping: the graph's, in its order"];
+    .qunit.assertEquals[.qetl.dag.jobs~keep;1b;"and asking leaves the registry as it was"]};
+
+.qt.qetl.verify.schema.test_a_dataset_with_only_a_reaction_and_one_worker_is_still_listed:{[t]
+    .qunit.assertEquals[(.qetl.verify.producers `deal_positions)`mode;enlist `reaction;"a derived dataset's producer is the reaction"]};
 
 .qt.qetl.verify.schema.test_a_dataset_nobody_fills_has_no_producers:{[t]
     .qunit.assertEquals[count .qetl.verify.producers `no_such_dataset;0;"nothing publishes it and no worker fills it"]};
