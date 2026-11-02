@@ -23,7 +23,7 @@ between them they would have caught all three:
   2. no running process's error log grew while we watched.
 
 This module is the pure half - what to expect and how to read it. The lane
-that starts the stack and waits is `scripts/test.py`'s `stack-smoke`.
+that starts the stack and waits is `scripts/gates/stack_smoke.py`.
 """
 
 from __future__ import annotations

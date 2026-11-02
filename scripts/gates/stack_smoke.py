@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Start the stack, watch it, and say whether it is actually working.
 
-Run through `python3 scripts/test.py stack-smoke`.
+Run it as `uv run python scripts/gates/stack_smoke.py`: it checks a running stack,
+which makes it an operational check rather than a test (#1808).
 
 NOT PART OF `all`, and not part of the GitHub workflow: it needs a kdb+
 licence, free ports and a couple of minutes. That is not a reason to skip

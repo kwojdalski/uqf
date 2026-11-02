@@ -8,7 +8,7 @@ processes reading one file. Attaching writes the declared rows, reloads both,
 and end of day then sorts the table by sym and time with `p#` on sym. Detach
 before publication takes the rows out and both processes back to the default.
 
-Opt-in like the other stack tests (UQS_ATTACH_STACK_TEST=1).
+Opt-in like the other stack tests (`-m live_stack`).
 """
 
 from __future__ import annotations

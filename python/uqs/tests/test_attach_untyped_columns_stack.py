@@ -7,7 +7,7 @@ touched (here), and what IS accepted - concrete types and nested columns with a
 declared element type - is shown to survive the writedown shapes that matter:
 repeated flushes with different row counts and vector lengths, then end of day.
 
-Opt-in like the other stack tests (UQS_ATTACH_STACK_TEST=1).
+Opt-in like the other stack tests (`-m live_stack`).
 """
 
 from __future__ import annotations

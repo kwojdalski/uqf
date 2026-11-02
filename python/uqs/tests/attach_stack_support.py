@@ -5,8 +5,8 @@ what "an existing TorQ stack" is. It runs on a base port nothing is using,
 with its own data directory and its own COPY of the starter pack (so a test
 may edit the stack's schema file; the vendored tree is never touched).
 
-Opt-in, like the other tests that start a whole stack: UQS_ATTACH_STACK_TEST=1
-(`python3 scripts/test.py attach-stack`). It needs a KDB-X licence and about
+Opt-in, like the other tests that start a whole stack: `-m live_stack`
+(conftest.py OPT_IN). It needs a KDB-X licence and about
 a minute per stack; hosted CI has neither, and the pre-commit hook must not
 start processes on every commit.
 
@@ -29,7 +29,6 @@ import pytest
 
 from uqs.attach.remote import Endpoint, IpcError, KolaIpc
 
-STACK_TEST = os.environ.get("UQS_ATTACH_STACK_TEST") == "1"
 REPO = Path(__file__).resolve().parents[3]
 #: discovery, stp, rdb, hdb, wdb, sort: the starter pack's own, minus the monitoring extras.
 CORE = ("discovery1", "stp1", "rdb1", "hdb1", "wdb1", "sort1")
@@ -38,7 +37,8 @@ SPAN = 80
 
 
 def requires_stack() -> list[pytest.MarkDecorator]:
-    """A module's `pytestmark`: opt-in, and one stack at a time under xdist.
+    """A module's `pytestmark`: opt-in (`-m live_stack`, conftest.py's OPT_IN),
+    and one stack at a time under xdist.
 
     pick_base_port shuffles per process, but between its check that a span is
     free and the stack binding it, another xdist worker's stack can take the
@@ -46,9 +46,7 @@ def requires_stack() -> list[pytest.MarkDecorator]:
     (`-n auto --dist loadgroup`), so they start one after another.
     """
     return [
-        pytest.mark.skipif(
-            not STACK_TEST, reason="UQS_ATTACH_STACK_TEST=1 starts an isolated TorQ stack"
-        ),
+        pytest.mark.live_stack,
         pytest.mark.xdist_group("torq-stack"),
     ]
 

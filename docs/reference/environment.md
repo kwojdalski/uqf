@@ -118,7 +118,7 @@ operator's business, and listing them would bury the ones above that are.
 
 Per-run arguments are flags, not variables: a backfill's worker, version and
 range are `uqs job backfill` options, and the live smoke check's sources are
-`scripts/test.py smoke --targets … --tables … --timeout-ms …`.
+`uv run pytest tests/qrun/test_external_smoke.py -m external --smoke-targets … --smoke-tables … --smoke-timeout-ms …`.
 
 ## Produced by the orchestrator
 

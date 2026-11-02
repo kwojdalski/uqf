@@ -21,7 +21,8 @@ bundle's tests. This does, without touching the checkout:
     uv run python scripts/dev/bundle_suite.py sidecars/mockups   # one
     uv run python scripts/dev/bundle_suite.py --install-into DIR # install only, run nothing
 
-Run through `python3 scripts/test.py bundles`. --install-into is how CI's
+Run through `uv run pytest tests/qrun/test_bundle_suites.py -m release`, a test
+per bundle (#1808). --install-into is how CI's
 PeachQ lane (scripts/portable/full_suite.py --bundles) puts every bundle and
 its tests into the tree it flattens, so the bundles are tested on every PR
 on the q CI has (#925).

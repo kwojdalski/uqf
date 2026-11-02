@@ -7,7 +7,7 @@ same names meet the isolated starter-pack stack and are refused - by preflight
 before any change, and by the q operations themselves when something reaches them
 anyway.
 
-Opt-in like the other stack tests (UQS_ATTACH_STACK_TEST=1).
+Opt-in like the other stack tests (`-m live_stack`).
 """
 
 from __future__ import annotations

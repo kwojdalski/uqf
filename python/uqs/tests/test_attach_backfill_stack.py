@@ -1,8 +1,8 @@
 """A backfill into an attached stack's HDB, end to end, on a DISPOSABLE TorQ stack (#1454, part 4).
 
-Opt-in like the other attach-stack tests (UQS_ATTACH_STACK_TEST=1, `python3 scripts/test.py
-attach-stack`): real discovery, tickerplant, rdb, wdb, hdb and sort processes on a port span
-nothing else uses, with their own data directory. The attachment is made with the real workflow
+Opt-in like the other attach-stack tests (`-m live_stack`): real discovery, tickerplant,
+rdb, wdb, hdb and sort processes on a port span nothing else uses, with their own data
+directory. The attachment is made with the real workflow
 (plan, apply, verify); the worker reads a real upstream q process; and the commands are the ones
 an operator types, as subprocesses of the CLI.
 

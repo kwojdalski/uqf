@@ -25,6 +25,10 @@ from __future__ import annotations
 import pytest
 from remote_world import BUNDLE, TABLE, World, copy_between
 
+#: Opt-in (-m docker), and every scenario on one xdist worker: they share one
+#: session's machines and run in file order.
+pytestmark = [pytest.mark.docker, pytest.mark.xdist_group("remote-stack")]
+
 WORKER = "remote_trades_backfill"
 DAY, NEXT = "2026-01-05", "2026-01-06"
 DAY_Q = DAY.replace("-", ".")

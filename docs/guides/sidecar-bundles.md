@@ -13,7 +13,7 @@ a release runs on a clean server with no workstation or Git checkout behind it.
 piggybank/
   bundle.json              {"name": "piggybank", "version": "1.4.0"}
   *.q                      sources, workers, streaming jobs and reactions
-  test_*.q                 its tests: run by `scripts/test.py bundles`
+  test_*.q                 its tests: run by `test_bundle_suites.py`
   tables.q                 optional: plant tables, nested[...] contracts and
                            sorting[...] rules
   catalog.q                optional: .qcat.describe (or .qcat.hidden, for a raw
@@ -23,7 +23,7 @@ piggybank/
   *_feed.py                optional: a connector - the publisher outside the
                            plant that feeds one of its tables (FEED = ...)
   *_streamer.py            optional: the process a *_feed.py starts
-  test_*.py                its Python tests: run by `scripts/test.py bundles`
+  test_*.py                its Python tests: run by `test_bundle_suites.py`
 ```
 
 Each `.q` file is placed by what it declares, as `uqs job install` does for any
@@ -101,7 +101,7 @@ uqs job new mock_rollup --triggered-by mock_trades --bundle sidecars/mockups
 ## Test a bundle
 
 ```bash
-python3 scripts/test.py bundles               # every bundle under sidecars/
+uv run pytest tests/qrun/test_bundle_suites.py -m release   # every bundle under sidecars/ (-k NAME: one)
 uv run python scripts/dev/bundle_suite.py ../piggybank
 ```
 
@@ -211,7 +211,7 @@ ODBC sources also need a driver set up: see [ODBC](odbc.md).
   instead of falling back to its fixture, so fixture rows are never published as
   real ones.
 - **Real connection check.**
-  `python3 scripts/test.py smoke --targets HOST:PORT --tables TABLE:COL,COL`
+  `uv run pytest tests/qrun/test_external_smoke.py -m external --smoke-targets HOST:PORT --smoke-tables TABLE:COL,COL`
   checks that each live source answers and its tables still have those columns.
   It is never part of ordinary CI.
 

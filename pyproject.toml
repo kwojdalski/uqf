@@ -179,4 +179,6 @@ testpaths = [
     # The q scripts run as tests - worked examples, the docs' q blocks - and
     # what their runner promises (#1808): what scripts/test.py's lanes ran.
     "tests/qrun",
+    # The remote-stack scenarios: Docker machines, opt-in (-m docker).
+    "tests/remote",
 ]

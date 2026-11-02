@@ -75,7 +75,11 @@ MARKERS = (
 #: how to select it, unless the `-m` expression names its marker. Each with
 #: why it is not part of an ordinary run.
 OPT_IN = {
-    "release": "a release check - the q suite again in reverse order, minutes long",
+    "release": "a release check, minutes long: the q suite again in reverse order, and "
+    "each sidecar bundle installed into a copy with the whole suite run there",
+    "live_stack": "starts isolated TorQ stacks on KDB-X (the attach workflow), about a minute each",
+    "docker": "starts Docker containers standing in for other machines (tests/remote)",
+    "external": "checks live external sources, named with --smoke-targets",
 }
 
 #: The interpreters --require-q takes.
@@ -127,6 +131,13 @@ def pytest_addoption(parser):
             "the q-tests hook passes scripts/dev/test_impact.py's selection"
         ),
     )
+    smoke = parser.getgroup("smoke", "the external smoke check (-m external)")
+    smoke.addoption("--smoke-targets", nargs="+", default=[], metavar="HOST:PORT",
+                    help="the sources to check")  # fmt: skip
+    smoke.addoption("--smoke-tables", nargs="+", default=[], metavar="TABLE:COL,COL",
+                    help="each table and the columns it must still have")  # fmt: skip
+    smoke.addoption("--smoke-timeout-ms", type=int, default=None,
+                    help="per-connection timeout (default 5000)")  # fmt: skip
     group = parser.getgroup("shards", "split the suite across CI runners by module")
     group.addoption("--shard", default=None, help="run shard I of N, as I/N")
     group.addoption(

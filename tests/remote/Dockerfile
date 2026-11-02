@@ -1,4 +1,4 @@
-# A machine of its own for the remote-stack lane (scripts/test.py remote-stack).
+# A machine of its own for the remote-stack tests (uv run pytest tests/remote -m docker).
 #
 # Linux x86_64, as the servers a stack runs on are, with PeachQ built from the
 # pin (scripts/peachq.json): there is no Linux KDB-X here, and PeachQ needs no

@@ -1,4 +1,4 @@
-"""The machines of the remote-stack lane, as Docker containers (scripts/test.py remote-stack).
+"""The machines of the remote-stack tests, as Docker containers (`-m docker`, #1808).
 
 Three Linux x86_64 machines from one image (tests/remote/Dockerfile), each with
 its own hostname, filesystem and process table:
@@ -36,8 +36,11 @@ from typing import Any
 
 import pytest
 
-ENABLED = os.environ.get("UQF_REMOTE_STACK_TEST") == "1"
-IMAGE = os.environ.get("UQF_REMOTE_IMAGE", "")
+#: The image the machines run: one per checkout state, rebuilt from cached
+#: layers when the tree changed (tests/remote/Dockerfile, `build_image`).
+#: UQF_REMOTE_IMAGE names one built already, and then nothing is built.
+IMAGE = os.environ.get("UQF_REMOTE_IMAGE") or "uqf-remote-stack:latest"
+PREBUILT = bool(os.environ.get("UQF_REMOTE_IMAGE"))
 RUN = os.environ.get("UQF_REMOTE_RUN") or str(os.getpid())
 LABEL = f"uqf-remote-run={RUN}"
 #: Ports published from the stack: its processes (offsets 0-6) and a receiver's.
@@ -51,6 +54,58 @@ BUNDLE = "tests/remote/bundle"
 CLIENT_RUNTIME = "peachq-etl"
 STACK_RUNTIME = "peachq"
 REPO_IN_IMAGE = Path("/uqf")
+
+
+REPO = Path(__file__).resolve().parents[2]
+
+
+def docker_problem() -> str | None:
+    """Why Docker cannot be used here, or None."""
+    import shutil
+
+    if shutil.which("docker") is None:
+        return "docker is not on PATH"
+    if subprocess.run(["docker", "info"], capture_output=True, check=False).returncode:
+        return "docker info failed - is the Docker daemon running?"
+    return None
+
+
+def build_context(tmp: Path) -> Path:
+    """The build context: the files git sees in the working tree (tracked, and
+    untracked but not ignored), so .venv, output/ and caches stay out. Written
+    with tarfile rather than tar, which on macOS adds extended attributes the
+    Docker daemon refuses."""
+    import tarfile
+
+    listed = subprocess.run(
+        ["git", "ls-files", "-co", "--exclude-standard", "-z"],
+        cwd=REPO, capture_output=True, check=True,
+    ).stdout.decode()  # fmt: skip
+    context = tmp / "context.tar"
+    # GNU, not PAX, and the Dockerfile first: docker tells an archive from a
+    # Dockerfile by parsing the first entry out of 1024 bytes, which a PAX
+    # extended header leaves too few of.
+    with tarfile.open(context, "w", format=tarfile.GNU_FORMAT) as tar:
+        tar.add(REPO / "tests/remote/Dockerfile", arcname="tests/remote/Dockerfile")
+        for name in filter(None, listed.split("\0")):
+            if name == "tests/remote/Dockerfile":
+                continue
+            path = REPO / name
+            if path.is_symlink() or path.is_file():
+                tar.add(path, arcname=name, recursive=False)
+    return context
+
+
+def build_image(tmp: Path) -> None:
+    """Build IMAGE from this checkout; cached layers make a rebuild quick."""
+    with open(build_context(tmp), "rb") as context:
+        built = subprocess.run(
+            ["docker", "build", "--platform", "linux/amd64",
+             "-f", "tests/remote/Dockerfile", "-t", IMAGE, "-"],
+            stdin=context, capture_output=True, text=True, check=False, timeout=3600,
+        )  # fmt: skip
+    if built.returncode:
+        raise RuntimeError(f"docker build failed:\n{built.stdout[-4000:]}{built.stderr[-4000:]}")
 
 
 def docker(*args: str, timeout: float = 120, check: bool = True) -> subprocess.CompletedProcess:

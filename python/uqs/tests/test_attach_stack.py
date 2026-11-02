@@ -1,6 +1,6 @@
 """The attach workflow against a REAL TorQ 5.2.12 stack (#1424).
 
-Opt-in: UQS_ATTACH_STACK_TEST=1 (or `python3 scripts/test.py attach-stack`).
+Opt-in: `uv run pytest -m live_stack`.
 The stack is the starter pack as it ships - the `torq` runtime - on a port span
 nothing else uses, with its own data directory and its own copy of the pack.
 The first supported case is `piggybank_general_ledger`, from a fixture bundle:
