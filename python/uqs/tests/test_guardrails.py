@@ -41,7 +41,7 @@ def test_the_catalog_lists_what_it_did_before_the_registry_in_the_same_order():
 
 
 def test_the_registry_keeps_every_attachment_code_and_its_policy():
-    by_id = {g.id: g for g in guardrails.registry()}
+    by_id = {g.id: g for g in safety.registry()}
     for code, policy in attach.POLICY.items():
         g = by_id[code]
         assert (g.overridable, g.risk, g.action) == (policy.overridable, policy.risk, policy.action)
@@ -60,7 +60,7 @@ def test_a_duplicate_id_across_owners_fails_the_registry(monkeypatch):
     clash = Guardrail("q-version-check", ("deploy push",), "a second q-version-check")
     monkeypatch.setattr(deploy, "GUARDRAILS", (*deploy.GUARDRAILS, clash))
     with pytest.raises(ValueError, match="'q-version-check' is declared twice"):
-        guardrails.registry()
+        safety.registry()
 
 
 @pytest.mark.parametrize(

@@ -8,9 +8,10 @@ own as `Guardrail` values, beside the code that enforces them:
   - attach/overrides.py: the attachment finding codes, from its POLICY table,
     each waived per component as `CODE:COMPONENT`.
 
-`registry()` gathers them in that order, and refuses two with one id;
-`uqs override list` (cli/safety.catalog) reads it. This module imports none of
-its owners at load, so every owner can import it.
+cli/safety.registry() gathers them in that order through `aggregate`, which
+refuses two with one id; `uqs override list` (cli/safety.catalog) reads it.
+This module imports nothing from this package, so every layer may import it
+(test_module_split holds it to that).
 """
 
 from __future__ import annotations
@@ -100,15 +101,3 @@ def aggregate(groups: Iterable[Iterable[Guardrail]]) -> tuple[Guardrail, ...]:
             seen.add(g.id)
             out.append(g)
     return tuple(out)
-
-
-def registry() -> tuple[Guardrail, ...]:
-    """Every guardrail, from the modules that enforce them, in a fixed order:
-    start, deployment, attachment."""
-    from uqs.attach import overrides as attach
-    from uqs.deploy import overrides as deploy
-    from uqs.stack import start_overrides as start
-
-    return aggregate(
-        [tuple(start.GUARDRAILS.values()), deploy.GUARDRAILS, attach.GUARDRAILS],
-    )
