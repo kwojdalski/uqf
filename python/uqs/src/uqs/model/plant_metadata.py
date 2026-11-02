@@ -97,7 +97,8 @@ class Table:
     nested: dict[str, str]
     #: the declared TorQ sort rule, `.qetl.plant.sorting`'s: (column, attribute)
     sorting: tuple[tuple[str, str], ...]
-    #: the column it is read by in time, `.qetl.plant.read_time_column`'s (#1869)
+    #: the column it is read by in time, `.qetl.plant.read_time_column`'s (#1869);
+    #: "" for a vendored table, which this tree does not read by them
     time_column: str
     #: its instrument column, `.qetl.plant.read_instrument_column`'s; "" if none
     instrument_column: str

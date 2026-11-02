@@ -236,7 +236,9 @@ def test_a_code_edit_makes_the_metadata_stale(tmp_path, edit):
     [
         (lambda t: "{not json", "is not valid"),
         (
-            lambda t: t.replace('"exporter_version": 2', '"exporter_version": 0'),
+            lambda t: t.replace(
+                f'"exporter_version": {plant_metadata.EXPORTER_VERSION}', '"exporter_version": 0'
+            ),
             "exporter version 0",
         ),
         (lambda t: t.replace('"tables"', '"tablez"'), "is not valid"),

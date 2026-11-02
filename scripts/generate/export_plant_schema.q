@@ -29,19 +29,23 @@
 
 / One table's declared schema: ordered columns with type char and attribute,
 / the nested columns' declared element types, the declared sort rule, and the
-/ time and instrument columns the table is read by (#1869).
+/ time and instrument columns an own table is read by (#1869; "" for a
+/ vendored one).
 .qschema.table:{[t]
     m:0!meta .qetl.plant.schema t;
     nested:exec column!element from .qetl.plant.elements where table=t;
     sorting:exec flip (string column; string att) from .qetl.plant.sort_rules where table=t;
+    / Read columns are a fact about this tree's own tables; a starter pack's
+    / (another pack's quote may have no time column) is not read by them.
+    own:not t in .qetl.plant.vendored;
     `name`vendored`columns`nested`sorting`time_column`instrument_column!(
         string t;
         t in .qetl.plant.vendored;
         {[c;ty;a] `name`type`attribute!(string c; enlist ty; string a)}'[m`c; m`t; m`a];
         (key nested)!enlist each value nested;
         sorting;
-        string .qetl.plant.read_time_column t;
-        string .qetl.plant.read_instrument_column t)}
+        $[own; string .qetl.plant.read_time_column t; ""];
+        $[own; string .qetl.plant.read_instrument_column t; ""])}
 
 if[count k:.qschema.keyed[];
     -2 "export_plant_schema: keyed table(s) ",(", " sv string k)," in .qetl.plant - a plant table is unkeyed; the schema metadata does not carry keyed tables";
