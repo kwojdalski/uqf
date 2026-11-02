@@ -19,8 +19,8 @@ from pathlib import Path
 import attach_backfill_support as support
 import pytest
 from attach_backfill_support import WORKER, facts_of, make_world, plan_with
+from plain_cli import PlainRunner
 from test_attach_backfill_findings import CASES, EOD, _expect
-from typer.testing import CliRunner
 
 from uqs import cli
 from uqs.attach import backfill_owner, backfill_policy, backfill_run
@@ -69,11 +69,11 @@ def test_the_guardrail_is_declared_once_from_the_coordination_policy():
 
 
 def test_backfill_help_shows_the_generated_skip_and_receive_does_not():
-    run = CliRunner().invoke(cli.app, ["job", "backfill", "--help"], env={"COLUMNS": "300"})
+    run = PlainRunner().invoke(cli.app, ["job", "backfill", "--help"], env={"COLUMNS": "300"})
     flat = " ".join(run.output.split())
     assert "--skip-eod-fence" in flat and "The same as --override eod-fence" in flat
     assert backfill_policy.POLICY["eod-fence"].risk[:60] in flat
-    receive = CliRunner().invoke(cli.app, ["job", "receive", "--help"], env={"COLUMNS": "300"})
+    receive = PlainRunner().invoke(cli.app, ["job", "receive", "--help"], env={"COLUMNS": "300"})
     assert "--skip-eod-fence" not in receive.output, "the receiver path takes no waiver"
 
 
@@ -292,7 +292,7 @@ ARGV = [
 
 def _cli(monkeypatch, *argv):
     monkeypatch.setattr(sys, "argv", ["uqs", *ARGV, *argv])
-    return CliRunner().invoke(cli.app, [*ARGV, *argv], env={"COLUMNS": "300"})
+    return PlainRunner().invoke(cli.app, [*ARGV, *argv], env={"COLUMNS": "300"})
 
 
 def test_cli_plan_with_the_skip_admits_and_says_so(world, monkeypatch):
@@ -360,7 +360,7 @@ def test_cli_refuses_the_waiver_on_the_fleet_path(world, monkeypatch):
     argv = ["job", "backfill", WORKER, "--source-version", "v1", "--from", "2026-09-11",
             "--to", "2026-09-13", "--skip-eod-fence", "--reason", REASON]  # fmt: skip
     monkeypatch.setattr(sys, "argv", ["uqs", *argv])
-    result = CliRunner().invoke(cli.app, argv, env={"COLUMNS": "300"})
+    result = PlainRunner().invoke(cli.app, argv, env={"COLUMNS": "300"})
     assert result.exit_code != 0
     assert any(
         "--skip-eod-fence is for --attach: only a backfill into an attached native HDB" in m
