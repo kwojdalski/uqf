@@ -100,6 +100,7 @@
 \l src/etl/core/rolling.q
 \l src/etl/core/enrich.q
 \l src/etl/core/tick.q
+\l src/etl/core/verify_schema.q
 / Every plant table's schema, before any job that publishes or reads one.
 \l src/etl/plant_tables.q
 
