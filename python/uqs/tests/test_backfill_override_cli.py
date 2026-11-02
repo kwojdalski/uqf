@@ -21,8 +21,8 @@ from pathlib import Path
 import attach_backfill_support as support
 import pytest
 from attach_backfill_support import WORKER, facts_of, make_world
+from plain_cli import PlainRunner
 from test_attach_backfill_eod_override import IN_FENCE, REASON
-from typer.testing import CliRunner
 
 from uqs import cli
 from uqs.attach import backfill_audit, backfill_owner, backfill_policy, backfill_run
@@ -66,7 +66,7 @@ ARGV = [
 
 def _cli(monkeypatch, *argv):
     monkeypatch.setattr(sys, "argv", ["uqs", *ARGV, *argv])
-    return CliRunner().invoke(cli.app, [*ARGV, *argv], env={"COLUMNS": "300"})
+    return PlainRunner().invoke(cli.app, [*ARGV, *argv], env={"COLUMNS": "300"})
 
 
 def _records(world) -> list[dict]:

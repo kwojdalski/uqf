@@ -16,10 +16,10 @@ import shlex
 from pathlib import Path
 
 import pytest
+from plain_cli import PlainRunner
 from test_attach_backfill_eod_override import REASON
 from test_attach_backfill_findings import _emitted_codes
 from test_backfill_override_cli import ARGV
-from typer.testing import CliRunner
 
 from uqs import cli
 from uqs.attach import backfill_policy
@@ -143,12 +143,12 @@ def _plain(text: str) -> str:
 def test_completion_offers_the_skip_with_its_declared_help():
     [g] = skip_options.declared("job backfill")
     words = "uqs job backfill duckdb_deals_backfill --skip-"
-    zsh = CliRunner().invoke(
+    zsh = PlainRunner().invoke(
         cli.app, [], prog_name="uqs",
         env={"_UQS_COMPLETE": "complete_zsh", "_TYPER_COMPLETE_ARGS": words},
     )  # fmt: skip
     assert f'"--skip-eod-fence":"{_plain(skip_options._help(g))}"' in _plain(zsh.output)
-    bash = CliRunner().invoke(
+    bash = PlainRunner().invoke(
         cli.app, [], prog_name="uqs",
         env={"_UQS_COMPLETE": "complete_bash", "COMP_WORDS": words, "COMP_CWORD": "4"},
     )  # fmt: skip
@@ -158,7 +158,7 @@ def test_completion_offers_the_skip_with_its_declared_help():
 def test_help_carries_the_declaration_risk_and_action():
     [g] = skip_options.declared("job backfill")
     shown = _plain(
-        CliRunner().invoke(cli.app, ["job", "backfill", "--help"], env={"COLUMNS": "300"}).output
+        PlainRunner().invoke(cli.app, ["job", "backfill", "--help"], env={"COLUMNS": "300"}).output
     )
     for part in (g.description, g.risk, g.action):
         assert _plain(part).rstrip(".")[1:80] in shown
