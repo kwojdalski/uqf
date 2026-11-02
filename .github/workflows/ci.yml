@@ -274,7 +274,7 @@ jobs:
         run: QCMD="$PEACHQ_BIN" uv run pytest -q -rs --require-q peachq -m "q_suite and peachq" tests/qrun/test_q_suite.py
 
   peachq-python:
-    name: PeachQ Python tests (${{ matrix.shard }}/4)
+    name: PeachQ Python tests (${{ matrix.shard }}/${{ strategy.job-total }})
     timeout-minutes: 20
     runs-on: ubuntu-24.04
     # Four runners, a quarter of the test modules each (#1696): on one 4-vCPU
@@ -282,6 +282,8 @@ jobs:
     # (#1695). scripts/dev/pytest_shards.py splits by module, balanced by
     # scripts/dev/test_module_durations.json; every module is in exactly one
     # shard whatever that record says. "Repository checks" needs every shard.
+    # The count is the matrix's length and nothing else: the name and --shard
+    # read it as strategy.job-total, so adding a shard is one edit to the list.
     strategy:
       fail-fast: false
       matrix:
@@ -383,10 +385,10 @@ jobs:
         # PeachQ rather than skipping it; the KDB-X half skips, visibly.
         # -m "not q_suite": the whole qUnit suite on PeachQ is the "PeachQ q
         # tests" job's, which runs it once rather than in a shard here.
-        run: QCMD="$PEACHQ_BIN" uv run pytest -q -n auto --dist loadgroup --require-q peachq -m "not q_suite" --shard "${{ matrix.shard }}/4" --store-shard-durations "$RUNNER_TEMP/durations-${{ matrix.shard }}.json"
+        run: QCMD="$PEACHQ_BIN" uv run pytest -q -n auto --dist loadgroup --require-q peachq -m "not q_suite" --shard "${{ matrix.shard }}/${{ strategy.job-total }}" --store-shard-durations "$RUNNER_TEMP/durations-${{ matrix.shard }}.json"
       - name: Keep this shard's module durations
         # What scripts/dev/test_module_durations.json is refreshed from: CI's
-        # own times, which differ from a laptop's (#1696). Merge the four with
+        # own times, which differ from a laptop's (#1696). Merge the shards' with
         # scripts/dev/pytest_shards.py --merge.
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
