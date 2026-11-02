@@ -15,8 +15,8 @@ from datetime import datetime
 import typer
 
 from uqs.attach import backfill as attached
+from uqs.attach import backfill_audit, backfill_run, config, service
 from uqs.attach import backfill_plan as planning
-from uqs.attach import backfill_run, config, service
 from uqs.attach.backfill_policy import EOD_BYPASSED, EOD_FENCE, coordination_line, override_lines
 from uqs.cli import backfill_receive
 from uqs.cli.shared import _die, _paths, console, log
@@ -218,7 +218,8 @@ def _execute(
             info,
             as_json,
             f"started {worker} (pid {run_.pid}) into {run_.destination.hdb_dir}; log {run_.log}"
-            f"\n  follow it with `{logs_command(attachment, worker)} -f`" + _bypass_note(plan),
+            f"\n  follow it with `{logs_command(attachment, worker)} -f`"
+            + _bypass_note(plan, run_.audit),
         )
         raise typer.Exit(code=0)
     if not as_json:  # with --json, stdout is the one document below (#1685)
@@ -226,19 +227,26 @@ def _execute(
             f"[dim]following {worker} (pid {run_.pid}); Ctrl-C stops waiting, not the run[/]"
         )
     code, result = backfill_run.follow(run_)
+    backfill_audit.outcome(
+        run_.audit, run_.run_id, outcome=result.get("outcome") or result.get("state", "unknown"),
+        exit_code=code, result=result,
+    )  # fmt: skip
     _report(
         {**info, "result": result, "exit_code": code},
         as_json,
-        _outcome_text(worker, run_, code, result) + _bypass_note(plan),
+        _outcome_text(worker, run_, code, result) + _bypass_note(plan, run_.audit),
     )
     raise typer.Exit(code=code)
 
 
-def _bypass_note(plan) -> str:
-    """The fence a run started under, said where it was waived - never claimed fenced."""
+def _bypass_note(plan, audit=None) -> str:
+    """The fence a run started under, said where it was waived - never claimed fenced - and
+    where the waiver is recorded (#1829)."""
     lines = override_lines(plan)
     if not plan["coordination"].get("eod_fence_bypassed"):
         return ""
+    if audit is not None:
+        lines.append(f"  recorded in   {audit}")
     return "\n" + "\n".join([coordination_line(plan["coordination"]), *lines])
 
 
