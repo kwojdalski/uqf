@@ -14,10 +14,13 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 import rename_support
+import typer
+from plain_cli import PlainRunner
 from typer.testing import CliRunner
 
 from uqs import cli
 from uqs import paths as stack_paths
+from uqs.cli import cleanup as cli_cleanup
 from uqs.cli import shared
 from uqs.paths import UqsError
 from uqs.stack import backfill, backfill_wait, runtime
@@ -392,18 +395,45 @@ def test_a_lock_left_by_an_exited_run_does_not_block_clearing(status):
 
 def test_remove_checkpoint_reports_what_it_did(status):
     (status / f"{WORKER}.checkpoint").write_text("{}")
-    result = runner.invoke(cli.app, ["job", "checkpoint", "remove", WORKER])
+    result = PlainRunner().invoke(cli.app, ["job", "checkpoint", "remove", WORKER])
     assert result.exit_code == 0, result.output
-    assert "cleared demo_deals_backfill's checkpoint" in result.output
-    again = runner.invoke(cli.app, ["job", "checkpoint", "remove", WORKER])
-    assert "has no checkpoint" in again.output
+    said = "".join(result.output.split())  # the console wraps a long path
+    assert f"cleared{WORKER}'scheckpoint({status / f'{WORKER}.checkpoint'})" in said
+    assert not (status / f"{WORKER}.lock").exists(), "the lock the clear took is released"
+    again = PlainRunner().invoke(cli.app, ["job", "checkpoint", "remove", WORKER])
+    assert f"{WORKER} has no checkpoint - nothing to clear" in again.output
 
 
-def test_remove_checkpoint_refusal_exits_one(status):
+def test_remove_checkpoint_refusal_names_the_holder_and_exits_one(status, monkeypatch):
+    """The race test: a lock held by a live run means no clear at all, so there
+    is no window in which a start could keep the old cursor and rewrite it."""
+    (status / f"{WORKER}.checkpoint").write_text("{}")
+    (status / f"{WORKER}.checkpoint.bak").write_text("{}")
     _lock(status, {"pid": os.getpid(), "host": socket.gethostname()})
-    result = runner.invoke(cli.app, ["job", "checkpoint", "remove", WORKER])
+    refused = []
+
+    def die(exc):
+        refused.append(str(exc))
+        raise typer.Exit(code=1)
+
+    monkeypatch.setattr(cli_cleanup, "_die", die)
+    result = PlainRunner().invoke(cli.app, ["job", "checkpoint", "remove", WORKER])
     assert result.exit_code == 1
     assert not isinstance(result.exception, UqsError)
+    said = " ".join(refused)
+    assert f"{WORKER} may still be running" in said
+    assert f"pid {os.getpid()} on {socket.gethostname()}" in said
+    assert str(status / f"{WORKER}.lock") in said
+    assert (status / f"{WORKER}.checkpoint").exists()
+    assert (status / f"{WORKER}.checkpoint.bak").exists()
+
+
+def test_a_generation_file_q_adds_is_removed_with_no_python_edit(status):
+    """Python names no file: whatever `durable_remove` removes, goes."""
+    (status / f"{WORKER}.checkpoint").write_text("{}")
+    (status / f"{WORKER}.checkpoint.bak").write_text("{}")
+    backfill.clear_checkpoint(stack_paths.default_paths(), WORKER)
+    assert not list(status.glob(f"{WORKER}.checkpoint*"))
 
 
 @pytest.mark.parametrize(
@@ -672,7 +702,6 @@ def test_a_successful_run_returns_no_error(tmp_path, monkeypatch):
 
 
 def test_wait_with_a_mode_that_writes_no_status_is_refused(monkeypatch):
-    import typer
 
     from uqs.cli import backfill as cli_backfill
 
