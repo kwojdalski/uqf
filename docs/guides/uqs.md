@@ -857,12 +857,12 @@ The implementation is asked of the binary, which is the only thing that says it
 other than the pinned build. `uqs list env` carries the answer as its
 `q_impl (binary)` row.
 
-`status` shows the whole graph, not just the unsatisfied part of it, in three
-columns derived from the same declarations:
+`status` shows the whole graph, not just the unsatisfied part of it, in columns
+derived from the same declarations:
 
 ```
-uqs status                     # all ten columns
-uqs status --columns status    # the seven status ones, for a narrow terminal
+uqs status                     # every column
+uqs status --columns status    # the status ones, for a narrow terminal
 uqs status --columns "Process,Depends on,Inputs,Outputs"
 uqs status --sort Port         # by any column, numeric-aware; --reverse for descending
 uqs status --sort Status --columns status
@@ -973,27 +973,12 @@ uqs config set monitor1 startwithall 0
 
 ### Default ports
 
-Base `6050` for the `uqf` runtime (`6150` for `torq`), override with
-`--base-port <n>`. The vendored infrastructure:
-
-  | Port        | Process       | Role                                                     |
-  | ---         | ---           | ---                                                      |
-  | 6050        | stp1          | segmented tickerplant                                    |
-  | 6051        | discovery1    | service discovery                                        |
-  | 6052        | rdb1          | real-time DB (today's ticks)                             |
-  | 6053 / 6054 | hdb1 / hdb2   | historical DB (the vendored sample data)                 |
-  | 6055        | wdb1          | writedown process (rolls RDB -> HDB)                     |
-  | 6056        | sort1         | sorts data before writedown                              |
-  | 6057        | gateway1      | single query entry point across hdb/rdb                  |
-  | 6059        | monitor1      | process monitor ([above](#monitor1))                     |
-  | 6061        | housekeeping1 | log/process housekeeping                                 |
-  | 6064        | feed1         | the vendored dummy feed - simulated equity quotes/trades |
-  | 6065        | sctp1         | segmented chained tickerplant                            |
-  | 6066 / 6067 | sortworker1/2 | sort worker pool                                         |
-  | 6068        | metrics1      | metrics collector                                        |
-
-uqf's own processes start at `6069` (`fxfeed1`); every one, with its port, is in
-the generated [process table](../reference/processes.md).
+Every port is the stack's base port plus a fixed offset. The base is the
+runtime's own (`uqs list --help` names each), and `--base-port <n>` overrides
+it. `uqs list processes` prints every process's port at the base in effect,
+vendored and uqf's alike; uqf's own take the offsets the vendored ones leave
+free, and the generated [process table](../reference/processes.md) lists them
+with their ports at the default base.
 
 ## Changing a process's config
 

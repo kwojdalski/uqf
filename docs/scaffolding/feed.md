@@ -14,18 +14,20 @@ uqs job new pulsefeed --publishes pulse --schema "sym:symbol, px:float"
 feed, and the scaffold derives that. Omitting `--subscribe-to` is the whole
 signal.
 
+<!-- scaffold-transcript: pulsefeed --publishes pulse --schema "sym:symbol, px:float" -->
 ```
 scaffold pulsefeed:
-  create src/etl/streaming/pulsefeed.q (33 lines)
-  append to src/etl/plant_tables.q (3 lines)
-  append to tests/q/test_stack_tables.q (1 line)
-  append to scripts/processes/uqs_catalog.q (2 lines)
-  create tests/q/test_pulsefeed.q (13 lines)
-  append to tests/run_tests.q (1 line)
-  note: describe pulse: replace its SCAFFOLDED line in scripts/processes/uqs_catalog.q ...
+  create src/etl/streaming/pulsefeed.q
+  append to src/etl/plant_tables.q
+  append to tests/q/test_stack_tables.q
+  append to scripts/processes/uqs_catalog.q
+  create tests/q/test_pulsefeed.q
+  append to docs/architecture/stack.md
+  append to docs/services/README.md
+  note: describe pulse: replace its SCAFFOLDED line in scripts/processes/uqs_catalog.q - or, if the desk should not see it, delete that line and add the table to .qcat.hidden with the reason
   note: implement .qpipe.job.pulsefeed.on_timer, then replace the scaffolded test
-  note: name pulsefeed1 in docs/architecture/stack.md - authored prose, checked by pytest
-  note: add pulsefeed1 to a profile in python/uqs/src/uqs/model/profiles.py ...
+  note: describe pulsefeed1: replace its SCAFFOLDED card in docs/services/README.md and its SCAFFOLDED comment in docs/architecture/stack.md
+  note: add pulsefeed1 to a profile (--profile NAME), or exempt it with --unprofiled REASON - `uqs list profiles` shows the sets and their connection budget
 ```
 
 ## What you get
