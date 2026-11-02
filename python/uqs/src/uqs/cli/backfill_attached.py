@@ -22,6 +22,7 @@ from uqs.cli import backfill_receive
 from uqs.cli.shared import _die, _paths, console, log
 from uqs.paths import UqsError
 from uqs.stack import backfill as stack_backfill
+from uqs.stack.run_modes import MODES
 
 
 def run(
@@ -48,8 +49,8 @@ def run(
     `waived` ({finding id: reason}, from safety.given) is honoured by plan, dry-run and run
     on this machine, each admitting afresh with it; refused with --writer and in validate."""
     mode = mode or "run"
-    if mode not in (*attached.READ_ONLY_MODES, *attached.EXECUTION_MODES):
-        _die(UqsError(f"--mode {mode!r} is not one of validate, plan, dry-run, run"))
+    if mode not in MODES:
+        _die(UqsError(f"--mode {mode!r} is not one of {', '.join(MODES)}"))
         return
     waived = dict(waived or {})
     try:

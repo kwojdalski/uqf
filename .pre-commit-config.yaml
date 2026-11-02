@@ -159,6 +159,19 @@ repos:
         pass_filenames: false
         always_run: true
 
+      # A tool version written in several files - uv, pre-commit, Quarto,
+      # Python, ruff, Node - is held equal across them (#1838): a bump that
+      # missed one copy left CI, install.sh and attest_kdbx.py running
+      # different tools. always_run because the copies are listed once, in
+      # scripts/gates/policy/tool_pins.py; a `files:` scope here would be a
+      # second list of them, free to drift from the first.
+      - id: tool-pins
+        name: Hold every copy of a tool version pin equal
+        entry: python3 scripts/gates/check.py tool-pins
+        language: system
+        pass_filenames: false
+        always_run: true
+
       - id: bundle-blocks
         name: Refuse an installed bundle's blocks in tracked q files
         entry: python3 scripts/gates/check_bundle_blocks.py
