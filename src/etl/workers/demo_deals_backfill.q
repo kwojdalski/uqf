@@ -57,8 +57,10 @@
 
 / The transform. Pass-through: this job copies deals into their target
 / unchanged, and declaring that is what makes it a tested claim. The example
-/ is the source's own hand-written fixture.
-.qetl.transform.passthrough[`demo_deals_passthrough;`batch;0#.qpipe.source.demo_deals.fixture[];.qpipe.source.demo_deals.fixture[]];
+/ is the source's own hand-written fixture. Its schema is the plant table's, the
+/ one demo_deals_feed publishes too: the feed is this worker's streaming twin,
+/ and both apply this one transform (#1851).
+.qetl.transform.passthrough[`demo_deals_passthrough;`batch;.qetl.plant.published `demo_deals;.qpipe.source.demo_deals.fixture[]];
 
 / Window width is this worker's own business rather than part of the
 / contract, but it is what makes the bound observable window by window.

@@ -608,3 +608,8 @@
 / is the source's own code, verbatim. book, product and venue are the grouping
 / dimensions and are null where the source gives none: venue is never inferred.
 .qetl.plant.order_outcomes:([]time:`timestamp$(); source_time:`timestamp$(); source:`symbol$(); request_id:`symbol$(); source_status:`symbol$(); outcome:`symbol$(); book:`symbol$(); product:`symbol$(); venue:`symbol$())
+
+/ demo_deals_feed1's output: one dealt trade from the demo_deals source - its id, the
+/ time it was dealt, the pair, the side, the notional and the rate - the same rows
+/ demo_deals_backfill windows into this dataset, which `uqs job verify demo_deals` compares.
+.qetl.plant.demo_deals:([]time:`timestamp$(); deal_id:`long$(); deal_time:`timestamp$(); sym:`g#`symbol$(); side:`symbol$(); notional:`float$(); rate:`float$())
