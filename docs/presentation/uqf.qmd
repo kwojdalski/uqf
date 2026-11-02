@@ -184,9 +184,9 @@ Area by area: what TorQ provides and uqf uses as it is, what uqf adds or
 replaces, and **how it hooks in without editing `lib/torq` or
 `lib/torq-finance-starter-pack`**.
 
-Measured with `uqs runtime diff uqf torq`: the starter pack's 23 processes are
-all still there, uqf adds 36 (26 streaming-job processes, 10 bounded backfills)
-and 41 tables.
+`uqs runtime diff uqf torq` measures it: every starter-pack process is still
+there, and what uqf adds, process by process and table by table, is in [the
+generated process table](../reference/processes.md).
 
 ## The seams: where uqf reaches into TorQ {.smaller .scrollable}
 

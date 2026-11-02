@@ -93,6 +93,21 @@
         "the fence is where end of day starts to touch the whole database"];
     .qunit.assertEquals[.qt.qetl.hdb_scoped.fingerprint[root];before;"and nothing was written"]};
 
+/ A waived end-of-day fence (#1828): the launcher passes -deadline 0Wp, which no .z.p passes. The
+/ write the deadline above refuses goes through; max_date still refuses, because completed history
+/ is never waived.
+.qt.qetl.hdb_scoped.test_an_infinite_deadline_never_fences_but_max_date_still_does:{[t]
+    root:.qt.qetl.hdb_scoped.native[];
+    m:.qetl.io.hdb_scoped[root;`time;`max_date`deadline`destination!(2026.01.31;0Wp;`dest_test)];
+    n:.qetl.io.write_keyed[m;`iodeals;.qt.qetl.hdb_scoped.batch[];.qt.qetl.hdb_scoped.opts`replace];
+    .qunit.assertEquals[n;1;"written: with the fence waived no instant is past the deadline"];
+    before:.qt.qetl.hdb_scoped.fingerprint[root];
+    b:update time:2026.02.01D10:00:00.000000000 from .qt.qetl.hdb_scoped.batch[];
+    .qunit.assertThrows[{[m;b;ignored] .qetl.io.write[m;`iodeals;b]}[m;b];::;
+        "hdb_scoped: iodeals would write 2026.02.01 into dest_test, whose completed history ends 2026.01.31*";
+        "waiving the end-of-day fence leaves the completed-history bound"];
+    .qunit.assertEquals[.qt.qetl.hdb_scoped.fingerprint[root];before;"and the refused write touched nothing"]};
+
 / --- the destination's own files are not rewritten ---------------------------
 
 .qt.qetl.hdb_scoped.test_finish_does_not_fill_other_dates_or_tables:{[t]

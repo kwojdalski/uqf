@@ -23,7 +23,7 @@ from typer.testing import CliRunner
 from uqs import cli
 from uqs.attach import backfill_coordination as coordination
 from uqs.attach import backfill_plan as planning
-from uqs.attach.facts import Host
+from uqs.attach.facts import Host, filesystem_of
 from uqs.attach.remote import Endpoint, KolaIpc, source
 from uqs.interpreter import PEACHQ, q_impl, q_interpreter
 from uqs.paths import UqsError
@@ -203,7 +203,7 @@ def test_a_network_filesystem_is_refused(world, monkeypatch):
 
 
 def test_the_filesystem_of_a_real_path_is_found(tmp_path):
-    assert coordination.filesystem_of(tmp_path) not in coordination.NETWORK_FILESYSTEMS
+    assert filesystem_of(tmp_path) not in coordination.NETWORK_FILESYSTEMS
 
 
 def test_the_plan_prints_how_the_run_is_coordinated(world, monkeypatch):

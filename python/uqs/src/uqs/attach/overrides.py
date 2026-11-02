@@ -31,6 +31,7 @@ from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 
 from uqs.attach.findings import Finding
+from uqs.guardrails import from_policy
 from uqs.paths import UqsError
 
 
@@ -173,6 +174,9 @@ POLICY: dict[str, Policy] = {
         False, "rows in a file that no process has loaded are not configuration"
     ),
 }
+
+#: POLICY as guardrails (#1825): each code waived per component, `CODE:COMPONENT`.
+GUARDRAILS = from_policy(POLICY, ("job attachment add",))
 
 #: Codes that are not refusals at all - warnings and what the plan will do.
 NOT_BLOCKERS = frozenset(

@@ -26,6 +26,7 @@ from uqs.liveness import on_this_host, pid_alive
 from uqs.model.registry import PIPELINES
 from uqs.paths import UqsError, UqsPaths
 from uqs.stack import capabilities, runs, runtime
+from uqs.stack.run_modes import MODES
 
 #: What a flag value may contain. torq.sh builds the start line into a string
 #: and `eval`s it, so anything a shell would interpret - a space, a `;`, a
@@ -42,13 +43,6 @@ _TORQ_SH_WORDS = ("csv", "extras")
 #: worker declares its own (upsert unless it says otherwise); `--on-conflict`
 #: overrides it for one run.
 ON_CONFLICT = q_facts.IO_STRATEGIES
-
-#: What a run may do - .qetl.job.bounded.runtime.modes, read from q and
-#: spelled as the CLI takes them (dry_run is dry-run). Each opens and writes
-#: strictly more than the one before: validate reads only configuration and
-#: code, plan adds the local ledgers read-only, dry-run adds the source, run
-#: adds every write.
-MODES = tuple(mode.replace("_", "-") for mode in q_facts.RUN_MODES)
 
 
 def backfill_workers() -> dict[str, str]:
@@ -183,11 +177,6 @@ def start(
         fixture=fixture,
     )
     return runtime.run_torq_sh(paths, ["start", procname, "-extras", *flags], base_port=base_port)
-
-
-#: Modes that write no status file - `validate` and `plan` - so there is no
-#: outcome to wait for.
-NO_STATUS_MODES = ("validate", "plan")
 
 
 def checkpoint_path(paths: UqsPaths, worker: str) -> Path:

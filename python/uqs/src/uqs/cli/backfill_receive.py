@@ -20,6 +20,7 @@ from uqs.cli.renames import renamed
 from uqs.cli.safety import ChangesState, dry_run_note
 from uqs.cli.shared import JOB_OPERATIONS_PANEL, _die, _paths, console, job_app
 from uqs.paths import UqsError
+from uqs.stack.run_modes import READ_ONLY_MODES
 
 
 def extract(
@@ -66,7 +67,7 @@ def extract(
         on_conflict = "append"
     try:
         paths = _paths()
-        if mode in ("validate", "plan"):
+        if mode in READ_ONLY_MODES:
             _, plan = backfill_remote.remote_plan(
                 paths, attachment, worker, version, bound_from, bound_to,
                 writer=writer, on_conflict=on_conflict, force=force,

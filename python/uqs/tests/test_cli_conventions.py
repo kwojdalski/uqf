@@ -7,7 +7,9 @@ docs/guides/uqs.md#cli-conventions states six rules; this walks every command
 - rule 3: one option name has one meaning, and one short flag one long name;
 - rule 4: every leaf is named by a verb from the vocabulary;
 - rule 5: `--json` on what reports, `--dry-run/-n` on what changes state,
-  `--yes/-y` on what asks, and no bypass but `--override NAME --reason`.
+  `--yes/-y` on what asks, and no bypass but `--override NAME --reason` - or
+  the `--skip-<id>` the guardrail registry generates as its other spelling
+  (cli/skip_options.py, #1826), never one written by hand.
 
 Each rule has an ALLOWLIST of today's exceptions, each naming the issue that
 removes it (#1727 to #1740). A rule fails on a violation that is not listed AND
@@ -32,7 +34,7 @@ import pytest
 import typer.main
 
 import uqs.cli.entry  # noqa: F401 - registers every command on the app
-from uqs.cli import safety, shared
+from uqs.cli import safety, shared, skip_options
 from uqs.cli.shared import app
 from uqs.cli.target_confirm import effect_of
 
@@ -55,10 +57,16 @@ class Cmd:
 
     @property
     def options(self) -> list:
-        # a hidden option is a renamed one's old spelling (rule 6): on its way out
+        # a hidden option is a renamed one's old spelling (rule 6): on its way out;
+        # a leaf's generated --skip-<id>s are its options as much as its signature's
+        generated = (
+            skip_options.generated(self.command, self.path)
+            if isinstance(self.command, skip_options.SkipOptions)
+            else ()
+        )
         return [
             p
-            for p in self.command.params
+            for p in [*self.command.params, *generated]
             if p.param_type_name == "option" and not getattr(p, "hidden", False)
         ]
 
@@ -573,15 +581,59 @@ def test_rule5c_the_commands_that_ask_are_the_known_ones():
     assert prompting == PROMPTING_MODULES
 
 
-def test_rule5d_a_bypass_is_override_name_reason():
+def _bypasses(tree: list[Cmd]) -> set[tuple[str, str]]:
+    """(command, option) for each bypass that is not `--override NAME --reason`
+    nor a `--skip-<id>` the guardrail registry generated."""
     found = set()
-    for cmd in TREE:
+    for cmd in tree:
         for param in cmd.options:
             name = _long(param)
             reason_taking = (param.metavar or "").upper() == "REASON" and name != "--reason"
-            if name.startswith("--skip-") or name == "--override-reason" or reason_taking:
+            handwritten_skip = name.startswith("--skip-") and not skip_options.is_generated(param)
+            if handwritten_skip or name == "--override-reason" or reason_taking:
                 found.add((cmd.path, name))
-    _hold("rule 5d", found, RULE5D_ALLOWLIST)
+    return found
+
+
+def test_rule5d_a_bypass_is_override_name_reason():
+    _hold("rule 5d", _bypasses(TREE), RULE5D_ALLOWLIST)
+
+
+def test_rule5d_a_generated_skip_passes_and_a_handwritten_one_does_not(monkeypatch):
+    """The same rule over a small tree: a guardrail declared with skip_flag
+    gives `job run` --skip-test-guard, which passes; `job run` also spells a
+    --skip-by-hand of its own, which does not."""
+    from uqs import guardrails
+
+    declared = guardrails.Guardrail("test-guard", ("job run",), "skips it", skip_flag=True)
+    monkeypatch.setattr(safety, "registry", lambda: (declared,))
+    small, job = typer.Typer(), typer.Typer()
+    small.add_typer(job, name="job")
+
+    @job.command("run", cls=safety.ChangesState)
+    def run(
+        override: safety.OverrideOpt = None,
+        reason: safety.ReasonOpt = None,
+        by_hand: bool = typer.Option(False, "--skip-by-hand"),
+    ) -> None: ...
+
+    tree = list(_walk(typer.main.get_command(small), []))
+    leaf = next(c for c in tree if c.path == "job run")
+    assert leaf.option("--skip-test-guard") is not None
+    assert _bypasses(tree) == {("job run", "--skip-by-hand")}
+
+
+def test_rule5d_every_generated_skip_is_on_the_commands_it_names():
+    """A guardrail declared with skip_flag names leaves that exist, are
+    command classes that generate it, and take --override and --reason
+    (skip_options.generated refuses one that does not)."""
+
+    for g in safety.registry():
+        if not g.skip_flag:
+            continue
+        for command in g.commands:
+            assert command in LEAVES, f"guardrail {g.id} names no command `uqs {command}`"
+            assert LEAVES[command].option(skip_options.flag(g)) is not None, (g.id, command)
 
 
 def test_rule5d_every_override_is_named_where_uqs_override_list_finds_it():

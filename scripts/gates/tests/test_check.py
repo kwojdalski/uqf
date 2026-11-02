@@ -182,6 +182,20 @@ _FIXTURE = (
     "docs/reference/pipeline-declarations.md",
     ".env.example",
     "python/uqs/src/uqs/stack/env.py",
+    # tool-pins: every file it reads a copy from.
+    ".github/workflows",
+    ".claude/agents",
+    ".pre-commit-config.yaml",
+    "install.sh",
+    "pyproject.toml",
+    "python/uqs/pyproject.toml",
+    "python/uqf_frontend/pyproject.toml",
+    "python/uqf_frontend/.python-version",
+    "python/uqf_airflow_provider/pyproject.toml",
+    "scripts/dev/attest_kdbx.py",
+    "README.md",
+    "web/package.json",
+    "web/README.md",
 )
 
 

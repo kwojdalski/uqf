@@ -137,7 +137,7 @@ app.add_typer(override_app, name="override")
 
 def _bypasses() -> list[dict]:
     return [
-        {"override": b.name, "commands": ", ".join(b.commands), "effect": b.skips}
+        {"override": b.name, "commands": ", ".join(b.commands), "effect": b.description}
         for b in safety.catalog()
     ]
 
