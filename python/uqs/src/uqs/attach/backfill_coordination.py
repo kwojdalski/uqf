@@ -192,7 +192,7 @@ def _others(obs: Observation, blockers: list[Finding], warnings: list[str]) -> N
             )
 
 
-def _fence(
+def fence(
     state: dict[str, Any], dates: list[date], guard: timedelta, blockers: list[Finding]
 ) -> tuple[date | None, datetime | None, datetime | None]:
     """One writer's active date and end-of-day fence: blockers appended, facts returned."""
@@ -334,7 +334,7 @@ def examine(
             )
         )
     _others(obs, blockers, warnings)
-    fences = [_fence(s, dates, guard, blockers) for s in answered.values()]
+    fences = [fence(s, dates, guard, blockers) for s in answered.values()]
     actives = [a for a, _, _ in fences if a is not None]
     nows = [n for _, n, _ in fences if n is not None]
     rolls = [r for _, _, r in fences if r is not None]

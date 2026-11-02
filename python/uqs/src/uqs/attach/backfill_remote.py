@@ -38,7 +38,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from uqs.attach import backfill_owner, config, receiver_contract
+from uqs.attach import backfill_forced, backfill_owner, config, receiver_contract, service
 from uqs.attach.backfill import (
     Destination,
     declaration,
@@ -163,10 +163,12 @@ def launch_remote(
     trace: bool = False,
     force: bool = False,
     attach_root: Path | None = None,
+    ipc: Ipc | None = None,
 ) -> tuple[Launched, dict[str, Any]]:
     """Start the extractor: the runner with -writer, after the remote plan. With
     `force` the runner gets -force and writes through the process at `writer`
-    directly (forced_destination): no receiver, contract or verification."""
+    directly (forced_destination): no receiver, contract or verification - but
+    still completed history only: `-max_date` is asked of the writer (backfill_forced)."""
     q = q_interpreter(os.environ)
     if q is None:
         raise UqsError("no q interpreter - set $QCMD, or put q on PATH; the run is a q process")
@@ -180,6 +182,11 @@ def launch_remote(
         backfill_owner.refuse_while_active(attachment, attach_root)
         att = config.load(attachment, attach_root)
         owner = backfill_owner.owner_file(attachment, worker, attach_root)
+        forced_bound: list[str] = []
+        if force:
+            host, wport = parse_writer(writer)
+            last = backfill_forced.last_completed_date(host, wport, ipc or service.ipc_for(att))
+            forced_bound = ["-max_date", q_date(last)]
         flags = [
             *stack_backfill.backfill_flags(
                 worker, version, range_from, range_to,
@@ -188,6 +195,7 @@ def launch_remote(
             "-destid", dest.identity, "-attachment", dest.attachment, "-owner", str(owner),
             "-writer", writer, "-writer_user", att.stack.user,
             *(["-force", "-force_hdb", att.storage.hdb_dir or "_own_"] if force else []),
+            *forced_bound,
         ]  # fmt: skip
         logs = dest.state_dir / LOGS
         logs.mkdir(parents=True, exist_ok=True)
