@@ -15,6 +15,7 @@ import json
 import pytest
 import typer
 import typer.main
+from typer.core import TyperGroup
 from typer.testing import CliRunner
 
 from uqs import cli
@@ -119,13 +120,20 @@ def test_without_the_declaration_there_is_no_option():
     ]
 
 
-def _generated_help() -> dict[str, str]:
+def _group(command: object) -> TyperGroup:
+    """`command`, checked to be a group, so its subcommands may be read."""
+    assert isinstance(command, TyperGroup)
+    return command
+
+
+def _generated_help() -> dict[str, str | None]:
     """{flag: help} of `job run`'s generated options, as Click builds both its
     --help and its completion from them (`get_params`)."""
-    root = typer.main.get_command(_app())
+    root = _group(typer.main.get_command(_app()))
     top = root.make_context("uqs", ["job"], resilient_parsing=True)
-    job = root.commands["job"].make_context("job", [], parent=top, resilient_parsing=True)
-    run = root.commands["job"].commands["run"]
+    job_group = _group(root.commands["job"])
+    job = job_group.make_context("job", [], parent=top, resilient_parsing=True)
+    run = job_group.commands["run"]
     ctx = run.make_context("run", [], parent=job, resilient_parsing=True)
     return {p.opts[-1]: p.help for p in run.get_params(ctx) if skip_options.is_generated(p)}
 
@@ -277,7 +285,7 @@ def test_a_skip_out_of_its_commands_scope_is_no_option(declared):
 
 
 def _run_command():
-    return typer.main.get_command(_app()).commands["job"].commands["run"]
+    return _group(_group(typer.main.get_command(_app())).commands["job"]).commands["run"]
 
 
 def test_a_skip_flag_on_a_guardrail_that_is_never_overridden_is_refused():

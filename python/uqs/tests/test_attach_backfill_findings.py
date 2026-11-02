@@ -217,15 +217,18 @@ def test_end_of_day_timing_is_one_finding_from_either_side(world, window):
 
 def _emitted_codes() -> set[str]:
     source = Path(coordination.__file__).read_text()
-    return {
-        node.args[0].value
-        for node in ast.walk(ast.parse(source))
-        if isinstance(node, ast.Call)
-        and isinstance(node.func, ast.Name)
-        and node.func.id == "_blocker"
-        and node.args
-        and isinstance(node.args[0], ast.Constant)
-    }
+    codes: set[str] = set()
+    for node in ast.walk(ast.parse(source)):
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "_blocker"
+            and node.args
+            and isinstance(first := node.args[0], ast.Constant)
+            and isinstance(code := first.value, str)
+        ):
+            codes.add(code)
+    return codes
 
 
 def test_every_finding_coordination_can_emit_has_a_policy():
