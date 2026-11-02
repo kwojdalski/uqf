@@ -34,9 +34,19 @@
 / @eg .servers.passwordfiles (`a1`s1`b1;`a2`s2`b2)  ->  `b1`b2`s1`s2`a1`a2
 passwordfiles:{[paths] distinct[raze flip reverse each paths] except `}
 
+/ Whether the site authenticates its own way (#1847): uqs sets UQF_SITE_AUTH
+/ to "1" for a publisher attached to a stack that keeps its credentials under
+/ KDBSECURE (python/uqs/src/uqs/stack/attached_publisher.py). Its own loader
+/ then stands - neither replaced below nor run again over TorQ's demo files.
+/ @return boolean
+/ @eg .servers.siteauth[]  ->  0b
+siteauth:{[] (enlist"1")~getenv`UQF_SITE_AUTH}
+
 / TorQ's loader, with the file order from passwordfiles. Otherwise as
 / trackservers.q has it: each file found sets USERPASS, so the last wins.
-loadpassword:{
+/ Not defined where the site authenticates its own way.
+if[not siteauth[];
+  loadpassword:{
     .lg.o[`conn;"attempting to load external connection username:password from file"];
     loadpassfile:{[file]
          $[()~key hsym file;
@@ -45,10 +55,10 @@ loadpassword:{
             .servers.USERPASS:first`$read0 hsym file]]};
     files:{.proc.getconfig["passwords/",(string x),".txt";2]} each `default,.proc.parentproctype,.proc.proctype,.proc.procname;
     loadpassfile each passwordfiles files;
-    }
+    }]
 
 \d .
 
 / Only inside TorQ, where trackservers.q has run: a test loads this file to
 / check passwordfiles, with no .proc to read paths from.
-if[100h<=type @[value;`.proc.getconfig;::]; .servers.loadpassword[]];
+if[(100h<=type @[value;`.proc.getconfig;::]) and not .servers.siteauth[]; .servers.loadpassword[]];

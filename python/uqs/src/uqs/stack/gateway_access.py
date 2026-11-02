@@ -36,7 +36,7 @@ from pathlib import Path
 from uqs.generated import q_facts
 from uqs.model import schemas
 from uqs.model.runtime_members import plant_tables
-from uqs.paths import UqsPaths
+from uqs.paths import UqsError, UqsPaths
 
 _DAY = re.compile(r"\d{4}\.\d{2}\.\d{2}")
 
@@ -60,7 +60,17 @@ def gateway_users(paths: UqsPaths) -> list[dict[str, str]]:
 def _access_lines(paths: UqsPaths, users: list[dict[str, str]]) -> list[str]:
     """Every vendored login, then each of `users` not already among them."""
     vendored = paths.torqapphome / "appconfig" / "passwords" / "accesslist.txt"
-    lines = [line.strip() for line in vendored.read_text().splitlines() if line.strip()]
+    try:
+        text = vendored.read_text()
+    except FileNotFoundError:
+        raise UqsError(
+            f"{vendored} does not exist: gateway1's and sctp1's access lists start from the "
+            "starter pack's logins, so this stack cannot be prepared without it. Point "
+            "TORQAPPHOME at a TorQ application that has one. A publisher attached to a stack "
+            "uqf does not manage needs neither list: start it on its own, `uqs start "
+            "<publisher> --base-port <stack id>` (#1847)"
+        ) from None
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
     known = {line.split(":", 1)[0] for line in lines}
     return lines + [f"{u['user']}:{u['password']}" for u in users if u["user"] not in known]
 
