@@ -24,7 +24,6 @@ import getpass
 import time
 from dataclasses import asdict
 from dataclasses import replace as dc_replace
-from pathlib import Path
 from typing import Annotated
 
 import typer
@@ -32,6 +31,7 @@ import typer
 from uqs.attach import config, service, workflow
 from uqs.attach import detach as detaching
 from uqs.attach import publisher as publishing
+from uqs.cli import attach_options as o
 from uqs.cli import safety, shared
 from uqs.cli.attach_legacy import refuse_legacy
 from uqs.cli.attach_output import (
@@ -82,119 +82,30 @@ YesOpt = Annotated[
 def attach(
     ctx: typer.Context,
     name: NameArg,
-    job: Annotated[
-        str | None, typer.Option("--job", help="The streaming job to attach (new attachment)")
-    ] = None,
-    bundle: Annotated[
-        Path | None,
-        typer.Option("--bundle", help="The sidecar bundle holding the job (default: this tree)"),
-    ] = None,
-    stack_id: Annotated[
-        int | None,
-        typer.Option(
-            "--stack-id",
-            help="The existing stack's base port (-stackid / KDBBASEPORT). No default: "
-            "the runtime's own base port is exactly the wrong guess.",
-        ),
-    ] = None,
-    host: Annotated[
-        str | None,
-        typer.Option("--host", help="Where the stack's processes listen (default: localhost)"),
-    ] = None,
-    discovery: Annotated[
-        str | None,
-        typer.Option(
-            "--discovery",
-            help="HOST:PORT of its discovery, on the --host machine (default: HOST:<stack-id>+1)",
-        ),
-    ] = None,
-    tickerplant: Annotated[
-        str | None, typer.Option("--tickerplant", help="Its tickerplant, if several")
-    ] = None,
-    consumer: Annotated[
-        list[str] | None, typer.Option("--consumer", help="An rdb/wdb to attach (default: all)")
-    ] = None,
-    user: Annotated[
-        str | None, typer.Option("--user", help=f"default: {config.DEFAULT_USER}")
-    ] = None,
-    password_env: Annotated[
-        str | None,
-        typer.Option(
-            "--password-env",
-            help="Environment variable holding the password (default: TorQ's own demo "
-            "credential). The password itself is never saved or printed.",
-        ),
-    ] = None,
-    runtime_only: Annotated[
-        bool,
-        typer.Option(
-            "--runtime-only",
-            help="Accept that restarting the tickerplant drops the registration "
-            "(default: add a marked block to its schema file)",
-        ),
-    ] = False,
-    remote_schema_file: Annotated[
-        bool,
-        typer.Option(
-            "--remote-schema-file",
-            help="Have the tickerplant append the marked block to its own schema file, "
-            "for a stack on another machine (default: uqs appends it, on the stack's machine)",
-        ),
-    ] = False,
-    tplogdir: Annotated[
-        str, typer.Option("--tplogdir", help="Pin the tickerplant log directory")
-    ] = "",
-    schema_file: Annotated[str, typer.Option("--schema-file", help="Pin the schema file")] = "",
-    ssh: Annotated[
-        str | None,
-        typer.Option(
-            "--ssh",
-            help="The ssh destination, USER@HOST, that reaches the stack's files, for `uqs data "
-            "check` and `alter --attach` (default: --host as the current user). Changes "
-            "a saved attachment without --replace",
-        ),
-    ] = None,
-    replace: Annotated[
-        bool,
-        typer.Option(
-            "--replace",
-            help="Rebuild a saved attachment from these options. Keeps its manifest and "
-            "accepted risks; refused while the manifest holds changes on another stack.",
-        ),
-    ] = False,
-    override: Annotated[
-        list[str] | None,
-        typer.Option(
-            "--override",
-            metavar="CODE:COMPONENT",
-            help="Bypass ONE blocker, as CODE:COMPONENT (e.g. TORQ_VERSION:stp1; `uqs override "
-            "list` names the codes); repeatable. It accepts a risk, it does not establish "
-            "compatibility. Needs --reason.",
-        ),
-    ] = None,
-    override_reason: Annotated[
-        str, typer.Option("--reason", help="Why the --override is acceptable: recorded with it")
-    ] = "",
-    accept_risks: Annotated[
-        bool,
-        typer.Option(
-            "--accept-risks",
-            help="Confirm attaching with the accepted risks the plan lists. Separate from "
-            "--yes, which never confirms them; --json needs it when there are any.",
-        ),
-    ] = False,
-    clear_overrides: Annotated[
-        bool,
-        typer.Option(
-            "--clear-overrides",
-            help="Withdraw every accepted risk (saved even when that leaves a blocker)",
-        ),
-    ] = False,
+    job: o.JobOpt = None,
+    bundle: o.BundleOpt = None,
+    stack_id: o.StackIdOpt = None,
+    host: o.HostOpt = None,
+    discovery: o.DiscoveryOpt = None,
+    tickerplant: o.TickerplantOpt = None,
+    consumer: o.ConsumerOpt = None,
+    user: o.UserOpt = None,
+    password_env: o.PasswordEnvOpt = None,
+    runtime_only: o.RuntimeOnlyOpt = False,
+    schema_writer: o.SchemaWriterOpt = None,
+    remote_schema_file: o.RetiredRemoteSchemaOpt = False,
+    process_file: o.ProcessFileOpt = None,
+    start_with_all: o.StartWithAllOpt = None,
+    tplogdir: o.TplogdirOpt = "",
+    schema_file: o.SchemaFileOpt = "",
+    ssh: o.SshOpt = None,
+    replace: o.ReplaceOpt = False,
+    override: o.OverrideOpt = None,
+    override_reason: o.ReasonOpt = "",
+    accept_risks: o.AcceptRisksOpt = False,
+    clear_overrides: o.ClearOverridesOpt = False,
     dry_run: DryRunOpt = False,
-    no_start: Annotated[
-        bool,
-        typer.Option("--no-start", help="Apply and verify, and leave the publisher stopped"),
-    ] = False,
+    no_start: o.NoStartOpt = False,
     yes: YesOpt = False,
     as_json: JsonOpt = False,
 ) -> None:
@@ -207,6 +118,10 @@ def attach(
     apply or verify never starts the publisher. Re-running is safe: what is in
     place is left alone. With --dry-run nothing is saved or changed.
 
+    With --process-file the publisher is also registered in the stack's own
+    TorQ process file, after verify, so a native torq.sh start runs it through
+    the same start gate; --start-with-all puts it in `start all`.
+
     A new attachment needs --job and --stack-id; a saved one is reused by name.
     Replaces the stage commands plan, validate, status, apply, verify and start.
     """
@@ -214,13 +129,15 @@ def attach(
     out = Output(as_json, debug)
     out.doc = {"attachment": name, "dry_run": dry_run}
     refuse_legacy(out, "job attachment add", name, ctx.args)
+    if remote_schema_file:
+        out.fail(o.REMOTE_SCHEMA_RETIRED)
     began = time.monotonic()
     given = workflow.Given(
         job=job, bundle=bundle, stack_id=stack_id, host=host, discovery=discovery,
         tickerplant=tickerplant, consumers=tuple(consumer or ()), user=user,
         password_env=password_env, runtime_only=runtime_only,
-        remote_schema_file=remote_schema_file, tplogdir=tplogdir,
-        schema_file=schema_file, ssh=ssh,
+        schema_writer=schema_writer.value if schema_writer else None, tplogdir=tplogdir,
+        schema_file=schema_file, ssh=ssh, process_file=process_file, start_with_all=start_with_all,
     )  # fmt: skip
     try:
         paths = _paths()

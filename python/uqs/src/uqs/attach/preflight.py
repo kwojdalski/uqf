@@ -16,7 +16,7 @@ silently not work (see docs/guides/attach-existing-torq.md for each one):
 
 A blocker is never downgraded by a flag. The one choice an operator has is
 how the registration persists - `--runtime-only` (accept that a tickerplant
-restart drops it) or `--remote-schema-file` (the tickerplant writes the block
+restart drops it) or `--schema-writer tickerplant` (the tickerplant writes the block
 to its own file, #1651) - and it is recorded in the attachment, not given at
 apply time.
 """

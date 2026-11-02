@@ -6,6 +6,7 @@ import ipaddress
 import socket
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from pathlib import Path
 
 LOCAL_HOSTS = ("localhost", "127.0.0.1", "::1")
 
@@ -114,3 +115,5 @@ class Facts:
     token: str = ""
     #: with `remote-schema-file`, what the tickerplant said about its schema file
     schema: SchemaRead | None = None
+    #: where the attachment's folder is, when not the default (tests, native.py)
+    state_dir: Path | None = None

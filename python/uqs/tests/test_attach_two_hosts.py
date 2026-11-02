@@ -99,7 +99,7 @@ class Hosts:
     def att(self, bundle: Path) -> Attachment:
         att = service.create(
             "pb-uat", "pb_general_ledger", bundle, 6000, ROOT, host=self.stack_host,
-            discovery=f"{self.stack_host}:{self.discovery}", remote_schema_file=True,
+            discovery=f"{self.stack_host}:{self.discovery}", schema_writer="tickerplant",
         )  # fmt: skip
         return replace(att, publisher=replace(att.publisher, advertised_host=self.advertised))
 

@@ -12,7 +12,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from uqs.attach import overrides, preflight, schema_files, sort_plan
+from uqs.attach import native, overrides, preflight, schema_files, sort_plan
 from uqs.attach.config import DURABLE, Attachment
 from uqs.attach.findings import Finding, blockers
 from uqs.attach.manifest import DONE, RETAINED, Manifest
@@ -32,6 +32,8 @@ class Plan:
     override_problems: list[str] = field(default_factory=list)
     #: what attaching does to the stack's sort.csv for tables that declare a sort rule (#1517)
     sort_changes: list[sort_plan.Change] = field(default_factory=list)
+    #: every file attaching writes, the publisher's identity and its startup policy
+    native: dict = field(default_factory=dict)
 
     @property
     def ok(self) -> bool:
@@ -197,6 +199,8 @@ class Plan:
             ],
             "sorting": [c.as_dict() for c in self.sort_changes],
             "persist": att.persist,
+            "schema_writer": att.schema_writer,
+            "native": self.native,
             "storage": att.storage.__dict__,
             "components": self.components(),
             "changes": self.changes(),
@@ -236,6 +240,7 @@ def build(att: Attachment, ipc: Ipc, root: Path, facts: preflight.Facts | None =
     if att.persist == "remote-schema-file" and obs.tickerplant and obs.tickerplant.up:
         facts.schema = schema_files.inspect(ipc, obs.tickerplant)
     changes, sort_findings = sort_plan.assess(att, obs, ipc, facts, root)
-    found = structural + preflight.check(att, obs, facts) + sort_findings
+    registry, preview = native.assess(att, obs, port, root, facts.state_dir)
+    found = structural + preflight.check(att, obs, facts) + sort_findings + registry
     found, problems = overrides.evaluate(att.overrides, found)
-    return Plan(att, obs, found, port, facts.token, problems, changes)
+    return Plan(att, obs, found, port, facts.token, problems, changes, preview)
