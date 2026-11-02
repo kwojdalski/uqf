@@ -24,6 +24,12 @@
     `.qt.qetl.job.stream.published upsert (job;t;enlist x);
     count x}
 
+/ Tests here drive every feed's on_timer, and a polling feed with a row_key
+/ writes its in-flight marker under the status directory: a suite-local one,
+/ never the unset default `/status` a non-root runner cannot create (#1851).
+/ The harness puts the variable back after the suite.
+.qt.qetl.job.stream.beforeNamespace_isolate_status:{[] setenv[`UQF_STATUS_DIR;"build/test-status-stream-job"];}
+
 .qt.qetl.job.stream.reset:{[]
     `.qt.qetl.job.stream.published set 0#.qt.qetl.job.stream.published;
     .qetl.job.stream.reset each .qetl.job.stream.defined[];
