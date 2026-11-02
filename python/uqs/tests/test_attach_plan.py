@@ -550,7 +550,11 @@ def test_no_schema_file_or_a_remote_one_cannot_be_persisted_to(bundle, tmp_path)
     # the path exists HERE, and is still not read: it names a file on otherbox (#1651)
     (refused,) = [f for f in remote.findings if f.code == "PERSIST_UNAVAILABLE"]
     assert "the schema file is on otherbox; this machine cannot edit it" in refused.message
-    for option in ("--remote-schema-file", "--runtime-only", "run uqs on the stack's machine"):
+    for option in (
+        "--schema-writer tickerplant",
+        "--runtime-only",
+        "run uqs on the stack's machine",
+    ):
         assert option in refused.action
 
 

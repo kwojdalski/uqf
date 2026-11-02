@@ -110,6 +110,20 @@ def render_plan(out: Output, d: dict) -> None:
         f"credential: {st['user']} / {st['password_env']}   persist: {d['persist']}   "
         f"publisher port: {d['publisher_port']}"
     )
+    native = d.get("native") or {}
+    if native:
+        pub = native["publisher"]
+        out.text(
+            f"publisher: {pub['procname']} ({pub['proctype'] or 'proctype from its row'}) on "
+            f"port {pub['port']}   schema writer: {d.get('schema_writer') or 'none (runtime-only)'}"
+        )
+        out.text(f"startup: {native['startup']}")
+        files = Table(title="Files attaching writes")
+        for column in ("file", "host", "writer", "change"):
+            files.add_column(column, overflow="fold")
+        for f in native["files"]:
+            files.add_row(f["file"], f["host"], f["writer"], f["change"])
+        out.table(files)
     for t in d["tables"]:
         out.text(
             f"table {t['name']}: " + ", ".join(f"{n}:{c.strip() or '*'}" for n, c in t["columns"])

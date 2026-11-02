@@ -32,7 +32,7 @@ from contextlib import nullcontext
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from uqs.attach import backfill_owner, config, persist, schema_files, sorting
+from uqs.attach import backfill_owner, config, native, persist, schema_files, sorting
 from uqs.attach.apply import Step
 from uqs.attach.config import Attachment, AttachmentError
 from uqs.attach.drift import Blocker, drift, plant_ours
@@ -161,6 +161,8 @@ def detach(
             # that still says `verified` whatever the rest of this detach does (#1443).
             m.set_state("detaching", "detach started: the publisher is stopped")
         try:
+            if not _unregister(m, result, previous, dry_run):
+                return result
             return _reverse(att, ipc, m, result, host, previous, dry_run, state_dir)
         except IpcError as exc:
             raise AttachmentError(interrupted(att, m, str(exc), dry_run)) from None
@@ -168,6 +170,22 @@ def detach(
             if result.interrupted:
                 raise AttachmentError(interrupted(att, m, str(exc), dry_run)) from None
             raise
+
+
+def _unregister(m: Manifest, result: DetachResult, previous: str, dry_run: bool) -> bool:
+    """The publisher's row in the stack's process file, and its launcher, go
+    first - after the stop, before anything on the stack - so no native start
+    can bring the publisher back while the rest is reversed (#1845). Only as
+    this attachment wrote them: a changed row refuses the whole detach."""
+    try:
+        removed, result.blockers = native.unregister(m, dry_run=dry_run)
+    except OSError as exc:
+        raise AttachmentError(f"the process file could not be written: {exc}") from None
+    result.steps += [Step("unregister", "process file", "", "removed", s) for s in removed]
+    if result.blockers and not dry_run:
+        state = "applied" if previous in ("verified", "detaching") else previous
+        m.set_state(state, "detach refused: " + "; ".join(b.reason for b in result.blockers))
+    return not result.blockers
 
 
 def _reverse(

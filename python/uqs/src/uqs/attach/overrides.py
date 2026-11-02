@@ -116,7 +116,12 @@ POLICY: dict[str, Policy] = {
     "PERSIST_UNAVAILABLE": Policy(
         False,
         "use --runtime-only to accept losing the registration on a restart, or, for a stack "
-        "on another machine, --remote-schema-file to have its tickerplant write the block",
+        "on another machine, --schema-writer tickerplant to have its tickerplant write the block",
+    ),
+    "PROCESS_REGISTRY": Policy(
+        False,
+        "the stack's process file is the site's: a row it already has, a clashing port, an "
+        "ambiguous tickerplant or a row someone else changed is never written over (#1845)",
     ),
     "DISCOVERY_UNREACHABLE": Policy(False, "nothing can be verified without discovery"),
     "UNREACHABLE": Policy(False, "a process that cannot be asked cannot be verified"),

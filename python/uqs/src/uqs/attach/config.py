@@ -17,6 +17,8 @@ back instead of recomputing it:
                   operator; a later run that sees something else refuses.
   credentials     the user and the NAME of the environment variable holding
                   the password. The secret itself is never written.
+  native start    the site's process registry the publisher is registered in,
+                  and whether its `start all` starts it (native.py, #1845).
 
 A directory per attachment holds `attachment.json` (this) and `manifest.json`
 (manifest.py). The directory is `$UQS_ATTACH_DIR`, else `$UQS_DATA_ROOT` or the
@@ -42,11 +44,16 @@ from uqs.stack.attach_state import CONFIG_FILE
 
 SCHEMA_VERSION = 1
 #: schema-file: a marked block appended to the tickerplant's schema file from this
-#: machine; remote-schema-file: the same block, appended by the tickerplant itself
-#: (schema_files.RemoteFile, #1651); runtime-only: no block, lost on a restart.
+#: machine (`--schema-writer cli`); remote-schema-file: the same block, appended by
+#: the tickerplant itself (`--schema-writer tickerplant`, schema_files.RemoteFile,
+#: #1651); runtime-only: no block, lost on a restart. The stored names are the ones
+#: attachments saved before `--remote-schema-file` became `--schema-writer
+#: tickerplant` (#1845), so every saved attachment loads as it was.
 PERSIST_MODES = ("schema-file", "remote-schema-file", "runtime-only")
 #: The modes that write a block, so a tickerplant restart keeps the registration.
 DURABLE = ("schema-file", "remote-schema-file")
+#: `--schema-writer` -> the persist mode it chooses, and back.
+SCHEMA_WRITERS = {"cli": "schema-file", "tickerplant": "remote-schema-file"}
 #: The credential TorQ's starter pack ships (accesslist.txt). Used when no
 #: password variable is configured, and said so in every plan.
 DEFAULT_USER = "admin"
@@ -113,6 +120,20 @@ class Publisher:
 
 
 @dataclass(frozen=True)
+class Native:
+    """The publisher's row in the stack's own TorQ process registry (#1845).
+
+    `process_file` empty: not registered, the publisher starts only through
+    uqs. Set, it is the absolute path of a file on THIS machine, given by
+    `--process-file`: the one thing that authorises writing to it.
+    `start_with_all` is the row's startwithall - whether a native `start all`
+    starts the publisher; a new registration is on demand (False)."""
+
+    process_file: str = ""
+    start_with_all: bool = False
+
+
+@dataclass(frozen=True)
 class Attachment:
     name: str
     stack: Stack
@@ -124,6 +145,14 @@ class Attachment:
     origin: dict = field(default_factory=dict)
     #: blockers an operator accepted, with who/when/why and the facts accepted against
     overrides: tuple[Override, ...] = ()
+    #: the publisher's registration in the stack's own process.csv, if any
+    native: Native = field(default_factory=Native)
+
+    @property
+    def schema_writer(self) -> str:
+        """Who writes the schema block: `cli` (uqs, here), `tickerplant`, or ""
+        for a runtime-only attachment, which writes none."""
+        return next((w for w, mode in SCHEMA_WRITERS.items() if mode == self.persist), "")
 
     def table(self, name: str) -> TableSpec:
         for spec in self.tables:
@@ -187,6 +216,8 @@ def from_json(data: dict) -> Attachment:
         persist=data["persist"],
         origin=data.get("origin", {}),
         overrides=tuple(Override(**o) for o in data.get("overrides", [])),
+        # absent from an attachment saved before #1845: not registered
+        native=Native(**data.get("native", {})),
     )
 
 

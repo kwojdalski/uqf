@@ -17,7 +17,7 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 from uqs.attach import apply as applying
-from uqs.attach import config, jobs, plan, reach
+from uqs.attach import config, jobs, native, native_config, plan, reach
 from uqs.attach import verify as verifying
 from uqs.attach.config import Attachment, AttachmentError, Storage
 from uqs.attach.facts import Host
@@ -43,12 +43,16 @@ class Given:
     user: str | None = None
     password_env: str | None = None
     runtime_only: bool = False
-    remote_schema_file: bool = False
+    #: `--schema-writer`: cli | tickerplant, None = the saved one (#1845)
+    schema_writer: str | None = None
     tplogdir: str = ""
     schema_file: str = ""
     #: how to reach the stack's host over ssh (#1755): set on a saved attachment
     #: without --replace, since it changes how uqs reaches the stack, not which
     ssh: str | None = None
+    #: native registration (#1845): None keeps the saved setting; no --replace needed
+    process_file: Path | None = None
+    start_with_all: bool | None = None
 
 
 @dataclass
@@ -79,11 +83,7 @@ def differences(saved: Attachment, given: Given, root: Path) -> list[str]:
     differs("--user", st.user, given.user)
     differs("--password-env", st.password_env, given.password_env)
     differs("--runtime-only", saved.persist, "runtime-only" if given.runtime_only else None)
-    differs(
-        "--remote-schema-file",
-        saved.persist,
-        "remote-schema-file" if given.remote_schema_file else None,
-    )
+    differs("--schema-writer", saved.schema_writer or saved.persist, given.schema_writer)
     differs("--tplogdir", saved.storage.tplogdir, given.tplogdir or None)
     differs("--schema-file", saved.storage.schema_file, given.schema_file or None)
     differs("--job", saved.publisher.job, given.job)
@@ -126,11 +126,14 @@ def resolve(
     if saved is not None:
         changed = differences(saved, given, root)
         if not changed:
+            att, said = saved, []
             if given.ssh is not None and given.ssh != saved.stack.ssh:
-                moved = replace(saved, stack=replace(saved.stack, ssh=given.ssh))
-                said = f"--ssh: {saved.stack.ssh!r} -> {given.ssh!r}"
-                return Resolved(moved, "saved", path, [said])
-            return Resolved(saved, "saved", path)
+                att = replace(saved, stack=replace(saved.stack, ssh=given.ssh))
+                said = [f"--ssh: {saved.stack.ssh!r} -> {given.ssh!r}"]
+            att, more = native_config.settle(
+                att, saved.native, given.process_file, given.start_with_all
+            )
+            return Resolved(att, "saved", path, said + more)
         if not replace_saved:
             raise AttachmentError(
                 f"attachment {name} is saved with other settings ({'; '.join(changed)}). "
@@ -147,14 +150,17 @@ def resolve(
         host=given.host or "localhost", discovery=given.discovery,
         tickerplant=given.tickerplant or "", consumers=tuple(given.consumers),
         user=given.user or config.DEFAULT_USER, password_env=given.password_env or "",
-        runtime_only=given.runtime_only, remote_schema_file=given.remote_schema_file,
+        runtime_only=given.runtime_only, schema_writer=given.schema_writer,
         storage=Storage(tplogdir=given.tplogdir, schema_file=given.schema_file), runtime=runtime,
         ssh=given.ssh or "",
     )  # fmt: skip
+    att, more = native_config.settle(
+        att, saved.native if saved else None, given.process_file, given.start_with_all
+    )
     if saved is None:
         return Resolved(att, "new", path)
     _refuse_moving(saved, att, state_dir)
-    return Resolved(replace(att, overrides=saved.overrides), "replaced", path, changed)
+    return Resolved(replace(att, overrides=saved.overrides), "replaced", path, changed + more)
 
 
 def _refuse_moving(saved: Attachment, att: Attachment, state_dir: Path | None) -> None:
@@ -190,7 +196,7 @@ def already_running(att: Attachment, p: plan.Plan, state_dir: Path | None = None
 
 @dataclass
 class Stage:
-    #: save | apply | verify | start | reach
+    #: save | apply | verify | register | start | reach
     name: str
     #: done | failed | skipped
     status: str
@@ -311,6 +317,8 @@ def execute(
             f"or reverse what this attachment created with {back}",
         ]
         return out
+    if att.native.process_file and not _register(att, root, p, out, state_dir):
+        return out
     t = time.monotonic()
     if running:
         stage("start", "skipped", f"{att.publisher.procname} is already running", t)
@@ -335,6 +343,24 @@ def execute(
             tp = p.observation.tickerplant
             _reach(att, ipc, root, publisher, out, state_dir, tp.endpoint if tp else None)
     return out
+
+
+def _register(att: Attachment, root: Path, p: plan.Plan, out: Outcome,
+              state_dir: Path | None) -> bool:  # fmt: skip
+    """The publisher's row in the stack's process file (native.py): after verify,
+    before any start, and not skipped by --no-start - it is the future policy."""
+    t = time.monotonic()
+    try:
+        said = "; ".join(native.register(att, root, p.publisher_port, p.observation, state_dir))
+    except (AttachmentError, OSError) as exc:
+        said, out.recovery = str(exc), [
+            "applied and verified; the process file is unchanged or as the manifest records",
+            f"fix the cause, then re-run `uqs job attachment add {att.name}`",
+        ]  # fmt: skip
+    ok = not out.recovery
+    out.stages.append(Stage("register", "done" if ok else "failed", said,
+                            round(time.monotonic() - t, 3)))  # fmt: skip
+    return ok
 
 
 def _reach(
