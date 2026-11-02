@@ -64,11 +64,18 @@ class Guardrail:
 
 
 class PolicyLike(Protocol):
-    """A row of a finding-code policy table, such as attach/overrides.Policy."""
+    """A row of a finding-code policy table, such as attach/overrides.Policy.
 
-    overridable: bool
-    risk: str
-    action: str
+    Read-only properties, not plain attributes: `from_policy` only reads a row,
+    and a plain protocol attribute is writable, which a frozen dataclass row
+    (attach's Policy) is not - so a row would not satisfy it."""
+
+    @property
+    def overridable(self) -> bool: ...
+    @property
+    def risk(self) -> str: ...
+    @property
+    def action(self) -> str: ...
 
 
 def from_policy(
