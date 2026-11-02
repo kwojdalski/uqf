@@ -132,9 +132,10 @@ def backfill(
             "--any-writer",
             help="With --writer: HOST:PORT is any q process of the stack (e.g. its wdb), and "
             "each date's rows are appended into that process's own HDB over plain IPC. "
-            "NOTHING is checked there - no receiver, contract, schema, attachment "
+            "Almost nothing is checked there - no receiver, contract, schema, attachment "
             "verification, end-of-day fence or retry protection - and no reader is told "
-            "to reload. Append only; a re-run or a retry duplicates rows",
+            "to reload. Completed history only: a row dated on or after the date the "
+            "writer is filling is refused. Append only; a re-run or a retry duplicates rows",
         ),
     ] = False,
     as_json: Annotated[

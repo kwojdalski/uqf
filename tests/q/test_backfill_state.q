@@ -404,3 +404,70 @@
     .qetl.job.bounded.state.acquire_lock[`shell_rethrow];
     .qunit.assertError[{.qetl.job.bounded.state.run_pass[`shell_rethrow;x;{'"deliberate"}]};spec;"the shell rethrows after recording, so a caller's own exit path still runs"];
     .qetl.job.bounded.state.release_lock[`shell_rethrow]};
+
+/ --- clearing a checkpoint under the worker's lock (#1863) --------------
+
+.qt.qetl.job.bounded.state.plant_ckpt:{[w]
+    p:.qetl.job.bounded.state.checkpoint_path w;
+    {(hsym `$x) 0: enlist "{}"} each p,/:("";".bak";".tmp");
+    p}
+
+.qt.qetl.job.bounded.state.gone:{[p] {()~key hsym `$x} each p,/:("";".bak";".tmp")}
+
+.qt.qetl.job.bounded.state.test_a_clear_under_a_live_lock_refuses_and_touches_nothing:{[t]
+    w:`clr_live;
+    p:.qt.qetl.job.bounded.state.plant_ckpt w;
+    .qt.qetl.job.bounded.state.plant_lock[w;.z.i;string .z.h];
+    r:.qetl.job.bounded.state.clear_checkpoint_locked[w;0b];
+    .qunit.assertEquals[r`status;`held;"a live holder refuses the clear"];
+    .qunit.assertTrue[(string r`holder) like "pid ",(string .z.i),"*";"and the answer names the holder"];
+    .qunit.assertEquals[.qt.qetl.job.bounded.state.gone p;000b;"no generation is deleted, so nothing can be resurrected"];
+    .qunit.assertTrue[.qetl.job.bounded.state.lock_held w;"the holder's lock is untouched"];
+    .qetl.job.bounded.state.release_lock w;
+    .qetl.job.bounded.state.durable_remove p};
+
+.qt.qetl.job.bounded.state.test_a_clear_under_a_stale_lock_clears_every_generation:{[t]
+    w:`clr_stale;
+    p:.qt.qetl.job.bounded.state.plant_ckpt w;
+    .qt.qetl.job.bounded.state.plant_lock[w;.qt.qetl.job.bounded.state.dead_pid;string .z.h];
+    r:.qetl.job.bounded.state.clear_checkpoint_locked[w;0b];
+    .qunit.assertEquals[r`status;`cleared;"a dead holder's lock does not block"];
+    .qunit.assertEquals[.qt.qetl.job.bounded.state.gone p;111b;"path, .bak and .tmp are all gone"];
+    .qunit.assertTrue[not .qetl.job.bounded.state.lock_held w;"and the lock taken for the clear is released"]};
+
+.qt.qetl.job.bounded.state.test_a_clear_with_no_lock_clears_and_with_nothing_reports_none:{[t]
+    w:`clr_none;
+    p:.qt.qetl.job.bounded.state.plant_ckpt w;
+    .qetl.job.bounded.state.release_lock w;
+    .qunit.assertEquals[(.qetl.job.bounded.state.clear_checkpoint_locked[w;0b])`status;`cleared;"cleared"];
+    .qunit.assertEquals[.qt.qetl.job.bounded.state.gone p;111b;"every generation"];
+    r:.qetl.job.bounded.state.clear_checkpoint_locked[w;0b];
+    .qunit.assertEquals[r`status;`none;"nothing left to clear"];
+    .qunit.assertEquals[`$.qetl.job.bounded.state.checkpoint_path w;r`path;"the answer names q's own checkpoint path"]};
+
+.qt.qetl.job.bounded.state.test_a_dry_clear_deletes_nothing_and_takes_no_lock:{[t]
+    w:`clr_dry;
+    p:.qt.qetl.job.bounded.state.plant_ckpt w;
+    .qetl.job.bounded.state.release_lock w;
+    r:.qetl.job.bounded.state.clear_checkpoint_locked[w;1b];
+    .qunit.assertEquals[r`status;`would_clear;"reports what it would do"];
+    .qunit.assertEquals[.qt.qetl.job.bounded.state.gone p;000b;"deletes nothing"];
+    .qunit.assertTrue[not .qetl.job.bounded.state.lock_held w;"and leaves no lock"];
+    .qt.qetl.job.bounded.state.plant_lock[w;.z.i;string .z.h];
+    .qunit.assertEquals[(.qetl.job.bounded.state.clear_checkpoint_locked[w;1b])`status;`held;"a live lock is refused on a dry run too"];
+    .qetl.job.bounded.state.release_lock w;
+    .qetl.job.bounded.state.durable_remove p};
+
+/ The generation list is durable_remove's alone. A file it learns to remove
+/ is removed by the locked clear with no other edit - which is the point of
+/ the clear running in q.
+.qt.qetl.job.bounded.state.test_a_generation_added_to_durable_remove_is_cleared_too:{[t]
+    w:`clr_generation;
+    p:.qt.qetl.job.bounded.state.plant_ckpt w;
+    (hsym `$p,".old") 0: enlist "{}";
+    original:.qetl.job.bounded.state.durable_remove;
+    .qetl.job.bounded.state.durable_remove:{[path] system"rm -f ",path," ",path,".bak ",path,".tmp ",path,".old"; path};
+    r:@[.qetl.job.bounded.state.clear_checkpoint_locked[w];0b;{[e] e}];
+    .qetl.job.bounded.state.durable_remove:original;
+    .qunit.assertEquals[r`status;`cleared;"cleared"];
+    .qunit.assertTrue[()~key hsym `$p,".old";"the extra generation went with it"]};

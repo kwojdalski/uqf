@@ -29,7 +29,7 @@ pointing the wrong way, and this stops it coming back.
 The third rule is about who reads TorQ (#619). src/ may read TorQ's own
 facilities - that is what runs it - but each one has ONE owner file: logging
 (`.lg`) is src/etl/core/log.q, service discovery (`.servers`) is
-src/etl/core/worker_runtime.q, and process identity (`.proc`) is
+src/etl/core/worker_dependencies.q, and process identity (`.proc`) is
 src/etl/core/run.q's `.qetl.run.proc_name`. Every other file goes through
 those. Before, the process name was read four times in three files, each
 with its own fallback, and nothing stopped a fifth. TorQ stays the authority;
@@ -76,7 +76,7 @@ ADAPTER_NS = ".qtorq"
 #: Each TorQ namespace src/ may read, and the one file allowed to read it.
 TORQ_OWNERS = {
     ".lg": "src/etl/core/log.q",
-    ".servers": "src/etl/core/worker_runtime.q",
+    ".servers": "src/etl/core/worker_dependencies.q",
     ".proc": "src/etl/core/run.q",
 }
 
