@@ -153,6 +153,7 @@ qetl.io,require_strategy,function,1,strategy
 qetl.io,required,value,,
 qetl.io,resolve,function,4,strategy existing batch opts
 qetl.io,retire,function,3,root d t
+qetl.io,scoped_check_date,function,5,bounds partition_col target batch window_to
 qetl.io,scoped_roots,value,,
 qetl.io,strategies,value,,
 qetl.io,touched,table,,
@@ -296,6 +297,7 @@ qetl.job.bounded.state,bounded_workers,dict,,
 qetl.job.bounded.state,break_stale,function,1,path
 qetl.job.bounded.state,checkpoint_path,function,1,worker
 qetl.job.bounded.state,clear_checkpoint,function,1,worker
+qetl.job.bounded.state,clear_checkpoint_locked,function,2,worker dry
 qetl.job.bounded.state,durable_get,function,1,path
 qetl.job.bounded.state,durable_lines,function,2,path lines
 qetl.job.bounded.state,durable_read,function,3,who path reader

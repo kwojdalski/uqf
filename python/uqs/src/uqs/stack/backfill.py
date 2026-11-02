@@ -15,14 +15,12 @@ reused the last range - the default torq_backfill.q exists to refuse.
 
 from __future__ import annotations
 
-import json
 import re
 import subprocess
 from datetime import datetime
 from pathlib import Path
 
 from uqs.generated import q_facts
-from uqs.liveness import on_this_host, pid_alive
 from uqs.model.registry import PIPELINES
 from uqs.paths import UqsError, UqsPaths
 from uqs.stack import capabilities, runs, runtime
@@ -179,57 +177,31 @@ def start(
     return runtime.run_torq_sh(paths, ["start", procname, "-extras", *flags], base_port=base_port)
 
 
-def checkpoint_path(paths: UqsPaths, worker: str) -> Path:
-    """`worker`'s private checkpoint, where `.qetl.job.bounded.state.checkpoint_path`
-    writes it: `<worker>.checkpoint` in the status directory."""
-    return runs.status_dir(paths) / f"{worker}.checkpoint"
-
-
-def _live_holder(lock: Path) -> str | None:
-    """Who holds `lock`, or None when nobody does or its holder is gone.
-
-    The same rule as `.qetl.job.bounded.state.lock_is_stale`, and in the same
-    direction: anything it cannot prove dead - no owner file yet, an owner
-    with no pid or host, another host's pid - counts as live. Whether the
-    owner is gone is uqs.liveness's rule, shared with the status readers.
-    """
-    if not lock.is_dir():
-        return None
-    try:
-        owner = json.loads((lock / "owner").read_text())
-    except OSError, ValueError:
-        return "an unrecorded holder (no readable owner file)"
-    pid, host = owner.get("pid"), owner.get("host")
-    if pid is None or host is None:
-        return "a holder that recorded no pid or host"
-    if not on_this_host(str(host)):
-        return f"pid {pid} on {host}"
-    return f"pid {pid}" if pid_alive(int(pid)) else None
-
-
 def clear_checkpoint(paths: UqsPaths, worker: str, dry_run: bool = False) -> Path | None:
     """Delete `worker`'s checkpoint, returning its path, or None if it had none.
     With `dry_run`, every check runs and nothing is deleted.
 
-    Refused while a run of `worker` may still be live: that run would go on
-    writing the cursor it holds in memory, and the delete would not have
-    happened. A lock left by a run that has exited does not count - the next
-    run breaks it itself.
+    q does the work, under the worker's own lock
+    (`.qetl.job.bounded.state.clear_checkpoint_locked`): which files are the
+    checkpoint's generations, whether a lock is live, and the acquire / clear /
+    release that keeps a run from starting between the check and the delete
+    are all q's. This keeps the friendly refusal, built from q's answer.
+
+    Refused while a run of `worker` is live: that run would go on writing the
+    cursor it holds in memory, and the delete would not have happened. A lock
+    left by a run that has exited does not count - q breaks it, as a run would.
     """
     procname_for(worker)
-    lock = runs.status_dir(paths) / f"{worker}.lock"
-    holder = _live_holder(lock)
-    if holder is not None:
+    if not runs.status_dir(paths).is_dir():
+        return None  # no run has ever written here: no checkpoint, and no lock
+    (answer,) = runs.query(
+        paths,
+        f"enlist .qetl.job.bounded.state.clear_checkpoint_locked[`{worker};{int(dry_run)}b]",
+        attach=False,
+    )
+    if answer["status"] == "held":
         raise UqsError(
-            f"{worker} may still be running - its lock {lock} is held by {holder}. "
-            "Let the run finish, or stop it, then clear the checkpoint."
+            f"{worker} may still be running - its lock {answer['lock']} is held by "
+            f"{answer['holder']}. Let the run finish, or stop it, then clear the checkpoint."
         )
-    path = checkpoint_path(paths, worker)
-    if not path.is_file() or dry_run:
-        return path if path.is_file() else None
-    # The previous generation goes too (`durable_remove`): left behind, it is
-    # what the next unreadable checkpoint would fall back to - a cursor from
-    # before the clear.
-    for stale in (path, path.with_name(path.name + ".bak"), path.with_name(path.name + ".tmp")):
-        stale.unlink(missing_ok=True)
-    return path
+    return None if answer["status"] == "none" else Path(answer["path"])

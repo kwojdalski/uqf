@@ -1036,8 +1036,9 @@ the process cannot be started or `--wait` follows it to its end.
   rename, and refused past the last completed date.
 - `replace` clears only its own window: rows outside it are kept, and other
   dates and other tables are not rewritten. Finishing a partition sorts it by
-  sym then time with `p#sym` and does **not** fill other dates with the table
-  (`.Q.chk`).
+  the table's declared sort rule (`.qetl.plant.sorting`), or sym then time with
+  `p#sym` when it declares none, and does **not** fill other dates with the
+  table (`.Q.chk`).
 - Coverage, checkpoint, lock and run ledger live under
   `<status dir>/attached/<attachment>-<id>/`, where the id is a digest of the
   host, stack id and canonical HDB path, so coverage recorded for one HDB cannot

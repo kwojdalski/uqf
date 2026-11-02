@@ -5,7 +5,8 @@ Two writers produce the same HDB partitions:
 - **End of day** sorts and sets attributes through TorQ's `.sort.sorttab`,
   which reads `$KDBCONFIG/sort.csv`: `lib/torq/config/sort.csv`.
 - **A bounded worker** sorts on its own when it finishes a partition:
-  `.qetl.io.finish_parts` in `src/etl/core/io_hdb.q`, sym then time with
+  `.qetl.io.finish_parts` in `src/etl/core/io_hdb.q`: the table's declared sort rule
+  (`.qetl.plant.sorting`, #1861), else - what this test holds - sym then time with
   `p#sym`. Reactions write through the same IO manager.
 
 They agree today, but by coincidence: nothing tied them together. A per-table
@@ -33,15 +34,16 @@ ROOT = repo_root()
 SORT_CSV = ROOT / "lib" / "torq" / "config" / "sort.csv"
 IO_MANAGER = ROOT / "src" / "etl" / "core" / "io_hdb.q"
 
-#: What `.qetl.io.finish_parts` applies, as sort.csv rows (att, column, sort):
+#: What `.qetl.io.finish_parts` applies to a table with no declared rule, as sort.csv
+#: rows (att, column, sort):
 #: `p#` on sym, sorted by sym then time.
 IO_MANAGER_SPEC = (("p", "sym", "1"), ("", "time", "1"))
 
 #: The code that applies IO_MANAGER_SPEC. Held here so a change to the IO
 #: manager's sort fails this test too, not only a change to sort.csv.
 IO_MANAGER_CODE = (
-    "order:(`sym`time inter c);",
-    "if[(`sym in c) and not .qetl.io.on_peachq; @[part;`sym;`p#]];",
+    "order:`sym`time inter c;",
+    "order!{$[x=`sym;`p;`]} each order}",
 )
 
 Spec = tuple[tuple[str, str, str], ...]

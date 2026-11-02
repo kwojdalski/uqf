@@ -628,6 +628,39 @@
 / Remove a worker's checkpoint, for a deliberate restart from the beginning.
 .qetl.job.bounded.state.clear_checkpoint:{[worker] .qetl.job.bounded.state.durable_remove .qetl.job.bounded.state.checkpoint_path worker}
 
+/ Clear a worker's checkpoint from outside it - under the worker's own lock.
+/ .
+/ A run that starts between "nobody holds the lock" and the delete would load
+/ the old cursor and rewrite it, so the clear would silently not have happened.
+/ Taking the lock the run takes closes that: either this call holds it, and a
+/ run that starts meanwhile is refused, or a run holds it and this call refuses.
+/ A stale lock is broken and retaken by acquire_lock exactly as a run's start
+/ would. With `dry`, nothing is acquired or deleted: the same answer, and a
+/ live lock is only looked at.
+/ @param worker the worker's name
+/ @param dry 1b to report what would happen and change nothing
+/ @return a dictionary: status (`cleared`, `none` when there was nothing to clear,
+/         `would_clear`, or `held` when a live lock refused it), path (the
+/         checkpoint), lock (the lock directory) and holder (a phrase naming
+/         who holds a live lock, empty otherwise)
+/ @throws the clear's own error, after the lock has been released
+/ @eg .qetl.job.bounded.state.clear_checkpoint_locked[`demo_deals_backfill;0b]
+.qetl.job.bounded.state.clear_checkpoint_locked:{[worker;dry]
+    path:.qetl.job.bounded.state.checkpoint_path worker;
+    lock:.qetl.job.bounded.state.lock_path worker;
+    has:not ()~key hsym `$path;
+    mk:{[st;path;lock;holder] `status`path`lock`holder!(st;`$path;`$lock;`$holder)};
+    if[dry;
+        live:.qetl.job.bounded.state.lock_held[worker] & not .qetl.job.bounded.state.lock_is_stale lock;
+        if[live; :mk[`held;path;lock;.qetl.job.bounded.state.owner_desc lock]];
+        :mk[$[has;`would_clear;`none];path;lock;""]];
+    got:@[{.qetl.job.bounded.state.acquire_lock x; 1b};worker;{[e] 0b}];
+    if[not got; :mk[`held;path;lock;.qetl.job.bounded.state.owner_desc lock]];
+    err:@[{.qetl.job.bounded.state.clear_checkpoint x; ""};worker;{[e] e}];
+    .qetl.job.bounded.state.release_lock worker;
+    if[count err; 'err];
+    mk[$[has;`cleared;`none];path;lock;""]}
+
 / ------------------------------------------------------------------- SHELL
 
 / Convert a thrown error into a terminal failed status.
