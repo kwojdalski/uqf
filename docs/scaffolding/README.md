@@ -40,9 +40,9 @@ result.
 
 ## What every shape has in common
 
-The four with a process write the same eight changes, and the reason each exists
-is the same across shapes. A reaction writes only the first and the fifth and
-sixth: it has no table and no process.
+Every shape with a process writes these changes, and the reason each exists is
+the same across shapes. A reaction writes only the job itself and its test: it
+has no table and no process.
 
 ```
 create src/etl/<streaming|sources+workers>/<name>.q   the job itself
@@ -50,7 +50,6 @@ append to src/etl/plant_tables.q              its table
 append to tests/q/test_stack_tables.q                 that table's name
 append to scripts/processes/uqs_catalog.q             a SCAFFOLDED description
 create tests/q/test_<name>.q                          a test that FAILS
-append to tests/run_tests.q                           the test's namespace
 append to docs/services/README.md                     a SCAFFOLDED Showcase card
 append to docs/architecture/stack.md                  a SCAFFOLDED comment naming the process
 ```
@@ -60,15 +59,15 @@ once on its fixture into a throwaway HDB under `build/` - no stack - and exits 1
 unless it published a row. Run it straight after scaffolding:
 `q scripts/examples/<name>_example.q`.
 
-Then it regenerates `docs/man.q` and the process table itself --- you do not run
-those.
+Then it regenerates the process table and the other derived files a new job
+makes stale --- you do not run those, unless it says it could not.
 
 **It writes the shape, never the logic.** The generated handler throws and the
 generated test fails, on purpose. A scaffold that left something green behind
 would make "generated" and "implemented" look the same from outside, which is
 how you get a process that is `up`, heartbeating, and publishing nothing.
 
-**Four things stay yours**, and each is gated so you cannot forget:
+**These stay yours**, and each is gated so you cannot forget:
 
   |                                           | what fails until you do it                          |
   | ---                                       | ---                                                 |
