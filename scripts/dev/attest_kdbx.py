@@ -110,7 +110,8 @@ _SOURCE = REPO
 #: checked (plant-schema, #1794).
 HOOKS = ("q-tests", "q-coverage", "q-docs", "contract-surface", "q-facts", "plant-schema")
 
-#: The pre-commit CI runs the hooks with.
+#: The pre-commit CI runs the hooks with: ci.yml's, held equal to it by
+#: `scripts/gates/check.py tool-pins`.
 PRE_COMMIT = "pre-commit==4.6.2"
 
 TRAILER = "KDB-X-gates"
