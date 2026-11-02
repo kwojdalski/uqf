@@ -24,6 +24,10 @@ dataset_columns:{[d] cols .qetl.transform.output_schema first exec transform fro
 dataset_time:{[d] $[`time in dataset_columns d; `time; first exec window_column from .qetl.job.bounded.worker_cfg where dataset=d]}
 dataset_instrument:{[d] $[`sym in dataset_columns d; `sym; `]}
 
+/ Each registered source's transport, as `.qetl.source.define` stored it (#1865): the
+/ declared one, or the default - however the source's file spelled it.
+source_transport:{[s] string (.qetl.source.def s)`transport}
+
 / q's column types and attributes (#1785): the vocabulary uqs's attachment
 / check, schema view, plant metadata, scaffold and the browser's catalog share.
 / q has no list of its type NAMES, so they are written here once - and each is
@@ -56,6 +60,8 @@ facts:(!) . flip (
     / The datasets bounded workers write, keyed by name (#1363).
     (`BOUNDED_DATASET_TIME_COLUMNS;       (!) . (asc datasets[]; string dataset_time each asc datasets[]));
     (`BOUNDED_DATASET_INSTRUMENT_COLUMNS; (!) . (asc datasets[]; string dataset_instrument each asc datasets[]));
+    / How each source is reached - what uqs's capability gate and `config sources stub` read (#1865).
+    (`SOURCE_TRANSPORTS;                  (!) . (asc .qetl.source.defined[]; source_transport each asc .qetl.source.defined[]));
     / Names q computes and the browser and `uqs` repeat (#1368).
     (`CFG_SOURCES;            .qetl.cfg.sources);
     (`CFG_ENV_LAYER;          .qetl.cfg.env_layer);

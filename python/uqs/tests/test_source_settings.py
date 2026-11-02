@@ -175,12 +175,12 @@ def test_a_stub_refuses_to_build_on_a_malformed_file(tmp_path):
         ss.add_stub(paths_for_root(tmp_path, "uqf"), "b", "odbc", TRANSPORTS)
 
 
-def test_a_sources_declared_transport_is_read_from_its_file():
-    assert ss.declared_transport(UQF_ROOT, "duckdb_deals", "ipc") == "odbc"
-    assert ss.declared_transport(UQF_ROOT, "hdb_transfer", "ipc") == "local"
-    assert ss.declared_transport(UQF_ROOT, "demo_deals", "ipc") == "ipc"
+def test_a_sources_transport_is_what_q_resolved():
+    assert ss.declared_transport("duckdb_deals") == "odbc"
+    assert ss.declared_transport("hdb_transfer") == "local"
+    assert ss.declared_transport("demo_deals") == "ipc"
     with pytest.raises(UqsError, match="no source 'nope'"):
-        ss.declared_transport(UQF_ROOT, "nope", "ipc")
+        ss.declared_transport("nope")
 
 
 def test_the_cli_shows_the_selected_file(monkeypatch, tmp_path):

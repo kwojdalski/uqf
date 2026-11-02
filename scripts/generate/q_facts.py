@@ -61,6 +61,7 @@ FACTS = {
     "STATUS_FILE_SUFFIX": "a status file's name after the instance id - .qetl.status.file_suffix",
     "BOUNDED_DATASET_TIME_COLUMNS": "dataset -> time column getdata reads it by (#1363)",
     "BOUNDED_DATASET_INSTRUMENT_COLUMNS": "dataset -> its instrument column, empty if none (#1363)",
+    "SOURCE_TRANSPORTS": "source -> its transport, as its declaration resolved it (#1865)",
     "CFG_SOURCES": "the worker-config layers, most significant first - .qetl.cfg.sources",
     "CFG_ENV_LAYER": "the layer that outranks a worker-config override - .qetl.cfg.env_layer",
     "CFG_OVERRIDE_LAYER": "the layer a worker-config override sits in - .qetl.cfg.override_layer",

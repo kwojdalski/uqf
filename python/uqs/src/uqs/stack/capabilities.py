@@ -14,6 +14,13 @@ finishes partitions on PeachQ itself, without the on-disk attributes and
 Asked, never assumed: PROBE runs on the binary the runtime starts, so a build
 that gains a capability gains the workers that need it with no edit here.
 A KDB-X runtime is never probed.
+
+Which worker needs the capability comes from q: its source's transport is
+`q_facts.SOURCE_TRANSPORTS`. PROBE's expression is the one
+`.qetl.io.odbc.native_loadable` asks inside q (src/etl/core/singlestore_odbc.q),
+which refuses an ODBC worker itself before it claims or locks anything; a bare
+q cannot load that tree, so the expression is written here too, and
+test_peachq_pipelines holds the two together.
 """
 
 from __future__ import annotations
@@ -23,13 +30,13 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+from uqs.generated import q_facts
 from uqs.interpreter import PEACHQ, q_command
 from uqs.model import transports
 from uqs.model.declarations import Declaration, read_declarations
-from uqs.paths import SOURCE_DIR, UqsError, UqsPaths
+from uqs.paths import UqsError, UqsPaths
 from uqs.stack.env import with_interpreter
 from uqs.stack.run_modes import READ_ONLY_MODES
-from uqs.stack.source_settings import declared_transport
 
 #: Each capability, as an operator reads it.
 CAPABILITIES = {"native": "loading a shared library (`2:`)"}
@@ -69,17 +76,13 @@ def probe(qcmd: str) -> dict[str, bool]:
     return {name: found.get(name) == "1" for name in CAPABILITIES}
 
 
-def _transport(repo_root: Path, source: str) -> str:
-    """The transport `source` declares. Its file is usually named after it,
-    but a bundle's keeps the bundle's own name: then it is the file whose
-    `source_name` is `source`."""
-    default = transports.default(repo_root)
-    if (repo_root / SOURCE_DIR / f"{source}.q").is_file():
-        return declared_transport(repo_root, source, default)
-    for path in sorted((repo_root / SOURCE_DIR).glob("*.q")):
-        if f"source_name:`{source}\n" in path.read_text(encoding="utf-8"):
-            return declared_transport(repo_root, path.stem, default)
-    return default
+def _transport(source: str, default: str) -> str:
+    """The transport `source` is read through: what q resolved
+    (`q_facts.SOURCE_TRANSPORTS`). A source q_facts does not list - one
+    written since it was generated - reads as `default`; q itself refuses an
+    ODBC one it cannot reach, before it claims or locks anything
+    (`.qetl.source.preflight`)."""
+    return q_facts.SOURCE_TRANSPORTS.get(source, default)
 
 
 def requirements(repo_root: Path, decl: Declaration, mode: str | None) -> list[tuple[str, str]]:
@@ -89,7 +92,7 @@ def requirements(repo_root: Path, decl: Declaration, mode: str | None) -> list[t
     run open the source."""
     if mode in READ_ONLY_MODES:
         return []
-    if _transport(repo_root, decl.source) == "odbc":
+    if _transport(decl.source, transports.default(repo_root)) == "odbc":
         return [("native", f"its source {decl.source} is read through an ODBC driver")]
     return []
 

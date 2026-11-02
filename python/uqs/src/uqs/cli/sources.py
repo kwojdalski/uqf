@@ -84,9 +84,7 @@ def sources_stub(
     paths = _paths()
     try:
         names = transports.names()
-        transport = source_settings.declared_transport(
-            paths.repo_root, source, transports.default()
-        )
+        transport = source_settings.declared_transport(source)
         console.print(source_settings.add_stub(paths, source, transport, names, dry_run))
         if dry_run:
             console.print(dry_run_note())
