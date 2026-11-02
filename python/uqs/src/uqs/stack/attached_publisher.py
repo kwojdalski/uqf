@@ -97,22 +97,31 @@ def publishers(args: Sequence[str]) -> tuple[str, ...]:
 
 def auth(paths: UqsPaths, procs: Sequence[str]) -> Auth:
     """The integration the publishers `procs` start under, or UNSUPPORTED."""
+    who = ", ".join(procs)
+    how = auth_for(paths.torqapphome, f"{who} cannot be started", "Nothing was started.")
+    if how is None:
+        raise UqsError(
+            UNSUPPORTED.format(procs=who, app=paths.torqapphome, access=STARTER_ACCESS_LIST)
+        )
+    return how
+
+
+def auth_for(app: Path | None, refused: str, nothing: str) -> Auth | None:
+    """SITE when KDBSECURE names a directory, STARTER_PACK when the TorQ
+    application `app` has the starter pack's access list, None when neither -
+    the caller says why, for what it was doing. `refused` and `nothing` word
+    the refusal of a KDBSECURE that names no directory."""
     secure = os.environ.get(KDBSECURE_ENV, "").strip()
     if secure:
         if not Path(secure).is_dir():
             raise UqsError(
-                f"{', '.join(procs)} cannot be started: {KDBSECURE_ENV}={secure!r} is not a "
-                "directory - it should be where the site keeps the credentials its own TorQ "
-                "code reads. Nothing was started."
+                f"{refused}: {KDBSECURE_ENV}={secure!r} is not a directory - it should be where "
+                f"the site keeps the credentials its own TorQ code reads. {nothing}"
             )
         return Auth(SITE, secure)
-    if (paths.torqapphome / STARTER_ACCESS_LIST).is_file():
+    if app is not None and (app / STARTER_ACCESS_LIST).is_file():
         return Auth(STARTER_PACK)
-    raise UqsError(
-        UNSUPPORTED.format(
-            procs=", ".join(procs), app=paths.torqapphome, access=STARTER_ACCESS_LIST
-        )
-    )
+    return None
 
 
 def with_auth(rows: list[dict[str, str]], procs: Sequence[str], how: Auth) -> list[dict[str, str]]:

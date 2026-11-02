@@ -34,8 +34,24 @@ process's start line. Nothing else - no setenv.sh, no other row - changes. It
 
 It holds no secret. The stack's password stays in the environment variable the
 attachment names, which the gate reads at start; only its NAME is in the
-attachment, as everywhere else. The publisher's own TorQ credential is TorQ's
-passwords files, as for every other process of the stack.
+attachment, as everywhere else.
+
+AUTHENTICATION (#1849) is stack/attached_publisher's model, judged against the
+SITE's TorQ application - the one a native start resolves ${TORQAPPHOME} in the
+row against - never this tree's, which always has the starter pack's list:
+
+  site          KDBSECURE is set, to a directory: the row names no `-U`, and the
+                launcher exports UQF_SITE_AUTH=1 and KDBSECURE (Auth.env), so
+                uqf's handlers leave the site's loader and .pm alone;
+  starter-pack  the process file is in a TorQ application's appconfig/ folder
+                (TorQ's KDBAPPCONFIG) and that application has
+                appconfig/passwords/accesslist.txt: row and launcher as before;
+  neither       refused (UNKNOWN_AUTH), nothing written. Neither TORQAPPHOME in
+                this environment (often this tree's own) nor the site's other
+                rows (a `-U` names a list, it does not show one exists) decides.
+
+KDBSECURE is a path, not a secret; it stays out of the row, which names only
+this tree's variables written out.
 """
 
 from __future__ import annotations
@@ -48,7 +64,8 @@ from pathlib import Path
 
 from uqs.attach import config
 from uqs.attach.config import Attachment, AttachmentError
-from uqs.paths import UqsPaths, paths_for_root
+from uqs.paths import UqsError, UqsPaths, paths_for_root
+from uqs.stack.attached_publisher import STARTER_ACCESS_LIST, Auth, auth_for
 
 #: The file in the attachment's folder a registered row's qcmd names.
 LAUNCHER = "native_start.sh"
@@ -60,10 +77,41 @@ TREE_VARS = ("UQF_ROOT", "UQF_SCRIPTS", "KDBSERVCONFIG", "KDBSERVCODE")
 NEEDED = ("host", "port", "proctype", "procname", "load", "startwithall", "qcmd")
 #: Where the ODBC home is named (stack/odbc_home.ODBC_HOME_ENV).
 ODBC_HOME_ENV = "UQS_ODBC_HOME"
+#: Why a registration cannot tell how a native start of the publisher authenticates.
+UNKNOWN_AUTH = (
+    "{proc} cannot be registered: {why}, and KDBSECURE is not set, so how a native start of it "
+    "authenticates is not known, and uqf will not fall back to TorQ's demo credentials. If the "
+    "site keeps its credentials under KDBSECURE and authenticates with its own .pm code, export "
+    "KDBSECURE as the site's processes see it and run the same command again; the site's loader "
+    "and .pm then stand. {otherwise} Nothing was written."
+)
 
 
 def paths_of(att: Attachment, root: Path) -> UqsPaths:
     return paths_for_root(root, att.publisher.runtime or None)
+
+
+def site_auth(att: Attachment) -> Auth:
+    """How a native start of the publisher authenticates, judged against the
+    site's TorQ application (module docstring); AttachmentError when not known."""
+    proc, path = att.publisher.procname, Path(att.native.process_file).absolute()
+    app = path.parent.parent if path.parent.name == "appconfig" else None
+    try:
+        how = auth_for(app, f"{proc} cannot be registered", "Nothing was written.")
+    except UqsError as exc:
+        raise AttachmentError(str(exc)) from exc
+    if how is not None:
+        return how
+    if app is None:
+        why = (
+            f"{path} is not in a TorQ application's appconfig/ folder, so which application "
+            "${TORQAPPHOME} names at a native start is not known here"
+        )
+        otherwise = "Otherwise give the process file in its TorQ application's appconfig/ folder."
+    else:
+        why = f"the stack's TorQ application ({app}) has no {STARTER_ACCESS_LIST}"
+        otherwise = f"Otherwise the site's TorQ application needs its {STARTER_ACCESS_LIST}."
+    raise AttachmentError(UNKNOWN_AUTH.format(proc=proc, why=why, otherwise=otherwise))
 
 
 def uqf_row(paths: UqsPaths, procname: str) -> dict[str, str] | None:

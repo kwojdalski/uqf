@@ -12,6 +12,7 @@ from uqs import cli
 from uqs.attach import config, facts, native_row, plan, publisher, service
 from uqs.cli import shared
 from uqs.paths import repo_root
+from uqs.stack import attached_publisher
 
 SECRET = "s3cr3t-Pw!x-native"
 PROC = "pb_ledger1"
@@ -56,6 +57,7 @@ class _ErrorLog:
 class World(FakeStack):
     state_dir: Path
     bundle: Path
+    app: Path
     registry: Path
     schema: Path
 
@@ -68,9 +70,15 @@ def make_world(monkeypatch, tmp_path) -> World:
     fake.schema = schema
     fake.state_dir = tmp_path / "attachments"
     fake.bundle = make_bundle(tmp_path / "piggybank")
-    fake.registry = tmp_path / "site" / "process.prd.csv"
-    fake.registry.parent.mkdir()
+    # the site's TorQ application, as TorQ lays one out: the process file in its
+    # appconfig/ (KDBAPPCONFIG), beside the starter pack's access list (#1849)
+    fake.app = tmp_path / "site"
+    fake.registry = fake.app / "appconfig" / "process.prd.csv"
+    access = fake.app / attached_publisher.STARTER_ACCESS_LIST
+    access.parent.mkdir(parents=True)
+    access.write_text("admin:admin\n")
     fake.registry.write_bytes(SITE.encode())
+    monkeypatch.delenv(attached_publisher.KDBSECURE_ENV, raising=False)
     monkeypatch.setenv(config.ATTACH_DIR_ENV, str(fake.state_dir))
     monkeypatch.setattr(service, "ipc_for", lambda att: fake)
     monkeypatch.setattr(
