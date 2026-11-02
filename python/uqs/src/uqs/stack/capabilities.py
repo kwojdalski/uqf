@@ -28,6 +28,7 @@ from uqs.model import transports
 from uqs.model.declarations import Declaration, read_declarations
 from uqs.paths import SOURCE_DIR, UqsError, UqsPaths
 from uqs.stack.env import with_interpreter
+from uqs.stack.run_modes import READ_ONLY_MODES
 from uqs.stack.source_settings import declared_transport
 
 #: Each capability, as an operator reads it.
@@ -86,7 +87,7 @@ def requirements(repo_root: Path, decl: Declaration, mode: str | None) -> list[t
 
     validate opens nothing and plan reads only the ledgers; dry-run and a
     run open the source."""
-    if mode in ("validate", "plan"):
+    if mode in READ_ONLY_MODES:
         return []
     if _transport(repo_root, decl.source) == "odbc":
         return [("native", f"its source {decl.source} is read through an ODBC driver")]
