@@ -15,9 +15,11 @@ EVERY table a desk may browse is listed: the browser reads through getdata
 (#889), and getdata serves no table it is not told about. What a desk may
 browse is the plant tables plus the datasets bounded workers write (#1363),
 and the file is DERIVED from both - `table_properties_rows`, written by
-`scripts/generate/derive.py table-properties` and held by its --check. A plant table gets
-`time` as its time column and `sym` as its instrument column where it has one;
-a worker dataset gets what q's transform output says (generated/q_facts.py).
+`scripts/generate/derive.py table-properties` and held by its --check. Which columns a
+table is read by is q's declaration, not Python's: a plant table's by
+`.qetl.plant.read_time_column` and `.qetl.plant.read_instrument_column`
+(src/etl/plant_tables.q), a worker dataset's by `.qetl.job.bounded.read_time_column`
+and `.qetl.job.bounded.read_instrument_column` (generated/q_facts.py).
 Listing a table is not granting it: the gateway's query policies decide who
 may read what (scripts/torqcode/gateway/querypolicy.q).
 
@@ -97,36 +99,20 @@ TABLE_PROPERTIES_HEADER = (
     "rolltimeoffset,rolltimezone,datatimezone,partitionfield"
 )
 
-#: The plant tables whose instrument column is not `sym`, and what it is. Not
-#: derivable: a column named `book` is a fact about order_quality alone.
-#: `table_properties_rows` refuses an entry whose column the plant definition
-#: lacks, so renaming it in plant_tables.q fails there and not at query time.
-INSTRUMENT_COLUMN_OVERRIDES = {"order_quality": "book"}
-
-
-def _plant_columns(table: str) -> set[str]:
-    """The column names of a plant table's one-line `([]c:t;...)` definition."""
-    return set(schemas.columns(table))
-
 
 def _row(table: str, time_column: str, instrument: str) -> str:
     return f",{table},{time_column},{instrument},{instrument},,,,"
 
 
 def derived_row(table: str) -> str:
-    """A table-properties row for a plant table: `time`, and its instrument
-    column - `sym` where it has one (INSTRUMENT_COLUMN_OVERRIDES otherwise)."""
-    columns = _plant_columns(table)
-    if "time" not in columns:
-        raise ValueError(f"plant_tables.q gives {table} no `time` column to read it by")
-    if column := INSTRUMENT_COLUMN_OVERRIDES.get(table):
-        if column not in columns:
-            raise ValueError(
-                f"INSTRUMENT_COLUMN_OVERRIDES names {column!r} for {table}, "
-                "which plant_tables.q does not give it"
-            )
-        return _row(table, "time", column)
-    return _row(table, "time", "sym" if "sym" in columns else "")
+    """A table-properties row for a plant table: the time and instrument
+    columns q declares for it (`.qetl.plant.read_time_column`,
+    `.qetl.plant.read_instrument_column`; q_facts.PLANT_TABLE_*)."""
+    return _row(
+        table,
+        q_facts.PLANT_TABLE_TIME_COLUMNS[table],
+        q_facts.PLANT_TABLE_INSTRUMENT_COLUMNS[table],
+    )
 
 
 def worker_datasets() -> set[str]:

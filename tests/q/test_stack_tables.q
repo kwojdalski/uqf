@@ -218,3 +218,23 @@
         "every not_exchanged entry names a job and table that still exist - remove the entry rather than leaving a dead excuse"]};
 
 .qt.qetl.plant.tables.bad:()
+
+/ ------------------------------------------------- how a table is read (#1869)
+
+.qt.qetl.plant.tables.test_every_table_is_read_by_the_time_the_plant_stamps:{[t]
+    .qunit.assertEquals[distinct .qetl.plant.read_time_column each .qetl.plant.own[];enlist `time;"one time column, `time, for every plant table"]};
+
+.qt.qetl.plant.tables.test_a_table_is_read_by_sym_unless_q_declares_another:{[t]
+    .qunit.assertEquals[.qetl.plant.read_instrument_column `orders;`sym;"sym where the table has one"];
+    .qunit.assertEquals[.qetl.plant.read_instrument_column `order_quality;`book;"order_quality's declared exception: it has no sym"];
+    .qunit.assertEquals[.qetl.plant.read_instrument_column `config_change;`;"none where it has neither"]};
+
+.qt.qetl.plant.tables.test_every_exception_names_a_column_its_table_has:{[t]
+    .qunit.assertTrue[all {[tbl] .qetl.plant.instrument_exceptions[tbl] in cols .qetl.plant.schema tbl} each key .qetl.plant.instrument_exceptions;"each declared exception is in its schema"]};
+
+.qt.qetl.plant.tables.test_an_exception_to_a_missing_column_is_refused:{[t]
+    keep:.qetl.plant.instrument_exceptions;
+    .qetl.plant.instrument_exceptions:(enlist `orders)!enlist `no_such_col;
+    r:@[{.qetl.plant.read_instrument_column `orders};::;{(`threw;x)}];
+    .qetl.plant.instrument_exceptions:keep;
+    .qunit.assertEquals[r;(`threw;"plant: instrument_exceptions names no_such_col for orders, which has no such column");"a rename fails here, not at query time"]};

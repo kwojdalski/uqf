@@ -176,6 +176,17 @@
     .qunit.assertTrue[(count .qetl.job.bounded.runtime.modes)>count ro;"at least one mode executes"];
     .qunit.assertEquals[.qetl.job.bounded.runtime.modes except ro;`dry_run`run;"the executing modes are the two that open the source"]};
 
+/ How getdata reads a worker's dataset (#1869): a plant table as the plant says,
+/ whatever the worker's output omits; any other by its output.
+.qt.qetl.job.bounded.runtime.test_a_dataset_that_is_a_plant_table_is_read_as_the_plant_says:{[t]
+    .qunit.assertEquals[.qetl.job.bounded.read_time_column `duckdb_deals;`time;"its output has only deal_time; the HDB writer stamps time, and the plant is read by it"];
+    .qunit.assertEquals[.qetl.job.bounded.read_instrument_column `order_quality;`book;"the plant's declared exception"]};
+
+.qt.qetl.job.bounded.runtime.test_a_dataset_that_is_not_a_plant_table_is_read_by_its_output:{[t]
+    .qunit.assertEquals[`demo_deals in .qetl.plant.names[];0b;"demo_deals has no plant table"];
+    .qunit.assertEquals[.qetl.job.bounded.read_time_column `demo_deals;`time;"stamped from deal_time by the HDB writer"];
+    .qunit.assertEquals[.qetl.job.bounded.read_instrument_column `demo_deals;`sym;"its output carries sym"]};
+
 .qt.qetl.job.bounded.runtime.test_an_unknown_mode_is_refused_by_name:{[t]
     .qetl.cfg.set_override[`mode;"rehearse"];
     .qunit.assertThrows[{.qetl.job.bounded.runtime.mode[]};::;"mode: rehearse is not one of*";"a typo fails rather than running for real"]};

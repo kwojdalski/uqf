@@ -13,16 +13,13 @@
 
 \d .qfacts
 
-/ Where each bounded worker's dataset is read by time and by instrument (#1363).
-/ A dataset is browsable through getdata only if scripts/torqconfig/dataaccess/
-/ tableproperties.csv has a row for it, and Python (scripts/generate/
-/ tableproperties.py) writes that row. The columns come from the transform's
-/ output - the shape the worker publishes - and the time column is `time`
-/ where the output has one, else the column the worker windows on.
+/ Where each bounded worker's dataset is read by time and by instrument (#1363),
+/ and each plant table (#1869). A dataset is browsable through getdata only if
+/ scripts/torqconfig/dataaccess/tableproperties.csv has a row for it, and Python
+/ (derive.py table-properties) writes that row. The columns are q's
+/ declaration - .qetl.plant.read_* for a plant table, .qetl.job.bounded.read_*
+/ for a worker's dataset - read here, not guessed from the output.
 datasets:{[] exec distinct dataset from .qetl.job.bounded.worker_cfg}
-dataset_columns:{[d] cols .qetl.transform.output_schema first exec transform from .qetl.job.bounded.worker_cfg where dataset=d}
-dataset_time:{[d] $[`time in dataset_columns d; `time; first exec window_column from .qetl.job.bounded.worker_cfg where dataset=d]}
-dataset_instrument:{[d] $[`sym in dataset_columns d; `sym; `]}
 
 / Each registered source's transport, as `.qetl.source.define` stored it (#1865): the
 / declared one, or the default - however the source's file spelled it.
@@ -59,8 +56,11 @@ facts:(!) . flip (
     (`STATUS_FILE_PREFIX;     .qetl.status.file_prefix);
     (`STATUS_FILE_SUFFIX;     .qetl.status.file_suffix);
     / The datasets bounded workers write, keyed by name (#1363).
-    (`BOUNDED_DATASET_TIME_COLUMNS;       (!) . (asc datasets[]; string dataset_time each asc datasets[]));
-    (`BOUNDED_DATASET_INSTRUMENT_COLUMNS; (!) . (asc datasets[]; string dataset_instrument each asc datasets[]));
+    (`BOUNDED_DATASET_TIME_COLUMNS;       (!) . (asc datasets[]; string .qetl.job.bounded.read_time_column each asc datasets[]));
+    (`BOUNDED_DATASET_INSTRUMENT_COLUMNS; (!) . (asc datasets[]; string .qetl.job.bounded.read_instrument_column each asc datasets[]));
+    / The plant tables this tree defines, by the columns they are read by (#1869).
+    (`PLANT_TABLE_TIME_COLUMNS;           (!) . (asc .qetl.plant.own[]; string .qetl.plant.read_time_column each asc .qetl.plant.own[]));
+    (`PLANT_TABLE_INSTRUMENT_COLUMNS;     (!) . (asc .qetl.plant.own[]; string .qetl.plant.read_instrument_column each asc .qetl.plant.own[]));
     / How each source is reached - what uqs's capability gate and `config sources stub` read (#1865).
     (`SOURCE_TRANSPORTS;                  (!) . (asc .qetl.source.defined[]; source_transport each asc .qetl.source.defined[]));
     / Names q computes and the browser and `uqs` repeat (#1368).
