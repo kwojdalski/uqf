@@ -1657,6 +1657,12 @@ uqs job runs list --json | jq -r '.runs[] | select(.status == "failed") | .run_i
 uqs status --json | jq -r '.processes[] | select(.status == "down") | .process'
 ```
 
+An attached backfill that cannot be coordinated with the stack's native writers
+adds `findings` beside `error`: one record per blocker with its `code` (such as
+`eod-fence` or `clock-unknown`), the `component` it is about, the observed
+`facts`, and whether its policy would ever let it be accepted (`overridable`)
+(#1827).
+
 Each command's `--help` names its document. The commands #1731 added:
 
   | command                                     | document                                                                                                                                                                                                       |

@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import ipaddress
+import re
 import socket
+import subprocess
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from pathlib import Path
 
 LOCAL_HOSTS = ("localhost", "127.0.0.1", "::1")
 
@@ -114,3 +117,29 @@ class Facts:
     token: str = ""
     #: with `remote-schema-file`, what the tickerplant said about its schema file
     schema: SchemaRead | None = None
+
+
+def filesystem_of(path: Path) -> str:
+    """The type of the filesystem `path` is on, or "unknown" - best effort, from the
+    mount table, longest mount point first."""
+    try:
+        if Path("/proc/mounts").is_file():
+            rows = [
+                (fields[1], fields[2])
+                for fields in (
+                    line.split() for line in Path("/proc/mounts").read_text().splitlines()
+                )
+                if len(fields) >= 3
+            ]
+        else:
+            out = subprocess.run(["mount"], capture_output=True, text=True, timeout=10, check=False)
+            rows = [(m.group(1), m.group(2)) for m in re.finditer(r" on (.+?) \((\w+)", out.stdout)]
+    except OSError, subprocess.SubprocessError:
+        return "unknown"
+    real = str(path.resolve())
+    best = max(
+        (r for r in rows if real == r[0] or real.startswith(r[0].rstrip("/") + "/")),
+        key=lambda r: len(r[0]),
+        default=None,
+    )
+    return best[1] if best else "unknown"
