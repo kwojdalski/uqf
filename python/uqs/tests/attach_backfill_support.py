@@ -153,6 +153,9 @@ def make_world(monkeypatch, tmp_path):
     stack = HdbStack(hdb)
     # the scripted stack's host is 'testhost': it is this machine as far as these tests go
     monkeypatch.setattr(coordination, "HOST", Host(local_names=("testhost",)))
+    # a local filesystem, whatever the machine: the real lookup runs `mount` on a host with no
+    # /proc/mounts, which a test that doubles subprocess.Popen turns into a TypeError (macOS)
+    monkeypatch.setattr(coordination, "filesystem_of", lambda path: "ext4")
     monkeypatch.setattr(service, "ipc_for", lambda att: stack)
     save_attachment("pb-uat", hdb)
     paths = paths_for_root(UQF_ROOT)
