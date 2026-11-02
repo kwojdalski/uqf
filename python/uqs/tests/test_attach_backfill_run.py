@@ -22,6 +22,7 @@ from attach_backfill_support import UQF_ROOT, HdbStack, save_attachment, snapsho
 from uqs.attach import backfill_coordination as coordination
 from uqs.attach import backfill_owner, backfill_run, config, detach, service
 from uqs.attach import backfill_plan as planning
+from uqs.attach.backfill_policy import CoordinationRefused
 from uqs.attach.config import AttachmentError
 from uqs.attach.facts import Host
 from uqs.attach.schema import parse_definition
@@ -340,7 +341,7 @@ def test_a_waived_fence_writes_past_the_timing_boundary_and_nothing_else_is_waiv
         "1999.12.31", "23:30:00.000000000", "2000.01.01D00:00:00.000000000"
     )
     before = snapshot(world.hdb)
-    with pytest.raises(UqsError, match="is not completed history") as info:
+    with pytest.raises(CoordinationRefused, match="is not completed history") as info:
         backfill_run.launch(
             world.paths, "pb-uat", WORKER, "v1", FROM, TO,
             ipc=world.stack, mode="run", on_conflict="replace", waived=waived,
