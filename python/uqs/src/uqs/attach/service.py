@@ -54,7 +54,7 @@ def create(
     user: str = config.DEFAULT_USER,
     password_env: str = "",
     runtime_only: bool = False,
-    remote_schema_file: bool = False,
+    schema_writer: str | None = None,
     storage: Storage | None = None,
     runtime: str = "",
     ssh: str = "",
@@ -88,22 +88,28 @@ def create(
         publisher=Publisher(spec.job, spec.procname, runtime, socket.gethostname().lower()),
         tables=spec.tables,
         storage=storage or Storage(),
-        persist=persist_mode(runtime_only, remote_schema_file),
+        persist=persist_mode(runtime_only, schema_writer),
         origin=spec.origin,
     )
 
 
-def persist_mode(runtime_only: bool, remote_schema_file: bool) -> str:
-    """The persistence the options choose: each is an explicit opt-in, recorded in
-    the attachment, and they exclude each other."""
-    if runtime_only and remote_schema_file:
+def persist_mode(runtime_only: bool, schema_writer: str | None = None) -> str:
+    """The persistence the options choose: `--runtime-only` writes no block, and
+    `--schema-writer` says who writes it - `cli` (uqs, here; the default) or
+    `tickerplant` (#1651, #1845). Each is recorded in the attachment, and the two
+    exclude each other."""
+    if schema_writer is not None and schema_writer not in config.SCHEMA_WRITERS:
         raise AttachmentError(
-            "--runtime-only and --remote-schema-file exclude each other: one keeps no "
-            "block, the other has the tickerplant write one"
+            f"--schema-writer {schema_writer!r}: one of {', '.join(config.SCHEMA_WRITERS)}"
         )
-    if remote_schema_file:
-        return "remote-schema-file"
-    return "runtime-only" if runtime_only else "schema-file"
+    if runtime_only and schema_writer is not None:
+        raise AttachmentError(
+            f"--runtime-only and --schema-writer {schema_writer} exclude each other: one keeps "
+            "no schema block, the other says who writes it"
+        )
+    if runtime_only:
+        return "runtime-only"
+    return config.SCHEMA_WRITERS[schema_writer or "cli"]
 
 
 def observed_storage(att: Attachment, obs: Observation) -> Storage:

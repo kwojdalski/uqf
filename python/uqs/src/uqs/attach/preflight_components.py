@@ -312,7 +312,7 @@ def persistence(att: Attachment, obs: Observation, facts: Facts) -> list[Finding
     if not facts.host.is_local(att.stack.host):
         return _unavailable(
             f"the schema file is on {att.stack.host}; this machine cannot edit it",
-            f"give --remote-schema-file to have {tp.procname if tp else 'the tickerplant'} "
+            f"give --schema-writer tickerplant to have {tp.procname if tp else 'the tickerplant'} "
             "append the block to its own file, or --runtime-only to accept losing the "
             "registration on a restart, or run uqs on the stack's machine",
         )

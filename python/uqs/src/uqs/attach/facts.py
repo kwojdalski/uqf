@@ -117,6 +117,8 @@ class Facts:
     token: str = ""
     #: with `remote-schema-file`, what the tickerplant said about its schema file
     schema: SchemaRead | None = None
+    #: where the attachment's folder is, when not the default (tests, native.py)
+    state_dir: Path | None = None
 
 
 def filesystem_of(path: Path) -> str:

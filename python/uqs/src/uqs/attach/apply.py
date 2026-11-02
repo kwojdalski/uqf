@@ -293,7 +293,7 @@ def apply(
     with config.locked(att.name, state_dir):
         m = _fresh(att, state_dir)
         facts = facts or Facts()
-        facts.token = m.token
+        facts.token, facts.state_dir = m.token, state_dir
         planned = plan.build(att, ipc, root, facts)
         if not planned.ok:
             raise ApplyRefused(blockers(planned.findings))

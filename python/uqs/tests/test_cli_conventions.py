@@ -367,6 +367,7 @@ OPTIONS = {
     "--reverse": Meaning("sort descending", r"descending"),
     "--schema": Meaning("tables' columns and their types", r"schema"),
     "--sort": Meaning("sort by a column", r"sort by"),
+    "--start-with-all": Meaning("whether a `start all` starts the process", r"start all"),
     "--ssh": Meaning("the ssh destination of a target", r"ssh destination"),
     "--table": Meaning("one table to act on", r"this table"),
     "--tables": Meaning("a set of tables", r"tables"),

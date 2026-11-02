@@ -61,7 +61,10 @@ def test_every_code_the_preflight_raises_has_a_policy():
     """A code added to the preflight without a decision about overriding it would
     be silently non-overridable, or worse, unreviewed: this keeps the table whole."""
     found: set[str] = set()
-    scanned = ("preflight.py", "preflight_components.py", "topology.py", "sorting.py", "reach.py")
+    scanned = (
+        "preflight.py", "preflight_components.py", "topology.py", "sorting.py", "reach.py",
+        "native.py",
+    )  # fmt: skip
     for name in scanned:
         tree = ast.parse((ROOT / "python/uqs/src/uqs/attach" / name).read_text())
         found |= {
@@ -74,7 +77,10 @@ def test_every_code_the_preflight_raises_has_a_policy():
             and len(n.value) > 3
         }
     unknown = (
-        found - set(overrides.POLICY) - overrides.NOT_BLOCKERS - {"GENERATED", "SUPPORTED_TORQ"}
+        found
+        - set(overrides.POLICY)
+        - overrides.NOT_BLOCKERS
+        - {"GENERATED", "SUPPORTED_TORQ", "KDBBASEPORT"}
     )
     assert not unknown, f"finding codes with no override policy: {sorted(unknown)}"
     assert not (set(overrides.POLICY) & overrides.NOT_BLOCKERS)

@@ -54,7 +54,7 @@ def bundle(tmp_path: Path) -> Path:
 
 
 def _att(bundle: Path, **kw) -> Attachment:
-    kw.setdefault("remote_schema_file", True)
+    kw.setdefault("schema_writer", "tickerplant")
     att = service.create(
         "pb-uat", "pb_general_ledger", bundle, 6000, ROOT, host="uat-box.example", **kw
     )
@@ -90,7 +90,7 @@ def _codes(p: plan.Plan) -> dict[str, str]:
 
 def test_the_option_is_recorded_in_the_attachment_and_excludes_runtime_only(bundle, tmp_path):
     att = _att(bundle)
-    assert att.persist == "remote-schema-file"
+    assert att.persist == "remote-schema-file" and att.schema_writer == "tickerplant"
     config.save(att, tmp_path)
     assert config.load(att.name, tmp_path).persist == "remote-schema-file"
     with pytest.raises(AttachmentError, match="exclude each other"):
@@ -98,9 +98,9 @@ def test_the_option_is_recorded_in_the_attachment_and_excludes_runtime_only(bund
 
 
 def test_a_saved_attachment_is_not_switched_by_a_later_flag(bundle, tmp_path):
-    config.save(_att(bundle, remote_schema_file=False), tmp_path)
-    given = workflow.Given(remote_schema_file=True)
-    with pytest.raises(AttachmentError, match="--remote-schema-file"):
+    config.save(_att(bundle, schema_writer="cli"), tmp_path)
+    given = workflow.Given(schema_writer="tickerplant")
+    with pytest.raises(AttachmentError, match="--schema-writer: 'cli' -> 'tickerplant'"):
         workflow.resolve("pb-uat", given, ROOT, state_dir=tmp_path)
 
 
@@ -138,12 +138,10 @@ def test_a_file_the_tickerplant_cannot_append_to_is_refused(bundle, setup, said)
 
 
 def test_without_the_option_a_remote_stack_is_refused_with_both_ways_out(bundle):
-    shown = plan.build(
-        _att(bundle, remote_schema_file=False), _fake(), ROOT, facts.Facts(host=HERE)
-    )
+    shown = plan.build(_att(bundle, schema_writer="cli"), _fake(), ROOT, facts.Facts(host=HERE))
     (refused,) = [f for f in shown.findings if f.code == "PERSIST_UNAVAILABLE"]
     assert "this machine cannot edit it" in refused.message
-    assert "--remote-schema-file" in refused.action and "--runtime-only" in refused.action
+    assert "--schema-writer tickerplant" in refused.action and "--runtime-only" in refused.action
     assert "run uqs on the stack's machine" in refused.action
 
 

@@ -116,4 +116,11 @@ RENAMED_AFTER: dict[str, frozenset[str]] = {
             "mcp uqs_summary",
         }
     ),
+    "stable/2026-10-29": frozenset(
+        {
+            # #1845: who writes the schema block is --schema-writer; the old flag refuses,
+            # naming it
+            "uqs job attachment add --remote-schema-file",
+        }
+    ),
 }

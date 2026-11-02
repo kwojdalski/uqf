@@ -81,6 +81,11 @@ class Manifest:
     #: accepted risks apply was confirmed against: who confirmed, when, and the overrides
     #: (with the facts they were accepted against) in force at that moment
     risk_acceptance: dict = field(default_factory=dict)
+    #: what this attachment wrote into files a TorQ start reads (native.py, #1845):
+    #: {"process_row" | "launcher": {path, host, procname, status, text | sha,
+    #: previous, at}}. A record, not a marker in the file: `text` is the exact row
+    #: it wrote, so an edit by anyone else is seen. Absent from older manifests.
+    registrations: dict[str, dict] = field(default_factory=dict)
     path: Path = field(default_factory=Path, repr=False, compare=False)
 
     # ----------------------------------------------------------- creation
