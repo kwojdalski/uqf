@@ -25,6 +25,7 @@ from typer.testing import CliRunner
 from uqs import cli
 from uqs.attach import backfill_coordination as coordination
 from uqs.attach import backfill_plan as planning
+from uqs.attach import backfill_policy
 from uqs.attach.facts import Host
 from uqs.attach.remote import IpcError
 from uqs.paths import UqsError
@@ -36,8 +37,8 @@ def world(monkeypatch, tmp_path):
     return make_world(monkeypatch, tmp_path)
 
 
-def refusal(world, facts=None) -> coordination.CoordinationRefused:
-    with pytest.raises(coordination.CoordinationRefused) as info:
+def refusal(world, facts=None) -> backfill_policy.CoordinationRefused:
+    with pytest.raises(backfill_policy.CoordinationRefused) as info:
         plan_with(world, facts or facts_of())
     return info.value
 
@@ -206,7 +207,7 @@ def test_end_of_day_timing_is_one_finding_from_either_side(world, window):
     for key, value in facts.items():
         assert found.facts[key] == value, key
     assert message in found.message
-    assert found.action == coordination.POLICY["eod-fence"].action
+    assert found.action == backfill_policy.POLICY["eod-fence"].action
     # the facts beside it are still established: what a later override would admit with
     assert exc.coordination is not None and exc.coordination.wdb == "wdb1"
 
@@ -230,9 +231,9 @@ def _emitted_codes() -> set[str]:
 def test_every_finding_coordination_can_emit_has_a_policy():
     """A finding added without a decision about accepting it would be unreviewed."""
     emitted = _emitted_codes()
-    assert emitted == set(coordination.POLICY), (
-        f"no policy: {sorted(emitted - set(coordination.POLICY))}; "
-        f"never emitted: {sorted(set(coordination.POLICY) - emitted)}"
+    assert emitted == set(backfill_policy.POLICY), (
+        f"no policy: {sorted(emitted - set(backfill_policy.POLICY))}; "
+        f"never emitted: {sorted(set(backfill_policy.POLICY) - emitted)}"
     )
     # and the cases above provoke every one of them
     assert emitted == set(CASES) | {"eod-fence"}
@@ -246,18 +247,18 @@ def test_every_finding_coordination_can_emit_has_a_policy():
 
 
 def test_only_end_of_day_timing_could_be_accepted():
-    allowed = {code for code, policy in coordination.POLICY.items() if policy.overridable}
+    allowed = {code for code, policy in backfill_policy.POLICY.items() if policy.overridable}
     assert allowed == {"eod-fence"}
     for code in ("clock-unknown", "active-date-unknown", "writer-unreachable"):
-        assert not coordination.POLICY[code].overridable, "missing evidence is never accepted"
+        assert not backfill_policy.POLICY[code].overridable, "missing evidence is never accepted"
     for code in ("remote-host", "network-filesystem", "segmented-hdb"):
-        assert not coordination.POLICY[code].overridable, "unsupported is never accepted"
-    assert all(p.risk for p in coordination.POLICY.values())
-    assert coordination.POLICY["eod-fence"].action
+        assert not backfill_policy.POLICY[code].overridable, "unsupported is never accepted"
+    assert all(p.risk for p in backfill_policy.POLICY.values())
+    assert backfill_policy.POLICY["eod-fence"].action
 
 
 def test_ids_are_kebab_case():
-    for code in coordination.POLICY:
+    for code in backfill_policy.POLICY:
         assert code == code.lower() and " " not in code and "_" not in code, code
 
 
@@ -342,7 +343,7 @@ def test_the_assessment_helper_is_the_refusal_without_raising(world, monkeypatch
     world.stack.state_over["wdb1"] = {"reloadcomplete": False}
     exc = refusal(world)
     found = seen["found"]
-    assert isinstance(found, coordination.Assessment)
+    assert isinstance(found, backfill_policy.Assessment)
     assert found.blockers == exc.findings and found.coordination == exc.coordination
     assert found.coordination is not None and found.warnings == []
 

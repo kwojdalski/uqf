@@ -23,8 +23,7 @@ from test_attach_backfill_findings import CASES, EOD, _expect
 from typer.testing import CliRunner
 
 from uqs import cli
-from uqs.attach import backfill_coordination as coordination
-from uqs.attach import backfill_owner, backfill_run
+from uqs.attach import backfill_owner, backfill_policy, backfill_run
 from uqs.attach import backfill_plan as planning
 from uqs.attach.backfill import Destination
 from uqs.cli import safety, skip_options
@@ -61,7 +60,7 @@ def _waived_plan(world, facts=None):
 def test_the_guardrail_is_declared_once_from_the_coordination_policy():
     by_id = {g.id: g for g in safety.registry()}
     g = by_id["eod-fence"]
-    policy = coordination.POLICY["eod-fence"]
+    policy = backfill_policy.POLICY["eod-fence"]
     assert g.commands == ("job backfill",)
     assert (g.risk, g.action, g.overridable) == (policy.risk, policy.action, True)
     assert g.skip_flag and not g.component_scoped and g.name == "eod-fence"
@@ -73,7 +72,7 @@ def test_backfill_help_shows_the_generated_skip_and_receive_does_not():
     run = CliRunner().invoke(cli.app, ["job", "backfill", "--help"], env={"COLUMNS": "300"})
     flat = " ".join(run.output.split())
     assert "--skip-eod-fence" in flat and "The same as --override eod-fence" in flat
-    assert coordination.POLICY["eod-fence"].risk[:60] in flat
+    assert backfill_policy.POLICY["eod-fence"].risk[:60] in flat
     receive = CliRunner().invoke(cli.app, ["job", "receive", "--help"], env={"COLUMNS": "300"})
     assert "--skip-eod-fence" not in receive.output, "the receiver path takes no waiver"
 
@@ -85,7 +84,7 @@ def test_backfill_help_shows_the_generated_skip_and_receive_does_not():
 def test_the_waiver_admits_a_plan_past_the_fence_from_either_side(world, window):
     now, _facts, message = EOD[window]
     _in_fence(world, now=now)
-    with pytest.raises(coordination.CoordinationRefused, match="end of day"):
+    with pytest.raises(backfill_policy.CoordinationRefused, match="end of day"):
         plan_with(world, facts_of())
     plan = _waived_plan(world)
     co = plan["coordination"]
@@ -121,7 +120,7 @@ def test_the_waiver_lifts_nothing_else(world, monkeypatch, code):
     provoke, dates, component, _facts, message = CASES[code]
     provoke(world, monkeypatch)
     _in_fence(world, "rdb1")
-    with pytest.raises(coordination.CoordinationRefused) as info:
+    with pytest.raises(backfill_policy.CoordinationRefused) as info:
         _waived_plan(world, facts_of(dates=dates) if dates else None)
     exc = info.value
     assert {f.code for f in exc.findings} == {code}
@@ -147,7 +146,7 @@ def test_the_waiver_lifts_nothing_else(world, monkeypatch, code):
 )
 def test_active_date_reload_and_clock_still_refuse_with_the_fence_waived(world, over, message):
     world.stack.state_over["wdb1"] = {"now": IN_FENCE, **over}
-    with pytest.raises(coordination.CoordinationRefused, match="cannot be coordinated") as info:
+    with pytest.raises(backfill_policy.CoordinationRefused, match="cannot be coordinated") as info:
         _waived_plan(world)
     assert message in str(info.value)
     assert "eod-fence" not in {f.code for f in info.value.findings}
@@ -172,9 +171,9 @@ def test_a_waiver_nobody_needed_is_recorded_as_requested_not_needed(world):
 def test_a_finding_that_is_never_waived_is_refused_as_a_waiver(world):
     for code, why in (("active-date", "is never waived"), ("no-such", "nothing to waive")):
         with pytest.raises(UqsError, match=why):
-            coordination.check_waivers({code: "because"})
+            backfill_policy.check_waivers({code: "because"})
     with pytest.raises(UqsError, match="needs a reason"):
-        coordination.check_waivers({"eod-fence": " "})
+        backfill_policy.check_waivers({"eod-fence": " "})
 
 
 # ------------------------------------------------------------------- what it says
@@ -262,7 +261,7 @@ def test_the_fresh_admission_at_launch_applies_the_waiver(world, launcher, mode)
     before = _waived_plan(world)
     assert before["overrides"][0]["needed"] is False
     _in_fence(world)
-    with pytest.raises(coordination.CoordinationRefused, match="30 minutes away"):
+    with pytest.raises(backfill_policy.CoordinationRefused, match="30 minutes away"):
         launch()
     assert started == [], "refused: nothing started"
     _, plan = launch(mode, waived=WAIVED)
@@ -277,7 +276,7 @@ def test_the_fresh_admission_at_launch_applies_the_waiver(world, launcher, mode)
 def test_the_waiver_at_launch_still_refuses_a_reload_in_progress(world, launcher):
     launch, started = launcher
     world.stack.state_over["wdb1"] = {"now": IN_FENCE, "reloadcomplete": False}
-    with pytest.raises(coordination.CoordinationRefused, match="end-of-day reload in progress"):
+    with pytest.raises(backfill_policy.CoordinationRefused, match="end-of-day reload in progress"):
         launch(waived=WAIVED)
     assert started == []
 

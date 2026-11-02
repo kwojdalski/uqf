@@ -51,10 +51,8 @@ from typing import Any
 
 from uqs import timerange
 from uqs.attach.backfill import Destination
-from uqs.attach.backfill_policy import (  # noqa: F401 - re-exported: this is where callers look
-    EOD_BYPASSED,
+from uqs.attach.backfill_policy import (
     EOD_FENCE,
-    GUARDRAILS,
     POLICY,
     Assessment,
     Coordination,
