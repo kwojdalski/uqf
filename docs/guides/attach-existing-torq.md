@@ -864,7 +864,12 @@ and refuse (listing every blocker together) when they cannot establish it:
   never touched, and an unreported date is a refusal.
 - **End-of-day fence.** Within an hour before the next roll, within an hour
   after the last, or while a reload is open (all on the wdb's clock), a run is
-  refused; a run that is under way stops writing when the fence begins.
+  refused; a run that is under way stops writing when the fence begins. Only
+  the timing can be waived: `--skip-eod-fence --reason TEXT` (plan, dry run
+  and run with `--attach`; not with `--writer`) admits the run within the
+  window and gives it no write deadline. The plan then says "EOD fence
+  bypassed; no EOD write deadline" and keeps the lifted finding as `accepted`.
+  A reload in progress, the active date and an unknown clock still refuse.
 - **Nothing working in place.** A `compression` process is a blocker;
   `housekeeping` is a warning. A `sort.csv` that would order or attribute the
   table differently from the finished partitions is a blocker.

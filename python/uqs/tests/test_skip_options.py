@@ -1,8 +1,9 @@
 """`--skip-<id>` options generated from the guardrail registry (#1826).
 
 Every test declares its guardrails by replacing `safety.registry`, the one
-place both `--override` and the generated options read. No shipped guardrail
-sets skip_flag yet (#1824: no flag before its runtime), so the real tree is
+place both `--override` and the generated options read. The one shipped
+guardrail with skip_flag is `job backfill`'s eod-fence (#1828), tested with its
+runtime in test_attach_backfill_eod_override.py; elsewhere the real tree is
 shown taking one only under such a declaration.
 """
 
@@ -111,9 +112,11 @@ def test_a_declaration_gives_the_command_an_option_its_signature_never_names(dec
 def test_without_the_declaration_there_is_no_option():
     """The same command, under the shipped registry: nothing is generated."""
     assert "--skip-" not in runner.invoke(_app(), ["job", "run", "--help"]).output
-    assert not any(g.skip_flag for g in safety.registry()), (
-        "#1824: no skip flag before its runtime - this PR exposes none"
-    )
+    # #1824: no skip flag before its runtime. The one shipped is `job backfill`'s
+    # --skip-eod-fence, whose runtime #1828 implements (test_attach_backfill_eod_override.py).
+    assert [(g.id, g.commands) for g in safety.registry() if g.skip_flag] == [
+        ("eod-fence", ("job backfill",))
+    ]
 
 
 def _generated_help() -> dict[str, str]:

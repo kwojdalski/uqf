@@ -6,7 +6,9 @@ end-of-day fences), because the plan an operator read may be minutes old and a s
 moves. What the fresh admission says becomes the run's two bounds - the last date it
 may write and the instant its writes must stop - and they, the destination and its
 state directory are handed to the runner as flags. Nothing is read from the runtime's
-own `KDBHDB`.
+own `KDBHDB`. A waived end-of-day fence (`--skip-eod-fence`, #1828) is applied by that
+fresh admission, not carried over from the plan, and its deadline becomes q's infinite
+timestamp (`NO_DEADLINE`): the completed-history bound is kept.
 
 The runner (scripts/dev/attached_backfill.q) is the bounded-worker lifecycle and the HDB
 writer, not a second engine. This module only starts it, owns the attachment while it
@@ -18,6 +20,7 @@ from __future__ import annotations
 import os
 import subprocess
 import time
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from pathlib import Path
@@ -40,6 +43,9 @@ REACH_PASSWORD_ENV = "UQF_ATTACH_REACH_PASSWORD"
 EXIT_NOT_QUERYABLE = 3
 RUNNER = Path("scripts") / "dev" / "attached_backfill.q"
 LOGS = "logs"
+#: The runner's -deadline when the end-of-day fence is waived: q's infinite timestamp, which
+#: no `.z.p` passes, so io_hdb_scoped's deadline check never fires (#1828).
+NO_DEADLINE = "0Wp"
 
 
 @dataclass
@@ -67,12 +73,18 @@ def q_date(day: date) -> str:
     return day.strftime("%Y.%m.%d")
 
 
-def bounds_of(plan: dict[str, Any]) -> tuple[date, datetime]:
-    """(last date this run may write, instant its writes stop) from a fresh admission."""
+def bounds_of(plan: dict[str, Any]) -> tuple[date, datetime | None]:
+    """(last date this run may write, instant its writes stop) from a fresh admission; the
+    instant is None when the end-of-day fence was waived, and only then."""
     co = plan["coordination"]
-    return date.fromisoformat(co["last_writable_date"]), datetime.fromisoformat(
-        co["writes_stop_at"]
-    )
+    stop = co["writes_stop_at"]
+    if (stop is None) != bool(co.get("eod_fence_bypassed")):
+        raise UqsError(
+            "the admission is inconsistent: a write deadline is missing without the end-of-day "
+            "fence waived, or present with it waived"
+        )
+    last = date.fromisoformat(co["last_writable_date"])
+    return last, None if stop is None else datetime.fromisoformat(stop)
 
 
 def runner_flags(
@@ -114,7 +126,7 @@ def runner_flags(
         "-max_date",
         q_date(last),
         "-deadline",
-        runs.to_q_timestamp(deadline),
+        NO_DEADLINE if deadline is None else runs.to_q_timestamp(deadline),
         "-owner",
         str(owner),
         "-readers",
@@ -140,12 +152,15 @@ def launch(
     verbose: bool = False,
     trace: bool = False,
     attach_root: Path | None = None,
+    waived: Mapping[str, str] | None = None,
 ) -> tuple[Launched, dict[str, Any]]:
     """Admit afresh and start the runner; returns the run and the admission it started under.
 
-    Refused - nothing started, nothing created - when the admission refuses; refused when the
-    attachment already has a run or there is no q. The state directory is created here and only
-    here.
+    `waived` ({finding id: reason}) is applied by that fresh admission: it lifts the
+    `eod-fence` findings found NOW, and nothing else, and a waived fence runs with no write
+    deadline. Refused - nothing started, nothing created - when the admission refuses; refused
+    when the attachment already has a run or there is no q. The state directory is created here
+    and only here.
     """
     if mode not in RUN_MODES:
         raise UqsError(f"--mode {mode} is not an execution mode ({', '.join(RUN_MODES)})")
@@ -166,6 +181,7 @@ def launch(
         fixture=fixture,
         on_conflict=on_conflict,
         attach_root=attach_root,
+        waived=waived,
     )
     with config.locked(attachment, attach_root):
         # Read again under the lock: a detach may have finished since admission (#1526).

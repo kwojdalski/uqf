@@ -1,8 +1,9 @@
 """Attached-backfill coordination blockers as structured findings (#1827).
 
 Each blocker `backfill_coordination` raises is a `Finding` with a stable id, the component it
-is about and the facts observed, and every id has a declared policy. Nothing may be skipped
-yet: these tests also pin that admission refuses and admits exactly as it did.
+is about and the facts observed, and every id has a declared policy. Without a waiver these
+tests also pin that admission refuses and admits exactly as it did; waiving eod-fence (#1828)
+is test_attach_backfill_eod_override.py.
 
 Admission and coordination are Python; only the plan's evaluation runs q, and `plan_with`
 replaces it. So these tests run without a q interpreter.
@@ -282,9 +283,13 @@ def test_a_healthy_stack_is_admitted_with_the_same_coordination(world):
         "eod_guard_minutes",
         "writers",
         "warnings",
+        # #1828: whether the end-of-day fence was waived, and the findings a waiver lifted
+        "eod_fence_bypassed",
+        "accepted",
     }
     assert co["wdb"] == "wdb1" and co["active_date"] == "2026-10-16"
     assert co["writes_stop_at"] == "2026-10-16T23:00:00+00:00"
+    assert co["eod_fence_bypassed"] is False and co["accepted"] == []
 
 
 def test_a_refusal_without_the_evidence_carries_no_coordination(world, monkeypatch):

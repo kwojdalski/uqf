@@ -322,6 +322,71 @@ def test_writes_stop_at_the_end_of_day_fence(world):
     assert backfill_owner.active("pb-uat") == []
 
 
+def _clock(day: str, now: str, roll: str, **over) -> dict:
+    return {
+        n: {"now": f"{day}D{now}", "eod_date": day, "next_roll": roll, "partition": day} | over
+        for n in ("rdb1", "wdb1")
+    }
+
+
+def test_a_waived_fence_writes_past_the_timing_boundary_and_nothing_else_is_waived(world):
+    """#1828's acceptance, on the real runner: the writers' clock is 30 minutes before their
+    roll, and the fence it implies began in 2020 - in real time long past. Unwaived, admission
+    refuses; waived, the runner is given no deadline (0Wp) and writes. The active date and a
+    reload in progress still refuse with the fence waived, and nothing is written for them."""
+    waived = {"eod-fence": "Approved maintenance window"}
+    # a writer filling 1999-12-31: 2015 is not completed history, fence or no fence
+    world.stack.state_over = _clock(
+        "1999.12.31", "23:30:00.000000000", "2000.01.01D00:00:00.000000000"
+    )
+    before = snapshot(world.hdb)
+    with pytest.raises(UqsError, match="is not completed history") as info:
+        backfill_run.launch(
+            world.paths, "pb-uat", WORKER, "v1", FROM, TO,
+            ipc=world.stack, mode="run", on_conflict="replace", waived=waived,
+        )  # fmt: skip
+    assert "eod-fence" not in {f.code for f in info.value.findings}
+    world.stack.state_over = _clock(
+        "2020.01.01", "23:30:00.000000000", "2020.01.02D00:00:00.000000000", reloadcomplete=False
+    )
+    with pytest.raises(UqsError, match="end-of-day reload in progress"):
+        backfill_run.launch(
+            world.paths, "pb-uat", WORKER, "v1", FROM, TO,
+            ipc=world.stack, mode="run", on_conflict="replace", waived=waived,
+        )  # fmt: skip
+    assert snapshot(world.hdb) == before, "neither refusal wrote a byte"
+    assert backfill_owner.active("pb-uat") == []
+    world.stack.state_over = _clock(
+        "2020.01.01", "23:30:00.000000000", "2020.01.02D00:00:00.000000000"
+    )
+    with pytest.raises(UqsError, match="30 minutes away"):
+        run(world)  # the fence, unwaived
+    started, plan = backfill_run.launch(
+        world.paths, "pb-uat", WORKER, "v1", FROM, TO,
+        ipc=world.stack, mode="run", on_conflict="replace", waived=waived,
+    )  # fmt: skip
+    assert plan["coordination"]["writes_stop_at"] is None
+    assert plan["overrides"][0]["needed"] is True
+    code, result = backfill_run.follow(started, timeout=120)
+    log = started.log.read_text()
+    assert code == 0 and result["state"] == "completed", log
+    assert "end-of-day fence began" not in log, "no window was refused for the time"
+    assert read_rows(world.hdb, "2015.01.07") > 0
+    assert backfill_owner.active("pb-uat") == []
+
+
+def test_the_runner_refuses_a_deadline_that_is_not_a_timestamp(world):
+    flags = [
+        *RANGE_FLAGS, "-hdb", str(world.hdb), "-destid", "abc123", "-attachment", "pb-uat",
+        "-max_date", "2026.01.01", "-deadline", "soon", "-owner", str(world.tmp / "o.json"),
+        "-readers", "_none_", "-user", "admin",
+    ]  # fmt: skip
+    bad = _runner(world, *flags, status=world.tmp / "st-abc123")
+    assert bad.returncode == 2
+    assert "-deadline soon is not a timestamp (0Wp for none)" in bad.stdout + bad.stderr
+    assert not (world.hdb / "2015.01.07").exists()
+
+
 def test_a_refused_admission_starts_nothing_and_leaves_nothing(world):
     world.stack.state_over["wdb1"] = dict(FUTURE) | {
         "partition": "2090.01.01",

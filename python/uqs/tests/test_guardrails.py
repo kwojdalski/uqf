@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 
 from uqs import guardrails
+from uqs.attach import backfill_policy as backfill
 from uqs.attach import overrides as attach
 from uqs.cli import safety
 from uqs.deploy import overrides as deploy
@@ -25,6 +26,8 @@ def test_the_catalog_lists_what_it_did_before_the_registry_in_the_same_order():
         for code, policy in sorted(attach.POLICY.items())
         if policy.overridable
     ]
+    # #1828: the attached backfill's end-of-day fence, after the attachment codes
+    before += [(g.id, ("job backfill",), g.description) for g in backfill.GUARDRAILS]
     assert [(g.name, g.commands, g.description) for g in safety.catalog()] == before
     assert [g.name for g in safety.catalog()] == [
         "q-version-check",
@@ -37,6 +40,7 @@ def test_the_catalog_lists_what_it_did_before_the_registry_in_the_same_order():
         "PUBLISHER_RUNNING:COMPONENT",
         "SORT_CONFIG:COMPONENT",
         "TORQ_VERSION:COMPONENT",
+        "eod-fence",
     ]
 
 

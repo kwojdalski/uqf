@@ -14,7 +14,7 @@ from typing import Annotated
 import typer
 
 from uqs import timerange
-from uqs.cli import backfill_attached, completion
+from uqs.cli import backfill_attached, completion, safety
 from uqs.cli.pipelines import needs_pipelines
 from uqs.cli.range_options import DateOpt, LastOpt, RangeFromOpt, RangeToOpt
 from uqs.cli.renames import renamed
@@ -159,6 +159,8 @@ def backfill(
             "whether torq.sh started the process",
         ),
     ] = False,
+    override: safety.OverrideOpt = None,
+    reason: safety.ReasonOpt = None,
 ) -> None:
     """Run a bounded worker over [--from, --to), recording coverage under --source-version.
 
@@ -188,7 +190,26 @@ def backfill(
     The exit code is torq.sh's: whether the process STARTED, not how the run
     ended. `--wait` follows the run to its outcome and exits with that - what
     a script or a scheduler wants.
+
+    With `--attach`, `--skip-eod-fence --reason TEXT` (`--override eod-fence`)
+    admits a plan, dry run or run within the native writers' end-of-day fence
+    and gives it no end-of-day write deadline - "EOD fence bypassed; no EOD
+    write deadline". Every other coordination check still refuses: the active
+    date, a reload in progress, an unknown clock, and the rest.
     """
+    try:
+        waived = safety.given("job backfill", override, reason)
+    except UqsError as exc:
+        _die(exc)
+        return
+    if waived and attach is None:
+        _die(
+            UqsError(
+                f"{backfill_attached.waiver_names(waived)} is for --attach: only a backfill into "
+                "an attached native HDB is fenced at its writers' end of day, and this one is not"
+            )
+        )
+        return
     if dry_run:
         if mode not in (None, "dry-run"):
             _die(UqsError(f"--dry-run is --mode dry-run: not with --mode {mode}"))
@@ -233,6 +254,7 @@ def backfill(
             trace=trace,
             writer=writer,
             force=force,
+            waived=waived,
         )
         return
     try:

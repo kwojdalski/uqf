@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 from pathlib import Path
@@ -21,6 +22,7 @@ from uqs import timerange
 from uqs.attach import config
 from uqs.attach.backfill import PLAN_SCRIPT, Destination, canonical, resolve
 from uqs.attach.backfill_coordination import assess
+from uqs.attach.backfill_policy import coordination_line, override_lines, overrides_of
 from uqs.attach.config import Attachment
 from uqs.attach.remote import Endpoint, Ipc, IpcError
 from uqs.attach.topology import Observation, observe, port_of
@@ -209,8 +211,13 @@ def build_plan(
     version: str,
     range_from: datetime,
     range_to: datetime,
+    waived: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
-    """The admission plan, or a refusal when the facts say a run must not start."""
+    """The admission plan, or a refusal when the facts say a run must not start.
+
+    `waived` ({finding id: reason}, from `--skip-eod-fence`/`--override eod-fence`) lifts
+    those coordination findings only (backfill_coordination.assess); the plan's `overrides`
+    says, for each, that it was requested, whether it was needed, and what it lifted."""
     if facts["custom_io"]:
         raise UqsError(
             f"{worker} declares its own IO manager, which would write where it likes: an attached "
@@ -232,7 +239,9 @@ def build_plan(
     ]
     dates = [date.fromisoformat(d.replace(".", "-")) for d in facts["dates"]]
     assert admission.observation is not None
-    coordination = assess(att, dest, admission.observation, admission.writers, ipc, dates)
+    coordination = assess(
+        att, dest, admission.observation, admission.writers, ipc, dates, waived=waived
+    )
     return {
         "mode": "plan",
         "worker": worker,
@@ -256,6 +265,7 @@ def build_plan(
         "native_partitions": partitions_on_disk(dest, dates),
         "writers": admission.writers,
         "coordination": coordination.as_dict(),
+        "overrides": overrides_of(waived, coordination),
         "beside_the_root": {
             "staging": f"{dest.hdb_dir}.staging",
             "write_lock": f"{dest.hdb_dir}.write.lock",
@@ -305,11 +315,8 @@ def render(plan: dict[str, Any]) -> str:
             "a run asks the readers again without rewriting them"
         )
     co = plan["coordination"]
-    lines.append(
-        f"  coordination  active write date {co['active_date']} is never touched (last writable "
-        f"date {co['last_writable_date']}); writes stop at {co['writes_stop_at']}, "
-        f"{co['eod_guard_minutes']} min before end of day; {co['filesystem']} filesystem"
-    )
+    lines.append(coordination_line(co))
+    lines.extend(override_lines(plan))
     lines.extend(f"    warning     {w}" for w in co["warnings"])
     lines.append(
         f"  beside root   {plan['beside_the_root']['staging']} (staging), "
@@ -335,8 +342,10 @@ def plan_attached(
     fixture: bool = False,
     on_conflict: str | None = None,
     attach_root: Path | None = None,
+    waived: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
-    """Resolve, admit and plan: everything `--attach --mode plan` does.
+    """Resolve, admit and plan: everything `--attach --mode plan` does. `waived` is
+    build_plan's: the coordination findings an operator waived, with the reason.
 
     Changes nothing - no directory, no ledger, no checkpoint, no symbol file, no
     stack state - and launches no worker.
@@ -356,4 +365,5 @@ def plan_attached(
         version=version,
         range_from=range_from,
         range_to=range_to,
+        waived=waived,
     )
