@@ -137,13 +137,17 @@ def _sort_config(
 ) -> None:
     """The wdb's sort.csv must describe the order this writer produces.
 
-    Finishing a backfilled partition sorts it by sym then time and puts p# on sym - and
-    drops every other attribute, because the partition is rewritten. A stack that sorts or
-    attributes this table otherwise would get partitions in an order its own end of day
-    never makes, so the difference is a blocker, named, rather than a surprise in a query.
+    Finishing a backfilled partition sorts it by the table's declared rule (`.qetl.plant.sorting`,
+    which attaching wrote to sort.csv) and keeps exactly that rule's attributes, dropping every
+    other, because the partition is rewritten. With no rule it is sym then time with p# on sym,
+    as `.qetl.io.finish_parts` does. A stack that sorts or attributes this table otherwise would
+    get an order its own end of day never makes, so the difference is a blocker, named.
     """
-    columns = {name for name, _ in att.table(dest.dataset).columns}
-    order = [c for c in ("sym", "time") if c in columns]
+    spec = att.table(dest.dataset)
+    columns = {name for name, _ in spec.columns}
+    order = [c for c, _ in spec.sort] or [c for c in ("sym", "time") if c in columns]
+    default = {"sym": "p"} if "sym" in columns else {}
+    want_attrs = {c: a for c, a in spec.sort if a} if spec.sort else default
     for proc in writers:
         rows = (proc.probe or {}).get("sortrows")
         if proc.proctype != "wdb" or rows is None:
@@ -152,7 +156,6 @@ def _sort_config(
         use = own or [r for r in rows if r.get("tabname") == "default"]
         sorted_by = [r["col"] for r in use if r.get("sort") and r.get("col")]
         attrs = {r["col"]: r["att"] for r in use if r.get("att") and r.get("col")}
-        want_attrs = {"sym": "p"} if "sym" in columns else {}
         if sorted_by != order or attrs != want_attrs:
             blockers.append(
                 _blocker(
