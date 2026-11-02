@@ -323,3 +323,16 @@
     .qunit.assertEquals[first f`lots;(in;1 3h);"the short vector, not widened"];
     r:?[.qt.qtorq.querypolicy.lots;.eqp.extractfilters[enlist[`filters]!enlist f;.eqp.queryparams]`filters;0b;()];
     .qunit.assertEquals[r`dataset;enlist `a;"in on shorts, then ne with a long atom"]};
+
+.qt.qtorq.querypolicy.test_under_site_auth_pmusers_leaves_the_sites_pm_alone:{[t]
+    / #1847: on a site whose .pm is its own (UQF_SITE_AUTH), pmusers.q neither
+    / reads a starter-pack access list - there is none - nor reassigns roles.
+    / Without the guard this load reads KDBAPPCONFIG's accesslist and fails.
+    had:`enabled in key `.pm;
+    was:@[value;`.pm.enabled;0b];
+    .pm.enabled:1b;
+    setenv[`UQF_SITE_AUTH;"1"];
+    loaded:@[{system x;`loaded};"l scripts/torqcode/handlers/pmusers.q";{[e] `$e}];
+    setenv[`UQF_SITE_AUTH;""];
+    $[had;.pm.enabled:was;delete enabled from `.pm];
+    .qunit.assertEquals[loaded;`loaded;"the site's .pm users are left as they are"]};

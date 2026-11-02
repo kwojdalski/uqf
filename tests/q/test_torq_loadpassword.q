@@ -33,3 +33,24 @@
     / The loader sets USERPASS on the first file it finds; no file was read.
     .qunit.assertEquals[@[value;`.servers.USERPASS;{[e] `unset}];`unset;
         "the guard keeps a test process from running the loader"]};
+
+.qt.qtorq.loadpassword.test_under_site_auth_the_sites_own_loader_stands:{[t]
+    / #1847: an attached publisher whose site keeps its credentials under
+    / KDBSECURE. uqs sets UQF_SITE_AUTH; this file must neither replace the
+    / site's loader nor run one over TorQ's demo passwords files.
+    before:.servers.loadpassword;
+    .servers.loadpassword:{[] `sites};
+    setenv[`UQF_SITE_AUTH;"1"];
+    flagged:.servers.siteauth[];
+    system"l scripts/torqcode/handlers/loadpassword.q";
+    kept:.servers.loadpassword;
+    setenv[`UQF_SITE_AUTH;""];
+    .servers.loadpassword:before;
+    .qunit.assertTrue[flagged;"UQF_SITE_AUTH=1 reads as the site's own authentication"];
+    .qunit.assertEquals[kept[];`sites;"the site's loader is not redefined"];
+    .qunit.assertEquals[@[value;`.servers.USERPASS;{[e] `unset}];`unset;"and no loader ran"]};
+
+.qt.qtorq.loadpassword.test_without_site_auth_uqfs_loader_is_the_one_defined:{[t]
+    .qunit.assertEquals[.servers.siteauth[];0b;"UQF_SITE_AUTH unset: not the site's"];
+    .qunit.assertTrue[(-3!.servers.loadpassword) like "*passwordfiles*";
+        "the base-first loader this file defines is the one in place"]};

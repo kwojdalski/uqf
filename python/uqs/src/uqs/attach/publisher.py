@@ -5,7 +5,9 @@ The gate itself is in stack/attach_state.py (the start path is below this
 package); this is the other direction - what the attach commands do to the
 publisher. Every start goes through `runtime.start`, so the same refusals
 apply to it as to `uqs start`, and with the attachment's base port passed
-explicitly: it is never left to the runtime's default.
+explicitly: it is never left to the runtime's default. What a start of the
+publisher alone prepares is its own launch configuration, never the stack's
+(stack/attached_publisher.py, #1847).
 """
 
 from __future__ import annotations

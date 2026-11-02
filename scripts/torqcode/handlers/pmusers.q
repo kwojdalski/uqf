@@ -51,7 +51,9 @@ setupusers:{[logins;policy]
     .pm.assignrole[.z.u;`administrator];
     }
 
-if[@[value;`.pm.enabled;0b];
+/ Not where the site authenticates its own way (UQF_SITE_AUTH, #1847): its
+/ .pm users and roles are its own, and it has no starter-pack access list.
+if[@[value;`.pm.enabled;0b] and not (enlist"1")~getenv`UQF_SITE_AUTH;
     .proc.loadconfig[getenv[`KDBSERVCONFIG],"/permissions/";] each `default,.proc.proctype,.proc.procname;
     userspath:hsym`$getenv[`KDBSERVCONFIG],"/permissions/",string[.proc.proctype],"_users.csv";
     setupusers[

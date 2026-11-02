@@ -19,7 +19,15 @@ from typing import Any
 from uqs.interpreter import q_command
 from uqs.logger import get_logger
 from uqs.paths import UqsError, UqsPaths, check_prerequisites
-from uqs.stack import alive, deployment, gateway_access, qtree, start_overrides, start_policy
+from uqs.stack import (
+    alive,
+    attached_publisher,
+    deployment,
+    gateway_access,
+    qtree,
+    start_overrides,
+    start_policy,
+)
 from uqs.stack import procs as stack_procs
 from uqs.stack import render as stack_render
 from uqs.stack.carriable import check_carriable
@@ -44,35 +52,9 @@ def bootstrap(
     check_prerequisites(paths)
     selected = deployment.members(paths) if selected is None else selected
 
-    if not paths.hdb_dir.is_dir():
-        log.info("Bootstrapping {} (first run) - copying sample hdb/dqe data...", paths.torqdata)
-        paths.torqdata.mkdir(parents=True, exist_ok=True)
-        shutil.copytree(paths.torqapphome / "hdb", paths.hdb_dir)
-        shutil.copytree(paths.torqapphome / "dqe", paths.torqdata / "dqe")
-
-    for sub in ("logs", "tplogs", "wdbhdb"):
-        (paths.torqdata / sub).mkdir(parents=True, exist_ok=True)
-
-    # Extend (never edit in place) the vendored process.csv with uqf's own extra processes
-    # (fxfeed1) and any process_overrides.csv fields set via set_process_config()/`config
-    # set`/uqs_set_config. Each row TorQ leaves to its default interpreter - an empty qcmd, or `q`
-    # spelled out, as the starter pack and the pipeline rows both do - names the configured one:
-    # QCMD, or the runtime's own (#764). torq.sh prefers a row's qcmd to $QCMD, so a row saying
-    # `q` ran PATH's q whatever QCMD named, and a site launcher need not fall back to $QCMD at
-    # all. An operator's override still wins, even one to bare `q`.
+    _seed_data_dir(paths)
     rows = effective_process_rows(paths, q_command(with_interpreter(paths)), selected)
-    check_carriable(rows)
-    with paths.generated_procs.open("w", newline="") as f:
-        # torq.sh's own field lookups are a naive awk -F, parse expecting
-        # plain \n line endings, like the vendored csv itself - csv module's
-        # default \r\n (the "excel" dialect) corrupts the last column's
-        # value (a trailing \r glued onto qcmd breaks the qcmd==qcmd header
-        # match, which every single process start looks up), producing a
-        # bare `print $` awk syntax error for every process - hard-won via
-        # `start all` throwing exactly that for every process at once.
-        writer = csv.DictWriter(f, fieldnames=process_csv_fields(), lineterminator="\n")
-        writer.writeheader()
-        writer.writerows(rows)
+    write_process_csv(paths, rows)
 
     # Without overlays (the torq runtime) the schema is the starter pack's
     # own, copied so the HDB filler below and `uqs` read it from the one place
@@ -107,9 +89,82 @@ def bootstrap(
     # help in exactly the case that matters.
     fill_hdb_partitions(paths)
 
+    return write_setenv(paths, base_port)
+
+
+def bootstrap_publisher(
+    paths: UqsPaths,
+    procs: Sequence[str],
+    base_port: int | None = None,
+    selected: Sequence[str] | None = None,
+    *,
+    starting: bool = True,
+) -> dict[str, str]:
+    """`bootstrap` for a command that names attachments' publishers and nothing
+    else (stack/attached_publisher.py, #1847): the logs directory, process.csv
+    and setenv.sh - the publishers' own launch configuration - and none of the
+    stack's access lists, schema, service configuration or HDB, which belong to
+    a stack uqf does not manage. A start refuses an authentication it cannot
+    tell; a stop needs none."""
+    check_prerequisites(paths)
+    paths.log_dir.mkdir(parents=True, exist_ok=True)
+    rows = effective_process_rows(paths, q_command(with_interpreter(paths)), selected)
+    extra: dict[str, str] = {}
+    if starting:
+        how = attached_publisher.auth(paths, procs)
+        rows, extra = attached_publisher.with_auth(rows, procs, how), how.env()
+    write_process_csv(paths, rows)
+    return write_setenv(paths, base_port, extra)
+
+
+def _seed_data_dir(paths: UqsPaths) -> None:
+    """A first run's data directory: the starter pack's sample HDB and DQE
+    data, and the directories the stack writes into."""
+    if not paths.hdb_dir.is_dir():
+        log.info("Bootstrapping {} (first run) - copying sample hdb/dqe data...", paths.torqdata)
+        paths.torqdata.mkdir(parents=True, exist_ok=True)
+        shutil.copytree(paths.torqapphome / "hdb", paths.hdb_dir)
+        shutil.copytree(paths.torqapphome / "dqe", paths.torqdata / "dqe")
+
+    for sub in ("logs", "tplogs", "wdbhdb"):
+        (paths.torqdata / sub).mkdir(parents=True, exist_ok=True)
+
+
+def write_process_csv(paths: UqsPaths, rows: list[dict[str, str]]) -> None:
+    """The process.csv torq.sh starts from: `rows`, as effective_process_rows
+    composes them.
+
+    Extend (never edit in place) the vendored process.csv with uqf's own extra
+    processes (fxfeed1) and any process_overrides.csv fields set via
+    set_process_config()/`config set`/uqs_set_config. Each row TorQ leaves to
+    its default interpreter - an empty qcmd, or `q` spelled out, as the starter
+    pack and the pipeline rows both do - names the configured one: QCMD, or the
+    runtime's own (#764). torq.sh prefers a row's qcmd to $QCMD, so a row saying
+    `q` ran PATH's q whatever QCMD named, and a site launcher need not fall back
+    to $QCMD at all. An operator's override still wins, even one to bare `q`.
+    """
+    check_carriable(rows)
+    with paths.generated_procs.open("w", newline="") as f:
+        # torq.sh's own field lookups are a naive awk -F, parse expecting
+        # plain \n line endings, like the vendored csv itself - csv module's
+        # default \r\n (the "excel" dialect) corrupts the last column's
+        # value (a trailing \r glued onto qcmd breaks the qcmd==qcmd header
+        # match, which every single process start looks up), producing a
+        # bare `print $` awk syntax error for every process - hard-won via
+        # `start all` throwing exactly that for every process at once.
+        writer = csv.DictWriter(f, fieldnames=process_csv_fields(), lineterminator="\n")
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def write_setenv(
+    paths: UqsPaths, base_port: int | None, extra: dict[str, str] | None = None
+) -> dict[str, str]:
+    """The env torq.sh runs under, plus `extra`, written as setenv.sh."""
     env = build_env(paths, base_port=base_port)
     # A runtime on PeachQ starts its processes, and only its own, on PeachQ.
     env.update(interpreter_env(paths))
+    env.update(extra or {})
 
     # torq.sh unconditionally sources $SETENV (defaulting to lib/torq/setenv.sh,
     # which would overwrite TORQAPPHOME/TORQPROCESSES/etc back to lib/torq's
@@ -133,7 +188,8 @@ def run_torq_sh(
     """Check the TorQ launcher, bootstrap, then run the launcher with *args*
     under the generated env: `$TORQHOME/torq.sh`, or `UQS_TORQ_LAUNCHER`
     (stack/launcher.py). A launcher that cannot run is refused before
-    bootstrap writes anything.
+    bootstrap writes anything. *args* naming attachments' publishers alone
+    prepares only them (bootstrap_publisher, #1847).
 
     A `start` or `restart` is refused first by start_policy.refuse_start -
     here, so no caller (`uqs start`, `uqs job backfill`, `uqs replay`, `uqs exec`)
@@ -154,7 +210,11 @@ def run_torq_sh(
     # and a launcher that is going to be refused must not have had that written for it.
     launcher = torq_launcher(paths)
     plan = deployment.planned(paths, args, selected)
-    overrides = bootstrap(paths, base_port=base_port, selected=plan)
+    if attached := attached_publisher.publishers(args):
+        starting = bool(args) and args[0] in start_policy.STARTING_VERBS
+        overrides = bootstrap_publisher(paths, attached, base_port, plan, starting=starting)
+    else:
+        overrides = bootstrap(paths, base_port=base_port, selected=plan)
     # subprocess.run's env= *replaces* the environment rather than extending it - merge onto
     # the inherited one (PATH, etc.) or envsubst/rlwrap/q stop resolving, though on PATH.
     env = {**os.environ, **overrides}
