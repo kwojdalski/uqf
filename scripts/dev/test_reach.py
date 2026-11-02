@@ -38,8 +38,9 @@ WHAT IS SEEN, through Python's audit hooks (sys.addaudithook):
             it runs inside the repository;
     python  a Python child - a gate run as a script, `uv run`, uqs: what it
             reads and imports is not seen, so it is taken to reach any file;
-    q       a q, or a shell (torq.sh starts one): reaches .q and shell files,
-            and what a q file names by a path literal (test_impact.q_readers);
+    q       a q, qlinter, or a shell (torq.sh starts a q): reaches .q and
+            shell files, qlinter's .qlinter* settings, and what a q file names
+            by a path literal (test_impact.q_readers);
     other   anything else: reaches any file - but for a few programs that
             read none of it (ps, hostname, ...), which are not recorded;
 * `scripts` - the repository .py files a Python child was started on.
@@ -86,11 +87,13 @@ _IGNORED_NAMES = {".testmondata", ".testmondata-wal", ".testmondata-shm"}
 _WRAPPERS = {"env", "timeout", "nice", "nohup", "stdbuf", "exec", "command", "time"}
 _PYTHON = {"uv", "uvx", "uqs", "pytest", "pre-commit", "pip"}
 _SHELLS = {"bash", "sh", "zsh", "dash"}
+_Q = {"q", "peachq", "qlinter"}
 _DURATION = re.compile(r"^\d+(\.\d+)?[smhd]?$")
 #: Programs that read no file of the repository: not recorded at all.
 _INERT = {
     "ps", "pgrep", "pkill", "kill", "lsof", "hostname", "uname", "which", "sleep", "id",
     "whoami", "true", "false", "date", "getconf", "sysctl", "sw_vers", "nproc", "tty",
+    "mount", "df", "ssh",
 }  # fmt: skip
 
 KINDS = ("git", "python", "q", "other")
@@ -115,9 +118,7 @@ def kind_of(argv: list[str], qcmd: str | None = None) -> str:
             return "git"
         if name.startswith("python") or name in _PYTHON or words[0] == sys.executable:
             return "python"
-        if name in ("q", "peachq") or (qcmd and words[0] == qcmd) or name.endswith(".sh"):
-            return "q"
-        if name in _SHELLS:
+        if name in _Q or name in _SHELLS or name.endswith(".sh") or (qcmd and words[0] == qcmd):
             return "q"
         return "other"
     return "other"
@@ -410,7 +411,9 @@ def _why(seen: dict[str, set[str]], status: str, path: str, q_reads: dict[str, l
         return "starts a process this cannot see into"
     if "python" in starts:
         return "starts a Python child, whose reads are not recorded"
-    if "q" in starts and (path.endswith((".q", ".sh")) or q_reads.get(path)):
+    if "q" in starts and (
+        path.endswith((".q", ".sh")) or path.startswith(".qlinter") or q_reads.get(path)
+    ):
         return f"starts a q, which {'loads' if path.endswith('.q') else 'reads'} {path}"
     return None
 

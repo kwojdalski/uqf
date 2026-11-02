@@ -44,6 +44,8 @@ else:
         (["timeout", "30", "q", "x.q"], "q"),
         (["env", "A=1", "git", "status"], "git"),
         (["ps", "-A"], "inert"),
+        (["mount"], "inert"),
+        (["qlinter", "src/"], "q"),
         (["docker", "run", "x"], "other"),
         ([], "other"),
     ],
