@@ -48,6 +48,10 @@ PROVIDER_OUT = (
 FACTS = {
     "IO_STRATEGIES": "what a write may do with a row whose key exists - .qetl.io.strategies",
     "RUN_MODES": "what a bounded run may do - .qetl.job.bounded.runtime.modes",
+    "READ_ONLY_RUN_MODES": (
+        "the run modes that open no source and write nothing - "
+        ".qetl.job.bounded.runtime.read_only_modes"
+    ),
     "LOG_LEVELS": "the levels .qetl.log writes, least to most severe - .qetl.log.levels",
     "ETL_RUNS_COLUMNS": "the run ledger's columns - cols .qetl.run.init_runs[]",
     "ETL_RUN_META_COLUMNS": "the run facts ledger's columns - cols .qetl.run.init_meta[]",

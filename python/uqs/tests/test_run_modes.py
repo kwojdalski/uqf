@@ -9,6 +9,8 @@ rather than falling through to whichever branch each caller happens to take.
 
 from __future__ import annotations
 
+import importlib
+
 from uqs.generated import q_facts
 from uqs.stack import run_modes
 
@@ -30,10 +32,22 @@ def test_read_only_and_execution_modes_partition_qs_run_modes():
     assert len(run_modes.EXECUTION_MODES) == len(executing)
 
 
-def test_the_split_is_the_one_the_callers_rely_on():
-    """validate and plan open nothing and write nothing; dry-run and run start a runner."""
-    assert set(run_modes.READ_ONLY_MODES) == {"validate", "plan"}
-    assert set(run_modes.EXECUTION_MODES) == {"dry-run", "run"}
+def test_the_read_only_modes_are_qs_declaration():
+    """No Python edit moves the split: it follows q_facts.READ_ONLY_RUN_MODES."""
+    assert set(q_facts.READ_ONLY_RUN_MODES) <= set(q_facts.RUN_MODES)
+    assert run_modes.READ_ONLY_MODES == tuple(_cli(m) for m in q_facts.READ_ONLY_RUN_MODES)
+
+
+def test_changing_the_declaration_changes_the_split(monkeypatch):
+    monkeypatch.setattr(q_facts, "READ_ONLY_RUN_MODES", ("validate", "plan", "dry_run"))
+    try:
+        moved = importlib.reload(run_modes)
+        assert moved.READ_ONLY_MODES == ("validate", "plan", "dry-run")
+        assert moved.EXECUTION_MODES == ("run",)
+    finally:
+        monkeypatch.undo()
+        importlib.reload(run_modes)
+    assert run_modes.READ_ONLY_MODES == tuple(_cli(m) for m in q_facts.READ_ONLY_RUN_MODES)
 
 
 def test_modes_are_qs_in_qs_order():

@@ -22,6 +22,12 @@ RUN_MODES: tuple[str, ...] = (
     "run",
 )
 
+#: the run modes that open no source and write nothing - .qetl.job.bounded.runtime.read_only_modes
+READ_ONLY_RUN_MODES: tuple[str, ...] = (
+    "validate",
+    "plan",
+)
+
 #: the levels .qetl.log writes, least to most severe - .qetl.log.levels
 LOG_LEVELS: tuple[str, ...] = (
     "TRACE",

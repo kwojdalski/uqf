@@ -45,6 +45,7 @@ attributes:attr each (`s#0 1;`u#0 1;`p#0 0 1;`g#0 1);
 facts:(!) . flip (
     (`IO_STRATEGIES;        .qetl.io.strategies);
     (`RUN_MODES;            .qetl.job.bounded.runtime.modes);
+    (`READ_ONLY_RUN_MODES;  .qetl.job.bounded.runtime.read_only_modes);
     (`LOG_LEVELS;           .qetl.log.levels);
     (`ETL_RUNS_COLUMNS;     cols .qetl.run.init_runs[]);
     (`ETL_RUN_META_COLUMNS; cols .qetl.run.init_meta[]);

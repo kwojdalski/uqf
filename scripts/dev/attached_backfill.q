@@ -96,8 +96,8 @@ if[not `worker in key opts:.Q.opt .z.x;
     missing:needed except key opts;
     if[count missing; '"attached_backfill: missing ",", " sv "-",/:string missing];
     if[`fixture in key opts; '"attached_backfill: -fixture is refused: a fixture in a native HDB is indistinguishable from data"];
-    if[count bad:(`plan`validate) inter `$first opts`mode;
-        '"attached_backfill: -mode ",string[first bad]," is the launcher's; this runs dry_run or run"];
+    if[count bad:(.qetl.job.bounded.runtime.read_only_modes) inter `$first opts`mode;
+        '"attached_backfill: -mode ",string[first bad]," is the launcher's; this runs ",(" or " sv string .qetl.job.bounded.runtime.modes except .qetl.job.bounded.runtime.read_only_modes)];
     if[.qetl.source.fixture_writes_allowed[];
         '"attached_backfill: fixture writes are enabled (UQF_FIXTURE_WRITES): unset it - nothing here writes a fixture"]}
 
