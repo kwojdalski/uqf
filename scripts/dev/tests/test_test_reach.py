@@ -46,6 +46,7 @@ else:
         (["ps", "-A"], "inert"),
         (["mount"], "inert"),
         (["qlinter", "src/"], "q"),
+        ([str(Path(reach.tempfile.gettempdir()) / "x" / "q_fake"), "-q"], "q"),
         (["docker", "run", "x"], "other"),
         ([], "other"),
     ],

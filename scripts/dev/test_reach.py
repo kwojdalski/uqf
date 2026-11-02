@@ -57,10 +57,12 @@ reaching everything). CI runs the whole suite on every pull request.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
 import sys
+import tempfile
 from collections import defaultdict
 from collections.abc import Iterable
 from pathlib import Path
@@ -97,6 +99,7 @@ _WRAPPERS = {"env", "timeout", "nice", "nohup", "stdbuf", "exec", "command", "ti
 _PYTHON = {"uv", "uvx", "uqs", "pytest", "pre-commit", "pip"}
 _SHELLS = {"bash", "sh", "zsh", "dash"}
 _Q = {"q", "peachq", "qlinter"}
+_TMP = (os.path.realpath(tempfile.gettempdir()), tempfile.gettempdir(), "/tmp/", "/private/tmp/")
 _DURATION = re.compile(r"^\d+(\.\d+)?[smhd]?$")
 #: Programs that read no file of the repository: not recorded at all.
 _INERT = {
@@ -129,6 +132,8 @@ def kind_of(argv: list[str], qcmd: str | None = None) -> str:
             return "python"
         if name in _Q or name in _SHELLS or name.endswith(".sh") or (qcmd and words[0] == qcmd):
             return "q"
+        if words[0].startswith(_TMP):
+            return "q"  # a stand-in a test wrote - most often a fake q
         return "other"
     return "other"
 
@@ -178,7 +183,9 @@ class Recorder:
         self._busy = False
         #: Where Python children write what they see (CHILD_DIR/sitecustomize.py),
         #: and under which name this process tells them the running owner.
-        self.children = path.with_name(f"{path.name}.children")
+        # Outside the tree: a test that asks git what is untracked must not see it.
+        digest = hashlib.sha256(str(path).encode()).hexdigest()[:12]
+        self.children = Path(tempfile.gettempdir()) / f"uqf-reach-{digest}"
         self.token = worker or "main"
 
     def watch_children(self) -> None:
