@@ -144,7 +144,11 @@
         / A partition a previous run finished carries p#sym; appending out of
         / order to it is not safe, so the attribute comes off here and
         / finish sorts and puts it back.
-        if[(`sym in existing) and not .qetl.io.on_peachq; @[part;`sym;`#]];
+        / A declared rule's other attributes (s#time, say) would refuse the
+        / append the same way, so every column of the rule loses its own.
+        if[not .qetl.io.on_peachq;
+            {[part;existing;col] if[col in existing; @[part;col;`#]]}[part;existing] each
+                $[count r:.qetl.io.declared_rule target; key r; `sym]];
         / PeachQ cannot upsert onto a splayed table on disk ('type), so there
         / the partition is read back and written again whole.
         $[()~existing; part set rows;
@@ -435,6 +439,30 @@
     {[base;m;c] f:hsym `$base,"/",string c; f set m#get f}[base;m] each c where n>m;
     1b}
 
+/ Private: the declared sort rule of `tbl` as column -> attribute in sort order
+/ (` for none), or the empty dictionary when the table declares none (#1861).
+/ .qetl.plant is loaded after this file, so it is read at call time, and a
+/ process that never loaded it - or a table the plant does not know, as a
+/ scoped writer's - has no rule: the default applies.
+/ @param tbl the table
+/ @return a dictionary of sort column to attribute, empty when nothing is declared
+/ @private
+.qetl.io.declared_rule:{[tbl]
+    if[not `sort_rules in key `.qetl.plant; :(`symbol$())!`symbol$()];
+    exec column!att from .qetl.plant.sort_rules where table=tbl}
+
+/ Private: how a partition of `tbl` with columns `c` is finished: the declared
+/ sort rule, else sym then time with p# on sym - a table with no sym gets no
+/ attribute, and xasc leaves s# on its first sort column.
+/ @param tbl the table
+/ @param c the partition's columns
+/ @return a dictionary of sort column to attribute, in sort order
+/ @private
+.qetl.io.sort_rule:{[tbl;c]
+    if[count r:.qetl.io.declared_rule tbl; :r];
+    order:`sym`time inter c;
+    order!{$[x=`sym;`p;`]} each order}
+
 / Private: sort and attribute these partitions of `root`, fill every
 / partition with every table, and forget them.
 / @param root the HDB directory
@@ -448,9 +476,11 @@
         base:string .Q.par[root;d;t];
         part:hsym `$base,"/";
         c:get hsym `$base,"/.d";
-        order:(`sym`time inter c);
-        if[count order; order xasc part];
-        if[(`sym in c) and not .qetl.io.on_peachq; @[part;`sym;`p#]];
+        rule:.qetl.io.sort_rule[t;c];
+        if[count rule; (key rule) xasc part];
+        / PeachQ keeps no attribute (.qetl.io.on_peachq).
+        if[not .qetl.io.on_peachq;
+            {[part;col;a] if[not null a; @[part;col;#[a;]]]}[part]'[key rule;value rule]];
         }[root]'[todo`dt;todo`tbl];
     / Not over a native stack's root (io_hdb_scoped.q): it would fill dates and
     / tables nobody asked about.
@@ -470,16 +500,22 @@
     base:string .Q.par[root;d;t];
     if[()~key hsym `$base,"/.d"; :1b];
     c:get hsym `$base,"/.d";
-    if[.qetl.io.on_peachq; :.qetl.io.in_order[base;c]];
+    / A declared rule is judged by its own attributes, or by its order where
+    / it declares none (and always on PeachQ, which keeps none).
+    if[count r:.qetl.io.declared_rule t;
+        have:r where not null r;
+        :$[.qetl.io.on_peachq or 0=count have;
+            .qetl.io.in_order[base;key r];
+            all {[base;col;a] a=attr get hsym `$base,"/",string col}[base]'[key have;value have]]];
+    if[.qetl.io.on_peachq; :.qetl.io.in_order[base;`sym`time inter c]];
     $[`sym in c; `p=attr get hsym `$base,"/sym";
       `time in c; `s=attr get hsym `$base,"/time";
       1b]}
 
-/ Private: is the partition at `base` in finish's order - sym, then time?
+/ Private: is the partition at `base` sorted by `order`, finish's sort columns?
 / How PeachQ, which keeps no attribute, tells a finished partition.
 / @private
-.qetl.io.in_order:{[base;c]
-    order:`sym`time inter c;
+.qetl.io.in_order:{[base;order]
     if[0=count order; :1b];
     t:flip order!{[base;x] get hsym `$base,"/",string x}[base] each order;
     t~order xasc t}
