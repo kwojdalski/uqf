@@ -37,8 +37,8 @@ def _whole_q_suite(monkeypatch):
 
 def recorded(env: dict | None, failures: tuple[str, ...] = (), ran: str | None = None) -> bool:
     """What tests/q/run_coverage.q does with attest's outcome variables: write
-    every test it ran, and those that did not pass - and what scripts/test.py
-    q-coverage does with UQF_Q_COVERAGE_RAN: say whether the subset it was
+    every test it ran, and those that did not pass - and what
+    tests/qrun/test_q_coverage.py does with UQF_Q_COVERAGE_RAN: say whether the subset it was
     given decided (`subset`) or the whole suite did (`all`; `ran` overrides).
     True, as a passing hook."""
     if env and attest.FAILURES_ENV in env:
@@ -363,15 +363,13 @@ def test_attest_allows_an_ignored_file(repo, monkeypatch):
     commit(repo, ".gitignore", "build/\n")
     (repo / "build").mkdir()
     (repo / "build" / "out.q").write_text("a:1\n")
-    fake = type("T", (), {"check_interpreter": staticmethod(lambda: "kdbx")})
-    monkeypatch.setattr(attest, "_test_py", lambda: fake)
+    monkeypatch.setattr(attest, "interpreter", lambda: "kdbx")
     assert attest.refusal() is None
 
 
 def test_attest_refuses_an_interpreter_that_is_not_kdbx(repo, monkeypatch):
     monkeypatch.setattr(attest, "REPO", repo)
-    fake = type("T", (), {"check_interpreter": staticmethod(lambda: "peachq")})
-    monkeypatch.setattr(attest, "_test_py", lambda: fake)
+    monkeypatch.setattr(attest, "interpreter", lambda: "peachq")
     assert "not KDB-X" in attest.refusal()
 
 
@@ -1039,5 +1037,9 @@ def test_the_q_coverage_hook_runs_the_coverage_selection():
     config = (_ROOT / ".pre-commit-config.yaml").read_text()
     hook = config.split("- id: q-coverage", 1)[1].split("- id:", 1)[0]
     assert "scripts/dev/test_impact.py --coverage-hook" in hook
-    assert "ALL) python3 scripts/test.py q-coverage ;;" in hook
-    assert 'python3 scripts/test.py q-coverage "${words[@]}"' in hook
+    assert "ALL) subset=() ;;" in hook
+    assert 'subset=(--q-files "${words[1]}" --q-modules "${words[3]}")' in hook
+    assert (
+        "uv run pytest -q -m coverage --require-q kdbx tests/qrun/test_q_coverage.py "
+        '${subset[@]+"${subset[@]}"}' in hook
+    )

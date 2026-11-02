@@ -84,7 +84,7 @@ tplog/
 # a clone would get twenty broken pointers. Machine-managed, never committed.
 .agents/
 
-# pytest-cov's data file, written by `scripts/test.py coverage`.
+# pytest-cov's data file, written by `uv run pytest --cov`.
 .coverage
 
 /.quarto/

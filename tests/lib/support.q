@@ -147,7 +147,7 @@
 // suites those files define and instruments and judges only the functions
 // the named production files define - what scripts/dev/test_impact.py's
 // coverage_for picks for a change. A subset that finds a function newly
-// uncovered exits 3 and scripts/test.py q-coverage hands the verdict to a run
+// uncovered exits 3 and tests/qrun/test_q_coverage.py hands the verdict to a run
 // of the whole suite; one that finds a baseline entry now entered fails, as
 // the whole suite would (it runs these suites and more).
 
@@ -327,7 +327,7 @@
 
 // The q command a runner starts its child processes with: $QCMD if set,
 // otherwise `q`, resolved by the shell on PATH. TorQ's rule (torq.sh), and
-// uqs.interpreter.q_command's (#414); scripts/test.py passes QCMD on to every lane
+// uqs.interpreter.q_command's (#414); the pytest runner passes QCMD on to every script
 // it runs, so the children run the binary the runner itself was started with.
 .qt.support.q_interpreter:{[] $[""~getenv `QCMD; "q"; getenv `QCMD]}
 

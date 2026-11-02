@@ -100,7 +100,7 @@ def test_the_resolver_parses_on_the_oldest_python_it_runs_under():
     only 3.14 accepts (an unparenthesised `except A, B:`) broke CI once."""
     import ast
 
-    for script in (SCRIPT, ROOT / "scripts" / "test.py"):
+    for script in (SCRIPT, ROOT / "scripts" / "dev" / "doc_examples.py"):
         ast.parse(script.read_text(), feature_version=(3, 10))
 
 

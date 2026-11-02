@@ -56,14 +56,15 @@ PEACHQ = "peachq"
 Q_IMPLS = (KDBX, PEACHQ)
 
 #: The variables that chose an interpreter before #1753, each with what
-#: replaces it. Set at all, each is refused - by uqs, scripts/test.py (through
-#: scripts/peachq.py, which spells the same list; test_interpreter.py holds
-#: the two equal) and deploy's preflight on the server.
+#: replaces it. Set at all, each is refused - by uqs, pytest (the root
+#: conftest), scripts/peachq.py (which spells the same list;
+#: test_interpreter.py holds the two equal) and deploy's preflight on the
+#: server.
 REMOVED_ENV = {
     "UQF_Q_IMPL": "the binary is asked which q it is - set QCMD=<binary> alone",
     "UQF_PEACHQ": (
         "set QCMD=<binary> to run everything on that PeachQ, or pass --peachq PATH "
-        "(scripts/test.py, pytest) for the PeachQ lanes alone"
+        "(pytest) for the PeachQ tests alone"
     ),
     "UQF_PEACHQ_REASON": (
         "a PeachQ in QCMD that is not the pinned build is named in a warning instead"
@@ -286,15 +287,14 @@ def peachq_binary(
 ) -> Path:
     """THE PeachQ for whatever must run on PeachQ (#1753), in this order:
 
-    1. `override` - `--peachq PATH`, from scripts/test.py or pytest - which
+    1. `override` - `--peachq PATH`, given to pytest - which
        must identify as PeachQ: an explicit choice that failed is refused,
        never replaced by a guess;
     2. `$QCMD`, when it answers as PeachQ;
     3. the pinned build, from scripts/peachq.py's cache, built on first use.
 
     A PeachQ from 1 or 2 that is not the pinned build is named in one
-    warning. scripts/test.py, which cannot import uqs, keeps a copy of this
-    rule; test_interpreter.py holds the two equal.
+    warning.
     """
     source = os.environ if env is None else env
     refuse_removed(source)

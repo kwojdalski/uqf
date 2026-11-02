@@ -942,8 +942,8 @@ class CoveragePlan:
     suite leaves never entered is never entered here too, since these suites
     are among the whole suite's - so a newly uncovered function in a module
     the change reaches is caught. What a subset finds never entered is
-    checked by a run of the whole suite, which decides (scripts/test.py
-    q-coverage), so a function covered only by a suite outside `files` cannot
+    checked by a run of the whole suite, which decides
+    (tests/qrun/test_q_coverage.py), so a function covered only by a suite outside `files` cannot
     fail a change; the coverage map adds such suites up front, so that is
     rare. A baseline entry a subset enters, the whole suite enters too: that
     fails the subset outright. What a subset cannot see - coverage moving in
@@ -966,7 +966,7 @@ class CoveragePlan:
 
     @property
     def args(self) -> list[str]:
-        """What scripts/test.py q-coverage passes tests/q/run_coverage.q."""
+        """What tests/qrun/test_q_coverage.py passes tests/q/run_coverage.q."""
         return [] if self.files is None else self.line.split()
 
     @property

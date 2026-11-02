@@ -23,8 +23,9 @@ It checks `--ref` (default origin/master, fetched first) out into a
 throwaway detached worktree, so it never touches a checkout in use, and runs
 there what an attestation runs when the selector says ALL:
 
-    python3 scripts/test.py q-coverage -map ...   every function judged against
-                                                  tests/q/coverage_baseline.txt
+    pytest -m coverage tests/qrun/test_q_coverage.py --q-coverage-map ...
+                                     every function judged against
+                                     tests/q/coverage_baseline.txt
     and every test's outcome from that same run, as q-tests' q-unit verdict
 
 The same run writes the coverage map - which suite files enter each function
@@ -142,7 +143,21 @@ def run(tree: Path, scratch: Path) -> tuple[int, Path]:
     fresh = scratch / "coverage_map.txt"
     env = {**os.environ, **attest.outcome_env(outcomes)}
     cov = subprocess.run(
-        [sys.executable, "scripts/test.py", "q-coverage", "-map", str(fresh)],
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "-m",
+            "coverage",
+            "--require-q",
+            "kdbx",
+            "tests/qrun/test_q_coverage.py",
+            "--q-coverage-map",
+            str(fresh),
+        ],
         cwd=tree,
         env=env,
         check=False,

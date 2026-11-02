@@ -23,7 +23,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
 def find_q_binary() -> tuple[str, dict[str, str]]:
-    """The q interpreter, by the rule scripts/test.py applies.
+    """The q interpreter, by the rule the root conftest's `kdbx` fixture applies.
 
     $QCMD if set, otherwise `q` on PATH - TorQ's rule, through
     uqs.interpreter.q_interpreter. Skips the calling test when there is none,

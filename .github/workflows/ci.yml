@@ -85,7 +85,7 @@ jobs:
       - name: Report q runtime coverage
         shell: bash
         run: |
-          # The same rule scripts/test.py applies, so CI skips exactly when
+          # The same rule pytest's `kdbx` fixture applies, so CI skips exactly when
           # the hook would have nothing to run: $QCMD, else q on PATH.
           if command -v "${QCMD:-q}" >/dev/null; then
             echo "A q interpreter is available; the q-tests and q-coverage hooks will run." >> "$GITHUB_STEP_SUMMARY"
@@ -93,7 +93,7 @@ jobs:
             echo "SKIP=$SKIP,q-tests,q-coverage,q-docs,contract-surface,q-facts,plant-schema" >> "$GITHUB_ENV"
             echo "::warning::No q interpreter on this runner. The full qUnit suite, the coverage gate and q-dependent Python IPC tests are not exercised here; static q checks still run, and the portable qUnit suites run on PeachQ further down."
             echo "### Runtime coverage limitation" >> "$GITHUB_STEP_SUMMARY"
-            echo "No q interpreter is installed on this hosted runner. The qUnit, coverage and contract-surface hooks are skipped, and Python tests requiring q skip through their existing fixtures. Static q checks and the remaining Python tests run. Run q tests/run_tests.q and scripts/test.py q-coverage locally with KDB-X before merging q changes." >> "$GITHUB_STEP_SUMMARY"
+            echo "No q interpreter is installed on this hosted runner. The qUnit, coverage and contract-surface hooks are skipped, and Python tests requiring q skip through their existing fixtures. Static q checks and the remaining Python tests run. Run uv run pytest tests/qrun/test_q_suite.py and uv run pytest -m coverage tests/qrun/test_q_coverage.py locally with KDB-X before merging q changes." >> "$GITHUB_STEP_SUMMARY"
           fi
       - name: Run repository hooks
         run: uv tool run --from pre-commit==4.6.2 pre-commit run --all-files --show-diff-on-failure
@@ -247,7 +247,7 @@ jobs:
         # pin. It prints an absolute path and puts nothing on PATH: every
         # other step still finds no q, so nothing here can be mistaken for a
         # KDB-X run. It is reached only by the steps below, which name it
-        # through QCMD and nothing else (#1753): scripts/test.py, uqs and the
+        # through QCMD and nothing else (#1753): uqs and the
         # pytest conftest ask the binary which q it is.
         if: ${{ !cancelled() }}
         shell: bash
@@ -342,7 +342,7 @@ jobs:
         # pin. It prints an absolute path and puts nothing on PATH: every
         # other step still finds no q, so nothing here can be mistaken for a
         # KDB-X run. It is reached only by the steps below, which name it
-        # through QCMD and nothing else (#1753): scripts/test.py, uqs and the
+        # through QCMD and nothing else (#1753): uqs and the
         # pytest conftest ask the binary which q it is.
         if: ${{ !cancelled() }}
         shell: bash
@@ -379,8 +379,7 @@ jobs:
         # ones) on one worker.
         #
         # tests/qrun/ is a testpath too: the docs' marked q blocks run here,
-        # their `peachq` half (#1808) - what `scripts/test.py q-docs` ran in
-        # the job above. --require-q peachq fails a test that cannot have
+        # their `peachq` half (#1808). --require-q peachq fails a test that cannot have
         # PeachQ rather than skipping it; the KDB-X half skips, visibly.
         # -m "not q_suite": the whole qUnit suite on PeachQ is the "PeachQ q
         # tests" job's, which runs it once rather than in a shard here.

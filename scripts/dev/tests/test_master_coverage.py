@@ -26,7 +26,7 @@ attest = _load("attest_kdbx_for_tests", "scripts/dev/attest_kdbx.py")
 
 
 def _fake_lane(monkeypatch, code: int, failures: str = "", map_text: str | None = "m\n"):
-    """scripts/test.py q-coverage exiting `code`, having written the outcomes
+    """The coverage test exiting `code`, having written the outcomes
     and, unless map_text is None, the coverage map."""
     seen = {}
 
@@ -35,7 +35,7 @@ def _fake_lane(monkeypatch, code: int, failures: str = "", map_text: str | None 
         Path(env["UQF_TEST_RESULTS"]).write_text(".qt.a\ttest_one\n")
         Path(env["UQF_TEST_FAILURES"]).write_text(failures + "\n")
         if map_text is not None:
-            Path(argv[argv.index("-map") + 1]).write_text(map_text)
+            Path(argv[argv.index("--q-coverage-map") + 1]).write_text(map_text)
         return subprocess.CompletedProcess(argv, code)
 
     monkeypatch.setattr(mc, "_attest", lambda tree: attest)
@@ -48,7 +48,10 @@ def test_the_whole_suite_runs_with_no_selection_and_writes_the_map(monkeypatch, 
     code, fresh = mc.run(tmp_path, tmp_path)
     assert code == 0 and fresh.read_text() == "m\n"
     # no -files, no -modules: every function judged, every suite run
-    assert seen["argv"][1:] == ["scripts/test.py", "q-coverage", "-map", str(fresh)]
+    assert seen["argv"][1:] == [
+        "-m", "pytest", "-q", "-p", "no:cacheprovider", "-m", "coverage", "--require-q", "kdbx",
+        "tests/qrun/test_q_coverage.py", "--q-coverage-map", str(fresh),
+    ]  # fmt: skip
 
 
 def test_a_coverage_failure_fails_it(monkeypatch, tmp_path, capsys):

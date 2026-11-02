@@ -1,11 +1,11 @@
 """What the q-running tests under tests/qrun/ promise about running q (#1808).
 
-They replaced scripts/test.py's q-scripts, q-docs and q-docs-peachq lanes, and
-these hold what the lanes guaranteed and what moving them must not lose: a q
-error fails even when q exits 0, a hung script is stopped with everything it
-started, an interpreter a gate requires fails the gate when it is missing
-rather than skipping it, and collecting the suite runs no q and changes
-nothing in the checkout.
+They replaced scripts/test.py's lanes, and these hold what the lanes
+guaranteed and what moving them must not lose: a q error fails even when q
+exits 0, a hung script is stopped with everything it started, an interpreter
+a gate requires fails the gate when it is missing rather than skipping it,
+collecting the suite runs no q and changes nothing in the checkout, and each
+test has one runner.
 """
 
 from __future__ import annotations
@@ -198,15 +198,20 @@ def test_each_q_hook_runs_its_tests_through_pytest_and_no_lane_runs_them_too() -
     hook = (REPO / "scripts/dev/python_tests_hook.py").read_text()
     assert 'NOT_Q_HOOKS = ["-m", "not q_backend"]' in hook
     assert hook.count("*NOT_Q_HOOKS]") == 2, "both modes leave them out"
-    test_py = (REPO / "scripts/test.py").read_text()
-    gone = ("lane_q_scripts", "lane_q_docs", "scripts/examples", "doc_examples",
-            "run_examples.q", "run_backfill_process.q", "run_two_instances.q",
-            "run_remote_writer.q", "run_metatables_hdb.q", "run_tests.q",
-            "full_suite.py", "UQF_TEST_ORDER", "bundle_suite.py",
-            "smoke_external_metadata.q", "tests/remote/Dockerfile", "UQS_ATTACH_STACK_TEST",
-            "lane_stack_smoke", "lane_remote_stack")  # fmt: skip
-    for name in gone:
-        assert name not in test_py
+    coverage = _hook(config, "q-coverage")
+    assert "-m coverage --require-q kdbx tests/qrun/test_q_coverage.py" in coverage
+
+
+def test_the_second_dispatcher_is_gone() -> None:
+    """pytest is the one test interface (#1808): scripts/test.py, and every
+    hook, workflow and script that called it, are gone."""
+    assert not (REPO / "scripts/test.py").exists()
+    callers = subprocess.run(
+        ["git", "grep", "-l", "-E", r"(python3?|uv run python) scripts/test\.py",
+         "--", ".pre-commit-config.yaml", ".github", "scripts", "python", "tests"],
+        cwd=REPO, capture_output=True, text=True, check=False,
+    ).stdout.split()  # fmt: skip
+    assert callers == []
 
 
 def test_nothing_else_runs_the_worked_examples() -> None:

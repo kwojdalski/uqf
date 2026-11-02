@@ -637,7 +637,8 @@ not bridged by a window spanning it; a contract-breaking source records **no**
 coverage rather than publishing nulls; a dry run publishes nothing; and each of
 the five contract methods actually delegates.
 
-`scripts/test.py coverage` will tell you which of those you missed.
+`uv run pytest -m coverage tests/qrun/test_q_coverage.py` will tell you which of
+those you missed.
 
 None of that runs your `query`. The unit suite never sets a credential, so a
 worker there runs on its fixture, and the query lambda is never sent anywhere.
