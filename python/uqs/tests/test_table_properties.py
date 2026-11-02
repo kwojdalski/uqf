@@ -12,7 +12,7 @@ from pathlib import Path
 
 from uqs import paths as stack_paths
 from uqs.generated import q_facts
-from uqs.model import schemas
+from uqs.model import plant_metadata, schemas
 from uqs.model.registry import PIPELINES
 from uqs.paths import UqsPaths
 from uqs.stack import gateway_access
@@ -68,9 +68,20 @@ def test_a_non_plant_dataset_is_read_by_the_time_the_hdb_writer_stamps() -> None
     assert rows["demo_deals"][2] == "time"
 
 
-def test_the_plant_facts_q_exports_are_the_plant_tables() -> None:
-    assert set(q_facts.PLANT_TABLE_TIME_COLUMNS) == schemas.table_names()
-    assert set(q_facts.PLANT_TABLE_INSTRUMENT_COLUMNS) == schemas.table_names()
+def _plant_read_columns() -> tuple[dict[str, str], dict[str, str]]:
+    """Each plant table's time and instrument column, as q evaluated the plant
+    (uqs.model.plant_metadata, from export_plant_schema.q)."""
+    own = plant_metadata.load().own()
+    return (
+        {n: t.time_column for n, t in own.items()},
+        {n: t.instrument_column for n, t in own.items()},
+    )
+
+
+def test_every_plant_table_carries_the_columns_q_reads_it_by() -> None:
+    plant_time, plant_instrument = _plant_read_columns()
+    assert set(plant_time) == set(plant_instrument) == schemas.table_names()
+    assert all(plant_time.values()), "every plant table is read by some time column"
 
 
 def test_every_row_of_the_committed_file_is_what_q_declares() -> None:
@@ -80,8 +91,7 @@ def test_every_row_of_the_committed_file_is_what_q_declares() -> None:
     rows = [
         dict(zip(TABLE_PROPERTIES_COLUMNS, r.split(","), strict=True)) for r in _tree_rows()[1:]
     ]
-    plant_time = q_facts.PLANT_TABLE_TIME_COLUMNS
-    plant_instrument = q_facts.PLANT_TABLE_INSTRUMENT_COLUMNS
+    plant_time, plant_instrument = _plant_read_columns()
     for row in rows:
         table = row["tablename"]
         if table in plant_time:
@@ -98,14 +108,14 @@ def test_every_row_of_the_committed_file_is_what_q_declares() -> None:
 def test_a_dataset_that_is_a_plant_table_is_read_as_the_plant_says() -> None:
     """q derives a worker's dataset from the plant when it is one, so the two
     facts cannot contradict each other (order_quality, duckdb_deals)."""
+    plant_time, plant_instrument = _plant_read_columns()
     for dataset, time_column in q_facts.BOUNDED_DATASET_TIME_COLUMNS.items():
-        if dataset in q_facts.PLANT_TABLE_TIME_COLUMNS:
-            assert time_column == q_facts.PLANT_TABLE_TIME_COLUMNS[dataset], dataset
+        if dataset in plant_time:
+            assert time_column == plant_time[dataset], dataset
             assert (
-                q_facts.BOUNDED_DATASET_INSTRUMENT_COLUMNS[dataset]
-                == q_facts.PLANT_TABLE_INSTRUMENT_COLUMNS[dataset]
+                q_facts.BOUNDED_DATASET_INSTRUMENT_COLUMNS[dataset] == plant_instrument[dataset]
             ), dataset
-    assert q_facts.PLANT_TABLE_INSTRUMENT_COLUMNS["order_quality"] == "book"
+    assert plant_instrument["order_quality"] == "book"
     assert q_facts.BOUNDED_DATASET_TIME_COLUMNS["duckdb_deals"] == "time"
 
 

@@ -55,7 +55,7 @@ PLANT_SCHEMA_FILE = ETL_DIR / "generated" / "plant_schema.json"
 
 #: Bumped when the JSON's shape or the exporter's meaning changes, so every
 #: committed file built by an older exporter reads as stale.
-EXPORTER_VERSION = 2
+EXPORTER_VERSION = 3
 #: The q that exports, relative to the tree of the uqs doing the reading.
 EXPORTER = Path("scripts/generate/export_plant_schema.q")
 #: The vendored starter pack's schema when $TORQAPPHOME is unset - the same
@@ -97,6 +97,11 @@ class Table:
     nested: dict[str, str]
     #: the declared TorQ sort rule, `.qetl.plant.sorting`'s: (column, attribute)
     sorting: tuple[tuple[str, str], ...]
+    #: the column it is read by in time, `.qetl.plant.read_time_column`'s (#1869);
+    #: "" for a vendored table, which this tree does not read by them
+    time_column: str
+    #: its instrument column, `.qetl.plant.read_instrument_column`'s; "" if none
+    instrument_column: str
 
     @property
     def column_names(self) -> list[str]:
@@ -252,7 +257,15 @@ def _parse(text: str) -> tuple[dict, dict[str, Table]]:
     for name, t in data["tables"].items():
         cols = tuple(Column(c["name"], c["type"], c["attribute"]) for c in t["columns"])
         sort = tuple((c, a) for c, a in t["sorting"])
-        tables[name] = Table(name, bool(t["vendored"]), cols, dict(t["nested"]), sort)
+        tables[name] = Table(
+            name,
+            bool(t["vendored"]),
+            cols,
+            dict(t["nested"]),
+            sort,
+            t["time_column"],
+            t["instrument_column"],
+        )
     return data, tables
 
 

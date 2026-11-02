@@ -18,7 +18,8 @@ and the file is DERIVED from both - `table_properties_rows`, written by
 `scripts/generate/derive.py table-properties` and held by its --check. Which columns a
 table is read by is q's declaration, not Python's: a plant table's by
 `.qetl.plant.read_time_column` and `.qetl.plant.read_instrument_column`
-(src/etl/plant_tables.q), a worker dataset's by `.qetl.job.bounded.read_time_column`
+(src/etl/plant_tables.q, carried by uqs.model.plant_metadata so an installed
+bundle's tables are included), a worker dataset's by `.qetl.job.bounded.read_time_column`
 and `.qetl.job.bounded.read_instrument_column` (generated/q_facts.py).
 Listing a table is not granting it: the gateway's query policies decide who
 may read what (scripts/torqcode/gateway/querypolicy.q).
@@ -36,7 +37,7 @@ import re
 from pathlib import Path
 
 from uqs.generated import q_facts
-from uqs.model import schemas
+from uqs.model import plant_metadata, schemas
 from uqs.model.runtime_members import plant_tables
 from uqs.paths import UqsError, UqsPaths
 
@@ -107,12 +108,10 @@ def _row(table: str, time_column: str, instrument: str) -> str:
 def derived_row(table: str) -> str:
     """A table-properties row for a plant table: the time and instrument
     columns q declares for it (`.qetl.plant.read_time_column`,
-    `.qetl.plant.read_instrument_column`; q_facts.PLANT_TABLE_*)."""
-    return _row(
-        table,
-        q_facts.PLANT_TABLE_TIME_COLUMNS[table],
-        q_facts.PLANT_TABLE_INSTRUMENT_COLUMNS[table],
-    )
+    `.qetl.plant.read_instrument_column`), as q evaluated the plant - an
+    installed bundle's tables included, which q_facts (the core tree's) is not."""
+    t = plant_metadata.load().table(table)
+    return _row(table, t.time_column, t.instrument_column)
 
 
 def worker_datasets() -> set[str]:

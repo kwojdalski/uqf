@@ -59,8 +59,6 @@ facts:(!) . flip (
     (`BOUNDED_DATASET_TIME_COLUMNS;       (!) . (asc datasets[]; string .qetl.job.bounded.read_time_column each asc datasets[]));
     (`BOUNDED_DATASET_INSTRUMENT_COLUMNS; (!) . (asc datasets[]; string .qetl.job.bounded.read_instrument_column each asc datasets[]));
     / The plant tables this tree defines, by the columns they are read by (#1869).
-    (`PLANT_TABLE_TIME_COLUMNS;           (!) . (asc .qetl.plant.own[]; string .qetl.plant.read_time_column each asc .qetl.plant.own[]));
-    (`PLANT_TABLE_INSTRUMENT_COLUMNS;     (!) . (asc .qetl.plant.own[]; string .qetl.plant.read_instrument_column each asc .qetl.plant.own[]));
     / How each source is reached - what uqs's capability gate and `config sources stub` read (#1865).
     (`SOURCE_TRANSPORTS;                  (!) . (asc .qetl.source.defined[]; source_transport each asc .qetl.source.defined[]));
     / Names q computes and the browser and `uqs` repeat (#1368).

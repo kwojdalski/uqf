@@ -73,7 +73,7 @@
 \d .
 
 / The flags this process reads are parsed by .qetl.job.bounded.spec_from_flags
-/ in src/etl/core/bounded_worker.q - the one parser scripts/dev/run_backfill.q
+/ in src/etl/core/bounded_flags.q - the one parser scripts/dev/run_backfill.q
 / uses too, so a command line means the same thing to both.
 
 / Whether this process was asked for DEBUG output.

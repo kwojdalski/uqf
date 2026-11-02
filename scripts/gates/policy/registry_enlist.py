@@ -38,7 +38,7 @@ NOT_DICTS: dict[tuple[str, str], str] = {
     ("src/etl/core/stream_job.q", "carry_log"): "job -> a (status; rows; batches) list",
     ("src/etl/core/tick.q", "schemas"): "table -> its empty schema, a table",
     ("src/etl/core/config_audit.q", "watched"): "owner -> a symbol list of globals",
-    ("src/etl/core/worker_runtime.q", "declared_dependencies"): "worker -> a symbol list",
+    ("src/etl/core/worker_dependencies.q", "declared_dependencies"): "worker -> a symbol list",
     ("src/etl/generated/load_plan.q", "declares"): "file -> the names it declares, a symbol list",
     ("src/etl/generated/load_plan.q", "jobs"): "job -> the files it loads, a list of paths",
     ("src/etl/generated/load_plan.q", "procs"): "process -> the files it loads, a list of paths",

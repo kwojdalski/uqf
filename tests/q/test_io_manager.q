@@ -212,6 +212,81 @@
     .qunit.assertEquals[(value p`sym;p`notional;attr p`sym);(`EURUSD`GBPUSD;2e6 1e6;`p);
         "sorted by sym then time, with p#sym, as an HDB partition is expected to be"]};
 
+/ #1861: a table's declared sort rule (`.qetl.plant.sorting`) is what finish applies.
+/ The rule is put straight into the registry - `iodeals` is no plant table, so `sorting`
+/ would refuse it - and taken out again, whether or not the body threw. The body takes a
+/ dummy last argument: a fully applied projection is a call, made before the rule is in.
+.qt.qetl.io.with_rule:{[tbl;rule;body]
+    `.qetl.plant.sort_rules upsert ([] table:(count rule)#tbl; column:key rule; att:value rule);
+    r:@[{[b] (1b;b[::])};body;{[e] (0b;e)}];
+    delete from `.qetl.plant.sort_rules where table=tbl;
+    if[not first r; 'last r];
+    last r}
+
+/ Two deals on one day whose time order is the reverse of their sym order.
+.qt.qetl.io.reversed:{[] ([] deal_time:2026.01.02D09:00:00.000000000 2026.01.02D10:00:00.000000000;
+    sym:`GBPUSD`EURUSD; notional:1e6 2e6)}
+
+.qt.qetl.io.test_finish_sorts_by_a_declared_rule_with_its_attribute:{[t]
+    root:.qt.qetl.io.hdb_dir[];
+    m:.qetl.io.hdb[root;`deal_time];
+    p:.qt.qetl.io.with_rule[`iodeals;(enlist `time)!enlist `s;{[root;m;u]
+        .qetl.io.write[m;`iodeals;.qt.qetl.io.reversed[]];
+        .qetl.io.finish m;
+        (.qt.qetl.io.part[root;2026.01.02;`iodeals];
+         .qetl.io.is_finished[root;2026.01.02;`iodeals])}[root;m]];
+    q:first p;
+    .qunit.assertEquals[(q`time;q`sym);(2026.01.02D09:00:00.000000000 2026.01.02D10:00:00.000000000;`GBPUSD`EURUSD);
+        "sorted by the declared time; the default would have put EURUSD first"];
+    .qunit.assertTrue[last p;"a partition finished by its declared rule reads as finished"];
+    if[not .qetl.io.on_peachq;
+        .qunit.assertEquals[(attr q`time;attr q`sym);(`s;`);"s#time as declared, and no p#sym the default would add"]]};
+
+.qt.qetl.io.test_finish_sorts_by_every_column_of_a_multi_column_rule:{[t]
+    root:.qt.qetl.io.hdb_dir[];
+    m:.qetl.io.hdb[root;`deal_time];
+    rows:([] deal_time:2026.01.02D10:00:00.000000000 2026.01.02D09:00:00.000000000 2026.01.02D09:00:00.000000000;
+        sym:`EURUSD`GBPUSD`EURUSD; notional:1e6 2e6 3e6);
+    q:.qt.qetl.io.with_rule[`iodeals;`notional`sym!`g`;{[root;m;rows;u]
+        .qetl.io.write[m;`iodeals;rows];
+        .qetl.io.finish m;
+        .qt.qetl.io.part[root;2026.01.02;`iodeals]}[root;m;rows]];
+    .qunit.assertEquals[(q`notional;q`sym);(1e6 2e6 3e6;`EURUSD`GBPUSD`EURUSD);
+        "sorted by notional, then sym - the declared columns, in the declared order"];
+    if[not .qetl.io.on_peachq;
+        .qunit.assertEquals[(attr q`notional;attr q`sym);(`g;`);"g# on the first column as declared; none on sym"]]};
+
+.qt.qetl.io.test_a_declared_rule_leaves_other_tables_on_the_default:{[t]
+    root:.qt.qetl.io.hdb_dir[];
+    m:.qetl.io.hdb[root;`deal_time];
+    q:.qt.qetl.io.with_rule[`iodeals;(enlist `time)!enlist `s;{[root;m;u]
+        .qetl.io.write[m;`iootherdeals;.qt.qetl.io.reversed[]];
+        .qetl.io.finish m;
+        .qt.qetl.io.part[root;2026.01.02;`iootherdeals]}[root;m]];
+    .qunit.assertEquals[value q`sym;`EURUSD`GBPUSD;"a table with no rule is still sorted by sym then time"];
+    if[not .qetl.io.on_peachq; .qunit.assertEquals[attr q`sym;`p;"and still gets p#sym"]]};
+
+.qt.qetl.io.test_an_append_to_a_partition_finished_by_a_declared_rule_succeeds:{[t]
+    root:.qt.qetl.io.hdb_dir[];
+    m:.qetl.io.hdb[root;`deal_time];
+    q:.qt.qetl.io.with_rule[`iodeals;(enlist `time)!enlist `s;{[root;m;u]
+        .qetl.io.write[m;`iodeals;.qt.qetl.io.deals[]];
+        .qetl.io.finish m;
+        .qetl.io.write[m;`iodeals;([] deal_time:enlist 2026.01.02D08:00:00.000000000; sym:enlist `USDJPY; notional:enlist 4e6)];
+        .qetl.io.finish m;
+        .qt.qetl.io.part[root;2026.01.02;`iodeals]}[root;m]];
+    .qunit.assertEquals[q`sym;`USDJPY`EURUSD`GBPUSD;"the s#time a declared rule leaves does not refuse the next window, which is then sorted in"]};
+
+.qt.qetl.io.test_a_partition_is_finished_by_its_declared_rule:{[t]
+    root:.qt.qetl.io.hdb_dir[];
+    m:.qetl.io.hdb[root;`deal_time];
+    r:.qt.qetl.io.with_rule[`iodeals;(enlist `time)!enlist `s;{[root;m;u]
+        .qetl.io.write[m;`iodeals;.qt.qetl.io.deals[]];
+        before:.qetl.io.is_finished[root;2026.01.02;`iodeals];
+        .qetl.io.finish m;
+        (before;.qetl.io.is_finished[root;2026.01.02;`iodeals])}[root;m]];
+    .qunit.assertEquals[r;01b;"unsorted by the declared time until finished, then finished - not judged by sym"]};
+
 / --- recovering what an interrupted run left unfinished ----------------
 
 / What a killed process leaves: partitions written, and the in-memory list of
@@ -792,8 +867,8 @@
     m:.qetl.io.hdb[root;`deal_time];
     .qetl.io.write[m;`iodeals;.qt.qetl.io.deals[]];
     base:string .Q.par[root;2026.01.02;`iodeals];
-    c:get hsym `$base,"/.d";
+    c:`sym`time;
     .qunit.assertTrue[not .qetl.io.in_order[base;c];"written in arrival order, GBPUSD first"];
     .qetl.io.finish m;
     .qunit.assertTrue[.qetl.io.in_order[base;c];"finished: sorted by sym, then time"];
-    .qunit.assertTrue[.qetl.io.in_order[base;`notional];"no sym and no time: nothing to be out of order"]};
+    .qunit.assertTrue[.qetl.io.in_order[base;`symbol$()];"no sort columns: nothing to be out of order"]};
