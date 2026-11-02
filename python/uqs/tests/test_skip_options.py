@@ -1,6 +1,6 @@
 """`--skip-<id>` options generated from the guardrail registry (#1826).
 
-Every test declares its guardrails by replacing `guardrails.registry`, the one
+Every test declares its guardrails by replacing `safety.registry`, the one
 place both `--override` and the generated options read. No shipped guardrail
 sets skip_flag yet (#1824: no flag before its runtime), so the real tree is
 shown taking one only under such a declaration.
@@ -16,7 +16,7 @@ import typer
 import typer.main
 from typer.testing import CliRunner
 
-from uqs import cli, guardrails
+from uqs import cli
 from uqs.cli import renames, safety, skip_options
 from uqs.cli import target as target_cli
 from uqs.cli.renames import renamed
@@ -52,7 +52,7 @@ DECLARED = (GUARD, CODE, PLAIN, FENCED, OTHER)
 
 @pytest.fixture
 def declared(monkeypatch):
-    monkeypatch.setattr(guardrails, "registry", lambda: DECLARED)
+    monkeypatch.setattr(safety, "registry", lambda: DECLARED)
     return DECLARED
 
 
@@ -111,7 +111,7 @@ def test_a_declaration_gives_the_command_an_option_its_signature_never_names(dec
 def test_without_the_declaration_there_is_no_option():
     """The same command, under the shipped registry: nothing is generated."""
     assert "--skip-" not in runner.invoke(_app(), ["job", "run", "--help"]).output
-    assert not any(g.skip_flag for g in guardrails.registry()), (
+    assert not any(g.skip_flag for g in safety.registry()), (
         "#1824: no skip flag before its runtime - this PR exposes none"
     )
 
@@ -284,7 +284,7 @@ def test_a_skip_flag_on_a_guardrail_that_is_never_overridden_is_refused():
 
 def test_two_guardrails_spelling_one_flag_are_refused(monkeypatch):
     twin = Guardrail("TEST_GUARD", ("job run",), "the same flag", skip_flag=True)
-    monkeypatch.setattr(guardrails, "registry", lambda: (GUARD, twin))
+    monkeypatch.setattr(safety, "registry", lambda: (GUARD, twin))
     with pytest.raises(
         ValueError, match="'test-guard' and 'TEST_GUARD' would both be --skip-test-guard"
     ):
@@ -293,7 +293,7 @@ def test_two_guardrails_spelling_one_flag_are_refused(monkeypatch):
 
 def test_a_flag_the_command_already_spells_is_refused(monkeypatch):
     clash = Guardrail("override", ("job run",), "names --skip-override", skip_flag=True)
-    monkeypatch.setattr(guardrails, "registry", lambda: (clash,))
+    monkeypatch.setattr(safety, "registry", lambda: (clash,))
     cmd = _run_command()
     cmd.params[0].opts.append("--skip-override")  # as a signature declaring it would
     with pytest.raises(ValueError, match="`uqs job run` already has --skip-override"):
@@ -303,7 +303,7 @@ def test_a_flag_the_command_already_spells_is_refused(monkeypatch):
 def test_a_command_without_override_and_reason_takes_no_generated_option(monkeypatch):
     """Its body could not read the skip, so the skip would be accepted and ignored."""
     lone = Guardrail("lone-guard", ("job bare",), "skips it", skip_flag=True)
-    monkeypatch.setattr(guardrails, "registry", lambda: (lone,))
+    monkeypatch.setattr(safety, "registry", lambda: (lone,))
     app, job = typer.Typer(), typer.Typer()
     app.add_typer(job, name="job")
     job.command("bare", cls=safety.ChangesState)(lambda: None)
@@ -317,9 +317,9 @@ def test_a_command_without_override_and_reason_takes_no_generated_option(monkeyp
 
 
 def _with(monkeypatch, ids: set[str], *extra: Guardrail) -> None:
-    real = guardrails.registry()
+    real = safety.registry()
     flagged = tuple(dataclasses.replace(g, skip_flag=True) if g.id in ids else g for g in real)
-    monkeypatch.setattr(guardrails, "registry", lambda: (*flagged, *extra))
+    monkeypatch.setattr(safety, "registry", lambda: (*flagged, *extra))
 
 
 def test_the_real_tree_takes_a_declared_skip(monkeypatch):

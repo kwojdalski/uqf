@@ -605,7 +605,7 @@ def test_rule5d_a_generated_skip_passes_and_a_handwritten_one_does_not(monkeypat
     from uqs import guardrails
 
     declared = guardrails.Guardrail("test-guard", ("job run",), "skips it", skip_flag=True)
-    monkeypatch.setattr(guardrails, "registry", lambda: (declared,))
+    monkeypatch.setattr(safety, "registry", lambda: (declared,))
     small, job = typer.Typer(), typer.Typer()
     small.add_typer(job, name="job")
 
@@ -626,9 +626,8 @@ def test_rule5d_every_generated_skip_is_on_the_commands_it_names():
     """A guardrail declared with skip_flag names leaves that exist, are
     command classes that generate it, and take --override and --reason
     (skip_options.generated refuses one that does not)."""
-    from uqs import guardrails
 
-    for g in guardrails.registry():
+    for g in safety.registry():
         if not g.skip_flag:
             continue
         for command in g.commands:

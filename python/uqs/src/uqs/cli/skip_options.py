@@ -34,7 +34,6 @@ from typing import Any
 
 from typer.core import TyperCommand, TyperOption
 
-from uqs import guardrails
 from uqs.guardrails import Guardrail
 
 #: ctx.meta's record of the skips a command line gave, as a Request.
@@ -66,7 +65,9 @@ def flag(g: Guardrail) -> str:
 
 def declared(command: str) -> tuple[Guardrail, ...]:
     """The guardrails that give `command` a generated option, in registry order."""
-    return tuple(g for g in guardrails.registry() if g.skip_flag and command in g.commands)
+    from uqs.cli import safety  # safety imports this module: read its registry at call time
+
+    return tuple(g for g in safety.registry() if g.skip_flag and command in g.commands)
 
 
 def _help(g: Guardrail) -> str:

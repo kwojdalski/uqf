@@ -27,9 +27,8 @@ from typing import Annotated
 import typer
 from typer.core import TyperCommand
 
-from uqs import guardrails
 from uqs.cli import skip_options
-from uqs.guardrails import Guardrail
+from uqs.guardrails import Guardrail, aggregate
 from uqs.paths import UqsError
 
 DryRunOpt = Annotated[
@@ -87,10 +86,23 @@ def dry_run_note() -> str:
     return "[dim]dry run: nothing was changed. Run it again without --dry-run.[/]"
 
 
+def registry() -> tuple[Guardrail, ...]:
+    """Every guardrail, from the modules that enforce them, in a fixed order:
+    start, deployment, attachment. Gathered here, in the front end, because
+    uqs/guardrails.py is a leaf every layer imports and must import none."""
+    from uqs.attach import overrides as attach
+    from uqs.deploy import overrides as deploy
+    from uqs.stack import start_overrides as start
+
+    return aggregate(
+        [tuple(start.GUARDRAILS.values()), deploy.GUARDRAILS, attach.GUARDRAILS],
+    )
+
+
 def catalog() -> list[Guardrail]:
     """Every named override a command takes: the overridable guardrails, read
-    from where each is enforced (uqs/guardrails.py)."""
-    return [g for g in guardrails.registry() if g.overridable]
+    from where each is enforced (`registry`)."""
+    return [g for g in registry() if g.overridable]
 
 
 def given(command: str, names: list[str] | None, reason: str | None) -> dict[str, str]:
@@ -110,7 +122,7 @@ def given(command: str, names: list[str] | None, reason: str | None) -> dict[str
         return {}
     if not text:
         raise UqsError(f"{asked[0][1]} needs --reason: say why the check is bypassed")
-    every = {g.id: g for g in guardrails.registry()}
+    every = {g.id: g for g in registry()}
     known = sorted(g.name for g in every.values() if g.overridable and command in g.commands)
     whole = {name: spelling for name, spelling in asked if ":" not in name}
     out: dict[str, str] = {}
