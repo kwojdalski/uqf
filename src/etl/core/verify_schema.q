@@ -55,6 +55,31 @@
     ([] producer:enlist producer; destination:enlist destination; column:enlist column;
         problem:enlist problem; expected:enlist expected; actual:enlist actual; basis:enlist basis)}
 
+/ ------------------------------------------------------------ EQUIVALENCE BASIS
+
+/ What "the same rows" means for a dataset, declared by the dataset and read here:
+/   events      every row each producer returns is a fact; the producers must return the same multiset
+/   revisions   each row is one revision of a key; the producers must return the same revisions
+/   final_state only the last row per key matters; earlier revisions may differ
+/ A shared destination schema does not imply any of them, so a dataset that declares
+/ none is not compared: cross-mode equivalence reads UNVERIFIED, never a guess.
+.qetl.verify.bases:`events`revisions`final_state
+
+/ dataset -> its declared equivalence basis.
+.qetl.verify.basis_of:(`symbol$())!`symbol$()
+
+/ Declare what row-for-row equivalence means for a dataset's producers.
+/ @param dataset the dataset, a symbol
+/ @param basis one of `events`revisions`final_state
+/ @return the dataset
+/ @throws error naming the basis when it is not one of them
+/ @eg .qetl.verify.declare_basis[`demo_deals;`events]  ->  `demo_deals
+.qetl.verify.declare_basis:{[dataset;basis]
+    if[not basis in .qetl.verify.bases;
+        '"declare_basis: ",string[dataset],"'s basis ",.Q.s1[basis]," is none of ",", " sv string .qetl.verify.bases];
+    .qetl.verify.basis_of[dataset]:basis;
+    dataset}
+
 / ------------------------------------------------------------ DISCOVERY
 
 / Private: the key columns a producer holds its rows to: its own declaration, else
