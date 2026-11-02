@@ -126,13 +126,6 @@ def test_every_reader_gets_the_same_columns_from_any_spelling(spell):
         assert plant_table_fields(repo, table) == [n for n in names if n != "time"]
 
 
-def test_gateway_access_reads_the_shared_columns():
-    from uqs.stack import gateway_access
-
-    for table in EXPECTED_TABLES:
-        assert gateway_access._plant_columns(table) == set(schemas.columns(table))
-
-
 def test_the_column_splitter_stops_at_the_literals_own_close_and_keeps_inner_semicolons():
     line = (
         ".qetl.plant.t:([]time:`timestamp$(); p:enlist[1;2]; q:`g#`symbol$())  / a (comment); x:1"

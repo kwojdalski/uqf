@@ -160,6 +160,44 @@
         attempt+:1];
     `state`kind`attempts`result`error!(`failed;`transport;cap;::;last outcome)}
 
+/ ------------------------------------------------- HOW A DATASET IS READ
+/ .
+/ The columns getdata reads a dataset a worker writes by (#1869), exported to
+/ uqs as q_facts.BOUNDED_DATASET_TIME_COLUMNS and ..._INSTRUMENT_COLUMNS. A
+/ dataset that is a plant table is read as the plant says
+/ (.qetl.plant.read_time_column, src/etl/plant_tables.q): that definition is
+/ the shape stored, whatever the worker's own output omits - duckdb_deals'
+/ transform leaves `time` out, the HDB writer stamps it, and the plant table
+/ is read by it. Any other dataset is stored as its transform's output with
+/ `time` stamped by the same writer when the output has none.
+
+/ The columns a dataset's worker output has.
+/ @param d the dataset
+/ @return the column names, from the first worker that writes it
+.qetl.job.bounded.dataset_columns:{[d]
+    cols .qetl.transform.output_schema first exec transform from .qetl.job.bounded.worker_cfg where dataset=d}
+
+/ The time column a dataset is read by.
+/ @param d the dataset
+/ @return `time, as a plant table or the HDB writer's stamp gives it
+/ @throws error when a dataset's output has neither it nor its source's time column to stamp it from
+/ @eg .qetl.job.bounded.read_time_column `duckdb_deals  ->  `time
+.qetl.job.bounded.read_time_column:{[d]
+    if[d in .qetl.plant.names[]; :.qetl.plant.read_time_column d];
+    c:.qetl.job.bounded.dataset_columns[d];
+    stamp:(.qetl.source.def first exec source from .qetl.job.bounded.worker_cfg where dataset=d)`time_column;
+    if[not (.qetl.plant.time_column in c) or stamp in c;
+        '"read_time_column: ",string[d]," has neither ",string[.qetl.plant.time_column]," nor ",string[stamp]," to be read by"];
+    .qetl.plant.time_column}
+
+/ The instrument column a dataset is read by, or a null symbol.
+/ @param d the dataset
+/ @return a plant table's own, else `sym where the output has one
+/ @eg .qetl.job.bounded.read_instrument_column `order_quality  ->  `book
+.qetl.job.bounded.read_instrument_column:{[d]
+    if[d in .qetl.plant.names[]; :.qetl.plant.read_instrument_column d];
+    .qetl.plant.instrument_in[d;.qetl.job.bounded.dataset_columns[d]]}
+
 / ------------------------------------------------------------- RUN MODES
 / .
 / What a bounded run is asked to do, each mode defined by what it may TOUCH:

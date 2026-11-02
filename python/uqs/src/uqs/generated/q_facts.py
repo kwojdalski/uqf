@@ -116,13 +116,13 @@ STATUS_FILE_PREFIX: str = "airflow_status_"
 #: a status file's name after the instance id - .qetl.status.file_suffix
 STATUS_FILE_SUFFIX: str = ".txt"
 
-#: dataset -> time column getdata reads it by (#1363)
+#: dataset -> time column getdata reads it by - .qetl.job.bounded.read_time_column
 BOUNDED_DATASET_TIME_COLUMNS: dict[str, str] = {
     "book_liquidity_1m": "time",
     "crypto_book_1s": "time",
-    "demo_deals": "deal_time",
+    "demo_deals": "time",
     "demo_execution_quality": "time",
-    "duckdb_deals": "deal_time",
+    "duckdb_deals": "time",
     "event_tape": "time",
     "exec_bar": "time",
     "fx_markout": "time",
@@ -132,7 +132,7 @@ BOUNDED_DATASET_TIME_COLUMNS: dict[str, str] = {
     "trades_copy": "time",
 }
 
-#: dataset -> its instrument column, empty if none (#1363)
+#: dataset -> its instrument column, empty if none - .qetl.job.bounded.read_instrument_column
 BOUNDED_DATASET_INSTRUMENT_COLUMNS: dict[str, str] = {
     "book_liquidity_1m": "sym",
     "crypto_book_1s": "sym",
@@ -144,7 +144,7 @@ BOUNDED_DATASET_INSTRUMENT_COLUMNS: dict[str, str] = {
     "fx_markout": "sym",
     "fx_markout_wide": "sym",
     "imported_trades": "sym",
-    "order_quality": "",
+    "order_quality": "book",
     "trades_copy": "sym",
 }
 

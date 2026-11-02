@@ -63,8 +63,12 @@ FACTS = {
     ),
     "STATUS_FILE_PREFIX": "a status file's name before the instance id - .qetl.status.file_prefix",
     "STATUS_FILE_SUFFIX": "a status file's name after the instance id - .qetl.status.file_suffix",
-    "BOUNDED_DATASET_TIME_COLUMNS": "dataset -> time column getdata reads it by (#1363)",
-    "BOUNDED_DATASET_INSTRUMENT_COLUMNS": "dataset -> its instrument column, empty if none (#1363)",
+    "BOUNDED_DATASET_TIME_COLUMNS": (
+        "dataset -> time column getdata reads it by - .qetl.job.bounded.read_time_column"
+    ),
+    "BOUNDED_DATASET_INSTRUMENT_COLUMNS": (
+        "dataset -> its instrument column, empty if none - .qetl.job.bounded.read_instrument_column"
+    ),
     "SOURCE_TRANSPORTS": "source -> its transport, as its declaration resolved it (#1865)",
     "CFG_SOURCES": "the worker-config layers, most significant first - .qetl.cfg.sources",
     "CFG_ENV_LAYER": "the layer that outranks a worker-config override - .qetl.cfg.env_layer",

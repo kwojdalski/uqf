@@ -170,10 +170,11 @@
 / be partitioned or would land in the tickerplant's dates.
 / @private
 .qetl.io.hdb_rows:{[partition_col;target;batch]
-    if[not any (`time;partition_col) in cols batch;
+    tc:.qetl.plant.time_column;
+    if[not any (tc;partition_col) in cols batch;
         '"hdb: ",string[target],"'s batch has neither time nor ",string[partition_col]," to partition by"];
-    data:$[`time in cols batch; batch; `time xcols ![batch;();0b;enlist[`time]!enlist partition_col]];
-    days:`date$data`time;
+    data:$[tc in cols batch; batch; tc xcols ![batch;();0b;enlist[tc]!enlist partition_col]];
+    days:`date$data tc;
     if[any null days;
         '"hdb: ",string[target]," has rows with a null time - no partition to put them in"];
     / Names the REMEDY, not only the refusal. The rule is a boundary - today

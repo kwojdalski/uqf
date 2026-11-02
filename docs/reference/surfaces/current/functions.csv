@@ -214,6 +214,7 @@ qetl.io.remote.contract,versions,value,,
 qetl.job.bounded,checkpoint,function,2,worker cursor
 qetl.job.bounded,cleanup,function,1,worker
 qetl.job.bounded,connect_error,function,2,source e
+qetl.job.bounded,dataset_columns,function,1,d
 qetl.job.bounded,def,function,1,worker
 qetl.job.bounded,default_version,function,1,worker
 qetl.job.bounded,define,function,2,worker decl
@@ -237,6 +238,8 @@ qetl.job.bounded,plan_only,function,2,worker run_spec
 qetl.job.bounded,process_worker,value,,
 qetl.job.bounded,publish,function,2,worker batch
 qetl.job.bounded,publish_last_batch,function,2,worker unused
+qetl.job.bounded,read_instrument_column,function,1,d
+qetl.job.bounded,read_time_column,function,1,d
 qetl.job.bounded,require_flags,function,1,opts
 qetl.job.bounded,required_cfg,value,,
 qetl.job.bounded,required_flags,value,,
@@ -581,6 +584,8 @@ qetl.plant,fx_markout_wide,table,,
 qetl.plant,fx_orderbook,table,,
 qetl.plant,fx_position,table,,
 qetl.plant,fx_position_open,table,,
+qetl.plant,instrument_exceptions,dict,,
+qetl.plant,instrument_in,function,2,t c
 qetl.plant,kafka_dead_letter,table,,
 qetl.plant,kafka_message,table,,
 qetl.plant,last_value,table,,
@@ -602,12 +607,15 @@ qetl.plant,predictions,table,,
 qetl.plant,problems,function,2,table_name rows
 qetl.plant,published,function,1,t
 qetl.plant,quote,table,,
+qetl.plant,read_instrument_column,function,1,t
+qetl.plant,read_time_column,function,1,t
 qetl.plant,reference_data,table,,
 qetl.plant,schema,function,1,t
 qetl.plant,shape,function,1,t
 qetl.plant,sort_rules,dict,,
 qetl.plant,sorting,function,2,table_name rule
 qetl.plant,superbook,table,,
+qetl.plant,time_column,value,,
 qetl.plant,trade,table,,
 qetl.plant,trades,table,,
 qetl.plant,trades_copy,table,,

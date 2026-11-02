@@ -40,6 +40,6 @@ proctype,tablename,primarytimecolumn,attributecolumn,instrumentcolumn,rolltimeof
 ,trades,time,sym,sym,,,,
 ,trades_copy,time,sym,sym,,,,
 ,wide_orderbook,time,sym,sym,,,,
-,demo_deals,deal_time,sym,sym,,,,
+,demo_deals,time,sym,sym,,,,
 ,event_tape,time,sym,sym,,,,
 ,imported_trades,time,sym,sym,,,,
