@@ -22,7 +22,7 @@ full suite - tests/run_tests.q, every suite - on that copy:
 
     python3 scripts/portable/full_suite.py --q "$PEACHQ_BIN"
     python3 scripts/portable/full_suite.py --q "$PEACHQ_BIN" --shards 4   # in parallel
-    python3 scripts/test.py q-unit-peachq      # the same, as a lane
+    uv run pytest tests/qrun/test_q_suite.py -m peachq   # the same, as a test (#1808)
 
 With `--shards N` (#1694) the suite runs as N PeachQ processes at once, each
 in its own copy of the tree, running a share of the tests/q/test_*.q files

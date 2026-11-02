@@ -628,7 +628,7 @@ Add `tests/q/test_fx_rates_backfill.q`, defining its tests under
 whole path and no `\d` (the scaffold writes it that way). Then:
 
 ```
-scripts/test.py q-unit
+uv run pytest tests/qrun/test_q_suite.py::test_the_q_suite_passes
 ```
 
 Worth covering beyond the happy path: a second run is idle; a version bump

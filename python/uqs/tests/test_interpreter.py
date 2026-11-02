@@ -154,8 +154,6 @@ def test_each_removed_variable_is_refused_naming_its_replacement(tmp_path, name,
         peachq_binary(env)
     with pytest.raises(SystemExit, match=message):
         runner.check_interpreter(env)
-    with pytest.raises(SystemExit, match=message):
-        runner.peachq_binary(env)
     assert interpreter_status(env).problem is not None
 
 
@@ -265,11 +263,9 @@ def _outcome(call) -> str:
         ("kdbx", "missing", "refused"),
     ],
 )
-def test_peachq_binary_and_its_copy_in_scripts_test_py_agree(
-    tmp_path, resolver, warnings, qcmd, override, expected
-):
+def test_peachq_binary_chooses_by_the_rule(tmp_path, resolver, warnings, qcmd, override, expected):
     """KDB-X alone: the pinned build. QCMD on PeachQ: QCMD. --peachq: that,
-    if it is PeachQ. scripts/test.py restates the rule; both answer alike."""
+    if it is PeachQ. (scripts/test.py's copy went with its PeachQ lanes, #1808.)"""
     binaries = {
         "kdbx": _fake_q(tmp_path, "kdbx"),
         "peachq": _fake_q(tmp_path, "peachq"),
@@ -287,7 +283,6 @@ def test_peachq_binary_and_its_copy_in_scripts_test_py_agree(
         "refused": "refused",
     }[expected]
     assert _outcome(lambda: peachq_binary(env, override=chosen)) == want
-    assert _outcome(lambda: runner.peachq_binary(env, override=chosen)) == want
 
 
 def test_a_resolver_refusal_is_a_uqs_error(monkeypatch, tmp_path):

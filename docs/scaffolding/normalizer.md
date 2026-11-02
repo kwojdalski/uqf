@@ -87,8 +87,9 @@ transform whose examples are all empty.
 
 ## Then
 
-Implement one mapping at a time and run `scripts/test.py q-unit` between each:
-with several sources it is the only way to know which one broke. Replace
+Implement one mapping at a time and run
+`uv run pytest tests/qrun/test_q_suite.py::test_the_q_suite_passes` between
+each: with several sources it is the only way to know which one broke. Replace
 `tests/q/test_all_fills.q` entirely, and add `all_fills1` to a profile --- a
 normalizer is nearly always a dependency rather than a leaf, so it usually
 arrives in one by being what a leaf reads.

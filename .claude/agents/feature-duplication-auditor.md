@@ -211,7 +211,7 @@ If the maintainer unifies two implementations, rerun the gates that notice --- a
 removed or moved function breaks three generated artefacts:
 
 ```bash
-scripts/test.py q-unit
+uv run pytest tests/qrun/test_q_suite.py::test_the_q_suite_passes
 scripts/test.py python
 uv run python scripts/generate/derive.py contract-surface
 ```

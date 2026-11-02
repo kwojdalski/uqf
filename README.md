@@ -25,7 +25,7 @@ Every entry point, the running stack included, finds q the way TorQ does:
 `~/.kx/bin/q`). To choose an interpreter, set `$QCMD` and `$QHOME`:
 
 ```
-QCMD=/path/to/q QHOME=/path/to/qhome scripts/test.py q-unit
+QCMD=/path/to/q QHOME=/path/to/qhome uv run pytest tests/qrun/test_q_suite.py
 ```
 
 **PeachQ is opt-in.** [PeachQ](https://peachq.org) is an MIT-licensed q
@@ -33,7 +33,7 @@ interpreter, used only when chosen out loud --- `QCMD` naming its binary, which
 is asked which q it is ([details](docs/reference/environment.md#peachq)):
 
 ```
-QCMD=/path/to/peachq/q scripts/test.py q-unit
+QCMD=/path/to/peachq/q uv run pytest tests/qrun/test_q_suite.py -m peachq --require-q peachq
 ```
 
 Run everything from the repository root; the load scripts use relative paths.
@@ -158,7 +158,6 @@ Component READMEs: [`python/uqs/`](python/uqs/README.md) (the stack CLI),
 ## Testing
 
 ```
-scripts/test.py q-unit    # the deterministic qUnit suite
 scripts/test.py python    # orchestrator and frontend
 scripts/test.py all       # every lane except the coverage lanes and the live-stack lanes
 ```
@@ -173,6 +172,10 @@ the backends it drives (#1808); the lanes move to it one at a time, each leaving
 ```
 uv run pytest                                      # everything; a test whose interpreter is missing skips, saying so
 uv run pytest -m "not q_backend"                   # without the q scripts run as tests (what the python-tests hook runs)
+uv run pytest tests/qrun/test_q_suite.py::test_the_q_suite_passes   # the qUnit suite on KDB-X (was q-unit);
+                                                   # --q-files test_a.q,test_b.q runs only those files' suites
+uv run pytest tests/qrun/test_q_suite.py -m release     # the same suites in reverse order (was q-order), opt-in
+uv run pytest tests/qrun/test_q_suite.py -m peachq      # the whole suite on PeachQ, held to its known gaps (was q-unit-peachq)
 uv run pytest tests/qrun/test_worked_examples.py   # every scripts/examples/*.q (was q-scripts), on KDB-X
 uv run pytest tests/qrun/test_doc_blocks.py -m kdbx     # the docs' marked q blocks on KDB-X (was q-docs)
 uv run pytest tests/qrun/test_doc_blocks.py -m peachq   # ... and on PeachQ (was q-docs-peachq); --peachq PATH picks one

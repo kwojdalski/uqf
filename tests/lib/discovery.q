@@ -145,7 +145,7 @@
 
 // Reorder suites for the runner: UQF_TEST_ORDER=reverse or shuffle runs the
 // same suites in another order, so a test that quietly depends on running
-// after another one fails there (scripts/test.py q-order). Shuffle draws from
+// after another one fails there (tests/qrun/test_q_suite.py, -m release). Shuffle draws from
 // the seed the runner set, so a shuffled run can be repeated.
 // @param suites namespace symbols
 // @param order "", "reverse" or "shuffle"

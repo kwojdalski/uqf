@@ -43,6 +43,9 @@ class QRun:
     returncode: int | None  #: None when it was stopped at the timeout
     output: str  #: stdout and stderr, interleaved as q wrote them
     timeout: float | None
+    #: Whether the output is q's own, so that q's error display in it fails
+    #: the run: not for a driver that reports q runs it made itself.
+    q_errors: bool = True
 
     def errors(self) -> list[str]:
         """The lines of the output that are q's display of an uncaught error."""
@@ -54,7 +57,7 @@ class QRun:
             return f"still running after {self.timeout:g}s - stopped"
         if self.returncode != 0:
             return f"exit {self.returncode}"
-        errors = self.errors()
+        errors = self.errors() if self.q_errors else []
         if errors:
             return f"exit 0, but q reported an error: {errors[0]}"
         return None
@@ -91,7 +94,22 @@ def run_q(
     stdin_open: bool = False,
 ) -> QRun:
     """Run `q script args` from `cwd` and wait, at most `timeout` seconds."""
-    argv: Sequence[str] = (str(q), str(script), *args)
+    argv = (str(q), str(script), *args)
+    return run_process(argv, cwd=cwd, env=env, timeout=timeout, stdin_open=stdin_open)
+
+
+def run_process(
+    argv: Sequence[str],
+    *,
+    cwd: Path,
+    env: Mapping[str, str],
+    timeout: float,
+    stdin_open: bool = False,
+    q_errors: bool = True,
+) -> QRun:
+    """Run `argv` from `cwd` as `run_q` runs q: its own process group, stopped
+    whole at `timeout` or on any way out. `q_errors=False` for a driver whose
+    output quotes q runs it judged itself (scripts/portable/full_suite.py)."""
     read_fd = write_fd = -1
     if stdin_open:
         read_fd, write_fd = os.pipe()
@@ -128,7 +146,7 @@ def run_q(
         if stdin_open:
             os.close(read_fd)
             os.close(write_fd)
-    return QRun(tuple(argv), code, output or "", timeout)
+    return QRun(tuple(argv), code, output or "", timeout, q_errors)
 
 
 def assert_passed(run: QRun, what: str) -> None:

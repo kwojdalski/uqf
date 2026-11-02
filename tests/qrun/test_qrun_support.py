@@ -186,6 +186,8 @@ def test_each_q_hook_runs_its_tests_through_pytest_and_no_lane_runs_them_too() -
     config = (REPO / ".pre-commit-config.yaml").read_text()
     q_tests = _hook(config, "q-tests")
     assert "tests/qrun/test_documented_examples.py tests/qrun/test_worked_examples.py" in q_tests
+    assert "tests/qrun/test_q_suite.py::test_the_q_suite_passes --q-files" in q_tests
+    assert "scripts/test.py q-unit" not in q_tests
     assert "--require-q kdbx" in q_tests
     assert "scripts/test.py q-examples" not in q_tests
     assert "q-scripts" not in q_tests.replace("q-scripts lane", "")
@@ -199,7 +201,8 @@ def test_each_q_hook_runs_its_tests_through_pytest_and_no_lane_runs_them_too() -
     test_py = (REPO / "scripts/test.py").read_text()
     gone = ("lane_q_scripts", "lane_q_docs", "scripts/examples", "doc_examples",
             "run_examples.q", "run_backfill_process.q", "run_two_instances.q",
-            "run_remote_writer.q", "run_metatables_hdb.q")  # fmt: skip
+            "run_remote_writer.q", "run_metatables_hdb.q", "run_tests.q",
+            "full_suite.py", "UQF_TEST_ORDER")  # fmt: skip
     for name in gone:
         assert name not in test_py
 
