@@ -142,6 +142,21 @@ BOUNDED_DATASET_INSTRUMENT_COLUMNS: dict[str, str] = {
     "trades_copy": "sym",
 }
 
+#: source -> its transport, as its declaration resolved it (#1865)
+SOURCE_TRANSPORTS: dict[str, str] = {
+    "demo_deals": "ipc",
+    "demo_events": "ipc",
+    "duckdb_deals": "odbc",
+    "hdb_crypto_book": "ipc",
+    "hdb_demo_markouts": "ipc",
+    "hdb_executions": "ipc",
+    "hdb_fx_markouts": "ipc",
+    "hdb_market_data": "ipc",
+    "hdb_orders": "ipc",
+    "hdb_transfer": "local",
+    "upstream_trades": "ipc",
+}
+
 #: the worker-config layers, most significant first - .qetl.cfg.sources
 CFG_SOURCES: tuple[str, ...] = (
     "env",

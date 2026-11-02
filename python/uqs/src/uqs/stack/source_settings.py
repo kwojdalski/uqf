@@ -29,8 +29,9 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
+from uqs.generated import q_facts
 from uqs.model.qnames import credential_var
-from uqs.paths import SOURCE_DIR, UqsError, UqsPaths
+from uqs.paths import UqsError, UqsPaths
 from uqs.stack.env import build_env
 
 #: The file, in each config layer.
@@ -218,15 +219,17 @@ def add_stub(
     return f"added a {STUB} row for {source} to {app}{copied}"
 
 
-_TRANSPORT_LINE = re.compile(r"^(?:\.[A-Za-z_][\w.]*\.)?transport:`(\w+)", re.MULTILINE)
-
-
-def declared_transport(repo_root: Path, source: str, default: str) -> str:
-    """The transport src/etl/sources/<source>.q declares - its top-level
-    `transport:` line, as the scaffold writes it - or `default` when it
-    declares none. A source with no such file is refused."""
-    path = repo_root / SOURCE_DIR / f"{source}.q"
-    if not path.is_file():
-        raise UqsError(f"no source {source!r}: {path.relative_to(repo_root)} does not exist")
-    found = _TRANSPORT_LINE.search(path.read_text(encoding="utf-8"))
-    return found.group(1) if found else default
+def declared_transport(source: str) -> str:
+    """The transport q resolved for `source` - `q_facts.SOURCE_TRANSPORTS`,
+    from `.qetl.source.def`, so a declaration spelled any way q accepts reads
+    the same. A source q_facts does not list (one added since it was
+    generated) is refused: its transport is not Python's to guess."""
+    try:
+        return q_facts.SOURCE_TRANSPORTS[source]
+    except KeyError:
+        raise UqsError(
+            f"no source {source!r} among the sources q registers "
+            f"({', '.join(q_facts.SOURCE_TRANSPORTS)}); a source added since "
+            "`derive.py q-facts` last ran has no recorded transport - add its row to "
+            "sources.csv by hand, naming the transport it declares"
+        ) from None
