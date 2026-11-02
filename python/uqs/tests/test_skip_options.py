@@ -11,13 +11,12 @@ from __future__ import annotations
 
 import dataclasses
 import json
-import re
 
 import pytest
 import typer
 import typer.main
+from plain_cli import PlainRunner
 from typer.core import TyperGroup
-from typer.testing import CliRunner
 
 from uqs import cli
 from uqs.cli import renames, safety, skip_options
@@ -27,22 +26,7 @@ from uqs.deploy import config, control, targets
 from uqs.guardrails import Guardrail
 from uqs.paths import UqsError
 
-#: GitHub Actions sets GITHUB_ACTIONS, and Typer's rich help then forces a
-#: terminal: help and usage errors come back in colour, an escape code inside
-#: `--skip-test-guard`. Every result here is read as plain text, as a user's
-#: eyes read it (the same regex as test_deploy_prune.py).
-_ANSI = re.compile(rb"\x1b\[[0-9;]*m")
-
-
-class _PlainRunner(CliRunner):
-    def invoke(self, *args, **kwargs):
-        result = super().invoke(*args, **kwargs)
-        for field in ("stdout_bytes", "stderr_bytes", "output_bytes"):
-            setattr(result, field, _ANSI.sub(b"", getattr(result, field)))
-        return result
-
-
-runner = _PlainRunner()
+runner = PlainRunner()
 
 GUARD = Guardrail(
     "test-guard",
