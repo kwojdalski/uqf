@@ -142,4 +142,28 @@ Unmodified TorQ Finance Starter Pack processes. uqf never edits the
 vendored `process.csv`; `bootstrap()` regenerates an overlay copy that
 appends the rows above.
 
-`discovery1`, `stp1`, `rdb1`, `hdb1`, `hdb2`, `wdb1`, `sort1`, `gateway1`, `killtick`, `monitor1`, `tpreplay1`, `housekeeping1`, `reporter1`, `filealerter1`, `feed1`, `sctp1`, `sortworker1`, `sortworker2`, `metrics1`, `dqc1`, `dqcdb1`, `dqe1`, `dqedb1`
+| process | port | proctype |
+|---|---|---|
+| `discovery1` | 6051 | discovery |
+| `stp1` | 6050 | segmentedtickerplant |
+| `rdb1` | 6052 | rdb |
+| `hdb1` | 6053 | hdb |
+| `hdb2` | 6054 | hdb |
+| `wdb1` | 6055 | wdb |
+| `sort1` | 6056 | sort |
+| `gateway1` | 6057 | gateway |
+| `killtick` | 6058 | kill |
+| `monitor1` | 6059 | monitor |
+| `tpreplay1` | 6060 | tickerlogreplay |
+| `housekeeping1` | 6061 | housekeeping |
+| `reporter1` | 6062 | reporter |
+| `filealerter1` | 6063 | filealerter |
+| `feed1` | 6064 | feed |
+| `sctp1` | 6065 | segmentedchainedtickerplant |
+| `sortworker1` | 6066 | sortworker |
+| `sortworker2` | 6067 | sortworker |
+| `metrics1` | 6068 | metrics |
+| `dqc1` | 6070 | dqc |
+| `dqcdb1` | 6071 | dqcdb |
+| `dqe1` | 6072 | dqe |
+| `dqedb1` | 6073 | dqedb |

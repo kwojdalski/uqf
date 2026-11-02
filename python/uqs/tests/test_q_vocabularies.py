@@ -20,7 +20,7 @@ from typing import Any
 
 from uqs.cli import runs as cli_runs
 from uqs.generated import q_facts
-from uqs.stack import backfill, logs, runs
+from uqs.stack import backfill, logs, run_modes, runs
 from uqs.stack.trace_render import CODE_FIELDS
 
 UQF_ROOT = Path(__file__).resolve().parents[3]
@@ -114,7 +114,7 @@ def test_on_conflict_and_modes_are_read_from_q_not_copied():
     """`--on-conflict` and `--mode` offer q's own values (#818): the CLI
     spelling of a mode swaps q's underscore for a hyphen, and nothing else."""
     assert backfill.ON_CONFLICT == q_facts.IO_STRATEGIES
-    assert backfill.MODES == tuple(m.replace("_", "-") for m in q_facts.RUN_MODES)
+    assert run_modes.MODES == tuple(m.replace("_", "-") for m in q_facts.RUN_MODES)
 
 
 def test_status_dir_is_qs_rule(tmp_path):

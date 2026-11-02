@@ -57,12 +57,6 @@ from uqs.stack import backfill as stack_backfill
 from uqs.stack import backfill_status, runs
 from uqs.stack.attach_state import VERIFIED
 
-#: What an attached backfill may do: `validate` and `plan` read configuration, code
-#: and the local ledgers; `dry-run` and `run` start the runner (uqs.attach.backfill_run),
-#: which admits afresh first.
-READ_ONLY_MODES = ("validate", "plan")
-EXECUTION_MODES = ("dry-run", "run")
-
 #: The q script that evaluates a plan, and the subdirectory (of the status
 #: directory) attached runs keep their state in.
 PLAN_SCRIPT = Path("scripts") / "dev" / "attached_plan.q"
