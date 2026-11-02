@@ -15,7 +15,7 @@ from uqs.stack import start_overrides as start
 def test_the_catalog_lists_what_it_did_before_the_registry_in_the_same_order():
     """The rows `uqs override list` showed when safety.catalog built them by
     hand from the three owners' tables - same names, commands, effects, order."""
-    before = [
+    before: list[tuple[str, tuple[str, ...], str]] = [
         (start.NAMES[field], ("start", "restart"), g.description)
         for field, g in start.GUARDRAILS.items()
     ]
