@@ -28,17 +28,20 @@
     n where {[x] v:get ` sv `.qetl.plant,x; $[99h=type v; 98h=type key v; 0b]} each n}
 
 / One table's declared schema: ordered columns with type char and attribute,
-/ the nested columns' declared element types, and the declared sort rule.
+/ the nested columns' declared element types, the declared sort rule, and the
+/ time and instrument columns the table is read by (#1869).
 .qschema.table:{[t]
     m:0!meta .qetl.plant.schema t;
     nested:exec column!element from .qetl.plant.elements where table=t;
     sorting:exec flip (string column; string att) from .qetl.plant.sort_rules where table=t;
-    `name`vendored`columns`nested`sorting!(
+    `name`vendored`columns`nested`sorting`time_column`instrument_column!(
         string t;
         t in .qetl.plant.vendored;
         {[c;ty;a] `name`type`attribute!(string c; enlist ty; string a)}'[m`c; m`t; m`a];
         (key nested)!enlist each value nested;
-        sorting)}
+        sorting;
+        string .qetl.plant.read_time_column t;
+        string .qetl.plant.read_instrument_column t)}
 
 if[count k:.qschema.keyed[];
     -2 "export_plant_schema: keyed table(s) ",(", " sv string k)," in .qetl.plant - a plant table is unkeyed; the schema metadata does not carry keyed tables";

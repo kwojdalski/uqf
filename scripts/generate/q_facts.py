@@ -69,8 +69,6 @@ FACTS = {
     "BOUNDED_DATASET_INSTRUMENT_COLUMNS": (
         "dataset -> its instrument column, empty if none - .qetl.job.bounded.read_instrument_column"
     ),
-    "PLANT_TABLE_TIME_COLUMNS": "plant table -> time column getdata reads it by (#1869)",
-    "PLANT_TABLE_INSTRUMENT_COLUMNS": "plant table -> its instrument column, empty if none (#1869)",
     "SOURCE_TRANSPORTS": "source -> its transport, as its declaration resolved it (#1865)",
     "CFG_SOURCES": "the worker-config layers, most significant first - .qetl.cfg.sources",
     "CFG_ENV_LAYER": "the layer that outranks a worker-config override - .qetl.cfg.env_layer",
