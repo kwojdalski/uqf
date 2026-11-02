@@ -2,7 +2,7 @@
 / fits the destination's schema (.qetl.verify, #1851).
 / .
 / A dataset can be filled by more than one job: a streaming job that publishes it
-/ and a bounded worker that backfills it. `uqs job verify <dataset>` asks whether
+/ and a bounded worker that backfills it. `uqs job check <dataset>` asks whether
 / they agree - with the destination and with each other - and this file is the
 / first half of that: discovery, and the schema.
 / .

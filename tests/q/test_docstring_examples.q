@@ -225,13 +225,13 @@
         "opens a Databento parquet file, which exists only where that data has been downloaded";
         "POSTs to a webhook, which needs an HTTP endpoint listening (#947)";
         "POSTs to a webhook, which needs an HTTP endpoint listening (#987)";
-        "refuses outside a throwaway q, and this runner holds a coverage ledger; `uqs job verify` runs it in its own q (#1851)";
-        "refuses outside a throwaway q, and this runner holds a coverage ledger; `uqs job verify` runs it in its own q (#1851)";
-        "refuses outside a throwaway q, and this runner holds a coverage ledger; `uqs job verify` runs it in its own q (#1851)";
-        "refuses outside a throwaway q, and this runner holds a coverage ledger; `uqs job verify` runs it in its own q (#1851)";
-        "refuses outside a throwaway q, and this runner holds a coverage ledger; `uqs job verify` runs it in its own q (#1851)";
-        "refuses outside a throwaway q, and this runner holds a coverage ledger; `uqs job verify` runs it in its own q (#1851)";
-        "refuses outside a throwaway q, and this runner holds a coverage ledger; `uqs job verify` runs it in its own q (#1851)"))
+        "refuses outside a throwaway q, and this runner holds a coverage ledger; `uqs job check` runs it in its own q (#1851)";
+        "refuses outside a throwaway q, and this runner holds a coverage ledger; `uqs job check` runs it in its own q (#1851)";
+        "refuses outside a throwaway q, and this runner holds a coverage ledger; `uqs job check` runs it in its own q (#1851)";
+        "refuses outside a throwaway q, and this runner holds a coverage ledger; `uqs job check` runs it in its own q (#1851)";
+        "refuses outside a throwaway q, and this runner holds a coverage ledger; `uqs job check` runs it in its own q (#1851)";
+        "refuses outside a throwaway q, and this runner holds a coverage ledger; `uqs job check` runs it in its own q (#1851)";
+        "refuses outside a throwaway q, and this runner holds a coverage ledger; `uqs job check` runs it in its own q (#1851)"))
 
 / Private: drop a trailing prose gloss - "1.016667 (2024 is a leap year)".
 / Both forms are tried by classify below rather than only the stripped one,

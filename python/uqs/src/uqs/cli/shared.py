@@ -46,8 +46,9 @@ job_app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
     help="ETL jobs: write them into the tree (new, list, remove, install) and operate on them "
-    "- backfill, preview a feed, find its gaps, receive another machine's batches, a "
-    "worker's checkpoint and runs, and its attachment to a TorQ stack already running.",
+    "- backfill, preview a feed, check a dataset's producers, find its gaps, receive another "
+    "machine's batches, a worker's checkpoint and runs, and its attachment to a TorQ stack "
+    "already running.",
 )
 #: The two help panels `uqs job --help` lists its commands under.
 JOB_AUTHORING_PANEL = "Authoring"

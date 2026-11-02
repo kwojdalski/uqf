@@ -1,4 +1,4 @@
-"""`uqs job verify`: run `.qetl.verify.run` in a q of its own and read the report (#1851).
+"""`uqs job check`: run `.qetl.verify.run` in a q of its own and read the report (#1851).
 
 Everything that decides a verdict is q's - which producers fill the dataset, which
 columns are keys, what the destination generates, what is refused. This module starts
@@ -103,6 +103,8 @@ def verify(
     message (a dataset nobody fills, an interval that is empty, a process that is not
     a throwaway).
     """
+    if not _NAME.fullmatch(dataset):
+        raise UqsError(f"{dataset!r} is not a dataset name")
     q = q_interpreter()
     if q is None:
         raise UqsError("no q interpreter - set $QCMD, or put q on PATH; verification runs in q")

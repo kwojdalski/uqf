@@ -1,4 +1,4 @@
-"""`uqs job verify`: the q it runs, and what it prints of the report (#1851).
+"""`uqs job check`: the q it runs, and what it prints of the report (#1851).
 
 The verification itself is q's and is held by tests/q/test_verify_*.q. These hold the
 Python half: the script it sends, the scope it will and will not splice, the report it
@@ -123,7 +123,7 @@ def invoke(monkeypatch, statuses, *extra, readonly=True):
     fake_q(monkeypatch, report(statuses, readonly))
     return runner.invoke(
         cli.app,
-        ["job", "verify", "demo_deals", "--from", "2026-09-11", "--to", "2026-09-14", *extra],
+        ["job", "check", "demo_deals", "--from", "2026-09-11", "--to", "2026-09-14", *extra],
     )
 
 
@@ -139,10 +139,10 @@ def test_a_failed_category_exits_1(monkeypatch):
     assert invoke(monkeypatch, {**ALL_PASS, "cross_mode": "FAIL"}).exit_code == 1
 
 
-def test_unverified_exits_0_unless_strict(monkeypatch):
+def test_unverified_exits_0_unless_asked(monkeypatch):
     unverified = {**ALL_PASS, "behaviour": "UNVERIFIED"}
     assert invoke(monkeypatch, unverified).exit_code == 0
-    assert invoke(monkeypatch, unverified, "--strict").exit_code == 1
+    assert invoke(monkeypatch, unverified, "--fail-unverified").exit_code == 1
 
 
 def test_a_changed_snapshot_exits_1(monkeypatch):
@@ -177,7 +177,7 @@ def test_demo_deals_end_to_end_against_a_real_q():
         cli.app,
         [
             "job",
-            "verify",
+            "check",
             "demo_deals",
             "--from",
             "2026-09-11",

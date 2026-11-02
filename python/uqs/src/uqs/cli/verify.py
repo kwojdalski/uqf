@@ -1,13 +1,15 @@
-"""`uqs job verify`: do a dataset's producers fit it, agree, and miss nothing? (#1851)
+"""`uqs job check`: do a dataset's producers fit it, agree, and miss nothing? (#1851)
 
 One read-only report over every producer of a dataset - a polling feed, a backfill,
 both or either - built by `.qetl.verify.run` in q. This module is the command line and
 the printing: the producers, the keys, what the destination generates and every
 refusal are q's. Four results, one per category, each PASS, FAIL or UNVERIFIED.
 
-It is `job verify`, not `data verify`: `job` is where `preview`, `backfill` and `gaps`
-are, the commands that take a producer and a time range; `data` operates on stored
-tables. The dataset is the argument because the grouping of producers comes from it.
+It is `job check`: `job` is where `preview`, `backfill` and `gaps` are, the commands
+that take a producer and a time range (`data` operates on stored tables), and `check`
+is the vocabulary's verb for "actively probe; exit non-zero on a problem" (CLI
+conventions, rule 4). The dataset is the argument because the grouping of producers
+comes from it.
 """
 
 from __future__ import annotations
@@ -60,11 +62,11 @@ def render(report: dict) -> None:
 
 
 @job_app.command(
-    "verify",
+    "check",
     rich_help_panel=JOB_OPERATIONS_PANEL,
-    cls=needs_pipelines("verifies this tree's producers of a dataset", ReadOnly),
+    cls=needs_pipelines("checks this tree's producers of a dataset", ReadOnly),
 )
-def verify(
+def check(
     dataset: Annotated[str, typer.Argument(help="A dataset: a plant table its producers fill")],
     scope: Annotated[
         list[str] | None,
@@ -89,8 +91,8 @@ def verify(
             help="Do not exercise cursor, retry, conflict and coverage behaviours in a sandbox",
         ),
     ] = False,
-    strict: Annotated[
-        bool, typer.Option("--strict", help="Exit 1 on UNVERIFIED as well as on FAIL")
+    fail_unverified: Annotated[
+        bool, typer.Option("--fail-unverified", help="Exit 1 on UNVERIFIED as well as on FAIL")
     ] = False,
     range_from: RangeFromOpt = None,
     range_to: RangeToOpt = None,
@@ -105,8 +107,8 @@ def verify(
     the basis it rests on. A dataset with one producer is verified without a second;
     its cross-mode result is UNVERIFIED. Behaviours run on fixtures in a throwaway
     directory and never against a live source or a running process.
-    Exits 1 on FAIL (and with --strict on UNVERIFIED).
-    e.g. `uqs job verify demo_deals --date 2026-09-11 --scope sym=EURUSD`
+    Exits 1 on FAIL (and with --fail-unverified on UNVERIFIED).
+    e.g. `uqs job check demo_deals --date 2026-09-11 --scope sym=EURUSD`
     """
     try:
         window = timerange.resolve(range_from, range_to, day, last)
@@ -126,5 +128,5 @@ def verify(
         emit(report | {"worst": worst})
     else:
         render(report)
-    if worst == "FAIL" or (strict and worst == "UNVERIFIED") or not report["readonly"]:
+    if worst == "FAIL" or (fail_unverified and worst == "UNVERIFIED") or not report["readonly"]:
         raise typer.Exit(code=1)

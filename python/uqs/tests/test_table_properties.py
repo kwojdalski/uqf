@@ -63,8 +63,8 @@ def test_the_workers_datasets_q_exports_are_the_registrys() -> None:
 def test_a_non_plant_dataset_is_listed_by_its_transforms_output() -> None:
     rows = {r.split(",")[1]: r.split(",") for r in _tree_rows()[1:]}
     assert rows["imported_trades"][2:5] == ["time", "sym", "sym"]
-    assert rows["demo_deals"][2] == "deal_time", (
-        "its output has no `time`; it is windowed on deal_time"
+    assert rows["demo_deals"][2:5] == ["time", "sym", "sym"], (
+        "a plant table is listed by the plant's own columns, whatever its worker's output"
     )
 
 
@@ -101,4 +101,4 @@ def test_a_worker_dataset_is_passed_on_only_while_the_hdb_holds_it(tmp_path, mon
 
     (paths.hdb_dir / "2026.01.02" / "imported_trades").mkdir()
     assert "imported_trades" in _listed(paths)
-    assert "demo_deals" not in _listed(paths), "only what the HDB holds"
+    assert "demo_deals" in _listed(paths), "a plant table is listed whether or not the HDB holds it"

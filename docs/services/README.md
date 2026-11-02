@@ -56,7 +56,7 @@ alongside them. [Details](crypto-recorder.md)
 
 **`demo_deals_feed1` · demo deals, by cursor** --- a polling feed over the
 `demo_deals` source: the streaming twin of `deals_backfill1`, filling the same
-dataset. Publishes `demo_deals`, on demand only. `uqs job verify demo_deals`
+dataset. Publishes `demo_deals`, on demand only. `uqs job check demo_deals`
 checks the pair against each other. See it with
 `uqs job preview demo_deals_feed`.
 

@@ -1,7 +1,7 @@
 / verify_report.q - one scoped report per dataset: schema, behaviour, cross-mode
 / equivalence and completeness, each PASS, FAIL or UNVERIFIED (.qetl.verify, #1851).
 / .
-/ This is the whole verification, and it runs in q: `uqs job verify` starts a q,
+/ This is the whole verification, and it runs in q: `uqs job check` starts a q,
 / calls `run` and prints what comes back, so nothing that matters is the CLI's and
 / the same call works from a q prompt or a scheduler. The rules that decide a
 / verdict - which columns are keys, what the destination generates, what is refused -
@@ -80,7 +80,7 @@
     js:(producers`producer) where (producers`mode)=`stream;
     gap:{[j]
         raze .qetl.verify.behaviour_row[;`stream;j;`UNVERIFIED;;]'[`slow_queries`startup_failure`late_arrivals;
-            ("no per-fetch deadline exists to exercise: a hung fetch is bounded only by its caller (uqs job preview times out)";
+            ("no per-fetch deadline exists to exercise: a hung fetch is bounded only by its caller (a preview of a feed gives up after a fixed time)";
              "starting a process is not run in a sandbox; the declaration's on_start is held generically by the stream job suites";
              "no double can inject a row into a source after a cursor has passed it; a timestamp cursor skips such a row - a known gap, recovery is out of scope");
             ("";"";"")]};

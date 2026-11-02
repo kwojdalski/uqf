@@ -99,7 +99,7 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 - **`hdb_fx_markout_wide_backfill1`** — bounded: marks out the HDB's executions against its market_data, into fx_markout_wide, with the calculation fxmarkoutwide1 applies live
 - **`hdb_fx_markouts_backfill1`** — bounded: marks out the HDB's executions against its market_data, into fx_markout, with the calculation fx_markout1 applies live
 - **`kafka_feed1`** — the native q Kafka consumer (KX kfk, pinned v1.6.6): publishes every record undecoded onto kafka_message, committing offsets only after the publish returned. Needs UQF_KFK_HOME and UQF_KAFKA_BROKERS, so it is started on demand, never with the stack. The Python consumer (uqs connector start kafka) publishes the same table; run one per group
-- **`demo_deals_feed1`** — polling feed over the demo_deals source, the streaming twin of demo_deals_backfill - started on demand, as an example of the pair `uqs job verify` checks
+- **`demo_deals_feed1`** — polling feed over the demo_deals source, the streaming twin of demo_deals_backfill - started on demand, as an example of the pair `uqs job check` checks
 
 ## Tables these processes publish
 

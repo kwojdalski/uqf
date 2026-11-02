@@ -116,6 +116,10 @@ CASES: dict[str, tuple[list[str], str]] = {
     "config show": (["config", "show", "nosuchproc"], "unknown process"),
     "job gaps": (["job", "gaps", "demo_markout", "--from", "bad", "--to", "2024-01-02"], "bad"),
     "job preview": (["job", "preview", "nosuch-x"], "is not a streaming job name"),
+    "job check": (
+        ["job", "check", "1bad", "--from", "2026-09-11", "--to", "2026-09-12"],
+        "is not a dataset name",
+    ),
     "job runs list": (["job", "runs", "list", "--attach", "nosuch"], "no attachment"),
     "job runs show": (["job", "runs", "show", "r", "--attach", "nosuch"], "no attachment"),
     "job runs audit": (["job", "runs", "audit", "d", "--from", "bad", "--to", "2024-01-02"], "bad"),

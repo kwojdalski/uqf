@@ -3,13 +3,13 @@
 / .
 / demo_deals_backfill fills the dataset by bounded windows; this feed fills the
 / same dataset by a cursor over the same source. They are the in-tree pair for
-/ one dataset, which is what `uqs job verify demo_deals` checks them as: each
+/ one dataset, which is what `uqs job check demo_deals` checks them as: each
 / against the destination's schema, and against each other. It is a generic
 / analogue (see src/etl/sources/demo_deals.q) and not a port of anything.
 / .
 / The cursor is the time of the last row published, so a deal that arrives
 / AFTER the cursor with an earlier or equal deal_time is never fetched - the
-/ late-arrival gap a polling cursor has, and one `uqs job verify` reports.
+/ late-arrival gap a polling cursor has, and one `uqs job check` reports.
 / .
 / Loaded by src/etl/init.q in any q process: nothing here touches TorQ.
 / `time` is not published - .u.upd stamps its own (invariant 1).
@@ -77,4 +77,4 @@
         .qpipe.job.demo_deals_feed.close;
         `deal_id);
     `demo_deals_passthrough;
-    "polling feed over the demo_deals source, the streaming twin of demo_deals_backfill - started on demand, as an example of the pair `uqs job verify` checks")];
+    "polling feed over the demo_deals source, the streaming twin of demo_deals_backfill - started on demand, as an example of the pair `uqs job check` checks")];

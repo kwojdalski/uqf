@@ -12,7 +12,7 @@ draws the topology.
   [one table, in any HDB](#one-table-in-any-hdb)
 - [Commands](#commands)
 - [Replaying a tickerplant log](#replaying-a-tickerplant-log)
-- [Verifying a dataset's producers](#verifying-a-datasets-producers)
+- [Checking a dataset's producers](#checking-a-datasets-producers)
 - [Listing things](#listing-things)
 - [What actually starts](#what-actually-starts) --- including
   [runtimes](#runtimes) and [profiles](#profiles)
@@ -374,14 +374,14 @@ tables being replayed are cleared in the partitions the replay touches before it
 writes them. `--dry-run` prints the resolved plan and the start line and runs
 nothing.
 
-## Verifying a dataset's producers
+## Checking a dataset's producers
 
 A dataset can be filled by more than one job - a polling feed and a backfill of
-the same table. `uqs job verify DATASET` asks, read only, whether they fit the
+the same table. `uqs job check DATASET` asks, read only, whether they fit the
 destination, agree with each other and between them miss nothing:
 
 ```
-uqs job verify demo_deals --date 2026-09-11 --scope sym=EURUSD --gateway gw1:6060
+uqs job check demo_deals --date 2026-09-11 --scope sym=EURUSD --gateway gw1:6060
 ```
 
 It reports four results, each `PASS`, `FAIL` or `UNVERIFIED`, with the dataset,
@@ -415,8 +415,8 @@ a single producer verifies without a second.
 
 The producers come from the job graph (`.qetl.dag.producers`), and everything
 above is decided in q (`.qetl.verify.run`); the command only reads the range and
-prints. It exits 1 on `FAIL`, and with `--strict` on `UNVERIFIED`. `--json`
-prints the report.
+prints. It exits 1 on `FAIL`, and with `--fail-unverified` on `UNVERIFIED`.
+`--json` prints the report.
 
 ## Listing things
 
@@ -694,7 +694,7 @@ On `torq`, `list processes` shows the 23 starter-pack processes. `essential`
 leaves out `feed1`, so nothing publishes; `feed` adds it, so `trade` and `quote`
 come in. Commands that work only on this tree's pipelines refuse, with the
 reason - `graph`, `job backfill`, `job gaps`, `job preview`, `job runs`,
-`job verify`, `job checkpoint remove` and `connector`;
+`job check`, `job checkpoint remove` and `connector`;
 `uqs runtime diff uqf torq` lists them, read off the commands themselves. So
 does a profile `torq` doesn't declare:
 
@@ -1515,7 +1515,7 @@ command that breaks a rule, and on a listed exception that has since been fixed.
    spelling; the release after removes it.
 
 A time range is given one way, on every command that takes one (`job backfill`,
-`job gaps`, `job preview`, `job verify`, `job runs audit`, `data seed`,
+`job gaps`, `job preview`, `job check`, `job runs audit`, `data seed`,
 `data replay`), and read by one parser, `uqs.timerange`:
 
 - `--from A --to B` is `[A, B)`: `B` is excluded. A bound is a date or a
@@ -1728,7 +1728,7 @@ Each command's `--help` names its document. The commands #1731 added:
   | `config show PROC [FIELD]`                  | `{process, fields: [{field, value}]}`, or `{process, field, value}`                                                                                                                                              |
   | `job gaps`                                  | `{job, gaps: [{range_from, range_to}], sessions, refillable, refills: [{worker, range_from, range_to, command}], today_not_refillable}`                                                                          |
   | `job preview`                               | the preview's own result: `{job, mode, state, live, cursor, next_cursor, advances, fetched, rows, sample, failures, trace}`                                                                                      |
-  | `job verify`                                | `{dataset, range_from, range_to, producers: [{producer, mode, source}], readonly, checks: [{category, status, dataset, scope, range_from, range_to, basis, reason, findings}], behaviours: [...], worst}`        |
+  | `job check`                                 | `{dataset, range_from, range_to, producers: [{producer, mode, source}], readonly, checks: [{category, status, dataset, scope, range_from, range_to, basis, reason, findings}], behaviours: [...], worst}`        |
   | `job runs list [--unfinished]`              | `{runs: [{run_id, worker, dataset, status, range_from, range_to, ...}]}`                                                                                                                                         |
   | `job runs show RUN`                         | `{run, facts, logs, rerun}`                                                                                                                                                                                      |
   | `job runs audit`                            | `{facts: [{run_id, dataset, range_from, range_to, label, text}]}`                                                                                                                                                |

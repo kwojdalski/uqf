@@ -202,7 +202,7 @@
 / .
 / Several jobs can fill one table - a polling feed and a backfill. They share its
 / schema, which says nothing about what "the same rows" means, and
-/ `uqs job verify` will not guess. A table that several jobs fill declares it here,
+/ `uqs job check` will not guess. A table that several jobs fill declares it here,
 / beside the table, with `equivalence`:
 /   events       every row is a fact; producers must return the same multiset of rows
 /   revisions    each row is a revision of a key; they must return the same revisions
@@ -642,7 +642,7 @@
 
 / demo_deals_feed1's output: one dealt trade from the demo_deals source - its id, the
 / time it was dealt, the pair, the side, the notional and the rate - the same rows
-/ demo_deals_backfill windows into this dataset, which `uqs job verify demo_deals` compares.
+/ demo_deals_backfill windows into this dataset, which `uqs job check demo_deals` compares.
 .qetl.plant.demo_deals:([]time:`timestamp$(); deal_id:`long$(); deal_time:`timestamp$(); sym:`g#`symbol$(); side:`symbol$(); notional:`float$(); rate:`float$())
 / Each deal is one fact and the dataset never revises one, so the feed and the
 / backfill are equivalent when they return the same deals, each the same number of times.
