@@ -36,7 +36,7 @@
     c:r`checks;
     .qunit.assertEquals[distinct c`dataset;enlist `demo_deals;"dataset"];
     .qunit.assertEquals[(distinct c`range_from;distinct c`range_to);(enlist .qt.qetl.verify.report.from;enlist .qt.qetl.verify.report.to);"time bounds"];
-    .qunit.assertEquals[first exec scope from c where category=`completeness;.Q.s1 .qt.qetl.verify.report.sc[];"scope"];
+    .qunit.assertEquals[first exec scope from c where category=`completeness;"sym=`EURUSD";"scope"];
     .qunit.assertTrue[all 0<count each c`basis;"every result states what it rests on"];
     .qunit.assertTrue[(first exec basis from c where category=`completeness) like "demo_deals, fixture, complete through*";"the source and its cutoff"]};
 

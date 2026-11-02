@@ -44,6 +44,7 @@ from uqs.cli import runs  # noqa: F401
 from uqs.cli import receiver_contract  # noqa: F401
 from uqs.cli import gaps  # noqa: F401
 from uqs.cli import stream  # noqa: F401
+from uqs.cli import verify  # noqa: F401
 from uqs.cli import replay  # noqa: F401
 from uqs.cli import seed  # noqa: F401
 from uqs.cli import migrate  # noqa: F401

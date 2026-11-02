@@ -1,0 +1,131 @@
+"""`uqs job verify`: do a dataset's producers fit it, agree, and miss nothing? (#1851)
+
+One read-only report over every producer of a dataset - a polling feed, a backfill,
+both or either - built by `.qetl.verify.run` in q. This module is the command line and
+the printing: the producers, the keys, what the destination generates and every
+refusal are q's. Four results, one per category, each PASS, FAIL or UNVERIFIED.
+
+It is `job verify`, not `data verify`: `job` is where `preview`, `backfill` and `gaps`
+are, the commands that take a producer and a time range; `data` operates on stored
+tables. The dataset is the argument because the grouping of producers comes from it.
+"""
+
+from __future__ import annotations
+
+from typing import Annotated
+
+import typer
+from rich.markup import escape
+
+from uqs import timerange
+from uqs.cli.json_out import emit, json_opt
+from uqs.cli.pipelines import needs_pipelines
+from uqs.cli.range_options import DateOpt, LastOpt, RangeFromOpt, RangeToOpt
+from uqs.cli.safety import ReadOnly
+from uqs.cli.shared import JOB_OPERATIONS_PANEL, _die, _paths, console, job_app
+from uqs.paths import UqsError
+from uqs.stack import dataset_verify
+
+_COLOUR = {"PASS": "green", "FAIL": "red", "UNVERIFIED": "yellow"}
+
+VerifyJson = json_opt(
+    '{"dataset", "range_from", "range_to", "producers": [{producer, mode, source}], "readonly", '
+    '"checks": [{category: schema/behaviour/cross_mode/completeness, status: PASS/FAIL/UNVERIFIED, '
+    'dataset, scope, range_from, range_to, basis, reason, findings: [text]}], '
+    '"behaviours": [{behaviour, mode, producer, status, reason, evidence}], "worst"}'
+)
+
+
+def _word(status: str) -> str:
+    return f"[bold {_COLOUR.get(status, 'white')}]{status}[/]"
+
+
+def render(report: dict) -> None:
+    """The report as text: one block per category, then the behaviours."""
+    console.print(
+        f"[bold]verify {report['dataset']}[/] over [{report['range_from']}, {report['range_to']}) UTC"
+    )
+    for p in report["producers"]:
+        console.print(f"  producer  {p['producer']} ({p['mode']})")
+    held = "held equal" if report["readonly"] else "[red]CHANGED[/]"
+    console.print(f"  read only: nothing published, no cursor, checkpoint or coverage touched - snapshot {held}")
+    for c in report["checks"]:
+        console.print(f"\n{_word(c['status'])}  {c['category']}")
+        if c["scope"]:
+            console.print(f"  scope   {escape(c['scope'])}")
+        console.print(f"  basis   {escape(c['basis'])}")
+        if c["reason"]:
+            console.print(f"  reason  {escape(c['reason'])}")
+        for line in c["findings"]:
+            console.print(f"    {escape(line)}")
+
+
+@job_app.command(
+    "verify",
+    rich_help_panel=JOB_OPERATIONS_PANEL,
+    cls=needs_pipelines("verifies this tree's producers of a dataset", ReadOnly),
+)
+def verify(
+    dataset: Annotated[str, typer.Argument(help="A dataset: a plant table its producers fill")],
+    scope: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--scope",
+            help="column=value, repeatable: the records the completeness check reconciles. "
+            "Without one it is UNVERIFIED",
+        ),
+    ] = None,
+    gateway: Annotated[
+        str | None,
+        typer.Option(
+            "--gateway",
+            help="HOST:PORT of a gateway whose RDB and HDB hold the destination. Without it the "
+            "completeness check is UNVERIFIED",
+        ),
+    ] = None,
+    no_behaviours: Annotated[
+        bool,
+        typer.Option(
+            "--no-behaviours",
+            help="Do not exercise cursor, retry, conflict and coverage behaviours in a sandbox",
+        ),
+    ] = False,
+    strict: Annotated[
+        bool, typer.Option("--strict", help="Exit 1 on UNVERIFIED as well as on FAIL")
+    ] = False,
+    range_from: RangeFromOpt = None,
+    range_to: RangeToOpt = None,
+    day: DateOpt = None,
+    last: LastOpt = None,
+    as_json: VerifyJson = False,
+) -> None:
+    """Verify a dataset's producers over one source window, read only.
+
+    Reports four results separately - schema, behaviour, cross-mode equivalence and
+    completeness - each PASS, FAIL or UNVERIFIED, with the dataset, scope, bounds and
+    the basis it rests on. A dataset with one producer is verified without a second;
+    its cross-mode result is UNVERIFIED. Behaviours run on fixtures in a throwaway
+    directory and never against a live source or a running process.
+    Exits 1 on FAIL (and with --strict on UNVERIFIED).
+    e.g. `uqs job verify demo_deals --date 2026-09-11 --scope sym=EURUSD`
+    """
+    try:
+        window = timerange.resolve(range_from, range_to, day, last)
+        report = dataset_verify.verify(
+            _paths(),
+            dataset,
+            dataset_verify.parse_scope(scope or []),
+            window,
+            behaviours=not no_behaviours,
+            gateway=gateway,
+        )
+    except UqsError as exc:
+        _die(exc)
+        return
+    worst = dataset_verify.worst(report)
+    if as_json:
+        emit(report | {"worst": worst})
+    else:
+        render(report)
+    if worst == "FAIL" or (strict and worst == "UNVERIFIED") or not report["readonly"]:
+        raise typer.Exit(code=1)
