@@ -54,6 +54,17 @@ def warn_renamed(old: str, new: str) -> None:
     log.warning("`{}` is renamed `{}`; the old spelling goes in the next release", old, new)
 
 
+def warn_secret_argv(old: str, new: str) -> None:
+    """The warning for an old spelling that takes a secret inline (#1853):
+    renamed, and why the old one is a risk while it lasts."""
+    log.warning(
+        "`{}` puts a secret on the command line, where ps and shell history show it; "
+        "export it and use `{}` - the old spelling goes in the next release",
+        old,
+        new,
+    )
+
+
 def _rewrite_renamed(
     args: list[str],
     renames: Mapping[str, str | tuple[str, str]],

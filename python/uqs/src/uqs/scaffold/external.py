@@ -178,7 +178,6 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--host", default="localhost")
     parser.add_argument("--port", type=int, required=True)
-    parser.add_argument("--credential", required=True)
     parser.add_argument("--table", default="{raw_table}")
     args = parser.parse_args(argv)
     try:
@@ -186,7 +185,11 @@ def main(argv: list[str] | None = None) -> int:
     except ImportError as exc:  # pragma: no cover - depends on the extra
         print(f"missing dependency: {{exc}}. uv pip install kola", file=sys.stderr)
         return 1
-    user, _, password = args.credential.partition(":")
+    # stp1's user:password from the environment {name}_feed.py gave it, never an
+    # argument, where ps would show it (#1853).
+    from uqs.external.connection import credential_from_env
+
+    user, password = credential_from_env()
     q = kola.Q(args.host, args.port, user=user, passwd=password)
     q.connect()
     for batch in batches():
@@ -236,8 +239,9 @@ def start(paths: UqsPaths, options: Mapping[str, Any]) -> int:
     FeedOption to FEED's options= and it is a `connector start` option.
 
     stp1's host, port and credential are every connector's, so they are not
-    written here (uqs.external.connection): --tp-credential, else
-    $UQF_TP_CREDENTIAL, else the starter pack's demo login."""
+    written here (uqs.external.connection): --tp-credential-env NAME, else
+    $UQF_TP_CREDENTIAL, else the starter pack's demo login. The credential
+    reaches the streamer in its environment, never its argv (#1853)."""
     port = connection.tickerplant_port(paths)
     credential = connection.tp_credential(options["tp_credential"])
     runner = Path(__file__).resolve().parent / "{name}_streamer.py"
@@ -245,9 +249,10 @@ def start(paths: UqsPaths, options: Mapping[str, Any]) -> int:
         "uv", "run", "--project", str(paths.repo_root / "python" / "uqs"),
         "python", str(runner),
         "--host", connection.TP_HOST, "--port", str(port),
-        "--credential", credential, "--table", RAW_TABLE,
+        "--table", RAW_TABLE,
     ]
-    return _process(paths).start(cmd, cwd=paths.repo_root)
+    env = connection.credential_env(credential)
+    return _process(paths).start(cmd, cwd=paths.repo_root, env=env)
 
 
 def stop(paths: UqsPaths) -> int | None:

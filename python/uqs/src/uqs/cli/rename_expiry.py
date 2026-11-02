@@ -121,6 +121,11 @@ RENAMED_AFTER: dict[str, frozenset[str]] = {
             # #1845: who writes the schema block is --schema-writer; the old flag refuses,
             # naming it
             "uqs job attachment add --remote-schema-file",
+            # #1853: a secret is never an argument - the variable holding it is
+            "uqs query --passwd",
+            "uqs schema --passwd",
+            "uqs connector start --tp-credential",
+            "uqs connector restart --tp-credential",
         }
     ),
 }

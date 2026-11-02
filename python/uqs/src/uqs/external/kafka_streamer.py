@@ -146,7 +146,6 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--host", default="localhost")
     parser.add_argument("--port", type=int, required=True)
-    parser.add_argument("--credential", required=True, help="user:password for stp1")
     parser.add_argument("--brokers", required=True, help="bootstrap.servers")
     parser.add_argument("--topic", required=True, help="one topic, or several separated by commas")
     parser.add_argument("--group", required=True, help="consumer group id")
@@ -164,7 +163,11 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     fields = contract_fields(args.repo_root)
-    user, _, password = args.credential.partition(":")
+    # stp1's user:password from the environment its launcher gave it, never
+    # an argument, where ps would show it (#1853).
+    from uqs.external.connection import credential_from_env
+
+    user, password = credential_from_env()
     # passwd, not password: kola.Q's own keyword.
     q = kola.Q(args.host, args.port, user=user, passwd=password)
     q.connect()

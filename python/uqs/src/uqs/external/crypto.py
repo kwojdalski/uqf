@@ -7,6 +7,7 @@ here rather than by torq.sh."""
 
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 from pathlib import Path
@@ -75,11 +76,20 @@ def _crypto_recorder_config_yaml(
         "  enabled: true\n"
         f"  host: {connection.TP_HOST}\n"
         f"  port: {stp1_port}\n"
-        f'  credential: "{credential}"\n'
+        f"  credential: {json.dumps(credential)}\n"
         f"  table: {table}\n"
         f"  top_n_levels: {top_n_levels}\n"
         f"  interval_ms: {interval_ms}\n"
     )
+
+
+def _write_owner_only(path: Path, text: str) -> None:
+    """`text` into `path`, readable by its owner only - made so before the
+    credential is written into it."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.touch(mode=0o600, exist_ok=True)
+    path.chmod(0o600)
+    path.write_text(text)
 
 
 def _recorder(paths: UqsPaths) -> DetachedProcess:
@@ -120,12 +130,8 @@ def start_crypto_recorder(
     port = connection.tickerplant_port(paths, base_port)
     tp_credential = connection.tp_credential(credential)
 
-    paths.torqdata.mkdir(parents=True, exist_ok=True)
-    config = paths.crypto_recorder_config_path
-    # Owner-only before the credential is written into it.
-    config.touch(mode=0o600, exist_ok=True)
-    config.chmod(0o600)
-    config.write_text(
+    _write_owner_only(
+        paths.crypto_recorder_config_path,
         _crypto_recorder_config_yaml(
             stp1_port=port,
             venues=list(venues),
@@ -134,7 +140,7 @@ def start_crypto_recorder(
             table=CRYPTO_RECORDER_TABLE,
             top_n_levels=top_n_levels,
             interval_ms=interval_ms,
-        )
+        ),
     )
 
     # cryptorust's pyo3 dependency's build script rejects a system Python
@@ -203,8 +209,10 @@ def crypto_recorder_status(paths: UqsPaths) -> dict[str, str]:
 # tables. Independent lifecycle from start_crypto_recorder above: that one
 # owns a Supervisor + live exchange connectors and needs a generated YAML
 # config; this one just polls an already-running cryptorust service's OMS
-# IPC socket (no connectors of its own), so plain CLI flags are enough -
-# no config file to generate. Can run with or without the book recorder.
+# IPC socket (no connectors of its own), so plain CLI flags are enough for
+# everything but stp1's credential, which goes in an owner-only config file
+# (`--config`) rather than on its command line, where ps and the pid file
+# would show it (#1853). Can run with or without the book recorder.
 # ---------------------------------------------------------------------------
 
 CRYPTO_FILLS_RECORDER_TABLE = "crypto_sim_fills"
@@ -256,6 +264,11 @@ def start_crypto_fills_recorder(
 
     port = connection.tickerplant_port(paths, base_port)
     tp_credential = connection.tp_credential(credential)
+    # cryptorust merges this onto its embedded defaults, as the book recorder's.
+    _write_owner_only(
+        paths.crypto_fills_recorder_config_path,
+        f"kdb_fills_recorder:\n  credential: {json.dumps(tp_credential)}\n",
+    )
 
     # same PyO3/system-Python workaround as start_crypto_recorder above.
     env = {**os.environ, "PYO3_USE_ABI3_FORWARD_COMPATIBILITY": "1"}
@@ -276,14 +289,14 @@ def start_crypto_fills_recorder(
     pid = proc.start(
         [
             str(binary),
+            "--config",
+            str(paths.crypto_fills_recorder_config_path),
             "--oms-socket-path",
             oms_socket_path,
             "--kdb-host",
             connection.TP_HOST,
             "--kdb-port",
             str(port),
-            "--kdb-credential",
-            tp_credential,
             "--kdb-table",
             CRYPTO_FILLS_RECORDER_TABLE,
             "--real-kdb-table",

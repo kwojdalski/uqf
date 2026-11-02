@@ -19,6 +19,7 @@ from typer.testing import CliRunner
 
 from uqs import cli
 from uqs.cli import external as cli_external
+from uqs.cli import renames
 from uqs.external import connection, crypto, feeds, kafka_feed
 from uqs.paths import UqsError, UqsPaths
 from uqs.scaffold import external as scaffold_external
@@ -168,11 +169,12 @@ def test_a_scaffolded_connector_takes_the_shared_credential_too(tmp_path):
 
 @pytest.fixture
 def spawned(monkeypatch):
-    """The command lines DetachedProcess would have run."""
-    commands: list[list[str]] = []
+    """The command lines DetachedProcess would have run, each with the
+    environment it would have run in."""
+    commands: list[tuple[list[str], dict]] = []
 
     def start(self, cmd, **kw):
-        commands.append(list(cmd))
+        commands.append((list(cmd), dict(kw.get("env") or {})))
         return 4242
 
     from uqs.external import lifecycle
@@ -184,8 +186,13 @@ def spawned(monkeypatch):
     return commands
 
 
-def _credential_in(cmd: list[str], flag: str = "--credential") -> str:
-    return cmd[cmd.index(flag) + 1]
+def _credential_in(spawn: tuple[list[str], dict]) -> str:
+    """The credential a start hands its process: in its environment, and never
+    in its argv, which ps and the pid file show (#1853)."""
+    cmd, env = spawn
+    credential = env[connection.TP_CREDENTIAL_ENV]
+    assert "--credential" not in cmd and not any(credential in arg for arg in cmd), cmd
+    return credential
 
 
 @pytest.mark.parametrize(
@@ -203,8 +210,9 @@ def test_the_kafka_feed_presents_the_resolved_credential(
         monkeypatch.setenv(connection.TP_CREDENTIAL_ENV, env)
     monkeypatch.setattr(kafka_feed.kafka_extra, "require", lambda: None)
     kafka_feed.start_kafka_feed(_paths(tmp_path), credential=given)
-    (cmd,) = spawned
-    assert _credential_in(cmd) == expected
+    (spawn,) = spawned
+    assert _credential_in(spawn) == expected
+    cmd = spawn[0]
     assert cmd[cmd.index("--host") + 1] == connection.TP_HOST
     assert cmd[cmd.index("--port") + 1] == "6051"
 
@@ -252,11 +260,117 @@ def test_the_dry_run_masks_the_credential_and_names_its_source(monkeypatch):
     assert "brokers=env-broker:9092 ($UQF_KAFKA_BROKERS)" in out
     assert "tp_credential=*** ($UQF_TP_CREDENTIAL)" in out
     assert SECRET not in result.output
+    monkeypatch.setenv("OPS_TP", SECRET)
+    named = runner.invoke(
+        cli.app, ["connector", "start", "crypto", "-n", "--tp-credential-env", "OPS_TP"]
+    )
+    assert named.exit_code == 0, named.output
+    assert "tp_credential=*** ($OPS_TP)" in " ".join(named.stdout.split())
+    assert SECRET not in named.output
+
+
+# ------------------------------------------- never on a command line (#1853)
+
+
+def test_the_credential_is_taken_by_the_name_of_its_variable(monkeypatch):
+    """`--tp-credential-env NAME` in --help, the inline flag hidden."""
+    help_ = runner.invoke(cli.app, ["connector", "start", "--help"]).stdout
+    assert "--tp-credential-env" in help_
+    assert "--tp-credential " not in help_.replace("--tp-credential-env", "")
+    monkeypatch.setenv("OPS_TP", "ops:pw")
+    given, origins = cli_external._secrets_from_env(
+        {"tp_credential": None, "tp_credential_env": "OPS_TP", "group": "g"}
+    )
+    assert given == {"tp_credential": "ops:pw", "group": "g"}
+    assert origins == {"tp_credential": "$OPS_TP"}
+
+
+def test_a_credential_variable_that_is_unset_is_refused_by_name(monkeypatch):
+    monkeypatch.delenv("OPS_TP", raising=False)
+    errors: list[str] = []
+    monkeypatch.setattr(cli_external, "_die", lambda exc: errors.append(str(exc)))
+    cli_external._start("crypto", {"tp_credential_env": "OPS_TP"}, dry_run=True)
+    assert errors == ["--tp-credential-env OPS_TP: $OPS_TP is not set"]
+
+
+def test_a_bad_credential_in_the_named_variable_names_the_variable(monkeypatch):
+    errors: list[str] = []
+    monkeypatch.setattr(cli_external, "_die", lambda exc: errors.append(str(exc)))
+    monkeypatch.setenv("OPS_TP", "nocolon-secret")
+    cli_external._start("crypto", {"tp_credential_env": "OPS_TP"}, dry_run=True)
+    assert errors and "from $OPS_TP" in errors[0] and "nocolon-secret" not in errors[0]
+
+
+def test_the_inline_credential_still_works_for_one_release_and_warns(monkeypatch):
+    warned: list[tuple[str, str]] = []
+    monkeypatch.setattr(renames, "warn_secret_argv", lambda old, new: warned.append((old, new)))
     given = runner.invoke(
         cli.app, ["connector", "start", "crypto", "-n", "--tp-credential", SECRET]
     )
     assert given.exit_code == 0, given.output
     assert "tp_credential=***" in given.stdout and SECRET not in given.output
+    assert warned == [("--tp-credential", "--tp-credential-env NAME")]
+
+
+def test_the_inline_and_named_credential_together_are_refused(monkeypatch):
+    monkeypatch.setenv("OPS_TP", "ops:pw")
+    errors: list[str] = []
+    monkeypatch.setattr(cli_external, "_die", lambda exc: errors.append(str(exc)))
+    cli_external._start(
+        "crypto", {"tp_credential": SECRET, "tp_credential_env": "OPS_TP"}, dry_run=True
+    )
+    assert errors == ["give --tp-credential-env or --tp-credential, not both"]
+
+
+def test_credential_from_env_reads_what_credential_env_wrote():
+    env = connection.credential_env("ops:pw", {"PATH": "/bin"})
+    assert env == {"PATH": "/bin", connection.TP_CREDENTIAL_ENV: "ops:pw"}
+    assert connection.credential_from_env(env) == ("ops", "pw")
+    with pytest.raises(UqsError, match=r"\$UQF_TP_CREDENTIAL") as exc:
+        connection.credential_from_env({connection.TP_CREDENTIAL_ENV: "secret-no-colon"})
+    assert "secret-no-colon" not in str(exc.value)
+
+
+def test_no_streamer_takes_the_credential_as_an_argument():
+    """Every streamer reads it from its environment: the launcher's argv is
+    in ps and in the pid file (lifecycle.process_identity)."""
+    streamers = [
+        REPO / "python/uqs/src/uqs/external/kafka_streamer.py",
+        REPO / "sidecars/databento/databento_streamer.py",
+        REPO / "sidecars/flink/flink_vwap_streamer.py",
+    ]
+    texts = [p.read_text() for p in streamers]
+    texts.append(scaffold_external._streamer("zz", "zz_raw", ["a"]))
+    for text in texts:
+        assert '"--credential"' not in text and "credential_from_env" in text
+
+
+def test_the_fills_recorder_reads_its_credential_from_an_owner_only_file(tmp_path, monkeypatch):
+    root = tmp_path / "cryptorust"
+    root.mkdir()
+    (root / "Cargo.toml").write_text("[package]\n")
+    monkeypatch.setenv(crypto.CRYPTORUST_ROOT_ENV, str(root))
+    monkeypatch.setenv(connection.TP_CREDENTIAL_ENV, SECRET)
+    monkeypatch.setattr(
+        connection, "get_process_config", lambda p, n, base_port=None: {"port": "6051"}
+    )
+    monkeypatch.setattr(
+        crypto.subprocess, "run", lambda *a, **k: types.SimpleNamespace(returncode=0, stderr="")
+    )
+    started: list[list[str]] = []
+    from uqs.external import lifecycle
+
+    monkeypatch.setattr(
+        lifecycle.DetachedProcess, "start", lambda self, cmd, **kw: started.append(cmd) or 4242
+    )
+    paths = _paths(tmp_path, repo_root=tmp_path)
+    crypto.start_crypto_fills_recorder(paths)
+    (cmd,) = started
+    assert not any(SECRET in arg for arg in cmd) and "--kdb-credential" not in cmd
+    config = paths.crypto_fills_recorder_config_path
+    assert cmd[cmd.index("--config") + 1] == str(config)
+    assert f'credential: "{SECRET}"' in config.read_text()
+    assert config.stat().st_mode & 0o077 == 0, "only its owner may read the credential"
 
 
 def test_status_and_its_json_carry_no_credential(monkeypatch):
@@ -344,7 +458,7 @@ def test_the_two_kafka_consumers_keep_their_own_groups(monkeypatch, tmp_path, sp
     options = kafka_feed.FEED.start_options({})
     assert options["group"] == kafka_feed.DEFAULT_GROUP
     kafka_feed.FEED.start(_paths(tmp_path), kafka_feed.FEED.start_options({"group": "mine"}))
-    (cmd,) = spawned
+    ((cmd, _env),) = spawned
     assert cmd[cmd.index("--group") + 1] == "mine"
 
 

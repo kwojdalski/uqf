@@ -86,6 +86,7 @@ def session(
     servers: str = DEFAULT_SERVERS,
     prompt: str = "gateway1) ",
     render: Callable[[], tuple[int, int]] | None = None,
+    routed: bool = True,
 ) -> int:
     """An interactive session on the gateway: read a line, wrap it, send it,
     show the answer - until `\\\\`, `exit`, `quit` or end of input.
@@ -98,6 +99,8 @@ def session(
     gateway; query_session below wires the real ones. `render` gives the
     console size for an answer printed as q prints it; it is asked again on
     every line, so a resized terminal is fitted from the next answer on.
+    `routed` False sends each line as typed, for a process that is not the
+    gateway (the session `uqs query` opens instead of qcon, #1853).
     @return how many lines were sent
     """
     sent = 0
@@ -114,7 +117,11 @@ def session(
         if text in _QUIT:
             return sent
         try:
-            show(send(expression(text, servers, render() if render else None)))
+            size = render() if render else None
+            if routed:
+                show(send(expression(text, servers, size)))
+            else:
+                show(send(text if size is None else stack_render.wrap(text, size)))
             sent += 1
         except Exception as exc:  # kola's own exception types, and UqsError
             fail(str(exc))
@@ -130,6 +137,8 @@ def query_session(
     fail: Callable[[str], None],
     servers: str = DEFAULT_SERVERS,
     render: Callable[[], tuple[int, int]] | None = None,
+    routed: bool = True,
+    prompt: str = "gateway1) ",
 ) -> int:
     """The session over one held kola connection, with line editing and
     history from readline where Python has it. `show` and `fail` are the
@@ -152,6 +161,6 @@ def query_session(
             answer = conn.sync(expr)
             return answer if render is None else stack_render.text(answer)
 
-        return session(send, input, show, fail, servers, render=render)
+        return session(send, input, show, fail, servers, prompt, render=render, routed=routed)
     finally:
         conn.disconnect()
