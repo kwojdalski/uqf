@@ -551,6 +551,7 @@ qetl.log,warn,function,3,id text fields
 qetl.log,with_context,function,3,ctx f args
 qetl.plant,adopt_vendored,function,1,path
 qetl.plant,arbitrage,table,,
+qetl.plant,bases,value,,
 qetl.plant,book_liquidity_1m,table,,
 qetl.plant,ccy_exposure,table,,
 qetl.plant,client_flow,table,,
@@ -569,6 +570,8 @@ qetl.plant,demo_execution_quality,table,,
 qetl.plant,duckdb_deals,table,,
 qetl.plant,economic_calendar,table,,
 qetl.plant,elements,dict,,
+qetl.plant,equivalence,function,2,table_name basis
+qetl.plant,equivalence_of,dict,,
 qetl.plant,exec_bar,table,,
 qetl.plant,executions,table,,
 qetl.plant,fx_limit_breach,table,,
@@ -822,12 +825,39 @@ qetl.uptime,mine,value,,
 qetl.uptime,period,value,,
 qetl.uptime,sessions,function,1,
 qetl.uptime,twins,function,1,job
+qetl.verify,armed,value,,
+qetl.verify,basis,function,1,dataset
+qetl.verify,behaviour_gaps,function,1,producers
+qetl.verify,capture,function,3,dataset from_ts to_ts
+qetl.verify,capture_bounded,function,3,worker from_ts to_ts
+qetl.verify,capture_one,function,4,prod dataset from_ts to_ts
+qetl.verify,capture_stream,function,4,job dataset from_ts to_ts
+qetl.verify,categories,value,,
+qetl.verify,check_conflict,function,4,worker batch from_ts to_ts
+qetl.verify,check_coverage,function,4,worker from_ts to_ts captured
+qetl.verify,check_cursor,function,1,job
+qetl.verify,check_publish_recovery,function,1,job
+qetl.verify,check_retries,function,3,worker from_ts to_ts
+qetl.verify,check_windows,function,4,worker from_ts to_ts rows
+qetl.verify,compare_rows,function,5,a b ks skip basis
+qetl.verify,completeness,function,5,dataset scope from_ts to_ts reader
+qetl.verify,cross_mode,function,2,dataset cap
 qetl.verify,destination,function,1,dataset
+qetl.verify,faults,value,,
 qetl.verify,finding,function,7,producer destination column problem expected actual basis
+qetl.verify,getdata_reader,function,2,h pad
+qetl.verify,in_sandbox,function,2,f args
 qetl.verify,key_findings,function,2,dataset producers
+qetl.verify,max_pages,value,,
+qetl.verify,no_differences,function,1,
 qetl.verify,no_findings,function,1,
 qetl.verify,producers,function,1,dataset
+qetl.verify,real_fetch,value,,
+qetl.verify,require_isolated,function,1,
+qetl.verify,run,function,6,dataset scope from_ts to_ts reader behaviours
 qetl.verify,schema_findings,function,4,producer dataset output basis
+qetl.verify,sent,table,,
+qetl.verify,snapshot,function,1,dataset
 qetl.verify,statuses,value,,
 qetl.verify,type_name,function,1,c
 qetl.verify,type_names,dict,,

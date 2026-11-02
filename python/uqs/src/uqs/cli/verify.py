@@ -31,7 +31,7 @@ _COLOUR = {"PASS": "green", "FAIL": "red", "UNVERIFIED": "yellow"}
 VerifyJson = json_opt(
     '{"dataset", "range_from", "range_to", "producers": [{producer, mode, source}], "readonly", '
     '"checks": [{category: schema/behaviour/cross_mode/completeness, status: PASS/FAIL/UNVERIFIED, '
-    'dataset, scope, range_from, range_to, basis, reason, findings: [text]}], '
+    "dataset, scope, range_from, range_to, basis, reason, findings: [text]}], "
     '"behaviours": [{behaviour, mode, producer, status, reason, evidence}], "worst"}'
 )
 
@@ -42,13 +42,12 @@ def _word(status: str) -> str:
 
 def render(report: dict) -> None:
     """The report as text: one block per category, then the behaviours."""
-    console.print(
-        f"[bold]verify {report['dataset']}[/] over [{report['range_from']}, {report['range_to']}) UTC"
-    )
+    span = f"[{report['range_from']}, {report['range_to']}) UTC"
+    console.print(f"[bold]verify {report['dataset']}[/] over {span}")
     for p in report["producers"]:
         console.print(f"  producer  {p['producer']} ({p['mode']})")
     held = "held equal" if report["readonly"] else "[red]CHANGED[/]"
-    console.print(f"  read only: nothing published, no cursor, checkpoint or coverage touched - snapshot {held}")
+    console.print(f"  read only (nothing published or advanced); snapshot {held}")
     for c in report["checks"]:
         console.print(f"\n{_word(c['status'])}  {c['category']}")
         if c["scope"]:

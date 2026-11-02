@@ -99,7 +99,7 @@
     counts:(count rows;count mine);
     if[0=counts 0;
         if[0=counts 1; :@[unv "empty sample - the source holds no record in this scope and range";`counts;:;counts]]];
-    basis:$[dataset in key .qetl.verify.basis_of; .qetl.verify.basis_of dataset; `final_state];
+    basis:.qetl.verify.basis dataset;
     / presence for a dataset that revises rows; multiplicity only where each row is a fact
     found:.qetl.verify.compare_rows[ks#rows;ks#mine;ks;`symbol$();$[basis=`events; `events; `final_state]];
     found:update detail:{ssr[ssr[ssr[x;"in the first producer only";"in the source only"];"in the second producer only";"in the destination only"];"first producer";"source"]} each detail from found;

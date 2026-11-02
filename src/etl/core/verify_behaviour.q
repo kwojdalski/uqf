@@ -21,7 +21,7 @@
 / Refuse to run fault injection anywhere that could be a live process.
 / @return 1b
 / @throws error naming what makes this process unsafe
-/ @eg .qetl.verify.require_isolated[]  ->  1b
+/ @eg .qetl.verify.require_isolated[]
 .qetl.verify.require_isolated:{[]
     p:.qetl.run.proc_name[];
     if[not null p; '"verify: refusing to inject faults inside process ",string[p]," - behaviours run only in a throwaway q, never in a TorQ process"];
@@ -38,14 +38,14 @@
 / @param args its arguments, a list
 / @return what f returned
 / @throws error when f does, after the environment is restored and the directory removed
-/ @eg .qetl.verify.in_sandbox[{[x] x+1};enlist 1]  ->  2
+/ @eg .qetl.verify.in_sandbox[{[x] x+1};enlist 1]
 .qetl.verify.in_sandbox:{[f;args]
     .qetl.verify.require_isolated[];
-    prev:getenv`UQF_STATUS_DIR;
+    was_dir:getenv`UQF_STATUS_DIR;
     dir:first system"mktemp -d";
     setenv[`UQF_STATUS_DIR;dir];
     r:.[f;args;{[e] (`sandbox_failed;e)}];
-    setenv[`UQF_STATUS_DIR;prev];
+    setenv[`UQF_STATUS_DIR;was_dir];
     system"rm -rf ",dir;
     if[(0h=type r) and `sandbox_failed~first r; 'last r];
     r}
@@ -96,7 +96,7 @@
 / cursor past it, and the next tick finds nothing new and publishes nothing again.
 / @param job the polling job
 / @return a dict status, reason, evidence
-/ @eg .qetl.verify.check_cursor[`demo_deals_feed]`status  ->  `PASS
+/ @eg .qetl.verify.check_cursor[`demo_deals_feed]`status
 .qetl.verify.check_cursor:{[job]
     body:{[job]
         ops:.qetl.job.stream.cursor_ops job;
@@ -121,7 +121,7 @@
 / was (never an over-claim), and the next tick publishes the page it had not delivered.
 / @param job the polling job
 / @return a dict status, reason, evidence
-/ @eg .qetl.verify.check_publish_recovery[`demo_deals_feed]`status  ->  `PASS
+/ @eg .qetl.verify.check_publish_recovery[`demo_deals_feed]`status
 .qetl.verify.check_publish_recovery:{[job]
     body:{[job]
         ops:.qetl.job.stream.cursor_ops job;

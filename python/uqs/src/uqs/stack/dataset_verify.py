@@ -70,7 +70,7 @@ def script(
         raise UqsError(f"--gateway {gateway!r}: expected HOST:PORT")
     start, end = window.bounds
     reader = (
-        f".qetl.verify.getdata_reader[hopen `$\":{gateway}\";1D]" if gateway is not None else "(::)"
+        f'.qetl.verify.getdata_reader[hopen `$":{gateway}";1D]' if gateway is not None else "(::)"
     )
     call = (
         f".qetl.verify.run[`{dataset};{_q_scope(scope)};{runs.to_q_timestamp(start)};"
@@ -125,7 +125,9 @@ def verify(
             raise UqsError(f"verify {dataset}: no result after {timeout:g}s") from None
     found = [line[len(_MARK) :] for line in result.stdout.splitlines() if line.startswith(_MARK)]
     if result.returncode != 0 or not found:
-        raise UqsError(f"the verification did not run:\n{(result.stdout + result.stderr).strip()[-1500:]}")
+        raise UqsError(
+            f"the verification did not run:\n{(result.stdout + result.stderr).strip()[-1500:]}"
+        )
     report = json.loads(found[-1])
     if "error" in report:
         raise UqsError(f"verify {dataset}: {report['error']}")

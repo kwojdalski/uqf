@@ -43,7 +43,7 @@
 / @param from_ts the window's first instant
 / @param to_ts the instant after its last
 / @return a capture result, with `error` set when the capture threw
-/ @eg (.qetl.verify.capture_one[`producer`mode!(`demo_deals_feed;`stream);`demo_deals;2026.09.11D00:00:00.000000000;2026.09.12D00:00:00.000000000])`fetched  ->  1
+/ @eg count (.qetl.verify.capture_one[`producer`mode!(`demo_deals_feed;`stream);`demo_deals;2026.09.11D00:00:00.000000000;2026.09.12D00:00:00.000000000])`rows  ->  1
 .qetl.verify.capture_one:{[prod;dataset;from_ts;to_ts]
     if[`reaction=prod`mode;
         r:.qetl.verify.capture_result[prod`producer;`reaction];

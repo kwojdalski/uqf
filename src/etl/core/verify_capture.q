@@ -68,7 +68,7 @@
 / @return a capture result: rows, fetched, windows (pages walked), failures (the plant's
 /   own contract messages and a cursor that does not advance), live, basis, limited
 / @throws error when the job is not a polling feed, or its fetch, normalize or next_cursor throws
-/ @eg .qetl.verify.capture_stream[`demo_deals_feed;`demo_deals;2026.09.11D00:00:00.000000000;2026.09.13D00:00:00.000000000]`fetched  ->  2
+/ @eg count .qetl.verify.capture_stream[`demo_deals_feed;`demo_deals;2026.09.11D00:00:00.000000000;2026.09.13D00:00:00.000000000]`rows  ->  2
 .qetl.verify.capture_stream:{[job;dataset;from_ts;to_ts]
     d:.qetl.job.stream.def job;
     if[not `poll in key d; '"capture: ",string[job]," declares no poll - its on_timer is one function that publishes; declare poll to verify it"];
@@ -116,7 +116,7 @@
 / @return a capture result; a window that failed fetch, transform or check puts its
 /   message in `failures` and leaves `rows` unset, because a partial capture would pass for a whole one
 / @throws error when the range is reversed, empty or not aligned to the worker's grid
-/ @eg .qetl.verify.capture_bounded[`demo_deals_backfill;2026.09.11D00:00:00.000000000;2026.09.13D00:00:00.000000000]`fetched  ->  2
+/ @eg .qetl.verify.capture_bounded[`demo_deals_backfill;2026.09.11D00:00:00.000000000;2026.09.13D00:00:00.000000000]`windows  ->  2
 .qetl.verify.capture_bounded:{[worker;from_ts;to_ts]
     cfg:.qetl.job.bounded.def worker;
     .qetl.coverage.require_interval[from_ts;to_ts];

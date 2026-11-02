@@ -12,12 +12,12 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from plain_cli import PlainRunner
 
 from uqs import cli, timerange
 from uqs.interpreter import q_interpreter
 from uqs.paths import UqsError, default_paths
 from uqs.stack import dataset_verify
-from plain_cli import PlainRunner
 
 runner = PlainRunner()
 
@@ -101,7 +101,7 @@ def test_a_column_given_twice_is_refused():
 def test_a_dataset_name_is_not_spliced_into_q_unchecked(monkeypatch):
     fake_q(monkeypatch, report(ALL_PASS))
     with pytest.raises(UqsError, match="is not a dataset name"):
-        dataset_verify.verify(default_paths(), "x;system \"rm -rf /\"", {}, window())
+        dataset_verify.verify(default_paths(), 'x;system "rm -rf /"', {}, window())
 
 
 def test_a_q_refusal_is_the_commands_error(monkeypatch):
@@ -113,13 +113,17 @@ def test_a_q_refusal_is_the_commands_error(monkeypatch):
 def test_worst_orders_fail_over_unverified_over_pass():
     assert dataset_verify.worst(report(ALL_PASS)) == "PASS"
     assert dataset_verify.worst(report({**ALL_PASS, "behaviour": "UNVERIFIED"})) == "UNVERIFIED"
-    assert dataset_verify.worst(report({**ALL_PASS, "behaviour": "UNVERIFIED", "schema": "FAIL"})) == "FAIL"
+    assert (
+        dataset_verify.worst(report({**ALL_PASS, "behaviour": "UNVERIFIED", "schema": "FAIL"}))
+        == "FAIL"
+    )
 
 
 def invoke(monkeypatch, statuses, *extra, readonly=True):
     fake_q(monkeypatch, report(statuses, readonly))
     return runner.invoke(
-        cli.app, ["job", "verify", "demo_deals", "--from", "2026-09-11", "--to", "2026-09-14", *extra]
+        cli.app,
+        ["job", "verify", "demo_deals", "--from", "2026-09-11", "--to", "2026-09-14", *extra],
     )
 
 
@@ -149,23 +153,48 @@ def test_json_is_the_report_with_its_worst_verdict(monkeypatch):
     r = invoke(monkeypatch, {**ALL_PASS, "completeness": "UNVERIFIED"}, "--json")
     doc = json.loads(r.stdout)
     assert doc["worst"] == "UNVERIFIED"
-    assert [c["category"] for c in doc["checks"]] == ["schema", "behaviour", "cross_mode", "completeness"]
+    assert [c["category"] for c in doc["checks"]] == [
+        "schema",
+        "behaviour",
+        "cross_mode",
+        "completeness",
+    ]
     assert {c["status"] for c in doc["checks"]} == {"PASS", "UNVERIFIED"}
-    assert set(doc["checks"][0]) >= {"dataset", "scope", "range_from", "range_to", "basis", "reason", "findings"}
+    assert set(doc["checks"][0]) >= {
+        "dataset",
+        "scope",
+        "range_from",
+        "range_to",
+        "basis",
+        "reason",
+        "findings",
+    }
 
 
 @pytest.mark.skipif(q_interpreter() is None, reason="no q interpreter")
 def test_demo_deals_end_to_end_against_a_real_q():
     r = runner.invoke(
         cli.app,
-        ["job", "verify", "demo_deals", "--from", "2026-09-11", "--to", "2026-09-14",
-         "--scope", "sym=EURUSD", "--json"],
+        [
+            "job",
+            "verify",
+            "demo_deals",
+            "--from",
+            "2026-09-11",
+            "--to",
+            "2026-09-14",
+            "--scope",
+            "sym=EURUSD",
+            "--json",
+        ],
     )
     doc = json.loads(r.stdout)
     by = {c["category"]: c["status"] for c in doc["checks"]}
     assert by["schema"] == "PASS" and by["cross_mode"] == "PASS"
     assert by["completeness"] == "UNVERIFIED", "no gateway: the destination was not read"
-    assert by["behaviour"] == "UNVERIFIED", "slow queries, startup failure and late arrivals have no harness"
+    assert by["behaviour"] == "UNVERIFIED", (
+        "slow queries, startup failure and late arrivals have no harness"
+    )
     assert doc["readonly"] is True
     assert [p["producer"] for p in doc["producers"]] == ["demo_deals_feed", "demo_deals_backfill"]
     assert doc["worst"] == "UNVERIFIED"

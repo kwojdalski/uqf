@@ -12,7 +12,7 @@
     `.qetl.job.stream.jobs set (enlist .qt.qetl.verify.compare.rogue) _ .qetl.job.stream.jobs;
     `.qetl.job.stream.procnames set (enlist `vcmp_rogue1) _ .qetl.job.stream.procnames;
     .qetl.job.continuous.clear_cursor each `demo_deals_feed`vcmp_rogue;
-    `.qetl.verify.basis_of set (enlist `demo_deals)!enlist `events;}
+    `.qetl.plant.equivalence_of set (enlist `demo_deals)!enlist `events;}
 
 .qt.qetl.verify.compare.beforeNamespace_isolate:{[]
     setenv[`UQF_STATUS_DIR;"build/test-status"];
@@ -117,7 +117,7 @@
     .qunit.assertEquals[(r`status;r`reason);(`UNVERIFIED;"one producer (demo_deals_feed) - there is nothing to compare it with");"not a failure"]};
 
 .qt.qetl.verify.compare.test_an_undeclared_basis_is_unverified:{[t]
-    `.qetl.verify.basis_of set (`symbol$())!`symbol$();
+    `.qetl.plant.equivalence_of set (`symbol$())!`symbol$();
     c:.qetl.verify.capture[`demo_deals;.qt.qetl.verify.compare.d 1;.qt.qetl.verify.compare.d 4];
     r:.qetl.verify.cross_mode[`demo_deals;c];
     .qunit.assertEquals[r`status;`UNVERIFIED;"a shared schema does not say what 'the same' means"];
@@ -129,5 +129,9 @@
     r:.qetl.verify.cross_mode[`demo_deals;c];
     .qunit.assertEquals[(r`status;r`reason);(`UNVERIFIED;"capture of vcmp_rogue failed: source unreachable");"nothing can pass on rows that were not read"]};
 
-.qt.qetl.verify.compare.test_declare_basis_refuses_a_word_that_is_not_one:{[t]
-    .qunit.assertThrows[{.qetl.verify.declare_basis[`demo_deals;`whatever]};::;"declare_basis: demo_deals's basis `whatever is none of events, revisions, final_state";"named"]};
+.qt.qetl.verify.compare.test_equivalence_refuses_a_word_that_is_not_a_basis:{[t]
+    .qunit.assertThrows[{.qetl.plant.equivalence[`demo_deals;`whatever]};::;"equivalence: demo_deals's basis `whatever is none of events, revisions, final_state";"named"]};
+
+.qt.qetl.verify.compare.test_a_table_declares_its_basis_once:{[t]
+    .qunit.assertThrows[{.qetl.plant.equivalence[`demo_deals;`events]};::;"equivalence: demo_deals already declares a basis";"a second declaration is refused"];
+    .qunit.assertEquals[(.qetl.verify.basis `demo_deals;.qetl.verify.basis `no_such_table);(`events;`);"read back, null where none"]};

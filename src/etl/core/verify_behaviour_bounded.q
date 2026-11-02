@@ -14,7 +14,7 @@
 / @param to_ts the instant after its last
 / @param rows what the capture returned for the whole range, or (::)
 / @return a dict status, reason, evidence
-/ @eg .qetl.verify.check_windows[`demo_deals_backfill;2026.09.11D00:00:00.000000000;2026.09.14D00:00:00.000000000;.qpipe.source.demo_deals.fixture[]]`status  ->  `UNVERIFIED
+/ @eg .qetl.verify.check_windows[`demo_deals_backfill;2026.09.11D00:00:00.000000000;2026.09.14D00:00:00.000000000;.qpipe.source.demo_deals.fixture[]]`status
 .qetl.verify.check_windows:{[worker;from_ts;to_ts;rows]
     cfg:.qetl.job.bounded.def worker;
     w:.qetl.job.bounded.runtime.windows[from_ts;to_ts;cfg`width];
@@ -63,7 +63,7 @@
 / @param to_ts its end
 / @return a dict status, reason, evidence
 / @throws error when this is not a throwaway q
-/ @eg .qetl.verify.check_retries[`demo_deals_backfill;2026.09.11D00:00:00.000000000;2026.09.12D00:00:00.000000000]`status  ->  `PASS
+/ @eg .qetl.verify.check_retries[`demo_deals_backfill;2026.09.11D00:00:00.000000000;2026.09.12D00:00:00.000000000]`status
 .qetl.verify.check_retries:{[worker;from_ts;to_ts]
     .qetl.verify.require_isolated[];
     why:.qetl.verify.not_exercisable[worker;`bounded];
@@ -88,7 +88,7 @@
 / @param to_ts its end
 / @return a dict status, reason, evidence
 / @throws error when this is not a throwaway q
-/ @eg .qetl.verify.check_conflict[`demo_deals_backfill;.qpipe.source.demo_deals.fixture[];2026.09.11D00:00:00.000000000;2026.09.16D00:00:00.000000000]`status  ->  `PASS
+/ @eg .qetl.verify.check_conflict[`demo_deals_backfill;.qpipe.source.demo_deals.fixture[];2026.09.11D00:00:00.000000000;2026.09.16D00:00:00.000000000]`status
 .qetl.verify.check_conflict:{[worker;batch;from_ts;to_ts]
     .qetl.verify.require_isolated[];
     why:.qetl.verify.not_exercisable[worker;`bounded];
@@ -144,7 +144,7 @@
 / @param captured how many rows a capture returned for the range
 / @return a dict status, reason, evidence
 / @throws error when this is not a throwaway q
-/ @eg .qetl.verify.check_coverage[`demo_deals_backfill;2026.09.11D00:00:00.000000000;2026.09.14D00:00:00.000000000;3]`status  ->  `PASS
+/ @eg .qetl.verify.check_coverage[`demo_deals_backfill;2026.09.11D00:00:00.000000000;2026.09.14D00:00:00.000000000;3]`status
 .qetl.verify.check_coverage:{[worker;from_ts;to_ts;captured]
     .qetl.verify.require_isolated[];
     why:.qetl.verify.not_exercisable[worker;`bounded];

@@ -81,14 +81,14 @@
     gap:{[j]
         raze .qetl.verify.behaviour_row[;`stream;j;`UNVERIFIED;;]'[`slow_queries`startup_failure`late_arrivals;
             ("no per-fetch deadline exists to exercise: a hung fetch is bounded only by its caller (uqs job preview times out)";
-             "starting a process is not run in a sandbox; the declaration's on_start is held generically by .qt.qetl.job.stream";
+             "starting a process is not run in a sandbox; the declaration's on_start is held generically by the stream job suites";
              "no double can inject a row into a source after a cursor has passed it; a timestamp cursor skips such a row - a known gap, recovery is out of scope");
             ("";"";"")]};
     $[0=count js; .qetl.verify.behaviour_row[`none;`none;`none;`UNVERIFIED;"";""]; raze gap each js]}
 
 / Private: run every implemented behaviour check for the producers.
 / @private
-.qetl.verify.behaviour_results:{[dataset;cap;from_ts;to_ts]
+.qetl.verify.behaviour_results:{[cap;from_ts;to_ts]
     p:cap`producers;
     out:.qetl.verify.behaviour_row[`none;`none;`none;`UNVERIFIED;"";""];
     out:0#out;
@@ -127,7 +127,7 @@
     co:.qetl.verify.completeness_result[dataset;scope;from_ts;to_ts;reader];
     gaps:.qetl.verify.behaviour_gaps cap`producers;
     gaps:select from gaps where mode<>`none;
-    ran:$[behaviours; .qetl.verify.behaviour_results[dataset;cap;from_ts;to_ts]; 0#gaps];
+    ran:$[behaviours; .qetl.verify.behaviour_results[cap;from_ts;to_ts]; 0#gaps];
     bh:ran,gaps;
     unrun:$[behaviours; ""; "behaviours were not run (--no-behaviours)"];
     bstatus:$[any bh[`status]=`FAIL; `FAIL; (not behaviours) or any bh[`status]=`UNVERIFIED; `UNVERIFIED; `PASS];

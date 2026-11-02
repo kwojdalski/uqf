@@ -6,7 +6,7 @@
 / .
 / WHAT IS COMPARED is the columns both producers return, minus what the destination
 / generates (derived from its schema: .qetl.verify.destination). WHAT "THE SAME"
-/ MEANS is the dataset's declared basis (.qetl.verify.declare_basis), because one
+/ MEANS is the dataset's declared basis (.qetl.plant.equivalence), because one
 / schema does not imply one semantics:
 /   events       the multiset of rows. A key twice in one producer and once in
 /                the other is a difference; so is any changed value
@@ -70,7 +70,6 @@
     xtra:kb where not kb in ka;
     out,:([] rowkey:.qetl.verify.key_text[ks] each miss; kind:(count miss)#`missing; detail:(count miss)#enlist "in the first producer only");
     out,:([] rowkey:.qetl.verify.key_text[ks] each xtra; kind:(count xtra)#`extra; detail:(count xtra)#enlist "in the second producer only");
-    both:ka where ka in kb;
     ca:?[a;();ks!ks;(enlist `c)!enlist (count;`i)];
     cb:?[b;();ks!ks;(enlist `c)!enlist (count;`i)];
     if[basis<>`final_state;
@@ -108,8 +107,8 @@
     names:p`producer;
     if[0=count names; :.qetl.verify.unverified "no producer that can be captured fills ",string dataset];
     if[1=count names; :.qetl.verify.unverified "one producer (",string[first names],") - there is nothing to compare it with"];
-    basis:$[dataset in key .qetl.verify.basis_of; .qetl.verify.basis_of dataset; `];
-    if[null basis; :.qetl.verify.unverified "equivalence basis undeclared - the dataset declares whether events, revisions or its final state must match (.qetl.verify.declare_basis)"];
+    basis:.qetl.verify.basis dataset;
+    if[null basis; :.qetl.verify.unverified "equivalence basis undeclared - the dataset declares whether events, revisions or its final state must match (.qetl.plant.equivalence)"];
     got:{[c;n] first c n}[cap`captures] each names;
     errs:{x`error} each got;
     if[any 0<count each errs; :.qetl.verify.unverified "; " sv errs where 0<count each errs];

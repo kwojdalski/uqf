@@ -46,7 +46,11 @@ def test_the_sites_dataset_verifies_without_a_failure():
         gateway=os.environ.get("UQF_SITE_VERIFY_GATEWAY") or None,
     )
     assert report["readonly"], "verification changed a cursor, checkpoint, coverage record or table"
-    failed = [(c["category"], c["reason"], c["findings"]) for c in report["checks"] if c["status"] == "FAIL"]
+    failed = [
+        (c["category"], c["reason"], c["findings"])
+        for c in report["checks"]
+        if c["status"] == "FAIL"
+    ]
     assert not failed, failed
     for c in report["checks"]:
         print(c["category"], c["status"], c["reason"])
