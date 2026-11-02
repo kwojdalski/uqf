@@ -26,7 +26,7 @@ from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 
-from uqs.attach import backfill_owner, config
+from uqs.attach import backfill_audit, backfill_owner, config
 from uqs.attach.backfill import Destination, require_verified
 from uqs.attach.backfill_plan import plan_attached
 from uqs.attach.remote import Ipc
@@ -58,6 +58,12 @@ class Launched:
     owner: Path
     destination: Destination
     process: subprocess.Popen[bytes]
+    #: backfill_overrides.jsonl, when a waiver was used: written before the process started
+    audit: Path | None = None
+
+    @property
+    def run_id(self) -> str:
+        return self.log.stem
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -66,6 +72,7 @@ class Launched:
             "state_dir": str(self.state_dir),
             "owner_record": str(self.owner),
             "destination": self.destination.as_dict(),
+            "override_record": None if self.audit is None else str(self.audit),
         }
 
 
@@ -160,7 +167,8 @@ def launch(
     `eod-fence` findings found NOW, and nothing else, and a waived fence runs with no write
     deadline. Refused - nothing started, nothing created - when the admission refuses; refused
     when the attachment already has a run or there is no q. The state directory is created here
-    and only here.
+    and only here. Each waiver applied is appended to backfill_audit's record before the
+    process is started, and the run refused if it cannot be (#1829).
     """
     if mode not in RUN_MODES:
         raise UqsError(f"--mode {mode} is not an execution mode ({', '.join(RUN_MODES)})")
@@ -208,26 +216,41 @@ def launch(
         logs = dest.state_dir / LOGS
         logs.mkdir(parents=True, exist_ok=True)
         log = logs / f"{worker}-{datetime.now(UTC).strftime('%Y%m%dT%H%M%S%f')}.log"
+        # each waiver is on record, durably, before the runner exists to write (#1829)
+        audit = backfill_audit.record(
+            dest.state_dir,
+            backfill_audit.entries(
+                plan,
+                run=log.stem,
+                mode=mode,
+                command=backfill_audit.command_of(worker, attachment, plan, mode, version),
+                log_path=log,
+            ),
+        )
         # the readers' password goes to the child by environment, never by command line
         env = {
             **os.environ,
             "UQF_STATUS_DIR": str(dest.state_dir),
             REACH_PASSWORD_ENV: att.stack.password(),
         }
-        with log.open("wb") as out:
-            proc = subprocess.Popen(
-                [str(q), str(paths.repo_root / RUNNER), *flags],
-                cwd=paths.repo_root,
-                env=env,
-                stdin=subprocess.DEVNULL,
-                stdout=out,
-                stderr=subprocess.STDOUT,
-                start_new_session=True,
-            )
+        try:
+            with log.open("wb") as out:
+                proc = subprocess.Popen(
+                    [str(q), str(paths.repo_root / RUNNER), *flags],
+                    cwd=paths.repo_root,
+                    env=env,
+                    stdin=subprocess.DEVNULL,
+                    stdout=out,
+                    stderr=subprocess.STDOUT,
+                    start_new_session=True,
+                )
+        except OSError as exc:
+            backfill_audit.outcome(audit, log.stem, outcome="not-started", error=str(exc))
+            raise UqsError(f"could not start the backfill runner: {exc}") from None
         # the process exists: record it before the lock is released, so no second run or detach
         # can slip in between its start and its own claim
         backfill_owner.claim(attachment, worker, proc.pid, dest.identity, attach_root)
-    return Launched(proc.pid, log, dest.state_dir, owner, dest, proc), plan
+    return Launched(proc.pid, log, dest.state_dir, owner, dest, proc, audit), plan
 
 
 def _destination(plan: dict[str, Any]) -> dict[str, Any]:

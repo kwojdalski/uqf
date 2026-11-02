@@ -870,6 +870,17 @@ and refuse (listing every blocker together) when they cannot establish it:
   window and gives it no write deadline. The plan then says "EOD fence
   bypassed; no EOD write deadline" and keeps the lifted finding as `accepted`.
   A reload in progress, the active date and an unknown clock still refuse.
+  The waiver is for that one invocation and is never saved with the attachment:
+  the next backfill without the flag is fenced again. A dry run or run that uses
+  it first appends an entry to `backfill_overrides.jsonl` in the destination's
+  state directory (below), fsynced before the runner starts, and does not start
+  if that fails. The entry holds the override, the reason, who and on which host,
+  when, the command (rebuilt from the run's arguments, never with a credential),
+  the mode, the destination, the run's bounds, the accepted findings with their
+  observed facts, and `requested`/`needed`: a waiver given when no finding of it
+  fired is kept as `needed: false`. It is never rewritten; an `outcome` entry
+  with the same `run` (the log's name) is appended when the process cannot be
+  started or `--wait` follows it to its end. `--mode plan` records nothing.
 - **Nothing working in place.** A `compression` process is a blocker;
   `housekeeping` is a warning. A `sort.csv` that would order or attribute the
   table differently from the finished partitions is a blocker.
@@ -957,6 +968,9 @@ asked again, and the readiness record advances only when each has answered.
   errors and the closing `RESULT` line are shown whatever `--level` says.
 - `uqs job runs list | status | show --attach NAME` - the destination's run
   ledger; `show` prints the re-run command with `--attach` in it.
+- `uqs job attachment show NAME` - ends with every waiver a backfill into the
+  attachment's destination used (`backfill_overrides` in `--json`), read from
+  `<status dir>/attached/<attachment>-<id>/backfill_overrides.jsonl`.
 - `uqs job backfill ... --attach NAME --mode plan` shows `reload owed` when an
   earlier run left rows written and covered but not yet queryable.
 
