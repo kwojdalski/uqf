@@ -755,3 +755,6 @@ def _wire(frame: pl.DataFrame) -> list[dict[str, Any]]:
             if value is not None and abs(value) in (math.inf, _SPAN_INFINITY):
                 row[name] = INFINITY[1 if value > 0 else -1]
     return rows
+
+
+# A comment that exists only to exercise CI path filters (#1879); it will not merge.
