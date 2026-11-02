@@ -1258,3 +1258,6 @@ holder is gone. It is refused while either of these holds:
 When it does break a lock, it says what it broke and why, then takes the lock
 itself. A lock written before this recorded no limit, so it is held to the
 current run's limit instead.
+
+This sentence exists only to exercise CI path filters (#1879) and will not
+merge.
