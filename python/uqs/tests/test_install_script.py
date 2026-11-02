@@ -8,15 +8,30 @@ logs its argv, so what the script ran (or did not) is asserted directly.
 
 from __future__ import annotations
 
+import importlib.util
 import os
 import re
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
 
 ROOT = Path(__file__).resolve().parents[3]
+
+
+def _pinned(tool: str) -> str:
+    """`tool`'s version from its one authority (#1838), not a third copy here."""
+    path = ROOT / "scripts" / "gates" / "policy" / "tool_pins.py"
+    spec = importlib.util.spec_from_file_location("tool_pins", path)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module.pinned(tool)
+
+
 BASH = shutil.which("bash") or "/bin/bash"
 
 STUBS = {
@@ -145,7 +160,7 @@ def test_dev_syncs_and_installs_hooks(repo: Path) -> None:
     code, out, calls = run(repo, "--dev", missing=("pre-commit",))
     assert code == 0, out
     assert "uv sync" in calls
-    assert "uv tool install pre-commit==4.6.2" in calls
+    assert f"uv tool install pre-commit=={_pinned('pre-commit')}" in calls
     assert "pre-commit install" in calls
 
 

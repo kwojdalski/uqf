@@ -139,6 +139,15 @@ def _declaration_reference(decl: ModuleType, root: Path) -> int:
     )
 
 
+def _tool_pins(pins: ModuleType, root: Path) -> int:
+    """Every copy of a tool's version pin agrees with its authority (#1838)."""
+    return report(
+        "tool-pins",
+        pins.problems(root),
+        f"every copy of {len(pins.PINS)} tool pins agrees with its authority",
+    )
+
+
 @dataclass(frozen=True)
 class Check:
     name: str
@@ -184,6 +193,12 @@ CHECKS: dict[str, Check] = {
             "docs/reference/pipeline-declarations.md matches the keys the declaring q files list",
             "declaration_reference",
             _declaration_reference,
+        ),
+        Check(
+            "tool-pins",
+            "every copy of a tool's version (uv, pre-commit, Python...) matches its authority",
+            "tool_pins",
+            _tool_pins,
         ),
     )
 }
