@@ -477,5 +477,5 @@ def test_kafka_brokers_and_topics_come_from_the_variables_kafka_feed1_reads(monk
     monkeypatch.setenv(kafka_feed.BROKERS_ENV, "b:1")
     monkeypatch.setenv(kafka_feed.TOPICS_ENV, "uqf.client.flow")
     options = kafka_feed.FEED.start_options({})
-    assert (options["brokers"], options["topic"]) == ("b:1", "uqf.client.flow")
+    assert (options["brokers"], options["topics"]) == ("b:1", "uqf.client.flow")
     assert kafka_feed.FEED.start_options({"brokers": "x:2"})["brokers"] == "x:2"

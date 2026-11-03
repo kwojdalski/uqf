@@ -320,6 +320,19 @@
     e:.qt.qpipe.transform.fx_markout.fill[.qt.qpipe.transform.fx_markout.t;`EURUSD;1;1.1001;`n1],update venue:`b from .qt.qpipe.transform.fx_markout.fill[.qt.qpipe.transform.fx_markout.t;`EURUSD;1;1.1001;`n1];
     .qunit.assertEquals[count distinct exec venue from .qt.qpipe.transform.fx_markout.calc[sp;e;.qt.qpipe.transform.fx_markout.direct_books[]];2;"identity is venue and fill_id"]};
 
+/ The identity is the pair, not its text: venue `a|b with fill `c and venue `a
+/ with fill `b|c both read "a|b|c" once joined, and were scored as one.
+.qt.qpipe.transform.fx_markout.test_identities_that_join_to_the_same_text_are_two_executions:{[tc]
+    sp:.qt.qpipe.transform.fx_markout.spec_of[`horizons`tolerance!(enlist .qt.qpipe.transform.fx_markout.one_s;1e-6)];
+    f:.qt.qpipe.transform.fx_markout.fill[.qt.qpipe.transform.fx_markout.t;`EURUSD;1;1.1001];
+    e:(update venue:`$"a|b" from f[`c]),update venue:`a from f[`$"b|c"];
+    r:.qt.qpipe.transform.fx_markout.calc[sp;e;.qt.qpipe.transform.fx_markout.direct_books[]];
+    .qunit.assertEquals[asc distinct exec venue from r;`$("a";"a|b");"both executions scored"]};
+
+.qt.qpipe.transform.fx_markout.test_last_delivery_of_nothing_is_the_empty_table:{[tc]
+    e:0#.qpipe.transform.fx_markout.executions_in;
+    .qunit.assertEquals[.qpipe.transform.fx_markout.last_delivery e;e;"not the general empty list"]};
+
 .qt.qpipe.transform.fx_markout.test_unscoreable_executions_are_excluded_and_named:{[tc]
     sp:.qt.qpipe.transform.fx_markout.spec_of[`horizons`tolerance!(enlist .qt.qpipe.transform.fx_markout.one_s;1e-6)];
     e:.qt.qpipe.transform.fx_markout.fill[.qt.qpipe.transform.fx_markout.t;`BTCUSDT;1;62000f;`k1],.qt.qpipe.transform.fx_markout.fill[.qt.qpipe.transform.fx_markout.t;`EURUSD;1;1.1;`],.qt.qpipe.transform.fx_markout.fill[.qt.qpipe.transform.fx_markout.t;`EURUSD;0;1.1;`k3],.qt.qpipe.transform.fx_markout.fill[.qt.qpipe.transform.fx_markout.t;`EURUSD;1;0f;`k4],.qt.qpipe.transform.fx_markout.fill[.qt.qpipe.transform.fx_markout.t;`EURUSD;1;1.1;`ok];
