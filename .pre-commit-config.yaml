@@ -514,7 +514,8 @@ repos:
       # and is where that check lives (#1879); this is only the early catch for
       # its commonest failure - a new test KDB-X passes and PeachQ does not,
       # which bounced five pull requests on 2026-11-03 for an hour each and
-      # reproduced locally in a minute. Failures listed in
+      # reproduced locally in a minute. An added or removed @eg line also
+      # runs tests/q/test_docstring_examples.q (#1978). Failures listed in
       # tests/q/peachq_known_gaps.txt are expected. PeachQ is found as
       # q-docs-peachq finds it: $QCMD when it is PeachQ, else the pinned build.
       # Push without it: SKIP=peachq-push git push.

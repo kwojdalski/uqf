@@ -64,18 +64,19 @@ commit runs only the fast set - format, lint, static gates, the generated-file
 checks - and takes seconds. A push runs the test suites (#1965): `python-tests`
 only the Python tests the push reaches, `q-tests` and `q-coverage` only the q
 suites the branch reaches, and `peachq-push` the q test files the branch adds or
-changes on PeachQ, with `tests/q/peachq_known_gaps.txt` expected. That last is
-an early catch, not a second home: CI's PeachQ job still runs the whole suite
-and decides. The docs render and the docs' q blocks on PeachQ run in CI only. On
-a pull request `scripts/dev/ci_scope.py` picks the whole groups (docs, q,
-browser app, Python) a change reaches - never single tests - and the static
-gates always run. Full mode is one switch away: `UQF_HOOKS_FULL=1 git commit` or
-`git push`, or `python3 scripts/dev/hooks_full.py --all` for both stages without
-either (`UQF_Q_TESTS_FULL=1` still runs the whole q suite alone); in CI, the
-`ci:full` PR label, `gh workflow run ci.yml --ref <branch> -f full=true`, and
-every push to master. A generated file never stops a merge: `.gitattributes`
-keeps one side, the post-merge hook regenerates it, and its `--check` gate still
-decides - register the driver once per clone with
+changes on PeachQ - plus `test_docstring_examples.q` when an `@eg` line changes
+(#1978) - with `tests/q/peachq_known_gaps.txt` expected. That last is an early
+catch, not a second home: CI's PeachQ job still runs the whole suite and
+decides. The docs render and the docs' q blocks on PeachQ run in CI only. On a
+pull request `scripts/dev/ci_scope.py` picks the whole groups (docs, q, browser
+app, Python) a change reaches - never single tests - and the static gates always
+run. Full mode is one switch away: `UQF_HOOKS_FULL=1 git commit` or `git push`,
+or `python3 scripts/dev/hooks_full.py --all` for both stages without either
+(`UQF_Q_TESTS_FULL=1` still runs the whole q suite alone); in CI, the `ci:full`
+PR label, `gh workflow run ci.yml --ref <branch> -f full=true`, and every push
+to master. A generated file never stops a merge: `.gitattributes` keeps one
+side, the post-merge hook regenerates it, and its `--check` gate still decides -
+register the driver once per clone with
 `python3 scripts/dev/merge_generated.py install` and install the push and merge
 hooks with `pre-commit install`. README's Testing section says where each check
 runs.
