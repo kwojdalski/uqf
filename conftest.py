@@ -56,6 +56,17 @@ for _name in STATE_LOCATION_VARS:
     os.environ.pop(_name, None)
 
 
+#: The switches that put the commit hooks in full mode (scripts/dev/hooks_full.py,
+#: scripts/dev/test_impact.py). They choose which tests a hook runs, and are
+#: read before pytest starts; inside it, a test of the selectors that inherited
+#: one from `UQF_HOOKS_FULL=1 git commit` would test full mode instead of
+#: what it means to.
+HOOK_MODE_VARS = ("UQF_HOOKS_FULL", "UQF_Q_TESTS_FULL")
+
+for _name in HOOK_MODE_VARS:
+    os.environ.pop(_name, None)
+
+
 #: The markers the q-running tests are selected by (#1808). `-m kdbx` and
 #: `-m peachq` pick an interpreter; `--require-q IMPL` makes a missing one a
 #: failure. q_backend is how the python-tests hook leaves out what the q hooks
@@ -90,15 +101,23 @@ REQUIRABLE_Q = ("kdbx", "peachq")
 # --- sharding across CI runners (#1696, scripts/dev/pytest_shards.py) ------------
 
 
-def _shards():
+@functools.cache
+def _dev_module(name: str):
+    """scripts/dev/<name>.py, loaded once: the tree's pytest helpers live there."""
     import importlib.util
+    import sys
 
-    path = Path(__file__).with_name("scripts") / "dev" / "pytest_shards.py"
-    spec = importlib.util.spec_from_file_location("pytest_shards", path)
+    path = Path(__file__).with_name("scripts") / "dev" / f"{name}.py"
+    spec = importlib.util.spec_from_file_location(name, path)
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
+    sys.modules.setdefault(name, module)
     spec.loader.exec_module(module)
     return module
+
+
+def _shards():
+    return _dev_module("pytest_shards")
 
 
 def pytest_addoption(parser):
@@ -151,6 +170,22 @@ def pytest_addoption(parser):
                     help="each table and the columns it must still have")  # fmt: skip
     smoke.addoption("--smoke-timeout-ms", type=int, default=None,
                     help="per-connection timeout (default 5000)")  # fmt: skip
+    picked = parser.getgroup("picked", "the tests a commit reaches (python_tests_hook.py)")
+    picked.addoption(
+        "--record-reach",
+        default=None,
+        metavar="PATH",
+        help=(
+            "record what each test reads, lists and starts into PATH, merged with what it "
+            "holds (scripts/dev/test_reach.py)"
+        ),
+    )
+    picked.addoption(
+        "--select-tests",
+        default=None,
+        metavar="FILE",
+        help="run only the tests whose ids FILE lists, one per line",
+    )
     group = parser.getgroup("shards", "split the suite across CI runners by module")
     group.addoption("--shard", default=None, help="run shard I of N, as I/N")
     group.addoption(
@@ -186,10 +221,19 @@ def pytest_configure(config):
     path = config.getoption("--store-shard-durations")
     if path:
         config.pluginmanager.register(_shards().Recorder(Path(path)), "shard-durations")
+    reach = config.getoption("--record-reach")
+    if reach:
+        test_reach = _dev_module("test_reach")
+        worker = getattr(config, "workerinput", {}).get("workerid")
+        recorder = test_reach.Recorder(Path(reach).resolve(), worker)
+        test_reach.install(recorder)
+        recorder.watch_children()
+        config.pluginmanager.register(recorder, "test-reach")
 
 
 def pytest_collection_modifyitems(config, items):
     _skip_unasked_opt_ins(config, items)
+    _keep_selected(config, items)
     spec = config.getoption("--shard")
     if not spec:
         return
@@ -199,6 +243,20 @@ def pytest_collection_modifyitems(config, items):
     mine = set(shards.assign(list(unit.values()), shards.load_weights(), count)[index - 1])
     keep = [item for item in items if unit[item.nodeid] in mine]
     dropped = [item for item in items if unit[item.nodeid] not in mine]
+    if dropped:
+        config.hook.pytest_deselected(items=dropped)
+    items[:] = keep
+
+
+def _keep_selected(config, items) -> None:
+    """--select-tests FILE: keep only the tests FILE names."""
+    path = config.getoption("--select-tests")
+    if not path:
+        return
+    wanted = set(Path(path).read_text().split())
+    test_id = _dev_module("test_reach").test_id
+    keep = [i for i in items if test_id(i.nodeid, i.keywords) in wanted]
+    dropped = [i for i in items if test_id(i.nodeid, i.keywords) not in wanted]
     if dropped:
         config.hook.pytest_deselected(items=dropped)
     items[:] = keep

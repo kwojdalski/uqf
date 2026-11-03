@@ -17,9 +17,10 @@ whatever the record says.
     # refresh the record, on a CI-like run (PeachQ, the stack tests on):
     uv run pytest -n auto --dist loadgroup \
         --store-shard-durations scripts/dev/test_module_durations.json
-    # or from CI's own times: each shard uploads durations-N.json
-    gh run download <run-id> --pattern 'durations-*' --dir /tmp/d
-    python3 scripts/dev/pytest_shards.py --merge /tmp/d/*/durations-*.json
+    # or from CI's own times: each shard uploads durations-N.json; several
+    # runs' files average per module
+    gh run download <run-id> --pattern 'durations-*' --dir /tmp/d/<run-id>
+    python3 scripts/dev/pytest_shards.py --merge /tmp/d/*/*/durations-*.json
 """
 
 from __future__ import annotations
@@ -101,12 +102,16 @@ class Recorder:
 
 
 def merge(paths: list[Path], out: Path = MODULE_DURATIONS) -> dict[str, float]:
-    """One record from the shards' own: each holds only its modules, so a
-    module appears in exactly one of them."""
-    data: dict[str, float] = {}
+    """One record from the shards' own. One run's shards each hold only their
+    modules; several runs' files - `gh run download` of a few runs - hold a
+    module once per run, and it weighs the mean of its times, which one slow
+    runner does not decide alone."""
+    seen: dict[str, list[float]] = defaultdict(list)
     for path in paths:
-        data.update(json.loads(path.read_text()))
-    out.write_text(json.dumps(dict(sorted(data.items())), indent=1) + "\n")
+        for module, seconds in json.loads(path.read_text()).items():
+            seen[module].append(seconds)
+    data = {m: round(statistics.fmean(v), 2) for m, v in sorted(seen.items())}
+    out.write_text(json.dumps(data, indent=1) + "\n")
     return data
 
 
