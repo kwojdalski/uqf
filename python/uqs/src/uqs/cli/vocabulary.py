@@ -111,7 +111,7 @@ TERMS = (
     Term("a private ODBC setup", "--odbc-home", "path", retired=("--home",)),
     Term("q's home, QHOME", "--q-home", "path", retired=("--qhome",)),
     Term("the q executable, QCMD", "--q-cmd", "str", retired=("--qcmd",)),
-    Term("the kdb+ version", "--q-version", "str"),
+    Term("the kdb+ version", "--q-version", "str", retired=("--q-target",)),
     Term("how many records to show", "--limit", "int", retired=("--sample",)),
     Term("how many lines of a log to show", "--lines", "int"),
     Term(

@@ -75,7 +75,7 @@
 / HDB answers by re-mapping its database - and then ask it whether it SERVES the data (#1773). A reload
 / that succeeds is not queryable: a partitioned HDB takes its table list from its LATEST partition, so
 / a table written only into an older date is invisible to it until the latest partition holds the table
-/ too (a native end of day writes it; `uqs data check --attach NAME --apply` fills it) - and a query
+/ too (a native end of day writes it; `uqs data check --attachment NAME --apply` fills it) - and a query
 / restricted to a covered date is served only if THAT date's partition holds the table with the
 / expected columns, which the table list says nothing about. So the reader is asked, by metadata only,
 / about every date the release covers. Unrestricted queries over older dates are not promised.
@@ -88,7 +88,7 @@
     addr:`$":",string[r`host],":",string[r`port],":",user,":",pass;
     h:@[hopen;(addr;10000);{[e] e}];
     if[10h=type h; :(0b;"cannot connect: ",h)];
-    fix:"uqs data check --attach NAME --apply";
+    fix:"uqs data check --attachment NAME --apply";
     res:.[{[h;n;fix]
             ds:n`dataset;
             h(`reload;.z.d);

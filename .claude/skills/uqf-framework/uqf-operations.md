@@ -30,7 +30,7 @@ Prerequisites: - KDB-X (q 5.0 or later; `QCMD`/`QHOME` when q isn't on PATH); -
   | a q expression on a process                            | `uqs query PROC "expr"` / `uqs query PROC` (interactive)                                                                          |
   | a table's columns in a running process                 | `uqs schema`                                                                                                                      |
   | logs                                                   | `uqs logs NAME --level ERROR`, `-f`, `--multitail`                                                                                |
-  | list processes, profiles, runtimes, overrides, env     | `uqs list KIND` (no argument lists the kinds)                                                                                     |
+  | list processes, profiles, env; runtimes; config set's  | `uqs list KIND` (no argument lists the kinds); `uqs runtime list`, `uqs config list`                                              |
   | a bounded worker over a range                          | `uqs [--debug] job backfill WORKER --from T --to T --source-version V [--wait] [--trace]`                                         |
   | runs: unfinished, one run, one window                  | `uqs job runs list --unfinished`, `uqs job runs show RUN_ID`, `uqs job runs list`                                                 |
   | holes in a streaming job's output, and refill commands | `uqs job gaps JOB --from T --to T`                                                                                                |
@@ -107,7 +107,7 @@ Deployment targets Linux. Push needs TorQ and q already on the server
 (`docs/guides/deploy.md`).
 
 ```bash
-uqs deploy build [--q-target 4.0] [--bundle DIR]   # an artifact, from a commit
+uqs deploy build [--q-version 4.0] [--bundle DIR]   # an artifact, from a commit
 uqs deploy push dist/uqf-<release>.tar.gz prod-a   # a target in deploy_targets.toml
 uqs deploy push dist/uqf-<release>.tar.gz --ssh H --dest /opt/uqf \
     --torq-home ... --torq-app-home ... --q-cmd ... --q-home ... --profile essential
@@ -121,10 +121,10 @@ optional live source check and soak; 10. activate `current`.
 
 Any failure rolls back, and a report is written into the release.
 
-**kdb+ 4.0 servers:** build with `--q-target 4.0`. The release's q is flattened,
-and the manifest records what was converted. `uqs start` recognises a converted
-release from that manifest, and checks each q file's sha256. For a server q
-older than the target, use
+**kdb+ 4.0 servers:** build with `--q-version 4.0`. The release's q is
+flattened, and the manifest records what was converted. `uqs start` recognises a
+converted release from that manifest, and checks each q file's sha256. For a
+server q older than the target, use
 `--override accept-converted-release --reason "REASON"`. It works only after the
 smoke test passes, applies only to that deployment, and is recorded in the
 report.

@@ -152,7 +152,7 @@ def test_no_start_registers_and_does_not_change_the_saved_policy(world):
 
 
 def test_start_with_all_is_refused_with_runtime_only(world):
-    result = run("add", *new(world), "--runtime-only", "--start-with-all", "--yes")
+    result = run("add", *new(world), "--transient", "--start-with-all", "--yes")
     assert result.exit_code == 1
     assert "--start-with-all needs durable table registration" in said(world, result)
     assert rows_for(world.registry) == []
@@ -321,8 +321,8 @@ def test_schema_writer_tickerplant_and_cli_are_saved_choices(world):
     result = run("add", *new(world)[:-2], "--schema-writer", "cli", "--dry-run", "--json")
     doc = json.loads(result.output)["plan"]
     assert doc["schema_writer"] == "cli" and doc["persist"] == "schema-file"
-    refused = run("add", *new(world), "--runtime-only", "--schema-writer", "cli", "--dry-run")
-    assert "--runtime-only and --schema-writer cli exclude each other" in said(world, refused)
+    refused = run("add", *new(world), "--transient", "--schema-writer", "cli", "--dry-run")
+    assert "--transient and --schema-writer cli exclude each other" in said(world, refused)
 
 
 def test_remote_schema_file_is_refused_with_what_to_run_instead(world):

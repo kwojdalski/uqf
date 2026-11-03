@@ -10,7 +10,7 @@ import typer
 from rich.table import Table
 
 from uqs.cli.deploy import deploy_app
-from uqs.cli.json_out import emit, json_opt
+from uqs.cli.json_out import emit, json_opt, timestamp
 from uqs.cli.safety import ReadOnly
 from uqs.cli.shared import (
     ExportOpt,
@@ -28,10 +28,10 @@ from uqs.deploy.config import DeployError
 from uqs.paths import UqsError, repo_root
 
 HistoryJson = json_opt(
-    '{"deployments": [{default: bool, at, target, host, dest, release, profile, status, '
+    '{"deployments": [{default: bool, at, target, ssh, dest, release, profile, status, '
     "stage}]}, newest first"
 )
-_KEYS = ("at", "target", "host", "dest", "release", "profile", "status", "stage")
+_KEYS = ("at", "target", "ssh", "dest", "release", "profile", "status", "stage")
 
 
 @deploy_app.command("history", cls=ReadOnly)
@@ -68,7 +68,7 @@ def deploy_history(
         (i, e)
         for i, e in enumerate(entries)
         if target is None
-        or target in (e.get("target"), e.get("host"), history.server_of(str(e.get("host"))))
+        or target in (e.get("target"), e.get("ssh"), history.server_of(str(e.get("ssh"))))
     ]
     rows = [
         {"default": i in defaults, **{k: e.get(k) for k in _KEYS}}
@@ -81,7 +81,8 @@ def deploy_history(
         return
     _export(rows, export)
     if as_json:
-        emit({"deployments": rows})
+        # the time ISO-8601 with its offset, as every document's (#1882)
+        emit({"deployments": [r | {"at": timestamp(r["at"], naive="utc")} for r in rows]})
         return
     if not rows:
         console.print(f"no deployments recorded in {history.history_path(root)}")
@@ -95,7 +96,7 @@ def deploy_history(
             "*" if r["default"] else "",
             str(r.get("at") or ""),
             str(r.get("target") or ""),
-            str(r.get("host") or ""),
+            str(r.get("ssh") or ""),
             str(r.get("dest") or ""),
             str(r.get("release") or ""),
             str(r.get("profile") or ""),

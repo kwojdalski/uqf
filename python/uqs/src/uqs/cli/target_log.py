@@ -33,7 +33,7 @@ from uqs.deploy.config import DeployError
 from uqs.paths import UqsError, repo_root
 
 LogJson = json_opt(
-    '{"changes": [{number, at, user, host, kind, command, target, tables: [{table, before, '
+    '{"changes": [{number, at, user, machine, kind, command, target, tables: [{table, before, '
     'after, keys}], diff, hash}], newest first, "edited_outside": bool}'
 )
 
@@ -55,7 +55,9 @@ def _about(entry: dict, name: str) -> bool:
 def log_(
     name: Annotated[
         str | None,
-        typer.Argument(metavar="NAME", help="Only the changes to this target", show_default=False),
+        typer.Argument(
+            metavar="TARGET", help="Only the changes to this target", show_default=False
+        ),
     ] = None,
     limit: Annotated[int, typer.Option("--limit", help="The most recent N changes")] = 20,
     export: ExportOpt = None,
@@ -64,7 +66,9 @@ def log_(
     interactive: InteractiveOpt = False,
     as_json: LogJson = False,
 ) -> None:
-    """The changes made to deploy_targets.toml, newest first: by whom, from
+    """List the changes made to deploy_targets.toml, newest first.
+
+    By whom, from
     which machine, with which command, and which settings each changed.
     `uqs target revert N` undoes change N."""
     root = repo_root()
@@ -82,7 +86,9 @@ def log_(
     changes: list[dict[str, Any]] = [
         {
             "number": n,
-            **{k: e.get(k) for k in ("at", "user", "host", "kind", "command", "target")},
+            **{k: e.get(k) for k in ("at", "user", "kind", "command", "target")},
+            # the machine the change was made on: "host" is a q host (#1888)
+            "machine": e.get("host"),
             "tables": [
                 {**t, "keys": target_changelog.keys_changed(t)} for t in e.get("tables") or []
             ],
@@ -118,7 +124,7 @@ def log_(
         table.add_row(
             str(n),
             str(e.get("at", "")),
-            f"{e.get('user', '')}@{e.get('host', '')}",
+            f"{e.get('user', '')}@{e.get('machine', '')}",
             str(e.get("kind", "")),
             str(e.get("target") or ""),
             what or "(comments or layout only)",
@@ -138,7 +144,9 @@ def revert(
     ],
     dry_run: DryRun = False,
 ) -> None:
-    """Put back each table one change altered, exactly as it was before it -
+    """Revert one change to deploy_targets.toml.
+
+    Puts back each table the change altered, exactly as it was before it -
     itself a change, checked and logged, so it can be reverted too. Refused
     when a table has changed again since."""
     ref = None if change == "last" else change

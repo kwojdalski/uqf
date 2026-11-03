@@ -17,10 +17,11 @@ have found a log directory, replayed it without complaint, and written down a
 day nobody asked for. The plant's own start line cannot drift from the plant:
 `-tplogdir`, `-schemafile` and `-stackid` are on it, and `ps` reports them.
 
-That is also where the stack's base port comes from. Every other command
-defaults `--base-port` to its runtime's base port and is wrong on a stack that
-was started with another; here the running plant's `-stackid` IS the answer, so
-`--base-port` is only needed when it is being overridden on purpose.
+The stack's base port is the one exception. `--base-port` defaults to the
+runtime's own, on this command as on every other (#1855) - one option, one
+default - and the plant's `-stackid` is checked against it: a plant running
+under another base port is refused, naming the `--base-port` that replays it,
+rather than replayed under a port the operator never chose.
 
 WHAT IS DELIBERATELY NOT DECIDED HERE. `emptytables`, `clean`, `sortafterreplay`
 and the rest keep TorQ's defaults, which means the replay EMPTIES the tables it
@@ -302,7 +303,7 @@ class ReplayPlan:
         return [
             ("log", str(self.log_dir), source),
             ("hdb", str(self.hdb_dir), "hdb process" if self.plant else "--hdb"),
-            ("schema", str(self.schema_file), source if self.plant else "--schema"),
+            ("schema", str(self.schema_file), source if self.plant else "--schema-file"),
             ("base port", str(self.base_port), "-stackid" if self.plant else "--base-port"),
             ("tables", ", ".join(self.tables) if self.tables else "all", "--table"),
         ]
@@ -317,6 +318,7 @@ def plan(
     tables: list[str] | None = None,
     base_port: int | None = None,
     timeout: float | None = None,
+    base_port_given: bool = True,
 ) -> ReplayPlan:
     """Resolve what to replay, preferring what was asked for over what is up.
 
@@ -324,7 +326,8 @@ def plan(
     fleet is only consulted for the parts left unsaid - and a call that
     supplies `log_dir`, `hdb_dir`, `schema_file` and `base_port` touches no
     process at all, which is what makes the command usable on a stack that
-    has already been stopped.
+    has already been stopped. A `base_port` that is only the runtime's default
+    (`base_port_given` False) must be the running plant's `-stackid`.
     """
     needs_plant = log_dir is None or schema_file is None or base_port is None or hdb_dir is None
     plant = resolve_plant(procname, timeout) if needs_plant else None
@@ -337,6 +340,12 @@ def plan(
             "--date picks a day out of a plant's log directory, so it cannot be used with --dir"
         )
 
+    if plant is not None and base_port is not None and not base_port_given:
+        if plant.base_port != base_port:
+            raise UqsError(
+                f"{plant.procname} runs under base port {plant.base_port}, not this "
+                f"runtime's {base_port}: give --base-port {plant.base_port} to replay its log"
+            )
     resolved_port = base_port if base_port is not None else (plant.base_port if plant else None)
     assert resolved_port is not None
 
@@ -348,7 +357,7 @@ def plan(
         if plant.schemafile is None:
             raise UqsError(
                 f"{plant.procname} is running without -schemafile, so the schema the log "
-                "was written under is not known - name it with --schema"
+                "was written under is not known - name it with --schema-file"
             )
         schema_file = plant.schemafile
 

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from uqs.cells import cells, values
 from uqs.model.declarations import read_declarations
 from uqs.model.jobs import job_rows
 from uqs.stack import listing
@@ -38,8 +39,8 @@ def test_every_kind_is_represented_in_the_real_tree():
     """`reaction` since #529, when rebuild_positions became the first one the
     tree runs rather than only tests."""
     assert {row["kind"] for row in job_rows(UQF_ROOT)} == {
-        "feed",
-        "etl",
+        "streaming",
+        "horizon",
         "normalizer",
         "backfill",
         "reaction",
@@ -59,13 +60,16 @@ def test_a_backfill_reads_its_source_and_writes_its_dataset_and_partition(tmp_pa
         },
     )
     (row,) = job_rows(root)
-    assert (row["kind"], row["procname"], row["reads"], row["writes"], row["starts"]) == (
+    shown = cells(row)  # the table: the source named a source, the partition beside the dataset
+    assert (row["kind"], row["procname"], shown["reads"], shown["writes"], row["starts"]) == (
         "backfill",
         "wbf1",
         "source s",
         "fx [EURUSD]",
         "triggered",
     )
+    # the document: the names alone (#1882)
+    assert (list(values(row)["reads"]), list(values(row)["writes"])) == (["s"], ["fx"])
 
 
 def test_state_tells_a_scaffold_from_written_work(tmp_path):
@@ -82,6 +86,6 @@ def test_state_tells_a_scaffold_from_written_work(tmp_path):
     )
     states = {row["job"]: (row["state"], row["starts"], row["kind"]) for row in job_rows(root)}
     assert states == {
-        "a": ("scaffolded", "on demand", "feed"),
-        "b": ("written", "on demand", "feed"),
+        "a": ("scaffolded", "on demand", "streaming"),
+        "b": ("written", "on demand", "streaming"),
     }

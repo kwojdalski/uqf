@@ -1,6 +1,6 @@
 """The record of a waived end-of-day fence (#1829, part of #1824).
 
-A dry run or run of `uqs job backfill --attach NAME --skip-eod-fence --reason TEXT` appends an
+A dry run or run of `uqs job backfill --attachment NAME --skip-eod-fence --reason TEXT` appends an
 `override` entry to backfill_overrides.jsonl in the destination's state directory before the
 runner can start, refuses to start if it cannot, never rewrites it, holds no credential, and
 says whether the waiver was needed. The waiver itself is not saved: the next invocation is
@@ -158,7 +158,7 @@ def test_the_record_names_the_override_who_when_where_and_what_it_accepted(world
     assert e["effect"] == backfill_policy.EOD_BYPASSED
     assert e["operator"] == getpass.getuser() and e["host"] and e["at"]
     assert e["command"] == (
-        f"uqs job backfill {WORKER} --attach pb-uat --mode {mode} --from "
+        f"uqs job backfill {WORKER} --attachment pb-uat --mode {mode} --from "
         f"{plan['range']['from']} --to {plan['range']['to']} --source-version v1 "
         "--override eod-fence"
     )
@@ -245,7 +245,7 @@ def test_the_waiver_is_not_saved_and_the_next_invocation_is_fenced_again(world):
 
 
 ARGV = [
-    "job", "backfill", WORKER, "--attach", "pb-uat", "--from", "2026-09-11",
+    "job", "backfill", WORKER, "--attachment", "pb-uat", "--from", "2026-09-11",
     "--to", "2026-09-13", "--source-version", "v1",
 ]  # fmt: skip
 

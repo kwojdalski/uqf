@@ -1,6 +1,6 @@
 """Deleting runtime state the stack wrote, noun first (#1727):
 
-    uqs clean                       output/uqs/: logs, tplogs, wdb, the copied sample data
+    uqs clean                       the runtime's data directory: logs, tplogs, wdb, sample data
     uqs job checkpoint remove JOB   one bounded worker's resume point
 
 These were `uqs remove output` and `uqs remove checkpoint`: a verb with nouns
@@ -29,7 +29,8 @@ from uqs.cli.shared import (
     console,
     job_app,
 )
-from uqs.paths import UqsError
+from uqs.paths import DATA_ROOT_ENV, UqsError
+from uqs.runtimes import RUNTIMES
 from uqs.stack import backfill as stack_backfill
 from uqs.stack import clean as stack_clean
 
@@ -49,12 +50,23 @@ DryRunOpt = Annotated[
     bool,
     typer.Option("--dry-run", "-n", help="List what would be removed and remove nothing"),
 ]
+
+
+def data_dir_described() -> str:
+    """Where a runtime's data directory is, for help text (#1893): rendered
+    from RUNTIMES and DATA_ROOT_ENV, so it names every runtime's own folder
+    rather than the default runtime's."""
+    dirs = ", ".join(f"{r.data_dir} ({name})" for name, r in RUNTIMES.items())
+    return f"${DATA_ROOT_ENV} (else output/), then the runtime's folder: {dirs}"
+
+
 MatchOpt = Annotated[
     str | None,
     typer.Option(
         "--match",
         metavar="REGEX",
-        help="Only remove entries whose path under output/uqs/ matches this regex",
+        help="Only remove entries whose path under the runtime's data directory matches this "
+        f"regex. That directory is {data_dir_described()}",
     ),
 ]
 
@@ -74,9 +86,9 @@ _CHECKPOINT = "resets this tree's bounded workers' checkpoints"
 
 @app.command("clean", cls=ChangesState)
 def clean(match: MatchOpt = None, dry_run: DryRunOpt = False) -> None:
-    """Wipe output/uqs/ (logs, tplogs, wdb, the copied sample data).
+    """Wipe the runtime's data directory (logs, tplogs, wdb, the copied sample data).
 
-    `--match` narrows it to the entries whose path under output/uqs/ matches a
+    `--match` narrows it to the entries whose path under that directory matches a
     regex - `clean --match '^logs$'` for the logs alone, `clean --match
     'out_rdb1'` for one process's files wherever they sit. A directory that
     matches goes whole; one that does not is descended into.
@@ -122,7 +134,7 @@ def remove_checkpoint(
 ) -> None:
     """Delete a bounded worker's checkpoint, so its next run starts at --from.
 
-    Names the checkpoint and asks first (#1854); `--yes` does not ask.
+    Names the checkpoint and asks first; `--yes` does not ask.
 
     Refused while a run of the worker may still be live. The checkpoint is
     only where a run resumes: windows already in the coverage ledger are

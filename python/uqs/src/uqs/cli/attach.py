@@ -10,7 +10,7 @@ workflow.execute; `--dry-run` stops after the plan and changes nothing.
 list` (stack/attach_state.py).
 
 `add` and `remove` were `uqs job attach` and `uqs job detach`, verbs whose
-noun was spelled three other ways (`list attachments`, `--attach`, `job
+noun was spelled three other ways (`list attachments`, `--attachment`, `job
 contract`); attachment is the noun now (#1737), and the old spellings stay for
 one release, hidden, each logging the new one.
 
@@ -59,7 +59,11 @@ def _saved_names() -> list[str]:
 
 NameArg = Annotated[
     str,
-    typer.Argument(help="The attachment's name, e.g. piggybank-uat", autocompletion=_saved_names),
+    typer.Argument(
+        metavar="ATTACHMENT",
+        help="The attachment's name, e.g. piggybank-uat",
+        autocompletion=_saved_names,
+    ),
 ]
 #: Extra words are taken, not rejected by the parser, so the old `uqs job attach
 #: <stage> NAME` is refused with the command that replaced it.
@@ -97,14 +101,14 @@ def attach(
     name: NameArg,
     job: o.JobOpt = None,
     bundle: o.BundleOpt = None,
-    stack_id: o.StackIdOpt = None,
+    stack_id: o.BasePortOpt = None,
     host: o.HostOpt = None,
     discovery: o.DiscoveryOpt = None,
     tickerplant: o.TickerplantOpt = None,
     consumer: o.ConsumerOpt = None,
     user: o.UserOpt = None,
     password_env: o.PasswordEnvOpt = None,
-    runtime_only: o.RuntimeOnlyOpt = False,
+    runtime_only: o.TransientOpt = False,
     schema_writer: o.SchemaWriterOpt = None,
     remote_schema_file: o.RetiredRemoteSchemaOpt = False,
     process_file: o.ProcessFileOpt = None,
@@ -135,7 +139,7 @@ def attach(
     TorQ process file, after verify, so a native torq.sh start runs it through
     the same start gate; --start-with-all puts it in `start all`.
 
-    A new attachment needs --job and --stack-id; a saved one is reused by name.
+    A new attachment needs --job and --base-port; a saved one is reused by name.
     Replaces the stage commands plan, validate, status, apply, verify and start.
     """
     debug = _debug_requested(ctx)

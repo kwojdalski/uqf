@@ -17,10 +17,11 @@ import typer
 from rich.table import Table
 
 from uqs import timerange
-from uqs.cli.json_out import emit, json_opt
+from uqs.cli import completion
+from uqs.cli.json_out import emit, json_opt, utc_times
 from uqs.cli.pipelines import needs_pipelines
 from uqs.cli.range_options import DateOpt, LastOpt, RangeFromOpt, RangeToOpt
-from uqs.cli.renames import alias_command
+from uqs.cli.renames import ATTACHMENT, alias_command, renamed
 from uqs.cli.safety import ChangesState, ReadOnly, dry_run_note
 from uqs.cli.shared import (
     JOB_OPERATIONS_PANEL,
@@ -45,7 +46,8 @@ _LEDGER = "reads this tree's run ledger"
 runs_app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
-    help="The run ledger: list every run (or the unfinished ones), show one run's facts, "
+    help="The run ledger: list, show, audit, upgrade.\n\n"
+    "List every run (or the unfinished ones), show one run's facts, "
     "audit one window across runs, upgrade a ledger an older uqs wrote.",
 )
 job_app.add_typer(runs_app, name="runs", rich_help_panel=JOB_OPERATIONS_PANEL)
@@ -71,9 +73,10 @@ _FACT_COLUMNS = ("run_id", "dataset", "range_from", "range_to", "label", "text")
 AttachOpt = Annotated[
     str | None,
     typer.Option(
-        "--attach",
-        help="Read the ledger of this attachment's destination (`uqs job backfill --attach`) "
-        "instead of the runtime's own",
+        "--attachment",
+        metavar="ATTACHMENT",
+        help="The attachment whose destination's ledger to read (`uqs job backfill "
+        "--attachment`), instead of the runtime's own",
     ),
 ]
 
@@ -86,12 +89,13 @@ ShowJson = json_opt(
 
 
 def _record(row: dict, columns: tuple[str, ...]) -> dict:
-    """One ledger row as JSON: the table's columns, a whole-number count as an int."""
+    """One ledger row as JSON: the table's columns, a whole-number count as an
+    int, and a time - `.z.p`, UTC - ISO-8601 with its offset (#1882)."""
     out = {}
     for col in columns:
         value = row.get(col)
         out[col] = int(value) if isinstance(value, float) and value.is_integer() else value
-    return out
+    return utc_times(out)
 
 
 def _where(attach: str | None) -> dict:
@@ -131,7 +135,7 @@ def _print(
     _show(table, interactive)
 
 
-@runs_app.command("list", cls=needs_pipelines(_LEDGER, ReadOnly))
+@runs_app.command("list", cls=renamed(ATTACHMENT, needs_pipelines(_LEDGER, ReadOnly)))
 def list_runs(
     interactive: InteractiveOpt = False,
     attach: AttachOpt = None,
@@ -151,14 +155,16 @@ def list_runs(
     reverse: ReverseOpt = False,
     as_json: RunsJson = False,
 ) -> None:
-    """Every run in the ledger, newest first - or, with --unfinished, the runs
+    """List the runs in the ledger, newest first.
+
+    Every run in the ledger - or, with --unfinished, the runs
     that began and never finished.
 
     `--unfinished` includes runs whose process has died: `running` on a run
     whose process is gone means that execution was interrupted, which is what
     it is for.
 
-    A time range keeps the runs whose window overlaps it (#1858), and the
+    A time range keeps the runs whose window overlaps it, and the
     list takes every listing's flags: --export, --sort, --reverse, -i.
     """
     try:
@@ -206,7 +212,7 @@ alias_command(
     "status",
     "uqs job runs list --unfinished",
     _unfinished,
-    cls=needs_pipelines(_LEDGER),
+    cls=renamed(ATTACHMENT, needs_pipelines(_LEDGER)),
 )
 
 
@@ -240,13 +246,15 @@ def upgrade(
 alias_command(runs_app, "migrate", "uqs job runs upgrade", upgrade, cls=needs_pipelines(_LEDGER))
 
 
-@runs_app.command("show", cls=needs_pipelines(_LEDGER, ReadOnly))
+@runs_app.command("show", cls=renamed(ATTACHMENT, needs_pipelines(_LEDGER, ReadOnly)))
 def show(
-    run_id: Annotated[str, typer.Argument(help="A run id, from `uqs job runs list`")],
+    run_id: Annotated[
+        str, typer.Argument(metavar="RUN", help="A run id, from `uqs job runs list`")
+    ],
     attach: AttachOpt = None,
     as_json: ShowJson = False,
 ) -> None:
-    """One run, and every fact it recorded about what it published."""
+    """Show one run, and every fact it recorded about what it published."""
     try:
         run, facts = stack_runs.show(_paths(), run_id, **_where(attach))
     except UqsError as exc:
@@ -299,14 +307,21 @@ def _print_next_steps(run: dict, attach: str | None = None) -> None:
 
 @runs_app.command("audit", cls=needs_pipelines(_LEDGER, ReadOnly))
 def audit(
-    dataset: Annotated[str, typer.Argument(help="The dataset, e.g. demo_deals")],
+    dataset: Annotated[
+        str,
+        typer.Argument(
+            metavar="DATASET",
+            help="The dataset, e.g. demo_deals",
+            autocompletion=completion.bounded_datasets,
+        ),
+    ],
     range_from: RangeFromOpt = None,
     range_to: RangeToOpt = None,
     day: DateOpt = None,
     last: LastOpt = None,
     as_json: FactsJson = False,
 ) -> None:
-    """Every fact recorded about one window, from every run that published it.
+    """Show every fact recorded about one window, from every run that published it.
 
     Two runs' facts side by side: whether two materialisations of the same
     window agree, which is the question run identity exists to answer.

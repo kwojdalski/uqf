@@ -16,11 +16,11 @@ import typer
 from uqs import timerange
 from uqs.attach.backfill_forced import ANY_WRITER
 from uqs.cli import backfill_attached, completion, safety
+from uqs.cli.choices import alternatives
 from uqs.cli.json_out import JSON_HELP, emit
 from uqs.cli.pipelines import needs_pipelines
 from uqs.cli.range_options import DateOpt, LastOpt, RangeFromOpt, RangeToOpt
-from uqs.cli.renames import bypass_flag, renamed, warn_renamed
-from uqs.cli.safety import ChangesState
+from uqs.cli.renames import ATTACHMENT, bypass_flag, renamed, warn_renamed
 from uqs.cli.shared import (
     JOB_OPERATIONS_PANEL,
     BasePortOpt,
@@ -31,6 +31,7 @@ from uqs.cli.shared import (
     job_app,
     log,
 )
+from uqs.generated import q_facts
 from uqs.paths import UqsError, UqsUsageError
 from uqs.stack import backfill as stack_backfill
 from uqs.stack import backfill_wait as stack_backfill_wait
@@ -47,8 +48,16 @@ from uqs.stack import run_modes
             "--any-writer": bypass_flag(ANY_WRITER),
             "--debug": "--debug",
             "--version": "--source-version",
+            **ATTACHMENT,
         },
-        needs_pipelines("runs this tree's bounded workers", ChangesState),
+        needs_pipelines(
+            "runs this tree's bounded workers",
+            safety.marked(
+                safety.Effect.CHANGES_STATE,
+                dry_run_starts="its dry run starts the worker, which fetches and transforms "
+                "every window (--mode dry-run, #1732)",
+            ),
+        ),
     ),
 )
 def backfill(
@@ -78,8 +87,8 @@ def backfill(
         typer.Option(
             "--on-conflict",
             help="For this run: what a write does with a row whose row_key is already "
-            "there - upsert, replace, ignore, append or fail. Default: the worker's own "
-            "(upsert unless it declares otherwise)",
+            f"there - {alternatives(stack_backfill.ON_CONFLICT)}. Default: the worker's own "
+            f"({q_facts.DEFAULT_IO_STRATEGY} unless it declares otherwise)",
             autocompletion=completion.choices(*stack_backfill.ON_CONFLICT),
         ),
     ] = None,
@@ -87,10 +96,14 @@ def backfill(
         str | None,
         typer.Option(
             "--mode",
-            help="validate: check the worker and range, open nothing. plan: also list the "
-            "windows a run would fetch, from the ledgers, read-only. run (the default): all of "
-            "it. A dry run - fetch and transform, write nothing - is --dry-run",
-            autocompletion=completion.choices(*(m for m in run_modes.MODES if m != "dry-run")),
+            help=alternatives(
+                run_modes.MODE_OPTION_MODES,
+                {m: run_modes.NOTES[m] for m in run_modes.MODE_OPTION_MODES},
+                default=run_modes.DEFAULT_MODE,
+                quote="`",
+            )
+            + ". A dry run - fetch and transform, write nothing - is --dry-run",
+            autocompletion=completion.choices(*run_modes.MODE_OPTION_MODES),
         ),
     ] = None,
     dry_run: Annotated[
@@ -114,8 +127,9 @@ def backfill(
     attach: Annotated[
         str | None,
         typer.Option(
-            "--attach",
-            help="Backfill into the native HDB of this saved attachment "
+            "--attachment",
+            metavar="ATTACHMENT",
+            help="The saved attachment whose native HDB to backfill into "
             "(`uqs job attachment add`), taking the stack and the destination from it. plan "
             "lists the windows, the native date partitions, the writers and the readers to "
             "reload, and changes nothing; run and dry-run admit afresh and start the runner "
@@ -127,8 +141,8 @@ def backfill(
         typer.Option(
             "--writer",
             metavar="HOST:PORT",
-            help="With --attach: extract here and send each window to the receiver "
-            "`uqs job receiver start` started on the stack's machine, which writes its HDB (#1650)",
+            help="With --attachment: extract here and send each window to the receiver "
+            "`uqs job receiver start` started on the stack's machine, which writes its HDB",
         ),
     ] = None,
     as_json: Annotated[
@@ -136,7 +150,7 @@ def backfill(
         typer.Option(
             "--json",
             help=f"{JSON_HELP}: what started (with --wait, its outcome) - or, with "
-            "--attach, the admission plan",
+            "--attachment, the admission plan",
         ),
     ] = False,
     port: BasePortOpt = None,
@@ -193,7 +207,7 @@ def backfill(
     ended. `--wait` follows the run to its outcome and exits with that - what
     a script or a scheduler wants.
 
-    With `--attach`, `--skip-eod-fence --reason TEXT` (`--override eod-fence`)
+    With `--attachment`, `--skip-eod-fence --reason TEXT` (`--override eod-fence`)
     admits a plan, dry run or run within the native writers' end-of-day fence
     and gives it no end-of-day write deadline - "EOD fence bypassed; no EOD
     write deadline". Every other coordination check still refuses: the active
@@ -213,8 +227,9 @@ def backfill(
     if waived and attach is None:
         _die(
             UqsUsageError(
-                f"{backfill_attached.waiver_names(waived)} is for --attach: only a backfill into "
-                "an attached native HDB is fenced at its writers' end of day, and this one is not"
+                f"{backfill_attached.waiver_names(waived)} is for --attachment: only a backfill "
+                "into an attached native HDB is fenced at its writers' end of day, and this one "
+                "is not"
             )
         )
         return
@@ -236,7 +251,7 @@ def backfill(
     if writer is not None and attach is None:
         _die(
             UqsUsageError(
-                "--writer is for --attach: it names the receiver of an attached destination"
+                "--writer is for --attachment: it names the receiver of an attached destination"
             )
         )
         return

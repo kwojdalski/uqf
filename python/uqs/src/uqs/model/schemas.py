@@ -40,7 +40,7 @@ TABLES_Q = repo_root() / TABLES_FILE
 #: match cannot pick one up.
 _DEFINITION = re.compile(r"^(?:\.qetl\.plant\.)?([a-z_][a-z0-9_]*):\(\[\].*$", re.MULTILINE)
 
-#: The same, also as `uqs deploy build --q-target 4.0` leaves it (#861): the
+#: The same, also as `uqs deploy build --q-version 4.0` leaves it (#861): the
 #: converter qualifies every name under the file's `\d .qetl.plant`, so a
 #: release built for kdb+ 4.0 prefixes each `name:([]...)` with that context. Group 1 is
 #: the definition WITHOUT that context - what database.q, loaded in the root

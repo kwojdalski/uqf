@@ -69,18 +69,6 @@ UNPARSED = (IndexError, ValueError)
 UNPARSED_BUSY = (IndexError, ValueError, KeyError, TypeError, AttributeError)
 
 
-#: make_config's options whose flag is not the option's own name: `host` -
-#: the ssh destination, kept under that key in deploy_targets.toml - is
-#: `--ssh`, since `--host` is a q host everywhere else (#1768).
-FLAG_NAMES = {"host": "ssh"}
-
-
-def flag(option: str) -> str:
-    """How make_config's `option` is given on the command line: `--ssh` for
-    `host`, `--torq-home` for `torq_home`."""
-    return "--" + FLAG_NAMES.get(option, option).replace("_", "-")
-
-
 class DeployError(Exception):
     """A deployment that cannot go on; `stage` says where it stopped."""
 

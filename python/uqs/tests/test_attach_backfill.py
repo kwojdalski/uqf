@@ -1,4 +1,4 @@
-"""`uqs job backfill --attach NAME --mode plan`: resolving an attached destination and
+"""`uqs job backfill --attachment NAME --mode plan`: resolving an attached destination and
 planning against it, read-only (#1454, part 1).
 
 The stack is scripted (attach_backfill_support.HdbStack, plus an HDB reader that answers
@@ -141,7 +141,7 @@ def test_a_port_naming_another_stack_is_refused_and_the_stacks_own_is_fine(world
 
 
 def test_fixture_is_refused_with_attach(world):
-    with pytest.raises(UqsError, match="--fixture is refused with --attach"):
+    with pytest.raises(UqsError, match="--fixture is refused with --attachment"):
         attached.resolve(world.paths, "pb-uat", WORKER, fixture=True)
 
 
@@ -326,7 +326,7 @@ def invoke(*argv: str):
 
 
 COMMON = [
-    "--attach",
+    "--attachment",
     "pb-uat",
     "--from",
     "2026-09-11",
@@ -389,9 +389,9 @@ def test_cli_plan_prints_the_report_and_json_matches(world, monkeypatch):
 
 def test_json_without_attach_reports_the_local_run(world):
     """#1858: --json on the local path prints what started, as one document -
-    no longer refused for want of --attach."""
+    no longer refused for want of --attachment."""
     invoke("--from", "2026-09-11", "--to", "2026-09-13", "--source-version", "v1", "--json")
-    assert not any("--json is for --attach" in e for e in world.errors)
+    assert not any("--json is for --attachment" in e for e in world.errors)
 
 
 # ----------------------------------------------------- the hdb_reader operation, on a real q

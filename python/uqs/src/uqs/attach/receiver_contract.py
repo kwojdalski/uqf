@@ -12,14 +12,14 @@ nothing else.
             the worker and derives the contract from its declarations
             (scripts/dev/receiver_contract.q, .qetl.io.remote.contract.of), so
             it is never a hand-kept copy; this adds its identity.
-  approve   on the stack's machine: `uqs job attachment contract approve FILE --attach NAME`.
+  approve   on the stack's machine: `uqs job attachment contract approve FILE --attachment NAME`.
             Validates the contract, checks it against the attachment - which
             must be verified, publish the dataset in the contract's shape and pin
             an HDB here - and stores it beside the attachment, BOUND to that
             destination, its user and the limits the operator sets. The binding
             is the operator's, never the contract's: a contract names no path,
             no user and no row limit.
-  receive   `uqs job receiver start --contract ID --attach NAME`: starts the receiver
+  receive   `uqs job receiver start --contract ID --attachment NAME`: starts the receiver
             from the approved record alone.
 
 THE IDENTITY is the first 16 hex digits of the SHA-256 of the contract's
@@ -47,6 +47,7 @@ from typing import Any
 
 from uqs.attach import config
 from uqs.attach.backfill import Destination, destination, require_verified
+from uqs.generated import q_facts
 from uqs.interpreter import q_interpreter
 from uqs.paths import UqsError, UqsPaths
 from uqs.stack import backfill as stack_backfill
@@ -57,8 +58,9 @@ VERSIONS = (1,)
 SCRIPT = Path("scripts") / "dev" / "receiver_contract.q"
 #: Approved contracts, one file per identity, in the attachment's directory.
 APPROVED_DIR = "receiver_contracts"
-#: .qetl.io.strategies
-STRATEGIES = ("append", "fail", "ignore", "replace", "upsert")
+#: .qetl.io.strategies, read from q (#1893): a strategy q adds is one a
+#: contract may permit, and --on-conflict take, at once.
+STRATEGIES = q_facts.IO_STRATEGIES
 #: The most rows one message may carry, unless the operator approves another limit.
 DEFAULT_MAX_ROWS = 100_000
 _KEYS = (
@@ -330,7 +332,7 @@ def approved(
         raise UqsError(
             f"no contract {identity} is approved for attachment {attachment}: export it where "
             "the worker is (`uqs job attachment contract export WORKER > FILE`), then approve "
-            f"it here (`uqs job attachment contract approve FILE --attach {attachment}`)"
+            f"it here (`uqs job attachment contract approve FILE --attachment {attachment}`)"
         )
     if len(found) > 1:
         raise UqsError(

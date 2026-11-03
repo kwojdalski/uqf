@@ -221,14 +221,14 @@ def resolve(
     att = config.load(attachment, attach_root)
     if fixture:
         raise UqsError(
-            "--fixture is refused with --attach: an attached backfill writes the "
+            "--fixture is refused with --attachment: an attached backfill writes the "
             "stack's real HDB, and a fixture there would be indistinguishable from data"
         )
     if port is not None and port != att.stack.id:
         raise UqsError(
             f"--base-port {port} conflicts with attachment {att.name}, which is stack "
-            f"{att.stack.id}: --attach takes the stack from the attachment, so drop --base-port "
-            f"or pass --base-port {att.stack.id}"
+            f"{att.stack.id}: --attachment takes the stack from the attachment, so drop "
+            f"--base-port or pass --base-port {att.stack.id}"
         )
     require_verified(att.name, attach_root)
     decl = declaration(paths, worker)
