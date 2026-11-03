@@ -9,7 +9,7 @@ import {
   uploadPathProblem,
   uploadRemoteFile,
 } from "./api";
-import { size } from "./FileBrowser";
+import { size } from "./FileTable";
 
 /** A file the operator picked, with its path relative to the destination:
  * its name, or - from a folder or a drop - the folder path above it. */
