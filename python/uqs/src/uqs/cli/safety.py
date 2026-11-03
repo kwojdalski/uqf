@@ -36,7 +36,7 @@ import typer
 from typer.core import TyperCommand
 
 from uqs.cli import completion, skip_options
-from uqs.guardrails import Guardrail, aggregate
+from uqs.guardrails import Guardrail, aggregate, spelled
 from uqs.logger import get_logger
 from uqs.paths import UqsError, UqsUsageError
 
@@ -244,6 +244,13 @@ def catalog() -> list[Guardrail]:
     return [g for g in registry() if g.overridable]
 
 
+def _as_id(name: str, ids: dict[str, str]) -> str:
+    """`name`'s guardrail id, with its component: `torq-version:stp1` is
+    `TORQ_VERSION:stp1`. An id spelled as it is declared passes as it is."""
+    gid, sep, component = name.partition(":")
+    return ids.get(spelled(gid), gid) + sep + component
+
+
 def given(command: str, names: list[str] | None, reason: str | None) -> dict[str, str]:
     """{override: reason} for the `--override`s given to `command`, and the
     `--skip-<id>`s generated for it (skip_options), as one: `--skip-eod-fence`
@@ -262,7 +269,9 @@ def given(command: str, names: list[str] | None, reason: str | None) -> dict[str
     if not text:
         raise UqsUsageError(f"{asked[0][1]} needs --reason: say why the check is bypassed")
     every = {g.id: g for g in registry()}
+    ids = {spelled(gid): gid for gid in every}  # torq-version -> TORQ_VERSION (#1884)
     known = sorted(g.name for g in every.values() if g.overridable and command in g.commands)
+    asked = [(_as_id(name, ids), spelling) for name, spelling in asked]
     whole = {name: spelling for name, spelling in asked if ":" not in name}
     out: dict[str, str] = {}
     for name, spelling in asked:
@@ -282,7 +291,7 @@ def given(command: str, names: list[str] | None, reason: str | None) -> dict[str
             not component or component != component.strip() or ":" in component
         ):
             raise UqsError(
-                f"{spelling}: {g.id} is waived for one component - give {g.id}:COMPONENT"
+                f"{spelling}: {spelled(g.id)} is waived for one component - give {g.name}"
             )
         if not g.component_scoped and sep:
             if gid in whole:

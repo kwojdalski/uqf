@@ -14,6 +14,7 @@ from typing import Annotated
 import typer
 
 from uqs.cli import safety
+from uqs.cli.concepts import job_arg
 from uqs.cli.regenerate import (
     _CONTRACT_SURFACE,
     _DERIVED,
@@ -28,6 +29,8 @@ from uqs.paths import UqsError
 from uqs.scaffold.remove import plan_removal
 from uqs.scaffold.remove_policy import EVEN_IF_EDITED
 
+_NameOpt = job_arg("The job, as uqs job new named it")
+
 
 @job_app.command(
     "remove",
@@ -41,7 +44,7 @@ from uqs.scaffold.remove_policy import EVEN_IF_EDITED
     ),
 )
 def remove_job(
-    name: Annotated[str, typer.Argument(metavar="JOB", help="The job, as uqs job new named it")],
+    name: _NameOpt,
     dry_run: Annotated[
         bool, typer.Option("--dry-run", "-n", help="Print what would be removed, remove nothing")
     ] = False,

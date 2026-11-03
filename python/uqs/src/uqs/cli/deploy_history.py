@@ -9,6 +9,7 @@ from typing import Annotated
 import typer
 from rich.table import Table
 
+from uqs.cli import completion
 from uqs.cli.deploy import deploy_app
 from uqs.cli.json_out import emit, json_opt, timestamp
 from uqs.cli.safety import ReadOnly
@@ -42,6 +43,7 @@ def deploy_history(
             metavar="TARGET",
             help="Only this target, or server (host, with or without user@)",
             show_default=False,
+            autocompletion=completion.targets,
         ),
     ] = None,
     limit: Annotated[int, typer.Option("--limit", help="Most recent N")] = 20,

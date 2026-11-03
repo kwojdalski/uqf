@@ -11,7 +11,7 @@ from typing import Annotated
 
 import typer
 
-from uqs.timerange import BOUND_FORMS
+from uqs.timerange import BOUND_FORMS, DAY_FORMS
 
 #: A time range, the one way every command takes it (#1735): --from/--to,
 #: --date or --last, resolved by uqs.timerange.resolve.
@@ -29,7 +29,7 @@ DateOpt = Annotated[
     str | None,
     typer.Option(
         "--date",
-        help="One day, 2026-09-13 or 2026.09.13: the same as --from D --to D+1",
+        help=f"One day, {DAY_FORMS}: the same as --from D --to D+1",
     ),
 ]
 LastOpt = Annotated[

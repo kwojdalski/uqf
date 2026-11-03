@@ -9,6 +9,8 @@ from typing import Annotated
 import typer
 
 from uqs import timerange
+from uqs.cli import completion
+from uqs.cli.choices import ChoiceOpt
 from uqs.cli.hdb_scope import tables_given
 from uqs.cli.range_options import DateOpt, LastOpt, RangeFromOpt, RangeToOpt
 from uqs.cli.renames import old_spelling, renamed, warn_renamed
@@ -37,6 +39,18 @@ def dates_as_range(text: str) -> tuple[str | None, str | None]:
     return lo, (date.fromisoformat(hi) + timedelta(days=1)).isoformat() if hi else None
 
 
+#: What `data seed --on-conflict` does with a table already there.
+SEED_CONFLICTS = ("ignore", "replace")
+_OnConflictOpt = ChoiceOpt(
+    SEED_CONFLICTS,
+    "--on-conflict",
+    "What a copy does with a partition's table this runtime already holds",
+    notes={"ignore": "keep it", "replace": "copy over it"},
+    default="ignore",
+    required=True,
+)
+
+
 #: A conflict policy is `--on-conflict` on every command (#1857); `--overwrite`
 #: was this one's, and is `--on-conflict replace` now. Tables are chosen one
 #: way on every command: a repeatable `--table` (#1856).
@@ -55,6 +69,7 @@ def seed(
         typer.Option(
             "--table",
             metavar="TABLE",
+            autocompletion=completion.plant_table,
             help="Copy only this table; repeatable, and TABLE,TABLE also works. Default: every "
             "table this runtime declares",
         ),
@@ -67,14 +82,7 @@ def seed(
         str | None,
         typer.Option("--dates", hidden=True, help="Renamed: --from FIRST --to LAST+1"),
     ] = None,
-    on_conflict: Annotated[
-        str,
-        typer.Option(
-            "--on-conflict",
-            help="What a copy does with a partition's table this runtime already holds: "
-            "ignore it (the default), or replace it",
-        ),
-    ] = "ignore",
+    on_conflict: _OnConflictOpt = "ignore",
     overwrite: Annotated[bool, old_spelling("--on-conflict replace", "--overwrite")] = False,
     dry_run: Annotated[
         bool,

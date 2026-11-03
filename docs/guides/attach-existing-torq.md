@@ -673,7 +673,7 @@ supported alternative to editing the validation code.
 
 ```bash
 uqs job attachment add pb-uat --job pb_general_ledger --base-port 6000 \
-    --override TORQ_VERSION:discovery1 --override TORQ_VERSION:stp1 \
+    --override torq-version:discovery1 --override torq-version:stp1 \
     --override TORQ_VERSION:rdb1 --override TORQ_VERSION:wdb1 \
     --reason "Reviewed against the site's TorQ build" --yes --accept-risks
 ```
@@ -688,8 +688,10 @@ component each and repeatable: `--skip-torq-version stp1` is
 **An override accepts a risk. It does not establish compatibility.** Accepting
 `TORQ_VERSION` does not add the version to the tested list.
 
-- **Scoped**: `CODE:COMPONENT`, one finding on one process. There is no blanket
-  `--force`.
+- **Scoped**: `NAME:COMPONENT`, one finding on one process - the finding's code
+  in lower case, words joined by `-` (`torq-version:stp1`), as
+  `uqs override list` names it; the code's own spelling, `TORQ_VERSION:stp1`,
+  still parses for one release. There is no blanket `--force`.
 - **A reason is mandatory** (`--reason`); the override records who accepted it,
   when, and the facts it was accepted against.
 - **Still visible**: shown as `accepted` with the failure risk and what the

@@ -697,7 +697,8 @@ def test_attachment_add_checks_its_overrides_as_every_command_does():
 
     assert waivers(["torq_version:stp1"], "known") == ["TORQ_VERSION:stp1"]
     assert waivers(None, "") == []
-    with pytest.raises(UqsError, match="give TORQ_VERSION:COMPONENT"):
+    assert waivers(["torq-version:stp1"], "known") == ["TORQ_VERSION:stp1"]  # #1884
+    with pytest.raises(UqsError, match="give torq-version:COMPONENT"):
         waivers(["TORQ_VERSION"], "x")
     with pytest.raises(UqsError, match="--reason says why an --override is acceptable"):
         waivers(None, "a reason for nothing")
@@ -753,7 +754,7 @@ def test_skip_torq_version_is_its_override_through_plan_confirmation_and_record(
 
 def test_both_spellings_together_are_one_waiver_per_component(world, bundle):
     mixed = ["--skip-torq-version", "discovery1", "--skip-torq-version=stp1",
-             "--override", "TORQ_VERSION:rdb1", "--override", "torq_version:wdb1",
+             "--override", "torq-version:rdb1", "--override", "torq-version:wdb1",
              "--skip-torq-version", "wdb1", "--reason", "r"]  # fmt: skip
     data = json.loads(invoke(*plan_args(bundle), *mixed, "--json", "--dry-run").output)["plan"]
     assert data["ok"] is True and len(data["accepted_risks"]) == 4

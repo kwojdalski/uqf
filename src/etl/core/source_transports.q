@@ -153,7 +153,8 @@
 / supporting's empty dict is a source with one input, as every source was
 / before #617 - see SUPPORTING INPUTS below.
 / complete_through's default is a source over CLOSED data: complete forever.
+/ reference_read's default is no declaration: the source's query owns what it reads.
 / ready's default has no requirement a window can fail (see READINESS in source_registry.q).
-.qetl.source.optional_declarations:`transport`credential_example`supporting`raw`complete_through`ready!(.qetl.source.default_transport;"";()!();()!();{[h] 0Wp};{[batch;range_from;range_to] ()})
+.qetl.source.optional_declarations:`transport`credential_example`supporting`raw`complete_through`ready`reference_read!(.qetl.source.default_transport;"";()!();()!();{[h] 0Wp};{[batch;range_from;range_to] ()};())
 
 \d .

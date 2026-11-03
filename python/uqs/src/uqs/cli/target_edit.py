@@ -16,7 +16,8 @@ from typing import Annotated
 
 import typer
 
-from uqs.cli import safety
+from uqs.cli import completion, safety
+from uqs.cli.concepts import TargetArg
 from uqs.cli.safety import ChangesState, YesOpt, dry_run_note
 from uqs.cli.shared import _die, console
 from uqs.cli.target import DryRun, _change, _command, _done, target_app
@@ -50,6 +51,7 @@ def edit(
         str | None,
         typer.Argument(
             metavar="TARGET",
+            autocompletion=completion.targets,
             help="Open the file at this target's table, as every other `target` verb names "
             "one; the whole file is still edited and checked",
             show_default=False,
@@ -119,7 +121,7 @@ def edit(
 
 @target_app.command("remove", cls=ChangesState)
 def remove(
-    name: Annotated[str, typer.Argument(metavar="TARGET", help="The target")],
+    name: TargetArg,
     dry_run: DryRun = False,
     yes: YesOpt = False,
 ) -> None:

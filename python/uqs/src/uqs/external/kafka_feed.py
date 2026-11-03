@@ -215,7 +215,8 @@ FEED = ExternalFeed(
         ),
         FeedOption(
             "topics",
-            "Topics to consume, comma separated",
+            "Topics to consume, comma-separated",
+            metavar="TOPIC,...",
             env=TOPICS_ENV,
             default_help="every topic a decoder job declares",
             # plural, as every comma-separated option is (#1890)

@@ -73,8 +73,16 @@ class Guardrail:
 
     @property
     def name(self) -> str:
-        """The waiver as an operator writes it: the id, or `ID:COMPONENT`."""
-        return f"{self.id}:COMPONENT" if self.component_scoped else self.id
+        """The waiver as an operator writes it: the id spelled as every
+        override is (`spelled`), with `:COMPONENT` where it is waived per
+        component - `torq-version:COMPONENT` (#1884)."""
+        return f"{spelled(self.id)}:COMPONENT" if self.component_scoped else spelled(self.id)
+
+
+def spelled(gid: str) -> str:
+    """A guardrail id as `--override` takes it: lower case, words joined by
+    `-` - a finding code `TORQ_VERSION` is `torq-version` (#1884)."""
+    return gid.lower().replace("_", "-")
 
 
 class PolicyLike(Protocol):
