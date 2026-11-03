@@ -3,9 +3,9 @@
 / (docs/architecture/markout-contract.md, #1923; the test is #1930).
 / .
 / Three things here are declared once and read by the tests:
-/   .qt.qetl.plant.markout.core       the core columns (name; q type char), in order.
-/                                     When #1929 lands the core's own declaration,
-/                                     repoint this ONE function at it.
+/   .qt.qetl.plant.markout.core       the core columns (name; q type char), in order,
+/                                     read from .qpipe.transform.markout_core
+/                                     (core_cols for the names, result for the types).
 /   .qt.qetl.plant.markout.datasets   which plant tables are markout datasets and their
 /                                     layout. plant_tables.q carries no marker (it is
 /                                     owned elsewhere until #1925 merges); when it
@@ -21,8 +21,9 @@
 / @return table: c (symbol), t (char)
 / @eg count .qt.qetl.plant.markout.core[]  ->  24
 .qt.qetl.plant.markout.core:{[]
-    ([] c:`time`source_time`clock`venue`fill_id`sym`side`size`horizon`price`quote_ccy`ref_t0`ref_t1`move`quote_amount`report_ccy`rate`rate_source`rate_sym`rate_time`rate_timing`report_amount`status`contract_version;
-        t:"ppssssjfnfsffffsfsspsfsj")}
+    m:exec c!t from meta .qpipe.transform.markout_core.result;
+    c:.qpipe.transform.markout_core.core_cols;
+    ([] c:c; t:m c)}
 
 / Every markout dataset on the plant, with its layout (`long or `wide).
 / @return dictionary: table name -> layout
