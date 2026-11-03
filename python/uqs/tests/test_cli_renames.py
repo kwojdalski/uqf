@@ -107,6 +107,12 @@ RENAMED = [
         for sha in ("", "-sha256")
     ],
     ("target adopt", "--release", "--release-dir"),
+    # #1890: one name per thing across surfaces
+    ("data replay", "--dir", "--tplogdir"),
+    ("logs", "--run", "--stamp"),
+    ("deploy build", "--kafka-home", "--kfk-home"),
+    ("deploy build", "--with-kafka-connector", "--kafka-connector"),
+    ("connector start", "--topic", "--topics"),
     ("data replay", "--schema", "--schema-file"),
     # #1852: the bare bypass flags, each now an --override with a reason
     *[
@@ -441,3 +447,22 @@ def test_attach_still_names_the_attachment_end_to_end(monkeypatch):
     assert result.exit_code == 0, result.output
     assert seen == ["pb-uat"]
     assert said == [("--attach", "--attachment")]
+
+
+def test_kind_external_is_kind_connector(monkeypatch):
+    """`job new --kind external` -> `--kind connector` (#1890): the Python
+    publisher outside q is a connector, as `uqs connector` names it."""
+    from uqs.cli import create_kinds
+
+    said = []
+    monkeypatch.setattr(renames, "warn_renamed", lambda o, n: said.append((o, n)))
+    assert create_kinds.canonical("external") == "connector"
+    assert create_kinds.canonical("streaming") == "streaming"
+    assert said == [("--kind external", "--kind connector")]
+
+
+def test_a_renamed_environment_variable_is_refused_naming_its_new_name():
+    from uqs.interpreter import removed_variables_problem
+
+    said = removed_variables_problem({"UQS_REQUIRE_LIVE_SOURCES": "1"})
+    assert said is not None and "UQF_LIVE_SOURCES_REQUIRED=1" in said

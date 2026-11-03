@@ -29,7 +29,7 @@ log = get_logger()
 
 #: The variable naming the deployment set's file to every TorQ process
 #: (stack/deployment.py writes it, scripts/torqcode/handlers/deployment.q reads it).
-DEPLOYMENT_ENV = "UQS_DEPLOYMENT_FILE"
+DEPLOYMENT_ENV = "UQF_DEPLOYMENT_FILE"
 #: The file q loads before anything else (q's own QINIT), and the one a PeachQ
 #: runtime names in it: what TorQ's processes call and PeachQ lacks.
 QINIT_ENV = "QINIT"
