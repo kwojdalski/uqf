@@ -16,14 +16,13 @@ from uqs.checks import schema_view
 from uqs.checks.schema_view import DEFAULT_PROC
 from uqs.cli import completion
 from uqs.cli.json_out import emit, json_opt
+from uqs.cli.q_login import DEFAULT_USER, QPasswdOpt, QPasswordEnvOpt, QUserOpt, q_password
 from uqs.cli.renames import renamed
 from uqs.cli.safety import ReadOnly
 from uqs.cli.shared import (
     ExportOpt,
     InteractiveOpt,
     QHostOpt,
-    QPasswdOpt,
-    QUserOpt,
     _die,
     _export,
     _proc_first,
@@ -77,8 +76,9 @@ def schema(
         int | None, typer.Option(help="stack base port (default: the runtime's)")
     ] = None,
     host: QHostOpt = "localhost",
-    user: QUserOpt = "admin",
-    passwd: QPasswdOpt = "admin",
+    user: QUserOpt = DEFAULT_USER,
+    password_env: QPasswordEnvOpt = None,
+    passwd: QPasswdOpt = None,
     export: ExportOpt = None,
     interactive: InteractiveOpt = False,
     every: EveryOpt = SCHEMA_REFRESH_SECONDS,
@@ -98,6 +98,7 @@ def schema(
     paths = stack_paths.default_paths()
     try:
         proc, table = _proc_first(ctx, proc, table, port is not None)
+        passwd = q_password(password_env, passwd)
         proc = proc or DEFAULT_PROC
         target = port if port is not None else schema_view.resolve_port(paths, proc, base_port)
     except UqsError as exc:

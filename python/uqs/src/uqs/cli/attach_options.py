@@ -55,7 +55,13 @@ TickerplantOpt = Annotated[
 ConsumerOpt = Annotated[
     list[str] | None, typer.Option("--consumer", help="An rdb/wdb to attach (default: all)")
 ]
-UserOpt = Annotated[str | None, typer.Option("--user", help=f"default: {config.DEFAULT_USER}")]
+UserOpt = Annotated[
+    str | None,
+    typer.Option(
+        "--user",
+        help=f"User to log in to the stack's processes as (default: {config.DEFAULT_USER})",
+    ),
+]
 PasswordEnvOpt = Annotated[
     str | None,
     typer.Option(

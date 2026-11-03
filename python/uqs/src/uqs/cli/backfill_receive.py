@@ -59,8 +59,8 @@ def extract(
         if on_conflict not in (None, "append"):
             _die(
                 UqsError(
-                    f"--any-writer only appends: --on-conflict {on_conflict} would need to "
-                    "read what the writer holds, and nothing is read there"
+                    f"--override any-writer only appends: --on-conflict {on_conflict} would "
+                    "need to read what the writer holds, and nothing is read there"
                 )
             )
             return

@@ -166,7 +166,11 @@ def test_a_column_of_another_type_is_reported_and_the_deployment_refuses_it(tmp_
 
     for fix_hdb in (False, True):
         cfg = make_config(
-            artifact="", host="h", dest="/opt/uqf", profile="essential", fix_hdb=fix_hdb
+            artifact="",
+            host="h",
+            dest="/opt/uqf",
+            profile="essential",
+            fix_hdb="the test fills it" if fix_hdb else None,
         )
         with pytest.raises(DeployError, match=r"1 HDB column\(s\) changed type - a migration"):
             hdb.check(Deployment(cfg, Remote()), "/r")

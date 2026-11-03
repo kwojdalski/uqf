@@ -10,7 +10,7 @@ prepare runs the release's own `uqs data check --json` against the shared
 HDB, once its .venv exists, so the release judges the HDB by its own schema:
 
   - a column whose type changed is always refused, naming each one;
-  - missing tables or columns are refused unless --fix-hdb, which runs
+  - missing tables or columns are refused unless --override fix-hdb, which runs
     `data check --apply --yes` (additive and idempotent: an empty copy of each missing
     table, each missing column as its type's null) and checks again.
 
@@ -65,7 +65,7 @@ def hdb_root(dep: Deployment) -> str:
 
 
 def planned(dep: Deployment, manifest: dict) -> str:
-    """The dry run's line: what --fix-hdb would fill, from the server's
+    """The dry run's line: what --override fix-hdb would fill, from the server's
     listing and the manifest's declared shape."""
     declared = manifest.get("hdb_shape")
     if not declared:
@@ -82,7 +82,11 @@ def planned(dep: Deployment, manifest: dict) -> str:
     parts = len({*tables, *columns})
     return (
         f"{n_tables} missing table(s) and {n_cols} missing column(s) in {parts} partition(s) - "
-        + ("filled by --fix-hdb" if dep.cfg.fix_hdb else "refused without --fix-hdb")
+        + (
+            "filled by --override fix-hdb"
+            if dep.cfg.fix_hdb
+            else "refused without --override fix-hdb"
+        )
         + "; types checked in prepare"
     )
 
@@ -132,8 +136,8 @@ def check(dep: Deployment, release: str) -> dict:
         raise DeployError(
             "hdb",
             f"{len(parts)} HDB partition(s) lack tables or columns this release declares "
-            f"({', '.join(parts[:6])}{' ...' if len(parts) > 6 else ''}) - pass --fix-hdb to "
-            "fill them (additive: missing tables empty, missing columns null)",
+            f"({', '.join(parts[:6])}{' ...' if len(parts) > 6 else ''}) - pass --override fix-hdb "
+            "--reason REASON to fill them (additive: missing tables empty, missing columns null)",
         )
     after = _check(dep, release, fix=True)
     if after.get("missing_tables") or after.get("missing_columns"):
