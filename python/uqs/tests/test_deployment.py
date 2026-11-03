@@ -177,7 +177,7 @@ show_["REGISTERED";exec procname from .servers.SERVERS];
 .servers.addprocs[disc;`sortworker;0b];.servers.retry[];
 show_["REFRESHED";exec procname from .servers.SERVERS];
 show_["TRIED";`$last each ":" vs/: string .h.tried];
-if[count f:getenv`UQS_DEPLOYMENT_FILE; (hsym`$f) 0: ("sort1";"sortworker1";"sortworker2")];
+if[count f:getenv`UQF_DEPLOYMENT_FILE; (hsym`$f) 0: ("sort1";"sortworker1";"sortworker2")];
 .servers.procupdate select procname,proctype,hpup,attributes from disc where procname=`sortworker2;
 show_["STARTED";exec procname from .servers.SERVERS];
 -1 "CUSTOM:",string .h.custom;

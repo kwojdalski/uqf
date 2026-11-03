@@ -70,6 +70,13 @@ REMOVED_ENV = {
         "a PeachQ in QCMD that is not the pinned build is named in a warning instead"
     ),
 }
+#: Variables renamed rather than retired, refused the same way, naming the new
+#: name (#1890): one prefix for what q reads, UQF_, and one spelling, PASSWORD.
+RENAMED_ENV = {
+    "UQS_REQUIRE_LIVE_SOURCES": "set UQF_LIVE_SOURCES_REQUIRED=1 (#1890)",
+    "UQF_FRONTEND_GATEWAY_PASSWD": "set UQF_FRONTEND_GATEWAY_PASSWORD (#1890)",
+    "UQF_FRONTEND_DATA_PASSWD": "set UQF_FRONTEND_DATA_PASSWORD (#1890)",
+}
 
 #: A q script printing which implementation runs it. `.pq.load_natives` is
 #: PeachQ's native-library loader (its own qlib/*.q call it first thing);
@@ -137,11 +144,12 @@ def removed_variables_problem(env: Mapping[str, str] | None = None) -> str | Non
     """Why the environment cannot be used as it is - a variable REMOVED_ENV
     names is set - or None. Each is named with what replaces it."""
     source = os.environ if env is None else env
-    found = [name for name in REMOVED_ENV if name in source]
+    gone = {**REMOVED_ENV, **RENAMED_ENV}
+    found = [name for name in gone if name in source]
     if not found:
         return None
     return (
-        "; ".join(f"{name} is no longer read - {REMOVED_ENV[name]}; unset it" for name in found)
+        "; ".join(f"{name} is no longer read - {gone[name]}; unset it" for name in found)
         + " (#1753). A deploy.env written before then sets them: redeploy the release."
     )
 

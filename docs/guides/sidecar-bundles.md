@@ -74,7 +74,7 @@ with its options, and the dependency warnings know what it feeds.
   by name - by `uqs connector status`, and by any command naming it - and every
   other connector still works.
 
-`uqs job new NAME --kind external --bundle FOLDER` writes `NAME_feed.py`,
+`uqs job new NAME --kind connector --bundle FOLDER` writes `NAME_feed.py`,
 `NAME_streamer.py` and their test into the bundle, and nothing into `uqs`.
 
 ## Scaffold a bundle job

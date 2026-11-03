@@ -380,6 +380,59 @@ def test_schema_and_query_reach_a_process_the_same_ways():
     assert all(LEAVES[p].option(o) is not None for p in ("query", "schema") for o in reach)
 
 
+def _all_help(cmd: Cmd) -> list[str]:
+    """`cmd`'s own help and each of its parameters', flattened."""
+    texts = [cmd.command.help or ""] + [getattr(p, "help", "") or "" for p in cmd.command.params]
+    return [" ".join(t.split()) for t in texts]
+
+
+def test_the_running_set_is_called_the_stack():
+    """ "stack" 39 times in help, "plant" 6 and "fleet" 3 (#1890): the running
+    set of processes is the stack. ("plant" stays where it names the
+    tickerplant's tables, plant_tables.q; "runtime" is a configuration.)"""
+    found = {c.path for c in TREE for t in _all_help(c) if re.search(r"\bfleet\b", t, re.I)}
+    assert not found, f"help calling the running stack a fleet: {sorted(found)}"
+
+
+def test_a_connector_is_never_called_a_feed():
+    """A feed is a q streaming job that only publishes; the Python process
+    outside the stack is a connector (#1890), under `uqs connector`."""
+    found = {
+        c.path
+        for c in TREE
+        if c.path == "connector" or c.path.startswith("connector ")
+        for t in _all_help(c)
+        if re.search(r"\bfeeds?\b", t, re.I)
+    }
+    assert not found, f"connector help that says feed: {sorted(found)}"
+
+
+#: Plural groups, with why each stays: renamed only if renamed anyway (#1890).
+PLURAL_GROUPS = {
+    "config sources": "sources.csv's rows; renaming it is churn with nothing else to gain",
+    "job runs": "the run ledger; renaming it is churn with nothing else to gain",
+}
+
+
+def test_group_names_are_singular():
+    singular_s = {"process"}  # a noun that ends in s and is singular
+    plural = {p for p in GROUPS if p.split()[-1].endswith("s") and p.split()[-1] not in singular_s}
+    assert plural == set(PLURAL_GROUPS)
+
+
+def test_one_option_name_has_one_flag_shape():
+    """`--start-with-all` was a --x/--no-x pair on `job attachment add` and a
+    lone flag on `job new` (#1890): a flag name is a pair everywhere, or
+    nowhere."""
+    shapes: dict[str, set[bool]] = {}
+    for cmd in TREE:
+        for p in cmd.options:
+            if getattr(p, "is_flag", False):
+                shapes.setdefault(_long(p), set()).add(bool(p.secondary_opts))
+    mixed = sorted(name for name, seen in shapes.items() if len(seen) > 1)
+    assert not mixed, f"flag names with two shapes: {mixed}"
+
+
 def test_the_guide_lists_the_same_vocabulary():
     """The guide's verb table and the lists above are one vocabulary."""
     text = GUIDE.read_text()
@@ -497,6 +550,7 @@ OPTIONS = {
     "--target": Meaning("run this command on a deployed target", r"instead of this machine"),
     "--timeout": Meaning("seconds for the whole command", r"^seconds\b"),
     "--to": Meaning("end of a time range, exclusive", r"exclusive"),
+    "--tplogdir": Meaning("a tickerplant's log directory", r"log directory"),
     "--tunnel": Meaning("a deploy target reached through an ssh tunnel", r"ssh tunnel"),
     "--trace": Meaning(
         "log every query the source is sent", r"every query the (source is sent|fetch sends)"
@@ -517,7 +571,7 @@ OPTIONS |= {
     for name in (
         "--api-key", "--brokers", "--databento-dataset", "--group", "--interval-ms",
         "--oms-socket-path", "--poll-interval-ms", "--symbol", "--symbols", "--top-n-levels",
-        "--topic", "--tp-credential", "--tp-credential-env", "--venues",
+        "--topics", "--tp-credential", "--tp-credential-env", "--venues",
     )
 }  # fmt: skip
 

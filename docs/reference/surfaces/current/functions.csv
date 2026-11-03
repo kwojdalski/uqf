@@ -1883,6 +1883,21 @@ qpipe.transform.demo_markouts,score,function,2,fill_rows quotes
 qpipe.transform.exec_bars,bars,function,1,x
 qpipe.transform.exec_bars,lateness,value,,
 qpipe.transform.exec_bars,width,value,,
+qpipe.transform.fx_domain,attribute,function,4,sk mids total execution
+qpipe.transform.fx_domain,attribution_rows,function,4,spec fr lg books
+qpipe.transform.fx_domain,conversion,function,3,spec quote_ccy report_ccy
+qpipe.transform.fx_domain,convert,function,3,spec quote_ccys report_ccy
+qpipe.transform.fx_domain,defaults,dict,,
+qpipe.transform.fx_domain,domain,dict,,
+qpipe.transform.fx_domain,pip_factor_of,function,1,syms
+qpipe.transform.fx_domain,pip_value,function,2,syms size
+qpipe.transform.fx_domain,pips,function,3,side pip_factor diff
+qpipe.transform.fx_domain,require_spec,function,1,spec
+qpipe.transform.fx_domain,residual_status,function,2,tolerance residual
+qpipe.transform.fx_domain,resolve,function,2,spec syms
+qpipe.transform.fx_domain,routable,function,2,conv syms
+qpipe.transform.fx_domain,route,function,2,conv sym
+qpipe.transform.fx_domain,waterfall_mids,function,2,at0 at1
 qpipe.transform.fx_markout,calc,function,3,spec exe md
 qpipe.transform.fx_markout,chain_mid,function,5,b0 a0 b1 a1 s
 qpipe.transform.fx_markout,convert,function,3,spec quote_ccys report_ccy
@@ -1963,6 +1978,14 @@ qpipe.transform.markout_core,unmet,function,4,domain spec exe md
 qpipe.transform.markout_core,unscoreable,function,3,domain spec exe
 qpipe.transform.markout_core,validate,function,2,domain spec
 qpipe.transform.markout_core,why,function,3,domain spec exe
+qpipe.transform.markout_layouts,canonical,function,2,spec lng
+qpipe.transform.markout_layouts,core_spec,function,3,columns components extra_own
+qpipe.transform.markout_layouts,long,function,2,spec wde
+qpipe.transform.markout_layouts,long_keys,value,,
+qpipe.transform.markout_layouts,nested,function,2,spec lng
+qpipe.transform.markout_layouts,require_spec,function,1,spec
+qpipe.transform.markout_layouts,unnest,function,1,nst
+qpipe.transform.markout_layouts,wide,function,2,spec lng
 qpipe.transform.order_outcome,dimensions,value,,
 qpipe.transform.order_outcome,outcomes,value,,
 qpipe.transform.order_outcome,status_map,function,2,codes outs

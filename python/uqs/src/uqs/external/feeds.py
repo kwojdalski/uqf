@@ -144,7 +144,7 @@ class ExternalFeed:
     options: tuple[FeedOption, ...] = ()
     #: table -> who feeds it, for the dependency warnings
     produces: Mapping[str, str] = field(default_factory=dict)
-    #: status table title; default "<name> feed status"
+    #: status table title; default "<name> connector status"
     title: str = ""
     #: appended to "<name> feed started (pid N)"
     started_note: str = ""
@@ -153,7 +153,7 @@ class ExternalFeed:
 
     @property
     def status_title(self) -> str:
-        return self.title or f"{self.name} feed status"
+        return self.title or f"{self.name} connector status"
 
     #: called with (paths, the start options) before a start or a dry run, to
     #: refuse a setting that binds to nothing - a topic no decoder declares

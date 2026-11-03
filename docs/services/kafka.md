@@ -133,11 +133,11 @@ neither, and the decoders need neither. Brokers, groups and credentials stay
 runtime configuration (`UQF_KAFKA_*`), and no check connects to a broker.
 
 ```
-uqs deploy build --kafka-home $HOME/kfk-linux     # the native client, for kafka_feed1
-uqs deploy build --with-kafka-connector           # confluent-kafka, for uqs connector start kafka
+uqs deploy build --kfk-home $HOME/kfk-linux     # the native client, for kafka_feed1
+uqs deploy build --kafka-connector           # confluent-kafka, for uqs connector start kafka
 ```
 
-**`--kafka-home DIR`** copies `kfk.q`, `libkfk.so`, every shared library `ldd`
+**`--kfk-home DIR`** copies `kfk.q`, `libkfk.so`, every shared library `ldd`
 resolves it to apart from glibc's (into `lib/`), and every `LICENSE*`, `NOTICE*`
 or `COPYING*` file under `DIR` (into `notices/`) to `.release/kafka/`. Build on
 Linux: the build refuses a missing file, a `DIR` with no licence, a library
@@ -148,7 +148,7 @@ using the native loader finds it with no setting of its own. Before anything
 starts, push loads `kfk.q` in the server's q from that copy (the `kafka` stage)
 and stops naming the reason when it does not load.
 
-**`--with-kafka-connector`** exports the lock with the `kafka` extra, so
+**`--kafka-connector`** exports the lock with the `kafka` extra, so
 confluent-kafka's wheel for the target is installed offline with the rest.
 
 ## Transport and decoding are two things

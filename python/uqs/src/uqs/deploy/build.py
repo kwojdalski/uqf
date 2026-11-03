@@ -14,7 +14,7 @@ WHAT IS IN IT:
                 uv.lock, and wheels/: uqs's and every pinned dependency's wheel
                 for the TARGET, so the server installs without a network.
   .release/kafka/
-                only with --kafka-home (#1515): KX's kfk for the target, with
+                only with --kfk-home (#1515): KX's kfk for the target, with
                 its libraries and notices (uqs.deploy.kafka).
   .release/python-runtime.tar.gz
                 only with --python-component (#1557): a CPython for the target,
