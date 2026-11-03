@@ -129,7 +129,7 @@ def test_log_regex_keeps_only_matching_messages(capsys):
     logcore.setup_logging(level="DEBUG", colored_output=False, log_regex="keep")
     logger.info("keep this")
     logger.info("drop this")
-    out = capsys.readouterr().out
+    out = capsys.readouterr().err
     assert "keep this" in out
     assert "drop this" not in out
 
@@ -139,7 +139,7 @@ def test_log_regex_is_read_from_the_environment(monkeypatch, capsys):
     logcore.setup_logging(level="DEBUG", colored_output=False)
     logger.info("only me")
     logger.info("not me")
-    out = capsys.readouterr().out
+    out = capsys.readouterr().err
     assert "only me" in out and "not me" not in out
 
 
@@ -150,7 +150,7 @@ def test_an_invalid_log_regex_is_reported_and_ignored(capsys):
     logger.info("still shown")
     captured = capsys.readouterr()
     assert "Invalid LOG_REGEX ignored" in captured.err
-    assert "still shown" in captured.out
+    assert "still shown" in captured.err
 
 
 def test_a_log_file_is_created_with_its_directory(tmp_path):
@@ -164,7 +164,7 @@ def test_a_log_file_is_created_with_its_directory(tmp_path):
 def test_structured_logging_writes_json(capsys):
     logcore.setup_logging(level="INFO", structured_logging=True)
     logger.info("structured")
-    out = capsys.readouterr().out
+    out = capsys.readouterr().err
     assert '"text"' in out and "structured" in out
 
 
@@ -172,7 +172,7 @@ def test_the_level_threshold_is_applied(capsys):
     logcore.setup_logging(level="warning", colored_output=False)
     logger.info("too quiet")
     logger.warning("loud enough")
-    out = capsys.readouterr().out
+    out = capsys.readouterr().err
     assert "loud enough" in out and "too quiet" not in out
 
 
@@ -193,13 +193,13 @@ def test_debug_overrides_the_level(capsys):
     # No `key=value` in the text: that would be colourised, and the
     # assertion would then be about the colouring rather than the level.
     logger.debug("visible at debug level")
-    assert "visible at debug level" in capsys.readouterr().out
+    assert "visible at debug level" in capsys.readouterr().err
 
 
 def test_the_full_format_names_the_component(capsys):
     logcore.configure_logging(component="rdb_probe", simplified=False)
     logger.warning("x")
-    assert "rdb_probe" in capsys.readouterr().out
+    assert "rdb_probe" in capsys.readouterr().err
 
 
 def test_the_cli_format_shows_the_level(capsys, monkeypatch):
@@ -208,7 +208,7 @@ def test_the_cli_format_shows_the_level(capsys, monkeypatch):
     monkeypatch.delenv("FORCE_COLOR", raising=False)
     logcore.configure_logging(component="uqs")
     logger.error("it broke")
-    out = capsys.readouterr().out
+    out = capsys.readouterr().err
     assert out.startswith("ERROR")
     assert "it broke" in out
 
@@ -219,10 +219,10 @@ def test_the_location_is_shown_only_when_debugging(capsys, monkeypatch):
     monkeypatch.delenv("FORCE_COLOR", raising=False)
     logcore.configure_logging(component="uqs", level="INFO")
     logger.warning("quiet")
-    assert "test_the_location_is_shown" not in capsys.readouterr().out
+    assert "test_the_location_is_shown" not in capsys.readouterr().err
     logcore.configure_logging(component="uqs", level="DEBUG")
     logger.warning("loud")
-    assert "test_the_location_is_shown_only_when_debugging" in capsys.readouterr().out
+    assert "test_the_location_is_shown_only_when_debugging" in capsys.readouterr().err
 
 
 def test_colour_follows_the_terminal_not_a_hardcoded_true(capsys, monkeypatch):
@@ -232,17 +232,17 @@ def test_colour_follows_the_terminal_not_a_hardcoded_true(capsys, monkeypatch):
     monkeypatch.delenv("NO_COLOR", raising=False)
     logcore.configure_logging(component="uqs")
     logger.error("plain")
-    assert "\x1b[" not in capsys.readouterr().out
+    assert "\x1b[" not in capsys.readouterr().err
 
     monkeypatch.setenv("FORCE_COLOR", "1")
     logcore.configure_logging(component="uqs")
     logger.error("coloured")
-    assert "\x1b[" in capsys.readouterr().out
+    assert "\x1b[" in capsys.readouterr().err
 
     monkeypatch.setenv("NO_COLOR", "1")
     logcore.configure_logging(component="uqs")
     logger.error("NO_COLOR wins over FORCE_COLOR")
-    assert "\x1b[" not in capsys.readouterr().out
+    assert "\x1b[" not in capsys.readouterr().err
 
 
 # --------------------------------------------------------- float precision

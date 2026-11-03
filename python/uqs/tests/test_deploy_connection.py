@@ -88,16 +88,16 @@ def test_the_flags_still_name_a_server_no_target_declares(root, monkeypatch, com
 
 
 @pytest.mark.parametrize("command", sorted(COMMANDS))
-def test_no_target_and_no_flags_is_refused(root, monkeypatch, command):
+def test_no_target_and_no_flags_is_refused(root, monkeypatch, command, log_text):
     r, seen = _run(monkeypatch, command, [])
     assert r.exit_code == 1 and not seen
-    assert "give a TARGET, or --ssh and --dest" in r.output
+    assert "give a TARGET, or --ssh and --dest" in log_text()
 
 
-def test_an_unknown_target_is_refused_naming_the_known_ones(root, monkeypatch):
+def test_an_unknown_target_is_refused_naming_the_known_ones(root, monkeypatch, log_text):
     r, seen = _run(monkeypatch, "status", ["prod-z"])
     assert r.exit_code == 1 and not seen
-    assert "no target or deployed server 'prod-z'" in r.output and "prod-a" in r.output
+    assert "no target or deployed server 'prod-z'" in log_text() and "prod-a" in log_text()
 
 
 def test_the_connection_flags_read_the_same_wherever_they_are_accepted():

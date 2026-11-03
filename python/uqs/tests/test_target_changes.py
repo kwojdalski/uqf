@@ -226,7 +226,7 @@ def test_the_write_replaces_the_file_in_one_rename(declared, monkeypatch):
 def test_a_dry_run_shows_the_change_and_writes_nothing(declared):
     r = uqs("target", "set", "prod", "dest=/srv/next", "--dry-run")
     assert r.exit_code == 0, r.output
-    assert '+dest = "/srv/next"' in r.output and "nothing written" in r.output
+    assert '+dest = "/srv/next"' in r.output and "dry run: nothing was changed" in r.output
     assert declared.read_text() == HAND_WRITTEN and _log(declared) == []
 
 

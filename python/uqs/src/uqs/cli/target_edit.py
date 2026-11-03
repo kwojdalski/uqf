@@ -16,7 +16,7 @@ from typing import Annotated
 
 import typer
 
-from uqs.cli.safety import ChangesState, YesOpt
+from uqs.cli.safety import ChangesState, YesOpt, dry_run_note
 from uqs.cli.shared import _die, console
 from uqs.cli.target import DryRun, _change, _command, _done, target_app
 from uqs.deploy import target_changes, targets
@@ -65,6 +65,8 @@ def edit(dry_run: DryRun = False) -> None:
             text = _strip_note(copy.read_text())
             if text == original:
                 console.print(f"no change: {path} is as it was")
+                if dry_run:
+                    console.print(dry_run_note())
                 return
             if not text.strip() and problem:
                 _die(UqsError(f"edit discarded - {path} is unchanged"))

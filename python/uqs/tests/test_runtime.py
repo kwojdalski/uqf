@@ -141,7 +141,6 @@ def test_a_launcher_that_cannot_run_is_refused(monkeypatch, tmp_path, value, mes
         (runtime.start, {"procs": "rdb1"}, ["start", "rdb1"]),
         (runtime.stop, {"procs": "all"}, ["stop", "all"]),
         (runtime.restart, {"procs": "hdb1"}, ["restart", "hdb1"]),
-        (runtime.print_procs, {"procs": "rdb1"}, ["print", "rdb1"]),
     ],
 )
 def test_each_verb_passes_torq_sh_its_own_arguments(monkeypatch, fn, extra, argv):
@@ -156,16 +155,24 @@ def test_each_verb_passes_torq_sh_its_own_arguments(monkeypatch, fn, extra, argv
     assert seen["base_port"] == 6100
 
 
-def test_print_captures_by_default_and_lifecycle_verbs_stream(monkeypatch):
-    """print is shown by the caller, so its output is captured;
-    start/stop/restart stream live to the terminal."""
+def test_print_composes_its_lines_and_lifecycle_verbs_stream(monkeypatch):
+    """print never runs torq.sh, which needs bootstrap to have written its
+    process.csv and setenv.sh first (#1880): it composes the lines and returns
+    them as torq.sh print would. start/stop/restart stream live to the terminal."""
     seen: dict[str, bool] = {}
     monkeypatch.setattr(
         runtime, "run_torq_sh", lambda paths, args, **kw: seen.__setitem__(args[0], kw["capture"])
     )
-    runtime.print_procs(_paths())
+    monkeypatch.setattr(runtime, "bootstrap", lambda *_a, **_k: pytest.fail("bootstrapped"))
+    line = runtime.start_lines.StartLine("rdb1", "q torq.q -procname rdb1", "/logs/torqrdb1.txt")
+    monkeypatch.setattr(runtime.start_lines, "plan", lambda *_a, **_k: [line])
+    printed = runtime.print_procs(_paths(), "rdb1")
+    assert printed.stdout == (
+        "Start line for rdb1:\n"
+        "nohup q torq.q -procname rdb1 </dev/null >/logs/torqrdb1.txt 2>&1 &\n"
+    )
     runtime.start(_paths())
-    assert seen == {"print": True, "start": False}
+    assert seen == {"start": False}
 
 
 # --------------------------------------------------------------------- query

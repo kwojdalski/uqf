@@ -47,9 +47,7 @@ def world(monkeypatch, tmp_path):
     monkeypatch.setattr(backfill_run, "q_interpreter", lambda env=None: Path("/bin/false"))
     monkeypatch.setattr(planning, "evaluate", lambda *a, **k: facts_of())
     w.started = []
-    monkeypatch.setattr(
-        backfill_run.subprocess, "Popen", lambda argv, **kw: w.started.append(argv) or _Started()
-    )
+    support.fake_popen(monkeypatch, lambda argv, **kw: w.started.append(argv) or _Started())
     yield w
     backfill_owner.release("pb-uat", WORKER)
 

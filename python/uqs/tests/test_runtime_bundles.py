@@ -194,7 +194,9 @@ def test_dry_run_reports_the_composition_and_writes_nothing(
     result = _cli(repo, monkeypatch, "--dry-run", runtime="crypto")
     assert result.exit_code == 0, result.output
     assert (
-        "pb" in result.output and "runtime" in result.output and "nothing written" in result.output
+        "pb" in result.output
+        and "runtime" in result.output
+        and "dry run: nothing was changed" in result.output
     )
     assert not (repo / LEDGER).exists()
 

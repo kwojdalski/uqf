@@ -331,7 +331,7 @@
     had:`enabled in key `.pm;
     was:@[value;`.pm.enabled;0b];
     .pm.enabled:1b;
-    setenv[`UQF_SITE_AUTH;"1"];
+    setenv[`UQF_SITE_AUTH;enlist"1"];
     loaded:@[{system x;`loaded};"l scripts/torqcode/handlers/pmusers.q";{[e] `$e}];
     setenv[`UQF_SITE_AUTH;""];
     $[had;.pm.enabled:was;delete enabled from `.pm];
