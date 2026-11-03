@@ -37,6 +37,7 @@ from __future__ import annotations
 
 from uqs.deploy.artifact import Artifact, meets
 from uqs.deploy.config import Config, DeployError
+from uqs.deploy.target_keys import FILE_KEYS
 from uqs.guardrails import Guardrail
 
 ACCEPT_DIGEST = "accept-digest"
@@ -133,8 +134,8 @@ def _pinned(cfg: Config, name: str, sha256: str, pinned: bool, component: str) -
         if not matched and cfg.accept_digest is None:
             raise DeployError(
                 "artifact",
-                f"{name} is {sha256}, not the {key} {expected} - pass --override "
-                "accept-digest --reason REASON to deploy it anyway",
+                f"{name} is {sha256}, not the {FILE_KEYS.get(key, key)} {expected} - pass "
+                "--override accept-digest --reason REASON to deploy it anyway",
             )
         if cfg.accept_digest is not None:
             out.append(

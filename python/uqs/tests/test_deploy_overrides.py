@@ -140,7 +140,7 @@ def test_a_q_requirement_is_a_minimum_or_an_exact_version(requirement, version, 
 def test_a_target_file_cannot_set_an_override(tmp_path, monkeypatch):
     path = tmp_path / "deploy_targets.toml"
     path.write_text(
-        '[targets.a]\nhost = "h"\ndest = "/opt/uqf"\nprofile = "essential"\n'
+        '[targets.a]\nssh = "h"\ndest = "/opt/uqf"\nprofile = "essential"\n'
         f'expected_sha256 = "{OTHER}"\naccept_digest = "it is fine"\n'
     )
     monkeypatch.setenv(targets.DECLARATION_ENV, str(path))
@@ -151,7 +151,7 @@ def test_a_target_file_cannot_set_an_override(tmp_path, monkeypatch):
 def test_a_target_sets_the_requirements_and_the_flag_relaxes_one(tmp_path, monkeypatch):
     path = tmp_path / "deploy_targets.toml"
     path.write_text(
-        '[targets.a]\nhost = "h"\ndest = "/opt/uqf"\nprofile = "essential"\n'
+        '[targets.a]\nssh = "h"\ndest = "/opt/uqf"\nprofile = "essential"\n'
         f'expected_sha256 = "{OTHER}"\nq_version = ">=4.1"\n'
     )
     monkeypatch.setenv(targets.DECLARATION_ENV, str(path))

@@ -83,9 +83,9 @@ def server(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.delenv(runtimes.RUNTIME_ENV, raising=False)
     declared = tmp_path / "deploy_targets.toml"
     declared.write_text(
-        f'[targets.dev]\nhost = "svc@dev.example"\ndest = "{tmp_path / "srv"}"\n'
+        f'[targets.dev]\nssh = "svc@dev.example"\ndest = "{tmp_path / "srv"}"\n'
         "connect_timeout = 2\n\n"
-        '[targets.down]\nhost = "unreachable"\ndest = "/opt/uqf"\n'
+        '[targets.down]\nssh = "unreachable"\ndest = "/opt/uqf"\n'
     )
     monkeypatch.setenv(targets.DECLARATION_ENV, str(declared))
     return tmp_path

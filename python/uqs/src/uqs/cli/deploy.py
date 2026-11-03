@@ -26,7 +26,17 @@ from uqs.cli.renames import renamed
 from uqs.cli.safety import ChangesState, DryRunOpt, OverrideOpt, ReasonOpt
 from uqs.cli.shared import EXIT_REFUSED, EXIT_USAGE, app, json_refusal
 from uqs.deploy import build as release_build
-from uqs.deploy import config, driver, frontend, history, kafka, overrides, portable, targets
+from uqs.deploy import (
+    config,
+    driver,
+    frontend,
+    history,
+    kafka,
+    overrides,
+    portable,
+    target_keys,
+    targets,
+)
 from uqs.deploy.artifact import PLATFORMS, ReleaseError
 from uqs.deploy.remote import Remote
 from uqs.logger import get_logger
@@ -345,7 +355,8 @@ def push(
             for name in ("host", "dest", "profile"):
                 if options[name] is None:
                     raise config.DeployError(
-                        "arguments", f"{config.flag(name)} is required, or a TARGET after ARTIFACT"
+                        "arguments",
+                        f"{target_keys.flag(name)} is required, or a TARGET after ARTIFACT",
                     )
             # an option left unset (None) takes make_config's default
             cfgs = [config.make_config(**{k: v for k, v in options.items() if v is not None})]

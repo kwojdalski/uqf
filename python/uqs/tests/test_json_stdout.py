@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 
@@ -223,3 +224,29 @@ def test_json_refusal_prints_nothing_without_json(monkeypatch, capsys):
     monkeypatch.setattr(sys, "argv", ["uqs", "list", "--json"])
     shared.json_refusal("nope")
     assert json.loads(capsys.readouterr().out) == {"ok": False, "error": "nope"}
+
+
+#: A document's keys are snake_case (#1888): `target list` printed "as" and
+#: "last deployed". Under these keys the keys are data - a table's or a
+#: process's name - not the document's own.
+DATA_KEYS = {"rows", "sample", "result", "busy", "fields", "facts_by", "missing_tables",
+             "missing_columns", "types", "renames", "tables_by"}  # fmt: skip
+_KEY = re.compile(r"^[a-z][a-z0-9_]*$")
+
+
+def _bad_keys(doc, path="") -> list[str]:
+    if isinstance(doc, list):
+        return [b for i, v in enumerate(doc) for b in _bad_keys(v, f"{path}[{i}]")]
+    if not isinstance(doc, dict):
+        return []
+    bad = [f"{path}.{k}" for k in doc if not _KEY.match(str(k))]
+    return bad + [
+        b for k, v in doc.items() if k not in DATA_KEYS for b in _bad_keys(v, f"{path}.{k}")
+    ]
+
+
+@pytest.mark.parametrize("command", sorted(CASES))
+def test_every_json_key_is_snake_case(tmp_path, command):
+    argv, _ = CASES[command]
+    run = _uqs(tmp_path, *argv, "--json")
+    assert not _bad_keys(json.loads(run.stdout))

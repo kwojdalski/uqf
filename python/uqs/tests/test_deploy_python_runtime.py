@@ -447,7 +447,7 @@ def test_a_python_runtime_given_wins_over_the_carried_one(tmp_path, cache):
 
 def test_a_pin_holds_the_carried_runtime_too(tmp_path, cache):
     pkg = carrying(tmp_path / "release", runtime(tmp_path))
-    with pytest.raises(DeployError, match="python_runtime_sha256"):
+    with pytest.raises(DeployError, match="python_component_sha256"):
         push_carried(tmp_path, pkg, "--python-component-sha256", "ab" * 32)
 
 

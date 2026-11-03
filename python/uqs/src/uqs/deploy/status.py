@@ -159,7 +159,7 @@ def status(cfg: Config, remote: Transport, *, health: bool = True) -> dict:
     named = {current, previous} - {None}
     result = {
         "format": FORMAT,
-        "host": cfg.host,
+        "ssh": cfg.host,
         "dest": cfg.dest,
         "current": _release(dep, current, kept),
         "previous": _release(dep, previous, kept),
@@ -179,7 +179,7 @@ def status(cfg: Config, remote: Transport, *, health: bool = True) -> dict:
 
 def render(s: dict) -> str:
     """The status for a terminal: one fact per line, worst news first."""
-    lines = [f"{s['host']}:{s['dest']}"]
+    lines = [f"{s['ssh']}:{s['dest']}"]
     if s["lock"]["held"]:
         lines.append(f"  LOCK      held: {s['lock']['owner'] or 'owner unknown'}")
     cur = s["current"]

@@ -70,3 +70,18 @@ def test_the_declaration_reference_documents_every_verb():
     text = (ROOT / "docs/reference/pipeline-declarations.md").read_text()
     for verb in DECLARATION_VERBS:
         assert f".{verb}" in text, f"pipeline-declarations.md never mentions .{verb}"
+
+
+def test_job_list_reports_the_kinds_job_new_scaffolds():
+    """`job new --kind streaming` wrote a job `job list` called etl or feed
+    (#1889): a listed kind is a scaffold kind, or `reaction`, and whether a
+    streaming job reads anything is its own field."""
+    from uqs.model.jobs import job_rows
+    from uqs.model.kinds import LISTED_KIND, REACTION
+    from uqs.paths import repo_root
+
+    assert set(LISTED_KIND) == set(DECLARATION_VERBS)
+    assert set(LISTED_KIND.values()) <= set(SCAFFOLD_KINDS)
+    rows = job_rows(repo_root())
+    assert {r["kind"] for r in rows} <= {*SCAFFOLD_KINDS, REACTION}
+    assert {r["subscribes"] for r in rows} <= {"yes", "no"}

@@ -459,7 +459,10 @@ The stack's own tables:
 A noun's own records:
 
 - `uqs job list` - every streaming job, normalizer and bounded worker, read from
-  its own q declaration: its kind, process, what it reads and writes (a
+  its own q declaration: its kind - one of `uqs job new --kind`'s (`streaming`,
+  `normalizer`, `horizon`, `backfill`) or `reaction`, so a job is listed as the
+  kind it was made as (#1889) - whether it `subscribes` to anything (a streaming
+  job that does not is a feed), its process, what it reads and writes (a
   backfill's source, and its dataset and partition), whether it starts with the
   stack, and whether it is still a `scaffolded` job `uqs job new` wrote or
   `written` work. `uqs job list --sort state` puts the unfinished scaffolds
@@ -1903,6 +1906,29 @@ on every command that takes one; deploy_targets.toml keeps its `*_runtime` keys.
 An override is a bypassed check (`uqs override list`), so `config set`'s
 settings are `uqs config list`. `data replay --base-port` defaults to the
 runtime's own, like every command's, and refuses a plant running under another.
+
+One name for the ssh destination (#1888):
+
+  | old                                                                | new                                         |
+  | ---                                                                | ---                                         |
+  | deploy_targets.toml `host = "..."`, `target set NAME host=`        | `ssh`, as `--ssh` names it                  |
+  | deploy_targets.toml `qcmd`, `qhome`                                | `q_cmd`, `q_home`, as `--q-cmd`/`--q-home`  |
+  | deploy_targets.toml `{q,torq,python}_runtime[_sha256]`             | `{q,torq,python}_component[_sha256]`        |
+  | JSON `"host"` in `target check`, `deploy history`, `deploy status` | `"ssh"`                                     |
+  | `target list` JSON `"as"`, `"last deployed"`                       | `"remote_user"`, `"last_deployed"`          |
+  | `target log` JSON `"host"` (the machine a change was made on)      | `"machine"`                                 |
+
+deploy_targets.toml spells every setting as push's option names it, so a key
+spelt the old way is refused, naming the key to write - `uqs target edit` opens
+the file. deploy_history.json entries written before this keep `host`, read as
+`ssh`; new ones are written with `ssh`. Every key a `--json` document holds is
+snake_case.
+
+One vocabulary for job kinds (#1889): `job list --json`'s `kind` was `etl` or
+`feed` for a job `job new --kind streaming` wrote; it is `streaming` now - or
+`normalizer`, `horizon`, `backfill`, `reaction` - and a new `subscribes`
+(`yes`/`no`) says whether a streaming job reads anything, which is what etl/feed
+meant. A script filtering on the old values needs the new ones.
 
 `--port` is now only ever one process's port (`query`, `schema`);
 `query --tunnel` keeps querying a target through an ssh tunnel from here, so

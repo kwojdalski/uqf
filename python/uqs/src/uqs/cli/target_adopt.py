@@ -129,7 +129,10 @@ def adopt_(
     entry = adopt.block(survey, r)
     console.print("  target       would save:")
     console.print(
-        "\n".join(f"    {ln}" for ln in target_file.render(("targets", name), entry).splitlines()),
+        "\n".join(
+            f"    {ln}"
+            for ln in target_file.render(("targets", name), targets.to_keys(entry)).splitlines()
+        ),
         markup=False,
         highlight=False,
     )
