@@ -144,9 +144,9 @@ It lists each stretch of the range when the job was not up, or was up but had a
 batch fail: a batch handler that throws is trapped, so the process keeps running
 while it drops rows. For a job with a bounded "twin" (a backfill worker filling
 the table the job publishes), it then prints the backfill command that refills
-each gap. For markouts the twin is `hdb_demo_markouts_backfill` (see
-[markouts](../services/markouts.md)). A job with no twin cannot be refilled from
-here, and `uqs job gaps` says so;
+each gap. For FX markouts the twin is `hdb_fx_markouts_backfill` (see [FX
+markouts](../services/fx-markout.md)). A job with no twin cannot be refilled
+from here, and `uqs job gaps` says so;
 `uqs job new NAME --kind backfill --twin-of JOB` scaffolds one (see
 [backfills](../scaffolding/backfill.md)).
 

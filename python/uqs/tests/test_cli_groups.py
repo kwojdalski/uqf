@@ -78,7 +78,7 @@ def test_root_help_shows_the_groups_and_none_of_the_old_paths():
     [
         ["odbc", "status"],
         ["stream", "preview", "vectorize2"],
-        ["gaps", "demo_markout", "--from", "2026-09-13", "--to", "2026-09-14"],
+        ["gaps", "crypto_markout", "--from", "2026-09-13", "--to", "2026-09-14"],
         ["run", "list"],
         ["backfill", "demo_deals_backfill", "--from", "2026-09-13", "--to", "2026-09-14"],
         ["feed", "status"],

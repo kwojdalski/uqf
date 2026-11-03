@@ -90,6 +90,9 @@ HAND_KEPT: dict[str, Callable[[], bool]] = {
     "uqs job backfill --mode dry-run": lambda: (
         '"--mode dry-run", "--dry-run"' in inspect.getsource(backfill)
     ),
+    "uqs job attachment add --override CODE:COMPONENT": lambda: (
+        "spell it" in inspect.getsource(__import__("uqs.cli.attach").cli.attach.waivers)
+    ),
 }
 
 

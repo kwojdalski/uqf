@@ -126,10 +126,10 @@ five seconds old (the reference `crypto_markout1` scores against). One book
 carries FX and crypto, because it reads the normalisers rather than each market.
 Publishes `position`. Profile `fx`.
 
-**`demo_markout1` · execution quality** --- each fill against the mid one and
-ten seconds later: did the price move for or against the trade? Reads `trades`
-and `quote`, publishes `demo_execution_quality`. Profile `fx`.
-[Details](markouts.md)
+**`crypto_markout1` · crypto execution quality** --- each real fill against the
+best mid across venues one and ten seconds later, in basis points. Reads
+`crypto_trades` and `crypto_book`, publishes `crypto_execution_quality`. Profile
+`crypto`. [Details](markouts.md)
 
 **`fxpositions1` · exposure and limits** --- net exposure by symbol, book and
 product from `executions`, the fills `posbook1` nets too, with a breach row
@@ -218,11 +218,6 @@ folded with the same transform `databento1` applies live. The
 crypto books and trades replayed from DuckDB, an hour at a time. The
 `sidecars/cryptorust` bundle's, with its source and `crypto_market_data` table.
 [Details](crypto-recorder.md)
-
-**`hdb_demo_markouts_backfill1` · markouts from history** --- the HDB's fills
-marked out against its quotes, into `demo_execution_quality`. It refills what
-`demo_markout1` missed while it was down; `uqs job gaps markout` names those
-holes. [Details](markouts.md)
 
 **`hdb_transfer_backfill1` · one kdb+ database into another** --- trades read
 from another HDB's files, with notional added, into `trades_copy`. The worked

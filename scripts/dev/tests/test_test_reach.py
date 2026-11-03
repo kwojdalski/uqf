@@ -131,6 +131,10 @@ def recorded(tmp_path_factory):
     environ = dict(os.environ)
     reach.install(recorder)
     recorder.watch_children()
+    # Under xdist a worker can set this fixture up twice, each time in a new
+    # directory; the first run's module must not be found in its place
+    # ("import file mismatch").
+    sys.modules.pop("test_reach_inner", None)
     try:
         code = pytest.main(
             [str(test_file), "-q", "-p", "no:cacheprovider", "-p", "no:xdist",

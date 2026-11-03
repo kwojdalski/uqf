@@ -7,20 +7,15 @@ documentation, so it says what the default is and what the option changes.
 
 from __future__ import annotations
 
-from enum import StrEnum
 from pathlib import Path
 from typing import Annotated
 
 import typer
 
 from uqs.attach import config, service
-from uqs.cli.choices import alternatives
+from uqs.cli import completion
+from uqs.cli.choices import ChoiceOpt
 from uqs.paths import UqsError, repo_root
-
-#: Who appends the marked schema block (#1845): uqs, here, or the tickerplant -
-#: config.SCHEMA_WRITERS' keys, so a writer added there is a choice here (#1893).
-SchemaWriter = StrEnum("SchemaWriter", {w.upper(): w for w in config.SCHEMA_WRITERS})
-
 
 JobOpt = Annotated[
     str | None, typer.Option("--job", help="The streaming job to attach (new attachment)")
@@ -88,15 +83,13 @@ TransientOpt = Annotated[
         "restarting it drops the registration (default: add a marked block to its schema file)",
     ),
 ]
-SchemaWriterOpt = Annotated[
-    SchemaWriter | None,
-    typer.Option(
-        "--schema-writer",
-        help="Who appends the marked block to the tickerplant's schema file: "
-        + alternatives(config.SCHEMA_WRITERS, config.SCHEMA_WRITER_NOTES)
-        + f". Default: the saved choice, else {config.DEFAULT_SCHEMA_WRITER}.",
-    ),
-]
+SchemaWriterOpt = ChoiceOpt(
+    config.SCHEMA_WRITERS,
+    "--schema-writer",
+    "Who appends the marked block to the tickerplant's schema file: {values}. Default: the "
+    f"saved choice, else {config.DEFAULT_SCHEMA_WRITER}.",
+    notes=config.SCHEMA_WRITER_NOTES,
+)
 RetiredRemoteSchemaOpt = Annotated[
     bool,
     typer.Option("--remote-schema-file", hidden=True, help="Retired: --schema-writer tickerplant"),
@@ -143,10 +136,11 @@ OverrideOpt = Annotated[
     list[str] | None,
     typer.Option(
         "--override",
-        metavar="CODE:COMPONENT",
-        help="Bypass ONE blocker, as CODE:COMPONENT (e.g. TORQ_VERSION:stp1; `uqs override "
-        "list` names the codes); repeatable. It accepts a risk, it does not establish "
+        metavar="NAME:COMPONENT",
+        help="Bypass ONE blocker, as NAME:COMPONENT (e.g. torq-version:stp1; `uqs override "
+        "list` names them); repeatable. It accepts a risk, it does not establish "
         "compatibility. Needs --reason.",
+        autocompletion=completion.overrides,
     ),
 ]
 ReasonOpt = Annotated[

@@ -180,6 +180,59 @@ def plant_tables(incomplete: str) -> list[str]:
 
 
 @_never_raises
+def attachments() -> list[str]:
+    """Every saved attachment - what `--attach` and `job attachment ...` resolve."""
+    from uqs.attach import config
+
+    return config.names()
+
+
+@_never_raises
+def targets() -> list[str]:
+    """Every declared deployment target - deploy_targets.toml, as `uqs target list`
+    reads it."""
+    from uqs.deploy import targets as deploy_targets
+
+    return sorted(deploy_targets.read(stack_paths.repo_root()))
+
+
+@_never_raises
+def jobs() -> list[str]:
+    """Every declared job: streaming jobs and bounded workers alike."""
+    from uqs.model.jobs import job_rows
+
+    return [row["job"] for row in job_rows(stack_paths.repo_root())]
+
+
+@_never_raises
+def streaming_jobs() -> list[str]:
+    """Every streaming job - what `job gaps`, `job preview` and `--twin-of` take."""
+    from uqs.model.jobs import job_rows
+
+    return [
+        r["job"]
+        for r in job_rows(stack_paths.repo_root())
+        if r["kind"] not in ("backfill", "reaction")
+    ]
+
+
+@_never_raises
+def sources() -> list[str]:
+    """Every source q registers (.qetl.source), from q_facts."""
+    from uqs.generated import q_facts
+
+    return sorted(q_facts.SOURCE_TRANSPORTS)
+
+
+@_never_raises
+def source_list(incomplete: str) -> list[str]:
+    """The sources, completing the last of a comma-separated list."""
+    from uqs.generated import q_facts
+
+    return _comma_list(sorted(q_facts.SOURCE_TRANSPORTS), incomplete)
+
+
+@_never_raises
 def bounded_datasets() -> list[str]:
     """Every dataset a bounded worker fills - q's own list (q_facts)."""
     from uqs.generated import q_facts
@@ -191,12 +244,12 @@ def bounded_datasets() -> list[str]:
 def overrides(ctx: typer.Context) -> list[tuple[str, str]]:
     """The overrides the command being typed takes - `uqs override list`'s
     catalogue (cli/safety.py) - each with what it bypasses. One waived per
-    component is offered as `ID:`, for the component to follow."""
+    component is offered as `name:`, for the component to follow."""
     from uqs.cli import safety
 
     command = " ".join(ctx.command_path.split()[1:])
     return [
-        (g.id + (":" if g.component_scoped else ""), g.description)
+        (g.name.removesuffix("COMPONENT"), g.description)
         for g in safety.catalog()
         if command in g.commands
     ]

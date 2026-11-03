@@ -326,18 +326,28 @@ on - `uqs setup odbc` installs, loads and rolls back a private ODBC setup.
 kafka, the cryptorust recorders - which are processes outside TorQ, not the q
 processes `uqs start` manages: `start`, `stop`, `restart` (with `start`'s
 options, which are not remembered), `status`, and `logs NAME [-f] [-l N]`, which
-shows the one plain log file `status` names.
+shows the one plain log file `status` names:
+
+```bash
+uqs connector start kafka --topic trades,quotes
+uqs connector restart kafka --group uqf-replay     # start's options, given again
+uqs connector logs kafka -f
+uqs connector stop kafka
+eval "$(uqs setup odbc env)"                       # this shell, on the private ODBC setup
+```
 
 Putting a release on a server is `uqs deploy` (`history` lists what this machine
 deployed): see [Deploying to a server](deploy.md).
 
 `PROCS` is `all` (the default) or one or more process names, each its own word -
-`uqs start posbook1 demo_markout1` - which is what lets TAB complete them. A
-single quoted `"posbook1 demo_markout1"` still works. `--base-port` sets
+`uqs start posbook1 crypto_markout1` - which is what lets TAB complete them. A
+single quoted `"posbook1 crypto_markout1"` still works. `--base-port` sets
 `KDBBASEPORT` (default: the runtime's own base port, `6050` for `uqf`; see the
-port table below). `--export FILE` (on `status`/`query`/`list`/`config show`)
-additionally writes the same rows to `FILE` as CSV or Parquet, format inferred
-from the extension; a result that is not a table, such as `count t`, is refused.
+port table below). `--export FILE` (on `status`, `query`, `schema`, `list`,
+`config show`, and every noun's `list`: `runtime`, `job`, `job attachment`,
+`target` and `override`) additionally writes the same rows to `FILE` as CSV or
+Parquet, format inferred from the extension; a result that is not a table, such
+as `count t`, is refused.
 
 ### Stopping a process that will not stop
 
@@ -773,15 +783,15 @@ The uqf runtime's profiles, against the community licence's fourteen slots
 
 <!-- BEGIN GENERATED profile table - scripts/generate/generate_operational_docs.py; CI runs it with --check, so edit the profiles, not this table -->
 
-  | profile     | leaves                                                                                                                            | processes | plant slots          |
-  | ---         | ---                                                                                                                               | ---       | ---                  |
-  | `all`       | `arbitrage1`, `cross1`, `crossarb1`, `demo_markout1`, `fxorderbookfeed1`, `fxpositions1`, `last_value1`, `posbook1`, `vectorize1` | 30        | 20/14 - over the cap |
-  | `arbitrage` | `arbitrage1`, `crossarb1`                                                                                                         | 20        | 10/14                |
-  | `crypto`    | `cryptomock1`, `crypto_markout1`, `crypto_book_1s1`                                                                               | 17        | 7/14                 |
-  | `default`   | `posbook1`, `demo_markout1`, `fxpositions1`, `fxorderbookfeed1`                                                                   | 23        | 13/14                |
-  | `depth`     | `vectorize1`, `cross1`                                                                                                            | 18        | 8/14                 |
-  | `essential` | none - the TorQ stack alone                                                                                                       | 14        | 4/14                 |
-  | `fx`        | `posbook1`, `demo_markout1`, `fxpositions1`, `last_value1`                                                                        | 24        | 14/14                |
+  | profile     | leaves                                                                                                           | processes | plant slots          |
+  | ---         | ---                                                                                                              | ---       | ---                  |
+  | `all`       | `arbitrage1`, `cross1`, `crossarb1`, `fxorderbookfeed1`, `fxpositions1`, `last_value1`, `posbook1`, `vectorize1` | 29        | 19/14 - over the cap |
+  | `arbitrage` | `arbitrage1`, `crossarb1`                                                                                        | 20        | 10/14                |
+  | `crypto`    | `cryptomock1`, `crypto_markout1`, `crypto_book_1s1`                                                              | 17        | 7/14                 |
+  | `default`   | `posbook1`, `fxpositions1`, `fxorderbookfeed1`                                                                   | 22        | 12/14                |
+  | `depth`     | `vectorize1`, `cross1`                                                                                           | 18        | 8/14                 |
+  | `essential` | none - the TorQ stack alone                                                                                      | 14        | 4/14                 |
+  | `fx`        | `posbook1`, `fxpositions1`, `last_value1`                                                                        | 23        | 13/14                |
 
 <!-- END GENERATED profile table -->
 
@@ -1545,7 +1555,7 @@ command that breaks a rule, and on a listed exception that has since been fixed.
    (`start`, `stop`, `restart`, `status`, `logs`, and `clean` for what it wrote)
    is a top-level verb.
 2. **The thing acted on is positional; a filter is an option.**
-   `uqs job gaps demo_markout --from 2026-09-13 --to 2026-09-14`.
+   `uqs job gaps fx_markout --from 2026-09-13 --to 2026-09-14`.
 3. **One meaning per option name**, and one long name per short flag: `--port`
    is one process's port (`uqs query --port 6052 'count quote'`), the stack's
    base port is `--base-port`, and `-n` is `--dry-run`. A name takes one type of

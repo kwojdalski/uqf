@@ -28,16 +28,14 @@
 / Every markout dataset on the plant, with its layout (`long or `wide).
 / @return dictionary: table name -> layout
 .qt.qetl.plant.markout.datasets:{[]
-    `fx_markout`fx_markout_wide`crypto_execution_quality`demo_execution_quality!`long`wide`long`long}
+    `fx_markout`fx_markout_wide`crypto_execution_quality!`long`wide`long}
 
 / Datasets that do not yet carry the core, each with the issue that removes the
 / exemption and why. An exemption is deleted by the issue named, not edited.
 / @return table: dataset, issue, reason
 .qt.qetl.plant.markout.exemptions:{[]
-    ([] dataset:`crypto_execution_quality`demo_execution_quality;
-        issue:`$("#1936";"#1937");
-        reason:("replaced by a new crypto dataset, which is written with the core";
-            "the demo job is retired; it gets no dataset"))}
+    ([] dataset:enlist `crypto_execution_quality; issue:enlist `$"#1936";
+        reason:enlist "replaced by a new crypto dataset, which is written with the core")}
 
 / What stops a table conforming. Empty means it conforms.
 / @param schema table: the dataset's schema

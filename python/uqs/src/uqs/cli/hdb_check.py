@@ -41,6 +41,7 @@ from uqs.cli.shared import _die, _paths, console, data_app
 from uqs.paths import UqsError
 from uqs.stack import hdb_alter, hdb_fill, hdb_layout, hdb_shape, hdb_types
 from uqs.stack.hdb_alter import Request
+from uqs.timerange import DAY_FORMS, parse_day
 
 CheckJson = json_opt(
     '{"ok", "hdb", "present", "segmented", "partitions", "missing_tables": {partition: [table]}, '
@@ -66,8 +67,9 @@ def hdb_check(
         str | None,
         typer.Option(
             "--template",
-            help="YYYY.MM.DD: the partition whose table is the schema to fill from, when this "
-            "runtime declares none (default: the latest holding it)",
+            metavar="DATE",
+            help=f"The partition ({DAY_FORMS}) whose table is the schema to fill from, when "
+            "this runtime declares none (default: the latest holding it)",
         ),
     ] = None,
     attach: AttachOpt = None,
@@ -109,7 +111,7 @@ def hdb_check(
             declared = hdb_shape.declared_tables(handle.paths)
             for name in tables or [_table(handle, None)]:
                 with hdb_alter.declaration(schema, name, declared) as decl:
-                    day = template.replace("-", ".") if template else None
+                    day = f"{parse_day('--template', template):%Y.%m.%d}" if template else None
                     req = Request(handle.hdb, name, "fill", schema=decl, template=day)
                     what = f"Write an empty {name} into each partition lacking it"
                     run_scoped(handle, req, apply=apply, yes=yes, as_json=as_json, what=what)

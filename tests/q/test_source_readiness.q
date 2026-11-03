@@ -32,9 +32,9 @@
         "define: rd_bad's ready must take exactly three arguments, the batch and the window's range_from and range_to";
         "it needs the batch and both bounds"]};
 
-.qt.qetl.source.readiness.test_the_markout_sources_declare_a_hook:{[t]
-    d:{(.qetl.source.def x)`ready} each `hdb_fx_markouts`hdb_demo_markouts;
-    .qunit.assertEquals[all {not x~(.qetl.source.optional_declarations)`ready} each d;1b;"both markout sources gate on their reference data"]};
+.qt.qetl.source.readiness.test_the_markout_source_declares_a_hook:{[t]
+    d:{(.qetl.source.def x)`ready} each enlist `hdb_fx_markouts;
+    .qunit.assertEquals[all {not x~(.qetl.source.optional_declarations)`ready} each d;1b;"the markout source gates on its reference data"]};
 
 / --- the stage -------------------------------------------------------------
 

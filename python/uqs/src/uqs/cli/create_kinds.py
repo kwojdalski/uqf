@@ -45,6 +45,7 @@ KindOpt = Annotated[
         help=alternatives(SCAFFOLD_KINDS, KIND_NOTES, default=DEFAULT_KIND, quote="`"),
         autocompletion=completion.choices(*SCAFFOLD_KINDS),
         callback=canonical,
+        show_default=False,
     ),
 ]
 

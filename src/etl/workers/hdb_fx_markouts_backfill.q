@@ -13,7 +13,7 @@
 / earliest the live row could have been stamped, since all of an execution's horizons
 / are published together once the last is due.
 / .
-/ on_conflict `replace, as hdb_demo_markouts_backfill declares (#1281): the live job
+/ on_conflict `replace (#1281): the live job
 / stamps a row when it RECEIVES it, the twin at source_time + the furthest horizon, so
 / near midnight one key can sit in two date partitions, and only `replace clears across
 / that boundary. window_column is source_time, so `replace clears the rows the window

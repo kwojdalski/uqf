@@ -112,7 +112,7 @@ def test_the_target_is_read_from_the_global_options_only(argv, expected):
         (["start", "piggy1"], True),
         (["stop"], True),
         (["job", "runs", "migrate"], True),
-        (["job", "gaps", "demo_markout", "--from", "2026-09-13"], False),
+        (["job", "gaps", "crypto_markout", "--from", "2026-09-13"], False),
         (["job", "preview", "vectorize2"], False),
         (["job", "runs", "list"], False),
         (["job", "backfill", "demo_deals_backfill"], True),

@@ -18,6 +18,7 @@ from rich.table import Table
 
 from uqs import timerange
 from uqs.cli import completion
+from uqs.cli.concepts import attach_opt
 from uqs.cli.json_out import emit, json_opt, utc_times
 from uqs.cli.pipelines import needs_pipelines
 from uqs.cli.range_options import DateOpt, LastOpt, RangeFromOpt, RangeToOpt
@@ -70,15 +71,10 @@ _RUN_COLUMNS = (
 _FACT_COLUMNS = ("run_id", "dataset", "range_from", "range_to", "label", "text")
 
 
-AttachOpt = Annotated[
-    str | None,
-    typer.Option(
-        "--attachment",
-        metavar="ATTACHMENT",
-        help="The attachment whose destination's ledger to read (`uqs job backfill "
-        "--attachment`), instead of the runtime's own",
-    ),
-]
+AttachOpt = attach_opt(
+    "The attachment whose destination's ledger to read (`uqs job backfill "
+    "--attachment`), instead of the runtime's own"
+)
 
 
 RunsJson = json_opt('{"runs": [{run_id, worker, dataset, status, range_from, ...}]}')
