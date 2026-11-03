@@ -206,12 +206,17 @@ def test_migrate_upgrades_a_ledger_from_before_the_range_and_counts(tmp_path, pa
             ),
             "not a dataset name",
         ),
-        (lambda p, d: runs.unfinished(p, directory=d / "missing"), "no status directory"),
     ],
 )
 def test_bad_arguments_are_refused_before_q_sees_them(ledger, paths, call, message):
     with pytest.raises(UqsError, match=message):
         call(paths, ledger)
+
+
+def test_a_missing_status_directory_is_an_empty_ledger(ledger, paths):
+    """No run recorded here yet is an empty result, exit 0 - not a refusal (#1885)."""
+    assert runs.unfinished(paths, directory=ledger / "missing") == []
+    assert not (ledger / "missing").exists(), "reading it creates nothing"
 
 
 def test_a_bound_reaches_q_as_the_same_instant_in_utc():

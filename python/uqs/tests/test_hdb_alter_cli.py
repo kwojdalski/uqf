@@ -169,7 +169,7 @@ def test_apply_without_a_terminal_and_without_yes_is_refused(world):
     before = digest(hdb)
     result = run_uqs("data", "alter", "pb", "--hdb", str(hdb), "--rename", "amt=amount", "--apply")
     assert result.exit_code == 1
-    assert any("needs a terminal" in e and "--yes" in e for e in world.errors)
+    assert any("no terminal to ask on" in e and "--yes" in e for e in world.errors)
     assert digest(hdb) == before
 
 

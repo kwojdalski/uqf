@@ -30,7 +30,7 @@ from uqs.cli.shared import (
     job_app,
     log,
 )
-from uqs.paths import UqsError
+from uqs.paths import UqsError, UqsUsageError
 from uqs.stack import backfill as stack_backfill
 from uqs.stack import backfill_wait as stack_backfill_wait
 from uqs.stack import run_modes
@@ -206,7 +206,7 @@ def backfill(
         log.warning("uqs job backfill: --override {} ({})", ANY_WRITER, why)
     if waived and attach is None:
         _die(
-            UqsError(
+            UqsUsageError(
                 f"{backfill_attached.waiver_names(waived)} is for --attach: only a backfill into "
                 "an attached native HDB is fenced at its writers' end of day, and this one is not"
             )
@@ -219,16 +219,20 @@ def backfill(
         mode = "dry-run"
     if force and writer is None:
         _die(
-            UqsError(
+            UqsUsageError(
                 "--override any-writer is for --writer: it writes through the process at HOST:PORT"
             )
         )
         return
     if writer is not None and attach is None:
-        _die(UqsError("--writer is for --attach: it names the receiver of an attached destination"))
+        _die(
+            UqsUsageError(
+                "--writer is for --attach: it names the receiver of an attached destination"
+            )
+        )
         return
     if as_json and attach is None:
-        _die(UqsError("--json is for --attach: it prints the attached admission plan"))
+        _die(UqsUsageError("--json is for --attach: it prints the attached admission plan"))
         return
     if wait and mode in run_modes.READ_ONLY_MODES:
         _die(UqsError(f"--wait has nothing to wait for with --mode {mode}: it writes no status"))

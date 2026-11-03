@@ -267,7 +267,7 @@ def test_a_dry_run_shows_the_manifest_and_a_registration_the_stack_lost(world):
 # ------------------------------------------------------------------ execution
 
 
-def test_attach_asks_first_and_changes_nothing_on_no(world):
+def test_attach_asks_first_and_changes_nothing_on_no(world, terminal):
     result = run("add", *new(world), input="n\n")
     assert result.exit_code != 0
     assert "Attach pb-uat to stack 6000 as above?" in flat(result.output)

@@ -35,6 +35,12 @@ PAGE = {
 }
 
 
+@pytest.fixture(autouse=True)
+def _declared(monkeypatch):
+    """The feed these cases preview, declared - checked before q is asked (#1885)."""
+    monkeypatch.setattr(stream_preview, "streaming_jobs", lambda _paths: {"vectorize2"})
+
+
 def fake_q(monkeypatch, answer: dict | None, *, stdout: str | None = None, returncode: int = 0):
     """Stand in for q; record the script it was given."""
     sent: dict = {}
@@ -65,6 +71,13 @@ def test_the_answer_is_the_marked_line(monkeypatch):
 def test_a_name_that_is_not_a_job_is_refused_before_q():
     with pytest.raises(UqsError, match="not a streaming job name"):
         stream_preview.preview(default_paths(), "x;exit 1")
+
+
+def test_a_job_the_tree_does_not_declare_is_refused_before_q(monkeypatch):
+    """q's own refusal blamed "a wiring bug rather than a lookup miss" (#1885)."""
+    monkeypatch.setattr(stream_preview, "q_interpreter", lambda: pytest.fail("asked q"))
+    with pytest.raises(UqsError, match="no streaming job 'nosuchjob' - `uqs job list` names"):
+        stream_preview.preview(default_paths(), "nosuchjob")
 
 
 def test_a_q_side_refusal_is_raised_with_its_message(monkeypatch):
@@ -297,7 +310,7 @@ def test_a_bad_last_is_refused_before_q(monkeypatch):
     started: list = []
     monkeypatch.setattr(stream_preview, "preview", lambda *a, **kw: started.append(1) or RECENT)
     result = runner.invoke(cli.app, ["job", "preview", "vectorize2", "--last", "0s"])
-    assert result.exit_code == 1
+    assert result.exit_code == 2, "a usage error (#1885)"
     assert started == []
 
 
