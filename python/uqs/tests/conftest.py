@@ -26,3 +26,16 @@ def no_receiver_outlives_the_run(tmp_path_factory):
             f"remote_receiver.q process(es) {left} started under {root} were still running "
             "at the end of the run (stopped now): a test started a receiver it did not stop"
         )
+
+
+@pytest.fixture
+def log_text():
+    """What the command logged, as text: a loguru sink of its own. The console
+    sink is stderr (#1881), bound when logging was configured - not the stream
+    an in-process CliRunner swaps in - so a result's output no longer holds it."""
+    from loguru import logger
+
+    lines: list[str] = []
+    sink = logger.add(lambda m: lines.append(str(m)), level="TRACE", format="{message}")
+    yield lambda: "".join(lines)
+    logger.remove(sink)

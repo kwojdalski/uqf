@@ -1716,6 +1716,13 @@ uqs job runs list --json | jq -r '.runs[] | select(.status == "failed") | .run_i
 uqs status --json | jq -r '.processes[] | select(.status == "down") | .process'
 ```
 
+Without `--json` the split is the same: every log line, refusals and warnings
+included, goes to stderr, and stdout holds only what the command prints as its
+output (#1881). So `uqs list processes > f` writes the list alone,
+`$(uqs config show ...)` captures the config, and `2>/dev/null` silences the
+log. `uqs logs` and `start -f` are the exception by design: the processes' log
+lines are their output, on stdout.
+
 An attached backfill that cannot be coordinated with the stack's native writers
 adds `findings` beside `error`: one record per blocker with its `code` (such as
 `eod-fence` or `clock-unknown`), the `component` it is about, the observed
