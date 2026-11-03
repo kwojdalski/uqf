@@ -52,7 +52,9 @@ WHAT IS SEEN, through Python's audit hooks (sys.addaudithook):
 What this cannot see, the python-tests hook does not pretend to: a file read
 by a cached loader is charged to the first test that loaded it in each
 worker, and a Python child's own reads are not seen at all (hence `python`
-reaching everything). CI runs the whole suite on every pull request.
+reaching everything). CI runs the whole suite on every pull request that can
+reach a Python test (scripts/dev/ci_scope.py, which checks its rule against
+this record where there is one).
 """
 
 from __future__ import annotations
