@@ -27,6 +27,11 @@ DEFAULT_CAPTURE_INTERVAL = 900
 
 DEFAULT_MAX_ROWS = 10_000
 
+#: Days of activity history kept, and the most rows kept whatever their age
+#: (activity.py). Both bounds apply; the tighter one wins.
+DEFAULT_ACTIVITY_RETENTION_DAYS = 30
+DEFAULT_ACTIVITY_MAX_ROWS = 100_000
+
 #: Seconds a gateway query may take before kola gives up (UQF_FRONTEND_TIMEOUT).
 DEFAULT_TIMEOUT = 30
 
@@ -115,6 +120,18 @@ class Settings:
     #: The stack this frontend serves: where torq.sh, process.csv and the
     #: status files live, and what every derived fact above is read from.
     stack_root: Path | None = None
+    #: The SQLite file activity history and the action audit are kept in
+    #: (activity.py). from_env derives it when UQF_FRONTEND_ACTIVITY_DB is
+    #: unset: `$TORQDATA/frontend/activity.sqlite3`, beside the workers'
+    #: status files, for the stack UQF_FRONTEND_STACK_ROOT names. None - no
+    #: stack root and no file - keeps history in memory, and GET /activity
+    #: says it is not persistent. `uqs clean` removes $TORQDATA and this file
+    #: with it; name a file elsewhere to keep history past a clean.
+    activity_db: Path | None = None
+    #: Retention: rows older than this many days are pruned, and only the
+    #: newest `activity_max_rows` are kept.
+    activity_retention_days: int = DEFAULT_ACTIVITY_RETENTION_DAYS
+    activity_max_rows: int = DEFAULT_ACTIVITY_MAX_ROWS
 
     @property
     def request_timeout(self) -> int:
@@ -159,6 +176,11 @@ class Settings:
             stack_root=stack_root,
             capture_dir=_path_env("UQF_FRONTEND_CAPTURE_DIR"),
             capture_interval=_int_env("UQF_FRONTEND_CAPTURE_INTERVAL", cls.capture_interval),
+            activity_db=_path_env("UQF_FRONTEND_ACTIVITY_DB") or facts.activity_db,
+            activity_retention_days=_int_env(
+                "UQF_FRONTEND_ACTIVITY_RETENTION_DAYS", cls.activity_retention_days
+            ),
+            activity_max_rows=_int_env("UQF_FRONTEND_ACTIVITY_MAX_ROWS", cls.activity_max_rows),
         )
 
 

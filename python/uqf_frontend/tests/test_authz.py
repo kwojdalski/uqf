@@ -256,11 +256,29 @@ SAMPLES: dict[tuple[str, str], dict] = {
     ("GET", "/ops/clients"): {},
     ("GET", "/ops/processes"): {},
     ("GET", "/ops/backfill"): {},
+    ("GET", "/services"): {},
+    ("GET", "/services/{target}/files"): {"params": {"path": "releases"}},
     ("GET", "/coverage"): {
         "params": {"dataset": "fx_quotes", "partition": "", "source_version": "v1"}
     },
     ("POST", "/query"): {"json": {"table": "trades", "filters": []}},
     ("GET", "/control"): {},
+    ("GET", "/activity"): {},
+    ("POST", "/activity/events"): {
+        "json": {
+            "events": [
+                {
+                    "event_id": "evt00000001",
+                    "session_id": "session0001",
+                    "ts": "2026-01-01T00:00:00Z",
+                    "kind": "navigate",
+                    "action": "view.open",
+                    "target": "Control",
+                    "trigger": "pointer",
+                }
+            ]
+        }
+    },
     ("POST", "/control/process/{action}"): {"json": {"procs": "rdb1"}},
     ("PUT", "/control/process/{procname}/config"): {"json": {"field": "port", "value": "1"}},
     ("PUT", "/control/worker-config"): {"json": {"key": "k", "value": "v"}},
@@ -294,7 +312,11 @@ def test_samples_cover_exactly_the_guarded_routes():
 def test_a_deny_all_policy_refuses_every_guarded_route(method, path):
     """Each route refused with 403, and before any data is read."""
     c, gw = client(policy=_deny_all)
-    url = path.replace("{action}", "start").replace("{procname}", "rdb1")
+    url = (
+        path.replace("{action}", "start")
+        .replace("{procname}", "rdb1")
+        .replace("{target}", "prod-a")
+    )
     resp = c.request(method, url, **SAMPLES[(method, path)])
     assert resp.status_code == 403, resp.text
     assert resp.json()["error"] == "Forbidden"

@@ -45,17 +45,18 @@ The q details this rests on, verified against a live KDB-X process:
 
 ## Endpoints
 
-  |                        |                                                                                                                                         |
-  | ---                    | ---                                                                                                                                     |
-  | `GET /health`          | BFF liveness plus gateway reachability. An EOD reload reports `ok: true, gateway: "reloading"` — a known transient state, not a failure |
-  | `GET /catalog`         | The queryable surface, so a UI builds filter controls from the server's whitelist instead of a hardcoded copy that drifts               |
-  | `GET /coverage`        | Composed coverage intervals and any gaps, for one dataset at one source release                                                         |
-  | `GET /ops/queue`       | Pending and running gateway queries                                                                                                     |
-  | `GET /ops/connections` | Registered backend handles and connected clients                                                                                        |
-  | `GET /ops/usage`       | Fleet-wide query log, assembled here because q has none                                                                                 |
-  | `GET /ops/processes`   | Fleet health for every process `process.csv` declares                                                                                   |
-  | `GET /ops/backfill`    | Backfill and Airflow task status, read from the files q writes                                                                          |
-  | `POST /query`          | Validated, parameterised table query, tier-routed                                                                                       |
+  |                        |                                                                                                                                          |
+  | ---                    | ---                                                                                                                                      |
+  | `GET /health`          | BFF liveness plus gateway reachability. An EOD reload reports `ok: true, gateway: "reloading"` — a known transient state, not a failure  |
+  | `GET /catalog`         | The queryable surface, so a UI builds filter controls from the server's whitelist instead of a hardcoded copy that drifts                |
+  | `GET /coverage`        | Composed coverage intervals and any gaps, for one dataset at one source release                                                          |
+  | `GET /ops/queue`       | Pending and running gateway queries                                                                                                      |
+  | `GET /ops/connections` | Registered backend handles and connected clients                                                                                         |
+  | `GET /ops/usage`       | Fleet-wide query log, assembled here because q has none                                                                                  |
+  | `GET /ops/processes`   | Fleet health for every process `process.csv` declares                                                                                    |
+  | `GET /ops/backfill`    | Backfill and Airflow task status, read from the files q writes                                                                           |
+  | `GET /services`        | The deployment targets `uqs target list --json` lists, read from `deploy_targets.toml` with no ssh, and whether remote operations are on |
+  | `POST /query`          | Validated, parameterised table query, tier-routed                                                                                        |
 
 ### Control routes --- these CHANGE things
 
@@ -103,10 +104,36 @@ and the copied sample data --- the one orchestrator verb whose blast radius is
 data rather than process state. `uqs clean` remains, where the person running it
 is at a terminal on the host.
 
+### Browsing a target's files --- reads, but over ssh
+
+`GET /services/{target}/files?path=&limit=` lists one directory under a
+registered target's deployment root (#1950). It changes nothing, but it reaches
+a server with this machine's ssh key, so it needs what a control action needs:
+writes on, the token, an allowed Host. Only a target `deploy_targets.toml`
+declares can be named; its ssh destination and root are the registry's, never
+the request's.
+
+The listing runs `remote_helper.py` - standard library only, sent on ssh's stdin
+every time - with the release's own `<dest>/current/.venv/bin/python -I -`. A
+release without that interpreter is refused (409) with nothing else tried and
+nothing installed. The path travels base64-encoded, so it never reaches a shell.
+
+`path` is relative to the root: an absolute path, `..`, a NUL byte or a path
+through a symbolic link is refused (400) before ssh and again on the server,
+which walks one directory descriptor at a time with `O_NOFOLLOW`. Links -
+`current` included - FIFOs, sockets, devices and names that are not UTF-8 are
+listed as blocked and cannot be entered; the release `current` names, and the
+fields of its `deploy-report.json`, come back as `release`. A listing returns at
+most `limit` entries (500 by default, 5000 at most) and says when it was
+truncated; the call is held to 20 s.
+
 A backfill is launched detached rather than awaited: it runs for as long as its
 range takes, and a request that blocked on one would time out mid-run and tell
 the caller nothing about whether the work continued. Every bound must carry an
 explicit offset, for the same reason `/coverage` requires one.
+
+Every one of them is audited, whoever calls it --- see [Activity history and the
+action audit](#activity-history-and-the-action-audit).
 
 Errors carry a `transient` flag so a UI can tell an EOD window or a timeout
 apart from a real failure.
@@ -359,6 +386,92 @@ summary counts `failed` separately from `running`.
 Writes are atomic (serialise, temp file, rename), because the frontend polls and
 would otherwise be able to read a half-written file. Files ending `.tmp` are
 ignored by the reader, and a test covers that.
+
+## Activity history and the action audit
+
+`activity.py` keeps one history with two sources (#1954):
+
+- **server** --- one row for every request that changes something (every method
+  but GET, HEAD and OPTIONS, less the reads `POST /query` and
+  `POST /activity/events`), written by middleware whether the caller is the UI,
+  `curl` or a script. It is written `pending` before the handler runs and
+  settled when the response is known, so a request the token or Host check
+  refuses is on record too. This is the authority on what happened.
+- **browser** --- what an operator did in the UI: `navigate`, `select`,
+  `submit`, `confirm`, `cancel`, and the `result` the browser saw. Intent, sent
+  in batches to `POST /activity/events`. Polling records nothing.
+
+  |                         |                                                                                                                                                                                                                                                                                                   |
+  | ---                     | ---                                                                                                                                                                                                                                                                                               |
+  | `GET /activity`         | The history, newest first. Filters: `since`, `until` (timezone required), `session_id`, `request_id`, `action` (exact, or a dotted prefix: `process` matches `process.stop`), `target`, `outcome`, `source`, `limit` (at most 1000). Says whether it is persistent and whether writes have failed |
+  | `POST /activity/events` | Up to 100 browser events. A repeated `event_id` is ignored, so a retried batch is stored once                                                                                                                                                                                                     |
+
+**Correlation.** The browser sends `X-UQF-Request-Id` and `X-UQF-Session-Id`
+with every write; the server stores both on its row and echoes the request id
+(making one up when none, or a malformed one, is sent). The browser's `confirm`
+or `submit`, its `result` and the server row of one operation share that id.
+Every row has a UTC timestamp, its target, a duration and, for an action over
+several processes, per-item outcomes.
+
+**Outcomes, including the uncertain ones.** `pending`, `succeeded`, `failed`,
+`refused` (nothing was acted on: 401, 403, a 422 before acting), `accepted` (a
+detached backfill: whether it finished is `/ops/backfill`'s to say) and
+`unknown` --- the request had begun to act and then failed, so part of it may
+have happened (a `torq.sh` that timed out, a worker-config answer that never
+came back, any 5xx). `torq.sh` reports one exit code for a whole selector, so a
+failed `stop rdb1 rdb2` marks each item `unknown` rather than guessing which one
+failed. A worker-config override shadowed by the environment is `failed`: set,
+but not in effect. A row still `pending` when the API restarts is settled
+`unknown`. One API process per history file.
+
+**What is never recorded.** Fields are allowlisted, not filtered: a `detail` key
+outside `activity.DETAIL_KEYS` is dropped and counted, and each allowed key is
+held to a pattern. Nothing reads the `Authorization` header, a request body, a
+typed value (a filter value, a config value: the field and key are recorded, the
+value is not) or a file's contents. An error is recorded by its type, never its
+message, which can quote the input back. `test_activity.py` searches the
+database for the write token and for typed values.
+
+**Identity.** `claimed_user` is the `x-uqf-user` header as sent. It is a label
+anyone can set (see the authorisation seam below), stored and shown as claimed,
+never as who called.
+
+**Storage and retention.** SQLite, from the standard library: the filters need
+an index rather than a scan of every line, and retention needs a `DELETE` rather
+than a rewrite, which rules out the JSON Lines `capture.py` uses for its
+append-only feed. The file is `$TORQDATA/frontend/activity.sqlite3` for the
+stack `UQF_FRONTEND_STACK_ROOT` names, beside the workers' status files;
+`UQF_FRONTEND_ACTIVITY_DB` names another. `uqs clean` removes `$TORQDATA`, this
+file with it; put it elsewhere to keep history past a clean. With neither set,
+history is kept in memory and `GET /activity` says it is not persistent. Rows
+older than `UQF_FRONTEND_ACTIVITY_RETENTION_DAYS` (30) are pruned, and only the
+newest `UQF_FRONTEND_ACTIVITY_MAX_ROWS` (100000) kept --- at startup and every
+200 writes.
+
+**When persistence fails.** A configured file that cannot be opened stops the
+API at startup. After that, a failed write never blocks the action it audits:
+the action goes ahead, its response carries `X-UQF-Audit: unrecorded` (else
+`recorded`), the failure is logged, and `GET /activity` reports the count and
+the last error, which the Activity view shows.
+
+This is operational logging: it helps an operator answer "who asked for what,
+and what came of it". It is not tamper-proof compliance evidence --- anyone with
+the file can edit it --- and not a recording of the screen.
+
+**Adding an action** (uploads, #1951; deletions, #1953). A new state-changing
+route is audited without doing anything, under a generic `http.<method>` name,
+and `test_activity.py` fails until it has an entry in `activity.SERVER_ACTIONS`.
+Its handler then reports what the status code cannot:
+
+```python
+audit = activity.audit_of(request)
+audit.set_target(name)  # written at once: survives a crash mid-action
+audit.note(file_name=name, size_bytes=size, sha256=digest)  # never the bytes
+audit.begin()  # past here, a failure is `unknown`
+...
+audit.item(name, "succeeded")  # one per file, for a batch
+audit.settle("failed")  # only where the status code would mislead
+```
 
 ## Authorisation seam
 
