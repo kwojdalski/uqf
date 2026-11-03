@@ -97,7 +97,7 @@ def test_a_dry_run_reports_source_mode_and_writes_nothing(server, tmp_path):
         f"link {server}/current -> releases/adopted-",
         'launch_mode = "source"',
         f'launch_env_file = "{server}/current/output/uqs/setenv.sh"',
-        "dry run: nothing changed",
+        "dry run: nothing was changed. Run it again with --apply",
     )
     assert _tree(tmp_path) == before, "nothing written on the server or here"
     assert (tmp_path / "deploy_targets.toml").read_text() == DECLARED

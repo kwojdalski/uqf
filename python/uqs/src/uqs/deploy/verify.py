@@ -42,6 +42,7 @@ import time
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
 
+from uqs.deploy.config import DEFAULT_VERIFY_TIMEOUT
 from uqs.model import infra, profiles
 from uqs.model.registry import PIPELINES
 from uqs.paths import default_paths
@@ -247,7 +248,7 @@ def _expected(
 def run(
     profile: str,
     *,
-    deadline: float = 180.0,
+    deadline: float = DEFAULT_VERIFY_TIMEOUT,
     query_timeout: int = 5,
     port: int | None = None,
     procs: list[str] | None = None,
