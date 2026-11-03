@@ -12,6 +12,7 @@ from typing import Annotated
 import typer
 from rich.table import Table
 
+from uqs.cli.concepts import SourceArg
 from uqs.cli.config import config_app
 from uqs.cli.safety import ChangesState, dry_run_note
 from uqs.cli.shared import _die, _paths, console
@@ -71,10 +72,7 @@ def sources_show(ctx: typer.Context) -> None:
 
 @sources_app.command("stub", cls=ChangesState)
 def sources_stub(
-    source: Annotated[
-        str,
-        typer.Argument(metavar="SOURCE", help="The source, as src/etl/sources/<source>.q names it"),
-    ],
+    source: SourceArg,
     dry_run: Annotated[
         bool, typer.Option("--dry-run", "-n", help="Show the row it would add; write nothing")
     ] = False,

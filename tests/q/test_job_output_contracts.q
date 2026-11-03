@@ -126,12 +126,7 @@
 / job -> a niladic function pushing input the job acts on. Each driver
 / runs after .qt.qetl.job.stream.reset[], which empties job state and wires every job
 / to .qt.qetl.job.stream.recorder.
-.qt.qpipe.job_output_contracts.drivers:`demo_markout`posbook`vectorize`fx_positions`executions`market_data`superbook`arbitrage`cross_arbitrage`exec_bars!(
-    {[] .qpipe.job.demo_markout.on_batch[`trades;([] time:enlist .qt.qetl.job.stream.d 0; sym:enlist `EURUSD; side:enlist 1;
-            trade_price:enlist 1.1; size:enlist 1e6; pip_factor:enlist 10000; fill_id:enlist `f1)];
-        .qpipe.job.demo_markout.on_batch[`quote;([] time:enlist .qt.qetl.job.stream.d 1; sym:enlist `EURUSD;
-            bid:enlist 1.1004; ask:enlist 1.1006)];
-        .qpipe.job.demo_markout.score_ready .qt.qetl.job.stream.d 20};
+.qt.qpipe.job_output_contracts.drivers:`posbook`vectorize`fx_positions`executions`market_data`superbook`arbitrage`cross_arbitrage`exec_bars!(
     {[] .qpipe.job.posbook.on_batch[`market_data;.qt.qetl.job.stream.a_book[`EURUSD;1.104]];
         .qpipe.job.posbook.on_batch[`executions;.qt.qetl.job.stream.an_execution[.qt.qetl.job.stream.d 0;`EURUSD;1;1.1;1e6]];
         / and the day ends, so its opening book is published too (#943)

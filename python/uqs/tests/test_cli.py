@@ -2291,7 +2291,7 @@ def test_kola_or_an_export_gets_the_python_objects(monkeypatch, argv, env):
 def test_an_unknown_renderer_is_refused_before_anything_connects(monkeypatch):
     monkeypatch.setattr(runtime, "query", lambda *a, **k: pytest.fail("should not query"))
     argv = ["query", "1+1", "--port", "6052", "--render", "python"]
-    assert runner.invoke(cli.app, argv).exit_code == 1
+    assert runner.invoke(cli.app, argv).exit_code == 2  # a usage error: --render is a choice
 
 
 @pytest.mark.parametrize(("argv", "rendered"), [([], True), (["--render", "kola"], False)])

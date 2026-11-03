@@ -1,0 +1,21 @@
+# Kodiak (https://kodiakhq.com) merges a PR labelled `automerge` once branch
+# protection's required checks pass on master's branch protection - today
+# "Repository checks", the job that needs every CI job. When the PR is behind
+# master, Kodiak merges master into it, waits for CI again, and merges: one PR
+# at a time, so each lands tested against the master it lands on.
+#
+# The KDB-X gates are not among the required checks (hosted CI has no KDB-X;
+# kdbx-attestation.yml is advisory, #1543). A branch Kodiak updates is not
+# re-attested; master's own whole-suite run (scripts/dev/master_coverage.py)
+# is what judges it until a licensed runner makes those gates a CI job.
+version = 1
+
+[merge]
+automerge_label = "automerge"
+method = "merge"
+delete_branch_on_merge = true
+notify_on_conflict = true   # comments on the PR and drops the label
+blocking_labels = ["do-not-merge"]
+
+[update]
+always = false   # update a PR only when it is next to merge

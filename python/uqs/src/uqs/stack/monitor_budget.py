@@ -33,7 +33,7 @@ log = get_logger()
 # Starting monitor1 is only half of collecting heartbeats. It subscribes to
 # the proctypes in `.servers.CONNECTIONS`, and the vendored
 # appconfig/settings/monitor.q lists TorQ's own types only - so the four
-# standing uqf ETLs (cross1, vectorize1, posbook1, demo_markout1, all proctype
+# standing uqf ETLs (cross1, vectorize1, posbook1, crypto_markout1, all proctype
 # `metrics`) published heartbeats that nothing was listening for. The feeds
 # were already covered, since `feed` is on the vendored list.
 #

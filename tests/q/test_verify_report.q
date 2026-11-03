@@ -62,11 +62,11 @@
     .qunit.assertEquals[first exec reason from r[`checks] where category=`cross_mode;"one producer (duckdb_deals_backfill) - there is nothing to compare it with";"and it says why"]};
 
 .qt.qetl.verify.report.test_a_real_twin_whose_stream_cannot_be_captured_is_unverified_with_its_reason:{[t]
-    r:.qetl.verify.run[`demo_execution_quality;()!();.qt.qetl.verify.report.from;.qt.qetl.verify.report.to;::;0b];
-    .qunit.assertEquals[(r`producers)`producer;`demo_markout`hdb_demo_markouts_backfill;"the job graph's twins"];
+    r:.qetl.verify.run[`fx_markout;()!();.qt.qetl.verify.report.from;.qt.qetl.verify.report.to;::;0b];
+    .qunit.assertEquals[(r`producers)`producer;`fx_markout`hdb_fx_markouts_backfill;"the job graph's twins"];
     .qunit.assertTrue[(first exec reason from r[`checks] where category=`cross_mode) like "equivalence basis undeclared*";"no basis is declared for the pair, so nothing is assumed"];
-    cap:.qetl.verify.capture[`demo_execution_quality;.qt.qetl.verify.report.from;.qt.qetl.verify.report.to];
-    .qunit.assertEquals[(first (cap`captures)`demo_markout)`error;"capture of demo_markout failed: capture: demo_markout declares no poll - its on_timer is one function that publishes; declare poll to verify it";
+    cap:.qetl.verify.capture[`fx_markout;.qt.qetl.verify.report.from;.qt.qetl.verify.report.to];
+    .qunit.assertEquals[(first (cap`captures)`fx_markout)`error;"capture of fx_markout failed: capture: fx_markout declares no poll - its on_timer is one function that publishes; declare poll to verify it";
         "and a subscriber cannot be fetched from, which the capture says"]};
 
 .qt.qetl.verify.report.test_the_report_is_json:{[t]

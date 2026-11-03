@@ -61,7 +61,9 @@ def install(
     home: Home,
     qhome: Annotated[
         Path | None,
-        typer.Option("--q-home", help="The managed QHOME to overlay; default: $QHOME"),
+        typer.Option(
+            "--q-home", envvar="QHOME", help="The managed QHOME to overlay; default: $QHOME"
+        ),
     ] = None,
     dry_run: Annotated[
         bool,

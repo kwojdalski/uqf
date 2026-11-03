@@ -156,7 +156,7 @@
     .qunit.assertEquals[(r`state;r`advances);(`invalid;0b);"a run would refuse this cursor, so the preview says so"]};
 
 .qt.qetl.job.stream.poll.test_a_subscriber_cannot_be_previewed:{[t]
-    .qunit.assertThrows[{.qetl.job.stream.preview[`demo_markout;5]};::;"*subscribes to*";
+    .qunit.assertThrows[{.qetl.job.stream.preview[`crypto_markout;5]};::;"*subscribes to*";
         "its input comes from the plant - there is no page to fetch"]};
 
 .qt.qetl.job.stream.poll.test_a_feed_without_poll_cannot_be_previewed:{[t]
