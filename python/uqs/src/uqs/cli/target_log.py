@@ -28,7 +28,7 @@ from uqs.cli.shared import (
     console,
 )
 from uqs.cli.target import DryRun, _change, _command, target_app
-from uqs.deploy import target_changelog, target_changes
+from uqs.deploy import target_changelog, target_changes, targets
 from uqs.deploy.config import DeployError
 from uqs.paths import UqsError, repo_root
 
@@ -36,6 +36,13 @@ LogJson = json_opt(
     '{"changes": [{number, at, user, machine, kind, command, target, tables: [{table, before, '
     'after, keys}], diff, hash}], newest first, "edited_outside": bool}'
 )
+
+
+def _declared(root, name: str) -> bool:
+    try:
+        return name in targets.read(root)
+    except DeployError:
+        return False
 
 
 def _about(entry: dict, name: str) -> bool:
@@ -68,6 +75,10 @@ def log_(
         _die(UqsError(str(exc)))
         return
     found = [(n, e) for n, e in enumerate(entries, 1) if name is None or _about(e, name)]
+    if name is not None and not found and not _declared(root, name):
+        # an unknown name is a refusal; a known target with no change, an empty log (#1885)
+        _die(UqsError(f"no target {name!r} - `uqs target list` names them, and no change names it"))
+        return
     changes: list[dict[str, Any]] = [
         {
             "number": n,

@@ -16,7 +16,7 @@ from typing import Annotated
 import typer
 
 from uqs.cli.vocabulary import duration
-from uqs.deploy import config, control, targets
+from uqs.deploy import config, control, target_keys, targets
 from uqs.deploy.config import DeployError
 from uqs.logger import get_logger
 from uqs.paths import UqsError, repo_root
@@ -132,7 +132,7 @@ def server(ctx: typer.Context, target: str | None, **flags) -> dict:
     flags alone, which must then name the server. A flag left unset (None)
     is left out, so make_config's default applies."""
     if target is None:
-        absent = [config.flag(k) for k in ("host", "dest") if flags[k] is None]
+        absent = [target_keys.flag(k) for k in ("host", "dest") if flags[k] is None]
         if absent:
             raise DeployError(
                 "arguments",
@@ -142,8 +142,8 @@ def server(ctx: typer.Context, target: str | None, **flags) -> dict:
     try:
         label, settings = control.settings_for(target, repo_root())
         r = control.remote_from(label, settings)
-    except UqsError as exc:
-        raise DeployError("arguments", str(exc)) from None
+    except UqsError as exc:  # an unknown name: a refusal (1), not a usage error (#1885)
+        raise DeployError("target", str(exc)) from None
     out = targets.push_options(label, settings)
     out.update(host=r.host, dest=r.dest, remote_user=r.remote_user)
     out.update({k: v for k, v in flags.items() if on_command_line(ctx, k)})

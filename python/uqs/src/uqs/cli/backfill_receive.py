@@ -20,7 +20,7 @@ from uqs.cli.json_out import json_opt
 from uqs.cli.renames import ATTACHMENT, alias_command, renamed, warn_renamed
 from uqs.cli.safety import ChangesState, dry_run_note
 from uqs.cli.shared import JOB_OPERATIONS_PANEL, _die, _paths, console, job_app
-from uqs.paths import UqsError
+from uqs.paths import UqsError, UqsUsageError
 from uqs.stack.run_modes import READ_ONLY_MODES
 
 
@@ -47,11 +47,15 @@ def extract(
     from uqs.cli.backfill_attached import _outcome_text, _report, logs_command
 
     if fixture:
-        _die(UqsError("--fixture is refused with --attachment: a fixture in a native HDB is data"))
+        _die(
+            UqsUsageError(
+                "--fixture is refused with --attachment: a fixture in a native HDB is data"
+            )
+        )
         return
     if port is not None:
         _die(
-            UqsError(
+            UqsUsageError(
                 "--base-port is not taken with --writer: the receiver's address is the stack's"
             )
         )
@@ -234,14 +238,14 @@ def _start(attach: str, contract: str | None, port: int | None, dry_run: bool, a
     """Admit the destination and start the receiver - `job receiver start`."""
     if port is None:
         _die(
-            UqsError(
+            UqsUsageError(
                 "--listen-port is required to start a receiver: the port the extractor connects to"
             )
         )
         return
     if contract is None:
         _die(
-            UqsError(
+            UqsUsageError(
                 "--contract is required to start a receiver: the identity of a contract "
                 "approved for the attachment "
                 f"(`uqs job attachment contract list --attachment {attach}`)"

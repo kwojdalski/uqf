@@ -187,7 +187,7 @@ def renamed(
     with its value attached (`-n20`). `--debug` -> `--debug` moves a
     per-command `--debug` to the global one, and a new spelling with no dash
     names the first positional (`--proc` -> `PROC`). A pair names a bypass:
-    `--skip-q-version-check R` -> `--override q-version-check`, its value the
+    `--accept-digest R` -> `--override accept-digest`, its value the
     --reason (#1732). A `bypass_flag(NAME)` names an old bypass FLAG, which
     takes no value: `--allow-dirty` -> `--override allow-dirty` (#1852). `mark`
     is the command's class from safety (`ReadOnly`, `ChangesState`,

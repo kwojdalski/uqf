@@ -46,7 +46,8 @@ from pathlib import Path
 from typing import Any
 
 from uqs.deploy import components, launch, overrides
-from uqs.deploy.config import FIELD_OF_KEY, FILE_KEYS, Config, DeployError, flag, make_config
+from uqs.deploy.config import Config, DeployError, make_config
+from uqs.deploy.target_keys import FIELD_OF_KEY, FILE_KEYS, flag
 from uqs.paths import UqsError
 
 DECLARATION = "deploy_targets.toml"

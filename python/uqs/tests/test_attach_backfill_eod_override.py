@@ -64,7 +64,10 @@ def test_the_guardrail_is_declared_once_from_the_coordination_policy():
     assert g.commands == ("job backfill",)
     assert (g.risk, g.action, g.overridable) == (policy.risk, policy.action, True)
     assert g.skip_flag and not g.component_scoped and g.name == "eod-fence"
-    assert [x.id for x in safety.registry() if x.skip_flag] == ["eod-fence"]
+    # the one generated skip `job backfill` takes (#1918 added others' elsewhere)
+    assert [x.id for x in safety.registry() if x.skip_flag and "job backfill" in x.commands] == [
+        "eod-fence"
+    ]
     assert skip_options.declared("job backfill") == (g,)
 
 

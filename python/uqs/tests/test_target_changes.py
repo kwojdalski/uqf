@@ -136,7 +136,7 @@ def test_remove_takes_its_block_and_its_own_comment_only(declared):
     assert "  # uat is rebuilt weekly\n[targets.uat]" in declared.read_text()
 
 
-def test_remove_shows_the_change_and_asks_first(declared):
+def test_remove_shows_the_change_and_asks_first(declared, terminal):
     """#1854: a deletion asks; declined, nothing is written."""
     declined = uqs("target", "remove", "prod", input="n\n")
     assert declined.exit_code == 1 and "[targets.prod]" in declined.output
@@ -307,7 +307,7 @@ def test_edit_saves_a_valid_copy(declared, tmp_path, monkeypatch):
 
 
 def test_edit_refuses_an_invalid_copy_and_reopens_it_with_the_reason(
-    declared, tmp_path, monkeypatch
+    declared, tmp_path, monkeypatch, terminal
 ):
     count = _editor(tmp_path, monkeypatch, "s|remote_user|remote_usr|", "s|remote_usr|remote_user|")
     r = uqs("target", "edit", input="y\n")
@@ -318,7 +318,7 @@ def test_edit_refuses_an_invalid_copy_and_reopens_it_with_the_reason(
     assert declared.read_text() == HAND_WRITTEN, "fixed back to what it was: nothing changed"
 
 
-def test_edit_discards_an_invalid_copy_on_request(declared, tmp_path, monkeypatch, capfd):
+def test_edit_discards_an_invalid_copy_on_request(declared, tmp_path, monkeypatch, capfd, terminal):
     _editor(tmp_path, monkeypatch, "s|remote_user|remote_usr|")
     r = uqs("target", "edit", input="n\n")
     assert r.exit_code == 1 and "edit discarded" in told(r, capfd)

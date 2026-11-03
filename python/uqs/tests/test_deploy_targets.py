@@ -13,7 +13,7 @@ import pytest
 from typer.testing import CliRunner
 
 from uqs import cli
-from uqs.deploy import driver, plan, targets
+from uqs.deploy import driver, plan, target_keys, targets
 from uqs.deploy.config import DeployError, make_config
 
 FILE = """
@@ -162,7 +162,7 @@ def test_the_old_target_option_still_deploys_and_names_the_new_spelling(
 
 def test_targets_given_both_ways_are_refused(root, monkeypatch, log_text):
     r, seen = _push(monkeypatch, root, ["prod-a", "--target", "prod-b"], [0])
-    assert r.exit_code == 1 and not seen
+    assert r.exit_code == 2 and not seen
     assert "not also as --target" in log_text()
 
 
@@ -272,7 +272,6 @@ def test_every_file_key_is_a_push_option_spelt_as_its_flag():
 
     import uqs.cli.entry  # noqa: F401 - registers the commands
     from uqs.cli.shared import app
-    from uqs.deploy import config as deploy_config
 
     root: Any = typer.main.get_command(app)
     push = root.commands["deploy"].commands["push"]
@@ -286,7 +285,7 @@ def test_every_file_key_is_a_push_option_spelt_as_its_flag():
     #: this run's own: what it is, how it asks, whether it registers; and
     #: --fixture, the other side of the `live` key's --fixture/--live
     run_only = {"dry_run", "override", "reason", "register", "no_register", "fixture"}
-    keys = {deploy_config.key(o) for o in targets.SETTABLE}
+    keys = {target_keys.key(o) for o in targets.SETTABLE}
     assert keys == {n for n in names if not n.startswith("skip_")} - run_only
     assert not targets.NOT_PUSH_OPTIONS & names
 

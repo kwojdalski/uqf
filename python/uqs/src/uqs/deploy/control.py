@@ -47,7 +47,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from uqs.deploy import history, targets
-from uqs.deploy.config import DEFAULT_CONNECT_TIMEOUT, FIELD_OF_KEY, DeployError
+from uqs.deploy.config import DEFAULT_CONNECT_TIMEOUT, DeployError
 from uqs.deploy.launch import (
     NO_RELEASE,
     RELEASE,
@@ -58,6 +58,7 @@ from uqs.deploy.launch import (
     uqs_command,
 )
 from uqs.deploy.remote import diagnostic
+from uqs.deploy.target_keys import FIELD_OF_KEY
 from uqs.paths import UqsError
 
 #: What ssh exits with when it, rather than the remote command, failed.
