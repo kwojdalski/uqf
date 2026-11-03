@@ -35,6 +35,12 @@
 /   book         the desk book a fill is booked to, null where the source
 /                has none - only `orders` carries it
 /   product      likewise: spot, forward, ... for a desk fill
+/   clock        whose clock source_time is (#1925): `venue or `receipt. Every
+/                mapping below stamps `receipt, because none of the three
+/                feeds carries a venue timestamp - source_time is the plant's
+/                own `time` on arrival. A source that does (a vendor's deal
+/                tape, fx_source_adapters.q) stamps `venue. The core refuses
+/                to score a fill against a reference on the other clock.
 / .
 / Nothing is DROPPED that a downstream job reads: pip_factor is not here
 / because nothing downstream of a fill reads it - .qf.exec's markout family
@@ -68,29 +74,46 @@
 
 / An FX fill as a canonical execution: the venue is fixed, there is no fee;
 / the id is the feed's own (#1080), null for a fill from before the column.
+/ trades has only the plant's `time`, so the clock is `receipt.
 / @param batch a trades batch
 / @return canonical executions
 .qpipe.job.executions.from_trades:{[batch]
     select source_time:time, sym, venue:.qpipe.job.executions.fx_venue, side, size, price:trade_price,
-        fee:0f, fee_ccy:`, fill_id, book:`, product:` from batch}
+        fee:0f, fee_ccy:`, fill_id, book:`, product:`, clock:`receipt from batch}
 
 / A crypto fill as a canonical execution: a rename, because the recorder's shape
-/ is already the canonical one with different spellings.
+/ is already the canonical one with different spellings. The fill feed is
+/ polled and crypto_trades carries no venue stamp, so `time` is the receipt
+/ time and the clock is `receipt (plant_tables.q, crypto_trades).
 / @param batch a crypto_trades batch
 / @return canonical executions
 .qpipe.job.executions.from_crypto_trades:{[batch]
     select source_time:time, sym, venue, side, size, price:trade_price,
-        fee, fee_ccy:fee_currency, fill_id:exchange_fill_id, book:`, product:` from batch}
+        fee, fee_ccy:fee_currency, fill_id:exchange_fill_id, book:`, product:`, clock:`receipt from batch}
 
 / A filled order as a canonical execution, booked to its book and product.
 / The orders feed is the FX desk's, so its venue is the FX one; the order's
-/ id is the fill's. Every other status is dropped: it never traded.
+/ id is the fill's. Every other status is dropped: it never traded. orders has
+/ only the plant's `time`, so the clock is `receipt.
 / @param batch an orders batch, any statuses
 / @return canonical executions, filled orders only
 .qpipe.job.executions.from_orders:{[batch]
     fs:.qpipe.job.executions.filled_status;
     select source_time:time, sym, venue:.qpipe.job.executions.fx_venue, side, size, price,
-        fee:0f, fee_ccy:`, fill_id:`$string order_id, book, product from batch where order_status=fs}
+        fee:0f, fee_ccy:`, fill_id:`$string order_id, book, product, clock:`receipt from batch where order_status=fs}
+
+/ The rows executions is about to publish, held to the clock rule (#1925):
+/ every row says whose clock its source_time is. A row that does not is a
+/ mapping that forgot to stamp it, and throwing withholds the whole batch
+/ (.qetl.job.stream.checked) rather than publishing a fill the core could
+/ score against the wrong clock.
+/ @param rows executions rows
+/ @return no failures, when every clock is `venue or `receipt
+/ @throws error when any row's clock is null or neither
+/ @eg count .qpipe.job.executions.check[0#.qpipe.job.executions.executions]  ->  0
+.qpipe.job.executions.check:{[rows]
+    .qetl.plant.require_clock[`executions;rows];
+    .qetl.job.bounded.no_failures[]}
 
 \d .
 
@@ -104,7 +127,7 @@
             pip_factor:.qf.px.pip_factor `EURUSD`USDJPY; fill_id:`fx1`fx2);
         ([] source_time:2026.09.17D10:00:00 2026.09.17D10:00:01; sym:`EURUSD`USDJPY;
             venue:`fx`fx; side:1 -1; size:1e6 5e5; price:1.085 149.5; fee:0 0f;
-            fee_ccy:``; fill_id:`fx1`fx2; book:``; product:``)))];
+            fee_ccy:``; fill_id:`fx1`fx2; book:``; product:``; clock:`receipt`receipt)))];
 
 .qetl.transform.define[`executions_from_crypto_trades;`inputs`output`fn`examples!(
     (enlist `crypto_trades)!enlist .qpipe.job.executions.crypto_trades;
@@ -118,7 +141,8 @@
         ([] source_time:enlist 2026.09.17D10:00:02; sym:enlist `$"BTC-USDT";
             venue:enlist `binance_spot; side:enlist -1; size:enlist 0.25;
             price:enlist 62000f; fee:enlist 15.5; fee_ccy:enlist `USDT;
-            fill_id:enlist `$"binance_spot-1"; book:enlist `; product:enlist `)))];
+            fill_id:enlist `$"binance_spot-1"; book:enlist `; product:enlist `;
+            clock:enlist `receipt)))];
 
 / A cancelled order is dropped; the filled ones keep their book and product.
 .qetl.transform.define[`executions_from_orders;`inputs`output`fn`examples!(
@@ -132,11 +156,14 @@
             order_status:`filled`cancelled`filled);
         ([] source_time:2026.09.17D10:00:00 2026.09.17D10:00:02; sym:`EURUSD`USDJPY;
             venue:`fx`fx; side:1 1; size:1e6 5e5; price:1.085 149.5; fee:0 0f;
-            fee_ccy:``; fill_id:`1`3; book:`london`newyork; product:`spot`fwd)))];
+            fee_ccy:``; fill_id:`1`3; book:`london`newyork; product:`spot`fwd; clock:`receipt`receipt)))];
 
-.qetl.job.stream.normalize[`executions;`procname`output`input`start_with_all`note!(
+/ on_fail `hold: the check throws, so the whole batch is withheld either way.
+.qetl.job.stream.normalize[`executions;`procname`output`input`start_with_all`note`check`on_fail!(
     `executions1;
     .qpipe.job.executions.executions;
     `trades`crypto_trades`orders!`executions_from_trades`executions_from_crypto_trades`executions_from_orders;
     1b;
-    "every fill as one tape: trades, crypto_trades and filled orders -> executions")];
+    "every fill as one tape: trades, crypto_trades and filled orders -> executions";
+    .qpipe.job.executions.check;
+    `hold)];
