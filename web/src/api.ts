@@ -156,6 +156,40 @@ export interface Services extends Pollable {
   invalid: string | null;
   remote_operations_enabled: boolean;
 }
+/** One entry of a remote directory - models.RemoteEntryOut. A symlink,
+ * special file or undecodable name is `blocked`: listed, never entered. */
+export interface RemoteEntry {
+  name: string;
+  kind: "dir" | "file" | "symlink" | "special" | "unknown";
+  size: number | null;
+  mtime: number | null;
+  blocked: boolean;
+  reason: string | null;
+}
+/** The release `current` names, and its deploy report - models.ReleaseOut. */
+export interface Release {
+  current: string | null;
+  release: string | null;
+  report: Record<string, unknown> | null;
+  report_error: string | null;
+}
+/** GET /services/{target}/files - models.RemoteFilesResponse. Not polled:
+ * each listing is an ssh round trip, made only when the operator asks. */
+export interface RemoteFiles {
+  target: string;
+  root: string;
+  path: string;
+  parent: string | null;
+  entries: RemoteEntry[];
+  total: number | null;
+  truncated: boolean;
+  release: Release;
+}
+/** The URL that lists `path` under `target`'s deployment root. */
+export function remoteFilesPath(target: string, path: string): string {
+  const query = new URLSearchParams({ path });
+  return `/services/${encodeURIComponent(target)}/files?${query}`;
+}
 export interface OpsData extends Pollable {
   rows?: Row[];
   servers?: Row[];

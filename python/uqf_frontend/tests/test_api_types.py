@@ -72,6 +72,9 @@ PAIRS = {
     "ActivityHistory": "ActivityResponse",
     "ServiceTarget": "ServiceTargetOut",
     "Services": "ServicesResponse",
+    "RemoteEntry": "RemoteEntryOut",
+    "Release": "ReleaseOut",
+    "RemoteFiles": "RemoteFilesResponse",
     **REQUESTS,
 }
 

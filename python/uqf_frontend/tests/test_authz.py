@@ -257,6 +257,7 @@ SAMPLES: dict[tuple[str, str], dict] = {
     ("GET", "/ops/processes"): {},
     ("GET", "/ops/backfill"): {},
     ("GET", "/services"): {},
+    ("GET", "/services/{target}/files"): {"params": {"path": "releases"}},
     ("GET", "/coverage"): {
         "params": {"dataset": "fx_quotes", "partition": "", "source_version": "v1"}
     },
@@ -311,7 +312,11 @@ def test_samples_cover_exactly_the_guarded_routes():
 def test_a_deny_all_policy_refuses_every_guarded_route(method, path):
     """Each route refused with 403, and before any data is read."""
     c, gw = client(policy=_deny_all)
-    url = path.replace("{action}", "start").replace("{procname}", "rdb1")
+    url = (
+        path.replace("{action}", "start")
+        .replace("{procname}", "rdb1")
+        .replace("{target}", "prod-a")
+    )
     resp = c.request(method, url, **SAMPLES[(method, path)])
     assert resp.status_code == 403, resp.text
     assert resp.json()["error"] == "Forbidden"
