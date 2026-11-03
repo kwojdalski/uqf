@@ -195,6 +195,7 @@ A job that copies rows unchanged still declares its transform, with
   | `partition_column` | no       | symbol, default none                                                         | the OUTPUT column that holds this worker's `partition`, so a `replace` clears only the rows of its own partition. Without it, a `replace` --- declared, or the one a live run switches to over a window a fixture run claimed --- is refused (declared) or withheld (automatic) for any worker with a `partition`, because the window may hold other partitions' rows whether or not their workers are loaded in this process (#1476, #1499). An unpartitioned worker's `replace` is likewise refused while the dataset's declarations or coverage ledger name any partition (#1518). Needs a `partition`, and a `partition` needs it: define refuses one without, and publish refuses any row whose value here is another partition's (#1539)                                                                                                                                                                                           | not a symbol, there is no `partition`, a `partition` has no column, or it is not among the transform's output columns                                            |
   | `align`            | no       | timespan that divides the width, default none                                | the bar width a bar-building worker cuts its output to (`hdb_exec_bars_backfill` 1m, `hdb_crypto_book_backfill` 1s). A run whose `--from` or `--to` is not a multiple of it is refused at init: a window edge inside a bar would build that bar twice from part of its fills and, under `upsert`, the partial second build would replace the first (#1303)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | not a timespan, not positive, or the width is not a multiple of it; at run time, an unaligned range                                                              |
   | `revision`         | no       | positive long, default none                                                  | the revision of the worker's output logic (#1097). Coverage is recorded under `<release>@r<revision>`, so bumping it when a transform or scoring rule changes plans every window again rather than mixing the old logic's windows with the new; old claims keep their own identity. Bump it with the change, in the same commit                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | not a positive long                                                                                                                                              |
+  | `batching`         | no       | dict, default none (off)                                                     | compute batching inside each window, off unless declared (#1921): `group_by`, `max_rows`, optionally `max_groups` and `context`. See [Compute batching](#compute-batching)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | malformed; `group_by` not a source column; `max_rows` not a positive, finite long; a bad `context`                                                               |
 
 `ns` is **not** a key: the namespace is always `.qpipe.job.<worker>`, and a
 supplied `ns` is refused. `define` writes the lifecycle methods (`init`, `plan`,
@@ -204,6 +205,52 @@ calling `define`.
 
 A worker has no `start_with_all`: a backfill runs its range and exits, so it
 never starts with the stack.
+
+### Compute batching
+
+A window is the unit of *durable* ownership: one fetch, one publish, one
+coverage record. A transform over a large window can still be too big to run at
+once, without the window being wrong. `batching` splits the **compute** and
+leaves the ownership alone: the window is fetched once, its primary rows are
+planned into batches of whole groups, each batch is transformed on its own, and
+the outputs are joined and go through the check, the publish and the coverage
+record as an unbatched window's do.
+
+```q
+batching:`group_by`max_rows`max_groups!(`sym;50000;4)
+```
+
+  | key          | meaning                                                                                                                                                                                                        |
+  | ---          | ---                                                                                                                                                                                                            |
+  | `group_by`   | the primary columns that identify one calculation group: one symbol or several (a composite key). Rows that agree on all of them are a group, and **a group is never split**                                   |
+  | `max_rows`   | the most primary rows a batch holds. A group larger than this is refused, naming the group and the ways out (raise it, shorten `width`, or declare a finer `group_by`)                                         |
+  | `max_groups` | the most groups a batch holds, default no limit. `1` is a batch per group; larger values batch several, for a workload where groups share context                                                              |
+  | `context`    | optional `{[supporting;rows] ...}` returning the supporting inputs a batch of those primary rows needs, out of the window's. Without it every batch gets all of them. Only for a source with supporting inputs |
+
+What that guarantees, because publish and coverage are still one write per
+window:
+
+- coverage is never recorded after only some batches succeeded: a failing batch
+  fails the window, naming the batch, before anything is written;
+- a retry has nothing half-written to duplicate, omit or delete, and no batch
+  writes beside a sibling's output;
+- `replace` clears the window's whole ownership scope in one write, an empty
+  result and a row stamped after midnight included;
+- no durable partition is created: batching is not a partitioning scheme.
+
+What it does not do: it does not read the source again per batch (the window is
+fetched once), so it bounds the transform's working set and not the read.
+Batches are planned in ascending key order and a batch keeps the window's row
+order, so a plan is the same on every run.
+
+**What the worker claims.** That its transform, given a group's rows and the
+context declared for them, produces that group's output whatever other groups
+are in the window. The framework cannot check that; compare a batched with an
+unbatched run, as `tests/q/test_bounded_batching.q` does for
+`hdb_fx_markouts_backfill`. That worker is **not** batched as shipped:
+`scripts/dev/bench_batching.q` compares unbatched, per-symbol and grouped-symbol
+scoring on a synthetic window, and enabling it is a decision for those numbers
+on a real HDB.
 
 ### Run spec
 

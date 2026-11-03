@@ -86,7 +86,7 @@
         .qetl.log.err[worker;"could not re-fetch a window to re-fire its reactions";
             `range_from`range_to`error!(w`range_from;w`range_to;f`error)];
         :0];
-    out:@[.qetl.job.bounded.transform_batch[worker;];f`result;{[e] (`transform_failed;e)}];
+    out:@[.qetl.job.bounded.transform_window[worker;];f`result;{[e] (`transform_failed;e)}];
     if[(0h=type out) and `transform_failed~first out;
         .qetl.log.err[worker;"could not transform a window to re-fire its reactions";
             `range_from`range_to`error!(w`range_from;w`range_to;last out)];

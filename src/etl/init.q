@@ -81,6 +81,7 @@
 \l src/etl/core/live_check.q
 \l src/etl/core/bounded_connect.q
 \l src/etl/core/bounded_worker.q
+\l src/etl/core/bounded_batching.q
 \l src/etl/core/bounded_flags.q
 \l src/etl/core/stream_health.q
 \l src/etl/core/uptime.q

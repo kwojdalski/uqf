@@ -72,7 +72,7 @@
 / the names are .qetl.job.bounded.defined.
 .qetl.job.bounded.worker_cfg:([name:`symbol$()] source:`symbol$(); dataset:`symbol$(); width:`timespan$();
     transform:`symbol$(); ns:`symbol$(); partition:`symbol$(); procname:`symbol$(); note:();
-    on_conflict:`symbol$(); source_version:`symbol$(); target_key:(); check:(); io:(); facts:(); window_column:`symbol$(); partition_column:`symbol$(); revision:`long$(); align:`timespan$())
+    on_conflict:`symbol$(); source_version:`symbol$(); target_key:(); check:(); io:(); facts:(); window_column:`symbol$(); partition_column:`symbol$(); revision:`long$(); align:`timespan$(); batching:())
 
 / Every defined worker's name.
 / @return a symbol vector, empty when no worker has been defined
@@ -194,7 +194,7 @@
 / the time column, a null fraction on the column that matters, a checksum.
 / Optional, for the same reason `check` is: metadata written to satisfy a
 / requirement rather than to be read is worse than none.
-.qetl.job.bounded.optional_cfg:`check`io`facts`partition
+.qetl.job.bounded.optional_cfg:`check`io`facts`partition`batching
 
 / Declare a worker's configuration.
 / .
@@ -210,7 +210,8 @@
 /   window_column (the OUTPUT column that carries the window's time - see
 /   require_window_column), partition_column (the output column holding the partition, #1476) and
 /   source_version (the default release a run records coverage under; none
-/   by default, so a run must name one), revision (the output logic's, #1097) and align (bar width; an unaligned run is refused, #1303)
+/   by default, so a run must name one), revision (the output logic's, #1097), align (bar width; an unaligned run is refused, #1303) and
+/   batching (compute batching inside a window, off unless declared - bounded_batching.q, #1921)
 / @throws error naming every missing or malformed field at once
 .qetl.job.bounded.define:{[worker;decl]
     / Both execution modes share .qpipe.job, so a name cannot belong to both.
@@ -300,6 +301,9 @@
     decl[`source_version]:dv;
     decl[`target_key]:.qetl.job.bounded.require_target_key[worker;decl];
     decl[`window_column]:.qetl.job.bounded.require_window_column[worker;decl];
+    / Batching is validated and normalised HERE, only when declared: a stored declaration
+    / read back with .qetl.job.bounded.def carries (::) for it, and that is "off", not a malformed dictionary.
+    if[$[`batching in key decl; not (::)~decl`batching; 0b]; decl[`batching]:.qetl.job.bounded.batching.require[worker;decl]];
     decl[`revision]:.qetl.job.bounded.runtime.require_revision[worker;decl]; decl[`align]:.qetl.job.bounded.runtime.require_align[worker;decl]; decl[`partition_column]:.qetl.job.bounded.runtime.require_partition_column[worker;decl];
     / Mask over the WHOLE registry first, then drop this worker - filtering the key
     / list before applying the mask pairs a shortened list with a full-length
@@ -1253,33 +1257,6 @@
 / @return an empty table of check, status and detail
 .qetl.job.bounded.no_failures:{[] ([] check:`symbol$(); status:`symbol$(); detail:())}
 
-/ Private: run the worker's transform over one fetched batch.
-/ .
-/ Narrowed to the contract's declared fields first. .qetl.source.validate accepts a
-/ source returning MORE columns than it declares, and the transform declares
-/ exactly the contract - so the extra columns are dropped here, where the
-/ contract says what the job reads, rather than refused.
-/ .
-/ A source with supporting inputs hands a dict of tables (#617), and each is
-/ narrowed to its own contract and passed under its own name. The primary
-/ owns the window: when it is empty the window publishes nothing, so the
-/ transform is not run and its declared output comes back empty - supporting
-/ rows alone are context for nothing.
-/ @return the transformed batch
-/ @throws whatever the transform throws, or a schema refusal from .qetl.transform
-/ @private
-.qetl.job.bounded.transform_batch:{[worker;batch]
-    cfg:.qetl.job.bounded.def worker;
-    src:.qetl.source.def cfg`source;
-    nm:cfg`transform;
-    if[0=count src`supporting;
-        :.qetl.transform.apply[nm;(.qetl.transform.input_names nm)!enlist (src`columns)#batch]];
-    if[0=count batch src`table_name; :0#.qetl.transform.output_schema nm];
-    sup:key src`supporting;
-    given:((enlist src`table_name)!enlist (src`columns)#batch src`table_name),
-        sup!{[batch;nm;contract] (cols contract)#batch nm}[batch]'[sup;value src`supporting];
-    .qetl.transform.apply[nm;given]}
-
 / Private: one window, end to end - fetch, transform, check, publish, record.
 / .
 / Accumulates into the worker's own `progress` rather than returning, because
@@ -1396,7 +1373,7 @@
 / window like a failed fetch.
 / @private
 .qetl.job.bounded.stage_transform:{[worker;s]
-    out:@[.qetl.job.bounded.transform_batch[worker;];s`batch;{[e] (`transform_failed;e)}];
+    out:@[.qetl.job.bounded.transform_window[worker;];s`batch;{[e] (`transform_failed;e)}];
     if[(0h=type out) and `transform_failed~first out;
         :.qetl.job.bounded.failed_with[s;"window failed transform";`transform`error!((s`cfg)`transform;last out)]];
     @[s;`batch;:;out]}
