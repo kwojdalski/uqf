@@ -123,7 +123,7 @@ def test_the_cli_refuses_kx_by_name():
         check=False,
         timeout=120,
     )
-    assert (r.returncode, r.stdout) == (1, "")
+    assert (r.returncode, r.stdout) == (2, ""), "a component it does not build: a usage error"
     assert "KX's q is never bundled" in r.stderr
 
 

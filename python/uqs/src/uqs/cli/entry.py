@@ -79,12 +79,12 @@ from uqs.cli import lists  # noqa: F401
 # isort: on
 import sys
 
-from uqs.cli.shared import _env_log_level, app
+from uqs.cli.shared import EXIT_REFUSED, EXIT_USAGE, _env_log_level, app
 from uqs.cli.zsh_completion import patch_zsh_completion_script
 from uqs.deploy import control
 from uqs.interpreter import removed_variables_problem
 from uqs.logger import configure_logging, get_logger
-from uqs.paths import UqsError
+from uqs.paths import UqsError, UqsUsageError
 from uqs.stack.envfiles import load_repo_env_files
 
 log = get_logger()
@@ -118,7 +118,7 @@ def main() -> None:
             sys.exit(target.forward(name, yes, rest, interactive=interactive))
         except UqsError as exc:
             log.error("{}", exc)
-            sys.exit(1)
+            sys.exit(EXIT_USAGE if isinstance(exc, UqsUsageError) else EXIT_REFUSED)
     app()
 
 

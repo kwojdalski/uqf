@@ -1551,6 +1551,23 @@ command that breaks a rule, and on a listed exception that has since been fixed.
 6. **A rename ships with a hidden alias for one release**, which prints the new
    spelling; the release after removes it.
 
+Every command exits the same way for the same outcome (#1885), and
+`tests/test_exit_codes.py` holds it:
+
+- **0**: done, or nothing to show or do. An empty result - no run recorded, no
+  log written yet, no attachment, no HDB - is not a failure.
+- **1**: refused. An unknown name - a process, a target, a run, a job - is
+  refused with one message each; an unknown process, by every command, as
+  `no process NAME in this runtime`, pointing at `uqs list processes`.
+- **2**: the command line is wrong as given: a missing argument, an unknown or
+  contradictory option, a time range given two ways. Click's own usage errors
+  and the command's (`UqsUsageError`) alike.
+- **1** also when a question is answered no, or not at all.
+
+A command asks through one helper, `safety.ask`/`safety.confirm`: `[y/N]`, so
+the default is no; an EOF or Ctrl-C is a no; and with no terminal to ask on it
+refuses at once, naming `--yes`, instead of prompting into the void.
+
 A time range is given one way, on every command that takes one (`job backfill`,
 `job gaps`, `job preview`, `job check`, `job runs audit`, `data seed`,
 `data replay`), and read by one parser, `uqs.timerange`:

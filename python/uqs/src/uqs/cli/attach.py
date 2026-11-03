@@ -203,11 +203,13 @@ def attach(
     if not running:
         if as_json and not yes:
             out.fail("--json cannot ask for confirmation: add --yes to change the stack")
-        if not yes:
-            typer.confirm(
+        try:
+            safety.confirm(
                 f"Attach {name} to stack {att.stack.id} as above? (no process is restarted)",
-                abort=True,
+                yes=yes,
             )
+        except UqsError as exc:
+            out.fail(exc)
         if planned.accepted:
             if not accept_risks:
                 if as_json:
@@ -215,12 +217,15 @@ def attach(
                         f"{len(planned.accepted)} accepted risk(s) need --accept-risks; "
                         "--yes does not confirm them"
                     )
-                typer.confirm(
-                    f"Attach with {len(planned.accepted)} ACCEPTED RISK(S) "
-                    "(" + ", ".join(f"{f.code}:{f.component}" for f in planned.accepted) + ")? "
-                    "--yes does not answer this",
-                    abort=True,
-                )
+                try:
+                    safety.confirm(
+                        f"Attach with {len(planned.accepted)} ACCEPTED RISK(S) "
+                        "(" + ", ".join(f"{f.code}:{f.component}" for f in planned.accepted) + ")? "
+                        "--yes does not answer this",
+                        yes=False,
+                    )
+                except UqsError as exc:
+                    out.fail(exc)
             confirmed = getpass.getuser()
     outcome = workflow.execute(
         resolved, planned, ipc, paths.repo_root, publishing.UqsPublisher(paths),
@@ -301,11 +306,10 @@ def detach(
         if not dry_run:
             if as_json and not yes:
                 out.fail("--json cannot ask for confirmation: add --yes to change the stack")
-            if not yes:
-                typer.confirm(
-                    f"Stop {att.publisher.procname} and detach {name} from stack {att.stack.id}?",
-                    abort=True,
-                )
+            safety.confirm(
+                f"Stop {att.publisher.procname} and detach {name} from stack {att.stack.id}?",
+                yes=yes,
+            )
         result = detaching.detach(
             att, service.ipc_for(att), publishing.UqsPublisher(_paths()), dry_run=dry_run
         )

@@ -190,6 +190,22 @@ def test_writing_twice_adds_one_block(att, schema):
     assert schema.read_text() == once
 
 
+def test_a_block_naming_the_old_commands_is_still_the_attachments_own(att, schema):
+    """Blocks written before #1885 name `uqs job attach apply|detach`, which never
+    existed; new ones name `uqs job attachment add|remove`. Re-applying compares
+    the block in the file with a fresh rendering, so one already there in the old
+    wording is found, recorded as it is, and left byte for byte."""
+    new = persist.render("pb-uat", "tok123", SPECS)
+    assert "`uqs job attachment add`" in new and "job attach apply" not in new
+    old = persist._as_written_before_1885(new)
+    assert "`uqs job attach apply`" in old and "`uqs job attach detach`" in old
+    schema.write_text(schema.read_text() + old)
+    before = schema.read_text()
+    record = persist.write(att, "tok123", SPECS, str(schema))
+    assert schema.read_text() == before, "nothing rewritten"
+    assert record.block_sha == persist._sha(old), "detach checks the block as it is"
+
+
 def test_a_block_someone_else_wrote_for_this_name_is_refused(att, schema):
     persist.write(att, "tok123", SPECS, str(schema))
     with pytest.raises(AttachmentError, match="already holds a different uqs-attach block"):

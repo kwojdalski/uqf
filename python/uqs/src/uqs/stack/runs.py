@@ -94,8 +94,17 @@ def query(
             "no q interpreter - set $QCMD, or put q on PATH; the run ledger is read by q"
         )
     where = directory or status_dir(paths)
-    if not where.is_dir():
-        raise UqsError(f"no status directory at {where} - no bounded worker has run here yet")
+    with tempfile.TemporaryDirectory() as empty:
+        # No status directory is an empty ledger, not a refusal (#1885): no
+        # run has been recorded here yet, so a list is empty and a range was
+        # never covered. q reads an empty directory, and whatever it creates
+        # there goes with it.
+        return _query(paths, expr, where if where.is_dir() else Path(empty), attach, loads, q)
+
+
+def _query(
+    paths: UqsPaths, expr: str, where: Path, attach: bool, loads: tuple[str, ...], q: Path
+) -> list[dict]:
     # `attach` validates the ledger's shape, which is exactly what `migrate`
     # must not do first - it exists to fix a shape attach refuses.
     script = "\n".join(

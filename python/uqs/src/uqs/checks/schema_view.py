@@ -23,6 +23,7 @@ from uqs.generated.q_facts import Q_TYPE_NAMES
 from uqs.logger import get_logger
 from uqs.paths import UqsError, UqsPaths
 from uqs.stack.listing import _list_processes
+from uqs.stack.procs import unknown_processes
 from uqs.stack.runtime import query
 
 log = get_logger()
@@ -88,8 +89,7 @@ def resolve_port(paths: UqsPaths, procname: str, base_port: int | None = None) -
     for row in _list_processes(paths, base_port):
         if row["procname"] == procname:
             return int(row["port"])
-    known = ", ".join(sorted(r["procname"] for r in _list_processes(paths, base_port)))
-    raise UqsError(f"{procname!r} is not a declared process - known: {known}")
+    raise unknown_processes(procname)
 
 
 def type_name(type_char: str) -> str:

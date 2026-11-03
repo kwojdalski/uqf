@@ -588,7 +588,7 @@ def test_yes_alone_does_not_confirm_accepted_risks_but_accept_risks_does(world, 
     assert world.named("stp1")["subscribers"][TABLE] == 2
 
 
-def test_the_risk_prompt_can_be_answered_interactively(world, bundle):
+def test_the_risk_prompt_can_be_answered_interactively(world, bundle, terminal):
     done = invoke(*plan_args(bundle), *overrides_args(), "--yes", "--no-start", input="y\n")
     assert done.exit_code == 0 and "ACCEPTED RISK(S)" in done.output.replace("\n", " ")
 

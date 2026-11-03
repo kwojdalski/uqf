@@ -159,11 +159,11 @@ def test_cli_dry_run_writes_nothing(sidecar: Path, cli_repo: Path) -> None:
 
 def test_cli_yes_needs_a_mode(sidecar: Path, cli_repo: Path) -> None:
     code, _out = _run(str(sidecar), "--yes")
-    assert code == 1
+    assert code == 2, "a usage error (#1885)"
     assert not (cli_repo / STREAM_DIR / "acme_spread.q").exists()
 
 
-def test_cli_wizard_asks_the_mode(sidecar: Path, cli_repo: Path) -> None:
+def test_cli_wizard_asks_the_mode(sidecar: Path, cli_repo: Path, terminal) -> None:
     code, out = _run(str(sidecar), stdin="symlink\ny\n")
     assert code == 0, out
     assert (cli_repo / WORKER_DIR / "acme_backfill.q").is_symlink()
@@ -175,7 +175,7 @@ def test_cli_wizard_asks_the_mode(sidecar: Path, cli_repo: Path) -> None:
     assert "acme_backfill fills acme_tape" in out
 
 
-def test_cli_declining_installs_nothing(sidecar: Path, cli_repo: Path) -> None:
+def test_cli_declining_installs_nothing(sidecar: Path, cli_repo: Path, terminal) -> None:
     code, _out = _run(str(sidecar), stdin="copy\nn\n")
     assert code == 1
     assert not (cli_repo / SOURCE_DIR / "acme.q").exists()
@@ -194,7 +194,7 @@ def test_cli_keeps_conflicts_unless_told(sidecar: Path, cli_repo: Path) -> None:
     assert dest.read_text() == STREAM
 
 
-def test_cli_asks_before_replacing(sidecar: Path, cli_repo: Path) -> None:
+def test_cli_asks_before_replacing(sidecar: Path, cli_repo: Path, terminal) -> None:
     dest = cli_repo / STREAM_DIR / "acme_spread.q"
     dest.write_text("/ the tree's own version\n")
     code, out = _run(str(sidecar), "--copy", stdin="y\ny\n")

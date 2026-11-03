@@ -20,11 +20,8 @@ log = get_logger()
 #: ---------------------------------------------------------------------------
 #: Where this repository keeps each kind of file, relative to its root.
 #: ---------------------------------------------------------------------------
-#: One home, because `src/etl/streaming` was spelled in four: `pipeline_edges`
-#: as `Path("src") / "etl" / "streaming"`, `scaffold` as
-#: `Path("src/etl/streaming")`, and twice more in q (`src/etl/init.q`,
-#: `tests/lib/support.q`). Four spellings of one fact is four places to edit
-#: and three chances to miss one.
+#: One home, because `src/etl/streaming` was spelled four ways (pipeline_edges,
+#: scaffold, src/etl/init.q, tests/lib/support.q): four places to edit.
 #:
 #: RELATIVE, because every consumer joins them to a root it already has - the
 #: scaffold to the repo root it is writing into, the edge verifier to the one
@@ -84,6 +81,10 @@ PACKAGE_DIR = Path("python/uqs")
 
 class UqsError(RuntimeError):
     """Raised for anything that stops the demo from being runnable as-is."""
+
+
+class UqsUsageError(UqsError):
+    """A command line wrong as given: exits 2, as Click's usage errors do (#1885)."""
 
 
 def runtime_from_env() -> str:
