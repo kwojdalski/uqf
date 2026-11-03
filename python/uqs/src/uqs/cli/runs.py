@@ -24,10 +24,15 @@ from uqs.cli.renames import alias_command
 from uqs.cli.safety import ChangesState, ReadOnly, dry_run_note
 from uqs.cli.shared import (
     JOB_OPERATIONS_PANEL,
+    ExportOpt,
     InteractiveOpt,
+    ReverseOpt,
+    SortOpt,
     _die,
+    _export,
     _paths,
     _show,
+    _sorted_items,
     console,
     job_app,
 )
@@ -139,6 +144,13 @@ def list_runs(
             help="Only runs that began and never finished, interrupted ones included",
         ),
     ] = False,
+    range_from: RangeFromOpt = None,
+    range_to: RangeToOpt = None,
+    day: DateOpt = None,
+    last: LastOpt = None,
+    export: ExportOpt = None,
+    sort: SortOpt = None,
+    reverse: ReverseOpt = False,
     as_json: RunsJson = False,
 ) -> None:
     """List the runs in the ledger, newest first.
@@ -149,14 +161,22 @@ def list_runs(
     `--unfinished` includes runs whose process has died: `running` on a run
     whose process is gone means that execution was interrupted, which is what
     it is for.
+
+    A time range keeps the runs whose window overlaps it, and the
+    list takes every listing's flags: --export, --sort, --reverse, -i.
     """
     try:
         rows = (stack_runs.unfinished if unfinished else stack_runs.history)(
             _paths(), **_where(attach)
         )
+        if any(v is not None for v in (range_from, range_to, day, last)):
+            window = timerange.resolve(range_from, range_to, day, last, open_ended=True)
+            rows = [r for r in rows if _overlaps(r, window)]
+        rows = _sorted_items(rows, sort, reverse)
     except UqsError as exc:
         _die(exc)
         return
+    _export([_record(r, _RUN_COLUMNS) for r in rows], export)
     if as_json:
         emit({"runs": [_record(r, _RUN_COLUMNS) for r in rows]})
         return
@@ -164,6 +184,18 @@ def list_runs(
         _print("unfinished runs", rows, _RUN_COLUMNS, "no unfinished runs", interactive)
     else:
         _print("runs", rows, _RUN_COLUMNS, "no runs recorded", interactive)
+
+
+def _overlaps(row: dict, window: timerange.TimeRange) -> bool:
+    """Whether a run's [range_from, range_to) meets `window`."""
+    lo, hi = row.get("range_from"), row.get("range_to")
+    if lo is None or hi is None:
+        return False
+    start = timerange.parse_bound("range_from", str(lo))
+    end = timerange.parse_bound("range_to", str(hi))
+    return (window.end is None or start < window.end) and (
+        window.start is None or end > window.start
+    )
 
 
 def _unfinished(
@@ -250,7 +282,9 @@ def _print_next_steps(run: dict, attach: str | None = None) -> None:
     logs = stack_runs.log_files(paths, run)
     if attach:
         state = _where(attach)["directory"]
-        console.print(f"\n[bold]logs[/]   {state / 'logs'}  (attached run; `uqs list backfills`)")
+        console.print(
+            f"\n[bold]logs[/]   {state / 'logs'}  (attached run; `uqs job attachment status`)"
+        )
     elif logs:
         console.print(f"\n[bold]logs[/]   uqs logs {run['process']} --level ERROR")
         for path in logs:

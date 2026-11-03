@@ -76,7 +76,9 @@ def test_backfill_help_shows_the_generated_skip_and_receive_does_not():
     flat = " ".join(run.output.split())
     assert "--skip-eod-fence" in flat and "The same as --override eod-fence" in flat
     assert backfill_policy.POLICY["eod-fence"].risk[:60] in flat
-    receive = PlainRunner().invoke(cli.app, ["job", "receive", "--help"], env={"COLUMNS": "300"})
+    receive = PlainRunner().invoke(
+        cli.app, ["job", "receiver", "start", "--help"], env={"COLUMNS": "300"}
+    )
     assert "--skip-eod-fence" not in receive.output, "the receiver path takes no waiver"
 
 

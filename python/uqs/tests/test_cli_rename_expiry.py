@@ -21,7 +21,7 @@ import pytest
 import typer
 
 from uqs import cli
-from uqs.cli import hdb_alter, lists, seed
+from uqs.cli import backfill, config, hdb_alter, lists, seed
 from uqs.cli.rename_expiry import RENAMED_AFTER
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -64,6 +64,14 @@ def kept_in_the_cli() -> set[str]:
     return found - {"uqs --yes"}
 
 
+def _hidden(*path: str) -> Any:
+    """The (hidden) command at `path`: its old spellings are hand-kept rows."""
+    command: Any = typer.main.get_command(cli.app)
+    for word in path:
+        command = command.commands[word]
+    return command
+
+
 #: Old spellings no command tree shows, each with the check that it is still
 #: there - so a row outliving its spelling is caught like any other.
 HAND_KEPT: dict[str, Callable[[], bool]] = {
@@ -72,6 +80,14 @@ HAND_KEPT: dict[str, Callable[[], bool]] = {
     "mcp uqs_summary": lambda: hasattr(__import__("uqs.mcp").mcp, "uqs_summary"),
     # an old VALUE, which only the command's own code reads (#1856)
     "uqs data alter --rename OLD=NEW": lambda: "def _old_rename" in inspect.getsource(hdb_alter),
+    # hidden since #1858, its own old spelling kept with it
+    "uqs list --port": lambda: "--port" in _hidden("list").renames,
+    "uqs job receive --port": lambda: "--port" in _hidden("job", "receive").renames,
+    # old VALUES, which only the command's own code reads (#1858)
+    "uqs config set PROC FIELD VALUE": lambda: "the old two-word" in inspect.getsource(config),
+    "uqs job backfill --mode dry-run": lambda: (
+        '"--mode dry-run", "--dry-run"' in inspect.getsource(backfill)
+    ),
 }
 
 

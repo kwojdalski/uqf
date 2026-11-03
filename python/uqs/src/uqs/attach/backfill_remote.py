@@ -4,7 +4,8 @@ An attached backfill (backfill_run) writes the stack's HDB from the machine it
 runs on, so the HDB must be on that machine. When the source's driver and
 credentials must stay somewhere else, the two halves run apart:
 
-  receive   on the STACK's machine: `uqs job receive --contract ID --attach NAME --listen-port P`.
+  receive   on the STACK's machine:
+            `uqs job receiver start --contract ID --attach NAME --listen-port P`.
             Takes the receiver contract approved there (uqs.attach.receiver_contract)
             - never the worker, whose code that machine need not have - and admits
             its destination exactly as an attached backfill does: the verified
@@ -262,7 +263,7 @@ def receive(
         )
     admission = admit(att, dest, ipc)
     assert admission.observation is not None
-    # never waived: `uqs job receive` takes no override, so the receiver always has its
+    # never waived: `uqs job receiver start` takes no override, so the receiver always has its
     # end-of-day deadline (an extractor's --skip-eod-fence is refused before it gets here)
     co = assess(att, dest, admission.observation, admission.writers, ipc, []).as_dict()
     readers = ",".join(f"{r.procname}@{att.stack.host}:{r.port}" for r in admission.reload_targets)
@@ -314,8 +315,10 @@ def _served(pid, port, dest, contract, binding, co, readers, log) -> dict[str, A
     }
 
 
-def stop_receivers(attachment: str, attach_root: Path | None = None) -> list[dict[str, Any]]:
-    """Stop this machine's receivers for `attachment` (`uqs job receive --stop`), so a
+def stop_receivers(
+    attachment: str, attach_root: Path | None = None, *, dry_run: bool = False
+) -> list[dict[str, Any]]:
+    """Stop this machine's receivers for `attachment` (`uqs job receiver stop`), so a
     detach here - which refuses while one runs - can go ahead. An extractor elsewhere
     then fails its next window without covering it, and nothing it sent half-way is
     written (a staged batch is committed only whole). Returns the receivers stopped."""
@@ -324,6 +327,9 @@ def stop_receivers(attachment: str, attach_root: Path | None = None) -> list[dic
         if not str(run.get("worker", "")).endswith(".receiver") or not on_this_host(
             str(run.get("host", ""))
         ):
+            continue
+        if dry_run:  # the ones that would stop: nothing signalled, nothing released
+            stopped.append(run)
             continue
         with contextlib.suppress(ProcessLookupError):
             os.kill(int(run["pid"]), signal.SIGTERM)

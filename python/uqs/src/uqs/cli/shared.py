@@ -36,21 +36,15 @@ app = typer.Typer(
 console = rendering.console()
 log = get_logger()
 
-#: `uqs job ...`: everything about one ETL job short of the fleet's
-#: lifecycle (#1417). Authoring - new, remove, install - WRITES jobs into the
-#: tree; operations - backfill, preview, gaps, runs - run a bounded worker,
-#: look at a polling feed's next page, find a streaming job's holes and read
-#: the run ledger. Two help panels keep the halves apart. Registered on `app`
-#: in create.py; the operations register on it from their own modules.
+#: `uqs job ...`: everything about one ETL job short of the fleet's lifecycle
+#: (#1417). Authoring WRITES jobs into the tree; operations run a worker, look
+#: at a feed's next page, find a job's holes and read the run ledger - two help
+#: panels. Registered on `app` in create.py; operations from their own modules.
 job_app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
-    help="Jobs: new, list, remove, install, backfill, preview, check, gaps, receive, checkpoint, "
-    "runs, attachment.\n\nETL jobs: "
-    "write them into the tree (new, list, remove, install) and operate on them "
-    "- backfill, preview a feed, check a dataset's producers, find its gaps, receive another "
-    "machine's batches, a worker's checkpoint and runs, and its attachment to a TorQ stack "
-    "already running.",
+    help="Jobs: new, list, remove, install, backfill, preview, check, gaps, receiver, "
+    "checkpoint, runs, attachment.\n\nETL jobs: write them into the tree, and operate on them.",
 )
 #: The two help panels `uqs job --help` lists its commands under.
 JOB_AUTHORING_PANEL = "Authoring"
@@ -226,6 +220,14 @@ ExportOpt = Annotated[
 QHostOpt = Annotated[str, typer.Option("--host", help="Host the q process listens on")]
 
 
+#: The sort and its direction, the same on every listing (#1728, #1858).
+SortOpt = Annotated[
+    str | None,
+    typer.Option("--sort", help="Sort by this column (case-insensitive, numeric-aware)."),
+]
+ReverseOpt = Annotated[
+    bool, typer.Option("--reverse", help="Sort descending. Only meaningful with --sort.")
+]
 InteractiveOpt = Annotated[
     bool,
     typer.Option(

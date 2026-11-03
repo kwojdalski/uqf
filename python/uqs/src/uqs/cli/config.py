@@ -21,7 +21,7 @@ from rich.table import Table
 
 from uqs.cli import completion
 from uqs.cli.json_out import emit, json_opt
-from uqs.cli.renames import alias_command, renamed
+from uqs.cli.renames import alias_command, renamed, warn_renamed
 from uqs.cli.safety import ChangesState, ReadOnly, dry_run_note
 from uqs.cli.shared import (
     BasePortOpt,
@@ -35,22 +35,19 @@ from uqs.cli.shared import (
     console,
 )
 from uqs.paths import UqsError, UqsUsageError
-from uqs.stack import attached_logs
+from uqs.stack import attached_logs, process_unset
 from uqs.stack import channel as stack_channel
 from uqs.stack import logs as stack_logs
 from uqs.stack import multitail as stack_multitail
 from uqs.stack import procs as stack_procs
 
-#: `uqs config show/set`: one process's process.csv row, read resolved or
-#: changed through process_overrides.csv. `uqs list overrides` and
-#: `uqs list fields` stay kinds of `list` (cli/lists.py), the stack's own
-#: tables.
+#: `uqs config show/set/unset`: a process's process.csv row, read or changed
+#: through process_overrides.csv; its fields and env are cli/lists.py's.
 config_app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
-    help="Process configuration: show, set, and the sources it reads (sources).\n\n"
-    "A process's process.csv fields: show them, or set one (persisted to "
-    "process_overrides.csv); and the sources the stack reads (sources).",
+    help="Process configuration: show, set, unset, env, field, sources.\n\nprocess.csv "
+    "fields, set in process_overrides.csv; the resolved env; the sources the stack reads.",
 )
 app.add_typer(config_app, name="config")
 
@@ -81,10 +78,8 @@ def config_get(
 ) -> None:
     """Show a process's effective process.csv row, or one FIELD of it.
 
-    Shows it with
-    ${VAR}/{VAR}+N placeholders (KDBBASEPORT, KDBHDB, ...) resolved against
-    the same env torq.sh itself would use - pass --unresolved to see them literal.
-    """
+    ${VAR}/{VAR}+N placeholders (KDBBASEPORT, KDBHDB, ...) are resolved against the
+    env torq.sh would use - pass --unresolved to see them literal."""
     try:
         row = stack_procs.get_process_config(_paths(), procname, base_port=port, resolve=not raw)
     except UqsError as exc:
@@ -114,28 +109,83 @@ def config_set(
     procname: Annotated[
         str, typer.Argument(metavar="PROC", help="The process", autocompletion=completion.procname)
     ],
-    field: Annotated[str, typer.Argument(metavar="FIELD", autocompletion=completion.csv_fields)],
-    value: Annotated[str, typer.Argument(metavar="VALUE", help="The value to set")],
+    pairs: Annotated[
+        list[str],
+        typer.Argument(
+            metavar="FIELD=VALUE...",
+            help="process.csv fields and their values, as `uqs target set` takes its "
+            "settings: port=6061 startwithall=0",
+            autocompletion=completion.csv_fields,
+        ),
+    ],
     dry_run: Annotated[
         bool,
         typer.Option("--dry-run", "-n", help="Check the setting and show it; write nothing"),
     ] = False,
 ) -> None:
-    """Set one process.csv FIELD of PROC to VALUE.
-
-    Persisted to
-    process_overrides.csv, applied on every later start/stop/summary/....
-    """
+    """Set PROC's process.csv fields in process_overrides.csv; `uqs config unset` removes one."""
+    settings = _pairs(pairs)
     try:
-        stack_procs.set_process_config(_paths(), procname, field, value, dry_run)
+        for field, value in settings:  # every one checked before any is written
+            stack_procs.set_process_config(_paths(), procname, field, value, True)
+        if not dry_run:
+            for field, value in settings:
+                stack_procs.set_process_config(_paths(), procname, field, value, False)
     except UqsError as exc:
         _die(exc)
         return
+    for field, value in settings:
+        verb = "would set" if dry_run else "set"
+        console.print(f"{verb} {procname}.{field} = {value}", markup=False)
     if dry_run:
-        console.print(f"would set {procname}.{field} = {value}", markup=False)
         console.print(dry_run_note())
+
+
+def _pairs(words: list[str]) -> list[tuple[str, str]]:
+    """FIELD=VALUE words as (field, value); `FIELD VALUE`, the old two-word
+    form (#1858), as one pair, warned."""
+    if len(words) == 2 and "=" not in words[0]:
+        warn_renamed(
+            f"config set PROC {words[0]} {words[1]}", f"config set PROC {words[0]}={words[1]}"
+        )
+        return [(words[0], words[1])]
+    out = []
+    for word in words:
+        field, sep, value = word.partition("=")
+        if not sep or not field:
+            _die(UqsError(f"{word!r} is not FIELD=VALUE"))
+        out.append((field, value))
+    return out
+
+
+@config_app.command("unset", cls=ChangesState)
+def config_unset(
+    procname: Annotated[
+        str, typer.Argument(metavar="PROC", help="The process", autocompletion=completion.procname)
+    ],
+    fields: Annotated[
+        list[str],
+        typer.Argument(
+            metavar="FIELD...",
+            help="Fields whose override to remove, so process.csv's own value applies",
+            autocompletion=completion.csv_fields,
+        ),
+    ],
+    dry_run: Annotated[
+        bool,
+        typer.Option("--dry-run", "-n", help="Check the change and show it; write nothing"),
+    ] = False,
+) -> None:
+    """Remove PROC's override of each FIELD: process.csv's own value applies again."""
+    try:
+        process_unset.unset_process_config(_paths(), procname, fields, dry_run)
+    except UqsError as exc:
+        _die(exc)
         return
-    console.print(f"{procname}.{field} = {value}")
+    verb = "would unset" if dry_run else "unset"
+    console.print(f"{verb} {procname}.{', '.join(fields)}", markup=False)
+    if dry_run:
+        console.print(dry_run_note())
 
 
 LogsJson = json_opt(
@@ -242,9 +292,8 @@ def logs(
 ) -> None:
     """Show the logs of one or more processes.
 
-    Tails out_/err_*.log for one or more processes through the same
-    colorized logger the CLI itself uses, instead of raw per-process files -
-    e.g. `logs stp1 rdb1 -f`, `logs -f --level WARNING`.
+    Tails out_/err_*.log through the CLI's own colorized logger, not raw
+    files - e.g. `logs stp1 rdb1 -f`, `logs -f --level WARNING`.
 
     `--multitail` follows the same files in the `multitail` binary, one pane
     each: `logs all --multitail --stream err --pane-columns 2`.

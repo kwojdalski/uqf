@@ -19,7 +19,7 @@ nothing else.
             destination, its user and the limits the operator sets. The binding
             is the operator's, never the contract's: a contract names no path,
             no user and no row limit.
-  receive   `uqs job receive --contract ID --attach NAME`: starts the receiver
+  receive   `uqs job receiver start --contract ID --attach NAME`: starts the receiver
             from the approved record alone.
 
 THE IDENTITY is the first 16 hex digits of the SHA-256 of the contract's

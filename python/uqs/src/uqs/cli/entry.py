@@ -72,6 +72,7 @@ from uqs.cli import deploy_component  # noqa: F401
 from uqs.cli import deploy_server  # noqa: F401
 from uqs.cli import target  # noqa: F401
 from uqs.cli import target_log  # noqa: F401
+from uqs.cli import deploy_history  # noqa: F401
 from uqs.cli import target_edit  # noqa: F401
 from uqs.cli import target_adopt  # noqa: F401
 from uqs.cli import lists  # noqa: F401

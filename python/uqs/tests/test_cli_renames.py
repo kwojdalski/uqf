@@ -283,7 +283,7 @@ def test_a_kind_that_moved_to_its_noun_still_lists_under_list(monkeypatch):
     assert old.stdout == new.stdout
     assert said == [("uqs list runtimes", "uqs runtime list")]
     kinds = runner.invoke(cli.app, ["list", "--json"]).stdout
-    assert "runtimes" not in kinds and "processes" in kinds
+    assert "runtimes" not in kinds and "processes" not in kinds
 
 
 @pytest.mark.parametrize(

@@ -1,6 +1,6 @@
 """Every ETL job the tree declares, as rows: what `uqs job list` shows.
 
-The process table (`uqs list processes`) answers "what runs where"; this
+The process table (`uqs process list`) answers "what runs where"; this
 answers "what jobs are there": each streaming job, normalizer and bounded
 worker, read from its own q declaration - the same files the process
 registry is built from, so the two cannot disagree about which jobs exist -

@@ -1,6 +1,6 @@
 """#1650: a backfill extracted on uat-client and written by the stack's own receiver.
 
-The receiver runs on uat-stack (`uqs job receive`), the extractor on uat-client
+The receiver runs on uat-stack (`uqs job receiver start`), the extractor on uat-client
 (`uqs job backfill --writer uat-stack:PORT`), both under the attachment of the
 same name. The rows must end up in the STACK's HDB - counted off uat-stack's
 disk - coverage must be filed on the client, a rerun must write nothing, and the

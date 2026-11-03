@@ -270,7 +270,7 @@ it covered, missing from the rest:
    naming an account on the HDB's host that can write it. Check that
    `ssh -o BatchMode=yes USER@HOST true` works.
 2. Make sure nothing else writes the table: let any attached backfill finish
-   (`uqs list backfills`), and pick a time well away from end of day.
+   (`uqs job attachment status`), and pick a time well away from end of day.
 3. Read the plan: `uqs data check --attach NAME`. It names the HDB and where
    that came from - check it is the directory you mean - and the dates that lack
    the table.
@@ -422,38 +422,38 @@ prints. It exits 1 on `FAIL`, and with `--fail-unverified` on `UNVERIFIED`.
 
 ## Listing things
 
-Each noun lists its own records: `uqs target list`, `uqs runtime list`,
-`uqs job list` and `uqs job attachment list`. `uqs list KIND` lists the stack's
-own tables, and `uqs list` with no argument prints those kinds. Every list takes
-the same flags: `--json`, `--export FILE`, `--sort`, `--reverse` and `-i`.
+Each noun lists its own records - `uqs process list`, `uqs profile list`,
+`uqs job list`, `uqs job attachment list`, `uqs target list`, `uqs runtime list` -
+and every listing takes the same flags: `--json`, `--export FILE`, `--sort`,
+`--reverse` and `-i`, `deploy history` and `target log` among them.
+`uqs list KIND` was the last top-level verb with nouns under it, and each kind
+is its noun's now (#1858).
 
 ```
-uqs list
-uqs list processes
+uqs process list
+uqs profile list
 uqs job list
 ```
 
-The stack's tables (`uqs list KIND`):
+The stack's own tables:
 
-- `processes` - every process's `procname`/`proctype`/`port`/`startwithall`,
-  resolved and with any `config set` overrides applied - the full set
-  `config show`/`config set`/`start <procname>` accept, without already needing
-  to know a name ahead of time - plus the `inputs` and `outputs` its job
-  declares: the tables it subscribes to and publishes, or for a backfill worker
-  the dataset it fills. The same declarations `status`'s graph columns come
-  from, but readable without a running stack
-- `fields` - `process.csv`'s valid columns (what `config set`'s `FIELD` argument
-  accepts)
-- `overrides` - every `config set` override currently in effect
-- `env` - `build_env()`'s resolved `KDBBASEPORT`/`KDBHDB`/... values (the same
-  env `config show`'s placeholder resolution and `torq.sh` itself use)
-- `dependencies` - each process's input tables and who publishes them, so you
-  can see what a process needs before starting it on its own
-- `backfills` - every attached destination a `uqs job backfill --attach` has run
-  into: attachment, destination id, worker, `state` (`running`, `completed`,
-  ...), `outcome` and `queryable` - written rows are not queryable until the
-  readers reload
-  - the latest log, and what to do next. Read-only
+- `uqs process list` - every process's `procname`/`proctype`/`port`/
+  `startwithall`, resolved and with any `config set` overrides applied - the
+  full set `config show`/`config set`/`start <procname>` accept - plus the
+  `inputs` and `outputs` its job declares: the tables it subscribes to and
+  publishes, or for a backfill worker the dataset it fills. Declared, not
+  running: `uqs status` asks the fleet what is up
+- `uqs config field list` - `process.csv`'s valid columns (what `config set`'s
+  `FIELD` accepts)
+- `uqs config env` - `build_env()`'s resolved `KDBBASEPORT`/`KDBHDB`/... values
+  (the same env `config show`'s placeholder resolution and `torq.sh` use)
+- `uqs graph --upstream --offline` - what each process needs, and who publishes
+  it, before starting it on its own
+- `uqs job attachment status` - every attached destination a
+  `uqs job backfill --attach` has run into: attachment, destination id, worker,
+  `state` (`running`, `completed`, ...), `outcome` and `queryable` - written
+  rows are not queryable until the readers reload - the latest log, and what to
+  do next. Read-only
 
 A noun's own records:
 
@@ -473,10 +473,10 @@ A noun's own records:
 `--sort` orders by any column the chosen kind produces, `--reverse` flips it:
 
 ```
-uqs list processes --sort port              # 6050, 6051, 6052, ...
-uqs list processes --sort proctype
-uqs list processes --sort port --reverse
-uqs list env --sort name
+uqs process list --sort port              # 6050, 6051, 6052, ...
+uqs process list --sort proctype
+uqs process list --sort port --reverse
+uqs config env --sort name
 ```
 
 Numeric columns sort as numbers (`6100` after `659`) and empty cells go last. An
@@ -488,7 +488,7 @@ filters its rows as you type. On `list`, `status`, `job runs list`,
 `job runs list --unfinished`, `job gaps` and `schema`:
 
 ```
-uqs list processes -i      # type "hdb" to keep the hdb rows
+uqs process list -i      # type "hdb" to keep the hdb rows
 uqs status -i             # "down" for what is down, "up warn" for both at once
 uqs job runs list -i       # Enter prints the run you picked, for `uqs job runs show`
 ```
@@ -717,7 +717,7 @@ A profile names the processes you actually came for; everything they read is
 derived from the same dependency graph `status`'s **Depends on** column uses:
 
 ```
-uqs list profiles
+uqs profile list
 uqs start --profile arbitrage
 uqs start --profile depth,crypto
 uqs start --profile essential      # the TorQ stack alone, no uqf jobs
@@ -735,7 +735,7 @@ is refused before anything starts. `restart`, `start --follow` and
 budget, so a set too big to start can still be stopped.
 
 The uqf runtime's profiles, against the community licence's fourteen slots
-(`uqs list profiles` reports the same against this machine's licence):
+(`uqs profile list` reports the same against this machine's licence):
 
 <!-- BEGIN GENERATED profile table - scripts/generate/generate_operational_docs.py; CI runs it with --check, so edit the profiles, not this table -->
 
@@ -767,7 +767,7 @@ automatically - and that holds more plant connections than the community licence
 has (see the table). On that licence it is refused like any profile over the
 cap. On a q licence that allows more concurrent connections, say how many with
 `UQS_LICENCE_CONNECTIONS` and it starts: that setting is the budget every start
-is held to - `--profile`, `uqs list profiles`' `fits` column and the
+is held to - `--profile`, `uqs profile list`' `fits` column and the
 positional-start warning. On PeachQ (`QCMD` naming a PeachQ binary, see the
 README's Requirements) there is no cap at all, so `all` starts as it is. `all`
 leaves out `crypto`, because the mock replaces cryptorust's recorders rather
@@ -778,21 +778,20 @@ stops at a table fed from outside the stack: `fx` needs `crypto_book` but does
 not start `cryptomock1`, which replaces cryptorust's recorder rather than
 joining it.
 
-**`essential` is the TorQ stack with nothing on top** - `uqs list profiles`
-names what it resolves to, and the table above what it holds. It is the
-infrastructure every other profile starts less its second HDB (`hdb2`) and
-second sort worker (`sortworker2`), plus `reporter1` and `tpreplay1`, which only
-`essential` starts. At end of day `wdb1` hands its writedown to `sort1`, which
-sorts it into the HDB with `sortworker1`, so `wdb1` stays free. `reporter1`
-holds no plant slot, but it does open handles to `gateway1`, `rdb1` and `hdb1`.
-On a runtime with this tree's overlays it doesn't read the site's
-`appconfig/reporter.csv`. It reads `reporter.csv` in the data directory, which
-bootstrap writes on every start from `UQF_REPORTER_CHECKS`
-(`python/uqs/src/uqs/stack/reporter.py`). That list is a memory check plus
-activity checks, each with its own window and row threshold, and a check on a
-table the runtime doesn't publish is left out with a log line saying why. A
-table name that nothing in the tree defines stops the bootstrap with an error.
-`tpreplay1` starts and exits: it is the one-shot replay
+**`essential` is the TorQ stack with nothing on top** - `uqs profile list` names
+what it resolves to, and the table above what it holds. It is the infrastructure
+every other profile starts less its second HDB (`hdb2`) and second sort worker
+(`sortworker2`), plus `reporter1` and `tpreplay1`, which only `essential`
+starts. At end of day `wdb1` hands its writedown to `sort1`, which sorts it into
+the HDB with `sortworker1`, so `wdb1` stays free. `reporter1` holds no plant
+slot, but it does open handles to `gateway1`, `rdb1` and `hdb1`. On a runtime
+with this tree's overlays it doesn't read the site's `appconfig/reporter.csv`.
+It reads `reporter.csv` in the data directory, which bootstrap writes on every
+start from `UQF_REPORTER_CHECKS` (`python/uqs/src/uqs/stack/reporter.py`). That
+list is a memory check plus activity checks, each with its own window and row
+threshold, and a check on a table the runtime doesn't publish is left out with a
+log line saying why. A table name that nothing in the tree defines stops the
+bootstrap with an error. `tpreplay1` starts and exits: it is the one-shot replay
 [`data replay`](#replaying-a-tickerplant-log) aims with a log, a schema and an
 HDB, and started without them it exits at startup, before it reads or empties
 anything - so expect it shown down. Composing `essential` with a job profile -
@@ -908,7 +907,7 @@ interpreter: peachq (/opt/peachq/q) - no connection cap
 
 The implementation is asked of the binary, which is the only thing that says it
 (#1753); a binary that will not say is named in a warning, and so is a PeachQ
-other than the pinned build. `uqs list env` carries the answer as its
+other than the pinned build. `uqs config env` carries the answer as its
 `q_impl (binary)` row.
 
 `status` shows the whole graph, not just the unsatisfied part of it, in columns
@@ -1022,14 +1021,14 @@ collected" on a healthy stack.
 To get the upstream behaviour back:
 
 ```bash
-uqs config set monitor1 startwithall 0
+uqs config set monitor1 startwithall=0
 ```
 
 ### Default ports
 
 Every port is the stack's base port plus a fixed offset. The base is the
 runtime's own (`uqs list --help` names each), and `--base-port <n>` overrides
-it. `uqs list processes` prints every process's port at the base in effect,
+it. `uqs process list` prints every process's port at the base in effect,
 vendored and uqf's alike; uqf's own take the offsets the vendored ones leave
 free. The generated [process table](../reference/processes.md) lists both, each
 with its port at the default base.
@@ -1046,7 +1045,7 @@ changes only this host's file and takes precedence over bundle rows.
 ```
 uqs config show fxfeed1
 uqs config show fxfeed1 startwithall
-uqs config set fxfeed1 startwithall 0
+uqs config set fxfeed1 startwithall=0
 ```
 
 `config show` resolves placeholders as `torq.sh` does at start time -
@@ -1065,7 +1064,7 @@ set:
 
 ```
 export UQS_PROCESS_FIELDS=taskset_no
-uqs config set stp1 taskset_no 3:5
+uqs config set stp1 taskset_no=3:5
 ```
 
 Every command regenerates `process.csv`, so the variable has to be set for each
@@ -1079,7 +1078,7 @@ quoted comma: the rest of the value would land in the next column. To pass a
 list, separate it with spaces:
 
 ```
-uqs config set fxfeed1 extras -- "-pairs EURUSD USDJPY"
+uqs config set fxfeed1 "extras=-pairs EURUSD USDJPY"
 ```
 
 An override like that already in the file stops the next command, and the error
@@ -1357,7 +1356,7 @@ reads, publishes or fills that `src/etl/plant_tables.q` does not define. Then
 check it is running:
 
 ```
-uqs list processes                      # the registry sees the new processes
+uqs process list                      # the registry sees the new processes
 uqs start --dry-run <procname>          # the exact start line
 uqs start <procname>                    # streaming jobs
 uqs job backfill <worker> --source-version v1 --from 2026-09-01 --to 2026-09-02 --mode plan
@@ -1466,7 +1465,7 @@ uqs query --tunnel dev                                               # a gateway
 ```
 
 The port of PROC (or of the gateway) comes from the target's deployed release:
-`uqs list processes --json`, run there with its `deploy.env` and the `--runtime`
+`uqs process list --json`, run there with its `deploy.env` and the `--runtime`
 given here. It never comes from this checkout. `--port` is a port on the target,
 so neither PROC with `--port` nor `--tunnel` with `--host` is accepted. Routing
 works as it does locally. An interactive PROC session runs qcon as a child
@@ -1747,8 +1746,8 @@ One safety vocabulary (#1732):
   | `data migrate` (dry by default)                             | still dry by default; `--apply` writes, after asking (#1854) |
 
 Every command that changes state now takes `--dry-run`/`-n`, among them `stop`,
-`restart`, `config set`, `data seed`, `job receive`, `job backfill`
-(`--mode dry-run`), `job runs upgrade`, `job attachment contract approve`,
+`restart`, `config set`, `data seed`, `job receiver start`, `job backfill`
+(`--dry-run`), `job runs upgrade`, `job attachment contract approve`,
 `connector start`/`stop`/`restart`, `setup odbc install`/`rollback`,
 `deploy component build` and `target add`/`remove`. The old
 `--accept-...`/`--skip-...` options each took their own reason; given together,
@@ -1856,6 +1855,34 @@ a repeatable `--table`, with `NAME,NAME` in one also read, on `data replay`,
 take the one table they act on as TABLE. `data check --apply` is the one command
 that fills missing HDB tables and columns: `deploy push --override fix-hdb` runs
 the release's own, and says so.
+
+An even command surface (#1858):
+
+  | old                                          | new                                       |
+  | ---                                          | ---                                       |
+  | `uqs list processes`                         | `uqs process list`                        |
+  | `uqs list profiles`                          | `uqs profile list`                        |
+  | `uqs list fields`                            | `uqs config field list`                   |
+  | `uqs list env`                               | `uqs config env`                          |
+  | `uqs list dependencies`                      | `uqs graph --upstream --offline`          |
+  | `uqs list backfills`                         | `uqs job attachment status`               |
+  | `uqs job receive ...`                        | `uqs job receiver start ...`              |
+  | `uqs job receive --attach NAME --stop`       | `uqs job receiver stop --attach NAME`     |
+  | `uqs config set PROC FIELD VALUE`            | `uqs config set PROC FIELD=VALUE ...`     |
+  | `uqs job backfill --mode dry-run`            | `uqs job backfill --dry-run`              |
+
+`config set` takes settings as `target set` does, several at once, and
+`config unset PROC FIELD...` removes an override so process.csv's own value
+applies. `target edit NAME` opens the file at that target's table. `schema`
+takes `query`'s `--tunnel`; `data replay` and `job runs list` take the whole
+time range (`job runs list` keeps the runs whose window overlaps it);
+`job backfill --json` reports a local run as well as an attached plan; and
+`connector start --help` groups each connector's options under its name. Three
+pairs of verbs stay apart on purpose: `clean` deletes what the stack wrote where
+`remove` deletes one declared thing, `deploy prune` removes old releases by a
+rule, and `job runs upgrade` changes the ledger's layout where `data migrate`
+changes an HDB partition's schema. None of the hidden aliases has passed its one
+release yet (`cli/rename_expiry.py`), so none is removed.
 
 `--port` is now only ever one process's port (`query`, `schema`);
 `query --tunnel` keeps querying a target through an ssh tunnel from here, so

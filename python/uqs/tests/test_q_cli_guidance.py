@@ -79,6 +79,12 @@ KEPT = {
         "the fallback for a release from before `deploy check`, which has only "
         "`deploy verify`: a rollback's target"
     ),
+    ("python/uqs/src/uqs/cli/backfill_receive.py", "job receive"): (
+        "`job receive --stop`'s own notice that it is `job receiver stop` now (#1858)"
+    ),
+    ("python/uqs/src/uqs/cli/lists.py", "list"): (
+        "the hidden `uqs list KIND`'s own notice naming the noun each kind moved to (#1858)"
+    ),
 }
 
 #: A q string literal, escapes included.

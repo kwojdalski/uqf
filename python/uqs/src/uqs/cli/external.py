@@ -122,13 +122,19 @@ def _start_signature() -> inspect.Signature:
     params = [inspect.Parameter("name", kind, annotation=FeedArg)]
     for name, (option, takers) in check_options(FEEDS).items():
         feeds = ", ".join(takers)
+        # each connector's options in a panel of their own, so `--help` says
+        # which apply to the one being started (#1858)
+        panel = f"Options of {feeds}"
         if option.secret:
             env_help = (
                 f"Environment variable holding the {option.help}. The value itself is "
                 f"never printed ({feeds})"
             )
             named = Annotated[
-                str | None, typer.Option(metavar="NAME", help=env_help, show_default=False)
+                str | None,
+                typer.Option(
+                    metavar="NAME", help=env_help, show_default=False, rich_help_panel=panel
+                ),
             ]
             params.append(
                 inspect.Parameter(name + ENV_SUFFIX, kind, default=None, annotation=named)
@@ -136,7 +142,9 @@ def _start_signature() -> inspect.Signature:
         help_ = f"{option.help} ({feeds})"
         typed = Annotated[
             option.type | None,
-            typer.Option(help=help_, show_default=False, hidden=option.secret),
+            typer.Option(
+                help=help_, show_default=False, hidden=option.secret, rich_help_panel=panel
+            ),
         ]
         params.append(inspect.Parameter(name, kind, default=None, annotation=typed))
     params.append(inspect.Parameter("dry_run", kind, default=False, annotation=DryRunOpt))

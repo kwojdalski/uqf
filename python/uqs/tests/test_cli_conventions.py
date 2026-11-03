@@ -292,8 +292,13 @@ def test_every_noun_that_adds_or_removes_a_thing_lists_it():
     assert found == set(UNLISTED)
 
 
+#: The verbs that list records, newest or by key: each takes every list flag
+#: (#1858) - `deploy history` and `target log` took only --limit.
+LISTING_VERBS = {"list", "history", "log"}
+
+
 def test_every_list_takes_the_same_output_flags():
-    lists = [c for p, c in LEAVES.items() if p.split()[-1] == "list"]
+    lists = [c for p, c in LEAVES.items() if p.split()[-1] in LISTING_VERBS]
     missing = {
         c.path: [f for f in LIST_FLAGS if c.option(f) is None]
         for c in lists
@@ -303,10 +308,73 @@ def test_every_list_takes_the_same_output_flags():
 
 
 #: Lists that do not take every output flag yet, and the issue that adds them.
-LIST_FLAGS_PENDING = {
-    "job runs list": "#1731",  # the run ledger's own table: no --json/--export/--sort
-    "job attachment contract list": "#1731",  # --json only
+#: Empty since #1858: keep it so.
+LIST_FLAGS_PENDING: dict[str, str] = {}
+
+
+#: Rule 1's exceptions: the stack's own lifecycle, and the views of it that
+#: read a running stack. `uqs list` was the last other top-level verb (#1858).
+TOP_LEVEL = {"start", "stop", "restart", "status", "logs", "clean", "exec", "query", "graph",
+             "schema"}  # fmt: skip
+
+
+def test_rule1_only_the_lifecycle_and_its_views_are_top_level_verbs():
+    top = {path for path in LEAVES if " " not in path}
+    assert top == TOP_LEVEL
+
+
+def test_a_noun_that_sets_a_setting_can_unset_it():
+    """`config set` had no `config unset` beside `target set`/`unset` (#1858)."""
+    verbs: dict[str, set[str]] = {}
+    for path in LEAVES:
+        group, _, verb = path.rpartition(" ")
+        verbs.setdefault(group, set()).add(verb)
+    assert not [g for g, v in verbs.items() if "set" in v and "unset" not in v]
+
+
+#: Options named after a verb of the vocabulary, on a command whose own verb
+#: is another, with why - `job receive --stop` made a verb its opposite (#1858).
+VERB_FLAGS = {
+    ("job new", "--check"): "scaffolds a quality check with the job: a thing made, not a verb run",
+    ("deploy push", "--restart"): "how the push replaces a deployment already there: it stays a "
+    "push",
+    ("job attachment add", "--start"): "whether the publisher runs once added - the pair "
+    "--start/--no-start (#1857); the command stays an add",
 }
+
+
+def test_no_flag_turns_its_command_into_another_verb():
+    verbs = set(CORE_VERBS) | set(DOMAIN_VERBS)
+    found = {
+        (path, _long(p))
+        for path, c in LEAVES.items()
+        for p in c.options
+        if getattr(p, "is_flag", False)
+        and _long(p)[2:] in verbs
+        and _long(p)[2:] != path.split()[-1]
+    }
+    assert found == set(VERB_FLAGS)
+
+
+#: A time range is given in full wherever one is taken (#1858): `data replay`
+#: had no --last.
+RANGE = ("--from", "--to", "--date", "--last")
+
+
+def test_a_command_taking_a_time_range_takes_all_of_it():
+    partial = {
+        path: [o for o in RANGE if c.option(o) is None]
+        for path, c in LEAVES.items()
+        if c.option("--from") is not None and any(c.option(o) is None for o in RANGE)
+    }
+    assert not partial
+
+
+def test_schema_and_query_reach_a_process_the_same_ways():
+    """`query --tunnel` with no `schema --tunnel` (#1858): the two read one
+    process, and take the same options to find it."""
+    reach = ("--port", "--base-port", "--host", "--tunnel", "--user", "--password-env")
+    assert all(LEAVES[p].option(o) is not None for p in ("query", "schema") for o in reach)
 
 
 def test_the_guide_lists_the_same_vocabulary():
@@ -406,6 +474,7 @@ OPTIONS = {
     "--target": Meaning("run this command on a deployed target", r"instead of this machine"),
     "--timeout": Meaning("seconds for the whole command", r"seconds"),
     "--to": Meaning("end of a time range, exclusive", r"exclusive"),
+    "--tunnel": Meaning("a deploy target reached through an ssh tunnel", r"ssh tunnel"),
     "--trace": Meaning("log every query the source is sent", r"quer"),
     "--user": Meaning("the q user", r"user|admin"),
     "--verify-timeout": Meaning("how long the processes have to become ready", r"become ready"),
@@ -1001,7 +1070,10 @@ def test_rendered_help_keeps_every_bracket_in_its_source(cmd):
     `--help` documents were wrong (#1883)."""
     result = CliRunner().invoke(app, [*cmd.path.split(), "--help"], terminal_width=200)
     assert result.exit_code == 0, result.output
-    shown = " ".join(re.sub(r"[│╭╮╰╯─]", " ", result.output).split())
+    # the text a reader sees: CI turns colour on (GITHUB_ACTIONS), and Rich's
+    # highlighter then puts escape codes inside `[{table, rows}]`
+    plain = re.sub(r"\x1b\[[0-9;]*m", "", result.output)
+    shown = " ".join(re.sub(r"[│╭╮╰╯─]", " ", plain).split())
     missing = [
         token
         for text in _help_texts(cmd.command)
