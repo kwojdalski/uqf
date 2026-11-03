@@ -1877,6 +1877,14 @@ qpipe.transform.crypto_book_1s,lateness,value,,
 qpipe.transform.crypto_book_1s,order_by,value,,
 qpipe.transform.crypto_book_1s,snapshots,function,1,x
 qpipe.transform.crypto_book_1s,width,value,,
+qpipe.transform.crypto_markout,convert,function,3,spec quote_ccys report_ccy
+qpipe.transform.crypto_markout,domain,function,1,
+qpipe.transform.crypto_markout,fee_quote,function,4,sym price fee fee_ccy
+qpipe.transform.crypto_markout,measures,function,2,rows fees
+qpipe.transform.crypto_markout,quote_ccy,function,1,syms
+qpipe.transform.crypto_markout,resolve,function,2,spec syms
+qpipe.transform.crypto_markout,score,function,3,spec exe md
+qpipe.transform.crypto_markout,split_sym,function,1,syms
 qpipe.transform.demo_markouts,horizons,value,,
 qpipe.transform.demo_markouts,max_horizon,value,,
 qpipe.transform.demo_markouts,score,function,2,fill_rows quotes
