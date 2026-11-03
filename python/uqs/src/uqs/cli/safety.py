@@ -28,6 +28,7 @@ the same on every command; test_cli_conventions.py holds the commands to them.
 
 from __future__ import annotations
 
+import sys
 from enum import StrEnum
 from typing import Annotated
 
@@ -37,7 +38,7 @@ from typer.core import TyperCommand
 from uqs.cli import completion, skip_options
 from uqs.guardrails import Guardrail, aggregate
 from uqs.logger import get_logger
-from uqs.paths import UqsError
+from uqs.paths import UqsError, UqsUsageError
 
 log = get_logger()
 
@@ -71,7 +72,7 @@ DefaultDryRunOpt = Annotated[
 def dry_unless_applied(dry_run: bool, apply: bool) -> None:
     """Refuse --dry-run with --apply, and warn that --dry-run alone is the default."""
     if dry_run and apply:
-        raise UqsError("--dry-run and --apply contradict each other - give one")
+        raise UqsUsageError("--dry-run and --apply contradict each other - give one")
     if dry_run:
         log.warning(
             "`--dry-run` is what this command does without --apply; drop it - the "
@@ -149,6 +150,59 @@ ConfirmsOnServer = marked(Effect.CONFIRMS_ON_SERVER)
 ChangesState = marked(Effect.CHANGES_STATE)
 
 
+#: The exit code of a command whose question was answered no - or not at all,
+#: at an EOF or Ctrl-C (#1885). One code for every command: nothing was
+#: changed, and the caller did not get what it asked for.
+EXIT_DECLINED = 1
+
+
+def interactive() -> bool:
+    """Whether there is a terminal to ask on."""
+    return sys.stdin.isatty()
+
+
+def ask(question: str, *, default: bool = False) -> bool:
+    """A yes/no question, the one way every command asks one (#1885): `[y/N]`
+    unless `default` says otherwise, an EOF or Ctrl-C an answer of no, and -
+    with no terminal to ask on - a refusal naming --yes, rather than a prompt
+    into the void that ended in Click's bare "Aborted!"."""
+    if not interactive():
+        raise UqsError(
+            f"{question.rstrip('?')}? - there is no terminal to ask on: add --yes to go ahead "
+            "without asking. Nothing was changed."
+        )
+    try:
+        return typer.confirm(question, default=default)
+    except typer.Abort:
+        return False
+
+
+def confirm(question: str, *, yes: bool) -> None:
+    """Ask `question` unless `yes`; a no ends the command with EXIT_DECLINED,
+    having changed nothing."""
+    if yes or ask(question):
+        return
+    log.warning("not confirmed - nothing was changed")
+    raise typer.Exit(code=EXIT_DECLINED)
+
+
+def choose(question: str, choices: list[str], *, default: str) -> str:
+    """One of `choices`, asked on the terminal until one is given; without a
+    terminal, refused - give it as an option instead."""
+    if not interactive():
+        raise UqsError(f"{question}: there is no terminal to ask on - give it as an option")
+    shown = f"{question} ({'/'.join(choices)})"
+    while True:
+        try:
+            answer = typer.prompt(shown, default=default)
+        except typer.Abort:
+            log.warning("not confirmed - nothing was changed")
+            raise typer.Exit(code=EXIT_DECLINED) from None
+        if answer in choices:
+            return answer
+        typer.echo(f"{answer!r} is not one of {', '.join(choices)}", err=True)
+
+
 def dry_run_note(rerun: str = "without --dry-run") -> str:
     """The line every dry run ends with, whatever it found - something to do or
     nothing (#1880). `rerun` is how to act on it: a command whose dry run is its
@@ -206,7 +260,7 @@ def given(command: str, names: list[str] | None, reason: str | None) -> dict[str
             raise UqsError("--reason says why an --override is acceptable, and none was given")
         return {}
     if not text:
-        raise UqsError(f"{asked[0][1]} needs --reason: say why the check is bypassed")
+        raise UqsUsageError(f"{asked[0][1]} needs --reason: say why the check is bypassed")
     every = {g.id: g for g in registry()}
     known = sorted(g.name for g in every.values() if g.overridable and command in g.commands)
     whole = {name: spelling for name, spelling in asked if ":" not in name}

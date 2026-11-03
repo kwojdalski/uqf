@@ -12,7 +12,7 @@ from pathlib import Path
 
 from uqs.cli.safety import dry_run_note
 from uqs.cli.shared import _die, console
-from uqs.paths import UqsError
+from uqs.paths import UqsError, UqsUsageError
 from uqs.scaffold import bundle as bundle_mod
 from uqs.scaffold import write
 from uqs.scaffold.plan import ScaffoldPlan
@@ -34,7 +34,7 @@ def refuse_tree_only(options: dict[str, bool]) -> None:
     """Options that write into the tree's own registrations mean nothing for a
     bundle job, so they are refused rather than dropped."""
     for option in (o for o, used in options.items() if used):
-        raise UqsError(
+        raise UqsUsageError(
             f"{option} does not apply with --bundle: a bundle's processes join a stack "
             "through runtime_bundles.json and `uqs deploy push --jobs`, never a profile"
         )

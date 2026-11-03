@@ -49,7 +49,7 @@ from uqs.cli.renames import renamed
 from uqs.cli.safety import ChangesState, DryRunOpt, ReadOnly, dry_run_note
 from uqs.cli.shared import _die, _paths, app, console
 from uqs.external.feeds import ExternalFeed, FeedOption, check_options, discover
-from uqs.paths import UqsError, repo_root
+from uqs.paths import UqsError, UqsUsageError, repo_root
 
 connector_app = typer.Typer(
     no_args_is_help=True,
@@ -100,7 +100,7 @@ def _feed(name: str) -> ExternalFeed:
         _die(UqsError(BROKEN[name]))
         raise typer.Exit(code=1)
     if name not in FEEDS:
-        _die(UqsError(f"no feed {name!r} - the feeds are {', '.join(FEEDS)}"))
+        _die(UqsError(f"no connector {name!r} - the connectors are {', '.join(FEEDS)}"))
         raise typer.Exit(code=1)
     return FEEDS[name]
 
@@ -186,7 +186,7 @@ def _start(name: str, options: dict[str, Any], dry_run: bool = False, verb: str 
     own = {option.name: option for option in feed.options}
     for option in given:
         if option not in own:
-            _die(UqsError(f"--{option.replace('_', '-')} does not apply to feed {name}"))
+            _die(UqsUsageError(f"--{option.replace('_', '-')} does not apply to connector {name}"))
             return
     try:
         # Bindings first (#1786), dry run or not: a topic or table that binds
@@ -228,7 +228,7 @@ def _secrets_from_env(options: dict[str, Any]) -> tuple[dict[str, Any], dict[str
                 renames.warn_secret_argv(flag, f"{flag}-env NAME")
             continue
         if key in given:
-            raise UqsError(f"give {flag}-env or {flag}, not both")
+            raise UqsUsageError(f"give {flag}-env or {flag}, not both")
         value = os.environ.get(variable, "")
         if not value.strip():
             raise UqsError(f"{flag}-env {variable}: ${variable} is not set")
@@ -264,7 +264,7 @@ def _would(name: str, action: str) -> None:
 
 @connector_app.command("stop", cls=needs_pipelines(_PLANT, ChangesState))
 def stop(name: FeedArg, dry_run: DryRunOpt = False) -> None:
-    """Stop a feed started by `uqs connector start`."""
+    """Stop a connector started by `uqs connector start`."""
     if dry_run:
         _would(name, f"stop {name}")
         return
@@ -273,7 +273,7 @@ def stop(name: FeedArg, dry_run: DryRunOpt = False) -> None:
     except UqsError as exc:
         _die(exc)
         return
-    console.print(f"{name} feed stopped")
+    console.print(f"{name} connector stopped")
 
 
 def _takes_start_options(fn: Any) -> Any:
@@ -296,7 +296,7 @@ def restart(name: str, dry_run: bool = False, **options: Any) -> None:
     try:
         if feed.status(_paths()).get("running") == "True":
             feed.stop(_paths())
-            console.print(f"{name} feed stopped")
+            console.print(f"{name} connector stopped")
     except UqsError as exc:
         _die(exc)
         return
@@ -324,13 +324,13 @@ def status(
     name: Annotated[
         str | None,
         typer.Argument(
-            help=f"One feed - {alternatives(FEEDS)}; omit it for every feed",
+            help=f"One connector - {alternatives(FEEDS)}; omit it for every connector",
             autocompletion=completion.choices(*FEEDS),
         ),
     ] = None,
     as_json: StatusJson = False,
 ) -> None:
-    """Whether a feed is running, its pid, and where its log lives."""
+    """Show whether a connector is running, its pid, and where its log lives."""
     found = []
     for each in [name] if name is not None else list(FEEDS):
         feed = _feed(each)

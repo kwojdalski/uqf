@@ -17,7 +17,7 @@ from typing import Annotated
 
 import typer
 
-from uqs.cli import completion
+from uqs.cli import completion, safety
 from uqs.cli.pipelines import needs_pipelines
 from uqs.cli.renames import alias_command
 from uqs.cli.safety import ChangesState, YesOpt, dry_run_note
@@ -145,12 +145,11 @@ def remove_checkpoint(
     try:
         if not dry_run and not yes:
             planned = stack_backfill.clear_checkpoint(_paths(), worker, True)
-            if planned is not None and not typer.confirm(
-                f"Delete {worker}'s checkpoint ({planned})? Its next run starts at --from",
-                default=False,
-            ):
-                console.print("nothing deleted")
-                raise typer.Exit(code=1)
+            if planned is not None:
+                safety.confirm(
+                    f"Delete {worker}'s checkpoint ({planned})? Its next run starts at --from",
+                    yes=False,
+                )
         path = stack_backfill.clear_checkpoint(_paths(), worker, dry_run)
     except UqsError as exc:
         _die(exc)

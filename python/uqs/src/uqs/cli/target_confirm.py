@@ -31,7 +31,7 @@ from typing import Any
 
 from uqs.cli.renames import QUIET_KEY, _rewrite_renamed
 from uqs.cli.safety import Effect
-from uqs.paths import UqsError
+from uqs.paths import UqsError, UqsUsageError
 
 #: The marks under which a command does not ask here: it cannot change the
 #: server, or it asks there, after showing its plan.
@@ -226,7 +226,7 @@ def confirmed_on_server(args: Sequence[str], yes: bool) -> list[str]:
     if p is None or p.help or effect_of(p.command) is not Effect.CONFIRMS_ON_SERVER:
         return args
     if p.given("--attach") is not None or p.given("--hdb") is not None:
-        raise UqsError("give one of --target, --attach and --hdb: each names an HDB")
+        raise UqsUsageError("give one of --target, --attach and --hdb: each names an HDB")
     if yes and p.given("--apply") and not p.given("--yes"):
         args.append("--yes")
     return args

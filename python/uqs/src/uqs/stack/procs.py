@@ -279,36 +279,38 @@ def list_process_names(paths: UqsPaths) -> list[str]:
     return [row["procname"] for row in effective_process_rows(paths)]
 
 
+def unknown_processes(names: list[str] | str, then: str = "") -> UqsError:
+    """The one refusal for a process name this runtime does not declare (#1885):
+    the names asked for and where the real ones are - it was phrased four ways,
+    two dumping all 65 names as a Python list. `then` says what was not done."""
+    names = [names] if isinstance(names, str) else names
+    word = "process" if len(names) == 1 else "processes"
+    then = f". {then}" if then else ""
+    return UqsError(
+        f"no {word} {', '.join(names)} in this runtime - `uqs list processes` names them{then}"
+    )
+
+
 def assert_known_procnames(paths: UqsPaths, procs: str) -> None:
     """Refuse a lifecycle selector naming a process that does not exist.
 
     `start`/`stop`/`restart`/`start --dry-run` used to hand `procs` straight to the
-    vendored torq.sh on the grounds that it owns its own handling of an
-    unknown name. It does, but badly, and the cost is paid before you see it:
-    `uqs start xyz` first printed a licence-cap warning whose arithmetic
-    counted the nonexistent process, then the vendored script's own
-    `hostname: illegal option` noise, then `xyz failed - unavailable
-    processname` - and **exited 0**, so nothing scripting this could tell the
-    typo from a successful start.
+    vendored torq.sh, which handles an unknown name badly: `uqs start xyz`
+    printed a licence-cap warning counting the nonexistent process, torq.sh's
+    noise, then `xyz failed - unavailable processname` - and **exited 0**, so
+    nothing scripting this could tell the typo from a successful start. Checking
+    here costs one read of the process table. `all` passes through untouched:
+    torq.sh's own selector for the startwithall rows, not a process.
 
-    Checking here costs one read of the process table and turns all of that
-    into one line before any work happens. `all` is passed through untouched:
-    it is torq.sh's own selector for the startwithall rows, not a process.
-
-    Deliberately NOT a resolver - it returns nothing and rewrites nothing,
-    because `all` has to reach torq.sh as the literal word. `resolve_procnames`
-    in stack/logs.py is the sibling that DOES expand, because the log commands
-    need a concrete file list.
+    Deliberately NOT a resolver: `all` has to reach torq.sh as the literal word.
+    `resolve_procnames` in stack/logs.py is the sibling that DOES expand.
     """
     if procs.strip() == "all":
         return
     known = list_process_names(paths)
     unknown = [name for name in procs.split() if name not in known]
     if unknown:
-        raise UqsError(
-            f"unknown process(es) {unknown} - known processes are {sorted(known)}. "
-            "Nothing was started or stopped."
-        )
+        raise unknown_processes(unknown, "Nothing was started or stopped.")
 
 
 def list_process_choices(paths: UqsPaths) -> list[dict[str, str]]:
@@ -368,7 +370,7 @@ def get_process_config(
     """
     rows = {row["procname"]: row for row in effective_process_rows(paths)}
     if procname not in rows:
-        raise UqsError(f"unknown process {procname!r} - {sorted(rows)}")
+        raise unknown_processes(procname)
     row = dict(rows[procname])
     if resolve:
         row = resolve_process_config(row, build_env(paths, base_port=base_port))
@@ -386,7 +388,7 @@ def set_process_config(
     """
     refuse_unknown_field(field, "unknown process.csv field")
     if procname not in list_process_names(paths):
-        raise UqsError(f"unknown process {procname!r} - {sorted(list_process_names(paths))}")
+        raise unknown_processes(procname)
     refuse_unsafe_override(procname, field, value)
     if dry_run:
         return

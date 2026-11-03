@@ -32,9 +32,7 @@ from uqs.cli.shared import (
     job_app,
 )
 from uqs.model.kinds import SCAFFOLD_KINDS
-from uqs.paths import (
-    UqsError,
-)
+from uqs.paths import UqsError, UqsUsageError
 from uqs.scaffold import columns as columns_mod
 from uqs.scaffold import cycles, external, jobs, normalizer
 from uqs.scaffold import horizon as horizon_scaffold
@@ -337,7 +335,7 @@ def new_job(
             if publishes:
                 raise UqsError("a normalizer publishes its own NAME - drop --publishes")
             if not shape:
-                raise UqsError("--kind normalizer needs --schema: its canonical table")
+                raise UqsUsageError("--kind normalizer needs --schema: its canonical table")
             return normalizer.normalizer(
                 name,
                 subs,
@@ -355,7 +353,7 @@ def new_job(
             )
         if kind == "external":
             if not (raw_table and publishes and shape):
-                raise UqsError("--kind external needs --raw-table, --publishes and --schema")
+                raise UqsUsageError("--kind external needs --raw-table, --publishes and --schema")
             return external.external_feed(
                 name,
                 raw_table,
@@ -377,7 +375,7 @@ def new_job(
                 procname=procname, start_with_all=start_with_all, profile=profile,
                 unprofiled=unprofiled,
             )  # fmt: skip
-        raise UqsError(f"--kind must be one of {', '.join(SCAFFOLD_KINDS)}: {kind!r}")
+        raise UqsUsageError(f"--kind must be one of {', '.join(SCAFFOLD_KINDS)}: {kind!r}")
 
     try:
         if bundle is not None:

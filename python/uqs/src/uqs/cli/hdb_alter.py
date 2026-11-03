@@ -21,7 +21,7 @@ from uqs.cli.renames import alias_command, warn_renamed
 from uqs.cli.safety import ConfirmsOnServer
 from uqs.cli.shared import _die, data_app
 from uqs.generated.q_facts import Q_ATTRIBUTES
-from uqs.paths import UqsError
+from uqs.paths import UqsError, UqsUsageError
 from uqs.stack.hdb_alter import Request
 
 #: What `--attr COL:` takes to clear an attribute - scripts/gates/hdb_alter.q's word.
@@ -101,7 +101,7 @@ def hdb_alter(
         }
         chosen = {k: v for k, v in given.items() if v is not None}
         if len(chosen) != 1:
-            raise UqsError(
+            raise UqsUsageError(
                 "give one operation: --reorder, --rename, --attr, --cast or --undo"
                 + (f" (not {len(chosen)})" if chosen else "")
             )

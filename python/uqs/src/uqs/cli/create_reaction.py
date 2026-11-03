@@ -14,7 +14,7 @@ from uqs.cli.regenerate import write_plan
 from uqs.cli.shared import _die, _paths
 from uqs.model.declarations import read_declarations
 from uqs.model.jobs import bounded_producers, job_rows
-from uqs.paths import UqsError
+from uqs.paths import UqsError, UqsUsageError
 from uqs.scaffold import reaction
 
 
@@ -37,7 +37,7 @@ def scaffold_reaction(
         return
     for option in (o for o, used in others.items() if used):
         _die(
-            UqsError(
+            UqsUsageError(
                 f"{option} does not apply to a reaction (--triggered-by): it has no process, "
                 "table or schedule of its own"
             )

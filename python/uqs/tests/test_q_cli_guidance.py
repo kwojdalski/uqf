@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import ast
 import re
+from collections.abc import Sequence
 from pathlib import Path
 
 import pytest
@@ -78,7 +79,6 @@ KEPT = {
         "the fallback for a release from before `deploy check`, which has only "
         "`deploy verify`: a rollback's target"
     ),
-    ("uqs job runs list --help", "job runs status"): "the migration notice in its help",
 }
 
 #: A q string literal, escapes included.
@@ -340,7 +340,7 @@ def test_the_python_scan_finds_the_messages_it_exists_for():
     }
     assert {"--target NAME status", "job checkpoint remove"} <= named
     helped = {" ".join(w) for _, text in help_texts() for w in commands_in(text)}
-    assert "job runs status" in helped
+    assert "job runs list" in helped
 
 
 def test_a_python_string_is_read_and_a_docstring_is_not():
@@ -381,3 +381,70 @@ def test_prose_cut_short_is_judged_by_what_parses(words, why):
 )
 def test_prose_that_names_a_canonical_command_passes(words):
     assert old_spelling(words) is None
+
+
+# ------------------------------------------- a backticked command exists (#1885)
+
+#: A command as code: `uqs`, then the words up to the closing backtick.
+_BACKTICKED = re.compile(r"`uqs((?: [^`]*)?)`")
+#: The root's own options, before the command.
+_GLOBAL_VALUE = {"--target", "--runtime"}
+_GLOBAL_FLAG = {"--debug", "--yes", "-y", "--version", "--help", "-h"}
+
+
+def unknown_word(words: Sequence[str]) -> str | None:
+    """The word of `words` that stands where a command must and names none:
+    `uqs list targets` resolved, `uqs sumary` does not. A placeholder
+    (`uqs <command>`, `uqs ...`) is no command word and passes."""
+    cmd, i, depth = target_confirm.root_command(), 0, 0
+    while i < len(words):
+        word = words[i]
+        if depth == 0 and word in _GLOBAL_VALUE:
+            i += 2
+            continue
+        if depth == 0 and word in _GLOBAL_FLAG:
+            i += 1
+            continue
+        subs = target_confirm.subcommands(cmd)
+        if not subs:
+            return None
+        if word not in subs:
+            return word if re.fullmatch(r"[a-z][a-z0-9-]*", word) else None
+        cmd, i, depth = subs[word], i + 1, depth + 1
+    return None
+
+
+def backticked_unknown() -> list[tuple[str, str]]:
+    """(where, `uqs ...`) for each command in backticks - in the tree's Python
+    strings and in --help - whose path names no command at all. The parse
+    tests above catch a hidden one; this catches one that never existed, or
+    was removed, as `uqs job attach apply` was written into attached stacks'
+    files (#1885)."""
+    found = []
+    for root in PY_ROOTS:
+        for path in sorted((UQF_ROOT / root).rglob("*.py")):
+            rel = str(path.relative_to(UQF_ROOT))
+            if rel in LEDGERS:
+                continue
+            for line, text in python_strings(path.read_text(errors="replace")):
+                for span in _BACKTICKED.findall(text):
+                    if unknown_word(span.split()):
+                        found.append((f"{rel}:{line}", f"uqs{span}"))
+    for where, text in help_texts():
+        for span in _BACKTICKED.findall(text):
+            if unknown_word(span.split()):
+                found.append((where, f"uqs{span}"))
+    return found
+
+
+def test_every_backticked_uqs_command_names_one_that_exists():
+    assert backticked_unknown() == []
+
+
+def test_the_backticked_scan_sees_an_unknown_command():
+    """Not vacuous: a path that names nothing is caught, a placeholder is not."""
+    assert unknown_word("sumary".split()) == "sumary"
+    assert unknown_word("job attach apply".split()) is None, "hidden: the parse tests' case"
+    assert unknown_word("job runs nosuch".split()) == "nosuch"
+    assert unknown_word("--target uat status".split()) is None
+    assert unknown_word("<command>".split()) is None
