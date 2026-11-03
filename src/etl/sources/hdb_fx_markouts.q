@@ -33,8 +33,8 @@
 .qpipe.source.hdb_fx_markouts.source_name:`hdb_fx_markouts
 
 / The primary input: the HDB's executions, narrowed to what scoring reads.
-.qpipe.source.hdb_fx_markouts.columns:`source_time`venue`sym`side`size`price`fill_id
-.qpipe.source.hdb_fx_markouts.types:"pssjffs"
+.qpipe.source.hdb_fx_markouts.columns:`source_time`venue`sym`side`size`price`fill_id`clock
+.qpipe.source.hdb_fx_markouts.types:"pssjffss"
 
 .qpipe.source.hdb_fx_markouts.time_column:`source_time
 
@@ -42,21 +42,23 @@
 .qpipe.source.hdb_fx_markouts.row_key:`venue`fill_id
 
 / The supporting input: the books, read by the transform as `market_data`.
-.qpipe.source.hdb_fx_markouts.supporting:enlist[`market_data]!enlist .qetl.plant.columns[`market_data;`source_time`sym`source`bid_prices`bid_sizes`ask_prices`ask_sizes]
+.qpipe.source.hdb_fx_markouts.supporting:enlist[`market_data]!enlist .qetl.plant.columns[`market_data;`source_time`sym`source`bid_prices`bid_sizes`ask_prices`ask_sizes`clock]
 
 / .u.upd stamps `time` in UTC, and the sources' own stamps are UTC.
 .qpipe.source.hdb_fx_markouts.tz:`UTC
 
 / The pairs a scored execution needs a reference for beyond its own route's legs:
-/ the conversion pair that takes its money to a reporting currency (#1931). None
-/ yet, so none are read. When #1931 lands this is the ONE place to name them; the
-/ declaration below already unions them in, so the books are read and the contract
-/ needs no other change.
+/ the conversion pair that takes its money to the reporting currency (#1931), the
+/ market_data sym of every rate the spec reads from a book, for the quote currencies
+/ the window's executions are in. The core's (markout_core.conversion_pairs), so the
+/ live job's readiness legs, this source's symbol filter and its ready hook name the
+/ same books.
 / @param spec the job's spec
 / @param rows the window's executions
 / @return a symbol vector
 / @eg .qpipe.source.hdb_fx_markouts.conversion_pairs[.qpipe.transform.fx_markout.default_spec;([] sym:enlist `EURUSD)]  ->  `symbol$()
-.qpipe.source.hdb_fx_markouts.conversion_pairs:{[spec;rows] `symbol$()}
+.qpipe.source.hdb_fx_markouts.conversion_pairs:{[spec;rows]
+    (.qpipe.transform.markout_core.conversion_pairs[.qpipe.transform.fx_domain.domain;spec;rows])`sym}
 
 / The symbols the window's references are read for: the legs of every execution's
 / route (the live job's own `legs`), and its conversion pairs.
@@ -99,7 +101,7 @@
     rr:.qetl.source.reference_read .qpipe.source.hdb_fx_markouts.source_name;
     skew:rr`date_skew;
     deals:.qetl.source.ipc[h;{[skew;from_ts;to_ts]
-        `source_time xasc select source_time, venue, sym, side, size, price, fill_id from `executions
+        `source_time xasc select source_time, venue, sym, side, size, price, fill_id, clock from `executions
             where date within (neg[skew],skew)+`date$(from_ts;to_ts), source_time>=from_ts, source_time<to_ts
       }[skew];range_from;range_to];
     if[0=count deals; :`executions`market_data!(deals;0#.qpipe.source.hdb_fx_markouts.supporting`market_data)];
@@ -108,10 +110,10 @@
     early:.qpipe.transform.fx_markout.lookback[spec];
     lb:.qetl.source.reference_lookback[.qpipe.source.hdb_fx_markouts.source_name;spec`max_age;early];
     books:.qetl.source.ipc[h;{[syms;skew;read_from;from_ts;to_ts]
-        cand:`source_time xasc select source_time, sym, source, bid_prices, bid_sizes, ask_prices, ask_sizes
+        cand:`source_time xasc select source_time, sym, source, bid_prices, bid_sizes, ask_prices, ask_sizes, clock
             from `market_data where date within (neg[skew],skew)+`date$(read_from;from_ts), source_time>=read_from, source_time<from_ts, sym in syms;
         before:0!?[cand;();`sym`source!`sym`source;()];
-        inwin:select source_time, sym, source, bid_prices, bid_sizes, ask_prices, ask_sizes from `market_data
+        inwin:select source_time, sym, source, bid_prices, bid_sizes, ask_prices, ask_sizes, clock from `market_data
             where date within (neg[skew],skew)+`date$(from_ts;to_ts), source_time>=from_ts, source_time<to_ts, sym in syms;
         `source_time xasc (cols before)#before,inwin
       }[syms;skew;range_from-lb];
@@ -131,22 +133,20 @@
     / max of no rows is -0Wp, and arithmetic on it wraps to a far-future instant
     $[latest<=-0Wp; -0Wp; latest-0D|max (.qpipe.transform.fx_markout_outputs.job_spec)`horizons]}
 
-/ Can this window be scored, or are its books absent? An execution with no book for one
-/ of its legs is a legitimate unavailable row and is ready; a window that has routable
-/ executions and NO books at all is not ready, because every row it scored would be
-/ unavailable and coverage would then keep them for good (#1927). A window with no
-/ executions, or none a route can be built for, has nothing to score and is ready.
+/ Can this window be scored, or are its books absent? The core's gate (markout_core.unmet,
+/ #1927): an execution with no book for one of its route's legs is a legitimate
+/ unavailable row and is ready, but a window that has scoreable executions and NO books
+/ at all is not, and neither is one whose conversion pair has no book of its declared
+/ source, because every row it scored would be unavailable or no_rate and coverage would
+/ then keep them for good. A window with no executions, or none a route can be built
+/ for, has nothing to score and is ready.
 / @param batch `executions`market_data!(...) as the query returns them
 / @param range_from inclusive lower bound
 / @param range_to exclusive upper bound
 / @return the unmet requirements, as a list of strings; () when ready
 / @eg .qpipe.source.hdb_fx_markouts.ready[.qpipe.source.hdb_fx_markouts.fixture[];2026.09.17D00:00;2026.09.18D00:00]  ->  ()
 .qpipe.source.hdb_fx_markouts.ready:{[batch;range_from;range_to] / noqa: QF016 the hook's fixed signature
-    deals:batch`executions;
-    if[0=count deals; :()];
-    pairs:distinct raze .qpipe.transform.fx_markout.legs_of[.qpipe.transform.fx_markout_outputs.job_spec;deals];
-    if[(0=count pairs) or 0<count batch`market_data; :()];
-    enlist "market_data holds no books for the ",string[count pairs]," pair(s) the window's ",string[count deals]," execution(s) route through"}
+    .qpipe.transform.markout_core.unmet[.qpipe.transform.fx_domain.domain;.qpipe.transform.fx_markout_outputs.job_spec;batch`executions;batch`market_data]}
 
 / Three fills on 2026.09.17 and the books around them: a EURUSD buy at 1.1001 against
 / two sources, a USDPLN sell that routes EURUSD (inverted) and EURPLN, and a crypto
@@ -156,7 +156,7 @@
 .qpipe.source.hdb_fx_markouts.raw_executions:{[]
     ([] source_time:2026.09.17D10:00:00 2026.09.17D10:00:20 2026.09.17D10:00:21;
         venue:`a`a`binance_spot; sym:(`EURUSD;`USDPLN;`$"BTC-USDT"); side:1 -1 1;
-        size:1e6 1e6 0.5; price:1.1001 3.99 62000f; fill_id:`x1`y1`z1)}
+        size:1e6 1e6 0.5; price:1.1001 3.99 62000f; fill_id:`x1`y1`z1; clock:3#`venue)}
 
 / The books: EURUSD on sources a and b, and EURPLN on a. Each is re-quoted within
 / the reference's max_age (.qf.mkt.reference_max_age, 5s) of every instant a fill is
@@ -171,7 +171,7 @@
         bid_prices:(enlist 1.0999;enlist 1.1004;enlist 1.1009;enlist 1.1003;enlist 1.1008;enlist 4.9999;enlist 5.0999;enlist 1.1009;enlist 1.1008;enlist 4.9999;enlist 1.1009;enlist 1.1008);
         bid_sizes:12#enlist enlist 1e6;
         ask_prices:(enlist 1.1001;enlist 1.1006;enlist 1.1011;enlist 1.1007;enlist 1.1010;enlist 5.0001;enlist 5.1001;enlist 1.1011;enlist 1.1010;enlist 5.0001;enlist 1.1011;enlist 1.1010);
-        ask_sizes:12#enlist enlist 1e6)}
+        ask_sizes:12#enlist enlist 1e6; clock:12#`venue)}
 
 / What query returns for the fixture's day.
 / @return `executions`market_data!(raw_executions[];raw_market_data[])
