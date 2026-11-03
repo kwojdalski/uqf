@@ -563,6 +563,7 @@ qetl.plant,bases,value,,
 qetl.plant,book_liquidity_1m,table,,
 qetl.plant,ccy_exposure,table,,
 qetl.plant,client_flow,table,,
+qetl.plant,clocks,value,,
 qetl.plant,columns,function,2,t cs
 qetl.plant,config_change,table,,
 qetl.plant,connections,table,,
@@ -614,6 +615,7 @@ qetl.plant,quote,table,,
 qetl.plant,read_instrument_column,function,1,t
 qetl.plant,read_time_column,function,1,t
 qetl.plant,reference_data,table,,
+qetl.plant,require_clock,function,2,table_name rows
 qetl.plant,schema,function,1,t
 qetl.plant,shape,function,1,t
 qetl.plant,sort_rules,dict,,
@@ -1363,6 +1365,7 @@ qpipe.job.exec_bars,on_endofday,value,,
 qpipe.job.exec_bars,on_timer,value,,
 qpipe.job.exec_bars,pending,table,,
 qpipe.job.exec_bars,publish,value,,
+qpipe.job.executions,check,function,1,rows
 qpipe.job.executions,crypto_trades,table,,
 qpipe.job.executions,executions,table,,
 qpipe.job.executions,filled_status,value,,

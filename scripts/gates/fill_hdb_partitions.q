@@ -45,6 +45,17 @@
 /     database is now whole. The last step re-reads every partition and exits
 /     1 naming anything still missing.
 / .
+/ A DERIVED DEFAULT, FOR ONE COLUMN (#1925). A column the partition lacks is
+/ written as the declared type's null EXCEPT `clock` on `executions` and
+/ `market_data`, which is attributed from the rows' own columns by the rules
+/ in scripts/gates/hdb_clock_rules.csv: whose clock a stored source_time is
+/ depends on which feed wrote the row, and the feed is recoverable from
+/ (market, source) for a book and from venue for a fill. Anything the rules
+/ do not name is `unknown - never a guess, and never null, because null is
+/ what a mapping that forgot to stamp looks like. The core refuses both. The
+/ rule file is read only when such a column is actually missing, so a copy of
+/ this script without it still repairs every other column.
+/ .
 / TWO LEVELS, THE SAME FAULT. A missing TABLE fails a query naming whichever
 / table sorts first; a missing COLUMN fails it naming that column in the
 / partition that lacks it - "./2026.01.01/book/venue. OS reports: No such
@@ -143,6 +154,54 @@ declared_default:{[root;table_name;col]
     empty:0#(value table_name)col;
     $[11h=abs type empty; (.Q.en[root] flip enlist[`v]!enlist empty)`v; empty]}
 
+/ The history-fill rules for `clock` (#1925): one row per (table, market, name)
+/ in scripts/gates/hdb_clock_rules.csv, found from this script's own path. Read
+/ only when a clock column has to be filled.
+/ @return the rules, columns tbl, market, name, clock
+clock_rules:{[]
+    f:hsym `$script_dir,"hdb_clock_rules.csv";
+    if[()~key f; die "no hdb_clock_rules.csv beside this script - the clock history fill needs it (#1925)"];
+    ("SSSS";enlist ",") 0: f}
+
+/ Is this column one whose missing values are derived, not null (#1925)?
+/ @param table_name the table
+/ @param col the column
+/ @return 1b for `clock on executions and market_data
+derived_column:{[table_name;col] (col=`clock) and table_name in `executions`market_data}
+
+/ The clock of each (market, name) pair, by the rules: an exact market-and-name
+/ rule wins over a `*` rule for that market, and a pair no rule names is
+/ `unknown. Executions have no market, so both sides are null for them.
+/ @param rules the rules of ONE table
+/ @param m the pair's market, or null
+/ @param nm the pair's source (market_data) or venue (executions)
+/ @return the clock symbol
+clock_of:{[rules;m;nm]
+    hits:(exec clock from rules where market=m, name=nm),exec clock from rules where market=m, name=`$"*";
+    $[count hits; first hits; `unknown]}
+
+/ One partition's clock column, attributed from the columns beside it. A column
+/ the partition lacks (a book older than `market`) leaves its rows `unknown.
+/ @param root the HDB root, whose sym file the key columns enumerate against
+/ @param table_name executions or market_data
+/ @param dir a table directory that holds a `.d`
+/ @return a symbol vector, one clock per row
+derived_clock:{[root;table_name;dir]
+    n:count get ` sv dir,first disk_cols dir;
+    key_cols:$[table_name=`market_data; `market`source; enlist `venue];
+    if[not all key_cols in disk_cols dir; :n#`unknown];
+    `sym set get ` sv root,`sym;
+    cols_read:{[dir;c] value get ` sv dir,c}[dir] each key_cols;
+    pairs:$[table_name=`market_data; flip `market`name!cols_read; flip `market`name!(n#`;first cols_read)];
+    rules:select from clock_rules[] where tbl=table_name;
+    seen:distinct pairs;
+    found:{[rules;p] clock_of[rules;p`market;p`name]}[rules] each seen;
+    out:found seen?pairs;
+    tally:count each group out;
+    -1 "  ",partition_name[dir],"/",string[table_name],": clock from the rules - ",
+        ", " sv {string[x]," ",string y}'[key tally;value tally];
+    out}
+
 / The columns a table directory holds, from its `.d`: the authority for what a
 / splayed table holds, not the directory listing, because a nested column
 / writes TWO files (`bids` and `bids#`) and appears in `.d` once. This is
@@ -170,7 +229,11 @@ repair_dir:{[root;table_name;dir]
         (` sv dir,`) set .Q.en[root;0#value table_name];
         :`table];
     absent:missing_cols[table_name;dir];
-    {[root;table_name;dir;col] add1col[dir;col;declared_default[root;table_name;col]]}[root;table_name;dir] each absent;
+    {[root;table_name;dir;col]
+        v:$[derived_column[table_name;col];
+            (.Q.en[root] flip enlist[`v]!enlist derived_clock[root;table_name;dir])`v;
+            declared_default[root;table_name;col]];
+        add1col[dir;col;v]}[root;table_name;dir] each absent;
     absent}
 
 / What is still wrong, read back from disk rather than taken from what the

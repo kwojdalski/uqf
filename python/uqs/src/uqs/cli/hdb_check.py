@@ -200,7 +200,9 @@ def _whole_runtime(*, apply: bool, yes: bool, as_json: bool) -> None:
         )
     console.print(
         "\n[dim]`uqs data check --apply` writes an empty copy of each missing "
-        "table, and each missing column as its declared type's null, after asking. Additive: "
+        "table, and each missing column as its declared type's null (the `clock` of executions and "
+        "market_data is attributed from the rows by scripts/gates/hdb_clock_rules.csv instead), "
+        "after asking. Additive: "
         "an existing table directory or column file is never touched, and a column whose "
         "declared TYPE changed is not repaired here.[/]"
     )

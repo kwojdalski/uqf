@@ -113,6 +113,15 @@
     r:.qetl.job.stream.normalizer.normalize[`fxa_exec;`deal_tape;update time:later from e];
     .qunit.assertEquals[r`source_time;enlist .qt.qpipe.transform.fx_source_adapters.t+0D00:00:07;"deal_time, even when the plant's receipt time says otherwise"]};
 
+.qt.qpipe.transform.fx_source_adapters.test_both_adapters_stamp_the_venue_clock:{[tc]
+    / The only timestamp either source delivers is its own, so source_time is on the
+    / venue's clock (#1925) - and a row the shell would publish passes the clock check.
+    e:.qt.qpipe.transform.fx_source_adapters.deal[1;1;.qt.qpipe.transform.fx_source_adapters.t;.qt.qpipe.transform.fx_source_adapters.eurusd;`fill;`B;1.1;(1e5;1e5)];
+    .qunit.assertEquals[(.qt.qpipe.transform.fx_source_adapters.from_tape[e])`clock;enlist `venue;"the deal tape's fills"];
+    lv:raze (.qt.qpipe.transform.fx_source_adapters.lvl[.qt.qpipe.transform.fx_source_adapters.t;.qt.qpipe.transform.fx_source_adapters.eurusd;`LPA;`FULL_AMOUNT;`SP;`bid;0;(1.0998;2e6)];.qt.qpipe.transform.fx_source_adapters.lvl[.qt.qpipe.transform.fx_source_adapters.t;.qt.qpipe.transform.fx_source_adapters.eurusd;`LPA;`FULL_AMOUNT;`SP;`ask;0;(1.1002;2e6)]);
+    .qunit.assertEquals[(.qt.qpipe.transform.fx_source_adapters.from_levels[lv])`clock;enlist `venue;"the book levels' snapshots"];
+    .qunit.assertEquals[count .qpipe.job.market_data.check .qt.qpipe.transform.fx_source_adapters.from_levels[lv];0;"and the market_data check lets it through"]};
+
 .qt.qpipe.transform.fx_source_adapters.test_a_nineteen_digit_id_is_kept_exactly_and_neighbours_stay_distinct:{[tc]
     e:raze (.qt.qpipe.transform.fx_source_adapters.deal[1234567890123456789;1;.qt.qpipe.transform.fx_source_adapters.t;.qt.qpipe.transform.fx_source_adapters.eurusd;`fill;`B;1.1;(1e5;1e5)];.qt.qpipe.transform.fx_source_adapters.deal[1234567890123456790;1;.qt.qpipe.transform.fx_source_adapters.t;.qt.qpipe.transform.fx_source_adapters.eurusd;`fill;`B;1.1;(1e5;1e5)]);
     r:.qt.qpipe.transform.fx_source_adapters.from_tape[e];
@@ -240,13 +249,17 @@
     a:.qt.qpipe.transform.fx_source_adapters.norm_a[];
     b:.qt.qpipe.transform.fx_source_adapters.norm_b[];
     .qunit.assertEquals[count a 0;2;"two executions: the fills, not the status, cancelled or equity rows"];
-    .qunit.assertEquals[`source_time xasc a 0;`source_time xasc b 0;"the same canonical executions, row for row and column for column"]};
+    / equivalent in everything but the clock: the deal tape stamps the venue's time and
+    / trades the plant's receipt time, which is the difference `clock` exists to record (#1925)
+    .qunit.assertEquals[`source_time xasc delete clock from a 0;`source_time xasc delete clock from b 0;"the same canonical executions, row for row and column for column"];
+    .qunit.assertEquals[(distinct (a 0)`clock;distinct (b 0)`clock);(enlist `venue;enlist `receipt);"and each says whose clock its source_time is"]};
 
 .qt.qpipe.transform.fx_source_adapters.test_two_sources_normalize_to_equivalent_market_data:{[tc]
     a:.qt.qpipe.transform.fx_source_adapters.norm_a[];
     b:.qt.qpipe.transform.fx_source_adapters.norm_b[];
     .qunit.assertEquals[count a 1;5;"five snapshots: the partial, forward and equity levels are not among them"];
-    .qunit.assertEquals[.qt.qpipe.transform.fx_source_adapters.by_key[a 1];.qt.qpipe.transform.fx_source_adapters.by_key[b 1];"the same snapshots"]};
+    .qunit.assertEquals[delete clock from .qt.qpipe.transform.fx_source_adapters.by_key[a 1];delete clock from .qt.qpipe.transform.fx_source_adapters.by_key[b 1];"the same snapshots, whatever clock their times are on"];
+    .qunit.assertEquals[(distinct (a 1)`clock;distinct (b 1)`clock);(enlist `venue;enlist `receipt);"each says whose clock its source_time is (#1925)"]};
 
 .qt.qpipe.transform.fx_source_adapters.test_two_sources_give_the_same_markouts_with_the_one_calculation:{[tc]
     a:.qt.qpipe.transform.fx_source_adapters.norm_a[];

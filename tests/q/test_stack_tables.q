@@ -251,3 +251,13 @@
     r:@[{.qetl.plant.read_instrument_column `orders};::;{(`threw;x)}];
     .qetl.plant.instrument_exceptions:keep;
     .qunit.assertEquals[r;(`threw;"plant: instrument_exceptions names no_such_col for orders, which has no such column");"a rename fails here, not at query time"]};
+
+/ --- whose clock source_time is (#1925) -------------------------------------
+
+.qt.qetl.plant.tables.test_both_canonical_tables_end_in_a_symbol_clock_column:{[t]
+    / LAST, so a partition the history fill appended `clock to has the same column
+    / order as one written from this declaration, and no positional read moves.
+    {[tbl] s:.qetl.plant.schema tbl;
+        .qunit.assertEquals[last cols s;`clock;string[tbl]," ends in clock"];
+        .qunit.assertEquals[type s`clock;11h;string[tbl],"'s clock is a symbol"]} each `executions`market_data;
+    .qunit.assertEquals[.qetl.plant.clocks;`venue`receipt;"the two clocks a source_time can be on; `unknown is the history fill's, and is refused"]};
