@@ -75,7 +75,7 @@ def test_a_missing_argument_is_a_usage_error_everywhere(path):
 #: The command's own checks of its command line, which Click cannot see.
 USAGE = {
     "deploy status": ["deploy", "status"],
-    "job gaps": ["job", "gaps", "demo_markout"],
+    "job gaps": ["job", "gaps", "crypto_markout"],
     "job check": ["job", "check", "demo_deals"],
     "--yes before the command": ["--yes", "job", "remove", "x"],
     "--target after the root": ["--target", "uat", "status"],
@@ -167,7 +167,7 @@ EMPTY = {
     "job runs list": ["job", "runs", "list"],
     "job runs upgrade": ["job", "runs", "upgrade"],
     "job runs audit": ["job", "runs", "audit", "demo_deals", "--last", "1d"],
-    "job gaps": ["job", "gaps", "demo_markout", "--last", "1d"],
+    "job gaps": ["job", "gaps", "crypto_markout", "--last", "1d"],
     "logs": ["logs"],
     "logs PROC": ["logs", "rdb1"],
     "job attachment list": ["job", "attachment", "list"],

@@ -124,7 +124,8 @@ PYTHON_TESTS_HOOK = "scripts/dev/python_tests_hook.py"
 KNOWN = re.compile(
     r"^(\.claude|\.github|docs|lib|python|scripts|sidecars|src|tests|web)/"
     r"|^(README\.md|CHANGELOG\.md|CLAUDE\.md|LICENSE|LICENSING\.md|install\.sh"
-    r"|\.env\.example|\.gitignore|\.panache\.toml|\.pre-commit-config\.yaml"
+    r"|\.env\.example|\.gitattributes|\.gitignore|\.kodiak\.toml|\.panache\.toml"
+    r"|\.pre-commit-config\.yaml"
     r"|\.qlinter-version|\.qlinter\.toml|conftest\.py|pyproject\.toml|uv\.lock)$"
 )
 

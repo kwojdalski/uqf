@@ -231,8 +231,13 @@ if ((DEV)); then
     if ! have pre-commit; then
         run "installing $PRE_COMMIT" uv tool install "$PRE_COMMIT"
     fi
+    # Commit, push, post-merge and post-rewrite hooks: .pre-commit-config.yaml's
+    # default_install_hook_types (#1965).
     run "installing the git hooks" pre-commit install
     INSTALLED+=("pre-commit and its git hooks")
+    # git reads merge drivers only from config, never from the tree (#1965).
+    run "registering the generated-file merge driver" python3 scripts/dev/merge_generated.py install
+    INSTALLED+=("the uqf-generated merge driver (.gitattributes)")
     UNVERIFIED+=("the q hooks need KDB-X on PATH; see the list above for the rest")
 fi
 

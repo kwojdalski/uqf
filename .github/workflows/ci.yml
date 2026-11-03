@@ -102,8 +102,10 @@ jobs:
       #     with a q, whenever the change can reach a Python test: the same
       #     suite plus what needs a q;
       #   doc-links - the "Docs links" job runs it strictly, in parallel; here
-      #     it was 37s of the hooks' 49s, and then ran a second time (#1689).
-      SKIP: no-commit-to-branch,branch-naming-with-git-username,q-docs-peachq,python-tests,doc-links
+      #     it was 37s of the hooks' 49s, and then ran a second time (#1689);
+      #   peachq-push - the early, targeted PeachQ catch before a push (#1965);
+      #     the "PeachQ q tests" job runs the whole suite on PeachQ.
+      SKIP: no-commit-to-branch,branch-naming-with-git-username,q-docs-peachq,python-tests,doc-links,peachq-push
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -166,6 +168,11 @@ jobs:
           fi
       - name: Run repository hooks
         run: uv tool run --from pre-commit==4.6.2 pre-commit run --all-files --show-diff-on-failure
+      # The hooks a developer's `git push` runs (#1965): q-tests and q-coverage,
+      # which need a q - skipped above when the runner has none - and the two
+      # this job SKIPs for running elsewhere (python-tests, peachq-push).
+      - name: Run repository push hooks
+        run: uv tool run --from pre-commit==4.6.2 pre-commit run --all-files --hook-stage pre-push --show-diff-on-failure
       # The gates that used to follow here as steps of their own are hooks
       # now, run above by `pre-commit run --all-files` (#1879): the module
       # graph, the ETL layering, the q line budget, the registry enlist

@@ -136,6 +136,60 @@ export interface ProcessHealth {
   identity_mismatch: string | null;
   port_unresolved: boolean;
 }
+/** One deployment target - models.ServiceTargetOut, as `uqs target list
+ * --json` lists it. Read from deploy_targets.toml: the server is never asked. */
+export interface ServiceTarget {
+  name: string;
+  ssh: string;
+  dest: string;
+  remote_user: string | null;
+  environment: string | null;
+  labels: Record<string, string>;
+  last_deployed: { release: string; at: string } | null;
+}
+/** GET /services - models.ServicesResponse. `invalid` is the registry's own
+ * refusal, naming the line, when the file exists but cannot be read. */
+export interface Services extends Pollable {
+  targets: ServiceTarget[];
+  source: string;
+  declared: boolean;
+  invalid: string | null;
+  remote_operations_enabled: boolean;
+}
+/** One entry of a remote directory - models.RemoteEntryOut. A symlink,
+ * special file or undecodable name is `blocked`: listed, never entered. */
+export interface RemoteEntry {
+  name: string;
+  kind: "dir" | "file" | "symlink" | "special" | "unknown";
+  size: number | null;
+  mtime: number | null;
+  blocked: boolean;
+  reason: string | null;
+}
+/** The release `current` names, and its deploy report - models.ReleaseOut. */
+export interface Release {
+  current: string | null;
+  release: string | null;
+  report: Record<string, unknown> | null;
+  report_error: string | null;
+}
+/** GET /services/{target}/files - models.RemoteFilesResponse. Not polled:
+ * each listing is an ssh round trip, made only when the operator asks. */
+export interface RemoteFiles {
+  target: string;
+  root: string;
+  path: string;
+  parent: string | null;
+  entries: RemoteEntry[];
+  total: number | null;
+  truncated: boolean;
+  release: Release;
+}
+/** The URL that lists `path` under `target`'s deployment root. */
+export function remoteFilesPath(target: string, path: string): string {
+  const query = new URLSearchParams({ path });
+  return `/services/${encodeURIComponent(target)}/files?${query}`;
+}
 export interface OpsData extends Pollable {
   rows?: Row[];
   servers?: Row[];
@@ -182,9 +236,10 @@ export async function request<T>(
   // and inferring that from anything would be guessing.
   method?: "GET" | "POST" | "PUT",
   authorization?: string,
+  extra?: Record<string, string>,
 ): Promise<T> {
   let response: Response;
-  const headers: Record<string, string> = {};
+  const headers: Record<string, string> = { ...extra };
   if (body) headers["Content-Type"] = "application/json";
   if (authorization) headers.Authorization = authorization;
   try {
@@ -400,6 +455,7 @@ export async function mutate<T>(
   path: string,
   body: unknown,
   method: "POST" | "PUT" = "POST",
+  correlation?: Correlation,
 ): Promise<T> {
   const controller = new AbortController();
   const token = writeToken.get();
@@ -409,7 +465,19 @@ export async function mutate<T>(
     JSON.stringify(body),
     method,
     token ? `Bearer ${token}` : undefined,
+    correlation
+      ? {
+          "X-UQF-Request-Id": correlation.requestId,
+          "X-UQF-Session-Id": correlation.sessionId,
+        }
+      : undefined,
   );
+}
+/** The ids a write carries so the server's audit row and the browser's
+ *  activity events for it can be read together (#1954). */
+export interface Correlation {
+  requestId: string;
+  sessionId: string;
 }
 
 /** The write token for the control routes (#631), when the operator typed it.
@@ -440,3 +508,231 @@ export const writeToken = {
     }
   },
 };
+
+/** PUT /services/{target}/files/content - models.RemoteUploadResponse: one
+ * file written below the target's shared/config, published atomically. */
+export interface RemoteUpload {
+  target: string;
+  root: string;
+  path: string;
+  size: number;
+  sha256: string;
+  replaced: boolean;
+  mode: number;
+  created: string[];
+}
+/** Upload limits and destination, held equal to remote_helper.py's by
+ * test_remote_upload.py: the browser refuses first, the API and the server
+ * refuse again. */
+export const UPLOAD_MAX_BYTES = 16 * 1024 * 1024;
+export const UPLOAD_ROOT = "shared/config";
+export const UPLOAD_MAX_DEPTH = 16;
+export const UPLOAD_TEMP_PREFIX = ".uqf-upload-";
+/** Longer than the server's own UPLOAD_TIMEOUT, so the server's answer -
+ * including "uncertain" - arrives before the browser gives up. */
+export const UPLOAD_TIMEOUT_MS = 150 * 1000;
+/** What one queue may hold - the browser's own bound, on top of the
+ * per-file limit every side enforces. */
+export const UPLOAD_MAX_FILES = 500;
+export const UPLOAD_MAX_TOTAL_BYTES = 256 * 1024 * 1024;
+
+/** The URL that writes `path` (relative to the deployment root). */
+export function remoteUploadPath(
+  target: string,
+  path: string,
+  overwrite: boolean,
+): string {
+  const query = new URLSearchParams({ path, overwrite: String(overwrite) });
+  return `/services/${encodeURIComponent(target)}/files/content?${query}`;
+}
+
+/** Why `path` (relative to the upload root's parent, the deployment root)
+ * cannot be uploaded to, or null. The same rules remote_helper.upload_parts
+ * applies - the server's word is still final. */
+export function uploadPathProblem(path: string): string | null {
+  if (path.includes("\0")) return "the path contains a NUL byte";
+  if (path.startsWith("/")) return "absolute paths are refused";
+  const parts = path.split("/").filter((p) => p !== "" && p !== ".");
+  if (parts.includes("..")) return "'..' is refused";
+  const root = UPLOAD_ROOT.split("/");
+  if (
+    parts.length <= root.length ||
+    root.some((part, index) => parts[index] !== part)
+  )
+    return `uploads go to a file below ${UPLOAD_ROOT}/ and nowhere else`;
+  if (parts.length - root.length - 1 > UPLOAD_MAX_DEPTH)
+    return `more than ${UPLOAD_MAX_DEPTH} directories below ${UPLOAD_ROOT}/`;
+  const encoder = new TextEncoder();
+  for (const part of parts) {
+    if (encoder.encode(part).length > 255)
+      return "a name is longer than 255 bytes";
+    if (part.startsWith(UPLOAD_TEMP_PREFIX))
+      return `names starting ${UPLOAD_TEMP_PREFIX} are the upload's own`;
+  }
+  return null;
+}
+
+/** An upload that did not succeed. `uncertain` when the file may have been
+ * written all the same: a timeout, a dropped connection, a cancellation in
+ * flight, or the server saying so. Such an upload is never retried. */
+export class UploadFailed extends ApiError {
+  constructor(
+    message: string,
+    status: number,
+    public uncertain: boolean,
+  ) {
+    super(message, false, status);
+  }
+}
+
+/** PUT one file's bytes, reporting progress; one attempt, no retry.
+ * XMLHttpRequest rather than fetch, because only it reports upload
+ * progress. */
+export function uploadRemoteFile(
+  target: string,
+  path: string,
+  file: Blob,
+  overwrite: boolean,
+  onProgress: (fraction: number) => void,
+  signal: AbortSignal,
+): Promise<RemoteUpload> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("PUT", remoteUploadPath(target, path, overwrite));
+    const token = writeToken.get();
+    if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+    xhr.setRequestHeader("Content-Type", "application/octet-stream");
+    xhr.timeout = UPLOAD_TIMEOUT_MS;
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable && event.total > 0)
+        onProgress(event.loaded / event.total);
+    };
+    const uncertain = (why: string) =>
+      reject(
+        new UploadFailed(
+          `${why} - the file may or may not have been written. List the directory before uploading it again.`,
+          0,
+          true,
+        ),
+      );
+    xhr.onload = () => {
+      let payload: { error?: unknown; detail?: unknown } | null = null;
+      try {
+        payload = JSON.parse(xhr.responseText);
+      } catch {
+        payload = null;
+      }
+      if (xhr.status >= 200 && xhr.status < 300 && payload) {
+        onProgress(1);
+        resolve(payload as unknown as RemoteUpload);
+        return;
+      }
+      const detail =
+        typeof payload?.detail === "string"
+          ? payload.detail
+          : `Upload failed (${xhr.status}).`;
+      // Only the server's word, or an answer it never gave, is uncertain; a
+      // refusal (4xx) and a failure it names as certain wrote nothing.
+      const unsure =
+        payload?.error === "UploadOutcomeUncertain" ||
+        payload === null ||
+        xhr.status === 504;
+      reject(new UploadFailed(detail, xhr.status, unsure));
+    };
+    xhr.onerror = () => uncertain("The connection to the API failed");
+    xhr.ontimeout = () => uncertain("The upload timed out");
+    xhr.onabort = () => uncertain("The upload was cancelled in flight");
+    if (signal.aborted) {
+      reject(new UploadFailed("Cancelled before it was sent.", 0, false));
+      return;
+    }
+    signal.addEventListener("abort", () => xhr.abort(), { once: true });
+    xhr.send(file);
+  });
+}
+
+// --- activity history (#1954) ----------------------------------------------
+
+/** models.ActivitySource and friends, held to them by test_api_types.py. */
+export type ActivitySource = "browser" | "server";
+export type BrowserKind =
+  "navigate" | "select" | "submit" | "confirm" | "cancel" | "result";
+export type ActivityKind =
+  | "navigate"
+  | "select"
+  | "submit"
+  | "confirm"
+  | "cancel"
+  | "result"
+  | "request";
+export type ActivityOutcome =
+  "pending" | "succeeded" | "failed" | "refused" | "accepted" | "unknown";
+export type ActivityTrigger =
+  "pointer" | "keyboard" | "programmatic" | "unknown";
+/** A `detail` value. Only the keys activity.DETAIL_KEYS allows are kept. */
+export type DetailValue = string | number | boolean;
+export interface ActivityItem {
+  target: string;
+  outcome: ActivityOutcome;
+}
+/** POST /activity/events, one event - models.BrowserEventIn. */
+export interface BrowserEvent {
+  event_id: string;
+  session_id: string;
+  ts: string;
+  kind: BrowserKind;
+  action: string;
+  target?: string | null;
+  trigger: ActivityTrigger;
+  request_id?: string | null;
+  outcome?: ActivityOutcome | null;
+  duration_ms?: number | null;
+  items?: ActivityItem[];
+  detail?: Record<string, DetailValue>;
+}
+/** POST /activity/events - models.ActivityBatchRequest. */
+export interface ActivityBatch {
+  events: BrowserEvent[];
+}
+export interface ActivityBatchResult {
+  stored: number;
+  not_stored: number;
+  dropped_detail: number;
+  persistent: boolean;
+}
+/** One stored event - models.ActivityEventOut. `claimed_user` is a header
+ *  anyone can set: shown as claimed, never as who it was. */
+export interface ActivityEvent {
+  event_id: string;
+  ts: string;
+  recorded_at: string;
+  source: ActivitySource;
+  kind: ActivityKind;
+  action: string;
+  target: string | null;
+  outcome: ActivityOutcome | null;
+  session_id: string | null;
+  request_id: string | null;
+  claimed_user: string | null;
+  trigger: ActivityTrigger | null;
+  method: string | null;
+  status_code: number | null;
+  duration_ms: number | null;
+  items: ActivityItem[];
+  detail: Record<string, unknown>;
+  dropped: number;
+}
+export interface ActivityPersistence {
+  persistent: boolean;
+  path: string | null;
+  failures: number;
+  last_error: string | null;
+  last_failure_at: string | null;
+}
+/** GET /activity - models.ActivityResponse. */
+export interface ActivityHistory extends Pollable {
+  events: ActivityEvent[];
+  persistence: ActivityPersistence;
+  retention_days: number;
+  max_rows: number;
+}

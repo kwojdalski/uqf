@@ -51,7 +51,7 @@ from uqf_airflow_provider.status_reader import MalformedStatusFile, status_file_
 from uqf_airflow_provider.translate import PokeOutcome
 
 WORKER = "markout_backfill"
-INSTANCE = "demo_markout1"
+INSTANCE = "crypto_markout1"
 
 ETL_CORE_Q = Path(__file__).resolve().parents[3] / "src" / "etl" / "core"
 

@@ -267,7 +267,8 @@ select:focus {
 .badge.connected,
 .badge.completed,
 .badge.idle,
-.badge.up {
+.badge.up,
+.badge.remote-operations-enabled {
   color: #136448;
   background: #e6f6ef;
   border-color: #a5d5be;
@@ -589,4 +590,39 @@ details.panel[open] > summary {
   margin-left: 0.5rem;
   font-size: 0.8rem;
   color: #9c2834;
+}
+
+/* The file browser (#1950). */
+.actions,
+.crumbs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  margin: 0.5rem 0;
+}
+button.link {
+  border: none;
+  background: none;
+  padding: 0;
+  color: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+  font: inherit;
+}
+.file-name {
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+tr.blocked td {
+  opacity: 0.6;
+}
+
+/* Uploads (#1951). */
+.drop-zone {
+  border: 2px dashed #8a8f98;
+  border-radius: 6px;
+  padding: 1rem;
+  margin: 0.5rem 0;
+  text-align: center;
 }

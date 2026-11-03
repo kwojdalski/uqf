@@ -33,6 +33,9 @@ remains, where the person running it is at a terminal on the host.
 from __future__ import annotations
 
 import datetime as dt
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass
 from typing import Any
 
@@ -40,6 +43,29 @@ from uqf_frontend.config import Settings
 from uqf_frontend.errors import ValidationFailed, WritesDisabled
 from uqs.generated.q_facts import CFG_ENV_LAYER, CFG_OVERRIDE_LAYER
 from uqs.model.qnames import config_env_var
+
+#: Called at the point past which an action may have changed something - the
+#: audit's `Audit.begin` (activity.py), so a failure after it is recorded as
+#: `unknown` rather than `refused`. A context variable rather than a
+#: parameter, so no signature here changes for a caller that is not listening.
+_ACTING: ContextVar[Callable[[], None] | None] = ContextVar("uqf_control_acting", default=None)
+
+
+@contextmanager
+def reporting_acting(callback: Callable[[], None]) -> Iterator[None]:
+    """Call *callback* when an action in this block starts changing something."""
+    token = _ACTING.set(callback)
+    try:
+        yield
+    finally:
+        _ACTING.reset(token)
+
+
+def _acting() -> None:
+    callback = _ACTING.get()
+    if callback is not None:
+        callback()
+
 
 #: The three lifecycle verbs this seam exposes. `clean` is excluded on
 #: purpose - see the module docstring.
@@ -132,12 +158,14 @@ def lifecycle(settings: Settings, action: str, procs: str) -> CommandResult:
     from uqs.stack import runtime
 
     fn = {"start": runtime.start, "stop": runtime.stop, "restart": runtime.restart}[action]
+    paths = _paths(settings)
+    _acting()
     try:
         # Bounded just inside the browser's own wait (config.lifecycle_timeout),
         # so a slow `start all` is refused here rather than timing out in the
         # browser while torq.sh is still running and inviting a second Start.
         result = fn(
-            _paths(settings),
+            paths,
             procs,
             base_port=settings.base_port,
             capture=True,
@@ -172,6 +200,7 @@ def set_process_field(settings: Settings, procname: str, field: str, value: str)
     from uqs.stack import procs as stack_procs
 
     paths = _paths(settings)
+    _acting()
     try:
         stack_procs.set_process_config(paths, procname, field, value)
         return stack_procs.get_process_config(paths, procname, base_port=settings.base_port)
@@ -241,6 +270,7 @@ def set_worker_config(gateway: Any, settings: Settings, key: str, value: str) ->
         raise ValidationFailed("a worker-config key is required")
     from uqf_frontend.gateway import TIERS
 
+    _acting()
     raw = gateway.route(SET_WORKER_CONFIG, (key, value), TIERS["rdb"])
     explain = _plain(raw)
     layer, effective = _layer_of(explain)
@@ -334,6 +364,7 @@ def start_backfill(
     paths = _paths(settings)
     try:
         procname = procname_for(worker)
+        _acting()
         result = start_backfill(
             paths,
             worker,
