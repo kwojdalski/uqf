@@ -20,7 +20,7 @@ import typer
 from rich.markup import escape
 
 from uqs import timerange
-from uqs.cli.json_out import emit, json_opt
+from uqs.cli.json_out import emit, json_opt, utc_times
 from uqs.cli.pipelines import needs_pipelines
 from uqs.cli.range_options import DateOpt, LastOpt, RangeFromOpt, RangeToOpt
 from uqs.cli.safety import ReadOnly
@@ -34,8 +34,18 @@ VerifyJson = json_opt(
     '{"dataset", "range_from", "range_to", "producers": [{producer, mode, source}], "readonly", '
     '"checks": [{category: schema/behaviour/cross_mode/completeness, status: PASS/FAIL/UNVERIFIED, '
     "dataset, scope, range_from, range_to, basis, reason, findings: [text]}], "
-    '"behaviours": [{behaviour, mode, producer, status, reason, evidence}], "worst"}'
+    '"behaviours": [{behaviour, mode, producer, status, reason, evidence}], "worst", "ok"} - '
+    "ok false when it exits 1; the bounds ISO-8601 in UTC"
 )
+
+
+def _utc_bounds(record: dict) -> dict:
+    """`record`, and each of its checks, with its bounds ISO-8601 in UTC (#1882):
+    the verifier reads the window in UTC and spells it with no zone."""
+    out = utc_times(record)
+    if isinstance(out.get("checks"), list):
+        out["checks"] = [_utc_bounds(c) if isinstance(c, dict) else c for c in out["checks"]]
+    return out
 
 
 def _word(status: str) -> str:
@@ -124,9 +134,12 @@ def check(
         _die(exc)
         return
     worst = dataset_verify.worst(report)
+    failed = (
+        worst == "FAIL" or (fail_unverified and worst == "UNVERIFIED") or not report["readonly"]
+    )
     if as_json:
-        emit(report | {"worst": worst})
+        emit({"ok": not failed, **_utc_bounds(report), "worst": worst})
     else:
         render(report)
-    if worst == "FAIL" or (fail_unverified and worst == "UNVERIFIED") or not report["readonly"]:
+    if failed:
         raise typer.Exit(code=1)

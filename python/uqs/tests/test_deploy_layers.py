@@ -167,7 +167,7 @@ def test_list_targets_shows_the_merged_target_and_its_environment(root):
     rows = {r["target"]: r for r in history.target_rows(root)}
     assert rows["alpha"]["environment"] == "uat" and rows["beta"]["environment"] == ""
     assert rows["alpha"]["as"] == "svc", "the defaults' remote_user"
-    assert rows["alpha"]["labels"] == "tier=uat", "the environment's labels"
+    assert rows["alpha"]["labels"] == {"tier": "uat"}, "the environment's labels"
 
 
 def test_target_add_and_remove_keep_the_shared_layers(root):

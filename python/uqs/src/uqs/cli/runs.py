@@ -17,7 +17,7 @@ import typer
 from rich.table import Table
 
 from uqs import timerange
-from uqs.cli.json_out import emit, json_opt
+from uqs.cli.json_out import emit, json_opt, utc_times
 from uqs.cli.pipelines import needs_pipelines
 from uqs.cli.range_options import DateOpt, LastOpt, RangeFromOpt, RangeToOpt
 from uqs.cli.renames import alias_command
@@ -81,12 +81,13 @@ ShowJson = json_opt(
 
 
 def _record(row: dict, columns: tuple[str, ...]) -> dict:
-    """One ledger row as JSON: the table's columns, a whole-number count as an int."""
+    """One ledger row as JSON: the table's columns, a whole-number count as an
+    int, and a time - `.z.p`, UTC - ISO-8601 with its offset (#1882)."""
     out = {}
     for col in columns:
         value = row.get(col)
         out[col] = int(value) if isinstance(value, float) and value.is_integer() else value
-    return out
+    return utc_times(out)
 
 
 def _where(attach: str | None) -> dict:

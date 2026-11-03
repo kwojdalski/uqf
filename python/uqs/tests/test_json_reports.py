@@ -116,7 +116,9 @@ def test_job_gaps_prints_the_gaps_and_their_refills(monkeypatch):
     holes = [hole | {"range_to": "2024-01-01T01:00:00.000000000"}]
     monkeypatch.setattr(stack_uptime, "gaps", lambda *_a: (holes, {"w_backfill": None}, 2))
     doc = _doc(["job", "gaps", "j", "--from", "2024-01-01", "--to", "2024-01-02"])
-    assert doc["gaps"] == holes and doc["sessions"] == 2 and doc["refillable"]
+    # the ledger's .z.p, spelt with its UTC offset (#1882)
+    utc = [{k: f"{v}+00:00" for k, v in h.items()} for h in holes]
+    assert doc["gaps"] == utc and doc["sessions"] == 2 and doc["refillable"]
     (refill,) = doc["refills"]
     assert refill["worker"] == "w_backfill"
     assert refill["command"].startswith("uqs job backfill w_backfill --from ")
@@ -205,7 +207,7 @@ def test_deploy_verify_json_leaves_out_the_marker(monkeypatch, capsys):
     monkeypatch.setattr(verify, "_expected", lambda *_a: ({"rdb1": 6002}, set()))
     monkeypatch.setattr(verify, "busy_ports", lambda expected, _c: {})
     assert verify.run("p", ports_free=True, marker=False) == 0
-    assert json.loads(capsys.readouterr().out) == {"profile": "p", "busy": {}}
+    assert json.loads(capsys.readouterr().out) == {"ok": True, "profile": "p", "busy": {}}
     verify.run("p", ports_free=True)
     assert capsys.readouterr().out.splitlines()[-1] == verify.OK_MARKER
 

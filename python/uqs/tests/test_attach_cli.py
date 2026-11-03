@@ -158,7 +158,7 @@ def test_the_old_verbs_are_hidden_aliases_that_name_the_new_spelling(world, monk
     assert run_old("attach", *new(world, "--dry-run")).exit_code == 0
     assert run_old("detach", "pb-uat", "--dry-run").exit_code == 1, "nothing saved by a dry run"
     done = run_old("contract", "list", "--attach", "pb-uat", "--json")
-    assert done.exit_code == 0 and json.loads(done.output) == []
+    assert done.exit_code == 0 and json.loads(done.output) == {"contracts": []}
     assert warned == [
         ("attach", "uqs job attachment add"),
         ("detach", "uqs job attachment remove"),
@@ -572,16 +572,16 @@ def test_list_attachments_shows_attachment_and_publisher_state_separately(world,
     before = snapshot(world.state_dir)
     result = _list("--json")
     assert result.exit_code == 0, result.output
-    (row,) = json.loads(result.output)
+    (row,) = json.loads(result.output)["attachments"]
     assert row["attachment"] == "pb-uat" and row["job"] == "pb_general_ledger"
-    assert row["publisher"] == "pb_ledger1" and row["stack"] == "6000"
+    assert row["publisher"] == "pb_ledger1" and row["stack"] == 6000
     assert row["host"] == "localhost" and row["persist"] == "runtime-only"
     assert row["state"] == "verified" and row["publisher_state"] == "stopped"
     assert snapshot(world.state_dir) == before, "listing changes nothing"
     monkeypatch.setattr(
         attach_state, "_port_state", lambda host, port: ("unreachable", "no route to host")
     )
-    (row,) = json.loads(_list("--json").output)
+    (row,) = json.loads(_list("--json").output)["attachments"]
     assert row["publisher_state"] == "unreachable" and row["state"] == "verified"
     assert "attachments (1)" in _list().output
 

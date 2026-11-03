@@ -30,6 +30,7 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
+from uqs.cells import Shown
 from uqs.logger import get_logger
 from uqs.model.connectors import CONNECTOR_DIR, bundle_connectors, feed_produces
 from uqs.model.plant_schema import _publishers
@@ -184,7 +185,11 @@ def worker_edges(
     return out
 
 
-def dependency_rows(pipelines: Iterable[Any] = PIPELINES) -> list[dict[str, str]]:
+#: What `list dependencies` says of a table no process or connector publishes.
+NOTHING_DECLARES = "(nothing declares it)"
+
+
+def dependency_rows(pipelines: Iterable[Any] = PIPELINES) -> list[dict[str, Any]]:
     """One row per (process, input table): who needs what, and who provides it.
 
     The listing behind `uqs list dependencies`. Sorted by consumer so
@@ -192,7 +197,7 @@ def dependency_rows(pipelines: Iterable[Any] = PIPELINES) -> list[dict[str, str]
     """
     producers = producers_by_table(pipelines)
     external = external_producers(repo_root())
-    rows: list[dict[str, str]] = []
+    rows: list[dict[str, Any]] = []
     for procname, tables in sorted(inputs_by_process(pipelines).items()):
         for table in tables:
             sources = sorted(producers.get(table, set()))
@@ -202,7 +207,8 @@ def dependency_rows(pipelines: Iterable[Any] = PIPELINES) -> list[dict[str, str]
                 {
                     "process": procname,
                     "needs": table,
-                    "published_by": " or ".join(sources) if sources else "(nothing declares it)",
+                    # a list of processes; the table says "a or b" (uqs.cells)
+                    "published_by": Shown(sources, " or ".join(sources) or NOTHING_DECLARES),
                 }
             )
     return rows

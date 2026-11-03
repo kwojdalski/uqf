@@ -329,9 +329,9 @@ def test_up_leaves_a_fleet_that_was_already_running_alone(monkeypatch):
 
 def test_up_all_follows_the_startwithall_processes(monkeypatch):
     rows = [
-        {"procname": "rdb1", "startwithall": "1"},
-        {"procname": "tap1", "startwithall": "0"},
-        {"procname": "fxfeed1", "startwithall": "1"},
+        {"procname": "rdb1", "startwithall": True},
+        {"procname": "tap1", "startwithall": False},
+        {"procname": "fxfeed1", "startwithall": True},
     ]
     result, start, stop, follow = _up(monkeypatch, [], already=set(), rows=rows)
     assert result.exit_code == 0, result.output
@@ -2463,7 +2463,9 @@ def test_list_profiles_shows_the_slot_count(monkeypatch):
     result = runner.invoke(cli.app, ["list", "profiles"])
     assert result.exit_code == 0
     assert "arbitrage" in result.output
-    assert "/14" in result.output, "the budget is the column that matters"
+    assert "allowance" in result.output and "14" in result.output, (
+        "the budget is the column that matters"
+    )
 
 
 # ---------------------------------------------------------------- runtimes

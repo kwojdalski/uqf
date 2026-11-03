@@ -13,6 +13,7 @@ import pytest
 from which_support import fake_which
 
 from uqs import paths as stack_paths
+from uqs.cells import cell, values
 from uqs.external import crypto
 from uqs.external.crypto import CRYPTORUST_ROOT_ENV
 from uqs.external.lifecycle import process_identity
@@ -813,35 +814,35 @@ def test_list_processes_includes_vendored_and_fxfeed1_resolved(fake_paths: UqsPa
     items = listing.list_items(fake_paths, "processes", base_port=7000)
     by_name = {item["procname"]: item for item in items}
     assert set(by_name) == _FIXTURE_VENDORED | {p.procname for p in PIPELINES}
-    assert by_name["discovery1"]["port"] == "7000"
-    assert by_name["fxfeed1"]["port"] == str(7000 + PIPELINE_OFFSETS["fxfeed1"])
-    assert by_name["fxorderbookfeed1"]["port"] == str(7000 + PIPELINE_OFFSETS["fxorderbookfeed1"])
-    assert by_name["cross1"]["port"] == str(7000 + PIPELINE_OFFSETS["cross1"])
-    assert by_name["widefeed1"]["port"] == str(7000 + PIPELINE_OFFSETS["widefeed1"])
-    assert by_name["vectorize1"]["port"] == str(7000 + PIPELINE_OFFSETS["vectorize1"])
-    assert by_name["tap1"]["port"] == str(7000 + PIPELINE_OFFSETS["tap1"])
-    assert by_name["tap1"]["startwithall"] == "0"
+    assert by_name["discovery1"]["port"] == 7000
+    assert by_name["fxfeed1"]["port"] == 7000 + PIPELINE_OFFSETS["fxfeed1"]
+    assert by_name["fxorderbookfeed1"]["port"] == 7000 + PIPELINE_OFFSETS["fxorderbookfeed1"]
+    assert by_name["cross1"]["port"] == 7000 + PIPELINE_OFFSETS["cross1"]
+    assert by_name["widefeed1"]["port"] == 7000 + PIPELINE_OFFSETS["widefeed1"]
+    assert by_name["vectorize1"]["port"] == 7000 + PIPELINE_OFFSETS["vectorize1"]
+    assert by_name["tap1"]["port"] == 7000 + PIPELINE_OFFSETS["tap1"]
+    assert by_name["tap1"]["startwithall"] is False
     assert stack_procs.get_process_config(fake_paths, "tap1")["extras"] == (
         "-tables quote wide_book"
     )
-    assert by_name["fxtradesfeed1"]["port"] == str(7000 + PIPELINE_OFFSETS["fxtradesfeed1"])
-    assert by_name["posbook1"]["port"] == str(7000 + PIPELINE_OFFSETS["posbook1"])
-    assert by_name["demo_markout1"]["port"] == str(7000 + PIPELINE_OFFSETS["demo_markout1"])
+    assert by_name["fxtradesfeed1"]["port"] == 7000 + PIPELINE_OFFSETS["fxtradesfeed1"]
+    assert by_name["posbook1"]["port"] == 7000 + PIPELINE_OFFSETS["posbook1"]
+    assert by_name["demo_markout1"]["port"] == 7000 + PIPELINE_OFFSETS["demo_markout1"]
 
 
 def test_list_processes_shows_what_each_process_reads_and_writes(fake_paths: UqsPaths):
     by_name = {i["procname"]: i for i in listing.list_items(fake_paths, "processes")}
-    assert by_name["fxpositions1"]["inputs"] == "executions"
+    assert by_name["fxpositions1"]["inputs"] == ["executions"]
     # fx_position_open: the book as each day opens, which a restart restores (#943);
     # config_change: its limits, watched by the config audit (#1112)
-    assert set(by_name["fxpositions1"]["outputs"].split(", ")) == {
+    assert set(by_name["fxpositions1"]["outputs"]) == {
         "fx_position",
         "fx_limit_breach",
         "fx_position_open",
         "config_change",
     }
-    assert by_name["fxfeed1"]["inputs"] == "", "a feed reads nothing"
-    assert by_name["discovery1"]["outputs"] == "", "a vendored process declares no edges"
+    assert by_name["fxfeed1"]["inputs"] == [], "a feed reads nothing"
+    assert by_name["discovery1"]["outputs"] == [], "a vendored process declares no edges"
 
 
 def test_list_processes_edges_are_the_ones_summary_draws(fake_paths: UqsPaths):
@@ -849,9 +850,9 @@ def test_list_processes_edges_are_the_ones_summary_draws(fake_paths: UqsPaths):
     inputs, outputs = dependencies.inputs_by_process(), dependencies.outputs_by_process()
     for item in listing.list_items(fake_paths, "processes"):
         name = item["procname"]
-        assert item["outputs"] == ", ".join(outputs.get(name, ())), name
-        if item["inputs"] != listing.RUNTIME_INPUTS:
-            assert item["inputs"] == ", ".join(inputs.get(name, ())), name
+        assert item["outputs"] == list(outputs.get(name, ())), name
+        if item["inputs"] != listing.CHOSEN_AT_START:
+            assert item["inputs"] == list(inputs.get(name, ())), name
 
 
 def test_list_processes_gives_a_bounded_worker_its_dataset_as_output(fake_paths: UqsPaths):
@@ -870,7 +871,7 @@ def test_list_processes_gives_a_bounded_worker_its_dataset_as_output(fake_paths:
         "x_backfill1": "x_rows",
     }
     by_name = {i["procname"]: i for i in listing.list_items(fake_paths, "processes")}
-    assert by_name["deals_backfill1"]["outputs"] == "demo_deals"
+    assert by_name["deals_backfill1"]["outputs"] == ["demo_deals"]
 
 
 def test_list_processes_says_a_runtime_input_is_chosen_at_start(fake_paths: UqsPaths):
@@ -878,14 +879,17 @@ def test_list_processes_says_a_runtime_input_is_chosen_at_start(fake_paths: UqsP
     by_name = {i["procname"]: i for i in listing.list_items(fake_paths, "processes")}
     dynamic = [p.procname for p in PIPELINES if p.subscribes_dynamic]
     assert dynamic, "the case this covers must still exist"
-    assert all(by_name[name]["inputs"] == listing.RUNTIME_INPUTS for name in dynamic)
+    assert all(by_name[name]["inputs"] == listing.CHOSEN_AT_START for name in dynamic)
+    # the table says so; the document says it reads nothing yet (#1882)
+    assert all(cell(by_name[name]["inputs"]) == listing.RUNTIME_INPUTS for name in dynamic)
+    assert all(values(by_name[name])["inputs"] is None for name in dynamic)
 
 
 def test_list_processes_reflects_overrides(fake_paths: UqsPaths):
     stack_procs.set_process_config(fake_paths, "fxfeed1", "startwithall", "0")
     items = listing.list_items(fake_paths, "processes")
     by_name = {item["procname"]: item for item in items}
-    assert by_name["fxfeed1"]["startwithall"] == "0"
+    assert by_name["fxfeed1"]["startwithall"] is False
 
 
 def test_bundle_and_host_overrides_have_separate_owners(fake_paths: UqsPaths):

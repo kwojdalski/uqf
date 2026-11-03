@@ -29,7 +29,7 @@ import typer
 from rich.table import Table
 
 from uqs.cli.deploy import deploy_app
-from uqs.cli.json_out import emit, json_opt
+from uqs.cli.json_out import emit, json_opt, timestamp
 from uqs.cli.safety import ChangesState, ReadOnly, dry_run_note
 from uqs.cli.shared import _die, app, console
 from uqs.cli.skip_options import forwarded
@@ -331,7 +331,8 @@ def deploy_history(
         keys = ("at", "target", "host", "dest", "release", "profile", "status", "stage")
         emit({
             "deployments": [
-                {"default": i in defaults, **{k: e.get(k) for k in keys}}
+                {"default": i in defaults, **{k: e.get(k) for k in keys},
+                 "at": timestamp(e.get("at"), naive="utc")}
                 for i, e in reversed(rows[-limit:])
             ]
         })  # fmt: skip

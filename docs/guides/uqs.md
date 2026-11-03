@@ -1752,8 +1752,28 @@ there.
 Every command that reports something takes `--json` and prints one JSON document
 on stdout, holding the same data as the table it would print (#1731). Its lists
 are records with snake_case keys: the `Depends on` column is `depends_on`. Logs
-go to stderr, and a refusal is the document `{"ok": false, "error": "..."}` with
-exit code 1, so stdout always parses:
+go to stderr, and a refusal is the document `{"ok": false, "error": "..."}`, so
+stdout always parses: exit code 1 for a refusal, 2 for a usage error Click
+catches - a missing argument, an unknown option - and 1 for an unknown
+`--target` (#1882).
+
+One contract holds for every document (#1882):
+
+- it is an object, never a bare list: a list command prints `{<kind>: [...]}` -
+  `uqs list processes --json` is `{processes: [...]}`, `uqs target list --json`
+  `{targets: [...]}`, `uqs list env --json` `{variables: [...]}`,
+  `uqs list --json` `{kinds: [...]}`;
+- its values are typed, read from the row rather than from the text its table
+  cell shows: a port is a number, a flag `true`/`false`, a set of names a list.
+  Where the table shows words for a missing value - `(chosen at start)`,
+  `no cap`, `(nothing declares it)` - the document has `null` or `[]`;
+- a process is `process`, wherever the table calls it `procname`;
+- a document that reports a verdict says it as `ok`, `false` exactly when the
+  command exits non-zero (`deploy check` keeps `passed` beside it, which a
+  deploying uqs of another version reads; `job check` keeps `worst`);
+- a time is ISO-8601 with an explicit offset: q's local `.z.P` (a log line,
+  TorQ's clock) carries this machine's, a ledger's `.z.p` `+00:00`, and a
+  fraction of a second keeps all its digits.
 
 ```bash
 uqs job runs list --json | jq -r '.runs[] | select(.status == "failed") | .run_id'
@@ -1775,26 +1795,28 @@ adds `findings` beside `error`: one record per blocker with its `code` (such as
 
 Each command's `--help` names its document. The commands #1731 added:
 
-  | command                                     | document                                                                                                                                                                                                         |
-  | ---                                         | ---                                                                                                                                                                                                              |
-  | `status`                                    | `{interpreter, processes: [{time, process, status, pid, port, heartbeat, responds, batches, depends_on, inputs, outputs, port_source}], silent, failing, starved: [{process, reasons}], heartbeats_collected}`   |
-  | `graph`                                     | `{direction, trees: [{process, status, tables, repeat, children}]}`                                                                                                                                              |
-  | `query [PROC] EXPR`                         | `{expression, result}`: a table is a list of records                                                                                                                                                             |
-  | `schema [PROC] [TABLE]`                     | `{process, port, tables: [{table, rows, columns}]}`, or with a TABLE `{process, port, columns: [{table, column, type, q, attribute}]}`                                                                           |
-  | `logs`                                      | `{lines: [{time, host, procname, proctype, loglevel, id, message}]}`; not with `--follow`, `--channel` or `--multitail`                                                                                          |
-  | `config show PROC [FIELD]`                  | `{process, fields: [{field, value}]}`, or `{process, field, value}`                                                                                                                                              |
-  | `job gaps`                                  | `{job, gaps: [{range_from, range_to}], sessions, refillable, refills: [{worker, range_from, range_to, command}], today_not_refillable}`                                                                          |
-  | `job preview`                               | the preview's own result: `{job, mode, state, live, cursor, next_cursor, advances, fetched, rows, sample, failures, trace}`                                                                                      |
-  | `job check`                                 | `{dataset, range_from, range_to, producers: [{producer, mode, source}], readonly, checks: [{category, status, dataset, scope, range_from, range_to, basis, reason, findings}], behaviours: [...], worst}`        |
-  | `job runs list [--unfinished]`              | `{runs: [{run_id, worker, dataset, status, range_from, range_to, ...}]}`                                                                                                                                         |
-  | `job runs show RUN`                         | `{run, facts, logs, rerun}`                                                                                                                                                                                      |
-  | `job runs audit`                            | `{facts: [{run_id, dataset, range_from, range_to, label, text}]}`                                                                                                                                                |
-  | `connector status`                          | `{connectors: [{name, running, pid, log, ...}]}`                                                                                                                                                                 |
-  | `setup odbc status`                         | `{home, current, previous, versions}`; without `--json` it is now a table                                                                                                                                        |
-  | `deploy check`                              | its report without the `DEPLOY_VERIFY_OK`/`FAILED` marker line                                                                                                                                                   |
-  | `deploy history`                            | `{deployments: [{default, at, target, host, dest, release, profile, status, stage}]}`                                                                                                                            |
-  | `target check`                              | `{ok, target, host, dest, remote_user, release}`                                                                                                                                                                 |
-  | `data check --table`, `data alter`          | `{ok, hdb, resolved_from, ssh, warnings, plan, result}`: `plan` and `result` are `scripts/gates/hdb_alter.q`'s own documents - partitions, shapes, steps, journal, final check                                   |
+  | command                                     | document                                                                                                                                                                                                                                                                         |
+  | ---                                         | ---                                                                                                                                                                                                                                                                              |
+  | `status`                                    | `{interpreter: {binary, actual, problem, runnable, connection_limit, summary}, processes: [{time, process, status, pid, port, heartbeat, responds, batches, depends_on, inputs, outputs, port_source}], silent, failing, starved: [{process, reasons}], heartbeats_collected}`   |
+  | `graph`                                     | `{direction, trees: [{process, status, tables, repeat, children}]}`                                                                                                                                                                                                              |
+  | `query [PROC] EXPR`                         | `{expression, result}`: a table is a list of records                                                                                                                                                                                                                             |
+  | `schema [PROC] [TABLE]`                     | `{process, port, tables: [{table, rows, columns}]}`, or with a TABLE `{process, port, columns: [{table, column, type, q, attribute}]}`                                                                                                                                           |
+  | `logs`                                      | `{lines: [{time, host, process, proctype, loglevel, id, message}]}`; not with `--follow`, `--channel` or `--multitail`                                                                                                                                                           |
+  | `config show PROC [FIELD]`                  | `{process, fields: [{field, value}]}`, or `{process, field, value}`                                                                                                                                                                                                              |
+  | `job gaps`                                  | `{job, gaps: [{range_from, range_to}], sessions, refillable, refills: [{worker, range_from, range_to, command}], today_not_refillable}`                                                                                                                                          |
+  | `job preview`                               | the preview's own result: `{job, mode, state, live, cursor, next_cursor, advances, fetched, rows, sample, failures, trace}`                                                                                                                                                      |
+  | `job check`                                 | `{dataset, range_from, range_to, producers: [{producer, mode, source}], readonly, checks: [{category, status, dataset, scope, range_from, range_to, basis, reason, findings}], behaviours: [...], worst, ok}`                                                                    |
+  | `job runs list [--unfinished]`              | `{runs: [{run_id, worker, dataset, status, range_from, range_to, ...}]}`                                                                                                                                                                                                         |
+  | `job runs show RUN`                         | `{run, facts, logs, rerun}`                                                                                                                                                                                                                                                      |
+  | `job runs audit`                            | `{facts: [{run_id, dataset, range_from, range_to, label, text}]}`                                                                                                                                                                                                                |
+  | `connector status`                          | `{connectors: [{name, running, pid, log, ...}]}`                                                                                                                                                                                                                                 |
+  | `setup odbc status`                         | `{home, current, previous, versions}`; without `--json` it is now a table                                                                                                                                                                                                        |
+  | `deploy check`                              | its report without the `DEPLOY_VERIFY_OK`/`FAILED` marker line                                                                                                                                                                                                                   |
+  | `deploy history`                            | `{deployments: [{default, at, target, host, dest, release, profile, status, stage}]}`                                                                                                                                                                                            |
+  | `target check`                              | `{ok, target, host, dest, remote_user, release}`                                                                                                                                                                                                                                 |
+  | `data check`                                | `{ok, hdb, present, segmented, partitions, missing_tables, missing_columns, types_checked, type_changes}`                                                                                                                                                                        |
+  | `config sources check SOURCE...`            | `{ok, sources: [{source, status, stage, rows, elapsed_ms, diagnostic}]}` - one document, not a line per source                                                                                                                                                                   |
+  | `data check --table`, `data alter`          | `{ok, hdb, resolved_from, ssh, warnings, plan, result}`: `plan` and `result` are `scripts/gates/hdb_alter.q`'s own documents - partitions, shapes, steps, journal, final check                                                                                                   |
 
 ## Installing
 

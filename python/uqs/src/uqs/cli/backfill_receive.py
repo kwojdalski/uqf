@@ -9,13 +9,13 @@ uqs.attach.backfill_remote.
 
 from __future__ import annotations
 
-import json
 from datetime import datetime
 from typing import Annotated
 
 import typer
 
 from uqs.attach import backfill_remote, backfill_run, config, service
+from uqs.cli.json_out import emit, json_opt
 from uqs.cli.renames import renamed
 from uqs.cli.safety import ChangesState, dry_run_note
 from uqs.cli.shared import JOB_OPERATIONS_PANEL, _die, _paths, console, job_app
@@ -109,6 +109,12 @@ def extract(
     raise typer.Exit(code=code)
 
 
+ReceiveJson = json_opt(
+    '{"pid", "port", "attachment", "contract", "dataset", "hdb_dir", "conflict_policies", '
+    '"last_writable_date", "stops_at", "readers": [], "log"} - or, with --stop, {"stopped": [...]}'
+)
+
+
 @job_app.command(
     "receive",
     rich_help_panel=JOB_OPERATIONS_PANEL,
@@ -145,7 +151,7 @@ def receive(
             help="Admit the destination and show what it would serve; start nothing",
         ),
     ] = False,
-    as_json: Annotated[bool, typer.Option("--json", help="Print what started as JSON")] = False,
+    as_json: ReceiveJson = False,
 ) -> None:
     """Start the receiver for a backfill extracted on another machine (#1650).
 
@@ -169,7 +175,7 @@ def receive(
         stopped = backfill_remote.stop_receivers(attach)
         names = ", ".join(f"{r['worker']} (pid {r['pid']})" for r in stopped) or "none was running"
         if as_json:
-            typer.echo(json.dumps({"stopped": stopped}, indent=2, sort_keys=True))
+            emit({"stopped": stopped})
         else:
             console.print(f"stopped: {names}", markup=False)
         raise typer.Exit(code=0)
@@ -198,7 +204,7 @@ def receive(
         _die(exc)
         return
     if as_json:
-        typer.echo(json.dumps(out, indent=2, sort_keys=True))
+        emit(out)
     elif dry_run:
         console.print(
             f"would receive {out['dataset']} (contract {out['contract']}) for attachment "

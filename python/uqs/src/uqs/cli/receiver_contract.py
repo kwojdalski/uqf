@@ -12,7 +12,6 @@ logging its new spelling.
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Annotated
 
@@ -21,6 +20,7 @@ import typer
 from uqs.attach import receiver_contract
 from uqs.cli import completion
 from uqs.cli.attachment import attachment_app
+from uqs.cli.json_out import emit, json_opt
 from uqs.cli.renames import alias_command
 from uqs.cli.safety import ChangesState, ReadOnly, dry_run_note
 from uqs.cli.shared import JOB_OPERATIONS_PANEL, _die, _paths, console, job_app
@@ -78,6 +78,12 @@ def export(
         console.print(said, markup=False)
 
 
+ApproveJson = json_opt(
+    '{"contract", "binding": {attachment, destination, host, stack_id, hdb_dir, users, '
+    "conflict_policies, max_rows, approved_at, ...}}"
+)
+
+
 @contract_app.command("approve", cls=ChangesState)
 def approve(
     file: Annotated[
@@ -101,9 +107,7 @@ def approve(
         bool,
         typer.Option("--dry-run", "-n", help="Check it and show the record; store nothing"),
     ] = False,
-    as_json: Annotated[
-        bool, typer.Option("--json", help="Print the approved record as JSON")
-    ] = False,
+    as_json: ApproveJson = False,
 ) -> None:
     """Approve a receiver contract for an attachment on THIS machine, the stack's.
 
@@ -125,7 +129,7 @@ def approve(
         _die(exc)
         return
     if as_json:
-        typer.echo(json.dumps(record, indent=2, sort_keys=True))
+        emit(record)
         return
     b = record["binding"]
     console.print(
@@ -141,10 +145,13 @@ def approve(
         console.print(dry_run_note())
 
 
+ListJson = json_opt('{"contracts": [{contract, binding, path}]}, oldest approval first')
+
+
 @contract_app.command("list", cls=ReadOnly)
 def list_(
     attach: Annotated[str, typer.Option("--attach", help="The attachment whose approvals to list")],
-    as_json: Annotated[bool, typer.Option("--json", help="Print them as JSON")] = False,
+    as_json: ListJson = False,
 ) -> None:
     """The receiver contracts approved for an attachment on this machine."""
     try:
@@ -153,7 +160,7 @@ def list_(
         _die(exc)
         return
     if as_json:
-        typer.echo(json.dumps(found, indent=2, sort_keys=True))
+        emit({"contracts": found})
         return
     if not found:
         console.print(f"no contract is approved for attachment {attach}", markup=False)

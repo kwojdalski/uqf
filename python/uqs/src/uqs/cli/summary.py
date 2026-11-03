@@ -105,19 +105,37 @@ def _note_monitor_coverage() -> None:
 
 
 SummaryJson = json_opt(
-    '{"interpreter", "processes": [{time, process, status, pid, port, heartbeat, responds, '
+    '{"interpreter": {binary, actual, problem, runnable, connection_limit, summary}, '
+    '"processes": [{time, process, status, pid, port, heartbeat, responds, '
     'batches, depends_on: [], inputs: [], outputs: [], port_source}], "silent": [process], '
     '"failing": [{job, process, ...}], "starved": [{process, reasons}], "heartbeats_collected"}'
 )
+
+
+def _interpreter(status) -> dict:
+    """The interpreter line as fields - all it says, `runnable` and the
+    connection budget included, which the bare status left out (#1882)."""
+    out = {
+        "binary": status.binary,
+        "actual": status.actual,
+        "problem": status.problem,
+        "runnable": status.binary is not None,
+        "connection_limit": None,
+        "summary": listing.interpreter_line(status),
+    }
+    if status.binary is not None:
+        try:  # null: no cap; unreadable, the summary line says why
+            out["connection_limit"] = profiles.licence_limit()
+        except UqsError:
+            pass
+    return out
 
 
 def _json(rows: list[dict], gathered, status) -> None:
     """The table and what is printed under it, as one document."""
     up = {row["Process"] for row in rows if row["Status"] == "up"}
     emit({
-        "interpreter": {
-            "binary": status.binary, "actual": status.actual, "problem": status.problem,
-        },
+        "interpreter": _interpreter(status),
         "processes": [record(row) for row in rows],
         "silent": gathered.silent,
         "failing": gathered.failing,

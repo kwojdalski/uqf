@@ -20,7 +20,8 @@ import typer
 from rich.table import Table
 
 from uqs.cli import completion
-from uqs.cli.json_out import emit, json_opt
+from uqs.cli.json_out import emit, json_opt, timestamp
+from uqs.cli.json_out import records as json_records
 from uqs.cli.renames import alias_command, renamed
 from uqs.cli.safety import ChangesState, ReadOnly, dry_run_note
 from uqs.cli.shared import (
@@ -132,14 +133,17 @@ def config_set(
 
 
 LogsJson = json_opt(
-    '{"lines": [{time, host, procname, proctype, loglevel, id, message}]} - the history '
-    "only: not with --follow, --channel or --multitail"
+    '{"lines": [{time, host, process, proctype, loglevel, id, message}]} - the history '
+    "only: not with --follow, --channel or --multitail; time ISO-8601 with its offset"
 )
 _LINE_KEYS = ("time", "host", "procname", "proctype", "loglevel", "id", "message")
 
 
 def _json_lines(records: list[dict]) -> None:
-    emit({"lines": [{k: r.get(k) for k in _LINE_KEYS} for r in records]})
+    """The lines as one document: a process is `process`, and the time TorQ
+    stamped in q's local `.z.P` is ISO-8601 with this machine's offset (#1882)."""
+    lines = [{k: r.get(k) for k in _LINE_KEYS} for r in records]
+    emit({"lines": [line | {"time": timestamp(line["time"])} for line in json_records(lines)]})
 
 
 @app.command(

@@ -9,7 +9,6 @@ connection flags for one no target declares (cli/deploy_connection.py, #1736).
 
 from __future__ import annotations
 
-import json
 from typing import Annotated
 
 import typer
@@ -17,7 +16,7 @@ import typer
 from uqs.cli import deploy_connection as conn
 from uqs.cli import deploy_policy as policy
 from uqs.cli.deploy import _failed, deploy_app
-from uqs.cli.json_out import json_opt
+from uqs.cli.json_out import emit, json_opt
 from uqs.cli.renames import alias_command, renamed
 from uqs.cli.safety import ChangesState, OverrideOpt, ReadOnly, ReasonOpt, YesOpt
 from uqs.cli.shared import _die, json_refusal
@@ -38,13 +37,18 @@ def _server(ctx, target, flags: dict, **fixed):
     return cfg, Remote(cfg.host, cfg.connect_timeout, remote_user=cfg.remote_user)
 
 
+StatusJson = json_opt(
+    '{"ok", "format", "host", "dest", "current", "previous", "releases", "last_deployment", '
+    '"health": {checked, passed, reason, processes}, "lock"} - ok false when the health check '
+    "ran and failed"
+)
+
+
 @deploy_app.command("status", cls=renamed(conn.OLD_SPELLINGS, ReadOnly))
 def status_cmd(
     ctx: typer.Context,
     target: conn.Target = None,
-    as_json: Annotated[
-        bool, typer.Option("--json", help="Print the status as JSON, to script against")
-    ] = False,
+    as_json: StatusJson = False,
     health: Annotated[
         bool,
         typer.Option("--health/--no-health", help="Ask current's processes whether they answer"),
@@ -70,9 +74,13 @@ def status_cmd(
         result = status.status(cfg, remote, health=health)
     except config.DeployError as exc:
         _failed("uqs deploy status", exc.stage, exc)
-    typer.echo(json.dumps(result, indent=2) if as_json else status.render(result))
     h = result["health"]
-    raise typer.Exit(code=1 if h["checked"] and not h["passed"] else 0)
+    failing = h["checked"] and not h["passed"]
+    if as_json:
+        emit({"ok": not failing, **result})
+    else:
+        typer.echo(status.render(result))
+    raise typer.Exit(code=1 if failing else 0)
 
 
 #: `--to` names a release here, and only here, while everywhere else it ends a
@@ -195,8 +203,8 @@ def _confirm_prune(planned: dict) -> bool:
 
 
 VerifyJson = json_opt(
-    '{"profile", "passed", "reason", "processes": [{process, port, pipeline, ok, error, ...}]} '
-    '- with --ports-free, {"profile", "busy": {process: port}}; no marker line'
+    '{"ok", "profile", "passed", "reason", "processes": [{process, port, pipeline, ok, error, '
+    '...}]} - with --ports-free, {"ok", "profile", "busy": {process: port}}; no marker line'
 )
 
 

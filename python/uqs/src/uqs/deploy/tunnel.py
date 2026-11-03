@@ -89,12 +89,16 @@ def remote_ports(
 
 
 def _parse_ports(r: control.Remote, out: str) -> dict[str, int]:
-    """The JSON list `uqs list processes --json` prints, from where it starts."""
-    start = out.find("[")
+    """The document `uqs list processes --json` prints, from where it starts:
+    `{"processes": [{process, port}]}` (#1882), or the bare list of
+    `{procname, port}` a release from before it printed - the release on the
+    server is whatever was deployed there, not this checkout."""
+    start = min((i for i in (out.find("{"), out.find("[")) if i >= 0), default=-1)
     try:
-        rows: list = json.loads(out[start:]) if start >= 0 else []
-        ports = {str(row["procname"]): int(row["port"]) for row in rows}
-    except ValueError, TypeError, KeyError:
+        doc = json.loads(out[start:]) if start >= 0 else []
+        rows: list = doc["processes"] if isinstance(doc, dict) else doc
+        ports = {str(row.get("process", row.get("procname"))): int(row["port"]) for row in rows}
+    except ValueError, TypeError, KeyError, AttributeError:
         raise UqsError(
             f"target {r.name}: its release did not list its processes as JSON - "
             f"`uqs --target {r.name} list processes --json` shows what it printed; "
