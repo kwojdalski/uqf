@@ -326,7 +326,15 @@ on - `uqs setup odbc` installs, loads and rolls back a private ODBC setup.
 kafka, the cryptorust recorders - which are processes outside TorQ, not the q
 processes `uqs start` manages: `start`, `stop`, `restart` (with `start`'s
 options, which are not remembered), `status`, and `logs NAME [-f] [-l N]`, which
-shows the one plain log file `status` names.
+shows the one plain log file `status` names:
+
+```bash
+uqs connector start kafka --topic trades,quotes
+uqs connector restart kafka --group uqf-replay     # start's options, given again
+uqs connector logs kafka -f
+uqs connector stop kafka
+eval "$(uqs setup odbc env)"                       # this shell, on the private ODBC setup
+```
 
 Putting a release on a server is `uqs deploy` (`history` lists what this machine
 deployed): see [Deploying to a server](deploy.md).
@@ -335,9 +343,11 @@ deployed): see [Deploying to a server](deploy.md).
 `uqs start posbook1 demo_markout1` - which is what lets TAB complete them. A
 single quoted `"posbook1 demo_markout1"` still works. `--base-port` sets
 `KDBBASEPORT` (default: the runtime's own base port, `6050` for `uqf`; see the
-port table below). `--export FILE` (on `status`/`query`/`list`/`config show`)
-additionally writes the same rows to `FILE` as CSV or Parquet, format inferred
-from the extension; a result that is not a table, such as `count t`, is refused.
+port table below). `--export FILE` (on `status`, `query`, `schema`, `list`,
+`config show`, and every noun's `list`: `runtime`, `job`, `job attachment`,
+`target` and `override`) additionally writes the same rows to `FILE` as CSV or
+Parquet, format inferred from the extension; a result that is not a table, such
+as `count t`, is refused.
 
 ### Stopping a process that will not stop
 

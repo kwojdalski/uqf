@@ -1,9 +1,9 @@
 """The `python-tests` pre-commit hook: the Python tests a commit reaches (#1879).
 
-Never the whole suite by default: CI runs that, on every pull request, on a
-clean Linux checkout. Two records say what each test depends on, both at the
-repository root and both gitignored, and a commit runs the union of what they
-select:
+Never the whole suite by default: CI runs that, on every pull request that can
+reach a Python test (scripts/dev/ci_scope.py), on a clean Linux checkout. Two
+records say what each test depends on, both at the repository root and both
+gitignored, and a commit runs the union of what they select:
 
 * testmon's `.testmondata` - the Python each test EXECUTES. When a .py file is
   staged, `pytest --testmon --testmon-forceselect` runs the tests whose

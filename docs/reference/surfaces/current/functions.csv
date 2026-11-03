@@ -752,6 +752,8 @@ qetl.source,optional_declarations,dict,,
 qetl.source,preflight,function,1,source
 qetl.source,primary,function,2,source fetched
 qetl.source,read_settings,function,1,path
+qetl.source,reference_lookback,function,3,source max_age horizon_lookback
+qetl.source,reference_read,function,1,source
 qetl.source,refuse_fixture,function,2,who source
 qetl.source,refuse_fixture_writes,function,2,who source
 qetl.source,register_transport,function,2,name decl
@@ -1804,12 +1806,14 @@ qpipe.source.hdb_executions,types,value,,
 qpipe.source.hdb_executions,tz,value,,
 qpipe.source.hdb_fx_markouts,columns,value,,
 qpipe.source.hdb_fx_markouts,complete_through,function,1,h
+qpipe.source.hdb_fx_markouts,conversion_pairs,function,2,spec rows
 qpipe.source.hdb_fx_markouts,fixture,function,1,
-qpipe.source.hdb_fx_markouts,lookback,value,,
 qpipe.source.hdb_fx_markouts,query,function,3,h range_from range_to
 qpipe.source.hdb_fx_markouts,raw_executions,function,1,
 qpipe.source.hdb_fx_markouts,raw_market_data,function,1,
 qpipe.source.hdb_fx_markouts,ready,function,3,batch range_from range_to
+qpipe.source.hdb_fx_markouts,reference_read,dict,,
+qpipe.source.hdb_fx_markouts,reference_symbols,function,2,spec rows
 qpipe.source.hdb_fx_markouts,row_key,value,,
 qpipe.source.hdb_fx_markouts,source_name,value,,
 qpipe.source.hdb_fx_markouts,supporting,dict,,
