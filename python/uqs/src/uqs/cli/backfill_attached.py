@@ -1,4 +1,4 @@
-"""`uqs job backfill --attachment NAME`: the attached-destination branch (#1454).
+"""`uqs job backfill --attachment ATTACHMENT`: the attached-destination branch (#1454).
 
 Apart from cli/backfill.py, which would otherwise carry two commands: the
 fleet-path backfill starts a process and returns; this resolves a saved

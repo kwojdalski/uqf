@@ -79,7 +79,7 @@ def new_job(
         str | None,
         typer.Option(
             "--raw-table",
-            help="connector: the table the Python publisher writes. backfill: the physical "
+            help="`connector`: the table the Python publisher writes. backfill: the physical "
             "table a new source's adapter reads, with --raw-columns" + for_kinds("--raw-table"),
         ),
     ] = None,
@@ -105,7 +105,9 @@ def new_job(
     ] = None,
     source: Annotated[
         str | None,
-        typer.Option("--source", help=f"Source name; default JOB{for_kinds('--source')}"),
+        typer.Option(
+            "--source", metavar="SOURCE", help=f"Source name; default JOB{for_kinds('--source')}"
+        ),
     ] = None,
     width: Annotated[
         str | None,
@@ -203,7 +205,7 @@ def new_job(
             "--twin-of",
             help="A streaming job whose published table this backfill refills - the dataset "
             "and columns are taken from it, and `uqs job gaps JOB` then names this worker "
-            "NAME_backfill: pass NAME without the suffix, e.g. `uqs job new JOB_hist "
+            "JOB_backfill: pass JOB without the suffix, e.g. `uqs job new JOB_hist "
             "--kind backfill --twin-of JOB`" + for_kinds("--twin-of"),
         ),
     ] = None,
@@ -211,8 +213,8 @@ def new_job(
         str | None,
         typer.Option(
             "--transform",
-            help=f"{alternatives(transform_mod.MODES)}: the transform, and for streaming its "
-            "handler" + for_kinds("--transform"),
+            help=f"{alternatives(transform_mod.MODES, quote='`')}: the transform, and for "
+            "streaming its handler" + for_kinds("--transform"),
             autocompletion=completion.choices(*transform_mod.MODES),
         ),
     ] = None,
@@ -220,7 +222,7 @@ def new_job(
         str | None,
         typer.Option(
             "--triggered-by",
-            help="Scaffold a reaction instead: run when a bounded worker publishes DATASET",
+            help="Scaffold a reaction instead: run when a bounded worker publishes this dataset",
         ),
     ] = None,
     writes: Annotated[
@@ -251,8 +253,8 @@ def new_job(
         uqs job new markout2 --subscribe-to trades,quote \\
             --publishes my_metric --schema "sym:symbol, px:float"
 
-    Bounded worker, with its source and transform - NAME is the base, so this writes worker
-    fx_rates_backfill over source fx_rates (a NAME already ending in _backfill is refused):
+    Bounded worker, with its source and transform - JOB is the base, so this writes worker
+    fx_rates_backfill over source fx_rates (a JOB already ending in _backfill is refused):
 
         uqs job new fx_rates --kind backfill --dataset fx_rates \\
             --schema "sym:symbol, mid:float" --width 1D

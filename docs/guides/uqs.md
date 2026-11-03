@@ -1509,7 +1509,7 @@ through to `lib/torq/torq.sh`. It was `raw`, which still works for a release.
 
 How `uqs` commands are named and what they take. Not every command follows them
 yet: [`test_cli_conventions.py`](../../python/uqs/tests/test_cli_conventions.py)
-holds rules 1, 3, 4 and 5 over the command tree, with a list of today's
+holds rules 1, 3, 4, 5 and 7 over the command tree, with a list of today's
 exceptions, each naming the issue that removes it (#1738). It fails on a new
 command that breaks a rule, and on a listed exception that has since been fixed.
 
@@ -1560,6 +1560,20 @@ command that breaks a rule, and on a listed exception that has since been fixed.
    ([deploy.md](deploy.md#rolling-back)).
 6. **A rename ships with a hidden alias for one release**, which prints the new
    spelling; the release after removes it.
+7. **Help says one thing one way** (#1883). A positional is shown as an
+   upper-case word of one vocabulary - `PROC`, `JOB`, `TARGET`, `TABLE`,
+   `DATASET`, `SOURCE`, `ATTACHMENT`, `CONNECTOR`, `RUNTIME`, `RUN`, ... - and a
+   placeholder in a command's help is one of that command's own (no `WORKER`, no
+   bare `NAME`). A command's first help paragraph is one line, the one its group
+   lists; option help starts with a capital or a backtick; and help names no
+   issue numbers. Help is text, not Rich markup, so `[process]` in a documented
+   JSON shape stays in it. `-h` is `--help` everywhere.
+
+Output into a pipe or a file is neither cut nor wrapped (#1883): a table is as
+wide as its widest row and a line is never broken, so
+`uqs status | grep discovery1` finds it and `ls "$(uqs config show rdb1 U)"`
+gets the whole path. What a q process or TorQ prints is shown as it is, never
+read as markup.
 
 Every command exits the same way for the same outcome (#1885), and
 `tests/test_exit_codes.py` holds it:

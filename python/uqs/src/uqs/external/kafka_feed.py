@@ -209,7 +209,7 @@ FEED = ExternalFeed(
     options=(
         FeedOption(
             "brokers",
-            "bootstrap.servers of the cluster",
+            "`bootstrap.servers` of the cluster",
             default=DEFAULT_BROKERS,
             env=BROKERS_ENV,
         ),

@@ -42,7 +42,7 @@ KindOpt = Annotated[
     str,
     typer.Option(
         "--kind",
-        help=alternatives(SCAFFOLD_KINDS, KIND_NOTES, default=DEFAULT_KIND),
+        help=alternatives(SCAFFOLD_KINDS, KIND_NOTES, default=DEFAULT_KIND, quote="`"),
         autocompletion=completion.choices(*SCAFFOLD_KINDS),
         callback=canonical,
     ),

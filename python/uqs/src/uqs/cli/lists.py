@@ -174,15 +174,15 @@ config_app.command("list", cls=safety.ReadOnly)(
 process_app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
-    help="Processes: the stack's declared processes, at the base port in effect - list. "
-    "What runs is `uqs status`.",
+    help="Processes the stack declares: list.\n\nAt the base port in effect; what runs is "
+    "`uqs status`.",
 )
 app.add_typer(process_app, name="process")
 process_app.command("list", cls=safety.ReadOnly)(
     _noun_list(
         "processes",
-        "List every declared process: its procname, proctype, port and startwithall, with "
-        "config set's changes applied, and the tables it reads and writes. Declared, not "
+        "List every declared process, with `config set`'s changes applied.\n\nIts procname, "
+        "proctype, port and startwithall, and the tables it reads and writes. Declared, not "
         "running: `uqs status` asks the stack.",
         base_port=True,
     )
@@ -208,7 +208,7 @@ field_app.command("list", cls=safety.ReadOnly)(
 config_app.command("env", cls=safety.ReadOnly)(
     _noun_list(
         "env",
-        "Show the stack's resolved environment: KDBBASEPORT, KDBHDB and the rest, as "
+        "Show the stack's resolved environment: KDBBASEPORT, KDBHDB and the rest.\n\nAs "
         "`config show` resolves placeholders and torq.sh starts processes.",
         base_port=True,
     )
@@ -216,7 +216,7 @@ config_app.command("env", cls=safety.ReadOnly)(
 attachment_app.command("status", cls=safety.ReadOnly)(
     _noun_list(
         "backfills",
-        "Every attached destination a `uqs job backfill --attachment` has run into: its "
+        "Show each destination a `uqs job backfill --attachment` has run into.\n\nIts "
         "attachment, worker, state, outcome, whether its rows are queryable, and its latest log.",
     )
 )
@@ -257,6 +257,7 @@ def list_items(
     kind: Annotated[
         str | None,
         typer.Argument(
+            metavar="KIND",
             help="Which of the stack's tables - run with no argument to see every kind",
             autocompletion=completion.list_kinds,
         ),
@@ -271,7 +272,9 @@ def list_items(
     interactive: InteractiveOpt = False,
     as_json: JsonOpt = False,
 ) -> None:
-    """List one of the stack's own tables - run with no argument to see the
+    """List one of the stack's own tables; with no KIND, list the kinds.
+
+    Run with no argument to see the
     kinds: 'processes', 'profiles', 'fields' (process.csv's settable columns),
     'env' (the resolved KDBBASEPORT, KDBHDB, ...), 'dependencies' and
     'backfills' (what each attached backfill did). A noun's own records are

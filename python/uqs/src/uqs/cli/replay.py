@@ -65,7 +65,7 @@ def replay(
     proc: Annotated[
         str | None,
         typer.Argument(
-            metavar="[PROC]",
+            metavar="PROC",
             help="Which running tickerplant's log to replay. Only needed when more than one is up",
             autocompletion=completion.procname,
             show_default=False,
@@ -95,7 +95,8 @@ def replay(
         list[str] | None,
         typer.Option(
             "--table",
-            help="Replay only this table; repeatable, and NAME,NAME also works. Default: "
+            metavar="TABLE",
+            help="Replay only this table; repeatable, and TABLE,TABLE also works. Default: "
             "every table in the log",
             autocompletion=completion.plant_table,
         ),
