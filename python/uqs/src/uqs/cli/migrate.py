@@ -64,11 +64,9 @@ def migrate(
             report = hdb_migrate.migrate(_paths(), table, day, renames, casts, apply=False)
         if apply and not yes:
             console.print(report, markup=False, highlight=False)
-            if not typer.confirm(
-                f"Migrate {table} {partition} as above? (stop the stack first)", default=False
-            ):
-                console.print("nothing migrated")
-                raise typer.Exit(code=1)
+            safety.confirm(
+                f"Migrate {table} {partition} as above? (stop the stack first)", yes=False
+            )
         if apply:
             report = hdb_migrate.migrate(_paths(), table, day, renames, casts, apply=True)
     except UqsError as exc:

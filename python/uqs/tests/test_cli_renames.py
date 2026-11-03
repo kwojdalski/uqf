@@ -52,15 +52,7 @@ RENAMED = [
     ("start", "--show-command", "--dry-run"),
     ("job attach", "--override-reason", "--reason"),
     ("job preview", "--dry-run", renames.DROPPED),
-    *[
-        (path, f"--skip-{name}", ("--override", name))
-        for path, name in [
-            ("start", "q-version-check"),
-            ("start", "profile-budget-check"),
-            ("up", "q-version-check"),
-            ("restart", "q-version-check"),
-        ]
-    ],
+    # #1918: start's --skip-...-check are generated aliases now, not old spellings
     *[
         ("deploy push", f"--{name}", ("--override", name))
         for name in (

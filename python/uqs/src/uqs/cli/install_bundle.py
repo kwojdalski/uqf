@@ -14,13 +14,13 @@ import filecmp
 from pathlib import Path
 
 import typer
-from rich.prompt import Confirm
 from rich.table import Table
 
+from uqs.cli import safety
 from uqs.cli.regenerate import _DERIVED, _regenerate_derived, derived_command
 from uqs.cli.safety import dry_run_note
 from uqs.cli.shared import _die, console
-from uqs.paths import INSTALLED_CONNECTORS
+from uqs.paths import INSTALLED_CONNECTORS, UqsError
 from uqs.stack import bundles
 from uqs.stack.install import Mode, Status
 
@@ -79,11 +79,10 @@ def install(
         or plan.stale
         or any(not (c.is_file() and filecmp.cmp(s, c, shallow=False)) for s, c in copies)
     )
-    if not yes and not Confirm.ask(
-        f"Install bundle {plan.bundle.name} {plan.bundle.version}?", default=True, console=console
-    ):
-        console.print("[dim]Nothing installed.[/]")
-        raise typer.Exit(code=1)
+    try:
+        safety.confirm(f"Install bundle {plan.bundle.name} {plan.bundle.version}?", yes=yes)
+    except UqsError as exc:
+        _die(exc)
     try:
         # in the runtime it was installed under (#852), as `runtime prepare` does
         entry = bundles.install(plan, root, runtime)

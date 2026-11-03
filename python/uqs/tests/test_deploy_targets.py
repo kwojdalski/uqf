@@ -162,7 +162,7 @@ def test_the_old_target_option_still_deploys_and_names_the_new_spelling(
 
 def test_targets_given_both_ways_are_refused(root, monkeypatch, log_text):
     r, seen = _push(monkeypatch, root, ["prod-a", "--target", "prod-b"], [0])
-    assert r.exit_code == 1 and not seen
+    assert r.exit_code == 2 and not seen
     assert "not also as --target" in log_text()
 
 

@@ -833,6 +833,12 @@ uqs restart rdb1 --override q-version-check --reason "..."     # takes both too
 - `profile-budget-check` starts (or `--dry-run`s) a `--profile` past the
   connection-budget estimate. The licence's own limit is still q's to enforce.
 
+Each also has a generated alias, `--skip-q-version-check` and
+`--skip-profile-budget-check`, which is the same override: the same `--reason`
+is required, and the same warning and record follow. `uqs start --help` shows
+what each waives, the risk and what to do, from the guardrail's declaration, and
+`uqs --target` sends it to a server as `--override NAME`.
+
 `uqs override list` names every override and the commands that take it.
 
 Each override:
@@ -1552,6 +1558,23 @@ command that breaks a rule, and on a listed exception that has since been fixed.
 6. **A rename ships with a hidden alias for one release**, which prints the new
    spelling; the release after removes it.
 
+Every command exits the same way for the same outcome (#1885), and
+`tests/test_exit_codes.py` holds it:
+
+- **0**: done, or nothing to show or do. An empty result - no run recorded, no
+  log written yet, no attachment, no HDB - is not a failure.
+- **1**: refused. An unknown name - a process, a target, a run, a job - is
+  refused with one message each; an unknown process, by every command, as
+  `no process NAME in this runtime`, pointing at `uqs list processes`.
+- **2**: the command line is wrong as given: a missing argument, an unknown or
+  contradictory option, a time range given two ways. Click's own usage errors
+  and the command's (`UqsUsageError`) alike.
+- **1** also when a question is answered no, or not at all.
+
+A command asks through one helper, `safety.ask`/`safety.confirm`: `[y/N]`, so
+the default is no; an EOF or Ctrl-C is a no; and with no terminal to ask on it
+refuses at once, naming `--yes`, instead of prompting into the void.
+
 A time range is given one way, on every command that takes one (`job backfill`,
 `job gaps`, `job preview`, `job check`, `job runs audit`, `data seed`,
 `data replay`), and read by one parser, `uqs.timerange`:
@@ -1710,8 +1733,6 @@ One safety vocabulary (#1732):
   | old                                                         | new                                                          |
   | ---                                                         | ---                                                          |
   | `start --show-command`                                      | `start --dry-run` / `-n`                                     |
-  | `start` `restart --skip-q-version-check REASON`             | `--override q-version-check --reason REASON`                 |
-  | `start` `restart --skip-profile-budget-check REASON`        | `--override profile-budget-check --reason REASON`            |
   | `deploy push --accept-digest REASON`, and so on             | `deploy push --override accept-digest --reason REASON`       |
   | `job attach --override CODE:COMPONENT --override-reason R`  | `job attach --override CODE:COMPONENT --reason R`            |
   | `job attach --yes`, `job detach --yes`, `uqs --yes`         | also `-y`                                                    |

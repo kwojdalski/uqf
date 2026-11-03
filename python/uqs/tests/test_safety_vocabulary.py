@@ -37,7 +37,7 @@ def test_override_list_names_each_command_and_what_it_bypasses():
     )
 
 
-def test_data_migrate_is_dry_unless_apply_which_asks(monkeypatch):
+def test_data_migrate_is_dry_unless_apply_which_asks(monkeypatch, terminal):
     """#1854: dry by default, and it stays so - the default no longer flips. --apply
     shows the plan and asks; --yes does not ask; the old -n still parses."""
     calls = []
@@ -56,7 +56,7 @@ def test_data_migrate_is_dry_unless_apply_which_asks(monkeypatch):
     calls.clear()
     ok = runner.invoke(cli.app, [*argv, "--apply", "--yes"])
     assert ok.exit_code == 0 and [c["apply"] for c in calls] == [True]
-    assert runner.invoke(cli.app, [*argv, "--apply", "-n"]).exit_code == 1
+    assert runner.invoke(cli.app, [*argv, "--apply", "-n"]).exit_code == 2, "contradictory flags"
 
 
 def test_config_set_dry_run_checks_and_writes_nothing(monkeypatch):

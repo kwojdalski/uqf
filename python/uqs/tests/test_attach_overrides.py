@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import ast
 import json
+import re
 import socket
 from pathlib import Path
 
@@ -587,7 +588,7 @@ def test_yes_alone_does_not_confirm_accepted_risks_but_accept_risks_does(world, 
     assert world.named("stp1")["subscribers"][TABLE] == 2
 
 
-def test_the_risk_prompt_can_be_answered_interactively(world, bundle):
+def test_the_risk_prompt_can_be_answered_interactively(world, bundle, terminal):
     done = invoke(*plan_args(bundle), *overrides_args(), "--yes", "--no-start", input="y\n")
     assert done.exit_code == 0 and "ACCEPTED RISK(S)" in done.output.replace("\n", " ")
 
@@ -700,3 +701,96 @@ def test_attachment_add_checks_its_overrides_as_every_command_does():
         waivers(["TORQ_VERSION"], "x")
     with pytest.raises(UqsError, match="--reason says why an --override is acceptable"):
         waivers(None, "a reason for nothing")
+
+
+# ----------------------------------------------- the generated aliases (#1918)
+
+
+def skip_args(reason: str = "Validated against the site's TorQ 4.2.0 build") -> list[str]:
+    """overrides_args, spelled with the generated --skip-torq-version."""
+    args = []
+    for spec in ALL_FOUR:
+        args += ["--skip-torq-version", spec.partition(":")[2]]
+    return [*args, "--reason", reason]
+
+
+def _saved(name: str = "pb-uat") -> list[dict]:
+    """The saved acceptances, less when each was made."""
+    return [
+        {k: v for k, v in o.as_dict().items() if k != "at"} for o in config.load(name).overrides
+    ]
+
+
+def test_skip_torq_version_is_its_override_through_plan_confirmation_and_record(world, bundle):
+    """`--skip-torq-version stp1` is `--override TORQ_VERSION:stp1`: the same plan,
+    the same accepted risks, the same --accept-risks asked, the same saved record."""
+
+    def planned(args: list[str]) -> dict:
+        out = invoke(*plan_args(bundle), *args, "--json", "--dry-run").output
+        # an acceptance names when it was made, to the second: the one thing that may differ
+        return json.loads(re.sub(r"\(\d{4}-\d\d-\d\dT[\d:]+Z\)", "(AT)", out))
+
+    alias, canon = planned(skip_args()), planned(overrides_args())
+    assert alias["plan"] == canon["plan"] and alias["plan"]["ok"] is True
+    accepted = alias["plan"]["accepted_risks"]
+    assert len(accepted) == 4 and all("ACCEPTED RISK" in a["message"] for a in accepted)
+    assert all(overrides.POLICY["TORQ_VERSION"].risk in a["message"] for a in accepted)
+    assert {a["level"] for a in accepted} == {"accepted"}, "a waived finding never passes"
+
+    refused = invoke(*plan_args(bundle), *skip_args(), "--yes", "--no-start", "--json")
+    assert refused.exit_code == 1 and "--accept-risks" in json.loads(refused.output)["error"]
+    assert mutations(world) == []
+    done = invoke(*plan_args(bundle), *skip_args(), "--yes", "--accept-risks", "--no-start")
+    assert done.exit_code == 0, done.output
+    by_alias = _saved()
+    invoke("pb-uat", "--clear-overrides", "--yes")
+    assert config.load("pb-uat").overrides == ()
+    again = invoke(*plan_args(bundle), *overrides_args(), "--yes", "--accept-risks", "--no-start")
+    assert again.exit_code == 0, again.output
+    assert by_alias == _saved() and len(by_alias) == 4
+    assert {o["code"] for o in by_alias} == {"TORQ_VERSION"}
+
+
+def test_both_spellings_together_are_one_waiver_per_component(world, bundle):
+    mixed = ["--skip-torq-version", "discovery1", "--skip-torq-version=stp1",
+             "--override", "TORQ_VERSION:rdb1", "--override", "torq_version:wdb1",
+             "--skip-torq-version", "wdb1", "--reason", "r"]  # fmt: skip
+    data = json.loads(invoke(*plan_args(bundle), *mixed, "--json", "--dry-run").output)["plan"]
+    assert data["ok"] is True and len(data["accepted_risks"]) == 4
+
+
+def test_a_skip_alias_waives_only_the_components_it_names(world, bundle):
+    """--skip-torq-version stp1 accepts stp1's finding and no other process's."""
+    out = invoke(*plan_args(bundle), "--skip-torq-version", "stp1", "--reason", "r",
+                 "--json", "--dry-run")  # fmt: skip
+    data = json.loads(out.output)["plan"]
+    assert data["ok"] is False
+    assert [(a["code"], a["component"]) for a in data["accepted_risks"]] == [
+        ("TORQ_VERSION", "stp1")
+    ]
+
+
+def test_a_skip_alias_does_not_lift_a_blocker_that_is_never_overridden(world, bundle):
+    world.named("stp1")["multilog"] = "singular"
+    out = invoke(*plan_args(bundle), *skip_args(), "--json", "--dry-run")
+    data = json.loads(out.output)["plan"]
+    assert data["ok"] is False
+    assert "LOGGING_MODE" in {f["code"] for f in data["findings"] if f["level"] == "blocker"}
+
+
+@pytest.mark.parametrize(
+    ("args", "says"),
+    [
+        (["--skip-torq-version", "stp1"], "--skip-torq-version stp1 needs --reason"),
+        (["--skip-torq-version", "stp1", "--reason", "  "], "needs --reason"),
+        (["--skip-publisher-running", "stp1", "--reason", "r"],
+         "no PUBLISHER_RUNNING finding for 'stp1'"),
+        (["--skip-torq-version", "nosuchproc", "--reason", "r"],
+         "no TORQ_VERSION finding for 'nosuchproc'"),
+    ],
+)  # fmt: skip
+def test_a_skip_alias_is_refused_as_its_override_is(world, bundle, args, says):
+    """A missing reason, and a component the stack shows no such finding for."""
+    out = invoke(*plan_args(bundle), *args, "--dry-run")
+    assert out.exit_code != 0
+    assert any(says in m for m in world.errors), world.errors

@@ -16,6 +16,7 @@ from typing import Annotated
 
 import typer
 
+from uqs.cli import safety
 from uqs.cli.safety import ChangesState, YesOpt, dry_run_note
 from uqs.cli.shared import _die, console
 from uqs.cli.target import DryRun, _change, _command, _done, target_app
@@ -105,10 +106,9 @@ def edit(
             except DeployError as exc:
                 problem = str(exc)
                 console.print(f"[red]✗[/] {problem}", highlight=False)
-                try:
-                    again = typer.confirm("Reopen the editor to fix it?", default=True)
-                except typer.Abort:
-                    again = False
+                again = safety.interactive() and safety.ask(
+                    "Reopen the editor to fix it?", default=True
+                )
                 if not again:
                     _die(UqsError(f"edit discarded - {path} is unchanged"))
                 continue
@@ -136,9 +136,10 @@ def remove(
             return
         if planned.entry is not None:
             console.print(planned.entry["diff"].rstrip("\n"), markup=False, highlight=False)
-            if not typer.confirm(f"Remove target {name}?", default=False):
-                console.print("nothing removed")
-                raise typer.Exit(code=1)
+            try:
+                safety.confirm(f"Remove target {name}?", yes=False)
+            except UqsError as exc:
+                _die(exc)
     _change(
         lambda: target_changes.remove(repo_root(), name, _command("remove", name), dry_run=dry_run),
         f"target {name} removed",
