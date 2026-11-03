@@ -975,6 +975,16 @@ processes, starts the target's from the target's own release, and moves
 verify is stopped, and the current release's processes are started and verified
 again, so the server ends where it began. Nothing is deleted.
 
+`--dry-run` prints the plan - what it would stop and what it would start - as
+JSON on stdout, and the dry-run note on stderr, so stdout still parses. It takes
+no lock (#1902), and `prune --dry-run` none either: taking it writes on the
+server - the lock directory, its owner and heartbeat, and `--dest` itself when
+it is missing - and a dry run promises to change nothing. The lock keeps two
+runs that act from acting at once; a dry run does not act, and the real run
+decides again under the lock. So a dry run reads the lock instead, and warns,
+naming the holder, when another deployment holds it: the plan it prints is the
+server as it is now, and may not survive that deployment.
+
 A target is verified with `uqs deploy check`, so a release from before that
 command existed (#835) cannot be a rollback target: its verification fails and
 the rollback is undone as above. Nor can an artifact whose manifest names no
@@ -985,7 +995,9 @@ Rebuild such a release with `uqs deploy build`.
 
 Every push leaves its release, with its own offline `.venv`, in `releases/`.
 `uqs deploy prune` removes all but the newest `--keep N`, under the deploy lock.
-It names each release it would remove and asks first; `--yes` does not ask:
+It names each release it would remove and asks first; `--yes` does not ask.
+`--dry-run` takes no lock, as for [a rollback](#rolling-back), and ends with the
+dry-run note on stderr after its JSON:
 
 ```bash
 uqs deploy prune prod-a --keep 3 --dry-run

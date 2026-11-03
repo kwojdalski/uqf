@@ -23,8 +23,8 @@ from pathlib import Path
 from uqs.generated import q_facts
 from uqs.model.registry import PIPELINES
 from uqs.paths import UqsError, UqsPaths
-from uqs.stack import capabilities, runs, runtime
-from uqs.stack.run_modes import MODES
+from uqs.stack import capabilities, rehearsal, runs, runtime
+from uqs.stack.run_modes import MODES, REHEARSAL_MODES
 
 #: What a flag value may contain. torq.sh builds the start line into a string
 #: and `eval`s it, so anything a shell would interpret - a space, a `;`, a
@@ -158,7 +158,14 @@ def start(
     mode: str | None = None,
     fixture: bool = False,
 ) -> subprocess.CompletedProcess[str]:
-    """Start the process that runs `worker`, over [range_from, range_to)."""
+    """Start the process that runs `worker`, over [range_from, range_to).
+
+    A rehearsal - any mode but a run: validate, plan, dry-run - starts it
+    against the data directory as it is, without bootstrapping it, and is
+    refused when that directory is not set up (stack/rehearsal.py,
+    #1902). Bootstrapping a fresh tree to rehearse in it wrote over a
+    thousand paths; a temporary data directory instead would show an empty
+    coverage ledger, so the rehearsal would plan windows a run never would."""
     # Before anything starts: a PeachQ runtime refuses a worker its
     # interpreter cannot run, rather than letting it fail mid-run.
     capabilities.refuse_unsupported(paths, worker, mode)
@@ -174,7 +181,10 @@ def start(
         mode=mode,
         fixture=fixture,
     )
-    return runtime.run_torq_sh(paths, ["start", procname, "-extras", *flags], base_port=base_port)
+    args = ["start", procname, "-extras", *flags]
+    if mode in REHEARSAL_MODES:
+        return rehearsal.run_bootstrapped(paths, args, base_port=base_port)
+    return runtime.run_torq_sh(paths, args, base_port=base_port)
 
 
 def clear_checkpoint(paths: UqsPaths, worker: str, dry_run: bool = False) -> Path | None:
