@@ -10,6 +10,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
+from uqs.cli.safety import dry_run_note
 from uqs.cli.shared import _die, console
 from uqs.paths import UqsError
 from uqs.scaffold import bundle as bundle_mod
@@ -52,7 +53,7 @@ def write_bundle_plan(plan: ScaffoldPlan, bundle: Path, *, dry_run: bool) -> Non
         return
     console.print(plan.render())
     if dry_run:
-        console.print("[dim]--dry-run: nothing written[/]")
+        console.print(dry_run_note())
         return
     try:
         written = write.apply_plan(plan, Path.cwd())

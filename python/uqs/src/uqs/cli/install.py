@@ -24,7 +24,7 @@ from uqs.cli import install_bundle
 from uqs.cli.create_plant import plant_tables as _plant_tables
 from uqs.cli.regenerate import _DERIVED, _regenerate_derived, derived_command
 from uqs.cli.renames import old_spelling, warn_renamed
-from uqs.cli.safety import ChangesState
+from uqs.cli.safety import ChangesState, dry_run_note
 from uqs.cli.shared import (
     JOB_AUTHORING_PANEL,
     _die,
@@ -51,6 +51,12 @@ _MODE_HELP = {
     Mode.SYMLINK: "the sidecar stays the source of truth; edits there are live on the next "
     "start, and moving or deleting it breaks the tree",
 }
+
+
+def _dry_run_end(dry_run: bool) -> None:
+    """A dry run's last line, on a path that found nothing to do as well."""
+    if dry_run:
+        console.print(dry_run_note())
 
 
 def _where(item: Item, repo_root: Path) -> str:
@@ -286,12 +292,14 @@ def install_jobs(
     )
     if not items:
         console.print("[yellow]No .q files in that folder.[/]")
+        _dry_run_end(dry_run)
         return
     console.print(_plan_table(items, sidecar, repo_root))
     todo = [i for i in items if i.status in (Status.NEW, Status.CONFLICT)]
     tests = [i.source for i in items if i.reason.startswith("a q test")]
     if not todo:
         console.print("[green]Nothing to install:[/] every job file is already in place.")
+        _dry_run_end(dry_run)
         return
     # Before anything is copied, and on a dry run too: a polling feed or a
     # backfill source whose query `--trace` cannot see is refused, not warned
@@ -312,7 +320,7 @@ def install_jobs(
         )
         raise typer.Exit(code=1)
     if dry_run:
-        console.print("[dim]--dry-run: nothing installed[/]")
+        console.print(dry_run_note())
         return
 
     if mode is None:

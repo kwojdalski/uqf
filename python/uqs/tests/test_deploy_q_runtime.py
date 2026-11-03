@@ -110,14 +110,21 @@ def test_a_runtime_of_another_implementation_is_refused(tmp_path):
         q_runtime.read_runtime(path)
 
 
-def test_the_cli_refuses_kx_by_name(capfd):
-    from typer.testing import CliRunner
+def test_the_cli_refuses_kx_by_name():
+    """On stderr, as every command's refusal is (#1881): run as a process,
+    since an in-process runner does not own the sink loguru writes to."""
+    import subprocess
+    import sys
 
-    from uqs import cli
-
-    r = CliRunner().invoke(cli.app, ["deploy", "component", "build", "kdbx"])
-    assert r.exit_code == 1
-    assert "KX's q is never bundled" in r.output + capfd.readouterr().err
+    r = subprocess.run(
+        [sys.executable, "-m", "uqs", "deploy", "component", "build", "kdbx"],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=120,
+    )
+    assert (r.returncode, r.stdout) == (1, "")
+    assert "KX's q is never bundled" in r.stderr
 
 
 def test_a_removed_variable_is_refused_rather_than_bundled(tmp_path):

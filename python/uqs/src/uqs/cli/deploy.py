@@ -4,7 +4,7 @@ Thin over uqs.deploy, whose package docstring describes the whole run. The
 push command's parameters are named exactly as uqs.deploy.config.make_config's,
 which checks them, so the options and their validation cannot drift apart.
 
-Progress goes through uqs.logger like every other command, but on stderr:
+Progress goes through uqs.logger on stderr, like every other command's (#1881):
 stdout carries what another program reads - build's artifact path, push's
 report and verify's result as JSON, whose last two lines the push that ran it
 parses.
@@ -12,9 +12,7 @@ parses.
 
 from __future__ import annotations
 
-import json
 import shutil
-import sys
 from pathlib import Path
 from typing import Annotated
 
@@ -22,15 +20,16 @@ import typer
 
 from uqs.cli import deploy_components as components
 from uqs.cli import deploy_connection as conn
+from uqs.cli import deploy_dry_run as dry
 from uqs.cli import deploy_policy as policy
 from uqs.cli.renames import renamed
 from uqs.cli.safety import ChangesState, DryRunOpt, OverrideOpt, ReasonOpt
-from uqs.cli.shared import _env_log_level, app, json_refusal
+from uqs.cli.shared import app, json_refusal
 from uqs.deploy import build as release_build
 from uqs.deploy import config, driver, frontend, history, kafka, targets
 from uqs.deploy.artifact import PLATFORMS, ReleaseError
 from uqs.deploy.remote import Remote
-from uqs.logger import configure_logging, get_logger
+from uqs.logger import get_logger
 from uqs.paths import repo_root, runtime_from_env
 from uqs.stack import runtime_bundles
 
@@ -43,11 +42,6 @@ deploy_app = typer.Typer(
 app.add_typer(deploy_app, name="deploy")
 
 log = get_logger()
-
-
-@deploy_app.callback()
-def _log_to_stderr() -> None:
-    configure_logging(component="uqs", level=_env_log_level(), stream=sys.stderr)
 
 
 def _failed(prefix: str, stage: str, exc: Exception) -> None:
@@ -88,9 +82,7 @@ def build(
             "beside those the runtime declares; repeatable",
         ),
     ] = None,
-    dry_run: Annotated[
-        bool, typer.Option("--dry-run", "-n", help="Print the bundle's composition; build nothing")
-    ] = False,
+    dry_run: dry.BuildDryRun = False,
     q_target: Annotated[
         str | None,
         typer.Option(
@@ -138,7 +130,7 @@ def build(
         except ReleaseError as exc:
             _failed("uqs deploy build", exc.stage, exc)
             return
-        print(json.dumps(runtime_bundles.composition(runtime, members), indent=2))
+        dry.say_composition(runtime_bundles.composition(runtime, members))
         return
     if shutil.which("uv") is None:
         _failed("uqs deploy build", "arguments", RuntimeError("uv is not on PATH"))
@@ -387,4 +379,5 @@ def push(
                 break
     except config.DeployError as exc:
         _failed("uqs deploy push", exc.stage, exc)
+    dry.end(dry_run, code)
     raise typer.Exit(code=code)

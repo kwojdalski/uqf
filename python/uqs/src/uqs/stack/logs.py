@@ -113,14 +113,15 @@ def log_sink() -> Any:
 
     The format is a CALLABLE, not a string: this sink receives kdb log lines
     AND uqs's own records, and only the first kind carries the fields the
-    kdb format needs. See _kdb_or_uqs_format.
+    kdb format needs. See _kdb_or_uqs_format. On stdout, unlike any other
+    command's log (#1881): these lines are what `logs` and `start -f` print.
     """
     from uqs.logger.core import setup_logging
 
     # TRACE, not DEBUG: a TRACE line from a `--trace` backfill is a loguru TRACE
     # record, and a DEBUG sink drops it. uqs logs nothing at TRACE itself, so
     # this lets through the processes' trace lines and nothing else.
-    return setup_logging(level="TRACE", format_string=_kdb_or_uqs_format)
+    return setup_logging(level="TRACE", format_string=_kdb_or_uqs_format, stream=sys.stdout)
 
 
 def resolve_procnames(paths: UqsPaths, procs: str) -> list[str]:

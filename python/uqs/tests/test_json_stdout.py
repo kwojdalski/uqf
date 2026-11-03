@@ -3,8 +3,7 @@
 A refused `uqs job attachment add X --json` wrote its `ERROR | refused...` log line to
 stdout ahead of the document, so `json.loads(stdout)` - or jq, or anything that
 shells out - failed on exactly the case a caller most needs to read. The console
-log sink now goes to stderr whenever the command line carries `--json`; without
-it, output is what it always was.
+log sink went to stderr under `--json` first; since #1881 it always does.
 
 The end-to-end cases run the real `python -m uqs` in a subprocess: the bug was
 in what reaches the process's stdout, which an in-process runner that replaces
@@ -60,12 +59,14 @@ def test_a_refused_attach_with_json_prints_one_parseable_document(tmp_path):
     assert "ERROR" in run.stderr  # the log line still exists, on stderr
 
 
-def test_a_refused_attach_without_json_still_logs_to_stdout(tmp_path):
-    """Human output is unchanged: only --json moves the log sink."""
+def test_a_refused_attach_without_json_logs_to_stderr_too(tmp_path):
+    """Without --json the refusal is the same log line, on stderr as well:
+    the log is never stdout's (#1881)."""
     run = _uqs(tmp_path, "job", "attachment", "add", "nosuch-1685")
     assert run.returncode == 1
-    assert "ERROR" in run.stdout
-    assert "needs --job and --stack-id" in run.stdout
+    assert run.stdout == ""
+    assert "ERROR" in run.stderr
+    assert "needs --job and --stack-id" in run.stderr
 
 
 # ------------------------------------------------- every --json command, offline
@@ -196,11 +197,14 @@ def test_the_console_sink_is_stderr_when_json_is_asked_for(monkeypatch, capsys):
     assert "refused: something" in captured.err
 
 
-def test_the_console_sink_is_stdout_without_json(monkeypatch, capsys):
+def test_the_console_sink_is_stderr_without_json(monkeypatch, capsys):
+    """#1881: --json no longer decides where the log goes - it is stderr's."""
     monkeypatch.setattr(sys, "argv", ["uqs", "job", "attachment", "add", "x"])
     logcore.setup_logging(level="INFO", colored_output=False)
     logger.error("refused: something")
-    assert "refused: something" in capsys.readouterr().out
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "refused: something" in captured.err
 
 
 def test_json_refusal_prints_nothing_without_json(monkeypatch, capsys):
