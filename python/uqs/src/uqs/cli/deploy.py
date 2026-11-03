@@ -12,7 +12,6 @@ parses.
 
 from __future__ import annotations
 
-import json
 import shutil
 import sys
 from pathlib import Path
@@ -22,6 +21,7 @@ import typer
 
 from uqs.cli import deploy_components as components
 from uqs.cli import deploy_connection as conn
+from uqs.cli import deploy_dry_run as dry
 from uqs.cli import deploy_policy as policy
 from uqs.cli.renames import renamed
 from uqs.cli.safety import ChangesState, DryRunOpt, OverrideOpt, ReasonOpt
@@ -86,9 +86,7 @@ def build(
             "beside those the runtime declares; repeatable",
         ),
     ] = None,
-    dry_run: Annotated[
-        bool, typer.Option("--dry-run", "-n", help="Print the bundle's composition; build nothing")
-    ] = False,
+    dry_run: dry.BuildDryRun = False,
     q_target: Annotated[
         str | None,
         typer.Option(
@@ -134,7 +132,7 @@ def build(
         except ReleaseError as exc:
             _failed("uqs deploy build", exc.stage, exc)
             return
-        print(json.dumps(runtime_bundles.composition(runtime, members), indent=2))
+        dry.say_composition(runtime_bundles.composition(runtime, members))
         return
     if shutil.which("uv") is None:
         _failed("uqs deploy build", "arguments", RuntimeError("uv is not on PATH"))
@@ -394,4 +392,5 @@ def push(
                 break
     except config.DeployError as exc:
         _failed("uqs deploy push", exc.stage, exc)
+    dry.end(dry_run, code)
     raise typer.Exit(code=code)

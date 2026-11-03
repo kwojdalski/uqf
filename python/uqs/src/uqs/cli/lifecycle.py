@@ -116,7 +116,11 @@ def _launch_checks(verb: str, names: str, port: int | None, profile: str | None)
 
 DryRunOpt = Annotated[
     bool,
-    typer.Option("--dry-run", "-n", help="Show the exact start line(s); start nothing"),
+    typer.Option(
+        "--dry-run",
+        "-n",
+        help="Show the exact start line(s), and what a restart stops; change nothing",
+    ),
 ]
 
 #: The options `start` and `restart` share, word for word (#1734): the
@@ -146,7 +150,7 @@ def _launch(
     overrides = _overrides(verb, override, reason, profile=profile, print_only=print_only)
     names = _names_to_start(procs, profile, overrides)
     if print_only:
-        _print_startlines(names, port)
+        _print_startlines(verb, names, port, profile)
         return
     launch = runtime.start if verb == "start" else runtime.restart
     selected = _selected(names, profile)
@@ -290,16 +294,25 @@ def stop(
     _run_streaming(runtime.stop, names, base_port=port)
 
 
-def _print_startlines(names: str, port: int | None) -> None:
-    """Print the startup command line(s) for `names`, then exit - `start --dry-run`."""
+def _print_startlines(verb: str, names: str, port: int | None, profile: str | None) -> None:
+    """`start --dry-run` and `restart --dry-run`: what a restart would stop, then
+    each start line - composed, never bootstrapped, so nothing is written here
+    or on a server `uqs --target` sent it to (stack/start_lines.py, #1880)."""
     _reject_unknown(names)
     try:
-        result = runtime.print_procs(_paths(), names, base_port=port)
+        stopping = start_follow.procnames_started_by(names, port) if verb == "restart" else []
+        result = runtime.print_procs(
+            _paths(), names, base_port=port, selected=_selected(names, profile)
+        )
     except UqsError as exc:
         _die(exc)
         return
-    console.print(result.stdout)
-    raise typer.Exit(code=result.returncode)
+    if stopping:
+        console.print(f"would stop: {' '.join(stopping)}", markup=False)
+    console.print(result.stdout.rstrip("\n"), markup=False, highlight=False)
+    if result.returncode:
+        raise typer.Exit(code=result.returncode)
+    console.print(dry_run_note())
 
 
 def _exec(ctx: typer.Context, port: BasePortOpt = None) -> None:
