@@ -77,16 +77,18 @@ YesOpt = Annotated[
 
 
 def waivers(override: list[str] | None, reason: str) -> list[str]:
-    """The `--override CODE:COMPONENT`s, checked as every command's are
-    (safety.given, #1852): a code this command does not take, one that is never
-    overridden, a missing component or reason, or a reason with no override, is
-    refused here. A code is matched in upper case, as the attachment's findings
-    name it. service.accept then checks each against what the stack shows."""
+    """The `--override CODE:COMPONENT`s and the generated `--skip-<code>
+    COMPONENT`s (`--skip-torq-version stp1` is `TORQ_VERSION:stp1`, #1918), as
+    one list, checked as every command's are (safety.given, #1852): a code this
+    command does not take, one that is never overridden, a missing component or
+    reason, or a reason with no override, is refused here. A code is matched in
+    upper case, as the attachment's findings name it. service.accept then checks
+    each against what the stack shows, so a component with no such finding is
+    refused there."""
     specs = [
         f"{c.upper()}{sep}{rest}" for c, sep, rest in (s.partition(":") for s in override or ())
     ]
-    safety.given("job attachment add", specs or None, reason or None)
-    return specs
+    return list(safety.given("job attachment add", specs or None, reason or None))
 
 
 @attachment_app.command("add", context_settings=EXTRA_WORDS, cls=OLD_REASON)

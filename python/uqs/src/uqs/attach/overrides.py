@@ -46,7 +46,18 @@ class Policy:
     risk: str
     #: overridable: what the operator must do about it
     action: str = ""
+    #: overridable: exactly what accepting it lifts - `uqs override list`'s effect and
+    #: the first words of a generated --skip option's help (uqs/guardrails.from_policy)
+    waives: str = ""
+    #: whether `job attachment add` takes `--skip-<code> COMPONENT` for it (#1918)
+    skip_flag: bool = False
 
+
+#: What accepting any blocker leaves in place, said after what it lifts.
+_STAYS = (
+    "only on the components named, and the finding stays, shown as ACCEPTED RISK and never "
+    "as passing; apply still needs --accept-risks, which --yes does not give"
+)
 
 _NO_RESTART = "fixing it needs a restart of a shared process, which this workflow never does"
 
@@ -60,12 +71,17 @@ POLICY: dict[str, Policy] = {
         "version to the tested list and does not establish compatibility",
         "run the attach-stack suite against this version; prefer --runtime-only until a restart "
         "has been shown to reload the registration; run verify after apply",
+        waives="accept the TORQ_VERSION blocker - a TorQ version this procedure was never "
+        "tested on - " + _STAYS,
+        skip_flag=True,
     ),
     "SORT_CONFIG": Policy(
         True,
         "the wdb's end-of-day sort of this table will fail or sort it wrongly, so the day's rows "
         "stay unsorted in the wdb and do not reach the HDB",
         "add a sort.csv row for the table (or the column it names) on the wdb before end of day",
+        waives="accept the SORT_CONFIG blocker - a wdb sort.csv with no rule for the table, "
+        "or one naming columns it lacks - " + _STAYS,
     ),
     "PORT_CONFLICT": Policy(
         True,
@@ -73,6 +89,8 @@ POLICY: dict[str, Policy] = {
         "another process in the stack",
         "free the port, or resolve the clashing name, before starting the publisher; the start "
         "gate still needs verify to pass",
+        waives="accept the PORT_CONFLICT blocker - the publisher's port held by another "
+        "process, or its name listed on another port - " + _STAYS,
     ),
     "PUBLISHER_RUNNING": Policy(
         True,
@@ -80,6 +98,9 @@ POLICY: dict[str, Policy] = {
         "consumers only, and detach cannot rely on a stopped publisher",
         "stop the publisher before apply (or accept that rows published meanwhile may be lost); "
         "run verify afterwards",
+        waives="accept the PUBLISHER_RUNNING blocker - the attachment's own publisher already "
+        "running, so its tables are registered while it publishes - " + _STAYS,
+        skip_flag=True,
     ),
     "SCHEMA_INCOMPATIBLE": Policy(
         False, "a proven schema mismatch: publishers send columns by position"
