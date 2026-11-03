@@ -168,6 +168,8 @@
     if[.qpipe.transform.markout_core.refuse_undeclared and count extra;
         '"markout_core: spec has undeclared key(s) ",", " sv string extra];
     spec:.qpipe.transform.markout_core.spec_defaults,spec;
+    / the domain completes its own keys first: its conversion reads them (an FX convention) when the rates are checked below
+    if[`validate in key domain; spec:domain[`validate] spec];
     hs:spec`horizons;
     if[not (16h=type hs) and 0<count hs; '"markout_core: horizons must be a non-empty list of timespans, e.g. 0D00:00:01 0D00:00:10"];
     if[any null hs; '"markout_core: horizons must not contain a null timespan"];
@@ -186,7 +188,7 @@
         if[not (first c`ok) and sym=first c`leg;
             '"markout_core: rates[",string[q],"]: the domain's conversion does not accept ",string sym]
       }[domain;spec] ./: flip ((key rt) mk;last each (value rt) mk);
-    $[`validate in key domain; domain[`validate] spec; spec]}
+    spec}
 
 / ------------------------------------------------------------- RESOLVER
 
@@ -198,6 +200,31 @@
     if[not (98h=type r) and all `sym`ok`quote_ccy`legs`invert in cols r; '"markout_core: resolve must return a table sym, ok, quote_ccy, legs, invert"];
     if[not (r`sym)~syms; '"markout_core: resolve must return one row per instrument, in order"];
     update usable:ok and (not null quote_ccy) and 0<count each legs from r}
+
+/ Private: the market_data a quote currency's rate is read from - `source`sym -
+/ or an empty list: none when it is the reporting currency, undeclared, or fixed.
+/ @private
+.qpipe.transform.markout_core.market_rate:{[rt;rep;q]
+    $[(q<>rep) and (q in key rt) and `market=.qpipe.transform.markout_core.rate_kind[rt q]; rt q; `symbol$()]}
+
+/ The conversion pairs a set of executions is converted through: the market_data
+/ sym of every rate read from a book, for the quote currencies the executions
+/ are quoted in. A fixed rate, a quote currency equal to the reporting one and
+/ one with no declared rate have none. The ONE list the live job's legs callback,
+/ the bounded source's symbol filter (#1926's extension point) and the readiness
+/ gate (unmet) all draw on.
+/ @param domain the domain dictionary
+/ @param spec the spec
+/ @param pending executions, at least sym
+/ @return table quote_ccy, source, sym: one row per rate book the executions need
+/ @eg .qpipe.transform.markout_core.conversion_pairs[.qpipe.transform.markout_core.fixture_domain;.qpipe.transform.markout_core.fixture_spec;([] sym:enlist `USDJPY)]  ->  ([] quote_ccy:enlist `JPY; source:enlist `a; sym:enlist `USDJPY)
+.qpipe.transform.markout_core.conversion_pairs:{[domain;spec;pending]
+    spec:.qpipe.transform.markout_core.validate[domain;spec];
+    r:.qpipe.transform.markout_core.resolution[domain;spec;distinct pending`sym];
+    qs:distinct (r`quote_ccy) where r`usable;
+    m:.qpipe.transform.markout_core.market_rate[spec`rates;spec`report_ccy;] each qs;
+    has:2=count each m;
+    ([] quote_ccy:qs where has; source:`symbol$(m[;0]) where has; sym:`symbol$(m[;1]) where has)}
 
 / The legs readiness waits on, per execution: the resolver's legs, plus the
 / conversion leg when the rate is read from market_data (open question 11). The
@@ -213,10 +240,37 @@
     u:distinct pending`sym;
     r:.qpipe.transform.markout_core.resolution[domain;spec;u];
     rt:spec`rates;
-    conv:{[rt;rep;q]
-        $[(q<>rep) and (q in key rt) and `market=.qpipe.transform.markout_core.rate_kind[rt q]; enlist (rt q) 1; `symbol$()]}[rt;spec`report_ccy];
+    conv:{[rt;rep;q] 1_ .qpipe.transform.markout_core.market_rate[rt;rep;q]}[rt;spec`report_ccy];
     per:{[usable;l;c] $[usable; distinct l,c; `symbol$()]}'[r`usable;r`legs;conv each r`quote_ccy];
     per u?pending`sym}
+
+/ What a window still lacks before it can be scored, for a source's `ready` hook
+/ (#1927): a list of strings, () when ready.
+/ .
+/ A route leg with no book is a legitimate `unavailable row, so the route legs are
+/ held to the existing rule only: scoreable executions and NO books at all is
+/ unmet. A conversion pair is held to more. With no book of the declared source
+/ for the pair, every row quoted in that currency would be `no_rate, and a
+/ window claimed as covered would keep them for good; so each rate book the
+/ window needs must exist (open question 11: the gate asks for the book, not that
+/ it reaches the horizon).
+/ @param domain the domain dictionary
+/ @param spec the spec
+/ @param exe the window's executions
+/ @param md the window's market_data, at least sym and source
+/ @return a list of strings, one per unmet requirement
+/ @eg .qpipe.transform.markout_core.unmet[.qpipe.transform.markout_core.fixture_domain;.qpipe.transform.markout_core.fixture_spec;0#.qpipe.transform.markout_core.executions_in;0#.qpipe.transform.markout_core.market_data_in]  ->  ()
+.qpipe.transform.markout_core.unmet:{[domain;spec;exe;md]
+    spec:.qpipe.transform.markout_core.validate[domain;spec];
+    exe:exe where null .qpipe.transform.markout_core.why[domain;spec;exe];
+    if[0=count exe; :()];
+    legs:distinct raze .qpipe.transform.markout_core.legs_of[domain;spec;exe];
+    if[0=count md; :enlist "market_data holds no books for the ",string[count legs]," pair(s) the window's ",string[count exe]," execution(s) are scored against"];
+    cp:.qpipe.transform.markout_core.conversion_pairs[domain;spec;exe];
+    / no book-read rate: nothing more to ask of the books (and `in` on empty flipped lists is a 'type on PeachQ)
+    if[0=count cp; :()];
+    gone:cp where not (flip cp`source`sym) in flip (md`source;md`sym);
+    {[g] "market_data holds no book of ",string[g`source]," for conversion pair ",string[g`sym]," (the rate of ",string[g`quote_ccy],")"} each gone}
 
 / ------------------------------------------------------------- SCORING
 

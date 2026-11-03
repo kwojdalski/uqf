@@ -102,8 +102,16 @@ uqs connector stop crypto-fills
 
 Rows land in `crypto_sim_fills` (`time`/`sym`/`side`/`trade_price`/`size`/
 `realized_delta_pnl` - see its definition in `src/etl/plant_tables.q`) and
-`crypto_trades` (`time`/`sym`/`venue`/`side`/`trade_price`/`size`/
-`fee`/`fee_currency`/`exchange_fill_id` - defined in `src/etl/plant_tables.q`):
+`crypto_trades` (`time`/`source_time`/`sym`/`venue`/`side`/`trade_price`/`size`/
+`fee`/`fee_currency`/`exchange_fill_id` - defined in `src/etl/plant_tables.q`).
+`time` is the tickerplant's receipt stamp; `source_time` is the venue's own time
+for the fill, which the recorder sends right after it (the exchange's trade
+time, `Fill.timestamp_ms`; cryptorust#1062). It is null for a row recorded
+before the column existed or by a recorder that predates it, and the markout
+path then scores the fill on the plant's receipt clock instead (see [Execution
+quality](markouts.md#real-fills-crypto_markout1)). The recorder and the plant
+must be upgraded together: the tickerplant takes rows by position, so an older
+recorder publishing one column short is refused rather than misaligned:
 
 ```
 uqs query "select from crypto_sim_fills" --port <rdb1's port>

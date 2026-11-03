@@ -739,10 +739,10 @@
 / --- crypto mock ----------------------------------------------------------
 
 / The exact column order and types cryptorust's kdb_fills_recorder.rs sends
-/ in build_real_upd_message: symbol, symbol, long, float, float, float,
-/ symbol, symbol. The mock's whole reason to exist is to be this, row for
+/ in build_real_upd_message: timestamp (the venue's fill time, source_time),
+/ symbol, symbol, long, float, float, float, symbol, symbol. The mock's whole reason to exist is to be this, row for
 / row, so this is the assertion that matters most in the section.
-.qt.qetl.job.stream.recorder_types:11 11 7 9 9 9 11 11h
+.qt.qetl.job.stream.recorder_types:12 11 11 7 9 9 9 11 11h
 
 .qt.qetl.job.stream.test_the_mock_publishes_a_book_and_then_fills:{[t]
     .qt.qetl.job.stream.reset[];
@@ -764,15 +764,15 @@
     .qt.qetl.job.stream.reset[];
     r:.qpipe.job.crypto_mock.fill_rows[`binance_spot;`$"BTC-USDT";1;62000f;0.25;`$"binance_spot-1"];
     .qunit.assertEquals[type each r;.qt.qetl.job.stream.recorder_types;
-        "sym, venue, side, trade_price, size, fee, fee_currency, exchange_fill_id - the recorder's types in the recorder's order"];
+        "source_time, sym, venue, side, trade_price, size, fee, fee_currency, exchange_fill_id - the recorder's types in the recorder's order"];
     .qunit.assertEquals[distinct count each r;enlist 1;"every column is a one-element vector, never an atom"];
     .qunit.assertEquals[count r;count 1_cols .qpipe.job.executions.crypto_trades;
         "and there are exactly as many as crypto_trades has columns after time"]};
 
 .qt.qetl.job.stream.test_a_mock_fills_fee_is_the_venues_maker_bps_in_the_quote_currency:{[t]
     r:.qpipe.job.crypto_mock.fill_rows[`bybit_spot;`$"ETH-USDT";-1;2000f;2f;`$"bybit_spot-7"];
-    .qt.support.assertApprox[first r 5;2000*2*8%10000;1e-9;"2 ETH at 2000 on bybit's 8bps is 3.2"];
-    .qunit.assertEquals[first r 6;`USDT;"charged in the quote currency, which is what comes after the hyphen"]};
+    .qt.support.assertApprox[first r 6;2000*2*8%10000;1e-9;"2 ETH at 2000 on bybit's 8bps is 3.2"];
+    .qunit.assertEquals[first r 7;`USDT;"charged in the quote currency, which is what comes after the hyphen"]};
 
 .qt.qetl.job.stream.test_the_fill_model_skews_with_toxicity_the_way_cryptorust_does:{[t]
     / Positive toxicity is buy-heavy flow: it lifts the ASK more. Negative
@@ -836,7 +836,7 @@
 / --- the normalizers and posbook over them -------------------------------
 
 .qt.qetl.job.stream.crypto_fill:{[s;side;price;size]
-    ([] time:enlist .qt.qetl.job.stream.d 0; sym:enlist s; venue:enlist `binance_spot; side:enlist side;
+    ([] time:enlist .qt.qetl.job.stream.d 0; source_time:enlist .qt.qetl.job.stream.d 0; sym:enlist s; venue:enlist `binance_spot; side:enlist side;
         trade_price:enlist price; size:enlist size; fee:enlist 0f;
         fee_currency:enlist `USDT; exchange_fill_id:enlist `$"binance_spot-1")}
 
@@ -908,7 +908,7 @@
         norm:$[tbl=`crypto_book;`market_data;`executions];
         .qt.qetl.job.stream.to_posbook[norm;.qetl.job.stream.normalizer.normalize[norm;tbl;`time xcols as_table[
             $[tbl=`crypto_book;`source_time`venue`sym`bid_prices`bid_sizes`ask_prices`ask_sizes;
-              `sym`venue`side`trade_price`size`fee`fee_currency`exchange_fill_id];r]]];
+              `source_time`sym`venue`side`trade_price`size`fee`fee_currency`exchange_fill_id];r]]];
         1}[as_table]];
     do[20;.qpipe.job.crypto_mock.on_timer[]];
     .qunit.assertTrue[0<count .qpipe.job.posbook.book;
@@ -937,7 +937,7 @@
     .qt.qetl.job.stream.to_posbook[`market_data;.qetl.job.stream.normalizer.normalize[`market_data;`crypto_book;
         .qt.qetl.job.stream.crypto_book_row[`$"BTC-USDT";62000 61999 61998f;62010 62011 62012f]]];
     .qt.qetl.job.stream.to_posbook[`executions;.qetl.job.stream.normalizer.normalize[`executions;`crypto_trades;
-        update time:.qt.qetl.job.stream.d[10] from .qt.qetl.job.stream.crypto_fill[`$"BTC-USDT";1;61000f;1f]]];
+        update time:.qt.qetl.job.stream.d[10], source_time:.qt.qetl.job.stream.d[10] from .qt.qetl.job.stream.crypto_fill[`$"BTC-USDT";1;61000f;1f]]];
     .qt.support.assertApprox[first .qt.qetl.job.stream.last_rows[]`mark_price;61000f;1e-9;
         "no fresh venue: marked at the fill's own price, as an unquoted sym is"]};
 
@@ -966,7 +966,7 @@
     .qunit.assertEquals[exec time from .qpipe.job.posbook.crypto_tob[`rows] where venue=`okx;.qt.qetl.job.stream.d[0 1];
         "okx's older book sits at its own time, behind the newer"];
     .qt.qetl.job.stream.to_posbook[`executions;.qetl.job.stream.normalizer.normalize[`executions;`crypto_trades;
-        update time:.qt.qetl.job.stream.d[2] from .qt.qetl.job.stream.crypto_fill[s;1;100f;1f]]];
+        update time:.qt.qetl.job.stream.d[2], source_time:.qt.qetl.job.stream.d[2] from .qt.qetl.job.stream.crypto_fill[s;1;100f;1f]]];
     .qt.support.assertApprox[first .qt.qetl.job.stream.last_rows[]`mark_price;100.5;1e-9;
         "marked at 100.5, not 95.5 off a crossed 100/91"];
     lv:.qpipe.job.last_value.apply[.qpipe.job.last_value.state;.qpipe.job.last_value.tob;

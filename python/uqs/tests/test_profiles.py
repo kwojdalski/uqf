@@ -57,14 +57,16 @@ def test_every_profile_is_closed_over_its_inputs(name):
     Externally-fed tables are exempt and that is the point of the exemption:
     `crypto_book` comes from cryptorust's recorder in the normal case, so
     `marketdata1` is fed without `cryptomock1` - which must NOT be started
-    alongside the real thing.
+    alongside the real thing. So are the tables a profile's PROFILE_UNFED_INPUTS
+    leaves unfed on purpose.
     """
     members = set(profiles.resolve([name])) & PROCNAMES
     producers = dependencies.producers_by_table()
+    left_unfed = profiles.unfed_inputs([name])
     unfed = []
     for procname in sorted(members):
         for table in dependencies.inputs_by_process().get(procname, ()):
-            if table in dependencies.external_producers(repo_root()):
+            if table in dependencies.external_producers(repo_root()) or table in left_unfed:
                 continue
             if not producers.get(table, set()) & members:
                 unfed.append(f"{procname} <- {table}")

@@ -259,6 +259,26 @@
     .qunit.assertTrue[any (r2 0) like "*already rectangular - nothing to do*";"nothing to do the second time"];
     .qunit.assertEquals[.qt.qproc.fillhdb.snapshot[root];after1;"the attributed column is not rewritten"]};
 
+/ --- crypto_trades.source_time: history has no venue time (#1936) ------------
+
+.qt.qproc.fillhdb.test_a_crypto_trades_partition_older_than_source_time_gets_null_not_a_copy_of_time:{[t]
+    root:.qt.qproc.fillhdb.scratch[];
+    t0:2026.01.01D00:00:00.000000000;
+    / one partition recorded before the column existed, one after it, with the venue's own (earlier) time
+    .qt.qproc.fillhdb.put[root;2026.01.01;`crypto_trades;([] time:2#t0; sym:2#`$"BTC-USDT"; venue:2#`binance_spot)];
+    .qt.qproc.fillhdb.put[root;2026.01.02;`crypto_trades;([] time:1#t0+0D01; source_time:enlist t0+0D00:59:59.5; sym:enlist `$"BTC-USDT"; venue:enlist `binance_spot)];
+    schema:"crypto_trades:([] time:`timestamp$(); source_time:`timestamp$(); sym:`symbol$(); venue:`symbol$())\n";
+    r:.qt.qproc.fillhdb.run[root;schema];
+    .qunit.assertEquals[r 1;0;"clean"];
+    st:{[root;part] get ` sv .qt.qproc.fillhdb.dir[root;part;`crypto_trades],`source_time}[root];
+    .qunit.assertEquals[st 2026.01.01;2#0Np;"the old partition has NO venue time: null, which the executions mapping reads as the receipt clock"];
+    .qunit.assertTrue[not (st 2026.01.01)~(get ` sv .qt.qproc.fillhdb.dir[root;2026.01.01;`crypto_trades],`time);"and never a copy of the receipt time, which would pass for a venue stamp"];
+    .qunit.assertEquals[st 2026.01.02;enlist t0+0D00:59:59.5;"a partition that already has the venue's time keeps it"];
+    .qunit.assertEquals[.qt.qproc.fillhdb.cols_of[root;2026.01.01;`crypto_trades];`time`sym`venue`source_time;"appended to .d"];
+    after1:.qt.qproc.fillhdb.snapshot[root];
+    .qt.qproc.fillhdb.run[root;schema];
+    .qunit.assertEquals[.qt.qproc.fillhdb.snapshot[root];after1;"and a second run changes nothing"]};
+
 / --- idempotency -----------------------------------------------------------
 
 .qt.qproc.fillhdb.test_repeating_a_successful_repair_changes_nothing:{[t]

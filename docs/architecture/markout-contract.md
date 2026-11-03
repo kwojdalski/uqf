@@ -65,7 +65,7 @@ asset class's domain columns.
   | Asset class | Dataset                                                           | Domain module | Issue        |
   | ---         | ---                                                               | ---           | ---          |
   | FX          | `fx_markout` (long), with `fx_markout_wide` derived from it       | #1933         | #1935        |
-  | crypto      | a new dataset, replacing `crypto_execution_quality`               | #1934         | #1936        |
+  | crypto      | `crypto_markout` (long), replacing `crypto_execution_quality`     | #1934         | #1936        |
   | equity      | a new dataset, once an equity source reaches `market_data`        | #1939         | #1939        |
 
 The long rows are the stored form. A wide or nested-wide layout is derived from
@@ -83,20 +83,24 @@ environment variable lets a job mix clocks.
 Today `source_time` means different clocks depending on the mapping, and nothing
 records which:
 
-  | Mapping                                                    | `source_time` is | Where                                                  |
-  | ---                                                        | ---              | ---                                                    |
-  | `executions.from_trades`, `from_orders`                    | receipt          | `src/etl/streaming/executions.q:73-75`, `:90-93`       |
-  | `executions.from_crypto_trades`                            | receipt          | `executions.q:81-83`; the fill feed is polled          |
-  | `market_data.from_quote`, `from_fx_orderbook`              | receipt          | `src/etl/streaming/market_data.q:6-8`, `:30-45`        |
-  | `market_data.from_crypto_book`                             | venue            | `market_data.q:47-60`                                  |
-  | `fx_source_adapters` (deal tape and depth)                 | venue            | `src/etl/transforms/fx_source_adapters.q:37`, `:120`   |
+  | Mapping                                                    | `source_time` is                                                | Where                                                  |
+  | ---                                                        | ---                                                             | ---                                                    |
+  | `executions.from_trades`, `from_orders`                    | receipt                                                         | `src/etl/streaming/executions.q:73-75`, `:90-93`       |
+  | `executions.from_crypto_trades`                            | venue, or receipt where the recorder sent no venue time (#1936) | `executions.q`; the fill feed is polled                |
+  | `market_data.from_quote`, `from_fx_orderbook`              | receipt                                                         | `src/etl/streaming/market_data.q:6-8`, `:30-45`        |
+  | `market_data.from_crypto_book`                             | venue                                                           | `market_data.q:47-60`                                  |
+  | `fx_source_adapters` (deal tape and depth)                 | venue                                                           | `src/etl/transforms/fx_source_adapters.q:37`, `:120`   |
 
 So the rule has consequences today:
 
-- Crypto fills carry receipt time and crypto books carry venue time. They cannot
-  be scored against each other until the cryptorust recorder stamps the venue's
-  trade time. That is why #1936 is blocked. `crypto_markout` avoids the problem
-  only by reading plant `time` on both sides (`crypto_markout.q:26-31`).
+- Crypto fills used to carry receipt time while crypto books carry venue time,
+  so the two could not be scored against each other until the cryptorust
+  recorder stamped the venue's trade time. It now does
+  (`crypto_trades.source_time`, cryptorust#1062), the executions mapping puts a
+  fill that has one on the `venue` clock and one that has none (a row from
+  before the column, an older recorder) on `receipt`, and #1936 is built: the
+  retired `crypto_markout` job avoided the problem only by reading plant `time`
+  on both sides.
 - A row whose clock is `unknown`, the value #1925 gives an ambiguous historical
   row, is never scored.
 
@@ -497,5 +501,6 @@ none is decided until the maintainer approves it.
     shape, so #1929 proposes it.
 16. **Date skew and `max_lateness`.** Should the source's date skew be derived
     from the live job's `max_lateness`, instead of declared beside it?
-17. **The crypto dataset's name.** #1936 names it when it is built. This page
-    does not.
+17. **The crypto dataset's name.** `crypto_markout` (#1936): the table takes the
+    job's name, as `fx_markout` does. It is a long dataset; the live job is
+    `crypto_markout1` and its bounded twin `hdb_crypto_markout_backfill1`.

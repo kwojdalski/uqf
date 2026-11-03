@@ -718,7 +718,7 @@
         "a missing side, and a sym no venue quotes, both price as null"]};
 
 .qt.qf.mkt.microstructure.test_one_staleness_policy_serves_both_jobs:{[t]
-    .qunit.assertEquals[.qpipe.job.crypto_markout.max_age;.qf.mkt.reference_max_age;
+    .qunit.assertEquals[.qpipe.transform.crypto_markout_outputs.job_spec`max_age;.qf.mkt.reference_max_age;
         "crypto_markout reads the library's limit rather than keeping its own"]};
 
 / ---- float-rounding edges (#1045, #1046) ----

@@ -56,9 +56,6 @@ def test_the_subscriber_can_snapshot_through_getdata_and_nothing_more():
 def test_the_first_subscribable_table_is_catalogued_and_has_a_policy():
     with (CONFIG / "dataaccess" / "querypolicy.csv").open(newline="") as f:
         policies = {row["tablename"] for row in csv.DictReader(f) if not row["role"]}
-    assert "crypto_execution_quality" in policies
+    assert "crypto_markout" in policies
     catalog = (REPO / "scripts" / "processes" / "uqs_catalog.q").read_text()
-    assert (
-        ".qcat.describe[`crypto_execution_quality]" in catalog
-        or "describe[`crypto_execution_quality]" in catalog
-    )
+    assert ".qcat.describe[`crypto_markout]" in catalog or "describe[`crypto_markout]" in catalog

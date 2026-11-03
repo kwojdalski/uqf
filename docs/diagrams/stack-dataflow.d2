@@ -135,7 +135,7 @@ order_outcomes: "order_outcomes\nsource · request_id · outcome\nbook · produc
 order_quality: "order_quality\nbook · window · as_of · n_orders\nfill_ratio · reject_ratio" { class: table }
 fx_markout: "fx_markout\nexecution · horizon · kind · step\nmarkout, residual, leg allocations" { class: table }
 fx_markout_wide: "fx_markout_wide\nexecution · horizon\nthe same, a row each, legs side by side" { class: table }
-crypto_execution_quality: "crypto_execution_quality\ntrade_time · horizon · venue\ntrade_price · ref_price · markout_bps" { class: table }
+crypto_markout: "crypto_markout\nexecution · horizon · kind · step\nmarkout_bps, fee_bps, markout_net_bps" { class: table }
 
 # --------------------------------------------------------------- the jobs
 
@@ -238,9 +238,9 @@ flink_py -> flink_vwap_raw
 flink_vwap_raw -> flink_vwap1: "subscribe"
 flink_vwap1 -> flink_vwap: "republish, each once"
 
-crypto_trades -> crypto_markout1: "subscribe"
-crypto_book -> crypto_markout1: "best mid"
-crypto_markout1 -> crypto_execution_quality: "republish"
+executions -> crypto_markout1: "subscribe"
+market_data -> crypto_markout1: "best mid across venues"
+crypto_markout1 -> crypto_markout: "republish"
 
 executions -> exec_bars1: "subscribe"
 exec_bars1 -> exec_bar: "republish, each bar once"
@@ -295,6 +295,6 @@ flink_vwap_raw -> storage
 flink_vwap -> storage
 client_flow -> storage
 crypto_book_snapshot -> storage
-crypto_execution_quality -> storage
+crypto_markout -> storage
 fx_markout -> storage
 fx_markout_wide -> storage

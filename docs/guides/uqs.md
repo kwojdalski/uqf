@@ -162,6 +162,18 @@ person (a column rewrite, as for any stored value). A partition with no
 `market`/`source` (or `venue`) column to read is `unknown` throughout. The run
 prints how many rows of each partition got each clock.
 
+### `crypto_trades.source_time`: history has no venue time (#1936)
+
+cryptorust's fills recorder began sending the venue's own time for each fill as
+`crypto_trades.source_time`. A partition written before that has no such column,
+and `uqs data check --apply` adds it as **null**, never as a copy of `time`:
+`time` is when the plant received the fill, and a receipt time in a venue-time
+column is what the markout contract (#1923) exists to refuse. The `executions`
+mapping reads a null `source_time` as "no venue stamp" and puts the fill on the
+`receipt` clock, so history scores as it always did and is never compared
+against venue-clock books. `clock` is the only column the fill derives; this one
+is deliberately not.
+
 ### Renamed or retyped HDB columns
 
 `data check --apply` does not rewrite existing columns. When a release renames
@@ -777,7 +789,7 @@ The uqf runtime's profiles, against the community licence's fourteen slots
   | ---         | ---                                                                                                                               | ---       | ---                  |
   | `all`       | `arbitrage1`, `cross1`, `crossarb1`, `demo_markout1`, `fxorderbookfeed1`, `fxpositions1`, `last_value1`, `posbook1`, `vectorize1` | 30        | 20/14 - over the cap |
   | `arbitrage` | `arbitrage1`, `crossarb1`                                                                                                         | 20        | 10/14                |
-  | `crypto`    | `cryptomock1`, `crypto_markout1`, `crypto_book_1s1`                                                                               | 17        | 7/14                 |
+  | `crypto`    | `cryptomock1`, `crypto_markout1`, `crypto_book_1s1`                                                                               | 19        | 9/14                 |
   | `default`   | `posbook1`, `demo_markout1`, `fxpositions1`, `fxorderbookfeed1`                                                                   | 23        | 13/14                |
   | `depth`     | `vectorize1`, `cross1`                                                                                                            | 18        | 8/14                 |
   | `essential` | none - the TorQ stack alone                                                                                                       | 14        | 4/14                 |

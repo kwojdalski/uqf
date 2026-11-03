@@ -123,6 +123,7 @@ STATUS_FILE_SUFFIX: str = ".txt"
 BOUNDED_DATASET_TIME_COLUMNS: dict[str, str] = {
     "book_liquidity_1m": "time",
     "crypto_book_1s": "time",
+    "crypto_markout": "time",
     "demo_deals": "time",
     "demo_execution_quality": "time",
     "duckdb_deals": "time",
@@ -139,6 +140,7 @@ BOUNDED_DATASET_TIME_COLUMNS: dict[str, str] = {
 BOUNDED_DATASET_INSTRUMENT_COLUMNS: dict[str, str] = {
     "book_liquidity_1m": "sym",
     "crypto_book_1s": "sym",
+    "crypto_markout": "sym",
     "demo_deals": "sym",
     "demo_execution_quality": "sym",
     "duckdb_deals": "sym",
@@ -170,7 +172,10 @@ DAG_PRODUCERS: dict[str, tuple[str, ...]] = {
         "crypto_book_1s",
         "hdb_crypto_book_backfill",
     ),
-    "crypto_execution_quality": ("crypto_markout",),
+    "crypto_markout": (
+        "crypto_markout",
+        "hdb_crypto_markout_backfill",
+    ),
     "crypto_trades": ("crypto_mock",),
     "deal_positions": ("demo_deals~rebuild_positions",),
     "demo_deals": (
@@ -227,6 +232,7 @@ SOURCE_TRANSPORTS: dict[str, str] = {
     "demo_events": "ipc",
     "duckdb_deals": "odbc",
     "hdb_crypto_book": "ipc",
+    "hdb_crypto_markouts": "ipc",
     "hdb_demo_markouts": "ipc",
     "hdb_executions": "ipc",
     "hdb_fx_markouts": "ipc",

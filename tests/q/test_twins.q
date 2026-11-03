@@ -17,7 +17,7 @@
 
 / stream job -> (stream transform; twin transform; twin input name for each stream input)
 / Stream transform input -> twin transform input, where they differ.
-.qt.qpipe.twins.renames:(`demo_markout`exec_bars`crypto_book_1s`order_quality`book_liquidity_1m`fx_markout`fx_markout_wide`demo_deals_feed)!(`trades`quotes!`trades`quote;enlist[`tape]!enlist `executions;enlist[`book]!enlist `book;()!();enlist[`books]!enlist `books;()!();()!();()!())
+.qt.qpipe.twins.renames:(`demo_markout`exec_bars`crypto_book_1s`order_quality`book_liquidity_1m`fx_markout`fx_markout_wide`crypto_markout`demo_deals_feed)!(`trades`quotes!`trades`quote;enlist[`tape]!enlist `executions;enlist[`book]!enlist `book;()!();enlist[`books]!enlist `books;()!();()!();()!();()!())
 
 / A bundle's twin pair lists its own renaming, as .qt.qpipe.job.<job>.twin_renames in its test file
 / (the databento bundle's eq_orderbook is one): a name the job's suite owns has no load order, and the
@@ -75,6 +75,9 @@
 .qt.qpipe.twins.test_the_demo_markout_twin_scores_as_the_live_job_does:{[t]
     .qunit.assertTrue[.qt.qpipe.twins.agrees[`demo_markout];
         "hdb_demo_markouts_score gives the live transform's rows on its examples"]};
+
+.qt.qpipe.twins.test_the_crypto_markout_twin_scores_as_the_live_job_does:{[t]
+    .qunit.assertTrue[.qt.qpipe.twins.agrees[`crypto_markout];"hdb_crypto_markout_long gives the live transform's rows on its examples (plus the core's time)"]};
 
 .qt.qpipe.twins.test_the_fx_markout_twins_score_as_the_live_jobs_do:{[t]
     .qunit.assertTrue[.qt.qpipe.twins.agrees[`fx_markout];"hdb_fx_markouts_long gives the live long layout's rows on its examples"];

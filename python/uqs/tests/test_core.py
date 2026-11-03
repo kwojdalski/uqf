@@ -2425,12 +2425,12 @@ def _community_licence(monkeypatch):
 @pytest.mark.usefixtures("_community_licence")
 def test_a_profile_start_plans_monitor1_against_the_profiles_fleet():
     """#1318, over the real tree. The default start's fleet is over budget
-    and gives up `feed`; `--profile crypto` starts seventeen processes whose
-    handles fit with room to spare, and its only producer - cryptomock1, a
-    `feed` - got no heartbeat subscription because the plan it was handed
-    was the default fleet's. Essential lost reporter1 and housekeeping1 the
-    same way. (tpreplay1's `tickerlogreplay` is not on the vendored list, so
-    no plan hears it.)"""
+    and gives up `feed`; `--profile crypto` starts nineteen processes (the two
+    normalizers crypto_markout1 reads through since #1936 among them), and its
+    only producer - cryptomock1, a `feed` - got no heartbeat subscription
+    because the plan it was handed was the default fleet's. Essential lost
+    reporter1 and housekeeping1 the same way. (tpreplay1's `tickerlogreplay` is
+    not on the vendored list, so no plan hears it.)"""
     real = stack_paths.default_paths()
     default = _monitor_connections(stack_procs.effective_process_rows(real))
     assert "feed" not in default, "the default fleet does give feed up"
@@ -2442,7 +2442,11 @@ def test_a_profile_start_plans_monitor1_against_the_profiles_fleet():
         stack_procs.effective_process_rows(real, selected=profiles.resolve(["essential"]))
     )
     assert {"reporter", "housekeeping"} <= set(essential)
-    assert stack_procs.monitor_dropped_proctypes(real, profiles.resolve(["crypto"])) == []
+    # nineteen handles no longer all fit: the plan gives up the sortworkers first, the
+    # least useful to watch, and keeps every process type the crypto chain runs as
+    assert stack_procs.monitor_dropped_proctypes(real, profiles.resolve(["crypto"])) == [
+        "sortworker"
+    ]
 
 
 @pytest.mark.usefixtures("_community_licence")

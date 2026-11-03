@@ -29,8 +29,8 @@
 .qt.qtorq.querypolicy.refusal:{[p;d] @[{.checkinputs.checkrequest[x;`sym;y];`passed}[p];d;{x}]}
 
 .qt.qtorq.querypolicy.test_every_exposed_table_has_a_policy_for_ordinary_callers:{[t]
-    .qunit.assertEquals[asc exec tablename from .qt.qtorq.querypolicy.shipped where null role;`crypto_execution_quality`demo_execution_quality`duckdb_deals`last_value`mkt_orderbook;
-        "the five tables the gateway exposes, each with a default row - crypto_execution_quality for the rts subscriber's snapshot (#984)"]};
+    .qunit.assertEquals[asc exec tablename from .qt.qtorq.querypolicy.shipped where null role;`crypto_markout`demo_execution_quality`duckdb_deals`last_value`mkt_orderbook;
+        "the five tables the gateway exposes, each with a default row - crypto_markout for the rts subscriber's snapshot (#984)"]};
 
 .qt.qtorq.querypolicy.test_a_table_without_a_policy_is_refused_with_how_to_get_one:{[t]
     .qunit.assertThrows[.checkinputs.resolvepolicy[.qt.qtorq.querypolicy.shipped;.qt.qtorq.querypolicy.caps;;.qt.qtorq.querypolicy.none];`trades;

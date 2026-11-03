@@ -120,8 +120,8 @@
     .qunit.assertEquals[ref`ask;1.12 1.12 0n 1.12 1.12 1.12 0n;"on either side"];
     v:.qf.mkt.venue_tops update market:`crypto from rows;
     .qunit.assertEquals[(v`bid;v`ask);(ref`bid;ref`ask);"a venue's top keeps a withdrawn side, null"];
-    mk:.qpipe.job.crypto_markout.top_of_book update venue:source from rows;
-    .qunit.assertEquals[(mk`bid;mk`ask);(ref`bid;ref`ask);"crypto_markout's top of book"];
+    mk:.qpipe.transform.markout_core.tops update clock:`venue from rows;
+    .qunit.assertEquals[(mk`bid;mk`ask);(ref`bid;ref`ask);"the markout core's top of book, which crypto_markout scores from"];
     own:.qf.mkt.own_book_mids rows;
     both:where (not null ref`bid) & not null ref`ask;
     .qunit.assertEquals[own`source;(rows`source) both;"a book's own mid needs both sides"]};

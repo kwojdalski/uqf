@@ -198,6 +198,33 @@ UNPROFILED: dict[str, str] = {
     ),
 }
 
+#: Inputs a profile deliberately leaves unfed, per profile, each with the reason.
+#:
+#: The same shape as UNPROFILED: an exemption carries its reason, so "nobody wired
+#: it" cannot pass as "deliberately not run". A normalizer (`executions1`,
+#: `marketdata1`) subscribes to every source it maps, but maps each one on its own
+#: and needs only the ones that carry data; closing over ALL of them would drag the
+#: FX feeds into a crypto stack that has no FX to normalize (#1936: crypto_markout1
+#: reads the canonical tables, so it rests on the normalizers). The table is still
+#: on the plant - the normalizer subscribes to it - it is simply never fed.
+PROFILE_UNFED_INPUTS: dict[str, dict[str, str]] = {
+    "crypto": {
+        table: "the FX source of a normalizer the crypto chain reads; crypto has no FX feed"
+        for table in ("trades", "orders", "quote", "fx_orderbook")
+    },
+}
+
+
+def unfed_inputs(names: Iterable[str]) -> frozenset[str]:
+    """The tables NONE of the named profiles needs fed: what they all leave unfed.
+
+    The intersection, because a stack started with `crypto` and `fx` together needs
+    the FX feeds, and a table one profile leaves unfed is another's input.
+    """
+    sets = [frozenset(PROFILE_UNFED_INPUTS.get(name, {})) for name in names]
+    return frozenset.intersection(*sets) if sets else frozenset()
+
+
 #: The environment variable saying how many concurrent connections this
 #: machine's q licence allows, when that is not the community licence's
 #: LICENCE_CONNECTION_LIMIT.
@@ -249,7 +276,7 @@ def _procnames() -> set[str]:
     return {pipeline.procname for pipeline in PIPELINES}
 
 
-def closure(leaves: Iterable[str]) -> set[str]:
+def closure(leaves: Iterable[str], unfed: Iterable[str] = ()) -> set[str]:
     """Every uqf process `leaves` need, themselves included.
 
     Walks inputs to the processes that publish them, transitively. A table in
@@ -257,13 +284,20 @@ def closure(leaves: Iterable[str]) -> set[str]:
     is NOT pulled in - the module docstring says why that matters rather than
     merely being tidy.
 
+    `unfed` is a profile's PROFILE_UNFED_INPUTS: tables it leaves unfed on purpose,
+    which are treated like an external producer's - satisfied, and their in-stack
+    producer not pulled in.
+
     Vendored infrastructure is not here: it is `CORE_INFRA` (or a profile's
     own PROFILE_INFRA set), not derivable from a graph that only knows
     uqf's own jobs.
     """
     inputs = inputs_by_process()
     producers = producers_by_table()
-    external = external_producers(repo_root())
+    external = {
+        **external_producers(repo_root()),
+        **dict.fromkeys(unfed, "left unfed by the profile"),
+    }
     seen: set[str] = set()
     pending = list(leaves)
     while pending:
@@ -322,7 +356,7 @@ def resolve(names: Iterable[str]) -> tuple[str, ...]:
             f"known profiles are {', '.join(sorted(PROFILES))}"
         )
     leaves = [leaf for name in wanted for leaf in PROFILES[name]]
-    members = closure(leaves)
+    members = closure(leaves, unfed_inputs(wanted))
     return infrastructure(wanted) + tuple(sorted(members))
 
 

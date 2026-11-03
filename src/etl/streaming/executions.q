@@ -35,10 +35,12 @@
 /   book         the desk book a fill is booked to, null where the source
 /                has none - only `orders` carries it
 /   product      likewise: spot, forward, ... for a desk fill
-/   clock        whose clock source_time is (#1925): `venue or `receipt. Every
-/                mapping below stamps `receipt, because none of the three
-/                feeds carries a venue timestamp - source_time is the plant's
-/                own `time` on arrival. A source that does (a vendor's deal
+/   clock        whose clock source_time is (#1925): `venue or `receipt. The FX
+/                trades and the orders stamp `receipt: neither feed carries a
+/                venue timestamp, so source_time is the plant's own `time` on
+/                arrival. crypto_trades stamps `venue when the recorder sent
+/                the venue's fill time (#1936) and `receipt, from `time`, when
+/                that is null. A source that carries one (a vendor's deal
 /                tape, fx_source_adapters.q) stamps `venue. The core refuses
 /                to score a fill against a reference on the other clock.
 / .
@@ -82,14 +84,25 @@
         fee:0f, fee_ccy:`, fill_id, book:`, product:`, clock:`receipt from batch}
 
 / A crypto fill as a canonical execution: a rename, because the recorder's shape
-/ is already the canonical one with different spellings. The fill feed is
-/ polled and crypto_trades carries no venue stamp, so `time` is the receipt
-/ time and the clock is `receipt (plant_tables.q, crypto_trades).
+/ is already the canonical one with different spellings, and a clock choice per
+/ row (#1936).
+/ .
+/ A fill that carries the VENUE's own time (the recorder sends it as source_time)
+/ keeps it, on the `venue clock: it is then comparable with crypto_book's venue
+/ stamps, and the markout contract (#1923) will score it against them. A fill
+/ whose source_time is null - a row from before the column existed or from a
+/ recorder that predates it, or a venue that gave no time - falls back to the
+/ plant's `time` on the `receipt clock: the feed is polled, so that is when the
+/ stack received the fill, and it may trail the trade by the poll interval. The
+/ markout core refuses to score a receipt-clock fill against venue-clock books
+/ rather than guess; the clock column is what makes the refusal possible.
 / @param batch a crypto_trades batch
 / @return canonical executions
+/ @eg count .qpipe.job.executions.from_crypto_trades[0#.qpipe.job.executions.crypto_trades]  ->  0
 .qpipe.job.executions.from_crypto_trades:{[batch]
-    select source_time:time, sym, venue, side, size, price:trade_price,
-        fee, fee_ccy:fee_currency, fill_id:exchange_fill_id, book:`, product:`, clock:`receipt from batch}
+    select source_time:?[null source_time;time;source_time], sym, venue, side, size, price:trade_price,
+        fee, fee_ccy:fee_currency, fill_id:exchange_fill_id, book:`, product:`,
+        clock:?[null source_time;`receipt;`venue] from batch}
 
 / A filled order as a canonical execution, booked to its book and product.
 / The orders feed is the FX desk's, so its venue is the FX one; the order's
@@ -134,15 +147,16 @@
     .qpipe.job.executions.executions;
     .qpipe.job.executions.from_crypto_trades;
     enlist `inputs`expected!(
-        (enlist `crypto_trades)!enlist ([] time:enlist 2026.09.17D10:00:02;
-            sym:enlist `$"BTC-USDT"; venue:enlist `binance_spot; side:enlist -1;
-            trade_price:enlist 62000f; size:enlist 0.25; fee:enlist 15.5;
-            fee_currency:enlist `USDT; exchange_fill_id:enlist `$"binance_spot-1");
-        ([] source_time:enlist 2026.09.17D10:00:02; sym:enlist `$"BTC-USDT";
-            venue:enlist `binance_spot; side:enlist -1; size:enlist 0.25;
-            price:enlist 62000f; fee:enlist 15.5; fee_ccy:enlist `USDT;
-            fill_id:enlist `$"binance_spot-1"; book:enlist `; product:enlist `;
-            clock:enlist `receipt)))];
+        (enlist `crypto_trades)!enlist ([] time:2026.09.17D10:00:02 2026.09.17D10:00:03;
+            source_time:2026.09.17D10:00:01.500 0Np;
+            sym:2#`$"BTC-USDT"; venue:2#`binance_spot; side:-1 1;
+            trade_price:62000 62001f; size:0.25 0.5; fee:15.5 31f;
+            fee_currency:2#`USDT; exchange_fill_id:`$("binance_spot-1";"binance_spot-2"));
+        ([] source_time:2026.09.17D10:00:01.500 2026.09.17D10:00:03; sym:2#`$"BTC-USDT";
+            venue:2#`binance_spot; side:-1 1; size:0.25 0.5;
+            price:62000 62001f; fee:15.5 31f; fee_ccy:2#`USDT;
+            fill_id:`$("binance_spot-1";"binance_spot-2"); book:2#`; product:2#`;
+            clock:`venue`receipt)))];
 
 / A cancelled order is dropped; the filled ones keep their book and product.
 .qetl.transform.define[`executions_from_orders;`inputs`output`fn`examples!(

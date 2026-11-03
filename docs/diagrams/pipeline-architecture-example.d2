@@ -148,7 +148,7 @@ engines: "4 · engines — subscribe, hold state, republish" {
   arb: "arbitrage · crossarb\nsuperbook → crossed levels,\nand synthetic routes" { class: job }
   windows: "exec_bars · order_quality · crypto_book_1s\nexecutions, orders, crypto_book → bars\nand rolling ratios, by event time" { class: job }
   lastvalue: "last_value\nmarket_data → the newest top of\nbook per sym" { class: job }
-  cryptomark: "crypto_markout\ncrypto_trades + crypto_book →\ncrypto_execution_quality, in bps" { class: job }
+  cryptomark: "crypto_markout\nexecutions + market_data →\ncrypto_markout, in bps" { class: job }
   reshape: "cross · vectorize\nquotes → synthetic crosses;\nwide_orderbook → mkt_orderbook" { class: job }
 }
 
