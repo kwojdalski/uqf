@@ -45,17 +45,18 @@ The q details this rests on, verified against a live KDB-X process:
 
 ## Endpoints
 
-  |                        |                                                                                                                                         |
-  | ---                    | ---                                                                                                                                     |
-  | `GET /health`          | BFF liveness plus gateway reachability. An EOD reload reports `ok: true, gateway: "reloading"` — a known transient state, not a failure |
-  | `GET /catalog`         | The queryable surface, so a UI builds filter controls from the server's whitelist instead of a hardcoded copy that drifts               |
-  | `GET /coverage`        | Composed coverage intervals and any gaps, for one dataset at one source release                                                         |
-  | `GET /ops/queue`       | Pending and running gateway queries                                                                                                     |
-  | `GET /ops/connections` | Registered backend handles and connected clients                                                                                        |
-  | `GET /ops/usage`       | Fleet-wide query log, assembled here because q has none                                                                                 |
-  | `GET /ops/processes`   | Fleet health for every process `process.csv` declares                                                                                   |
-  | `GET /ops/backfill`    | Backfill and Airflow task status, read from the files q writes                                                                          |
-  | `POST /query`          | Validated, parameterised table query, tier-routed                                                                                       |
+  |                        |                                                                                                                                          |
+  | ---                    | ---                                                                                                                                      |
+  | `GET /health`          | BFF liveness plus gateway reachability. An EOD reload reports `ok: true, gateway: "reloading"` — a known transient state, not a failure  |
+  | `GET /catalog`         | The queryable surface, so a UI builds filter controls from the server's whitelist instead of a hardcoded copy that drifts                |
+  | `GET /coverage`        | Composed coverage intervals and any gaps, for one dataset at one source release                                                          |
+  | `GET /ops/queue`       | Pending and running gateway queries                                                                                                      |
+  | `GET /ops/connections` | Registered backend handles and connected clients                                                                                         |
+  | `GET /ops/usage`       | Fleet-wide query log, assembled here because q has none                                                                                  |
+  | `GET /ops/processes`   | Fleet health for every process `process.csv` declares                                                                                    |
+  | `GET /ops/backfill`    | Backfill and Airflow task status, read from the files q writes                                                                           |
+  | `GET /services`        | The deployment targets `uqs target list --json` lists, read from `deploy_targets.toml` with no ssh, and whether remote operations are on |
+  | `POST /query`          | Validated, parameterised table query, tier-routed                                                                                        |
 
 ### Control routes --- these CHANGE things
 
@@ -102,6 +103,29 @@ Removing output is deliberately **not** exposed. It deletes logs, tplogs, wdb
 and the copied sample data --- the one orchestrator verb whose blast radius is
 data rather than process state. `uqs clean` remains, where the person running it
 is at a terminal on the host.
+
+### Browsing a target's files --- reads, but over ssh
+
+`GET /services/{target}/files?path=&limit=` lists one directory under a
+registered target's deployment root (#1950). It changes nothing, but it reaches
+a server with this machine's ssh key, so it needs what a control action needs:
+writes on, the token, an allowed Host. Only a target `deploy_targets.toml`
+declares can be named; its ssh destination and root are the registry's, never
+the request's.
+
+The listing runs `remote_helper.py` - standard library only, sent on ssh's stdin
+every time - with the release's own `<dest>/current/.venv/bin/python -I -`. A
+release without that interpreter is refused (409) with nothing else tried and
+nothing installed. The path travels base64-encoded, so it never reaches a shell.
+
+`path` is relative to the root: an absolute path, `..`, a NUL byte or a path
+through a symbolic link is refused (400) before ssh and again on the server,
+which walks one directory descriptor at a time with `O_NOFOLLOW`. Links -
+`current` included - FIFOs, sockets, devices and names that are not UTF-8 are
+listed as blocked and cannot be entered; the release `current` names, and the
+fields of its `deploy-report.json`, come back as `release`. A listing returns at
+most `limit` entries (500 by default, 5000 at most) and says when it was
+truncated; the call is held to 20 s.
 
 A backfill is launched detached rather than awaited: it runs for as long as its
 range takes, and a request that blocked on one would time out mid-run and tell

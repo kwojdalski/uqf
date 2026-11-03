@@ -21,11 +21,13 @@ import {
   type QueryInput,
   type QueryResult,
   type Row,
+  type Services,
   type Tier,
   filterValue,
   validateRange,
   writeToken,
 } from "./api";
+import { FileBrowser } from "./FileBrowser";
 import { useResource } from "./useResource";
 
 const views = [
@@ -36,6 +38,7 @@ const views = [
   "Queue",
   "Connections",
   "Usage",
+  "Services",
   "Control",
 ] as const;
 type View = (typeof views)[number];
@@ -715,6 +718,103 @@ function DeskView() {
     </>
   );
 }
+/** The deployment targets `uqs target list` lists (#1949): read by the API
+ *  from deploy_targets.toml, so the server is never contacted to list one. */
+function ServicesView() {
+  const resource = useResource<Services>("/services");
+  const data = resource.data;
+  const [browsing, setBrowsing] = useState<string | null>(null);
+  return (
+    <>
+      <ResourceStatus resource={resource} />
+      {!data && resource.loading && (
+        <p className="empty">Loading deployment targets…</p>
+      )}
+      {data && (
+        <section className="panel">
+          <div className="section-heading">
+            <h2>Deployment targets</h2>
+            <Badge
+              value={
+                data.remote_operations_enabled
+                  ? "Remote operations enabled"
+                  : "Remote operations disabled"
+              }
+            />
+          </div>
+          <p className="note">Source: {data.source}</p>
+          {data.invalid ? (
+            <div className="notice error" role="alert">
+              <strong>Invalid deployment configuration</strong>
+              <p>{data.invalid}</p>
+              <p>
+                Fix the file - <code>uqs target edit</code> opens it - then
+                refresh.
+              </p>
+            </div>
+          ) : !data.declared ? (
+            <p className="empty">
+              No deployment targets declared. Add one with{" "}
+              <code>uqs target add</code>, or <code>uqs deploy push</code> to a
+              server.
+            </p>
+          ) : (
+            <Table
+              rows={data.targets.map((target) => ({
+                target: target.name,
+                ssh: target.ssh,
+                dest: target.dest,
+                environment: target.environment,
+                remote_user: target.remote_user,
+                labels:
+                  Object.entries(target.labels)
+                    .map(([key, value]) => `${key}=${value}`)
+                    .join(", ") || null,
+                last_deployed: target.last_deployed
+                  ? `${target.last_deployed.release} (${target.last_deployed.at})`
+                  : null,
+              }))}
+              empty="The file declares no targets."
+            />
+          )}
+          <p className="note">
+            Listed from the file and this machine&apos;s deploy history - no
+            server is contacted.
+          </p>
+          {data.targets.length > 0 &&
+            (data.remote_operations_enabled ? (
+              <div className="actions" aria-label="Browse files">
+                {data.targets.map((target) => (
+                  <button
+                    type="button"
+                    key={target.name}
+                    aria-pressed={browsing === target.name}
+                    onClick={() => setBrowsing(target.name)}
+                  >
+                    Browse {target.name}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p className="note">
+                Browsing a target&apos;s files reaches it over ssh, so it needs
+                remote operations enabled.
+              </p>
+            ))}
+        </section>
+      )}
+      {browsing &&
+        data?.remote_operations_enabled &&
+        data.targets.some((target) => target.name === browsing) && (
+          <FileBrowser
+            key={browsing}
+            target={browsing}
+            onClose={() => setBrowsing(null)}
+          />
+        )}
+    </>
+  );
+}
 function OpsView({
   view,
 }: {
@@ -1365,6 +1465,8 @@ export default function App() {
             <DeskView />
           ) : view === "Control" ? (
             <ControlView />
+          ) : view === "Services" ? (
+            <ServicesView />
           ) : (
             <OpsView key={view} view={view} />
           )}

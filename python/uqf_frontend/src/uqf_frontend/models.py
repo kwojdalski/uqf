@@ -280,6 +280,85 @@ class BackfillStatusResponse(BaseModel):
     poll_seconds: int
 
 
+# ------------------------------------------------------------------ services
+
+
+class DeployedOut(BaseModel):
+    """The release last deployed to a target from this workstation."""
+
+    release: str
+    at: str
+
+
+class ServiceTargetOut(BaseModel):
+    """One deployment target, as `uqs target list --json` lists it."""
+
+    name: str
+    ssh: str = Field(description="the ssh destination, user@host - never contacted to list it")
+    dest: str = Field(description="the deployment root on that server")
+    remote_user: str | None
+    environment: str | None = Field(
+        description="the [environments.NAME] layer the target names, if any"
+    )
+    labels: dict[str, str]
+    last_deployed: DeployedOut | None = Field(
+        description="from this workstation's deploy_history.json, not from the server"
+    )
+
+
+class ServicesResponse(BaseModel):
+    """The deployment targets this machine declares (services.py).
+
+    `invalid` carries the registry's refusal, naming the line, when the file
+    exists but cannot be read: reported rather than raised, so the view can
+    show the file and the reason together."""
+
+    targets: list[ServiceTargetOut]
+    source: str = Field(description="the deploy_targets.toml that was read, or would be")
+    declared: bool = Field(description="whether that file exists")
+    invalid: str | None = None
+    remote_operations_enabled: bool = Field(
+        description="whether an action reaching a server could run here: "
+        "UQF_FRONTEND_ENABLE_WRITES, with its token. Listing never reaches one"
+    )
+    poll_seconds: int
+
+
+class RemoteEntryOut(BaseModel):
+    """One entry of a remote directory (remote_helper.describe). A symlink,
+    special file or undecodable name is `blocked`: listed, never entered."""
+
+    name: str
+    kind: Literal["dir", "file", "symlink", "special", "unknown"]
+    size: int | None = Field(description="bytes, for a regular file")
+    mtime: float | None
+    blocked: bool
+    reason: str | None
+
+
+class ReleaseOut(BaseModel):
+    """What the target's `current` names, read as a link and never followed,
+    and the fields of that release's deploy-report.json worth showing."""
+
+    current: str | None = Field(description="the link text of <dest>/current")
+    release: str | None = Field(description="the release id under releases/")
+    report: dict[str, Any] | None
+    report_error: str | None = Field(description="why the report was not read")
+
+
+class RemoteFilesResponse(BaseModel):
+    """GET /services/{target}/files: one directory under a deployment root."""
+
+    target: str
+    root: str = Field(description="the target's deployment root, from the registry")
+    path: str = Field(description="the directory listed, relative to the root; empty is the root")
+    parent: str | None = Field(description="the parent directory's path; null at the root")
+    entries: list[RemoteEntryOut]
+    total: int | None = Field(description="entries in the directory; null when too many to count")
+    truncated: bool
+    release: ReleaseOut
+
+
 # ------------------------------------------------------------ control (writes)
 
 
