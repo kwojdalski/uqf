@@ -159,11 +159,8 @@
     p:get dir;
     select venue:`$string venue, fill_id:`$string fill_id, horizon, kind:`$string kind, step from p}
 
-/ An execution in the last seconds of a day: the live job stamps its rows when it
-/ receives them, after the furthest horizon, which is the next day; the bounded twin stamps
-/ them at source_time plus the furthest horizon, which is still this day. One key,
-/ two date partitions, and only `replace clears across that boundary.
-.qt.qpipe.transform.fx_markout.characterization.test_replace_across_midnight_leaves_no_duplicates:{[tc]
+/ The bounded twin's rows for an execution at 23:59:45, and the live job's copy stamped after midnight.
+.qt.qpipe.transform.fx_markout.characterization.midnight_rows:{[]
     tm:2026.09.17D23:59:45.000000000;
     exe:.qt.qpipe.transform.fx_markout.characterization.fill[tm;`EURUSD;1;1.1001;`m1];
     md:raze (.qt.qpipe.transform.fx_markout.characterization.bk[tm-0D00:00:01;`EURUSD;`a;1.0999;1.1001];
@@ -172,6 +169,16 @@
         .qt.qpipe.transform.fx_markout.characterization.bk[tm+0D00:00:08;`EURUSD;`a;1.1008;1.1010]);
     twin:.qetl.transform.apply[`hdb_fx_markouts_long;`executions`market_data!(exe;md)];
     live:update time:2026.09.18D00:00:03.000000000 from delete time from twin;
+    (twin;live)}
+
+/ An execution in the last seconds of a day: the live job stamps its rows when it
+/ receives them, after the furthest horizon, which is the next day; the bounded twin stamps
+/ them at source_time plus the furthest horizon, which is still this day. One key,
+/ two date partitions, and only `replace clears across that boundary.
+.qt.qpipe.transform.fx_markout.characterization.test_replace_across_midnight_leaves_no_duplicates:{[tc]
+    rows:.qt.qpipe.transform.fx_markout.characterization.midnight_rows[];
+    twin:rows 0;
+    live:rows 1;
     .qunit.assertEquals[(distinct `date$twin`time;distinct `date$live`time);(enlist 2026.09.17;enlist 2026.09.18);"the premise: the twin's rows and the live rows fall in different date partitions"];
     d:.qetl.job.bounded.def `hdb_fx_markouts_backfill;
     .qunit.assertEquals[(d`on_conflict;d`window_column);(`replace;`source_time);"the worker declares replace on the execution's time"];
@@ -179,7 +186,13 @@
     root:`$":",first system"mktemp -d";
     m:.qetl.io.hdb[root;`time];
     .qetl.io.write_keyed[m;`fx_markout;live;o];
-    .qunit.assertEquals[count .qt.qpipe.transform.fx_markout.characterization.part[root;2026.09.18];16;"the live copy sits in the next day"];
+    / The live copy's place is checked on a root of its own: re-reading a partition in the process that
+    / is about to replace it by rename is not something every interpreter supports.
+    probe:`$":",first system"mktemp -d";
+    .qetl.io.write_keyed[.qetl.io.hdb[probe;`time];`fx_markout;live;o];
+    .qunit.assertEquals[(count .qt.qpipe.transform.fx_markout.characterization.part[probe;2026.09.18];count .qt.qpipe.transform.fx_markout.characterization.part[probe;2026.09.17]);16 0;"the live copy sits in the next day"];
+    system "rm -rf ",1_string probe;
+    .qetl.io.write_keyed[m;`fx_markout;live;o];
     .qetl.io.write_keyed[m;`fx_markout;twin;o];
     p17:.qt.qpipe.transform.fx_markout.characterization.part[root;2026.09.17];
     p18:.qt.qpipe.transform.fx_markout.characterization.part[root;2026.09.18];
