@@ -3,7 +3,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import App from "./App";
 import type { RemoteEntry, RemoteFiles, Services } from "./api";
 import { remoteFilesPath } from "./api";
-import { size } from "./FileBrowser";
+import { size } from "./FileTable";
 
 const ok = (body: unknown) => ({ ok: true, json: async () => body });
 const failed = (status: number, detail: string) => ({

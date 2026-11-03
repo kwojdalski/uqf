@@ -15,6 +15,7 @@
     "check": "prettier --check . && tsc --noEmit && vitest run"
   },
   "dependencies": {
+    "@tanstack/react-table": "^9.3.1",
     "react": "19.3.0",
     "react-dom": "19.3.0"
   },

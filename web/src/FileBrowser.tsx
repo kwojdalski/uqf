@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { FileTable } from "./FileTable";
 import {
   ApiError,
   type RemoteEntry,
@@ -7,27 +8,6 @@ import {
   request,
   writeToken,
 } from "./api";
-
-/** Bytes as an operator reads them: 12.1 KiB, not 12345. */
-export function size(bytes: number | null): string {
-  if (bytes === null) return "";
-  const units = ["B", "KiB", "MiB", "GiB", "TiB"];
-  let value = bytes;
-  let unit = 0;
-  while (value >= 1024 && unit < units.length - 1) {
-    value /= 1024;
-    unit += 1;
-  }
-  return unit === 0 ? `${bytes} B` : `${value.toFixed(1)} ${units[unit]}`;
-}
-
-const KIND: Record<RemoteEntry["kind"], string> = {
-  dir: "Directory",
-  file: "File",
-  symlink: "Link",
-  special: "Special",
-  unknown: "Unknown",
-};
 
 /** The fields of the release's deploy report worth a glance, in order. */
 const REPORT_FIELDS = [
@@ -177,49 +157,16 @@ export function FileBrowser({
         (data.entries.length === 0 ? (
           <p className="empty">This directory is empty.</p>
         ) : (
-          <div className="table-scroll" tabIndex={0} aria-label="Files">
-            <table>
-              <thead>
-                <tr>
-                  <th>name</th>
-                  <th>type</th>
-                  <th>size</th>
-                  <th>note</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.entries.map((entry) => (
-                  <tr
-                    key={entry.name}
-                    className={entry.blocked ? "blocked" : undefined}
-                  >
-                    <td className="file-name">
-                      {entry.kind === "dir" && !entry.blocked ? (
-                        <button
-                          type="button"
-                          className="link"
-                          onClick={() =>
-                            setPath(
-                              data.path
-                                ? `${data.path}/${entry.name}`
-                                : entry.name,
-                            )
-                          }
-                        >
-                          {entry.name}/
-                        </button>
-                      ) : (
-                        entry.name
-                      )}
-                    </td>
-                    <td>{KIND[entry.kind]}</td>
-                    <td>{size(entry.size)}</td>
-                    <td>{entry.blocked ? `Blocked: ${entry.reason}` : ""}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <FileTable
+            key={`${target}:${path}`}
+            entries={data.entries}
+            disabled={
+              state.loading || data.path !== path || Boolean(state.error)
+            }
+            onOpen={(name) =>
+              setPath(data.path ? `${data.path}/${name}` : name)
+            }
+          />
         ))}
       {data?.truncated && (
         <p className="note">
