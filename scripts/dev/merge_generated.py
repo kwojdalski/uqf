@@ -104,7 +104,7 @@ def regenerate(dry_run: bool = False, cwd: Path | None = None) -> int:
         return 0
     paths = sorted({p for p in record.read_text().splitlines() if p})
     wanted = {target_of(p) for p in paths} - {None}
-    targets = [t for t, _ in TARGETS if t in wanted]
+    targets = list(dict.fromkeys(t for t, _ in TARGETS if t in wanted))
     print(
         f"{NAME}: {len(paths)} generated file(s) were merged by keeping one side: "
         f"{', '.join(paths)}"

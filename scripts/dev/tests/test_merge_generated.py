@@ -75,7 +75,8 @@ def test_regenerate_names_the_target_and_clears_the_record(conflict: Path, capsy
     mg.install(cwd=conflict)
     git(conflict, "merge", "-q", "--no-edit", "b")
     assert mg.regenerate(dry_run=True, cwd=conflict) == 0
-    assert "derive.py operational-docs" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert out.count("derive.py operational-docs") == 1, "each target once"
     assert mg.record_file(conflict).exists(), "a dry run keeps the record"
 
 
