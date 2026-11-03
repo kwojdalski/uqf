@@ -168,7 +168,7 @@ def attach(
     render_plan(out, d)
     verdict(out, d, running)
     if dry_run:
-        out.text("[dim]dry run: nothing was saved or changed. Run it again without --dry-run.[/]")
+        out.text(safety.dry_run_note())
         out.finish(ok=planned.ok or running)
     if not planned.ok and not running:
         if clear_overrides and resolved.source != "new":
@@ -311,5 +311,7 @@ def detach(
     for b in result.blockers:
         out.text(f"[red]refused[/] {b.component}: {b.reason}\n  -> {b.action}")
     out.detail(f"total {time.monotonic() - began:.3f}s")
-    out.text(f"{name}: {result.outcome}" + (" (dry run: nothing was changed)" if dry_run else ""))
+    out.text(f"{name}: {result.outcome}")
+    if dry_run:
+        out.text(safety.dry_run_note())
     out.finish(ok=result.outcome != "refused")

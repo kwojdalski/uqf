@@ -101,10 +101,9 @@ def clean(paths: UqsPaths, match: str | None = None, dry_run: bool = False) -> l
         else:
             log.info("{} does not exist, nothing to clean", paths.torqdata)
         return []
+    if dry_run:
+        return targets  # the caller lists them: logged too, each was shown twice (#1880)
     for entry, _size in targets:
-        if dry_run:
-            log.info("would remove {}", entry)
-            continue
         log.info("Removing {}", entry)
         if entry.is_dir() and not entry.is_symlink():
             shutil.rmtree(entry)
