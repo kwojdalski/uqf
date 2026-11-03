@@ -97,12 +97,6 @@
     inb:fee_ccy=s`base;
     ?[null fee;0n;?[0f=fee;0f;?[inq;fee;?[inb;fee*price;0n]]]]}
 
-/ The crypto domain, for the core.
-/ @return dict resolve, convert, keys
-/ @eg key .qpipe.transform.crypto_markout.domain[]  ->  `resolve`convert`keys
-.qpipe.transform.crypto_markout.domain:{[]
-    `resolve`convert`keys!(.qpipe.transform.crypto_markout.resolve;.qpipe.transform.crypto_markout.convert;`symbol$())}
-
 / The conversion leg of each quote currency: the market_data sym QUOTE-REPORT,
 / never inverted. A quote currency equal to the reporting one needs none, and
 / the core never asks.
@@ -142,7 +136,12 @@
 / @throws error when the spec is refused by the core
 / @eg count .qpipe.transform.crypto_markout.score[`horizons`report_ccy`rate_timing!(enlist 0D00:00:10;`USD;`execution);([] source_time:`timestamp$(); venue:`symbol$(); sym:`symbol$(); side:`long$(); size:`float$(); price:`float$(); fill_id:`symbol$(); clock:`symbol$(); fee:`float$(); fee_ccy:`symbol$());0#.qpipe.transform.markout_core.market_data_in]  ->  0
 .qpipe.transform.crypto_markout.score:{[spec;exe;md]
-    r:.qpipe.transform.markout_core.calc[.qpipe.transform.crypto_markout.domain[];spec;exe;md];
+    r:.qpipe.transform.markout_core.calc[.qpipe.transform.crypto_markout.domain;spec;exe;md];
     .qpipe.transform.crypto_markout.measures[r;select venue, fill_id, fee, fee_ccy from exe]}
+
+/ The crypto domain, as the core takes it (the way .qpipe.transform.fx_domain.domain
+/ is): resolve, convert and no spec keys of its own. A fee-adjusted measure is a
+/ presentation column, so there is no attribute and no availability rule.
+.qpipe.transform.crypto_markout.domain:`resolve`convert`keys!(.qpipe.transform.crypto_markout.resolve;.qpipe.transform.crypto_markout.convert;`symbol$())
 
 \d .

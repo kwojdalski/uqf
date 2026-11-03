@@ -45,7 +45,10 @@ KX_NAMES = frozenset({KDBX, "kx", "kdb", "kdb+"})
 #: A directory written into is `--output-dir`; `--output` is a FILE (#1857).
 OUTPUT_DIR = {"--output": "--output-dir"}
 Component = Annotated[
-    str, typer.Argument(help="The component to build: torq, q (PeachQ) or python (CPython)")
+    str,
+    typer.Argument(
+        metavar="COMPONENT", help="The component to build: torq, q (PeachQ) or python (CPython)"
+    ),
 ]
 Output = Annotated[
     Path | None,
@@ -54,11 +57,11 @@ Output = Annotated[
     ),
 ]
 Arch = Annotated[
-    str, typer.Option("--arch", help=f"python only: the servers' {', '.join(PLATFORMS)}")
+    str, typer.Option("--arch", help=f"Python only: the servers' {', '.join(PLATFORMS)}")
 ]
 Python = Annotated[
     str | None,
-    typer.Option("--python", help="python only: major.minor; default requires-python's"),
+    typer.Option("--python", help="Python only: major.minor; default requires-python's"),
 ]
 
 
@@ -75,7 +78,9 @@ def build(
         ),
     ] = False,
 ) -> None:
-    """Build a bundled component's artifact: `torq`, TorQ and its starter pack exactly as
+    """Build a bundled component's artifact: torq, q or python.
+
+    `torq` is TorQ and its starter pack exactly as
     vendored, for --torq-mode bundled; `q`, the pinned PeachQ, for --q-mode bundled;
     `python`, the CPython uv installs for linux --arch, for --python-mode bundled and
     `uqs deploy build --python-component`. KX's q is never bundled."""

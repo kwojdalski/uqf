@@ -118,7 +118,7 @@
     .qunit.assertEquals[count r;0;"excluded as no_route, not guessed"]};
 
 .qt.qpipe.transform.crypto_markout.test_the_spec_is_validated_by_the_core_with_no_crypto_keys:{[t]
-    f:{.qpipe.transform.markout_core.validate[.qpipe.transform.crypto_markout.domain[];x]};
+    f:{.qpipe.transform.markout_core.validate[.qpipe.transform.crypto_markout.domain;x]};
     .qunit.assertThrows[f;.qt.qpipe.transform.crypto_markout.spec[],enlist[`tolerance]!enlist 1f;"*undeclared*";"a key crypto does not own is refused"];
     ok:f .qt.qpipe.transform.crypto_markout.spec[];
     .qunit.assertEquals[ok`report_ccy;`USD;"and the fixture spec passes"]};
