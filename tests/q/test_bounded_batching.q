@@ -44,6 +44,27 @@
     if[`USDPLN in rows`sym; 'boom];
     .qt.qetl.job.bounded.batching.legs_context[sup;rows]}
 
+/ The worker's own fetch, kept so a test that feeds the window by hand can put it back.
+.qt.qetl.job.bounded.batching.fetch_kept:()
+
+/ Make the markout worker's fetch return `inputs` as the window (what a live read would), with the
+/ source's own readiness stage still between fetch and transform.
+.qt.qetl.job.bounded.batching.feed:{[inputs]
+    if[0=count .qt.qetl.job.bounded.batching.fetch_kept;
+        `.qt.qetl.job.bounded.batching.fetch_kept set enlist get `.qpipe.job.hdb_fx_markouts_backfill.fetch];
+    / the executions are cut to the window as a read cuts them; the books are context and are not
+    `.qpipe.job.hdb_fx_markouts_backfill.fetch set {[inputs;from_ts;to_ts]
+        w:@[inputs;`executions;{[e;a;b] select from e where source_time>=a, source_time<b}[;from_ts;to_ts]];
+        `state`result`attempts!(`ok;w;1)}[inputs];
+    inputs}
+
+/ Has the ledger claimed the hour that holds the fixture's executions (10:00-11:00)? Asked of the
+/ ledger itself: coverage is recorded under <version>~fixture here, and the other hours hold no
+/ executions and are claimed as empty, so "any row" would say nothing.
+.qt.qetl.job.bounded.batching.claimed:{[]
+    0<count select from .qetl.coverage.ledger[] where dataset=`fx_markout,
+        range_from=2026.09.17D10:00:00.000000000, range_to=2026.09.17D11:00:00.000000000}
+
 / One run of the markout worker over the day; its published table, sorted by identity.
 .qt.qetl.job.bounded.batching.run_day:{[]
     d:.qt.qetl.job.bounded.batching.day[];
@@ -73,6 +94,9 @@
 
 .qt.qetl.job.bounded.batching.tearDown_restore:{[]
     .qpipe.job.hdb_fx_markouts_backfill.cleanup[];
+    if[count .qt.qetl.job.bounded.batching.fetch_kept;
+        `.qpipe.job.hdb_fx_markouts_backfill.fetch set first .qt.qetl.job.bounded.batching.fetch_kept;
+        `.qt.qetl.job.bounded.batching.fetch_kept set ()];
     .qt.qetl.job.bounded.batching.set_batching[(::)];
     }
 
@@ -229,6 +253,40 @@
     .qt.qetl.job.bounded.batching.set_batching[.qt.qetl.job.bounded.batching.spec[1000;1]];
     .qunit.assertEquals[.qetl.job.bounded.batching.apply[`hdb_fx_markouts_backfill;inputs];.qetl.job.bounded.transform_batch[`hdb_fx_markouts_backfill;inputs];"as an unbatched window's empty output"]};
 
+/ --- readiness (#1927) ---------------------------------------------------------------------------
+/ The source says whether the window can be scored, between fetch and transform, over the WHOLE window.
+/ Batches run inside the transform, so none starts on a window that is not ready, and a window is
+/ claimed only after all of its batches.
+
+.qt.qetl.job.bounded.batching.test_a_window_with_no_books_is_not_ready_so_no_batch_runs_and_nothing_is_claimed:{[t]
+    inputs:.qpipe.source.hdb_fx_markouts.fixture[];
+    inputs[`market_data]:0#inputs`market_data;
+    .qt.qetl.job.bounded.batching.feed[inputs];
+    spec:.qt.qetl.job.bounded.batching.spec[1000;1];
+    spec[`context]:.qt.qetl.job.bounded.batching.recording_context;
+    .qt.qetl.job.bounded.batching.set_batching[spec];
+    r:.qt.qetl.job.bounded.batching.run_day[];
+    .qunit.assertEquals[r`state;`partial;"the run ends partial, as an unbatched one does"];
+    .qunit.assertEquals[count .qt.qetl.job.bounded.batching.seen;0;"no batch was started: the window failed its readiness check first"];
+    .qunit.assertEquals[count get `fx_markout;0;"nothing was published"];
+    .qunit.assertEquals[.qt.qetl.job.bounded.batching.claimed[];0b;"and the window was not claimed, so the next run plans it again"]};
+
+.qt.qetl.job.bounded.batching.test_a_window_missing_one_legs_book_is_ready_and_claimed_as_an_unbatched_one_is:{[t]
+    inputs:.qpipe.source.hdb_fx_markouts.fixture[];
+    inputs[`market_data]:select from inputs`market_data where not sym=`EURPLN;
+    .qt.qetl.job.bounded.batching.feed[inputs];
+    r0:.qt.qetl.job.bounded.batching.run_day[];
+    plain:.qt.qetl.job.bounded.batching.published[];
+    plain_claimed:.qt.qetl.job.bounded.batching.claimed[];
+    .qpipe.job.hdb_fx_markouts_backfill.cleanup[];
+    `fx_markout set 0#.qetl.plant.shape `fx_markout;
+    .qt.support.reset_coverage_ledger[];
+    .qt.qetl.job.bounded.batching.set_batching[.qt.qetl.job.bounded.batching.spec[1000;1]];
+    r1:.qt.qetl.job.bounded.batching.run_day[];
+    .qunit.assertEquals[(r0`state;r1`state);`completed`completed;"a missing leg is an unavailable row, not an unready window, batched or not"];
+    .qunit.assertEquals[.qt.qetl.job.bounded.batching.published[];plain;"the same rows, the unavailable ones included"];
+    .qunit.assertEquals[(plain_claimed;.qt.qetl.job.bounded.batching.claimed[]);11b;"and claimed once all its batches passed - which also shows the ledger check can say yes"]};
+
 / --- failure -----------------------------------------------------------------------------------
 
 .qt.qetl.job.bounded.batching.test_a_failing_batch_names_itself:{[t]
@@ -242,11 +300,10 @@
     spec:.qt.qetl.job.bounded.batching.spec[1000;1];
     spec[`context]:.qt.qetl.job.bounded.batching.failing_context;
     .qt.qetl.job.bounded.batching.set_batching[spec];
-    d:.qt.qetl.job.bounded.batching.day[];
     r:.qt.qetl.job.bounded.batching.run_day[];
     .qunit.assertTrue[not `completed~r`state;"the run did not complete"];
     .qunit.assertEquals[count get `fx_markout;0;"the batches that succeeded wrote nothing beside the one that did not"];
-    .qunit.assertEquals[.qetl.coverage.is_covered[`fx_markout;`;`v1;.z.p;d 0;d 1];0b;"and the window is not covered"]};
+    .qunit.assertEquals[.qt.qetl.job.bounded.batching.claimed[];0b;"and the window is not covered"]};
 
 .qt.qetl.job.bounded.batching.test_a_retry_after_a_failed_batch_writes_each_row_once:{[t]
     spec:.qt.qetl.job.bounded.batching.spec[1000;1];
@@ -257,7 +314,8 @@
     spec[`context]:.qt.qetl.job.bounded.batching.legs_context;
     .qt.qetl.job.bounded.batching.set_batching[spec];
     r:.qt.qetl.job.bounded.batching.run_day[];
-    .qunit.assertEquals[(r`state;count get `fx_markout);(`completed;36);"the retry completes and nothing is doubled"]};
+    .qunit.assertEquals[(r`state;count get `fx_markout);(`completed;36);"the retry completes and nothing is doubled"];
+    .qunit.assertEquals[.qt.qetl.job.bounded.batching.claimed[];1b;"and now the window is claimed"]};
 
 .qt.qetl.job.bounded.batching.test_a_group_over_the_limit_fails_the_window_with_the_refusal:{[t]
     .qt.qetl.job.bounded.batching.set_batching[.qt.qetl.job.bounded.batching.spec[1;1]];
