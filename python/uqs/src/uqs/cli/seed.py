@@ -19,7 +19,7 @@ from uqs.cli.shared import (
     console,
     data_app,
 )
-from uqs.paths import UqsError, paths_for_root
+from uqs.paths import UqsError, UqsUsageError, paths_for_root
 from uqs.runtimes import RUNTIMES
 from uqs.stack import hdb_seed, runtime
 
@@ -99,11 +99,11 @@ def seed(
             warn_renamed(f"--from {range_from}", f"--from-runtime {range_from}")
             from_runtime, range_from = range_from, None
         if from_runtime is None:
-            raise UqsError(
+            raise UqsUsageError(
                 f"name the runtime to copy from: --from-runtime, one of {', '.join(RUNTIMES)}"
             )
         if from_runtime not in RUNTIMES:
-            raise UqsError(
+            raise UqsUsageError(
                 f"--from-runtime {from_runtime!r} is not a runtime - "
                 f"choose one of: {', '.join(RUNTIMES)}"
             )

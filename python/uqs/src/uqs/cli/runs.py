@@ -156,7 +156,7 @@ def list_runs(
 
     `--unfinished` includes runs whose process has died: `running` on a run
     whose process is gone means that execution was interrupted, which is what
-    it is for. It was `uqs job runs status` (#1733).
+    it is for.
 
     A time range keeps the runs whose window overlaps it (#1858), and the
     list takes every listing's flags: --export, --sort, --reverse, -i.

@@ -39,3 +39,12 @@ def log_text():
     sink = logger.add(lambda m: lines.append(str(m)), level="TRACE", format="{message}")
     yield lambda: "".join(lines)
     logger.remove(sink)
+
+
+@pytest.fixture
+def terminal(monkeypatch):
+    """A terminal to ask on: a command's question reads the runner's input.
+    Without one, `safety.ask` refuses, naming --yes (#1885)."""
+    from uqs.cli import safety
+
+    monkeypatch.setattr(safety, "interactive", lambda: True)

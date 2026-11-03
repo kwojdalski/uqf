@@ -823,13 +823,21 @@ def test_rule5c_yes_y_exactly_on_what_asks():
 
 
 def test_rule5c_the_commands_that_ask_are_the_known_ones():
+    """Every question is asked through safety.ask, confirm or choose (#1885):
+    one default (No), one refusal without a terminal, one exit code for a no.
+    Only safety itself calls a prompt."""
     cli_dir = Path(shared.__file__).parent
-    prompting = {
-        f.stem
-        for f in cli_dir.glob("*.py")
-        if re.search(r"typer\.confirm\(|Confirm\.ask\(|\.prompt\(", f.read_text())
+    texts = {f.stem: f.read_text() for f in cli_dir.glob("*.py")}
+    direct = {
+        stem
+        for stem, text in texts.items()
+        if re.search(r"typer\.confirm\(|Confirm\.ask\(|Prompt\.ask\(|\.prompt\(", text)
     }
-    assert prompting == PROMPTING_MODULES
+    assert direct == {"safety"}, "a question asked around safety.ask"
+    asking = {
+        stem for stem, text in texts.items() if re.search(r"safety\.(ask|confirm|choose)\(", text)
+    }
+    assert asking == PROMPTING_MODULES
 
 
 def test_rule5e_one_write_model_per_kind_of_change():
