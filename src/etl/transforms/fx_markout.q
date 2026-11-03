@@ -118,11 +118,8 @@
     if[not (16h=type hs) and 0<count hs; '"fx_markout: horizons must be a non-empty list of timespans, e.g. 0D00:00:01 0D00:00:10"];
     if[any null hs; '"fx_markout: horizons must not contain a null timespan"];
     if[not (count hs)=count distinct hs; '"fx_markout: horizons must be distinct"];
-    if[not 99h=type spec`convention; '"fx_markout: convention must be a .qf.mkt attribution convention dictionary"];
-    if[count `version`currencies`direct`exceptions except key spec`convention;
-        '"fx_markout: convention must carry version, currencies, direct and exceptions"];
     if[not (-16h=type spec`max_age) and spec[`max_age]>0D; '"fx_markout: max_age must be a positive timespan, 0Wn for as of however old"];
-    if[not (-9h=type spec`tolerance) and spec[`tolerance]>=0f; '"fx_markout: tolerance must be a non-negative float, in pips"];
+    .qpipe.transform.fx_domain.require_spec[spec];
     spec}
 
 / How long an execution waits before it is scored: the furthest-ahead horizon,
@@ -143,28 +140,21 @@
 / ------------------------------------------------------------------ ROUTES
 
 / Is each instrument one the convention can route: a six-letter pair of two
-/ different currencies, both in the convention? Crypto and malformed symbols are not.
+/ different currencies, both in the convention? The FX domain's (fx_domain.q).
 / @param conv the convention
 / @param syms instruments
 / @return a boolean per instrument
 / @eg .qpipe.transform.fx_markout.routable[.qf.mkt.attribution_convention;`EURUSD`BTCUSDT`EURXXX]  ->  100b
-.qpipe.transform.fx_markout.routable:{[conv;syms]
-    ccys:conv[`currencies]`ccy;
-    one:{[ccys;s]
-        if[not .qf.px.is_ccy_pair s; :0b];
-        ends:.qf.px.ccy_pair_legs s;
-        $[(ends`base)=ends`quote; 0b; all (ends`base`quote) in ccys]}[ccys];
-    "b"$one each syms}
+.qpipe.transform.fx_markout.routable:{[conv;syms] .qpipe.transform.fx_domain.routable[conv;syms]}
 
-/ The legs an instrument is priced along, in chain order: the reference keys
-/ readiness waits on and scoring reads. A function of the instrument and the
-/ convention only.
+/ The legs an instrument is priced along, in chain order: the FX domain's route
+/ (fx_domain.q), the reference keys readiness waits on and scoring reads.
 / @param conv the convention
 / @param sym a routable instrument
 / @return table leg, invert, one row per leg
 / @throws error when the convention cannot route the instrument
 / @eg .qpipe.transform.fx_markout.route[.qf.mkt.attribution_convention;`USDPLN]`leg  ->  `EURUSD`EURPLN
-.qpipe.transform.fx_markout.route:{[conv;sym] select leg, invert from .qf.mkt.attribution_route_with[conv;sym]}
+.qpipe.transform.fx_markout.route:{[conv;sym] .qpipe.transform.fx_domain.route[conv;sym]}
 
 / The horizon kind's `legs` callback: for each pending execution, the legs its
 / reference must cover. An execution with no route has none (and is never queued:
@@ -270,10 +260,9 @@
     n:count exe;
     m:count hs;
     rows:exe "j"$raze m#'til n;
-    pairs:distinct exe`sym;
-    pf:(pairs!.qf.px.pip_factor pairs) rows`sym;
+    pf:.qpipe.transform.fx_domain.pip_factor_of rows`sym;
     ([] ri:til n*m; source_time:rows`source_time; venue:rows`venue; fill_id:rows`fill_id; sym:rows`sym;
-        side:rows`side; size:rows`size; price:rows`price; horizon:hs (n*m)#til m; pip_factor:`long$pf;
+        side:rows`side; size:rows`size; price:rows`price; horizon:hs (n*m)#til m; pip_factor:pf;
         version:(n*m)#spec[`convention]`version)}
 
 / Private: the k-th leg of each row's route and whether it is inverted, for every
@@ -301,16 +290,14 @@
 .qpipe.transform.fx_markout.allocate:{[fr;refs]
     at0:refs`at0;
     at1:refs`at1;
-    depth:count at0;
-    mids:.qpipe.transform.fx_markout.chain_mid[{x`bid} each at0;{x`ask} each at0;{x`bid} each at1;{x`ask} each at1;] each til depth+1;
+    mids:.qpipe.transform.fx_domain.waterfall_mids[at0;at1];
     ref0:first mids;
     ref1:last mids;
     sk:(`float$fr`side)*`float$fr`pip_factor;
-    complete:(not null ref0) & not null ref1;
-    moves:{[sk;complete;lo;hi] sk*?[complete;hi-lo;0n]}[sk;complete]'[-1_mids;1_mids];
-    total:sk*ref1-fr`price;
-    execution:sk*ref0-fr`price;
-    `ref0`ref1`total`execution`moves`residual!(ref0;ref1;total;execution;moves;total-execution+(+/) moves)}
+    total:.qpipe.transform.fx_domain.pips[fr`side;fr`pip_factor;ref1-fr`price];
+    execution:.qpipe.transform.fx_domain.pips[fr`side;fr`pip_factor;ref0-fr`price];
+    at:.qpipe.transform.fx_domain.attribute[sk;mids;total;execution];
+    `ref0`ref1`total`execution`moves`residual!(ref0;ref1;total;execution;at`moves;at`residual)}
 
 / Private: a component's rows for those of fr in idx: its identity columns, its
 / kind and place in the listing order, and its own columns.
@@ -331,7 +318,7 @@
     every:til nn;
     st:{[v] ?[null v;`unavailable;`ok]};
     blank:.qpipe.transform.fx_markout.own[nn#0;nn#`;nn#0b;;;;];
-    rs:?[null a`residual;`unavailable;?[(spec`tolerance)>=abs a`residual;`reconciled;`unreconciled]];
+    rs:.qpipe.transform.fx_domain.residual_status[spec`tolerance;a`residual];
     parts:enlist .qpipe.transform.fx_markout.piece[fr;every;0;`total;blank[fr`price;a`ref1;a`total;st a`total]];
     parts,:enlist .qpipe.transform.fx_markout.piece[fr;every;1;`execution;blank[fr`price;a`ref0;a`execution;st a`execution]];
     parts,:{[fr;lg;refs;a;k]
