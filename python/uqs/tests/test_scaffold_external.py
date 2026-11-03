@@ -85,7 +85,8 @@ def test_the_generated_publisher_sends_a_list_of_columns_in_field_order(monkeypa
     streamer: dict = {"__name__": "ws_streamer"}
     exec(compile(_body(_plan(), "ws_streamer.py"), "ws_streamer.py", "exec"), streamer)
     streamer["batches"] = lambda: iter([[{"px": 1.0, "sym": "BTC"}, {"px": 2.0, "sym": "ETH"}]])
-    assert streamer["main"](["--port", "5010", "--credential", "u:p"]) == 0
+    monkeypatch.setenv("UQF_TP_CREDENTIAL", "u:p")  # from its launcher, never argv (#1853)
+    assert streamer["main"](["--port", "5010"]) == 0
     assert sent == [(".u.upd", "ws_raw", [["BTC", "ETH"], [1.0, 2.0]])]
 
 

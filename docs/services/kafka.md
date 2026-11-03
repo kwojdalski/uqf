@@ -25,7 +25,7 @@ refuses it, naming the declared ones: its records would only be dead-lettered.
 The consumer group is deliberately **not** shared: this one defaults to
 `uqf-kafka-flow`, `kafka_feed1` to `uqf-kafka-q`, and `UQF_KAFKA_GROUP` is read
 by the q feed only, so the two alternatives never split one group's partitions.
-The tickerplant credential is every connector's (`--tp-credential`,
+The tickerplant credential is every connector's (`--tp-credential-env NAME`,
 `UQF_TP_CREDENTIAL`, see [connector
 configuration](../reference/environment.md#connector-configuration)).
 

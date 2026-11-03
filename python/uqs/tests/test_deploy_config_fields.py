@@ -59,7 +59,7 @@ SAMPLES: dict[str, Any] = {
     "command_timeout": 7,
     "smoke_timeout": 7,
     "verify_timeout": 7,
-    "allow_dirty": True,
+    "allow_dirty": "a hotfix rehearsal",
     "accept_converted_release": "smoke passed on the 4.1 server",
     "release_repo": "owner/name",
     "expected_sha256": "ab" * 32,
@@ -76,10 +76,10 @@ SAMPLES: dict[str, Any] = {
     "python_mode": "bundled",
     "python_runtime": "dist/python-runtime.tar.gz",
     "python_runtime_sha256": "12" * 32,
-    "fix_hdb": True,
+    "fix_hdb": "the release adds a column",
     "keep": 3,
     "soak": 45,
-    "break_lock": True,
+    "break_lock": "the holder's machine died",
 }
 
 #: What an override needs beside it, or it is refused for relaxing nothing (#1557).

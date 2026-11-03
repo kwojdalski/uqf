@@ -7,6 +7,7 @@ from typing import Annotated
 
 import typer
 
+from uqs.cli import safety
 from uqs.cli.safety import ChangesState, dry_run_note
 from uqs.cli.shared import _die, _paths, console, data_app
 from uqs.paths import UqsError
@@ -29,34 +30,23 @@ def migrate(
             "(the target type is always the declared one, so it takes no :TYPE); repeatable",
         ),
     ] = None,
-    dry_run: Annotated[
-        bool,
-        typer.Option("--dry-run", "-n", help="Show the migration plan; change nothing"),
-    ] = False,
-    apply: Annotated[
-        bool,
-        typer.Option(
-            "--apply",
-            hidden=True,
-            help="Write: the default from the next release; until then, say it",
-        ),
-    ] = False,
+    apply: safety.ApplyOpt = False,
+    yes: safety.ApplyYesOpt = False,
+    dry_run: safety.DefaultDryRunOpt = False,
 ) -> None:
     """Migrate one HDB date/table to this release's schema: stage, validate,
     and replace the table partition.
 
     Stop the stack first: TorQ end of day does not share the backfill
-    writer's lock. The old table is retained at the path reported after a
-    successful atomic exchange. `--dry-run` shows the plan and writes nothing.
-    Until the next release, writing also needs `--apply`, so a script written
-    when this command was dry by default does not start writing unasked (#1732).
+    writer's lock. Without --apply it shows the migration plan and changes
+    nothing - the default, and it stays so (#1854). --apply shows the plan,
+    asks, then writes; --yes does not ask. The old table is retained at the
+    path reported after a successful atomic exchange.
     """
-    if dry_run == apply:
-        _die(UqsError(
-            "--dry-run shows the plan; --apply writes - give one of them. `uqs data "
-            "migrate` was dry by default, and writes by default from the next release"
-            if not dry_run else "--dry-run and --apply contradict each other - give one"
-        ))  # fmt: skip
+    try:
+        safety.dry_unless_applied(dry_run, apply)
+    except UqsError as exc:
+        _die(exc)
         return
     try:
         try:
@@ -69,7 +59,18 @@ def migrate(
             if not sep or not old or not new or old in renames:
                 raise UqsError(f"--rename {pair!r} must be a unique OLD:NEW pair")
             renames[old] = new
-        report = hdb_migrate.migrate(_paths(), table, day, renames, set(cast or []), apply=apply)
+        casts = set(cast or [])
+        if not apply or not yes:  # the plan: shown, and asked about before --apply writes
+            report = hdb_migrate.migrate(_paths(), table, day, renames, casts, apply=False)
+        if apply and not yes:
+            console.print(report, markup=False, highlight=False)
+            if not typer.confirm(
+                f"Migrate {table} {partition} as above? (stop the stack first)", default=False
+            ):
+                console.print("nothing migrated")
+                raise typer.Exit(code=1)
+        if apply:
+            report = hdb_migrate.migrate(_paths(), table, day, renames, casts, apply=True)
     except UqsError as exc:
         _die(exc)
         return
@@ -77,4 +78,4 @@ def migrate(
     if apply:
         console.print("[dim]restart hdb1 to load the migrated partition[/]")
     else:
-        console.print(dry_run_note())
+        console.print(dry_run_note("with --apply"))

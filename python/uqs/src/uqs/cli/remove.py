@@ -13,6 +13,7 @@ from typing import Annotated
 
 import typer
 
+from uqs.cli import safety
 from uqs.cli.regenerate import (
     _CONTRACT_SURFACE,
     _DERIVED,
@@ -20,30 +21,32 @@ from uqs.cli.regenerate import (
     _regenerate_derived,
     derived_command,
 )
-from uqs.cli.renames import renamed
-from uqs.cli.safety import ChangesState, dry_run_note
-from uqs.cli.shared import JOB_AUTHORING_PANEL, _die, _paths, console, job_app
+from uqs.cli.renames import bypass_flag, renamed
+from uqs.cli.safety import ChangesState, OverrideOpt, ReasonOpt, dry_run_note
+from uqs.cli.shared import JOB_AUTHORING_PANEL, _die, _paths, console, job_app, log
 from uqs.paths import UqsError
 from uqs.scaffold.remove import plan_removal
+from uqs.scaffold.remove_policy import EVEN_IF_EDITED
 
 
 @job_app.command(
     "remove",
     rich_help_panel=JOB_AUTHORING_PANEL,
-    cls=renamed({"--force": "--even-if-edited"}, ChangesState),
+    cls=renamed(
+        {
+            "--force": bypass_flag(EVEN_IF_EDITED),
+            "--even-if-edited": bypass_flag(EVEN_IF_EDITED),
+        },
+        ChangesState,
+    ),
 )
 def remove_job(
     name: Annotated[str, typer.Argument(metavar="JOB", help="The job, as uqs job new named it")],
     dry_run: Annotated[
         bool, typer.Option("--dry-run", "-n", help="Print what would be removed, remove nothing")
     ] = False,
-    force: Annotated[
-        bool,
-        typer.Option(
-            "--even-if-edited",
-            help="Remove it even though it has been written (no SCAFFOLDED left)",
-        ),
-    ] = False,
+    override: OverrideOpt = None,
+    reason: ReasonOpt = None,
     yes: Annotated[bool, typer.Option("--yes", "-y", help="Do not ask before removing")] = False,
     strict: Annotated[
         bool,
@@ -59,7 +62,7 @@ def remove_job(
     A table the job published is kept when anything else in the tree uses it,
     and a backfill's source is kept when another worker reads it. A job whose
     SCAFFOLDED markers are gone has been written, and is refused without
-    --even-if-edited.
+    `--override even-if-edited --reason TEXT`.
 
     Every other line that still names what goes - an example, a docs page, a
     diagram - is listed with its line number and left alone; --strict refuses
@@ -69,6 +72,12 @@ def remove_job(
     """
     repo_root = _paths().repo_root
     try:
+        waived = safety.given("job remove", override, reason)
+        force = EVEN_IF_EDITED in waived
+        if force:
+            log.warning(
+                "uqs job remove: --override {} ({})", EVEN_IF_EDITED, waived[EVEN_IF_EDITED]
+            )
         removal = plan_removal(repo_root, name, force=force)
     except UqsError as exc:
         _die(exc)

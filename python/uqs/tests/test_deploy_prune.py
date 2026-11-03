@@ -150,3 +150,22 @@ def test_the_command_refuses_a_negative_keep():
     )
     plain = re.sub(r"\x1b\[[0-9;]*m", "", r.output)  # CI renders usage errors in colour
     assert r.exit_code != 0 and "--keep" in plain
+
+
+@pytest.mark.parametrize("answer", [False, True])
+def test_prune_asks_with_what_would_go_and_removes_nothing_unless_told_yes(dest, answer):
+    """#1854: a removed release cannot be brought back, so `deploy prune` asks
+    (`--yes` does not): the question is decided under the same lock as the removal."""
+    asked: list[dict] = []
+    remote, out = LocalRemote(), io.StringIO()
+    cfg = make_config(artifact="", host="uqf-server", dest=str(dest), profile="prune")
+    before = _left(dest)
+    code = prune.prune(
+        cfg, remote, keep=0, out=out, confirm=lambda planned: asked.append(planned) or answer
+    )
+    assert [a["removed"] for a in asked] == [[R3, R5]]
+    result = json.loads(out.getvalue())
+    if answer:
+        assert code == 0 and result["prune"] == "done" and _left(dest) == [R1, R2, R4]
+    else:
+        assert code == 1 and result["prune"] == "declined" and _left(dest) == before

@@ -148,6 +148,76 @@ BOUNDED_DATASET_INSTRUMENT_COLUMNS: dict[str, str] = {
     "trades_copy": "sym",
 }
 
+#: table -> the jobs that write it, reactions included - .qetl.dag.producers (#1862)
+DAG_PRODUCERS: dict[str, tuple[str, ...]] = {
+    "arbitrage": ("arbitrage",),
+    "book_liquidity_1m": (
+        "book_liquidity_1m",
+        "hdb_book_liquidity_1m_backfill",
+    ),
+    "client_flow": ("kafka_flow",),
+    "config_change": (
+        "cross_arbitrage",
+        "fx_positions",
+        "superbook",
+    ),
+    "cross_arbitrage": ("cross_arbitrage",),
+    "crypto_book": ("crypto_mock",),
+    "crypto_book_1s": (
+        "crypto_book_1s",
+        "hdb_crypto_book_backfill",
+    ),
+    "crypto_execution_quality": ("crypto_markout",),
+    "crypto_trades": ("crypto_mock",),
+    "deal_positions": ("demo_deals~rebuild_positions",),
+    "demo_deals": (
+        "demo_deals_backfill",
+        "demo_deals_feed",
+    ),
+    "demo_execution_quality": (
+        "demo_markout",
+        "hdb_demo_markouts_backfill",
+    ),
+    "duckdb_deals": ("duckdb_deals_backfill",),
+    "event_tape": ("demo_events_backfill",),
+    "exec_bar": (
+        "exec_bars",
+        "hdb_exec_bars_backfill",
+    ),
+    "executions": ("executions",),
+    "fx_limit_breach": ("fx_positions",),
+    "fx_markout": (
+        "fx_markout",
+        "hdb_fx_markouts_backfill",
+    ),
+    "fx_markout_wide": (
+        "fx_markout_wide",
+        "hdb_fx_markout_wide_backfill",
+    ),
+    "fx_orderbook": ("fx_orderbook_feed",),
+    "fx_position": ("fx_positions",),
+    "fx_position_open": ("fx_positions",),
+    "imported_trades": ("upstream_trades_backfill",),
+    "kafka_dead_letter": ("kafka_flow",),
+    "kafka_message": ("kafka_feed",),
+    "last_value": ("last_value",),
+    "market_data": ("market_data",),
+    "mkt_orderbook": ("vectorize",),
+    "order_outcomes": ("order_outcomes",),
+    "order_quality": (
+        "hdb_order_quality_backfill",
+        "order_quality",
+    ),
+    "orders": ("fx_orders_feed",),
+    "position": ("posbook",),
+    "position_open": ("posbook",),
+    "quote": ("fx_feed",),
+    "superbook": ("superbook",),
+    "trades": ("fx_trades_feed",),
+    "trades_copy": ("hdb_transfer_backfill",),
+    "wide_orderbook": ("wide_orderbook_feed",),
+}
+
 #: source -> its transport, as its declaration resolved it (#1865)
 SOURCE_TRANSPORTS: dict[str, str] = {
     "demo_deals": "ipc",
