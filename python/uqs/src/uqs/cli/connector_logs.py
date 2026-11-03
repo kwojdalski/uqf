@@ -20,7 +20,7 @@ from uqs.cli.json_out import emit, json_opt
 from uqs.cli.pipelines import needs_pipelines
 from uqs.cli.safety import ReadOnly
 from uqs.cli.shared import _die, _paths
-from uqs.paths import UqsError
+from uqs.paths import UqsError, UqsUsageError
 from uqs.stack import follow as log_follow
 
 
@@ -28,7 +28,7 @@ def _log_path(name: str) -> Path:
     """Feed `name`'s log file, which every feed's status names - or exit."""
     log = _feed(name).status(_paths()).get("log")
     if not log:
-        _die(UqsError(f"feed {name} names no log in its status"))
+        _die(UqsError(f"connector {name} names no log in its status"))
         raise typer.Exit(code=1)
     path = Path(log)
     if not path.is_file():
@@ -57,7 +57,7 @@ def logs(
     `connector logs crypto -f`, `connector logs crypto-fills -l 200`.
     """
     if as_json and follow:
-        _die(UqsError("--json prints the history: --follow does not apply with it"))
+        _die(UqsUsageError("--json prints the history: --follow does not apply with it"))
         return
     path = _log_path(name)
     if follow:

@@ -43,6 +43,7 @@ from uqs.model import process_graph
 from uqs.model.process_graph import Direction, Node
 from uqs.paths import UqsError
 from uqs.stack import listing, runtime
+from uqs.stack import procs as stack_procs
 
 STATUS_STYLE = {"up": "bold green", "down": "red"}
 
@@ -197,7 +198,7 @@ def graph(
     edges = process_graph.edges()
     known = set(info) | {e.producer for e in edges} | {e.consumer for e in edges}
     if proc is not None and proc not in known:
-        _die(UqsError(f"no process {proc!r} - `uqs list processes` names them"))
+        _die(stack_procs.unknown_processes(proc))
         return
     status = {} if offline else live_status(port)
     direction: Direction = "upstream" if upstream else "downstream"

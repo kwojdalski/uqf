@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from uqs.cli import safety
 from uqs.cli.shared import _die
-from uqs.paths import UqsError
+from uqs.paths import UqsError, UqsUsageError
 from uqs.stack.start_overrides import FLAGS, NAMES, Overrides
 
 #: The old `--skip-...-check REASON` options, kept hidden for one release.
@@ -29,12 +29,12 @@ def overrides_from(
     given = safety.given(command, names, reason)
     by_field = {field: given.get(name) for field, name in NAMES.items()}
     if by_field["q_version"] is not None and print_only:
-        raise UqsError(
+        raise UqsUsageError(
             f"{FLAGS['q_version']} with --dry-run: a dry run starts nothing, so no "
             "q version is checked - drop one of them"
         )
     if by_field["profile_budget"] is not None and profile is None:
-        raise UqsError(
+        raise UqsUsageError(
             f"{FLAGS['profile_budget']} needs --profile: only a profile's set is "
             "refused on the budget estimate"
         )

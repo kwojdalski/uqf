@@ -84,12 +84,12 @@ import typer.main
 from typer import Abort
 from typer._click.exceptions import ClickException, UsageError
 
-from uqs.cli.shared import _env_log_level, app, json_refusal
+from uqs.cli.shared import EXIT_REFUSED, EXIT_USAGE, _env_log_level, app, json_refusal
 from uqs.cli.zsh_completion import patch_zsh_completion_script
 from uqs.deploy import control
 from uqs.interpreter import removed_variables_problem
 from uqs.logger import configure_logging, get_logger, json_requested
-from uqs.paths import UqsError
+from uqs.paths import UqsError, UqsUsageError
 from uqs.stack.envfiles import load_repo_env_files
 
 log = get_logger()
@@ -121,13 +121,18 @@ def main() -> None:
         try:
             sys.exit(target.forward(name, yes, rest, interactive=interactive))
         except UqsError as exc:
-            _refuse(str(exc), 1)
+            _refuse(str(exc), _exit_code(exc))
     if json_requested():
         _run_for_json()
     try:
         app()
     except UqsError as exc:  # one a command did not catch: a refusal, not a traceback
-        _refuse(str(exc), 1)
+        _refuse(str(exc), _exit_code(exc))
+
+
+def _exit_code(exc: UqsError) -> int:
+    """2 for a command line wrong as given, 1 for any other refusal (#1885)."""
+    return EXIT_USAGE if isinstance(exc, UqsUsageError) else EXIT_REFUSED
 
 
 def _refuse(message: str, code: int) -> NoReturn:
@@ -158,7 +163,7 @@ def _run_for_json() -> NoReturn:
     except Abort:
         _refuse("aborted", 1)
     except UqsError as exc:
-        _refuse(str(exc), 1)
+        _refuse(str(exc), _exit_code(exc))
     # Non-standalone, Click returns an Exit's code - and a command's own
     # return value, which no command here uses for anything but None.
     sys.exit(code if isinstance(code, int) else 0)

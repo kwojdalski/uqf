@@ -19,6 +19,7 @@ from datetime import timedelta
 from pathlib import Path
 
 from uqs.interpreter import q_interpreter
+from uqs.model.jobs import job_rows
 from uqs.paths import UqsError, UqsPaths
 from uqs.stack import runs
 from uqs.timerange import TimeRange
@@ -68,6 +69,15 @@ def trace_lines(output: str) -> list[tuple[str, str, str]]:
     return out
 
 
+def streaming_jobs(paths: UqsPaths) -> set[str]:
+    """The streaming jobs - feeds, ETL jobs, normalizers - this tree declares."""
+    return {r["job"] for r in job_rows(paths.repo_root) if r["kind"] not in _NOT_STREAMING}
+
+
+#: The kinds `uqs job list` lists that are no streaming job.
+_NOT_STREAMING = ("backfill", "reaction")
+
+
 def preview(
     paths: UqsPaths,
     job: str,
@@ -95,6 +105,9 @@ def preview(
     """
     if not _JOB.fullmatch(job):
         raise UqsError(f"{job!r} is not a streaming job name")
+    if job not in streaming_jobs(paths):
+        # asked here, by name, before q: q's own refusal blamed a wiring bug (#1885)
+        raise UqsError(f"no streaming job {job!r} - `uqs job list` names them")
     q = q_interpreter()
     if q is None:
         raise UqsError(

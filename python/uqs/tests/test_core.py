@@ -1215,9 +1215,9 @@ def test_run_multitail_execs_the_binary_with_the_argv(monkeypatch):
     assert seen == [("/usr/bin/multitail", ["multitail", "-f", "x.log"])]
 
 
-def test_print_recent_logs_raises_when_no_log_files(fake_paths: UqsPaths):
-    with pytest.raises(UqsError):
-        stack_logs.print_recent_logs(fake_paths, "discovery1")
+def test_print_recent_logs_prints_nothing_when_no_log_files(fake_paths: UqsPaths):
+    """No log yet is an empty result, not a refusal (#1885)."""
+    stack_logs.print_recent_logs(fake_paths, "discovery1")
 
 
 def test_print_recent_logs_emits_sorted_by_time(fake_paths: UqsPaths, capsys):
@@ -1400,9 +1400,8 @@ def test_warn_filters_out_info(fake_paths: UqsPaths):
     assert [r["message"] for r in records] == ["slow"]
 
 
-def test_get_recent_logs_raises_when_no_log_files(fake_paths: UqsPaths):
-    with pytest.raises(UqsError):
-        stack_logs.get_recent_logs(fake_paths, "discovery1")
+def test_get_recent_logs_is_empty_when_no_log_files(fake_paths: UqsPaths):
+    assert stack_logs.get_recent_logs(fake_paths, "discovery1") == []
 
 
 def test_list_env_includes_kdbbaseport(fake_paths: UqsPaths):
