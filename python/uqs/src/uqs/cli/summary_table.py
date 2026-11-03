@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 from rich.table import Table
 from rich.text import Text
 
-from uqs.cli.json_out import snake
+from uqs.cli.json_out import snake, timestamp
 from uqs.cli.shared import _lines, _paths, _sorted_items, log
 from uqs.cli.summary_graph import attach_graph_columns
 from uqs.paths import UqsError
@@ -180,7 +180,8 @@ def render(rows: list[dict[str, str]], chosen: list[str], port: int | None) -> T
 
 def record(row: dict[str, str]) -> dict:
     """One row as `status --json` prints it: no markup, the graph columns as
-    lists, PID and Port as ints, and a blank or `-` cell as null."""
+    lists, PID and Port as ints, the time ISO-8601 with its offset, and a blank
+    or `-` cell as null."""
     out: dict = {}
     for key, value in row.items():
         text = Text.from_markup(value).plain.strip() if isinstance(value, str) else value
@@ -190,6 +191,8 @@ def record(row: dict[str, str]) -> dict:
             ]
         elif key in ("PID", "Port"):
             out[snake(key)] = int(text) if str(text).isdigit() else None
+        elif key == "Time":  # TorQ's clock, this machine's time of day (#1882)
+            out["time"] = timestamp(text)
         else:
             out[snake(key)] = None if text in ("", "-") else text
     return out

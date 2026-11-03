@@ -19,9 +19,8 @@ from typing import Annotated
 import typer
 from rich.table import Table
 
-from uqs.cli import completion
-from uqs.cli.choices import alternatives
-from uqs.cli.json_out import emit, json_opt
+from uqs.cli import choices, completion
+from uqs.cli.json_out import emit, json_opt, records, timestamp
 from uqs.cli.renames import ATTACHMENT, alias_command, renamed, warn_renamed
 from uqs.cli.safety import ChangesState, ReadOnly, dry_run_note
 from uqs.cli.shared import (
@@ -42,8 +41,7 @@ from uqs.stack import logs as stack_logs
 from uqs.stack import multitail as stack_multitail
 from uqs.stack import procs as stack_procs
 
-#: `uqs config show/set/unset/list`: a process.csv row via process_overrides.csv,
-#: and every setting `set` wrote (`list`, once `uqs list overrides`, #1855).
+#: `uqs config show/set/unset/list`: process.csv rows, set in process_overrides.csv (#1855).
 config_app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
@@ -191,14 +189,15 @@ def config_unset(
 
 
 LogsJson = json_opt(
-    '{"lines": [{time, host, procname, proctype, loglevel, id, message}]} - the history '
-    "only: not with --follow, --channel or --multitail"
+    '{"lines": [{time, host, process, proctype, loglevel, id, message}]} - the history '
+    "only: not with --follow, --channel or --multitail; time ISO-8601 with its offset"
 )
 _LINE_KEYS = ("time", "host", "procname", "proctype", "loglevel", "id", "message")
 
 
-def _json_lines(records: list[dict]) -> None:
-    emit({"lines": [{k: r.get(k) for k in _LINE_KEYS} for r in records]})
+def _json_lines(rows: list[dict]) -> None:  # q's local .z.P, with this machine's offset
+    lines = records([{k: r.get(k) for k in _LINE_KEYS} for r in rows])
+    emit({"lines": [line | {"time": timestamp(line["time"])} for line in lines]})
 
 
 @app.command(
@@ -239,7 +238,7 @@ def logs(
         typer.Option(
             "--stream",
             help="With --multitail: which log files get a pane - "
-            + alternatives(
+            + choices.alternatives(
                 stack_multitail.MULTITAIL_STREAMS, default=stack_multitail.DEFAULT_STREAM
             ),
             autocompletion=completion.choices(*stack_multitail.MULTITAIL_STREAMS),
@@ -319,11 +318,8 @@ def logs(
     with `--attachment`.
     """
     if as_json:
-        for option, used in {
-            "--follow": follow,
-            "--channel": channel,
-            "--multitail": multitail,
-        }.items():
+        live = {"--follow": follow, "--channel": channel, "--multitail": multitail}
+        for option, used in live.items():
             if used:
                 _die(UqsUsageError(f"--json prints the history: {option} does not apply with it"))
                 return

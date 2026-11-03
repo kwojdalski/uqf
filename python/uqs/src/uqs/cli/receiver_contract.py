@@ -12,7 +12,6 @@ logging its new spelling.
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Annotated
 
@@ -23,7 +22,7 @@ from uqs.attach import receiver_contract
 from uqs.cli import completion
 from uqs.cli.attachment import attachment_app
 from uqs.cli.choices import alternatives
-from uqs.cli.json_out import JSON_HELP
+from uqs.cli.json_out import emit, json_opt
 from uqs.cli.renames import ATTACHMENT, alias_command, renamed
 from uqs.cli.safety import ChangesState, Effect, ReadOnly, dry_run_note, marked
 from uqs.cli.shared import (
@@ -100,6 +99,12 @@ def export(
         console.print(said, markup=False)
 
 
+ApproveJson = json_opt(
+    '{"contract", "binding": {attachment, destination, host, stack_id, hdb_dir, users, '
+    "conflict_policies, max_rows, approved_at, ...}}"
+)
+
+
 #: A conflict policy is `--on-conflict` on every command; `--max-rows` was a
 #: row limit's name for something else, the rows one message carries (#1857).
 _APPROVE_RENAMES = {
@@ -135,9 +140,7 @@ def approve(
         bool,
         typer.Option("--dry-run", "-n", help="Check it and show the record; store nothing"),
     ] = False,
-    as_json: Annotated[
-        bool, typer.Option("--json", help=f"{JSON_HELP}: the approved record")
-    ] = False,
+    as_json: ApproveJson = False,
 ) -> None:
     """Approve a receiver contract for an attachment on THIS machine, the stack's.
 
@@ -159,7 +162,7 @@ def approve(
         _die(exc)
         return
     if as_json:
-        typer.echo(json.dumps(record, indent=2, sort_keys=True))
+        emit(record)
         return
     b = record["binding"]
     console.print(
@@ -175,6 +178,9 @@ def approve(
         console.print(dry_run_note())
 
 
+ListJson = json_opt('{"contracts": [{contract, binding, path}]}, in the order the table shows')
+
+
 @contract_app.command("list", cls=renamed(ATTACHMENT, ReadOnly))
 def list_(
     attach: Annotated[
@@ -184,9 +190,7 @@ def list_(
     sort: SortOpt = None,
     reverse: ReverseOpt = False,
     interactive: InteractiveOpt = False,
-    as_json: Annotated[
-        bool, typer.Option("--json", help=f"{JSON_HELP}: [{{contract, binding}}]")
-    ] = False,
+    as_json: ListJson = False,
 ) -> None:
     """The receiver contracts approved for an attachment on this machine: one
     row each, with every listing's flags (#1858); --json prints the records."""
@@ -200,7 +204,7 @@ def list_(
     if as_json:
         order = {row["identity"]: i for i, row in enumerate(rows)}
         found.sort(key=lambda r: order.get(r.get("contract", {}).get("identity"), 0))
-        typer.echo(json.dumps(found, indent=2, sort_keys=True))
+        emit({"contracts": found})
         return
     if not found:
         console.print(f"no contract is approved for attachment {attach}", markup=False)

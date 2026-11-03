@@ -9,14 +9,13 @@ uqs.attach.backfill_remote.
 
 from __future__ import annotations
 
-import json
 from datetime import datetime
 from typing import Annotated
 
 import typer
 
 from uqs.attach import backfill_remote, backfill_run, config, service
-from uqs.cli.json_out import json_opt
+from uqs.cli.json_out import emit, json_opt
 from uqs.cli.renames import ATTACHMENT, alias_command, renamed, warn_renamed
 from uqs.cli.safety import ChangesState, dry_run_note
 from uqs.cli.shared import JOB_OPERATIONS_PANEL, _die, _paths, console, job_app
@@ -195,7 +194,7 @@ def receiver_stop(
     stopped = backfill_remote.stop_receivers(attach, dry_run=dry_run)
     names = ", ".join(f"{r['worker']} (pid {r['pid']})" for r in stopped) or "none was running"
     if as_json:
-        typer.echo(json.dumps({"stopped": stopped, "dry_run": dry_run}, indent=2, sort_keys=True))
+        emit({"stopped": stopped, "dry_run": dry_run})
     elif dry_run:
         console.print(f"would stop: {names}", markup=False)
         console.print(dry_run_note())
@@ -261,7 +260,7 @@ def _start(attach: str, contract: str | None, port: int | None, dry_run: bool, a
         _die(exc)
         return
     if as_json:
-        typer.echo(json.dumps(out, indent=2, sort_keys=True))
+        emit(out)
     elif dry_run:
         console.print(
             f"would receive {out['dataset']} (contract {out['contract']}) for attachment "

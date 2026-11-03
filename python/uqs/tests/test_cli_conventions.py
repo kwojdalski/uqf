@@ -976,26 +976,23 @@ def test_rule5a_every_reporting_command_has_json():
 
 #: `--json` commands that print a JSON object a line rather than one document,
 #: with why (#1859).
-JSON_LINES = {"config sources check": "one object per source, as each source's check ends"}
 
 
 def test_rule5a_every_json_help_is_the_one_phrasing():
     """Ten phrasings of `--json` across 36 commands (#1859): every one is
     `json_out.JSON_HELP`, then the document's shape, then a note on when it
     applies - one help, built by `json_opt` or led by JSON_HELP."""
-    from uqs.cli.json_out import JSON_HELP, JSON_LINES_HELP
+    from uqs.cli.json_out import JSON_HELP
 
     found = {}
     for path, cmd in LEAVES.items():
         param = cmd.option("--json")
         if param is None:
             continue
-        lead = JSON_LINES_HELP if path in JSON_LINES else JSON_HELP
         text = " ".join((param.help or "").split())
-        if text != lead and not text.startswith((f"{lead}:", f"{lead}.")):
+        if text != JSON_HELP and not text.startswith((f"{JSON_HELP}:", f"{JSON_HELP}.")):
             found[path] = text
     assert not found, f"--json helps in another phrasing: {found}"
-    assert set(JSON_LINES) <= set(LEAVES)
 
 
 def test_rule5b_dry_run_n_exactly_on_what_changes_state():
