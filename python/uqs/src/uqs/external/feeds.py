@@ -135,17 +135,26 @@ class ExternalFeed:
         """Every declared option for `start`: as given, else `$env`, else its default."""
         return {o.name: o.value(given.get(o.name)) for o in self.options}
 
-    def check_bindings(self, paths: UqsPaths, given: Mapping[str, Any]) -> dict[str, Any]:
+    def check_bindings(
+        self,
+        paths: UqsPaths,
+        given: Mapping[str, Any],
+        origins: Mapping[str, str] | None = None,
+    ) -> dict[str, Any]:
         """The start options for `given`, refused (UqsError) unless what they and
         the feed bind to agrees: each option's own check, every table the feed
-        `produces` defined in the plant, then the feed's `check`.
+        `produces` defined in the plant, then the feed's `check`. `origins`
+        names where a given value came from when it was not its flag - the
+        variable `--<option>-env` named (#1853).
 
         Run before a start and by a dry run, so a mismatch is an error naming
         the fix rather than a publisher whose rows the tickerplant drops."""
+        origins = origins or {}
         for option in self.options:
             if option.validate is not None:
                 given_value = given.get(option.name)
-                option.validate(option.value(given_value), option.origin(given_value))
+                origin = origins.get(option.name) or option.origin(given_value)
+                option.validate(option.value(given_value), origin)
         options = self.start_options(given)
         if missing := unplanted(self, paths.repo_root):
             raise UqsError(

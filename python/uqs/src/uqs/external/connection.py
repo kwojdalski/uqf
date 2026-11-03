@@ -8,9 +8,13 @@ connector and the scaffold template import them:
 
   TP_HOST            the host stp1 is reached on
   tickerplant_port   stp1's port, from its process.csv row
-  TP_CREDENTIAL      the `--tp-credential` option, declared once and listed
-                     in every connector's options
+  TP_CREDENTIAL      the credential option, declared once and listed in every
+                     connector's options - `--tp-credential-env NAME` on the
+                     command line (cli/external.py, #1853)
   tp_credential      the credential a start presents, resolved
+  credential_env     the environment a connector's own process starts with,
+                     the credential in it
+  credential_from_env  what that process reads it back with
 
 What stays each connector's own is everything else: Kafka's brokers, topics
 and consumer group, cryptorust's venues, Databento's dataset and key.
@@ -20,8 +24,9 @@ and consumer group, cryptorust's venues, Databento's dataset and key.
 A setting a FeedOption gives an `env` resolves in one order
 (`feeds.FeedOption.value`), and the credential follows it:
 
-  1. given explicitly: the option to `uqs connector start` (`--tp-credential`),
-     or the argument a Python caller passes - a deployment's own credential;
+  1. given explicitly: `uqs connector start --tp-credential-env NAME`, which
+     reads it from $NAME, or the argument a Python caller passes - a
+     deployment's own credential;
   2. the environment: `$UQF_TP_CREDENTIAL`, which a deployed server can export
      from its shared/config/secrets.env (deploy/config.SECRETS), sourced by
      deploy.env for every process uqs starts;
@@ -39,6 +44,18 @@ DEMO_TP_CREDENTIAL, and a start that falls back to it says so in its log.
 A credential is a secret wherever it appears: the option is `secret`, so a
 dry run prints `***`, and every refusal here names where the value came from,
 never the value.
+
+## Never on a command line (#1853)
+
+A value on a command line is in `ps` for every user on the machine, in shell
+history, and - for a connector - in its pid file, which records the argv it
+was started with (external/lifecycle.py). So the credential reaches neither:
+`connector start` takes the NAME of the variable holding it
+(`--tp-credential-env`), and a connector hands it to the process it starts in
+that process's environment (`credential_env`), which the process reads back
+with `credential_from_env` - never as an argument. The inline
+`--tp-credential USER:PASSWORD` still parses for one release, hidden, and says
+what to use instead.
 """
 
 from __future__ import annotations
@@ -71,12 +88,13 @@ def _check_credential(value: str, origin: str) -> None:
     if not colon or not user.strip():
         raise UqsError(
             f"the tickerplant credential from {origin} is not user:password "
-            "(its value is not shown) - pass --tp-credential USER:PASSWORD or set "
-            f"${TP_CREDENTIAL_ENV}"
+            "(its value is not shown) - export USER:PASSWORD in a variable and pass "
+            f"--tp-credential-env NAME, or set ${TP_CREDENTIAL_ENV}"
         )
 
 
-#: `--tp-credential`: one option, every connector lists it in its options=.
+#: The credential: one option, every connector lists it in its options=. A
+#: secret, so the CLI takes it as `--tp-credential-env NAME` (cli/external.py).
 TP_CREDENTIAL = FeedOption(
     "tp_credential",
     "user:password stp1 accepts; default $" + TP_CREDENTIAL_ENV + ", else the starter "
@@ -99,10 +117,28 @@ def tp_credential(given: str | None = None, environ: Mapping[str, str] | None = 
     if value == DEMO_TP_CREDENTIAL:
         log.info(
             "connecting to stp1 with the DEMO credential (the starter pack's sample "
-            f"`feed` login) - pass --tp-credential or set ${TP_CREDENTIAL_ENV} to use "
-            "a deployment's own"
+            f"`feed` login) - pass --tp-credential-env NAME or set ${TP_CREDENTIAL_ENV} "
+            "to use a deployment's own"
         )
     return value
+
+
+def credential_env(credential: str, environ: Mapping[str, str] | None = None) -> dict[str, str]:
+    """The environment a connector's own process starts with: `environ` (this
+    process's by default) with the resolved `credential` in
+    $UQF_TP_CREDENTIAL. Not an argument: an argv is in `ps`, and in the pid
+    file that records it (#1853)."""
+    return {**(os.environ if environ is None else environ), TP_CREDENTIAL_ENV: credential}
+
+
+def credential_from_env(environ: Mapping[str, str] | None = None) -> tuple[str, str]:
+    """(user, password) from $UQF_TP_CREDENTIAL, as `credential_env` set it -
+    what a connector's process opens stp1 with. Refuses, naming the variable
+    and never its value, when it is unset or not user:password."""
+    value = (os.environ if environ is None else environ).get(TP_CREDENTIAL_ENV, "")
+    _check_credential(value, f"${TP_CREDENTIAL_ENV}")
+    user, _, password = value.partition(":")
+    return user, password
 
 
 def tickerplant_port(paths: UqsPaths, base_port: int | None = None) -> int:

@@ -1367,7 +1367,17 @@ derived files included - CI checks they are current.
 
 Every process (except the passwordless `feed1`) is protected by
 `lib/torq-finance-starter-pack/appconfig/passwords/accesslist.txt` - placeholder
-demo credentials, `admin:admin` works for everything.
+demo credentials, `admin:admin` works for everything, and is what `uqs query`
+and `uqs schema` log in as by default. For another login, give `--user` and put
+the password in a variable whose NAME `--password-env` takes - never on the
+command line, where `ps` and shell history would show it:
+
+```
+read -rs Q_PW && export Q_PW
+uqs query rdb1 "count trade" --user ops --password-env Q_PW
+```
+
+The old `--passwd PASSWORD` still parses for one release, hidden, and warns.
 
 ```
 uqs query \
@@ -1412,7 +1422,9 @@ In the session, `\\` (q's own), `exit` or Ctrl-D leaves; Ctrl-C drops the line
 being typed. A line that fails is reported and the session goes on.
 
 It refuses a process that is not running, naming the `uqs start` to fix it.
-`qcon` ships with kdb+, not with this repository.
+`qcon` ships with kdb+, not with this repository. qcon takes the password on its
+command line, so with a password from `--password-env` the session on a process
+is uqs's own console instead, each line sent as typed.
 
 Results print as q's own console prints them: the process formats its answer
 with `.Q.s`, laid out to this terminal's size (or in full when the output is

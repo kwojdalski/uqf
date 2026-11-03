@@ -23,18 +23,25 @@ connector:NAME` beside the stack's verbs (#1734): a connector is not a torq.sh
 process, so it shares none of `start`'s options (`--profile`, `--follow`, the
 skips) while each feed has start options of its own, and #1738's rule 1 is
 noun, then verb. Its log is one plain file, not a TorQ out_/err_ pair.
+
+A secret option - the tickerplant credential, an API key - is never taken on
+the command line (#1853), where `ps`, shell history and the connector's pid
+file would show it: `start` takes the NAME of the variable holding it,
+`--<option>-env NAME`. The inline spelling still parses for one release,
+hidden, and warns.
 """
 
 from __future__ import annotations
 
 import functools
 import inspect
+import os
 from typing import Annotated, Any
 
 import typer
 from rich.table import Table
 
-from uqs.cli import completion
+from uqs.cli import completion, renames
 from uqs.cli.json_out import emit, json_opt, snake
 from uqs.cli.pipelines import needs_pipelines
 from uqs.cli.renames import renamed
@@ -96,15 +103,39 @@ def _feed(name: str) -> ExternalFeed:
     return FEEDS[name]
 
 
+#: The suffix of a secret option's parameter that names its variable (#1853):
+#: `tp_credential` is given as `--tp-credential-env NAME`.
+ENV_SUFFIX = "_env"
+
+
 def _start_signature() -> inspect.Signature:
     """`connector start`'s parameters: NAME, then every option any feed
     declares - one CLI option per name, its help naming the feeds that take
-    it - then --dry-run. Typer reads this, so the options are the feeds'."""
+    it - then --dry-run. Typer reads this, so the options are the feeds'.
+
+    A secret option is two parameters (#1853): `--<option>-env NAME`, the
+    variable holding it, and the inline `--<option>`, hidden - kept for one
+    release (cli/rename_expiry.py), warning when used."""
     kind = inspect.Parameter.POSITIONAL_OR_KEYWORD
     params = [inspect.Parameter("name", kind, annotation=FeedArg)]
     for name, (option, takers) in check_options(FEEDS).items():
-        help_ = f"{option.help} ({', '.join(takers)})"
-        typed = Annotated[option.type | None, typer.Option(help=help_, show_default=False)]
+        feeds = ", ".join(takers)
+        if option.secret:
+            env_help = (
+                f"Environment variable holding the {option.help}. The value itself is "
+                f"never printed ({feeds})"
+            )
+            named = Annotated[
+                str | None, typer.Option(metavar="NAME", help=env_help, show_default=False)
+            ]
+            params.append(
+                inspect.Parameter(name + ENV_SUFFIX, kind, default=None, annotation=named)
+            )
+        help_ = f"{option.help} ({feeds})"
+        typed = Annotated[
+            option.type | None,
+            typer.Option(help=help_, show_default=False, hidden=option.secret),
+        ]
         params.append(inspect.Parameter(name, kind, default=None, annotation=typed))
     params.append(inspect.Parameter("dry_run", kind, default=False, annotation=DryRunOpt))
     return inspect.Signature(params)
@@ -133,7 +164,11 @@ start = connector_app.command("start", cls=_START)(start)
 def _start(name: str, options: dict[str, Any], dry_run: bool = False, verb: str = "start") -> None:
     """Start feed `name` with the options given (refusing any not its own), or dry-run it."""
     feed = _feed(name)
-    given = {k: v for k, v in options.items() if v is not None}
+    try:
+        given, origins = _secrets_from_env(options)
+    except UqsError as exc:
+        _die(exc)
+        return
     own = {option.name: option for option in feed.options}
     for option in given:
         if option not in own:
@@ -142,12 +177,12 @@ def _start(name: str, options: dict[str, Any], dry_run: bool = False, verb: str 
     try:
         # Bindings first (#1786), dry run or not: a topic or table that binds
         # to nothing is refused here, not left to the detached process's log.
-        resolved = feed.check_bindings(_paths(), given)
+        resolved = feed.check_bindings(_paths(), given, origins)
     except UqsError as exc:
         _die(exc)
         return
     if dry_run:
-        _would(name, f"{verb} {name} with {_settings(feed, given)}")
+        _would(name, f"{verb} {name} with {_settings(feed, given, origins)}")
         return
     try:
         pid = feed.start(_paths(), resolved)
@@ -157,12 +192,42 @@ def _start(name: str, options: dict[str, Any], dry_run: bool = False, verb: str 
     console.print(feed.started(pid))
 
 
-def _settings(feed: ExternalFeed, given: dict[str, Any]) -> str:
+def _secrets_from_env(options: dict[str, Any]) -> tuple[dict[str, Any], dict[str, str]]:
+    """The options given, each secret read from the variable its
+    `--<option>-env NAME` names, and {option: "$NAME"} for those (#1853).
+
+    An inline secret still works for its one release, warning that it is in
+    `ps` and shell history; given with its `-env` form too, it is refused
+    rather than one silently winning."""
+    secrets = {name for name, (option, _) in check_options(FEEDS).items() if option.secret}
+    named = {name: options.get(name + ENV_SUFFIX) for name in secrets}
+    given: dict[str, Any] = {
+        k: v
+        for k, v in options.items()
+        if v is not None and not (k.endswith(ENV_SUFFIX) and k[: -len(ENV_SUFFIX)] in secrets)
+    }
+    origins: dict[str, str] = {}
+    for key, variable in named.items():
+        flag = "--" + key.replace("_", "-")
+        if variable is None:
+            if key in given:
+                renames.warn_secret_argv(flag, f"{flag}-env NAME")
+            continue
+        if key in given:
+            raise UqsError(f"give {flag}-env or {flag}, not both")
+        value = os.environ.get(variable, "")
+        if not value.strip():
+            raise UqsError(f"{flag}-env {variable}: ${variable} is not set")
+        given[key], origins[key] = value, f"${variable}"
+    return given, origins
+
+
+def _settings(feed: ExternalFeed, given: dict[str, Any], origins: dict[str, str]) -> str:
     """A dry run's settings: each option given, or taken from its variable
     (named), a secret as ***. The defaults are not listed."""
     shown = []
     for option in feed.options:
-        origin = option.origin(given.get(option.name))
+        origin = origins.get(option.name) or option.origin(given.get(option.name))
         if origin == "default":
             continue
         value = "***" if option.secret else option.value(given.get(option.name))
