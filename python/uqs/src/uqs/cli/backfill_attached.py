@@ -8,7 +8,6 @@ Everything it decides is in uqs.attach.backfill.
 
 from __future__ import annotations
 
-import json
 from collections.abc import Mapping
 from datetime import datetime
 
@@ -19,6 +18,7 @@ from uqs.attach import backfill_audit, backfill_run, config, service
 from uqs.attach import backfill_plan as planning
 from uqs.attach.backfill_policy import EOD_BYPASSED, EOD_FENCE, coordination_line, override_lines
 from uqs.cli import backfill_receive
+from uqs.cli.json_out import emit
 from uqs.cli.shared import _die, _paths, console, log
 from uqs.paths import UqsError, UqsUsageError
 from uqs.stack import backfill as stack_backfill
@@ -128,7 +128,7 @@ def run(
         _die(exc)
         return
     if as_json:
-        typer.echo(json.dumps(out, indent=2, sort_keys=True))
+        emit(out)
     else:
         console.print(text, markup=False)
     raise typer.Exit(code=0)
@@ -285,6 +285,6 @@ def _outcome_text(worker, run_, code, result) -> str:
 
 def _report(info, as_json, text):
     if as_json:
-        typer.echo(json.dumps(info, indent=2, sort_keys=True, default=str))
+        emit(info)
     else:
         console.print(text, markup=False)

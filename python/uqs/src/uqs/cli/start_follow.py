@@ -64,7 +64,7 @@ def procnames_started_by(names: str, port: int | None) -> list[str]:
         return [
             row["procname"]
             for row in listing.list_items(_paths(), "processes", base_port=port)
-            if row.get("startwithall") == "1"
+            if row.get("startwithall") is True
         ]
     return stack_logs.resolve_procnames(_paths(), names)
 

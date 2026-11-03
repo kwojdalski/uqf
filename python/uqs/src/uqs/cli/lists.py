@@ -13,17 +13,17 @@ command's signature at runtime, and Typer resolves string annotations against
 this module's globals, where a factory's locals are not.
 """
 
-import json
 from collections.abc import Callable
 from typing import Annotated
 
 import typer
 from rich.table import Table
 
+from uqs.cells import cells
 from uqs.cli import completion, safety
 from uqs.cli.attachment import attachment_app
 from uqs.cli.config import config_app
-from uqs.cli.json_out import JSON_HELP
+from uqs.cli.json_out import JSON_HELP, emit, records
 from uqs.cli.renames import BASE_PORT, renamed, warn_renamed
 from uqs.cli.runtime_diff import runtime_app
 from uqs.cli.shared import (
@@ -67,8 +67,17 @@ ReverseOpt = Annotated[
     bool, typer.Option("--reverse", help="Sort descending. Only meaningful with --sort.")
 ]
 JsonOpt = Annotated[
-    bool, typer.Option("--json", help=f"{JSON_HELP}: the rows, [{{column: value}}]")
+    bool,
+    typer.Option(
+        "--json",
+        help=f'{JSON_HELP}: {{"<kind>": [{{column: value}}]}}, each value typed - a port a '
+        "number, a flag true/false, a set of names a list.",
+    ),
 ]
+
+#: The key a kind's rows are under in its --json document, where it is not
+#: the kind's own name.
+_JSON_KEY = {"named overrides": "overrides", "env": "variables"}
 _SORT_HELP = "Sort by this column (case-insensitive, numeric-aware)."
 
 
@@ -87,18 +96,19 @@ def _print(kind, base_port, export, sort, reverse, interactive, as_json, rows=No
         )
         return
     items = _sorted_items(items, sort, reverse)
+    shown = [cells(item) for item in items]  # what a table cell and an export hold
     if as_json:
-        print(json.dumps(items, indent=2))
-        _export(items, export)
+        emit({_JSON_KEY.get(kind, kind): records(items)})
+        _export(shown, export)
         return
     table = Table(title=f"{kind} ({len(items)})")
     if items:
         for col in items[0]:
             table.add_column(col)
-        for item in items:
+        for item in shown:
             table.add_row(*item.values())
     _show(table, interactive)
-    _export(items, export)
+    _export(shown, export)
 
 
 def _noun_list(
@@ -222,7 +232,7 @@ app.add_typer(override_app, name="override")
 
 def _bypasses() -> list[dict]:
     return [
-        {"override": b.name, "commands": ", ".join(b.commands), "effect": b.description}
+        {"override": b.name, "commands": list(b.commands), "effect": b.description}
         for b in safety.catalog()
     ]
 
@@ -274,7 +284,7 @@ def list_items(
     """
     if kind is None:
         if as_json:
-            print(json.dumps(_kinds()))
+            emit({"kinds": _kinds()})
         else:
             console.print(f"Available kinds: {', '.join(_kinds())}")
         return

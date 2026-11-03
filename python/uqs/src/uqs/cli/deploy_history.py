@@ -11,7 +11,7 @@ from rich.table import Table
 
 from uqs.cli import completion
 from uqs.cli.deploy import deploy_app
-from uqs.cli.json_out import emit, json_opt
+from uqs.cli.json_out import emit, json_opt, timestamp
 from uqs.cli.safety import ReadOnly
 from uqs.cli.shared import (
     ExportOpt,
@@ -83,7 +83,8 @@ def deploy_history(
         return
     _export(rows, export)
     if as_json:
-        emit({"deployments": rows})
+        # the time ISO-8601 with its offset, as every document's (#1882)
+        emit({"deployments": [r | {"at": timestamp(r["at"], naive="utc")} for r in rows]})
         return
     if not rows:
         console.print(f"no deployments recorded in {history.history_path(root)}")

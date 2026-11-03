@@ -9,7 +9,7 @@ from rich.table import Table
 from uqs import timerange
 from uqs.cli import completion
 from uqs.cli.concepts import job_arg
-from uqs.cli.json_out import emit, json_opt
+from uqs.cli.json_out import emit, json_opt, utc_times
 from uqs.cli.pipelines import needs_pipelines
 from uqs.cli.range_options import DateOpt, LastOpt, RangeFromOpt, RangeToOpt
 from uqs.cli.safety import ReadOnly
@@ -146,10 +146,13 @@ def gaps(
         found, cut = refills(holes, twins)
         emit({
             "job": job,
-            "gaps": [{"range_from": h["range_from"], "range_to": h["range_to"]} for h in holes],
+            "gaps": [
+                utc_times({"range_from": h["range_from"], "range_to": h["range_to"]})
+                for h in holes
+            ],
             "sessions": sessions,
             "refillable": bool(twins),
-            "refills": found,
+            "refills": [utc_times(r) for r in found],
             "today_not_refillable": cut,
         })  # fmt: skip
         return

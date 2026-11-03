@@ -754,7 +754,7 @@ def test_skip_torq_version_is_its_override_through_plan_confirmation_and_record(
 
 def test_both_spellings_together_are_one_waiver_per_component(world, bundle):
     mixed = ["--skip-torq-version", "discovery1", "--skip-torq-version=stp1",
-             "--override", "TORQ_VERSION:rdb1", "--override", "torq_version:wdb1",
+             "--override", "torq-version:rdb1", "--override", "torq-version:wdb1",
              "--skip-torq-version", "wdb1", "--reason", "r"]  # fmt: skip
     data = json.loads(invoke(*plan_args(bundle), *mixed, "--json", "--dry-run").output)["plan"]
     assert data["ok"] is True and len(data["accepted_risks"]) == 4
