@@ -15,8 +15,9 @@ before a run is allowed to exist:
     disagrees). That is the common exclusion mechanism, and it is a property of kdb+
     on a LOCAL filesystem: a directory on a network filesystem is refused.
   * COMPLETED HISTORY ONLY. Every affected date is before the date any native writer
-    is filling and before its trading date, so native end of day - which writes
-    that date - never meets a backfilled partition. An unknown date is a refusal.
+    is filling - a wdb's current write partition, an rdb's earliest outstanding partition,
+    never `.eodtime.d`, which TorQ does not advance (#1914) - so native end of day, which
+    writes that date, never meets a backfilled partition. An unknown date is a refusal.
   * AN END-OF-DAY FENCE. Reloads, sorts, merges and table-filling over every
     partition cluster around end of day, so a run is refused within `EOD_GUARD` of the
     next roll, within it after the last, or while a reload is open - measured on the
@@ -44,12 +45,11 @@ blocker still refuses. backfill_policy.py holds the ids, their policy and the gu
 from __future__ import annotations
 
 import dataclasses
-import re
 from collections.abc import Mapping
 from datetime import date, datetime, timedelta
 from typing import Any
 
-from uqs import timerange
+from uqs.attach import writer_clock
 from uqs.attach.backfill import Destination
 from uqs.attach.backfill_policy import (
     EOD_FENCE,
@@ -91,28 +91,6 @@ def _blocker(code: str, component: str, message: str, **facts: object) -> Findin
         action=POLICY[code].action,
         facts={k: "" if v is None else str(v) for k, v in facts.items()},
     )
-
-
-#: The digits of a q timestamp's fraction past the microsecond.
-_PAST_MICROSECOND = re.compile(r"(\.\d{6})\d+$")
-
-
-def _moment(text: str) -> datetime | None:
-    """A writer's clock reading, to the microsecond.
-
-    The writer sends `.z.p`, which on Linux carries nanoseconds (macOS's clock
-    stops at the microsecond, so a run there never showed it). parse_bound
-    refuses those digits in a bound someone typed; a clock reading nobody typed
-    is cut to the microsecond instead, which no fence measured in minutes can
-    feel (#1650: the remote-stack lane's wdb on Linux was refused for it)."""
-    return (
-        timerange.parse_bound("writer clock", _PAST_MICROSECOND.sub(r"\1", text)) if text else None
-    )
-
-
-def _day(text: str) -> date | None:
-    moment = _moment(text)
-    return moment.date() if moment else None
 
 
 def _state(proc: Proc, ipc: Ipc, blockers: list[Finding]) -> dict[str, Any] | None:
@@ -200,21 +178,25 @@ def fence(
 ) -> tuple[date | None, datetime | None, datetime | None]:
     """One writer's active date and end-of-day fence: blockers appended, facts returned."""
     who = state.get("procname", "a writer")
-    eod_date = _day(state.get("eod_date", ""))
-    known = [d for d in (_day(state.get("partition", "")), eod_date) if d is not None]
-    if state.get("proctype") == "wdb" and len(known) < 2 or eod_date is None:
+    held, unreadable = writer_clock.partitions(state)
+    if not held or unreadable:
+        what = (
+            "current write partition"
+            if state.get("proctype") == "wdb"
+            else "outstanding partitions"
+        )
         blockers.append(
             _blocker(
                 "active-date-unknown",
                 who,
-                f"{who} does not report which date it is writing: the active write date cannot "
-                "be excluded",
+                f"{who} does not report which date it is writing: its {what} are missing, "
+                "empty or unreadable, so the active write date cannot be excluded",
                 proctype=state.get("proctype"),
                 partition=state.get("partition"),
-                eod_date=state.get("eod_date"),
+                partitions=state.get("partitions"),
             )
         )
-    active = min(known) if known else None
+    active = min(held) if held and not unreadable else None
     if active is not None:
         touched = [d.isoformat() for d in dates if d >= active]
         if touched:
@@ -222,14 +204,18 @@ def fence(
                 _blocker(
                     "active-date",
                     who,
-                    f"{', '.join(touched)} is not completed history: {who} is writing {active} "
-                    "and native end of day will write it. Only dates before it can be "
-                    "backfilled",
+                    f"{', '.join(touched)} is not completed history: "
+                    f"{writer_clock.boundary(state, held)} and native end of day will write it. "
+                    "Only dates before it can be backfilled",
                     active_date=active.isoformat(),
                     touched_dates=",".join(touched),
+                    partitions=",".join(d.isoformat() for d in held),
                 )
             )
-    now, roll = _moment(state.get("now", "")), _moment(state.get("next_roll", ""))
+    now, roll = (
+        writer_clock.moment(state.get("now", "")),
+        writer_clock.moment(state.get("next_roll", "")),
+    )
     if now is None or roll is None:
         blockers.append(
             _blocker(

@@ -139,7 +139,10 @@ def test_the_waiver_lifts_nothing_else(world, monkeypatch, code):
 @pytest.mark.parametrize(
     ("over", "message"),
     [
-        ({"partition": "2026.09.01"}, "2026-09-12 is not completed history: wdb1 is writing"),
+        (
+            {"partition": "2026.09.01"},
+            "2026-09-12 is not completed history: wdb1's current write partition is",
+        ),
         ({"reloadcomplete": False}, "wdb1 has an end-of-day reload in progress"),
         ({"next_roll": ""}, "wdb1 does not report its clock and next roll"),
     ],
