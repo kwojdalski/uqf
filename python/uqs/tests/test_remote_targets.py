@@ -356,12 +356,12 @@ def test_list_targets_shows_each_target_and_its_last_deployment(server, tmp_path
     )
     result = CliRunner().invoke(app, ["target", "list", "--json"])
     assert result.exit_code == 0, result.output
-    rows = {r["target"]: r for r in json.loads(result.output)}
+    rows = {r["target"]: r for r in json.loads(result.output)["targets"]}
     assert list(rows) == ["bare", "down", "prod", "uat"]
     assert list(rows["prod"]) == ["target", "ssh", "dest", "remote_user", "labels", "last_deployed"]
-    assert rows["prod"]["remote_user"] == "efx" and rows["prod"]["labels"] == "env=prod"
-    assert rows["uat"]["last_deployed"].startswith("r7 (")
-    assert rows["down"]["last_deployed"] == ""
+    assert rows["prod"]["remote_user"] == "efx" and rows["prod"]["labels"] == {"env": "prod"}
+    assert rows["uat"]["last_deployed"]["release"] == "r7"
+    assert rows["down"]["last_deployed"] is None
     table = CliRunner().invoke(app, ["target", "list"], env={"COLUMNS": "200"}).output
     assert "last_deployed" in table and "svc@uat.example" in table
 

@@ -22,6 +22,7 @@ import socket
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from uqs.logger import get_logger
 from uqs.paths import UqsError, UqsPaths, repo_root
@@ -304,11 +305,11 @@ def _publisher_port(procname: str, stack_id: int, root: Path) -> int | None:
         return None
 
 
-def inventory(root: Path | None = None, repo: Path | None = None) -> list[dict[str, str]]:
+def inventory(root: Path | None = None, repo: Path | None = None) -> list[dict[str, Any]]:
     """One row per attachment: what it is, where, its lifecycle state, and -
     separately - whether its publisher is running now. Reads the two JSON
     files and connects to one port; changes nothing, and takes no lock."""
-    rows: list[dict[str, str]] = []
+    rows: list[dict[str, Any]] = []
     base = root or state_root()
     published, broken = _scan(base)
     for pub in published:
@@ -329,20 +330,20 @@ def inventory(root: Path | None = None, repo: Path | None = None) -> list[dict[s
                 "attachment": pub.attachment,
                 "job": job,
                 "publisher": pub.procname,
-                "stack": str(pub.stack_id),
+                "stack": pub.stack_id,
                 "host": host,
                 "state": pub.state,
                 "persist": persist,
                 "publisher_state": running,
-                "publisher_port": "" if port is None else str(port),
+                "publisher_port": port,
                 "detail": pub.problem or detail,
             }
         )
     for line in broken:
-        blank = dict.fromkeys(("job", "publisher", "stack", "host", "persist"), "")
+        blank = {**dict.fromkeys(("job", "publisher", "host", "persist"), ""), "stack": None}
         name = Path(line.split(" cannot be read")[0]).parent.name
         rows.append(
             {"attachment": name, **blank, "state": UNREADABLE,
-             "publisher_state": UNKNOWN, "publisher_port": "", "detail": line}
+             "publisher_state": UNKNOWN, "publisher_port": None, "detail": line}
         )  # fmt: skip
     return rows

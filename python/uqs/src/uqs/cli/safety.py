@@ -35,7 +35,7 @@ from typing import Annotated
 import typer
 from typer.core import TyperCommand
 
-from uqs.cli import skip_options
+from uqs.cli import completion, skip_options
 from uqs.guardrails import Guardrail, aggregate
 from uqs.logger import get_logger
 from uqs.paths import UqsError, UqsUsageError
@@ -87,6 +87,7 @@ OverrideOpt = Annotated[
         metavar="NAME",
         help="Bypass the check NAME for this command only (`uqs override list` names them); "
         "repeatable. Needs --reason; warned and recorded",
+        autocompletion=completion.overrides,
     ),
 ]
 ReasonOpt = Annotated[
@@ -108,14 +109,40 @@ class Effect(StrEnum):
 
 
 def marked(
-    effect: Effect, base: type[TyperCommand] = skip_options.SkipOptions
+    effect: Effect,
+    base: type[TyperCommand] = skip_options.SkipOptions,
+    *,
+    dry_run_starts: str = "",
+    acts_when: str = "",
+    own_output: str = "",
+    no_dry_run: str = "",
 ) -> type[TyperCommand]:
     """`base` carrying `effect`: the `cls=` of a command. Typer wraps the
     command's function, so the mark is on the Click class, which survives.
-    It takes its registry-generated `--skip-<id>` options (skip_options)."""
+    It takes its registry-generated `--skip-<id>` options (skip_options).
+
+    The rest are what an Effect does not say (#1893), each read by
+    `uqs --target` (cli/target_confirm.py) and test_cli_conventions.py, so a
+    new command with one of these properties declares it here, once:
+
+    - `dry_run_starts`: why its --dry-run still starts a process - so on a
+      --target it asks even then;
+    - `acts_when`: the option under which a read-only command changes state
+      (`status --interactive` starts and stops processes with single keys);
+    - `own_output`: why its output belongs to something else, so --json and
+      --dry-run do not apply;
+    - `no_dry_run`: why a command that changes state reports, and has no
+      --dry-run."""
     if not issubclass(base, skip_options.SkipOptions):
         base = type(base.__name__, (skip_options.SkipOptions, base), {})
-    return type(base.__name__, (base,), {"effect": effect})
+    traits = {
+        "effect": effect,
+        "dry_run_starts": dry_run_starts,
+        "acts_when": acts_when,
+        "own_output": own_output,
+        "no_dry_run": no_dry_run,
+    }
+    return type(base.__name__, (base,), traits)
 
 
 ReadOnly = marked(Effect.READ_ONLY)

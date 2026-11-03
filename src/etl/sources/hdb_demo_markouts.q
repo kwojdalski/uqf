@@ -94,6 +94,29 @@
       }[distinct deals`sym;.qpipe.source.hdb_demo_markouts.lookback];range_from;range_to+.qpipe.transform.demo_markouts.max_horizon];
     `trades`quote!(deals;quotes)}
 
+/ How far the HDB's quotes reach, less the longest horizon: a window ending at or before
+/ this has every quote its fills are marked against (#1927). -0Wp (no quote yet) means
+/ nothing is complete.
+/ @param h an open handle to the HDB
+/ @return the exclusive instant through which the quotes the markout needs are present
+/ @eg .qpipe.source.hdb_demo_markouts.complete_through[{2026.09.17D10:00:25}]  ->  2026.09.17D10:00:15.000000000
+.qpipe.source.hdb_demo_markouts.complete_through:{[h]
+    latest:.qetl.source.ipc_call[h;{[unused] exec max time from `quote where date=max date};enlist 0b];
+    $[latest<=-0Wp; -0Wp; latest-.qpipe.transform.demo_markouts.max_horizon]}
+
+/ Can this window be marked out, or are its quotes absent? A fill with no quote after it
+/ is a legitimate null markout and is ready; a window with fills and NO quotes at all
+/ is not, since every markout it wrote would be null and coverage would keep them
+/ (#1927). A window with no fills has nothing to mark and is ready.
+/ @param batch `trades`quote!(...) as the query returns them
+/ @param range_from inclusive lower bound
+/ @param range_to exclusive upper bound
+/ @return the unmet requirements, as a list of strings; () when ready
+/ @eg .qpipe.source.hdb_demo_markouts.ready[.qpipe.source.hdb_demo_markouts.fixture[];2026.09.17D00:00;2026.09.18D00:00]  ->  ()
+.qpipe.source.hdb_demo_markouts.ready:{[batch;range_from;range_to] / noqa: QF016 the hook's fixed signature
+    if[(0=count batch`trades) or 0<count batch`quote; :()];
+    enlist "quote holds no quotes for the ",string[count distinct (batch`trades)`sym]," pair(s) the window's ",string[count batch`trades]," fill(s) trade"}
+
 / Four fills on 2026.09.17: EURUSD both ways, a USDJPY buy, and a GBPUSD
 / fill with no quote after it, so a null markout is part of the fixture.
 / @return the fills, as the HDB's trades holds them
@@ -125,7 +148,7 @@
 .qpipe.source.hdb_demo_markouts.fixture:{[] `trades`quote!(.qpipe.source.hdb_demo_markouts.raw_fills[];.qpipe.source.hdb_demo_markouts.raw_quotes[])}
 
 .qetl.source.define[.qpipe.source.hdb_demo_markouts.source_name;
-    `source`table_name`time_column`row_key`columns`types`query`fixture`tz`supporting!
-    (.qpipe.source.hdb_demo_markouts.source_name;`trades;.qpipe.source.hdb_demo_markouts.time_column;.qpipe.source.hdb_demo_markouts.row_key;.qpipe.source.hdb_demo_markouts.columns;.qpipe.source.hdb_demo_markouts.types;.qpipe.source.hdb_demo_markouts.query;.qpipe.source.hdb_demo_markouts.fixture;.qpipe.source.hdb_demo_markouts.tz;.qpipe.source.hdb_demo_markouts.supporting)];
+    `source`table_name`time_column`row_key`columns`types`query`fixture`tz`supporting`complete_through`ready!
+    (.qpipe.source.hdb_demo_markouts.source_name;`trades;.qpipe.source.hdb_demo_markouts.time_column;.qpipe.source.hdb_demo_markouts.row_key;.qpipe.source.hdb_demo_markouts.columns;.qpipe.source.hdb_demo_markouts.types;.qpipe.source.hdb_demo_markouts.query;.qpipe.source.hdb_demo_markouts.fixture;.qpipe.source.hdb_demo_markouts.tz;.qpipe.source.hdb_demo_markouts.supporting;.qpipe.source.hdb_demo_markouts.complete_through;.qpipe.source.hdb_demo_markouts.ready)];
 
 \d .
