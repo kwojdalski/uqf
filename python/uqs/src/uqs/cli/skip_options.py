@@ -34,7 +34,7 @@ from typing import Any, TypeGuard
 
 from typer.core import TyperCommand, TyperOption
 
-from uqs.guardrails import Guardrail
+from uqs.guardrails import Guardrail, spelled
 
 #: ctx.meta's record of the skips a command line gave, as a Request.
 META_KEY = "uqs.skip_options.given"
@@ -60,7 +60,7 @@ _CURRENT: contextvars.ContextVar[Request | None] = contextvars.ContextVar(
 
 def flag(g: Guardrail) -> str:
     """`g`'s generated option: `--skip-eod-fence`, `--skip-torq-version`."""
-    return "--skip-" + g.id.lower().replace("_", "-")
+    return "--skip-" + spelled(g.id)
 
 
 def declared(command: str) -> tuple[Guardrail, ...]:

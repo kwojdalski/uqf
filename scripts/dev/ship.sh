@@ -4,8 +4,8 @@
 #   scripts/dev/ship.sh 1697 issue-1696      # .claude/worktrees/issue-1696
 #   scripts/dev/ship.sh 1697 /abs/path/to/worktree
 #
-# Merges master into the branch ONLY when it must (#1687): GitHub reports a
-# conflict, or the KDB-X attestation check refuses the head against the
+# Merges master into the branch ONLY when it must (#1687): the branch conflicts
+# with master, or the KDB-X attestation check refuses the head against the
 # current master because master changed a path the gates judge. A branch that
 # is merely behind merges as it is, and a branch whose own new commit is not
 # attested yet is attested without merging master. Before merging, it asks the
@@ -15,6 +15,12 @@
 # itself passed, not merely that nothing failed: before CI has created its
 # jobs, the checks reported so far can all be green (#1697 merged that way).
 # Repeats up to three times when master moves underneath. One line per step.
+#
+# A conflict is judged locally, with `git merge-tree` against origin/master,
+# not by GitHub's `mergeable`: that reads UNKNOWN for minutes after master
+# moves, and a conflicting PR runs no CI, so a script trusting it waited 40
+# minutes for checks that never start. The wait for CI stops the same way the
+# moment master moves into a conflict.
 # After the merge it starts the whole-suite coverage run on master's new tip
 # in the background (scripts/dev/master_coverage.py, #1719).
 set -u
@@ -26,7 +32,12 @@ cd "$wt" || { echo "$pr: no worktree $wt"; exit 1; }
 logs=$(mktemp -d "${TMPDIR:-/tmp}/ship-$pr.XXXXXX")
 push() { timeout 120 git -c credential.helper= -c 'credential.helper=!gh auth git-credential' push -q 2>&1 | tail -1; }
 gate_ok() { python3 scripts/gates/check_kdbx_attestation.py origin/master HEAD > "$logs/gate.log" 2>&1; }
-conflicted() { [ "$(gh pr view "$pr" --json mergeable --jq .mergeable 2>/dev/null)" = "CONFLICTING" ]; }
+# merge-tree exits 1 for a conflict, 0 for a clean merge, >1 for an error
+conflicted() {
+  local rc=0
+  git merge-tree --write-tree HEAD origin/master > /dev/null 2>&1 || rc=$?
+  [ "$rc" = "1" ]
+}
 master_moved_judged() { grep -q "the base has since changed\|does not contain the base's tip, so" "$logs/gate.log"; }
 ci_state() {
   # shellcheck disable=SC2016 # jq's own $variables
@@ -76,11 +87,16 @@ for _ in 1 2 3; do
     sleep 20
   fi
   st=pending
-  for _ in $(seq 1 80); do
+  for i in $(seq 1 80); do
     st=$(ci_state)
     [ "$st" = "pending" ] || [ -z "$st" ] || break
+    if [ $((i % 4)) = 0 ]; then
+      git fetch -q origin
+      conflicted && { st=conflict; break; }
+    fi
     sleep 30
   done
+  [ "$st" = "conflict" ] && { echo "$pr: master moved into a conflict while waiting for CI, again"; continue; }
   echo "$pr: checks $st"
   [ "$st" = "pass" ] || { echo "$pr: not green, not merging (logs: $logs)"; exit 1; }
   git fetch -q origin

@@ -18,10 +18,13 @@ from typing import Annotated
 
 import typer
 
+from uqs.cli import completion
 from uqs.cli import deploy_components as components
 from uqs.cli import deploy_connection as conn
 from uqs.cli import deploy_dry_run as dry
 from uqs.cli import deploy_policy as policy
+from uqs.cli.choices import ChoiceOpt
+from uqs.cli.concepts import profile_opt
 from uqs.cli.renames import renamed
 from uqs.cli.safety import ChangesState, DryRunOpt, OverrideOpt, ReasonOpt
 from uqs.cli.shared import EXIT_REFUSED, EXIT_USAGE, app, json_refusal
@@ -52,6 +55,13 @@ deploy_app = typer.Typer(
 )
 app.add_typer(deploy_app, name="deploy")
 
+
+#: The servers' architecture a release is built for when --arch is not given.
+DEFAULT_ARCH = "x86_64"
+#: `--arch`, shared by `deploy build` and `deploy component build` (#1884).
+ArchOpt = ChoiceOpt(
+    PLATFORMS, "--arch", "The servers' architecture", default=DEFAULT_ARCH, required=True
+)
 log = get_logger()
 
 
@@ -89,9 +99,7 @@ def build(
             help="Directory to write the artifact into; default: dist/ at the repo root",
         ),
     ] = None,
-    arch: Annotated[
-        str, typer.Option("--arch", help=f"The servers' architecture: {', '.join(PLATFORMS)}")
-    ] = "x86_64",
+    arch: ArchOpt = DEFAULT_ARCH,
     python: Annotated[
         str | None,
         typer.Option(
@@ -178,6 +186,7 @@ _PUSH_RENAMES = (
     | components.OLD_Q_SPELLINGS
     | components.OLD_SPELLINGS
 )
+_ProfileOpt = profile_opt("The uqs profile to start, e.g. essential")
 
 
 @deploy_app.command("push", cls=renamed(_PUSH_RENAMES, ChangesState))
@@ -195,6 +204,7 @@ def push(
         list[str] | None,
         typer.Argument(
             metavar="TARGET...",
+            autocompletion=completion.targets,
             help=f"Targets in {targets.DECLARATION} (or ${targets.DECLARATION_ENV}), deployed in "
             "order, stopping at the first failure; a flag given here wins over a target's "
             "value. None: --ssh, --dest and --profile say it all",
@@ -203,9 +213,7 @@ def push(
     ] = None,
     host: conn.Host = None,
     dest: conn.Dest = None,
-    profile: Annotated[
-        str | None, typer.Option("--profile", help="The uqs profile to start, e.g. essential")
-    ] = None,
+    profile: _ProfileOpt = None,
     target: Annotated[
         str | None,
         typer.Option(
@@ -295,6 +303,7 @@ def push(
             metavar="SOURCE,...",
             help="Check these sources live after verification and before activation; "
             "a failure rolls the deployment back",
+            autocompletion=completion.source_list,
         ),
     ] = "",
     live_check_timeout: conn.LiveCheckTimeout = 120,

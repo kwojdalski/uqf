@@ -27,6 +27,7 @@ from uqs.attach import config as attach_config
 from uqs.attach import hdb_where, service
 from uqs.attach.hdb_where import AttachedHdb
 from uqs.cli import safety
+from uqs.cli.concepts import attach_opt
 from uqs.cli.json_out import emit
 from uqs.cli.safety import dry_run_note
 from uqs.cli.shared import _paths, console
@@ -34,14 +35,7 @@ from uqs.paths import UqsError, UqsPaths, UqsUsageError
 from uqs.stack import hdb_alter, hdb_remote
 from uqs.stack.hdb_alter import Request
 
-AttachOpt = Annotated[
-    str | None,
-    typer.Option(
-        "--attachment",
-        metavar="ATTACHMENT",
-        help="The attachment whose HDB to use: its pinned one, else its live wdb's",
-    ),
-]
+AttachOpt = attach_opt("The attachment whose HDB to use: its pinned one, else its live wdb's")
 HdbOpt = Annotated[
     Path | None,
     typer.Option("--hdb", help="An HDB directory on this machine, when nothing else names it"),

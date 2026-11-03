@@ -235,10 +235,10 @@ def parse_spec(spec: str) -> tuple[str, str]:
     code, sep, component = spec.partition(":")
     if not sep or not code or not component or ":" in component or " " in spec:
         raise OverrideError(
-            f"--override takes CODE:COMPONENT, e.g. TORQ_VERSION:stp1 - not {spec!r}. "
+            f"--override takes CODE:COMPONENT, e.g. torq-version:stp1 - not {spec!r}. "
             "There is no blanket override; name the finding and the process it is about"
         )
-    return code.upper(), component
+    return code.upper().replace("-", "_"), component
 
 
 def observed(findings: list[Finding], code: str, component: str) -> dict[str, str]:
