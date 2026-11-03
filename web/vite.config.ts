@@ -16,6 +16,7 @@ export const API_PATHS = [
   "query",
   "ops",
   "control",
+  "activity",
   "services",
 ];
 

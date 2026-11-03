@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 
 #: Where a query reads: today's session, completed partitions, or both. One
 #: name for the request and the response, which api.ts mirrors as `Tier`.
@@ -517,3 +517,116 @@ class BackfillStartedResponse(BaseModel):
     #: The TorQ process running it - what `uqs logs` takes.
     procname: str
     status_path: str
+
+
+# ------------------------------------------------------------ activity (#1954)
+
+#: activity.SOURCES, BROWSER_KINDS + SERVER_KIND, OUTCOMES and TRIGGERS, as
+#: words the browser's types are held to (test_activity.py holds these to
+#: activity.py, test_api_types.py holds api.ts to these).
+ActivitySource = Literal["browser", "server"]
+ActivityKind = Literal["navigate", "select", "submit", "confirm", "cancel", "result", "request"]
+BrowserKind = Literal["navigate", "select", "submit", "confirm", "cancel", "result"]
+ActivityOutcome = Literal["pending", "succeeded", "failed", "refused", "accepted", "unknown"]
+ActivityTrigger = Literal["pointer", "keyboard", "programmatic", "unknown"]
+
+_ACTIVITY_ID = r"^[A-Za-z0-9_-]{8,64}$"
+
+
+class ActivityItem(BaseModel):
+    """One item's outcome, for an action over several things."""
+
+    model_config = STRICT_REQUEST
+
+    target: str = Field(min_length=1, max_length=200)
+    outcome: ActivityOutcome
+
+
+class BrowserEventIn(BaseModel):
+    """One thing an operator did in the UI.
+
+    Strict, and every field bounded: `detail` keys outside
+    activity.DETAIL_KEYS are dropped before anything is stored, and there is
+    no field for a typed value, a token or a file's contents.
+    """
+
+    model_config = STRICT_REQUEST
+
+    event_id: str = Field(pattern=_ACTIVITY_ID)
+    session_id: str = Field(pattern=_ACTIVITY_ID)
+    #: When it happened, by the browser's clock; must carry a timezone.
+    ts: AwareDatetime
+    kind: BrowserKind
+    action: str = Field(pattern=r"^[a-z][a-z0-9_.-]{0,63}$")
+    target: str | None = Field(default=None, max_length=200)
+    trigger: ActivityTrigger
+    request_id: str | None = Field(default=None, pattern=_ACTIVITY_ID)
+    outcome: ActivityOutcome | None = None
+    duration_ms: float | None = Field(default=None, ge=0, le=86_400_000)
+    items: list[ActivityItem] = Field(default_factory=list, max_length=256)
+    detail: dict[str, str | int | float | bool] = Field(default_factory=dict, max_length=32)
+
+
+class ActivityBatchRequest(BaseModel):
+    """What the browser sends: a batch, so navigation does not cost a request each."""
+
+    model_config = STRICT_REQUEST
+
+    events: list[BrowserEventIn] = Field(min_length=1, max_length=100)
+
+
+class ActivityBatchResponse(BaseModel):
+    """What became of a batch."""
+
+    #: Events written now.
+    stored: int
+    #: Events not written: a repeated event_id, or a failed write.
+    not_stored: int
+    #: `detail` keys dropped for being outside the allowlist or ill-formed.
+    dropped_detail: int
+    #: False while the history is in memory only.
+    persistent: bool
+
+
+class ActivityEventOut(BaseModel):
+    """One stored event. `claimed_user` is the x-uqf-user header as sent: a
+    label, never an authenticated identity."""
+
+    event_id: str
+    ts: str
+    recorded_at: str
+    source: ActivitySource
+    kind: ActivityKind
+    action: str
+    target: str | None
+    outcome: ActivityOutcome | None
+    session_id: str | None
+    request_id: str | None
+    claimed_user: str | None
+    trigger: ActivityTrigger | None
+    method: str | None
+    status_code: int | None
+    duration_ms: float | None
+    items: list[ActivityItem]
+    detail: dict[str, Any]
+    dropped: int
+
+
+class ActivityPersistence(BaseModel):
+    """Whether history is being kept, and whether writes have failed."""
+
+    persistent: bool
+    path: str | None
+    failures: int
+    last_error: str | None
+    last_failure_at: str | None
+
+
+class ActivityResponse(BaseModel):
+    """The history, newest first, with how it is kept."""
+
+    events: list[ActivityEventOut]
+    persistence: ActivityPersistence
+    retention_days: int
+    max_rows: int
+    poll_seconds: int
