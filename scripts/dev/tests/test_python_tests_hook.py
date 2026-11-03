@@ -189,7 +189,38 @@ def test_staged_changes_are_read_with_their_status(tmp_path, monkeypatch):
     (tmp_path / "a.q").write_text("a:1\n")
     git("add", "-A")
     monkeypatch.setattr(hook, "REPO", tmp_path)
+    # Run by the pre-push hook itself, the suite inherits a pushed range.
+    monkeypatch.delenv("PRE_COMMIT_FROM_REF", raising=False)
+    monkeypatch.delenv("PRE_COMMIT_TO_REF", raising=False)
     assert sorted(hook.staged_changes()) == [("A", "a.q"), ("A", "new.md"), ("D", "old.md")]
+
+
+def test_a_push_reads_the_pushed_range_not_the_index(tmp_path, monkeypatch):
+    """At `git push` (#1965) pre-commit names the range being pushed; what is
+    staged then is unrelated to what is pushed."""
+    import subprocess
+
+    def git(*a):
+        return subprocess.run(
+            ["git", *a], cwd=tmp_path, check=True, capture_output=True, text=True
+        ).stdout.strip()
+
+    git("init", "-q")
+    git("config", "user.email", "t@example.com")
+    git("config", "user.name", "t")
+    (tmp_path / "old.md").write_text("x\n")
+    git("add", "-A")
+    git("commit", "-q", "-m", "base")
+    start = git("rev-parse", "HEAD")
+    (tmp_path / "pushed.q").write_text("a:1\n")
+    git("add", "-A")
+    git("commit", "-q", "-m", "pushed")
+    end = git("rev-parse", "HEAD")
+    (tmp_path / "staged.md").write_text("y\n")
+    git("add", "-A")
+    monkeypatch.setattr(hook, "REPO", tmp_path)
+    env = {"PRE_COMMIT_FROM_REF": start, "PRE_COMMIT_TO_REF": end}
+    assert hook.staged_changes(env) == [("A", "pushed.q")]
 
 
 def test_the_record_is_read_from_testmons_own_table(tmp_path):
