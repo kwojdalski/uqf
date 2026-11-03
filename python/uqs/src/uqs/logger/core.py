@@ -20,6 +20,9 @@ from loguru import logger
 
 from uqs.logger.floats import CutFloatsLogger
 
+#: The variable that sets the log level - read by uqs's CLI and by trace_calls.
+LOG_LEVEL_ENV = "LOG_LEVEL"
+
 if TYPE_CHECKING:
     # loguru declares Record in its stub but does not export it at runtime,
     # so this import has to be type-checking-only. Annotating the filter

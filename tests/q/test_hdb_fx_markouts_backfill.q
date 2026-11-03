@@ -166,3 +166,77 @@
     r:.qt.qpipe.job.hdb_fx_markouts_backfill.with_hdb {.qpipe.source.hdb_fx_markouts.query[.qt.qpipe.job.hdb_fx_markouts_backfill.hdb;2026.09.17D12:00:00;2026.09.17D13:00:00]};
     .qunit.assertEquals[(count .qt.qpipe.job.hdb_fx_markouts_backfill.sent;count r`executions;count r`market_data);(1;0;0);"no executions, no book query"];
     .qunit.assertTrue[.qetl.source.validate[`hdb_fx_markouts;r];"and both inputs still in their contracts' shape"]};
+
+/ --- readiness: reference data that has not landed is not a scored window (#1927) ------------
+
+/ Run the day with the source's fixture replaced by `f`, then put the real one back.
+.qt.qpipe.job.hdb_fx_markouts_backfill.run_with:{[f]
+    keep:(.qetl.source.def `hdb_fx_markouts)`fixture;
+    .[`.qetl.source.sources;(`hdb_fx_markouts;`fixture);:;f];
+    d:.qt.qpipe.job.hdb_fx_markouts_backfill.day[];
+    .qpipe.job.hdb_fx_markouts_backfill.init[.qt.qpipe.job.hdb_fx_markouts_backfill.spec_for[`v1;d 0;d 1]];
+    r:@[{.qpipe.job.hdb_fx_markouts_backfill.run[]};::;{[e] `threw,e}];
+    .qpipe.job.hdb_fx_markouts_backfill.cleanup[];
+    .[`.qetl.source.sources;(`hdb_fx_markouts;`fixture);:;keep];
+    if[`threw~first r; 'last r];
+    r}
+
+/ Executions with no books at all, as the HDB is before market_data lands.
+.qt.qpipe.job.hdb_fx_markouts_backfill.no_books:{[]
+    `executions`market_data!(.qpipe.source.hdb_fx_markouts.raw_executions[];0#.qpipe.source.hdb_fx_markouts.supporting`market_data)}
+
+/ Executions and only the EURUSD books: USDPLN's EURPLN leg has no book.
+.qt.qpipe.job.hdb_fx_markouts_backfill.one_leg_unrouted:{[]
+    b:.qpipe.source.hdb_fx_markouts.raw_market_data[];
+    `executions`market_data!(.qpipe.source.hdb_fx_markouts.raw_executions[];select from b where sym=`EURUSD)}
+
+.qt.qpipe.job.hdb_fx_markouts_backfill.covered:{[]
+    v:.qetl.source.fixture_version `v1;
+    .qetl.coverage.is_covered[`fx_markout;`;v;.z.p;2026.09.17D10:00:00;2026.09.17D11:00:00]}
+
+.qt.qpipe.job.hdb_fx_markouts_backfill.test_a_window_with_executions_and_no_books_is_not_claimed_and_replans_once_they_land:{[t]
+    r:.qt.qpipe.job.hdb_fx_markouts_backfill.run_with[.qt.qpipe.job.hdb_fx_markouts_backfill.no_books];
+    .qunit.assertEquals[(r`state;r`windows_failed;count get `fx_markout);(`partial;1;0);
+        "the 10:00 window is refused, nothing is written, and the run says it is partial"];
+    .qunit.assertFalse[.qt.qpipe.job.hdb_fx_markouts_backfill.covered[];"no coverage for the window that could not be scored"];
+    r2:.qt.qpipe.job.hdb_fx_markouts_backfill.run_with[.qpipe.source.hdb_fx_markouts.fixture];
+    .qunit.assertEquals[(r2`state;r2`windows_completed;count get `fx_markout);(`completed;1;36);
+        "the books landed: only that window replans, at the same version, and is scored"];
+    .qunit.assertEquals[count select from get `fx_markout where status=`unavailable;0;
+        "scored for real, not unavailable"];
+    .qunit.assertTrue[.qt.qpipe.job.hdb_fx_markouts_backfill.covered[];"and now claimed"]};
+
+.qt.qpipe.job.hdb_fx_markouts_backfill.test_a_window_with_one_unrouted_leg_is_still_covered:{[t]
+    r:.qt.qpipe.job.hdb_fx_markouts_backfill.run_with[.qt.qpipe.job.hdb_fx_markouts_backfill.one_leg_unrouted];
+    .qunit.assertEquals[(r`state;r`windows_failed);(`completed;0);"a missing book for one leg is not a missing reference"];
+    .qunit.assertTrue[0<count select from get `fx_markout where status=`unavailable;"that leg is an unavailable row"];
+    .qunit.assertTrue[0<count select from get `fx_markout where status<>`unavailable;"the leg with books is scored"];
+    .qunit.assertTrue[.qt.qpipe.job.hdb_fx_markouts_backfill.covered[];"and the window is claimed"]};
+
+.qt.qpipe.job.hdb_fx_markouts_backfill.test_a_window_with_no_executions_is_still_covered:{[t]
+    none:{`executions`market_data!(0#.qpipe.source.hdb_fx_markouts.raw_executions[];0#.qpipe.source.hdb_fx_markouts.supporting`market_data)};
+    r:.qt.qpipe.job.hdb_fx_markouts_backfill.run_with[none];
+    .qunit.assertEquals[(r`state;r`windows_failed;count get `fx_markout);(`completed;0;0);"nothing to score is not a missing reference"];
+    .qunit.assertTrue[.qt.qpipe.job.hdb_fx_markouts_backfill.covered[];"and the empty window is claimed"]};
+
+.qt.qpipe.job.hdb_fx_markouts_backfill.test_only_unroutable_executions_are_ready_without_books:{[t]
+    b:.qt.qpipe.job.hdb_fx_markouts_backfill.no_books[];
+    crypto:b;
+    crypto[`executions]:select from b`executions where sym=`$"BTC-USDT";
+    .qunit.assertEquals[.qpipe.source.hdb_fx_markouts.ready[crypto;2026.09.17D00:00;2026.09.18D00:00];();
+        "no route, no leg, nothing the books could be missing for"];
+    .qunit.assertEquals[count .qpipe.source.hdb_fx_markouts.ready[b;2026.09.17D00:00;2026.09.18D00:00];1;
+        "routable executions and no books at all: one unmet requirement"]};
+
+/ --- readiness: the window's end plus the furthest horizon must be inside the books -----
+
+.qt.qpipe.job.hdb_fx_markouts_backfill.test_complete_through_is_the_latest_book_less_the_furthest_horizon:{[t]
+    r:.qt.qpipe.job.hdb_fx_markouts_backfill.with_hdb {.qpipe.source.hdb_fx_markouts.complete_through[.qt.qpipe.job.hdb_fx_markouts_backfill.hdb]};
+    .qunit.assertEquals[r;2026.09.17D10:00:25-0D00:00:10;"the last book is at 10:00:25 and the furthest horizon is 10s"]};
+
+.qt.qpipe.job.hdb_fx_markouts_backfill.test_an_hdb_without_books_vouches_for_nothing:{[t]
+    f:{`market_data set 0#update date:`date$source_time from .qpipe.source.hdb_fx_markouts.raw_market_data[];
+        .qpipe.source.hdb_fx_markouts.complete_through[.qt.qpipe.job.hdb_fx_markouts_backfill.hdb]};
+    `.qt.qpipe.job.hdb_fx_markouts_backfill.empty set f;
+    r:.qt.qpipe.job.hdb_fx_markouts_backfill.with_hdb {.qt.qpipe.job.hdb_fx_markouts_backfill.empty[]};
+    .qunit.assertEquals[r;-0Wp;"no book yet: nothing is complete, not a wrapped far-future instant"]};
