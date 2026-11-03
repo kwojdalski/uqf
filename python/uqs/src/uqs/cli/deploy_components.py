@@ -10,16 +10,24 @@ from typing import Annotated
 
 import typer
 
-from uqs.deploy.components import EXISTING
+from uqs.cli import completion
+from uqs.cli.choices import alternatives
+from uqs.deploy.components import BUNDLED, EXISTING, MODES
 
 
-def _mode(component: str, fields: str, bundled: str) -> typer.models.OptionInfo:
+def _mode(component: str, existing: str, bundled: str) -> typer.models.OptionInfo:
+    """`--<component>-mode`: its help and completion from deploy/components.MODES,
+    each mode with what it means for `component` (#1893)."""
+    notes = {EXISTING: f"{existing} already on the server, found by preflight", BUNDLED: bundled}
     return typer.Option(
-        f"--{component}-mode", metavar="MODE", help=f"existing: {fields} already on the server, "
-        f"found by preflight. bundled: {bundled}"
-    )  # fmt: skip
+        f"--{component}-mode",
+        metavar="MODE",
+        help=alternatives(MODES, notes, default=DEFAULT),
+        autocompletion=completion.choices(*MODES),
+    )
 
 
+DEFAULT = EXISTING
 QMode = Annotated[
     str,
     _mode(
@@ -45,7 +53,6 @@ PythonMode = Annotated[
         "which .venv is made from",
     ),
 ]
-DEFAULT = EXISTING
 TorqRuntime = Annotated[
     str | None,
     typer.Option(

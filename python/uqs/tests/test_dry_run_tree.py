@@ -33,7 +33,7 @@ from rich.text import Text
 from test_cli_conventions import LEAVES
 
 from uqs.cli.safety import Effect, dry_run_note
-from uqs.cli.target_confirm import changes_the_server, effect_of
+from uqs.cli.target_confirm import changes_the_server, effect_of, trait_of
 
 pytestmark = pytest.mark.xdist_group("dry_run_tree")
 
@@ -41,11 +41,13 @@ NOTE = Text.from_markup(dry_run_note()).plain
 #: The note of a command whose dry run is its default: "... Run it again with --apply".
 APPLY_NOTE = Text.from_markup(dry_run_note("with --apply")).plain.rstrip(".")
 
-#: The commands whose dry run is allowed to write, each with why.
+#: The commands whose dry run is allowed to write, each with why: those marked
+#: `dry_run_starts` (cli/safety.py), which is why `uqs --target` asks before
+#: their dry run too (cli/target_confirm.py).
 EXEMPT = {
-    "job backfill": "its dry run starts the worker, which fetches and transforms every window "
-    "(--mode dry-run, #1732): a started process bootstraps, logs and records its run, which "
-    "is why `uqs --target` asks before it (cli/target_confirm.py _DRY_RUN_STARTS)",
+    path: trait_of(cmd.command, "dry_run_starts")
+    for path, cmd in LEAVES.items()
+    if trait_of(cmd.command, "dry_run_starts")
 }
 
 #: Whose dry run prints its report as the JSON document a program reads, and so

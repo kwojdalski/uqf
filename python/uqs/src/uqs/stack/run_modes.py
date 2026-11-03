@@ -19,6 +19,19 @@ from uqs.generated import q_facts
 #: adds every write.
 MODES = tuple(mode.replace("_", "-") for mode in q_facts.RUN_MODES)
 
+#: The mode a run takes when none is given: q's `.qetl.job.bounded.runtime.mode`
+#: resolves an unset mode to `run`, the last - the one that does all of it.
+DEFAULT_MODE = MODES[-1]
+
+#: What each mode does, for `--mode`'s help; tests/test_cli_conventions.py
+#: holds its keys to MODES, so a mode q adds is described or fails there.
+NOTES = {
+    "validate": "check the worker and range, open nothing",
+    "plan": "also list the windows a run would fetch, from the ledgers, read-only",
+    "dry-run": "also fetch and transform, and write nothing",
+    "run": "all of it",
+}
+
 #: The modes that open no source, write nothing and leave no status file -
 #: so there is no outcome to wait for and no capability to require. q's own
 #: declaration, .qetl.job.bounded.runtime.read_only_modes.

@@ -29,7 +29,9 @@ from uqs.external import crypto
 from uqs.external.crypto import (
     CRYPTO_FILLS_RECORDER_DEFAULT_POLL_MS,
     CRYPTO_FILLS_RECORDER_DEFAULT_SYMBOL,
+    CRYPTO_RECORDER_DEFAULT_INTERVAL_MS,
     CRYPTO_RECORDER_DEFAULT_SYMBOLS,
+    CRYPTO_RECORDER_DEFAULT_TOP_N_LEVELS,
     CRYPTO_RECORDER_DEFAULT_VENUES,
     DEFAULT_OMS_SOCKET_PATH,
 )
@@ -221,8 +223,8 @@ def uqs_logs(
 def uqs_crypto_start(
     venues: str = ",".join(CRYPTO_RECORDER_DEFAULT_VENUES),
     symbols: str = ",".join(CRYPTO_RECORDER_DEFAULT_SYMBOLS),
-    top_n_levels: int = 5,
-    interval_ms: int = 1000,
+    top_n_levels: int = CRYPTO_RECORDER_DEFAULT_TOP_N_LEVELS,
+    interval_ms: int = CRYPTO_RECORDER_DEFAULT_INTERVAL_MS,
     port: int | None = None,
 ) -> str:
     """Build and launch a sibling cryptorust checkout's own

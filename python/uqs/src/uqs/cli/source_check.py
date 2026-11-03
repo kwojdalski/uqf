@@ -32,7 +32,7 @@ def sources_check(
     window: Annotated[
         int,
         typer.Option("--window", min=1, help="Minutes back the bounded read reaches"),
-    ] = 60,
+    ] = live_check.DEFAULT_WINDOW_MINUTES,
     odbc: Annotated[
         Path | None,
         typer.Option(

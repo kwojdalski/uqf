@@ -47,6 +47,7 @@ from typing import Any
 
 from uqs.attach import config
 from uqs.attach.backfill import Destination, destination, require_verified
+from uqs.generated import q_facts
 from uqs.interpreter import q_interpreter
 from uqs.paths import UqsError, UqsPaths
 from uqs.stack import backfill as stack_backfill
@@ -57,8 +58,9 @@ VERSIONS = (1,)
 SCRIPT = Path("scripts") / "dev" / "receiver_contract.q"
 #: Approved contracts, one file per identity, in the attachment's directory.
 APPROVED_DIR = "receiver_contracts"
-#: .qetl.io.strategies
-STRATEGIES = ("append", "fail", "ignore", "replace", "upsert")
+#: .qetl.io.strategies, read from q (#1893): a strategy q adds is one a
+#: contract may permit, and --on-conflict take, at once.
+STRATEGIES = q_facts.IO_STRATEGIES
 #: The most rows one message may carry, unless the operator approves another limit.
 DEFAULT_MAX_ROWS = 100_000
 _KEYS = (

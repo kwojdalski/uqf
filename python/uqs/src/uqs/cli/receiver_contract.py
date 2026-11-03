@@ -21,8 +21,9 @@ import typer
 from uqs.attach import receiver_contract
 from uqs.cli import completion
 from uqs.cli.attachment import attachment_app
+from uqs.cli.choices import alternatives
 from uqs.cli.renames import alias_command
-from uqs.cli.safety import ChangesState, ReadOnly, dry_run_note
+from uqs.cli.safety import ChangesState, Effect, ReadOnly, dry_run_note, marked
 from uqs.cli.shared import JOB_OPERATIONS_PANEL, _die, _paths, console, job_app
 from uqs.paths import UqsError
 
@@ -42,7 +43,13 @@ job_app.add_typer(
 )
 
 
-@contract_app.command("export", cls=ChangesState)
+@contract_app.command(
+    "export",
+    cls=marked(
+        Effect.CHANGES_STATE,
+        own_output="prints the contract, a document another machine approves",
+    ),
+)
 def export(
     worker: Annotated[
         str,
@@ -90,8 +97,10 @@ def approve(
         list[str] | None,
         typer.Option(
             "--conflict",
-            help="A conflict policy to permit; repeatable. Default: every one the contract "
-            "permits. Narrows the contract, never widens it",
+            help=f"A conflict policy to permit - {alternatives(receiver_contract.STRATEGIES)}; "
+            "repeatable. Default: every one the contract permits. Narrows the contract, never "
+            "widens it",
+            autocompletion=completion.choices(*receiver_contract.STRATEGIES),
         ),
     ] = None,
     max_rows: Annotated[

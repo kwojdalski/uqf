@@ -17,6 +17,7 @@ import typer
 from rich.table import Table
 
 from uqs import timerange
+from uqs.cli import completion
 from uqs.cli.json_out import emit, json_opt
 from uqs.cli.pipelines import needs_pipelines
 from uqs.cli.range_options import DateOpt, LastOpt, RangeFromOpt, RangeToOpt
@@ -265,7 +266,12 @@ def _print_next_steps(run: dict, attach: str | None = None) -> None:
 
 @runs_app.command("audit", cls=needs_pipelines(_LEDGER, ReadOnly))
 def audit(
-    dataset: Annotated[str, typer.Argument(help="The dataset, e.g. demo_deals")],
+    dataset: Annotated[
+        str,
+        typer.Argument(
+            help="The dataset, e.g. demo_deals", autocompletion=completion.bounded_datasets
+        ),
+    ],
     range_from: RangeFromOpt = None,
     range_to: RangeToOpt = None,
     day: DateOpt = None,

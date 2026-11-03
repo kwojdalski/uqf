@@ -213,7 +213,8 @@ def verify_cmd(
         typer.Option("--procs", metavar="NAME,...", help="Processes beyond the profile"),
     ] = "",
     tables: Annotated[
-        str, typer.Option("--tables", metavar="NAME,...", help="Tables stp1 must carry")
+        str,
+        typer.Option("--tables", metavar="NAME,...", help=f"Tables {verify.PLANT} must carry"),
     ] = "",
     live: Annotated[bool, typer.Option("--live", help="Fixtures must be refused")] = False,
     ports_free: Annotated[

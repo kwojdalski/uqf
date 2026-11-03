@@ -18,10 +18,12 @@ from typing import Annotated
 
 import typer
 
+from uqs.cli import completion
 from uqs.cli import deploy_components as components
 from uqs.cli import deploy_connection as conn
 from uqs.cli import deploy_dry_run as dry
 from uqs.cli import deploy_policy as policy
+from uqs.cli.choices import alternatives
 from uqs.cli.renames import renamed
 from uqs.cli.safety import ChangesState, DryRunOpt, OverrideOpt, ReasonOpt
 from uqs.cli.shared import app, json_refusal
@@ -82,8 +84,9 @@ def build(
         str | None,
         typer.Option(
             "--q-target",
-            help="Convert the release's q for this kdb+ - 4.0 has no nested contexts. "
-            "Only the artifact changes, never the checkout",
+            help=f"Convert the release's q for this kdb+, one without nested contexts: "
+            f"{alternatives(portable.Q_TARGETS)}. Only the artifact changes, never the checkout",
+            autocompletion=completion.choices(*portable.Q_TARGETS),
         ),
     ] = None,
     q_exclude: Annotated[
@@ -162,7 +165,7 @@ def push(
         list[str] | None,
         typer.Argument(
             metavar="TARGET...",
-            help="Targets in deploy_targets.toml (or $UQS_DEPLOY_TARGETS), deployed in "
+            help=f"Targets in {targets.DECLARATION} (or ${targets.DECLARATION_ENV}), deployed in "
             "order, stopping at the first failure; a flag given here wins over a target's "
             "value. None: --ssh, --dest and --profile say it all",
             show_default=False,

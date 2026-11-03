@@ -16,10 +16,10 @@ import typer
 from uqs import timerange
 from uqs.attach.backfill_forced import ANY_WRITER
 from uqs.cli import backfill_attached, completion, safety
+from uqs.cli.choices import alternatives
 from uqs.cli.pipelines import needs_pipelines
 from uqs.cli.range_options import DateOpt, LastOpt, RangeFromOpt, RangeToOpt
 from uqs.cli.renames import bypass_flag, renamed
-from uqs.cli.safety import ChangesState
 from uqs.cli.shared import (
     JOB_OPERATIONS_PANEL,
     BasePortOpt,
@@ -30,6 +30,7 @@ from uqs.cli.shared import (
     job_app,
     log,
 )
+from uqs.generated import q_facts
 from uqs.paths import UqsError
 from uqs.stack import backfill as stack_backfill
 from uqs.stack import backfill_wait as stack_backfill_wait
@@ -47,7 +48,15 @@ from uqs.stack import run_modes
             "--debug": "--debug",
             "--version": "--source-version",
         },
-        needs_pipelines("runs this tree's bounded workers", ChangesState),
+        needs_pipelines(
+            "runs this tree's bounded workers",
+            safety.marked(
+                safety.Effect.CHANGES_STATE,
+                dry_run_starts="its dry run starts the worker, which fetches and transforms "
+                "every window (--mode dry-run, #1732): a started process bootstraps, logs and "
+                "records its run",
+            ),
+        ),
     ),
 )
 def backfill(
@@ -77,8 +86,8 @@ def backfill(
         typer.Option(
             "--on-conflict",
             help="For this run: what a write does with a row whose row_key is already "
-            "there - upsert, replace, ignore, append or fail. Default: the worker's own "
-            "(upsert unless it declares otherwise)",
+            f"there - {alternatives(stack_backfill.ON_CONFLICT)}. Default: the worker's own "
+            f"({q_facts.DEFAULT_IO_STRATEGY} unless it declares otherwise)",
             autocompletion=completion.choices(*stack_backfill.ON_CONFLICT),
         ),
     ] = None,
@@ -86,9 +95,7 @@ def backfill(
         str | None,
         typer.Option(
             "--mode",
-            help="validate: check the worker and range, open nothing. plan: also list the "
-            "windows a run would fetch, from the ledgers, read-only. dry-run: also fetch and "
-            "transform, and write nothing. run (the default): all of it",
+            help=alternatives(run_modes.MODES, run_modes.NOTES, default=run_modes.DEFAULT_MODE),
             autocompletion=completion.choices(*run_modes.MODES),
         ),
     ] = None,

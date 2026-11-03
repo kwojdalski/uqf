@@ -20,6 +20,7 @@ import typer
 from rich.markup import escape
 
 from uqs import timerange
+from uqs.cli import completion
 from uqs.cli.json_out import emit, json_opt
 from uqs.cli.pipelines import needs_pipelines
 from uqs.cli.range_options import DateOpt, LastOpt, RangeFromOpt, RangeToOpt
@@ -67,7 +68,13 @@ def render(report: dict) -> None:
     cls=needs_pipelines("checks this tree's producers of a dataset", ReadOnly),
 )
 def check(
-    dataset: Annotated[str, typer.Argument(help="A dataset: a plant table its producers fill")],
+    dataset: Annotated[
+        str,
+        typer.Argument(
+            help="A dataset: a plant table its producers fill",
+            autocompletion=completion.plant_table,
+        ),
+    ],
     scope: Annotated[
         list[str] | None,
         typer.Option(
