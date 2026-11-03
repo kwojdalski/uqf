@@ -1,6 +1,6 @@
 """A release converted at build time is recognised where it starts (#936).
 
-`uqs deploy build --q-target 4.0` releases passed conversion and smoke on a
+`uqs deploy build --q-version 4.0` releases passed conversion and smoke on a
 managed q 4.0 and were then refused by `uqs start`, whose guard asked only
 the runtime's declared q_tree. These build a release directory as a
 deployment leaves one - its files and RELEASE_MANIFEST.json - and hold

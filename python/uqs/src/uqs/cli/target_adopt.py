@@ -11,6 +11,7 @@ from typing import Annotated
 import typer
 
 from uqs.cli import safety
+from uqs.cli.renames import renamed
 from uqs.cli.safety import ChangesState, dry_run_note
 from uqs.cli.shared import _die, console
 from uqs.cli.target import _ACCOUNT, RemoteUser, Ssh, _command, _reach, target_app
@@ -51,7 +52,9 @@ def _say(s: adopt.Survey, r: control.Remote) -> None:
         console.print(f"  python       {p.source}: {where} - {verdict}", highlight=False)
 
 
-@target_app.command("adopt", cls=ChangesState)
+#: `--release` is a release's name (`deploy rollback --release`); the copied tree
+#: here is a directory, `--release-dir` (#1855).
+@target_app.command("adopt", cls=renamed({"--release": "--release-dir"}, ChangesState))
 def adopt_(
     name: Annotated[str, typer.Argument(help="What to call it: `uqs --target NAME ...`")],
     ssh: Ssh,
@@ -60,7 +63,7 @@ def adopt_(
     release: Annotated[
         str | None,
         typer.Option(
-            "--release",
+            "--release-dir",
             help="The copied tree, absolute; default: DEST itself. Moved to "
             "DEST/releases/adopted-<time> with DEST/current linked to it",
         ),
@@ -126,12 +129,15 @@ def adopt_(
     entry = adopt.block(survey, r)
     console.print("  target       would save:")
     console.print(
-        "\n".join(f"    {ln}" for ln in target_file.render(("targets", name), entry).splitlines()),
+        "\n".join(
+            f"    {ln}"
+            for ln in target_file.render(("targets", name), targets.to_keys(entry)).splitlines()
+        ),
         markup=False,
         highlight=False,
     )
     words = [name, "--ssh", ssh, "--dest", dest]
-    for flag, value in (("--remote-user", remote_user), ("--release", release),
+    for flag, value in (("--remote-user", remote_user), ("--release-dir", release),
                         ("--launch-python", launch_python),
                         ("--launch-env-file", launch_env_file)):  # fmt: skip
         words += [flag, value] if value else []

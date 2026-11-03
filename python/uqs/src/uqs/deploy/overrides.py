@@ -17,7 +17,7 @@ until #1852, each now a named override with a recorded reason:
     --override fix-hdb               fill the shared HDB's missing tables and columns
     --override break-lock            remove a deploy lock whose holder stopped beating
 
-and `deploy build --q-target`'s `--override allow-computed-names` is the
+and `deploy build --q-version`'s `--override allow-computed-names` is the
 converter's own (deploy/portable.py).
 
 None of them bypasses anything else. The archive's members are still checked
@@ -37,6 +37,7 @@ from __future__ import annotations
 
 from uqs.deploy.artifact import Artifact, meets
 from uqs.deploy.config import Config, DeployError
+from uqs.deploy.target_keys import FILE_KEYS
 from uqs.guardrails import Guardrail
 
 ACCEPT_DIGEST = "accept-digest"
@@ -133,8 +134,8 @@ def _pinned(cfg: Config, name: str, sha256: str, pinned: bool, component: str) -
         if not matched and cfg.accept_digest is None:
             raise DeployError(
                 "artifact",
-                f"{name} is {sha256}, not the {key} {expected} - pass --override "
-                "accept-digest --reason REASON to deploy it anyway",
+                f"{name} is {sha256}, not the {FILE_KEYS.get(key, key)} {expected} - pass "
+                "--override accept-digest --reason REASON to deploy it anyway",
             )
         if cfg.accept_digest is not None:
             out.append(

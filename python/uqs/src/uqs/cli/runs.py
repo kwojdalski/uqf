@@ -20,7 +20,7 @@ from uqs import timerange
 from uqs.cli.json_out import emit, json_opt
 from uqs.cli.pipelines import needs_pipelines
 from uqs.cli.range_options import DateOpt, LastOpt, RangeFromOpt, RangeToOpt
-from uqs.cli.renames import alias_command
+from uqs.cli.renames import ATTACHMENT, alias_command, renamed
 from uqs.cli.safety import ChangesState, ReadOnly, dry_run_note
 from uqs.cli.shared import (
     JOB_OPERATIONS_PANEL,
@@ -71,9 +71,9 @@ _FACT_COLUMNS = ("run_id", "dataset", "range_from", "range_to", "label", "text")
 AttachOpt = Annotated[
     str | None,
     typer.Option(
-        "--attach",
-        help="Read the ledger of this attachment's destination (`uqs job backfill --attach`) "
-        "instead of the runtime's own",
+        "--attachment",
+        help="The attachment whose destination's ledger to read (`uqs job backfill "
+        "--attachment`), instead of the runtime's own",
     ),
 ]
 
@@ -131,7 +131,7 @@ def _print(
     _show(table, interactive)
 
 
-@runs_app.command("list", cls=needs_pipelines(_LEDGER, ReadOnly))
+@runs_app.command("list", cls=renamed(ATTACHMENT, needs_pipelines(_LEDGER, ReadOnly)))
 def list_runs(
     interactive: InteractiveOpt = False,
     attach: AttachOpt = None,
@@ -206,7 +206,7 @@ alias_command(
     "status",
     "uqs job runs list --unfinished",
     _unfinished,
-    cls=needs_pipelines(_LEDGER),
+    cls=renamed(ATTACHMENT, needs_pipelines(_LEDGER)),
 )
 
 
@@ -240,7 +240,7 @@ def upgrade(
 alias_command(runs_app, "migrate", "uqs job runs upgrade", upgrade, cls=needs_pipelines(_LEDGER))
 
 
-@runs_app.command("show", cls=needs_pipelines(_LEDGER, ReadOnly))
+@runs_app.command("show", cls=renamed(ATTACHMENT, needs_pipelines(_LEDGER, ReadOnly)))
 def show(
     run_id: Annotated[str, typer.Argument(help="A run id, from `uqs job runs list`")],
     attach: AttachOpt = None,

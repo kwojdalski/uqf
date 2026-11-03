@@ -164,30 +164,30 @@ release's, or an attached TorQ stack's, such as a production HDB a backfill
 wrote a table into on a few dates only (#1755):
 
 ```
-uqs data check --attach pb-prod                          # the plan: which dates lack the table
-uqs data check --attach pb-prod --apply                  # write an empty one there, after asking
-uqs data alter --attach pb-prod --reorder time,sym,amount,note
-uqs data alter --attach pb-prod --reorder time,sym,amount,note --apply
-uqs data alter --attach pb-prod --undo /data/hdb.uqf-alter/20261028D101500123-pb.json --apply
+uqs data check --attachment pb-prod                          # the plan: which dates lack the table
+uqs data check --attachment pb-prod --apply                  # write an empty one there, after asking
+uqs data alter --attachment pb-prod --reorder time,sym,amount,note
+uqs data alter --attachment pb-prod --reorder time,sym,amount,note --apply
+uqs data alter --attachment pb-prod --undo /data/hdb.uqf-alter/20261028D101500123-pb.json --apply
 ```
 
 **Which HDB** is named once, by what already knows it - give exactly one:
 
-  | handle                         | the HDB                                                                                     | runs                                     |
-  | ---                            | ---                                                                                         | ---                                      |
-  | `uqs --target NAME data ...`   | the deployed release's own configured HDB                                                   | on the server, from the release          |
-  | `uqs data ... --attach NAME`   | the attachment's pinned `storage.hdb_dir`, else its live wdb's `.wdb.hdbdir`                | on the stack's host, over ssh            |
-  | `uqs data ... --hdb DIR`       | that directory                                                                              | on this machine                          |
-  | none                           | this runtime's own HDB (what `--target` reaches on a server)                                | on this machine                          |
+  | handle                             | the HDB                                                                                     | runs                                     |
+  | ---                                | ---                                                                                         | ---                                      |
+  | `uqs --target NAME data ...`       | the deployed release's own configured HDB                                                   | on the server, from the release          |
+  | `uqs data ... --attachment NAME`   | the attachment's pinned `storage.hdb_dir`, else its live wdb's `.wdb.hdbdir`                | on the stack's host, over ssh            |
+  | `uqs data ... --hdb DIR`           | that directory                                                                              | on this machine                          |
+  | none                               | this runtime's own HDB (what `--target` reaches on a server)                                | on this machine                          |
 
 The plan says which was used. Two handles are refused, and so is an attachment
-whose pinned HDB its live wdb contradicts. With `--attach`, the table defaults
-to the attachment's own. A segmented HDB (`par.txt`) is followed into its
-segments.
+whose pinned HDB its live wdb contradicts. With `--attachment`, the table
+defaults to the attachment's own. A segmented HDB (`par.txt`) is followed into
+its segments.
 
-**`data check --table T`** (or `--attach`, `--hdb`) checks and fills ONE table:
-only partitions lacking it get an empty one, enumerated against the HDB's sym
-file, which an empty table adds nothing to. Its schema is this runtime's
+**`data check --table T`** (or `--attachment`, `--hdb`) checks and fills ONE
+table: only partitions lacking it get an empty one, enumerated against the HDB's
+sym file, which an empty table adds nothing to. Its schema is this runtime's
 declaration when the runtime declares the table, else one partition holding it -
 the latest, or `--template YYYY.MM.DD` - taken in its column order and types.
 Partitions holding the table with another shape are refused, never rewritten.
@@ -230,10 +230,10 @@ again, and the run exits 1 naming any that does not have the target shape.
 
 **Writers and readers**, by handle:
 
-- `--attach`: refused while an attached backfill owns the attachment, or while a
-  wdb writing that HDB reports an end-of-day reload in progress. Afterwards each
-  HDB reader serving the directory is asked to reload, and the ones that did not
-  are reported.
+- `--attachment`: refused while an attached backfill owns the attachment, or
+  while a wdb writing that HDB reports an end-of-day reload in progress.
+  Afterwards each HDB reader serving the directory is asked to reload, and the
+  ones that did not are reported.
 - `--target` (the release's own HDB): the write holds the HDB write lock uqf's
   own writers take, so it is refused while one of the release's backfills runs.
   Afterwards the release's HDB processes are asked to reload.
@@ -243,9 +243,9 @@ again, and the run exits 1 naming any that does not have the target shape.
 None of this coordinates with a native end of day beyond the check above: run it
 outside end of day.
 
-**On the stack's host.** `--attach` runs the commands where the files are. The q
-script (`scripts/gates/hdb_alter.q`) and the vendored `dbmaint.q` it loads are
-copied to a temporary directory there over one ssh session, run with the
+**On the stack's host.** `--attachment` runs the commands where the files are.
+The q script (`scripts/gates/hdb_alter.q`) and the vendored `dbmaint.q` it loads
+are copied to a temporary directory there over one ssh session, run with the
 server's own q (`$QCMD`, else `q`, from the account's login shell), and removed
 afterwards - so the host needs q and nothing of uqf. The destination is the
 attachment's `ssh` setting (`uqs job attachment add NAME --ssh USER@HOST`, which
@@ -271,17 +271,17 @@ it covered, missing from the rest:
    `ssh -o BatchMode=yes USER@HOST true` works.
 2. Make sure nothing else writes the table: let any attached backfill finish
    (`uqs job attachment status`), and pick a time well away from end of day.
-3. Read the plan: `uqs data check --attach NAME`. It names the HDB and where
+3. Read the plan: `uqs data check --attachment NAME`. It names the HDB and where
    that came from - check it is the directory you mean - and the dates that lack
    the table.
-4. `uqs data check --attach NAME --apply` writes the empty table there; the
+4. `uqs data check --attachment NAME --apply` writes the empty table there; the
    final check and the readers' reload follow.
 5. To change the table's layout, plan it with
-   `uqs data alter --attach NAME --reorder ...` (or `--rename`, `--attr`,
+   `uqs data alter --attachment NAME --reorder ...` (or `--rename`, `--attr`,
    `--cast`), read the plan, then add `--apply`. Keep the journal path the plan
    prints.
-6. If the result is wrong, `uqs data alter --attach NAME --undo JOURNAL` shows
-   what it would put back; add `--apply`.
+6. If the result is wrong, `uqs data alter --attachment NAME --undo JOURNAL`
+   shows what it would put back; add `--apply`.
 
 ## Commands
 
@@ -358,18 +358,19 @@ not off the configuration that describes them:
   | the log directory | the running plant's own `-tplogdir`, newest day for that plant |
   | the schema        | that plant's `-schemafile`                                     |
   | the database      | the `-load` of the hdb process on the same stack               |
-  | the base port     | the plant's `-stackid`                                         |
+  | the base port     | the runtime's own, which must be the plant's `-stackid`        |
 
 A process's start line cannot drift from the process, which is why they are read
-rather than configured. `--base-port` is not needed either: the plant's
-`-stackid` is the stack.
+rather than configured. `--base-port` defaults to the runtime's own, as on every
+command, and the plant's `-stackid` must agree with it: a plant running under
+another base port is refused, naming the `--base-port` that replays it.
 
-Every row in that table is an option (`--dir`, `--schema`, `--hdb`,
-`--base-port`), and an option that is given wins - supply all four and nothing
-is asked of the machine at all, which is how to replay a log after the stack it
-came from has been stopped. `uqs data replay PROC` picks between plants when
-more than one is up with a log of its own; with exactly one, it is not needed,
-and with several the command refuses rather than ranking them.
+Every row in that table is an option (`--dir`, `--schema-file`, `--hdb`,
+`--base-port`), and an option that is given wins - supply the first three and
+nothing is asked of the machine at all, which is how to replay a log after the
+stack it came from has been stopped. `uqs data replay PROC` picks between plants
+when more than one is up with a log of its own; with exactly one, it is not
+needed, and with several the command refuses rather than ranking them.
 
 **It empties what it writes.** TorQ's replay defaults are kept whole, so the
 tables being replayed are cleared in the partitions the replay touches before it
@@ -423,11 +424,11 @@ prints. It exits 1 on `FAIL`, and with `--fail-unverified` on `UNVERIFIED`.
 ## Listing things
 
 Each noun lists its own records - `uqs process list`, `uqs profile list`,
-`uqs job list`, `uqs job attachment list`, `uqs target list`, `uqs runtime list` -
-and every listing takes the same flags: `--json`, `--export FILE`, `--sort`,
-`--reverse` and `-i`, `deploy history` and `target log` among them.
-`uqs list KIND` was the last top-level verb with nouns under it, and each kind
-is its noun's now (#1858).
+`uqs job list`, `uqs job attachment list`, `uqs target list`,
+`uqs runtime list`, `uqs config list` - and every listing takes the same flags:
+`--json`, `--export FILE`, `--sort`, `--reverse` and `-i`, `deploy history` and
+`target log` among them. `uqs list KIND` was the last top-level verb with nouns
+under it, and each kind is its noun's now (#1858).
 
 ```
 uqs process list
@@ -450,15 +451,18 @@ The stack's own tables:
 - `uqs graph --upstream --offline` - what each process needs, and who publishes
   it, before starting it on its own
 - `uqs job attachment status` - every attached destination a
-  `uqs job backfill --attach` has run into: attachment, destination id, worker,
-  `state` (`running`, `completed`, ...), `outcome` and `queryable` - written
-  rows are not queryable until the readers reload - the latest log, and what to
-  do next. Read-only
+  `uqs job backfill --attachment` has run into: attachment, destination id,
+  worker, `state` (`running`, `completed`, ...), `outcome` and `queryable` -
+  written rows are not queryable until the readers reload - the latest log, and
+  what to do next. Read-only
 
 A noun's own records:
 
 - `uqs job list` - every streaming job, normalizer and bounded worker, read from
-  its own q declaration: its kind, process, what it reads and writes (a
+  its own q declaration: its kind - one of `uqs job new --kind`'s (`streaming`,
+  `normalizer`, `horizon`, `backfill`) or `reaction`, so a job is listed as the
+  kind it was made as (#1889) - whether it `subscribes` to anything (a streaming
+  job that does not is a feed), its process, what it reads and writes (a
   backfill's source, and its dataset and partition), whether it starts with the
   stack, and whether it is still a `scaffolded` job `uqs job new` wrote or
   `written` work. `uqs job list --sort state` puts the unfinished scaffolds
@@ -469,6 +473,9 @@ A noun's own records:
   `unreachable`/`unknown` when the host or port cannot be checked. Read-only
 - `uqs runtime list` - each runtime: whether it is here, and up
 - `uqs target list` - this machine's deploy targets
+- `uqs config list` - every `config set` setting in effect, from
+  `process_overrides.csv` (`uqs list overrides` before #1855: an override is a
+  bypassed check, `uqs override list`)
 
 `--sort` orders by any column the chosen kind produces, `--reverse` flips it:
 
@@ -1119,8 +1126,8 @@ Lines are sorted by the log's own timestamp. `-f` keeps following across
 restarts and the daily roll. `--level` filters to that level and above.
 
 An attached backfill or receiver is no TorQ process and has no `out_` log.
-`uqs logs --attach NAME --worker WORKER` reads its latest run instead, with the
-same `-f`, `-n` and `--level`; `--run` picks an older run
+`uqs logs --attachment NAME --worker WORKER` reads its latest run instead, with
+the same `-f`, `-n` and `--level`; `--run` picks an older run
 ([attach-existing-torq](attach-existing-torq.md#seeing-what-happened)).
 
 `uqs logs --multitail` follows the same files in
@@ -1514,7 +1521,11 @@ command that breaks a rule, and on a listed exception that has since been fixed.
    `uqs job gaps demo_markout --from 2026-09-13 --to 2026-09-14`.
 3. **One meaning per option name**, and one long name per short flag: `--port`
    is one process's port (`uqs query --port 6052 'count quote'`), the stack's
-   base port is `--base-port`, and `-n` is `--dry-run`.
+   base port is `--base-port`, and `-n` is `--dry-run`. A name takes one type of
+   value everywhere (`--release` is a release's name, never a path); a word in
+   an option name means one thing (`target` is a deploy target, `runtime` a uqs
+   runtime); and one concept has one name (the base port is never `--stack-id`)
+   (#1855).
 4. **A fixed verb vocabulary**: the table below.
 5. **Uniform flags.** `--json`, one JSON document on stdout, on every command
    that reports (`uqs runtime diff uqf torq --json`); `--dry-run`/`-n` on every
@@ -1844,18 +1855,18 @@ the release's own, and says so.
 
 An even command surface (#1858):
 
-  | old                                          | new                                       |
-  | ---                                          | ---                                       |
-  | `uqs list processes`                         | `uqs process list`                        |
-  | `uqs list profiles`                          | `uqs profile list`                        |
-  | `uqs list fields`                            | `uqs config field list`                   |
-  | `uqs list env`                               | `uqs config env`                          |
-  | `uqs list dependencies`                      | `uqs graph --upstream --offline`          |
-  | `uqs list backfills`                         | `uqs job attachment status`               |
-  | `uqs job receive ...`                        | `uqs job receiver start ...`              |
-  | `uqs job receive --attach NAME --stop`       | `uqs job receiver stop --attach NAME`     |
-  | `uqs config set PROC FIELD VALUE`            | `uqs config set PROC FIELD=VALUE ...`     |
-  | `uqs job backfill --mode dry-run`            | `uqs job backfill --dry-run`              |
+  | old                                              | new                                           |
+  | ---                                              | ---                                           |
+  | `uqs list processes`                             | `uqs process list`                            |
+  | `uqs list profiles`                              | `uqs profile list`                            |
+  | `uqs list fields`                                | `uqs config field list`                       |
+  | `uqs list env`                                   | `uqs config env`                              |
+  | `uqs list dependencies`                          | `uqs graph --upstream --offline`              |
+  | `uqs list backfills`                             | `uqs job attachment status`                   |
+  | `uqs job receive ...`                            | `uqs job receiver start ...`                  |
+  | `uqs job receive --attachment NAME --stop`       | `uqs job receiver stop --attachment NAME`     |
+  | `uqs config set PROC FIELD VALUE`                | `uqs config set PROC FIELD=VALUE ...`         |
+  | `uqs job backfill --mode dry-run`                | `uqs job backfill --dry-run`                  |
 
 `config set` takes settings as `target set` does, several at once, and
 `config unset PROC FIELD...` removes an override so process.csv's own value
@@ -1869,6 +1880,55 @@ pairs of verbs stay apart on purpose: `clean` deletes what the stack wrote where
 rule, and `job runs upgrade` changes the ledger's layout where `data migrate`
 changes an HDB partition's schema. None of the hidden aliases has passed its one
 release yet (`cli/rename_expiry.py`), so none is removed.
+
+One meaning per word (#1855):
+
+  | old                                                                     | new                                    |
+  | ---                                                                     | ---                                    |
+  | `--attach NAME` on `logs`, `job backfill`, `job receive`, `job runs`,   | `--attachment NAME`                    |
+  | `job attachment contract approve`/`list`, `data check`/`alter`          |                                        |
+  | `job attachment add --stack-id PORT`                                    | `--base-port PORT`                     |
+  | `job attachment add --runtime-only`                                     | `--transient`                          |
+  | `deploy build --q-target 4.0`                                           | `--q-version 4.0`                      |
+  | `deploy build --python-runtime FILE`                                    | `--python-component FILE`              |
+  | `deploy push --{q,torq,python}-runtime[-sha256]`                        | `--{q,torq,python}-component[-sha256]` |
+  | `target adopt --release DIR`                                            | `--release-dir DIR`                    |
+  | `data replay --schema FILE`                                             | `--schema-file FILE`                   |
+  | `uqs list overrides`                                                    | `uqs config list`                      |
+
+An attachment is a noun, so the option naming one is too, whatever the command
+does with it - reads its ledger, writes its HDB, reads its logs. `target` is a
+deploy target (`uqs --target`, `deploy push TARGET`, `query --tunnel TARGET`),
+so the kdb+ version a build converts for is `--q-version`, as `deploy push`
+already called it. `runtime` is a uqs runtime (`uqs --runtime`,
+`uqs runtime list`), so what `uqs deploy component build` makes is a component
+on every command that takes one; deploy_targets.toml keeps its `*_runtime` keys.
+An override is a bypassed check (`uqs override list`), so `config set`'s
+settings are `uqs config list`. `data replay --base-port` defaults to the
+runtime's own, like every command's, and refuses a plant running under another.
+
+One name for the ssh destination (#1888):
+
+  | old                                                                | new                                         |
+  | ---                                                                | ---                                         |
+  | deploy_targets.toml `host = "..."`, `target set NAME host=`        | `ssh`, as `--ssh` names it                  |
+  | deploy_targets.toml `qcmd`, `qhome`                                | `q_cmd`, `q_home`, as `--q-cmd`/`--q-home`  |
+  | deploy_targets.toml `{q,torq,python}_runtime[_sha256]`             | `{q,torq,python}_component[_sha256]`        |
+  | JSON `"host"` in `target check`, `deploy history`, `deploy status` | `"ssh"`                                     |
+  | `target list` JSON `"as"`, `"last deployed"`                       | `"remote_user"`, `"last_deployed"`          |
+  | `target log` JSON `"host"` (the machine a change was made on)      | `"machine"`                                 |
+
+deploy_targets.toml spells every setting as push's option names it, so a key
+spelt the old way is refused, naming the key to write - `uqs target edit` opens
+the file. deploy_history.json entries written before this keep `host`, read as
+`ssh`; new ones are written with `ssh`. Every key a `--json` document holds is
+snake_case.
+
+One vocabulary for job kinds (#1889): `job list --json`'s `kind` was `etl` or
+`feed` for a job `job new --kind streaming` wrote; it is `streaming` now - or
+`normalizer`, `horizon`, `backfill`, `reaction` - and a new `subscribes`
+(`yes`/`no`) says whether a streaming job reads anything, which is what etl/feed
+meant. A script filtering on the old values needs the new ones.
 
 `--port` is now only ever one process's port (`query`, `schema`);
 `query --tunnel` keeps querying a target through an ssh tunnel from here, so

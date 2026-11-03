@@ -106,6 +106,7 @@ def test_list_jobs_shows_a_reaction_where_it_runs(tmp_path):
     assert row == {
         "job": "rebuild",
         "kind": "reaction",
+        "subscribes": "no",
         "procname": ", ".join(producers["demo_deals"]),
         "reads": "demo_deals",
         "writes": "positions",

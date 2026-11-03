@@ -77,12 +77,12 @@ EOD_FENCE = "eod-fence"
 EOD_BYPASSED = "EOD fence bypassed; no EOD write deadline"
 #: `uqs job backfill --skip-eod-fence` (cli/skip_options.py builds the flag from this): its
 #: risk and action are POLICY's, so the text lives in one place. Only the attached path
-#: (`--attach`, run, dry-run and plan) honours it; cli/backfill.py refuses it elsewhere.
+#: (`--attachment`, run, dry-run and plan) honours it; cli/backfill.py refuses it elsewhere.
 GUARDRAILS = (
     Guardrail(
         EOD_FENCE,
         ("job backfill",),
-        "admit an attached backfill (--attach) within the end-of-day fence and give it no "
+        "admit an attached backfill (--attachment) within the end-of-day fence and give it no "
         "end-of-day write deadline; every other coordination check still refuses",
         risk=POLICY[EOD_FENCE].risk,
         action=POLICY[EOD_FENCE].action,

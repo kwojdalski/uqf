@@ -52,7 +52,7 @@ def test_the_receiver_is_stopped_by_its_own_verb_and_a_dry_run_signals_nothing(m
         "stop_receivers",
         lambda att, dry_run=False: calls.append(dry_run) or [{"worker": "d.receiver", "pid": 7}],
     )
-    dry = runner.invoke(cli.app, ["job", "receiver", "stop", "--attach", "pb", "-n", "--json"])
+    dry = runner.invoke(cli.app, ["job", "receiver", "stop", "--attachment", "pb", "-n", "--json"])
     assert dry.exit_code == 0 and json.loads(dry.stdout)["dry_run"] is True
     old = runner.invoke(cli.app, ["job", "receive", "--attach", "pb", "--stop"])
     assert old.exit_code == 0 and calls == [True, False]
@@ -60,7 +60,7 @@ def test_the_receiver_is_stopped_by_its_own_verb_and_a_dry_run_signals_nothing(m
 
 def test_target_edit_name_opens_the_file_at_that_targets_table(monkeypatch, tmp_path):
     decl = tmp_path / "deploy_targets.toml"
-    decl.write_text('[defaults]\n\n[targets.uat]\nhost = "a@b"\ndest = "/srv"\n')
+    decl.write_text('[defaults]\n\n[targets.uat]\nssh = "a@b"\ndest = "/srv"\n')
     monkeypatch.setattr(target_edit, "repo_root", lambda: tmp_path)
     monkeypatch.setattr(target_edit.targets, "declaration_path", lambda _r: decl)
     monkeypatch.setenv("EDITOR", "vi")

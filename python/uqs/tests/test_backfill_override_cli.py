@@ -1,4 +1,4 @@
-"""`uqs job backfill --attach ... --skip-eod-fence` through the real command (#1830, the last
+"""`uqs job backfill --attachment ... --skip-eod-fence` through the real command (#1830, the last
 part of #1824).
 
 The per-part tests prove the waiver in the library under the command. These invoke the Typer
@@ -57,7 +57,7 @@ def _in_fence(world):
 
 
 ARGV = [
-    "job", "backfill", WORKER, "--attach", "pb-uat", "--from", "2026-09-11",
+    "job", "backfill", WORKER, "--attachment", "pb-uat", "--from", "2026-09-11",
     "--to", "2026-09-13", "--source-version", "v1",
 ]  # fmt: skip
 

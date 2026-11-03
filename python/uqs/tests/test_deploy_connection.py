@@ -17,7 +17,7 @@ from uqs.deploy import targets
 
 FILE = """
 [targets.prod-a]
-host = "deploy@prod-a"
+ssh = "deploy@prod-a"
 remote_user = "svc"
 dest = "/srv/uqf"
 profile = "essential"

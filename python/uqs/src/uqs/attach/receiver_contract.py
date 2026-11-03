@@ -12,14 +12,14 @@ nothing else.
             the worker and derives the contract from its declarations
             (scripts/dev/receiver_contract.q, .qetl.io.remote.contract.of), so
             it is never a hand-kept copy; this adds its identity.
-  approve   on the stack's machine: `uqs job attachment contract approve FILE --attach NAME`.
+  approve   on the stack's machine: `uqs job attachment contract approve FILE --attachment NAME`.
             Validates the contract, checks it against the attachment - which
             must be verified, publish the dataset in the contract's shape and pin
             an HDB here - and stores it beside the attachment, BOUND to that
             destination, its user and the limits the operator sets. The binding
             is the operator's, never the contract's: a contract names no path,
             no user and no row limit.
-  receive   `uqs job receiver start --contract ID --attach NAME`: starts the receiver
+  receive   `uqs job receiver start --contract ID --attachment NAME`: starts the receiver
             from the approved record alone.
 
 THE IDENTITY is the first 16 hex digits of the SHA-256 of the contract's
@@ -330,7 +330,7 @@ def approved(
         raise UqsError(
             f"no contract {identity} is approved for attachment {attachment}: export it where "
             "the worker is (`uqs job attachment contract export WORKER > FILE`), then approve "
-            f"it here (`uqs job attachment contract approve FILE --attach {attachment}`)"
+            f"it here (`uqs job attachment contract approve FILE --attachment {attachment}`)"
         )
     if len(found) > 1:
         raise UqsError(

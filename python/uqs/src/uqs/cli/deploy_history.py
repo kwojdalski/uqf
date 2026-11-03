@@ -28,10 +28,10 @@ from uqs.deploy.config import DeployError
 from uqs.paths import UqsError, repo_root
 
 HistoryJson = json_opt(
-    '{"deployments": [{default: bool, at, target, host, dest, release, profile, status, '
+    '{"deployments": [{default: bool, at, target, ssh, dest, release, profile, status, '
     "stage}]}, newest first"
 )
-_KEYS = ("at", "target", "host", "dest", "release", "profile", "status", "stage")
+_KEYS = ("at", "target", "ssh", "dest", "release", "profile", "status", "stage")
 
 
 @deploy_app.command("history", cls=ReadOnly)
@@ -68,7 +68,7 @@ def deploy_history(
         (i, e)
         for i, e in enumerate(entries)
         if target is None
-        or target in (e.get("target"), e.get("host"), history.server_of(str(e.get("host"))))
+        or target in (e.get("target"), e.get("ssh"), history.server_of(str(e.get("ssh"))))
     ]
     rows = [
         {"default": i in defaults, **{k: e.get(k) for k in _KEYS}}
@@ -95,7 +95,7 @@ def deploy_history(
             "*" if r["default"] else "",
             str(r.get("at") or ""),
             str(r.get("target") or ""),
-            str(r.get("host") or ""),
+            str(r.get("ssh") or ""),
             str(r.get("dest") or ""),
             str(r.get("release") or ""),
             str(r.get("profile") or ""),

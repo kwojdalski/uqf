@@ -322,7 +322,7 @@ def test_the_cli_previews_executes_reruns_and_detaches_a_real_stack(stack, bundl
     """`uqs job attachment add NAME --dry-run`, then the same without it, then again,
     then `uqs job attachment remove` - as subprocesses, the way an operator runs them."""
     cmd = ["job", "attachment", "add", "pb-uat", "--job", "pb_general_ledger",
-           "--bundle", str(bundle), "--stack-id", str(stack.port), "--host", "127.0.0.1",
+           "--bundle", str(bundle), "--base-port", str(stack.port), "--host", "127.0.0.1",
            "--discovery", f"127.0.0.1:{stack.port + 1}"]  # fmt: skip
     schema_before = stack.schema_file.read_bytes()
 

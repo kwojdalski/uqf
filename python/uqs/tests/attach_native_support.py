@@ -107,7 +107,7 @@ def _started(fake: FakeStack, att) -> None:
 def new(world: World, *extra: str) -> list[str]:
     """A new attachment, durable (the cli writer), registered in the site's file."""
     return ["pb-uat", "--job", "pb_general_ledger", "--bundle", str(world.bundle),
-            "--stack-id", "6000", "--process-file", str(world.registry), *extra]  # fmt: skip
+            "--base-port", "6000", "--process-file", str(world.registry), *extra]  # fmt: skip
 
 
 def run(*argv: str):

@@ -104,7 +104,7 @@ def backfill(stack, *argv: str, timeout: float = 240):
         "job",
         "backfill",
         WORKER,
-        "--attach",
+        "--attachment",
         "pb-uat",
         *RANGE,
         *MODE,

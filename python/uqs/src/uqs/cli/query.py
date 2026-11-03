@@ -210,7 +210,7 @@ def query(
     gateway: Annotated[
         bool,
         typer.Option(
-            "--gateway/--no-gateway",
+            "--via-gateway/--no-gateway",
             help="with the gateway: send through .gw.syncexec (the default), or as typed "
             "(and, with no expression, open plain qcon)",
         ),
