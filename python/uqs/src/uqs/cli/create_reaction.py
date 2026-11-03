@@ -8,7 +8,11 @@ the others and is refused all of theirs.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Annotated
 
+import typer
+
+from uqs.cli import completion
 from uqs.cli.create_bundle import planning_root, write_bundle_plan
 from uqs.cli.regenerate import write_plan
 from uqs.cli.shared import _die, _paths
@@ -16,6 +20,26 @@ from uqs.model.declarations import read_declarations
 from uqs.model.jobs import bounded_producers, job_rows
 from uqs.paths import UqsError, UqsUsageError
 from uqs.scaffold import reaction
+
+#: `job new`'s two options of a reaction's own.
+TriggeredByOpt = Annotated[
+    str | None,
+    typer.Option(
+        "--triggered-by",
+        metavar="DATASET",
+        help="Scaffold a reaction instead: run when a bounded worker publishes this dataset",
+        autocompletion=completion.bounded_datasets,
+    ),
+]
+WritesOpt = Annotated[
+    str | None,
+    typer.Option(
+        "--writes",
+        metavar="TABLE,...",
+        help="Tables the reaction writes",
+        autocompletion=completion.plant_tables,
+    ),
+]
 
 
 def scaffold_reaction(

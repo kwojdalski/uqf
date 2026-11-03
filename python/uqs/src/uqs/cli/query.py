@@ -20,7 +20,8 @@ import typer
 
 from uqs.cli import completion
 from uqs.cli import query_target as via_target
-from uqs.cli.choices import alternatives
+from uqs.cli.choices import ChoiceOpt
+from uqs.cli.concepts import target_opt
 from uqs.cli.json_out import emit, json_opt
 from uqs.cli.q_login import (
     DEFAULT_PASSWORD,
@@ -162,6 +163,15 @@ QueryJson = json_opt(
     '{"expression", "result"} - a table as [{column: value}], a dictionary as an object, '
     "a list as an array, a time as ISO text. Needs an expression"
 )
+_RenderOpt = ChoiceOpt(
+    stack_render.RENDERERS,
+    "--render",
+    "How results print",
+    notes=stack_render.NOTES,
+    default=stack_render.DEFAULT_RENDERER,
+    case_sensitive=False,
+    envvar=stack_render.RENDER_ENV,
+)
 
 
 @app.command(
@@ -200,10 +210,9 @@ def query(
     host: QHostOpt = "localhost",
     target: Annotated[
         str | None,
-        typer.Option(
+        target_opt(
             "--tunnel",
-            metavar="TARGET",
-            help="Deployment target (deploy_targets.toml) to query from here, through an "
+            "Deployment target (deploy_targets.toml) to query from here, through an "
             "ssh tunnel opened for the call; ports are the target's release's own",
         ),
     ] = None,
@@ -222,19 +231,7 @@ def query(
             "(and, with no expression, open plain qcon)",
         ),
     ] = True,
-    render: Annotated[
-        str | None,
-        typer.Option(
-            help=alternatives(
-                stack_render.RENDERERS,
-                stack_render.NOTES,
-                default=stack_render.DEFAULT_RENDERER,
-                quote="`",
-            )
-            + f". Default from ${stack_render.RENDER_ENV}",
-            autocompletion=completion.choices(*stack_render.RENDERERS),
-        ),
-    ] = None,
+    render: _RenderOpt = None,
     export: ExportOpt = None,
     as_json: QueryJson = False,
 ) -> None:
