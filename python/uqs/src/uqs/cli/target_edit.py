@@ -16,7 +16,7 @@ from typing import Annotated
 
 import typer
 
-from uqs.cli import safety
+from uqs.cli import completion, safety
 from uqs.cli.concepts import TargetArg
 from uqs.cli.safety import ChangesState, YesOpt, dry_run_note
 from uqs.cli.shared import _die, console
@@ -50,7 +50,8 @@ def edit(
     name: Annotated[
         str | None,
         typer.Argument(
-            metavar="[NAME]",
+            metavar="TARGET",
+            autocompletion=completion.targets,
             help="Open the file at this target's table, as every other `target` verb names "
             "one; the whole file is still edited and checked",
             show_default=False,
@@ -58,10 +59,11 @@ def edit(
     ] = None,
     dry_run: DryRun = False,
 ) -> None:
-    """Edit the file in $VISUAL or $EDITOR: a copy, checked when the editor
-    exits and only then swapped in. An invalid copy reopens with the reason
-    on top - or is discarded, leaving the file as it was. NAME opens it at
-    that target's table (#1858)."""
+    """Edit deploy_targets.toml in $VISUAL or $EDITOR, checked before it is saved.
+
+    The editor gets a copy, checked when the editor exits and only then swapped
+    in. An invalid copy reopens with the reason on top - or is discarded,
+    leaving the file as it was. TARGET opens it at that target's table."""
     root = repo_root()
     path = targets.declaration_path(root)
     original = path.read_text() if path.is_file() else ""
@@ -123,10 +125,12 @@ def remove(
     dry_run: DryRun = False,
     yes: YesOpt = False,
 ) -> None:
-    """Delete one target's table, and the comment directly above it; every
+    """Remove one target from deploy_targets.toml.
+
+    Deletes its table, and the comment directly above it; every
     other line stays. `uqs target revert` brings it back.
 
-    Shows the change and asks first (#1854); `--yes` does not ask."""
+    Shows the change and asks first; `--yes` does not ask."""
     if not dry_run and not yes:
         try:
             planned = target_changes.remove(

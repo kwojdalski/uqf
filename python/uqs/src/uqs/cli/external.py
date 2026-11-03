@@ -54,7 +54,8 @@ from uqs.paths import UqsError, UqsUsageError, repo_root
 connector_app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
-    help="External connectors: start, stop, restart, status and logs of the "
+    help="External connectors: start, stop, restart, status, logs.\n\n"
+    "The publishers outside the plant: start, stop, restart, status and logs of the "
     "publishers outside the plant "
     "(kafka, crypto, crypto-fills, and those installed bundles carry) that write into its "
     "tickerplant. These supervise external processes, not the TorQ-managed q processes "
@@ -73,8 +74,9 @@ FEEDS: dict[str, ExternalFeed] = discover(repo_root(), BROKEN)
 FeedArg = Annotated[
     str,
     typer.Argument(
+        metavar="CONNECTOR",
         # every connector found, each as it describes itself (#1893)
-        help=", ".join(f"{n} ({f.about})" if f.about else n for n, f in FEEDS.items())
+        help=", ".join(f"`{n}` ({f.about})" if f.about else f"`{n}`" for n, f in FEEDS.items())
         + ", or one a bundle installed later carries - `connector status` lists them",
         autocompletion=completion.choices(*FEEDS),
     ),
@@ -300,7 +302,9 @@ def _takes_start_options(fn: Any) -> Any:
 @connector_app.command("restart", cls=_START)
 @_takes_start_options
 def restart(name: str, dry_run: bool = False, **options: Any) -> None:
-    """Stop a feed if it is running, then start it again - with exactly
+    """Restart a connector with the options given here.
+
+    Stops a feed if it is running, then starts it again - with exactly
     `start`'s options, which are not remembered from the last start."""
     feed = _feed(name)
     if dry_run:
@@ -336,6 +340,7 @@ def status(
     name: Annotated[
         str | None,
         typer.Argument(
+            metavar="CONNECTOR",
             help=f"One connector - {alternatives(FEEDS)}; omit it for every connector",
             autocompletion=completion.choices(*FEEDS),
         ),

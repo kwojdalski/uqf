@@ -54,7 +54,7 @@ def schema(
     proc: Annotated[
         str | None,
         typer.Argument(
-            metavar="[PROC]",
+            metavar="PROC",
             help=f"process to read from, e.g. rdb1 (today, the default: {DEFAULT_PROC}) or "
             "hdb1 (history)",
             autocompletion=completion.procname,
@@ -64,6 +64,7 @@ def schema(
     table: Annotated[
         str | None,
         typer.Argument(
+            metavar="TABLE",
             help="a table to describe, or a pattern like 'crypto*'; omit to list every table",
             autocompletion=completion.plant_table,
         ),
@@ -71,20 +72,20 @@ def schema(
     port: Annotated[
         int | None,
         typer.Option(
-            help="read this port directly, instead of resolving PROC",
+            help="Read this port directly, instead of resolving PROC",
             autocompletion=completion.process_ports,
         ),
     ] = None,
     base_port: Annotated[
-        int | None, typer.Option(help="stack base port (default: the runtime's)")
+        int | None, typer.Option(help="Stack base port (default: the runtime's)")
     ] = None,
     host: QHostOpt = "localhost",
     tunnel: Annotated[
         str | None,
         target_opt(
             "--tunnel",
-            "deployment target (deploy_targets.toml) to read from here, through an "
-            "ssh tunnel opened for the call, as `query --tunnel` does (#1858)",
+            "The deployment target (deploy_targets.toml) to read from here, through an "
+            "ssh tunnel opened for the call, as `query --tunnel` does",
         ),
     ] = None,
     user: QUserOpt = DEFAULT_USER,

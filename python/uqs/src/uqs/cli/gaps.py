@@ -124,7 +124,7 @@ def gaps(
     interactive: InteractiveOpt = False,
     as_json: GapsJson = False,
 ) -> None:
-    """Where in [--from, --to) a streaming job was not up and subscribed.
+    """Find where in [--from, --to) a streaming job was not up and subscribed.
 
     A restarted job rebuilds its state from the day's log but does not publish
     again what it missed, so these are the holes in its output. Each is

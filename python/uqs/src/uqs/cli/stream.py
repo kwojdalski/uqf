@@ -91,7 +91,9 @@ def preview(
     last: LastOpt = None,
     as_json: PreviewJson = False,
 ) -> None:
-    """One page of a polling feed: what it would publish, and where its cursor
+    """Preview one page of a polling feed, publishing nothing and saving no cursor.
+
+    One page of a polling feed: what it would publish, and where its cursor
     would move - with nothing published and no cursor saved.
 
     The page is fetched for real, through the feed's own fetch, so a live

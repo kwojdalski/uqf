@@ -47,7 +47,8 @@ _LEDGER = "reads this tree's run ledger"
 runs_app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
-    help="The run ledger: list every run (or the unfinished ones), show one run's facts, "
+    help="The run ledger: list, show, audit, upgrade.\n\n"
+    "List every run (or the unfinished ones), show one run's facts, "
     "audit one window across runs, upgrade a ledger an older uqs wrote.",
 )
 job_app.add_typer(runs_app, name="runs", rich_help_panel=JOB_OPERATIONS_PANEL)
@@ -150,14 +151,16 @@ def list_runs(
     reverse: ReverseOpt = False,
     as_json: RunsJson = False,
 ) -> None:
-    """Every run in the ledger, newest first - or, with --unfinished, the runs
+    """List the runs in the ledger, newest first.
+
+    Every run in the ledger - or, with --unfinished, the runs
     that began and never finished.
 
     `--unfinished` includes runs whose process has died: `running` on a run
     whose process is gone means that execution was interrupted, which is what
     it is for.
 
-    A time range keeps the runs whose window overlaps it (#1858), and the
+    A time range keeps the runs whose window overlaps it, and the
     list takes every listing's flags: --export, --sort, --reverse, -i.
     """
     try:
@@ -247,7 +250,7 @@ def show(
     attach: AttachOpt = None,
     as_json: ShowJson = False,
 ) -> None:
-    """One run, and every fact it recorded about what it published."""
+    """Show one run, and every fact it recorded about what it published."""
     try:
         run, facts = stack_runs.show(_paths(), run_id, **_where(attach))
     except UqsError as exc:
@@ -303,7 +306,9 @@ def audit(
     dataset: Annotated[
         str,
         typer.Argument(
-            help="The dataset, e.g. demo_deals", autocompletion=completion.bounded_datasets
+            metavar="DATASET",
+            help="The dataset, e.g. demo_deals",
+            autocompletion=completion.bounded_datasets,
         ),
     ],
     range_from: RangeFromOpt = None,
@@ -312,7 +317,7 @@ def audit(
     last: LastOpt = None,
     as_json: FactsJson = False,
 ) -> None:
-    """Every fact recorded about one window, from every run that published it.
+    """Show every fact recorded about one window, from every run that published it.
 
     Two runs' facts side by side: whether two materialisations of the same
     window agree, which is the question run identity exists to answer.

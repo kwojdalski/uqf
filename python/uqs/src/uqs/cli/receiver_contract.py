@@ -45,9 +45,9 @@ from uqs.paths import UqsError
 contract_app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
-    help="Receiver contracts: export one where a worker is, approve it for an attachment "
-    "where its HDB is, list those approved - so `uqs job receiver start` writes the worker's rows "
-    "without the worker's code.",
+    help="Receiver contracts: export, approve, list.\n\nExport one where a worker is, "
+    "approve it for an attachment where its HDB is, list those approved - so "
+    "`uqs job receiver start` writes the worker's rows without the worker's code.",
 )
 attachment_app.add_typer(contract_app, name="contract")
 
@@ -78,7 +78,7 @@ def export(
         Path | None, typer.Option("--output", "-o", help="Write it to this file, not stdout")
     ] = None,
 ) -> None:
-    """Print WORKER's receiver contract, derived from its declarations.
+    """Print JOB's receiver contract, derived from its declarations.
 
     Run where the worker's source, transform and worker definitions are - the
     extraction machine. The contract is data: the dataset, its columns and types,
@@ -132,7 +132,10 @@ _ConflictOpt = ChoiceOpt(
 @contract_app.command("approve", cls=renamed(_APPROVE_RENAMES, ChangesState))
 def approve(
     file: Annotated[
-        Path, typer.Argument(help="The contract file `uqs job attachment contract export` wrote")
+        Path,
+        typer.Argument(
+            metavar="FILE", help="The contract file `uqs job attachment contract export` wrote"
+        ),
     ],
     attach: _AttachOpt,
     conflict: _ConflictOpt = None,
@@ -152,7 +155,7 @@ def approve(
     verified, does not publish the contract's dataset in the contract's shape, or
     pins no HDB here. The approval binds the contract to the attachment's
     destination and stack user, and to the limits given here: `uqs job receiver start
-    --contract ID --attachment NAME` then serves it, and refuses if the attachment
+    --contract CONTRACT --attachment ATTACHMENT` then serves it, and refuses if the attachment
     has since been pointed at another HDB.
     """
     try:
@@ -197,8 +200,9 @@ def list_(
     interactive: InteractiveOpt = False,
     as_json: ListJson = False,
 ) -> None:
-    """The receiver contracts approved for an attachment on this machine: one
-    row each, with every listing's flags (#1858); --json prints the records."""
+    """List the receiver contracts approved for an attachment on this machine.
+
+    One row each, with every listing's flags; --json prints the records."""
     try:
         found = receiver_contract.records(attach)
         rows = _sorted_items([_row(r) for r in found], sort, reverse)

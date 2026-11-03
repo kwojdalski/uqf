@@ -24,7 +24,7 @@ from uqs.deploy.components import COMPONENTS
 def attach_opt(help: str, *, required: bool = False) -> Any:  # noqa: A002 - typer's name
     """`--attachment NAME`: a saved attachment."""
     option = typer.Option(
-        "--attachment", metavar="NAME", help=help, autocompletion=completion.attachments
+        "--attachment", metavar="ATTACHMENT", help=help, autocompletion=completion.attachments
     )
     return Annotated[str, option] if required else Annotated[str | None, option]
 
@@ -32,7 +32,7 @@ def attach_opt(help: str, *, required: bool = False) -> Any:  # noqa: A002 - typ
 AttachmentArg = Annotated[
     str,
     typer.Argument(
-        metavar="NAME",
+        metavar="ATTACHMENT",
         help="The attachment's name, e.g. piggybank-uat",
         autocompletion=completion.attachments,
     ),

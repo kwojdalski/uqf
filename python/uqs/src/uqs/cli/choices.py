@@ -68,7 +68,8 @@ def ChoiceOpt(  # noqa: N802 - an Annotated alias, named like the others
     outside `values` is refused by Click before the command runs, and the
     command receives the value as a str."""
     values = tuple(values)
-    listed = alternatives(values, notes, default=default)
+    # backticked, so a help that opens with them starts as #1912's rule asks
+    listed = alternatives(values, notes, default=default, quote="`")
     text = help.format(values=listed) if "{values}" in help else f"{help}: {listed}"
     if envvar:
         text += f". Default from ${envvar}"

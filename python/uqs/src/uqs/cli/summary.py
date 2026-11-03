@@ -212,7 +212,7 @@ def summary(
     every: EveryOpt = SUMMARY_REFRESH_SECONDS,
     as_json: SummaryJson = False,
 ) -> None:
-    """Status table for every process in process.csv, with its declared graph.
+    """Show the status of every process in process.csv, with its declared graph.
 
     The graph columns - what each process subscribes to, what it publishes,
     and which processes it therefore needs running - answer the question

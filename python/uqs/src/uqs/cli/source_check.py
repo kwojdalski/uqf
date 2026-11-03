@@ -62,8 +62,10 @@ def sources_check(
     ] = None,
     as_json: SourcesJson = False,
 ) -> None:
-    """Connect to each source with its real credential and driver, check its
-    declared tables and column types, and read a bounded window - publishing
+    """Check each SOURCE live: connect, check its tables, read a bounded window.
+
+    Connects to each source with its real credential and driver, checks its
+    declared tables and column types, and reads a bounded window - publishing
     nothing and recording nothing. Exits 1 when any source fails."""
     if window is not None:  # #1857: minutes, where every duration is a DURATION now
         warn_renamed(f"--window {window}", f"--last {window}m")

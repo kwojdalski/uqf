@@ -373,8 +373,8 @@
         "every window clashes and fails on its own; the run reports partial, and nothing doubled"]};
 
 .qt.qpipe.job.demo_deals_backfill.test_window_stages_run_fetch_to_publish:{[t]
-    .qunit.assertEquals[key .qetl.job.bounded.window_stages;`fetch`transform`check`publish;
-        "a window is gated in this order, so the check judges the transformed rows"]};
+    .qunit.assertEquals[key .qetl.job.bounded.window_stages;`fetch`ready`transform`check`publish;
+        "a window is gated in this order, so the check judges the transformed rows and readiness is asked before any are made"]};
 
 .qt.qpipe.job.demo_deals_backfill.test_a_failed_stage_carries_its_message_and_fields:{[t]
     s:.qetl.job.bounded.failed_with[(``window)!(::;`w);"window failed transform";enlist[`error]!enlist "boom"];

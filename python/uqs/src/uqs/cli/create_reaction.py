@@ -27,7 +27,7 @@ TriggeredByOpt = Annotated[
     typer.Option(
         "--triggered-by",
         metavar="DATASET",
-        help="Scaffold a reaction instead: run when a bounded worker publishes DATASET",
+        help="Scaffold a reaction instead: run when a bounded worker publishes this dataset",
         autocompletion=completion.bounded_datasets,
     ),
 ]

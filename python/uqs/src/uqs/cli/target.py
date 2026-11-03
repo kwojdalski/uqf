@@ -1,4 +1,4 @@
-"""`uqs target ...` and `uqs deploy history`: the servers `uqs --target NAME`
+"""`uqs target ...` and `uqs deploy history`: the servers `uqs --target TARGET`
 drives, and what was deployed where (#956).
 
 Targets are the entries `uqs deploy push ARTIFACT TARGET...` reads, in
@@ -12,7 +12,7 @@ made to the file's text so comments and order survive, validated whole,
 written atomically and recorded in the change log `uqs target log` reads.
 The file may still be edited by hand; the next change records that edit.
 
-`uqs --target NAME <command>` itself is handled by the entry point before any
+`uqs --target TARGET <command>` itself is handled by the entry point before any
 command parses (cli/entry.py), because what follows it is the SERVER's
 command line, for the server's uqs to parse.
 """
@@ -41,8 +41,8 @@ from uqs.paths import UqsError, UqsUsageError, repo_root
 target_app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
-    help="The servers `uqs --target NAME <command>` runs on: add, set, unset, rename, remove, "
-    "edit, list, check, log, revert, adopt, shell.",
+    help="Deploy targets: add, set, unset, rename, remove, edit, list, check, log, revert, "
+    "adopt, shell.\n\nThe servers `uqs --target TARGET <command>` runs on.",
 )
 app.add_typer(target_app, name="target")
 
@@ -134,18 +134,19 @@ RemoteUser = Annotated[
 
 @target_app.command("add", cls=ChangesState)
 def add(
-    name: Annotated[str, typer.Argument(help="What to call it: `uqs --target NAME ...`")],
+    name: Annotated[str, typer.Argument(metavar="TARGET", help="Its name, for `uqs --target`")],
     ssh: Ssh,
     dest: Dest,
     remote_user: RemoteUser = None,
     label: Annotated[
         list[str] | None,
-        typer.Option("--label", help="key=value, shown by `uqs target list`; repeatable"),
+        typer.Option("--label", help="`key=value`, shown by `uqs target list`; repeatable"),
     ] = None,
     reach: Reach = False,
     dry_run: DryRun = False,
 ) -> None:
     """Declare a server: its ssh destination and deployment root, nothing else.
+
     Processes, ports and configuration are read from the server when used. A
     push registers its server itself; this is for one deployed some other way.
     Other settings: `uqs target set`."""
@@ -188,7 +189,9 @@ def set_(
     reach: Reach = False,
     dry_run: DryRun = False,
 ) -> None:
-    """Change settings of one target in place - any key the file accepts,
+    """Change settings of one target in place.
+
+    Any key the file accepts,
     including launch_mode, launch_python, launch_env_file, connect_timeout
     and environment. The rest of the file, comments included, is untouched."""
     changes: dict[str, object] = {}
@@ -217,7 +220,9 @@ def unset(
     ],
     dry_run: DryRun = False,
 ) -> None:
-    """Remove settings from one target, so it takes the layer beneath's
+    """Remove settings from one target.
+
+    The target then takes the layer beneath's
     value ([defaults], its environment) or push's default."""
     for key in keys:
         if not _KEY.fullmatch(key):
@@ -239,8 +244,7 @@ def rename(
     new: Annotated[str, typer.Argument(metavar="NEW", help="Its new name")],
     dry_run: DryRun = False,
 ) -> None:
-    """Rename a target in place. The deployments recorded under its old name
-    are recorded under the new one, so `uqs deploy history NEW` shows them."""
+    """Rename a target in place; `uqs deploy history NEW` then shows its deployments."""
     _change(
         lambda: target_changes.rename(
             repo_root(), old, new, _command("rename", old, new), dry_run=dry_run
@@ -255,8 +259,7 @@ CheckJson = json_opt('{"ok": true, "target", "ssh", "dest", "remote_user", "rele
 
 @target_app.command("check", cls=ReadOnly)
 def check(name: Name = None, as_json: CheckJson = False) -> None:
-    """Reach the target and name the release it runs. Says which part failed:
-    ssh, or no release under its dest."""
+    """Reach the target and name its release - or which failed: ssh, or no release."""
     try:
         r = control.remote_for(name, repo_root())
         release = control.current_release(r)
@@ -279,7 +282,9 @@ def check(name: Name = None, as_json: CheckJson = False) -> None:
 def shell(
     name: LatestTargetArg = None,
 ) -> None:
-    """A shell on the server, in the deployed release - like `poetry shell`:
+    """Open a shell on the server, in the deployed release.
+
+    Like `poetry shell`:
     its deploy.env loaded, its uqs first on PATH, as the target's account.
     `exit` comes back."""
     try:
@@ -293,7 +298,7 @@ def shell(
 
 
 def forward(name: str, yes: bool, args: list[str], *, interactive: bool) -> int:
-    """`uqs --target NAME <args>`: run args on the target's release, after
+    """`uqs --target TARGET <args>`: run args on the target's release, after
     asking - or `--yes` - when they may change the server."""
     words = control.command_words(args)
     if words[:1] == ("target",):

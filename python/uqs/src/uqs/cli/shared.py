@@ -17,13 +17,12 @@ from pathlib import Path
 from typing import Annotated
 
 import typer
-from rich.console import Console
 from rich.table import Table
 
 from uqs import paths as stack_paths
 from uqs import runtimes
 from uqs.cells import cell
-from uqs.cli import completion, json_out, table_browser
+from uqs.cli import completion, json_out, rendering, table_browser
 from uqs.cli.concepts import target_opt
 from uqs.cli.renames import MOVED_KEY
 from uqs.logger import LOG_LEVEL_ENV, configure_logging, get_logger, json_requested
@@ -32,24 +31,21 @@ from uqs.stack import listing, runtime
 
 app = typer.Typer(
     no_args_is_help=True,
-    help="Bridges lib/torq + lib/torq-finance-starter-pack into a runnable demo.",
+    context_settings={"help_option_names": ["-h", "--help"]},
+    help="Build, run, inspect and deploy the uqf kdb+ stack: its processes, jobs and data.",
 )
-console = Console()
+console = rendering.console()
 log = get_logger()
 
-#: `uqs job ...`: everything about one ETL job short of the fleet's
-#: lifecycle (#1417). Authoring - new, remove, install - WRITES jobs into the
-#: tree; operations - backfill, preview, gaps, runs - run a bounded worker,
-#: look at a polling feed's next page, find a streaming job's holes and read
-#: the run ledger. Two help panels keep the halves apart. Registered on `app`
-#: in create.py; the operations register on it from their own modules.
+#: `uqs job ...`: everything about one ETL job short of the fleet's lifecycle
+#: (#1417). Authoring WRITES jobs into the tree; operations run a worker, look
+#: at a feed's next page, find a job's holes and read the run ledger - two help
+#: panels. Registered on `app` in create.py; operations from their own modules.
 job_app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
-    help="ETL jobs: write them into the tree (new, list, remove, install) and operate on them "
-    "- backfill, preview a feed, check a dataset's producers, find its gaps, the receiver of "
-    "another machine's batches, a worker's checkpoint and runs, and its attachment to a TorQ stack "
-    "already running.",
+    help="Jobs: new, list, remove, install, backfill, preview, check, gaps, receiver, "
+    "checkpoint, runs, attachment.\n\nETL jobs: write them into the tree, and operate on them.",
 )
 #: The two help panels `uqs job --help` lists its commands under.
 JOB_AUTHORING_PANEL = "Authoring"
@@ -142,7 +138,7 @@ def _configure(
 ) -> None:
     """Global options, applied before any subcommand runs."""
     if target is not None:
-        # The entry point forwards `uqs --target NAME ...` before this parses
+        # The entry point forwards `uqs --target TARGET ...` before this parses
         # anything (cli/entry.py); reaching here means it did not, so running
         # the command locally would be running it on the wrong machine.
         _die(UqsUsageError("--target goes before the command: `uqs --target TARGET <command>`"))
@@ -205,6 +201,7 @@ PASS_THROUGH = {"allow_extra_args": True, "ignore_unknown_options": True}
 ProcsArg = Annotated[
     list[str] | None,
     typer.Argument(
+        metavar="PROC...",
         help="'all' (the default), or one or more process names",
         autocompletion=completion.procnames,
         show_default=False,
@@ -212,7 +209,7 @@ ProcsArg = Annotated[
 ]
 ExportOpt = Annotated[
     Path | None,
-    typer.Option("--export", help="Also write output to FILE as .csv or .parquet"),
+    typer.Option("--export", metavar="FILE", help="Also write output to FILE as .csv or .parquet"),
 ]
 
 
@@ -371,7 +368,7 @@ def _run_streaming(result_fn, *args, **kwargs) -> None:
 ProcArg = Annotated[
     str | None,
     typer.Argument(
-        metavar="[PROC]",
+        metavar="PROC",
         help="The process, by name, e.g. rdb1",
         autocompletion=completion.procname,
         show_default=False,

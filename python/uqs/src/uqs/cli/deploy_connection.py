@@ -81,7 +81,7 @@ def verify_timeout_option(integer: bool = False) -> typer.models.OptionInfo:
         "--verify-timeout",
         integer=integer,
         help=f"How long (a DURATION) the processes have to become ready, default "
-        f"{config.DEFAULT_VERIFY_TIMEOUT}s; overrides TARGET's",
+        f"{config.DEFAULT_VERIFY_TIMEOUT}s; overrides the target's",
         show_default=False,
     )
 
