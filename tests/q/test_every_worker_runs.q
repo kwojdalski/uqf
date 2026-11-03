@@ -343,13 +343,13 @@
 
 .qt.qpipe.worker_runs.test_a_hand_copied_output_is_a_departure:{[t]
     / The gate must be able to fail: each way a copy drifts.
-    base:.qetl.plant.published `crypto_execution_quality;
-    .qunit.assertEquals[.qt.qpipe.worker_runs.departure[base;`crypto_execution_quality];"";"the derived output agrees"];
+    base:.qetl.plant.published `crypto_markout;
+    .qunit.assertEquals[.qt.qpipe.worker_runs.departure[base;`crypto_markout];"";"the derived output agrees"];
     .qunit.assertEquals[.qt.qpipe.worker_runs.departure[.qetl.plant.shape `crypto_book_1s;`crypto_book_1s];"";"the time-keeping convention agrees"];
     retyped:update markout_bps:`long$() from base;
     reordered:(reverse cols base)#base;
     extra:update added:`long$() from base;
-    dropped:(cols[base] except `ref_price)#base;
-    found:.qt.qpipe.worker_runs.departure[;`crypto_execution_quality] each (retyped;reordered;extra;dropped);
+    dropped:(cols[base] except `ref_t1)#base;
+    found:.qt.qpipe.worker_runs.departure[;`crypto_markout] each (retyped;reordered;extra;dropped);
     .qunit.assertTrue[all 0<count each found;"a retyped, reordered, extended or shortened copy is each refused"];
-    .qunit.assertTrue[(first found) like "crypto_execution_quality output is *";"and the message names the table"]};
+    .qunit.assertTrue[(first found) like "crypto_markout output is *";"and the message names the table"]};

@@ -326,8 +326,8 @@ def _plant() -> dict[str, str]:
 
 def test_a_twin_takes_its_jobs_table_and_columns():
     dataset, cols = create_backfill.twin_target(UQF_ROOT, "crypto_markout", None, None, _plant())
-    assert dataset == "crypto_execution_quality", "the one table crypto_markout publishes"
-    assert [c for c, _ in cols][:2] == ["time", "sym"], "and that table's own columns"
+    assert dataset == "crypto_markout", "the one table crypto_markout publishes"
+    assert [c for c, _ in cols][:2] == ["time", "source_time"], "and that table's own columns"
 
 
 def test_a_job_publishing_several_tables_needs_dataset_to_choose():
@@ -358,13 +358,13 @@ def test_a_twin_applies_the_transform_its_job_declares():
     refill re-derives what the job publishes rather than a copy of it."""
     assert create_backfill.shared_transform(UQF_ROOT, "crypto_markout", None) == (
         "crypto_markout",
-        "crypto_execution_quality",
+        "crypto_markout_score",
     )
     body = templates.worker_body(
-        "mk_backfill", "mk", "crypto_execution_quality", "1D", "mk_backfill1",
-        shared=("crypto_markout", "crypto_execution_quality"),
+        "mk_backfill", "mk", "crypto_markout", "1D", "mk_backfill1",
+        shared=("crypto_markout", "crypto_markout_score"),
     )  # fmt: skip
-    assert "`mk;`crypto_execution_quality;1D;`crypto_execution_quality;" in body
+    assert "`mk;`crypto_markout;1D;`crypto_markout_score;" in body
     assert "passthrough" not in body, "no transform of its own is written"
 
 
@@ -462,16 +462,11 @@ def test_a_twin_of_a_job_without_a_transform_still_gets_a_new_source():
 
 
 def test_a_twin_whose_transform_registers_after_workers_is_refused():
-    """#1579: crypto_execution_quality is registered inside the streaming job's
-    file, which src/etl/init.q loads after workers/. A twin naming it stopped
-    the whole tree loading with `transform ... is not registered`."""
-    with pytest.raises(UqsError, match="Move crypto_execution_quality's .qetl.transform.define"):
-        create_backfill.backfill_plan(
-            UQF_ROOT, "crypto_refill", None, None,
-            width=None, source=None, procname=None, transport=None, partition=None,
-            check=False, transform=None, start_with_all=False, twin_of="crypto_markout",
-            definitions=_plant(),
-        )  # fmt: skip
+    """#1579: posbook's `position` transform is registered inside the streaming
+    job's file, which src/etl/init.q loads after workers/. A twin naming it
+    stopped the whole tree loading with `transform ... is not registered`."""
+    with pytest.raises(UqsError, match="Move position's .qetl.transform.define"):
+        create_backfill.require_loaded_before_workers(UQF_ROOT, "posbook", "position")
 
 
 def test_a_transform_registered_under_transforms_is_loaded_before_workers():

@@ -547,7 +547,18 @@
 / Real fills, via cryptorust's get_recent_real_fills. Normalised to the
 / trades shape below - side as a long, not the raw "buy"/"sell" string - so
 / execution analytics reads one convention.
-.qetl.plant.crypto_trades:([]time:`timestamp$(); sym:`g#`symbol$(); venue:`symbol$(); side:`long$(); trade_price:`float$(); size:`float$(); fee:`float$(); fee_currency:`symbol$(); exchange_fill_id:`symbol$())
+/ .
+/ source_time (#1936) is the VENUE's own time for the fill (binance trade.time,
+/ bybit execTime, hyperliquid data.time), sent by the recorder right after the
+/ `time` that .u.upd stamps; `time` is when the plant received it, which for a
+/ POLLED feed trails the trade by up to a poll interval. It is null where the
+/ recorder predates the column or the venue gave no time - and in every HDB
+/ partition written before it existed: the history fill adds the column as null
+/ (scripts/gates/fill_hdb_partitions.q), never as a copy of `time`, because a
+/ receipt time written into a venue-time column is exactly the lie the clock
+/ rule (#1923) refuses. The executions mapping reads a null source_time as
+/ "no venue stamp" and falls back to `time` on the `receipt clock.
+.qetl.plant.crypto_trades:([]time:`timestamp$(); source_time:`timestamp$(); sym:`g#`symbol$(); venue:`symbol$(); side:`long$(); trade_price:`float$(); size:`float$(); fee:`float$(); fee_currency:`symbol$(); exchange_fill_id:`symbol$())
 
 / The trades shape src/execution/execution.q's markout family consumes
 / (sym/time/side/trade_price/pip_factor), so posbook1 reads
@@ -699,8 +710,18 @@
 / hdb_transfer_backfill1's target. <one line: what a row means>
 .qetl.plant.trades_copy:([]time:`timestamp$(); trade_id:`long$(); sym:`g#`symbol$(); price:`float$(); size:`long$(); side:`symbol$(); notional:`float$())
 
-/ crypto_markout1's output. <one line: what a row means>
-.qetl.plant.crypto_execution_quality:([]time:`timestamp$(); sym:`g#`symbol$(); venue:`symbol$(); fill_id:`symbol$(); trade_time:`timestamp$(); horizon:`timespan$(); side:`long$(); trade_price:`float$(); ref_price:`float$(); markout_bps:`float$())
+/ crypto_markout1's output (#1936): the crypto markout dataset of the markout contract
+/ (docs/architecture/markout-contract.md), one row per execution, horizon and component, in
+/ the contract's 24 core columns (in order, with kind and step after horizon) and the crypto
+/ measures after them. kind is `total (the markout against the best mid across venues) or
+/ `execution (the move from the fill to the reference at the fill); step is 0 for both, so
+/ (venue; fill_id; horizon; kind; step) is a key with no nulls. move is the row's signed move in
+/ price units and positive means the market moved in the fill's favour. markout_bps is
+/ 10000*move%price. fee_quote is the fill's fee in the QUOTE currency (null when it cannot be
+/ valued without a rate), fee_bps that as a share of notional, and markout_net_bps what the fill
+/ earned after it - on the `total row only, null elsewhere and null whenever fee_bps is. `clock
+/ is the execution's, and so every reference's. Replaces crypto_execution_quality.
+.qetl.plant.crypto_markout:([]time:`timestamp$(); source_time:`timestamp$(); clock:`symbol$(); venue:`symbol$(); fill_id:`symbol$(); sym:`g#`symbol$(); side:`long$(); size:`float$(); horizon:`timespan$(); kind:`symbol$(); step:`long$(); price:`float$(); quote_ccy:`symbol$(); ref_t0:`float$(); ref_t1:`float$(); move:`float$(); quote_amount:`float$(); report_ccy:`symbol$(); rate:`float$(); rate_source:`symbol$(); rate_sym:`symbol$(); rate_time:`timestamp$(); rate_timing:`symbol$(); report_amount:`float$(); status:`symbol$(); contract_version:`long$(); markout_bps:`float$(); fee_quote:`float$(); fee_bps:`float$(); markout_net_bps:`float$())
 
 / last_value1's output. <one line: what a row means>
 .qetl.plant.last_value:([]time:`timestamp$(); sym:`g#`symbol$(); market:`symbol$(); source:`symbol$(); source_time:`timestamp$(); bid:`float$(); ask:`float$(); mid:`float$())

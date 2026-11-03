@@ -105,7 +105,7 @@ normalizers: "NORMALIZERS - many sources, one table\n\nexecutions1: trades + cry
 
 q_join: "Does it combine several\ntables row by row?" { class: question }
 
-joins: "JOINS - more than one input\n\ncrypto_markout1: crypto_trades + crypto_book -> crypto_execution_quality\nposbook1: executions + market_data -> position" { class: group }
+joins: "JOINS - more than one input\n\ncrypto_markout1: executions + market_data -> crypto_markout\nposbook1: executions + market_data -> position" { class: group }
 
 single: "ONE INPUT, ONE JOB\n\ndatabento1: databento_mbp10 -> eq_orderbook\nkafka_flow1: kafka_message -> client_flow, kafka_dead_letter\nfxpositions1: executions -> fx_position, fx_limit_breach\nvectorize1: wide_orderbook -> mkt_orderbook\nsuperbook1: market_data -> superbook\narbitrage1: superbook -> arbitrage\ncrossarb1: superbook -> cross_arbitrage\nlast_value1: market_data -> last_value\nexec_bars1: executions -> exec_bar\norder_quality1: orders -> order_quality\ncrypto_book_1s1: crypto_book -> crypto_book_1s\nflink_vwap1: flink_vwap_raw -> flink_vwap" { class: group }
 
