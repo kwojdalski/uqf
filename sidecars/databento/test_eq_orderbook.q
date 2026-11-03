@@ -15,8 +15,11 @@
 
 .qt.qpipe.job.eq_orderbook.recorder:{[t;x] `.qt.qpipe.job.eq_orderbook.published set .qt.qpipe.job.eq_orderbook.published,enlist (t;x); count x}
 
-/ The last publication's rows.
-.qt.qpipe.job.eq_orderbook.last_rows:{[] last last .qt.qpipe.job.eq_orderbook.published}
+/ The last publication onto one table, as rows.
+.qt.qpipe.job.eq_orderbook.last_on:{[tbl] last last .qt.qpipe.job.eq_orderbook.published where tbl=first each .qt.qpipe.job.eq_orderbook.published}
+
+/ The last eq_orderbook publication's rows.
+.qt.qpipe.job.eq_orderbook.last_rows:{[] .qt.qpipe.job.eq_orderbook.last_on[`eq_orderbook]}
 
 / Empty the job's state and wire publish to the recorder.
 .qt.qpipe.job.eq_orderbook.drive_ready:{[]
@@ -78,7 +81,44 @@
     .qt.qpipe.job.eq_orderbook.drive_ready[];
     .qpipe.job.eq_orderbook.on_batch[`databento_mbp10;.qt.qpipe.job.eq_orderbook.mbp10_batch[]];
     .qpipe.job.eq_orderbook.on_batch[`databento_mbp10;.qt.qpipe.job.eq_orderbook.mbp10_batch[]];
-    .qunit.assertEquals[count .qt.qpipe.job.eq_orderbook.published;2;"each batch stands alone"]};
+    .qunit.assertEquals[count .qt.qpipe.job.eq_orderbook.published;4;"each batch stands alone: a book and its market_data per batch"]};
+
+/ --- market_data: the same books, scoreable (#1939) ---------------------------
+
+.qt.qpipe.job.eq_orderbook.test_a_folded_book_is_also_published_as_market_data:{[t]
+    .qt.qpipe.job.eq_orderbook.drive_ready[];
+    .qpipe.job.eq_orderbook.on_batch[`databento_mbp10;.qt.qpipe.job.eq_orderbook.mbp10_batch[]];
+    md:.qt.qpipe.job.eq_orderbook.last_on[`market_data];
+    book:.qt.qpipe.job.eq_orderbook.last_rows[];
+    .qunit.assertEquals[first each .qt.qpipe.job.eq_orderbook.published;`eq_orderbook`market_data;"the book, then its market_data"];
+    .qunit.assertEquals[count md;count book;"one snapshot per folded book"];
+    .qunit.assertEquals[.qetl.plant.problems[`market_data;md];();"to the plant's market_data contract"];
+    .qunit.assertEquals[distinct md`market;enlist `equity;"market is equity"];
+    .qunit.assertEquals[distinct md`clock;enlist `venue;"the clock is the venue's"];
+    .qunit.assertEquals[distinct md`source;enlist `XNAS;"source is the dataset"]};
+
+.qt.qpipe.job.eq_orderbook.test_market_data_source_time_is_the_venue_stamp_not_receipt:{[t]
+    .qt.qpipe.job.eq_orderbook.drive_ready[];
+    .qpipe.job.eq_orderbook.on_batch[`databento_mbp10;update time:.z.p from .qpipe.source.databento_mbp10.fixture[]];
+    .qunit.assertEquals[(.qt.qpipe.job.eq_orderbook.last_on[`market_data])`source_time;(.qt.qpipe.job.eq_orderbook.last_rows[])`ts_event;
+        "source_time is ts_event, which is not a time the tickerplant stamped"]};
+
+.qt.qpipe.job.eq_orderbook.test_market_data_ladders_are_the_books_as_floats:{[t]
+    .qt.qpipe.job.eq_orderbook.drive_ready[];
+    .qpipe.job.eq_orderbook.on_batch[`databento_mbp10;.qt.qpipe.job.eq_orderbook.mbp10_batch[]];
+    md:.qt.qpipe.job.eq_orderbook.last_on[`market_data];
+    book:.qt.qpipe.job.eq_orderbook.last_rows[];
+    .qunit.assertEquals[md`bid_prices;book`bid_prices;"prices pass through"];
+    .qunit.assertEquals[md`ask_sizes;`float$/:book`ask_sizes;"sizes are the book's, as floats"]};
+
+.qt.qpipe.job.eq_orderbook.test_the_publish_seam_drops_a_crossed_market_data_book_and_keeps_the_book:{[t]
+    / the wired seam sees both tables: the crossed snapshot is withheld from market_data, while
+    / eq_orderbook (which the gate does not judge) keeps all four rows
+    .qt.qpipe.job.eq_orderbook.drive_ready[];
+    crossed:update bid_px_00:ask_px_00+1f from .qt.qpipe.job.eq_orderbook.mbp10_batch[] where i=3;
+    .qpipe.job.eq_orderbook.on_batch[`databento_mbp10;crossed];
+    .qunit.assertEquals[count .qt.qpipe.job.eq_orderbook.last_rows[];4;"the book is published whole"];
+    .qunit.assertEquals[count .qt.qpipe.job.eq_orderbook.last_on[`market_data];3;"the crossed snapshot is not market_data"]};
 
 / What test_job_output_contracts.q drives the job with.
 .qt.qpipe.job.eq_orderbook.contract_driver:{[]
