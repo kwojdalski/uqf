@@ -1,4 +1,5 @@
-"""What `uqs deploy build --dry-run` and `uqs deploy push --dry-run` say (#1880).
+"""What `uqs deploy build --dry-run`, `push --dry-run`, `prune --dry-run` and
+`rollback --dry-run` say (#1880, #1902).
 
 Beside cli/deploy.py, which is at its line budget. build's dry run printed the
 raw JSON composition - with no --json asked for, no "would build" and no note -
@@ -10,6 +11,7 @@ from __future__ import annotations
 from typing import Annotated
 
 import typer
+from rich.console import Console
 
 from uqs.cli.safety import dry_run_note
 from uqs.cli.shared import console
@@ -36,3 +38,10 @@ def end(dry_run: bool, code: int) -> None:
     """A push's note, after a dry run that planned every target."""
     if dry_run and not code:
         console.print(dry_run_note())
+
+
+def end_json(dry_run: bool, code: int) -> None:
+    """prune's and rollback's note, on stderr: their stdout is the JSON report
+    another program reads, which a prose line after it would stop parsing."""
+    if dry_run and not code:
+        Console(stderr=True).print(dry_run_note())

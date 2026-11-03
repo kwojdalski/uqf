@@ -173,7 +173,10 @@ def backfill(
 
     `--mode plan` lists the windows a run would fetch without opening the
     source or writing anything; `--dry-run` (`--mode dry-run`) fetches them and
-    writes nothing. Their output is in the process's log, like a run's.
+    writes nothing. Their output is in the process's log, like a run's. Every
+    mode but a run rehearses against the data directory as the fleet's last
+    start left it, and never bootstraps it: on a tree not yet started it is
+    refused, naming `uqs start`.
 
     `uqs --debug job backfill ...` starts the process with
     `-verbose`, so its log - `uqs logs <process>` - carries DEBUG lines.
@@ -279,6 +282,8 @@ def backfill(
             fixture=fixture,
         )
         if result.returncode != 0 or not wait:
+            if result.returncode == 0 and dry_run:
+                console.print(safety.dry_run_note())
             raise typer.Exit(code=result.returncode)
         procname = stack_backfill.procname_for(worker)
         console.print(
@@ -294,4 +299,6 @@ def backfill(
     console.print(f"[{colour}]{procname}: {state}[/] - `uqs logs {procname}` for its log")
     if error:
         console.print(f"  {error}", markup=False)
+    if code == 0 and dry_run:
+        console.print(safety.dry_run_note())
     raise typer.Exit(code=code)
