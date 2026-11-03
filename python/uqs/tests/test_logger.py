@@ -468,7 +468,7 @@ def test_follow_during_is_following_before_the_start_runs(tmp_path, monkeypatch)
 
 def test_follow_logs_refuses_when_there_is_nothing_to_follow(tmp_path, monkeypatch):
     paths = _paths_with_logs(tmp_path, monkeypatch, {})
-    with pytest.raises(logs.UqsError, match="has the demo been started"):
+    with pytest.raises(logs.UqsError, match="no log yet for rdb1 .* to follow"):
         logs.follow_logs(paths, "rdb1")
 
 

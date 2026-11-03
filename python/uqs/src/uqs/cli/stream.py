@@ -63,7 +63,8 @@ PreviewJson = json_opt(
     "preview",
     rich_help_panel=JOB_OPERATIONS_PANEL,
     cls=renamed(
-        {"--dry-run": DROPPED},
+        # --sample: how many records to show is `--limit` (#1857)
+        {"--dry-run": DROPPED, "--sample": "--limit"},
         needs_pipelines("previews this tree's streaming jobs", ReadOnly),
     ),
 )
@@ -73,7 +74,8 @@ def preview(
         typer.Argument(metavar="JOB", help="A polling feed - a streaming job that declares poll"),
     ],
     sample: Annotated[
-        int, typer.Option("--sample", min=1, max=1000, help="Rows of each table to show")
+        int,
+        typer.Option("--limit", min=1, max=1000, help="Show at most N rows of each table"),
     ] = 5,
     trace: Annotated[
         bool,

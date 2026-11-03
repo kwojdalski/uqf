@@ -28,15 +28,16 @@ from typing import Annotated
 import typer
 from rich.table import Table
 
+from uqs.cli import safety
 from uqs.cli.deploy import deploy_app
 from uqs.cli.json_out import emit, json_opt
 from uqs.cli.safety import ChangesState, ReadOnly, dry_run_note
-from uqs.cli.shared import _die, app, console
+from uqs.cli.shared import _die, app, console, log
 from uqs.cli.skip_options import forwarded
 from uqs.cli.target_confirm import changes_the_server, confirmed_on_server
 from uqs.deploy import control, history, target_changelog, target_changes, target_file
 from uqs.deploy.config import DeployError
-from uqs.paths import UqsError, repo_root
+from uqs.paths import UqsError, UqsUsageError, repo_root
 
 target_app = typer.Typer(
     no_args_is_help=True,
@@ -241,10 +242,7 @@ def rename(
     new: Annotated[str, typer.Argument(metavar="NEW", help="Its new name")],
     dry_run: DryRun = False,
 ) -> None:
-    """Rename a target in place.
-
-    The deployments recorded under its old name
-    are recorded under the new one, so `uqs deploy history NEW` shows them."""
+    """Rename a target in place; `uqs deploy history NEW` then shows its deployments."""
     _change(
         lambda: target_changes.rename(
             repo_root(), old, new, _command("rename", old, new), dry_run=dry_run
@@ -259,10 +257,7 @@ CheckJson = json_opt('{"ok": true, "target", "host", "dest", "remote_user", "rel
 
 @target_app.command("check", cls=ReadOnly)
 def check(name: Name, as_json: CheckJson = False) -> None:
-    """Reach the target and name the release it runs.
-
-    Says which part failed:
-    ssh, or no release under its dest."""
+    """Reach the target and name its release - or which failed: ssh, or no release."""
     try:
         r = control.remote_for(name, repo_root())
         release = control.current_release(r)
@@ -375,9 +370,13 @@ def forward(name: str, yes: bool, args: list[str], *, interactive: bool) -> int:
     asking - or `--yes` - when they may change the server."""
     words = control.command_words(args)
     if words[:1] == ("target",):
-        raise UqsError("`uqs target ...` manages this machine's targets - run it without --target")
+        raise UqsUsageError(
+            "`uqs target ...` manages this machine's targets - run it without --target"
+        )
     if words[:2] == ("list", "targets"):
-        raise UqsError("`uqs list targets` lists this machine's targets - run it without --target")
+        raise UqsUsageError(
+            "`uqs target list` lists this machine's targets - run it without --target"
+        )
     tunnel = ("--tunnel", "--target")  # --target: query's old spelling (#1729)
     if words[:1] == ("query",) and any(a.partition("=")[0] in tunnel for a in args):
         # Each names a different machine to run the query on (#1561).
@@ -395,6 +394,7 @@ def forward(name: str, yes: bool, args: list[str], *, interactive: bool) -> int:
                 f"`{shown}` may change {r.name} ({r.describe()}) - pass --yes "
                 f"(`uqs --target {name} --yes ...`) to run it without a terminal to confirm on"
             )
-        if not typer.confirm(f"Run `{shown}` on {r.name} ({r.describe()})?", default=False):
-            raise UqsError("not run")
+        if not safety.ask(f"Run `{shown}` on {r.name} ({r.describe()})?"):
+            log.warning("not confirmed - nothing was run")
+            return safety.EXIT_DECLINED
     return control.run(r, args, tty=interactive and sys.stdout.isatty())

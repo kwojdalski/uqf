@@ -31,9 +31,7 @@ from uqs.cli.shared import (
     job_app,
 )
 from uqs.model.kinds import SCAFFOLD_KINDS
-from uqs.paths import (
-    UqsError,
-)
+from uqs.paths import UqsError, UqsUsageError
 from uqs.scaffold import columns as columns_mod
 from uqs.scaffold import cycles, external, jobs, normalizer
 from uqs.scaffold import horizon as horizon_scaffold
@@ -41,10 +39,12 @@ from uqs.scaffold import horizon as horizon_scaffold
 app.add_typer(job_app, name="job")
 
 
+#: --procname: a process is PROC, or `--proc` as an option, on every command (#1857)
+_RENAMES = {"--columns": "--schema", "--columns-from": "--schema-from", "--procname": "--proc"}
+
+
 @job_app.command(
-    "new",
-    rich_help_panel=JOB_AUTHORING_PANEL,
-    cls=renamed({"--columns": "--schema", "--columns-from": "--schema-from"}, safety.ChangesState),
+    "new", rich_help_panel=JOB_AUTHORING_PANEL, cls=renamed(_RENAMES, safety.ChangesState)
 )
 def new_job(
     name: Annotated[
@@ -116,9 +116,7 @@ def new_job(
     ] = None,
     procname: Annotated[
         str | None,
-        typer.Option(
-            "--procname", help="The process that runs it (default: JOB1, or JOB_backfill1)"
-        ),
+        typer.Option("--proc", help="The process that runs it (default: JOB1, or JOB_backfill1)"),
     ] = None,
     start_with_all: Annotated[
         bool,
@@ -264,7 +262,7 @@ def new_job(
         "--schema-from": columns_from is not None,
         "--source": source is not None,
         "--width": width is not None,
-        "--procname": procname is not None,
+        "--proc": procname is not None,
         "--start-with-all": start_with_all,
         "--transport": transport is not None,
         "--period": period is not None,
@@ -341,7 +339,7 @@ def new_job(
             if publishes:
                 raise UqsError("a normalizer publishes its own NAME - drop --publishes")
             if not shape:
-                raise UqsError("--kind normalizer needs --schema: its canonical table")
+                raise UqsUsageError("--kind normalizer needs --schema: its canonical table")
             return normalizer.normalizer(
                 name,
                 subs,
@@ -359,7 +357,7 @@ def new_job(
             )
         if kind == "external":
             if not (raw_table and publishes and shape):
-                raise UqsError("--kind external needs --raw-table, --publishes and --schema")
+                raise UqsUsageError("--kind external needs --raw-table, --publishes and --schema")
             return external.external_feed(
                 name,
                 raw_table,
@@ -381,7 +379,7 @@ def new_job(
                 procname=procname, start_with_all=start_with_all, profile=profile,
                 unprofiled=unprofiled,
             )  # fmt: skip
-        raise UqsError(f"--kind must be one of {', '.join(SCAFFOLD_KINDS)}: {kind!r}")
+        raise UqsUsageError(f"--kind must be one of {', '.join(SCAFFOLD_KINDS)}: {kind!r}")
 
     try:
         if bundle is not None:

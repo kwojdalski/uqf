@@ -30,12 +30,13 @@ from uqs.cli.shared import (
     app,
     console,
 )
+from uqs.cli.vocabulary import EVERY_DEFAULT, EveryOpt
 from uqs.paths import UqsError
 
 #: How often `schema -i` re-reads the process: often enough to watch a table
 #: fill as a feed publishes, rarely enough that a few IPC queries a tick stay
 #: invisible to the process being read.
-SCHEMA_REFRESH_SECONDS = 5.0
+SCHEMA_REFRESH_SECONDS = EVERY_DEFAULT  # was 5: one default for --every (#1857)
 
 
 SchemaJson = json_opt(
@@ -81,13 +82,7 @@ def schema(
     passwd: QPasswdOpt = None,
     export: ExportOpt = None,
     interactive: InteractiveOpt = False,
-    every: Annotated[
-        float,
-        typer.Option(
-            min=0,
-            help="With -i, re-read the process every this many seconds; 0 turns it off",
-        ),
-    ] = SCHEMA_REFRESH_SECONDS,
+    every: EveryOpt = SCHEMA_REFRESH_SECONDS,
     as_json: SchemaJson = False,
 ) -> None:
     """Show the tables in a running process, or one table's columns and types.

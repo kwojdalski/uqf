@@ -100,7 +100,7 @@ def test_a_dry_run_writes_nothing_and_creates_no_journal(world):
     before = digest(hdb)
     for argv in (
         ["alter", "pb", "--reorder", "n,amt,sym,time"],
-        ["alter", "pb", "--rename", "amt=amount"],
+        ["alter", "pb", "--rename", "amt:amount"],
         ["alter", "pb", "--attr", "sym:g"],
         ["alter", "pb", "--cast", "n:long"],
         ["check", "--table", "pb"],
@@ -167,9 +167,9 @@ def test_reorder_then_undo_restores_every_file(world):
 def test_apply_without_a_terminal_and_without_yes_is_refused(world):
     hdb = world.build()
     before = digest(hdb)
-    result = run_uqs("data", "alter", "pb", "--hdb", str(hdb), "--rename", "amt=amount", "--apply")
+    result = run_uqs("data", "alter", "pb", "--hdb", str(hdb), "--rename", "amt:amount", "--apply")
     assert result.exit_code == 1
-    assert any("needs a terminal" in e and "--yes" in e for e in world.errors)
+    assert any("no terminal to ask on" in e and "--yes" in e for e in world.errors)
     assert digest(hdb) == before
 
 

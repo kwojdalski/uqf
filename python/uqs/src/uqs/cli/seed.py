@@ -9,8 +9,9 @@ from typing import Annotated
 import typer
 
 from uqs import timerange
+from uqs.cli.hdb_scope import tables_given
 from uqs.cli.range_options import DateOpt, LastOpt, RangeFromOpt, RangeToOpt
-from uqs.cli.renames import warn_renamed
+from uqs.cli.renames import old_spelling, renamed, warn_renamed
 from uqs.cli.safety import ChangesState, dry_run_note
 from uqs.cli.shared import (
     _die,
@@ -18,7 +19,7 @@ from uqs.cli.shared import (
     console,
     data_app,
 )
-from uqs.paths import UqsError, paths_for_root
+from uqs.paths import UqsError, UqsUsageError, paths_for_root
 from uqs.runtimes import RUNTIMES
 from uqs.stack import hdb_seed, runtime
 
@@ -36,7 +37,10 @@ def dates_as_range(text: str) -> tuple[str | None, str | None]:
     return lo, (date.fromisoformat(hi) + timedelta(days=1)).isoformat() if hi else None
 
 
-@data_app.command("seed", cls=ChangesState)
+#: A conflict policy is `--on-conflict` on every command (#1857); `--overwrite`
+#: was this one's, and is `--on-conflict replace` now. Tables are chosen one
+#: way on every command: a repeatable `--table` (#1856).
+@data_app.command("seed", cls=renamed({"--tables": "--table"}, ChangesState))
 def seed(
     from_runtime: Annotated[
         str | None,
@@ -47,8 +51,13 @@ def seed(
         ),
     ] = None,
     tables: Annotated[
-        str | None,
-        typer.Option(help="Comma-separated tables; default every table this runtime declares"),
+        list[str] | None,
+        typer.Option(
+            "--table",
+            metavar="TABLE",
+            help="Copy only this table; repeatable, and TABLE,TABLE also works. Default: every "
+            "table this runtime declares",
+        ),
     ] = None,
     range_from: RangeFromOpt = None,
     range_to: RangeToOpt = None,
@@ -58,10 +67,15 @@ def seed(
         str | None,
         typer.Option("--dates", hidden=True, help="Renamed: --from FIRST --to LAST+1"),
     ] = None,
-    overwrite: Annotated[
-        bool,
-        typer.Option("--overwrite", help="Replace a partition's table this runtime already holds"),
-    ] = False,
+    on_conflict: Annotated[
+        str,
+        typer.Option(
+            "--on-conflict",
+            help="What a copy does with a partition's table this runtime already holds: "
+            "ignore it (the default), or replace it",
+        ),
+    ] = "ignore",
+    overwrite: Annotated[bool, old_spelling("--on-conflict replace", "--overwrite")] = False,
     dry_run: Annotated[
         bool,
         typer.Option("--dry-run", "-n", help="Name the partitions it would copy; write nothing"),
@@ -73,23 +87,26 @@ def seed(
     this runtime's (`--runtime`), re-enumerating every symbol against this
     runtime's sym file. The source is only read. A table this runtime does
     not declare, or a column whose type differs, is refused with nothing
-    written; a partition already here is skipped unless --overwrite.
+    written; a partition already here is skipped unless --on-conflict replace.
 
     The partitions copied are those whose date lies in the time range - every
     one when no range is given; either bound may be left off.
 
     e.g. `uqs --runtime torq data seed --from-runtime uqf --from 2026-09-01 --to 2026-10-01`
     """
+    if overwrite:
+        warn_renamed("--overwrite", "--on-conflict replace")
+        on_conflict = "replace"
     try:
         if from_runtime is None and range_from in RUNTIMES:
             warn_renamed(f"--from {range_from}", f"--from-runtime {range_from}")
             from_runtime, range_from = range_from, None
         if from_runtime is None:
-            raise UqsError(
+            raise UqsUsageError(
                 f"name the runtime to copy from: --from-runtime, one of {', '.join(RUNTIMES)}"
             )
         if from_runtime not in RUNTIMES:
-            raise UqsError(
+            raise UqsUsageError(
                 f"--from-runtime {from_runtime!r} is not a runtime - "
                 f"choose one of: {', '.join(RUNTIMES)}"
             )
@@ -101,6 +118,8 @@ def seed(
             warn_renamed(
                 f"--dates {dates}", " ".join(f"{f} {v}" for f, v in bounds if v) or "no range"
             )
+        if on_conflict not in ("ignore", "replace"):
+            raise UqsError(f"--on-conflict {on_conflict!r}: a seed can ignore or replace")
         first, last_day = timerange.resolve(
             range_from, range_to, day, last, open_ended=True
         ).partition_dates()
@@ -108,8 +127,9 @@ def seed(
         source = paths_for_root(target.repo_root, from_runtime)
         if not dry_run:
             runtime.bootstrap(target)
-        wanted = [t.strip() for t in tables.split(",") if t.strip()] if tables else None
-        report = hdb_seed.seed(target, source, wanted, first, last_day, overwrite, dry_run)
+        wanted = tables_given(tables) or None
+        replace = on_conflict == "replace"
+        report = hdb_seed.seed(target, source, wanted, first, last_day, replace, dry_run)
     except UqsError as exc:
         _die(exc)
         return

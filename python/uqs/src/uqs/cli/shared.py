@@ -25,7 +25,7 @@ from uqs import runtimes
 from uqs.cli import completion, rendering, table_browser
 from uqs.cli.renames import MOVED_KEY
 from uqs.logger import configure_logging, get_logger, json_requested
-from uqs.paths import UqsError
+from uqs.paths import UqsError, UqsUsageError
 from uqs.stack import listing, runtime
 
 app = typer.Typer(
@@ -145,17 +145,26 @@ def _configure(
     ] = False,
 ) -> None:
     """Global options, applied before any subcommand runs."""
-    if target is not None or yes:
+    if target is not None:
         # The entry point forwards `uqs --target TARGET ...` before this parses
         # anything (cli/entry.py); reaching here means it did not, so running
         # the command locally would be running it on the wrong machine.
-        _die(UqsError("--target goes before the command: `uqs --target TARGET <command>`"))
+        _die(UqsUsageError("--target goes before the command: `uqs --target TARGET <command>`"))
+    if yes:
+        # `uqs --yes job remove X`: before the command, --yes only goes with
+        # --target; the hint named --target although none was given (#1885)
+        _die(
+            UqsUsageError(
+                "--yes before the command only goes with --target: put it after the command - "
+                "`uqs <command> ... --yes`"
+            )
+        )
     # Through the environment rather than an argument, so every path this
     # command builds - and every uqs a child process runs - agrees on it.
     if runtime_name is not None:
         if runtime_name not in runtimes.RUNTIMES:
             _die(
-                UqsError(
+                UqsUsageError(
                     f"--runtime {runtime_name!r} is not a runtime - choose one of: "
                     + ", ".join(runtimes.RUNTIMES)
                 )
@@ -277,11 +286,17 @@ def _lines(result) -> int:
     return len((result.stdout or "").strip().splitlines())
 
 
+#: The exit codes every command keeps to (#1885): a refusal - an unknown name,
+#: a check that fails - is 1; a command line wrong as given is 2, as Click's
+#: own usage errors are. An empty result is 0, and so is nothing to do.
+EXIT_REFUSED, EXIT_USAGE = 1, 2
+
+
 def _die(exc: UqsError) -> None:
     log.error("{}", exc)
     details = getattr(exc, "json_details", None)
     json_refusal(str(exc), details() if callable(details) else None)
-    raise typer.Exit(code=1)
+    raise typer.Exit(code=EXIT_USAGE if isinstance(exc, UqsUsageError) else EXIT_REFUSED)
 
 
 def json_refusal(message: str, details: dict | None = None) -> None:

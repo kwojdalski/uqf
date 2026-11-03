@@ -22,11 +22,15 @@ def migrate(
     ],
     rename: Annotated[
         list[str] | None,
-        typer.Option("--rename", help="OLD:NEW column rename; repeat for several"),
+        typer.Option("--rename", help="OLD:NEW - rename a column; repeatable"),
     ] = None,
     cast: Annotated[
         list[str] | None,
-        typer.Option("--cast", help="Target column to cast losslessly; repeat for several"),
+        typer.Option(
+            "--cast",
+            help="COL - cast a column losslessly to the type this release declares for it "
+            "(the target type is always the declared one, so it takes no :TYPE); repeatable",
+        ),
     ] = None,
     apply: safety.ApplyOpt = False,
     yes: safety.ApplyYesOpt = False,
@@ -64,11 +68,9 @@ def migrate(
             report = hdb_migrate.migrate(_paths(), table, day, renames, casts, apply=False)
         if apply and not yes:
             console.print(report, markup=False, highlight=False)
-            if not typer.confirm(
-                f"Migrate {table} {partition} as above? (stop the stack first)", default=False
-            ):
-                console.print("nothing migrated")
-                raise typer.Exit(code=1)
+            safety.confirm(
+                f"Migrate {table} {partition} as above? (stop the stack first)", yes=False
+            )
         if apply:
             report = hdb_migrate.migrate(_paths(), table, day, renames, casts, apply=True)
     except UqsError as exc:

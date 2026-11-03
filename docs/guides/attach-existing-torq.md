@@ -780,7 +780,7 @@ scp -r "$UQS_DATA_ROOT/attachments/pb-uat" uat-host:/srv/uqs/attachments/
 scp ledger.contract.json uat-host:
 
 # uat-host: approve the contract for the attachment, then start the receiver
-uqs job attachment contract approve ledger.contract.json --attach pb-uat --conflict upsert --conflict replace
+uqs job attachment contract approve ledger.contract.json --attach pb-uat --on-conflict upsert --on-conflict replace
 uqs job attachment contract list --attach pb-uat          # its identity, e.g. 3f9a0c2e7b1d4a56
 uqs job receive --contract 3f9a0c2e --attach pb-uat --listen-port 7090
 
@@ -821,9 +821,9 @@ operator controls, not the contract:
 
 - the destination (host, stack and canonical HDB);
 - the attachment's stack user, the only writer;
-- the conflict policies (`--conflict` narrows the contract's, never widens
+- the conflict policies (`--on-conflict` narrows the contract's, never widens
   them);
-- the most rows one message may carry (`--max-rows`, 100000).
+- the most rows one message may carry (`--max-message-rows`, 100000).
 
 A worker whose output changes has a new identity, so it must be exported and
 approved again. An attachment pointed at another HDB since the approval is
@@ -874,7 +874,7 @@ directory:
   in doubt: check the target, then `.qetl.io.remote.forget` it.
 - `upsert`, `replace` and `ignore` write it again, which is harmless.
 
-A window larger than one message (the approval's `--max-rows`, 100000 by
+A window larger than one message (the approval's `--max-message-rows`, 100000 by
 default) is sent in chunks of 50000 rows. The receiver stages them and commits
 the window only when its last chunk arrives and the reassembled rows match the
 batch's id, so a window that stops half-way writes nothing and its coverage does

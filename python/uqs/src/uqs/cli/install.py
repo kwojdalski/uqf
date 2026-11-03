@@ -15,12 +15,11 @@ from typing import Annotated
 import typer
 from rich.console import Group
 from rich.panel import Panel
-from rich.prompt import Confirm, Prompt
 from rich.table import Table
 from rich.text import Text
 
 from uqs.checks.traced_queries import untraced_lines
-from uqs.cli import install_bundle
+from uqs.cli import install_bundle, safety
 from uqs.cli.create_plant import plant_tables as _plant_tables
 from uqs.cli.regenerate import _DERIVED, _regenerate_derived, derived_command
 from uqs.cli.renames import old_spelling, warn_renamed
@@ -34,7 +33,7 @@ from uqs.cli.shared import (
 )
 from uqs.model.declarations import Declaration, declaration_calls, read_file, symbols
 from uqs.model.pipeline import PipelineKind
-from uqs.paths import UqsError
+from uqs.paths import UqsError, UqsUsageError
 from uqs.stack import bundles
 from uqs.stack import install as stack_install
 from uqs.stack.install import Item, Kind, Mode, Status
@@ -92,10 +91,7 @@ def _ask_mode() -> Mode:
     console.print(
         Panel(choices, title="How should they be installed?", border_style="cyan", expand=False)
     )
-    answer = Prompt.ask(
-        "Mode", choices=[m.value for m in Mode], default=Mode.COPY.value, console=console
-    )
-    return Mode(answer)
+    return Mode(safety.choose("Mode", [m.value for m in Mode], default=Mode.COPY.value))
 
 
 def _resolve_conflicts(items: list[Item], overwrite: bool, yes: bool, repo_root: Path) -> set[Path]:
@@ -109,11 +105,7 @@ def _resolve_conflicts(items: list[Item], overwrite: bool, yes: bool, repo_root:
     return {
         i.source
         for i in conflicts
-        if Confirm.ask(
-            f"[yellow]{_where(i, repo_root)}[/] exists and differs. Replace it?",
-            default=False,
-            console=console,
-        )
+        if safety.ask(f"{_where(i, repo_root)} exists and differs. Replace it?")
     }
 
 
@@ -218,8 +210,8 @@ def install_jobs(
         Path,
         typer.Argument(
             metavar="BUNDLE",
-            help="Folder holding the job files, laid out any way: each file is placed by "
-            "what it declares",
+            help="The sidecar bundle folder holding the job files, laid out any way: each "
+            "file is placed by what it declares",
             exists=True,
             file_okay=False,
             dir_okay=True,
@@ -330,19 +322,19 @@ def install_jobs(
 
     if mode is None:
         if yes:
-            _die(UqsError("--yes asks nothing, so it needs --link or --copy"))
+            _die(UqsUsageError("--yes asks nothing, so it needs --link or --copy"))
             return
-        mode = _ask_mode()
-    replace = _resolve_conflicts(items, overwrite, yes, repo_root)
-    todo = [i for i in todo if i.status is Status.NEW or i.source in replace]
-    if not todo:
-        console.print("[yellow]Nothing installed:[/] every remaining file was kept as it is.")
+    try:  # every question below refuses, naming --yes, with no terminal to ask on
+        mode = mode or _ask_mode()
+        replace = _resolve_conflicts(items, overwrite, yes, repo_root)
+        todo = [i for i in todo if i.status is Status.NEW or i.source in replace]
+        if not todo:
+            console.print("[yellow]Nothing installed:[/] every remaining file was kept as it is.")
+            return
+        safety.confirm(f"Install {len(todo)} file(s) as {mode.value}?", yes=yes)
+    except UqsError as exc:
+        _die(exc)
         return
-    if not yes and not Confirm.ask(
-        f"Install {len(todo)} file(s) as [bold]{mode.value}[/]?", default=True, console=console
-    ):
-        console.print("[dim]Nothing installed.[/]")
-        raise typer.Exit(code=1)
 
     for item in todo:
         try:

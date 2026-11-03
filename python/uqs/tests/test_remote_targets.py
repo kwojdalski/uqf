@@ -20,7 +20,7 @@ import typer
 import typer.core
 from typer.testing import CliRunner
 
-from uqs.cli import app, target_confirm
+from uqs.cli import app, safety, target_confirm
 from uqs.cli import target as target_cli
 from uqs.cli.safety import ChangesState, Effect, ReadOnly
 from uqs.deploy import control, history, targets
@@ -316,10 +316,11 @@ def test_a_change_with_yes_runs(server, capfd):
     assert "[stop]" in capfd.readouterr().out
 
 
-def test_a_declined_confirmation_runs_nothing(server, monkeypatch):
-    monkeypatch.setattr(target_cli.typer, "confirm", lambda *_a, **_k: False)
-    with pytest.raises(UqsError, match="not run"):
-        target_cli.forward("uat", False, ["stop"], interactive=True)
+def test_a_declined_confirmation_runs_nothing(server, monkeypatch, terminal):
+    """A no exits as every declined question does (#1885), running nothing."""
+    monkeypatch.setattr(safety.typer, "confirm", lambda *_a, **_k: False)
+    monkeypatch.setattr(target_cli.control, "run", lambda *_a, **_k: pytest.fail("ran"))
+    assert target_cli.forward("uat", False, ["stop"], interactive=True) == safety.EXIT_DECLINED
 
 
 def test_target_management_is_never_forwarded(server):
@@ -445,7 +446,7 @@ def test_target_through_the_app_is_refused_rather_than_run_here():
     """Only the entry point forwards; reached any other way, --target must not
     run the command on this machine."""
     result = CliRunner().invoke(app, ["--target", "uat", "summary"])
-    assert result.exit_code == 1
+    assert result.exit_code == 2, "a usage error (#1885)"
 
 
 def test_the_entry_point_forwards(server):

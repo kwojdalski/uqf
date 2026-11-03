@@ -148,7 +148,7 @@ def list_runs(
 
     `--unfinished` includes runs whose process has died: `running` on a run
     whose process is gone means that execution was interrupted, which is what
-    it is for. It was `uqs job runs status`.
+    it is for.
     """
     try:
         rows = (stack_runs.unfinished if unfinished else stack_runs.history)(

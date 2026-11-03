@@ -19,6 +19,7 @@ from rich.table import Table
 
 from uqs import timerange
 from uqs.cli import completion
+from uqs.cli.hdb_scope import tables_given
 from uqs.cli.range_options import DateOpt, RangeFromOpt, RangeToOpt
 from uqs.cli.renames import renamed
 from uqs.cli.safety import ChangesState, dry_run_note
@@ -76,7 +77,9 @@ def replay(
         list[str] | None,
         typer.Option(
             "--table",
-            help="Replay only this table; repeatable. Default: every table in the log",
+            metavar="TABLE",
+            help="Replay only this table; repeatable, and TABLE,TABLE also works. Default: "
+            "every table in the log",
             autocompletion=completion.plant_table,
         ),
     ] = None,
@@ -120,7 +123,7 @@ def replay(
             log_dir=dir_,
             hdb_dir=hdb,
             schema_file=schema,
-            tables=list(table) if table else None,
+            tables=tables_given(table) or None,
             base_port=port,
         )
     except UqsError as exc:

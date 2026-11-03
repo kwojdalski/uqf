@@ -24,6 +24,7 @@ a command or an option to hold to the rules.
 
 from __future__ import annotations
 
+import importlib
 import inspect
 import io
 import os
@@ -41,7 +42,7 @@ from typer.testing import CliRunner
 
 import uqs.cli.entry  # noqa: F401 - registers every command on the app
 from uqs import paths
-from uqs.cli import lists, rendering, safety, shared, skip_options
+from uqs.cli import lists, rendering, safety, shared, skip_options, vocabulary
 from uqs.cli.shared import app
 from uqs.cli.target_confirm import effect_of
 from uqs.stack import listing
@@ -227,6 +228,8 @@ NOT_THE_NAME = {"WORKER", "PROCNAME"}
 #: Options naming a process or a job, kept because they filter rather than name
 #: what the command acts on, with why.
 RULE2_FILTERS = {
+    ("deploy check", "--proc"): "a process the check expects beyond the profile's",
+    ("job new", "--proc"): "the process the new job runs in: a property of what it scaffolds",
     ("logs", "--worker"): "with --attach: whose run in the attachment - a worker or a receiver",
 }
 
@@ -343,7 +346,7 @@ OPTIONS = {
     "--debug": Meaning("log at DEBUG", r"^Log at DEBUG\. Same as LOG_LEVEL"),
     "--dest": Meaning("the absolute directory on the server", r"absolute"),
     "--dry-run": Meaning("show what would change, change nothing", r"nothing|dry"),
-    "--every": Meaning("re-read every N seconds", r"re-read"),
+    "--every": Meaning("re-read every DURATION", r"^with -i, re-read every DURATION"),
     "--stop-on-exit": Meaning(
         "with --follow: stop what it started when the stream ends", r"stop what this started"
     ),
@@ -352,19 +355,30 @@ OPTIONS = {
     "--force": Meaning("retired: each use gets its own name", None),
     "--from": Meaning("start of a time range", r"start"),
     "--hdb": Meaning("an HDB directory", r"HDB directory|this database"),
-    "--home": Meaning("the ODBC home", r"ODBC home"),
+    "--fixture": Meaning(
+        "a source with no credential may run on its fixture; --live refuses it",
+        r"^let a (worker whose )?source (with|has) no credential",
+    ),
+    "--gateway": Meaning("route through the gateway, or (--no-gateway) not", r"gateway"),
+    "--home": Meaning("retired: --odbc-home (#1857)", None),
     "--host": Meaning("where a q process listens", r"listen"),
     "--interactive": Meaning("browse the table", r"browse"),
     "--json": Meaning("one JSON document on stdout", r"JSON"),
     "--keep": Meaning("how many newest releases to keep", r"newest"),
     "--last": Meaning("a time range up to now", r"up to now"),
     "--level": Meaning("the lowest log level shown", r"level"),
-    "--limit": Meaning("only the most recent N records", r"most recent"),
+    "--limit": Meaning("show at most N records", r"(most recent|at most) N"),
     "--lines": Meaning("how many lines of a log to show", r"lines"),
-    "--live": Meaning("refuse fixtures", r"fixture"),
+    "--live": Meaning("retired as its own flag: the other side of --fixture/--live", None),
     "--mode": Meaning("backfill's validate/plan/run mode", r"validate"),
     "--odbc-home": Meaning("a private ODBC setup", r"ODBC"),
-    "--output": Meaning("where to write the output", r"write"),
+    "--on-conflict": Meaning(
+        "what a write does with a row already there",
+        r"what a (write|copy) (may )?do(es)? with a (row|partition)",
+    ),
+    "--output": Meaning("a FILE to write instead of stdout", r"^write it to this file"),
+    "--output-dir": Meaning("a directory to write into", r"^directory to write"),
+    "--proc": Meaning("a process, as an option", r"\bprocess\b"),
     "--overwrite": Meaning("replace what is already there", r"replace"),
     "--override": Meaning("bypass one named check", r"bypass"),
     "--passwd": Meaning("retired: --password-env NAME", None),
@@ -375,7 +389,7 @@ OPTIONS = {
     "--show-command": Meaning("show the command, run nothing", r"show"),
     "--python": Meaning("the servers' Python version", r"major\.minor"),
     "--python-runtime": Meaning("a bundled CPython", r"CPython"),
-    "--qhome": Meaning("a QHOME", r"QHOME"),
+    "--q-home": Meaning("a QHOME", r"QHOME"),
     "--raw": Meaning("retired: --no-gateway / --unresolved", None),
     "--reach": Meaning("reach the server first; save nothing it cannot reach", r"reach"),
     "--reason": Meaning("why an --override is acceptable", r"--override"),
@@ -394,7 +408,7 @@ OPTIONS = {
     "--to": Meaning("end of a time range, exclusive", r"exclusive"),
     "--trace": Meaning("log every query the source is sent", r"quer"),
     "--user": Meaning("the q user", r"user|admin"),
-    "--verify-timeout": Meaning("readiness deadline", r"deadline"),
+    "--verify-timeout": Meaning("how long the processes have to become ready", r"become ready"),
     "--version": Meaning("print uqs's version", r"uqs's version"),
     "--yes": Meaning("do not ask", r"ask"),
 }
@@ -472,6 +486,130 @@ def test_rule3_every_option_says_what_it_means():
         f"{c.path} {_long(p)}" for c in TREE for p in c.options if not (p.help or "").strip()
     )
     assert not silent
+
+
+# ------------------------------------------------- the vocabulary (#1857)
+
+
+def _is_duration(param) -> bool:
+    return getattr(param.type, "func", None) in vocabulary.PARSERS
+
+
+def _term_type(param) -> str:
+    """A parameter's type as cli/vocabulary.py's TERMS spell it."""
+    if _is_duration(param):
+        return "duration"
+    if getattr(param, "is_flag", False):
+        return "flag"
+    return param.type.name.removesuffix(" range")
+
+
+def test_the_vocabulary_holds_every_command_to_its_names_and_types():
+    """cli/vocabulary.py's TERMS: an option a term names has the term's type
+    on every command, and no command takes a spelling a term retired."""
+    wrong, retired = set(), set()
+    terms = {t.name: t for t in vocabulary.TERMS}
+    gone = {old: t.name for t in vocabulary.TERMS for old in t.retired}
+    for cmd in TREE:
+        for param in cmd.options:
+            names = [o for o in param.opts + param.secondary_opts if o.startswith("--")]
+            for name in names:
+                term = terms.get(name)
+                if term is not None and _term_type(param) != term.type:
+                    wrong.add((cmd.path, name, _term_type(param), term.type))
+                if name in gone:
+                    retired.add((cmd.path, name, gone[name]))
+        for param in cmd.command.params:
+            if param.param_type_name == "argument" and _metavar(param) in gone:
+                retired.add((cmd.path, _metavar(param), gone[_metavar(param)]))
+    assert not wrong, f"(command, option, its type, the vocabulary's): {sorted(wrong)}"
+    assert not retired, f"(command, retired spelling, its name now): {sorted(retired)}"
+
+
+#: Options that take a span of time in a unit of their own, with why. A
+#: connector's start options are the connector's: declared by the feed
+#: (external/feeds.py), possibly an installed bundle's, and passed to it as
+#: typed - their unit is in their name (`--interval-ms`).
+OWN_UNIT = {"--interval-ms", "--poll-interval-ms"}
+
+#: What makes an option a span of time: its name, or its help naming a unit.
+_TIME_NAME = re.compile(r"-timeout$|^--(every|soak|deadline|window)$")
+_TIME_HELP = re.compile(r"\b(seconds|minutes|milliseconds)\b", re.I)
+
+
+def test_every_duration_is_a_duration():
+    """Minutes on one command, seconds as a float or an int on others (#1857):
+    a span of time is a DURATION everywhere - seconds bare, or `500ms`, `5m`."""
+    found = {
+        (cmd.path, _long(p))
+        for cmd in TREE
+        for p in cmd.options
+        if (_TIME_NAME.search(_long(p)) or _TIME_HELP.search(p.help or ""))
+        and _long(p) not in OWN_UNIT
+        and not _is_duration(p)
+    }
+    assert not found, f"spans of time that are no DURATION: {sorted(found)}"
+
+
+def test_a_negative_flag_has_its_positive():
+    """`--no-start` beside `--health/--no-health` (#1857): a flag that turns a
+    default off is the off side of a pair, so the default can be said too."""
+    lone = {
+        (cmd.path, _long(p))
+        for cmd in TREE
+        for p in cmd.options
+        if getattr(p, "is_flag", False) and _long(p).startswith("--no-")
+    }
+    assert not lone, f"--no-X flags with no --X: {sorted(lone)}"
+
+
+def test_every_shared_option_name_is_in_the_vocabulary_or_the_registry():
+    """A shared name the registry gives one meaning, and the vocabulary one
+    type: a term's name needs no row of OPTIONS's to be held."""
+    terms = {t.name for t in vocabulary.TERMS if t.name.startswith("--")}
+    assert terms <= set(OPTIONS) | set(_option_uses()) | terms
+
+
+# ------------------------------------------------ one grammar per option (#1856)
+
+#: A pair an option takes, as its help leads with it: `OLD:NEW`, `COL:TYPE`.
+_PAIR = re.compile(r"^([A-Z][A-Z0-9]*)([=:])([A-Z][A-Z0-9|]*|[a-z|]+)\b")
+
+
+def test_a_pair_is_spelt_with_a_colon_everywhere():
+    """`data alter --rename OLD=NEW` beside `data migrate --rename OLD:NEW`
+    (#1856): an option taking a pair - a column and its new name, type or
+    attribute - spells it `A:B` on every command."""
+    found = {
+        (cmd.path, _long(p), m.group(0))
+        for cmd in TREE
+        for p in cmd.options
+        if (m := _PAIR.match(p.help or "")) and m.group(2) != ":"
+    }
+    assert not found, f"pairs not spelt A:B: {sorted(found)}"
+
+
+def test_tables_are_chosen_one_way():
+    """`--table` repeatable on one command, one value on another, `--tables`
+    comma-separated on a third (#1856): tables are chosen by a repeatable
+    `--table` everywhere (NAME,NAME works in one too)."""
+    found = {
+        (cmd.path, _long(p))
+        for cmd in TREE
+        for p in cmd.options
+        if _long(p) in ("--table", "--tables") and (_long(p) != "--table" or not p.multiple)
+    }
+    assert not found, f"tables chosen another way: {sorted(found)}"
+
+
+def test_one_command_fills_a_missing_hdb_table_and_the_other_runs_it():
+    """`deploy push --fix-hdb` (`--override fix-hdb` since #1852) and `data
+    check --apply` both filled missing HDB partitions (#1856): data check is
+    the one that fills, and the push runs the release's own - its override
+    says so."""
+    (fix,) = [g for g in safety.registry() if g.name == "fix-hdb"]
+    assert "`uqs data check --apply`" in fix.description
+    assert LEAVES["data check"].option("--apply") is not None
 
 
 # ------------------------------------------------------ rule 5: uniform flags
@@ -607,13 +745,21 @@ def test_rule5c_yes_y_exactly_on_what_asks():
 
 
 def test_rule5c_the_commands_that_ask_are_the_known_ones():
+    """Every question is asked through safety.ask, confirm or choose (#1885):
+    one default (No), one refusal without a terminal, one exit code for a no.
+    Only safety itself calls a prompt."""
     cli_dir = Path(shared.__file__).parent
-    prompting = {
-        f.stem
-        for f in cli_dir.glob("*.py")
-        if re.search(r"typer\.confirm\(|Confirm\.ask\(|\.prompt\(", f.read_text())
+    texts = {f.stem: f.read_text() for f in cli_dir.glob("*.py")}
+    direct = {
+        stem
+        for stem, text in texts.items()
+        if re.search(r"typer\.confirm\(|Confirm\.ask\(|Prompt\.ask\(|\.prompt\(", text)
     }
-    assert prompting == PROMPTING_MODULES
+    assert direct == {"safety"}, "a question asked around safety.ask"
+    asking = {
+        stem for stem, text in texts.items() if re.search(r"safety\.(ask|confirm|choose)\(", text)
+    }
+    assert asking == PROMPTING_MODULES
 
 
 def test_rule5e_one_write_model_per_kind_of_change():
@@ -917,7 +1063,19 @@ def _cells(argv: list[str]) -> list[str]:
     else:
         kind = argv[1] if argv[0] == "list" else _NOUN_KINDS[" ".join(argv)]
         rows = listing.list_items(paths.default_paths(), kind)
-    return [str(v) for row in rows for v in row.values() if v not in (None, "")]
+    texts = (_cell(v) for row in rows for v in row.values())
+    return [text for text in texts if text]
+
+
+def _cell(value) -> str:
+    """A value as the table's cell shows it: `uqs.cells.cell` once #1882's
+    typed rows are in the tree (a list is "a, b", a flag yes/no); until then
+    every row value is already its cell's text."""
+    try:
+        cells = importlib.import_module("uqs.cells")
+    except ModuleNotFoundError:  # before #1882 lands: rows hold text
+        return "" if value is None else str(value)
+    return cells.cell(value)
 
 
 @pytest.mark.parametrize("argv", LIST_COMMANDS, ids=" ".join)

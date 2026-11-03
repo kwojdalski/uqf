@@ -71,14 +71,14 @@ def test_resolve_port_finds_a_declared_process():
     assert schema_view.resolve_port(paths, "rdb1", 6050) == 6052
 
 
-def test_resolve_port_refuses_an_unknown_process_and_names_the_real_ones():
+def test_resolve_port_refuses_an_unknown_process_and_says_where_the_real_ones_are():
     # A typo should not produce a connection attempt against a port derived
-    # from nothing - and the message has to be actionable, because "not a
-    # declared process" alone leaves the reader guessing at spelling.
+    # from nothing - and the message has to be actionable: it names the typo
+    # and the command that lists the real names, as every command does (#1885).
     paths = stack_paths.default_paths()
-    with pytest.raises(UqsError, match="known:") as exc:
+    with pytest.raises(UqsError, match="no process rbd1 in this runtime") as exc:
         schema_view.resolve_port(paths, "rbd1", 6050)
-    assert "rdb1" in str(exc.value)
+    assert "`uqs list processes`" in str(exc.value)
 
 
 def test_the_default_process_is_one_that_exists():

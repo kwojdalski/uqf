@@ -365,7 +365,7 @@ def test_deploy_push_receives_a_skip_as_its_override(monkeypatch):
     base = ["deploy", "push", "a.tar.gz", "--ssh", "h", "--dest", "/d", "--profile", "p"]
     for spelling in (["--skip-accept-digest"], ["--override", "accept-digest"]):
         result = runner.invoke(cli.app, [*base, *spelling, "--reason", "vendor build"])
-        assert result.exit_code == 1, result.output
+        assert result.exit_code == 2, result.output  # "stop here" at the arguments stage
     assert len(made) == 2 and made[0] == made[1]
     # an override not asked for is left out, for make_config's own None (#1892)
     assert made[0]["accept_digest"] == "vendor build" and "allow_unpinned" not in made[0]
@@ -384,7 +384,7 @@ def test_deploy_push_to_targets_records_a_skip_as_the_override(monkeypatch):
 
     monkeypatch.setattr(targets, "configs", configs)
     args = ["deploy", "push", "a.tar.gz", "uat", "--skip-accept-digest", "--reason", "why"]
-    assert runner.invoke(cli.app, args).exit_code == 1
+    assert runner.invoke(cli.app, args).exit_code == 2  # "stop here" at the arguments stage
     names, explicit = seen[0]
     assert names == "uat" and explicit == {"accept_digest": "why"}
     assert targets._flag("accept_digest") == "--override accept-digest"

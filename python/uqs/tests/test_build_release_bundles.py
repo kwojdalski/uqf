@@ -115,7 +115,7 @@ def _bundle(tmp_path: Path) -> Path:
 def _build(tmp_path: Path, *extra: str, fail_install: bool = False):
     root = tmp_path / "tree"
     tools, calls = _tools(_tree(root), fail_install)
-    art = _built(["--output", str(tmp_path / "dist"), *extra], root=root, runner=tools)
+    art = _built(["--output-dir", str(tmp_path / "dist"), *extra], root=root, runner=tools)
     return art, calls, root
 
 

@@ -154,7 +154,7 @@ def _check_processes(plan: ScaffoldPlan, repo_root: Path) -> None:
         if d.procname in taken:
             raise UqsError(
                 f"{d.name} would run as {d.procname}, which {taken[d.procname]} already runs - "
-                "one process runs one job: pick another --procname"
+                "one process runs one job: pick another --proc"
             )
 
 

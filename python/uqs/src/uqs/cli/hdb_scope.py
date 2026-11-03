@@ -17,7 +17,6 @@ shows the plan, asks, checks the writers, runs it and reloads the readers.
 
 from __future__ import annotations
 
-import sys
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Annotated, Any
@@ -31,7 +30,7 @@ from uqs.cli import safety
 from uqs.cli.json_out import emit
 from uqs.cli.safety import dry_run_note
 from uqs.cli.shared import _paths, console
-from uqs.paths import UqsError, UqsPaths
+from uqs.paths import UqsError, UqsPaths, UqsUsageError
 from uqs.stack import hdb_alter, hdb_remote
 from uqs.stack.hdb_alter import Request
 
@@ -44,7 +43,7 @@ AttachOpt = Annotated[
     ),
 ]
 HdbOpt = Annotated[
-    str | None,
+    Path | None,
     typer.Option("--hdb", help="An HDB directory on this machine, when nothing else names it"),
 ]
 #: The --apply model's options, safety's own (#1854).
@@ -76,11 +75,11 @@ class Handle:
         return hdb_alter.run_local(self.paths, req, apply=apply)
 
 
-def resolve(attach: str | None, hdb: str | None) -> Handle:
+def resolve(attach: str | None, hdb: Path | str | None) -> Handle:
     """The one HDB named: --attach, --hdb, or (neither) this runtime's own."""
     paths = _paths()
     if attach and hdb:
-        raise UqsError("give one of --target, --attach and --hdb: each names an HDB")
+        raise UqsUsageError("give one of --target, --attach and --hdb: each names an HDB")
     if attach:
         ipc = service.ipc_for(attach_config.load(attach))
         where = hdb_where.resolve(attach, ipc)
@@ -96,6 +95,12 @@ def resolve(attach: str | None, hdb: str | None) -> Handle:
         )
         return Handle("hdb", str(root.resolve()), "--hdb", paths, warnings=[unchecked])
     return Handle("runtime", str(paths.hdb_dir), f"this runtime's HDB ({paths.runtime})", paths)
+
+
+def tables_given(values: list[str] | None) -> list[str]:
+    """The tables a repeatable `--table` names (#1856): each value, or a
+    comma-separated list in one - one way to choose tables on every command."""
+    return [t for v in values or () for t in v.split(",") if t.strip()]
 
 
 def _table(handle: Handle, given: str | None, *, required: bool = True) -> str | None:
@@ -154,13 +159,11 @@ def confirm(handle: Handle, what: str, *, yes: bool, as_json: bool) -> None:
     """Ask once before the first write; without a terminal, --yes or nothing."""
     if yes:
         return
-    if as_json or not sys.stdin.isatty():
-        raise UqsError(
-            "--apply without --yes needs a terminal to ask on - add --yes to write without "
-            "asking. Nothing was written."
+    if as_json:
+        raise UqsUsageError(
+            "--json cannot ask for confirmation: add --yes to write. Nothing was written."
         )
-    if not typer.confirm(f"{what} in {handle.hdb}?", default=False):
-        raise UqsError("not applied - nothing was written")
+    safety.confirm(f"{what} in {handle.hdb}?", yes=False)
 
 
 def apply_plan(

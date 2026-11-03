@@ -8,33 +8,45 @@ how, and uqs.stack.odbc_home for --odbc-home.
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
 from typing import Annotated
 
 import typer
 from rich.table import Table
 
+from uqs import timerange
+from uqs.cli.renames import old_spelling, warn_renamed
 from uqs.cli.safety import ReadOnly
 from uqs.cli.shared import _die, _paths, console
 from uqs.cli.sources import sources_app
+from uqs.cli.vocabulary import duration
 from uqs.paths import UqsError
 from uqs.stack import live_check, odbc_home
 
 _STATUS = {"ok": "[green]ok[/]", "empty": "[yellow]empty[/]", "failed": "[bold red]failed[/]"}
 
 
+#: `--window N` was minutes back; a duration is a DURATION on every command,
+#: and "up to now" is `--last` (#1857). The old spelling's value is minutes,
+#: so it is read and converted here, not renamed by name.
 @sources_app.command("check", cls=ReadOnly)
 def sources_check(
     sources: Annotated[
         list[str], typer.Argument(metavar="SOURCE...", help="The sources to check, by name")
     ],
     timeout: Annotated[
-        float, typer.Option("--timeout", min=1, help="Seconds for every check together")
+        float, duration("--timeout", help="Seconds (a DURATION) for every check together")
     ] = 120.0,
-    window: Annotated[
-        int,
-        typer.Option("--window", min=1, help="Minutes back the bounded read reaches"),
-    ] = 60,
+    last: Annotated[
+        str,
+        typer.Option(
+            "--last",
+            help="A DURATION up to now - 30s, 5m, 2h, 7d: how far back the bounded read "
+            "reaches (default 1h)",
+        ),
+    ] = "1h",
+    window: Annotated[int | None, old_spelling("--last", "--window")] = None,
     odbc: Annotated[
         Path | None,
         typer.Option(
@@ -50,7 +62,11 @@ def sources_check(
     Connects to each source with its real credential and driver, checks its
     declared tables and column types, and reads a bounded window - publishing
     nothing and recording nothing. Exits 1 when any source fails."""
+    if window is not None:  # #1857: minutes, where every duration is a DURATION now
+        warn_renamed(f"--window {window}", f"--last {window}m")
+        last = f"{window}m"
     try:
+        minutes = math.ceil(timerange.parse_duration("--last", last).total_seconds() / 60)
         env = None
         if odbc is not None:
             version = odbc_home.current(odbc)
@@ -60,7 +76,7 @@ def sources_check(
                 )
             env = odbc_home.env_vars(version)
         results = live_check.check(
-            _paths(), sources, timeout=timeout, window_minutes=window, odbc_env=env
+            _paths(), sources, timeout=timeout, window_minutes=minutes, odbc_env=env
         )
     except UqsError as exc:
         _die(exc)

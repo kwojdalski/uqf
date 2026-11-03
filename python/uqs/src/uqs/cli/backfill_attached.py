@@ -20,7 +20,7 @@ from uqs.attach import backfill_plan as planning
 from uqs.attach.backfill_policy import EOD_BYPASSED, EOD_FENCE, coordination_line, override_lines
 from uqs.cli import backfill_receive
 from uqs.cli.shared import _die, _paths, console, log
-from uqs.paths import UqsError
+from uqs.paths import UqsError, UqsUsageError
 from uqs.stack import backfill as stack_backfill
 from uqs.stack.run_modes import MODES
 
@@ -50,7 +50,7 @@ def run(
     on this machine, each admitting afresh with it; refused with --writer and in validate."""
     mode = mode or "run"
     if mode not in MODES:
-        _die(UqsError(f"--mode {mode!r} is not one of {', '.join(MODES)}"))
+        _die(UqsUsageError(f"--mode {mode!r} is not one of {', '.join(MODES)}"))
         return
     waived = dict(waived or {})
     try:
@@ -148,7 +148,7 @@ def refuse_waivers(waived: Mapping[str, str], *, mode: str, writer: str | None) 
     if unknown:
         raise UqsError(f"{', '.join(unknown)} cannot be waived for an attached backfill")
     if writer is not None:
-        raise UqsError(
+        raise UqsUsageError(
             f"{names} is not supported with --writer: the receiver on the stack's machine "
             "admits and fences every batch itself, and is never told of a waiver - run the "
             "backfill on that machine with --attach, or wait for the window to pass"

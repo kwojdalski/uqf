@@ -61,8 +61,8 @@ uqs schema fx_orderbook         # one table's columns, types and attributes
 uqs schema 'crypto*'        # every table matching a pattern, one block each
 uqs schema hdb1             # the history instead of today
 uqs schema --port 6052      # a port directly, skipping PROC resolution
-uqs schema -i               # browse it, re-read every 5 seconds
-uqs schema -i --every 1     # faster; --every 0 re-reads only on R
+uqs schema -i               # browse it, re-read every 2 seconds
+uqs schema -i --every 500ms # faster; --every 0 re-reads only on R
 ```
 
 With `-i` the browser keeps asking the process: row counts climb as a feed
@@ -199,7 +199,7 @@ table and nowhere else:
   | operation                     | writes                                                     | `--undo`                                                                                                                      |
   | ---                           | ---                                                        | ---                                                                                                                           |
   | `--reorder c1,c2,...`         | each partition's `.d`; it must list every existing column  | the journalled `.d`                                                                                                           |
-  | `--rename old=new`            | the column's files renamed, and `.d`                       | renamed back                                                                                                                  |
+  | `--rename old:new`            | the column's files renamed, and `.d`                       | renamed back                                                                                                                  |
   | `--attr col:p\|s\|g\|u\|none` | the column's attribute (its header)                        | the journalled attribute                                                                                                      |
   | `--cast col:TYPE`             | the column, written beside it and renamed over it          | the original while the run is unfinished; once complete, a cast back (exact only for a lossless cast, which the plan reports) |
 
@@ -653,7 +653,7 @@ both declare:
 
 ```
 uqs --runtime torq data seed --from-runtime uqf     # every table torq declares
-uqs --runtime torq data seed --from-runtime uqf --tables trade,quote --from 2026-09-01 --to 2026-10-01
+uqs --runtime torq data seed --from-runtime uqf --table trade --table quote --from 2026-09-01 --to 2026-10-01
 ```
 
 The partitions copied are those whose date lies in the [time
@@ -1559,6 +1559,23 @@ wide as its widest row and a line is never broken, so
 gets the whole path. What a q process or TorQ prints is shown as it is, never
 read as markup.
 
+Every command exits the same way for the same outcome (#1885), and
+`tests/test_exit_codes.py` holds it:
+
+- **0**: done, or nothing to show or do. An empty result - no run recorded, no
+  log written yet, no attachment, no HDB - is not a failure.
+- **1**: refused. An unknown name - a process, a target, a run, a job - is
+  refused with one message each; an unknown process, by every command, as
+  `no process NAME in this runtime`, pointing at `uqs list processes`.
+- **2**: the command line is wrong as given: a missing argument, an unknown or
+  contradictory option, a time range given two ways. Click's own usage errors
+  and the command's (`UqsUsageError`) alike.
+- **1** also when a question is answered no, or not at all.
+
+A command asks through one helper, `safety.ask`/`safety.confirm`: `[y/N]`, so
+the default is no; an EOF or Ctrl-C is a no; and with no terminal to ask on it
+refuses at once, naming `--yes`, instead of prompting into the void.
+
 A time range is given one way, on every command that takes one (`job backfill`,
 `job gaps`, `job preview`, `job check`, `job runs audit`, `data seed`,
 `data replay`), and read by one parser, `uqs.timerange`:
@@ -1608,6 +1625,37 @@ record's change history, where `logs` is processes' output and `history` what
 was deployed; `revert` undoes one recorded change and is itself recorded, where
 `rollback` returns a server to its previous release; `unset` removes a setting
 so the layer beneath applies, which no value given to `set` can say.
+
+### Vocabulary
+
+One concept has one name, one type and one unit on every command
+([`cli/vocabulary.py`](../../python/uqs/src/uqs/cli/vocabulary.py), #1857);
+`test_cli_conventions.py` holds every command to it, and refuses a spelling it
+retired.
+
+  | concept                                       | spelt                                | takes                                     |
+  | ---                                           | ---                                  | ---                                       |
+  | a process acted on                            | `PROC` / `PROCS` (`all`)             | a name                                    |
+  | a process as a property or a filter           | `--proc NAME`                        | a name; repeatable where several fit      |
+  | a job acted on                                | `JOB`                                | a name                                    |
+  | a span of time                                | `--*-timeout`, `--every`, `--soak`   | a DURATION: `30` (seconds), `500ms`, `5m` |
+  | a time range up to now                        | `--last DURATION`                    | `30s`, `5m`, `2h`, `7d`                   |
+  | the readiness wait of a deploy                | `--verify-timeout`                   | a DURATION                                |
+  | a source with no credential on its fixture    | `--fixture/--live`                   | a flag pair; the default is the command's |
+  | what a write does with a row already there    | `--on-conflict POLICY`               | upsert, replace, ignore, append, fail     |
+  | a private ODBC setup                          | `--odbc-home DIR`                    | a path                                    |
+  | q's home and executable                       | `--q-home DIR`, `--q-cmd PATH`       | as `--torq-home`                          |
+  | the kdb+ version                              | `--q-version`                        | `4.0`, `>=4.1`                            |
+  | how many records to show                      | `--limit N`                          | a count                                   |
+  | a FILE written instead of stdout              | `--output FILE` / `-o`               | a path                                    |
+  | a directory written into                      | `--output-dir DIR`                   | a path                                    |
+  | a sidecar bundle                              | `--bundle DIR`, `BUNDLE`             | a path                                    |
+
+A flag that turns a default off is one side of a pair -
+`--gateway/--no-gateway`, `--start/--no-start`, `--register/--no-register` - and
+`--every` re-reads every 2 seconds by default on `status` and `schema` alike. A
+connector's own start options (`--interval-ms`) are the connector's, and name
+their unit.
 
 ### Renamed spellings
 
@@ -1764,6 +1812,46 @@ on a problem, `list` many records and `show` one. A push or rollback asks a
 release for `deploy check`, or for `deploy verify` on a release from before it.
 The MCP tool `uqs_summary` is `uqs_status`, and `uqs_summary` stays for one
 release.
+
+One vocabulary (#1857):
+
+  | old                                                           | new                                   |
+  | ---                                                           | ---                                   |
+  | `job new --procname P`                                        | `--proc P`                            |
+  | `deploy check --procs A,B`                                    | `--proc A --proc B`                   |
+  | `deploy check --deadline S`                                   | `--verify-timeout S`                  |
+  | `config sources check --window MINUTES`                       | `--last DURATION` (`--last 60m`)      |
+  | `data seed --overwrite`                                       | `--on-conflict replace`               |
+  | `job attachment contract approve --conflict P`                | `--on-conflict P`                     |
+  | `job attachment contract approve --max-rows N`                | `--max-message-rows N`                |
+  | `job preview --sample N`                                      | `--limit N`                           |
+  | `deploy build --output DIR`, `deploy component build`'s too   | `--output-dir DIR`                    |
+  | `deploy push --qcmd`, `--qhome`; `setup odbc install --qhome` | `--q-cmd`, `--q-home`                 |
+  | `setup odbc ... --home DIR`                                   | `--odbc-home DIR`                     |
+
+A duration that was a bare number still is one - seconds - so only `--window`'s
+minutes changed meaning, and its old spelling is converted. `deploy push` asks
+the release it verifies which spelling its `deploy check` takes, so a push or a
+rollback to a release from before this still verifies.
+
+One grammar per option across `uqs data` (#1856):
+
+  | old                                   | new                                          |
+  | ---                                   | ---                                          |
+  | `data alter --rename OLD=NEW`         | `--rename OLD:NEW`, as `data migrate` has it |
+  | `data seed --tables A,B`              | `--table A --table B` (or `--table A,B`)     |
+  | `deploy check --tables A,B`           | `--table A --table B`                        |
+
+A pair an option takes is `A:B` on every command - `--rename OLD:NEW`,
+`--cast COL:TYPE`, `--attr COL:p` - and `--rename`, `--cast` and `--attr` are
+repeatable on `data alter` as on `data migrate`; an alter is still one operation
+per run, and refuses a second. `data migrate --cast COL` takes no type because
+its target is always the type this release declares. Tables are chosen one way:
+a repeatable `--table`, with `NAME,NAME` in one also read, on `data replay`,
+`data check`, `data seed` and `deploy check`; `data alter` and `data migrate`
+take the one table they act on as TABLE. `data check --apply` is the one command
+that fills missing HDB tables and columns: `deploy push --override fix-hdb` runs
+the release's own, and says so.
 
 `--port` is now only ever one process's port (`query`, `schema`);
 `query --tunnel` keeps querying a target through an ssh tunnel from here, so

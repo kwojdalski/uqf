@@ -23,7 +23,7 @@ import re
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
 
-from uqs.paths import UqsError
+from uqs.paths import UqsUsageError
 from uqs.timefmt import finer_than_a_microsecond
 
 #: Said by every refusal of a range, so each command explains it one way.
@@ -81,7 +81,7 @@ def _from_q_literal(name: str, text: str) -> datetime | None:
             tzinfo=UTC,
         )
     except ValueError as exc:
-        raise UqsError(f"{name} {text!r} is not a real date or time: {exc}") from None
+        raise UqsUsageError(f"{name} {text!r} is not a real date or time: {exc}") from None
 
 
 def parse_bound(name: str, text: str) -> datetime:
@@ -100,14 +100,14 @@ def parse_bound(name: str, text: str) -> datetime:
     """
     text = text.strip()
     if finer_than_a_microsecond(text):
-        raise UqsError(f"{name} {text!r} is finer than a microsecond, which this cannot carry")
+        raise UqsUsageError(f"{name} {text!r} is finer than a microsecond, which this cannot carry")
     from_q = _from_q_literal(name, text)
     if from_q is not None:
         return from_q
     try:
         parsed = datetime.fromisoformat(text)
     except ValueError:
-        raise UqsError(
+        raise UqsUsageError(
             f"{name} must be a date or a timestamp - {BOUND_FORMS}; got {text!r}"
         ) from None
     if parsed.tzinfo is None:
@@ -119,26 +119,26 @@ def parse_day(name: str, text: str) -> date:
     """A day alone, 2026-09-13 or 2026.09.13 - what `--date` takes."""
     m = _DAY.fullmatch(text.strip())
     if m is None:
-        raise UqsError(f"{name} must be a day, 2026-09-13 or 2026.09.13; got {text!r}")
+        raise UqsUsageError(f"{name} must be a day, 2026-09-13 or 2026.09.13; got {text!r}")
     try:
         return date(*(int(g) for g in m.groups()))
     except ValueError as exc:
-        raise UqsError(f"{name} {text!r} is not a real date: {exc}") from None
+        raise UqsUsageError(f"{name} {text!r} is not a real date: {exc}") from None
 
 
 def parse_duration(name: str, text: str) -> timedelta:
     """`30s`, `5m`, `2h`, `7d` or `500ms` - what `--last` takes.
 
-    @raise UqsError for anything else, and for zero - a range must cover time.
+    @raise UqsUsageError for anything else, and for zero - a range must cover time.
     """
     m = _DURATION.fullmatch(text.strip())
     if not m:
-        raise UqsError(
+        raise UqsUsageError(
             f"{name} {text!r}: expected a whole number and a unit - ms, s, m, h or d - e.g. 30s"
         )
     span = int(m.group(1)) * _UNIT[m.group(2)]
     if span <= timedelta(0):
-        raise UqsError(f"{name} {text!r}: the range must be longer than zero")
+        raise UqsUsageError(f"{name} {text!r}: the range must be longer than zero")
     return span
 
 
@@ -165,7 +165,7 @@ class TimeRange:
     def bounds(self) -> tuple[datetime, datetime]:
         """(start, end) of a range resolved whole - not `open_ended`."""
         if self.start is None or self.end is None:
-            raise UqsError(f"{self} is open-ended - {USAGE}")
+            raise UqsUsageError(f"{self} is open-ended - {USAGE}")
         return self.start, self.end
 
     def day(self, what: str) -> date:
@@ -174,7 +174,7 @@ class TimeRange:
             first = self.start.date()
             if self.start == _midnight(first) and self.end == _midnight(first + timedelta(days=1)):
                 return first
-        raise UqsError(f"{what} one whole day: --date D, or --from D --to D+1 - not {self}")
+        raise UqsUsageError(f"{what} one whole day: --date D, or --from D --to D+1 - not {self}")
 
     def partition_dates(self) -> tuple[date | None, date | None]:
         """(first, last), inclusive: the dates whose midnight lies in the range -
@@ -204,7 +204,7 @@ def resolve(
     --last. With it, either bound - or both - may be left off, for a command
     that otherwise takes everything (`data seed`).
 
-    @raise UqsError, ending with `USAGE`, for a mix of the ways, a missing
+    @raise UqsUsageError, ending with `USAGE`, for a mix of the ways, a missing
     bound, or a range that is empty; and the parsers' own for a bad value.
     """
     given = [
@@ -219,7 +219,7 @@ def resolve(
     ]
     if day is not None or last is not None:
         if len(given) > 1:
-            raise UqsError(f"{' and '.join(given)} cannot be given together - {USAGE}")
+            raise UqsUsageError(f"{' and '.join(given)} cannot be given together - {USAGE}")
         if day is not None:
             first = parse_day("--date", day)
             return TimeRange(_midnight(first), _midnight(first + timedelta(days=1)))
@@ -228,11 +228,11 @@ def resolve(
         return TimeRange(end - span, end, span)
     if not open_ended and (range_from is None or range_to is None):
         missing = "--from" if range_from is None else "--to"
-        raise UqsError(f"no {missing} - {USAGE}")
+        raise UqsUsageError(f"no {missing} - {USAGE}")
     start = parse_bound("--from", range_from) if range_from is not None else None
     end = parse_bound("--to", range_to) if range_to is not None else None
     if start is not None and end is not None and start >= end:
-        raise UqsError(
+        raise UqsUsageError(
             f"the range is empty: --from {start.isoformat()} is not before "
             f"--to {end.isoformat()} - {USAGE}"
         )

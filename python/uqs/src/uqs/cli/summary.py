@@ -34,6 +34,7 @@ from uqs.cli.shared import (
 from uqs.cli.summary_actions import process_actions
 from uqs.cli.summary_columns import resolve_columns, resolve_sort_column
 from uqs.cli.summary_table import gather, record, render
+from uqs.cli.vocabulary import EVERY_DEFAULT, EveryOpt, duration
 from uqs.interpreter import interpreter_status
 from uqs.model import dependencies, profiles
 from uqs.paths import UqsError
@@ -64,7 +65,7 @@ SUMMARY_TIMEOUT_SECONDS = 120.0
 #: that takes longer than this - a wedged process holding a probe up to
 #: --probe-timeout - just skips the ticks it overlaps, so a slow fleet is
 #: read back to back rather than piled up.
-SUMMARY_REFRESH_SECONDS = 2.0
+SUMMARY_REFRESH_SECONDS = EVERY_DEFAULT
 
 
 def _print_startups(log_dir: Path, procnames: list[str]) -> None:
@@ -151,21 +152,21 @@ def summary(
     ] = None,
     timeout: Annotated[
         float,
-        typer.Option(
+        duration(
             "--timeout",
             help=(
-                f"Seconds to spend gathering the table before giving up "
+                f"Seconds (a DURATION) to spend gathering the table before giving up "
                 f"(default {SUMMARY_TIMEOUT_SECONDS:g}). 0 waits forever."
             ),
         ),
     ] = SUMMARY_TIMEOUT_SECONDS,
     probe_timeout: Annotated[
         float,
-        typer.Option(
+        duration(
             "--probe-timeout",
             help=(
-                "Seconds each up process gets to complete the kdb+ handshake, "
-                f"for the Responds column (default {probe.DEFAULT_PROBE_TIMEOUT:g}). "
+                "How long (a DURATION) each up process gets to complete the kdb+ handshake, "
+                f"for the Responds column (default {probe.DEFAULT_PROBE_TIMEOUT:g}s). "
                 "All are probed at once. 0 skips the probe."
             ),
         ),
@@ -185,13 +186,7 @@ def summary(
         bool, typer.Option("--reverse", help="Sort descending. Only meaningful with --sort.")
     ] = False,
     interactive: InteractiveOpt = False,
-    every: Annotated[
-        float,
-        typer.Option(
-            min=0,
-            help="With -i, re-read the fleet every this many seconds; 0 turns it off",
-        ),
-    ] = SUMMARY_REFRESH_SECONDS,
+    every: EveryOpt = SUMMARY_REFRESH_SECONDS,
     as_json: SummaryJson = False,
 ) -> None:
     """Show the status of every process in process.csv, with its declared graph.

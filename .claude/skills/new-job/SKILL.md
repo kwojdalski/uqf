@@ -115,7 +115,7 @@ uses. It also lists every other line that still names the job (an example, a
 docs page, a diagram) - those are yours to edit - and `--strict` refuses while
 any remain.
 
-`--procname` names the process (default `NAME1`, or `NAME_backfill1`), and
+`--proc` names the process (default `NAME1`, or `NAME_backfill1`), and
 `--start-with-all` puts a streaming job or normalizer in `uqs start all`. Leave
 that off unless the user asks: a new process in the default start counts against
 the licence's connection budget, and the profile tests pin the default set.

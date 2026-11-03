@@ -17,11 +17,14 @@ import typer
 from uqs.cli import deploy_connection as conn
 from uqs.cli import deploy_dry_run as dry
 from uqs.cli import deploy_policy as policy
+from uqs.cli import safety
 from uqs.cli.deploy import _failed, deploy_app
+from uqs.cli.hdb_scope import tables_given
 from uqs.cli.json_out import json_opt
 from uqs.cli.renames import alias_command, renamed
 from uqs.cli.safety import ChangesState, OverrideOpt, ReadOnly, ReasonOpt, YesOpt
 from uqs.cli.shared import _die, json_refusal
+from uqs.cli.vocabulary import duration
 from uqs.deploy import config, overrides, prune, rollback, status, verify
 from uqs.deploy.prune import RELEASE_ID
 from uqs.deploy.remote import Remote
@@ -51,7 +54,10 @@ def status_cmd(
         typer.Option("--health/--no-health", help="Ask current's processes whether they answer"),
     ] = True,
     health_timeout: Annotated[
-        int, typer.Option("--health-timeout", help="How long processes have to answer, seconds")
+        int,
+        duration(
+            "--health-timeout", integer=True, help="How long (a DURATION) processes have to answer"
+        ),
     ] = 10,
     host: conn.Host = None,
     dest: conn.Dest = None,
@@ -201,11 +207,13 @@ def _confirm_prune(planned: dict) -> bool:
         typer.echo(f"  release {name}")
     for name in runtimes:
         typer.echo(f"  runtime {name}")
-    return typer.confirm(
-        f"Remove these {len(planned['removed'])} release(s) and {len(runtimes)} runtime(s) "
-        "from the server? This cannot be undone",
-        default=False,
-    )
+    try:
+        return safety.ask(
+            f"Remove these {len(planned['removed'])} release(s) and {len(runtimes)} runtime(s) "
+            "from the server? This cannot be undone"
+        )
+    except UqsError as exc:  # no terminal to ask on: refused, removing nothing
+        raise config.DeployError("confirm", str(exc)) from None
 
 
 VerifyJson = json_opt(
@@ -214,22 +222,44 @@ VerifyJson = json_opt(
 )
 
 
-@deploy_app.command("check", cls=renamed({"--port": "--base-port"}, ReadOnly))
+#: The readiness wait is `--verify-timeout`, as `deploy push` and `rollback`
+#: name it, and a process beyond the profile `--proc`, repeatable (#1857).
+#: `deploy push` asks the release which it takes (deploy/selection.py).
+_CHECK_RENAMES = {
+    "--port": "--base-port",
+    "--deadline": "--verify-timeout",
+    "--procs": "--proc",
+    "--tables": "--table",  # tables are a repeatable --table on every command (#1856)
+}
+
+
+@deploy_app.command("check", cls=renamed(_CHECK_RENAMES, ReadOnly))
 def verify_cmd(
     profile: Annotated[str, typer.Option("--profile", help="The profile the release started")],
-    deadline: Annotated[
-        float, typer.Option("--deadline", help="Seconds")
-    ] = config.DEFAULT_VERIFY_TIMEOUT,
-    query_timeout: Annotated[int, typer.Option("--query-timeout", help="Seconds per query")] = 5,
+    deadline: Annotated[float, conn.verify_timeout_option()] = config.DEFAULT_VERIFY_TIMEOUT,
+    query_timeout: Annotated[
+        int,
+        duration("--query-timeout", integer=True, help="How long (a DURATION) each query may take"),
+    ] = 5,
     port: Annotated[int | None, typer.Option("--base-port", help="The stack's base port")] = None,
     procs: Annotated[
-        str,
-        typer.Option("--procs", metavar="NAME,...", help="Processes beyond the profile"),
-    ] = "",
+        list[str] | None,
+        typer.Option(
+            "--proc",
+            metavar="PROC",
+            help="A process the check expects beyond the profile's; repeatable "
+            "(PROC,PROC also works)",
+        ),
+    ] = None,
     tables: Annotated[
-        str, typer.Option("--tables", metavar="NAME,...", help="Tables stp1 must carry")
-    ] = "",
-    live: Annotated[bool, typer.Option("--live", help="Fixtures must be refused")] = False,
+        list[str] | None,
+        typer.Option(
+            "--table",
+            metavar="TABLE",
+            help="Check stp1 carries this table; repeatable, and TABLE,TABLE also works",
+        ),
+    ] = None,
+    fixture: conn.FixtureOpt = True,
     ports_free: Annotated[
         bool,
         typer.Option(
@@ -251,9 +281,9 @@ def verify_cmd(
             deadline=deadline,
             query_timeout=query_timeout,
             port=port,
-            procs=[p for p in procs.split(",") if p],
-            tables=[t for t in tables.split(",") if t],
-            live=live,
+            procs=[p for word in procs or () for p in word.split(",") if p],
+            tables=tables_given(tables),
+            live=not fixture,
             ports_free=ports_free,
             marker=not as_json,
         )
@@ -271,6 +301,4 @@ def verify_cmd(
 #: Its name before #1733: `check` actively probes and exits non-zero on a problem.
 #: An older release on a server has only `verify`, which a rollback runs
 #: (deploy/selection.py's verify_command asks for whichever it has).
-alias_command(
-    deploy_app, "verify", "uqs deploy check", verify_cmd, cls=renamed({"--port": "--base-port"})
-)
+alias_command(deploy_app, "verify", "uqs deploy check", verify_cmd, cls=renamed(_CHECK_RENAMES))
