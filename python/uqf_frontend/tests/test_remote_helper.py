@@ -481,19 +481,37 @@ def test_the_helper_imports_only_the_standard_library():
             assert node.level == 0, "a relative import needs the package"
             imported.add((node.module or "").split(".")[0])
     assert imported <= set(sys.stdlib_module_names), imported - set(sys.stdlib_module_names)
+    assert not imported & {"subprocess", "shutil", "pty", "multiprocessing"}
 
 
-def test_the_helper_only_reads():
-    """No call that writes, removes, renames or runs anything."""
+#: The helper's functions that may write, all of them the upload op's (#1951).
+WRITERS = {"make_dirs", "_new_mode", "_receive", "_publish_new", "sweep", "publish", "upload",
+           "_interrupted"}  # fmt: skip
+
+
+def test_only_the_upload_functions_write():
+    """No os call that writes, removes or renames outside the upload op's
+    own functions - so `list` reads - and none anywhere that runs a program.
+    The helper imports no subprocess (the stdlib test above names them)."""
     src = Path(remote_helper.__file__).read_text()
     tree = ast.parse(src)
-    called = {
-        node.func.attr
-        for node in ast.walk(tree)
-        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
-    }
     forbidden = {"remove", "unlink", "rmdir", "rename", "replace", "mkdir", "makedirs",
-                 "chmod", "chown", "symlink", "link", "truncate", "system", "popen",
-                 "execv", "execvp", "spawnv", "run", "Popen"}  # fmt: skip
-    assert called & forbidden == set()
-    assert "O_WRONLY" not in src and "O_RDWR" not in src and "O_CREAT" not in src
+                 "chmod", "fchmod", "chown", "symlink", "link", "truncate", "write", "umask",
+                 "fsync"}  # fmt: skip
+    running = {"system", "popen", "execv", "execvp", "spawnv", "fork"}
+    functions = [n for n in tree.body if isinstance(n, ast.FunctionDef)]
+    assert WRITERS <= {f.name for f in functions}
+    for fn in functions:
+        called = {
+            node.func.attr
+            for node in ast.walk(fn)
+            if isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and isinstance(node.func.value, ast.Name)
+            and node.func.value.id == "os"
+        }
+        assert called & running == set(), fn.name
+        if fn.name not in WRITERS:
+            assert called & forbidden == set(), fn.name
+            text = ast.get_source_segment(src, fn) or ""
+            assert "O_WRONLY" not in text and "O_RDWR" not in text and "O_CREAT" not in text

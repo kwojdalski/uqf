@@ -198,7 +198,8 @@
 / @param fr the core's frame: ri, side, price, sym, ...
 / @param lg the chain legs: legs and invs, one entry per leg index
 / @param books dict at0, at1: per leg, table bid, ask, mid
-/ @return table ri, kind, step, move, status
+/ @return table ri, kind, step, move, status and the FX columns leg, invert,
+/   price_t0 and price_t1 (a leg's own mid at the execution and at the horizon)
 .qpipe.transform.fx_domain.attribution_rows:{[spec;fr;lg;books]
     mids:.qpipe.transform.fx_domain.waterfall_mids[books`at0;books`at1];
     side:`float$fr`side;
@@ -209,10 +210,14 @@
     res:total-execution+(+/) steps;
     pf:`float$.qpipe.transform.fx_domain.pip_factor_of[fr`sym];
     rs:.qpipe.transform.fx_domain.residual_status[spec`tolerance;pf*res];
-    legrows:{[lg;steps;k]
+    legrows:{[lg;steps;books;k]
         idx:where not null (lg`legs) k;
-        ([] ri:idx; kind:(count idx)#`leg; step:(count idx)#1+k; move:(steps k) idx; status:(count idx)#`ok)}[lg;steps] each til count steps;
-    (raze legrows),([] ri:til count fr; kind:(count fr)#`residual; step:(count fr)#0; move:res; status:rs)}
+        n:count idx;
+        ([] ri:idx; kind:n#`leg; step:n#1+k; move:(steps k) idx; status:n#`ok;
+            leg:((lg`legs) k) idx; invert:((lg`invs) k) idx;
+            price_t0:(((books`at0) k)`mid) idx; price_t1:(((books`at1) k)`mid) idx)}[lg;steps;books] each til count steps;
+    n:count fr;
+    (raze legrows),([] ri:til n; kind:n#`residual; step:n#0; move:res; status:rs; leg:n#`; invert:n#0b; price_t0:n#0n; price_t1:n#0n)}
 
 / The FX domain as the markout core takes it: the resolver, the conversion, the
 / spec keys the domain owns, their validation and the leg attribution.
@@ -222,5 +227,31 @@
     `convention`tolerance;
     {[spec] .qpipe.transform.fx_domain.require_spec[.qpipe.transform.fx_domain.defaults,spec]; .qpipe.transform.fx_domain.defaults,spec};
     .qpipe.transform.fx_domain.attribution_rows)
+
+
+/ ------------------------------------------------------------------ THE LONG ROWS
+
+/ The columns FX adds to the core's, in the order the stored long dataset lists them
+/ (the core's columns keep their relative order, the contract's Q1).
+.qpipe.transform.fx_domain.long_cols:`time`source_time`clock`venue`fill_id`sym`side`size`horizon`kind`step`leg`invert`price`price_t0`price_t1`quote_ccy`ref_t0`ref_t1`move`pips`pip_factor`pip_value`quote_amount`report_ccy`rate`rate_source`rate_sym`rate_time`rate_timing`report_amount`status`contract_version`version
+
+/ The core's rows with FX's measures: pips (pip_factor * move), pip_factor, the pip
+/ value in quote currency, the convention's version, and the reference prices a
+/ component is read against (price_t0 and price_t1: a total's are the fill and the
+/ horizon's reference, an execution residual's the fill and the execution's
+/ reference, a leg's its own mid, a residual's none).
+/ @param spec the validated spec, at least convention
+/ @param rows the core's result with the attribution's FX columns
+/ @return the stored long layout, long_cols
+.qpipe.transform.fx_domain.long_rows:{[spec;rows]
+    pf:.qpipe.transform.fx_domain.pip_factor_of[rows`sym];
+    k:rows`kind;
+    t0:?[k=`total;rows`price;?[k=`execution;rows`price;rows`price_t0]];
+    t1:?[k=`total;rows`ref_t1;?[k=`execution;rows`ref_t0;rows`price_t1]];
+    rows:update price_t0:t0, price_t1:t1, pip_factor:pf,
+        pips:(`float$pf)*move,
+        pip_value:.qpipe.transform.fx_domain.pip_value[sym;size],
+        version:(count rows)#spec[`convention]`version from rows;
+    .qpipe.transform.fx_domain.long_cols#rows}
 
 \d .

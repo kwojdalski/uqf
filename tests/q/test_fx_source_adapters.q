@@ -242,7 +242,7 @@
 .qt.qpipe.transform.fx_source_adapters.norm_b:{[] .qt.qpipe.transform.fx_source_adapters.ensure_normalizers[]; (.qetl.job.stream.normalizer.normalize[`fxa_exec;`trades;.qt.qpipe.transform.fx_source_adapters.eq_exec_b[]];.qetl.job.stream.normalizer.normalize[`fxa_md;`quote;.qt.qpipe.transform.fx_source_adapters.eq_quote_b[]])}
 
 / the scoring columns, in a canonical order
-.qt.qpipe.transform.fx_source_adapters.scored_cols:{[e] `source_time`venue`sym`side`size`price`fill_id#e}
+.qt.qpipe.transform.fx_source_adapters.scored_cols:{[e] `source_time`venue`sym`side`size`price`fill_id`clock#e}
 .qt.qpipe.transform.fx_source_adapters.by_key:{[m] `sym`source`source_time xasc m}
 
 .qt.qpipe.transform.fx_source_adapters.test_two_sources_normalize_to_equivalent_executions:{[tc]
@@ -268,7 +268,9 @@
     ra:.qpipe.transform.fx_markout.calc[sp;a 0;a 1];
     rb:.qpipe.transform.fx_markout.calc[sp;b 0;b 1];
     .qunit.assertTrue[0<count ra;"scored"];
-    .qunit.assertEquals[ra;rb;"identical results from the same function"];
+    / each scores against books on its own clock; the clock column is the only difference between the two
+    .qunit.assertEquals[distinct (ra`clock),rb`clock;`venue`receipt;"a fixture per clock"];
+    .qunit.assertEquals[delete clock from ra;delete clock from rb;"identical results from the same function"];
     / and the numbers are the hand-worked ones: e1 bought at 1.1001, +1s best mid 1.1005 -> 4 pips
     .qunit.assertEquals[first exec pips from ra where fill_id=`9001, horizon=0D00:00:01, kind=`total;4f;"10000*(1.1005-1.1001)"]};
 
@@ -278,7 +280,7 @@
     tm:.qt.qpipe.transform.fx_source_adapters.t+0D00:00:03;
     a:.qetl.job.stream.normalizer.normalize[`fxa_md;`book_levels;raze (.qt.qpipe.transform.fx_source_adapters.lvl[tm;.qt.qpipe.transform.fx_source_adapters.eurusd;`LPA;`FULL_AMOUNT;`SP;`bid;0;(0n;0f)];.qt.qpipe.transform.fx_source_adapters.lvl[tm;.qt.qpipe.transform.fx_source_adapters.eurusd;`LPA;`FULL_AMOUNT;`SP;`ask;0;(1.1012;1e6)])];
     b:.qetl.job.stream.normalizer.normalize[`fxa_md;`quote;([] time:enlist tm; sym:`EURUSD; bid:enlist 0n; ask:enlist 1.1012; bsize:enlist 0; asize:enlist 1000000; src:`LPA)];
-    ta:.qpipe.transform.fx_markout.tops[a];
-    tb:.qpipe.transform.fx_markout.tops[b];
-    .qunit.assertEquals[ta;tb;"no bid, an ask of 1.1012, from both"];
+    ta:.qpipe.transform.markout_core.tops[a];
+    tb:.qpipe.transform.markout_core.tops[b];
+    .qunit.assertEquals[delete clock from ta;delete clock from tb;"no bid, an ask of 1.1012, from both"];
     .qunit.assertTrue[null first ta`bid;"and the missing bid is null, not a price"]};

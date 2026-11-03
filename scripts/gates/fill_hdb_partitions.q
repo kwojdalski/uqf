@@ -174,11 +174,73 @@ clock_rules:{[]
     if[()~key f; die "no hdb_clock_rules.csv beside this script - the clock history fill needs it (#1925)"];
     ("SSSS";enlist ",") 0: f}
 
-/ Is this column one whose missing values are derived, not null (#1925)?
+/ The columns the FX markout tables gained with the markout contract (#1935) whose
+/ missing values are DERIVED from the columns the stored rows already hold, not null:
+/ the contract's move, quote_ccy, quote_amount, price, ref_t0, ref_t1 and
+/ contract_version, FX's pip_value, and the clock. What a stored row cannot say stays
+/ the declared null: report_ccy, rate and report_amount, because no rate was ever
+/ declared for a stored row. The wide table already held price, ref_t0 and ref_t1.
+fx_derived:`fx_markout`fx_markout_wide!(`clock`quote_ccy`move`pip_value`quote_amount`contract_version`price`ref_t0`ref_t1;`clock`quote_ccy`move`pip_value`quote_amount`contract_version)
+
+/ Is this column one whose missing values are derived, not null (#1925, #1935)?
 / @param table_name the table
 / @param col the column
-/ @return 1b for `clock on executions and market_data
-derived_column:{[table_name;col] (col=`clock) and table_name in `executions`market_data}
+/ @return 1b for `clock on executions and market_data (attributed by rule), and for a
+/   derived contract column of the FX markout tables
+derived_column:{[table_name;col]
+    $[table_name in `executions`market_data; col=`clock;
+      table_name in key fx_derived; col in fx_derived table_name;
+      0b]}
+
+/ The stored columns the derivation of an FX markout column reads.
+/ @param table_name fx_markout or fx_markout_wide
+/ @param col the column to derive
+/ @return the columns it needs, none for a constant
+fx_needs:{[table_name;col]
+    pf:$[table_name=`fx_markout; `pips; `total_pips];
+    $[col in `clock`contract_version; `$();
+      col=`quote_ccy; enlist `sym;
+      col=`move; `pip_factor,pf;
+      col=`pip_value; `size`pip_factor;
+      col=`quote_amount; `size`pip_factor,pf;
+      col=`price; `venue`fill_id`horizon`kind`price_t0;
+      `venue`fill_id`horizon`kind`price_t1]}
+
+/ The value of column c on the rows whose kind is knd, looked up for every row of its
+/ (venue; fill_id; horizon) - a long table repeats the execution's facts on each component.
+/ @param d the stored columns, as a dictionary
+/ @param knd the component to read
+/ @param c the column to read
+/ @return a float per row, null where the (execution, horizon) has no such component
+by_component:{[d;knd;c]
+    k:flip d`venue`fill_id`horizon;
+    w:where (d`kind)=knd;
+    (d[c] w) (k w)?k}
+
+/ One FX markout column, derived from the columns beside it. A partition that lacks a
+/ column the derivation reads keeps the declared null: nothing is guessed.
+/ @param root the HDB root, whose sym file a symbol column enumerates against
+/ @param table_name fx_markout or fx_markout_wide
+/ @param dir a table directory that holds a `.d`
+/ @param col the column to derive
+/ @return the column, one value per row, enumerated if symbol
+derived_fx:{[root;table_name;dir;col]
+    n:count get ` sv dir,first disk_cols dir;
+    need:fx_needs[table_name;col];
+    if[not all need in disk_cols dir; :declared_default[root;table_name;col]];
+    `sym set get ` sv root,`sym;
+    d:$[count need; need!{[dir;c] v:get ` sv dir,c; $[type[v] within 20 76h; value v; v]}[dir] each need; ()!()];
+    pips_col:$[table_name=`fx_markout; `pips; `total_pips];
+    v:$[col=`clock; n#`unknown;
+        col=`contract_version; n#1;
+        col=`quote_ccy; [u:distinct d`sym; q:{`$-3#string x} each u; q u?d`sym];
+        col=`move; (`float$d pips_col)%`float$d`pip_factor;
+        col=`pip_value; (`float$d`size)%`float$d`pip_factor;
+        col=`quote_amount; (`float$d`size)*(`float$d pips_col)%`float$d`pip_factor;
+        col=`price; by_component[d;`total;`price_t0];
+        col=`ref_t0; by_component[d;`execution;`price_t1];
+        by_component[d;`total;`price_t1]];
+    $[11h=abs type v; (.Q.en[root] flip enlist[`v]!enlist v)`v; v]}
 
 / The clock of each (market, name) pair, by the rules: an exact market-and-name
 / rule wins over a `*` rule for that market, and a pair no rule names is
@@ -241,9 +303,9 @@ repair_dir:{[root;table_name;dir]
         :`table];
     absent:missing_cols[table_name;dir];
     {[root;table_name;dir;col]
-        v:$[derived_column[table_name;col];
-            (.Q.en[root] flip enlist[`v]!enlist derived_clock[root;table_name;dir])`v;
-            declared_default[root;table_name;col]];
+        v:$[not derived_column[table_name;col]; declared_default[root;table_name;col];
+            table_name in key fx_derived; derived_fx[root;table_name;dir;col];
+            (.Q.en[root] flip enlist[`v]!enlist derived_clock[root;table_name;dir])`v];
         add1col[dir;col;v]}[root;table_name;dir] each absent;
     absent}
 
