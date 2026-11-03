@@ -71,6 +71,10 @@ def _failed(prefix: str, stage: str, exc: Exception) -> None:
 #: `--output-dir` (#1857).
 _BUILD_RENAMES = {
     "--output": "--output-dir",
+    # KFK is KX's client library, which UQF_KFK_HOME names; the only --with-*
+    # flag is a --x/--no-x pair like every other (#1890)
+    "--kafka-home": "--kfk-home",
+    "--with-kafka-connector": "--kafka-connector",
     **policy.BUILD_OLD_SPELLINGS,
     **components.BUILD_OLD_SPELLINGS,
 }
@@ -115,10 +119,10 @@ def build(
     override: OverrideOpt = None,
     reason: ReasonOpt = None,
     kafka_home: Annotated[
-        Path | None, typer.Option("--kafka-home", metavar="DIR", help=kafka.HOME_HELP)
+        Path | None, typer.Option("--kfk-home", metavar="DIR", help=kafka.HOME_HELP)
     ] = None,
     with_kafka_connector: Annotated[
-        bool, typer.Option("--with-kafka-connector", help=kafka.CONNECTOR_HELP)
+        bool, typer.Option("--kafka-connector/--no-kafka-connector", help=kafka.CONNECTOR_HELP)
     ] = False,
     python_runtime: components.CarriedPythonRuntime = None,
     frontend_dist: Annotated[

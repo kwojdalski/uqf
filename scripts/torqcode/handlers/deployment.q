@@ -14,7 +14,7 @@
 / .
 / THE FIX, HERE. uqs writes the deployment set - the profile's resolved
 / members, plus every process started since, with what each needs - to the
-/ file UQS_DEPLOYMENT_FILE names (python/uqs/src/uqs/stack/deployment.py).
+/ file UQF_DEPLOYMENT_FILE names (python/uqs/src/uqs/stack/deployment.py).
 / .servers.register, which every row of a connection table goes through on
 / its way into .servers.SERVERS - from process.csv at startup, from
 / discovery's getservices on a refresh, from discovery's procupdate when a
@@ -65,9 +65,9 @@ declaredprocs:{[] exec procname from @[value;`.servers.procstab;{[e] ([]procname
 / @param connectiontab table with a procname column
 / @return the rows to register
 deploymentfilter:{[connectiontab]
-    kept:indeployment[deploymentset[getenv`UQS_DEPLOYMENT_FILE];declaredprocs[];connectiontab];
+    kept:indeployment[deploymentset[getenv`UQF_DEPLOYMENT_FILE];declaredprocs[];connectiontab];
     if[count dropped:distinct (exec procname from connectiontab) except exec procname from kept;
-        .lg.o[`conn;"not registering ",(", " sv string dropped)," - not in this deployment's process set (",getenv[`UQS_DEPLOYMENT_FILE],")"]];
+        .lg.o[`conn;"not registering ",(", " sv string dropped)," - not in this deployment's process set (",getenv[`UQF_DEPLOYMENT_FILE],")"]];
     kept}
 
 / Wrap register once, and only where trackservers.q defined it: a test that

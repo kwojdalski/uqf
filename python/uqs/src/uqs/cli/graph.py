@@ -134,7 +134,7 @@ def describe(name: str, info: dict[str, dict[str, str]], status: dict[str, str])
 
 GraphJson = json_opt(
     '{"direction", "trees": [{process, status, tables, repeat, children: [...]}]} - '
-    "status null with --offline or when the fleet cannot say"
+    "status null with --offline or when the stack cannot say"
 )
 
 
@@ -176,7 +176,7 @@ def graph(
     ] = False,
     offline: Annotated[
         bool,
-        typer.Option("--offline", help="Do not ask the fleet what is up; draw the graph alone."),
+        typer.Option("--offline", help="Do not ask the stack what is up; draw the graph alone."),
     ] = False,
     port: BasePortOpt = None,
     interactive: InteractiveOpt = False,

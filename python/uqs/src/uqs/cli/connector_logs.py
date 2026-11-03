@@ -51,9 +51,9 @@ def logs(
     lines: Annotated[int, typer.Option("--lines", "-l", help="Lines of the log to show")] = 20,
     as_json: LogsJson = False,
 ) -> None:
-    """Show a feed's log, the file `connector status` names.
+    """Show a connector's log, the file `connector status` names.
 
-    The feed's own output, as it wrote it: `connector logs kafka`,
+    The connector's own output, as it wrote it: `connector logs kafka`,
     `connector logs crypto -f`, `connector logs crypto-fills -l 200`.
     """
     if as_json and follow:
