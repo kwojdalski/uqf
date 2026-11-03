@@ -15,12 +15,15 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from rich.text import Text
 from typer.testing import CliRunner
 
 from uqs import cli
+from uqs.cli.safety import dry_run_note
 from uqs.deploy import prune
 from uqs.deploy.config import DeployError, make_config
 
+NOTE = Text.from_markup(dry_run_note()).plain
 R1, R2, R3, R4, R5 = (f"2026100{d}T120000Z-0123456789a{d}" for d in range(1, 6))
 
 
@@ -98,6 +101,37 @@ def test_a_dry_run_lists_the_removals_and_removes_nothing(dest):
     assert result["prune"] == "planned" and result["removed"] == [R3, R5]
     assert _left(dest) == before
     assert not any("rm -rf" in s and "/releases/" in s for _, s in remote.scripts)
+
+
+def test_a_dry_run_takes_no_lock_and_writes_nothing_on_the_server(dest):
+    """#1902: taking the lock is a write - the lock, its owner and heartbeat -
+    and a dry run promises none. It reads the lock instead."""
+    _, _, remote = _prune(dest, 0, dry_run=True)
+    assert not any("mkdir" in s or "> " in s for _, s in remote.scripts)
+    assert not (dest / "deploy.lock").exists()
+
+
+def test_a_dry_run_under_a_held_lock_plans_and_says_the_lock_is_held(dest, log_text):
+    (dest / "deploy.lock").mkdir()
+    (dest / "deploy.lock" / "owner").write_text("head\ncommand=push\nuser=ops\nhost=h\npid=1\n")
+    _, result, _ = _prune(dest, 0, dry_run=True)
+    assert result["prune"] == "planned" and result["removed"] == [R3, R5]
+    assert (dest / "deploy.lock" / "owner").is_file(), "left as it was"
+    assert "another deployment holds" in log_text() and "push" in log_text()
+
+
+def test_the_command_ends_a_dry_run_with_the_note_on_stderr_after_the_json(dest, monkeypatch):
+    """#1902: stdout stays the JSON report a program parses."""
+    from uqs.cli import deploy_server
+
+    monkeypatch.setattr(deploy_server, "Remote", lambda *a, **k: LocalRemote())
+    r = CliRunner().invoke(
+        cli.app,
+        ["deploy", "prune", "--ssh", "h", "--dest", str(dest), "--keep", "0", "--dry-run"],
+    )
+    assert r.exit_code == 0, r.output
+    assert r.stderr.strip().splitlines()[-1] == NOTE
+    assert NOTE not in r.stdout
 
 
 def test_the_lock_is_held_from_before_the_listing_until_after_the_removal(dest):
