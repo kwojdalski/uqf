@@ -463,3 +463,35 @@ def test_deletion_checks_host_before_ssh(served):
     )
     assert response.status_code == 403
     assert not runner.calls
+
+
+def test_deletion_audit_preserves_partial_results(served):
+    client = _client(Loopback())
+    response = client.post(
+        "/services/box/files/delete",
+        json={"paths": ["shared/config/sources.csv", "missing"], "confirmed": True},
+    )
+    assert response.status_code == 200
+    rows = client.get("/activity", params={"action": "files.delete"}).json()["events"]
+    assert len(rows) == 1
+    assert rows[0]["outcome"] == "failed"
+    assert [item["outcome"] for item in rows[0]["items"]] == ["succeeded", "failed"]
+
+
+def test_deletion_timeout_is_audited_as_unknown_and_not_retried(served):
+    calls = []
+
+    def timeout(argv, **kwargs):
+        calls.append(argv)
+        raise subprocess.TimeoutExpired(argv, kwargs["timeout"])
+
+    client = _client(timeout)
+    response = client.post(
+        "/services/box/files/delete",
+        json={"paths": ["shared/config/sources.csv"], "confirmed": True},
+    )
+    assert response.status_code == 504
+    assert "unknown" in response.json()["detail"]
+    (row,) = client.get("/activity", params={"action": "files.delete"}).json()["events"]
+    assert row["outcome"] == "unknown"
+    assert len(calls) == 1

@@ -176,6 +176,7 @@ def delete(
     paths: list[str],
     confirmed: bool,
     runner: Runner = subprocess.run,
+    on_begin: Callable[[], None] | None = None,
 ) -> dict[str, Any]:
     if confirmed is not True:
         raise ValidationFailed("explicit confirmation is required")
@@ -185,10 +186,18 @@ def delete(
         check_path(path)
         if not remote_helper.split_path(path):
             raise BrowseRefused("the deployment root cannot be deleted")
-    return _call(settings, name, {"op": "delete", "paths": paths, "confirmed": True}, runner)
+    return _call(
+        settings, name, {"op": "delete", "paths": paths, "confirmed": True}, runner, on_begin
+    )
 
 
-def _call(settings: Settings, name: str, payload: dict[str, Any], runner: Runner) -> dict[str, Any]:
+def _call(
+    settings: Settings,
+    name: str,
+    payload: dict[str, Any],
+    runner: Runner,
+    on_begin: Callable[[], None] | None = None,
+) -> dict[str, Any]:
     from uqs.deploy import control
     from uqs.deploy.remote import diagnostic
 
@@ -198,6 +207,8 @@ def _call(settings: Settings, name: str, payload: dict[str, Any], runner: Runner
     command = remote_command(r.dest, r.remote_user, remote_helper.encode(request))
     argv = control.ssh_argv(r, (), tty=False, command=command)
     try:
+        if on_begin is not None:
+            on_begin()
         done = runner(
             argv, input=helper_source(), capture_output=True, text=True,
             timeout=TIMEOUT, check=False,
