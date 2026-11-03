@@ -395,12 +395,14 @@ def test_a_lock_left_by_an_exited_run_does_not_block_clearing(status):
 
 def test_remove_checkpoint_reports_what_it_did(status):
     (status / f"{WORKER}.checkpoint").write_text("{}")
-    result = PlainRunner().invoke(cli.app, ["job", "checkpoint", "remove", WORKER])
+    declined = PlainRunner().invoke(cli.app, ["job", "checkpoint", "remove", WORKER], input="n\n")
+    assert declined.exit_code == 1 and (status / f"{WORKER}.checkpoint").exists(), "#1854: it asks"
+    result = PlainRunner().invoke(cli.app, ["job", "checkpoint", "remove", WORKER, "--yes"])
     assert result.exit_code == 0, result.output
     said = "".join(result.output.split())  # the console wraps a long path
     assert f"cleared{WORKER}'scheckpoint({status / f'{WORKER}.checkpoint'})" in said
     assert not (status / f"{WORKER}.lock").exists(), "the lock the clear took is released"
-    again = PlainRunner().invoke(cli.app, ["job", "checkpoint", "remove", WORKER])
+    again = PlainRunner().invoke(cli.app, ["job", "checkpoint", "remove", WORKER, "--yes"])
     assert f"{WORKER} has no checkpoint - nothing to clear" in again.output
 
 

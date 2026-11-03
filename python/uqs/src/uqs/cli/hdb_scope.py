@@ -27,6 +27,7 @@ import typer
 from uqs.attach import config as attach_config
 from uqs.attach import hdb_where, service
 from uqs.attach.hdb_where import AttachedHdb
+from uqs.cli import safety
 from uqs.cli.json_out import emit
 from uqs.cli.safety import dry_run_note
 from uqs.cli.shared import _paths, console
@@ -44,15 +45,9 @@ HdbOpt = Annotated[
     str | None,
     typer.Option("--hdb", help="An HDB directory on this machine, when nothing else names it"),
 ]
-ApplyOpt = Annotated[
-    bool,
-    typer.Option(
-        "--apply", help="Write the plan, after asking; without it, a dry run that writes nothing"
-    ),
-]
-YesOpt = Annotated[
-    bool, typer.Option("--yes", "-y", help="With --apply: do not ask before writing")
-]
+#: The --apply model's options, safety's own (#1854).
+ApplyOpt = safety.ApplyOpt
+YesOpt = safety.ApplyYesOpt
 
 
 @dataclass

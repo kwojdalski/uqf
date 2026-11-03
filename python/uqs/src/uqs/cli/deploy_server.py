@@ -19,7 +19,7 @@ from uqs.cli import deploy_policy as policy
 from uqs.cli.deploy import _failed, deploy_app
 from uqs.cli.json_out import json_opt
 from uqs.cli.renames import alias_command, renamed
-from uqs.cli.safety import ChangesState, OverrideOpt, ReadOnly, ReasonOpt
+from uqs.cli.safety import ChangesState, OverrideOpt, ReadOnly, ReasonOpt, YesOpt
 from uqs.cli.shared import _die, json_refusal
 from uqs.deploy import config, overrides, prune, rollback, status, verify
 from uqs.deploy.prune import RELEASE_ID
@@ -150,8 +150,12 @@ def prune_cmd(
     remote_user: conn.RemoteUser = None,
     connect_timeout: conn.ConnectTimeout = conn.DEFAULT_CONNECT_TIMEOUT,
     command_timeout: conn.CommandTimeout = None,
+    yes: YesOpt = False,
 ) -> None:
     """Remove the oldest releases beyond the newest --keep, under the deploy lock.
+
+    Names what would go and asks first: a removed release cannot be brought
+    back (#1854). `--yes` does not ask.
 
     Never removes the release `current` names, the one a rollback would return
     to, or one whose push is still running - whatever --keep is. Prints what
@@ -168,10 +172,26 @@ def prune_cmd(
                 command_timeout=command_timeout,
             ),
         )
-        code = prune.prune(cfg, remote, keep=keep, dry_run=dry_run)
+        code = prune.prune(
+            cfg, remote, keep=keep, dry_run=dry_run, confirm=None if yes else _confirm_prune
+        )
     except config.DeployError as exc:
         _failed("uqs deploy prune", exc.stage, exc)
     raise typer.Exit(code=code)
+
+
+def _confirm_prune(planned: dict) -> bool:
+    """Ask before `deploy prune` removes anything, naming each release and runtime."""
+    runtimes = planned.get("runtimes", {}).get("removed", [])
+    for name in planned["removed"]:
+        typer.echo(f"  release {name}")
+    for name in runtimes:
+        typer.echo(f"  runtime {name}")
+    return typer.confirm(
+        f"Remove these {len(planned['removed'])} release(s) and {len(runtimes)} runtime(s) "
+        "from the server? This cannot be undone",
+        default=False,
+    )
 
 
 VerifyJson = json_opt(

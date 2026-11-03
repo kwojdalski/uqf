@@ -141,18 +141,20 @@ the pattern, or the shell will try to expand it against your filenames first.
 or changes one, stop the stack and migrate each affected date/table explicitly:
 
 ```
-uqs data migrate trade 2026-01-01 --rename old_price:price --cast price --dry-run
+uqs data migrate trade 2026-01-01 --rename old_price:price --cast price
 uqs data migrate trade 2026-01-01 --rename old_price:price --cast price --apply
 uqs data check
 uqs restart hdb1
 ```
 
-The first command is a dry run. `--cast` authorises a type change only when
-every value survives conversion back to its original type. The applied command
-builds and checks a complete table partition before exchanging it with the old
-one; it prints the old directory's backup path for rollback. A source column not
-named in the current schema must be mapped with `--rename` rather than silently
-dropped. The command refuses segmented HDBs.
+The first command is a dry run: without `--apply` it always is (#1854).
+`--apply` shows the same plan and asks before writing; `--yes` does not ask.
+`--cast` authorises a type change only when every value survives conversion back
+to its original type. The applied command builds and checks a complete table
+partition before exchanging it with the old one; it prints the old directory's
+backup path for rollback. A source column not named in the current schema must
+be mapped with `--rename` rather than silently dropped. The command refuses
+segmented HDBs.
 
 ### One table, in any HDB
 
@@ -1152,18 +1154,20 @@ is not a TorQ process, such as the external feeds.
 
 **`uqs start --follow` (`-f`) is the foreground form of all this**: it starts
 what `start` would - the same names, `all`, or `--profile` - then streams those
-processes' logs to this console until Ctrl-C, which stops what it started, the
-way `docker compose up` does. The console is the run. `restart -f` does the same
-after a restart.
+processes' logs to this console until Ctrl-C. Ctrl-C ends the stream, as it does
+for `uqs logs -f`, and the processes keep running (#1854). `--stop-on-exit`
+makes the console the run, the way `docker compose up` does: Ctrl-C then stops
+what it started. `restart -f` does the same after a restart.
 
 ```
-uqs start -f                          # the default set, streamed; Ctrl-C stops it
+uqs start -f                          # the default set, streamed; Ctrl-C leaves it up
+uqs start -f --stop-on-exit           # ... and Ctrl-C stops what it started
 uqs start rdb1 fxpositions1 -f        # just these
 uqs start --profile fx -f --level WARNING
 ```
 
-What a process prints while it loads is shown too. Processes already running
-when it began are left running at Ctrl-C.
+What a process prints while it loads is shown too. With `--stop-on-exit`,
+processes already running when it began are left running at Ctrl-C.
 
 ### Where a process stopped
 
@@ -1639,10 +1643,10 @@ still reads rdb1. A job or worker is JOB in every command (`job backfill JOB`,
 
 Fewer, regular top-level commands (#1734):
 
-  | old                   | new                      |
-  | --------------------- | ------------------------ |
-  | `uqs up [PROC...]`    | `uqs start -f [PROC...]` |
-  | `uqs raw -- VERB ...` | `uqs exec -- VERB ...`   |
+  | old                   | new                                     |
+  | --------------------- | --------------------------------------- |
+  | `uqs up [PROC...]`    | `uqs start -f --stop-on-exit [PROC...]` |
+  | `uqs raw -- VERB ...` | `uqs exec -- VERB ...`                  |
 
 `start`, `restart` and `stop` take one option set: the processes positionally,
 `--profile` and `--base-port` on all three; `start` and `restart` add the same
@@ -1656,16 +1660,16 @@ first.
 
 One safety vocabulary (#1732):
 
-  | old                                                         | new                                                       |
-  | ---                                                         | ---                                                       |
-  | `start --show-command`                                      | `start --dry-run` / `-n`                                  |
-  | `start` `restart --skip-q-version-check REASON`             | `--override q-version-check --reason REASON`              |
-  | `start` `restart --skip-profile-budget-check REASON`        | `--override profile-budget-check --reason REASON`         |
-  | `deploy push --accept-digest REASON`, and so on             | `deploy push --override accept-digest --reason REASON`    |
-  | `job attach --override CODE:COMPONENT --override-reason R`  | `job attach --override CODE:COMPONENT --reason R`         |
-  | `job attach --yes`, `job detach --yes`, `uqs --yes`         | also `-y`                                                 |
-  | `job preview --dry-run`                                     | dropped: a preview never writes                           |
-  | `data migrate` (dry by default)                             | `data migrate --dry-run`; writing still says `--apply`    |
+  | old                                                         | new                                                          |
+  | ---                                                         | ---                                                          |
+  | `start --show-command`                                      | `start --dry-run` / `-n`                                     |
+  | `start` `restart --skip-q-version-check REASON`             | `--override q-version-check --reason REASON`                 |
+  | `start` `restart --skip-profile-budget-check REASON`        | `--override profile-budget-check --reason REASON`            |
+  | `deploy push --accept-digest REASON`, and so on             | `deploy push --override accept-digest --reason REASON`       |
+  | `job attach --override CODE:COMPONENT --override-reason R`  | `job attach --override CODE:COMPONENT --reason R`            |
+  | `job attach --yes`, `job detach --yes`, `uqs --yes`         | also `-y`                                                    |
+  | `job preview --dry-run`                                     | dropped: a preview never writes                              |
+  | `data migrate` (dry by default)                             | still dry by default; `--apply` writes, after asking (#1854) |
 
 Every command that changes state now takes `--dry-run`/`-n`, among them `stop`,
 `restart`, `config set`, `data seed`, `job receive`, `job backfill`
@@ -1673,10 +1677,19 @@ Every command that changes state now takes `--dry-run`/`-n`, among them `stop`,
 `connector start`/`stop`/`restart`, `setup odbc install`/`rollback`,
 `deploy component build` and `target add`/`remove`. The old
 `--accept-...`/`--skip-...` options each took their own reason; given together,
-their reasons are joined into the one `--reason`. `data migrate` was dry unless
-`--apply`: for one release it refuses to run with neither `--dry-run` nor
-`--apply`, so a script written for the old default does not start writing, and
-the release after writes by default.
+their reasons are joined into the one `--reason`.
+
+One write model per kind of change (#1854). A command that changes this machine
+writes by default and takes `--dry-run`/`-n`. A command that rewrites data in
+place - `data check`, `data alter`, `data migrate`, `target adopt` - is a dry
+run by default and writes only with `--apply`, which shows the plan and asks;
+`--yes`/`-y` answers that question, and nothing else. Their `--dry-run` says
+nothing more than the default: it still parses for one release, hidden, and is
+refused beside `--apply`. `data migrate`'s default, which was to flip to
+writing, stays a dry run. Every deletion that cannot be undone asks first and
+takes `--yes`/`-y`: `deploy prune`, `job checkpoint remove`, `target remove`
+(which `target revert` can undo), beside `job remove` and
+`job attachment remove`.
 
 Every bypass is a named override with a reason (#1852): the bare flags that
 lifted a refusal and recorded no reason are `--override NAME --reason TEXT`,
