@@ -9,8 +9,9 @@ from typing import Annotated
 import typer
 
 from uqs import timerange
+from uqs.cli.hdb_scope import tables_given
 from uqs.cli.range_options import DateOpt, LastOpt, RangeFromOpt, RangeToOpt
-from uqs.cli.renames import old_spelling, warn_renamed
+from uqs.cli.renames import old_spelling, renamed, warn_renamed
 from uqs.cli.safety import ChangesState, dry_run_note
 from uqs.cli.shared import (
     _die,
@@ -37,8 +38,9 @@ def dates_as_range(text: str) -> tuple[str | None, str | None]:
 
 
 #: A conflict policy is `--on-conflict` on every command (#1857); `--overwrite`
-#: was this one's, and is `--on-conflict replace` now.
-@data_app.command("seed", cls=ChangesState)
+#: was this one's, and is `--on-conflict replace` now. Tables are chosen one
+#: way on every command: a repeatable `--table` (#1856).
+@data_app.command("seed", cls=renamed({"--tables": "--table"}, ChangesState))
 def seed(
     from_runtime: Annotated[
         str | None,
@@ -49,8 +51,12 @@ def seed(
         ),
     ] = None,
     tables: Annotated[
-        str | None,
-        typer.Option(help="Comma-separated tables; default every table this runtime declares"),
+        list[str] | None,
+        typer.Option(
+            "--table",
+            help="Copy only this table; repeatable, and NAME,NAME also works. Default: every "
+            "table this runtime declares",
+        ),
     ] = None,
     range_from: RangeFromOpt = None,
     range_to: RangeToOpt = None,
@@ -118,7 +124,7 @@ def seed(
         source = paths_for_root(target.repo_root, from_runtime)
         if not dry_run:
             runtime.bootstrap(target)
-        wanted = [t.strip() for t in tables.split(",") if t.strip()] if tables else None
+        wanted = tables_given(tables) or None
         replace = on_conflict == "replace"
         report = hdb_seed.seed(target, source, wanted, first, last_day, replace, dry_run)
     except UqsError as exc:
