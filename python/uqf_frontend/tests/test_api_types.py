@@ -65,6 +65,9 @@ PAIRS = {
     "ProcessHealth": "ProcessHealthOut",
     "ServiceTarget": "ServiceTargetOut",
     "Services": "ServicesResponse",
+    "RemoteEntry": "RemoteEntryOut",
+    "Release": "ReleaseOut",
+    "RemoteFiles": "RemoteFilesResponse",
     **REQUESTS,
 }
 
