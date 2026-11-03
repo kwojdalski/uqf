@@ -138,8 +138,8 @@ ends up committed beside it), and the gateway's access list refuses an empty
 one:
 
 ```bash
-export UQF_FRONTEND_GATEWAY_USER=admin UQF_FRONTEND_GATEWAY_PASSWD=admin
-export UQF_FRONTEND_DATA_USER=browser UQF_FRONTEND_DATA_PASSWD=browser
+export UQF_FRONTEND_GATEWAY_USER=admin UQF_FRONTEND_GATEWAY_PASSWORD=admin
+export UQF_FRONTEND_DATA_USER=browser UQF_FRONTEND_DATA_PASSWORD=browser
 ```
 
 `admin:admin` is what `uqs query` uses against the generated appconfig. The
@@ -159,13 +159,13 @@ export UQF_FRONTEND_STACK_ROOT="$PWD"
 
 Configuration is environment-only, so credentials stay server-side:
 
-  | Variable                                | Default                                                                                                                         |
-  | ---                                     | ---                                                                                                                             |
-  | `UQF_FRONTEND_STACK_ROOT`               | unset — the gateway at `localhost:6057`; fleet health, the query log, backfill status and `/ui/` report themselves unconfigured |
-  | `UQF_FRONTEND_GATEWAY_USER` / `_PASSWD` | empty — set both; `admin`/`admin` for the demo stack                                                                            |
-  | `UQF_FRONTEND_DATA_USER` / `_PASSWD`    | empty — set both; `browser`/`browser` for the demo stack. Without it `/query` refuses with 503, naming these                    |
-  | `UQF_FRONTEND_TIMEOUT`                  | `30`                                                                                                                            |
-  | `UQF_FRONTEND_MAX_ROWS`                 | `10000`                                                                                                                         |
+  | Variable                                  | Default                                                                                                                         |
+  | ---                                       | ---                                                                                                                             |
+  | `UQF_FRONTEND_STACK_ROOT`                 | unset — the gateway at `localhost:6057`; fleet health, the query log, backfill status and `/ui/` report themselves unconfigured |
+  | `UQF_FRONTEND_GATEWAY_USER` / `_PASSWORD` | empty — set both; `admin`/`admin` for the demo stack                                                                            |
+  | `UQF_FRONTEND_DATA_USER` / `_PASSWORD`    | empty — set both; `browser`/`browser` for the demo stack. Without it `/query` refuses with 503, naming these                    |
+  | `UQF_FRONTEND_TIMEOUT`                    | `30`                                                                                                                            |
+  | `UQF_FRONTEND_MAX_ROWS`                   | `10000`                                                                                                                         |
 
 A malformed numeric value, or a stack root that is not the repository, fails at
 startup rather than falling back to a default.

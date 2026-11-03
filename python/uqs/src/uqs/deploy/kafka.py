@@ -2,7 +2,7 @@
 
 Two consumers read Kafka, and a release carries neither unless asked:
 
-  native   `uqs deploy build --kafka-home DIR` packages KX's kfk (kfk.q,
+  native   `uqs deploy build --kfk-home DIR` packages KX's kfk (kfk.q,
            libkfk.so), the shared libraries libkfk.so resolves to on the
            builder - librdkafka and the rest, never the C library (GLIBC) -
            and the redistribution notices found in DIR. They go under
@@ -11,7 +11,7 @@ Two consumers read Kafka, and a release carries neither unless asked:
            process the release starts - every job that loads kfk through
            .qpipe.job.kafka_feed.load_library - finds the same library. No
            job names it: it is one setting for the release.
-  python   `--with-kafka-connector` exports the lock with the uqs `kafka`
+  python   `--kafka-connector` exports the lock with the uqs `kafka`
            extra, so confluent-kafka's locked wheel for the target is among
            the release's wheels (uqs.deploy.payload); `uqs connector start
            kafka` refuses without it (uqs.stack.kafka_extra).
@@ -51,7 +51,7 @@ KAFKA_DIR = f"{RELEASE_DIR}/kafka"
 #: The resolved shared libraries, LD_LIBRARY_PATH's first entry on the server.
 LIB_SUBDIR = "lib"
 NOTICE_SUBDIR = "notices"
-#: What --kafka-home must hold: the q half and the C half of KX's kfk v1.6.6.
+#: What --kfk-home must hold: the q half and the C half of KX's kfk v1.6.6.
 REQUIRED = ("kfk.q", "libkfk.so")
 #: `uqs deploy build`'s two options (uqs.cli.deploy).
 HOME_HELP = (
@@ -186,12 +186,12 @@ def package(
     unresolved dependency or a DIR with no redistribution notice."""
     home = home.expanduser().resolve()
     if not home.is_dir():
-        raise ReleaseError("kafka", f"--kafka-home {home} is not a directory")
+        raise ReleaseError("kafka", f"--kfk-home {home} is not a directory")
     missing = [f for f in REQUIRED if not (home / f).is_file()]
     if missing:
         raise ReleaseError(
             "kafka",
-            f"--kafka-home {home} lacks {', '.join(missing)} - it must hold kfk.q and libkfk.so "
+            f"--kfk-home {home} lacks {', '.join(missing)} - it must hold kfk.q and libkfk.so "
             "built from KxSystems/kafka v1.6.6 (docs/services/kafka.md)",
         )
     so = home / "libkfk.so"
@@ -205,7 +205,7 @@ def package(
     if not found:
         raise ReleaseError(
             "kafka",
-            f"--kafka-home {home} holds no LICENSE, NOTICE or COPYING file - kfk and "
+            f"--kfk-home {home} holds no LICENSE, NOTICE or COPYING file - kfk and "
             "librdkafka are redistributed with their licences: copy kfk's LICENSE and "
             "librdkafka's LICENSE* files into it",
         )
@@ -262,8 +262,8 @@ def select(
     into: Path,
     runner: Runner = subprocess.run,
 ) -> Selected:
-    """`--kafka-home` packaged into `into` (refused before anything else is
-    built), and `--with-kafka-connector` as the `kafka` extra."""
+    """`--kfk-home` packaged into `into` (refused before anything else is
+    built), and `--kafka-connector` as the `kafka` extra."""
     sel = Selected(extras=(EXTRA,) if connector else ())
     if home is not None:
         sel.staged, sel.record = into, package(Path(home), arch, into, runner)

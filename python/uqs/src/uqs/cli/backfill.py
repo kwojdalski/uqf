@@ -178,7 +178,7 @@ def backfill(
     --source-version is required too unless the worker declares a default
     source_version - one whose source is never restated. Pass a new
     --source-version to re-fetch windows already covered. The process registers with discovery, so
-    the fleet has to be up, and it exits when the range is done - follow it with
+    the stack has to be up, and it exits when the range is done - follow it with
     `uqs logs <process> -f`.
 
     e.g.
@@ -189,7 +189,7 @@ def backfill(
     `--mode plan` lists the windows a run would fetch without opening the
     source or writing anything; `--dry-run` (`--mode dry-run`) fetches them and
     writes nothing. Their output is in the process's log, like a run's. Every
-    mode but a run rehearses against the data directory as the fleet's last
+    mode but a run rehearses against the data directory as the stack's last
     start left it, and never bootstraps it: on a tree not yet started it is
     refused, naming `uqs start`.
 

@@ -57,7 +57,6 @@ GetJson = json_opt(
     '{"process", "fields": [{field, value}]} - or, given a FIELD, {"process", "field", "value"}'
 )
 
-
 #: The old spellings `config show` still takes (#1729).
 _SHOW_RENAMES = {"--port": "--base-port", "--raw": "--unresolved"}
 
@@ -222,6 +221,7 @@ _AttachOpt = attach_opt(
             "--print": "--show-command",
             "--columns": "--pane-columns",
             "-c": "--pane-columns",
+            "--run": "--stamp",  # a log's stamp, not the run_id "run" means (#1890)
             **ATTACHMENT,
         },
         ReadOnly,
@@ -279,7 +279,7 @@ def logs(
     run: Annotated[
         str | None,
         typer.Option(
-            "--run",
+            "--stamp",
             help="With --attachment: an older run, by its log's file name or a prefix of its "
             "stamp (e.g. 20261027T1304)",
         ),
@@ -304,7 +304,7 @@ def logs(
 
     What the options combine with: the PROCs are what is read, every
     option a filter on how. `--attachment ATTACHMENT` replaces PROC - one attachment's
-    run, narrowed by `--worker` (a worker, or <dataset>.receiver) and `--run`,
+    run, narrowed by `--worker` (a worker, or <dataset>.receiver) and `--stamp`,
     which need it. `--channel` and `--multitail` each read PROC another way:
     `--id` needs `--channel`; `--stream`, `--pane-columns` and `--show-command` need
     `--multitail`. `--follow`, `--lines` and `--level` go with the files and
@@ -317,7 +317,7 @@ def logs(
                 _die(UqsUsageError(f"--json prints the history: {option} does not apply with it"))
                 return
     if attach is None:
-        for option, used in {"--worker": worker, "--run": run}.items():
+        for option, used in {"--worker": worker, "--stamp": run}.items():
             if used is not None:
                 _die(UqsUsageError(f"{option} needs --attachment"))
                 return

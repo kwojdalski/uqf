@@ -1653,7 +1653,7 @@ def test_feed_status_with_no_name_shows_every_feed(monkeypatch):
         _patch(monkeypatch, module, fn, result={"running": fn})
     result = runner.invoke(cli.app, ["connector", "status"])
     assert result.exit_code == 0
-    for title in ("kafka feed", "crypto recorder", "crypto fills recorder"):
+    for title in ("kafka connector", "crypto recorder", "crypto fills recorder"):
         assert title in result.stdout
 
 

@@ -178,6 +178,14 @@ RENAMED_AFTER: dict[str, frozenset[str]] = {
             "uqs data replay --schema",
             # #1855: process_overrides.csv is `config list`; `override` is a bypass
             "uqs list overrides",
+            # #1890: one name per thing across surfaces
+            "uqs data replay --dir",
+            "uqs logs --run",
+            "uqs deploy build --kafka-home",
+            "uqs deploy build --with-kafka-connector",
+            "uqs connector start --topic",
+            "uqs connector restart --topic",
+            "uqs job new --kind external",
             # #1854: a command written with --apply is dry by default; its
             # --dry-run says nothing more
             "uqs data alter --dry-run",

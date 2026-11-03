@@ -88,7 +88,7 @@ def new_job(
         str | None,
         typer.Option(
             "--raw-table",
-            help="`external`: the table the Python publisher writes. backfill: the physical "
+            help="`connector`: the table the Python publisher writes. backfill: the physical "
             "table a new source's adapter reads, with --raw-columns" + for_kinds("--raw-table"),
         ),
     ] = None,
@@ -133,7 +133,7 @@ def new_job(
     start_with_all: Annotated[
         bool,
         typer.Option(
-            "--start-with-all",
+            "--start-with-all/--no-start-with-all",
             help="Start it with `uqs start all` (default: on demand)"
             + for_kinds("--start-with-all"),
         ),
@@ -346,9 +346,9 @@ def new_job(
                 profile=profile,
                 unprofiled=unprofiled,
             )
-        if kind == "external":
+        if kind == "connector":
             if not (raw_table and publishes and shape):
-                raise UqsUsageError("--kind external needs --raw-table, --publishes and --schema")
+                raise UqsUsageError("--kind connector needs --raw-table, --publishes and --schema")
             return external.external_feed(
                 name,
                 raw_table,

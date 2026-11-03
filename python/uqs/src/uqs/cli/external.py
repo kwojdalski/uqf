@@ -8,12 +8,12 @@ rather than lifecycle commands. Called
 `connector` rather than `feed` (#1417) because a feed is also a TorQ-managed q
 process here; these supervise the publisher OUTSIDE the plant.
 
-One `start` for every feed, rather than a sub-app per feed, because every
-feed has the same five verbs. Each feed's options are its own: one given to a
-feed it does not belong to is refused by name, as `uqs job new` refuses an
+One `start` for every connector, rather than a sub-app per connector, because
+every connector has the same five verbs. Each one's options are its own: one given to
+a connector it does not belong to is refused by name, as `uqs job new` refuses an
 option for another kind.
 
-This module names no feed (#1776). Every connector declares itself in its
+This module names no connector itself (#1776). Every connector declares itself in its
 `*_feed.py` module - its options, what it produces, its status title -
 `external.feeds.discover()` finds them, and `start`'s options are built from
 theirs: its signature is generated, and `restart` copies it.
@@ -21,7 +21,7 @@ theirs: its signature is generated, and `restart` copies it.
 The whole lifecycle lives in this group rather than as `uqs start
 connector:NAME` beside the stack's verbs (#1734): a connector is not a torq.sh
 process, so it shares none of `start`'s options (`--profile`, `--follow`, the
-skips) while each feed has start options of its own, and #1738's rule 1 is
+skips) while each connector has start options of its own, and #1738's rule 1 is
 noun, then verb. Its log is one plain file, not a TorQ out_/err_ pair.
 
 A secret option - the tickerplant credential, an API key - is never taken on
@@ -54,9 +54,8 @@ from uqs.paths import UqsError, UqsUsageError, repo_root
 connector_app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
-    help="External connectors: start, stop, restart, status, logs.\n\n"
-    "The publishers outside the plant: start, stop, restart, status and logs of the "
-    "publishers outside the plant "
+    help="Connectors: start, stop, restart, status, logs.\n\n"
+    "The processes outside the stack "
     "(kafka, crypto, crypto-fills, and those installed bundles carry) that write into its "
     "tickerplant. These supervise external processes, not the TorQ-managed q processes "
     "`uqs start` runs.",
@@ -170,7 +169,7 @@ def _start_signature() -> inspect.Signature:
 
 
 def start(name: str, dry_run: bool = False, **options: Any) -> None:
-    """Start a feed publishing onto the running stack's tickerplant.
+    """Start a connector publishing onto the running stack's tickerplant.
 
     kafka: a topic onto `kafka_message`, decoded and deduplicated by kafka_flow1; needs
     a reachable broker and `confluent-kafka` (the uqs `kafka` extra).
@@ -304,7 +303,7 @@ def _takes_start_options(fn: Any) -> Any:
 def restart(name: str, dry_run: bool = False, **options: Any) -> None:
     """Restart a connector with the options given here.
 
-    Stops a feed if it is running, then starts it again - with exactly
+    Stops a connector if it is running, then starts it again - with exactly
     `start`'s options, which are not remembered from the last start."""
     feed = _feed(name)
     if dry_run:
@@ -320,7 +319,8 @@ def restart(name: str, dry_run: bool = False, **options: Any) -> None:
 
 
 StatusJson = json_opt(
-    '{"connectors": [{name, running: bool, pid: int or null, log, ...each feed\'s own fields}], '
+    '{"connectors": [{name, running: bool, pid: int or null, log, '
+    "...each connector's own fields}], "
     '"broken": [{name, error}] only when an installed connector did not load}'
 )
 
