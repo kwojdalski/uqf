@@ -197,7 +197,10 @@ def test_each_q_hook_runs_its_tests_through_pytest_and_no_lane_runs_them_too() -
     )
     hook = (REPO / "scripts/dev/python_tests_hook.py").read_text()
     assert 'NOT_Q_HOOKS = ["-m", "not q_backend"]' in hook
-    assert hook.count("*NOT_Q_HOOKS]") == 2, "both modes leave them out"
+    # every run the hook makes - the whole suite, testmon's pick, the record's -
+    # is PYTEST, which leaves them out
+    assert "PYTEST = [" in hook and hook.count("*NOT_Q_HOOKS]") == 1
+    assert hook.count("[*PYTEST,") == 3
     coverage = _hook(config, "q-coverage")
     assert "-m coverage --require-q kdbx tests/qrun/test_q_coverage.py" in coverage
 
