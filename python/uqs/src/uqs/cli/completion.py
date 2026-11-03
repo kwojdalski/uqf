@@ -163,7 +163,9 @@ def summary_sort_column() -> list[str]:
 @_never_raises
 def summary_columns(incomplete: str) -> list[str]:
     if "," not in incomplete:
-        return ["all", "status", *listing.SUMMARY_ALL_COLUMNS]
+        from uqs.cli.summary_columns import SUMMARY_PRESETS
+
+        return [*SUMMARY_PRESETS, *listing.SUMMARY_ALL_COLUMNS]
     return _comma_list(listing.SUMMARY_ALL_COLUMNS, incomplete)
 
 
@@ -177,10 +179,36 @@ def plant_tables(incomplete: str) -> list[str]:
     return _comma_list(sorted(_plant_tables()), incomplete)
 
 
+@_never_raises
+def bounded_datasets() -> list[str]:
+    """Every dataset a bounded worker fills - q's own list (q_facts)."""
+    from uqs.generated import q_facts
+
+    return sorted(q_facts.BOUNDED_DATASET_TIME_COLUMNS)
+
+
+@_never_raises
+def overrides(ctx: typer.Context) -> list[tuple[str, str]]:
+    """The overrides the command being typed takes - `uqs override list`'s
+    catalogue (cli/safety.py) - each with what it bypasses. One waived per
+    component is offered as `ID:`, for the component to follow."""
+    from uqs.cli import safety
+
+    command = " ".join(ctx.command_path.split()[1:])
+    return [
+        (g.id + (":" if g.component_scoped else ""), g.description)
+        for g in safety.catalog()
+        if command in g.commands
+    ]
+
+
 def choices(*values: str) -> Callable[[], list[str]]:
-    """A completer for an option whose values are a fixed set."""
+    """A completer for an option whose values are a fixed set. The set is kept
+    on it as `choice_values`, which test_cli_conventions.py reads to hold the
+    option's help to it."""
 
     def complete() -> list[str]:
         return list(values)
 
+    complete.choice_values = values  # ty: ignore[unresolved-attribute]
     return complete

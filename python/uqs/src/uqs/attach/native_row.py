@@ -66,6 +66,7 @@ from uqs.attach import config
 from uqs.attach.config import Attachment, AttachmentError
 from uqs.paths import UqsError, UqsPaths, paths_for_root
 from uqs.stack.attached_publisher import STARTER_ACCESS_LIST, Auth, auth_for
+from uqs.stack.odbc_home import ODBC_HOME_ENV
 
 #: The file in the attachment's folder a registered row's qcmd names.
 LAUNCHER = "native_start.sh"
@@ -75,8 +76,6 @@ TREE_VARS = ("UQF_ROOT", "UQF_SCRIPTS", "KDBSERVCONFIG", "KDBSERVCODE")
 #: The columns a registration writes besides the ones it copies; a registry
 #: without one of them cannot hold the row.
 NEEDED = ("host", "port", "proctype", "procname", "load", "startwithall", "qcmd")
-#: Where the ODBC home is named (stack/odbc_home.ODBC_HOME_ENV).
-ODBC_HOME_ENV = "UQS_ODBC_HOME"
 #: Why a registration cannot tell how a native start of the publisher authenticates.
 UNKNOWN_AUTH = (
     "{proc} cannot be registered: {why}, and KDBSECURE is not set, so how a native start of it "

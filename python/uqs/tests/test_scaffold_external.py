@@ -218,7 +218,7 @@ def test_a_scaffolded_feed_with_options_reaches_connector_start_help():
     assert done.returncode == 0, done.stderr
     # CI forces colour: compare the text without its escape codes
     out = re.sub(r"\x1b\[[0-9;]*m", "", done.stdout)
-    assert "--ws-url" in out and "Websocket to subscribe to (ws)" in out
+    assert "--ws-url" in out and "Websocket to subscribe to" in out and "(ws)" in out
     assert "would restart ws with ws_url=y" in out
 
 

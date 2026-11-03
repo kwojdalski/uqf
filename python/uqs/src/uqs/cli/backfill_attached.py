@@ -22,6 +22,7 @@ from uqs.cli.json_out import emit
 from uqs.cli.shared import _die, _paths, console, log
 from uqs.paths import UqsError, UqsUsageError
 from uqs.stack import backfill as stack_backfill
+from uqs.stack import run_modes
 from uqs.stack.run_modes import MODES
 
 
@@ -48,7 +49,7 @@ def run(
 
     `waived` ({finding id: reason}, from safety.given) is honoured by plan, dry-run and run
     on this machine, each admitting afresh with it; refused with --writer and in validate."""
-    mode = mode or "run"
+    mode = mode or run_modes.DEFAULT_MODE
     if mode not in MODES:
         _die(UqsUsageError(f"--mode {mode!r} is not one of {', '.join(MODES)}"))
         return
