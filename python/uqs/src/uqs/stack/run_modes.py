@@ -44,3 +44,8 @@ EXECUTION_MODES = tuple(mode for mode in MODES if mode not in READ_ONLY_MODES)
 # A mode q adds executes unless q lists it read-only; tests/test_run_modes.py
 # holds the two halves to q's whole list, since --wait, the capability check
 # and the attached-backfill dispatch each branch on this split.
+
+#: The modes that rehearse a run rather than make it - every one but `run`.
+#: Their promise is to write nothing, so `uqs job backfill` starts them
+#: without bootstrapping the data directory first (stack/backfill.py, #1902).
+REHEARSAL_MODES = tuple(mode for mode in MODES if mode != "run")

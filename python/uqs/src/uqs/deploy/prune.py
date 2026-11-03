@@ -174,7 +174,8 @@ def _runtimes(found: list[str], left: list[dict]) -> dict:
 
 def prune_locked(dep: Deployment, keep: int, dry_run: bool = False) -> dict:
     """Prune with the lock already held - by `prune`, or by a push after it
-    activated. Returns what stayed, what went and the bytes freed."""
+    activated - or, as a dry run that removes nothing, without it (#1902).
+    Returns what stayed, what went and the bytes freed."""
     if keep < 0:
         raise DeployError("arguments", "--keep must be 0 or more")
     result = decide(_listing(dep), keep)
@@ -208,21 +209,26 @@ def prune(
     confirm: Callable[[dict], bool] | None = None,
 ) -> int:
     """Remove the server's releases beyond the newest `keep`, under the lock.
+    A dry run lists them without taking it (Deployment.read_lock, #1902).
 
     With `confirm`, what would go is decided first, under the same lock, and
     handed to it; nothing is removed unless it answers yes (#1854) - a removed
     release cannot be brought back. Exits 1 when declined."""
     dep = Deployment(cfg, remote)
     dep.check_sudo()
+    if dry_run:  # reads the lock, takes nothing: Deployment.read_lock says why
+        dep.read_lock("prune")
+        print(json.dumps(prune_locked(dep, keep, dry_run=True), indent=2), file=out)
+        return 0
     dep.take_lock("prune")
     try:
-        if confirm is not None and not dry_run:
+        if confirm is not None:
             planned = decide(_listing(dep), keep)
             going = planned["removed"] + planned.get("runtimes", {}).get("removed", [])
             if going and not confirm(planned):
                 print(json.dumps({"prune": "declined", **planned}, indent=2), file=out)
                 return 1
-        result = prune_locked(dep, keep, dry_run)
+        result = prune_locked(dep, keep)
     finally:
         dep.release_lock()
     print(json.dumps(result, indent=2), file=out)

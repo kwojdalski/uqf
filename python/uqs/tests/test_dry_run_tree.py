@@ -41,17 +41,15 @@ NOTE = Text.from_markup(dry_run_note()).plain
 #: The note of a command whose dry run is its default: "... Run it again with --apply".
 APPLY_NOTE = Text.from_markup(dry_run_note("with --apply")).plain.rstrip(".")
 
-#: The commands whose dry run is allowed to write, each with why: those marked
-#: `dry_run_starts` (cli/safety.py), which is why `uqs --target` asks before
-#: their dry run too (cli/target_confirm.py).
-EXEMPT = {
-    path: trait_of(cmd.command, "dry_run_starts")
-    for path, cmd in LEAVES.items()
-    if trait_of(cmd.command, "dry_run_starts")
-}
+#: The commands whose dry run starts a process - the worker, to fetch and
+#: transform every window (#1732) - so `uqs --target` asks before it:
+#: those marked `dry_run_starts` (cli/safety.py, #1893). It no
+#: longer bootstraps the data directory to do so (#1902): here, on an empty
+#: data root, it refuses and changes nothing, like every other case.
+STARTS_A_PROCESS = {path for path, cmd in LEAVES.items() if trait_of(cmd.command, "dry_run_starts")}
 
-#: Whose dry run prints its report as the JSON document a program reads, and so
-#: has no prose last line: deploy keeps stdout for what another program reads.
+#: Whose dry run prints its report as the JSON document a program reads: deploy
+#: keeps stdout for that, so the note is stderr's last line instead (#1902).
 JSON_REPORT = {"deploy prune", "deploy rollback"}
 
 
@@ -128,6 +126,7 @@ CASES = [
     Case("deploy prune", ("--keep", "1", "--ssh", NOWHERE, "--dest", "/opt/x")),
     Case("deploy push", ("nosuch.tar.gz", "--ssh", NOWHERE, "--dest", "/opt/x")),
     Case("deploy rollback", ("--ssh", NOWHERE, "--dest", "/opt/x")),
+    Case("job backfill", ("demo_deals_backfill", "--source-version", "v1", "--date", "2026-09-13")),
     Case("job attachment add", ("nosuch",)),
     Case("job attachment remove", ("nosuch",)),
     Case("job attachment contract approve", ("nosuch.json", "--attach", "nosuch")),
@@ -176,8 +175,8 @@ def _dry_run_commands() -> set[str]:
 
 def test_every_dry_run_is_walked():
     walked = {c.command for c in CASES}
-    missing = _dry_run_commands() - walked - EXEMPT.keys()
-    stale = (walked | EXEMPT.keys()) - _dry_run_commands()
+    missing = _dry_run_commands() - walked
+    stale = walked - _dry_run_commands()
     assert not missing, f"give each a Case: {sorted(missing)}"
     assert not stale, f"no longer a changes-state command with --dry-run: {sorted(stale)}"
 
@@ -221,7 +220,9 @@ def test_a_dry_run_ends_with_the_note(case, shared_repo):
     if code != 0:
         pytest.skip(f"refused (exit {code}): the note is a successful dry run's last line")
     if case.command in JSON_REPORT:
-        pytest.skip("its stdout is a JSON report")
+        lines = [line.rstrip() for line in err.splitlines() if line.strip()]
+        assert lines and lines[-1] == NOTE, f"stderr:\n{err}"
+        return
     lines = [line.rstrip() for line in out.splitlines() if line.strip()]
     if case.dry_by_default:  # its note names --apply, how to act on it (#1854)
         assert lines and lines[-1].startswith(APPLY_NOTE), f"stdout:\n{out}\n--- stderr\n{err}"
@@ -232,10 +233,6 @@ def test_a_dry_run_ends_with_the_note(case, shared_repo):
 @pytest.mark.parametrize("case", CASES, ids=_id)
 def test_target_sends_a_dry_run_unasked_only_once_it_is_walked_here(case):
     """`uqs --target` sends a dry run without asking (cli/target_confirm.py):
-    sound only for a dry run this file shows writes nothing."""
-    assert changes_the_server(case.argv) is False
-
-
-@pytest.mark.parametrize("command", sorted(EXEMPT))
-def test_target_asks_before_a_dry_run_that_writes(command):
-    assert changes_the_server([*command.split(), "w", "--dry-run"]) is True
+    sound only for a dry run this file shows writes nothing. A backfill's
+    still starts a process, so it asks."""
+    assert changes_the_server(case.argv) is (case.command in STARTS_A_PROCESS)
