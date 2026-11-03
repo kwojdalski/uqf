@@ -73,9 +73,28 @@ it the API runs alone.
   `manual`, and each shows up/down when the Fleet view has a process.csv.
   Then start/stop/restart, a process.csv field override, a live worker-config
   value, or a backfill run.
+  Stop and restart ask to be confirmed first; Escape or Cancel backs out.
+- **Activity:** the history `GET /activity` serves - what operators did here
+  and the server's audit of every write, whoever sent it - filtered by time,
+  this session, action, target, outcome and source. Choosing a request id shows
+  one operation: the click, the request and its result. It says when history
+  is in memory only or writes to it have failed, and shows a claimed user as
+  unverified.
 - **Fleet, Queue, Connections, Usage:** the existing operational endpoints,
   including partial failures, identity mismatches, unresolved ports, optional
   processes and unconfigured usage collection.
+
+## Activity recording
+
+`src/activity.ts` records navigation, selections, submissions, confirmations,
+cancellations and the result of each write, with how each was triggered
+(`pointer` or `keyboard`: Enter on a button counts). It batches events and
+sends them to `POST /activity/events` about a second later, or when the tab is
+hidden, and keeps them while the API is unreachable. Polling records nothing.
+It never records a typed value or the write token: a target names a view, a
+table, a process selector or a worker, and `detail` carries only the keys the
+server allows. Every write carries `X-UQF-Request-Id` and `X-UQF-Session-Id`,
+so its browser events and the server's audit row share an id.
 
 ## Refresh behaviour
 

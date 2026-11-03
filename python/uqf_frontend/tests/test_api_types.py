@@ -43,6 +43,9 @@ REQUESTS = {
     "ProcessConfigBody": "ProcessConfigRequest",
     "WorkerConfigBody": "WorkerConfigRequest",
     "BackfillBody": "BackfillRequest",
+    "ActivityBatch": "ActivityBatchRequest",
+    "BrowserEvent": "BrowserEventIn",
+    "ActivityItem": "ActivityItem",
 }
 
 #: TypeScript interface -> the model it mirrors: every response, the
@@ -63,6 +66,10 @@ PAIRS = {
     "WorkerConfigResult": "WorkerConfigResponse",
     "BackfillStarted": "BackfillStartedResponse",
     "ProcessHealth": "ProcessHealthOut",
+    "ActivityBatchResult": "ActivityBatchResponse",
+    "ActivityEvent": "ActivityEventOut",
+    "ActivityPersistence": "ActivityPersistence",
+    "ActivityHistory": "ActivityResponse",
     **REQUESTS,
 }
 
@@ -188,8 +195,10 @@ def test_a_literal_field_offers_the_same_words_on_both_sides(interface, model):
         words = _literal_words(field.annotation)
         if words is None:
             continue
-        ts_type = ts_fields[name].strip()
-        ts_words = set(re.findall(r'"([^"]+)"', aliases.get(ts_type, ts_type)))
+        # Each arm of a union by its words, so `ActivityOutcome | null` reads
+        # as the alias's words (null is not a word).
+        arms = [arm.strip() for arm in ts_fields[name].split("|")]
+        ts_words = {w for arm in arms for w in re.findall(r'"([^"]+)"', aliases.get(arm, arm))}
         assert ts_words == words, (
             f"{interface}.{name}: TypeScript allows {sorted(ts_words)}, "
             f"{model}.{name} allows {sorted(words)}"

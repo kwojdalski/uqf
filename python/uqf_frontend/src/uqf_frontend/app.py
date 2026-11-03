@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import datetime as dt
 import math
+import time
 import typing
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -20,6 +21,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from uqf_frontend import (
+    activity,
     authz,
     catalog,
     control,
@@ -34,6 +36,7 @@ from uqf_frontend.authz import Policy, Request_, allow_all, enforce
 from uqf_frontend.capture import CaptureScheduler, JsonlSink, UsageCapture
 from uqf_frontend.config import Settings
 from uqf_frontend.errors import (
+    BackfillNotStarted,
     CoverageIncomplete,
     FrontendError,
     GatewayReloading,
@@ -43,6 +46,13 @@ from uqf_frontend.errors import (
 from uqf_frontend.fleet import Fleet, KolaFleet
 from uqf_frontend.gateway import TIERS, Gateway, KolaGateway
 from uqf_frontend.models import (
+    ActivityBatchRequest,
+    ActivityBatchResponse,
+    ActivityEventOut,
+    ActivityOutcome,
+    ActivityPersistence,
+    ActivityResponse,
+    ActivitySource,
     BackfillRequest,
     BackfillStartedResponse,
     BackfillStatusResponse,
@@ -128,6 +138,14 @@ def create_app(
     fleet = fleet or KolaFleet(settings)
     policy = policy or allow_all
 
+    # Activity history and the action audit (activity.py). Opened here, not
+    # in the lifespan, so an unusable file stops the API before it serves.
+    history = activity.ActivityStore(
+        settings.activity_db,
+        retention_days=settings.activity_retention_days,
+        max_rows=settings.activity_max_rows,
+    )
+
     # Usage capture, started with the app and stopped with it. Off unless
     # a destination is configured - see Settings.capture_dir on why "off" is
     # a real choice and not a safe one.
@@ -153,6 +171,7 @@ def create_app(
             # The gateway's pooled connections, held between requests now.
             if isinstance(gateway, KolaGateway):
                 gateway.close()
+            history.close()
 
     app = FastAPI(
         title="uqf frontend API",
@@ -172,6 +191,7 @@ def create_app(
     app.state.fleet = fleet
     app.state.policy = policy
     app.state.capture = scheduler
+    app.state.activity = history
 
     @app.middleware("http")
     async def guard_writes(request: Request, call_next):  # noqa: ANN001, ANN202
@@ -191,11 +211,70 @@ def create_app(
             return _refused(403, "HostNotAllowed", refusal)
         return await call_next(request)
 
+    @app.middleware("http")
+    async def audit_actions(request: Request, call_next):  # noqa: ANN001, ANN202
+        """One audit row per state-changing request, whoever sent it.
+
+        Added after guard_writes, so it runs OUTSIDE it: a request the token
+        or Host check refuses is audited as refused. It reads no header but
+        the correlation ids and the claimed user, and no body at all - what a
+        handler knows beyond the status code it reports through
+        activity.audit_of(request).
+        """
+        if not activity.is_audited(request.method, request.url.path):
+            return await call_next(request)
+        started = time.perf_counter()
+        template, params = _route_of(request)
+        request_id = (
+            activity.clean_id(request.headers.get(activity.REQUEST_ID_HEADER)) or activity.new_id()
+        )
+        event_id, recorded = history.add(
+            source="server",
+            kind=activity.SERVER_KIND,
+            action=activity.server_action(request.method, template, params),
+            target=activity.server_target(params),
+            outcome="pending",
+            session_id=request.headers.get(activity.SESSION_ID_HEADER),
+            request_id=request_id,
+            claimed_user=request.headers.get(authz.IDENTITY_HEADER),
+            method=request.method.upper(),
+        )
+        audit = activity.audit_of(request)
+        audit.store, audit.event_id = history, event_id
+        try:
+            response = await call_next(request)
+        except Exception:
+            history.update(
+                event_id,
+                outcome="unknown",
+                status_code=500,
+                duration_ms=_elapsed_ms(started),
+                detail={**audit.detail, "error": "unhandled"},
+            )
+            raise
+        outcome = audit.outcome or activity.outcome_for_status(response.status_code, audit.acting)
+        settled = history.update(
+            event_id,
+            outcome=outcome,
+            status_code=response.status_code,
+            duration_ms=_elapsed_ms(started),
+            items=audit.items,
+            detail=audit.detail,
+        )
+        response.headers[activity.REQUEST_ID_HEADER] = request_id
+        response.headers[activity.AUDIT_HEADER] = (
+            "recorded" if recorded and settled else "unrecorded"
+        )
+        return response
+
     @app.exception_handler(FrontendError)
-    async def _handle(_: Request, exc: FrontendError) -> JSONResponse:
+    async def _handle(request: Request, exc: FrontendError) -> JSONResponse:
         """Render a typed failure, keeping the transient flag the UI needs to
         tell an EOD reload window apart from a real error.
         """
+        # The error's TYPE, for an audited action: never its message, which
+        # can quote the input back.
+        activity.audit_of(request).note(error=type(exc).__name__)
         return JSONResponse(
             status_code=exc.status_code,
             content={
@@ -481,9 +560,18 @@ def create_app(
         )
 
     @app.post("/control/process/{action}", response_model=CommandResponse)
-    def control_lifecycle(action: str, req: LifecycleRequest) -> CommandResponse:
+    def control_lifecycle(action: str, req: LifecycleRequest, request: Request) -> CommandResponse:
         """Start, stop or restart processes (action is start|stop|restart)."""
-        result = control.lifecycle(settings, action, req.procs)
+        audit = activity.audit_of(request)
+        audit.set_target(req.procs)
+        with control.reporting_acting(audit.begin):
+            result = control.lifecycle(settings, action, req.procs)
+        # torq.sh reports one exit code for the whole selector: success says
+        # every process did as asked; a failure does not say which one failed.
+        audit.settle("succeeded" if result.ok else "failed")
+        for proc in req.procs.split():
+            audit.item(proc, "succeeded" if result.ok else "unknown")
+        audit.note(exit_code=result.exit_code)
         return CommandResponse(
             action=result.action,
             target=result.target,
@@ -493,9 +581,15 @@ def create_app(
         )
 
     @app.put("/control/process/{procname}/config", response_model=ProcessConfigResponse)
-    def control_process_config(procname: str, req: ProcessConfigRequest) -> ProcessConfigResponse:
+    def control_process_config(
+        procname: str, req: ProcessConfigRequest, request: Request
+    ) -> ProcessConfigResponse:
         """Persist one process.csv field override, applied on the next start."""
-        row = control.set_process_field(settings, procname, req.field_name, req.value)
+        audit = activity.audit_of(request)
+        # The field, never the value: a value is whatever was typed.
+        audit.note(procname=procname, field=req.field_name)
+        with control.reporting_acting(audit.begin):
+            row = control.set_process_field(settings, procname, req.field_name, req.value)
         return ProcessConfigResponse(
             procname=procname,
             config=row,
@@ -503,27 +597,163 @@ def create_app(
         )
 
     @app.put("/control/worker-config", response_model=WorkerConfigResponse)
-    def control_worker_config(req: WorkerConfigRequest) -> WorkerConfigResponse:
+    def control_worker_config(req: WorkerConfigRequest, request: Request) -> WorkerConfigResponse:
         """Set a `.qetl.cfg` override in the live process the gateway addresses."""
-        out = control.set_worker_config(gateway, settings, req.key, req.value)
+        audit = activity.audit_of(request)
+        audit.set_target(req.key)
+        audit.note(key=req.key)
+        with control.reporting_acting(audit.begin):
+            out = control.set_worker_config(gateway, settings, req.key, req.value)
+        # Set is not in effect: an environment variable outranks the override,
+        # and an answer of unknown shape says nothing either way.
+        audit.settle("succeeded" if out["saved"] else "failed" if out["shadowed"] else "unknown")
+        audit.note(
+            saved=out["saved"],
+            shadowed=out["shadowed"],
+            effective_layer=out["effective_layer"],
+        )
         return WorkerConfigResponse(**out)
 
     @app.post("/control/backfill", response_model=BackfillStartedResponse)
-    def control_backfill(req: BackfillRequest) -> BackfillStartedResponse:
+    def control_backfill(req: BackfillRequest, request: Request) -> BackfillStartedResponse:
         """Launch a bounded worker over a range. Detached; watch /ops/backfill."""
-        out = control.start_backfill(
-            settings,
+        audit = activity.audit_of(request)
+        audit.set_target(req.worker)
+        audit.note(
             worker=req.worker,
             source_version=req.source_version,
             range_from=req.range_from,
             range_to=req.range_to,
         )
+        try:
+            with control.reporting_acting(audit.begin):
+                out = control.start_backfill(
+                    settings,
+                    worker=req.worker,
+                    source_version=req.source_version,
+                    range_from=req.range_from,
+                    range_to=req.range_to,
+                )
+        except BackfillNotStarted:
+            audit.settle("failed")  # torq.sh said so: nothing is running
+            raise
+        # Handed off, not finished: whether it worked is /ops/backfill's to say.
+        audit.settle("accepted")
         return BackfillStartedResponse(**out)
+
+    # ------------------------------------------------------ activity (#1954)
+
+    @app.post("/activity/events", response_model=ActivityBatchResponse)
+    def record_activity(batch: ActivityBatchRequest, request: Request) -> ActivityBatchResponse:
+        """What an operator did in the UI. Intent, as the browser reports it -
+        the server's own rows are the authority on what happened."""
+        stored = dropped = 0
+        claimed = request.headers.get(authz.IDENTITY_HEADER)
+        for event in batch.events:
+            _, more = activity.clean_detail(event.detail)
+            dropped += more
+            _, ok = history.add(
+                source="browser",
+                kind=event.kind,
+                action=event.action,
+                ts=event.ts,
+                event_id=event.event_id,
+                target=event.target,
+                outcome=event.outcome,
+                session_id=event.session_id,
+                request_id=event.request_id,
+                claimed_user=claimed,
+                trigger=event.trigger,
+                duration_ms=event.duration_ms,
+                items=[item.model_dump() for item in event.items],
+                detail=event.detail,
+            )
+            stored += ok
+        return ActivityBatchResponse(
+            stored=stored,
+            not_stored=len(batch.events) - stored,
+            dropped_detail=dropped,
+            persistent=history.persistence.persistent,
+        )
+
+    @app.get("/activity", response_model=ActivityResponse)
+    def list_activity(
+        since: str | None = None,
+        until: str | None = None,
+        session_id: str | None = None,
+        request_id: str | None = None,
+        action: str | None = None,
+        target: str | None = None,
+        outcome: ActivityOutcome | None = None,
+        source: ActivitySource | None = None,
+        limit: int = activity.DEFAULT_LIMIT,
+    ) -> ActivityResponse:
+        """The history, newest first, filtered; and whether it is being kept."""
+        rows = history.query(
+            activity.Query(
+                since=_instant("since", since),
+                until=_instant("until", until),
+                session_id=session_id or None,
+                request_id=request_id or None,
+                action=action or None,
+                target=target or None,
+                outcome=outcome,
+                source=source,
+                limit=limit,
+            )
+        )
+        state = history.persistence
+        return ActivityResponse(
+            events=[ActivityEventOut(**row) for row in rows],
+            persistence=ActivityPersistence(
+                persistent=state.persistent,
+                path=state.path,
+                failures=state.failures,
+                last_error=state.last_error,
+                last_failure_at=state.last_failure_at,
+            ),
+            retention_days=history.retention_days,
+            max_rows=history.max_rows,
+            poll_seconds=ops.POLL_SECONDS["activity"],
+        )
 
     if settings.web_dist is not None:
         app.mount("/ui", StaticFiles(directory=settings.web_dist, html=True), name="web")
 
     return app
+
+
+def _route_of(request: Request) -> tuple[str | None, dict[str, str]]:
+    """The route template a request will reach and its path parameters,
+    asked of the router before the request is routed - so the audit row is
+    written, under its action name, before the handler runs."""
+    from starlette.routing import Match
+
+    for route in request.app.router.routes:
+        match, child = route.matches(request.scope)
+        if match == Match.FULL:
+            params = child.get("path_params", {})
+            return getattr(route, "path", None), {k: str(v) for k, v in params.items()}
+    return None, {}
+
+
+def _elapsed_ms(started: float) -> float:
+    return round((time.perf_counter() - started) * 1000, 3)
+
+
+def _instant(name: str, raw: str | None) -> dt.datetime | None:
+    """A filter bound, which must carry its timezone."""
+    if raw is None or raw == "":
+        return None
+    try:
+        parsed = dt.datetime.fromisoformat(raw)
+    except ValueError:
+        raise ValidationFailed(
+            f"{name} must be ISO-8601, e.g. 2026-09-11T00:00:00Z; got {raw!r}"
+        ) from None
+    if parsed.tzinfo is None:
+        raise ValidationFailed(f"{name} needs an explicit timezone offset, got {raw!r}")
+    return parsed
 
 
 def _worker_status_out(s: status.WorkerStatus) -> WorkerStatusOut:

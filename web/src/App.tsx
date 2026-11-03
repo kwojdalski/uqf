@@ -27,6 +27,8 @@ import {
   writeToken,
 } from "./api";
 import { useResource } from "./useResource";
+import { ActivityView } from "./ActivityView";
+import { installActivity, record, tracked, triggerOf } from "./activity";
 
 const views = [
   "Coverage",
@@ -37,6 +39,7 @@ const views = [
   "Connections",
   "Usage",
   "Control",
+  "Activity",
 ] as const;
 type View = (typeof views)[number];
 /** An ISO instant, as the server sends one: a date, a T, a time, and
@@ -326,8 +329,21 @@ function CoverageView() {
       setApplied({ ...range });
       setError("");
       resource.refresh();
+      record("submit", "coverage.check", {
+        target: range.dataset,
+        detail: {
+          dataset: range.dataset,
+          source_version: range.source_version,
+          range_from: range.range_from,
+          range_to: range.range_to,
+        },
+      });
     } catch (error) {
       setError((error as Error).message);
+      record("submit", "coverage.check", {
+        outcome: "refused",
+        detail: { reason: "invalid input" },
+      });
     }
   }
   return (
@@ -503,8 +519,23 @@ function DeskView() {
       });
       setError("");
       resource.refresh();
+      // How many filters, never their values: those are whatever was typed.
+      record("submit", "query.apply", {
+        target: selected.name,
+        detail: {
+          tier,
+          limit,
+          filter_count: parsed.length,
+          require_coverage: requireCoverage,
+        },
+      });
     } catch (error) {
       setError((error as Error).message);
+      record("submit", "query.apply", {
+        target: selected.name,
+        outcome: "refused",
+        detail: { reason: "invalid input" },
+      });
     }
   }
   return (
@@ -526,7 +557,14 @@ function DeskView() {
               className="table-choice"
               aria-pressed={item.name === selected?.name}
               title={item.description}
-              onClick={() => setTable(item.name)}
+              onClick={(event) => {
+                if (item.name !== selected?.name)
+                  record("select", "table.select", {
+                    target: item.name,
+                    trigger: triggerOf(event),
+                  });
+                setTable(item.name);
+              }}
             >
               <code>{item.name}</code>
             </button>
@@ -572,7 +610,13 @@ function DeskView() {
                   Storage tier
                   <select
                     value={tier}
-                    onChange={(event) => setTier(event.target.value as Tier)}
+                    onChange={(event) => {
+                      setTier(event.target.value as Tier);
+                      record("select", "query.tier", {
+                        target: selected?.name,
+                        detail: { tier: event.target.value },
+                      });
+                    }}
                   >
                     <option value="rdb">RDB · current session</option>
                     <option value="hdb">HDB · completed partitions</option>
@@ -1006,9 +1050,19 @@ export function workerConfigOutcome(r: WorkerConfigResult): string {
   );
 }
 
+/** Lifecycle actions that take something down: each asks to be confirmed. */
+const DESTRUCTIVE = new Set(["stop", "restart"]);
+
+/** The outcome a worker-config response supports (#634): set is not in effect. */
+function workerConfigSettled(r: WorkerConfigResult) {
+  return r.saved ? "succeeded" : r.shadowed ? "failed" : "unknown";
+}
+
 function ControlView() {
   const status = useResource<ControlStatus>("/control");
   const [busy, setBusy] = useState("");
+  // The destructive action awaiting confirmation, if any.
+  const [confirming, setConfirming] = useState("");
   const [result, setResult] = useState<string>("");
   const [error, setError] = useState("");
 
@@ -1032,6 +1086,34 @@ function ControlView() {
     range_to: "",
   });
   const [token, setToken] = useState(writeToken.get());
+
+  function lifecycle(
+    action: string,
+    kind: "submit" | "confirm",
+    trigger: ReturnType<typeof triggerOf>,
+  ) {
+    const target = procs;
+    run(action, async () => {
+      const r = await tracked(
+        kind,
+        `process.${action}`,
+        { target, trigger, detail: { mode } },
+        (correlation) =>
+          mutate<CommandResult>(
+            `/control/process/${action}`,
+            { procs: target } satisfies LifecycleBody,
+            "POST",
+            correlation,
+          ),
+        (r) => (r.ok ? "succeeded" : "failed"),
+      );
+      return `${r.action} ${r.target}: exit ${r.exit_code}\n${r.output}`;
+    });
+  }
+  function cancel(trigger: ReturnType<typeof triggerOf>) {
+    record("cancel", `process.${confirming}`, { target: procs, trigger });
+    setConfirming("");
+  }
 
   async function run(label: string, fn: () => Promise<string>) {
     setBusy(label);
@@ -1114,6 +1196,12 @@ function ControlView() {
           onChange={(m, p) => {
             setMode(m);
             setPicked(p);
+            record("select", "process.selection", {
+              detail: {
+                mode: m,
+                selected_count: m === "pick" ? p.size : undefined,
+              },
+            });
           }}
           liveness={liveness}
         />
@@ -1128,22 +1216,54 @@ function ControlView() {
                 key={action}
                 type="button"
                 className={action === "stop" ? "danger" : "primary"}
-                disabled={busy !== "" || procs === ""}
-                onClick={() =>
-                  run(action, async () => {
-                    const r = await mutate<CommandResult>(
-                      `/control/process/${action}`,
-                      { procs } satisfies LifecycleBody,
-                    );
-                    return `${r.action} ${r.target}: exit ${r.exit_code}\n${r.output}`;
-                  })
-                }
+                disabled={busy !== "" || procs === "" || confirming !== ""}
+                onClick={(event) => {
+                  if (!DESTRUCTIVE.has(action))
+                    return lifecycle(action, "submit", triggerOf(event));
+                  record("submit", `process.${action}`, {
+                    target: procs,
+                    trigger: triggerOf(event),
+                    detail: { mode },
+                  });
+                  setConfirming(action);
+                }}
               >
                 {busy === action ? "…" : action}
               </button>
             ))}
           </span>
         </div>
+        {confirming && (
+          <div
+            className="notice pending"
+            role="alertdialog"
+            aria-label={`Confirm ${confirming}`}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") cancel("keyboard");
+            }}
+          >
+            <p>
+              {confirming} <code>{procs}</code>? Running processes will go down.
+            </p>
+            <button
+              type="button"
+              className="danger"
+              onClick={(event) => {
+                setConfirming("");
+                lifecycle(confirming, "confirm", triggerOf(event));
+              }}
+            >
+              Confirm {confirming}
+            </button>{" "}
+            <button
+              type="button"
+              autoFocus
+              onClick={(event) => cancel(triggerOf(event))}
+            >
+              Cancel
+            </button>
+          </div>
+        )}
       </form>
 
       <form
@@ -1151,13 +1271,25 @@ function ControlView() {
         onSubmit={(e) => {
           e.preventDefault();
           run("config", async () => {
-            const r = await mutate<ProcessConfigResult>(
-              `/control/process/${cfg.procname}/config`,
+            // The field, never the value typed into it.
+            const r = await tracked(
+              "submit",
+              "process.config",
               {
-                field: cfg.field,
-                value: cfg.value,
-              } satisfies ProcessConfigBody,
-              "PUT",
+                target: cfg.procname,
+                trigger: triggerOf(),
+                detail: { procname: cfg.procname, field: cfg.field },
+              },
+              (correlation) =>
+                mutate<ProcessConfigResult>(
+                  `/control/process/${cfg.procname}/config`,
+                  {
+                    field: cfg.field,
+                    value: cfg.value,
+                  } satisfies ProcessConfigBody,
+                  "PUT",
+                  correlation,
+                ),
             );
             return `${r.procname} now: ${JSON.stringify(r.config, null, 2)}`;
           });
@@ -1211,10 +1343,22 @@ function ControlView() {
         onSubmit={(e) => {
           e.preventDefault();
           run("worker-config", async () => {
-            const r = await mutate<WorkerConfigResult>(
-              "/control/worker-config",
-              wcfg,
-              "PUT",
+            const r = await tracked(
+              "submit",
+              "worker.config",
+              {
+                target: wcfg.key,
+                trigger: triggerOf(),
+                detail: { key: wcfg.key },
+              },
+              (correlation) =>
+                mutate<WorkerConfigResult>(
+                  "/control/worker-config",
+                  wcfg,
+                  "PUT",
+                  correlation,
+                ),
+              workerConfigSettled,
             );
             return `${workerConfigOutcome(r)}\n\n${r.note}`;
           });
@@ -1251,7 +1395,29 @@ function ControlView() {
         onSubmit={(e) => {
           e.preventDefault();
           run("backfill", async () => {
-            const r = await mutate<BackfillStarted>("/control/backfill", bf);
+            const r = await tracked(
+              "submit",
+              "backfill.start",
+              {
+                target: bf.worker,
+                trigger: triggerOf(),
+                detail: {
+                  worker: bf.worker,
+                  source_version: bf.source_version,
+                  range_from: bf.range_from,
+                  range_to: bf.range_to,
+                },
+              },
+              (correlation) =>
+                mutate<BackfillStarted>(
+                  "/control/backfill",
+                  bf,
+                  "POST",
+                  correlation,
+                ),
+              // Handed off, not finished: the Backfills view says how it went.
+              () => "accepted",
+            );
             return `started ${r.worker} as ${r.procname}\nwatch ${r.status_path}, or \`uqs logs ${r.procname}\``;
           });
         }}
@@ -1288,6 +1454,7 @@ function ControlView() {
 }
 export default function App() {
   const [view, setView] = useState<View>("Coverage");
+  useEffect(() => installActivity(), []);
   const health = useResource<Health>("/health");
   // Asked once here so the sidebar can say what this deployment actually is,
   // rather than asserting "read-only" on a server where it is not true.
@@ -1327,7 +1494,15 @@ export default function App() {
                 key={item}
                 className={view === item ? "selected" : ""}
                 aria-current={view === item ? "page" : undefined}
-                onClick={() => setView(item)}
+                onClick={(event) => {
+                  if (item !== view)
+                    record("navigate", "view.open", {
+                      target: item,
+                      trigger: triggerOf(event),
+                      detail: { from_view: view },
+                    });
+                  setView(item);
+                }}
               >
                 <span className="nav-number">0{index + 1}</span>
                 {item}
@@ -1346,7 +1521,11 @@ export default function App() {
           <div className="page-heading">
             <div>
               <p className="eyebrow">
-                {view === "Desk" ? "PUBLISHED DATA" : "OPERATIONS"}
+                {view === "Desk"
+                  ? "PUBLISHED DATA"
+                  : view === "Activity"
+                    ? "HISTORY"
+                    : "OPERATIONS"}
               </p>
               <h1>{view}</h1>
             </div>
@@ -1365,6 +1544,8 @@ export default function App() {
             <DeskView />
           ) : view === "Control" ? (
             <ControlView />
+          ) : view === "Activity" ? (
+            <ActivityView />
           ) : (
             <OpsView key={view} view={view} />
           )}
