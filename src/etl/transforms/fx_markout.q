@@ -198,12 +198,17 @@
     ([] fill_id:e`fill_id; venue:e`venue; reason:why)}
 
 / The last delivery of each identity, in the order those deliveries arrived.
+/ The identity is the pair (venue; fill_id), grouped as a pair: joining the
+/ two as text made venue `a|b with fill `c and venue `a with fill `b|c one
+/ execution. An empty input is guarded because grouping no pairs indexes the
+/ table with a general empty list, which gives () rather than the empty table.
 / @param exe executions
 / @return executions, one per (venue; fill_id)
 / @eg count .qpipe.transform.fx_markout.last_delivery[([] venue:`a`a`b; fill_id:`x`x`x)]  ->  2
+/ @eg count .qpipe.transform.fx_markout.last_delivery[([] venue:`$("a|b";"a"); fill_id:`$("c";"b|c"))]  ->  2
 .qpipe.transform.fx_markout.last_delivery:{[exe]
-    ids:`$string[exe`venue],'"|",'string exe`fill_id;
-    exe asc last each value group ids}
+    if[not count exe; :exe];
+    exe asc last each value group flip exe`venue`fill_id}
 
 / The level-0 top of each source's book, one row per snapshot: the input of
 / .qf.mkt.best_across_venues. A snapshot with an empty or unusable side keeps
