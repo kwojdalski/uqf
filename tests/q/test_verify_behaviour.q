@@ -92,6 +92,14 @@
     .qunit.assertEquals[getenv`UQF_STATUS_DIR;"build/test-status";"the status directory is restored"];
     .qunit.assertEquals[$[count key hsym `$cp; read1 hsym `$cp; ()];before;"and the real checkpoint is as it was"]};
 
+.qt.qetl.verify.behaviour.test_a_check_that_throws_is_unverified_and_the_sandbox_is_undone:{[t]
+    / #1891: a body that throws - as every bounded check did while KDB-X's
+    / setenv refused a char atom - is reported, not raised, and never a verdict.
+    r:.qetl.verify.sandboxed[{[w] '"no fixture for ",string w};`demo_deals_backfill];
+    .qunit.assertEquals[r;`status`reason`evidence!(`UNVERIFIED;"the check did not complete: no fixture for demo_deals_backfill";"");
+        "UNVERIFIED, with what threw"];
+    .qunit.assertEquals[getenv`UQF_STATUS_DIR;"build/test-status";"the status directory is put back"]};
+
 .qt.qetl.verify.behaviour.test_the_gaps_are_listed_with_their_reasons:{[t]
     g:.qetl.verify.behaviour_gaps .qetl.verify.producers `demo_deals;
     .qunit.assertEquals[g`behaviour;`slow_queries`startup_failure`late_arrivals;"what no harness exercises"];
