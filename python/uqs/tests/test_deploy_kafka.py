@@ -95,7 +95,7 @@ def _build_kafka(tmp_path: Path, *argv: str, ldd_out: str | None = None):
     root = tmp_path / "tree"
     tools, calls = _tools(_tree(root))
     runner, ldd_calls = _with_ldd(tools, ldd_out or _ldd(tmp_path / "deps"))
-    art = _built_with(["--output", str(tmp_path / "dist"), *argv], root=root, runner=runner)
+    art = _built_with(["--output-dir", str(tmp_path / "dist"), *argv], root=root, runner=runner)
     return art, calls, ldd_calls
 
 
@@ -198,7 +198,7 @@ def test_a_library_ldd_cannot_read_is_refused(tmp_path):
     runner, _ = _with_ldd(tools, "", rc=1)
     with pytest.raises(ReleaseError, match="ldd could not list libkfk.so's libraries"):
         _built_with(
-            ["--output", str(tmp_path / "dist"), "--kafka-home", str(home)],
+            ["--output-dir", str(tmp_path / "dist"), "--kafka-home", str(home)],
             root=root,
             runner=runner,
         )

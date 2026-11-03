@@ -57,12 +57,15 @@ def _failed(prefix: str, stage: str, exc: Exception) -> None:
     raise typer.Exit(code=1)
 
 
-@deploy_app.command("build", cls=ChangesState)
+#: `--output` is a FILE, as `contract export -o` writes one; a directory is
+#: `--output-dir` (#1857).
+@deploy_app.command("build", cls=renamed({"--output": "--output-dir"}, ChangesState))
 def build(
     output: Annotated[
         Path | None,
         typer.Option(
-            "--output", help="Directory to write the artifact into; default: dist/ at the repo root"
+            "--output-dir",
+            help="Directory to write the artifact into; default: dist/ at the repo root",
         ),
     ] = None,
     arch: Annotated[
@@ -78,10 +81,9 @@ def build(
         bool, typer.Option("--allow-dirty", help="Build uncommitted changes (recorded)")
     ] = False,
     bundle: Annotated[
-        list[str] | None,
+        list[Path] | None,
         typer.Option(
             "--bundle",
-            metavar="DIR",
             help="A sidecar bundle (a folder with bundle.json) to install into the release, "
             "beside those the runtime declares; repeatable",
         ),
@@ -130,7 +132,9 @@ def build(
     runtime = runtime_from_env()
     if dry_run:
         try:
-            members = release_build.composition_members(runtime, repo_root(), bundle or ())
+            members = release_build.composition_members(
+                runtime, repo_root(), [str(b) for b in bundle or ()]
+            )
         except ReleaseError as exc:
             _failed("uqs deploy build", exc.stage, exc)
             return
@@ -144,7 +148,7 @@ def build(
             arch=arch,
             python=python,
             allow_dirty=allow_dirty,
-            bundles=bundle or (),
+            bundles=[str(b) for b in bundle or ()],
             runtime=runtime,
             q_target=q_target,
             q_exclude=q_exclude or (),
@@ -159,7 +163,12 @@ def build(
     print(artifact.path)
 
 
-@deploy_app.command("push", cls=renamed(policy.OLD_SPELLINGS | conn.OLD_SPELLINGS, ChangesState))
+@deploy_app.command(
+    "push",
+    cls=renamed(
+        policy.OLD_SPELLINGS | conn.OLD_SPELLINGS | components.OLD_Q_SPELLINGS, ChangesState
+    ),
+)
 def push(
     ctx: typer.Context,
     artifact: Annotated[
@@ -257,14 +266,9 @@ def push(
             "from the artifact's bundles (`uqs deploy build --bundle`)",
         ),
     ] = "",
-    live: Annotated[
-        bool,
-        typer.Option(
-            "--live", help="Refuse a source with no credential instead of reading its fixture"
-        ),
-    ] = False,
+    fixture: conn.FixtureOpt = True,
     odbc_home: Annotated[
-        str | None,
+        Path | None,
         typer.Option(
             "--odbc-home",
             help="A private ODBC setup on the server (uqs setup odbc install), loaded by every "
@@ -280,19 +284,11 @@ def push(
             "a failure rolls the deployment back",
         ),
     ] = "",
-    live_check_timeout: Annotated[
-        int, typer.Option("--live-check-timeout", help="Every live check together, seconds")
-    ] = 120,
+    live_check_timeout: conn.LiveCheckTimeout = 120,
     connect_timeout: conn.ConnectTimeout = conn.DEFAULT_CONNECT_TIMEOUT,
-    command_timeout: Annotated[
-        int, typer.Option("--command-timeout", help="Each remote step, seconds")
-    ] = 900,
-    smoke_timeout: Annotated[
-        int, typer.Option("--smoke-timeout", help="The offline check, seconds")
-    ] = 120,
-    verify_timeout: Annotated[
-        int, typer.Option("--verify-timeout", help="Readiness deadline, seconds")
-    ] = 180,
+    command_timeout: conn.CommandTimeout = 900,
+    smoke_timeout: conn.SmokeTimeout = 120,
+    verify_timeout: conn.VerifyTimeout = 180,
     allow_dirty: policy.AllowDirty = False,
     override: OverrideOpt = None,
     reason: ReasonOpt = None,
@@ -331,15 +327,7 @@ def push(
             help="After activating, remove all but the newest N releases (`uqs deploy prune`)",
         ),
     ] = None,
-    soak: Annotated[
-        int | None,
-        typer.Option(
-            "--soak",
-            metavar="SECONDS",
-            help="After verify, let data flow this long; then a streaming job that is "
-            "failing, or never beat, rolls the deployment back before activation",
-        ),
-    ] = None,
+    soak: conn.Soak = None,
     break_lock: Annotated[
         bool,
         typer.Option(
@@ -347,11 +335,11 @@ def push(
             help="Remove a deploy lock whose holder stopped beating; refused while it beats",
         ),
     ] = False,
-    no_register: conn.NoRegister = False,
+    register: conn.Register = True,
 ) -> None:
     """Deploy a release onto a server, on its TorQ and q or bundled ones, and verify it there."""
-    options = dict(locals())
-    del options["ctx"], options["target"], options["target_names"], options["no_register"]
+    options = conn.config_options(dict(locals()))
+    del options["ctx"], options["target"], options["target_names"]
     del options["override"], options["reason"]
     code = 0
     try:
@@ -368,7 +356,8 @@ def push(
             given = {
                 k: v
                 for k, v in options.items()
-                if k not in targets.GIVEN_SEPARATELY and conn.on_command_line(ctx, k)
+                if k not in targets.GIVEN_SEPARATELY
+                and conn.on_command_line(ctx, {"live": "fixture"}.get(k, k))
             } | {k: v for k, v in bypass.items() if v is not None}
             cfgs = targets.configs(names, artifact, given, dry_run, repo_root())
         else:
@@ -386,7 +375,7 @@ def push(
                 cfg,
                 remote,
                 on_report=lambda rep, c=cfg: history.record(
-                    repo_root(), c, rep, register=not no_register, say=typer.echo
+                    repo_root(), c, rep, register=register, say=typer.echo
                 ),
             )
             if code:

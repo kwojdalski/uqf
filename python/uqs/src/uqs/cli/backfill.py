@@ -100,10 +100,11 @@ def backfill(
     fixture: Annotated[
         bool,
         typer.Option(
-            "--fixture",
+            "--fixture/--live",
             help="Let a worker whose source has no credential write the source's fixture "
-            "(a demo). Refused otherwise outside a dry run; its coverage is recorded "
-            "under <version>~fixture, so a later live run still fetches the range",
+            "(a demo), or (--live, the default) refuse it outside a dry run. A fixture's "
+            "coverage is recorded under <version>~fixture, so a later live run still fetches "
+            "the range",
         ),
     ] = False,
     attach: Annotated[

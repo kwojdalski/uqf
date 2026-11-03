@@ -17,6 +17,7 @@ from typing import Annotated
 import typer
 
 from uqs.cli.deploy import _failed, deploy_app
+from uqs.cli.renames import renamed
 from uqs.cli.safety import ChangesState
 from uqs.deploy import python_runtime, q_runtime, torq_runtime
 from uqs.deploy.artifact import PLATFORMS, ReleaseError
@@ -40,12 +41,16 @@ deploy_app.add_typer(component_app, name="component")
 KX_NAMES = frozenset({KDBX, "kx", "kdb", "kdb+"})
 
 
+#: A directory written into is `--output-dir`; `--output` is a FILE (#1857).
+OUTPUT_DIR = {"--output": "--output-dir"}
 Component = Annotated[
     str, typer.Argument(help="The component to build: torq, q (PeachQ) or python (CPython)")
 ]
 Output = Annotated[
     Path | None,
-    typer.Option("--output", help="Directory to write it into; default: dist/ at the repo root"),
+    typer.Option(
+        "--output-dir", help="Directory to write it into; default: dist/ at the repo root"
+    ),
 ]
 Arch = Annotated[
     str, typer.Option("--arch", help=f"python only: the servers' {', '.join(PLATFORMS)}")
@@ -56,7 +61,7 @@ Python = Annotated[
 ]
 
 
-@component_app.command("build", cls=ChangesState)
+@component_app.command("build", cls=renamed(OUTPUT_DIR, ChangesState))
 def build(
     component: Component,
     output: Output = None,
@@ -76,7 +81,7 @@ def build(
     _build("uqs deploy component build", component, output, arch, python, dry_run)
 
 
-@deploy_app.command("build-runtime", hidden=True, cls=ChangesState)
+@deploy_app.command("build-runtime", hidden=True, cls=renamed(OUTPUT_DIR, ChangesState))
 def build_runtime(
     component: Component,
     output: Output = None,

@@ -84,7 +84,7 @@ def plan(
         "verify    "
         + " ".join(
             [
-                f"uqs deploy check --profile {cfg.profile} --deadline {cfg.verify_timeout}",
+                f"uqs deploy check --profile {cfg.profile} --verify-timeout {cfg.verify_timeout}",
                 *verify_args(sel, cfg.live),
             ]
         ),

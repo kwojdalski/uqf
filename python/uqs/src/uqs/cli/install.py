@@ -206,8 +206,9 @@ def install_jobs(
     sidecar: Annotated[
         Path,
         typer.Argument(
-            help="Folder holding the job files, laid out any way: each file is placed by "
-            "what it declares",
+            metavar="BUNDLE",
+            help="The sidecar bundle folder holding the job files, laid out any way: each "
+            "file is placed by what it declares",
             exists=True,
             file_okay=False,
             dir_okay=True,

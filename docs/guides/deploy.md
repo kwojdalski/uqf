@@ -38,15 +38,15 @@ network.
   match the artifact's manifest, and its glibc must meet the floor the
   artifact's wheels set.
 
-- A licensed q. `--qhome` and `--qcmd` are optional. Without them, the values
+- A licensed q. `--q-home` and `--q-cmd` are optional. Without them, the values
   are resolved on the server, in the environment of the account that deploys:
   the `--remote-user`'s login environment, or else the ssh login's. Your own
   machine's values are never used (#782):
 
-  | Setting | First                 | Otherwise                                               |
-  | ---     | ---                   | ---                                                     |
-  | QHOME   | `--qhome`             | that account's `$QHOME`; refused if unset               |
-  | QCMD    | `--qcmd`              | that account's `$QCMD`, else `q` on that account's PATH |
+  | Setting | First                  | Otherwise                                               |
+  | ---     | ---                    | ---                                                     |
+  | QHOME   | `--q-home`             | that account's `$QHOME`; refused if unset               |
+  | QCMD    | `--q-cmd`              | that account's `$QCMD`, else `q` on that account's PATH |
 
   QCMD must be an executable name or an absolute path, not a command with
   arguments, so `rlwrap q` is refused. Preflight runs a script with the resolved
@@ -209,7 +209,7 @@ server reports, every step, and any restart it would make. It changes nothing:
 uqs deploy push dist/uqf-<release>.tar.gz \
   --ssh uqf-server --dest /opt/uqf \
   --torq-home /opt/torq --torq-app-home /opt/torq-finance-starter-pack \
-  --qcmd /opt/kx/bin/q --qhome /opt/kx \
+  --q-cmd /opt/kx/bin/q --q-home /opt/kx \
   --profile essential --init-data --dry-run
 ```
 
@@ -1063,7 +1063,7 @@ uqs deploy push dist/uqf-<release>.tar.gz \
   --torq-app-home /opt/site/torq/TorQApp \
   --torq-launcher /opt/site/torq/bin/torq.sh \
   --launcher-env KDBDB_ORG=uqf \
-  --qcmd /opt/site/torq/bin/q.sh --qhome /opt/site/q \
+  --q-cmd /opt/site/torq/bin/q.sh --q-home /opt/site/q \
   --profile default --init-data --dry-run
 ```
 

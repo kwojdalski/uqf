@@ -21,7 +21,7 @@ import typer
 from uqs.attach import receiver_contract
 from uqs.cli import completion
 from uqs.cli.attachment import attachment_app
-from uqs.cli.renames import alias_command
+from uqs.cli.renames import alias_command, renamed
 from uqs.cli.safety import ChangesState, ReadOnly, dry_run_note
 from uqs.cli.shared import JOB_OPERATIONS_PANEL, _die, _paths, console, job_app
 from uqs.paths import UqsError
@@ -78,7 +78,12 @@ def export(
         console.print(said, markup=False)
 
 
-@contract_app.command("approve", cls=ChangesState)
+#: A conflict policy is `--on-conflict` on every command; `--max-rows` was a
+#: row limit's name for something else, the rows one message carries (#1857).
+_APPROVE_RENAMES = {"--conflict": "--on-conflict", "--max-rows": "--max-message-rows"}
+
+
+@contract_app.command("approve", cls=renamed(_APPROVE_RENAMES, ChangesState))
 def approve(
     file: Annotated[
         Path, typer.Argument(help="The contract file `uqs job attachment contract export` wrote")
@@ -89,13 +94,14 @@ def approve(
     conflict: Annotated[
         list[str] | None,
         typer.Option(
-            "--conflict",
-            help="A conflict policy to permit; repeatable. Default: every one the contract "
+            "--on-conflict",
+            help="What a write may do with a row already there - a conflict policy to "
+            "permit; repeatable. Default: every one the contract "
             "permits. Narrows the contract, never widens it",
         ),
     ] = None,
     max_rows: Annotated[
-        int, typer.Option("--max-rows", help="The most rows one message may carry")
+        int, typer.Option("--max-message-rows", help="The most rows one message may carry")
     ] = receiver_contract.DEFAULT_MAX_ROWS,
     dry_run: Annotated[
         bool,
@@ -169,4 +175,10 @@ def list_(
 
 
 for _verb, _fn in (("export", export), ("approve", approve), ("list", list_)):
-    alias_command(legacy_contract_app, _verb, f"uqs job attachment contract {_verb}", _fn)
+    alias_command(
+        legacy_contract_app,
+        _verb,
+        f"uqs job attachment contract {_verb}",
+        _fn,
+        cls=renamed(_APPROVE_RENAMES),
+    )

@@ -15,6 +15,7 @@ from typing import Annotated
 
 import typer
 
+from uqs.cli.vocabulary import duration
 from uqs.deploy import config, control
 from uqs.deploy.config import DeployError
 from uqs.logger import get_logger
@@ -59,17 +60,51 @@ RemoteUser = Annotated[
     ),
 ]
 ConnectTimeout = Annotated[
-    int, typer.Option("--connect-timeout", help="ssh/scp, seconds; overrides TARGET's")
+    int,
+    duration(
+        "--connect-timeout",
+        integer=True,
+        help="How long (a DURATION) ssh/scp may take to connect; overrides TARGET's",
+    ),
+]
+CommandTimeout = Annotated[
+    int,
+    duration(
+        "--command-timeout", integer=True, help="How long (a DURATION) each remote step may take"
+    ),
+]
+
+
+def verify_timeout_option(integer: bool = False) -> typer.models.OptionInfo:
+    """`--verify-timeout`: one readiness wait, on `deploy push`, `rollback` and
+    `check` - which called it `--deadline` until #1857."""
+    return duration(
+        "--verify-timeout",
+        integer=integer,
+        help="How long (a DURATION) the processes have to become ready",
+    )
+
+
+VerifyTimeout = Annotated[int, verify_timeout_option(integer=True)]
+#: Whether a source with no credential may run on its fixture (#1857): the
+#: same pair on `job backfill`, which defaults to live, and `deploy push` and
+#: `check`, which default to the fixture - the default is each command's.
+FixtureOpt = Annotated[
+    bool,
+    typer.Option(
+        "--fixture/--live",
+        help="Let a source with no credential run on its fixture, or (--live) refuse it",
+    ),
 ]
 DEFAULT_CONNECT_TIMEOUT = control.DEFAULT_CONNECT_TIMEOUT
 #: A push to a server no target names declares one (deploy/history.py), as a
 #: change `uqs target log` records (#1756); this says not to.
-NoRegister = Annotated[
+Register = Annotated[
     bool,
     typer.Option(
-        "--no-register",
-        help="Do not declare a target for a server no target names (by default a "
-        "successful push adds one, through `uqs target add`'s checks and change log)",
+        "--register/--no-register",
+        help="Declare a target for a server no target names, through `uqs target add`'s "
+        "checks and change log (the default), or not",
     ),
 ]
 
@@ -118,3 +153,40 @@ def renamed_target_option(names: str) -> None:
         "`uqs deploy push ARTIFACT {}` - the option goes in the next release",
         shown,
     )
+
+
+LiveCheckTimeout = Annotated[
+    int,
+    duration(
+        "--live-check-timeout",
+        integer=True,
+        help="How long (a DURATION) every live check together may take",
+    ),
+]
+SmokeTimeout = Annotated[
+    int,
+    duration(
+        "--smoke-timeout", integer=True, help="How long (a DURATION) the offline check may take"
+    ),
+]
+Soak = Annotated[
+    int | None,
+    duration(
+        "--soak",
+        integer=True,
+        help="After verify, let data flow this long (a DURATION); then a streaming job that is "
+        "failing, or never beat, rolls the deployment back before activation",
+    ),
+]
+
+
+def config_options(params: dict) -> dict:
+    """`deploy push`'s parameters as make_config takes them (#1857): `live`
+    refuses a fixture (the option is `--fixture/--live`), a server path is
+    text, and `--register` is a choice about this machine, not the push."""
+    options = dict(params)
+    options.pop("register", None)
+    options["live"] = not options.pop("fixture")
+    for name in ("odbc_home", "qhome"):
+        options[name] = None if options[name] is None else str(options[name])
+    return options
