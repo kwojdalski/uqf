@@ -9,7 +9,7 @@ with an interpreter that imports uqf's dependencies and an environment file.
 adopt works that out by asking the server, in one read-only round trip:
 
   - does `<dest>/current` link to a release already; if not, which directory
-    would become one (`--release`, default `<dest>` itself), moved to
+    would become one (`--release-dir`, default `<dest>` itself), moved to
     `<dest>/releases/adopted-<UTC time>` with `current` linked to it;
   - can that release launch uqs as pushed (.venv/bin/uqs and deploy.env), or
     must it run from source;
@@ -152,7 +152,7 @@ def survey(
     now: datetime | None = None,
 ) -> Survey:
     """Ask the server what adopting would find; change nothing."""
-    for flag, value in (("--release", release), ("--launch-python", python),
+    for flag, value in (("--release-dir", release), ("--launch-python", python),
                         ("--launch-env-file", env_file)):  # fmt: skip
         if value is not None and not value.startswith("/"):
             raise UqsError(f"{flag} {value!r} must be an absolute path on the server")

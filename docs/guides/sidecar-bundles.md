@@ -248,7 +248,7 @@ the checkout: they load a copy in `output/uqs-peachq-etl/qtree`:
 - **What it holds.** `src/` and `scripts/` from the checkout, installed bundle
   jobs included. Each q file is rewritten by
   `scripts/portable/flatten_contexts.py`, the converter that
-  `uqs deploy build --q-target 4.0` uses. `UQF_ROOT`, `UQF_SCRIPTS` and both
+  `uqs deploy build --q-version 4.0` uses. `UQF_ROOT`, `UQF_SCRIPTS` and both
   service layers point at the copy.
 - **When it is built.** Every `start`, before anything starts. A dry run of
   `runtime prepare` converts the tree and the bundles' files in memory and

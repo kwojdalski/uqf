@@ -69,7 +69,7 @@ POLICY: dict[str, Policy] = {
         "the TorQ internals this procedure drives (.stpps, .stplg, .stpm, .sub) are unverified on "
         "this version: registration may misbehave or fail part way. Accepting does NOT add the "
         "version to the tested list and does not establish compatibility",
-        "run the attach-stack suite against this version; prefer --runtime-only until a restart "
+        "run the attach-stack suite against this version; prefer --transient until a restart "
         "has been shown to reload the registration; run verify after apply",
         waives="accept the TORQ_VERSION blocker - a TorQ version this procedure was never "
         "tested on - " + _STAYS,
@@ -136,7 +136,7 @@ POLICY: dict[str, Policy] = {
     ),
     "PERSIST_UNAVAILABLE": Policy(
         False,
-        "use --runtime-only to accept losing the registration on a restart, or, for a stack "
+        "use --transient to accept losing the registration on a restart, or, for a stack "
         "on another machine, --schema-writer tickerplant to have its tickerplant write the block",
     ),
     "PROCESS_REGISTRY": Policy(

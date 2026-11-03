@@ -161,7 +161,7 @@ def test_logs_prints_the_lines(monkeypatch):
 
 def test_logs_attach_prints_the_runs_lines(monkeypatch):
     monkeypatch.setattr(attached_logs, "recent", lambda *_a, **_k: [{"message": "RESULT"}])
-    assert _doc(["logs", "--attach", "a"])["lines"][0]["message"] == "RESULT"
+    assert _doc(["logs", "--attachment", "a"])["lines"][0]["message"] == "RESULT"
 
 
 def test_schema_prints_tables_or_named_columns(monkeypatch):
@@ -199,7 +199,7 @@ def test_target_check_prints_the_release(monkeypatch):
     monkeypatch.setattr(control, "remote_for", lambda *_a: remote)
     monkeypatch.setattr(control, "current_release", lambda _r: "rel-1")
     doc = _doc(["target", "check", "t"])
-    assert doc == {"ok": True, "target": "t", "host": "h", "dest": "/srv/uqf",
+    assert doc == {"ok": True, "target": "t", "ssh": "h", "dest": "/srv/uqf",
                    "remote_user": None, "release": "rel-1"}  # fmt: skip
 
 

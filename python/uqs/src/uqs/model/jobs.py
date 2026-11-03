@@ -1,6 +1,6 @@
 """Every ETL job the tree declares, as rows: what `uqs job list` shows.
 
-The process table (`uqs list processes`) answers "what runs where"; this
+The process table (`uqs process list`) answers "what runs where"; this
 answers "what jobs are there": each streaming job, normalizer and bounded
 worker, read from its own q declaration - the same files the process
 registry is built from, so the two cannot disagree about which jobs exist -
@@ -19,6 +19,7 @@ from typing import Any
 
 from uqs.cells import Shown
 from uqs.model.declarations import declaration_calls, reaction_calls, read_file_text, symbols
+from uqs.model.kinds import LISTED_KIND, REACTION
 from uqs.model.pipeline import PipelineKind
 from uqs.model.producers import BOUNDED, processes_by_table
 from uqs.paths import REACTION_DIR, STREAM_DIR, WORKER_DIR
@@ -56,7 +57,7 @@ def job_rows(repo_root: Path) -> list[dict[str, Any]]:
             text = path.read_text()
             rel = path.relative_to(repo_root)
             calls = declaration_calls(text)
-            for decl, (_, _, fields) in zip(read_file_text(text, rel), calls, strict=True):
+            for decl, (verb, _, fields) in zip(read_file_text(text, rel), calls, strict=True):
                 if decl.kind is PipelineKind.BACKFILL:
                     sources = symbols(fields.get("source", ""))
                     reads = Shown(sources, ", ".join(f"source {s}" for s in sources))
@@ -70,7 +71,8 @@ def job_rows(repo_root: Path) -> list[dict[str, Any]]:
                 rows.append(
                     {
                         "job": decl.name,
-                        "kind": str(decl.kind),
+                        "kind": LISTED_KIND[verb.lstrip(".")],
+                        "subscribes": bool(decl.subscribe_to),
                         "procname": decl.procname,
                         "reads": reads,
                         "writes": writes,
@@ -86,7 +88,8 @@ def job_rows(repo_root: Path) -> list[dict[str, Any]]:
             rows.append(
                 {
                     "job": r.name,
-                    "kind": "reaction",
+                    "kind": REACTION,
+                    "subscribes": False,
                     # No process of its own: it runs in whichever publishes.
                     "procname": ", ".join(producers.get(r.dataset, [])) or Shown(None, "-"),
                     "reads": [r.dataset],

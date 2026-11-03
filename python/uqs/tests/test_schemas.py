@@ -96,7 +96,7 @@ def test_no_definition_carries_rows():
 # metadata (#1781); the TEXT readers that remain - for a bundle's tables.q
 # before install, and the scaffold's tree - are held here to the same columns
 # on the tree's own text AND on a release written by `uqs deploy build
-# --q-target 4.0`, which prefixes `.qetl.plant.`.
+# --q-version 4.0`, which prefixes `.qetl.plant.`.
 
 
 def _bare(text: str) -> str:

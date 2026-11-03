@@ -60,7 +60,7 @@ def test_a_refused_attach_with_json_prints_one_parseable_document(tmp_path):
     doc = json.loads(run.stdout)  # the whole of stdout, nothing before it
     assert doc["ok"] is False
     assert doc["attachment"] == "nosuch-1685"
-    assert "needs --job and --stack-id" in doc["error"]
+    assert "needs --job and --base-port" in doc["error"]
     assert "ERROR" in run.stderr  # the log line still exists, on stderr
 
 
@@ -71,7 +71,7 @@ def test_a_refused_attach_without_json_logs_to_stderr_too(tmp_path):
     assert run.returncode == 1
     assert run.stdout == ""
     assert "ERROR" in run.stderr
-    assert "needs --job and --stack-id" in run.stderr
+    assert "needs --job and --base-port" in run.stderr
 
 
 # ------------------------------------------------- every --json command, offline
@@ -80,11 +80,16 @@ def test_a_refused_attach_without_json_logs_to_stderr_too(tmp_path):
 #: live stack - most of them refused before reaching anything - and the text the
 #: document must carry.
 CASES: dict[str, tuple[list[str], str]] = {
-    "list": (["list"], "processes"),
     "target list": (["target", "list"], "["),
     "target log": (["target", "log"], "edited_outside"),
     "runtime list": (["runtime", "list"], "uqf"),
     "job list": (["job", "list"], "["),
+    "process list": (["process", "list"], '"process"'),
+    "profile list": (["profile", "list"], "["),
+    "config field list": (["config", "field", "list"], "["),
+    "config env": (["config", "env"], "KDBBASEPORT"),
+    "job attachment status": (["job", "attachment", "status"], "["),
+    "config list": (["config", "list"], "["),
     "job attachment list": (["job", "attachment", "list"], "["),
     "override list": (["override", "list"], "q-version-check"),
     "data check": (["data", "check"], "present"),
@@ -93,18 +98,22 @@ CASES: dict[str, tuple[list[str], str]] = {
         "no such directory",
     ),
     "runtime diff": (["runtime", "diff", "nosuch1", "nosuch2"], "is not a runtime"),
-    "job receive": (["job", "receive", "--attach", "nosuch"], "--listen-port is required"),
+    "job receiver start": (
+        ["job", "receiver", "start", "--attachment", "nosuch"],
+        "--listen-port is required",
+    ),
+    "job receiver stop": (["job", "receiver", "stop", "--attachment", "nosuch", "-n"], "stopped"),
     "job backfill": (
         ["job", "backfill", "w", "--from", "2024-01-01", "--to", "2024-01-02"],
-        "--json is for --attach",
+        "source_version",
     ),
     "job attachment add": (["job", "attachment", "add", "nosuch"], "needs --job"),
     "job attachment contract approve": (
-        ["job", "attachment", "contract", "approve", "nosuch.json", "--attach", "nosuch"],
+        ["job", "attachment", "contract", "approve", "nosuch.json", "--attachment", "nosuch"],
         "cannot read nosuch.json",
     ),
     "job attachment contract list": (
-        ["job", "attachment", "contract", "list", "--attach", "nosuch"],
+        ["job", "attachment", "contract", "list", "--attachment", "nosuch"],
         "[]",
     ),
     "job attachment show": (["job", "attachment", "show", "nosuch"], "no attachment 'nosuch'"),
@@ -126,8 +135,8 @@ CASES: dict[str, tuple[list[str], str]] = {
         ["job", "check", "1bad", "--from", "2026-09-11", "--to", "2026-09-12"],
         "is not a dataset name",
     ),
-    "job runs list": (["job", "runs", "list", "--attach", "nosuch"], "no attachment"),
-    "job runs show": (["job", "runs", "show", "r", "--attach", "nosuch"], "no attachment"),
+    "job runs list": (["job", "runs", "list", "--attachment", "nosuch"], "no attachment"),
+    "job runs show": (["job", "runs", "show", "r", "--attachment", "nosuch"], "no attachment"),
     "job runs audit": (["job", "runs", "audit", "d", "--from", "bad", "--to", "2024-01-02"], "bad"),
     "connector status": (["connector", "status", "nosuch"], "no connector 'nosuch'"),
     "connector logs": (["connector", "logs", "crypto", "--follow"], "--follow does not apply"),
@@ -386,13 +395,11 @@ def test_a_row_is_typed_for_a_document_and_rendered_for_a_table():
 @pytest.mark.parametrize(
     ("argv", "key"),
     [
-        (["list", "processes"], "processes"),
-        (["list", "profiles"], "profiles"),
-        (["list", "dependencies"], "dependencies"),
+        (["process", "list"], "processes"),
+        (["profile", "list"], "profiles"),
         (["runtime", "list"], "runtimes"),
         (["job", "list"], "jobs"),
         (["override", "list"], "overrides"),
-        (["list"], "kinds"),
     ],
 )
 def test_a_list_is_an_object_of_typed_records(argv, key):
@@ -403,8 +410,6 @@ def test_a_list_is_an_object_of_typed_records(argv, key):
     doc = json.loads(result.stdout)
     assert list(doc) == [key] and doc[key]
     for record in doc[key]:
-        if not isinstance(record, dict):
-            continue  # `uqs list`'s kinds are names
         assert "procname" not in record, "a process is `process` in a document"
         for field, value in record.items():
             assert not (isinstance(value, str) and value.isdigit()), (field, value)
@@ -412,14 +417,14 @@ def test_a_list_is_an_object_of_typed_records(argv, key):
 
 
 def test_list_processes_carries_numbers_bools_and_lists():
-    doc = json.loads(CliRunner().invoke(cli.app, ["list", "processes", "--json"]).stdout)
+    doc = json.loads(CliRunner().invoke(cli.app, ["process", "list", "--json"]).stdout)
     rdb = next(r for r in doc["processes"] if r["process"] == "rdb1")
     assert isinstance(rdb["port"], int) and isinstance(rdb["startwithall"], bool)
     assert isinstance(rdb["inputs"], list) and isinstance(rdb["outputs"], list)
 
 
 def test_an_older_releases_bare_process_list_still_gives_its_ports():
-    """`--target` tunnels read the SERVER's `list processes --json`, which is
+    """`--target` tunnels read the SERVER's `process list --json`, which is
     whatever release was deployed there: both shapes give the same ports."""
     from uqs.deploy import control, tunnel
 
@@ -443,3 +448,29 @@ def test_status_json_says_all_its_interpreter_line_says(monkeypatch):
     kdbx = summary._interpreter(InterpreterStatus(Path("/opt/q"), "kdbx", None))
     assert kdbx["runnable"] is True and kdbx["connection_limit"] == 16
     assert kdbx["summary"].endswith("16 connections")
+
+
+#: A document's keys are snake_case (#1888): `target list` printed "as" and
+#: "last deployed". Under these keys the keys are data - a table's or a
+#: process's name - not the document's own.
+DATA_KEYS = {"rows", "sample", "result", "busy", "fields", "facts_by", "missing_tables",
+             "missing_columns", "types", "renames", "tables_by"}  # fmt: skip
+_KEY = re.compile(r"^[a-z][a-z0-9_]*$")
+
+
+def _bad_keys(doc, path="") -> list[str]:
+    if isinstance(doc, list):
+        return [b for i, v in enumerate(doc) for b in _bad_keys(v, f"{path}[{i}]")]
+    if not isinstance(doc, dict):
+        return []
+    bad = [f"{path}.{k}" for k in doc if not _KEY.match(str(k))]
+    return bad + [
+        b for k, v in doc.items() if k not in DATA_KEYS for b in _bad_keys(v, f"{path}.{k}")
+    ]
+
+
+@pytest.mark.parametrize("command", sorted(CASES))
+def test_every_json_key_is_snake_case(tmp_path, command):
+    argv, _ = CASES[command]
+    run = _uqs(tmp_path, *argv, "--json")
+    assert not _bad_keys(json.loads(run.stdout))

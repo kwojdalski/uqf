@@ -78,7 +78,7 @@ def test_resolve_port_refuses_an_unknown_process_and_says_where_the_real_ones_ar
     paths = stack_paths.default_paths()
     with pytest.raises(UqsError, match="no process rbd1 in this runtime") as exc:
         schema_view.resolve_port(paths, "rbd1", 6050)
-    assert "`uqs list processes`" in str(exc.value)
+    assert "`uqs process list`" in str(exc.value)
 
 
 def test_the_default_process_is_one_that_exists():

@@ -73,7 +73,7 @@ def differences(saved: Attachment, given: Given, root: Path) -> list[str]:
         if after is not None and after != before:
             out.append(f"{what}: {before!r} -> {after!r}")
 
-    differs("--stack-id", st.id, given.stack_id)
+    differs("--base-port", st.id, given.stack_id)
     differs("--host", st.host, given.host)
     if given.discovery is not None:
         differs("--discovery", f"{st.discovery_host}:{st.discovery_port}",
@@ -82,7 +82,7 @@ def differences(saved: Attachment, given: Given, root: Path) -> list[str]:
     differs("--consumer", st.consumers, tuple(given.consumers) or None)
     differs("--user", st.user, given.user)
     differs("--password-env", st.password_env, given.password_env)
-    differs("--runtime-only", saved.persist, "runtime-only" if given.runtime_only else None)
+    differs("--transient", saved.persist, "runtime-only" if given.runtime_only else None)
     differs("--schema-writer", saved.schema_writer or saved.persist, given.schema_writer)
     differs("--tplogdir", saved.storage.tplogdir, given.tplogdir or None)
     differs("--schema-file", saved.storage.schema_file, given.schema_file or None)
@@ -141,9 +141,9 @@ def resolve(
             )
     if not given.job or given.stack_id is None:
         raise AttachmentError(
-            f"a new attachment needs --job and --stack-id (no attachment {name} is saved)"
+            f"a new attachment needs --job and --base-port (no attachment {name} is saved)"
             if saved is None
-            else "--replace rebuilds the attachment: give --job and --stack-id"
+            else "--replace rebuilds the attachment: give --job and --base-port"
         )
     att = create(
         name, given.job, given.bundle, given.stack_id, root,

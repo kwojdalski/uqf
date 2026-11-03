@@ -20,9 +20,8 @@ import typer
 from rich.table import Table
 
 from uqs.cli import completion
-from uqs.cli.json_out import emit, json_opt, timestamp
-from uqs.cli.json_out import records as json_records
-from uqs.cli.renames import alias_command, renamed
+from uqs.cli.json_out import emit, json_opt, records, timestamp
+from uqs.cli.renames import ATTACHMENT, alias_command, renamed, warn_renamed
 from uqs.cli.safety import ChangesState, ReadOnly, dry_run_note
 from uqs.cli.shared import (
     BasePortOpt,
@@ -36,21 +35,19 @@ from uqs.cli.shared import (
     console,
 )
 from uqs.paths import UqsError, UqsUsageError
-from uqs.stack import attached_logs
+from uqs.stack import attached_logs, process_unset
 from uqs.stack import channel as stack_channel
 from uqs.stack import logs as stack_logs
 from uqs.stack import multitail as stack_multitail
 from uqs.stack import procs as stack_procs
 
-#: `uqs config show/set`: one process's process.csv row, read resolved or
-#: changed through process_overrides.csv. `uqs list overrides` and
-#: `uqs list fields` stay kinds of `list` (cli/lists.py), the stack's own
-#: tables.
+#: `uqs config show/set/unset/list`: process.csv rows, set in process_overrides.csv (#1855).
 config_app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
     help="A process's process.csv fields: show them, or set one (persisted to "
-    "process_overrides.csv); and the sources the stack reads (sources).",
+    "process_overrides.csv) or unset one, and list every one set; the fields set can "
+    "change (field), the stack's resolved env, and the sources the stack reads (sources).",
 )
 app.add_typer(config_app, name="config")
 
@@ -110,26 +107,85 @@ def config_set(
     procname: Annotated[
         str, typer.Argument(metavar="PROC", help="The process", autocompletion=completion.procname)
     ],
-    field: Annotated[str, typer.Argument(autocompletion=completion.csv_fields)],
-    value: str,
+    pairs: Annotated[
+        list[str],
+        typer.Argument(
+            metavar="FIELD=VALUE...",
+            help="process.csv fields and their values, as `uqs target set` takes its "
+            "settings: port=6061 startwithall=0",
+            autocompletion=completion.csv_fields,
+        ),
+    ],
     dry_run: Annotated[
         bool,
         typer.Option("--dry-run", "-n", help="Check the setting and show it; write nothing"),
     ] = False,
 ) -> None:
-    """Set one process.csv field for *procname* (persisted to
-    process_overrides.csv, applied on every later start/stop/summary/...).
-    """
+    """Set process.csv fields for *procname* (persisted to process_overrides.csv,
+    applied on every later start/stop/...); `uqs config unset` removes one."""
+    settings = _pairs(pairs)
     try:
-        stack_procs.set_process_config(_paths(), procname, field, value, dry_run)
+        for field, value in settings:  # every one checked before any is written
+            stack_procs.set_process_config(_paths(), procname, field, value, True)
+        if not dry_run:
+            for field, value in settings:
+                stack_procs.set_process_config(_paths(), procname, field, value, False)
     except UqsError as exc:
         _die(exc)
         return
+    for field, value in settings:
+        verb = "would set" if dry_run else "set"
+        console.print(f"{verb} {procname}.{field} = {value}", markup=False)
     if dry_run:
-        console.print(f"would set {procname}.{field} = {value}", markup=False)
         console.print(dry_run_note())
+
+
+def _pairs(words: list[str]) -> list[tuple[str, str]]:
+    """FIELD=VALUE words as (field, value); `FIELD VALUE`, the old two-word
+    form (#1858), as one pair, warned."""
+    if len(words) == 2 and "=" not in words[0]:
+        warn_renamed(
+            f"config set PROC {words[0]} {words[1]}", f"config set PROC {words[0]}={words[1]}"
+        )
+        return [(words[0], words[1])]
+    out = []
+    for word in words:
+        field, sep, value = word.partition("=")
+        if not sep or not field:
+            _die(UqsError(f"{word!r} is not FIELD=VALUE"))
+        out.append((field, value))
+    return out
+
+
+@config_app.command("unset", cls=ChangesState)
+def config_unset(
+    procname: Annotated[
+        str, typer.Argument(metavar="PROC", help="The process", autocompletion=completion.procname)
+    ],
+    fields: Annotated[
+        list[str],
+        typer.Argument(
+            metavar="FIELD...",
+            help="Fields whose override to remove, so process.csv's own value applies",
+            autocompletion=completion.csv_fields,
+        ),
+    ],
+    dry_run: Annotated[
+        bool,
+        typer.Option("--dry-run", "-n", help="Check the change and show it; write nothing"),
+    ] = False,
+) -> None:
+    """Remove *procname*'s override of each FIELD, as `uqs target unset` does
+    a target's setting: process.csv's own value applies again (#1858)."""
+    try:
+        process_unset.unset_process_config(_paths(), procname, fields, dry_run)
+    except UqsError as exc:
+        _die(exc)
         return
-    console.print(f"{procname}.{field} = {value}")
+    verb = "would unset" if dry_run else "unset"
+    console.print(f"{verb} {procname}.{', '.join(fields)}", markup=False)
+    if dry_run:
+        console.print(dry_run_note())
 
 
 LogsJson = json_opt(
@@ -139,11 +195,9 @@ LogsJson = json_opt(
 _LINE_KEYS = ("time", "host", "procname", "proctype", "loglevel", "id", "message")
 
 
-def _json_lines(records: list[dict]) -> None:
-    """The lines as one document: a process is `process`, and the time TorQ
-    stamped in q's local `.z.P` is ISO-8601 with this machine's offset (#1882)."""
-    lines = [{k: r.get(k) for k in _LINE_KEYS} for r in records]
-    emit({"lines": [line | {"time": timestamp(line["time"])} for line in json_records(lines)]})
+def _json_lines(rows: list[dict]) -> None:  # q's local .z.P, with this machine's offset
+    lines = records([{k: r.get(k) for k in _LINE_KEYS} for r in rows])
+    emit({"lines": [line | {"time": timestamp(line["time"])} for line in lines]})
 
 
 @app.command(
@@ -153,6 +207,7 @@ def _json_lines(records: list[dict]) -> None:
             "--print": "--show-command",
             "--columns": "--pane-columns",
             "-c": "--pane-columns",
+            **ATTACHMENT,
         },
         ReadOnly,
     )
@@ -213,16 +268,16 @@ def logs(
     attach: Annotated[
         str | None,
         typer.Option(
-            "--attach",
-            help="Read an attached backfill's or receiver's log instead: the latest run for "
-            "this attachment (`uqs job backfill --attach`)",
+            "--attachment",
+            help="The attachment whose backfill or receiver log to read instead: its latest "
+            "run (`uqs job backfill --attachment`)",
         ),
     ] = None,
     worker: Annotated[
         str | None,
         typer.Option(
             "--worker",
-            help="With --attach: whose run - the worker, or <dataset>.receiver. Needed when "
+            help="With --attachment: whose run - the worker, or <dataset>.receiver. Needed when "
             "the attachment has logs of more than one",
         ),
     ] = None,
@@ -230,7 +285,7 @@ def logs(
         str | None,
         typer.Option(
             "--run",
-            help="With --attach: an older run, by its log's file name or a prefix of its "
+            help="With --attachment: an older run, by its log's file name or a prefix of its "
             "stamp (e.g. 20261027T1304)",
         ),
     ] = None,
@@ -247,17 +302,17 @@ def logs(
     publish, filtered by `--id` and `--level` - e.g. `logs all --channel
     --level ERROR`, `logs fxpositions1 --channel --id fx_positions` (#1067).
 
-    `--attach` reads an attached backfill's or receiver's run instead, which is
-    no TorQ process: `logs --attach pb-uat --worker piggybank_ledger_backfill -f`
+    `--attachment` reads an attached backfill's or receiver's run instead, which is
+    no TorQ process: `logs --attachment pb-uat --worker piggybank_ledger_backfill -f`
     (#1725). Its q errors and RESULT line are shown whatever `--level` says.
 
     What the options combine with (#1730): the PROCS are what is read, every
-    option a filter on how. `--attach NAME` replaces PROCS - one attachment's
+    option a filter on how. `--attachment NAME` replaces PROCS - one attachment's
     run, narrowed by `--worker` (a worker, or <dataset>.receiver) and `--run`,
     which need it. `--channel` and `--multitail` each read PROCS another way:
     `--id` needs `--channel`; `--stream`, `--pane-columns` and `--show-command` need
     `--multitail`. `--follow`, `--lines` and `--level` go with the files and
-    with `--attach`.
+    with `--attachment`.
     """
     if as_json:
         for option, used in {
@@ -271,7 +326,7 @@ def logs(
     if attach is None:
         for option, used in {"--worker": worker, "--run": run}.items():
             if used is not None:
-                _die(UqsUsageError(f"{option} needs --attach"))
+                _die(UqsUsageError(f"{option} needs --attachment"))
                 return
     else:
         clash = {"a process name": bool(procs), "--channel": channel, "--multitail": multitail}
@@ -279,7 +334,7 @@ def logs(
             if used:
                 _die(
                     UqsUsageError(
-                        f"{option} does not apply with --attach, which reads one run's log"
+                        f"{option} does not apply with --attachment, which reads one run's log"
                     )
                 )
                 return

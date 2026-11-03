@@ -89,7 +89,7 @@ def _started(fake, att) -> None:
 def new(fake, *extra: str) -> list[str]:
     """The first command line: a new attachment's identity."""
     return ["pb-uat", "--job", "pb_general_ledger", "--bundle", str(fake.bundle),
-            "--stack-id", "6000", "--runtime-only", *extra]  # fmt: skip
+            "--base-port", "6000", "--transient", *extra]  # fmt: skip
 
 
 def run(*argv: str, debug: bool = False, **kw):
@@ -161,7 +161,7 @@ def test_the_old_verbs_are_hidden_aliases_that_name_the_new_spelling(world, monk
         assert job.commands[old].hidden, old
     assert run_old("attach", *new(world, "--dry-run")).exit_code == 0
     assert run_old("detach", "pb-uat", "--dry-run").exit_code == 1, "nothing saved by a dry run"
-    done = run_old("contract", "list", "--attach", "pb-uat", "--json")
+    done = run_old("contract", "list", "--attachment", "pb-uat", "--json")
     assert done.exit_code == 0 and json.loads(done.output) == {"contracts": []}
     assert warned == [
         ("attach", "uqs job attachment add"),
@@ -386,7 +386,7 @@ def test_conflicting_options_for_a_saved_attachment_are_refused_unless_replaced(
     moved[moved.index("6000")] = "6100"
     refused = run("add", *moved)
     assert refused.exit_code == 1
-    assert any("saved with other settings" in m and "--stack-id" in m for m in world.errors)
+    assert any("saved with other settings" in m and "--base-port" in m for m in world.errors)
     replaced = run("add", *moved, "--replace")
     assert replaced.exit_code == 1, "its manifest holds changes on stack 6000"
     assert any("detach it first" in m for m in world.errors)
@@ -397,7 +397,7 @@ def test_conflicting_options_for_a_saved_attachment_are_refused_unless_replaced(
 def test_a_new_attachment_needs_a_job_and_a_stack_id(world):
     result = run("add", "pb-uat", "--dry-run")
     assert result.exit_code == 1
-    assert any("needs --job and --stack-id" in m for m in world.errors)
+    assert any("needs --job and --base-port" in m for m in world.errors)
 
 
 def test_a_partial_apply_exits_nonzero_with_recovery_and_starts_nothing(world, monkeypatch):

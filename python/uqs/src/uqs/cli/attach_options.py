@@ -30,10 +30,10 @@ BundleOpt = Annotated[
     Path | None,
     typer.Option("--bundle", help="The sidecar bundle holding the job (default: this tree)"),
 ]
-StackIdOpt = Annotated[
+BasePortOpt = Annotated[
     int | None,
     typer.Option(
-        "--stack-id",
+        "--base-port",
         help="The existing stack's base port (-stackid / KDBBASEPORT). No default: "
         "the runtime's own base port is exactly the wrong guess.",
     ),
@@ -46,7 +46,7 @@ DiscoveryOpt = Annotated[
     str | None,
     typer.Option(
         "--discovery",
-        help="HOST:PORT of its discovery, on the --host machine (default: HOST:<stack-id>+1)",
+        help="HOST:PORT of its discovery, on the --host machine (default: HOST:<base-port>+1)",
     ),
 ]
 TickerplantOpt = Annotated[
@@ -59,7 +59,7 @@ UserOpt = Annotated[
     str | None,
     typer.Option(
         "--user",
-        help=f"User to log in to the stack's processes as (default: {config.DEFAULT_USER})",
+        help=f"The user to log in to the stack's processes as (default: {config.DEFAULT_USER})",
     ),
 ]
 PasswordEnvOpt = Annotated[
@@ -70,12 +70,12 @@ PasswordEnvOpt = Annotated[
         "credential). The password itself is never saved or printed.",
     ),
 ]
-RuntimeOnlyOpt = Annotated[
+TransientOpt = Annotated[
     bool,
     typer.Option(
-        "--runtime-only",
-        help="Accept that restarting the tickerplant drops the registration "
-        "(default: add a marked block to its schema file)",
+        "--transient",
+        help="Register the table in the running tickerplant only, accepting that "
+        "restarting it drops the registration (default: add a marked block to its schema file)",
     ),
 ]
 SchemaWriterOpt = Annotated[
@@ -117,7 +117,7 @@ SshOpt = Annotated[
     typer.Option(
         "--ssh",
         help="The ssh destination, USER@HOST, that reaches the stack's files, for `uqs data "
-        "check` and `alter --attach` (default: --host as the current user). Changes "
+        "check` and `alter --attachment` (default: --host as the current user). Changes "
         "a saved attachment without --replace",
     ),
 ]

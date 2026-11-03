@@ -32,14 +32,14 @@ profile = "essential"   # every target starts this
 
 # production: careful
 [targets.prod]
-host = "deploy@prod"    # the bastion alias
+ssh = "deploy@prod"    # the bastion alias
 dest = "/srv/uqf"
 remote_user = "svc"
 
   # uat is rebuilt weekly
 [targets.uat]
 dest = "/srv/uat"
-host = "deploy@uat"
+ssh = "deploy@uat"
 labels = { tier = "uat" }
 
 
@@ -116,12 +116,12 @@ def _outside(old: str, new: str, block: str) -> tuple[str, str]:
 
 
 def test_set_changes_one_value_and_nothing_else(declared):
-    r = uqs("target", "set", "prod", "host=deploy@prod-2", "connect_timeout=20")
+    r = uqs("target", "set", "prod", "ssh=deploy@prod-2", "connect_timeout=20")
     assert r.exit_code == 0, r.output
     after = declared.read_text()
     assert after == HAND_WRITTEN.replace(
-        'host = "deploy@prod"    # the bastion alias',
-        'host = "deploy@prod-2"    # the bastion alias',
+        'ssh = "deploy@prod"    # the bastion alias',
+        'ssh = "deploy@prod-2"    # the bastion alias',
     ).replace('remote_user = "svc"\n', 'remote_user = "svc"\nconnect_timeout = 20\n')
     assert targets.read(ROOT)["prod"]["connect_timeout"] == 20
 
@@ -129,7 +129,7 @@ def test_set_changes_one_value_and_nothing_else(declared):
 def test_remove_takes_its_block_and_its_own_comment_only(declared):
     block = (
         "# production: careful\n[targets.prod]\n"
-        'host = "deploy@prod"    # the bastion alias\ndest = "/srv/uqf"\nremote_user = "svc"\n\n'
+        'ssh = "deploy@prod"    # the bastion alias\ndest = "/srv/uqf"\nremote_user = "svc"\n\n'
     )
     assert uqs("target", "remove", "prod", "--yes").exit_code == 0
     assert declared.read_text() == HAND_WRITTEN.replace(block, "")
@@ -163,7 +163,7 @@ def test_add_appends_a_block_and_a_remove_takes_it_away_again(declared):
     r = uqs("target", "add", "dr", "--ssh", "svc@dr", "--dest", "/srv/dr", "--label", "site=b")
     assert r.exit_code == 0, r.output
     assert declared.read_text().startswith(HAND_WRITTEN)
-    assert '[targets.dr]\nhost = "svc@dr"\ndest = "/srv/dr"\nlabels = {site = "b"}\n' in (
+    assert '[targets.dr]\nssh = "svc@dr"\ndest = "/srv/dr"\nlabels = {site = "b"}\n' in (
         declared.read_text()
     )
     assert uqs("target", "remove", "dr", "--yes").exit_code == 0
@@ -416,7 +416,7 @@ def test_a_push_registers_through_the_transaction_and_prints_the_block(declared)
     assert entry["kind"] == target_changelog.REGISTERED and entry["target"] == "new-example-new"
     assert declared.read_text().startswith(HAND_WRITTEN), "appended, the rest untouched"
     (message,) = said
-    assert '[targets.new-example-new]\nhost = "svc@new.example"' in message
+    assert '[targets.new-example-new]\nssh = "svc@new.example"' in message
     assert "change 1" in message and "--no-register" in message
 
 
@@ -451,20 +451,20 @@ def test_push_takes_no_register(declared, monkeypatch):
 
 
 def test_an_inline_target_is_changed_through_tomlkit(tmp_path):
-    text = '[targets]\na = { host = "h", dest = "/d" }  # inline\nb = { host = "g", dest = "/e" }\n'
+    text = '[targets]\na = { ssh = "h", dest = "/d" }  # inline\nb = { ssh = "g", dest = "/e" }\n'
     key = ("targets", "a")
     assert target_file.block(text, key) is None
     removed = target_file.remove(text, key)
-    assert removed == '[targets]\nb = { host = "g", dest = "/e" }\n'
+    assert removed == '[targets]\nb = { ssh = "g", dest = "/e" }\n'
     renamed = target_file.rename(text, key, ("targets", "c"))
     assert set(tomllib.loads(renamed)["targets"]) == {"b", "c"}
 
 
 def test_a_sub_table_moves_with_its_target():
-    text = '[targets.a]\nhost = "h"\n\n[targets.a.labels]\nx = "1"\n\n[targets.b]\nhost = "g"\n'
-    assert target_file.remove(text, ("targets", "a")) == '[targets.b]\nhost = "g"\n'
+    text = '[targets.a]\nssh = "h"\n\n[targets.a.labels]\nx = "1"\n\n[targets.b]\nssh = "g"\n'
+    assert target_file.remove(text, ("targets", "a")) == '[targets.b]\nssh = "g"\n'
     assert target_file.rename(text, ("targets", "a"), ("targets", "z")).startswith(
-        '[targets.z]\nhost = "h"\n\n[targets.z.labels]\n'
+        '[targets.z]\nssh = "h"\n\n[targets.z.labels]\n'
     )
 
 

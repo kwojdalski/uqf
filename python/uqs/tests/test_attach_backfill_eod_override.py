@@ -1,6 +1,6 @@
 """Waiving the end-of-day fence of an attached backfill (#1828, part of #1824).
 
-`uqs job backfill JOB --attach NAME --from A --to B --skip-eod-fence --reason TEXT`: the plan,
+`uqs job backfill JOB --attachment NAME --from A --to B --skip-eod-fence --reason TEXT`: the plan,
 the dry run and the run are admitted within the native writers' end-of-day fence, and the run
 gets no end-of-day write deadline (`-deadline 0Wp`). Only `eod-fence` findings are lifted -
 each kept, at level `accepted`, never shown as passing - and every other blocker still refuses.
@@ -76,7 +76,9 @@ def test_backfill_help_shows_the_generated_skip_and_receive_does_not():
     flat = " ".join(run.output.split())
     assert "--skip-eod-fence" in flat and "The same as --override eod-fence" in flat
     assert backfill_policy.POLICY["eod-fence"].risk[:60] in flat
-    receive = PlainRunner().invoke(cli.app, ["job", "receive", "--help"], env={"COLUMNS": "300"})
+    receive = PlainRunner().invoke(
+        cli.app, ["job", "receiver", "start", "--help"], env={"COLUMNS": "300"}
+    )
     assert "--skip-eod-fence" not in receive.output, "the receiver path takes no waiver"
 
 
@@ -289,7 +291,7 @@ def test_the_waiver_at_launch_still_refuses_a_reload_in_progress(world, launcher
 
 
 ARGV = [
-    "job", "backfill", WORKER, "--attach", "pb-uat", "--from", "2026-09-11",
+    "job", "backfill", WORKER, "--attachment", "pb-uat", "--from", "2026-09-11",
     "--to", "2026-09-13", "--source-version", "v1",
 ]  # fmt: skip
 
@@ -367,6 +369,6 @@ def test_cli_refuses_the_waiver_on_the_fleet_path(world, monkeypatch):
     result = PlainRunner().invoke(cli.app, argv, env={"COLUMNS": "300"})
     assert result.exit_code != 0
     assert any(
-        "--skip-eod-fence is for --attach: only a backfill into an attached native HDB" in m
+        "--skip-eod-fence is for --attachment: only a backfill into an attached native HDB" in m
         for m in world.errors
     ), world.errors

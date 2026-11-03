@@ -31,12 +31,16 @@ import typer
 
 from uqs.cells import Shown
 
+#: How every `--json` help begins (#1859): one phrasing, on every command.
+JSON_HELP = "Print one JSON document on stdout instead"
 
-def json_opt(shape: str) -> Any:
-    """The `--json` option, its help naming the document it prints."""
-    return Annotated[
-        bool, typer.Option("--json", help=f"Print one JSON document on stdout instead: {shape}")
-    ]
+
+def json_opt(shape: str | None = None, note: str | None = None) -> Any:
+    """The `--json` option: one help on every command (#1859), naming the
+    document's `shape` when given, then any `note` on when it applies.
+    Every command prints one document; none prints a line per record (#1882)."""
+    text = JSON_HELP + (f": {shape}" if shape else "")
+    return Annotated[bool, typer.Option("--json", help=text + (f". {note}" if note else ""))]
 
 
 #: A key one concept is spelled under in some rows -> the one spelling every

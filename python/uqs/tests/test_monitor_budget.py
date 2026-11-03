@@ -178,7 +178,7 @@ def test_a_monitor1_that_does_not_start_reports_nothing(monkeypatch):
 
 
 def test_a_config_set_override_reaches_the_report(monkeypatch):
-    """`uqs config set X startwithall 0` changes the fleet monitor1 is planned
+    """`uqs config set X startwithall=0` changes the fleet monitor1 is planned
     against, so the report is planned against the overridden rows too."""
     feeds = _rows(feed=4)
     rows = [_MONITOR, *_rows(rdb=ALLOWANCE - 1), *feeds]

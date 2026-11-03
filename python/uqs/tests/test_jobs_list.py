@@ -39,8 +39,8 @@ def test_every_kind_is_represented_in_the_real_tree():
     """`reaction` since #529, when rebuild_positions became the first one the
     tree runs rather than only tests."""
     assert {row["kind"] for row in job_rows(UQF_ROOT)} == {
-        "feed",
-        "etl",
+        "streaming",
+        "horizon",
         "normalizer",
         "backfill",
         "reaction",
@@ -86,6 +86,6 @@ def test_state_tells_a_scaffold_from_written_work(tmp_path):
     )
     states = {row["job"]: (row["state"], row["starts"], row["kind"]) for row in job_rows(root)}
     assert states == {
-        "a": ("scaffolded", "on demand", "feed"),
-        "b": ("written", "on demand", "feed"),
+        "a": ("scaffolded", "on demand", "streaming"),
+        "b": ("written", "on demand", "streaming"),
     }

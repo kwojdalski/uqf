@@ -68,7 +68,15 @@ def read(root: Path) -> list[dict]:
         entries = json.loads(path.read_text()).get("deployments", [])
     except (json.JSONDecodeError, AttributeError) as exc:
         raise DeployError("arguments", f"{path} is not a deployment history: {exc}") from None
-    return [e for e in entries if isinstance(e, dict)]
+    return [_ssh(e) for e in entries if isinstance(e, dict)]
+
+
+def _ssh(entry: dict) -> dict:
+    """An entry with its ssh destination under `ssh`, as every reader takes it
+    (#1888): an entry written before then holds it under `host`."""
+    if "host" in entry and "ssh" not in entry:
+        entry["ssh"] = entry.pop("host")
+    return entry
 
 
 def _write(root: Path, entries: list[dict]) -> None:
@@ -137,7 +145,7 @@ def record_adopted(
     server's latest installation."""
     entry = {
         "at": datetime.now(UTC).isoformat(timespec="seconds"),
-        "target": name, "host": host, "dest": dest, "remote_user": user,
+        "target": name, "ssh": host, "dest": dest, "remote_user": user,
         "release": release, "status": target_changelog.ADOPTED, "stage": None,
     }  # fmt: skip
     _write(root, [*read(root), entry])
@@ -171,7 +179,7 @@ def record(
         entry = {
             "at": (now or datetime.now(UTC)).isoformat(timespec="seconds"),
             "target": name,
-            "host": cfg.host,
+            "ssh": cfg.host,
             "dest": cfg.dest,
             "remote_user": cfg.remote_user,
             "release": r.get("release"),
@@ -199,7 +207,7 @@ def latest(root: Path, server: str | None = None) -> dict | None:
     for e in reversed(read(root)):
         if e.get("status") not in INSTALLED:
             continue
-        if server is None or server in (e.get("host"), server_of(str(e.get("host")))):
+        if server is None or server in (e.get("ssh"), server_of(str(e.get("ssh")))):
             return e
     return None
 
@@ -212,7 +220,7 @@ def defaults(root: Path) -> set[int]:
     entries = read(root)
     for i in range(len(entries) - 1, -1, -1):
         e = entries[i]
-        key = (e.get("host"), e.get("dest"))
+        key = (e.get("ssh"), e.get("dest"))
         if e.get("status") in INSTALLED and key not in seen:
             seen.add(key)
             out.add(i)
@@ -227,7 +235,7 @@ def target_rows(root: Path) -> list[dict[str, Any]]:
         return []
     declared = targets.read(root)
     deployed = {
-        (e.get("host"), e.get("dest")): e for e in read(root) if e.get("status") in INSTALLED
+        (e.get("ssh"), e.get("dest")): e for e in read(root) if e.get("status") in INSTALLED
     }
     envs = any(targets.ENVIRONMENT in t for t in declared.values())
     rows = []
@@ -240,10 +248,10 @@ def target_rows(root: Path) -> list[dict[str, Any]]:
                 **env,
                 "ssh": str(t.get("host", "")),
                 "dest": str(t.get("dest", "")),
-                "as": str(t.get("remote_user") or ""),
+                "remote_user": str(t.get("remote_user") or ""),
                 "labels": {str(k): str(v) for k, v in (t.get("labels") or {}).items()},
                 # {release, at} in a document; "release (at)" in the table (uqs.cells)
-                "last deployed": Shown(
+                "last_deployed": Shown(
                     {"release": last["release"], "at": last["at"]},
                     f"{last['release']} ({last['at']})",
                 )

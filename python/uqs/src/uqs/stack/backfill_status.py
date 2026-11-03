@@ -1,4 +1,4 @@
-"""`uqs list backfills`: what each attached backfill did, from the files it leaves (#1454).
+"""`uqs job attachment status`: what each attached backfill did, from the files it leaves (#1454).
 
 An attached backfill (uqs.attach.backfill_run) runs as a process of its own, logs to
 `<status dir>/attached/<attachment>-<destination id>/logs/` and holds an owner record in
@@ -99,7 +99,7 @@ def _row(state: Path) -> dict[str, Any]:
 
 
 def rows(paths: UqsPaths, base_port: int | None = None) -> list[dict[str, Any]]:
-    """One row per attached destination that has run (`uqs list backfills`): in name order.
+    """One row per attached destination that has run (`uqs job attachment status`): in name order.
     `base_port` is the listing's signature; the state is on disk and has none."""
     base = runs.status_dir(paths) / STATE_SUBDIR
     if not base.is_dir():

@@ -9,7 +9,7 @@ a file on this machine.
 
 Two things come from the server, and nothing else is assumed:
 
-  - the ports, from the release's own `uqs list processes --json`, run as
+  - the ports, from the release's own `uqs process list --json`, run as
     control.py runs every forwarded command (the release's deploy.env, its
     service account) - so they are what that release's process_ports.csv,
     port lock and runtime base port resolve to, never this checkout's;
@@ -37,7 +37,7 @@ from uqs.paths import UqsError
 
 #: The loopback address both ends of the tunnel use.
 LOOPBACK = "127.0.0.1"
-#: How long the remote `uqs list processes` may take, past ssh's own connect.
+#: How long the remote `uqs process list` may take, past ssh's own connect.
 LIST_TIMEOUT = 60
 #: How long the tunnel may take to accept, past ssh's ConnectTimeout.
 READY_GRACE = 5.0
@@ -47,11 +47,17 @@ Runner = Callable[..., subprocess.CompletedProcess]
 Popen = Callable[..., Any]
 
 
-def list_args(runtime: str | None, base_port: int | None) -> list[str]:
+#: A click usage error - an older release, which has no `uqs process list`.
+USAGE_ERROR = 2
+
+
+def list_args(runtime: str | None, base_port: int | None, current: bool = True) -> list[str]:
     """The remote uqs's argv for its process list: the runtime only when one
-    was chosen here, so the release's own deploy.env otherwise decides."""
+    was chosen here, so the release's own deploy.env otherwise decides. A
+    release from before #1858 lists them as `uqs process list` (`current`
+    False)."""
     args = ["--runtime", runtime] if runtime else []
-    args += ["list", "processes", "--json"]
+    args += ["process", "list", "--json"] if current else ["list", "processes", "--json"]
     return args + (["--base-port", str(base_port)] if base_port is not None else [])
 
 
@@ -61,17 +67,12 @@ def remote_ports(
     base_port: int | None = None,
     runner: Runner = subprocess.run,
 ) -> dict[str, int]:
-    """procname -> port, as the target's deployed release resolves them."""
-    argv = control.ssh_argv(r, list_args(runtime, base_port), tty=False)
+    """procname -> port, as the target's deployed release resolves them: by
+    `uqs process list`, or on a release from before it `uqs process list`."""
     try:
-        done = runner(
-            argv,
-            capture_output=True,
-            text=True,
-            check=False,
-            stdin=subprocess.DEVNULL,
-            timeout=r.connect_timeout + LIST_TIMEOUT,
-        )
+        done = _list(r, list_args(runtime, base_port), runner)
+        if done.returncode == USAGE_ERROR:
+            done = _list(r, list_args(runtime, base_port, current=False), runner)
     except subprocess.TimeoutExpired:
         raise UqsError(
             f"target {r.name}: listing its processes did not finish within "
@@ -88,8 +89,19 @@ def remote_ports(
     return _parse_ports(r, done.stdout or "")
 
 
+def _list(r: control.Remote, args: list[str], runner: Runner) -> subprocess.CompletedProcess:
+    return runner(
+        control.ssh_argv(r, args, tty=False),
+        capture_output=True,
+        text=True,
+        check=False,
+        stdin=subprocess.DEVNULL,
+        timeout=r.connect_timeout + LIST_TIMEOUT,
+    )
+
+
 def _parse_ports(r: control.Remote, out: str) -> dict[str, int]:
-    """The document `uqs list processes --json` prints, from where it starts:
+    """The document `uqs process list --json` prints, from where it starts:
     `{"processes": [{process, port}]}` (#1882), or the bare list of
     `{procname, port}` a release from before it printed - the release on the
     server is whatever was deployed there, not this checkout."""
@@ -101,7 +113,7 @@ def _parse_ports(r: control.Remote, out: str) -> dict[str, int]:
     except ValueError, TypeError, KeyError, AttributeError:
         raise UqsError(
             f"target {r.name}: its release did not list its processes as JSON - "
-            f"`uqs --target {r.name} list processes --json` shows what it printed; "
+            f"`uqs --target {r.name} process list --json` shows what it printed; "
             "a release older than `list --json` needs --port"
         ) from None
     if not ports:

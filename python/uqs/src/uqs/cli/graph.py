@@ -117,7 +117,7 @@ def live_status(port: int | None) -> dict[str, str]:
 
 
 def describe(name: str, info: dict[str, dict[str, str]], status: dict[str, str]) -> Text:
-    """The side panel for one process: what `uqs list processes` knows, and its status."""
+    """The side panel for one process: what `uqs process list` knows, and its status."""
     if name.startswith("("):
         return Text(f"{name}\n\nProduced outside the stack - nothing here to start.")
     row = info.get(name, {})

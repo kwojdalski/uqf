@@ -46,8 +46,8 @@ job_app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
     help="ETL jobs: write them into the tree (new, list, remove, install) and operate on them "
-    "- backfill, preview a feed, check a dataset's producers, find its gaps, receive another "
-    "machine's batches, a worker's checkpoint and runs, and its attachment to a TorQ stack "
+    "- backfill, preview a feed, check a dataset's producers, find its gaps, the receiver of "
+    "another machine's batches, a worker's checkpoint and runs, and its attachment to a TorQ stack "
     "already running.",
 )
 #: The two help panels `uqs job --help` lists its commands under.
@@ -222,6 +222,14 @@ ExportOpt = Annotated[
 QHostOpt = Annotated[str, typer.Option("--host", help="Host the q process listens on")]
 
 
+#: The sort and its direction, the same on every listing (#1728, #1858).
+SortOpt = Annotated[
+    str | None,
+    typer.Option("--sort", help="Sort by this column (case-insensitive, numeric-aware)."),
+]
+ReverseOpt = Annotated[
+    bool, typer.Option("--reverse", help="Sort descending. Only meaningful with --sort.")
+]
 InteractiveOpt = Annotated[
     bool,
     typer.Option(
