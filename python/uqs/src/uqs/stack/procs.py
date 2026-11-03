@@ -60,7 +60,7 @@ log = get_logger()
 # This is an overlay, not an edit: the vendored file is never touched,
 # and because process_overrides.csv is still applied afterwards, an operator
 # who does want the upstream behaviour can put it back with
-# `uqs config set monitor1 startwithall 0`.
+# `uqs config set monitor1 startwithall=0`.
 VENDORED_STARTWITHALL_OVERLAY = {"monitor1": "1", "feed1": "0"}
 
 #: Extra q a vendored process loads, as (before, after) its vendored `load`
@@ -287,7 +287,7 @@ def unknown_processes(names: list[str] | str, then: str = "") -> UqsError:
     word = "process" if len(names) == 1 else "processes"
     then = f". {then}" if then else ""
     return UqsError(
-        f"no {word} {', '.join(names)} in this runtime - `uqs list processes` names them{then}"
+        f"no {word} {', '.join(names)} in this runtime - `uqs process list` names them{then}"
     )
 
 

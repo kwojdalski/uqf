@@ -48,7 +48,7 @@ ProfileOpt = Annotated[
     typer.Option(
         "--profile",
         help=(
-            "Comma-separated named start set(s) - see `uqs list profiles`. "
+            "Comma-separated named start set(s) - see `uqs profile list`. "
             "Process names given as well are added to the set. Refused if the "
             "total is past the licence's connection cap."
         ),
@@ -274,7 +274,7 @@ def stop(
         str | None,
         typer.Option(
             "--profile",
-            help="Comma-separated named start set(s) to stop - see `uqs list profiles`. "
+            help="Comma-separated named start set(s) to stop - see `uqs profile list`. "
             "Process names given as well are added to the set",
             autocompletion=completion.profiles,
         ),

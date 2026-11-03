@@ -78,7 +78,7 @@ def build(
     """Build a bundled component's artifact: `torq`, TorQ and its starter pack exactly as
     vendored, for --torq-mode bundled; `q`, the pinned PeachQ, for --q-mode bundled;
     `python`, the CPython uv installs for linux --arch, for --python-mode bundled and
-    `uqs deploy build --python-runtime`. KX's q is never bundled."""
+    `uqs deploy build --python-component`. KX's q is never bundled."""
     _build("uqs deploy component build", component, output, arch, python, dry_run)
 
 

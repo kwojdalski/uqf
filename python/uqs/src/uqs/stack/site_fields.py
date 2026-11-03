@@ -10,7 +10,7 @@ process it starts.
 `uqs deploy push --process-fields` writes it into a target's deploy.env. Each
 declared column is appended to the generated header, after `qcmd`, and every
 row carries it: empty unless process_overrides.csv gives that process a value
-(`uqs config set tp1 taskset_no 3`). A value is never derived or guessed. With
+(`uqs config set tp1 taskset_no=3`). A value is never derived or guessed. With
 nothing declared, process.csv's columns are TorQ's own, exactly as before.
 """
 

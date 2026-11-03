@@ -224,7 +224,7 @@ def push(tmp_path: Path, rt: python_runtime.PythonRuntime, *extra: str, state: d
     pkg = release(tmp_path / "release")
     argv = [str(pkg), "--ssh", "uqf-server", "--dest", "/opt/uqf", "--profile", "capture",
             "--torq-home", "/opt/torq", "--python-mode", "bundled",
-            "--python-runtime", str(rt.path)]  # fmt: skip
+            "--python-component", str(rt.path)]  # fmt: skip
     code = driver.deploy(parse_args([*argv, *extra]), remote, out=out)
     return code, remote, out.getvalue()
 
@@ -428,7 +428,9 @@ def test_the_dry_run_names_the_release_that_carries_it(tmp_path, cache):
 
 def test_a_release_that_carries_none_is_refused_naming_both_ways(tmp_path, cache):
     pkg = carrying(tmp_path / "release", None)
-    with pytest.raises(DeployError, match=r"needs python_runtime.*carries none.*--python-runtime"):
+    with pytest.raises(
+        DeployError, match=r"needs python_runtime.*carries none.*--python-component"
+    ):
         push_carried(tmp_path, pkg)
 
 
@@ -437,7 +439,7 @@ def test_a_python_runtime_given_wins_over_the_carried_one(tmp_path, cache):
     given = runtime(tmp_path / "b", "cpython-3.14.8-linux-x86_64-gnu")
     pkg = carrying(tmp_path / "release", carried)
     probe = {" -I -c ": _done("UQF_PYTHON 3.14.8 cpython\n")}
-    code, _, out = push_carried(tmp_path, pkg, "--python-runtime", str(given.path), state=probe)
+    code, _, out = push_carried(tmp_path, pkg, "--python-component", str(given.path), state=probe)
     py = json.loads(out)["components"]["python"]
     assert code == 0 and py["sha256"] == given.sha256 and "carried_by" not in py
     assert not cache.exists(), "nothing is extracted when a runtime is given"
@@ -445,8 +447,8 @@ def test_a_python_runtime_given_wins_over_the_carried_one(tmp_path, cache):
 
 def test_a_pin_holds_the_carried_runtime_too(tmp_path, cache):
     pkg = carrying(tmp_path / "release", runtime(tmp_path))
-    with pytest.raises(DeployError, match="python_runtime_sha256"):
-        push_carried(tmp_path, pkg, "--python-runtime-sha256", "ab" * 32)
+    with pytest.raises(DeployError, match="python_component_sha256"):
+        push_carried(tmp_path, pkg, "--python-component-sha256", "ab" * 32)
 
 
 def test_an_altered_extracted_copy_is_extracted_again(tmp_path, cache):

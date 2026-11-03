@@ -184,7 +184,7 @@ class Server:
             raise DeployError(
                 "preflight",
                 "--override accept-converted-release is for a release converted at build time "
-                "(--q-target), and this one ships its q as written",
+                "(--q-version), and this one ships its q as written",
             )
         problems = compatible(self.target, facts, accept_converted=accept)
         if problems:

@@ -274,6 +274,17 @@ def test_an_option_that_is_given_wins_over_what_is_running(fleet, logs, monkeypa
     assert plan.hdb_dir == Path("/elsewhere/hdb")
 
 
+def test_a_defaulted_base_port_must_be_the_running_plants(fleet, logs, monkeypatch):
+    """`--base-port` defaults to the runtime's own, as on every command
+    (#1855); a plant under another stackid is refused, naming the one to give,
+    rather than replayed under a port nobody chose."""
+    fleet(STP1, HDB1)
+    monkeypatch.setattr(replay, "resolve_plant", lambda *a, **k: logs)
+    assert replay.plan(base_port=6050, base_port_given=False).base_port == 6050
+    with pytest.raises(UqsError, match="runs under base port 6050, not this runtime's 6150"):
+        replay.plan(base_port=6150, base_port_given=False)
+
+
 def test_supplying_everything_consults_no_process_at_all(monkeypatch):
     """Which is what makes the command usable on a stack that has already
     been stopped."""
@@ -338,7 +349,7 @@ def test_dry_run_prints_the_plan_and_starts_nothing(monkeypatch):
 
     monkeypatch.setattr(replay, "start", explode)
     argv = ["data", "replay", "--dry-run", "--port", "6050"]
-    argv += ["--dir", TPLOGS, "--hdb", HDB, "--schema", SCHEMA]
+    argv += ["--dir", TPLOGS, "--hdb", HDB, "--schema-file", SCHEMA]
     result = runner.invoke(cli.app, argv)
     assert result.exit_code == 0, result.output
     assert "would start: tpreplay1 -extras" in result.output.replace("\n", "")
@@ -347,7 +358,7 @@ def test_dry_run_prints_the_plan_and_starts_nothing(monkeypatch):
 def test_the_command_exits_with_what_the_replay_exited_with(monkeypatch):
     monkeypatch.setattr(replay, "start", lambda *a, **k: type("Completed", (), {"returncode": 3})())
     argv = ["data", "replay", "--port", "6050"]
-    argv += ["--dir", TPLOGS, "--hdb", HDB, "--schema", SCHEMA]
+    argv += ["--dir", TPLOGS, "--hdb", HDB, "--schema-file", SCHEMA]
     assert runner.invoke(cli.app, argv).exit_code == 3
 
 

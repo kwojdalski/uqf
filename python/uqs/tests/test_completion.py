@@ -90,10 +90,10 @@ def test_sort_offers_the_columns_of_the_kind_already_typed():
     """The line ends in `--sort`, still waiting for its value - which is where
     Click stops parsing and leaves `processes` unassigned. The completer has to
     find it anyway, or `--sort` offers nothing."""
-    assert complete("uqs list processes --sort ") == list(
+    assert complete("uqs process list --sort ") == list(
         listing.list_items(stack_paths.default_paths(), "processes")[0]
     )
-    assert complete("uqs list env --sort ") == ["name", "value"]
+    assert complete("uqs config env --sort ") == ["name", "value"]
 
 
 def test_config_fields_complete_after_the_process():

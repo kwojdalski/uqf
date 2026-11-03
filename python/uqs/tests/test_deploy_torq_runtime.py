@@ -240,8 +240,8 @@ def test_a_target_switching_to_bundled_drops_the_torq_home_below_it(tmp_path, mo
     monkeypatch.delenv(targets.DECLARATION_ENV, raising=False)
     (tmp_path / targets.DECLARATION).write_text(
         '[defaults]\nprofile = "essential"\ntorq_home = "/opt/torq"\n'
-        '[targets.b]\nhost = "h"\ndest = "/srv/uqf"\ntorq_mode = "bundled"\n'
-        'torq_runtime = "dist/rt.tar.gz"\n'
+        '[targets.b]\nssh = "h"\ndest = "/srv/uqf"\ntorq_mode = "bundled"\n'
+        'torq_component = "dist/rt.tar.gz"\n'
     )
     (cfg,) = targets.configs("b", "x", {}, False, tmp_path)
     assert (cfg.torq_mode, cfg.torq_home, cfg.torq_runtime) == ("bundled", None, "dist/rt.tar.gz")
@@ -264,7 +264,7 @@ def _push(tmp_path: Path, rt: torq_runtime.Runtime, *extra: str, state: dict | N
     remote, out = FakeRemote(rules), io.StringIO()
     built = list((tmp_path / "release" / "dist").glob("uqf-*.tar.gz"))
     release = built[0] if built else _artifact(tmp_path / "release")
-    argv = _args(release, "--torq-mode", "bundled", "--torq-runtime", str(rt.path))
+    argv = _args(release, "--torq-mode", "bundled", "--torq-component", str(rt.path))
     code = driver.deploy(parse_args([*argv, *extra]), remote, out=out)
     return code, remote, out.getvalue()
 
@@ -348,8 +348,8 @@ def test_an_unpinned_runtime_is_refused_without_allow_unpinned(tmp_path):
 
 def test_a_runtime_that_is_not_the_pinned_one_is_refused_without_accept_digest(tmp_path):
     rt = runtime(tmp_path)
-    pin = ("--torq-runtime-sha256", "ab" * 32)
-    with pytest.raises(DeployError, match="not the torq_runtime_sha256 abab"):
+    pin = ("--torq-component-sha256", "ab" * 32)
+    with pytest.raises(DeployError, match="not the torq_component_sha256 abab"):
         _push(tmp_path, rt, *pin)
     code, remote, out = _push(
         tmp_path, rt, *pin, "--override", "accept-digest", "--reason", "rebuilt TorQ"

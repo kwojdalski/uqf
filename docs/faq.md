@@ -264,13 +264,13 @@ their HDBs, and its own ports, so two can run at once.
 
 **Each runtime declares its own profiles** (#765): the ones it can start, and
 only those. `uqs --runtime torq list profiles` lists the starter pack's, and
-`uqs list profiles` the uqf runtime's, each naming what it starts. A profile
+`uqs profile list` the uqf runtime's, each naming what it starts. A profile
 another runtime declares is refused by name -
 `uqs --runtime torq start --profile fx` says which profiles torq has - rather
 than starting part of the set, and a test holds every runtime's profiles to the
 processes that runtime has.
 
-`uqs list profiles` also shows each profile's connection cost against your
+`uqs profile list` also shows each profile's connection cost against your
 licence's cap: a profile can fit on its own and not fit combined with another.
 
 More detail: [runtimes](guides/uqs.md#runtimes) and

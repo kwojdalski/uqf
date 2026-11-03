@@ -1,6 +1,6 @@
 """Which HDB `uqs data check` / `alter` act on, and the refusals before any q runs (#1755).
 
-No q here: the resolution from --target, --attach and --hdb, the writers check,
+No q here: the resolution from --target, --attachment and --hdb, the writers check,
 the reader reload and ssh's own failure are all decided in Python. What the q
 script then does to a database is test_hdb_alter_cli.py's (and the q suite's,
 tests/q/test_hdb_alter.q).
@@ -42,7 +42,7 @@ def stack(monkeypatch, tmp_path):
     return fake, hdb
 
 
-# ------------------------------------------------------------------ --attach
+# ------------------------------------------------------------------ --attachment
 
 
 def test_the_pinned_hdb_is_used_and_named(stack):
@@ -177,7 +177,7 @@ def test_the_remote_script_carries_both_files_and_cleans_up():
 
 def test_two_handles_are_refused(monkeypatch):
     monkeypatch.setattr(hdb_scope, "_paths", lambda: paths_for_root(UQF_ROOT))
-    with pytest.raises(UqsError, match="one of --target, --attach and --hdb"):
+    with pytest.raises(UqsError, match="one of --target, --attachment and --hdb"):
         hdb_scope.resolve("pb", "/data/hdb")
 
 
@@ -210,9 +210,9 @@ def test_target_runs_both_commands_on_the_release_asking_there(command, options,
     )
 
 
-@pytest.mark.parametrize("handle", ["--attach", "--hdb"])
+@pytest.mark.parametrize("handle", ["--attachment", "--hdb"])
 def test_target_with_another_handle_is_refused(handle):
-    with pytest.raises(UqsError, match="one of --target, --attach and --hdb"):
+    with pytest.raises(UqsError, match="one of --target, --attachment and --hdb"):
         target.forward("uat", False, ["data", "alter", "pb", handle, "x"], interactive=False)
 
 

@@ -2370,7 +2370,7 @@ def test_monitor1_plans_its_connections_from_the_overridden_fleet(
     fake_paths: UqsPaths, monkeypatch
 ):
     """The budget used to be decided before process_overrides.csv applied, so
-    `config set X startwithall ...` never reached it."""
+    `config set X startwithall=...` never reached it."""
     seen: list[list[dict[str, str]]] = []
 
     def plan(paths, rows, selected=None):

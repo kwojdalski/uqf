@@ -233,25 +233,25 @@ def test_a_q_runtime_without_bundled_is_refused():
 LAYERED = """
 [defaults]
 profile = "capture"
-qcmd = "/opt/kx/bin/q"
-qhome = "/opt/kx"
+q_cmd = "/opt/kx/bin/q"
+q_home = "/opt/kx"
 
 [environments.uat]
 q_mode = "bundled"
-q_runtime = "dist/q-runtime.tar.gz"
-q_runtime_sha256 = "{pin}"
+q_component = "dist/q-runtime.tar.gz"
+q_component_sha256 = "{pin}"
 
 [targets.a]
-host = "h"
+ssh = "h"
 dest = "/srv/uqf"
 environment = "uat"
 
 [targets.kx]
-host = "h"
+ssh = "h"
 dest = "/srv/uqf"
 environment = "uat"
 q_mode = "existing"
-qcmd = "/opt/kx5/bin/q"
+q_cmd = "/opt/kx5/bin/q"
 """
 
 
@@ -314,7 +314,7 @@ def push(tmp_path: Path, rt: q_runtime.QRuntime, *extra: str, state: dict | None
     pkg = release(tmp_path / "release", runtime_name)
     argv = [str(pkg), "--ssh", "uqf-server", "--dest", "/opt/uqf", "--profile", "capture",
             "--torq-home", "/opt/torq", "--q-mode", "bundled",
-            "--q-runtime", str(rt.path)]  # fmt: skip
+            "--q-component", str(rt.path)]  # fmt: skip
     code = driver.deploy(parse_args([*argv, *extra]), remote, out=out)
     return code, remote, out.getvalue()
 
@@ -428,8 +428,8 @@ def test_an_unpinned_q_runtime_is_refused_without_allow_unpinned(tmp_path):
 
 def test_a_q_runtime_that_is_not_the_pinned_one_needs_accept_digest(tmp_path):
     rt = runtime(tmp_path)
-    pin = ("--q-runtime-sha256", "ab" * 32)
-    with pytest.raises(DeployError, match="not the q_runtime_sha256 abab"):
+    pin = ("--q-component-sha256", "ab" * 32)
+    with pytest.raises(DeployError, match="not the q_component_sha256 abab"):
         push(tmp_path, rt, *pin)
     code, remote, out = push(
         tmp_path, rt, *pin, "--override", "accept-digest", "--reason", "rebuilt PeachQ"

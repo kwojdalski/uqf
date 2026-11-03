@@ -48,6 +48,7 @@ def _group(*path: str) -> TyperGroup:
                 "attach",
                 "detach",
                 "receive",
+                "receiver",
             },  # fmt: skip
         ),
         (("job", "runs"), {"status", "list", "show", "audit", "migrate"}),
@@ -107,7 +108,7 @@ def test_job_help_keeps_authoring_apart_from_operations():
         "runs",
         "attach",
         "detach",
-        "receive",
+        "receiver",
         "contract",
         "checkpoint",
         "attachment",
