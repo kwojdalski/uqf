@@ -234,25 +234,42 @@ window:
 
 - coverage is never recorded after only some batches succeeded: a failing batch
   fails the window, naming the batch, before anything is written;
+- a window is claimed only if it was **ready** (#1927, #1942). The source's
+  `ready` stage runs between `fetch` and `transform` over the whole fetched
+  window, so a window that is not ready ends partial before any batch starts:
+  nothing is transformed, published or claimed, and the next run plans it again;
 - a retry has nothing half-written to duplicate, omit or delete, and no batch
   writes beside a sibling's output;
-- `replace` clears the window's whole ownership scope in one write, an empty
-  result and a row stamped after midnight included;
+- `replace` clears the window's ownership scope in one write, whatever the batch
+  count: a batch that scores nothing, an all-empty result and output stamped
+  after midnight are the cases `tests/q/test_bounded_batching.q` pins;
 - no durable partition is created: batching is not a partitioning scheme.
 
 What it does not do: it does not read the source again per batch (the window is
-fetched once), so it bounds the transform's working set and not the read.
-Batches are planned in ascending key order and a batch keeps the window's row
-order, so a plan is the same on every run.
+fetched once), so it splits the transform's *work* and not the read or the
+write, and it does not lower the transform's peak memory: the whole fetched
+window and every batch's output are still held until they are joined. Batches
+are planned in ascending key order and a batch keeps the window's row order, so
+a plan is the same on every run.
+
+**What it measured.** `scripts/dev/bench_batching.q` runs
+`hdb_fx_markouts_backfill` end to end into a real HDB on a temporary root and
+reports each stage's time and peak memory, and the fetches and writes. On 20,000
+executions against 200 quotes a book (one machine, KDB-X, fastest of two): the
+transform stage took 757 ms unbatched and 147 ms batched per symbol with each
+batch's books narrowed to its legs (`context`), 5x faster, but with a peak 6.5%
+*higher* (243 MB against 228 MB); without narrowing, batching is no faster. The
+load on the source and the HDB was identical in every configuration: 24 fetches
+reading 20,000 executions, 24 writes of 326,404 rows into one date partition,
+and the same rows read back. Batching here buys compute time, through `context`,
+and nothing else.
 
 **What the worker claims.** That its transform, given a group's rows and the
 context declared for them, produces that group's output whatever other groups
 are in the window. The framework cannot check that; compare a batched with an
 unbatched run, as `tests/q/test_bounded_batching.q` does for
-`hdb_fx_markouts_backfill`. That worker is **not** batched as shipped:
-`scripts/dev/bench_batching.q` compares unbatched, per-symbol and grouped-symbol
-scoring on a synthetic window, and enabling it is a decision for those numbers
-on a real HDB.
+`hdb_fx_markouts_backfill`. That worker is **not** batched as shipped: enabling
+it is a decision for `scripts/dev/bench_batching.q` on a real HDB.
 
 ### Run spec
 

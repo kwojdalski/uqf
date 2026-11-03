@@ -287,6 +287,64 @@
     .qunit.assertEquals[.qt.qetl.job.bounded.batching.published[];plain;"the same rows, the unavailable ones included"];
     .qunit.assertEquals[(plain_claimed;.qt.qetl.job.bounded.batching.claimed[]);11b;"and claimed once all its batches passed - which also shows the ledger check can say yes"]};
 
+/ --- replace across batches (#1921, #1927) -----------------------------------------------------
+/ Batches only COMPUTE; the joined output is written once, so `replace sees one write whatever the
+/ batch count. These prove it where it could go wrong: a batch that scores nothing, and a window
+/ whose last rows are stamped after midnight.
+
+/ One HDB partition's table, read back with its symbols as symbols.
+.qt.qetl.job.bounded.batching.part:{[root;d]
+    dir:hsym `$(string .Q.par[root;d;`fx_markout]),"/";
+    if[()~key dir; :([] venue:`symbol$(); fill_id:`symbol$(); horizon:`timespan$(); kind:`symbol$(); step:`long$())];
+    @[`.;`sym;:;get ` sv root,`sym];
+    p:get dir;
+    select venue:`$string venue, fill_id:`$string fill_id, horizon, kind:`$string kind, step from p}
+
+/ The fixture's window moved to the end of a day: executions at 23:59:15, 23:59:35 and 23:59:36.
+.qt.qetl.job.bounded.batching.late_inputs:{[]
+    f:.qpipe.source.hdb_fx_markouts.fixture[];
+    dt:0D13:59:15;
+    `executions`market_data!(update source_time:source_time+dt from f`executions;update source_time:source_time+dt from f`market_data)}
+
+.qt.qetl.job.bounded.batching.test_a_batched_replace_across_midnight_leaves_one_row_per_key:{[t]
+    inputs:.qt.qetl.job.bounded.batching.late_inputs[];
+    plain:.qetl.job.bounded.transform_batch[`hdb_fx_markouts_backfill;inputs];
+    .qt.qetl.job.bounded.batching.set_batching[.qt.qetl.job.bounded.batching.spec[1000;1]];
+    twin:.qetl.job.bounded.batching.apply[`hdb_fx_markouts_backfill;inputs];
+    k:`venue`fill_id`horizon`kind`step;
+    .qunit.assertEquals[k xasc twin;k xasc plain;"the premise: the batched rows are the unbatched rows (three batches, one a crypto fill that scores nothing)"];
+    live:update time:2026.09.18D00:00:03.000000000 from delete time from twin;
+    .qunit.assertEquals[(distinct `date$twin`time;distinct `date$live`time);(enlist 2026.09.17;enlist 2026.09.18);"the premise: the twin's rows and the live rows fall in different date partitions"];
+    d:.qetl.job.bounded.def `hdb_fx_markouts_backfill;
+    o:`on_conflict`row_key`time_column`range_from`range_to!(`replace;d`target_key;d`window_column;2026.09.17D00:00:00.000000000;2026.09.18D00:00:00.000000000);
+    root:`$":",first system"mktemp -d";
+    m:.qetl.io.hdb[root;`time];
+    .qetl.io.write_keyed[m;`fx_markout;live;o];
+    .qetl.io.write_keyed[m;`fx_markout;twin;o];
+    p17:.qt.qetl.job.bounded.batching.part[root;2026.09.17];
+    p18:.qt.qetl.job.bounded.batching.part[root;2026.09.18];
+    .qunit.assertEquals[(count p17;count p18);(count twin;0);"the live copy in the next day is cleared; the batched rows are the only ones"];
+    .qunit.assertEquals[count distinct `venue`fill_id`horizon`kind`step#p17,p18;count twin;"one row per key across the partitions"];
+    system "rm -rf ",1_string root};
+
+.qt.qetl.job.bounded.batching.test_a_batched_window_that_scores_nothing_still_replaces_the_scope:{[t]
+    inputs:.qt.qetl.job.bounded.batching.late_inputs[];
+    earlier:.qetl.job.bounded.transform_batch[`hdb_fx_markouts_backfill;inputs];
+    / every execution is the crypto fill: each batch scores nothing
+    none:@[inputs;`executions;{select from x where sym=`$"BTC-USDT"}];
+    .qt.qetl.job.bounded.batching.set_batching[.qt.qetl.job.bounded.batching.spec[1000;1]];
+    out:.qetl.job.bounded.batching.apply[`hdb_fx_markouts_backfill;none];
+    .qunit.assertEquals[count out;0;"nothing is scored, batched"];
+    d:.qetl.job.bounded.def `hdb_fx_markouts_backfill;
+    o:`on_conflict`row_key`time_column`range_from`range_to!(`replace;d`target_key;d`window_column;2026.09.17D00:00:00.000000000;2026.09.18D00:00:00.000000000);
+    root:`$":",first system"mktemp -d";
+    m:.qetl.io.hdb[root;`time];
+    .qetl.io.write_keyed[m;`fx_markout;earlier;o];
+    before:count .qt.qetl.job.bounded.batching.part[root;2026.09.17];
+    .qetl.io.write_keyed[m;`fx_markout;out;o];
+    .qunit.assertEquals[(before;count .qt.qetl.job.bounded.batching.part[root;2026.09.17]);(count earlier;0);"the day held the earlier run's rows, and an empty batched result clears them all"];
+    system "rm -rf ",1_string root};
+
 / --- failure -----------------------------------------------------------------------------------
 
 .qt.qetl.job.bounded.batching.test_a_failing_batch_names_itself:{[t]

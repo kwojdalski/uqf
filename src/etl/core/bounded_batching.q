@@ -28,6 +28,9 @@
 / .
 /   - coverage is never recorded after only some batches succeeded: a batch that fails
 /     fails the window, before anything is written;
+/   - readiness (#1927, #1942) is checked by the `ready` stage between fetch and transform,
+/     over the whole window, so no batch starts on a window that is not ready and such a
+/     window is never claimed;
 /   - a retry has nothing half-written to duplicate, omit or delete, and a batch never
 /     writes beside a sibling's output;
 /   - `replace clears the window's whole ownership scope in one write, an empty result
