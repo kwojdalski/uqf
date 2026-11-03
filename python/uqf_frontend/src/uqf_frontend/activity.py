@@ -255,6 +255,7 @@ SERVER_ACTIONS: dict[tuple[str, str], Callable[[Mapping[str, str]], str]] = {
     ("PUT", "/control/process/{procname}/config"): lambda _: "process.config",
     ("PUT", "/control/worker-config"): lambda _: "worker.config",
     ("POST", "/control/backfill"): lambda _: "backfill.start",
+    ("PUT", "/services/{target}/files/content"): lambda _: "file.upload",
 }
 
 #: Path parameters that name the target of an action.

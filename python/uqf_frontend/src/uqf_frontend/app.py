@@ -8,6 +8,7 @@ poll-only, so a socket would add a moving part without adding liveness.
 from __future__ import annotations
 
 import datetime as dt
+import hashlib
 import math
 import subprocess
 import time
@@ -18,6 +19,7 @@ from typing import Any
 
 import polars as pl
 from fastapi import Depends, FastAPI, Request
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -79,6 +81,7 @@ from uqf_frontend.models import (
     QueryRequest,
     QueryResponse,
     RemoteFilesResponse,
+    RemoteUploadResponse,
     RunState,
     ServicesResponse,
     ServiceTargetOut,
@@ -534,6 +537,79 @@ def create_app(
             total=answer["total"],
             truncated=answer["truncated"],
             release=answer["release"],
+        )
+
+    @app.put("/services/{target}/files/content", response_model=RemoteUploadResponse)
+    async def put_remote_file(
+        request: Request, target: str, path: str, overwrite: bool = False
+    ) -> RemoteUploadResponse:
+        """Write the request body to `path` below a registered target's
+        shared/config, over ssh, with the release's own Python - see
+        remote_files.upload (#1951).
+
+        Refuses before reading the body when writes are off, the path is
+        unsafe or outside shared/config, the target is not registered, or
+        Content-Length is over the limit; refuses a body that grows past it
+        while read. An existing file is replaced only with `overwrite=true`.
+        A timeout or lost answer is 504 UploadOutcomeUncertain, never retried.
+        """
+        # Audited as `file.upload` (activity.SERVER_ACTIONS): the target, and
+        # the file's path, size and sha256 - never its bytes.
+        audit = activity.audit_of(request)
+        audit.set_target(target)
+        if not settings.enable_writes:
+            raise WritesDisabled(
+                "uploading to a server reaches it over ssh, so it needs remote "
+                "operations: set UQF_FRONTEND_ENABLE_WRITES=1 and UQF_FRONTEND_WRITE_TOKEN "
+                "on the server"
+            )
+        remote_files.check_upload_path(path)
+        remote_files.target(settings, target)
+        limit = remote_helper.MAX_UPLOAD
+        too_large = f"a file may be at most {limit} bytes"
+        declared = request.headers.get("content-length")
+        if declared is not None and declared.isdigit() and int(declared) > limit:
+            raise remote_files.UploadTooLarge(too_large)
+        body = bytearray()
+        async for chunk in request.stream():
+            body += chunk
+            if len(body) > limit:
+                raise remote_files.UploadTooLarge(too_large)
+        data = bytes(body)
+        audit.note(
+            file_name=path,
+            size_bytes=len(data),
+            sha256=hashlib.sha256(data).hexdigest(),
+            mode="overwrite" if overwrite else "create",
+        )
+        audit.begin()  # past here the file may be written
+        try:
+            answer = await run_in_threadpool(
+                remote_files.upload,
+                settings,
+                target,
+                path,
+                data,
+                overwrite,
+                runner=request.app.state.remote_runner,
+            )
+        except remote_files.UploadOutcomeUncertain:
+            audit.settle("unknown")
+            raise
+        except FrontendError as exc:
+            # Every other failure is certain: nothing was written. A refusal
+            # (4xx) is `refused`; damaged bytes or no ssh at all, `failed`.
+            audit.settle("refused" if exc.status_code < 500 else "failed")
+            raise
+        return RemoteUploadResponse(
+            target=target,
+            root=answer["root"],
+            path=answer["path"],
+            size=answer["size"],
+            sha256=answer["sha256"],
+            replaced=answer["replaced"],
+            mode=answer["mode"],
+            created=answer["created"],
         )
 
     @app.get("/coverage", response_model=CoverageResponse)
