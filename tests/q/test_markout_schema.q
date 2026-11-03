@@ -51,10 +51,10 @@
     need:core[`c];
     if[layout=`long; need,:`kind`step];
     missing:need where not need in key m;
-    p:("missing column ",/:string missing);
+    p:{"missing column ",string x} each missing;
     have:select from core where c in key m;
     bad:select from have where not t=m c;
-    p,:{"column ",string[x]," is type ",(1#y)," not ",1#z}'[bad`c;m bad`c;bad`t];
+    if[count bad; p,:{"column ",string[x]," is type ",(1#y)," not ",1#z}'[bad`c;m bad`c;bad`t]];
     at:(cols schema)?have`c;
     if[not at~asc at; p,:enlist "core columns are out of order"];
     p}
