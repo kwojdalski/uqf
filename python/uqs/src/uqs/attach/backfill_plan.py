@@ -87,7 +87,7 @@ def _writers(att: Attachment, obs: Observation, dest: Destination) -> list[str]:
 
 def readers_of(att: Attachment, obs: Observation, hdb_dir: Path, ipc: Ipc) -> list[Reader]:
     """Every HDB process discovery lists, and whether it serves `hdb_dir`: the
-    reload targets of an attached backfill, and of `uqs data alter --attach`."""
+    reload targets of an attached backfill, and of `uqs data alter --attachment`."""
     out: list[Reader] = []
     for svc in obs.others:
         if svc["proctype"] != "hdb":
@@ -344,7 +344,7 @@ def plan_attached(
     attach_root: Path | None = None,
     waived: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
-    """Resolve, admit and plan: everything `--attach --mode plan` does. `waived` is
+    """Resolve, admit and plan: everything `--attachment --mode plan` does. `waived` is
     build_plan's: the coordination findings an operator waived, with the reason.
 
     Changes nothing - no directory, no ledger, no checkpoint, no symbol file, no

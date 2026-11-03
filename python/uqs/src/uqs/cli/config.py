@@ -20,8 +20,8 @@ import typer
 from rich.table import Table
 
 from uqs.cli import completion
-from uqs.cli.json_out import emit, json_opt
-from uqs.cli.renames import alias_command, renamed, warn_renamed
+from uqs.cli.json_out import emit, json_opt, records, timestamp
+from uqs.cli.renames import ATTACHMENT, alias_command, renamed, warn_renamed
 from uqs.cli.safety import ChangesState, ReadOnly, dry_run_note
 from uqs.cli.shared import (
     BasePortOpt,
@@ -41,12 +41,11 @@ from uqs.stack import logs as stack_logs
 from uqs.stack import multitail as stack_multitail
 from uqs.stack import procs as stack_procs
 
-#: `uqs config show/set/unset`: a process's process.csv row, read or changed
-#: through process_overrides.csv; its fields and env are cli/lists.py's.
+#: `uqs config show/set/unset/list`: process.csv rows, set in process_overrides.csv (#1855).
 config_app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
-    help="Process configuration: show, set, unset, env, field, sources.\n\nprocess.csv "
+    help="Process configuration: show, set, unset, list, env, field, sources.\n\nprocess.csv "
     "fields, set in process_overrides.csv; the resolved env; the sources the stack reads.",
 )
 app.add_typer(config_app, name="config")
@@ -78,8 +77,7 @@ def config_get(
 ) -> None:
     """Show a process's effective process.csv row, or one FIELD of it.
 
-    ${VAR}/{VAR}+N placeholders (KDBBASEPORT, KDBHDB, ...) are resolved against the
-    env torq.sh would use - pass --unresolved to see them literal."""
+    ${VAR}/{VAR}+N placeholders resolve as torq.sh would; --unresolved shows them literal."""
     try:
         row = stack_procs.get_process_config(_paths(), procname, base_port=port, resolve=not raw)
     except UqsError as exc:
@@ -189,14 +187,15 @@ def config_unset(
 
 
 LogsJson = json_opt(
-    '{"lines": [{time, host, procname, proctype, loglevel, id, message}]} - the history '
-    "only: not with --follow, --channel or --multitail"
+    '{"lines": [{time, host, process, proctype, loglevel, id, message}]} - the history '
+    "only: not with --follow, --channel or --multitail; time ISO-8601 with its offset"
 )
 _LINE_KEYS = ("time", "host", "procname", "proctype", "loglevel", "id", "message")
 
 
-def _json_lines(records: list[dict]) -> None:
-    emit({"lines": [{k: r.get(k) for k in _LINE_KEYS} for r in records]})
+def _json_lines(rows: list[dict]) -> None:  # q's local .z.P, with this machine's offset
+    lines = records([{k: r.get(k) for k in _LINE_KEYS} for r in rows])
+    emit({"lines": [line | {"time": timestamp(line["time"])} for line in lines]})
 
 
 @app.command(
@@ -206,6 +205,7 @@ def _json_lines(records: list[dict]) -> None:
             "--print": "--show-command",
             "--columns": "--pane-columns",
             "-c": "--pane-columns",
+            **ATTACHMENT,
         },
         ReadOnly,
     )
@@ -266,17 +266,17 @@ def logs(
     attach: Annotated[
         str | None,
         typer.Option(
-            "--attach",
+            "--attachment",
             metavar="ATTACHMENT",
-            help="Read an attached backfill's or receiver's log instead: the latest run for "
-            "this attachment (`uqs job backfill --attach`)",
+            help="The attachment whose backfill or receiver log to read instead: its latest "
+            "run (`uqs job backfill --attachment`)",
         ),
     ] = None,
     worker: Annotated[
         str | None,
         typer.Option(
             "--worker",
-            help="With --attach: whose run - the worker, or <dataset>.receiver. Needed when "
+            help="With --attachment: whose run - the worker, or <dataset>.receiver. Needed when "
             "the attachment has logs of more than one",
         ),
     ] = None,
@@ -284,7 +284,7 @@ def logs(
         str | None,
         typer.Option(
             "--run",
-            help="With --attach: an older run, by its log's file name or a prefix of its "
+            help="With --attachment: an older run, by its log's file name or a prefix of its "
             "stamp (e.g. 20261027T1304)",
         ),
     ] = None,
@@ -302,17 +302,17 @@ def logs(
     publish, filtered by `--id` and `--level` - e.g. `logs all --channel
     --level ERROR`, `logs fxpositions1 --channel --id fx_positions`.
 
-    `--attach` reads an attached backfill's or receiver's run instead, which is
-    no TorQ process: `logs --attach pb-uat --worker piggybank_ledger_backfill -f`.
+    `--attachment` reads an attached backfill's or receiver's run instead, which is
+    no TorQ process: `logs --attachment pb-uat --worker piggybank_ledger_backfill -f`.
     Its q errors and RESULT line are shown whatever `--level` says.
 
     What the options combine with: the PROCs are what is read, every
-    option a filter on how. `--attach ATTACHMENT` replaces PROC - one attachment's
+    option a filter on how. `--attachment ATTACHMENT` replaces PROC - one attachment's
     run, narrowed by `--worker` (a worker, or <dataset>.receiver) and `--run`,
     which need it. `--channel` and `--multitail` each read PROC another way:
     `--id` needs `--channel`; `--stream`, `--pane-columns` and `--show-command` need
     `--multitail`. `--follow`, `--lines` and `--level` go with the files and
-    with `--attach`.
+    with `--attachment`.
     """
     if as_json:
         for option, used in {
@@ -326,7 +326,7 @@ def logs(
     if attach is None:
         for option, used in {"--worker": worker, "--run": run}.items():
             if used is not None:
-                _die(UqsUsageError(f"{option} needs --attach"))
+                _die(UqsUsageError(f"{option} needs --attachment"))
                 return
     else:
         clash = {"a process name": bool(procs), "--channel": channel, "--multitail": multitail}
@@ -334,7 +334,7 @@ def logs(
             if used:
                 _die(
                     UqsUsageError(
-                        f"{option} does not apply with --attach, which reads one run's log"
+                        f"{option} does not apply with --attachment, which reads one run's log"
                     )
                 )
                 return

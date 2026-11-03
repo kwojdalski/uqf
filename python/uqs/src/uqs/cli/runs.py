@@ -17,10 +17,10 @@ import typer
 from rich.table import Table
 
 from uqs import timerange
-from uqs.cli.json_out import emit, json_opt
+from uqs.cli.json_out import emit, json_opt, utc_times
 from uqs.cli.pipelines import needs_pipelines
 from uqs.cli.range_options import DateOpt, LastOpt, RangeFromOpt, RangeToOpt
-from uqs.cli.renames import alias_command
+from uqs.cli.renames import ATTACHMENT, alias_command, renamed
 from uqs.cli.safety import ChangesState, ReadOnly, dry_run_note
 from uqs.cli.shared import (
     JOB_OPERATIONS_PANEL,
@@ -72,10 +72,10 @@ _FACT_COLUMNS = ("run_id", "dataset", "range_from", "range_to", "label", "text")
 AttachOpt = Annotated[
     str | None,
     typer.Option(
-        "--attach",
+        "--attachment",
         metavar="ATTACHMENT",
-        help="Read the ledger of this attachment's destination (`uqs job backfill --attach`) "
-        "instead of the runtime's own",
+        help="The attachment whose destination's ledger to read (`uqs job backfill "
+        "--attachment`), instead of the runtime's own",
     ),
 ]
 
@@ -88,12 +88,13 @@ ShowJson = json_opt(
 
 
 def _record(row: dict, columns: tuple[str, ...]) -> dict:
-    """One ledger row as JSON: the table's columns, a whole-number count as an int."""
+    """One ledger row as JSON: the table's columns, a whole-number count as an
+    int, and a time - `.z.p`, UTC - ISO-8601 with its offset (#1882)."""
     out = {}
     for col in columns:
         value = row.get(col)
         out[col] = int(value) if isinstance(value, float) and value.is_integer() else value
-    return out
+    return utc_times(out)
 
 
 def _where(attach: str | None) -> dict:
@@ -133,7 +134,7 @@ def _print(
     _show(table, interactive)
 
 
-@runs_app.command("list", cls=needs_pipelines(_LEDGER, ReadOnly))
+@runs_app.command("list", cls=renamed(ATTACHMENT, needs_pipelines(_LEDGER, ReadOnly)))
 def list_runs(
     interactive: InteractiveOpt = False,
     attach: AttachOpt = None,
@@ -210,7 +211,7 @@ alias_command(
     "status",
     "uqs job runs list --unfinished",
     _unfinished,
-    cls=needs_pipelines(_LEDGER),
+    cls=renamed(ATTACHMENT, needs_pipelines(_LEDGER)),
 )
 
 
@@ -244,7 +245,7 @@ def upgrade(
 alias_command(runs_app, "migrate", "uqs job runs upgrade", upgrade, cls=needs_pipelines(_LEDGER))
 
 
-@runs_app.command("show", cls=needs_pipelines(_LEDGER, ReadOnly))
+@runs_app.command("show", cls=renamed(ATTACHMENT, needs_pipelines(_LEDGER, ReadOnly)))
 def show(
     run_id: Annotated[
         str, typer.Argument(metavar="RUN", help="A run id, from `uqs job runs list`")

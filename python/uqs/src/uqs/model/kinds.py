@@ -40,6 +40,23 @@ VERBS: tuple[DeclarationVerb, ...] = (
 
 DECLARATION_VERBS: tuple[str, ...] = tuple(v.verb for v in VERBS)
 
+#: The kind `uqs job list` reports for each declaration verb (#1889): the
+#: scaffold vocabulary below, so a job `job new --kind streaming` wrote lists
+#: as `streaming`. A bar or rolling job is a streaming job with no scaffold of
+#: its own. Whether a streaming job reads anything - feed or etl, which picks
+#: its proctype and access list - is the listing's `subscribes`, not a kind.
+LISTED_KIND: dict[str, str] = {
+    STREAM_DEFINE: "streaming",
+    STREAM_NORMALIZE: "normalizer",
+    STREAM_HORIZONS: "horizon",
+    STREAM_BARS: "streaming",
+    STREAM_ROLLING: "streaming",
+    BOUNDED_DEFINE: "backfill",
+}
+#: A reaction's kind in `job list`: no declaration verb of the above, and no
+#: process of its own.
+REACTION = "reaction"
+
 #: The `uqs job new --kind` values.
 SCAFFOLD_KINDS: tuple[str, ...] = (
     "streaming",

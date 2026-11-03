@@ -1,4 +1,4 @@
-"""`uqs logs --attach NAME`: an attached run's log, read like a process's (#1725)."""
+"""`uqs logs --attachment NAME`: an attached run's log, read like a process's (#1725)."""
 
 from __future__ import annotations
 
@@ -209,10 +209,10 @@ def _errors(monkeypatch) -> list[str]:
 @pytest.mark.parametrize(
     ("argv", "said"),
     [
-        (["--worker", WORKER], "--worker needs --attach"),
-        (["--run", "2026"], "--run needs --attach"),
-        (["rdb1", "--attach", "pb-uat"], "a process name does not apply with --attach"),
-        (["--attach", "pb-uat", "--channel"], "--channel does not apply with --attach"),
+        (["--worker", WORKER], "--worker needs --attachment"),
+        (["--run", "2026"], "--run needs --attachment"),
+        (["rdb1", "--attachment", "pb-uat"], "a process name does not apply with --attachment"),
+        (["--attachment", "pb-uat", "--channel"], "--channel does not apply with --attachment"),
     ],
 )
 def test_the_cli_refuses_options_that_do_not_go_together(monkeypatch, argv, said):
@@ -228,7 +228,7 @@ def test_the_cli_reads_the_attached_run(paths, tmp_path, monkeypatch):
     seen: list[dict[str, str]] = []
     monkeypatch.setattr(logs, "emit", lambda log, rec, min_level: seen.append(rec))
     result = CliRunner().invoke(
-        cli.app, ["logs", "--attach", "pb-uat", "--worker", WORKER], catch_exceptions=False
+        cli.app, ["logs", "--attachment", "pb-uat", "--worker", WORKER], catch_exceptions=False
     )
     assert result.exit_code == 0, result.output
     assert [r["message"] for r in seen] == ["window 1 of 3 fetched rows=12"]
@@ -242,4 +242,4 @@ def test_a_finished_run_names_the_command_that_reads_its_log():
             attachment = "pb-uat"
 
     text = backfill_attached._outcome_text(WORKER, Run, 0, {"outcome": "queryable"})
-    assert f"uqs logs --attach pb-uat --worker {WORKER}" in text
+    assert f"uqs logs --attachment pb-uat --worker {WORKER}" in text

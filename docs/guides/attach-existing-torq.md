@@ -30,7 +30,7 @@ What it guarantees:
   into one file, say) is a *blocker* in the plan, with the manual action named.
 - **It never edits vendored TorQ** and leaves no q code on a process. The one
   thing it leaves is an ownership record, `.uqfattach.owned`.
-- **It does not default the stack.** `--stack-id` has no default; every later
+- **It does not default the stack.** `--base-port` has no default; every later
   command reads the stack id, discovery address and storage locations from the
   saved attachment.
 - **It only reverses what it created**, from a recorded manifest.
@@ -39,9 +39,9 @@ What it guarantees:
 
 ```bash
 uqs job attachment add pb-uat --job pb_general_ledger --bundle ../piggybank \
-    --stack-id 6000 --consumer rdb1 --consumer wdb1 --dry-run
+    --base-port 6000 --consumer rdb1 --consumer wdb1 --dry-run
 uqs job attachment add pb-uat --job pb_general_ledger --bundle ../piggybank \
-    --stack-id 6000 --consumer rdb1 --consumer wdb1
+    --base-port 6000 --consumer rdb1 --consumer wdb1
 uqs job attachment list                # attachment state and publisher state, per attachment
 uqs job attachment remove pb-uat --dry-run
 uqs job attachment remove pb-uat
@@ -70,11 +70,11 @@ re-verified and left running.
   check, timings and recovery detail. It works through `uqs --target`, and does
   not change how the publisher logs.
 
-A new attachment needs `--job` and `--stack-id`; `--host` (default `localhost`),
-`--discovery HOST:PORT` (default: the stack id + 1; its HOST must be the
-`--host` machine, since a stack is attached on one host), `--tickerplant`,
-`--consumer` (default: all), `--user`, `--password-env`,
-`--tplogdir`/`--schema-file` (pin storage), `--runtime-only`,
+A new attachment needs `--job` and `--base-port`; `--host` (default
+`localhost`), `--discovery HOST:PORT` (default: the stack id + 1; its HOST must
+be the `--host` machine, since a stack is attached on one host),
+`--tickerplant`, `--consumer` (default: all), `--user`, `--password-env`,
+`--tplogdir`/`--schema-file` (pin storage), `--transient`,
 `--schema-writer cli|tickerplant` (who writes the schema block: `cli` by
 default), `--process-file` and `--start-with-all` ([native TorQ
 start](#native-torq-start)) are optional. After the first execution the
@@ -136,7 +136,7 @@ the stack's machine.
   `PERSIST_UNAVAILABLE`, which names the three ways out:
   - `--schema-writer tickerplant`: the tickerplant writes the block itself
     (below);
-  - `--runtime-only`: no block, and the registration is lost on a restart;
+  - `--transient`: no block, and the registration is lost on a restart;
   - run `uqs` on the stack's machine.
 
 - **Runtime-only** is the persistence that needs nothing of the stack's disk.
@@ -158,12 +158,12 @@ the stack's machine.
 #### Durable registration through the tickerplant
 
 `--schema-writer tickerplant` is recorded in the attachment as
-`persist: remote-schema-file`, like `--runtime-only`; `--schema-writer cli`, the
+`persist: remote-schema-file`, like `--transient`; `--schema-writer cli`, the
 default, as `persist: schema-file`. It is not a flag for one run, and it
-excludes `--runtime-only`. The stored names are the ones attachments saved
-before the option was renamed, so those load and run unchanged. The block is the
-one `schema-file` writes, with the same token, and only the process that writes
-it changes:
+excludes `--transient`. The stored names are the ones attachments saved before
+the option was renamed, so those load and run unchanged. The block is the one
+`schema-file` writes, with the same token, and only the process that writes it
+changes:
 
 - **The tickerplant changes its own file.** The `schema_file` operation runs in
   the tickerplant, on the file it was started with (`-schemafile`), never on a
@@ -551,7 +551,7 @@ existing process registry (its `process.csv`, here a production
 
 ```bash
 uqs job attachment add pb-uat --job pb_general_ledger --bundle ../piggybank \
-    --stack-id 6000 --process-file /opt/torq/appconfig/process.prd.csv --dry-run
+    --base-port 6000 --process-file /opt/torq/appconfig/process.prd.csv --dry-run
 uqs job attachment add pb-uat --start-with-all     # in the stack's `start all` from now on
 uqs job attachment add pb-uat --no-start-with-all  # registered, started on demand only
 ```
@@ -564,7 +564,7 @@ uqs job attachment add pb-uat --no-start-with-all  # registered, started on dema
   `--start-with-all` sets it to 1, so a native `start all` starts the publisher;
   `--no-start-with-all` sets it back without removing the row; leaving both out
   keeps the saved setting. Enabling it needs durable table registration and is
-  refused with `--runtime-only`, since a `start all` restarts the tickerplant.
+  refused with `--transient`, since a `start all` restarts the tickerplant.
   `--no-start` changes only the run it is given to. Being in `start all` is not
   a boot service or crash supervision.
 - **The row is derived.** It is this checkout's own row for the publisher, as
@@ -672,7 +672,7 @@ blocker can be accepted explicitly where the table says so; this is the
 supported alternative to editing the validation code.
 
 ```bash
-uqs job attachment add pb-uat --job pb_general_ledger --stack-id 6000 \
+uqs job attachment add pb-uat --job pb_general_ledger --base-port 6000 \
     --override TORQ_VERSION:discovery1 --override TORQ_VERSION:stp1 \
     --override TORQ_VERSION:rdb1 --override TORQ_VERSION:wdb1 \
     --reason "Reviewed against the site's TorQ build" --yes --accept-risks
@@ -704,7 +704,7 @@ component each and repeatable: `--skip-torq-version stp1` is
 
   | Code                                                                                                                  | Overridable | Refused because / risk accepted                                                                                                                                                      |
   | -----------------------------------------------------------------------------                                         | ----------- | -----------------------------------------------------------------------------------------------------------------                                                                    |
-  | `TORQ_VERSION`                                                                                                        | yes         | the process runs a TorQ other than the tested one; its internals are unverified there (prefer `--runtime-only`)                                                                      |
+  | `TORQ_VERSION`                                                                                                        | yes         | the process runs a TorQ other than the tested one; its internals are unverified there (prefer `--transient`)                                                                         |
   | `SORT_CONFIG`                                                                                                         | yes         | the wdb's `sort.csv` cannot sort the table; end of day would fail. Declare a [sort rule](#sort-rules), or add a row first                                                            |
   | `SORT_DECLARATION`, `SORT_CONFLICT`, `SORT_FILE`, `SORT_DRIFT`, `SORT_RELOAD_UNAVAILABLE`                             | no          | the declared sort rule is invalid, conflicts with the stack's rows, cannot be written or cannot be reloaded safely; see [Sort rules](#sort-rules)                                    |
   | `PORT_CONFLICT`                                                                                                       | yes         | the publisher's port is held by another process; free it before starting                                                                                                             |
@@ -715,7 +715,7 @@ component each and repeatable: `--skip-torq-version stp1` is
   | `STACK_MISMATCH`                                                                                                      | no          | a process answers but belongs to another stack                                                                                                                                       |
   | `LOGGING_MODE`, `LOGS_DISABLED`, `CHAINED_TP`                                                                         | no          | the tickerplant does not log one file per table, or at all, or is chained; fixing it needs a restart                                                                                 |
   | `CONSUMER_FILTERED`, `CONSUMER_IGNORES`, `WDB_MODE`                                                                   | no          | an rdb/wdb filters or ignores the table, or the wdb does not save: it would never persist                                                                                            |
-  | `PERSIST_UNAVAILABLE`                                                                                                 | no          | the registration could not survive a tickerplant restart (no `-schemafile` this machine, or with `--schema-writer tickerplant` the tickerplant, can append to); use `--runtime-only` |
+  | `PERSIST_UNAVAILABLE`                                                                                                 | no          | the registration could not survive a tickerplant restart (no `-schemafile` this machine, or with `--schema-writer tickerplant` the tickerplant, can append to); use `--transient`    |
   | `PROCESS_REGISTRY`                                                                                                    | no          | the stack's process file cannot take the publisher's row as it is: [native TorQ start](#native-torq-start)                                                                           |
   | `STORAGE_MISMATCH`                                                                                                    | no          | a pinned location is not what the stack reports; `--replace` with the right one                                                                                                      |
   | `DISCOVERY_UNREACHABLE`, `UNREACHABLE`, `NO_TICKERPLANT`, `AMBIGUOUS_TICKERPLANT`, `NO_CONSUMER`, `UNKNOWN_CONSUMER`  | no          | an endpoint does not answer or rejects the credential, or there is nothing (or more than one thing) to publish to or persist with                                                    |
@@ -730,11 +730,11 @@ Detach's refusals are destructive-cleanup protections and cannot be overridden.
 
 `uqs job backfill` writes into the HDB of the uqf runtime it belongs to
 (`KDBHDB`); `--base-port` changes which stack it registers with, not where the
-rows go. `--attach NAME` names the destination from the saved attachment
+rows go. `--attachment NAME` names the destination from the saved attachment
 instead:
 
 ```bash
-uqs job backfill piggybank_ledger_backfill --attach pb-uat \
+uqs job backfill piggybank_ledger_backfill --attachment pb-uat \
     --from 2026-10-01 --to 2026-10-02 --source-version historical-v1 \
     --on-conflict replace --mode plan          # then --dry-run, then run
 ```
@@ -754,9 +754,9 @@ the day they happened, and only readers that reload see them.
 
 ### Extracting on one machine, writing on the stack's (#1650)
 
-`--attach` writes the HDB from the machine that runs the worker, so the HDB must
-be on that machine. When the source's driver and credentials must stay on an
-extraction machine instead, the stack's machine writes and the extraction
+`--attachment` writes the HDB from the machine that runs the worker, so the HDB
+must be on that machine. When the source's driver and credentials must stay on
+an extraction machine instead, the stack's machine writes and the extraction
 machine sends. The stack's machine needs none of the job's code (#1717). It
 writes under a **receiver contract**: data exported from the worker's
 declarations on the extraction machine and approved by the stack's operator.
@@ -766,17 +766,17 @@ declarations on the extraction machine and approved by the stack's operator.
 The Piggybank ledger is extracted on `etl-host`, which has the source's ODBC
 driver and credentials, and written into the HDB of the stack on `uat-host`:
 
-  |            | `etl-host` (extraction)                                                                             | `uat-host` (the stack)                                                                                       |
-  | ---        | ---                                                                                                 | ---                                                                                                          |
-  | installed  | uqf, KDB-X, the Piggybank bundle (`uqs job install ../piggybank`): its source, transform and worker | uqf and KDB-X only: no Piggybank source, transform or worker                                                 |
-  | configured | the source's credential (`UQF_SOURCE_CRED_...`); the attachment `pb-uat`                            | the attachment `pb-uat`, copied from `etl-host`; the approved contract; the stack's password variable        |
-  | runs       | `uqs job backfill --attach pb-uat --writer uat-host:7090`                                           | the TorQ stack, and `uqs job receiver start`                                                                 |
-  | holds      | coverage, the checkpoint and the run ledger                                                         | the HDB and the receiver's batch journal                                                                     |
+  |            | `etl-host` (extraction)                                                                                 | `uat-host` (the stack)                                                                                       |
+  | ---        | ---                                                                                                     | ---                                                                                                          |
+  | installed  | uqf, KDB-X, the Piggybank bundle (`uqs job install ../piggybank`): its source, transform and worker     | uqf and KDB-X only: no Piggybank source, transform or worker                                                 |
+  | configured | the source's credential (`UQF_SOURCE_CRED_...`); the attachment `pb-uat`                                | the attachment `pb-uat`, copied from `etl-host`; the approved contract; the stack's password variable        |
+  | runs       | `uqs job backfill --attachment pb-uat --writer uat-host:7090`                                           | the TorQ stack, and `uqs job receiver start`                                                                 |
+  | holds      | coverage, the checkpoint and the run ledger                                                             | the HDB and the receiver's batch journal                                                                     |
 
 ```bash
 # etl-host: attach (this records the stack, its HDB and the table), then export
 # the worker's receiver contract
-uqs job attachment add pb-uat --job pb_general_ledger --bundle ../piggybank --stack-id 6000 \
+uqs job attachment add pb-uat --job pb_general_ledger --bundle ../piggybank --base-port 6000 \
     --host uat-host --consumer rdb1 --consumer wdb1 --yes
 uqs job attachment contract export piggybank_ledger_backfill --output ledger.contract.json
 
@@ -787,12 +787,12 @@ scp -r "$UQS_DATA_ROOT/attachments/pb-uat" uat-host:/srv/uqs/attachments/
 scp ledger.contract.json uat-host:
 
 # uat-host: approve the contract for the attachment, then start the receiver
-uqs job attachment contract approve ledger.contract.json --attach pb-uat --on-conflict upsert --on-conflict replace
-uqs job attachment contract list --attach pb-uat          # its identity, e.g. 3f9a0c2e7b1d4a56
-uqs job receiver start --contract 3f9a0c2e --attach pb-uat --listen-port 7090
+uqs job attachment contract approve ledger.contract.json --attachment pb-uat --on-conflict upsert --on-conflict replace
+uqs job attachment contract list --attachment pb-uat          # its identity, e.g. 3f9a0c2e7b1d4a56
+uqs job receiver start --contract 3f9a0c2e --attachment pb-uat --listen-port 7090
 
 # etl-host: extract, and send each window to the receiver
-uqs job backfill piggybank_ledger_backfill --attach pb-uat --writer uat-host:7090 \
+uqs job backfill piggybank_ledger_backfill --attachment pb-uat --writer uat-host:7090 \
     --from 2026-10-01 --to 2026-10-02 --source-version historical-v1 --wait
 ```
 
@@ -813,7 +813,7 @@ declarations (`.qetl.io.remote.contract.of`). It is never written by hand:
   | `conflict_policies`                                         | every strategy the declarations admit. `replace` needs a window column, and a partition column for a partitioned worker    |
   | `origin`                                                    | the worker, source and transform it came from, for the operator to read                                                    |
 
-`uqs job attachment contract approve FILE --attach NAME` runs on the stack's
+`uqs job attachment contract approve FILE --attachment NAME` runs on the stack's
 machine. It refuses, and stores nothing, in any of these cases:
 
 - the contract is malformed, of an unsupported version, or altered since export;
@@ -893,7 +893,7 @@ replaces itself, and a committed batch answers `duplicate` at its first chunk.
 
 A running receiver holds the attachment's owner record on the stack's machine,
 so `uqs job attachment remove` there refuses while it runs.
-`uqs job receiver stop --attach NAME` stops it. An extractor elsewhere then
+`uqs job receiver stop --attachment NAME` stops it. An extractor elsewhere then
 fails its next window without covering it, and the next run, once a receiver is
 back, sends it again.
 
@@ -913,7 +913,7 @@ be `verified`, pin an HDB or publish the dataset: it is read only for the
 stack's user and password.
 
 ```bash
-uqs job backfill piggybank_ledger_backfill --attach pb-uat \
+uqs job backfill piggybank_ledger_backfill --attachment pb-uat \
     --writer uat-host:6055 --force \
     --from 2026-10-01 --to 2026-10-02 --source-version historical-v1 --wait
 ```
@@ -995,13 +995,13 @@ The fence's timing, and nothing else in this section, can be waived for one
 invocation, with a reason:
 
 ```bash
-uqs job backfill JOB --attach NAME --from START --to END \
+uqs job backfill JOB --attachment NAME --from START --to END \
   --skip-eod-fence --reason "Approved maintenance window"
 ```
 
 `--override eod-fence` is the same waiver, and `uqs override list` names it. It
 is taken by `--mode plan`, `--dry-run` and a run on the machine that holds the
-attachment. It is refused without `--attach`, with `--writer` (the receiver
+attachment. It is refused without `--attachment`, with `--writer` (the receiver
 fences each batch itself and is never told of a waiver) and with
 `--mode validate`. Through `uqs --target NAME`, it is sent as
 `--override eod-fence`.
@@ -1073,8 +1073,8 @@ whether it serves the table, because **a partitioned HDB takes its table list
 from its latest partition**: a table written only into an older date stays
 invisible until the latest partition holds it too. On a freshly attached table
 that is the case until the stack's next end of day writes it (or
-`uqs data check --attach NAME --apply` fills it), and the run says so by name
-instead of reporting success.
+`uqs data check --attachment NAME --apply` fills it), and the run says so by
+name instead of reporting success.
 
 Listing the table is not enough either (#1773). "Queryable" means a query
 restricted to the **covered dates** is served, so the runner also inspects each
@@ -1108,18 +1108,18 @@ asked again, and the readiness record advances only when each has answered.
 - `uqs job attachment status` - per destination: attachment, worker, state
   (`running`, `completed`, ...), outcome, whether the rows are queryable, the
   log, and what to do next when they are not.
-- `uqs logs --attach NAME --worker WORKER [-f]` - a run's log, coloured as a
+- `uqs logs --attachment NAME --worker WORKER [-f]` - a run's log, coloured as a
   process's is, with `--lines` and `--level`. It reads the latest run of that
   worker (or `<dataset>.receiver`) across the attachment's destinations, and
   `--run` picks an older one by its log's file name or a prefix of its stamp. q
   errors and the closing `RESULT` line are shown whatever `--level` says.
-- `uqs job runs list | status | show --attach NAME` - the destination's run
-  ledger; `show` prints the re-run command with `--attach` in it.
+- `uqs job runs list | status | show --attachment NAME` - the destination's run
+  ledger; `show` prints the re-run command with `--attachment` in it.
 - `uqs job attachment show NAME` - ends with every
   [waiver](#waiving-the-end-of-day-fence) a backfill into the attachment's
   destination used.
-- `uqs job backfill ... --attach NAME --mode plan` shows `reload owed` when an
-  earlier run left rows written and covered but not yet queryable.
+- `uqs job backfill ... --attachment NAME --mode plan` shows `reload owed` when
+  an earlier run left rows written and covered but not yet queryable.
 
 ## Restart behaviour
 
@@ -1128,13 +1128,13 @@ marked block to the tickerplant's `-schemafile` and leaves every other byte
 untouched, line endings included; removing the block restores the file exactly,
 whatever order attachments sharing the file are removed in.
 `--schema-writer tickerplant` has the tickerplant append the same block to its
-own file ([above](#durable-registration-through-the-tickerplant)).
-`--runtime-only` skips it.
+own file ([above](#durable-registration-through-the-tickerplant)). `--transient`
+skips it.
 
   | State                                                  | A tickerplant restart                                                                                               |
   | ------------------------------                         | -------------------------------------------------------------------------------------------                         |
   | applied, `schema-file` or `remote-schema-file` persist | the block recreates the table and its ownership record                                                              |
-  | applied, `--runtime-only`                              | the table is gone; `--dry-run` reports `registration-lost`, verify fails, `uqs job attachment add NAME` restores it |
+  | applied, `--transient`                                 | the table is gone; `--dry-run` reports `registration-lost`, verify fails, `uqs job attachment add NAME` restores it |
   | rolled back                                            | the block went with the registration: the table does not come back                                                  |
   | detached after publication                             | the block stayed, so the table comes back and its logs replay                                                       |
 
@@ -1166,7 +1166,7 @@ published ports, not through `uqs`:
 
   | Scenario                                                                                         | Checked on the stack                                                                                                                                                                                                                                                                                                                                                                               |
   | --------------------------------------------------------------------------                       | --------------------------------------------------------------------------                                                                                                                                                                                                                                                                                                                         |
-  | a publisher on uat-client, attached `--runtime-only`                                             | the table on stp1, its rows counted there and in rdb1, a handle back from discovery                                                                                                                                                                                                                                                                                                                |
+  | a publisher on uat-client, attached `--transient`                                                | the table on stp1, its rows counted there and in rdb1, a handle back from discovery                                                                                                                                                                                                                                                                                                                |
   | a publisher name the stack cannot resolve: `ADVERTISED_UNRESOLVABLE`                             | nothing registered, no ownership record                                                                                                                                                                                                                                                                                                                                                            |
   | a name that resolves to an address nothing answers on: `PUBLISHER_UNREACHABLE_FROM_STACK`        | discovery lists the publisher with no handle; the publisher is stopped and the attachment back to `applied`                                                                                                                                                                                                                                                                                        |
   | `uqs stop` of the publisher on uat-client, then the tickerplant, rdb and wdb restarted           | the publisher gone from uat-client while every stack process still answers; then the table gone; `--dry-run` reports `registration-lost`; `uqs job attachment add` registers it again and rows flow                                                                                                                                                                                                |
@@ -1208,8 +1208,8 @@ What the containers do not show:
   operator restarts them, after which they subscribe to every table the
   tickerplant has; the workflow never restarts a process it did not start.
 - **Older HDB partitions lack the table** until repaired after the first end of
-  day: `uqs data check --attach NAME --apply` writes an empty table into just
-  the partitions lacking it, on the stack's host ([one table, in any
+  day: `uqs data check --attachment NAME --apply` writes an empty table into
+  just the partitions lacking it, on the stack's host ([one table, in any
   HDB](uqs.md#one-table-in-any-hdb)). The plan warns with `HDB_HISTORY`.
 - **Connection cap.** Under a licence with a connection limit (the KDB-X
   community licence allows 16 per process), an attachment adds one persistent

@@ -16,7 +16,7 @@ from typing import Annotated
 import typer
 
 from uqs.cli.vocabulary import duration
-from uqs.deploy import config, control, targets
+from uqs.deploy import config, control, target_keys, targets
 from uqs.deploy.config import DeployError
 from uqs.logger import get_logger
 from uqs.paths import UqsError, repo_root
@@ -132,7 +132,7 @@ def server(ctx: typer.Context, target: str | None, **flags) -> dict:
     flags alone, which must then name the server. A flag left unset (None)
     is left out, so make_config's default applies."""
     if target is None:
-        absent = [config.flag(k) for k in ("host", "dest") if flags[k] is None]
+        absent = [target_keys.flag(k) for k in ("host", "dest") if flags[k] is None]
         if absent:
             raise DeployError(
                 "arguments",

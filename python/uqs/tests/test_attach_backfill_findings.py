@@ -359,7 +359,7 @@ def test_a_json_refusal_carries_ids_components_and_facts(world, monkeypatch):
     monkeypatch.setattr(planning, "evaluate", lambda *a, **k: facts_of())
     world.stack.state_over["wdb1"] = {"now": "2026.10.16D23:30:00.000000000"}
     argv = [
-        "job", "backfill", WORKER, "--attach", "pb-uat", "--from", "2026-09-11",
+        "job", "backfill", WORKER, "--attachment", "pb-uat", "--from", "2026-09-11",
         "--to", "2026-09-13", "--source-version", "v1", "--mode", "plan", "--json",
     ]  # fmt: skip
     # --json is read from the command line itself (uqs.logger.json_requested)

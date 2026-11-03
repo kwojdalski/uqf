@@ -135,9 +135,9 @@ CASES = [
     Case("job new", ("probe_job",)),
     Case(
         "job receiver start",
-        ("--attach", "nosuch", "--listen-port", "7999", "--contract", "c1"),
+        ("--attachment", "nosuch", "--listen-port", "7999", "--contract", "c1"),
     ),
-    Case("job receiver stop", ("--attach", "nosuch")),
+    Case("job receiver stop", ("--attachment", "nosuch")),
     Case("job remove", ("probe_job",), _uqs("job", "new", "probe_job"), own_copy=True),
     Case("job runs upgrade", (), _status),
     Case("runtime prepare", ()),

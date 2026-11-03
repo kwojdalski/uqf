@@ -58,6 +58,7 @@ from uqs.deploy.launch import (
     uqs_command,
 )
 from uqs.deploy.remote import diagnostic
+from uqs.deploy.target_keys import FIELD_OF_KEY
 from uqs.paths import UqsError
 
 #: What ssh exits with when it, rather than the remote command, failed.
@@ -101,7 +102,9 @@ def settings_for(name: str | None, root: Path) -> tuple[str, dict]:
     if name in declared:
         t, label = declared[name], name
     elif last is not None:
-        t, label = last, str(last.get("target") or history.server_of(str(last["host"])))
+        # the entry's keys as make_config's options: `ssh` is `host` (#1888)
+        t = {FIELD_OF_KEY.get(k, k): v for k, v in last.items()}
+        label = str(last.get("target") or history.server_of(str(last["ssh"])))
     else:
         known = ", ".join(sorted(declared)) or "none"
         what = f"no target or deployed server {name!r}" if name else "no deployment recorded"

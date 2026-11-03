@@ -7,7 +7,7 @@ name: Release
 # .sha256 before anything touches a server.
 #
 # Two artifacts per release: the plain one, and one whose q is converted for
-# kdb+ 4.0 (`--q-target 4.0`, #861). push refuses to choose between them by
+# kdb+ 4.0 (`--q-version 4.0`, #861). push refuses to choose between them by
 # tag, so a release carrying both is deployed by URL.
 
 on:
@@ -62,7 +62,7 @@ jobs:
         run: |
           set -euo pipefail
           uv run uqs deploy build --output-dir dist
-          uv run uqs deploy build --output-dir dist --q-target 4.0
+          uv run uqs deploy build --output-dir dist --q-version 4.0
           ls -l dist
       - name: Publish them on the release
         env:

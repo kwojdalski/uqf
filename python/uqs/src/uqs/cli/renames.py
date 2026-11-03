@@ -64,6 +64,10 @@ def legacy_reason(old: str) -> str:
 #: now, and `--port` is only ever one process's port (#1729).
 BASE_PORT = {"--port": "--base-port"}
 
+#: `--attach NAME` was a verb naming a noun: the saved attachment is
+#: `--attachment NAME` on every command that reads or writes one (#1855).
+ATTACHMENT = {"--attach": "--attachment"}
+
 
 def warn_renamed(old: str, new: str) -> None:
     log.warning("`{}` is renamed `{}`; the old spelling goes in the next release", old, new)

@@ -76,6 +76,38 @@ RENAMED = [
     ("deploy push", "--qhome", "--q-home"),
     *[(f"setup odbc {verb}", "--home", "--odbc-home") for verb in ("rollback", "status", "env")],
     ("setup odbc install", "--qhome", "--q-home"),
+    # #1855: one meaning per word
+    *[
+        (path, "--attach", "--attachment")
+        for path in (
+            "logs",
+            "job backfill",
+            "job receive",
+            "job runs list",
+            "job runs show",
+            "job runs status",
+            "job attachment contract approve",
+            "job attachment contract list",
+            "job contract approve",
+            "job contract list",
+            "data check",
+            "data alter",
+            "data hdb-check",
+            "data hdb-alter",
+        )
+    ],
+    ("job attachment add", "--stack-id", "--base-port"),
+    ("job attach", "--stack-id", "--base-port"),
+    ("job attachment add", "--runtime-only", "--transient"),
+    ("deploy build", "--q-target", "--q-version"),
+    ("deploy build", "--python-runtime", "--python-component"),
+    *[
+        ("deploy push", f"--{c}-runtime{sha}", f"--{c}-component{sha}")
+        for c in ("q", "torq", "python")
+        for sha in ("", "-sha256")
+    ],
+    ("target adopt", "--release", "--release-dir"),
+    ("data replay", "--schema", "--schema-file"),
     # #1852: the bare bypass flags, each now an --override with a reason
     *[
         (path, f"--{name}", renames.bypass_flag(name))
@@ -377,3 +409,35 @@ def test_tables_are_a_repeatable_table_and_a_comma_list_works_in_one():
 
     assert tables_given(["trade", "quote,fx"]) == ["trade", "quote", "fx"]
     assert tables_given(None) == []
+
+
+def test_list_overrides_is_config_list(monkeypatch):
+    """`uqs list overrides` -> `uqs config list` (#1855): `override` is the
+    checks a command bypasses (`uqs override list`), not process_overrides.csv."""
+    from uqs.stack import listing
+
+    rows = [{"procname": "rdb1", "field": "port", "value": "6061"}]
+    monkeypatch.setitem(listing.LISTABLE_KINDS, "overrides", lambda *_a: rows)
+    said = []
+    monkeypatch.setattr(lists, "warn_renamed", lambda o, n: said.append((o, n)))
+    old = runner.invoke(cli.app, ["list", "overrides", "--json"])
+    new = runner.invoke(cli.app, ["config", "list", "--json"])
+    assert old.exit_code == new.exit_code == 0, old.output
+    assert old.stdout == new.stdout
+    assert said == [("uqs list overrides", "uqs config list")]
+    assert "overrides" not in runner.invoke(cli.app, ["list", "--json"]).stdout
+
+
+def test_attach_still_names_the_attachment_end_to_end(monkeypatch):
+    """`--attach NAME` keeps reaching the command, as `--attachment NAME`."""
+    from uqs.cli import runs
+
+    seen = []
+    monkeypatch.setattr(runs, "_where", lambda attach: seen.append(attach) or {})
+    monkeypatch.setattr(runs.stack_runs, "history", lambda *_a, **_k: [])
+    said = []
+    monkeypatch.setattr(renames, "warn_renamed", lambda o, n: said.append((o, n)))
+    result = runner.invoke(cli.app, ["job", "runs", "list", "--attach", "pb-uat", "--json"])
+    assert result.exit_code == 0, result.output
+    assert seen == ["pb-uat"]
+    assert said == [("--attach", "--attachment")]

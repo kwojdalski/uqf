@@ -12,7 +12,6 @@ logging its new spelling.
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Annotated
 
@@ -22,8 +21,8 @@ from rich.table import Table
 from uqs.attach import receiver_contract
 from uqs.cli import completion
 from uqs.cli.attachment import attachment_app
-from uqs.cli.json_out import JSON_HELP
-from uqs.cli.renames import alias_command, renamed
+from uqs.cli.json_out import emit, json_opt
+from uqs.cli.renames import ATTACHMENT, alias_command, renamed
 from uqs.cli.safety import ChangesState, ReadOnly, dry_run_note
 from uqs.cli.shared import (
     JOB_OPERATIONS_PANEL,
@@ -93,9 +92,19 @@ def export(
         console.print(said, markup=False)
 
 
+ApproveJson = json_opt(
+    '{"contract", "binding": {attachment, destination, host, stack_id, hdb_dir, users, '
+    "conflict_policies, max_rows, approved_at, ...}}"
+)
+
+
 #: A conflict policy is `--on-conflict` on every command; `--max-rows` was a
 #: row limit's name for something else, the rows one message carries (#1857).
-_APPROVE_RENAMES = {"--conflict": "--on-conflict", "--max-rows": "--max-message-rows"}
+_APPROVE_RENAMES = {
+    "--conflict": "--on-conflict",
+    "--max-rows": "--max-message-rows",
+    **ATTACHMENT,
+}
 
 
 @contract_app.command("approve", cls=renamed(_APPROVE_RENAMES, ChangesState))
@@ -109,7 +118,7 @@ def approve(
     attach: Annotated[
         str,
         typer.Option(
-            "--attach",
+            "--attachment",
             metavar="ATTACHMENT",
             help="The saved, verified attachment whose HDB it may write",
         ),
@@ -130,9 +139,7 @@ def approve(
         bool,
         typer.Option("--dry-run", "-n", help="Check it and show the record; store nothing"),
     ] = False,
-    as_json: Annotated[
-        bool, typer.Option("--json", help=f"{JSON_HELP}: the approved record")
-    ] = False,
+    as_json: ApproveJson = False,
 ) -> None:
     """Approve a receiver contract for an attachment on THIS machine, the stack's.
 
@@ -141,7 +148,7 @@ def approve(
     verified, does not publish the contract's dataset in the contract's shape, or
     pins no HDB here. The approval binds the contract to the attachment's
     destination and stack user, and to the limits given here: `uqs job receiver start
-    --contract CONTRACT --attach ATTACHMENT` then serves it, and refuses if the attachment
+    --contract CONTRACT --attachment ATTACHMENT` then serves it, and refuses if the attachment
     has since been pointed at another HDB.
     """
     try:
@@ -154,7 +161,7 @@ def approve(
         _die(exc)
         return
     if as_json:
-        typer.echo(json.dumps(record, indent=2, sort_keys=True))
+        emit(record)
         return
     b = record["binding"]
     console.print(
@@ -162,7 +169,7 @@ def approve(
         f"({contract.dataset}) for attachment {attach}: "
         f"into {b['hdb_dir']}, writer {', '.join(b['users'])}, "
         f"policies {', '.join(b['conflict_policies'])}, at most {b['max_rows']} rows a message; "
-        f"`uqs job receiver start --contract {contract.identity} --attach {attach} "
+        f"`uqs job receiver start --contract {contract.identity} --attachment {attach} "
         "--listen-port PORT` serves it",
         markup=False,
     )
@@ -170,16 +177,19 @@ def approve(
         console.print(dry_run_note())
 
 
-@contract_app.command("list", cls=ReadOnly)
+ListJson = json_opt('{"contracts": [{contract, binding, path}]}, in the order the table shows')
+
+
+@contract_app.command("list", cls=renamed(ATTACHMENT, ReadOnly))
 def list_(
-    attach: Annotated[str, typer.Option("--attach", help="The attachment whose approvals to list")],
+    attach: Annotated[
+        str, typer.Option("--attachment", help="The attachment whose approvals to list")
+    ],
     export: ExportOpt = None,
     sort: SortOpt = None,
     reverse: ReverseOpt = False,
     interactive: InteractiveOpt = False,
-    as_json: Annotated[
-        bool, typer.Option("--json", help=f"{JSON_HELP}: [{{contract, binding}}]")
-    ] = False,
+    as_json: ListJson = False,
 ) -> None:
     """List the receiver contracts approved for an attachment on this machine.
 
@@ -194,7 +204,7 @@ def list_(
     if as_json:
         order = {row["identity"]: i for i, row in enumerate(rows)}
         found.sort(key=lambda r: order.get(r.get("contract", {}).get("identity"), 0))
-        typer.echo(json.dumps(found, indent=2, sort_keys=True))
+        emit({"contracts": found})
         return
     if not found:
         console.print(f"no contract is approved for attachment {attach}", markup=False)
