@@ -46,15 +46,15 @@ def test_the_default_and_the_selected_runtime_are_marked(monkeypatch):
 
 def test_torq_is_the_starter_pack_alone(monkeypatch):
     torq = _rows(monkeypatch)["torq"]
-    assert (torq["tables"], torq["layers"]) == ("3", "TorQ, starter pack")
-    assert torq["data_dir"] == "output/uqs-torq" and torq["base_port"] == "6150"
+    assert (torq["tables"], torq["layers"]) == (3, ["TorQ", "starter pack"])
+    assert torq["data_dir"] == "output/uqs-torq" and torq["base_port"] == 6150
 
 
 def test_running_counts_only_this_runtimes_processes(monkeypatch):
     monkeypatch.setattr(alive, "running", lambda paths, base_port=None: {"rdb1", "fxfeed1"})
     rows = _rows(monkeypatch)
-    assert rows["uqf"]["running"].startswith("2/")
-    assert rows["torq"]["running"].startswith("1/"), "fxfeed1 is not a torq process"
+    assert rows["uqf"]["running"] == 2
+    assert rows["torq"]["running"] == 1, "fxfeed1 is not a torq process"
 
 
 def test_the_diff_says_what_uqf_adds_to_the_starter_pack():
@@ -81,7 +81,7 @@ def test_both_commands_print_json(monkeypatch):
     monkeypatch.delenv("UQS_RUNTIME", raising=False)
     listed = runner.invoke(cli.app, ["runtime", "list", "--json"])
     assert listed.exit_code == 0, listed.output
-    assert [r["runtime"] for r in json.loads(listed.stdout)] == list(RUNTIMES)
+    assert [r["runtime"] for r in json.loads(listed.stdout)["runtimes"]] == list(RUNTIMES)
     diffed = runner.invoke(cli.app, ["runtime", "diff", "uqf", "torq", "--json"])
     assert diffed.exit_code == 0, diffed.output
     assert set(json.loads(diffed.stdout)) == set(runtime_report.DIFF_SECTIONS)

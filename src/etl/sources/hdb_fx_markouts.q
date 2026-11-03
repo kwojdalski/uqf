@@ -82,6 +82,35 @@
       range_to+0D|max spec`horizons];
     `executions`market_data!(deals;books)}
 
+/ How far the HDB's books reach, less the furthest horizon: a window ending at or before
+/ this has every book its executions are scored against (#1927). The latest book is read
+/ from the newest partition only; a recorder that has not landed any gives -0Wp, and a
+/ -0Wp bound means nothing is complete yet, so no window is planned.
+/ @param h an open handle to the HDB
+/ @return the exclusive instant through which the books the scoring needs are present
+/ @eg .qpipe.source.hdb_fx_markouts.complete_through[{2026.09.17D10:00:25}]  ->  2026.09.17D10:00:15.000000000
+.qpipe.source.hdb_fx_markouts.complete_through:{[h]
+    latest:.qetl.source.ipc_call[h;{[unused] exec max source_time from `market_data where date=max date};enlist 0b];
+    / max of no rows is -0Wp, and arithmetic on it wraps to a far-future instant
+    $[latest<=-0Wp; -0Wp; latest-0D|max (.qpipe.transform.fx_markout_outputs.job_spec)`horizons]}
+
+/ Can this window be scored, or are its books absent? An execution with no book for one
+/ of its legs is a legitimate unavailable row and is ready; a window that has routable
+/ executions and NO books at all is not ready, because every row it scored would be
+/ unavailable and coverage would then keep them for good (#1927). A window with no
+/ executions, or none a route can be built for, has nothing to score and is ready.
+/ @param batch `executions`market_data!(...) as the query returns them
+/ @param range_from inclusive lower bound
+/ @param range_to exclusive upper bound
+/ @return the unmet requirements, as a list of strings; () when ready
+/ @eg .qpipe.source.hdb_fx_markouts.ready[.qpipe.source.hdb_fx_markouts.fixture[];2026.09.17D00:00;2026.09.18D00:00]  ->  ()
+.qpipe.source.hdb_fx_markouts.ready:{[batch;range_from;range_to] / noqa: QF016 the hook's fixed signature
+    deals:batch`executions;
+    if[0=count deals; :()];
+    pairs:distinct raze .qpipe.transform.fx_markout.legs_of[.qpipe.transform.fx_markout_outputs.job_spec;deals];
+    if[(0=count pairs) or 0<count batch`market_data; :()];
+    enlist "market_data holds no books for the ",string[count pairs]," pair(s) the window's ",string[count deals]," execution(s) route through"}
+
 / Three fills on 2026.09.17 and the books around them: a EURUSD buy at 1.1001 against
 / two sources, a USDPLN sell that routes EURUSD (inverted) and EURPLN, and a crypto
 / fill the calculation cannot route and so excludes.
@@ -112,7 +141,7 @@
 .qpipe.source.hdb_fx_markouts.fixture:{[] `executions`market_data!(.qpipe.source.hdb_fx_markouts.raw_executions[];.qpipe.source.hdb_fx_markouts.raw_market_data[])}
 
 .qetl.source.define[.qpipe.source.hdb_fx_markouts.source_name;
-    `source`table_name`time_column`row_key`columns`types`query`fixture`tz`supporting!
-    (.qpipe.source.hdb_fx_markouts.source_name;`executions;.qpipe.source.hdb_fx_markouts.time_column;.qpipe.source.hdb_fx_markouts.row_key;.qpipe.source.hdb_fx_markouts.columns;.qpipe.source.hdb_fx_markouts.types;.qpipe.source.hdb_fx_markouts.query;.qpipe.source.hdb_fx_markouts.fixture;.qpipe.source.hdb_fx_markouts.tz;.qpipe.source.hdb_fx_markouts.supporting)];
+    `source`table_name`time_column`row_key`columns`types`query`fixture`tz`supporting`complete_through`ready!
+    (.qpipe.source.hdb_fx_markouts.source_name;`executions;.qpipe.source.hdb_fx_markouts.time_column;.qpipe.source.hdb_fx_markouts.row_key;.qpipe.source.hdb_fx_markouts.columns;.qpipe.source.hdb_fx_markouts.types;.qpipe.source.hdb_fx_markouts.query;.qpipe.source.hdb_fx_markouts.fixture;.qpipe.source.hdb_fx_markouts.tz;.qpipe.source.hdb_fx_markouts.supporting;.qpipe.source.hdb_fx_markouts.complete_through;.qpipe.source.hdb_fx_markouts.ready)];
 
 \d .

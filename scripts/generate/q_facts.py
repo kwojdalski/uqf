@@ -47,6 +47,9 @@ PROVIDER_OUT = (
 #: must print, so a fact added on one side only fails here.
 FACTS = {
     "IO_STRATEGIES": "what a write may do with a row whose key exists - .qetl.io.strategies",
+    "DEFAULT_IO_STRATEGY": (
+        "the strategy a worker that declares none writes with - .qetl.io.default_strategy"
+    ),
     "RUN_MODES": "what a bounded run may do - .qetl.job.bounded.runtime.modes",
     "READ_ONLY_RUN_MODES": (
         "the run modes that open no source and write nothing - "
