@@ -13,6 +13,8 @@ import importlib.util
 import sys
 from pathlib import Path
 
+import pytest
+
 _SPEC = importlib.util.spec_from_file_location(
     "check_doc_links",
     Path(__file__).resolve().parents[3] / "scripts" / "gates" / "check_doc_links.py",
@@ -57,3 +59,52 @@ def test_an_absolute_url_is_not_ours_to_check(tmp_path):
 
 def test_the_real_docs_resolve():
     assert links.broken_anchors() == []
+
+
+@pytest.fixture
+def rendered_site(monkeypatch):
+    """A renderer that writes a site, just as Quarto does even on warnings."""
+    outputs = []
+
+    def render(exe, out_dir):
+        path = Path(out_dir)
+        path.mkdir(parents=True, exist_ok=True)
+        (path / "index.html").write_text("<h1>Checked site</h1>")
+        outputs.append(path)
+        return 0, ["[ 1/1] page.md"]
+
+    monkeypatch.setattr(links, "quarto", lambda: "quarto")
+    monkeypatch.setattr(links, "render", render)
+    monkeypatch.setattr(links, "broken_anchors", lambda: [])
+    return outputs
+
+
+def test_an_explicit_output_keeps_the_checked_site(tmp_path, rendered_site):
+    out = tmp_path / "site"
+    assert links.main(["--output-dir", str(out)]) == 0
+    assert (out / "index.html").read_text() == "<h1>Checked site</h1>"
+    assert rendered_site == [out]
+
+
+def test_a_default_render_still_leaves_no_artifacts(rendered_site):
+    assert links.main([]) == 0
+    assert len(rendered_site) == 1
+    assert not rendered_site[0].exists()
+
+
+@pytest.mark.parametrize(
+    ("code", "lines", "anchors", "message"),
+    [
+        (0, ["[ 1/1] page.md", "Unable to resolve link target: gone.md"], [], "gone.md"),
+        (0, ["Unable to resolve crossref: sec-gone"], [], "sec-gone"),
+        (0, [], [("page.md", "#gone")], "#gone"),
+        (1, ["ERROR: render failed"], [], "render failed"),
+    ],
+)
+def test_keeping_the_output_still_fails_broken_links_and_renders(
+    tmp_path, monkeypatch, rendered_site, capsys, code, lines, anchors, message
+):
+    monkeypatch.setattr(links, "render", lambda *_: (code, lines))
+    monkeypatch.setattr(links, "broken_anchors", lambda: anchors)
+    assert links.main(["--output-dir", str(tmp_path / "site")]) == 1
+    assert message in capsys.readouterr().err

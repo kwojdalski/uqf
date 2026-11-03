@@ -1,81 +1,72 @@
-# Publishes docs/ to GitHub Pages.
-#
-# The site is the one docs/_quarto.yml already describes - the same project
-# the doc-links gate renders on every push to check that each link and anchor
-# resolves. Deploying it is a second use of a build that was happening anyway,
-# rather than a second documentation toolchain: no .md file is converted, and
-# the revealjs deck renders as a deck rather than being flattened into a page.
-#
-# PAGES MUST BE ENABLED for this repository, with its source set to "GitHub
-# Actions", before the deploy job can succeed. Until then the build job still
-# runs and still fails on a broken link, which is the half that matters.
+# Publishes the exact site that a successful master CI run rendered and checked.
+# No checkout or rendering here: the source run and SHA identify the artifact.
 name: Documentation site
 
 on:
-  push:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
     branches: [master]
-    paths:
-      - "docs/**"
-      - ".github/workflows/docs.yml"
-      # The q API pages are written from these at render time.
-      - "src/**/*.q"
-      - "scripts/generate/q_api_docs.py"
-      - "scripts/generate/export_api_reference.q"
-      - "scripts/peachq.json"
   workflow_dispatch:
+    inputs:
+      ci_run_id:
+        description: "Successful master push CI run whose validated site to publish"
+        required: true
+        type: string
 
 permissions:
+  actions: read
   contents: read
   pages: write
   id-token: write
 
-# One deploy at a time, and never cancel one half-way: a cancelled deploy can
-# leave Pages serving a partially-written site.
 concurrency:
   group: pages
   cancel-in-progress: false
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-      - name: Install Quarto
-        # Pinned to the version ci.yml installs, so the published site and the
-        # link gate cannot be produced by two different renderers.
-        uses: quarto-dev/quarto-actions/setup@v2
-        with:
-          version: "1.10.18"
-      - name: Restore PeachQ built from its pinned commit
-        # The render's pre-render step writes the q API pages from the qDoc
-        # comments (scripts/generate/q_api_docs.py), which needs a q. PeachQ
-        # is the one a hosted runner can have; same pin and cache as ci.yml.
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/.cache/uqf/peachq
-          key: peachq-${{ hashFiles('scripts/peachq.json') }}-${{ runner.os }}-${{ runner.arch }}
-      - name: Provide PeachQ for the q API pages
-        # Builds the pinned commit on a cold cache (about 40s). Through QCMD
-        # only, as everywhere else: nothing is put on PATH.
-        shell: bash
-        run: |
-          set -euo pipefail
-          bin="$(python3 scripts/peachq.py)"
-          echo "QCMD=$bin" >> "$GITHUB_ENV"
-      - name: Render docs/
-        working-directory: docs
-        run: quarto render
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: docs/_site
-
   deploy:
-    needs: build
-    runs-on: ubuntu-latest
+    # workflow_run also fires for PR CI. Only a successful push to this
+    # repository's master may supply a site, including on a manual dispatch.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_sha == github.sha)
+    runs-on: ubuntu-24.04
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      - name: Verify the source CI run
+        id: source
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        with:
+          script: |
+            const runId = Number(context.payload.workflow_run?.id ?? context.payload.inputs?.ci_run_id);
+            if (!Number.isSafeInteger(runId) || runId <= 0) {
+              throw new Error('ci_run_id must be a positive integer');
+            }
+            const {data: run} = await github.rest.actions.getWorkflowRun({
+              ...context.repo, run_id: runId,
+            });
+            if (run.path !== '.github/workflows/ci.yml' ||
+                run.head_repository.full_name !== `${context.repo.owner}/${context.repo.repo}` ||
+                run.event !== 'push' || run.head_branch !== 'master' ||
+                run.status !== 'completed' || run.conclusion !== 'success') {
+              throw new Error('Only a successful master push CI run may publish documentation');
+            }
+            core.setOutput('sha', run.head_sha);
+      - name: Download that run's validated site
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          name: docs-site-${{ steps.source.outputs.sha }}
+          path: ${{ runner.temp }}/docs-site
+          run-id: ${{ github.event.workflow_run.id || inputs.ci_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5
+      - uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3
+        with:
+          path: ${{ runner.temp }}/docs-site
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4

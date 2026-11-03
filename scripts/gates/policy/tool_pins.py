@@ -15,7 +15,6 @@ listed here.
 
     uv          the setup-uv `version:` in .github/workflows/ci.yml
     pre-commit  `pre-commit==` in .github/workflows/ci.yml, which the hooks job runs
-    quarto      the quarto setup `version:` in .github/workflows/ci.yml
     python      requires-python's lower bound in the root pyproject.toml - the
                 Python every workflow sets up, ruff targets and a release builds for
     ruff        `ruff==` in the root pyproject.toml, which the pre-commit hook's rev follows
@@ -144,13 +143,6 @@ PINS: tuple[Pin, ...] = (
             Site("scripts/dev/attest_kdbx.py", _PRE_COMMIT),
             Site("scripts/dev/hooks_full.py", _PRE_COMMIT),
             Site(".claude/agents/*.md", _PRE_COMMIT, required=False),
-        ),
-    ),
-    Pin(
-        "quarto",
-        tuple(
-            Site(path, _in_block(r"uses:\s*quarto-dev/quarto-actions/setup@", "version"))
-            for path in (CI, ".github/workflows/docs.yml")
         ),
     ),
     Pin(
