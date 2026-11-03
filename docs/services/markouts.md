@@ -76,8 +76,8 @@ uqs logs hdb_demo_markouts_backfill1 -f
 ```
 
 Without the variable it runs on its fixture, a small built-in data set. That is
-what tests and `--mode plan`/`--mode dry-run` use. `--trace` shows the two
-queries each window sends to the HDB.
+what tests and `--mode plan`/`--dry-run` use. `--trace` shows the two queries
+each window sends to the HDB.
 
 For each window `[from, to)`, one hour wide by default, the source
 `.qpipe.source.hdb_demo_markouts` (`src/etl/sources/hdb_demo_markouts.q`):

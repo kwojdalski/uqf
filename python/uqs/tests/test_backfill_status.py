@@ -1,4 +1,4 @@
-"""`uqs list backfills`: what an attached run left behind, read back (#1454).
+"""`uqs job attachment status`: what an attached run left behind, read back (#1454).
 
 No process is started: the files a run leaves - its log's closing RESULT line and the owner
 record in the attachment's folder - are written by hand, and the listing must tell written
@@ -139,7 +139,7 @@ def test_list_backfills_is_a_listable_kind_and_prints(world):
         {"worker": "w", "state": "completed", "outcome": "queryable", "queryable": True},
     )
     result = CliRunner().invoke(
-        cli.app, ["list", "backfills"], catch_exceptions=False, env={"COLUMNS": "260"}
+        cli.app, ["job", "attachment", "status"], catch_exceptions=False, env={"COLUMNS": "260"}
     )
     assert result.exit_code == 0
     assert "pb-uat" in result.output and "queryable" in result.output

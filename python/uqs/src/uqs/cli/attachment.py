@@ -19,10 +19,16 @@ attachment_app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
     help="Attachments: a job put on a TorQ stack already running - add, remove, show, "
-    "list, and the receiver contracts approved for one (contract).",
+    "list, the status of the backfills into them, and the receiver contracts approved for "
+    "one (contract).",
 )
 
-#: `add`, and its old spelling `job attach`: `--override-reason` is `--reason` (#1732)
-OLD_REASON = renamed({"--override-reason": "--reason"}, ChangesState)
+#: `add`, and its old spelling `job attach`: `--override-reason` is `--reason`
+#: (#1732); the stack's base port is `--base-port`, as on every command, and
+#: "runtime" names a uqs runtime only, so `--runtime-only` is `--transient` (#1855)
+OLD_REASON = renamed(
+    {"--override-reason": "--reason", "--stack-id": "--base-port", "--runtime-only": "--transient"},
+    ChangesState,
+)
 
 job_app.add_typer(attachment_app, name="attachment", rich_help_panel=JOB_OPERATIONS_PANEL)

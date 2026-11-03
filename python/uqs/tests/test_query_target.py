@@ -1,7 +1,7 @@
 """`uqs query --tunnel NAME` over an ssh tunnel (#1561).
 
 No real host is reached: a stand-in `ssh` on PATH runs the remote command
-locally against a fake release (whose `uqs list processes --json` prints the
+locally against a fake release (whose `uqs process list --json` prints the
 ports), and in tunnel mode (`-N -L ...`) listens on the local end it was
 given, records its pid and waits to be ended - so the tunnel's start, its
 readiness check and its teardown are all exercised for real.
@@ -83,9 +83,9 @@ def server(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.delenv(runtimes.RUNTIME_ENV, raising=False)
     declared = tmp_path / "deploy_targets.toml"
     declared.write_text(
-        f'[targets.dev]\nhost = "svc@dev.example"\ndest = "{tmp_path / "srv"}"\n'
+        f'[targets.dev]\nssh = "svc@dev.example"\ndest = "{tmp_path / "srv"}"\n'
         "connect_timeout = 2\n\n"
-        '[targets.down]\nhost = "unreachable"\ndest = "/opt/uqf"\n'
+        '[targets.down]\nssh = "unreachable"\ndest = "/opt/uqf"\n'
     )
     monkeypatch.setenv(targets.DECLARATION_ENV, str(declared))
     return tmp_path
@@ -194,14 +194,14 @@ def test_split_global_leaves_a_query_scoped_target_to_query():
 def test_ports_come_from_the_targets_release(server):
     r = control.remote_for("dev", Path("."))
     assert tunnel.remote_ports(r, None) == {"gateway1": 17007, "rdb1": 17002}
-    assert (server / "log" / "uqs.args").read_text().split() == ["list", "processes", "--json"]
+    assert (server / "log" / "uqs.args").read_text().split() == ["process", "list", "--json"]
 
 
 def test_the_chosen_runtime_and_base_port_are_passed_on(server):
     r = control.remote_for("dev", Path("."))
     tunnel.remote_ports(r, "peachq-etl", 9000)
     assert (server / "log" / "uqs.args").read_text().split() == [
-        "--runtime", "peachq-etl", "list", "processes", "--json", "--base-port", "9000",
+        "--runtime", "peachq-etl", "process", "list", "--json", "--base-port", "9000",
     ]  # fmt: skip
 
 
@@ -392,9 +392,25 @@ def test_without_target_a_failed_query_still_exits_1_as_before(monkeypatch):
 
 def test_scrub_masks_each_secret():
     assert tunnel.scrub("u:pw@h pw", ["pw", ""]) == "u:***@h ***"
-    assert json.loads(json.dumps(tunnel.list_args(None, None))) == ["list", "processes", "--json"]
+    assert json.loads(json.dumps(tunnel.list_args(None, None))) == ["process", "list", "--json"]
 
 
 def test_split_global_takes_yes_as_y_too():
     """The root's --yes has a -y like every other --yes (#1732)."""
     assert control.split_global(["-y", "--target", "uat", "stop"]) == ("uat", True, ["stop"])
+
+
+def test_a_release_from_before_process_list_is_asked_with_list_processes():
+    """#1858: the ports come from `uqs process list --json`; a release from
+    before it has only `uqs list processes`, which answers the usage error."""
+    seen = []
+
+    def runner(argv, **_kw):
+        seen.append(argv)
+        old = "processes" in " ".join(map(str, argv))
+        out = '[{"procname": "rdb1", "port": 6052}]' if old else ""
+        return subprocess.CompletedProcess(argv, 0 if old else tunnel.USAGE_ERROR, out, "")
+
+    r = control.Remote("dev", "h", "/srv")
+    assert tunnel.remote_ports(r, None, runner=runner) == {"rdb1": 6052}
+    assert len(seen) == 2 and "processes" not in " ".join(map(str, seen[0]))

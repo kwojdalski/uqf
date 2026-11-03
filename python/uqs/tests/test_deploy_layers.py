@@ -23,12 +23,12 @@ labels = { tier = "uat" }
 
 [targets.alpha]
 environment = "uat"
-host = "deploy@alpha"
+ssh = "deploy@alpha"
 dest = "/srv/uqf"
 verify_timeout = 500
 
 [targets.beta]
-host = "deploy@beta"
+ssh = "deploy@beta"
 dest = "/srv/uqf"
 """
 
@@ -136,14 +136,14 @@ def test_only_a_target_names_an_environment(root, table, layer):
     ['[default]\nprofile = "p"\n', 'defaults = "p"\n', '[environments]\nuat = "p"\n'],
 )
 def test_a_misshapen_or_misspelt_table_is_refused(root, text):
-    _write(root, text + '[targets.beta]\nhost = "h"\ndest = "/d"\nprofile = "p"\n')
+    _write(root, text + '[targets.beta]\nssh = "h"\ndest = "/d"\nprofile = "p"\n')
     with pytest.raises(DeployError, match=r"declare targets as \[targets.<name>\] tables"):
         targets.configs("beta", "x", {}, False, root)
 
 
 def test_a_file_without_the_new_tables_behaves_as_before(root):
     """A plain [targets.*] file: the same Config, every source the target."""
-    _write(root, '[targets.a]\nhost = "h"\ndest = "/d"\nprofile = "p"\nruntime = "crypto"\n')
+    _write(root, '[targets.a]\nssh = "h"\ndest = "/d"\nprofile = "p"\nruntime = "crypto"\n')
     (cfg,) = targets.configs("a", "x", {"profile": "q"}, False, root)
     assert cfg.sources == {"host": "target a", "dest": "target a", "profile": "--profile"}
     assert cfg.runtime == "crypto"
@@ -152,8 +152,8 @@ def test_a_file_without_the_new_tables_behaves_as_before(root):
     assert targets.read(root) == {
         "a": {"host": "h", "dest": "/d", "profile": "p", "runtime": "crypto"}
     }
-    assert list(history.target_rows(root)[0]) == ["target", "ssh", "dest", "as", "labels",
-                                                  "last deployed"]  # fmt: skip
+    assert list(history.target_rows(root)[0]) == ["target", "ssh", "dest", "remote_user", "labels",
+                                                  "last_deployed"]  # fmt: skip
 
 
 def test_runtime_and_labels_layer_like_any_key(root):
@@ -166,7 +166,7 @@ def test_runtime_and_labels_layer_like_any_key(root):
 def test_list_targets_shows_the_merged_target_and_its_environment(root):
     rows = {r["target"]: r for r in history.target_rows(root)}
     assert rows["alpha"]["environment"] == "uat" and rows["beta"]["environment"] == ""
-    assert rows["alpha"]["as"] == "svc", "the defaults' remote_user"
+    assert rows["alpha"]["remote_user"] == "svc", "the defaults' remote_user"
     assert rows["alpha"]["labels"] == "tier=uat", "the environment's labels"
 
 

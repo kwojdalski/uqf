@@ -229,7 +229,7 @@ def setup_logging(
     The console sink writes to `stream`, or to stderr when it is None - with
     --json or without (#1881). A log line is never a command's data: stdout
     carries only what the command prints through its console or
-    json_out.emit, so `uqs list processes > f` holds the list,
+    json_out.emit, so `uqs process list > f` holds the list,
     `$(uqs config show ...)` the config, and `2>/dev/null` silences the log.
     It used to be stdout outside --json (#1685 moved only --json's). Read at
     call time, so a test that swaps sys.stderr is honoured."""

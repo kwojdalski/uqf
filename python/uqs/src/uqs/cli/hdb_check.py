@@ -1,7 +1,7 @@
 """`uqs data check`: which HDB partitions lack a table or a column, and -
 with --apply, after asking - the empty table or null column written in.
 
-Two scopes (#1755). Without --table, --attach or --hdb it judges this
+Two scopes (#1755). Without --table, --attachment or --hdb it judges this
 runtime's own HDB against every table this runtime declares, as it always
 has: stack/hdb_layout.py asks q which partitions there are (in the segments
 par.txt names, for a segmented database - #1783), stack/hdb_shape.py judges
@@ -35,7 +35,8 @@ from uqs.cli.hdb_scope import (
     run_scoped,
     tables_given,
 )
-from uqs.cli.renames import alias_command
+from uqs.cli.json_out import JSON_HELP
+from uqs.cli.renames import ATTACHMENT, alias_command, renamed
 from uqs.cli.safety import ConfirmsOnServer
 from uqs.cli.shared import _die, _paths, console, data_app
 from uqs.paths import UqsError
@@ -43,14 +44,14 @@ from uqs.stack import hdb_alter, hdb_fill, hdb_layout, hdb_shape, hdb_types
 from uqs.stack.hdb_alter import Request
 
 
-@data_app.command("check", cls=ConfirmsOnServer)
+@data_app.command("check", cls=renamed(ATTACHMENT, ConfirmsOnServer))
 def hdb_check(
     table: Annotated[
         list[str] | None,
         typer.Option(
             "--table",
-            help="Check and fill only this table (default with --attach: the attachment's own); "
-            "repeatable, and NAME,NAME also works",
+            help="Check and fill only this table (default with --attachment: the attachment's "
+            "own); repeatable, and NAME,NAME also works",
             autocompletion=completion.plant_table,
         ),
     ] = None,
@@ -70,7 +71,11 @@ def hdb_check(
         bool, typer.Option("--fix", hidden=True, help="Retired: --apply, which asks first")
     ] = False,
     as_json: Annotated[
-        bool, typer.Option("--json", help="Print the findings as JSON, to script against")
+        bool,
+        typer.Option(
+            "--json",
+            help=f"{JSON_HELP}: the findings - missing tables and columns, changed types",
+        ),
     ] = False,
 ) -> None:
     """Report HDB partitions missing a table or a column - the cause behind
@@ -79,7 +84,7 @@ def hdb_check(
 
     A partitioned kdb+ database needs every table in every partition, each
     holding the same columns; a gap fails the whole query, naming whichever
-    table sorts first. Without --table, --attach or --hdb: this runtime's HDB,
+    table sorts first. Without --table, --attachment or --hdb: this runtime's HDB,
     against every table it declares. With one: that table alone, in the HDB
     they name (`uqs --target NAME data check` is a release's own). --apply
     shows the plan, asks, and writes only what is missing - additive: a table
@@ -199,4 +204,4 @@ def _whole_runtime(*, apply: bool, yes: bool, as_json: bool) -> None:
 
 
 #: Its name before #1733: `check` actively probes and exits non-zero on a problem.
-alias_command(data_app, "hdb-check", "uqs data check", hdb_check)
+alias_command(data_app, "hdb-check", "uqs data check", hdb_check, cls=renamed(ATTACHMENT))

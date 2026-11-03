@@ -74,9 +74,9 @@ def checked(
     runtimes' paths, when they ship."""
     pins = Pins(
         expected_sha256=sha256("expected_sha256", expected_sha256),
-        torq_runtime_sha256=sha256("torq_runtime_sha256", torq_runtime_sha256),
-        q_runtime_sha256=sha256("q_runtime_sha256", q_runtime_sha256),
-        python_runtime_sha256=sha256("python_runtime_sha256", python_runtime_sha256),
+        torq_runtime_sha256=sha256("torq_component_sha256", torq_runtime_sha256),
+        q_runtime_sha256=sha256("q_component_sha256", q_runtime_sha256),
+        python_runtime_sha256=sha256("python_component_sha256", python_runtime_sha256),
         q_version=q_version(q_version_),
         accept_digest=reason("--override accept-digest", accept_digest),
         accept_q_version=reason("--override accept-q-version", accept_q_version),

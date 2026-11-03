@@ -93,7 +93,7 @@ def create(
     once; the result is stored and never re-derived.
     """
     if stack_id < 1024:
-        raise AttachmentError(f"--stack-id {stack_id} is not a base port")
+        raise AttachmentError(f"--base-port {stack_id} is below 1024: no stack's base port")
     spec = jobs.resolve(job, bundle.resolve() if bundle else None, root)
     d_host, d_port = (
         parse_discovery(discovery) if discovery else (host, stack_id + discovery_offset(root))
@@ -121,7 +121,7 @@ def create(
 
 
 def persist_mode(runtime_only: bool, schema_writer: str | None = None) -> str:
-    """The persistence the options choose: `--runtime-only` writes no block, and
+    """The persistence the options choose: `--transient` writes no block, and
     `--schema-writer` says who writes it - `cli` (uqs, here; the default) or
     `tickerplant` (#1651, #1845). Each is recorded in the attachment, and the two
     exclude each other."""
@@ -131,7 +131,7 @@ def persist_mode(runtime_only: bool, schema_writer: str | None = None) -> str:
         )
     if runtime_only and schema_writer is not None:
         raise AttachmentError(
-            f"--runtime-only and --schema-writer {schema_writer} exclude each other: one keeps "
+            f"--transient and --schema-writer {schema_writer} exclude each other: one keeps "
             "no schema block, the other says who writes it"
         )
     if runtime_only:

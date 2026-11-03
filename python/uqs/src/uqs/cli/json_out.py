@@ -21,12 +21,18 @@ from typing import Annotated, Any
 
 import typer
 
+#: How every `--json` help begins (#1859): one phrasing, on every command.
+JSON_HELP = "Print one JSON document on stdout instead"
+#: The one command whose `--json` prints a JSON line per record, and its lead.
+JSON_LINES_HELP = "Print JSON on stdout instead, one object a line"
 
-def json_opt(shape: str) -> Any:
-    """The `--json` option, its help naming the document it prints."""
-    return Annotated[
-        bool, typer.Option("--json", help=f"Print one JSON document on stdout instead: {shape}")
-    ]
+
+def json_opt(shape: str | None = None, note: str | None = None, *, lines: bool = False) -> Any:
+    """The `--json` option: one help on every command (#1859), naming the
+    document's `shape` when given, then any `note` on when it applies.
+    `lines` is the one command that prints a JSON object per line."""
+    text = (JSON_LINES_HELP if lines else JSON_HELP) + (f": {shape}" if shape else "")
+    return Annotated[bool, typer.Option("--json", help=text + (f". {note}" if note else ""))]
 
 
 def snake(key: object) -> str:

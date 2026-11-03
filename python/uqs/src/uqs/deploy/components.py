@@ -51,7 +51,7 @@ FIELDS: dict[str, dict[str, tuple[str, ...]]] = {
 }
 #: The field a mode cannot go without. A bundled Python can do without
 #: `python_runtime` when the release carries one (`uqs deploy build
-#: --python-runtime`, #1646): only the artifact says, so bundled.attach checks.
+#: --python-component`, #1646): only the artifact says, so bundled.attach checks.
 REQUIRED = {(c, BUNDLED): f"{c}_runtime" for c in COMPONENTS if c != "python"}
 
 

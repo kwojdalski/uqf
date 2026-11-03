@@ -12,7 +12,7 @@ something built on whichever laptop ran `uqs deploy build`.
   - a release tag, e.g. v1.4.0: the release's assets are listed through the
     GitHub API (--release-repo, else this checkout's origin) and its one
     artifact downloaded - or, when it carries more than one (the plain and
-    the --q-target 4.0 build), refused naming each, to be given by URL.
+    the --q-version 4.0 build), refused naming each, to be given by URL.
 
 Downloads land in a cache directory of their own, and the archive is then
 checked exactly as a local one is (deploy.artifact.read_artifact): against
