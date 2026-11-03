@@ -10,7 +10,7 @@ from typing import Annotated
 
 import typer
 
-from uqs.cli.safety import ChangesState
+from uqs.cli.safety import ChangesState, dry_run_note
 from uqs.cli.shared import _die, console
 from uqs.cli.target import _ACCOUNT, RemoteUser, Ssh, _command, _reach, target_app
 from uqs.deploy import (
@@ -146,7 +146,7 @@ def adopt_(
     except DeployError as exc:
         _die(UqsError(str(exc)))
     if not do_it:
-        console.print("dry run: nothing changed on the server or here - --apply to adopt it")
+        console.print(dry_run_note("with --apply to adopt it"))
         return
     changes = adopt.server_changes(survey)
     if changes and not yes:
