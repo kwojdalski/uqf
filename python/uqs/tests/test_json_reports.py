@@ -197,7 +197,7 @@ def test_target_check_prints_the_release(monkeypatch):
     monkeypatch.setattr(control, "remote_for", lambda *_a: remote)
     monkeypatch.setattr(control, "current_release", lambda _r: "rel-1")
     doc = _doc(["target", "check", "t"])
-    assert doc == {"ok": True, "target": "t", "host": "h", "dest": "/srv/uqf",
+    assert doc == {"ok": True, "target": "t", "ssh": "h", "dest": "/srv/uqf",
                    "remote_user": None, "release": "rel-1"}  # fmt: skip
 
 

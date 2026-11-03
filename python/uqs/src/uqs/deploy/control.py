@@ -47,7 +47,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from uqs.deploy import history, targets
-from uqs.deploy.config import DEFAULT_CONNECT_TIMEOUT, DeployError
+from uqs.deploy.config import DEFAULT_CONNECT_TIMEOUT, FIELD_OF_KEY, DeployError
 from uqs.deploy.launch import (
     NO_RELEASE,
     RELEASE,
@@ -101,7 +101,9 @@ def settings_for(name: str | None, root: Path) -> tuple[str, dict]:
     if name in declared:
         t, label = declared[name], name
     elif last is not None:
-        t, label = last, str(last.get("target") or history.server_of(str(last["host"])))
+        # the entry's keys as make_config's options: `ssh` is `host` (#1888)
+        t = {FIELD_OF_KEY.get(k, k): v for k, v in last.items()}
+        label = str(last.get("target") or history.server_of(str(last["ssh"])))
     else:
         known = ", ".join(sorted(declared)) or "none"
         what = f"no target or deployed server {name!r}" if name else "no deployment recorded"

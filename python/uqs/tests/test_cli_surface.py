@@ -60,7 +60,7 @@ def test_the_receiver_is_stopped_by_its_own_verb_and_a_dry_run_signals_nothing(m
 
 def test_target_edit_name_opens_the_file_at_that_targets_table(monkeypatch, tmp_path):
     decl = tmp_path / "deploy_targets.toml"
-    decl.write_text('[defaults]\n\n[targets.uat]\nhost = "a@b"\ndest = "/srv"\n')
+    decl.write_text('[defaults]\n\n[targets.uat]\nssh = "a@b"\ndest = "/srv"\n')
     monkeypatch.setattr(target_edit, "repo_root", lambda: tmp_path)
     monkeypatch.setattr(target_edit.targets, "declaration_path", lambda _r: decl)
     monkeypatch.setenv("EDITOR", "vi")

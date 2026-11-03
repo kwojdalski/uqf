@@ -245,7 +245,7 @@ def rename(
     )
 
 
-CheckJson = json_opt('{"ok": true, "target", "host", "dest", "remote_user", "release"}')
+CheckJson = json_opt('{"ok": true, "target", "ssh", "dest", "remote_user", "release"}')
 
 
 @target_app.command("check", cls=ReadOnly)
@@ -260,7 +260,7 @@ def check(name: Name, as_json: CheckJson = False) -> None:
         return
     if as_json:
         emit({
-            "ok": True, "target": r.name, "host": r.host, "dest": r.dest,
+            "ok": True, "target": r.name, "ssh": r.host, "dest": r.dest,
             "remote_user": r.remote_user, "release": release,
         })  # fmt: skip
         return

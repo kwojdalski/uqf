@@ -126,30 +126,30 @@ def test_the_cli_takes_each_mode():
 LAYERED = """
 [defaults]
 profile = "essential"
-qcmd = "/opt/kx/bin/q"
-qhome = "/opt/kx"
+q_cmd = "/opt/kx/bin/q"
+q_home = "/opt/kx"
 torq_home = "/opt/torq"
 
 [targets.kx]
-host = "h"
+ssh = "h"
 dest = "/srv/uqf"
 
 [targets.restated]
-host = "h"
+ssh = "h"
 dest = "/srv/uqf"
 q_mode = "existing"
 
 [targets.switched]
-host = "h"
+ssh = "h"
 dest = "/srv/uqf"
 q_mode = "bundled"
-q_runtime = "dist/q-runtime.tar.gz"
+q_component = "dist/q-runtime.tar.gz"
 
 [targets.both]
-host = "h"
+ssh = "h"
 dest = "/srv/uqf"
 q_mode = "bundled"
-qcmd = "/opt/kx/bin/q"
+q_cmd = "/opt/kx/bin/q"
 """
 
 

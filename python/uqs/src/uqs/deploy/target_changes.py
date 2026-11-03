@@ -217,9 +217,10 @@ def _copy(value):
 
 
 def add(root: Path, name: str, entry: dict, command: str, **kw) -> Result:
-    """[targets.NAME] appended, its empty values left out."""
+    """[targets.NAME] appended, its empty values left out; `entry` names push's
+    options as make_config does, written as the file spells them (#1888)."""
     path = targets.declaration_path(root)
-    settings = {k: v for k, v in entry.items() if v not in (None, "", {}, [])}
+    settings = {k: v for k, v in targets.to_keys(entry).items() if v not in (None, "", {}, [])}
 
     def edit(text: str, data: dict) -> Edit:
         _new_name(data, name, path)

@@ -1883,6 +1883,23 @@ An override is a bypassed check (`uqs override list`), so `config set`'s
 settings are `uqs config list`. `data replay --base-port` defaults to the
 runtime's own, like every command's, and refuses a plant running under another.
 
+One name for the ssh destination (#1888):
+
+  | old                                                                | new                                         |
+  | ---                                                                | ---                                         |
+  | deploy_targets.toml `host = "..."`, `target set NAME host=`        | `ssh`, as `--ssh` names it                  |
+  | deploy_targets.toml `qcmd`, `qhome`                                | `q_cmd`, `q_home`, as `--q-cmd`/`--q-home`  |
+  | deploy_targets.toml `{q,torq,python}_runtime[_sha256]`             | `{q,torq,python}_component[_sha256]`        |
+  | JSON `"host"` in `target check`, `deploy history`, `deploy status` | `"ssh"`                                     |
+  | `target list` JSON `"as"`, `"last deployed"`                       | `"remote_user"`, `"last_deployed"`          |
+  | `target log` JSON `"host"` (the machine a change was made on)      | `"machine"`                                 |
+
+deploy_targets.toml spells every setting as push's option names it, so a key
+spelt the old way is refused, naming the key to write - `uqs target edit` opens
+the file. deploy_history.json entries written before this keep `host`, read as
+`ssh`; new ones are written with `ssh`. Every key a `--json` document holds is
+snake_case.
+
 `--port` is now only ever one process's port (`query`, `schema`);
 `query --tunnel` keeps querying a target through an ssh tunnel from here, so
 `--export` writes here, where `uqs --target NAME query` runs the whole command

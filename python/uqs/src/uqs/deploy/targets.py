@@ -46,7 +46,7 @@ from pathlib import Path
 from typing import Any
 
 from uqs.deploy import components, launch, overrides
-from uqs.deploy.config import Config, DeployError, flag, make_config
+from uqs.deploy.config import FIELD_OF_KEY, FILE_KEYS, Config, DeployError, flag, make_config
 from uqs.paths import UqsError
 
 DECLARATION = "deploy_targets.toml"
@@ -114,7 +114,14 @@ def _tables(text: str, path: Path) -> dict:
         isinstance(t, dict) and all(isinstance(v, dict) for v in t.values()) for t in tables
     ):
         raise DeployError("arguments", f"{path}: {shape}")
-    shared = [(DEFAULTS, defaults), *((f"environment {n}", e) for n, e in envs.items())]
+    layers = [
+        (DEFAULTS, defaults),
+        *((f"environment {n}", e) for n, e in envs.items()),
+        *((f"target {n}", t) for n, t in found.items()),
+    ]
+    for layer, settings in layers:
+        _as_fields(layer, settings, text, path)
+    shared = layers[: 1 + len(envs)]
     for layer, settings in shared:
         if ENVIRONMENT in settings:
             raise DeployError(
@@ -123,6 +130,31 @@ def _tables(text: str, path: Path) -> dict:
                 "its environment",
             )
     return {DEFAULTS: defaults, ENVIRONMENTS: envs, TARGETS: found}
+
+
+def _as_fields(layer: str, settings: dict, text: str, path: Path) -> None:
+    """`settings`' keys, as the file spells them (`ssh`, `q_cmd`), renamed in
+    place to make_config's options (`host`, `qcmd`), so everything past the
+    file reads one set of names. A key spelt as the option's old name is
+    refused, naming the key now (#1888)."""
+    old = sorted(set(settings) & set(FILE_KEYS))
+    if old:
+        raise DeployError(
+            "arguments",
+            f"{_at(text, path, layer, old[0])}{layer}: "
+            + ", ".join(f"{k} is {FILE_KEYS[k]}" for k in old)
+            + " - rename the key: the file spells each setting as push's option "
+            "(`uqs target edit` opens it)",
+        )
+    for key_, field in FIELD_OF_KEY.items():
+        if key_ in settings:
+            settings[field] = settings.pop(key_)
+
+
+def to_keys(entry: dict) -> dict:
+    """A target's settings, as make_config names them, as the file spells
+    them: what `uqs target add`, `adopt` and a push's registration write."""
+    return {FILE_KEYS.get(k, k): v for k, v in entry.items()}
 
 
 def _header(layer: str) -> str:
@@ -244,7 +276,7 @@ def remote_shape(label: str, t: dict) -> None:
     if host is not None and (
         not isinstance(host, str) or host.startswith("-") or any(c.isspace() for c in host)
     ):
-        raise UqsError(f"target {label}: host {host!r} is not an ssh destination")
+        raise UqsError(f"target {label}: ssh {host!r} is not an ssh destination")
     if dest is not None and (
         not isinstance(dest, str) or not dest.startswith("/") or any(c.isspace() for c in dest)
     ):
@@ -271,7 +303,7 @@ def _options(layer: str, declared: dict, text: str = "", path: Path | None = Non
         raise DeployError(
             "arguments",
             f"{where}{layer}: unknown setting(s) {', '.join(unknown)} - the file sets push's "
-            "options, spelt as parameters (torq_home for --torq-home)",
+            "options, spelt as their flags (torq_home for --torq-home, ssh for --ssh)",
         )
     options = {}
     for key, value in declared.items():

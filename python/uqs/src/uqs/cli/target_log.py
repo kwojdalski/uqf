@@ -33,7 +33,7 @@ from uqs.deploy.config import DeployError
 from uqs.paths import UqsError, repo_root
 
 LogJson = json_opt(
-    '{"changes": [{number, at, user, host, kind, command, target, tables: [{table, before, '
+    '{"changes": [{number, at, user, machine, kind, command, target, tables: [{table, before, '
     'after, keys}], diff, hash}], newest first, "edited_outside": bool}'
 )
 
@@ -71,7 +71,9 @@ def log_(
     changes: list[dict[str, Any]] = [
         {
             "number": n,
-            **{k: e.get(k) for k in ("at", "user", "host", "kind", "command", "target")},
+            **{k: e.get(k) for k in ("at", "user", "kind", "command", "target")},
+            # the machine the change was made on: "host" is a q host (#1888)
+            "machine": e.get("host"),
             "tables": [
                 {**t, "keys": target_changelog.keys_changed(t)} for t in e.get("tables") or []
             ],
@@ -107,7 +109,7 @@ def log_(
         table.add_row(
             str(n),
             str(e.get("at", "")),
-            f"{e.get('user', '')}@{e.get('host', '')}",
+            f"{e.get('user', '')}@{e.get('machine', '')}",
             str(e.get("kind", "")),
             str(e.get("target") or ""),
             what or "(comments or layout only)",

@@ -54,9 +54,9 @@ def server(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     declared = tmp_path / "deploy_targets.toml"
     declared.write_text(
         "# the operator's own comment\n"
-        f'[targets.uat]\nhost = "svc@uat.example"\ndest = "{tmp_path / "srv"}"\n\n'
-        '[targets.down]\nhost = "unreachable"\ndest = "/opt/uqf"\n\n'
-        f'[targets.bare]\nhost = "h"\ndest = "{tmp_path / "none"}"\n'
+        f'[targets.uat]\nssh = "svc@uat.example"\ndest = "{tmp_path / "srv"}"\n\n'
+        '[targets.down]\nssh = "unreachable"\ndest = "/opt/uqf"\n\n'
+        f'[targets.bare]\nssh = "h"\ndest = "{tmp_path / "none"}"\n'
     )
     monkeypatch.setenv(targets.DECLARATION_ENV, str(declared))
     return tmp_path
@@ -350,19 +350,19 @@ def test_list_targets_shows_each_target_and_its_last_deployment(server, tmp_path
     history.record(Path("."), _cfg("svc@uat.example", str(tmp_path / "srv"), "uat"), _report("r7"))
     declared = Path(os.environ[targets.DECLARATION_ENV])
     declared.write_text(
-        declared.read_text() + '\n[targets.prod]\nhost = "p"\ndest = "/srv/p"\n'
+        declared.read_text() + '\n[targets.prod]\nssh = "p"\ndest = "/srv/p"\n'
         'remote_user = "efx"\nlabels = { env = "prod" }\n'
     )
     result = CliRunner().invoke(app, ["target", "list", "--json"])
     assert result.exit_code == 0, result.output
     rows = {r["target"]: r for r in json.loads(result.output)}
     assert list(rows) == ["bare", "down", "prod", "uat"]
-    assert list(rows["prod"]) == ["target", "ssh", "dest", "as", "labels", "last deployed"]
-    assert rows["prod"]["as"] == "efx" and rows["prod"]["labels"] == "env=prod"
-    assert rows["uat"]["last deployed"].startswith("r7 (")
-    assert rows["down"]["last deployed"] == ""
-    table = CliRunner().invoke(app, ["target", "list"], terminal_width=200).output
-    assert "last deployed" in table and "svc@uat.example" in table
+    assert list(rows["prod"]) == ["target", "ssh", "dest", "remote_user", "labels", "last_deployed"]
+    assert rows["prod"]["remote_user"] == "efx" and rows["prod"]["labels"] == "env=prod"
+    assert rows["uat"]["last_deployed"].startswith("r7 (")
+    assert rows["down"]["last_deployed"] == ""
+    table = CliRunner().invoke(app, ["target", "list"], env={"COLUMNS": "200"}).output
+    assert "last_deployed" in table and "svc@uat.example" in table
 
 
 def test_list_targets_with_none_declared_says_how_to_add_one(tmp_path, monkeypatch):
@@ -433,7 +433,7 @@ def test_add_refuses_a_destination_that_could_reach_a_shell(server):
 def test_a_pushed_target_may_carry_labels(server, tmp_path):
     declared = Path(os.environ[targets.DECLARATION_ENV])
     declared.write_text(
-        '[targets.prod]\nhost = "h"\ndest = "/srv"\nprofile = "essential"\n'
+        '[targets.prod]\nssh = "h"\ndest = "/srv"\nprofile = "essential"\n'
         'labels = { env = "prod" }\n'
     )
     (cfg,) = targets.configs("prod", str(tmp_path / "a.tar.gz"), {}, True, tmp_path)

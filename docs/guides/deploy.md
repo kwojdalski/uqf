@@ -227,7 +227,7 @@ Instead of repeating a dozen flags, declare each server once in
 
 ```toml
 [targets.prod-a]
-host = "deploy@prod-a"
+ssh = "deploy@prod-a"
 remote_user = "svc"
 dest = "/srv/uqf"
 runtime = "crypto"
@@ -285,7 +285,7 @@ profile = "fx"
 
 [targets.uat-a]
 environment = "uat"
-host = "deploy@uat-a"
+ssh = "deploy@uat-a"
 dest = "/srv/uqf"
 ```
 
@@ -420,7 +420,7 @@ A release runs on three components: q, TorQ and Python. Each has a mode, set by
 
 KX's q is never bundled.
 
-`existing` mode's settings are the options above: `qcmd` and `qhome` for q;
+`existing` mode's settings are the options above: `q_cmd` and `q_home` for q;
 `torq_home`, `torq_app_home` and `torq_launcher` for TorQ. Python has none, uv
 finds it. A push that sets no mode is the source-only push it always was.
 
@@ -457,7 +457,7 @@ uqs deploy push dist/uqf-<release>.tar.gz --ssh uqf-server --dest /opt/uqf \
   sha256. The same trees always make the same archive, so its sha256 names that
   TorQ.
 - **Pinned like a release.** The runtime's `.sha256` must sit beside it, and
-  `torq_runtime_sha256` (or `--torq-component-sha256`) pins it as
+  `torq_component_sha256` (or `--torq-component-sha256`) pins it as
   `expected_sha256` pins a release. `--override accept-digest` and
   `--override allow-unpinned` relax these pins too, and are recorded. Its
   members are checked as a release's are, and the server checks the bytes it
@@ -508,9 +508,9 @@ uqs deploy push dist/uqf-<release>.tar.gz --ssh uqf-server --dest /opt/uqf \
   nothing assumes PeachQ runs a workload until that workload's tests pass on it.
   The runtime must also be built for the release's OS and architecture, so build
   it on such a host.
-- **Pinned like a release.** `q_runtime_sha256` (or `--q-component-sha256`) pins
-  it, and `--override accept-digest` and `--override allow-unpinned` relax that
-  pin as they do the others, recorded. `q_version` holds it too.
+- **Pinned like a release.** `q_component_sha256` (or `--q-component-sha256`)
+  pins it, and `--override accept-digest` and `--override allow-unpinned` relax
+  that pin as they do the others, recorded. `q_version` holds it too.
 - **Installed once, run there.** It goes to `<dest>/shared/runtimes/q/<sha256>/`
   under the same write-once rules as a TorQ runtime. Preflight looks for no q on
   the server. Once installed, the push runs the binary there; if it does not
@@ -526,9 +526,9 @@ uqs deploy push dist/uqf-<release>.tar.gz --ssh uqf-server --dest /opt/uqf \
   binary. The release's `uqs` refuses them now, and so does preflight when the
   server account's own environment sets them, each naming what replaces it. Push
   the release again to write a `deploy.env` without them.
-- **Exclusive.** `qcmd` and `qhome` are refused beside it. A layer that switches
-  q to bundled drops them from the layers below it, and one that switches back
-  drops `q_runtime` and its pin.
+- **Exclusive.** `q_cmd` and `q_home` are refused beside it. A layer that
+  switches q to bundled drops them from the layers below it, and one that
+  switches back drops `q_component` and its pin.
 
 The `components` entry records `bundled`, the runtime's sha256, the version the
 installed q reported, PeachQ's commit, its path on the server, and whether this
@@ -566,7 +566,7 @@ uqs deploy push dist/uqf-<release>.tar.gz --ssh uqf-server --dest /opt/uqf \
   files ask for, and every file's sha256.
 - **For this release.** It must be built for the release's OS, architecture and
   Python `major.minor`, or the push is refused before anything runs.
-- **Pinned like a release.** `python_runtime_sha256` (or
+- **Pinned like a release.** `python_component_sha256` (or
   `--python-component-sha256`) pins it; `--override accept-digest` and
   `--override allow-unpinned` relax that pin as they do the others, recorded.
 - **Installed once, run there.** It goes to
@@ -597,7 +597,7 @@ carries:
   `~/.cache/uqf/runtimes/python/<sha256>/` (under `XDG_CACHE_HOME` when set),
   and refuses a copy whose sha256 is not the one the release's manifest records.
   The release's own pin and checks therefore pin it: it needs no `.sha256` of
-  its own, and `python_runtime_sha256` still holds it.
+  its own, and `python_component_sha256` still holds it.
 - **Installed as any other.** From there it is installed, probed, recorded and
   pruned exactly as a runtime given with `--python-component`. Its `components`
   entry adds `carried_by`, the release it came from, and the plan says so.
@@ -691,7 +691,7 @@ environment file its operator provisioned:
 
 ```toml
 [targets.uat]
-host = "svc@uat.example"
+ssh = "svc@uat.example"
 dest = "/opt/efx/uat/uqf"
 launch_mode = "source"
 launch_python = "/opt/python/3.12/bin/python3"

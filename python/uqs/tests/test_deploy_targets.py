@@ -18,7 +18,7 @@ from uqs.deploy.config import DeployError, make_config
 
 FILE = """
 [targets.prod-a]
-host = "deploy@prod-a"
+ssh = "deploy@prod-a"
 remote_user = "svc"
 dest = "/srv/uqf"
 runtime = "crypto"
@@ -31,7 +31,7 @@ launcher_env = ["KDBDB_ORG=desk"]
 process_fields = ["taskset_no"]
 
 [targets.prod-b]
-host = "deploy@prod-b"
+ssh = "deploy@prod-b"
 dest = "/srv/uqf"
 profile = "essential"
 """
@@ -72,7 +72,7 @@ def test_a_flag_wins_over_the_file_and_says_so(root):
 
 def test_the_files_values_are_checked_like_flags(root):
     (root / targets.DECLARATION).write_text(
-        '[targets.bad]\nhost = "h"\ndest = "rel/dir"\nprofile = "p"\n'
+        '[targets.bad]\nssh = "h"\ndest = "rel/dir"\nprofile = "p"\n'
     )
     with pytest.raises(DeployError, match="--dest 'rel/dir' must be an absolute path"):
         targets.configs("bad", "x", {}, False, root)
@@ -81,14 +81,14 @@ def test_the_files_values_are_checked_like_flags(root):
 @pytest.mark.parametrize(
     ("text", "names", "message"),
     [
-        ('[targets.a]\nhost = "h"\ndest = "/d"\nprofile = "p"\nhots = "x"\n', "a",
+        ('[targets.a]\nssh = "h"\ndest = "/d"\nprofile = "p"\nhots = "x"\n', "a",
          "unknown setting.*hots"),
-        ('[targets.a]\nhost = "h"\ndest = "/d"\nprofile = "p"\nartifact = "x"\n', "a",
+        ('[targets.a]\nssh = "h"\ndest = "/d"\nprofile = "p"\nartifact = "x"\n', "a",
          "unknown setting.*artifact"),
-        ('[targets.a]\nhost = "h"\nprofile = "p"\n', "a", "target a sets no dest"),
-        ('[targets.a]\nhost = "h"\ndest = "/d"\nprofile = "p"\n', "b", "no target b.*declares: a"),
+        ('[targets.a]\nssh = "h"\nprofile = "p"\n', "a", "target a sets no dest"),
+        ('[targets.a]\nssh = "h"\ndest = "/d"\nprofile = "p"\n', "b", "no target b.*declares: a"),
         ("not toml [", "a", "not TOML"),
-        ('[server]\nhost = "h"\n', "a", r"declare targets as \[targets.<name>\]"),
+        ('[server]\nssh = "h"\n', "a", r"declare targets as \[targets.<name>\]"),
     ],
 )  # fmt: skip
 def test_a_bad_file_or_name_is_refused(root, text, names, message):
@@ -261,3 +261,38 @@ def test_a_new_override_is_refused_in_a_target_file_without_naming_it_twice(monk
     finally:
         monkeypatch.undo()
         importlib.reload(targets)
+
+
+def test_every_file_key_is_a_push_option_spelt_as_its_flag():
+    """deploy_targets.toml spells each setting as push's option (#1888): `ssh`
+    for `--ssh` (it was `host`), `q_cmd` for `--q-cmd`, `torq_component` for
+    `--torq-component`. The keys a target may set are exactly push's options
+    but this run's own; the keys that are no push option are none of push's."""
+    import typer.main
+
+    import uqs.cli.entry  # noqa: F401 - registers the commands
+    from uqs.cli.shared import app
+    from uqs.deploy import config as deploy_config
+
+    root: Any = typer.main.get_command(app)
+    push = root.commands["deploy"].commands["push"]
+    names = {
+        o[2:].replace("-", "_")
+        for p in push.params
+        if p.param_type_name == "option" and not getattr(p, "hidden", False)
+        for o in (*p.opts, *p.secondary_opts)
+        if o.startswith("--")
+    }
+    #: this run's own: what it is, how it asks, whether it registers; and
+    #: --fixture, the other side of the `live` key's --fixture/--live
+    run_only = {"dry_run", "override", "reason", "register", "no_register", "fixture"}
+    keys = {deploy_config.key(o) for o in targets.SETTABLE}
+    assert keys == {n for n in names if not n.startswith("skip_")} - run_only
+    assert not targets.NOT_PUSH_OPTIONS & names
+
+
+def test_a_key_spelt_as_the_old_option_name_is_refused_naming_the_new(tmp_path):
+    path = tmp_path / "deploy_targets.toml"
+    text = '[targets.a]\nhost = "h"\ndest = "/d"\nprofile = "p"\n'
+    with pytest.raises(DeployError, match=r"line 2: target a: host is ssh - rename the key"):
+        targets.validate(text, path)
