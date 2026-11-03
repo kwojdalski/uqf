@@ -10,7 +10,7 @@ from typing import Any
 
 from loguru import logger
 
-from uqs.logger.core import is_level_enabled
+from uqs.logger.core import LOG_LEVEL_ENV, is_level_enabled
 from uqs.logger.floats import format_float
 
 # Thread-local storage for call depth tracking
@@ -42,7 +42,7 @@ def trace_calls(show_return: bool = False) -> Callable:
     def decorator(func: Callable) -> Callable:
         @functools.wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
-            env_log_level = os.getenv("LOG_LEVEL", "").upper()
+            env_log_level = os.getenv(LOG_LEVEL_ENV, "").upper()
             is_debug = is_level_enabled("DEBUG") or env_log_level == "DEBUG"
 
             if not is_debug:

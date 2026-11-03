@@ -21,7 +21,7 @@ from uqs.attach import live as _registers_live_check  # noqa: F401 - the start g
 from uqs.cli import completion, start_follow, start_warnings
 from uqs.cli.force_stop import ForceOpt, _force_stop
 from uqs.cli.renames import BASE_PORT, alias_command, renamed
-from uqs.cli.safety import ChangesState, OverrideOpt, ReasonOpt, dry_run_note
+from uqs.cli.safety import ChangesState, Effect, OverrideOpt, ReasonOpt, dry_run_note, marked
 from uqs.cli.shared import (
     PASS_THROUGH,
     BasePortOpt,
@@ -337,5 +337,6 @@ def _exec(ctx: typer.Context, port: BasePortOpt = None) -> None:
     raise typer.Exit(code=result.returncode)
 
 
-app.command("exec", context_settings=PASS_THROUGH, cls=renamed(BASE_PORT, ChangesState))(_exec)
+_EXEC = marked(Effect.CHANGES_STATE, own_output="passes any verb through to torq.sh")
+app.command("exec", context_settings=PASS_THROUGH, cls=renamed(BASE_PORT, _EXEC))(_exec)
 alias_command(app, "raw", "uqs exec", _exec, context_settings=PASS_THROUGH, cls=renamed(BASE_PORT))

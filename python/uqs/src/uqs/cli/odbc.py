@@ -18,7 +18,7 @@ from rich.table import Table
 
 from uqs.cli.json_out import emit, json_opt
 from uqs.cli.renames import renamed
-from uqs.cli.safety import ChangesState, ReadOnly, dry_run_note
+from uqs.cli.safety import ChangesState, Effect, ReadOnly, dry_run_note, marked
 from uqs.cli.shared import _die, app, console
 from uqs.paths import UqsError
 from uqs.stack import odbc_home
@@ -130,7 +130,10 @@ def status(home: Home, as_json: StatusJson = False) -> None:
         console.print("[dim]nothing installed - `uqs setup odbc install` first[/]")
 
 
-@odbc_app.command("env", cls=renamed(_RENAMES, ReadOnly))
+@odbc_app.command(
+    "env",
+    cls=renamed(_RENAMES, marked(Effect.READ_ONLY, own_output="prints shell exports, for eval")),
+)
 def env(home: Home) -> None:
     """Print the current version's variables, as shell exports."""
     version = odbc_home.current(home)

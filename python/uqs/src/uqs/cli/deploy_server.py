@@ -264,7 +264,7 @@ def verify_cmd(
         typer.Option(
             "--table",
             metavar="TABLE",
-            help="Check stp1 carries this table; repeatable, and TABLE,TABLE also works",
+            help=f"Check {verify.PLANT} carries this table; repeatable, and TABLE,TABLE also works",
         ),
     ] = None,
     fixture: conn.FixtureOpt = True,

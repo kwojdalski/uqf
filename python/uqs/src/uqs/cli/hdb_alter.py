@@ -20,8 +20,12 @@ from uqs.cli.json_out import json_opt
 from uqs.cli.renames import ATTACHMENT, alias_command, renamed, warn_renamed
 from uqs.cli.safety import ConfirmsOnServer
 from uqs.cli.shared import _die, data_app
+from uqs.generated.q_facts import Q_ATTRIBUTES
 from uqs.paths import UqsError, UqsUsageError
 from uqs.stack.hdb_alter import Request
+
+#: What `--attr COL:` takes to clear an attribute - scripts/gates/hdb_alter.q's word.
+CLEAR_ATTRIBUTE = "none"
 
 AlterJson = json_opt(
     '{"ok", "hdb", "resolved_from", "ssh", "warnings", "plan", "result"} - plan and result '
@@ -55,7 +59,9 @@ def hdb_alter(
     attr: Annotated[
         list[str] | None,
         typer.Option(
-            "--attr", help="COL:p|s|g|u|none - set or clear a column's attribute; one per run"
+            "--attr",
+            help=f"COL:{'|'.join((*Q_ATTRIBUTES, CLEAR_ATTRIBUTE))} - set or clear a column's "
+            "attribute; one per run",
         ),
     ] = None,
     cast: Annotated[

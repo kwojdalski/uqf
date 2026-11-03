@@ -13,14 +13,13 @@ from typing import Annotated
 
 import typer
 
-from uqs.attach import config
+from uqs.attach import config, service
+from uqs.cli.choices import alternatives
+from uqs.paths import UqsError, repo_root
 
-
-class SchemaWriter(StrEnum):
-    """Who appends the marked schema block (#1845): uqs, here, or the tickerplant."""
-
-    CLI = "cli"
-    TICKERPLANT = "tickerplant"
+#: Who appends the marked schema block (#1845): uqs, here, or the tickerplant -
+#: config.SCHEMA_WRITERS' keys, so a writer added there is a choice here (#1893).
+SchemaWriter = StrEnum("SchemaWriter", {w.upper(): w for w in config.SCHEMA_WRITERS})
 
 
 JobOpt = Annotated[
@@ -38,6 +37,16 @@ BasePortOpt = Annotated[
         "the runtime's own base port is exactly the wrong guess.",
     ),
 ]
+
+
+def _discovery_offset() -> str:
+    """discovery's `+N`, for --discovery's help: read, never typed (#1893)."""
+    try:
+        return str(service.discovery_offset(repo_root()))
+    except UqsError:
+        return "N"
+
+
 HostOpt = Annotated[
     str | None,
     typer.Option("--host", help="Where the stack's processes listen (default: localhost)"),
@@ -46,7 +55,8 @@ DiscoveryOpt = Annotated[
     str | None,
     typer.Option(
         "--discovery",
-        help="HOST:PORT of its discovery, on the --host machine (default: HOST:<base-port>+1)",
+        help="HOST:PORT of its discovery, on the --host machine (default: HOST:<base-port>"
+        f"+{_discovery_offset()}, as the starter pack's process.csv puts it)",
     ),
 ]
 TickerplantOpt = Annotated[
@@ -82,9 +92,9 @@ SchemaWriterOpt = Annotated[
     SchemaWriter | None,
     typer.Option(
         "--schema-writer",
-        help="Who appends the marked block to the tickerplant's schema file: cli (uqs, on "
-        "this machine, which must be the stack's) or tickerplant (the tickerplant, to its "
-        "own file, for a stack on another machine). Default: the saved choice, else cli.",
+        help="Who appends the marked block to the tickerplant's schema file: "
+        + alternatives(config.SCHEMA_WRITERS, config.SCHEMA_WRITER_NOTES)
+        + f". Default: the saved choice, else {config.DEFAULT_SCHEMA_WRITER}.",
     ),
 ]
 RetiredRemoteSchemaOpt = Annotated[

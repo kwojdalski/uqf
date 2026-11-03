@@ -32,6 +32,10 @@ RENDER_ENV = "UQS_QUERY_RENDER"
 Q = "q"
 KOLA = "kola"
 RENDERERS = (Q, KOLA)
+#: What each renderer shows, for `--render`'s help.
+NOTES = {Q: "show results as q prints them", KOLA: "as Python objects"}
+#: The renderer when neither --render nor $UQS_QUERY_RENDER chooses one.
+DEFAULT_RENDERER = Q
 
 #: The range q accepts for each side of `\c`.
 _C_MIN, _C_MAX = 10, 2000
@@ -45,7 +49,7 @@ def renderer(flag: str | None, env: Mapping[str, str] | None = None) -> str:
     """Which renderer to use: `flag` if given, else `$UQS_QUERY_RENDER`, else
     `q`. Refuses any other value rather than guessing."""
     source = os.environ if env is None else env
-    chosen = (flag or source.get(RENDER_ENV) or Q).strip().lower()
+    chosen = (flag or source.get(RENDER_ENV) or DEFAULT_RENDERER).strip().lower()
     if chosen not in RENDERERS:
         where = "--render" if flag else RENDER_ENV
         raise UqsError(f"{where}={chosen!r} - it is one of {', '.join(RENDERERS)}")

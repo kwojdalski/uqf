@@ -29,7 +29,7 @@ import typer
 
 from uqs.cli import safety
 from uqs.cli.json_out import emit, json_opt
-from uqs.cli.safety import ChangesState, ReadOnly, dry_run_note
+from uqs.cli.safety import ChangesState, Effect, ReadOnly, dry_run_note, marked
 from uqs.cli.shared import _die, app, console, log
 from uqs.cli.skip_options import forwarded
 from uqs.cli.target_confirm import changes_the_server, confirmed_on_server
@@ -271,7 +271,10 @@ def check(name: Name, as_json: CheckJson = False) -> None:
     console.print(f"[green]✓[/] {r.name} ({r.describe()}) runs release {release}")
 
 
-@target_app.command("shell", cls=ChangesState)
+@target_app.command(
+    "shell",
+    cls=marked(Effect.CHANGES_STATE, own_output="opens an interactive shell on the server"),
+)
 def shell(
     name: Annotated[
         str | None,

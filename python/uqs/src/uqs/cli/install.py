@@ -155,6 +155,17 @@ def _untraced(items: list[Item]) -> list[str]:
     ]
 
 
+def _err_log() -> str:
+    """Where a process's error log is, as this runtime puts it (#1893): under its
+    data directory, which is `uqs-torq`, `uqs-fx`, ... - not always output/uqs."""
+    paths = _paths()
+    where = paths.torq_log("<procname>", "err")
+    try:
+        return str(where.relative_to(paths.repo_root))
+    except ValueError:
+        return str(where)
+
+
 def _next_steps(declarations: list[Declaration], sidecar_tests: list[Path]) -> Panel:
     streaming = [d.procname for d in declarations if d.kind is not PipelineKind.BACKFILL]
     workers = [d.name for d in declarations if d.kind is PipelineKind.BACKFILL]
@@ -191,7 +202,7 @@ def _next_steps(declarations: list[Declaration], sidecar_tests: list[Path]) -> P
             f"  The sidecar carries {', '.join(p.name for p in sidecar_tests)} - not installed."
         )
     notes += [
-        "[bold]Down or not answering?[/] Check [cyan]output/uqs/logs/err_<procname>.log[/], "
+        f"[bold]Down or not answering?[/] Check [cyan]{_err_log()}[/], "
         "or run it in the foreground: [green]uqs exec -- debug <procname>[/].",
         "[bold]Commit[/] what [cyan]git status[/] now shows, derived files included - "
         "CI checks they are current.",

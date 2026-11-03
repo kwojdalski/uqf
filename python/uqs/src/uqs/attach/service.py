@@ -6,6 +6,7 @@ through, so tests pass a scripted one and failure injection wraps the real one.
 
 from __future__ import annotations
 
+import csv
 import getpass
 import socket
 from dataclasses import replace
@@ -17,11 +18,35 @@ from uqs.attach.facts import Facts, Host
 from uqs.attach.manifest import Manifest
 from uqs.attach.remote import Ipc, KolaIpc
 from uqs.attach.topology import Observation
+from uqs.paths import paths_for_root
 
 
 def ipc_for(att: Attachment) -> Ipc:
     """The real connection, with the credential the attachment names."""
     return KolaIpc(att.stack.user, att.stack.password())
+
+
+#: The starter pack's process registry, under the starter pack: where TorQ's
+#: rule for discovery's port - `{KDBBASEPORT}+N` - is written.
+STARTER_PROCESS_CSV = Path("appconfig") / "process.csv"
+
+
+def discovery_offset(root: Path) -> int:
+    """discovery's port, less the stack id: the `+N` of the starter pack's
+    process.csv row for it (#1893), read rather than restated as `+1`."""
+    path = paths_for_root(root).torqapphome / STARTER_PROCESS_CSV
+    try:
+        rows = list(csv.DictReader(path.read_text().splitlines()))
+    except OSError as exc:
+        raise AttachmentError(f"cannot read discovery's port from {path}: {exc}") from None
+    for row in rows:
+        if row.get("proctype") == "discovery":
+            base, plus, offset = (row.get("port") or "").partition("+")
+            if base.strip() == "{KDBBASEPORT}" and plus and offset.strip().isdigit():
+                return int(offset)
+            raise AttachmentError(f"{path}: discovery's port {row.get('port')!r} is not "
+                                  "{KDBBASEPORT}+N")  # fmt: skip
+    raise AttachmentError(f"{path} declares no discovery process")
 
 
 def parse_discovery(text: str) -> tuple[str, int]:
@@ -63,14 +88,16 @@ def create(
     the answer to "which stack", and the incident that produced this workflow
     was a default answering it wrongly.
 
-    The discovery address defaults to `stack_id + 1` - TorQ's own rule for the
-    starter pack's process.csv - but only HERE, once; the result is stored and
-    never re-derived.
+    The discovery address defaults to `stack_id + N` - TorQ's own rule, read
+    from the starter pack's process.csv (`discovery_offset`) - but only HERE,
+    once; the result is stored and never re-derived.
     """
     if stack_id < 1024:
         raise AttachmentError(f"--base-port {stack_id} is below 1024: no stack's base port")
     spec = jobs.resolve(job, bundle.resolve() if bundle else None, root)
-    d_host, d_port = parse_discovery(discovery) if discovery else (host, stack_id + 1)
+    d_host, d_port = (
+        parse_discovery(discovery) if discovery else (host, stack_id + discovery_offset(root))
+    )
     if not same_machine(host, d_host):
         # one stack, one machine: the processes are reached at the host:port
         # discovery lists with --host's machine, and the publisher, started under
@@ -109,7 +136,7 @@ def persist_mode(runtime_only: bool, schema_writer: str | None = None) -> str:
         )
     if runtime_only:
         return "runtime-only"
-    return config.SCHEMA_WRITERS[schema_writer or "cli"]
+    return config.SCHEMA_WRITERS[schema_writer or config.DEFAULT_SCHEMA_WRITER]
 
 
 def observed_storage(att: Attachment, obs: Observation) -> Storage:

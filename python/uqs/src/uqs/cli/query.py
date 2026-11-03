@@ -20,6 +20,7 @@ import typer
 
 from uqs.cli import completion
 from uqs.cli import query_target as via_target
+from uqs.cli.choices import alternatives
 from uqs.cli.json_out import emit, json_opt
 from uqs.cli.q_login import (
     DEFAULT_PASSWORD,
@@ -30,7 +31,7 @@ from uqs.cli.q_login import (
     q_password,
 )
 from uqs.cli.renames import renamed
-from uqs.cli.safety import ChangesState
+from uqs.cli.safety import Effect, marked
 from uqs.cli.shared import (
     ExportOpt,
     ProcArg,
@@ -166,7 +167,12 @@ QueryJson = json_opt(
 @app.command(
     cls=renamed(
         {"--raw": "--no-gateway", "--target": "--tunnel", "--proc": "PROC"},
-        ChangesState,
+        marked(
+            Effect.CHANGES_STATE,
+            no_dry_run="runs any q on a process - so it may change it, which is its Effect - "
+            "and what it changes is the expression's: there is nothing to check without "
+            "running it",
+        ),
     )
 )
 def query(
@@ -219,8 +225,14 @@ def query(
     render: Annotated[
         str | None,
         typer.Option(
-            help="`q`: show results as q prints them (the default); kola: as Python "
-            f"objects. Default from ${stack_render.RENDER_ENV}",
+            help=alternatives(
+                stack_render.RENDERERS,
+                stack_render.NOTES,
+                default=stack_render.DEFAULT_RENDERER,
+                quote="`",
+            )
+            + f". Default from ${stack_render.RENDER_ENV}",
+            autocompletion=completion.choices(*stack_render.RENDERERS),
         ),
     ] = None,
     export: ExportOpt = None,

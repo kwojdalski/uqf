@@ -24,7 +24,7 @@ from uqs import runtimes
 from uqs.cells import cell
 from uqs.cli import completion, json_out, rendering, table_browser
 from uqs.cli.renames import MOVED_KEY
-from uqs.logger import configure_logging, get_logger, json_requested
+from uqs.logger import LOG_LEVEL_ENV, configure_logging, get_logger, json_requested
 from uqs.paths import UqsError, UqsUsageError
 from uqs.stack import listing, runtime
 
@@ -79,7 +79,7 @@ def _env_log_level() -> str:
     An unrecognised value falls back to the default rather than aborting: a
     typo in a log level must not stop the fleet being started or inspected.
     """
-    level = os.environ.get("LOG_LEVEL", "").strip().upper()
+    level = os.environ.get(LOG_LEVEL_ENV, "").strip().upper()
     if level in {"TRACE", "DEBUG", "INFO", "SUCCESS", "WARNING", "ERROR", "CRITICAL"}:
         return level
     return DEFAULT_LOG_LEVEL
