@@ -38,6 +38,8 @@ from uqs.cli.target_confirm import changes_the_server, effect_of
 pytestmark = pytest.mark.xdist_group("dry_run_tree")
 
 NOTE = Text.from_markup(dry_run_note()).plain
+#: The note of a command whose dry run is its default: "... Run it again with --apply".
+APPLY_NOTE = Text.from_markup(dry_run_note("with --apply")).plain.rstrip(".")
 
 #: The commands whose dry run is allowed to write, each with why.
 EXEMPT = {
@@ -92,8 +94,14 @@ class Case:
     root: tuple[str, ...] = ()
 
     @property
+    def dry_by_default(self) -> bool:
+        """Writes only with --apply (#1854): its dry run is the command alone."""
+        return self.command in _dry_by_default_commands()
+
+    @property
     def argv(self) -> list[str]:
-        return [*self.root, *self.command.split(), *self.args, "--dry-run"]
+        dry = [] if self.dry_by_default else ["--dry-run"]
+        return [*self.root, *self.command.split(), *self.args, *dry]
 
 
 NOWHERE = "nosuchhost.invalid"
@@ -146,12 +154,22 @@ def _id(case: Case) -> str:
     return " ".join([*case.root, case.command, *case.args])
 
 
+@cache
+def _dry_by_default_commands() -> frozenset[str]:
+    """The changes-state commands that write only with --apply (#1854)."""
+    return frozenset(
+        path
+        for path, c in LEAVES.items()
+        if c.option("--apply") is not None and effect_of(c.command) is Effect.CHANGES_STATE
+    )
+
+
 def _dry_run_commands() -> set[str]:
     return {
         path
         for path, c in LEAVES.items()
         if c.option("--dry-run") is not None and effect_of(c.command) is Effect.CHANGES_STATE
-    }
+    } | _dry_by_default_commands()
 
 
 def test_every_dry_run_is_walked():
@@ -203,6 +221,9 @@ def test_a_dry_run_ends_with_the_note(case, shared_repo):
     if case.command in JSON_REPORT:
         pytest.skip("its stdout is a JSON report")
     lines = [line.rstrip() for line in out.splitlines() if line.strip()]
+    if case.dry_by_default:  # its note names --apply, how to act on it (#1854)
+        assert lines and lines[-1].startswith(APPLY_NOTE), f"stdout:\n{out}\n--- stderr\n{err}"
+        return
     assert lines and lines[-1] == NOTE, f"stdout:\n{out}\n--- stderr\n{err[-2000:]}"
 
 

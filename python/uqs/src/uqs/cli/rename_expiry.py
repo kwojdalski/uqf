@@ -82,7 +82,6 @@ RENAMED_AFTER: dict[str, frozenset[str]] = {
             "uqs deploy push --accept-converted-release",
             "uqs job attachment add --override-reason",
             "uqs job preview --dry-run",
-            "uqs data migrate --apply",
             # #1755: hdb-check --fix is --apply
             "uqs data check --fix",
             # #1736, #1739: deploy names a TARGET; --host is --ssh
@@ -121,6 +120,14 @@ RENAMED_AFTER: dict[str, frozenset[str]] = {
             # #1845: who writes the schema block is --schema-writer; the old flag refuses,
             # naming it
             "uqs job attachment add --remote-schema-file",
+            # #1854: a command written with --apply is dry by default; its
+            # --dry-run says nothing more
+            "uqs data alter --dry-run",
+            "uqs data alter -n",
+            "uqs data migrate --dry-run",
+            "uqs data migrate -n",
+            "uqs target adopt --dry-run",
+            "uqs target adopt -n",
             # #1852: a bypass is --override NAME --reason, never a bare flag
             "uqs deploy build --allow-dirty",
             "uqs deploy build --allow-computed-names",

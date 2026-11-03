@@ -320,7 +320,7 @@ uqs target set prd launch_mode=source launch_python=/opt/py/bin/python3 \
 uqs target set prd labels.owner=desk environment=uat
 uqs target unset prd launch_python launch_env_file launch_mode
 uqs target rename prd production
-uqs target remove production
+uqs target remove production      # shows the change and asks; --yes does not
 uqs target edit                    # the whole file, in $VISUAL or $EDITOR
 uqs target log                     # newest first; `uqs target log prd --json`
 uqs target revert last             # or a change's number from the log
@@ -984,11 +984,13 @@ Rebuild such a release with `uqs deploy build`.
 ## Removing old releases
 
 Every push leaves its release, with its own offline `.venv`, in `releases/`.
-`uqs deploy prune` removes all but the newest `--keep N`, under the deploy lock:
+`uqs deploy prune` removes all but the newest `--keep N`, under the deploy lock.
+It names each release it would remove and asks first; `--yes` does not ask:
 
 ```bash
 uqs deploy prune prod-a --keep 3 --dry-run
-uqs deploy prune prod-a --keep 3
+uqs deploy prune prod-a --keep 3          # asks
+uqs deploy prune prod-a --keep 3 --yes    # from a script
 ```
 
 Three releases are never removed, whatever `--keep` is, even 0:

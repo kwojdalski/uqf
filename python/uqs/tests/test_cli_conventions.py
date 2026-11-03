@@ -330,6 +330,9 @@ OPTIONS = {
     "--dest": Meaning("the absolute directory on the server", r"absolute"),
     "--dry-run": Meaning("show what would change, change nothing", r"nothing|dry"),
     "--every": Meaning("re-read every N seconds", r"re-read"),
+    "--stop-on-exit": Meaning(
+        "with --follow: stop what it started when the stream ends", r"stop what this started"
+    ),
     "--export": Meaning("also write the rows to FILE", r"write output to FILE"),
     "--follow": Meaning("keep streaming log lines until Ctrl-C", r"stream"),
     "--force": Meaning("retired: each use gets its own name", None),
@@ -505,8 +508,8 @@ ASKS = {c.path for c in TREE if c.path in LEAVES and _kind(c.path) == CONFIRMS} 
 #: The cli modules that call a prompt. A new one means a command that asks:
 #: give it --yes/-y, then list the module here.
 PROMPTING_MODULES = {
-    "attach", "hdb_scope", "install", "install_bundle", "remove", "target", "target_adopt",
-    "target_edit",
+    "attach", "cleanup", "deploy_server", "hdb_scope", "install", "install_bundle", "migrate",
+    "remove", "target", "target_adopt", "target_edit",
 }  # fmt: skip
 
 #: leaf -> the issue that adds its --json. Empty since #1731: keep it so.
@@ -566,7 +569,13 @@ def test_rule5b_dry_run_n_exactly_on_what_changes_state():
     found = set()
     for path, cmd in LEAVES.items():
         kind = _kind(path)
-        if kind == CHANGES and path not in NO_DRY_RUN and not _flag(cmd, "--dry-run", "-n"):
+        dry_by_default = cmd.option("--apply") is not None  # rule 5e: --apply writes
+        if (
+            kind == CHANGES
+            and path not in NO_DRY_RUN
+            and not dry_by_default
+            and not _flag(cmd, "--dry-run", "-n")
+        ):
             found.add(path)
         elif kind == CONFIRMS and _flag(cmd, "--dry-run") and not _flag(cmd, "--dry-run", "-n"):
             found.add(path)
@@ -591,6 +600,22 @@ def test_rule5c_the_commands_that_ask_are_the_known_ones():
         if re.search(r"typer\.confirm\(|Confirm\.ask\(|\.prompt\(", f.read_text())
     }
     assert prompting == PROMPTING_MODULES
+
+
+def test_rule5e_one_write_model_per_kind_of_change():
+    """#1854: a command that writes with --apply is dry by default, asks before
+    --apply writes and takes --yes/-y for that question, and takes no visible
+    --dry-run - it is what it does anyway; a confirms-on-server command is one."""
+    found = set()
+    for path, cmd in LEAVES.items():
+        applies = cmd.option("--apply") is not None
+        if _kind(path) == CONFIRMS and not applies:
+            found.add((path, "--apply missing"))
+        if applies and not _flag(cmd, "--yes", "-y"):
+            found.add((path, "--yes/-y missing"))
+        if applies and cmd.option("--dry-run") is not None:
+            found.add((path, "--dry-run beside --apply"))
+    assert not found, sorted(found)
 
 
 def _bypasses(tree: list[Cmd]) -> set[tuple[str, str]]:
