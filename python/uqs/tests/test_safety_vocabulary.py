@@ -32,8 +32,8 @@ def test_override_list_names_each_command_and_what_it_bypasses():
     assert rows["profile-budget-check"].commands == ("start", "restart")
     assert rows["accept-digest"].commands == ("deploy push",)
     assert (
-        "TORQ_VERSION:COMPONENT" in rows
-        and "job attachment add" in rows["TORQ_VERSION:COMPONENT"].commands
+        "torq-version:COMPONENT" in rows
+        and "job attachment add" in rows["torq-version:COMPONENT"].commands
     )
 
 

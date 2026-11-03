@@ -86,7 +86,7 @@ DIR=/tmp/uqf-kafka-example-xxxx
 uqs --runtime peachq-etl runtime prepare --bundle sidecars/kafka_crypto_example
 uqs --runtime peachq-etl start --profile capture
 uqs --runtime peachq-etl start cryptotrades1
-uqs --runtime peachq-etl summary       # the stp1 and rdb1 ports (6550 and 6552 here)
+uqs --runtime peachq-etl status        # the stp1 and rdb1 ports (6550 and 6552 here)
 #   on a KDB-X host: uqs job install sidecars/kafka_crypto_example --yes, then
 #   uqs start --profile essential and uqs start cryptotrades1
 

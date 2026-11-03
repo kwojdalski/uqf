@@ -15,6 +15,7 @@ import typer
 from rich.table import Table
 
 from uqs import timerange
+from uqs.cli.concepts import SourcesArg
 from uqs.cli.json_out import emit, json_opt
 from uqs.cli.renames import old_spelling, warn_renamed
 from uqs.cli.safety import ReadOnly
@@ -37,9 +38,7 @@ SourcesJson = json_opt(
 #: so it is read and converted here, not renamed by name.
 @sources_app.command("check", cls=ReadOnly)
 def sources_check(
-    sources: Annotated[
-        list[str], typer.Argument(metavar="SOURCE...", help="The sources to check, by name")
-    ],
+    sources: SourcesArg,
     timeout: Annotated[
         float, duration("--timeout", help="Seconds (a DURATION) for every check together")
     ] = 120.0,
@@ -49,6 +48,7 @@ def sources_check(
             "--last",
             help="A DURATION up to now - 30s, 5m, 2h, 7d: how far back the bounded read "
             "reaches (default 1h)",
+            show_default=False,
         ),
     ] = "1h",
     window: Annotated[int | None, old_spelling("--last", "--window")] = None,
