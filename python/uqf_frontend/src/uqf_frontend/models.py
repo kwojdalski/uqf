@@ -359,6 +359,20 @@ class RemoteFilesResponse(BaseModel):
     release: ReleaseOut
 
 
+class RemoteUploadResponse(BaseModel):
+    """PUT /services/{target}/files/content: one file written below the
+    target's shared/config, published in one atomic step (#1951)."""
+
+    target: str
+    root: str = Field(description="the target's deployment root, from the registry")
+    path: str = Field(description="the file written, relative to the root")
+    size: int = Field(description="bytes written")
+    sha256: str = Field(description="of the bytes written, as the server checked them")
+    replaced: bool = Field(description="an existing file was replaced (overwrite was asked)")
+    mode: int = Field(description="the file's permission bits; a replaced file's are kept")
+    created: list[str] = Field(description="directories created on the way, relative to the root")
+
+
 # ------------------------------------------------------------ control (writes)
 
 

@@ -617,3 +617,12 @@ button.link {
 tr.blocked td {
   opacity: 0.6;
 }
+
+/* Uploads (#1951). */
+.drop-zone {
+  border: 2px dashed #8a8f98;
+  border-radius: 6px;
+  padding: 1rem;
+  margin: 0.5rem 0;
+  text-align: center;
+}
