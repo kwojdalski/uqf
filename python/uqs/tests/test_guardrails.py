@@ -25,7 +25,8 @@ def test_the_catalog_lists_what_it_did_before_the_registry_in_the_same_order():
     ]
     before += [(g.id, g.commands, g.description) for g in deploy.GUARDRAILS]
     before += [
-        (f"{code}:COMPONENT", ("job attachment add",), policy.risk)
+        # #1918: described by what accepting it lifts, where the row says
+        (f"{code}:COMPONENT", ("job attachment add",), policy.waives or policy.risk)
         for code, policy in sorted(attach.POLICY.items())
         if policy.overridable
     ]

@@ -20,7 +20,7 @@ from uqs import paths as stack_paths
 from uqs.cli import shared, start_override_opts, target_confirm
 from uqs.deploy import control
 from uqs.paths import UqsError
-from uqs.stack import occupancy, runtime, start_policy
+from uqs.stack import occupancy, runtime, start_overrides, start_policy
 from uqs.stack.start_overrides import OVERRIDES_LOG, Overrides
 
 runner = CliRunner()
@@ -171,18 +171,129 @@ def test_the_cli_hands_the_reason_to_the_stack(monkeypatch):
     assert seen["skips"] == Overrides(q_version="old q on uat")
 
 
-def test_the_old_skip_flag_still_gives_the_override_for_one_release(monkeypatch):
-    """`--skip-q-version-check REASON` is `--override q-version-check --reason
-    REASON` (#1732), hidden, until the next release."""
-    seen = {}
+def _cli_start(monkeypatch, paths, argv: list[str]) -> tuple[Overrides | None, list[dict]]:
+    """`uqs <argv>` through the real CLI, start_policy and record, on `paths`:
+    the Overrides that reached the launcher, and what was recorded (less its
+    time). The launcher itself is never run."""
+    reached: list[Overrides] = []
 
-    def start(_paths, names, **kw):
-        seen.update(kw)
-        raise SystemExit(0)
+    def launcher(*_a, **_k):
+        raise RuntimeError("reached the launcher")
 
-    monkeypatch.setattr(runtime, "start", start)
-    runner.invoke(cli.app, ["start", "rdb1", "--skip-q-version-check", "old q on uat"])
-    assert seen["skips"] == Overrides(q_version="old q on uat")
+    real_start, real_restart = runtime.start, runtime.restart
+
+    def through(real):
+        def run(p, names, **kw):
+            reached.append(kw["skips"])
+            try:
+                real(p, names, **kw)
+            except RuntimeError as exc:
+                assert "reached the launcher" in str(exc)
+            raise SystemExit(0)
+
+        return run
+
+    monkeypatch.setattr(stack_paths, "default_paths", lambda: paths)
+    monkeypatch.setattr(runtime, "torq_launcher", launcher)
+    monkeypatch.setattr(runtime, "start", through(real_start))
+    monkeypatch.setattr(runtime, "restart", through(real_restart))
+    (paths.torqdata / OVERRIDES_LOG).unlink(missing_ok=True)
+    result = runner.invoke(cli.app, argv)
+    assert result.exit_code == 0, (result.output, result.exception)
+    return (reached[0] if reached else None), [
+        {k: v for k, v in e.items() if k != "at"} for e in _record(paths)
+    ]
+
+
+@pytest.mark.parametrize("verb", ["start", "restart"])
+def test_skip_q_version_check_is_its_override_through_policy_and_record(old_q, monkeypatch, verb):
+    """#1918: `--skip-q-version-check --reason R` is `--override q-version-check
+    --reason R` - the same Overrides reach the launcher, the same q-version
+    refusal is lifted, and the same record is written, naming the risk."""
+    why = "checking which jobs load on uat's 4.1"
+    alias = _cli_start(
+        monkeypatch, old_q, [verb, "rdb1", "--skip-q-version-check", "--reason", why]
+    )
+    canon = _cli_start(
+        monkeypatch, old_q, [verb, "rdb1", "--override", "q-version-check", "--reason", why]
+    )
+    assert alias == canon
+    skips, (entry,) = alias
+    assert skips == Overrides(q_version=why)
+    assert entry["override"] == "--override q-version-check" and entry["reason"] == why
+    assert entry["risk"] == start_overrides.GUARDRAILS["q_version"].risk
+    assert "nested context" in entry["risk"]
+
+
+def test_skip_profile_budget_check_is_its_override_through_policy_and_record(old_q, monkeypatch):
+    over = "the set needs 99 plant slots, past the budget"
+    monkeypatch.setattr(start_policy.profiles, "over_budget_procs", lambda *_a: over)
+    why = "full licence on this host"
+    base = ["start", "--profile", "essential", "--reason", why]
+    alias = _cli_start(monkeypatch, old_q, [*base, "--skip-profile-budget-check",
+                                             "--skip-q-version-check"])  # fmt: skip
+    canon = _cli_start(monkeypatch, old_q, [*base, "--override", "profile-budget-check",
+                                             "--override", "q-version-check"])  # fmt: skip
+    assert alias == canon
+    skips, entries = alias
+    assert skips == Overrides(q_version=why, profile_budget=why)
+    assert {e["override"] for e in entries} == {
+        "--override profile-budget-check", "--override q-version-check"
+    }  # fmt: skip
+
+
+def test_a_skip_alias_waives_only_its_own_check(old_q, monkeypatch):
+    """--skip-profile-budget-check leaves the q-version refusal in place, and
+    --skip-q-version-check the budget's; neither is a blanket skip."""
+    said: list[str] = []
+
+    class Log:
+        def error(self, msg, *a):
+            said.append(str(msg).format(*a))
+
+        def __getattr__(self, _name):
+            return lambda *a, **kw: None
+
+    monkeypatch.setattr(shared, "log", Log())
+    monkeypatch.setattr(stack_paths, "default_paths", lambda: old_q)
+    monkeypatch.setattr(runtime, "torq_launcher", lambda *_a, **_k: pytest.fail("launched"))
+    over = "the set needs 99 plant slots, past the budget"
+    monkeypatch.setattr(start_policy.profiles, "over_budget_procs", lambda *_a: over)
+    base = ["start", "--profile", "essential", "--reason", "r"]
+    budget_only = runner.invoke(cli.app, [*base, "--skip-profile-budget-check"])
+    assert budget_only.exit_code != 0 and any("no nested contexts" in m for m in said)
+    said.clear()
+    q_only = runner.invoke(cli.app, [*base, "--skip-q-version-check"])
+    assert q_only.exit_code != 0 and any("past the budget" in m for m in said)
+
+
+@pytest.mark.parametrize(
+    ("args", "says"),
+    [
+        (["--skip-q-version-check"], "--skip-q-version-check needs --reason"),
+        (["--skip-q-version-check", "--reason", "  "], "--skip-q-version-check needs --reason"),
+        # the old hidden spelling took the reason as its value; now it is refused, not guessed
+        (["--skip-q-version-check", "old q on uat"], "--skip-q-version-check needs --reason"),
+        (["--skip-q-version-check", "--override", "q-version-check", "--reason", "r",
+          "--dry-run"], "a dry run starts nothing"),
+        (["--skip-profile-budget-check", "--reason", "r"], "needs --profile"),
+    ],
+)  # fmt: skip
+def test_a_skip_alias_is_refused_as_its_override_is(monkeypatch, args, says):
+    said: list[str] = []
+
+    class Log:
+        def error(self, msg, *a):
+            said.append(str(msg).format(*a))
+
+        def __getattr__(self, _name):
+            return lambda *a, **kw: None
+
+    monkeypatch.setattr(shared, "log", Log())
+    monkeypatch.setattr(runtime, "start", lambda *_a, **_k: pytest.fail("started"))
+    result = runner.invoke(cli.app, ["start", "rdb1", *args])
+    assert result.exit_code != 0
+    assert any(says in m for m in said), said
 
 
 def test_a_remote_start_forwards_the_reason_intact():

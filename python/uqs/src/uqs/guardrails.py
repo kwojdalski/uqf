@@ -3,10 +3,12 @@
 A guardrail is a check a command refuses on. Each owning module declares its
 own as `Guardrail` values, beside the code that enforces them:
 
-  - stack/start_overrides.py: the start refusals `--override NAME` may skip;
+  - stack/start_overrides.py: the start refusals `--override NAME` may skip,
+    each with a generated --skip-<id> (#1918);
   - deploy/overrides.py: the deployment requirements `deploy push` may relax;
   - attach/overrides.py: the attachment finding codes, from its POLICY table,
-    each waived per component as `CODE:COMPONENT`.
+    each waived per component as `CODE:COMPONENT` - TORQ_VERSION and
+    PUBLISHER_RUNNING with a generated --skip-<code> COMPONENT (#1918).
   - attach/backfill_policy.py: `eod-fence`, the end-of-day fence an
     attached `job backfill` may waive (#1828), with a generated --skip-eod-fence.
 
@@ -88,22 +90,28 @@ class PolicyLike(Protocol):
     def risk(self) -> str: ...
     @property
     def action(self) -> str: ...
+    @property
+    def waives(self) -> str: ...
+    @property
+    def skip_flag(self) -> bool: ...
 
 
 def from_policy(
     table: Mapping[str, PolicyLike], commands: tuple[str, ...]
 ) -> tuple[Guardrail, ...]:
     """A finding-code policy table ({CODE: policy}) as guardrails, by code: each
-    waived per component, and described by its risk."""
+    waived per component, and described by what accepting it lifts - or, for a
+    row that does not say, by its risk."""
     return tuple(
         Guardrail(
             code,
             commands,
-            policy.risk,
+            policy.waives or policy.risk,
             risk=policy.risk,
             action=policy.action,
             overridable=policy.overridable,
             component_scoped=True,
+            skip_flag=policy.skip_flag,
         )
         for code, policy in sorted(table.items())
     )
