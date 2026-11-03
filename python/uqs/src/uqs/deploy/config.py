@@ -32,6 +32,12 @@ SHARED_CONFIG = (
 #: anyone but its owner may read it.
 SECRETS = "secrets.env"
 
+#: ssh/scp's connect, each remote step, and the release's check, in seconds:
+#: each default's one home (#1892), which `deploy check --deadline` shares.
+DEFAULT_CONNECT_TIMEOUT = 10
+DEFAULT_COMMAND_TIMEOUT = 900
+DEFAULT_VERIFY_TIMEOUT = 180
+
 #: One-liners run with the server's python3: a file's sha256, and an atomic
 #: rename (os.replace) - portable where `mv -T` and `sha256sum` are not.
 SHA256_PY = "import hashlib,sys; print(hashlib.sha256(open(sys.argv[1],'rb').read()).hexdigest())"
@@ -122,10 +128,10 @@ class Config:
     #: sources checked live after verify, before activation (#840)
     live_check: tuple[str, ...] = ()
     live_check_timeout: int = 120
-    connect_timeout: int = 10
-    command_timeout: int = 900
+    connect_timeout: int = DEFAULT_CONNECT_TIMEOUT
+    command_timeout: int = DEFAULT_COMMAND_TIMEOUT
     smoke_timeout: int = 120
-    verify_timeout: int = 180
+    verify_timeout: int = DEFAULT_VERIFY_TIMEOUT
     #: the deploy_targets.toml target this came from (#873), and where each
     #: setting came from - the target or a flag - for the plan
     target: str | None = None
@@ -261,10 +267,10 @@ def make_config(
     odbc_home: str | None = None,
     live_check: str = "",
     live_check_timeout: int = 120,
-    connect_timeout: int = 10,
-    command_timeout: int = 900,
+    connect_timeout: int = DEFAULT_CONNECT_TIMEOUT,
+    command_timeout: int = DEFAULT_COMMAND_TIMEOUT,
     smoke_timeout: int = 120,
-    verify_timeout: int = 180,
+    verify_timeout: int = DEFAULT_VERIFY_TIMEOUT,
     allow_dirty: bool = False,
     accept_converted_release: str | None = None,
     release_repo: str | None = None,
