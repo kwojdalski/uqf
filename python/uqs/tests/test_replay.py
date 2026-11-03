@@ -297,11 +297,11 @@ def test_supplying_everything_consults_no_process_at_all(monkeypatch):
         log_dir=Path(TPLOGS), hdb_dir=Path(HDB), schema_file=Path(SCHEMA), base_port=6050
     )
     assert plan.plant is None
-    assert plan.rows()[0] == ("log", TPLOGS, "--dir")
+    assert plan.rows()[0] == ("log", TPLOGS, "--tplogdir")
 
 
 def test_a_day_cannot_be_picked_out_of_a_directory_that_was_named_outright():
-    with pytest.raises(UqsError, match="cannot be used with --dir"):
+    with pytest.raises(UqsError, match="cannot be used with --tplogdir"):
         replay.plan(
             log_dir=Path(TPLOGS),
             hdb_dir=Path(HDB),
@@ -349,7 +349,7 @@ def test_dry_run_prints_the_plan_and_starts_nothing(monkeypatch):
 
     monkeypatch.setattr(replay, "start", explode)
     argv = ["data", "replay", "--dry-run", "--port", "6050"]
-    argv += ["--dir", TPLOGS, "--hdb", HDB, "--schema-file", SCHEMA]
+    argv += ["--tplogdir", TPLOGS, "--hdb", HDB, "--schema-file", SCHEMA]
     result = runner.invoke(cli.app, argv)
     assert result.exit_code == 0, result.output
     assert "would start: tpreplay1 -extras" in result.output.replace("\n", "")
@@ -358,7 +358,7 @@ def test_dry_run_prints_the_plan_and_starts_nothing(monkeypatch):
 def test_the_command_exits_with_what_the_replay_exited_with(monkeypatch):
     monkeypatch.setattr(replay, "start", lambda *a, **k: type("Completed", (), {"returncode": 3})())
     argv = ["data", "replay", "--port", "6050"]
-    argv += ["--dir", TPLOGS, "--hdb", HDB, "--schema-file", SCHEMA]
+    argv += ["--tplogdir", TPLOGS, "--hdb", HDB, "--schema-file", SCHEMA]
     assert runner.invoke(cli.app, argv).exit_code == 3
 
 

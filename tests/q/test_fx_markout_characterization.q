@@ -419,13 +419,13 @@
     r:.qpipe.transform.fx_markout.calc[.qt.qpipe.transform.fx_markout.characterization.with_horizons[enlist 0D00:00:00];exe;.qt.qpipe.transform.fx_markout.characterization.signed_books[]];
     .qunit.assertEquals[(count r;exec distinct price_t0 from r where kind=`total);(4;enlist 1.1001);"scored at the first delivery's price"]};
 
-.qt.qpipe.transform.fx_markout.characterization.test_identities_that_join_to_the_same_text_are_one_execution:{[tc]
+.qt.qpipe.transform.fx_markout.characterization.test_identities_that_join_to_the_same_text_are_two_executions:{[tc]
     t:.qt.qpipe.transform.fx_markout.characterization.t;
     f:.qt.qpipe.transform.fx_markout.characterization.fill;
-    / ODDITY: the identity is the venue and fill_id joined with "|", so venue `a|b with fill c and
-    / venue `a with fill `b|c are the same text and collapse into one execution, the second delivery winning.
+    / Was an ODDITY: the identity was the venue and fill_id joined with "|", so venue `a|b with fill c
+    / and venue `a with fill `b|c collapsed into one execution. The identity is now the pair (#1946).
     one:update venue:`$"a|b" from f[t;`EURUSD;1;1.1001;`c];
     two:update fill_id:`$"b|c" from f[t;`EURUSD;1;1.1002;`ignored];
     exe:one,two;
     got:.qpipe.transform.fx_markout.last_delivery exe;
-    .qunit.assertEquals[(count got;got`price);(1;enlist 1.1002);"one execution, the later delivery"]};
+    .qunit.assertEquals[(count got;got`price);(2;1.1001 1.1002);"two executions, each its own delivery"]};

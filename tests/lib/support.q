@@ -460,7 +460,7 @@
 //
 // Every suite runs in ONE q process, so whatever a test changes outlives it
 // unless something puts it back (#834). #801's test set
-// UQS_REQUIRE_LIVE_SOURCES=1 and never cleared it, and every suite after it
+// UQF_LIVE_SOURCES_REQUIRED=1 and never cleared it, and every suite after it
 // ran with live sources required. Each test restoring its own state by hand
 // is a convention, and a convention is broken by the next test written.
 //

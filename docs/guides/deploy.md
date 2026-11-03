@@ -98,8 +98,8 @@ With a component left `existing`, it adds its own requirement: `uv` and a Python
 of the artifact's version for Python; a q and, for KDB-X or kdb+, **its
 licence** in `QHOME` for q (KX's q is never bundled, and no licence is in any
 artifact); TorQ and the starter pack at `--torq-home`/`--torq-app-home` for
-TorQ. A release built with `--kafka-home` loads its `kfk` in the server's q
-before starting, and `--odbc-home` needs that setup on the server.
+TorQ. A release built with `--kfk-home` loads its `kfk` in the server's q before
+starting, and `--odbc-home` needs that setup on the server.
 
 Outside the contract: `netstat` and `column`, which `torq.sh summary` uses to
 show each process's port and lay the table out. Without them `uqs status` lacks
@@ -140,9 +140,9 @@ Inside the artifact:
 - **`RELEASE_MANIFEST.json`.** The revision, whether the tree had uncommitted
   changes, the target OS, architecture and Python, and every member's sha256.
 
-Kafka is opt-in, and a default release carries none of it: `--kafka-home DIR`
-adds the native client under `.release/kafka/`, and `--with-kafka-connector`
-adds confluent-kafka's locked wheels (the `uqs` `kafka` extra). See [Kafka in a
+Kafka is opt-in, and a default release carries none of it: `--kfk-home DIR` adds
+the native client under `.release/kafka/`, and `--kafka-connector` adds
+confluent-kafka's locked wheels (the `uqs` `kafka` extra). See [Kafka in a
 release](../services/kafka.md#in-a-release).
 
 The browser frontend is opt-in too. `--frontend DIST` adds the app that
@@ -802,7 +802,7 @@ In order, each step refusing with what to do before the next one writes:
    removes the `.venv` it made;
 6. `deploy.env` is written when there is something to put in it. With
    `--env-file`, it loads that site file, which stays outside the release, so no
-   setting is copied in. For a release built with `--kafka-home`, it then sets
+   setting is copied in. For a release built with `--kfk-home`, it then sets
    `UQF_KFK_HOME` to the release's own `.release/kafka` and puts its `lib/`
    first on `LD_LIBRARY_PATH`, as a push's `deploy.env` does.
 
@@ -858,7 +858,7 @@ Each stage stops the deployment if it fails:
   | preflight | ssh works and the destination is writable; uv and the release's Python (unless bundled), q (it must run a script, unless bundled), the TorQ trees and the [host contract](#the-minimum-host-contract)'s tools are there; the server's OS, architecture, glibc and Python match the artifact's target; the release is not already there; the data directory exists or `--init-data` was given; another deployment there needs `--restart`; no other deployment holds the lock                                                                                                                                                                        |
   | transfer  | `scp` into `staging/<release>/`; the archive's sha256 is checked **on the server** before it is extracted into `releases/<release>/`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
   | prepare   | `releases/<release>/deploy.env` (below), and a release-local `.venv` installed **offline** from the artifact's wheels: the dependencies with their locked hashes required, then `uqs` itself, by uv or, with a bundled Python, by its `-m venv` and pip. `UV_OFFLINE=1` stays set, so nothing later fetches either                                                                                                                                                                                                                                                                                                                                  |
-  | kafka     | only for a release built with `--kafka-home`: `kfk.q` is loaded in `$QCMD` from the release's copy, with no broker, so a library that does not resolve on the server fails here, before any process starts                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+  | kafka     | only for a release built with `--kfk-home`: `kfk.q` is loaded in `$QCMD` from the release's copy, with no broker, so a library that does not resolve on the server fails here, before any process starts                                                                                                                                                                                                                                                                                                                                                                                                                                            |
   | smoke     | `scripts/deploy_smoke.q` loads the quant library and checks known numbers, then loads the declarations of the processes the deployment starts (theirs only) against the server's `$TORQAPPHOME/database.q`, so a job whose table that schema lacks fails here, naming the job, table and schema path. It must print `DEPLOY_SMOKE_OK` and exit 0 within `--smoke-timeout`                                                                                                                                                                                                                                                                           |
   | restart   | with `--restart`, the previous release's processes stop. Their replacements take the same ports, so an upgrade has downtime: `downtime` in the report                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
   | ports     | nothing else listens on the profile's ports                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
@@ -1159,7 +1159,7 @@ It exports `TORQHOME` and `TORQAPPHOME`, the existing TorQ and starter pack,
 which `uqs` uses in place of the vendored `lib/` trees. It exports
 `UQS_DATA_ROOT`, the data directory that every release shares, so a second
 deployment keeps the first one's HDB. It also exports `QCMD`, `QHOME`,
-`UQS_RUNTIME` and `UV_OFFLINE`, and with `--live`, `UQS_REQUIRE_LIVE_SOURCES`.
+`UQS_RUNTIME` and `UV_OFFLINE`, and with `--live`, `UQF_LIVE_SOURCES_REQUIRED`.
 Without `--live`, a backfill whose source has no credential is still refused
 unless run with `--fixture`, so a missing credential cannot quietly fill a
 server's tables with fixture rows. If `shared/config/secrets.env` exists, it

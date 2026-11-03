@@ -210,7 +210,7 @@ def _errors(monkeypatch) -> list[str]:
     ("argv", "said"),
     [
         (["--worker", WORKER], "--worker needs --attachment"),
-        (["--run", "2026"], "--run needs --attachment"),
+        (["--stamp", "2026"], "--stamp needs --attachment"),
         (["rdb1", "--attachment", "pb-uat"], "a process name does not apply with --attachment"),
         (["--attachment", "pb-uat", "--channel"], "--channel does not apply with --attachment"),
     ],

@@ -1,4 +1,4 @@
-"""Scaffold an external publisher: `uqs job new NAME --kind external` (#715).
+"""Scaffold an external publisher: `uqs job new NAME --kind connector` (#715).
 
 Real data mostly enters the stack from something a q process cannot hold a
 subscription to - a Kafka topic, a vendor's websocket, a broker's API. The

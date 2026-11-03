@@ -121,7 +121,7 @@ def test_a_default_release_carries_no_kafka_dependency(tmp_path):
 
 def test_kafka_home_packages_kfk_its_libraries_and_notices_but_never_glibc(tmp_path):
     home = _kafka_home(tmp_path)
-    art, _, ldd_calls = _build_kafka(tmp_path, "--kafka-home", str(home))
+    art, _, ldd_calls = _build_kafka(tmp_path, "--kfk-home", str(home))
     names = _members(art)
     d = kafka.KAFKA_DIR
     for want in ("kfk.q", "libkfk.so", "lib/librdkafka.so.1", "notices/LICENSE",
@@ -143,7 +143,7 @@ def test_kafka_home_packages_kfk_its_libraries_and_notices_but_never_glibc(tmp_p
 def test_a_library_for_another_architecture_is_refused(tmp_path):
     home = _kafka_home(tmp_path, machine=183)  # aarch64
     with pytest.raises(ReleaseError, match=r"libkfk.so is built for aarch64.*linux/x86_64"):
-        _build_kafka(tmp_path, "--kafka-home", str(home))
+        _build_kafka(tmp_path, "--kfk-home", str(home))
     assert not (tmp_path / "dist").exists()
 
 
@@ -151,20 +151,20 @@ def test_a_dependency_for_another_architecture_is_refused(tmp_path):
     home = _kafka_home(tmp_path)
     ldd_out = _ldd(tmp_path / "deps", machine=183)
     with pytest.raises(ReleaseError, match=r"librdkafka.so.1.2.3 is built for aarch64"):
-        _build_kafka(tmp_path, "--kafka-home", str(home), ldd_out=ldd_out)
+        _build_kafka(tmp_path, "--kfk-home", str(home), ldd_out=ldd_out)
 
 
 def test_a_macos_library_is_refused_for_a_linux_release(tmp_path):
     home = _kafka_home(tmp_path)
     (home / "libkfk.so").write_bytes(b"\xcf\xfa\xed\xfe" + bytes(60))
     with pytest.raises(ReleaseError, match=r"macOS \(Mach-O\) library - a release runs on Linux"):
-        _build_kafka(tmp_path, "--kafka-home", str(home))
+        _build_kafka(tmp_path, "--kfk-home", str(home))
 
 
 def test_the_aarch64_target_takes_an_aarch64_library(tmp_path):
     home = _kafka_home(tmp_path, machine=183)
     art, _, _ = _build_kafka(
-        tmp_path, "--arch", "aarch64", "--kafka-home", str(home),
+        tmp_path, "--arch", "aarch64", "--kfk-home", str(home),
         ldd_out=_ldd(tmp_path / "deps", machine=183),
     )  # fmt: skip
     assert art.manifest["kafka"]["arch"] == "aarch64"
@@ -175,20 +175,20 @@ def test_a_kafka_home_missing_kfk_is_refused(tmp_path, gone):
     home = _kafka_home(tmp_path)
     (home / gone).unlink()
     with pytest.raises(ReleaseError, match=rf"lacks {gone} - it must hold kfk.q and libkfk.so"):
-        _build_kafka(tmp_path, "--kafka-home", str(home))
+        _build_kafka(tmp_path, "--kfk-home", str(home))
 
 
 def test_a_kafka_home_with_no_licence_is_refused(tmp_path):
     home = _kafka_home(tmp_path, notice=False)
     with pytest.raises(ReleaseError, match="holds no LICENSE, NOTICE or COPYING file"):
-        _build_kafka(tmp_path, "--kafka-home", str(home))
+        _build_kafka(tmp_path, "--kfk-home", str(home))
 
 
 def test_a_dependency_ldd_cannot_find_is_refused(tmp_path):
     home = _kafka_home(tmp_path)
     ldd_out = _ldd(tmp_path / "deps", extra="\tlibzstd.so.1 => not found\n")
     with pytest.raises(ReleaseError, match=r"needs libzstd.so.1, which ldd does not find"):
-        _build_kafka(tmp_path, "--kafka-home", str(home), ldd_out=ldd_out)
+        _build_kafka(tmp_path, "--kfk-home", str(home), ldd_out=ldd_out)
 
 
 def test_a_library_ldd_cannot_read_is_refused(tmp_path):
@@ -198,7 +198,7 @@ def test_a_library_ldd_cannot_read_is_refused(tmp_path):
     runner, _ = _with_ldd(tools, "", rc=1)
     with pytest.raises(ReleaseError, match="ldd could not list libkfk.so's libraries"):
         _built_with(
-            ["--output-dir", str(tmp_path / "dist"), "--kafka-home", str(home)],
+            ["--output-dir", str(tmp_path / "dist"), "--kfk-home", str(home)],
             root=root,
             runner=runner,
         )
@@ -227,7 +227,7 @@ def test_a_macos_builder_lists_libraries_with_otool_leaving_the_system_out(tmp_p
 
 
 def test_with_kafka_connector_exports_the_kafka_extra_into_the_wheels(tmp_path):
-    art, calls, ldd_calls = _build_kafka(tmp_path, "--with-kafka-connector")
+    art, calls, ldd_calls = _build_kafka(tmp_path, "--kafka-connector")
     export = next(c for c in calls if "export" in c)
     assert export[export.index("--extra") + 1] == "kafka"
     assert art.manifest["python"]["extras"] == ["kafka"]
@@ -386,7 +386,7 @@ def test_the_connector_refuses_without_the_extra_naming_it(no_extra, tmp_path, m
         kafka_feed.start_kafka_feed(None)  # ty: ignore[invalid-argument-type]
     msg = str(exc.value)
     assert "needs confluent-kafka, the uqs `kafka` extra" in msg
-    assert "uv sync --extra kafka" in msg and "--with-kafka-connector" in msg
+    assert "uv sync --extra kafka" in msg and "--kafka-connector" in msg
 
 
 def test_uqs_connector_start_kafka_reports_the_missing_extra(no_extra, monkeypatch):
