@@ -105,7 +105,7 @@ TERMS = (
     Term(
         "what a write does with a row already there",
         "--on-conflict",
-        "str",
+        "choice",
         retired=("--conflict",),
     ),  # fmt: skip
     Term("a private ODBC setup", "--odbc-home", "path", retired=("--home",)),
@@ -130,5 +130,6 @@ EveryOpt = Annotated[
     duration(
         "--every",
         help=f"With -i, re-read every DURATION (default {EVERY_DEFAULT:g}s); 0 turns it off",
+        show_default=False,
     ),
 ]

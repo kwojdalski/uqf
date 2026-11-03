@@ -19,7 +19,9 @@ from typing import Annotated
 import typer
 from rich.table import Table
 
-from uqs.cli import choices, completion
+from uqs.cli import completion
+from uqs.cli.choices import ChoiceOpt
+from uqs.cli.concepts import attach_opt
 from uqs.cli.json_out import emit, json_opt, records, timestamp
 from uqs.cli.renames import ATTACHMENT, alias_command, renamed, warn_renamed
 from uqs.cli.safety import ChangesState, ReadOnly, dry_run_note
@@ -197,6 +199,21 @@ def _json_lines(rows: list[dict]) -> None:  # q's local .z.P, with this machine'
     emit({"lines": [line | {"time": timestamp(line["time"])} for line in lines]})
 
 
+_LevelOpt = ChoiceOpt(
+    stack_logs.LEVEL_CHOICES, "--level", stack_logs.LEVEL_HELP, case_sensitive=False
+)
+_StreamOpt = ChoiceOpt(
+    stack_multitail.MULTITAIL_STREAMS,
+    "--stream",
+    "With --multitail: which log files get a pane",
+    default=stack_multitail.DEFAULT_STREAM,
+)
+_AttachOpt = attach_opt(
+    "The attachment whose backfill or receiver log to read instead: its latest "
+    "run (`uqs job backfill --attachment`)"
+)
+
+
 @app.command(
     cls=renamed(
         {
@@ -218,30 +235,14 @@ def logs(
     lines: Annotated[
         int, typer.Option("--lines", "-l", help="Lines per process log to show (history)")
     ] = 20,
-    level: Annotated[
-        str | None,
-        typer.Option(
-            help=stack_logs.LEVEL_HELP,
-            autocompletion=completion.choices(*stack_logs.LEVEL_CHOICES),
-        ),
-    ] = None,
+    level: _LevelOpt = None,
     multitail: Annotated[
         bool,
         typer.Option(
             "--multitail", help="Follow in multitail instead, one pane per out_/err_*.log file"
         ),
     ] = False,
-    stream: Annotated[
-        str | None,
-        typer.Option(
-            "--stream",
-            help="With --multitail: which log files get a pane - "
-            + choices.alternatives(
-                stack_multitail.MULTITAIL_STREAMS, default=stack_multitail.DEFAULT_STREAM
-            ),
-            autocompletion=completion.choices(*stack_multitail.MULTITAIL_STREAMS),
-        ),
-    ] = None,
+    stream: _StreamOpt = None,
     pane_columns: Annotated[
         int | None,
         typer.Option("--pane-columns", help="With --multitail: lay the panes out in N columns"),
@@ -266,15 +267,7 @@ def logs(
             "--id", help="With --channel: only this worker or component's lines (repeatable)"
         ),
     ] = None,
-    attach: Annotated[
-        str | None,
-        typer.Option(
-            "--attachment",
-            metavar="ATTACHMENT",
-            help="The attachment whose backfill or receiver log to read instead: its latest "
-            "run (`uqs job backfill --attachment`)",
-        ),
-    ] = None,
+    attach: _AttachOpt = None,
     worker: Annotated[
         str | None,
         typer.Option(

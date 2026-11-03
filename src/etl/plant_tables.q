@@ -550,7 +550,7 @@
 .qetl.plant.crypto_trades:([]time:`timestamp$(); sym:`g#`symbol$(); venue:`symbol$(); side:`long$(); trade_price:`float$(); size:`float$(); fee:`float$(); fee_currency:`symbol$(); exchange_fill_id:`symbol$())
 
 / The trades shape src/execution/execution.q's markout family consumes
-/ (sym/time/side/trade_price/pip_factor), so demo_markout1 and posbook1 read
+/ (sym/time/side/trade_price/pip_factor), so posbook1 reads
 / rows off this table with zero reshaping.
 / fill_id (#1080) is the fill's identity: unique per fill, so a keyed consumer
 / never collapses two fills that share a time, sym and price. Null in a
@@ -566,11 +566,6 @@
 / across days and a restart agrees with a process left running. carried_to is
 / the plant time of the last batch the book had applied (#1015).
 .qetl.plant.position_open:([]time:`timestamp$(); sym:`g#`symbol$(); qty:`float$(); avg_price:`float$(); realized_pnl:`float$(); carried_to:`timestamp$())
-
-/ demo_markout1's output: per-trade execution quality at each horizon.
-/ fill_id (#1080) is the scored fill's trades.fill_id, so (fill_id; horizon)
-/ identifies a row; null for a fill that predates the column.
-.qetl.plant.demo_execution_quality:([]time:`timestamp$(); sym:`g#`symbol$(); trade_time:`timestamp$(); horizon:`timespan$(); trade_price:`float$(); ref_price:`float$(); markout_pips:`float$(); fill_id:`symbol$())
 
 / executions1's output: every fill the stack carries, as one tape (#885). The
 / `executions` normalizer (src/etl/streaming/executions.q) maps `trades`,

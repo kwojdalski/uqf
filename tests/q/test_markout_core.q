@@ -46,7 +46,7 @@
 .qt.qpipe.transform.markout_core.test_the_core_names_no_source_vendor_table_or_implementation:{[tc]
     src:" " sv read0 `:src/etl/transforms/markout_core.q;
     forbidden:("marketwarehouse";"mkt_order_book";"FULL_AMOUNT";"security_code";"last_qty";"deal_tape";"book_events";"demo_deals";"fx_orderbook";
-        "crypto_book";"cryptorust";"kafka";"singlestore";"hdb_";"fx_markout";"crypto_markout";"demo_markout";"torq";".qtorq";"duckdb";"odbc");
+        "crypto_book";"cryptorust";"kafka";"singlestore";"hdb_";"fx_markout";"crypto_markout";"torq";".qtorq";"duckdb";"odbc");
     found:forbidden where {[s;w] 0<count ss[s;w]}[src] each forbidden;
     .qunit.assertEquals[found;();"no source, vendor, table or implementation appears in the core"]};
 

@@ -39,6 +39,10 @@ uqs connector status databento
 uqs connector stop databento
 ```
 
+`--databento-dataset` (and `databento` itself) exists only once the bundle that
+carries the connector is installed: before that, `uqs connector start --help`
+does not list it.
+
 Needs `$DATABENTO_API_KEY` (Databento's own variable, so an existing export
 works). It refuses to start without one rather than failing on its first call.
 

@@ -158,9 +158,9 @@
     `pid`host`run_id
 
 / The path of an instance's status file.
-/ @param instance_id the process instance, e.g. `demo_markout1
+/ @param instance_id the process instance, e.g. `crypto_markout1
 / @return the path, as a string
-/ @eg .qetl.status.file_path[`demo_markout1] like "*/airflow_status_demo_markout1.txt"  ->  1b
+/ @eg .qetl.status.file_path[`crypto_markout1] like "*/airflow_status_crypto_markout1.txt"  ->  1b
 .qetl.status.file_path:{[instance_id] (.qetl.status.status_dir[]),"/",.qetl.status.file_prefix,string[instance_id],.qetl.status.file_suffix}
 
 / Where status files go. Overridden by UQF_STATUS_DIR so the demo and a real
@@ -187,7 +187,7 @@
 / otherwise be able to read a half-written file and see a truncated JSON
 / object as a parse error.
 / @param worker the worker's name, e.g. `markout_backfill
-/ @param instance_id the process instance, e.g. `demo_markout1 - names the file,
+/ @param instance_id the process instance, e.g. `crypto_markout1 - names the file,
 /   so two instances of one worker do not overwrite each other
 / @param state one of status_states
 / @param spec dict with `source_version`range_from`range_to - the run
@@ -201,7 +201,7 @@
 / @return the path written
 / @throws error if state is unknown, if the range is empty or reversed, if
 /   source_version is missing, or if a failed state carries no error
-/ @eg .qetl.status.write_status[`markout_backfill;`demo_markout1;`completed;
+/ @eg .qetl.status.write_status[`markout_backfill;`crypto_markout1;`completed;
 /       `source_version`range_from`range_to!(`v1;2026.09.13D00:00;2026.09.14D00:00);
 /       `cursor`rows_published`windows_completed!(2026.09.14D00:00;1234;1);
 /       ""]

@@ -9,7 +9,7 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 [docs/guides/uqs.md](../guides/uqs.md); for the topology diagrams see
 [architecture/stack.md](../architecture/stack.md).
 
-**23 vendored processes** plus **42 uqf processes** — 65 in total. Ports are shown at the default base port 6050; every one is `{KDBBASEPORT}+offset`, so a different base shifts them all together.
+**23 vendored processes** plus **40 uqf processes** — 63 in total. Ports are shown at the default base port 6050; every one is `{KDBBASEPORT}+offset`, so a different base shifts them all together.
 
 ## uqf's own processes
 
@@ -23,7 +23,6 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 | `tap1` | 6078 | etl | `processes/torq_tap.q` | — | _chosen at runtime_ | — |
 | `fxtradesfeed1` | 6079 | feed | `processes/torq_stream.q` | `trades` | — | `trades` |
 | `posbook1` | 6080 | etl | `processes/torq_stream.q` | — | `executions`, `market_data` | `position`, `position_open` |
-| `demo_markout1` | 6081 | etl | `processes/torq_stream.q` | `demo_execution_quality` | `trades`, `quote` | `demo_execution_quality` |
 | `deals_backfill1` | 6082 | backfill | `processes/torq_backfill.q` | — | — | — |
 | `events_backfill1` | 6083 | backfill | `processes/torq_backfill.q` | — | — | — |
 | `cryptomock1` | 6085 | feed | `processes/torq_stream.q` | — | — | `crypto_book`, `crypto_trades` |
@@ -37,7 +36,6 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 | `crossarb1` | 6095 | etl | `processes/torq_stream.q` | `cross_arbitrage` | `superbook` | `cross_arbitrage`, `config_change` |
 | `duckdb_deals_backfill1` | 6096 | backfill | `processes/torq_backfill.q` | — | — | — |
 | `kafka_flow1` | 6097 | etl | `processes/torq_stream.q` | — | `kafka_message` | `client_flow`, `kafka_dead_letter` |
-| `hdb_demo_markouts_backfill1` | 6099 | backfill | `processes/torq_backfill.q` | — | — | — |
 | `hdb_transfer_backfill1` | 6100 | backfill | `processes/torq_backfill.q` | — | — | — |
 | `crypto_markout1` | 6101 | etl | `processes/torq_stream.q` | `crypto_execution_quality` | `crypto_trades`, `crypto_book` | `crypto_execution_quality` |
 | `alert_sink1` | 6102 | etl | `processes/torq_stream.q` | — | `fx_limit_breach` | — |
@@ -66,7 +64,6 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 - **`vectorize1`** — the other half of the widefeed1 pair: nothing subscribes to mkt_orderbook, so this branch of the graph is self-contained. See widefeed1
 - **`tap1`** — diagnostic subscriber - started on demand, not with the whole stack
 - **`posbook1`** — reads the normalizers' outputs - executions and market_data, not trades and quote - so one book carries FX and crypto and a new market is a mapping, not a job
-- **`demo_markout1`** — compares its own clock against incoming data timestamps (the process_ready cutoff), and .u.upd stamps those in UTC. It reads .z.p directly for that reason, so it needs no localtime override - it used to carry localtime:0 instead, which fixed the arithmetic by starting one process on a different clock from the other twenty-two
 - **`deals_backfill1`** — bounded: runs a window range and exits, so it must not start with the stack
 - **`events_backfill1`** — bounded: see deals_backfill1
 - **`cryptomock1`** — stands in for cryptorust's two kdb recorders. startwithall:0: start it INSTEAD of them, never as well as - it publishes onto the same two tables, and an invented ladder or fill must not interleave with a real one
@@ -80,7 +77,6 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 - **`crossarb1`** — the direct book against a synthetic route through other pairs (EURJPY against EURUSD x USDJPY), where arbitrage1 compares two sources on the SAME pair. Reads superbook like arbitrage1, so it is the second consumer of the marketdata1 chain rather than a fifth link - see there. startwithall:0 for that chain's reason (#285), and note that the chain plus this one is four more plant connections than the default start holds: start `--profile arbitrage`, which is that set, rather than adding them to a running default
 - **`duckdb_deals_backfill1`** — bounded: copies mock FX deals from a DuckDB file over ODBC, a day at a time
 - **`kafka_flow1`** — decodes the Kafka records on kafka_message into each declared topic's plant table (client_flow for the client trade topic), deduplicated on (topic;partition;offset), and sends what it cannot decode to kafka_dead_letter - including every topic no decoder job has claimed. The records are published by a consumer - the q feed kafka_feed1, or the legacy Python one - so kafka_message has no producer in a default start. That is why it does not start with the stack: it would hold one of the sixteen licensed plant connections to consume nothing. Start it with the consumer
-- **`hdb_demo_markouts_backfill1`** — bounded: marks out the HDB's fills against its quotes, into demo_execution_quality
 - **`hdb_transfer_backfill1`** — bounded - copies trades from a kdb+ HDB on this machine into trades_copy, adding notional; the HDB-to-HDB example
 - **`crypto_markout1`** — markouts on real crypto fills, in bps against the best mid across venues. Not started with the stack: its inputs come from cryptorust's recorders, or from cryptomock1 in their place, neither of which starts by default - `uqs start --profile crypto` brings it up with the mock
 - **`alert_sink1`** — outbound webhook for fx_limit_breach, at least once; refuses to run without UQF_SOURCE_CRED_ALERT_SINK. On demand: it needs a webhook URL, and without one it would only fail
@@ -115,7 +111,6 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 | `crypto_execution_quality` | `plant_tables.q` | `crypto_markout1` |
 | `crypto_trades` | `plant_tables.q` | `cryptomock1` |
 | `demo_deals` | `plant_tables.q` | `demo_deals_feed1` |
-| `demo_execution_quality` | `plant_tables.q` | `demo_markout1` |
 | `exec_bar` | `plant_tables.q` | `exec_bars1` |
 | `executions` | `plant_tables.q` | `executions1` |
 | `fx_limit_breach` | `plant_tables.q` | `fxpositions1` |

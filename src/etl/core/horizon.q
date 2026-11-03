@@ -4,8 +4,8 @@
 / WHY A KIND. A markout scores a fill against the market some time AFTER it:
 / the fill arrives now, and the price it is judged by arrives later. So the
 / job queues the fill, keeps the reference rows that will price it, and on a
-/ timer scores whatever has waited long enough. demo_markout and
-/ crypto_markout each built that by hand - a pending queue, a reference
+/ timer scores whatever has waited long enough. The first two markout
+/ jobs each built that by hand - a pending queue, a reference
 / history, score_ready, evict - line for line the same, and the copies had
 / already drifted: one bounded its history, the other let it grow for as
 / long as the process ran. A third would have been a third copy.
@@ -29,7 +29,7 @@
 /                    not set the price). Every row older than the oldest
 /                    pending event minus max_age is dropped.
 /   max_age absent   the latest reference row is used however old - an
-/   (or 0Wn)         as-of join (demo_markout). 0Wn, how a spec says
+/   (or 0Wn)         as-of join (fx_markout). 0Wn, how a spec says
 /                    "however old", is the same declaration (#1480). Rows
 /                    older than the oldest pending event are dropped, EXCEPT
 /                    the latest such row per `by` key: it is still the as-of
@@ -274,7 +274,7 @@
 
 / Every defined horizon job.
 / @return a symbol vector
-/ @eg `demo_markout in .qetl.job.stream.horizons.defined[]  ->  1b
+/ @eg `crypto_markout in .qetl.job.stream.horizons.defined[]  ->  1b
 .qetl.job.stream.horizons.defined:{[] key .qetl.job.stream.horizons.registry}
 
 / Private: buffer one batch - events into `pending`, reference rows into
