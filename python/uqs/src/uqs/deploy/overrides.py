@@ -36,7 +36,8 @@ the same list.
 from __future__ import annotations
 
 from uqs.deploy.artifact import Artifact, meets
-from uqs.deploy.config import FILE_KEYS, Config, DeployError
+from uqs.deploy.config import Config, DeployError
+from uqs.deploy.target_keys import FILE_KEYS
 from uqs.guardrails import Guardrail
 
 ACCEPT_DIGEST = "accept-digest"

@@ -20,7 +20,7 @@ from uqs.cli.json_out import emit, json_opt
 from uqs.cli.pipelines import needs_pipelines
 from uqs.cli.safety import ReadOnly
 from uqs.cli.shared import _die, _paths
-from uqs.paths import UqsError
+from uqs.paths import UqsError, UqsUsageError
 from uqs.stack import follow as log_follow
 
 
@@ -57,7 +57,7 @@ def logs(
     `connector logs crypto -f`, `connector logs crypto-fills -l 200`.
     """
     if as_json and follow:
-        _die(UqsError("--json prints the history: --follow does not apply with it"))
+        _die(UqsUsageError("--json prints the history: --follow does not apply with it"))
         return
     path = _log_path(name)
     if follow:

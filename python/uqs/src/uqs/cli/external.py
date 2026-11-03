@@ -8,12 +8,12 @@ rather than lifecycle commands. Called
 `connector` rather than `feed` (#1417) because a feed is also a TorQ-managed q
 process here; these supervise the publisher OUTSIDE the plant.
 
-One `start` for every feed, rather than a sub-app per feed, because every
-feed has the same five verbs. Each feed's options are its own: one given to a
-feed it does not belong to is refused by name, as `uqs job new` refuses an
+One `start` for every connector, rather than a sub-app per connector, because
+every connector has the same five verbs. Each one's options are its own: one given to
+a connector it does not belong to is refused by name, as `uqs job new` refuses an
 option for another kind.
 
-This module names no feed (#1776). Every connector declares itself in its
+This module names no connector itself (#1776). Every connector declares itself in its
 `*_feed.py` module - its options, what it produces, its status title -
 `external.feeds.discover()` finds them, and `start`'s options are built from
 theirs: its signature is generated, and `restart` copies it.
@@ -21,7 +21,7 @@ theirs: its signature is generated, and `restart` copies it.
 The whole lifecycle lives in this group rather than as `uqs start
 connector:NAME` beside the stack's verbs (#1734): a connector is not a torq.sh
 process, so it shares none of `start`'s options (`--profile`, `--follow`, the
-skips) while each feed has start options of its own, and #1738's rule 1 is
+skips) while each connector has start options of its own, and #1738's rule 1 is
 noun, then verb. Its log is one plain file, not a TorQ out_/err_ pair.
 
 A secret option - the tickerplant credential, an API key - is never taken on
@@ -48,7 +48,7 @@ from uqs.cli.renames import renamed
 from uqs.cli.safety import ChangesState, DryRunOpt, ReadOnly, dry_run_note
 from uqs.cli.shared import _die, _paths, app, console
 from uqs.external.feeds import ExternalFeed, check_options, discover
-from uqs.paths import UqsError, repo_root
+from uqs.paths import UqsError, UqsUsageError, repo_root
 
 connector_app = typer.Typer(
     no_args_is_help=True,
@@ -179,7 +179,7 @@ def _start(name: str, options: dict[str, Any], dry_run: bool = False, verb: str 
     own = {option.name: option for option in feed.options}
     for option in given:
         if option not in own:
-            _die(UqsError(f"--{option.replace('_', '-')} does not apply to connector {name}"))
+            _die(UqsUsageError(f"--{option.replace('_', '-')} does not apply to connector {name}"))
             return
     try:
         # Bindings first (#1786), dry run or not: a topic or table that binds
@@ -221,7 +221,7 @@ def _secrets_from_env(options: dict[str, Any]) -> tuple[dict[str, Any], dict[str
                 renames.warn_secret_argv(flag, f"{flag}-env NAME")
             continue
         if key in given:
-            raise UqsError(f"give {flag}-env or {flag}, not both")
+            raise UqsUsageError(f"give {flag}-env or {flag}, not both")
         value = os.environ.get(variable, "")
         if not value.strip():
             raise UqsError(f"{flag}-env {variable}: ${variable} is not set")
@@ -324,7 +324,7 @@ def status(
     ] = None,
     as_json: StatusJson = False,
 ) -> None:
-    """Whether a connector is running, its pid, and where its log lives."""
+    """Show whether a connector is running, its pid, and where its log lives."""
     found = []
     for each in [name] if name is not None else list(FEEDS):
         feed = _feed(each)

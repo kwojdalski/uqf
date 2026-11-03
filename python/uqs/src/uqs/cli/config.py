@@ -34,15 +34,15 @@ from uqs.cli.shared import (
     app,
     console,
 )
-from uqs.paths import UqsError
+from uqs.paths import UqsError, UqsUsageError
 from uqs.stack import attached_logs, process_unset
 from uqs.stack import channel as stack_channel
 from uqs.stack import logs as stack_logs
 from uqs.stack import multitail as stack_multitail
 from uqs.stack import procs as stack_procs
 
-#: `uqs config show/set/unset/list`: a process.csv row, and every setting `set`
-#: wrote (`list`, once `uqs list overrides`: an override is a bypass, #1855).
+#: `uqs config show/set/unset/list`: a process.csv row via process_overrides.csv,
+#: and every setting `set` wrote (`list`, once `uqs list overrides`, #1855).
 config_app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
@@ -56,7 +56,6 @@ app.add_typer(config_app, name="config")
 GetJson = json_opt(
     '{"process", "fields": [{field, value}]} - or, given a FIELD, {"process", "field", "value"}'
 )
-
 
 #: The old spellings `config show` still takes (#1729).
 _SHOW_RENAMES = {"--port": "--base-port", "--raw": "--unresolved"}
@@ -207,8 +206,7 @@ def _json_lines(records: list[dict]) -> None:
             "--print": "--show-command",
             "--columns": "--pane-columns",
             "-c": "--pane-columns",
-            # a log's stamp, not the run_id every other surface means by "run" (#1890)
-            "--run": "--stamp",
+            "--run": "--stamp",  # a log's stamp, not the run_id "run" means (#1890)
             **ATTACHMENT,
         },
         ReadOnly,
@@ -323,19 +321,19 @@ def logs(
             "--multitail": multitail,
         }.items():
             if used:
-                _die(UqsError(f"--json prints the history: {option} does not apply with it"))
+                _die(UqsUsageError(f"--json prints the history: {option} does not apply with it"))
                 return
     if attach is None:
         for option, used in {"--worker": worker, "--stamp": run}.items():
             if used is not None:
-                _die(UqsError(f"{option} needs --attachment"))
+                _die(UqsUsageError(f"{option} needs --attachment"))
                 return
     else:
         clash = {"a process name": bool(procs), "--channel": channel, "--multitail": multitail}
         for option, used in clash.items():
             if used:
                 _die(
-                    UqsError(
+                    UqsUsageError(
                         f"{option} does not apply with --attachment, which reads one run's log"
                     )
                 )
@@ -354,12 +352,12 @@ def logs(
             _die(exc)
         return
     if ids and not channel:
-        _die(UqsError("--id needs --channel"))
+        _die(UqsUsageError("--id needs --channel"))
         return
     if channel:
         for option, used in {"--follow": follow, "--multitail": multitail}.items():
             if used:
-                _die(UqsError(f"{option} does not apply with --channel, which is always live"))
+                _die(UqsUsageError(f"{option} does not apply with --channel, which is always live"))
                 return
     given = {
         "--stream": stream is not None,

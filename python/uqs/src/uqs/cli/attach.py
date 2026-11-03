@@ -77,16 +77,18 @@ YesOpt = Annotated[
 
 
 def waivers(override: list[str] | None, reason: str) -> list[str]:
-    """The `--override CODE:COMPONENT`s, checked as every command's are
-    (safety.given, #1852): a code this command does not take, one that is never
-    overridden, a missing component or reason, or a reason with no override, is
-    refused here. A code is matched in upper case, as the attachment's findings
-    name it. service.accept then checks each against what the stack shows."""
+    """The `--override CODE:COMPONENT`s and the generated `--skip-<code>
+    COMPONENT`s (`--skip-torq-version stp1` is `TORQ_VERSION:stp1`, #1918), as
+    one list, checked as every command's are (safety.given, #1852): a code this
+    command does not take, one that is never overridden, a missing component or
+    reason, or a reason with no override, is refused here. A code is matched in
+    upper case, as the attachment's findings name it. service.accept then checks
+    each against what the stack shows, so a component with no such finding is
+    refused there."""
     specs = [
         f"{c.upper()}{sep}{rest}" for c, sep, rest in (s.partition(":") for s in override or ())
     ]
-    safety.given("job attachment add", specs or None, reason or None)
-    return specs
+    return list(safety.given("job attachment add", specs or None, reason or None))
 
 
 @attachment_app.command("add", context_settings=EXTRA_WORDS, cls=OLD_REASON)
@@ -199,11 +201,13 @@ def attach(
     if not running:
         if as_json and not yes:
             out.fail("--json cannot ask for confirmation: add --yes to change the stack")
-        if not yes:
-            typer.confirm(
+        try:
+            safety.confirm(
                 f"Attach {name} to stack {att.stack.id} as above? (no process is restarted)",
-                abort=True,
+                yes=yes,
             )
+        except UqsError as exc:
+            out.fail(exc)
         if planned.accepted:
             if not accept_risks:
                 if as_json:
@@ -211,12 +215,15 @@ def attach(
                         f"{len(planned.accepted)} accepted risk(s) need --accept-risks; "
                         "--yes does not confirm them"
                     )
-                typer.confirm(
-                    f"Attach with {len(planned.accepted)} ACCEPTED RISK(S) "
-                    "(" + ", ".join(f"{f.code}:{f.component}" for f in planned.accepted) + ")? "
-                    "--yes does not answer this",
-                    abort=True,
-                )
+                try:
+                    safety.confirm(
+                        f"Attach with {len(planned.accepted)} ACCEPTED RISK(S) "
+                        "(" + ", ".join(f"{f.code}:{f.component}" for f in planned.accepted) + ")? "
+                        "--yes does not answer this",
+                        yes=False,
+                    )
+                except UqsError as exc:
+                    out.fail(exc)
             confirmed = getpass.getuser()
     outcome = workflow.execute(
         resolved, planned, ipc, paths.repo_root, publishing.UqsPublisher(paths),
@@ -297,11 +304,10 @@ def detach(
         if not dry_run:
             if as_json and not yes:
                 out.fail("--json cannot ask for confirmation: add --yes to change the stack")
-            if not yes:
-                typer.confirm(
-                    f"Stop {att.publisher.procname} and detach {name} from stack {att.stack.id}?",
-                    abort=True,
-                )
+            safety.confirm(
+                f"Stop {att.publisher.procname} and detach {name} from stack {att.stack.id}?",
+                yes=yes,
+            )
         result = detaching.detach(
             att, service.ipc_for(att), publishing.UqsPublisher(_paths()), dry_run=dry_run
         )

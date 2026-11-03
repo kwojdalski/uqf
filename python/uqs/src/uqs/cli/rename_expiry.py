@@ -72,10 +72,6 @@ RENAMED_AFTER: dict[str, frozenset[str]] = {
             # #1732: one safety vocabulary
             "uqs start --show-command",
             "uqs restart --show-command",
-            "uqs start --skip-q-version-check",
-            "uqs start --skip-profile-budget-check",
-            "uqs restart --skip-q-version-check",
-            "uqs restart --skip-profile-budget-check",
             "uqs deploy push --accept-digest",
             "uqs deploy push --accept-q-version",
             "uqs deploy push --allow-unpinned",

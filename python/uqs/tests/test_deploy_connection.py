@@ -90,7 +90,7 @@ def test_the_flags_still_name_a_server_no_target_declares(root, monkeypatch, com
 @pytest.mark.parametrize("command", sorted(COMMANDS))
 def test_no_target_and_no_flags_is_refused(root, monkeypatch, command, log_text):
     r, seen = _run(monkeypatch, command, [])
-    assert r.exit_code == 1 and not seen
+    assert r.exit_code == 2 and not seen, "a usage error (#1885)"
     assert "give a TARGET, or --ssh and --dest" in log_text()
 
 

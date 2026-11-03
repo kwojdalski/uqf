@@ -237,17 +237,19 @@ def test_the_refusal_names_the_typo_and_the_alternatives(_known_procs):
         # stub never has to satisfy UqsPaths at runtime.
         stack_procs.assert_known_procnames(cast("UqsPaths", _Paths()), "rdb1 xyz")
     message = str(excinfo.value)
-    assert "xyz" in message
-    assert "rdb1" in message, "the known names are what makes the error useful"
+    assert "xyz" in message and "rdb1" not in message, "only the name that is unknown"
+    assert "`uqs process list` names them" in message, "where the real names are"
     assert "Nothing was started or stopped" in message
 
 
-def test_the_refusal_lists_the_known_names_alphabetically(monkeypatch, _known_procs):
-    """process.csv order is load order, not something a reader can scan."""
+def test_the_refusal_never_dumps_every_name(monkeypatch, _known_procs):
+    """It printed all 65 names as a Python list (#1885): one message, the
+    unknown name and where to look, whatever the command."""
     monkeypatch.setattr(stack_procs, "list_process_names", lambda _paths: ["stp1", "hdb1", "rdb1"])
     with pytest.raises(UqsError) as excinfo:
         stack_procs.assert_known_procnames(cast("UqsPaths", _Paths()), "xyz")
-    assert "['hdb1', 'rdb1', 'stp1']" in str(excinfo.value)
+    assert "[" not in str(excinfo.value)
+    assert str(excinfo.value).startswith(str(stack_procs.unknown_processes("xyz")))
 
 
 @pytest.mark.parametrize("selector", ["all", " all ", "rdb1", "rdb1 stp1"])
@@ -1528,7 +1530,7 @@ def test_connector_restart_refuses_another_feeds_option_before_stopping(monkeypa
     _crypto_running(monkeypatch, True)
     start = _patch(monkeypatch, crypto, "start_crypto_recorder", result=7)
     _patch(monkeypatch, crypto, "stop_crypto_recorder")
-    assert runner.invoke(cli.app, ["connector", "restart", "crypto", "--topic", "t"]).exit_code == 1
+    assert runner.invoke(cli.app, ["connector", "restart", "crypto", "--topic", "t"]).exit_code == 2
     assert start.calls == []
 
 
@@ -1623,21 +1625,22 @@ def test_a_zero_or_empty_feed_option_reaches_the_feed_as_typed(monkeypatch):
 
 
 @pytest.mark.parametrize(
-    ("argv", "message"),
+    ("argv", "message", "code"),
     [
-        (["kafka", "--venues", "x"], "--venues does not apply to connector kafka"),
+        (["kafka", "--venues", "x"], "--venues does not apply to connector kafka", 2),
         (
             ["crypto", "--oms-socket-path", "/s"],
             "--oms-socket-path does not apply to connector crypto",
+            2,
         ),
-        (["nope"], "no connector 'nope'"),
+        (["nope"], "no connector 'nope'", 1),
     ],
 )
-def test_a_feed_refuses_an_option_or_name_it_does_not_have(monkeypatch, argv, message):
+def test_a_feed_refuses_an_option_or_name_it_does_not_have(monkeypatch, argv, message, code):
     errors = _error_log(monkeypatch)
     monkeypatch.setattr(kafka_feed, "start_kafka_feed", lambda *a, **k: pytest.fail("started"))
     monkeypatch.setattr(crypto, "start_crypto_recorder", lambda *a, **k: pytest.fail("started"))
-    assert runner.invoke(cli.app, ["connector", "start", *argv]).exit_code == 1
+    assert runner.invoke(cli.app, ["connector", "start", *argv]).exit_code == code
     assert any(message in m for m in errors.messages), errors.messages
 
 
@@ -1708,7 +1711,7 @@ def test_logs_refuses_channel_options_out_of_place(monkeypatch, argv, message):
     errors = _error_log(monkeypatch)
     chan = _patch(monkeypatch, stack_channel, "follow_channel")
     _patch(monkeypatch, stack_logs, "print_recent_logs")
-    assert runner.invoke(cli.app, ["logs", *argv]).exit_code == 1
+    assert runner.invoke(cli.app, ["logs", *argv]).exit_code == 2, "a usage error (#1885)"
     assert chan.calls == []
     assert any(message in m for m in errors.messages), errors.messages
 
@@ -2113,7 +2116,7 @@ def test_query_proc_refuses_an_unknown_process_by_name(monkeypatch):
     seen = _conn(monkeypatch)
     assert runner.invoke(cli.app, ["query", "nope1", "1+1"]).exit_code == 1
     assert "argv" not in seen
-    assert any("not a declared process" in m for m in errors.messages), errors.messages
+    assert any("no process nope1 in this runtime" in m for m in errors.messages), errors.messages
 
 
 def test_query_proc_refuses_a_stopped_process_and_says_how_to_start_it(monkeypatch):
@@ -2177,7 +2180,7 @@ def test_query_refuses_both_proc_and_port(monkeypatch):
     errors = _error_log(monkeypatch)
     monkeypatch.setattr(runtime, "query", lambda *a, **k: pytest.fail("should not query"))
     argv = ["query", "rdb1", "select 1", "--port", "6052"]
-    assert runner.invoke(cli.app, argv).exit_code == 1
+    assert runner.invoke(cli.app, argv).exit_code == 2
     assert any("PROC or --port N" in m for m in errors.messages), errors.messages
 
 

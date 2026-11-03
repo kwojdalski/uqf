@@ -16,7 +16,7 @@ from typing import Any
 
 from uqs.logger import get_logger
 from uqs.paths import UqsError, UqsPaths
-from uqs.stack.procs import list_process_names
+from uqs.stack.procs import list_process_names, unknown_processes
 from uqs.stack.trace_render import render_query_trace
 
 log = get_logger()
@@ -152,11 +152,7 @@ def resolve_procnames(paths: UqsPaths, procs: str) -> list[str]:
     known = list_process_names(paths)
     unknown = [name for name in requested if name not in known]
     if unknown:
-        raise UqsError(
-            f"unknown process(es) {unknown} - known processes are {sorted(known)}. "
-            "A process that exists but has never started has no log file yet; "
-            "that case is skipped silently rather than reported here."
-        )
+        raise unknown_processes(unknown)
     return requested
 
 
@@ -226,14 +222,12 @@ def get_recent_logs(
     an MCP client to read directly.
     """
     procnames = resolve_procnames(paths, procs)
+    min_level_name(min_level)
     files = _log_files(paths, procnames)
     if not files:
-        raise UqsError(
-            f"no log files found for {procnames} under {paths.log_dir} "
-            "- has the demo been started at least once?"
-        )
-
-    min_level_name(min_level)
+        # Nothing written yet is an empty result, not a failure (#1885).
+        log.info("no log yet for {} under {} - none of it has started", procs, paths.log_dir)
+        return []
     return _recent_records(files, lines, min_level)
 
 
@@ -285,10 +279,7 @@ def follow_logs(
     procnames = resolve_procnames(paths, procs)
     files = _log_files(paths, procnames)
     if not files:
-        raise UqsError(
-            f"no log files found for {procnames} under {paths.log_dir} "
-            "- has the demo been started at least once?"
-        )
+        raise UqsError(f"no log yet for {procs} under {paths.log_dir} to follow - start it first")
     min_level_name(min_level)  # refuse a bad --level before following anything
     _follow(files, min_level, history=lambda: _recent_records(files, lines, min_level))
 
