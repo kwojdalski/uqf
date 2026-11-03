@@ -274,7 +274,7 @@ def backfill_plan(
         name,
         dataset,
         shape,
-        width="1D" if width is None else width,
+        width=worker.DEFAULT_WIDTH if width is None else width,
         source=source,
         procname=procname,
         transport=transport,

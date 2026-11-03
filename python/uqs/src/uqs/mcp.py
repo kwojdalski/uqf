@@ -22,6 +22,7 @@ from typing import Any
 
 from fastmcp import FastMCP
 
+from uqs import cells
 from uqs import paths as stack_paths
 from uqs.attach import live as _registers_live_check  # noqa: F401 - the start gate's (#1651)
 from uqs.deploy import history as _registers_list_targets  # noqa: F401 - `targets` kind
@@ -29,7 +30,9 @@ from uqs.external import crypto
 from uqs.external.crypto import (
     CRYPTO_FILLS_RECORDER_DEFAULT_POLL_MS,
     CRYPTO_FILLS_RECORDER_DEFAULT_SYMBOL,
+    CRYPTO_RECORDER_DEFAULT_INTERVAL_MS,
     CRYPTO_RECORDER_DEFAULT_SYMBOLS,
+    CRYPTO_RECORDER_DEFAULT_TOP_N_LEVELS,
     CRYPTO_RECORDER_DEFAULT_VENUES,
     DEFAULT_OMS_SOCKET_PATH,
 )
@@ -188,7 +191,8 @@ def uqs_list(kind: str = "processes", port: int | None = None) -> Any:
     build_env()'s resolved KDBBASEPORT/KDBHDB/... values.
     """
     try:
-        return listing.list_items(stack_paths.default_paths(), kind, base_port=port)
+        rows = listing.list_items(stack_paths.default_paths(), kind, base_port=port)
+        return [cells.values(row) for row in rows]
     except UqsError as exc:
         return {"error": str(exc)}
 
@@ -221,8 +225,8 @@ def uqs_logs(
 def uqs_crypto_start(
     venues: str = ",".join(CRYPTO_RECORDER_DEFAULT_VENUES),
     symbols: str = ",".join(CRYPTO_RECORDER_DEFAULT_SYMBOLS),
-    top_n_levels: int = 5,
-    interval_ms: int = 1000,
+    top_n_levels: int = CRYPTO_RECORDER_DEFAULT_TOP_N_LEVELS,
+    interval_ms: int = CRYPTO_RECORDER_DEFAULT_INTERVAL_MS,
     port: int | None = None,
 ) -> str:
     """Build and launch a sibling cryptorust checkout's own

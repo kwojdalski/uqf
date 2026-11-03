@@ -119,8 +119,11 @@ def test_every_exempt_module_still_exists_and_is_still_over():
 #: `timefmt` and `liveness` must stay that way: uqf_frontend's read path
 #: imports them (#1326, #1362). `guardrails` (#1825) is the declaration model
 #: every owner of a guardrail imports, so it imports nothing either; the
-#: registry that gathers the owners lives in cli/safety.py.
+#: registry that gathers the owners lives in cli/safety.py. `cells` (#1882)
+#: is a listed row's values - typed for a document, rendered for a table - which
+#: every layer's listings produce and the CLI prints, so it imports nothing.
 LEAVES = {
+    "cells",
     "paths",
     "logger",
     "interpreter",
@@ -192,7 +195,15 @@ def test_the_leaves_stay_leaves():
     source = (PKG / "src" / "uqs" / "timerange.py").read_text()
     reached = {m.group(1) or m.group(2) for m in _IMPORT.finditer(source)}
     assert reached <= {"paths", "timefmt"}, reached
-    for leaf in ("runtimes.py", "timefmt.py", "liveness.py", "portexpr.py", "guardrails.py"):
+    leaves = (
+        "runtimes.py",
+        "timefmt.py",
+        "liveness.py",
+        "portexpr.py",
+        "guardrails.py",
+        "cells.py",
+    )
+    for leaf in leaves:
         source = (PKG / "src" / "uqs" / leaf).read_text()
         assert not {m.group(1) or m.group(2) for m in _IMPORT.finditer(source)}, leaf
 

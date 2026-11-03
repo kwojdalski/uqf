@@ -106,7 +106,7 @@ def connection_cap(procs: str, port: int | None) -> None:
             starting = {
                 row["procname"]
                 for row in listing.list_items(_paths(), "processes", base_port=port)
-                if row.get("startwithall") == "1"
+                if row.get("startwithall") is True
             }
         else:
             starting = {p for p in procs.split() if p != "all"}

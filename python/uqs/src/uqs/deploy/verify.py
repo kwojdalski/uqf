@@ -262,7 +262,7 @@ def run(
     expected, pipelines = _expected(profile, port, procs)
     if ports_free:
         busy = busy_ports(expected, _listening)
-        print(json.dumps({"profile": profile, "busy": busy}))
+        print(json.dumps({"ok": not busy, "profile": profile, "busy": busy}))
         if marker:
             print(FAILED_MARKER if busy else OK_MARKER)
         return 1 if busy else 0
@@ -273,7 +273,10 @@ def run(
     passed, results, why = verify(
         expected, pipelines, query, deadline, tables=tables or [], live=live
     )
+    # `ok` is every --json document's success flag (#1882); `passed` stays
+    # beside it because a deploying uqs of another version reads that one
     report = {
+        "ok": passed,
         "profile": profile,
         "passed": passed,
         "reason": why,
