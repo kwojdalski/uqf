@@ -68,7 +68,10 @@ PreviewJson = json_opt(
     ),
 )
 def preview(
-    job: Annotated[str, typer.Argument(help="A polling feed - a streaming job that declares poll")],
+    job: Annotated[
+        str,
+        typer.Argument(metavar="JOB", help="A polling feed - a streaming job that declares poll"),
+    ],
     sample: Annotated[
         int, typer.Option("--sample", min=1, max=1000, help="Rows of each table to show")
     ] = 5,
@@ -86,7 +89,9 @@ def preview(
     last: LastOpt = None,
     as_json: PreviewJson = False,
 ) -> None:
-    """One page of a polling feed: what it would publish, and where its cursor
+    """Preview one page of a polling feed, publishing nothing and saving no cursor.
+
+    One page of a polling feed: what it would publish, and where its cursor
     would move - with nothing published and no cursor saved.
 
     The page is fetched for real, through the feed's own fetch, so a live

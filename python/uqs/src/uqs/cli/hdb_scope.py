@@ -3,9 +3,9 @@ checked, filled and changed one table at a time, dry run first (#1755).
 
 Which HDB is named once, by what already knows it - never a path to remember:
 
-  uqs --target NAME data ...   a deployed release: the command runs THERE, on its
+  uqs --target TARGET data ...   a deployed release: the command runs THERE, on its
                                own configured HDB (deploy/control.py routes it)
-  uqs data ... --attach NAME   an attached TorQ stack: its pinned HDB, else its live
+  uqs data ... --attach ATTACHMENT   an attached TorQ stack: its pinned HDB, else its live
                                wdb's .wdb.hdbdir, on the stack's host over ssh
   uqs data ... --hdb DIR       a directory on this machine, for anything else
 
@@ -38,7 +38,9 @@ from uqs.stack.hdb_alter import Request
 AttachOpt = Annotated[
     str | None,
     typer.Option(
-        "--attach", help="The attachment whose HDB to use: its pinned one, else its live wdb's"
+        "--attach",
+        metavar="ATTACHMENT",
+        help="The attachment whose HDB to use: its pinned one, else its live wdb's",
     ),
 ]
 HdbOpt = Annotated[

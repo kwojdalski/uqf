@@ -1,8 +1,8 @@
 """The two halves of a backfill whose HDB is on another machine (#1650).
 
-`uqs job receive --contract ID --attach NAME --listen-port P`, on the stack's machine,
+`uqs job receive --contract CONTRACT --attach ATTACHMENT --listen-port P`, on the stack's machine,
 starts the receiver for a receiver contract approved there (`uqs job attachment contract`);
-`uqs job backfill WORKER --attach NAME --writer HOST:P ...`, on the source's
+`uqs job backfill JOB --attach ATTACHMENT --writer HOST:P ...`, on the source's
 machine, extracts and sends to it. What each decides is in
 uqs.attach.backfill_remote.
 """
@@ -41,7 +41,7 @@ def extract(
     trace: bool,
     force: bool = False,
 ) -> None:
-    """`uqs job backfill --attach NAME --writer HOST:PORT`: plan or start the extractor.
+    """`uqs job backfill --attach ATTACHMENT --writer HOST:PORT`: plan or start the extractor.
     With `force`, HOST:PORT is any q process (a wdb), written to with nothing checked."""
     from uqs.cli.backfill_attached import _outcome_text, _report, logs_command
 
@@ -116,7 +116,12 @@ def extract(
 )
 def receive(
     attach: Annotated[
-        str, typer.Option("--attach", help="The saved, verified attachment whose HDB it writes")
+        str,
+        typer.Option(
+            "--attach",
+            metavar="ATTACHMENT",
+            help="The saved, verified attachment whose HDB it writes",
+        ),
     ],
     contract: Annotated[
         str | None,
@@ -147,15 +152,15 @@ def receive(
     ] = False,
     as_json: Annotated[bool, typer.Option("--json", help="Print what started as JSON")] = False,
 ) -> None:
-    """Start the receiver for a backfill extracted on another machine (#1650).
+    """Start the receiver for a backfill extracted on another machine.
 
     Run on the STACK's machine, which needs no code of the job: it serves the
     receiver contract --contract that `uqs job attachment contract approve` bound to the
-    attachment here (#1717), and takes the row limit and the permitted conflict
+    attachment here, and takes the row limit and the permitted conflict
     policies from that approval. It admits the attachment's destination against the
     live stack as `uqs job backfill --attach` does - the pinned HDB, its writers and
     readers, the end-of-day fence - then listens on --listen-port for the extractor
-    (`uqs job backfill WORKER --attach NAME --writer THIS-HOST:PORT ...` on the
+    (`uqs job backfill JOB --attach ATTACHMENT --writer THIS-HOST:PORT ...` on the
     source's machine). Every batch is checked against the contract - dataset,
     columns and types, window column, row key, partition, conflict policy - and
     committed through the fenced HDB writer; the readers are asked to reload as rows

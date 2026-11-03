@@ -327,7 +327,9 @@ def _print_startlines(verb: str, names: str, port: int | None, profile: str | No
 
 
 def _exec(ctx: typer.Context, port: BasePortOpt = None) -> None:
-    """Run any other torq.sh verb, passed straight through, e.g.:
+    """Run any other torq.sh verb, passed straight through.
+
+    For example:
     `exec -- debug rdb1`, `exec -- qcon gateway1 admin:admin`, `exec -- top feed1`.
     """
     try:

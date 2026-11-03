@@ -16,26 +16,30 @@ from uqs.stack import hdb_migrate
 
 @data_app.command("migrate", cls=ChangesState)
 def migrate(
-    table: Annotated[str, typer.Argument(help="the declared HDB table")],
-    partition: Annotated[str, typer.Argument(help="one partition date, YYYY-MM-DD")],
+    table: Annotated[str, typer.Argument(metavar="TABLE", help="the declared HDB table")],
+    partition: Annotated[
+        str, typer.Argument(metavar="PARTITION", help="one partition date, YYYY-MM-DD")
+    ],
     rename: Annotated[
         list[str] | None,
         typer.Option("--rename", help="OLD:NEW column rename; repeat for several"),
     ] = None,
     cast: Annotated[
         list[str] | None,
-        typer.Option("--cast", help="target column to cast losslessly; repeat for several"),
+        typer.Option("--cast", help="Target column to cast losslessly; repeat for several"),
     ] = None,
     apply: safety.ApplyOpt = False,
     yes: safety.ApplyYesOpt = False,
     dry_run: safety.DefaultDryRunOpt = False,
 ) -> None:
-    """Migrate one HDB date/table to this release's schema: stage, validate,
-    and replace the table partition.
+    """Migrate one HDB partition of a table to this release's schema.
+
+    Stages, validates
+    and replaces the table partition.
 
     Stop the stack first: TorQ end of day does not share the backfill
     writer's lock. Without --apply it shows the migration plan and changes
-    nothing - the default, and it stays so (#1854). --apply shows the plan,
+    nothing - the default, and it stays so. --apply shows the plan,
     asks, then writes; --yes does not ask. The old table is retained at the
     path reported after a successful atomic exchange.
     """

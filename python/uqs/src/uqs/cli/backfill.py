@@ -86,7 +86,7 @@ def backfill(
         str | None,
         typer.Option(
             "--mode",
-            help="validate: check the worker and range, open nothing. plan: also list the "
+            help="`validate`: check the worker and range, open nothing. plan: also list the "
             "windows a run would fetch, from the ledgers, read-only. dry-run: also fetch and "
             "transform, and write nothing. run (the default): all of it",
             autocompletion=completion.choices(*run_modes.MODES),
@@ -113,6 +113,7 @@ def backfill(
         str | None,
         typer.Option(
             "--attach",
+            metavar="ATTACHMENT",
             help="Backfill into the native HDB of this saved attachment "
             "(`uqs job attachment add`), taking the stack and the destination from it. plan "
             "lists the windows, the native date partitions, the writers and the readers to "
@@ -126,7 +127,7 @@ def backfill(
             "--writer",
             metavar="HOST:PORT",
             help="With --attach: extract here and send each window to the receiver "
-            "`uqs job receive` started on the stack's machine, which writes its HDB (#1650)",
+            "`uqs job receive` started on the stack's machine, which writes its HDB",
         ),
     ] = None,
     as_json: Annotated[

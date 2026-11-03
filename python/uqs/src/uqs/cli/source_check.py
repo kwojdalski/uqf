@@ -25,7 +25,9 @@ _STATUS = {"ok": "[green]ok[/]", "empty": "[yellow]empty[/]", "failed": "[bold r
 
 @sources_app.command("check", cls=ReadOnly)
 def sources_check(
-    sources: Annotated[list[str], typer.Argument(help="The sources to check, by name")],
+    sources: Annotated[
+        list[str], typer.Argument(metavar="SOURCE...", help="The sources to check, by name")
+    ],
     timeout: Annotated[
         float, typer.Option("--timeout", min=1, help="Seconds for every check together")
     ] = 120.0,
@@ -43,8 +45,10 @@ def sources_check(
     ] = None,
     as_json: Annotated[bool, typer.Option("--json", help="One JSON object per source")] = False,
 ) -> None:
-    """Connect to each source with its real credential and driver, check its
-    declared tables and column types, and read a bounded window - publishing
+    """Check each SOURCE live: connect, check its tables, read a bounded window.
+
+    Connects to each source with its real credential and driver, checks its
+    declared tables and column types, and reads a bounded window - publishing
     nothing and recording nothing. Exits 1 when any source fails."""
     try:
         env = None

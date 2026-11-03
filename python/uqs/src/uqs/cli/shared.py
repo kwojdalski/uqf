@@ -18,12 +18,11 @@ from pathlib import Path
 from typing import Annotated
 
 import typer
-from rich.console import Console
 from rich.table import Table
 
 from uqs import paths as stack_paths
 from uqs import runtimes
-from uqs.cli import completion, table_browser
+from uqs.cli import completion, rendering, table_browser
 from uqs.cli.renames import MOVED_KEY
 from uqs.logger import configure_logging, get_logger, json_requested
 from uqs.paths import UqsError
@@ -31,9 +30,10 @@ from uqs.stack import listing, runtime
 
 app = typer.Typer(
     no_args_is_help=True,
-    help="Bridges lib/torq + lib/torq-finance-starter-pack into a runnable demo.",
+    context_settings={"help_option_names": ["-h", "--help"]},
+    help="Build, run, inspect and deploy the uqf kdb+ stack: its processes, jobs and data.",
 )
-console = Console()
+console = rendering.console()
 log = get_logger()
 
 #: `uqs job ...`: everything about one ETL job short of the fleet's
@@ -45,7 +45,9 @@ log = get_logger()
 job_app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
-    help="ETL jobs: write them into the tree (new, list, remove, install) and operate on them "
+    help="Jobs: new, list, remove, install, backfill, preview, check, gaps, receive, checkpoint, "
+    "runs, attachment.\n\nETL jobs: "
+    "write them into the tree (new, list, remove, install) and operate on them "
     "- backfill, preview a feed, check a dataset's producers, find its gaps, receive another "
     "machine's batches, a worker's checkpoint and runs, and its attachment to a TorQ stack "
     "already running.",
@@ -124,6 +126,7 @@ def _configure(
         str | None,
         typer.Option(
             "--target",
+            metavar="TARGET",
             help=(
                 "Run the command on a deployed release instead of this machine: a target "
                 "from deploy_targets.toml (`uqs target list`). Add --yes to skip the "
@@ -143,10 +146,10 @@ def _configure(
 ) -> None:
     """Global options, applied before any subcommand runs."""
     if target is not None or yes:
-        # The entry point forwards `uqs --target NAME ...` before this parses
+        # The entry point forwards `uqs --target TARGET ...` before this parses
         # anything (cli/entry.py); reaching here means it did not, so running
         # the command locally would be running it on the wrong machine.
-        _die(UqsError("--target goes before the command: `uqs --target NAME <command>`"))
+        _die(UqsError("--target goes before the command: `uqs --target TARGET <command>`"))
     # Through the environment rather than an argument, so every path this
     # command builds - and every uqs a child process runs - agrees on it.
     if runtime_name is not None:
@@ -197,6 +200,7 @@ PASS_THROUGH = {"allow_extra_args": True, "ignore_unknown_options": True}
 ProcsArg = Annotated[
     list[str] | None,
     typer.Argument(
+        metavar="PROC...",
         help="'all' (the default), or one or more process names",
         autocompletion=completion.procnames,
         show_default=False,
@@ -204,7 +208,7 @@ ProcsArg = Annotated[
 ]
 ExportOpt = Annotated[
     Path | None,
-    typer.Option("--export", help="Also write output to FILE as .csv or .parquet"),
+    typer.Option("--export", metavar="FILE", help="Also write output to FILE as .csv or .parquet"),
 ]
 
 
@@ -349,7 +353,7 @@ def _run_streaming(result_fn, *args, **kwargs) -> None:
 ProcArg = Annotated[
     str | None,
     typer.Argument(
-        metavar="[PROC]",
+        metavar="PROC",
         help="The process, by name, e.g. rdb1",
         autocompletion=completion.procname,
         show_default=False,

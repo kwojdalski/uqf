@@ -53,7 +53,8 @@ from uqs.paths import UqsError, repo_root
 connector_app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
-    help="External connectors: start, stop, restart, status and logs of the "
+    help="External connectors: start, stop, restart, status, logs.\n\n"
+    "The publishers outside the plant: start, stop, restart, status and logs of the "
     "publishers outside the plant "
     "(kafka, crypto, crypto-fills, and those installed bundles carry) that write into its "
     "tickerplant. These supervise external processes, not the TorQ-managed q processes "
@@ -72,6 +73,7 @@ FEEDS: dict[str, ExternalFeed] = discover(repo_root(), BROKEN)
 FeedArg = Annotated[
     str,
     typer.Argument(
+        metavar="CONNECTOR",
         help="kafka, crypto (order books), crypto-fills (the bot's fills), or one an "
         "installed bundle carries - `connector status` lists them",
         autocompletion=completion.choices(*FEEDS),
@@ -274,7 +276,9 @@ def _takes_start_options(fn: Any) -> Any:
 @connector_app.command("restart", cls=_START)
 @_takes_start_options
 def restart(name: str, dry_run: bool = False, **options: Any) -> None:
-    """Stop a feed if it is running, then start it again - with exactly
+    """Restart a connector with the options given here.
+
+    Stops a feed if it is running, then starts it again - with exactly
     `start`'s options, which are not remembered from the last start."""
     feed = _feed(name)
     if dry_run:
@@ -310,13 +314,14 @@ def status(
     name: Annotated[
         str | None,
         typer.Argument(
+            metavar="CONNECTOR",
             help="One feed; omit it for every feed",
             autocompletion=completion.choices(*FEEDS),
         ),
     ] = None,
     as_json: StatusJson = False,
 ) -> None:
-    """Whether a feed is running, its pid, and where its log lives."""
+    """Show whether a feed is running, its pid, and where its log lives."""
     found = []
     for each in [name] if name is not None else list(FEEDS):
         feed = _feed(each)

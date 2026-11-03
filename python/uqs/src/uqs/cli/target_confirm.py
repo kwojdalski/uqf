@@ -1,4 +1,4 @@
-"""Whether `uqs --target NAME <command>` may change the server, so asks first
+"""Whether `uqs --target TARGET <command>` may change the server, so asks first
 (#956, #1780).
 
 Every command states what it may do where it is declared: its Click class

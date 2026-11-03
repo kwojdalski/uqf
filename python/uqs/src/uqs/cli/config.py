@@ -48,7 +48,8 @@ from uqs.stack import procs as stack_procs
 config_app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
-    help="A process's process.csv fields: show them, or set one (persisted to "
+    help="Process configuration: show, set, and the sources it reads (sources).\n\n"
+    "A process's process.csv fields: show them, or set one (persisted to "
     "process_overrides.csv); and the sources the stack reads (sources).",
 )
 app.add_typer(config_app, name="config")
@@ -68,7 +69,9 @@ def config_get(
     procname: Annotated[
         str, typer.Argument(metavar="PROC", help="The process", autocompletion=completion.procname)
     ],
-    field: Annotated[str | None, typer.Argument(autocompletion=completion.csv_fields)] = None,
+    field: Annotated[
+        str | None, typer.Argument(metavar="FIELD", autocompletion=completion.csv_fields)
+    ] = None,
     port: BasePortOpt = None,
     raw: Annotated[
         bool, typer.Option("--unresolved", help="Show unresolved ${VAR}/{VAR}+N placeholders as-is")
@@ -76,7 +79,9 @@ def config_get(
     export: ExportOpt = None,
     as_json: GetJson = False,
 ) -> None:
-    """Show a process's effective process.csv row (or one field of it), with
+    """Show a process's effective process.csv row, or one FIELD of it.
+
+    Shows it with
     ${VAR}/{VAR}+N placeholders (KDBBASEPORT, KDBHDB, ...) resolved against
     the same env torq.sh itself would use - pass --unresolved to see them literal.
     """
@@ -93,7 +98,7 @@ def config_get(
         _export([{"field": k, "value": v} for k, v in row.items()], export)
         return
     if field is not None:
-        console.print(row.get(field, ""))
+        print(row.get(field, ""))  # the value alone, as `$(uqs config show ...)` takes it
         return
     table = Table(title=f"{procname} config")
     table.add_column("field")
@@ -109,15 +114,17 @@ def config_set(
     procname: Annotated[
         str, typer.Argument(metavar="PROC", help="The process", autocompletion=completion.procname)
     ],
-    field: Annotated[str, typer.Argument(autocompletion=completion.csv_fields)],
-    value: str,
+    field: Annotated[str, typer.Argument(metavar="FIELD", autocompletion=completion.csv_fields)],
+    value: Annotated[str, typer.Argument(metavar="VALUE", help="The value to set")],
     dry_run: Annotated[
         bool,
         typer.Option("--dry-run", "-n", help="Check the setting and show it; write nothing"),
     ] = False,
 ) -> None:
-    """Set one process.csv field for *procname* (persisted to
-    process_overrides.csv, applied on every later start/stop/summary/...).
+    """Set one process.csv FIELD of PROC to VALUE.
+
+    Persisted to
+    process_overrides.csv, applied on every later start/stop/summary/....
     """
     try:
         stack_procs.set_process_config(_paths(), procname, field, value, dry_run)
@@ -210,6 +217,7 @@ def logs(
         str | None,
         typer.Option(
             "--attach",
+            metavar="ATTACHMENT",
             help="Read an attached backfill's or receiver's log instead: the latest run for "
             "this attachment (`uqs job backfill --attach`)",
         ),
@@ -232,7 +240,9 @@ def logs(
     ] = None,
     as_json: LogsJson = False,
 ) -> None:
-    """Tail out_/err_*.log for one or more processes through the same
+    """Show the logs of one or more processes.
+
+    Tails out_/err_*.log for one or more processes through the same
     colorized logger the CLI itself uses, instead of raw per-process files -
     e.g. `logs stp1 rdb1 -f`, `logs -f --level WARNING`.
 
@@ -241,16 +251,16 @@ def logs(
 
     `--channel` subscribes instead of reading files: every line the processes
     publish, filtered by `--id` and `--level` - e.g. `logs all --channel
-    --level ERROR`, `logs fxpositions1 --channel --id fx_positions` (#1067).
+    --level ERROR`, `logs fxpositions1 --channel --id fx_positions`.
 
     `--attach` reads an attached backfill's or receiver's run instead, which is
-    no TorQ process: `logs --attach pb-uat --worker piggybank_ledger_backfill -f`
-    (#1725). Its q errors and RESULT line are shown whatever `--level` says.
+    no TorQ process: `logs --attach pb-uat --worker piggybank_ledger_backfill -f`.
+    Its q errors and RESULT line are shown whatever `--level` says.
 
-    What the options combine with (#1730): the PROCS are what is read, every
-    option a filter on how. `--attach NAME` replaces PROCS - one attachment's
+    What the options combine with: the PROCs are what is read, every
+    option a filter on how. `--attach ATTACHMENT` replaces PROC - one attachment's
     run, narrowed by `--worker` (a worker, or <dataset>.receiver) and `--run`,
-    which need it. `--channel` and `--multitail` each read PROCS another way:
+    which need it. `--channel` and `--multitail` each read PROC another way:
     `--id` needs `--channel`; `--stream`, `--pane-columns` and `--show-command` need
     `--multitail`. `--follow`, `--lines` and `--level` go with the files and
     with `--attach`.

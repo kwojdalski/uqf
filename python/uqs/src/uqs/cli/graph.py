@@ -160,6 +160,7 @@ def graph(
     proc: Annotated[
         str | None,
         typer.Argument(
+            metavar="PROC",
             help="Draw only the tree from this process; omit for every process",
             autocompletion=completion.procname,
         ),
@@ -179,7 +180,7 @@ def graph(
     interactive: InteractiveOpt = False,
     as_json: GraphJson = False,
 ) -> None:
-    """Every process and who feeds whom, as a tree, with the tables on each edge.
+    """Draw every process and who feeds whom, as a tree, with the tables on each edge.
 
     Downstream by default - from what nothing feeds, to what reads from it:
     "if this stops, what starves". `--upstream` turns it over: "what must be

@@ -15,7 +15,7 @@ from uqs.deploy.components import EXISTING
 
 def _mode(component: str, fields: str, bundled: str) -> typer.models.OptionInfo:
     return typer.Option(
-        f"--{component}-mode", metavar="MODE", help=f"existing: {fields} already on the server, "
+        f"--{component}-mode", metavar="MODE", help=f"`existing`: {fields} already on the server, "
         f"found by preflight. bundled: {bundled}"
     )  # fmt: skip
 

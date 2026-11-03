@@ -29,7 +29,8 @@ from uqs.paths import UqsError
 contract_app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
-    help="Receiver contracts: export one where a worker is, approve it for an attachment "
+    help="Receiver contracts: export, approve, list.\n\n"
+    "Export one where a worker is, approve it for an attachment "
     "where its HDB is, list those approved - so `uqs job receive` writes the worker's rows "
     "without the worker's code.",
 )
@@ -56,7 +57,7 @@ def export(
         Path | None, typer.Option("--output", "-o", help="Write it to this file, not stdout")
     ] = None,
 ) -> None:
-    """Print WORKER's receiver contract, derived from its declarations.
+    """Print JOB's receiver contract, derived from its declarations.
 
     Run where the worker's source, transform and worker definitions are - the
     extraction machine. The contract is data: the dataset, its columns and types,
@@ -81,10 +82,18 @@ def export(
 @contract_app.command("approve", cls=ChangesState)
 def approve(
     file: Annotated[
-        Path, typer.Argument(help="The contract file `uqs job attachment contract export` wrote")
+        Path,
+        typer.Argument(
+            metavar="FILE", help="The contract file `uqs job attachment contract export` wrote"
+        ),
     ],
     attach: Annotated[
-        str, typer.Option("--attach", help="The saved, verified attachment whose HDB it may write")
+        str,
+        typer.Option(
+            "--attach",
+            metavar="ATTACHMENT",
+            help="The saved, verified attachment whose HDB it may write",
+        ),
     ],
     conflict: Annotated[
         list[str] | None,
@@ -112,7 +121,7 @@ def approve(
     verified, does not publish the contract's dataset in the contract's shape, or
     pins no HDB here. The approval binds the contract to the attachment's
     destination and stack user, and to the limits given here: `uqs job receive
-    --contract ID --attach NAME` then serves it, and refuses if the attachment
+    --contract CONTRACT --attach ATTACHMENT` then serves it, and refuses if the attachment
     has since been pointed at another HDB.
     """
     try:
@@ -143,10 +152,15 @@ def approve(
 
 @contract_app.command("list", cls=ReadOnly)
 def list_(
-    attach: Annotated[str, typer.Option("--attach", help="The attachment whose approvals to list")],
+    attach: Annotated[
+        str,
+        typer.Option(
+            "--attach", metavar="ATTACHMENT", help="The attachment whose approvals to list"
+        ),
+    ],
     as_json: Annotated[bool, typer.Option("--json", help="Print them as JSON")] = False,
 ) -> None:
-    """The receiver contracts approved for an attachment on this machine."""
+    """List the receiver contracts approved for an attachment on this machine."""
     try:
         found = receiver_contract.records(attach)
     except UqsError as exc:

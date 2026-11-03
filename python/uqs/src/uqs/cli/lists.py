@@ -161,6 +161,7 @@ def list_items(
     kind: Annotated[
         str | None,
         typer.Argument(
+            metavar="KIND",
             help="Which of the stack's tables - run with no argument to see every kind",
             autocompletion=completion.list_kinds,
         ),
@@ -175,7 +176,9 @@ def list_items(
     interactive: InteractiveOpt = False,
     as_json: JsonOpt = False,
 ) -> None:
-    """List one of the stack's own tables - run with no argument to see the
+    """List one of the stack's own tables; with no KIND, list the kinds.
+
+    Run with no argument to see the
     kinds: 'processes', 'profiles', 'fields' (process.csv's settable columns),
     'overrides' (process_overrides.csv), 'env' (the resolved KDBBASEPORT,
     KDBHDB, ...), 'dependencies' and 'backfills' (what each attached backfill

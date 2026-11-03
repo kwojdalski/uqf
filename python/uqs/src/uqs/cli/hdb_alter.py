@@ -34,7 +34,7 @@ def hdb_alter(
     table: Annotated[
         str | None,
         typer.Argument(
-            metavar="[TABLE]",
+            metavar="TABLE",
             help="The table to change (default with --attach: the attachment's own)",
             autocompletion=completion.plant_table,
             show_default=False,
@@ -73,8 +73,8 @@ def hdb_alter(
     """Change one table in every partition that holds it, and only those.
 
     One operation per run: --reorder, --rename, --attr, --cast, or --undo of
-    an earlier run. Name the HDB with --attach NAME (run on the stack's host),
-    --hdb DIR, or `uqs --target NAME data alter ...` for a release's own;
+    an earlier run. Name the HDB with --attach ATTACHMENT (run on the stack's host),
+    --hdb DIR, or `uqs --target TARGET data alter ...` for a release's own;
     with none, this runtime's. Shows the plan and writes nothing unless
     --apply, which asks first (--yes does not). Refused when the partitions
     holding the table disagree on its columns, order or types - `data check`

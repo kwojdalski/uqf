@@ -176,20 +176,21 @@ def query(
     expr: Annotated[
         str | None,
         typer.Argument(
+            metavar="EXPR",
             help='q expression, e.g. "select count i by sym from quote"; omit it for an '
-            "interactive session on the process"
+            "interactive session on the process",
         ),
     ] = None,
     port: Annotated[
         int | None,
         typer.Option(
-            help="port to query directly, instead of naming PROC",
+            help="Port to query directly, instead of naming PROC",
             autocompletion=completion.process_ports,
         ),
     ] = None,
     base_port: Annotated[
         int | None,
-        typer.Option(help="stack base port PROC is resolved against (default: the runtime's)"),
+        typer.Option(help="Stack base port PROC is resolved against (default: the runtime's)"),
     ] = None,
     host: QHostOpt = "localhost",
     target: Annotated[
@@ -197,7 +198,7 @@ def query(
         typer.Option(
             "--tunnel",
             metavar="TARGET",
-            help="deployment target (deploy_targets.toml) to query from here, through an "
+            help="Deployment target (deploy_targets.toml) to query from here, through an "
             "ssh tunnel opened for the call; ports are the target's release's own",
         ),
     ] = None,
@@ -206,27 +207,29 @@ def query(
     passwd: QPasswdOpt = None,
     servers: Annotated[
         str,
-        typer.Option(help="with the gateway: the process types an expression is routed to"),
+        typer.Option(help="With the gateway: the process types an expression is routed to"),
     ] = stack_gateway.DEFAULT_SERVERS,
     raw: Annotated[
         bool,
         typer.Option(
             "--no-gateway",
-            help="with the gateway: send as typed, not through .gw.syncexec "
+            help="With the gateway: send as typed, not through .gw.syncexec "
             "(and, with no expression, open plain qcon)",
         ),
     ] = False,
     render: Annotated[
         str | None,
         typer.Option(
-            help="q: show results as q prints them (the default); kola: as Python "
+            help="`q`: show results as q prints them (the default); kola: as Python "
             f"objects. Default from ${stack_render.RENDER_ENV}",
         ),
     ] = None,
     export: ExportOpt = None,
     as_json: QueryJson = False,
 ) -> None:
-    """Run a q expression against a running process - or, with no expression,
+    """Run a q expression on a running process, or open a session on it.
+
+    With no expression,
     open an interactive session on it.
 
     Name the process first, `uqs query rdb1 'count quote'`, or give its
@@ -360,5 +363,5 @@ def _ask(
     if size is not None:
         _show_q(stack_render.text(result))
         return
-    console.print(result)
+    console.print(result, markup=False, highlight=False)  # q's text is not Rich markup
     _export(result, export)

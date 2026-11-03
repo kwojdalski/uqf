@@ -50,7 +50,7 @@ def schema(
     proc: Annotated[
         str | None,
         typer.Argument(
-            metavar="[PROC]",
+            metavar="PROC",
             help=f"process to read from, e.g. rdb1 (today, the default: {DEFAULT_PROC}) or "
             "hdb1 (history)",
             autocompletion=completion.procname,
@@ -60,6 +60,7 @@ def schema(
     table: Annotated[
         str | None,
         typer.Argument(
+            metavar="TABLE",
             help="a table to describe, or a pattern like 'crypto*'; omit to list every table",
             autocompletion=completion.plant_table,
         ),
@@ -67,12 +68,12 @@ def schema(
     port: Annotated[
         int | None,
         typer.Option(
-            help="read this port directly, instead of resolving PROC",
+            help="Read this port directly, instead of resolving PROC",
             autocompletion=completion.process_ports,
         ),
     ] = None,
     base_port: Annotated[
-        int | None, typer.Option(help="stack base port (default: the runtime's)")
+        int | None, typer.Option(help="Stack base port (default: the runtime's)")
     ] = None,
     host: QHostOpt = "localhost",
     user: QUserOpt = DEFAULT_USER,
@@ -84,7 +85,7 @@ def schema(
         float,
         typer.Option(
             min=0,
-            help="with -i, re-read the process every this many seconds; 0 turns it off",
+            help="With -i, re-read the process every this many seconds; 0 turns it off",
         ),
     ] = SCHEMA_REFRESH_SECONDS,
     as_json: SchemaJson = False,

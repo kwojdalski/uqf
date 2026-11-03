@@ -53,7 +53,9 @@ def _say(s: adopt.Survey, r: control.Remote) -> None:
 
 @target_app.command("adopt", cls=ChangesState)
 def adopt_(
-    name: Annotated[str, typer.Argument(help="What to call it: `uqs --target NAME ...`")],
+    name: Annotated[
+        str, typer.Argument(metavar="TARGET", help="What to call it: `uqs --target TARGET ...`")
+    ],
     ssh: Ssh,
     dest: Dest,
     remote_user: RemoteUser = None,
@@ -92,7 +94,9 @@ def adopt_(
     dry_run: safety.DefaultDryRunOpt = False,
     yes: safety.ApplyYesOpt = False,
 ) -> None:
-    """Take over a release copied onto a server by hand (scp, rsync): say
+    """Adopt a release copied onto a server by hand (scp, rsync).
+
+    Says
     what the server holds, how it would launch uqs and the target it would
     save. --apply links it as DEST/current, saves the target - checked by
     reaching it - and records it in `uqs deploy history`."""

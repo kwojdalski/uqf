@@ -59,7 +59,10 @@ RemoteUser = Annotated[
     ),
 ]
 ConnectTimeout = Annotated[
-    int, typer.Option("--connect-timeout", help="ssh/scp, seconds; overrides TARGET's")
+    int,
+    typer.Option(
+        "--connect-timeout", help="Seconds ssh/scp may take to connect; overrides TARGET's"
+    ),
 ]
 DEFAULT_CONNECT_TIMEOUT = config.DEFAULT_CONNECT_TIMEOUT
 #: None unless given, so neither overrides TARGET's value nor restates

@@ -58,7 +58,11 @@ def _saved_names() -> list[str]:
 
 NameArg = Annotated[
     str,
-    typer.Argument(help="The attachment's name, e.g. piggybank-uat", autocompletion=_saved_names),
+    typer.Argument(
+        metavar="ATTACHMENT",
+        help="The attachment's name, e.g. piggybank-uat",
+        autocompletion=_saved_names,
+    ),
 ]
 #: Extra words are taken, not rejected by the parser, so the old `uqs job attach
 #: <stage> NAME` is refused with the command that replaced it.

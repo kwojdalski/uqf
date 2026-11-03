@@ -41,7 +41,9 @@ def _strip_note(text: str) -> str:
 
 @target_app.command("edit", cls=ChangesState)
 def edit(dry_run: DryRun = False) -> None:
-    """Edit the file in $VISUAL or $EDITOR: a copy, checked when the editor
+    """Edit deploy_targets.toml in $VISUAL or $EDITOR, checked before it is saved.
+
+    The editor gets a copy, checked when the editor
     exits and only then swapped in. An invalid copy reopens with the reason
     on top - or is discarded, leaving the file as it was."""
     root = repo_root()
@@ -93,14 +95,16 @@ def edit(dry_run: DryRun = False) -> None:
 
 @target_app.command("remove", cls=ChangesState)
 def remove(
-    name: Annotated[str, typer.Argument(help="The target")],
+    name: Annotated[str, typer.Argument(metavar="TARGET", help="The target")],
     dry_run: DryRun = False,
     yes: YesOpt = False,
 ) -> None:
-    """Delete one target's table, and the comment directly above it; every
+    """Remove one target from deploy_targets.toml.
+
+    Deletes its table, and the comment directly above it; every
     other line stays. `uqs target revert` brings it back.
 
-    Shows the change and asks first (#1854); `--yes` does not ask."""
+    Shows the change and asks first; `--yes` does not ask."""
     if not dry_run and not yes:
         try:
             planned = target_changes.remove(

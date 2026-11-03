@@ -71,7 +71,9 @@ def hdb_check(
         bool, typer.Option("--json", help="Print the findings as JSON, to script against")
     ] = False,
 ) -> None:
-    """Report HDB partitions missing a table or a column - the cause behind
+    """Check the HDB for missing tables and columns, and columns of the wrong type.
+
+    Reports HDB partitions missing a table or a column - the cause behind
     "./2015.01.07/arbitrage. OS reports: No such file or directory" - and
     columns stored as another type than the schema declares.
 
@@ -79,7 +81,7 @@ def hdb_check(
     holding the same columns; a gap fails the whole query, naming whichever
     table sorts first. Without --table, --attach or --hdb: this runtime's HDB,
     against every table it declares. With one: that table alone, in the HDB
-    they name (`uqs --target NAME data check` is a release's own). --apply
+    they name (`uqs --target TARGET data check` is a release's own). --apply
     shows the plan, asks, and writes only what is missing - additive: a table
     directory or column file that exists is never touched.
     """

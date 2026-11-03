@@ -57,7 +57,9 @@ def status_cmd(
     remote_user: conn.RemoteUser = None,
     connect_timeout: conn.ConnectTimeout = conn.DEFAULT_CONNECT_TIMEOUT,
 ) -> None:
-    """What a server runs: its current and previous releases, the last
+    """Show what a server runs: its releases, last deployment, health and lock.
+
+    What a server runs: its current and previous releases, the last
     deployment's outcome, whether current's processes answer, and the lock.
     Read-only; it never takes the lock."""
     try:
@@ -107,8 +109,10 @@ def rollback_cmd(
     override: OverrideOpt = None,
     reason: ReasonOpt = None,
 ) -> None:
-    """Put a server back on an earlier release: stop current's processes, start
-    and verify the target's, then move `current`. A target that fails to verify
+    """Put a server back on an earlier release.
+
+    Stops current's processes, starts
+    and verifies the target's, then moves `current`. A target that fails to verify
     is stopped and current's processes are started again."""
     if to is not None and not RELEASE_ID.fullmatch(to):
         _failed(
@@ -155,7 +159,7 @@ def prune_cmd(
     """Remove the oldest releases beyond the newest --keep, under the deploy lock.
 
     Names what would go and asks first: a removed release cannot be brought
-    back (#1854). `--yes` does not ask.
+    back. `--yes` does not ask.
 
     Never removes the release `current` names, the one a rollback would return
     to, or one whose push is still running - whatever --keep is. Prints what
@@ -224,7 +228,9 @@ def verify_cmd(
     ] = False,
     as_json: VerifyJson = False,
 ) -> None:
-    """Run on the server, from a release: does every process the profile promises answer?
+    """Check, on the server, that every process the profile promises answers.
+
+    Run from a release on the server.
 
     Prints one JSON object, then DEPLOY_VERIFY_OK or DEPLOY_VERIFY_FAILED on a
     line of its own, which `uqs deploy push` reads; `--json` leaves the marker
