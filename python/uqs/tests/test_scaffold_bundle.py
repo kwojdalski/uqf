@@ -140,7 +140,7 @@ def test_an_external_feed_lands_in_a_bundle_with_its_connector(tmp_path, monkeyp
     external scaffold writes NAME_feed.py, NAME_streamer.py and their test into
     the bundle beside the q job and the raw table - and nothing into uqs."""
     folder = tmp_path / "mockups"
-    argv = ["audit_ext", "--kind", "external", "--raw-table", "audit_ext_raw",
+    argv = ["audit_ext", "--kind", "connector", "--raw-table", "audit_ext_raw",
             "--publishes", "audit_ext_out", "--schema", "sym:symbol, px:float"]  # fmt: skip
     _out, refused = _job_new([*argv, "--bundle", str(folder)], monkeypatch)
     assert refused == []

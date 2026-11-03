@@ -137,7 +137,7 @@ def start_kafka_feed(
 
     runner = Path(__file__).resolve().parent / "kafka_streamer.py"
     # This interpreter, the one kafka_extra just checked: a release's .venv
-    # holds the extra's wheels only when it was built --with-kafka-connector,
+    # holds the extra's wheels only when it was built --kafka-connector,
     # and `uv run` would try to sync that venv to the lock, offline (#1515).
     cmd = [
         sys.executable,
@@ -187,14 +187,14 @@ def kafka_feed_status(paths: UqsPaths) -> dict[str, str]:
 
 
 def _check(paths: UqsPaths, options: Mapping[str, Any]) -> None:
-    check_topics(paths, options["topic"])
+    check_topics(paths, options["topics"])
 
 
 def _start(paths: UqsPaths, options: Mapping[str, Any]) -> int:
     return start_kafka_feed(
         paths,
         brokers=options["brokers"],
-        topic=options["topic"],
+        topic=options["topics"],
         group=options["group"],
         credential=options["tp_credential"],
     )
@@ -214,10 +214,12 @@ FEED = ExternalFeed(
             env=BROKERS_ENV,
         ),
         FeedOption(
-            "topic",
-            f"Topic(s) to consume, comma separated; default ${TOPICS_ENV}, else every "
+            "topics",
+            f"Topics to consume, comma separated; default ${TOPICS_ENV}, else every "
             "topic a decoder job declares",
             env=TOPICS_ENV,
+            # plural, as every comma-separated option is (#1890)
+            aliases=("--topic",),
         ),
         FeedOption(
             "group",

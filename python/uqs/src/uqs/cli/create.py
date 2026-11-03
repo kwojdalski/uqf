@@ -18,7 +18,7 @@ import typer
 from uqs.cli import completion, safety
 from uqs.cli.create_backfill import backfill_plan
 from uqs.cli.create_bundle import planning_root, refuse_tree_only, write_bundle_plan
-from uqs.cli.create_kinds import misplaced
+from uqs.cli.create_kinds import canonical, misplaced
 from uqs.cli.create_plant import plant_definitions, plant_tables
 from uqs.cli.create_reaction import scaffold_reaction
 from uqs.cli.regenerate import write_plan
@@ -56,10 +56,11 @@ def new_job(
         str,
         typer.Option(
             "--kind",
-            help="'streaming' (default), 'backfill', 'normalizer', 'external' (a Python "
+            help="'streaming' (default), 'backfill', 'normalizer', 'connector' (a Python "
             "publisher outside q, plus the q job reshaping what it publishes) or 'horizon' "
             "(each event evaluated once --horizon has passed)",
             autocompletion=completion.choices(*SCAFFOLD_KINDS),
+            callback=canonical,
         ),
     ] = "streaming",
     subscribe_to: Annotated[
@@ -123,7 +124,7 @@ def new_job(
     start_with_all: Annotated[
         bool,
         typer.Option(
-            "--start-with-all",
+            "--start-with-all/--no-start-with-all",
             help="Start it with `uqs start all` (streaming, normalizer; default: on demand)",
         ),
     ] = False,
@@ -357,9 +358,9 @@ def new_job(
                 profile=profile,
                 unprofiled=unprofiled,
             )
-        if kind == "external":
+        if kind == "connector":
             if not (raw_table and publishes and shape):
-                raise UqsError("--kind external needs --raw-table, --publishes and --schema")
+                raise UqsError("--kind connector needs --raw-table, --publishes and --schema")
             return external.external_feed(
                 name,
                 raw_table,

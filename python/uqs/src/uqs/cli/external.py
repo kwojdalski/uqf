@@ -53,10 +53,9 @@ from uqs.paths import UqsError, repo_root
 connector_app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
-    help="External connectors: start, stop, restart, status and logs of the "
-    "publishers outside the plant "
-    "(kafka, crypto, crypto-fills, and those installed bundles carry) that write into its "
-    "tickerplant. These supervise external processes, not the TorQ-managed q processes "
+    help="Connectors: start, stop, restart, status and logs of the processes outside the "
+    "stack (kafka, crypto, crypto-fills, and those installed bundles carry) that write into "
+    "its tickerplant. These supervise external processes, not the TorQ-managed q processes "
     "`uqs start` runs.",
 )
 app.add_typer(connector_app, name="connector")
@@ -98,7 +97,7 @@ def _feed(name: str) -> ExternalFeed:
         _die(UqsError(BROKEN[name]))
         raise typer.Exit(code=1)
     if name not in FEEDS:
-        _die(UqsError(f"no feed {name!r} - the feeds are {', '.join(FEEDS)}"))
+        _die(UqsError(f"no connector {name!r} - the connectors are {', '.join(FEEDS)}"))
         raise typer.Exit(code=1)
     return FEEDS[name]
 
@@ -150,7 +149,7 @@ def _start_signature() -> inspect.Signature:
 
 
 def start(name: str, dry_run: bool = False, **options: Any) -> None:
-    """Start a feed publishing onto the running stack's tickerplant.
+    """Start a connector publishing onto the running stack's tickerplant.
 
     kafka: a topic onto `kafka_message`, decoded and deduplicated by kafka_flow1; needs
     a reachable broker and `confluent-kafka` (the uqs `kafka` extra).
@@ -180,7 +179,7 @@ def _start(name: str, options: dict[str, Any], dry_run: bool = False, verb: str 
     own = {option.name: option for option in feed.options}
     for option in given:
         if option not in own:
-            _die(UqsError(f"--{option.replace('_', '-')} does not apply to feed {name}"))
+            _die(UqsError(f"--{option.replace('_', '-')} does not apply to connector {name}"))
             return
     try:
         # Bindings first (#1786), dry run or not: a topic or table that binds
@@ -258,7 +257,7 @@ def _would(name: str, action: str) -> None:
 
 @connector_app.command("stop", cls=needs_pipelines(_PLANT, ChangesState))
 def stop(name: FeedArg, dry_run: DryRunOpt = False) -> None:
-    """Stop a feed started by `uqs connector start`."""
+    """Stop a connector started by `uqs connector start`."""
     if dry_run:
         _would(name, f"stop {name}")
         return
@@ -267,7 +266,7 @@ def stop(name: FeedArg, dry_run: DryRunOpt = False) -> None:
     except UqsError as exc:
         _die(exc)
         return
-    console.print(f"{name} feed stopped")
+    console.print(f"{name} connector stopped")
 
 
 def _takes_start_options(fn: Any) -> Any:
@@ -282,7 +281,7 @@ def _takes_start_options(fn: Any) -> Any:
 @connector_app.command("restart", cls=_START)
 @_takes_start_options
 def restart(name: str, dry_run: bool = False, **options: Any) -> None:
-    """Stop a feed if it is running, then start it again - with exactly
+    """Stop a connector if it is running, then start it again - with exactly
     `start`'s options, which are not remembered from the last start."""
     feed = _feed(name)
     if dry_run:
@@ -290,7 +289,7 @@ def restart(name: str, dry_run: bool = False, **options: Any) -> None:
     try:
         if feed.status(_paths()).get("running") == "True":
             feed.stop(_paths())
-            console.print(f"{name} feed stopped")
+            console.print(f"{name} connector stopped")
     except UqsError as exc:
         _die(exc)
         return
@@ -298,7 +297,8 @@ def restart(name: str, dry_run: bool = False, **options: Any) -> None:
 
 
 StatusJson = json_opt(
-    '{"connectors": [{name, running: bool, pid: int or null, log, ...each feed\'s own fields}], '
+    '{"connectors": [{name, running: bool, pid: int or null, log, '
+    "...each connector's own fields}], "
     '"broken": [{name, error}] only when an installed connector did not load}'
 )
 
@@ -318,13 +318,13 @@ def status(
     name: Annotated[
         str | None,
         typer.Argument(
-            help="One feed; omit it for every feed",
+            help="One connector; omit it for every connector",
             autocompletion=completion.choices(*FEEDS),
         ),
     ] = None,
     as_json: StatusJson = False,
 ) -> None:
-    """Whether a feed is running, its pid, and where its log lives."""
+    """Whether a connector is running, its pid, and where its log lives."""
     found = []
     for each in [name] if name is not None else list(FEEDS):
         feed = _feed(each)

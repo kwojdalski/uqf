@@ -207,6 +207,8 @@ def _json_lines(records: list[dict]) -> None:
             "--print": "--show-command",
             "--columns": "--pane-columns",
             "-c": "--pane-columns",
+            # a log's stamp, not the run_id every other surface means by "run" (#1890)
+            "--run": "--stamp",
             **ATTACHMENT,
         },
         ReadOnly,
@@ -284,7 +286,7 @@ def logs(
     run: Annotated[
         str | None,
         typer.Option(
-            "--run",
+            "--stamp",
             help="With --attachment: an older run, by its log's file name or a prefix of its "
             "stamp (e.g. 20261027T1304)",
         ),
@@ -308,7 +310,7 @@ def logs(
 
     What the options combine with (#1730): the PROCS are what is read, every
     option a filter on how. `--attachment NAME` replaces PROCS - one attachment's
-    run, narrowed by `--worker` (a worker, or <dataset>.receiver) and `--run`,
+    run, narrowed by `--worker` (a worker, or <dataset>.receiver) and `--stamp`,
     which need it. `--channel` and `--multitail` each read PROCS another way:
     `--id` needs `--channel`; `--stream`, `--pane-columns` and `--show-command` need
     `--multitail`. `--follow`, `--lines` and `--level` go with the files and
@@ -324,7 +326,7 @@ def logs(
                 _die(UqsError(f"--json prints the history: {option} does not apply with it"))
                 return
     if attach is None:
-        for option, used in {"--worker": worker, "--run": run}.items():
+        for option, used in {"--worker": worker, "--stamp": run}.items():
             if used is not None:
                 _die(UqsError(f"{option} needs --attachment"))
                 return

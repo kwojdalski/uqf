@@ -173,7 +173,7 @@ process_app.command("list", cls=safety.ReadOnly)(
         "processes",
         "List every declared process: its procname, proctype, port and startwithall, with "
         "config set's changes applied, and the tables it reads and writes. Declared, not "
-        "running: `uqs status` asks the fleet.",
+        "running: `uqs status` asks the stack.",
         base_port=True,
     )
 )

@@ -28,7 +28,7 @@ def _log_path(name: str) -> Path:
     """Feed `name`'s log file, which every feed's status names - or exit."""
     log = _feed(name).status(_paths()).get("log")
     if not log:
-        _die(UqsError(f"feed {name} names no log in its status"))
+        _die(UqsError(f"connector {name} names no log in its status"))
         raise typer.Exit(code=1)
     path = Path(log)
     if not path.is_file():
@@ -51,9 +51,9 @@ def logs(
     lines: Annotated[int, typer.Option("--lines", "-l", help="Lines of the log to show")] = 20,
     as_json: LogsJson = False,
 ) -> None:
-    """Show a feed's log, the file `connector status` names.
+    """Show a connector's log, the file `connector status` names.
 
-    The feed's own output, as it wrote it: `connector logs kafka`,
+    The connector's own output, as it wrote it: `connector logs kafka`,
     `connector logs crypto -f`, `connector logs crypto-fills -l 200`.
     """
     if as_json and follow:

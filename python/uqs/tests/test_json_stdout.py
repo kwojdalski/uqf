@@ -134,7 +134,7 @@ CASES: dict[str, tuple[list[str], str]] = {
     "job runs list": (["job", "runs", "list", "--attachment", "nosuch"], "no attachment"),
     "job runs show": (["job", "runs", "show", "r", "--attachment", "nosuch"], "no attachment"),
     "job runs audit": (["job", "runs", "audit", "d", "--from", "bad", "--to", "2024-01-02"], "bad"),
-    "connector status": (["connector", "status", "nosuch"], "no feed 'nosuch'"),
+    "connector status": (["connector", "status", "nosuch"], "no connector 'nosuch'"),
     "connector logs": (["connector", "logs", "crypto", "--follow"], "--follow does not apply"),
     "setup odbc status": (
         ["setup", "odbc", "status", "--odbc-home", "/nonexistent-1731"],

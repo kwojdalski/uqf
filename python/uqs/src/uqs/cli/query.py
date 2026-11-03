@@ -230,7 +230,7 @@ def query(
     Name the process first, `uqs query rdb1 'count quote'`, or give its
     `--port`. A lone word that names a process is PROC; any other is the
     expression. With neither it
-    asks the gateway, gateway1 - the fleet's front door, and the one process
+    asks the gateway, gateway1 - the stack's front door, and the one process
     whose answer does not depend on which part of the day the data is in.
 
     On the gateway every expression is routed for you - it runs as

@@ -1625,9 +1625,12 @@ def test_a_zero_or_empty_feed_option_reaches_the_feed_as_typed(monkeypatch):
 @pytest.mark.parametrize(
     ("argv", "message"),
     [
-        (["kafka", "--venues", "x"], "--venues does not apply to feed kafka"),
-        (["crypto", "--oms-socket-path", "/s"], "--oms-socket-path does not apply to feed crypto"),
-        (["nope"], "no feed 'nope'"),
+        (["kafka", "--venues", "x"], "--venues does not apply to connector kafka"),
+        (
+            ["crypto", "--oms-socket-path", "/s"],
+            "--oms-socket-path does not apply to connector crypto",
+        ),
+        (["nope"], "no connector 'nope'"),
     ],
 )
 def test_a_feed_refuses_an_option_or_name_it_does_not_have(monkeypatch, argv, message):
@@ -1647,7 +1650,7 @@ def test_feed_status_with_no_name_shows_every_feed(monkeypatch):
         _patch(monkeypatch, module, fn, result={"running": fn})
     result = runner.invoke(cli.app, ["connector", "status"])
     assert result.exit_code == 0
-    for title in ("kafka feed", "crypto recorder", "crypto fills recorder"):
+    for title in ("kafka connector", "crypto recorder", "crypto fills recorder"):
         assert title in result.stdout
 
 

@@ -1,4 +1,4 @@
-"""`uqs job new NAME --kind external` (#715): a Python publisher outside q, its
+"""`uqs job new NAME --kind connector` (#715): a Python publisher outside q, its
 raw table, and the q job that reshapes it - written, found, and removed."""
 
 from __future__ import annotations
@@ -128,7 +128,7 @@ def test_every_connector_declares_itself():
 def test_raw_table_is_refused_on_another_kind_and_required_on_external():
     other = runner.invoke(cli.app, ["job", "new", "x", "--raw-table", "r", "--dry-run"])
     assert other.exit_code != 0
-    missing = runner.invoke(cli.app, ["job", "new", "x", "--kind", "external", "--dry-run"])
+    missing = runner.invoke(cli.app, ["job", "new", "x", "--kind", "connector", "--dry-run"])
     assert missing.exit_code != 0
 
 

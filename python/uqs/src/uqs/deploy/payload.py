@@ -217,7 +217,7 @@ def python_payload(
     """requirements.txt and every wheel the target needs, under `into`.
 
     `extras` are uqs extras whose locked dependencies join the default ones
-    (`kafka`: confluent-kafka, for `--with-kafka-connector`); none by default.
+    (`kafka`: confluent-kafka, for `--kafka-connector`); none by default.
     `packages` are workspace packages whose wheels, and locked dependencies,
     join uqs's (`uqf-frontend`, for `--frontend`, uqs.deploy.frontend).
 

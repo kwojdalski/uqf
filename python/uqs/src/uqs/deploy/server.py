@@ -114,7 +114,7 @@ class Server:
             ("UQS_DATA_ROOT", c.data_root),
             ("UQS_RUNTIME", self.runtime),
             # a source with no credential is refused, never read as its fixture
-            ("UQS_REQUIRE_LIVE_SOURCES", "1" if c.live else None),
+            ("UQF_LIVE_SOURCES_REQUIRED", "1" if c.live else None),
             # the private ODBC setup deploy.env loads, for `uqs config sources check`
             ("UQS_ODBC_HOME", c.odbc_home),
             # the site launcher's own process.csv columns, empty unless set

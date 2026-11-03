@@ -1,7 +1,7 @@
 """The tickerplant connection every external connector shares (#1786).
 
 Each connector outside the plant - kafka, crypto, crypto-fills, a sidecar
-bundle's, one `uqs job new --kind external` scaffolds - opens its own kdb+ IPC
+bundle's, one `uqs job new --kind connector` scaffolds - opens its own kdb+ IPC
 handle to stp1 and calls `.u.upd`. Where that handle goes and what it presents
 are the same for all of them, so they are written once, here, and every
 connector and the scaffold template import them:
