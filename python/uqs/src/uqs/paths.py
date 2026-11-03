@@ -176,6 +176,11 @@ class UqsPaths:
         return self.torqdata / "crypto_recorder_config.yaml"
 
     @property
+    def crypto_fills_recorder_config_path(self) -> Path:
+        """The fills recorder's config: only stp1's credential, owner-only (#1853)."""
+        return self.torqdata / "crypto_fills_recorder_config.yaml"
+
+    @property
     def crypto_fills_recorder_pid_path(self) -> Path:
         return self.orchestrator_dir / "crypto_fills_recorder.pid"
 

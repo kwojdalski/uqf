@@ -30,6 +30,7 @@ from __future__ import annotations
 import json
 import re
 import sys
+from collections.abc import Callable
 
 from uqs.deploy.components import COMPONENTS
 from uqs.deploy.config import Config, DeployError
@@ -198,13 +199,29 @@ def prune_locked(dep: Deployment, keep: int, dry_run: bool = False) -> dict:
 
 
 def prune(
-    cfg: Config, remote: Transport, *, keep: int, dry_run: bool = False, out=sys.stdout
+    cfg: Config,
+    remote: Transport,
+    *,
+    keep: int,
+    dry_run: bool = False,
+    out=sys.stdout,
+    confirm: Callable[[dict], bool] | None = None,
 ) -> int:
-    """Remove the server's releases beyond the newest `keep`, under the lock."""
+    """Remove the server's releases beyond the newest `keep`, under the lock.
+
+    With `confirm`, what would go is decided first, under the same lock, and
+    handed to it; nothing is removed unless it answers yes (#1854) - a removed
+    release cannot be brought back. Exits 1 when declined."""
     dep = Deployment(cfg, remote)
     dep.check_sudo()
     dep.take_lock("prune")
     try:
+        if confirm is not None and not dry_run:
+            planned = decide(_listing(dep), keep)
+            going = planned["removed"] + planned.get("runtimes", {}).get("removed", [])
+            if going and not confirm(planned):
+                print(json.dumps({"prune": "declined", **planned}, indent=2), file=out)
+                return 1
         result = prune_locked(dep, keep, dry_run)
     finally:
         dep.release_lock()

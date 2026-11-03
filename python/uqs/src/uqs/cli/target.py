@@ -287,19 +287,6 @@ def shell(
     raise typer.Exit(code=code)
 
 
-@target_app.command("remove", cls=ChangesState)
-def remove(
-    name: Annotated[str, typer.Argument(help="The target")], dry_run: DryRun = False
-) -> None:
-    """Delete one target's table, and the comment directly above it; every
-    other line stays. `uqs target revert` brings it back."""
-    _change(
-        lambda: target_changes.remove(repo_root(), name, _command("remove", name), dry_run=dry_run),
-        f"target {name} removed",
-        dry_run,
-    )
-
-
 def forward(name: str, yes: bool, args: list[str], *, interactive: bool) -> int:
     """`uqs --target NAME <args>`: run args on the target's release, after
     asking - or `--yes` - when they may change the server."""

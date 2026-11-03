@@ -69,6 +69,9 @@ FACTS = {
     "BOUNDED_DATASET_INSTRUMENT_COLUMNS": (
         "dataset -> its instrument column, empty if none - .qetl.job.bounded.read_instrument_column"
     ),
+    "DAG_PRODUCERS": (
+        "table -> the jobs that write it, reactions included - .qetl.dag.producers (#1862)"
+    ),
     "SOURCE_TRANSPORTS": "source -> its transport, as its declaration resolved it (#1865)",
     "CFG_SOURCES": "the worker-config layers, most significant first - .qetl.cfg.sources",
     "CFG_ENV_LAYER": "the layer that outranks a worker-config override - .qetl.cfg.env_layer",
@@ -105,7 +108,7 @@ these in q fails the commit until this file is regenerated.
 '''
 
 
-def export() -> dict[str, list[str] | str | dict[str, str]]:
+def export() -> dict[str, list[str] | str | dict[str, str] | dict[str, list[str]]]:
     """Run the q exporter and return its facts."""
     from uqs.interpreter import q_interpreter
 
@@ -133,7 +136,9 @@ def export() -> dict[str, list[str] | str | dict[str, str]]:
     return facts
 
 
-def render(facts: dict[str, list[str] | str | dict[str, str]], out_path: Path) -> str:
+def render(
+    facts: dict[str, list[str] | str | dict[str, str] | dict[str, list[str]]], out_path: Path
+) -> str:
     """The module, already ruff-formatted - the format hook would otherwise
     rewrite it, and --check would then call every commit's copy stale."""
     who, names = MODULES[out_path]
@@ -142,6 +147,13 @@ def render(facts: dict[str, list[str] | str | dict[str, str]], out_path: Path) -
         value = facts[name]
         if isinstance(value, str):
             out.append(f"\n#: {FACTS[name]}\n{name}: str = {json.dumps(value)}\n")
+            continue
+        if isinstance(value, dict) and all(isinstance(v, list) for v in value.values()):
+            items = ", ".join(
+                f"{json.dumps(k)}: ({''.join(f'{json.dumps(w)}, ' for w in v)})"
+                for k, v in value.items()
+            )
+            out.append(f"\n#: {FACTS[name]}\n{name}: dict[str, tuple[str, ...]] = {{{items}}}\n")
             continue
         if isinstance(value, dict):
             items = ", ".join(f"{json.dumps(k)}: {json.dumps(v)}" for k, v in value.items())

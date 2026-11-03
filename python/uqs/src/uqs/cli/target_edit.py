@@ -16,9 +16,9 @@ from typing import Annotated
 
 import typer
 
-from uqs.cli.safety import ChangesState, dry_run_note
+from uqs.cli.safety import ChangesState, YesOpt, dry_run_note
 from uqs.cli.shared import _die, console
-from uqs.cli.target import DryRun, _command, _done, target_app
+from uqs.cli.target import DryRun, _change, _command, _done, target_app
 from uqs.deploy import target_changes, targets
 from uqs.deploy.config import DeployError
 from uqs.paths import UqsError, repo_root
@@ -114,3 +114,33 @@ def edit(
                 continue
             _done(result, f"{path.name} edited", dry_run)
             return
+
+
+@target_app.command("remove", cls=ChangesState)
+def remove(
+    name: Annotated[str, typer.Argument(help="The target")],
+    dry_run: DryRun = False,
+    yes: YesOpt = False,
+) -> None:
+    """Delete one target's table, and the comment directly above it; every
+    other line stays. `uqs target revert` brings it back.
+
+    Shows the change and asks first (#1854); `--yes` does not ask."""
+    if not dry_run and not yes:
+        try:
+            planned = target_changes.remove(
+                repo_root(), name, _command("remove", name), dry_run=True
+            )
+        except (DeployError, UqsError) as exc:
+            _die(UqsError(str(exc)))
+            return
+        if planned.entry is not None:
+            console.print(planned.entry["diff"].rstrip("\n"), markup=False, highlight=False)
+            if not typer.confirm(f"Remove target {name}?", default=False):
+                console.print("nothing removed")
+                raise typer.Exit(code=1)
+    _change(
+        lambda: target_changes.remove(repo_root(), name, _command("remove", name), dry_run=dry_run),
+        f"target {name} removed",
+        dry_run,
+    )

@@ -60,13 +60,13 @@ class Feed:
             cmd = [
                 sys.executable, str(runner),
                 "--host", "localhost", "--port", str(self.stp_port),
-                "--credential", connection.tp_credential(),
                 "--brokers", self.broker.bootstrap,
                 "--topic", topics, "--group", self.group,
                 "--table", kafka_streamer.KAFKA_RAW_TABLE,
                 "--repo-root", str(self.repo_root),
             ]  # fmt: skip
-            self._process().start(cmd, cwd=self.repo_root)
+            env = connection.credential_env(connection.tp_credential())
+            self._process().start(cmd, cwd=self.repo_root, env=env)
             return
         if not self.uqs or not self.kfk_home:
             raise UqsError("the native feed needs the `uqs` command prefix and UQF_KFK_HOME")

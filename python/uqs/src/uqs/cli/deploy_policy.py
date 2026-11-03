@@ -11,31 +11,51 @@ from typing import Annotated
 import typer
 
 from uqs.cli import safety
-from uqs.deploy import overrides
+from uqs.cli.renames import bypass_flag
+from uqs.deploy import overrides, portable
 from uqs.deploy.config import DeployError
+from uqs.logger import get_logger
 from uqs.paths import UqsError
 
+log = get_logger()
+
 #: The old per-override options, each now `--override NAME --reason REASON`
-#: (#1732); kept, hidden, for one release.
-OLD_SPELLINGS = {f"--{name}": ("--override", name) for name in overrides.SKIPS}
+#: (#1732), their value the reason; and the old bypass flags, which took no
+#: value (#1852). Kept, hidden, for one release.
+OLD_SPELLINGS: dict[str, str | tuple[str, ...]] = {
+    **{f"--{name}": ("--override", name) for name in overrides.POLICY},
+    **{
+        f"--{name}": bypass_flag(name)
+        for name in (overrides.ALLOW_DIRTY, overrides.FIX_HDB, overrides.BREAK_LOCK)
+    },
+}
+#: `deploy build`'s and `deploy rollback`'s old bypass flags (#1852).
+BUILD_OLD_SPELLINGS = {
+    f"--{name}": bypass_flag(name)
+    for name in (overrides.ALLOW_DIRTY, portable.ALLOW_COMPUTED_NAMES)
+}
+ROLLBACK_OLD_SPELLINGS = {f"--{overrides.BREAK_LOCK}": bypass_flag(overrides.BREAK_LOCK)}
+
+
+def waived(command: str, names: list[str] | None, reason: str | None) -> dict[str, str]:
+    """{override: reason} for `command`'s `--override`s, refused as a
+    DeployError (safety.given), each warned about: a bypass is never silent."""
+    try:
+        given = safety.given(command, names, reason)
+    except UqsError as exc:
+        raise DeployError("arguments", str(exc)) from exc
+    for name, why in given.items():
+        log.warning("uqs {}: --override {} ({})", command, name, why)
+    return given
 
 
 def bypasses(names: list[str] | None, reason: str | None) -> dict[str, str | None]:
-    """make_config's override fields - accept_digest, ... - from the
-    `--override NAME`s given and their --reason; None for each not given."""
-    try:
-        given = safety.given("deploy push", names, reason)
-    except UqsError as exc:
-        raise DeployError("arguments", str(exc)) from exc
+    """make_config's override fields - accept_digest, allow_dirty, ... - from
+    the `--override NAME`s given and their --reason; None for each not given."""
+    given = waived("deploy push", names, reason)
     return {name.replace("-", "_"): given.get(name) for name in overrides.SKIPS}
 
 
-AllowDirty = Annotated[
-    bool,
-    typer.Option(
-        "--allow-dirty", help="Deploy an artifact built from uncommitted changes (refused)"
-    ),
-]
 ExpectedSha256 = Annotated[
     str | None,
     typer.Option(

@@ -259,7 +259,10 @@ def test_the_tunnel_closes_when_the_query_fails_and_hides_the_password(server, d
         raise ConnectionError(f"handshake rejected for user:{passwd}")
 
     monkeypatch.setattr(query_mod.runtime, "query", refuse)
-    result = _invoke("--tunnel", "dev", "--passwd", "s3cret", "--render", "kola", "1+1")
+    monkeypatch.setenv("UQS_TEST_Q_PW", "s3cret")
+    result = _invoke(
+        "--tunnel", "dev", "--password-env", "UQS_TEST_Q_PW", "--render", "kola", "1+1"
+    )
     said = str(result.exception)
     assert "query on gateway1 on target dev (port 17007, via ssh) failed" in said
     assert "s3cret" not in said and "***" in said

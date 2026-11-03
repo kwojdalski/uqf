@@ -43,7 +43,12 @@ class LocalRemote:
 
 def _dep(remote, dest="/opt/uqf", fix_hdb=False, data_dir=None) -> Deployment:
     cfg = make_config(
-        artifact="", host="h", dest=dest, profile="essential", fix_hdb=fix_hdb, data_dir=data_dir
+        artifact="",
+        host="h",
+        dest=dest,
+        profile="essential",
+        fix_hdb="the test fills it" if fix_hdb else None,
+        data_dir=data_dir,
     )
     return Deployment(cfg, remote)
 
@@ -64,7 +69,7 @@ def test_no_hdb_yet_is_nothing_to_judge():
 
 def test_a_short_partition_is_refused_without_fix_hdb():
     remote = FakeRemote(SHORT)
-    with pytest.raises(DeployError, match=r"2 HDB partition\(s\) lack .*pass --fix-hdb"):
+    with pytest.raises(DeployError, match=r"2 HDB partition\(s\) lack .*pass --override fix-hdb"):
         hdb.check(_dep(remote), "/r")
     assert not any("--apply" in s for s in remote.scripts), "nothing is written"
 
@@ -109,9 +114,9 @@ def test_the_dry_run_lists_what_would_be_filled_from_the_servers_hdb(tmp_path):
     line = hdb.planned(dep, {"hdb_shape": shape})
     # book is in neither partition; quote is in one, short of venue
     assert line.startswith("3 missing table(s) and 1 missing column(s) in 2 partition(s)")
-    assert "refused without --fix-hdb" in line
+    assert "refused without --override fix-hdb" in line
     fixing = _dep(LocalRemote(), data_dir=str(data), fix_hdb=True)
-    assert "filled by --fix-hdb" in hdb.planned(fixing, {"hdb_shape": shape})
+    assert "filled by --override fix-hdb" in hdb.planned(fixing, {"hdb_shape": shape})
 
 
 def test_the_dry_run_of_a_complete_hdb_has_nothing_to_fill(tmp_path):
