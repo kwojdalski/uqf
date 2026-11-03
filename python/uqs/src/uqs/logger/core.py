@@ -223,10 +223,13 @@ def setup_logging(
 ) -> Any:
     """Configure loguru sinks and return the logger.
 
-    The console sink writes to `stream`. When it is None: stdout, or stderr
-    when the command line asks for --json, whose stdout is one JSON document
-    and nothing else (#1685). Either is read at call time, so a test that
-    swaps sys.stdout is honoured."""
+    The console sink writes to `stream`, or to stderr when it is None - with
+    --json or without (#1881). A log line is never a command's data: stdout
+    carries only what the command prints through its console or
+    json_out.emit, so `uqs list processes > f` holds the list,
+    `$(uqs config show ...)` the config, and `2>/dev/null` silences the log.
+    It used to be stdout outside --json (#1685 moved only --json's). Read at
+    call time, so a test that swaps sys.stderr is honoured."""
     logger.remove()
 
     if log_regex is None:
@@ -257,7 +260,7 @@ def setup_logging(
         # what turns a per-record template choice into one.
         console_fmt = _make_kv_format(fmt) if use_color or callable(fmt) else fmt
         logger.add(
-            stream or (sys.stderr if json_requested() else sys.stdout),
+            stream or sys.stderr,
             level=level.upper(),
             format=console_fmt,
             colorize=_colorize() if use_color else False,

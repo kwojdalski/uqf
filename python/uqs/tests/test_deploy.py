@@ -132,7 +132,7 @@ def _args(path: Path, *extra: str) -> list[str]:
 # --- arguments and quoting ------------------------------------------------------
 
 
-def test_the_required_arguments_are_host_dest_and_profile(capfd):
+def test_the_required_arguments_are_host_dest_and_profile(log_text):
     """Required by the command rather than the parser: a --target can give them."""
     from typer.testing import CliRunner
 
@@ -140,7 +140,7 @@ def test_the_required_arguments_are_host_dest_and_profile(capfd):
 
     r = CliRunner().invoke(cli.app, ["deploy", "push", "a", "--ssh", "h", "--dest", "/opt/uqf"])
     assert r.exit_code == 1
-    assert "--profile is required, or a TARGET after ARTIFACT" in r.output + capfd.readouterr().err
+    assert "--profile is required, or a TARGET after ARTIFACT" in log_text()
     cfg = parse_args(BASE)
     assert (cfg.host, cfg.dest, cfg.profile) == ("uqf-server", "/opt/uqf", "essential")
     assert cfg.data_root == "/opt/uqf/shared/data"
