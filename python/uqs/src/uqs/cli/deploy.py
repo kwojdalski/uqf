@@ -24,7 +24,7 @@ from uqs.cli import deploy_dry_run as dry
 from uqs.cli import deploy_policy as policy
 from uqs.cli.renames import renamed
 from uqs.cli.safety import ChangesState, DryRunOpt, OverrideOpt, ReasonOpt
-from uqs.cli.shared import app, json_refusal
+from uqs.cli.shared import EXIT_REFUSED, EXIT_USAGE, app, json_refusal
 from uqs.deploy import build as release_build
 from uqs.deploy import config, driver, frontend, history, kafka, overrides, portable, targets
 from uqs.deploy.artifact import PLATFORMS, ReleaseError
@@ -44,11 +44,16 @@ app.add_typer(deploy_app, name="deploy")
 log = get_logger()
 
 
+#: The stage a deploy command refuses its own command line at: a usage error,
+#: exit 2 like any other (#1885); every other stage's failure exits 1.
+ARGUMENTS = "arguments"
+
+
 def _failed(prefix: str, stage: str, exc: Exception) -> None:
     message = f"{prefix}: FAILED at {stage}: {config.redact(str(exc))}"
     log.error("{}", message)
     json_refusal(message)
-    raise typer.Exit(code=1)
+    raise typer.Exit(code=EXIT_USAGE if stage == ARGUMENTS else EXIT_REFUSED)
 
 
 #: `--output` is a FILE, as `contract export -o` writes one; a directory is
@@ -130,7 +135,7 @@ def build(
         dry.say_composition(runtime_bundles.composition(runtime, members))
         return
     if shutil.which("uv") is None:
-        _failed("uqs deploy build", "arguments", RuntimeError("uv is not on PATH"))
+        _failed("uqs deploy build", "prerequisites", RuntimeError("uv is not on PATH"))
     try:
         artifact = release_build.build(
             output,

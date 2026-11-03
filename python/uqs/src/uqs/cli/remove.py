@@ -96,8 +96,10 @@ def remove_job(
             )
         )
         return
-    if not yes and not typer.confirm("Remove these?", default=False):
-        console.print("nothing removed")
+    try:
+        safety.confirm("Remove these?", yes=yes)
+    except UqsError as exc:
+        _die(exc)
         return
     removal.apply(repo_root)
     console.print(f"\n[green]removed {removal.name}[/]")

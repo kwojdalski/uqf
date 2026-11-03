@@ -142,8 +142,8 @@ def server(ctx: typer.Context, target: str | None, **flags) -> dict:
     try:
         label, settings = control.settings_for(target, repo_root())
         r = control.remote_from(label, settings)
-    except UqsError as exc:
-        raise DeployError("arguments", str(exc)) from None
+    except UqsError as exc:  # an unknown name: a refusal (1), not a usage error (#1885)
+        raise DeployError("target", str(exc)) from None
     out = targets.push_options(label, settings)
     out.update(host=r.host, dest=r.dest, remote_user=r.remote_user)
     out.update({k: v for k, v in flags.items() if on_command_line(ctx, k)})

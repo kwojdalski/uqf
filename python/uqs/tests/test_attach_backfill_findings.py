@@ -127,7 +127,7 @@ CASES = {
         _state(partition=""),
         None,
         "wdb1",
-        {"proctype": "wdb", "partition": "", "eod_date": "2026.10.16"},
+        {"proctype": "wdb", "partition": ""},
         "wdb1 does not report which date it is writing",
     ),
     "active-date": (
@@ -135,7 +135,8 @@ CASES = {
         ["2026.09.12", "2026.10.16", "2026.10.17"],
         "wdb1",
         {"active_date": "2026-10-16", "touched_dates": "2026-10-16,2026-10-17"},
-        "2026-10-16, 2026-10-17 is not completed history: wdb1 is writing 2026-10-16",
+        "2026-10-16, 2026-10-17 is not completed history: "
+        "wdb1's current write partition is 2026-10-16",
     ),
     "clock-unknown": (
         _state(next_roll=""),
@@ -315,7 +316,7 @@ def test_every_blocker_is_still_one_refusal_in_the_order_found(world, monkeypatc
         "now": "2026.10.16D23:50:00.000000000",
         "reloadcomplete": False,
     }
-    world.stack.state_over["rdb1"] = {"eod_date": ""}
+    world.stack.state_over["rdb1"] = {"partitions": []}
     exc = refusal(world)
     text = str(exc)
     assert text.startswith(

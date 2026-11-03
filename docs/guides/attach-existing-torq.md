@@ -678,6 +678,13 @@ uqs job attachment add pb-uat --job pb_general_ledger --base-port 6000 \
     --reason "Reviewed against the site's TorQ build" --yes --accept-risks
 ```
 
+`TORQ_VERSION` and `PUBLISHER_RUNNING` also take a generated alias, one
+component each and repeatable: `--skip-torq-version stp1` is
+`--override TORQ_VERSION:stp1`, and `--skip-publisher-running PROC` is
+`--override PUBLISHER_RUNNING:PROC`. Everything below applies to it unchanged,
+`--reason` and `--accept-risks` included, and `uqs --target` sends the
+`--override` form.
+
 **An override accepts a risk. It does not establish compatibility.** Accepting
 `TORQ_VERSION` does not add the version to the tested list.
 

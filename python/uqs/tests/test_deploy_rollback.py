@@ -248,4 +248,4 @@ def test_the_cli_refuses_a_to_that_is_not_a_release_id():
         cli.app,
         ["deploy", "rollback", "--ssh", "h", "--dest", "/opt/uqf", "--release", "../etc;rm -rf /"],
     )
-    assert result.exit_code == 1
+    assert result.exit_code == 2

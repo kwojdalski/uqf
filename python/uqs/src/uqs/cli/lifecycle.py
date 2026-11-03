@@ -35,11 +35,10 @@ from uqs.cli.shared import (
     log,
 )
 from uqs.cli.start_follow import FollowOpt, LevelOpt, StopOnExitOpt
-from uqs.cli.start_override_opts import OLD_SPELLINGS as OLD_SKIPS
 from uqs.cli.start_override_opts import parsed as _overrides
 from uqs.cli.start_warnings import running as _running
 from uqs.model import profiles
-from uqs.paths import UqsError
+from uqs.paths import UqsError, UqsUsageError
 from uqs.stack import procs as procs_model
 from uqs.stack import runtime, start_policy
 from uqs.stack.start_overrides import NONE, Overrides
@@ -126,9 +125,9 @@ DryRunOpt = Annotated[
 #: The options `start` and `restart` share, word for word (#1734): the
 #: selection `stop` takes too - PROC..., --profile, --base-port - and what a
 #: launch adds to it. A test holds the two signatures equal. --print, then
-#: --show-command, are --dry-run, and the --skip-...-check bypasses are
-#: --override NAME --reason (#1732).
-_LAUNCH_RENAMES = BASE_PORT | {"--print": "--dry-run", "--show-command": "--dry-run"} | OLD_SKIPS
+#: --show-command, are --dry-run. `--skip-q-version-check` and
+#: `--skip-profile-budget-check` are generated from the guardrails (#1918).
+_LAUNCH_RENAMES = BASE_PORT | {"--print": "--dry-run", "--show-command": "--dry-run"}
 
 
 def _launch(
@@ -145,11 +144,11 @@ def _launch(
 ) -> None:
     """`start` and `restart`, which differ only in the torq.sh verb they run."""
     if level is not None and not follow:
-        _die(UqsError("--level needs --follow"))
+        _die(UqsUsageError("--level needs --follow"))
     if stop_on_exit and not follow:
-        _die(UqsError("--stop-on-exit needs --follow: it stops what the stream started"))
+        _die(UqsUsageError("--stop-on-exit needs --follow: it stops what the stream started"))
     if print_only and follow:
-        _die(UqsError("--dry-run does not apply with --follow"))
+        _die(UqsUsageError("--dry-run does not apply with --follow"))
     overrides = _overrides(verb, override, reason, profile=profile, print_only=print_only)
     names = _names_to_start(procs, profile, overrides)
     if print_only:
@@ -251,9 +250,7 @@ def _up(
     )  # fmt: skip
 
 
-alias_command(
-    app, "up", "uqs start --follow --stop-on-exit", _up, cls=renamed(BASE_PORT | OLD_SKIPS)
-)
+alias_command(app, "up", "uqs start --follow --stop-on-exit", _up, cls=renamed(BASE_PORT))
 
 
 def _names_to_stop(procs: list[str] | None, profile: str | None) -> str:

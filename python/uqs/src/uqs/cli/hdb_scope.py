@@ -17,7 +17,6 @@ shows the plan, asks, checks the writers, runs it and reloads the readers.
 
 from __future__ import annotations
 
-import sys
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Annotated, Any
@@ -31,7 +30,7 @@ from uqs.cli import safety
 from uqs.cli.json_out import emit
 from uqs.cli.safety import dry_run_note
 from uqs.cli.shared import _paths, console
-from uqs.paths import UqsError, UqsPaths
+from uqs.paths import UqsError, UqsPaths, UqsUsageError
 from uqs.stack import hdb_alter, hdb_remote
 from uqs.stack.hdb_alter import Request
 
@@ -78,7 +77,7 @@ def resolve(attach: str | None, hdb: Path | str | None) -> Handle:
     """The one HDB named: --attachment, --hdb, or (neither) this runtime's own."""
     paths = _paths()
     if attach and hdb:
-        raise UqsError("give one of --target, --attachment and --hdb: each names an HDB")
+        raise UqsUsageError("give one of --target, --attachment and --hdb: each names an HDB")
     if attach:
         ipc = service.ipc_for(attach_config.load(attach))
         where = hdb_where.resolve(attach, ipc)
@@ -158,13 +157,11 @@ def confirm(handle: Handle, what: str, *, yes: bool, as_json: bool) -> None:
     """Ask once before the first write; without a terminal, --yes or nothing."""
     if yes:
         return
-    if as_json or not sys.stdin.isatty():
-        raise UqsError(
-            "--apply without --yes needs a terminal to ask on - add --yes to write without "
-            "asking. Nothing was written."
+    if as_json:
+        raise UqsUsageError(
+            "--json cannot ask for confirmation: add --yes to write. Nothing was written."
         )
-    if not typer.confirm(f"{what} in {handle.hdb}?", default=False):
-        raise UqsError("not applied - nothing was written")
+    safety.confirm(f"{what} in {handle.hdb}?", yes=False)
 
 
 def apply_plan(

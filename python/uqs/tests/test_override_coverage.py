@@ -134,7 +134,28 @@ def test_every_command_with_a_generated_skip_reads_it_under_its_own_name():
     asked under another name would accept the flag and silently ignore it."""
     skipping = {c for g in safety.registry() if g.skip_flag for c in g.commands}
     assert skipping, "no generated skip: this test would hold nothing"
-    assert skipping <= _given_literals()
+    assert skipping <= _given_literals() | set(VERB_READERS)
+
+
+#: Commands whose safety.given call takes the command name as a variable, not a
+#: literal - start and restart share `_launch(verb, ...)`, which hands `verb` to
+#: start_override_opts.overrides_from - each with the call that proves it.
+VERB_READERS = {
+    "start": '_launch(\n        "start",',
+    "restart": '_launch(\n        "restart",',
+}
+
+
+def test_the_start_verbs_read_their_skips_under_their_own_name():
+    """#1918: `start` and `restart` reach safety.given under their own name: their
+    bodies call `_launch` with it, and `_launch` passes it to overrides_from, which
+    calls safety.given with it. test_start_overrides.py proves it at run time."""
+    lifecycle = (SRC / "cli" / "lifecycle.py").read_text()
+    opts = (SRC / "cli" / "start_override_opts.py").read_text()
+    for call in VERB_READERS.values():
+        assert call in lifecycle, call
+    assert "_overrides(verb, override, reason" in lifecycle
+    assert "given = safety.given(command, names, reason)" in opts
 
 
 # ------------------------------------------------------------- help and completion

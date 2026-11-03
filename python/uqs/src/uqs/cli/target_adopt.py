@@ -149,13 +149,10 @@ def adopt_(
         return
     changes = adopt.server_changes(survey)
     if changes and not yes:
-        asked = f"On {r.host}: {'; '.join(changes)}?"
         try:
-            agreed = typer.confirm(asked, default=False)
-        except typer.Abort:
-            agreed = False
-        if not agreed:
-            _die(UqsError("not adopted: nothing was changed (--yes to run without asking)"))
+            safety.confirm(f"On {r.host}: {'; '.join(changes)}?", yes=False)
+        except UqsError as exc:
+            _die(exc)
     try:
         adopt.apply(r, survey)
         done = target_changes.add(

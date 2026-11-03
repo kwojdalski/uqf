@@ -64,7 +64,10 @@ def test_the_guardrail_is_declared_once_from_the_coordination_policy():
     assert g.commands == ("job backfill",)
     assert (g.risk, g.action, g.overridable) == (policy.risk, policy.action, True)
     assert g.skip_flag and not g.component_scoped and g.name == "eod-fence"
-    assert [x.id for x in safety.registry() if x.skip_flag] == ["eod-fence"]
+    # the one generated skip `job backfill` takes (#1918 added others' elsewhere)
+    assert [x.id for x in safety.registry() if x.skip_flag and "job backfill" in x.commands] == [
+        "eod-fence"
+    ]
     assert skip_options.declared("job backfill") == (g,)
 
 
@@ -141,7 +144,10 @@ def test_the_waiver_lifts_nothing_else(world, monkeypatch, code):
 @pytest.mark.parametrize(
     ("over", "message"),
     [
-        ({"partition": "2026.09.01"}, "2026-09-12 is not completed history: wdb1 is writing"),
+        (
+            {"partition": "2026.09.01"},
+            "2026-09-12 is not completed history: wdb1's current write partition is",
+        ),
         ({"reloadcomplete": False}, "wdb1 has an end-of-day reload in progress"),
         ({"next_roll": ""}, "wdb1 does not report its clock and next roll"),
     ],

@@ -20,7 +20,7 @@ from uqs.cli.json_out import json_opt
 from uqs.cli.renames import ATTACHMENT, alias_command, renamed, warn_renamed
 from uqs.cli.safety import ConfirmsOnServer
 from uqs.cli.shared import _die, data_app
-from uqs.paths import UqsError
+from uqs.paths import UqsError, UqsUsageError
 from uqs.stack.hdb_alter import Request
 
 AlterJson = json_opt(
@@ -95,7 +95,7 @@ def hdb_alter(
         }
         chosen = {k: v for k, v in given.items() if v is not None}
         if len(chosen) != 1:
-            raise UqsError(
+            raise UqsUsageError(
                 "give one operation: --reorder, --rename, --attr, --cast or --undo"
                 + (f" (not {len(chosen)})" if chosen else "")
             )
