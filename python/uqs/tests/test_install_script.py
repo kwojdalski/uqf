@@ -55,6 +55,7 @@ esac
     "npm": "",
     "git": "",
     "pre-commit": "",
+    "python3": "",
 }
 
 
@@ -162,6 +163,7 @@ def test_dev_syncs_and_installs_hooks(repo: Path) -> None:
     assert "uv sync" in calls
     assert f"uv tool install pre-commit=={_pinned('pre-commit')}" in calls
     assert "pre-commit install" in calls
+    assert "python3 scripts/dev/merge_generated.py install" in calls
 
 
 def test_web_builds_from_the_lockfile(repo: Path) -> None:

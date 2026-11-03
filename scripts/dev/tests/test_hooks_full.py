@@ -97,17 +97,28 @@ def test_a_full_only_hook_fails_when_its_command_does(monkeypatch):
 
 
 def test_all_runs_every_hook_over_the_tree_in_full_mode(monkeypatch):
-    seen = {}
+    seen = []
 
     def run(cmd, env, check):
-        seen.update(cmd=cmd, env=env)
+        seen.append((cmd, env))
         return type("R", (), {"returncode": 0})()
 
     monkeypatch.setattr(hf.subprocess, "run", run)
     assert hf.main(["--all"]) == 0
-    assert seen["cmd"][-3:] == ["pre-commit", "run", "--all-files"]
-    assert hf.PRE_COMMIT in seen["cmd"]
-    assert seen["env"][hf.ENV] == "1"
+    # the commit hooks, then the push hooks the suites moved to (#1965)
+    assert [cmd[-5:] for cmd, _ in seen] == [
+        ["pre-commit", "run", "--all-files", "--hook-stage", stage]
+        for stage in ("pre-commit", "pre-push")
+    ]
+    assert all(hf.PRE_COMMIT in cmd and env[hf.ENV] == "1" for cmd, env in seen)
+
+
+def test_all_fails_when_either_stage_fails(monkeypatch):
+    codes = iter([0, 3])
+    monkeypatch.setattr(
+        hf.subprocess, "run", lambda cmd, env, check: type("R", (), {"returncode": next(codes)})()
+    )
+    assert hf.main(["--all"]) == 3
 
 
 def test_a_malformed_call_is_refused():
