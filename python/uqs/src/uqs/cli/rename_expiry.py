@@ -196,6 +196,9 @@ RENAMED_AFTER: dict[str, frozenset[str]] = {
             "uqs job backfill --any-writer",
             "uqs job remove --even-if-edited",
             # #1853: a secret is never an argument - the variable holding it is
+            # #1884: an override name is lower case, words joined by `-`; a finding
+            # code's own spelling (TORQ_VERSION:stp1) still parses, warning
+            "uqs job attachment add --override CODE:COMPONENT",
             "uqs query --passwd",
             "uqs schema --passwd",
             "uqs connector start --tp-credential",

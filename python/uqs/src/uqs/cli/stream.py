@@ -14,6 +14,8 @@ import typer
 from rich.table import Table
 
 from uqs import timerange
+from uqs.cli import completion
+from uqs.cli.concepts import job_arg
 from uqs.cli.json_out import emit, json_opt
 from uqs.cli.pipelines import needs_pipelines
 from uqs.cli.range_options import DateOpt, LastOpt, RangeFromOpt, RangeToOpt
@@ -57,6 +59,7 @@ PreviewJson = json_opt(
     '"failures": [...], "trace": [{level, source, message}]} - '
     'with --last, also "window" and "kept"'
 )
+_JobOpt = job_arg("A polling feed - a streaming job that declares poll", completion.streaming_jobs)
 
 
 @job_app.command(
@@ -69,7 +72,7 @@ PreviewJson = json_opt(
     ),
 )
 def preview(
-    job: Annotated[str, typer.Argument(help="A polling feed - a streaming job that declares poll")],
+    job: _JobOpt,
     sample: Annotated[
         int,
         typer.Option("--limit", min=1, max=1000, help="Show at most N rows of each table"),

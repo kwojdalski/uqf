@@ -47,6 +47,7 @@ ProfileOpt = Annotated[
     str | None,
     typer.Option(
         "--profile",
+        metavar="PROFILE,...",
         help=(
             "Comma-separated named start set(s) - see `uqs profile list`. "
             "Process names given as well are added to the set. Refused if the "
@@ -274,6 +275,7 @@ def stop(
         str | None,
         typer.Option(
             "--profile",
+            metavar="PROFILE,...",
             help="Comma-separated named start set(s) to stop - see `uqs profile list`. "
             "Process names given as well are added to the set",
             autocompletion=completion.profiles,

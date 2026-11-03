@@ -22,7 +22,8 @@ from rich.table import Table
 from uqs.attach import receiver_contract
 from uqs.cli import completion
 from uqs.cli.attachment import attachment_app
-from uqs.cli.choices import alternatives
+from uqs.cli.choices import ChoiceOpt
+from uqs.cli.concepts import attach_opt
 from uqs.cli.json_out import JSON_HELP
 from uqs.cli.renames import ATTACHMENT, alias_command, renamed
 from uqs.cli.safety import ChangesState, Effect, ReadOnly, dry_run_note, marked
@@ -109,25 +110,27 @@ _APPROVE_RENAMES = {
 }
 
 
+_AttachOpt = attach_opt(
+    "The saved, verified attachment whose HDB it may write",
+    required=True,
+)
+_ConflictOpt = ChoiceOpt(
+    receiver_contract.STRATEGIES,
+    "--on-conflict",
+    "What a write may do with a row already there - a conflict policy to permit: "
+    "{values}; repeatable. Default: every one the contract permits. Narrows the "
+    "contract, never widens it",
+    many=True,
+)
+
+
 @contract_app.command("approve", cls=renamed(_APPROVE_RENAMES, ChangesState))
 def approve(
     file: Annotated[
         Path, typer.Argument(help="The contract file `uqs job attachment contract export` wrote")
     ],
-    attach: Annotated[
-        str,
-        typer.Option("--attachment", help="The saved, verified attachment whose HDB it may write"),
-    ],
-    conflict: Annotated[
-        list[str] | None,
-        typer.Option(
-            "--on-conflict",
-            help="What a write may do with a row already there - a conflict policy to "
-            f"permit: {alternatives(receiver_contract.STRATEGIES)}; repeatable. Default: every "
-            "one the contract permits. Narrows the contract, never widens it",
-            autocompletion=completion.choices(*receiver_contract.STRATEGIES),
-        ),
-    ] = None,
+    attach: _AttachOpt,
+    conflict: _ConflictOpt = None,
     max_rows: Annotated[
         int, typer.Option("--max-message-rows", help="The most rows one message may carry")
     ] = receiver_contract.DEFAULT_MAX_ROWS,
@@ -175,11 +178,15 @@ def approve(
         console.print(dry_run_note())
 
 
+_AttachOpt = attach_opt(
+    "The attachment whose approvals to list",
+    required=True,
+)
+
+
 @contract_app.command("list", cls=renamed(ATTACHMENT, ReadOnly))
 def list_(
-    attach: Annotated[
-        str, typer.Option("--attachment", help="The attachment whose approvals to list")
-    ],
+    attach: _AttachOpt,
     export: ExportOpt = None,
     sort: SortOpt = None,
     reverse: ReverseOpt = False,

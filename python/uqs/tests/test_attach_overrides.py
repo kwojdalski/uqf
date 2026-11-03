@@ -697,7 +697,8 @@ def test_attachment_add_checks_its_overrides_as_every_command_does():
 
     assert waivers(["torq_version:stp1"], "known") == ["TORQ_VERSION:stp1"]
     assert waivers(None, "") == []
-    with pytest.raises(UqsError, match="give TORQ_VERSION:COMPONENT"):
+    assert waivers(["torq-version:stp1"], "known") == ["TORQ_VERSION:stp1"]  # #1884
+    with pytest.raises(UqsError, match="give torq-version:COMPONENT"):
         waivers(["TORQ_VERSION"], "x")
     with pytest.raises(UqsError, match="--reason says why an --override is acceptable"):
         waivers(None, "a reason for nothing")

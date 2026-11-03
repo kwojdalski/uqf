@@ -7,12 +7,9 @@ the job scaffolded as though it had been honoured.
 
 from __future__ import annotations
 
-from typing import Annotated, Any
+from typing import Any
 
-import typer
-
-from uqs.cli import completion
-from uqs.cli.choices import alternatives
+from uqs.cli.choices import ChoiceOpt
 from uqs.model.kinds import SCAFFOLD_KINDS
 
 #: `--kind` when it is not given.
@@ -23,14 +20,10 @@ KIND_NOTES = {
     "horizon": "each event evaluated once --horizon has passed",
 }
 
-KindOpt = Annotated[
-    str,
-    typer.Option(
-        "--kind",
-        help=alternatives(SCAFFOLD_KINDS, KIND_NOTES, default=DEFAULT_KIND),
-        autocompletion=completion.choices(*SCAFFOLD_KINDS),
-    ),
-]
+KindOpt = ChoiceOpt(
+    SCAFFOLD_KINDS, "--kind", "What it scaffolds", notes=KIND_NOTES, default=DEFAULT_KIND,
+    required=True,
+)  # fmt: skip
 
 _BACKFILL = ("backfill",)
 _STANDING = ("streaming", "normalizer", "external", "horizon")

@@ -14,6 +14,7 @@ from typing import Annotated, Any
 import typer
 from rich.table import Table
 
+from uqs.cli import completion
 from uqs.cli.json_out import emit, json_opt
 from uqs.cli.safety import ChangesState, ReadOnly
 from uqs.cli.shared import (
@@ -55,7 +56,12 @@ def _about(entry: dict, name: str) -> bool:
 def log_(
     name: Annotated[
         str | None,
-        typer.Argument(metavar="NAME", help="Only the changes to this target", show_default=False),
+        typer.Argument(
+            metavar="TARGET",
+            help="Only the changes to this target",
+            show_default=False,
+            autocompletion=completion.targets,
+        ),
     ] = None,
     limit: Annotated[int, typer.Option("--limit", help="The most recent N changes")] = 20,
     export: ExportOpt = None,

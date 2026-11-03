@@ -18,6 +18,7 @@ from rich.table import Table
 
 from uqs import timerange
 from uqs.cli import completion
+from uqs.cli.concepts import attach_opt
 from uqs.cli.json_out import emit, json_opt
 from uqs.cli.pipelines import needs_pipelines
 from uqs.cli.range_options import DateOpt, LastOpt, RangeFromOpt, RangeToOpt
@@ -69,14 +70,10 @@ _RUN_COLUMNS = (
 _FACT_COLUMNS = ("run_id", "dataset", "range_from", "range_to", "label", "text")
 
 
-AttachOpt = Annotated[
-    str | None,
-    typer.Option(
-        "--attachment",
-        help="The attachment whose destination's ledger to read (`uqs job backfill "
-        "--attachment`), instead of the runtime's own",
-    ),
-]
+AttachOpt = attach_opt(
+    "The attachment whose destination's ledger to read (`uqs job backfill "
+    "--attachment`), instead of the runtime's own"
+)
 
 
 RunsJson = json_opt('{"runs": [{run_id, worker, dataset, status, range_from, ...}]}')
@@ -243,7 +240,9 @@ alias_command(runs_app, "migrate", "uqs job runs upgrade", upgrade, cls=needs_pi
 
 @runs_app.command("show", cls=renamed(ATTACHMENT, needs_pipelines(_LEDGER, ReadOnly)))
 def show(
-    run_id: Annotated[str, typer.Argument(help="A run id, from `uqs job runs list`")],
+    run_id: Annotated[
+        str, typer.Argument(metavar="RUN", help="A run id, from `uqs job runs list`")
+    ],
     attach: AttachOpt = None,
     as_json: ShowJson = False,
 ) -> None:

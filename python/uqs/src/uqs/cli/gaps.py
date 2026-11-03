@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 from datetime import UTC, date, datetime
-from typing import Annotated
 
-import typer
 from rich.table import Table
 
 from uqs import timerange
+from uqs.cli import completion
+from uqs.cli.concepts import job_arg
 from uqs.cli.json_out import emit, json_opt
 from uqs.cli.pipelines import needs_pipelines
 from uqs.cli.range_options import DateOpt, LastOpt, RangeFromOpt, RangeToOpt
@@ -107,13 +107,16 @@ def refills(holes: list[dict], twins: dict) -> tuple[list[dict], bool]:
     return out, cut
 
 
+_JobOpt = job_arg("The streaming job, e.g. markout", completion.streaming_jobs)
+
+
 @job_app.command(
     "gaps",
     rich_help_panel=JOB_OPERATIONS_PANEL,
     cls=needs_pipelines("reads this tree's streaming jobs' coverage", ReadOnly),
 )
 def gaps(
-    job: Annotated[str, typer.Argument(help="The streaming job, e.g. markout")],
+    job: _JobOpt,
     range_from: RangeFromOpt = None,
     range_to: RangeToOpt = None,
     day: DateOpt = None,

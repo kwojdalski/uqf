@@ -45,22 +45,13 @@ from uqs.cli.attach_output import (
     verdict,
 )
 from uqs.cli.attachment import OLD_REASON, attachment_app
+from uqs.cli.concepts import AttachmentArg
 from uqs.cli.json_out import json_opt
-from uqs.cli.shared import _debug_requested, _paths
+from uqs.cli.shared import _debug_requested, _paths, log
+from uqs.guardrails import spelled
 from uqs.paths import UqsError
 
-
-def _saved_names() -> list[str]:
-    try:
-        return config.names()
-    except Exception:  # noqa: BLE001 - completion must never raise
-        return []
-
-
-NameArg = Annotated[
-    str,
-    typer.Argument(help="The attachment's name, e.g. piggybank-uat", autocompletion=_saved_names),
-]
+NameArg = AttachmentArg
 #: Extra words are taken, not rejected by the parser, so the old `uqs job attach
 #: <stage> NAME` is refused with the command that replaced it.
 EXTRA_WORDS = {"allow_extra_args": True}
@@ -77,17 +68,25 @@ YesOpt = Annotated[
 
 
 def waivers(override: list[str] | None, reason: str) -> list[str]:
-    """The `--override CODE:COMPONENT`s and the generated `--skip-<code>
+    """The `--override NAME:COMPONENT`s and the generated `--skip-<name>
     COMPONENT`s (`--skip-torq-version stp1` is `TORQ_VERSION:stp1`, #1918), as
     one list, checked as every command's are (safety.given, #1852): a code this
     command does not take, one that is never overridden, a missing component or
-    reason, or a reason with no override, is refused here. A code is matched in
-    upper case, as the attachment's findings name it. service.accept then checks
-    each against what the stack shows, so a component with no such finding is
-    refused there."""
-    specs = [
-        f"{c.upper()}{sep}{rest}" for c, sep, rest in (s.partition(":") for s in override or ())
-    ]
+    reason, or a reason with no override, is refused here. A name is matched as
+    the attachment's findings name it - `torq-version` is `TORQ_VERSION`, and the
+    code's own spelling still parses for one release, warning (#1884).
+    service.accept then checks each against what the stack shows, so a component
+    with no such finding is refused there."""
+    specs = []
+    for c, sep, rest in (s.partition(":") for s in override or ()):
+        if c != spelled(c):
+            log.warning(
+                "--override {}: spell it {} - the finding-code spelling goes in the next "
+                "release (#1884)",
+                c,
+                spelled(c),
+            )
+        specs.append(f"{c.upper().replace('-', '_')}{sep}{rest}")
     return list(safety.given("job attachment add", specs or None, reason or None))
 
 

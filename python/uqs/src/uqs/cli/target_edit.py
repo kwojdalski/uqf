@@ -17,6 +17,7 @@ from typing import Annotated
 import typer
 
 from uqs.cli import safety
+from uqs.cli.concepts import TargetArg
 from uqs.cli.safety import ChangesState, YesOpt, dry_run_note
 from uqs.cli.shared import _die, console
 from uqs.cli.target import DryRun, _change, _command, _done, target_app
@@ -118,7 +119,7 @@ def edit(
 
 @target_app.command("remove", cls=ChangesState)
 def remove(
-    name: Annotated[str, typer.Argument(help="The target")],
+    name: TargetArg,
     dry_run: DryRun = False,
     yes: YesOpt = False,
 ) -> None:

@@ -16,7 +16,8 @@ import typer
 from uqs import timerange
 from uqs.attach.backfill_forced import ANY_WRITER
 from uqs.cli import backfill_attached, completion, safety
-from uqs.cli.choices import alternatives
+from uqs.cli.choices import ChoiceOpt, alternatives
+from uqs.cli.concepts import attach_opt
 from uqs.cli.json_out import JSON_HELP, emit
 from uqs.cli.pipelines import needs_pipelines
 from uqs.cli.range_options import DateOpt, LastOpt, RangeFromOpt, RangeToOpt
@@ -39,6 +40,20 @@ from uqs.stack import run_modes
 
 #: The modes `--mode` offers: a dry run is `--dry-run` (#1856).
 _MODES = tuple(m for m in run_modes.MODES if m != "dry-run")
+_OnConflictOpt = ChoiceOpt(
+    stack_backfill.ON_CONFLICT,
+    "--on-conflict",
+    "For this run: what a write does with a row whose row_key is already there - "
+    "{values}. Default: the worker's own "
+    f"({q_facts.DEFAULT_IO_STRATEGY} unless it declares otherwise)",
+)
+_AttachOpt = attach_opt(
+    "The saved attachment whose native HDB to backfill into "
+    "(`uqs job attachment add`), taking the stack and the destination from it. plan "
+    "lists the windows, the native date partitions, the writers and the readers to "
+    "reload, and changes nothing; run and dry-run admit afresh and start the runner "
+    "(completed historical dates only)"
+)
 
 
 @job_app.command(
@@ -85,16 +100,7 @@ def backfill(
             "declares a default; a new value re-fetches windows already covered (a restatement)",
         ),
     ] = None,
-    on_conflict: Annotated[
-        str | None,
-        typer.Option(
-            "--on-conflict",
-            help="For this run: what a write does with a row whose row_key is already "
-            f"there - {alternatives(stack_backfill.ON_CONFLICT)}. Default: the worker's own "
-            f"({q_facts.DEFAULT_IO_STRATEGY} unless it declares otherwise)",
-            autocompletion=completion.choices(*stack_backfill.ON_CONFLICT),
-        ),
-    ] = None,
+    on_conflict: _OnConflictOpt = None,
     mode: Annotated[
         str | None,
         typer.Option(
@@ -124,17 +130,7 @@ def backfill(
             "the range",
         ),
     ] = False,
-    attach: Annotated[
-        str | None,
-        typer.Option(
-            "--attachment",
-            help="The saved attachment whose native HDB to backfill into "
-            "(`uqs job attachment add`), taking the stack and the destination from it. plan "
-            "lists the windows, the native date partitions, the writers and the readers to "
-            "reload, and changes nothing; run and dry-run admit afresh and start the runner "
-            "(completed historical dates only)",
-        ),
-    ] = None,
+    attach: _AttachOpt = None,
     writer: Annotated[
         str | None,
         typer.Option(

@@ -74,10 +74,19 @@ class FeedOption:
     #: the default in words, where `default` is not one to print: computed by
     #: the feed (None), or a secret's
     default_help: str = ""
+    #: how --help shows its value; a comma-separated one ends ",..." (#1884)
+    metavar: str = ""
 
     @property
     def flag(self) -> str:
         return "--" + self.name.replace("_", "-")
+
+    @property
+    def shown_as(self) -> str | None:
+        """Its metavar: declared, else NAME,... for a comma-separated one."""
+        if self.metavar:
+            return self.metavar
+        return f"{self.name.upper().removesuffix('S')},..." if self.many else None
 
     @property
     def fallback(self) -> str:

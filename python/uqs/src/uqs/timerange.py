@@ -33,6 +33,8 @@ USAGE = (
 )
 
 #: The forms a bound takes, for an option's help and a refusal.
+#: The forms a day takes - what `--date`, a partition and a template take.
+DAY_FORMS = "2026-09-13 or 2026.09.13"
 BOUND_FORMS = (
     "2026-09-13, 2026-09-13T06:00, 2026-09-13T06:00+02:00 or 2026.09.13D06:00; no offset means UTC"
 )
@@ -119,7 +121,7 @@ def parse_day(name: str, text: str) -> date:
     """A day alone, 2026-09-13 or 2026.09.13 - what `--date` takes."""
     m = _DAY.fullmatch(text.strip())
     if m is None:
-        raise UqsUsageError(f"{name} must be a day, 2026-09-13 or 2026.09.13; got {text!r}")
+        raise UqsUsageError(f"{name} must be a day, {DAY_FORMS}; got {text!r}")
     try:
         return date(*(int(g) for g in m.groups()))
     except ValueError as exc:

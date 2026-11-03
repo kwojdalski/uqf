@@ -14,10 +14,11 @@ from typing import Annotated
 
 import typer
 
+from uqs.cli import completion, safety
 from uqs.cli import deploy_connection as conn
 from uqs.cli import deploy_dry_run as dry
 from uqs.cli import deploy_policy as policy
-from uqs.cli import safety
+from uqs.cli.concepts import profile_opt
 from uqs.cli.deploy import _failed, deploy_app
 from uqs.cli.hdb_scope import tables_given
 from uqs.cli.json_out import JSON_HELP, json_opt
@@ -229,9 +230,12 @@ _CHECK_RENAMES = {
 }
 
 
+_ProfileOpt = profile_opt("The profile the release started", required=True)
+
+
 @deploy_app.command("check", cls=renamed(_CHECK_RENAMES, ReadOnly))
 def verify_cmd(
-    profile: Annotated[str, typer.Option("--profile", help="The profile the release started")],
+    profile: _ProfileOpt,
     deadline: Annotated[float, conn.verify_timeout_option()] = config.DEFAULT_VERIFY_TIMEOUT,
     query_timeout: Annotated[
         int,
@@ -250,7 +254,9 @@ def verify_cmd(
         list[str] | None,
         typer.Option(
             "--table",
+            metavar="TABLE",
             help=f"Check {verify.PLANT} carries this table; repeatable, and NAME,NAME also works",
+            autocompletion=completion.plant_table,
         ),
     ] = None,
     fixture: conn.FixtureOpt = True,

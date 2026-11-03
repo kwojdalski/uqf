@@ -16,12 +16,12 @@ from typing import Annotated
 import typer
 
 from uqs.cli import completion, safety
-from uqs.cli.choices import alternatives
+from uqs.cli.choices import ChoiceOpt
 from uqs.cli.create_backfill import backfill_plan
 from uqs.cli.create_bundle import planning_root, refuse_tree_only, write_bundle_plan
 from uqs.cli.create_kinds import DEFAULT_KIND, KindOpt, for_kinds, given_options, misplaced
 from uqs.cli.create_plant import plant_definitions, plant_tables
-from uqs.cli.create_reaction import scaffold_reaction
+from uqs.cli.create_reaction import TriggeredByOpt, WritesOpt, scaffold_reaction
 from uqs.cli.regenerate import write_plan
 from uqs.cli.renames import renamed
 from uqs.cli.shared import (
@@ -46,6 +46,13 @@ app.add_typer(job_app, name="job")
 _RENAMES = {"--columns": "--schema", "--columns-from": "--schema-from", "--procname": "--proc"}
 
 
+_TransformOpt = ChoiceOpt(
+    transform_mod.MODES,
+    "--transform",
+    "{values}: the transform, and for streaming its handler" + for_kinds("--transform"),
+)
+
+
 @job_app.command(
     "new", rich_help_panel=JOB_AUTHORING_PANEL, cls=renamed(_RENAMES, safety.ChangesState)
 )
@@ -59,6 +66,7 @@ def new_job(
         str | None,
         typer.Option(
             "--subscribe-to",
+            metavar="TABLE,...",
             help=f"Comma-separated tables it reads. Omit for a feed{for_kinds('--subscribe-to')}",
             autocompletion=completion.plant_tables,
         ),
@@ -67,6 +75,7 @@ def new_job(
         str | None,
         typer.Option(
             "--publishes",
+            metavar="TABLE,...",
             help="Comma-separated tables it writes; an existing one is published onto"
             + for_kinds("--publishes"),
             autocompletion=completion.plant_tables,
@@ -207,25 +216,9 @@ def new_job(
             "--kind backfill --twin-of JOB`" + for_kinds("--twin-of"),
         ),
     ] = None,
-    transform: Annotated[
-        str | None,
-        typer.Option(
-            "--transform",
-            help=f"{alternatives(transform_mod.MODES)}: the transform, and for streaming its "
-            "handler" + for_kinds("--transform"),
-            autocompletion=completion.choices(*transform_mod.MODES),
-        ),
-    ] = None,
-    triggered_by: Annotated[
-        str | None,
-        typer.Option(
-            "--triggered-by",
-            help="Scaffold a reaction instead: run when a bounded worker publishes DATASET",
-        ),
-    ] = None,
-    writes: Annotated[
-        str | None, typer.Option("--writes", help="Tables the reaction writes, comma-separated")
-    ] = None,
+    transform: _TransformOpt = None,
+    triggered_by: TriggeredByOpt = None,
+    writes: WritesOpt = None,
     bundle: Annotated[
         Path | None,
         typer.Option(

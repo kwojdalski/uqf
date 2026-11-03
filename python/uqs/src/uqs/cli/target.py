@@ -28,6 +28,7 @@ from typing import Annotated
 import typer
 
 from uqs.cli import safety
+from uqs.cli.concepts import LatestTargetArg, TargetArg, target_arg
 from uqs.cli.json_out import emit, json_opt
 from uqs.cli.safety import ChangesState, Effect, ReadOnly, dry_run_note, marked
 from uqs.cli.shared import _die, app, console, log
@@ -47,8 +48,11 @@ app.add_typer(target_app, name="target")
 
 _ACCOUNT = re.compile(r"[a-z_][a-z0-9_-]{0,31}")
 _LABEL = re.compile(r"([A-Za-z0-9_.-]+)=(\S*)")
-Name = Annotated[str, typer.Argument(help="A target, or a server: its latest deployment")]
+Name = LatestTargetArg
 
+
+#: `target rename OLD NEW`'s OLD: a target there is.
+_OldTarget = target_arg("The target to rename")
 
 Reach = Annotated[
     bool,
@@ -170,7 +174,7 @@ _KEY = re.compile(r"[a-z_][a-z0-9_]*(?:\.[A-Za-z0-9_.-]+)?")
 
 @target_app.command("set", cls=ChangesState)
 def set_(
-    name: Annotated[str, typer.Argument(help="The target")],
+    name: TargetArg,
     pairs: Annotated[
         list[str],
         typer.Argument(
@@ -206,7 +210,7 @@ def set_(
 
 @target_app.command("unset", cls=ChangesState)
 def unset(
-    name: Annotated[str, typer.Argument(help="The target")],
+    name: TargetArg,
     keys: Annotated[
         list[str],
         typer.Argument(metavar="KEY...", help="Settings to remove: launch_python labels.tier"),
@@ -231,7 +235,7 @@ def unset(
 
 @target_app.command("rename", cls=ChangesState)
 def rename(
-    old: Annotated[str, typer.Argument(metavar="OLD", help="The target")],
+    old: _OldTarget,
     new: Annotated[str, typer.Argument(metavar="NEW", help="Its new name")],
     dry_run: DryRun = False,
 ) -> None:
@@ -250,7 +254,7 @@ CheckJson = json_opt('{"ok": true, "target", "ssh", "dest", "remote_user", "rele
 
 
 @target_app.command("check", cls=ReadOnly)
-def check(name: Name, as_json: CheckJson = False) -> None:
+def check(name: Name = None, as_json: CheckJson = False) -> None:
     """Reach the target and name the release it runs. Says which part failed:
     ssh, or no release under its dest."""
     try:
@@ -273,10 +277,7 @@ def check(name: Name, as_json: CheckJson = False) -> None:
     cls=marked(Effect.CHANGES_STATE, own_output="opens an interactive shell on the server"),
 )
 def shell(
-    name: Annotated[
-        str | None,
-        typer.Argument(help="A target or a server; default: the most recent deployment"),
-    ] = None,
+    name: LatestTargetArg = None,
 ) -> None:
     """A shell on the server, in the deployed release - like `poetry shell`:
     its deploy.env loaded, its uqs first on PATH, as the target's account.

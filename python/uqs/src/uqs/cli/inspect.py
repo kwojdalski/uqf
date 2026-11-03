@@ -17,6 +17,7 @@ from uqs.checks import schema_view
 from uqs.checks.schema_view import DEFAULT_PROC
 from uqs.cli import completion
 from uqs.cli import query_target as via_target
+from uqs.cli.concepts import target_opt
 from uqs.cli.json_out import emit, json_opt
 from uqs.cli.q_login import DEFAULT_USER, QPasswdOpt, QPasswordEnvOpt, QUserOpt, q_password
 from uqs.cli.renames import renamed
@@ -80,10 +81,9 @@ def schema(
     host: QHostOpt = "localhost",
     tunnel: Annotated[
         str | None,
-        typer.Option(
+        target_opt(
             "--tunnel",
-            metavar="TARGET",
-            help="deployment target (deploy_targets.toml) to read from here, through an "
+            "deployment target (deploy_targets.toml) to read from here, through an "
             "ssh tunnel opened for the call, as `query --tunnel` does (#1858)",
         ),
     ] = None,

@@ -1371,6 +1371,241 @@ def test_the_receivers_row_limit_is_the_contracts():
     assert f"(default {DEFAULT_MAX_ROWS})" in script
 
 
+# ------------------------------------- option values, one mechanism (#1884)
+
+
+def _completer(param):
+    """The function `param` completes with, unwrapped from Typer's adapter."""
+    completer = getattr(param, "_custom_shell_complete", None)
+    for cell in getattr(completer, "__closure__", None) or ():
+        if callable(cell.cell_contents):
+            return cell.cell_contents
+    return None
+
+
+#: (command, option) -> why its fixed values are a completer, not a Choice.
+NOT_A_CHOICE = {
+    ("job backfill", "--mode"): "takes the retired value dry-run for one release "
+    "(rename_expiry: `uqs job backfill --mode dry-run`), which its help no longer shows",
+    ("deploy build", "--q-version"): "one name, one type (cli/vocabulary.py): on `deploy push` "
+    "--q-version is a free REQUIREMENT, >=4.1",
+}
+
+
+def test_an_option_with_fixed_values_is_a_choice():
+    """#1884: an option taking one of a fixed set is a Choice (cli/choices.py
+    ChoiceOpt) - its type, completion and help from one tuple - not a free
+    str with a completer and validation by hand. `--sort` takes a column the
+    listing's header names; an argument may refuse with its own message."""
+    found = {
+        (cmd.path, _long(p))
+        for cmd in TREE
+        for p in cmd.options
+        if "--sort" not in p.opts
+        and (cmd.path, _long(p)) not in NOT_A_CHOICE
+        and not hasattr(p.type, "choices")
+        and getattr(_completer(p), "choice_values", None) is not None
+    }
+    assert not found, sorted(found)
+
+
+def _concept(param) -> str | None:
+    """Which concept a parameter names, by its flag or its metavar."""
+    opts, metavar = set(param.opts), (param.metavar or "").rstrip(".").rstrip(",")
+    if "--attachment" in opts:
+        return "attachment"
+    if opts & {"--target", "--tunnel"} or metavar == "TARGET":
+        return "target"
+    if "--profile" in opts:
+        return "profile"
+    if metavar == "JOB":
+        return "job"
+    if metavar == "TABLE" or opts & {"--table", "--tables"}:
+        return "table"
+    if metavar == "SOURCE":
+        return "source"
+    return None
+
+
+def _name(fn) -> str | None:
+    """A completer's name: Typer hands each command a copy, so not its identity."""
+    return f"{fn.__module__}.{fn.__qualname__}" if fn is not None else None
+
+
+def _concept_completers() -> dict[str, set[str | None]]:
+    from uqs.cli import completion as c
+
+    named = {
+        "attachment": (c.attachments,),
+        "target": (c.targets,),
+        "profile": (c.profiles,),
+        "job": (c.jobs, c.streaming_jobs, c.backfill_workers),
+        "table": (c.plant_table, c.plant_tables),
+        "source": (c.sources, c.source_list),
+    }
+    return {concept: {_name(f) for f in fns} for concept, fns in named.items()}
+
+
+#: (command, parameter) -> why it names a concept's NEW value, so offers none.
+NAMES_A_NEW_ONE = {("job new", "name"): "the job it scaffolds does not exist yet"}
+
+
+def test_each_concept_completes_with_its_completer():
+    """#1884: an attachment, a target, a profile, a job, a table or a source
+    completes the same way on every command - shared aliases in
+    cli/concepts.py carry the completer."""
+    completers, found = _concept_completers(), set()
+    for cmd in TREE:
+        for param in cmd.command.params:
+            if getattr(param, "hidden", False) or (cmd.path, param.name) in NAMES_A_NEW_ONE:
+                continue
+            concept = _concept(param)
+            if concept and _name(_completer(param)) not in completers[concept]:
+                found.add((cmd.path, param.name, concept))
+    assert not found, sorted(found)
+
+
+def test_the_target_argument_is_one_definition():
+    """#1884: a TARGET is TARGET everywhere and completes targets; a command
+    that only reads a server falls back to the latest deployment."""
+    for path in ("target check", "target shell", "deploy status"):
+        param = next(p for p in LEAVES[path].command.params if p.metavar == "TARGET")
+        assert not param.required, path
+    for path in ("target set", "target unset", "target remove"):
+        param = next(p for p in LEAVES[path].command.params if p.metavar == "TARGET")
+        assert param.required, path
+
+
+def test_a_comma_separated_option_says_so_in_its_metavar():
+    """#1884: one style, `NAME,...`, wherever an option takes a comma-separated list."""
+    found = {
+        (cmd.path, _long(p), p.metavar)
+        for cmd in TREE
+        for p in cmd.options
+        if re.search(r"comma[- ]separated", p.help or "", re.IGNORECASE)
+        and not (p.metavar or "").endswith(",...")
+    }
+    assert not found, sorted(found)
+
+
+def test_a_default_said_in_help_is_not_shown_twice():
+    """#1884: a help that states its default does not also get `[default: X]`
+    - `status --timeout` read "(default 120) ... [default: 120.0]"."""
+    found = {
+        (cmd.path, _long(p))
+        for cmd in TREE
+        for p in cmd.options
+        if re.search(r"\bdefault", p.help or "", re.IGNORECASE)
+        and p.show_default is not False
+        and not p.is_flag
+        and p.default not in (None, (), [])
+    }
+    assert not found, sorted(found)
+
+
+#: "default $NAME", "Default from $NAME", "default: $NAME" - a variable as a fallback.
+_ENV_FALLBACK = re.compile(r"\bdefault(?: from|:)?\s+\$([A-Z][A-Z0-9_]*)", re.IGNORECASE)
+
+
+def test_a_variable_named_as_a_fallback_is_the_one_read():
+    """#1884: a `$NAME` a help names as its default is the option's own envvar
+    - or, for a connector option, the variable its FeedOption reads (it
+    resolves given > $env > default itself, external/feeds.py)."""
+    from uqs.cli.external import FEEDS
+
+    feed_env = {
+        flag: o.env
+        for f in FEEDS.values()
+        for o in f.options
+        for flag in (o.flag, f"{o.flag}-env")
+        if o.env
+    }
+    found = set()
+    for cmd in TREE:
+        for p in cmd.options:
+            for name in _ENV_FALLBACK.findall(p.help or ""):
+                connector = cmd.path.startswith("connector ") and feed_env.get(_long(p)) == name
+                if p.envvar != name and not connector:
+                    found.add((cmd.path, _long(p), name, p.envvar))
+    assert not found, sorted(found)
+
+
+#: The plant's variables a publisher reads beside q (external/connection.py).
+_PUBLISHERS = __import__("uqs.external.connection").external.connection.TP_CREDENTIAL_ENV
+
+
+def test_a_uqf_variable_in_help_is_one_q_reads():
+    """#1884: one prefix per side. uqs's own variables are UQS_; a UQF_ one
+    (q_facts.CFG_ENV_PREFIX) is the plant's - q reads it, or a publisher that
+    feeds the plant beside q does (UQF_TP_CREDENTIAL, held in
+    external/connection.py) - and is named in help only then."""
+    from uqs.generated import q_facts
+
+    q_text = "\n".join(p.read_text() for p in (GUIDE.parents[2] / "src").rglob("*.q"))
+    named = {
+        (cmd.path, name)
+        for cmd in TREE
+        for p in cmd.options
+        for name in re.findall(r"\$((?:UQS|UQF)_[A-Z0-9_]+)", p.help or "")
+    }
+    stray = {
+        (path, name)
+        for path, name in named
+        if name.startswith(q_facts.CFG_ENV_PREFIX) and name not in q_text + _PUBLISHERS
+    }
+    assert not stray, sorted(stray)
+
+
+#: A day written out in a help: 2026-09-13, 2026.09.13, YYYY-MM-DD.
+_DAY_SHAPED = re.compile(r"\d{4}[-.]\d{2}[-.]\d{2}|YYYY")
+
+
+def test_every_date_shaped_parameter_uses_the_shared_forms():
+    """#1884: a parameter taking a day names timerange's forms - both spellings,
+    which timerange.parse_day accepts - rather than one of its own."""
+    from uqs.timerange import BOUND_FORMS, DAY_FORMS
+
+    found = {
+        (cmd.path, p.name)
+        for cmd in TREE
+        for p in cmd.command.params
+        if not getattr(p, "hidden", False)
+        and _DAY_SHAPED.search(p.help or "")
+        and DAY_FORMS not in (p.help or "")
+        and BOUND_FORMS not in (p.help or "")
+    }
+    assert not found, sorted(found)
+
+
+@pytest.mark.parametrize("partition", ["2026-01-02", "2026.01.02"])
+def test_data_migrate_takes_both_day_forms(monkeypatch, partition):
+    """`data migrate TABLE PARTITION` refused 2026.01.02, the form on disk (#1884)."""
+    from datetime import date
+
+    from typer.testing import CliRunner
+
+    from uqs.stack import hdb_migrate
+
+    seen = []
+
+    def migrate(_paths, _table, day, *_a, **_k):
+        seen.append(day)
+        raise SystemExit(0)
+
+    monkeypatch.setattr(hdb_migrate, "migrate", migrate)
+    CliRunner().invoke(app, ["data", "migrate", "trade", partition])
+    assert seen == [date(2026, 1, 2)]
+
+
+def test_every_override_name_is_one_spelling():
+    """#1884: `uqs override list` showed `q-version-check`, `accept-digest` and
+    `TORQ_VERSION:COMPONENT` side by side; every name is lower case, words
+    joined by `-`, with `:COMPONENT` where it is waived per process."""
+    pattern = re.compile(r"^[a-z][a-z0-9-]*(:COMPONENT)?$")
+    bad = [g.name for g in safety.catalog() if not pattern.fullmatch(g.name)]
+    assert not bad, bad
+
+
 # ------------------------------------------------------------- the lists
 
 

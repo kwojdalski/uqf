@@ -155,7 +155,11 @@ def _start_signature() -> inspect.Signature:
         typed = Annotated[
             option.type | None,
             typer.Option(
-                help=help_, show_default=False, hidden=option.secret, rich_help_panel=panel
+                help=help_,
+                show_default=False,
+                hidden=option.secret,
+                rich_help_panel=panel,
+                metavar=option.shown_as,
             ),
         ]
         params.append(inspect.Parameter(name, kind, default=None, annotation=typed))
