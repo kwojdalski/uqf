@@ -1539,7 +1539,16 @@ command that breaks a rule, and on a listed exception that has since been fixed.
    waiver at run time. Through `uqs --target`, a `--dry-run` asks nothing first,
    except a backfill's, which starts a process to fetch. That is sound only
    because of the test above: `start --dry-run` used to bootstrap the data
-   directory, unasked, on the server (#1880).
+   directory, unasked, on the server (#1880), and `job backfill --dry-run` did
+   too, until #1902. A backfill rehearsal - `--dry-run`, `--mode plan` or
+   `--mode validate` - now starts its worker against the data directory as the
+   fleet's last start left it, and is refused, naming `uqs start`, when that
+   directory is not bootstrapped; it rehearses against the real coverage ledger,
+   which a scratch directory would not hold. What the worker itself writes - its
+   log and its status file - is the rehearsal's output. `deploy prune` and
+   `deploy rollback` print a JSON report, so their note goes to stderr; their
+   dry runs read the deploy lock and take nothing
+   ([deploy.md](deploy.md#rolling-back)).
 6. **A rename ships with a hidden alias for one release**, which prints the new
    spelling; the release after removes it.
 

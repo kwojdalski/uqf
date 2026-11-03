@@ -8,7 +8,7 @@ import json
 from uqs.deploy import preflight as checks
 from uqs.deploy.artifact import compatible
 from uqs.deploy.config import REPORT, UNREADABLE_REPORT, Config, DeployError, redact
-from uqs.deploy.lock import Lock
+from uqs.deploy.lock import Lock, describe
 from uqs.deploy.python_runtime import PythonRuntime
 from uqs.deploy.q_runtime import QRuntime
 from uqs.deploy.remote import Transport, _checked, diagnostic, q, script
@@ -271,6 +271,24 @@ class Server:
         """Hold deploy.lock, recording who holds it (uqs.deploy.lock); with
         --override break-lock, first remove one whose holder has stopped beating."""
         self.locker.take(command, self.release)
+
+    def read_lock(self, command: str) -> None:
+        """A dry run's stand-in for take_lock (#1902): read the lock, take
+        nothing. A prune or rollback dry run promises to change nothing, and
+        taking the lock writes on the server - `mkdir -p` of dest itself, the
+        lock, its owner and heartbeat - and would refuse a real push that
+        started meanwhile. Its plan is advisory: the real run decides again,
+        under the lock. So a held lock only warns that the plan may be
+        overtaken by the deployment holding it; the race the lock prevents
+        is between two runs that ACT, and a dry run does not."""
+        if held := self.locker.info():
+            log.warning(
+                "{} --dry-run: another deployment holds {} ({}) - this plan reads the "
+                "server as it is now, and may not survive it",
+                command,
+                self.lock,
+                describe(held),
+            )
 
     def beat(self) -> None:
         """Tell a later reader the lock's holder is alive: between stages."""
