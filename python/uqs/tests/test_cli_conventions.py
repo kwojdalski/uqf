@@ -409,6 +409,15 @@ OPTIONS |= {
     )
 }  # fmt: skip
 
+#: The generated `--skip-<id>` options (cli/skip_options.py, #1826, #1918): each is
+#: one guardrail's declaration on every command that declaration names, so one
+#: meaning by construction - the --override it spells, which its help names.
+OPTIONS |= {
+    skip_options.flag(g): Meaning(f"waive {g.id}", "--override " + re.escape(g.name))
+    for g in safety.registry()
+    if g.skip_flag
+}
+
 #: Every short flag, and the one long name it abbreviates.
 SHORT_FLAGS = {
     "-n": "--dry-run",

@@ -1,5 +1,6 @@
 """The start commands' named overrides (#1643, #1732): the one place that turns
-`--override NAME --reason TEXT` into stack/start_overrides.Overrides.
+`--override NAME --reason TEXT` - or its generated `--skip-NAME` (#1918), which
+safety.given reads as the same - into stack/start_overrides.Overrides.
 
 Each is refused where it would do nothing: a q-version check is never run
 for a dry run, and the budget estimate is a profile's only.
@@ -11,9 +12,6 @@ from uqs.cli import safety
 from uqs.cli.shared import _die
 from uqs.paths import UqsError
 from uqs.stack.start_overrides import FLAGS, NAMES, Overrides
-
-#: The old `--skip-...-check REASON` options, kept hidden for one release.
-OLD_SPELLINGS = {f"--skip-{name}": ("--override", name) for name in NAMES.values()}
 
 
 def overrides_from(

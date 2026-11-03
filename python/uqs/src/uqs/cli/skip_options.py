@@ -79,7 +79,8 @@ def _help(g: Guardrail) -> str:
     if g.action:
         parts.append(f"Then: {g.action.rstrip('.')}")
     each = "; repeatable, one COMPONENT each" if g.component_scoped else ""
-    parts.append(f"The same as {same}{each}. Needs --reason; warned and recorded")
+    parts.append(f"Nothing else is waived. The same as {same}{each}")
+    parts.append("Needs --reason; warned and recorded")
     return ". ".join(parts)
 
 

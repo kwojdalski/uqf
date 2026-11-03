@@ -11,14 +11,15 @@ want to try it anyway:
     estimate (profiles.over_budget_procs). Only the estimate is waived: the
     licence's own limit is still q's to enforce.
 
-Each override is the operator's for this command only: a nonempty reason is
-required, a warning says what was skipped and what may follow, and every
-use is appended to OVERRIDES_LOG in the runtime's data directory with the
-command, the processes and the runtime. Nothing is ever set by a file or a
-default, and the front ends that do not pass one - the MCP server, the
-browser - keep every refusal. Port ownership, process names, attachment
-verification, converted-source integrity and the launcher's own checks are
-never overridable.
+Each override is the operator's for this command only, spelled `--override
+NAME` or its generated `--skip-NAME` (#1918), which reach here identically: a
+nonempty reason is required, a warning says what was skipped and the risk
+accepted, and every use is appended to OVERRIDES_LOG in the runtime's data
+directory with the risk, the command, the processes and the runtime.
+Nothing is ever set by a file or a default, and the front ends that do not
+pass one - the MCP server, the browser - keep every refusal. Port ownership,
+process names, attachment verification, converted-source integrity and the
+launcher's own checks are never overridable.
 """
 
 from __future__ import annotations
@@ -37,19 +38,29 @@ log = get_logger()
 OVERRIDES_LOG = "start_overrides.jsonl"
 _START = ("start", "restart")
 #: The refusals a start may skip, by Overrides field; each id is the name
-#: `--override NAME` gives (#1732, #1825).
+#: `--override NAME` gives (#1732, #1825), and each gives `start` and `restart`
+#: a generated `--skip-<id>` (cli/skip_options.py, #1918) whose help is this
+#: declaration: what is waived, the risk, and what to do about it.
 GUARDRAILS = {
     "q_version": Guardrail(
         "q-version-check",
         _START,
-        "the q is older than the tree as written needs: processes may die on "
-        "their first nested context, the failure only in their logs",
+        "start on a q older than the KDB-X 5.0 the tree as written needs, without "
+        "converting the tree; only the q-version refusal is lifted",
+        risk="processes may die on their first nested context, the failure only in their logs",
+        action="check each started process came up and stayed up (`uqs status`, `uqs logs PROC`)",
+        skip_flag=True,
     ),
     "profile_budget": Guardrail(
         "profile-budget-check",
         _START,
-        "the set may exceed the licence's connections: the plant resets the "
-        "extra handles and those processes wedge while reporting up",
+        "start a --profile set past the connection budget estimate; only the estimate is "
+        "waived, the licence's own limit is still q's to enforce",
+        risk="the set may exceed the licence's connections: the plant resets the extra "
+        "handles and those processes wedge while reporting up",
+        action="query each process of the set, not only its status, and stop the set if one "
+        "does not answer",
+        skip_flag=True,
     ),
 }
 #: Each override's name, by Overrides field.
@@ -85,17 +96,20 @@ def skipped(paths: UqsPaths, overrides: Overrides, which: str, verb: str, procs:
     reason = getattr(overrides, which)
     if not reason:
         return False
+    g = GUARDRAILS[which]
     log.warning(
-        "{} given ({}): skipping that check for `{} {}` - {}",
+        "{} given ({}): skipping that check for `{} {}` - {}. Accepted risk: {}",
         FLAGS[which],
         reason,
         verb,
         procs,
-        GUARDRAILS[which].description,
+        g.description,
+        g.risk,
     )
     entry = {
         "at": datetime.now(UTC).isoformat(timespec="seconds"),
         "override": FLAGS[which],
+        "risk": g.risk,
         "reason": reason,
         "command": verb,
         "processes": procs,
