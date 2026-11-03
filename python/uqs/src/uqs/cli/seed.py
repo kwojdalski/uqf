@@ -54,7 +54,8 @@ def seed(
         list[str] | None,
         typer.Option(
             "--table",
-            help="Copy only this table; repeatable, and NAME,NAME also works. Default: every "
+            metavar="TABLE",
+            help="Copy only this table; repeatable, and TABLE,TABLE also works. Default: every "
             "table this runtime declares",
         ),
     ] = None,
@@ -80,7 +81,9 @@ def seed(
         typer.Option("--dry-run", "-n", help="Name the partitions it would copy; write nothing"),
     ] = False,
 ) -> None:
-    """Copy another runtime's HDB partitions of the tables both declare into
+    """Copy another runtime's HDB partitions into this runtime's HDB.
+
+    Copies the partitions of the tables both declare into
     this runtime's (`--runtime`), re-enumerating every symbol against this
     runtime's sym file. The source is only read. A table this runtime does
     not declare, or a column whose type differs, is refused with nothing

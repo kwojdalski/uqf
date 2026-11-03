@@ -113,7 +113,7 @@ def refills(holes: list[dict], twins: dict) -> tuple[list[dict], bool]:
     cls=needs_pipelines("reads this tree's streaming jobs' coverage", ReadOnly),
 )
 def gaps(
-    job: Annotated[str, typer.Argument(help="The streaming job, e.g. markout")],
+    job: Annotated[str, typer.Argument(metavar="JOB", help="The streaming job, e.g. markout")],
     range_from: RangeFromOpt = None,
     range_to: RangeToOpt = None,
     day: DateOpt = None,
@@ -121,7 +121,7 @@ def gaps(
     interactive: InteractiveOpt = False,
     as_json: GapsJson = False,
 ) -> None:
-    """Where in [--from, --to) a streaming job was not up and subscribed.
+    """Find where in [--from, --to) a streaming job was not up and subscribed.
 
     A restarted job rebuilds its state from the day's log but does not publish
     again what it missed, so these are the holes in its output. Each is

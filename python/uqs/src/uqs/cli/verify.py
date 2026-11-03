@@ -81,6 +81,7 @@ def check(
     dataset: Annotated[
         str,
         typer.Argument(
+            metavar="DATASET",
             help="A dataset: a plant table its producers fill",
             autocompletion=completion.plant_table,
         ),
@@ -89,7 +90,7 @@ def check(
         list[str] | None,
         typer.Option(
             "--scope",
-            help="column=value, repeatable: the records the completeness check reconciles. "
+            help="`column=value`, repeatable: the records the completeness check reconciles. "
             "Without one it is UNVERIFIED",
         ),
     ] = None,
@@ -118,7 +119,7 @@ def check(
     last: LastOpt = None,
     as_json: VerifyJson = False,
 ) -> None:
-    """Verify a dataset's producers over one source window, read only.
+    """Check a dataset's producers over one source window, read only.
 
     Reports four results separately - schema, behaviour, cross-mode equivalence and
     completeness - each PASS, FAIL or UNVERIFIED, with the dataset, scope, bounds and

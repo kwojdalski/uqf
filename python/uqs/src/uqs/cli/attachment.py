@@ -18,7 +18,8 @@ from uqs.cli.shared import JOB_OPERATIONS_PANEL, job_app
 attachment_app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
-    help="Attachments: a job put on a TorQ stack already running - add, remove, show, "
+    help="Jobs attached to a running TorQ stack: add, remove, show, list, status, contract."
+    "\n\nAn attachment is a job put on a TorQ stack already running - add, remove, show, "
     "list, the status of the backfills into them, and the receiver contracts approved for "
     "one (contract).",
 )

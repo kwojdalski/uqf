@@ -23,7 +23,8 @@ from uqs.stack import runtime_report
 runtime_app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
-    help="Compare the runtimes (`uqs runtime diff uqf torq`) and install the bundles one "
+    help="Runtimes: list, diff, prepare.\n\n"
+    "Compare the runtimes (`uqs runtime diff uqf torq`) and install the bundles one "
     "declares (`uqs runtime prepare`: `uqs job install` for each); `uqs runtime list` "
     "lists them.",
 )
@@ -40,11 +41,25 @@ DiffJson = json_opt(
 
 @runtime_app.command("diff", cls=ReadOnly)
 def runtime_diff(
-    a: Annotated[str, typer.Argument(help="A runtime", autocompletion=lambda: _NAMES)],
-    b: Annotated[str, typer.Argument(help="Another runtime", autocompletion=lambda: _NAMES)],
+    a: Annotated[
+        str,
+        typer.Argument(
+            metavar="RUNTIME", help="A runtime, e.g. uqf", autocompletion=lambda: _NAMES
+        ),
+    ],
+    b: Annotated[
+        str,
+        typer.Argument(
+            metavar="RUNTIME",
+            help="Another runtime, e.g. uqf or torq",
+            autocompletion=lambda: _NAMES,
+        ),
+    ],
     as_json: DiffJson = False,
 ) -> None:
-    """What runtime A has that B does not, and the reverse: processes, tables,
+    """Compare two runtimes: what each has that the other does not.
+
+    What the first RUNTIME has that the second does not, and the reverse: processes, tables,
     config layers, and the commands only some runtimes run."""
     try:
         sections = runtime_report.diff(_paths().repo_root, a, b, pipelines_only())

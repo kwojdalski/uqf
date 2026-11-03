@@ -112,7 +112,7 @@ def main() -> None:
     # Before app(): --install-completion and --show-completion are handled
     # inside it, and both read the template this swaps out.
     patch_zsh_completion_script()
-    # `uqs --target NAME <command>` runs the command on a deployed release
+    # `uqs --target TARGET <command>` runs the command on a deployed release
     # (#956). Here, before Typer parses anything, because what follows is the
     # SERVER's command line: the server's uqs parses it, and a command this
     # checkout no longer has, or has changed, still means what it means there.
