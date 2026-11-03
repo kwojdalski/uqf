@@ -28,7 +28,7 @@ from typing import Annotated
 import typer
 
 from uqs.cli.json_out import emit, json_opt
-from uqs.cli.safety import ChangesState, ReadOnly
+from uqs.cli.safety import ChangesState, ReadOnly, dry_run_note
 from uqs.cli.shared import _die, app, console
 from uqs.cli.skip_options import forwarded
 from uqs.cli.target_confirm import changes_the_server, confirmed_on_server
@@ -90,13 +90,13 @@ def _done(result: target_changes.Result, said: str, dry_run: bool) -> None:
         )
     if result.entry is None:
         console.print(f"nothing to change: {said}")
-        return
-    console.print(result.entry["diff"].rstrip("\n"), markup=False, highlight=False)
+    else:
+        console.print(result.entry["diff"].rstrip("\n"), markup=False, highlight=False)
     if dry_run:
-        console.print(f"dry run: {said} - nothing written")
-        return
-    number = len(target_changelog.read_log(repo_root()))
-    console.print(f"[green]✓[/] {said} in {result.path} (change {number}, `uqs target log`)")
+        console.print(dry_run_note())
+    elif result.entry is not None:
+        number = len(target_changelog.read_log(repo_root()))
+        console.print(f"[green]✓[/] {said} in {result.path} (change {number}, `uqs target log`)")
 
 
 def _change(run: Callable[[], target_changes.Result], said: str, dry_run: bool) -> None:

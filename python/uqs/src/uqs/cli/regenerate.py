@@ -11,6 +11,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+from uqs.cli.safety import dry_run_note
 from uqs.cli.shared import _die, console
 from uqs.interpreter import q_interpreter
 from uqs.paths import DERIVE_SCRIPT, UqsError
@@ -84,7 +85,7 @@ def write_plan(plan: ScaffoldPlan, repo_root: Path, *, dry_run: bool) -> None:
         "  then regenerate: " + ", ".join(" ".join(d) for d in (*_DERIVED, _CONTRACT_SURFACE))
     )
     if dry_run:
-        console.print("[dim]--dry-run: nothing written[/]")
+        console.print(dry_run_note())
         return
     try:
         written = write.apply_plan(plan, repo_root)

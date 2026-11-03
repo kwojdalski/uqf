@@ -22,7 +22,7 @@ from rich.table import Table
 
 from uqs.cli.regenerate import _DERIVED, _regenerate_derived, derived_command
 from uqs.cli.runtime_diff import runtime_app
-from uqs.cli.safety import ChangesState
+from uqs.cli.safety import ChangesState, dry_run_note
 from uqs.cli.shared import _die, _paths, console
 from uqs.paths import UqsError
 from uqs.stack import qtree, runtime_bundles
@@ -85,7 +85,7 @@ def prepare(
             f"{converted['transformed']} rewritten; `start` builds and checks the tree[/]"
         )
     if dry_run:
-        console.print("[dim]--dry-run: nothing written[/]")
+        console.print(dry_run_note())
         return
     try:
         runtime_bundles.prepare(runtime, members, paths.repo_root)

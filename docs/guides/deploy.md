@@ -1106,7 +1106,7 @@ Set each process's value on the server:
 
 ```bash
 uqs --target uat config set stp1 taskset_no=3:5
-uqs --target uat start --dry-run stp1
+uqs --target uat config show stp1     # taskset_no 3:5
 ```
 
 `config set` writes `python/uqs/process_overrides.csv` (see [changing a
@@ -1115,8 +1115,10 @@ file from `shared/config/python/uqs/process_overrides.csv` when it exists, so
 create it there, with just the header `procname,field,value`, before the first
 `config set`. Values set without it are kept by that release only. A process
 with no value keeps the column empty, and nothing assigns CPUs on its own.
-`start --dry-run` shows the start lines the launcher builds, without starting
-anything.
+`start --dry-run` shows the start lines TorQ's own `torq.sh` builds, without
+starting or writing anything. uqs composes them from the process rows and
+environment a start would write, and never runs the site launcher for them, so
+how a launcher uses `taskset_no` shows only when it starts the process.
 
 ## On the server
 
