@@ -236,9 +236,10 @@ export async function request<T>(
   // and inferring that from anything would be guessing.
   method?: "GET" | "POST" | "PUT",
   authorization?: string,
+  extra?: Record<string, string>,
 ): Promise<T> {
   let response: Response;
-  const headers: Record<string, string> = {};
+  const headers: Record<string, string> = { ...extra };
   if (body) headers["Content-Type"] = "application/json";
   if (authorization) headers.Authorization = authorization;
   try {
@@ -454,6 +455,7 @@ export async function mutate<T>(
   path: string,
   body: unknown,
   method: "POST" | "PUT" = "POST",
+  correlation?: Correlation,
 ): Promise<T> {
   const controller = new AbortController();
   const token = writeToken.get();
@@ -463,7 +465,19 @@ export async function mutate<T>(
     JSON.stringify(body),
     method,
     token ? `Bearer ${token}` : undefined,
+    correlation
+      ? {
+          "X-UQF-Request-Id": correlation.requestId,
+          "X-UQF-Session-Id": correlation.sessionId,
+        }
+      : undefined,
   );
+}
+/** The ids a write carries so the server's audit row and the browser's
+ *  activity events for it can be read together (#1954). */
+export interface Correlation {
+  requestId: string;
+  sessionId: string;
 }
 
 /** The write token for the control routes (#631), when the operator typed it.
@@ -635,4 +649,90 @@ export function uploadRemoteFile(
     signal.addEventListener("abort", () => xhr.abort(), { once: true });
     xhr.send(file);
   });
+}
+
+// --- activity history (#1954) ----------------------------------------------
+
+/** models.ActivitySource and friends, held to them by test_api_types.py. */
+export type ActivitySource = "browser" | "server";
+export type BrowserKind =
+  "navigate" | "select" | "submit" | "confirm" | "cancel" | "result";
+export type ActivityKind =
+  | "navigate"
+  | "select"
+  | "submit"
+  | "confirm"
+  | "cancel"
+  | "result"
+  | "request";
+export type ActivityOutcome =
+  "pending" | "succeeded" | "failed" | "refused" | "accepted" | "unknown";
+export type ActivityTrigger =
+  "pointer" | "keyboard" | "programmatic" | "unknown";
+/** A `detail` value. Only the keys activity.DETAIL_KEYS allows are kept. */
+export type DetailValue = string | number | boolean;
+export interface ActivityItem {
+  target: string;
+  outcome: ActivityOutcome;
+}
+/** POST /activity/events, one event - models.BrowserEventIn. */
+export interface BrowserEvent {
+  event_id: string;
+  session_id: string;
+  ts: string;
+  kind: BrowserKind;
+  action: string;
+  target?: string | null;
+  trigger: ActivityTrigger;
+  request_id?: string | null;
+  outcome?: ActivityOutcome | null;
+  duration_ms?: number | null;
+  items?: ActivityItem[];
+  detail?: Record<string, DetailValue>;
+}
+/** POST /activity/events - models.ActivityBatchRequest. */
+export interface ActivityBatch {
+  events: BrowserEvent[];
+}
+export interface ActivityBatchResult {
+  stored: number;
+  not_stored: number;
+  dropped_detail: number;
+  persistent: boolean;
+}
+/** One stored event - models.ActivityEventOut. `claimed_user` is a header
+ *  anyone can set: shown as claimed, never as who it was. */
+export interface ActivityEvent {
+  event_id: string;
+  ts: string;
+  recorded_at: string;
+  source: ActivitySource;
+  kind: ActivityKind;
+  action: string;
+  target: string | null;
+  outcome: ActivityOutcome | null;
+  session_id: string | null;
+  request_id: string | null;
+  claimed_user: string | null;
+  trigger: ActivityTrigger | null;
+  method: string | null;
+  status_code: number | null;
+  duration_ms: number | null;
+  items: ActivityItem[];
+  detail: Record<string, unknown>;
+  dropped: number;
+}
+export interface ActivityPersistence {
+  persistent: boolean;
+  path: string | null;
+  failures: number;
+  last_error: string | null;
+  last_failure_at: string | null;
+}
+/** GET /activity - models.ActivityResponse. */
+export interface ActivityHistory extends Pollable {
+  events: ActivityEvent[];
+  persistence: ActivityPersistence;
+  retention_days: number;
+  max_rows: number;
 }

@@ -15,6 +15,7 @@ import json
 import re
 import secrets
 import shlex
+import sqlite3
 import stat
 import subprocess
 import sys
@@ -89,8 +90,14 @@ def _deployment(dest: Path, python: bool = True) -> Path:
     return dest
 
 
-def _client(runner, *, writes: bool = True, token: str | None = TOKEN) -> TestClient:
-    settings = Settings(enable_writes=True, write_token=TOKEN) if writes else Settings()
+def _client(
+    runner, *, writes: bool = True, token: str | None = TOKEN, activity_db: Path | None = None
+) -> TestClient:
+    settings = (
+        Settings(enable_writes=True, write_token=TOKEN, activity_db=activity_db)
+        if writes
+        else Settings()
+    )
     headers = {"Authorization": f"Bearer {token}"} if token else {}
     return TestClient(
         create_app(gateway=FakeGateway(), settings=settings, remote_runner=runner),
@@ -428,3 +435,74 @@ def test_the_browser_waits_longer_than_the_server_does():
     expr = _ts_const("UPLOAD_TIMEOUT_MS")
     assert re.fullmatch(r"[\d\s*]+", expr), expr
     assert eval(expr) > remote_files.UPLOAD_TIMEOUT * 1000  # noqa: S307
+
+
+# ------------------------------------------------------------ the audit (#1954)
+
+SECRET = b"PRIVATE-FILE-CONTENTS-7f3a"
+
+
+def _audited(tmp_path, runner, path="shared/config/x.csv", data=SECRET, **params):
+    db = tmp_path / "activity.sqlite3"
+    client = _client(runner, activity_db=db)
+    resp = _put(runner, path, data=data, client=client, **params)
+    rows = client.get("/activity", params={"source": "server"}).json()["events"]
+    with sqlite3.connect(db) as conn:
+        dump = "\n".join(repr(r) for r in conn.execute("SELECT * FROM activity"))
+    return resp, rows, dump
+
+
+def test_an_upload_is_audited_with_metadata_and_never_its_bytes(served, tmp_path):
+    resp, rows, dump = _audited(tmp_path, Loopback())
+    assert resp.status_code == 200, resp.text
+    (row,) = rows
+    assert row["action"] == "file.upload"
+    assert row["target"] == "box"
+    assert row["outcome"] == "succeeded"
+    assert row["detail"] == {
+        "file_name": "shared/config/x.csv",
+        "size_bytes": len(SECRET),
+        "sha256": hashlib.sha256(SECRET).hexdigest(),
+        "mode": "create",
+    }
+    assert SECRET.decode() not in dump
+    assert base64.b64encode(SECRET).decode() not in dump
+
+
+def test_an_uncertain_upload_is_audited_as_unknown(served, tmp_path):
+    def slow(argv, **kwargs):
+        raise subprocess.TimeoutExpired(argv, kwargs["timeout"])
+
+    resp, (row,), dump = _audited(tmp_path, slow)
+    assert resp.status_code == 504
+    assert row["outcome"] == "unknown"
+    assert row["detail"]["error"] == "UploadOutcomeUncertain"
+    assert SECRET.decode() not in dump
+
+
+def test_a_refused_upload_is_audited_as_refused_even_after_it_began(served, tmp_path):
+    """The file exists: the helper refused after ssh opened, nothing written."""
+    resp, (row,), _ = _audited(tmp_path, Loopback(), path="shared/config/sources.csv")
+    assert resp.status_code == 409
+    assert row["outcome"] == "refused"
+    assert row["detail"]["error"] == "UploadExists"
+
+
+def test_damaged_bytes_are_audited_as_failed(served, tmp_path):
+    class Corrupting(Loopback):
+        def __call__(self, argv, **kwargs):
+            data = bytearray(kwargs["input"])
+            data[-1] ^= 0xFF
+            return super().__call__(argv, **{**kwargs, "input": bytes(data)})
+
+    resp, (row,), _ = _audited(tmp_path, Corrupting())
+    assert resp.status_code == 502
+    assert row["outcome"] == "failed"
+
+
+def test_an_overwrite_is_audited_as_one(served, tmp_path):
+    resp, (row,), _ = _audited(
+        tmp_path, Loopback(), path="shared/config/sources.csv", overwrite="true"
+    )
+    assert resp.status_code == 200
+    assert row["detail"]["mode"] == "overwrite"
