@@ -191,5 +191,5 @@ def test_plan_dry_run_run_query_and_a_safe_retry_without_restarting_anything(wor
 
     # ---- the stack was never restarted, and the operator can see what happened
     assert sorted(stack.pids()) == processes
-    listing = operator(stack, "list", "backfills")
+    listing = operator(stack, "job", "attachment", "status")
     assert "pb-uat" in listing.stdout and WORKER in listing.stdout

@@ -19,7 +19,8 @@ attachment_app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
     help="Attachments: a job put on a TorQ stack already running - add, remove, show, "
-    "list, and the receiver contracts approved for one (contract).",
+    "list, the status of the backfills into them, and the receiver contracts approved for "
+    "one (contract).",
 )
 
 #: `add`, and its old spelling `job attach`: `--override-reason` is `--reason` (#1732)

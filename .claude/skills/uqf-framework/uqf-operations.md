@@ -68,17 +68,17 @@ process's port is base + its offset in `scripts/processes/process_ports.csv`;
 for example rdb1 is base + 2, so 6052. `uqs runtime list` is authoritative.
 
 **Connection budget:** the licence allows 16 concurrent connections, and 2 are
-held back, so 14 slots. Each started process uses one. `uqs list profiles` shows
+held back, so 14 slots. Each started process uses one. `uqs profile list` shows
 each profile's slots and whether it fits; `all` doesn't fit.
 
 ## Data and state
 
-  | What                                           | Where                                                                                               |
-  | ---                                            | ---                                                                                                 |
-  | a runtime's data (HDB, logs, generated config) | `output/uqs` (`uqf`), else `output/uqs-<runtime>` (`uqs list env`)                                  |
-  | run ledger, coverage, status files             | `$UQF_STATUS_DIR`                                                                                   |
-  | logs                                           | `<data>/logs/out_<proc>.log`, `err_<proc>.log`; read them with `uqs logs`                           |
-  | a flattened tree for a `peachq-etl` runtime    | `<data>/qtree`, rebuilt only when its source changes                                                |
+  | What                                           | Where                                                                                                 |
+  | ---                                            | ---                                                                                                   |
+  | a runtime's data (HDB, logs, generated config) | `output/uqs` (`uqf`), else `output/uqs-<runtime>` (`uqs config env`)                                  |
+  | run ledger, coverage, status files             | `$UQF_STATUS_DIR`                                                                                     |
+  | logs                                           | `<data>/logs/out_<proc>.log`, `err_<proc>.log`; read them with `uqs logs`                             |
+  | a flattened tree for a `peachq-etl` runtime    | `<data>/qtree`, rebuilt only when its source changes                                                  |
 
 `uqs clean` deletes runtime state. `uqs job checkpoint remove WORKER` restarts a
 worker's range from its beginning on purpose; you rarely need it, because

@@ -295,7 +295,7 @@ def test_a_resolver_refusal_is_a_uqs_error(monkeypatch, tmp_path):
         peachq_binary({"PATH": str(tmp_path)})
 
 
-# ------------------------------------------- reporting it: uqs list env / summary
+# ------------------------------------------- reporting it: uqs config env / summary
 
 
 def test_status_reports_what_the_binary_says(tmp_path):

@@ -176,7 +176,7 @@ Apply the rules below. Each cites the file that holds or enforces it.
 
 - **J10** `start_with_all 1b` only when the user asks for it. Every started
   process spends one of the licence's 16 connections, with two held back, so 14
-  slots in all. `uqs list profiles` shows each profile's cost (`docs/faq.md`).
+  slots in all. `uqs profile list` shows each profile's cost (`docs/faq.md`).
 
 - **J11** Job names are unique across streaming and bounded jobs: they share
   `.qpipe.job` (`.qetl.job.stream.define`).
