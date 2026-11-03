@@ -89,6 +89,7 @@ records which:
   | `executions.from_crypto_trades`                            | receipt          | `executions.q:81-83`; the fill feed is polled          |
   | `market_data.from_quote`, `from_fx_orderbook`              | receipt          | `src/etl/streaming/market_data.q:6-8`, `:30-45`        |
   | `market_data.from_crypto_book`                             | venue            | `market_data.q:47-60`                                  |
+  | `market_data` from `eq_orderbook` (databento bundle)       | venue            | `sidecars/databento/eq_orderbook.q`, `to_market_data`  |
   | `fx_source_adapters` (deal tape and depth)                 | venue            | `src/etl/transforms/fx_source_adapters.q:37`, `:120`   |
 
 So the rule has consequences today:
