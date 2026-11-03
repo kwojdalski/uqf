@@ -40,7 +40,7 @@
     / site's loader nor run one over TorQ's demo passwords files.
     before:.servers.loadpassword;
     .servers.loadpassword:{[] `sites};
-    setenv[`UQF_SITE_AUTH;"1"];
+    setenv[`UQF_SITE_AUTH;enlist"1"];
     flagged:.servers.siteauth[];
     system"l scripts/torqcode/handlers/loadpassword.q";
     kept:.servers.loadpassword;
