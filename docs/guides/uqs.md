@@ -1798,10 +1798,13 @@ there.
 ## Machine-readable output
 
 Every command that reports something takes `--json` and prints one JSON document
-on stdout, holding the same data as the table it would print (#1731). Its lists
-are records with snake_case keys: the `Depends on` column is `depends_on`. Logs
-go to stderr, and a refusal is the document `{"ok": false, "error": "..."}` with
-exit code 1, so stdout always parses:
+on stdout, holding the same data as the table it would print (#1731). Its help
+reads the same on every command - "Print one JSON document on stdout instead:",
+then the document's shape (#1859); `config sources check --json` alone prints an
+object a line, one per source. Its lists are records with snake_case keys: the
+`Depends on` column is `depends_on`. Logs go to stderr, and a refusal is the
+document `{"ok": false, "error": "..."}` with exit code 1, so stdout always
+parses:
 
 ```bash
 uqs job runs list --json | jq -r '.runs[] | select(.status == "failed") | .run_id'

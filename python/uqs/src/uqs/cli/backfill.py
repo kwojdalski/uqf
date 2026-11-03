@@ -15,7 +15,7 @@ import typer
 
 from uqs import timerange
 from uqs.cli import backfill_attached, completion, safety
-from uqs.cli.json_out import emit
+from uqs.cli.json_out import JSON_HELP, emit
 from uqs.cli.pipelines import needs_pipelines
 from uqs.cli.range_options import DateOpt, LastOpt, RangeFromOpt, RangeToOpt
 from uqs.cli.renames import renamed, warn_renamed
@@ -144,8 +144,8 @@ def backfill(
         bool,
         typer.Option(
             "--json",
-            help="Print one JSON document on stdout instead: what started (with --wait, its "
-            "outcome) - or, with --attach, the admission plan",
+            help=f"{JSON_HELP}: what started (with --wait, its outcome) - or, with "
+            "--attach, the admission plan",
         ),
     ] = False,
     port: BasePortOpt = None,

@@ -17,7 +17,7 @@ import typer
 from uqs.cli import deploy_connection as conn
 from uqs.cli.deploy import _failed, deploy_app
 from uqs.cli.hdb_scope import tables_given
-from uqs.cli.json_out import json_opt
+from uqs.cli.json_out import JSON_HELP, json_opt
 from uqs.cli.renames import alias_command, renamed
 from uqs.cli.safety import ChangesState, ReadOnly
 from uqs.cli.shared import _die, json_refusal
@@ -42,7 +42,7 @@ def status_cmd(
     ctx: typer.Context,
     target: conn.Target = None,
     as_json: Annotated[
-        bool, typer.Option("--json", help="Print the status as JSON, to script against")
+        bool, typer.Option("--json", help=f"{JSON_HELP}: the status the table shows")
     ] = False,
     health: Annotated[
         bool,
