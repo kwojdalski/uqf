@@ -129,7 +129,7 @@ CASES: dict[str, tuple[list[str], str]] = {
     "schema": (["schema", "nosuchproc", "trade"], "no process nosuchproc in this runtime"),
     "logs": (["logs", "--follow"], "--follow does not apply"),
     "config show": (["config", "show", "nosuchproc"], "no process nosuchproc"),
-    "job gaps": (["job", "gaps", "demo_markout", "--from", "bad", "--to", "2024-01-02"], "bad"),
+    "job gaps": (["job", "gaps", "crypto_markout", "--from", "bad", "--to", "2024-01-02"], "bad"),
     "job preview": (["job", "preview", "nosuch-x"], "is not a streaming job name"),
     "job check": (
         ["job", "check", "1bad", "--from", "2026-09-11", "--to", "2026-09-12"],

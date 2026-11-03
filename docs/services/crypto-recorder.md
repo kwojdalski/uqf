@@ -69,7 +69,7 @@ of concept, alongside the book recorder above: cryptorust's own
 `kdb-fills-recorder` binary (`src/bin/kdb_fills_recorder.rs`) polls an
 *already-running* cryptorust service's OMS over its own IPC unix socket (default
 `/tmp/beacon.sock`) and republishes new fills onto this demo's `stp1`, the
-bridge role the `posbook` and `demo_markout` streaming jobs play inside this
+bridge role the `posbook` and `crypto_markout` streaming jobs play inside this
 repo's own uqf stack - except this one bridges two entirely different IPC
 protocols (cryptorust's JSON-RPC and kdb+'s wire protocol) rather than two kdb+
 processes. It polls two independent methods each tick, into two separate tables:

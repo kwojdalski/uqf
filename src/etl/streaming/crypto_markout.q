@@ -5,9 +5,7 @@
 / price against the BEST MID ACROSS VENUES, in basis points. Publishes
 / `crypto_execution_quality`.
 / .
-/ THE REAL MARKOUT JOB (#729). demo_markout scores the demo's invented FX
-/ pairs off `trades` and `quote`, which only the demo's feeds publish. This
-/ scores cryptorust's real fills - crypto_trades, from get_recent_real_fills
+/ THE REAL MARKOUT JOB (#729). It scores cryptorust's real fills - crypto_trades, from get_recent_real_fills
 / - and never crypto_sim_fills: plant_tables.q keeps simulated and real
 / execution apart, and so does this.
 / .

@@ -245,10 +245,10 @@ def test_a_source_another_worker_reads_is_kept(tree):
 def test_a_written_job_is_refused_without_force(tree):
     """markout carries no SCAFFOLDED marker: it is real work, not a scaffold."""
     with pytest.raises(UqsError, match="no SCAFFOLDED marker left"):
-        plan_removal(tree, "demo_markout")
+        plan_removal(tree, "crypto_markout")
     assert (
-        Path("src/etl/streaming/demo_markout.q")
-        in plan_removal(tree, "demo_markout", force=True).deletes
+        Path("src/etl/streaming/crypto_markout.q")
+        in plan_removal(tree, "crypto_markout", force=True).deletes
     )
 
 
@@ -475,12 +475,12 @@ def test_a_written_job_is_removed_only_through_the_named_override(tree, monkeypa
     monkeypatch.setattr(remove_cli, "_paths", lambda: type("P", (), {"repo_root": tree})())
     errors: list[str] = []
     monkeypatch.setattr(remove_cli, "_die", lambda exc: errors.append(str(exc)))
-    refused = runner.invoke(cli.app, ["job", "remove", "demo_markout", "--dry-run"])
+    refused = runner.invoke(cli.app, ["job", "remove", "crypto_markout", "--dry-run"])
     assert refused.exit_code == 0 and any("no SCAFFOLDED marker left" in e for e in errors)
     errors.clear()
-    shown = runner.invoke(cli.app, ["job", "remove", "demo_markout", "--dry-run", *argv])
+    shown = runner.invoke(cli.app, ["job", "remove", "crypto_markout", "--dry-run", *argv])
     assert shown.exit_code == 0 and errors == [], errors
-    assert "demo_markout.q" in shown.output
+    assert "crypto_markout.q" in shown.output
 
 
 def test_a_removal_not_confirmed_exits_1_and_removes_nothing(tree, monkeypatch):

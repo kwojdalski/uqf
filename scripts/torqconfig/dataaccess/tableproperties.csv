@@ -13,7 +13,6 @@ proctype,tablename,primarytimecolumn,attributecolumn,instrumentcolumn,rolltimeof
 ,crypto_trades,time,sym,sym,,,,
 ,deal_positions,time,sym,sym,,,,
 ,demo_deals,time,sym,sym,,,,
-,demo_execution_quality,time,sym,sym,,,,
 ,duckdb_deals,time,sym,sym,,,,
 ,economic_calendar,time,,,,,,
 ,exec_bar,time,sym,sym,,,,
