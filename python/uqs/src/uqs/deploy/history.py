@@ -32,8 +32,9 @@ import re
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Protocol
+from typing import Any, Protocol
 
+from uqs.cells import Shown
 from uqs.deploy import target_changelog, target_changes, targets
 from uqs.deploy.config import Config, DeployError
 from uqs.logger import get_logger
@@ -226,7 +227,7 @@ def defaults(root: Path) -> set[int]:
     return out
 
 
-def target_rows(root: Path) -> list[dict[str, str]]:
+def target_rows(root: Path) -> list[dict[str, Any]]:
     """`uqs target list`: every declared target - where it is, as whom, its
     labels - and the release last deployed there from this machine. The
     environment column appears only when a target names one (#1557)."""
@@ -248,14 +249,20 @@ def target_rows(root: Path) -> list[dict[str, str]]:
                 "ssh": str(t.get("host", "")),
                 "dest": str(t.get("dest", "")),
                 "remote_user": str(t.get("remote_user") or ""),
-                "labels": ", ".join(f"{k}={v}" for k, v in (t.get("labels") or {}).items()),
-                "last_deployed": f"{last['release']} ({last['at']})" if last else "",
+                "labels": {str(k): str(v) for k, v in (t.get("labels") or {}).items()},
+                # {release, at} in a document; "release (at)" in the table (uqs.cells)
+                "last_deployed": Shown(
+                    {"release": last["release"], "at": last["at"]},
+                    f"{last['release']} ({last['at']})",
+                )
+                if last
+                else None,
             }
         )
     return rows
 
 
-def _list_targets(paths: UqsPaths, base_port: int | None) -> list[dict[str, str]]:
+def _list_targets(paths: UqsPaths, base_port: int | None) -> list[dict[str, Any]]:
     try:
         return target_rows(paths.repo_root)
     except DeployError as exc:

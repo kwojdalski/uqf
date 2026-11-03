@@ -7,13 +7,12 @@ both declarations rather than off a table someone keeps by hand.
 
 from __future__ import annotations
 
-import json
 from typing import Annotated
 
 import typer
 from rich.table import Table
 
-from uqs.cli.json_out import JSON_HELP
+from uqs.cli.json_out import emit, json_opt
 from uqs.cli.pipelines import pipelines_only
 from uqs.cli.safety import ReadOnly
 from uqs.cli.shared import _die, _paths, app, console
@@ -33,11 +32,17 @@ app.add_typer(runtime_app, name="runtime")
 _NAMES = list(RUNTIMES)
 
 
+DiffJson = json_opt(
+    '{"<section>": {"only_<a>": [...], "only_<b>": [...]}} - one section each for '
+    "processes, tables, layers and commands"
+)
+
+
 @runtime_app.command("diff", cls=ReadOnly)
 def runtime_diff(
     a: Annotated[str, typer.Argument(help="A runtime", autocompletion=lambda: _NAMES)],
     b: Annotated[str, typer.Argument(help="Another runtime", autocompletion=lambda: _NAMES)],
-    as_json: Annotated[bool, typer.Option("--json", help=f"{JSON_HELP}: the difference")] = False,
+    as_json: DiffJson = False,
 ) -> None:
     """What runtime A has that B does not, and the reverse: processes, tables,
     config layers, and the commands only some runtimes run."""
@@ -47,7 +52,7 @@ def runtime_diff(
         _die(exc)
         return
     if as_json:
-        print(json.dumps(sections, indent=2))
+        emit(sections)
         return
     for section, sides in sections.items():
         if not any(sides.values()):

@@ -23,7 +23,7 @@ def test_every_declared_input_has_a_named_source():
     succeeds, because the table is defined on the plant either way.
     """
     for row in dependencies.dependency_rows():
-        assert row["published_by"] != "(nothing declares it)", (
+        assert row["published_by"].value, (
             f"{row['process']} subscribes to {row['needs']!r}, which nothing "
             "publishes and no external source claims"
         )

@@ -84,4 +84,4 @@ def test_job_list_reports_the_kinds_job_new_scaffolds():
     assert set(LISTED_KIND.values()) <= set(SCAFFOLD_KINDS)
     rows = job_rows(repo_root())
     assert {r["kind"] for r in rows} <= {*SCAFFOLD_KINDS, REACTION}
-    assert {r["subscribes"] for r in rows} <= {"yes", "no"}
+    assert {r["subscribes"] for r in rows} <= {True, False}
