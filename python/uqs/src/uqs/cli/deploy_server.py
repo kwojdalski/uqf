@@ -18,6 +18,7 @@ from uqs.cli import deploy_connection as conn
 from uqs.cli import deploy_dry_run as dry
 from uqs.cli import deploy_policy as policy
 from uqs.cli.deploy import _failed, deploy_app
+from uqs.cli.hdb_scope import tables_given
 from uqs.cli.json_out import json_opt
 from uqs.cli.renames import alias_command, renamed
 from uqs.cli.safety import ChangesState, OverrideOpt, ReadOnly, ReasonOpt, YesOpt
@@ -217,7 +218,12 @@ VerifyJson = json_opt(
 #: The readiness wait is `--verify-timeout`, as `deploy push` and `rollback`
 #: name it, and a process beyond the profile `--proc`, repeatable (#1857).
 #: `deploy push` asks the release which it takes (deploy/selection.py).
-_CHECK_RENAMES = {"--port": "--base-port", "--deadline": "--verify-timeout", "--procs": "--proc"}
+_CHECK_RENAMES = {
+    "--port": "--base-port",
+    "--deadline": "--verify-timeout",
+    "--procs": "--proc",
+    "--tables": "--table",  # tables are a repeatable --table on every command (#1856)
+}
 
 
 @deploy_app.command("check", cls=renamed(_CHECK_RENAMES, ReadOnly))
@@ -238,8 +244,11 @@ def verify_cmd(
         ),
     ] = None,
     tables: Annotated[
-        str, typer.Option("--tables", metavar="NAME,...", help="Tables stp1 must carry")
-    ] = "",
+        list[str] | None,
+        typer.Option(
+            "--table", help="Check stp1 carries this table; repeatable, and NAME,NAME also works"
+        ),
+    ] = None,
     fixture: conn.FixtureOpt = True,
     ports_free: Annotated[
         bool,
@@ -261,7 +270,7 @@ def verify_cmd(
             query_timeout=query_timeout,
             port=port,
             procs=[p for word in procs or () for p in word.split(",") if p],
-            tables=[t for t in tables.split(",") if t],
+            tables=tables_given(tables),
             live=not fixture,
             ports_free=ports_free,
             marker=not as_json,

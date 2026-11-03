@@ -555,6 +555,48 @@ def test_every_shared_option_name_is_in_the_vocabulary_or_the_registry():
     assert terms <= set(OPTIONS) | set(_option_uses()) | terms
 
 
+# ------------------------------------------------ one grammar per option (#1856)
+
+#: A pair an option takes, as its help leads with it: `OLD:NEW`, `COL:TYPE`.
+_PAIR = re.compile(r"^([A-Z][A-Z0-9]*)([=:])([A-Z][A-Z0-9|]*|[a-z|]+)\b")
+
+
+def test_a_pair_is_spelt_with_a_colon_everywhere():
+    """`data alter --rename OLD=NEW` beside `data migrate --rename OLD:NEW`
+    (#1856): an option taking a pair - a column and its new name, type or
+    attribute - spells it `A:B` on every command."""
+    found = {
+        (cmd.path, _long(p), m.group(0))
+        for cmd in TREE
+        for p in cmd.options
+        if (m := _PAIR.match(p.help or "")) and m.group(2) != ":"
+    }
+    assert not found, f"pairs not spelt A:B: {sorted(found)}"
+
+
+def test_tables_are_chosen_one_way():
+    """`--table` repeatable on one command, one value on another, `--tables`
+    comma-separated on a third (#1856): tables are chosen by a repeatable
+    `--table` everywhere (NAME,NAME works in one too)."""
+    found = {
+        (cmd.path, _long(p))
+        for cmd in TREE
+        for p in cmd.options
+        if _long(p) in ("--table", "--tables") and (_long(p) != "--table" or not p.multiple)
+    }
+    assert not found, f"tables chosen another way: {sorted(found)}"
+
+
+def test_one_command_fills_a_missing_hdb_table_and_the_other_runs_it():
+    """`deploy push --fix-hdb` (`--override fix-hdb` since #1852) and `data
+    check --apply` both filled missing HDB partitions (#1856): data check is
+    the one that fills, and the push runs the release's own - its override
+    says so."""
+    (fix,) = [g for g in safety.registry() if g.name == "fix-hdb"]
+    assert "`uqs data check --apply`" in fix.description
+    assert LEAVES["data check"].option("--apply") is not None
+
+
 # ------------------------------------------------------ rule 5: uniform flags
 
 REPORTS, CONFIRMS, CHANGES = "reports", "confirms", "changes"

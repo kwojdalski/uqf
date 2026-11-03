@@ -86,14 +86,17 @@ def started_by(profile: str, extra: Sequence[str]) -> list[str]:
 
 def verify_args(sel: Selection, live: bool, current: bool = True) -> list[str]:
     """`uqs deploy check`'s flags for a selection; none without one. A process
-    is `--proc NAME` since #1857; `current` False spells it as a release from
-    before then takes it, `--procs NAME,...`."""
+    is `--proc NAME` since #1857, a table `--table NAME` since #1856;
+    `current` False spells them as a release from before then takes them,
+    `--procs NAME,...` and `--tables NAME,...`."""
     argv = []
     if sel.processes and current:
         argv += [a for p in sel.processes for a in ("--proc", p)]
     elif sel.processes:
         argv += ["--procs", ",".join(sel.processes)]
-    if sel.tables:
+    if sel.tables and current:
+        argv += [a for t in sel.tables for a in ("--table", t)]
+    elif sel.tables:
         argv += ["--tables", ",".join(sel.tables)]
     return [*argv, "--live"] if live else argv
 
@@ -106,9 +109,10 @@ def verify_command(
     target - `uqs deploy verify`, the name it had then. A release from before
     #835, which had neither, is not a supported rollback target (#1648).
 
-    The readiness wait (`timeout`) is `--verify-timeout` and a process `--proc`
-    on a release since #1857; one from before takes `--deadline` and `--procs`,
-    so the release's own --help says which it is given - the old spellings
+    The readiness wait (`timeout`) is `--verify-timeout`, a process `--proc`
+    and a table `--table` on a release since #1856/#1857; one from before takes
+    `--deadline`, `--procs` and `--tables`, so the release's own --help says
+    which it is given, by the newest of them (`--table`) - the old spellings
     stop parsing a release after they were renamed (cli/rename_expiry.py)."""
 
     def argv(current: bool) -> str:
@@ -121,7 +125,7 @@ def verify_command(
         return " ".join(q(a) for a in words)
 
     return (
-        "if .venv/bin/uqs deploy check --help 2>/dev/null | grep -q -e --verify-timeout; "
+        "if .venv/bin/uqs deploy check --help 2>/dev/null | grep -q -e '--table '; "
         f"then .venv/bin/uqs deploy check {argv(True)}; "
         "elif .venv/bin/uqs deploy check --help >/dev/null 2>&1; "
         f"then .venv/bin/uqs deploy check {argv(False)}; "

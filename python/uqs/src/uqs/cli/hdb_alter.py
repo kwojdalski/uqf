@@ -17,7 +17,7 @@ import typer
 from uqs.cli import completion, safety
 from uqs.cli.hdb_scope import ApplyOpt, AttachOpt, HdbOpt, YesOpt, _table, resolve, run_scoped
 from uqs.cli.json_out import json_opt
-from uqs.cli.renames import alias_command
+from uqs.cli.renames import alias_command, warn_renamed
 from uqs.cli.safety import ConfirmsOnServer
 from uqs.cli.shared import _die, data_app
 from uqs.paths import UqsError
@@ -47,18 +47,23 @@ def hdb_alter(
         typer.Option("--reorder", help="C1,C2,...: every existing column, in a new order"),
     ] = None,
     rename: Annotated[
-        str | None, typer.Option("--rename", help="OLD=NEW: rename one column (file and .d)")
+        list[str] | None,
+        typer.Option(
+            "--rename", help="OLD:NEW - rename a column (file and .d); one operation per run"
+        ),
     ] = None,
     attr: Annotated[
-        str | None,
-        typer.Option("--attr", help="COL:p|s|g|u|none - set or clear one column's attribute"),
+        list[str] | None,
+        typer.Option(
+            "--attr", help="COL:p|s|g|u|none - set or clear a column's attribute; one per run"
+        ),
     ] = None,
     cast: Annotated[
-        str | None,
+        list[str] | None,
         typer.Option(
             "--cast",
-            help="COL:TYPE - cast one column (long, float, ... or a type letter); never "
-            "to or from symbol",
+            help="COL:TYPE - cast a column (long, float, ... or a type letter); never "
+            "to or from symbol; one per run",
         ),
     ] = None,
     undo: Annotated[
@@ -80,9 +85,15 @@ def hdb_alter(
     holding the table disagree on its columns, order or types - `data check`
     repairs a missing table, anything else is for a person to decide.
     """
-    given = {"reorder": reorder, "rename": rename, "attr": attr, "cast": cast, "undo": undo}
-    chosen = {k: v for k, v in given.items() if v is not None}
     try:
+        given = {
+            "reorder": reorder,
+            "rename": _old_rename(_one("--rename", rename)),
+            "attr": _one("--attr", attr),
+            "cast": _one("--cast", cast),
+            "undo": undo,
+        }
+        chosen = {k: v for k, v in given.items() if v is not None}
         if len(chosen) != 1:
             raise UqsError(
                 "give one operation: --reorder, --rename, --attr, --cast or --undo"
@@ -97,6 +108,30 @@ def hdb_alter(
         run_scoped(handle, req, apply=apply, yes=yes, as_json=as_json, what=what)
     except UqsError as exc:
         _die(exc)
+
+
+def _one(flag: str, values: list[str] | None) -> str | None:
+    """The one value of a repeatable `data` option (#1856): `data migrate`
+    takes several, and an alter is one operation per run."""
+    if values and len(values) > 1:
+        raise UqsError(f"{flag} once: an alter is one operation per run (not {len(values)})")
+    return values[0] if values else None
+
+
+def _old_rename(value: str | None) -> str | None:
+    """`--rename OLD:NEW`, as `data migrate` spells it (#1856), in the OLD=NEW
+    hdb_alter.q reads. `OLD=NEW`, this command's own spelling before, still
+    parses for one release (cli/rename_expiry.py)."""
+    if value is None:
+        return None
+    if ":" not in value and "=" in value:
+        old, _, new = value.partition("=")
+        warn_renamed(f"--rename {value}", f"--rename {old}:{new}")
+        return value
+    old, sep, new = value.partition(":")
+    if not sep or not old or not new:
+        raise UqsError(f"--rename {value!r} must be OLD:NEW")
+    return f"{old}={new}"
 
 
 #: Its name before #1733, beside `hdb-check`: `alter` is a domain verb.

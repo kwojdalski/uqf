@@ -138,6 +138,10 @@ RENAMED_AFTER: dict[str, frozenset[str]] = {
                 for verb in ("install", "rollback", "status", "env")
                 for old in ("--home", "--qhome")
             ),
+            # #1856: one grammar per option across `uqs data`
+            "uqs data seed --tables",
+            "uqs deploy check --tables",
+            "uqs data alter --rename OLD=NEW",
             # #1854: a command written with --apply is dry by default; its
             # --dry-run says nothing more
             "uqs data alter --dry-run",
