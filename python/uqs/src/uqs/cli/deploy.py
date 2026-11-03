@@ -189,7 +189,7 @@ def push(
         list[str] | None,
         typer.Argument(
             metavar="TARGET...",
-            help="Targets in deploy_targets.toml (or $UQS_DEPLOY_TARGETS), deployed in "
+            help=f"Targets in {targets.DECLARATION} (or ${targets.DECLARATION_ENV}), deployed in "
             "order, stopping at the first failure; a flag given here wins over a target's "
             "value. None: --ssh, --dest and --profile say it all",
             show_default=False,

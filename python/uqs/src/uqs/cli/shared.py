@@ -10,7 +10,6 @@ is what keeps `uqs start` spelled that way after the split.
 
 from __future__ import annotations
 
-import json
 import os
 from collections.abc import Callable, Sequence
 from importlib.metadata import version as installed_version
@@ -23,9 +22,10 @@ from rich.table import Table
 
 from uqs import paths as stack_paths
 from uqs import runtimes
-from uqs.cli import completion, table_browser
+from uqs.cells import cell
+from uqs.cli import completion, json_out, table_browser
 from uqs.cli.renames import MOVED_KEY
-from uqs.logger import configure_logging, get_logger, json_requested
+from uqs.logger import LOG_LEVEL_ENV, configure_logging, get_logger, json_requested
 from uqs.paths import UqsError, UqsUsageError
 from uqs.stack import listing, runtime
 
@@ -83,7 +83,7 @@ def _env_log_level() -> str:
     An unrecognised value falls back to the default rather than aborting: a
     typo in a log level must not stop the fleet being started or inspected.
     """
-    level = os.environ.get("LOG_LEVEL", "").strip().upper()
+    level = os.environ.get(LOG_LEVEL_ENV, "").strip().upper()
     if level in {"TRACE", "DEBUG", "INFO", "SUCCESS", "WARNING", "ERROR", "CRITICAL"}:
         return level
     return DEFAULT_LOG_LEVEL
@@ -312,7 +312,7 @@ def json_refusal(message: str, details: dict | None = None) -> None:
     what a structured refusal adds beside its message - a backfill coordination
     refusal's `findings` (#1827) - and never replace `ok` or `error`."""
     if json_requested():
-        print(json.dumps({**(details or {}), "ok": False, "error": message}, indent=2))
+        json_out.emit({**(details or {}), "ok": False, "error": message})
 
 
 def _sort_key(value: object):
@@ -322,7 +322,7 @@ def _sort_key(value: object):
     sorting as the empty string among real values - a process with no
     override set is not "before aaa", it is absent.
     """
-    text = "" if value is None else str(value).strip()
+    text = cell(value).strip()
     if not text:
         return (1, 0.0, "")
     try:

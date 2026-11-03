@@ -1752,11 +1752,13 @@ qpipe.source.hdb_executions,time_column,value,,
 qpipe.source.hdb_executions,types,value,,
 qpipe.source.hdb_executions,tz,value,,
 qpipe.source.hdb_fx_markouts,columns,value,,
+qpipe.source.hdb_fx_markouts,complete_through,function,1,h
 qpipe.source.hdb_fx_markouts,fixture,function,1,
 qpipe.source.hdb_fx_markouts,lookback,value,,
 qpipe.source.hdb_fx_markouts,query,function,3,h range_from range_to
 qpipe.source.hdb_fx_markouts,raw_executions,function,1,
 qpipe.source.hdb_fx_markouts,raw_market_data,function,1,
+qpipe.source.hdb_fx_markouts,ready,function,3,batch range_from range_to
 qpipe.source.hdb_fx_markouts,row_key,value,,
 qpipe.source.hdb_fx_markouts,source_name,value,,
 qpipe.source.hdb_fx_markouts,supporting,dict,,

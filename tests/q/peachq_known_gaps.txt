@@ -71,6 +71,7 @@ platform: Linux-x86_64
 .qt.qetl.registries.test_the_trap_is_real_and_has_two_halves  # peachq-lacks: not yet narrowed - it throws 'type on code KDB-X accepts
 
 .qt.qpipe.job.superbook.test_tickerplant_routes_all_three_processes_using_the_real_schemas  # peachq-lacks: `,'` of two empty tables gives () rather than an empty table, so the schema built as ([] time:...),'output is refused as keyed
+.qt.qpipe.transform.fx_markout.characterization.test_replace_across_midnight_leaves_no_duplicates  # peachq-lacks: the replace spill into the next date partition (write_hdb_keyed swaps partitions in by rename): after the swap the live rows are still on disk in the next day - its column files keep their rows where KDB-X leaves them empty (measured with a scratch writer run, no test involved)
 
 .qt.harness.seed.test_reseeding_reproduces_a_known_draw  # peachq-lacks: KDB-X's random generator - a seed is reproducible on PeachQ, but `\S 20260916` then 5?1000 draws 717 47 276 94 179
 

@@ -14,6 +14,9 @@ IO_STRATEGIES: tuple[str, ...] = (
     "fail",
 )
 
+#: the strategy a worker that declares none writes with - .qetl.io.default_strategy
+DEFAULT_IO_STRATEGY: str = "upsert"
+
 #: what a bounded run may do - .qetl.job.bounded.runtime.modes
 RUN_MODES: tuple[str, ...] = (
     "validate",
