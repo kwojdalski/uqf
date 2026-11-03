@@ -52,7 +52,7 @@ def test_the_receiver_is_stopped_by_its_own_verb_and_a_dry_run_signals_nothing(m
         "stop_receivers",
         lambda att, dry_run=False: calls.append(dry_run) or [{"worker": "d.receiver", "pid": 7}],
     )
-    dry = runner.invoke(cli.app, ["job", "receiver", "stop", "--attach", "pb", "-n", "--json"])
+    dry = runner.invoke(cli.app, ["job", "receiver", "stop", "--attachment", "pb", "-n", "--json"])
     assert dry.exit_code == 0 and json.loads(dry.stdout)["dry_run"] is True
     old = runner.invoke(cli.app, ["job", "receive", "--attach", "pb", "--stop"])
     assert old.exit_code == 0 and calls == [True, False]

@@ -329,7 +329,7 @@ def compatible(target: dict, facts: dict[str, str], *, accept_converted: bool = 
                 "the server's q",
                 version,
                 "and the release's q is as written: build it with "
-                "`uqs deploy build --q-target 4.0`",
+                "`uqs deploy build --q-version 4.0`",
             )
         )
     converted_for = target.get("q")

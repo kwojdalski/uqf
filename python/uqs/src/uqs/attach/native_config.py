@@ -64,9 +64,9 @@ def settle(
     wanted = base.start_with_all if start_with_all is None else start_with_all
     if wanted and att.persist not in config.DURABLE:
         raise AttachmentError(
-            "--start-with-all needs durable table registration: with --runtime-only a "
+            "--start-with-all needs durable table registration: with --transient a "
             "tickerplant restart - which a `start all` is - loses the tables, so the publisher "
-            "could never start. Drop --runtime-only, or give --no-start-with-all"
+            "could never start. Drop --transient, or give --no-start-with-all"
         )
     native = Native(path, wanted)
     changed = []

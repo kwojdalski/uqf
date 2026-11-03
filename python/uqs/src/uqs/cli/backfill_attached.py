@@ -1,4 +1,4 @@
-"""`uqs job backfill --attach NAME`: the attached-destination branch (#1454).
+"""`uqs job backfill --attachment NAME`: the attached-destination branch (#1454).
 
 Apart from cli/backfill.py, which would otherwise carry two commands: the
 fleet-path backfill starts a process and returns; this resolves a saved
@@ -151,7 +151,7 @@ def refuse_waivers(waived: Mapping[str, str], *, mode: str, writer: str | None) 
         raise UqsError(
             f"{names} is not supported with --writer: the receiver on the stack's machine "
             "admits and fences every batch itself, and is never told of a waiver - run the "
-            "backfill on that machine with --attach, or wait for the window to pass"
+            "backfill on that machine with --attachment, or wait for the window to pass"
         )
     if mode == "validate":
         raise UqsError(
@@ -252,7 +252,7 @@ def _bypass_note(plan, audit=None) -> str:
 
 def logs_command(attachment: str, worker: str) -> str:
     """The command that reads a run's log through `uqs logs` (#1725)."""
-    return f"uqs logs --attach {attachment} --worker {worker}"
+    return f"uqs logs --attachment {attachment} --worker {worker}"
 
 
 def _outcome_text(worker, run_, code, result) -> str:

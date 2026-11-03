@@ -21,7 +21,7 @@ from rich.table import Table
 
 from uqs.cli import completion
 from uqs.cli.json_out import emit, json_opt
-from uqs.cli.renames import alias_command, renamed, warn_renamed
+from uqs.cli.renames import ATTACHMENT, alias_command, renamed, warn_renamed
 from uqs.cli.safety import ChangesState, ReadOnly, dry_run_note
 from uqs.cli.shared import (
     BasePortOpt,
@@ -41,17 +41,14 @@ from uqs.stack import logs as stack_logs
 from uqs.stack import multitail as stack_multitail
 from uqs.stack import procs as stack_procs
 
-#: `uqs config show/set`: one process's process.csv row, read resolved or
-#: changed through process_overrides.csv. `uqs list overrides` and
-#: `uqs config field list` stay kinds of `list` (cli/lists.py), the stack's own
-#: tables.
+#: `uqs config show/set/unset/list`: a process.csv row, and every setting `set`
+#: wrote (`list`, once `uqs list overrides`: an override is a bypass, #1855).
 config_app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
     help="A process's process.csv fields: show them, or set one (persisted to "
-    "process_overrides.csv) or unset one; the fields set can change (field), the stack's "
-    "resolved env, "
-    "and the sources the stack reads (sources).",
+    "process_overrides.csv) or unset one, and list every one set; the fields set can "
+    "change (field), the stack's resolved env, and the sources the stack reads (sources).",
 )
 app.add_typer(config_app, name="config")
 
@@ -210,6 +207,7 @@ def _json_lines(records: list[dict]) -> None:
             "--print": "--show-command",
             "--columns": "--pane-columns",
             "-c": "--pane-columns",
+            **ATTACHMENT,
         },
         ReadOnly,
     )
@@ -270,16 +268,16 @@ def logs(
     attach: Annotated[
         str | None,
         typer.Option(
-            "--attach",
-            help="Read an attached backfill's or receiver's log instead: the latest run for "
-            "this attachment (`uqs job backfill --attach`)",
+            "--attachment",
+            help="The attachment whose backfill or receiver log to read instead: its latest "
+            "run (`uqs job backfill --attachment`)",
         ),
     ] = None,
     worker: Annotated[
         str | None,
         typer.Option(
             "--worker",
-            help="With --attach: whose run - the worker, or <dataset>.receiver. Needed when "
+            help="With --attachment: whose run - the worker, or <dataset>.receiver. Needed when "
             "the attachment has logs of more than one",
         ),
     ] = None,
@@ -287,7 +285,7 @@ def logs(
         str | None,
         typer.Option(
             "--run",
-            help="With --attach: an older run, by its log's file name or a prefix of its "
+            help="With --attachment: an older run, by its log's file name or a prefix of its "
             "stamp (e.g. 20261027T1304)",
         ),
     ] = None,
@@ -304,17 +302,17 @@ def logs(
     publish, filtered by `--id` and `--level` - e.g. `logs all --channel
     --level ERROR`, `logs fxpositions1 --channel --id fx_positions` (#1067).
 
-    `--attach` reads an attached backfill's or receiver's run instead, which is
-    no TorQ process: `logs --attach pb-uat --worker piggybank_ledger_backfill -f`
+    `--attachment` reads an attached backfill's or receiver's run instead, which is
+    no TorQ process: `logs --attachment pb-uat --worker piggybank_ledger_backfill -f`
     (#1725). Its q errors and RESULT line are shown whatever `--level` says.
 
     What the options combine with (#1730): the PROCS are what is read, every
-    option a filter on how. `--attach NAME` replaces PROCS - one attachment's
+    option a filter on how. `--attachment NAME` replaces PROCS - one attachment's
     run, narrowed by `--worker` (a worker, or <dataset>.receiver) and `--run`,
     which need it. `--channel` and `--multitail` each read PROCS another way:
     `--id` needs `--channel`; `--stream`, `--pane-columns` and `--show-command` need
     `--multitail`. `--follow`, `--lines` and `--level` go with the files and
-    with `--attach`.
+    with `--attachment`.
     """
     if as_json:
         for option, used in {
@@ -328,13 +326,17 @@ def logs(
     if attach is None:
         for option, used in {"--worker": worker, "--run": run}.items():
             if used is not None:
-                _die(UqsError(f"{option} needs --attach"))
+                _die(UqsError(f"{option} needs --attachment"))
                 return
     else:
         clash = {"a process name": bool(procs), "--channel": channel, "--multitail": multitail}
         for option, used in clash.items():
             if used:
-                _die(UqsError(f"{option} does not apply with --attach, which reads one run's log"))
+                _die(
+                    UqsError(
+                        f"{option} does not apply with --attachment, which reads one run's log"
+                    )
+                )
                 return
         try:
             if as_json:

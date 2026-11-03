@@ -181,7 +181,7 @@ needs `uv`, and network access to fetch the wheels.
 `.github/workflows/release.yml` builds the artifacts for a tag `v*`, or for a
 tag given to its manual run. It builds them only after `ci.yml`'s checks pass on
 that commit, and never with `--allow-dirty`. Each release gets two: the plain
-artifact, and one with its q converted for kdb+ 4.0 (`--q-target 4.0`). Each
+artifact, and one with its q converted for kdb+ 4.0 (`--q-version 4.0`). Each
 comes with its `.sha256` and `.manifest.json`. Deploy one by tag or by URL:
 
 ```bash
@@ -446,7 +446,7 @@ name before #1740, `uqs deploy build-runtime`, still works for one release.
 uqs deploy component build torq      # dist/torq-runtime-<version>-<id>.tar.gz
 uqs deploy push dist/uqf-<release>.tar.gz --ssh uqf-server --dest /opt/uqf \
   --profile essential --torq-mode bundled \
-  --torq-runtime dist/torq-runtime-5.2.12-<id>.tar.gz
+  --torq-component dist/torq-runtime-5.2.12-<id>.tar.gz
 ```
 
 - **Built from the tree, unedited.** The build packs the two trees' tracked
@@ -456,7 +456,7 @@ uqs deploy push dist/uqf-<release>.tar.gz --ssh uqf-server --dest /opt/uqf \
   sha256. The same trees always make the same archive, so its sha256 names that
   TorQ.
 - **Pinned like a release.** The runtime's `.sha256` must sit beside it, and
-  `torq_runtime_sha256` (or `--torq-runtime-sha256`) pins it as
+  `torq_runtime_sha256` (or `--torq-component-sha256`) pins it as
   `expected_sha256` pins a release. `--override accept-digest` and
   `--override allow-unpinned` relax these pins too, and are recorded. Its
   members are checked as a release's are, and the server checks the bytes it
@@ -489,8 +489,8 @@ kdb+) is licensed to the server it runs on, so it is never bundled. It stays
 uqs deploy component build q         # dist/q-runtime-peachq-<commit>-<os>-<arch>.tar.gz
 uqs --runtime peachq deploy build
 uqs deploy push dist/uqf-<release>.tar.gz --ssh uqf-server --dest /opt/uqf \
-  --profile capture --torq-mode bundled --torq-runtime dist/torq-runtime-<...>.tar.gz \
-  --q-mode bundled --q-runtime dist/q-runtime-peachq-<commit>-linux-x86_64.tar.gz
+  --profile capture --torq-mode bundled --torq-component dist/torq-runtime-<...>.tar.gz \
+  --q-mode bundled --q-component dist/q-runtime-peachq-<commit>-linux-x86_64.tar.gz
 ```
 
 - **Built from the pin.** The build takes the binary `scripts/peachq.py`
@@ -507,7 +507,7 @@ uqs deploy push dist/uqf-<release>.tar.gz --ssh uqf-server --dest /opt/uqf \
   nothing assumes PeachQ runs a workload until that workload's tests pass on it.
   The runtime must also be built for the release's OS and architecture, so build
   it on such a host.
-- **Pinned like a release.** `q_runtime_sha256` (or `--q-runtime-sha256`) pins
+- **Pinned like a release.** `q_runtime_sha256` (or `--q-component-sha256`) pins
   it, and `--override accept-digest` and `--override allow-unpinned` relax that
   pin as they do the others, recorded. `q_version` holds it too.
 - **Installed once, run there.** It goes to `<dest>/shared/runtimes/q/<sha256>/`
@@ -544,8 +544,8 @@ then needs no `uv` and no Python 3.14.
 uqs deploy component build python --arch x86_64 --python 3.14
                                    # dist/python-runtime-3.14.<n>-linux-x86_64.tar.gz
 uqs deploy push dist/uqf-<release>.tar.gz --ssh uqf-server --dest /opt/uqf \
-  --profile essential --torq-mode bundled --torq-runtime dist/torq-runtime-<...>.tar.gz \
-  --python-mode bundled --python-runtime dist/python-runtime-3.14.<n>-linux-x86_64.tar.gz
+  --profile essential --torq-mode bundled --torq-component dist/torq-runtime-<...>.tar.gz \
+  --python-mode bundled --python-component dist/python-runtime-3.14.<n>-linux-x86_64.tar.gz
 ```
 
 - **Installed by uv, packed as installed.** The build runs
@@ -566,7 +566,7 @@ uqs deploy push dist/uqf-<release>.tar.gz --ssh uqf-server --dest /opt/uqf \
 - **For this release.** It must be built for the release's OS, architecture and
   Python `major.minor`, or the push is refused before anything runs.
 - **Pinned like a release.** `python_runtime_sha256` (or
-  `--python-runtime-sha256`) pins it; `--override accept-digest` and
+  `--python-component-sha256`) pins it; `--override accept-digest` and
   `--override allow-unpinned` relax that pin as they do the others, recorded.
 - **Installed once, run there.** It goes to
   `<dest>/shared/runtimes/python/<sha256>/` under the same write-once rules as
@@ -586,10 +586,10 @@ installed interpreter reported, the python-build-standalone release, its path on
 the server, and whether this push installed or reused it.
 
 A release can also **carry** a Python runtime
-(`uqs deploy build --python-runtime FILE`), for a server where it is installed
+(`uqs deploy build --python-component FILE`), for a server where it is installed
 without `push`: see [installing an artifact on the server
 yourself](#installing-an-artifact-on-the-server-yourself). A push of such a
-release with `--python-mode bundled` and no `--python-runtime` uses the one it
+release with `--python-mode bundled` and no `--python-component` uses the one it
 carries:
 
 - **Extracted, then checked.** The push copies it out of the release into
@@ -598,9 +598,9 @@ carries:
   The release's own pin and checks therefore pin it: it needs no `.sha256` of
   its own, and `python_runtime_sha256` still holds it.
 - **Installed as any other.** From there it is installed, probed, recorded and
-  pruned exactly as a runtime given with `--python-runtime`. Its `components`
+  pruned exactly as a runtime given with `--python-component`. Its `components`
   entry adds `carried_by`, the release it came from, and the plan says so.
-- **A given runtime wins.** `--python-runtime` names another, and nothing is
+- **A given runtime wins.** `--python-component` names another, and nothing is
   extracted. A release that carries none is refused, naming both ways to give
   one.
 
@@ -728,7 +728,7 @@ driving it needs, and does it:
 ```bash
 uqs target adopt lvc --ssh svc@lvc.example --dest /srv/uqf                # a dry run (-n says so)
 uqs target adopt lvc --ssh svc@lvc.example --dest /srv/uqf --apply        # asks first
-uqs target adopt lvc --ssh svc@lvc.example --dest /srv/uqf --release /home/svc/uqf \
+uqs target adopt lvc --ssh svc@lvc.example --dest /srv/uqf --release-dir /home/svc/uqf \
     --launch-python /opt/py/bin/python3 --apply --yes
 uqs --target lvc status
 ```
@@ -736,8 +736,8 @@ uqs --target lvc status
 The dry run asks the server, changing nothing on either side:
 
 - whether `<dest>/current` already links to a release. If not, which directory
-  would become one: `--release`, default `<dest>` itself. It would be moved to
-  `<dest>/releases/adopted-<UTC time>`, with `current` linked to it;
+  would become one: `--release-dir`, default `<dest>` itself. It would be moved
+  to `<dest>/releases/adopted-<UTC time>`, with `current` linked to it;
 - whether that release launches `uqs` as pushed (`.venv/bin/uqs` and
   `deploy.env`), or must run from source;
 - for source, the environment file: `--launch-env-file`, else the release's
@@ -763,12 +763,13 @@ server's default. A release named `adopted-*` is not a release id, so
 The other way, when the release process delivers a `uqs deploy build` artifact
 rather than a bare source tree: the artifact already carries every Python
 dependency as a locked wheel, and an installer that needs only the server's
-`python3` (3.8 or later, standard library only). Built with `--python-runtime`,
-it carries the interpreter too, so the server needs no Python 3.14:
+`python3` (3.8 or later, standard library only). Built with
+`--python-component`, it carries the interpreter too, so the server needs no
+Python 3.14:
 
 ```bash
 uqs deploy component build python --arch x86_64
-uqs deploy build --arch x86_64 --python-runtime dist/python-runtime-3.14.<n>-linux-x86_64.tar.gz
+uqs deploy build --arch x86_64 --python-component dist/python-runtime-3.14.<n>-linux-x86_64.tar.gz
 ```
 
 Unpack the artifact into its own release directory, then, from inside it:
@@ -1161,7 +1162,7 @@ rewrite; it still converts a sidecar bundle's own nested declarations. Build the
 release for it, and only the artifact changes - never the checkout (#861):
 
 ```bash
-uqs deploy build --q-target 4.0
+uqs deploy build --q-version 4.0
 ```
 
 The build converts its staged copy with `scripts/portable/flatten_contexts.py`

@@ -207,7 +207,7 @@ def test_the_installer_ships_in_every_release():
 
 @pytest.fixture
 def carrying(release: Path, tmp_path: Path) -> tuple[Path, dict]:
-    """`release`, carrying a Python runtime as `uqs deploy build --python-runtime`
+    """`release`, carrying a Python runtime as `uqs deploy build --python-component`
     puts one in: the archive at its path, recorded in the manifest."""
     from test_deploy_python_runtime import runtime
 

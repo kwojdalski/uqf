@@ -7,7 +7,7 @@ the CLI, and the files are compared byte for byte. KDB-X only: the q script
 refuses PeachQ, which cannot write a partitioned HDB natively (each case is in
 python/peachq_known_gaps.txt).
 
-The --attach cases go through a stand-in `ssh` on PATH that runs the remote
+The --attachment cases go through a stand-in `ssh` on PATH that runs the remote
 script with bash on this machine: what is tested is the script uqs sends - the
 copy into a temporary directory, the run with $QCMD, the clean-up - not ssh.
 The Docker lane (tests/remote) would put a real sshd in between.
@@ -186,7 +186,7 @@ def test_partitions_that_disagree_are_refused_naming_each_shape(world):
     assert digest(hdb) == before, "before any write"
 
 
-# ------------------------------------------------------------------ --attach, over ssh
+# ------------------------------------------------------------------ --attachment, over ssh
 
 
 class ReloadingStack(HdbStack):
@@ -228,12 +228,12 @@ def attached(world, monkeypatch):
 
 def test_attach_plans_and_applies_on_the_stack_s_host_and_reloads_its_readers(world, attached):
     hdb = attached.hdb
-    plan = run_uqs("data", "alter", "--attach", "pb", "--reorder", "n,amt,sym,time", "--json")
+    plan = run_uqs("data", "alter", "--attachment", "pb", "--reorder", "n,amt,sym,time", "--json")
     d = doc(plan)
     assert plan.exit_code == 0 and d["ok"], (plan.output, world.errors)
     assert d["ssh"] == "testhost" and "pinned storage.hdb_dir" in d["resolved_from"]
     assert d["plan"]["table"] == "pb", "the attachment's own table, when none is named"
-    applied = run_uqs("data", "alter", "--attach", "pb", "--reorder", "n,amt,sym,time",
+    applied = run_uqs("data", "alter", "--attachment", "pb", "--reorder", "n,amt,sym,time",
                   "--apply", "--yes", "--json")  # fmt: skip
     r = doc(applied)["result"]
     assert applied.exit_code == 0 and r["final_check"]["clean"], (applied.output, world.errors)
@@ -248,7 +248,7 @@ def test_attach_plans_and_applies_on_the_stack_s_host_and_reloads_its_readers(wo
 def test_attach_refuses_while_a_backfill_owns_the_attachment(world, attached):
     before = digest(attached.hdb)
     backfill_owner.claim("pb", "pb_backfill", os.getpid(), "abc")
-    result = run_uqs("data", "check", "--attach", "pb", "--apply", "--yes")
+    result = run_uqs("data", "check", "--attachment", "pb", "--apply", "--yes")
     assert result.exit_code == 1
     assert any("attached backfill running" in e for e in world.errors), world.errors
     assert digest(attached.hdb) == before

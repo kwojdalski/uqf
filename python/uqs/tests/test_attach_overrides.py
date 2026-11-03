@@ -112,7 +112,7 @@ def test_proven_incompatibility_ambiguous_ownership_and_restart_needs_are_not_ov
 
 
 def test_persisting_is_not_overridden_the_alternative_is_runtime_only():
-    assert "--runtime-only" in overrides.POLICY["PERSIST_UNAVAILABLE"].risk
+    assert "--transient" in overrides.POLICY["PERSIST_UNAVAILABLE"].risk
 
 
 # ------------------------------------------------------------ what is refused
@@ -533,7 +533,7 @@ def invoke(*argv: str, **kw):
 
 def plan_args(bundle: Path) -> list[str]:
     return ["pb-uat", "--job", "pb_general_ledger", "--bundle", str(bundle)] + [
-        "--stack-id", "6000", "--runtime-only",
+        "--base-port", "6000", "--transient",
     ]  # fmt: skip
 
 

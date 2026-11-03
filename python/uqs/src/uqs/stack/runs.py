@@ -230,7 +230,7 @@ def rerun_command(run: dict, attach: str | None = None) -> str | None:
         f"uqs job backfill {run['worker']} --from {_as_bound(str(run['range_from']))} "
         f"--to {_as_bound(str(run['range_to']), upper=True)} --source-version {version}"
         + (" --fixture" if fixture else "")
-        + (f" --attach {attach}" if attach else "")
+        + (f" --attachment {attach}" if attach else "")
     )
 
 

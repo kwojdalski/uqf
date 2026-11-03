@@ -304,8 +304,8 @@ def attach_args(world: World, name: str, *extra: str) -> list[str]:
     attachment names the destination of test_4's remote writer (#1650)."""
     return [
         "job", "attachment", "add", name, "--job", FEED_JOB, "--bundle", BUNDLE,
-        "--stack-id", str(world.base), "--host", "uat-stack", "--consumer", "rdb1",
-        "--consumer", "wdb1", "--runtime-only", "--yes", *extra,
+        "--base-port", str(world.base), "--host", "uat-stack", "--consumer", "rdb1",
+        "--consumer", "wdb1", "--transient", "--yes", *extra,
     ]  # fmt: skip
 
 

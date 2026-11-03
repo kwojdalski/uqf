@@ -215,7 +215,7 @@ def test_a_tampered_artifact_is_refused_before_the_server_is_touched(tmp_path):
         ("os=Linux\narch=x86_64\npython=3.13\n", "wheels are for 3.14"),
         (
             "os=Linux\narch=x86_64\npython=3.14\nqversion=4.1\n",
-            "kdb\\+ 4.1, which has no nested contexts.*--q-target 4.0",
+            "kdb\\+ 4.1, which has no nested contexts.*--q-version 4.0",
         ),
     ],
 )

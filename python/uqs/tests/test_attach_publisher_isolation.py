@@ -281,8 +281,8 @@ def test_attachment_add_prepares_and_launches_only_the_publisher(site, stack):
     before = site.snapshot()
     result = CliRunner().invoke(
         cli.app,
-        ["job", "attachment", "add", "ex-site", "--job", JOB, "--stack-id", str(STACK),
-         "--runtime-only", "--yes"],
+        ["job", "attachment", "add", "ex-site", "--job", JOB, "--base-port", str(STACK),
+         "--transient", "--yes"],
         catch_exceptions=False,
     )  # fmt: skip
     output = ANSI.sub("", result.output)
@@ -304,8 +304,8 @@ def test_attachment_add_that_fails_verification_never_launches(site, stack, monk
     monkeypatch.setattr(verifying, "verify", failed)
     result = CliRunner().invoke(
         cli.app,
-        ["job", "attachment", "add", "ex-site", "--job", JOB, "--stack-id", str(STACK),
-         "--runtime-only", "--yes"],
+        ["job", "attachment", "add", "ex-site", "--job", JOB, "--base-port", str(STACK),
+         "--transient", "--yes"],
         catch_exceptions=False,
     )  # fmt: skip
     assert result.exit_code != 0

@@ -3,7 +3,7 @@
 End to end on real q processes, with the world test_attach_backfill_run builds: an upstream
 the worker reads, a scripted stack, a native-shaped HDB and a fake reader. The receiver runs
 as `uqs job receiver start` starts it, from a receiver contract exported from the worker and
-approved for the attachment (#1717); the extractor as `uqs job backfill --attach --writer`
+approved for the attachment (#1717); the extractor as `uqs job backfill --attachment --writer`
 does, under an attachment directory of its own, as it would be on another machine.
 """
 

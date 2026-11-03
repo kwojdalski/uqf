@@ -56,7 +56,7 @@ def test_a_refused_attach_with_json_prints_one_parseable_document(tmp_path):
     doc = json.loads(run.stdout)  # the whole of stdout, nothing before it
     assert doc["ok"] is False
     assert doc["attachment"] == "nosuch-1685"
-    assert "needs --job and --stack-id" in doc["error"]
+    assert "needs --job and --base-port" in doc["error"]
     assert "ERROR" in run.stderr  # the log line still exists, on stderr
 
 
@@ -65,7 +65,7 @@ def test_a_refused_attach_without_json_still_logs_to_stdout(tmp_path):
     run = _uqs(tmp_path, "job", "attachment", "add", "nosuch-1685")
     assert run.returncode == 1
     assert "ERROR" in run.stdout
-    assert "needs --job and --stack-id" in run.stdout
+    assert "needs --job and --base-port" in run.stdout
 
 
 # ------------------------------------------------- every --json command, offline
@@ -83,6 +83,7 @@ CASES: dict[str, tuple[list[str], str]] = {
     "config field list": (["config", "field", "list"], "["),
     "config env": (["config", "env"], "KDBBASEPORT"),
     "job attachment status": (["job", "attachment", "status"], "["),
+    "config list": (["config", "list"], "["),
     "job attachment list": (["job", "attachment", "list"], "["),
     "override list": (["override", "list"], "q-version-check"),
     "data check": (["data", "check"], "present"),
@@ -92,21 +93,21 @@ CASES: dict[str, tuple[list[str], str]] = {
     ),
     "runtime diff": (["runtime", "diff", "nosuch1", "nosuch2"], "is not a runtime"),
     "job receiver start": (
-        ["job", "receiver", "start", "--attach", "nosuch"],
+        ["job", "receiver", "start", "--attachment", "nosuch"],
         "--listen-port is required",
     ),
-    "job receiver stop": (["job", "receiver", "stop", "--attach", "nosuch", "-n"], "stopped"),
+    "job receiver stop": (["job", "receiver", "stop", "--attachment", "nosuch", "-n"], "stopped"),
     "job backfill": (
         ["job", "backfill", "w", "--from", "2024-01-01", "--to", "2024-01-02"],
         "source_version",
     ),
     "job attachment add": (["job", "attachment", "add", "nosuch"], "needs --job"),
     "job attachment contract approve": (
-        ["job", "attachment", "contract", "approve", "nosuch.json", "--attach", "nosuch"],
+        ["job", "attachment", "contract", "approve", "nosuch.json", "--attachment", "nosuch"],
         "cannot read nosuch.json",
     ),
     "job attachment contract list": (
-        ["job", "attachment", "contract", "list", "--attach", "nosuch"],
+        ["job", "attachment", "contract", "list", "--attachment", "nosuch"],
         "[]",
     ),
     "job attachment show": (["job", "attachment", "show", "nosuch"], "no attachment 'nosuch'"),
@@ -128,8 +129,8 @@ CASES: dict[str, tuple[list[str], str]] = {
         ["job", "check", "1bad", "--from", "2026-09-11", "--to", "2026-09-12"],
         "is not a dataset name",
     ),
-    "job runs list": (["job", "runs", "list", "--attach", "nosuch"], "no attachment"),
-    "job runs show": (["job", "runs", "show", "r", "--attach", "nosuch"], "no attachment"),
+    "job runs list": (["job", "runs", "list", "--attachment", "nosuch"], "no attachment"),
+    "job runs show": (["job", "runs", "show", "r", "--attachment", "nosuch"], "no attachment"),
     "job runs audit": (["job", "runs", "audit", "d", "--from", "bad", "--to", "2024-01-02"], "bad"),
     "connector status": (["connector", "status", "nosuch"], "no feed 'nosuch'"),
     "connector logs": (["connector", "logs", "crypto", "--follow"], "--follow does not apply"),

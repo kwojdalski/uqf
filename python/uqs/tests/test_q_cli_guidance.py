@@ -25,7 +25,7 @@ The same parse holds two more places guidance is written (#1787): the help
 of the tree's Python - an error, a log line, a next step - other than
 docstrings, which are prose for the reader of the code as a q comment is. A
 Python string is prose more often than a q message is, and cuts a command off
-mid-line (`uqs job backfill --attach` with its NAME in the next sentence), so
+mid-line (`uqs job backfill --attachment` with its NAME in the next sentence), so
 there the part that parses is what is judged: it must still name no alias, no
 hidden command and no old option. The few places that name an old spelling on
 purpose are KEPT, each with its reason, and each must still be needed.
@@ -287,7 +287,7 @@ def test_an_old_or_unknown_spelling_is_refused(words, why):
     [
         ["job", "checkpoint", "remove", "demo_deals_backfill"],
         ["status"],
-        ["data", "check", "--attach", "NAME", "--apply"],
+        ["data", "check", "--attachment", "NAME", "--apply"],
         ["start", "--profile", "crypto"],
         ["connector", "start", "kafka"],
         ["--debug", "status"],
@@ -371,7 +371,7 @@ def test_a_python_string_is_read_and_a_docstring_is_not():
     [
         (["--target", "NAME", "summary"], "old spelling of `uqs status`"),
         (["data", "check", "--fix"], "--fix is a hidden option"),
-        (["job", "backfill", "--debug", "--attach"], "--debug is an old spelling"),
+        (["job", "backfill", "--debug", "--attachment"], "--debug is an old spelling"),
         (["deploy", "verify", "NAME"], "old spelling of `uqs deploy check`"),
     ],
 )
@@ -382,7 +382,7 @@ def test_prose_cut_short_is_judged_by_what_parses(words, why):
 @pytest.mark.parametrize(
     "words",
     [
-        ["job", "backfill", "--attach"],  # its NAME in the next sentence
+        ["job", "backfill", "--attachment"],  # its NAME in the next sentence
         ["--target", "NAME", "<command>"],
         ["job", "new", "named", "it"],
         ["status", "--sort"],

@@ -59,7 +59,10 @@ def _failed(prefix: str, stage: str, exc: Exception) -> None:
 
 #: `--output` is a FILE, as `contract export -o` writes one; a directory is
 #: `--output-dir` (#1857).
-@deploy_app.command("build", cls=renamed({"--output": "--output-dir"}, ChangesState))
+_BUILD_RENAMES = {"--output": "--output-dir", **components.BUILD_OLD_SPELLINGS}
+
+
+@deploy_app.command("build", cls=renamed(_BUILD_RENAMES, ChangesState))
 def build(
     output: Annotated[
         Path | None,
@@ -91,27 +94,20 @@ def build(
     dry_run: Annotated[
         bool, typer.Option("--dry-run", "-n", help="Print the bundle's composition; build nothing")
     ] = False,
-    q_target: Annotated[
-        str | None,
-        typer.Option(
-            "--q-target",
-            help="Convert the release's q for this kdb+ - 4.0 has no nested contexts. "
-            "Only the artifact changes, never the checkout",
-        ),
-    ] = None,
+    q_target: components.ConvertFor = None,
     q_exclude: Annotated[
         list[str] | None,
         typer.Option(
             "--q-exclude",
             metavar="PATTERN",
-            help="With --q-target: a folder, file or glob to ship as written; repeatable",
+            help="With --q-version: a folder, file or glob to ship as written; repeatable",
         ),
     ] = None,
     allow_computed_names: Annotated[
         bool,
         typer.Option(
             "--allow-computed-names",
-            help="With --q-target: accept a load-time lookup of a computed name, with a warning",
+            help="With --q-version: accept a load-time lookup of a computed name, with a warning",
         ),
     ] = False,
     kafka_home: Annotated[
@@ -163,12 +159,15 @@ def build(
     print(artifact.path)
 
 
-@deploy_app.command(
-    "push",
-    cls=renamed(
-        policy.OLD_SPELLINGS | conn.OLD_SPELLINGS | components.OLD_Q_SPELLINGS, ChangesState
-    ),
+_PUSH_RENAMES = (
+    policy.OLD_SPELLINGS
+    | conn.OLD_SPELLINGS
+    | components.OLD_Q_SPELLINGS
+    | components.OLD_SPELLINGS
 )
+
+
+@deploy_app.command("push", cls=renamed(_PUSH_RENAMES, ChangesState))
 def push(
     ctx: typer.Context,
     artifact: Annotated[

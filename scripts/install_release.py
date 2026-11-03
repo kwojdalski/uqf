@@ -17,7 +17,7 @@ In order, each step refusing with what to do before the next one writes:
      torq.sh and the release's processes run (docs/guides/deploy.md, "The
      minimum host contract"), the list preflight checks on a push;
   4. Python    - the interpreter is the version the artifact targets. A release
-     built with `uqs deploy build --python-runtime` carries a CPython: unless
+     built with `uqs deploy build --python-component` carries a CPython: unless
      --python names another, it is unpacked into .release/python, checked file
      by file against its own manifest, and is the interpreter - so the host
      needs only a python3 (3.8 or later) to run this script;

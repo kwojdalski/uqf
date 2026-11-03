@@ -44,7 +44,7 @@ def world(monkeypatch, tmp_path):
 
 
 COMMON = [
-    "--attach",
+    "--attachment",
     "pb-uat",
     "--from",
     "2026-09-11",

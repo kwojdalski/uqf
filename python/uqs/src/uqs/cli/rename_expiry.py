@@ -154,6 +154,35 @@ RENAMED_AFTER: dict[str, frozenset[str]] = {
             "uqs job receive",
             "uqs config set PROC FIELD VALUE",
             "uqs job backfill --mode dry-run",
+            # #1855: one meaning per word - the saved attachment is --attachment
+            "uqs logs --attach",
+            "uqs job backfill --attach",
+            "uqs job receive --attach",
+            "uqs job runs list --attach",
+            "uqs job runs show --attach",
+            "uqs job attachment contract approve --attach",
+            "uqs job attachment contract list --attach",
+            "uqs data check --attach",
+            "uqs data alter --attach",
+            # #1855: the base port is --base-port; "runtime" is a uqs runtime only
+            "uqs job attachment add --stack-id",
+            "uqs job attachment add --runtime-only",
+            # #1855: "target" is a deploy target; the kdb+ version is --q-version
+            "uqs deploy build --q-target",
+            # #1855: a bundled q, TorQ or Python is a component, not a runtime
+            "uqs deploy build --python-runtime",
+            "uqs deploy push --python-runtime",
+            "uqs deploy push --python-runtime-sha256",
+            "uqs deploy push --q-runtime",
+            "uqs deploy push --q-runtime-sha256",
+            "uqs deploy push --torq-runtime",
+            "uqs deploy push --torq-runtime-sha256",
+            # #1855: --release is a release's name; a directory is --release-dir
+            "uqs target adopt --release",
+            # #1855: --schema is a table's columns; a schema file is --schema-file
+            "uqs data replay --schema",
+            # #1855: process_overrides.csv is `config list`; `override` is a bypass
+            "uqs list overrides",
         }
     ),
 }
