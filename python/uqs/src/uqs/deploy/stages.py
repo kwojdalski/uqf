@@ -265,8 +265,7 @@ class Deployment(Server):
             profile or self.cfg.profile,
             self.selection if sel is None else sel,
             live,
-            "--deadline",
-            str(self.cfg.verify_timeout),
+            timeout=self.cfg.verify_timeout,
         )
         r = self.remote.run(
             script(*self.in_release(release, command)), self.cfg.verify_timeout + 60, stage

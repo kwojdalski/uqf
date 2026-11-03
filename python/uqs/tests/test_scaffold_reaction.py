@@ -142,7 +142,7 @@ def _refusal(argv: list[str], monkeypatch) -> str:
     [
         (["--period", "0D00:00:01"], "--period does not apply to a reaction"),
         (["--kind", "backfill"], "--kind does not apply to a reaction"),
-        (["--procname", "x1"], "--procname does not apply to a reaction"),
+        (["--proc", "x1"], "--proc does not apply to a reaction"),
         # #1578: --schema-from was not tracked, so it was silently ignored.
         (["--schema-from", "does_not_exist"], "--schema-from does not apply to a reaction"),
     ],

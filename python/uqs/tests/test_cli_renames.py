@@ -70,6 +70,20 @@ RENAMED = [
             "accept-converted-release",
         )
     ],
+    # #1857: one vocabulary
+    ("job new", "--procname", "--proc"),
+    ("deploy check", "--procs", "--proc"),
+    ("deploy check", "--deadline", "--verify-timeout"),
+    ("deploy verify", "--deadline", "--verify-timeout"),
+    ("job attachment contract approve", "--conflict", "--on-conflict"),
+    ("job attachment contract approve", "--max-rows", "--max-message-rows"),
+    ("job preview", "--sample", "--limit"),
+    ("deploy build", "--output", "--output-dir"),
+    ("deploy component build", "--output", "--output-dir"),
+    ("deploy push", "--qcmd", "--q-cmd"),
+    ("deploy push", "--qhome", "--q-home"),
+    *[(f"setup odbc {verb}", "--home", "--odbc-home") for verb in ("rollback", "status", "env")],
+    ("setup odbc install", "--qhome", "--q-home"),
     # #1852: the bare bypass flags, each now an --override with a reason
     *[
         (path, f"--{name}", renames.bypass_flag(name))
@@ -314,3 +328,60 @@ def test_the_old_proc_option_names_the_process_whatever_it_is(monkeypatch):
     assert got == ["nope1", "count quote"] and moved == ["nope1"]
     assert shared._proc_first(ctx, "nope1", None, port_given=False) == ("nope1", None)
     assert said == [("--proc", "uqs query PROC")]
+
+
+def test_a_duration_is_seconds_bare_or_with_a_unit():
+    """#1857: every span of time is a DURATION; a bare number stays seconds,
+    as every duration option took before."""
+    from uqs.cli import vocabulary
+
+    assert vocabulary.seconds("30") == 30.0
+    assert vocabulary.seconds("500ms") == 0.5
+    assert vocabulary.seconds("5m") == 300.0
+    assert vocabulary.whole_seconds("1.2") == 2
+    with pytest.raises(typer.BadParameter, match="a duration is a number of seconds"):
+        vocabulary.seconds("soon")
+
+
+def test_sources_check_window_minutes_become_last(monkeypatch):
+    """`--window N` was minutes; it is `--last Nm` now, read and converted."""
+    from uqs.cli import source_check
+
+    seen = {}
+    monkeypatch.setattr(source_check.live_check, "check", lambda *a, **k: seen.update(k) or [])
+    said = []
+    monkeypatch.setattr(source_check, "warn_renamed", lambda o, n: said.append((o, n)))
+    result = runner.invoke(cli.app, ["config", "sources", "check", "src1", "--window", "90"])
+    assert result.exit_code == 0, result.output
+    assert seen["window_minutes"] == 90
+    assert said == [("--window 90", "--last 90m")]
+    runner.invoke(cli.app, ["config", "sources", "check", "src1", "--last", "2h"])
+    assert seen["window_minutes"] == 120
+
+
+def test_seed_overwrite_is_on_conflict_replace(monkeypatch):
+    """`data seed --overwrite` -> `--on-conflict replace` (#1857)."""
+    from uqs.cli import seed
+
+    said = []
+    monkeypatch.setattr(seed, "warn_renamed", lambda o, n: said.append((o, n)))
+    result = runner.invoke(cli.app, ["data", "seed", "--overwrite", "--from-runtime", "nope"])
+    assert said == [("--overwrite", "--on-conflict replace")], result.output
+
+
+def test_alter_rename_is_old_colon_new_and_the_old_equals_still_parses(monkeypatch):
+    """`data alter --rename OLD:NEW`, as `data migrate` spells it (#1856)."""
+    from uqs.cli import hdb_alter
+
+    said = []
+    monkeypatch.setattr(hdb_alter, "warn_renamed", lambda o, n: said.append(n))
+    assert hdb_alter._old_rename("amt:amount") == "amt=amount"
+    assert hdb_alter._old_rename("amt=amount") == "amt=amount"
+    assert said == ["--rename amt:amount"]
+
+
+def test_tables_are_a_repeatable_table_and_a_comma_list_works_in_one():
+    from uqs.cli.hdb_scope import tables_given
+
+    assert tables_given(["trade", "quote,fx"]) == ["trade", "quote", "fx"]
+    assert tables_given(None) == []

@@ -48,16 +48,16 @@ hostname -I >/dev/null 2>&1 ||
   fail "hostname -I fails - torq.sh matches a process's host against this host's addresses with it"
 echo "glibc=$(getconf GNU_LIBC_VERSION 2>/dev/null | sed -n 's/^glibc //p')"
 me=$(id -un)
-# QHOME: --qhome, else this account's own $QHOME - never the caller's.
-if [ -n "$qhome_flag" ]; then qhome_eff=$qhome_flag; qhome_from="--qhome"
+# QHOME: --q-home, else this account's own $QHOME - never the caller's.
+if [ -n "$qhome_flag" ]; then qhome_eff=$qhome_flag; qhome_from="--q-home"
 elif [ -n "${QHOME:-}" ]; then qhome_eff=$QHOME; qhome_from="$me's QHOME"
-else fail "QHOME is not set for $me and --qhome was not given -" \
-  "pass --qhome <the directory q finds its licence in>"
+else fail "QHOME is not set for $me and --q-home was not given -" \
+  "pass --q-home <the directory q finds its licence in>"
 fi
 test -d "$qhome_eff" || fail "QHOME $qhome_eff ($qhome_from) is not a directory"
-# QCMD: --qcmd, else $QCMD, else q on this account's PATH. A name or a path,
+# QCMD: --q-cmd, else $QCMD, else q on this account's PATH. A name or a path,
 # never a command line: it is run as one word, quoted.
-if [ -n "$qcmd_flag" ]; then qcmd_want=$qcmd_flag; qcmd_from="--qcmd"
+if [ -n "$qcmd_flag" ]; then qcmd_want=$qcmd_flag; qcmd_from="--q-cmd"
 elif [ -n "${QCMD:-}" ]; then qcmd_want=$QCMD; qcmd_from="$me's QCMD"
 else qcmd_want=q; qcmd_from="q on $me's PATH"
 fi
@@ -67,9 +67,9 @@ case "$qcmd_want" in
       qcmd_eff=$qcmd_want;;
   */*) fail "QCMD $qcmd_want ($qcmd_from) is a relative path - give an absolute one";;
   *[[:space:]]*) fail "QCMD '$qcmd_want' ($qcmd_from) is not an executable name -" \
-                   "a command with arguments is not supported; pass --qcmd";;
+                   "a command with arguments is not supported; pass --q-cmd";;
   *) qcmd_eff=$(command -v -- "$qcmd_want") ||
-       fail "QCMD $qcmd_want ($qcmd_from) is not on $me's PATH - pass --qcmd"
+       fail "QCMD $qcmd_want ($qcmd_from) is not on $me's PATH - pass --q-cmd"
      case "$qcmd_eff" in
        /*) ;;
        *) fail "QCMD $qcmd_want ($qcmd_from) is a shell alias or function, not an executable";;
@@ -230,7 +230,7 @@ if [ -d /opt/uqf/deploy.lock ]; then date +%s > /opt/uqf/deploy.lock/heartbeat; 
 set -euo pipefail
 cd /opt/uqf/releases/20261007T000000Z-0123456789ab
 source ./deploy.env
-if .venv/bin/uqs deploy check --help >/dev/null 2>&1; then .venv/bin/uqs deploy check --profile essential --ports-free; else .venv/bin/uqs deploy verify --profile essential --ports-free; fi
+if .venv/bin/uqs deploy check --help 2>/dev/null | grep -q -e '--table '; then .venv/bin/uqs deploy check --profile essential --ports-free; elif .venv/bin/uqs deploy check --help >/dev/null 2>&1; then .venv/bin/uqs deploy check --profile essential --ports-free; else .venv/bin/uqs deploy verify --profile essential --ports-free; fi
 
 =====
 [start]
@@ -249,7 +249,7 @@ if [ -d /opt/uqf/deploy.lock ]; then date +%s > /opt/uqf/deploy.lock/heartbeat; 
 set -euo pipefail
 cd /opt/uqf/releases/20261007T000000Z-0123456789ab
 source ./deploy.env
-if .venv/bin/uqs deploy check --help >/dev/null 2>&1; then .venv/bin/uqs deploy check --profile essential --deadline 180; else .venv/bin/uqs deploy verify --profile essential --deadline 180; fi
+if .venv/bin/uqs deploy check --help 2>/dev/null | grep -q -e '--table '; then .venv/bin/uqs deploy check --profile essential --verify-timeout 180; elif .venv/bin/uqs deploy check --help >/dev/null 2>&1; then .venv/bin/uqs deploy check --profile essential --deadline 180; else .venv/bin/uqs deploy verify --profile essential --deadline 180; fi
 
 =====
 [lock]

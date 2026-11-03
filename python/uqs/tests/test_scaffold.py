@@ -171,7 +171,7 @@ def test_a_plan_refuses_wholesale_rather_than_half_writing(tmp_path: Path):
 
 
 def test_a_process_another_job_runs_is_refused_before_anything_is_written(tmp_path: Path):
-    """#1572: --procname of an existing job's process wrote the new job, and
+    """#1572: --proc of an existing job's process wrote the new job, and
     the tree then refused to load - one process runs one job."""
     streaming = tmp_path / "src" / "etl" / "streaming"
     streaming.mkdir(parents=True)

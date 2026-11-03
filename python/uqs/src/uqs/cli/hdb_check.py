@@ -32,6 +32,7 @@ from uqs.cli.hdb_scope import (
     confirm,
     resolve,
     run_scoped,
+    tables_given,
 )
 from uqs.cli.json_out import emit, json_opt
 from uqs.cli.renames import alias_command
@@ -51,10 +52,11 @@ CheckJson = json_opt(
 @data_app.command("check", cls=ConfirmsOnServer)
 def hdb_check(
     table: Annotated[
-        str | None,
+        list[str] | None,
         typer.Option(
             "--table",
-            help="Check and fill only this table (default with --attach: the attachment's own)",
+            help="Check and fill only this table (default with --attach: the attachment's own); "
+            "repeatable, and NAME,NAME also works",
             autocompletion=completion.plant_table,
         ),
     ] = None,
@@ -93,17 +95,20 @@ def hdb_check(
             "write and asks first; add --yes where nothing can ask"
         ))  # fmt: skip
         return
-    if table or template or attach or hdb:
+    tables = tables_given(table)
+    if tables or template or attach or hdb:
         try:
+            if as_json and len(tables) > 1:
+                raise UqsError("--json reports one table: give --table once")
             handle = resolve(attach, hdb)
-            name = _table(handle, table)
             schema = hdb_types.declared_schema(handle.paths)
             declared = hdb_shape.declared_tables(handle.paths)
-            with hdb_alter.declaration(schema, name, declared) as decl:
-                day = template.replace("-", ".") if template else None
-                req = Request(handle.hdb, name, "fill", schema=decl, template=day)
-                what = f"Write an empty {name} into each partition lacking it"
-                run_scoped(handle, req, apply=apply, yes=yes, as_json=as_json, what=what)
+            for name in tables or [_table(handle, None)]:
+                with hdb_alter.declaration(schema, name, declared) as decl:
+                    day = template.replace("-", ".") if template else None
+                    req = Request(handle.hdb, name, "fill", schema=decl, template=day)
+                    what = f"Write an empty {name} into each partition lacking it"
+                    run_scoped(handle, req, apply=apply, yes=yes, as_json=as_json, what=what)
         except UqsError as exc:
             _die(exc)
         return

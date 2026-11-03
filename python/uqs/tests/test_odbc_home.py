@@ -231,12 +231,12 @@ def test_the_cli_runs_the_whole_lifecycle_under_setup_odbc(tmp_path, qhome):
     _approve(home, v1, v2)
 
     def uqs(*args: str):
-        return runner.invoke(cli.app, ["setup", "odbc", *args, "--home", str(home)])
+        return runner.invoke(cli.app, ["setup", "odbc", *args, "--odbc-home", str(home)])
 
     empty = uqs("env")
     assert empty.exit_code == 1
     for pkg in (v1, v2):
-        installed = uqs("install", str(pkg), "--qhome", str(qhome))
+        installed = uqs("install", str(pkg), "--q-home", str(qhome))
         assert installed.exit_code == 0, installed.output
         # Unwrapped: rich wraps at the terminal's width, which a test does not set.
         said = installed.output.replace("\n", "")
@@ -268,7 +268,9 @@ def test_setup_odbc_env_without_a_version_names_the_new_install_command(tmp_path
 
     monkeypatch.setattr("uqs.cli.odbc._die", die)
     (tmp_path / "odbc").mkdir()
-    result = CliRunner().invoke(cli.app, ["setup", "odbc", "env", "--home", str(tmp_path / "odbc")])
+    result = CliRunner().invoke(
+        cli.app, ["setup", "odbc", "env", "--odbc-home", str(tmp_path / "odbc")]
+    )
     assert result.exit_code == 1
     assert said == [f"{tmp_path / 'odbc'} has no current version - `uqs setup odbc install` first"]
 

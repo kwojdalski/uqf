@@ -51,7 +51,7 @@ singlestore,1.1.7,linux-x86_64,4f0c...e2
 Then, as the service account:
 
 ```bash
-uqs setup odbc install singlestore-1.1.7.tar.gz --home /srv/uqf/odbc --qhome /opt/kx
+uqs setup odbc install singlestore-1.1.7.tar.gz --odbc-home /srv/uqf/odbc --q-home /opt/kx
 . /srv/uqf/odbc/current/env.sh
 ```
 
@@ -88,7 +88,8 @@ whose table this site lacks can't stop the check. The stages, in order:
 4. **schema:** the physical tables and columns the adapter reads are present,
    with their types. That's the source's `raw` contract when it declares one,
    and its own `columns` and `types` otherwise.
-5. **read:** the adapter's bounded read of the last hour (`--window`) runs.
+5. **read:** the adapter's bounded read of the last hour (`--last`, default
+   `1h`) runs.
 6. **output:** the rows it returned have the declared `columns` and `types`.
 
 Declare `raw` when the adapter's output isn't its input. For example, it reads
@@ -127,9 +128,9 @@ the usual rollback follows.
 ## Upgrading and rolling back
 
 ```bash
-uqs setup odbc install singlestore-1.1.8.tar.gz --home /srv/uqf/odbc   # approved first
-uqs setup odbc status --home /srv/uqf/odbc
-uqs setup odbc rollback --home /srv/uqf/odbc
+uqs setup odbc install singlestore-1.1.8.tar.gz --odbc-home /srv/uqf/odbc   # approved first
+uqs setup odbc status --odbc-home /srv/uqf/odbc
+uqs setup odbc rollback --odbc-home /srv/uqf/odbc
 ```
 
 An upgrade installs the new version beside the old and moves `current`. The old

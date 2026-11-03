@@ -20,6 +20,7 @@ from typer.main import get_group
 
 from uqs.cli import deploy_policy
 from uqs.cli.deploy import deploy_app
+from uqs.cli.deploy_connection import config_options
 from uqs.deploy import artifact, driver, verify
 from uqs.deploy import build as release_build
 from uqs.deploy import remote as remote_mod
@@ -43,9 +44,8 @@ def parse_args(argv: list[str]) -> Config:
     params.pop("target_names", None)
     # --override NAME --reason TEXT become make_config's per-override fields (#1732)
     params |= deploy_policy.bypasses(params.pop("override"), params.pop("reason"))
-    params.pop("no_register", None)  # a choice about this machine, not the push
     # an option left unset (None) takes make_config's default, as push does (#1892)
-    return make_config(**{k: v for k, v in params.items() if v is not None})
+    return make_config(**{k: v for k, v in config_options(params).items() if v is not None})
 
 
 ARGS = ["--ssh", "uqf-server", "--dest", "/opt/uqf", "--profile", "essential"]
@@ -170,7 +170,7 @@ def test_ssh_keeps_host_key_checking_and_never_prompts():
 
 
 def test_every_value_reaches_the_remote_shell_quoted():
-    cfg = parse_args([*BASE, "--qcmd", "/opt/kx/bin/q", "--qhome", "/opt/kx"])
+    cfg = parse_args([*BASE, "--q-cmd", "/opt/kx/bin/q", "--q-home", "/opt/kx"])
     text = Deployment(cfg, FakeRemote()).preflight_script()
     assert "dest=/opt/uqf\n" in text and "qcmd_flag=/opt/kx/bin/q\n" in text
     assert q("a b;c") == "'a b;c'"
@@ -584,14 +584,14 @@ def test_a_dry_run_as_a_service_user_says_who_does_what(tmp_path):
 def test_q_flags_are_optional_and_may_hold_spaces():
     cfg = parse_args(BASE)
     assert cfg.qcmd is None and cfg.qhome is None
-    cfg = parse_args([*BASE, "--qhome", "/opt/kx home", "--qcmd", "/opt/kx home/bin/q"])
+    cfg = parse_args([*BASE, "--q-home", "/opt/kx home", "--q-cmd", "/opt/kx home/bin/q"])
     assert (cfg.qhome, cfg.qcmd) == ("/opt/kx home", "/opt/kx home/bin/q")
 
 
 @pytest.mark.parametrize("value", ["bin/q", "/opt/../q", "/opt/kx\nq"])
 def test_an_explicit_q_path_must_be_absolute_and_plain(value):
-    with pytest.raises(DeployError, match="--qcmd"):
-        parse_args([*BASE, "--qcmd", value])
+    with pytest.raises(DeployError, match="--q-cmd"):
+        parse_args([*BASE, "--q-cmd", value])
 
 
 def test_the_local_environment_never_reaches_the_server(monkeypatch):
@@ -603,7 +603,7 @@ def test_the_local_environment_never_reaches_the_server(monkeypatch):
 
 
 def test_explicit_flags_reach_preflight_quoted():
-    cfg = parse_args([*BASE, "--qhome", "/opt/kx home"])
+    cfg = parse_args([*BASE, "--q-home", "/opt/kx home"])
     text = Deployment(cfg, FakeRemote()).preflight_script()
     assert "qhome_flag='/opt/kx home'\n" in text and "qcmd_flag=''\n" in text
 
@@ -611,7 +611,7 @@ def test_explicit_flags_reach_preflight_quoted():
 def test_preflight_resolves_from_the_deploying_accounts_environment():
     text = Deployment(parse_args(BASE), FakeRemote()).preflight_script()
     assert 'elif [ -n "${QHOME:-}" ]' in text and 'elif [ -n "${QCMD:-}" ]' in text
-    assert 'command -v -- "$qcmd_want"' in text and "pass --qhome" in text
+    assert 'command -v -- "$qcmd_want"' in text and "pass --q-home" in text
 
 
 def test_the_resolved_q_is_what_the_release_runs_with(tmp_path):

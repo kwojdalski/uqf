@@ -118,7 +118,7 @@ def attach(
     accept_risks: o.AcceptRisksOpt = False,
     clear_overrides: o.ClearOverridesOpt = False,
     dry_run: DryRunOpt = False,
-    no_start: o.NoStartOpt = False,
+    start: o.StartOpt = True,
     yes: YesOpt = False,
     as_json: JsonOpt = False,
 ) -> None:
@@ -222,7 +222,7 @@ def attach(
             confirmed = getpass.getuser()
     outcome = workflow.execute(
         resolved, planned, ipc, paths.repo_root, publishing.UqsPublisher(paths),
-        start=not no_start, confirmed_risks=confirmed,
+        start=start, confirmed_risks=confirmed,
     )  # fmt: skip
     stages = [asdict(s) | {"stage": s.name} for s in outcome.stages]
     for s in stages:

@@ -208,7 +208,7 @@ def install(home: Path, archive: Path, managed_qhome: Path, dry_run: bool = Fals
     if not archive.is_file():
         raise UqsError(f"no package at {archive}")
     if not managed_qhome.is_dir():
-        raise UqsError(f"the managed QHOME {managed_qhome} is not a directory - pass --qhome")
+        raise UqsError(f"the managed QHOME {managed_qhome} is not a directory - pass --q-home")
     digest = _sha256(archive)
     row = approved(home).get(digest)
     if row is None:

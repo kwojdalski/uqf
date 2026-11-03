@@ -92,18 +92,124 @@ def test_the_native_active_write_date_and_later_are_never_backfilled(world, day)
         plan_with(world, facts_of(dates=["2026.09.12", day]))
 
 
-def test_the_earlier_of_the_wdbs_partition_and_trading_date_is_the_active_date(world):
-    # the wdb is still filling the 15th although its trading date has moved on
+def test_the_wdbs_current_write_partition_is_the_active_date(world):
     world.stack.state_over["wdb1"] = {"partition": "2026.10.15"}
-    with pytest.raises(UqsError, match="2026-10-15 is not completed history: wdb1 is writing"):
+    with pytest.raises(
+        UqsError,
+        match="2026-10-15 is not completed history: wdb1's current write partition is 2026-10-15",
+    ):
         plan_with(world, facts_of(dates=["2026.10.15"]))
     assert plan_with(world, facts_of(dates=["2026.10.14"]))["coordination"]["active_date"] == (
         "2026-10-15"
     )
 
 
-def test_an_unknown_active_date_is_a_refusal_not_a_pass(world):
-    refused(world, "wdb1 does not report which date it is writing", wdb1={"partition": ""})
+# A writer that crossed end of day without a restart: TorQ set .eodtime.d at startup and no
+# end-of-day handler advances it (#1914). Neither the old nor a new date there is evidence.
+NOV_3 = {"now": "2026.11.03D12:00:00.000000000", "next_roll": "2026.11.04D00:00:00.000000000"}
+
+
+def long_running(**over):
+    return {
+        "wdb1": NOV_3 | {"partition": "2026.11.03", "eod_date": "2026.11.01"},
+        "rdb1": NOV_3 | {"partitions": ["2026.11.03"], "eod_date": "2026.11.01"},
+    } | over
+
+
+def test_a_stale_startup_date_does_not_refuse_completed_history(world):
+    world.stack.state_over.update(long_running())
+    co = plan_with(world, facts_of(dates=["2026.11.02"]))["coordination"]
+    assert co["active_date"] == "2026-11-03" and co["last_writable_date"] == "2026-11-02"
+
+
+def test_the_stale_startup_date_is_never_evidence_in_either_direction(world):
+    # a startup date AFTER the partitions does not make anything active, nor does it hide it
+    over = long_running()
+    over["wdb1"]["eod_date"] = over["rdb1"]["eod_date"] = "2026.10.01"
+    world.stack.state_over.update(over)
+    assert plan_with(world, facts_of(dates=["2026.11.02"]))["coordination"]["active_date"] == (
+        "2026-11-03"
+    )
+    with pytest.raises(UqsError, match="2026-11-03 is not completed history"):
+        plan_with(world, facts_of(dates=["2026.11.03"]))
+
+
+def test_the_rdbs_outstanding_partitions_block_a_date_awaiting_reload(world):
+    # the rdb crossed end of day on 2 November and has not finished reloading it
+    over = long_running()
+    over["rdb1"]["partitions"] = ["2026.11.02", "2026.11.03"]
+    world.stack.state_over.update(over)
+    with pytest.raises(UqsError) as info:
+        plan_with(world, facts_of(dates=["2026.11.02"]))
+    assert (
+        "2026-11-02 is not completed history: rdb1's outstanding partitions are "
+        "2026-11-02, 2026-11-03, the earliest 2026-11-02"
+    ) in str(info.value)
+    assert "wdb1" not in str(info.value), "the wdb, on 3 November, has no objection"
+    assert plan_with(world, facts_of(dates=["2026.11.01"]))["coordination"]["active_date"] == (
+        "2026-11-02"
+    )
+
+
+@pytest.mark.parametrize(
+    "state",
+    [
+        {"partitions": []},
+        {"partitions": [""]},
+        {"partitions": ["2026.11.03", ""]},
+        {"partitions": ["not-a-date"]},
+        {"partitions": "2026.11.03"},
+        {"partitions": None},
+        {"partitions": ["2026.11.03"], "proctype": "unheard-of"},
+    ],
+)
+def test_unknown_rdb_partition_state_is_a_refusal_not_a_pass(world, state):
+    over = long_running()
+    over["rdb1"] = over["rdb1"] | state
+    world.stack.state_over.update(over)
+    with pytest.raises(UqsError, match="rdb1 does not report which date it is writing"):
+        plan_with(world, facts_of(dates=["2026.11.02"]))
+
+
+def test_a_missing_partitions_key_is_a_refusal(world, monkeypatch):
+    """An rdb whose writer_state predates the key, or cannot read its list, says nothing."""
+    original = world.stack.writer_state
+
+    def without(name):
+        state = original(name)
+        state.pop("partitions", None)
+        return state
+
+    monkeypatch.setattr(world.stack, "writer_state", without)
+    world.stack.state_over.update(long_running())
+    del world.stack.state_over["rdb1"]["partitions"]
+    with pytest.raises(UqsError, match="rdb1 does not report which date it is writing"):
+        plan_with(world, facts_of(dates=["2026.11.02"]))
+
+
+@pytest.mark.parametrize("wdb", [{"partition": ""}, {"partition": "garbage"}])
+def test_unknown_wdb_partition_is_a_refusal_not_a_pass(world, wdb):
+    over = long_running()
+    over["wdb1"] = over["wdb1"] | wdb
+    world.stack.state_over.update(over)
+    with pytest.raises(UqsError, match="wdb1 does not report which date it is writing"):
+        plan_with(world, facts_of(dates=["2026.11.02"]))
+
+
+def test_a_startup_date_alone_does_not_stand_in_for_a_missing_partition(world):
+    stale = NOV_3 | {"partition": "", "eod_date": "2026.11.03"}
+    world.stack.state_over.update(long_running(wdb1=stale))
+    with pytest.raises(UqsError, match="wdb1 does not report which date it is writing"):
+        plan_with(world, facts_of(dates=["2026.11.02"]))
+
+
+def test_rollover_and_reload_still_refuse_with_healthy_partitions(world):
+    over = long_running()
+    over["wdb1"] = over["wdb1"] | {"now": "2026.11.03D23:30:00.000000000", "reloadcomplete": False}
+    world.stack.state_over.update(over)
+    message = refused(world, "end of day is at 2026-11-04T00:00:00\\+00:00, 30 minutes away")
+    assert "wdb1 has an end-of-day reload in progress" in message
+    assert "not completed history" not in message
 
 
 def test_end_of_day_close_by_is_fenced(world):
@@ -169,7 +275,9 @@ def test_the_earliest_active_date_of_all_writers_wins(world):
     )
     world.stack.refresh_discovery()
     world.stack.state_over["wdb2"] = {"partition": "2026.10.14", "proctype": "wdb"}
-    with pytest.raises(UqsError, match="2026-10-14 is not completed history: wdb2 is writing"):
+    with pytest.raises(
+        UqsError, match="2026-10-14 is not completed history: wdb2's current write partition is"
+    ):
         plan_with(world, facts_of(dates=["2026.10.14"]))
     co = plan_with(world, facts_of(dates=["2026.10.13"]))["coordination"]
     assert co["active_date"] == "2026-10-14" and co["writers"] == ["rdb1", "wdb1", "wdb2"]
@@ -297,7 +405,7 @@ def test_every_blocker_is_reported_together(world):
             "now": "2026.10.16D23:50:00.000000000",
             "reloadcomplete": False,
         },
-        rdb1={"eod_date": ""},
+        rdb1={"partitions": []},
     )
     for fragment in (
         "is not completed history",
@@ -318,23 +426,15 @@ def _free_port() -> int:
         return s.getsockname()[1]
 
 
-@pytest.fixture
-def fake_wdb(tmp_path):
-    """A real q process that is a `wdb` as far as `writer_state` can tell."""
+def _fake_writer(tmp_path, body: str, procname: str):
+    """A real q process that answers `writer_state`; `body` is the q that makes it a wdb or rdb."""
     if q_interpreter(os.environ) is None:
         pytest.skip("no q interpreter")
-    hdb = tmp_path / "wdb-hdb"
+    hdb = tmp_path / f"{procname}-hdb"
     hdb.mkdir()
     port = _free_port()
-    script = tmp_path / "wdb.q"
-    script.write_text(
-        f".proc.procname:`wdb1; .proc.proctype:`wdb;\n"
-        f'.wdb.hdbdir:hsym `$"{hdb}"; .wdb.savedir:hsym `$"{tmp_path}/save";\n'
-        ".wdb.mode:`saveandsort;\n"
-        ".wdb.writedownmode:`default; .wdb.getpartition:{2026.10.16}; .wdb.permitreload:1b;\n"
-        ".wdb.reloadcomplete:1b; .eodtime.d:2026.10.16;\n"
-        ".eodtime.nextroll:2026.10.17D00:00:00.000000000;\n"
-    )
+    script = tmp_path / f"{procname}.q"
+    script.write_text(body.replace("HDB", str(hdb)).replace("TMP", str(tmp_path)))
     proc = subprocess.Popen(
         [str(q_interpreter(os.environ)), str(script), "-p", str(port), "-q"],
         stdin=subprocess.DEVNULL,
@@ -343,7 +443,7 @@ def fake_wdb(tmp_path):
         text=True,
     )
     ipc = KolaIpc("u", "p", timeout_ms=5000)
-    endpoint = Endpoint("wdb1", "127.0.0.1", port)
+    endpoint = Endpoint(procname, "127.0.0.1", port)
     for _ in range(100):
         try:
             ipc.call(endpoint, "writer_state", {})
@@ -353,20 +453,79 @@ def fake_wdb(tmp_path):
     else:
         proc.terminate()
         raise AssertionError(
-            "the fake wdb did not come up: " + (proc.stdout.read() if proc.stdout else "")
+            f"the fake {procname} did not come up: " + (proc.stdout.read() if proc.stdout else "")
         )
-    yield type("W", (), {"hdb": hdb, "ipc": ipc, "endpoint": endpoint})
+    return proc, type("W", (), {"hdb": hdb, "ipc": ipc, "endpoint": endpoint})
+
+
+@pytest.fixture
+def fake_wdb(tmp_path):
+    """A wdb as far as `writer_state` can tell, past an end of day it never restarted for:
+    .eodtime.d is the startup date (16 Oct), the maintained partition has advanced (17 Oct)."""
+    proc, writer = _fake_writer(
+        tmp_path,
+        ".proc.procname:`wdb1; .proc.proctype:`wdb;\n"
+        '.wdb.hdbdir:hsym `$"HDB"; .wdb.savedir:hsym `$"TMP/save";\n'
+        ".wdb.mode:`saveandsort;\n"
+        ".wdb.writedownmode:`default; .wdb.getpartition:{2026.10.17}; .wdb.permitreload:1b;\n"
+        ".wdb.reloadcomplete:1b; .eodtime.d:2026.10.16;\n"
+        ".eodtime.nextroll:2026.10.18D00:00:00.000000000;\n",
+        "wdb1",
+    )
+    yield writer
     proc.terminate()
     proc.wait(timeout=10)
+
+
+def _fake_rdb(tmp_path, partitions: str):
+    return _fake_writer(
+        tmp_path,
+        ".proc.procname:`rdb1; .proc.proctype:`rdb;\n"
+        '.rdb.hdbdir:hsym `$"HDB"; .rdb.savetables:0b; .rdb.reloadenabled:1b;\n'
+        f"{partitions}\n"
+        ".eodtime.d:2026.10.16; .eodtime.nextroll:2026.10.18D00:00:00.000000000;\n",
+        "rdb1",
+    )
 
 
 def test_writer_state_reports_what_the_wdb_will_write_and_when(fake_wdb):
     state = fake_wdb.ipc.call(fake_wdb.endpoint, "writer_state", {})
     assert state["proctype"] == "wdb" and state["procname"] == "wdb1"
-    assert state["partition"] == "2026.10.16" and state["eod_date"] == "2026.10.16"
-    assert state["next_roll"].startswith("2026.10.17D00:00:00")
+    assert state["partition"] == "2026.10.17", "the maintained partition, not .eodtime.d"
+    assert "eod_date" not in state, ".eodtime.d is not evidence of the active date (#1914)"
+    assert state["next_roll"].startswith("2026.10.18D00:00:00")
     assert state["hdbdir"] == f":{fake_wdb.hdb}" and state["reloadcomplete"] is True
     assert state["now"], "the wdb's own clock is part of the answer"
+
+
+@pytest.mark.parametrize(
+    "q, expected",
+    [
+        (
+            ".rdb.rdbpartition:enlist 2026.10.17; .rdb.getpartition:{.rdb.rdbpartition};",
+            ["2026.10.17"],
+        ),
+        (
+            ".rdb.rdbpartition:2026.10.17 2026.10.18; .rdb.getpartition:{.rdb.rdbpartition};",
+            ["2026.10.17", "2026.10.18"],
+        ),
+        (".rdb.getpartition:{2026.10.18};", ["2026.10.18"]),
+        (".rdb.getpartition:{0#0Nd};", []),
+        (".rdb.getpartition:{enlist 0Nd};", [""]),
+        (".rdb.getpartition:{'`boom};", []),
+        ("", []),
+    ],
+)
+def test_writer_state_reports_the_rdbs_outstanding_partitions(tmp_path, q, expected):
+    """An end of day not yet reloaded leaves its date in the list beside the new one."""
+    proc, rdb = _fake_rdb(tmp_path, q)
+    try:
+        state = rdb.ipc.call(rdb.endpoint, "writer_state", {})
+    finally:
+        proc.terminate()
+        proc.wait(timeout=10)
+    assert state["proctype"] == "rdb" and state["partitions"] == expected
+    assert "eod_date" not in state and "partition" not in state
 
 
 def test_writer_state_is_one_lambda_that_changes_nothing():

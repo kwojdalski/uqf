@@ -81,8 +81,9 @@ GUARDRAILS = (
     Guardrail(
         FIX_HDB,
         _PUSH,
-        "fill the shared HDB's partitions that lack a table or column this release declares "
-        "(additive) instead of refusing them; a changed type is still refused",
+        "fill the shared HDB's partitions that lack a table or column this release declares, "
+        "by running its `uqs data check --apply` (additive), instead of refusing them; a "
+        "changed type is still refused",
         risk="every partition of the shared HDB is written to",
     ),
     Guardrail(

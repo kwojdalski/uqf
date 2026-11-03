@@ -156,7 +156,7 @@ or `durable_set` to get the same.
 Declaring the steps is what makes the feed previewable:
 
 ```
-uqs job preview vectorize2 --sample 10
+uqs job preview vectorize2 --limit 10
 ```
 
 fetches one real page and shows what it would publish and where the cursor would
@@ -187,7 +187,7 @@ want while troubleshooting. `--last` previews a recent window instead of the
 next page:
 
 ```
-uqs job preview vectorize2 --last 30s --sample 1 --trace
+uqs job preview vectorize2 --last 30s --limit 1 --trace
 ```
 
 The window is `[now - 30s, now)`, with `now` one UTC instant captured once.
