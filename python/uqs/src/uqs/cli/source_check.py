@@ -37,7 +37,9 @@ SourcesJson = json_opt(
 #: so it is read and converted here, not renamed by name.
 @sources_app.command("check", cls=ReadOnly)
 def sources_check(
-    sources: Annotated[list[str], typer.Argument(help="The sources to check, by name")],
+    sources: Annotated[
+        list[str], typer.Argument(metavar="SOURCE...", help="The sources to check, by name")
+    ],
     timeout: Annotated[
         float, duration("--timeout", help="Seconds (a DURATION) for every check together")
     ] = 120.0,
@@ -60,8 +62,10 @@ def sources_check(
     ] = None,
     as_json: SourcesJson = False,
 ) -> None:
-    """Connect to each source with its real credential and driver, check its
-    declared tables and column types, and read a bounded window - publishing
+    """Check each SOURCE live: connect, check its tables, read a bounded window.
+
+    Connects to each source with its real credential and driver, checks its
+    declared tables and column types, and reads a bounded window - publishing
     nothing and recording nothing. Exits 1 when any source fails."""
     if window is not None:  # #1857: minutes, where every duration is a DURATION now
         warn_renamed(f"--window {window}", f"--last {window}m")

@@ -22,7 +22,8 @@ from uqs.stack import source_settings
 sources_app = typer.Typer(
     add_completion=False,
     invoke_without_command=True,
-    help="Show which sources.csv the stack reads, and each configured source - never a "
+    help="The sources the stack reads: list, check, stub.\n\n"
+    "Show which sources.csv the stack reads, and each configured source - never a "
     "secret; check one against its declaration, or stub a placeholder row.",
 )
 config_app.add_typer(sources_app, name="sources")
@@ -71,13 +72,16 @@ def sources_show(ctx: typer.Context) -> None:
 @sources_app.command("stub", cls=ChangesState)
 def sources_stub(
     source: Annotated[
-        str, typer.Argument(help="The source, as src/etl/sources/<source>.q names it")
+        str,
+        typer.Argument(metavar="SOURCE", help="The source, as src/etl/sources/<source>.q names it"),
     ],
     dry_run: Annotated[
         bool, typer.Option("--dry-run", "-n", help="Show the row it would add; write nothing")
     ] = False,
 ) -> None:
-    """Add a SCAFFOLDED row for SOURCE to the operator's sources.csv (the
+    """Add a placeholder row for SOURCE to the operator's sources.csv.
+
+    The row is SCAFFOLDED, in the operator's sources.csv (the
     application layer, gitignored). Keeps every row the stack reads now and
     never changes an existing one; the source refuses to connect until its
     setting is written."""

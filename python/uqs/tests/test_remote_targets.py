@@ -157,7 +157,8 @@ def test_the_target_is_read_from_the_global_options_only(argv, expected):
         (["status", "--no-such-option"], True),
         (["stop", "--no-such-option", "x", "--dry-run"], True),
         (["stop", "--dry-run", "--no-such-option"], True),
-        (["start", "-h"], True),  # -h is no help flag in this CLI: it does not parse
+        # -h is --help (#1883); an older release that lacks it refuses it, running nothing
+        (["start", "-h"], False),
         (["job"], True),  # a group, no command
         (["job", "runs", "show", "abc", "--dry-run"], True),  # show takes no --dry-run
         ([], False),
