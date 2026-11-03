@@ -13,6 +13,7 @@ import ast
 import re
 import types
 from pathlib import Path
+from typing import Any
 
 import pytest
 from typer.testing import CliRunner
@@ -274,9 +275,12 @@ def test_the_dry_run_masks_the_credential_and_names_its_source(monkeypatch):
 
 def test_the_credential_is_taken_by_the_name_of_its_variable(monkeypatch):
     """`--tp-credential-env NAME` in --help, the inline flag hidden."""
-    help_ = runner.invoke(cli.app, ["connector", "start", "--help"]).stdout
-    assert "--tp-credential-env" in help_
-    assert "--tp-credential " not in help_.replace("--tp-credential-env", "")
+    import typer
+
+    root: Any = typer.main.get_command(cli.app)
+    start = root.commands["connector"].commands["start"]
+    shown = {o: p.hidden for p in start.params for o in p.opts}
+    assert shown["--tp-credential-env"] is False and shown["--tp-credential"] is True
     monkeypatch.setenv("OPS_TP", "ops:pw")
     given, origins = cli_external._secrets_from_env(
         {"tp_credential": None, "tp_credential_env": "OPS_TP", "group": "g"}
