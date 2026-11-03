@@ -386,7 +386,7 @@
 .qt.qpipe.job.fx_markout.test_both_markout_families_take_the_reference_age_from_one_definition:{[tc]
     .qunit.assertEquals[.qpipe.transform.fx_markout_outputs.job_spec`max_age;.qf.mkt.reference_max_age;"fx_markout scores with the shared reference age"];
     .qunit.assertEquals[.qpipe.transform.fx_markout.default_spec`max_age;.qf.mkt.reference_max_age;"and so does its default spec"];
-    .qunit.assertEquals[.qpipe.job.crypto_markout.max_age;.qf.mkt.reference_max_age;"as does crypto_markout"];
+    .qunit.assertEquals[.qpipe.transform.crypto_markout_outputs.job_spec`max_age;.qf.mkt.reference_max_age;"as does crypto_markout"];
     .qunit.assertEquals[(.qetl.job.stream.horizons.def `fx_markout)`max_age;.qf.mkt.reference_max_age;"the long job's history ages out on it"];
     .qunit.assertEquals[(.qetl.job.stream.horizons.def `fx_markout_wide)`max_age;.qf.mkt.reference_max_age;"and the wide job's"];
     .qunit.assertEquals[(.qetl.job.stream.horizons.def `crypto_markout)`max_age;.qf.mkt.reference_max_age;"and crypto_markout's"]};

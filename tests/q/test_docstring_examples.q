@@ -190,7 +190,7 @@
 / tickerplant, a TorQ process, a licensed driver or downloaded market data,
 / none of which a test process has.
 .qt.man.examples.needs_live:([] expr:(
-        ".qtorq.publish[h;`crypto_execution_quality;out]";
+        ".qtorq.publish[h;`crypto_markout;out]";
         ".qtorq.publish[h;`trades;`sym`side`trade_price`size`pip_factor!(`EURUSD;1;1.085;1e6;10000)]";
         ".qtorq.publish[h;`trades;(enlist `EURUSD;enlist 1;enlist 1.085;enlist 1e6;enlist 10000)]";
         ".qtorq.safe_timer[`crypto_markout;0D00:00:01.000;`.qproc.stream.tick;\"Run the markout streaming job\"]";

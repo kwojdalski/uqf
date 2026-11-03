@@ -56,6 +56,17 @@
 / rule file is read only when such a column is actually missing, so a copy of
 / this script without it still repairs every other column.
 / .
+/ A COLUMN THAT IS DELIBERATELY NOT DERIVED: crypto_trades.source_time (#1936). It
+/ is the VENUE's own time for a fill, which the recorder began sending after the
+/ table was first written. A partition older than that has no venue time to give,
+/ and the only value to hand is the plant's receipt `time` - exactly what must not
+/ be written into a venue-time column, because the markout core would then score a
+/ receipt stamp against venue-clock books as if they shared a clock (#1923). So it
+/ is filled with the declared null like any other column, by the default and not by
+/ a rule, and the executions normalizer reads a null as "no venue stamp" and puts
+/ the fill on the `receipt clock (src/etl/streaming/executions.q). The test that
+/ pins it is test_fill_hdb_partitions.q's; `clock` above is the only derived column.
+/ .
 / TWO LEVELS, THE SAME FAULT. A missing TABLE fails a query naming whichever
 / table sorts first; a missing COLUMN fails it naming that column in the
 / partition that lacks it - "./2026.01.01/book/venue. OS reports: No such

@@ -9,7 +9,7 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 [docs/guides/uqs.md](../guides/uqs.md); for the topology diagrams see
 [architecture/stack.md](../architecture/stack.md).
 
-**23 vendored processes** plus **40 uqf processes** — 63 in total. Ports are shown at the default base port 6050; every one is `{KDBBASEPORT}+offset`, so a different base shifts them all together.
+**23 vendored processes** plus **41 uqf processes** — 64 in total. Ports are shown at the default base port 6050; every one is `{KDBBASEPORT}+offset`, so a different base shifts them all together.
 
 ## uqf's own processes
 
@@ -37,7 +37,7 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 | `duckdb_deals_backfill1` | 6096 | backfill | `processes/torq_backfill.q` | — | — | — |
 | `kafka_flow1` | 6097 | etl | `processes/torq_stream.q` | — | `kafka_message` | `client_flow`, `kafka_dead_letter` |
 | `hdb_transfer_backfill1` | 6100 | backfill | `processes/torq_backfill.q` | — | — | — |
-| `crypto_markout1` | 6101 | etl | `processes/torq_stream.q` | `crypto_execution_quality` | `crypto_trades`, `crypto_book` | `crypto_execution_quality` |
+| `crypto_markout1` | 6101 | etl | `processes/torq_stream.q` | `crypto_markout` | `executions`, `market_data` | `crypto_markout` |
 | `alert_sink1` | 6102 | etl | `processes/torq_stream.q` | — | `fx_limit_breach` | — |
 | `last_value1` | 6103 | etl | `processes/torq_stream.q` | `last_value` | `market_data` | `last_value` |
 | `exec_bars1` | 6104 | etl | `processes/torq_stream.q` | `exec_bar` | `executions` | `exec_bar` |
@@ -55,6 +55,7 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 | `hdb_fx_markouts_backfill1` | 6117 | backfill | `processes/torq_backfill.q` | — | — | — |
 | `kafka_feed1` | 6118 | feed | `processes/torq_stream.q` | `kafka_message` | — | `kafka_message` |
 | `demo_deals_feed1` | 6120 | feed | `processes/torq_stream.q` | `demo_deals` | — | `demo_deals` |
+| `hdb_crypto_markout_backfill1` | 6121 | backfill | `processes/torq_backfill.q` | — | — | — |
 
 ### Why a row deviates from the defaults
 
@@ -78,7 +79,7 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 - **`duckdb_deals_backfill1`** — bounded: copies mock FX deals from a DuckDB file over ODBC, a day at a time
 - **`kafka_flow1`** — decodes the Kafka records on kafka_message into each declared topic's plant table (client_flow for the client trade topic), deduplicated on (topic;partition;offset), and sends what it cannot decode to kafka_dead_letter - including every topic no decoder job has claimed. The records are published by a consumer - the q feed kafka_feed1, or the legacy Python one - so kafka_message has no producer in a default start. That is why it does not start with the stack: it would hold one of the sixteen licensed plant connections to consume nothing. Start it with the consumer
 - **`hdb_transfer_backfill1`** — bounded - copies trades from a kdb+ HDB on this machine into trades_copy, adding notional; the HDB-to-HDB example
-- **`crypto_markout1`** — markouts on real crypto fills, in bps against the best mid across venues. Not started with the stack: its inputs come from cryptorust's recorders, or from cryptomock1 in their place, neither of which starts by default - `uqs start --profile crypto` brings it up with the mock
+- **`crypto_markout1`** — markouts on real crypto fills, in bps against the best mid across venues and net of the fee, from the canonical executions and market_data. Not started with the stack: its inputs come from cryptorust's recorders, or from cryptomock1 in their place, neither of which starts by default - `uqs start --profile crypto` brings it up with the mock
 - **`alert_sink1`** — outbound webhook for fx_limit_breach, at least once; refuses to run without UQF_SOURCE_CRED_ALERT_SINK. On demand: it needs a webhook URL, and without one it would only fail
 - **`last_value1`** — the newest top of book per sym, FX and crypto, as a published table: read the last row per sym (select by sym) for one shared answer to the current price instead of each consumer's own cache; on demand, in the fx profile
 - **`exec_bars1`** — time bars over the unified fills tape; the window is the fill's source_time
@@ -96,6 +97,7 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 - **`hdb_fx_markouts_backfill1`** — bounded: marks out the HDB's executions against its market_data, into fx_markout, with the calculation fx_markout1 applies live
 - **`kafka_feed1`** — the native q Kafka consumer (KX kfk, pinned v1.6.6): publishes every record undecoded onto kafka_message, committing offsets only after the publish returned. Needs UQF_KFK_HOME and UQF_KAFKA_BROKERS, so it is started on demand, never with the stack. The Python consumer (uqs connector start kafka) publishes the same table; run one per group
 - **`demo_deals_feed1`** — polling feed over the demo_deals source, the streaming twin of demo_deals_backfill - started on demand, as an example of the pair `uqs job check` checks
+- **`hdb_crypto_markout_backfill1`** — bounded: marks out the HDB's crypto executions against its market_data, into crypto_markout, with the calculation crypto_markout1 applies live
 
 ## Tables these processes publish
 
@@ -108,7 +110,7 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 | `cross_arbitrage` | `plant_tables.q` | `crossarb1` |
 | `crypto_book` | `plant_tables.q` | `cryptomock1` |
 | `crypto_book_1s` | `plant_tables.q` | `crypto_book_1s1` |
-| `crypto_execution_quality` | `plant_tables.q` | `crypto_markout1` |
+| `crypto_markout` | `plant_tables.q` | `crypto_markout1` |
 | `crypto_trades` | `plant_tables.q` | `cryptomock1` |
 | `demo_deals` | `plant_tables.q` | `demo_deals_feed1` |
 | `exec_bar` | `plant_tables.q` | `exec_bars1` |

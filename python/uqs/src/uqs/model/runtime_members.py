@@ -70,7 +70,10 @@ def pipeline_procnames(runtime: Runtime) -> set[str] | None:
             f"the {runtime.name} runtime is declared from profile {runtime.profile!r}, "
             f"which does not exist - known profiles are {', '.join(sorted(profiles.PROFILES))}"
         )
-    return profiles.closure([*profiles.PROFILES[runtime.profile], *sorted(included)])
+    return profiles.closure(
+        [*profiles.PROFILES[runtime.profile], *sorted(included)],
+        profiles.unfed_inputs([runtime.profile]),
+    )
 
 
 def plant_tables(runtime: Runtime) -> set[str] | None:

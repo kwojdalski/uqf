@@ -57,7 +57,7 @@
     .qunit.assertEquals[all exec passed from .qetl.transform.verify_all[];0b;"so the all deploy check takes is 0b"]};
 
 .qt.qetl.transform.test_the_stream_jobs_and_backfill_workers_all_declare_a_transform:{[t]
-    want:`crypto_execution_quality`cross_quotes`position`mkt_orderbook`demo_deals_passthrough`demo_events_passthrough;
+    want:`crypto_markout_score`cross_quotes`position`mkt_orderbook`demo_deals_passthrough`demo_events_passthrough;
     .qunit.assertEquals[all want in .qetl.transform.defined[];1b;"each shipped job's transform is registered"]};
 
 / A stream transform's output is published positionally by .u.upd, so its
@@ -66,16 +66,18 @@
 / scratch namespace so its root-level tables do not leak into other suites.
 .qt.qetl.transform.test_stream_outputs_match_the_tickerplant_tables:{[t]
     stack:.qt.qetl.transform.stack_tables[];
-    bad:{[stack;nm]
-        want:delete time from stack nm;
+    / transform name -> the plant table it publishes onto, where they differ
+    plant_of:`crypto_markout_score`position`mkt_orderbook!`crypto_markout`position`mkt_orderbook;
+    bad:{[stack;plant_of;nm]
+        want:delete time from stack plant_of nm;
         got:.qetl.transform.output_schema nm;
         $[(cols want)~cols got; (); enlist nm]
-      }[stack] each `crypto_execution_quality`position`mkt_orderbook;
+      }[stack;plant_of] each key plant_of;
     .qunit.assertEquals[count raze bad;0;"each published transform output matches its table, column for column: ",.Q.s1 raze bad]};
 
 .qt.qetl.transform.stack_tables:{[]
     ls:{$[x like ".qetl.plant.*"; 12_x; x]} each read0 `$":src/etl/plant_tables.q";
-    nms:`crypto_execution_quality`position`mkt_orderbook;
+    nms:`crypto_markout`position`mkt_orderbook;
     nms!{[ls;nm] line:first ls where ls like string[nm],":*"; value (1+line?":") _ line}[ls] each nms}
 
 / --- declaring --------------------------------------------------------------

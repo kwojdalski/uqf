@@ -573,7 +573,7 @@ qetl.plant,connections,table,,
 qetl.plant,cross_arbitrage,table,,
 qetl.plant,crypto_book,table,,
 qetl.plant,crypto_book_1s,table,,
-qetl.plant,crypto_execution_quality,table,,
+qetl.plant,crypto_markout,table,,
 qetl.plant,crypto_sim_fills,table,,
 qetl.plant,crypto_trades,table,,
 qetl.plant,deal_positions,table,,
@@ -1237,23 +1237,17 @@ qpipe.job.crypto_book_1s,on_endofday,value,,
 qpipe.job.crypto_book_1s,on_timer,value,,
 qpipe.job.crypto_book_1s,pending,table,,
 qpipe.job.crypto_book_1s,publish,value,,
-qpipe.job.crypto_markout,books,table,,
 qpipe.job.crypto_markout,completed,table,,
-qpipe.job.crypto_markout,crypto_execution_quality,table,,
 qpipe.job.crypto_markout,expired,table,,
 qpipe.job.crypto_markout,history,table,,
-qpipe.job.crypto_markout,horizons,value,,
-qpipe.job.crypto_markout,max_age,value,,
-qpipe.job.crypto_markout,max_horizon,value,,
+qpipe.job.crypto_markout,keep,function,1,x
+qpipe.job.crypto_markout,legs,function,1,pending
 qpipe.job.crypto_markout,now,function,1,
 qpipe.job.crypto_markout,on_batch,value,,
 qpipe.job.crypto_markout,on_timer,value,,
 qpipe.job.crypto_markout,pending,table,,
 qpipe.job.crypto_markout,publish,value,,
-qpipe.job.crypto_markout,real_fills,table,,
-qpipe.job.crypto_markout,score_markouts,function,2,real_fills books
 qpipe.job.crypto_markout,score_ready,value,,
-qpipe.job.crypto_markout,top_of_book,function,1,books
 qpipe.job.crypto_mock,beta_draw,function,2,a b
 qpipe.job.crypto_mock,book_rows,function,1,mkt
 qpipe.job.crypto_mock,decide,function,3,row horizon draws
@@ -1474,6 +1468,25 @@ qpipe.job.hdb_crypto_book_backfill,run,function,1,
 qpipe.job.hdb_crypto_book_backfill,snapshots,function,1,book_rows
 qpipe.job.hdb_crypto_book_backfill,source_version,value,,
 qpipe.job.hdb_crypto_book_backfill,spec,function,1,
+qpipe.job.hdb_crypto_markout_backfill,checkpoint,function,1,cursor
+qpipe.job.hdb_crypto_markout_backfill,cleanup,function,1,
+qpipe.job.hdb_crypto_markout_backfill,facts,function,1,batch
+qpipe.job.hdb_crypto_markout_backfill,fetch,function,2,from_ts to_ts
+qpipe.job.hdb_crypto_markout_backfill,handle,value,,
+qpipe.job.hdb_crypto_markout_backfill,init,function,1,run_spec
+qpipe.job.hdb_crypto_markout_backfill,last_batch,value,,
+qpipe.job.hdb_crypto_markout_backfill,last_window,dict,,
+qpipe.job.hdb_crypto_markout_backfill,live,value,,
+qpipe.job.hdb_crypto_markout_backfill,phase,value,,
+qpipe.job.hdb_crypto_markout_backfill,plan,function,1,
+qpipe.job.hdb_crypto_markout_backfill,progress,dict,,
+qpipe.job.hdb_crypto_markout_backfill,publish,function,1,batch
+qpipe.job.hdb_crypto_markout_backfill,quality_check,function,1,batch
+qpipe.job.hdb_crypto_markout_backfill,range_from,value,,
+qpipe.job.hdb_crypto_markout_backfill,range_to,value,,
+qpipe.job.hdb_crypto_markout_backfill,run,function,1,
+qpipe.job.hdb_crypto_markout_backfill,source_version,value,,
+qpipe.job.hdb_crypto_markout_backfill,spec,function,1,
 qpipe.job.hdb_exec_bars_backfill,bars,function,1,fill_rows
 qpipe.job.hdb_exec_bars_backfill,checkpoint,function,1,cursor
 qpipe.job.hdb_exec_bars_backfill,cleanup,function,1,
@@ -1751,6 +1764,21 @@ qpipe.source.hdb_crypto_book,source_name,value,,
 qpipe.source.hdb_crypto_book,time_column,value,,
 qpipe.source.hdb_crypto_book,types,value,,
 qpipe.source.hdb_crypto_book,tz,value,,
+qpipe.source.hdb_crypto_markouts,columns,value,,
+qpipe.source.hdb_crypto_markouts,complete_through,function,1,h
+qpipe.source.hdb_crypto_markouts,fixture,function,1,
+qpipe.source.hdb_crypto_markouts,query,function,3,h range_from range_to
+qpipe.source.hdb_crypto_markouts,raw_executions,function,1,
+qpipe.source.hdb_crypto_markouts,raw_market_data,function,1,
+qpipe.source.hdb_crypto_markouts,ready,function,3,batch range_from range_to
+qpipe.source.hdb_crypto_markouts,reference_read,dict,,
+qpipe.source.hdb_crypto_markouts,reference_symbols,function,2,spec rows
+qpipe.source.hdb_crypto_markouts,row_key,value,,
+qpipe.source.hdb_crypto_markouts,source_name,value,,
+qpipe.source.hdb_crypto_markouts,supporting,dict,,
+qpipe.source.hdb_crypto_markouts,time_column,value,,
+qpipe.source.hdb_crypto_markouts,types,value,,
+qpipe.source.hdb_crypto_markouts,tz,value,,
 qpipe.source.hdb_executions,columns,value,,
 qpipe.source.hdb_executions,fixture,function,1,
 qpipe.source.hdb_executions,query,function,3,h range_from range_to
@@ -1839,6 +1867,29 @@ qpipe.transform.crypto_book_1s,lateness,value,,
 qpipe.transform.crypto_book_1s,order_by,value,,
 qpipe.transform.crypto_book_1s,snapshots,function,1,x
 qpipe.transform.crypto_book_1s,width,value,,
+qpipe.transform.crypto_markout,convert,function,3,spec quote_ccys report_ccy
+qpipe.transform.crypto_markout,domain,dict,,
+qpipe.transform.crypto_markout,fee_quote,function,4,sym price fee fee_ccy
+qpipe.transform.crypto_markout,measures,function,2,rows fees
+qpipe.transform.crypto_markout,quote_ccy,function,1,syms
+qpipe.transform.crypto_markout,resolve,function,2,spec syms
+qpipe.transform.crypto_markout,score,function,3,spec exe md
+qpipe.transform.crypto_markout,split_sym,function,1,syms
+qpipe.transform.crypto_markout_outputs,executions_in,table,,
+qpipe.transform.crypto_markout_outputs,expire_after,value,,
+qpipe.transform.crypto_markout_outputs,job_spec,dict,,
+qpipe.transform.crypto_markout_outputs,keep,function,1,x
+qpipe.transform.crypto_markout_outputs,legs,function,1,pending
+qpipe.transform.crypto_markout_outputs,live,function,2,exe md
+qpipe.transform.crypto_markout_outputs,lookback,function,1,
+qpipe.transform.crypto_markout_outputs,market_data_in,table,,
+qpipe.transform.crypto_markout_outputs,max_lateness,value,,
+qpipe.transform.crypto_markout_outputs,out,table,,
+qpipe.transform.crypto_markout_outputs,rate_syms,function,1,
+qpipe.transform.crypto_markout_outputs,remember,value,,
+qpipe.transform.crypto_markout_outputs,rows,function,2,exe md
+qpipe.transform.crypto_markout_outputs,settle,value,,
+qpipe.transform.crypto_markout_outputs,wait,function,1,
 qpipe.transform.eq_domain,available,function,2,spec fr
 qpipe.transform.eq_domain,benchmarks,value,,
 qpipe.transform.eq_domain,complete,function,1,spec

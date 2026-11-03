@@ -127,9 +127,10 @@ carries FX and crypto, because it reads the normalisers rather than each market.
 Publishes `position`. Profile `fx`.
 
 **`crypto_markout1` · crypto execution quality** --- each real fill against the
-best mid across venues one and ten seconds later, in basis points. Reads
-`crypto_trades` and `crypto_book`, publishes `crypto_execution_quality`. Profile
-`crypto`. [Details](markouts.md)
+best mid across venues one and ten seconds later, in basis points and net of the
+fee. Reads `executions` and `market_data`, publishes `crypto_markout`; its twin
+`hdb_crypto_markout_backfill1` refills a window from the HDB. Profile `crypto`.
+[Details](markouts.md)
 
 **`fxpositions1` · exposure and limits** --- net exposure by symbol, book and
 product from `executions`, the fills `posbook1` nets too, with a breach row
