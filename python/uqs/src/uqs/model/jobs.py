@@ -18,6 +18,7 @@ from pathlib import Path
 
 from uqs.model.declarations import declaration_calls, reaction_calls, read_file_text, symbols
 from uqs.model.pipeline import PipelineKind
+from uqs.model.producers import BOUNDED, processes_by_table
 from uqs.paths import REACTION_DIR, STREAM_DIR, WORKER_DIR
 
 #: The marker `uqs job new` writes into every placeholder.
@@ -34,19 +35,12 @@ def bounded_producers(repo_root: Path) -> dict[str, list[str]]:
     """{dataset: the processes whose bounded workers fill it}.
 
     The datasets a reaction can watch - only a bounded worker's published
-    window fires one - and the processes it will then run inside.
+    window fires one - and the processes it will then run inside. A projection
+    of the one producer map (model/producers.py, #1862), so each worker's
+    process is its declaration's, q's `<worker>1` default included, and is
+    not worked out a second time here.
     """
-    out: dict[str, list[str]] = {}
-    for path in sorted((repo_root / WORKER_DIR).glob("*.q")):
-        for fn, name, fields in declaration_calls(path.read_text()):
-            if fn != "qetl.job.bounded.define":
-                continue
-            proc = (symbols(fields.get("procname", "")) or (f"{name}1",))[0]
-            for dataset in symbols(fields.get("dataset", ""))[:1]:
-                procs = out.setdefault(dataset, [])
-                if proc not in procs:
-                    procs.append(proc)
-    return out
+    return {t: list(ps) for t, ps in processes_by_table(repo_root, frozenset({BOUNDED})).items()}
 
 
 def job_rows(repo_root: Path) -> list[dict[str, str]]:
