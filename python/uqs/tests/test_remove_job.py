@@ -453,3 +453,31 @@ def test_removing_an_exempt_process_named_like_a_profile_drops_only_its_exemptio
     assert "default" in _literal(exempt, "UNPROFILED")
     after = _drop_from_profiles(exempt, "default")
     assert after == before
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["--override", "even-if-edited", "--reason", "rewriting it from scratch"],
+        ["--even-if-edited"],  # the old flag, for one release (#1852)
+        ["--force"],
+    ],
+)
+def test_a_written_job_is_removed_only_through_the_named_override(tree, monkeypatch, argv):
+    """#1852: the bypass is `--override even-if-edited --reason`, as every other is;
+    the old spellings still reach it."""
+    from typer.testing import CliRunner
+
+    from uqs import cli
+    from uqs.cli import remove as remove_cli
+
+    runner = CliRunner()
+    monkeypatch.setattr(remove_cli, "_paths", lambda: type("P", (), {"repo_root": tree})())
+    errors: list[str] = []
+    monkeypatch.setattr(remove_cli, "_die", lambda exc: errors.append(str(exc)))
+    refused = runner.invoke(cli.app, ["job", "remove", "demo_markout", "--dry-run"])
+    assert refused.exit_code == 0 and any("no SCAFFOLDED marker left" in e for e in errors)
+    errors.clear()
+    shown = runner.invoke(cli.app, ["job", "remove", "demo_markout", "--dry-run", *argv])
+    assert shown.exit_code == 0 and errors == [], errors
+    assert "demo_markout.q" in shown.output

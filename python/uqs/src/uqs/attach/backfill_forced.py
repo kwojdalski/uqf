@@ -1,4 +1,4 @@
-"""`--any-writer`: the one check a forced run keeps - completed history only (#1866).
+"""`--override any-writer`: the one check a forced run keeps - completed history only (#1866).
 
 A forced run skips the receiver, the contract, the schema and the batch journal, and
 the end-of-day fence: the process at `--writer` is any q process of the stack, and
@@ -16,7 +16,23 @@ from datetime import date, timedelta
 
 from uqs.attach.backfill_coordination import EOD_GUARD, fence
 from uqs.attach.remote import Endpoint, Ipc, IpcError
+from uqs.guardrails import Guardrail
 from uqs.paths import UqsError
+
+#: `job backfill --writer HOST:PORT --override any-writer` (a bare --any-writer
+#: until #1852): write through any process of the stack, nothing checked but this.
+ANY_WRITER = "any-writer"
+GUARDRAILS = (
+    Guardrail(
+        ANY_WRITER,
+        ("job backfill",),
+        "with --writer: append through ANY q process of the stack (e.g. its wdb), into that "
+        "process's own HDB over plain IPC, instead of a receiver - no contract, schema, "
+        "verification, end-of-day fence or retry protection; completed history only",
+        risk="a re-run or a retry duplicates rows, and no reader is told to reload",
+        action="prefer `uqs job receive` on the stack's machine",
+    ),
+)
 
 
 def last_completed_date(host: str, port: int, ipc: Ipc) -> date:
@@ -34,7 +50,7 @@ def last_completed_date(host: str, port: int, ipc: Ipc) -> date:
     except IpcError as exc:
         raise UqsError(
             f"{where} does not answer writer_state ({exc.reason}): which date it is writing "
-            "cannot be established, and --any-writer still keeps completed history only"
+            "cannot be established, and --override any-writer still keeps completed history only"
         ) from exc
     refusals: list = []
     active, _, _ = fence(state, [], EOD_GUARD, refusals)

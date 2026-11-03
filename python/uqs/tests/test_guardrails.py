@@ -5,11 +5,14 @@ from __future__ import annotations
 import pytest
 
 from uqs import guardrails
+from uqs.attach import backfill_forced as forced
 from uqs.attach import backfill_policy as backfill
 from uqs.attach import overrides as attach
 from uqs.cli import safety
 from uqs.deploy import overrides as deploy
+from uqs.deploy import portable
 from uqs.guardrails import Guardrail
+from uqs.scaffold import remove_policy as remove
 from uqs.stack import start_overrides as start
 
 
@@ -20,7 +23,7 @@ def test_the_catalog_lists_what_it_did_before_the_registry_in_the_same_order():
         (start.NAMES[field], ("start", "restart"), g.description)
         for field, g in start.GUARDRAILS.items()
     ]
-    before += [(name, ("deploy push",), skips) for name, skips in deploy.SKIPS.items()]
+    before += [(g.id, g.commands, g.description) for g in deploy.GUARDRAILS]
     before += [
         (f"{code}:COMPONENT", ("job attachment add",), policy.risk)
         for code, policy in sorted(attach.POLICY.items())
@@ -28,6 +31,11 @@ def test_the_catalog_lists_what_it_did_before_the_registry_in_the_same_order():
     ]
     # #1828: the attached backfill's end-of-day fence, after the attachment codes
     before += [(g.id, ("job backfill",), g.description) for g in backfill.GUARDRAILS]
+    # #1852: the bare bypass flags, each a guardrail of its owner's
+    before += [
+        (g.id, g.commands, g.description)
+        for g in (*forced.GUARDRAILS, *portable.GUARDRAILS, *remove.GUARDRAILS)
+    ]
     assert [(g.name, g.commands, g.description) for g in safety.catalog()] == before
     assert [g.name for g in safety.catalog()] == [
         "q-version-check",
@@ -36,11 +44,17 @@ def test_the_catalog_lists_what_it_did_before_the_registry_in_the_same_order():
         "accept-q-version",
         "allow-unpinned",
         "accept-converted-release",
+        "allow-dirty",
+        "fix-hdb",
+        "break-lock",
         "PORT_CONFLICT:COMPONENT",
         "PUBLISHER_RUNNING:COMPONENT",
         "SORT_CONFIG:COMPONENT",
         "TORQ_VERSION:COMPONENT",
         "eod-fence",
+        "any-writer",
+        "allow-computed-names",
+        "even-if-edited",
     ]
 
 
