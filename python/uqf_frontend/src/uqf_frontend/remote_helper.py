@@ -37,17 +37,57 @@ registry, and is trusted. Everything under it is not:
     (never above MAX_LIMIT); `truncated` says when there were more, and
     `total` is None when the scan stopped early.
 
-The list operation only reads. The explicitly confirmed delete operation
-removes regular files or empty directories relative to confined parent descriptors.
-It never recurses or follows links.
+`list` only reads: one directory and one deploy report. Confirmed `delete`
+removes named regular files and empty directories, never following links or recursing.
+
+UPLOAD (#1951). `upload` is the one op that writes, and only below
+UPLOAD_ROOT (shared/config/, the operator-supplied files every release
+links in). Its request carries the destination path, the file's `size` and
+`sha256`, and `overwrite`; the bytes follow the helper on stdin (FRAMING).
+The answer names what was written: `{"ok": true, "path", "size", "sha256",
+"replaced", "mode", "created", "swept"}`.
+
+  - The destination path is confined as a browse path is, and must name a
+    file strictly below UPLOAD_ROOT, at most MAX_UPLOAD_DEPTH deep, each
+    name at most MAX_NAME_BYTES bytes and none starting with TEMP_PREFIX.
+  - Missing directories below the root are created one at a time, each
+    re-opened with O_NOFOLLOW and its identity checked; a link anywhere on
+    the way is refused, never followed or replaced.
+  - The bytes go to a fresh temp file (O_CREAT|O_EXCL|O_NOFOLLOW) in the
+    destination directory, are counted and hashed as they arrive, and are
+    fsync'd. Fewer or more bytes than `size`, or another sha256, publishes
+    nothing.
+  - Publishing is one atomic step in that directory: os.link(temp, name)
+    when overwriting is not allowed - it fails if the name exists, with no
+    window between check and publish - else os.replace(temp, name). Either
+    way a reader sees the old file or the whole new one, never part of it.
+  - An existing file is replaced only with `overwrite`; a link, directory
+    or special file at the name is never replaced. A replaced file's
+    permission bits (not setuid, setgid or sticky) are kept; a new file gets
+    0o666 less the umask, as any newly created file would.
+  - The temp file is removed on every path that does not publish it,
+    including a hangup or SIGTERM (ssh dropped or timed out), which are
+    turned into a refusal so the cleanup runs. Only SIGKILL leaves one; the
+    next upload to that directory sweeps temp files older than STALE_TEMP.
+
+FRAMING. `list` is sent as before: the helper's source on stdin to
+`python -I -`. An upload cannot be, because `-` reads stdin to its end as
+source. So the API runs `python -I -c BOOTSTRAP <request>`, where BOOTSTRAP
+(remote_files.BOOTSTRAP, fixed text) reads one decimal line N, then N bytes
+of this source, which it runs, then calls `main(argv, stdin)`; the rest of
+stdin, exactly `size` bytes, is the file. No path is in either.
 """
 
 import base64
 import errno
+import hashlib
 import json
 import os
+import re
+import signal
 import stat
 import sys
+import time
 
 PROTOCOL = 1
 #: Longest relative path accepted, in characters.
@@ -76,7 +116,39 @@ REPORT_FIELDS = (
     "jobs",
     "artifact",
 )
-ERRORS = ("bad_request", "refused", "not_found", "not_a_directory", "denied")
+ERRORS = (
+    "bad_request",
+    "refused",
+    "not_found",
+    "not_a_directory",
+    "denied",
+    # upload only: a destination outside UPLOAD_ROOT, a name that exists
+    # without `overwrite`, a file over MAX_UPLOAD, and bytes that did not
+    # arrive whole - in every one, nothing was written
+    "unsupported",
+    "exists",
+    "too_large",
+    "incomplete",
+)
+#: Largest file one upload carries, in bytes. The API refuses a larger body
+#: before ssh, and the browser before sending (web/src/api.ts).
+MAX_UPLOAD = 16 * 1024 * 1024
+#: The one directory uploads may go below, relative to the deployment root:
+#: the operator-supplied files each release links in (uqs.deploy.config).
+UPLOAD_ROOT = ("shared", "config")
+#: Most directories below UPLOAD_ROOT an upload's path may hold.
+MAX_UPLOAD_DEPTH = 16
+#: Longest single name, in bytes - what most filesystems allow.
+MAX_NAME_BYTES = 255
+#: Names the upload's temp files take, and so no upload may.
+TEMP_PREFIX = ".uqf-upload-"
+#: Seconds after which a temp file left in a destination directory - by a
+#: helper killed outright, which no cleanup survives - is swept by the next
+#: upload there. Far past any upload's own time limit.
+STALE_TEMP = 3600
+#: Bytes read from stdin at a time.
+CHUNK = 64 * 1024
+_SHA256 = re.compile(r"[0-9a-f]{64}")
 
 
 class Refusal(Exception):
@@ -292,6 +364,222 @@ def release_info(root, root_fd):
     return out
 
 
+# ------------------------------------------------------------ upload (#1951)
+
+
+def upload_parts(path):
+    """The components of an upload's destination `path`, or Refusal: a
+    confined path (split_path) naming a file strictly below UPLOAD_ROOT. The
+    API runs this before it opens ssh, and the server runs it again."""
+    parts = split_path(path)
+    where = "/".join(UPLOAD_ROOT)
+    if tuple(parts[: len(UPLOAD_ROOT)]) != UPLOAD_ROOT or len(parts) <= len(UPLOAD_ROOT):
+        raise Refusal("unsupported", f"uploads go to a file below {where}/ and nowhere else")
+    if len(parts) - len(UPLOAD_ROOT) - 1 > MAX_UPLOAD_DEPTH:
+        raise Refusal("refused", f"more than {MAX_UPLOAD_DEPTH} directories below {where}/")
+    for part in parts:
+        if len(part.encode("utf-8")) > MAX_NAME_BYTES:
+            raise Refusal("refused", f"a name is longer than {MAX_NAME_BYTES} bytes")
+        if part.startswith(TEMP_PREFIX):
+            raise Refusal("refused", f"names starting {TEMP_PREFIX!r} are the upload's own")
+    return parts
+
+
+def make_dirs(root, parts):
+    """(descriptor for root/parts..., the paths created): `walk`, creating
+    each missing directory and opening it again, confined, before the next."""
+    fd = _open_root(root)
+    created = []
+    try:
+        for i, part in enumerate(parts):
+            try:
+                nxt = _open_dir(fd, part)
+            except Refusal as exc:
+                if exc.error != "not_found":
+                    raise
+                try:
+                    os.mkdir(part, 0o777, dir_fd=fd)
+                    created.append("/".join(parts[: i + 1]))
+                except FileExistsError:
+                    pass  # made meanwhile: opened, and checked, below
+                except PermissionError:
+                    raise Refusal("denied", f"{part!r} cannot be created") from None
+                nxt = _open_dir(fd, part)
+            os.close(fd)
+            fd = nxt
+    except BaseException:
+        os.close(fd)
+        raise
+    return fd, created
+
+
+def _existing(fd, name, overwrite):
+    """The stat of what `name` is now, or None; Refusal when it may not be
+    replaced - never a link, a directory or a special file, and nothing at
+    all without `overwrite`."""
+    try:
+        st = os.stat(name, dir_fd=fd, follow_symlinks=False)
+    except FileNotFoundError:
+        return None
+    if stat.S_ISLNK(st.st_mode):
+        raise Refusal("refused", f"{name!r} is a symbolic link - links are not replaced")
+    if stat.S_ISDIR(st.st_mode):
+        raise Refusal("refused", f"{name!r} is a directory")
+    if not stat.S_ISREG(st.st_mode):
+        raise Refusal("refused", f"{name!r} is a special file")
+    if not overwrite:
+        raise Refusal("exists", f"{name!r} exists - replacing it must be asked for")
+    return st
+
+
+def _new_mode():
+    """What a newly created file gets: 0o666 less this process's umask."""
+    mask = os.umask(0o022)
+    os.umask(mask)
+    return 0o666 & ~mask
+
+
+def _receive(tfd, stream, size, digest):
+    """Copy exactly `size` bytes from `stream` to `tfd`, or Refusal."""
+    hashed = hashlib.sha256()
+    left = size
+    while left:
+        chunk = stream.read(min(CHUNK, left))
+        if not chunk:
+            raise Refusal("incomplete", f"the upload ended after {size - left} of {size} bytes")
+        view = memoryview(chunk)
+        while view:
+            view = view[os.write(tfd, view) :]
+        hashed.update(chunk)
+        left -= len(chunk)
+    if stream.read(1):
+        raise Refusal("incomplete", f"more than the {size} bytes declared arrived")
+    if hashed.hexdigest() != digest:
+        raise Refusal("incomplete", "the bytes that arrived do not match the sha256 sent")
+
+
+def _publish_new(fd, tmp, name):
+    """Publish `tmp` as `name` only if no `name` exists - atomically, with
+    link(2), which fails when it does. A filesystem without hard links
+    falls back to a check and a rename, which a writer racing it could beat."""
+    try:
+        os.link(tmp, name, src_dir_fd=fd, dst_dir_fd=fd)
+    except FileExistsError:
+        raise Refusal("exists", f"{name!r} exists - replacing it must be asked for") from None
+    except OSError as exc:
+        if exc.errno not in (errno.EPERM, errno.ENOTSUP, errno.EOPNOTSUPP, errno.EXDEV):
+            raise
+        _existing(fd, name, overwrite=False)
+        os.rename(tmp, name, src_dir_fd=fd, dst_dir_fd=fd)
+        return
+    os.unlink(tmp, dir_fd=fd)
+
+
+def _interrupted(signum, _frame):
+    raise Refusal("incomplete", f"interrupted by signal {signum} - nothing was published")
+
+
+def sweep(fd, now=None):
+    """Remove temp files older than STALE_TEMP from directory `fd`; how many."""
+    cutoff = (time.time() if now is None else now) - STALE_TEMP
+    swept = 0
+    with os.scandir(fd) as it:
+        names = [e.name for e in it if e.name.startswith(TEMP_PREFIX) and e.name.endswith(".tmp")]
+    for name in names:
+        try:
+            st = os.stat(name, dir_fd=fd, follow_symlinks=False)
+            if stat.S_ISREG(st.st_mode) and st.st_mtime < cutoff:
+                os.unlink(name, dir_fd=fd)
+                swept += 1
+        except OSError:
+            pass
+    return swept
+
+
+def publish(fd, name, stream, size, digest, overwrite):
+    """Write `name` in directory `fd` from `stream`: a temp file, then one
+    atomic step. Returns (replaced, mode)."""
+    existing = _existing(fd, name, overwrite)
+    tmp = TEMP_PREFIX + os.urandom(8).hex() + ".tmp"
+    flags = (os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW
+             | getattr(os, "O_CLOEXEC", 0))  # fmt: skip
+    try:
+        tfd = os.open(tmp, flags, 0o600, dir_fd=fd)
+    except PermissionError:
+        raise Refusal("denied", "the destination directory cannot be written") from None
+    published = False
+    try:
+        try:
+            _receive(tfd, stream, size, digest)
+            mode = stat.S_IMODE(existing.st_mode) & 0o777 if existing else _new_mode()
+            os.fchmod(tfd, mode)
+            os.fsync(tfd)
+        finally:
+            os.close(tfd)
+        if overwrite:
+            if existing is None:
+                _existing(fd, name, overwrite)  # what is there now may not be a file
+            os.replace(tmp, name, src_dir_fd=fd, dst_dir_fd=fd)
+        else:
+            _publish_new(fd, tmp, name)
+        published = True
+    finally:
+        if not published:
+            try:
+                os.unlink(tmp, dir_fd=fd)
+            except FileNotFoundError:
+                pass
+    try:
+        os.fsync(fd)  # the directory entry, where the platform allows it
+    except OSError:
+        pass
+    return existing is not None, mode
+
+
+def upload(request, stream):
+    """Answer an `upload` request, the file's bytes read from `stream`."""
+    if stream is None:
+        raise Refusal("bad_request", "an upload's bytes must follow the helper on stdin")
+    root = request.get("root")
+    parts = upload_parts(request.get("path"))
+    size = request.get("size")
+    if not isinstance(size, int) or isinstance(size, bool) or size < 0:
+        raise Refusal("bad_request", "size must be a non-negative integer")
+    if size > MAX_UPLOAD:
+        raise Refusal("too_large", f"a file may be at most {MAX_UPLOAD} bytes")
+    digest = request.get("sha256")
+    if not isinstance(digest, str) or not _SHA256.fullmatch(digest):
+        raise Refusal("bad_request", "sha256 must be 64 lower-case hex digits")
+    overwrite = request.get("overwrite", False)
+    if not isinstance(overwrite, bool):
+        raise Refusal("bad_request", "overwrite must be true or false")
+    fd, created = make_dirs(root, parts[:-1])
+    previous = {}
+    try:
+        swept = sweep(fd)
+        for signum in (signal.SIGHUP, signal.SIGTERM):
+            try:
+                previous[signum] = signal.signal(signum, _interrupted)
+            except ValueError:
+                pass  # not the main thread: only in-process callers, never ssh
+        replaced, mode = publish(fd, parts[-1], stream, size, digest, overwrite)
+    finally:
+        for signum, handler in previous.items():
+            signal.signal(signum, handler)
+        os.close(fd)
+    return {
+        "protocol": PROTOCOL,
+        "ok": True,
+        "path": "/".join(parts),
+        "size": size,
+        "sha256": digest,
+        "replaced": replaced,
+        "mode": mode,
+        "created": created,
+        "swept": swept,
+    }
+
+
 MAX_DELETE = 100
 
 
@@ -329,8 +617,9 @@ def delete_paths(root, paths, confirmed):
     return {"protocol": PROTOCOL, "ok": True, "results": results}
 
 
-def handle(request):
-    """Answer one request object; Refusal becomes an ok:false answer."""
+def handle(request, stream=None):
+    """Answer one request object; Refusal becomes an ok:false answer.
+    `stream` carries an upload's bytes, and nothing else reads it."""
     try:
         if not isinstance(request, dict):
             raise Refusal("bad_request", "the request is not a JSON object")
@@ -338,26 +627,33 @@ def handle(request):
             raise Refusal("bad_request", f"protocol {request.get('protocol')!r} is not {PROTOCOL}")
         if request.get("op") == "delete":
             return delete_paths(request.get("root"), request.get("paths"), request.get("confirmed"))
-        if request.get("op") != "list":
-            raise Refusal("bad_request", f"op {request.get('op')!r} is not supported")
-        limit = request.get("limit", MAX_LIMIT)
-        if not isinstance(limit, int) or isinstance(limit, bool) or limit < 1:
-            raise Refusal("bad_request", "limit must be a positive integer")
-        limit = min(limit, MAX_LIMIT)
-        root = request.get("root")
-        parts = split_path(request.get("path", ""))
-        root_fd = _open_root(root)
-        try:
-            release = release_info(root, root_fd)
-        finally:
-            os.close(root_fd)
-        fd = walk(root, parts)
-        try:
-            entries, total, truncated = list_dir(fd, limit)
-        finally:
-            os.close(fd)
+        if request.get("op") == "upload":
+            return upload(request, stream)
+        return _list(request)
     except Refusal as exc:
         return {"protocol": PROTOCOL, "ok": False, "error": exc.error, "detail": exc.detail}
+
+
+def _list(request):
+    """Answer a `list` request."""
+    if request.get("op") != "list":
+        raise Refusal("bad_request", f"op {request.get('op')!r} is not supported")
+    limit = request.get("limit", MAX_LIMIT)
+    if not isinstance(limit, int) or isinstance(limit, bool) or limit < 1:
+        raise Refusal("bad_request", "limit must be a positive integer")
+    limit = min(limit, MAX_LIMIT)
+    root = request.get("root")
+    parts = split_path(request.get("path", ""))
+    root_fd = _open_root(root)
+    try:
+        release = release_info(root, root_fd)
+    finally:
+        os.close(root_fd)
+    fd = walk(root, parts)
+    try:
+        entries, total, truncated = list_dir(fd, limit)
+    finally:
+        os.close(fd)
     return {
         "protocol": PROTOCOL,
         "ok": True,
@@ -375,7 +671,9 @@ def encode(request):
     return base64.b64encode(json.dumps(request).encode("utf-8")).decode("ascii")
 
 
-def main(argv):
+def main(argv, stream=None):
+    """Run one request: `argv[1]`, and for an upload the bytes on `stream`
+    (stdin, past this source - see FRAMING)."""
     if len(argv) != 2:
         answer = {"protocol": PROTOCOL, "ok": False, "error": "bad_request",
                   "detail": "expected one argument, the encoded request"}  # fmt: skip
@@ -384,7 +682,7 @@ def main(argv):
             request = json.loads(base64.b64decode(argv[1], validate=True).decode("utf-8"))
         except ValueError:
             request = None
-        answer = handle(request)
+        answer = handle(request, stream)
     sys.stdout.write(json.dumps(answer) + "\n")
     return 0
 

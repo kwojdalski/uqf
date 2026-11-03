@@ -261,6 +261,10 @@ SAMPLES: dict[tuple[str, str], dict] = {
     ("GET", "/ops/backfill"): {},
     ("GET", "/services"): {},
     ("GET", "/services/{target}/files"): {"params": {"path": "releases"}},
+    ("PUT", "/services/{target}/files/content"): {
+        "params": {"path": "shared/config/x.csv"},
+        "content": b"a,b\n",
+    },
     ("GET", "/coverage"): {
         "params": {"dataset": "fx_quotes", "partition": "", "source_version": "v1"}
     },

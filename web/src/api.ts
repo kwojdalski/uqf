@@ -509,6 +509,148 @@ export const writeToken = {
   },
 };
 
+/** PUT /services/{target}/files/content - models.RemoteUploadResponse: one
+ * file written below the target's shared/config, published atomically. */
+export interface RemoteUpload {
+  target: string;
+  root: string;
+  path: string;
+  size: number;
+  sha256: string;
+  replaced: boolean;
+  mode: number;
+  created: string[];
+}
+/** Upload limits and destination, held equal to remote_helper.py's by
+ * test_remote_upload.py: the browser refuses first, the API and the server
+ * refuse again. */
+export const UPLOAD_MAX_BYTES = 16 * 1024 * 1024;
+export const UPLOAD_ROOT = "shared/config";
+export const UPLOAD_MAX_DEPTH = 16;
+export const UPLOAD_TEMP_PREFIX = ".uqf-upload-";
+/** Longer than the server's own UPLOAD_TIMEOUT, so the server's answer -
+ * including "uncertain" - arrives before the browser gives up. */
+export const UPLOAD_TIMEOUT_MS = 150 * 1000;
+/** What one queue may hold - the browser's own bound, on top of the
+ * per-file limit every side enforces. */
+export const UPLOAD_MAX_FILES = 500;
+export const UPLOAD_MAX_TOTAL_BYTES = 256 * 1024 * 1024;
+
+/** The URL that writes `path` (relative to the deployment root). */
+export function remoteUploadPath(
+  target: string,
+  path: string,
+  overwrite: boolean,
+): string {
+  const query = new URLSearchParams({ path, overwrite: String(overwrite) });
+  return `/services/${encodeURIComponent(target)}/files/content?${query}`;
+}
+
+/** Why `path` (relative to the upload root's parent, the deployment root)
+ * cannot be uploaded to, or null. The same rules remote_helper.upload_parts
+ * applies - the server's word is still final. */
+export function uploadPathProblem(path: string): string | null {
+  if (path.includes("\0")) return "the path contains a NUL byte";
+  if (path.startsWith("/")) return "absolute paths are refused";
+  const parts = path.split("/").filter((p) => p !== "" && p !== ".");
+  if (parts.includes("..")) return "'..' is refused";
+  const root = UPLOAD_ROOT.split("/");
+  if (
+    parts.length <= root.length ||
+    root.some((part, index) => parts[index] !== part)
+  )
+    return `uploads go to a file below ${UPLOAD_ROOT}/ and nowhere else`;
+  if (parts.length - root.length - 1 > UPLOAD_MAX_DEPTH)
+    return `more than ${UPLOAD_MAX_DEPTH} directories below ${UPLOAD_ROOT}/`;
+  const encoder = new TextEncoder();
+  for (const part of parts) {
+    if (encoder.encode(part).length > 255)
+      return "a name is longer than 255 bytes";
+    if (part.startsWith(UPLOAD_TEMP_PREFIX))
+      return `names starting ${UPLOAD_TEMP_PREFIX} are the upload's own`;
+  }
+  return null;
+}
+
+/** An upload that did not succeed. `uncertain` when the file may have been
+ * written all the same: a timeout, a dropped connection, a cancellation in
+ * flight, or the server saying so. Such an upload is never retried. */
+export class UploadFailed extends ApiError {
+  constructor(
+    message: string,
+    status: number,
+    public uncertain: boolean,
+  ) {
+    super(message, false, status);
+  }
+}
+
+/** PUT one file's bytes, reporting progress; one attempt, no retry.
+ * XMLHttpRequest rather than fetch, because only it reports upload
+ * progress. */
+export function uploadRemoteFile(
+  target: string,
+  path: string,
+  file: Blob,
+  overwrite: boolean,
+  onProgress: (fraction: number) => void,
+  signal: AbortSignal,
+): Promise<RemoteUpload> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("PUT", remoteUploadPath(target, path, overwrite));
+    const token = writeToken.get();
+    if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+    xhr.setRequestHeader("Content-Type", "application/octet-stream");
+    xhr.timeout = UPLOAD_TIMEOUT_MS;
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable && event.total > 0)
+        onProgress(event.loaded / event.total);
+    };
+    const uncertain = (why: string) =>
+      reject(
+        new UploadFailed(
+          `${why} - the file may or may not have been written. List the directory before uploading it again.`,
+          0,
+          true,
+        ),
+      );
+    xhr.onload = () => {
+      let payload: { error?: unknown; detail?: unknown } | null = null;
+      try {
+        payload = JSON.parse(xhr.responseText);
+      } catch {
+        payload = null;
+      }
+      if (xhr.status >= 200 && xhr.status < 300 && payload) {
+        onProgress(1);
+        resolve(payload as unknown as RemoteUpload);
+        return;
+      }
+      const detail =
+        typeof payload?.detail === "string"
+          ? payload.detail
+          : `Upload failed (${xhr.status}).`;
+      // Only the server's word, or an answer it never gave, is uncertain; a
+      // refusal (4xx) and a failure it names as certain wrote nothing.
+      const unsure =
+        payload?.error === "UploadOutcomeUncertain" ||
+        payload === null ||
+        xhr.status === 504;
+      reject(new UploadFailed(detail, xhr.status, unsure));
+    };
+    xhr.onerror = () => uncertain("The connection to the API failed");
+    xhr.ontimeout = () => uncertain("The upload timed out");
+    xhr.onabort = () => uncertain("The upload was cancelled in flight");
+    if (signal.aborted) {
+      reject(new UploadFailed("Cancelled before it was sent.", 0, false));
+      return;
+    }
+    signal.addEventListener("abort", () => xhr.abort(), { once: true });
+    xhr.send(file);
+  });
+}
+
 // --- activity history (#1954) ----------------------------------------------
 
 /** models.ActivitySource and friends, held to them by test_api_types.py. */

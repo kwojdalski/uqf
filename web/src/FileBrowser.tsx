@@ -9,6 +9,7 @@ import {
   request,
   writeToken,
 } from "./api";
+import { UploadPanel, type Uploader } from "./UploadPanel";
 
 /** The fields of the release's deploy report worth a glance, in order. */
 const REPORT_FIELDS = [
@@ -31,9 +32,12 @@ const REPORT_FIELDS = [
 export function FileBrowser({
   target,
   onClose,
+  uploader,
 }: {
   target: string;
   onClose: () => void;
+  /** Injectable for tests; the real one PUTs over XMLHttpRequest. */
+  uploader?: Uploader;
 }) {
   const [selected, setSelected] = useState<string[]>([]);
   const [deleting, setDeleting] = useState(false);
@@ -224,6 +228,15 @@ export function FileBrowser({
         Browsing uses ssh with the release&apos;s own Python. Deletion requires
         confirmation. Links and special files are not followed.
       </p>
+      {data && (
+        <UploadPanel
+          target={target}
+          root={data.root}
+          directory={data.path}
+          onUploaded={() => setRevision((r) => r + 1)}
+          uploader={uploader}
+        />
+      )}
     </section>
   );
 }
