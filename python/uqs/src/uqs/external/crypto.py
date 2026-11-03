@@ -38,6 +38,8 @@ CRYPTORUST_ROOT_ENV = "CRYPTORUST_ROOT"
 CRYPTO_RECORDER_TABLE = "crypto_book"
 CRYPTO_RECORDER_DEFAULT_VENUES = ("binance_spot",)
 CRYPTO_RECORDER_DEFAULT_SYMBOLS = ("BTC-USDT", "ETH-USDT")
+CRYPTO_RECORDER_DEFAULT_TOP_N_LEVELS = 5
+CRYPTO_RECORDER_DEFAULT_INTERVAL_MS = 1000
 
 
 def cryptorust_root(paths: UqsPaths) -> Path:
@@ -109,8 +111,8 @@ def start_crypto_recorder(
     base_port: int | None = None,
     venues: tuple[str, ...] = CRYPTO_RECORDER_DEFAULT_VENUES,
     symbols: tuple[str, ...] = CRYPTO_RECORDER_DEFAULT_SYMBOLS,
-    top_n_levels: int = 5,
-    interval_ms: int = 1000,
+    top_n_levels: int = CRYPTO_RECORDER_DEFAULT_TOP_N_LEVELS,
+    interval_ms: int = CRYPTO_RECORDER_DEFAULT_INTERVAL_MS,
     credential: str | None = None,
 ) -> int:
     """Build (if needed) and launch cryptorust's kdb-market-data-recorder,

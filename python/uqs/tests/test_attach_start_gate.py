@@ -77,7 +77,7 @@ def with_state(att: config.Attachment, status: str) -> Path:
 def test_the_example_publisher_is_a_startwithall_row():
     """The premise #1441 rests on: `all` launches this publisher."""
     rows = listing.list_items(default_paths(), "processes")
-    assert {r["procname"]: r["startwithall"] for r in rows}[PUBLISHER] == "1"
+    assert {r["procname"]: r["startwithall"] for r in rows}[PUBLISHER] is True
 
 
 # Every torq.sh argument list a front end produces for a start that launches

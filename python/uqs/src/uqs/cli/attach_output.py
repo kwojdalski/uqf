@@ -7,7 +7,6 @@ Every string printed - in a table, in a line, in `--json`, in an error or in
 
 from __future__ import annotations
 
-import json
 import re
 from typing import Any
 
@@ -16,6 +15,7 @@ from rich.table import Table
 
 from uqs.attach.config import Attachment
 from uqs.cli import shared
+from uqs.cli.json_out import emit
 from uqs.cli.shared import console
 from uqs.paths import UqsError
 
@@ -91,7 +91,7 @@ class Output:
             doc = {**self.doc, **extra, "ok": ok}
             if self.debug:
                 doc["debug"] = self.notes
-            print(json.dumps(redact(doc, self.secrets), indent=2, default=str))
+            emit(redact(doc, self.secrets))
         raise typer.Exit(code=(0 if ok else 1) if code is None else code)
 
 

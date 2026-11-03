@@ -71,10 +71,36 @@ class FeedOption:
     #: called with (value, where it came from) before a start or a dry run;
     #: raises UqsError - naming the origin, never a secret's value - to refuse it
     validate: Callable[[Any, str], None] | None = None
+    #: the default in words, where `default` is not one to print: computed by
+    #: the feed (None), or a secret's
+    default_help: str = ""
 
     @property
     def flag(self) -> str:
         return "--" + self.name.replace("_", "-")
+
+    @property
+    def fallback(self) -> str:
+        """Where the value comes from when the option is not given, in words:
+        "default $ENV, else X", "default X" or "" - rendered from `env` and
+        `default` (#1893), so a help string never restates either. A secret's
+        default is never printed: it says `default_help` or nothing."""
+        if self.default_help:
+            default = self.default_help
+        elif self.secret or self.default is None:
+            default = ""
+        elif isinstance(self.default, tuple | list):
+            default = ",".join(str(v) for v in self.default)
+        else:
+            default = str(self.default)
+        if self.env:
+            return f"default ${self.env}" + (f", else {default}" if default else "")
+        return f"default {default}" if default else ""
+
+    @property
+    def described(self) -> str:
+        """`help`, then `fallback`: the option's whole help (#1893)."""
+        return f"{self.help}; {self.fallback}" if self.fallback else self.help
 
     def _from_env(self, environ: Mapping[str, str] | None) -> str | None:
         if not self.env:
@@ -122,6 +148,8 @@ class ExternalFeed:
     title: str = ""
     #: appended to "<name> feed started (pid N)"
     started_note: str = ""
+    #: what it publishes, in a few words - beside its name in `connector`'s help
+    about: str = ""
 
     @property
     def status_title(self) -> str:
