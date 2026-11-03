@@ -34,11 +34,8 @@
 / exemption and why. An exemption is deleted by the issue named, not edited.
 / @return table: dataset, issue, reason
 .qt.qetl.plant.markout.exemptions:{[]
-    ([] dataset:`fx_markout`fx_markout_wide`crypto_execution_quality;
-        issue:`$("#1935";"#1935";"#1936");
-        reason:("FX gains the core columns in the domain-module migration";
-            "derived from fx_markout, so it gains them with it";
-            "replaced by a new crypto dataset, which is written with the core"))}
+    ([] dataset:enlist `crypto_execution_quality; issue:enlist `$"#1936";
+        reason:enlist "replaced by a new crypto dataset, which is written with the core")}
 
 / What stops a table conforming. Empty means it conforms.
 / @param schema table: the dataset's schema
@@ -139,5 +136,5 @@
 
 / The real datasets are not vacuously accepted: each unmigrated one has problems.
 .qt.qetl.plant.markout.test_the_unmigrated_datasets_are_caught_by_the_check:{[t]
-    p:count each .qt.qetl.plant.markout.problems[;`long] each .qetl.plant.schema each `fx_markout`crypto_execution_quality;
+    p:count each .qt.qetl.plant.markout.problems[;`long] each .qetl.plant.schema each enlist `crypto_execution_quality;
     .qunit.assertTrue[all p>0;"the check finds the missing core columns in real schemas"]};
