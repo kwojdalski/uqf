@@ -73,6 +73,9 @@ class StackFacts:
     process_csv: Path | None = None
     processes: tuple[Process, ...] = ()
     web_dist: Path | None = None
+    #: Where activity history is kept (activity.py): beside the workers'
+    #: status files under $TORQDATA, so a stack's history lives with its data.
+    activity_db: Path | None = None
 
 
 def derive(root: Path | None) -> StackFacts:
@@ -110,6 +113,7 @@ def derive(root: Path | None) -> StackFacts:
             if p.start_with_all and p.port is not None
         ),
         web_dist=web_dist if web_dist.is_dir() else None,
+        activity_db=paths.torqdata / "frontend" / "activity.sqlite3",
     )
 
 
