@@ -118,11 +118,11 @@ CASES: dict[str, tuple[list[str], str]] = {
     ),
     # #1731: every reporting command
     "status": (["status", "--columns", "nosuch"], "unknown summary column"),
-    "graph": (["graph", "nosuchproc", "--offline"], "no process 'nosuchproc'"),
+    "graph": (["graph", "nosuchproc", "--offline"], "no process nosuchproc in this runtime"),
     "query": (["query"], "--json needs an expression"),
-    "schema": (["schema", "nosuchproc", "trade"], "is not a declared process"),
+    "schema": (["schema", "nosuchproc", "trade"], "no process nosuchproc in this runtime"),
     "logs": (["logs", "--follow"], "--follow does not apply"),
-    "config show": (["config", "show", "nosuchproc"], "unknown process"),
+    "config show": (["config", "show", "nosuchproc"], "no process nosuchproc"),
     "job gaps": (["job", "gaps", "demo_markout", "--from", "bad", "--to", "2024-01-02"], "bad"),
     "job preview": (["job", "preview", "nosuch-x"], "is not a streaming job name"),
     "job check": (
@@ -132,7 +132,7 @@ CASES: dict[str, tuple[list[str], str]] = {
     "job runs list": (["job", "runs", "list", "--attach", "nosuch"], "no attachment"),
     "job runs show": (["job", "runs", "show", "r", "--attach", "nosuch"], "no attachment"),
     "job runs audit": (["job", "runs", "audit", "d", "--from", "bad", "--to", "2024-01-02"], "bad"),
-    "connector status": (["connector", "status", "nosuch"], "no feed 'nosuch'"),
+    "connector status": (["connector", "status", "nosuch"], "no connector 'nosuch'"),
     "connector logs": (["connector", "logs", "crypto", "--follow"], "--follow does not apply"),
     "setup odbc status": (
         ["setup", "odbc", "status", "--odbc-home", "/nonexistent-1731"],
@@ -172,10 +172,10 @@ def test_every_json_command_has_a_case():
 def test_json_stdout_is_exactly_one_document(tmp_path, command):
     argv, expected = CASES[command]
     run = _uqs(tmp_path, *argv, "--json")
-    assert run.returncode in (0, 1), run.stderr
+    assert run.returncode in (0, 1, 2), run.stderr  # 2: a usage error (#1885)
     doc = json.loads(run.stdout)
     assert expected in json.dumps(doc)
-    if run.returncode == 1:
+    if run.returncode != 0:
         assert doc["ok"] is False
 
 

@@ -39,7 +39,7 @@ from uqs.cli.start_override_opts import OLD_SPELLINGS as OLD_SKIPS
 from uqs.cli.start_override_opts import parsed as _overrides
 from uqs.cli.start_warnings import running as _running
 from uqs.model import profiles
-from uqs.paths import UqsError
+from uqs.paths import UqsError, UqsUsageError
 from uqs.stack import procs as procs_model
 from uqs.stack import runtime, start_policy
 from uqs.stack.start_overrides import NONE, Overrides
@@ -145,11 +145,11 @@ def _launch(
 ) -> None:
     """`start` and `restart`, which differ only in the torq.sh verb they run."""
     if level is not None and not follow:
-        _die(UqsError("--level needs --follow"))
+        _die(UqsUsageError("--level needs --follow"))
     if stop_on_exit and not follow:
-        _die(UqsError("--stop-on-exit needs --follow: it stops what the stream started"))
+        _die(UqsUsageError("--stop-on-exit needs --follow: it stops what the stream started"))
     if print_only and follow:
-        _die(UqsError("--dry-run does not apply with --follow"))
+        _die(UqsUsageError("--dry-run does not apply with --follow"))
     overrides = _overrides(verb, override, reason, profile=profile, print_only=print_only)
     names = _names_to_start(procs, profile, overrides)
     if print_only:

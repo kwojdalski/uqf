@@ -19,7 +19,7 @@ from uqs.model.declarations import (
     symbols,
 )
 from uqs.model.pipeline import PipelineKind
-from uqs.paths import ETL_DIR, SOURCE_DIR, WORKER_DIR, UqsError
+from uqs.paths import ETL_DIR, SOURCE_DIR, WORKER_DIR, UqsError, UqsUsageError
 from uqs.scaffold import worker
 from uqs.scaffold.columns import (
     PHYSICAL_NAME,
@@ -217,7 +217,7 @@ def backfill_plan(
     plant_tables.q is read.
     """
     if (raw_table is None) != (raw_columns is None):
-        raise UqsError(
+        raise UqsUsageError(
             "--raw-table and --raw-columns go together: the physical table the new source "
             "reads, and the columns it reads from it"
         )
@@ -240,7 +240,7 @@ def backfill_plan(
         # standing processes, and .qetl.job.bounded.define has no such key.
         raise UqsError("--start-with-all is for standing jobs, not a backfill - drop it")
     if not dataset:
-        raise UqsError("--kind backfill needs --dataset: the table it fills")
+        raise UqsUsageError("--kind backfill needs --dataset: the table it fills")
     claimed = workers_filling(repo_root, dataset, partition)
     if claimed:
         where = f"partition {partition!r}" if partition else "no partition"

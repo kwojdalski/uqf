@@ -17,6 +17,7 @@ import typer
 from uqs.cli import deploy_connection as conn
 from uqs.cli import deploy_dry_run as dry
 from uqs.cli import deploy_policy as policy
+from uqs.cli import safety
 from uqs.cli.deploy import _failed, deploy_app
 from uqs.cli.hdb_scope import tables_given
 from uqs.cli.json_out import json_opt
@@ -202,11 +203,13 @@ def _confirm_prune(planned: dict) -> bool:
         typer.echo(f"  release {name}")
     for name in runtimes:
         typer.echo(f"  runtime {name}")
-    return typer.confirm(
-        f"Remove these {len(planned['removed'])} release(s) and {len(runtimes)} runtime(s) "
-        "from the server? This cannot be undone",
-        default=False,
-    )
+    try:
+        return safety.ask(
+            f"Remove these {len(planned['removed'])} release(s) and {len(runtimes)} runtime(s) "
+            "from the server? This cannot be undone"
+        )
+    except UqsError as exc:  # no terminal to ask on: refused, removing nothing
+        raise config.DeployError("confirm", str(exc)) from None
 
 
 VerifyJson = json_opt(

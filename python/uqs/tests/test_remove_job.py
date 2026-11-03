@@ -481,3 +481,23 @@ def test_a_written_job_is_removed_only_through_the_named_override(tree, monkeypa
     shown = runner.invoke(cli.app, ["job", "remove", "demo_markout", "--dry-run", *argv])
     assert shown.exit_code == 0 and errors == [], errors
     assert "demo_markout.q" in shown.output
+
+
+def test_a_removal_not_confirmed_exits_1_and_removes_nothing(tree, monkeypatch):
+    """A no to `job remove` exited 0 while every other command's no exited 1,
+    and with no terminal it prompted into the void (#1885)."""
+    from typer.testing import CliRunner
+
+    from uqs import cli
+    from uqs.cli import remove as remove_cli
+    from uqs.cli import safety
+
+    write.apply_plan(jobs.streaming_job("pulse", [], "pulse", "px:float"), tree)
+    monkeypatch.setattr(remove_cli, "_paths", lambda: type("P", (), {"repo_root": tree})())
+    runner = CliRunner()
+    unasked = runner.invoke(cli.app, ["job", "remove", "pulse"])
+    assert unasked.exit_code == 1 and "Aborted" not in unasked.output
+    monkeypatch.setattr(safety, "interactive", lambda: True)
+    declined = runner.invoke(cli.app, ["job", "remove", "pulse"], input="n\n")
+    assert declined.exit_code == safety.EXIT_DECLINED == 1
+    assert (tree / "src/etl/streaming/pulse.q").is_file(), "and nothing was removed"
