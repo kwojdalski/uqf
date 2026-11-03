@@ -517,3 +517,21 @@ class BackfillStartedResponse(BaseModel):
     #: The TorQ process running it - what `uqs logs` takes.
     procname: str
     status_path: str
+
+
+class RemoteDeleteRequest(BaseModel):
+    model_config = STRICT_REQUEST
+    paths: list[str] = Field(min_length=1, max_length=100)
+    confirmed: bool = Field(strict=True)
+
+
+class RemoteDeleteResult(BaseModel):
+    path: str
+    deleted: bool
+    error: str | None
+
+
+class RemoteDeleteResponse(BaseModel):
+    target: str
+    root: str
+    results: list[RemoteDeleteResult]

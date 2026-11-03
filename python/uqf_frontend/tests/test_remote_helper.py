@@ -414,7 +414,7 @@ def test_a_bad_limit_is_a_bad_request(deployment, limit):
         None,
         [],
         {"protocol": 2, "op": "list", "root": "/"},
-        {"protocol": 1, "op": "delete", "root": "/"},
+        {"protocol": 1, "op": "unsupported", "root": "/"},
         {"protocol": 1, "op": "list", "root": "relative"},
     ],
 )
@@ -483,8 +483,8 @@ def test_the_helper_imports_only_the_standard_library():
     assert imported <= set(sys.stdlib_module_names), imported - set(sys.stdlib_module_names)
 
 
-def test_the_helper_only_reads():
-    """No call that writes, removes, renames or runs anything."""
+def test_only_the_delete_operation_can_remove_entries():
+    """Only the explicit delete operation may remove files; no other writes."""
     src = Path(remote_helper.__file__).read_text()
     tree = ast.parse(src)
     called = {
@@ -495,5 +495,13 @@ def test_the_helper_only_reads():
     forbidden = {"remove", "unlink", "rmdir", "rename", "replace", "mkdir", "makedirs",
                  "chmod", "chown", "symlink", "link", "truncate", "system", "popen",
                  "execv", "execvp", "spawnv", "run", "Popen"}  # fmt: skip
-    assert called & forbidden == set()
+    assert called & forbidden == {"unlink", "rmdir"}
+    for node in tree.body:
+        if isinstance(node, ast.FunctionDef) and node.name != "delete_paths":
+            calls = {
+                n.func.attr
+                for n in ast.walk(node)
+                if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
+            }
+            assert not calls & forbidden, node.name
     assert "O_WRONLY" not in src and "O_RDWR" not in src and "O_CREAT" not in src

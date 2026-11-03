@@ -36,6 +36,7 @@ API_TS = Path(__file__).resolve().parents[3] / "web" / "src" / "api.ts"
 
 #: TypeScript interface -> the request model it is sent to (#1361).
 REQUESTS = {
+    "RemoteDeleteRequest": "RemoteDeleteRequest",
     "QueryInput": "QueryRequest",
     "QueryFilter": "Filter",
     "CoverageRequest": "CoverageRequirement",
@@ -48,6 +49,8 @@ REQUESTS = {
 #: TypeScript interface -> the model it mirrors: every response, the
 #: process-health row the browser reads by key, and every request.
 PAIRS = {
+    "RemoteDeleteResult": "RemoteDeleteResult",
+    "RemoteDeleteResponse": "RemoteDeleteResponse",
     "Catalog": "CatalogResponse",
     "Column": "ColumnInfo",
     "Interval": "IntervalOut",

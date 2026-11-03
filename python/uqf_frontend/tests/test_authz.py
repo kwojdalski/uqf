@@ -250,6 +250,9 @@ def _deny_all(req: Request_) -> str | None:
 #: A well-formed request per guarded route, so the refusal is the policy's
 #: and not a 422 - valid before and after the seam moved into a dependency.
 SAMPLES: dict[tuple[str, str], dict] = {
+    ("POST", "/services/{target}/files/delete"): {
+        "json": {"paths": ["shared/file"], "confirmed": True}
+    },
     ("GET", "/ops/queue"): {},
     ("GET", "/ops/connections"): {},
     ("GET", "/ops/usage"): {},

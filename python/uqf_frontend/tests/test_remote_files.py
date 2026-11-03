@@ -404,3 +404,62 @@ def test_a_login_banner_before_the_answer_is_skipped(served):
     answer = remote_helper.handle({})  # a refusal is still an answer
     resp = _get(Recorder(stdout="Welcome to box\n" + json.dumps(answer) + "\n"))
     assert resp.status_code == 422  # bad_request -> ValidationFailed
+
+
+def test_api_confirmation_and_auth_before_ssh(served):
+    runner = Recorder()
+    for payload in (
+        {"paths": ["shared/config/sources.csv"]},
+        {"paths": ["shared/config/sources.csv"], "confirmed": False},
+    ):
+        assert _client(runner).post("/services/box/files/delete", json=payload).status_code in (
+            400,
+            422,
+        )
+    assert (
+        _client(runner, token=None)
+        .post("/services/box/files/delete", json={"paths": ["x"], "confirmed": True})
+        .status_code
+        == 401
+    )
+    assert (
+        _client(runner, writes=False)
+        .post("/services/box/files/delete", json={"paths": ["x"], "confirmed": True})
+        .status_code
+        == 403
+    )
+    assert not runner.calls
+
+
+def test_api_loopback_reports_each_result(served):
+    response = _client(Loopback()).post(
+        "/services/box/files/delete",
+        json={
+            "paths": ["shared/config/sources.csv", "shared/config", "missing"],
+            "confirmed": True,
+        },
+    )
+    assert response.status_code == 200, response.text
+    assert [r["deleted"] for r in response.json()["results"]] == [True, True, False]
+    assert not (served / "shared/config").exists()
+
+
+@pytest.mark.parametrize("paths", [["../escape"], ["/etc/passwd"], [""], ["x"] * 101])
+def test_deletion_invalid_paths_are_refused_before_ssh(served, paths):
+    runner = Recorder()
+    response = _client(runner).post(
+        "/services/box/files/delete", json={"paths": paths, "confirmed": True}
+    )
+    assert response.status_code in (400, 422)
+    assert runner.calls == []
+
+
+def test_deletion_checks_host_before_ssh(served):
+    runner = Recorder()
+    response = _client(runner).post(
+        "/services/box/files/delete",
+        json={"paths": ["x"], "confirmed": True},
+        headers={"Host": "evil.example"},
+    )
+    assert response.status_code == 403
+    assert not runner.calls

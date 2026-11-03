@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { FileDelete } from "./FileDelete";
 import { FileTable } from "./FileTable";
 import {
   ApiError,
@@ -34,6 +35,8 @@ export function FileBrowser({
   target: string;
   onClose: () => void;
 }) {
+  const [selected, setSelected] = useState<string[]>([]);
+  const [deleting, setDeleting] = useState(false);
   const [path, setPath] = useState("");
   const [revision, setRevision] = useState(0);
   const [state, setState] = useState<{
@@ -84,7 +87,7 @@ export function FileBrowser({
     <section className="panel" aria-label={`Files on ${target}`}>
       <div className="section-heading">
         <h2>Files on {target}</h2>
-        <button type="button" onClick={onClose}>
+        <button type="button" disabled={deleting} onClick={onClose}>
           Close
         </button>
       </div>
@@ -94,7 +97,7 @@ export function FileBrowser({
         </p>
       )}
       <nav aria-label="Path" className="crumbs">
-        <button type="button" onClick={() => setPath("")}>
+        <button type="button" disabled={deleting} onClick={() => setPath("")}>
           root
         </button>
         {crumbs.map((crumb, index) => (
@@ -102,6 +105,7 @@ export function FileBrowser({
             {" / "}
             <button
               type="button"
+              disabled={deleting}
               onClick={() => setPath(crumbs.slice(0, index + 1).join("/"))}
             >
               {crumb}
@@ -113,12 +117,16 @@ export function FileBrowser({
         <span role="status">{state.loading ? "Loading…" : ""}</span>
         <button
           type="button"
-          disabled={!path}
+          disabled={deleting || !path}
           onClick={() => setPath(crumbs.slice(0, -1).join("/"))}
         >
           Up
         </button>
-        <button type="button" onClick={() => setRevision((r) => r + 1)}>
+        <button
+          type="button"
+          disabled={deleting}
+          onClick={() => setRevision((r) => r + 1)}
+        >
           Refresh
         </button>
       </div>
@@ -153,15 +161,53 @@ export function FileBrowser({
       {release?.report_error && (
         <p className="note">Deployment report: {release.report_error}</p>
       )}
+      {data && (
+        <FileDelete
+          key={`delete:${target}:${path}`}
+          target={target}
+          root={data.root}
+          paths={selected.map((name) =>
+            data.path ? `${data.path}/${name}` : name,
+          )}
+          disabled={state.loading || data.path !== path || Boolean(state.error)}
+          onBusy={setDeleting}
+          onRefresh={async () => {
+            const token = writeToken.get();
+            try {
+              const fresh = await request<RemoteFiles>(
+                remoteFilesPath(target, path),
+                new AbortController().signal,
+                undefined,
+                "GET",
+                token ? `Bearer ${token}` : undefined,
+              );
+              setState({ data: fresh, loading: false });
+            } catch (error) {
+              const failure =
+                error instanceof ApiError ? error : new ApiError(String(error));
+              setState((previous) => ({
+                ...previous,
+                error: failure,
+                loading: false,
+              }));
+              throw failure;
+            }
+          }}
+        />
+      )}
       {data &&
         (data.entries.length === 0 ? (
           <p className="empty">This directory is empty.</p>
         ) : (
           <FileTable
+            onSelectionChange={setSelected}
             key={`${target}:${path}`}
             entries={data.entries}
             disabled={
-              state.loading || data.path !== path || Boolean(state.error)
+              deleting ||
+              state.loading ||
+              data.path !== path ||
+              Boolean(state.error)
             }
             onOpen={(name) =>
               setPath(data.path ? `${data.path}/${name}` : name)
@@ -175,8 +221,8 @@ export function FileBrowser({
         </p>
       )}
       <p className="note">
-        Read only, over ssh with the release&apos;s own Python. Links and
-        special files are not followed.
+        Browsing uses ssh with the release&apos;s own Python. Deletion requires
+        confirmation. Links and special files are not followed.
       </p>
     </section>
   );

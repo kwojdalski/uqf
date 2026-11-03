@@ -70,10 +70,12 @@ export function FileTable({
   entries,
   disabled,
   onOpen,
+  onSelectionChange,
 }: {
   entries: RemoteEntry[];
   disabled: boolean;
   onOpen: (name: string) => void;
+  onSelectionChange?: (names: string[]) => void;
 }) {
   const table = useTable({
     key: useId(),
@@ -92,6 +94,10 @@ export function FileTable({
   useEffect(() => {
     if (disabled) table.resetRowSelection();
   }, [disabled]);
+  const selectedRows = table.getSelectedRowModel().rows;
+  useEffect(() => {
+    onSelectionChange?.(selectedRows.map((row) => row.original.name));
+  }, [selectedRows, onSelectionChange]);
   const selectable = entries.filter((entry) => !entry.blocked).length;
   return (
     <>

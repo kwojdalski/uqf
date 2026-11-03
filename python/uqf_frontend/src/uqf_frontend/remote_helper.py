@@ -37,7 +37,9 @@ registry, and is trusted. Everything under it is not:
     (never above MAX_LIMIT); `truncated` says when there were more, and
     `total` is None when the scan stopped early.
 
-The helper only reads: it lists one directory and reads one deploy report.
+The list operation only reads. The explicitly confirmed delete operation
+removes regular files or empty directories relative to confined parent descriptors.
+It never recurses or follows links.
 """
 
 import base64
@@ -290,6 +292,43 @@ def release_info(root, root_fd):
     return out
 
 
+MAX_DELETE = 100
+
+
+def delete_paths(root, paths, confirmed):
+    """Remove named regular files or empty directories, never following links."""
+    if confirmed is not True:
+        raise Refusal("refused", "explicit confirmation is required")
+    if not isinstance(paths, list) or not 1 <= len(paths) <= MAX_DELETE:
+        raise Refusal("bad_request", f"paths must contain 1 to {MAX_DELETE} entries")
+    if not all(isinstance(path, str) for path in paths):
+        raise Refusal("bad_request", "every path must be a string")
+    results = []
+    for path in paths:
+        try:
+            parts = split_path(path)
+            if not parts:
+                raise Refusal("refused", "the deployment root cannot be deleted")
+            fd = walk(root, parts[:-1])
+            try:
+                before = os.stat(parts[-1], dir_fd=fd, follow_symlinks=False)
+                if stat.S_ISREG(before.st_mode):
+                    os.unlink(parts[-1], dir_fd=fd)
+                elif stat.S_ISDIR(before.st_mode):
+                    os.rmdir(parts[-1], dir_fd=fd)
+                else:
+                    raise Refusal(
+                        "refused", "only regular files and empty directories may be deleted"
+                    )
+            finally:
+                os.close(fd)
+            results.append({"path": path, "deleted": True, "error": None})
+        except (Refusal, OSError) as exc:
+            detail = exc.detail if isinstance(exc, Refusal) else exc.strerror
+            results.append({"path": path, "deleted": False, "error": detail})
+    return {"protocol": PROTOCOL, "ok": True, "results": results}
+
+
 def handle(request):
     """Answer one request object; Refusal becomes an ok:false answer."""
     try:
@@ -297,6 +336,8 @@ def handle(request):
             raise Refusal("bad_request", "the request is not a JSON object")
         if request.get("protocol") != PROTOCOL:
             raise Refusal("bad_request", f"protocol {request.get('protocol')!r} is not {PROTOCOL}")
+        if request.get("op") == "delete":
+            return delete_paths(request.get("root"), request.get("paths"), request.get("confirmed"))
         if request.get("op") != "list":
             raise Refusal("bad_request", f"op {request.get('op')!r} is not supported")
         limit = request.get("limit", MAX_LIMIT)

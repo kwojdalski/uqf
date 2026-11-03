@@ -68,6 +68,8 @@ from uqf_frontend.models import (
     ProcessHealthOut,
     QueryRequest,
     QueryResponse,
+    RemoteDeleteRequest,
+    RemoteDeleteResponse,
     RemoteFilesResponse,
     RunState,
     ServicesResponse,
@@ -456,6 +458,17 @@ def create_app(
             truncated=answer["truncated"],
             release=answer["release"],
         )
+
+    @app.post("/services/{target}/files/delete", response_model=RemoteDeleteResponse)
+    def delete_remote_files(
+        request: Request, target: str, req: RemoteDeleteRequest
+    ) -> RemoteDeleteResponse:
+        if not settings.enable_writes:
+            raise WritesDisabled("remote deletion requires remote operations to be enabled")
+        answer = remote_files.delete(
+            settings, target, req.paths, req.confirmed, runner=request.app.state.remote_runner
+        )
+        return RemoteDeleteResponse(target=target, root=answer["root"], results=answer["results"])
 
     @app.get("/coverage", response_model=CoverageResponse)
     def get_coverage(
