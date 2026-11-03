@@ -202,8 +202,8 @@ surface:{[]
 .qcat.describe[`last_value]:
     "One change to a pair's current price: the newest level-0 bid, ask and mid across sources, FX and crypto, with the source that quoted it and its own source_time. Appended only when a newer book replaces the held one, so read the latest row per sym (select by sym) for the one shared current price";
 .qcat.describe[`fx_markout]:
-    "One component of one execution at one horizon, from the normalized FX markout calculation: the markout against the reference mid, the execution residual, each cross leg's allocation, or the reconciling residual (kind), in pips, with the prices behind it - a row per (venue, fill_id, horizon, kind, step)";
+    "One component of one execution at one horizon, from the normalized FX markout calculation: the markout against the reference mid, the execution residual, each cross leg's allocation, or the reconciling residual (kind), in pips and in money (the quote currency, and the reporting currency where a rate is declared), with the prices behind it and whose clock they are on - a row per (venue, fill_id, horizon, kind, step)";
 .qcat.describe[`fx_markout_wide]:
-    "One execution at one horizon, from the normalized FX markout calculation: the markout, the execution residual and the reconciling residual side by side, with up to three cross legs and their allocations - the wide layout of fx_markout, a row per (venue, fill_id, horizon)";
+    "One execution at one horizon, from the normalized FX markout calculation: the markout, the execution residual and the reconciling residual side by side, with up to three cross legs and their allocations - the wide layout of fx_markout, with the total's money, a row per (venue, fill_id, horizon)";
 .qcat.describe[`demo_deals]:
     "One dealt trade from the demo deal source: its id, the time it was dealt, the pair, the side, the notional and the rate - a row per deal";

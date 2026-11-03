@@ -65,8 +65,8 @@
 .qetl.load.jobs[`exec_bars]:enlist "src/etl/streaming/exec_bars.q"
 .qetl.load.jobs[`executions]:enlist "src/etl/streaming/executions.q"
 .qetl.load.jobs[`fx_feed]:enlist "src/etl/streaming/fx_feed.q"
-.qetl.load.jobs[`fx_markout]:("src/etl/transforms/fx_domain.q";"src/etl/transforms/fx_markout.q";"src/etl/transforms/fx_markout_outputs.q";"src/etl/transforms/markout_core.q";"src/etl/streaming/fx_markout.q")
-.qetl.load.jobs[`fx_markout_wide]:("src/etl/transforms/fx_domain.q";"src/etl/transforms/fx_markout.q";"src/etl/transforms/fx_markout_outputs.q";"src/etl/transforms/markout_core.q";"src/etl/streaming/fx_markout_wide.q")
+.qetl.load.jobs[`fx_markout]:("src/etl/transforms/fx_domain.q";"src/etl/transforms/fx_markout.q";"src/etl/transforms/fx_markout_outputs.q";"src/etl/transforms/markout_core.q";"src/etl/transforms/markout_layouts.q";"src/etl/streaming/fx_markout.q")
+.qetl.load.jobs[`fx_markout_wide]:("src/etl/transforms/fx_domain.q";"src/etl/transforms/fx_markout.q";"src/etl/transforms/fx_markout_outputs.q";"src/etl/transforms/markout_core.q";"src/etl/transforms/markout_layouts.q";"src/etl/streaming/fx_markout_wide.q")
 .qetl.load.jobs[`fx_orderbook_feed]:enlist "src/etl/streaming/fx_orderbook_feed.q"
 .qetl.load.jobs[`fx_orders_feed]:enlist "src/etl/streaming/fx_orders_feed.q"
 .qetl.load.jobs[`fx_positions]:enlist "src/etl/streaming/fx_positions.q"
@@ -75,8 +75,8 @@
 .qetl.load.jobs[`hdb_crypto_book_backfill]:("src/etl/sources/hdb_crypto_book.q";"src/etl/transforms/crypto_book_1s.q";"src/etl/workers/hdb_crypto_book_backfill.q")
 .qetl.load.jobs[`hdb_demo_markouts_backfill]:("src/etl/sources/hdb_demo_markouts.q";"src/etl/transforms/demo_markouts.q";"src/etl/workers/hdb_demo_markouts_backfill.q")
 .qetl.load.jobs[`hdb_exec_bars_backfill]:("src/etl/sources/hdb_executions.q";"src/etl/transforms/exec_bars.q";"src/etl/workers/hdb_exec_bars_backfill.q")
-.qetl.load.jobs[`hdb_fx_markout_wide_backfill]:("src/etl/sources/hdb_fx_markouts.q";"src/etl/transforms/fx_domain.q";"src/etl/transforms/fx_markout.q";"src/etl/transforms/fx_markout_outputs.q";"src/etl/transforms/markout_core.q";"src/etl/workers/hdb_fx_markout_wide_backfill.q")
-.qetl.load.jobs[`hdb_fx_markouts_backfill]:("src/etl/sources/hdb_fx_markouts.q";"src/etl/transforms/fx_domain.q";"src/etl/transforms/fx_markout.q";"src/etl/transforms/fx_markout_outputs.q";"src/etl/transforms/markout_core.q";"src/etl/workers/hdb_fx_markouts_backfill.q")
+.qetl.load.jobs[`hdb_fx_markout_wide_backfill]:("src/etl/sources/hdb_fx_markouts.q";"src/etl/transforms/fx_domain.q";"src/etl/transforms/fx_markout.q";"src/etl/transforms/fx_markout_outputs.q";"src/etl/transforms/markout_core.q";"src/etl/transforms/markout_layouts.q";"src/etl/workers/hdb_fx_markout_wide_backfill.q")
+.qetl.load.jobs[`hdb_fx_markouts_backfill]:("src/etl/sources/hdb_fx_markouts.q";"src/etl/transforms/fx_domain.q";"src/etl/transforms/fx_markout.q";"src/etl/transforms/fx_markout_outputs.q";"src/etl/transforms/markout_core.q";"src/etl/transforms/markout_layouts.q";"src/etl/workers/hdb_fx_markouts_backfill.q")
 .qetl.load.jobs[`hdb_order_quality_backfill]:("src/etl/sources/hdb_orders.q";"src/etl/transforms/order_outcome.q";"src/etl/transforms/order_quality.q";"src/etl/workers/hdb_order_quality_backfill.q")
 .qetl.load.jobs[`hdb_transfer_backfill]:("src/etl/sources/hdb_transfer.q";"src/etl/workers/hdb_transfer_backfill.q")
 .qetl.load.jobs[`kafka_feed]:enlist "src/etl/streaming/kafka_feed.q"
@@ -107,8 +107,8 @@
 .qetl.load.procs[`exec_bars1]:enlist "src/etl/streaming/exec_bars.q"
 .qetl.load.procs[`executions1]:enlist "src/etl/streaming/executions.q"
 .qetl.load.procs[`fxfeed1]:enlist "src/etl/streaming/fx_feed.q"
-.qetl.load.procs[`fxmarkout1]:("src/etl/transforms/fx_domain.q";"src/etl/transforms/fx_markout.q";"src/etl/transforms/fx_markout_outputs.q";"src/etl/transforms/markout_core.q";"src/etl/streaming/fx_markout.q")
-.qetl.load.procs[`fxmarkoutwide1]:("src/etl/transforms/fx_domain.q";"src/etl/transforms/fx_markout.q";"src/etl/transforms/fx_markout_outputs.q";"src/etl/transforms/markout_core.q";"src/etl/streaming/fx_markout_wide.q")
+.qetl.load.procs[`fxmarkout1]:("src/etl/transforms/fx_domain.q";"src/etl/transforms/fx_markout.q";"src/etl/transforms/fx_markout_outputs.q";"src/etl/transforms/markout_core.q";"src/etl/transforms/markout_layouts.q";"src/etl/streaming/fx_markout.q")
+.qetl.load.procs[`fxmarkoutwide1]:("src/etl/transforms/fx_domain.q";"src/etl/transforms/fx_markout.q";"src/etl/transforms/fx_markout_outputs.q";"src/etl/transforms/markout_core.q";"src/etl/transforms/markout_layouts.q";"src/etl/streaming/fx_markout_wide.q")
 .qetl.load.procs[`fxorderbookfeed1]:enlist "src/etl/streaming/fx_orderbook_feed.q"
 .qetl.load.procs[`fxordersfeed1]:enlist "src/etl/streaming/fx_orders_feed.q"
 .qetl.load.procs[`fxpositions1]:enlist "src/etl/streaming/fx_positions.q"
@@ -117,8 +117,8 @@
 .qetl.load.procs[`hdb_crypto_book_backfill1]:("src/etl/sources/hdb_crypto_book.q";"src/etl/transforms/crypto_book_1s.q";"src/etl/workers/hdb_crypto_book_backfill.q")
 .qetl.load.procs[`hdb_demo_markouts_backfill1]:("src/etl/sources/hdb_demo_markouts.q";"src/etl/transforms/demo_markouts.q";"src/etl/workers/hdb_demo_markouts_backfill.q")
 .qetl.load.procs[`hdb_exec_bars_backfill1]:("src/etl/sources/hdb_executions.q";"src/etl/transforms/exec_bars.q";"src/etl/workers/hdb_exec_bars_backfill.q")
-.qetl.load.procs[`hdb_fx_markout_wide_backfill1]:("src/etl/sources/hdb_fx_markouts.q";"src/etl/transforms/fx_domain.q";"src/etl/transforms/fx_markout.q";"src/etl/transforms/fx_markout_outputs.q";"src/etl/transforms/markout_core.q";"src/etl/workers/hdb_fx_markout_wide_backfill.q")
-.qetl.load.procs[`hdb_fx_markouts_backfill1]:("src/etl/sources/hdb_fx_markouts.q";"src/etl/transforms/fx_domain.q";"src/etl/transforms/fx_markout.q";"src/etl/transforms/fx_markout_outputs.q";"src/etl/transforms/markout_core.q";"src/etl/workers/hdb_fx_markouts_backfill.q")
+.qetl.load.procs[`hdb_fx_markout_wide_backfill1]:("src/etl/sources/hdb_fx_markouts.q";"src/etl/transforms/fx_domain.q";"src/etl/transforms/fx_markout.q";"src/etl/transforms/fx_markout_outputs.q";"src/etl/transforms/markout_core.q";"src/etl/transforms/markout_layouts.q";"src/etl/workers/hdb_fx_markout_wide_backfill.q")
+.qetl.load.procs[`hdb_fx_markouts_backfill1]:("src/etl/sources/hdb_fx_markouts.q";"src/etl/transforms/fx_domain.q";"src/etl/transforms/fx_markout.q";"src/etl/transforms/fx_markout_outputs.q";"src/etl/transforms/markout_core.q";"src/etl/transforms/markout_layouts.q";"src/etl/workers/hdb_fx_markouts_backfill.q")
 .qetl.load.procs[`hdb_order_quality_backfill1]:("src/etl/sources/hdb_orders.q";"src/etl/transforms/order_outcome.q";"src/etl/transforms/order_quality.q";"src/etl/workers/hdb_order_quality_backfill.q")
 .qetl.load.procs[`hdb_transfer_backfill1]:("src/etl/sources/hdb_transfer.q";"src/etl/workers/hdb_transfer_backfill.q")
 .qetl.load.procs[`kafka_feed1]:enlist "src/etl/streaming/kafka_feed.q"
@@ -139,7 +139,7 @@
 .qetl.load.sources[`hdb_crypto_book]:enlist "src/etl/sources/hdb_crypto_book.q"
 .qetl.load.sources[`hdb_demo_markouts]:("src/etl/sources/hdb_demo_markouts.q";"src/etl/transforms/demo_markouts.q")
 .qetl.load.sources[`hdb_executions]:enlist "src/etl/sources/hdb_executions.q"
-.qetl.load.sources[`hdb_fx_markouts]:("src/etl/sources/hdb_fx_markouts.q";"src/etl/transforms/fx_domain.q";"src/etl/transforms/fx_markout.q";"src/etl/transforms/fx_markout_outputs.q";"src/etl/transforms/markout_core.q")
+.qetl.load.sources[`hdb_fx_markouts]:("src/etl/sources/hdb_fx_markouts.q";"src/etl/transforms/fx_domain.q";"src/etl/transforms/fx_markout.q";"src/etl/transforms/fx_markout_outputs.q";"src/etl/transforms/markout_core.q";"src/etl/transforms/markout_layouts.q")
 .qetl.load.sources[`hdb_market_data]:enlist "src/etl/sources/hdb_market_data.q"
 .qetl.load.sources[`hdb_orders]:("src/etl/sources/hdb_orders.q";"src/etl/transforms/order_outcome.q";"src/etl/transforms/order_quality.q")
 .qetl.load.sources[`hdb_transfer]:enlist "src/etl/sources/hdb_transfer.q"

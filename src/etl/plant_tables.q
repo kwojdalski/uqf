@@ -715,14 +715,18 @@
 / execution residual), `leg (a cross leg's allocation, step 1 upward) or `residual (what the
 / allocation left over); step is 0 for every kind but a leg, so (venue; fill_id; horizon; kind; step)
 / is a key with no nulls. pips are signed so positive means the market moved in the execution's
-/ favour; price_t0 and price_t1 are per kind - see src/etl/transforms/fx_markout.q.
-.qetl.plant.fx_markout:([]time:`timestamp$(); source_time:`timestamp$(); venue:`symbol$(); fill_id:`symbol$(); sym:`g#`symbol$(); side:`long$(); size:`float$(); horizon:`timespan$(); kind:`symbol$(); step:`long$(); leg:`symbol$(); invert:`boolean$(); price_t0:`float$(); price_t1:`float$(); pips:`float$(); status:`symbol$(); pip_factor:`long$(); version:`symbol$())
+/ favour; price_t0 and price_t1 are per kind - see src/etl/transforms/fx_domain.q. The columns of the markout
+/ contract (docs/architecture/markout-contract.md) keep their relative order, with FX's own between them (#1935):
+/ clock is whose clock source_time is, quote_ccy what price is in, move the signed move in price units, and
+/ report_amount the move's money in report_ccy, null when no rate is declared (status `no_rate).
+.qetl.plant.fx_markout:([]time:`timestamp$(); source_time:`timestamp$(); clock:`symbol$(); venue:`symbol$(); fill_id:`symbol$(); sym:`g#`symbol$(); side:`long$(); size:`float$(); horizon:`timespan$(); kind:`symbol$(); step:`long$(); leg:`symbol$(); invert:`boolean$(); price:`float$(); price_t0:`float$(); price_t1:`float$(); quote_ccy:`symbol$(); ref_t0:`float$(); ref_t1:`float$(); move:`float$(); pips:`float$(); pip_factor:`long$(); pip_value:`float$(); quote_amount:`float$(); report_ccy:`symbol$(); rate:`float$(); rate_source:`symbol$(); rate_sym:`symbol$(); rate_time:`timestamp$(); rate_timing:`symbol$(); report_amount:`float$(); status:`symbol$(); contract_version:`long$(); version:`symbol$())
 
 / fxmarkoutwide1's output (#1395): fx_markout in a row per (venue; fill_id; horizon) - the markout,
 / the execution residual and the reconciling residual side by side, and up to three legs in route
 / order with their inversion and allocation. status is `ok, `partial (priced but a component is not),
-/ `unavailable (not priced) or `unreconciled (the legs do not add up).
-.qetl.plant.fx_markout_wide:([]time:`timestamp$(); source_time:`timestamp$(); venue:`symbol$(); fill_id:`symbol$(); sym:`g#`symbol$(); side:`long$(); size:`float$(); horizon:`timespan$(); price:`float$(); pip_factor:`long$(); ref_t0:`float$(); ref_t1:`float$(); total_pips:`float$(); execution_pips:`float$(); residual_pips:`float$(); leg1:`symbol$(); leg1_invert:`boolean$(); leg1_pips:`float$(); leg2:`symbol$(); leg2_invert:`boolean$(); leg2_pips:`float$(); leg3:`symbol$(); leg3_invert:`boolean$(); leg3_pips:`float$(); status:`symbol$(); version:`symbol$())
+/ `unavailable (not priced) or `unreconciled (the legs do not add up); it carries the contract's
+/ columns for the total (move, quote_amount, report_amount, the rate) like the long layout (#1935).
+.qetl.plant.fx_markout_wide:([]time:`timestamp$(); source_time:`timestamp$(); clock:`symbol$(); venue:`symbol$(); fill_id:`symbol$(); sym:`g#`symbol$(); side:`long$(); size:`float$(); horizon:`timespan$(); pip_factor:`long$(); pip_value:`float$(); price:`float$(); quote_ccy:`symbol$(); ref_t0:`float$(); ref_t1:`float$(); move:`float$(); total_pips:`float$(); execution_pips:`float$(); residual_pips:`float$(); leg1:`symbol$(); leg1_invert:`boolean$(); leg1_pips:`float$(); leg2:`symbol$(); leg2_invert:`boolean$(); leg2_pips:`float$(); leg3:`symbol$(); leg3_invert:`boolean$(); leg3_pips:`float$(); quote_amount:`float$(); report_ccy:`symbol$(); rate:`float$(); rate_source:`symbol$(); rate_sym:`symbol$(); rate_time:`timestamp$(); rate_timing:`symbol$(); report_amount:`float$(); status:`symbol$(); contract_version:`long$(); version:`symbol$())
 / order_outcomes1's output: the normalized order-outcome contract (#1396), the one
 / shape order_quality1 reads whatever OMS an order came from. One row per STATUS
 / EVENT a source reported, not per order: `source_time` is the source's own stamp

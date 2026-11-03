@@ -33,7 +33,9 @@
 /                        0b marks the pair unpriced for a domain reason.
 /   attribute  optional  {[spec;frame;legs;books]} -> table ri, kind, step, move
 /                        and optionally status: extra component rows (FX's legs
-/                        and residual). ri indexes the frame; books is the dict
+/                        and residual). Any other column it returns is a domain
+/                        column: it rides on those rows, null on the core's, and
+/                        follows the core's columns in the result. ri indexes the frame; books is the dict
 /                        at0, at1 of per-leg tables bid, ask (oriented), mid
 /                        (the leg's own) at the execution and at the horizon. The
 /                        core adds the money, the conversion and the statuses.
@@ -315,8 +317,7 @@
 / @return executions, one per (venue; fill_id)
 / @eg count .qpipe.transform.markout_core.last_delivery[([] venue:`a`a`b; fill_id:`x`x`x)]  ->  2
 .qpipe.transform.markout_core.last_delivery:{[exe]
-    ids:`$string[exe`venue],'"|",'string exe`fill_id;
-    exe asc last each value group ids}
+    $[0=count exe; exe; exe asc last each value group flip exe`venue`fill_id]}
 
 / The level-0 top of each source's book, one row per snapshot: the input of
 / .qf.mkt.best_across_venues. A side the source withdrew is null, which is how a
@@ -507,6 +508,7 @@
     any0:.qpipe.transform.markout_core.chain_mid[.qpipe.transform.markout_core.leg_books[tob;ma;lg;fr`t0;fr`clock;0b]];
     any1:.qpipe.transform.markout_core.chain_mid[.qpipe.transform.markout_core.leg_books[tob;ma;lg;fr`t1;fr`clock;0b]];
     fr:update ref_t0:ref0, ref_t1:ref1 from fr;
+    xc:`symbol$();
     avail:$[`available in key domain; domain[`available][spec;fr]; (count fr)#1b];
     k0:.qpipe.transform.markout_core.cause[ref0;any0;avail];
     k1:.qpipe.transform.markout_core.cause[ref1;any1;avail];
@@ -521,10 +523,15 @@
         / an attributed row the reference could not price takes its pair's cause
         ca:?[(k1 a`ri)<>`ok; k1 a`ri; ?[null a`move; `unavailable; `ok]];
         ds:$[`status in cols a; a`status; (count a)#`ok];
-        c,:([] ri:a`ri; ord:(count a)#2; kind:a`kind; step:"j"$a`step; move:?[ca=`ok;"f"$a`move;0n]; cause:ca; dstatus:ds)];
+        / any other column the domain returns rides along on its own rows (null on the core's)
+        xc:(cols a) except `ri`kind`step`move`status;
+        arows:([] ri:a`ri; ord:(count a)#2; kind:a`kind; step:"j"$a`step; move:?[ca=`ok;"f"$a`move;0n]; cause:ca; dstatus:ds);
+        c:c uj $[count xc; arows,'xc#a; arows]];
     c:`ri`ord xasc c;
     rt:.qpipe.transform.markout_core.rates_at[domain;spec;tob;fr`quote_ccy;fr`clock;$[spec[`rate_timing]=`execution; fr`t0; fr`t1]];
-    (cols .qpipe.transform.markout_core.result)#.qpipe.transform.markout_core.finish[spec;fr;rt;c]}
+    out:.qpipe.transform.markout_core.finish[spec;fr;rt;c];
+    out:(cols .qpipe.transform.markout_core.result)#out;
+    $[count xc; out,'xc#c; out]}
 
 / Refuse a result written under another contract version (a consumer pins one).
 / @param rows a markout dataset's rows
