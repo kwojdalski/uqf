@@ -830,6 +830,12 @@ uqs restart rdb1 --override q-version-check --reason "..."     # takes both too
 - `profile-budget-check` starts (or `--dry-run`s) a `--profile` past the
   connection-budget estimate. The licence's own limit is still q's to enforce.
 
+Each also has a generated alias, `--skip-q-version-check` and
+`--skip-profile-budget-check`, which is the same override: the same `--reason`
+is required, and the same warning and record follow. `uqs start --help` shows
+what each waives, the risk and what to do, from the guardrail's declaration, and
+`uqs --target` sends it to a server as `--override NAME`.
+
 `uqs override list` names every override and the commands that take it.
 
 Each override:
@@ -1734,8 +1740,6 @@ One safety vocabulary (#1732):
   | old                                                         | new                                                          |
   | ---                                                         | ---                                                          |
   | `start --show-command`                                      | `start --dry-run` / `-n`                                     |
-  | `start` `restart --skip-q-version-check REASON`             | `--override q-version-check --reason REASON`                 |
-  | `start` `restart --skip-profile-budget-check REASON`        | `--override profile-budget-check --reason REASON`            |
   | `deploy push --accept-digest REASON`, and so on             | `deploy push --override accept-digest --reason REASON`       |
   | `job attach --override CODE:COMPONENT --override-reason R`  | `job attach --override CODE:COMPONENT --reason R`            |
   | `job attach --yes`, `job detach --yes`, `uqs --yes`         | also `-y`                                                    |
