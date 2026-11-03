@@ -32,6 +32,12 @@ SHARED_CONFIG = (
 #: anyone but its owner may read it.
 SECRETS = "secrets.env"
 
+#: ssh/scp's connect, each remote step, and the release's check, in seconds:
+#: each default's one home (#1892), which `deploy check --deadline` shares.
+DEFAULT_CONNECT_TIMEOUT = 10
+DEFAULT_COMMAND_TIMEOUT = 900
+DEFAULT_VERIFY_TIMEOUT = 180
+
 #: One-liners run with the server's python3: a file's sha256, and an atomic
 #: rename (os.replace) - portable where `mv -T` and `sha256sum` are not.
 SHA256_PY = "import hashlib,sys; print(hashlib.sha256(open(sys.argv[1],'rb').read()).hexdigest())"
@@ -122,10 +128,10 @@ class Config:
     #: sources checked live after verify, before activation (#840)
     live_check: tuple[str, ...] = ()
     live_check_timeout: int = 120
-    connect_timeout: int = 10
-    command_timeout: int = 900
+    connect_timeout: int = DEFAULT_CONNECT_TIMEOUT
+    command_timeout: int = DEFAULT_COMMAND_TIMEOUT
     smoke_timeout: int = 120
-    verify_timeout: int = 180
+    verify_timeout: int = DEFAULT_VERIFY_TIMEOUT
     #: the deploy_targets.toml target this came from (#873), and where each
     #: setting came from - the target or a flag - for the plan
     target: str | None = None
@@ -133,8 +139,7 @@ class Config:
     #: the runtime the target expects the artifact to run; None: the artifact's
     runtime: str | None = None
 
-    #: --override allow-dirty's reason: deploy an artifact built from
-    #: uncommitted changes (#872, #1852); None: refused
+    #: --override allow-dirty's reason: deploy a dirty artifact (#872, #1852)
     allow_dirty: str | None = None
     #: --override accept-converted-release's reason: start a converted release on a q
     #: its version check cannot confirm, after smoke passes there (#936)
@@ -169,8 +174,7 @@ class Config:
     python_runtime: str | None = None
     python_runtime_sha256: str | None = None
 
-    #: --override fix-hdb's reason: fill the shared HDB's missing tables and
-    #: columns in prepare (#870, #1852); None: refused
+    #: --override fix-hdb's reason: fill the HDB's missing tables, columns (#870)
     fix_hdb: str | None = None
 
     #: after activation, keep the newest this many releases (#866); None keeps all
@@ -179,8 +183,7 @@ class Config:
     #: seconds to let data flow after verify, then require every started
     #: streaming job to have beaten and none to be failing (#869); None skips it
     soak: int | None = None
-    #: --override break-lock's reason: remove a deploy lock whose holder has
-    #: stopped beating (#867, #1852); None: refused
+    #: --override break-lock's reason: remove a lock whose holder died (#867)
     break_lock: str | None = None
 
     @property
@@ -264,10 +267,10 @@ def make_config(
     odbc_home: str | None = None,
     live_check: str = "",
     live_check_timeout: int = 120,
-    connect_timeout: int = 10,
-    command_timeout: int = 900,
+    connect_timeout: int = DEFAULT_CONNECT_TIMEOUT,
+    command_timeout: int = DEFAULT_COMMAND_TIMEOUT,
     smoke_timeout: int = 120,
-    verify_timeout: int = 180,
+    verify_timeout: int = DEFAULT_VERIFY_TIMEOUT,
     allow_dirty: str | None = None,
     accept_converted_release: str | None = None,
     release_repo: str | None = None,

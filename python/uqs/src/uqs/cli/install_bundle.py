@@ -18,6 +18,7 @@ from rich.prompt import Confirm
 from rich.table import Table
 
 from uqs.cli.regenerate import _DERIVED, _regenerate_derived, derived_command
+from uqs.cli.safety import dry_run_note
 from uqs.cli.shared import _die, console
 from uqs.paths import INSTALLED_CONNECTORS
 from uqs.stack import bundles
@@ -70,7 +71,7 @@ def install(
     if plan.tests:
         console.print(f"[dim]not installed (q tests): {', '.join(p.name for p in plan.tests)}[/]")
     if dry_run:
-        console.print("[dim]--dry-run: nothing installed[/]")
+        console.print(dry_run_note())
         return
     copies = [(s, root / INSTALLED_CONNECTORS / plan.bundle.name / s.name) for s in plan.connectors]
     changes = (

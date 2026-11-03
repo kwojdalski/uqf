@@ -44,7 +44,8 @@ def parse_args(argv: list[str]) -> Config:
     # --override NAME --reason TEXT become make_config's per-override fields (#1732)
     params |= deploy_policy.bypasses(params.pop("override"), params.pop("reason"))
     params.pop("no_register", None)  # a choice about this machine, not the push
-    return make_config(**params)
+    # an option left unset (None) takes make_config's default, as push does (#1892)
+    return make_config(**{k: v for k, v in params.items() if v is not None})
 
 
 ARGS = ["--ssh", "uqf-server", "--dest", "/opt/uqf", "--profile", "essential"]
@@ -132,7 +133,7 @@ def _args(path: Path, *extra: str) -> list[str]:
 # --- arguments and quoting ------------------------------------------------------
 
 
-def test_the_required_arguments_are_host_dest_and_profile(capfd):
+def test_the_required_arguments_are_host_dest_and_profile(log_text):
     """Required by the command rather than the parser: a --target can give them."""
     from typer.testing import CliRunner
 
@@ -140,7 +141,7 @@ def test_the_required_arguments_are_host_dest_and_profile(capfd):
 
     r = CliRunner().invoke(cli.app, ["deploy", "push", "a", "--ssh", "h", "--dest", "/opt/uqf"])
     assert r.exit_code == 1
-    assert "--profile is required, or a TARGET after ARTIFACT" in r.output + capfd.readouterr().err
+    assert "--profile is required, or a TARGET after ARTIFACT" in log_text()
     cfg = parse_args(BASE)
     assert (cfg.host, cfg.dest, cfg.profile) == ("uqf-server", "/opt/uqf", "essential")
     assert cfg.data_root == "/opt/uqf/shared/data"

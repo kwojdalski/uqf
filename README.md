@@ -178,6 +178,44 @@ uv run pytest tests/remote -m docker               # a stack on another machine,
 uv run pytest tests/qrun/test_external_smoke.py -m external --smoke-targets HOST:PORT --smoke-tables TABLE:COL,COL
 ```
 
+### Where each check runs
+
+Each check runs in one place, chosen by what it needs (#1879). A commit's hooks
+are **fast and targeted**; CI is the **full, clean** run - a Linux checkout with
+nothing left over, PeachQ as its q.
+
+- **Commit hooks.** The static hooks run on what is staged. `python-tests` runs
+  only the Python tests the commit reaches: testmon's record for a `.py` file,
+  and for anything else a record of what each test reads, lists and starts
+  (`scripts/dev/test_reach.py`) - a `.q` change runs every test that starts a
+  q. `q-tests` and `q-coverage` run the q suites the branch reaches, on KDB-X
+  (`scripts/dev/test_impact.py`). The docs render (`doc-links`) and the docs' q
+  blocks on PeachQ (`q-docs-peachq`) do not run: CI does. The whole Python suite
+  runs only when the selector cannot decide - no record yet, a `conftest.py`,
+  `pyproject.toml` or `uv.lock` change. The records are shared between the
+  worktrees of a clone, so a new worktree starts from the last one written.
+- **CI.** Every hook again over every file, the whole Python suite in four
+  PeachQ shards, and - when the change can affect them - the whole q suite on
+  PeachQ and the docs render. `scripts/dev/ci_scope.py` decides, and says why in
+  the "Scope" job's summary; "Repository checks" counts a job it skipped as
+  passed.
+- **KDB-X attestation.** The KDB-X gates run locally
+  (`uv run python scripts/dev/attest_kdbx.py`), and CI checks the trailer.
+
+**Full mode is one switch away on both sides.**
+
+```
+UQF_HOOKS_FULL=1 git commit ...               # this commit's hooks in full: the whole Python
+                                              # suite, the whole q suite and coverage gate,
+                                              # the docs render, the docs' q blocks on PeachQ
+python3 scripts/dev/hooks_full.py --all       # the same over the whole tree, without a commit
+UQF_Q_TESTS_FULL=1 git commit ...             # the whole q suite only, as before
+gh pr edit <n> --add-label ci:full            # CI: every job on this pull request
+gh workflow run ci.yml --ref <branch> -f full=true   # CI: every job on a branch
+```
+
+Every push to master runs every CI job.
+
 `coverage`, `release`, `live_stack`, `docker` and `external` are opt-in: a test
 carrying one skips, saying how to select it, unless `-m` names it.
 

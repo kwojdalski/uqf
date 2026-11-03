@@ -504,7 +504,9 @@
     / A declared rule is judged by its own attributes, or by its order where
     / it declares none (and always on PeachQ, which keeps none).
     if[count r:.qetl.io.declared_rule t;
-        have:r where not null r;
+        / `#`, not `r where`: indexing a dictionary by its keys gives a list of
+        / values, whose key is no column name (#1891)
+        have:(where not null r)#r;
         :$[.qetl.io.on_peachq or 0=count have;
             .qetl.io.in_order[base;key r];
             all {[base;col;a] a=attr get hsym `$base,"/",string col}[base]'[key have;value have]]];

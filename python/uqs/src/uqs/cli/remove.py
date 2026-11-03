@@ -22,7 +22,7 @@ from uqs.cli.regenerate import (
     derived_command,
 )
 from uqs.cli.renames import bypass_flag, renamed
-from uqs.cli.safety import ChangesState, OverrideOpt, ReasonOpt
+from uqs.cli.safety import ChangesState, OverrideOpt, ReasonOpt, dry_run_note
 from uqs.cli.shared import JOB_AUTHORING_PANEL, _die, _paths, console, job_app, log
 from uqs.paths import UqsError
 from uqs.scaffold.remove import plan_removal
@@ -86,7 +86,7 @@ def remove_job(
     if dry_run:
         if strict and removal.references:
             console.print("[yellow]--strict would refuse: the lines above still name it[/]")
-        console.print("[dim]--dry-run: nothing removed[/]")
+        console.print(dry_run_note())
         return
     if strict and removal.references:
         _die(

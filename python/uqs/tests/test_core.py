@@ -537,14 +537,15 @@ def test_a_site_column_is_a_new_plain_name(value, message, fake_paths: UqsPaths,
         runtime.bootstrap(fake_paths)
 
 
-def test_a_site_launcher_finds_its_column_in_the_printed_start(
+def test_a_site_launcher_finds_its_column_in_the_generated_process_csv(
     fake_paths: UqsPaths, monkeypatch, tmp_path: Path
 ):
-    """`uqs start --dry-run` through a launcher that looks taskset_no up the
-    way the UAT torq.sh does - by header, as the vendored getfield does. With
-    no such column that lookup is `print $}`, an awk syntax error for every
-    process; declared, a configured row prints its CPUs and an unconfigured
-    one prints nothing, with no error either way."""
+    """A launcher that looks taskset_no up the way the UAT torq.sh does - by
+    header, as the vendored getfield does. With no such column that lookup is
+    `print $}`, an awk syntax error for every process; declared, a configured
+    row prints its CPUs and an unconfigured one prints nothing, with no error
+    either way. Run directly: `start --dry-run` no longer runs the launcher,
+    which needs process.csv written first (stack/start_lines.py, #1880)."""
     fake_which(monkeypatch, other="/usr/bin/true")
     launcher = tmp_path / "site" / "torq.sh"
     launcher.parent.mkdir()
@@ -562,9 +563,9 @@ def test_a_site_launcher_finds_its_column_in_the_printed_start(
     monkeypatch.setenv("UQS_TORQ_LAUNCHER", str(launcher))
     monkeypatch.setenv("UQS_PROCESS_FIELDS", "taskset_no")
     stack_procs.set_process_config(fake_paths, "stp1", "taskset_no", "3:5")
-    printed = runtime.print_procs(fake_paths, "stp1")
+    printed = runtime.run_torq_sh(fake_paths, ["print", "stp1"], capture=True)
     assert (printed.stdout.strip(), printed.stderr) == ("stp1 taskset_no=[3:5]", "")
-    printed = runtime.print_procs(fake_paths, "discovery1")
+    printed = runtime.run_torq_sh(fake_paths, ["print", "discovery1"], capture=True)
     assert (printed.stdout.strip(), printed.stderr) == ("discovery1 taskset_no=[]", "")
 
 
