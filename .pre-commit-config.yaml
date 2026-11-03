@@ -87,8 +87,8 @@ repos:
   - repo: local
     hooks:
       # The Python tests the commit reaches, from the uv workspace root - never
-      # the whole suite by default: CI runs that on every pull request, on a
-      # clean Linux checkout (#1879).
+      # the whole suite by default: CI runs that on every pull request that can
+      # reach a Python test, on a clean Linux checkout (#1879, #1955).
       #
       # scripts/dev/python_tests_hook.py picks them from two records: testmon's
       # (the Python each test executes) for a staged .py file, and
