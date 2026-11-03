@@ -114,3 +114,21 @@ def test_the_session_routes_each_line_with_the_current_size():
         lambda e: e, read, shown.append, list().append, "rdb", render=lambda: next(sizes)
     )
     assert 'system"c 40 120"' in shown[0] and 'system"c 30 90"' in shown[1]
+
+
+def test_an_unrouted_session_sends_each_line_as_typed():
+    """The session `uqs query` opens on a process instead of qcon when the
+    password is a real one (#1853): no .gw.syncexec, and an in-place delete is
+    the process's own business there."""
+    lines = iter(["delete from `trade", "count quote"])
+    shown: list = []
+
+    def read(prompt):
+        assert prompt == "q) "
+        try:
+            return next(lines)
+        except StopIteration:
+            raise EOFError from None
+
+    n = gateway.session(lambda e: e, read, shown.append, list().append, prompt="q) ", routed=False)
+    assert (n, shown) == (2, ["delete from `trade", "count quote"])

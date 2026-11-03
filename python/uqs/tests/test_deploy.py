@@ -1021,7 +1021,9 @@ def test_preflight_asks_the_servers_q_for_its_version():
 
 def test_a_dirty_artifact_is_refused_unless_allowed(tmp_path):
     path = _artifact(tmp_path, dirty=True)
-    with pytest.raises(DeployError, match=r"uncommitted changes \(dirty: true\).*--allow-dirty"):
+    with pytest.raises(
+        DeployError, match=r"uncommitted changes \(dirty: true\).*--override allow-dirty"
+    ):
         driver.deploy(parse_args(_args(path, "--dry-run")), FakeRemote(), out=io.StringIO())
     remote = FakeRemote({"uv python find": _done(SERVER + "data=present\n")})
     out = io.StringIO()
@@ -1029,6 +1031,23 @@ def test_a_dirty_artifact_is_refused_unless_allowed(tmp_path):
         driver.deploy(parse_args(_args(path, "--dry-run", "--allow-dirty")), remote, out=out) == 0
     )
     assert "(with uncommitted changes)" in out.getvalue()
+
+
+def test_allow_dirty_is_an_override_whose_reason_the_plan_records(tmp_path):
+    """#1852: a bare --allow-dirty recorded no reason; --override allow-dirty does, in the
+    plan's EXCEPTIONS, and the old flag alone records that it gave none."""
+    path = _artifact(tmp_path, dirty=True)
+    for argv, said in (
+        (["--override", "allow-dirty", "--reason", "hotfix rehearsal"], "hotfix rehearsal"),
+        (["--allow-dirty"], "given as --allow-dirty, which records no reason"),
+    ):
+        remote = FakeRemote({"uv python find": _done(SERVER + "data=present\n")})
+        out = io.StringIO()
+        cfg = parse_args(_args(path, "--dry-run", *argv))
+        assert cfg.allow_dirty == said
+        assert driver.deploy(cfg, remote, out=out) == 0
+        plan = out.getvalue()
+        assert "EXCEPTIONS" in plan and "--override allow-dirty: " in plan and said in plan
 
 
 def test_a_dirty_artifact_is_refused_before_the_server_is_touched(tmp_path):
@@ -1193,7 +1212,9 @@ def test_a_held_lock_in_preflight_names_break_lock(tmp_path):
     held = _done(
         SERVER + "data=present\nlocked=2026-10-08 push OLD by ops@h pid 7, last beat 9s ago\n"
     )
-    with pytest.raises(DeployError, match=r"last beat 9s ago\)\. If it died, --break-lock"):
+    with pytest.raises(
+        DeployError, match=r"last beat 9s ago\)\. If it died, --override break-lock"
+    ):
         driver.deploy(parse_args(_args(_artifact(tmp_path))), FakeRemote({"uv python find": held}))
 
 

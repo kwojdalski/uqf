@@ -128,6 +128,20 @@ RENAMED_AFTER: dict[str, frozenset[str]] = {
             "uqs data migrate -n",
             "uqs target adopt --dry-run",
             "uqs target adopt -n",
+            # #1852: a bypass is --override NAME --reason, never a bare flag
+            "uqs deploy build --allow-dirty",
+            "uqs deploy build --allow-computed-names",
+            "uqs deploy push --allow-dirty",
+            "uqs deploy push --fix-hdb",
+            "uqs deploy push --break-lock",
+            "uqs deploy rollback --break-lock",
+            "uqs job backfill --any-writer",
+            "uqs job remove --even-if-edited",
+            # #1853: a secret is never an argument - the variable holding it is
+            "uqs query --passwd",
+            "uqs schema --passwd",
+            "uqs connector start --tp-credential",
+            "uqs connector restart --tp-credential",
         }
     ),
 }

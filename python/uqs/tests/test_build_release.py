@@ -32,7 +32,7 @@ def _built(argv: list[str], **kwargs):
         p["output"],
         arch=p["arch"],
         python=p["python"],
-        allow_dirty=p["allow_dirty"],
+        allow_dirty="allow-dirty" in (p["override"] or []),
         bundles=p["bundle"] or (),
         **kwargs,
     )

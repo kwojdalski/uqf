@@ -38,7 +38,11 @@ class LocalRemote:
 
 def _server(dest: Path, break_lock: bool = False) -> Server:
     cfg = make_config(
-        artifact="", host="uqf-server", dest=str(dest), profile="essential", break_lock=break_lock
+        artifact="",
+        host="uqf-server",
+        dest=str(dest),
+        profile="essential",
+        break_lock="the holder died" if break_lock else None,
     )
     return Server(cfg, LocalRemote(), release="20261008T120000Z-0123456789ab")
 
@@ -114,7 +118,9 @@ def test_a_beat_refreshes_the_heartbeat(tmp_path):
 def test_a_held_lock_is_refused_naming_its_holder(tmp_path):
     dest = tmp_path / "uqf"
     _held(dest, age=10)
-    with pytest.raises(DeployError, match=r"push of OLD by ops@elsewhere \(pid 1\).*--break-lock"):
+    with pytest.raises(
+        DeployError, match=r"push of OLD by ops@elsewhere \(pid 1\).*--override break-lock"
+    ):
         _server(dest).take_lock()
 
 
@@ -123,7 +129,7 @@ def test_a_lock_with_no_owner_file_is_refused_not_unreadable(tmp_path):
     and its owner record: the directory alone, read under pipefail."""
     dest = tmp_path / "uqf"
     (dest / "deploy.lock").mkdir(parents=True)
-    with pytest.raises(DeployError, match="another deployment holds.*--break-lock"):
+    with pytest.raises(DeployError, match="another deployment holds.*--override break-lock"):
         _server(dest).take_lock()
 
 

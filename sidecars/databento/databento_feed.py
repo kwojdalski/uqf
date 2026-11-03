@@ -108,7 +108,7 @@ def start_databento_feed(
     key = api_key or os.environ.get(DATABENTO_API_KEY_ENV)
     if not key:
         raise UqsError(
-            f"no Databento API key: pass --api-key or set ${DATABENTO_API_KEY_ENV}. "
+            f"no Databento API key: set ${DATABENTO_API_KEY_ENV}, or pass --api-key-env NAME. "
             "Databento gives new accounts free credit; this feed does not run "
             "against a fixture."
         )
@@ -128,8 +128,6 @@ def start_databento_feed(
         connection.TP_HOST,
         "--port",
         str(port),
-        "--credential",
-        tp_credential,
         "--dataset",
         dataset,
         "--symbols",
@@ -139,7 +137,9 @@ def start_databento_feed(
     ]
 
     proc = _process(paths)
-    env = dict(os.environ, **{DATABENTO_API_KEY_ENV: key})
+    # Both secrets in its environment, never its argv: ps and the pid file
+    # would show them (#1853).
+    env = connection.credential_env(tp_credential, {**os.environ, DATABENTO_API_KEY_ENV: key})
     pid = proc.start(cmd, cwd=paths.repo_root, env=env)
     log.info(
         f"started the databento feed (pid {pid}), {dataset} "

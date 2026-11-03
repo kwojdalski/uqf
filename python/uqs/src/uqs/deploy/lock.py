@@ -14,7 +14,7 @@ writes deploy.lock/heartbeat, the SERVER's clock in seconds, on taking the
 lock and again between stages, so the age read back is the server's clock
 against itself, never two machines' against each other.
 
-`--break-lock` removes a lock only when its holder is gone: refused while the
+`--override break-lock` removes a lock only when its holder is gone: refused while the
 heartbeat is younger than the holder's stale_after, or while the holder's pid
 is alive on this very machine (from anywhere else, the heartbeat decides). A
 lock from before this has no heartbeat; the directory's own age stands in.
@@ -141,7 +141,8 @@ class Lock:
             raise DeployError(
                 "lock",
                 f"another deployment holds {self.path}: {describe(info)}. If it died, "
-                "--break-lock removes it - refused while its holder still beats",
+                "--override break-lock --reason REASON removes it - refused while its holder "
+                "still beats",
             )
         ok, why = verdict(info, socket.gethostname(), _alive, stale_after(self.cfg))
         if not ok:
