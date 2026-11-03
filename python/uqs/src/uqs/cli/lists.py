@@ -23,6 +23,7 @@ from rich.table import Table
 from uqs.cli import completion, safety
 from uqs.cli.attachment import attachment_app
 from uqs.cli.config import config_app
+from uqs.cli.json_out import JSON_HELP
 from uqs.cli.renames import BASE_PORT, renamed, warn_renamed
 from uqs.cli.runtime_diff import runtime_app
 from uqs.cli.shared import (
@@ -63,7 +64,7 @@ ReverseOpt = Annotated[
     bool, typer.Option("--reverse", help="Sort descending. Only meaningful with --sort.")
 ]
 JsonOpt = Annotated[
-    bool, typer.Option("--json", help="Print the rows as a JSON list, for a script.")
+    bool, typer.Option("--json", help=f"{JSON_HELP}: the rows, [{{column: value}}]")
 ]
 _SORT_HELP = "Sort by this column (case-insensitive, numeric-aware)."
 
