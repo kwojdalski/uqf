@@ -44,7 +44,8 @@ def parse_args(argv: list[str]) -> Config:
     # --override NAME --reason TEXT become make_config's per-override fields (#1732)
     params |= deploy_policy.bypasses(params.pop("override"), params.pop("reason"))
     params.pop("no_register", None)  # a choice about this machine, not the push
-    return make_config(**params)
+    # an option left unset (None) takes make_config's default, as push does (#1892)
+    return make_config(**{k: v for k, v in params.items() if v is not None})
 
 
 ARGS = ["--ssh", "uqf-server", "--dest", "/opt/uqf", "--profile", "essential"]

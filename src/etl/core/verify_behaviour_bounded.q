@@ -125,8 +125,9 @@
     spec:`source_version`range_from`range_to!(`verify;from_ts;to_ts);
     saved:.qetl.io.default;
     fx:getenv`UQF_FIXTURE_WRITES;
-    / the sandbox is the one place a fixture's rows may be written
-    setenv[`UQF_FIXTURE_WRITES;"1"];
+    / the sandbox is the one place a fixture's rows may be written; a string,
+    / not the char atom "1", which KDB-X's setenv refuses with 'type (#1891)
+    setenv[`UQF_FIXTURE_WRITES;enlist"1"];
     `.qetl.io.default set .qetl.io.memory;
     pass:{[ns;spec] (get ` sv ns,`init) spec; r:(get ` sv ns,`run)[]; (get ` sv ns,`cleanup)[]; r};
     r1:.[pass;(ns;spec);{[e] (`failed;e)}];

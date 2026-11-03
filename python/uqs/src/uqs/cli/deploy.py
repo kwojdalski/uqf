@@ -12,7 +12,6 @@ parses.
 
 from __future__ import annotations
 
-import json
 import shutil
 from pathlib import Path
 from typing import Annotated
@@ -21,6 +20,7 @@ import typer
 
 from uqs.cli import deploy_components as components
 from uqs.cli import deploy_connection as conn
+from uqs.cli import deploy_dry_run as dry
 from uqs.cli import deploy_policy as policy
 from uqs.cli.renames import renamed
 from uqs.cli.safety import ChangesState, DryRunOpt, OverrideOpt, ReasonOpt
@@ -80,9 +80,7 @@ def build(
             "beside those the runtime declares; repeatable",
         ),
     ] = None,
-    dry_run: Annotated[
-        bool, typer.Option("--dry-run", "-n", help="Print the bundle's composition; build nothing")
-    ] = False,
+    dry_run: dry.BuildDryRun = False,
     q_target: Annotated[
         str | None,
         typer.Option(
@@ -128,7 +126,7 @@ def build(
         except ReleaseError as exc:
             _failed("uqs deploy build", exc.stage, exc)
             return
-        print(json.dumps(runtime_bundles.composition(runtime, members), indent=2))
+        dry.say_composition(runtime_bundles.composition(runtime, members))
         return
     if shutil.which("uv") is None:
         _failed("uqs deploy build", "arguments", RuntimeError("uv is not on PATH"))
@@ -278,15 +276,11 @@ def push(
         int, typer.Option("--live-check-timeout", help="Every live check together, seconds")
     ] = 120,
     connect_timeout: conn.ConnectTimeout = conn.DEFAULT_CONNECT_TIMEOUT,
-    command_timeout: Annotated[
-        int, typer.Option("--command-timeout", help="Each remote step, seconds")
-    ] = 900,
+    command_timeout: conn.CommandTimeout = None,
     smoke_timeout: Annotated[
         int, typer.Option("--smoke-timeout", help="The offline check, seconds")
     ] = 120,
-    verify_timeout: Annotated[
-        int, typer.Option("--verify-timeout", help="Readiness deadline, seconds")
-    ] = 180,
+    verify_timeout: conn.VerifyTimeout = None,
     allow_dirty: policy.AllowDirty = False,
     override: OverrideOpt = None,
     reason: ReasonOpt = None,
@@ -371,7 +365,8 @@ def push(
                     raise config.DeployError(
                         "arguments", f"{config.flag(name)} is required, or a TARGET after ARTIFACT"
                     )
-            cfgs = [config.make_config(**options)]
+            # an option left unset (None) takes make_config's default
+            cfgs = [config.make_config(**{k: v for k, v in options.items() if v is not None})]
         for cfg in cfgs:
             if cfg.target:
                 log.info("target {}: {}:{}", cfg.target, cfg.host, cfg.dest)
@@ -391,4 +386,5 @@ def push(
                 break
     except config.DeployError as exc:
         _failed("uqs deploy push", exc.stage, exc)
+    dry.end(dry_run, code)
     raise typer.Exit(code=code)

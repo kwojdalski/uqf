@@ -91,15 +91,17 @@ def clean(match: MatchOpt = None, dry_run: DryRunOpt = False) -> None:
         return
     if not targets:
         console.print("[dim]nothing to remove[/]")
-        return
-    total = sum(size for _entry, size in targets)
-    verb = "would remove" if dry_run else "removed"
-    for entry, size in targets:
-        console.print(f"  {_human_bytes(size):>7}  {entry}")
-    console.print(
-        f"[dim]{verb} {len(targets)} entr{'y' if len(targets) == 1 else 'ies'}, "
-        f"{_human_bytes(total)}[/]"
-    )
+    else:
+        total = sum(size for _entry, size in targets)
+        verb = "would remove" if dry_run else "removed"
+        for entry, size in targets:
+            console.print(f"  {_human_bytes(size):>7}  {entry}", markup=False, highlight=False)
+        console.print(
+            f"[dim]{verb} {len(targets)} entr{'y' if len(targets) == 1 else 'ies'}, "
+            f"{_human_bytes(total)}[/]"
+        )
+    if dry_run:
+        console.print(dry_run_note())
 
 
 @checkpoint_app.command("remove", cls=needs_pipelines(_CHECKPOINT, ChangesState))
@@ -134,9 +136,10 @@ def remove_checkpoint(
         console.print(f"{worker} has no checkpoint - nothing to clear", markup=False)
     elif dry_run:
         console.print(f"would clear {worker}'s checkpoint ({path})", markup=False)
-        console.print(dry_run_note())
     else:
         console.print(f"cleared {worker}'s checkpoint ({path})", markup=False)
+    if dry_run:
+        console.print(dry_run_note())
 
 
 alias_command(remove_app, "output", "uqs clean", clean)

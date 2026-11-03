@@ -1498,7 +1498,11 @@ command that breaks a rule, and on a listed exception that has since been fixed.
 5. **Uniform flags.** `--json`, one JSON document on stdout, on every command
    that reports (`uqs runtime diff uqf torq --json`); `--dry-run`/`-n` on every
    command that changes state (`uqs clean -n`), which checks everything and
-   changes nothing; `--yes`/`-y` on every command that asks
+   changes nothing, and ends with one line,
+   `dry run: nothing was changed. Run it again without --dry-run.`
+   (`safety.dry_run_note`). A test runs each such command's dry run against a
+   copy of the tree and an empty data directory and fails on any file written
+   (`tests/test_dry_run_tree.py`); `--yes`/`-y` on every command that asks
    (`uqs job remove NAME -y`). A check is bypassed only with
    `--override NAME --reason TEXT`: NAME is one of the command's own, which
    `uqs override list` shows, repeatable, with one reason for all of them,
@@ -1510,7 +1514,9 @@ command that breaks a rule, and on a listed exception that has since been fixed.
    `--override eod-fence`, read by the same `safety.given`, and `uqs --target`
    sends it as that. A guardrail gets the flag only once its command honours the
    waiver at run time. Through `uqs --target`, a `--dry-run` asks nothing first,
-   except a backfill's, which starts a process to fetch.
+   except a backfill's, which starts a process to fetch. That is sound only
+   because of the test above: `start --dry-run` used to bootstrap the data
+   directory, unasked, on the server (#1880).
 6. **A rename ships with a hidden alias for one release**, which prints the new
    spelling; the release after removes it.
 

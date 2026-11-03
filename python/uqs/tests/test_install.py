@@ -153,7 +153,7 @@ def _run(*args: str, stdin: str = "") -> tuple[int, str]:
 def test_cli_dry_run_writes_nothing(sidecar: Path, cli_repo: Path) -> None:
     code, out = _run(str(sidecar), "--dry-run")
     assert code == 0, out
-    assert "nothing installed" in out
+    assert "dry run: nothing was changed" in out
     assert not (cli_repo / STREAM_DIR / "acme_spread.q").exists()
 
 

@@ -15,7 +15,7 @@ from typing import Annotated
 
 import typer
 
-from uqs.deploy import config, control
+from uqs.deploy import config, control, targets
 from uqs.deploy.config import DeployError
 from uqs.logger import get_logger
 from uqs.paths import UqsError, repo_root
@@ -61,7 +61,27 @@ RemoteUser = Annotated[
 ConnectTimeout = Annotated[
     int, typer.Option("--connect-timeout", help="ssh/scp, seconds; overrides TARGET's")
 ]
-DEFAULT_CONNECT_TIMEOUT = control.DEFAULT_CONNECT_TIMEOUT
+DEFAULT_CONNECT_TIMEOUT = config.DEFAULT_CONNECT_TIMEOUT
+#: None unless given, so neither overrides TARGET's value nor restates
+#: make_config's default, which is the only one (#1892).
+CommandTimeout = Annotated[
+    int | None,
+    typer.Option(
+        "--command-timeout",
+        help=f"Each remote step, seconds, default {config.DEFAULT_COMMAND_TIMEOUT}; "
+        "overrides TARGET's",
+        show_default=False,
+    ),
+]
+VerifyTimeout = Annotated[
+    int | None,
+    typer.Option(
+        "--verify-timeout",
+        help=f"Readiness deadline, seconds, default {config.DEFAULT_VERIFY_TIMEOUT}; "
+        "overrides TARGET's",
+        show_default=False,
+    ),
+]
 #: A push to a server no target names declares one (deploy/history.py), as a
 #: change `uqs target log` records (#1756); this says not to.
 NoRegister = Annotated[
@@ -83,9 +103,11 @@ def on_command_line(ctx: typer.Context, name: str) -> bool:
 
 
 def server(ctx: typer.Context, target: str | None, **flags) -> dict:
-    """{host, dest, remote_user, connect_timeout} for a command that reaches
-    one server: TARGET's, with each connection flag given on the command line
-    over it; with no TARGET, the flags alone, which must then name the server."""
+    """make_config's keyword arguments for a command that reaches one server:
+    every push option TARGET sets - its connection and its timeouts alike -
+    with each flag given on the command line over it; with no TARGET, the
+    flags alone, which must then name the server. A flag left unset (None)
+    is left out, so make_config's default applies."""
     if target is None:
         absent = [config.flag(k) for k in ("host", "dest") if flags[k] is None]
         if absent:
@@ -93,17 +115,14 @@ def server(ctx: typer.Context, target: str | None, **flags) -> dict:
                 "arguments",
                 f"give a TARGET, or {' and '.join(absent)} for a server no target declares",
             )
-        return flags
+        return {k: v for k, v in flags.items() if v is not None}
     try:
-        r = control.remote_for(target, repo_root())
+        label, settings = control.settings_for(target, repo_root())
+        r = control.remote_from(label, settings)
     except UqsError as exc:
         raise DeployError("arguments", str(exc)) from None
-    out = {
-        "host": r.host,
-        "dest": r.dest,
-        "remote_user": r.remote_user,
-        "connect_timeout": r.connect_timeout,
-    }
+    out = targets.push_options(label, settings)
+    out.update(host=r.host, dest=r.dest, remote_user=r.remote_user)
     out.update({k: v for k, v in flags.items() if on_command_line(ctx, k)})
     log.info("target {}: {}:{}", r.name, out["host"], out["dest"])
     return out

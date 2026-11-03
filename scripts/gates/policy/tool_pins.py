@@ -142,6 +142,7 @@ PINS: tuple[Pin, ...] = (
             Site(WORKFLOWS, _PRE_COMMIT, required=False),
             Site("install.sh", _PRE_COMMIT),
             Site("scripts/dev/attest_kdbx.py", _PRE_COMMIT),
+            Site("scripts/dev/hooks_full.py", _PRE_COMMIT),
             Site(".claude/agents/*.md", _PRE_COMMIT, required=False),
         ),
     ),
