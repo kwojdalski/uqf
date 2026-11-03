@@ -41,8 +41,8 @@ from uqs.stack import logs as stack_logs
 from uqs.stack import multitail as stack_multitail
 from uqs.stack import procs as stack_procs
 
-#: `uqs config show/set/unset/list`: a process.csv row, and every setting `set`
-#: wrote (`list`, once `uqs list overrides`: an override is a bypass, #1855).
+#: `uqs config show/set/unset/list`: a process.csv row via process_overrides.csv,
+#: and every setting `set` wrote (`list`, once `uqs list overrides`, #1855).
 config_app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
