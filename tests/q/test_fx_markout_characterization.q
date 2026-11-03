@@ -18,21 +18,28 @@
 
 .qt.qpipe.transform.fx_markout.characterization.t:2026.09.17D10:00:00.000000000
 
+/ The specs these tests pin behaviour under. The rest of the money is the markout contract's
+/ (#1935): a currency with no declared rate is `no_rate, so the pinned statuses (ok, reconciled,
+/ unavailable) are read under a spec that gives every quote currency the tests use a rate of 1.
+.qt.qpipe.transform.fx_markout.characterization.rates:`EUR`GBP`JPY`PLN`TRY`MXN`HUF!7#1f
+.qt.qpipe.transform.fx_markout.characterization.default:.qpipe.transform.fx_markout.default_spec,enlist[`rates]!enlist .qt.qpipe.transform.fx_markout.characterization.rates
+.qt.qpipe.transform.fx_markout.characterization.job:.qpipe.transform.fx_markout_outputs.job_spec,enlist[`rates]!enlist .qt.qpipe.transform.fx_markout.characterization.rates
+
 / calc under the default spec, with some of it changed
-.qt.qpipe.transform.fx_markout.characterization.spec_of:{[changes] .qpipe.transform.fx_markout.default_spec,changes}
+.qt.qpipe.transform.fx_markout.characterization.spec_of:{[changes] .qt.qpipe.transform.fx_markout.characterization.default,changes}
 
 / the default spec with these horizons
 .qt.qpipe.transform.fx_markout.characterization.with_horizons:{[hs] .qt.qpipe.transform.fx_markout.characterization.spec_of[(enlist `horizons)!enlist hs]}
 
 / one execution of venue a
 .qt.qpipe.transform.fx_markout.characterization.fill:{[tm;sym;side;px;id]
-    ([] source_time:enlist tm; venue:enlist `a; sym:enlist sym; side:enlist side; size:enlist 1e6; price:enlist px; fill_id:enlist id)}
+    ([] source_time:enlist tm; venue:enlist `a; sym:enlist sym; side:enlist side; size:enlist 1e6; price:enlist px; fill_id:enlist id; clock:enlist `venue)}
 
 / one source's book for one pair at one instant: a single level each side
 .qt.qpipe.transform.fx_markout.characterization.bk:{[tm;sym;src;bid;ask]
     ([] source_time:enlist tm; sym:enlist sym; source:enlist src;
         bid_prices:enlist enlist bid; bid_sizes:enlist enlist 1e6;
-        ask_prices:enlist enlist ask; ask_sizes:enlist enlist 1e6)}
+        ask_prices:enlist enlist ask; ask_sizes:enlist enlist 1e6; clock:enlist `venue)}
 
 / equal where both are null, within a tolerance elsewhere
 .qt.qpipe.transform.fx_markout.characterization.near:{[a;b] (all (null a)=null b) and all (null a) or 1e-9>=abs a-b}
@@ -104,7 +111,7 @@
     f:.qt.qpipe.transform.fx_markout.characterization.drive_live[];
     live:.qt.qpipe.transform.fx_markout.characterization.published[`fx_markout_wide];
     twin:.qetl.transform.apply[`hdb_fx_markouts_wide;f];
-    direct:.qpipe.transform.fx_markout_outputs.wide .qpipe.transform.fx_markout.calc[.qpipe.transform.fx_markout_outputs.job_spec;f`executions;f`market_data];
+    direct:delete time from .qpipe.transform.fx_markout_outputs.wide[.qpipe.transform.fx_markout_outputs.job_spec;.qpipe.transform.fx_markout.calc[.qpipe.transform.fx_markout_outputs.job_spec;f`executions;f`market_data]];
     .qunit.assertEquals[count live;8;"one row per (execution, horizon): two executions, four horizons"];
     .qunit.assertEquals[delete time from twin;live;"the bounded twin gives the live rows, bar the time it stamps"];
     .qunit.assertEquals[direct;live;"and the bare calculation under the job spec gives them too"]};
@@ -118,10 +125,10 @@
 
 .qt.qpipe.transform.fx_markout.characterization.test_calc_is_a_pure_function_of_its_inputs:{[tc]
     f:.qpipe.source.hdb_fx_markouts.fixture[];
-    a:.qpipe.transform.fx_markout.calc[.qpipe.transform.fx_markout_outputs.job_spec;f`executions;f`market_data];
-    b:.qpipe.transform.fx_markout.calc[.qpipe.transform.fx_markout_outputs.job_spec;f`executions;f`market_data];
+    a:.qpipe.transform.fx_markout.calc[.qt.qpipe.transform.fx_markout.characterization.job;f`executions;f`market_data];
+    b:.qpipe.transform.fx_markout.calc[.qt.qpipe.transform.fx_markout.characterization.job;f`executions;f`market_data];
     .qunit.assertEquals[a;b;"the same call twice gives the same rows"];
-    .qunit.assertEquals[a;.qpipe.transform.fx_markout.calc[.qpipe.transform.fx_markout_outputs.job_spec;f`executions;reverse f`market_data];
+    .qunit.assertEquals[a;.qpipe.transform.fx_markout.calc[.qt.qpipe.transform.fx_markout.characterization.job;f`executions;reverse f`market_data];
         "and the order the books arrive in does not matter"]};
 
 .qt.qpipe.transform.fx_markout.characterization.test_writing_a_window_twice_under_replace_leaves_one_copy:{[tc]
@@ -206,10 +213,10 @@
 .qt.qpipe.transform.fx_markout.characterization.test_an_empty_window_gives_no_rows:{[tc]
     f:.qpipe.source.hdb_fx_markouts.fixture[];
     none:0#f`executions;
-    .qunit.assertEquals[.qpipe.transform.fx_markout.calc[.qpipe.transform.fx_markout.default_spec;none;f`market_data];0#.qpipe.transform.fx_markout.result;"no executions, books or not: no rows, in the result's shape"];
-    .qunit.assertEquals[.qpipe.transform.fx_markout.calc[.qpipe.transform.fx_markout.default_spec;none;0#f`market_data];0#.qpipe.transform.fx_markout.result;"and without books"];
-    .qunit.assertEquals[.qpipe.transform.fx_markout_outputs.score_with[.qpipe.transform.fx_markout_outputs.job_spec;`long;none;f`market_data];0#.qetl.plant.published `fx_markout;"the long layout is empty in the plant's columns"];
-    .qunit.assertEquals[.qpipe.transform.fx_markout_outputs.score_with[.qpipe.transform.fx_markout_outputs.job_spec;`wide;none;f`market_data];0#.qetl.plant.published `fx_markout_wide;"and so is the wide"];
+    .qunit.assertEquals[.qpipe.transform.fx_markout.calc[.qt.qpipe.transform.fx_markout.characterization.default;none;f`market_data];0#.qpipe.transform.fx_markout.result;"no executions, books or not: no rows, in the result's shape"];
+    .qunit.assertEquals[.qpipe.transform.fx_markout.calc[.qt.qpipe.transform.fx_markout.characterization.default;none;0#f`market_data];0#.qpipe.transform.fx_markout.result;"and without books"];
+    .qunit.assertEquals[.qpipe.transform.fx_markout_outputs.score_with[.qt.qpipe.transform.fx_markout.characterization.job;`long;none;f`market_data];0#.qetl.plant.published `fx_markout;"the long layout is empty in the plant's columns"];
+    .qunit.assertEquals[.qpipe.transform.fx_markout_outputs.score_with[.qt.qpipe.transform.fx_markout.characterization.job;`wide;none;f`market_data];0#.qetl.plant.published `fx_markout_wide;"and so is the wide"];
     .qunit.assertEquals[.qetl.transform.apply[`hdb_fx_markouts_long;`executions`market_data!(none;f`market_data)];0#.qetl.plant.shape `fx_markout;"and the bounded twin's"]};
 
 .qt.qpipe.transform.fx_markout.characterization.test_executions_that_cannot_be_scored_give_no_rows_either:{[tc]
@@ -219,8 +226,8 @@
     bad_price:.qt.qpipe.transform.fx_markout.characterization.fill[.qt.qpipe.transform.fx_markout.characterization.t;`EURUSD;1;0f;`c3];
     no_id:.qt.qpipe.transform.fx_markout.characterization.fill[.qt.qpipe.transform.fx_markout.characterization.t;`EURUSD;1;1.1001;`];
     all_bad:crypto,bad_side,bad_price,no_id;
-    .qunit.assertEquals[.qpipe.transform.fx_markout.calc[.qpipe.transform.fx_markout.default_spec;all_bad;md];0#.qpipe.transform.fx_markout.result;"each is excluded, so nothing is scored"];
-    .qunit.assertEquals[(.qpipe.transform.fx_markout.unscoreable[.qpipe.transform.fx_markout.default_spec;all_bad])`reason;`no_route`bad_side`bad_price`no_identity;"and unscoreable names why, in order"]};
+    .qunit.assertEquals[.qpipe.transform.fx_markout.calc[.qt.qpipe.transform.fx_markout.characterization.default;all_bad;md];0#.qpipe.transform.fx_markout.result;"each is excluded, so nothing is scored"];
+    .qunit.assertEquals[(.qpipe.transform.fx_markout.unscoreable[.qt.qpipe.transform.fx_markout.characterization.default;all_bad])`reason;`no_route`bad_side`bad_price`no_identity;"and unscoreable names why, in order"]};
 
 / ------------------------------------------------------------------ a missing reference
 
@@ -232,7 +239,7 @@
 
 .qt.qpipe.transform.fx_markout.characterization.test_a_horizon_beyond_the_books_age_is_unavailable_and_the_execution_residual_survives:{[tc]
     t:.qt.qpipe.transform.fx_markout.characterization.t;
-    r:.qpipe.transform.fx_markout.calc[.qpipe.transform.fx_markout.default_spec;.qt.qpipe.transform.fx_markout.characterization.fill[t;`USDPLN;-1;3.99;`y1];.qt.qpipe.transform.fx_markout.characterization.cross_books[]];
+    r:.qpipe.transform.fx_markout.calc[.qt.qpipe.transform.fx_markout.characterization.default;.qt.qpipe.transform.fx_markout.characterization.fill[t;`USDPLN;-1;3.99;`y1];.qt.qpipe.transform.fx_markout.characterization.cross_books[]];
     / +1s: the T-1s books are 2s old, within the 5s max_age; nothing moved. +10s: 11s old - no reference.
     one:select from r where horizon=0D00:00:01;
     ten:select from r where horizon=0D00:00:10;
@@ -246,20 +253,20 @@
 .qt.qpipe.transform.fx_markout.characterization.test_a_pair_with_no_book_for_a_leg_is_unavailable_in_every_row:{[tc]
     t:.qt.qpipe.transform.fx_markout.characterization.t;
     md:select from .qt.qpipe.transform.fx_markout.characterization.cross_books[] where sym=`EURUSD;
-    r:.qpipe.transform.fx_markout.calc[.qpipe.transform.fx_markout.default_spec;.qt.qpipe.transform.fx_markout.characterization.fill[t;`USDPLN;-1;3.99;`y1];md];
+    r:.qpipe.transform.fx_markout.calc[.qt.qpipe.transform.fx_markout.characterization.default;.qt.qpipe.transform.fx_markout.characterization.fill[t;`USDPLN;-1;3.99;`y1];md];
     .qunit.assertEquals[count r;10;"the rows are kept so the gap shows: two horizons of five components"];
     .qunit.assertEquals[distinct r`status;enlist `unavailable;"every one unavailable"];
     .qunit.assertTrue[all null r`pips;"with no pips"];
     / ODDITY: the leg that HAS a book is unavailable too, and so is the execution residual - the
     / reference is the whole chain's, so one missing leg takes the execution's own row with it.
     .qunit.assertEquals[(first exec price_t0 from r where kind=`leg, step=1, horizon=0D00:00:01;first exec price_t0 from r where kind=`leg, step=2, horizon=0D00:00:01);1.25 0n;"the leg with a book still shows its mid; the other has none"];
-    w:.qpipe.transform.fx_markout_outputs.wide r;
+    w:.qpipe.transform.fx_markout_outputs.wide[.qt.qpipe.transform.fx_markout.characterization.job;r];
     .qunit.assertEquals[(w`status;w`horizon);(2#`unavailable;0D00:00:01 0D00:00:10);"the wide layout says unavailable"];
     .qunit.assertTrue[all null w`total_pips;"with no markout"]};
 
 .qt.qpipe.transform.fx_markout.characterization.test_no_book_at_all_gives_unavailable_rows_not_an_error:{[tc]
     t:.qt.qpipe.transform.fx_markout.characterization.t;
-    r:.qpipe.transform.fx_markout.calc[.qpipe.transform.fx_markout.default_spec;.qt.qpipe.transform.fx_markout.characterization.fill[t;`EURUSD;1;1.1001;`x1];0#.qpipe.transform.fx_markout.market_data_in];
+    r:.qpipe.transform.fx_markout.calc[.qt.qpipe.transform.fx_markout.characterization.default;.qt.qpipe.transform.fx_markout.characterization.fill[t;`EURUSD;1;1.1001;`x1];0#.qpipe.transform.fx_markout.market_data_in];
     .qunit.assertEquals[(count r;distinct r`status);(8;enlist `unavailable);"two horizons of four components, all unavailable"];
     .qunit.assertTrue[all null r`pips;"no pips anywhere"]};
 
@@ -272,7 +279,7 @@
     .qunit.assertEquals[r`status;`ok`unavailable`unavailable`unavailable;"the markout is priced; the rest, which need the book at the execution, are not"];
     .qunit.assertTrue[.qt.qpipe.transform.fx_markout.characterization.near[r`pips;4 0n 0n 0n];"4 pips: 10000*(1.1005-1.1001)"];
     / ODDITY: the wide layout then says `partial - a markout that is priced but not decomposed.
-    .qunit.assertEquals[(.qpipe.transform.fx_markout_outputs.wide r)`status;enlist `partial;"the wide row is partial"]};
+    .qunit.assertEquals[(.qpipe.transform.fx_markout_outputs.wide[.qt.qpipe.transform.fx_markout.characterization.job;r])`status;enlist `partial;"the wide row is partial"]};
 
 / ------------------------------------------------------------------ an inverted multi-leg route reconciles
 
@@ -311,14 +318,14 @@
     .qunit.assertEquals[r`invert;001000b;"only the first is inverted"];
     .qunit.assertTrue[.qt.qpipe.transform.fx_markout.characterization.near[r`pips;0 2500 -12500 10000 0 0f];"the hand-worked waterfall"];
     .qunit.assertEquals[.qt.qpipe.transform.fx_markout.characterization.reconciles[r];11b;"it reconciles"];
-    w:.qpipe.transform.fx_markout_outputs.wide r;
+    w:.qpipe.transform.fx_markout_outputs.wide[.qt.qpipe.transform.fx_markout.characterization.job;r];
     .qunit.assertEquals[(first w`leg1;first w`leg2;first w`leg3;first w`leg1_invert);(`EURPLN;`EURUSD;`USDMXN;1b);"and fits the wide layout's three leg columns"]};
 
 .qt.qpipe.transform.fx_markout.characterization.test_a_multi_leg_route_reconciles_at_every_horizon_the_jobs_score:{[tc]
     f:.qpipe.source.hdb_fx_markouts.fixture[];
-    r:.qpipe.transform.fx_markout.calc[.qpipe.transform.fx_markout_outputs.job_spec;f`executions;f`market_data];
+    r:.qpipe.transform.fx_markout.calc[.qt.qpipe.transform.fx_markout.characterization.job;f`executions;f`market_data];
     .qunit.assertEquals[.qt.qpipe.transform.fx_markout.characterization.reconciles[r];11b;"the fixture's EURUSD buy and USDPLN sell, at -1s, 0, 1s and 10s"];
-    w:.qpipe.transform.fx_markout_outputs.wide r;
+    w:.qpipe.transform.fx_markout_outputs.wide[.qt.qpipe.transform.fx_markout.characterization.job;r];
     .qunit.assertTrue[all (w`status) in `ok`unavailable`partial;"and the wide status is one of the documented ones"]};
 
 / ------------------------------------------------------------------ signed horizons
@@ -377,11 +384,11 @@
     e:.qt.qpipe.transform.fx_markout.characterization.fill[t;`EURUSD;1;1.1001;`x1];
     md:.qt.qpipe.transform.fx_markout.characterization.signed_books[];
     .qunit.assertThrows[{[e;md] .qpipe.transform.fx_markout.calc[.qt.qpipe.transform.fx_markout.characterization.with_horizons[0D00:00:01 0D00:00:01];e;md]}[e];md;
-        "fx_markout: horizons must be distinct";"a repeated horizon"];
+        "*horizons must be distinct*";"a repeated horizon"];
     .qunit.assertThrows[{[e;md] .qpipe.transform.fx_markout.calc[.qt.qpipe.transform.fx_markout.characterization.with_horizons[0D00:00:01,0Nn];e;md]}[e];md;
-        "fx_markout: horizons must not contain a null timespan";"a null horizon"];
+        "*horizons must not contain a null timespan*";"a null horizon"];
     .qunit.assertThrows[{[e;md] .qpipe.transform.fx_markout.calc[.qt.qpipe.transform.fx_markout.characterization.with_horizons[`timespan$()];e;md]}[e];md;
-        "fx_markout: horizons must be a non-empty list of timespans*";"no horizons"]};
+        "*horizons must be a non-empty list of timespans*";"no horizons"]};
 
 .qt.qpipe.transform.fx_markout.characterization.test_the_wait_and_the_lookback_follow_the_signs_of_the_horizons:{[tc]
     sp:{.qt.qpipe.transform.fx_markout.characterization.with_horizons[x]};
@@ -400,13 +407,13 @@
     .qunit.assertEquals[exec distinct fill_id from r;`y1`x1;"two executions, not three"];
     .qunit.assertEquals[(first exec price_t0 from r where fill_id=`x1, kind=`total;first exec price_t0 from r where fill_id=`y1, kind=`total);1.1003 1.1002;"x1 is scored at its LAST delivery's price"];
     / ODDITY: the result is ordered by where each identity's last delivery arrived, not by the order of first arrival or by time.
-    .qunit.assertEquals[(.qpipe.transform.fx_markout.last_delivery exe)`price;1.1002 1.1003;"y1 (delivered second) before x1 (last delivered third)"]};
+    .qunit.assertEquals[(.qpipe.transform.markout_core.last_delivery exe)`price;1.1002 1.1003;"y1 (delivered second) before x1 (last delivered third)"]};
 
 .qt.qpipe.transform.fx_markout.characterization.test_the_same_fill_id_on_another_venue_is_another_execution:{[tc]
     t:.qt.qpipe.transform.fx_markout.characterization.t;
     f:.qt.qpipe.transform.fx_markout.characterization.fill;
     exe:f[t;`EURUSD;1;1.1001;`x1],update venue:`b from f[t;`EURUSD;1;1.1002;`x1];
-    .qunit.assertEquals[count .qpipe.transform.fx_markout.last_delivery exe;2;"identity is (venue; fill_id)"];
+    .qunit.assertEquals[count .qpipe.transform.markout_core.last_delivery exe;2;"identity is (venue; fill_id)"];
     r:.qpipe.transform.fx_markout.calc[.qt.qpipe.transform.fx_markout.characterization.with_horizons[enlist 0D00:00:00];exe;.qt.qpipe.transform.fx_markout.characterization.signed_books[]];
     .qunit.assertEquals[exec distinct venue from r;`a`b;"both are scored"]};
 
@@ -427,5 +434,5 @@
     one:update venue:`$"a|b" from f[t;`EURUSD;1;1.1001;`c];
     two:update fill_id:`$"b|c" from f[t;`EURUSD;1;1.1002;`ignored];
     exe:one,two;
-    got:.qpipe.transform.fx_markout.last_delivery exe;
+    got:.qpipe.transform.markout_core.last_delivery exe;
     .qunit.assertEquals[(count got;got`price);(2;1.1001 1.1002);"two executions, each its own delivery"]};

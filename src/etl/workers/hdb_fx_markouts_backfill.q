@@ -22,15 +22,18 @@
 \d .
 
 / A markout is missing only where no book covered a leg: kept, as the live job's
-/ expiry would otherwise hide it. Anything infinite is broken, and a residual that does
-/ not reconcile means the allocation and the reference were priced differently.
+/ expiry would otherwise hide it. Anything infinite is broken, and a residual outside the
+/ spec's tolerance means the allocation and the reference were priced differently. The
+/ residual is judged on its pips, not its status: a row with no conversion rate is
+/ no_rate whatever its residual is.
 / @param batch the transformed rows
 / @return no failures, or the offending rows' count by reason
 / @eg count .qpipe.job.hdb_fx_markouts_backfill.quality_check[0#.qetl.plant.shape `fx_markout]  ->  0
 .qpipe.job.hdb_fx_markouts_backfill.quality_check:{[batch]
     if[0=count batch; :.qetl.job.bounded.no_failures[]];
     inf:sum batch[`pips] in -0w 0w;
-    unrec:sum batch[`status]=`unreconciled;
+    res:select pips from batch where kind=`residual, not null pips;
+    unrec:sum (.qpipe.transform.fx_markout_outputs.job_spec`tolerance)<abs res`pips;
     bad:`infinite_pips`unreconciled_residual!(inf;unrec);
     names:where 0<bad;
     $[0=count names;
@@ -55,16 +58,15 @@
 .qetl.transform.define[`hdb_fx_markouts_long;`inputs`output`fn`examples!(
     `executions`market_data!(.qpipe.transform.fx_markout.executions_in;.qpipe.transform.fx_markout.market_data_in);
     .qetl.plant.shape `fx_markout;
-    {[exe;md] .qpipe.transform.fx_markout_outputs.stamped[.qpipe.transform.fx_markout_outputs.job_spec;
-        .qpipe.transform.fx_markout_outputs.score_with[.qpipe.transform.fx_markout_outputs.job_spec;`long;exe;md]]};
+    .qpipe.transform.fx_markout_outputs.stamped_with[.qpipe.transform.fx_markout_outputs.job_spec;`long;;];
     enlist `inputs`expected!(
         `executions`market_data!(.qpipe.transform.fx_markout_outputs.sample_executions[];.qpipe.transform.fx_markout_outputs.sample_books[]);
-        (([] time:16#2026.09.17D10:00:10),'.qpipe.transform.fx_markout_outputs.sample_long[])))];
+        (cols .qetl.plant.shape `fx_markout)#(([] time:16#2026.09.17D10:00:10),'.qpipe.transform.fx_markout_outputs.sample_long[])))];
 
 .qetl.job.bounded.define[`hdb_fx_markouts_backfill;
-    `source`dataset`width`transform`check`facts`procname`note`target_key`window_column`on_conflict!
+    `source`dataset`width`transform`check`facts`procname`note`target_key`window_column`on_conflict`revision!
     (`hdb_fx_markouts;`fx_markout;0D01;`hdb_fx_markouts_long;
      .qpipe.job.hdb_fx_markouts_backfill.quality_check;.qpipe.job.hdb_fx_markouts_backfill.facts;
      `hdb_fx_markouts_backfill1;
      "bounded: marks out the HDB's executions against its market_data, into fx_markout, with the calculation fx_markout1 applies live";
-     `venue`fill_id`horizon`kind`step;`source_time;`replace)];
+     `venue`fill_id`horizon`kind`step;`source_time;`replace;1)];

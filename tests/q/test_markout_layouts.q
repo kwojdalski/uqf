@@ -5,32 +5,17 @@
 / derivation has to reproduce.
 
 / The FX layout spec: a domain hands this over, the layouts never assume it.
-.qt.qpipe.transform.markout_layouts.fx_spec:{[]
-    `columns`execution`horizon`shared`own`base`components`present`per_execution!(
-        cols .qpipe.transform.fx_markout.result;`venue`fill_id;`horizon;
-        `source_time`sym`side`size`pip_factor`version;`leg`invert`price_t0`price_t1`pips`status;`total;
-        ([] kind:`execution`leg`leg`leg`residual; step:0 1 2 3 0);`status;
-        `source_time`sym`side`size`pip_factor`version)}
+.qt.qpipe.transform.markout_layouts.fx_spec:{[] .qpipe.transform.fx_markout_outputs.layout_spec[]}
 
-/ Today's wide status: what fx_markout_outputs.wide says of the components.
-.qt.qpipe.transform.markout_layouts.fx_status:{[w]
-    missing:((not null w`leg1_leg)&null w`leg1_pips)|((not null w`leg2_leg)&null w`leg2_pips)|(not null w`leg3_leg)&null w`leg3_pips;
-    ?[null w`pips;`unavailable;?[missing|null w`execution_pips;`partial;?[(w`residual_status)=`reconciled;`ok;`unreconciled]]]}
-
-/ Today's wide table, read from the derived wide one: rename, roll the status up, project.
-.qt.qpipe.transform.markout_layouts.as_fx_wide:{[w]
-    st:.qt.qpipe.transform.markout_layouts.fx_status[w];
-    r:update status:st from w;
-    r:(`price_t0`price_t1`pips`execution_price_t1`leg1_leg`leg2_leg`leg3_leg!`price`ref_t1`total_pips`ref_t0`leg1`leg2`leg3) xcol r;
-    (cols .qpipe.transform.fx_markout_outputs.wide_out)#r}
+/ The hand-worked EURUSD rows, as stored: with the time the core stamps.
+.qt.qpipe.transform.markout_layouts.sixteen:{[] ([] time:16#2026.09.17D10:00:10),'.qpipe.transform.fx_markout_outputs.sample_long[]}
 
 / Two executions, three horizons, one with a missing leg and one unpriced horizon.
 .qt.qpipe.transform.markout_layouts.fx_two:{[]
-    a:.qpipe.transform.fx_markout_outputs.sample_long[];
+    a:.qt.qpipe.transform.markout_layouts.sixteen[];
     b:.qpipe.transform.fx_markout_outputs.sample_result[];
-    / a second horizon for the USDPLN sell, unpriced: no markout, no references
-    b2:update horizon:0D00:00:10, pips:0n, price_t0:0n, price_t1:0n, status:`unavailable from b;
-    b2:update status:`unavailable from b2 where kind=`residual;
+    / a second horizon for the USDPLN sell, unpriced: no markout, no references, no money
+    b2:update horizon:0D00:00:10, pips:0n, move:0n, quote_amount:0n, price_t0:0n, price_t1:0n, ref_t0:0n, ref_t1:0n, status:`unavailable from b;
     a,b,b2}
 
 .qt.qpipe.transform.markout_layouts.test_long_to_wide_to_long_gives_the_identical_long_rows:{[tc]
@@ -43,7 +28,7 @@
 
 .qt.qpipe.transform.markout_layouts.test_a_long_in_canonical_order_comes_back_in_order:{[tc]
     sp:.qt.qpipe.transform.markout_layouts.fx_spec[];
-    lg:.qpipe.transform.fx_markout_outputs.sample_long[];
+    lg:.qt.qpipe.transform.markout_layouts.sixteen[];
     .qunit.assertTrue[lg~.qpipe.transform.markout_layouts.long[sp;.qpipe.transform.markout_layouts.wide[sp;lg]];"row for row, the same order"];
     r:.qpipe.transform.markout_layouts.canonical[sp;reverse lg];
     .qunit.assertTrue[(`venue`fill_id`horizon`kind`step xasc r)~`venue`fill_id`horizon`kind`step xasc lg;"a reshuffled long holds the same rows"];
@@ -72,15 +57,12 @@
     .qunit.assertEquals[x1`status;4#`ok;"statuses, aligned to it"];
     .qunit.assertEquals[(x1`sym;x1`size);(`EURUSD;1e6);"per-execution columns stay atoms"]};
 
-.qt.qpipe.transform.markout_layouts.test_todays_fx_wide_output_is_reproduced:{[tc]
-    sp:.qt.qpipe.transform.markout_layouts.fx_spec[];
-    f:{[sp;lg] .qt.qpipe.transform.markout_layouts.as_fx_wide .qpipe.transform.markout_layouts.wide[sp;lg]};
-    one:.qpipe.transform.fx_markout_outputs.sample_result[];
-    sixteen:.qpipe.transform.fx_markout_outputs.sample_long[];
-    two:.qt.qpipe.transform.markout_layouts.fx_two[];
-    .qunit.assertEquals[f[sp;one];.qpipe.transform.fx_markout_outputs.wide one;"the USDPLN three-leg route, two legs used"];
-    .qunit.assertEquals[f[sp;sixteen];.qpipe.transform.fx_markout_outputs.sample_wide[];"the hand-worked EURUSD wide rows"];
-    .qunit.assertEquals[f[sp;two];.qpipe.transform.fx_markout_outputs.wide two;"two executions, an unpriced horizon: partial and unavailable"]};
+.qt.qpipe.transform.markout_layouts.test_fx_wide_is_the_layout_the_desks_read:{[tc]
+    sp:.qpipe.transform.fx_markout_outputs.job_spec;
+    f:.qpipe.transform.fx_markout_outputs.wide;
+    .qunit.assertEquals[(cols .qetl.plant.published `fx_markout_wide)#f[sp;.qt.qpipe.transform.markout_layouts.sixteen[]];.qpipe.transform.fx_markout_outputs.sample_wide[];"the hand-worked EURUSD wide rows"];
+    two:f[sp;.qt.qpipe.transform.markout_layouts.fx_two[]];
+    .qunit.assertEquals[two`status;(4#`ok),`no_rate`unavailable;"two executions, an unpriced horizon: converted, not converted, and not priced"]};
 
 .qt.qpipe.transform.markout_layouts.test_wide_rows_carry_the_total_as_core_and_other_components_prefixed:{[tc]
     sp:.qt.qpipe.transform.markout_layouts.fx_spec[];
@@ -118,7 +100,7 @@
 
 .qt.qpipe.transform.markout_layouts.test_a_per_execution_column_that_varies_is_refused:{[tc]
     sp:.qt.qpipe.transform.markout_layouts.fx_spec[];
-    lg:.qpipe.transform.fx_markout_outputs.sample_long[];
+    lg:.qt.qpipe.transform.markout_layouts.sixteen[];
     bad:update size:2e6 from lg where horizon=0D00:00:10;
     .qunit.assertThrows[.qpipe.transform.markout_layouts.nested[sp;];bad;"*per-execution*";"nesting would otherwise keep one of two values"]};
 
