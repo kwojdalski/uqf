@@ -159,9 +159,10 @@ def write_process_csv(paths: UqsPaths, rows: list[dict[str, str]]) -> None:
 
 
 def write_setenv(
-    paths: UqsPaths, base_port: int | None, extra: dict[str, str] | None = None
+    paths: UqsPaths, base_port: int | None, extra: dict[str, str] | None = None, target=None
 ) -> dict[str, str]:
-    """The env torq.sh runs under, plus `extra`, written as setenv.sh."""
+    """The env torq.sh runs under, plus `extra`, written as setenv.sh (or `target`)."""
+    target = target or paths.generated_setenv
     env = build_env(paths, base_port=base_port)
     # A runtime on PeachQ starts its processes, and only its own, on PeachQ.
     env.update(interpreter_env(paths))
@@ -171,9 +172,8 @@ def write_setenv(
     # which would overwrite TORQAPPHOME/TORQPROCESSES/etc back to lib/torq's
     # own defaults) - generate our own and point SETENV at it instead.
     setenv_lines = [f'export {k}="{v}"' for k, v in env.items()]
-    paths.generated_setenv.write_text("\n".join(setenv_lines) + "\n")
-    env["SETENV"] = str(paths.generated_setenv)
-
+    target.write_text("\n".join(setenv_lines) + "\n")
+    env["SETENV"] = str(target)
     return env
 
 

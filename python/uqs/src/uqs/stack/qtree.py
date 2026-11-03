@@ -276,6 +276,13 @@ def _published(paths: UqsPaths, fp: str) -> bool:
         return False
 
 
+def is_current(paths: UqsPaths) -> bool:
+    """Whether the published tree is the one `prepare` would publish now: a
+    start that would write nothing to it (a rehearsal's check, #1902)."""
+    root = paths.repo_root
+    return _published(paths, fingerprint(root, sources(root)))
+
+
 def prepare(paths: UqsPaths, qcmd: str, env: Mapping[str, str]) -> Path:
     """The runtime's tree, converted, proven on `qcmd` and published - or the
     published one, when nothing it is built from has changed."""

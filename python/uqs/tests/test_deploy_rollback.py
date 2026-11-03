@@ -196,6 +196,36 @@ def test_a_dry_run_stops_and_starts_nothing():
     assert not remote.ran(".current.new")
 
 
+def test_a_dry_run_reads_the_lock_and_takes_nothing():
+    """#1902: taking the lock writes on the server, and a dry run promises not to."""
+    remote = _server()
+    _roll(remote, dry_run=True)
+    assert [stage for stage, _ in remote.scripts].count("lock") == 1
+    assert not remote.ran("mkdir") and not remote.ran("rm -rf")
+
+
+def test_a_dry_run_under_a_held_lock_plans_and_warns(log_text):
+    remote = _server()
+    remote.rules["deploy.lock/owner"] = _done("command=push\nuser=ops\nhost=h\npid=1\nage=5\n")
+    code, result = _roll(remote, dry_run=True)
+    assert code == 0 and result["rollback"] == "planned"
+    assert "another deployment holds" in log_text() and "push" in log_text()
+
+
+def test_the_command_ends_a_dry_run_with_the_note_on_stderr_after_the_json(monkeypatch):
+    from rich.text import Text
+
+    from uqs.cli import deploy_server
+    from uqs.cli.safety import dry_run_note
+
+    monkeypatch.setattr(deploy_server, "Remote", lambda *a, **k: _server())
+    r = CliRunner().invoke(
+        cli.app, ["deploy", "rollback", "--ssh", "h", "--dest", "/opt/uqf", "--dry-run"]
+    )
+    assert r.exit_code == 0, r.output
+    assert r.stderr.strip().splitlines()[-1] == Text.from_markup(dry_run_note()).plain
+
+
 def test_without_a_recorded_predecessor_it_asks_for_to():
     remote = _server(previous=None)
     with pytest.raises(DeployError, match="pass --release RELEASE"):

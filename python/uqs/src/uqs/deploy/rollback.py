@@ -91,6 +91,31 @@ def _start_and_verify(dep: Deployment, release: str, report: dict, what: str) ->
         return {"passed": False, "reason": str(exc)}
 
 
+def _plan(dep: Deployment, cfg: Config, to: str | None) -> tuple[dict, dict, dict]:
+    """(what a rollback would stop and start, current's report, the target's):
+    read from the server, changing nothing."""
+    current = _current(dep)
+    if not current:
+        raise DeployError("rollback", f"{cfg.dest} has no current release to roll back from")
+    now = _report(dep, current)
+    target = to or now.get("previous_release")
+    if not target:
+        raise DeployError(
+            "rollback",
+            f"release {current}'s report names no release it replaced - pass --release RELEASE",
+        )
+    if target == current:
+        raise DeployError("rollback", f"{target} is already current")
+    then = _report(dep, target)
+    plan = {
+        "from": current,
+        "to": target,
+        "stop": _started(now),
+        "start": {"profile": then["profile"], "extra_processes": then["extra_processes"]},
+    }
+    return plan, now, then
+
+
 def rollback(
     cfg: Config, remote: Transport, *, to: str | None = None, dry_run: bool = False, out=sys.stdout
 ) -> int:
@@ -98,30 +123,14 @@ def rollback(
     Returns 0 when the target is running, verified and `current`."""
     dep = Deployment(cfg, remote)
     dep.check_sudo()
+    if dry_run:  # reads the lock, takes nothing: Deployment.read_lock says why
+        dep.read_lock("rollback")
+        print(json.dumps({"rollback": "planned", **_plan(dep, cfg, to)[0]}, indent=2), file=out)
+        return 0
     dep.take_lock("rollback")
     try:
-        current = _current(dep)
-        if not current:
-            raise DeployError("rollback", f"{cfg.dest} has no current release to roll back from")
-        now = _report(dep, current)
-        target = to or now.get("previous_release")
-        if not target:
-            raise DeployError(
-                "rollback",
-                f"release {current}'s report names no release it replaced - pass --release RELEASE",
-            )
-        if target == current:
-            raise DeployError("rollback", f"{target} is already current")
-        then = _report(dep, target)
-        plan = {
-            "from": current,
-            "to": target,
-            "stop": _started(now),
-            "start": {"profile": then["profile"], "extra_processes": then["extra_processes"]},
-        }
-        if dry_run:
-            print(json.dumps({"rollback": "planned", **plan}, indent=2), file=out)
-            return 0
+        plan, now, then = _plan(dep, cfg, to)
+        current, target = plan["from"], plan["to"]
         log.info("stopping release {}'s processes", current)
         try:
             dep.uqs(f"{dep.releases}/{current}", "rollback", "stopping the current processes",
