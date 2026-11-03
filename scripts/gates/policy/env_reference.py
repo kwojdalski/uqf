@@ -322,6 +322,20 @@ def env_example_keys(root: Path) -> set[str]:
     return keys
 
 
+#: Where a UQS_ variable may be read: the uqs Python package, which names it.
+UQS_READERS = ("python/uqs/",)
+
+
+def prefix_problems(reads: dict[str, list[str]]) -> dict[str, list[str]]:
+    """UQS_ variable -> the files outside the uqs package that read it (#1890):
+    `UQS_` is the uqs Python's own prefix, `UQF_` everything else's."""
+    return {
+        name: sorted(f for f in set(files) if not f.startswith(UQS_READERS))
+        for name, files in sorted(reads.items())
+        if name.startswith("UQS_") and any(not f.startswith(UQS_READERS) for f in files)
+    }
+
+
 def run(root: Path) -> int:
     """Report every disagreement between the page and the code under `root`;
     the exit status. The findings are grouped by direction, each group with
@@ -352,6 +366,17 @@ def run(root: Path) -> int:
     )
 
     problems = 0
+    misprefixed = prefix_problems(reads)
+    if misprefixed:
+        problems += len(misprefixed)
+        print("A UQS_ variable read outside the uqs Python package:", file=sys.stderr)
+        for name, files in misprefixed.items():
+            print(f"  {name}  ({', '.join(files[:3])})", file=sys.stderr)
+        print(
+            "\nUQS_ is the uqs Python's own; a variable q or another package reads is "
+            "UQF_ (#1890).\nRename it, refusing the old name in uqs.interpreter.REMOVED_ENV.",
+            file=sys.stderr,
+        )
     if undocumented:
         problems += len(undocumented)
         print("Read by the code, absent from docs/reference/environment.md:", file=sys.stderr)

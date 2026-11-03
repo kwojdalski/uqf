@@ -135,6 +135,33 @@ case-sensitively against the names the process reported. An exact name is just a
 pattern that matches itself, so there is one behaviour rather than two - quote
 the pattern, or the shell will try to expand it against your filenames first.
 
+### The `clock` column on `executions` and `market_data` (#1925)
+
+Every row of `executions` and `market_data` says whose clock its `source_time`
+is: `venue` (the venue stamped it) or `receipt` (this stack stamped it on
+arrival). A partition written before the column existed gets it from
+`uqs data check --apply`, which for this one column **attributes** instead of
+writing null, from the rows' own columns and the rules in
+`scripts/gates/hdb_clock_rules.csv`:
+
+  | Table         | Looked up by       | Rule shipped                                                                               |
+  | ---           | ---                | ---                                                                                        |
+  | `market_data` | `(market, source)` | `fx` + `UQFFX` or `UQFDEPTH`: `receipt`; any `crypto` source: `venue`                      |
+  | `executions`  | `venue`            | `fx`, `binance_spot`, `bybit_spot`: `receipt` (the FX feeds and the polled crypto fills)   |
+  | either        | no rule matches    | `unknown`                                                                                  |
+
+A row the rules do not name is `unknown`, never null and never a guess: a source
+name such as an FX liquidity provider can have come from the quote feed
+(`receipt`) or from a vendor book (`venue`), and only the site knows which.
+`unknown` is refused by the normalizers' checks and by the markout contract
+(#1923), so history that matters needs a rule row (`table,market,name,clock`;
+`*` as the name matches any source of that market) BEFORE the first `--apply`:
+the fill is additive and writes the column once, so a partition already filled
+`unknown` is not revisited by a later run. Correcting it is a decision for a
+person (a column rewrite, as for any stored value). A partition with no
+`market`/`source` (or `venue`) column to read is `unknown` throughout. The run
+prints how many rows of each partition got each clock.
+
 ### Renamed or retyped HDB columns
 
 `data check --apply` does not rewrite existing columns. When a release renames
@@ -365,7 +392,7 @@ rather than configured. `--base-port` defaults to the runtime's own, as on every
 command, and the plant's `-stackid` must agree with it: a plant running under
 another base port is refused, naming the `--base-port` that replays it.
 
-Every row in that table is an option (`--dir`, `--schema-file`, `--hdb`,
+Every row in that table is an option (`--tplogdir`, `--schema-file`, `--hdb`,
 `--base-port`), and an option that is given wins - supply the first three and
 nothing is asked of the machine at all, which is how to replay a log after the
 stack it came from has been stopped. `uqs data replay PROC` picks between plants
@@ -1943,6 +1970,27 @@ One vocabulary for job kinds (#1889): `job list --json`'s `kind` was `etl` or
 `normalizer`, `horizon`, `backfill`, `reaction` - and a new `subscribes`
 (`yes`/`no`) says whether a streaming job reads anything, which is what etl/feed
 meant. A script filtering on the old values needs the new ones.
+
+One name per thing across surfaces (#1890):
+
+  | old                                          | new                                              |
+  | ---                                          | ---                                              |
+  | `data replay --dir DIR`                      | `--tplogdir DIR`, as `job attachment add` has it |
+  | `logs --attachment NAME --run STAMP`         | `--stamp STAMP` - a log's stamp, not a run_id    |
+  | `deploy build --kafka-home DIR`              | `--kfk-home DIR` (KX's kfk, `UQF_KFK_HOME`)      |
+  | `deploy build --with-kafka-connector`        | `--kafka-connector/--no-kafka-connector`         |
+  | `connector start/restart kafka --topic T,U`  | `--topics T,U`, plural as every list is          |
+  | `job new --kind external`                    | `--kind connector`                               |
+  | `job new --start-with-all` (a lone flag)     | `--start-with-all/--no-start-with-all`           |
+  | `UQS_REQUIRE_LIVE_SOURCES=1`                 | `UQF_LIVE_SOURCES_REQUIRED=1` (refused)          |
+  | `UQF_FRONTEND_{GATEWAY,DATA}_PASSWD`         | `..._PASSWORD` (refused)                         |
+  | `UQS_DEPLOYMENT_FILE` (set by uqs itself)    | `UQF_DEPLOYMENT_FILE`                            |
+
+A connector is the Python process outside the stack that `uqs connector` runs; a
+feed is a q streaming job that only publishes, and the connector commands' help
+no longer calls one the other. A renamed variable is refused, naming the new
+one, as a removed one is. `UQS_` is the uqs Python package's own prefix;
+whatever q or another package reads is `UQF_`.
 
 `--port` is now only ever one process's port (`query`, `schema`);
 `query --tunnel` keeps querying a target through an ssh tunnel from here, so

@@ -10,7 +10,7 @@ in a short-lived q of its own:
   - under ONE overall budget: each source gets what is left of it, one that
     overruns is a `timeout` failure, and any not reached are reported as not
     checked rather than silently skipped;
-  - with UQS_REQUIRE_LIVE_SOURCES=1, and the stack's own sources.csv loaded
+  - with UQF_LIVE_SOURCES_REQUIRED=1, and the stack's own sources.csv loaded
     by the same rule TorQ uses (uqs.stack.source_settings.selected), so the
     credential checked is the one a worker would use;
   - with a private ODBC setup's variables when one is given
@@ -107,7 +107,7 @@ def check(
         **os.environ,
         **build_env(paths),
         **(odbc_env or {}),
-        "UQS_REQUIRE_LIVE_SOURCES": "1",
+        "UQF_LIVE_SOURCES_REQUIRED": "1",
     }
     deadline = clock() + timeout
     results = []

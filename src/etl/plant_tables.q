@@ -94,6 +94,36 @@
             $[t in .qetl.plant.vendored; .qetl.plant.vendored_path; "src/etl/plant_tables.q"]];
     cs#s}
 
+/ ------------------------------------------------- WHOSE CLOCK source_time IS
+
+/ The clocks a row's source_time can be on (#1925), declared once: `venue, the
+/ venue's own stamp of the event, and `receipt, the time this stack (or the
+/ feed handler that fed it) received the event. Both canonical tables,
+/ `executions` and `market_data`, carry one per row in `clock`. `unknown is
+/ NOT in this list: it is what the history fill writes for a stored row it
+/ cannot attribute (scripts/gates/hdb_clock_rules.csv), and a measure that
+/ compares two clocks must refuse it, not pick one.
+/ @eg .qetl.plant.clocks  ->  `venue`receipt
+.qetl.plant.clocks:`venue`receipt
+
+/ Refuse rows whose clock is not one of .qetl.plant.clocks: a mapping that did
+/ not stamp it (null), or stamped something else (`unknown included). The
+/ normalizers' checks call this first, so a row whose clock nobody vouches for
+/ is withheld with the batch and logged, never published.
+/ @param table_name the table the rows are bound for, for the message
+/ @param rows a table with a clock column
+/ @return rows, unchanged, when every clock is valid
+/ @throws error naming the table, how many rows and the first offending clock
+/ @eg .qetl.plant.require_clock[`executions;([] clock:`venue`receipt)]  ->  ([] clock:`venue`receipt)
+.qetl.plant.require_clock:{[table_name;rows]
+    if[not `clock in cols rows; '"clock: ",string[table_name]," rows carry no clock column - every mapping must stamp whose clock source_time is"];
+    bad:not rows[`clock] in .qetl.plant.clocks;
+    if[any bad;
+        '"clock: ",string[table_name]," has ",string[sum bad]," row(s) whose clock is not `venue or `receipt (null, or `unknown) - first: ",
+            $[null first rows[`clock] where bad; "null"; string first rows[`clock] where bad],
+            "; a mapping must stamp whose clock source_time is"];
+    rows}
+
 / ------------------------------------------------- HOW A TABLE IS READ
 / .
 / The columns a table is read by, declared once (#1869): the primary time
@@ -384,7 +414,18 @@
 / Every venue's book, FX and crypto, with its source and original timestamp
 / kept across normalization. posbook1 marks to its level-0 mids; superbook1
 / merges the FX ones.
-.qetl.plant.market_data:([]time:`timestamp$(); sym:`g#`symbol$(); source:`symbol$(); market:`symbol$(); source_time:`timestamp$(); bid_prices:(); bid_sizes:(); ask_prices:(); ask_sizes:())
+/ .
+/ clock (#1925) says WHOSE clock source_time is: `venue, the venue's own stamp
+/ of the book, or `receipt, this stack's (or the feed handler's) receipt time,
+/ which is all a feed with no exchange timestamp has. Every mapping stamps it,
+/ because the mapping is the only place that knows; the normalizer's check
+/ refuses anything else, null and `unknown included. `unknown is what the
+/ history fill (scripts/gates/hdb_clock_rules.csv) writes for a stored row it
+/ cannot attribute, so a measure that needs a clock refuses it rather than
+/ guess. The column is LAST, so a partition filled afterwards has the same
+/ column order as one written from this declaration, and a positional reader
+/ of the older columns does not move.
+.qetl.plant.market_data:([]time:`timestamp$(); sym:`g#`symbol$(); source:`symbol$(); market:`symbol$(); source_time:`timestamp$(); bid_prices:(); bid_sizes:(); ask_prices:(); ask_sizes:(); clock:`symbol$())
 .qetl.plant.nested[`market_data;`bid_prices`bid_sizes`ask_prices`ask_sizes!"FFFF"];
 
 / Complete per-pair snapshots; level provenance stays aligned with prices and sizes.
@@ -534,7 +575,12 @@
 / null for a fill that carries none. source_time is the source's own stamp,
 / `time` the plant's on the normalized row. Named `executions` because
 / `fills` is a q builtin.
-.qetl.plant.executions:([]time:`timestamp$(); source_time:`timestamp$(); sym:`g#`symbol$(); venue:`symbol$(); side:`long$(); size:`float$(); price:`float$(); fee:`float$(); fee_ccy:`symbol$(); fill_id:`symbol$(); book:`symbol$(); product:`symbol$())
+/ .
+/ clock (#1925) says whose clock source_time is - `venue (the venue stamped the
+/ fill) or `receipt (this stack stamped it on arrival; a polled feed has no
+/ venue stamp) - and every mapping sets it; see market_data above for why, for
+/ `unknown, and for the column being last.
+.qetl.plant.executions:([]time:`timestamp$(); source_time:`timestamp$(); sym:`g#`symbol$(); venue:`symbol$(); side:`long$(); size:`float$(); price:`float$(); fee:`float$(); fee_ccy:`symbol$(); fill_id:`symbol$(); book:`symbol$(); product:`symbol$(); clock:`symbol$())
 
 / exec_bars1's output: time bars of `executions` (#946), one row per sym per
 / window [bar_start, bar_start+width), on the fill's source_time. open and close

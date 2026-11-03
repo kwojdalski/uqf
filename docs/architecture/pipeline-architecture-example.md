@@ -65,8 +65,8 @@ per source --- refused at load if its output drifts from the canonical schema.
 
   | Normalizer                                             | Sources                                | Output                                                                                      |
   | ---                                                    | ---                                    | ---                                                                                         |
-  | [`executions`](../../src/etl/streaming/executions.q)   | `trades`, `crypto_trades`              | one fill table: source_time, sym, venue, side, size, price, fee, fee_ccy, fill_id           |
-  | [`market_data`](../../src/etl/streaming/market_data.q) | `quote`, `fx_orderbook`, `crypto_book` | one book shape: source and source_time preserved, so a merge can tell whose liquidity it is |
+  | [`executions`](../../src/etl/streaming/executions.q)   | `trades`, `crypto_trades`              | one fill table: source_time, sym, venue, side, size, price, fee, fee_ccy, fill_id, clock    |
+  | [`market_data`](../../src/etl/streaming/market_data.q) | `quote`, `fx_orderbook`, `crypto_book` | one book shape: source and source_time preserved, and clock says whose time that is         |
 
 A third market --- a new venue, a futures feed --- is a mapping in one of these,
 not a change to anything downstream.

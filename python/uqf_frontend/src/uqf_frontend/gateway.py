@@ -175,7 +175,7 @@ class KolaGateway:
         if not s.data_user:
             raise GatewayUnavailable(
                 "table reads go through the gateway's query policy as their own login (#889) - "
-                "set UQF_FRONTEND_DATA_USER / _PASSWD (browser/browser on the demo stack)"
+                "set UQF_FRONTEND_DATA_USER / _PASSWORD (browser/browser on the demo stack)"
             )
         with self._lock:
             if self._data is None:
@@ -245,7 +245,7 @@ class KolaGateway:
             # guessing at a package they did not write.
             raise GatewayUnavailable(
                 f"gateway at {s.host}:{s.port} is not reachable: {exc} "
-                f"(set UQF_FRONTEND_STACK_ROOT and UQF_FRONTEND_GATEWAY_USER / _PASSWD; "
+                f"(set UQF_FRONTEND_STACK_ROOT and UQF_FRONTEND_GATEWAY_USER / _PASSWORD; "
                 f"against the local demo stack that is the checkout and admin/admin)"
             ) from exc
         return q

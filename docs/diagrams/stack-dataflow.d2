@@ -102,7 +102,7 @@ trade: "trade\nvendored schema" { class: table }
 fx_orderbook: "fx_orderbook\ntime · sym · bid/ask_prices · bid/ask_sizes" { class: table }
 wide_orderbook: "wide_orderbook\ntime · sym · bids0..10 · asks0..10" { class: table }
 trades: "trades\ntime · sym · side · trade_price\nsize · pip_factor · fill_id" { class: table }
-executions: "executions\nsource_time · sym · venue · side · size · price\nfee · fee_ccy · fill_id · book · product" { class: table }
+executions: "executions\nsource_time · sym · venue · side · size · price\nfee · fee_ccy · fill_id · book · product · clock" { class: table }
 crypto_book: "crypto_book\ntime · source_time · venue · sym · bid/ask_prices · bid/ask_sizes" { class: table }
 crypto_trades: "crypto_trades\ntime · sym · venue · side · trade_price · size\nfee · fee_currency · exchange_fill_id" { class: table }
 

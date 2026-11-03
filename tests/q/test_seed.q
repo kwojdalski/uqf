@@ -55,7 +55,7 @@
 / A test that leaks: it sets a variable the tree reads and starts a timer, and
 / cleans up neither. Not named test*, so the runner never runs it on its own.
 .qt.harness.seed.leaky:{[t]
-    setenv[`UQS_REQUIRE_LIVE_SOURCES;enlist "1"];
+    setenv[`UQF_LIVE_SOURCES_REQUIRED;enlist "1"];
     system"t 3600000";
     `seedtest_leaked set ([] a:1 2);
     .qunit.assertTrue[1b;"ran"]}
@@ -63,9 +63,9 @@
 .qt.harness.seed.test_what_a_test_changes_does_not_outlive_it:{[t]
     / First: the nested run resets the runner's assertion state, so nothing
     / of this test's may be recorded before it.
-    before:(getenv `UQS_REQUIRE_LIVE_SOURCES;system"t");
+    before:(getenv `UQF_LIVE_SOURCES_REQUIRED;system"t");
     r:.qunit.runTest `.qt.harness.seed.leaky;
-    .qunit.assertEquals[(r`status;getenv `UQS_REQUIRE_LIVE_SOURCES;system"t";`seedtest_leaked in tables `.);
+    .qunit.assertEquals[(r`status;getenv `UQF_LIVE_SOURCES_REQUIRED;system"t";`seedtest_leaked in tables `.);
         (`pass),before,0b;
         "the leaky test passed, and its variable, timer and root table were put back"]};
 
@@ -74,7 +74,7 @@
         "the runner's per-test entry point is the isolating one"]};
 
 .qt.harness.seed.test_the_isolated_variables_include_those_read_and_those_set:{[t]
-    .qunit.assertTrue[all `UQS_REQUIRE_LIVE_SOURCES`UQF_STATUS_DIR in .qt.support.env_names;
+    .qunit.assertTrue[all `UQF_LIVE_SOURCES_REQUIRED`UQF_STATUS_DIR in .qt.support.env_names;
         "one the tree reads (the contract surface) and one only tests set"]};
 
 / --- suite isolation (#1818) -------------------------------------------------

@@ -224,7 +224,7 @@ def test_live_requires_live_sources_on_the_server_and_in_verification(tmp_path):
     code, remote, _ = _deploy(tmp_path, "--live")
     assert code == 0
     (prepare,) = remote.stage("prepare")
-    assert "export UQS_REQUIRE_LIVE_SOURCES=1" in prepare
+    assert "export UQF_LIVE_SOURCES_REQUIRED=1" in prepare
     (check,) = remote.stage("verify")
     assert check.rstrip().endswith(" --live; fi")
 
@@ -232,7 +232,7 @@ def test_live_requires_live_sources_on_the_server_and_in_verification(tmp_path):
 def test_without_live_nothing_is_required(tmp_path):
     _, remote, _ = _deploy(tmp_path)
     (prepare,) = remote.stage("prepare")
-    assert "UQS_REQUIRE_LIVE_SOURCES" not in prepare
+    assert "UQF_LIVE_SOURCES_REQUIRED" not in prepare
 
 
 # -------------------------------------------------------------- rollback

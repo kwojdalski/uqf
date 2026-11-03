@@ -5,7 +5,7 @@ the crypto example's tooling (`python -m uqs.external.kafka_example`) import
 confluent-kafka; nothing else in uqs does, so it is an optional extra rather
 than a dependency. Every entry point checks for it here, before it starts
 anything, and names the way to get it: `uv sync --extra kafka` in a checkout,
-`uqs deploy build --with-kafka-connector` for a release, whose server installs
+`uqs deploy build --kafka-connector` for a release, whose server installs
 it offline from the release's own wheels.
 
 The native q feed (kafka_feed1) and the decoders need none of this.
@@ -25,7 +25,7 @@ def missing(what: str) -> str:
     return (
         f"{what} needs confluent-kafka, the uqs `{EXTRA}` extra, and this environment lacks "
         f"it: run `uv sync --extra {EXTRA}` in a checkout, or build the release with "
-        "`uqs deploy build --with-kafka-connector`. The native q feed (kafka_feed1) "
+        "`uqs deploy build --kafka-connector`. The native q feed (kafka_feed1) "
         "needs neither"
     )
 
