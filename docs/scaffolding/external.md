@@ -12,7 +12,7 @@ Kafka](../services/README.md#external-sources) are:
 ## Command
 
 ```bash
-uqs job new ws_quotes --kind external --raw-table ws_quotes_raw \
+uqs job new ws_quotes --kind connector --raw-table ws_quotes_raw \
     --publishes ws_quotes_book --schema "sym:symbol, bid:float, ask:float"
 ```
 

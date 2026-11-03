@@ -78,7 +78,7 @@ def test_each_source_runs_in_its_own_q_with_live_sources_required(monkeypatch):
     results = _run(["s1", "s2"], runner, odbc_env={"ODBCSYSINI": "/odbc/etc"})
     assert [r["source"] for r in results] == ["s1", "s2"]
     assert len(calls) == 2, "one process per source"
-    assert all(c["env"]["UQS_REQUIRE_LIVE_SOURCES"] == "1" for c in calls)
+    assert all(c["env"]["UQF_LIVE_SOURCES_REQUIRED"] == "1" for c in calls)
     assert all(c["env"]["ODBCSYSINI"] == "/odbc/etc" for c in calls)
     assert live_check.passed(results)
 

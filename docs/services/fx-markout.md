@@ -26,6 +26,11 @@ Nothing new is invented: the existing contracts are sufficient.
 The plant's receipt `time` is **not** an input, so it cannot leak into the
 clock. An execution is identified by `(venue; fill_id)`.
 
+Both tables also carry `clock` (`venue` or `receipt`, #1925): whose clock
+`source_time` is. This calculation does not read it yet, so it still scores a
+`receipt`-clock fill against a `venue`-clock book; refusing that comparison is
+the markout contract's rule (#1923), enforced once the core exists.
+
 ## The result
 
 One long table, one row per `(execution, horizon, component)`:

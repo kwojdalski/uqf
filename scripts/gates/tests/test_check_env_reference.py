@@ -31,7 +31,7 @@ def test_only_the_dotenv_reader_s_variables_count_as_read_from_dotenv():
     is NOT read from .env, however documented it is."""
     names = cer.dotenv_read_names(REPO)
     assert "DATABENTO_DATA_DIR" in names
-    assert "UQF_FRONTEND_GATEWAY_PASSWD" not in names, "read by Settings.from_env, not from .env"
+    assert "UQF_FRONTEND_GATEWAY_PASSWORD" not in names, "read by Settings.from_env, not from .env"
     assert "UQF_STATUS_DIR" not in names, "read by getenv in status.q"
 
 
@@ -76,10 +76,10 @@ def test_a_secret_in_the_example_is_refused_naming_its_real_reader(monkeypatch, 
     how a credential ends up committed. The message says WHERE it is really
     read, so the fix is obvious."""
     rc, err = _run_with_example(
-        monkeypatch, tmp_path, "DATABENTO_DATA_DIR=/x\nUQF_FRONTEND_GATEWAY_PASSWD=pw\n"
+        monkeypatch, tmp_path, "DATABENTO_DATA_DIR=/x\nUQF_FRONTEND_GATEWAY_PASSWORD=pw\n"
     )
     assert rc == 1
-    assert "UQF_FRONTEND_GATEWAY_PASSWD" in err
+    assert "UQF_FRONTEND_GATEWAY_PASSWORD" in err
     assert "config.py" in err
 
 
@@ -199,3 +199,16 @@ def test_self_names_this_file_where_it_sits_in_the_tree():
     where it really is."""
     assert REPO / cer.SELF == Path(str(cer.__file__)).resolve()
     assert str(cer.SELF) not in {f for fs in cer.read_names(REPO).values() for f in fs}
+
+
+def test_a_uqs_variable_is_read_only_by_the_uqs_package():
+    """UQS_ is the uqs Python's own prefix; a variable q reads is UQF_ (#1890):
+    UQS_REQUIRE_LIVE_SOURCES was read by src/etl/core/source_credentials.q."""
+    reads = {
+        "UQS_RUNTIME": ["python/uqs/src/uqs/paths.py"],
+        "UQS_REQUIRE_LIVE_SOURCES": ["src/etl/core/source_credentials.q", "python/uqs/x.py"],
+        "UQF_ROOT": ["src/init.q"],
+    }
+    assert cer.prefix_problems(reads) == {
+        "UQS_REQUIRE_LIVE_SOURCES": ["src/etl/core/source_credentials.q"]
+    }

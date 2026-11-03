@@ -165,6 +165,64 @@
     .qunit.assertEquals[`time in cols .qpipe.job.market_data.market_data;0b;
         "the plant stamps `time` on what market_data publishes - sending one makes the message a column too wide"]};
 
+/ --- whose clock source_time is (#1925) --------------------------------------
+
+/ One batch per shipped mapping, in the shape the plant delivers it. The
+/ receipt-stamped sources carry only `time`; crypto_book also carries the venue's
+/ own source_time, four hours earlier so that reading the wrong one cannot pass.
+.qt.qetl.job.stream.normalizer.clock_batches:{[]
+    t:2026.09.17D10:00:00.000000000;
+    lad:([] bid_prices:enlist 1.1 1.09; bid_sizes:enlist 1000 2000f; ask_prices:enlist 1.2 1.21; ask_sizes:enlist 3000 4000f);
+    `trades`crypto_trades`orders`quote`fx_orderbook`crypto_book!(
+        ([] time:enlist t; sym:enlist `EURUSD; side:enlist 1; trade_price:enlist 1.085; size:enlist 1e6; pip_factor:enlist 10000; fill_id:enlist `f1);
+        ([] time:enlist t; sym:enlist `$"BTC-USDT"; venue:enlist `binance_spot; side:enlist -1; trade_price:enlist 62000f; size:enlist 0.25; fee:enlist 15.5; fee_currency:enlist `USDT; exchange_fill_id:enlist `x1);
+        ([] time:enlist t; order_id:enlist 1; sym:enlist `EURUSD; book:enlist `london; product:enlist `spot; side:enlist 1; size:enlist 1e6; price:enlist 1.085; order_status:enlist `filled);
+        ([] time:enlist t; sym:enlist `EURUSD; bid:enlist 1.1; ask:enlist 1.2; bsize:enlist 1000; asize:enlist 2000; src:enlist `LP_A);
+        ([] time:enlist t; sym:enlist `EURUSD),'lad;
+        ([] time:enlist t+0D04; source_time:enlist t; venue:enlist `binance_spot; sym:enlist `$"BTC-USDT"),'lad)}
+
+.qt.qetl.job.stream.normalizer.test_every_mapping_stamps_whose_clock_its_source_time_is:{[t]
+    / Confirmed from each mapping's source table: trades, orders, crypto_trades, quote
+    / and fx_orderbook carry only the plant's receipt `time`, so their source_time is
+    / receipt; crypto_book carries the venue's own source_time.
+    b:.qt.qetl.job.stream.normalizer.clock_batches[];
+    owner:`trades`crypto_trades`orders`quote`fx_orderbook`crypto_book!`executions`executions`executions`market_data`market_data`market_data;
+    want:`trades`crypto_trades`orders`quote`fx_orderbook`crypto_book!`receipt`receipt`receipt`receipt`receipt`venue;
+    got:{[b;owner;src] first .qetl.job.stream.normalizer.normalize[owner src;src;b src]`clock}[b;owner] each key want;
+    .qunit.assertEquals[got;value want;"each mapping's clock: trades, crypto_trades, orders, quote, fx_orderbook, crypto_book"]};
+
+.qt.qetl.job.stream.normalizer.test_the_checks_refuse_a_row_with_no_clock_or_an_unknown_one:{[t]
+    ex:.qetl.job.stream.normalizer.normalize[`executions;`trades;.qt.qetl.job.stream.normalizer.clock_batches[]`trades];
+    md:.qetl.job.stream.normalizer.normalize[`market_data;`quote;.qt.qetl.job.stream.normalizer.clock_batches[]`quote];
+    .qunit.assertEquals[count .qpipe.job.executions.check ex;0;"a stamped execution passes"];
+    .qunit.assertEquals[count .qpipe.job.market_data.check md;0;"a stamped book passes"];
+    .qunit.assertThrows[.qpipe.job.executions.check;update clock:` from ex;
+        "clock: executions has 1 row(s) whose clock is not `venue or `receipt (null, or `unknown) - first: null; a mapping must stamp whose clock source_time is";
+        "executions: a null clock"];
+    .qunit.assertThrows[.qpipe.job.market_data.check;update clock:` from md;
+        "clock: market_data has 1 row(s) whose clock is not `venue or `receipt (null, or `unknown) - first: null; a mapping must stamp whose clock source_time is";
+        "market_data: a null clock"];
+    .qunit.assertThrows[.qpipe.job.executions.check;update clock:`unknown from ex;
+        "clock: executions has 1 row(s) whose clock is not `venue or `receipt (null, or `unknown) - first: unknown; a mapping must stamp whose clock source_time is";
+        "the history fill's `unknown is refused"];
+    .qunit.assertThrows[.qpipe.job.market_data.check;update clock:`unknown from md;
+        "clock: market_data has 1 row(s) whose clock is not `venue or `receipt (null, or `unknown) - first: unknown; a mapping must stamp whose clock source_time is";
+        "the history fill's `unknown is refused"];
+    .qunit.assertThrows[.qetl.plant.require_clock[`executions];delete clock from ex;
+        "clock: executions rows carry no clock column - every mapping must stamp whose clock source_time is";
+        "a table with no clock column at all"]};
+
+.qt.qetl.job.stream.normalizer.test_a_batch_with_a_null_clock_is_withheld_whole_by_the_published_job:{[t]
+    / The check THROWS, and .qetl.job.stream.checked treats a throwing check as a
+    / failure of the whole batch: nothing reaches the publisher.
+    good:.qetl.job.stream.normalizer.normalize[`executions;`trades;.qt.qetl.job.stream.normalizer.clock_batches[]`trades];
+    pub:{[t;x] `.qt.qetl.job.stream.normalizer.seen set (.qt.qetl.job.stream.normalizer.seen,count x)};
+    `.qt.qetl.job.stream.normalizer.seen set ();
+    guarded:.qetl.job.stream.checked[`executions;.qpipe.job.executions.check;`hold;pub;`executions;];
+    guarded good;
+    guarded update clock:` from good;
+    .qunit.assertEquals[.qt.qetl.job.stream.normalizer.seen;enlist 1;"the stamped batch published, the unstamped one did not"]};
+
 .qt.qetl.job.stream.normalizer.test_every_shipped_mapping_verifies:{[t]
     / The examples in executions.q and market_data.q, run - test_transform.q
     / does this for every transform too, but a reader of THIS file should see

@@ -90,7 +90,7 @@ def test_an_option_is_its_default_unless_given_and_a_zero_is_given():
 
 
 def test_titles_and_start_messages():
-    assert _feed("f").status_title == "f feed status"
+    assert _feed("f").status_title == "f connector status"
     assert _feed("f", title="T").status_title == "T"
     assert _feed("f").started(3) == "f feed started (pid 3)"
     assert _feed("f", started_note="n").started(3) == "f feed started (pid 3) - n"
