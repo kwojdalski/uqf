@@ -25,7 +25,7 @@
 \d .
 
 / job -> its declaration, ENLISTED. Keyed by the job's own name, which is
-/ also the segment of its namespace: `demo_markout` is `.qpipe.job.demo_markout`.
+/ also the segment of its namespace: `crypto_markout` is `.qpipe.job.crypto_markout`.
 / .
 / The enlist is load-bearing, and the reason is a q trap worth knowing: a
 / dictionary whose values are dictionaries with the SAME keys is a table, and
@@ -99,8 +99,8 @@
 
 / The namespace a job's implementation lives in.
 / @param job the job's name
-/ @return the namespace symbol, e.g. `.qpipe.job.demo_markout
-/ @eg .qetl.job.stream.namespace `demo_markout  ->  `.qpipe.job.demo_markout
+/ @return the namespace symbol, e.g. `.qpipe.job.crypto_markout
+/ @eg .qetl.job.stream.namespace `crypto_markout  ->  `.qpipe.job.crypto_markout
 .qetl.job.stream.namespace:{[job] ` sv .qetl.job.stream.job_root,job}
 
 / Private: refuse a malformed optional key - deployment facts, transform,
@@ -201,7 +201,7 @@
 / Declare a streaming job. Called by the job's own file as it loads, so a
 / declaration and its implementation cannot drift - there is no way to have
 / one without the other.
-/ @param job the job's name, e.g. `demo_markout
+/ @param job the job's name, e.g. `crypto_markout
 / @param decl dict of procname, subscribe_to, publishes, and then on_batch
 /   (required when it subscribes), period and on_timer (a pair) - or period
 /   and poll, for a polling feed (see stream_poll.q); optionally
@@ -224,7 +224,7 @@
     if[count missing;
         '"define: ",string[job]," is missing ",", " sv string missing];
     if[not -11h=type decl`procname;
-        '"define: ",string[job],"'s procname must be a symbol naming the TorQ process that runs it, e.g. `demo_markout1"];
+        '"define: ",string[job],"'s procname must be a symbol naming the TorQ process that runs it, e.g. `crypto_markout1"];
     if[(decl`procname) in key .qetl.job.stream.procnames;
         '"define: ",string[job]," claims procname ",string[decl`procname]," which ",(string .qetl.job.stream.procnames decl`procname)," already runs - one process runs one job"];
     if[not 11h=abs type decl`subscribe_to;
@@ -270,7 +270,7 @@
 / @param job the job's name
 / @return the declaration dict
 / @throws error naming the job when register was never called for it
-/ @eg .qetl.job.stream.def[`demo_markout]`subscribe_to  ->  `trades`quote
+/ @eg .qetl.job.stream.def[`crypto_markout]`subscribe_to  ->  `executions`market_data
 .qetl.job.stream.def:{[job]
     if[not job in key .qetl.job.stream.jobs;
         '"def: ",string[job]," is not a registered streaming job - a job registers as its own file loads, so this is a wiring bug rather than a lookup miss"];
@@ -282,10 +282,10 @@
 / how a started process finds out which one it is. A procname nothing claims
 / is an error naming it rather than a process that comes up subscribed to
 / nothing and reports healthy.
-/ @param procname the TorQ process name, e.g. `demo_markout1
+/ @param procname the TorQ process name, e.g. `crypto_markout1
 / @return the job's name
 / @throws error when no registered job claims that process
-/ @eg .qetl.job.stream.for_procname `demo_markout1  ->  `demo_markout
+/ @eg .qetl.job.stream.for_procname `crypto_markout1  ->  `crypto_markout
 .qetl.job.stream.for_procname:{[procname]
     if[not procname in key .qetl.job.stream.procnames;
         '"for_procname: no streaming job runs as ",string[procname]," - registered processes: ",", " sv string key .qetl.job.stream.procnames];
@@ -440,7 +440,7 @@
 / Lived in scripts/processes/torq_pipeline.q until the jobs moved into src/, where
 / nothing may call .qtorq. It belongs here anyway: buffering is the
 / job's own business, not TorQ's.
-/ @param table_name the buffer table's fully-qualified name, e.g. `.qpipe.job.demo_markout.pending
+/ @param table_name the buffer table's fully-qualified name, e.g. `.qpipe.job.crypto_markout.pending
 / @param mask a boolean vector over that table, as long as it is
 / @return the drained rows, in their original order
 / @eg `.qetl.job.stream.eg_buffer set ([] a:1 2 3); .qetl.job.stream.drain[`.qetl.job.stream.eg_buffer;101b]  ->  ([] a:1 3)

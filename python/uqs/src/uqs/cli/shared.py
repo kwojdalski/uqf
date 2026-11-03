@@ -23,6 +23,7 @@ from uqs import paths as stack_paths
 from uqs import runtimes
 from uqs.cells import cell
 from uqs.cli import completion, json_out, rendering, table_browser
+from uqs.cli.concepts import target_opt
 from uqs.cli.renames import MOVED_KEY
 from uqs.logger import LOG_LEVEL_ENV, configure_logging, get_logger, json_requested
 from uqs.paths import UqsError, UqsUsageError
@@ -118,14 +119,11 @@ def _configure(
     ] = None,
     target: Annotated[
         str | None,
-        typer.Option(
+        target_opt(
             "--target",
-            metavar="TARGET",
-            help=(
-                "Run the command on a deployed release instead of this machine: a target "
-                "from deploy_targets.toml (`uqs target list`). Add --yes to skip the "
-                "confirmation a command that changes the server asks for."
-            ),
+            "Run the command on a deployed release instead of this machine: a target from "
+            "deploy_targets.toml (`uqs target list`). Add --yes to skip the confirmation a "
+            "command that changes the server asks for.",
         ),
     ] = None,
     yes: Annotated[

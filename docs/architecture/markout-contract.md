@@ -8,20 +8,19 @@ proposal stands only once it is approved.
 
 ## Why this exists
 
-The tree has three markout implementations, and each has its own horizon
+The tree has two markout implementations, and each has its own horizon
 expansion, reference lookup, units and clock:
 
   | Job              | Scoring                                                                        | Reference                                         | Unit | Clock                                                                     |
   | ---              | ---                                                                            | ---                                               | ---  | ---                                                                       |
   | `fx_markout`     | `src/etl/transforms/fx_markout.q:359-370`                                      | best bid/ask across sources, routed by convention | pips | `source_time` on both inputs (`src/etl/streaming/fx_markout.q:14-15`)     |
   | `crypto_markout` | `src/etl/streaming/crypto_markout.q:77-89`                                     | best mid across venues, single leg                | bps  | plant receipt `time` on both (`crypto_markout.q:26-31`)                   |
-  | `demo_markout`   | `src/etl/transforms/demo_markouts.q:42-48`, via `.qf.exec.markout_at_horizons` | the latest quote's mid, however old               | pips | plant receipt `time` on both                                              |
 
 Only `fx_markout` reads the canonical `executions` and `market_data`, and it is
 hard-wired to FX. It routes currency pairs, scores in pips and attributes by
 leg. It also excludes every other instrument as `no_route`
 (`fx_markout.q:151-157`, `:204`). Adding a measure, an asset class or a layout
-means writing another copy. This contract replaces the three with one core.
+means writing another copy. This contract replaces the two with one core.
 
 ## Layering
 
@@ -71,7 +70,6 @@ asset class's domain columns.
 The long rows are the stored form. A wide or nested-wide layout is derived from
 the long rows by key and is never recalculated (#1932). This is already true of
 `fx_markout_wide` (`src/etl/transforms/fx_markout_outputs.q:15-20`).
-`demo_execution_quality` gets no dataset. Its job is retired (#1937).
 
 ## Clocks
 
@@ -197,10 +195,10 @@ key](#long-layout-key)). Domain columns may sit between core columns, so
   | #   | Column             | Type        | Meaning                                                                                       | Replaces or comes from                                                                                                                                                                                    |
   | -:  | ---                | ---         | ---                                                                                           | ---                                                                                                                                                                                                       |
   |   1 | `time`             | `timestamp` | the plant's stamp; a backfill writes `source_time + max horizons`                             | `fx_markout.time` (`src/etl/plant_tables.q:673`); backfill stamp at `fx_markout_outputs.q:141-142`                                                                                                        |
-  |   2 | `source_time`      | `timestamp` | the execution's time, on its clock                                                            | `executions.source_time` (`plant_tables.q:542`); replaces `trade_time` in `crypto_execution_quality` (`:662`) and `demo_execution_quality` (`:532`)                                                       |
+  |   2 | `source_time`      | `timestamp` | the execution's time, on its clock                                                            | `executions.source_time` (`plant_tables.q:542`); replaces `trade_time` in `crypto_execution_quality` (`:662`)                                                                                             |
   |   3 | `clock`            | `symbol`    | `venue` or `receipt`; the execution's, and so every reference's                               | new, `executions.clock` (#1925)                                                                                                                                                                           |
   |   4 | `venue`            | `symbol`    | identity, with `fill_id`                                                                      | `fx_markout.venue`; `crypto_execution_quality.venue`                                                                                                                                                      |
-  |   5 | `fill_id`          | `symbol`    | identity                                                                                      | `fx_markout.fill_id`; `crypto_execution_quality.fill_id`; `demo_execution_quality.fill_id`                                                                                                                |
+  |   5 | `fill_id`          | `symbol`    | identity                                                                                      | `fx_markout.fill_id`; `crypto_execution_quality.fill_id`                                                                                                                                                  |
   |   6 | `sym`              | `symbol`    | the instrument, as `executions` spells it (`` `g# `` on the plant)                            | `fx_markout.sym`                                                                                                                                                                                          |
   |   7 | `side`             | `long`      | `1` buy, `-1` sell                                                                            | `fx_markout.side`; `crypto_execution_quality.side`                                                                                                                                                        |
   |   8 | `size`             | `float`     | base units                                                                                    | `fx_markout.size`; absent from both execution-quality tables today                                                                                                                                        |

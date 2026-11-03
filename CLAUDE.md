@@ -59,13 +59,16 @@ work by label.
 
 ## Each check runs in one place
 
-Commit hooks are targeted; CI runs everything in full (#1879). `python-tests`
-runs only the Python tests a commit reaches, `q-tests` and `q-coverage` only the
-q suites the branch reaches, and the docs render and the docs' q blocks on
-PeachQ not at all - CI's "Docs links" and PeachQ jobs do, when the change can
-affect them. Full mode is one switch away: `UQF_HOOKS_FULL=1 git commit`, or
-`python3 scripts/dev/hooks_full.py --all` without a commit (`UQF_Q_TESTS_FULL=1`
-still runs the whole q suite alone); in CI, the `ci:full` PR label,
+Commit hooks are targeted; CI runs every affected group in full (#1879, #1955).
+`python-tests` runs only the Python tests a commit reaches, `q-tests` and
+`q-coverage` only the q suites the branch reaches, and the docs render and the
+docs' q blocks on PeachQ not at all - CI's "Docs links" and PeachQ jobs do, when
+the change can affect them. On a pull request `scripts/dev/ci_scope.py` picks
+the whole groups (docs, q, browser app, Python) a change reaches - never single
+tests - and the static gates always run. Full mode is one switch away:
+`UQF_HOOKS_FULL=1 git commit`, or `python3 scripts/dev/hooks_full.py --all`
+without a commit (`UQF_Q_TESTS_FULL=1` still runs the whole q suite alone); in
+CI, the `ci:full` PR label,
 `gh workflow run ci.yml --ref <branch> -f full=true`, and every push to master.
 README's Testing section says where each check runs.
 

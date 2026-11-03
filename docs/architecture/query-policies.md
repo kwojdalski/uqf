@@ -82,16 +82,16 @@ read, the gateway loads no policies and refuses every ordinary request.
 
 ## The tables, and why these limits
 
-The three tables are the in-tree analogues of the desk's deals, order book and
-markout tables (see [`demo_deals.q`](../../src/etl/sources/demo_deals.q) for why
-the desk's own names are not in this repository). Each limit is set from that
+The tables are the in-tree analogues of the desk's deals, order book and markout
+tables (see [`demo_deals.q`](../../src/etl/sources/demo_deals.q) for why the
+desk's own names are not in this repository). Each limit is set from that
 table's own data density, not copied between rows:
 
-  | Table                    | Density                                                                                                     | Default policy                                                                                                                               |
-  | ---                      | ---                                                                                                         | ---                                                                                                                                          |
-  | `mkt_orderbook`          | 10 rows/s: `widefeed1` ticks twice a second for five pairs; two 11-level vectors make a row about 220 bytes | one hour, a `sym` filter required, raw only, 50,000 rows, 16MB. One pair for an hour is 7,200 rows                                           |
-  | `demo_execution_quality` | 2 rows/s: one fill a second, scored at two horizons; about 56 bytes a row                                   | seven days, raw or aggregate, 250,000 rows, 32MB. A raw week (1.2M rows) stops at the row limit, which is intended: a week is for aggregates |
-  | `duckdb_deals`           | 200 to 1,000 deals a day                                                                                    | 31 days, raw or aggregate, 100,000 rows, 16MB                                                                                                |
+  | Table                      | Density                                                                                                                          | Default policy                                                                                                                                                                            |
+  | ---                        | ---                                                                                                                              | ---                                                                                                                                                                                       |
+  | `mkt_orderbook`            | 10 rows/s: `widefeed1` ticks twice a second for five pairs; two 11-level vectors make a row about 220 bytes                      | one hour, a `sym` filter required, raw only, 50,000 rows, 16MB. One pair for an hour is 7,200 rows                                                                                        |
+  | `crypto_markout`           | about 7 rows/s from `cryptomock1`: each fill scored at two horizons as a total and an execution component; about 250 bytes a row | one day, raw or aggregate, 250,000 rows, 64MB. A raw day (about 600,000 rows) is past the row limit, which is intended: a raw request is for a recent window, and a day is for aggregates |
+  | `duckdb_deals`             | 200 to 1,000 deals a day                                                                                                         | 31 days, raw or aggregate, 100,000 rows, 16MB                                                                                                                                             |
 
 `quant` has one exception: a whole day of `mkt_orderbook` (172,800 rows for one
 pair, about 38MB), still filtered by `sym`.

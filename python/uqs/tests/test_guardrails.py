@@ -26,7 +26,11 @@ def test_the_catalog_lists_what_it_did_before_the_registry_in_the_same_order():
     before += [(g.id, g.commands, g.description) for g in deploy.GUARDRAILS]
     before += [
         # #1918: described by what accepting it lifts, where the row says
-        (f"{code}:COMPONENT", ("job attachment add",), policy.waives or policy.risk)
+        (
+            f"{guardrails.spelled(code)}:COMPONENT",
+            ("job attachment add",),
+            policy.waives or policy.risk,
+        )
         for code, policy in sorted(attach.POLICY.items())
         if policy.overridable
     ]
@@ -48,10 +52,10 @@ def test_the_catalog_lists_what_it_did_before_the_registry_in_the_same_order():
         "allow-dirty",
         "fix-hdb",
         "break-lock",
-        "PORT_CONFLICT:COMPONENT",
-        "PUBLISHER_RUNNING:COMPONENT",
-        "SORT_CONFIG:COMPONENT",
-        "TORQ_VERSION:COMPONENT",
+        "port-conflict:COMPONENT",
+        "publisher-running:COMPONENT",
+        "sort-config:COMPONENT",
+        "torq-version:COMPONENT",
         "eod-fence",
         "any-writer",
         "allow-computed-names",
@@ -64,7 +68,7 @@ def test_the_registry_keeps_every_attachment_code_and_its_policy():
     for code, policy in attach.POLICY.items():
         g = by_id[code]
         assert (g.overridable, g.risk, g.action) == (policy.overridable, policy.risk, policy.action)
-        assert g.component_scoped and g.name == f"{code}:COMPONENT"
+        assert g.component_scoped and g.name == f"{guardrails.spelled(code)}:COMPONENT"
     assert not by_id["q-version-check"].component_scoped
 
 
@@ -111,7 +115,7 @@ def test_a_policy_table_adapts_into_guardrails_by_code():
     a, b = guardrails.from_policy(table, ("job backfill",))
     assert (a.id, a.name, a.description, a.action, a.overridable) == (
         "A_CODE",
-        "A_CODE:COMPONENT",
+        "a-code:COMPONENT",
         "may lose rows",
         "stop it first",
         True,

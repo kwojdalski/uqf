@@ -143,7 +143,6 @@ engines: "4 · engines — subscribe, hold state, republish" {
 
   posbook: "posbook\nexecutions + market_data → position\n.qf.port, FX and crypto in one book" { class: job }
   fxpos: "fx_positions\nexecutions → fx_position · fx_limit_breach\n.qf.port exposure and caps" { class: job }
-  markout: "markout\ntrades + quote → demo_execution_quality\n.qf.exec, at horizons on a timer" { class: job }
   superbook: "superbook\nmarket_data → superbook\n.qpipe.job.superbook merges\nacross sources" { class: job }
   arb: "arbitrage · crossarb\nsuperbook → crossed levels,\nand synthetic routes" { class: job }
   windows: "exec_bars · order_quality · crypto_book_1s\nexecutions, orders, crypto_book → bars\nand rolling ratios, by event time" { class: job }

@@ -96,7 +96,7 @@
         "the core's long result, then the crypto measures"]};
 
 .qt.qpipe.job.crypto_markout.test_the_job_keeps_only_what_scoring_can_use:{[tc]
-    k:.qpipe.transform.crypto_markout_outputs.keep;
+    k:.qpipe.job.crypto_markout.keep;
     .qunit.assertEquals[k ([] sym:`$("BTC-USDT";"EURUSD";"ETH-USDT"));101b;"books of BASE-QUOTE pairs"];
     e:.qt.qpipe.job.crypto_markout.ex[.qt.qpipe.job.crypto_markout.t;.qt.qpipe.job.crypto_markout.t;`a;.qt.qpipe.job.crypto_markout.btc;1;62000f;`a1;`venue],
         .qt.qpipe.job.crypto_markout.ex[.qt.qpipe.job.crypto_markout.t;.qt.qpipe.job.crypto_markout.t;`a;`EURUSD;1;1.1;`a2;`receipt],

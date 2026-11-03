@@ -50,39 +50,60 @@
 / .u.upd stamps `time` in UTC, and the sources' own stamps are UTC.
 .qpipe.source.hdb_crypto_markouts.tz:`UTC
 
-/ How far back a source's last book before the window is looked for: the reference's
-/ max_age, exactly. A book older than that at an execution's instant is not a reference
-/ (#1410), so reading further back could only fetch rows scoring would ignore.
-/ @return a timespan
-/ @eg .qpipe.source.hdb_crypto_markouts.lookback[]  ->  0D00:00:05
-.qpipe.source.hdb_crypto_markouts.lookback:{[]
-    (.qpipe.transform.crypto_markout_outputs.job_spec)`max_age}
+/ The market_data symbols the window's references are read for: the legs of every
+/ execution's route (the live job's own `legs`), and the conversion pairs the spec
+/ reads a rate from (none while every rate is fixed, as the shipped spec's is).
+/ @param spec the job's spec
+/ @param rows the window's executions
+/ @return a symbol vector, distinct
+/ @eg .qpipe.source.hdb_crypto_markouts.reference_symbols[.qpipe.transform.crypto_markout_outputs.job_spec;([] sym:enlist `$"BTC-USDT")]  ->  enlist `$"BTC-USDT"
+.qpipe.source.hdb_crypto_markouts.reference_symbols:{[spec;rows]
+    legs:distinct raze .qpipe.transform.crypto_markout_outputs.legs rows;
+    distinct legs,(.qpipe.transform.markout_core.conversion_pairs[.qpipe.transform.crypto_markout.domain;spec;rows])`sym}
+
+/ What the source reads of its books, declared (.qetl.source REFERENCE READ):
+/   date_skew     1 day either side: the window is on source_time but the HDB is
+/                 partitioned on the plant's `time`, which can fall on the other side of
+/                 midnight from the venue's stamp
+/   lookback_cap  7 days, for a spec whose max_age is 0Wn. The shipped spec's max_age is
+/                 finite (.qf.mkt.reference_max_age), so the look-back is that - a book
+/                 older than it at an execution's instant is not a reference (#1410), and
+/                 reading further back could only fetch rows scoring would ignore
+/   symbols       reference_symbols
+.qpipe.source.hdb_crypto_markouts.reference_read:`date_skew`lookback_cap`symbols!(1;7D;.qpipe.source.hdb_crypto_markouts.reference_symbols)
 
 / The window's executions, and the books they are scored against, both from the HDB.
 / Both tables are date-partitioned, so the partition is constrained first, and each is
-/ named as a symbol so it resolves at the HDB's root. The legs to read are the
-/ routes' (the live job's own `legs`), so the books read are the books scoring needs.
+/ named as a symbol so it resolves at the HDB's root. The books read are the declared
+/ reference_read's: the symbols scoring needs, from the window's start back by the
+/ look-back the spec's max_age sets to its end plus the furthest horizon, and each
+/ (pair, source)'s last book before the earliest reference time.
 / @param h an open handle to the HDB
 / @param range_from inclusive lower bound
 / @param range_to exclusive upper bound
 / @return `executions`market_data!(the window's executions; the books they need)
 .qpipe.source.hdb_crypto_markouts.query:{[h;range_from;range_to]
-    deals:.qetl.source.ipc[h;{[from_ts;to_ts]
+    rr:.qetl.source.reference_read .qpipe.source.hdb_crypto_markouts.source_name;
+    skew:rr`date_skew;
+    deals:.qetl.source.ipc[h;{[skew;from_ts;to_ts]
         `source_time xasc select source_time, venue, sym, side, size, price, fee, fee_ccy, fill_id, clock from `executions
-            where date within (-1 1)+`date$(from_ts;to_ts), source_time>=from_ts, source_time<to_ts
-      };range_from;range_to];
+            where date within (neg[skew],skew)+`date$(from_ts;to_ts), source_time>=from_ts, source_time<to_ts
+      }[skew];range_from;range_to];
     if[0=count deals; :`executions`market_data!(deals;0#.qpipe.source.hdb_crypto_markouts.supporting`market_data)];
-    pairs:distinct raze .qpipe.transform.crypto_markout_outputs.legs deals;
-    books:.qetl.source.ipc[h;{[syms;lb;from_ts;to_ts]
+    spec:.qpipe.transform.crypto_markout_outputs.job_spec;
+    syms:rr[`symbols][spec;deals];
+    early:.qpipe.transform.crypto_markout_outputs.lookback[];
+    lb:.qetl.source.reference_lookback[.qpipe.source.hdb_crypto_markouts.source_name;spec`max_age;early];
+    books:.qetl.source.ipc[h;{[syms;skew;read_from;from_ts;to_ts]
         cand:`source_time xasc select source_time, sym, source, bid_prices, bid_sizes, ask_prices, ask_sizes, clock
-            from `market_data where date within `date$(from_ts-lb;from_ts), source_time>=from_ts-lb, source_time<from_ts, sym in syms;
+            from `market_data where date within (neg[skew],skew)+`date$(read_from;from_ts), source_time>=read_from, source_time<from_ts, sym in syms;
         before:0!?[cand;();`sym`source!`sym`source;()];
         inwin:select source_time, sym, source, bid_prices, bid_sizes, ask_prices, ask_sizes, clock from `market_data
-            where date within (-1 1)+`date$(from_ts;to_ts), source_time>=from_ts, source_time<to_ts, sym in syms;
+            where date within (neg[skew],skew)+`date$(from_ts;to_ts), source_time>=from_ts, source_time<to_ts, sym in syms;
         `source_time xasc (cols before)#before,inwin
-      }[pairs;.qpipe.source.hdb_crypto_markouts.lookback[]+.qpipe.transform.crypto_markout_outputs.lookback[]];
-      range_from-.qpipe.transform.crypto_markout_outputs.lookback[];
-      range_to+0D|max (.qpipe.transform.crypto_markout_outputs.job_spec)`horizons];
+      }[syms;skew;range_from-lb];
+      range_from-early;
+      range_to+0D|max spec`horizons];
     `executions`market_data!(deals;books)}
 
 / How far the HDB's crypto books reach, less the furthest horizon: a window ending at or
@@ -149,7 +170,7 @@
 .qpipe.source.hdb_crypto_markouts.fixture:{[] `executions`market_data!(.qpipe.source.hdb_crypto_markouts.raw_executions[];.qpipe.source.hdb_crypto_markouts.raw_market_data[])}
 
 .qetl.source.define[.qpipe.source.hdb_crypto_markouts.source_name;
-    `source`table_name`time_column`row_key`columns`types`query`fixture`tz`supporting`complete_through`ready!
-    (.qpipe.source.hdb_crypto_markouts.source_name;`executions;.qpipe.source.hdb_crypto_markouts.time_column;.qpipe.source.hdb_crypto_markouts.row_key;.qpipe.source.hdb_crypto_markouts.columns;.qpipe.source.hdb_crypto_markouts.types;.qpipe.source.hdb_crypto_markouts.query;.qpipe.source.hdb_crypto_markouts.fixture;.qpipe.source.hdb_crypto_markouts.tz;.qpipe.source.hdb_crypto_markouts.supporting;.qpipe.source.hdb_crypto_markouts.complete_through;.qpipe.source.hdb_crypto_markouts.ready)];
+    `source`table_name`time_column`row_key`columns`types`query`fixture`tz`supporting`reference_read`complete_through`ready!
+    (.qpipe.source.hdb_crypto_markouts.source_name;`executions;.qpipe.source.hdb_crypto_markouts.time_column;.qpipe.source.hdb_crypto_markouts.row_key;.qpipe.source.hdb_crypto_markouts.columns;.qpipe.source.hdb_crypto_markouts.types;.qpipe.source.hdb_crypto_markouts.query;.qpipe.source.hdb_crypto_markouts.fixture;.qpipe.source.hdb_crypto_markouts.tz;.qpipe.source.hdb_crypto_markouts.supporting;.qpipe.source.hdb_crypto_markouts.reference_read;.qpipe.source.hdb_crypto_markouts.complete_through;.qpipe.source.hdb_crypto_markouts.ready)];
 
 \d .

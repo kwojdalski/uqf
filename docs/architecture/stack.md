@@ -4,20 +4,18 @@ Diagrams for the running state of the uqf stack (see
 [docs/guides/uqs.md](../guides/uqs.md) for how to actually start/stop/query it).
 Reflects what `uqs process list` shows today: the vendored 23-process stack plus
 uqf's own additions (`fxfeed1`, `fxorderbookfeed1`, `widefeed1`, `cross1`,
-`vectorize1`, `tap1`, `fxtradesfeed1`, `posbook1`, `demo_markout1`,
-`kafka_feed1`, `kafka_flow1`, `cryptomock1`, `executions1`, `fxordersfeed1`,
-`fxpositions1`, `marketdata1`, `superbook1`, `arbitrage1`, `crossarb1`,
-`crypto_markout1`, `alert_sink1`, `last_value1`, `exec_bars1`,
-`crypto_book_1s1`, `order_quality1`, `fxmarkout1`, `fxmarkoutwide1`,
-`order_outcomes1`, `book_liquidity_1m1`, `demo_deals_feed1`), and thirteen
-bounded backfill processes (`deals_backfill1`, `events_backfill1`,
-`upstream_backfill1`, `duckdb_deals_backfill1`, `hdb_demo_markouts_backfill1`,
-`hdb_transfer_backfill1`, `hdb_exec_bars_backfill1`,
-`hdb_crypto_book_backfill1`, `hdb_order_quality_backfill1`,
-`hdb_book_liquidity_1m_backfill1`, `hdb_fx_markouts_backfill1`,
-`hdb_fx_markout_wide_backfill1`, `hdb_crypto_markout_backfill1`). Declared is
-not the same as running here - see [what starts with the
-stack](#what-starts-and-why-not-all-of-it).
+`vectorize1`, `tap1`, `fxtradesfeed1`, `posbook1`, `kafka_feed1`, `kafka_flow1`,
+`cryptomock1`, `executions1`, `fxordersfeed1`, `fxpositions1`, `marketdata1`,
+`superbook1`, `arbitrage1`, `crossarb1`, `crypto_markout1`, `alert_sink1`,
+`last_value1`, `exec_bars1`, `crypto_book_1s1`, `order_quality1`, `fxmarkout1`,
+`fxmarkoutwide1`, `order_outcomes1`, `book_liquidity_1m1`, `demo_deals_feed1`),
+and twelve bounded backfill processes (`deals_backfill1`, `events_backfill1`,
+`upstream_backfill1`, `duckdb_deals_backfill1`, `hdb_transfer_backfill1`,
+`hdb_exec_bars_backfill1`, `hdb_crypto_book_backfill1`,
+`hdb_order_quality_backfill1`, `hdb_book_liquidity_1m_backfill1`,
+`hdb_fx_markouts_backfill1`, `hdb_fx_markout_wide_backfill1`,
+`hdb_crypto_markout_backfill1`). Declared is not the same as running here - see
+[what starts with the stack](#what-starts-and-why-not-all-of-it).
 
 Five more processes exist only when a sidecar bundle is installed, because each
 is tied to one outside system: `databento1` and `databento_backfill1`
@@ -98,16 +96,15 @@ and some do not:
   and the vendored `feed1`) needs no credential: `.qtorq.feed_handle` finds the
   tickerplant with
   `.servers.gethandlebytype[\`segmentedtickerplant;\`any\]` and that is a self-managed handle, no `.servers.startup\[\]\`.
-- **Subscribing** (`cross1`/`vectorize1`/`posbook1`/`demo_markout1`) needs a
-  real `.servers`-managed, access-listed handle - `.qtorq.subscribe_etl` runs
+- **Subscribing** (`cross1`/`vectorize1`/`posbook1`) needs a real
+  `.servers`-managed, access-listed handle - `.qtorq.subscribe_etl` runs
   `.servers.startup[]` against `accesslist.txt`. They borrow the
   already-credentialed `metrics` proctype rather than adding a password file to
   the vendored tree (see `model/pipeline.py`'s `_ETL_ACCESS_LIST`).
 
-A job that both subscribes and republishes - `vectorize1`, `posbook1`,
-`demo_markout1` - needs both, and gets both from the same runner. That used to
-be something each script arranged for itself, which is what made the eight of
-them near-copies.
+A job that both subscribes and republishes - `vectorize1`, `posbook1` - needs
+both, and gets both from the same runner. That used to be something each script
+arranged for itself, which is what made the eight of them near-copies.
 
 `databento1` (the `sidecars/databento` bundle's) is the newest subscriber and
 the only one whose input comes from outside q entirely: an external Python
@@ -151,16 +148,16 @@ are the paper strategy's own fills and are not a position.
 `executions` and `market_data` (below), and scores each crypto fill at 1s and
 10s in basis points against the best mid across venues, skipping any venue whose
 book is more than five seconds old, into `crypto_markout`. It is the crypto
-counterpart of `fxmarkout1`; `demo_markout1` scores only the demo's invented FX
-pairs. It does not start with the stack: `uqs start --profile crypto` starts it
-with `cryptomock1` and the two normalizers it reads through (the FX sources
-those normalizers also map stay unfed, `PROFILE_UNFED_INPUTS`). A fill is on the
-venue's clock when cryptorust's recorder sends the venue's fill time as
-`crypto_trades.source_time`, and on the plant's receipt clock when it does not.
-`hdb_crypto_markout_backfill1` is its bounded twin: it scores a window of the
-HDB's `executions` and `market_data` with the same transform and writes the same
-table, replacing what the live job wrote for the window, so the fills
-`crypto_markout1` never saw are marked out too.
+counterpart of `fxmarkout1`. It does not start with the stack:
+`uqs start --profile crypto` starts it with `cryptomock1` and the two
+normalizers it reads through (the FX sources those normalizers also map stay
+unfed, `PROFILE_UNFED_INPUTS`). A fill is on the venue's clock when cryptorust's
+recorder sends the venue's fill time as `crypto_trades.source_time`, and on the
+plant's receipt clock when it does not. `hdb_crypto_markout_backfill1` is its
+bounded twin: it scores a window of the HDB's `executions` and `market_data`
+with the same transform and writes the same table, replacing what the live job
+wrote for the window, so the fills `crypto_markout1` never saw are marked out
+too.
 
 `executions1` and `marketdata1` are **normalizers** - a job kind of their own
 (`.qetl.job.stream.normalizer`, `src/etl/core/normalizer.q`). A normalizer
@@ -247,25 +244,24 @@ table), the other keeps it private to the process.
 
 ![Which process writes which table, and which of those tables is persisted rather than private to its process](../diagrams/stack-dataflow.svg)
 
-`posbook1` and `demo_markout1` are the two processes in this stack that run
-uqf's actual eFX business logic (position/PnL and execution quality, not just
-market-data reshaping) against live data. `posbook1`'s `.qpipe.job.posbook.book`
-(a private, in-process `.qf.port`-shaped keyed table, same "wrap a pure function
+`posbook1` runs uqf's actual eFX business logic (position/PnL, not just
+market-data reshaping) against live data. Its `.qpipe.job.posbook.book` (a
+private, in-process `.qf.port`-shaped keyed table, same "wrap a pure function
 with local mutable state" pattern `cross1`'s `.qpipe.job.cross.fx_orderbook`
 mirror uses) accumulates fills via `.qf.port.apply_fill`, marked to the mid as
 of each fill's own `source_time` (`.qf.mkt.lookup` over an event-time history,
 so a book stamped after a fill never marks it); `position` is a snapshot
-republished per fill. `demo_markout1` can't score a fill the instant it arrives -
+republished per fill. A markout can't score a fill the instant it arrives -
 `.qf.exec.markout_at_horizons` needs a reference quote at trade_time+horizon,
-which by definition hasn't happened yet - so it buffers trades/quotes in
-`.qpipe.job.demo_markout.pending`/`.qpipe.job.demo_markout.history` and
-scores+drains them on a 1s repeating timer once each trade is old enough that
-its furthest horizon's quote should already exist. That waiting is a job kind of
+which by definition hasn't happened yet - so `crypto_markout1` buffers fills and
+books in `.qpipe.job.crypto_markout.pending`/`.qpipe.job.crypto_markout.history`
+and scores+drains them on a 1s repeating timer once each fill is old enough that
+its furthest horizon's book should already exist. That waiting is a job kind of
 its own, `.qetl.job.stream.at_horizons` (`src/etl/core/horizon.q`), shared with
-`crypto_markout1`: it also bounds the quote history to what a waiting fill can
-still use. Unlike `cross_quotes`, both `position` and `demo_execution_quality`
-are real, persisted tables (round-trip through `rdb1`/`wdb1`/`hdb`, same as
-`mkt_orderbook`), since this history is worth keeping.
+the FX markout jobs: it also bounds the reference history to what a waiting fill
+can still use. Unlike `cross_quotes`, `position` is a real, persisted table
+(round-trips through `rdb1`/`wdb1`/`hdb`, same as `mkt_orderbook`), since this
+history is worth keeping.
 
 `exec_bars1` turns `executions` into one-minute bars (`exec_bar`: open, high,
 low, close, vwap, volume per sym), a **bars job** (`.qetl.job.stream.at_bars`,
@@ -294,19 +290,10 @@ with no update has no row - nothing is forward-filled.
 with the same pick, under the key `venue, sym, bar_start`. It is in the `crypto`
 profile.
 
-`demo_markout1`'s buffers live in its process, so a fill it never saw goes
-unscored: it was down, restarting, or the fill came before it. A bounded
-backfill covers those. `hdb_demo_markouts_backfill1`
-(`uqs job backfill hdb_demo_markouts_backfill ...`) reads a window of fills from
-the HDB's `trades`, and their quotes from `quote` up to the window's end plus
-the longest horizon. It scores them with the same function and horizons as
-`demo_markout1` (`.qpipe.source.hdb_demo_markouts`) and writes the rows into the
-same `demo_execution_quality` table. Rows are keyed on
-`sym, trade_time, horizon`, so a fill both jobs scored is replaced, not counted
-twice. Point it at the HDB with
-`UQF_SOURCE_CRED_HDB_MARKOUTS=localhost:<hdb1's port>`; without that, it runs on
-its fixture. Both paths, and how they meet in one table, are drawn in
-[markouts](../services/markouts.md).
+`crypto_markout1`'s buffers live in its process, so a fill it never saw goes
+unscored: it was down, restarting, or the fill came before it. The FX markouts
+have a bounded backfill for that, `hdb_fx_markouts_backfill1`; real crypto fills
+have none yet. See [markouts](../services/markouts.md).
 
 `cross_quotes` is drawn dashed because it never becomes a real database table -
 it's `.qpipe.job.cross.crosses`, a plain in-memory table inside `cross1`'s own

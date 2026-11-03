@@ -267,9 +267,9 @@
     legs:distinct raze .qpipe.transform.markout_core.legs_of[domain;spec;exe];
     if[0=count md; :enlist "market_data holds no books for the ",string[count legs]," pair(s) the window's ",string[count exe]," execution(s) are scored against"];
     cp:.qpipe.transform.markout_core.conversion_pairs[domain;spec;exe];
-    / no book-read rate: nothing more to ask of the books (and `in` on empty flipped lists is a 'type on PeachQ)
     if[0=count cp; :()];
-    gone:cp where not (flip cp`source`sym) in flip (md`source;md`sym);
+    held:{[md;src;sy] any (md[`source]=src) and md[`sym]=sy}[md]'[cp`source;cp`sym];
+    gone:cp where not held;
     {[g] "market_data holds no book of ",string[g`source]," for conversion pair ",string[g`sym]," (the rate of ",string[g`quote_ccy],")"} each gone}
 
 / ------------------------------------------------------------- SCORING

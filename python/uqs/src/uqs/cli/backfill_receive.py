@@ -16,6 +16,7 @@ from typing import Annotated
 import typer
 
 from uqs.attach import backfill_remote, backfill_run, config, service
+from uqs.cli.concepts import attach_opt
 from uqs.cli.json_out import emit, json_opt
 from uqs.cli.renames import ATTACHMENT, alias_command, renamed, warn_renamed
 from uqs.cli.safety import ChangesState, dry_run_note
@@ -125,9 +126,10 @@ receiver_app = typer.Typer(
 )
 job_app.add_typer(receiver_app, name="receiver", rich_help_panel=JOB_OPERATIONS_PANEL)
 
-AttachmentOpt = Annotated[
-    str, typer.Option("--attachment", help="The saved, verified attachment whose HDB it writes")
-]
+AttachmentOpt = attach_opt(
+    "The saved, verified attachment whose HDB it writes",
+    required=True,
+)
 ContractOpt = Annotated[
     str | None,
     typer.Option(
@@ -178,12 +180,15 @@ def receiver_start(
     _start(attach, contract, port, dry_run, as_json)
 
 
+_AttachOpt = attach_opt(
+    "The attachment whose receivers on this machine stop",
+    required=True,
+)
+
+
 @receiver_app.command("stop", cls=ChangesState)
 def receiver_stop(
-    attach: Annotated[
-        str,
-        typer.Option("--attachment", help="The attachment whose receivers on this machine stop"),
-    ],
+    attach: _AttachOpt,
     dry_run: Annotated[
         bool,
         typer.Option("--dry-run", "-n", help="Name the receivers that would stop; stop nothing"),

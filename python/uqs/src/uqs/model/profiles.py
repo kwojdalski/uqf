@@ -86,9 +86,9 @@ from uqs.runtimes import RUNTIMES
 PROFILES: dict[str, tuple[str, ...]] = {
     #: What a `start all` runs today, named so it can be asked about and
     #: diffed. Deliberately NOT the union of the others.
-    "default": ("posbook1", "demo_markout1", "fxpositions1", "fxorderbookfeed1"),
-    #: Positions, P&L and execution quality on the FX chain.
-    "fx": ("posbook1", "demo_markout1", "fxpositions1", "last_value1"),
+    "default": ("posbook1", "fxpositions1", "fxorderbookfeed1"),
+    #: Positions and P&L on the FX chain.
+    "fx": ("posbook1", "fxpositions1", "last_value1"),
     #: Cross-source and cross-currency opportunities, three processes deep.
     "arbitrage": ("arbitrage1", "crossarb1"),
     #: The depth-aware book path: a wide feed folded into vector columns, and
@@ -198,15 +198,12 @@ UNPROFILED: dict[str, str] = {
     ),
 }
 
-#: Inputs a profile deliberately leaves unfed, per profile, each with the reason.
+#: Inputs a profile leaves unfed on purpose, each with the reason (as UNPROFILED).
 #:
-#: The same shape as UNPROFILED: an exemption carries its reason, so "nobody wired
-#: it" cannot pass as "deliberately not run". A normalizer (`executions1`,
-#: `marketdata1`) subscribes to every source it maps, but maps each one on its own
-#: and needs only the ones that carry data; closing over ALL of them would drag the
-#: FX feeds into a crypto stack that has no FX to normalize (#1936: crypto_markout1
-#: reads the canonical tables, so it rests on the normalizers). The table is still
-#: on the plant - the normalizer subscribes to it - it is simply never fed.
+#: A normalizer (`executions1`, `marketdata1`) subscribes to every source it maps but
+#: maps each on its own, so closing over all of them would drag the FX feeds into a
+#: crypto stack that has no FX to normalize (#1936: crypto_markout1 reads the canonical
+#: tables). The table is still on the plant, never fed.
 PROFILE_UNFED_INPUTS: dict[str, dict[str, str]] = {
     "crypto": {
         table: "the FX source of a normalizer the crypto chain reads; crypto has no FX feed"
@@ -216,11 +213,7 @@ PROFILE_UNFED_INPUTS: dict[str, dict[str, str]] = {
 
 
 def unfed_inputs(names: Iterable[str]) -> frozenset[str]:
-    """The tables NONE of the named profiles needs fed: what they all leave unfed.
-
-    The intersection, because a stack started with `crypto` and `fx` together needs
-    the FX feeds, and a table one profile leaves unfed is another's input.
-    """
+    """What ALL the named profiles leave unfed: `crypto` with `fx` needs the FX feeds."""
     sets = [frozenset(PROFILE_UNFED_INPUTS.get(name, {})) for name in names]
     return frozenset.intersection(*sets) if sets else frozenset()
 
@@ -284,9 +277,7 @@ def closure(leaves: Iterable[str], unfed: Iterable[str] = ()) -> set[str]:
     is NOT pulled in - the module docstring says why that matters rather than
     merely being tidy.
 
-    `unfed` is a profile's PROFILE_UNFED_INPUTS: tables it leaves unfed on purpose,
-    which are treated like an external producer's - satisfied, and their in-stack
-    producer not pulled in.
+    `unfed` (a profile's PROFILE_UNFED_INPUTS) counts as external: satisfied, no producer pulled in.
 
     Vendored infrastructure is not here: it is `CORE_INFRA` (or a profile's
     own PROFILE_INFRA set), not derivable from a graph that only knows

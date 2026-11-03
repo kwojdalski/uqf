@@ -28,17 +28,16 @@
 / Every markout dataset on the plant, with its layout (`long or `wide).
 / @return dictionary: table name -> layout
 .qt.qetl.plant.markout.datasets:{[]
-    `fx_markout`fx_markout_wide`crypto_markout`demo_execution_quality!`long`wide`long`long}
+    `fx_markout`fx_markout_wide`crypto_markout!`long`wide`long}
 
 / Datasets that do not yet carry the core, each with the issue that removes the
 / exemption and why. An exemption is deleted by the issue named, not edited.
 / @return table: dataset, issue, reason
 .qt.qetl.plant.markout.exemptions:{[]
-    ([] dataset:`fx_markout`fx_markout_wide`demo_execution_quality;
-        issue:`$("#1935";"#1935";"#1937");
+    ([] dataset:`fx_markout`fx_markout_wide;
+        issue:`$("#1935";"#1935");
         reason:("FX gains the core columns in the domain-module migration";
-            "derived from fx_markout, so it gains them with it";
-            "the demo job is retired; it gets no dataset"))}
+            "derived from fx_markout, so it gains them with it"))}
 
 / What stops a table conforming. Empty means it conforms.
 / @param schema table: the dataset's schema
@@ -139,5 +138,5 @@
 
 / The real datasets are not vacuously accepted: each unmigrated one has problems.
 .qt.qetl.plant.markout.test_the_unmigrated_datasets_are_caught_by_the_check:{[t]
-    p:count each .qt.qetl.plant.markout.problems[;`long] each .qetl.plant.schema each `fx_markout`demo_execution_quality;
+    p:count each .qt.qetl.plant.markout.problems[;`long] each .qetl.plant.schema each `fx_markout`fx_markout_wide;
     .qunit.assertTrue[all p>0;"the check finds the missing core columns in real schemas"]};

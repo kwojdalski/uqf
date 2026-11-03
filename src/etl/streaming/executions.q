@@ -100,9 +100,10 @@
 / @return canonical executions
 / @eg count .qpipe.job.executions.from_crypto_trades[0#.qpipe.job.executions.crypto_trades]  ->  0
 .qpipe.job.executions.from_crypto_trades:{[batch]
-    select source_time:?[null source_time;time;source_time], sym, venue, side, size, price:trade_price,
+    / fill and index rather than ?[b;x;y], which gives () on an empty batch on PeachQ
+    select source_time:time^source_time, sym, venue, side, size, price:trade_price,
         fee, fee_ccy:fee_currency, fill_id:exchange_fill_id, book:`, product:`,
-        clock:?[null source_time;`receipt;`venue] from batch}
+        clock:(`venue`receipt) "j"$null source_time from batch}
 
 / A filled order as a canonical execution, booked to its book and product.
 / The orders feed is the FX desk's, so its venue is the FX one; the order's

@@ -69,7 +69,7 @@ of concept, alongside the book recorder above: cryptorust's own
 `kdb-fills-recorder` binary (`src/bin/kdb_fills_recorder.rs`) polls an
 *already-running* cryptorust service's OMS over its own IPC unix socket (default
 `/tmp/beacon.sock`) and republishes new fills onto this demo's `stp1`, the
-bridge role the `posbook` and `demo_markout` streaming jobs play inside this
+bridge role the `posbook` and `crypto_markout` streaming jobs play inside this
 repo's own uqf stack - except this one bridges two entirely different IPC
 protocols (cryptorust's JSON-RPC and kdb+'s wire protocol) rather than two kdb+
 processes. It polls two independent methods each tick, into two separate tables:
@@ -109,9 +109,9 @@ for the fill, which the recorder sends right after it (the exchange's trade
 time, `Fill.timestamp_ms`; cryptorust#1062). It is null for a row recorded
 before the column existed or by a recorder that predates it, and the markout
 path then scores the fill on the plant's receipt clock instead (see [Execution
-quality](markouts.md#real-fills-crypto_markout1)). The recorder and the plant
-must be upgraded together: the tickerplant takes rows by position, so an older
-recorder publishing one column short is refused rather than misaligned:
+quality](markouts.md#crypto_markout1)). The recorder and the plant must be
+upgraded together: the tickerplant takes rows by position, so an older recorder
+publishing one column short is refused rather than misaligned:
 
 ```
 uqs query "select from crypto_sim_fills" --port <rdb1's port>

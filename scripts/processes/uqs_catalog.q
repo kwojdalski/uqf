@@ -54,8 +54,6 @@ describe[`etl_coverage]:
     "Append-only completeness ledger: which [range_from, range_to) window of which dataset is published, at which source_version. A window with rows_published=0 still counts as covered - that is what distinguishes 'ran, found nothing' from 'never ran'";
 describe[`event_tape]:
     "Per-event order/trade tape: add, cancel and trade events with the aggressor side on a trade. A superset of trades, so a tape filtered to action='trade' is trade-shaped. Sorted ascending by time by contract - see docs/architecture/event-tape.md";
-describe[`demo_execution_quality]:
-    "Post-trade markout per fill per horizon; a null markout_pips means no reference quote existed at that horizon, not a zero markout";
 describe[`exec_bar]:
     "One-minute bars of executions per sym, built by exec_bars1 and rebuildable from the HDB by hdb_exec_bars_backfill: open, high, low, close, size-weighted vwap, volume and fill count for [bar_start, bar_start+1m) on the fill's source_time. A minute with no fills has no row; the minute a fill can still amend is not yet published, so the newest bar lags by about 5s past its end";
 describe[`order_quality]:

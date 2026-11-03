@@ -4,7 +4,7 @@
 / whose table it writes; `uqs job gaps` offers the twin to refill an outage, and
 / a refill REPLACES the live rows under the shared key. So a twin must
 / re-derive what the stream job publishes, and that was nowhere checked: the
-/ demo markout pair computed its rows two ways for as long as it existed.
+/ one twin pair once computed its rows two ways for as long as it existed.
 / .
 / The rule, over every twin pair: run the twin's transform on the STREAM
 / transform's own examples - with the input names mapped - and it must give
@@ -17,7 +17,7 @@
 
 / stream job -> (stream transform; twin transform; twin input name for each stream input)
 / Stream transform input -> twin transform input, where they differ.
-.qt.qpipe.twins.renames:(`demo_markout`exec_bars`crypto_book_1s`order_quality`book_liquidity_1m`fx_markout`fx_markout_wide`crypto_markout`demo_deals_feed)!(`trades`quotes!`trades`quote;enlist[`tape]!enlist `executions;enlist[`book]!enlist `book;()!();enlist[`books]!enlist `books;()!();()!();()!();()!())
+.qt.qpipe.twins.renames:(`exec_bars`crypto_book_1s`order_quality`book_liquidity_1m`fx_markout`fx_markout_wide`crypto_markout`demo_deals_feed)!(enlist[`tape]!enlist `executions;enlist[`book]!enlist `book;()!();enlist[`books]!enlist `books;()!();()!();()!();()!())
 
 / A bundle's twin pair lists its own renaming, as .qt.qpipe.job.<job>.twin_renames in its test file
 / (the databento bundle's eq_orderbook is one): a name the job's suite owns has no load order, and the
@@ -71,10 +71,6 @@
         / the comparison the stream transform's own examples are held to:
         / float columns within .qetl.transform.float_tolerance
         0=count .qetl.transform.differences[c#want;c#got]}[p] each s`examples}
-
-.qt.qpipe.twins.test_the_demo_markout_twin_scores_as_the_live_job_does:{[t]
-    .qunit.assertTrue[.qt.qpipe.twins.agrees[`demo_markout];
-        "hdb_demo_markouts_score gives the live transform's rows on its examples"]};
 
 .qt.qpipe.twins.test_the_crypto_markout_twin_scores_as_the_live_job_does:{[t]
     .qunit.assertTrue[.qt.qpipe.twins.agrees[`crypto_markout];"hdb_crypto_markout_long gives the live transform's rows on its examples (plus the core's time)"]};

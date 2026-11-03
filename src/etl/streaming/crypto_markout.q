@@ -45,6 +45,24 @@
 / .
 / Loaded by src/etl/init.q in any q process: nothing here touches TorQ.
 
+\d .
+
+/ What this job keeps of a batch of either table: fills the crypto domain can score, and books of
+/ the pairs it prices from. The predicate is the transform namespace's, which the bounded twin
+/ shares; the job declares it as its own `keep`. Fully qualified, as every global a job reads is.
+/ @param x a batch of executions or of market_data
+/ @return a boolean per row
+/ @eg .qpipe.job.crypto_markout.keep[([] sym:`$("BTC-USDT";"EURUSD"))]  ->  10b
+.qpipe.job.crypto_markout.keep:{[x] .qpipe.transform.crypto_markout_outputs.keep x}
+
+/ Each pending fill's legs: the reference keys readiness waits on.
+/ @param pending the pending executions
+/ @return a list of symbol lists
+/ @eg .qpipe.job.crypto_markout.legs[([] sym:enlist `$"BTC-USDT")]  ->  enlist enlist `$"BTC-USDT"
+.qpipe.job.crypto_markout.legs:{[pending] .qpipe.transform.crypto_markout_outputs.legs pending}
+
+\d .
+
 .qetl.job.stream.at_horizons[`crypto_markout;`procname`events`reference`transform`publishes`horizon`period`event_time`reference_time`ready_on`legs`lookback`max_age`by`retain_by`identity`remember`max_lateness`expire_after`keep`note`ephemeral!(
     `crypto_markout1;
     `executions;
@@ -56,7 +74,7 @@
     `source_time;
     `source_time;
     `both;
-    .qpipe.transform.crypto_markout_outputs.legs;
+    .qpipe.job.crypto_markout.legs;
     .qpipe.transform.crypto_markout_outputs.lookback[];
     (.qpipe.transform.crypto_markout_outputs.job_spec)`max_age;
     `sym;
@@ -65,6 +83,6 @@
     .qpipe.transform.crypto_markout_outputs.remember;
     .qpipe.transform.crypto_markout_outputs.max_lateness;
     .qpipe.transform.crypto_markout_outputs.expire_after;
-    .qpipe.transform.crypto_markout_outputs.keep;
+    .qpipe.job.crypto_markout.keep;
     "markouts on real crypto fills, in bps against the best mid across venues and net of the fee, from the canonical executions and market_data. Not started with the stack: its inputs come from cryptorust's recorders, or from cryptomock1 in their place, neither of which starts by default - `uqs start --profile crypto` brings it up with the mock";
     "fills waiting for their horizons at a restart are not scored, and the venue-book history is rebuilt from the next books; the job publishes scores, it holds no book of record - hdb_crypto_markout_backfill re-derives any window from the HDB")];

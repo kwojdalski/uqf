@@ -356,21 +356,21 @@ def test_a_twin_that_would_not_be_one_is_refused(job, dataset, columns, message)
 def test_a_twin_applies_the_transform_its_job_declares():
     """#884: a job that names its transform hands it to its twin, so a
     refill re-derives what the job publishes rather than a copy of it."""
-    assert create_backfill.shared_transform(UQF_ROOT, "demo_markout", None) == (
-        "demo_markout",
-        "demo_execution_quality",
+    assert create_backfill.shared_transform(UQF_ROOT, "crypto_markout", None) == (
+        "crypto_markout",
+        "crypto_markout_score",
     )
     body = templates.worker_body(
-        "mk_backfill", "mk", "demo_execution_quality", "1D", "mk_backfill1",
-        shared=("demo_markout", "demo_execution_quality"),
+        "mk_backfill", "mk", "crypto_markout", "1D", "mk_backfill1",
+        shared=("crypto_markout", "crypto_markout_score"),
     )  # fmt: skip
-    assert "`mk;`demo_execution_quality;1D;`demo_execution_quality;" in body
+    assert "`mk;`crypto_markout;1D;`crypto_markout_score;" in body
     assert "passthrough" not in body, "no transform of its own is written"
 
 
 def test_transform_beside_a_declared_one_is_refused():
     with pytest.raises(UqsError, match="drop --transform"):
-        create_backfill.shared_transform(UQF_ROOT, "demo_markout", "derive")
+        create_backfill.shared_transform(UQF_ROOT, "crypto_markout", "derive")
 
 
 def test_a_job_that_declares_no_transform_leaves_its_twin_the_usual_scaffold():

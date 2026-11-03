@@ -119,9 +119,9 @@ or time, a side other than +1/-1, a price that is not positive and finite) are
 excluded, and `.qpipe.transform.fx_markout.unscoreable` names them with the
 reason; the live job's `keep` drops the same rows so a queue never holds one.
 
-**Not migrated.** `demo_markout` and `crypto_markout` keep their own, different
-policies (a single-quote pip mid; a best mid in basis points). They are not
-rebuilt on this calculation, so their outputs are unchanged.
+**Not migrated.** `crypto_markout` keeps its own, different policy (a best mid
+in basis points). It is not rebuilt on this calculation, so its output is
+unchanged.
 
 ## Source adapters
 
@@ -209,14 +209,14 @@ them to that.
 ## Recovery
 
 The pending queue, the book history and the deduplication memory are
-**intentionally ephemeral**, as `demo_markout`'s and `crypto_markout`'s are: the
-jobs publish derived rows, not a book of record. Executions waiting for their
-horizons at a restart are not scored by the restarted job.
-`hdb_fx_markouts_backfill1` and `hdb_fx_markout_wide_backfill1` re-derive any
-window from the HDB with the same calculation and `replace` the rows under the
-same key, so a gap is a refill, not a loss. A failure in the calculation or in
-publishing leaves the eligible executions queued for the next tick (the horizon
-kind publishes before it evicts); a test forces each.
+**intentionally ephemeral**, as `crypto_markout`'s is: the job publishes derived
+rows, not a book of record. Executions waiting for their horizons at a restart
+are not scored by the restarted job. `hdb_fx_markouts_backfill1` and
+`hdb_fx_markout_wide_backfill1` re-derive any window from the HDB with the same
+calculation and `replace` the rows under the same key, so a gap is a refill, not
+a loss. A failure in the calculation or in publishing leaves the eligible
+executions queued for the next tick (the horizon kind publishes before it
+evicts); a test forces each.
 
 ## Deduplication has a bound
 
