@@ -98,6 +98,7 @@ class HdbStack(FakeStack):
             }
         return base | {
             "proctype": "rdb",
+            "partitions": ["2026.10.16"],
             "savetables": False,
             "reloadenabled": True,
             "hdbdir": self.named(name)["hdbdir"],
@@ -111,10 +112,12 @@ class HdbStack(FakeStack):
             if endpoint.port in self.hung:
                 raise IpcError(endpoint, op, "q error: timed out")
             if op == "writer_state":
-                return {
-                    **self.writer_state(endpoint.procname),
-                    **self.state_over.get(endpoint.procname, {}),
-                }
+                over = self.state_over.get(endpoint.procname, {})
+                if endpoint.procname.startswith("rdb") and "partition" in over:
+                    # shorthand for tests that move a whole stack to one date: an rdb holds
+                    # that date alone unless the test lists its `partitions` itself
+                    over = {"partitions": [over["partition"]]} | over
+                return {**self.writer_state(endpoint.procname), **over}
             return {"procname": endpoint.procname, **self.readers[endpoint.procname]}
         return super().call(endpoint, op, request)
 
