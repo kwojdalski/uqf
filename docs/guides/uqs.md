@@ -135,6 +135,33 @@ case-sensitively against the names the process reported. An exact name is just a
 pattern that matches itself, so there is one behaviour rather than two - quote
 the pattern, or the shell will try to expand it against your filenames first.
 
+### The `clock` column on `executions` and `market_data` (#1925)
+
+Every row of `executions` and `market_data` says whose clock its `source_time`
+is: `venue` (the venue stamped it) or `receipt` (this stack stamped it on
+arrival). A partition written before the column existed gets it from
+`uqs data check --apply`, which for this one column **attributes** instead of
+writing null, from the rows' own columns and the rules in
+`scripts/gates/hdb_clock_rules.csv`:
+
+  | Table         | Looked up by       | Rule shipped                                                                               |
+  | ---           | ---                | ---                                                                                        |
+  | `market_data` | `(market, source)` | `fx` + `UQFFX` or `UQFDEPTH`: `receipt`; any `crypto` source: `venue`                      |
+  | `executions`  | `venue`            | `fx`, `binance_spot`, `bybit_spot`: `receipt` (the FX feeds and the polled crypto fills)   |
+  | either        | no rule matches    | `unknown`                                                                                  |
+
+A row the rules do not name is `unknown`, never null and never a guess: a source
+name such as an FX liquidity provider can have come from the quote feed
+(`receipt`) or from a vendor book (`venue`), and only the site knows which.
+`unknown` is refused by the normalizers' checks and by the markout contract
+(#1923), so history that matters needs a rule row (`table,market,name,clock`;
+`*` as the name matches any source of that market) BEFORE the first `--apply`:
+the fill is additive and writes the column once, so a partition already filled
+`unknown` is not revisited by a later run. Correcting it is a decision for a
+person (a column rewrite, as for any stored value). A partition with no
+`market`/`source` (or `venue`) column to read is `unknown` throughout. The run
+prints how many rows of each partition got each clock.
+
 ### Renamed or retyped HDB columns
 
 `data check --apply` does not rewrite existing columns. When a release renames

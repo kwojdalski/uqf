@@ -1554,7 +1554,7 @@
 .qt.qetl.job.stream.test_market_data_check_names_crossed_and_stale_rows:{[t]
     t0:2026.09.19D10:00:00.000000000;
     book:{[s;ts;b;a] ([] sym:enlist s; source:enlist `LP_A; market:enlist `fx; source_time:enlist ts;
-        bid_prices:enlist enlist b; bid_sizes:enlist enlist 1e6; ask_prices:enlist enlist a; ask_sizes:enlist enlist 1e6)};
+        bid_prices:enlist enlist b; bid_sizes:enlist enlist 1e6; ask_prices:enlist enlist a; ask_sizes:enlist enlist 1e6; clock:enlist `receipt)};
     rows:raze (book[`EURUSD;t0;1.1;1.2];book[`GBPUSD;t0;1.3;1.2];book[`USDJPY;t0-0D00:10;150.0;150.1]);
     f:.qpipe.job.market_data.check rows;
     .qunit.assertEquals[exec row from f where check=`crossed_book;enlist 1;"GBPUSD is crossed"];
@@ -1567,7 +1567,7 @@
     / Two fresh venues must not let okx's ten-minute-old book through.
     t0:2026.09.19D10:10:00.000000000;
     book:{[v;ts] ([] sym:enlist `$"BTC-USDT"; source:enlist v; market:enlist `crypto; source_time:enlist ts;
-        bid_prices:enlist enlist 100f; bid_sizes:enlist enlist 1f; ask_prices:enlist enlist 101f; ask_sizes:enlist enlist 1f)};
+        bid_prices:enlist enlist 100f; bid_sizes:enlist enlist 1f; ask_prices:enlist enlist 101f; ask_sizes:enlist enlist 1f; clock:enlist `venue)};
     rows:raze (book[`binance;t0];book[`kraken;t0];book[`okx;t0-0D00:10]);
     f:.qpipe.job.market_data.check rows;
     .qunit.assertEquals[exec row from f where check=`stale_quote;enlist 2;"okx lags the batch by ten minutes"];
@@ -1579,7 +1579,7 @@
 .qt.qetl.job.stream.test_market_data_check_names_bad_levels_and_future_stamps:{[t]
     now:.z.p;
     book:{[b;bs;ts] ([] sym:enlist `EURUSD; source:enlist `LP_A; market:enlist `fx; source_time:enlist ts;
-        bid_prices:enlist b; bid_sizes:enlist bs; ask_prices:enlist enlist 1.12; ask_sizes:enlist enlist 1e6)};
+        bid_prices:enlist b; bid_sizes:enlist bs; ask_prices:enlist enlist 1.12; ask_sizes:enlist enlist 1e6; clock:enlist `receipt)};
     rows:raze (book[enlist 1.10;enlist 1e6;now];book[enlist 0w;enlist 1e6;now];book[enlist 1.10;enlist 0f;now];
         book[`float$();`float$();now];book[enlist 1.10;enlist 1e6;now+0D00:01]);
     f:.qpipe.job.market_data.check rows;
@@ -1595,7 +1595,7 @@
 .qt.qetl.job.stream.test_market_data_check_stale_reference_ignores_future_rows:{[t]
     now:.z.p;
     book:{[s;v;ts] ([] sym:enlist s; source:enlist v; market:enlist `fx; source_time:enlist ts;
-        bid_prices:enlist enlist 1.1; bid_sizes:enlist enlist 1e6; ask_prices:enlist enlist 1.2; ask_sizes:enlist enlist 1e6)};
+        bid_prices:enlist enlist 1.1; bid_sizes:enlist enlist 1e6; ask_prices:enlist enlist 1.2; ask_sizes:enlist enlist 1e6; clock:enlist `receipt)};
     rows:raze (book[`EURUSD;`LP_A;now];book[`GBPUSD;`LP_A;now];book[`USDJPY;`LP_A;now];
         book[`EURUSD;`LP_B;now+0D00:10]);
     f:.qpipe.job.market_data.check rows;
@@ -1614,7 +1614,7 @@
     `.qpipe.job.superbook.books set 0#.qpipe.job.superbook.books;
     .qetl.job.stream.wire[`superbook;{[t;x]}];
     row:([] sym:enlist `EURUSD; source:enlist `LP_A; market:enlist `fx; source_time:enlist .z.p+0D00:00:00.600;
-        bid_prices:enlist enlist 1.10; bid_sizes:enlist enlist 1e6; ask_prices:enlist enlist 1.12; ask_sizes:enlist enlist 1e6);
+        bid_prices:enlist enlist 1.10; bid_sizes:enlist enlist 1e6; ask_prices:enlist enlist 1.12; ask_sizes:enlist enlist 1e6; clock:enlist `receipt);
     r:@[{.qpipe.job.superbook.on_batch[`market_data;x]; count .qpipe.job.superbook.books};row;{x}];
     `.qf.mkt.max_clock_lead set saved;
     `.qpipe.job.superbook.books set 0#.qpipe.job.superbook.books;

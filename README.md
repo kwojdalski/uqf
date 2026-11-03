@@ -194,11 +194,17 @@ nothing left over, PeachQ as its q.
   runs only when the selector cannot decide - no record yet, a `conftest.py`,
   `pyproject.toml` or `uv.lock` change. The records are shared between the
   worktrees of a clone, so a new worktree starts from the last one written.
-- **CI.** Every hook again over every file, the whole Python suite in four
-  PeachQ shards, and - when the change can affect them - the whole q suite on
-  PeachQ and the docs render. `scripts/dev/ci_scope.py` decides, and says why in
-  the "Scope" job's summary; "Repository checks" counts a job it skipped as
-  passed.
+- **CI.** Every hook again over every file, on every run. Then each complete
+  group the change can affect (#1955): the whole Python suite in four PeachQ
+  shards, the whole q suite on PeachQ, the docs render, and the browser
+  application's check and build. `scripts/dev/ci_scope.py` decides, and says why -
+  for each group run and each skipped - in the "Scope" job's summary. The Python
+  suite runs for every change but a `web/` file no Python file names (a `.q`
+  file starts q in Python tests, a document's q blocks run as one); the browser
+  application only for `web/`; and every group for the shared test configuration
+  (`conftest.py`, `pyproject.toml`, `uv.lock`, the workflow and its planner) or
+  a path in no known area. "Repository checks" counts a skipped job as passed
+  only when Scope said to skip it.
 - **KDB-X attestation.** The KDB-X gates run locally
   (`uv run python scripts/dev/attest_kdbx.py`), and CI checks the trailer.
 

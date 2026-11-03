@@ -167,6 +167,25 @@
     .qunit.assertEquals[(count .qt.qpipe.job.hdb_fx_markouts_backfill.sent;count r`executions;count r`market_data);(1;0;0);"no executions, no book query"];
     .qunit.assertTrue[.qetl.source.validate[`hdb_fx_markouts;r];"and both inputs still in their contracts' shape"]};
 
+/ --- the declared reference read (#1926) ---------------------------------------
+
+.qt.qpipe.job.hdb_fx_markouts_backfill.test_the_source_declares_its_reference_read:{[t]
+    rr:.qetl.source.reference_read `hdb_fx_markouts;
+    .qunit.assertEquals[(rr`date_skew;rr`lookback_cap);(1;7D);"a day either side; the cap that was the literal"];
+    spec:.qpipe.transform.fx_markout_outputs.job_spec;
+    early:.qpipe.transform.fx_markout.lookback spec;
+    .qunit.assertEquals[.qetl.source.reference_lookback[`hdb_fx_markouts;spec`max_age;early];spec[`max_age]+early;"the job's max_age is finite, so the look-back is not the 7 day cap"]};
+
+.qt.qpipe.job.hdb_fx_markouts_backfill.test_the_symbols_are_the_routes_legs_and_the_conversion_pairs:{[t]
+    spec:.qpipe.transform.fx_markout_outputs.job_spec;
+    rows:([] sym:`USDPLN`EURUSD`USDPLN);
+    .qunit.assertEquals[.qpipe.source.hdb_fx_markouts.reference_symbols[spec;rows];`EURUSD`EURPLN;"USDPLN's legs, EURUSD's, no duplicates"];
+    old:.qpipe.source.hdb_fx_markouts.conversion_pairs;
+    `.qpipe.source.hdb_fx_markouts.conversion_pairs set {[spec;rows] enlist `GBPUSD};
+    r:.qpipe.source.hdb_fx_markouts.reference_symbols[spec;rows];
+    `.qpipe.source.hdb_fx_markouts.conversion_pairs set old;
+    .qunit.assertEquals[r;`EURUSD`EURPLN`GBPUSD;"a conversion pair joins the legs"]};
+
 / --- readiness: reference data that has not landed is not a scored window (#1927) ------------
 
 / Run the day with the source's fixture replaced by `f`, then put the real one back.
