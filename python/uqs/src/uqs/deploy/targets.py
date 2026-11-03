@@ -283,6 +283,14 @@ def _options(layer: str, declared: dict, text: str = "", path: Path | None = Non
     return options
 
 
+def push_options(label: str, t: dict) -> dict:
+    """The push options among `t`'s settings - a target read() merged, or a
+    history entry - as make_config's keyword arguments: what a command that
+    reaches the server makes its Config from, so rollback and prune honour
+    a target's command_timeout and verify_timeout as push does (#1892)."""
+    return _options(label, {k: v for k, v in t.items() if k in SETTABLE})
+
+
 def _merged(
     data: dict, name: str, path: Path, text: str = ""
 ) -> tuple[dict, dict[str, str], str | None]:

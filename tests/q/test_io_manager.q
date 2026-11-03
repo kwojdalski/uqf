@@ -236,7 +236,9 @@
         (.qt.qetl.io.part[root;2026.01.02;`iodeals];
          .qetl.io.is_finished[root;2026.01.02;`iodeals])}[root;m]];
     q:first p;
-    .qunit.assertEquals[(q`time;q`sym);(2026.01.02D09:00:00.000000000 2026.01.02D10:00:00.000000000;`GBPUSD`EURUSD);
+    / read back off disk: sym is enumerated and time carries the s# the rule
+    / puts on it, so both are compared bare - the attribute is asserted below
+    .qunit.assertEquals[(`#q`time;value q`sym);(2026.01.02D09:00:00.000000000 2026.01.02D10:00:00.000000000;`GBPUSD`EURUSD);
         "sorted by the declared time; the default would have put EURUSD first"];
     .qunit.assertTrue[last p;"a partition finished by its declared rule reads as finished"];
     if[not .qetl.io.on_peachq;
@@ -251,7 +253,7 @@
         .qetl.io.write[m;`iodeals;rows];
         .qetl.io.finish m;
         .qt.qetl.io.part[root;2026.01.02;`iodeals]}[root;m;rows]];
-    .qunit.assertEquals[(q`notional;q`sym);(1e6 2e6 3e6;`EURUSD`GBPUSD`EURUSD);
+    .qunit.assertEquals[(`#q`notional;value q`sym);(1e6 2e6 3e6;`EURUSD`GBPUSD`EURUSD);
         "sorted by notional, then sym - the declared columns, in the declared order"];
     if[not .qetl.io.on_peachq;
         .qunit.assertEquals[(attr q`notional;attr q`sym);(`g;`);"g# on the first column as declared; none on sym"]]};
@@ -275,7 +277,7 @@
         .qetl.io.write[m;`iodeals;([] deal_time:enlist 2026.01.02D08:00:00.000000000; sym:enlist `USDJPY; notional:enlist 4e6)];
         .qetl.io.finish m;
         .qt.qetl.io.part[root;2026.01.02;`iodeals]}[root;m]];
-    .qunit.assertEquals[q`sym;`USDJPY`EURUSD`GBPUSD;"the s#time a declared rule leaves does not refuse the next window, which is then sorted in"]};
+    .qunit.assertEquals[value q`sym;`USDJPY`EURUSD`GBPUSD;"the s#time a declared rule leaves does not refuse the next window, which is then sorted in"]};
 
 .qt.qetl.io.test_a_partition_is_finished_by_its_declared_rule:{[t]
     root:.qt.qetl.io.hdb_dir[];

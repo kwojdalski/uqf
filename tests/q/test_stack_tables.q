@@ -3,8 +3,8 @@
 //
 // These definitions used to be Python string literals. Nothing parsed them
 // as q until stp1 started, so a typo was a failed tickerplant rather than a
-// failed commit. This file is the parser: loading the q file here means a
-// malformed declaration fails the suite.
+// failed commit. The runner loads the q file (src/etl/init.q), so a
+// malformed declaration fails the run before any suite does.
 //
 // It also holds the shapes to the functions that consume them. A table whose
 // columns no longer match what src/ expects is not a syntax error - it is a
@@ -12,12 +12,25 @@
 // column assertions below exist to catch.
 
 
-/ Loaded here rather than in run_tests.q's list: this is the only suite that
-/ needs these tables in scope, and defining nine top-level tables for every
+/ Materialised here rather than for every suite: this is the only suite that
+/ needs these tables in scope, and defining them as top-level tables for every
 / other suite would put names in the root namespace that nothing else wants.
+/ .
+/ The file itself is NOT loaded again: src/etl/init.q has loaded it - so a
+/ malformed declaration already fails the run - and a second load redefined
+/ every .qetl.plant function after the coverage gate had instrumented it, and
+/ emptied the registries other suites declare into. .qetl.plant.equivalence
+/ then read as never entered, though test_verify_compare.q enters it (#1891).
 .qt.qetl.plant.tables.beforeNamespace_load:{[]
-    system"l src/etl/plant_tables.q";
+    `.qt.qetl.plant.tables.made set .qetl.plant.own[] except tables `.;
     .qetl.plant.materialise .qetl.plant.own[];
+    }
+
+/ And dropped again after, the ones this suite made: a root demo_deals left
+/ behind is where the memory io manager writes, so a later verify suite's
+/ backfill was refused for a `time` column its batch does not carry (#1891).
+.qt.qetl.plant.tables.afterNamespace_drop:{[]
+    {[t] ![`.;();0b;enlist t]} each .qt.qetl.plant.tables.made;
     }
 
 / Every table the orchestrator's generated database.q is expected to carry.

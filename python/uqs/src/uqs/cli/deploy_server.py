@@ -28,12 +28,14 @@ from uqs.deploy.remote import Remote
 from uqs.paths import UqsError
 
 
-def _server(ctx, target, host, dest, remote_user, connect_timeout, **timeouts):
-    connection = conn.server(
-        ctx, target, host=host, dest=dest, remote_user=remote_user, connect_timeout=connect_timeout
-    )
+def _server(ctx, target, flags: dict, **fixed):
+    """The Config and Remote for a command that reaches one server: TARGET's
+    settings - its timeouts too (#1892) - under the `flags` given on the
+    command line, under `fixed`, which this command alone decides."""
+    settings = conn.server(ctx, target, **flags) | fixed
     # profile is unused: each release's own report names the profile it runs
-    cfg = config.make_config(artifact="", profile="unused", **connection, **timeouts)
+    settings["profile"] = "unused"
+    cfg = config.make_config(artifact="", **settings)
     return cfg, Remote(cfg.host, cfg.connect_timeout, remote_user=cfg.remote_user)
 
 
@@ -64,7 +66,10 @@ def status_cmd(
     Read-only; it never takes the lock."""
     try:
         cfg, remote = _server(
-            ctx, target, host, dest, remote_user, connect_timeout, verify_timeout=health_timeout
+            ctx,
+            target,
+            dict(host=host, dest=dest, remote_user=remote_user, connect_timeout=connect_timeout),
+            verify_timeout=health_timeout,
         )
         result = status.status(cfg, remote, health=health)
     except config.DeployError as exc:
@@ -98,8 +103,8 @@ def rollback_cmd(
     dest: conn.Dest = None,
     remote_user: conn.RemoteUser = None,
     connect_timeout: conn.ConnectTimeout = conn.DEFAULT_CONNECT_TIMEOUT,
-    command_timeout: conn.CommandTimeout = 900,
-    verify_timeout: conn.VerifyTimeout = 180,
+    command_timeout: conn.CommandTimeout = None,
+    verify_timeout: conn.VerifyTimeout = None,
     break_lock: Annotated[
         bool,
         typer.Option(
@@ -119,12 +124,14 @@ def rollback_cmd(
         cfg, remote = _server(
             ctx,
             target,
-            host,
-            dest,
-            remote_user,
-            connect_timeout,
-            command_timeout=command_timeout,
-            verify_timeout=verify_timeout,
+            dict(
+                host=host,
+                dest=dest,
+                remote_user=remote_user,
+                connect_timeout=connect_timeout,
+                command_timeout=command_timeout,
+                verify_timeout=verify_timeout,
+            ),
             break_lock=break_lock,
         )
         code = rollback.rollback(cfg, remote, to=to, dry_run=dry_run)
@@ -147,7 +154,7 @@ def prune_cmd(
     dest: conn.Dest = None,
     remote_user: conn.RemoteUser = None,
     connect_timeout: conn.ConnectTimeout = conn.DEFAULT_CONNECT_TIMEOUT,
-    command_timeout: conn.CommandTimeout = 900,
+    command_timeout: conn.CommandTimeout = None,
 ) -> None:
     """Remove the oldest releases beyond the newest --keep, under the deploy lock.
 
@@ -156,7 +163,15 @@ def prune_cmd(
     stayed and why, what went, and the bytes freed."""
     try:
         cfg, remote = _server(
-            ctx, target, host, dest, remote_user, connect_timeout, command_timeout=command_timeout
+            ctx,
+            target,
+            dict(
+                host=host,
+                dest=dest,
+                remote_user=remote_user,
+                connect_timeout=connect_timeout,
+                command_timeout=command_timeout,
+            ),
         )
         code = prune.prune(cfg, remote, keep=keep, dry_run=dry_run)
     except config.DeployError as exc:
@@ -184,7 +199,7 @@ _CHECK_RENAMES = {
 @deploy_app.command("check", cls=renamed(_CHECK_RENAMES, ReadOnly))
 def verify_cmd(
     profile: Annotated[str, typer.Option("--profile", help="The profile the release started")],
-    deadline: Annotated[float, conn.verify_timeout_option()] = 180.0,
+    deadline: Annotated[float, conn.verify_timeout_option()] = config.DEFAULT_VERIFY_TIMEOUT,
     query_timeout: Annotated[
         int,
         duration("--query-timeout", integer=True, help="How long (a DURATION) each query may take"),
