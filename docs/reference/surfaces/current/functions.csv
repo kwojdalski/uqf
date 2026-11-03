@@ -1876,6 +1876,39 @@ qpipe.transform.fx_source_adapters,spot_codes,value,,
 qpipe.transform.fx_source_adapters,tape_sides,value,,
 qpipe.transform.kafka_client_flow,map,function,1,m
 qpipe.transform.kafka_client_flow,message,table,,
+qpipe.transform.markout_core,calc,function,4,domain spec exe md
+qpipe.transform.markout_core,chain_mid,function,1,books
+qpipe.transform.markout_core,clocks,value,,
+qpipe.transform.markout_core,contract_version,value,,
+qpipe.transform.markout_core,core_cols,value,,
+qpipe.transform.markout_core,core_keys,value,,
+qpipe.transform.markout_core,declare,function,4,name domain spec examples
+qpipe.transform.markout_core,exclude_bad_size,value,,
+qpipe.transform.markout_core,executions_in,table,,
+qpipe.transform.markout_core,fixed_source,value,,
+qpipe.transform.markout_core,fixture_domain,dict,,
+qpipe.transform.markout_core,fixture_examples,function,1,
+qpipe.transform.markout_core,fixture_spec,dict,,
+qpipe.transform.markout_core,input_names,value,,
+qpipe.transform.markout_core,last_delivery,function,1,exe
+qpipe.transform.markout_core,leg_at,function,5,tob max_age syms inverted times
+qpipe.transform.markout_core,legs_of,function,3,domain spec pending
+qpipe.transform.markout_core,long_key_cols,value,,
+qpipe.transform.markout_core,market_data_in,table,,
+qpipe.transform.markout_core,mismatch_status,value,,
+qpipe.transform.markout_core,rate_kind,function,1,entry
+qpipe.transform.markout_core,rate_max_age,function,1,spec
+qpipe.transform.markout_core,rate_same_clock,value,,
+qpipe.transform.markout_core,refuse_undeclared,value,,
+qpipe.transform.markout_core,require_version,function,2,rows version
+qpipe.transform.markout_core,required_keys,value,,
+qpipe.transform.markout_core,result,table,,
+qpipe.transform.markout_core,spec_defaults,dict,,
+qpipe.transform.markout_core,table_domain,function,2,inst conv
+qpipe.transform.markout_core,tops,function,1,md
+qpipe.transform.markout_core,unscoreable,function,3,domain spec exe
+qpipe.transform.markout_core,validate,function,2,domain spec
+qpipe.transform.markout_core,why,function,3,domain spec exe
 qpipe.transform.order_outcome,dimensions,value,,
 qpipe.transform.order_outcome,outcomes,value,,
 qpipe.transform.order_outcome,status_map,function,2,codes outs

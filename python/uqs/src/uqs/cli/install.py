@@ -88,7 +88,9 @@ def _ask_mode() -> Mode:
     choices = Table.grid(padding=(0, 2))
     for mode, help_text in _MODE_HELP.items():
         choices.add_row(f"[bold]{mode.value}[/]", help_text)
-    console.print(Panel(choices, title="How should they be installed?", border_style="cyan"))
+    console.print(
+        Panel(choices, title="How should they be installed?", border_style="cyan", expand=False)
+    )
     return Mode(safety.choose("Mode", [m.value for m in Mode], default=Mode.COPY.value))
 
 
@@ -206,7 +208,10 @@ def _next_steps(declarations: list[Declaration], sidecar_tests: list[Path]) -> P
         "CI checks they are current.",
     ]
     return Panel(
-        Group(steps, *notes), title="Next steps: check it is up and running", border_style="green"
+        Group(steps, *notes),
+        title="Next steps: check it is up and running",
+        border_style="green",
+        expand=False,
     )
 
 
