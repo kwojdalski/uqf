@@ -84,24 +84,50 @@ def started_by(profile: str, extra: Sequence[str]) -> list[str]:
     return list(dict.fromkeys([*procs, *extra]))
 
 
-def verify_args(sel: Selection, live: bool) -> list[str]:
-    """`uqs deploy check`'s flags for a selection; none without one."""
+def verify_args(sel: Selection, live: bool, current: bool = True) -> list[str]:
+    """`uqs deploy check`'s flags for a selection; none without one. A process
+    is `--proc NAME` since #1857, a table `--table NAME` since #1856;
+    `current` False spells them as a release from before then takes them,
+    `--procs NAME,...` and `--tables NAME,...`."""
     argv = []
-    if sel.processes:
+    if sel.processes and current:
+        argv += [a for p in sel.processes for a in ("--proc", p)]
+    elif sel.processes:
         argv += ["--procs", ",".join(sel.processes)]
-    if sel.tables:
+    if sel.tables and current:
+        argv += [a for t in sel.tables for a in ("--table", t)]
+    elif sel.tables:
         argv += ["--tables", ",".join(sel.tables)]
     return [*argv, "--live"] if live else argv
 
 
-def verify_command(profile: str, sel: Selection, live: bool, *extra: str) -> str:
+def verify_command(
+    profile: str, sel: Selection, live: bool, *extra: str, timeout: int | None = None
+) -> str:
     """The shell command a release verifies itself with, from its own root:
     `uqs deploy check`, or, on a release from before #1733 - a rollback's
     target - `uqs deploy verify`, the name it had then. A release from before
-    #835, which had neither, is not a supported rollback target (#1648)."""
-    argv = " ".join(q(a) for a in ["--profile", profile, *extra, *verify_args(sel, live)])
+    #835, which had neither, is not a supported rollback target (#1648).
+
+    The readiness wait (`timeout`) is `--verify-timeout`, a process `--proc`
+    and a table `--table` on a release since #1856/#1857; one from before takes
+    `--deadline`, `--procs` and `--tables`, so the release's own --help says
+    which it is given, by the newest of them (`--table`) - the old spellings
+    stop parsing a release after they were renamed (cli/rename_expiry.py)."""
+
+    def argv(current: bool) -> str:
+        wait = (
+            []
+            if timeout is None
+            else ["--verify-timeout" if current else "--deadline", str(timeout)]
+        )
+        words = ["--profile", profile, *extra, *wait, *verify_args(sel, live, current)]
+        return " ".join(q(a) for a in words)
+
     return (
-        "if .venv/bin/uqs deploy check --help >/dev/null 2>&1; "
-        f"then .venv/bin/uqs deploy check {argv}; "
-        f"else .venv/bin/uqs deploy verify {argv}; fi"
+        "if .venv/bin/uqs deploy check --help 2>/dev/null | grep -q -e '--table '; "
+        f"then .venv/bin/uqs deploy check {argv(True)}; "
+        "elif .venv/bin/uqs deploy check --help >/dev/null 2>&1; "
+        f"then .venv/bin/uqs deploy check {argv(False)}; "
+        f"else .venv/bin/uqs deploy verify {argv(False)}; fi"
     )

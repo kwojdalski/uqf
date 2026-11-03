@@ -44,10 +44,12 @@ from uqs.scaffold import worker as worker_mod
 app.add_typer(job_app, name="job")
 
 
+#: --procname: a process is PROC, or `--proc` as an option, on every command (#1857)
+_RENAMES = {"--columns": "--schema", "--columns-from": "--schema-from", "--procname": "--proc"}
+
+
 @job_app.command(
-    "new",
-    rich_help_panel=JOB_AUTHORING_PANEL,
-    cls=renamed({"--columns": "--schema", "--columns-from": "--schema-from"}, safety.ChangesState),
+    "new", rich_help_panel=JOB_AUTHORING_PANEL, cls=renamed(_RENAMES, safety.ChangesState)
 )
 def new_job(
     ctx: typer.Context,
@@ -117,9 +119,7 @@ def new_job(
     ] = None,
     procname: Annotated[
         str | None,
-        typer.Option(
-            "--procname", help="The process that runs it (default: JOB1, or JOB_backfill1)"
-        ),
+        typer.Option("--proc", help="The process that runs it (default: JOB1, or JOB_backfill1)"),
     ] = None,
     start_with_all: Annotated[
         bool,

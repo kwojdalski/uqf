@@ -271,11 +271,11 @@ def approve(
     wider = sorted(set(policies) - set(contract.conflict_policies))
     if wider:
         raise UqsError(
-            f"--conflict {', '.join(wider)}: contract {contract.identity} permits only "
+            f"--on-conflict {', '.join(wider)}: contract {contract.identity} permits only "
             f"{', '.join(contract.conflict_policies)} - approval may narrow it, never widen it"
         )
     if not 0 < max_rows <= 10_000_000:
-        raise UqsError(f"--max-rows {max_rows} must be between 1 and 10000000")
+        raise UqsError(f"--max-message-rows {max_rows} must be between 1 and 10000000")
     dest = _contract_destination(paths, attachment, contract, attach_root)
     att = config.load(attachment, attach_root)
     record = {

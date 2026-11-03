@@ -17,6 +17,7 @@ import typer
 from rich.table import Table
 
 from uqs.cli.json_out import emit, json_opt
+from uqs.cli.renames import renamed
 from uqs.cli.safety import ChangesState, Effect, ReadOnly, dry_run_note, marked
 from uqs.cli.shared import _die, app, console
 from uqs.paths import UqsError
@@ -40,17 +41,24 @@ setup_app.add_typer(odbc_app, name="odbc")
 
 Home = Annotated[
     Path,
-    typer.Option("--home", envvar=odbc_home.ODBC_HOME_ENV, help="The ODBC home directory"),
+    typer.Option(
+        "--odbc-home",
+        envvar=odbc_home.ODBC_HOME_ENV,
+        help="A private ODBC setup: the directory its versions are installed in",
+    ),
 ]
+#: The ODBC home is `--odbc-home` on every command, and QHOME `--q-home` beside
+#: `--torq-home` (#1857).
+_RENAMES = {"--home": "--odbc-home", "--qhome": "--q-home"}
 
 
-@odbc_app.command("install", cls=ChangesState)
+@odbc_app.command("install", cls=renamed(_RENAMES, ChangesState))
 def install(
     package: Annotated[Path, typer.Argument(help="The package, a .tar.gz with package.json")],
     home: Home,
     qhome: Annotated[
         Path | None,
-        typer.Option("--qhome", help="The managed QHOME to overlay; default: $QHOME"),
+        typer.Option("--q-home", help="The managed QHOME to overlay; default: $QHOME"),
     ] = None,
     dry_run: Annotated[
         bool,
@@ -61,7 +69,7 @@ def install(
     managed = qhome or (Path(os.environ["QHOME"]) if os.environ.get("QHOME") else None)
     try:
         if managed is None:
-            raise UqsError("no managed QHOME - set $QHOME or pass --qhome")
+            raise UqsError("no managed QHOME - set $QHOME or pass --q-home")
         version = odbc_home.install(home, package, managed, dry_run)
     except UqsError as exc:
         _die(exc)
@@ -73,7 +81,7 @@ def install(
     console.print(f"installed {version.name}; load it with: . {home}/current/{odbc_home.ENV_FILE}")
 
 
-@odbc_app.command("rollback", cls=ChangesState)
+@odbc_app.command("rollback", cls=renamed(_RENAMES, ChangesState))
 def rollback(
     home: Home,
     dry_run: Annotated[
@@ -97,7 +105,7 @@ def rollback(
 StatusJson = json_opt('{"home", "current", "previous", "versions": [name, ...]}')
 
 
-@odbc_app.command("status", cls=ReadOnly)
+@odbc_app.command("status", cls=renamed(_RENAMES, ReadOnly))
 def status(home: Home, as_json: StatusJson = False) -> None:
     """The installed versions, and which is current and previous."""
     try:
@@ -119,7 +127,10 @@ def status(home: Home, as_json: StatusJson = False) -> None:
         console.print("[dim]nothing installed - `uqs setup odbc install` first[/]")
 
 
-@odbc_app.command("env", cls=marked(Effect.READ_ONLY, own_output="prints shell exports, for eval"))
+@odbc_app.command(
+    "env",
+    cls=renamed(_RENAMES, marked(Effect.READ_ONLY, own_output="prints shell exports, for eval")),
+)
 def env(home: Home) -> None:
     """The current version's variables, as shell exports."""
     version = odbc_home.current(home)

@@ -92,7 +92,7 @@ def _build(tmp_path: Path, *extra: str, dirty: str = "", fail: str | None = None
     root = tmp_path / "tree"
     files = _tree(root)
     tools, calls = _tools(files, dirty=dirty, fail=fail)
-    art = _built(["--output", str(tmp_path / "dist"), *extra], root=root, runner=tools)
+    art = _built(["--output-dir", str(tmp_path / "dist"), *extra], root=root, runner=tools)
     return art, calls
 
 
@@ -163,7 +163,7 @@ def test_the_artifact_carries_dbmaint_with_its_licence_and_notice(tmp_path):
         (root / f).parent.mkdir(parents=True, exist_ok=True)
         (root / f).write_text(f"content of {f}\n")
     tools, _ = _tools([*files, *kept, "lib/torq/torq.q"])
-    art = _built(["--output", str(tmp_path / "dist")], root=root, runner=tools)
+    art = _built(["--output-dir", str(tmp_path / "dist")], root=root, runner=tools)
     with tarfile.open(art.path) as tar:
         names = set(tar.getnames())
     assert set(kept) <= names
@@ -296,7 +296,7 @@ def _marked_build(tmp_path: Path, wheels: tuple[str, ...] = ALL_WHEELS, *extra: 
     root = tmp_path / "tree"
     _tree(root)
     tools, calls = _marked_tools(wheels)
-    art = _built(["--output", str(tmp_path / "dist"), *extra], root=root, runner=tools)
+    art = _built(["--output-dir", str(tmp_path / "dist"), *extra], root=root, runner=tools)
     return art, calls
 
 
@@ -356,7 +356,7 @@ def test_the_target_environment_is_linux_cpython_of_the_target():
 
 def test_a_malformed_python_version_is_refused():
     with pytest.raises(artifact.ReleaseError, match="major.minor"):
-        _built(["--output", "dist", "--python", "3"])
+        _built(["--output-dir", "dist", "--python", "3"])
 
 
 def test_the_builder_needs_no_ssh(tmp_path):

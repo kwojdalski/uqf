@@ -9,8 +9,14 @@
 / now and next_roll are THIS process's clock and end-of-day roll (.eodtime), so the
 / distance to end of day is measured where end of day runs. partition is the
 / date the wdb is currently filling (.wdb.getpartition), the one native end of
-/ day will write; eod_date is the process's current trading date. Dates are
-/ "" when unknown, and unknown is never read as safe.
+/ day will write (TorQ wdb.q: currentpartition, advanced by endofday and fixpartition).
+/ An rdb reports partitions: every date it still holds, .rdb.getpartition[] (TorQ rdb.q:
+/ rdbpartition, which endofday extends with date+1 and rmdtfromgetpar shrinks only once
+/ the reload completes), so a date awaiting reload is still listed. .eodtime.d is NOT
+/ exported: TorQ sets it at process start and neither end-of-day handler advances it, so
+/ it says nothing about the date a long-running writer is filling (#1914). Dates are ""
+/ (partitions: an empty list or a "" element) when unknown, and unknown is never read as
+/ safe.
 / .
 / @param req JSON, ignored (kept so every operation takes one string)
 / @return JSON string
@@ -18,7 +24,7 @@
  g:{@[value;x;y]};
  s:{[v] $[(null v) or 0=count v;"";string v]};
  pt:g[`.proc.proctype;`];
- base:`procname`proctype`now`eod_date`next_roll!(string g[`.proc.procname;`];string pt;s .z.p;s g[`.eodtime.d;0Nd];s g[`.eodtime.nextroll;0Np]);
+ base:`procname`proctype`now`next_roll!(string g[`.proc.procname;`];string pt;s .z.p;s g[`.eodtime.nextroll;0Np]);
  ext:()!();
  if[pt~`wdb;
   gp:@[{.wdb.getpartition[]};::;{0Nd}];
@@ -26,5 +32,7 @@
    string g[`.wdb.hdbdir;`];string g[`.wdb.savedir;`];string g[`.wdb.mode;`];string g[`.wdb.writedownmode;`];
    s gp;g[`.wdb.permitreload;0b];g[`.wdb.reloadcomplete;1b])];
  if[pt~`rdb;
-  ext:`hdbdir`savetables`reloadenabled!(string g[`.rdb.hdbdir;`];g[`.rdb.savetables;1b];g[`.rdb.reloadenabled;0b])];
+  rp:@[{(),.rdb.getpartition[]};::;{0#0Nd}];
+  ext:`hdbdir`savetables`reloadenabled`partitions!(string g[`.rdb.hdbdir;`];g[`.rdb.savetables;1b];g[`.rdb.reloadenabled;0b];
+   $[14h=type rp;s each rp;enlist""]) ];
  .j.j base,ext}

@@ -323,17 +323,17 @@ policy applies to ordinary users.
 
 ## Deployment {.smaller .scrollable}
 
-  |               | TorQ                            | uqf                                                                                                                                           |
-  | ---           | ---                             | ---                                                                                                                                           |
-  | install       | `installtorqapp.sh`, copy trees | `uqs deploy build` makes one artifact: the tree, uqs and every pinned wheel, with a manifest of sha256s                                       |
-  | push          | by hand                         | `uqs deploy push`: preflight, transfer, prepare, smoke, start, verify, then `--live-check` and `--soak`, activate                             |
-  | releases      | one tree                        | `releases/<id>/`, each with its own offline `.venv` and `deploy.env`; `current` moves in one rename                                           |
-  | failure       | n/a                             | before `current` moves: the previous release's processes are started again; the report says whether that worked                               |
-  | other actions | n/a                             | `status`, `verify`, `list`, `rollback`, `prune` (or `--keep N` on push), a deploy lock with a heartbeat that `--override break-lock` respects |
-  | upgrades      | stop, then start                | an upgrade records its downtime, from stopping the old release to the new one verified                                                        |
-  | TorQ itself   | the tree you run                | the server's own: `--torq-home`, `--torq-app-home`, `--qcmd`; the artifact carries none of TorQ                                               |
-  | older kdb+    | n/a                             | `--q-target 4.0` flattens nested contexts at build; a startup guard checks the manifest and each file's hash                                  |
-  | shared HDB    | n/a                             | prepare judges it by the release's schema: a changed column type refuses, missing tables need `--override fix-hdb`                            |
+  |               | TorQ                            | uqf                                                                                                                                            |
+  | ---           | ---                             | ---                                                                                                                                            |
+  | install       | `installtorqapp.sh`, copy trees | `uqs deploy build` makes one artifact: the tree, uqs and every pinned wheel, with a manifest of sha256s                                        |
+  | push          | by hand                         | `uqs deploy push`: preflight, transfer, prepare, smoke, start, verify, then `--live-check` and `--soak`, activate                              |
+  | releases      | one tree                        | `releases/<id>/`, each with its own offline `.venv` and `deploy.env`; `current` moves in one rename                                            |
+  | failure       | n/a                             | before `current` moves: the previous release's processes are started again; the report says whether that worked                                |
+  | other actions | n/a                             | `status`, `verify`, `list`, `rollback`, `prune` (or `--keep N` on push), a deploy lock with a heartbeat that `--override break-lock` respects  |
+  | upgrades      | stop, then start                | an upgrade records its downtime, from stopping the old release to the new one verified                                                         |
+  | TorQ itself   | the tree you run                | the server's own: `--torq-home`, `--torq-app-home`, `--q-cmd`; the artifact carries none of TorQ                                               |
+  | older kdb+    | n/a                             | `--q-target 4.0` flattens nested contexts at build; a startup guard checks the manifest and each file's hash                                   |
+  | shared HDB    | n/a                             | prepare judges it by the release's schema: a changed column type refuses, missing tables need `--override fix-hdb`                             |
 
 The `peachq` runtime runs the starter pack on PeachQ, a different q. The
 experimental `peachq-etl` adds a profile's jobs, from a copy of the q tree

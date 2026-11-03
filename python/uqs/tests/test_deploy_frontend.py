@@ -45,9 +45,9 @@ def _with_frontend_wheel(tools):
 def _build(tmp_path: Path, *argv: str):
     root = tmp_path / "tree"
     tools, calls = _tools(_tree(root))
-    p = _CLI.commands["build"].make_context("build", ["--output", str(tmp_path / "out"), *argv])
+    p = _CLI.commands["build"].make_context("build", ["--output-dir", str(tmp_path / "out"), *argv])
     art = _built(
-        ["--output", str(tmp_path / "out"), *argv],
+        ["--output-dir", str(tmp_path / "out"), *argv],
         root=root,
         runner=_with_frontend_wheel(tools),
         frontend_dist=p.params["frontend_dist"],

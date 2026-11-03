@@ -70,7 +70,7 @@ PROBE = (
 #: Never bundled, whatever the binary says: KX's q is the server's to provide.
 KX_REFUSAL = (
     "KX's q is never bundled - it is licensed to the server it runs on; deploy it with "
-    'q_mode = "existing" (--qcmd/--qhome) and its licence in QHOME'
+    'q_mode = "existing" (--q-cmd/--q-home) and its licence in QHOME'
 )
 
 

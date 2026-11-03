@@ -231,7 +231,7 @@ def test_export_approve_and_list_from_the_command_line(world, exported, tmp_path
             str(out),
             "--attach",
             "pb-uat",
-            "--conflict",
+            "--on-conflict",
             "upsert",
         ],
     )

@@ -91,13 +91,14 @@ def check(
             "completeness check is UNVERIFIED",
         ),
     ] = None,
-    no_behaviours: Annotated[
+    behaviours: Annotated[
         bool,
         typer.Option(
-            "--no-behaviours",
-            help="Do not exercise cursor, retry, conflict and coverage behaviours in a sandbox",
+            "--behaviours/--no-behaviours",
+            help="Exercise cursor, retry, conflict and coverage behaviours in a sandbox "
+            "(the default), or not",
         ),
-    ] = False,
+    ] = True,
     fail_unverified: Annotated[
         bool, typer.Option("--fail-unverified", help="Exit 1 on UNVERIFIED as well as on FAIL")
     ] = False,
@@ -124,7 +125,7 @@ def check(
             dataset,
             dataset_verify.parse_scope(scope or []),
             window,
-            behaviours=not no_behaviours,
+            behaviours=behaviours,
             gateway=gateway,
         )
     except UqsError as exc:

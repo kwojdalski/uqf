@@ -6,6 +6,7 @@ command stays readable in one sitting."""
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Annotated
 
 import typer
@@ -114,18 +115,20 @@ CarriedPythonRuntime = Annotated[
         "from; built for --arch and --python",
     ),
 ]
+#: q's paths are spelt as TorQ's are, `--torq-home`: `--q-cmd`, `--q-home` (#1857).
+OLD_Q_SPELLINGS = {"--qcmd": "--q-cmd", "--qhome": "--q-home"}
 Qcmd = Annotated[
     str | None,
     typer.Option(
-        "--qcmd",
+        "--q-cmd",
         help="The q executable on the server, an absolute path. Default: the deploying "
         "account's $QCMD there, else q on that account's PATH - never this machine's",
     ),
 ]
 Qhome = Annotated[
-    str | None,
+    Path | None,
     typer.Option(
-        "--qhome",
+        "--q-home",
         help="QHOME on the server, where q finds its licence. Default: the deploying "
         "account's $QHOME there; refused when that is unset too",
     ),

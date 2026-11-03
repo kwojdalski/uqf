@@ -214,14 +214,14 @@ def query(
         str,
         typer.Option(help="with the gateway: the process types an expression is routed to"),
     ] = stack_gateway.DEFAULT_SERVERS,
-    raw: Annotated[
+    gateway: Annotated[
         bool,
         typer.Option(
-            "--no-gateway",
-            help="with the gateway: send as typed, not through .gw.syncexec "
+            "--gateway/--no-gateway",
+            help="with the gateway: send through .gw.syncexec (the default), or as typed "
             "(and, with no expression, open plain qcon)",
         ),
-    ] = False,
+    ] = True,
     render: Annotated[
         str | None,
         typer.Option(
@@ -277,6 +277,7 @@ def query(
         return
     if proc is None and port is None:
         proc = stack_gateway.DEFAULT_PROC
+    raw = not gateway
     routed = proc == stack_gateway.DEFAULT_PROC and not raw
     if target is not None:
         if getattr(ctx.get_parameter_source("host"), "name", None) != "DEFAULT":
