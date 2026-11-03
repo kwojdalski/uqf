@@ -258,11 +258,31 @@ SAMPLES: dict[tuple[str, str], dict] = {
     ("GET", "/ops/backfill"): {},
     ("GET", "/services"): {},
     ("GET", "/services/{target}/files"): {"params": {"path": "releases"}},
+    ("PUT", "/services/{target}/files/content"): {
+        "params": {"path": "shared/config/x.csv"},
+        "content": b"a,b\n",
+    },
     ("GET", "/coverage"): {
         "params": {"dataset": "fx_quotes", "partition": "", "source_version": "v1"}
     },
     ("POST", "/query"): {"json": {"table": "trades", "filters": []}},
     ("GET", "/control"): {},
+    ("GET", "/activity"): {},
+    ("POST", "/activity/events"): {
+        "json": {
+            "events": [
+                {
+                    "event_id": "evt00000001",
+                    "session_id": "session0001",
+                    "ts": "2026-01-01T00:00:00Z",
+                    "kind": "navigate",
+                    "action": "view.open",
+                    "target": "Control",
+                    "trigger": "pointer",
+                }
+            ]
+        }
+    },
     ("POST", "/control/process/{action}"): {"json": {"procs": "rdb1"}},
     ("PUT", "/control/process/{procname}/config"): {"json": {"field": "port", "value": "1"}},
     ("PUT", "/control/worker-config"): {"json": {"key": "k", "value": "v"}},

@@ -113,6 +113,8 @@ it("lists every process the server declares, grouped by type, and sends the pick
   fireEvent.click(screen.getByLabelText("every rdb"));
   expect(screen.getByText(/2 selected/)).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "stop" }));
+  // stop takes processes down, so it is confirmed first
+  fireEvent.click(screen.getByRole("button", { name: "Confirm stop" }));
   expect(await lifecycleBody(fetcher, "stop")).toEqual({ procs: "rdb1 rdb2" });
 });
 
