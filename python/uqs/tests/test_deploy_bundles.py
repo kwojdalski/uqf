@@ -171,7 +171,8 @@ def test_selected_jobs_start_with_their_dependency_closure(tmp_path):
     (check,) = remote.stage("verify")
     assert "--proc piggy_spread1 --proc fxfeed1 --proc mw_quotes1" in check
     assert "--procs piggy_spread1,fxfeed1,mw_quotes1" in check
-    assert "--tables mw_quote,piggy_tape" in check
+    assert "--table mw_quote --table piggy_tape" in check
+    assert "--tables mw_quote,piggy_tape" in check  # an older release
     report = json.loads(out)
     assert report["jobs"] == ["piggy_spread", "mw_quotes"]
     assert report["extra_processes"] == ["piggy_spread1", "fxfeed1", "mw_quotes1"]
@@ -353,11 +354,11 @@ def test_a_release_verifies_itself_with_uqs_deploy_check_or_verify():
     command = verify_command("fx", sel, True, timeout=60)
     new = (
         "--profile fx --verify-timeout 60 --proc piggy_spread1 --proc fxfeed1 "
-        "--tables piggy_tape --live"
+        "--table piggy_tape --live"
     )
     old = "--profile fx --deadline 60 --procs piggy_spread1,fxfeed1 --tables piggy_tape --live"
     assert command == (
-        "if .venv/bin/uqs deploy check --help 2>/dev/null | grep -q -e --verify-timeout; "
+        "if .venv/bin/uqs deploy check --help 2>/dev/null | grep -q -e '--table '; "
         f"then .venv/bin/uqs deploy check {new}; "
         "elif .venv/bin/uqs deploy check --help >/dev/null 2>&1; "
         f"then .venv/bin/uqs deploy check {old}; else .venv/bin/uqs deploy verify {old}; fi"

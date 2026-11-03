@@ -316,7 +316,8 @@ def push(
         typer.Option(
             "--fix-hdb",
             help="Fill the shared HDB's partitions that lack a table or column this release "
-            "declares (additive); without it they are refused. A changed type always is",
+            "declares, by running its `uqs data check --apply` (additive); without it they are "
+            "refused. A changed type always is",
         ),
     ] = False,
     keep: Annotated[

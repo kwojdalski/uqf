@@ -139,6 +139,10 @@ RENAMED_AFTER: dict[str, frozenset[str]] = {
                 for verb in ("install", "rollback", "status", "env")
                 for old in ("--home", "--qhome")
             ),
+            # #1856: one grammar per option across `uqs data`
+            "uqs data seed --tables",
+            "uqs deploy check --tables",
+            "uqs data alter --rename OLD=NEW",
         }
     ),
 }

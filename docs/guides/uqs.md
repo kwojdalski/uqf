@@ -197,7 +197,7 @@ table and nowhere else:
   | operation                     | writes                                                     | `--undo`                                                                                                                      |
   | ---                           | ---                                                        | ---                                                                                                                           |
   | `--reorder c1,c2,...`         | each partition's `.d`; it must list every existing column  | the journalled `.d`                                                                                                           |
-  | `--rename old=new`            | the column's files renamed, and `.d`                       | renamed back                                                                                                                  |
+  | `--rename old:new`            | the column's files renamed, and `.d`                       | renamed back                                                                                                                  |
   | `--attr col:p\|s\|g\|u\|none` | the column's attribute (its header)                        | the journalled attribute                                                                                                      |
   | `--cast col:TYPE`             | the column, written beside it and renamed over it          | the original while the run is unfinished; once complete, a cast back (exact only for a lossless cast, which the plan reports) |
 
@@ -651,7 +651,7 @@ both declare:
 
 ```
 uqs --runtime torq data seed --from-runtime uqf     # every table torq declares
-uqs --runtime torq data seed --from-runtime uqf --tables trade,quote --from 2026-09-01 --to 2026-10-01
+uqs --runtime torq data seed --from-runtime uqf --table trade --table quote --from 2026-09-01 --to 2026-10-01
 ```
 
 The partitions copied are those whose date lies in the [time
@@ -1743,6 +1743,25 @@ A duration that was a bare number still is one - seconds - so only `--window`'s
 minutes changed meaning, and its old spelling is converted. `deploy push` asks
 the release it verifies which spelling its `deploy check` takes, so a push or a
 rollback to a release from before this still verifies.
+
+One grammar per option across `uqs data` (#1856):
+
+  | old                                   | new                                          |
+  | ---                                   | ---                                          |
+  | `data alter --rename OLD=NEW`         | `--rename OLD:NEW`, as `data migrate` has it |
+  | `data seed --tables A,B`              | `--table A --table B` (or `--table A,B`)     |
+  | `deploy check --tables A,B`           | `--table A --table B`                        |
+
+A pair an option takes is `A:B` on every command - `--rename OLD:NEW`,
+`--cast COL:TYPE`, `--attr COL:p` - and `--rename`, `--cast` and `--attr` are
+repeatable on `data alter` as on `data migrate`; an alter is still one operation
+per run, and refuses a second. `data migrate --cast COL` takes no type because
+its target is always the type this release declares. Tables are chosen one way:
+a repeatable `--table`, with `NAME,NAME` in one also read, on `data replay`,
+`data check`, `data seed` and `deploy check`; `data alter` and `data migrate`
+take the one table they act on as TABLE. `data check --apply` is the one command
+that fills missing HDB tables and columns: `deploy push --fix-hdb` runs the
+release's own, and says so.
 
 `--port` is now only ever one process's port (`query`, `schema`);
 `query --tunnel` keeps querying a target through an ssh tunnel from here, so

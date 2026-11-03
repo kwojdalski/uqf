@@ -335,3 +335,21 @@ def test_seed_overwrite_is_on_conflict_replace(monkeypatch):
     monkeypatch.setattr(seed, "warn_renamed", lambda o, n: said.append((o, n)))
     result = runner.invoke(cli.app, ["data", "seed", "--overwrite", "--from-runtime", "nope"])
     assert said == [("--overwrite", "--on-conflict replace")], result.output
+
+
+def test_alter_rename_is_old_colon_new_and_the_old_equals_still_parses(monkeypatch):
+    """`data alter --rename OLD:NEW`, as `data migrate` spells it (#1856)."""
+    from uqs.cli import hdb_alter
+
+    said = []
+    monkeypatch.setattr(hdb_alter, "warn_renamed", lambda o, n: said.append(n))
+    assert hdb_alter._old_rename("amt:amount") == "amt=amount"
+    assert hdb_alter._old_rename("amt=amount") == "amt=amount"
+    assert said == ["--rename amt:amount"]
+
+
+def test_tables_are_a_repeatable_table_and_a_comma_list_works_in_one():
+    from uqs.cli.hdb_scope import tables_given
+
+    assert tables_given(["trade", "quote,fx"]) == ["trade", "quote", "fx"]
+    assert tables_given(None) == []

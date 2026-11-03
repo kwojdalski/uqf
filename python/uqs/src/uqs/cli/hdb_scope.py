@@ -40,7 +40,7 @@ AttachOpt = Annotated[
     ),
 ]
 HdbOpt = Annotated[
-    str | None,
+    Path | None,
     typer.Option("--hdb", help="An HDB directory on this machine, when nothing else names it"),
 ]
 ApplyOpt = Annotated[
@@ -78,7 +78,7 @@ class Handle:
         return hdb_alter.run_local(self.paths, req, apply=apply)
 
 
-def resolve(attach: str | None, hdb: str | None) -> Handle:
+def resolve(attach: str | None, hdb: Path | str | None) -> Handle:
     """The one HDB named: --attach, --hdb, or (neither) this runtime's own."""
     paths = _paths()
     if attach and hdb:
@@ -98,6 +98,12 @@ def resolve(attach: str | None, hdb: str | None) -> Handle:
         )
         return Handle("hdb", str(root.resolve()), "--hdb", paths, warnings=[unchecked])
     return Handle("runtime", str(paths.hdb_dir), f"this runtime's HDB ({paths.runtime})", paths)
+
+
+def tables_given(values: list[str] | None) -> list[str]:
+    """The tables a repeatable `--table` names (#1856): each value, or a
+    comma-separated list in one - one way to choose tables on every command."""
+    return [t for v in values or () for t in v.split(",") if t.strip()]
 
 
 def _table(handle: Handle, given: str | None, *, required: bool = True) -> str | None:

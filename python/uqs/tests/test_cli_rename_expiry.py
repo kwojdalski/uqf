@@ -21,7 +21,7 @@ import pytest
 import typer
 
 from uqs import cli
-from uqs.cli import lists, seed
+from uqs.cli import hdb_alter, lists, seed
 from uqs.cli.rename_expiry import RENAMED_AFTER
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -70,6 +70,8 @@ HAND_KEPT: dict[str, Callable[[], bool]] = {
     **{f"uqs list {kind}": (lambda k=kind: k in lists.MOVED) for kind in lists.MOVED},
     "uqs data seed --from RUNTIME": lambda: "range_from in RUNTIMES" in inspect.getsource(seed),
     "mcp uqs_summary": lambda: hasattr(__import__("uqs.mcp").mcp, "uqs_summary"),
+    # an old VALUE, which only the command's own code reads (#1856)
+    "uqs data alter --rename OLD=NEW": lambda: "def _old_rename" in inspect.getsource(hdb_alter),
 }
 
 
