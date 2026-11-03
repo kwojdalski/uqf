@@ -46,7 +46,8 @@ from uqs.stack import runtime_bundles
 deploy_app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
-    help="Deploy uqf onto a server with an existing TorQ: build a release (and each "
+    help="Deploy releases: build, component, push, check, status, history, rollback, prune.\n\n"
+    "Deploy uqf onto a server with an existing TorQ: build a release (and each "
     "component), push it, check it, see its status and history, rollback, prune.",
 )
 app.add_typer(deploy_app, name="deploy")
@@ -181,8 +182,9 @@ def push(
     artifact: Annotated[
         str,
         typer.Argument(
+            metavar="ARTIFACT",
             help="The release: a file from `uqs deploy build`, an https:// URL to one, or "
-            "a release tag CI published (.github/workflows/release.yml)"
+            "a release tag CI published (.github/workflows/release.yml)",
         ),
     ],
     target_names: Annotated[

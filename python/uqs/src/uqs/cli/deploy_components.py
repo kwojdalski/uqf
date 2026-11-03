@@ -36,7 +36,7 @@ def _mode(component: str, existing: str, bundled: str) -> typer.models.OptionInf
     return typer.Option(
         f"--{component}-mode",
         metavar="MODE",
-        help=alternatives(MODES, notes, default=DEFAULT),
+        help=alternatives(MODES, notes, default=DEFAULT, quote="`"),
         autocompletion=completion.choices(*MODES),
     )
 
