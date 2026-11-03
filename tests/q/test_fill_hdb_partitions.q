@@ -213,6 +213,52 @@
     .qunit.assertEquals[type d;11h;".d is a plain symbol list"];
     .qunit.assertEquals[count distinct d;count d;"no column is listed twice"]};
 
+/ --- the clock column is attributed, not nulled (#1925) ---------------------
+
+/ The clock a partition's rows hold, decoded against the HDB's sym file.
+.qt.qproc.fillhdb.clock_of_rows:{[root;part;t]
+    (get hsym `$root,"/sym") get ` sv .qt.qproc.fillhdb.dir[root;part;t],`clock}
+
+.qt.qproc.fillhdb.test_a_market_datas_clock_is_derived_from_market_and_source:{[t]
+    root:.qt.qproc.fillhdb.scratch[];
+    t0:2026.01.01D00:00:00.000000000;
+    / one partition per row kind: the plant's own FX feeds, a crypto venue, a source the
+    / rules do not name, and a book with no market recorded at all
+    .qt.qproc.fillhdb.put[root;2026.01.01;`market_data;([] time:4#t0; sym:`EURUSD`EURUSD`BTCUSD`EURUSD; source:`UQFFX`UQFDEPTH`binance_spot`LP_X; market:`fx`fx`crypto`fx)];
+    schema:"market_data:([] time:`timestamp$(); sym:`symbol$(); source:`symbol$(); market:`symbol$(); clock:`symbol$())\n";
+    r:.qt.qproc.fillhdb.run[root;schema];
+    .qunit.assertEquals[r 1;0;"clean"];
+    .qunit.assertEquals[.qt.qproc.fillhdb.clock_of_rows[root;2026.01.01;`market_data];`receipt`receipt`venue`unknown;
+        "the plant's FX feeds are receipt, any crypto source is venue, and a source no rule names is unknown - never null"];
+    .qunit.assertEquals[type get ` sv .qt.qproc.fillhdb.dir[root;2026.01.01;`market_data],`clock;20h;"an enumerated symbol column"];
+    .qunit.assertEquals[.qt.qproc.fillhdb.cols_of[root;2026.01.01;`market_data];`time`sym`source`market`clock;"clock is appended to .d"];
+    .qunit.assertTrue[any (r 0) like "*market_data: clock from the rules*";"and the run says how many rows it attributed"]};
+
+.qt.qproc.fillhdb.test_an_executions_clock_is_derived_from_venue:{[t]
+    root:.qt.qproc.fillhdb.scratch[];
+    t0:2026.01.01D00:00:00.000000000;
+    .qt.qproc.fillhdb.put[root;2026.01.01;`executions;([] time:4#t0; sym:`EURUSD`BTCUSD`BTCUSD`EURUSD; venue:`fx`binance_spot`bybit_spot`other)];
+    .qt.qproc.fillhdb.put[root;2026.01.02;`executions;([] time:1#t0; sym:enlist `EURUSD; venue:enlist `)];
+    schema:"executions:([] time:`timestamp$(); sym:`symbol$(); venue:`symbol$(); clock:`symbol$())\n";
+    r:.qt.qproc.fillhdb.run[root;schema];
+    .qunit.assertEquals[r 1;0;"clean"];
+    .qunit.assertEquals[.qt.qproc.fillhdb.clock_of_rows[root;2026.01.01;`executions];`receipt`receipt`receipt`unknown;
+        "FX and the crypto venues the plant polls are receipt; a venue no rule names is unknown"];
+    .qunit.assertEquals[.qt.qproc.fillhdb.clock_of_rows[root;2026.01.02;`executions];enlist `unknown;"a fill with no venue is unknown, not null"]};
+
+.qt.qproc.fillhdb.test_a_partition_older_than_its_key_columns_is_unknown_and_a_second_run_changes_nothing:{[t]
+    root:.qt.qproc.fillhdb.scratch[];
+    t0:2026.01.01D00:00:00.000000000;
+    / predates `market` AND `source`: nothing to attribute the clock from
+    .qt.qproc.fillhdb.put[root;2026.01.01;`market_data;([] time:2#t0; sym:`EURUSD`GBPUSD)];
+    schema:"market_data:([] time:`timestamp$(); sym:`symbol$(); source:`symbol$(); market:`symbol$(); clock:`symbol$())\n";
+    .qunit.assertEquals[(.qt.qproc.fillhdb.run[root;schema]) 1;0;"clean"];
+    .qunit.assertEquals[.qt.qproc.fillhdb.clock_of_rows[root;2026.01.01;`market_data];`unknown`unknown;"no key columns: every row unknown"];
+    after1:.qt.qproc.fillhdb.snapshot[root];
+    r2:.qt.qproc.fillhdb.run[root;schema];
+    .qunit.assertTrue[any (r2 0) like "*already rectangular - nothing to do*";"nothing to do the second time"];
+    .qunit.assertEquals[.qt.qproc.fillhdb.snapshot[root];after1;"the attributed column is not rewritten"]};
+
 / --- idempotency -----------------------------------------------------------
 
 .qt.qproc.fillhdb.test_repeating_a_successful_repair_changes_nothing:{[t]

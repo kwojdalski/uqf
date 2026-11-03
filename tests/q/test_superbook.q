@@ -4,7 +4,7 @@
 .qt.qpipe.job.superbook.empty:{[] `sym`source xkey 0#.qpipe.job.market_data.market_data}
 .qt.qpipe.job.superbook.fixtures:{[] ([] sym:`EURUSD`EURUSD; source:`LP_A`LP_B; market:`fx`fx; source_time:.qt.qpipe.job.superbook.d[0 0];
     bid_prices:(1.101 1.098;1.099 1.097); bid_sizes:(100 200f;500 600f);
-    ask_prices:(1.103 1.104;1.100 1.102); ask_sizes:(200 300f;60 70f))}
+    ask_prices:(1.103 1.104;1.100 1.102); ask_sizes:(200 300f;60 70f); clock:`receipt`receipt)}
 .qt.qpipe.job.superbook.state:{[] .qpipe.job.superbook.replace_books[.qt.qpipe.job.superbook.empty[];.qt.qpipe.job.superbook.fixtures[];.qt.qpipe.job.superbook.d[0]]}
 .qt.qpipe.job.superbook.snapshot:{[s;n] .qpipe.job.superbook.snapshot[s;.qt.qpipe.job.superbook.d[n];0D00:00:05;0D]}
 .qt.qpipe.job.superbook.arb:{[s;n] first .qpipe.job.arbitrage.evaluate .qt.qpipe.job.superbook.snapshot[s;n]}

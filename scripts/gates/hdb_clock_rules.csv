@@ -1,0 +1,7 @@
+tbl,market,name,clock
+market_data,fx,UQFFX,receipt
+market_data,fx,UQFDEPTH,receipt
+market_data,crypto,*,venue
+executions,,fx,receipt
+executions,,binance_spot,receipt
+executions,,bybit_spot,receipt

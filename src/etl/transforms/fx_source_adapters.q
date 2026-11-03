@@ -35,7 +35,10 @@
 / vendor changing a code is a break to see, not rows to lose.
 / .
 / Time stays the source's. deal_time and ts become source_time; the plant's
-/ receipt `time` is not an input.
+/ receipt `time` is not an input. So the clock is `venue: both adapters stamp
+/ `clock` `venue (#1925), because the only timestamp either source delivers is
+/ the source's own, and the plant's receipt time never reached them. An adapter
+/ over a source that delivers ONLY receipt time must stamp `receipt instead.
 
 \d .
 
@@ -118,7 +121,7 @@
     .qpipe.transform.fx_source_adapters.refuse["deal_tape";"with no id";taken`order_id;null taken`id];
     if[0=count taken; :0#.qpipe.transform.fx_source_adapters.executions];
     select source_time:deal_time, sym:pair, venue:venue_code, side:?[side=`B;1;-1], size:last_qty, price,
-        fee:0f, fee_ccy:`, fill_id:`$string id, book:`, product:` from taken}
+        fee:0f, fee_ccy:`, fill_id:`$string id, book:`, product:`, clock:`venue from taken}
 
 / ---------------------------------------------------------- THE BOOK LEVELS
 
@@ -163,7 +166,7 @@
     bids:rows[`bid];
     asks:rows[`ask];
     ([] sym:snaps`sym; source:snaps`source; market:n#`fx; source_time:snaps`source_time;
-        bid_prices:bids@\:`px; bid_sizes:bids@\:`qty; ask_prices:asks@\:`px; ask_sizes:asks@\:`qty)}
+        bid_prices:bids@\:`px; bid_sizes:bids@\:`qty; ask_prices:asks@\:`px; ask_sizes:asks@\:`qty; clock:n#`venue)}
 
 \d .
 
@@ -188,7 +191,7 @@
         ([] source_time:2026.09.17D10:00:00 2026.09.17D10:00:01 2026.09.17D10:00:03;
             sym:`EURUSD`EURUSD`USDJPY; venue:3#`fx; side:1 1 -1; size:6e5 4e5 1e5;
             price:1.1001 1.1002 150.01; fee:3#0f; fee_ccy:3#`; fill_id:`1234567890123456789`1234567890123456790`2;
-            book:3#`; product:3#`)))];
+            book:3#`; product:3#`; clock:3#`venue)))];
 
 / The book levels' mapping, declared. Worked by hand: LPA's snapshot arrives with
 / its levels out of order and comes out best first; its partial-amount bid and
@@ -208,4 +211,4 @@
             qty:2e6 2e6 1e6 1e6 9e6 9e6 0.0 1e6 1.0);
         ([] sym:2#`EURUSD; source:`LPA`LPB; market:2#`fx; source_time:2#2026.09.17D10:00:00;
             bid_prices:(1.0999 1.0998;`float$()); bid_sizes:(1e6 2e6;`float$());
-            ask_prices:(1.1001 1.1002;enlist 1.1005); ask_sizes:(1e6 2e6;enlist 1e6))))];
+            ask_prices:(1.1001 1.1002;enlist 1.1005); ask_sizes:(1e6 2e6;enlist 1e6); clock:2#`venue)))];
