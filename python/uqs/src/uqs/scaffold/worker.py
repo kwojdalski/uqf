@@ -69,11 +69,17 @@ def check_width(width: str) -> str:
     return width
 
 
+#: A bounded worker's window width when `job new --width` is not given.
+DEFAULT_WIDTH = "1D"
+#: The column holding a worker's --partition when `--partition-column` is not given.
+DEFAULT_PARTITION_COLUMN = "sym"
+
+
 def bounded_worker(
     name: str,
     dataset: str,
     columns: Columns | None,
-    width: str = "1D",
+    width: str = DEFAULT_WIDTH,
     source: str | None = None,
     procname: str | None = None,
     *,
@@ -149,7 +155,7 @@ def bounded_worker(
     if partition_column is not None and partition is None:
         raise UqsError("--partition-column needs --partition: it names the column holding it")
     if partition is not None:
-        partition_column = partition_column or "sym"
+        partition_column = partition_column or DEFAULT_PARTITION_COLUMN
         if not _PARTITION.fullmatch(partition_column):
             raise UqsError(f"--partition-column {partition_column!r} must be a q symbol")
     worker = f"{name}_backfill"

@@ -20,8 +20,12 @@ from uqs.cli.json_out import json_opt
 from uqs.cli.renames import ATTACHMENT, alias_command, renamed, warn_renamed
 from uqs.cli.safety import ConfirmsOnServer
 from uqs.cli.shared import _die, data_app
+from uqs.generated.q_facts import Q_ATTRIBUTES
 from uqs.paths import UqsError, UqsUsageError
 from uqs.stack.hdb_alter import Request
+
+#: What `--attr COL:` takes to clear an attribute - scripts/gates/hdb_alter.q's word.
+CLEAR_ATTRIBUTE = "none"
 
 AlterJson = json_opt(
     '{"ok", "hdb", "resolved_from", "ssh", "warnings", "plan", "result"} - plan and result '
@@ -34,7 +38,7 @@ def hdb_alter(
     table: Annotated[
         str | None,
         typer.Argument(
-            metavar="[TABLE]",
+            metavar="TABLE",
             help="The table to change (default with --attachment: the attachment's own)",
             autocompletion=completion.plant_table,
             show_default=False,
@@ -55,7 +59,9 @@ def hdb_alter(
     attr: Annotated[
         list[str] | None,
         typer.Option(
-            "--attr", help="COL:p|s|g|u|none - set or clear a column's attribute; one per run"
+            "--attr",
+            help=f"COL:{'|'.join((*Q_ATTRIBUTES, CLEAR_ATTRIBUTE))} - set or clear a column's "
+            "attribute; one per run",
         ),
     ] = None,
     cast: Annotated[
@@ -78,8 +84,8 @@ def hdb_alter(
     """Change one table in every partition that holds it, and only those.
 
     One operation per run: --reorder, --rename, --attr, --cast, or --undo of
-    an earlier run. Name the HDB with --attachment NAME (run on the stack's host),
-    --hdb DIR, or `uqs --target NAME data alter ...` for a release's own;
+    an earlier run. Name the HDB with --attachment ATTACHMENT (run on the stack's host),
+    --hdb DIR, or `uqs --target TARGET data alter ...` for a release's own;
     with none, this runtime's. Shows the plan and writes nothing unless
     --apply, which asks first (--yes does not). Refused when the partitions
     holding the table disagree on its columns, order or types - `data check`

@@ -157,7 +157,8 @@ def test_the_target_is_read_from_the_global_options_only(argv, expected):
         (["status", "--no-such-option"], True),
         (["stop", "--no-such-option", "x", "--dry-run"], True),
         (["stop", "--dry-run", "--no-such-option"], True),
-        (["start", "-h"], True),  # -h is no help flag in this CLI: it does not parse
+        # -h is --help (#1883); an older release that lacks it refuses it, running nothing
+        (["start", "-h"], False),
         (["job"], True),  # a group, no command
         (["job", "runs", "show", "abc", "--dry-run"], True),  # show takes no --dry-run
         ([], False),
@@ -356,12 +357,12 @@ def test_list_targets_shows_each_target_and_its_last_deployment(server, tmp_path
     )
     result = CliRunner().invoke(app, ["target", "list", "--json"])
     assert result.exit_code == 0, result.output
-    rows = {r["target"]: r for r in json.loads(result.output)}
+    rows = {r["target"]: r for r in json.loads(result.output)["targets"]}
     assert list(rows) == ["bare", "down", "prod", "uat"]
     assert list(rows["prod"]) == ["target", "ssh", "dest", "remote_user", "labels", "last_deployed"]
-    assert rows["prod"]["remote_user"] == "efx" and rows["prod"]["labels"] == "env=prod"
-    assert rows["uat"]["last_deployed"].startswith("r7 (")
-    assert rows["down"]["last_deployed"] == ""
+    assert rows["prod"]["remote_user"] == "efx" and rows["prod"]["labels"] == {"env": "prod"}
+    assert rows["uat"]["last_deployed"]["release"] == "r7"
+    assert rows["down"]["last_deployed"] is None
     table = CliRunner().invoke(app, ["target", "list"], env={"COLUMNS": "200"}).output
     assert "last_deployed" in table and "svc@uat.example" in table
 

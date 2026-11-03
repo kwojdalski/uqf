@@ -19,8 +19,8 @@ from typing import Annotated
 import typer
 from rich.table import Table
 
-from uqs.cli import completion
-from uqs.cli.json_out import emit, json_opt
+from uqs.cli import choices, completion
+from uqs.cli.json_out import emit, json_opt, records, timestamp
 from uqs.cli.renames import ATTACHMENT, alias_command, renamed, warn_renamed
 from uqs.cli.safety import ChangesState, ReadOnly, dry_run_note
 from uqs.cli.shared import (
@@ -41,14 +41,12 @@ from uqs.stack import logs as stack_logs
 from uqs.stack import multitail as stack_multitail
 from uqs.stack import procs as stack_procs
 
-#: `uqs config show/set/unset/list`: a process.csv row via process_overrides.csv,
-#: and every setting `set` wrote (`list`, once `uqs list overrides`, #1855).
+#: `uqs config show/set/unset/list`: process.csv rows, set in process_overrides.csv (#1855).
 config_app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
-    help="A process's process.csv fields: show them, or set one (persisted to "
-    "process_overrides.csv) or unset one, and list every one set; the fields set can "
-    "change (field), the stack's resolved env, and the sources the stack reads (sources).",
+    help="Process configuration: show, set, unset, list, env, field, sources.\n\nprocess.csv "
+    "fields, set in process_overrides.csv; the resolved env; the sources the stack reads.",
 )
 app.add_typer(config_app, name="config")
 
@@ -67,7 +65,9 @@ def config_get(
     procname: Annotated[
         str, typer.Argument(metavar="PROC", help="The process", autocompletion=completion.procname)
     ],
-    field: Annotated[str | None, typer.Argument(autocompletion=completion.csv_fields)] = None,
+    field: Annotated[
+        str | None, typer.Argument(metavar="FIELD", autocompletion=completion.csv_fields)
+    ] = None,
     port: BasePortOpt = None,
     raw: Annotated[
         bool, typer.Option("--unresolved", help="Show unresolved ${VAR}/{VAR}+N placeholders as-is")
@@ -75,10 +75,9 @@ def config_get(
     export: ExportOpt = None,
     as_json: GetJson = False,
 ) -> None:
-    """Show a process's effective process.csv row (or one field of it), with
-    ${VAR}/{VAR}+N placeholders (KDBBASEPORT, KDBHDB, ...) resolved against
-    the same env torq.sh itself would use - pass --unresolved to see them literal.
-    """
+    """Show a process's effective process.csv row, or one FIELD of it.
+
+    ${VAR}/{VAR}+N placeholders resolve as torq.sh would; --unresolved shows them literal."""
     try:
         row = stack_procs.get_process_config(_paths(), procname, base_port=port, resolve=not raw)
     except UqsError as exc:
@@ -92,7 +91,7 @@ def config_get(
         _export([{"field": k, "value": v} for k, v in row.items()], export)
         return
     if field is not None:
-        console.print(row.get(field, ""))
+        print(row.get(field, ""))  # the value alone, as `$(uqs config show ...)` takes it
         return
     table = Table(title=f"{procname} config")
     table.add_column("field")
@@ -122,8 +121,7 @@ def config_set(
         typer.Option("--dry-run", "-n", help="Check the setting and show it; write nothing"),
     ] = False,
 ) -> None:
-    """Set process.csv fields for *procname* (persisted to process_overrides.csv,
-    applied on every later start/stop/...); `uqs config unset` removes one."""
+    """Set PROC's process.csv fields in process_overrides.csv; `uqs config unset` removes one."""
     settings = _pairs(pairs)
     try:
         for field, value in settings:  # every one checked before any is written
@@ -176,8 +174,7 @@ def config_unset(
         typer.Option("--dry-run", "-n", help="Check the change and show it; write nothing"),
     ] = False,
 ) -> None:
-    """Remove *procname*'s override of each FIELD, as `uqs target unset` does
-    a target's setting: process.csv's own value applies again (#1858)."""
+    """Remove PROC's override of each FIELD: process.csv's own value applies again."""
     try:
         process_unset.unset_process_config(_paths(), procname, fields, dry_run)
     except UqsError as exc:
@@ -190,14 +187,15 @@ def config_unset(
 
 
 LogsJson = json_opt(
-    '{"lines": [{time, host, procname, proctype, loglevel, id, message}]} - the history '
-    "only: not with --follow, --channel or --multitail"
+    '{"lines": [{time, host, process, proctype, loglevel, id, message}]} - the history '
+    "only: not with --follow, --channel or --multitail; time ISO-8601 with its offset"
 )
 _LINE_KEYS = ("time", "host", "procname", "proctype", "loglevel", "id", "message")
 
 
-def _json_lines(records: list[dict]) -> None:
-    emit({"lines": [{k: r.get(k) for k in _LINE_KEYS} for r in records]})
+def _json_lines(rows: list[dict]) -> None:  # q's local .z.P, with this machine's offset
+    lines = records([{k: r.get(k) for k in _LINE_KEYS} for r in rows])
+    emit({"lines": [line | {"time": timestamp(line["time"])} for line in lines]})
 
 
 @app.command(
@@ -237,8 +235,11 @@ def logs(
         str | None,
         typer.Option(
             "--stream",
-            help="With --multitail: which log files get a pane, out, err or both (default)",
-            autocompletion=completion.choices("out", "err", "both"),
+            help="With --multitail: which log files get a pane - "
+            + choices.alternatives(
+                stack_multitail.MULTITAIL_STREAMS, default=stack_multitail.DEFAULT_STREAM
+            ),
+            autocompletion=completion.choices(*stack_multitail.MULTITAIL_STREAMS),
         ),
     ] = None,
     pane_columns: Annotated[
@@ -269,6 +270,7 @@ def logs(
         str | None,
         typer.Option(
             "--attachment",
+            metavar="ATTACHMENT",
             help="The attachment whose backfill or receiver log to read instead: its latest "
             "run (`uqs job backfill --attachment`)",
         ),
@@ -291,35 +293,33 @@ def logs(
     ] = None,
     as_json: LogsJson = False,
 ) -> None:
-    """Tail out_/err_*.log for one or more processes through the same
-    colorized logger the CLI itself uses, instead of raw per-process files -
-    e.g. `logs stp1 rdb1 -f`, `logs -f --level WARNING`.
+    """Show the logs of one or more processes.
+
+    Tails out_/err_*.log through the CLI's own colorized logger, not raw
+    files - e.g. `logs stp1 rdb1 -f`, `logs -f --level WARNING`.
 
     `--multitail` follows the same files in the `multitail` binary, one pane
     each: `logs all --multitail --stream err --pane-columns 2`.
 
     `--channel` subscribes instead of reading files: every line the processes
     publish, filtered by `--id` and `--level` - e.g. `logs all --channel
-    --level ERROR`, `logs fxpositions1 --channel --id fx_positions` (#1067).
+    --level ERROR`, `logs fxpositions1 --channel --id fx_positions`.
 
     `--attachment` reads an attached backfill's or receiver's run instead, which is
-    no TorQ process: `logs --attachment pb-uat --worker piggybank_ledger_backfill -f`
-    (#1725). Its q errors and RESULT line are shown whatever `--level` says.
+    no TorQ process: `logs --attachment pb-uat --worker piggybank_ledger_backfill -f`.
+    Its q errors and RESULT line are shown whatever `--level` says.
 
-    What the options combine with (#1730): the PROCS are what is read, every
-    option a filter on how. `--attachment NAME` replaces PROCS - one attachment's
+    What the options combine with: the PROCs are what is read, every
+    option a filter on how. `--attachment ATTACHMENT` replaces PROC - one attachment's
     run, narrowed by `--worker` (a worker, or <dataset>.receiver) and `--run`,
-    which need it. `--channel` and `--multitail` each read PROCS another way:
+    which need it. `--channel` and `--multitail` each read PROC another way:
     `--id` needs `--channel`; `--stream`, `--pane-columns` and `--show-command` need
     `--multitail`. `--follow`, `--lines` and `--level` go with the files and
     with `--attachment`.
     """
     if as_json:
-        for option, used in {
-            "--follow": follow,
-            "--channel": channel,
-            "--multitail": multitail,
-        }.items():
+        live = {"--follow": follow, "--channel": channel, "--multitail": multitail}
+        for option, used in live.items():
             if used:
                 _die(UqsUsageError(f"--json prints the history: {option} does not apply with it"))
                 return
@@ -378,7 +378,7 @@ def logs(
             argv = stack_multitail.multitail_command(
                 _paths(),
                 _procs(procs),
-                stream=stream or "both",
+                stream=stream or stack_multitail.DEFAULT_STREAM,
                 columns=pane_columns or 1,
                 lines=lines,
             )

@@ -27,7 +27,7 @@ ShowJson = json_opt(
 
 @attachment_app.command("show", cls=ReadOnly)
 def show(name: NameArg, as_json: ShowJson = False) -> None:
-    """One attachment: what was saved for it, and its state now.
+    """Show one attachment: what was saved for it, and its state now.
 
     The state is its `uqs job attachment list` row - the lifecycle state and,
     separately, whether its publisher runs; the rest is its saved

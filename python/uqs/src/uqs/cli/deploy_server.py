@@ -9,7 +9,6 @@ connection flags for one no target declares (cli/deploy_connection.py, #1736).
 
 from __future__ import annotations
 
-import json
 from typing import Annotated
 
 import typer
@@ -20,7 +19,7 @@ from uqs.cli import deploy_policy as policy
 from uqs.cli import safety
 from uqs.cli.deploy import _failed, deploy_app
 from uqs.cli.hdb_scope import tables_given
-from uqs.cli.json_out import JSON_HELP, json_opt
+from uqs.cli.json_out import emit, json_opt
 from uqs.cli.renames import alias_command, renamed
 from uqs.cli.safety import ChangesState, OverrideOpt, ReadOnly, ReasonOpt, YesOpt
 from uqs.cli.shared import _die, json_refusal
@@ -42,13 +41,18 @@ def _server(ctx, target, flags: dict, **fixed):
     return cfg, Remote(cfg.host, cfg.connect_timeout, remote_user=cfg.remote_user)
 
 
+StatusJson = json_opt(
+    '{"ok", "format", "host", "dest", "current", "previous", "releases", "last_deployment", '
+    '"health": {checked, passed, reason, processes}, "lock"} - ok false when the health check '
+    "ran and failed"
+)
+
+
 @deploy_app.command("status", cls=renamed(conn.OLD_SPELLINGS, ReadOnly))
 def status_cmd(
     ctx: typer.Context,
     target: conn.Target = None,
-    as_json: Annotated[
-        bool, typer.Option("--json", help=f"{JSON_HELP}: the status the table shows")
-    ] = False,
+    as_json: StatusJson = False,
     health: Annotated[
         bool,
         typer.Option("--health/--no-health", help="Ask current's processes whether they answer"),
@@ -64,7 +68,9 @@ def status_cmd(
     remote_user: conn.RemoteUser = None,
     connect_timeout: conn.ConnectTimeout = conn.DEFAULT_CONNECT_TIMEOUT,
 ) -> None:
-    """What a server runs: its current and previous releases, the last
+    """Show what a server runs: its releases, last deployment, health and lock.
+
+    What a server runs: its current and previous releases, the last
     deployment's outcome, whether current's processes answer, and the lock.
     Read-only; it never takes the lock."""
     try:
@@ -77,9 +83,13 @@ def status_cmd(
         result = status.status(cfg, remote, health=health)
     except config.DeployError as exc:
         _failed("uqs deploy status", exc.stage, exc)
-    typer.echo(json.dumps(result, indent=2) if as_json else status.render(result))
     h = result["health"]
-    raise typer.Exit(code=1 if h["checked"] and not h["passed"] else 0)
+    failing = h["checked"] and not h["passed"]
+    if as_json:
+        emit({"ok": not failing, **result})
+    else:
+        typer.echo(status.render(result))
+    raise typer.Exit(code=1 if failing else 0)
 
 
 #: `--to` names a release here, and only here, while everywhere else it ends a
@@ -114,9 +124,11 @@ def rollback_cmd(
     override: OverrideOpt = None,
     reason: ReasonOpt = None,
 ) -> None:
-    """Put a server back on an earlier release: stop current's processes, start
-    and verify the target's, then move `current`. A target that fails to verify
-    is stopped and current's processes are started again.
+    """Put a server back on an earlier release.
+
+    Stops current's processes, starts and verifies the target's, then moves
+    `current`. A target that fails to verify is stopped and current's
+    processes are started again.
 
     `--dry-run` prints the plan as JSON and the dry-run note on stderr. It
     reads the deploy lock and does not take it: it changes nothing, so it
@@ -167,7 +179,7 @@ def prune_cmd(
     """Remove the oldest releases beyond the newest --keep, under the deploy lock.
 
     Names what would go and asks first: a removed release cannot be brought
-    back (#1854). `--yes` does not ask.
+    back. `--yes` does not ask.
 
     Never removes the release `current` names, the one a rollback would return
     to, or one whose push is still running - whatever --keep is. Prints what
@@ -213,8 +225,8 @@ def _confirm_prune(planned: dict) -> bool:
 
 
 VerifyJson = json_opt(
-    '{"profile", "passed", "reason", "processes": [{process, port, pipeline, ok, error, ...}]} '
-    '- with --ports-free, {"profile", "busy": {process: port}}; no marker line'
+    '{"ok", "profile", "passed", "reason", "processes": [{process, port, pipeline, ok, error, '
+    '...}]} - with --ports-free, {"ok", "profile", "busy": {process: port}}; no marker line'
 )
 
 
@@ -242,14 +254,17 @@ def verify_cmd(
         list[str] | None,
         typer.Option(
             "--proc",
+            metavar="PROC",
             help="A process the check expects beyond the profile's; repeatable "
-            "(NAME,NAME also works)",
+            "(PROC,PROC also works)",
         ),
     ] = None,
     tables: Annotated[
         list[str] | None,
         typer.Option(
-            "--table", help="Check stp1 carries this table; repeatable, and NAME,NAME also works"
+            "--table",
+            metavar="TABLE",
+            help=f"Check {verify.PLANT} carries this table; repeatable, and TABLE,TABLE also works",
         ),
     ] = None,
     fixture: conn.FixtureOpt = True,
@@ -261,7 +276,9 @@ def verify_cmd(
     ] = False,
     as_json: VerifyJson = False,
 ) -> None:
-    """Run on the server, from a release: does every process the profile promises answer?
+    """Check, on the server, that every process the profile promises answers.
+
+    Run from a release on the server.
 
     Prints one JSON object, then DEPLOY_VERIFY_OK or DEPLOY_VERIFY_FAILED on a
     line of its own, which `uqs deploy push` reads; `--json` leaves the marker

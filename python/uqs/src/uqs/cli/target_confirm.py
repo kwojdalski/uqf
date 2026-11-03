@@ -1,4 +1,4 @@
-"""Whether `uqs --target NAME <command>` may change the server, so asks first
+"""Whether `uqs --target TARGET <command>` may change the server, so asks first
 (#956, #1780).
 
 Every command states what it may do where it is declared: its Click class
@@ -36,10 +36,6 @@ from uqs.paths import UqsError, UqsUsageError
 #: The marks under which a command does not ask here: it cannot change the
 #: server, or it asks there, after showing its plan.
 _NO_ASK = (Effect.READ_ONLY, Effect.CONFIRMS_ON_SERVER)
-#: Its dry run still starts a process, to fetch (#1732).
-_DRY_RUN_STARTS = ("job", "backfill")
-#: Its --interactive browser starts, stops and restarts processes with single keys.
-_INTERACTIVE_ACTS = ("status",)
 
 
 @functools.cache
@@ -79,6 +75,13 @@ def canonical(cmd: Any, root: Any = None) -> tuple[Any, tuple[str, ...] | None]:
 def effect_of(cmd: Any, root: Any = None) -> Effect | None:
     """`cmd`'s mark: an alias's is its new name's, so the two cannot differ."""
     return getattr(canonical(cmd, root)[0], "effect", None)
+
+
+def trait_of(cmd: Any, name: str, root: Any = None) -> str:
+    """One of `safety.marked`'s traits on `cmd` (`dry_run_starts`, `acts_when`,
+    `own_output`, `no_dry_run`), "" when it has none; an alias's is its new
+    name's (#1893)."""
+    return getattr(canonical(cmd, root)[0], name, "") or ""
 
 
 def unmarked(root: Any = None) -> list[str]:
@@ -192,9 +195,11 @@ def changes_the_server(args: Sequence[str]) -> bool:
     """Whether `args` may change the server, read from the parsed command:
     never with help, nor a dry run - every command that changes state takes
     --dry-run/-n (#1732), and tests/test_dry_run_tree.py runs each one's to
-    show it writes nothing (#1880) - but a backfill's, which starts a process to fetch;
-    a read-only or confirms-on-server command does not, except `status
-    --interactive`; anything else, or anything that does not parse, may."""
+    show it writes nothing (#1880) - but one marked `dry_run_starts` (a
+    backfill's, which starts a process to fetch); a read-only or
+    confirms-on-server command does not, except under the option it is
+    marked `acts_when` (`status --interactive`); anything else, or anything
+    that does not parse, may."""
     p = parse(args)
     if p is None:
         return True
@@ -202,11 +207,11 @@ def changes_the_server(args: Sequence[str]) -> bool:
         return False
     if p.command is None:
         return True
-    if p.given("--dry-run") is True and p.path != _DRY_RUN_STARTS:
+    if p.given("--dry-run") is True and not trait_of(p.command, "dry_run_starts"):
         return False
     if _dry_by_default(p.command) and not p.given("--apply"):
         return False  # a dry run without --apply (#1854), walked by test_dry_run_tree
-    if p.path == _INTERACTIVE_ACTS and p.given("--interactive"):
+    if (acts := trait_of(p.command, "acts_when")) and p.given(acts):
         return True
     return effect_of(p.command) not in _NO_ASK
 

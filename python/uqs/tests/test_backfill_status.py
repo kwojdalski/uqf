@@ -68,9 +68,9 @@ def test_written_and_queryable_are_told_apart(world):
         },
     )
     rows = {r["attachment"]: r for r in backfill_status.rows(world.paths)}
-    assert (rows["pb-uat"]["outcome"], rows["pb-uat"]["queryable"]) == ("queryable", "yes")
+    assert (rows["pb-uat"]["outcome"], rows["pb-uat"]["queryable"]) == ("queryable", True)
     bad = rows["pb-prod"]
-    assert (bad["outcome"], bad["queryable"]) == ("written_not_queryable", "no")
+    assert (bad["outcome"], bad["queryable"]) == ("written_not_queryable", False)
     assert "NOT queryable" in bad["detail"] and "re-run the same command" in bad["detail"]
     assert "hdb1: cannot connect" in bad["detail"], "the failure is named, not just counted"
     assert bad["destination"] == "def456" and bad["worker"] == "w"

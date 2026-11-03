@@ -7,13 +7,12 @@ both declarations rather than off a table someone keeps by hand.
 
 from __future__ import annotations
 
-import json
 from typing import Annotated
 
 import typer
 from rich.table import Table
 
-from uqs.cli.json_out import JSON_HELP
+from uqs.cli.json_out import emit, json_opt
 from uqs.cli.pipelines import pipelines_only
 from uqs.cli.safety import ReadOnly
 from uqs.cli.shared import _die, _paths, app, console
@@ -24,7 +23,8 @@ from uqs.stack import runtime_report
 runtime_app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
-    help="Compare the runtimes (`uqs runtime diff uqf torq`) and install the bundles one "
+    help="Runtimes: list, diff, prepare.\n\n"
+    "Compare the runtimes (`uqs runtime diff uqf torq`) and install the bundles one "
     "declares (`uqs runtime prepare`: `uqs job install` for each); `uqs runtime list` "
     "lists them.",
 )
@@ -33,13 +33,33 @@ app.add_typer(runtime_app, name="runtime")
 _NAMES = list(RUNTIMES)
 
 
+DiffJson = json_opt(
+    '{"<section>": {"only_<a>": [...], "only_<b>": [...]}} - one section each for '
+    "processes, tables, layers and commands"
+)
+
+
 @runtime_app.command("diff", cls=ReadOnly)
 def runtime_diff(
-    a: Annotated[str, typer.Argument(help="A runtime", autocompletion=lambda: _NAMES)],
-    b: Annotated[str, typer.Argument(help="Another runtime", autocompletion=lambda: _NAMES)],
-    as_json: Annotated[bool, typer.Option("--json", help=f"{JSON_HELP}: the difference")] = False,
+    a: Annotated[
+        str,
+        typer.Argument(
+            metavar="RUNTIME", help="A runtime, e.g. uqf", autocompletion=lambda: _NAMES
+        ),
+    ],
+    b: Annotated[
+        str,
+        typer.Argument(
+            metavar="RUNTIME",
+            help="Another runtime, e.g. uqf or torq",
+            autocompletion=lambda: _NAMES,
+        ),
+    ],
+    as_json: DiffJson = False,
 ) -> None:
-    """What runtime A has that B does not, and the reverse: processes, tables,
+    """Compare two runtimes: what each has that the other does not.
+
+    What the first RUNTIME has that the second does not, and the reverse: processes, tables,
     config layers, and the commands only some runtimes run."""
     try:
         sections = runtime_report.diff(_paths().repo_root, a, b, pipelines_only())
@@ -47,7 +67,7 @@ def runtime_diff(
         _die(exc)
         return
     if as_json:
-        print(json.dumps(sections, indent=2))
+        emit(sections)
         return
     for section, sides in sections.items():
         if not any(sides.values()):
