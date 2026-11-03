@@ -42,13 +42,14 @@ read tables any crypto publisher fills.
 
 ## databento
 
-  | Job                                           | Kind      | Reads                                           | Writes          |
-  | ---                                           | ---       | ---                                             | ---             |
-  | `eq_orderbook` (databento1)                   | streaming | `databento_mbp10` (the feed handler's raw rows) | `eq_orderbook`  |
-  | `eq_orderbook_backfill` (databento_backfill1) | backfill  | the `databento_mbp10` source (DuckDB over ODBC) | `eq_orderbook`  |
+  | Job                                           | Kind      | Reads                                           | Writes                        |
+  | ---                                           | ---       | ---                                             | ---                           |
+  | `eq_orderbook` (databento1)                   | streaming | `databento_mbp10` (the feed handler's raw rows) | `eq_orderbook`, `market_data` |
+  | `eq_orderbook_backfill` (databento_backfill1) | backfill  | the `databento_mbp10` source (DuckDB over ODBC) | `eq_orderbook`                |
 
-Both apply the one `eq_orderbook` fold, which sits in the source's file.
-[Service page](../docs/services/databento.md).
+Both apply the one `eq_orderbook` fold, which sits in the source's file. The
+live job also publishes each book onto `market_data` (market `equity`, clock
+`venue`, #1939). [Service page](../docs/services/databento.md).
 
 ## flink
 
