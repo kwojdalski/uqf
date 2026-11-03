@@ -15,6 +15,7 @@ from typing import Annotated
 import typer
 
 from uqs.cli import deploy_connection as conn
+from uqs.cli import deploy_dry_run as dry
 from uqs.cli import deploy_policy as policy
 from uqs.cli.deploy import _failed, deploy_app
 from uqs.cli.hdb_scope import tables_given
@@ -114,7 +115,11 @@ def rollback_cmd(
 ) -> None:
     """Put a server back on an earlier release: stop current's processes, start
     and verify the target's, then move `current`. A target that fails to verify
-    is stopped and current's processes are started again."""
+    is stopped and current's processes are started again.
+
+    `--dry-run` prints the plan as JSON and the dry-run note on stderr. It
+    reads the deploy lock and does not take it: it changes nothing, so it
+    warns when another deployment holds the lock rather than writing one."""
     if to is not None and not RELEASE_ID.fullmatch(to):
         _failed(
             "uqs deploy rollback", "arguments", ValueError(f"--release {to!r} is not a release id")
@@ -137,6 +142,7 @@ def rollback_cmd(
         code = rollback.rollback(cfg, remote, to=to, dry_run=dry_run)
     except config.DeployError as exc:
         _failed("uqs deploy rollback", exc.stage, exc)
+    dry.end_json(dry_run, code)
     raise typer.Exit(code=code)
 
 
@@ -164,7 +170,10 @@ def prune_cmd(
 
     Never removes the release `current` names, the one a rollback would return
     to, or one whose push is still running - whatever --keep is. Prints what
-    stayed and why, what went, and the bytes freed."""
+    stayed and why, what went, and the bytes freed.
+
+    `--dry-run` takes no lock - it reads it, and warns when another deployment
+    holds it - and ends with the dry-run note on stderr, after the JSON."""
     try:
         cfg, remote = _server(
             ctx,
@@ -182,6 +191,7 @@ def prune_cmd(
         )
     except config.DeployError as exc:
         _failed("uqs deploy prune", exc.stage, exc)
+    dry.end_json(dry_run, code)
     raise typer.Exit(code=code)
 
 
