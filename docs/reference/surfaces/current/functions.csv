@@ -1900,7 +1900,6 @@ qpipe.transform.fx_domain,route,function,2,conv sym
 qpipe.transform.fx_domain,waterfall_mids,function,2,at0 at1
 qpipe.transform.fx_markout,calc,function,3,spec exe md
 qpipe.transform.fx_markout,chain_mid,function,5,b0 a0 b1 a1 s
-qpipe.transform.fx_markout,convert,function,3,spec quote_ccys report_ccy
 qpipe.transform.fx_markout,default_spec,dict,,
 qpipe.transform.fx_markout,executions_in,table,,
 qpipe.transform.fx_markout,kinds,value,,

@@ -168,6 +168,8 @@
     if[.qpipe.transform.markout_core.refuse_undeclared and count extra;
         '"markout_core: spec has undeclared key(s) ",", " sv string extra];
     spec:.qpipe.transform.markout_core.spec_defaults,spec;
+    / the domain completes its own keys first: its conversion reads them (an FX convention) when the rates are checked below
+    if[`validate in key domain; spec:domain[`validate] spec];
     hs:spec`horizons;
     if[not (16h=type hs) and 0<count hs; '"markout_core: horizons must be a non-empty list of timespans, e.g. 0D00:00:01 0D00:00:10"];
     if[any null hs; '"markout_core: horizons must not contain a null timespan"];
@@ -186,7 +188,7 @@
         if[not (first c`ok) and sym=first c`leg;
             '"markout_core: rates[",string[q],"]: the domain's conversion does not accept ",string sym]
       }[domain;spec] ./: flip ((key rt) mk;last each (value rt) mk);
-    $[`validate in key domain; domain[`validate] spec; spec]}
+    spec}
 
 / ------------------------------------------------------------- RESOLVER
 

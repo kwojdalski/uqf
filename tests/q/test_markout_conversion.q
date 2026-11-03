@@ -1,5 +1,5 @@
 / test_markout_conversion.q - reporting-currency conversion of the markout core
-/ for the FX domain (#1931): the FX `convert` (src/etl/transforms/fx_markout.q), the
+/ for the FX domain (#1931): the FX `convert` (src/etl/transforms/fx_domain.q), the
 / conversion pairs the readiness legs and a bounded source's symbol filter share,
 / and the readiness gate's view of them.
 / .
@@ -37,11 +37,8 @@
     ([] source_time:enlist .qt.qpipe.transform.fx_markout.conversion.t; venue:enlist `a; sym:enlist sym; side:enlist 1; size:enlist 1e6;
         price:enlist px; fill_id:enlist `f1; clock:enlist `venue)}
 
-/ the FX domain as data for the instruments; the conversion is the FX convert under test
-.qt.qpipe.transform.fx_markout.conversion.domain:{[]
-    inst:([] sym:`USDJPY`EURUSD; quote_ccy:`JPY`USD; legs:(enlist `USDJPY;enlist `EURUSD); invert:(enlist 0b;enlist 0b));
-    d:.qpipe.transform.markout_core.table_domain[inst;0#([] quote_ccy:`symbol$(); report_ccy:`symbol$(); leg:`symbol$(); invert:`boolean$())];
-    d,enlist[`convert]!enlist .qpipe.transform.fx_markout.convert}
+/ the FX domain, as the core takes it
+.qt.qpipe.transform.fx_markout.conversion.domain:{[] .qpipe.transform.fx_domain.domain}
 
 .qt.qpipe.transform.fx_markout.conversion.spec:{[changes]
     (`horizons`report_ccy`rate_timing`rates!(enlist 0D00:00:10;`USD;`execution;enlist[`JPY]!enlist `a`USDJPY)),changes}
@@ -55,16 +52,16 @@
 / --- the FX convert ---------------------------------------------------------------
 
 .qt.qpipe.transform.fx_markout.conversion.test_fx_convert_names_the_one_book_and_its_orientation:{[tc]
-    c:.qpipe.transform.fx_markout.convert[()!();`JPY`EUR`GBP;`USD];
+    c:.qpipe.transform.fx_domain.convert[.qpipe.transform.fx_domain.defaults;`JPY`EUR`GBP;`USD];
     .qunit.assertEquals[c`ok;111b;"JPY, EUR and GBP each convert through one book"];
     .qunit.assertEquals[c`leg;`USDJPY`EURUSD`GBPUSD;"the market's spelling of the pair"];
     .qunit.assertEquals[c`invert;100b;"USD per JPY is the inverse of USDJPY; EURUSD and GBPUSD are already USD per unit"]};
 
 .qt.qpipe.transform.fx_markout.conversion.test_fx_convert_never_invents_a_rate:{[tc]
-    c:.qpipe.transform.fx_markout.convert[()!();`PLN`USDT`USD`XXX;`USD];
-    .qunit.assertEquals[c`ok;0000b;"a chain of books, a non-FX currency, the reporting currency itself and an unknown one are all refused"];
+    c:.qpipe.transform.fx_domain.convert[.qpipe.transform.fx_domain.defaults;`PLN`USDT`USD`XXX;`USD];
+    .qunit.assertEquals[c`ok;0010b;"a chain of books, a non-FX currency and an unknown one are refused; the reporting currency needs no book"];
     .qunit.assertTrue[all null c`leg;"and carry no leg"];
-    r:.qpipe.transform.fx_markout.convert[()!();enlist `USD;`PLN];
+    r:.qpipe.transform.fx_domain.convert[.qpipe.transform.fx_domain.defaults;enlist `USD;`PLN];
     .qunit.assertEquals[r`ok;enlist 0b;"a chain is refused for any reporting currency (USD to PLN is EURUSD then EURPLN)"]};
 
 .qt.qpipe.transform.fx_markout.conversion.test_a_declared_pair_the_fx_convert_refuses_is_a_spec_error:{[tc]
