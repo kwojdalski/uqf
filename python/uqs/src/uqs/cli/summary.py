@@ -166,6 +166,7 @@ def summary(
         str | None,
         typer.Option(
             "--columns",
+            metavar="COLUMN,...",
             help=presets_help(),
             autocompletion=completion.summary_columns,
         ),
@@ -178,6 +179,7 @@ def summary(
                 f"Seconds (a DURATION) to spend gathering the table before giving up "
                 f"(default {SUMMARY_TIMEOUT_SECONDS:g}). 0 waits forever."
             ),
+            show_default=False,
         ),
     ] = SUMMARY_TIMEOUT_SECONDS,
     probe_timeout: Annotated[
@@ -189,6 +191,7 @@ def summary(
                 f"for the Responds column (default {probe.DEFAULT_PROBE_TIMEOUT:g}s). "
                 "All are probed at once. 0 skips the probe."
             ),
+            show_default=False,
         ),
     ] = probe.DEFAULT_PROBE_TIMEOUT,
     sort: Annotated[
@@ -209,7 +212,7 @@ def summary(
     every: EveryOpt = SUMMARY_REFRESH_SECONDS,
     as_json: SummaryJson = False,
 ) -> None:
-    """Status table for every process in process.csv, with its declared graph.
+    """Show the status of every process in process.csv, with its declared graph.
 
     The graph columns - what each process subscribes to, what it publishes,
     and which processes it therefore needs running - answer the question

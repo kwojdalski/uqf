@@ -16,7 +16,9 @@ from typing import Annotated
 
 import typer
 
-from uqs.cli.deploy import _failed, deploy_app
+from uqs.cli.choices import ChoiceOpt
+from uqs.cli.concepts import ComponentArg
+from uqs.cli.deploy import DEFAULT_ARCH, _failed, deploy_app
 from uqs.cli.renames import renamed
 from uqs.cli.safety import ChangesState, dry_run_note
 from uqs.cli.shared import console
@@ -44,21 +46,20 @@ KX_NAMES = frozenset({KDBX, "kx", "kdb", "kdb+"})
 
 #: A directory written into is `--output-dir`; `--output` is a FILE (#1857).
 OUTPUT_DIR = {"--output": "--output-dir"}
-Component = Annotated[
-    str, typer.Argument(help="The component to build: torq, q (PeachQ) or python (CPython)")
-]
+Component = ComponentArg
 Output = Annotated[
     Path | None,
     typer.Option(
         "--output-dir", help="Directory to write it into; default: dist/ at the repo root"
     ),
 ]
-Arch = Annotated[
-    str, typer.Option("--arch", help=f"python only: the servers' {', '.join(PLATFORMS)}")
-]
+Arch = ChoiceOpt(
+    PLATFORMS, "--arch", "Python only: the servers' architecture", default=DEFAULT_ARCH,
+    required=True,
+)  # fmt: skip
 Python = Annotated[
     str | None,
-    typer.Option("--python", help="python only: major.minor; default requires-python's"),
+    typer.Option("--python", help="Python only: major.minor; default requires-python's"),
 ]
 
 
@@ -66,7 +67,7 @@ Python = Annotated[
 def build(
     component: Component,
     output: Output = None,
-    arch: Arch = "x86_64",
+    arch: Arch = DEFAULT_ARCH,
     python: Python = None,
     dry_run: Annotated[
         bool,
@@ -75,7 +76,9 @@ def build(
         ),
     ] = False,
 ) -> None:
-    """Build a bundled component's artifact: `torq`, TorQ and its starter pack exactly as
+    """Build a bundled component's artifact: torq, q or python.
+
+    `torq` is TorQ and its starter pack exactly as
     vendored, for --torq-mode bundled; `q`, the pinned PeachQ, for --q-mode bundled;
     `python`, the CPython uv installs for linux --arch, for --python-mode bundled and
     `uqs deploy build --python-component`. KX's q is never bundled."""
@@ -86,7 +89,7 @@ def build(
 def build_runtime(
     component: Component,
     output: Output = None,
-    arch: Arch = "x86_64",
+    arch: Arch = DEFAULT_ARCH,
     python: Python = None,
 ) -> None:
     """Renamed `uqs deploy component build` (#1740); kept for one release."""

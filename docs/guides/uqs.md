@@ -135,6 +135,33 @@ case-sensitively against the names the process reported. An exact name is just a
 pattern that matches itself, so there is one behaviour rather than two - quote
 the pattern, or the shell will try to expand it against your filenames first.
 
+### The `clock` column on `executions` and `market_data` (#1925)
+
+Every row of `executions` and `market_data` says whose clock its `source_time`
+is: `venue` (the venue stamped it) or `receipt` (this stack stamped it on
+arrival). A partition written before the column existed gets it from
+`uqs data check --apply`, which for this one column **attributes** instead of
+writing null, from the rows' own columns and the rules in
+`scripts/gates/hdb_clock_rules.csv`:
+
+  | Table         | Looked up by       | Rule shipped                                                                               |
+  | ---           | ---                | ---                                                                                        |
+  | `market_data` | `(market, source)` | `fx` + `UQFFX` or `UQFDEPTH`: `receipt`; any `crypto` source: `venue`                      |
+  | `executions`  | `venue`            | `fx`, `binance_spot`, `bybit_spot`: `receipt` (the FX feeds and the polled crypto fills)   |
+  | either        | no rule matches    | `unknown`                                                                                  |
+
+A row the rules do not name is `unknown`, never null and never a guess: a source
+name such as an FX liquidity provider can have come from the quote feed
+(`receipt`) or from a vendor book (`venue`), and only the site knows which.
+`unknown` is refused by the normalizers' checks and by the markout contract
+(#1923), so history that matters needs a rule row (`table,market,name,clock`;
+`*` as the name matches any source of that market) BEFORE the first `--apply`:
+the fill is additive and writes the column once, so a partition already filled
+`unknown` is not revisited by a later run. Correcting it is a decision for a
+person (a column rewrite, as for any stored value). A partition with no
+`market`/`source` (or `venue`) column to read is `unknown` throughout. The run
+prints how many rows of each partition got each clock.
+
 ### Renamed or retyped HDB columns
 
 `data check --apply` does not rewrite existing columns. When a release renames
@@ -299,18 +326,28 @@ on - `uqs setup odbc` installs, loads and rolls back a private ODBC setup.
 kafka, the cryptorust recorders - which are processes outside TorQ, not the q
 processes `uqs start` manages: `start`, `stop`, `restart` (with `start`'s
 options, which are not remembered), `status`, and `logs NAME [-f] [-l N]`, which
-shows the one plain log file `status` names.
+shows the one plain log file `status` names:
+
+```bash
+uqs connector start kafka --topic trades,quotes
+uqs connector restart kafka --group uqf-replay     # start's options, given again
+uqs connector logs kafka -f
+uqs connector stop kafka
+eval "$(uqs setup odbc env)"                       # this shell, on the private ODBC setup
+```
 
 Putting a release on a server is `uqs deploy` (`history` lists what this machine
 deployed): see [Deploying to a server](deploy.md).
 
 `PROCS` is `all` (the default) or one or more process names, each its own word -
-`uqs start posbook1 demo_markout1` - which is what lets TAB complete them. A
-single quoted `"posbook1 demo_markout1"` still works. `--base-port` sets
+`uqs start posbook1 crypto_markout1` - which is what lets TAB complete them. A
+single quoted `"posbook1 crypto_markout1"` still works. `--base-port` sets
 `KDBBASEPORT` (default: the runtime's own base port, `6050` for `uqf`; see the
-port table below). `--export FILE` (on `status`/`query`/`list`/`config show`)
-additionally writes the same rows to `FILE` as CSV or Parquet, format inferred
-from the extension; a result that is not a table, such as `count t`, is refused.
+port table below). `--export FILE` (on `status`, `query`, `schema`, `list`,
+`config show`, and every noun's `list`: `runtime`, `job`, `job attachment`,
+`target` and `override`) additionally writes the same rows to `FILE` as CSV or
+Parquet, format inferred from the extension; a result that is not a table, such
+as `count t`, is refused.
 
 ### Stopping a process that will not stop
 
@@ -365,7 +402,7 @@ rather than configured. `--base-port` defaults to the runtime's own, as on every
 command, and the plant's `-stackid` must agree with it: a plant running under
 another base port is refused, naming the `--base-port` that replays it.
 
-Every row in that table is an option (`--dir`, `--schema-file`, `--hdb`,
+Every row in that table is an option (`--tplogdir`, `--schema-file`, `--hdb`,
 `--base-port`), and an option that is given wins - supply the first three and
 nothing is asked of the machine at all, which is how to replay a log after the
 stack it came from has been stopped. `uqs data replay PROC` picks between plants
@@ -746,15 +783,15 @@ The uqf runtime's profiles, against the community licence's fourteen slots
 
 <!-- BEGIN GENERATED profile table - scripts/generate/generate_operational_docs.py; CI runs it with --check, so edit the profiles, not this table -->
 
-  | profile     | leaves                                                                                                                            | processes | plant slots          |
-  | ---         | ---                                                                                                                               | ---       | ---                  |
-  | `all`       | `arbitrage1`, `cross1`, `crossarb1`, `demo_markout1`, `fxorderbookfeed1`, `fxpositions1`, `last_value1`, `posbook1`, `vectorize1` | 30        | 20/14 - over the cap |
-  | `arbitrage` | `arbitrage1`, `crossarb1`                                                                                                         | 20        | 10/14                |
-  | `crypto`    | `cryptomock1`, `crypto_markout1`, `crypto_book_1s1`                                                                               | 17        | 7/14                 |
-  | `default`   | `posbook1`, `demo_markout1`, `fxpositions1`, `fxorderbookfeed1`                                                                   | 23        | 13/14                |
-  | `depth`     | `vectorize1`, `cross1`                                                                                                            | 18        | 8/14                 |
-  | `essential` | none - the TorQ stack alone                                                                                                       | 14        | 4/14                 |
-  | `fx`        | `posbook1`, `demo_markout1`, `fxpositions1`, `last_value1`                                                                        | 24        | 14/14                |
+  | profile     | leaves                                                                                                           | processes | plant slots          |
+  | ---         | ---                                                                                                              | ---       | ---                  |
+  | `all`       | `arbitrage1`, `cross1`, `crossarb1`, `fxorderbookfeed1`, `fxpositions1`, `last_value1`, `posbook1`, `vectorize1` | 29        | 19/14 - over the cap |
+  | `arbitrage` | `arbitrage1`, `crossarb1`                                                                                        | 20        | 10/14                |
+  | `crypto`    | `cryptomock1`, `crypto_markout1`, `crypto_book_1s1`                                                              | 17        | 7/14                 |
+  | `default`   | `posbook1`, `fxpositions1`, `fxorderbookfeed1`                                                                   | 22        | 12/14                |
+  | `depth`     | `vectorize1`, `cross1`                                                                                           | 18        | 8/14                 |
+  | `essential` | none - the TorQ stack alone                                                                                      | 14        | 4/14                 |
+  | `fx`        | `posbook1`, `fxpositions1`, `last_value1`                                                                        | 23        | 13/14                |
 
 <!-- END GENERATED profile table -->
 
@@ -1509,7 +1546,7 @@ through to `lib/torq/torq.sh`. It was `raw`, which still works for a release.
 
 How `uqs` commands are named and what they take. Not every command follows them
 yet: [`test_cli_conventions.py`](../../python/uqs/tests/test_cli_conventions.py)
-holds rules 1, 3, 4 and 5 over the command tree, with a list of today's
+holds rules 1, 3, 4, 5 and 7 over the command tree, with a list of today's
 exceptions, each naming the issue that removes it (#1738). It fails on a new
 command that breaks a rule, and on a listed exception that has since been fixed.
 
@@ -1518,7 +1555,7 @@ command that breaks a rule, and on a listed exception that has since been fixed.
    (`start`, `stop`, `restart`, `status`, `logs`, and `clean` for what it wrote)
    is a top-level verb.
 2. **The thing acted on is positional; a filter is an option.**
-   `uqs job gaps demo_markout --from 2026-09-13 --to 2026-09-14`.
+   `uqs job gaps fx_markout --from 2026-09-13 --to 2026-09-14`.
 3. **One meaning per option name**, and one long name per short flag: `--port`
    is one process's port (`uqs query --port 6052 'count quote'`), the stack's
    base port is `--base-port`, and `-n` is `--dry-run`. A name takes one type of
@@ -1560,6 +1597,20 @@ command that breaks a rule, and on a listed exception that has since been fixed.
    ([deploy.md](deploy.md#rolling-back)).
 6. **A rename ships with a hidden alias for one release**, which prints the new
    spelling; the release after removes it.
+7. **Help says one thing one way** (#1883). A positional is shown as an
+   upper-case word of one vocabulary - `PROC`, `JOB`, `TARGET`, `TABLE`,
+   `DATASET`, `SOURCE`, `ATTACHMENT`, `CONNECTOR`, `RUNTIME`, `RUN`, ... - and a
+   placeholder in a command's help is one of that command's own (no `WORKER`, no
+   bare `NAME`). A command's first help paragraph is one line, the one its group
+   lists; option help starts with a capital or a backtick; and help names no
+   issue numbers. Help is text, not Rich markup, so `[process]` in a documented
+   JSON shape stays in it. `-h` is `--help` everywhere.
+
+Output into a pipe or a file is neither cut nor wrapped (#1883): a table is as
+wide as its widest row and a line is never broken, so
+`uqs status | grep discovery1` finds it and `ls "$(uqs config show rdb1 U)"`
+gets the whole path. What a q process or TorQ prints is shown as it is, never
+read as markup.
 
 Every command exits the same way for the same outcome (#1885), and
 `tests/test_exit_codes.py` holds it:
@@ -1929,6 +1980,27 @@ One vocabulary for job kinds (#1889): `job list --json`'s `kind` was `etl` or
 `normalizer`, `horizon`, `backfill`, `reaction` - and a new `subscribes`
 (`yes`/`no`) says whether a streaming job reads anything, which is what etl/feed
 meant. A script filtering on the old values needs the new ones.
+
+One name per thing across surfaces (#1890):
+
+  | old                                          | new                                              |
+  | ---                                          | ---                                              |
+  | `data replay --dir DIR`                      | `--tplogdir DIR`, as `job attachment add` has it |
+  | `logs --attachment NAME --run STAMP`         | `--stamp STAMP` - a log's stamp, not a run_id    |
+  | `deploy build --kafka-home DIR`              | `--kfk-home DIR` (KX's kfk, `UQF_KFK_HOME`)      |
+  | `deploy build --with-kafka-connector`        | `--kafka-connector/--no-kafka-connector`         |
+  | `connector start/restart kafka --topic T,U`  | `--topics T,U`, plural as every list is          |
+  | `job new --kind external`                    | `--kind connector`                               |
+  | `job new --start-with-all` (a lone flag)     | `--start-with-all/--no-start-with-all`           |
+  | `UQS_REQUIRE_LIVE_SOURCES=1`                 | `UQF_LIVE_SOURCES_REQUIRED=1` (refused)          |
+  | `UQF_FRONTEND_{GATEWAY,DATA}_PASSWD`         | `..._PASSWORD` (refused)                         |
+  | `UQS_DEPLOYMENT_FILE` (set by uqs itself)    | `UQF_DEPLOYMENT_FILE`                            |
+
+A connector is the Python process outside the stack that `uqs connector` runs; a
+feed is a q streaming job that only publishes, and the connector commands' help
+no longer calls one the other. A renamed variable is refused, naming the new
+one, as a removed one is. `UQS_` is the uqs Python package's own prefix;
+whatever q or another package reads is `UQF_`.
 
 `--port` is now only ever one process's port (`query`, `schema`);
 `query --tunnel` keeps querying a target through an ssh tunnel from here, so

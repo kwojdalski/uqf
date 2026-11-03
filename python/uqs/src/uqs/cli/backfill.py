@@ -16,7 +16,8 @@ import typer
 from uqs import timerange
 from uqs.attach.backfill_forced import ANY_WRITER
 from uqs.cli import backfill_attached, completion, safety
-from uqs.cli.choices import alternatives
+from uqs.cli.choices import ChoiceOpt, alternatives
+from uqs.cli.concepts import attach_opt
 from uqs.cli.json_out import JSON_HELP, emit
 from uqs.cli.pipelines import needs_pipelines
 from uqs.cli.range_options import DateOpt, LastOpt, RangeFromOpt, RangeToOpt
@@ -36,6 +37,21 @@ from uqs.paths import UqsError, UqsUsageError
 from uqs.stack import backfill as stack_backfill
 from uqs.stack import backfill_wait as stack_backfill_wait
 from uqs.stack import run_modes
+
+_OnConflictOpt = ChoiceOpt(
+    stack_backfill.ON_CONFLICT,
+    "--on-conflict",
+    "For this run: what a write does with a row whose row_key is already there - "
+    "{values}. Default: the worker's own "
+    f"({q_facts.DEFAULT_IO_STRATEGY} unless it declares otherwise)",
+)
+_AttachOpt = attach_opt(
+    "The saved attachment whose native HDB to backfill into "
+    "(`uqs job attachment add`), taking the stack and the destination from it. plan "
+    "lists the windows, the native date partitions, the writers and the readers to "
+    "reload, and changes nothing; run and dry-run admit afresh and start the runner "
+    "(completed historical dates only)"
+)
 
 
 @job_app.command(
@@ -82,16 +98,7 @@ def backfill(
             "declares a default; a new value re-fetches windows already covered (a restatement)",
         ),
     ] = None,
-    on_conflict: Annotated[
-        str | None,
-        typer.Option(
-            "--on-conflict",
-            help="For this run: what a write does with a row whose row_key is already "
-            f"there - {alternatives(stack_backfill.ON_CONFLICT)}. Default: the worker's own "
-            f"({q_facts.DEFAULT_IO_STRATEGY} unless it declares otherwise)",
-            autocompletion=completion.choices(*stack_backfill.ON_CONFLICT),
-        ),
-    ] = None,
+    on_conflict: _OnConflictOpt = None,
     mode: Annotated[
         str | None,
         typer.Option(
@@ -100,6 +107,7 @@ def backfill(
                 run_modes.MODE_OPTION_MODES,
                 {m: run_modes.NOTES[m] for m in run_modes.MODE_OPTION_MODES},
                 default=run_modes.DEFAULT_MODE,
+                quote="`",
             )
             + ". A dry run - fetch and transform, write nothing - is --dry-run",
             autocompletion=completion.choices(*run_modes.MODE_OPTION_MODES),
@@ -123,24 +131,14 @@ def backfill(
             "the range",
         ),
     ] = False,
-    attach: Annotated[
-        str | None,
-        typer.Option(
-            "--attachment",
-            help="The saved attachment whose native HDB to backfill into "
-            "(`uqs job attachment add`), taking the stack and the destination from it. plan "
-            "lists the windows, the native date partitions, the writers and the readers to "
-            "reload, and changes nothing; run and dry-run admit afresh and start the runner "
-            "(completed historical dates only)",
-        ),
-    ] = None,
+    attach: _AttachOpt = None,
     writer: Annotated[
         str | None,
         typer.Option(
             "--writer",
             metavar="HOST:PORT",
             help="With --attachment: extract here and send each window to the receiver "
-            "`uqs job receiver start` started on the stack's machine, which writes its HDB (#1650)",
+            "`uqs job receiver start` started on the stack's machine, which writes its HDB",
         ),
     ] = None,
     as_json: Annotated[
@@ -180,7 +178,7 @@ def backfill(
     --source-version is required too unless the worker declares a default
     source_version - one whose source is never restated. Pass a new
     --source-version to re-fetch windows already covered. The process registers with discovery, so
-    the fleet has to be up, and it exits when the range is done - follow it with
+    the stack has to be up, and it exits when the range is done - follow it with
     `uqs logs <process> -f`.
 
     e.g.
@@ -191,7 +189,7 @@ def backfill(
     `--mode plan` lists the windows a run would fetch without opening the
     source or writing anything; `--dry-run` (`--mode dry-run`) fetches them and
     writes nothing. Their output is in the process's log, like a run's. Every
-    mode but a run rehearses against the data directory as the fleet's last
+    mode but a run rehearses against the data directory as the stack's last
     start left it, and never bootstraps it: on a tree not yet started it is
     refused, naming `uqs start`.
 

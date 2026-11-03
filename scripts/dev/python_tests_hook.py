@@ -1,9 +1,14 @@
-"""The `python-tests` pre-commit hook: the Python tests a commit reaches (#1879).
+"""The `python-tests` pre-push hook: the Python tests a push reaches (#1879, #1965).
 
-Never the whole suite by default: CI runs that, on every pull request, on a
-clean Linux checkout. Two records say what each test depends on, both at the
-repository root and both gitignored, and a commit runs the union of what they
-select:
+It runs at `git push`, not at commit (#1965): pre-commit hands it the pushed
+range in PRE_COMMIT_FROM_REF/PRE_COMMIT_TO_REF, and the paths that range
+changes stand where the staged paths stood. Run by hand or at commit it still
+reads what is staged.
+
+Never the whole suite by default: CI runs that, on every pull request that can
+reach a Python test (scripts/dev/ci_scope.py), on a clean Linux checkout. Two
+records say what each test depends on, both at the repository root and both
+gitignored, and a commit runs the union of what they select:
 
 * testmon's `.testmondata` - the Python each test EXECUTES. When a .py file is
   staged, `pytest --testmon --testmon-forceselect` runs the tests whose
@@ -101,11 +106,15 @@ PYTEST = ["uv", "run", "pytest", "-q", "-n", "auto", "--dist", "loadgroup", *NOT
 NO_TESTS = 5
 
 
-def staged_changes() -> list[tuple[str, str]]:
-    """(status letter, path) for each path the commit adds, changes or
-    deletes; a rename is its old path deleted and its new one added."""
+def staged_changes(environ: dict[str, str] | None = None) -> list[tuple[str, str]]:
+    """(status letter, path) for each path the push - or, outside a push, the
+    commit - adds, changes or deletes; a rename is its old path deleted and its
+    new one added. A pre-push hook gets the pushed range from pre-commit."""
+    env = os.environ if environ is None else environ
+    start, end = env.get("PRE_COMMIT_FROM_REF"), env.get("PRE_COMMIT_TO_REF")
+    which = [start, end] if start and end else ["--cached"]
     out = subprocess.run(
-        ["git", "diff", "--cached", "--name-status", "--no-renames", "-z"],
+        ["git", "diff", *which, "--name-status", "--no-renames", "-z"],
         capture_output=True,
         text=True,
         check=True,

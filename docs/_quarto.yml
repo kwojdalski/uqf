@@ -128,6 +128,7 @@ website:
           - architecture/pipeline-architecture-example.md
           - architecture/event-tape.md
           - architecture/cryptorust-discovery.md
+          - architecture/markout-contract.md
       - section: "Reference"
         contents:
           - reference/quant-modules.md

@@ -2,22 +2,27 @@
 
 from __future__ import annotations
 
-from datetime import date
 from typing import Annotated
 
 import typer
 
 from uqs.cli import safety
+from uqs.cli.concepts import table_arg
 from uqs.cli.safety import ChangesState, dry_run_note
 from uqs.cli.shared import _die, _paths, console, data_app
 from uqs.paths import UqsError
 from uqs.stack import hdb_migrate
+from uqs.timerange import DAY_FORMS, parse_day
+
+_TableOpt = table_arg("The declared HDB table")
 
 
 @data_app.command("migrate", cls=ChangesState)
 def migrate(
-    table: Annotated[str, typer.Argument(help="the declared HDB table")],
-    partition: Annotated[str, typer.Argument(help="one partition date, YYYY-MM-DD")],
+    table: _TableOpt,
+    partition: Annotated[
+        str, typer.Argument(metavar="PARTITION", help=f"One partition's date, {DAY_FORMS}")
+    ],
     rename: Annotated[
         list[str] | None,
         typer.Option("--rename", help="OLD:NEW - rename a column; repeatable"),
@@ -34,12 +39,14 @@ def migrate(
     yes: safety.ApplyYesOpt = False,
     dry_run: safety.DefaultDryRunOpt = False,
 ) -> None:
-    """Migrate one HDB date/table to this release's schema: stage, validate,
-    and replace the table partition.
+    """Migrate one HDB partition of a table to this release's schema.
+
+    Stages, validates
+    and replaces the table partition.
 
     Stop the stack first: TorQ end of day does not share the backfill
     writer's lock. Without --apply it shows the migration plan and changes
-    nothing - the default, and it stays so (#1854). --apply shows the plan,
+    nothing - the default, and it stays so. --apply shows the plan,
     asks, then writes; --yes does not ask. The old table is retained at the
     path reported after a successful atomic exchange.
     """
@@ -49,10 +56,7 @@ def migrate(
         _die(exc)
         return
     try:
-        try:
-            day = date.fromisoformat(partition)
-        except ValueError as exc:
-            raise UqsError(f"{partition!r} is not a date in YYYY-MM-DD form") from exc
+        day = parse_day("PARTITION", partition)
         renames: dict[str, str] = {}
         for pair in rename or []:
             old, sep, new = pair.partition(":")

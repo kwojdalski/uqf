@@ -401,7 +401,7 @@
 / .
 / `replace clears the window's rows by this column, so it must be the column the
 / window was CUT on, as the output holds it. Declared with window_column when
-/ the transform moves it: hdb_demo_markouts_backfill's `time` is trade_time+horizon,
+/ the transform moves it: hdb_fx_markouts_backfill's `time` is trade_time+horizon,
 / the fill's time plus the markout horizon, so clearing by `time` deletes
 / markouts a neighbouring window wrote (#972). Undeclared, it is the source's
 / time_column when the output keeps it, else `time (a transform that renamed it),

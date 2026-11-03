@@ -153,18 +153,18 @@
     .qunit.assertThrows[.qetl.job.stream.reset;`no_such_job;"*is not a registered streaming job*";"named, not ignored"]};
 
 .qt.qetl.job.stream.test_a_jobs_namespace_is_derived_from_its_name:{[t]
-    .qunit.assertEquals[.qetl.job.stream.namespace `demo_markout;`.qpipe.job.demo_markout;
+    .qunit.assertEquals[.qetl.job.stream.namespace `crypto_markout;`.qpipe.job.crypto_markout;
         "a job's namespace is .qpipe.job.<job>, not a second name to keep in step"]};
 
 .qt.qetl.job.stream.test_the_declaration_names_the_namespace_that_holds_the_job:{[t]
     / Not a tautology with the test above: this one checks the derived name
     / is where the implementation actually is.
-    .qunit.assertEquals[`on_batch in key .qetl.job.stream.def[`demo_markout]`ns;1b;
+    .qunit.assertEquals[`on_batch in key .qetl.job.stream.def[`crypto_markout]`ns;1b;
         "the derived namespace holds the job's own handler"]};
 
 .qt.qetl.job.stream.test_a_process_finds_its_job_by_name:{[t]
     / How the generic runner knows which job it is.
-    .qunit.assertEquals[.qetl.job.stream.for_procname `demo_markout1;`demo_markout;
+    .qunit.assertEquals[.qetl.job.stream.for_procname `crypto_markout1;`crypto_markout;
         "the job that claims a process is found by that process's name"]};
 
 .qt.qetl.job.stream.test_an_unclaimed_process_is_refused_by_name:{[t]
@@ -187,8 +187,8 @@
 .qt.qetl.job.stream.test_two_jobs_may_not_claim_one_process:{[t]
     .qunit.assertError[{.qetl.job.stream.define[`impostor;x]};
         `procname`subscribe_to`publishes`on_batch!(
-            `demo_markout1;enlist `t;`symbol$();{[t;x] ()});
-        "one process runs one job, so a second claim on demo_markout1 is refused"]};
+            `crypto_markout1;enlist `t;`symbol$();{[t;x] ()});
+        "one process runs one job, so a second claim on crypto_markout1 is refused"]};
 
 .qt.qetl.job.stream.test_an_unwired_publish_throws_rather_than_dropping_rows:{[t]
     / The seam's whole point: rows going nowhere must not look like a job
@@ -369,54 +369,22 @@
 .qt.qetl.job.stream.bad:()
 
 / --- markout --------------------------------------------------------------
+/ The job's own scoring is held in test_crypto_markout.q; these are the two
+/ properties of the stream runner it shows.
 
-.qt.qetl.job.stream.test_markout_buffers_trades_and_quotes_separately:{[t]
-    .qt.qetl.job.stream.reset[];
-    .qpipe.job.demo_markout.on_batch[`trades;([] time:enlist .qt.qetl.job.stream.d 0; sym:enlist `EURUSD; side:enlist 1;
-        trade_price:enlist 1.1; size:enlist 1e6; pip_factor:enlist 10000; fill_id:enlist `f1)];
-    .qpipe.job.demo_markout.on_batch[`quote;([] time:enlist .qt.qetl.job.stream.d 0; sym:enlist `EURUSD;
-        bid:enlist 1.0999; ask:enlist 1.1001)];
-    .qunit.assertEquals[(count .qpipe.job.demo_markout.pending;count .qpipe.job.demo_markout.history);(1;1);
-        "each batch lands in the buffer its table names"]};
-
-.qt.qetl.job.stream.test_markout_ignores_a_pair_this_demo_does_not_trade:{[t]
-    / `quote` also carries the vendored starter pack's equity quotes.
-    .qt.qetl.job.stream.reset[];
-    .qpipe.job.demo_markout.on_batch[`quote;([] time:enlist .qt.qetl.job.stream.d 0; sym:enlist `AAPL;
-        bid:enlist 150f; ask:enlist 150.1)];
-    .qunit.assertEquals[count .qpipe.job.demo_markout.history;0;
-        "a quote outside .qf.demo.pairs is not buffered"]};
-
-.qt.qetl.job.stream.test_markout_publishes_nothing_until_a_fill_is_old_enough:{[t]
-    / The horizon has not passed, so there is nothing to score yet - and
-    / crucially the fill stays buffered rather than being scored against
-    / quotes that have not arrived.
-    .qt.qetl.job.stream.reset[];
-    .qpipe.job.demo_markout.on_batch[`trades;([] time:enlist .qt.qetl.job.stream.d 0; sym:enlist `EURUSD; side:enlist 1;
-        trade_price:enlist 1.1; size:enlist 1e6; pip_factor:enlist 10000; fill_id:enlist `f1)];
-    .qpipe.job.demo_markout.score_ready[.qt.qetl.job.stream.d[1]];
-    .qunit.assertEquals[(count .qt.qetl.job.stream.published;count .qpipe.job.demo_markout.pending);(0;1);
-        "a fill younger than the longest horizon is neither scored nor dropped"]};
-
-.qt.qetl.job.stream.test_markout_scores_and_evicts_a_ready_fill:{[t]
-    .qt.qetl.job.stream.reset[];
-    .qpipe.job.demo_markout.on_batch[`trades;([] time:enlist .qt.qetl.job.stream.d 0; sym:enlist `EURUSD; side:enlist 1;
-        trade_price:enlist 1.1; size:enlist 1e6; pip_factor:enlist 10000; fill_id:enlist `f1)];
-    .qpipe.job.demo_markout.on_batch[`quote;([] time:.qt.qetl.job.stream.d[1 10]; sym:`EURUSD`EURUSD;
-        bid:1.1004 1.1009; ask:1.1006 1.1011)];
-    .qpipe.job.demo_markout.score_ready[.qt.qetl.job.stream.d[20]];
-    out:.qt.qetl.job.stream.last_rows[];
-    .qunit.assertEquals[(count .qt.qetl.job.stream.published;count out;count .qpipe.job.demo_markout.pending);(1;2;0);
-        "a fill past its longest horizon is scored at both horizons, published once, and evicted"]};
+.qt.qetl.job.stream.markout_inputs:{[]
+    t0:.qt.qetl.job.stream.d[0];
+    sym:`$"BTC-USDT";
+    .qpipe.job.crypto_markout.on_batch[`crypto_book;([] time:enlist t0; source_time:enlist t0; venue:enlist `a; sym:enlist sym;
+        bid_prices:enlist enlist 62000f; bid_sizes:enlist enlist 1f; ask_prices:enlist enlist 62010f; ask_sizes:enlist enlist 1f)];
+    .qpipe.job.crypto_markout.on_batch[`crypto_trades;([] time:enlist t0; sym:enlist sym; venue:enlist `a; side:enlist 1;
+        trade_price:enlist 62000f; size:enlist 0.5; fee:enlist 0f; fee_currency:enlist `USDT; exchange_fill_id:enlist `f1)]}
 
 .qt.qetl.job.stream.test_markout_publishes_the_execution_quality_table:{[t]
     .qt.qetl.job.stream.reset[];
-    .qpipe.job.demo_markout.on_batch[`trades;([] time:enlist .qt.qetl.job.stream.d 0; sym:enlist `EURUSD; side:enlist 1;
-        trade_price:enlist 1.1; size:enlist 1e6; pip_factor:enlist 10000; fill_id:enlist `f1)];
-    .qpipe.job.demo_markout.on_batch[`quote;([] time:enlist .qt.qetl.job.stream.d 1; sym:enlist `EURUSD;
-        bid:enlist 1.1004; ask:enlist 1.1006)];
-    .qpipe.job.demo_markout.score_ready[.qt.qetl.job.stream.d[20]];
-    .qunit.assertEquals[first exec tbl from .qt.qetl.job.stream.published;`demo_execution_quality;
+    .qt.qetl.job.stream.markout_inputs[];
+    .qpipe.job.crypto_markout.score_ready[.qt.qetl.job.stream.d[20]];
+    .qunit.assertEquals[first exec tbl from .qt.qetl.job.stream.published;`crypto_execution_quality;
         "the rows are published onto the table the job declares"]};
 
 .qt.qetl.job.stream.test_markout_keeps_the_batch_when_publishing_throws:{[t]
@@ -424,13 +392,10 @@
     / drain-before-publish ordering would lose the batch silently - which is
     / why score_ready evicts only after the publish returns.
     .qt.qetl.job.stream.reset[];
-    .qetl.job.stream.wire[`demo_markout;{[t;x] '"tickerplant is down"}];
-    .qpipe.job.demo_markout.on_batch[`trades;([] time:enlist .qt.qetl.job.stream.d 0; sym:enlist `EURUSD; side:enlist 1;
-        trade_price:enlist 1.1; size:enlist 1e6; pip_factor:enlist 10000; fill_id:enlist `f1)];
-    .qpipe.job.demo_markout.on_batch[`quote;([] time:enlist .qt.qetl.job.stream.d 1; sym:enlist `EURUSD;
-        bid:enlist 1.1004; ask:enlist 1.1006)];
-    @[{.qpipe.job.demo_markout.score_ready x};.qt.qetl.job.stream.d[20];{x}];
-    .qunit.assertEquals[count .qpipe.job.demo_markout.pending;1;
+    .qetl.job.stream.wire[`crypto_markout;{[t;x] '"tickerplant is down"}];
+    .qt.qetl.job.stream.markout_inputs[];
+    @[{.qpipe.job.crypto_markout.score_ready x};.qt.qetl.job.stream.d[20];{x}];
+    .qunit.assertEquals[count .qpipe.job.crypto_markout.pending;1;
         "a failed publish leaves the fill buffered for the next tick"]};
 
 / --- cross ----------------------------------------------------------------
@@ -1424,7 +1389,7 @@
 
 .qt.qetl.job.stream.test_a_job_that_does_not_replay_is_not_asked_to:{[t]
     .qt.qetl.job.stream.reset[];
-    .qetl.job.stream.start[`demo_markout;.qt.qetl.job.stream.fake_transport[`demo_markout;()]];
+    .qetl.job.stream.start[`crypto_markout;.qt.qetl.job.stream.fake_transport[`crypto_markout;()]];
     .qunit.assertEquals[.qt.qetl.job.stream.started`replay;0b;"replay is opt-in"]};
 
 / Publish has to be wired before subscribing: a replay delivers batches
@@ -1554,7 +1519,7 @@
 .qt.qetl.job.stream.test_market_data_check_names_crossed_and_stale_rows:{[t]
     t0:2026.09.19D10:00:00.000000000;
     book:{[s;ts;b;a] ([] sym:enlist s; source:enlist `LP_A; market:enlist `fx; source_time:enlist ts;
-        bid_prices:enlist enlist b; bid_sizes:enlist enlist 1e6; ask_prices:enlist enlist a; ask_sizes:enlist enlist 1e6)};
+        bid_prices:enlist enlist b; bid_sizes:enlist enlist 1e6; ask_prices:enlist enlist a; ask_sizes:enlist enlist 1e6; clock:enlist `receipt)};
     rows:raze (book[`EURUSD;t0;1.1;1.2];book[`GBPUSD;t0;1.3;1.2];book[`USDJPY;t0-0D00:10;150.0;150.1]);
     f:.qpipe.job.market_data.check rows;
     .qunit.assertEquals[exec row from f where check=`crossed_book;enlist 1;"GBPUSD is crossed"];
@@ -1567,7 +1532,7 @@
     / Two fresh venues must not let okx's ten-minute-old book through.
     t0:2026.09.19D10:10:00.000000000;
     book:{[v;ts] ([] sym:enlist `$"BTC-USDT"; source:enlist v; market:enlist `crypto; source_time:enlist ts;
-        bid_prices:enlist enlist 100f; bid_sizes:enlist enlist 1f; ask_prices:enlist enlist 101f; ask_sizes:enlist enlist 1f)};
+        bid_prices:enlist enlist 100f; bid_sizes:enlist enlist 1f; ask_prices:enlist enlist 101f; ask_sizes:enlist enlist 1f; clock:enlist `venue)};
     rows:raze (book[`binance;t0];book[`kraken;t0];book[`okx;t0-0D00:10]);
     f:.qpipe.job.market_data.check rows;
     .qunit.assertEquals[exec row from f where check=`stale_quote;enlist 2;"okx lags the batch by ten minutes"];
@@ -1579,7 +1544,7 @@
 .qt.qetl.job.stream.test_market_data_check_names_bad_levels_and_future_stamps:{[t]
     now:.z.p;
     book:{[b;bs;ts] ([] sym:enlist `EURUSD; source:enlist `LP_A; market:enlist `fx; source_time:enlist ts;
-        bid_prices:enlist b; bid_sizes:enlist bs; ask_prices:enlist enlist 1.12; ask_sizes:enlist enlist 1e6)};
+        bid_prices:enlist b; bid_sizes:enlist bs; ask_prices:enlist enlist 1.12; ask_sizes:enlist enlist 1e6; clock:enlist `receipt)};
     rows:raze (book[enlist 1.10;enlist 1e6;now];book[enlist 0w;enlist 1e6;now];book[enlist 1.10;enlist 0f;now];
         book[`float$();`float$();now];book[enlist 1.10;enlist 1e6;now+0D00:01]);
     f:.qpipe.job.market_data.check rows;
@@ -1595,7 +1560,7 @@
 .qt.qetl.job.stream.test_market_data_check_stale_reference_ignores_future_rows:{[t]
     now:.z.p;
     book:{[s;v;ts] ([] sym:enlist s; source:enlist v; market:enlist `fx; source_time:enlist ts;
-        bid_prices:enlist enlist 1.1; bid_sizes:enlist enlist 1e6; ask_prices:enlist enlist 1.2; ask_sizes:enlist enlist 1e6)};
+        bid_prices:enlist enlist 1.1; bid_sizes:enlist enlist 1e6; ask_prices:enlist enlist 1.2; ask_sizes:enlist enlist 1e6; clock:enlist `receipt)};
     rows:raze (book[`EURUSD;`LP_A;now];book[`GBPUSD;`LP_A;now];book[`USDJPY;`LP_A;now];
         book[`EURUSD;`LP_B;now+0D00:10]);
     f:.qpipe.job.market_data.check rows;
@@ -1614,7 +1579,7 @@
     `.qpipe.job.superbook.books set 0#.qpipe.job.superbook.books;
     .qetl.job.stream.wire[`superbook;{[t;x]}];
     row:([] sym:enlist `EURUSD; source:enlist `LP_A; market:enlist `fx; source_time:enlist .z.p+0D00:00:00.600;
-        bid_prices:enlist enlist 1.10; bid_sizes:enlist enlist 1e6; ask_prices:enlist enlist 1.12; ask_sizes:enlist enlist 1e6);
+        bid_prices:enlist enlist 1.10; bid_sizes:enlist enlist 1e6; ask_prices:enlist enlist 1.12; ask_sizes:enlist enlist 1e6; clock:enlist `receipt);
     r:@[{.qpipe.job.superbook.on_batch[`market_data;x]; count .qpipe.job.superbook.books};row;{x}];
     `.qf.mkt.max_clock_lead set saved;
     `.qpipe.job.superbook.books set 0#.qpipe.job.superbook.books;

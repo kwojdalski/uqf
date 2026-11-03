@@ -62,12 +62,14 @@ by default.
   | `source_time`              | Original quote timestamp in UTC                            |
   | `bid_prices`, `ask_prices` | Direct prices in quote currency per base unit              |
   | `bid_sizes`, `ask_sizes`   | Available **base-currency** quantities aligned with prices |
+  | `clock`                    | Whose clock `source_time` is: `venue` or `receipt`         |
 
 `quote.src` becomes `source`; scalar prices and sizes become one-level vectors.
 The existing single-publisher `fx_orderbook` demo feed is mapped to `UQFDEPTH`.
 These two feeds have no exchange event timestamp, so the adapter preserves their
-original plant receipt time as `source_time`. Non-FX symbols on the shared
-`quote` table are filtered out.
+original plant receipt time as `source_time`, and say so with `clock = receipt`
+(a venue-stamped book such as `crypto_book` carries `venue`). Non-FX symbols on
+the shared `quote` table are filtered out.
 
 A new feed can publish this canonical shape, or add a source mapping to
 `src/etl/streaming/market_data.q` using the existing

@@ -255,10 +255,28 @@ def needed(base: str) -> list[str]:
     return check.needed_hooks(changed)
 
 
+def hook_stage(hook: str, config: Path | None = None) -> str:
+    """The stage `hook` runs at, read from its `stages:` in the config -
+    `pre-commit` when it names none. q-tests and q-coverage run at pre-push
+    (#1965), and `pre-commit run <id>` finds a hook only at the stage asked."""
+    text = (config or REPO / ".pre-commit-config.yaml").read_text()
+    lines = text.splitlines()
+    for i, line in enumerate(lines):
+        if line.strip() == f"- id: {hook}":
+            for following in lines[i + 1 :]:
+                if following.strip().startswith("- id:") or following.startswith("  - repo:"):
+                    break
+                if following.strip().startswith("stages:"):
+                    return following.split("[", 1)[1].split(",")[0].strip(" ]")
+            break
+    return "pre-commit"
+
+
 def run_hook(hook: str, env: dict[str, str] | None = None) -> bool:
-    """Run one pre-commit hook over the whole tree, with `env` added to this
-    process's environment; whether it passed."""
-    cmd = ["uv", "tool", "run", "--from", PRE_COMMIT, "pre-commit", "run", hook, "--all-files"]
+    """Run one pre-commit hook over the whole tree, at its own stage, with
+    `env` added to this process's environment; whether it passed."""
+    cmd = ["uv", "tool", "run", "--from", PRE_COMMIT, "pre-commit", "run", hook, "--all-files",
+           "--hook-stage", hook_stage(hook)]  # fmt: skip
     merged = {**os.environ, **(env or {})}
     return subprocess.run(cmd, cwd=REPO, env=merged, check=False).returncode == 0
 

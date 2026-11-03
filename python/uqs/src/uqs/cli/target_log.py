@@ -14,6 +14,7 @@ from typing import Annotated, Any
 import typer
 from rich.table import Table
 
+from uqs.cli import completion
 from uqs.cli.json_out import emit, json_opt
 from uqs.cli.safety import ChangesState, ReadOnly
 from uqs.cli.shared import (
@@ -55,7 +56,12 @@ def _about(entry: dict, name: str) -> bool:
 def log_(
     name: Annotated[
         str | None,
-        typer.Argument(metavar="NAME", help="Only the changes to this target", show_default=False),
+        typer.Argument(
+            metavar="TARGET",
+            help="Only the changes to this target",
+            show_default=False,
+            autocompletion=completion.targets,
+        ),
     ] = None,
     limit: Annotated[int, typer.Option("--limit", help="The most recent N changes")] = 20,
     export: ExportOpt = None,
@@ -64,7 +70,9 @@ def log_(
     interactive: InteractiveOpt = False,
     as_json: LogJson = False,
 ) -> None:
-    """The changes made to deploy_targets.toml, newest first: by whom, from
+    """List the changes made to deploy_targets.toml, newest first.
+
+    By whom, from
     which machine, with which command, and which settings each changed.
     `uqs target revert N` undoes change N."""
     root = repo_root()
@@ -140,7 +148,9 @@ def revert(
     ],
     dry_run: DryRun = False,
 ) -> None:
-    """Put back each table one change altered, exactly as it was before it -
+    """Revert one change to deploy_targets.toml.
+
+    Puts back each table the change altered, exactly as it was before it -
     itself a change, checked and logged, so it can be reverted too. Refused
     when a table has changed again since."""
     ref = None if change == "last" else change

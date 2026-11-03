@@ -4,7 +4,7 @@ A horizon job evaluates each event **some time after it**: a markout scores a
 fill against the market 1s, 10s or 60s later, so the fill waits in a queue until
 the prices that judge it have arrived. The queue, the timer, readiness, eviction
 and the history bound are the kind's (`src/etl/core/horizon.q`). Your file is
-the scoring. `demo_markout` and `crypto_markout` are horizon jobs.
+the scoring. `crypto_markout` and `fx_markout` are horizon jobs.
 
 ## Command
 

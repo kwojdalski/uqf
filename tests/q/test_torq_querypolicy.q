@@ -29,8 +29,8 @@
 .qt.qtorq.querypolicy.refusal:{[p;d] @[{.checkinputs.checkrequest[x;`sym;y];`passed}[p];d;{x}]}
 
 .qt.qtorq.querypolicy.test_every_exposed_table_has_a_policy_for_ordinary_callers:{[t]
-    .qunit.assertEquals[asc exec tablename from .qt.qtorq.querypolicy.shipped where null role;`crypto_execution_quality`demo_execution_quality`duckdb_deals`last_value`mkt_orderbook;
-        "the five tables the gateway exposes, each with a default row - crypto_execution_quality for the rts subscriber's snapshot (#984)"]};
+    .qunit.assertEquals[asc exec tablename from .qt.qtorq.querypolicy.shipped where null role;`crypto_execution_quality`duckdb_deals`last_value`mkt_orderbook;
+        "the four tables the gateway exposes, each with a default row - crypto_execution_quality for the rts subscriber's snapshot (#984)"]};
 
 .qt.qtorq.querypolicy.test_a_table_without_a_policy_is_refused_with_how_to_get_one:{[t]
     .qunit.assertThrows[.checkinputs.resolvepolicy[.qt.qtorq.querypolicy.shipped;.qt.qtorq.querypolicy.caps;;.qt.qtorq.querypolicy.none];`trades;
@@ -129,8 +129,8 @@
 
 .qt.qtorq.querypolicy.test_a_comparison_on_a_column_no_policy_requires_is_unaffected:{[t]
     d:.qt.qtorq.querypolicy.book,enlist[`filters]!enlist `sym`bid!(enlist .uqf.browse_pair[`eq;`EURUSD];enlist .uqf.browse_pair[`gt;1.08]);
-    p:.qt.qtorq.querypolicy.policy`demo_execution_quality;
-    e:`tablename`starttime`endtime`filters!(`demo_execution_quality;2026.01.01D00:00;2026.01.01D01:00;
+    p:.qt.qtorq.querypolicy.policy`crypto_execution_quality;
+    e:`tablename`starttime`endtime`filters!(`crypto_execution_quality;2026.01.01D00:00;2026.01.01D01:00;
         enlist[`sym]!enlist enlist .uqf.browse_pair[`ne;`ZZZ]);
     .qunit.assertEquals[(.qt.qtorq.querypolicy.refusal[.qt.qtorq.querypolicy.policy`mkt_orderbook] d;.qt.qtorq.querypolicy.refusal[p] e);`passed`passed;"only required columns must narrow"]};
 
@@ -144,17 +144,17 @@
         "querypolicy: mkt_orderbook allows raw and this request is aggregate - drop aggregations*";"raw only"]};
 
 .qt.qtorq.querypolicy.test_a_raw_read_on_an_aggregate_only_table_is_refused:{[t]
-    p:@[.qt.qtorq.querypolicy.policy`demo_execution_quality;`operations;:;enlist`aggregate];
-    d:`tablename`starttime`endtime!(`demo_execution_quality;2026.01.01D00:00;2026.01.01D01:00);
+    p:@[.qt.qtorq.querypolicy.policy`crypto_execution_quality;`operations;:;enlist`aggregate];
+    d:`tablename`starttime`endtime!(`crypto_execution_quality;2026.01.01D00:00;2026.01.01D01:00);
     .qunit.assertThrows[.checkinputs.checkrequest[p;`sym;];d;
-        "querypolicy: demo_execution_quality allows aggregate and this request is raw - send aggregations*";"aggregates only"]};
+        "querypolicy: crypto_execution_quality allows aggregate and this request is raw - send aggregations*";"aggregates only"]};
 
 .qt.qtorq.querypolicy.test_only_approved_aggregation_functions_pass_where_a_policy_lists_them:{[t]
-    p:@[.qt.qtorq.querypolicy.policy`demo_execution_quality;`functions;:;`avg`count];
-    d:`tablename`starttime`endtime`aggregations!(`demo_execution_quality;2026.01.01D00:00;2026.01.01D01:00;`avg`max!`markout_pips`markout_pips);
+    p:@[.qt.qtorq.querypolicy.policy`crypto_execution_quality;`functions;:;`avg`count];
+    d:`tablename`starttime`endtime`aggregations!(`crypto_execution_quality;2026.01.01D00:00;2026.01.01D01:00;`avg`max!`markout_bps`markout_bps);
     .qunit.assertThrows[.checkinputs.checkrequest[p;`sym;];d;
-        "querypolicy: demo_execution_quality allows the aggregations avg, count - not max";"max is not on the list"];
-    .qunit.assertEquals[.qt.qtorq.querypolicy.refusal[p;@[d;`aggregations;:;enlist[`avg]!enlist`markout_pips]];`passed;"avg is"]};
+        "querypolicy: crypto_execution_quality allows the aggregations avg, count - not max";"max is not on the list"];
+    .qunit.assertEquals[.qt.qtorq.querypolicy.refusal[p;@[d;`aggregations;:;enlist[`avg]!enlist`markout_bps]];`passed;"avg is"]};
 
 .qt.qtorq.querypolicy.test_a_parameter_the_policy_cannot_see_into_is_refused:{[t]
     .qunit.assertThrows[.checkinputs.checkprohibited;.qt.qtorq.querypolicy.book,enlist[`postprocessing]!enlist{x};

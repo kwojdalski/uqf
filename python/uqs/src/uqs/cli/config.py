@@ -19,7 +19,9 @@ from typing import Annotated
 import typer
 from rich.table import Table
 
-from uqs.cli import choices, completion
+from uqs.cli import completion
+from uqs.cli.choices import ChoiceOpt
+from uqs.cli.concepts import attach_opt
 from uqs.cli.json_out import emit, json_opt, records, timestamp
 from uqs.cli.renames import ATTACHMENT, alias_command, renamed, warn_renamed
 from uqs.cli.safety import ChangesState, ReadOnly, dry_run_note
@@ -45,9 +47,8 @@ from uqs.stack import procs as stack_procs
 config_app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
-    help="A process's process.csv fields: show them, or set one (persisted to "
-    "process_overrides.csv) or unset one, and list every one set; the fields set can "
-    "change (field), the stack's resolved env, and the sources the stack reads (sources).",
+    help="Process configuration: show, set, unset, list, env, field, sources.\n\nprocess.csv "
+    "fields, set in process_overrides.csv; the resolved env; the sources the stack reads.",
 )
 app.add_typer(config_app, name="config")
 
@@ -55,7 +56,6 @@ app.add_typer(config_app, name="config")
 GetJson = json_opt(
     '{"process", "fields": [{field, value}]} - or, given a FIELD, {"process", "field", "value"}'
 )
-
 
 #: The old spellings `config show` still takes (#1729).
 _SHOW_RENAMES = {"--port": "--base-port", "--raw": "--unresolved"}
@@ -66,7 +66,9 @@ def config_get(
     procname: Annotated[
         str, typer.Argument(metavar="PROC", help="The process", autocompletion=completion.procname)
     ],
-    field: Annotated[str | None, typer.Argument(autocompletion=completion.csv_fields)] = None,
+    field: Annotated[
+        str | None, typer.Argument(metavar="FIELD", autocompletion=completion.csv_fields)
+    ] = None,
     port: BasePortOpt = None,
     raw: Annotated[
         bool, typer.Option("--unresolved", help="Show unresolved ${VAR}/{VAR}+N placeholders as-is")
@@ -74,10 +76,9 @@ def config_get(
     export: ExportOpt = None,
     as_json: GetJson = False,
 ) -> None:
-    """Show a process's effective process.csv row (or one field of it), with
-    ${VAR}/{VAR}+N placeholders (KDBBASEPORT, KDBHDB, ...) resolved against
-    the same env torq.sh itself would use - pass --unresolved to see them literal.
-    """
+    """Show a process's effective process.csv row, or one FIELD of it.
+
+    ${VAR}/{VAR}+N placeholders resolve as torq.sh would; --unresolved shows them literal."""
     try:
         row = stack_procs.get_process_config(_paths(), procname, base_port=port, resolve=not raw)
     except UqsError as exc:
@@ -91,7 +92,7 @@ def config_get(
         _export([{"field": k, "value": v} for k, v in row.items()], export)
         return
     if field is not None:
-        console.print(row.get(field, ""))
+        print(row.get(field, ""))  # the value alone, as `$(uqs config show ...)` takes it
         return
     table = Table(title=f"{procname} config")
     table.add_column("field")
@@ -121,8 +122,7 @@ def config_set(
         typer.Option("--dry-run", "-n", help="Check the setting and show it; write nothing"),
     ] = False,
 ) -> None:
-    """Set process.csv fields for *procname* (persisted to process_overrides.csv,
-    applied on every later start/stop/...); `uqs config unset` removes one."""
+    """Set PROC's process.csv fields in process_overrides.csv; `uqs config unset` removes one."""
     settings = _pairs(pairs)
     try:
         for field, value in settings:  # every one checked before any is written
@@ -175,8 +175,7 @@ def config_unset(
         typer.Option("--dry-run", "-n", help="Check the change and show it; write nothing"),
     ] = False,
 ) -> None:
-    """Remove *procname*'s override of each FIELD, as `uqs target unset` does
-    a target's setting: process.csv's own value applies again (#1858)."""
+    """Remove PROC's override of each FIELD: process.csv's own value applies again."""
     try:
         process_unset.unset_process_config(_paths(), procname, fields, dry_run)
     except UqsError as exc:
@@ -200,6 +199,21 @@ def _json_lines(rows: list[dict]) -> None:  # q's local .z.P, with this machine'
     emit({"lines": [line | {"time": timestamp(line["time"])} for line in lines]})
 
 
+_LevelOpt = ChoiceOpt(
+    stack_logs.LEVEL_CHOICES, "--level", stack_logs.LEVEL_HELP, case_sensitive=False
+)
+_StreamOpt = ChoiceOpt(
+    stack_multitail.MULTITAIL_STREAMS,
+    "--stream",
+    "With --multitail: which log files get a pane",
+    default=stack_multitail.DEFAULT_STREAM,
+)
+_AttachOpt = attach_opt(
+    "The attachment whose backfill or receiver log to read instead: its latest "
+    "run (`uqs job backfill --attachment`)"
+)
+
+
 @app.command(
     cls=renamed(
         {
@@ -207,6 +221,7 @@ def _json_lines(rows: list[dict]) -> None:  # q's local .z.P, with this machine'
             "--print": "--show-command",
             "--columns": "--pane-columns",
             "-c": "--pane-columns",
+            "--run": "--stamp",  # a log's stamp, not the run_id "run" means (#1890)
             **ATTACHMENT,
         },
         ReadOnly,
@@ -220,30 +235,14 @@ def logs(
     lines: Annotated[
         int, typer.Option("--lines", "-l", help="Lines per process log to show (history)")
     ] = 20,
-    level: Annotated[
-        str | None,
-        typer.Option(
-            help=stack_logs.LEVEL_HELP,
-            autocompletion=completion.choices(*stack_logs.LEVEL_CHOICES),
-        ),
-    ] = None,
+    level: _LevelOpt = None,
     multitail: Annotated[
         bool,
         typer.Option(
             "--multitail", help="Follow in multitail instead, one pane per out_/err_*.log file"
         ),
     ] = False,
-    stream: Annotated[
-        str | None,
-        typer.Option(
-            "--stream",
-            help="With --multitail: which log files get a pane - "
-            + choices.alternatives(
-                stack_multitail.MULTITAIL_STREAMS, default=stack_multitail.DEFAULT_STREAM
-            ),
-            autocompletion=completion.choices(*stack_multitail.MULTITAIL_STREAMS),
-        ),
-    ] = None,
+    stream: _StreamOpt = None,
     pane_columns: Annotated[
         int | None,
         typer.Option("--pane-columns", help="With --multitail: lay the panes out in N columns"),
@@ -268,14 +267,7 @@ def logs(
             "--id", help="With --channel: only this worker or component's lines (repeatable)"
         ),
     ] = None,
-    attach: Annotated[
-        str | None,
-        typer.Option(
-            "--attachment",
-            help="The attachment whose backfill or receiver log to read instead: its latest "
-            "run (`uqs job backfill --attachment`)",
-        ),
-    ] = None,
+    attach: _AttachOpt = None,
     worker: Annotated[
         str | None,
         typer.Option(
@@ -287,32 +279,33 @@ def logs(
     run: Annotated[
         str | None,
         typer.Option(
-            "--run",
+            "--stamp",
             help="With --attachment: an older run, by its log's file name or a prefix of its "
             "stamp (e.g. 20261027T1304)",
         ),
     ] = None,
     as_json: LogsJson = False,
 ) -> None:
-    """Tail out_/err_*.log for one or more processes through the same
-    colorized logger the CLI itself uses, instead of raw per-process files -
-    e.g. `logs stp1 rdb1 -f`, `logs -f --level WARNING`.
+    """Show the logs of one or more processes.
+
+    Tails out_/err_*.log through the CLI's own colorized logger, not raw
+    files - e.g. `logs stp1 rdb1 -f`, `logs -f --level WARNING`.
 
     `--multitail` follows the same files in the `multitail` binary, one pane
     each: `logs all --multitail --stream err --pane-columns 2`.
 
     `--channel` subscribes instead of reading files: every line the processes
     publish, filtered by `--id` and `--level` - e.g. `logs all --channel
-    --level ERROR`, `logs fxpositions1 --channel --id fx_positions` (#1067).
+    --level ERROR`, `logs fxpositions1 --channel --id fx_positions`.
 
     `--attachment` reads an attached backfill's or receiver's run instead, which is
-    no TorQ process: `logs --attachment pb-uat --worker piggybank_ledger_backfill -f`
-    (#1725). Its q errors and RESULT line are shown whatever `--level` says.
+    no TorQ process: `logs --attachment pb-uat --worker piggybank_ledger_backfill -f`.
+    Its q errors and RESULT line are shown whatever `--level` says.
 
-    What the options combine with (#1730): the PROCS are what is read, every
-    option a filter on how. `--attachment NAME` replaces PROCS - one attachment's
-    run, narrowed by `--worker` (a worker, or <dataset>.receiver) and `--run`,
-    which need it. `--channel` and `--multitail` each read PROCS another way:
+    What the options combine with: the PROCs are what is read, every
+    option a filter on how. `--attachment ATTACHMENT` replaces PROC - one attachment's
+    run, narrowed by `--worker` (a worker, or <dataset>.receiver) and `--stamp`,
+    which need it. `--channel` and `--multitail` each read PROC another way:
     `--id` needs `--channel`; `--stream`, `--pane-columns` and `--show-command` need
     `--multitail`. `--follow`, `--lines` and `--level` go with the files and
     with `--attachment`.
@@ -324,7 +317,7 @@ def logs(
                 _die(UqsUsageError(f"--json prints the history: {option} does not apply with it"))
                 return
     if attach is None:
-        for option, used in {"--worker": worker, "--run": run}.items():
+        for option, used in {"--worker": worker, "--stamp": run}.items():
             if used is not None:
                 _die(UqsUsageError(f"{option} needs --attachment"))
                 return

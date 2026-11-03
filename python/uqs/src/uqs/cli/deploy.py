@@ -18,10 +18,13 @@ from typing import Annotated
 
 import typer
 
+from uqs.cli import completion
 from uqs.cli import deploy_components as components
 from uqs.cli import deploy_connection as conn
 from uqs.cli import deploy_dry_run as dry
 from uqs.cli import deploy_policy as policy
+from uqs.cli.choices import ChoiceOpt
+from uqs.cli.concepts import profile_opt
 from uqs.cli.renames import renamed
 from uqs.cli.safety import ChangesState, DryRunOpt, OverrideOpt, ReasonOpt
 from uqs.cli.shared import EXIT_REFUSED, EXIT_USAGE, app, json_refusal
@@ -46,11 +49,19 @@ from uqs.stack import runtime_bundles
 deploy_app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
-    help="Deploy uqf onto a server with an existing TorQ: build a release (and each "
+    help="Deploy releases: build, component, push, check, status, history, rollback, prune.\n\n"
+    "Deploy uqf onto a server with an existing TorQ: build a release (and each "
     "component), push it, check it, see its status and history, rollback, prune.",
 )
 app.add_typer(deploy_app, name="deploy")
 
+
+#: The servers' architecture a release is built for when --arch is not given.
+DEFAULT_ARCH = "x86_64"
+#: `--arch`, shared by `deploy build` and `deploy component build` (#1884).
+ArchOpt = ChoiceOpt(
+    PLATFORMS, "--arch", "The servers' architecture", default=DEFAULT_ARCH, required=True
+)
 log = get_logger()
 
 
@@ -70,6 +81,10 @@ def _failed(prefix: str, stage: str, exc: Exception) -> None:
 #: `--output-dir` (#1857).
 _BUILD_RENAMES = {
     "--output": "--output-dir",
+    # KFK is KX's client library, which UQF_KFK_HOME names; the only --with-*
+    # flag is a --x/--no-x pair like every other (#1890)
+    "--kafka-home": "--kfk-home",
+    "--with-kafka-connector": "--kafka-connector",
     **policy.BUILD_OLD_SPELLINGS,
     **components.BUILD_OLD_SPELLINGS,
 }
@@ -84,9 +99,7 @@ def build(
             help="Directory to write the artifact into; default: dist/ at the repo root",
         ),
     ] = None,
-    arch: Annotated[
-        str, typer.Option("--arch", help=f"The servers' architecture: {', '.join(PLATFORMS)}")
-    ] = "x86_64",
+    arch: ArchOpt = DEFAULT_ARCH,
     python: Annotated[
         str | None,
         typer.Option(
@@ -114,10 +127,10 @@ def build(
     override: OverrideOpt = None,
     reason: ReasonOpt = None,
     kafka_home: Annotated[
-        Path | None, typer.Option("--kafka-home", metavar="DIR", help=kafka.HOME_HELP)
+        Path | None, typer.Option("--kfk-home", metavar="DIR", help=kafka.HOME_HELP)
     ] = None,
     with_kafka_connector: Annotated[
-        bool, typer.Option("--with-kafka-connector", help=kafka.CONNECTOR_HELP)
+        bool, typer.Option("--kafka-connector/--no-kafka-connector", help=kafka.CONNECTOR_HELP)
     ] = False,
     python_runtime: components.CarriedPythonRuntime = None,
     frontend_dist: Annotated[
@@ -173,6 +186,7 @@ _PUSH_RENAMES = (
     | components.OLD_Q_SPELLINGS
     | components.OLD_SPELLINGS
 )
+_ProfileOpt = profile_opt("The uqs profile to start, e.g. essential")
 
 
 @deploy_app.command("push", cls=renamed(_PUSH_RENAMES, ChangesState))
@@ -181,14 +195,16 @@ def push(
     artifact: Annotated[
         str,
         typer.Argument(
+            metavar="ARTIFACT",
             help="The release: a file from `uqs deploy build`, an https:// URL to one, or "
-            "a release tag CI published (.github/workflows/release.yml)"
+            "a release tag CI published (.github/workflows/release.yml)",
         ),
     ],
     target_names: Annotated[
         list[str] | None,
         typer.Argument(
             metavar="TARGET...",
+            autocompletion=completion.targets,
             help=f"Targets in {targets.DECLARATION} (or ${targets.DECLARATION_ENV}), deployed in "
             "order, stopping at the first failure; a flag given here wins over a target's "
             "value. None: --ssh, --dest and --profile say it all",
@@ -197,9 +213,7 @@ def push(
     ] = None,
     host: conn.Host = None,
     dest: conn.Dest = None,
-    profile: Annotated[
-        str | None, typer.Option("--profile", help="The uqs profile to start, e.g. essential")
-    ] = None,
+    profile: _ProfileOpt = None,
     target: Annotated[
         str | None,
         typer.Option(
@@ -289,6 +303,7 @@ def push(
             metavar="SOURCE,...",
             help="Check these sources live after verification and before activation; "
             "a failure rolls the deployment back",
+            autocompletion=completion.source_list,
         ),
     ] = "",
     live_check_timeout: conn.LiveCheckTimeout = 120,

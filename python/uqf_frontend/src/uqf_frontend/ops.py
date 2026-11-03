@@ -137,6 +137,9 @@ POLL_SECONDS: dict[str, int] = {
     "coverage": 60,
     "processes": 5,
     "backfill": 10,
+    "activity": 15,
+    # a file the operator edits by hand, read locally: no server is asked
+    "services": 30,
 }
 
 

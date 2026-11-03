@@ -7,12 +7,12 @@ command stays readable in one sitting."""
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
 import typer
 
 from uqs.cli import completion
-from uqs.cli.choices import alternatives
+from uqs.cli.choices import ChoiceOpt, alternatives
 from uqs.deploy import portable
 from uqs.deploy.components import BUNDLED, EXISTING, MODES
 
@@ -29,44 +29,35 @@ OLD_SPELLINGS = {
 BUILD_OLD_SPELLINGS = {"--q-target": "--q-version", "--python-runtime": "--python-component"}
 
 
-def _mode(component: str, existing: str, bundled: str) -> typer.models.OptionInfo:
-    """`--<component>-mode`: its help and completion from deploy/components.MODES,
-    each mode with what it means for `component` (#1893)."""
-    notes = {EXISTING: f"{existing} already on the server, found by preflight", BUNDLED: bundled}
-    return typer.Option(
-        f"--{component}-mode",
-        metavar="MODE",
-        help=alternatives(MODES, notes, default=DEFAULT),
-        autocompletion=completion.choices(*MODES),
-    )
-
-
 DEFAULT = EXISTING
-QMode = Annotated[
-    str,
-    _mode(
-        "q",
-        "the q of --qcmd/--qhome",
-        "the PeachQ of --q-component, installed once under shared/runtimes/q/ (never KX's q)",
-    ),
-]
-TorqMode = Annotated[
-    str,
-    _mode(
-        "torq",
-        "the TorQ of --torq-home/--torq-app-home",
-        "the vendored TorQ of --torq-component, installed once under shared/runtimes/torq/",
-    ),
-]
-PythonMode = Annotated[
-    str,
-    _mode(
-        "python",
-        "the Python uv finds",
-        "the CPython of --python-component, installed once under shared/runtimes/python/, "
-        "which .venv is made from",
-    ),
-]
+
+
+def _mode(component: str, existing: str, bundled: str) -> Any:
+    """`--<component>-mode`: a choice of deploy/components.MODES, each with what
+    it means for `component` (#1893, #1884)."""
+    notes = {EXISTING: f"{existing} already on the server, found by preflight", BUNDLED: bundled}
+    return ChoiceOpt(
+        MODES, f"--{component}-mode", "How it reaches the server", notes=notes, default=DEFAULT,
+        required=True, metavar="MODE",
+    )  # fmt: skip
+
+
+QMode = _mode(
+    "q",
+    "the q of --qcmd/--qhome",
+    "the PeachQ of --q-component, installed once under shared/runtimes/q/ (never KX's q)",
+)
+TorqMode = _mode(
+    "torq",
+    "the TorQ of --torq-home/--torq-app-home",
+    "the vendored TorQ of --torq-component, installed once under shared/runtimes/torq/",
+)
+PythonMode = _mode(
+    "python",
+    "the Python uv finds",
+    "the CPython of --python-component, installed once under shared/runtimes/python/, "
+    "which .venv is made from",
+)
 TorqRuntime = Annotated[
     str | None,
     typer.Option(
@@ -153,7 +144,7 @@ ConvertFor = Annotated[
         "--q-version",
         metavar="VERSION",
         help=f"The servers' kdb+ version, {alternatives(portable.Q_TARGETS)}: convert the "
-        "release's q for it - 4.0 has no nested contexts. Only the artifact changes, never "
+        "release's q for it - one without nested contexts. Only the artifact changes, never "
         "the checkout",
         autocompletion=completion.choices(*portable.Q_TARGETS),
     ),

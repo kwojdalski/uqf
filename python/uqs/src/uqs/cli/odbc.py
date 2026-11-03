@@ -26,7 +26,8 @@ from uqs.stack import odbc_home
 setup_app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
-    help="Infrastructure setup: prepare what the stack needs on this machine - "
+    help="Infrastructure setup on this machine: odbc.\n\n"
+    "Prepare what the stack needs on this machine - "
     "a private ODBC setup (odbc). Changes no running process.",
 )
 app.add_typer(setup_app, name="setup")
@@ -54,11 +55,15 @@ _RENAMES = {"--home": "--odbc-home", "--qhome": "--q-home"}
 
 @odbc_app.command("install", cls=renamed(_RENAMES, ChangesState))
 def install(
-    package: Annotated[Path, typer.Argument(help="The package, a .tar.gz with package.json")],
+    package: Annotated[
+        Path, typer.Argument(metavar="PACKAGE", help="The package, a .tar.gz with package.json")
+    ],
     home: Home,
     qhome: Annotated[
         Path | None,
-        typer.Option("--q-home", help="The managed QHOME to overlay; default: $QHOME"),
+        typer.Option(
+            "--q-home", envvar="QHOME", help="The managed QHOME to overlay; default: $QHOME"
+        ),
     ] = None,
     dry_run: Annotated[
         bool,
@@ -107,7 +112,7 @@ StatusJson = json_opt('{"home", "current", "previous", "versions": [name, ...]}'
 
 @odbc_app.command("status", cls=renamed(_RENAMES, ReadOnly))
 def status(home: Home, as_json: StatusJson = False) -> None:
-    """The installed versions, and which is current and previous."""
+    """Show the installed versions, and which is current and previous."""
     try:
         found = odbc_home.status(home)
     except OSError as exc:
@@ -132,7 +137,7 @@ def status(home: Home, as_json: StatusJson = False) -> None:
     cls=renamed(_RENAMES, marked(Effect.READ_ONLY, own_output="prints shell exports, for eval")),
 )
 def env(home: Home) -> None:
-    """The current version's variables, as shell exports."""
+    """Print the current version's variables, as shell exports."""
     version = odbc_home.current(home)
     if version is None:
         _die(UqsError(f"{home} has no current version - `uqs setup odbc install` first"))

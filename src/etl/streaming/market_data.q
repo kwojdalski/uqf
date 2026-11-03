@@ -7,6 +7,12 @@
 / source_time preserves their ORIGINAL plant timestamp, before normalization;
 / crypto_book carries the venue's own, and that is what source_time holds.
 / .
+/ WHOSE CLOCK (#1925). source_time is on different clocks by source, so each
+/ row says which in `clock`: `receipt for quote and fx_orderbook (the plant's
+/ own time, as above), `venue for crypto_book. The mapping stamps it because
+/ the mapping is the only place that knows, and check refuses a row that
+/ does not carry one of the two.
+/ .
 / FX FROM quote AND fx_orderbook, CRYPTO FROM crypto_book, and each row says
 / which in `market` (#886): the mapping knows, so it records it. The one path from a
 / vendor's book to a standard shape: posbook1 marks positions to the level-0
@@ -31,7 +37,7 @@
     fx:batch where .qf.px.is_ccy_pair each batch`sym;
     select sym, source:src, market:`fx, source_time:time,
         bid_prices:enlist each bid, bid_sizes:enlist each `float$bsize,
-        ask_prices:enlist each ask, ask_sizes:enlist each `float$asize from fx}
+        ask_prices:enlist each ask, ask_sizes:enlist each `float$asize, clock:`receipt from fx}
 
 / The single synthetic depth feed, identified separately from UQFFX.
 / fx_orderbook has no source column: another publisher must use market_data or
@@ -42,7 +48,7 @@
 .qpipe.job.market_data.from_fx_orderbook:{[batch]
     fx:batch where .qf.px.is_ccy_pair each batch`sym;
     select sym, source:`UQFDEPTH, market:`fx, source_time:time,
-        bid_prices, bid_sizes, ask_prices, ask_sizes from fx}
+        bid_prices, bid_sizes, ask_prices, ask_sizes, clock:`receipt from fx}
 
 / A crypto venue's ladder, already level-0-first, with the venue as source.
 / .
@@ -51,13 +57,14 @@
 / must not claim the venue quoted it when the plant happened to receive it.
 / No FX filter, and `market` is `crypto by construction: the mapping knows
 / which market it reads, so no reader downstream guesses it from how a sym
-/ is spelled (#886) - a venue spelling a pair XBTEUR stays crypto.
+/ is spelled (#886) - a venue spelling a pair XBTEUR stays crypto. And the
+/ clock is `venue for the same reason: that is whose stamp source_time is.
 / @param batch crypto_book rows
 / @return complete market_data snapshots, one per venue and sym
 / @eg count .qpipe.job.market_data.from_crypto_book[.qpipe.job.market_data.crypto_book] -> 0
 .qpipe.job.market_data.from_crypto_book:{[batch]
     select sym, source:venue, market:`crypto, source_time,
-        bid_prices, bid_sizes, ask_prices, ask_sizes from batch}
+        bid_prices, bid_sizes, ask_prices, ask_sizes, clock:`venue from batch}
 
 / The rows market_data is about to publish, held to the .qf.mkt checks (#944):
 / a crossed book (bid at or through the ask) and a quote stale against the
@@ -72,11 +79,13 @@
 / Staleness is measured against the batch's own newest source_time, not the
 / wall clock: a replayed or backfilled batch is old by design and must not
 / read as a stale feed.
-/ @param rows market_data rows (sym, source, source_time, the four ladders)
+/ @param rows market_data rows (sym, source, source_time, the four ladders, clock)
 / @return failures: check, status, detail, and `row`, the index in rows
+/ @throws error when any row's clock is null or neither `venue nor `receipt (#1925): a mapping that did not stamp it is a bug, and the whole batch is withheld
 / @eg count .qpipe.job.market_data.check[0#.qpipe.job.market_data.market_data] -> 0
 .qpipe.job.market_data.check:{[rows]
     if[0=count rows; :.qetl.job.bounded.no_failures[]];
+    .qetl.plant.require_clock[`market_data;rows];
     / The quality check sorts its answer, so it is handed the row index as its
     / `time` (a timestamp is a long underneath) and the index comes back with it.
     / A table literal, not `select time:`timestamp$til count rows, ...`: on
@@ -127,7 +136,7 @@
         ([] sym:enlist `EURUSD; source:enlist `LP_A; market:enlist `fx;
             source_time:enlist 2026.09.19D10:00:00.000000000;
             bid_prices:enlist enlist 1.1; bid_sizes:enlist enlist 1000f;
-            ask_prices:enlist enlist 1.2; ask_sizes:enlist enlist 2000f)))];
+            ask_prices:enlist enlist 1.2; ask_sizes:enlist enlist 2000f; clock:enlist `receipt)))];
 
 .qetl.transform.define[`market_data_from_fx_orderbook;`inputs`output`fn`examples!(
     (enlist `fx_orderbook)!enlist .qpipe.job.market_data.fx_orderbook;
@@ -140,7 +149,7 @@
         ([] sym:enlist `EURUSD; source:enlist `UQFDEPTH; market:enlist `fx;
             source_time:enlist 2026.09.19D10:00:00.000000000;
             bid_prices:enlist 1.1 1.09; bid_sizes:enlist 1000 2000f;
-            ask_prices:enlist 1.2 1.21; ask_sizes:enlist 3000 4000f)))];
+            ask_prices:enlist 1.2 1.21; ask_sizes:enlist 3000 4000f; clock:enlist `receipt)))];
 
 .qetl.transform.define[`market_data_from_crypto_book;`inputs`output`fn`examples!(
     (enlist `crypto_book)!enlist .qpipe.job.market_data.crypto_book;
@@ -155,7 +164,7 @@
         ([] sym:enlist `$"BTC-USDT"; source:enlist `binance_spot; market:enlist `crypto;
             source_time:enlist 2026.09.17D10:00:01.000000000;
             bid_prices:enlist 61999 61998f; bid_sizes:enlist 0.5 1f;
-            ask_prices:enlist 62001 62002f; ask_sizes:enlist 0.5 1f)))];
+            ask_prices:enlist 62001 62002f; ask_sizes:enlist 0.5 1f; clock:enlist `venue)))];
 
 / on_fail `drop, not `hold: market_data is every venue's book in one stream,
 / and a batch is whatever the plant delivered together. One venue's crossed

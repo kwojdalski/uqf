@@ -16,12 +16,12 @@ from typing import Annotated
 import typer
 
 from uqs.cli import completion, safety
-from uqs.cli.choices import alternatives
+from uqs.cli.choices import ChoiceOpt
 from uqs.cli.create_backfill import backfill_plan
 from uqs.cli.create_bundle import planning_root, refuse_tree_only, write_bundle_plan
 from uqs.cli.create_kinds import DEFAULT_KIND, KindOpt, for_kinds, given_options, misplaced
 from uqs.cli.create_plant import plant_definitions, plant_tables
-from uqs.cli.create_reaction import scaffold_reaction
+from uqs.cli.create_reaction import TriggeredByOpt, WritesOpt, scaffold_reaction
 from uqs.cli.regenerate import write_plan
 from uqs.cli.renames import renamed
 from uqs.cli.shared import (
@@ -46,6 +46,13 @@ app.add_typer(job_app, name="job")
 _RENAMES = {"--columns": "--schema", "--columns-from": "--schema-from", "--procname": "--proc"}
 
 
+_TransformOpt = ChoiceOpt(
+    transform_mod.MODES,
+    "--transform",
+    "{values}: the transform, and for streaming its handler" + for_kinds("--transform"),
+)
+
+
 @job_app.command(
     "new", rich_help_panel=JOB_AUTHORING_PANEL, cls=renamed(_RENAMES, safety.ChangesState)
 )
@@ -59,6 +66,7 @@ def new_job(
         str | None,
         typer.Option(
             "--subscribe-to",
+            metavar="TABLE,...",
             help=f"Comma-separated tables it reads. Omit for a feed{for_kinds('--subscribe-to')}",
             autocompletion=completion.plant_tables,
         ),
@@ -67,6 +75,7 @@ def new_job(
         str | None,
         typer.Option(
             "--publishes",
+            metavar="TABLE,...",
             help="Comma-separated tables it writes; an existing one is published onto"
             + for_kinds("--publishes"),
             autocompletion=completion.plant_tables,
@@ -79,7 +88,7 @@ def new_job(
         str | None,
         typer.Option(
             "--raw-table",
-            help="external: the table the Python publisher writes. backfill: the physical "
+            help="`connector`: the table the Python publisher writes. backfill: the physical "
             "table a new source's adapter reads, with --raw-columns" + for_kinds("--raw-table"),
         ),
     ] = None,
@@ -105,7 +114,9 @@ def new_job(
     ] = None,
     source: Annotated[
         str | None,
-        typer.Option("--source", help=f"Source name; default JOB{for_kinds('--source')}"),
+        typer.Option(
+            "--source", metavar="SOURCE", help=f"Source name; default JOB{for_kinds('--source')}"
+        ),
     ] = None,
     width: Annotated[
         str | None,
@@ -122,7 +133,7 @@ def new_job(
     start_with_all: Annotated[
         bool,
         typer.Option(
-            "--start-with-all",
+            "--start-with-all/--no-start-with-all",
             help="Start it with `uqs start all` (default: on demand)"
             + for_kinds("--start-with-all"),
         ),
@@ -203,29 +214,13 @@ def new_job(
             "--twin-of",
             help="A streaming job whose published table this backfill refills - the dataset "
             "and columns are taken from it, and `uqs job gaps JOB` then names this worker "
-            "NAME_backfill: pass NAME without the suffix, e.g. `uqs job new JOB_hist "
+            "JOB_backfill: pass JOB without the suffix, e.g. `uqs job new JOB_hist "
             "--kind backfill --twin-of JOB`" + for_kinds("--twin-of"),
         ),
     ] = None,
-    transform: Annotated[
-        str | None,
-        typer.Option(
-            "--transform",
-            help=f"{alternatives(transform_mod.MODES)}: the transform, and for streaming its "
-            "handler" + for_kinds("--transform"),
-            autocompletion=completion.choices(*transform_mod.MODES),
-        ),
-    ] = None,
-    triggered_by: Annotated[
-        str | None,
-        typer.Option(
-            "--triggered-by",
-            help="Scaffold a reaction instead: run when a bounded worker publishes DATASET",
-        ),
-    ] = None,
-    writes: Annotated[
-        str | None, typer.Option("--writes", help="Tables the reaction writes, comma-separated")
-    ] = None,
+    transform: _TransformOpt = None,
+    triggered_by: TriggeredByOpt = None,
+    writes: WritesOpt = None,
     bundle: Annotated[
         Path | None,
         typer.Option(
@@ -251,8 +246,8 @@ def new_job(
         uqs job new markout2 --subscribe-to trades,quote \\
             --publishes my_metric --schema "sym:symbol, px:float"
 
-    Bounded worker, with its source and transform - NAME is the base, so this writes worker
-    fx_rates_backfill over source fx_rates (a NAME already ending in _backfill is refused):
+    Bounded worker, with its source and transform - JOB is the base, so this writes worker
+    fx_rates_backfill over source fx_rates (a JOB already ending in _backfill is refused):
 
         uqs job new fx_rates --kind backfill --dataset fx_rates \\
             --schema "sym:symbol, mid:float" --width 1D
@@ -351,9 +346,9 @@ def new_job(
                 profile=profile,
                 unprofiled=unprofiled,
             )
-        if kind == "external":
+        if kind == "connector":
             if not (raw_table and publishes and shape):
-                raise UqsUsageError("--kind external needs --raw-table, --publishes and --schema")
+                raise UqsUsageError("--kind connector needs --raw-table, --publishes and --schema")
             return external.external_feed(
                 name,
                 raw_table,

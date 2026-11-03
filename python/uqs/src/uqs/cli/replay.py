@@ -51,7 +51,13 @@ def _day(
 
 #: `--schema` is a table's columns (`job new --schema`); a schema FILE is
 #: `--schema-file`, as `job attachment add` names it (#1855).
-_RENAMES = {"--port": "--base-port", "--proc": "PROC", "--schema": "--schema-file"}
+#: The TorQ files are spelt as `job attachment add` spells them (#1890).
+_RENAMES = {
+    "--port": "--base-port",
+    "--proc": "PROC",
+    "--schema": "--schema-file",
+    "--dir": "--tplogdir",
+}
 
 
 @data_app.command("replay", cls=renamed(_RENAMES, ChangesState))
@@ -59,7 +65,7 @@ def replay(
     proc: Annotated[
         str | None,
         typer.Argument(
-            metavar="[PROC]",
+            metavar="PROC",
             help="Which running tickerplant's log to replay. Only needed when more than one is up",
             autocompletion=completion.procname,
             show_default=False,
@@ -70,9 +76,9 @@ def replay(
     range_to: RangeToOpt = None,
     last: LastOpt = None,
     dir_: Annotated[
-        Path | None,
+        str | None,
         typer.Option(
-            "--dir", help="Replay this log directory, instead of resolving a running plant"
+            "--tplogdir", help="Replay this log directory, instead of resolving a running plant"
         ),
     ] = None,
     hdb: Annotated[
@@ -89,7 +95,8 @@ def replay(
         list[str] | None,
         typer.Option(
             "--table",
-            help="Replay only this table; repeatable, and NAME,NAME also works. Default: "
+            metavar="TABLE",
+            help="Replay only this table; repeatable, and TABLE,TABLE also works. Default: "
             "every table in the log",
             autocompletion=completion.plant_table,
         ),
@@ -125,7 +132,7 @@ def replay(
         plan = stack_replay.plan(
             procname=proc,
             date=_day(day, range_from, range_to, last),
-            log_dir=dir_,
+            log_dir=Path(dir_) if dir_ else None,
             hdb_dir=hdb,
             schema_file=Path(schema) if schema else None,
             tables=tables_given(table) or None,

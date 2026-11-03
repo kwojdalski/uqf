@@ -1046,3 +1046,19 @@ def test_the_q_coverage_hook_runs_the_coverage_selection():
         "uv run pytest -q -m coverage --require-q kdbx tests/qrun/test_q_coverage.py "
         '${subset[@]+"${subset[@]}"}' in hook
     )
+
+
+def test_each_gate_is_run_at_the_stage_it_is_declared_at(monkeypatch):
+    """q-tests and q-coverage run at pre-push (#1965), and `pre-commit run <id>`
+    finds a hook only at the stage it is asked for - so the attestation asks
+    for each hook's own stage, or it would run nothing and fail."""
+    assert attest.hook_stage("q-tests") == "pre-push"
+    assert attest.hook_stage("q-coverage") == "pre-push"
+    assert attest.hook_stage("contract-surface") == "pre-commit"
+    seen = []
+    monkeypatch.setattr(
+        attest.subprocess, "run",
+        lambda cmd, **kw: seen.append(cmd) or subprocess.CompletedProcess(cmd, 0),
+    )  # fmt: skip
+    assert attest.run_hook("q-coverage")
+    assert seen[0][-2:] == ["--hook-stage", "pre-push"]

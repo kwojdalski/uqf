@@ -43,6 +43,21 @@
 / "when did this happen" and "when did we hear about it" are different
 / columns and their difference is the feed's latency.
 / .
+/ .
+/ ALSO market_data (#1939). Each folded book is mapped onto the canonical
+/ market_data table as well - source XNAS, market `equity, the VENUE clock -
+/ so an equity book is scoreable by the markout core. It is mapped HERE and
+/ not in the core's marketdata1 normalizer because eq_orderbook exists only
+/ when this bundle is installed, and the core cannot subscribe to a table
+/ that may not be there. market_data.from_quote still passes FX only, on
+/ purpose: the shared quote table carries equities with a receipt-clock
+/ top of book and no session, which is not what an equity markout wants.
+/ .
+/ source_time is eq_orderbook's `ts_event`, never its `time`: `time` is when
+/ the tickerplant heard of the book, and the markout core refuses to score a
+/ venue-clock fill against a receipt-clock reference (#1925). The clock is
+/ stamped `venue for that reason - the mapping is the one place that knows.
+/ .
 / Loaded by src/etl/init.q in any q process: nothing here touches TorQ.
 
 \d .
@@ -61,6 +76,49 @@
 .qpipe.job.eq_orderbook.book:([] sym:`symbol$(); ts_event:`timestamp$(); action:`symbol$(); side:`symbol$();
     price:`float$(); size:`long$(); sequence:`long$();
     bid_prices:(); bid_sizes:(); ask_prices:(); ask_sizes:())
+
+/ ------------------------------------------------------ THE MARKET_DATA MAPPING
+
+/ The market_data `source` of these books: the Databento dataset the feed
+/ handler subscribes to (its default, XNAS.ITCH, is Nasdaq's XNAS). MBP-10
+/ rows carry no dataset column, so the dataset is declared here; a site that
+/ subscribes to another sets this before the job loads or maps through its
+/ own copy. `source` identifies independent liquidity, so two datasets that
+/ carry the same book must share an identifier (market_data.q).
+.qpipe.job.eq_orderbook.market_source:`XNAS
+
+/ What the mapping reads of a folded book. Declared here, not read from `book`
+/ above or from another file, so this one stands alone at load. No `time`: the
+/ plant stamps its own on receipt, and the mapping must not read it.
+.qpipe.job.eq_orderbook.book_in:([] sym:`symbol$(); ts_event:`timestamp$();
+    bid_prices:(); bid_sizes:(); ask_prices:(); ask_sizes:())
+
+/ A folded equity book as a market_data snapshot: one row per book event,
+/ replacing the (sym, source) book, ladders level-0-first.
+/ .
+/ Sizes become floats, market_data's type for every asset class (a share
+/ count is whole, but the table is one shape). An empty ladder passes
+/ through as a withdrawal, which is how a venue pulls its book.
+/ @param batch a folded book: sym, ts_event and the four ladders
+/ @return market_data rows without `time`, clock `venue, market `equity
+/ @eg count .qpipe.job.eq_orderbook.to_market_data[.qpipe.job.eq_orderbook.book_in] -> 0
+.qpipe.job.eq_orderbook.to_market_data:{[batch]
+    n:count batch;
+    ([] sym:batch`sym; source:n#.qpipe.job.eq_orderbook.market_source; market:n#`equity; source_time:batch`ts_event;
+        bid_prices:`float$/:batch`bid_prices; bid_sizes:`float$/:batch`bid_sizes;
+        ask_prices:`float$/:batch`ask_prices; ask_sizes:`float$/:batch`ask_sizes; clock:n#`venue)}
+
+/ The quality gate for the market_data rows this job publishes, and only for
+/ them: the job's publish seam sees eq_orderbook rows too, which are not
+/ market_data and are not judged by its checks. market_data's own gate
+/ (.qpipe.job.market_data.check) is called at publish time, so this file does
+/ not depend on that one at load.
+/ @param rows the rows about to be published
+/ @return failures: check, status, detail and row, none for a table that is not market_data
+/ @eg count .qpipe.job.eq_orderbook.gate[([] a:1 2)] -> 0
+.qpipe.job.eq_orderbook.gate:{[rows]
+    if[not all `market`clock in cols rows; :.qetl.job.bounded.no_failures[]];
+    .qpipe.job.market_data.check rows}
 
 / --------------------------------------------------------------- THE JOB
 
@@ -89,15 +147,35 @@
     / venue clock; dropped here, so .u.upd stamps the receipt time instead.
     out:![folded;();0b;enlist `time];
     .qpipe.job.eq_orderbook.publish[`eq_orderbook;out];
+    / The same books onto market_data, after the book itself: a failure to map
+    / or publish them must not cost the eq_orderbook rows.
+    mapped:.qetl.transform.apply[`market_data_from_eq_orderbook;enlist[`batch]!enlist (cols .qpipe.job.eq_orderbook.book_in)#out];
+    .qpipe.job.eq_orderbook.publish[`market_data;mapped];
     }
 
 \d .
 
+.qetl.transform.define[`market_data_from_eq_orderbook;`inputs`output`fn`examples!(
+    (enlist `batch)!enlist .qpipe.job.eq_orderbook.book_in;
+    .qetl.plant.published `market_data;
+    .qpipe.job.eq_orderbook.to_market_data;
+    / two books: a Nasdaq quote with the venue's stamp, then an emptied side (a withdrawal)
+    enlist `inputs`expected!(
+        (enlist `batch)!enlist ([] sym:`AAPL`AAPL; ts_event:2026.09.17D13:30:00.000123456 2026.09.17D13:30:01.000000000;
+            bid_prices:(189.5 189.49;enlist 189.5); bid_sizes:(300 500;enlist 200);
+            ask_prices:(189.52 189.53;`float$()); ask_sizes:(100 400;`long$()));
+        ([] sym:`AAPL`AAPL; source:`XNAS`XNAS; market:`equity`equity;
+            source_time:2026.09.17D13:30:00.000123456 2026.09.17D13:30:01.000000000;
+            bid_prices:(189.5 189.49;enlist 189.5); bid_sizes:(300 500f;enlist 200f);
+            ask_prices:(189.52 189.53;`float$()); ask_sizes:(100 400f;`float$()); clock:`venue`venue)))];
+
 .qetl.job.stream.define[`eq_orderbook;
-    `procname`subscribe_to`publishes`on_batch`transform`note!(
+    `procname`subscribe_to`publishes`on_batch`transform`check`on_fail`note!(
         `databento1;
         enlist `databento_mbp10;
-        enlist `eq_orderbook;
+        `eq_orderbook`market_data;
         .qpipe.job.eq_orderbook.on_batch;
         `eq_orderbook;
-        "folds live Databento MBP-10 into the book shape. The raw rows are published by an EXTERNAL Python feed handler (this bundle's databento_feed.py) - a q process cannot hold a Databento subscription - so databento_mbp10 has a schema row but no producer in this list. That is also why startwithall:0: on a default start nothing publishes the table it subscribes to, so it held one of the sixteen licensed plant connections (#285) to consume nothing. Start it with the feed handler")];
+        .qpipe.job.eq_orderbook.gate;
+        `drop;
+        "folds live Databento MBP-10 into the book shape, and maps each book onto market_data (market `equity, clock `venue, source XNAS) so the markout core can score equities. The raw rows are published by an EXTERNAL Python feed handler (this bundle's databento_feed.py) - a q process cannot hold a Databento subscription - so databento_mbp10 has a schema row but no producer in this list. That is also why startwithall:0: on a default start nothing publishes the table it subscribes to, so it held one of the sixteen licensed plant connections (#285) to consume nothing. Start it with the feed handler")];

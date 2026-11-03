@@ -21,7 +21,7 @@ import pytest
 import typer
 
 from uqs import cli
-from uqs.cli import backfill, config, hdb_alter, lists, seed
+from uqs.cli import backfill, config, create_kinds, hdb_alter, lists, seed
 from uqs.cli.rename_expiry import RENAMED_AFTER
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -86,8 +86,12 @@ HAND_KEPT: dict[str, Callable[[], bool]] = {
     "uqs job receive --attach": lambda: "--attach" in _hidden("job", "receive").renames,
     # old VALUES, which only the command's own code reads (#1858)
     "uqs config set PROC FIELD VALUE": lambda: "the old two-word" in inspect.getsource(config),
+    "uqs job new --kind external": lambda: "external" in create_kinds.OLD_KINDS,
     "uqs job backfill --mode dry-run": lambda: (
         '"--mode dry-run", "--dry-run"' in inspect.getsource(backfill)
+    ),
+    "uqs job attachment add --override CODE:COMPONENT": lambda: (
+        "spell it" in inspect.getsource(__import__("uqs.cli.attach").cli.attach.waivers)
     ),
 }
 

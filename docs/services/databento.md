@@ -39,6 +39,10 @@ uqs connector status databento
 uqs connector stop databento
 ```
 
+`--databento-dataset` (and `databento` itself) exists only once the bundle that
+carries the connector is installed: before that, `uqs connector start --help`
+does not list it.
+
 Needs `$DATABENTO_API_KEY` (Databento's own variable, so an existing export
 works). It refuses to start without one rather than failing on its first call.
 
@@ -49,6 +53,18 @@ job, subscribes to that and republishes `eq_orderbook`, folding the forty
 columns into four level-0-first vectors with **the same `.qetl.transform`
 transform the backfill uses**. The fold exists once, in q, with its own worked
 examples; the Python side decides nothing about what a book is.
+
+**Equity books also reach `market_data` (#1939).** `databento1` maps each folded
+book onto the canonical `market_data` table as it publishes `eq_orderbook`:
+`market` is `equity`, `clock` is `venue`, `source` is `XNAS` (the dataset,
+declared as `.qpipe.job.eq_orderbook.market_source`) and `source_time` is the
+book's `ts_event`, never its receipt `time`. It lives in the bundle because the
+table it reads exists only with the bundle, so the core `marketdata1` cannot
+subscribe to it; `market_data.from_quote` still passes FX only. Crossed or stale
+snapshots are dropped by `market_data`'s own gate before they publish, and the
+`eq_orderbook` rows are never withheld by it. The historical backfill writes
+`eq_orderbook` only. The equity domain of the markout core is
+`src/etl/transforms/eq_domain.q`.
 
 The handler is not a process.csv row, for the same reason cryptorust is not: a q
 process cannot hold a Databento subscription, so it gets a pidfile and a

@@ -1,0 +1,15 @@
+# Generated files merge themselves (#1965): a conflict in one is never resolved
+# by hand - the answer is always to regenerate it. scripts/dev/merge_generated.py
+# keeps one side so the merge does not stop, and the post-merge/post-rewrite hook
+# regenerates with scripts/generate/derive.py. Each clone registers the driver
+# once (`python3 scripts/dev/merge_generated.py install`, run by
+# `./install.sh --dev`); a clone without it merges these as text, as before.
+# Every path here must belong to a derive.py target in merge_generated.TARGETS.
+src/etl/generated/load_plan.q                                     merge=uqf-generated
+src/etl/generated/pipeline_dag.q                                  merge=uqf-generated
+src/etl/generated/plant_schema.json                               merge=uqf-generated
+docs/reference/processes.md                                       merge=uqf-generated
+docs/reference/surfaces/current/*.csv                             merge=uqf-generated
+docs/diagrams/*.svg                                               merge=uqf-generated
+python/uqs/src/uqs/generated/q_facts.py                           merge=uqf-generated
+python/uqf_airflow_provider/src/uqf_airflow_provider/q_facts.py   merge=uqf-generated

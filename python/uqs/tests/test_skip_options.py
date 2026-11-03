@@ -144,7 +144,7 @@ def test_help_is_the_declaration(declared):
         "Then: check the rows after. Nothing else is waived. The same as --override "
         "test-guard. Needs --reason; warned and recorded",
         "--skip-test-code": "Accepts the test finding on one process. Nothing else is waived. "
-        "The same as --override TEST_CODE:COMPONENT; repeatable, one COMPONENT each. Needs "
+        "The same as --override test-code:COMPONENT; repeatable, one COMPONENT each. Needs "
         "--reason; warned and recorded",
     }
     shown = " ".join(runner.invoke(_app(), ["job", "run", "--help"]).output.split())
@@ -236,8 +236,8 @@ def test_nothing_given_is_nothing(declared):
         (["--reason", "r"], "refused: --reason says why an --override is acceptable"),
         (
             ["--override", "nope", "--reason", "r"],
-            "refused: `uqs job run` has no override 'nope' - it takes: TEST_CODE:COMPONENT, "
-            "plain-guard, test-guard",
+            "refused: `uqs job run` has no override 'nope' - it takes: plain-guard, "
+            "test-code:COMPONENT, test-guard",
         ),
         (
             ["--override", "other-guard", "--reason", "r"],
@@ -249,12 +249,12 @@ def test_nothing_given_is_nothing(declared):
         ),
         (
             ["--override", "TEST_CODE", "--reason", "r"],
-            "refused: --override TEST_CODE: TEST_CODE is waived for one component - give "
-            "TEST_CODE:COMPONENT",
+            "refused: --override TEST_CODE: test-code is waived for one component - give "
+            "test-code:COMPONENT",
         ),
         (
             ["--skip-test-code", "", "--reason", "r"],
-            "refused: --skip-test-code : TEST_CODE is waived for one component",
+            "refused: --skip-test-code : test-code is waived for one component",
         ),
         (
             ["--override", "test-guard:rdb1", "--reason", "r"],

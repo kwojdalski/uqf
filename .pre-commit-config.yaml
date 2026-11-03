@@ -86,9 +86,12 @@ repos:
 
   - repo: local
     hooks:
-      # The Python tests the commit reaches, from the uv workspace root - never
-      # the whole suite by default: CI runs that on every pull request, on a
-      # clean Linux checkout (#1879).
+      # The Python tests the push reaches, from the uv workspace root - never
+      # the whole suite by default: CI runs that on every pull request that can
+      # reach a Python test, on a clean Linux checkout (#1879, #1955). At
+      # `git push`, not at commit (#1965): under load it made a commit take
+      # minutes. It reads the pushed range pre-commit names, where at commit it
+      # read what was staged.
       #
       # scripts/dev/python_tests_hook.py picks them from two records: testmon's
       # (the Python each test executes) for a staged .py file, and
@@ -105,11 +108,12 @@ repos:
       # interpreter. They find it by $QCMD, else q on PATH - TorQ's rule
       # (uqs.paths.q_interpreter).
       - id: python-tests
-        name: Run the Python tests the commit reaches (all with UQF_HOOKS_FULL=1)
+        name: Run the Python tests the push reaches (all with UQF_HOOKS_FULL=1)
         entry: uv run python scripts/dev/python_tests_hook.py
         language: system
         files: '.'
         pass_filenames: false
+        stages: [pre-push]
 
       - id: check-hook-scopes
         name: Check pre-commit hook scopes cover the code
@@ -278,10 +282,14 @@ repos:
         pass_filenames: false
         files: ^(docs/diagrams/.*\.d2|scripts/processes/|scripts/torqconfig/|python/uqs/src/uqs/(model|stack)/)
 
+      # At `git push`, not at commit (#1965), with q-coverage and
+      # python-tests: the three that run test suites made a commit take 10-30
+      # minutes under load. attest_kdbx.py runs them by id, at their stage.
       - id: q-tests
         name: Run qUnit tests for uqf
         entry: bash
         language: system
+        stages: [pre-push]
         args:
           - -c
           - |
@@ -454,6 +462,7 @@ repos:
         name: Check every function a test should reach is reached
         entry: bash
         language: system
+        stages: [pre-push]
         args:
           - -c
           - |
@@ -483,10 +492,9 @@ repos:
             # ($QCMD, else q on PATH), never a fallback to something the tree
             # is not verified on; --require-q kdbx fails a run without KDB-X.
             #
-            # It roughly doubles the time a q commit takes (~14s on top of
-            # the suite's own ~13s). If that becomes the reason people reach
-            # for --no-verify, move this one hook to `stages: [pre-push]`
-            # rather than dropping it: the check is cheap compared to
+            # It roughly doubled the time a q commit took, and under load a
+            # commit took 10-30 minutes, so it runs at `git push` (#1965)
+            # rather than being dropped: the check is cheap compared to
             # noticing months later that nothing calls a function.
             selection=$(python3 scripts/dev/test_impact.py --coverage-hook)
             case "$selection" in
@@ -500,6 +508,35 @@ repos:
         # the pytest module and the decision it makes (#1808).
         files: '\.q$|^tests/q/coverage_baseline\.txt$|^tests/qrun/(qrun_support|q_coverage|test_q_coverage)\.py$'
         pass_filenames: false
+
+      # The q test files the branch adds or changes, on PeachQ, before the
+      # push (#1965). CI's "PeachQ q tests" job runs the whole suite on PeachQ
+      # and is where that check lives (#1879); this is only the early catch for
+      # its commonest failure - a new test KDB-X passes and PeachQ does not,
+      # which bounced five pull requests on 2026-11-03 for an hour each and
+      # reproduced locally in a minute. Failures listed in
+      # tests/q/peachq_known_gaps.txt are expected. PeachQ is found as
+      # q-docs-peachq finds it: $QCMD when it is PeachQ, else the pinned build.
+      # Push without it: SKIP=peachq-push git push.
+      - id: peachq-push
+        name: Run the q test files this branch changes on PeachQ (CI runs them all)
+        entry: python3 scripts/dev/peachq_push.py
+        language: system
+        files: '\.q$'
+        pass_filenames: false
+        stages: [pre-push]
+
+      # After a merge or rebase that kept one side of a generated file
+      # (.gitattributes, merge=uqf-generated), regenerate it with derive.py and
+      # leave the result to commit (#1965). Does nothing when the merge driver
+      # recorded nothing; the generated files' --check gates still decide.
+      - id: regenerate-merged
+        name: Regenerate the generated files a merge kept one side of
+        entry: python3 scripts/dev/merge_generated.py regenerate
+        language: system
+        always_run: true
+        pass_filenames: false
+        stages: [post-merge, post-rewrite]
 
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v2.2.1
@@ -573,5 +610,11 @@ repos:
         pass_filenames: false
 
 # Global settings
+#
+# A commit runs the fast set - format, lint, static gates, generated-file
+# checks; a push runs the test suites (python-tests, q-tests, q-coverage) and
+# the targeted PeachQ run (#1965); a merge or rebase regenerates what the
+# generated-file merge driver kept. `pre-commit install` installs all four.
 default_stages: [pre-commit]
+default_install_hook_types: [pre-commit, pre-push, post-merge, post-rewrite]
 minimum_pre_commit_version: '3.0.0'

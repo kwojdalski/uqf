@@ -23,7 +23,7 @@ from typing import Annotated
 
 import typer
 
-from uqs.cli import completion
+from uqs.cli.choices import ChoiceOpt
 from uqs.cli.shared import _paths, console, log
 from uqs.paths import UqsError
 from uqs.stack import listing, runtime
@@ -48,13 +48,12 @@ StopOnExitOpt = Annotated[
     ),
 ]
 
-LevelOpt = Annotated[
-    str | None,
-    typer.Option(
-        help=stack_logs.LEVEL_HELP + " (with --follow)",
-        autocompletion=completion.choices(*stack_logs.LEVEL_CHOICES),
-    ),
-]
+LevelOpt = ChoiceOpt(
+    stack_logs.LEVEL_CHOICES,
+    "--level",
+    stack_logs.LEVEL_HELP + " (with --follow)",
+    case_sensitive=False,
+)
 
 
 def procnames_started_by(names: str, port: int | None) -> list[str]:

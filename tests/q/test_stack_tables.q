@@ -36,7 +36,7 @@
 / Every table the orchestrator's generated database.q is expected to carry.
 / A floor AND a list: a missing name is caught, and so is a new one added to
 / the q file without a thought about who consumes it.
-.qt.qetl.plant.tables.expected:`fx_orderbook`wide_orderbook`mkt_orderbook`kafka_message`kafka_dead_letter`crypto_book`crypto_sim_fills`crypto_trades`trades`position`demo_execution_quality`executions`orders`fx_position`fx_limit_breach`fx_position_open`position_open`cross_arbitrage`config_change`market_data`superbook`arbitrage`predictions`ccy_exposure`reference_data`order_routing`connections`economic_calendar`duckdb_deals`client_flow`deal_positions`trades_copy`crypto_execution_quality`exec_bar`crypto_book_1s`book_liquidity_1m`last_value`order_quality`order_outcomes`fx_markout`fx_markout_wide`demo_deals
+.qt.qetl.plant.tables.expected:`fx_orderbook`wide_orderbook`mkt_orderbook`kafka_message`kafka_dead_letter`crypto_book`crypto_sim_fills`crypto_trades`trades`position`executions`orders`fx_position`fx_limit_breach`fx_position_open`position_open`cross_arbitrage`config_change`market_data`superbook`arbitrage`predictions`ccy_exposure`reference_data`order_routing`connections`economic_calendar`duckdb_deals`client_flow`deal_positions`trades_copy`crypto_execution_quality`exec_bar`crypto_book_1s`book_liquidity_1m`last_value`order_quality`order_outcomes`fx_markout`fx_markout_wide`demo_deals
 
 / Tables an installed sidecar bundle added, read from its ledger
 / (src/etl/installed_bundles.json). The bundle defines and describes them
@@ -251,3 +251,13 @@
     r:@[{.qetl.plant.read_instrument_column `orders};::;{(`threw;x)}];
     .qetl.plant.instrument_exceptions:keep;
     .qunit.assertEquals[r;(`threw;"plant: instrument_exceptions names no_such_col for orders, which has no such column");"a rename fails here, not at query time"]};
+
+/ --- whose clock source_time is (#1925) -------------------------------------
+
+.qt.qetl.plant.tables.test_both_canonical_tables_end_in_a_symbol_clock_column:{[t]
+    / LAST, so a partition the history fill appended `clock to has the same column
+    / order as one written from this declaration, and no positional read moves.
+    {[tbl] s:.qetl.plant.schema tbl;
+        .qunit.assertEquals[last cols s;`clock;string[tbl]," ends in clock"];
+        .qunit.assertEquals[type s`clock;11h;string[tbl],"'s clock is a symbol"]} each `executions`market_data;
+    .qunit.assertEquals[.qetl.plant.clocks;`venue`receipt;"the two clocks a source_time can be on; `unknown is the history fill's, and is refused"]};

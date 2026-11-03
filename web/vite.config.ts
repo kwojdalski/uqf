@@ -16,6 +16,8 @@ export const API_PATHS = [
   "query",
   "ops",
   "control",
+  "activity",
+  "services",
 ];
 
 // The write token (#631), added here on the server side so a dev browser

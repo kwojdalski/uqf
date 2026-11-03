@@ -3,7 +3,7 @@
 The trees come from model/process_graph.py; this draws them. Each process is
 coloured by whether it is up - the same status `uqs status` reads - unless
 `--offline` skips asking, and each edge is labelled with the tables it
-carries, so a reader sees not just that demo_markout1 needs the plant but which
+carries, so a reader sees not just that crypto_markout1 needs the plant but which
 of its tables.
 
 Without `--interactive` the trees print once, as Rich trees, so the view
@@ -134,7 +134,7 @@ def describe(name: str, info: dict[str, dict[str, str]], status: dict[str, str])
 
 GraphJson = json_opt(
     '{"direction", "trees": [{process, status, tables, repeat, children: [...]}]} - '
-    "status null with --offline or when the fleet cannot say"
+    "status null with --offline or when the stack cannot say"
 )
 
 
@@ -162,6 +162,7 @@ def graph(
     proc: Annotated[
         str | None,
         typer.Argument(
+            metavar="PROC",
             help="Draw only the tree from this process; omit for every process",
             autocompletion=completion.procname,
         ),
@@ -175,13 +176,13 @@ def graph(
     ] = False,
     offline: Annotated[
         bool,
-        typer.Option("--offline", help="Do not ask the fleet what is up; draw the graph alone."),
+        typer.Option("--offline", help="Do not ask the stack what is up; draw the graph alone."),
     ] = False,
     port: BasePortOpt = None,
     interactive: InteractiveOpt = False,
     as_json: GraphJson = False,
 ) -> None:
-    """Every process and who feeds whom, as a tree, with the tables on each edge.
+    """Draw every process and who feeds whom, as a tree, with the tables on each edge.
 
     Downstream by default - from what nothing feeds, to what reads from it:
     "if this stops, what starves". `--upstream` turns it over: "what must be

@@ -3,9 +3,9 @@ checked, filled and changed one table at a time, dry run first (#1755).
 
 Which HDB is named once, by what already knows it - never a path to remember:
 
-  uqs --target NAME data ...   a deployed release: the command runs THERE, on its
+  uqs --target TARGET data ...   a deployed release: the command runs THERE, on its
                                own configured HDB (deploy/control.py routes it)
-  uqs data ... --attachment NAME   an attached TorQ stack: its pinned HDB, else its live
+  uqs data ... --attachment ATTACHMENT   an attached TorQ stack: its pinned HDB, else its live
                                wdb's .wdb.hdbdir, on the stack's host over ssh
   uqs data ... --hdb DIR       a directory on this machine, for anything else
 
@@ -27,6 +27,7 @@ from uqs.attach import config as attach_config
 from uqs.attach import hdb_where, service
 from uqs.attach.hdb_where import AttachedHdb
 from uqs.cli import safety
+from uqs.cli.concepts import attach_opt
 from uqs.cli.json_out import emit
 from uqs.cli.safety import dry_run_note
 from uqs.cli.shared import _paths, console
@@ -34,12 +35,7 @@ from uqs.paths import UqsError, UqsPaths, UqsUsageError
 from uqs.stack import hdb_alter, hdb_remote
 from uqs.stack.hdb_alter import Request
 
-AttachOpt = Annotated[
-    str | None,
-    typer.Option(
-        "--attachment", help="The attachment whose HDB to use: its pinned one, else its live wdb's"
-    ),
-]
+AttachOpt = attach_opt("The attachment whose HDB to use: its pinned one, else its live wdb's")
 HdbOpt = Annotated[
     Path | None,
     typer.Option("--hdb", help="An HDB directory on this machine, when nothing else names it"),

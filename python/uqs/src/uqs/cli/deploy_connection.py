@@ -15,6 +15,7 @@ from typing import Annotated
 
 import typer
 
+from uqs.cli.concepts import TARGET_HELP, target_arg
 from uqs.cli.vocabulary import duration
 from uqs.deploy import config, control, target_keys, targets
 from uqs.deploy.config import DeployError
@@ -27,15 +28,7 @@ log = get_logger()
 #: make_config's parameter names.
 CONNECTION = ("host", "dest", "remote_user", "connect_timeout")
 
-Target = Annotated[
-    str | None,
-    typer.Argument(
-        metavar="TARGET",
-        help="A target in deploy_targets.toml, or a server pushed to from here "
-        "(`uqs deploy history`); for one neither knows, give --ssh and --dest",
-        show_default=False,
-    ),
-]
+Target = target_arg(f"{TARGET_HELP}; for one neither knows, give --ssh and --dest", latest=True)
 #: `--ssh`, as `uqs target add` names it; `--host` until #1768, where every
 #: other command's --host is a q host. The old spelling parses for one release.
 Host = Annotated[
@@ -88,7 +81,7 @@ def verify_timeout_option(integer: bool = False) -> typer.models.OptionInfo:
         "--verify-timeout",
         integer=integer,
         help=f"How long (a DURATION) the processes have to become ready, default "
-        f"{config.DEFAULT_VERIFY_TIMEOUT}s; overrides TARGET's",
+        f"{config.DEFAULT_VERIFY_TIMEOUT}s; overrides the target's",
         show_default=False,
     )
 

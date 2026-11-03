@@ -41,11 +41,13 @@ from uqs.cli.shared import _die, _paths, console, data_app
 from uqs.paths import UqsError
 from uqs.stack import hdb_alter, hdb_fill, hdb_layout, hdb_shape, hdb_types
 from uqs.stack.hdb_alter import Request
+from uqs.timerange import DAY_FORMS, parse_day
 
 CheckJson = json_opt(
     '{"ok", "hdb", "present", "segmented", "partitions", "missing_tables": {partition: [table]}, '
     '"missing_columns": {partition: {table: [column]}}, "types_checked", "type_changes": [...]} '
-    '- or, with --table, --attach or --hdb, {"ok", "hdb", "resolved_from", "plan", "result", ...}'
+    '- or, with --table, --attachment or --hdb, {"ok", "hdb", "resolved_from", "plan", '
+    '"result", ...}'
 )
 
 
@@ -55,8 +57,9 @@ def hdb_check(
         list[str] | None,
         typer.Option(
             "--table",
+            metavar="TABLE",
             help="Check and fill only this table (default with --attachment: the attachment's "
-            "own); repeatable, and NAME,NAME also works",
+            "own); repeatable, and TABLE,TABLE also works",
             autocompletion=completion.plant_table,
         ),
     ] = None,
@@ -64,8 +67,9 @@ def hdb_check(
         str | None,
         typer.Option(
             "--template",
-            help="YYYY.MM.DD: the partition whose table is the schema to fill from, when this "
-            "runtime declares none (default: the latest holding it)",
+            metavar="DATE",
+            help=f"The partition ({DAY_FORMS}) whose table is the schema to fill from, when "
+            "this runtime declares none (default: the latest holding it)",
         ),
     ] = None,
     attach: AttachOpt = None,
@@ -77,7 +81,9 @@ def hdb_check(
     ] = False,
     as_json: CheckJson = False,
 ) -> None:
-    """Report HDB partitions missing a table or a column - the cause behind
+    """Check the HDB for missing tables and columns, and columns of the wrong type.
+
+    Reports HDB partitions missing a table or a column - the cause behind
     "./2015.01.07/arbitrage. OS reports: No such file or directory" - and
     columns stored as another type than the schema declares.
 
@@ -85,7 +91,7 @@ def hdb_check(
     holding the same columns; a gap fails the whole query, naming whichever
     table sorts first. Without --table, --attachment or --hdb: this runtime's HDB,
     against every table it declares. With one: that table alone, in the HDB
-    they name (`uqs --target NAME data check` is a release's own). --apply
+    they name (`uqs --target TARGET data check` is a release's own). --apply
     shows the plan, asks, and writes only what is missing - additive: a table
     directory or column file that exists is never touched.
     """
@@ -105,7 +111,7 @@ def hdb_check(
             declared = hdb_shape.declared_tables(handle.paths)
             for name in tables or [_table(handle, None)]:
                 with hdb_alter.declaration(schema, name, declared) as decl:
-                    day = template.replace("-", ".") if template else None
+                    day = f"{parse_day('--template', template):%Y.%m.%d}" if template else None
                     req = Request(handle.hdb, name, "fill", schema=decl, template=day)
                     what = f"Write an empty {name} into each partition lacking it"
                     run_scoped(handle, req, apply=apply, yes=yes, as_json=as_json, what=what)
@@ -196,7 +202,9 @@ def _whole_runtime(*, apply: bool, yes: bool, as_json: bool) -> None:
         )
     console.print(
         "\n[dim]`uqs data check --apply` writes an empty copy of each missing "
-        "table, and each missing column as its declared type's null, after asking. Additive: "
+        "table, and each missing column as its declared type's null (the `clock` of executions and "
+        "market_data is attributed from the rows by scripts/gates/hdb_clock_rules.csv instead), "
+        "after asking. Additive: "
         "an existing table directory or column file is never touched, and a column whose "
         "declared TYPE changed is not repaired here.[/]"
     )

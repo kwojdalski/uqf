@@ -3,10 +3,11 @@ name: CI
 # The full, clean run (#1879): a Linux checkout with nothing left over, PeachQ
 # as its q. A commit's hooks are targeted (scripts/dev/hooks_full.py); this is
 # where every check runs in full - every job on master, and on a pull request
-# everything but the two path-filtered jobs its change cannot affect ("Docs
-# links", "PeachQ q tests"; scripts/dev/ci_scope.py decides, in the "Scope"
-# job). Full mode runs those too: every push, a `ci:full` label on the pull
-# request, or workflow_dispatch with `full: true`.
+# the hooks and static gates plus each complete verification group its change
+# can affect ("Docs links", "PeachQ q tests", "Browser application", "PeachQ
+# Python tests"; scripts/dev/ci_scope.py decides, in the "Scope" job, and says
+# why in its summary). Full mode runs every group: every push, a `ci:full`
+# label on the pull request, or workflow_dispatch with `full: true`.
 
 on:
   push:
@@ -44,13 +45,15 @@ concurrency:
 jobs:
   scope:
     name: Scope
-    # Which path-filtered jobs this run needs, and why (the step summary).
+    # Which verification groups this run needs, and why (the step summary).
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
       full: ${{ steps.scope.outputs.full }}
       docs: ${{ steps.scope.outputs.docs }}
       q: ${{ steps.scope.outputs.q }}
+      frontend: ${{ steps.scope.outputs.frontend }}
+      python: ${{ steps.scope.outputs.python }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -63,7 +66,7 @@ jobs:
         with:
           version: "0.12.14"
           python-version: "3.14"
-      - name: Decide which path-filtered jobs run
+      - name: Decide which verification groups run
         id: scope
         env:
           EVENT: ${{ github.event_name }}
@@ -96,10 +99,13 @@ jobs:
       #     Python shards run the docs' q blocks on PeachQ
       #     (tests/qrun/test_doc_blocks.py);
       #   python-tests - the "PeachQ Python tests" shards run every testpath
-      #     with a q: the same suite plus what needs a q;
+      #     with a q, whenever the change can reach a Python test: the same
+      #     suite plus what needs a q;
       #   doc-links - the "Docs links" job runs it strictly, in parallel; here
-      #     it was 37s of the hooks' 49s, and then ran a second time (#1689).
-      SKIP: no-commit-to-branch,branch-naming-with-git-username,q-docs-peachq,python-tests,doc-links
+      #     it was 37s of the hooks' 49s, and then ran a second time (#1689);
+      #   peachq-push - the early, targeted PeachQ catch before a push (#1965);
+      #     the "PeachQ q tests" job runs the whole suite on PeachQ.
+      SKIP: no-commit-to-branch,branch-naming-with-git-username,q-docs-peachq,python-tests,doc-links,peachq-push
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -162,6 +168,11 @@ jobs:
           fi
       - name: Run repository hooks
         run: uv tool run --from pre-commit==4.6.2 pre-commit run --all-files --show-diff-on-failure
+      # The hooks a developer's `git push` runs (#1965): q-tests and q-coverage,
+      # which need a q - skipped above when the runner has none - and the two
+      # this job SKIPs for running elsewhere (python-tests, peachq-push).
+      - name: Run repository push hooks
+        run: uv tool run --from pre-commit==4.6.2 pre-commit run --all-files --hook-stage pre-push --show-diff-on-failure
       # The gates that used to follow here as steps of their own are hooks
       # now, run above by `pre-commit run --all-files` (#1879): the module
       # graph, the ETL layering, the q line budget, the registry enlist
@@ -258,6 +269,11 @@ jobs:
 
   peachq-python:
     name: PeachQ Python tests (${{ matrix.shard }}/${{ strategy.job-total }})
+    # Every change but a web/ file no Python file names, or in full mode
+    # (scripts/dev/ci_scope.py): a .q file (the tests start q), a document
+    # (tests/qrun runs its q blocks), anything a gate's tests read.
+    needs: scope
+    if: ${{ needs.scope.outputs.python == 'true' }}
     timeout-minutes: 20
     runs-on: ubuntu-24.04
     # Four runners, a quarter of the test modules each (#1696): on one 4-vCPU
@@ -433,14 +449,16 @@ jobs:
         # has on the contract surface.
         run: python3 scripts/gates/check_doc_links.py
 
-  # The one name branch protection requires: green only when every job above
-  # passed, or was skipped because Scope said its change could not affect it.
-  # Kept as its own job so splitting or adding jobs never changes the
-  # required check's name.
+  # The one name branch protection requires: green only when every job in
+  # this workflow passed, or was skipped because Scope said its change could
+  # not affect it. Kept as its own job so splitting or adding jobs never
+  # changes the required check's name. A failed Scope leaves every NEEDED
+  # empty, and a job skipped although Scope said "true" (an `if:` that reads
+  # the wrong output, a needs that failed) is no pass either: either fails it.
   repository-checks:
     name: Repository checks
     if: ${{ always() }}
-    needs: [scope, checks, doc-links, peachq-q, peachq-python]
+    needs: [scope, checks, doc-links, peachq-q, peachq-python, web]
     runs-on: ubuntu-24.04
     timeout-minutes: 2
     steps:
@@ -449,6 +467,9 @@ jobs:
           SCOPE: ${{ needs.scope.result }}
           CHECKS: ${{ needs.checks.result }}
           PYTHON: ${{ needs.peachq-python.result }}
+          PYTHON_NEEDED: ${{ needs.scope.outputs.python }}
+          WEB: ${{ needs.web.result }}
+          WEB_NEEDED: ${{ needs.scope.outputs.frontend }}
           DOCS: ${{ needs.doc-links.result }}
           DOCS_NEEDED: ${{ needs.scope.outputs.docs }}
           Q: ${{ needs.peachq-q.result }}
@@ -463,13 +484,19 @@ jobs:
           }
           need "Scope" "$SCOPE"
           need "Hooks and static gates" "$CHECKS"
-          need "PeachQ Python tests" "$PYTHON"
           filtered "Docs links" "$DOCS" "$DOCS_NEEDED"
           filtered "PeachQ q tests" "$Q" "$Q_NEEDED"
+          filtered "Browser application" "$WEB" "$WEB_NEEDED"
+          filtered "PeachQ Python tests" "$PYTHON" "$PYTHON_NEEDED"
           exit "$fail"
 
   web:
     name: Browser application
+    # Only when the change touches web/ or the shared CI configuration, or in
+    # full mode (scripts/dev/ci_scope.py): the package reads nothing outside
+    # web/.
+    needs: scope
+    if: ${{ needs.scope.outputs.frontend == 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:

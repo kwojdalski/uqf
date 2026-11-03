@@ -26,7 +26,12 @@ a command or an option to hold to the rules.
 
 from __future__ import annotations
 
+import inspect
+import io
+import os
 import re
+import subprocess
+import sys
 from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
@@ -34,11 +39,16 @@ from typing import Any
 
 import pytest
 import typer.main
+from typer.testing import CliRunner
 
 import uqs.cli.entry  # noqa: F401 - registers every command on the app
-from uqs.cli import safety, shared, skip_options, vocabulary
+from uqs import paths
+from uqs.cells import cell as cell_text
+from uqs.cli import lists, rendering, safety, shared, skip_options, vocabulary
 from uqs.cli.shared import app
 from uqs.cli.target_confirm import changes_the_server, effect_of, trait_of
+from uqs.stack import alive, listing
+from uqs.stack import procs as stack_procs
 
 ROOT = "uqs"  # the label the root group's own options are reported under
 GUIDE = Path(__file__).resolve().parents[3] / "docs" / "guides" / "uqs.md"
@@ -188,6 +198,11 @@ def test_rule1_no_group_is_named_after_a_verb():
 # ------------------------------------------------------------- group help
 
 
+def _summary(command) -> str:
+    """The first paragraph of a command's help: what its group's listing shows."""
+    return inspect.cleandoc(command.help or "").split("\n\n")[0].replace("\n", " ")
+
+
 def _named(word: str, text: str) -> bool:
     """`word` in `text` as itself: `check` is not named by `hdb-check`."""
     return re.search(rf"(?<![\w-]){re.escape(word)}(?![\w-])", text) is not None
@@ -199,7 +214,7 @@ def test_every_group_help_names_every_command_in_it():
     hdb-check" while it also held `migrate`. Hidden aliases are not held."""
     unnamed = {
         path: [n for n, sub in group.command.commands.items()
-               if not getattr(sub, "hidden", False) and not _named(n, group.command.help or "")]
+               if not getattr(sub, "hidden", False) and not _named(n, _summary(group.command))]
         for path, group in GROUPS.items()
     }  # fmt: skip
     unnamed = {path: names for path, names in unnamed.items() if names}
@@ -365,6 +380,59 @@ def test_schema_and_query_reach_a_process_the_same_ways():
     assert all(LEAVES[p].option(o) is not None for p in ("query", "schema") for o in reach)
 
 
+def _all_help(cmd: Cmd) -> list[str]:
+    """`cmd`'s own help and each of its parameters', flattened."""
+    texts = [cmd.command.help or ""] + [getattr(p, "help", "") or "" for p in cmd.command.params]
+    return [" ".join(t.split()) for t in texts]
+
+
+def test_the_running_set_is_called_the_stack():
+    """ "stack" 39 times in help, "plant" 6 and "fleet" 3 (#1890): the running
+    set of processes is the stack. ("plant" stays where it names the
+    tickerplant's tables, plant_tables.q; "runtime" is a configuration.)"""
+    found = {c.path for c in TREE for t in _all_help(c) if re.search(r"\bfleet\b", t, re.I)}
+    assert not found, f"help calling the running stack a fleet: {sorted(found)}"
+
+
+def test_a_connector_is_never_called_a_feed():
+    """A feed is a q streaming job that only publishes; the Python process
+    outside the stack is a connector (#1890), under `uqs connector`."""
+    found = {
+        c.path
+        for c in TREE
+        if c.path == "connector" or c.path.startswith("connector ")
+        for t in _all_help(c)
+        if re.search(r"\bfeeds?\b", t, re.I)
+    }
+    assert not found, f"connector help that says feed: {sorted(found)}"
+
+
+#: Plural groups, with why each stays: renamed only if renamed anyway (#1890).
+PLURAL_GROUPS = {
+    "config sources": "sources.csv's rows; renaming it is churn with nothing else to gain",
+    "job runs": "the run ledger; renaming it is churn with nothing else to gain",
+}
+
+
+def test_group_names_are_singular():
+    singular_s = {"process"}  # a noun that ends in s and is singular
+    plural = {p for p in GROUPS if p.split()[-1].endswith("s") and p.split()[-1] not in singular_s}
+    assert plural == set(PLURAL_GROUPS)
+
+
+def test_one_option_name_has_one_flag_shape():
+    """`--start-with-all` was a --x/--no-x pair on `job attachment add` and a
+    lone flag on `job new` (#1890): a flag name is a pair everywhere, or
+    nowhere."""
+    shapes: dict[str, set[bool]] = {}
+    for cmd in TREE:
+        for p in cmd.options:
+            if getattr(p, "is_flag", False):
+                shapes.setdefault(_long(p), set()).add(bool(p.secondary_opts))
+    mixed = sorted(name for name, seen in shapes.items() if len(seen) > 1)
+    assert not mixed, f"flag names with two shapes: {mixed}"
+
+
 def test_the_guide_lists_the_same_vocabulary():
     """The guide's verb table and the lists above are one vocabulary."""
     text = GUIDE.read_text()
@@ -482,6 +550,7 @@ OPTIONS = {
     "--target": Meaning("run this command on a deployed target", r"instead of this machine"),
     "--timeout": Meaning("seconds for the whole command", r"^seconds\b"),
     "--to": Meaning("end of a time range, exclusive", r"exclusive"),
+    "--tplogdir": Meaning("a tickerplant's log directory", r"log directory"),
     "--tunnel": Meaning("a deploy target reached through an ssh tunnel", r"ssh tunnel"),
     "--trace": Meaning(
         "log every query the source is sent", r"every query the (source is sent|fetch sends)"
@@ -502,7 +571,7 @@ OPTIONS |= {
     for name in (
         "--api-key", "--brokers", "--databento-dataset", "--group", "--interval-ms",
         "--oms-socket-path", "--poll-interval-ms", "--symbol", "--symbols", "--top-n-levels",
-        "--topic", "--tp-credential", "--tp-credential-env", "--venues",
+        "--topics", "--tp-credential", "--tp-credential-env", "--venues",
     )
 }  # fmt: skip
 
@@ -1367,6 +1436,248 @@ def test_the_receivers_row_limit_is_the_contracts():
     assert f"(default {DEFAULT_MAX_ROWS})" in script
 
 
+# ------------------------------------- option values, one mechanism (#1884)
+
+
+def _completer(param):
+    """The function `param` completes with, unwrapped from Typer's adapter."""
+    completer = getattr(param, "_custom_shell_complete", None)
+    for cell in getattr(completer, "__closure__", None) or ():
+        if callable(cell.cell_contents):
+            return cell.cell_contents
+    return None
+
+
+#: (command, option) -> why its fixed values are a completer, not a Choice.
+NOT_A_CHOICE = {
+    ("job backfill", "--mode"): "takes the retired value dry-run for one release "
+    "(rename_expiry: `uqs job backfill --mode dry-run`), which its help no longer shows",
+    ("job new", "--kind"): "takes the retired kind `external` for one release (#1890), which a "
+    "Choice would refuse before its callback names `connector`",
+    ("deploy build", "--q-version"): "one name, one type (cli/vocabulary.py): on `deploy push` "
+    "--q-version is a free REQUIREMENT, >=4.1",
+}
+
+
+def test_an_option_with_fixed_values_is_a_choice():
+    """#1884: an option taking one of a fixed set is a Choice (cli/choices.py
+    ChoiceOpt) - its type, completion and help from one tuple - not a free
+    str with a completer and validation by hand. `--sort` takes a column the
+    listing's header names; an argument may refuse with its own message."""
+    found = {
+        (cmd.path, _long(p))
+        for cmd in TREE
+        for p in cmd.options
+        if "--sort" not in p.opts
+        and (cmd.path, _long(p)) not in NOT_A_CHOICE
+        and not hasattr(p.type, "choices")
+        and getattr(_completer(p), "choice_values", None) is not None
+    }
+    assert not found, sorted(found)
+
+
+def _concept(param) -> str | None:
+    """Which concept a parameter names, by its flag or its metavar."""
+    opts, metavar = set(param.opts), (param.metavar or "").rstrip(".").rstrip(",")
+    if "--attachment" in opts:
+        return "attachment"
+    if opts & {"--target", "--tunnel"} or metavar == "TARGET":
+        return "target"
+    if "--profile" in opts:
+        return "profile"
+    if metavar == "JOB":
+        return "job"
+    if metavar == "TABLE" or opts & {"--table", "--tables"}:
+        return "table"
+    if metavar == "SOURCE":
+        return "source"
+    return None
+
+
+def _name(fn) -> str | None:
+    """A completer's name: Typer hands each command a copy, so not its identity."""
+    return f"{fn.__module__}.{fn.__qualname__}" if fn is not None else None
+
+
+def _concept_completers() -> dict[str, set[str | None]]:
+    from uqs.cli import completion as c
+
+    named = {
+        "attachment": (c.attachments,),
+        "target": (c.targets,),
+        "profile": (c.profiles,),
+        "job": (c.jobs, c.streaming_jobs, c.backfill_workers),
+        "table": (c.plant_table, c.plant_tables),
+        "source": (c.sources, c.source_list),
+    }
+    return {concept: {_name(f) for f in fns} for concept, fns in named.items()}
+
+
+#: (command, parameter) -> why it names a concept's NEW value, so offers none.
+NAMES_A_NEW_ONE = {
+    ("job new", "name"): "the job it scaffolds does not exist yet",
+    ("job new", "source"): "the source a new backfill reads is usually new too",
+    ("target add", "name"): "the target it declares does not exist yet",
+    ("target adopt", "name"): "the target it declares does not exist yet",
+}
+
+
+def test_each_concept_completes_with_its_completer():
+    """#1884: an attachment, a target, a profile, a job, a table or a source
+    completes the same way on every command - shared aliases in
+    cli/concepts.py carry the completer."""
+    completers, found = _concept_completers(), set()
+    for cmd in TREE:
+        for param in cmd.command.params:
+            if getattr(param, "hidden", False) or (cmd.path, param.name) in NAMES_A_NEW_ONE:
+                continue
+            concept = _concept(param)
+            if concept and _name(_completer(param)) not in completers[concept]:
+                found.add((cmd.path, param.name, concept))
+    assert not found, sorted(found)
+
+
+def test_the_target_argument_is_one_definition():
+    """#1884: a TARGET is TARGET everywhere and completes targets; a command
+    that only reads a server falls back to the latest deployment."""
+    for path in ("target check", "target shell", "deploy status"):
+        param = next(p for p in LEAVES[path].command.params if p.metavar == "TARGET")
+        assert not param.required, path
+    for path in ("target set", "target unset", "target remove"):
+        param = next(p for p in LEAVES[path].command.params if p.metavar == "TARGET")
+        assert param.required, path
+
+
+def test_a_comma_separated_option_says_so_in_its_metavar():
+    """#1884: one style, `NAME,...`, wherever an option takes a comma-separated list."""
+    found = {
+        (cmd.path, _long(p), p.metavar)
+        for cmd in TREE
+        for p in cmd.options
+        if re.search(r"comma[- ]separated", p.help or "", re.IGNORECASE)
+        and not (p.metavar or "").endswith(",...")
+    }
+    assert not found, sorted(found)
+
+
+def test_a_default_said_in_help_is_not_shown_twice():
+    """#1884: a help that states its default does not also get `[default: X]`
+    - `status --timeout` read "(default 120) ... [default: 120.0]"."""
+    found = {
+        (cmd.path, _long(p))
+        for cmd in TREE
+        for p in cmd.options
+        if re.search(r"\bdefault", p.help or "", re.IGNORECASE)
+        and p.show_default is not False
+        and not p.is_flag
+        and p.default not in (None, (), [])
+    }
+    assert not found, sorted(found)
+
+
+#: "default $NAME", "Default from $NAME", "default: $NAME" - a variable as a fallback.
+_ENV_FALLBACK = re.compile(r"\bdefault(?: from|:)?\s+\$([A-Z][A-Z0-9_]*)", re.IGNORECASE)
+
+
+def test_a_variable_named_as_a_fallback_is_the_one_read():
+    """#1884: a `$NAME` a help names as its default is the option's own envvar
+    - or, for a connector option, the variable its FeedOption reads (it
+    resolves given > $env > default itself, external/feeds.py)."""
+    from uqs.cli.external import FEEDS
+
+    feed_env = {
+        flag: o.env
+        for f in FEEDS.values()
+        for o in f.options
+        for flag in (o.flag, f"{o.flag}-env")
+        if o.env
+    }
+    found = set()
+    for cmd in TREE:
+        for p in cmd.options:
+            for name in _ENV_FALLBACK.findall(p.help or ""):
+                connector = cmd.path.startswith("connector ") and feed_env.get(_long(p)) == name
+                if p.envvar != name and not connector:
+                    found.add((cmd.path, _long(p), name, p.envvar))
+    assert not found, sorted(found)
+
+
+#: The plant's variables a publisher reads beside q (external/connection.py).
+_PUBLISHERS = __import__("uqs.external.connection").external.connection.TP_CREDENTIAL_ENV
+
+
+def test_a_uqf_variable_in_help_is_one_q_reads():
+    """#1884: one prefix per side. uqs's own variables are UQS_; a UQF_ one
+    (q_facts.CFG_ENV_PREFIX) is the plant's - q reads it, or a publisher that
+    feeds the plant beside q does (UQF_TP_CREDENTIAL, held in
+    external/connection.py) - and is named in help only then."""
+    from uqs.generated import q_facts
+
+    q_text = "\n".join(p.read_text() for p in (GUIDE.parents[2] / "src").rglob("*.q"))
+    named = {
+        (cmd.path, name)
+        for cmd in TREE
+        for p in cmd.options
+        for name in re.findall(r"\$((?:UQS|UQF)_[A-Z0-9_]+)", p.help or "")
+    }
+    stray = {
+        (path, name)
+        for path, name in named
+        if name.startswith(q_facts.CFG_ENV_PREFIX) and name not in q_text + _PUBLISHERS
+    }
+    assert not stray, sorted(stray)
+
+
+#: A day written out in a help: 2026-09-13, 2026.09.13, YYYY-MM-DD.
+_DAY_SHAPED = re.compile(r"\d{4}[-.]\d{2}[-.]\d{2}|YYYY")
+
+
+def test_every_date_shaped_parameter_uses_the_shared_forms():
+    """#1884: a parameter taking a day names timerange's forms - both spellings,
+    which timerange.parse_day accepts - rather than one of its own."""
+    from uqs.timerange import BOUND_FORMS, DAY_FORMS
+
+    found = {
+        (cmd.path, p.name)
+        for cmd in TREE
+        for p in cmd.command.params
+        if not getattr(p, "hidden", False)
+        and _DAY_SHAPED.search(p.help or "")
+        and DAY_FORMS not in (p.help or "")
+        and BOUND_FORMS not in (p.help or "")
+    }
+    assert not found, sorted(found)
+
+
+@pytest.mark.parametrize("partition", ["2026-01-02", "2026.01.02"])
+def test_data_migrate_takes_both_day_forms(monkeypatch, partition):
+    """`data migrate TABLE PARTITION` refused 2026.01.02, the form on disk (#1884)."""
+    from datetime import date
+
+    from typer.testing import CliRunner
+
+    from uqs.stack import hdb_migrate
+
+    seen = []
+
+    def migrate(_paths, _table, day, *_a, **_k):
+        seen.append(day)
+        raise SystemExit(0)
+
+    monkeypatch.setattr(hdb_migrate, "migrate", migrate)
+    CliRunner().invoke(app, ["data", "migrate", "trade", partition])
+    assert seen == [date(2026, 1, 2)]
+
+
+def test_every_override_name_is_one_spelling():
+    """#1884: `uqs override list` showed `q-version-check`, `accept-digest` and
+    `TORQ_VERSION:COMPONENT` side by side; every name is lower case, words
+    joined by `-`, with `:COMPONENT` where it is waived per process."""
+    pattern = re.compile(r"^[a-z][a-z0-9-]*(:COMPONENT)?$")
+    bad = [g.name for g in safety.catalog() if not pattern.fullmatch(g.name)]
+    assert not bad, bad
+
+
 # ------------------------------------------------------------- the lists
 
 
@@ -1388,3 +1699,223 @@ def test_the_receivers_row_limit_is_the_contracts():
 )
 def test_every_exception_names_the_issue_that_removes_it(allowlist):
     assert set(allowlist.values()) <= ISSUES
+
+
+# ------------------------------------------------------ help as written (#1883)
+
+#: The placeholder a positional is shown as: one word per thing a command acts
+#: on, upper case, the same word wherever that thing is meant (#1883).
+VOCABULARY = {
+    "PROC", "JOB", "TARGET", "TABLE", "DATASET", "SOURCE", "KIND", "EXPR", "FIELD",
+    "VALUE", "PARTITION", "RUNTIME", "RUN", "ATTACHMENT", "FILE", "CONNECTOR",
+    "PACKAGE", "ARTIFACT", "COMPONENT", "BUNDLE", "KEY", "CHANGE", "NEW",
+}  # fmt: skip
+#: Placeholders the vocabulary replaced: in help they may only name a command's
+#: own option (`--override NAME`), never stand for one of the things above.
+RETIRED_PLACEHOLDERS = {"WORKER", "PROCNAME", "PROCS", "NAME"}
+#: The longest first help paragraph: the one line a group's listing shows.
+SUMMARY_MAX = 110
+_PLACEHOLDER = re.compile(r"(?<![\w$-])([A-Z][A-Z_]{2,})(?![\w-])")
+
+
+def _visible_params(command) -> list:
+    return [p for p in command.params if not getattr(p, "hidden", False)]
+
+
+def _help_texts(command) -> list[str]:
+    """Everything a reader of `--help` reads: the command's help, its params'."""
+    return [command.help or ""] + [
+        p.help for p in _visible_params(command) if getattr(p, "help", None)
+    ]
+
+
+def _own_metavars(command) -> set[str]:
+    return {w for p in command.params if p.metavar for w in re.findall(r"[A-Z][A-Z_]+", p.metavar)}
+
+
+def test_every_visible_argument_is_an_upper_case_word_of_the_vocabulary():
+    """`query [PROC] [expr]`, `job gaps {job}` beside `job backfill {JOB}`,
+    `target ... {name}` beside `target log [NAME]`: one style, one word per
+    thing (#1883)."""
+    found = {
+        (path, p.name, p.metavar)
+        for path, c in LEAVES.items()
+        for p in _visible_params(c.command)
+        if p.param_type_name == "argument"
+        and not (p.metavar and set(re.split(r"=", p.metavar.removesuffix("..."))) <= VOCABULARY)
+    }
+    assert not found, f"positionals outside the vocabulary: {sorted(found)}"
+
+
+def test_a_placeholder_in_help_is_one_of_the_commands_own():
+    """A vocabulary word the prose uses is a positional or an option of the
+    same command, and a retired one (WORKER, NAME, ...) is nowhere unless the
+    command takes it: `job receive` showed `uqs job backfill WORKER --attach
+    NAME`, `job new --source` said it defaults to NAME (#1883). Code spans may
+    show another command's line, so only the retired words are held there;
+    `OLD=NEW` and `OLD:NEW` describe a value's shape, not a positional."""
+    found = set()
+    for path, c in LEAVES.items():
+        own = _own_metavars(c.command)
+        for text in _help_texts(c.command):
+            text = re.sub(r"\b[A-Z]+[=:][A-Z]+\b", " ", text)
+            code = " ".join(re.findall(r"`([^`]*)`", text))
+            prose = re.sub(r"`[^`]*`", " ", text)
+            for word in set(_PLACEHOLDER.findall(prose)):
+                if word in VOCABULARY | RETIRED_PLACEHOLDERS and word not in own:
+                    found.add((path, word))
+            for word in set(_PLACEHOLDER.findall(code)):
+                if word in RETIRED_PLACEHOLDERS and word not in own:
+                    found.add((path, word))
+    assert not found, sorted(found)
+
+
+def test_every_first_help_paragraph_is_one_short_line():
+    """The line a group's listing shows: `list`'s ran to 421 characters (#1883)."""
+    long = {
+        c.path: len(_summary(c.command)) for c in TREE if len(_summary(c.command)) > SUMMARY_MAX
+    }
+    assert not long, long
+
+
+def test_no_help_names_an_issue_number():
+    """An issue number tells an operator nothing: it is the tree's history (#1883)."""
+    found = {c.path for c in TREE for t in _help_texts(c.command) if re.search(r"#\d+", t)}
+    assert not found, sorted(found)
+
+
+def test_every_option_help_starts_with_a_capital_or_a_backtick():
+    found = {
+        (c.path, _long(p))
+        for c in TREE
+        for p in c.options
+        if p.help and not re.match(r"[A-Z`'\"$]", p.help.strip())
+    }
+    assert not found, sorted(found)
+
+
+def _brackets(text: str) -> list[str]:
+    return [" ".join(m.split()) for m in re.findall(r"\[[^\[\]\n]*\]", text)]
+
+
+@pytest.mark.parametrize("cmd", [c for c in TREE if c.path != ROOT], ids=lambda c: c.path)
+def test_rendered_help_keeps_every_bracket_in_its_source(cmd):
+    """Typer read help as Rich markup, so `"silent": [process]` rendered as
+    `"silent": ,` and `[defaults]` vanished from `target unset`: the JSON shapes
+    `--help` documents were wrong (#1883)."""
+    result = CliRunner().invoke(app, [*cmd.path.split(), "--help"], terminal_width=200)
+    assert result.exit_code == 0, result.output
+    # the text a reader sees: CI turns colour on (GITHUB_ACTIONS), and Rich's
+    # highlighter then puts escape codes inside `[{table, rows}]`
+    plain = re.sub(r"\x1b\[[0-9;]*m", "", result.output)
+    shown = " ".join(re.sub(r"[│╭╮╰╯─]", " ", plain).split())
+    missing = [
+        token
+        for text in _help_texts(cmd.command)
+        for token in _brackets(" ".join(text.split()))
+        if token not in shown
+    ]
+    assert not missing, missing
+
+
+def test_h_is_help_everywhere():
+    for argv in (["-h"], ["job", "-h"], ["status", "-h"]):
+        result = CliRunner().invoke(app, argv)
+        assert result.exit_code == 0 and "Usage" in result.output, argv
+
+
+# ------------------------------------------------- output into a pipe (#1883)
+
+#: Every list command, as argv: each of `uqs list`'s kinds and every noun's own.
+LIST_COMMANDS = [
+    *(["list", kind] for kind in sorted(listing.LISTABLE_KINDS)),
+    ["target", "list"],
+    ["runtime", "list"],
+    ["job", "list"],
+    ["job", "attachment", "list"],
+    ["override", "list"],
+]
+
+
+def _uqs_piped(*argv: str) -> subprocess.CompletedProcess[str]:
+    """`uqs argv` with stdout a pipe, as `uqs ... | grep` has it."""
+    drop = ("UQF_PEACHQ", "UQF_Q_IMPL", "UQF_PEACHQ_REASON", "COLUMNS", "LOG_REGEX")
+    env = {k: v for k, v in os.environ.items() if k not in drop} | {"NO_COLOR": "1"}
+    return subprocess.run(
+        [sys.executable, "-m", "uqs", *argv],
+        capture_output=True,
+        text=True,
+        env=env,
+        stdin=subprocess.DEVNULL,
+        timeout=180,
+        check=False,
+    )
+
+
+def test_a_piped_console_neither_cuts_nor_wraps(monkeypatch):
+    monkeypatch.setattr(sys, "stdout", io.StringIO())
+    made = rendering.console()
+    assert made.width == rendering.UNBOUNDED_WIDTH and made.soft_wrap
+
+
+@pytest.fixture
+def piped(monkeypatch):
+    """The CLI's console as a pipe gets it, whatever pytest's own stdout is."""
+    with monkeypatch.context() as m:
+        m.setattr(sys, "stdout", io.StringIO())
+        made = rendering.console()
+    monkeypatch.setattr(shared.console, "width", made.width)
+    monkeypatch.setattr(shared.console, "soft_wrap", made.soft_wrap)
+
+
+#: A noun's own list -> the kind of `uqs list` it lists.
+_NOUN_KINDS = {command.removeprefix("uqs "): kind for kind, command in lists.MOVED.items()}
+
+
+def _cells(argv: list[str]) -> list[str]:
+    """The text of every cell the command's table holds, from its rows."""
+    if argv[0] == "override":
+        rows = lists._bypasses()
+    else:
+        kind = argv[1] if argv[0] == "list" else _NOUN_KINDS[" ".join(argv)]
+        rows = listing.list_items(paths.default_paths(), kind)
+    texts = (cell_text(v) for row in rows for v in row.values())
+    return [text for text in texts if text]
+
+
+@pytest.mark.parametrize("argv", LIST_COMMANDS, ids=" ".join)
+def test_every_cell_of_a_list_reaches_a_pipe_whole(piped, argv, monkeypatch):
+    """`uqs status | grep -c discovery1` was 0: the column showed `dis…`, as
+    `list processes` cut `segmentedtickerplant` - an 80-column guess for a
+    terminal there is none of (#1883). What runs is held still: the rows are
+    read twice, and another test starting a process between the reads changed
+    `runtime list`'s running count."""
+    monkeypatch.setattr(alive, "running", lambda *_a, **_k: set())
+    result = CliRunner().invoke(app, argv)
+    assert result.exit_code == 0, result.output
+    missing = [text for text in _cells(argv) if text not in result.stdout]
+    assert not missing, missing
+
+
+def test_status_names_every_process_whole_into_a_pipe():
+    run = _uqs_piped("status", "--probe-timeout", "0")
+    names = listing.configured_ports(paths.default_paths())
+    missing = [name for name in names if not re.search(rf"\b{re.escape(name)}\b", run.stdout)]
+    assert not missing, (missing, run.stderr[-400:])
+
+
+def test_a_scalar_is_one_line_a_shell_can_take():
+    """`ls "$(uqs config show rdb1 U)"` failed: the path came back over three lines."""
+    run = _uqs_piped("config", "show", "rdb1", "U")
+    assert run.returncode == 0, run.stderr
+    value = stack_procs.get_process_config(paths.default_paths(), "rdb1")["U"]
+    assert len(value) > 80, "the case this covers is a value wider than a terminal"
+    assert run.stdout == value + "\n"
+
+
+def test_a_start_line_is_not_broken_into_a_pipe():
+    run = _uqs_piped("start", "--dry-run", "rdb1")
+    assert run.returncode == 0, run.stderr
+    (line,) = [ln for ln in run.stdout.splitlines() if "-procname rdb1" in ln]
+    assert line.split()[0].endswith("nohup") or "torq.q" in line
+    assert "torq.q" in line and "-proctype rdb" in line
