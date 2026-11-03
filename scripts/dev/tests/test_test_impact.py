@@ -309,7 +309,14 @@ def real():
     return ti.build(REPO)
 
 
+#: The tests of the real tree share one xdist worker, so `real` - the graph
+#: of the whole tree, the slowest thing in this module - is drawn once rather
+#: than once on every worker that happens to run one of them (#1879).
+REAL = pytest.mark.xdist_group("test-impact-real-tree")
+
+
 @GRAPH
+@REAL
 def test_the_registries_the_issue_names_are_found_not_listed(real):
     shells = set(real.registries)
     assert {
@@ -322,6 +329,7 @@ def test_the_registries_the_issue_names_are_found_not_listed(real):
 
 
 @GRAPH
+@REAL
 def test_every_declaration_registers_through_an_entry_point_the_selector_knows(real):
     """The guard on the found list: a top-level call from a declaration into
     src/etl/core/ that is not an entry point is a registry the links miss -
@@ -330,12 +338,14 @@ def test_every_declaration_registers_through_an_entry_point_the_selector_knows(r
 
 
 @GRAPH
+@REAL
 def test_every_reviewed_dynamic_file_still_has_a_dynamic_entry(real):
     stale = [f for f in ti.DYNAMIC_REVIEWED if f not in real.dynamic]
     assert stale == [], "remove these from DYNAMIC_REVIEWED: nothing in them is dynamic now"
 
 
 @GRAPH
+@REAL
 def test_a_declaration_reaches_its_own_suite_and_the_shell_suite(real):
     sel = _pick(real, "src/etl/transforms/order_quality.q")
     assert not sel.all
@@ -343,6 +353,7 @@ def test_a_declaration_reaches_its_own_suite_and_the_shell_suite(real):
 
 
 @GRAPH
+@REAL
 def test_a_library_change_selects_a_subset(real):
     sel = _pick(real, "src/pricing/forwards.q")
     assert not sel.all
@@ -351,6 +362,7 @@ def test_a_library_change_selects_a_subset(real):
 
 
 @GRAPH
+@REAL
 def test_the_selection_is_what_the_runner_can_load(real):
     """Every selected name is a suite file support.q's suite_files globs."""
     names = {Path(f).name for f in _pick(real, "src/etl/core/transform.q").files}

@@ -367,7 +367,8 @@ def test_deploy_push_receives_a_skip_as_its_override(monkeypatch):
         result = runner.invoke(cli.app, [*base, *spelling, "--reason", "vendor build"])
         assert result.exit_code == 1, result.output
     assert len(made) == 2 and made[0] == made[1]
-    assert made[0]["accept_digest"] == "vendor build" and made[0]["allow_unpinned"] is None
+    # an override not asked for is left out, for make_config's own None (#1892)
+    assert made[0]["accept_digest"] == "vendor build" and "allow_unpinned" not in made[0]
     assert "uqs_skip__accept_digest" not in made[0], "the body never sees the option"
 
 

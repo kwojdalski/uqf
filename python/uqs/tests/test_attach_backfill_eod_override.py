@@ -241,9 +241,7 @@ def launcher(world, monkeypatch):
     """backfill_run.launch with no q: the command line it would start is recorded."""
     started: list[list[str]] = []
     monkeypatch.setattr(backfill_run, "q_interpreter", lambda env=None: Path("/bin/false"))
-    monkeypatch.setattr(
-        backfill_run.subprocess, "Popen", lambda argv, **kw: started.append(argv) or _Started()
-    )
+    support.fake_popen(monkeypatch, lambda argv, **kw: started.append(argv) or _Started())
     monkeypatch.setattr(planning, "evaluate", lambda *a, **k: facts_of())
 
     def launch(mode="run", **kw):

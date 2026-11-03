@@ -131,6 +131,20 @@ def snapshot(*roots: Path) -> dict[str, tuple[int, int]]:
     return seen
 
 
+def fake_popen(monkeypatch, popen) -> None:
+    """Make `popen` the Popen backfill_run starts its worker with - in its own
+    namespace only. Patching the shared subprocess module instead broke every
+    other subprocess.run on the way there: on macOS, which has no
+    /proc/mounts, facts.filesystem_of runs `mount` (#1879)."""
+    import subprocess
+    import types
+
+    from uqs.attach import backfill_run
+
+    shim = types.SimpleNamespace(**{**vars(subprocess), "Popen": popen})
+    monkeypatch.setattr(backfill_run, "subprocess", shim)
+
+
 def make_world(monkeypatch, tmp_path):
     q = q_interpreter(os.environ)
     if q is None:

@@ -286,9 +286,9 @@ def push(
     ] = "",
     live_check_timeout: conn.LiveCheckTimeout = 120,
     connect_timeout: conn.ConnectTimeout = conn.DEFAULT_CONNECT_TIMEOUT,
-    command_timeout: conn.CommandTimeout = 900,
+    command_timeout: conn.CommandTimeout = None,
     smoke_timeout: conn.SmokeTimeout = 120,
-    verify_timeout: conn.VerifyTimeout = 180,
+    verify_timeout: conn.VerifyTimeout = None,
     allow_dirty: policy.AllowDirty = False,
     override: OverrideOpt = None,
     reason: ReasonOpt = None,
@@ -367,7 +367,8 @@ def push(
                     raise config.DeployError(
                         "arguments", f"{config.flag(name)} is required, or a TARGET after ARTIFACT"
                     )
-            cfgs = [config.make_config(**options)]
+            # an option left unset (None) takes make_config's default
+            cfgs = [config.make_config(**{k: v for k, v in options.items() if v is not None})]
         for cfg in cfgs:
             if cfg.target:
                 log.info("target {}: {}:{}", cfg.target, cfg.host, cfg.dest)
