@@ -115,7 +115,7 @@ def live_status(port: int | None) -> dict[str, str]:
 
 
 def describe(name: str, info: dict[str, dict[str, str]], status: dict[str, str]) -> Text:
-    """The side panel for one process: what `uqs list processes` knows, and its status."""
+    """The side panel for one process: what `uqs process list` knows, and its status."""
     if name.startswith("("):
         return Text(f"{name}\n\nProduced outside the stack - nothing here to start.")
     row = info.get(name, {})
@@ -196,7 +196,7 @@ def graph(
     edges = process_graph.edges()
     known = set(info) | {e.producer for e in edges} | {e.consumer for e in edges}
     if proc is not None and proc not in known:
-        _die(UqsError(f"no process {proc!r} - `uqs list processes` names them"))
+        _die(UqsError(f"no process {proc!r} - `uqs process list` names them"))
         return
     status = {} if offline else live_status(port)
     direction: Direction = "upstream" if upstream else "downstream"

@@ -74,11 +74,15 @@ def test_a_refused_attach_without_json_still_logs_to_stdout(tmp_path):
 #: live stack - most of them refused before reaching anything - and the text the
 #: document must carry.
 CASES: dict[str, tuple[list[str], str]] = {
-    "list": (["list"], "processes"),
     "target list": (["target", "list"], "["),
     "target log": (["target", "log"], "edited_outside"),
     "runtime list": (["runtime", "list"], "uqf"),
     "job list": (["job", "list"], "["),
+    "process list": (["process", "list"], "procname"),
+    "profile list": (["profile", "list"], "["),
+    "config field list": (["config", "field", "list"], "["),
+    "config env": (["config", "env"], "KDBBASEPORT"),
+    "job attachment status": (["job", "attachment", "status"], "["),
     "job attachment list": (["job", "attachment", "list"], "["),
     "override list": (["override", "list"], "q-version-check"),
     "data check": (["data", "check"], "present"),
@@ -87,10 +91,14 @@ CASES: dict[str, tuple[list[str], str]] = {
         "no such directory",
     ),
     "runtime diff": (["runtime", "diff", "nosuch1", "nosuch2"], "is not a runtime"),
-    "job receive": (["job", "receive", "--attach", "nosuch"], "--listen-port is required"),
+    "job receiver start": (
+        ["job", "receiver", "start", "--attach", "nosuch"],
+        "--listen-port is required",
+    ),
+    "job receiver stop": (["job", "receiver", "stop", "--attach", "nosuch", "-n"], "stopped"),
     "job backfill": (
         ["job", "backfill", "w", "--from", "2024-01-01", "--to", "2024-01-02"],
-        "--json is for --attach",
+        "source_version",
     ),
     "job attachment add": (["job", "attachment", "add", "nosuch"], "needs --job"),
     "job attachment contract approve": (

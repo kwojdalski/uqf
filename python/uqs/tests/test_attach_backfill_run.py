@@ -659,7 +659,7 @@ def test_the_listing_and_the_run_ledger_show_the_attached_run(world):
     world.reader.refuse()
     started, _ = run(world)
     assert backfill_run.follow(started, timeout=120)[0] == 3
-    listing_ = _cli_any("list", "backfills")
+    listing_ = _cli_any("job", "attachment", "status")
     flat = " ".join(listing_.output.split())
     assert "pb-uat" in flat and WORKER in flat and "written_not_queryable" in flat
     ledger = _cli_any("job", "runs", "list", "--attach", "pb-uat")

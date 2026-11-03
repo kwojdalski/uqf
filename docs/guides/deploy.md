@@ -1105,7 +1105,7 @@ columns are TorQ's own.
 Set each process's value on the server:
 
 ```bash
-uqs --target uat config set stp1 taskset_no 3:5
+uqs --target uat config set stp1 taskset_no=3:5
 uqs --target uat start --dry-run stp1
 ```
 

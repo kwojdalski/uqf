@@ -1,6 +1,6 @@
 """Which profiles a runtime can start.
 
-Each runtime declares its own (Runtime.profiles, #765): `uqs list profiles`
+Each runtime declares its own (Runtime.profiles, #765): `uqs profile list`
 shows those, `--profile` takes only those, and test_profiles holds every
 declared profile to the processes its runtime has - so a profile that names
 a process its runtime lacks fails a test, not an operator's start.

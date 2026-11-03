@@ -342,8 +342,8 @@ def test_listing_targets_is_never_forwarded(server, args, said):
 
 
 def test_other_kinds_of_list_are_still_forwarded(server, capfd):
-    assert target_cli.forward("uat", False, ["list", "processes"], interactive=False) == 0
-    assert "[processes]" in capfd.readouterr().out
+    assert target_cli.forward("uat", False, ["process", "list"], interactive=False) == 0
+    assert "[process]\n[list]" in capfd.readouterr().out
 
 
 def test_list_targets_shows_each_target_and_its_last_deployment(server, tmp_path):

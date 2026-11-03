@@ -5,7 +5,7 @@ THE CONSTRAINT THIS EXISTS FOR. The licence caps a q process at
 held back for ad-hoc handles, leaving fourteen tickerplant slots. The default
 start holds thirteen. So the arbitrage chain - four processes - cannot run
 without first stopping something, and the only dial was
-`uqs config set <proc> startwithall 0/1`: one process at a time, persisted to
+`uqs config set <proc> startwithall=0/1`: one process at a time, persisted to
 disk, easy to forget you changed.
 
 Past the cap nothing complains. The plant RESETS the extra connection, the

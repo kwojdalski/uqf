@@ -6,6 +6,7 @@ cli/lifecycle.py for why the split is shaped this way.
 
 from __future__ import annotations
 
+import contextlib
 from typing import Annotated
 
 import typer
@@ -15,6 +16,7 @@ from uqs import paths as stack_paths
 from uqs.checks import schema_view
 from uqs.checks.schema_view import DEFAULT_PROC
 from uqs.cli import completion
+from uqs.cli import query_target as via_target
 from uqs.cli.json_out import emit, json_opt
 from uqs.cli.renames import renamed
 from uqs.cli.safety import ReadOnly
@@ -77,6 +79,15 @@ def schema(
         int | None, typer.Option(help="stack base port (default: the runtime's)")
     ] = None,
     host: QHostOpt = "localhost",
+    tunnel: Annotated[
+        str | None,
+        typer.Option(
+            "--tunnel",
+            metavar="TARGET",
+            help="deployment target (deploy_targets.toml) to read from here, through an "
+            "ssh tunnel opened for the call, as `query --tunnel` does (#1858)",
+        ),
+    ] = None,
     user: QUserOpt = "admin",
     passwd: QPasswdOpt = "admin",
     export: ExportOpt = None,
@@ -95,106 +106,120 @@ def schema(
     `uqs schema hdb1 trade`: a lone word that names a process is PROC, any
     other is TABLE (`uqs schema 'crypto*'` reads rdb1).
     """
-    paths = stack_paths.default_paths()
-    try:
-        proc, table = _proc_first(ctx, proc, table, port is not None)
-        proc = proc or DEFAULT_PROC
-        target = port if port is not None else schema_view.resolve_port(paths, proc, base_port)
-    except UqsError as exc:
-        _die(exc)
+    if tunnel is not None and getattr(ctx.get_parameter_source("host"), "name", None) != "DEFAULT":
+        _die(UqsError("--tunnel names the machine to read - give --tunnel or --host, not both"))
         return
+    with contextlib.ExitStack() as scope:
+        paths = stack_paths.default_paths()
+        try:
+            proc, table = _proc_first(ctx, proc, table, port is not None)
+            proc = proc or DEFAULT_PROC
+            if tunnel is not None:
+                via = scope.enter_context(
+                    via_target.connect(
+                        tunnel, proc if port is None else None, port, base_port, user, passwd
+                    )  # fmt: skip
+                )
+                host, target = via_target.LOOPBACK, via.port
+            else:
+                target = (
+                    port if port is not None else schema_view.resolve_port(paths, proc, base_port)
+                )
+        except UqsError as exc:
+            _die(exc)
+            return
 
-    where = f"{proc}" if port is None else f"port {target}"
-    creds = {"user": user, "passwd": passwd}
+        where = f"{proc}" if port is None else f"port {target}"
+        creds = {"user": user, "passwd": passwd}
 
-    # A pattern describes EVERY match, one table per rendered block. An exact
-    # name is just a pattern that matches itself, so there is one code path
-    # rather than two - and `schema fx_orderbook` behaves identically either way.
-    try:
-        matched = schema_view.match_tables(table, target, host=host, **creds) if table else []
-        if table and not matched:
-            available = schema_view.table_names(target, host=host, **creds)
-            raise UqsError(
-                f"nothing matches {table!r} on {where} - it has: {', '.join(sorted(available))}"
+        # A pattern describes EVERY match, one table per rendered block. An exact
+        # name is just a pattern that matches itself, so there is one code path
+        # rather than two - and `schema fx_orderbook` behaves identically either way.
+        try:
+            matched = schema_view.match_tables(table, target, host=host, **creds) if table else []
+            if table and not matched:
+                available = schema_view.table_names(target, host=host, **creds)
+                raise UqsError(
+                    f"nothing matches {table!r} on {where} - it has: {', '.join(sorted(available))}"
+                )
+            rows = (
+                [
+                    {"table": name, **r}
+                    for name in matched
+                    for r in schema_view.columns(name, target, host=host, **creds)
+                ]
+                if table
+                else schema_view.overview(target, host=host, **creds)
             )
-        rows = (
-            [
-                {"table": name, **r}
-                for name in matched
-                for r in schema_view.columns(name, target, host=host, **creds)
-            ]
-            if table
-            else schema_view.overview(target, host=host, **creds)
-        )
-    except UqsError as exc:
-        _die(exc)
-        return
-    except Exception as exc:  # kola raises its own connect/query errors
-        _die(UqsError(f"could not read the schema from {where} ({target}): {exc}"))
-        return
-    # --export writes what it always has: a TABLE's columns, without the table's name
-    exported = [{k: v for k, v in r.items() if k != "table"} for r in rows] if table else rows
-    if as_json:
-        emit({"process": proc if port is None else None, "port": target,
-              "columns" if table else "tables": rows})  # fmt: skip
-        _export(exported, export)
-        return
+        except UqsError as exc:
+            _die(exc)
+            return
+        except Exception as exc:  # kola raises its own connect/query errors
+            _die(UqsError(f"could not read the schema from {where} ({target}): {exc}"))
+            return
+        # --export writes what it always has: a TABLE's columns, without the table's name
+        exported = [{k: v for k, v in r.items() if k != "table"} for r in rows] if table else rows
+        if as_json:
+            emit({"process": proc if port is None else None, "port": target,
+                  "columns" if table else "tables": rows})  # fmt: skip
+            _export(exported, export)
+            return
 
-    def column_table(name: str) -> Table:
-        rendered = Table(title=f"{name} on {where}")
-        rendered.add_column("column")
-        rendered.add_column("type")
-        rendered.add_column("q", justify="center")
-        rendered.add_column("attribute")
-        for row in schema_view.columns(name, target, host=host, **creds):
-            # A general column carries no type information at all, so it
-            # is dimmed rather than presented alongside the ones that do.
-            style = "dim" if row["type"] == "general" else ""
-            rendered.add_row(
-                row["column"],
-                f"[{style}]{row['type']}[/]" if style else row["type"],
-                row["q"],
-                f"[green]{row['attribute']}[/]" if row["attribute"] else "",
-            )
-        return rendered
+        def column_table(name: str) -> Table:
+            rendered = Table(title=f"{name} on {where}")
+            rendered.add_column("column")
+            rendered.add_column("type")
+            rendered.add_column("q", justify="center")
+            rendered.add_column("attribute")
+            for row in schema_view.columns(name, target, host=host, **creds):
+                # A general column carries no type information at all, so it
+                # is dimmed rather than presented alongside the ones that do.
+                style = "dim" if row["type"] == "general" else ""
+                rendered.add_row(
+                    row["column"],
+                    f"[{style}]{row['type']}[/]" if style else row["type"],
+                    row["q"],
+                    f"[green]{row['attribute']}[/]" if row["attribute"] else "",
+                )
+            return rendered
 
-    def overview_table(rows: list[dict]) -> Table:
-        rendered = Table(title=f"tables on {where} (port {target})")
-        rendered.add_column("table")
-        rendered.add_column("rows", justify="right")
-        rendered.add_column("columns", justify="right")
-        for row in rows:
-            # Zero rows is not an error - an empty table is the normal state
-            # for one nothing has published into yet - but it is the thing a
-            # reader is usually looking for, so it is not left to be counted.
-            count = "[dim]0[/]" if row["rows"] == 0 else f"{row['rows']:,}"
-            rendered.add_row(row["table"], count, str(row["columns"]))
-        return rendered
+        def overview_table(rows: list[dict]) -> Table:
+            rendered = Table(title=f"tables on {where} (port {target})")
+            rendered.add_column("table")
+            rendered.add_column("rows", justify="right")
+            rendered.add_column("columns", justify="right")
+            for row in rows:
+                # Zero rows is not an error - an empty table is the normal state
+                # for one nothing has published into yet - but it is the thing a
+                # reader is usually looking for, so it is not left to be counted.
+                count = "[dim]0[/]" if row["rows"] == 0 else f"{row['rows']:,}"
+                rendered.add_row(row["table"], count, str(row["columns"]))
+            return rendered
 
-    # The browser's re-read (R, and the --every timer) asks the process again
-    # rather than replaying `rows`, which is what makes it worth watching.
-    every_s = every or None
-    if table:
-        for name in matched:
+        # The browser's re-read (R, and the --every timer) asks the process again
+        # rather than replaying `rows`, which is what makes it worth watching.
+        every_s = every or None
+        if table:
+            for name in matched:
+                _show(
+                    column_table(name),
+                    interactive,
+                    refresh=lambda name=name: column_table(name),
+                    every=every_s,
+                )
+            if len(matched) > 1:
+                console.print(f"[dim]{len(matched)} tables matched {table!r}.[/]")
+        else:
             _show(
-                column_table(name),
+                overview_table(rows),
                 interactive,
-                refresh=lambda name=name: column_table(name),
+                refresh=lambda: overview_table(schema_view.overview(target, host=host, **creds)),
                 every=every_s,
             )
-        if len(matched) > 1:
-            console.print(f"[dim]{len(matched)} tables matched {table!r}.[/]")
-    else:
-        _show(
-            overview_table(rows),
-            interactive,
-            refresh=lambda: overview_table(schema_view.overview(target, host=host, **creds)),
-            every=every_s,
-        )
-        empty = [r["table"] for r in rows if r["rows"] == 0]
-        if empty:
-            console.print(
-                f"[dim]{len(empty)} empty: {', '.join(empty)}. Declared and carrying "
-                "nothing - normal before a feed publishes, a gap afterwards.[/]"
-            )
-    _export(exported, export)
+            empty = [r["table"] for r in rows if r["rows"] == 0]
+            if empty:
+                console.print(
+                    f"[dim]{len(empty)} empty: {', '.join(empty)}. Declared and carrying "
+                    "nothing - normal before a feed publishes, a gap afterwards.[/]"
+                )
+        _export(exported, export)

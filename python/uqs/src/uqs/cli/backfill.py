@@ -15,9 +15,10 @@ import typer
 
 from uqs import timerange
 from uqs.cli import backfill_attached, completion, safety
+from uqs.cli.json_out import emit
 from uqs.cli.pipelines import needs_pipelines
 from uqs.cli.range_options import DateOpt, LastOpt, RangeFromOpt, RangeToOpt
-from uqs.cli.renames import renamed
+from uqs.cli.renames import renamed, warn_renamed
 from uqs.cli.safety import ChangesState
 from uqs.cli.shared import (
     JOB_OPERATIONS_PANEL,
@@ -84,9 +85,9 @@ def backfill(
         typer.Option(
             "--mode",
             help="validate: check the worker and range, open nothing. plan: also list the "
-            "windows a run would fetch, from the ledgers, read-only. dry-run: also fetch and "
-            "transform, and write nothing. run (the default): all of it",
-            autocompletion=completion.choices(*run_modes.MODES),
+            "windows a run would fetch, from the ledgers, read-only. run (the default): all of "
+            "it. A dry run - fetch and transform, write nothing - is --dry-run",
+            autocompletion=completion.choices(*(m for m in run_modes.MODES if m != "dry-run")),
         ),
     ] = None,
     dry_run: Annotated[
@@ -124,7 +125,7 @@ def backfill(
             "--writer",
             metavar="HOST:PORT",
             help="With --attach: extract here and send each window to the receiver "
-            "`uqs job receive` started on the stack's machine, which writes its HDB (#1650)",
+            "`uqs job receiver start` started on the stack's machine, which writes its HDB (#1650)",
         ),
     ] = None,
     force: Annotated[
@@ -141,7 +142,11 @@ def backfill(
     ] = False,
     as_json: Annotated[
         bool,
-        typer.Option("--json", help="With --attach: print the plan as JSON"),
+        typer.Option(
+            "--json",
+            help="Print one JSON document on stdout instead: what started (with --wait, its "
+            "outcome) - or, with --attach, the admission plan",
+        ),
     ] = False,
     port: BasePortOpt = None,
     trace: Annotated[
@@ -213,6 +218,9 @@ def backfill(
             )
         )
         return
+    if mode == "dry-run" and not dry_run:  # one spelling of a dry run (#1858)
+        warn_renamed("--mode dry-run", "--dry-run")
+        dry_run = True
     if dry_run:
         if mode not in (None, "dry-run"):
             _die(UqsError(f"--dry-run is --mode dry-run: not with --mode {mode}"))
@@ -223,9 +231,6 @@ def backfill(
         return
     if writer is not None and attach is None:
         _die(UqsError("--writer is for --attach: it names the receiver of an attached destination"))
-        return
-    if as_json and attach is None:
-        _die(UqsError("--json is for --attach: it prints the attached admission plan"))
         return
     if wait and mode in run_modes.READ_ONLY_MODES:
         _die(UqsError(f"--wait has nothing to wait for with --mode {mode}: it writes no status"))
@@ -276,19 +281,32 @@ def backfill(
             on_conflict=on_conflict,
             mode=mode,
             fixture=fixture,
+            **({"capture": True} if as_json else {}),
         )
-        if result.returncode != 0 or not wait:
-            raise typer.Exit(code=result.returncode)
         procname = stack_backfill.procname_for(worker)
-        console.print(
-            f"[dim]waiting for {procname}'s outcome (Ctrl-C stops waiting, not the run)[/]"
-        )
+        started = {
+            "worker": worker, "process": procname, "source_version": resolved,
+            "range_from": bound_from.isoformat(), "range_to": bound_to.isoformat(),
+            "mode": mode or "run", "started": result.returncode == 0,
+            "output": (result.stdout or "").splitlines() if as_json else [],
+        }  # fmt: skip
+        if result.returncode != 0 or not wait:
+            if as_json:
+                emit(started)
+            raise typer.Exit(code=result.returncode)
+        if not as_json:
+            console.print(
+                f"[dim]waiting for {procname}'s outcome (Ctrl-C stops waiting, not the run)[/]"
+            )
         state, code, error = stack_backfill_wait.wait_for_outcome(
             paths, procname, resolved, bound_from, bound_to, launched_at, base_port=port
         )
     except UqsError as exc:
         _die(exc)
         return
+    if as_json:
+        emit({**started, "state": state, "exit": code, "error": error})
+        raise typer.Exit(code=code)
     colour = "green" if code == 0 else "red"
     console.print(f"[{colour}]{procname}: {state}[/] - `uqs logs {procname}` for its log")
     if error:

@@ -143,6 +143,17 @@ RENAMED_AFTER: dict[str, frozenset[str]] = {
             "uqs data seed --tables",
             "uqs deploy check --tables",
             "uqs data alter --rename OLD=NEW",
+            # #1858: every `uqs list` kind is its noun's; the receiver a noun
+            "uqs list",
+            "uqs list processes",
+            "uqs list profiles",
+            "uqs list fields",
+            "uqs list env",
+            "uqs list dependencies",
+            "uqs list backfills",
+            "uqs job receive",
+            "uqs config set PROC FIELD VALUE",
+            "uqs job backfill --mode dry-run",
         }
     ),
 }

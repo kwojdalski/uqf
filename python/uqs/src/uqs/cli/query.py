@@ -87,9 +87,7 @@ def _proc_port(procname: str, base_port: int | None) -> int:
     paths = _paths()
     ports = listing.configured_ports(paths, base_port=base_port)
     if procname not in ports:
-        raise UqsError(
-            f"{procname} is not a declared process - `uqs list processes` shows them all"
-        )
+        raise UqsError(f"{procname} is not a declared process - `uqs process list` shows them all")
     # Advisory: a check that cannot answer does not stop the call, since the
     # connection will say for itself whether anything is listening.
     try:

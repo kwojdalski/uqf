@@ -79,6 +79,15 @@ KEPT = {
         "`deploy verify`: a rollback's target"
     ),
     ("uqs job runs list --help", "job runs status"): "the migration notice in its help",
+    ("python/uqs/src/uqs/cli/backfill_receive.py", "job receive"): (
+        "`job receive --stop`'s own notice that it is `job receiver stop` now (#1858)"
+    ),
+    ("python/uqs/src/uqs/cli/lists.py", "list"): (
+        "the hidden `uqs list KIND`'s own notice naming the noun each kind moved to (#1858)"
+    ),
+    ("python/uqs/src/uqs/cli/target.py", "list"): (
+        "the refusal of `uqs --target NAME list targets`, the old spelling, by name"
+    ),
 }
 
 #: A q string literal, escapes included.

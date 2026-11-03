@@ -1,6 +1,6 @@
 """The two halves of a backfill whose HDB is on another machine (#1650).
 
-`uqs job receive --contract ID --attach NAME --listen-port P`, on the stack's machine,
+`uqs job receiver start --contract ID --attach NAME --listen-port P`, on the stack's machine,
 starts the receiver for a receiver contract approved there (`uqs job attachment contract`);
 `uqs job backfill WORKER --attach NAME --writer HOST:P ...`, on the source's
 machine, extracts and sends to it. What each decides is in
@@ -16,7 +16,7 @@ from typing import Annotated
 import typer
 
 from uqs.attach import backfill_remote, backfill_run, config, service
-from uqs.cli.renames import renamed
+from uqs.cli.renames import alias_command, renamed, warn_renamed
 from uqs.cli.safety import ChangesState, dry_run_note
 from uqs.cli.shared import JOB_OPERATIONS_PANEL, _die, _paths, console, job_app
 from uqs.paths import UqsError
@@ -109,26 +109,96 @@ def extract(
     raise typer.Exit(code=code)
 
 
-@job_app.command(
-    "receive",
-    rich_help_panel=JOB_OPERATIONS_PANEL,
-    cls=renamed({"--port": "--listen-port"}, ChangesState),
+#: `uqs job receiver start|stop` (#1858): the receiver is a noun with two
+#: verbs, as a connector's is, where `job receive --stop` turned the verb into
+#: its opposite with a flag. `job receive` stays one release, hidden.
+receiver_app = typer.Typer(
+    no_args_is_help=True,
+    add_completion=False,
+    help="Receivers: a backfill's HDB writer on the stack's machine, for an extractor on "
+    "another - start one, stop them.",
 )
-def receive(
-    attach: Annotated[
-        str, typer.Option("--attach", help="The saved, verified attachment whose HDB it writes")
-    ],
-    contract: Annotated[
-        str | None,
+job_app.add_typer(receiver_app, name="receiver", rich_help_panel=JOB_OPERATIONS_PANEL)
+
+AttachmentOpt = Annotated[
+    str, typer.Option("--attach", help="The saved, verified attachment whose HDB it writes")
+]
+ContractOpt = Annotated[
+    str | None,
+    typer.Option(
+        "--contract",
+        help="The identity of the receiver contract approved for the attachment "
+        "(`uqs job attachment contract approve`); a unique prefix will do",
+    ),
+]
+ListenPortOpt = Annotated[
+    int | None, typer.Option("--listen-port", help="The port the extractor connects to")
+]
+ReceiverJson = Annotated[bool, typer.Option("--json", help="Print what started as JSON")]
+
+
+@receiver_app.command("start", cls=ChangesState)
+def receiver_start(
+    attach: AttachmentOpt,
+    contract: ContractOpt = None,
+    port: ListenPortOpt = None,
+    dry_run: Annotated[
+        bool,
         typer.Option(
-            "--contract",
-            help="The identity of the receiver contract approved for the attachment "
-            "(`uqs job attachment contract approve`); a unique prefix will do",
+            "--dry-run",
+            "-n",
+            help="Admit the destination and show what it would serve; start nothing",
         ),
-    ] = None,
-    port: Annotated[
-        int | None, typer.Option("--listen-port", help="The port the extractor connects to")
-    ] = None,
+    ] = False,
+    as_json: ReceiverJson = False,
+) -> None:
+    """Start the receiver for a backfill extracted on another machine (#1650).
+
+    Run on the STACK's machine, which needs no code of the job: it serves the
+    receiver contract --contract that `uqs job attachment contract approve` bound to the
+    attachment here (#1717), and takes the row limit and the permitted conflict
+    policies from that approval. It admits the attachment's destination against the
+    live stack as `uqs job backfill --attach` does - the pinned HDB, its writers and
+    readers, the end-of-day fence - then listens on --listen-port for the extractor
+    (`uqs job backfill WORKER --attach NAME --writer THIS-HOST:PORT ...` on the
+    source's machine). Every batch is checked against the contract - dataset,
+    columns and types, window column, row key, partition, conflict policy - and
+    committed through the fenced HDB writer; the readers are asked to reload as rows
+    finish. It authenticates the attachment's stack user, and stops itself where the
+    end-of-day fence begins. `uqs job receiver stop` stops it.
+    """
+    _start(attach, contract, port, dry_run, as_json)
+
+
+@receiver_app.command("stop", cls=ChangesState)
+def receiver_stop(
+    attach: Annotated[
+        str, typer.Option("--attach", help="The attachment whose receivers on this machine stop")
+    ],
+    dry_run: Annotated[
+        bool,
+        typer.Option("--dry-run", "-n", help="Name the receivers that would stop; stop nothing"),
+    ] = False,
+    as_json: Annotated[bool, typer.Option("--json", help="Print what stopped as JSON")] = False,
+) -> None:
+    """Stop this machine's receivers for an attachment, so a detach can go
+    ahead; an extractor then fails its next window without covering it."""
+    stopped = backfill_remote.stop_receivers(attach, dry_run=dry_run)
+    names = ", ".join(f"{r['worker']} (pid {r['pid']})" for r in stopped) or "none was running"
+    if as_json:
+        typer.echo(json.dumps({"stopped": stopped, "dry_run": dry_run}, indent=2, sort_keys=True))
+    elif dry_run:
+        console.print(f"would stop: {names}", markup=False)
+        console.print(dry_run_note())
+    else:
+        console.print(f"stopped: {names}", markup=False)
+    raise typer.Exit(code=0)
+
+
+def receive(
+    attach: AttachmentOpt,
+    contract: ContractOpt = None,
+    port: ListenPortOpt = None,
     stop: Annotated[
         bool,
         typer.Option(
@@ -145,34 +215,18 @@ def receive(
             help="Admit the destination and show what it would serve; start nothing",
         ),
     ] = False,
-    as_json: Annotated[bool, typer.Option("--json", help="Print what started as JSON")] = False,
+    as_json: ReceiverJson = False,
 ) -> None:
-    """Start the receiver for a backfill extracted on another machine (#1650).
-
-    Run on the STACK's machine, which needs no code of the job: it serves the
-    receiver contract --contract that `uqs job attachment contract approve` bound to the
-    attachment here (#1717), and takes the row limit and the permitted conflict
-    policies from that approval. It admits the attachment's destination against the
-    live stack as `uqs job backfill --attach` does - the pinned HDB, its writers and
-    readers, the end-of-day fence - then listens on --listen-port for the extractor
-    (`uqs job backfill WORKER --attach NAME --writer THIS-HOST:PORT ...` on the
-    source's machine). Every batch is checked against the contract - dataset,
-    columns and types, window column, row key, partition, conflict policy - and
-    committed through the fenced HDB writer; the readers are asked to reload as rows
-    finish. It authenticates the attachment's stack user, and stops itself where the
-    end-of-day fence begins.
-    """
+    """`uqs job receive`, before #1858: `job receiver start`, or with --stop
+    `job receiver stop`."""
     if stop:
-        if dry_run:
-            _die(UqsError("--stop with --dry-run: give one of them"))
-            return
-        stopped = backfill_remote.stop_receivers(attach)
-        names = ", ".join(f"{r['worker']} (pid {r['pid']})" for r in stopped) or "none was running"
-        if as_json:
-            typer.echo(json.dumps({"stopped": stopped}, indent=2, sort_keys=True))
-        else:
-            console.print(f"stopped: {names}", markup=False)
-        raise typer.Exit(code=0)
+        warn_renamed("uqs job receive --stop", "uqs job receiver stop")
+        receiver_stop(attach, dry_run, as_json)
+    _start(attach, contract, port, dry_run, as_json)
+
+
+def _start(attach: str, contract: str | None, port: int | None, dry_run: bool, as_json: bool):
+    """Admit the destination and start the receiver - `job receiver start`."""
     if port is None:
         _die(
             UqsError(
@@ -217,3 +271,12 @@ def receive(
             markup=False,
         )
     raise typer.Exit(code=0)
+
+
+alias_command(
+    job_app,
+    "receive",
+    "uqs job receiver start",
+    receive,
+    cls=renamed({"--port": "--listen-port"}, ChangesState),
+)

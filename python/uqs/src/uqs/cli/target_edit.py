@@ -12,6 +12,7 @@ import shlex
 import subprocess
 import tempfile
 from pathlib import Path
+from typing import Annotated
 
 import typer
 
@@ -38,14 +39,36 @@ def _strip_note(text: str) -> str:
     return "".join(lines)
 
 
+#: Editors that open a file at `+LINE`, as `uqs target edit NAME` asks.
+_AT_LINE = frozenset({"vi", "vim", "nvim", "view", "nano", "emacs", "micro", "kak", "hx"})
+
+
 @target_app.command("edit", cls=ChangesState)
-def edit(dry_run: DryRun = False) -> None:
+def edit(
+    name: Annotated[
+        str | None,
+        typer.Argument(
+            metavar="[NAME]",
+            help="Open the file at this target's table, as every other `target` verb names "
+            "one; the whole file is still edited and checked",
+            show_default=False,
+        ),
+    ] = None,
+    dry_run: DryRun = False,
+) -> None:
     """Edit the file in $VISUAL or $EDITOR: a copy, checked when the editor
     exits and only then swapped in. An invalid copy reopens with the reason
-    on top - or is discarded, leaving the file as it was."""
+    on top - or is discarded, leaving the file as it was. NAME opens it at
+    that target's table (#1858)."""
     root = repo_root()
     path = targets.declaration_path(root)
     original = path.read_text() if path.is_file() else ""
+    at = None
+    if name is not None:
+        at = targets.line_of(original, f"{targets.TARGETS}.{name}")
+        if at is None:
+            _die(UqsError(f"no target {name!r} declared as a table in {path}"))
+            return
     text, problem = original, None
     with tempfile.TemporaryDirectory(prefix="uqs-target-edit-") as scratch:
         copy = Path(scratch) / path.name
@@ -55,7 +78,10 @@ def edit(dry_run: DryRun = False) -> None:
                 note += f"{_EDIT_NOTE}fix it and save, or empty the file to discard this edit\n"
             copy.write_text(note + text)
             try:
-                done = subprocess.run([*_editor(), str(copy)], check=False)
+                editor = _editor()
+                line = None if at is None else at + note.count("\n")
+                where = [f"+{line}"] if line and Path(editor[0]).name in _AT_LINE else []
+                done = subprocess.run([*editor, *where, str(copy)], check=False)
             except OSError as exc:
                 _die(UqsError(f"could not run the editor ({exc}) - set $VISUAL or $EDITOR"))
                 return

@@ -20,7 +20,7 @@ from rich.table import Table
 from uqs import timerange
 from uqs.cli import completion
 from uqs.cli.hdb_scope import tables_given
-from uqs.cli.range_options import DateOpt, RangeFromOpt, RangeToOpt
+from uqs.cli.range_options import DateOpt, LastOpt, RangeFromOpt, RangeToOpt
 from uqs.cli.renames import renamed
 from uqs.cli.safety import ChangesState
 from uqs.cli.shared import (
@@ -36,12 +36,15 @@ from uqs.stack import replay as stack_replay
 app.add_typer(data_app, name="data")
 
 
-def _day(day: str | None, range_from: str | None, range_to: str | None) -> str | None:
+def _day(
+    day: str | None, range_from: str | None, range_to: str | None, last: str | None = None
+) -> str | None:
     """The one day to replay, as the log directories spell it (2026.09.23), or
-    None for the plant's newest. A log is one day's, so the range must be one."""
-    if day is None and range_from is None and range_to is None:
+    None for the plant's newest. A log is one day's, so the range must be one -
+    given any way a range is given, `--last` too (#1858)."""
+    if day is None and range_from is None and range_to is None and last is None:
         return None
-    window = timerange.resolve(range_from, range_to, day)
+    window = timerange.resolve(range_from, range_to, day, last)
     return window.day("data replay replays").strftime("%Y.%m.%d")
 
 
@@ -59,6 +62,7 @@ def replay(
     day: DateOpt = None,
     range_from: RangeFromOpt = None,
     range_to: RangeToOpt = None,
+    last: LastOpt = None,
     dir_: Annotated[
         Path | None,
         typer.Option(
@@ -118,7 +122,7 @@ def replay(
     try:
         plan = stack_replay.plan(
             procname=proc,
-            date=_day(day, range_from, range_to),
+            date=_day(day, range_from, range_to, last),
             log_dir=dir_,
             hdb_dir=hdb,
             schema_file=schema,

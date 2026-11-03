@@ -729,7 +729,7 @@ instead:
 ```bash
 uqs job backfill piggybank_ledger_backfill --attach pb-uat \
     --from 2026-10-01 --to 2026-10-02 --source-version historical-v1 \
-    --on-conflict replace --mode plan          # then --mode dry-run, then run
+    --on-conflict replace --mode plan          # then --dry-run, then run
 ```
 
 `validate` resolves the destination offline; `plan` also asks the stack
@@ -759,12 +759,12 @@ declarations on the extraction machine and approved by the stack's operator.
 The Piggybank ledger is extracted on `etl-host`, which has the source's ODBC
 driver and credentials, and written into the HDB of the stack on `uat-host`:
 
-  |            | `etl-host` (extraction)                                                                             | `uat-host` (the stack)                                                                                |
-  | ---        | ---                                                                                                 | ---                                                                                                   |
-  | installed  | uqf, KDB-X, the Piggybank bundle (`uqs job install ../piggybank`): its source, transform and worker | uqf and KDB-X only: no Piggybank source, transform or worker                                          |
-  | configured | the source's credential (`UQF_SOURCE_CRED_...`); the attachment `pb-uat`                            | the attachment `pb-uat`, copied from `etl-host`; the approved contract; the stack's password variable |
-  | runs       | `uqs job backfill --attach pb-uat --writer uat-host:7090`                                           | the TorQ stack, and `uqs job receive`                                                                 |
-  | holds      | coverage, the checkpoint and the run ledger                                                         | the HDB and the receiver's batch journal                                                              |
+  |            | `etl-host` (extraction)                                                                             | `uat-host` (the stack)                                                                                       |
+  | ---        | ---                                                                                                 | ---                                                                                                          |
+  | installed  | uqf, KDB-X, the Piggybank bundle (`uqs job install ../piggybank`): its source, transform and worker | uqf and KDB-X only: no Piggybank source, transform or worker                                                 |
+  | configured | the source's credential (`UQF_SOURCE_CRED_...`); the attachment `pb-uat`                            | the attachment `pb-uat`, copied from `etl-host`; the approved contract; the stack's password variable        |
+  | runs       | `uqs job backfill --attach pb-uat --writer uat-host:7090`                                           | the TorQ stack, and `uqs job receiver start`                                                                 |
+  | holds      | coverage, the checkpoint and the run ledger                                                         | the HDB and the receiver's batch journal                                                                     |
 
 ```bash
 # etl-host: attach (this records the stack, its HDB and the table), then export
@@ -782,7 +782,7 @@ scp ledger.contract.json uat-host:
 # uat-host: approve the contract for the attachment, then start the receiver
 uqs job attachment contract approve ledger.contract.json --attach pb-uat --on-conflict upsert --on-conflict replace
 uqs job attachment contract list --attach pb-uat          # its identity, e.g. 3f9a0c2e7b1d4a56
-uqs job receive --contract 3f9a0c2e --attach pb-uat --listen-port 7090
+uqs job receiver start --contract 3f9a0c2e --attach pb-uat --listen-port 7090
 
 # etl-host: extract, and send each window to the receiver
 uqs job backfill piggybank_ledger_backfill --attach pb-uat --writer uat-host:7090 \
@@ -886,7 +886,7 @@ replaces itself, and a committed batch answers `duplicate` at its first chunk.
 
 A running receiver holds the attachment's owner record on the stack's machine,
 so `uqs job attachment remove` there refuses while it runs.
-`uqs job receive --attach NAME --stop` stops it. An extractor elsewhere then
+`uqs job receiver stop --attach NAME` stops it. An extractor elsewhere then
 fails its next window without covering it, and the next run, once a receiver is
 back, sends it again.
 
@@ -1098,9 +1098,9 @@ asked again, and the readiness record advances only when each has answered.
 
 ### Seeing what happened
 
-- `uqs list backfills` - per destination: attachment, worker, state (`running`,
-  `completed`, ...), outcome, whether the rows are queryable, the log, and what
-  to do next when they are not.
+- `uqs job attachment status` - per destination: attachment, worker, state
+  (`running`, `completed`, ...), outcome, whether the rows are queryable, the
+  log, and what to do next when they are not.
 - `uqs logs --attach NAME --worker WORKER [-f]` - a run's log, coloured as a
   process's is, with `--lines` and `--level`. It reads the latest run of that
   worker (or `<dataset>.receiver`) across the attachment's destinations, and
@@ -1157,14 +1157,14 @@ would need `--network-address` for this host to be the client.
 Each scenario checks its effect on the stack's own processes, through their
 published ports, not through `uqs`:
 
-  | Scenario                                                                                  | Checked on the stack                                                                                                                                                                                                                                                                                                                                                                               |
-  | --------------------------------------------------------------------------                | --------------------------------------------------------------------------                                                                                                                                                                                                                                                                                                                         |
-  | a publisher on uat-client, attached `--runtime-only`                                      | the table on stp1, its rows counted there and in rdb1, a handle back from discovery                                                                                                                                                                                                                                                                                                                |
-  | a publisher name the stack cannot resolve: `ADVERTISED_UNRESOLVABLE`                      | nothing registered, no ownership record                                                                                                                                                                                                                                                                                                                                                            |
-  | a name that resolves to an address nothing answers on: `PUBLISHER_UNREACHABLE_FROM_STACK` | discovery lists the publisher with no handle; the publisher is stopped and the attachment back to `applied`                                                                                                                                                                                                                                                                                        |
-  | `uqs stop` of the publisher on uat-client, then the tickerplant, rdb and wdb restarted    | the publisher gone from uat-client while every stack process still answers; then the table gone; `--dry-run` reports `registration-lost`; `uqs job attachment add` registers it again and rows flow                                                                                                                                                                                                |
-  | a bare `uqs start` after that restart                                                     | refused, naming the re-apply: the start path re-asks the stack ([#1673](https://github.com/kwojdalski/uqf/pull/1673))                                                                                                                                                                                                                                                                              |
-  | `uqs job receive` on uat-stack, `uqs job backfill --writer` on uat-client                 | uat-stack has no copy of the bundle: the contract is exported on uat-client and approved on uat-stack. The day's rows counted on uat-stack's disk, coverage on uat-client, a rerun that writes nothing, no HDB on uat-client. hdb1 serves them where it maps a partitioned HDB; PeachQ's maps none, so there the run ends `written_not_queryable` with the reader's failure reported apart         |
+  | Scenario                                                                                         | Checked on the stack                                                                                                                                                                                                                                                                                                                                                                               |
+  | --------------------------------------------------------------------------                       | --------------------------------------------------------------------------                                                                                                                                                                                                                                                                                                                         |
+  | a publisher on uat-client, attached `--runtime-only`                                             | the table on stp1, its rows counted there and in rdb1, a handle back from discovery                                                                                                                                                                                                                                                                                                                |
+  | a publisher name the stack cannot resolve: `ADVERTISED_UNRESOLVABLE`                             | nothing registered, no ownership record                                                                                                                                                                                                                                                                                                                                                            |
+  | a name that resolves to an address nothing answers on: `PUBLISHER_UNREACHABLE_FROM_STACK`        | discovery lists the publisher with no handle; the publisher is stopped and the attachment back to `applied`                                                                                                                                                                                                                                                                                        |
+  | `uqs stop` of the publisher on uat-client, then the tickerplant, rdb and wdb restarted           | the publisher gone from uat-client while every stack process still answers; then the table gone; `--dry-run` reports `registration-lost`; `uqs job attachment add` registers it again and rows flow                                                                                                                                                                                                |
+  | a bare `uqs start` after that restart                                                            | refused, naming the re-apply: the start path re-asks the stack ([#1673](https://github.com/kwojdalski/uqf/pull/1673))                                                                                                                                                                                                                                                                              |
+  | `uqs job receiver start` on uat-stack, `uqs job backfill --writer` on uat-client                 | uat-stack has no copy of the bundle: the contract is exported on uat-client and approved on uat-stack. The day's rows counted on uat-stack's disk, coverage on uat-client, a rerun that writes nothing, no HDB on uat-client. hdb1 serves them where it maps a partitioned HDB; PeachQ's maps none, so there the run ends `written_not_queryable` with the reader's failure reported apart         |
 
 The lane found that a publisher attached to a stack elsewhere looked for
 discovery on its own machine; the discovery address above is the fix. It also

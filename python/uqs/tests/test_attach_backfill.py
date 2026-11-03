@@ -387,11 +387,11 @@ def test_cli_plan_prints_the_report_and_json_matches(world, monkeypatch):
     assert json.loads(as_json.output)["reload_targets"] == [{"procname": "hdb1", "port": 6003}]
 
 
-def test_json_without_attach_is_refused(world):
-    result = invoke(
-        "--from", "2026-09-11", "--to", "2026-09-13", "--source-version", "v1", "--json"
-    )
-    assert result.exit_code != 0 and "--json is for --attach" in world.errors[-1]
+def test_json_without_attach_reports_the_local_run(world):
+    """#1858: --json on the local path prints what started, as one document -
+    no longer refused for want of --attach."""
+    invoke("--from", "2026-09-11", "--to", "2026-09-13", "--source-version", "v1", "--json")
+    assert not any("--json is for --attach" in e for e in world.errors)
 
 
 # ----------------------------------------------------- the hdb_reader operation, on a real q

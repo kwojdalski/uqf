@@ -17,20 +17,34 @@ from pathlib import Path
 from typing import Annotated
 
 import typer
+from rich.table import Table
 
 from uqs.attach import receiver_contract
 from uqs.cli import completion
 from uqs.cli.attachment import attachment_app
 from uqs.cli.renames import alias_command, renamed
 from uqs.cli.safety import ChangesState, ReadOnly, dry_run_note
-from uqs.cli.shared import JOB_OPERATIONS_PANEL, _die, _paths, console, job_app
+from uqs.cli.shared import (
+    JOB_OPERATIONS_PANEL,
+    ExportOpt,
+    InteractiveOpt,
+    ReverseOpt,
+    SortOpt,
+    _die,
+    _export,
+    _paths,
+    _show,
+    _sorted_items,
+    console,
+    job_app,
+)
 from uqs.paths import UqsError
 
 contract_app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
     help="Receiver contracts: export one where a worker is, approve it for an attachment "
-    "where its HDB is, list those approved - so `uqs job receive` writes the worker's rows "
+    "where its HDB is, list those approved - so `uqs job receiver start` writes the worker's rows "
     "without the worker's code.",
 )
 attachment_app.add_typer(contract_app, name="contract")
@@ -117,7 +131,7 @@ def approve(
     does not read, or altered since it was exported; an attachment that is not
     verified, does not publish the contract's dataset in the contract's shape, or
     pins no HDB here. The approval binds the contract to the attachment's
-    destination and stack user, and to the limits given here: `uqs job receive
+    destination and stack user, and to the limits given here: `uqs job receiver start
     --contract ID --attach NAME` then serves it, and refuses if the attachment
     has since been pointed at another HDB.
     """
@@ -139,7 +153,7 @@ def approve(
         f"({contract.dataset}) for attachment {attach}: "
         f"into {b['hdb_dir']}, writer {', '.join(b['users'])}, "
         f"policies {', '.join(b['conflict_policies'])}, at most {b['max_rows']} rows a message; "
-        f"`uqs job receive --contract {contract.identity} --attach {attach} "
+        f"`uqs job receiver start --contract {contract.identity} --attach {attach} "
         "--listen-port PORT` serves it",
         markup=False,
     )
@@ -150,28 +164,46 @@ def approve(
 @contract_app.command("list", cls=ReadOnly)
 def list_(
     attach: Annotated[str, typer.Option("--attach", help="The attachment whose approvals to list")],
+    export: ExportOpt = None,
+    sort: SortOpt = None,
+    reverse: ReverseOpt = False,
+    interactive: InteractiveOpt = False,
     as_json: Annotated[bool, typer.Option("--json", help="Print them as JSON")] = False,
 ) -> None:
-    """The receiver contracts approved for an attachment on this machine."""
+    """The receiver contracts approved for an attachment on this machine: one
+    row each, with every listing's flags (#1858); --json prints the records."""
     try:
         found = receiver_contract.records(attach)
+        rows = _sorted_items([_row(r) for r in found], sort, reverse)
     except UqsError as exc:
         _die(exc)
         return
+    _export(rows, export)
     if as_json:
+        order = {row["identity"]: i for i, row in enumerate(rows)}
+        found.sort(key=lambda r: order.get(r.get("contract", {}).get("identity"), 0))
         typer.echo(json.dumps(found, indent=2, sort_keys=True))
         return
     if not found:
         console.print(f"no contract is approved for attachment {attach}", markup=False)
         return
-    for r in found:
-        c, b = r.get("contract", {}), r.get("binding", {})
-        console.print(
-            f"{c.get('identity')}  {c.get('dataset')}"
-            f"  from {c.get('origin', {}).get('worker', '?')}"
-            f"  approved {b.get('approved_at')} by {b.get('approved_by')}",
-            markup=False,
-        )
+    table = Table(title=f"contracts approved for {attach} ({len(rows)})")
+    for col in rows[0]:
+        table.add_column(col)
+    for row in rows:
+        table.add_row(*(str(v) for v in row.values()))
+    _show(table, interactive)
+
+
+def _row(record: dict) -> dict:
+    c, b = record.get("contract", {}), record.get("binding", {})
+    return {
+        "identity": c.get("identity"),
+        "dataset": c.get("dataset"),
+        "worker": c.get("origin", {}).get("worker", "?"),
+        "approved_at": b.get("approved_at"),
+        "approved_by": b.get("approved_by"),
+    }
 
 
 for _verb, _fn in (("export", export), ("approve", approve), ("list", list_)):

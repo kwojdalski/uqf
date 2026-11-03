@@ -180,7 +180,7 @@ def worker_edges(
 def dependency_rows(pipelines: Iterable[Any] = PIPELINES) -> list[dict[str, str]]:
     """One row per (process, input table): who needs what, and who provides it.
 
-    The listing behind `uqs list dependencies`. Sorted by consumer so
+    The listing behind `uqs graph --upstream --offline`. Sorted by consumer so
     a process's inputs read together.
     """
     producers = producers_by_table(pipelines)

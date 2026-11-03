@@ -2,7 +2,7 @@
 
 End to end on real q processes, with the world test_attach_backfill_run builds: an upstream
 the worker reads, a scripted stack, a native-shaped HDB and a fake reader. The receiver runs
-as `uqs job receive` starts it, from a receiver contract exported from the worker and
+as `uqs job receiver start` starts it, from a receiver contract exported from the worker and
 approved for the attachment (#1717); the extractor as `uqs job backfill --attach --writer`
 does, under an attachment directory of its own, as it would be on another machine.
 """
@@ -236,7 +236,7 @@ def _accepting(port: int) -> bool:
 
 # ------------------------------------------------- the receiver's admission (#1650)
 #
-# `uqs job receive` admits the destination as a direct write does: a verified
+# `uqs job receiver start` admits the destination as a direct write does: a verified
 # attachment, the coordination rules, one owner at a time. Each refusal starts no
 # q and leaves no owner record.
 
