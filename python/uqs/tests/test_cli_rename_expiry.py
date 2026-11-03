@@ -83,6 +83,7 @@ HAND_KEPT: dict[str, Callable[[], bool]] = {
     # hidden since #1858, its own old spelling kept with it
     "uqs list --port": lambda: "--port" in _hidden("list").renames,
     "uqs job receive --port": lambda: "--port" in _hidden("job", "receive").renames,
+    "uqs job receive --attach": lambda: "--attach" in _hidden("job", "receive").renames,
     # old VALUES, which only the command's own code reads (#1858)
     "uqs config set PROC FIELD VALUE": lambda: "the old two-word" in inspect.getsource(config),
     "uqs job backfill --mode dry-run": lambda: (

@@ -4,7 +4,7 @@ Each noun that adds or removes a thing lists it too, under its own group -
 `uqs target list`, `uqs runtime list`, `uqs job list`, `uqs job attachment
 list` - and every list takes the same output flags: --json, --export, --sort,
 --reverse and -i. `uqs list KIND` stays for the stack's own tables (processes,
-profiles, fields, overrides, env, dependencies, backfills); a kind that moved
+profiles, fields, env, dependencies, backfills); a kind that moved
 to its noun still works there for one release, logging the command that lists
 it now.
 
@@ -58,6 +58,9 @@ MOVED = {
     "env": "uqs config env",
     "dependencies": "uqs graph --upstream --offline",
     "backfills": "uqs job attachment status",
+    # process_overrides.csv's settings: `override` is the checks a command
+    # bypasses (`uqs override list`), one word with one meaning (#1855)
+    "overrides": "uqs config list",
 }
 
 ReverseOpt = Annotated[
@@ -149,6 +152,12 @@ job_app.command("list", rich_help_panel=JOB_AUTHORING_PANEL, cls=safety.ReadOnly
 attachment_app.command("list", cls=safety.ReadOnly)(
     _noun_list("attachments", "List every attachment: its state, and whether its publisher runs.")
 )
+config_app.command("list", cls=safety.ReadOnly)(
+    _noun_list(
+        "overrides",
+        "List every process.csv field `uqs config set` changed: process_overrides.csv, by process.",
+    )
+)
 
 #: The stack's own tables, each under its noun (#1858): what `uqs list KIND`
 #: listed, a verb with seven kinds after every other noun listed its own.
@@ -197,7 +206,7 @@ config_app.command("env", cls=safety.ReadOnly)(
 attachment_app.command("status", cls=safety.ReadOnly)(
     _noun_list(
         "backfills",
-        "Every attached destination a `uqs job backfill --attach` has run into: its "
+        "Every attached destination a `uqs job backfill --attachment` has run into: its "
         "attachment, worker, state, outcome, whether its rows are queryable, and its latest log.",
     )
 )
@@ -254,10 +263,10 @@ def list_items(
 ) -> None:
     """List one of the stack's own tables - run with no argument to see the
     kinds: 'processes', 'profiles', 'fields' (process.csv's settable columns),
-    'overrides' (process_overrides.csv), 'env' (the resolved KDBBASEPORT,
-    KDBHDB, ...), 'dependencies' and 'backfills' (what each attached backfill
-    did). A noun's own records are listed by its group: `uqs target list`,
-    `uqs runtime list`, `uqs job list`, `uqs job attachment list`.
+    'env' (the resolved KDBBASEPORT, KDBHDB, ...), 'dependencies' and
+    'backfills' (what each attached backfill did). A noun's own records are
+    listed by its group: `uqs target list`, `uqs runtime list`, `uqs job
+    list`, `uqs job attachment list`, `uqs config list` (process_overrides.csv).
 
     `--sort` takes any column the chosen kind produces, which differ between
     kinds. The order reaches `--export` too, so an exported CSV matches what

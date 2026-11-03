@@ -42,7 +42,7 @@ The manifest records uv's name for the installation, the version, the
 python-build-standalone release (its BUILD file), the platform, the glibc its
 ELF files ask for, the interpreter, and every file's sha256.
 
-A release can also CARRY one (`uqs deploy build --python-runtime FILE`), at
+A release can also CARRY one (`uqs deploy build --python-component FILE`), at
 CARRIED, for scripts/install_release.py to make the .venv from on a server with
 no Python 3.14.
 """
@@ -190,7 +190,7 @@ def read_runtime(path: Path) -> PythonRuntime:
 
 
 def for_release(path: Path | str | None, target: dict) -> PythonRuntime | None:
-    """The runtime `uqs deploy build --python-runtime` carries, read whole and
+    """The runtime `uqs deploy build --python-component` carries, read whole and
     fitted to the release's `target`; None when none is given."""
     if path is None:
         return None

@@ -159,7 +159,7 @@ def test_logs_prints_the_lines(monkeypatch):
 
 def test_logs_attach_prints_the_runs_lines(monkeypatch):
     monkeypatch.setattr(attached_logs, "recent", lambda *_a, **_k: [{"message": "RESULT"}])
-    assert _doc(["logs", "--attach", "a"])["lines"][0]["message"] == "RESULT"
+    assert _doc(["logs", "--attachment", "a"])["lines"][0]["message"] == "RESULT"
 
 
 def test_schema_prints_tables_or_named_columns(monkeypatch):

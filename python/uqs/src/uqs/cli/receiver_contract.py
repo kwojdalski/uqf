@@ -23,7 +23,7 @@ from uqs.attach import receiver_contract
 from uqs.cli import completion
 from uqs.cli.attachment import attachment_app
 from uqs.cli.json_out import JSON_HELP
-from uqs.cli.renames import alias_command, renamed
+from uqs.cli.renames import ATTACHMENT, alias_command, renamed
 from uqs.cli.safety import ChangesState, ReadOnly, dry_run_note
 from uqs.cli.shared import (
     JOB_OPERATIONS_PANEL,
@@ -95,7 +95,11 @@ def export(
 
 #: A conflict policy is `--on-conflict` on every command; `--max-rows` was a
 #: row limit's name for something else, the rows one message carries (#1857).
-_APPROVE_RENAMES = {"--conflict": "--on-conflict", "--max-rows": "--max-message-rows"}
+_APPROVE_RENAMES = {
+    "--conflict": "--on-conflict",
+    "--max-rows": "--max-message-rows",
+    **ATTACHMENT,
+}
 
 
 @contract_app.command("approve", cls=renamed(_APPROVE_RENAMES, ChangesState))
@@ -104,7 +108,8 @@ def approve(
         Path, typer.Argument(help="The contract file `uqs job attachment contract export` wrote")
     ],
     attach: Annotated[
-        str, typer.Option("--attach", help="The saved, verified attachment whose HDB it may write")
+        str,
+        typer.Option("--attachment", help="The saved, verified attachment whose HDB it may write"),
     ],
     conflict: Annotated[
         list[str] | None,
@@ -133,7 +138,7 @@ def approve(
     verified, does not publish the contract's dataset in the contract's shape, or
     pins no HDB here. The approval binds the contract to the attachment's
     destination and stack user, and to the limits given here: `uqs job receiver start
-    --contract ID --attach NAME` then serves it, and refuses if the attachment
+    --contract ID --attachment NAME` then serves it, and refuses if the attachment
     has since been pointed at another HDB.
     """
     try:
@@ -154,7 +159,7 @@ def approve(
         f"({contract.dataset}) for attachment {attach}: "
         f"into {b['hdb_dir']}, writer {', '.join(b['users'])}, "
         f"policies {', '.join(b['conflict_policies'])}, at most {b['max_rows']} rows a message; "
-        f"`uqs job receiver start --contract {contract.identity} --attach {attach} "
+        f"`uqs job receiver start --contract {contract.identity} --attachment {attach} "
         "--listen-port PORT` serves it",
         markup=False,
     )
@@ -162,9 +167,11 @@ def approve(
         console.print(dry_run_note())
 
 
-@contract_app.command("list", cls=ReadOnly)
+@contract_app.command("list", cls=renamed(ATTACHMENT, ReadOnly))
 def list_(
-    attach: Annotated[str, typer.Option("--attach", help="The attachment whose approvals to list")],
+    attach: Annotated[
+        str, typer.Option("--attachment", help="The attachment whose approvals to list")
+    ],
     export: ExportOpt = None,
     sort: SortOpt = None,
     reverse: ReverseOpt = False,

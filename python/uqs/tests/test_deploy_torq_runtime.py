@@ -264,7 +264,7 @@ def _push(tmp_path: Path, rt: torq_runtime.Runtime, *extra: str, state: dict | N
     remote, out = FakeRemote(rules), io.StringIO()
     built = list((tmp_path / "release" / "dist").glob("uqf-*.tar.gz"))
     release = built[0] if built else _artifact(tmp_path / "release")
-    argv = _args(release, "--torq-mode", "bundled", "--torq-runtime", str(rt.path))
+    argv = _args(release, "--torq-mode", "bundled", "--torq-component", str(rt.path))
     code = driver.deploy(parse_args([*argv, *extra]), remote, out=out)
     return code, remote, out.getvalue()
 
@@ -348,7 +348,7 @@ def test_an_unpinned_runtime_is_refused_without_allow_unpinned(tmp_path):
 
 def test_a_runtime_that_is_not_the_pinned_one_is_refused_without_accept_digest(tmp_path):
     rt = runtime(tmp_path)
-    pin = ("--torq-runtime-sha256", "ab" * 32)
+    pin = ("--torq-component-sha256", "ab" * 32)
     with pytest.raises(DeployError, match="not the torq_runtime_sha256 abab"):
         _push(tmp_path, rt, *pin)
     code, remote, out = _push(

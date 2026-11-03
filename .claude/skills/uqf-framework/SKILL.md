@@ -426,7 +426,7 @@ Read one only when the task needs it. They aren't auto-loaded.
   Read before changing a framework shell, adding a module, or answering "where
   does X come from".
 - **`uqf-operations.md`:** the `uqs` command map; runtimes, profiles and ports;
-  the connection budget; deployment, including `--q-target 4.0`; ODBC; PeachQ.
+  the connection budget; deployment, including `--q-version 4.0`; ODBC; PeachQ.
   Read when starting, stopping, deploying or diagnosing a stack.
 - **`uqf-q-traps.md`:** each q trap with its measured reproduction, plus the
   nine TorQ invariants from `torq_pipeline.q`. Read when a q change "works" but

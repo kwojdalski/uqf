@@ -17,7 +17,7 @@ until #1852, each now a named override with a recorded reason:
     --override fix-hdb               fill the shared HDB's missing tables and columns
     --override break-lock            remove a deploy lock whose holder stopped beating
 
-and `deploy build --q-target`'s `--override allow-computed-names` is the
+and `deploy build --q-version`'s `--override allow-computed-names` is the
 converter's own (deploy/portable.py).
 
 None of them bypasses anything else. The archive's members are still checked

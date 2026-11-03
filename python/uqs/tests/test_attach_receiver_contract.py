@@ -229,7 +229,7 @@ def test_export_approve_and_list_from_the_command_line(world, exported, tmp_path
             "contract",
             "approve",
             str(out),
-            "--attach",
+            "--attachment",
             "pb-uat",
             "--on-conflict",
             "upsert",
@@ -238,7 +238,7 @@ def test_export_approve_and_list_from_the_command_line(world, exported, tmp_path
     assert done.exit_code == 0, done.output
     assert f"approved contract {exported.identity}" in done.output
     done = runner.invoke(
-        cli.app, ["job", "attachment", "contract", "list", "--attach", "pb-uat", "--json"]
+        cli.app, ["job", "attachment", "contract", "list", "--attachment", "pb-uat", "--json"]
     )
     assert done.exit_code == 0, done.output
     [record] = json.loads(done.output)
@@ -249,7 +249,7 @@ def test_approving_a_malformed_file_fails_and_stores_nothing(world, tmp_path):
     bad = tmp_path / "contract.json"
     bad.write_text(json.dumps({"format": rc.FORMAT, "version": 9}))
     done = runner.invoke(
-        cli.app, ["job", "attachment", "contract", "approve", str(bad), "--attach", "pb-uat"]
+        cli.app, ["job", "attachment", "contract", "approve", str(bad), "--attachment", "pb-uat"]
     )
     assert done.exit_code == 1
     assert not rc.approved_dir("pb-uat").exists()

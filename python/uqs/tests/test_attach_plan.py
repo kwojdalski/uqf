@@ -182,7 +182,7 @@ def test_the_stack_id_has_no_default_and_discovery_is_stored_once(bundle):
     assert (att.stack.id, att.stack.discovery_port) == (6000, 6001)
     other = attachment(bundle, 6000, host="otherhost", discovery="otherhost:7001")
     assert (other.stack.discovery_host, other.stack.discovery_port) == ("otherhost", 7001)
-    with pytest.raises(config.AttachmentError, match="not a base port"):
+    with pytest.raises(config.AttachmentError, match="no stack's base port"):
         attachment(bundle, 80)
     with pytest.raises(config.AttachmentError, match="HOST:PORT"):
         attachment(bundle, 6000, discovery="6001")
@@ -552,7 +552,7 @@ def test_no_schema_file_or_a_remote_one_cannot_be_persisted_to(bundle, tmp_path)
     assert "the schema file is on otherbox; this machine cannot edit it" in refused.message
     for option in (
         "--schema-writer tickerplant",
-        "--runtime-only",
+        "--transient",
         "run uqs on the stack's machine",
     ):
         assert option in refused.action
@@ -618,13 +618,13 @@ def invoke(*argv: str):
 def test_a_new_attachment_needs_a_job_and_a_stack_id(cli_stack):
     result = invoke("pb-uat", "--dry-run")
     assert result.exit_code != 0
-    assert any("needs --job and --stack-id" in m for m in cli_stack.errors)
+    assert any("needs --job and --base-port" in m for m in cli_stack.errors)
 
 
 def test_a_dry_run_prints_the_plan_as_json_and_saves_nothing(cli_stack, bundle, tmp_path):
     result = invoke(
         "pb-uat", "--job", "pb_general_ledger", "--bundle", str(bundle),
-        "--stack-id", "6000", "--runtime-only", "--json", "--dry-run",
+        "--base-port", "6000", "--transient", "--json", "--dry-run",
     )  # fmt: skip
     assert result.exit_code == 0, result.output
     data = json.loads(result.output)["plan"]
@@ -634,20 +634,20 @@ def test_a_dry_run_prints_the_plan_as_json_and_saves_nothing(cli_stack, bundle, 
 
 
 def test_executing_saves_the_config_with_the_observed_storage(cli_stack, bundle, tmp_path):
-    args = ["--job", "pb_general_ledger", "--bundle", str(bundle), "--stack-id", "6000"]
-    assert invoke("pb-uat", *args, "--runtime-only", "--yes", "--no-start").exit_code == 0
+    args = ["--job", "pb_general_ledger", "--bundle", str(bundle), "--base-port", "6000"]
+    assert invoke("pb-uat", *args, "--transient", "--yes", "--no-start").exit_code == 0
     saved = json.loads((tmp_path / "attachments" / "pb-uat" / config.CONFIG_FILE).read_text())
     assert saved["stack"]["discovery_port"] == 6001
     assert saved["storage"]["tplogdir"] == "/data/tplogs"
     assert invoke("pb-uat", "--dry-run", "--json").exit_code == 0, "reuses the saved identity"
-    assert invoke("pb-uat", *args, "--runtime-only", "--dry-run").exit_code == 0, "the same"
+    assert invoke("pb-uat", *args, "--transient", "--dry-run").exit_code == 0, "the same"
 
 
 def test_a_dry_run_exits_nonzero_on_a_blocker_and_zero_when_clean(cli_stack, bundle):
-    args = ["--job", "pb_general_ledger", "--bundle", str(bundle), "--stack-id", "6000"]
-    assert invoke("pb-uat", *args, "--runtime-only", "--dry-run").exit_code == 0
+    args = ["--job", "pb_general_ledger", "--bundle", str(bundle), "--base-port", "6000"]
+    assert invoke("pb-uat", *args, "--transient", "--dry-run").exit_code == 0
     cli_stack.named("stp1")["multilog"] = "singular"
-    result = invoke("pb-uat", *args, "--runtime-only", "--dry-run", "--json")
+    result = invoke("pb-uat", *args, "--transient", "--dry-run", "--json")
     assert result.exit_code == 1
     assert "LOGGING_MODE" in {f["code"] for f in json.loads(result.output)["plan"]["findings"]}
 
@@ -662,7 +662,7 @@ def test_a_detach_of_an_unknown_attachment_says_so(cli_stack):
 def test_the_cli_refuses_a_discovery_on_another_machine_before_asking_anything(cli_stack, bundle):
     result = invoke(
         "pb-uat", "--job", "pb_general_ledger", "--bundle", str(bundle),
-        "--stack-id", "6000", "--discovery", "uat-box.example:6001", "--dry-run",
+        "--base-port", "6000", "--discovery", "uat-box.example:6001", "--dry-run",
     )  # fmt: skip
     assert result.exit_code != 0
     assert any("is not on the --host machine (localhost)" in m for m in cli_stack.errors)

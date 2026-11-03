@@ -58,10 +58,14 @@ def _failed(prefix: str, stage: str, exc: Exception) -> None:
 
 #: `--output` is a FILE, as `contract export -o` writes one; a directory is
 #: `--output-dir` (#1857).
-@deploy_app.command(
-    "build",
-    cls=renamed({"--output": "--output-dir", **policy.BUILD_OLD_SPELLINGS}, ChangesState),
-)
+_BUILD_RENAMES = {
+    "--output": "--output-dir",
+    **policy.BUILD_OLD_SPELLINGS,
+    **components.BUILD_OLD_SPELLINGS,
+}
+
+
+@deploy_app.command("build", cls=renamed(_BUILD_RENAMES, ChangesState))
 def build(
     output: Annotated[
         Path | None,
@@ -88,20 +92,13 @@ def build(
         ),
     ] = None,
     dry_run: dry.BuildDryRun = False,
-    q_target: Annotated[
-        str | None,
-        typer.Option(
-            "--q-target",
-            help="Convert the release's q for this kdb+ - 4.0 has no nested contexts. "
-            "Only the artifact changes, never the checkout",
-        ),
-    ] = None,
+    q_target: components.ConvertFor = None,
     q_exclude: Annotated[
         list[str] | None,
         typer.Option(
             "--q-exclude",
             metavar="PATTERN",
-            help="With --q-target: a folder, file or glob to ship as written; repeatable",
+            help="With --q-version: a folder, file or glob to ship as written; repeatable",
         ),
     ] = None,
     override: OverrideOpt = None,
@@ -160,12 +157,15 @@ def build(
     print(artifact.path)
 
 
-@deploy_app.command(
-    "push",
-    cls=renamed(
-        policy.OLD_SPELLINGS | conn.OLD_SPELLINGS | components.OLD_Q_SPELLINGS, ChangesState
-    ),
+_PUSH_RENAMES = (
+    policy.OLD_SPELLINGS
+    | conn.OLD_SPELLINGS
+    | components.OLD_Q_SPELLINGS
+    | components.OLD_SPELLINGS
 )
+
+
+@deploy_app.command("push", cls=renamed(_PUSH_RENAMES, ChangesState))
 def push(
     ctx: typer.Context,
     artifact: Annotated[
