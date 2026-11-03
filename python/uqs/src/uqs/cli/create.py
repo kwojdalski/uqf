@@ -39,10 +39,12 @@ from uqs.scaffold import horizon as horizon_scaffold
 app.add_typer(job_app, name="job")
 
 
+#: --procname: a process is PROC, or `--proc` as an option, on every command (#1857)
+_RENAMES = {"--columns": "--schema", "--columns-from": "--schema-from", "--procname": "--proc"}
+
+
 @job_app.command(
-    "new",
-    rich_help_panel=JOB_AUTHORING_PANEL,
-    cls=renamed({"--columns": "--schema", "--columns-from": "--schema-from"}, safety.ChangesState),
+    "new", rich_help_panel=JOB_AUTHORING_PANEL, cls=renamed(_RENAMES, safety.ChangesState)
 )
 def new_job(
     name: Annotated[
@@ -114,9 +116,7 @@ def new_job(
     ] = None,
     procname: Annotated[
         str | None,
-        typer.Option(
-            "--procname", help="The process that runs it (default: NAME1, or NAME_backfill1)"
-        ),
+        typer.Option("--proc", help="The process that runs it (default: NAME1, or NAME_backfill1)"),
     ] = None,
     start_with_all: Annotated[
         bool,
@@ -262,7 +262,7 @@ def new_job(
         "--schema-from": columns_from is not None,
         "--source": source is not None,
         "--width": width is not None,
-        "--procname": procname is not None,
+        "--proc": procname is not None,
         "--start-with-all": start_with_all,
         "--transport": transport is not None,
         "--period": period is not None,

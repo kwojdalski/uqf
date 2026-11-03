@@ -58,7 +58,7 @@ uqs job new fx_rates_1h --kind backfill --dataset fx_rates_1h \
 `--transport odbc` scaffolds a backfill source read from a database instead of a
 q process, and `--transport local` one read from an HDB directory's files on
 this machine, with no process serving it (see "A source read from local HDB
-files" below), `--procname` names the process, and `--start-with-all` puts a
+files" below), `--proc` names the process, and `--start-with-all` puts a
 streaming job in `uqs start all`. `--period` sets a feed's tick or gives an etl
 a timer, `--profile`/`--unprofiled` place a standing job in a start profile, and
 `--partition`/`--check` shape a backfill. `--transform passthrough|derive`

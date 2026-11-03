@@ -284,7 +284,7 @@ def test_the_command_says_a_recent_sample_is_not_the_next_page(monkeypatch):
 
     monkeypatch.setattr(stream_preview, "preview", fake)
     result = runner.invoke(
-        cli.app, ["job", "preview", "vectorize2", "--last", "30s", "--sample", "1"]
+        cli.app, ["job", "preview", "vectorize2", "--last", "30s", "--limit", "1"]
     )
     assert result.exit_code == 0, result.output
     assert seen["last"] == timedelta(seconds=30)

@@ -54,7 +54,7 @@ def artifacts(tmp_path_factory) -> list[Path]:
     built = []
     for _ in range(3):
         r = subprocess.run(
-            [UQS, "deploy", "build", "--output", str(out), "--allow-dirty"],
+            [UQS, "deploy", "build", "--output-dir", str(out), "--allow-dirty"],
             capture_output=True, text=True, check=True, timeout=1800,
         )  # fmt: skip
         built.append(Path(r.stdout.strip().splitlines()[-1]))
@@ -68,8 +68,8 @@ def _deploy(artifact: Path, *extra: str) -> subprocess.CompletedProcess:
     for flag, var in (
         ("--torq-home", "UQF_DEPLOY_TEST_TORQHOME"),
         ("--torq-app-home", "UQF_DEPLOY_TEST_TORQAPPHOME"),
-        ("--qcmd", "UQF_DEPLOY_TEST_QCMD"),
-        ("--qhome", "UQF_DEPLOY_TEST_QHOME"),
+        ("--q-cmd", "UQF_DEPLOY_TEST_QCMD"),
+        ("--q-home", "UQF_DEPLOY_TEST_QHOME"),
     ):
         if os.environ.get(var):
             argv += [flag, os.environ[var]]

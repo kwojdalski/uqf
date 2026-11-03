@@ -1103,7 +1103,7 @@ def _browsed(monkeypatch) -> list[dict]:
     return shown
 
 
-def test_schema_interactive_re_reads_the_process_every_five_seconds(monkeypatch):
+def test_schema_interactive_re_reads_the_process_every_two_seconds(monkeypatch):
     """-i hands the browser a refresh that asks the process AGAIN - replaying
     the rows already read would make the timer show nothing changing."""
     _patch(monkeypatch, schema_view, "resolve_port", result=6052)
@@ -1113,7 +1113,7 @@ def test_schema_interactive_re_reads_the_process_every_five_seconds(monkeypatch)
     shown = _browsed(monkeypatch)
     assert runner.invoke(cli.app, ["schema", "-i"]).exit_code == 0
     (browsed,) = shown
-    assert browsed["interactive"] and browsed["every"] == 5.0
+    assert browsed["interactive"] and browsed["every"] == 2.0
     reads = len(overview.calls)
     browsed["refresh"]()
     assert len(overview.calls) == reads + 1

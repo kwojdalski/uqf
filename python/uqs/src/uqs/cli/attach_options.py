@@ -157,12 +157,12 @@ ClearOverridesOpt = Annotated[
         help="Withdraw every accepted risk (saved even when that leaves a blocker)",
     ),
 ]
-NoStartOpt = Annotated[
+StartOpt = Annotated[
     bool,
     typer.Option(
-        "--no-start",
-        help="Apply and verify, and leave the publisher stopped. Changes only this run's "
-        "start, never the saved --start-with-all.",
+        "--start/--no-start",
+        help="Apply and verify, then start the publisher (the default) or leave it stopped. "
+        "Changes only this run's start, never the saved --start-with-all.",
     ),
 ]
 

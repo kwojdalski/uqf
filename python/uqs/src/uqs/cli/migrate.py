@@ -20,11 +20,15 @@ def migrate(
     partition: Annotated[str, typer.Argument(help="one partition date, YYYY-MM-DD")],
     rename: Annotated[
         list[str] | None,
-        typer.Option("--rename", help="OLD:NEW column rename; repeat for several"),
+        typer.Option("--rename", help="OLD:NEW - rename a column; repeatable"),
     ] = None,
     cast: Annotated[
         list[str] | None,
-        typer.Option("--cast", help="target column to cast losslessly; repeat for several"),
+        typer.Option(
+            "--cast",
+            help="COL - cast a column losslessly to the type this release declares for it "
+            "(the target type is always the declared one, so it takes no :TYPE); repeatable",
+        ),
     ] = None,
     apply: safety.ApplyOpt = False,
     yes: safety.ApplyYesOpt = False,

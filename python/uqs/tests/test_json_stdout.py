@@ -127,7 +127,7 @@ CASES: dict[str, tuple[list[str], str]] = {
     "connector status": (["connector", "status", "nosuch"], "no connector 'nosuch'"),
     "connector logs": (["connector", "logs", "crypto", "--follow"], "--follow does not apply"),
     "setup odbc status": (
-        ["setup", "odbc", "status", "--home", "/nonexistent-1731"],
+        ["setup", "odbc", "status", "--odbc-home", "/nonexistent-1731"],
         "cannot read",
     ),
     "deploy check": (["deploy", "check", "--profile", "nosuch"], "unknown profile"),

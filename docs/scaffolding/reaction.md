@@ -46,7 +46,7 @@ window is cleared.
 `--writes` is optional: the tables the handler writes. With it, the reaction
 registers through `on_writing` and becomes a node in the job graph, where a
 cycle is refused when the file loads. Writing the dataset it watches is refused
-up front for that reason. Every option that shapes a process (`--procname`,
+up front for that reason. Every option that shapes a process (`--proc`,
 `--period`, `--profile`, `--schema`, ...) is refused rather than ignored.
 
 <!-- scaffold-transcript: deal_volume --triggered-by demo_deals --writes deal_volume -->

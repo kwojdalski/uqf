@@ -152,7 +152,8 @@ def test_health_runs_currents_own_verifier_with_its_extra_processes():
     assert h["checked"] and not h["passed"] and h["reason"] == "piggy1 did not answer"
     check = next(sc for sc in remote.scripts if "uqs deploy verify" in sc)
     assert f"cd /opt/uqf/releases/{NEW}\n" in check and "piggy1" in check
-    assert "--deadline 180" in check, "the verifier gets the configured deadline"
+    assert "--verify-timeout 180" in check, "the verifier gets the configured deadline"
+    assert "--deadline 180" in check, "as an older release spells it"
 
 
 def test_the_health_timeout_is_the_verifiers_deadline():
@@ -164,7 +165,7 @@ def test_the_health_timeout_is_the_verifiers_deadline():
     )
     status.status(cfg, remote)
     check = next(sc for sc in remote.scripts if "uqs deploy verify" in sc)
-    assert "--deadline 7" in check
+    assert "--verify-timeout 7" in check and "--deadline 7" in check
 
 
 def test_failing_streaming_jobs_are_named():

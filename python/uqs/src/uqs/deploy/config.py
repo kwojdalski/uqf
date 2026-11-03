@@ -203,7 +203,7 @@ def _absolute(name: str, value: str | None) -> str | None:
 
 
 def _q_path(name: str, value: str | None) -> str | None:
-    """An explicit --qcmd/--qhome: absolute, and spaces allowed - it is quoted
+    """An explicit --q-cmd/--q-home: absolute, and spaces allowed - it is quoted
     everywhere it goes. No `..`, and no control characters."""
     if value is None:
         return None
@@ -360,8 +360,8 @@ def make_config(
         torq_launcher=_absolute("--torq-launcher", torq_launcher),
         launcher_env=_launcher_env(launcher_env or ()),
         process_fields=_process_fields(process_fields),
-        qcmd=_q_path("--qcmd", qcmd),
-        qhome=_q_path("--qhome", qhome),
+        qcmd=_q_path("--q-cmd", qcmd),
+        qhome=_q_path("--q-home", qhome),
         data_dir=_absolute("--data-dir", data_dir),
         dry_run=dry_run,
         restart=restart,
