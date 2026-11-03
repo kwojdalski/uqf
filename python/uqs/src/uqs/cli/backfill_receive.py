@@ -19,7 +19,7 @@ from uqs.attach import backfill_remote, backfill_run, config, service
 from uqs.cli.renames import renamed
 from uqs.cli.safety import ChangesState, dry_run_note
 from uqs.cli.shared import JOB_OPERATIONS_PANEL, _die, _paths, console, job_app
-from uqs.paths import UqsError
+from uqs.paths import UqsError, UqsUsageError
 from uqs.stack.run_modes import READ_ONLY_MODES
 
 
@@ -46,11 +46,11 @@ def extract(
     from uqs.cli.backfill_attached import _outcome_text, _report, logs_command
 
     if fixture:
-        _die(UqsError("--fixture is refused with --attach: a fixture in a native HDB is data"))
+        _die(UqsUsageError("--fixture is refused with --attach: a fixture in a native HDB is data"))
         return
     if port is not None:
         _die(
-            UqsError(
+            UqsUsageError(
                 "--base-port is not taken with --writer: the receiver's address is the stack's"
             )
         )
@@ -164,7 +164,7 @@ def receive(
     """
     if stop:
         if dry_run:
-            _die(UqsError("--stop with --dry-run: give one of them"))
+            _die(UqsUsageError("--stop with --dry-run: give one of them"))
             return
         stopped = backfill_remote.stop_receivers(attach)
         names = ", ".join(f"{r['worker']} (pid {r['pid']})" for r in stopped) or "none was running"
@@ -175,14 +175,14 @@ def receive(
         raise typer.Exit(code=0)
     if port is None:
         _die(
-            UqsError(
+            UqsUsageError(
                 "--listen-port is required to start a receiver: the port the extractor connects to"
             )
         )
         return
     if contract is None:
         _die(
-            UqsError(
+            UqsUsageError(
                 "--contract is required to start a receiver: the identity of a contract "
                 "approved for the attachment "
                 f"(`uqs job attachment contract list --attach {attach}`)"

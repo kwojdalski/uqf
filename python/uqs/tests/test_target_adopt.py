@@ -61,7 +61,7 @@ def logged():
     from loguru import logger
 
     lines: list[str] = []
-    sink = logger.add(lambda m: lines.append(str(m)), level="ERROR", format="{message}")
+    sink = logger.add(lambda m: lines.append(str(m)), level="WARNING", format="{message}")
     yield lines
     logger.remove(sink)
 
@@ -169,10 +169,10 @@ def test_a_pushed_release_already_linked_is_saved_as_is(server, tmp_path):
     assert history.read(Path("."))[0]["release"] == release.name
 
 
-def test_without_yes_it_asks_and_a_no_changes_nothing(server, tmp_path, logged):
+def test_without_yes_it_asks_and_a_no_changes_nothing(server, tmp_path, logged, terminal):
     before = _tree(tmp_path)
     r = _adopt(server, "--launch-python", sys.executable, "--apply", input="n\n")
-    assert r.exit_code == 1 and _has(r.output + "".join(logged), "not adopted")
+    assert r.exit_code == 1 and _has(r.output + "".join(logged), "nothing was changed")
     assert _tree(tmp_path) == before
 
 

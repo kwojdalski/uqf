@@ -43,9 +43,10 @@ from uqs.cli.shared import (
     console,
     log,
 )
-from uqs.paths import UqsError
+from uqs.paths import UqsError, UqsUsageError
 from uqs.stack import alive, listing, runtime
 from uqs.stack import gateway as stack_gateway
+from uqs.stack import procs as stack_procs
 from uqs.stack import render as stack_render
 
 
@@ -93,9 +94,7 @@ def _proc_port(procname: str, base_port: int | None) -> int:
     paths = _paths()
     ports = listing.configured_ports(paths, base_port=base_port)
     if procname not in ports:
-        raise UqsError(
-            f"{procname} is not a declared process - `uqs list processes` shows them all"
-        )
+        raise stack_procs.unknown_processes(procname)
     # Advisory: a check that cannot answer does not stop the call, since the
     # connection will say for itself whether anything is listening.
     try:
@@ -261,7 +260,7 @@ def query(
         _die(exc)
         return
     if proc is not None and port is not None:
-        _die(UqsError("name the process to query once: PROC or --port N, not both"))
+        _die(UqsUsageError("name the process to query once: PROC or --port N, not both"))
         return
     if as_json and expr is None:
         _die(UqsError("--json needs an expression whose result it can print"))
@@ -273,7 +272,9 @@ def query(
     if target is not None:
         if getattr(ctx.get_parameter_source("host"), "name", None) != "DEFAULT":
             _die(
-                UqsError("--tunnel names the machine to query - give --tunnel or --host, not both")
+                UqsUsageError(
+                    "--tunnel names the machine to query - give --tunnel or --host, not both"
+                )
             )
             return
         try:

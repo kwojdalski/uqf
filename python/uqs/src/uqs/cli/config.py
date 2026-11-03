@@ -34,7 +34,7 @@ from uqs.cli.shared import (
     app,
     console,
 )
-from uqs.paths import UqsError
+from uqs.paths import UqsError, UqsUsageError
 from uqs.stack import attached_logs
 from uqs.stack import channel as stack_channel
 from uqs.stack import logs as stack_logs
@@ -262,18 +262,22 @@ def logs(
             "--multitail": multitail,
         }.items():
             if used:
-                _die(UqsError(f"--json prints the history: {option} does not apply with it"))
+                _die(UqsUsageError(f"--json prints the history: {option} does not apply with it"))
                 return
     if attach is None:
         for option, used in {"--worker": worker, "--run": run}.items():
             if used is not None:
-                _die(UqsError(f"{option} needs --attach"))
+                _die(UqsUsageError(f"{option} needs --attach"))
                 return
     else:
         clash = {"a process name": bool(procs), "--channel": channel, "--multitail": multitail}
         for option, used in clash.items():
             if used:
-                _die(UqsError(f"{option} does not apply with --attach, which reads one run's log"))
+                _die(
+                    UqsUsageError(
+                        f"{option} does not apply with --attach, which reads one run's log"
+                    )
+                )
                 return
         try:
             if as_json:
@@ -289,12 +293,12 @@ def logs(
             _die(exc)
         return
     if ids and not channel:
-        _die(UqsError("--id needs --channel"))
+        _die(UqsUsageError("--id needs --channel"))
         return
     if channel:
         for option, used in {"--follow": follow, "--multitail": multitail}.items():
             if used:
-                _die(UqsError(f"{option} does not apply with --channel, which is always live"))
+                _die(UqsUsageError(f"{option} does not apply with --channel, which is always live"))
                 return
     given = {
         "--stream": stream is not None,
