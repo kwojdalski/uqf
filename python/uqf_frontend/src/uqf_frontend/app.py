@@ -17,6 +17,7 @@ from typing import Any
 
 import polars as pl
 from fastapi import Depends, FastAPI, Request
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -69,6 +70,7 @@ from uqf_frontend.models import (
     QueryRequest,
     QueryResponse,
     RemoteFilesResponse,
+    RemoteUploadResponse,
     RunState,
     ServicesResponse,
     ServiceTargetOut,
@@ -455,6 +457,63 @@ def create_app(
             total=answer["total"],
             truncated=answer["truncated"],
             release=answer["release"],
+        )
+
+    @app.put("/services/{target}/files/content", response_model=RemoteUploadResponse)
+    async def put_remote_file(
+        request: Request, target: str, path: str, overwrite: bool = False
+    ) -> RemoteUploadResponse:
+        """Write the request body to `path` below a registered target's
+        shared/config, over ssh, with the release's own Python - see
+        remote_files.upload (#1951).
+
+        Refuses before reading the body when writes are off, the path is
+        unsafe or outside shared/config, the target is not registered, or
+        Content-Length is over the limit; refuses a body that grows past it
+        while read. An existing file is replaced only with `overwrite=true`.
+        A timeout or lost answer is 504 UploadOutcomeUncertain, never retried.
+        """
+        # TODO(#1954): when activity.py lands (PR #1971), add
+        # ("PUT", "/services/{target}/files/content"): lambda _: "file.upload" to
+        # activity.SERVER_ACTIONS, and here record through activity.audit_of(request):
+        # set_target(target), note(file_name=path, size_bytes=len(data), sha256=...),
+        # begin() just before ssh, and the outcome - unknown on UploadOutcomeUncertain.
+        if not settings.enable_writes:
+            raise WritesDisabled(
+                "uploading to a server reaches it over ssh, so it needs remote "
+                "operations: set UQF_FRONTEND_ENABLE_WRITES=1 and UQF_FRONTEND_WRITE_TOKEN "
+                "on the server"
+            )
+        remote_files.check_upload_path(path)
+        remote_files.target(settings, target)
+        limit = remote_helper.MAX_UPLOAD
+        too_large = f"a file may be at most {limit} bytes"
+        declared = request.headers.get("content-length")
+        if declared is not None and declared.isdigit() and int(declared) > limit:
+            raise remote_files.UploadTooLarge(too_large)
+        body = bytearray()
+        async for chunk in request.stream():
+            body += chunk
+            if len(body) > limit:
+                raise remote_files.UploadTooLarge(too_large)
+        answer = await run_in_threadpool(
+            remote_files.upload,
+            settings,
+            target,
+            path,
+            bytes(body),
+            overwrite,
+            runner=request.app.state.remote_runner,
+        )
+        return RemoteUploadResponse(
+            target=target,
+            root=answer["root"],
+            path=answer["path"],
+            size=answer["size"],
+            sha256=answer["sha256"],
+            replaced=answer["replaced"],
+            mode=answer["mode"],
+            created=answer["created"],
         )
 
     @app.get("/coverage", response_model=CoverageResponse)

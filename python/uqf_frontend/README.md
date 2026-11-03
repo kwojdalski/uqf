@@ -127,6 +127,48 @@ fields of its `deploy-report.json`, come back as `release`. A listing returns at
 most `limit` entries (500 by default, 5000 at most) and says when it was
 truncated; the call is held to 20 s.
 
+### Uploading to a target's shared/config --- one file per request
+
+`PUT /services/{target}/files/content?path=&overwrite=false` writes the request
+body to `path` below the target's `shared/config/` - the operator-supplied files
+every release links in - and nowhere else (#1951). It is gated like browsing:
+writes on, the token, an allowed Host, a registered target. The browser's file
+browser shows an upload queue in `shared/config/` and below it. You can choose
+files or a folder, or drag them in. Nested paths are kept. Nothing is sent until
+you confirm the destination. Each file has its own progress and its own outcome.
+
+- **Limits.** 16 MiB a file, checked in the browser, again by the API before ssh
+  (`Content-Length`, then while the body is read: 413), and again on the server.
+  The browser also caps a queue at 500 files and 256 MiB. A path must be
+  relative, without `..`, NUL or a name over 255 bytes, at most 16 directories
+  below `shared/config/`. Directories that do not exist are created. A link on
+  the way is refused, never followed.
+- **Framing.** `list` runs the helper as `python -I -`, which reads stdin to its
+  end as source. So an upload runs `python -I -c BOOTSTRAP <request>`, and stdin
+  carries `<len(source)>\n`, the source, then exactly `size` raw bytes.
+  `BOOTSTRAP` is fixed, single-line text. The base64 request carries the path,
+  `size`, `sha256` and `overwrite`, so no path reaches a shell.
+- **Atomicity.** The bytes go to `.uqf-upload-<random>.tmp` in the destination
+  directory, created with `O_EXCL|O_NOFOLLOW`. They are counted and hashed, then
+  fsync'd. A wrong size or sha256 publishes nothing. Without `overwrite`, the
+  file is published with `link(2)`, which fails if the name exists, with no
+  window between check and write. With it, the file is published with
+  `rename(2)`. A reader sees the old file or the whole new one. A link,
+  directory or special file at the name is never replaced. A replaced file keeps
+  its permission bits (not setuid, setgid or sticky). A new file gets 0666 less
+  the umask.
+- **Cleanup.** The temp file is removed on every failure. A hangup or SIGTERM
+  from a dropped or timed-out ssh becomes a refusal so that the cleanup runs.
+  Only SIGKILL leaves a temp file behind, and the next upload to that directory
+  sweeps any older than an hour.
+- **Uncertain outcomes.** An existing file without `overwrite` is 409. A refused
+  path is 400. Damaged bytes are 502 `UploadIncomplete`. In each of these,
+  nothing was written. A timeout (120 s), an ssh failure (255), a helper crash
+  or a lost answer is 504 `UploadOutcomeUncertain`, with `transient: false`. The
+  file may or may not be there, and neither the API nor the browser retries: the
+  queue shows "Outcome uncertain", and you list the directory before uploading
+  it again. Cancelling an upload in flight is reported the same way.
+
 A backfill is launched detached rather than awaited: it runs for as long as its
 range takes, and a request that blocked on one would time out mid-run and tell
 the caller nothing about whether the work continued. Every bound must carry an

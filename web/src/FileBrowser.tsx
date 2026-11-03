@@ -7,6 +7,7 @@ import {
   request,
   writeToken,
 } from "./api";
+import { UploadPanel, type Uploader } from "./UploadPanel";
 
 /** Bytes as an operator reads them: 12.1 KiB, not 12345. */
 export function size(bytes: number | null): string {
@@ -50,9 +51,12 @@ const REPORT_FIELDS = [
 export function FileBrowser({
   target,
   onClose,
+  uploader,
 }: {
   target: string;
   onClose: () => void;
+  /** Injectable for tests; the real one PUTs over XMLHttpRequest. */
+  uploader?: Uploader;
 }) {
   const [path, setPath] = useState("");
   const [revision, setRevision] = useState(0);
@@ -228,9 +232,18 @@ export function FileBrowser({
         </p>
       )}
       <p className="note">
-        Read only, over ssh with the release&apos;s own Python. Links and
-        special files are not followed.
+        Browsing reads only, over ssh with the release&apos;s own Python. Links
+        and special files are not followed.
       </p>
+      {data && (
+        <UploadPanel
+          target={target}
+          root={data.root}
+          directory={data.path}
+          onUploaded={() => setRevision((r) => r + 1)}
+          uploader={uploader}
+        />
+      )}
     </section>
   );
 }

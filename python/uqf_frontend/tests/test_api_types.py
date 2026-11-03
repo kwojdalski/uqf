@@ -68,6 +68,7 @@ PAIRS = {
     "RemoteEntry": "RemoteEntryOut",
     "Release": "ReleaseOut",
     "RemoteFiles": "RemoteFilesResponse",
+    "RemoteUpload": "RemoteUploadResponse",
     **REQUESTS,
 }
 
