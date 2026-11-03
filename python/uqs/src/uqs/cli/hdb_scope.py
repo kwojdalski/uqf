@@ -3,9 +3,9 @@ checked, filled and changed one table at a time, dry run first (#1755).
 
 Which HDB is named once, by what already knows it - never a path to remember:
 
-  uqs --target NAME data ...   a deployed release: the command runs THERE, on its
+  uqs --target TARGET data ...   a deployed release: the command runs THERE, on its
                                own configured HDB (deploy/control.py routes it)
-  uqs data ... --attach NAME   an attached TorQ stack: its pinned HDB, else its live
+  uqs data ... --attachment ATTACHMENT   an attached TorQ stack: its pinned HDB, else its live
                                wdb's .wdb.hdbdir, on the stack's host over ssh
   uqs data ... --hdb DIR       a directory on this machine, for anything else
 
@@ -37,7 +37,9 @@ from uqs.stack.hdb_alter import Request
 AttachOpt = Annotated[
     str | None,
     typer.Option(
-        "--attach", help="The attachment whose HDB to use: its pinned one, else its live wdb's"
+        "--attachment",
+        metavar="ATTACHMENT",
+        help="The attachment whose HDB to use: its pinned one, else its live wdb's",
     ),
 ]
 HdbOpt = Annotated[
@@ -74,10 +76,10 @@ class Handle:
 
 
 def resolve(attach: str | None, hdb: Path | str | None) -> Handle:
-    """The one HDB named: --attach, --hdb, or (neither) this runtime's own."""
+    """The one HDB named: --attachment, --hdb, or (neither) this runtime's own."""
     paths = _paths()
     if attach and hdb:
-        raise UqsUsageError("give one of --target, --attach and --hdb: each names an HDB")
+        raise UqsUsageError("give one of --target, --attachment and --hdb: each names an HDB")
     if attach:
         ipc = service.ipc_for(attach_config.load(attach))
         where = hdb_where.resolve(attach, ipc)

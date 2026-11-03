@@ -20,7 +20,7 @@ started: if it cannot be written, nothing starts. It is never rewritten. What be
 run is appended separately as an `outcome` entry with the same `run` - `not-started` when the
 process could not be started, the runner's result when `--wait` followed it - so a run that
 died or stopped part way keeps its override entry, and one with no outcome entry is one
-nobody followed (`uqs logs --attach NAME --worker W` reads its log). A dry run is recorded
+nobody followed (`uqs logs --attachment NAME --worker W` reads its log). A dry run is recorded
 too, `mode: dry-run`: it admits under the waiver and runs the lifecycle; `--mode plan` records
 nothing, it changes nothing. No credential is ever recorded: the readers' password goes to
 the runner by environment, and the command is rebuilt from the run's own arguments, not argv.
@@ -61,7 +61,7 @@ def command_of(worker: str, attachment: str, plan: dict[str, Any], mode: str, ve
     rng = plan["range"]
     waivers = "".join(f" --override {o['override']}" for o in plan.get("overrides", []))
     return (
-        f"uqs job backfill {worker} --attach {attachment} --mode {mode} --from {rng['from']} "
+        f"uqs job backfill {worker} --attachment {attachment} --mode {mode} --from {rng['from']} "
         f"--to {rng['to']} --source-version {version}{waivers}"
     )
 

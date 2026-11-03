@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from uqs.cells import Shown
 from uqs.interpreter import InterpreterStatus, interpreter_status
 from uqs.logger import get_logger
 from uqs.model import profiles
@@ -28,17 +29,11 @@ from uqs.stack.site_fields import process_csv_fields
 log = get_logger()
 
 
-# ---------------------------------------------------------------------------
-# list_items(paths, kind) - generic listing, not just processes: a small
-# registry of kind -> (paths, base_port) -> list[dict], so a new listable
-# thing is one function + one registry entry, not a new CLI command/MCP
-# tool each time.
-# ---------------------------------------------------------------------------
-
-
 #: What `list processes` shows for a process that picks its input when it
 #: starts (`tap1`, via `-tables`) - an empty cell would claim it reads nothing.
 RUNTIME_INPUTS = "(chosen at start)"
+#: ... and what its row holds: no inputs yet - `null` in `--json` (#1882).
+CHOSEN_AT_START = Shown(None, RUNTIME_INPUTS)
 
 
 def _worker_datasets(paths: UqsPaths) -> dict[str, str]:
@@ -61,7 +56,7 @@ def _worker_datasets(paths: UqsPaths) -> dict[str, str]:
     return out
 
 
-def _list_processes(paths: UqsPaths, base_port: int | None) -> list[dict[str, str]]:
+def _list_processes(paths: UqsPaths, base_port: int | None) -> list[dict[str, Any]]:
     """Every process.csv row, resolved, with the tables it reads and writes.
 
     Inputs and outputs come from the same declarations `uqs status`'s graph
@@ -81,12 +76,12 @@ def _list_processes(paths: UqsPaths, base_port: int | None) -> list[dict[str, st
             {
                 "procname": eff["procname"],
                 "proctype": eff["proctype"],
-                "port": eff["port"],
-                "startwithall": eff["startwithall"],
-                "inputs": RUNTIME_INPUTS
+                "port": int(eff["port"]) if str(eff["port"]).isdigit() else eff["port"],
+                "startwithall": str(eff["startwithall"]).strip() == "1",
+                "inputs": CHOSEN_AT_START
                 if eff["procname"] in dynamic
-                else ", ".join(inputs.get(eff["procname"], ())),
-                "outputs": ", ".join(outputs.get(eff["procname"], ())),
+                else list(inputs.get(eff["procname"], ())),
+                "outputs": list(outputs.get(eff["procname"], ())),
             }
         )
     return items
@@ -154,11 +149,13 @@ def _list_dependencies(paths: UqsPaths, base_port: int) -> list[dict[str, str]]:
     return dependency_rows()
 
 
-def _list_profiles(paths: UqsPaths, base_port: int) -> list[dict[str, str]]:
+def _list_profiles(paths: UqsPaths, base_port: int) -> list[dict[str, Any]]:
     """Each named start set, what it resolves to, and whether it fits.
 
-    `Slots` is the column that matters: two profiles can each fit and not fit
-    together, and this is where an operator sees that before starting one.
+    `slots` is the column that matters - the connection slots the profile's
+    plant holds, against the licence's `allowance` (none: no cap): two
+    profiles can each fit and not fit together, and this is where an operator
+    sees that before starting one.
     """
     rows = []
     slots = profiles.allowance()
@@ -168,10 +165,11 @@ def _list_profiles(paths: UqsPaths, base_port: int) -> list[dict[str, str]]:
         rows.append(
             {
                 "profile": name,
-                "leaves": ", ".join(profiles.PROFILES[name]),
-                "processes": str(len(resolved)),
-                "slots": f"{held}/{'no cap' if slots is None else slots}",
-                "fits": "yes" if slots is None or held <= slots else "NO",
+                "leaves": list(profiles.PROFILES[name]),
+                "processes": len(resolved),
+                "slots": held,
+                "allowance": Shown(None, "no cap") if slots is None else slots,
+                "fits": slots is None or held <= slots,
             }
         )
     return rows
@@ -266,7 +264,7 @@ def configured_ports(paths: UqsPaths, base_port: int | None = None) -> dict[str,
     `resolve_process_config` evaluates it, so a port is known whether or not
     anything is running.
     """
-    return {row["procname"]: row["port"] for row in _list_processes(paths, base_port)}
+    return {row["procname"]: str(row["port"]) for row in _list_processes(paths, base_port)}
 
 
 def heartbeat_states(

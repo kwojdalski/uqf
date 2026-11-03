@@ -17,7 +17,9 @@ from uqs.external.crypto import (
     CRYPTO_FILLS_RECORDER_DEFAULT_SYMBOL,
     CRYPTO_FILLS_RECORDER_TABLE,
     CRYPTO_REAL_FILLS_RECORDER_TABLE,
+    CRYPTO_RECORDER_DEFAULT_INTERVAL_MS,
     CRYPTO_RECORDER_DEFAULT_SYMBOLS,
+    CRYPTO_RECORDER_DEFAULT_TOP_N_LEVELS,
     CRYPTO_RECORDER_DEFAULT_VENUES,
     CRYPTO_RECORDER_TABLE,
     DEFAULT_OMS_SOCKET_PATH,
@@ -80,19 +82,23 @@ FEEDS = (
                 many=True,
             ),
             FeedOption(
-                "top_n_levels", "Book depth levels per snapshot (default 5)", type=int, default=5
+                "top_n_levels",
+                "Book depth levels per snapshot",
+                type=int,
+                default=CRYPTO_RECORDER_DEFAULT_TOP_N_LEVELS,
             ),
             FeedOption(
                 "interval_ms",
-                "Publish interval in milliseconds (default 1000)",
+                "Publish interval in milliseconds",
                 type=int,
-                default=1000,
+                default=CRYPTO_RECORDER_DEFAULT_INTERVAL_MS,
             ),
             BASE_PORT,
             connection.TP_CREDENTIAL,
         ),  # fmt: skip
         produces={CRYPTO_RECORDER_TABLE: RECORDER},
         title="crypto recorder status",
+        about="order books",
     ),
     ExternalFeed(
         "crypto-fills",
@@ -128,6 +134,7 @@ FEEDS = (
         },
         title="crypto fills recorder status "
         "(sim_table = paper fills, real_table = confirmed executions)",
+        about="the bot's fills",
         started_note=f"{CRYPTO_FILLS_RECORDER_TABLE} is SIMULATED, "
         f"{CRYPTO_REAL_FILLS_RECORDER_TABLE} is real",
     ),

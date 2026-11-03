@@ -72,18 +72,24 @@ from uqs.cli import deploy_component  # noqa: F401
 from uqs.cli import deploy_server  # noqa: F401
 from uqs.cli import target  # noqa: F401
 from uqs.cli import target_log  # noqa: F401
+from uqs.cli import deploy_history  # noqa: F401
 from uqs.cli import target_edit  # noqa: F401
 from uqs.cli import target_adopt  # noqa: F401
 from uqs.cli import lists  # noqa: F401
 
 # isort: on
 import sys
+from typing import NoReturn
 
-from uqs.cli.shared import EXIT_REFUSED, EXIT_USAGE, _env_log_level, app
+import typer.main
+from typer import Abort
+from typer._click.exceptions import ClickException, UsageError
+
+from uqs.cli.shared import EXIT_REFUSED, EXIT_USAGE, _env_log_level, app, json_refusal
 from uqs.cli.zsh_completion import patch_zsh_completion_script
 from uqs.deploy import control
 from uqs.interpreter import removed_variables_problem
-from uqs.logger import configure_logging, get_logger
+from uqs.logger import configure_logging, get_logger, json_requested
 from uqs.paths import UqsError, UqsUsageError
 from uqs.stack.envfiles import load_repo_env_files
 
@@ -102,12 +108,11 @@ def main() -> None:
     # now): refused before any command, so none of them is silently ignored.
     removed = removed_variables_problem()
     if removed:
-        log.error("{}", removed)
-        sys.exit(1)
+        _refuse(removed, 1)
     # Before app(): --install-completion and --show-completion are handled
     # inside it, and both read the template this swaps out.
     patch_zsh_completion_script()
-    # `uqs --target NAME <command>` runs the command on a deployed release
+    # `uqs --target TARGET <command>` runs the command on a deployed release
     # (#956). Here, before Typer parses anything, because what follows is the
     # SERVER's command line: the server's uqs parses it, and a command this
     # checkout no longer has, or has changed, still means what it means there.
@@ -117,9 +122,52 @@ def main() -> None:
         try:
             sys.exit(target.forward(name, yes, rest, interactive=interactive))
         except UqsError as exc:
-            log.error("{}", exc)
-            sys.exit(EXIT_USAGE if isinstance(exc, UqsUsageError) else EXIT_REFUSED)
-    app()
+            _refuse(str(exc), _exit_code(exc))
+    if json_requested():
+        _run_for_json()
+    try:
+        app()
+    except UqsError as exc:  # one a command did not catch: a refusal, not a traceback
+        _refuse(str(exc), _exit_code(exc))
+
+
+def _exit_code(exc: UqsError) -> int:
+    """2 for a command line wrong as given, 1 for any other refusal (#1885)."""
+    return EXIT_USAGE if isinstance(exc, UqsUsageError) else EXIT_REFUSED
+
+
+def _refuse(message: str, code: int) -> NoReturn:
+    """Log `message`, print it as the --json refusal when --json was asked
+    for (#1882), and exit `code`."""
+    log.error("{}", message)
+    json_refusal(message)
+    sys.exit(code)
+
+
+def _run_for_json() -> NoReturn:
+    """The app, with what Click would print as its own error box turned into
+    the one JSON document `--json` promises (#1882).
+
+    Standalone, Click shows a usage error - a missing argument, an unknown
+    option - as a box on stderr and exits 2, leaving stdout empty, so a caller
+    parsing it reads a refusal as a broken pipe. Run non-standalone, the error
+    reaches here: it is still exit 2 (a usage error), but stdout carries
+    `{"ok": false, "error"}` like every other refusal."""
+    command = typer.main.get_command(app)
+    try:
+        code = command.main(args=sys.argv[1:], standalone_mode=False)
+    except UsageError as exc:
+        where = f" - `{exc.ctx.command_path} --help` shows its usage" if exc.ctx else ""
+        _refuse(f"{exc.format_message()}{where}", exc.exit_code)
+    except ClickException as exc:
+        _refuse(exc.format_message(), exc.exit_code)
+    except Abort:
+        _refuse("aborted", 1)
+    except UqsError as exc:
+        _refuse(str(exc), _exit_code(exc))
+    # Non-standalone, Click returns an Exit's code - and a command's own
+    # return value, which no command here uses for anything but None.
+    sys.exit(code if isinstance(code, int) else 0)
 
 
 if __name__ == "__main__":

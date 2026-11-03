@@ -116,7 +116,9 @@ def test_job_gaps_prints_the_gaps_and_their_refills(monkeypatch):
     holes = [hole | {"range_to": "2024-01-01T01:00:00.000000000"}]
     monkeypatch.setattr(stack_uptime, "gaps", lambda *_a: (holes, {"w_backfill": None}, 2))
     doc = _doc(["job", "gaps", "j", "--from", "2024-01-01", "--to", "2024-01-02"])
-    assert doc["gaps"] == holes and doc["sessions"] == 2 and doc["refillable"]
+    # the ledger's .z.p, spelt with its UTC offset (#1882)
+    utc = [{k: f"{v}+00:00" for k, v in h.items()} for h in holes]
+    assert doc["gaps"] == utc and doc["sessions"] == 2 and doc["refillable"]
     (refill,) = doc["refills"]
     assert refill["worker"] == "w_backfill"
     assert refill["command"].startswith("uqs job backfill w_backfill --from ")
@@ -159,7 +161,7 @@ def test_logs_prints_the_lines(monkeypatch):
 
 def test_logs_attach_prints_the_runs_lines(monkeypatch):
     monkeypatch.setattr(attached_logs, "recent", lambda *_a, **_k: [{"message": "RESULT"}])
-    assert _doc(["logs", "--attach", "a"])["lines"][0]["message"] == "RESULT"
+    assert _doc(["logs", "--attachment", "a"])["lines"][0]["message"] == "RESULT"
 
 
 def test_schema_prints_tables_or_named_columns(monkeypatch):
@@ -197,7 +199,7 @@ def test_target_check_prints_the_release(monkeypatch):
     monkeypatch.setattr(control, "remote_for", lambda *_a: remote)
     monkeypatch.setattr(control, "current_release", lambda _r: "rel-1")
     doc = _doc(["target", "check", "t"])
-    assert doc == {"ok": True, "target": "t", "host": "h", "dest": "/srv/uqf",
+    assert doc == {"ok": True, "target": "t", "ssh": "h", "dest": "/srv/uqf",
                    "remote_user": None, "release": "rel-1"}  # fmt: skip
 
 
@@ -205,7 +207,7 @@ def test_deploy_verify_json_leaves_out_the_marker(monkeypatch, capsys):
     monkeypatch.setattr(verify, "_expected", lambda *_a: ({"rdb1": 6002}, set()))
     monkeypatch.setattr(verify, "busy_ports", lambda expected, _c: {})
     assert verify.run("p", ports_free=True, marker=False) == 0
-    assert json.loads(capsys.readouterr().out) == {"profile": "p", "busy": {}}
+    assert json.loads(capsys.readouterr().out) == {"ok": True, "profile": "p", "busy": {}}
     verify.run("p", ports_free=True)
     assert capsys.readouterr().out.splitlines()[-1] == verify.OK_MARKER
 

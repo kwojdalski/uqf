@@ -9,7 +9,7 @@ import typer
 from rich.table import Table
 
 from uqs import timerange
-from uqs.cli.json_out import emit, json_opt
+from uqs.cli.json_out import emit, json_opt, utc_times
 from uqs.cli.pipelines import needs_pipelines
 from uqs.cli.range_options import DateOpt, LastOpt, RangeFromOpt, RangeToOpt
 from uqs.cli.safety import ReadOnly
@@ -113,7 +113,7 @@ def refills(holes: list[dict], twins: dict) -> tuple[list[dict], bool]:
     cls=needs_pipelines("reads this tree's streaming jobs' coverage", ReadOnly),
 )
 def gaps(
-    job: Annotated[str, typer.Argument(help="The streaming job, e.g. markout")],
+    job: Annotated[str, typer.Argument(metavar="JOB", help="The streaming job, e.g. markout")],
     range_from: RangeFromOpt = None,
     range_to: RangeToOpt = None,
     day: DateOpt = None,
@@ -121,7 +121,7 @@ def gaps(
     interactive: InteractiveOpt = False,
     as_json: GapsJson = False,
 ) -> None:
-    """Where in [--from, --to) a streaming job was not up and subscribed.
+    """Find where in [--from, --to) a streaming job was not up and subscribed.
 
     A restarted job rebuilds its state from the day's log but does not publish
     again what it missed, so these are the holes in its output. Each is
@@ -143,10 +143,13 @@ def gaps(
         found, cut = refills(holes, twins)
         emit({
             "job": job,
-            "gaps": [{"range_from": h["range_from"], "range_to": h["range_to"]} for h in holes],
+            "gaps": [
+                utc_times({"range_from": h["range_from"], "range_to": h["range_to"]})
+                for h in holes
+            ],
             "sessions": sessions,
             "refillable": bool(twins),
-            "refills": found,
+            "refills": [utc_times(r) for r in found],
             "today_not_refillable": cut,
         })  # fmt: skip
         return

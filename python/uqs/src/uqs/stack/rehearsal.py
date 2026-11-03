@@ -66,7 +66,7 @@ def refuse_unbootstrapped(paths: UqsPaths, args: Sequence[str]) -> None:
 
 
 def run_bootstrapped(
-    paths: UqsPaths, args: list[str], base_port: int | None = None
+    paths: UqsPaths, args: list[str], base_port: int | None = None, capture: bool = False
 ) -> subprocess.CompletedProcess[str]:
     """run_torq_sh for a rehearsal - a backfill's validate, plan or dry run
     (#1902): the launcher against the data directory as the last start
@@ -91,4 +91,4 @@ def run_bootstrapped(
             **runtime.write_setenv(paths, base_port, target=Path(tmp) / "setenv.sh"),
         }
         log.debug("running (rehearsal, no bootstrap): {}", " ".join(cmd))
-        return subprocess.run(cmd, env=env, text=True, check=False)
+        return subprocess.run(cmd, env=env, text=True, check=False, capture_output=capture)

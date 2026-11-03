@@ -153,10 +153,10 @@ def test_an_unknown_name_exits_1_and_says_so(sandbox, case):
 
 def test_one_message_for_an_unknown_process():
     message = str(stack_procs.unknown_processes("xyz"))
-    assert message == "no process xyz in this runtime - `uqs list processes` names them"
+    assert message == "no process xyz in this runtime - `uqs process list` names them"
     two = str(stack_procs.unknown_processes(["a", "b"], "Nothing was started."))
     assert two == (
-        "no processes a, b in this runtime - `uqs list processes` names them. Nothing was started."
+        "no processes a, b in this runtime - `uqs process list` names them. Nothing was started."
     )
 
 

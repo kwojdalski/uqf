@@ -130,7 +130,7 @@ def test_the_json_keys_are_the_documented_ones():
     """--json is for scripts: a renamed or removed key must bump FORMAT."""
     s = status.status(_cfg(), _server())
     assert set(s) == {
-        "format", "host", "dest", "current", "previous", "releases",
+        "format", "ssh", "dest", "current", "previous", "releases",
         "last_deployment", "health", "lock",
     }  # fmt: skip
     assert set(s["health"]) == {"checked", "passed", "reason", "processes", "failing_jobs"}

@@ -8,6 +8,7 @@ ones, before any slow step runs.
 
 from __future__ import annotations
 
+from uqs.cli.choices import alternatives
 from uqs.cli.shared import _die
 from uqs.paths import UqsError
 from uqs.stack.listing import (
@@ -16,6 +17,30 @@ from uqs.stack.listing import (
     SUMMARY_COLUMNS,
     SUMMARY_PROBE_COLUMNS,
 )
+
+#: `uqs status --columns`'s presets, a name for a set of columns - read by the
+#: resolver, the help, completion and the refusal alike (#1893). `status` is
+#: everything but the graph, narrower for an 80-column terminal.
+SUMMARY_PRESETS: dict[str, tuple[str, ...]] = {
+    "all": SUMMARY_ALL_COLUMNS,
+    "status": SUMMARY_COLUMNS + SUMMARY_PROBE_COLUMNS + SUMMARY_BATCH_COLUMNS,
+}
+#: The preset shown when `--columns` is not given.
+SUMMARY_DEFAULT_PRESET = "all"
+
+
+def presets_help() -> str:
+    """`--columns`'s help: each preset with the columns it shows (#1893)."""
+
+    def shows(columns: tuple[str, ...]) -> str:
+        return "every column" if columns == SUMMARY_ALL_COLUMNS else ", ".join(columns)
+
+    notes = {name: shows(columns) for name, columns in SUMMARY_PRESETS.items()}
+    return (
+        "Comma-separated columns, or a preset: "
+        + alternatives(SUMMARY_PRESETS, notes, default=SUMMARY_DEFAULT_PRESET, quote="`")
+        + "."
+    )
 
 
 def resolve_columns(requested: str | None) -> list[str]:
@@ -29,12 +54,10 @@ def resolve_columns(requested: str | None) -> list[str]:
     `--columns status`; a reader who never learns the columns exist has no
     such move.
     """
-    if not requested:
-        return list(SUMMARY_ALL_COLUMNS)
-    if requested.strip().lower() == "all":
-        return list(SUMMARY_ALL_COLUMNS)
-    if requested.strip().lower() == "status":
-        return list(SUMMARY_COLUMNS + SUMMARY_PROBE_COLUMNS + SUMMARY_BATCH_COLUMNS)
+    requested = requested or SUMMARY_DEFAULT_PRESET
+    preset = SUMMARY_PRESETS.get(requested.strip().lower())
+    if preset is not None:
+        return list(preset)
     wanted = [c.strip() for c in requested.split(",") if c.strip()]
     known = {c.lower(): c for c in SUMMARY_ALL_COLUMNS}
     resolved, unknown = [], []
@@ -49,7 +72,7 @@ def resolve_columns(requested: str | None) -> list[str]:
             UqsError(
                 f"unknown summary column(s): {', '.join(unknown)}. "
                 f"Available: {', '.join(sorted(SUMMARY_ALL_COLUMNS))}, "
-                "or `all` / `status`"
+                f"or {' / '.join(f'`{p}`' for p in SUMMARY_PRESETS)}"
             )
         )
     return resolved

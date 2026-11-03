@@ -68,7 +68,7 @@
 / the declaration it always did.
 .qetl.source.sources:([name:`symbol$()] source:`symbol$(); table_name:`symbol$();
     time_column:`symbol$(); row_key:(); columns:(); types:(); query:(); fixture:();
-    tz:`symbol$(); transport:`symbol$(); credential_example:(); supporting:(); raw:(); complete_through:(); reference_read:())
+    tz:`symbol$(); transport:`symbol$(); credential_example:(); supporting:(); raw:(); complete_through:(); ready:(); reference_read:())
 
 / ------------------------------------------------------- COMPLETE THROUGH
 / .
@@ -87,6 +87,31 @@
 / and is closed data, so it is never clipped. A settle lag (a per-worker
 / allowance for late rows below the bound) is deliberately not built: add it
 / when a source shows rows arriving behind its own bound.
+
+/ -------------------------------------------------------------- READINESS
+/ .
+/ A coverage claim is permanent, so a window must not be claimed on inputs it
+/ could not yet read (#1927). A source with SUPPORTING inputs (reference data a
+/ transform scores the primary against) can fetch a window whose primary rows
+/ are all there and whose reference rows have not landed. Scored anyway, every
+/ row comes out unavailable, coverage records the window as done at this
+/ version, and nothing ever plans it again.
+/ .
+/ `ready:{[batch;range_from;range_to] -> unmet}` is the source saying what the
+/ window cannot be scored without. `batch` is what fetch returned (a dict of
+/ tables when the source has supporting inputs), the bounds are the window's.
+/ It returns a list of strings, one per unmet requirement, and () when ready.
+/ A window with unmet requirements stops after fetch and before publish: no
+/ rows, no coverage, a failed window (so the run reports partial) that names
+/ what was missing, and the next run plans it again with no new mechanism.
+/ .
+/ Readiness is NOT the same as an empty answer. A window that has no primary
+/ rows is ready (there is nothing to score), and a window whose reference data
+/ has no entry for one leg is ready (that leg is a legitimate unavailable row):
+/ what is unready is a window whose reference data is ABSENT. Where the
+/ reference data is merely not yet as far along as the window needs,
+/ complete_through is the tool, because it clips the plan rather than failing
+/ windows. The default hook is ready for everything.
 
 / ------------------------------------------------------- REFERENCE READ
 / .
@@ -193,6 +218,9 @@
 /     UTC instant (a timestamp) through which the source holds EVERY row, for
 /     a source over data that is still growing (see COMPLETE THROUGH). The
 /     default, {[h] 0Wp}, is closed data: complete forever.
+/   ready - a lambda {[batch;range_from;range_to]} returning the window's unmet
+/     requirements as a list of strings, () when it can be scored (see READINESS).
+/     The default is ready for everything.
 /   reference_read - date_skew, lookback_cap and symbols, how much of its
 /     supporting inputs the source reads as reference (see REFERENCE READ). Needs
 /     supporting inputs to describe.
@@ -302,6 +330,12 @@
         params:(value ct) 1;
         if[(not 1=count params) or null first params;
             '"define: ",string[source],"'s complete_through must take exactly one argument, the source's handle"]];
+    if[`ready in key decl;
+        rd:decl`ready;
+        if[not 100h=type rd;
+            '"define: ",string[source],"'s ready must be a lambda taking the fetched batch and the window's bounds and returning its unmet requirements"];
+        if[3<>count (value rd) 1;
+            '"define: ",string[source],"'s ready must take exactly three arguments, the batch and the window's range_from and range_to"]];
     / A declaration read back from the registry carries the default, (): not declared.
     if[(`reference_read in key decl) and not ()~decl`reference_read;
         if[0=count sup;

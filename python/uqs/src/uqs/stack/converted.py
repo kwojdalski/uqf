@@ -1,7 +1,7 @@
 """A release whose q was converted for an older kdb+ at build time, recognised
 where it starts (#936).
 
-`uqs deploy build --q-target 4.0` flattens the release's q (deploy/portable.py)
+`uqs deploy build --q-version 4.0` flattens the release's q (deploy/portable.py)
 and records it in RELEASE_MANIFEST.json: `target.q`, and `portable` - which
 files were transformed - beside a sha256 for every file. The startup guard
 (qtree.refuse_unloadable) asked only the runtime's declared `q_tree`, so a

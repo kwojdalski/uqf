@@ -17,7 +17,7 @@ from rich.table import Table
 from uqs.cli import completion
 from uqs.cli.json_out import emit, json_opt
 from uqs.cli.renames import alias_command, renamed
-from uqs.cli.safety import ReadOnly
+from uqs.cli.safety import Effect, marked
 from uqs.cli.shared import (
     BasePortOpt,
     ExportOpt,
@@ -32,7 +32,7 @@ from uqs.cli.shared import (
     log,
 )
 from uqs.cli.summary_actions import process_actions
-from uqs.cli.summary_columns import resolve_columns, resolve_sort_column
+from uqs.cli.summary_columns import presets_help, resolve_columns, resolve_sort_column
 from uqs.cli.summary_table import gather, record, render
 from uqs.cli.vocabulary import EVERY_DEFAULT, EveryOpt, duration
 from uqs.interpreter import interpreter_status
@@ -106,19 +106,37 @@ def _note_monitor_coverage() -> None:
 
 
 SummaryJson = json_opt(
-    '{"interpreter", "processes": [{time, process, status, pid, port, heartbeat, responds, '
+    '{"interpreter": {binary, actual, problem, runnable, connection_limit, summary}, '
+    '"processes": [{time, process, status, pid, port, heartbeat, responds, '
     'batches, depends_on: [], inputs: [], outputs: [], port_source}], "silent": [process], '
     '"failing": [{job, process, ...}], "starved": [{process, reasons}], "heartbeats_collected"}'
 )
+
+
+def _interpreter(status) -> dict:
+    """The interpreter line as fields - all it says, `runnable` and the
+    connection budget included, which the bare status left out (#1882)."""
+    out = {
+        "binary": status.binary,
+        "actual": status.actual,
+        "problem": status.problem,
+        "runnable": status.binary is not None,
+        "connection_limit": None,
+        "summary": listing.interpreter_line(status),
+    }
+    if status.binary is not None:
+        try:  # null: no cap; unreadable, the summary line says why
+            out["connection_limit"] = profiles.licence_limit()
+        except UqsError:
+            pass
+    return out
 
 
 def _json(rows: list[dict], gathered, status) -> None:
     """The table and what is printed under it, as one document."""
     up = {row["Process"] for row in rows if row["Status"] == "up"}
     emit({
-        "interpreter": {
-            "binary": status.binary, "actual": status.actual, "problem": status.problem,
-        },
+        "interpreter": _interpreter(status),
         "processes": [record(row) for row in rows],
         "silent": gathered.silent,
         "failing": gathered.failing,
@@ -134,7 +152,12 @@ def _json(rows: list[dict], gathered, status) -> None:
 _RENAMES = {"--port": "--base-port", "--debug": "--debug"}
 
 
-@app.command("status", cls=renamed(_RENAMES, ReadOnly))
+#: `status`'s mark: with --interactive, its browser starts, stops and restarts
+#: processes with single keys, so `uqs --target` asks first (#1893).
+_STATUS = marked(Effect.READ_ONLY, acts_when="--interactive")
+
+
+@app.command("status", cls=renamed(_RENAMES, _STATUS))
 def summary(
     ctx: typer.Context,
     port: BasePortOpt = None,
@@ -143,10 +166,7 @@ def summary(
         str | None,
         typer.Option(
             "--columns",
-            help=(
-                "Comma-separated columns, `all` (the default), or `status` for "
-                "just up/down/pid/port - narrower, for an 80-column terminal."
-            ),
+            help=presets_help(),
             autocompletion=completion.summary_columns,
         ),
     ] = None,
@@ -189,15 +209,15 @@ def summary(
     every: EveryOpt = SUMMARY_REFRESH_SECONDS,
     as_json: SummaryJson = False,
 ) -> None:
-    """Status table for every process in process.csv, with its declared graph.
+    """Show the status of every process in process.csv, with its declared graph.
 
     The graph columns - what each process subscribes to, what it publishes,
     and which processes it therefore needs running - answer the question
     behind every `up, but idle` process, from the same declarations
     `verify_pipeline_edges` checks.
 
-    Ten columns need a wide terminal. `--columns status` gives the seven
-    status columns, and any subset can be named explicitly.
+    Every column needs a wide terminal. `--columns status` leaves the graph
+    columns out, and any subset can be named explicitly.
 
     `--sort` orders the rows by any column, including one `--columns` leaves
     out, numerically where the column is numeric (`Port`, `PID`) and with

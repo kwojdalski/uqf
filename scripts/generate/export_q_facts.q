@@ -50,6 +50,7 @@ attributes:attr each (`s#0 1;`u#0 1;`p#0 0 1;`g#0 1);
 / name -> a list of symbols, in q's own order, or a string.
 facts:(!) . flip (
     (`IO_STRATEGIES;        .qetl.io.strategies);
+    (`DEFAULT_IO_STRATEGY;  .qetl.io.default_strategy);
     (`RUN_MODES;            .qetl.job.bounded.runtime.modes);
     (`READ_ONLY_RUN_MODES;  .qetl.job.bounded.runtime.read_only_modes);
     (`LOG_LEVELS;           .qetl.log.levels);
