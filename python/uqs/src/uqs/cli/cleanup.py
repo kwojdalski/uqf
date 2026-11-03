@@ -134,7 +134,7 @@ def remove_checkpoint(
 ) -> None:
     """Delete a bounded worker's checkpoint, so its next run starts at --from.
 
-    Names the checkpoint and asks first (#1854); `--yes` does not ask.
+    Names the checkpoint and asks first; `--yes` does not ask.
 
     Refused while a run of the worker may still be live. The checkpoint is
     only where a run resumes: windows already in the coverage ledger are
