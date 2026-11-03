@@ -144,7 +144,7 @@ def resolve_plant(procname: str | None = None, timeout: float | None = None) -> 
         raise UqsError(
             "no tickerplant is running, so there is nothing to take a log directory "
             "from - start one with `uqs start stp1`, or name the log yourself with "
-            "`uqs data replay --dir <path>`"
+            "`uqs data replay --tplogdir <path>`"
         )
     if len(plants) > 1:
         names = ", ".join(p.procname for p in plants)
@@ -299,7 +299,7 @@ class ReplayPlan:
 
     def rows(self) -> list[tuple[str, str, str]]:
         """(what, value, where it came from), for the printed plan."""
-        source = f"{self.plant.procname} (pid {self.plant.pid})" if self.plant else "--dir"
+        source = f"{self.plant.procname} (pid {self.plant.pid})" if self.plant else "--tplogdir"
         return [
             ("log", str(self.log_dir), source),
             ("hdb", str(self.hdb_dir), "hdb process" if self.plant else "--hdb"),
@@ -337,7 +337,8 @@ def plan(
         log_dir = resolve_log_dir(plant, date)
     elif date is not None:
         raise UqsError(
-            "--date picks a day out of a plant's log directory, so it cannot be used with --dir"
+            "--date picks a day out of a plant's log directory, so it cannot be used with "
+            "--tplogdir"
         )
 
     if plant is not None and base_port is not None and not base_port_given:

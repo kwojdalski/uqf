@@ -65,7 +65,7 @@ refused, and a backfill is its own deliberate `uqs job backfill` afterwards. The
 plan (--dry-run) prints the resolved process list; verification checks those
 processes and that the tickerplant carries every bundle table.
 
---live writes UQS_REQUIRE_LIVE_SOURCES=1 into deploy.env, so a source with no
+--live writes UQF_LIVE_SOURCES_REQUIRED=1 into deploy.env, so a source with no
 credential is REFUSED rather than read as its fixture - no synthetic row, and
 no coverage recorded for it - and verification proves the pipeline processes
 saw the setting. Credentials stay on the server, outside the artifact: in

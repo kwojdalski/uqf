@@ -62,6 +62,6 @@ SCAFFOLD_KINDS: tuple[str, ...] = (
     "streaming",
     "backfill",
     "normalizer",
-    "external",
+    "connector",
     "horizon",
 )

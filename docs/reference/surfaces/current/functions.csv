@@ -1975,6 +1975,14 @@ qpipe.transform.markout_core,tops,function,1,md
 qpipe.transform.markout_core,unscoreable,function,3,domain spec exe
 qpipe.transform.markout_core,validate,function,2,domain spec
 qpipe.transform.markout_core,why,function,3,domain spec exe
+qpipe.transform.markout_layouts,canonical,function,2,spec lng
+qpipe.transform.markout_layouts,core_spec,function,3,columns components extra_own
+qpipe.transform.markout_layouts,long,function,2,spec wde
+qpipe.transform.markout_layouts,long_keys,value,,
+qpipe.transform.markout_layouts,nested,function,2,spec lng
+qpipe.transform.markout_layouts,require_spec,function,1,spec
+qpipe.transform.markout_layouts,unnest,function,1,nst
+qpipe.transform.markout_layouts,wide,function,2,spec lng
 qpipe.transform.order_outcome,dimensions,value,,
 qpipe.transform.order_outcome,outcomes,value,,
 qpipe.transform.order_outcome,status_map,function,2,codes outs
