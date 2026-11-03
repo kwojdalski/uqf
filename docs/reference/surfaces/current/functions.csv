@@ -211,6 +211,7 @@ qetl.io.remote.contract,require,function,1,c
 qetl.io.remote.contract,require_opts,function,2,k o
 qetl.io.remote.contract,schema,function,1,k
 qetl.io.remote.contract,versions,value,,
+qetl.job.bounded,batching,dict,,
 qetl.job.bounded,checkpoint,function,2,worker cursor
 qetl.job.bounded,cleanup,function,1,worker
 qetl.job.bounded,connect_error,function,2,source e
@@ -254,6 +255,8 @@ qetl.job.bounded,validate,function,2,worker run_spec
 qetl.job.bounded,version_from_flags,function,2,opts worker
 qetl.job.bounded,worker_cfg,dict,,
 qetl.job.bounded,worker_root,value,,
+qetl.job.bounded.batching,keys,value,,
+qetl.job.bounded.batching,plan,function,2,spec rows
 qetl.job.bounded.runtime,airflow_owned,value,,
 qetl.job.bounded.runtime,allows,function,1,effect
 qetl.job.bounded.runtime,backoff_ms,function,2,pol attempt
