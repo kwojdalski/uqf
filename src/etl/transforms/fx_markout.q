@@ -155,7 +155,7 @@
 / @param spec the spec
 / @param exe executions
 / @return a boolean per execution
-/ @eg .qpipe.transform.fx_markout.scoreable[.qpipe.transform.fx_markout.default_spec;([] source_time:2#2026.09.17D10:00:00; venue:`a`a; sym:`EURUSD`BTCUSDT; side:1 1; price:1.1 2f; fill_id:`x`y; clock:2#`venue)]  ->  10b
+/ @eg .qpipe.transform.fx_markout.scoreable[.qpipe.transform.fx_markout.default_spec;([] source_time:2#2026.09.17D10:00:00; venue:`a`a; sym:`EURUSD`BTCUSDT; side:1 1; size:2#1e6; price:1.1 2f; fill_id:`x`y; clock:2#`venue)]  ->  10b
 .qpipe.transform.fx_markout.scoreable:{[spec;exe]
     null .qpipe.transform.markout_core.why[.qpipe.transform.fx_domain.domain;.qpipe.transform.fx_markout.require_spec[spec];exe]}
 
@@ -164,7 +164,7 @@
 / @param spec the spec
 / @param exe executions
 / @return table fill_id, venue, reason
-/ @eg count .qpipe.transform.fx_markout.unscoreable[.qpipe.transform.fx_markout.default_spec;([] source_time:enlist 2026.09.17D10:00:00; venue:`a; sym:`BTCUSDT; side:1; price:1f; fill_id:`x; clock:`venue)]  ->  1
+/ @eg count .qpipe.transform.fx_markout.unscoreable[.qpipe.transform.fx_markout.default_spec;([] source_time:enlist 2026.09.17D10:00:00; venue:`a; sym:`BTCUSDT; side:1; size:1e6; price:1f; fill_id:`x; clock:`venue)]  ->  1
 .qpipe.transform.fx_markout.unscoreable:{[spec;exe] .qpipe.transform.markout_core.unscoreable[.qpipe.transform.fx_domain.domain;spec;exe]}
 
 / Score executions against market_data at every horizon of the spec.
