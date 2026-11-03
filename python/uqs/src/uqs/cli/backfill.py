@@ -14,10 +14,11 @@ from typing import Annotated
 import typer
 
 from uqs import timerange
+from uqs.attach.backfill_forced import ANY_WRITER
 from uqs.cli import backfill_attached, completion, safety
 from uqs.cli.pipelines import needs_pipelines
 from uqs.cli.range_options import DateOpt, LastOpt, RangeFromOpt, RangeToOpt
-from uqs.cli.renames import renamed
+from uqs.cli.renames import bypass_flag, renamed
 from uqs.cli.safety import ChangesState
 from uqs.cli.shared import (
     JOB_OPERATIONS_PANEL,
@@ -27,6 +28,7 @@ from uqs.cli.shared import (
     _paths,
     console,
     job_app,
+    log,
 )
 from uqs.paths import UqsError
 from uqs.stack import backfill as stack_backfill
@@ -40,7 +42,8 @@ from uqs.stack import run_modes
     cls=renamed(
         {
             "--port": "--base-port",
-            "--force": "--any-writer",
+            "--force": bypass_flag(ANY_WRITER),
+            "--any-writer": bypass_flag(ANY_WRITER),
             "--debug": "--debug",
             "--version": "--source-version",
         },
@@ -126,18 +129,6 @@ def backfill(
             "`uqs job receive` started on the stack's machine, which writes its HDB (#1650)",
         ),
     ] = None,
-    force: Annotated[
-        bool,
-        typer.Option(
-            "--any-writer",
-            help="With --writer: HOST:PORT is any q process of the stack (e.g. its wdb), and "
-            "each date's rows are appended into that process's own HDB over plain IPC. "
-            "Almost nothing is checked there - no receiver, contract, schema, attachment "
-            "verification, end-of-day fence or retry protection - and no reader is told "
-            "to reload. Completed history only: a row dated on or after the date the "
-            "writer is filling is refused. Append only; a re-run or a retry duplicates rows",
-        ),
-    ] = False,
     as_json: Annotated[
         bool,
         typer.Option("--json", help="With --attach: print the plan as JSON"),
@@ -204,6 +195,12 @@ def backfill(
     except UqsError as exc:
         _die(exc)
         return
+    # `--override any-writer` (a bare --any-writer until #1852) is the writer's,
+    # not a coordination waiver: it travels as `force`.
+    why = waived.pop(ANY_WRITER, None)
+    force = why is not None
+    if force:
+        log.warning("uqs job backfill: --override {} ({})", ANY_WRITER, why)
     if waived and attach is None:
         _die(
             UqsError(
@@ -218,7 +215,11 @@ def backfill(
             return
         mode = "dry-run"
     if force and writer is None:
-        _die(UqsError("--any-writer is for --writer: it writes through the process at HOST:PORT"))
+        _die(
+            UqsError(
+                "--override any-writer is for --writer: it writes through the process at HOST:PORT"
+            )
+        )
         return
     if writer is not None and attach is None:
         _die(UqsError("--writer is for --attach: it names the receiver of an attached destination"))

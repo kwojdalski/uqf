@@ -10,7 +10,15 @@ it and nothing else:
     --override accept-q-version   a server q outside q_version
     --override allow-unpinned     an artifact with no .sha256 and no expected_sha256
 
-each with `--reason TEXT` (#1732).
+each with `--reason TEXT` (#1732). So are the bypasses that were bare flags
+until #1852, each now a named override with a recorded reason:
+
+    --override allow-dirty           an artifact (or a build) from uncommitted changes
+    --override fix-hdb               fill the shared HDB's missing tables and columns
+    --override break-lock            remove a deploy lock whose holder stopped beating
+
+and `deploy build --q-target`'s `--override allow-computed-names` is the
+converter's own (deploy/portable.py).
 
 None of them bypasses anything else. The archive's members are still checked
 against its manifest, the platform still has to match, and smoke and verify
@@ -35,8 +43,14 @@ ACCEPT_DIGEST = "accept-digest"
 ACCEPT_Q_VERSION = "accept-q-version"
 ALLOW_UNPINNED = "allow-unpinned"
 ACCEPT_CONVERTED = "accept-converted-release"
+ALLOW_DIRTY = "allow-dirty"
+FIX_HDB = "fix-hdb"
+BREAK_LOCK = "break-lock"
 
 _PUSH = ("deploy push",)
+#: The overrides that were option-per-override before #1732, each then taking
+#: its reason as its value: their old spellings are value-taking (cli/deploy_policy.py).
+POLICY = (ACCEPT_DIGEST, ACCEPT_Q_VERSION, ALLOW_UNPINNED, ACCEPT_CONVERTED)
 #: Each override, as `--override NAME` gives it, and the requirement it relaxes (#1825).
 GUARDRAILS = (
     Guardrail(ACCEPT_DIGEST, _PUSH, "deploy an artifact whose sha256 is not expected_sha256"),
@@ -56,9 +70,31 @@ GUARDRAILS = (
         "start a release converted for an older kdb+ on a q its version check "
         "cannot confirm, once its smoke test passes there",
     ),
+    # Bare flags until #1852: each a bypass with no reason recorded.
+    Guardrail(
+        ALLOW_DIRTY,
+        ("deploy build", "deploy push"),
+        "build, or deploy, an artifact from uncommitted changes (its manifest says dirty)",
+        risk="what runs is no commit anyone can check out again",
+        action="commit, and build from the commit - ideally in CI",
+    ),
+    Guardrail(
+        FIX_HDB,
+        _PUSH,
+        "fill the shared HDB's partitions that lack a table or column this release declares "
+        "(additive) instead of refusing them; a changed type is still refused",
+        risk="every partition of the shared HDB is written to",
+    ),
+    Guardrail(
+        BREAK_LOCK,
+        ("deploy push", "deploy rollback"),
+        "remove a deploy lock whose holder stopped beating; still refused while it beats",
+        risk="a deployment that is only slow, not dead, loses its lock",
+    ),
 )
-#: {name: what it relaxes}, as the options and a target file's refusals read them.
-SKIPS = {g.id: g.description for g in GUARDRAILS}
+#: {name: what it relaxes} for `deploy push`'s overrides: make_config's fields,
+#: each the reason or None, and what a target file may not set (targets.OVERRIDES).
+SKIPS = {g.id: g.description for g in GUARDRAILS if "deploy push" in g.commands}
 
 
 def _entry(override: str, reason: str, requirement: str, observed: str, applied: bool) -> dict:
@@ -147,6 +183,22 @@ def for_q(cfg: Config, observed: str) -> list[dict]:
     if cfg.accept_q_version is None:
         return []
     return [_entry(ACCEPT_Q_VERSION, cfg.accept_q_version, cfg.q_version, seen, not ok)]
+
+
+def for_flags(cfg: Config, dirty: bool) -> list[dict]:
+    """The exceptions for the overrides that were bare flags (#1852), each with
+    its reason: allow-dirty applied when the artifact is dirty, the others as
+    requested - whether a lock is broken or a partition filled is decided
+    later, on the server."""
+    out = []
+    if cfg.allow_dirty:
+        state = "dirty: true" if dirty else "dirty: false"
+        out.append(_entry(ALLOW_DIRTY, str(cfg.allow_dirty), "a clean artifact", state, dirty))
+    if cfg.fix_hdb:
+        out.append(_entry(FIX_HDB, str(cfg.fix_hdb), "no partition filled", "fill requested", True))
+    if cfg.break_lock:
+        out.append(_entry(BREAK_LOCK, str(cfg.break_lock), "a free lock", "break requested", True))
+    return out
 
 
 def converted(record: dict) -> dict:

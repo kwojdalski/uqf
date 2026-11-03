@@ -973,12 +973,41 @@ def test_a_failed_export_reports_rather_than_losing_the_output(monkeypatch, tmp_
 
 def test_query_passes_the_expression_and_connection_through(monkeypatch):
     rec = _patch(monkeypatch, runtime, "query", result="RESULT")
+    monkeypatch.setenv("UQS_TEST_Q_PW", "p")
     result = runner.invoke(
-        cli.app, ["query", "select from t", "--port", "6052", "--user", "u", "--passwd", "p"]
-    )
+        cli.app,
+        ["query", "select from t", "--port", "6052", "--user", "u",
+         "--password-env", "UQS_TEST_Q_PW"],
+    )  # fmt: skip
     assert result.exit_code == 0
     assert rec.args[:2] == ("select from t", 6052)
     assert rec.kwargs["user"] == "u"
+    assert rec.kwargs["passwd"] == "p"
+
+
+def test_query_password_is_never_an_argument(monkeypatch):
+    """#1853: --password-env names the variable; with none it is TorQ's demo
+    password, and an unset variable is refused by name before anything connects."""
+    rec = _patch(monkeypatch, runtime, "query", result="RESULT")
+    assert runner.invoke(cli.app, ["query", "1", "--port", "6052"]).exit_code == 0
+    assert (rec.kwargs["user"], rec.kwargs["passwd"]) == ("admin", "admin")
+    monkeypatch.delenv("UQS_TEST_Q_PW", raising=False)
+    errors = _error_log(monkeypatch)
+    argv = ["query", "1", "--port", "6052", "--password-env", "UQS_TEST_Q_PW"]
+    assert runner.invoke(cli.app, argv).exit_code == 1
+    assert any("$UQS_TEST_Q_PW is not set" in m for m in errors.messages), errors.messages
+
+
+@pytest.mark.parametrize("command", [["query", "1"], ["schema"]])
+def test_the_inline_passwd_still_parses_for_one_release_and_warns(monkeypatch, command):
+    from uqs.cli import renames
+
+    said: list[tuple[str, str]] = []
+    monkeypatch.setattr(renames, "warn_secret_argv", lambda old, new: said.append((old, new)))
+    rec = _patch(monkeypatch, runtime, "query", result="RESULT")
+    monkeypatch.setattr(schema_view, "overview", lambda *a, **k: rec(*a, **k) or [])
+    runner.invoke(cli.app, [*command, "--port", "6052", "--passwd", "p"])
+    assert said == [("--passwd", "--password-env NAME")]
     assert rec.kwargs["passwd"] == "p"
 
 
@@ -1964,12 +1993,29 @@ def test_query_with_no_expression_execs_qcon_on_the_same_connection(monkeypatch)
     seen: dict[str, Any] = {}
     fake_which(monkeypatch, {"rlwrap": "/usr/bin/rlwrap", "qcon": "/usr/bin/qcon"})
     monkeypatch.setattr(query_cli.os, "execvp", lambda f, a: seen.update(file=f, argv=a))
-    result = runner.invoke(
-        cli.app,
-        ["query", "--port", "6099", "--host", "h2", "--user", "u", "--passwd", "p"],
-    )
+    result = runner.invoke(cli.app, ["query", "--port", "6099", "--host", "h2", "--user", "u"])
     assert result.exit_code == 0, result.output
-    assert seen["argv"] == ["rlwrap", "qcon", "h2:6099:u:p"]
+    assert seen["argv"] == ["rlwrap", "qcon", "h2:6099:u:admin"]
+
+
+def test_a_session_with_a_real_password_never_puts_it_on_qcons_command_line(monkeypatch):
+    """#1853: qcon takes `host:port:user:password` as its argument, where ps
+    shows it, so a password from --password-env gets uqs's own session -
+    each line sent as typed, not routed through the gateway."""
+    fake_which(monkeypatch, {"qcon": "/usr/bin/qcon"})
+    monkeypatch.setattr(query_cli.os, "execvp", lambda f, a: pytest.fail(f"exec'd {a}"))
+    seen: dict[str, Any] = {}
+    monkeypatch.setattr(
+        query_cli.stack_gateway,
+        "query_session",
+        lambda host, port, user, passwd, **k: seen.update(k, port=port, passwd=passwd) or 0,
+    )
+    monkeypatch.setenv("UQS_TEST_Q_PW", "s3cret")
+    argv = ["query", "--port", "6099", "--password-env", "UQS_TEST_Q_PW"]
+    result = runner.invoke(cli.app, argv)
+    assert result.exit_code == 0, result.output
+    assert (seen["port"], seen["passwd"], seen["routed"]) == (6099, "s3cret", False)
+    assert "s3cret" not in result.output
 
 
 def test_a_session_without_qcon_installed_says_what_still_works(monkeypatch):
@@ -2036,9 +2082,9 @@ def test_query_proc_opens_qcon_on_the_named_process_port(monkeypatch):
 
 def test_query_proc_resolves_the_port_at_the_stacks_base_port(monkeypatch):
     seen = _conn(monkeypatch)
-    runner.invoke(cli.app, ["query", "rdb1", "--base-port", "7000", "--user", "u", "--passwd", "p"])
+    runner.invoke(cli.app, ["query", "rdb1", "--base-port", "7000", "--user", "u"])
     assert seen["base"] == 7000
-    assert seen["argv"][-1] == "localhost:6052:u:p"
+    assert seen["argv"][-1] == "localhost:6052:u:admin"
 
 
 def test_query_proc_refuses_an_unknown_process_by_name(monkeypatch):
@@ -2181,7 +2227,7 @@ def test_query_with_nothing_at_all_opens_the_routing_session_on_the_gateway(monk
     _conn(monkeypatch, running=("gateway1",), ports={"gateway1": "6057"})
     seen = {}
 
-    def session(host, port, user, passwd, *, show, fail, servers, render):
+    def session(host, port, user, passwd, *, show, fail, servers, render, **_k):
         seen.update(port=port, servers=servers)
         return 0
 

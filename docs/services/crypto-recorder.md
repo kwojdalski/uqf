@@ -44,12 +44,14 @@ uqs query "select from crypto_book" --port <rdb1's port>
 Requires a `~/github_projects/cryptorust` checkout (override the path via
 `$CRYPTORUST_ROOT`) with a Rust toolchain on `PATH` - `connector start crypto`
 runs `cargo build` itself the first time, which can take a while. It presents
-the tickerplant credential every connector shares to `stp1`'s access list -
-`--tp-credential`, else `UQF_TP_CREDENTIAL`, else the starter pack's labelled
-demo login ([connector
+the tickerplant credential every connector shares to `stp1`'s access list - the
+variable `--tp-credential-env NAME` names, else `UQF_TP_CREDENTIAL`, else the
+starter pack's labelled demo login ([connector
 configuration](../reference/environment.md#connector-configuration)) - so there
 is no separate cryptorust-side credential to set up. The generated
-`crypto_recorder_config.yaml` holds it, and is written owner-only (0600).
+`crypto_recorder_config.yaml` holds it, and is written owner-only (0600); the
+fills recorder gets its own, `crypto_fills_recorder_config.yaml`, passed as
+`--config` rather than putting the credential on its command line.
 
 The q side of what is specific to cryptorust - its recorded DuckDB capture
 (`crypto_market_data_backfill1`) and its Kafka book snapshots

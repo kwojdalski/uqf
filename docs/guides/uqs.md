@@ -1367,7 +1367,17 @@ derived files included - CI checks they are current.
 
 Every process (except the passwordless `feed1`) is protected by
 `lib/torq-finance-starter-pack/appconfig/passwords/accesslist.txt` - placeholder
-demo credentials, `admin:admin` works for everything.
+demo credentials, `admin:admin` works for everything, and is what `uqs query`
+and `uqs schema` log in as by default. For another login, give `--user` and put
+the password in a variable whose NAME `--password-env` takes - never on the
+command line, where `ps` and shell history would show it:
+
+```
+read -rs Q_PW && export Q_PW
+uqs query rdb1 "count trade" --user ops --password-env Q_PW
+```
+
+The old `--passwd PASSWORD` still parses for one release, hidden, and warns.
 
 ```
 uqs query \
@@ -1412,7 +1422,9 @@ In the session, `\\` (q's own), `exit` or Ctrl-D leaves; Ctrl-C drops the line
 being typed. A line that fails is reported and the session goes on.
 
 It refuses a process that is not running, naming the `uqs start` to fix it.
-`qcon` ships with kdb+, not with this repository.
+`qcon` ships with kdb+, not with this repository. qcon takes the password on its
+command line, so with a password from `--password-env` the session on a process
+is uqs's own console instead, each line sent as typed.
 
 Results print as q's own console prints them: the process formats its answer
 with `.Q.s`, laid out to this terminal's size (or in full when the output is
@@ -1577,23 +1589,23 @@ logs its new spelling when used (rule 6). The release after removes it.
 
 One meaning per option name (#1729):
 
-  | old                                                                                     | new                              |
-  | ---                                                                                     | ---                              |
-  | `--port` on `start` `stop` `restart` `exec` `summary` `graph` `list`                    | `--base-port`                    |
-  | `--port` on `config get` `data replay` `connector start` `deploy verify` `job backfill` | `--base-port`                    |
-  | `job receive --port`                                                                    | `--listen-port`                  |
-  | `query --target NAME`                                                                   | `query --tunnel NAME`            |
-  | `stop --force`                                                                          | `stop --kill`                    |
-  | `job backfill --force`                                                                  | `job backfill --any-writer`      |
-  | `job remove --force`                                                                    | `job remove --even-if-edited`    |
-  | `logs -n N`                                                                             | `logs --lines N` / `-l N`        |
-  | `start --print`                                                                         | `start --dry-run` (#1732)        |
-  | `logs --print`                                                                          | `--show-command`                 |
-  | `query --raw`                                                                           | `query --no-gateway`             |
-  | `config get --raw`                                                                      | `config show --unresolved`       |
-  | `summary --debug`, `job backfill --debug`                                               | `uqs --debug status`, ...        |
-  | `--host` on `deploy push` `status` `rollback` `prune`                                   | `--ssh` (#1768)                  |
-  | `deploy rollback --to RELEASE`                                                          | `--release RELEASE` (#1768)      |
+  | old                                                                                     | new                                            |
+  | ---                                                                                     | ---                                            |
+  | `--port` on `start` `stop` `restart` `exec` `summary` `graph` `list`                    | `--base-port`                                  |
+  | `--port` on `config get` `data replay` `connector start` `deploy verify` `job backfill` | `--base-port`                                  |
+  | `job receive --port`                                                                    | `--listen-port`                                |
+  | `query --target NAME`                                                                   | `query --tunnel NAME`                          |
+  | `stop --force`                                                                          | `stop --kill`                                  |
+  | `job backfill --force`                                                                  | `job backfill --override any-writer` (#1852)   |
+  | `job remove --force`                                                                    | `job remove --override even-if-edited` (#1852) |
+  | `logs -n N`                                                                             | `logs --lines N` / `-l N`                      |
+  | `start --print`                                                                         | `start --dry-run` (#1732)                      |
+  | `logs --print`                                                                          | `--show-command`                               |
+  | `query --raw`                                                                           | `query --no-gateway`                           |
+  | `config get --raw`                                                                      | `config show --unresolved`                     |
+  | `summary --debug`, `job backfill --debug`                                               | `uqs --debug status`, ...                      |
+  | `--host` on `deploy push` `status` `rollback` `prune`                                   | `--ssh` (#1768)                                |
+  | `deploy rollback --to RELEASE`                                                          | `--release RELEASE` (#1768)                    |
 
 Noun first (#1727):
 
@@ -1665,6 +1677,25 @@ their reasons are joined into the one `--reason`. `data migrate` was dry unless
 `--apply`: for one release it refuses to run with neither `--dry-run` nor
 `--apply`, so a script written for the old default does not start writing, and
 the release after writes by default.
+
+Every bypass is a named override with a reason (#1852): the bare flags that
+lifted a refusal and recorded no reason are `--override NAME --reason TEXT`,
+each in `uqs override list`, warned about and recorded where the command records
+anything (`deploy push` in its plan's EXCEPTIONS and the release's report):
+
+  | old                                                  | new                                          |
+  | ---                                                  | ---                                          |
+  | `deploy build` `deploy push --allow-dirty`           | `--override allow-dirty --reason R`          |
+  | `deploy build --allow-computed-names`                | `--override allow-computed-names --reason R` |
+  | `deploy push --fix-hdb`                              | `--override fix-hdb --reason R`              |
+  | `deploy push` `deploy rollback --break-lock`         | `--override break-lock --reason R`           |
+  | `job backfill --any-writer`                          | `--override any-writer --reason R`           |
+  | `job remove --even-if-edited`                        | `--override even-if-edited --reason R`       |
+
+An old flag given without `--reason` still works for one release: its record
+says it was given as the old flag, which records no reason.
+`job attachment add --override CODE:COMPONENT` is checked as every other
+command's is.
 
 Group help that matches its commands, and no colliding names (#1737):
 

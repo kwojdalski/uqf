@@ -97,7 +97,6 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--host", default="localhost")
     parser.add_argument("--port", type=int, required=True)
-    parser.add_argument("--credential", required=True)
     parser.add_argument("--table", default=RAW_TABLE)
     parser.add_argument("--repo-root", default=os.getcwd())
     args = parser.parse_args(argv)
@@ -115,7 +114,10 @@ def main(argv: list[str] | None = None) -> int:
             file=sys.stderr,
         )
         return 1
-    user, _, password = args.credential.partition(":")
+    # stp1's user:password from the environment its launcher gave it (#1853).
+    from uqs.external.connection import credential_from_env
+
+    user, password = credential_from_env()
     q = kola.Q(args.host, args.port, user=user, passwd=password)
     q.connect()
 
