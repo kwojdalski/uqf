@@ -86,6 +86,13 @@ def producers_by_table(pipelines: Iterable[Any] = PIPELINES) -> dict[str, set[st
     The same `_publishers` the generated `database.q` is built from, so the
     graph an operator is warned about and the schema the plant loads cannot
     describe different systems.
+
+    The PLANT's producers only: the streaming jobs and normalizers that
+    publish to the tickerplant. A bounded worker or a reaction writes the
+    HDB, and starting one feeds no subscriber, so neither belongs here. For
+    the shipped registry this is held equal to `producers.plant_producers`,
+    the plant projection of the job graph's whole producer map, by
+    test_producer_map.py (#1862).
     """
     return _publishers(pipelines)
 
