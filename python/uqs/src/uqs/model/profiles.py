@@ -86,9 +86,9 @@ from uqs.runtimes import RUNTIMES
 PROFILES: dict[str, tuple[str, ...]] = {
     #: What a `start all` runs today, named so it can be asked about and
     #: diffed. Deliberately NOT the union of the others.
-    "default": ("posbook1", "demo_markout1", "fxpositions1", "fxorderbookfeed1"),
-    #: Positions, P&L and execution quality on the FX chain.
-    "fx": ("posbook1", "demo_markout1", "fxpositions1", "last_value1"),
+    "default": ("posbook1", "fxpositions1", "fxorderbookfeed1"),
+    #: Positions and P&L on the FX chain.
+    "fx": ("posbook1", "fxpositions1", "last_value1"),
     #: Cross-source and cross-currency opportunities, three processes deep.
     "arbitrage": ("arbitrage1", "crossarb1"),
     #: The depth-aware book path: a wide feed folded into vector columns, and

@@ -134,12 +134,12 @@
     .qetl.coverage.gaps[range_from;range_to;up]}
 
 / The bounded workers that can refill `job`'s gaps: those whose dataset is a
-/ table the job publishes. markout publishes demo_execution_quality, and
-/ hdb_demo_markouts_backfill re-derives demo_execution_quality from the HDB - so it is
-/ markout's twin. A job with none cannot be refilled; `uqs job gaps` says so.
+/ table the job publishes. fx_markout publishes fx_markout, and
+/ hdb_fx_markouts_backfill re-derives fx_markout from the HDB - so it is
+/ fx_markout's twin. A job with none cannot be refilled; `uqs job gaps` says so.
 / @param job the streaming job's name
 / @return the worker names, a symbol list
-/ @eg .qetl.uptime.twins `demo_markout  ->  ,`hdb_demo_markouts_backfill
+/ @eg .qetl.uptime.twins `fx_markout  ->  ,`hdb_fx_markouts_backfill
 .qetl.uptime.twins:{[job]
     out:(),(.qetl.job.stream.def job)`publishes;
     workers:.qetl.job.bounded.defined[];

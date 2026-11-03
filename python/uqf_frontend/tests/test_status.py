@@ -108,12 +108,16 @@ def test_status_file_name_matches_the_q_writer():
 
 
 def test_reads_a_completed_run(tmp_path):
-    write_status_file(tmp_path, "demo_markout1")
+    write_status_file(tmp_path, "crypto_markout1")
     statuses, unreadable = status.read_dir(tmp_path)
     assert unreadable == []
     assert len(statuses) == 1
     s = statuses[0]
-    assert (s.worker, s.instance_id, s.state) == ("markout_backfill", "demo_markout1", "completed")
+    assert (s.worker, s.instance_id, s.state) == (
+        "markout_backfill",
+        "crypto_markout1",
+        "completed",
+    )
     assert s.rows_published == 1234
     assert s.terminal and s.ok
     assert s.error is None, "q writes '' for no error; the reader normalises it to None"
@@ -136,7 +140,7 @@ def test_failed_run_surfaces_its_error_window_and_cursor(tmp_path):
     """
     write_status_file(
         tmp_path,
-        "demo_markout1",
+        "crypto_markout1",
         state="failed",
         error="source read failed: connection refused",
         cursor="2026-09-13T12:00:00.000000000",
@@ -267,7 +271,7 @@ def test_the_endpoint_reads_the_workers_directory_given_only_a_stack_root(tmp_pa
     from uqs import paths as stack_paths
 
     monkeypatch.setenv("UQF_STATUS_DIR", str(tmp_path))
-    write_status_file(tmp_path, "demo_markout1")
+    write_status_file(tmp_path, "crypto_markout1")
     client = TestClient(
         create_app(
             gateway=FakeGateway(),
@@ -276,7 +280,7 @@ def test_the_endpoint_reads_the_workers_directory_given_only_a_stack_root(tmp_pa
         )
     )
     body = client.get("/ops/backfill").json()
-    assert body["workers"][0]["instance_id"] == "demo_markout1"
+    assert body["workers"][0]["instance_id"] == "crypto_markout1"
     assert body["source"] == str(tmp_path)
 
 
@@ -301,10 +305,10 @@ def client_for(status_dir, monkeypatch):
 
 
 def test_endpoint_returns_workers_and_a_poll_cadence(tmp_path, monkeypatch):
-    write_status_file(tmp_path, "demo_markout1")
+    write_status_file(tmp_path, "crypto_markout1")
     body = client_for(tmp_path, monkeypatch).get("/ops/backfill").json()
     assert body["summary"]["workers"] == 1
-    assert body["workers"][0]["instance_id"] == "demo_markout1"
+    assert body["workers"][0]["instance_id"] == "crypto_markout1"
     assert body["poll_seconds"] > 0
     assert body["source"] == str(tmp_path)
 
@@ -337,7 +341,7 @@ def test_endpoint_carries_no_airflow_owned_fields(tmp_path, monkeypatch):
     timeouts and concurrency are Airflow's, and inferring them here is the
     cross-layer inference the framework forbids.
     """
-    write_status_file(tmp_path, "demo_markout1")
+    write_status_file(tmp_path, "crypto_markout1")
     row = client_for(tmp_path, monkeypatch).get("/ops/backfill").json()["workers"][0]
     for forbidden in ("retries", "retry_count", "try_number", "timeout", "concurrency", "queue"):
         assert forbidden not in row
