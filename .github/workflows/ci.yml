@@ -1,11 +1,34 @@
 name: CI
 
+# The full, clean run (#1879): a Linux checkout with nothing left over, PeachQ
+# as its q. A commit's hooks are targeted (scripts/dev/hooks_full.py); this is
+# where every check runs in full - every job on master, and on a pull request
+# everything but the two path-filtered jobs its change cannot affect ("Docs
+# links", "PeachQ q tests"; scripts/dev/ci_scope.py decides, in the "Scope"
+# job). Full mode runs those too: every push, a `ci:full` label on the pull
+# request, or workflow_dispatch with `full: true`.
+
 on:
   push:
     branches: [master]
   pull_request:
-  # release.yml runs these same checks before it builds an artifact (#872)
+    # `labeled` so adding `ci:full` re-runs this in full. Any other label
+    # re-runs it as an ordinary run of the same head: never a run that
+    # reports without checking (a skipped required check counts as passed).
+    types: [opened, synchronize, reopened, labeled]
+  workflow_dispatch:
+    inputs:
+      full:
+        description: "Run every job, whatever the branch changes"
+        type: boolean
+        default: false
+  # release.yml runs these same checks before it builds an artifact (#872),
+  # every one of them.
   workflow_call:
+    inputs:
+      full:
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -19,6 +42,40 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  scope:
+    name: Scope
+    # Which path-filtered jobs this run needs, and why (the step summary).
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      full: ${{ steps.scope.outputs.full }}
+      docs: ${{ steps.scope.outputs.docs }}
+      q: ${{ steps.scope.outputs.q }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          # the merge base, for the pull request's three-dot diff
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        # The repository's Python: ci_scope.py reads q_readers from
+        # scripts/dev/test_impact.py, written for 3.14.
+        with:
+          version: "0.12.14"
+          python-version: "3.14"
+      - name: Decide which path-filtered jobs run
+        id: scope
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha || 'origin/master' }}
+          HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+          LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+          FULL: ${{ inputs.full }}
+        run: >-
+          uv run --no-project --python 3.14 python scripts/dev/ci_scope.py
+          --event "$EVENT" --base "$BASE" --head "$HEAD" --labels "$LABELS" --full-input "$FULL"
+          --output "$GITHUB_OUTPUT" --summary "$GITHUB_STEP_SUMMARY"
+
   checks:
     name: Hooks and static gates
     runs-on: ubuntu-24.04
@@ -26,14 +83,22 @@ jobs:
     env:
       # uv run inside the hooks must use the committed resolution.
       UV_LOCKED: "true"
-      # These govern local commits/branch names, not a detached PR merge ref.
-      # q-docs-peachq would build PeachQ inside the hooks, before its cache is
-      # restored; "Run the marked q blocks in docs/ on PeachQ" below covers it.
-      # python-tests: the "PeachQ Python tests" job runs every testpath with a q,
-      # which is the same suite plus what needs a q - running it here too only
-      # doubled the time.
-      # doc-links: the "Docs links" job runs it strictly, in parallel; here it
-      # was 37s of the hooks' 49s, and then ran a second time (#1689).
+      # Every hook over every file, in a clean clone (#1879). A commit's
+      # hooks see only what it stages, in a working tree with whatever else
+      # is lying in it, and a merge commit or a commit made without the hooks
+      # installed runs none of them; this is the run that holds the tree as
+      # pushed. Under two minutes, and off the critical path.
+      #
+      # Skipped here, each because it runs elsewhere or does not apply:
+      #   no-commit-to-branch, branch-naming-with-git-username - they govern
+      #     local commits and branch names, not a detached PR merge ref;
+      #   q-docs-peachq - it would build PeachQ inside the hooks; the PeachQ
+      #     Python shards run the docs' q blocks on PeachQ
+      #     (tests/qrun/test_doc_blocks.py);
+      #   python-tests - the "PeachQ Python tests" shards run every testpath
+      #     with a q: the same suite plus what needs a q;
+      #   doc-links - the "Docs links" job runs it strictly, in parallel; here
+      #     it was 37s of the hooks' 49s, and then ran a second time (#1689).
       SKIP: no-commit-to-branch,branch-naming-with-git-username,q-docs-peachq,python-tests,doc-links
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -97,72 +162,14 @@ jobs:
           fi
       - name: Run repository hooks
         run: uv tool run --from pre-commit==4.6.2 pre-commit run --all-files --show-diff-on-failure
-      - name: Check the generated operational docs match the registry
-        # Operational docs are generated, committed and checked.
-        # Where the source and the document disagree the source is right by
-        # definition, so this fails the build rather than reconciling.
-        if: ${{ !cancelled() }}
-        # `uv run`, not bare python3: this script imports uqs,
-        # which imports loguru. Under the runner's system python3 it died with
-        # ModuleNotFoundError before checking anything - so the gate had never
-        # once run, and master was red for it. Loud rather than silent, but
-        # still a gate that protected nothing. The other three gates here are
-        # stdlib-only and do not need the workspace.
-        run: uv run python scripts/generate/derive.py operational-docs --check
-      - name: Check the committed contract surface is current
-        # WP2 (#139): docs/reference/surfaces/current/ is this tree's
-        # half of the contract lock. A committed baseline nothing verifies
-        # goes stale silently - the .qetl.coverage.require_schema shape, where a file's
-        # existence reads as protection it is not providing. Reports the
-        # CONTRACT difference ("is_covered gained an argument"), not a JSON
-        # line diff, because only the former is actionable.
-        #
-        # Skipped without KDB-X: the exporter loads the full q tree, and a
-        # partial load would export a quietly incomplete surface. The skip is
-        # a WARNING and a summary line, not a notice: on a hosted runner it
-        # is every run, and the contract-surface pre-commit hook is then the
-        # only thing verifying the surface.
-        #
-        # The same interpreter rule as the contract-surface target itself ($QCMD,
-        # else q on PATH - TorQ's rule).
-        if: ${{ !cancelled() }}
-        shell: bash
-        run: |
-          if command -v "${QCMD:-q}" >/dev/null; then
-            uv run python scripts/generate/derive.py contract-surface --check
-          else
-            echo "::warning::No KDB-X on this runner; the contract surface in docs/reference/surfaces/current/ was NOT checked. Run 'uv run python scripts/generate/derive.py contract-surface --check' locally before merging."
-            echo "The contract surface (docs/reference/surfaces/current/) was not checked: no KDB-X on this runner. The contract-surface pre-commit hook checks it locally." >> "$GITHUB_STEP_SUMMARY"
-          fi
-      - name: Check the ETL core does not depend on its declarations
-        # The split makes core/ framework and sources//workers/ declarations; that
-        # is the property that buys - a new source needs no core change.
-        # The rule was a convention with no gate, so a
-        # file reaching the wrong way would break it with every test green.
-        if: ${{ !cancelled() }}
-        run: python3 scripts/gates/check_etl_layering.py --check
-      - name: Check the q library's module graph is acyclic and reviewed
-        # Every edge between library namespaces is listed in the gate (#626):
-        # a new one, a stale one or a cycle fails, so a cross-module
-        # dependency is a reviewed line rather than an invisible one.
-        if: ${{ !cancelled() }}
-        run: python3 scripts/gates/check_module_deps.py
-      - name: Check no \d context names more than one level
-        # PeachQ cannot switch into a nested context, so this tree defines
-        # every name fully qualified from the root (#1411).
-        if: ${{ !cancelled() }}
-        run: python3 scripts/gates/check.py nested-contexts
-      - name: Check q modules stay under their line budget
-        # The q counterpart of test_module_split.py (#970): a file over the
-        # limit splits, or is listed with a reason and a cap that only shrinks.
-        if: ${{ !cancelled() }}
-        run: python3 scripts/gates/check.py q-module-size
-      - name: Check every q registry stores its values enlisted
-        # A dict of same-keyed dicts collapses into a table on its first
-        # insert, and the next differently-shaped entry is refused (#1028).
-        # The enlist idiom was prose in three files; this holds it (#1030).
-        if: ${{ !cancelled() }}
-        run: python3 scripts/gates/check.py registry-enlist
+      # The gates that used to follow here as steps of their own are hooks
+      # now, run above by `pre-commit run --all-files` (#1879): the module
+      # graph, the ETL layering, the q line budget, the registry enlist
+      # idiom, the environment and declaration references, nested contexts,
+      # the diagram ports, the doc references and the operational docs. The
+      # contract surface needs KDB-X, which no hosted runner has: the
+      # contract-surface hook checks it, and the KDB-X attestation check
+      # holds a pull request to having run it.
       - name: Check the rendered diagrams match their d2 sources
         # An .svg committed beside its .d2 is a derived artefact, and this
         # tree knows what happens to those without a gate - docs/man.q once
@@ -170,41 +177,17 @@ jobs:
         # notice when d2 is absent or is a different version, since the
         # bytes are only comparable for one renderer (see the script). CI
         # installs the pinned d2 above and passes --require, so here it can
-        # fail but not skip.
+        # fail but not skip - the one static check this job runs beyond the
+        # hooks, because the rendered-diagrams hook skips without that d2.
         if: ${{ !cancelled() }}
         run: python3 scripts/generate/derive.py diagrams --check --require
-      - name: Check the diagram port labels match the stack
-        # stack-topology.d2 hand-copies every procname and port; this reads
-        # them from process_ports.csv and the vendored process.csv (#1369).
-        if: ${{ !cancelled() }}
-        run: uv run python scripts/gates/check_diagram_ports.py
-      - name: Check the docs cite functions that exist
-        # The generated documentation had gates; the PROSE had none, so a
-        # guide could name a function that never existed and every check
-        # passed. Its first run found two: a design note citing
-        # .qf.mkt.require_sorted_tape (the function is require_tape) and an
-        # agent citing .qetl.coerce.coerce (it is coerce_column).
-        if: ${{ !cancelled() }}
-        run: python3 scripts/gates/check_doc_references.py
-      - name: Check the environment reference lists every variable
-        # docs/reference/environment.md is the one operator-facing list. It is
-        # hand-written because "optional, and here is what unset does" is a
-        # judgement, and checked in both directions because a hand-written
-        # reference otherwise ends up describing a previous version of the
-        # system. One variable (UQF_DRY_RUN) is built mechanically by
-        # .qetl.cfg.env_name and appears in no source file, so grep is not a
-        # substitute for this page.
-        if: ${{ !cancelled() }}
-        run: python3 scripts/gates/check.py env-reference
-      - name: Check the pipeline declaration reference lists every key
-        # docs/reference/pipeline-declarations.md is hand-written, like the
-        # environment page, and for the same reason drifts the day a key is
-        # added or renamed. Checked in both directions against the key lists
-        # in the declaring q files.
-        if: ${{ !cancelled() }}
-        run: python3 scripts/gates/check.py declaration-reference
+
   peachq-q:
     name: PeachQ q tests
+    # Only when the change can alter the q suite's result, or in full mode
+    # (scripts/dev/ci_scope.py).
+    needs: scope
+    if: ${{ needs.scope.outputs.q == 'true' }}
     timeout-minutes: 20
     runs-on: ubuntu-24.04
     env:
@@ -398,14 +381,14 @@ jobs:
           retention-days: 30
 
 
-  # The one name branch protection requires: green only when every job above
-  # is. Kept as its own job so splitting or adding jobs never changes the
-  # required check's name.
   doc-links:
     name: Docs links
     # Its own job (#1689): rendering docs/ is the slowest gate the hooks job
     # had, and nothing else there needs Quarto. Standard library only, so no
-    # uv sync.
+    # uv sync. Only when the change can alter the render or a link, or in
+    # full mode (scripts/dev/ci_scope.py): the commit hooks leave it to here.
+    needs: scope
+    if: ${{ needs.scope.outputs.docs == 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -450,19 +433,40 @@ jobs:
         # has on the contract surface.
         run: python3 scripts/gates/check_doc_links.py
 
+  # The one name branch protection requires: green only when every job above
+  # passed, or was skipped because Scope said its change could not affect it.
+  # Kept as its own job so splitting or adding jobs never changes the
+  # required check's name.
   repository-checks:
     name: Repository checks
     if: ${{ always() }}
-    needs: [checks, doc-links, peachq-q, peachq-python]
+    needs: [scope, checks, doc-links, peachq-q, peachq-python]
     runs-on: ubuntu-24.04
     timeout-minutes: 2
     steps:
-      - name: Every job passed
+      - name: Every job passed, or was not needed
         env:
-          RESULTS: ${{ join(needs.*.result, ' ') }}
+          SCOPE: ${{ needs.scope.result }}
+          CHECKS: ${{ needs.checks.result }}
+          PYTHON: ${{ needs.peachq-python.result }}
+          DOCS: ${{ needs.doc-links.result }}
+          DOCS_NEEDED: ${{ needs.scope.outputs.docs }}
+          Q: ${{ needs.peachq-q.result }}
+          Q_NEEDED: ${{ needs.scope.outputs.q }}
         run: |
-          echo "results: $RESULTS"
-          for r in $RESULTS; do [ "$r" = success ] || { echo "a required job did not succeed"; exit 1; }; done
+          fail=0
+          need() { echo "$1: $2"; [ "$2" = success ] || { echo "::error::$1 did not succeed ($2)"; fail=1; }; }
+          # Skipped counts as passed only when Scope ran and said "false" for it.
+          filtered() {
+            if [ "$2" = skipped ] && [ "$3" = false ]; then echo "$1: skipped - nothing it checks changed"
+            else need "$1" "$2"; fi
+          }
+          need "Scope" "$SCOPE"
+          need "Hooks and static gates" "$CHECKS"
+          need "PeachQ Python tests" "$PYTHON"
+          filtered "Docs links" "$DOCS" "$DOCS_NEEDED"
+          filtered "PeachQ q tests" "$Q" "$Q_NEEDED"
+          exit "$fail"
 
   web:
     name: Browser application

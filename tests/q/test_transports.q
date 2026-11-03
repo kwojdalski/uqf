@@ -155,6 +155,16 @@
     .qetl.io.odbc.native_loadable:keep;
     r}
 
+/ The real probe, not the stub with_native puts in its place: it answers for
+/ the interpreter running it and never throws (#1891). KDB-X can always load
+/ a library; PeachQ can or cannot by build - a static one cannot, a dynamic
+/ one can - so there only the shape of the answer is held.
+.qt.qetl.source.transport.test_native_loadable_answers_for_this_interpreter:{[t]
+    r:@[.qetl.io.odbc.native_loadable;::;{[e] (`threw;e)}];
+    $[.qetl.io.on_peachq;
+        .qunit.assertEquals[type r;-1h;"a boolean, whichever PeachQ build this is"];
+        .qunit.assertEquals[r;1b;"KDB-X loads a shared library"]]};
+
 .qt.qetl.source.transport.test_a_transport_set_only_in_the_define_dict_is_the_sources_transport:{[t]
     .qetl.source.define[`pf_dict;.qt.qetl.source.transport.dict_source[]];
     r:(.qetl.source.def `pf_dict)`transport;

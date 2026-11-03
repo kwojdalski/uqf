@@ -1,61 +1,118 @@
-"""The `python-tests` pre-commit hook: which Python tests a commit runs.
+"""The `python-tests` pre-commit hook: the Python tests a commit reaches (#1879).
 
-Two modes, chosen from what is staged:
+Never the whole suite by default: CI runs that, on every pull request, on a
+clean Linux checkout. Two records say what each test depends on, both at the
+repository root and both gitignored, and a commit runs the union of what they
+select:
 
-* **Only .py files** - `pytest --testmon`: the tests whose recorded coverage
-  touches a changed file, and nothing else. pytest-testmon keeps that record in
-  `.testmondata` at the repository root (gitignored; it is this checkout's, not
-  the project's).
-* **Anything else** - the whole suite, in parallel (`-n auto --dist loadgroup`).
-  testmon sees only the Python a test executes in-process. Many tests start q,
-  or read a CSV, a config or a document, and a change to any of those is
-  invisible to it: a .q edit selected by testmon would select nothing.
+* testmon's `.testmondata` - the Python each test EXECUTES. When a .py file is
+  staged, `pytest --testmon --testmon-forceselect` runs the tests whose
+  recorded execution touches what changed (and any new or changed test).
+* `.testreach.json` (scripts/dev/test_reach.py) - what each test READS,
+  LISTS and STARTS, which testmon cannot see. When anything else is staged -
+  a .q, a CSV, a document, a config - the record picks the tests that read
+  it, list its directory (when it is added or deleted), or start a process
+  that can see it: a q, for a .q file or a file a q file names
+  (scripts/dev/test_impact.py's q_readers, the literal edge of its graph), and
+  a Python child or an unknown program, for any file. A .py file testmon has
+  no record of - a gate a test runs as a script - picks the tests that start
+  a Python child.
 
-So testmon is used only where it can see the change, and even then it falls
-back to the whole suite when it cannot vouch for a file (below). CI and master
-always run the whole suite; this only makes a commit's feedback faster.
+A q change therefore runs every Python test that starts a q, not just those
+whose q loads the changed module: a Python-started q loads the whole tree
+(src/init.q, or a TorQ process), and what it loads is outside both testmon's
+record and the q graph, whose nodes are q files. The q suites themselves are
+the q-tests hook's, selected by the graph.
 
-testmon and xdist are not combined: testmon's record is written by one process
-and does not survive being split across workers.
+THE WHOLE SUITE ONLY WHEN THIS CANNOT DECIDE:
+
+* UQF_HOOKS_FULL=1 (scripts/dev/hooks_full.py) - full mode, asked for;
+* nothing staged - a manual run, or `pre-commit run --all-files`;
+* a file that shapes every test: a conftest.py, pyproject.toml, uv.lock, or
+  the recorder and this hook themselves;
+* no record yet to decide with.
+
+Every run updates both records - the whole suite rewrites them - so a run
+leaves them current for the next. They are shared between the worktrees of
+one clone (SHARED, in git's common directory): a worktree without its own
+starts from the last one any worktree wrote, and each run writes its own
+back. testmon's record names files relative to the root and compares their
+content, so another worktree's record selects soundly here: what differs
+between the two trees is a change like any other.
+
+Every run leaves out the q_backend tests: q-tests runs the worked examples,
+q-docs the docs' q blocks, each on the interpreter it requires (#1808).
 
     uv run python scripts/dev/python_tests_hook.py            # what the hook runs
-    uv run python scripts/dev/python_tests_hook.py --dry-run  # say which mode, run nothing
+    uv run python scripts/dev/python_tests_hook.py --dry-run  # say what it would run
 """
 
 from __future__ import annotations
 
 import argparse
+import importlib.util
+import os
+import shutil
 import sqlite3
 import subprocess
 import sys
+import tempfile
+from collections.abc import Callable, Iterable
+from dataclasses import dataclass, field
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
+HERE = Path(__file__).resolve().parent
+
+
+def _sibling(name: str):
+    spec = importlib.util.spec_from_file_location(name, HERE / f"{name}.py")
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    sys.modules.setdefault(name, module)
+    spec.loader.exec_module(module)
+    return module
+
+
+hooks_full = _sibling("hooks_full")
+test_reach = _sibling("test_reach")
 
 #: pytest-testmon's database, at the rootdir it records against.
 TESTMON_DATA = REPO / ".testmondata"
+#: What each test reads, lists and starts (scripts/dev/test_reach.py).
+REACH_DATA = test_reach.RECORD
+#: Where the records are shared between worktrees, under git's common directory.
+SHARED = "uqf-test-records"
+
+#: A change here shapes every test, so every test runs.
+SHAPES_EVERY_TEST = {
+    "pyproject.toml": "the pytest configuration and the dependencies",
+    "uv.lock": "the dependencies",
+    "scripts/dev/test_reach.py": "the recorder this hook selects by",
+    "scripts/dev/python_tests_hook.py": "this hook",
+}
 
 #: The tests a q hook runs at commit (the q_backend marker, conftest.py) are
-#: left out of both modes: q-tests runs the worked examples and q-docs and
-#: q-docs-peachq the docs' q blocks, each on the interpreter it requires, and
-#: a commit that fired both hooks would otherwise run them twice (#1808). A
-#: plain `uv run pytest`, and CI, run them with everything else.
+#: left out: q-tests runs the worked examples and q-docs the docs' q blocks,
+#: each on the interpreter it requires, so a commit runs each test once (#1808).
 NOT_Q_HOOKS = ["-m", "not q_backend"]
+PYTEST = ["uv", "run", "pytest", "-q", "-n", "auto", "--dist", "loadgroup", *NOT_Q_HOOKS]
+#: pytest's exit status when nothing was selected: nothing failed.
+NO_TESTS = 5
 
-FULL = ["uv", "run", "pytest", "-q", "-n", "auto", "--dist", "loadgroup", *NOT_Q_HOOKS]
-TESTMON = ["uv", "run", "pytest", "-q", "--testmon", *NOT_Q_HOOKS]
 
-
-def staged_files() -> list[str]:
-    """Every path the commit adds, changes, renames or deletes."""
+def staged_changes() -> list[tuple[str, str]]:
+    """(status letter, path) for each path the commit adds, changes or
+    deletes; a rename is its old path deleted and its new one added."""
     out = subprocess.run(
-        ["git", "diff", "--cached", "--name-only", "--diff-filter=ACDMRT", "-z"],
+        ["git", "diff", "--cached", "--name-status", "--no-renames", "-z"],
         capture_output=True,
         text=True,
         check=True,
         cwd=REPO,
     ).stdout
-    return [p for p in out.split("\0") if p]
+    words = [w for w in out.split("\0") if w]
+    return [(words[i][0], words[i + 1]) for i in range(0, len(words) - 1, 2)]
 
 
 def testmon_files(data: Path = TESTMON_DATA) -> set[str] | None:
@@ -76,51 +133,172 @@ def _is_test_module(path: str) -> bool:
     return Path(path).name.startswith("test_") and "/tests/" in f"/{path}"
 
 
-def choose(staged: list[str], known: set[str] | None) -> tuple[str, str]:
-    """("testmon" | "full", why) for a commit staging `staged`.
+@dataclass
+class Decision:
+    """What a commit runs: `full`, or `testmon`'s selection and/or `tests`
+    (nodeid -> why) from the reach record; nothing when neither is asked for."""
 
-    The whole suite unless every staged file is Python testmon can see:
-    a test module (testmon runs new and changed tests), or a file its record
-    shows a test executing. A conftest.py shapes every test under it, and a
-    .py file no test imports in-process - a gate a test runs as a subprocess,
-    say - is a change testmon would select nothing for.
-    """
-    if not staged:
-        return "full", "nothing staged (a manual or --all-files run)"
-    other = [p for p in staged if not p.endswith(".py")]
-    if other:
-        return "full", f"{len(other)} staged non-Python file(s), e.g. {other[0]}"
-    conftests = [p for p in staged if Path(p).name == "conftest.py"]
-    if conftests:
-        return "full", f"a conftest changed ({conftests[0]})"
-    if known is None:
-        return "full", f"no testmon record yet ({TESTMON_DATA.name})"
-    unseen = [p for p in staged if not _is_test_module(p) and p not in known]
-    if unseen:
-        return "full", f"testmon has no test that runs {unseen[0]} in-process"
-    return "testmon", f"{len(staged)} Python file(s), all known to testmon"
+    why: str
+    full: bool = False
+    testmon: bool = False
+    tests: dict[str, str] = field(default_factory=dict)
+
+    @property
+    def mode(self) -> str:
+        if self.full:
+            return "full"
+        return "picked" if self.testmon or self.tests else "none"
+
+
+def decide(
+    changes: list[tuple[str, str]],
+    *,
+    full_mode: bool,
+    known: set[str] | None,
+    record: dict | None,
+    q_readers: Callable[[Iterable[str]], dict[str, list[str]]],
+) -> Decision:
+    """Which tests `changes` reach; the whole suite only when that cannot be
+    decided (see the module docstring)."""
+    if full_mode:
+        return Decision(f"{hooks_full.ENV}=1", full=True)
+    if not changes:
+        return Decision("nothing staged (a manual or --all-files run)", full=True)
+    for _, path in changes:
+        if Path(path).name == "conftest.py":
+            return Decision(f"a conftest changed ({path}), which shapes the tests under it", True)
+        if path in SHAPES_EVERY_TEST:
+            return Decision(f"{path} changed: {SHAPES_EVERY_TEST[path]}", full=True)
+    python = [(s, p) for s, p in changes if p.endswith(".py")]
+    other = [(s, p) for s, p in changes if not p.endswith(".py")]
+    if python and known is None:
+        return Decision(f"no testmon record yet ({TESTMON_DATA.name}) to select with", True)
+    unseen = [
+        p for s, p in python if s != "D" and not _is_test_module(p) and p not in (known or ())
+    ]
+    if (other or unseen) and record is None:
+        return Decision(f"no record yet ({REACH_DATA.name}) of what the tests read and start", True)
+
+    tests: dict[str, str] = {}
+    if other or unseen:
+        assert record is not None
+        reads = q_readers([p for _, p in other]) if other else {}
+        tests = test_reach.reached(record, other + [(s, p) for s, p in python], reads)
+        for path in unseen:
+            for kind in ("python", "other"):
+                for nodeid in test_reach.starters(record, kind):
+                    tests.setdefault(nodeid, f"starts a child that may run {path}")
+    parts = []
+    if python:
+        parts.append(f"testmon for {len(python)} Python file(s)")
+    if other or unseen:
+        parts.append(
+            f"{len(tests)} test(s) the record says reach {len(other) + len(unseen)} other file(s)"
+        )
+    return Decision("; ".join(parts), testmon=bool(python), tests=tests)
+
+
+# --- the records, shared between worktrees ------------------------------------
+
+
+def shared_dir(root: Path = REPO) -> Path | None:
+    """SHARED under git's common directory - one per clone - or None outside git."""
+    try:
+        common = subprocess.run(
+            ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
+            capture_output=True,
+            text=True,
+            check=True,
+            cwd=root,
+        ).stdout.strip()
+    except subprocess.CalledProcessError, FileNotFoundError:
+        return None
+    return Path(common) / SHARED if common else None
+
+
+def seed(records: Iterable[Path], shared: Path | None) -> list[str]:
+    """Copy each record this worktree lacks from `shared`; the names copied."""
+    copied = []
+    for local in records:
+        source = shared / local.name if shared else None
+        if not local.exists() and source and source.is_file():
+            shutil.copyfile(source, local)
+            copied.append(local.name)
+    return copied
+
+
+def publish(records: Iterable[Path], shared: Path | None) -> None:
+    """Write each record back to `shared`, whole: a reader never sees half of one."""
+    if shared is None:
+        return
+    shared.mkdir(parents=True, exist_ok=True)
+    for local in records:
+        if local.is_file():
+            tmp = shared / f".{local.name}.{os.getpid()}"
+            shutil.copyfile(local, tmp)
+            os.replace(tmp, shared / local.name)
+
+
+# --- running -----------------------------------------------------------------
+
+
+def commands(decision: Decision, ids_file: Path, reach: Path) -> list[list[str]]:
+    """The pytest runs `decision` takes, each recording into the records."""
+    record = ["--testmon", "--record-reach", str(reach)]
+    if decision.full:
+        return [[*PYTEST, *record]]
+    runs = []
+    if decision.testmon:
+        runs.append([*PYTEST, *record, "--testmon-forceselect"])
+    if decision.tests:
+        modules = sorted({t.split("::", 1)[0] for t in decision.tests})
+        modules = [m for m in modules if (REPO / m).is_file()]
+        if modules:
+            runs.append([*PYTEST, *record, "--select-tests", str(ids_file), *modules])
+    return runs
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--dry-run", action="store_true", help="say which mode, run nothing")
+    ap.add_argument("--dry-run", action="store_true", help="say what would run, run nothing")
     args = ap.parse_args()
 
-    staged = staged_files()
-    mode, why = choose(staged, testmon_files())
-    cmd = TESTMON if mode == "testmon" else FULL
-    print(f"python-tests: {mode} - {why}", flush=True)
-    if args.dry_run:
-        print(" ".join(cmd))
-        return 0
-    code = subprocess.run(cmd, cwd=REPO, check=False).returncode
-    if mode == "full" and code == 0 and not TESTMON_DATA.is_file():
-        # Said once, where it helps: the faster mode needs a record to start.
-        print(
-            "python-tests: run `uv run pytest --testmon` once to let commits of "
-            "Python alone run only the tests they affect",
-            flush=True,
-        )
+    shared = shared_dir()
+    records = (TESTMON_DATA, REACH_DATA)
+    if not args.dry_run:
+        for name in seed(records, shared):
+            print(f"python-tests: started from the shared {name} ({shared})", flush=True)
+    decision = decide(
+        staged_changes(),
+        full_mode=hooks_full.full(),
+        known=testmon_files(),
+        record=test_reach.load(REACH_DATA),
+        q_readers=_sibling("test_impact").q_readers,
+    )
+    print(f"python-tests: {decision.mode} - {decision.why}", flush=True)
+    for nodeid, why in list(sorted(decision.tests.items()))[:5]:
+        print(f"  {nodeid}  ({why})")
+    if len(decision.tests) > 5:
+        print(f"  ... and {len(decision.tests) - 5} more")
+
+    with tempfile.TemporaryDirectory(prefix="python-tests-") as tmp:
+        ids_file = Path(tmp) / "tests.txt"
+        ids_file.write_text("\n".join(sorted(decision.tests)) + "\n")
+        # The whole suite rewrites the reach record rather than adding to it.
+        reach = Path(tmp) / REACH_DATA.name if decision.full else REACH_DATA
+        runs = commands(decision, ids_file, reach)
+        if args.dry_run:
+            for cmd in runs:
+                print(" ".join(cmd))
+            return 0
+        code = 0
+        for cmd in runs:
+            rc = subprocess.run(cmd, cwd=REPO, check=False).returncode
+            if rc not in (0, NO_TESTS) and code == 0:
+                code = rc
+        if decision.full and reach.is_file():
+            shutil.move(reach, REACH_DATA)
+    publish(records, shared)
     return code
 
 

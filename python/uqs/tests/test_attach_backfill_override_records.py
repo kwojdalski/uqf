@@ -66,7 +66,7 @@ def _popen(world, record: list, *, fail: bool = False):
             raise FileNotFoundError(2, "No such file or directory", argv[0])
         return _Started()
 
-    world.monkeypatch.setattr(backfill_run.subprocess, "Popen", popen)
+    support.fake_popen(world.monkeypatch, popen)
 
 
 def _launch(world, mode="run", **kw):

@@ -282,15 +282,11 @@ def push(
         int, typer.Option("--live-check-timeout", help="Every live check together, seconds")
     ] = 120,
     connect_timeout: conn.ConnectTimeout = conn.DEFAULT_CONNECT_TIMEOUT,
-    command_timeout: Annotated[
-        int, typer.Option("--command-timeout", help="Each remote step, seconds")
-    ] = 900,
+    command_timeout: conn.CommandTimeout = None,
     smoke_timeout: Annotated[
         int, typer.Option("--smoke-timeout", help="The offline check, seconds")
     ] = 120,
-    verify_timeout: Annotated[
-        int, typer.Option("--verify-timeout", help="Readiness deadline, seconds")
-    ] = 180,
+    verify_timeout: conn.VerifyTimeout = None,
     allow_dirty: policy.AllowDirty = False,
     override: OverrideOpt = None,
     reason: ReasonOpt = None,
@@ -375,7 +371,8 @@ def push(
                     raise config.DeployError(
                         "arguments", f"{config.flag(name)} is required, or a TARGET after ARTIFACT"
                     )
-            cfgs = [config.make_config(**options)]
+            # an option left unset (None) takes make_config's default
+            cfgs = [config.make_config(**{k: v for k, v in options.items() if v is not None})]
         for cfg in cfgs:
             if cfg.target:
                 log.info("target {}: {}:{}", cfg.target, cfg.host, cfg.dest)
