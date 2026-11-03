@@ -13,6 +13,7 @@ from typing import Annotated
 import typer
 from rich.table import Table
 
+from uqs.cli.json_out import JSON_HELP
 from uqs.cli.pipelines import pipelines_only
 from uqs.cli.safety import ReadOnly
 from uqs.cli.shared import _die, _paths, app, console
@@ -42,9 +43,7 @@ def runtime_diff(
         str,
         typer.Argument(metavar="RUNTIME", help="Another runtime", autocompletion=lambda: _NAMES),
     ],
-    as_json: Annotated[
-        bool, typer.Option("--json", help="Print the difference as JSON, for a script.")
-    ] = False,
+    as_json: Annotated[bool, typer.Option("--json", help=f"{JSON_HELP}: the difference")] = False,
 ) -> None:
     """Compare two runtimes: what each has that the other does not.
 

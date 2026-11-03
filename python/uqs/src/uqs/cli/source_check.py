@@ -16,6 +16,7 @@ import typer
 from rich.table import Table
 
 from uqs import timerange
+from uqs.cli.json_out import json_opt
 from uqs.cli.renames import old_spelling, warn_renamed
 from uqs.cli.safety import ReadOnly
 from uqs.cli.shared import _die, _paths, console
@@ -25,6 +26,11 @@ from uqs.paths import UqsError
 from uqs.stack import live_check, odbc_home
 
 _STATUS = {"ok": "[green]ok[/]", "empty": "[yellow]empty[/]", "failed": "[bold red]failed[/]"}
+
+
+SourcesJson = json_opt(
+    "{source, status, stage, rows, elapsed_ms, diagnostic} for each source", lines=True
+)
 
 
 #: `--window N` was minutes back; a duration is a DURATION on every command,
@@ -55,7 +61,7 @@ def sources_check(
             help="A private ODBC setup (uqs setup odbc install) whose current version to load",
         ),
     ] = None,
-    as_json: Annotated[bool, typer.Option("--json", help="One JSON object per source")] = False,
+    as_json: SourcesJson = False,
 ) -> None:
     """Check each SOURCE live: connect, check its tables, read a bounded window.
 

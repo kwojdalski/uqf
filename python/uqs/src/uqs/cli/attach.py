@@ -45,6 +45,7 @@ from uqs.cli.attach_output import (
     verdict,
 )
 from uqs.cli.attachment import OLD_REASON, attachment_app
+from uqs.cli.json_out import json_opt
 from uqs.cli.shared import _debug_requested, _paths
 from uqs.paths import UqsError
 
@@ -67,10 +68,7 @@ NameArg = Annotated[
 #: Extra words are taken, not rejected by the parser, so the old `uqs job attach
 #: <stage> NAME` is refused with the command that replaced it.
 EXTRA_WORDS = {"allow_extra_args": True}
-JsonOpt = Annotated[
-    bool,
-    typer.Option("--json", help="Print one JSON document. Executing needs --yes: it cannot ask."),
-]
+JsonOpt = json_opt('{"plan", "stages", "verdict", ...}', "Executing needs --yes: it cannot ask")
 DryRunOpt = Annotated[
     bool, typer.Option("--dry-run", "-n", help="Run every check and show the plan; change nothing")
 ]

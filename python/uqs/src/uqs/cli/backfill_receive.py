@@ -17,6 +17,7 @@ from typing import Annotated
 import typer
 
 from uqs.attach import backfill_remote, backfill_run, config, service
+from uqs.cli.json_out import json_opt
 from uqs.cli.renames import alias_command, renamed, warn_renamed
 from uqs.cli.safety import ChangesState, dry_run_note
 from uqs.cli.shared import JOB_OPERATIONS_PANEL, _die, _paths, console, job_app
@@ -135,7 +136,10 @@ ContractOpt = Annotated[
 ListenPortOpt = Annotated[
     int | None, typer.Option("--listen-port", help="The port the extractor connects to")
 ]
-ReceiverJson = Annotated[bool, typer.Option("--json", help="Print what started as JSON")]
+_STARTED = '{"attachment", "dataset", "contract", "port", "hdb_dir", "pid", "log", ...}'
+ReceiverJson = json_opt(_STARTED)
+ReceiveJson = json_opt(_STARTED, 'With --stop, {"stopped": [...]}')
+StoppedJson = json_opt('{"stopped": [{worker, pid, ...}], "dry_run"}')
 
 
 @receiver_app.command("start", cls=ChangesState)
@@ -180,7 +184,7 @@ def receiver_stop(
         bool,
         typer.Option("--dry-run", "-n", help="Name the receivers that would stop; stop nothing"),
     ] = False,
-    as_json: Annotated[bool, typer.Option("--json", help="Print what stopped as JSON")] = False,
+    as_json: StoppedJson = False,
 ) -> None:
     """Stop this machine's receivers for an attachment, so a detach can go ahead.
 
@@ -217,7 +221,7 @@ def receive(
             help="Admit the destination and show what it would serve; start nothing",
         ),
     ] = False,
-    as_json: ReceiverJson = False,
+    as_json: ReceiveJson = False,
 ) -> None:
     """`uqs job receive`, before #1858: `job receiver start`, or with --stop
     `job receiver stop`."""

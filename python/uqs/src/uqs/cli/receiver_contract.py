@@ -22,6 +22,7 @@ from rich.table import Table
 from uqs.attach import receiver_contract
 from uqs.cli import completion
 from uqs.cli.attachment import attachment_app
+from uqs.cli.json_out import JSON_HELP
 from uqs.cli.renames import alias_command, renamed
 from uqs.cli.safety import ChangesState, ReadOnly, dry_run_note
 from uqs.cli.shared import (
@@ -130,7 +131,7 @@ def approve(
         typer.Option("--dry-run", "-n", help="Check it and show the record; store nothing"),
     ] = False,
     as_json: Annotated[
-        bool, typer.Option("--json", help="Print the approved record as JSON")
+        bool, typer.Option("--json", help=f"{JSON_HELP}: the approved record")
     ] = False,
 ) -> None:
     """Approve a receiver contract for an attachment on THIS machine, the stack's.
@@ -176,7 +177,9 @@ def list_(
     sort: SortOpt = None,
     reverse: ReverseOpt = False,
     interactive: InteractiveOpt = False,
-    as_json: Annotated[bool, typer.Option("--json", help="Print them as JSON")] = False,
+    as_json: Annotated[
+        bool, typer.Option("--json", help=f"{JSON_HELP}: [{{contract, binding}}]")
+    ] = False,
 ) -> None:
     """List the receiver contracts approved for an attachment on this machine.
 

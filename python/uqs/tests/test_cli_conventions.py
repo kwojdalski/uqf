@@ -431,7 +431,7 @@ OPTIONS = {
     "--home": Meaning("retired: --odbc-home (#1857)", None),
     "--host": Meaning("where a q process listens", r"listen"),
     "--interactive": Meaning("browse the table", r"browse"),
-    "--json": Meaning("one JSON document on stdout", r"JSON"),
+    "--json": Meaning("one JSON document on stdout", r"^Print (one )?JSON"),
     "--keep": Meaning("how many newest releases to keep", r"newest"),
     "--last": Meaning("a time range up to now", r"up to now"),
     "--level": Meaning("the lowest log level shown", r"level"),
@@ -791,6 +791,30 @@ def test_rule5a_every_reporting_command_has_json():
         if (_kind(p) in (REPORTS, CONFIRMS) or p in NO_DRY_RUN) and not _flag(c, "--json")
     }
     _hold("rule 5a", found, RULE5A_ALLOWLIST)
+
+
+#: `--json` commands that print a JSON object a line rather than one document,
+#: with why (#1859).
+JSON_LINES = {"config sources check": "one object per source, as each source's check ends"}
+
+
+def test_rule5a_every_json_help_is_the_one_phrasing():
+    """Ten phrasings of `--json` across 36 commands (#1859): every one is
+    `json_out.JSON_HELP`, then the document's shape, then a note on when it
+    applies - one help, built by `json_opt` or led by JSON_HELP."""
+    from uqs.cli.json_out import JSON_HELP, JSON_LINES_HELP
+
+    found = {}
+    for path, cmd in LEAVES.items():
+        param = cmd.option("--json")
+        if param is None:
+            continue
+        lead = JSON_LINES_HELP if path in JSON_LINES else JSON_HELP
+        text = " ".join((param.help or "").split())
+        if text != lead and not text.startswith((f"{lead}:", f"{lead}.")):
+            found[path] = text
+    assert not found, f"--json helps in another phrasing: {found}"
+    assert set(JSON_LINES) <= set(LEAVES)
 
 
 def test_rule5b_dry_run_n_exactly_on_what_changes_state():

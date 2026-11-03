@@ -35,6 +35,7 @@ from uqs.cli.hdb_scope import (
     run_scoped,
     tables_given,
 )
+from uqs.cli.json_out import JSON_HELP
 from uqs.cli.renames import alias_command
 from uqs.cli.safety import ConfirmsOnServer
 from uqs.cli.shared import _die, _paths, console, data_app
@@ -71,7 +72,11 @@ def hdb_check(
         bool, typer.Option("--fix", hidden=True, help="Retired: --apply, which asks first")
     ] = False,
     as_json: Annotated[
-        bool, typer.Option("--json", help="Print the findings as JSON, to script against")
+        bool,
+        typer.Option(
+            "--json",
+            help=f"{JSON_HELP}: the findings - missing tables and columns, changed types",
+        ),
     ] = False,
 ) -> None:
     """Check the HDB for missing tables and columns, and columns of the wrong type.
