@@ -1836,6 +1836,18 @@ qpipe.transform.crypto_book_1s,lateness,value,,
 qpipe.transform.crypto_book_1s,order_by,value,,
 qpipe.transform.crypto_book_1s,snapshots,function,1,x
 qpipe.transform.crypto_book_1s,width,value,,
+qpipe.transform.eq_domain,available,function,2,spec fr
+qpipe.transform.eq_domain,benchmarks,value,,
+qpipe.transform.eq_domain,complete,function,1,spec
+qpipe.transform.eq_domain,convert,function,3,spec quote_ccys report_ccy
+qpipe.transform.eq_domain,defaults,dict,,
+qpipe.transform.eq_domain,domain,dict,,
+qpipe.transform.eq_domain,halted,function,4,halts s t0 t1
+qpipe.transform.eq_domain,in_session,function,4,sessions s t0 t1
+qpipe.transform.eq_domain,interval_table,function,3,tbl from_c to_c
+qpipe.transform.eq_domain,require_spec,function,1,spec
+qpipe.transform.eq_domain,resolve,function,2,spec syms
+qpipe.transform.eq_domain,rows_for,function,2,tbl s
 qpipe.transform.exec_bars,bars,function,1,x
 qpipe.transform.exec_bars,lateness,value,,
 qpipe.transform.exec_bars,width,value,,
