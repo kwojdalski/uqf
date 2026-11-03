@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import datetime as dt
 import math
+import subprocess
 import typing
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -27,6 +28,8 @@ from uqf_frontend import (
     ops,
     procfile,
     queries,
+    remote_files,
+    remote_helper,
     services,
     status,
     write_guard,
@@ -40,6 +43,7 @@ from uqf_frontend.errors import (
     GatewayReloading,
     GatewayUnavailable,
     ValidationFailed,
+    WritesDisabled,
 )
 from uqf_frontend.fleet import Fleet, KolaFleet
 from uqf_frontend.gateway import TIERS, Gateway, KolaGateway
@@ -64,6 +68,7 @@ from uqf_frontend.models import (
     ProcessHealthOut,
     QueryRequest,
     QueryResponse,
+    RemoteFilesResponse,
     RunState,
     ServicesResponse,
     ServiceTargetOut,
@@ -116,6 +121,7 @@ def create_app(
     settings: Settings | None = None,
     fleet: Fleet | None = None,
     policy: Policy | None = None,
+    remote_runner: remote_files.Runner | None = None,
 ) -> FastAPI:
     """Build the app. Every dependency is injectable so tests need no q
     process and no environment.
@@ -174,6 +180,8 @@ def create_app(
     app.state.catalog = tables
     app.state.fleet = fleet
     app.state.policy = policy
+    # ssh, injectable so tests reach no server (remote_files.py)
+    app.state.remote_runner = remote_runner or subprocess.run
     app.state.capture = scheduler
 
     @app.middleware("http")
@@ -185,7 +193,7 @@ def create_app(
         if (
             refusal is None
             and settings.enable_writes
-            and write_guard.is_write(request.method, request.url.path)
+            and write_guard.needs_token(request.method, request.url.path)
         ):
             refusal = write_guard.token_refusal(settings, request.headers.get("authorization"))
             if refusal is not None:
@@ -415,6 +423,38 @@ def create_app(
             invalid=found.invalid,
             remote_operations_enabled=settings.enable_writes,
             poll_seconds=ops.POLL_SECONDS["services"],
+        )
+
+    @app.get("/services/{target}/files", response_model=RemoteFilesResponse)
+    def get_remote_files(
+        request: Request, target: str, path: str = "", limit: int = remote_files.DEFAULT_LIMIT
+    ) -> RemoteFilesResponse:
+        """List one directory under a registered target's deployment root,
+        over ssh, with the release's own Python - see remote_files.py.
+
+        Reads only. Behind the authz guard like every route, and it reaches a
+        server with this machine's ssh key, so it needs remote operations on
+        (UQF_FRONTEND_ENABLE_WRITES) and, through the write guard, the token."""
+        if not settings.enable_writes:
+            raise WritesDisabled(
+                "browsing a server's files reaches it over ssh, so it needs remote "
+                "operations: set UQF_FRONTEND_ENABLE_WRITES=1 and UQF_FRONTEND_WRITE_TOKEN "
+                "on the server"
+            )
+        if not 1 <= limit <= remote_helper.MAX_LIMIT:
+            raise ValidationFailed(f"limit must be between 1 and {remote_helper.MAX_LIMIT}")
+        answer = remote_files.browse(
+            settings, target, path, limit, runner=request.app.state.remote_runner
+        )
+        return RemoteFilesResponse(
+            target=target,
+            root=answer["root"],
+            path=answer["path"],
+            parent=answer["parent"],
+            entries=answer["entries"],
+            total=answer["total"],
+            truncated=answer["truncated"],
+            release=answer["release"],
         )
 
     @app.get("/coverage", response_model=CoverageResponse)

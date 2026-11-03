@@ -54,6 +54,18 @@ def is_write(method: str, path: str) -> bool:
     )
 
 
+def is_remote(path: str) -> bool:
+    """Does this request reach a server over ssh? Everything under a target
+    in /services does; the list itself does not (#1950). It carries the
+    token like a write: the operator's ssh key, not the caller's, opens it."""
+    return path.startswith("/services/")
+
+
+def needs_token(method: str, path: str) -> bool:
+    """Must this request carry the write token?"""
+    return is_write(method, path) or is_remote(path)
+
+
 def host_refusal(settings: Settings, host_header: str | None) -> str | None:
     """Why this Host is refused, or None when it is allowed.
 

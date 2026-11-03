@@ -591,3 +591,29 @@ details.panel[open] > summary {
   font-size: 0.8rem;
   color: #9c2834;
 }
+
+/* The file browser (#1950). */
+.actions,
+.crumbs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  margin: 0.5rem 0;
+}
+button.link {
+  border: none;
+  background: none;
+  padding: 0;
+  color: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+  font: inherit;
+}
+.file-name {
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+tr.blocked td {
+  opacity: 0.6;
+}

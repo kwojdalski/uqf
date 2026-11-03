@@ -324,6 +324,41 @@ class ServicesResponse(BaseModel):
     poll_seconds: int
 
 
+class RemoteEntryOut(BaseModel):
+    """One entry of a remote directory (remote_helper.describe). A symlink,
+    special file or undecodable name is `blocked`: listed, never entered."""
+
+    name: str
+    kind: Literal["dir", "file", "symlink", "special", "unknown"]
+    size: int | None = Field(description="bytes, for a regular file")
+    mtime: float | None
+    blocked: bool
+    reason: str | None
+
+
+class ReleaseOut(BaseModel):
+    """What the target's `current` names, read as a link and never followed,
+    and the fields of that release's deploy-report.json worth showing."""
+
+    current: str | None = Field(description="the link text of <dest>/current")
+    release: str | None = Field(description="the release id under releases/")
+    report: dict[str, Any] | None
+    report_error: str | None = Field(description="why the report was not read")
+
+
+class RemoteFilesResponse(BaseModel):
+    """GET /services/{target}/files: one directory under a deployment root."""
+
+    target: str
+    root: str = Field(description="the target's deployment root, from the registry")
+    path: str = Field(description="the directory listed, relative to the root; empty is the root")
+    parent: str | None = Field(description="the parent directory's path; null at the root")
+    entries: list[RemoteEntryOut]
+    total: int | None = Field(description="entries in the directory; null when too many to count")
+    truncated: bool
+    release: ReleaseOut
+
+
 # ------------------------------------------------------------ control (writes)
 
 
