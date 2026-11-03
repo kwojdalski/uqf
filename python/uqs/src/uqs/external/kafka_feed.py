@@ -209,26 +209,27 @@ FEED = ExternalFeed(
     options=(
         FeedOption(
             "brokers",
-            f"bootstrap.servers of the cluster; default ${BROKERS_ENV}, else {DEFAULT_BROKERS}",
+            "bootstrap.servers of the cluster",
             default=DEFAULT_BROKERS,
             env=BROKERS_ENV,
         ),
         FeedOption(
             "topics",
-            f"Topics to consume, comma separated; default ${TOPICS_ENV}, else every "
-            "topic a decoder job declares",
+            "Topics to consume, comma separated",
             env=TOPICS_ENV,
+            default_help="every topic a decoder job declares",
             # plural, as every comma-separated option is (#1890)
             aliases=("--topic",),
         ),
         FeedOption(
             "group",
-            f"Consumer group id - the committed offsets belong to it (default {DEFAULT_GROUP})",
+            "Consumer group id - the committed offsets belong to it",
             default=DEFAULT_GROUP,
         ),
         connection.TP_CREDENTIAL,
     ),
     check=_check,
+    about="a topic onto kafka_message",
     produces={
         KAFKA_RAW_TABLE: (
             "a Kafka consumer: the q feed kafka_feed1, or the legacy Python one "

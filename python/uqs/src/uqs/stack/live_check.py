@@ -80,12 +80,16 @@ def _failed(source: str, stage: str, diagnostic: str, elapsed_ms: int | None = N
     }
 
 
+#: How far back the bounded read reaches, in minutes, unless told otherwise.
+DEFAULT_WINDOW_MINUTES = 60
+
+
 def check(
     paths: UqsPaths,
     sources: Sequence[str],
     *,
     timeout: float,
-    window_minutes: int = 60,
+    window_minutes: int = DEFAULT_WINDOW_MINUTES,
     odbc_env: dict[str, str] | None = None,
     runner: Runner = subprocess.run,
     clock: Callable[[], float] = time.monotonic,

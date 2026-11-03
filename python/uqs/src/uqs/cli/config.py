@@ -19,7 +19,7 @@ from typing import Annotated
 import typer
 from rich.table import Table
 
-from uqs.cli import completion
+from uqs.cli import choices, completion
 from uqs.cli.json_out import emit, json_opt, records, timestamp
 from uqs.cli.renames import ATTACHMENT, alias_command, renamed, warn_renamed
 from uqs.cli.safety import ChangesState, ReadOnly, dry_run_note
@@ -237,8 +237,11 @@ def logs(
         str | None,
         typer.Option(
             "--stream",
-            help="With --multitail: which log files get a pane, out, err or both (default)",
-            autocompletion=completion.choices("out", "err", "both"),
+            help="With --multitail: which log files get a pane - "
+            + choices.alternatives(
+                stack_multitail.MULTITAIL_STREAMS, default=stack_multitail.DEFAULT_STREAM
+            ),
+            autocompletion=completion.choices(*stack_multitail.MULTITAIL_STREAMS),
         ),
     ] = None,
     pane_columns: Annotated[
@@ -315,11 +318,8 @@ def logs(
     with `--attachment`.
     """
     if as_json:
-        for option, used in {
-            "--follow": follow,
-            "--channel": channel,
-            "--multitail": multitail,
-        }.items():
+        live = {"--follow": follow, "--channel": channel, "--multitail": multitail}
+        for option, used in live.items():
             if used:
                 _die(UqsUsageError(f"--json prints the history: {option} does not apply with it"))
                 return
@@ -378,7 +378,7 @@ def logs(
             argv = stack_multitail.multitail_command(
                 _paths(),
                 _procs(procs),
-                stream=stream or "both",
+                stream=stream or stack_multitail.DEFAULT_STREAM,
                 columns=pane_columns or 1,
                 lines=lines,
             )

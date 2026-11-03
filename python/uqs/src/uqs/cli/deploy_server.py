@@ -257,7 +257,8 @@ def verify_cmd(
     tables: Annotated[
         list[str] | None,
         typer.Option(
-            "--table", help="Check stp1 carries this table; repeatable, and NAME,NAME also works"
+            "--table",
+            help=f"Check {verify.PLANT} carries this table; repeatable, and NAME,NAME also works",
         ),
     ] = None,
     fixture: conn.FixtureOpt = True,

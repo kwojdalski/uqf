@@ -97,9 +97,9 @@ def _check_credential(value: str, origin: str) -> None:
 #: secret, so the CLI takes it as `--tp-credential-env NAME` (cli/external.py).
 TP_CREDENTIAL = FeedOption(
     "tp_credential",
-    "user:password stp1 accepts; default $" + TP_CREDENTIAL_ENV + ", else the starter "
-    "pack's DEMO login",
+    "user:password stp1 accepts",
     default=DEMO_TP_CREDENTIAL,
+    default_help="the starter pack's DEMO login",
     secret=True,
     env=TP_CREDENTIAL_ENV,
     validate=_check_credential,

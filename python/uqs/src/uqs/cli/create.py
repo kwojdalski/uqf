@@ -16,9 +16,10 @@ from typing import Annotated
 import typer
 
 from uqs.cli import completion, safety
+from uqs.cli.choices import alternatives
 from uqs.cli.create_backfill import backfill_plan
 from uqs.cli.create_bundle import planning_root, refuse_tree_only, write_bundle_plan
-from uqs.cli.create_kinds import canonical, misplaced
+from uqs.cli.create_kinds import DEFAULT_KIND, KindOpt, for_kinds, given_options, misplaced
 from uqs.cli.create_plant import plant_definitions, plant_tables
 from uqs.cli.create_reaction import scaffold_reaction
 from uqs.cli.regenerate import write_plan
@@ -35,6 +36,8 @@ from uqs.paths import UqsError, UqsUsageError
 from uqs.scaffold import columns as columns_mod
 from uqs.scaffold import cycles, external, jobs, normalizer
 from uqs.scaffold import horizon as horizon_scaffold
+from uqs.scaffold import transform as transform_mod
+from uqs.scaffold import worker as worker_mod
 
 app.add_typer(job_app, name="job")
 
@@ -47,25 +50,16 @@ _RENAMES = {"--columns": "--schema", "--columns-from": "--schema-from", "--procn
     "new", rich_help_panel=JOB_AUTHORING_PANEL, cls=renamed(_RENAMES, safety.ChangesState)
 )
 def new_job(
+    ctx: typer.Context,
     name: Annotated[
         str, typer.Argument(metavar="JOB", help="Job name: a q namespace and a filename")
     ],
-    kind: Annotated[
-        str,
-        typer.Option(
-            "--kind",
-            help="'streaming' (default), 'backfill', 'normalizer', 'connector' (a Python "
-            "publisher outside q, plus the q job reshaping what it publishes) or 'horizon' "
-            "(each event evaluated once --horizon has passed)",
-            autocompletion=completion.choices(*SCAFFOLD_KINDS),
-            callback=canonical,
-        ),
-    ] = "streaming",
+    kind: KindOpt = DEFAULT_KIND,
     subscribe_to: Annotated[
         str | None,
         typer.Option(
             "--subscribe-to",
-            help="Comma-separated tables it reads. Omit for a feed.",
+            help=f"Comma-separated tables it reads. Omit for a feed{for_kinds('--subscribe-to')}",
             autocompletion=completion.plant_tables,
         ),
     ] = None,
@@ -73,19 +67,20 @@ def new_job(
         str | None,
         typer.Option(
             "--publishes",
-            help="Comma-separated tables it writes (streaming); an existing one is published onto",
+            help="Comma-separated tables it writes; an existing one is published onto"
+            + for_kinds("--publishes"),
             autocompletion=completion.plant_tables,
         ),
     ] = None,
     dataset: Annotated[
-        str | None, typer.Option("--dataset", help="The table it fills (backfill)")
+        str | None, typer.Option("--dataset", help=f"The table it fills{for_kinds('--dataset')}")
     ] = None,
     raw_table: Annotated[
         str | None,
         typer.Option(
             "--raw-table",
-            help="external: the table the Python publisher writes. backfill: the physical "
-            "table a new source's adapter reads, with --raw-columns",
+            help="connector: the table the Python publisher writes. backfill: the physical "
+            "table a new source's adapter reads, with --raw-columns" + for_kinds("--raw-table"),
         ),
     ] = None,
     raw_columns: Annotated[
@@ -93,7 +88,7 @@ def new_job(
         typer.Option(
             "--raw-columns",
             help="The columns the adapter reads from --raw-table, as the source names them: "
-            "'CREATED_AT:timestamp, PAYLOAD:any' (backfill)",
+            "'CREATED_AT:timestamp, PAYLOAD:any'" + for_kinds("--raw-columns"),
         ),
     ] = None,
     columns: Annotated[
@@ -109,21 +104,27 @@ def new_job(
         ),
     ] = None,
     source: Annotated[
-        str | None, typer.Option("--source", help="Source name (backfill; defaults to NAME)")
+        str | None,
+        typer.Option("--source", help=f"Source name; default JOB{for_kinds('--source')}"),
     ] = None,
     width: Annotated[
         str | None,
-        typer.Option("--width", help="Backfill window width, as a q timespan (default 1D)"),
+        typer.Option(
+            "--width",
+            help=f"Window width, as a q timespan; default {worker_mod.DEFAULT_WIDTH}"
+            + for_kinds("--width"),
+        ),
     ] = None,
     procname: Annotated[
         str | None,
-        typer.Option("--proc", help="The process that runs it (default: NAME1, or NAME_backfill1)"),
+        typer.Option("--proc", help="The process that runs it (default: JOB1, or JOB_backfill1)"),
     ] = None,
     start_with_all: Annotated[
         bool,
         typer.Option(
             "--start-with-all/--no-start-with-all",
-            help="Start it with `uqs start all` (streaming, normalizer; default: on demand)",
+            help="Start it with `uqs start all` (default: on demand)"
+            + for_kinds("--start-with-all"),
         ),
     ] = False,
     transport: Annotated[
@@ -132,51 +133,69 @@ def new_job(
             "--transport",
             help="How a new backfill source is reached - one of the transports "
             ".qetl.source registers (docs/reference/surfaces/current/transports.csv); "
-            "default: the default transport there, a q process",
+            "default: the default transport there, a q process" + for_kinds("--transport"),
             autocompletion=completion.transports,
         ),
     ] = None,
     period: Annotated[
         str | None,
-        typer.Option("--period", help="Timer period: a feed's tick, or an etl's added on_timer"),
+        typer.Option(
+            "--period",
+            help="Timer period: a feed's tick, or an etl's added on_timer" + for_kinds("--period"),
+        ),
     ] = None,
     horizon: Annotated[
         str | None,
-        typer.Option("--horizon", help="How long an event waits before it is evaluated (horizon)"),
+        typer.Option(
+            "--horizon",
+            help="How long an event waits before it is evaluated" + for_kinds("--horizon"),
+        ),
     ] = None,
     poll: Annotated[
         bool,
-        typer.Option("--poll", help="A feed as previewable fetch/normalize steps"),
+        typer.Option(
+            "--poll", help="A feed as previewable fetch/normalize steps" + for_kinds("--poll")
+        ),
     ] = False,
     cursor_fields: Annotated[
         str | None,
-        typer.Option("--cursor-fields", help="With --poll: a compound cursor's fields, e.g. ts,id"),
+        typer.Option(
+            "--cursor-fields",
+            help="With --poll: a compound cursor's fields, e.g. ts,id"
+            + for_kinds("--cursor-fields"),
+        ),
     ] = None,
     profile: Annotated[
         str | None,
         typer.Option(
             "--profile",
-            help="Start profile it joins (streaming, normalizer)",
+            help="Start profile it joins" + for_kinds("--profile"),
             autocompletion=completion.profiles,
         ),
     ] = None,
     unprofiled: Annotated[
         str | None,
-        typer.Option("--unprofiled", help="Or the reason it belongs to no profile"),
+        typer.Option(
+            "--unprofiled",
+            help="Or the reason it belongs to no profile" + for_kinds("--unprofiled"),
+        ),
     ] = None,
     partition: Annotated[
         str | None,
-        typer.Option("--partition", help="The slice of --dataset it fills (backfill)"),
+        typer.Option(
+            "--partition", help="The slice of --dataset it fills" + for_kinds("--partition")
+        ),
     ] = None,
     partition_column: Annotated[
         str | None,
         typer.Option(
             "--partition-column",
-            help="The column holding --partition (backfill; default sym)",
+            help="The column holding --partition; default "
+            f"{worker_mod.DEFAULT_PARTITION_COLUMN}{for_kinds('--partition-column')}",
         ),
     ] = None,
     check: Annotated[
-        bool, typer.Option("--check", help="Scaffold a quality check (backfill)")
+        bool, typer.Option("--check", help=f"Scaffold a quality check{for_kinds('--check')}")
     ] = False,
     twin_of: Annotated[
         str | None,
@@ -185,15 +204,16 @@ def new_job(
             help="A streaming job whose published table this backfill refills - the dataset "
             "and columns are taken from it, and `uqs job gaps JOB` then names this worker "
             "NAME_backfill: pass NAME without the suffix, e.g. `uqs job new JOB_hist "
-            "--kind backfill --twin-of JOB` (backfill)",
+            "--kind backfill --twin-of JOB`" + for_kinds("--twin-of"),
         ),
     ] = None,
     transform: Annotated[
         str | None,
         typer.Option(
             "--transform",
-            help="passthrough or derive: the transform, and for streaming its handler "
-            "(backfill, streaming)",
+            help=f"{alternatives(transform_mod.MODES)}: the transform, and for streaming its "
+            "handler" + for_kinds("--transform"),
+            autocompletion=completion.choices(*transform_mod.MODES),
         ),
     ] = None,
     triggered_by: Annotated[
@@ -252,32 +272,7 @@ def new_job(
     """
     subs = [s.strip() for s in (subscribe_to or "").split(",") if s.strip()]
     repo_root = _paths().repo_root
-    used = {
-        "--kind": kind != "streaming",
-        "--subscribe-to": subscribe_to is not None,
-        "--publishes": publishes is not None,
-        "--dataset": dataset is not None,
-        "--raw-table": raw_table is not None,
-        "--raw-columns": raw_columns is not None,
-        "--schema": columns is not None,
-        "--schema-from": columns_from is not None,
-        "--source": source is not None,
-        "--width": width is not None,
-        "--proc": procname is not None,
-        "--start-with-all": start_with_all,
-        "--transport": transport is not None,
-        "--period": period is not None,
-        "--horizon": horizon is not None,
-        "--poll": poll,
-        "--cursor-fields": cursor_fields is not None,
-        "--profile": profile is not None,
-        "--unprofiled": unprofiled is not None,
-        "--partition": partition is not None,
-        "--partition-column": partition_column is not None,
-        "--check": check,
-        "--transform": transform is not None,
-        "--twin-of": twin_of is not None,
-    }
+    used = given_options(ctx)
     if triggered_by is not None or writes is not None:
         scaffold_reaction(
             name,

@@ -38,7 +38,7 @@ import typer.main
 import uqs.cli.entry  # noqa: F401 - registers every command on the app
 from uqs.cli import safety, shared, skip_options, vocabulary
 from uqs.cli.shared import app
-from uqs.cli.target_confirm import effect_of
+from uqs.cli.target_confirm import changes_the_server, effect_of, trait_of
 
 ROOT = "uqs"  # the label the root group's own options are reported under
 GUIDE = Path(__file__).resolve().parents[3] / "docs" / "guides" / "uqs.md"
@@ -922,21 +922,20 @@ BY_EFFECT = {
     safety.Effect.CHANGES_STATE: CHANGES,
 }
 
-#: The third kind, which no Effect states: a command whose output belongs to
-#: something else, so --json and --dry-run do not apply. Each says why.
-OWN_OUTPUT = {
-    "exec": "passes any verb through to torq.sh",
-    "job attachment contract export": "prints the contract, a document another machine approves",
-    "setup odbc env": "prints shell exports, for eval",
-    "target shell": "opens an interactive shell on the server",
-}
 
-#: Changes-state commands that report and take no --dry-run, with why: rule 5a
-#: holds them, 5b does not.
-NO_DRY_RUN = {
-    "query": "runs any q on a process - so it may change it, which is its Effect - and "
-    "what it changes is the expression's: there is nothing to check without running it",
-}
+#: The third kind, which no Effect states: a command whose output belongs to
+#: something else, so --json and --dry-run do not apply - declared where the
+#: command is, `safety.marked(..., own_output=WHY)` (#1893).
+def _marked(trait: str) -> dict[str, str]:
+    """{leaf: what it says} for every leaf `safety.marked` gave `trait`."""
+    return {p: trait_of(c.command, trait) for p, c in LEAVES.items() if trait_of(c.command, trait)}
+
+
+OWN_OUTPUT = _marked("own_output")
+
+#: Changes-state commands that report and take no --dry-run, each marked
+#: `safety.marked(..., no_dry_run=WHY)`: rule 5a holds them, 5b does not.
+NO_DRY_RUN = _marked("no_dry_run")
 
 
 def _kind(path: str) -> str | None:
@@ -991,14 +990,32 @@ def _flag(cmd: Cmd, long: str, short: str | None = None) -> bool:
 
 
 def test_rule5_every_leaf_is_classified():
-    """Every leaf has a kind - its Effect, or a row of the third kind - and
-    every hand-kept row names a leaf of the kind it claims to except."""
+    """Every leaf has a kind - its Effect, or the third kind - and every
+    no_dry_run mark is on a command that changes state."""
     unmarked = sorted(p for p in LEAVES if _kind(p) is None)
     assert not unmarked, f"no Effect on: {unmarked} - give each its cls= from cli/safety.py"
-    gone = sorted((set(OWN_OUTPUT) | set(NO_DRY_RUN)) - set(LEAVES))
-    assert not gone, f"no such command any more - delete its row: {gone}"
     stale = sorted(p for p in NO_DRY_RUN if BY_EFFECT.get(effect_of(LEAVES[p].command)) != CHANGES)
-    assert not stale, f"NO_DRY_RUN rows that no longer change state - delete them: {stale}"
+    assert not stale, f"no_dry_run marks on commands that do not change state: {stale}"
+
+
+def test_rule5_the_marks_beyond_an_effect_are_declared_where_their_command_is():
+    """#1893: which commands own their output, report without a dry run, start
+    a process even in a dry run, or act under an option are marks on the
+    commands (`safety.marked`), which `uqs --target` reads too - so a new
+    command with one of these properties cannot skip being confirmed."""
+    assert set(OWN_OUTPUT) == {"exec", "job attachment contract export", "setup odbc env",
+                               "target shell"}  # fmt: skip
+    assert set(NO_DRY_RUN) == {"query"}
+    starts = set(_marked("dry_run_starts"))
+    assert starts == {"job backfill"}
+    for path in starts:
+        assert changes_the_server([*path.split(), "w", "--dry-run"]) is True, path
+    acting = _marked("acts_when")
+    assert acting == {"status": "--interactive"}
+    for path, option in acting.items():
+        assert LEAVES[path].option(option) is not None, (path, option)
+        assert changes_the_server([*path.split(), option]) is True, path
+        assert changes_the_server(path.split()) is False, path
 
 
 def test_rule5a_every_reporting_command_has_json():
@@ -1183,6 +1200,225 @@ def test_rule5d_every_override_is_named_where_uqs_override_list_finds_it():
     named = {command for b in safety.catalog() for command in b.commands}
     assert taking == named
     assert all(c.option("--reason") is not None for c in TREE if c.path in taking)
+
+
+# ------------------------------------- help derived from its authority (#1893)
+
+
+def _choices_of(param) -> tuple[str, ...] | None:
+    """The fixed values `param` takes: its Choice's, or those of the
+    `completion.choices(...)` completer it carries; None for a free value."""
+    if hasattr(param.type, "choices"):
+        return tuple(str(c) for c in param.type.choices)
+    completer = getattr(param, "_custom_shell_complete", None)
+    for cell in getattr(completer, "__closure__", None) or ():  # typer wraps the completer
+        values = getattr(cell.cell_contents, "choice_values", None)
+        if values is not None:
+            return tuple(values)
+    return None
+
+
+def _names(value: str, text: str) -> bool:
+    return re.search(rf"(?<![\w-]){re.escape(value)}(?![\w-])", text) is not None
+
+
+def _params(cmd: Cmd) -> list:
+    return [p for p in cmd.command.params if not getattr(p, "hidden", False)]
+
+
+def _param(path: str, name: str):
+    """The option `name` (`--kind`), or the argument whose name is `name`, of `path`."""
+    cmd = LEAVES[path]
+    return next(p for p in _params(cmd) if name in (*p.opts, p.name))
+
+
+def _authorities() -> dict[tuple[str, str], tuple[str, ...]]:
+    """(command, option) -> the tuple that declares the values it takes: the
+    option's choices and its help are both held to it."""
+    from uqs.attach import config, receiver_contract
+    from uqs.cli.external import FEEDS
+    from uqs.deploy import components, portable
+    from uqs.generated import q_facts
+    from uqs.model.kinds import SCAFFOLD_KINDS
+    from uqs.scaffold import transform
+    from uqs.stack import multitail, render, run_modes
+
+    out = {
+        ("job backfill", "--on-conflict"): q_facts.IO_STRATEGIES,
+        ("job attachment contract approve", "--on-conflict"): receiver_contract.STRATEGIES,
+        ("job backfill", "--mode"): run_modes.MODE_OPTION_MODES,
+        ("job new", "--kind"): SCAFFOLD_KINDS,
+        ("job new", "--transform"): transform.MODES,
+        ("query", "--render"): render.RENDERERS,
+        ("logs", "--stream"): tuple(multitail.MULTITAIL_STREAMS),
+        ("deploy build", "--q-version"): portable.Q_TARGETS,
+        ("job attachment add", "--schema-writer"): tuple(config.SCHEMA_WRITERS),
+        ("start", "--level"): q_facts.LOG_LEVELS,
+        ("restart", "--level"): q_facts.LOG_LEVELS,
+        ("logs", "--level"): q_facts.LOG_LEVELS,
+    }
+    for component in components.COMPONENTS:
+        out[("deploy push", f"--{component}-mode")] = components.MODES
+    for verb in ("start", "stop", "restart", "status", "logs"):
+        out[(f"connector {verb}", "name")] = tuple(FEEDS)
+    return out
+
+
+def test_an_option_with_fixed_values_takes_its_authoritys():
+    """#1893: each option's values are its declaring source's - q's strategies
+    and modes, the scaffold kinds, the renderers - not a copy beside them."""
+    for (path, name), authority in _authorities().items():
+        assert _choices_of(_param(path, name)) == tuple(authority), (path, name)
+
+
+def test_help_naming_fixed_values_names_every_one():
+    """An option that takes a fixed set of values names every one in its help,
+    so a value its source adds is shown the day it is accepted. `--sort` takes
+    a column name, which the listing's own header shows."""
+    found = set()
+    for cmd in TREE:
+        for param in _params(cmd):
+            values = _choices_of(param)
+            if values is None or "--sort" in param.opts:
+                continue
+            if missing := [v for v in values if not _names(v, param.help or "")]:
+                found.add((cmd.path, param.opts[0] if param.opts else param.name, *missing))
+    assert not found, sorted(found)
+
+
+#: A digit-led default in an option's help - "default 120", "default: 1D".
+_STATED_DEFAULT = re.compile(r"\bdefault:?\s+(\d[\w.]*)", re.IGNORECASE)
+
+
+def _defaults() -> dict[tuple[str, str], object]:
+    """(command, option) -> the authority for a default its help states where
+    the option's own default is not it: one a feed, a target or the scaffold
+    applies when the option is not given."""
+    from uqs.cli.external import FEEDS
+    from uqs.deploy import config
+    from uqs.scaffold import worker
+
+    out: dict[tuple[str, str], object] = {("job new", "--width"): worker.DEFAULT_WIDTH}
+    for command in ("deploy push", "deploy rollback", "deploy prune"):
+        out[(command, "--command-timeout")] = config.DEFAULT_COMMAND_TIMEOUT
+    for command in ("deploy push", "deploy rollback"):
+        out[(command, "--verify-timeout")] = config.DEFAULT_VERIFY_TIMEOUT
+    for verb in ("start", "restart"):
+        for feed in FEEDS.values():
+            for option in feed.options:
+                if option.default is not None and not option.secret:
+                    out[(f"connector {verb}", option.flag)] = option.default
+    return out
+
+
+def _rendered(value: object) -> str:
+    return f"{value:g}" if isinstance(value, float) else str(value)
+
+
+def test_a_default_stated_in_help_is_the_one_applied():
+    """#1893: a default a help states is the option's own, or the value its
+    authority applies when it is not given - never a number typed beside it."""
+    authorities, found = _defaults(), set()
+    for cmd in TREE:
+        for param in _params(cmd):
+            name = param.opts[0] if param.opts else param.name
+            for stated in _STATED_DEFAULT.findall(param.help or ""):
+                applied = authorities.get((cmd.path, name), param.default)
+                # a DURATION states its seconds with their unit: "default 180s"
+                if stated not in (_rendered(applied), f"{_rendered(applied)}s"):
+                    found.add((cmd.path, name, stated, _rendered(applied)))
+    assert not found, f"(command, option, stated, applied): {sorted(found)}"
+
+
+def test_a_default_authority_names_a_live_option():
+    gone = {k for k in _defaults() if k[0] not in LEAVES or LEAVES[k[0]].option(k[1]) is None}
+    assert not gone, gone
+
+
+def test_job_new_kind_tags_are_shapes():
+    """#1893: the "(backfill)" ending a `job new` option's help is rendered from
+    create_kinds.SHAPES, the table that refuses the option on any other kind;
+    every SHAPES row is an option `job new` has, and so checks."""
+    from uqs.cli.create_kinds import SHAPES, for_kinds
+    from uqs.model.kinds import SCAFFOLD_KINDS
+
+    cmd = LEAVES["job new"]
+    for option, kinds in SHAPES.items():
+        param = cmd.option(option)
+        assert param is not None, f"SHAPES names {option}, which `job new` does not take"
+        assert param.help.endswith(for_kinds(option)), (option, param.help)
+        assert set(kinds) <= set(SCAFFOLD_KINDS), (option, kinds)
+    tag = re.compile(rf"\((?:(?:{'|'.join(SCAFFOLD_KINDS)})(?:, )?)+\)$")
+    untagged = [p for p in cmd.options if _long(p) not in SHAPES and tag.search(p.help or "")]
+    assert not untagged, [_long(p) for p in untagged]
+
+
+def test_job_new_refuses_a_misplaced_option_it_was_never_told_about(monkeypatch):
+    """`used` is read from Click, so every SHAPES row is checked: a backfill
+    given --publishes was scaffolded with it dropped (#1893)."""
+    from typer.testing import CliRunner
+
+    from uqs.cli import create
+
+    refused: list[str] = []
+
+    def record(exc: Exception) -> None:
+        refused.append(str(exc))
+        raise SystemExit(1)
+
+    monkeypatch.setattr(create, "_die", record)
+    argv = ["job", "new", "x", "--kind", "backfill", "--publishes", "t", "--dry-run"]
+    CliRunner().invoke(app, argv)
+    assert refused == ["--publishes does not apply to --kind backfill"]
+
+
+def test_status_presets_are_one_table():
+    """#1893: `status --columns`'s presets - resolved, completed, refused and
+    described - are summary_columns.SUMMARY_PRESETS, so the help says what each shows."""
+    from uqs.cli import completion
+    from uqs.cli.summary_columns import SUMMARY_PRESETS, resolve_columns
+    from uqs.stack.listing import SUMMARY_ALL_COLUMNS
+
+    help_ = LEAVES["status"].option("--columns").help
+    for name, columns in SUMMARY_PRESETS.items():
+        assert resolve_columns(name) == list(columns)
+        assert f"`{name}`" in help_ and name in completion.summary_columns("")
+        if columns != SUMMARY_ALL_COLUMNS:
+            assert ", ".join(columns) in help_, name
+
+
+def test_connector_help_is_rendered_from_each_option():
+    """#1893: a connector option's default and variable are its FeedOption's,
+    rendered by it - never retyped into its help."""
+    from uqs.cli.external import FEEDS
+
+    for feed in FEEDS.values():
+        for option in feed.options:
+            if option.env:
+                assert f"${option.env}" not in option.help, option.flag
+            if option.default is not None and not option.secret:
+                assert f"default {option.default}" not in option.help, option.flag
+            param = LEAVES["connector start"].option(
+                option.flag + ("-env" if option.secret else "")
+            )
+            assert option.described in param.help, option.flag
+
+
+def test_mode_notes_describe_every_mode():
+    from uqs.stack import run_modes
+
+    assert set(run_modes.NOTES) == set(run_modes.MODES)
+    assert run_modes.DEFAULT_MODE in run_modes.MODES
+
+
+def test_the_receivers_row_limit_is_the_contracts():
+    """scripts/dev/remote_receiver.q's `-max_rows` default is the contract's
+    DEFAULT_MAX_ROWS (#1893): the q receiver cannot import it, so it is held."""
+    from uqs.attach.receiver_contract import DEFAULT_MAX_ROWS
+
+    script = (GUIDE.parents[2] / "scripts" / "dev" / "remote_receiver.q").read_text()
+    assert re.search(rf'"J"\$first o`max_rows; {DEFAULT_MAX_ROWS}\]', script)
+    assert f"(default {DEFAULT_MAX_ROWS})" in script
 
 
 # ------------------------------------------------------------- the lists

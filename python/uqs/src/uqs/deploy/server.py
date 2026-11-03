@@ -18,6 +18,7 @@ from uqs.interpreter import PEACHQ
 from uqs.logger import get_logger
 from uqs.runtimes import DEFAULT_RUNTIME
 from uqs.stack import site_fields
+from uqs.stack.odbc_home import ODBC_HOME_ENV
 
 log = get_logger()
 
@@ -116,7 +117,7 @@ class Server:
             # a source with no credential is refused, never read as its fixture
             ("UQF_LIVE_SOURCES_REQUIRED", "1" if c.live else None),
             # the private ODBC setup deploy.env loads, for `uqs config sources check`
-            ("UQS_ODBC_HOME", c.odbc_home),
+            (ODBC_HOME_ENV, c.odbc_home),
             # the site launcher's own process.csv columns, empty unless set
             (site_fields.PROCESS_FIELDS_ENV, ",".join(c.process_fields)),
             # the release installs from its own wheels; nothing after that
