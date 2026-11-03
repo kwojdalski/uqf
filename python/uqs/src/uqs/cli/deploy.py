@@ -26,7 +26,7 @@ from uqs.cli.renames import renamed
 from uqs.cli.safety import ChangesState, DryRunOpt, OverrideOpt, ReasonOpt
 from uqs.cli.shared import app, json_refusal
 from uqs.deploy import build as release_build
-from uqs.deploy import config, driver, frontend, history, kafka, targets
+from uqs.deploy import config, driver, frontend, history, kafka, overrides, portable, targets
 from uqs.deploy.artifact import PLATFORMS, ReleaseError
 from uqs.deploy.remote import Remote
 from uqs.logger import get_logger
@@ -53,7 +53,10 @@ def _failed(prefix: str, stage: str, exc: Exception) -> None:
 
 #: `--output` is a FILE, as `contract export -o` writes one; a directory is
 #: `--output-dir` (#1857).
-@deploy_app.command("build", cls=renamed({"--output": "--output-dir"}, ChangesState))
+@deploy_app.command(
+    "build",
+    cls=renamed({"--output": "--output-dir", **policy.BUILD_OLD_SPELLINGS}, ChangesState),
+)
 def build(
     output: Annotated[
         Path | None,
@@ -71,9 +74,6 @@ def build(
             "--python", help="The servers' Python, major.minor; default requires-python's"
         ),
     ] = None,
-    allow_dirty: Annotated[
-        bool, typer.Option("--allow-dirty", help="Build uncommitted changes (recorded)")
-    ] = False,
     bundle: Annotated[
         list[Path] | None,
         typer.Option(
@@ -99,13 +99,8 @@ def build(
             help="With --q-target: a folder, file or glob to ship as written; repeatable",
         ),
     ] = None,
-    allow_computed_names: Annotated[
-        bool,
-        typer.Option(
-            "--allow-computed-names",
-            help="With --q-target: accept a load-time lookup of a computed name, with a warning",
-        ),
-    ] = False,
+    override: OverrideOpt = None,
+    reason: ReasonOpt = None,
     kafka_home: Annotated[
         Path | None, typer.Option("--kafka-home", metavar="DIR", help=kafka.HOME_HELP)
     ] = None,
@@ -122,6 +117,11 @@ def build(
     It carries the selected runtime's bundles (`uqs --runtime crypto deploy build`):
     those runtime_bundles.json declares for it, plus any --bundle."""
     runtime = runtime_from_env()
+    try:
+        waived = policy.waived("deploy build", override, reason)
+    except config.DeployError as exc:
+        _failed("uqs deploy build", exc.stage, exc)
+        return
     if dry_run:
         try:
             members = release_build.composition_members(
@@ -139,12 +139,12 @@ def build(
             output,
             arch=arch,
             python=python,
-            allow_dirty=allow_dirty,
+            allow_dirty=overrides.ALLOW_DIRTY in waived,
             bundles=[str(b) for b in bundle or ()],
             runtime=runtime,
             q_target=q_target,
             q_exclude=q_exclude or (),
-            allow_computed_names=allow_computed_names,
+            allow_computed_names=portable.ALLOW_COMPUTED_NAMES in waived,
             kafka_home=kafka_home,
             kafka_connector=with_kafka_connector,
             python_runtime_file=python_runtime,
@@ -281,7 +281,6 @@ def push(
     command_timeout: conn.CommandTimeout = None,
     smoke_timeout: conn.SmokeTimeout = 120,
     verify_timeout: conn.VerifyTimeout = None,
-    allow_dirty: policy.AllowDirty = False,
     override: OverrideOpt = None,
     reason: ReasonOpt = None,
     release_repo: Annotated[
@@ -303,14 +302,6 @@ def push(
     q_runtime_sha256: components.QRuntimeSha256 = None,
     python_runtime: components.PythonRuntime = None,
     python_runtime_sha256: components.PythonRuntimeSha256 = None,
-    fix_hdb: Annotated[
-        bool,
-        typer.Option(
-            "--fix-hdb",
-            help="Fill the shared HDB's partitions that lack a table or column this release "
-            "declares (additive); without it they are refused. A changed type always is",
-        ),
-    ] = False,
     keep: Annotated[
         int | None,
         typer.Option(
@@ -320,13 +311,6 @@ def push(
         ),
     ] = None,
     soak: conn.Soak = None,
-    break_lock: Annotated[
-        bool,
-        typer.Option(
-            "--break-lock",
-            help="Remove a deploy lock whose holder stopped beating; refused while it beats",
-        ),
-    ] = False,
     register: conn.Register = True,
 ) -> None:
     """Deploy a release onto a server, on its TorQ and q or bundled ones, and verify it there."""

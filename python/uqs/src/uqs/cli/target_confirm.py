@@ -183,6 +183,11 @@ def parse(args: Sequence[str]) -> Parsed | None:
     return Parsed(alias or path, command, leaf, asked_help)
 
 
+def _dry_by_default(command) -> bool:
+    """Whether `command` writes only with --apply (cli/safety.py, #1854)."""
+    return any("--apply" in getattr(p, "opts", ()) for p in command.params)
+
+
 def changes_the_server(args: Sequence[str]) -> bool:
     """Whether `args` may change the server, read from the parsed command:
     never with help, nor a dry run - every command that changes state takes
@@ -199,6 +204,8 @@ def changes_the_server(args: Sequence[str]) -> bool:
         return True
     if p.given("--dry-run") is True and p.path != _DRY_RUN_STARTS:
         return False
+    if _dry_by_default(p.command) and not p.given("--apply"):
+        return False  # a dry run without --apply (#1854), walked by test_dry_run_tree
     if p.path == _INTERACTIVE_ACTS and p.given("--interactive"):
         return True
     return effect_of(p.command) not in _NO_ASK

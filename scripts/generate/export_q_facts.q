@@ -25,6 +25,15 @@ datasets:{[] exec distinct dataset from .qetl.job.bounded.worker_cfg}
 / declared one, or the default - however the source's file spelled it.
 source_transport:{[s] string (.qetl.source.def s)`transport}
 
+/ The job graph's producers (#1862): every table a job writes -> the jobs that
+/ write it, named as .qetl.dag names them, reactions (`dataset~reaction`)
+/ included. uqs's producer map is held to this, so it cannot quietly cover only
+/ the streaming jobs or only the bounded workers again.
+dag_producers:{[]
+    .qetl.dag.adopt_all[];
+    outs:asc distinct raze exec outputs from .qetl.dag.jobs;
+    outs!{string asc .qetl.dag.producers x} each outs}
+
 / q's column types and attributes (#1785): the vocabulary uqs's attachment
 / check, schema view, plant metadata, scaffold and the browser's catalog share.
 / q has no list of its type NAMES, so they are written here once - and each is
@@ -60,6 +69,8 @@ facts:(!) . flip (
     (`BOUNDED_DATASET_INSTRUMENT_COLUMNS; (!) . (asc datasets[]; string .qetl.job.bounded.read_instrument_column each asc datasets[]));
     / The plant tables this tree defines, by the columns they are read by (#1869).
     / How each source is reached - what uqs's capability gate and `config sources stub` read (#1865).
+    / Who writes each table, by job (#1862).
+    (`DAG_PRODUCERS;                      dag_producers[]);
     (`SOURCE_TRANSPORTS;                  (!) . (asc .qetl.source.defined[]; source_transport each asc .qetl.source.defined[]));
     / Names q computes and the browser and `uqs` repeat (#1368).
     (`CFG_SOURCES;            .qetl.cfg.sources);

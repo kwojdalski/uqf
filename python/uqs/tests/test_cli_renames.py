@@ -45,9 +45,9 @@ RENAMED = [
     ("connector restart", "--port", "--base-port"),
     ("deploy verify", "--port", "--base-port"),
     ("job backfill", "--port", "--base-port"),
-    ("job backfill", "--force", "--any-writer"),
+    ("job backfill", "--force", renames.bypass_flag("any-writer")),
     ("job receive", "--port", "--listen-port"),
-    ("job remove", "--force", "--even-if-edited"),
+    ("job remove", "--force", renames.bypass_flag("even-if-edited")),
     # #1732: one safety vocabulary
     ("start", "--show-command", "--dry-run"),
     ("job attach", "--override-reason", "--reason"),
@@ -84,6 +84,20 @@ RENAMED = [
     ("deploy push", "--qhome", "--q-home"),
     *[(f"setup odbc {verb}", "--home", "--odbc-home") for verb in ("rollback", "status", "env")],
     ("setup odbc install", "--qhome", "--q-home"),
+    # #1852: the bare bypass flags, each now an --override with a reason
+    *[
+        (path, f"--{name}", renames.bypass_flag(name))
+        for path, name in [
+            ("deploy build", "allow-dirty"),
+            ("deploy build", "allow-computed-names"),
+            ("deploy push", "allow-dirty"),
+            ("deploy push", "fix-hdb"),
+            ("deploy push", "break-lock"),
+            ("deploy rollback", "break-lock"),
+            ("job backfill", "any-writer"),
+            ("job remove", "even-if-edited"),
+        ]
+    ],
 ]
 
 
@@ -139,6 +153,24 @@ def test_an_old_bypass_becomes_an_override_with_one_reason(monkeypatch):
     )
     assert got == ["rdb1", "--override", "a", "--override", "b", "--reason", "why a; why b"]
     assert said == ["--skip-a", "--skip-b"]
+
+
+def test_an_old_bypass_flag_becomes_an_override_with_a_reason_saying_none_was_given(monkeypatch):
+    """#1852: `--allow-dirty` took no value. It is `--override allow-dirty`, and with no
+    --reason on the line the record says the old flag gave none; with one, that covers it."""
+    said = []
+    monkeypatch.setattr(renames, "warn_renamed", lambda old, new: said.append((old, new)))
+    table = {"--allow-dirty": renames.bypass_flag("allow-dirty")}
+    got = renames._rewrite_renamed(
+        ["art.tgz", "--allow-dirty", "prod"], table, "uqs deploy push", None
+    )
+    assert got == ["art.tgz", "--override", "allow-dirty", "prod",
+                   "--reason", renames.legacy_reason("--allow-dirty")]  # fmt: skip
+    assert said == [("--allow-dirty", "--override allow-dirty --reason REASON")]
+    given = renames._rewrite_renamed(
+        ["--allow-dirty", "--reason", "hotfix"], table, "uqs deploy push", None
+    )
+    assert given == ["--override", "allow-dirty", "--reason", "hotfix"]
 
 
 def test_a_dropped_flag_is_accepted_and_ignored():

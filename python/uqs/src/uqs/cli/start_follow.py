@@ -1,10 +1,12 @@
 """`uqs start --follow` and `uqs restart --follow`: the console is the run.
 
-Starts what `start` (or `restart`) would, streams every started process's log
-to this console until Ctrl-C, then stops what the command brought up - the way
-`docker compose up` does. Processes that were already running when it began are
-left running; if `status` cannot say which those were, Ctrl-C stops everything
-the command was asked for.
+Starts what `start` (or `restart`) would and streams every started process's
+log to this console until Ctrl-C. Ctrl-C stops the stream, as it does for
+`uqs logs --follow`: the processes keep running (#1854). Stopping them too is
+asked for by name, `--stop-on-exit`, the way `docker compose up` behaves: then
+what the command brought up is stopped, and processes that were already
+running when it began are left running - if `status` cannot say which those
+were, everything the command was asked for is stopped.
 
 This was `uqs up`, a command of its own with its own option set (#1734). It is
 a flag now, so `start`, `restart` and their `--follow` take one set of options;
@@ -33,7 +35,16 @@ FollowOpt = Annotated[
         "--follow",
         "-f",
         help="Stay in the foreground, streaming every started process's log until "
-        "Ctrl-C - which stops what this started, and leaves what was already running",
+        "Ctrl-C, which stops the stream; the processes keep running",
+    ),
+]
+
+StopOnExitOpt = Annotated[
+    bool,
+    typer.Option(
+        "--stop-on-exit",
+        help="With --follow: when the stream ends (Ctrl-C), stop what this started; what "
+        "was already running is left running",
     ),
 ]
 
@@ -79,10 +90,12 @@ def follow(
     launch: Callable[[], None],
     port: int | None,
     level: str | None,
+    stop: bool = False,
 ) -> None:
-    """Follow `wanted`'s logs from before `launch` runs until Ctrl-C, then stop
-    those of them that were not in `already` (None: every one). Always exits
-    the command: with the launch's code, or the stop's if the launch was fine."""
+    """Follow `wanted`'s logs from before `launch` runs until Ctrl-C; with
+    `stop`, then stop those of them that were not in `already` (None: every
+    one). Always exits the command: with the launch's code, or the stop's if
+    the launch was fine."""
     # Ctrl-C ends the stream normally. A failed launch ends it early - and
     # still stops what did start, because the console is the run.
     exit_code = 0
@@ -94,6 +107,13 @@ def follow(
     except typer.Exit as exc:
         exit_code = exc.exit_code
     started = [p for p in wanted if already is None or p not in already]
+    if not stop:
+        if started:
+            console.print(
+                f"[dim]left running: {' '.join(started)} - `uqs stop {' '.join(started)}` "
+                "stops them[/]"
+            )
+        raise typer.Exit(code=exit_code)
     if not started:
         console.print("[dim]every process was already running; leaving them up[/]")
     else:

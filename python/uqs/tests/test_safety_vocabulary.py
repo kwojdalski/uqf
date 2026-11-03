@@ -37,17 +37,26 @@ def test_override_list_names_each_command_and_what_it_bypasses():
     )
 
 
-def test_data_migrate_needs_dry_run_or_apply_until_it_writes_by_default(monkeypatch):
-    """It was dry by default; a script written then must not start writing
-    unasked, so for one release a bare migrate is refused (#1732)."""
+def test_data_migrate_is_dry_unless_apply_which_asks(monkeypatch):
+    """#1854: dry by default, and it stays so - the default no longer flips. --apply
+    shows the plan and asks; --yes does not ask; the old -n still parses."""
     calls = []
     monkeypatch.setattr(hdb_migrate, "migrate", lambda *a, **kw: calls.append(kw) or "plan")
-    assert runner.invoke(cli.app, ["data", "migrate", "trade", "2026-09-01"]).exit_code == 1
-    assert not calls
-    assert runner.invoke(cli.app, ["data", "migrate", "trade", "2026-09-01", "-n"]).exit_code == 0
+    argv = ["data", "migrate", "trade", "2026-09-01"]
+    assert runner.invoke(cli.app, argv).exit_code == 0
+    assert [c["apply"] for c in calls] == [False]
+    assert runner.invoke(cli.app, [*argv, "-n"]).exit_code == 0
     assert calls[-1]["apply"] is False
-    ok = runner.invoke(cli.app, ["data", "migrate", "trade", "2026-09-01", "--apply"])
-    assert ok.exit_code == 0 and calls[-1]["apply"] is True
+    calls.clear()
+    declined = runner.invoke(cli.app, [*argv, "--apply"], input="n\n")
+    assert declined.exit_code == 1 and [c["apply"] for c in calls] == [False]
+    calls.clear()
+    asked = runner.invoke(cli.app, [*argv, "--apply"], input="y\n")
+    assert asked.exit_code == 0 and [c["apply"] for c in calls] == [False, True]
+    calls.clear()
+    ok = runner.invoke(cli.app, [*argv, "--apply", "--yes"])
+    assert ok.exit_code == 0 and [c["apply"] for c in calls] == [True]
+    assert runner.invoke(cli.app, [*argv, "--apply", "-n"]).exit_code == 1
 
 
 def test_config_set_dry_run_checks_and_writes_nothing(monkeypatch):

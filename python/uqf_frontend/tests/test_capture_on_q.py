@@ -35,9 +35,11 @@ add_one_ns_later:{[unused]
 """
 
 
-@pytest.fixture(scope="module")
-def fleet(start_q, tmp_path_factory) -> Any:
-    script = tmp_path_factory.mktemp("usage") / "usage.q"
+@pytest.fixture
+def fleet(start_q, tmp_path) -> Any:
+    """A process of its own per test: one test inserts a row, and a fleet
+    shared across the module made the others depend on running before it."""
+    script = tmp_path / "usage.q"
     script.write_text(SERVER_SCRIPT)
     with start_q(str(script)) as port:
         yield KolaFleet(Settings(processes=(Process("rdb1", "localhost", port),)))

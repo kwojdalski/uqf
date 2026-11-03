@@ -141,18 +141,20 @@ the pattern, or the shell will try to expand it against your filenames first.
 or changes one, stop the stack and migrate each affected date/table explicitly:
 
 ```
-uqs data migrate trade 2026-01-01 --rename old_price:price --cast price --dry-run
+uqs data migrate trade 2026-01-01 --rename old_price:price --cast price
 uqs data migrate trade 2026-01-01 --rename old_price:price --cast price --apply
 uqs data check
 uqs restart hdb1
 ```
 
-The first command is a dry run. `--cast` authorises a type change only when
-every value survives conversion back to its original type. The applied command
-builds and checks a complete table partition before exchanging it with the old
-one; it prints the old directory's backup path for rollback. A source column not
-named in the current schema must be mapped with `--rename` rather than silently
-dropped. The command refuses segmented HDBs.
+The first command is a dry run: without `--apply` it always is (#1854).
+`--apply` shows the same plan and asks before writing; `--yes` does not ask.
+`--cast` authorises a type change only when every value survives conversion back
+to its original type. The applied command builds and checks a complete table
+partition before exchanging it with the old one; it prints the old directory's
+backup path for rollback. A source column not named in the current schema must
+be mapped with `--rename` rather than silently dropped. The command refuses
+segmented HDBs.
 
 ### One table, in any HDB
 
@@ -1152,18 +1154,20 @@ is not a TorQ process, such as the external feeds.
 
 **`uqs start --follow` (`-f`) is the foreground form of all this**: it starts
 what `start` would - the same names, `all`, or `--profile` - then streams those
-processes' logs to this console until Ctrl-C, which stops what it started, the
-way `docker compose up` does. The console is the run. `restart -f` does the same
-after a restart.
+processes' logs to this console until Ctrl-C. Ctrl-C ends the stream, as it does
+for `uqs logs -f`, and the processes keep running (#1854). `--stop-on-exit`
+makes the console the run, the way `docker compose up` does: Ctrl-C then stops
+what it started. `restart -f` does the same after a restart.
 
 ```
-uqs start -f                          # the default set, streamed; Ctrl-C stops it
+uqs start -f                          # the default set, streamed; Ctrl-C leaves it up
+uqs start -f --stop-on-exit           # ... and Ctrl-C stops what it started
 uqs start rdb1 fxpositions1 -f        # just these
 uqs start --profile fx -f --level WARNING
 ```
 
-What a process prints while it loads is shown too. Processes already running
-when it began are left running at Ctrl-C.
+What a process prints while it loads is shown too. With `--stop-on-exit`,
+processes already running when it began are left running at Ctrl-C.
 
 ### Where a process stopped
 
@@ -1367,7 +1371,17 @@ derived files included - CI checks they are current.
 
 Every process (except the passwordless `feed1`) is protected by
 `lib/torq-finance-starter-pack/appconfig/passwords/accesslist.txt` - placeholder
-demo credentials, `admin:admin` works for everything.
+demo credentials, `admin:admin` works for everything, and is what `uqs query`
+and `uqs schema` log in as by default. For another login, give `--user` and put
+the password in a variable whose NAME `--password-env` takes - never on the
+command line, where `ps` and shell history would show it:
+
+```
+read -rs Q_PW && export Q_PW
+uqs query rdb1 "count trade" --user ops --password-env Q_PW
+```
+
+The old `--passwd PASSWORD` still parses for one release, hidden, and warns.
 
 ```
 uqs query \
@@ -1412,7 +1426,9 @@ In the session, `\\` (q's own), `exit` or Ctrl-D leaves; Ctrl-C drops the line
 being typed. A line that fails is reported and the session goes on.
 
 It refuses a process that is not running, naming the `uqs start` to fix it.
-`qcon` ships with kdb+, not with this repository.
+`qcon` ships with kdb+, not with this repository. qcon takes the password on its
+command line, so with a password from `--password-env` the session on a process
+is uqs's own console instead, each line sent as typed.
 
 Results print as q's own console prints them: the process formats its answer
 with `.Q.s`, laid out to this terminal's size (or in full when the output is
@@ -1608,23 +1624,23 @@ logs its new spelling when used (rule 6). The release after removes it.
 
 One meaning per option name (#1729):
 
-  | old                                                                                     | new                              |
-  | ---                                                                                     | ---                              |
-  | `--port` on `start` `stop` `restart` `exec` `summary` `graph` `list`                    | `--base-port`                    |
-  | `--port` on `config get` `data replay` `connector start` `deploy verify` `job backfill` | `--base-port`                    |
-  | `job receive --port`                                                                    | `--listen-port`                  |
-  | `query --target NAME`                                                                   | `query --tunnel NAME`            |
-  | `stop --force`                                                                          | `stop --kill`                    |
-  | `job backfill --force`                                                                  | `job backfill --any-writer`      |
-  | `job remove --force`                                                                    | `job remove --even-if-edited`    |
-  | `logs -n N`                                                                             | `logs --lines N` / `-l N`        |
-  | `start --print`                                                                         | `start --dry-run` (#1732)        |
-  | `logs --print`                                                                          | `--show-command`                 |
-  | `query --raw`                                                                           | `query --no-gateway`             |
-  | `config get --raw`                                                                      | `config show --unresolved`       |
-  | `summary --debug`, `job backfill --debug`                                               | `uqs --debug status`, ...        |
-  | `--host` on `deploy push` `status` `rollback` `prune`                                   | `--ssh` (#1768)                  |
-  | `deploy rollback --to RELEASE`                                                          | `--release RELEASE` (#1768)      |
+  | old                                                                                     | new                                            |
+  | ---                                                                                     | ---                                            |
+  | `--port` on `start` `stop` `restart` `exec` `summary` `graph` `list`                    | `--base-port`                                  |
+  | `--port` on `config get` `data replay` `connector start` `deploy verify` `job backfill` | `--base-port`                                  |
+  | `job receive --port`                                                                    | `--listen-port`                                |
+  | `query --target NAME`                                                                   | `query --tunnel NAME`                          |
+  | `stop --force`                                                                          | `stop --kill`                                  |
+  | `job backfill --force`                                                                  | `job backfill --override any-writer` (#1852)   |
+  | `job remove --force`                                                                    | `job remove --override even-if-edited` (#1852) |
+  | `logs -n N`                                                                             | `logs --lines N` / `-l N`                      |
+  | `start --print`                                                                         | `start --dry-run` (#1732)                      |
+  | `logs --print`                                                                          | `--show-command`                               |
+  | `query --raw`                                                                           | `query --no-gateway`                           |
+  | `config get --raw`                                                                      | `config show --unresolved`                     |
+  | `summary --debug`, `job backfill --debug`                                               | `uqs --debug status`, ...                      |
+  | `--host` on `deploy push` `status` `rollback` `prune`                                   | `--ssh` (#1768)                                |
+  | `deploy rollback --to RELEASE`                                                          | `--release RELEASE` (#1768)                    |
 
 Noun first (#1727):
 
@@ -1658,10 +1674,10 @@ still reads rdb1. A job or worker is JOB in every command (`job backfill JOB`,
 
 Fewer, regular top-level commands (#1734):
 
-  | old                   | new                      |
-  | --------------------- | ------------------------ |
-  | `uqs up [PROC...]`    | `uqs start -f [PROC...]` |
-  | `uqs raw -- VERB ...` | `uqs exec -- VERB ...`   |
+  | old                   | new                                     |
+  | --------------------- | --------------------------------------- |
+  | `uqs up [PROC...]`    | `uqs start -f --stop-on-exit [PROC...]` |
+  | `uqs raw -- VERB ...` | `uqs exec -- VERB ...`                  |
 
 `start`, `restart` and `stop` take one option set: the processes positionally,
 `--profile` and `--base-port` on all three; `start` and `restart` add the same
@@ -1675,16 +1691,16 @@ first.
 
 One safety vocabulary (#1732):
 
-  | old                                                         | new                                                       |
-  | ---                                                         | ---                                                       |
-  | `start --show-command`                                      | `start --dry-run` / `-n`                                  |
-  | `start` `restart --skip-q-version-check REASON`             | `--override q-version-check --reason REASON`              |
-  | `start` `restart --skip-profile-budget-check REASON`        | `--override profile-budget-check --reason REASON`         |
-  | `deploy push --accept-digest REASON`, and so on             | `deploy push --override accept-digest --reason REASON`    |
-  | `job attach --override CODE:COMPONENT --override-reason R`  | `job attach --override CODE:COMPONENT --reason R`         |
-  | `job attach --yes`, `job detach --yes`, `uqs --yes`         | also `-y`                                                 |
-  | `job preview --dry-run`                                     | dropped: a preview never writes                           |
-  | `data migrate` (dry by default)                             | `data migrate --dry-run`; writing still says `--apply`    |
+  | old                                                         | new                                                          |
+  | ---                                                         | ---                                                          |
+  | `start --show-command`                                      | `start --dry-run` / `-n`                                     |
+  | `start` `restart --skip-q-version-check REASON`             | `--override q-version-check --reason REASON`                 |
+  | `start` `restart --skip-profile-budget-check REASON`        | `--override profile-budget-check --reason REASON`            |
+  | `deploy push --accept-digest REASON`, and so on             | `deploy push --override accept-digest --reason REASON`       |
+  | `job attach --override CODE:COMPONENT --override-reason R`  | `job attach --override CODE:COMPONENT --reason R`            |
+  | `job attach --yes`, `job detach --yes`, `uqs --yes`         | also `-y`                                                    |
+  | `job preview --dry-run`                                     | dropped: a preview never writes                              |
+  | `data migrate` (dry by default)                             | still dry by default; `--apply` writes, after asking (#1854) |
 
 Every command that changes state now takes `--dry-run`/`-n`, among them `stop`,
 `restart`, `config set`, `data seed`, `job receive`, `job backfill`
@@ -1692,10 +1708,38 @@ Every command that changes state now takes `--dry-run`/`-n`, among them `stop`,
 `connector start`/`stop`/`restart`, `setup odbc install`/`rollback`,
 `deploy component build` and `target add`/`remove`. The old
 `--accept-...`/`--skip-...` options each took their own reason; given together,
-their reasons are joined into the one `--reason`. `data migrate` was dry unless
-`--apply`: for one release it refuses to run with neither `--dry-run` nor
-`--apply`, so a script written for the old default does not start writing, and
-the release after writes by default.
+their reasons are joined into the one `--reason`.
+
+One write model per kind of change (#1854). A command that changes this machine
+writes by default and takes `--dry-run`/`-n`. A command that rewrites data in
+place - `data check`, `data alter`, `data migrate`, `target adopt` - is a dry
+run by default and writes only with `--apply`, which shows the plan and asks;
+`--yes`/`-y` answers that question, and nothing else. Their `--dry-run` says
+nothing more than the default: it still parses for one release, hidden, and is
+refused beside `--apply`. `data migrate`'s default, which was to flip to
+writing, stays a dry run. Every deletion that cannot be undone asks first and
+takes `--yes`/`-y`: `deploy prune`, `job checkpoint remove`, `target remove`
+(which `target revert` can undo), beside `job remove` and
+`job attachment remove`.
+
+Every bypass is a named override with a reason (#1852): the bare flags that
+lifted a refusal and recorded no reason are `--override NAME --reason TEXT`,
+each in `uqs override list`, warned about and recorded where the command records
+anything (`deploy push` in its plan's EXCEPTIONS and the release's report):
+
+  | old                                                  | new                                          |
+  | ---                                                  | ---                                          |
+  | `deploy build` `deploy push --allow-dirty`           | `--override allow-dirty --reason R`          |
+  | `deploy build --allow-computed-names`                | `--override allow-computed-names --reason R` |
+  | `deploy push --fix-hdb`                              | `--override fix-hdb --reason R`              |
+  | `deploy push` `deploy rollback --break-lock`         | `--override break-lock --reason R`           |
+  | `job backfill --any-writer`                          | `--override any-writer --reason R`           |
+  | `job remove --even-if-edited`                        | `--override even-if-edited --reason R`       |
+
+An old flag given without `--reason` still works for one release: its record
+says it was given as the old flag, which records no reason.
+`job attachment add --override CODE:COMPONENT` is checked as every other
+command's is.
 
 Group help that matches its commands, and no colliding names (#1737):
 

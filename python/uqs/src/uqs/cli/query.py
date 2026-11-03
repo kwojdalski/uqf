@@ -21,14 +21,20 @@ import typer
 from uqs.cli import completion
 from uqs.cli import query_target as via_target
 from uqs.cli.json_out import emit, json_opt
+from uqs.cli.q_login import (
+    DEFAULT_PASSWORD,
+    DEFAULT_USER,
+    QPasswdOpt,
+    QPasswordEnvOpt,
+    QUserOpt,
+    q_password,
+)
 from uqs.cli.renames import renamed
 from uqs.cli.safety import ChangesState
 from uqs.cli.shared import (
     ExportOpt,
     ProcArg,
     QHostOpt,
-    QPasswdOpt,
-    QUserOpt,
     _die,
     _export,
     _paths,
@@ -60,7 +66,7 @@ def _exec_qcon(host: str, port: int, user: str, passwd: str) -> None:
         )
         return
     argv = runtime.qcon_command(host, port, user, passwd, rlwrap=shutil.which("rlwrap") is not None)
-    log.debug("exec: {}", " ".join(argv))
+    log.debug("exec: {}", " ".join(argv[:-1] + [f"{host}:{port}:{user}:***"]))
     # execvp, not subprocess: qcon owns the terminal from here, and replacing
     # this process rather than wrapping it is what makes Ctrl-C, Ctrl-D and
     # the exit code behave as they would if you had typed `qcon` yourself.
@@ -117,16 +123,22 @@ def _gateway_session(
     servers: str,
     render: str,
     via: via_target.Via | None = None,
+    *,
+    routed: bool = True,
 ) -> None:
-    """The gateway's interactive session: every line through .gw.syncexec."""
+    """The gateway's interactive session: every line through .gw.syncexec.
+    Not `routed`: a session on any process, each line sent as typed - what
+    `query` opens instead of qcon when the password is a real one, since
+    qcon takes it on its command line (#1853)."""
     types = "".join("`" + t for t in servers.split())
     where = f"{host}:{port}" if via is None else via.where
-    console.print(
-        f"gateway1 at {where} - each line runs as .gw.syncexec[...;{types}]. "
-        "\\\\ or Ctrl-D to leave; uqs query --no-gateway for plain qcon.",
-        markup=False,
-        style="dim",
-    )
+    if routed:
+        said = (f"gateway1 at {where} - each line runs as .gw.syncexec[...;{types}]. "
+                "\\\\ or Ctrl-D to leave; uqs query --no-gateway for plain qcon.")  # fmt: skip
+    else:
+        said = (f"{where} - each line runs as typed (not qcon, which would put the "
+                "password on its command line). \\\\ or Ctrl-D to leave.")  # fmt: skip
+    console.print(said, markup=False, style="dim")
     try:
         stack_gateway.query_session(
             host,
@@ -137,10 +149,13 @@ def _gateway_session(
             fail=lambda msg: console.print(msg, markup=False, style="red"),
             servers=servers,
             render=stack_render.console_size if render == stack_render.Q else None,
+            routed=routed,
+            prompt="gateway1) " if routed else "q) ",
         )
     except Exception as exc:  # kola's own exception types on connect
         said = str(exc) if via is None else via.scrub(exc)
-        _die(UqsError(f"could not open a session on gateway1 at {where}: {said}"))
+        what = "gateway1 at " if routed else ""
+        _die(UqsError(f"could not open a session on {what}{where}: {said}"))
 
 
 QueryJson = json_opt(
@@ -186,8 +201,9 @@ def query(
             "ssh tunnel opened for the call; ports are the target's release's own",
         ),
     ] = None,
-    user: QUserOpt = "admin",
-    passwd: QPasswdOpt = "admin",
+    user: QUserOpt = DEFAULT_USER,
+    password_env: QPasswordEnvOpt = None,
+    passwd: QPasswdOpt = None,
     servers: Annotated[
         str,
         typer.Option(help="with the gateway: the process types an expression is routed to"),
@@ -240,6 +256,7 @@ def query(
     try:
         render = stack_render.renderer(render)
         proc, expr = _proc_first(ctx, proc, expr, port is not None)
+        passwd = q_password(password_env, passwd)
     except UqsError as exc:
         _die(exc)
         return
@@ -303,6 +320,11 @@ def _ask(
             return
         if routed:
             _gateway_session(host, port, user, passwd, servers, render, via)
+            return
+        if passwd != DEFAULT_PASSWORD:
+            # qcon takes the password as an argument, where ps shows it: a
+            # real one gets uqs's own session instead (#1853).
+            _gateway_session(host, port, user, passwd, servers, render, via, routed=False)
             return
         if via is not None:
             via_target.run_qcon(host, port, user, passwd)
