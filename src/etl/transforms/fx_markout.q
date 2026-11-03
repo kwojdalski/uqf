@@ -166,6 +166,29 @@
 / @eg .qpipe.transform.fx_markout.route[.qf.mkt.attribution_convention;`USDPLN]`leg  ->  `EURUSD`EURPLN
 .qpipe.transform.fx_markout.route:{[conv;sym] select leg, invert from .qf.mkt.attribution_route_with[conv;sym]}
 
+/ The conversion of a quote currency to a reporting currency, as the markout core
+/ asks for it (its domain's `convert`, #1931): the one market_data pair whose book
+/ gives report_ccy per quote_ccy, and whether that book is inverted to do so. It
+/ is the attribution route of the pair "quote report" under the convention, so it
+/ reads the same books as the rest of the family. A conversion that needs a chain
+/ of books (a cross through a bridge) is refused, as are a currency the convention
+/ does not list and a quote currency equal to the reporting one: the core reads a
+/ rate from ONE book, and declares anything else as a fixed rate.
+/ @param spec the spec; its convention if it declares one, else the default
+/ @param quote_ccys the quote currencies to convert
+/ @param report_ccy the reporting currency
+/ @return table ok, leg, invert: one row per quote currency
+/ @eg .qpipe.transform.fx_markout.convert[()!();`JPY`EUR`USDT`PLN;`USD]`leg  ->  `USDJPY`EURUSD``
+.qpipe.transform.fx_markout.convert:{[spec;quote_ccys;report_ccy]
+    conv:$[`convention in key spec; spec`convention; .qf.mkt.attribution_convention];
+    ccys:conv[`currencies]`ccy;
+    one:{[conv;ccys;rep;q]
+        if[not (q in ccys) and (rep in ccys) and q<>rep; :(0b;`;0b)];
+        r:.qf.mkt.attribution_route_with[conv;.qf.px.ccy_pair_symbol[q;rep]];
+        $[1=count r; (1b;first r`leg;first r`invert); (0b;`;0b)]}[conv;ccys;report_ccy];
+    rows:one each quote_ccys;
+    ([] ok:`boolean$rows[;0]; leg:`symbol$rows[;1]; invert:`boolean$rows[;2])}
+
 / The horizon kind's `legs` callback: for each pending execution, the legs its
 / reference must cover. An execution with no route has none (and is never queued:
 / see scoreable).
