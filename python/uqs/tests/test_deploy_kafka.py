@@ -423,7 +423,7 @@ def test_the_connector_runs_in_the_interpreter_that_was_checked(tmp_path, monkey
     class Proc:
         log_path = tmp_path / "kafka_feed.log"
 
-        def start(self, cmd, cwd):
+        def start(self, cmd, cwd, env=None):
             started["cmd"] = cmd
             return 42
 

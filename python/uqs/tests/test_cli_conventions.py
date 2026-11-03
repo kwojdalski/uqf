@@ -350,7 +350,8 @@ OPTIONS = {
     "--output": Meaning("where to write the output", r"write"),
     "--overwrite": Meaning("replace what is already there", r"replace"),
     "--override": Meaning("bypass one named check", r"bypass"),
-    "--passwd": Meaning("the q password", r"password"),
+    "--passwd": Meaning("retired: --password-env NAME", None),
+    "--password-env": Meaning("the variable holding the password", r"variable holding"),
     "--port": Meaning("one process's port", r"directly"),
     "--print": Meaning("retired: --show-command", None),
     "--profile": Meaning("a start profile", r"profile"),
@@ -388,7 +389,7 @@ OPTIONS |= {
     for name in (
         "--api-key", "--brokers", "--databento-dataset", "--group", "--interval-ms",
         "--oms-socket-path", "--poll-interval-ms", "--symbol", "--symbols", "--top-n-levels",
-        "--topic", "--tp-credential", "--venues",
+        "--topic", "--tp-credential", "--tp-credential-env", "--venues",
     )
 }  # fmt: skip
 

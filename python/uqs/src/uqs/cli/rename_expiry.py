@@ -130,6 +130,11 @@ RENAMED_AFTER: dict[str, frozenset[str]] = {
             "uqs deploy rollback --break-lock",
             "uqs job backfill --any-writer",
             "uqs job remove --even-if-edited",
+            # #1853: a secret is never an argument - the variable holding it is
+            "uqs query --passwd",
+            "uqs schema --passwd",
+            "uqs connector start --tp-credential",
+            "uqs connector restart --tp-credential",
         }
     ),
 }
