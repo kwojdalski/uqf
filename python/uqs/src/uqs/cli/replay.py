@@ -22,7 +22,7 @@ from uqs.cli import completion
 from uqs.cli.hdb_scope import tables_given
 from uqs.cli.range_options import DateOpt, LastOpt, RangeFromOpt, RangeToOpt
 from uqs.cli.renames import renamed
-from uqs.cli.safety import ChangesState
+from uqs.cli.safety import ChangesState, dry_run_note
 from uqs.cli.shared import (
     BasePortOpt,
     _die,
@@ -149,7 +149,8 @@ def replay(
 
     if dry_run:
         line = " ".join([stack_replay.REPLAY_PROCNAME, "-extras", *plan.flags()])
-        console.print(f"[dim]would start: {line}[/]")
+        console.print(f"would start: {line}", markup=False, highlight=False)
+        console.print(dry_run_note())
         return
 
     try:

@@ -25,7 +25,7 @@ from uqs.attach.findings import Finding
 from uqs.attach.manifest import Manifest
 from uqs.attach.overrides import OverrideError
 from uqs.cli import shared
-from uqs.paths import repo_root
+from uqs.paths import UqsError, repo_root
 
 ROOT = repo_root()
 TABLE = "piggybank_general_ledger"
@@ -562,14 +562,17 @@ def test_a_dry_run_without_the_override_is_blocked_and_with_it_shows_the_accepte
 
 def test_an_override_needs_a_reason_a_known_code_and_an_overridable_one(world, bundle):
     no_reason = invoke(*plan_args(bundle), "--override", "TORQ_VERSION:stp1", "--dry-run")
-    assert no_reason.exit_code != 0 and any("needs a reason" in m for m in world.errors)
+    # #1852: refused as every command's --override is (safety.given)
+    assert no_reason.exit_code != 0 and any("needs --reason" in m for m in world.errors)
     unknown = invoke(*plan_args(bundle), "--override", "NOPE:stp1", "--reason", "x", "--dry-run")
-    assert unknown.exit_code != 0 and any("not a finding code" in m for m in world.errors)
+    assert unknown.exit_code != 0 and any(
+        "`uqs job attachment add` has no override 'NOPE:stp1'" in m for m in world.errors
+    )
     world.named("stp1")["multilog"] = "singular"
     fixed = invoke(
         *plan_args(bundle), "--override", "LOGGING_MODE:stp1", "--reason", "x", "--dry-run"
     )
-    assert fixed.exit_code != 0 and any("cannot be overridden" in m for m in world.errors)
+    assert fixed.exit_code != 0 and any("is never overridden" in m for m in world.errors)
 
 
 def test_yes_alone_does_not_confirm_accepted_risks_but_accept_risks_does(world, bundle):
@@ -684,3 +687,16 @@ def test_wire_faults_in_a_plan_do_not_leak_into_overrides(bundle):
     cut = FaultIpc(fake, [("probe", 0, "before")])
     with pytest.raises(OverrideError, match="nothing to accept"):
         service.accept(att_for(bundle), cut, ROOT, ["TORQ_VERSION:stp1"], "x", operator="a")
+
+
+def test_attachment_add_checks_its_overrides_as_every_command_does():
+    """#1852: `--override CODE:COMPONENT` goes through safety.given, as every other
+    command's --override does; a code is matched in upper case, as before."""
+    from uqs.cli.attach import waivers
+
+    assert waivers(["torq_version:stp1"], "known") == ["TORQ_VERSION:stp1"]
+    assert waivers(None, "") == []
+    with pytest.raises(UqsError, match="give TORQ_VERSION:COMPONENT"):
+        waivers(["TORQ_VERSION"], "x")
+    with pytest.raises(UqsError, match="--reason says why an --override is acceptable"):
+        waivers(None, "a reason for nothing")

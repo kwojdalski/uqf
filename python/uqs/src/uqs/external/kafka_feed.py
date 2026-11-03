@@ -146,8 +146,6 @@ def start_kafka_feed(
         connection.TP_HOST,
         "--port",
         str(port),
-        "--credential",
-        tp_credential,
         "--brokers",
         brokers,
         "--topic",
@@ -159,7 +157,9 @@ def start_kafka_feed(
     ]
 
     proc = _process(paths)
-    pid = proc.start(cmd, cwd=paths.repo_root)
+    # The credential in its environment, never its argv: ps and the pid file
+    # would show it (#1853).
+    pid = proc.start(cmd, cwd=paths.repo_root, env=connection.credential_env(tp_credential))
     log.info(
         f"started the kafka feed (pid {pid}), {topics} on {brokers} "
         f"-> stp1:{port} {KAFKA_RAW_TABLE} - logging to {proc.log_path}"

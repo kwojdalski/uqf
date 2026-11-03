@@ -33,9 +33,9 @@ def deploy(cfg: Config, remote: Transport, *, out=sys.stdout, on_report=None) ->
         raise DeployError(
             "artifact",
             f"{pkg.path.name} was built from uncommitted changes (dirty: true) - deploy one "
-            "built from a commit, ideally by CI, or pass --allow-dirty",
+            "built from a commit, ideally by CI, or pass --override allow-dirty --reason REASON",
         )
-    exceptions = overrides.for_artifact(cfg, pkg)
+    exceptions = overrides.for_artifact(cfg, pkg) + overrides.for_flags(cfg, pkg.manifest["dirty"])
     rid = pkg.release
     dep = Deployment(cfg, remote, pkg.manifest["target"], rid)
     try:

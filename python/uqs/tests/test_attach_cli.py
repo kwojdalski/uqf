@@ -205,7 +205,7 @@ def test_a_dry_run_shows_the_plan_and_changes_nothing(world):
     assert result.exit_code == 0, result.output
     text = flat(result.output)
     assert "Affected components" in text and "Changes attach would make" in text
-    assert "dry run: nothing was saved or changed" in text
+    assert "dry run: nothing was changed" in text
     assert not world.state_dir.exists(), "no config, no manifest, no lock"
     assert {op for _, op, _ in world.calls} == {"probe"} and world.started == []
 

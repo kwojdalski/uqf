@@ -14,7 +14,7 @@ from typing import Annotated
 
 import typer
 
-from uqs.cli import completion
+from uqs.cli import completion, safety
 from uqs.cli.hdb_scope import ApplyOpt, AttachOpt, HdbOpt, YesOpt, _table, resolve, run_scoped
 from uqs.cli.json_out import json_opt
 from uqs.cli.renames import ATTACHMENT, alias_command, renamed, warn_renamed
@@ -71,10 +71,7 @@ def hdb_alter(
         typer.Option("--undo", help="A run's journal (as the plan names it): reverse that run"),
     ] = None,
     apply: ApplyOpt = False,
-    dry_run: Annotated[
-        bool,
-        typer.Option("--dry-run", "-n", help="Show the plan and write nothing (the default)"),
-    ] = False,
+    dry_run: safety.DefaultDryRunOpt = False,
     yes: YesOpt = False,
     as_json: AlterJson = False,
 ) -> None:
@@ -102,8 +99,7 @@ def hdb_alter(
                 "give one operation: --reorder, --rename, --attr, --cast or --undo"
                 + (f" (not {len(chosen)})" if chosen else "")
             )
-        if dry_run and apply:
-            raise UqsError("--dry-run and --apply contradict each other")
+        safety.dry_unless_applied(dry_run, apply)
         (op, value), *_ = chosen.items()
         handle = resolve(attach, hdb)
         name = _table(handle, table, required=op != "undo")

@@ -27,7 +27,9 @@ import typer
 from uqs.attach import config as attach_config
 from uqs.attach import hdb_where, service
 from uqs.attach.hdb_where import AttachedHdb
+from uqs.cli import safety
 from uqs.cli.json_out import emit
+from uqs.cli.safety import dry_run_note
 from uqs.cli.shared import _paths, console
 from uqs.paths import UqsError, UqsPaths
 from uqs.stack import hdb_alter, hdb_remote
@@ -43,15 +45,9 @@ HdbOpt = Annotated[
     Path | None,
     typer.Option("--hdb", help="An HDB directory on this machine, when nothing else names it"),
 ]
-ApplyOpt = Annotated[
-    bool,
-    typer.Option(
-        "--apply", help="Write the plan, after asking; without it, a dry run that writes nothing"
-    ),
-]
-YesOpt = Annotated[
-    bool, typer.Option("--yes", "-y", help="With --apply: do not ask before writing")
-]
+#: The --apply model's options, safety's own (#1854).
+ApplyOpt = safety.ApplyOpt
+YesOpt = safety.ApplyYesOpt
 
 
 @dataclass
@@ -218,7 +214,7 @@ def finish(
     elif result is None and not plan.get("steps"):
         console.print("[green]nothing to do[/]")
     elif result is None:
-        console.print("[dim]dry run: nothing was written. --apply writes it, after asking.[/]")
+        console.print(dry_run_note("with --apply, which asks first, to write it"))
     else:
         console.print(f"[green]applied[/] in {len(result.get('partitions_touched') or [])} "
                       "partition(s); final check clean")  # fmt: skip

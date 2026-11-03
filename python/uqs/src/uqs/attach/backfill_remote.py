@@ -64,7 +64,7 @@ WRITER_PASSWORD_ENV = "UQF_ATTACH_WRITER_PASSWORD"
 #: The receiver's batch journal and access file, in the destination's state directory.
 JOURNAL = "remote_journal"
 ACCESS = "receiver.access"
-#: --any-writer: the HDB a destination names when the attachment pins none - the
+#: --override any-writer: the HDB a destination names when the attachment pins none - the
 #: writer's own `.wdb.hdbdir`, resolved by that process - and the prefix that keeps a
 #: forced destination's identity, and so its coverage, apart from a checked one.
 FORCED_HDB = ".wdb.hdbdir"
@@ -132,7 +132,7 @@ def forced_destination(
     writer: str,
     attach_root: Path | None = None,
 ) -> Destination:
-    """`--any-writer`: the process at `writer` itself, with nothing about it checked.
+    """`--override any-writer`: the process at `writer` itself, with nothing about it checked.
 
     The attachment is read for its stack's credential and nothing else: it need not
     be verified, pin an HDB or publish the dataset. The rows go wherever that process

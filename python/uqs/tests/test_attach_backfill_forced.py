@@ -120,7 +120,7 @@ def test_force_without_a_writer_is_refused(world, monkeypatch):
         catch_exceptions=False,
     )  # fmt: skip
     assert result.exit_code != 0
-    assert any("--any-writer is for --writer" in m for m in errors), result.output
+    assert any("--override any-writer is for --writer" in m for m in errors), result.output
 
 
 def test_force_refuses_any_strategy_but_append(world, monkeypatch):
@@ -134,7 +134,7 @@ def test_force_refuses_any_strategy_but_append(world, monkeypatch):
         catch_exceptions=False,
     )  # fmt: skip
     assert result.exit_code != 0
-    assert any("--any-writer only appends" in m for m in errors), result.output
+    assert any("--override any-writer only appends" in m for m in errors), result.output
 
 
 def test_a_forced_launch_always_passes_the_completed_history_bound(world, monkeypatch):

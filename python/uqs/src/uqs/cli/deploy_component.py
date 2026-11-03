@@ -18,7 +18,8 @@ import typer
 
 from uqs.cli.deploy import _failed, deploy_app
 from uqs.cli.renames import renamed
-from uqs.cli.safety import ChangesState
+from uqs.cli.safety import ChangesState, dry_run_note
+from uqs.cli.shared import console
 from uqs.deploy import python_runtime, q_runtime, torq_runtime
 from uqs.deploy.artifact import PLATFORMS, ReleaseError
 from uqs.deploy.build import DEFAULT_OUTPUT
@@ -119,7 +120,8 @@ def _build(
         detail = (
             f" (Python {python or default_python(root)}, {arch})" if component == "python" else ""
         )
-        print(f"would build the {component} runtime{detail} into {out}; built nothing (dry run)")
+        console.print(f"would build the {component} runtime{detail} into {out}", markup=False)
+        console.print(dry_run_note())
         return
     try:
         if component == "python":

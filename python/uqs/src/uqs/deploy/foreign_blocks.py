@@ -13,7 +13,7 @@ def refuse(root: Path, files: list[str], runtime: str, composition: set) -> None
 
     `uqs runtime prepare` installs a bundle by writing a `/ BEGIN bundle`
     block into tracked files (plant_tables.q, uqs_catalog.q). A release is
-    built from the working tree, so - with --allow-dirty, or after a commit
+    built from the working tree, so - with --override allow-dirty, or after a commit
     nothing refused - every bundle prepared locally ships: its tables count
     as the tree's own in every runtime's schema, with no job files and no
     ledger entry. A block of the composition itself is re-installed by the

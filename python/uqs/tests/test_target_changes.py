@@ -131,9 +131,18 @@ def test_remove_takes_its_block_and_its_own_comment_only(declared):
         "# production: careful\n[targets.prod]\n"
         'host = "deploy@prod"    # the bastion alias\ndest = "/srv/uqf"\nremote_user = "svc"\n\n'
     )
-    assert uqs("target", "remove", "prod").exit_code == 0
+    assert uqs("target", "remove", "prod", "--yes").exit_code == 0
     assert declared.read_text() == HAND_WRITTEN.replace(block, "")
     assert "  # uat is rebuilt weekly\n[targets.uat]" in declared.read_text()
+
+
+def test_remove_shows_the_change_and_asks_first(declared):
+    """#1854: a deletion asks; declined, nothing is written."""
+    declined = uqs("target", "remove", "prod", input="n\n")
+    assert declined.exit_code == 1 and "[targets.prod]" in declined.output
+    assert declared.read_text() == HAND_WRITTEN
+    assert uqs("target", "remove", "prod", input="y\n").exit_code == 0
+    assert "[targets.prod]" not in declared.read_text()
 
 
 def test_unset_set_and_rename_keep_the_rest_byte_for_byte(declared):
@@ -157,7 +166,7 @@ def test_add_appends_a_block_and_a_remove_takes_it_away_again(declared):
     assert '[targets.dr]\nhost = "svc@dr"\ndest = "/srv/dr"\nlabels = {site = "b"}\n' in (
         declared.read_text()
     )
-    assert uqs("target", "remove", "dr").exit_code == 0
+    assert uqs("target", "remove", "dr", "--yes").exit_code == 0
     assert declared.read_text() == HAND_WRITTEN
 
 
@@ -217,7 +226,7 @@ def test_the_write_replaces_the_file_in_one_rename(declared, monkeypatch):
 def test_a_dry_run_shows_the_change_and_writes_nothing(declared):
     r = uqs("target", "set", "prod", "dest=/srv/next", "--dry-run")
     assert r.exit_code == 0, r.output
-    assert '+dest = "/srv/next"' in r.output and "nothing written" in r.output
+    assert '+dest = "/srv/next"' in r.output and "dry run: nothing was changed" in r.output
     assert declared.read_text() == HAND_WRITTEN and _log(declared) == []
 
 
@@ -337,7 +346,7 @@ def test_every_change_appends_one_entry_and_log_lists_them(declared):
         ("set", "dr", "profile=full"),
         ("unset", "dr", "profile"),
         ("rename", "dr", "dr2"),
-        ("remove", "dr2"),
+        ("remove", "dr2", "--yes"),
     ]
     for n, argv in enumerate(steps, 1):
         assert uqs("target", *argv).exit_code == 0
@@ -365,7 +374,7 @@ def test_revert_last_restores_the_previous_block_exactly(declared):
 
 
 def test_revert_brings_back_a_removed_target_with_its_comment(declared):
-    assert uqs("target", "remove", "prod").exit_code == 0
+    assert uqs("target", "remove", "prod", "--yes").exit_code == 0
     assert uqs("target", "revert", "1").exit_code == 0
     assert targets.read(ROOT)["prod"]["remote_user"] == "svc"
     assert "# production: careful\n[targets.prod]\n" in declared.read_text()

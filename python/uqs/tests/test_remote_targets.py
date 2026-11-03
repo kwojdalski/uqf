@@ -416,7 +416,7 @@ def test_add_appends_and_remove_deletes_only_that_table(server):
         "labels": {"env": "prod"},
     }
     assert runner.invoke(app, ["target", "add", "prod", "--ssh", "x", "--dest", "/x"]).exit_code
-    removed = runner.invoke(app, ["target", "remove", "prod"])
+    removed = runner.invoke(app, ["target", "remove", "prod", "--yes"])
     assert removed.exit_code == 0, removed.output
     assert declared.read_text().rstrip("\n") == before.rstrip("\n"), "comments and others kept"
 
@@ -592,7 +592,7 @@ def test_dry_runs_of_add_and_remove_check_and_write_nothing(server):
         app, ["target", "add", "prod", "--ssh", "svc@prod", "--dest", "/srv/uqf", "-n"]
     )
     assert added.exit_code == 0, added.output
-    assert "dry run: target prod added - nothing written" in added.output
+    assert "dry run: nothing was changed" in added.output
     assert declared.read_text() == before
     bad = runner.invoke(
         app, ["target", "add", "x", "--ssh", "-oProxyCommand=sh", "--dest", "/d", "-n"]

@@ -27,6 +27,7 @@ from types import ModuleType
 
 from uqs.deploy.artifact import ReleaseError
 from uqs.deploy.payload import VENDORED_IN_RELEASE
+from uqs.guardrails import Guardrail
 from uqs.paths import TABLES_FILE
 
 CONVERTER = Path("scripts") / "portable" / "flatten_contexts.py"
@@ -34,6 +35,19 @@ CONVERTER = Path("scripts") / "portable" / "flatten_contexts.py"
 Q_TARGETS = ("4.0",)
 #: How many refusals the build failure lists before saying how many more.
 SHOWN = 10
+
+#: `deploy build --q-version --override allow-computed-names` (a bare
+#: --allow-computed-names until #1852): the conversion's one waivable refusal.
+ALLOW_COMPUTED_NAMES = "allow-computed-names"
+GUARDRAILS = (
+    Guardrail(
+        ALLOW_COMPUTED_NAMES,
+        ("deploy build",),
+        "with --q-version: accept a load-time lookup of a computed name the conversion "
+        "cannot check, with a warning",
+        risk="the converted release may name something that does not exist on the older kdb+",
+    ),
+)
 
 
 def _converter(tree: Path) -> ModuleType:

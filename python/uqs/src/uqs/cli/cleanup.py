@@ -20,7 +20,7 @@ import typer
 from uqs.cli import completion
 from uqs.cli.pipelines import needs_pipelines
 from uqs.cli.renames import alias_command
-from uqs.cli.safety import ChangesState, dry_run_note
+from uqs.cli.safety import ChangesState, YesOpt, dry_run_note
 from uqs.cli.shared import (
     JOB_OPERATIONS_PANEL,
     _die,
@@ -91,15 +91,17 @@ def clean(match: MatchOpt = None, dry_run: DryRunOpt = False) -> None:
         return
     if not targets:
         console.print("[dim]nothing to remove[/]")
-        return
-    total = sum(size for _entry, size in targets)
-    verb = "would remove" if dry_run else "removed"
-    for entry, size in targets:
-        console.print(f"  {_human_bytes(size):>7}  {entry}")
-    console.print(
-        f"[dim]{verb} {len(targets)} entr{'y' if len(targets) == 1 else 'ies'}, "
-        f"{_human_bytes(total)}[/]"
-    )
+    else:
+        total = sum(size for _entry, size in targets)
+        verb = "would remove" if dry_run else "removed"
+        for entry, size in targets:
+            console.print(f"  {_human_bytes(size):>7}  {entry}", markup=False, highlight=False)
+        console.print(
+            f"[dim]{verb} {len(targets)} entr{'y' if len(targets) == 1 else 'ies'}, "
+            f"{_human_bytes(total)}[/]"
+        )
+    if dry_run:
+        console.print(dry_run_note())
 
 
 @checkpoint_app.command("remove", cls=needs_pipelines(_CHECKPOINT, ChangesState))
@@ -116,8 +118,11 @@ def remove_checkpoint(
         bool,
         typer.Option("--dry-run", "-n", help="Name the checkpoint that would go; delete nothing"),
     ] = False,
+    yes: YesOpt = False,
 ) -> None:
     """Delete a bounded worker's checkpoint, so its next run starts at --from.
+
+    Names the checkpoint and asks first (#1854); `--yes` does not ask.
 
     Refused while a run of the worker may still be live. The checkpoint is
     only where a run resumes: windows already in the coverage ledger are
@@ -126,6 +131,14 @@ def remove_checkpoint(
     e.g. `uqs job checkpoint remove demo_deals_backfill`
     """
     try:
+        if not dry_run and not yes:
+            planned = stack_backfill.clear_checkpoint(_paths(), worker, True)
+            if planned is not None and not typer.confirm(
+                f"Delete {worker}'s checkpoint ({planned})? Its next run starts at --from",
+                default=False,
+            ):
+                console.print("nothing deleted")
+                raise typer.Exit(code=1)
         path = stack_backfill.clear_checkpoint(_paths(), worker, dry_run)
     except UqsError as exc:
         _die(exc)
@@ -134,9 +147,10 @@ def remove_checkpoint(
         console.print(f"{worker} has no checkpoint - nothing to clear", markup=False)
     elif dry_run:
         console.print(f"would clear {worker}'s checkpoint ({path})", markup=False)
-        console.print(dry_run_note())
     else:
         console.print(f"cleared {worker}'s checkpoint ({path})", markup=False)
+    if dry_run:
+        console.print(dry_run_note())
 
 
 alias_command(remove_app, "output", "uqs clean", clean)

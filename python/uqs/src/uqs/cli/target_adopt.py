@@ -10,8 +10,9 @@ from typing import Annotated
 
 import typer
 
+from uqs.cli import safety
 from uqs.cli.renames import renamed
-from uqs.cli.safety import ChangesState
+from uqs.cli.safety import ChangesState, dry_run_note
 from uqs.cli.shared import _die, console
 from uqs.cli.target import _ACCOUNT, RemoteUser, Ssh, _command, _reach, target_app
 from uqs.deploy import (
@@ -87,26 +88,21 @@ def adopt_(
         bool,
         typer.Option(
             "--apply",
-            help="Make the changes - move and link on the server, save the target; "
-            "without it, a dry run that writes nothing on either side",
+            help="Make the changes, after asking - move and link on the server, save the "
+            "target; without it, a dry run that changes nothing on either side",
         ),
     ] = False,
-    dry_run: Annotated[
-        bool,
-        typer.Option(
-            "--dry-run", "-n", help="Show what it would do and change nothing (the default)"
-        ),
-    ] = False,
-    yes: Annotated[
-        bool, typer.Option("--yes", "-y", help="Do not ask before changing the server")
-    ] = False,
+    dry_run: safety.DefaultDryRunOpt = False,
+    yes: safety.ApplyYesOpt = False,
 ) -> None:
     """Take over a release copied onto a server by hand (scp, rsync): say
     what the server holds, how it would launch uqs and the target it would
     save. --apply links it as DEST/current, saves the target - checked by
     reaching it - and records it in `uqs deploy history`."""
-    if dry_run and do_it:
-        _die(UqsError("--dry-run and --apply contradict each other - give one"))
+    try:
+        safety.dry_unless_applied(dry_run, do_it)
+    except UqsError as exc:
+        _die(exc)
         return
     root = repo_root()
     try:
@@ -149,7 +145,7 @@ def adopt_(
     except DeployError as exc:
         _die(UqsError(str(exc)))
     if not do_it:
-        console.print("dry run: nothing changed on the server or here - --apply to adopt it")
+        console.print(dry_run_note("with --apply to adopt it"))
         return
     changes = adopt.server_changes(survey)
     if changes and not yes:

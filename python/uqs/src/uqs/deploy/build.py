@@ -312,9 +312,8 @@ def build(
         raise ReleaseError("arguments", f"--python {python!r} must be major.minor, e.g. 3.14")
     rev, dirty = revision(root, runner)
     if dirty and not allow_dirty:
-        raise ReleaseError(
-            "package", "the tree has uncommitted changes - commit them, or pass --allow-dirty"
-        )
+        why = "the tree has uncommitted changes - commit them, or --override allow-dirty --reason R"
+        raise ReleaseError("package", why)
     target = Target(os="linux", arch=arch, python=python or default_python(root), q=q_target)
     carried = python_runtime.for_release(python_runtime_file, target.as_dict())
     front = frontend.select(frontend_dist)

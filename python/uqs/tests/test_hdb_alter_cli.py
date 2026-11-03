@@ -107,7 +107,7 @@ def test_a_dry_run_writes_nothing_and_creates_no_journal(world):
     ):
         result = run_uqs("data", *argv, "--hdb", str(hdb))
         assert result.exit_code == 0, (argv, result.output, world.errors)
-        assert "dry run: nothing was written" in result.output
+        assert "dry run: nothing was changed" in result.output
     assert digest(hdb) == before, "every file's bytes are unchanged"
     assert not (hdb.parent / "hdb.uqf-alter").exists(), "and no journal was created"
 

@@ -32,7 +32,7 @@ def _process(paths: UqsPaths) -> DetachedProcess:
 
 def start(paths: UqsPaths, options: Mapping[str, Any]) -> int:
     """stp1's host, port and credential are every connector's
-    (uqs.external.connection): `options` holds --tp-credential, resolved."""
+    (uqs.external.connection): `options` holds the credential, resolved."""
     port = connection.tickerplant_port(paths)
     credential = connection.tp_credential(options["tp_credential"])
     runner = Path(__file__).resolve().parent / "flink_vwap_streamer.py"
@@ -47,12 +47,13 @@ def start(paths: UqsPaths, options: Mapping[str, Any]) -> int:
         connection.TP_HOST,
         "--port",
         str(port),
-        "--credential",
-        credential,
         "--table",
         RAW_TABLE,
     ]
-    return _process(paths).start(cmd, cwd=paths.repo_root)
+    # The credential in its environment, never its argv (#1853).
+    return _process(paths).start(
+        cmd, cwd=paths.repo_root, env=connection.credential_env(credential)
+    )
 
 
 def stop(paths: UqsPaths) -> int | None:

@@ -173,16 +173,16 @@ uqs deploy build --frontend web/dist
 
 The target defaults to Linux on x86_64 with the Python `requires-python` names.
 Pass `--arch aarch64` or `--python 3.14` for others. Uncommitted changes are
-refused unless you pass `--allow-dirty`, which the manifest records. Building
-needs `uv`, and network access to fetch the wheels.
+refused unless you pass `--override allow-dirty --reason TEXT`, which the
+manifest records. Building needs `uv`, and network access to fetch the wheels.
 
 ## Artifacts built by CI
 
 `.github/workflows/release.yml` builds the artifacts for a tag `v*`, or for a
 tag given to its manual run. It builds them only after `ci.yml`'s checks pass on
-that commit, and never with `--allow-dirty`. Each release gets two: the plain
-artifact, and one with its q converted for kdb+ 4.0 (`--q-version 4.0`). Each
-comes with its `.sha256` and `.manifest.json`. Deploy one by tag or by URL:
+that commit, and never with `--override allow-dirty`. Each release gets two: the
+plain artifact, and one with its q converted for kdb+ 4.0 (`--q-version 4.0`).
+Each comes with its `.sha256` and `.manifest.json`. Deploy one by tag or by URL:
 
 ```bash
 uqs deploy push v1.4.0 --ssh uqf-server --dest /opt/uqf ... --dry-run
@@ -197,7 +197,8 @@ uqs deploy push https://github.com/<owner>/uqf/releases/download/v1.4.0/uqf-<rel
   is, before anything reaches the server. A token in `GH_TOKEN` or
   `GITHUB_TOKEN` is sent for a private repository.
 - **Dirty artifacts.** `push` refuses an artifact built from uncommitted changes
-  (`dirty: true`) unless given `--allow-dirty`.
+  (`dirty: true`) unless given `--override allow-dirty --reason TEXT`, which the
+  plan's EXCEPTIONS block and the release's report record with its reason.
 
 ## A first deployment
 
@@ -319,7 +320,7 @@ uqs target set prd launch_mode=source launch_python=/opt/py/bin/python3 \
 uqs target set prd labels.owner=desk environment=uat
 uqs target unset prd launch_python launch_env_file launch_mode
 uqs target rename prd production
-uqs target remove production
+uqs target remove production      # shows the change and asks; --yes does not
 uqs target edit                    # the whole file, in $VISUAL or $EDITOR
 uqs target log                     # newest first; `uqs target log prd --json`
 uqs target revert last             # or a change's number from the log
@@ -879,19 +880,20 @@ the first short one. Once the release's `.venv` exists, prepare runs that
 release's own `uqs data check --json` against the shared HDB:
 
 - **Missing tables or columns** are refused, naming the partitions. With
-  `--fix-hdb`, prepare runs `data check --apply --yes` and checks again. The fix
-  is additive: each missing table is written empty, and each missing column is
-  written as its type's null. It is a thin wrapper over KX's `dbmaint.q` (it
-  decides what the declared schema lacks, `dbmaint` writes the columns), checks
-  the database afterwards and exits 1 if anything is still missing. It takes no
-  HDB lock, is not transactional, and does not reload a running HDB.
+  `--override fix-hdb --reason TEXT`, prepare runs `data check --apply --yes`
+  and checks again. The fix is additive: each missing table is written empty,
+  and each missing column is written as its type's null. It is a thin wrapper
+  over KX's `dbmaint.q` (it decides what the declared schema lacks, `dbmaint`
+  writes the columns), checks the database afterwards and exits 1 if anything is
+  still missing. It takes no HDB lock, is not transactional, and does not reload
+  a running HDB.
 - **A column whose type changed** is always refused, naming it. That is a
   migration, which no fill makes right.
 
 `--dry-run` cannot run the release, because none of it is on the server yet. It
 compares a listing of the server's HDB with the tables and columns
-`uqs deploy build` recorded in the manifest, and says what `--fix-hdb` would
-fill. Column types need q, so they are checked in prepare.
+`uqs deploy build` recorded in the manifest, and says what `--override fix-hdb`
+would fill. Column types need q, so they are checked in prepare.
 
 ## Soaking before activation
 
@@ -983,11 +985,13 @@ Rebuild such a release with `uqs deploy build`.
 ## Removing old releases
 
 Every push leaves its release, with its own offline `.venv`, in `releases/`.
-`uqs deploy prune` removes all but the newest `--keep N`, under the deploy lock:
+`uqs deploy prune` removes all but the newest `--keep N`, under the deploy lock.
+It names each release it would remove and asks first; `--yes` does not ask:
 
 ```bash
 uqs deploy prune prod-a --keep 3 --dry-run
-uqs deploy prune prod-a --keep 3
+uqs deploy prune prod-a --keep 3          # asks
+uqs deploy prune prod-a --keep 3 --yes    # from a script
 ```
 
 Three releases are never removed, whatever `--keep` is, even 0:
@@ -1107,7 +1111,7 @@ Set each process's value on the server:
 
 ```bash
 uqs --target uat config set stp1 taskset_no=3:5
-uqs --target uat start --dry-run stp1
+uqs --target uat config show stp1     # taskset_no 3:5
 ```
 
 `config set` writes `python/uqs/process_overrides.csv` (see [changing a
@@ -1116,8 +1120,10 @@ file from `shared/config/python/uqs/process_overrides.csv` when it exists, so
 create it there, with just the header `procname,field,value`, before the first
 `config set`. Values set without it are kept by that release only. A process
 with no value keeps the column empty, and nothing assigns CPUs on its own.
-`start --dry-run` shows the start lines the launcher builds, without starting
-anything.
+`start --dry-run` shows the start lines TorQ's own `torq.sh` builds, without
+starting or writing anything. uqs composes them from the process rows and
+environment a start would write, and never runs the site launcher for them, so
+how a launcher uses `taskset_no` shows only when it starts the process.
 
 ## On the server
 
@@ -1247,8 +1253,8 @@ killed mid-run leaves the lock behind. The next run refuses it, naming the
 holder and how long ago it last beat. Preflight and `uqs deploy status` show the
 same.
 
-`--break-lock` on `push` or `rollback` removes the lock, but only once its
-holder is gone. It is refused while either of these holds:
+`--override break-lock --reason TEXT` on `push` or `rollback` removes the lock,
+but only once its holder is gone. It is refused while either of these holds:
 
 - **The heartbeat is fresh.** The holder records how long it may go between
   beats, from its own longest step: `--command-timeout`, by default, plus a

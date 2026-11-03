@@ -4,7 +4,7 @@ Thin over uqs.deploy, whose package docstring describes the whole run. The
 push command's parameters are named exactly as uqs.deploy.config.make_config's,
 which checks them, so the options and their validation cannot drift apart.
 
-Progress goes through uqs.logger like every other command, but on stderr:
+Progress goes through uqs.logger on stderr, like every other command's (#1881):
 stdout carries what another program reads - build's artifact path, push's
 report and verify's result as JSON, whose last two lines the push that ran it
 parses.
@@ -12,9 +12,7 @@ parses.
 
 from __future__ import annotations
 
-import json
 import shutil
-import sys
 from pathlib import Path
 from typing import Annotated
 
@@ -22,15 +20,16 @@ import typer
 
 from uqs.cli import deploy_components as components
 from uqs.cli import deploy_connection as conn
+from uqs.cli import deploy_dry_run as dry
 from uqs.cli import deploy_policy as policy
 from uqs.cli.renames import renamed
 from uqs.cli.safety import ChangesState, DryRunOpt, OverrideOpt, ReasonOpt
-from uqs.cli.shared import _env_log_level, app, json_refusal
+from uqs.cli.shared import app, json_refusal
 from uqs.deploy import build as release_build
-from uqs.deploy import config, driver, frontend, history, kafka, targets
+from uqs.deploy import config, driver, frontend, history, kafka, overrides, portable, targets
 from uqs.deploy.artifact import PLATFORMS, ReleaseError
 from uqs.deploy.remote import Remote
-from uqs.logger import configure_logging, get_logger
+from uqs.logger import get_logger
 from uqs.paths import repo_root, runtime_from_env
 from uqs.stack import runtime_bundles
 
@@ -45,11 +44,6 @@ app.add_typer(deploy_app, name="deploy")
 log = get_logger()
 
 
-@deploy_app.callback()
-def _log_to_stderr() -> None:
-    configure_logging(component="uqs", level=_env_log_level(), stream=sys.stderr)
-
-
 def _failed(prefix: str, stage: str, exc: Exception) -> None:
     message = f"{prefix}: FAILED at {stage}: {config.redact(str(exc))}"
     log.error("{}", message)
@@ -59,7 +53,11 @@ def _failed(prefix: str, stage: str, exc: Exception) -> None:
 
 #: `--output` is a FILE, as `contract export -o` writes one; a directory is
 #: `--output-dir` (#1857).
-_BUILD_RENAMES = {"--output": "--output-dir", **components.BUILD_OLD_SPELLINGS}
+_BUILD_RENAMES = {
+    "--output": "--output-dir",
+    **policy.BUILD_OLD_SPELLINGS,
+    **components.BUILD_OLD_SPELLINGS,
+}
 
 
 @deploy_app.command("build", cls=renamed(_BUILD_RENAMES, ChangesState))
@@ -80,9 +78,6 @@ def build(
             "--python", help="The servers' Python, major.minor; default requires-python's"
         ),
     ] = None,
-    allow_dirty: Annotated[
-        bool, typer.Option("--allow-dirty", help="Build uncommitted changes (recorded)")
-    ] = False,
     bundle: Annotated[
         list[Path] | None,
         typer.Option(
@@ -91,9 +86,7 @@ def build(
             "beside those the runtime declares; repeatable",
         ),
     ] = None,
-    dry_run: Annotated[
-        bool, typer.Option("--dry-run", "-n", help="Print the bundle's composition; build nothing")
-    ] = False,
+    dry_run: dry.BuildDryRun = False,
     q_target: components.ConvertFor = None,
     q_exclude: Annotated[
         list[str] | None,
@@ -103,13 +96,8 @@ def build(
             help="With --q-version: a folder, file or glob to ship as written; repeatable",
         ),
     ] = None,
-    allow_computed_names: Annotated[
-        bool,
-        typer.Option(
-            "--allow-computed-names",
-            help="With --q-version: accept a load-time lookup of a computed name, with a warning",
-        ),
-    ] = False,
+    override: OverrideOpt = None,
+    reason: ReasonOpt = None,
     kafka_home: Annotated[
         Path | None, typer.Option("--kafka-home", metavar="DIR", help=kafka.HOME_HELP)
     ] = None,
@@ -126,6 +114,11 @@ def build(
     It carries the selected runtime's bundles (`uqs --runtime crypto deploy build`):
     those runtime_bundles.json declares for it, plus any --bundle."""
     runtime = runtime_from_env()
+    try:
+        waived = policy.waived("deploy build", override, reason)
+    except config.DeployError as exc:
+        _failed("uqs deploy build", exc.stage, exc)
+        return
     if dry_run:
         try:
             members = release_build.composition_members(
@@ -134,7 +127,7 @@ def build(
         except ReleaseError as exc:
             _failed("uqs deploy build", exc.stage, exc)
             return
-        print(json.dumps(runtime_bundles.composition(runtime, members), indent=2))
+        dry.say_composition(runtime_bundles.composition(runtime, members))
         return
     if shutil.which("uv") is None:
         _failed("uqs deploy build", "arguments", RuntimeError("uv is not on PATH"))
@@ -143,12 +136,12 @@ def build(
             output,
             arch=arch,
             python=python,
-            allow_dirty=allow_dirty,
+            allow_dirty=overrides.ALLOW_DIRTY in waived,
             bundles=[str(b) for b in bundle or ()],
             runtime=runtime,
             q_target=q_target,
             q_exclude=q_exclude or (),
-            allow_computed_names=allow_computed_names,
+            allow_computed_names=portable.ALLOW_COMPUTED_NAMES in waived,
             kafka_home=kafka_home,
             kafka_connector=with_kafka_connector,
             python_runtime_file=python_runtime,
@@ -288,7 +281,6 @@ def push(
     command_timeout: conn.CommandTimeout = None,
     smoke_timeout: conn.SmokeTimeout = 120,
     verify_timeout: conn.VerifyTimeout = None,
-    allow_dirty: policy.AllowDirty = False,
     override: OverrideOpt = None,
     reason: ReasonOpt = None,
     release_repo: Annotated[
@@ -310,15 +302,6 @@ def push(
     q_runtime_sha256: components.QRuntimeSha256 = None,
     python_runtime: components.PythonRuntime = None,
     python_runtime_sha256: components.PythonRuntimeSha256 = None,
-    fix_hdb: Annotated[
-        bool,
-        typer.Option(
-            "--fix-hdb",
-            help="Fill the shared HDB's partitions that lack a table or column this release "
-            "declares, by running its `uqs data check --apply` (additive); without it they are "
-            "refused. A changed type always is",
-        ),
-    ] = False,
     keep: Annotated[
         int | None,
         typer.Option(
@@ -328,13 +311,6 @@ def push(
         ),
     ] = None,
     soak: conn.Soak = None,
-    break_lock: Annotated[
-        bool,
-        typer.Option(
-            "--break-lock",
-            help="Remove a deploy lock whose holder stopped beating; refused while it beats",
-        ),
-    ] = False,
     register: conn.Register = True,
 ) -> None:
     """Deploy a release onto a server, on its TorQ and q or bundled ones, and verify it there."""
@@ -387,4 +363,5 @@ def push(
                 break
     except config.DeployError as exc:
         _failed("uqs deploy push", exc.stage, exc)
+    dry.end(dry_run, code)
     raise typer.Exit(code=code)

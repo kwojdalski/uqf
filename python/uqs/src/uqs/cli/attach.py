@@ -76,6 +76,19 @@ YesOpt = Annotated[
 # ------------------------------------------------------- uqs job attachment add
 
 
+def waivers(override: list[str] | None, reason: str) -> list[str]:
+    """The `--override CODE:COMPONENT`s, checked as every command's are
+    (safety.given, #1852): a code this command does not take, one that is never
+    overridden, a missing component or reason, or a reason with no override, is
+    refused here. A code is matched in upper case, as the attachment's findings
+    name it. service.accept then checks each against what the stack shows."""
+    specs = [
+        f"{c.upper()}{sep}{rest}" for c, sep, rest in (s.partition(":") for s in override or ())
+    ]
+    safety.given("job attachment add", specs or None, reason or None)
+    return specs
+
+
 @attachment_app.command("add", context_settings=EXTRA_WORDS, cls=OLD_REASON)
 def attach(
     ctx: typer.Context,
@@ -146,7 +159,8 @@ def attach(
         att = dc_replace(resolved.att, overrides=()) if clear_overrides else resolved.att
         resolved = dc_replace(resolved, att=att)
         ipc = service.ipc_for(att)
-        att = service.accept(att, ipc, paths.repo_root, list(override or ()), override_reason)
+        specs = waivers(override, override_reason)
+        att = service.accept(att, ipc, paths.repo_root, specs, override_reason)
         resolved = dc_replace(resolved, att=att)
         planned = service.make_plan(att, ipc, paths.repo_root)
         manifest = service.manifest_of(name)
@@ -168,7 +182,7 @@ def attach(
     render_plan(out, d)
     verdict(out, d, running)
     if dry_run:
-        out.text("[dim]dry run: nothing was saved or changed. Run it again without --dry-run.[/]")
+        out.text(safety.dry_run_note())
         out.finish(ok=planned.ok or running)
     if not planned.ok and not running:
         if clear_overrides and resolved.source != "new":
@@ -311,5 +325,7 @@ def detach(
     for b in result.blockers:
         out.text(f"[red]refused[/] {b.component}: {b.reason}\n  -> {b.action}")
     out.detail(f"total {time.monotonic() - began:.3f}s")
-    out.text(f"{name}: {result.outcome}" + (" (dry run: nothing was changed)" if dry_run else ""))
+    out.text(f"{name}: {result.outcome}")
+    if dry_run:
+        out.text(safety.dry_run_note())
     out.finish(ok=result.outcome != "refused")

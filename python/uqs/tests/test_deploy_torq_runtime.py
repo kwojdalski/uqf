@@ -385,7 +385,9 @@ def test_the_cli_builds_a_runtime(tmp_path, monkeypatch):
     assert r.exit_code == 1
 
 
-def test_the_old_build_runtime_name_still_builds_and_names_the_new_one(tmp_path, monkeypatch):
+def test_the_old_build_runtime_name_still_builds_and_names_the_new_one(
+    tmp_path, monkeypatch, log_text
+):
     """`uqs deploy build-runtime`, renamed `deploy component build` by #1740,
     works for one release, saying what to type instead - and is hidden."""
     from typer.testing import CliRunner
@@ -397,6 +399,6 @@ def test_the_old_build_runtime_name_still_builds_and_names_the_new_one(tmp_path,
     monkeypatch.setattr(deploy_component, "repo_root", lambda: repo)
     r = CliRunner().invoke(cli.app, ["deploy", "build-runtime", "torq"])
     assert r.exit_code == 0, r.output
-    assert "uqs deploy component build torq" in r.output
+    assert "uqs deploy component build torq" in log_text()
     assert list((repo / "dist").glob("torq-runtime-*.tar.gz"))
     assert "build-runtime" not in CliRunner().invoke(cli.app, ["deploy", "--help"]).output
