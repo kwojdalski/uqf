@@ -11,6 +11,7 @@ from __future__ import annotations
 from collections.abc import Collection
 from functools import partial
 from pathlib import Path
+from typing import Any
 
 from uqs.paths import UqsError, UqsPaths, paths_for_root, runtime_from_env
 from uqs.runtimes import DEFAULT_RUNTIME, RUNTIMES
@@ -51,7 +52,7 @@ def commands(paths: UqsPaths, pipelines_only: Collection[str] = ()) -> list[str]
     return sorted(pipelines_only) if paths.runtime_declaration.pipelines else []
 
 
-def list_runtimes(paths: UqsPaths, base_port: int | None = None) -> list[dict[str, str]]:
+def list_runtimes(paths: UqsPaths, base_port: int | None = None) -> list[dict[str, Any]]:
     """One row per declared runtime: what it is, and whether it is here and up.
 
     `base_port` is ignored: each runtime is reported on its own declared
@@ -66,16 +67,16 @@ def list_runtimes(paths: UqsPaths, base_port: int | None = None) -> list[dict[st
         rows.append(
             {
                 "runtime": name,
-                "default": "yes" if name == DEFAULT_RUNTIME else "",
-                "selected": "yes" if name == selected else "",
+                "default": name == DEFAULT_RUNTIME,
+                "selected": name == selected,
                 "description": runtime.description,
-                "processes": str(len(procs)),
-                "tables": str(len(tables(p))),
-                "layers": ", ".join(layers(p)),
+                "processes": len(procs),
+                "tables": len(tables(p)),
+                "layers": list(layers(p)),
                 "data_dir": f"output/{runtime.data_dir}",
-                "data": "yes" if p.torqdata.is_dir() else "no",
-                "base_port": str(runtime.base_port),
-                "running": f"{len(up)}/{len(procs)}",
+                "data": p.torqdata.is_dir(),
+                "base_port": runtime.base_port,
+                "running": len(up),
             }
         )
     return rows

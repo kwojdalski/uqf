@@ -241,7 +241,7 @@ def test_export_approve_and_list_from_the_command_line(world, exported, tmp_path
         cli.app, ["job", "attachment", "contract", "list", "--attachment", "pb-uat", "--json"]
     )
     assert done.exit_code == 0, done.output
-    [record] = json.loads(done.output)
+    [record] = json.loads(done.output)["contracts"]
     assert record["binding"]["conflict_policies"] == ["upsert"]
 
 

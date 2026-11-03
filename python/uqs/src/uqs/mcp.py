@@ -22,6 +22,7 @@ from typing import Any
 
 from fastmcp import FastMCP
 
+from uqs import cells
 from uqs import paths as stack_paths
 from uqs.attach import live as _registers_live_check  # noqa: F401 - the start gate's (#1651)
 from uqs.deploy import history as _registers_list_targets  # noqa: F401 - `targets` kind
@@ -188,7 +189,8 @@ def uqs_list(kind: str = "processes", port: int | None = None) -> Any:
     build_env()'s resolved KDBBASEPORT/KDBHDB/... values.
     """
     try:
-        return listing.list_items(stack_paths.default_paths(), kind, base_port=port)
+        rows = listing.list_items(stack_paths.default_paths(), kind, base_port=port)
+        return [cells.values(row) for row in rows]
     except UqsError as exc:
         return {"error": str(exc)}
 
