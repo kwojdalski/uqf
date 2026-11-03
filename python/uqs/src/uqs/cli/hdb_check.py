@@ -1,7 +1,7 @@
 """`uqs data check`: which HDB partitions lack a table or a column, and -
 with --apply, after asking - the empty table or null column written in.
 
-Two scopes (#1755). Without --table, --attach or --hdb it judges this
+Two scopes (#1755). Without --table, --attachment or --hdb it judges this
 runtime's own HDB against every table this runtime declares, as it always
 has: stack/hdb_layout.py asks q which partitions there are (in the segments
 par.txt names, for a segmented database - #1783), stack/hdb_shape.py judges
@@ -16,7 +16,6 @@ table when there is one, else from a partition that holds it
 
 from __future__ import annotations
 
-import json
 import tempfile
 from pathlib import Path
 from typing import Annotated
@@ -35,22 +34,29 @@ from uqs.cli.hdb_scope import (
     run_scoped,
     tables_given,
 )
-from uqs.cli.renames import alias_command
+from uqs.cli.json_out import emit, json_opt
+from uqs.cli.renames import ATTACHMENT, alias_command, renamed
 from uqs.cli.safety import ConfirmsOnServer
 from uqs.cli.shared import _die, _paths, console, data_app
 from uqs.paths import UqsError
 from uqs.stack import hdb_alter, hdb_fill, hdb_layout, hdb_shape, hdb_types
 from uqs.stack.hdb_alter import Request
 
+CheckJson = json_opt(
+    '{"ok", "hdb", "present", "segmented", "partitions", "missing_tables": {partition: [table]}, '
+    '"missing_columns": {partition: {table: [column]}}, "types_checked", "type_changes": [...]} '
+    '- or, with --table, --attach or --hdb, {"ok", "hdb", "resolved_from", "plan", "result", ...}'
+)
 
-@data_app.command("check", cls=ConfirmsOnServer)
+
+@data_app.command("check", cls=renamed(ATTACHMENT, ConfirmsOnServer))
 def hdb_check(
     table: Annotated[
         list[str] | None,
         typer.Option(
             "--table",
-            help="Check and fill only this table (default with --attach: the attachment's own); "
-            "repeatable, and NAME,NAME also works",
+            help="Check and fill only this table (default with --attachment: the attachment's "
+            "own); repeatable, and NAME,NAME also works",
             autocompletion=completion.plant_table,
         ),
     ] = None,
@@ -69,9 +75,7 @@ def hdb_check(
     fix: Annotated[
         bool, typer.Option("--fix", hidden=True, help="Retired: --apply, which asks first")
     ] = False,
-    as_json: Annotated[
-        bool, typer.Option("--json", help="Print the findings as JSON, to script against")
-    ] = False,
+    as_json: CheckJson = False,
 ) -> None:
     """Report HDB partitions missing a table or a column - the cause behind
     "./2015.01.07/arbitrage. OS reports: No such file or directory" - and
@@ -79,7 +83,7 @@ def hdb_check(
 
     A partitioned kdb+ database needs every table in every partition, each
     holding the same columns; a gap fails the whole query, naming whichever
-    table sorts first. Without --table, --attach or --hdb: this runtime's HDB,
+    table sorts first. Without --table, --attachment or --hdb: this runtime's HDB,
     against every table it declares. With one: that table alone, in the HDB
     they name (`uqs --target NAME data check` is a release's own). --apply
     shows the plan, asks, and writes only what is missing - additive: a table
@@ -117,7 +121,7 @@ def _whole_runtime(*, apply: bool, yes: bool, as_json: bool) -> None:
     hdb_root = paths.hdb_dir
     if not hdb_root.is_dir():
         if as_json:
-            print(json.dumps({"hdb": str(hdb_root), "present": False}))
+            emit({"ok": True, "hdb": str(hdb_root), "present": False})
         else:
             console.print(f"[yellow]no HDB at {hdb_root}[/] - nothing to check")
         return
@@ -157,7 +161,8 @@ def _whole_runtime(*, apply: bool, yes: bool, as_json: bool) -> None:
             _die(exc)
             return
     if as_json:
-        print(json.dumps({
+        emit({
+            "ok": not (short or thin or changed),
             "hdb": str(hdb_root),
             "present": True,
             "segmented": layout.segmented,
@@ -166,7 +171,7 @@ def _whole_runtime(*, apply: bool, yes: bool, as_json: bool) -> None:
             "missing_columns": {p: {t: sorted(c) for t, c in by.items()} for p, by in thin.items()},
             "types_checked": changed is not None,
             "type_changes": changed or [],
-        }, indent=2))  # fmt: skip
+        })  # fmt: skip
         if short or thin or changed:
             raise typer.Exit(code=1)
         return
@@ -199,4 +204,4 @@ def _whole_runtime(*, apply: bool, yes: bool, as_json: bool) -> None:
 
 
 #: Its name before #1733: `check` actively probes and exits non-zero on a problem.
-alias_command(data_app, "hdb-check", "uqs data check", hdb_check)
+alias_command(data_app, "hdb-check", "uqs data check", hdb_check, cls=renamed(ATTACHMENT))

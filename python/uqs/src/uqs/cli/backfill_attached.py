@@ -1,4 +1,4 @@
-"""`uqs job backfill --attach NAME`: the attached-destination branch (#1454).
+"""`uqs job backfill --attachment NAME`: the attached-destination branch (#1454).
 
 Apart from cli/backfill.py, which would otherwise carry two commands: the
 fleet-path backfill starts a process and returns; this resolves a saved
@@ -8,7 +8,6 @@ Everything it decides is in uqs.attach.backfill.
 
 from __future__ import annotations
 
-import json
 from collections.abc import Mapping
 from datetime import datetime
 
@@ -19,9 +18,11 @@ from uqs.attach import backfill_audit, backfill_run, config, service
 from uqs.attach import backfill_plan as planning
 from uqs.attach.backfill_policy import EOD_BYPASSED, EOD_FENCE, coordination_line, override_lines
 from uqs.cli import backfill_receive
+from uqs.cli.json_out import emit
 from uqs.cli.shared import _die, _paths, console, log
 from uqs.paths import UqsError, UqsUsageError
 from uqs.stack import backfill as stack_backfill
+from uqs.stack import run_modes
 from uqs.stack.run_modes import MODES
 
 
@@ -48,7 +49,7 @@ def run(
 
     `waived` ({finding id: reason}, from safety.given) is honoured by plan, dry-run and run
     on this machine, each admitting afresh with it; refused with --writer and in validate."""
-    mode = mode or "run"
+    mode = mode or run_modes.DEFAULT_MODE
     if mode not in MODES:
         _die(UqsUsageError(f"--mode {mode!r} is not one of {', '.join(MODES)}"))
         return
@@ -127,7 +128,7 @@ def run(
         _die(exc)
         return
     if as_json:
-        typer.echo(json.dumps(out, indent=2, sort_keys=True))
+        emit(out)
     else:
         console.print(text, markup=False)
     raise typer.Exit(code=0)
@@ -151,7 +152,7 @@ def refuse_waivers(waived: Mapping[str, str], *, mode: str, writer: str | None) 
         raise UqsUsageError(
             f"{names} is not supported with --writer: the receiver on the stack's machine "
             "admits and fences every batch itself, and is never told of a waiver - run the "
-            "backfill on that machine with --attach, or wait for the window to pass"
+            "backfill on that machine with --attachment, or wait for the window to pass"
         )
     if mode == "validate":
         raise UqsError(
@@ -252,7 +253,7 @@ def _bypass_note(plan, audit=None) -> str:
 
 def logs_command(attachment: str, worker: str) -> str:
     """The command that reads a run's log through `uqs logs` (#1725)."""
-    return f"uqs logs --attach {attachment} --worker {worker}"
+    return f"uqs logs --attachment {attachment} --worker {worker}"
 
 
 def _outcome_text(worker, run_, code, result) -> str:
@@ -284,6 +285,6 @@ def _outcome_text(worker, run_, code, result) -> str:
 
 def _report(info, as_json, text):
     if as_json:
-        typer.echo(json.dumps(info, indent=2, sort_keys=True, default=str))
+        emit(info)
     else:
         console.print(text, markup=False)

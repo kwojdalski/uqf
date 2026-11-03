@@ -306,7 +306,7 @@ def start_upstream():
 
 # ------------------------------------------------- receivers a test started (#1760)
 #
-# `uqs job receive` starts scripts/dev/remote_receiver.q in a session of its own,
+# `uqs job receiver start` starts scripts/dev/remote_receiver.q in a session of its own,
 # and the receiver stops itself only at its -deadline. A test that loses track of
 # one - a refusal that started it anyway, a failed assertion, a stop that looked in
 # the wrong attachment directory - leaves it idling on its port for as long as that

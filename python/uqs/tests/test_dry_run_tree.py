@@ -33,7 +33,7 @@ from rich.text import Text
 from test_cli_conventions import LEAVES
 
 from uqs.cli.safety import Effect, dry_run_note
-from uqs.cli.target_confirm import _DRY_RUN_STARTS, changes_the_server, effect_of
+from uqs.cli.target_confirm import changes_the_server, effect_of, trait_of
 
 pytestmark = pytest.mark.xdist_group("dry_run_tree")
 
@@ -41,11 +41,12 @@ NOTE = Text.from_markup(dry_run_note()).plain
 #: The note of a command whose dry run is its default: "... Run it again with --apply".
 APPLY_NOTE = Text.from_markup(dry_run_note("with --apply")).plain.rstrip(".")
 
-#: The command whose dry run starts a process - the worker, to fetch and
-#: transform every window (#1732) - so `uqs --target` asks before it. It no
+#: The commands whose dry run starts a process - the worker, to fetch and
+#: transform every window (#1732) - so `uqs --target` asks before it:
+#: those marked `dry_run_starts` (cli/safety.py, #1893). It no
 #: longer bootstraps the data directory to do so (#1902): here, on an empty
 #: data root, it refuses and changes nothing, like every other case.
-STARTS_A_PROCESS = " ".join(_DRY_RUN_STARTS)
+STARTS_A_PROCESS = {path for path, cmd in LEAVES.items() if trait_of(cmd.command, "dry_run_starts")}
 
 #: Whose dry run prints its report as the JSON document a program reads: deploy
 #: keeps stdout for that, so the note is stderr's last line instead (#1902).
@@ -112,7 +113,8 @@ CASES = [
     Case("stop", ("rdb1",)),
     Case("clean", ()),
     Case("clean", (), _hdb("uqs")),
-    Case("config set", ("rdb1", "localtime", "0")),
+    Case("config set", ("rdb1", "localtime=0")),
+    Case("config unset", ("rdb1", "localtime")),
     Case("config sources stub", ("demo_deals",)),
     Case("connector start", ("kafka",)),
     Case("connector stop", ("kafka",)),
@@ -132,7 +134,11 @@ CASES = [
     Case("job checkpoint remove", ("demo_deals_backfill",)),
     Case("job install", ("sidecars/kafka_example",)),
     Case("job new", ("probe_job",)),
-    Case("job receive", ("--attach", "nosuch", "--listen-port", "7999", "--contract", "c1")),
+    Case(
+        "job receiver start",
+        ("--attachment", "nosuch", "--listen-port", "7999", "--contract", "c1"),
+    ),
+    Case("job receiver stop", ("--attachment", "nosuch")),
     Case("job remove", ("probe_job",), _uqs("job", "new", "probe_job"), own_copy=True),
     Case("job runs upgrade", (), _status),
     Case("runtime prepare", ()),
@@ -234,4 +240,4 @@ def test_target_sends_a_dry_run_unasked_only_once_it_is_walked_here(case):
     """`uqs --target` sends a dry run without asking (cli/target_confirm.py):
     sound only for a dry run this file shows writes nothing. A backfill's
     still starts a process, so it asks."""
-    assert changes_the_server(case.argv) is (case.command == STARTS_A_PROCESS)
+    assert changes_the_server(case.argv) is (case.command in STARTS_A_PROCESS)

@@ -520,7 +520,7 @@ def test_a_reader_that_reloads_but_does_not_serve_the_table_is_not_queryable(wor
     assert code == 3 and result["outcome"] == "written_not_queryable", started.log.read_text()
     (why,) = result["failed_readers"]
     assert why.startswith("hdb1: reloaded, but its HDB does not define imported_trades yet")
-    assert "next end of day" in why and "uqs data check --attach NAME --apply" in why, (
+    assert "next end of day" in why and "uqs data check --attachment NAME --apply" in why, (
         "it says how to fix it, with the command as it is called now"
     )
     assert "hdb-check" not in why
@@ -603,7 +603,7 @@ def _cli(*argv: str):
             "job",
             "backfill",
             WORKER,
-            "--attach",
+            "--attachment",
             "pb-uat",
             "--from",
             "2015-01-07T09:00",
@@ -659,14 +659,16 @@ def test_the_listing_and_the_run_ledger_show_the_attached_run(world):
     world.reader.refuse()
     started, _ = run(world)
     assert backfill_run.follow(started, timeout=120)[0] == 3
-    listing_ = _cli_any("list", "backfills")
+    listing_ = _cli_any("job", "attachment", "status")
     flat = " ".join(listing_.output.split())
     assert "pb-uat" in flat and WORKER in flat and "written_not_queryable" in flat
-    ledger = _cli_any("job", "runs", "list", "--attach", "pb-uat")
+    ledger = _cli_any("job", "runs", "list", "--attachment", "pb-uat")
     assert WORKER in ledger.output, "the destination's own run ledger"
     run_id = stack_runs.history(world.paths, directory=started.state_dir)[0]["run_id"]
-    shown = " ".join(_cli_any("job", "runs", "show", run_id, "--attach", "pb-uat").output.split())
-    assert "--attach pb-uat" in shown, (
+    shown = " ".join(
+        _cli_any("job", "runs", "show", run_id, "--attachment", "pb-uat").output.split()
+    )
+    assert "--attachment pb-uat" in shown, (
         "the re-run command names the destination, or it would write uqf's HDB"
     )
     assert str(started.state_dir / "logs") in shown.replace("\n", "")
@@ -713,7 +715,7 @@ def test_a_covered_date_without_the_table_is_not_queryable_though_the_table_is_l
     (why,) = result["failed_readers"]
     assert why.startswith("hdb1: reloaded, but cannot serve imported_trades for the covered dates")
     assert "2015.01.07: no imported_trades directory" in why, "reader, date and table are named"
-    assert "uqs data check --attach NAME --apply" in why
+    assert "uqs data check --attachment NAME --apply" in why
     assert (first.state_dir / "etl_coverage").is_file(), "coverage stays"
     assert not (first.state_dir / "etl_ready").exists(), "readiness does not advance"
 

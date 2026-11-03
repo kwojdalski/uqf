@@ -17,7 +17,7 @@ WHAT IS IN IT:
                 only with --kafka-home (#1515): KX's kfk for the target, with
                 its libraries and notices (uqs.deploy.kafka).
   .release/python-runtime.tar.gz
-                only with --python-runtime (#1557): a CPython for the target,
+                only with --python-component (#1557): a CPython for the target,
                 which scripts/install_release.py makes .venv from.
   web/dist/     only with --frontend (#1646): the built browser app, and
                 uqf-frontend's wheels beside uqs's (uqs.deploy.frontend).

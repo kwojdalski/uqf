@@ -17,17 +17,23 @@ import typer
 from rich.table import Table
 
 from uqs import timerange
-from uqs.cli.json_out import emit, json_opt
+from uqs.cli import completion
+from uqs.cli.json_out import emit, json_opt, utc_times
 from uqs.cli.pipelines import needs_pipelines
 from uqs.cli.range_options import DateOpt, LastOpt, RangeFromOpt, RangeToOpt
-from uqs.cli.renames import alias_command
+from uqs.cli.renames import ATTACHMENT, alias_command, renamed
 from uqs.cli.safety import ChangesState, ReadOnly, dry_run_note
 from uqs.cli.shared import (
     JOB_OPERATIONS_PANEL,
+    ExportOpt,
     InteractiveOpt,
+    ReverseOpt,
+    SortOpt,
     _die,
+    _export,
     _paths,
     _show,
+    _sorted_items,
     console,
     job_app,
 )
@@ -66,9 +72,9 @@ _FACT_COLUMNS = ("run_id", "dataset", "range_from", "range_to", "label", "text")
 AttachOpt = Annotated[
     str | None,
     typer.Option(
-        "--attach",
-        help="Read the ledger of this attachment's destination (`uqs job backfill --attach`) "
-        "instead of the runtime's own",
+        "--attachment",
+        help="The attachment whose destination's ledger to read (`uqs job backfill "
+        "--attachment`), instead of the runtime's own",
     ),
 ]
 
@@ -81,12 +87,13 @@ ShowJson = json_opt(
 
 
 def _record(row: dict, columns: tuple[str, ...]) -> dict:
-    """One ledger row as JSON: the table's columns, a whole-number count as an int."""
+    """One ledger row as JSON: the table's columns, a whole-number count as an
+    int, and a time - `.z.p`, UTC - ISO-8601 with its offset (#1882)."""
     out = {}
     for col in columns:
         value = row.get(col)
         out[col] = int(value) if isinstance(value, float) and value.is_integer() else value
-    return out
+    return utc_times(out)
 
 
 def _where(attach: str | None) -> dict:
@@ -126,7 +133,7 @@ def _print(
     _show(table, interactive)
 
 
-@runs_app.command("list", cls=needs_pipelines(_LEDGER, ReadOnly))
+@runs_app.command("list", cls=renamed(ATTACHMENT, needs_pipelines(_LEDGER, ReadOnly)))
 def list_runs(
     interactive: InteractiveOpt = False,
     attach: AttachOpt = None,
@@ -137,6 +144,13 @@ def list_runs(
             help="Only runs that began and never finished, interrupted ones included",
         ),
     ] = False,
+    range_from: RangeFromOpt = None,
+    range_to: RangeToOpt = None,
+    day: DateOpt = None,
+    last: LastOpt = None,
+    export: ExportOpt = None,
+    sort: SortOpt = None,
+    reverse: ReverseOpt = False,
     as_json: RunsJson = False,
 ) -> None:
     """Every run in the ledger, newest first - or, with --unfinished, the runs
@@ -145,14 +159,22 @@ def list_runs(
     `--unfinished` includes runs whose process has died: `running` on a run
     whose process is gone means that execution was interrupted, which is what
     it is for.
+
+    A time range keeps the runs whose window overlaps it (#1858), and the
+    list takes every listing's flags: --export, --sort, --reverse, -i.
     """
     try:
         rows = (stack_runs.unfinished if unfinished else stack_runs.history)(
             _paths(), **_where(attach)
         )
+        if any(v is not None for v in (range_from, range_to, day, last)):
+            window = timerange.resolve(range_from, range_to, day, last, open_ended=True)
+            rows = [r for r in rows if _overlaps(r, window)]
+        rows = _sorted_items(rows, sort, reverse)
     except UqsError as exc:
         _die(exc)
         return
+    _export([_record(r, _RUN_COLUMNS) for r in rows], export)
     if as_json:
         emit({"runs": [_record(r, _RUN_COLUMNS) for r in rows]})
         return
@@ -160,6 +182,18 @@ def list_runs(
         _print("unfinished runs", rows, _RUN_COLUMNS, "no unfinished runs", interactive)
     else:
         _print("runs", rows, _RUN_COLUMNS, "no runs recorded", interactive)
+
+
+def _overlaps(row: dict, window: timerange.TimeRange) -> bool:
+    """Whether a run's [range_from, range_to) meets `window`."""
+    lo, hi = row.get("range_from"), row.get("range_to")
+    if lo is None or hi is None:
+        return False
+    start = timerange.parse_bound("range_from", str(lo))
+    end = timerange.parse_bound("range_to", str(hi))
+    return (window.end is None or start < window.end) and (
+        window.start is None or end > window.start
+    )
 
 
 def _unfinished(
@@ -174,7 +208,7 @@ alias_command(
     "status",
     "uqs job runs list --unfinished",
     _unfinished,
-    cls=needs_pipelines(_LEDGER),
+    cls=renamed(ATTACHMENT, needs_pipelines(_LEDGER)),
 )
 
 
@@ -208,7 +242,7 @@ def upgrade(
 alias_command(runs_app, "migrate", "uqs job runs upgrade", upgrade, cls=needs_pipelines(_LEDGER))
 
 
-@runs_app.command("show", cls=needs_pipelines(_LEDGER, ReadOnly))
+@runs_app.command("show", cls=renamed(ATTACHMENT, needs_pipelines(_LEDGER, ReadOnly)))
 def show(
     run_id: Annotated[str, typer.Argument(help="A run id, from `uqs job runs list`")],
     attach: AttachOpt = None,
@@ -244,7 +278,9 @@ def _print_next_steps(run: dict, attach: str | None = None) -> None:
     logs = stack_runs.log_files(paths, run)
     if attach:
         state = _where(attach)["directory"]
-        console.print(f"\n[bold]logs[/]   {state / 'logs'}  (attached run; `uqs list backfills`)")
+        console.print(
+            f"\n[bold]logs[/]   {state / 'logs'}  (attached run; `uqs job attachment status`)"
+        )
     elif logs:
         console.print(f"\n[bold]logs[/]   uqs logs {run['process']} --level ERROR")
         for path in logs:
@@ -265,7 +301,12 @@ def _print_next_steps(run: dict, attach: str | None = None) -> None:
 
 @runs_app.command("audit", cls=needs_pipelines(_LEDGER, ReadOnly))
 def audit(
-    dataset: Annotated[str, typer.Argument(help="The dataset, e.g. demo_deals")],
+    dataset: Annotated[
+        str,
+        typer.Argument(
+            help="The dataset, e.g. demo_deals", autocompletion=completion.bounded_datasets
+        ),
+    ],
     range_from: RangeFromOpt = None,
     range_to: RangeToOpt = None,
     day: DateOpt = None,

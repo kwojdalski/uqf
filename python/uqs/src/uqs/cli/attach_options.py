@@ -13,14 +13,13 @@ from typing import Annotated
 
 import typer
 
-from uqs.attach import config
+from uqs.attach import config, service
+from uqs.cli.choices import alternatives
+from uqs.paths import UqsError, repo_root
 
-
-class SchemaWriter(StrEnum):
-    """Who appends the marked schema block (#1845): uqs, here, or the tickerplant."""
-
-    CLI = "cli"
-    TICKERPLANT = "tickerplant"
+#: Who appends the marked schema block (#1845): uqs, here, or the tickerplant -
+#: config.SCHEMA_WRITERS' keys, so a writer added there is a choice here (#1893).
+SchemaWriter = StrEnum("SchemaWriter", {w.upper(): w for w in config.SCHEMA_WRITERS})
 
 
 JobOpt = Annotated[
@@ -30,14 +29,24 @@ BundleOpt = Annotated[
     Path | None,
     typer.Option("--bundle", help="The sidecar bundle holding the job (default: this tree)"),
 ]
-StackIdOpt = Annotated[
+BasePortOpt = Annotated[
     int | None,
     typer.Option(
-        "--stack-id",
+        "--base-port",
         help="The existing stack's base port (-stackid / KDBBASEPORT). No default: "
         "the runtime's own base port is exactly the wrong guess.",
     ),
 ]
+
+
+def _discovery_offset() -> str:
+    """discovery's `+N`, for --discovery's help: read, never typed (#1893)."""
+    try:
+        return str(service.discovery_offset(repo_root()))
+    except UqsError:
+        return "N"
+
+
 HostOpt = Annotated[
     str | None,
     typer.Option("--host", help="Where the stack's processes listen (default: localhost)"),
@@ -46,7 +55,8 @@ DiscoveryOpt = Annotated[
     str | None,
     typer.Option(
         "--discovery",
-        help="HOST:PORT of its discovery, on the --host machine (default: HOST:<stack-id>+1)",
+        help="HOST:PORT of its discovery, on the --host machine (default: HOST:<base-port>"
+        f"+{_discovery_offset()}, as the starter pack's process.csv puts it)",
     ),
 ]
 TickerplantOpt = Annotated[
@@ -59,7 +69,7 @@ UserOpt = Annotated[
     str | None,
     typer.Option(
         "--user",
-        help=f"User to log in to the stack's processes as (default: {config.DEFAULT_USER})",
+        help=f"The user to log in to the stack's processes as (default: {config.DEFAULT_USER})",
     ),
 ]
 PasswordEnvOpt = Annotated[
@@ -70,21 +80,21 @@ PasswordEnvOpt = Annotated[
         "credential). The password itself is never saved or printed.",
     ),
 ]
-RuntimeOnlyOpt = Annotated[
+TransientOpt = Annotated[
     bool,
     typer.Option(
-        "--runtime-only",
-        help="Accept that restarting the tickerplant drops the registration "
-        "(default: add a marked block to its schema file)",
+        "--transient",
+        help="Register the table in the running tickerplant only, accepting that "
+        "restarting it drops the registration (default: add a marked block to its schema file)",
     ),
 ]
 SchemaWriterOpt = Annotated[
     SchemaWriter | None,
     typer.Option(
         "--schema-writer",
-        help="Who appends the marked block to the tickerplant's schema file: cli (uqs, on "
-        "this machine, which must be the stack's) or tickerplant (the tickerplant, to its "
-        "own file, for a stack on another machine). Default: the saved choice, else cli.",
+        help="Who appends the marked block to the tickerplant's schema file: "
+        + alternatives(config.SCHEMA_WRITERS, config.SCHEMA_WRITER_NOTES)
+        + f". Default: the saved choice, else {config.DEFAULT_SCHEMA_WRITER}.",
     ),
 ]
 RetiredRemoteSchemaOpt = Annotated[
@@ -117,7 +127,7 @@ SshOpt = Annotated[
     typer.Option(
         "--ssh",
         help="The ssh destination, USER@HOST, that reaches the stack's files, for `uqs data "
-        "check` and `alter --attach` (default: --host as the current user). Changes "
+        "check` and `alter --attachment` (default: --host as the current user). Changes "
         "a saved attachment without --replace",
     ),
 ]

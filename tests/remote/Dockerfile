@@ -50,7 +50,7 @@ RUN uv sync --package uqs --no-install-workspace
 
 COPY . /uqf
 # The one q of this machine is PeachQ, said out loud: QCMD names it, and it
-# answers as PeachQ when asked (#1753) - which is what `uqs job receive`
+# answers as PeachQ when asked (#1753) - which is what `uqs job receiver start`
 # starts its receiver with. Every runtime's data lives under /data.
 RUN uv sync --package uqs \
     && ln -s /opt/venv/bin/uqs /usr/local/bin/uqs \

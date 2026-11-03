@@ -33,7 +33,7 @@ scaffold spreadmon:
   note: describe spread_bps: replace its SCAFFOLDED line in scripts/processes/uqs_catalog.q - or, if the desk should not see it, delete that line and add the table to .qcat.hidden with the reason
   note: implement .qpipe.job.spreadmon.on_batch, then replace the scaffolded test
   note: describe spreadmon1: replace its SCAFFOLDED card in docs/services/README.md and its SCAFFOLDED comment in docs/architecture/stack.md
-  note: add spreadmon1 to a profile (--profile NAME), or exempt it with --unprofiled REASON - `uqs list profiles` shows the sets and their connection budget
+  note: add spreadmon1 to a profile (--profile NAME), or exempt it with --unprofiled REASON - `uqs profile list` shows the sets and their connection budget
   note: start it with its producers: fx_orderbook
 ```
 

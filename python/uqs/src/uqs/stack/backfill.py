@@ -157,6 +157,7 @@ def start(
     on_conflict: str | None = None,
     mode: str | None = None,
     fixture: bool = False,
+    capture: bool = False,
 ) -> subprocess.CompletedProcess[str]:
     """Start the process that runs `worker`, over [range_from, range_to).
 
@@ -165,7 +166,8 @@ def start(
     refused when that directory is not set up (stack/rehearsal.py,
     #1902). Bootstrapping a fresh tree to rehearse in it wrote over a
     thousand paths; a temporary data directory instead would show an empty
-    coverage ledger, so the rehearsal would plan windows a run never would."""
+    coverage ledger, so the rehearsal would plan windows a run never would.
+    `capture` keeps torq.sh's output off stdout, for --json."""
     # Before anything starts: a PeachQ runtime refuses a worker its
     # interpreter cannot run, rather than letting it fail mid-run.
     capabilities.refuse_unsupported(paths, worker, mode)
@@ -183,8 +185,8 @@ def start(
     )
     args = ["start", procname, "-extras", *flags]
     if mode in REHEARSAL_MODES:
-        return rehearsal.run_bootstrapped(paths, args, base_port=base_port)
-    return runtime.run_torq_sh(paths, args, base_port=base_port)
+        return rehearsal.run_bootstrapped(paths, args, base_port=base_port, capture=capture)
+    return runtime.run_torq_sh(paths, args, base_port=base_port, capture=capture)
 
 
 def clear_checkpoint(paths: UqsPaths, worker: str, dry_run: bool = False) -> Path | None:

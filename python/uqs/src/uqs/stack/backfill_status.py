@@ -1,4 +1,4 @@
-"""`uqs list backfills`: what each attached backfill did, from the files it leaves (#1454).
+"""`uqs job attachment status`: what each attached backfill did, from the files it leaves (#1454).
 
 An attached backfill (uqs.attach.backfill_run) runs as a process of its own, logs to
 `<status dir>/attached/<attachment>-<destination id>/logs/` and holds an owner record in
@@ -64,7 +64,7 @@ def _latest_log(state: Path) -> Path | None:
     return logs[-1] if logs else None
 
 
-def _row(state: Path) -> dict[str, str]:
+def _row(state: Path) -> dict[str, Any]:
     attachment, _, identity = state.name.rpartition("-")
     log = _latest_log(state)
     result = result_line(log) if log else {}
@@ -75,7 +75,7 @@ def _row(state: Path) -> dict[str, str]:
         "worker": str(result.get("worker") or (owners[0].get("worker") if owners else "")),
         "state": "running" if owners else str(result.get("state", "no outcome")),
         "outcome": "" if owners else str(result.get("outcome", "")),
-        "queryable": "" if owners or not result else ("yes" if result.get("queryable") else "no"),
+        "queryable": None if owners or not result else bool(result.get("queryable")),
         "log": str(log or ""),
         "detail": "",
     }
@@ -98,8 +98,8 @@ def _row(state: Path) -> dict[str, str]:
     return row
 
 
-def rows(paths: UqsPaths, base_port: int | None = None) -> list[dict[str, str]]:
-    """One row per attached destination that has run (`uqs list backfills`): in name order.
+def rows(paths: UqsPaths, base_port: int | None = None) -> list[dict[str, Any]]:
+    """One row per attached destination that has run (`uqs job attachment status`): in name order.
     `base_port` is the listing's signature; the state is on disk and has none."""
     base = runs.status_dir(paths) / STATE_SUBDIR
     if not base.is_dir():

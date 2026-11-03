@@ -42,12 +42,13 @@ import typer
 from rich.table import Table
 
 from uqs.cli import completion, renames
+from uqs.cli.choices import alternatives
 from uqs.cli.json_out import emit, json_opt, snake
 from uqs.cli.pipelines import needs_pipelines
 from uqs.cli.renames import renamed
 from uqs.cli.safety import ChangesState, DryRunOpt, ReadOnly, dry_run_note
 from uqs.cli.shared import _die, _paths, app, console
-from uqs.external.feeds import ExternalFeed, check_options, discover
+from uqs.external.feeds import ExternalFeed, FeedOption, check_options, discover
 from uqs.paths import UqsError, UqsUsageError, repo_root
 
 connector_app = typer.Typer(
@@ -72,8 +73,9 @@ FEEDS: dict[str, ExternalFeed] = discover(repo_root(), BROKEN)
 FeedArg = Annotated[
     str,
     typer.Argument(
-        help="kafka, crypto (order books), crypto-fills (the bot's fills), or one an "
-        "installed bundle carries - `connector status` lists them",
+        # every connector found, each as it describes itself (#1893)
+        help=", ".join(f"{n} ({f.about})" if f.about else n for n, f in FEEDS.items())
+        + ", or one a bundle installed later carries - `connector status` lists them",
         autocompletion=completion.choices(*FEEDS),
     ),
 ]
@@ -108,6 +110,17 @@ def _feed(name: str) -> ExternalFeed:
 ENV_SUFFIX = "_env"
 
 
+def _described(name: str, option: FeedOption, takers: list[str]) -> str:
+    """An option's help, its fallback rendered from each declaration (#1893):
+    one, where the feeds that take it agree; each feed's, where they do not."""
+    declared = {f: next(o for o in FEEDS[f].options if o.name == name) for f in takers}
+    if len({o.fallback for o in declared.values()}) == 1:
+        return option.described
+    return f"{option.help}; " + "; ".join(
+        f"{feed}: {o.fallback or 'no default'}" for feed, o in declared.items()
+    )
+
+
 def _start_signature() -> inspect.Signature:
     """`connector start`'s parameters: NAME, then every option any feed
     declares - one CLI option per name, its help naming the feeds that take
@@ -120,21 +133,30 @@ def _start_signature() -> inspect.Signature:
     params = [inspect.Parameter("name", kind, annotation=FeedArg)]
     for name, (option, takers) in check_options(FEEDS).items():
         feeds = ", ".join(takers)
+        described = _described(name, option, takers)
+        # each connector's options in a panel of their own, so `--help` says
+        # which apply to the one being started (#1858)
+        panel = f"Options of {feeds}"
         if option.secret:
             env_help = (
-                f"Environment variable holding the {option.help}. The value itself is "
+                f"Environment variable holding the {described}. The value itself is "
                 f"never printed ({feeds})"
             )
             named = Annotated[
-                str | None, typer.Option(metavar="NAME", help=env_help, show_default=False)
+                str | None,
+                typer.Option(
+                    metavar="NAME", help=env_help, show_default=False, rich_help_panel=panel
+                ),
             ]
             params.append(
                 inspect.Parameter(name + ENV_SUFFIX, kind, default=None, annotation=named)
             )
-        help_ = f"{option.help} ({feeds})"
+        help_ = f"{described} ({feeds})"
         typed = Annotated[
             option.type | None,
-            typer.Option(help=help_, show_default=False, hidden=option.secret),
+            typer.Option(
+                help=help_, show_default=False, hidden=option.secret, rich_help_panel=panel
+            ),
         ]
         params.append(inspect.Parameter(name, kind, default=None, annotation=typed))
     params.append(inspect.Parameter("dry_run", kind, default=False, annotation=DryRunOpt))
@@ -310,7 +332,7 @@ def status(
     name: Annotated[
         str | None,
         typer.Argument(
-            help="One connector; omit it for every connector",
+            help=f"One connector - {alternatives(FEEDS)}; omit it for every connector",
             autocompletion=completion.choices(*FEEDS),
         ),
     ] = None,

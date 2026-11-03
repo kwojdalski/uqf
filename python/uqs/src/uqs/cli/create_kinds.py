@@ -7,6 +7,31 @@ the job scaffolded as though it had been honoured.
 
 from __future__ import annotations
 
+from typing import Annotated, Any
+
+import typer
+
+from uqs.cli import completion
+from uqs.cli.choices import alternatives
+from uqs.model.kinds import SCAFFOLD_KINDS
+
+#: `--kind` when it is not given.
+DEFAULT_KIND = "streaming"
+#: What a kind scaffolds, where its name does not say: `--kind`'s help.
+KIND_NOTES = {
+    "external": "a Python publisher outside q, plus the q job reshaping what it publishes",
+    "horizon": "each event evaluated once --horizon has passed",
+}
+
+KindOpt = Annotated[
+    str,
+    typer.Option(
+        "--kind",
+        help=alternatives(SCAFFOLD_KINDS, KIND_NOTES, default=DEFAULT_KIND),
+        autocompletion=completion.choices(*SCAFFOLD_KINDS),
+    ),
+]
+
 _BACKFILL = ("backfill",)
 _STANDING = ("streaming", "normalizer", "external", "horizon")
 
@@ -31,7 +56,21 @@ SHAPES: dict[str, tuple[str, ...]] = {
     "--raw-table": ("external", "backfill"),
     "--profile": _STANDING,
     "--unprofiled": _STANDING,
+    # every kind declares whether `uqs start all` starts it (#1893)
+    "--start-with-all": SCAFFOLD_KINDS,
+    # a normalizer and a horizon job publish their own NAME; a backfill fills --dataset
+    "--publishes": ("streaming", "external"),
+    # a backfill reads its source, an external job --raw-table
+    "--subscribe-to": ("streaming", "normalizer", "horizon"),
 }
+
+
+def for_kinds(option: str) -> str:
+    """The " (backfill)" that ends `option`'s help: the kinds SHAPES lets it
+    shape, read from SHAPES so the help cannot name others (#1893). Nothing
+    for an option every kind takes."""
+    kinds = SHAPES[option]
+    return "" if set(kinds) == set(SCAFFOLD_KINDS) else f" ({', '.join(kinds)})"
 
 
 def misplaced(kind: str, used: dict[str, bool]) -> str | None:
@@ -40,3 +79,18 @@ def misplaced(kind: str, used: dict[str, bool]) -> str | None:
         if used.get(option) and kind not in kinds:
             return f"{option} does not apply to --kind {kind}"
     return None
+
+
+#: The options that are not a job's shape: a reaction's own, and how to write.
+NOT_SHAPING = frozenset({"--triggered-by", "--writes", "--bundle", "--dry-run"})
+
+
+def given_options(ctx: Any, exclude: frozenset[str] = NOT_SHAPING) -> dict[str, bool]:
+    """{--option: whether the command line gave it}, for every option of
+    `ctx`'s command - read from Click, so an option added to the command is
+    checked against SHAPES without a list to add it to (#1893)."""
+    return {
+        param.opts[0]: getattr(ctx.get_parameter_source(param.name), "name", "") == "COMMANDLINE"
+        for param in ctx.command.params
+        if param.param_type_name == "option" and param.opts[0] not in exclude
+    }

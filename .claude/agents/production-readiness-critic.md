@@ -152,8 +152,8 @@ checked and found sound. An area you skipped is not an area that passed.
 - **Run things.** KDB-X:
   `QLIC=~/.kx QHOME=~/.kx/q ~/.kx/bin/q script.q -q < /dev/null`. Python:
   `uv run python …`. CLI: `uv run uqs … --help`.
-- **Read the generated configuration** (`uqs list env`, `uqs config show`), not
-  just the code that generates it.
+- **Read the generated configuration** (`uqs config env`, `uqs config show`),
+  not just the code that generates it.
 - **Quote what a command printed.** Every number must be measured.
 - **Check open issues first:** `gh issue list --state open --limit 100`. A
   production risk already filed is cited by number, not re-reported; say whether

@@ -1428,7 +1428,7 @@
 / before it added - and returns that state with its own result added, or
 / failed_with's failure. Defined after them, because it holds their values.
 / @private
-.qetl.job.bounded.window_stages:`fetch`transform`check`publish!(.qetl.job.bounded.stage_fetch;.qetl.job.bounded.stage_transform;.qetl.job.bounded.stage_check;.qetl.job.bounded.stage_publish)
+.qetl.job.bounded.window_stages:`fetch`ready`transform`check`publish!(.qetl.job.bounded.stage_fetch;.qetl.job.bounded.stage_ready;.qetl.job.bounded.stage_transform;.qetl.job.bounded.stage_check;.qetl.job.bounded.stage_publish)
 
 / Private: attach this window's metadata to the materialisation.
 / .

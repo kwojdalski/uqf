@@ -4,7 +4,9 @@ docs/guides/uqs.md#cli-conventions states six rules; this walks every command
 `uqs.cli.entry` registers and enforces the four a tree can show:
 
 - rule 1: no group is named after a verb;
-- rule 3: one option name has one meaning, and one short flag one long name;
+- rule 3: one option name has one meaning and one value type, one short flag
+  one long name, one word in an option name one meaning, and one concept one
+  option name (#1855);
 - rule 4: every leaf is named by a verb from the vocabulary;
 - rule 5: `--json` on what reports, `--dry-run/-n` on what changes state,
   `--yes/-y` on what asks, and no bypass but `--override NAME --reason` - or
@@ -36,14 +38,15 @@ import typer.main
 import uqs.cli.entry  # noqa: F401 - registers every command on the app
 from uqs.cli import safety, shared, skip_options, vocabulary
 from uqs.cli.shared import app
-from uqs.cli.target_confirm import effect_of
+from uqs.cli.target_confirm import changes_the_server, effect_of, trait_of
 
 ROOT = "uqs"  # the label the root group's own options are reported under
 GUIDE = Path(__file__).resolve().parents[3] / "docs" / "guides" / "uqs.md"
 
-#: The issues allowed to hold an exception open: #1738's sub-issues, and those
-#: the audit that built these lists filed beside them.
-ISSUES = {f"#{n}" for n in range(1727, 1741)}
+#: The issues allowed to hold an exception open: #1738's sub-issues, those the
+#: audit that built these lists filed beside them, and the naming audit's
+#: (#1855-#1859).
+ISSUES = {f"#{n}" for n in (*range(1727, 1741), *range(1855, 1860))}
 
 
 # --------------------------------------------------------------------------- tree
@@ -215,7 +218,7 @@ NOT_THE_NAME = {"WORKER", "PROCNAME"}
 RULE2_FILTERS = {
     ("deploy check", "--proc"): "a process the check expects beyond the profile's",
     ("job new", "--proc"): "the process the new job runs in: a property of what it scaffolds",
-    ("logs", "--worker"): "with --attach: whose run in the attachment - a worker or a receiver",
+    ("logs", "--worker"): "with --attachment: whose run in the attachment - a worker or a receiver",
 }
 
 
@@ -277,8 +280,13 @@ def test_every_noun_that_adds_or_removes_a_thing_lists_it():
     assert found == set(UNLISTED)
 
 
+#: The verbs that list records, newest or by key: each takes every list flag
+#: (#1858) - `deploy history` and `target log` took only --limit.
+LISTING_VERBS = {"list", "history", "log"}
+
+
 def test_every_list_takes_the_same_output_flags():
-    lists = [c for p, c in LEAVES.items() if p.split()[-1] == "list"]
+    lists = [c for p, c in LEAVES.items() if p.split()[-1] in LISTING_VERBS]
     missing = {
         c.path: [f for f in LIST_FLAGS if c.option(f) is None]
         for c in lists
@@ -288,10 +296,73 @@ def test_every_list_takes_the_same_output_flags():
 
 
 #: Lists that do not take every output flag yet, and the issue that adds them.
-LIST_FLAGS_PENDING = {
-    "job runs list": "#1731",  # the run ledger's own table: no --json/--export/--sort
-    "job attachment contract list": "#1731",  # --json only
+#: Empty since #1858: keep it so.
+LIST_FLAGS_PENDING: dict[str, str] = {}
+
+
+#: Rule 1's exceptions: the stack's own lifecycle, and the views of it that
+#: read a running stack. `uqs list` was the last other top-level verb (#1858).
+TOP_LEVEL = {"start", "stop", "restart", "status", "logs", "clean", "exec", "query", "graph",
+             "schema"}  # fmt: skip
+
+
+def test_rule1_only_the_lifecycle_and_its_views_are_top_level_verbs():
+    top = {path for path in LEAVES if " " not in path}
+    assert top == TOP_LEVEL
+
+
+def test_a_noun_that_sets_a_setting_can_unset_it():
+    """`config set` had no `config unset` beside `target set`/`unset` (#1858)."""
+    verbs: dict[str, set[str]] = {}
+    for path in LEAVES:
+        group, _, verb = path.rpartition(" ")
+        verbs.setdefault(group, set()).add(verb)
+    assert not [g for g, v in verbs.items() if "set" in v and "unset" not in v]
+
+
+#: Options named after a verb of the vocabulary, on a command whose own verb
+#: is another, with why - `job receive --stop` made a verb its opposite (#1858).
+VERB_FLAGS = {
+    ("job new", "--check"): "scaffolds a quality check with the job: a thing made, not a verb run",
+    ("deploy push", "--restart"): "how the push replaces a deployment already there: it stays a "
+    "push",
+    ("job attachment add", "--start"): "whether the publisher runs once added - the pair "
+    "--start/--no-start (#1857); the command stays an add",
 }
+
+
+def test_no_flag_turns_its_command_into_another_verb():
+    verbs = set(CORE_VERBS) | set(DOMAIN_VERBS)
+    found = {
+        (path, _long(p))
+        for path, c in LEAVES.items()
+        for p in c.options
+        if getattr(p, "is_flag", False)
+        and _long(p)[2:] in verbs
+        and _long(p)[2:] != path.split()[-1]
+    }
+    assert found == set(VERB_FLAGS)
+
+
+#: A time range is given in full wherever one is taken (#1858): `data replay`
+#: had no --last.
+RANGE = ("--from", "--to", "--date", "--last")
+
+
+def test_a_command_taking_a_time_range_takes_all_of_it():
+    partial = {
+        path: [o for o in RANGE if c.option(o) is None]
+        for path, c in LEAVES.items()
+        if c.option("--from") is not None and any(c.option(o) is None for o in RANGE)
+    }
+    assert not partial
+
+
+def test_schema_and_query_reach_a_process_the_same_ways():
+    """`query --tunnel` with no `schema --tunnel` (#1858): the two read one
+    process, and take the same options to find it."""
+    reach = ("--port", "--base-port", "--host", "--tunnel", "--user", "--password-env")
+    assert all(LEAVES[p].option(o) is not None for p in ("query", "schema") for o in reach)
 
 
 def test_the_guide_lists_the_same_vocabulary():
@@ -318,10 +389,13 @@ OPTIONS = {
     "--allow-dirty": Meaning("retired: --override allow-dirty", None),
     "--apply": Meaning("make the changes; without it, a dry run", r"without it, a dry run"),
     "--arch": Meaning("the servers' CPU architecture", r"x86_64"),
-    "--attach": Meaning("a saved attachment, by name", r"attach"),
+    "--attach": Meaning("retired: --attachment - a verb naming a noun (#1855)", None),
+    "--attachment": Meaning(
+        "a saved attachment, by name", r"^the (saved(, verified)? )?attachment whose\b"
+    ),
     "--base-port": Meaning("the stack's base port", r"base port"),
     "--break-lock": Meaning("retired: --override break-lock", None),
-    "--bundle": Meaning("a sidecar bundle folder", r"bundle"),
+    "--bundle": Meaning("a sidecar bundle folder", r"bundle folder|sidecar bundle"),
     "--cast": Meaning("cast a column's type", r"cast"),
     "--columns": Meaning("which columns of a table to show", r"`all`"),
     "--command-timeout": Meaning("seconds per remote step", r"remote step"),
@@ -329,73 +403,96 @@ OPTIONS = {
     "--date": Meaning("one day of a time range: --from D --to D+1", r"--from D --to D\+1"),
     "--dataset": Meaning("the dataset a bounded worker fills", r"table it fills"),
     "--debug": Meaning("log at DEBUG", r"^Log at DEBUG\. Same as LOG_LEVEL"),
-    "--dest": Meaning("the absolute directory on the server", r"absolute"),
-    "--dry-run": Meaning("show what would change, change nothing", r"nothing|dry"),
+    "--dest": Meaning(
+        "the absolute directory on the server", r"(directory|root) on the server|installs, absolute"
+    ),
+    "--dry-run": Meaning(
+        "show what would change, change nothing",
+        r"\b(change|write|start|run|build|install|store|remove|delete|stop)\w* nothing\b",
+    ),
     "--every": Meaning("re-read every DURATION", r"^with -i, re-read every DURATION"),
     "--stop-on-exit": Meaning(
         "with --follow: stop what it started when the stream ends", r"stop what this started"
     ),
     "--export": Meaning("also write the rows to FILE", r"write output to FILE"),
-    "--follow": Meaning("keep streaming log lines until Ctrl-C", r"stream"),
+    "--follow": Meaning("keep streaming log lines until Ctrl-C", r"streaming (new|every)"),
     "--force": Meaning("retired: each use gets its own name", None),
-    "--from": Meaning("start of a time range", r"start"),
+    "--from": Meaning("start of a time range", r"^start of the time range"),
     "--hdb": Meaning("an HDB directory", r"HDB directory|this database"),
     "--fixture": Meaning(
         "a source with no credential may run on its fixture; --live refuses it",
         r"^let a (worker whose )?source (with|has) no credential",
     ),
-    "--gateway": Meaning("route through the gateway, or (--no-gateway) not", r"gateway"),
+    "--via-gateway": Meaning(
+        "route through the gateway, or (--no-gateway) not", r"through \.gw\.syncexec"
+    ),
     "--home": Meaning("retired: --odbc-home (#1857)", None),
-    "--host": Meaning("where a q process listens", r"listen"),
-    "--interactive": Meaning("browse the table", r"browse"),
-    "--json": Meaning("one JSON document on stdout", r"JSON"),
-    "--keep": Meaning("how many newest releases to keep", r"newest"),
+    "--host": Meaning("where a q process listens", r"^(host|where)\b.*\blistens?\b"),
+    "--interactive": Meaning("browse the table", r"^browse the table"),
+    "--json": Meaning("one JSON document on stdout", r"^Print (one )?JSON"),
+    "--keep": Meaning("how many newest releases to keep", r"newest (n )?releases"),
     "--last": Meaning("a time range up to now", r"up to now"),
-    "--level": Meaning("the lowest log level shown", r"level"),
+    "--level": Meaning("the lowest log level shown", r"this level and above"),
     "--limit": Meaning("show at most N records", r"(most recent|at most) N"),
-    "--lines": Meaning("how many lines of a log to show", r"lines"),
+    "--lines": Meaning("how many lines of a log to show", r"^lines (of|per)\b"),
     "--live": Meaning("retired as its own flag: the other side of --fixture/--live", None),
     "--mode": Meaning("backfill's validate/plan/run mode", r"validate"),
-    "--odbc-home": Meaning("a private ODBC setup", r"ODBC"),
+    "--odbc-home": Meaning("a private ODBC setup", r"private ODBC setup"),
     "--on-conflict": Meaning(
         "what a write does with a row already there",
         r"what a (write|copy) (may )?do(es)? with a (row|partition)",
     ),
     "--output": Meaning("a FILE to write instead of stdout", r"^write it to this file"),
     "--output-dir": Meaning("a directory to write into", r"^directory to write"),
-    "--proc": Meaning("a process, as an option", r"\bprocess\b"),
-    "--overwrite": Meaning("replace what is already there", r"replace"),
+    "--proc": Meaning("a process, as an option", r"^(a|the) process (the check expects|that runs)"),
+    "--overwrite": Meaning(
+        "replace what is already there", r"^replace .*(already holds|that differ)"
+    ),
     "--override": Meaning("bypass one named check", r"bypass"),
     "--passwd": Meaning("retired: --password-env NAME", None),
     "--password-env": Meaning("the variable holding the password", r"variable holding"),
     "--port": Meaning("one process's port", r"directly"),
     "--print": Meaning("retired: --show-command", None),
-    "--profile": Meaning("a start profile", r"profile"),
-    "--show-command": Meaning("show the command, run nothing", r"show"),
+    "--profile": Meaning(
+        "a start profile", r"named start set|start profile|profile (the release started|to start)"
+    ),
+    "--q-version": Meaning("the servers' kdb+ version", r"kdb\+ version|q must be this version"),
+    "--show-command": Meaning(
+        "show the command, run nothing", r"show its command without running it"
+    ),
     "--python": Meaning("the servers' Python version", r"major\.minor"),
-    "--python-runtime": Meaning("a bundled CPython", r"CPython"),
-    "--q-home": Meaning("a QHOME", r"QHOME"),
+    "--python-component": Meaning("a bundled CPython", r"CPython"),
+    "--q-home": Meaning("a QHOME", r"^(QHOME on the server|the managed QHOME)"),
     "--raw": Meaning("retired: --no-gateway / --unresolved", None),
-    "--reach": Meaning("reach the server first; save nothing it cannot reach", r"reach"),
+    "--reach": Meaning(
+        "reach the server first; save nothing it cannot reach", r"^reach the server first"
+    ),
     "--reason": Meaning("why an --override is acceptable", r"--override"),
-    "--release": Meaning("a release on the server", r"release"),
+    "--release": Meaning("a release on the server, by name - not a path", r"^the release\b"),
     "--remote-user": Meaning("run as this account through sudo", r"sudo"),
     "--rename": Meaning("rename a column", r"rename"),
     "--reverse": Meaning("sort descending", r"descending"),
-    "--schema": Meaning("tables' columns and their types", r"schema"),
+    "--schema": Meaning("tables' columns and their types", r"^its table's schema"),
+    "--schema-file": Meaning("a tickerplant's schema file", r"^(load|pin) (this|the) schema file"),
     "--sort": Meaning("sort by a column", r"sort by"),
     "--start-with-all": Meaning("whether a `start all` starts the process", r"start all"),
     "--ssh": Meaning("the ssh destination of a target", r"ssh destination"),
     "--table": Meaning("one table to act on", r"this table"),
-    "--tables": Meaning("a set of tables", r"tables"),
+    "--tables": Meaning("a set of tables", r"^comma-separated tables(;|$)|^tables stp1 must carry"),
     "--target": Meaning("run this command on a deployed target", r"instead of this machine"),
-    "--timeout": Meaning("seconds for the whole command", r"seconds"),
+    "--timeout": Meaning("seconds for the whole command", r"^seconds\b"),
     "--to": Meaning("end of a time range, exclusive", r"exclusive"),
-    "--trace": Meaning("log every query the source is sent", r"quer"),
-    "--user": Meaning("the q user", r"user|admin"),
+    "--tunnel": Meaning("a deploy target reached through an ssh tunnel", r"ssh tunnel"),
+    "--trace": Meaning(
+        "log every query the source is sent", r"every query the (source is sent|fetch sends)"
+    ),
+    "--user": Meaning("the q user", r"user to log in"),
     "--verify-timeout": Meaning("how long the processes have to become ready", r"become ready"),
     "--version": Meaning("print uqs's version", r"uqs's version"),
-    "--yes": Meaning("do not ask", r"ask"),
+    "--yes": Meaning(
+        "do not ask",
+        r"^(do not ask (before|first)|ask nothing|with --\w+: (do not ask|run without asking))",
+    ),
 }
 
 #: A connector's start options, shared by `connector start` and `connector
@@ -606,6 +703,157 @@ def test_one_command_fills_a_missing_hdb_table_and_the_other_runs_it():
     assert LEAVES["data check"].option("--apply") is not None
 
 
+#: Pairs (option, other option) whose leading clauses a registered pattern may
+#: both match, each with why: the two are kin, not one meaning spelt twice.
+PATTERN_KIN: dict[tuple[str, str], str] = {
+    ("--password-env", "--tp-credential-env"): "each names the variable holding a secret - "
+    "the q password, a connector's tickerplant credential (#1853)",
+}
+
+
+def _said(text: str) -> str:
+    """What an option IS: its help up to the first default, aside or sentence."""
+    return re.split(r"[;(]|\. |Default|default:", text, maxsplit=1)[0]
+
+
+def test_rule3_each_meaning_pattern_tells_its_option_apart():
+    """A one-word pattern - `schema`, `release`, `attach` - matched every use
+    of its name whatever it meant, so `data replay --schema FILE` passed as
+    `job new --schema SPEC`'s meaning (#1855). A pattern must state the
+    meaning closely enough that the leading clause of no option with another
+    name matches it: what holds two meanings apart is then the test's, not
+    the reader's."""
+    found = set()
+    uses = _option_uses()
+    for name, meaning in OPTIONS.items():
+        if meaning.pattern is None or name not in uses or "(databento" in meaning.pattern:
+            continue
+        for other, by in uses.items():
+            if other != name and any(
+                re.search(meaning.pattern, _said(t), re.I) for t in by.values()
+            ):
+                found.add((name, other))
+    _hold("rule 3 (a pattern tells its option apart)", found, PATTERN_KIN)
+
+
+def _value_type(param) -> str:
+    """What an option takes: `flag`, `duration`, or its Click type (a range is its type)."""
+    if getattr(param.type, "func", None) in vocabulary.PARSERS:
+        return "duration"
+    return "flag" if param.is_flag else param.type.name.removesuffix(" range")
+
+
+def _option_params() -> dict[str, list]:
+    """option name -> its parameter on each command that takes it."""
+    params: dict[str, list] = {}
+    for cmd in TREE:
+        for param in cmd.options:
+            params.setdefault(_long(param), []).append(param)
+    return params
+
+
+#: Option names whose uses take a value of more than one type, or one value on
+#: one command and many on another -> the issue that gives them one (#1855).
+#: Empty since #1856 and #1857: keep it so.
+RULE3_TYPE_ALLOWLIST: dict[str, str] = {}
+
+#: Names one command takes once and another many times, by what each does with
+#: it - the type is still one. Each says why.
+ONE_OR_MANY = {
+    "--bundle": "job new scaffolds into one bundle; a release or a runtime carries several",
+    "--on-conflict": "contract approve permits several policies; a write uses one",
+    "--proc": "deploy check expects several; a new job runs in one",
+}
+
+
+def test_rule3_one_option_name_has_one_value_type():
+    """`--release` was a release's name on `deploy rollback` and a path on
+    `target adopt`; `--schema` a table's columns on `job new` and a file on
+    `data replay` (#1855). A name takes one type of value everywhere, and the
+    same number of them."""
+    found = set()
+    for name, uses in _option_params().items():
+        types = {_value_type(p) for p in uses}
+        many = {p.multiple for p in uses}
+        if len(types) > 1 or (len(many) > 1 and name not in ONE_OR_MANY):
+            found.add(name)
+    _hold("rule 3 (one value type)", found, RULE3_TYPE_ALLOWLIST)
+
+
+#: A word in an option's name, or in a positional's metavar, means one thing
+#: wherever it appears (#1855): `--q-target` named a kdb+ version where every
+#: other "target" is a deploy target, and `--torq-runtime` a TorQ artifact
+#: where every other "runtime" is a uqs runtime. A use of the word whose help
+#: does not match the pattern is a second meaning; a None pattern retires it.
+WORDS = {
+    "target": Meaning("a deploy target, from deploy_targets.toml", r"\btargets?\b"),
+    "runtime": Meaning("a uqs runtime: uqf, torq, peachq, ...", r"\buqf\b"),
+    "attach": Meaning("retired: the noun is attachment (--attachment)", None),
+    "stack-id": Meaning("retired: the stack's base port is --base-port", None),
+}
+
+#: (command, option or metavar) -> the issue that renames it
+RULE3_WORD_ALLOWLIST: dict[tuple[str, str], str] = {}
+
+
+def _words(name: str) -> set[str]:
+    """The words of `--q-target` or `TARGET...`, and each pair of them (`stack-id`)."""
+    parts = [w for w in re.split(r"[-_.\s]+", name.lower().strip("-[].")) if w]
+    return {*parts, *("-".join(pair) for pair in zip(parts, parts[1:], strict=False))}
+
+
+def test_rule3_a_word_in_an_option_name_has_one_meaning():
+    found = set()
+    for cmd in TREE:
+        named = [(_long(p), p) for p in cmd.options]
+        named += [(_metavar(p), p) for p in cmd.command.params if p.param_type_name == "argument"]
+        for name, param in named:
+            text = " ".join((getattr(param, "help", "") or "").split())
+            for word in _words(name) & set(WORDS):
+                pattern = WORDS[word].pattern
+                if pattern is None or not re.search(pattern, text, re.I):
+                    found.add((cmd.path, name))
+    _hold("rule 3 (one meaning per word)", found, RULE3_WORD_ALLOWLIST)
+
+
+#: A concept -> the one option name it has (#1855): the stack's base port was
+#: also `job attachment add --stack-id`, and the servers' kdb+ version
+#: `deploy build --q-target`. An option whose help says it IS the concept - in
+#: its first clause, before a default or an aside - is called by its name.
+CONCEPTS = {
+    "--base-port": r"(?<![-<\w])base port\b",
+    "--q-version": r"\bkdb\+ version\b",
+}
+
+#: (command, option) -> the issue that renames it
+RULE3_CONCEPT_ALLOWLIST: dict[tuple[str, str], str] = {}
+
+
+def test_rule3_one_concept_has_one_option_name():
+    found = set()
+    for cmd in TREE:
+        for param in cmd.options:
+            text = " ".join((param.help or "").split())
+            said = _said(text)
+            for name, pattern in CONCEPTS.items():
+                if re.search(pattern, said, re.I) and _long(param) != name:
+                    found.add((cmd.path, _long(param)))
+    _hold("rule 3 (one name per concept)", found, RULE3_CONCEPT_ALLOWLIST)
+
+
+def test_rule3_a_list_kind_is_not_another_nouns_name():
+    """`uqs list overrides` listed process_overrides.csv beside `uqs override
+    list`, the checks a command bypasses (#1855): a kind of the stack's own
+    tables must not share its word with a noun group, which owns that word."""
+    from uqs.cli import lists
+    from uqs.stack import listing
+
+    nouns = {path.split()[-1] for path in GROUPS}
+    kinds = set(listing.LISTABLE_KINDS) - set(lists.MOVED)
+    clash = {k for k in kinds if {k, k.removesuffix("s"), k.removesuffix("es")} & nouns}
+    assert not clash, f"`uqs list` kinds named like a noun group: {sorted(clash)}"
+
+
 # ------------------------------------------------------ rule 5: uniform flags
 
 REPORTS, CONFIRMS, CHANGES = "reports", "confirms", "changes"
@@ -620,21 +868,20 @@ BY_EFFECT = {
     safety.Effect.CHANGES_STATE: CHANGES,
 }
 
-#: The third kind, which no Effect states: a command whose output belongs to
-#: something else, so --json and --dry-run do not apply. Each says why.
-OWN_OUTPUT = {
-    "exec": "passes any verb through to torq.sh",
-    "job attachment contract export": "prints the contract, a document another machine approves",
-    "setup odbc env": "prints shell exports, for eval",
-    "target shell": "opens an interactive shell on the server",
-}
 
-#: Changes-state commands that report and take no --dry-run, with why: rule 5a
-#: holds them, 5b does not.
-NO_DRY_RUN = {
-    "query": "runs any q on a process - so it may change it, which is its Effect - and "
-    "what it changes is the expression's: there is nothing to check without running it",
-}
+#: The third kind, which no Effect states: a command whose output belongs to
+#: something else, so --json and --dry-run do not apply - declared where the
+#: command is, `safety.marked(..., own_output=WHY)` (#1893).
+def _marked(trait: str) -> dict[str, str]:
+    """{leaf: what it says} for every leaf `safety.marked` gave `trait`."""
+    return {p: trait_of(c.command, trait) for p, c in LEAVES.items() if trait_of(c.command, trait)}
+
+
+OWN_OUTPUT = _marked("own_output")
+
+#: Changes-state commands that report and take no --dry-run, each marked
+#: `safety.marked(..., no_dry_run=WHY)`: rule 5a holds them, 5b does not.
+NO_DRY_RUN = _marked("no_dry_run")
 
 
 def _kind(path: str) -> str | None:
@@ -689,14 +936,32 @@ def _flag(cmd: Cmd, long: str, short: str | None = None) -> bool:
 
 
 def test_rule5_every_leaf_is_classified():
-    """Every leaf has a kind - its Effect, or a row of the third kind - and
-    every hand-kept row names a leaf of the kind it claims to except."""
+    """Every leaf has a kind - its Effect, or the third kind - and every
+    no_dry_run mark is on a command that changes state."""
     unmarked = sorted(p for p in LEAVES if _kind(p) is None)
     assert not unmarked, f"no Effect on: {unmarked} - give each its cls= from cli/safety.py"
-    gone = sorted((set(OWN_OUTPUT) | set(NO_DRY_RUN)) - set(LEAVES))
-    assert not gone, f"no such command any more - delete its row: {gone}"
     stale = sorted(p for p in NO_DRY_RUN if BY_EFFECT.get(effect_of(LEAVES[p].command)) != CHANGES)
-    assert not stale, f"NO_DRY_RUN rows that no longer change state - delete them: {stale}"
+    assert not stale, f"no_dry_run marks on commands that do not change state: {stale}"
+
+
+def test_rule5_the_marks_beyond_an_effect_are_declared_where_their_command_is():
+    """#1893: which commands own their output, report without a dry run, start
+    a process even in a dry run, or act under an option are marks on the
+    commands (`safety.marked`), which `uqs --target` reads too - so a new
+    command with one of these properties cannot skip being confirmed."""
+    assert set(OWN_OUTPUT) == {"exec", "job attachment contract export", "setup odbc env",
+                               "target shell"}  # fmt: skip
+    assert set(NO_DRY_RUN) == {"query"}
+    starts = set(_marked("dry_run_starts"))
+    assert starts == {"job backfill"}
+    for path in starts:
+        assert changes_the_server([*path.split(), "w", "--dry-run"]) is True, path
+    acting = _marked("acts_when")
+    assert acting == {"status": "--interactive"}
+    for path, option in acting.items():
+        assert LEAVES[path].option(option) is not None, (path, option)
+        assert changes_the_server([*path.split(), option]) is True, path
+        assert changes_the_server(path.split()) is False, path
 
 
 def test_rule5a_every_reporting_command_has_json():
@@ -707,6 +972,27 @@ def test_rule5a_every_reporting_command_has_json():
         if (_kind(p) in (REPORTS, CONFIRMS) or p in NO_DRY_RUN) and not _flag(c, "--json")
     }
     _hold("rule 5a", found, RULE5A_ALLOWLIST)
+
+
+#: `--json` commands that print a JSON object a line rather than one document,
+#: with why (#1859).
+
+
+def test_rule5a_every_json_help_is_the_one_phrasing():
+    """Ten phrasings of `--json` across 36 commands (#1859): every one is
+    `json_out.JSON_HELP`, then the document's shape, then a note on when it
+    applies - one help, built by `json_opt` or led by JSON_HELP."""
+    from uqs.cli.json_out import JSON_HELP
+
+    found = {}
+    for path, cmd in LEAVES.items():
+        param = cmd.option("--json")
+        if param is None:
+            continue
+        text = " ".join((param.help or "").split())
+        if text != JSON_HELP and not text.startswith((f"{JSON_HELP}:", f"{JSON_HELP}.")):
+            found[path] = text
+    assert not found, f"--json helps in another phrasing: {found}"
 
 
 def test_rule5b_dry_run_n_exactly_on_what_changes_state():
@@ -862,6 +1148,225 @@ def test_rule5d_every_override_is_named_where_uqs_override_list_finds_it():
     assert all(c.option("--reason") is not None for c in TREE if c.path in taking)
 
 
+# ------------------------------------- help derived from its authority (#1893)
+
+
+def _choices_of(param) -> tuple[str, ...] | None:
+    """The fixed values `param` takes: its Choice's, or those of the
+    `completion.choices(...)` completer it carries; None for a free value."""
+    if hasattr(param.type, "choices"):
+        return tuple(str(c) for c in param.type.choices)
+    completer = getattr(param, "_custom_shell_complete", None)
+    for cell in getattr(completer, "__closure__", None) or ():  # typer wraps the completer
+        values = getattr(cell.cell_contents, "choice_values", None)
+        if values is not None:
+            return tuple(values)
+    return None
+
+
+def _names(value: str, text: str) -> bool:
+    return re.search(rf"(?<![\w-]){re.escape(value)}(?![\w-])", text) is not None
+
+
+def _params(cmd: Cmd) -> list:
+    return [p for p in cmd.command.params if not getattr(p, "hidden", False)]
+
+
+def _param(path: str, name: str):
+    """The option `name` (`--kind`), or the argument whose name is `name`, of `path`."""
+    cmd = LEAVES[path]
+    return next(p for p in _params(cmd) if name in (*p.opts, p.name))
+
+
+def _authorities() -> dict[tuple[str, str], tuple[str, ...]]:
+    """(command, option) -> the tuple that declares the values it takes: the
+    option's choices and its help are both held to it."""
+    from uqs.attach import config, receiver_contract
+    from uqs.cli.external import FEEDS
+    from uqs.deploy import components, portable
+    from uqs.generated import q_facts
+    from uqs.model.kinds import SCAFFOLD_KINDS
+    from uqs.scaffold import transform
+    from uqs.stack import multitail, render, run_modes
+
+    out = {
+        ("job backfill", "--on-conflict"): q_facts.IO_STRATEGIES,
+        ("job attachment contract approve", "--on-conflict"): receiver_contract.STRATEGIES,
+        ("job backfill", "--mode"): run_modes.MODE_OPTION_MODES,
+        ("job new", "--kind"): SCAFFOLD_KINDS,
+        ("job new", "--transform"): transform.MODES,
+        ("query", "--render"): render.RENDERERS,
+        ("logs", "--stream"): tuple(multitail.MULTITAIL_STREAMS),
+        ("deploy build", "--q-version"): portable.Q_TARGETS,
+        ("job attachment add", "--schema-writer"): tuple(config.SCHEMA_WRITERS),
+        ("start", "--level"): q_facts.LOG_LEVELS,
+        ("restart", "--level"): q_facts.LOG_LEVELS,
+        ("logs", "--level"): q_facts.LOG_LEVELS,
+    }
+    for component in components.COMPONENTS:
+        out[("deploy push", f"--{component}-mode")] = components.MODES
+    for verb in ("start", "stop", "restart", "status", "logs"):
+        out[(f"connector {verb}", "name")] = tuple(FEEDS)
+    return out
+
+
+def test_an_option_with_fixed_values_takes_its_authoritys():
+    """#1893: each option's values are its declaring source's - q's strategies
+    and modes, the scaffold kinds, the renderers - not a copy beside them."""
+    for (path, name), authority in _authorities().items():
+        assert _choices_of(_param(path, name)) == tuple(authority), (path, name)
+
+
+def test_help_naming_fixed_values_names_every_one():
+    """An option that takes a fixed set of values names every one in its help,
+    so a value its source adds is shown the day it is accepted. `--sort` takes
+    a column name, which the listing's own header shows."""
+    found = set()
+    for cmd in TREE:
+        for param in _params(cmd):
+            values = _choices_of(param)
+            if values is None or "--sort" in param.opts:
+                continue
+            if missing := [v for v in values if not _names(v, param.help or "")]:
+                found.add((cmd.path, param.opts[0] if param.opts else param.name, *missing))
+    assert not found, sorted(found)
+
+
+#: A digit-led default in an option's help - "default 120", "default: 1D".
+_STATED_DEFAULT = re.compile(r"\bdefault:?\s+(\d[\w.]*)", re.IGNORECASE)
+
+
+def _defaults() -> dict[tuple[str, str], object]:
+    """(command, option) -> the authority for a default its help states where
+    the option's own default is not it: one a feed, a target or the scaffold
+    applies when the option is not given."""
+    from uqs.cli.external import FEEDS
+    from uqs.deploy import config
+    from uqs.scaffold import worker
+
+    out: dict[tuple[str, str], object] = {("job new", "--width"): worker.DEFAULT_WIDTH}
+    for command in ("deploy push", "deploy rollback", "deploy prune"):
+        out[(command, "--command-timeout")] = config.DEFAULT_COMMAND_TIMEOUT
+    for command in ("deploy push", "deploy rollback"):
+        out[(command, "--verify-timeout")] = config.DEFAULT_VERIFY_TIMEOUT
+    for verb in ("start", "restart"):
+        for feed in FEEDS.values():
+            for option in feed.options:
+                if option.default is not None and not option.secret:
+                    out[(f"connector {verb}", option.flag)] = option.default
+    return out
+
+
+def _rendered(value: object) -> str:
+    return f"{value:g}" if isinstance(value, float) else str(value)
+
+
+def test_a_default_stated_in_help_is_the_one_applied():
+    """#1893: a default a help states is the option's own, or the value its
+    authority applies when it is not given - never a number typed beside it."""
+    authorities, found = _defaults(), set()
+    for cmd in TREE:
+        for param in _params(cmd):
+            name = param.opts[0] if param.opts else param.name
+            for stated in _STATED_DEFAULT.findall(param.help or ""):
+                applied = authorities.get((cmd.path, name), param.default)
+                # a DURATION states its seconds with their unit: "default 180s"
+                if stated not in (_rendered(applied), f"{_rendered(applied)}s"):
+                    found.add((cmd.path, name, stated, _rendered(applied)))
+    assert not found, f"(command, option, stated, applied): {sorted(found)}"
+
+
+def test_a_default_authority_names_a_live_option():
+    gone = {k for k in _defaults() if k[0] not in LEAVES or LEAVES[k[0]].option(k[1]) is None}
+    assert not gone, gone
+
+
+def test_job_new_kind_tags_are_shapes():
+    """#1893: the "(backfill)" ending a `job new` option's help is rendered from
+    create_kinds.SHAPES, the table that refuses the option on any other kind;
+    every SHAPES row is an option `job new` has, and so checks."""
+    from uqs.cli.create_kinds import SHAPES, for_kinds
+    from uqs.model.kinds import SCAFFOLD_KINDS
+
+    cmd = LEAVES["job new"]
+    for option, kinds in SHAPES.items():
+        param = cmd.option(option)
+        assert param is not None, f"SHAPES names {option}, which `job new` does not take"
+        assert param.help.endswith(for_kinds(option)), (option, param.help)
+        assert set(kinds) <= set(SCAFFOLD_KINDS), (option, kinds)
+    tag = re.compile(rf"\((?:(?:{'|'.join(SCAFFOLD_KINDS)})(?:, )?)+\)$")
+    untagged = [p for p in cmd.options if _long(p) not in SHAPES and tag.search(p.help or "")]
+    assert not untagged, [_long(p) for p in untagged]
+
+
+def test_job_new_refuses_a_misplaced_option_it_was_never_told_about(monkeypatch):
+    """`used` is read from Click, so every SHAPES row is checked: a backfill
+    given --publishes was scaffolded with it dropped (#1893)."""
+    from typer.testing import CliRunner
+
+    from uqs.cli import create
+
+    refused: list[str] = []
+
+    def record(exc: Exception) -> None:
+        refused.append(str(exc))
+        raise SystemExit(1)
+
+    monkeypatch.setattr(create, "_die", record)
+    argv = ["job", "new", "x", "--kind", "backfill", "--publishes", "t", "--dry-run"]
+    CliRunner().invoke(app, argv)
+    assert refused == ["--publishes does not apply to --kind backfill"]
+
+
+def test_status_presets_are_one_table():
+    """#1893: `status --columns`'s presets - resolved, completed, refused and
+    described - are summary_columns.SUMMARY_PRESETS, so the help says what each shows."""
+    from uqs.cli import completion
+    from uqs.cli.summary_columns import SUMMARY_PRESETS, resolve_columns
+    from uqs.stack.listing import SUMMARY_ALL_COLUMNS
+
+    help_ = LEAVES["status"].option("--columns").help
+    for name, columns in SUMMARY_PRESETS.items():
+        assert resolve_columns(name) == list(columns)
+        assert f"`{name}`" in help_ and name in completion.summary_columns("")
+        if columns != SUMMARY_ALL_COLUMNS:
+            assert ", ".join(columns) in help_, name
+
+
+def test_connector_help_is_rendered_from_each_option():
+    """#1893: a connector option's default and variable are its FeedOption's,
+    rendered by it - never retyped into its help."""
+    from uqs.cli.external import FEEDS
+
+    for feed in FEEDS.values():
+        for option in feed.options:
+            if option.env:
+                assert f"${option.env}" not in option.help, option.flag
+            if option.default is not None and not option.secret:
+                assert f"default {option.default}" not in option.help, option.flag
+            param = LEAVES["connector start"].option(
+                option.flag + ("-env" if option.secret else "")
+            )
+            assert option.described in param.help, option.flag
+
+
+def test_mode_notes_describe_every_mode():
+    from uqs.stack import run_modes
+
+    assert set(run_modes.NOTES) == set(run_modes.MODES)
+    assert run_modes.DEFAULT_MODE in run_modes.MODES
+
+
+def test_the_receivers_row_limit_is_the_contracts():
+    """scripts/dev/remote_receiver.q's `-max_rows` default is the contract's
+    DEFAULT_MAX_ROWS (#1893): the q receiver cannot import it, so it is held."""
+    from uqs.attach.receiver_contract import DEFAULT_MAX_ROWS
+
+    script = (GUIDE.parents[2] / "scripts" / "dev" / "remote_receiver.q").read_text()
+    assert re.search(rf'"J"\$first o`max_rows; {DEFAULT_MAX_ROWS}\]', script)
+    assert f"(default {DEFAULT_MAX_ROWS})" in script
+
+
 # ------------------------------------------------------------- the lists
 
 
@@ -870,6 +1375,9 @@ def test_rule5d_every_override_is_named_where_uqs_override_list_finds_it():
     [
         RULE1_ALLOWLIST,
         RULE3_ALLOWLIST,
+        RULE3_TYPE_ALLOWLIST,
+        RULE3_WORD_ALLOWLIST,
+        RULE3_CONCEPT_ALLOWLIST,
         RULE4_ALLOWLIST,
         RULE4_MISUSED,
         RULE5A_ALLOWLIST,

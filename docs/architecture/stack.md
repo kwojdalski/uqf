@@ -2,8 +2,8 @@
 
 Diagrams for the running state of the uqf stack (see
 [docs/guides/uqs.md](../guides/uqs.md) for how to actually start/stop/query it).
-Reflects what `uqs list processes` shows today: the vendored 23-process stack
-plus uqf's own additions (`fxfeed1`, `fxorderbookfeed1`, `widefeed1`, `cross1`,
+Reflects what `uqs process list` shows today: the vendored 23-process stack plus
+uqf's own additions (`fxfeed1`, `fxorderbookfeed1`, `widefeed1`, `cross1`,
 `vectorize1`, `tap1`, `fxtradesfeed1`, `posbook1`, `demo_markout1`,
 `kafka_feed1`, `kafka_flow1`, `cryptomock1`, `executions1`, `fxordersfeed1`,
 `fxpositions1`, `marketdata1`, `superbook1`, `arbitrage1`, `crossarb1`,
@@ -23,7 +23,7 @@ is tied to one outside system: `databento1` and `databento_backfill1`
 (`sidecars/databento`), `crypto_book_decoder1` and
 `crypto_market_data_backfill1` (`sidecars/cryptorust`), and `flink_vwap1`
 (`sidecars/flink`). They keep their ports (the port lock is append-only), but
-`uqs list processes` shows them only once `uqs job install sidecars/<name>` has
+`uqs process list` shows them only once `uqs job install sidecars/<name>` has
 run, and no profile starts them.
 
 Direct FX arbitrage flows through `marketdata1` (`quote`, `fx_orderbook` and
@@ -56,8 +56,8 @@ that a backfill neither publishes to the tickerplant nor subscribes --- it reads
 an external source and writes its target table directly --- so drawing one would
 put an edge where there is none. True, but their absence read as an omission
 rather than as a fact: a reader counting processes found eleven in
-`uqs list processes` and nine in the picture. They now sit in their own band,
-with no edge and with the reason written on the box.
+`uqs process list` and nine in the picture. They now sit in their own band, with
+no edge and with the reason written on the box.
 
 They are declared processes so that **starting one wires it to discovery**: TorQ
 registers a declared process at startup, so a running backfill is visible in

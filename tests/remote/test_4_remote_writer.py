@@ -1,6 +1,6 @@
 """#1650: a backfill extracted on uat-client and written by the stack's own receiver.
 
-The receiver runs on uat-stack (`uqs job receive`), the extractor on uat-client
+The receiver runs on uat-stack (`uqs job receiver start`), the extractor on uat-client
 (`uqs job backfill --writer uat-stack:PORT`), both under the attachment of the
 same name. The rows must end up in the STACK's HDB - counted off uat-stack's
 disk - coverage must be filed on the client, a rerun must write nothing, and the
@@ -60,13 +60,13 @@ def receiving(world: World) -> World:
         "contract",
         "approve",
         "/tmp/remote_trades.contract.json",
-        "--attach",
+        "--attachment",
         "feed-uat",
     )
     assert code == 0, approved
     world.contract = approved["contract"]["identity"]
     started = world.stack.uqs(
-        "job", "receive", "--contract", world.contract, "--attach", "feed-uat",
+        "job", "receive", "--contract", world.contract, "--attachment", "feed-uat",
         "--port", str(world.receiver_port),
     )  # fmt: skip
     assert started.returncode == 0, started.stdout + started.stderr
@@ -75,7 +75,7 @@ def receiving(world: World) -> World:
 
 def backfill(world: World):
     return world.client.uqs(
-        "job", "backfill", WORKER, "--attach", "feed-uat",
+        "job", "backfill", WORKER, "--attachment", "feed-uat",
         "--writer", f"uat-stack:{world.receiver_port}",
         "--from", DAY, "--to", NEXT, "--version", "remote-lane-v1", "--wait",
         env={"UQF_SOURCE_CRED_REMOTE_TRADES": "42"}, timeout=600,

@@ -26,16 +26,14 @@ from collections.abc import Callable
 from typing import Annotated
 
 import typer
-from rich.table import Table
 
 from uqs.cli import safety
-from uqs.cli.deploy import deploy_app
 from uqs.cli.json_out import emit, json_opt
-from uqs.cli.safety import ChangesState, ReadOnly, dry_run_note
+from uqs.cli.safety import ChangesState, Effect, ReadOnly, dry_run_note, marked
 from uqs.cli.shared import _die, app, console, log
 from uqs.cli.skip_options import forwarded
 from uqs.cli.target_confirm import changes_the_server, confirmed_on_server
-from uqs.deploy import control, history, target_changelog, target_changes, target_file
+from uqs.deploy import control, target_changelog, target_changes, target_file
 from uqs.deploy.config import DeployError
 from uqs.paths import UqsError, UqsUsageError, repo_root
 
@@ -248,7 +246,7 @@ def rename(
     )
 
 
-CheckJson = json_opt('{"ok": true, "target", "host", "dest", "remote_user", "release"}')
+CheckJson = json_opt('{"ok": true, "target", "ssh", "dest", "remote_user", "release"}')
 
 
 @target_app.command("check", cls=ReadOnly)
@@ -263,14 +261,17 @@ def check(name: Name, as_json: CheckJson = False) -> None:
         return
     if as_json:
         emit({
-            "ok": True, "target": r.name, "host": r.host, "dest": r.dest,
+            "ok": True, "target": r.name, "ssh": r.host, "dest": r.dest,
             "remote_user": r.remote_user, "release": release,
         })  # fmt: skip
         return
     console.print(f"[green]✓[/] {r.name} ({r.describe()}) runs release {release}")
 
 
-@target_app.command("shell", cls=ChangesState)
+@target_app.command(
+    "shell",
+    cls=marked(Effect.CHANGES_STATE, own_output="opens an interactive shell on the server"),
+)
 def shell(
     name: Annotated[
         str | None,
@@ -290,74 +291,6 @@ def shell(
     raise typer.Exit(code=code)
 
 
-HistoryJson = json_opt(
-    '{"deployments": [{default: bool, at, target, host, dest, release, profile, status, '
-    "stage}]}, newest first"
-)
-
-
-@deploy_app.command("history", cls=ReadOnly)
-def deploy_history(
-    target: Annotated[
-        str | None,
-        typer.Argument(
-            metavar="TARGET",
-            help="Only this target, or server (host, with or without user@)",
-            show_default=False,
-        ),
-    ] = None,
-    limit: Annotated[int, typer.Option("--limit", help="Most recent N")] = 20,
-    as_json: HistoryJson = False,
-) -> None:
-    """Show deployment history recorded on this machine, newest first.
-
-    Every `uqs deploy push` made from THIS machine - not what a server has
-    installed (`uqs deploy status`) nor the declared servers (`uqs list
-    targets`). `*` marks each server's default: its latest successful
-    deployment, which `uqs --target <server>` and `uqs target shell` use."""
-    root = repo_root()
-    try:
-        entries = history.read(root)
-    except DeployError as exc:
-        _die(UqsError(str(exc)))
-        return
-    defaults = history.defaults(root)
-    rows = [
-        (i, e)
-        for i, e in enumerate(entries)
-        if target is None
-        or target in (e.get("target"), e.get("host"), history.server_of(str(e.get("host"))))
-    ]
-    if as_json:
-        keys = ("at", "target", "host", "dest", "release", "profile", "status", "stage")
-        emit({
-            "deployments": [
-                {"default": i in defaults, **{k: e.get(k) for k in keys}}
-                for i, e in reversed(rows[-limit:])
-            ]
-        })  # fmt: skip
-        return
-    if not rows:
-        console.print(f"no deployments recorded in {history.history_path(root)}")
-        return
-    table = Table("", "when", "target", "server", "dest", "release", "profile", "status")
-    for i, e in reversed(rows[-limit:]):
-        status = str(e.get("status"))
-        if status == "failed":
-            status = f"[red]failed[/] at {e.get('stage')}"
-        table.add_row(
-            "*" if i in defaults else "",
-            str(e.get("at", "")),
-            str(e.get("target") or ""),
-            str(e.get("host", "")),
-            str(e.get("dest", "")),
-            str(e.get("release", "")),
-            str(e.get("profile") or ""),
-            status,
-        )
-    console.print(table)
-
-
 def forward(name: str, yes: bool, args: list[str], *, interactive: bool) -> int:
     """`uqs --target NAME <args>`: run args on the target's release, after
     asking - or `--yes` - when they may change the server."""
@@ -371,11 +304,11 @@ def forward(name: str, yes: bool, args: list[str], *, interactive: bool) -> int:
             "`uqs target list` lists this machine's targets - run it without --target"
         )
     tunnel = ("--tunnel", "--target")  # --target: query's old spelling (#1729)
-    if words[:1] == ("query",) and any(a.partition("=")[0] in tunnel for a in args):
-        # Each names a different machine to run the query on (#1561).
+    if words[:1] in (("query",), ("schema",)) and any(a.partition("=")[0] in tunnel for a in args):
+        # Each names a different machine to run the query on (#1561, #1858).
         raise UqsError(
-            "give the target once: `uqs --target NAME query` runs the query on the server, "
-            "`uqs query --tunnel NAME` runs it here through an ssh tunnel"
+            f"give the target once: `uqs --target NAME {words[0]}` runs it on the server, "
+            f"`uqs {words[0]} --tunnel NAME` runs it here through an ssh tunnel"
         )
     # a --skip-<id> goes as its --override, which an older server's uqs takes (#1826)
     args = confirmed_on_server(forwarded(args), yes)

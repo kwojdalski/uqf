@@ -20,12 +20,14 @@ log = get_logger()
 
 #: Which of a process's two log files `multitail` opens.
 MULTITAIL_STREAMS = {"out": ("out",), "err": ("err",), "both": ("out", "err")}
+#: The panes `--stream` opens when it is not given.
+DEFAULT_STREAM = "both"
 
 
 def multitail_command(
     paths: UqsPaths,
     procs: str = "all",
-    stream: str = "both",
+    stream: str = DEFAULT_STREAM,
     columns: int = 1,
     lines: int = 20,
 ) -> list[str]:

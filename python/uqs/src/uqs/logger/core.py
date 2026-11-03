@@ -20,6 +20,9 @@ from loguru import logger
 
 from uqs.logger.floats import CutFloatsLogger
 
+#: The variable that sets the log level - read by uqs's CLI and by trace_calls.
+LOG_LEVEL_ENV = "LOG_LEVEL"
+
 if TYPE_CHECKING:
     # loguru declares Record in its stub but does not export it at runtime,
     # so this import has to be type-checking-only. Annotating the filter
@@ -226,7 +229,7 @@ def setup_logging(
     The console sink writes to `stream`, or to stderr when it is None - with
     --json or without (#1881). A log line is never a command's data: stdout
     carries only what the command prints through its console or
-    json_out.emit, so `uqs list processes > f` holds the list,
+    json_out.emit, so `uqs process list > f` holds the list,
     `$(uqs config show ...)` the config, and `2>/dev/null` silences the log.
     It used to be stdout outside --json (#1685 moved only --json's). Read at
     call time, so a test that swaps sys.stderr is honoured."""

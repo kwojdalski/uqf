@@ -54,6 +54,13 @@ PERSIST_MODES = ("schema-file", "remote-schema-file", "runtime-only")
 DURABLE = ("schema-file", "remote-schema-file")
 #: `--schema-writer` -> the persist mode it chooses, and back.
 SCHEMA_WRITERS = {"cli": "schema-file", "tickerplant": "remote-schema-file"}
+#: The writer when neither --schema-writer nor a saved attachment chooses one.
+DEFAULT_SCHEMA_WRITER = "cli"
+#: Who each writer is, for `--schema-writer`'s help.
+SCHEMA_WRITER_NOTES = {
+    "cli": "uqs, on this machine, which must be the stack's",
+    "tickerplant": "the tickerplant, to its own file, for a stack on another machine",
+}
 #: The credential TorQ's starter pack ships (accesslist.txt). Used when no
 #: password variable is configured, and said so in every plan.
 DEFAULT_USER = "admin"
@@ -86,7 +93,7 @@ class Stack:
     consumers: tuple[str, ...] = ()
     user: str = DEFAULT_USER
     password_env: str = ""
-    #: where `uqs data check/alter --attach` ssh to, to reach the HDB's files
+    #: where `uqs data check/alter --attachment` ssh to, to reach the HDB's files
     #: ("" = `host`, as the current user; this machine when `host` is it)
     ssh: str = ""
 
@@ -244,7 +251,7 @@ def load(name: str, root: Path | None = None) -> Attachment:
     if not path.is_file():
         raise AttachmentError(
             f"no attachment {name!r} (looked in {path.parent}) - "
-            f"`uqs job attachment add {name} --job JOB --stack-id PORT` creates one"
+            f"`uqs job attachment add {name} --job JOB --base-port PORT` creates one"
         )
     try:
         return from_json(json.loads(path.read_text()))

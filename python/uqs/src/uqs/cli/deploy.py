@@ -26,7 +26,17 @@ from uqs.cli.renames import renamed
 from uqs.cli.safety import ChangesState, DryRunOpt, OverrideOpt, ReasonOpt
 from uqs.cli.shared import EXIT_REFUSED, EXIT_USAGE, app, json_refusal
 from uqs.deploy import build as release_build
-from uqs.deploy import config, driver, frontend, history, kafka, overrides, portable, targets
+from uqs.deploy import (
+    config,
+    driver,
+    frontend,
+    history,
+    kafka,
+    overrides,
+    portable,
+    target_keys,
+    targets,
+)
 from uqs.deploy.artifact import PLATFORMS, ReleaseError
 from uqs.deploy.remote import Remote
 from uqs.logger import get_logger
@@ -58,10 +68,14 @@ def _failed(prefix: str, stage: str, exc: Exception) -> None:
 
 #: `--output` is a FILE, as `contract export -o` writes one; a directory is
 #: `--output-dir` (#1857).
-@deploy_app.command(
-    "build",
-    cls=renamed({"--output": "--output-dir", **policy.BUILD_OLD_SPELLINGS}, ChangesState),
-)
+_BUILD_RENAMES = {
+    "--output": "--output-dir",
+    **policy.BUILD_OLD_SPELLINGS,
+    **components.BUILD_OLD_SPELLINGS,
+}
+
+
+@deploy_app.command("build", cls=renamed(_BUILD_RENAMES, ChangesState))
 def build(
     output: Annotated[
         Path | None,
@@ -88,20 +102,13 @@ def build(
         ),
     ] = None,
     dry_run: dry.BuildDryRun = False,
-    q_target: Annotated[
-        str | None,
-        typer.Option(
-            "--q-target",
-            help="Convert the release's q for this kdb+ - 4.0 has no nested contexts. "
-            "Only the artifact changes, never the checkout",
-        ),
-    ] = None,
+    q_target: components.ConvertFor = None,
     q_exclude: Annotated[
         list[str] | None,
         typer.Option(
             "--q-exclude",
             metavar="PATTERN",
-            help="With --q-target: a folder, file or glob to ship as written; repeatable",
+            help="With --q-version: a folder, file or glob to ship as written; repeatable",
         ),
     ] = None,
     override: OverrideOpt = None,
@@ -160,12 +167,15 @@ def build(
     print(artifact.path)
 
 
-@deploy_app.command(
-    "push",
-    cls=renamed(
-        policy.OLD_SPELLINGS | conn.OLD_SPELLINGS | components.OLD_Q_SPELLINGS, ChangesState
-    ),
+_PUSH_RENAMES = (
+    policy.OLD_SPELLINGS
+    | conn.OLD_SPELLINGS
+    | components.OLD_Q_SPELLINGS
+    | components.OLD_SPELLINGS
 )
+
+
+@deploy_app.command("push", cls=renamed(_PUSH_RENAMES, ChangesState))
 def push(
     ctx: typer.Context,
     artifact: Annotated[
@@ -179,7 +189,7 @@ def push(
         list[str] | None,
         typer.Argument(
             metavar="TARGET...",
-            help="Targets in deploy_targets.toml (or $UQS_DEPLOY_TARGETS), deployed in "
+            help=f"Targets in {targets.DECLARATION} (or ${targets.DECLARATION_ENV}), deployed in "
             "order, stopping at the first failure; a flag given here wins over a target's "
             "value. None: --ssh, --dest and --profile say it all",
             show_default=False,
@@ -345,7 +355,8 @@ def push(
             for name in ("host", "dest", "profile"):
                 if options[name] is None:
                     raise config.DeployError(
-                        "arguments", f"{config.flag(name)} is required, or a TARGET after ARTIFACT"
+                        "arguments",
+                        f"{target_keys.flag(name)} is required, or a TARGET after ARTIFACT",
                     )
             # an option left unset (None) takes make_config's default
             cfgs = [config.make_config(**{k: v for k, v in options.items() if v is not None})]

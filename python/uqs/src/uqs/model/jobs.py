@@ -1,6 +1,6 @@
 """Every ETL job the tree declares, as rows: what `uqs job list` shows.
 
-The process table (`uqs list processes`) answers "what runs where"; this
+The process table (`uqs process list`) answers "what runs where"; this
 answers "what jobs are there": each streaming job, normalizer and bounded
 worker, read from its own q declaration - the same files the process
 registry is built from, so the two cannot disagree about which jobs exist -
@@ -15,8 +15,11 @@ It is the list `uqs job remove` will act on without --override even-if-edited.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
+from uqs.cells import Shown
 from uqs.model.declarations import declaration_calls, reaction_calls, read_file_text, symbols
+from uqs.model.kinds import LISTED_KIND, REACTION
 from uqs.model.pipeline import PipelineKind
 from uqs.model.producers import BOUNDED, processes_by_table
 from uqs.paths import REACTION_DIR, STREAM_DIR, WORKER_DIR
@@ -43,29 +46,33 @@ def bounded_producers(repo_root: Path) -> dict[str, list[str]]:
     return {t: list(ps) for t, ps in processes_by_table(repo_root, frozenset({BOUNDED})).items()}
 
 
-def job_rows(repo_root: Path) -> list[dict[str, str]]:
+def job_rows(repo_root: Path) -> list[dict[str, Any]]:
     """One row per declared job, streaming jobs first, then bounded workers,
     then reactions, each directory in filename order - the order src/etl/init.q
-    loads them in."""
+    loads them in. `reads` and `writes` are lists of names (uqs.cells: a
+    worker's table says "source x" and "dataset [partition]")."""
     rows = []
     for directory in (STREAM_DIR, WORKER_DIR):
         for path in sorted((repo_root / directory).glob("*.q")):
             text = path.read_text()
             rel = path.relative_to(repo_root)
             calls = declaration_calls(text)
-            for decl, (_, _, fields) in zip(read_file_text(text, rel), calls, strict=True):
+            for decl, (verb, _, fields) in zip(read_file_text(text, rel), calls, strict=True):
                 if decl.kind is PipelineKind.BACKFILL:
-                    reads = ", ".join(f"source {s}" for s in symbols(fields.get("source", "")))
+                    sources = symbols(fields.get("source", ""))
+                    reads = Shown(sources, ", ".join(f"source {s}" for s in sources))
                     part = symbols(fields.get("partition", ""))
-                    writes = ", ".join(symbols(fields.get("dataset", "")))
-                    writes += f" [{part[0]}]" if part else ""
+                    datasets = symbols(fields.get("dataset", ""))
+                    shown = ", ".join(datasets) + (f" [{part[0]}]" if part else "")
+                    writes = Shown(datasets, shown)
                 else:
-                    reads = ", ".join(decl.subscribe_to)
-                    writes = ", ".join(decl.publishes)
+                    reads = list(decl.subscribe_to)
+                    writes = list(decl.publishes)
                 rows.append(
                     {
                         "job": decl.name,
-                        "kind": str(decl.kind),
+                        "kind": LISTED_KIND[verb.lstrip(".")],
+                        "subscribes": bool(decl.subscribe_to),
                         "procname": decl.procname,
                         "reads": reads,
                         "writes": writes,
@@ -81,11 +88,12 @@ def job_rows(repo_root: Path) -> list[dict[str, str]]:
             rows.append(
                 {
                     "job": r.name,
-                    "kind": "reaction",
+                    "kind": REACTION,
+                    "subscribes": False,
                     # No process of its own: it runs in whichever publishes.
-                    "procname": ", ".join(producers.get(r.dataset, [])) or "-",
-                    "reads": r.dataset,
-                    "writes": ", ".join(r.writes),
+                    "procname": ", ".join(producers.get(r.dataset, [])) or Shown(None, "-"),
+                    "reads": [r.dataset],
+                    "writes": list(r.writes),
                     "starts": "triggered",
                     "state": "scaffolded" if SCAFFOLD_MARKER in text else "written",
                     "file": str(path.relative_to(repo_root)),

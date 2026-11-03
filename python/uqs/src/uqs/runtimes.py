@@ -54,7 +54,7 @@ class Runtime:
     #: The subset is derived, never listed, so a dependency added to a job
     #: joins every runtime that includes the job (#760).
     profile: str | None = None
-    #: The profiles `--profile` takes, and `uqs list profiles` shows, on this
+    #: The profiles `--profile` takes, and `uqs profile list` shows, on this
     #: runtime. Declared, not filtered from uqf's (#765): a profile listed
     #: here that names a process the runtime lacks fails test_profiles,
     #: rather than an operator's start.

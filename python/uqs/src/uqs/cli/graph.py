@@ -23,6 +23,7 @@ from rich.console import Group
 from rich.text import Text
 from rich.tree import Tree
 
+from uqs.cells import cell
 from uqs.cli import completion
 from uqs.cli.json_out import emit, json_opt
 from uqs.cli.pipelines import needs_pipelines
@@ -116,14 +117,14 @@ def live_status(port: int | None) -> dict[str, str]:
 
 
 def describe(name: str, info: dict[str, dict[str, str]], status: dict[str, str]) -> Text:
-    """The side panel for one process: what `uqs list processes` knows, and its status."""
+    """The side panel for one process: what `uqs process list` knows, and its status."""
     if name.startswith("("):
         return Text(f"{name}\n\nProduced outside the stack - nothing here to start.")
     row = info.get(name, {})
     text = Text(name + "\n\n", style="bold")
     fields = [("status", status.get(name, "not asked"))]
     fields += [
-        (k, row.get(k, "")) for k in ("proctype", "port", "startwithall", "inputs", "outputs")
+        (k, cell(row.get(k))) for k in ("proctype", "port", "startwithall", "inputs", "outputs")
     ]
     for key, value in fields:
         text.append(f"{key:<13}", style="dim")

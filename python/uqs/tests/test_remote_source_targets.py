@@ -57,11 +57,11 @@ def server(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     (tmp_path / "uat runtime.env").write_text("export FAKE_ENV=uat\n")
     declared = tmp_path / "deploy_targets.toml"
     declared.write_text(
-        f'[targets.uat]\nhost = "svc@uat.example"\ndest = "{tmp_path / "srv"}"\n'
+        f'[targets.uat]\nssh = "svc@uat.example"\ndest = "{tmp_path / "srv"}"\n'
         'launch_mode = "source"\n'
         f'launch_python = "{provisioned / "python3"}"\n'
         f'launch_env_file = "{tmp_path / "uat runtime.env"}"\n\n'
-        f'[targets.prepared]\nhost = "h"\ndest = "{tmp_path / "srv"}"\n'
+        f'[targets.prepared]\nssh = "h"\ndest = "{tmp_path / "srv"}"\n'
     )
     monkeypatch.setenv(targets.DECLARATION_ENV, str(declared))
     monkeypatch.delenv("PYTHONPATH", raising=False)
@@ -171,7 +171,7 @@ def test_the_shell_puts_the_interpreter_and_source_first(server):
 )
 def test_invalid_launch_settings_are_refused(tmp_path, monkeypatch, settings, says):
     declared = tmp_path / "deploy_targets.toml"
-    declared.write_text(f'[targets.x]\nhost = "h"\ndest = "/srv/uqf"\n{settings}\n')
+    declared.write_text(f'[targets.x]\nssh = "h"\ndest = "/srv/uqf"\n{settings}\n')
     monkeypatch.setenv(targets.DECLARATION_ENV, str(declared))
     with pytest.raises(UqsError, match=says):
         control.remote_for("x", Path("."))
@@ -195,7 +195,7 @@ def test_push_reads_a_source_target_without_refusing_its_launch_keys(server):
 
 def test_an_unknown_target_key_is_still_refused(tmp_path, monkeypatch):
     declared = tmp_path / "deploy_targets.toml"
-    declared.write_text('[targets.x]\nhost = "h"\ndest = "/srv/uqf"\nlaunch_pyhton = "/p"\n')
+    declared.write_text('[targets.x]\nssh = "h"\ndest = "/srv/uqf"\nlaunch_pyhton = "/p"\n')
     monkeypatch.setenv(targets.DECLARATION_ENV, str(declared))
     with pytest.raises(DeployError, match="unknown setting"):
         targets.configs("x", "a.tar.gz", {"profile": "essential"}, True, Path("."))

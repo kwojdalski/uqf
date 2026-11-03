@@ -11,22 +11,43 @@ from typing import Annotated
 
 import typer
 
-from uqs.deploy.components import EXISTING
+from uqs.cli import completion
+from uqs.cli.choices import alternatives
+from uqs.deploy import portable
+from uqs.deploy.components import BUNDLED, EXISTING, MODES
+
+#: "runtime" names a uqs runtime (`uqs --runtime`, `uqs runtime list`) and
+#: nothing else (#1855): what `uqs deploy component build` makes is a
+#: component, on every command that takes one.
+OLD_SPELLINGS = {
+    f"--{c}-runtime{sha}": f"--{c}-component{sha}"
+    for c in ("q", "torq", "python")
+    for sha in ("", "-sha256")
+}
+#: `deploy build`'s: `--q-target` named a kdb+ version where "target" is a
+#: deploy target (#1855); the kdb+ version is `--q-version`, as on `deploy push`.
+BUILD_OLD_SPELLINGS = {"--q-target": "--q-version", "--python-runtime": "--python-component"}
 
 
-def _mode(component: str, fields: str, bundled: str) -> typer.models.OptionInfo:
+def _mode(component: str, existing: str, bundled: str) -> typer.models.OptionInfo:
+    """`--<component>-mode`: its help and completion from deploy/components.MODES,
+    each mode with what it means for `component` (#1893)."""
+    notes = {EXISTING: f"{existing} already on the server, found by preflight", BUNDLED: bundled}
     return typer.Option(
-        f"--{component}-mode", metavar="MODE", help=f"existing: {fields} already on the server, "
-        f"found by preflight. bundled: {bundled}"
-    )  # fmt: skip
+        f"--{component}-mode",
+        metavar="MODE",
+        help=alternatives(MODES, notes, default=DEFAULT),
+        autocompletion=completion.choices(*MODES),
+    )
 
 
+DEFAULT = EXISTING
 QMode = Annotated[
     str,
     _mode(
         "q",
         "the q of --qcmd/--qhome",
-        "the PeachQ of --q-runtime, installed once under shared/runtimes/q/ (never KX's q)",
+        "the PeachQ of --q-component, installed once under shared/runtimes/q/ (never KX's q)",
     ),
 ]
 TorqMode = Annotated[
@@ -34,7 +55,7 @@ TorqMode = Annotated[
     _mode(
         "torq",
         "the TorQ of --torq-home/--torq-app-home",
-        "the vendored TorQ of --torq-runtime, installed once under shared/runtimes/torq/",
+        "the vendored TorQ of --torq-component, installed once under shared/runtimes/torq/",
     ),
 ]
 PythonMode = Annotated[
@@ -42,47 +63,46 @@ PythonMode = Annotated[
     _mode(
         "python",
         "the Python uv finds",
-        "the CPython of --python-runtime, installed once under shared/runtimes/python/, "
+        "the CPython of --python-component, installed once under shared/runtimes/python/, "
         "which .venv is made from",
     ),
 ]
-DEFAULT = EXISTING
 TorqRuntime = Annotated[
     str | None,
     typer.Option(
-        "--torq-runtime",
+        "--torq-component",
         metavar="FILE",
-        help="With --torq-mode bundled: the TorQ runtime `uqs deploy component build torq` made",
+        help="With --torq-mode bundled: the TorQ component `uqs deploy component build torq` made",
     ),
 ]
 TorqRuntimeSha256 = Annotated[
     str | None,
     typer.Option(
-        "--torq-runtime-sha256",
+        "--torq-component-sha256",
         metavar="SHA256",
-        help="Refuse a TorQ runtime whose sha256 is anything else (usually a target's)",
+        help="Refuse a TorQ component whose sha256 is anything else (usually a target's)",
     ),
 ]
 QRuntime = Annotated[
     str | None,
     typer.Option(
-        "--q-runtime",
+        "--q-component",
         metavar="FILE",
-        help="With --q-mode bundled: the PeachQ runtime `uqs deploy component build q` made",
+        help="With --q-mode bundled: the PeachQ component `uqs deploy component build q` made",
     ),
 ]
 QRuntimeSha256 = Annotated[
     str | None,
     typer.Option(
-        "--q-runtime-sha256",
+        "--q-component-sha256",
         metavar="SHA256",
-        help="Refuse a q runtime whose sha256 is anything else (usually a target's)",
+        help="Refuse a q component whose sha256 is anything else (usually a target's)",
     ),
 ]
 PythonRuntime = Annotated[
     str | None,
     typer.Option(
-        "--python-runtime",
+        "--python-component",
         metavar="FILE",
         help="With --python-mode bundled: the CPython `uqs deploy component build python` made; "
         "default: the one the release carries",
@@ -91,17 +111,17 @@ PythonRuntime = Annotated[
 PythonRuntimeSha256 = Annotated[
     str | None,
     typer.Option(
-        "--python-runtime-sha256",
+        "--python-component-sha256",
         metavar="SHA256",
-        help="Refuse a Python runtime whose sha256 is anything else (usually a target's)",
+        help="Refuse a Python component whose sha256 is anything else (usually a target's)",
     ),
 ]
-#: `uqs deploy build --python-runtime`: carried in the release, for
+#: `uqs deploy build --python-component`: carried in the release, for
 #: scripts/install_release.py on a server with no Python of the release's version.
 CarriedPythonRuntime = Annotated[
     str | None,
     typer.Option(
-        "--python-runtime",
+        "--python-component",
         metavar="FILE",
         help="Carry this CPython (`uqs deploy component build python`) in the release, for "
         "scripts/install_release.py, or a push with --python-mode bundled, to make .venv "
@@ -124,5 +144,17 @@ Qhome = Annotated[
         "--q-home",
         help="QHOME on the server, where q finds its licence. Default: the deploying "
         "account's $QHOME there; refused when that is unset too",
+    ),
+]
+#: `uqs deploy build --q-version`: the kdb+ the release's q is converted for.
+ConvertFor = Annotated[
+    str | None,
+    typer.Option(
+        "--q-version",
+        metavar="VERSION",
+        help=f"The servers' kdb+ version, {alternatives(portable.Q_TARGETS)}: convert the "
+        "release's q for it - 4.0 has no nested contexts. Only the artifact changes, never "
+        "the checkout",
+        autocompletion=completion.choices(*portable.Q_TARGETS),
     ),
 ]

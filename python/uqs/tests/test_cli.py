@@ -238,7 +238,7 @@ def test_the_refusal_names_the_typo_and_the_alternatives(_known_procs):
         stack_procs.assert_known_procnames(cast("UqsPaths", _Paths()), "rdb1 xyz")
     message = str(excinfo.value)
     assert "xyz" in message and "rdb1" not in message, "only the name that is unknown"
-    assert "`uqs list processes` names them" in message, "where the real names are"
+    assert "`uqs process list` names them" in message, "where the real names are"
     assert "Nothing was started or stopped" in message
 
 
@@ -331,9 +331,9 @@ def test_up_leaves_a_fleet_that_was_already_running_alone(monkeypatch):
 
 def test_up_all_follows_the_startwithall_processes(monkeypatch):
     rows = [
-        {"procname": "rdb1", "startwithall": "1"},
-        {"procname": "tap1", "startwithall": "0"},
-        {"procname": "fxfeed1", "startwithall": "1"},
+        {"procname": "rdb1", "startwithall": True},
+        {"procname": "tap1", "startwithall": False},
+        {"procname": "fxfeed1", "startwithall": True},
     ]
     result, start, stop, follow = _up(monkeypatch, [], already=set(), rows=rows)
     assert result.exit_code == 0, result.output
@@ -967,7 +967,7 @@ def test_export_writes_when_a_path_is_given(monkeypatch, tmp_path):
     _patch(monkeypatch, listing, "list_items", result=[{"procname": "rdb1"}])
     rec = _patch(monkeypatch, runtime, "export_table")
     target = tmp_path / "out.csv"
-    result = runner.invoke(cli.app, ["list", "processes", "--export", str(target)])
+    result = runner.invoke(cli.app, ["process", "list", "--export", str(target)])
     assert result.exit_code == 0
     assert rec.args[1] == target
     assert "exported to" in result.stdout
@@ -976,7 +976,7 @@ def test_export_writes_when_a_path_is_given(monkeypatch, tmp_path):
 def test_nothing_is_exported_without_the_option(monkeypatch):
     _patch(monkeypatch, listing, "list_items", result=[{"procname": "rdb1"}])
     rec = _patch(monkeypatch, runtime, "export_table")
-    runner.invoke(cli.app, ["list", "processes"])
+    runner.invoke(cli.app, ["process", "list"])
     assert rec.calls == []
 
 
@@ -986,7 +986,7 @@ def test_a_failed_export_reports_rather_than_losing_the_output(monkeypatch, tmp_
     traceback."""
     _patch(monkeypatch, listing, "list_items", result=[{"procname": "rdb1"}])
     _patch(monkeypatch, runtime, "export_table", raises=UqsError("unsupported suffix"))
-    result = runner.invoke(cli.app, ["list", "processes", "--export", str(tmp_path / "x.txt")])
+    result = runner.invoke(cli.app, ["process", "list", "--export", str(tmp_path / "x.txt")])
     assert result.exit_code == 1
 
 
@@ -1159,7 +1159,7 @@ def test_config_get_resolves_placeholders_unless_raw_is_given(monkeypatch):
 
 def test_config_set_reports_what_it_wrote(monkeypatch):
     rec = _patch(monkeypatch, stack_procs, "set_process_config")
-    result = runner.invoke(cli.app, ["config", "set", "rdb1", "startwithall", "1"])
+    result = runner.invoke(cli.app, ["config", "set", "rdb1", "startwithall=1"])
     assert result.exit_code == 0
     assert rec.args[1:] == ("rdb1", "startwithall", "1", False)
 
@@ -1190,7 +1190,7 @@ def test_config_set_refuses_a_character_torq_sh_s_eval_acts_on(monkeypatch, ch):
 
 def test_config_set_refusal_exits_one(monkeypatch):
     _patch(monkeypatch, stack_procs, "set_process_config", raises=UqsError("unknown field"))
-    assert runner.invoke(cli.app, ["config", "set", "rdb1", "nope", "1"]).exit_code == 1
+    assert runner.invoke(cli.app, ["config", "set", "rdb1", "nope=1"]).exit_code == 1
 
 
 def test_list_with_no_kind_shows_the_kinds_rather_than_failing(monkeypatch):
@@ -1202,7 +1202,7 @@ def test_list_with_no_kind_shows_the_kinds_rather_than_failing(monkeypatch):
 
 def test_list_renders_the_items_of_a_kind(monkeypatch):
     _patch(monkeypatch, listing, "list_items", result=[{"procname": "rdb1", "port": "6052"}])
-    result = runner.invoke(cli.app, ["list", "processes"])
+    result = runner.invoke(cli.app, ["process", "list"])
     assert result.exit_code == 0
     assert "rdb1" in result.stdout
 
@@ -1271,7 +1271,7 @@ def test_an_unsortable_column_names_the_real_ones(monkeypatch):
     against - a typo has to be answered with the columns this listing
     actually produced."""
     _patch(monkeypatch, listing, "list_items", result=_procs())
-    result = runner.invoke(cli.app, ["list", "processes", "--sort", "bogus"])
+    result = runner.invoke(cli.app, ["process", "list", "--sort", "bogus"])
     assert result.exit_code == 1
 
 
@@ -1280,9 +1280,7 @@ def test_the_sorted_order_reaches_the_export(monkeypatch):
     worst of both."""
     _patch(monkeypatch, listing, "list_items", result=_procs())
     rec = _patch(monkeypatch, runtime, "export_table", result=None)
-    result = runner.invoke(
-        cli.app, ["list", "processes", "--sort", "port", "--export", "/tmp/x.csv"]
-    )
+    result = runner.invoke(cli.app, ["process", "list", "--sort", "port", "--export", "/tmp/x.csv"])
     assert result.exit_code == 0
     assert [i["port"] for i in rec.args[0]] == ["659", "6067", "6100"]
 
@@ -2461,15 +2459,17 @@ def test_on_peachq_a_big_start_does_not_warn_and_profiles_have_no_cap(monkeypatc
     result = runner.invoke(cli.app, ["start", "rdb1"])
     assert result.exit_code == 0
     assert "past the" not in result.stdout
-    assert "no cap" in runner.invoke(cli.app, ["list", "profiles"]).output
+    assert "no cap" in runner.invoke(cli.app, ["profile", "list"]).output
 
 
 def test_list_profiles_shows_the_slot_count(monkeypatch):
     monkeypatch.setattr("uqs.model.profiles.q_impl", lambda env=None: "kdbx")
-    result = runner.invoke(cli.app, ["list", "profiles"])
+    result = runner.invoke(cli.app, ["profile", "list"])
     assert result.exit_code == 0
     assert "arbitrage" in result.output
-    assert "/14" in result.output, "the budget is the column that matters"
+    assert "allowance" in result.output and "14" in result.output, (
+        "the budget is the column that matters"
+    )
 
 
 # ---------------------------------------------------------------- runtimes
@@ -2498,14 +2498,14 @@ def test_the_torq_runtime_refuses_the_commands_only_uqf_has(monkeypatch, command
 
 def test_runtime_is_set_for_everything_the_command_then_builds(monkeypatch):
     monkeypatch.setenv("UQS_RUNTIME", "uqf")
-    runner.invoke(cli.app, ["--runtime", "torq", "list", "fields"])
+    runner.invoke(cli.app, ["--runtime", "torq", "config", "field", "list"])
     assert os.environ["UQS_RUNTIME"] == "torq"
 
 
 def test_an_unknown_runtime_is_refused(monkeypatch):
     monkeypatch.setenv("UQS_RUNTIME", "uqf")
     said = _refusals(monkeypatch, shared)
-    assert runner.invoke(cli.app, ["--runtime", "pure", "list", "fields"]).exit_code == 1
+    assert runner.invoke(cli.app, ["--runtime", "pure", "config", "field", "list"]).exit_code == 1
     from uqs.runtimes import RUNTIMES
 
     names = ", ".join(RUNTIMES)

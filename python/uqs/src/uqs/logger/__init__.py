@@ -6,6 +6,7 @@ helpers, useful anywhere in this repo's Python code.
 """
 
 from uqs.logger.core import (
+    LOG_LEVEL_ENV,
     configure_logging,
     get_logger,
     is_level_enabled,
@@ -24,6 +25,7 @@ from uqs.logger.utils import (
 )
 
 __all__ = [
+    "LOG_LEVEL_ENV",
     "LogContext",
     "configure_logging",
     "get_logger",
