@@ -45,7 +45,7 @@ from uqs import paths
 from uqs.cli import lists, rendering, safety, shared, skip_options, vocabulary
 from uqs.cli.shared import app
 from uqs.cli.target_confirm import effect_of
-from uqs.stack import listing
+from uqs.stack import alive, listing
 from uqs.stack import procs as stack_procs
 
 ROOT = "uqs"  # the label the root group's own options are reported under
@@ -1184,10 +1184,13 @@ def _cell(value) -> str:
 
 
 @pytest.mark.parametrize("argv", LIST_COMMANDS, ids=" ".join)
-def test_every_cell_of_a_list_reaches_a_pipe_whole(piped, argv):
+def test_every_cell_of_a_list_reaches_a_pipe_whole(piped, argv, monkeypatch):
     """`uqs status | grep -c discovery1` was 0: the column showed `dis…`, as
     `list processes` cut `segmentedtickerplant` - an 80-column guess for a
-    terminal there is none of (#1883)."""
+    terminal there is none of (#1883). What runs is held still: the rows are
+    read twice, and another test starting a process between the reads changed
+    `runtime list`'s running count."""
+    monkeypatch.setattr(alive, "running", lambda *_a, **_k: set())
     result = CliRunner().invoke(app, argv)
     assert result.exit_code == 0, result.output
     missing = [text for text in _cells(argv) if text not in result.stdout]
