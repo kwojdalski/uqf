@@ -120,6 +120,24 @@ RENAMED_AFTER: dict[str, frozenset[str]] = {
             # #1845: who writes the schema block is --schema-writer; the old flag refuses,
             # naming it
             "uqs job attachment add --remote-schema-file",
+            # #1857: one vocabulary - a name, a type and a unit per concept
+            "uqs job new --procname",
+            "uqs deploy check --procs",
+            "uqs deploy check --deadline",
+            "uqs config sources check --window",
+            "uqs data seed --overwrite",
+            "uqs job attachment contract approve --conflict",
+            "uqs job attachment contract approve --max-rows",
+            "uqs job preview --sample",
+            "uqs deploy build --output",
+            "uqs deploy component build --output",
+            "uqs deploy push --qcmd",
+            "uqs deploy push --qhome",
+            *(
+                f"uqs setup odbc {verb} {old}"
+                for verb in ("install", "rollback", "status", "env")
+                for old in ("--home", "--qhome")
+            ),
             # #1854: a command written with --apply is dry by default; its
             # --dry-run says nothing more
             "uqs data alter --dry-run",

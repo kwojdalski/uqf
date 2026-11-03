@@ -61,8 +61,8 @@ uqs schema fx_orderbook         # one table's columns, types and attributes
 uqs schema 'crypto*'        # every table matching a pattern, one block each
 uqs schema hdb1             # the history instead of today
 uqs schema --port 6052      # a port directly, skipping PROC resolution
-uqs schema -i               # browse it, re-read every 5 seconds
-uqs schema -i --every 1     # faster; --every 0 re-reads only on R
+uqs schema -i               # browse it, re-read every 2 seconds
+uqs schema -i --every 500ms # faster; --every 0 re-reads only on R
 ```
 
 With `-i` the browser keeps asking the process: row counts climb as a feed
@@ -1595,6 +1595,37 @@ was deployed; `revert` undoes one recorded change and is itself recorded, where
 `rollback` returns a server to its previous release; `unset` removes a setting
 so the layer beneath applies, which no value given to `set` can say.
 
+### Vocabulary
+
+One concept has one name, one type and one unit on every command
+([`cli/vocabulary.py`](../../python/uqs/src/uqs/cli/vocabulary.py), #1857);
+`test_cli_conventions.py` holds every command to it, and refuses a spelling it
+retired.
+
+  | concept                                       | spelt                                | takes                                     |
+  | ---                                           | ---                                  | ---                                       |
+  | a process acted on                            | `PROC` / `PROCS` (`all`)             | a name                                    |
+  | a process as a property or a filter           | `--proc NAME`                        | a name; repeatable where several fit      |
+  | a job acted on                                | `JOB`                                | a name                                    |
+  | a span of time                                | `--*-timeout`, `--every`, `--soak`   | a DURATION: `30` (seconds), `500ms`, `5m` |
+  | a time range up to now                        | `--last DURATION`                    | `30s`, `5m`, `2h`, `7d`                   |
+  | the readiness wait of a deploy                | `--verify-timeout`                   | a DURATION                                |
+  | a source with no credential on its fixture    | `--fixture/--live`                   | a flag pair; the default is the command's |
+  | what a write does with a row already there    | `--on-conflict POLICY`               | upsert, replace, ignore, append, fail     |
+  | a private ODBC setup                          | `--odbc-home DIR`                    | a path                                    |
+  | q's home and executable                       | `--q-home DIR`, `--q-cmd PATH`       | as `--torq-home`                          |
+  | the kdb+ version                              | `--q-version`                        | `4.0`, `>=4.1`                            |
+  | how many records to show                      | `--limit N`                          | a count                                   |
+  | a FILE written instead of stdout              | `--output FILE` / `-o`               | a path                                    |
+  | a directory written into                      | `--output-dir DIR`                   | a path                                    |
+  | a sidecar bundle                              | `--bundle DIR`, `BUNDLE`             | a path                                    |
+
+A flag that turns a default off is one side of a pair -
+`--gateway/--no-gateway`, `--start/--no-start`, `--register/--no-register` - and
+`--every` re-reads every 2 seconds by default on `status` and `schema` alike. A
+connector's own start options (`--interval-ms`) are the connector's, and name
+their unit.
+
 ### Renamed spellings
 
 Each old spelling below still works for one release, hidden from `--help`, and
@@ -1750,6 +1781,27 @@ on a problem, `list` many records and `show` one. A push or rollback asks a
 release for `deploy check`, or for `deploy verify` on a release from before it.
 The MCP tool `uqs_summary` is `uqs_status`, and `uqs_summary` stays for one
 release.
+
+One vocabulary (#1857):
+
+  | old                                                           | new                                   |
+  | ---                                                           | ---                                   |
+  | `job new --procname P`                                        | `--proc P`                            |
+  | `deploy check --procs A,B`                                    | `--proc A --proc B`                   |
+  | `deploy check --deadline S`                                   | `--verify-timeout S`                  |
+  | `config sources check --window MINUTES`                       | `--last DURATION` (`--last 60m`)      |
+  | `data seed --overwrite`                                       | `--on-conflict replace`               |
+  | `job attachment contract approve --conflict P`                | `--on-conflict P`                     |
+  | `job attachment contract approve --max-rows N`                | `--max-message-rows N`                |
+  | `job preview --sample N`                                      | `--limit N`                           |
+  | `deploy build --output DIR`, `deploy component build`'s too   | `--output-dir DIR`                    |
+  | `deploy push --qcmd`, `--qhome`; `setup odbc install --qhome` | `--q-cmd`, `--q-home`                 |
+  | `setup odbc ... --home DIR`                                   | `--odbc-home DIR`                     |
+
+A duration that was a bare number still is one - seconds - so only `--window`'s
+minutes changed meaning, and its old spelling is converted. `deploy push` asks
+the release it verifies which spelling its `deploy check` takes, so a push or a
+rollback to a release from before this still verifies.
 
 `--port` is now only ever one process's port (`query`, `schema`);
 `query --tunnel` keeps querying a target through an ssh tunnel from here, so

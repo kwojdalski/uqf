@@ -67,16 +67,16 @@ hostname -I >/dev/null 2>&1 ||
   fail "hostname -I fails - torq.sh matches a process's host against this host's addresses with it"
 echo "glibc=$(getconf GNU_LIBC_VERSION 2>/dev/null | sed -n 's/^glibc //p')"
 me=$(id -un)
-# QHOME: --qhome, else this account's own $QHOME - never the caller's.
-if [ -n "$qhome_flag" ]; then qhome_eff=$qhome_flag; qhome_from="--qhome"
+# QHOME: --q-home, else this account's own $QHOME - never the caller's.
+if [ -n "$qhome_flag" ]; then qhome_eff=$qhome_flag; qhome_from="--q-home"
 elif [ -n "${QHOME:-}" ]; then qhome_eff=$QHOME; qhome_from="$me's QHOME"
-else fail "QHOME is not set for $me and --qhome was not given -" \
-  "pass --qhome <the directory q finds its licence in>"
+else fail "QHOME is not set for $me and --q-home was not given -" \
+  "pass --q-home <the directory q finds its licence in>"
 fi
 test -d "$qhome_eff" || fail "QHOME $qhome_eff ($qhome_from) is not a directory"
-# QCMD: --qcmd, else $QCMD, else q on this account's PATH. A name or a path,
+# QCMD: --q-cmd, else $QCMD, else q on this account's PATH. A name or a path,
 # never a command line: it is run as one word, quoted.
-if [ -n "$qcmd_flag" ]; then qcmd_want=$qcmd_flag; qcmd_from="--qcmd"
+if [ -n "$qcmd_flag" ]; then qcmd_want=$qcmd_flag; qcmd_from="--q-cmd"
 elif [ -n "${QCMD:-}" ]; then qcmd_want=$QCMD; qcmd_from="$me's QCMD"
 else qcmd_want=q; qcmd_from="q on $me's PATH"
 fi
@@ -86,9 +86,9 @@ case "$qcmd_want" in
       qcmd_eff=$qcmd_want;;
   */*) fail "QCMD $qcmd_want ($qcmd_from) is a relative path - give an absolute one";;
   *[[:space:]]*) fail "QCMD '$qcmd_want' ($qcmd_from) is not an executable name -" \
-                   "a command with arguments is not supported; pass --qcmd";;
+                   "a command with arguments is not supported; pass --q-cmd";;
   *) qcmd_eff=$(command -v -- "$qcmd_want") ||
-       fail "QCMD $qcmd_want ($qcmd_from) is not on $me's PATH - pass --qcmd"
+       fail "QCMD $qcmd_want ($qcmd_from) is not on $me's PATH - pass --q-cmd"
      case "$qcmd_eff" in
        /*) ;;
        *) fail "QCMD $qcmd_want ($qcmd_from) is a shell alias or function, not an executable";;
@@ -144,7 +144,7 @@ fi
 
 #: Where PREFLIGHT resolves and runs the server's q: from the first line to
 #: the second, exclusive. A push with a bundled q leaves it out.
-Q_RESOLUTION = ("# QHOME: --qhome", 'if [ -n "$odbc_home" ]')
+Q_RESOLUTION = ("# QHOME: --q-home", 'if [ -n "$odbc_home" ]')
 #: Where it finds the server's Python with uv. A push with a bundled Python
 #: leaves it out: the release's .venv is made from the runtime's interpreter.
 PY_RESOLUTION = ("command -v uv", 'echo "os=')

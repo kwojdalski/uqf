@@ -61,8 +61,8 @@ jobs:
         # `uqs deploy build` refuses uncommitted changes without it.
         run: |
           set -euo pipefail
-          uv run uqs deploy build --output dist
-          uv run uqs deploy build --output dist --q-target 4.0
+          uv run uqs deploy build --output-dir dist
+          uv run uqs deploy build --output-dir dist --q-target 4.0
           ls -l dist
       - name: Publish them on the release
         env:

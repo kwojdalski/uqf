@@ -6,7 +6,7 @@ runs TorQ, and prove it works before calling it deployed.
     uqs deploy push dist/uqf-<release>.tar.gz \\
         --ssh uqf-server --dest /opt/uqf \\
         --torq-home /opt/torq --torq-app-home /opt/torq-finance-starter-pack \\
-        --qcmd /opt/kx/bin/q --qhome /opt/kx --profile essential --dry-run
+        --q-cmd /opt/kx/bin/q --q-home /opt/kx --profile essential --dry-run
 
 THE MODULES, in the order a deployment meets them: artifact (the format,
 read back whole), payload and build (making one), config (what push is
@@ -86,12 +86,12 @@ Layout under --dest:
     staging/<id>/         the archive while it is checked; removed after
     deploy.lock/          held while a deployment runs; serialises them
 
-WHICH q (#782). --qhome and --qcmd are optional and resolved ON THE SERVER,
+WHICH q (#782). --q-home and --q-cmd are optional and resolved ON THE SERVER,
 in the environment of the account that deploys - the --remote-user's login
 environment, or the ssh login's - never from this machine's:
 
-    QHOME   --qhome, else that account's $QHOME, else refused (pass --qhome)
-    QCMD    --qcmd, else that account's $QCMD, else `q` on that account's PATH
+    QHOME   --q-home, else that account's $QHOME, else refused (pass --q-home)
+    QCMD    --q-cmd, else that account's $QCMD, else `q` on that account's PATH
 
 QCMD is an executable name or an absolute path, never a command with
 arguments. Preflight resolves both, runs a script with them, and writes them

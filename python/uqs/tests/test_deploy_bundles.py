@@ -14,6 +14,7 @@ from typer.main import get_group
 
 from uqs.cli import deploy_policy
 from uqs.cli.deploy import deploy_app
+from uqs.cli.deploy_connection import config_options
 from uqs.deploy import artifact, driver, payload, verify
 from uqs.deploy import build as release_build
 from uqs.deploy.config import Config, DeployError, make_config
@@ -33,9 +34,8 @@ def parse_args(argv: list[str]) -> Config:
     params.pop("target", None)
     params.pop("target_names", None)
     params |= deploy_policy.bypasses(params.pop("override"), params.pop("reason"))
-    params.pop("no_register", None)  # a choice about this machine, not the push
     # an option left unset (None) takes make_config's default, as push does (#1892)
-    return make_config(**{k: v for k, v in params.items() if v is not None})
+    return make_config(**{k: v for k, v in config_options(params).items() if v is not None})
 
 
 ARGS = ["--ssh", "uqf-server", "--dest", "/opt/uqf", "--profile", "essential"]
@@ -167,8 +167,10 @@ def test_selected_jobs_start_with_their_dependency_closure(tmp_path):
     (start,) = remote.stage("start")
     assert "uqs start --profile essential piggy_spread1 fxfeed1 mw_quotes1" in start
     (ports,) = remote.stage("ports")
-    assert "--ports-free --procs piggy_spread1,fxfeed1,mw_quotes1" in ports
+    assert "--ports-free --proc piggy_spread1 --proc fxfeed1 --proc mw_quotes1" in ports
+    assert "--ports-free --procs piggy_spread1,fxfeed1,mw_quotes1" in ports  # an older release
     (check,) = remote.stage("verify")
+    assert "--proc piggy_spread1 --proc fxfeed1 --proc mw_quotes1" in check
     assert "--procs piggy_spread1,fxfeed1,mw_quotes1" in check
     assert "--tables mw_quote,piggy_tape" in check
     report = json.loads(out)
@@ -195,7 +197,7 @@ def test_an_artifact_without_bundles_deploys_as_before(tmp_path):
     code, remote, out = _deploy(tmp_path, bundles=None)
     assert code == 0
     (check,) = remote.stage("verify")
-    assert "--procs" not in check and "--tables" not in check and "--live" not in check
+    assert "--proc" not in check and "--tables" not in check and "--live" not in check
     assert json.loads(out)["bundles"] == {}
 
 
@@ -254,7 +256,7 @@ def test_a_failed_upgrade_restores_the_previous_sidecar_processes(tmp_path):
     assert code == 1
     rollback = remote.stage("rollback")
     assert any("uqs start --profile fx piggy_spread1" in s for s in rollback)
-    assert any("--profile fx" in s and "--procs piggy_spread1" in s for s in rollback)
+    assert any("--profile fx" in s and "--proc piggy_spread1" in s for s in rollback)
     assert "restarted and verified release OLD" in json.loads(out)["rollback"]
 
 
@@ -343,14 +345,22 @@ def test_an_env_file_in_a_bundle_never_reaches_an_artifact():
 
 
 def test_a_release_verifies_itself_with_uqs_deploy_check_or_verify():
-    """#1648: the selection is comma-joined, and a release from before #835
-    (scripts/deploy_verify.py) is no longer asked for. #1733: `deploy check`,
-    or `deploy verify` on a release from before it - a rollback's target."""
+    """#1648: a release from before #835 (scripts/deploy_verify.py) is no
+    longer asked for. #1733: `deploy check`, or `deploy verify` on a release
+    from before it - a rollback's target. #1857: `--verify-timeout` and one
+    `--proc` per process on a release whose --help shows them, else the
+    `--deadline` and comma-joined `--procs` an older one takes."""
     sel = Selection(processes=["piggy_spread1", "fxfeed1"], tables=["piggy_tape"])
-    command = verify_command("fx", sel, True, "--deadline", "60")
-    args = "--profile fx --deadline 60 --procs piggy_spread1,fxfeed1 --tables piggy_tape --live"
+    command = verify_command("fx", sel, True, timeout=60)
+    new = (
+        "--profile fx --verify-timeout 60 --proc piggy_spread1 --proc fxfeed1 "
+        "--tables piggy_tape --live"
+    )
+    old = "--profile fx --deadline 60 --procs piggy_spread1,fxfeed1 --tables piggy_tape --live"
     assert command == (
-        "if .venv/bin/uqs deploy check --help >/dev/null 2>&1; "
-        f"then .venv/bin/uqs deploy check {args}; else .venv/bin/uqs deploy verify {args}; fi"
+        "if .venv/bin/uqs deploy check --help 2>/dev/null | grep -q -e --verify-timeout; "
+        f"then .venv/bin/uqs deploy check {new}; "
+        "elif .venv/bin/uqs deploy check --help >/dev/null 2>&1; "
+        f"then .venv/bin/uqs deploy check {old}; else .venv/bin/uqs deploy verify {old}; fi"
     )
     assert "deploy_verify.py" not in command
