@@ -71,7 +71,7 @@ def uqs_start(procs: str = "all", port: int | None = None, profile: str | None =
     """Start the uqf stack. procs='all' starts every startwithall=1 process
     (including uqf's own fxfeed1); pass a space-separated list of process
     names to start only specific ones. profile names comma-separated start
-    sets (`uqs list profiles`); procs given with it are added to the set.
+    sets (`uqs profile list`); procs given with it are added to the set.
     """
     selected = None
     if profile is not None:

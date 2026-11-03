@@ -178,7 +178,7 @@ def test_without_yes_it_asks_and_a_no_changes_nothing(server, tmp_path, logged, 
 
 def test_a_declared_name_is_refused(server, logged):
     (Path(os.environ[targets.DECLARATION_ENV])).write_text(
-        f'[targets.lvc]\nhost = "x"\ndest = "{server}"\n'
+        f'[targets.lvc]\nssh = "x"\ndest = "{server}"\n'
     )
     r = _adopt(server)
     assert r.exit_code == 1 and "target lvc is already declared" in "".join(logged)

@@ -86,7 +86,7 @@ class Stack:
     consumers: tuple[str, ...] = ()
     user: str = DEFAULT_USER
     password_env: str = ""
-    #: where `uqs data check/alter --attach` ssh to, to reach the HDB's files
+    #: where `uqs data check/alter --attachment` ssh to, to reach the HDB's files
     #: ("" = `host`, as the current user; this machine when `host` is it)
     ssh: str = ""
 
@@ -244,7 +244,7 @@ def load(name: str, root: Path | None = None) -> Attachment:
     if not path.is_file():
         raise AttachmentError(
             f"no attachment {name!r} (looked in {path.parent}) - "
-            f"`uqs job attachment add {name} --job JOB --stack-id PORT` creates one"
+            f"`uqs job attachment add {name} --job JOB --base-port PORT` creates one"
         )
     try:
         return from_json(json.loads(path.read_text()))

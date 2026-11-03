@@ -176,7 +176,7 @@ Apply the rules below. Each cites the file that holds or enforces it.
 
 - **J10** `start_with_all 1b` only when the user asks for it. Every started
   process spends one of the licence's 16 connections, with two held back, so 14
-  slots in all. `uqs list profiles` shows each profile's cost (`docs/faq.md`).
+  slots in all. `uqs profile list` shows each profile's cost (`docs/faq.md`).
 
 - **J11** Job names are unique across streaming and bounded jobs: they share
   `.qpipe.job` (`.qetl.job.stream.define`).
@@ -426,7 +426,7 @@ Read one only when the task needs it. They aren't auto-loaded.
   Read before changing a framework shell, adding a module, or answering "where
   does X come from".
 - **`uqf-operations.md`:** the `uqs` command map; runtimes, profiles and ports;
-  the connection budget; deployment, including `--q-target 4.0`; ODBC; PeachQ.
+  the connection budget; deployment, including `--q-version 4.0`; ODBC; PeachQ.
   Read when starting, stopping, deploying or diagnosing a stack.
 - **`uqf-q-traps.md`:** each q trap with its measured reproduction, plus the
   nine TorQ invariants from `torq_pipeline.q`. Read when a q change "works" but

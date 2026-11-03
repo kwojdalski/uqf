@@ -313,7 +313,7 @@ def persistence(att: Attachment, obs: Observation, facts: Facts) -> list[Finding
         return _unavailable(
             f"the schema file is on {att.stack.host}; this machine cannot edit it",
             f"give --schema-writer tickerplant to have {tp.procname if tp else 'the tickerplant'} "
-            "append the block to its own file, or --runtime-only to accept losing the "
+            "append the block to its own file, or --transient to accept losing the "
             "registration on a restart, or run uqs on the stack's machine",
         )
     if not Path(path).is_file():
@@ -343,7 +343,7 @@ def _judge(att: Attachment, path: str, text: str, will: str) -> list[Finding]:
 
 
 def _unavailable(
-    why: str, action: str = "choose --runtime-only to accept losing it on restart, or fix the above"
+    why: str, action: str = "choose --transient to accept losing it on restart, or fix the above"
 ) -> list[Finding]:
     return [
         Finding(

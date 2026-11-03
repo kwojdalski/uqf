@@ -91,7 +91,7 @@ def membership(
     if start_with_all:
         notes.append(
             f"{proc} starts with the stack: pin it in test_core.py's always_on, and check "
-            "`uqs list profiles` - the default start must fit the connection budget, and "
+            "`uqs profile list` - the default start must fit the connection budget, and "
             "everything it reads must start with the stack too"
         )
     if actions:
@@ -100,7 +100,7 @@ def membership(
         return actions, notes
     return [], [
         f"add {proc} to a profile (--profile NAME), or exempt it with --unprofiled REASON - "
-        "`uqs list profiles` shows the sets and their connection budget"
+        "`uqs profile list` shows the sets and their connection budget"
     ]
 
 

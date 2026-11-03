@@ -21,7 +21,7 @@ from uqs.deploy.selection import Selection
 
 FILE = """
 [targets.slow]
-host = "deploy@slow"
+ssh = "deploy@slow"
 dest = "/srv/uqf"
 profile = "essential"
 command_timeout = 1800

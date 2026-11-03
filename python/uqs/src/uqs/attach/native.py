@@ -200,7 +200,7 @@ def problems(t: Target, att: Attachment, m: Manifest | None, obs: Observation | 
     """Every reason this registration may not be written, now."""
     out = _ownership(t, m) + _ports(t, att) + _tickerplants(t, att, obs)
     if att.native.start_with_all and att.persist not in config.DURABLE:
-        out.append("--start-with-all needs durable table registration, not --runtime-only")
+        out.append("--start-with-all needs durable table registration, not --transient")
     if att.stack.password_env and os.environ.get(att.stack.password_env) is None:
         out.append(
             f"the publisher's start gate reads the stack's password from ${att.stack.password_env} "

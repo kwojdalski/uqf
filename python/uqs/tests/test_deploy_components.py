@@ -116,7 +116,7 @@ def test_an_existing_field_beside_bundled_is_refused_before_bundled_is(component
 def test_the_cli_takes_each_mode():
     cfg = parse_args(["a", "--ssh", "h", "--dest", "/srv/uqf", "--profile", "essential",
                       "--torq-mode", "existing", "--python-mode", "bundled",
-                      "--python-runtime", "dist/py.tar.gz"])  # fmt: skip
+                      "--python-component", "dist/py.tar.gz"])  # fmt: skip
     assert (cfg.torq_mode, cfg.python_mode) == ("existing", "bundled")
     assert cfg.python_runtime == "dist/py.tar.gz"
 
@@ -126,30 +126,30 @@ def test_the_cli_takes_each_mode():
 LAYERED = """
 [defaults]
 profile = "essential"
-qcmd = "/opt/kx/bin/q"
-qhome = "/opt/kx"
+q_cmd = "/opt/kx/bin/q"
+q_home = "/opt/kx"
 torq_home = "/opt/torq"
 
 [targets.kx]
-host = "h"
+ssh = "h"
 dest = "/srv/uqf"
 
 [targets.restated]
-host = "h"
+ssh = "h"
 dest = "/srv/uqf"
 q_mode = "existing"
 
 [targets.switched]
-host = "h"
+ssh = "h"
 dest = "/srv/uqf"
 q_mode = "bundled"
-q_runtime = "dist/q-runtime.tar.gz"
+q_component = "dist/q-runtime.tar.gz"
 
 [targets.both]
-host = "h"
+ssh = "h"
 dest = "/srv/uqf"
 q_mode = "bundled"
-qcmd = "/opt/kx/bin/q"
+q_cmd = "/opt/kx/bin/q"
 """
 
 

@@ -30,7 +30,7 @@ GUARDRAILS = (
         "process's own HDB over plain IPC, instead of a receiver - no contract, schema, "
         "verification, end-of-day fence or retry protection; completed history only",
         risk="a re-run or a retry duplicates rows, and no reader is told to reload",
-        action="prefer `uqs job receive` on the stack's machine",
+        action="prefer `uqs job receiver start` on the stack's machine",
     ),
 )
 

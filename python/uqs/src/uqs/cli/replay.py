@@ -20,10 +20,11 @@ from rich.table import Table
 from uqs import timerange
 from uqs.cli import completion
 from uqs.cli.hdb_scope import tables_given
-from uqs.cli.range_options import DateOpt, RangeFromOpt, RangeToOpt
+from uqs.cli.range_options import DateOpt, LastOpt, RangeFromOpt, RangeToOpt
 from uqs.cli.renames import renamed
 from uqs.cli.safety import ChangesState, dry_run_note
 from uqs.cli.shared import (
+    BasePortOpt,
     _die,
     _paths,
     app,
@@ -36,16 +37,24 @@ from uqs.stack import replay as stack_replay
 app.add_typer(data_app, name="data")
 
 
-def _day(day: str | None, range_from: str | None, range_to: str | None) -> str | None:
+def _day(
+    day: str | None, range_from: str | None, range_to: str | None, last: str | None = None
+) -> str | None:
     """The one day to replay, as the log directories spell it (2026.09.23), or
-    None for the plant's newest. A log is one day's, so the range must be one."""
-    if day is None and range_from is None and range_to is None:
+    None for the plant's newest. A log is one day's, so the range must be one -
+    given any way a range is given, `--last` too (#1858)."""
+    if day is None and range_from is None and range_to is None and last is None:
         return None
-    window = timerange.resolve(range_from, range_to, day)
+    window = timerange.resolve(range_from, range_to, day, last)
     return window.day("data replay replays").strftime("%Y.%m.%d")
 
 
-@data_app.command("replay", cls=renamed({"--port": "--base-port", "--proc": "PROC"}, ChangesState))
+#: `--schema` is a table's columns (`job new --schema`); a schema FILE is
+#: `--schema-file`, as `job attachment add` names it (#1855).
+_RENAMES = {"--port": "--base-port", "--proc": "PROC", "--schema": "--schema-file"}
+
+
+@data_app.command("replay", cls=renamed(_RENAMES, ChangesState))
 def replay(
     proc: Annotated[
         str | None,
@@ -59,6 +68,7 @@ def replay(
     day: DateOpt = None,
     range_from: RangeFromOpt = None,
     range_to: RangeToOpt = None,
+    last: LastOpt = None,
     dir_: Annotated[
         Path | None,
         typer.Option(
@@ -70,8 +80,10 @@ def replay(
         typer.Option(help="Write into this database, instead of the running hdb process's"),
     ] = None,
     schema: Annotated[
-        Path | None,
-        typer.Option(help="Load this schema file, instead of the plant's -schemafile"),
+        str | None,
+        typer.Option(
+            "--schema-file", help="Load this schema file, instead of the plant's -schemafile"
+        ),
     ] = None,
     table: Annotated[
         list[str] | None,
@@ -82,13 +94,7 @@ def replay(
             autocompletion=completion.plant_table,
         ),
     ] = None,
-    port: Annotated[
-        int | None,
-        typer.Option(
-            "--base-port",
-            help="Stack base port. Default: the -stackid the plant is running under",
-        ),
-    ] = None,
+    port: BasePortOpt = None,
     dry_run: Annotated[
         bool,
         typer.Option(
@@ -99,11 +105,11 @@ def replay(
     """Replay a tickerplant log into the HDB, aimed by what is running.
 
     With nothing passed it finds the tickerplant that is up, takes the log
-    directory, schema file and base port off that process's own start line,
-    finds the database the HDB process has open, and replays the plant's
-    newest day into it. Every one of those is an option, and an option that is
-    given wins - so the port only has to be passed when it is being
-    overridden, not to be discovered.
+    directory and schema file off that process's own start line, finds the
+    database the HDB process has open, and replays the plant's newest day into
+    it. Every one of those is an option, and an option that is given wins.
+    `--base-port` defaults to the runtime's own, as on every command; a plant
+    running under another is refused, naming the `--base-port` to give.
 
     THIS EMPTIES WHAT IT WRITES. TorQ's replay defaults are kept whole, which
     means the tables being replayed are cleared in the partitions it touches
@@ -118,12 +124,13 @@ def replay(
     try:
         plan = stack_replay.plan(
             procname=proc,
-            date=_day(day, range_from, range_to),
+            date=_day(day, range_from, range_to, last),
             log_dir=dir_,
             hdb_dir=hdb,
-            schema_file=schema,
+            schema_file=Path(schema) if schema else None,
             tables=tables_given(table) or None,
-            base_port=port,
+            base_port=_paths().runtime_declaration.resolve_base_port(port),
+            base_port_given=port is not None,
         )
     except UqsError as exc:
         _die(exc)

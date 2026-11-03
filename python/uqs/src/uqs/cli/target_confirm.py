@@ -212,7 +212,7 @@ def changes_the_server(args: Sequence[str]) -> bool:
 
 
 def confirmed_on_server(args: Sequence[str], yes: bool) -> list[str]:
-    """`args` for a confirms-on-server command under --target: --attach and
+    """`args` for a confirms-on-server command under --target: --attachment and
     --hdb refused (each names an HDB, and --target named the release's own),
     and the global --yes passed on, so one --yes answers the server's question
     (#1755)."""
@@ -220,8 +220,8 @@ def confirmed_on_server(args: Sequence[str], yes: bool) -> list[str]:
     p = parse(args)
     if p is None or p.help or effect_of(p.command) is not Effect.CONFIRMS_ON_SERVER:
         return args
-    if p.given("--attach") is not None or p.given("--hdb") is not None:
-        raise UqsUsageError("give one of --target, --attach and --hdb: each names an HDB")
+    if p.given("--attachment") is not None or p.given("--hdb") is not None:
+        raise UqsUsageError("give one of --target, --attachment and --hdb: each names an HDB")
     if yes and p.given("--apply") and not p.given("--yes"):
         args.append("--yes")
     return args

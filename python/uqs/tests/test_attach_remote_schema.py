@@ -141,7 +141,7 @@ def test_without_the_option_a_remote_stack_is_refused_with_both_ways_out(bundle)
     shown = plan.build(_att(bundle, schema_writer="cli"), _fake(), ROOT, facts.Facts(host=HERE))
     (refused,) = [f for f in shown.findings if f.code == "PERSIST_UNAVAILABLE"]
     assert "this machine cannot edit it" in refused.message
-    assert "--schema-writer tickerplant" in refused.action and "--runtime-only" in refused.action
+    assert "--schema-writer tickerplant" in refused.action and "--transient" in refused.action
     assert "run uqs on the stack's machine" in refused.action
 
 

@@ -1,4 +1,4 @@
-"""`uqs logs --attach NAME`: the logs an attached backfill or receiver writes (#1725).
+"""`uqs logs --attachment NAME`: the logs an attached backfill or receiver writes (#1725).
 
 An attached run (uqs.attach.backfill_run, backfill_remote) is a q process of its own, not a
 TorQ process: it registers nothing, and logs to
@@ -65,7 +65,7 @@ def select(
     if not every:
         raise UqsError(
             f"no attached run has logged for attachment {attachment} under "
-            f"{runs.status_dir(paths) / STATE_SUBDIR} - has `uqs job backfill --attach "
+            f"{runs.status_dir(paths) / STATE_SUBDIR} - has `uqs job backfill --attachment "
             f"{attachment}` run on this machine?"
         )
     workers = sorted({r.worker for r in every})
@@ -135,7 +135,7 @@ def recent(
     lines: int = 20,
     min_level: str | None = None,
 ) -> list[dict[str, str]]:
-    """The lines `show` prints without `follow`, as records - `uqs logs --attach --json`."""
+    """The lines `show` prints without `follow`, as records - `uqs logs --attachment --json`."""
     logs.min_level_name(min_level)
     return [
         rec
@@ -155,7 +155,7 @@ def show(
     lines: int = 20,
     min_level: str | None = None,
 ) -> None:
-    """`uqs logs --attach NAME`: the run `select` names, printed as a process's log is -
+    """`uqs logs --attachment NAME`: the run `select` names, printed as a process's log is -
     its last *lines* lines, then with `follow` every line appended until Ctrl-C."""
     logs.min_level_name(min_level)
     chosen = select(paths, attachment, worker, run)

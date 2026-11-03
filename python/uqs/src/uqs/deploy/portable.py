@@ -1,7 +1,7 @@
 """The q a release carries, converted for the server's kdb+ at build time (#861).
 
 kdb+ 4.0 has no nested working contexts, and this tree uses them. Rather than
-change the source, `uqs deploy build --q-target 4.0` runs
+change the source, `uqs deploy build --q-version 4.0` runs
 scripts/portable/flatten_contexts.py (#856) over the build's STAGED copy:
 the checkout is never written, and only the artifact carries the converted q.
 
@@ -36,14 +36,14 @@ Q_TARGETS = ("4.0",)
 #: How many refusals the build failure lists before saying how many more.
 SHOWN = 10
 
-#: `deploy build --q-target --override allow-computed-names` (a bare
+#: `deploy build --q-version --override allow-computed-names` (a bare
 #: --allow-computed-names until #1852): the conversion's one waivable refusal.
 ALLOW_COMPUTED_NAMES = "allow-computed-names"
 GUARDRAILS = (
     Guardrail(
         ALLOW_COMPUTED_NAMES,
         ("deploy build",),
-        "with --q-target: accept a load-time lookup of a computed name the conversion "
+        "with --q-version: accept a load-time lookup of a computed name the conversion "
         "cannot check, with a warning",
         risk="the converted release may name something that does not exist on the older kdb+",
     ),
@@ -83,7 +83,7 @@ def convert(
     cannot be converted with certainty."""
     if q_target not in Q_TARGETS:
         raise ReleaseError(
-            "arguments", f"--q-target {q_target!r} must be one of {', '.join(Q_TARGETS)}"
+            "arguments", f"--q-version {q_target!r} must be one of {', '.join(Q_TARGETS)}"
         )
     fc = _converter(tree)
     # vendored files ship as upstream wrote them: converting one would change

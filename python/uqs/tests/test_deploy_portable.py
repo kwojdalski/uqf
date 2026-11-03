@@ -1,4 +1,4 @@
-"""`uqs deploy build --q-target 4.0` (#861): the release's q converted for a
+"""`uqs deploy build --q-version 4.0` (#861): the release's q converted for a
 kdb+ 4.0 server, in a staged copy - the checkout is never written.
 
 uv, pip and git are fakes, as in test_build_release.py; the converter is the
@@ -139,7 +139,7 @@ def test_a_refused_file_can_be_left_out(tmp_path):
 
 
 def test_an_unknown_q_target_is_refused(tmp_path):
-    with pytest.raises(ReleaseError, match="--q-target '3.6' must be one of 4.0"):
+    with pytest.raises(ReleaseError, match="--q-version '3.6' must be one of 4.0"):
         _build(tmp_path, q_target="3.6")
 
 
