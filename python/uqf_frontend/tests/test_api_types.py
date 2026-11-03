@@ -63,6 +63,8 @@ PAIRS = {
     "WorkerConfigResult": "WorkerConfigResponse",
     "BackfillStarted": "BackfillStartedResponse",
     "ProcessHealth": "ProcessHealthOut",
+    "ServiceTarget": "ServiceTargetOut",
+    "Services": "ServicesResponse",
     **REQUESTS,
 }
 
