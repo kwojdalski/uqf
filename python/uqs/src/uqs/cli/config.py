@@ -312,11 +312,8 @@ def logs(
     with `--attachment`.
     """
     if as_json:
-        for option, used in {
-            "--follow": follow,
-            "--channel": channel,
-            "--multitail": multitail,
-        }.items():
+        live = {"--follow": follow, "--channel": channel, "--multitail": multitail}
+        for option, used in live.items():
             if used:
                 _die(UqsUsageError(f"--json prints the history: {option} does not apply with it"))
                 return

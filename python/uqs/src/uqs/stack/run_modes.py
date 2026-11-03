@@ -32,6 +32,10 @@ NOTES = {
     "run": "all of it",
 }
 
+#: The values `--mode` offers: every mode but `dry-run`, which is spelled
+#: `--dry-run` (#1858) - `--mode dry-run` is still taken, with a warning.
+MODE_OPTION_MODES = tuple(mode for mode in MODES if mode != "dry-run")
+
 #: The modes that open no source, write nothing and leave no status file -
 #: so there is no outcome to wait for and no capability to require. q's own
 #: declaration, .qetl.job.bounded.runtime.read_only_modes.

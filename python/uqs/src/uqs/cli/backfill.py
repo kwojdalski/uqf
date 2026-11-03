@@ -38,8 +38,6 @@ from uqs.stack import backfill as stack_backfill
 from uqs.stack import backfill_wait as stack_backfill_wait
 from uqs.stack import run_modes
 
-#: The modes `--mode` offers: a dry run is `--dry-run` (#1856).
-_MODES = tuple(m for m in run_modes.MODES if m != "dry-run")
 _OnConflictOpt = ChoiceOpt(
     stack_backfill.ON_CONFLICT,
     "--on-conflict",
@@ -106,10 +104,12 @@ def backfill(
         typer.Option(
             "--mode",
             help=alternatives(
-                _MODES, {m: run_modes.NOTES[m] for m in _MODES}, default=run_modes.DEFAULT_MODE
+                run_modes.MODE_OPTION_MODES,
+                {m: run_modes.NOTES[m] for m in run_modes.MODE_OPTION_MODES},
+                default=run_modes.DEFAULT_MODE,
             )
             + ". A dry run - fetch and transform, write nothing - is --dry-run",
-            autocompletion=completion.choices(*_MODES),
+            autocompletion=completion.choices(*run_modes.MODE_OPTION_MODES),
         ),
     ] = None,
     dry_run: Annotated[

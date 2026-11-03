@@ -1192,8 +1192,7 @@ def _authorities() -> dict[tuple[str, str], tuple[str, ...]]:
     out = {
         ("job backfill", "--on-conflict"): q_facts.IO_STRATEGIES,
         ("job attachment contract approve", "--on-conflict"): receiver_contract.STRATEGIES,
-        # a dry run is --dry-run, so --mode offers the rest (#1856)
-        ("job backfill", "--mode"): tuple(m for m in run_modes.MODES if m != "dry-run"),
+        ("job backfill", "--mode"): run_modes.MODE_OPTION_MODES,
         ("job new", "--kind"): SCAFFOLD_KINDS,
         ("job new", "--transform"): transform.MODES,
         ("query", "--render"): render.RENDERERS,

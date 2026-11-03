@@ -26,8 +26,7 @@ from uqs.cells import cell
 from uqs.cli import completion, json_out, table_browser
 from uqs.cli.concepts import target_opt
 from uqs.cli.renames import MOVED_KEY
-from uqs.logger import configure_logging, get_logger, json_requested
-from uqs.logger.core import LOG_LEVEL_ENV
+from uqs.logger import LOG_LEVEL_ENV, configure_logging, get_logger, json_requested
 from uqs.paths import UqsError, UqsUsageError
 from uqs.stack import listing, runtime
 
