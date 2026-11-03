@@ -108,7 +108,6 @@ crypto_trades: "crypto_trades\ntime · sym · venue · side · trade_price · si
 
 mkt_orderbook: "mkt_orderbook\ntime · sym · bid/ask_prices" { class: table }
 position: "position\nqty · avg_price · realized_pnl\nmark_price · unrealized_pnl · total_pnl" { class: table }
-demo_execution_quality: "demo_execution_quality\ntrade_time · horizon · trade_price\nref_price · markout_pips · fill_id" { class: table }
 cross_quotes: "cross_quotes\nnever written to stp1 —\nlives in cross1's memory" { class: private }
 
 databento_mbp10: "databento_mbp10\nDatabento's own columns,\nten levels each side" { class: table }
@@ -143,7 +142,6 @@ cross1: "cross1\n.qf.mkt.cross_book_at" { class: job }
 vectorize1: "vectorize1\n.qf.mkt.book_from_wide_levels" { class: job }
 posbook1: "posbook1\n.qf.port.apply_fill + .qf.port.pnl" { class: job }
 executions1: "executions1\nnormalizer: every fill\ntable as one" { class: job }
-demo_markout1: "demo_markout1\n.qf.exec.markout_at_horizons\nscores on a 1s timer, not on arrival" { class: job }
 fxpositions1: "fxpositions1\n.qf.port desk book + limits\nnets executions, on a timer" { class: job }
 marketdata1: "marketdata1\nnormalizer" { class: job }
 superbook1: "superbook1\n.qpipe.job.superbook merge\nacross sources" { class: job }
@@ -198,9 +196,6 @@ executions -> posbook1: "subscribe"
 market_data -> posbook1: "mark each fill at the mid\nas of its own time"
 posbook1 -> position: "republish"
 
-trades -> demo_markout1: "subscribe, buffered"
-quote -> demo_markout1: "buffered"
-demo_markout1 -> demo_execution_quality: "republish"
 
 executions -> fxpositions1: "subscribe"
 fxpositions1 -> fx_position: "republish"
@@ -277,7 +272,6 @@ crypto_book_1s -> storage
 book_liquidity_1m -> storage
 mkt_orderbook -> storage
 position -> storage
-demo_execution_quality -> storage
 databento_mbp10 -> storage
 eq_orderbook -> storage
 orders -> storage

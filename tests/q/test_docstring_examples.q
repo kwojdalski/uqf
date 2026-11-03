@@ -134,15 +134,6 @@
     `trade set .qt.qf.util.metatables.source;
     `spec set .qf.util.definition[`trade;`date;enlist `sym;()!()];
     `stored set .qf.util.collect[value `spec;2026.09.01 2026.09.02];
-    / The markout job's own buffer, with two rows in it. It used to be read
-    / out of scripts/torq_markout_etl.q as TEXT and re-evaluated, because
-    / that file could not be loaded outside TorQ; the job is a src/ file now,
-    / so the real table is simply here.
-    `.qpipe.job.demo_markout.pending set .qpipe.job.demo_markout.pending upsert
-        ([] time:2026.01.01D00:00:00.000000000 2026.01.01D00:00:01.000000000;
-            sym:`EURUSD`GBPUSD; side:1 -1; trade_price:1.1 1.25;
-            size:1000000 500000f; pip_factor:10000 10000);
-    `cutoff set 2026.01.01D00:00:00.500000000;
     `bound}
 
 / Private: files to scan. `find` rather than a hardcoded list - a new module
@@ -199,10 +190,10 @@
 / tickerplant, a TorQ process, a licensed driver or downloaded market data,
 / none of which a test process has.
 .qt.man.examples.needs_live:([] expr:(
-        ".qtorq.publish[h;`demo_execution_quality;out]";
+        ".qtorq.publish[h;`crypto_execution_quality;out]";
         ".qtorq.publish[h;`trades;`sym`side`trade_price`size`pip_factor!(`EURUSD;1;1.085;1e6;10000)]";
         ".qtorq.publish[h;`trades;(enlist `EURUSD;enlist 1;enlist 1.085;enlist 1e6;enlist 10000)]";
-        ".qtorq.safe_timer[`demo_markout;0D00:00:01.000;`.qproc.stream.tick;\"Run the markout streaming job\"]";
+        ".qtorq.safe_timer[`crypto_markout;0D00:00:01.000;`.qproc.stream.tick;\"Run the markout streaming job\"]";
         ".qtorq.reload_hdb[]";
         ".qetl.io.odbc.window_query[h;`deals;`deal_time;`deal_id`rate;from_ts;to_ts]";
         ".qdata.getBySymbolDate[`AAPL;2026.02.25]";

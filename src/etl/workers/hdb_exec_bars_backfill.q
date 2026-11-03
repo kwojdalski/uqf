@@ -16,7 +16,7 @@
 / The output's own `time` is bar_start+width, the bar's END, so window_column
 / says bar_start: `replace then clears the bars the window produced, not the
 / previous window's last bar, whose end is this window's first instant (#1143;
-/ the same class as hdb_demo_markouts_backfill's #972).
+/ the same class as #972).
 
 \d .
 

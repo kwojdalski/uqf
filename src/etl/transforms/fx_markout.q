@@ -59,7 +59,7 @@
 /               the instant is not a price. When no source is that fresh the
 /               leg has no book and the row is `unavailable (see `missing`).
 /               0Wn ("as of however old") stays valid for a single-source
-/               site and is demo_markout's policy, but is no longer the default.
+/               site, but is no longer the default.
 /   missing     a leg with no book at the execution or the horizon gives a null
 /               reference and null allocations with status `unavailable, kept
 /               so the gap shows; an execution's own residual survives a

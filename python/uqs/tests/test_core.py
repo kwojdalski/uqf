@@ -585,7 +585,7 @@ def test_bootstrap_generates_schema_with_the_fx_orderbook_table(fake_paths: UqsP
     # place "which database.q a runtime uses" is decided (#1370).
     assert generated == hdb_types.declared_schema(fake_paths)
     assert schemas.definition("position") in generated
-    assert schemas.definition("demo_execution_quality") in generated
+    assert schemas.definition("crypto_execution_quality") in generated
 
 
 def _torq(paths: UqsPaths) -> UqsPaths:
@@ -826,7 +826,7 @@ def test_list_processes_includes_vendored_and_fxfeed1_resolved(fake_paths: UqsPa
     )
     assert by_name["fxtradesfeed1"]["port"] == str(7000 + PIPELINE_OFFSETS["fxtradesfeed1"])
     assert by_name["posbook1"]["port"] == str(7000 + PIPELINE_OFFSETS["posbook1"])
-    assert by_name["demo_markout1"]["port"] == str(7000 + PIPELINE_OFFSETS["demo_markout1"])
+    assert by_name["crypto_markout1"]["port"] == str(7000 + PIPELINE_OFFSETS["crypto_markout1"])
 
 
 def test_list_processes_shows_what_each_process_reads_and_writes(fake_paths: UqsPaths):
@@ -984,7 +984,7 @@ def test_resolve_procnames_still_allows_a_process_with_no_log_file(
 #: port cells, which is why the parser pads instead of requiring an exact
 #: width - and why every down process used to show a blank port.
 _SUMMARY_STDOUT = """TIME | PROCESS | STATUS | PID | PORT
-2026.09.16 | demo_markout1 | up | 4242 | 6081
+2026.09.16 | crypto_markout1 | up | 4242 | 6081
 2026.09.16 | tap1 | down
 2026.09.16 | dqc1 | down
 """
@@ -1020,9 +1020,9 @@ def test_heartbeat_absent_is_distinguished_from_heartbeat_silent():
 
 
 def test_heartbeat_state_is_reported_per_process():
-    rows = listing.summary_rows(_SUMMARY_STDOUT, {}, {"demo_markout1": "ok", "tap1": "error"})
+    rows = listing.summary_rows(_SUMMARY_STDOUT, {}, {"crypto_markout1": "ok", "tap1": "error"})
     by_name = {r["Process"]: r for r in rows}
-    assert by_name["demo_markout1"]["Heartbeat"] == "ok"
+    assert by_name["crypto_markout1"]["Heartbeat"] == "ok"
     assert by_name["tap1"]["Heartbeat"] == "error"
     # dqc1 is in the stdout fixture but not in the heartbeat map: the
     # collector is up and simply has no row for it.
@@ -1036,8 +1036,8 @@ def test_a_process_can_be_up_by_pid_and_failing_by_heartbeat():
     PID. A row showing `up` beside `error` is exactly what this is for — and
     it must not be collapsed into one verdict.
     """
-    rows = listing.summary_rows(_SUMMARY_STDOUT, {}, {"demo_markout1": "error"})
-    markout = next(r for r in rows if r["Process"] == "demo_markout1")
+    rows = listing.summary_rows(_SUMMARY_STDOUT, {}, {"crypto_markout1": "error"})
+    markout = next(r for r in rows if r["Process"] == "crypto_markout1")
     assert markout["Status"] == "up"
     assert markout["Heartbeat"] == "error"
 
@@ -1070,7 +1070,7 @@ def test_summary_marks_a_filled_port_as_configured_not_reported():
     """
     rows = listing.summary_rows(_SUMMARY_STDOUT, {"tap1": "6078", "dqc1": "6070"})
     by_name = {r["Process"]: r for r in rows}
-    assert by_name["demo_markout1"]["PortSource"] == "reported"
+    assert by_name["crypto_markout1"]["PortSource"] == "reported"
     assert by_name["tap1"]["PortSource"] == "configured"
 
 
@@ -1080,10 +1080,10 @@ def test_summary_never_overwrites_a_reported_port():
     Someone restarting with a different base port is exactly when a summary
     must not tidy the disagreement away.
     """
-    rows = listing.summary_rows(_SUMMARY_STDOUT, {"demo_markout1": "9999", "tap1": "6078"})
+    rows = listing.summary_rows(_SUMMARY_STDOUT, {"crypto_markout1": "9999", "tap1": "6078"})
     by_name = {r["Process"]: r for r in rows}
-    assert by_name["demo_markout1"]["Port"] == "6081"
-    assert by_name["demo_markout1"]["PortSource"] == "reported"
+    assert by_name["crypto_markout1"]["Port"] == "6081"
+    assert by_name["crypto_markout1"]["PortSource"] == "reported"
 
 
 def test_summary_leaves_a_port_blank_when_nothing_declares_one():
@@ -1099,7 +1099,7 @@ def test_summary_leaves_a_port_blank_when_nothing_declares_one():
 
 def test_summary_skips_the_header_and_blank_lines():
     rows = listing.summary_rows(_SUMMARY_STDOUT, {})
-    assert [r["Process"] for r in rows] == ["demo_markout1", "tap1", "dqc1"]
+    assert [r["Process"] for r in rows] == ["crypto_markout1", "tap1", "dqc1"]
 
 
 def test_every_process_has_a_configured_port(fake_paths: UqsPaths):
@@ -1510,7 +1510,8 @@ def test_pipeline_offsets_are_stable():
         "tap1": 28,
         "fxtradesfeed1": 29,
         "posbook1": 30,
-        "demo_markout1": 31,
+        # 31 was the demo markout job, retired: its row stays in
+        # process_ports.csv so the offset is never handed to anything else.
         "deals_backfill1": 32,
         "events_backfill1": 33,
         # Appended last so the eleven above keep their ports; a new
@@ -1573,7 +1574,7 @@ def test_qpipe_library_loads_before_the_pipeline_that_needs_it():
     pipeline script calls .qtorq.load_uqf at top level, and TorQ's
     .proc.reloadf each loads -load's files in the order given.
     """
-    markout = BY_NAME["demo_markout1"]
+    markout = BY_NAME["crypto_markout1"]
     assert markout.loads_qtorq
     loaded = markout.load_column().split()
     assert loaded[0].endswith(PIPELINE_LIB_SCRIPT)
@@ -1650,7 +1651,7 @@ def test_no_pipeline_overrides_the_process_clock():
     gone, and the fleet reads one clock. A new `localtime="0"` means someone
     is fixing a timestamp bug in process configuration again, which is the
     thing that produced a permanent false `error` in monitor1's heartbeat
-    table: demo_markout1 stamped its heartbeat in UTC while the monitor compared
+    table: crypto_markout1 stamped its heartbeat in UTC while the monitor compared
     against local time.
     """
     assert all(p.localtime == "1" for p in PIPELINES), [
@@ -1693,7 +1694,6 @@ def test_tap_and_the_on_demand_chain_do_not_autostart():
         "fxorderbookfeed1",
         "fxtradesfeed1",
         "posbook1",
-        "demo_markout1",
         "executions1",
         "marketdata1",
         "fxordersfeed1",

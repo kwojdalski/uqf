@@ -2,8 +2,8 @@
 
 An etl subscribes to one or more plant tables, computes something from each
 batch, and republishes. Most of this stack is etls: `posbook1` folds fills into
-positions, `demo_markout1` scores execution quality, `arbitrage1` finds crossed
-levels in a merged book.
+positions, `crypto_markout1` scores execution quality, `arbitrage1` finds
+crossed levels in a merged book.
 
 If your rows come from a timer rather than a subscription you want
 [feed.md](feed.md); if you are spelling several tables into one shape,
@@ -18,7 +18,7 @@ uqs job new spreadmon --subscribe-to fx_orderbook \
 
 `--subscribe-to` is what makes it an etl rather than a feed. It takes a
 comma-separated list --- subscribing to two tables is legal and common
-(`demo_markout1` reads `trades` and `quote`).
+(`crypto_markout1` reads `crypto_trades` and `crypto_book`).
 
 <!-- scaffold-transcript: spreadmon --subscribe-to fx_orderbook --publishes spread_bps --schema "sym:symbol, spread:float" -->
 ```
