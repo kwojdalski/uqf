@@ -416,7 +416,7 @@ def test_add_appends_and_remove_deletes_only_that_table(server):
         "labels": {"env": "prod"},
     }
     assert runner.invoke(app, ["target", "add", "prod", "--ssh", "x", "--dest", "/x"]).exit_code
-    removed = runner.invoke(app, ["target", "remove", "prod"])
+    removed = runner.invoke(app, ["target", "remove", "prod", "--yes"])
     assert removed.exit_code == 0, removed.output
     assert declared.read_text().rstrip("\n") == before.rstrip("\n"), "comments and others kept"
 

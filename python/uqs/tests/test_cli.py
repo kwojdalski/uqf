@@ -279,9 +279,9 @@ def _up(
     args: list[str],
     already: set[str] | Exception,
     rows=(),
-    command: tuple[str, ...] = ("start", "--follow"),
+    command: tuple[str, ...] = ("start", "--follow", "--stop-on-exit"),
 ):
-    """Run `uqs start --follow` with the stack faked: the follow starts, then
+    """Run `uqs start --follow --stop-on-exit` with the stack faked: the follow starts, then
     returns as a Ctrl-C would. Returns the launch and stop recorders and the
     follow call. `command` is `restart --follow`, or the `up` alias."""
     start = _patch(monkeypatch, runtime, command[0] if command[0] != "up" else "start",
@@ -352,7 +352,7 @@ def test_a_failed_start_still_stops_what_it_started_and_keeps_its_exit_code(monk
     monkeypatch.setattr(
         stack_logs, "follow_during", lambda paths, procnames, start_fn, min_level=None: start_fn()
     )
-    result = runner.invoke(cli.app, ["start", "rdb1", "-f"])
+    result = runner.invoke(cli.app, ["start", "rdb1", "-f", "--stop-on-exit"])
     assert start.calls, "it started"
     assert result.exit_code == 3, "the start's own failure is what the command reports"
     assert stop.args[1] == "rdb1"
@@ -368,7 +368,10 @@ def test_restart_follow_restarts_and_on_ctrl_c_stops_what_was_not_running(monkey
     """`restart -f` is `start -f` for a fleet already up (#1734): what was
     running before it began is left running."""
     result, restart, stop, follow = _up(
-        monkeypatch, ["rdb1", "fxpositions1"], already={"rdb1"}, command=("restart", "-f")
+        monkeypatch,
+        ["rdb1", "fxpositions1"],
+        already={"rdb1"},
+        command=("restart", "-f", "--stop-on-exit"),
     )
     assert result.exit_code == 0, result.output
     assert restart.args[1] == "rdb1 fxpositions1"
@@ -385,8 +388,21 @@ def test_up_is_a_hidden_alias_of_start_follow_that_names_it(monkeypatch):
     assert result.exit_code == 0, result.output
     assert start.args[1] == "rdb1" and follow["min_level"] == "ERROR"
     assert stop.args[1] == "rdb1"
-    assert said == [("up", "uqs start --follow")]
+    assert said == [("up", "uqs start --follow --stop-on-exit")]
     assert _command("up").hidden
+
+
+@pytest.mark.parametrize("command", [("start", "-f"), ("restart", "--follow")])
+def test_ctrl_c_on_follow_ends_the_stream_and_leaves_the_processes_running(monkeypatch, command):
+    """#1854: --follow's Ctrl-C means what it means on `logs --follow`; stopping is
+    --stop-on-exit, asked for by name."""
+    result, _, stop, follow = _up(
+        monkeypatch, ["rdb1", "fxpositions1"], already={"rdb1"}, command=command
+    )
+    assert result.exit_code == 0, result.output
+    assert follow["procnames"] == ["rdb1", "fxpositions1"]
+    assert stop.calls == []
+    assert "left running: fxpositions1" in result.output
 
 
 @pytest.mark.parametrize(
@@ -395,6 +411,10 @@ def test_up_is_a_hidden_alias_of_start_follow_that_names_it(monkeypatch):
         (["start", "--level", "ERROR"], "--level needs --follow"),
         (["restart", "--level", "ERROR"], "--level needs --follow"),
         (["start", "-f", "--dry-run"], "--dry-run does not apply with --follow"),
+        (
+            ["start", "--stop-on-exit"],
+            "--stop-on-exit needs --follow: it stops what the stream started",
+        ),
     ],
 )
 def test_a_follow_only_option_without_follow_is_refused(monkeypatch, args, refusal):

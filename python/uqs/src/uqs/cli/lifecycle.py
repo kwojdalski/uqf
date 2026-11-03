@@ -34,7 +34,7 @@ from uqs.cli.shared import (
     console,
     log,
 )
-from uqs.cli.start_follow import FollowOpt, LevelOpt
+from uqs.cli.start_follow import FollowOpt, LevelOpt, StopOnExitOpt
 from uqs.cli.start_override_opts import OLD_SPELLINGS as OLD_SKIPS
 from uqs.cli.start_override_opts import parsed as _overrides
 from uqs.cli.start_warnings import running as _running
@@ -137,10 +137,13 @@ def _launch(
     print_only: bool,
     override: list[str] | None,
     reason: str | None,
+    stop_on_exit: bool = False,
 ) -> None:
     """`start` and `restart`, which differ only in the torq.sh verb they run."""
     if level is not None and not follow:
         _die(UqsError("--level needs --follow"))
+    if stop_on_exit and not follow:
+        _die(UqsError("--stop-on-exit needs --follow: it stops what the stream started"))
     if print_only and follow:
         _die(UqsError("--dry-run does not apply with --follow"))
     overrides = _overrides(verb, override, reason, profile=profile, print_only=print_only)
@@ -170,7 +173,7 @@ def _launch(
         _launch_checks(verb, names, port, profile)
         start_follow.in_foreground(lambda **kw: launch(_paths(), names, **kwargs, **kw))()
 
-    start_follow.follow(wanted, already, before, port, level)
+    start_follow.follow(wanted, already, before, port, level, stop=stop_on_exit)
 
 
 @app.command(cls=renamed(_LAUNCH_RENAMES, ChangesState))
@@ -179,6 +182,7 @@ def start(
     port: BasePortOpt = None,
     profile: ProfileOpt = None,
     follow: FollowOpt = False,
+    stop_on_exit: StopOnExitOpt = False,
     level: LevelOpt = None,
     print_only: DryRunOpt = False,
     override: OverrideOpt = None,
@@ -190,14 +194,16 @@ def start(
     read, resolved from the dependency graph rather than listed by hand.
     `--profile essential vectorize1` starts the set plus the names given.
 
-    `--follow` (`-f`) is the foreground form, the way `docker compose up` is:
-    it streams every started process's log until Ctrl-C, then stops what it
-    started - `start -f`, `start rdb1 fxpositions1 -f`, `start --profile fx -f
-    --level WARNING`. What was already running is left running.
+    `--follow` (`-f`) stays in the foreground, streaming every started
+    process's log until Ctrl-C, which ends the stream and leaves the processes
+    running - `start -f`, `start rdb1 fxpositions1 -f`, `start --profile fx -f
+    --level WARNING`. `--stop-on-exit` makes it the foreground form `docker
+    compose up` is: Ctrl-C then stops what it started, and leaves what was
+    already running.
     """
     _launch(
         "start", procs, port, profile, follow, level, print_only,
-        override, reason,
+        override, reason, stop_on_exit,
     )  # fmt: skip
 
 
@@ -207,6 +213,7 @@ def restart(
     port: BasePortOpt = None,
     profile: ProfileOpt = None,
     follow: FollowOpt = False,
+    stop_on_exit: StopOnExitOpt = False,
     level: LevelOpt = None,
     print_only: DryRunOpt = False,
     override: OverrideOpt = None,
@@ -215,11 +222,12 @@ def restart(
     """Restart every startwithall=1 process (or specific process name(s)).
 
     Takes exactly `start`'s options: `--profile` restarts a named set,
-    `--follow` streams the restarted processes' logs until Ctrl-C.
+    `--follow` streams the restarted processes' logs until Ctrl-C, which ends
+    the stream and leaves them running; `--stop-on-exit` stops them then.
     """
     _launch(
         "restart", procs, port, profile, follow, level, print_only,
-        override, reason,
+        override, reason, stop_on_exit,
     )  # fmt: skip
 
 
@@ -231,14 +239,17 @@ def _up(
     override: OverrideOpt = None,
     reason: ReasonOpt = None,
 ) -> None:
-    """`start --follow`, under the name it had before #1734."""
+    """`start --follow --stop-on-exit`, under the name it had before #1734:
+    its Ctrl-C stops what it started, as it always did (#1854)."""
     _launch(
         "start", procs, port, profile, True, level, False,
-        override, reason,
+        override, reason, True,
     )  # fmt: skip
 
 
-alias_command(app, "up", "uqs start --follow", _up, cls=renamed(BASE_PORT | OLD_SKIPS))
+alias_command(
+    app, "up", "uqs start --follow --stop-on-exit", _up, cls=renamed(BASE_PORT | OLD_SKIPS)
+)
 
 
 def _names_to_stop(procs: list[str] | None, profile: str | None) -> str:

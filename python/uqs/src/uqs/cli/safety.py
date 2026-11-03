@@ -3,6 +3,13 @@
 - `--dry-run/-n` on every command that changes state: everything is checked and
   what would change is shown, and nothing is changed.
 - `--yes/-y` on every command that asks before acting.
+- Two write models, one per kind of change (#1854). A command that changes
+  this machine writes by default and takes `--dry-run/-n`. A command that
+  rewrites data in place - an HDB, a server's release - is a dry run by
+  default and writes only with `--apply`, which shows its plan and asks;
+  `--yes/-y` answers that question. Such a command takes no visible
+  `--dry-run`: it is what it does anyway (`DefaultDryRunOpt` keeps the old
+  spelling parsing for one release).
 - `--override NAME --reason TEXT` for every bypass of a check: NAME is one of
   the command's named overrides (`uqs override list`), repeatable, and one
   reason covers the overrides given with it. Each is warned about and recorded
@@ -29,7 +36,10 @@ from typer.core import TyperCommand
 
 from uqs.cli import skip_options
 from uqs.guardrails import Guardrail, aggregate
+from uqs.logger import get_logger
 from uqs.paths import UqsError
+
+log = get_logger()
 
 DryRunOpt = Annotated[
     bool,
@@ -38,6 +48,37 @@ DryRunOpt = Annotated[
     ),
 ]
 YesOpt = Annotated[bool, typer.Option("--yes", "-y", help="Do not ask before acting")]
+#: The `--apply` model (#1854): a dry run unless --apply, which asks first.
+ApplyOpt = Annotated[
+    bool,
+    typer.Option(
+        "--apply", help="Make the changes, after asking; without it, a dry run that changes nothing"
+    ),
+]
+ApplyYesOpt = Annotated[
+    bool, typer.Option("--yes", "-y", help="With --apply: do not ask before changing anything")
+]
+#: `--dry-run`/`-n` on an `--apply` command: what it does anyway. Hidden, and
+#: parsing for one release (cli/rename_expiry.py); `dry_unless_applied` reads it.
+DefaultDryRunOpt = Annotated[
+    bool,
+    typer.Option(
+        "--dry-run", "-n", hidden=True, help="Retired: a dry run is the default; --apply writes"
+    ),
+]
+
+
+def dry_unless_applied(dry_run: bool, apply: bool) -> None:
+    """Refuse --dry-run with --apply, and warn that --dry-run alone is the default."""
+    if dry_run and apply:
+        raise UqsError("--dry-run and --apply contradict each other - give one")
+    if dry_run:
+        log.warning(
+            "`--dry-run` is what this command does without --apply; drop it - the "
+            "spelling goes in the next release"
+        )
+
+
 OverrideOpt = Annotated[
     list[str] | None,
     typer.Option(

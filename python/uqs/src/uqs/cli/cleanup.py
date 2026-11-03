@@ -20,7 +20,7 @@ import typer
 from uqs.cli import completion
 from uqs.cli.pipelines import needs_pipelines
 from uqs.cli.renames import alias_command
-from uqs.cli.safety import ChangesState, dry_run_note
+from uqs.cli.safety import ChangesState, YesOpt, dry_run_note
 from uqs.cli.shared import (
     JOB_OPERATIONS_PANEL,
     _die,
@@ -116,8 +116,11 @@ def remove_checkpoint(
         bool,
         typer.Option("--dry-run", "-n", help="Name the checkpoint that would go; delete nothing"),
     ] = False,
+    yes: YesOpt = False,
 ) -> None:
     """Delete a bounded worker's checkpoint, so its next run starts at --from.
+
+    Names the checkpoint and asks first (#1854); `--yes` does not ask.
 
     Refused while a run of the worker may still be live. The checkpoint is
     only where a run resumes: windows already in the coverage ledger are
@@ -126,6 +129,14 @@ def remove_checkpoint(
     e.g. `uqs job checkpoint remove demo_deals_backfill`
     """
     try:
+        if not dry_run and not yes:
+            planned = stack_backfill.clear_checkpoint(_paths(), worker, True)
+            if planned is not None and not typer.confirm(
+                f"Delete {worker}'s checkpoint ({planned})? Its next run starts at --from",
+                default=False,
+            ):
+                console.print("nothing deleted")
+                raise typer.Exit(code=1)
         path = stack_backfill.clear_checkpoint(_paths(), worker, dry_run)
     except UqsError as exc:
         _die(exc)
