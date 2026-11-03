@@ -47,38 +47,75 @@
 / .u.upd stamps `time` in UTC, and the sources' own stamps are UTC.
 .qpipe.source.hdb_fx_markouts.tz:`UTC
 
-/ How far back a source's last book before the window is looked for. Without it, an
-/ execution early in a window whose latest book predates the window has nothing to be
-/ priced against, and the target key would replace the live job's correct row with
-/ nulls. A pair unquoted for longer than this is unpriced, as the live job would
-/ leave it after a restart.
-.qpipe.source.hdb_fx_markouts.lookback:7D
+/ The pairs a scored execution needs a reference for beyond its own route's legs:
+/ the conversion pair that takes its money to a reporting currency (#1931). None
+/ yet, so none are read. When #1931 lands this is the ONE place to name them; the
+/ declaration below already unions them in, so the books are read and the contract
+/ needs no other change.
+/ @param spec the job's spec
+/ @param rows the window's executions
+/ @return a symbol vector
+/ @eg .qpipe.source.hdb_fx_markouts.conversion_pairs[.qpipe.transform.fx_markout.default_spec;([] sym:enlist `EURUSD)]  ->  `symbol$()
+.qpipe.source.hdb_fx_markouts.conversion_pairs:{[spec;rows] `symbol$()}
+
+/ The symbols the window's references are read for: the legs of every execution's
+/ route (the live job's own `legs`), and its conversion pairs.
+/ @param spec the job's spec
+/ @param rows the window's executions
+/ @return a symbol vector, distinct
+/ @eg .qpipe.source.hdb_fx_markouts.reference_symbols[.qpipe.transform.fx_markout.default_spec;([] sym:enlist `USDPLN)]  ->  `EURUSD`EURPLN
+.qpipe.source.hdb_fx_markouts.reference_symbols:{[spec;rows]
+    legs:distinct raze .qpipe.transform.fx_markout.legs_of[spec;rows];
+    distinct legs,.qpipe.source.hdb_fx_markouts.conversion_pairs[spec;rows]}
+
+/ What the source reads of its books, declared (.qetl.source REFERENCE READ):
+/   date_skew     1 day either side. The window is on source_time but the HDB is
+/                 partitioned on the plant's `time`, which can fall on the other
+/                 side of midnight from the source's stamp
+/   lookback_cap  7 days, for a spec whose max_age is 0Wn. A finite max_age sets
+/                 the look-back itself: a book older than max_age plus the furthest
+/                 look-back horizon is not a reference, so reading back further
+/                 is rescanning the market for nothing (#1926). A pair unquoted for
+/                 longer than the look-back is unpriced, as the live job would leave
+/                 it after a restart; without any look-back an execution early in a
+/                 window would have nothing to be priced against and the target key
+/                 would replace the live job's correct row with nulls
+/   symbols       reference_symbols
+.qpipe.source.hdb_fx_markouts.reference_read:`date_skew`lookback_cap`symbols!(1;7D;.qpipe.source.hdb_fx_markouts.reference_symbols)
 
 / The window's executions, and the books they are scored against, both from the HDB.
 / Both tables are date-partitioned, so the partition is constrained first, and each is
-/ named as a symbol so it resolves at the HDB's root. The legs to read are the
-/ routes' (the live job's own `legs`), so the books read are the books scoring needs.
+/ named as a symbol so it resolves at the HDB's root. The books read are the declared
+/ reference_read's: the symbols scoring needs, from the window's start back by the
+/ look-back the spec's max_age sets (measured from the window's start, so it already
+/ includes the furthest look-back horizon) to its end plus the furthest horizon, and
+/ each (pair, source)'s last book before the earliest reference time. Both queries
+/ widen the partitions by the declared date_skew.
 / @param h an open handle to the HDB
 / @param range_from inclusive lower bound
 / @param range_to exclusive upper bound
 / @return `executions`market_data!(the window's executions; the books they need)
 .qpipe.source.hdb_fx_markouts.query:{[h;range_from;range_to]
-    deals:.qetl.source.ipc[h;{[from_ts;to_ts]
+    rr:.qetl.source.reference_read .qpipe.source.hdb_fx_markouts.source_name;
+    skew:rr`date_skew;
+    deals:.qetl.source.ipc[h;{[skew;from_ts;to_ts]
         `source_time xasc select source_time, venue, sym, side, size, price, fill_id from `executions
-            where date within (-1 1)+`date$(from_ts;to_ts), source_time>=from_ts, source_time<to_ts
-      };range_from;range_to];
+            where date within (neg[skew],skew)+`date$(from_ts;to_ts), source_time>=from_ts, source_time<to_ts
+      }[skew];range_from;range_to];
     if[0=count deals; :`executions`market_data!(deals;0#.qpipe.source.hdb_fx_markouts.supporting`market_data)];
     spec:.qpipe.transform.fx_markout_outputs.job_spec;
-    pairs:distinct raze .qpipe.transform.fx_markout.legs_of[spec;deals];
-    books:.qetl.source.ipc[h;{[syms;lb;from_ts;to_ts]
+    syms:rr[`symbols][spec;deals];
+    early:.qpipe.transform.fx_markout.lookback[spec];
+    lb:.qetl.source.reference_lookback[.qpipe.source.hdb_fx_markouts.source_name;spec`max_age;early];
+    books:.qetl.source.ipc[h;{[syms;skew;read_from;from_ts;to_ts]
         cand:`source_time xasc select source_time, sym, source, bid_prices, bid_sizes, ask_prices, ask_sizes
-            from `market_data where date within `date$(from_ts-lb;from_ts), source_time<from_ts, sym in syms;
+            from `market_data where date within (neg[skew],skew)+`date$(read_from;from_ts), source_time>=read_from, source_time<from_ts, sym in syms;
         before:0!?[cand;();`sym`source!`sym`source;()];
         inwin:select source_time, sym, source, bid_prices, bid_sizes, ask_prices, ask_sizes from `market_data
-            where date within (-1 1)+`date$(from_ts;to_ts), source_time>=from_ts, source_time<to_ts, sym in syms;
+            where date within (neg[skew],skew)+`date$(from_ts;to_ts), source_time>=from_ts, source_time<to_ts, sym in syms;
         `source_time xasc (cols before)#before,inwin
-      }[pairs;.qpipe.source.hdb_fx_markouts.lookback];
-      range_from-.qpipe.transform.fx_markout.lookback[spec];
+      }[syms;skew;range_from-lb];
+      range_from-early;
       range_to+0D|max spec`horizons];
     `executions`market_data!(deals;books)}
 
@@ -112,7 +149,7 @@
 .qpipe.source.hdb_fx_markouts.fixture:{[] `executions`market_data!(.qpipe.source.hdb_fx_markouts.raw_executions[];.qpipe.source.hdb_fx_markouts.raw_market_data[])}
 
 .qetl.source.define[.qpipe.source.hdb_fx_markouts.source_name;
-    `source`table_name`time_column`row_key`columns`types`query`fixture`tz`supporting!
-    (.qpipe.source.hdb_fx_markouts.source_name;`executions;.qpipe.source.hdb_fx_markouts.time_column;.qpipe.source.hdb_fx_markouts.row_key;.qpipe.source.hdb_fx_markouts.columns;.qpipe.source.hdb_fx_markouts.types;.qpipe.source.hdb_fx_markouts.query;.qpipe.source.hdb_fx_markouts.fixture;.qpipe.source.hdb_fx_markouts.tz;.qpipe.source.hdb_fx_markouts.supporting)];
+    `source`table_name`time_column`row_key`columns`types`query`fixture`tz`supporting`reference_read!
+    (.qpipe.source.hdb_fx_markouts.source_name;`executions;.qpipe.source.hdb_fx_markouts.time_column;.qpipe.source.hdb_fx_markouts.row_key;.qpipe.source.hdb_fx_markouts.columns;.qpipe.source.hdb_fx_markouts.types;.qpipe.source.hdb_fx_markouts.query;.qpipe.source.hdb_fx_markouts.fixture;.qpipe.source.hdb_fx_markouts.tz;.qpipe.source.hdb_fx_markouts.supporting;.qpipe.source.hdb_fx_markouts.reference_read)];
 
 \d .

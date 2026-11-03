@@ -68,7 +68,7 @@
 / the declaration it always did.
 .qetl.source.sources:([name:`symbol$()] source:`symbol$(); table_name:`symbol$();
     time_column:`symbol$(); row_key:(); columns:(); types:(); query:(); fixture:();
-    tz:`symbol$(); transport:`symbol$(); credential_example:(); supporting:(); raw:(); complete_through:())
+    tz:`symbol$(); transport:`symbol$(); credential_example:(); supporting:(); raw:(); complete_through:(); reference_read:())
 
 / ------------------------------------------------------- COMPLETE THROUGH
 / .
@@ -87,6 +87,75 @@
 / and is closed data, so it is never clipped. A settle lag (a per-worker
 / allowance for late rows below the bound) is deliberately not built: add it
 / when a source shows rows arriving behind its own bound.
+
+/ ------------------------------------------------------- REFERENCE READ
+/ .
+/ A source that hands a worker supporting inputs read as REFERENCE - the books an
+/ execution is marked against - decides how much of them to read. Left to its
+/ query that is three numbers written as literals: how many days either side of
+/ the window the date partitions are widened (the window is on a source clock, the
+/ HDB is partitioned on the plant's), how far back the last reference before the
+/ window is looked for, and which symbols are read at all. A literal is a number
+/ nobody can ask the source about, and one a second source copies.
+/ .
+/ `reference_read` declares them, so the contract validates them with the rest:
+/ .
+/   date_skew     whole days, 0 or more, the partition constraint is widened by on
+/                 each side of the window
+/   lookback_cap  a positive timespan, how far back to look when the reference
+/                 has no age limit (max_age 0Wn); see reference_lookback
+/   symbols       a lambda taking (spec;rows) - the job's spec and the window's
+/                 primary rows - and returning the symbols to read. The ONE place
+/                 a symbol the reference needs is added (a conversion pair, #1931)
+/ .
+/ Every key is required once reference_read is declared: a half-declared read would
+/ leave the missing number to a default nobody chose. A source that declares none
+/ reads as it always did; its query owns the decision.
+
+/ How far back a reference read looks before its window.
+/ .
+/ A reference older than max_age is not a reference, so with a finite max_age the
+/ look-back ends where no reference can still count: max_age plus `horizon_lookback`,
+/ the furthest an execution is scored BEFORE its own time (the most negative
+/ horizon, 0 when none is). With max_age 0Wn ("as of however old") nothing ends it,
+/ so the declared cap does.
+/ @param source a registered source name that declares reference_read
+/ @param max_age the oldest a reference may be and still count, 0Wn for no limit
+/ @param horizon_lookback how far before an execution's time it is scored, 0D or more
+/ @return a timespan: max_age + horizon_lookback, or lookback_cap for max_age 0Wn
+/ @throws error when the source declares no reference_read
+/ @eg .qetl.source.reference_lookback[`hdb_fx_markouts;0D00:00:05;0D00:00:30]  ->  0D00:00:35
+.qetl.source.reference_lookback:{[source;max_age;horizon_lookback]
+    rr:.qetl.source.reference_read[source];
+    $[max_age=0Wn; rr`lookback_cap; max_age+horizon_lookback]}
+
+/ A source's declared reference read, or a refusal naming it.
+/ @param source a registered source name
+/ @return the dict date_skew, lookback_cap, symbols
+/ @throws error when the source declares no reference_read
+/ @eg key .qetl.source.reference_read `hdb_fx_markouts  ->  `date_skew`lookback_cap`symbols
+.qetl.source.reference_read:{[source]
+    rr:(.qetl.source.def[source])`reference_read;
+    if[not 99h=type rr;
+        '"reference_read: ",string[source]," declares no reference_read - its query owns what it reads"];
+    rr}
+
+/ Private: refuse a malformed reference_read, naming every fault at once.
+/ @private
+.qetl.source.check_reference_read:{[source;rr]
+    who:"define: ",string[source],"'s reference_read ";
+    if[not 99h=type rr; 'who,"must be a dict of date_skew, lookback_cap and symbols"];
+    miss:`date_skew`lookback_cap`symbols except key rr;
+    if[count miss; 'who,"is missing ",", " sv string miss];
+    extra:(key rr) except `date_skew`lookback_cap`symbols;
+    if[count extra; 'who,"declares ",(", " sv string extra),", which it does not take"];
+    bad:();
+    if[not (-7h=type rr`date_skew) and rr[`date_skew]>=0; bad,:enlist "date_skew (a whole number of days, 0 or more)"];
+    if[not (-16h=type rr`lookback_cap) and (rr[`lookback_cap]>0D) and rr[`lookback_cap]<0Wn; bad,:enlist "lookback_cap (a positive, finite timespan)"];
+    sy:rr`symbols;
+    if[not (100h=type sy) and 2=count (value sy) 1; bad,:enlist "symbols (a lambda taking spec and rows)"];
+    if[count bad; 'who,"has malformed ",", " sv bad];
+    }
 
 / Register an external source table.
 / .
@@ -124,6 +193,9 @@
 /     UTC instant (a timestamp) through which the source holds EVERY row, for
 /     a source over data that is still growing (see COMPLETE THROUGH). The
 /     default, {[h] 0Wp}, is closed data: complete forever.
+/   reference_read - date_skew, lookback_cap and symbols, how much of its
+/     supporting inputs the source reads as reference (see REFERENCE READ). Needs
+/     supporting inputs to describe.
 / @return the source name
 / @throws error naming every missing or malformed declaration at once
 .qetl.source.define:{[source;decl]
@@ -230,6 +302,11 @@
         params:(value ct) 1;
         if[(not 1=count params) or null first params;
             '"define: ",string[source],"'s complete_through must take exactly one argument, the source's handle"]];
+    / A declaration read back from the registry carries the default, (): not declared.
+    if[(`reference_read in key decl) and not ()~decl`reference_read;
+        if[0=count sup;
+            '"define: ",string[source]," declares reference_read but no supporting inputs - there is no reference to read"];
+        .qetl.source.check_reference_read[source;decl`reference_read]];
     tr:$[`transport in key decl; decl`transport; .qetl.source.default_transport];
     if[not tr in .qetl.source.transports[];
         '"define: ",string[source],"'s transport must be one of ",(", " sv string .qetl.source.transports[])];

@@ -736,3 +736,35 @@
     .qunit.assertEquals[(count got`ext;count got`q);(1;1);
         "day 5 is outside the window, and day 0's quote is kept: supporting rows are context"];
     .qunit.assertEquals[.qetl.source.primary[`t;got];got`ext;"the primary is the window's own rows"]};
+
+/ --- reference read (#1926) -------------------------------------------------
+
+.qt.qetl.source.rr:{[] `date_skew`lookback_cap`symbols!(1;7D;{[spec;rows] distinct rows`sym})}
+
+.qt.qetl.source.test_a_source_can_declare_its_reference_read:{[t]
+    .qetl.source.define[`t;@[.qt.qetl.source.decl2[];`reference_read;:;.qt.qetl.source.rr[]]];
+    rr:.qetl.source.reference_read `t;
+    .qunit.assertEquals[(rr`date_skew;rr`lookback_cap);(1;7D);"as declared"];
+    .qunit.assertEquals[rr[`symbols][();([] sym:`b`a`b)];`b`a;"the symbols lambda is the declaration's own"]};
+
+.qt.qetl.source.test_the_lookback_is_max_age_plus_the_horizon_lookback_or_the_cap:{[t]
+    .qetl.source.define[`t;@[.qt.qetl.source.decl2[];`reference_read;:;.qt.qetl.source.rr[]]];
+    .qunit.assertEquals[.qetl.source.reference_lookback[`t;0D00:00:05;0D00:00:30];0D00:00:35;"a finite max_age sets it"];
+    .qunit.assertEquals[.qetl.source.reference_lookback[`t;0D00:00:05;0D];0D00:00:05;"with no look-back horizon, max_age alone"];
+    .qunit.assertEquals[.qetl.source.reference_lookback[`t;0Wn;0D00:00:30];7D;"an unlimited max_age falls to the declared cap"]};
+
+.qt.qetl.source.test_a_source_without_reference_read_is_refused_its_lookback:{[t]
+    .qetl.source.define[`t;.qt.qetl.source.decl2[]];
+    .qunit.assertThrows[{.qetl.source.reference_lookback[`t;5D;0D]};();"*declares no reference_read*";"its query owns what it reads"]};
+
+.qt.qetl.source.test_reference_read_is_refused_when_incomplete_or_malformed:{[t]
+    d:.qt.qetl.source.decl2[];
+    rr:.qt.qetl.source.rr[];
+    .qunit.assertThrows[{.qetl.source.define[`t;x]};@[d;`reference_read;:;enlist[`date_skew]!enlist 1];"*is missing lookback_cap, symbols*";"every key is required"];
+    .qunit.assertThrows[{.qetl.source.define[`t;x]};@[d;`reference_read;:;@[rr;`date_skew;:;-1]];"*date_skew*";"a negative skew"];
+    .qunit.assertThrows[{.qetl.source.define[`t;x]};@[d;`reference_read;:;@[rr;`lookback_cap;:;0Wn]];"*lookback_cap*";"a cap that is no cap"];
+    .qunit.assertThrows[{.qetl.source.define[`t;x]};@[d;`reference_read;:;@[rr;`symbols;:;{[x] x}]];"*symbols*";"a symbols lambda takes spec and rows"];
+    .qunit.assertThrows[{.qetl.source.define[`t;x]};@[d;`reference_read;:;@[rr;`extra;:;1]];"*which it does not take*";"an unknown key"]};
+
+.qt.qetl.source.test_reference_read_needs_supporting_inputs:{[t]
+    .qunit.assertThrows[{.qetl.source.define[`t;x]};@[.qt.qetl.source.decl[];`reference_read;:;.qt.qetl.source.rr[]];"*no supporting inputs*";"there is no reference to read"]};
