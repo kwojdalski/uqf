@@ -11,25 +11,32 @@ source tables ──adapter──► executions ┐
 source tables ──adapter──► market_data ┘     (one result)   wide output
 ```
 
-This page is the contract and the decisions. The calculation is
-`src/etl/transforms/fx_markout.q`, namespace `.qpipe.transform.fx_markout`.
+This page is the contract and the decisions. The calculation is the markout core
+(`src/etl/transforms/markout_core.q`) run under the FX domain module
+(`src/etl/transforms/fx_domain.q`): the core owns the horizons, the reference,
+the clocks, the identity and the money; the domain owns the convention route,
+pips, leg attribution and pip value. `src/etl/transforms/fx_markout.q`,
+namespace `.qpipe.transform.fx_markout`, is the FX declaration and spec. The
+stored datasets carry the markout contract's columns ([the
+contract](../architecture/markout-contract.md)) with FX's between them.
 
 ## The two inputs
 
 Nothing new is invented: the existing contracts are sufficient.
 
-  | Input         | Columns the calculation reads                                                                             | Clock         |
-  | ---           | ---                                                                                                       | ---           |
-  | `executions`  | `source_time`, `venue`, `sym`, `side` (+1 buy, -1 sell), `size`, `price`, `fill_id`                       | `source_time` |
-  | `market_data` | `source_time`, `sym`, `source`, `bid_prices`, `bid_sizes`, `ask_prices`, `ask_sizes` (a snapshot per row) | `source_time` |
+  | Input         | Columns the calculation reads                                                                                      | Clock         |
+  | ---           | ---                                                                                                                | ---           |
+  | `executions`  | `source_time`, `venue`, `sym`, `side` (+1 buy, -1 sell), `size`, `price`, `fill_id`, `clock`                       | `source_time` |
+  | `market_data` | `source_time`, `sym`, `source`, `bid_prices`, `bid_sizes`, `ask_prices`, `ask_sizes`, `clock` (a snapshot per row) | `source_time` |
 
 The plant's receipt `time` is **not** an input, so it cannot leak into the
 clock. An execution is identified by `(venue; fill_id)`.
 
 Both tables also carry `clock` (`venue` or `receipt`, #1925): whose clock
-`source_time` is. This calculation does not read it yet, so it still scores a
-`receipt`-clock fill against a `venue`-clock book; refusing that comparison is
-the markout contract's rule (#1923), enforced once the core exists.
+`source_time` is. The calculation reads it: an execution is scored only against
+books on its own clock, a leg whose only book within `max_age` is on the other
+clock is `clock_mismatch`, and a fill with a null or `unknown` clock is excluded
+with the reason `no_clock`.
 
 ## The result
 
@@ -44,6 +51,14 @@ One long table, one row per `(execution, horizon, component)`:
 
 `step` numbers a leg within its route from 1 and is 0 for every other kind, so
 `(venue; fill_id; horizon; kind; step)` is a key with no nulls.
+
+`pips` is `pip_factor × move`, where `move` (the contract's column) is the
+signed move in price units. `pip_value` is the money one pip is worth per trade
+in the quote currency, `size ÷ pip_factor`. `quote_amount` is `size × move`;
+`report_amount` is that in `report_ccy` (USD in the jobs) at the book of the
+execution's instant. A quote currency with no declared rate in the spec's
+`rates` is `no_rate`: the pips and `quote_amount` are kept and `report_amount`
+is null. A site declares the rate book each of its currencies converts through.
 
 So `total = execution + Σ leg + residual` for every `(execution, horizon)`.
 Reference and allocation are priced along one route, so the residual is float
@@ -227,6 +242,27 @@ is `remember` (a day, on the plant clock). Past that, a redelivery is a new
 execution and is scored and published again; the bounded twin's key makes that
 an idempotent replace in the HDB.
 
+## Moving to the contract's columns (#1935)
+
+`fx_markout` and `fx_markout_wide` gained the contract's columns: `clock`,
+`price`, `quote_ccy`, `ref_t0`, `ref_t1`, `move`, `quote_amount`, `report_ccy`,
+`rate`, `rate_source`, `rate_sym`, `rate_time`, `rate_timing`, `report_amount`
+and `contract_version`, plus FX's `pip_value`. The core columns keep their
+relative order; FX's own sit between them. Both workers declare `revision` 1, so
+every window is planned again under `<release>@r1` and the new columns are
+written.
+
+History is filled, not recomputed. `fill_hdb_partitions.q` (the repair behind
+`uqs data check --apply`) adds each missing column to every partition and
+derives what the stored rows already say: `clock` is `unknown` (no stored fill
+says whose clock it was scored on), `contract_version` is 1, `quote_ccy` is the
+pair's quote leg, `move` is `pips ÷ pip_factor`, `pip_value` is
+`size ÷ pip_factor`, `quote_amount` is `size × move`, and in the long table
+`price`, `ref_t0` and `ref_t1` are read off the `total` and `execution` rows of
+the same `(execution, horizon)`. `report_ccy`, the rate columns and
+`report_amount` stay null: no rate was ever declared for a stored row. A refill
+under `revision` 1 replaces a window with rows that carry every column.
+
 ## The bounded twins
 
 `hdb_fx_markouts_backfill1` (long) and `hdb_fx_markout_wide_backfill1` (wide)
@@ -236,8 +272,11 @@ the lookback to its end plus the furthest horizon, and each source's last book
 before that (looked back up to seven days). They apply the live job's
 calculation and layout and add one thing the live job cannot have: `time` is
 `source_time` plus the furthest horizon, the earliest a live row could have been
-stamped. `on_conflict` is `replace` on `source_time`, so a window the live job
-also scored is replaced, not doubled.
+stamped (the core stamps it). The source reads `clock` with the rows and names
+the conversion pair the spec's rates read from a book beside the route's legs;
+its readiness gate is the core's (`markout_core.unmet`), so a window whose
+conversion book is absent is not claimed. `on_conflict` is `replace` on
+`source_time`, so a window the live job also scored is replaced, not doubled.
 `q scripts/examples/hdb_fx_markouts_example.q` runs both on the source's
 fixture, each with its own status directory and destination HDB, and reads
 `fx_markout` and `fx_markout_wide` back from disk.

@@ -14,19 +14,19 @@
 
 / one execution
 .qt.qpipe.transform.fx_markout.fill:{[tm;sym;side;px;id]
-    ([] source_time:enlist tm; venue:enlist `a; sym:enlist sym; side:enlist side; size:enlist 1e6; price:enlist px; fill_id:enlist id)}
+    ([] source_time:enlist tm; venue:enlist `a; sym:enlist sym; side:enlist side; size:enlist 1e6; price:enlist px; fill_id:enlist id; clock:enlist `venue)}
 
 / one source's book for one pair at one instant: a single level each side
 .qt.qpipe.transform.fx_markout.bk:{[tm;sym;src;bid;ask]
     ([] source_time:enlist tm; sym:enlist sym; source:enlist src;
         bid_prices:enlist enlist bid; bid_sizes:enlist enlist 1e6;
-        ask_prices:enlist enlist ask; ask_sizes:enlist enlist 1e6)}
+        ask_prices:enlist enlist ask; ask_sizes:enlist enlist 1e6; clock:enlist `venue)}
 
 / a book whose bid side is withdrawn (an empty ladder)
 .qt.qpipe.transform.fx_markout.bk_no_bid:{[tm;sym;src;ask]
     ([] source_time:enlist tm; sym:enlist sym; source:enlist src;
         bid_prices:enlist `float$(); bid_sizes:enlist `float$();
-        ask_prices:enlist enlist ask; ask_sizes:enlist enlist 1e6)}
+        ask_prices:enlist enlist ask; ask_sizes:enlist enlist 1e6; clock:enlist `venue)}
 
 / a locked book (bid = ask): the arithmetic is then by hand
 .qt.qpipe.transform.fx_markout.lk:{[tm;sym;src;px] .qt.qpipe.transform.fx_markout.bk[tm;sym;src;px;px]}
@@ -51,8 +51,8 @@
     .qunit.assertEquals[found;();"no adapter's table, column or filter appears in the calculator"]};
 
 .qt.qpipe.transform.fx_markout.test_the_calculator_reads_the_two_canonical_contracts_and_no_plant_receipt_time:{[tc]
-    .qunit.assertEquals[cols .qpipe.transform.fx_markout.executions_in;`source_time`venue`sym`side`size`price`fill_id;"executions, on source_time"];
-    .qunit.assertEquals[cols .qpipe.transform.fx_markout.market_data_in;`source_time`sym`source`bid_prices`bid_sizes`ask_prices`ask_sizes;"market_data, on source_time"];
+    .qunit.assertEquals[cols .qpipe.transform.fx_markout.executions_in;`source_time`venue`sym`side`size`price`fill_id`clock;"executions, on source_time, and whose clock it is"];
+    .qunit.assertEquals[cols .qpipe.transform.fx_markout.market_data_in;`source_time`sym`source`bid_prices`bid_sizes`ask_prices`ask_sizes`clock;"market_data, on source_time, and whose clock it is"];
     both:(cols .qpipe.transform.fx_markout.executions_in),cols .qpipe.transform.fx_markout.market_data_in;
     .qunit.assertFalse[`time in both;
         "the plant's receipt time is not an input"]};
@@ -194,7 +194,8 @@
     .qunit.assertTrue[all raze ok;"every leg allocation, and the reference move, equal cross_markout_attribution's"]};
 
 .qt.qpipe.transform.fx_markout.test_total_equals_execution_plus_legs_plus_residual_everywhere:{[tc]
-    sp:.qt.qpipe.transform.fx_markout.spec_of[`horizons`tolerance!(-0D00:00:01 0D00:00:00 0D00:00:01 0D00:00:10;1e-6)];
+    / TRY and PLN are given a declared rate of 1, so every row converts and the residual says `reconciled
+    sp:.qt.qpipe.transform.fx_markout.spec_of[`horizons`tolerance`rates!(-0D00:00:01 0D00:00:00 0D00:00:01 0D00:00:10;1e-6;`TRY`PLN!1 1f)];
     e:.qt.qpipe.transform.fx_markout.fill[.qt.qpipe.transform.fx_markout.t;`PLNTRY;1;12.4;`c1],.qt.qpipe.transform.fx_markout.fill[.qt.qpipe.transform.fx_markout.t+0D00:00:02;`USDPLN;-1;3.99;`c2],.qt.qpipe.transform.fx_markout.fill[.qt.qpipe.transform.fx_markout.t;`EURUSD;1;1.1;`c3];
     m:.qt.qpipe.transform.fx_markout.three_leg_books[],.qt.qpipe.transform.fx_markout.lk[.qt.qpipe.transform.fx_markout.t-0D00:00:01;`EURUSD;`b;1.2],.qt.qpipe.transform.fx_markout.lk[.qt.qpipe.transform.fx_markout.t+0D00:00:06;`EURPLN;`a;4.5],.qt.qpipe.transform.fx_markout.lk[.qt.qpipe.transform.fx_markout.t+0D00:00:06;`EURUSD;`a;1.3];
     r:.qt.qpipe.transform.fx_markout.calc[sp;e;m];
@@ -249,14 +250,14 @@
 .qt.qpipe.transform.fx_markout.test_a_zero_size_level_is_not_a_quote:{[tc]
     sp:.qt.qpipe.transform.fx_markout.spec_of[`horizons`tolerance!(enlist .qt.qpipe.transform.fx_markout.one_s;1e-6)];
     m:([] source_time:enlist .qt.qpipe.transform.fx_markout.t-0D00:00:01; sym:enlist `EURUSD; source:enlist `a;
-        bid_prices:enlist enlist 1.1000; bid_sizes:enlist enlist 0f; ask_prices:enlist enlist 1.1002; ask_sizes:enlist enlist 1e6);
+        bid_prices:enlist enlist 1.1000; bid_sizes:enlist enlist 0f; ask_prices:enlist enlist 1.1002; ask_sizes:enlist enlist 1e6; clock:enlist `venue);
     r:.qt.qpipe.transform.fx_markout.calc[sp;.qt.qpipe.transform.fx_markout.fill[.qt.qpipe.transform.fx_markout.t;`EURUSD;1;1.1;`x];m];
     .qunit.assertTrue[null first exec price_t1 from r where kind=`execution;"level_ok refuses a level nobody can deal at"]};
 
 .qt.qpipe.transform.fx_markout.test_only_level_zero_sets_the_reference:{[tc]
     sp:.qt.qpipe.transform.fx_markout.spec_of[`horizons`tolerance!(enlist .qt.qpipe.transform.fx_markout.one_s;1e-6)];
     m:([] source_time:enlist .qt.qpipe.transform.fx_markout.t-0D00:00:01; sym:enlist `EURUSD; source:enlist `a;
-        bid_prices:enlist 1.1000 1.0900; bid_sizes:enlist 1e3 1e9; ask_prices:enlist 1.1002 1.1100; ask_sizes:enlist 1e3 1e9);
+        bid_prices:enlist 1.1000 1.0900; bid_sizes:enlist 1e3 1e9; ask_prices:enlist 1.1002 1.1100; ask_sizes:enlist 1e3 1e9; clock:enlist `venue);
     r:.qt.qpipe.transform.fx_markout.calc[sp;.qt.qpipe.transform.fx_markout.fill[.qt.qpipe.transform.fx_markout.t;`EURUSD;1;1.1;`x];m];
     .qunit.assertTrue[.qt.qpipe.transform.fx_markout.near[exec price_t1 from r where kind=`execution;enlist 1.1001];"the deeper, larger levels do not move it"]};
 
@@ -331,7 +332,7 @@
 
 .qt.qpipe.transform.fx_markout.test_last_delivery_of_nothing_is_the_empty_table:{[tc]
     e:0#.qpipe.transform.fx_markout.executions_in;
-    .qunit.assertEquals[.qpipe.transform.fx_markout.last_delivery e;e;"not the general empty list"]};
+    .qunit.assertEquals[.qpipe.transform.markout_core.last_delivery e;e;"not the general empty list"]};
 
 .qt.qpipe.transform.fx_markout.test_unscoreable_executions_are_excluded_and_named:{[tc]
     sp:.qt.qpipe.transform.fx_markout.spec_of[`horizons`tolerance!(enlist .qt.qpipe.transform.fx_markout.one_s;1e-6)];
@@ -377,4 +378,4 @@
     .qunit.assertThrows[.qpipe.transform.fx_markout.require_spec;sp,enlist[`max_age]!enlist 5;
         "*max_age must be a positive timespan*";"not a timespan"];
     .qunit.assertThrows[.qpipe.transform.fx_markout.require_spec;enlist[`horizons]!enlist .qt.qpipe.transform.fx_markout.one_s;
-        "*spec is missing convention, max_age, tolerance*";"every key"]};
+        "*spec is missing report_ccy, rate_timing*";"every key the spec must carry"]};
