@@ -136,6 +136,26 @@ export interface ProcessHealth {
   identity_mismatch: string | null;
   port_unresolved: boolean;
 }
+/** One deployment target - models.ServiceTargetOut, as `uqs target list
+ * --json` lists it. Read from deploy_targets.toml: the server is never asked. */
+export interface ServiceTarget {
+  name: string;
+  ssh: string;
+  dest: string;
+  remote_user: string | null;
+  environment: string | null;
+  labels: Record<string, string>;
+  last_deployed: { release: string; at: string } | null;
+}
+/** GET /services - models.ServicesResponse. `invalid` is the registry's own
+ * refusal, naming the line, when the file exists but cannot be read. */
+export interface Services extends Pollable {
+  targets: ServiceTarget[];
+  source: string;
+  declared: boolean;
+  invalid: string | null;
+  remote_operations_enabled: boolean;
+}
 export interface OpsData extends Pollable {
   rows?: Row[];
   servers?: Row[];

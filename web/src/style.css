@@ -267,7 +267,8 @@ select:focus {
 .badge.connected,
 .badge.completed,
 .badge.idle,
-.badge.up {
+.badge.up,
+.badge.remote-operations-enabled {
   color: #136448;
   background: #e6f6ef;
   border-color: #a5d5be;

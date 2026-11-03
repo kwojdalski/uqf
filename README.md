@@ -181,19 +181,49 @@ uv run pytest tests/qrun/test_external_smoke.py -m external --smoke-targets HOST
 ### Where each check runs
 
 Each check runs in one place, chosen by what it needs (#1879). A commit's hooks
-are **fast and targeted**; CI is the **full, clean** run - a Linux checkout with
-nothing left over, PeachQ as its q.
+are **fast**, a push's are **targeted test suites**, and CI is the **full,
+clean** run - a Linux checkout with nothing left over, PeachQ as its q.
 
-- **Commit hooks.** The static hooks run on what is staged. `python-tests` runs
-  only the Python tests the commit reaches: testmon's record for a `.py` file,
-  and for anything else a record of what each test reads, lists and starts
-  (`scripts/dev/test_reach.py`) - a `.q` change runs every test that starts a
-  q. `q-tests` and `q-coverage` run the q suites the branch reaches, on KDB-X
-  (`scripts/dev/test_impact.py`). The docs render (`doc-links`) and the docs' q
-  blocks on PeachQ (`q-docs-peachq`) do not run: CI does. The whole Python suite
-  runs only when the selector cannot decide - no record yet, a `conftest.py`,
-  `pyproject.toml` or `uv.lock` change. The records are shared between the
-  worktrees of a clone, so a new worktree starts from the last one written.
+  | Check                                                             | Before #1965 | Now                |
+  | ---                                                               | ---          | ---                |
+  | format, lint, `ty`, static gates, generated-file checks, `q-docs` | commit       | commit             |
+  | `python-tests` (the Python tests the change reaches)              | commit       | push               |
+  | `q-tests`, `q-coverage` (the q suites the branch reaches, KDB-X)  | commit       | push               |
+  | `peachq-push` (changed q test files on PeachQ)                    | -            | push               |
+  | whole Python suite, whole q suite on PeachQ, docs render          | CI           | CI                 |
+  | `regenerate-merged` (generated files a merge kept one side of)    | -            | after merge/rebase |
+
+- **Commit hooks.** The static hooks run on what is staged, in seconds.
+
+- **Push hooks.** `python-tests` runs only the Python tests the pushed commits
+  reach: testmon's record for a `.py` file, and for anything else a record of
+  what each test reads, lists and starts (`scripts/dev/test_reach.py`) - a `.q`
+  change runs every test that starts a q. `q-tests` and `q-coverage` run the q
+  suites the branch reaches, on KDB-X (`scripts/dev/test_impact.py`).
+  `peachq-push` runs the `tests/q/test_*.q` files the branch adds or changes,
+  and the namesake suite of each changed module, on PeachQ, failing only on a
+  test not in `tests/q/peachq_known_gaps.txt` - the early catch for CI's PeachQ
+  job, which still runs the whole suite (`SKIP=peachq-push git push` skips it).
+  The docs render (`doc-links`) and the docs' q blocks on PeachQ
+  (`q-docs-peachq`) do not run: CI does. The whole Python suite runs only when
+  the selector cannot decide - no record yet, a `conftest.py`, `pyproject.toml`
+  or `uv.lock` change. The records are shared between the worktrees of a clone,
+  so a new worktree starts from the last one written.
+
+- **Generated files merge themselves.** `.gitattributes` gives the files
+  `scripts/generate/derive.py` writes a merge driver that keeps one side, so a
+  merge or rebase never stops on them; the `regenerate-merged` hook then reruns
+  their `derive.py` target and leaves the result to commit, and the files'
+  `--check` gates still decide. Once per clone (`./install.sh --dev` does both):
+
+  ```
+  pre-commit install                                  # commit, push, post-merge, post-rewrite hooks
+  python3 scripts/dev/merge_generated.py install      # register the merge driver in git config
+  ```
+
+  CI and Kodiak never merge locally and need neither. A clone without the driver
+  merges these files as text, as before.
+
 - **CI.** Every hook again over every file, on every run. Then each complete
   group the change can affect (#1955): the whole Python suite in four PeachQ
   shards, the whole q suite on PeachQ, the docs render, and the browser
@@ -205,17 +235,19 @@ nothing left over, PeachQ as its q.
   (`conftest.py`, `pyproject.toml`, `uv.lock`, the workflow and its planner) or
   a path in no known area. "Repository checks" counts a skipped job as passed
   only when Scope said to skip it.
+
 - **KDB-X attestation.** The KDB-X gates run locally
   (`uv run python scripts/dev/attest_kdbx.py`), and CI checks the trailer.
 
 **Full mode is one switch away on both sides.**
 
 ```
-UQF_HOOKS_FULL=1 git commit ...               # this commit's hooks in full: the whole Python
-                                              # suite, the whole q suite and coverage gate,
-                                              # the docs render, the docs' q blocks on PeachQ
-python3 scripts/dev/hooks_full.py --all       # the same over the whole tree, without a commit
-UQF_Q_TESTS_FULL=1 git commit ...             # the whole q suite only, as before
+UQF_HOOKS_FULL=1 git commit ...               # this commit's hooks in full: the docs render,
+                                              # the docs' q blocks on PeachQ
+UQF_HOOKS_FULL=1 git push ...                 # this push's in full: the whole Python suite,
+                                              # the whole q suite and coverage gate
+python3 scripts/dev/hooks_full.py --all       # both over the whole tree, without either
+UQF_Q_TESTS_FULL=1 git push ...               # the whole q suite only, as before
 gh pr edit <n> --add-label ci:full            # CI: every job on this pull request
 gh workflow run ci.yml --ref <branch> -f full=true   # CI: every job on a branch
 ```
@@ -233,8 +265,8 @@ Coverage measures what the suites **execute**: line coverage for Python
 (`uv run pytest --cov`, measuring each member's `src/`), statement and branch
 coverage for q through the [`.cov` library](scripts/dev/coverage.q). The q half
 is the gate (`-m coverage`): it fails when the set of functions nothing enters
-differs from `tests/q/coverage_baseline.txt` in either direction. At commit and
-in an attestation it judges only the production files a change reaches, running
+differs from `tests/q/coverage_baseline.txt` in either direction. At push and in
+an attestation it judges only the production files a change reaches, running
 q-tests' suites plus, for each function judged, a suite that enters it according
 to `tests/q/coverage_map.txt`; a subset that finds a function never entered
 hands the verdict to a whole-suite run. The whole suite, judging every function,

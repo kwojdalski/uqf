@@ -256,6 +256,7 @@ SAMPLES: dict[tuple[str, str], dict] = {
     ("GET", "/ops/clients"): {},
     ("GET", "/ops/processes"): {},
     ("GET", "/ops/backfill"): {},
+    ("GET", "/services"): {},
     ("GET", "/coverage"): {
         "params": {"dataset": "fx_quotes", "partition": "", "source_version": "v1"}
     },

@@ -70,6 +70,8 @@ PAIRS = {
     "ActivityEvent": "ActivityEventOut",
     "ActivityPersistence": "ActivityPersistence",
     "ActivityHistory": "ActivityResponse",
+    "ServiceTarget": "ServiceTargetOut",
+    "Services": "ServicesResponse",
     **REQUESTS,
 }
 

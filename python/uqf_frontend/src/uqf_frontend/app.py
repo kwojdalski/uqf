@@ -29,6 +29,7 @@ from uqf_frontend import (
     ops,
     procfile,
     queries,
+    services,
     status,
     write_guard,
 )
@@ -74,6 +75,8 @@ from uqf_frontend.models import (
     QueryRequest,
     QueryResponse,
     RunState,
+    ServicesResponse,
+    ServiceTargetOut,
     TableInfo,
     UsageResponse,
     WorkerConfigRequest,
@@ -476,6 +479,21 @@ def create_app(
             unreadable=unreadable,
             source=str(directory) if directory else None,
             poll_seconds=ops.POLL_SECONDS["backfill"],
+        )
+
+    @app.get("/services", response_model=ServicesResponse)
+    def get_services() -> ServicesResponse:
+        """The deployment targets this machine declares, as `uqs target list
+        --json` reads them: from deploy_targets.toml and the local deploy
+        history, with no ssh - see services.py."""
+        found = services.read(settings)
+        return ServicesResponse(
+            targets=[ServiceTargetOut(**t) for t in found.targets],
+            source=found.source,
+            declared=found.declared,
+            invalid=found.invalid,
+            remote_operations_enabled=settings.enable_writes,
+            poll_seconds=ops.POLL_SECONDS["services"],
         )
 
     @app.get("/coverage", response_model=CoverageResponse)

@@ -45,17 +45,18 @@ The q details this rests on, verified against a live KDB-X process:
 
 ## Endpoints
 
-  |                        |                                                                                                                                         |
-  | ---                    | ---                                                                                                                                     |
-  | `GET /health`          | BFF liveness plus gateway reachability. An EOD reload reports `ok: true, gateway: "reloading"` — a known transient state, not a failure |
-  | `GET /catalog`         | The queryable surface, so a UI builds filter controls from the server's whitelist instead of a hardcoded copy that drifts               |
-  | `GET /coverage`        | Composed coverage intervals and any gaps, for one dataset at one source release                                                         |
-  | `GET /ops/queue`       | Pending and running gateway queries                                                                                                     |
-  | `GET /ops/connections` | Registered backend handles and connected clients                                                                                        |
-  | `GET /ops/usage`       | Fleet-wide query log, assembled here because q has none                                                                                 |
-  | `GET /ops/processes`   | Fleet health for every process `process.csv` declares                                                                                   |
-  | `GET /ops/backfill`    | Backfill and Airflow task status, read from the files q writes                                                                          |
-  | `POST /query`          | Validated, parameterised table query, tier-routed                                                                                       |
+  |                        |                                                                                                                                          |
+  | ---                    | ---                                                                                                                                      |
+  | `GET /health`          | BFF liveness plus gateway reachability. An EOD reload reports `ok: true, gateway: "reloading"` — a known transient state, not a failure  |
+  | `GET /catalog`         | The queryable surface, so a UI builds filter controls from the server's whitelist instead of a hardcoded copy that drifts                |
+  | `GET /coverage`        | Composed coverage intervals and any gaps, for one dataset at one source release                                                          |
+  | `GET /ops/queue`       | Pending and running gateway queries                                                                                                      |
+  | `GET /ops/connections` | Registered backend handles and connected clients                                                                                         |
+  | `GET /ops/usage`       | Fleet-wide query log, assembled here because q has none                                                                                  |
+  | `GET /ops/processes`   | Fleet health for every process `process.csv` declares                                                                                    |
+  | `GET /ops/backfill`    | Backfill and Airflow task status, read from the files q writes                                                                           |
+  | `GET /services`        | The deployment targets `uqs target list --json` lists, read from `deploy_targets.toml` with no ssh, and whether remote operations are on |
+  | `POST /query`          | Validated, parameterised table query, tier-routed                                                                                        |
 
 ### Control routes --- these CHANGE things
 
