@@ -111,7 +111,7 @@ it("says changes are not part of a caller's access without control:write", async
 it("shows every view when the server's answer is not a policy", async () => {
   serve({ unexpected: true });
   render(<App />);
-  await waitFor(() => expect(navNames()).toHaveLength(11));
+  await waitFor(() => expect(navNames()).toHaveLength(12));
   expect(screen.getByText(/Local session/)).toBeInTheDocument();
 });
 

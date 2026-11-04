@@ -277,7 +277,8 @@ select:focus {
 .badge.ok,
 .badge.verified,
 .badge.listening,
-.badge.remote-operations-enabled {
+.badge.remote-operations-enabled,
+.badge.equal_in_sample {
   color: #136448;
   background: #e6f6ef;
   border-color: #a5d5be;
@@ -292,7 +293,9 @@ select:focus {
 .badge.discovery,
 .badge.auth_refused,
 .badge.local_bind,
-.badge.not_ready {
+.badge.not_ready,
+.badge.differs,
+.badge.missing_table {
   color: #9c2834;
   background: #fff0f0;
   border-color: #e4b2b7;
@@ -303,7 +306,9 @@ select:focus {
 .badge.undetermined,
 .badge.stale,
 .badge.unverified,
-.badge.disconnected {
+.badge.disconnected,
+.badge.incomplete_coverage,
+.badge.endpoint_unavailable {
   color: #76520c;
   background: #fff6d9;
   border-color: #e8d090;

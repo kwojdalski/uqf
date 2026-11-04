@@ -1136,3 +1136,89 @@ class ChartResponse(BaseModel):
         description="the read was cut at a row cap, or series were left out to fit point_limit"
     )
     notes: list[str] = Field(description="what was left out, and why, in words")
+
+
+# ------------------------------------------------------------ compare (#2033)
+
+#: The outcomes `uqs data diff` reaches, as q names them (.qetl.compare.outcomes).
+CompareOutcome = Literal[
+    "endpoint_unavailable", "missing_table", "differs", "incomplete_coverage", "equal_in_sample"
+]
+
+
+class CompareRequest(BaseModel):
+    """POST /compare: two explicit sides, an explicit window, filters and a row limit."""
+
+    model_config = STRICT_REQUEST
+    left: str = Field(min_length=1, max_length=64, description="`local`, or a registered target")
+    right: str = Field(min_length=1, max_length=64, description="`local`, or a registered target")
+    tables: list[str] = Field(min_length=1, max_length=20)
+    range_from: AwareDatetime
+    range_to: AwareDatetime
+    filters: list[str] = Field(default_factory=list, max_length=20,
+                               description="COLUMN OP VALUE, e.g. sym=EURUSD")  # fmt: skip
+    limit: int = Field(default=1000, ge=1, le=100_000, description="rows read per side, at most")
+    source_version: str | None = Field(default=None, max_length=128)
+    partition: str | None = Field(default=None, max_length=128)
+
+
+class CompareInterval(BaseModel):
+    range_from: str
+    range_to: str
+
+
+class CompareCoverageSide(BaseModel):
+    checked: bool = Field(description="false when no source_version was given")
+    covered: list[CompareInterval]
+    gaps: list[CompareInterval] = Field(
+        description="what of the window this side has not published"
+    )
+
+
+class CompareSchemaDifference(BaseModel):
+    column: str
+    left: str = Field(description='the type on the left, or "absent"')
+    right: str = Field(description='the type on the right, or "absent"')
+
+
+class CompareRowDifference(BaseModel):
+    rowkey: str
+    kind: str = Field(description="only_left, only_right, duplicated or changed")
+    detail: str
+
+
+class CompareTable(BaseModel):
+    """One table's verdict, as q decided it."""
+
+    table: str
+    outcome: CompareOutcome
+    label: str = Field(description="what the outcome means here; a truncated sample says so")
+    truncated: bool = Field(description="a side stopped at the row limit: a sample, not the table")
+    key: list[str]
+    basis: str
+    read: list[int] = Field(description="rows read on the left and on the right")
+    schema_: list[CompareSchemaDifference] = Field(alias="schema")
+    rows: list[CompareRowDifference]
+    unpaired: int = Field(description="keys one truncated sample holds alone, not judged")
+    coverage: dict[str, CompareCoverageSide]
+    reasons: dict[str, str] = Field(description="why a side was unavailable")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class CompareResponse(BaseModel):
+    """POST /compare: `uqs data diff --json`."""
+
+    ok: bool = Field(description="true only when every table is equal_in_sample")
+    outcome: CompareOutcome
+    left: str
+    right: str
+    range_from: str = Field(alias="from")
+    range_to: str = Field(alias="to")
+    limit: int
+    filters: list[str]
+    source_version: str
+    partition: str
+    tables: list[CompareTable]
+
+    model_config = ConfigDict(populate_by_name=True)

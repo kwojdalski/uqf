@@ -20,6 +20,7 @@ export const API_PATHS = [
   "services",
   "me",
   "charts",
+  "compare",
   "workspaces",
   "workspace",
 ];
