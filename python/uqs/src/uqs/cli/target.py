@@ -42,7 +42,7 @@ target_app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
     help="Deploy targets: add, set, unset, rename, remove, edit, list, check, log, revert, "
-    "adopt, shell, tunnel.\n\nThe servers `uqs --target TARGET <command>` runs on.",
+    "adopt, shell, config, tunnel.\n\nThe servers `uqs --target TARGET <command>` runs on.",
 )
 app.add_typer(target_app, name="target")
 

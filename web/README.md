@@ -76,24 +76,42 @@ it the API runs alone.
   Stop and restart ask to be confirmed first; Escape or Cancel backs out.
 - **Activity:** the history `GET /activity` serves - what operators did here
   and the server's audit of every write, whoever sent it - filtered by time,
-  this session, action, target, outcome and source. Choosing a request id shows
-  one operation: the click, the request and its result. It says when history
-  is in memory only or writes to it have failed, and shows a claimed user as
-  unverified.
+  this session, action, target, outcome, source and level. Choosing a request
+  id shows one operation: the click, the request and its result. It says when
+  history is in memory only or writes to it have failed, how much of each level
+  is kept and what was not, and shows a claimed user as unverified. It sets the
+  level this tab records at, and exports what the filters show as a timeline,
+  CSV or JSON Lines.
 - **Fleet, Queue, Connections, Usage:** the existing operational endpoints,
   including partial failures, identity mismatches, unresolved ports, optional
   processes and unconfigured usage collection.
 
 ## Activity recording
 
-`src/activity.ts` records navigation, selections, submissions, confirmations,
-cancellations and the result of each write, with how each was triggered
-(`pointer` or `keyboard`: Enter on a button counts). It batches events and
-sends them to `POST /activity/events` about a second later, or when the tab is
-hidden, and keeps them while the API is unreachable. Polling records nothing.
-It never records a typed value or the write token: a target names a view, a
-table, a process selector or a worker, and `detail` carries only the keys the
-server allows. Every write carries `X-UQF-Request-Id` and `X-UQF-Session-Id`,
+`src/activity.ts` records at the tab's level (#2000) - the server's default from
+`/health`, or the one picked in the Activity view:
+
+- `off`: nothing. The server still audits every write.
+- `actions`: navigation, selections, submissions, confirmations, cancellations
+  and the result of each write, from the handler that performs each.
+- `interactions`: also every control used, recorded by one listener at the
+  document - a click (or Enter or Space on a control), a download, a change to
+  a select, box or field, a section toggled, a copy - under the control's
+  `data-activity` name. Give every new button, link, input, select, textarea
+  and summary one: `src/ActivityCoverage.test.tsx` fails on a control without
+  it, in the source and on every rendered view.
+- `debug`: also each request's start and finish (method, route, status,
+  duration) and each poll and retry of a polled view, rate-limited (a burst of
+  30, then 5 a second).
+
+Each event says how it was triggered (`pointer` or `keyboard`: Enter on a button
+counts). It batches events and sends them to `POST /activity/events` about a
+second later, or when the tab is hidden, and keeps up to 1000 while the API is
+unreachable; what the rate limit samples away or the queue overflows is counted
+and sent with the next batch. It never records a typed value, a file's name or
+contents, copied text or the write token at any level: a target names a view, a
+table, a process selector, a worker or a control, a request is recorded by its
+route alone, and `detail` carries only the keys the server allows. Every write carries `X-UQF-Request-Id` and `X-UQF-Session-Id`,
 so its browser events and the server's audit row share an id.
 
 ## Refresh behaviour

@@ -387,7 +387,7 @@ def test_targets_are_listed_by_their_own_noun(server):
     assert isinstance(group, typer.core.TyperGroup)
     assert set(group.commands) == {
         "add", "set", "unset", "rename", "remove", "edit", "log", "revert", "adopt",
-        "list", "check", "shell", "tunnel",
+        "list", "check", "shell", "config", "tunnel",
     }  # fmt: skip
 
 
