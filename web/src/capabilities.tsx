@@ -9,6 +9,7 @@ export const VIEW_FEATURE: Readonly<Record<string, string>> = {
   Coverage: "coverage",
   Backfills: "backfills",
   Desk: "desk",
+  Charts: "charts",
   Fleet: "fleet",
   Queue: "queue",
   Connections: "connections",

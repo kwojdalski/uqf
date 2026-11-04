@@ -101,6 +101,9 @@ PAIRS = {
     "RestoreStep": "RestoreStepOut",
     "RestoreResult": "RestoreResultOut",
     "ConfigRestore": "ConfigRestoreResponse",
+    "ChartInfo": "ChartInfo",
+    "ChartList": "ChartsResponse",
+    "ChartResult": "ChartResponse",
     **REQUESTS,
 }
 

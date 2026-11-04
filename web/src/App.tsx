@@ -29,6 +29,7 @@ import {
 } from "./api";
 import { FileBrowser } from "./FileBrowser";
 import { PlotPanel } from "./PlotPanel";
+import { ChartsView } from "./ChartsView";
 import { useResource } from "./useResource";
 import { ActivityView } from "./ActivityView";
 import { CapabilitiesProvider, useCapabilities } from "./capabilities";
@@ -44,6 +45,7 @@ const views = [
   "Coverage",
   "Backfills",
   "Desk",
+  "Charts",
   "Fleet",
   "Queue",
   "Connections",
@@ -1821,7 +1823,7 @@ function Workspace() {
           <div className="page-heading">
             <div>
               <p className="eyebrow">
-                {view === "Desk"
+                {view === "Desk" || view === "Charts"
                   ? "PUBLISHED DATA"
                   : view === "Activity"
                     ? "HISTORY"
@@ -1847,6 +1849,8 @@ function Workspace() {
             <BackfillView />
           ) : view === "Desk" ? (
             <DeskView />
+          ) : view === "Charts" ? (
+            <ChartsView />
           ) : view === "Control" ? (
             <ControlView />
           ) : view === "Activity" ? (

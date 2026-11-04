@@ -71,6 +71,11 @@ it the API runs alone.
   infinities stay gaps, and a truncated result says so on the chart. No new
   request is made. Plotly loads only when a plot is first shown, from its own
   chunk.
+- **Charts:** prepared charts, defined on the server (`GET /charts`). The view
+  draws each chart's form from its parameter schema and renders the plotly.py
+  figure it is sent, with the point limit and whether the figure was
+  downsampled or truncated. It holds no chart-specific code. Plotly comes from
+  the same lazy chunk the Desk's Plot view uses.
 - **Control:** the write surface, rendered only when the API reports writes
   enabled. Processes are picked from the list the API serves, grouped by
   proctype, with `all` meaning torq.sh's own `all` (startwithall=1) rather
