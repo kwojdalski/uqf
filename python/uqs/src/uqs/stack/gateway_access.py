@@ -40,6 +40,7 @@ from uqs.generated import q_facts
 from uqs.model import plant_metadata, schemas
 from uqs.model.runtime_members import plant_tables
 from uqs.paths import UqsError, UqsPaths
+from uqs.stack import generated
 
 _DAY = re.compile(r"\d{4}\.\d{2}\.\d{2}")
 
@@ -173,8 +174,10 @@ def table_properties_lines(paths: UqsPaths) -> list[str]:
 
 def write(paths: UqsPaths) -> None:
     """Both files, into the runtime's data directory."""
-    paths.generated_gateway_access.write_text("\n".join(gateway_access_lines(paths)) + "\n")
+    generated.write_text(
+        paths.generated_gateway_access, "\n".join(gateway_access_lines(paths)) + "\n"
+    )
     subscribers = paths.torqdata / "subscriber_accesslist.txt"
-    subscribers.write_text("\n".join(subscriber_access_lines(paths)) + "\n")
+    generated.write_text(subscribers, "\n".join(subscriber_access_lines(paths)) + "\n")
     if lines := table_properties_lines(paths):
-        (paths.torqdata / TABLE_PROPERTIES.name).write_text("\n".join(lines) + "\n")
+        generated.write_text(paths.torqdata / TABLE_PROPERTIES.name, "\n".join(lines) + "\n")

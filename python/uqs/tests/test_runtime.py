@@ -57,6 +57,17 @@ def _no_port_check(monkeypatch):
     monkeypatch.setattr(occupancy, "refuse_if_taken", lambda *_a, **_k: None)
 
 
+@pytest.fixture(autouse=True)
+def _no_stack_lock(monkeypatch):
+    """The stand-in paths' $TORQDATA cannot be created, so the stack's lock
+    file cannot be either; test_generated_files.py covers the lock."""
+    from contextlib import nullcontext
+
+    from uqs.stack import generated
+
+    monkeypatch.setattr(generated, "lifecycle_lock", lambda *_a, **_k: nullcontext())
+
+
 @pytest.fixture(scope="module")
 def q_port(start_q, tmp_path_factory) -> Any:
     script = tmp_path_factory.mktemp("q") / "schema.q"

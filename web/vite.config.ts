@@ -18,6 +18,7 @@ export const API_PATHS = [
   "control",
   "activity",
   "services",
+  "charts",
 ];
 
 // The write token (#631), added here on the server side so a dev browser
@@ -32,6 +33,8 @@ const proxy = {
 };
 export default defineConfig({
   base: "/ui/",
+  // scripts/check-bundle.mjs reads it, to hold Plotly out of the main bundle.
+  build: { manifest: true },
   plugins: [react()],
   server: { proxy },
   preview: { proxy },
