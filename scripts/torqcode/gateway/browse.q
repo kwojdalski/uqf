@@ -49,6 +49,17 @@ browse_pair:{[o;v]
     v:browse_value[v];
     $[`ne=o; (op 0;op 1;enlist v); `in=o; (op;(),v); (op;v)]}
 
+/ PROVIDER SEMANTICS (#2055). getdata's own time bounds are the provider's, and
+/ they are CLOSED at both ends (it selects `time within (starttime;endtime)`).
+/ The browser's contract is the operators it was given: `ge` and `lt` are
+/ [start; end), `gt` and `le` exclude the start / include the end. So the window
+/ below only NARROWS what getdata reads, and every `time` condition also travels
+/ as a column filter (browse_pair), which is what makes a row exactly at an
+/ exclusive bound (`lt`, `gt`) come back not at all: the bound is never moved by
+/ a tick, so nothing here depends on the column's precision. The window's end
+/ with no `time` condition is the caller's `now`, an instant that is simply the
+/ read's moment, not a boundary a neighbouring read must tile against.
+/ .
 / The time window a read covers: the browser's own bounds on `time` where it
 / gave them, else the latest window the caller's policy allows.
 / @param fc the filter columns

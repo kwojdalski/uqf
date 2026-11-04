@@ -284,6 +284,34 @@
     w:.uqf.browse_window[`time`time;`ge`lt;(2026.01.01D10:00;2026.01.01D11:00);1D;2026.01.02D00:00];
     .qunit.assertEquals[w;2026.01.01D10:00 2026.01.01D11:00;"the bounds given, not the policy's span"]};
 
+/ #2055: getdata reads its window CLOSED at both ends, so the browser's contract
+/ rests on the `time` filters that travel with it. Rows at a, at b (three of
+/ them, sharing the instant) and at c, read as getdata reads - `within` - then
+/ filtered as browse_pair sends: [a;b) and [b;c) return b's rows exactly once,
+/ neither returns c's, and together they are [a;c). Run at ms, us and ns
+/ alignment, so no bound is a tick away from the event.
+.qt.qtorq.querypolicy.read_as_getdata:{[ts;lo;hi]
+    w:.uqf.browse_window[`time`time;`ge`lt;(lo;hi);1D;2026.01.02D00:00];
+    in_closed:ts within w;
+    pg:.uqf.browse_pair[`ge;lo];
+    pl:.uqf.browse_pair[`lt;hi];
+    in_closed and (pg[0][ts;pg 1]) and pl[0][ts;pl 1]}
+
+.qt.qtorq.querypolicy.check_adjacent:{[u]
+    b:2026.01.02D00:00:00.000000000;
+    a:b-u; c:b+u;
+    ts:a,b,b,b,c;
+    left:ts where .qt.qtorq.querypolicy.read_as_getdata[ts;a;b];
+    right:ts where .qt.qtorq.querypolicy.read_as_getdata[ts;b;c];
+    whole:ts where .qt.qtorq.querypolicy.read_as_getdata[ts;a;c];
+    .qunit.assertEquals[left;enlist a;"[a;b) has a and none of b's rows, at ",string u];
+    .qunit.assertEquals[right;3#b;"[b;c) has all three rows at b and not c's, at ",string u];
+    .qunit.assertEquals[left,right;whole;"the two requests concatenate to the combined one, at ",string u]}
+
+.qt.qtorq.querypolicy.test_adjacent_browser_windows_compose_and_the_shared_instant_comes_back_once:{[t]
+    .qt.qtorq.querypolicy.check_adjacent each 0D00:00:00.001000000 0D00:00:00.000001000 0D00:00:00.000000001;
+    }
+
 .qt.qtorq.querypolicy.test_browse_refuses_an_unknown_operator:{[t]
     .qunit.assertThrows[{.uqf.browse[`t;enlist `sym;enlist `like;enlist "E*";10;enlist `rdb]};::;
         "uqf.browse: unknown operator like";"named, not run"]};
