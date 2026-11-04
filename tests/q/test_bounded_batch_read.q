@@ -321,7 +321,10 @@
         bid_prices:bid_prices+0.01,ask_prices:ask_prices+0.01 from late;
     `market_data set market_data,late;
     `.qt.qetl.job.bounded.batch_read.fail_at set 0;
+    before:count .qt.qetl.job.bounded.batch_read.sent;
     .qunit.assertTrue[.qetl.job.bounded.do_window[worker;h];"the same window and version now succeeds"];
+    again:before _ .qt.qetl.job.bounded.batch_read.sent;
+    .qunit.assertTrue[`EURUSD in raze (2_again)[;2];"the retry asked the source for EURUSD again, not the failed attempt's cache (after the executions and presence reads)"];
     whole:.qpipe.source.hdb_fx_markouts.query[.qt.qetl.job.bounded.batch_read.hdb;h`range_from;h`range_to];
     expected:`venue`fill_id`horizon`kind`step xasc .qetl.job.bounded.transform_batch[worker;whole];
     .qunit.assertEquals[.qt.qetl.job.bounded.batch_read.published[];expected;"every value matches a fresh source read, including the late books"];
