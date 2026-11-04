@@ -4,7 +4,7 @@
 / and scores it once its horizons are covered, publishing the long layout of the
 / markout contract onto `crypto_markout`: at each horizon the fill price against the
 / BEST MID ACROSS VENUES, in basis points (markout_bps), and net of the fee
-/ (markout_net_bps), with the contract's 24 core columns beside them. See
+/ (markout_net_bps), with the contract's 22 core columns beside them. See
 / src/etl/transforms/crypto_markout.q for the domain (how a BASE-QUOTE pair is priced
 / and the measures), src/etl/transforms/crypto_markout_outputs.q for the spec and the
 / scoring transform, and docs/architecture/markout-contract.md for the contract.
@@ -42,6 +42,10 @@
 /                               feed trails the venue by up to a poll interval
 /   keep                        only fills the core can score, and only books of pairs it
 /                               prices from, so the queue never holds a fill that fails every tick
+/   on_start, check, on_fail    the spec's configuration snapshot is recorded (pinned) before the
+/                               job opens anything, and a batch whose rows name a snapshot that
+/                               is not durably recorded is held whole: a result never becomes
+/                               visible before the configuration that explains it (#1999)
 / .
 / Loaded by src/etl/init.q in any q process: nothing here touches TorQ.
 
@@ -63,7 +67,7 @@
 
 \d .
 
-.qetl.job.stream.at_horizons[`crypto_markout;`procname`events`reference`transform`publishes`horizon`period`event_time`reference_time`ready_on`legs`lookback`max_age`by`retain_by`identity`remember`max_lateness`expire_after`keep`note`ephemeral!(
+.qetl.job.stream.at_horizons[`crypto_markout;`procname`events`reference`transform`publishes`horizon`period`event_time`reference_time`ready_on`legs`lookback`max_age`by`retain_by`identity`remember`max_lateness`expire_after`keep`note`ephemeral`on_start`check`on_fail!(
     `crypto_markout1;
     `executions;
     `market_data;
@@ -85,4 +89,7 @@
     .qpipe.transform.crypto_markout_outputs.expire_after;
     .qpipe.job.crypto_markout.keep;
     "markouts on real crypto fills, in bps against the best mid across venues and net of the fee, from the canonical executions and market_data. Not started with the stack: its inputs come from cryptorust's recorders, or from cryptomock1 in their place, neither of which starts by default - `uqs start --profile crypto` brings it up with the mock";
-    "fills waiting for their horizons at a restart are not scored, and the venue-book history is rebuilt from the next books; the job publishes scores, it holds no book of record - hdb_crypto_markout_backfill re-derives any window from the HDB")];
+    "fills waiting for their horizons at a restart are not scored, and the venue-book history is rebuilt from the next books; the job publishes scores, it holds no book of record - hdb_crypto_markout_backfill re-derives any window from the HDB";
+    {[] .qpipe.transform.crypto_markout_outputs.pin[]; (::)};
+    .qpipe.transform.config_markout.check_pinned;
+    `hold)];

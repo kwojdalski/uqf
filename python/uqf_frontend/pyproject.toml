@@ -31,6 +31,7 @@ dependencies = [
     # Reimplementing either here would make a second writer to one file,
     # which is worse than a dependency by any measure used in this tree.
     "uqs",
+    "plotly>=6",
 ]
 
 [build-system]

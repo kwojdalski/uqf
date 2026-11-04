@@ -95,7 +95,9 @@
     hx:.qt.qpipe.transform.markout_core.at[h;`total;.qt.qpipe.transform.markout_core.ten_s;];
     xx:.qt.qpipe.transform.markout_core.at[ex;`total;.qt.qpipe.transform.markout_core.ten_s;];
     .qunit.assertTrue[.qt.qpipe.transform.markout_core.near[hx`report_amount;50000%150.05];"333.22 USD at 1/150.05"];
-    .qunit.assertEquals[hx`rate_timing;`horizon;"the timing is on the row"];
+    d:.qt.qpipe.transform.markout_core.domain[];
+    .qunit.assertEquals[(.qpipe.transform.config_markout.content[d;.qt.qpipe.transform.markout_core.sp[enlist[`rate_timing]!enlist `horizon]])`rate_timing;`horizon;"the timing is in the configuration the row names"];
+    .qunit.assertTrue[not (hx`config_id)~xx`config_id;"and the two timings are two configurations"];
     .qunit.assertEquals[hx`rate_time;t+0D00:00:09;"the rate's book is the horizon's"];
     .qunit.assertEquals[xx`rate_time;t-0D00:00:01;"and the execution's book under execution timing"];
     translation:(xx`report_amount)-hx`report_amount;
@@ -270,7 +272,7 @@
     .qunit.assertEquals[count r;6;"three executions, two components"];
     .qunit.assertTrue[.qt.qpipe.transform.markout_core.near[r`quote_amount;(r`size)*r`move];"quote_amount = size * move"];
     .qunit.assertTrue[.qt.qpipe.transform.markout_core.near[r`report_amount;(r`quote_amount)*r`rate];"report_amount = quote_amount * rate"];
-    .qunit.assertEquals[distinct r`contract_version;enlist 1;"the contract version"]};
+    .qunit.assertEquals[distinct r`config_id;enlist .qpipe.transform.config_markout.id[.qpipe.transform.markout_core.fixture_domain;.qpipe.transform.markout_core.validate[.qpipe.transform.markout_core.fixture_domain;.qpipe.transform.markout_core.fixture_spec]];"every row names the one configuration the fixture spec is"]};
 
 / --- the optional domain components --------------------------------------------------
 
@@ -340,16 +342,12 @@
 .qt.qpipe.transform.markout_core.test_the_result_carries_the_contracts_core_columns_in_the_contracts_order:{[tc]
     c:cols .qpipe.transform.markout_core.result;
     core:.qpipe.transform.markout_core.core_cols;
-    .qunit.assertEquals[count core;24;"the contract lists 24 core columns"];
+    .qunit.assertEquals[count core;22;"the contract lists 22 core columns"];
+    .qunit.assertTrue[not any `report_ccy`rate_timing`contract_version in c;"the configuration's three fields are the snapshot's, not the row's (#1999)"];
     .qunit.assertEquals[c except .qpipe.transform.markout_core.long_key_cols;core;"the core columns in the contract's order, and only kind and step besides"];
     .qunit.assertEquals[c?.qpipe.transform.markout_core.long_key_cols;(1+c?`horizon),2+c?`horizon;"kind and step sit right after horizon"];
     t:exec c!t from meta .qpipe.transform.markout_core.result;
-    .qunit.assertEquals[t`contract_version`side`horizon`move`rate_time`clock;"jjnfps";"types"]};
-
-.qt.qpipe.transform.markout_core.test_a_consumer_pinned_to_a_version_refuses_another:{[tc]
-    r:update contract_version:2 from first .qpipe.transform.markout_core.fixture_examples[]`expected;
-    .qunit.assertThrows[.qpipe.transform.markout_core.require_version[;1];r;"*contract version 2 is not the pinned 1*";"another version"];
-    .qunit.assertEquals[count .qpipe.transform.markout_core.require_version[r;2];count r;"the pinned version passes"]};
+    .qunit.assertEquals[t`config_id`side`horizon`move`rate_time`clock;"sjnfps";"types"]};
 
 / --- spec validation, at declaration -----------------------------------------------------
 

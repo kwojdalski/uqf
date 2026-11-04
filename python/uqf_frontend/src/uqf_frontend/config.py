@@ -63,6 +63,8 @@ class Settings:
 
     #: The gateway, from the stack's process.csv (stack.derive): never a
     #: setting of its own, so it cannot disagree with where the stack put it.
+    #: With a stack root these are the facts at startup; what acts on them
+    #: reads ``facts()``, which follows the stack's files (#2027).
     host: str = stack.DEFAULT_HOST
     port: int = stack.DEFAULT_BASE_PORT + stack.GATEWAY_PORT_OFFSET
     #: Empty, and it stays empty: credentials belong in the server
@@ -177,6 +179,27 @@ class Settings:
             ),
             "debug": (self.activity_debug_retention_days, self.activity_debug_max_rows),
         }
+
+    def facts(self) -> stack.StackFacts:
+        """The stack facts as they are NOW (#2027): with a stack root, read
+        from the stack's files (``stack.current``), which every start, stop
+        and restart rewrites; without one, the fields above.
+
+        The gateway address, the fan-out list and the base port a lifecycle
+        action passes torq.sh all come from here, per request. The fields of
+        the same names are only what was true when this object was built.
+        """
+        if self.stack_root is None:
+            return stack.StackFacts(
+                host=self.host,
+                port=self.port,
+                base_port=self.base_port,
+                process_csv=self.process_csv,
+                processes=self.processes,
+                web_dist=self.web_dist,
+                activity_db=self.activity_db,
+            )
+        return stack.current(self.stack_root)
 
     @property
     def request_timeout(self) -> int:
