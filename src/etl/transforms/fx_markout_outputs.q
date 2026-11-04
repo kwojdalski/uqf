@@ -117,7 +117,10 @@
 
 / How long a job waits for an execution's references before giving up on it: the
 / wait for its horizons, and five minutes more.
-.qpipe.transform.fx_markout_outputs.expire_after:.qpipe.transform.fx_markout.wait[.qpipe.transform.fx_markout_outputs.job_spec;.qpipe.transform.fx_markout_outputs.settle]+0D00:05
+/ @return a timespan
+/ @eg .qpipe.transform.fx_markout_outputs.expire_after[]  ->  0D00:05:10
+.qpipe.transform.fx_markout_outputs.expire_after:{[]
+    .qpipe.transform.fx_markout.wait[.qpipe.transform.fx_markout_outputs.job_spec;.qpipe.transform.fx_markout_outputs.settle]+0D00:05}
 
 / How long a job remembers an execution it has scored, to drop a redelivery.
 .qpipe.transform.fx_markout_outputs.remember:0D01

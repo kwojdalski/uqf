@@ -159,6 +159,82 @@
       -9h=type entry; $[(entry>0f) and entry<0w; `fixed; `];
       `]}
 
+/ ------------------------------------------------------------ THE HORIZON GRID
+/ .
+/ A job's horizons are declared once, in its spec, and everything that depends on
+/ them reads that one list through the functions below: the reference fetch
+/ (reach, lookback), the calculation (frame), the configuration snapshot (its
+/ content), the output naming (horizon_labels, horizon_columns) and the live holdback
+/ (wait). A second copy of the grid, or a column name typed by hand, is a copy that
+/ drifts from it; the contract refuses a grid it cannot name before any of them runs.
+/ .
+/ A horizon is an exact whole number of milliseconds, signed: the label is that count,
+/ with `neg_` for a negative one (-1s is neg_1000, 0 is 0, +500ms is 500). Finer than a
+/ millisecond is refused rather than rounded, because two horizons a microsecond
+/ apart would otherwise share a column.
+
+/ Refuse a horizon grid that cannot be scored or named, naming the first problem.
+/ @param hs the horizons
+/ @return the horizons, unchanged
+/ @throws error when hs is not a non-empty timespan list, holds a null or infinite horizon, a sub-millisecond offset, or a duplicate
+/ @eg .qpipe.transform.markout_core.require_horizons[-0D00:00:01 0D 0D00:00:00.500]  ->  -0D00:00:01 0D 0D00:00:00.500
+.qpipe.transform.markout_core.require_horizons:{[hs]
+    if[not (16h=type hs) and 0<count hs; '"markout_core: horizons must be a non-empty list of timespans, e.g. 0D00:00:01 0D00:00:10"];
+    if[any null hs; '"markout_core: horizons must not contain a null timespan"];
+    if[any (abs hs)=0Wn; '"markout_core: horizons must be finite, not an infinite timespan"];
+    if[any 0<>(abs "j"$hs) mod 1000000; '"markout_core: horizons must be whole milliseconds, got a sub-millisecond offset"];
+    if[not (count hs)=count distinct hs; '"markout_core: horizons must be distinct"];
+    hs}
+
+/ The validated horizons of a spec: what every consumer of the grid reads.
+/ @param spec dict with a `horizons` key
+/ @return the horizons in the spec's order
+/ @throws error when the spec has no horizons or the grid is refused by require_horizons
+/ @eg .qpipe.transform.markout_core.horizons_of[enlist[`horizons]!enlist 0D00:00:01 0D00:00:10]  ->  0D00:00:01 0D00:00:10
+.qpipe.transform.markout_core.horizons_of:{[spec]
+    if[not (99h=type spec) and `horizons in key spec; '"markout_core: spec is missing horizons"];
+    .qpipe.transform.markout_core.require_horizons[spec`horizons]}
+
+/ The label of each horizon: its exact milliseconds, `neg_` before a negative one.
+/ @param horizons the horizons, a timespan list
+/ @return a dictionary from each horizon to its label symbol, in input order
+/ @throws error when the grid is refused by require_horizons
+/ @eg .qpipe.transform.markout_core.horizon_labels[-0D00:00:01 0D 0D00:00:00.500]  ->  (-0D00:00:01;0D;0D00:00:00.500)!`neg_1000`0`500
+.qpipe.transform.markout_core.horizon_labels:{[horizons]
+    hs:.qpipe.transform.markout_core.require_horizons[horizons];
+    ms:("j"$hs) div 1000000;
+    hs!`$?[ms<0;"neg_",/:string abs ms;string ms]}
+
+/ The output column of a stem at each horizon: stem_label, e.g. markout_neg_1000.
+/ @param stem a symbol
+/ @param horizons the horizons, a timespan list
+/ @return a dictionary from each horizon to its column name, in input order
+/ @throws error when stem is not a non-null symbol atom or the grid is refused
+/ @eg .qpipe.transform.markout_core.horizon_columns[`pips;-0D00:00:01 0D00:00:00.500]  ->  (-0D00:00:01;0D00:00:00.500)!`pips_neg_1000`pips_500
+.qpipe.transform.markout_core.horizon_columns:{[stem;horizons]
+    if[not $[-11h=type stem; not null stem; 0b]; '"markout_core: stem must be a non-null symbol"];
+    named:.qpipe.transform.markout_core.horizon_labels[horizons];
+    key[named]!`$(string[stem],"_"),/:string value named}
+
+/ How long a job waits before scoring: the furthest horizon, but never less than settle.
+/ @param spec the spec
+/ @param settle the least wait, a timespan
+/ @return the wait the horizon kind declares
+/ @eg .qpipe.transform.markout_core.wait[enlist[`horizons]!enlist -0D00:00:01 0D00:00:10;0D00:00:01]  ->  0D00:00:10
+.qpipe.transform.markout_core.wait:{[spec;settle] settle|max .qpipe.transform.markout_core.horizons_of spec}
+
+/ How far BEFORE an execution the reference is read: the most negative horizon, or none.
+/ @param spec the spec
+/ @return a timespan of zero or more
+/ @eg .qpipe.transform.markout_core.lookback[enlist[`horizons]!enlist -0D00:00:30 0D00:00:01]  ->  0D00:00:30
+.qpipe.transform.markout_core.lookback:{[spec] 0D|neg min .qpipe.transform.markout_core.horizons_of spec}
+
+/ How far AFTER an execution the reference is read: the furthest horizon, or none.
+/ @param spec the spec
+/ @return a timespan of zero or more
+/ @eg .qpipe.transform.markout_core.reach[enlist[`horizons]!enlist -0D00:00:30 0D00:00:01]  ->  0D00:00:01
+.qpipe.transform.markout_core.reach:{[spec] 0D|max .qpipe.transform.markout_core.horizons_of spec}
+
 / Refuse a spec the core cannot honour, naming the first problem, and complete it.
 / .
 / The core's keys are checked here and the domain's by its own validate. A
@@ -181,10 +257,7 @@
     spec:.qpipe.transform.markout_core.spec_defaults,spec;
     / the domain completes its own keys first: its conversion reads them (an FX convention) when the rates are checked below
     if[`validate in key domain; spec:domain[`validate] spec];
-    hs:spec`horizons;
-    if[not (16h=type hs) and 0<count hs; '"markout_core: horizons must be a non-empty list of timespans, e.g. 0D00:00:01 0D00:00:10"];
-    if[any null hs; '"markout_core: horizons must not contain a null timespan"];
-    if[not (count hs)=count distinct hs; '"markout_core: horizons must be distinct"];
+    .qpipe.transform.markout_core.require_horizons[spec`horizons];
     if[not (-16h=type spec`max_age) and spec[`max_age]>0D; '"markout_core: max_age must be a positive timespan, 0Wn for as of however old"];
     if[not (-11h=type spec`report_ccy) and not null spec`report_ccy; '"markout_core: report_ccy must be a non-null symbol"];
     if[not (-11h=type spec`rate_timing) and spec[`rate_timing] in `execution`horizon; '"markout_core: rate_timing must be `execution or `horizon"];
@@ -447,7 +520,7 @@
 / resolution, the horizon and the two instants.
 / @private
 .qpipe.transform.markout_core.frame:{[domain;spec;exe]
-    hs:spec`horizons;
+    hs:.qpipe.transform.markout_core.horizons_of[spec];
     n:count exe;
     m:count hs;
     rows:exe "j"$raze m#'til n;

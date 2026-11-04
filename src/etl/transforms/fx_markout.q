@@ -115,13 +115,13 @@
 / @param settle the least wait, a positive timespan
 / @return the horizon the horizon kind declares
 / @eg .qpipe.transform.fx_markout.wait[.qpipe.transform.fx_markout.default_spec;0D00:00:01]  ->  0D00:00:10
-.qpipe.transform.fx_markout.wait:{[spec;settle] settle|max spec`horizons}
+.qpipe.transform.fx_markout.wait:{[spec;settle] .qpipe.transform.markout_core.wait[spec;settle]}
 
 / How far BEFORE an execution the reference is read: the most negative horizon, or none.
 / @param spec the spec
 / @return the lookback the horizon kind declares, a timespan of zero or more
 / @eg .qpipe.transform.fx_markout.lookback[`horizons`convention`max_age`tolerance!(-0D00:00:30 0D00:00:01;::;0Wn;0f)]  ->  0D00:00:30
-.qpipe.transform.fx_markout.lookback:{[spec] 0D|neg min spec`horizons}
+.qpipe.transform.fx_markout.lookback:{[spec] .qpipe.transform.markout_core.lookback spec}
 
 / ------------------------------------------------------------------ ROUTES
 

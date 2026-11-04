@@ -86,7 +86,7 @@
     `venue`fill_id;
     .qpipe.transform.crypto_markout_outputs.remember;
     .qpipe.transform.crypto_markout_outputs.max_lateness;
-    .qpipe.transform.crypto_markout_outputs.expire_after;
+    .qpipe.transform.crypto_markout_outputs.expire_after[];
     .qpipe.job.crypto_markout.keep;
     "markouts on real crypto fills, in bps against the best mid across venues and net of the fee, from the canonical executions and market_data. Not started with the stack: its inputs come from cryptorust's recorders, or from cryptomock1 in their place, neither of which starts by default - `uqs start --profile crypto` brings it up with the mock";
     "fills waiting for their horizons at a restart are not scored, and the venue-book history is rebuilt from the next books; the job publishes scores, it holds no book of record - hdb_crypto_markout_backfill re-derives any window from the HDB";

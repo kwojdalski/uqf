@@ -133,7 +133,10 @@
 
 / How long a job waits for a fill's references before giving up on it: the wait for
 / its horizons, and five minutes more.
-.qpipe.transform.eq_markout_outputs.expire_after:(.qpipe.transform.eq_markout_outputs.settle|max (.qpipe.transform.eq_markout_outputs.job_spec)`horizons)+0D00:05
+/ @return a timespan
+/ @eg .qpipe.transform.eq_markout_outputs.expire_after[]  ->  0D00:06:00
+.qpipe.transform.eq_markout_outputs.expire_after:{[]
+    .qpipe.transform.eq_markout_outputs.wait[]+0D00:05}
 
 / How long a job remembers a fill it has scored, to drop a redelivery.
 .qpipe.transform.eq_markout_outputs.remember:0D01
@@ -149,13 +152,13 @@
 / @return the horizon the horizon kind declares
 / @eg .qpipe.transform.eq_markout_outputs.wait[]  ->  0D00:01:00
 .qpipe.transform.eq_markout_outputs.wait:{[]
-    .qpipe.transform.eq_markout_outputs.settle|max (.qpipe.transform.eq_markout_outputs.job_spec)`horizons}
+    .qpipe.transform.markout_core.wait[.qpipe.transform.eq_markout_outputs.job_spec;.qpipe.transform.eq_markout_outputs.settle]}
 
 / How far BEFORE a fill the reference is read: the most negative horizon, or none.
 / @return a timespan of zero or more
 / @eg .qpipe.transform.eq_markout_outputs.lookback[]  ->  0D00:00:00
 .qpipe.transform.eq_markout_outputs.lookback:{[]
-    0D|neg min (.qpipe.transform.eq_markout_outputs.job_spec)`horizons}
+    .qpipe.transform.markout_core.lookback .qpipe.transform.eq_markout_outputs.job_spec}
 
 / What the horizon kind keeps of a batch of either table: the equity venues' fills the core can
 / score, and the equity venues' books. Fills and books are told apart by `fill_id`, as the other

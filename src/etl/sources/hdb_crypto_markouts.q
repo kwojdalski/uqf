@@ -103,7 +103,7 @@
         `source_time xasc (cols before)#before,inwin
       }[syms;skew;range_from-lb];
       range_from-early;
-      range_to+0D|max spec`horizons];
+      range_to+.qpipe.transform.markout_core.reach spec];
     `executions`market_data!(deals;books)}
 
 / How far the HDB's crypto books reach, less the furthest horizon: a window ending at or
@@ -117,7 +117,7 @@
 .qpipe.source.hdb_crypto_markouts.complete_through:{[h]
     latest:.qetl.source.ipc_call[h;{[unused] exec max source_time from `market_data where date=max date, market=`crypto};enlist 0b];
     / max of no rows is -0Wp, and arithmetic on it wraps to a far-future instant
-    $[latest<=-0Wp; -0Wp; latest-0D|max (.qpipe.transform.crypto_markout_outputs.job_spec)`horizons]}
+    $[latest<=-0Wp; -0Wp; latest-.qpipe.transform.markout_core.reach .qpipe.transform.crypto_markout_outputs.job_spec]}
 
 / Can this window be scored, or are its books absent? An execution with no book for its pair is
 / a legitimate unavailable row and is ready; a window that has crypto executions and NO books at

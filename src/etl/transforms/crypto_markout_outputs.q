@@ -66,7 +66,10 @@
 
 / How long a job waits for a fill's references before giving up on it: the wait for
 / its horizons, and five minutes more.
-.qpipe.transform.crypto_markout_outputs.expire_after:(.qpipe.transform.crypto_markout_outputs.settle|max (.qpipe.transform.crypto_markout_outputs.job_spec)`horizons)+0D00:05
+/ @return a timespan
+/ @eg .qpipe.transform.crypto_markout_outputs.expire_after[]  ->  0D00:05:10
+.qpipe.transform.crypto_markout_outputs.expire_after:{[]
+    .qpipe.transform.crypto_markout_outputs.wait[]+0D00:05}
 
 / How long a job remembers a fill it has scored, to drop a redelivery.
 .qpipe.transform.crypto_markout_outputs.remember:0D01
@@ -83,13 +86,13 @@
 / @return the horizon the horizon kind declares
 / @eg .qpipe.transform.crypto_markout_outputs.wait[]  ->  0D00:00:10
 .qpipe.transform.crypto_markout_outputs.wait:{[]
-    .qpipe.transform.crypto_markout_outputs.settle|max (.qpipe.transform.crypto_markout_outputs.job_spec)`horizons}
+    .qpipe.transform.markout_core.wait[.qpipe.transform.crypto_markout_outputs.job_spec;.qpipe.transform.crypto_markout_outputs.settle]}
 
 / How far BEFORE a fill the reference is read: the most negative horizon, or none.
 / @return a timespan of zero or more
 / @eg .qpipe.transform.crypto_markout_outputs.lookback[]  ->  0D00:00:00
 .qpipe.transform.crypto_markout_outputs.lookback:{[]
-    0D|neg min (.qpipe.transform.crypto_markout_outputs.job_spec)`horizons}
+    .qpipe.transform.markout_core.lookback .qpipe.transform.crypto_markout_outputs.job_spec}
 
 / The market_data syms a conversion rate is read from, when the spec declares one
 / as `source`sym rather than a fixed float: books the history must keep.

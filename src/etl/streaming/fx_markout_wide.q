@@ -81,7 +81,7 @@
     `venue`fill_id;
     .qpipe.transform.fx_markout_outputs.remember;
     .qpipe.transform.fx_markout_outputs.max_lateness;
-    .qpipe.transform.fx_markout_outputs.expire_after;
+    .qpipe.transform.fx_markout_outputs.expire_after[];
     .qpipe.job.fx_markout_wide.keep;
     "normalized FX markouts, wide layout: the markout, the execution residual, each cross leg's allocation and the residual, from the canonical executions and market_data. On demand - it needs executions and market_data sources a site wires in";
     "executions waiting for their horizons at a restart are not scored, and the book history is rebuilt from the next snapshots; the job publishes derived rows, not a book of record - hdb_fx_markout_wide_backfill re-derives any window from the HDB";

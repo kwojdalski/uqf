@@ -385,3 +385,70 @@
     f:{[d;bad] .qpipe.transform.markout_core.declare[`markout_core_bad;d;bad;.qpipe.transform.markout_core.fixture_examples[]]}[d;];
     .qunit.assertThrows[f;bad;"*rate_timing must be*";"refused when declared"];
     .qunit.assertFalse[`markout_core_bad in .qetl.transform.defined[];"and nothing is registered"]};
+
+/ --- the horizon grid: one validated spec, read by every consumer (#2080) -----------------
+
+/ a signed, sub-second grid, deliberately out of order
+.qt.qpipe.transform.markout_core.grid:{[] -0D00:00:00.250 0D 0D00:00:00.500 0D00:00:02}
+
+.qt.qpipe.transform.markout_core.test_horizon_labels_are_exact_signed_milliseconds_in_input_order:{[tc]
+    lab:.qpipe.transform.markout_core.horizon_labels[-0D00:00:01 0D 0D00:00:00.500];
+    .qunit.assertEquals[key lab;-0D00:00:01 0D 0D00:00:00.500;"keyed by the horizons, in input order"];
+    .qunit.assertEquals[value lab;`neg_1000`0`500;"-1s is neg_1000, 0 is 0, +500ms is 500"];
+    g:.qt.qpipe.transform.markout_core.grid[];
+    .qunit.assertEquals[value .qpipe.transform.markout_core.horizon_labels g;`neg_250`0`500`2000;"a signed sub-second grid, unsorted"];
+    .qunit.assertEquals[value .qpipe.transform.markout_core.horizon_labels reverse g;reverse `neg_250`0`500`2000;"the order is the caller's"];
+    .qunit.assertEquals[value .qpipe.transform.markout_core.horizon_labels enlist 0D00:01;enlist `60000;"one horizon is still a dictionary"];
+    c:.qpipe.transform.markout_core.horizon_columns[`pips;g];
+    .qunit.assertEquals[value c;`pips_neg_250`pips_0`pips_500`pips_2000;"output naming reads the same labels"]};
+
+.qt.qpipe.transform.markout_core.test_a_horizon_grid_that_cannot_be_named_is_refused_by_name:{[tc]
+    f:.qpipe.transform.markout_core.horizon_labels;
+    .qunit.assertThrows[f;1000 2000;"*horizons must be a non-empty list of timespans*";"bare longs"];
+    .qunit.assertThrows[f;0D00:00:01;"*horizons must be a non-empty list of timespans*";"an atom is not a grid"];
+    .qunit.assertThrows[f;(0D00:00:01;1000);"*horizons must be a non-empty list of timespans*";"a mixed list"];
+    .qunit.assertThrows[f;0#0D;"*horizons must be a non-empty list of timespans*";"an empty grid"];
+    .qunit.assertThrows[f;0D00:00:01 0D00:00:01;"*horizons must be distinct*";"duplicates"];
+    .qunit.assertThrows[f;(0D00:00:01;0Nn);"*horizons must not contain a null timespan*";"a null"];
+    .qunit.assertThrows[f;(0D00:00:01;0Wn);"*horizons must be finite*";"+infinity"];
+    .qunit.assertThrows[f;(0D00:00:01;-0Wn);"*horizons must be finite*";"-infinity"];
+    .qunit.assertThrows[f;0D00:00:01 0D00:00:00.000500;"*horizons must be whole milliseconds*";"half a millisecond"];
+    .qunit.assertThrows[f;enlist -0D00:00:00.000000001;"*horizons must be whole milliseconds*";"a nanosecond before"];
+    .qunit.assertThrows[.qpipe.transform.markout_core.horizon_columns[;enlist 0D00:00:01];"pips";"*stem must be a non-null symbol*";"a string stem"]};
+
+.qt.qpipe.transform.markout_core.test_a_custom_grid_is_read_alike_by_every_consumer:{[tc]
+    g:.qt.qpipe.transform.markout_core.grid[];
+    t:.qt.qpipe.transform.markout_core.t;
+    sp:.qt.qpipe.transform.markout_core.sp[enlist[`horizons]!enlist g];
+    d:.qt.qpipe.transform.markout_core.domain[];
+    / reference fetching and live holdback
+    .qunit.assertEquals[.qpipe.transform.markout_core.reach sp;0D00:00:02;"the read reaches to the furthest horizon"];
+    .qunit.assertEquals[.qpipe.transform.markout_core.lookback sp;0D00:00:00.250;"and back by the most negative"];
+    .qunit.assertEquals[.qpipe.transform.markout_core.wait[sp;0D00:00:01];0D00:00:02;"the holdback waits for the furthest horizon"];
+    .qunit.assertEquals[.qpipe.transform.markout_core.wait[sp,enlist[`horizons]!enlist enlist -0D00:00:05;0D00:00:01];0D00:00:01;"never less than settle"];
+    .qunit.assertEquals[.qpipe.transform.fx_markout.wait[sp;0D00:00:01];0D00:00:02;"a domain's wait is the core's"];
+    .qunit.assertEquals[.qpipe.transform.fx_markout.lookback sp;0D00:00:00.250;"a domain's lookback is the core's"];
+    / scoring: a row per horizon, each against the book that stood at that instant
+    m:raze (.qt.qpipe.transform.markout_core.bk[t-0D00:00:00.300;`USDJPY;`a;`venue;150f;150f];
+        .qt.qpipe.transform.markout_core.bk[t-0D00:00:00.100;`USDJPY;`a;`venue;150.01;150.01];
+        .qt.qpipe.transform.markout_core.bk[t+0D00:00:00.400;`USDJPY;`a;`venue;150.02;150.02];
+        .qt.qpipe.transform.markout_core.bk[t+0D00:00:01.900;`USDJPY;`a;`venue;150.03;150.03]);
+    r:.qpipe.transform.markout_core.calc[d;sp;.qt.qpipe.transform.markout_core.fill[`USDJPY;1;1e6;150f;`f1;`venue];m];
+    tot:select from r where kind=`total;
+    .qunit.assertEquals[tot`horizon;g;"one scored row per horizon, in the grid's order"];
+    .qunit.assertTrue[.qt.qpipe.transform.markout_core.near[tot`ref_t1;150 150.01 150.02 150.03];"each read at its own instant"];
+    / output naming: the scored horizons name exactly the columns the labels declare
+    cols_:.qpipe.transform.markout_core.horizon_columns[`ref;g];
+    named:(value cols_)!{[tot;h] first exec ref_t1 from tot where horizon=h}[tot;] each key cols_;
+    .qunit.assertEquals[key named;`ref_neg_250`ref_0`ref_500`ref_2000;"the columns come from the grid"];
+    .qunit.assertTrue[.qt.qpipe.transform.markout_core.near[value named;150 150.01 150.02 150.03];"and carry that horizon's figure"];
+    / configuration identity
+    cid:{[d;sp] .qpipe.transform.config_markout.id[d;.qpipe.transform.markout_core.validate[d;sp]]}[d;];
+    c:.qpipe.transform.config_markout.content[d;sp];
+    .qunit.assertEquals[c`horizons;asc g;"the snapshot records the validated grid"];
+    .qunit.assertEquals[tot`config_id;(count tot)#cid sp;"and the rows name that snapshot"];
+    .qunit.assertTrue[not (cid sp)~cid .qt.qpipe.transform.markout_core.sp[enlist[`horizons]!enlist g,0D00:00:03];"a longer grid is another configuration"];
+    .qunit.assertTrue[not (cid sp)~cid .qt.qpipe.transform.markout_core.sp[enlist[`horizons]!enlist (-0D00:00:00.250;0D;0D00:00:00.501;0D00:00:02)];"one millisecond moved is another configuration"];
+    / an unnameable grid is refused by the same validation at declaration
+    .qunit.assertThrows[.qpipe.transform.markout_core.validate[d;];sp,enlist[`horizons]!enlist (0D;0Wn);"*horizons must be finite*";"infinite"];
+    .qunit.assertThrows[.qpipe.transform.markout_core.validate[d;];sp,enlist[`horizons]!enlist 0D00:00:01 0D00:00:00.000500;"*whole milliseconds*";"sub-millisecond"]};
