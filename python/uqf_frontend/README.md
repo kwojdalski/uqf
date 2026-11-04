@@ -568,7 +568,7 @@ policy.
   | ---                 | ---                                                         | ---                                                       |
   | `markout_curve`     | `fx_markout` (pips) or `crypto_markout` (bps), `kind` total | mean markout per horizon, a line per venue                |
   | `backfill_coverage` | the status files `/ops/backfill` reads                      | each worker's last run per day, coloured by state         |
-  | `mid_spread_fills`  | `market_data`'s first level, and `executions` or `trades`   | mid and spread, with buys and sells overlaid              |
+  | `mid_spread_fills`  | `market_data`'s first level, and `executions` or `trades`   | mid and spread per `source`, with buys and sells overlaid |
   | `ops_latency`       | `.usage.usage` on every process, as `/ops/usage` does       | completed query durations per process, as box plots       |
 
 ## Comparing endpoints
