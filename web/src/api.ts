@@ -129,6 +129,21 @@ export interface Health extends Pollable {
   /** the level a tab records its activity at unless its operator picks another (#2000) */
   activity_level: SessionLevel;
 }
+/** One feature and action the access policy grants - models.Capability. */
+export interface Capability {
+  feature: string;
+  action: "read" | "write";
+}
+/** GET /me/capabilities (#2045): who the caller is, as a trusted proxy
+ *  vouches, and what the server's access policy lets them do. The browser
+ *  hides what is not here; the server refuses it either way. */
+export interface Capabilities extends Pollable {
+  identity: string;
+  authenticated: boolean;
+  groups: string[];
+  capabilities: Capability[];
+  features: Record<string, string[]>;
+}
 export interface Worker {
   worker: string;
   instance_id: string;

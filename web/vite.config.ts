@@ -18,6 +18,7 @@ export const API_PATHS = [
   "control",
   "activity",
   "services",
+  "me",
   "charts",
 ];
 

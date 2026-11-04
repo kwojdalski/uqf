@@ -7,11 +7,12 @@ process environment on the server and held only in this object.
 
 from __future__ import annotations
 
+import functools
 import os
 from dataclasses import dataclass
 from pathlib import Path
 
-from uqf_frontend import remote_helper, stack
+from uqf_frontend import identity, remote_helper, stack
 from uqf_frontend.stack import Process
 from uqs.activity_log import DEFAULT_LEVEL, LEVELS
 
@@ -160,6 +161,21 @@ class Settings:
     #: pruning audited, whenever a push opens.
     config_history_keep: int = remote_helper.DEFAULT_KEEP
     config_history_days: int = remote_helper.DEFAULT_KEEP_DAYS
+    #: Who is calling (identity.py, #2045). The header an authenticating
+    #: proxy puts the user it authenticated in - believed only from a peer in
+    #: `trusted_proxies`. Empty: no header is an identity, every caller is
+    #: `anonymous`, as it always was here.
+    trusted_identity_header: str = ""
+    #: The header the same proxy puts the user's groups in, comma-separated.
+    #: Optional; believed only alongside a believed user.
+    trusted_groups_header: str = ""
+    #: The proxy addresses (IPs or CIDR ranges) those headers are believed
+    #: from: the request's direct peer, never what X-Forwarded-For says.
+    trusted_proxies: tuple[str, ...] = ()
+    #: The deployment's access policy (access.py): Casbin CSV of grants and
+    #: memberships. None serves the packaged default - everyone may do
+    #: everything - which cannot be changed from the frontend.
+    policy_file: Path | None = None
 
     def __post_init__(self) -> None:
         if self.activity_level not in LEVELS:
@@ -168,6 +184,12 @@ class Settings:
                 f"got {self.activity_level!r}"
             )
         check_history_bound(self.config_history_keep, self.config_history_days)
+        check_identity(self)
+
+    @functools.cached_property
+    def proxy_networks(self) -> tuple[identity.ProxyNetwork, ...]:
+        """`trusted_proxies`, parsed (and checked at construction)."""
+        return identity.parse_proxies(self.trusted_proxies)
 
     def activity_bounds(self) -> dict[str, tuple[int, int]]:
         """Each event level's (retention days, max rows)."""
@@ -268,6 +290,46 @@ class Settings:
             ),
             config_history_keep=history_bound_from_env()[0],
             config_history_days=history_bound_from_env()[1],
+            trusted_identity_header=_header_env("UQF_FRONTEND_TRUSTED_IDENTITY_HEADER"),
+            trusted_groups_header=_header_env("UQF_FRONTEND_TRUSTED_GROUPS_HEADER"),
+            trusted_proxies=_list_env("UQF_FRONTEND_TRUSTED_PROXIES"),
+            policy_file=_path_env("UQF_FRONTEND_POLICY_FILE"),
+        )
+
+
+def check_identity(settings: Settings) -> None:
+    """Refuse a trusted-identity configuration that could not mean what its
+    operator thinks: a header with no proxy to believe it from (nobody would
+    ever be identified), proxies with no header, a header that carries a
+    credential or that every client sets, or a malformed address."""
+    header = settings.trusted_identity_header
+    groups = settings.trusted_groups_header
+    for name, value in (
+        ("UQF_FRONTEND_TRUSTED_IDENTITY_HEADER", header),
+        ("UQF_FRONTEND_TRUSTED_GROUPS_HEADER", groups),
+    ):
+        if value != value.strip().lower() or " " in value:
+            raise ValueError(f"{name} must be a lower-case header name, got {value!r}")
+        if value in identity.FORBIDDEN_HEADERS:
+            raise ValueError(f"{name} cannot be {value!r}: it is not an identity a proxy sets")
+    if groups and not header:
+        raise ValueError(
+            "UQF_FRONTEND_TRUSTED_GROUPS_HEADER is set but UQF_FRONTEND_TRUSTED_IDENTITY_HEADER "
+            "is not - groups are only believed alongside a user"
+        )
+    if groups and groups == header:
+        raise ValueError("the trusted identity and groups headers must differ")
+    proxies = identity.parse_proxies(settings.trusted_proxies)
+    if header and not proxies:
+        raise ValueError(
+            "UQF_FRONTEND_TRUSTED_IDENTITY_HEADER is set but UQF_FRONTEND_TRUSTED_PROXIES is "
+            "not - name the address the authenticating proxy connects from, or the header "
+            "would be believed from nobody"
+        )
+    if proxies and not header:
+        raise ValueError(
+            "UQF_FRONTEND_TRUSTED_PROXIES is set but UQF_FRONTEND_TRUSTED_IDENTITY_HEADER is "
+            "not - name the header the proxy puts the authenticated user in"
         )
 
 
@@ -327,6 +389,16 @@ def _hosts_env(name: str, default: tuple[str, ...]) -> tuple[str, ...]:
     raw = os.environ.get(name, "")
     hosts = tuple(h.strip().lower() for h in raw.split(",") if h.strip())
     return hosts or default
+
+
+def _header_env(name: str) -> str:
+    """A header name, lower-cased as HTTP compares them; unset is empty."""
+    return os.environ.get(name, "").strip().lower()
+
+
+def _list_env(name: str) -> tuple[str, ...]:
+    """A comma-separated list; unset or empty is empty."""
+    return tuple(v.strip() for v in os.environ.get(name, "").split(",") if v.strip())
 
 
 def _path_env(name: str) -> Path | None:

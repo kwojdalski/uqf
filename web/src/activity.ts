@@ -111,6 +111,9 @@ let heldLevel: SessionLevel | null = null;
 let drops = new Map<string, number>();
 let tokens = DEBUG_BURST;
 let refilled = 0;
+/** False when the server's access policy does not let this caller record
+ *  its history (activity:write, #2045): nothing is queued or sent. */
+let recordingAllowed = true;
 const listeners = new Set<() => void>();
 
 /** Swap the transport, the batching delay or the server's default level -
@@ -131,8 +134,21 @@ export function configureActivity(options: {
   drops = new Map();
   tokens = DEBUG_BURST;
   refilled = 0;
+  recordingAllowed = true;
   clearTimeout(timer);
   timer = undefined;
+}
+
+/** Stop or resume recording, as /me/capabilities says (capabilities.tsx).
+ *  Stopping drops what is queued: it would only be refused. */
+export function allowRecording(allowed: boolean): void {
+  recordingAllowed = allowed;
+  if (!allowed) {
+    queue = [];
+    drops = new Map();
+    clearTimeout(timer);
+    timer = undefined;
+  }
 }
 
 export function newId(): string {
@@ -280,7 +296,7 @@ export function record(
   options: RecordOptions = {},
 ): BrowserEvent | null {
   const level = KIND_LEVEL[kind];
-  if (!recordsAt(level)) return null;
+  if (!recordingAllowed || !recordsAt(level)) return null;
   if (level === "debug" && !debugAllowed()) {
     countDrop(level, "sampled");
     schedule();

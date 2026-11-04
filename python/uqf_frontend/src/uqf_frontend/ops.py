@@ -140,6 +140,9 @@ POLL_SECONDS: dict[str, int] = {
     "activity": 15,
     # a file the operator edits by hand, read locally: no server is asked
     "services": 30,
+    # the access policy can change without a restart (#2045); an open tab
+    # learns of it this often
+    "capabilities": 60,
 }
 
 
