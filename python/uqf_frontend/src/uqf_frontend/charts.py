@@ -681,10 +681,13 @@ def _text(value: Any) -> str:
 def _latency_build(read: Read, p: LatencyParams, cap: int) -> Built:
     # Only a completed query has a duration: TorQ logs `b`efore and `e`rror
     # rows too, whose timer is not one (lib/torq/code/handlers/logusage.q).
+    # The timer is MICROSECONDS, not nanoseconds: logusage.q writes
+    # `long$.001*endp-startp, a span a thousand times shorter whose ns count
+    # is the elapsed µs - `long$.001*0D00:00:01 is 1000000 (#2075).
     done = (
         read.frames["usage"]
         .filter((pl.col("status") == "c") & pl.col("timer").is_not_null())
-        .with_columns((pl.col("timer") / 1e6).alias("ms"))
+        .with_columns((pl.col("timer") / 1e3).alias("ms"))
         .sort("process")
     )
     fig = go.Figure()
