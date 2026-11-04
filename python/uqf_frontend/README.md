@@ -889,7 +889,9 @@ The registry is read on each write, so a target put in inspection mode is
 refused from the next request, with no restart. If the registry cannot be read,
 every write naming a target is refused, because its mode is unknown. `uqs`
 refuses the same target's changes itself (`uqs.deploy.inspection`; see the
-[deploy guide](../../docs/guides/deploy.md#inspection-only-targets)).
+[deploy guide](../../docs/guides/deploy.md#inspection-only-targets)). A write
+naming another declared target at the same server (the same ssh and `dest`,
+compared as `uqs` compares them) is refused as that target's.
 
 **Workspaces (#2029).** The target a request acts on is its `{target}` path
 parameter. Otherwise it is the workspace named in the request's `X-UQF-Target`
