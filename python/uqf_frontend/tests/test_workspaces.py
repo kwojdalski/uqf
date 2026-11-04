@@ -164,8 +164,11 @@ def _app(targets: Targets, local_gw: FakeGateway, *, writes: bool = True):
     )
 
 
-def _client(app) -> TestClient:
-    return TestClient(app, base_url="http://localhost")
+def _client(app, *, token: bool = True) -> TestClient:
+    """A browser in a workspace: it holds the write token, and sends it with
+    every request naming a target (#2067) - unless `token` is False."""
+    headers = {"Authorization": f"Bearer {TOKEN}"} if token else None
+    return TestClient(app, base_url="http://localhost", headers=headers)
 
 
 def _query(c: TestClient, target: str | None):
@@ -277,6 +280,88 @@ def test_a_target_needs_remote_operations_and_never_falls_back(declared, targets
     assert not targets.opened and local_gw.calls == []
 
 
+# ------------------------------------------------------------- the token
+
+
+def _scoped_request(c: TestClient, method: str, template: str, target: str | None):
+    path = template.replace("{name}", "spread")
+    headers = {HEADER: target} if target else {}
+    if method == "POST":
+        return c.post(path, json={"table": "trades", "limit": 5}, headers=headers)
+    return c.get(path, headers=headers)
+
+
+def test_a_target_workspace_needs_the_write_token_and_opens_nothing_without_it(
+    declared, targets, local_gw
+):
+    """A workspace reaches its target over ssh with the operator's key, as
+    /services/{target}/files does - so, like it, it needs the token (#2067).
+    Refused before any ssh is opened, on every scoped route."""
+    app = _app(targets, local_gw)
+    leased: list[str] = []
+    real_lease = app.state.workspaces.lease
+
+    def lease(name: str):  # noqa: ANN202
+        leased.append(name)
+        return real_lease(name)
+
+    app.state.workspaces.lease = lease
+    c = _client(app, token=False)
+    files = c.get("/services/prod-a/files")
+    assert files.status_code == 401 and files.json()["error"] == "WriteTokenRequired"
+    for method, template in sorted(workspaces.SCOPED):
+        resp = _scoped_request(c, method, template, "prod-a")
+        assert resp.status_code == 401, (method, template, resp.text)
+        assert resp.json()["error"] == "WriteTokenRequired", (method, template)
+    wrong = c.post(
+        "/query",
+        json={"table": "trades", "limit": 5},
+        headers={HEADER: "prod-a", "Authorization": "Bearer " + "x" * 32},
+    )
+    assert wrong.status_code == 401
+    assert not targets.opened
+    assert "prod-a" not in leased  # refused before any lease (#2062)
+    assert targets.gateways[PORTS["prod-a"]].calls == []
+    # the spy is wired: the same request with the token does take a lease
+    ok = c.get("/catalog", headers={HEADER: "prod-a", "Authorization": f"Bearer {TOKEN}"})
+    assert ok.status_code == 200, ok.text
+    assert leased == ["prod-a"]
+
+
+def test_a_target_workspace_with_the_token_is_answered(declared, targets, local_gw):
+    c = _client(_app(targets, local_gw), token=False)
+    resp = c.post(
+        "/query",
+        json={"table": "trades", "limit": 5},
+        headers={HEADER: "prod-a", "Authorization": f"Bearer {TOKEN}"},
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["rows"] == [{"sym": "from-prod-a"}]
+    assert [t.target for t in targets.opened] == ["prod-a"]
+
+
+def test_the_local_workspace_needs_no_token(declared, targets, local_gw):
+    """Reads of this API's own stack are as they were: no token, named or not."""
+    c = _client(_app(targets, local_gw), token=False)
+    for target in (None, "local"):
+        for method, template in sorted(workspaces.SCOPED):
+            resp = _scoped_request(c, method, template, target)
+            assert resp.status_code != 401, (target, method, template, resp.text)
+    assert _query(c, None).json()["rows"] == [{"sym": "from-local"}]
+    assert not targets.opened
+
+
+def test_routes_that_open_no_ssh_need_no_token_in_a_target_workspace(declared, targets, local_gw):
+    """Only what reaches the target is held to the token: a tab left on a
+    target without it can still list the workspaces and switch back."""
+    c = _client(_app(targets, local_gw), token=False)
+    for path in ("/workspaces", "/health", "/me/capabilities", "/services"):
+        resp = c.get(path, headers={HEADER: "prod-a"})
+        assert resp.status_code == 200, (path, resp.text)
+    assert c.get("/control", headers={HEADER: "prod-a"}).status_code == 409
+    assert not targets.opened
+
+
 def test_a_route_that_is_not_scoped_refuses_a_target(declared, targets, local_gw):
     """Control and backfill status read this server's own stack: with a
     target named they refuse, rather than answer for the local one."""
@@ -322,6 +407,97 @@ def test_an_idle_connection_is_closed(declared, targets, local_gw):
     _query(c, "uat-b")
     assert ws.open_targets() == ["uat-b"]
     assert targets.opened[0].closed
+
+
+def test_an_idle_target_is_closed_once_the_session_is_back_on_local(declared, targets, local_gw):
+    """#2062: reaping does not wait for a request naming another target - an
+    hour of local-only traffic closes the target left idle."""
+    app = _app(targets, local_gw)
+    now = [0.0]
+    ws = app.state.workspaces
+    ws._clock = lambda: now[0]
+    c = _client(app)
+    assert _query(c, "prod-a").status_code == 200
+    for _ in range(6):  # an hour on local
+        now[0] += workspaces.IDLE_SECONDS
+        assert _query(c, None).status_code == 200
+        assert c.get("/catalog").status_code == 200
+    assert ws.open_targets() == []
+    assert targets.opened[0].closed
+
+
+def test_the_reaper_closes_an_idle_target_with_no_request_at_all(declared, targets, local_gw):
+    """#2062: the app's own reaper closes an idle target even when no request
+    of any kind arrives after it."""
+    app = _app(targets, local_gw)
+    now = [0.0]
+    ws = app.state.workspaces
+    ws._clock = lambda: now[0]
+    ws._reap_every = 0.01
+    with _client(app) as c:
+        assert _query(c, "prod-a").status_code == 200
+        now[0] += workspaces.IDLE_SECONDS + 1
+        for _ in range(500):
+            if targets.opened[0].closed:
+                break
+            threading.Event().wait(0.01)
+        assert targets.opened[0].closed
+        assert ws.open_targets() == []
+
+
+def test_a_connection_in_use_is_never_reaped(declared, targets, local_gw):
+    """#2062: a request reading a target holds its connection: a reap that
+    runs meanwhile - however long the request takes - leaves it open."""
+    app = _app(targets, local_gw)
+    now = [0.0]
+    ws = app.state.workspaces
+    ws._clock = lambda: now[0]
+    seen: list[bool] = []
+    target_gw = targets.gateways[PORTS["prod-a"]]
+    plain = target_gw.browse
+
+    def slow_browse(*args):  # noqa: ANN002, ANN202
+        now[0] += workspaces.IDLE_SECONDS * 10  # a very long query
+        ws.reap()
+        seen.append(targets.opened[0].closed)
+        return plain(*args)
+
+    target_gw.browse = slow_browse
+    c = _client(app)
+    assert _query(c, "prod-a").status_code == 200
+    assert seen == [False]
+    # Released when the request ended, and only idle from then on.
+    assert ws.open_targets() == ["prod-a"]
+    ws.reap()
+    assert ws.open_targets() == ["prod-a"]
+    now[0] += workspaces.IDLE_SECONDS + 1
+    ws.reap()
+    assert ws.open_targets() == [] and targets.opened[0].closed
+
+
+def test_a_held_lease_survives_a_reap(declared, targets, local_gw):
+    app = _app(targets, local_gw)
+    now = [0.0]
+    ws = app.state.workspaces
+    ws._clock = lambda: now[0]
+    with ws.lease("prod-a") as scope:
+        assert scope.target == "prod-a"
+        now[0] += workspaces.IDLE_SECONDS * 10
+        ws.reap()
+        assert not targets.opened[0].closed
+    now[0] += workspaces.IDLE_SECONDS + 1
+    ws.reap()
+    assert targets.opened[0].closed
+
+
+def test_shutdown_closes_every_target_connection(declared, targets, local_gw):
+    app = _app(targets, local_gw)
+    with _client(app) as c:
+        assert _query(c, "prod-a").status_code == 200
+        assert _query(c, "uat-b").status_code == 200
+        assert app.state.workspaces.open_targets() == ["prod-a", "uat-b"]
+    assert app.state.workspaces.open_targets() == []
+    assert [conn.closed for conn in targets.opened] == [True, True]
 
 
 # ------------------------------------------------------------- the registry

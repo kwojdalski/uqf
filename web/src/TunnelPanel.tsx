@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ApiError,
   request,
@@ -220,11 +220,26 @@ export function TunnelPanel({
     error?: ApiError;
     loading: boolean;
   }>({ loading: true });
+  // A check belongs to the selection it ran for: it is shown only while that
+  // selection is current, and one still in flight is aborted when it changes
+  // (#2070).
+  const selection = tunnelPath(target, chosen, true);
   const [check, setCheck] = useState<{
     data?: TunnelCheck;
     error?: ApiError;
     loading: boolean;
+    selection?: string;
   }>({ loading: false });
+  const current =
+    check.selection === selection ? check : { loading: false as const };
+  const checking = useRef<AbortController | null>(null);
+  useEffect(
+    () => () => {
+      checking.current?.abort();
+      checking.current = null;
+    },
+    [selection],
+  );
   const [revision, setRevision] = useState(0);
 
   useEffect(() => {
@@ -255,18 +270,20 @@ export function TunnelPanel({
     if (next.size) setChosen([...next].sort());
   }
   function runCheck() {
-    setCheck({ loading: true });
-    fetchTunnel<TunnelCheck>(
-      tunnelPath(target, chosen, true),
-      new AbortController().signal,
-    )
+    const controller = new AbortController();
+    checking.current?.abort();
+    checking.current = controller;
+    setCheck({ loading: true, selection });
+    fetchTunnel<TunnelCheck>(selection, controller.signal)
       .then((result) => {
-        setCheck({ data: result, loading: false });
+        if (controller.signal.aborted) return;
+        setCheck({ data: result, loading: false, selection });
         setRevision((r) => r + 1); // the plan's states read the new record
       })
-      .catch((error: unknown) =>
-        setCheck({ error: failure(error), loading: false }),
-      );
+      .catch((error: unknown) => {
+        if (controller.signal.aborted) return;
+        setCheck({ error: failure(error), loading: false, selection });
+      });
   }
 
   return (
@@ -334,18 +351,18 @@ export function TunnelPanel({
           <button
             type="button"
             data-activity="tunnel.check"
-            disabled={check.loading}
+            disabled={current.loading}
             onClick={runCheck}
           >
-            {check.loading ? "Checking…" : "Check connections"}
+            {current.loading ? "Checking…" : "Check connections"}
           </button>
-          {check.error && (
+          {current.error && (
             <div className="notice error" role="alert">
               <strong>Could not run the check</strong>
-              <p>{check.error.message}</p>
+              <p>{current.error.message}</p>
             </div>
           )}
-          {check.data && <CheckResult check={check.data} />}
+          {current.data && <CheckResult check={current.data} />}
         </>
       )}
     </section>
@@ -370,7 +387,11 @@ export function FleetConnections() {
     loading: boolean;
   }>({ loading: false });
   useEffect(() => {
-    if (!target) return;
+    if (!target) {
+      // no target, no rows: never the last target's (#2070)
+      setPlan({ loading: false });
+      return;
+    }
     const controller = new AbortController();
     let active = true;
     setPlan({ loading: true });

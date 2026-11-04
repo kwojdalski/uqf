@@ -15,6 +15,7 @@ import shlex
 import socket
 import subprocess
 import threading
+import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -441,6 +442,57 @@ def test_check_reads_the_password_from_the_named_variable_only(root, monkeypatch
                                    "PROD_Q_PW"])  # fmt: skip
     assert run.exit_code == 0, run.output
     assert seen["passwd"] == SECRET and SECRET not in run.output
+
+
+def test_concurrent_checks_keep_every_targets_record(root, monkeypatch):
+    """Two checks at once - the frontend's thread pool and `uqs target tunnel
+    check` beside it - each record their successes; neither loses the other's
+    (#2063). The read is slowed so every writer would interleave unlocked."""
+    read = tunnel_plan.read_checks
+
+    def slow_read(r):
+        found = read(r)
+        time.sleep(0.05)
+        return found
+
+    monkeypatch.setattr(tunnel_plan, "read_checks", slow_read)
+    names = [f"target{i}" for i in range(8)]
+    errors: list[BaseException] = []
+
+    def record(name):
+        try:
+            tunnel_plan.record_checks(root, name, {"rdb1": {"at": "x", "remote_port": 6002}})
+        except BaseException as exc:  # noqa: BLE001 - every failure is the finding
+            errors.append(exc)
+
+    threads = [threading.Thread(target=record, args=(n,)) for n in names]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert errors == []
+    assert sorted(read(root)) == names
+    path = tunnel_plan.checks_path(root)
+    assert sorted(p.name for p in path.parent.iterdir() if path.stem in p.name) == [
+        "tunnel_checks.json", "tunnel_checks.json.lock",
+    ]  # fmt: skip
+
+
+def test_a_record_that_cannot_be_written_raises_and_leaves_no_temp_file(root, monkeypatch):
+    tunnel_plan.record_checks(root, "prod", {"rdb1": {"at": "first"}})
+    path = tunnel_plan.checks_path(root)
+    before = path.read_text()
+
+    def refuse(src, dst):
+        raise OSError(28, "No space left on device")
+
+    monkeypatch.setattr(tunnel_plan.os, "replace", refuse)
+    with pytest.raises(OSError, match="No space left on device"):
+        tunnel_plan.record_checks(root, "uat", {"rdb1": {"at": "second"}})
+    assert path.read_text() == before
+    assert sorted(p.name for p in path.parent.iterdir() if path.stem in p.name) == [
+        "tunnel_checks.json", "tunnel_checks.json.lock",
+    ]  # fmt: skip
 
 
 def test_the_check_document_round_trips(root, server, monkeypatch):

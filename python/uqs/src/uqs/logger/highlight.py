@@ -8,8 +8,9 @@ are joined back into exactly the message: the highlighter only ever ADDS
 loguru colour tags around runs of the message's own characters, and escapes
 whatever loguru would otherwise read as a tag. Colours:
 
-  value after `=`        True green, False red, None dim, path bold,
-                         number magenta (negative red), other light-cyan
+  value after `=`        True/1b green, False/0b red, None dim, path bold,
+                         number magenta (negative red), other light-cyan;
+                         q-typed atoms (-187i, 2f, 0N, -0w) are numbers
   q symbol `abc          yellow, each element of `a`b`c on its own
   date/time/timestamp    green, exactly as written (2026.11.04D13:14:56.078...)
   uuid, 32/40/64 hex     light-blue
@@ -27,6 +28,8 @@ in "double quotes" anywhere else, and a backticked command such as
 from __future__ import annotations
 
 import re
+
+from uqs.logger.qatoms import q_bool_colour, q_number_colour
 
 # One value token: whatever follows `=` up to whitespace or most
 # punctuation, with digit groups (11,643) kept whole.
@@ -154,7 +157,7 @@ def _number_colour(val: str) -> str | None:
     try:
         num = float(check_val.replace(",", ""))
     except ValueError:
-        return None
+        return q_number_colour(val)  # -187i, 1.5e, 0N, -0w (.Q.s1, #2079)
     return "red" if num < 0 else "magenta"
 
 
@@ -166,6 +169,9 @@ def _value_kind(val: str) -> tuple[str, str]:
         return "bool", "red"
     if val == "None":
         return "none", "dim"
+    q_bool = q_bool_colour(val)  # 1b, 0b, 101b
+    if q_bool:
+        return "bool", q_bool
     if val.startswith('"') and _QUOTED_RE.fullmatch(val):
         return "string", "light-cyan"
     if val.startswith("`") and _SYMBOL_RE.fullmatch(val):
