@@ -444,14 +444,42 @@ ignored by the reader, and a test covers that.
   `curl` or a script. It is written `pending` before the handler runs and
   settled when the response is known, so a request the token or Host check
   refuses is on record too. This is the authority on what happened.
-- **browser** --- what an operator did in the UI: `navigate`, `select`,
-  `submit`, `confirm`, `cancel`, and the `result` the browser saw. Intent, sent
-  in batches to `POST /activity/events`. Polling records nothing.
+- **browser** --- what an operator did in the UI, at the level the tab records
+  at (below). Intent, sent in batches to `POST /activity/events`.
+
+**Levels (#2000).** Ordered, least detail first; each records its own events and
+every level's before it. Every row carries the level it was recorded under,
+derived by the server from its kind - the browser cannot send one.
+
+  | level          | records                                                                                                                                                                                                                                                                                    |
+  | ---            | ---                                                                                                                                                                                                                                                                                        |
+  | `off`          | no browser history. The server still audits every write                                                                                                                                                                                                                                    |
+  | `actions`      | `navigate`, `select`, `submit`, `confirm`, `cancel` and the `result` the browser saw, from the handler that performs each - and every server audit row, at any level. The default                                                                                                          |
+  | `interactions` | also `interact`: every control used - `ui.click` (a pointer, or Enter or Space on a focused control), `ui.download`, `ui.change` (a select, a checkbox or a field: that it changed, never to what), `ui.toggle` (a section expanded or collapsed) and `ui.copy` - under the control's name |
+  | `debug`        | also `debug`: each request's `request.start` and `request.finish` (method, route, status, duration), and a polled view's `resource.poll` and `resource.retry`. Rate-limited in the browser (a burst of 30, then 5 a second)                                                                |
+
+`UQF_FRONTEND_ACTIVITY_LEVEL` sets the default, served on `/health`; an operator
+can pick another for one tab in the Activity view (kept in that tab's
+sessionStorage). `interactions` is recorded by one listener at the document, not
+by any component: a control is named by its `data-activity` attribute, and
+`web/src/ActivityCoverage.test.tsx` fails on an interactive element without one -
+in the source and on every rendered view - so a new control is covered the day
+it is added. The allowlist below applies at every level: a click records the
+control's name and kind, a change whether a box is checked, a request its route
+(the first two path segments, a name in them replaced by `*`, never the query
+string).
 
   |                         |                                                                                                                                                                                                                                                                                                   |
   | ---                     | ---                                                                                                                                                                                                                                                                                               |
   | `GET /activity`         | The history, newest first. Filters: `since`, `until` (timezone required), `session_id`, `request_id`, `action` (exact, or a dotted prefix: `process` matches `process.stop`), `target`, `outcome`, `source`, `limit` (at most 1000). Says whether it is persistent and whether writes have failed |
-  | `POST /activity/events` | Up to 100 browser events. A repeated `event_id` is ignored, so a retried batch is stored once                                                                                                                                                                                                     |
+  | `POST /activity/events` | Up to 100 browser events, in one transaction, and the count of any the browser did not send (`dropped`). A repeated `event_id` is ignored, so a retried batch is stored once                                                                                                                      |
+  | `GET /activity/export`  | The history as a file, oldest first, under the same filters plus `format`: `jsonl`, `csv`, or `text` - a timeline `UTC time · session · level · action · target · outcome · duration`, each browser action grouped under the server request it caused (its request id). At most 100000 events     |
+
+`GET /activity` also takes `level`, the most detailed level shown:
+`interactions` shows actions and interactions. `uqs activity list` and
+`uqs activity export` read the same file, read-only, with no API running,
+through the same `uqs.activity_log` the API reads it with - so the CLI's export
+is the API's, byte for byte.
 
 **Correlation.** The browser sends `X-UQF-Request-Id` and `X-UQF-Session-Id`
 with every write; the server stores both on its row and echoes the request id
@@ -490,10 +518,24 @@ append-only feed. The file is `$TORQDATA/frontend/activity.sqlite3` for the
 stack `UQF_FRONTEND_STACK_ROOT` names, beside the workers' status files;
 `UQF_FRONTEND_ACTIVITY_DB` names another. `uqs clean` removes `$TORQDATA`, this
 file with it; put it elsewhere to keep history past a clean. With neither set,
-history is kept in memory and `GET /activity` says it is not persistent. Rows
-older than `UQF_FRONTEND_ACTIVITY_RETENTION_DAYS` (30) are pruned, and only the
-newest `UQF_FRONTEND_ACTIVITY_MAX_ROWS` (100000) kept --- at startup and every
-200 writes.
+history is kept in memory and `GET /activity` says it is not persistent. Each
+level has its own bounds, applied at startup and every 200 writes: `actions` -
+which holds the server's audit - keeps 30 days and 100000 rows
+(`UQF_FRONTEND_ACTIVITY_RETENTION_DAYS`, `UQF_FRONTEND_ACTIVITY_MAX_ROWS`),
+`interactions` 7 days and 50000, `debug` 1 day and 10000
+(`UQF_FRONTEND_ACTIVITY_INTERACTIONS_*`, `UQF_FRONTEND_ACTIVITY_DEBUG_*`). A
+flood of clicks therefore never evicts an audit row.
+
+**Nothing is lost without a number.** What a level's row cap evicts (`row_cap`),
+what ages out (`retention`), what the browser's debug rate limit sampled away
+(`sampled`) and what overflowed its queue while the API was unreachable
+(`queue_overflow`) are counted by level in `activity_drops`, shown on
+`GET /activity` and the Activity view, and stated at the head of a text export.
+A batch of browser events is one transaction, and the file runs in WAL mode with
+`synchronous=NORMAL`: a power cut can lose the last writes, never the file.
+`test_activity_levels.py` holds a history written at click rate to its cap:
+10000 clicks against a cap of 2000 leave 2000 rows, the file stops growing after
+the first prune, and a batch of 100 costs about a millisecond.
 
 **When persistence fails.** A configured file that cannot be opened stops the
 API at startup. After that, a failed write never blocks the action it audits:

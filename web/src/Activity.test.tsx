@@ -15,6 +15,7 @@ import {
   queuedActivity,
   record,
 } from "./activity";
+import { HISTORY } from "./testing/activityFixtures";
 
 const ok = (body: unknown) => ({ ok: true, json: async () => body });
 
@@ -37,44 +38,6 @@ const PROCESSES = [
   { procname: "rdb1", proctype: "rdb", start_with_all: true },
   { procname: "rdb2", proctype: "rdb", start_with_all: true },
 ];
-const HISTORY = {
-  events: [
-    {
-      event_id: "e1",
-      ts: "2026-11-03T10:00:00.000000Z",
-      recorded_at: "2026-11-03T10:00:00.000000Z",
-      source: "server",
-      kind: "request",
-      action: "process.stop",
-      target: "rdb1 rdb2",
-      outcome: "unknown",
-      session_id: null,
-      request_id: "req0123456789",
-      claimed_user: "alice",
-      trigger: null,
-      method: "POST",
-      status_code: 422,
-      duration_ms: 35000,
-      items: [
-        { target: "rdb1", outcome: "unknown" },
-        { target: "rdb2", outcome: "unknown" },
-      ],
-      detail: {},
-      dropped: 0,
-    },
-  ],
-  persistence: {
-    persistent: false,
-    path: null,
-    failures: 2,
-    last_error: "OperationalError: disk I/O error",
-    last_failure_at: null,
-  },
-  retention_days: 30,
-  max_rows: 100000,
-  poll_seconds: 15,
-};
-
 function mockApi(
   handler: (path: string, options: RequestInit) => unknown = () => ok({}),
 ) {

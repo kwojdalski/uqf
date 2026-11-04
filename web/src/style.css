@@ -29,7 +29,8 @@ input,
 select {
   font: inherit;
 }
-button {
+button,
+a.button {
   cursor: pointer;
   border: 1px solid var(--line);
   background: #fff;
@@ -39,7 +40,12 @@ button {
   font-size: 0.875rem;
   font-weight: 600;
 }
-button:hover {
+a.button {
+  display: inline-block;
+  text-decoration: none;
+}
+button:hover,
+a.button:hover {
   border-color: #8294ae;
   background: #f3f6fa;
 }

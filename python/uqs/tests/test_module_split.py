@@ -122,7 +122,10 @@ def test_every_exempt_module_still_exists_and_is_still_over():
 #: registry that gathers the owners lives in cli/safety.py. `cells` (#1882)
 #: is a listed row's values - typed for a document, rendered for a table - which
 #: every layer's listings produce and the CLI prints, so it imports nothing.
+#: `activity_log` (#2000) reads the frontend's activity history for the API and
+#: `uqs activity` alike; uqf_frontend imports it, so it imports nothing either.
 LEAVES = {
+    "activity_log",
     "cells",
     "paths",
     "logger",

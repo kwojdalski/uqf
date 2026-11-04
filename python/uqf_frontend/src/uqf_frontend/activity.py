@@ -44,6 +44,17 @@ blocks the action being audited: this is operational logging, not a gate and
 not tamper-proof evidence. The failure is counted, logged, reported on
 GET /activity, and the action's response carries `X-UQF-Audit: unrecorded`.
 
+LEVELS (#2000). A session records its browser history at one of
+activity_log.LEVELS - `off`, `actions`, `interactions`, `debug` - the server's
+default (UQF_FRONTEND_ACTIVITY_LEVEL) unless the operator picks another for
+the tab. Every row carries the level it was recorded under, derived here from
+its kind (LEVEL_OF_KIND), never taken from the browser's word. The server's
+audit rows are `actions` and are written whatever the level: `off` stops the
+browser's history, never the audit. Each level has its own retention and row
+cap (Bound), and what a cap evicts, what ages out and what the browser had to
+sample or drop is counted in `activity_drops` and reported on GET /activity -
+never lost without a number.
+
 HOOK FOR NEW ACTIONS. Every state-changing request is audited by default
 (is_audited). A new route needs an entry in SERVER_ACTIONS - test_activity.py
 fails until it has one - and, to report a target, per-item outcomes or a
@@ -66,22 +77,41 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-log = logging.getLogger(__name__)
+from uqs.activity_log import (
+    DROP_REASONS,
+    EVENT_LEVELS,
+    EXPORT_MAX,
+    OUTCOMES,
+    SOURCES,
+    Query,
+    select,
+    stamp,
+)
+from uqs.activity_log import drops as read_drops
 
-#: Where a record came from. `server` rows are the authoritative audit.
-SOURCES = ("browser", "server")
+log = logging.getLogger(__name__)
 
 #: What a browser event says happened. `result` is the browser's own reading
 #: of a response - useful for timing, never the authority on the outcome.
-BROWSER_KINDS = ("navigate", "select", "submit", "confirm", "cancel", "result")
+#: `interact` is a control used (the `interactions` level) and `debug` a
+#: request, a poll or a retry (the `debug` level).
+BROWSER_KINDS = ("navigate", "select", "submit", "confirm", "cancel", "result", "interact", "debug")
 
 #: The one kind the server writes: a request to change something.
 SERVER_KIND = "request"
 
-#: How an action ended. `pending` until settled; `accepted` for work handed off
-#: (a detached backfill); `refused` when nothing was acted on (401, 403, 422
-#: before acting); `unknown` when it may have partly happened.
-OUTCOMES = ("pending", "succeeded", "failed", "refused", "accepted", "unknown")
+#: The level each kind is recorded under (activity_log.LEVELS). Derived, so a
+#: browser cannot file a click as an action to outlive its level's retention.
+LEVEL_OF_KIND = {
+    **dict.fromkeys(("navigate", "select", "submit", "confirm", "cancel", "result"), "actions"),
+    SERVER_KIND: "actions",
+    "interact": "interactions",
+    "debug": "debug",
+}
+
+#: The reasons the browser reports for events it did not send (DROP_REASONS):
+#: the others are the server's own.
+BROWSER_DROP_REASONS = ("sampled", "queue_overflow")
 
 #: How a browser action was triggered.
 TRIGGERS = ("pointer", "keyboard", "programmatic", "unknown")
@@ -168,26 +198,23 @@ DETAIL_KEYS: dict[str, Callable[[object], bool]] = {
     "sha256": _is_hex,
     "content_type": _is_name,
     "item_count": _is_count,
+    # interactions (#2000): what kind of control, and a toggle's new state -
+    # never what was typed into it
+    "control": _is_name,
+    "checked": _is_bool,
+    "open": _is_bool,
+    "level": _is_name,
+    # debug (#2000): which attempt a retry is
+    "attempt": _is_count,
 }
 
 #: Bounds on what one event may carry.
 MAX_ITEMS = 256
-MAX_LIMIT = 1000
-DEFAULT_LIMIT = 200
 
-#: Inserts between retention sweeps, so pruning costs one DELETE per batch
-#: rather than one per row.
+#: Inserts between retention sweeps, so pruning costs one DELETE per level
+#: per batch rather than one per row. A level holds at most its row cap plus
+#: this many rows between sweeps.
 PRUNE_EVERY = 200
-
-#: A stored instant: fixed width, UTC, so text order is time order.
-_STAMP = "%Y-%m-%dT%H:%M:%S.%fZ"
-
-
-def stamp(moment: dt.datetime) -> str:
-    """An aware datetime as the fixed-width UTC text rows are stored with."""
-    if moment.tzinfo is None:
-        raise ValueError("an activity timestamp must carry a timezone")
-    return moment.astimezone(dt.UTC).strftime(_STAMP)
 
 
 def _now() -> dt.datetime:
@@ -321,6 +348,24 @@ class Persistence:
     last_failure_at: str | None = None
 
 
+@dataclass(frozen=True)
+class Bound:
+    """How much of one level is kept: rows younger than `retention_days`, and
+    of those only the newest `max_rows`. The tighter bound wins."""
+
+    retention_days: int
+    max_rows: int
+
+    def __post_init__(self) -> None:
+        if self.retention_days <= 0 or self.max_rows <= 0:
+            raise ValueError("activity retention needs positive days and rows")
+
+
+def uniform(retention_days: int, max_rows: int) -> dict[str, Bound]:
+    """The same bound at every level."""
+    return dict.fromkeys(EVENT_LEVELS, Bound(retention_days, max_rows))
+
+
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS activity (
     seq          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -348,67 +393,39 @@ CREATE INDEX IF NOT EXISTS activity_ts ON activity (ts);
 CREATE INDEX IF NOT EXISTS activity_recorded ON activity (recorded_at);
 CREATE INDEX IF NOT EXISTS activity_request ON activity (request_id);
 CREATE INDEX IF NOT EXISTS activity_session ON activity (session_id);
+CREATE TABLE IF NOT EXISTS activity_drops (
+    level   TEXT NOT NULL,
+    reason  TEXT NOT NULL,
+    count   INTEGER NOT NULL,
+    last_at TEXT NOT NULL,
+    PRIMARY KEY (level, reason)
+);
 """
 
-#: Columns a reader gets back, in order.
-COLUMNS = (
-    "event_id",
-    "ts",
-    "recorded_at",
-    "source",
-    "kind",
-    "action",
-    "target",
-    "outcome",
-    "session_id",
-    "request_id",
-    "claimed_user",
-    "trigger",
-    "method",
-    "status_code",
-    "duration_ms",
-    "items",
-    "detail",
-    "dropped",
-)
-
-
-@dataclass(frozen=True)
-class Query:
-    """A filter over the history. Every field narrows; None means any."""
-
-    since: dt.datetime | None = None
-    until: dt.datetime | None = None
-    session_id: str | None = None
-    request_id: str | None = None
-    #: An action name, or a dotted prefix of one: `process` matches
-    #: `process.stop`.
-    action: str | None = None
-    target: str | None = None
-    outcome: str | None = None
-    source: str | None = None
-    limit: int = DEFAULT_LIMIT
+#: Added by #2000. A file #1954 wrote has no `level` column; every row in it
+#: was an action, so that is what the column is filled with.
+_LEVEL_COLUMN = "ALTER TABLE activity ADD COLUMN level TEXT NOT NULL DEFAULT 'actions'"
+_LEVEL_INDEX = "CREATE INDEX IF NOT EXISTS activity_level ON activity (level, seq)"
 
 
 class ActivityStore:
     """The history, in SQLite. Thread-safe: sync routes run in a pool.
 
     *path* None keeps it in memory, for the life of the process only, which
-    `persistence.persistent` says.
+    `persistence.persistent` says. *bounds* gives each of activity_log's
+    EVENT_LEVELS its own retention and row cap.
     """
 
     def __init__(
         self,
         path: Path | None,
         *,
-        retention_days: int,
-        max_rows: int,
+        bounds: Mapping[str, Bound],
         clock: Callable[[], dt.datetime] = _now,
     ) -> None:
-        if retention_days <= 0 or max_rows <= 0:
-            raise ValueError("activity retention needs positive days and rows")
-        self.retention_days = retention_days
-        self.max_rows = max_rows
+        if missing := sorted(set(EVENT_LEVELS) - set(bounds)):
+            raise ValueError(f"activity bounds missing for levels {missing}")
+        self.bounds = {level: bounds[level] for level in EVENT_LEVELS}
         self._clock = clock
         self._lock = threading.Lock()
         self._inserts = 0
@@ -428,7 +445,15 @@ class ActivityStore:
             )
             if path is not None:
                 self._db.execute("PRAGMA journal_mode=WAL")
+                # In WAL mode NORMAL cannot corrupt the file; it can lose the
+                # last writes to a power cut, which operational logging can
+                # afford and a click-rate history cannot afford to fsync for.
+                self._db.execute("PRAGMA synchronous=NORMAL")
             self._db.executescript(_SCHEMA)
+            columns = {row[1] for row in self._db.execute("PRAGMA table_info(activity)")}
+            if "level" not in columns:
+                self._db.execute(_LEVEL_COLUMN)
+            self._db.execute(_LEVEL_INDEX)
         except (sqlite3.Error, OSError) as exc:
             raise ValueError(
                 f"activity history cannot be kept at {path}: {exc} - set "
@@ -439,6 +464,12 @@ class ActivityStore:
 
     # -- writing --------------------------------------------------------------
 
+    def _failed(self, exc: sqlite3.Error) -> None:
+        self.persistence.failures += 1
+        self.persistence.last_error = type(exc).__name__ + ": " + str(exc)[:200]
+        self.persistence.last_failure_at = stamp(self._clock())
+        log.warning("activity history write failed: %s", exc)
+
     def _write(self, sql: str, args: tuple[Any, ...]) -> int | None:
         """Run one write and return the rows it changed; on failure, count it,
         carry on and return None (module docstring)."""
@@ -446,77 +477,102 @@ class ActivityStore:
             with self._lock:
                 return self._db.execute(sql, args).rowcount
         except sqlite3.Error as exc:
-            self.persistence.failures += 1
-            self.persistence.last_error = type(exc).__name__ + ": " + str(exc)[:200]
-            self.persistence.last_failure_at = stamp(self._clock())
-            log.warning("activity history write failed: %s", exc)
+            self._failed(exc)
             return None
 
-    def add(
-        self,
-        *,
-        source: str,
-        kind: str,
-        action: str,
-        ts: dt.datetime | None = None,
-        event_id: str | None = None,
-        target: str | None = None,
-        outcome: str | None = None,
-        session_id: str | None = None,
-        request_id: str | None = None,
-        claimed_user: str | None = None,
-        trigger: str | None = None,
-        method: str | None = None,
-        status_code: int | None = None,
-        duration_ms: float | None = None,
-        items: Iterable[Mapping[str, object]] | None = None,
-        detail: Mapping[str, object] | None = None,
-        dropped: int = 0,
-    ) -> tuple[str, bool]:
-        """Insert one event; returns its id and whether it was stored.
-
-        A repeated `event_id` is ignored, so a browser that retries a batch
-        does not record it twice.
-        """
+    def _row(self, event: Mapping[str, Any], now: dt.datetime) -> tuple[Any, ...]:
+        """One event as the INSERT's values, every field cleaned."""
+        source, kind, action = event["source"], event["kind"], event["action"]
+        outcome = event.get("outcome")
         if source not in SOURCES:
             raise ValueError(f"unknown source {source!r}")
+        if kind not in LEVEL_OF_KIND:
+            raise ValueError(f"unknown kind {kind!r}")
         if outcome is not None and outcome not in OUTCOMES:
             raise ValueError(f"unknown outcome {outcome!r}")
         if not _ACTION.match(action):
             raise ValueError(f"an action name must match {_ACTION.pattern}, got {action!r}")
-        kept, more = clean_detail(detail)
-        event_id = clean_id(event_id) or new_id()
-        now = self._clock()
-        changed = self._write(
-            "INSERT OR IGNORE INTO activity (event_id, ts, recorded_at, source, kind, action, "
-            "target, outcome, session_id, request_id, claimed_user, trigger, method, "
-            "status_code, duration_ms, items, detail, dropped) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-            (
-                event_id,
-                stamp(ts or now),
-                stamp(now),
-                source,
-                kind,
-                action,
-                clean_target(target),
-                outcome,
-                clean_id(session_id),
-                clean_id(request_id),
-                clean_user(claimed_user),
-                trigger if trigger in TRIGGERS else None,
-                method,
-                status_code,
-                duration_ms,
-                json.dumps(clean_items(items)),
-                json.dumps(kept, sort_keys=True),
-                dropped + more,
-            ),
+        kept, more = clean_detail(event.get("detail"))
+        trigger = event.get("trigger")
+        return (
+            clean_id(event.get("event_id")) or new_id(),
+            stamp(event.get("ts") or now),
+            stamp(now),
+            LEVEL_OF_KIND[kind],
+            source,
+            kind,
+            action,
+            clean_target(event.get("target")),
+            outcome,
+            clean_id(event.get("session_id")),
+            clean_id(event.get("request_id")),
+            clean_user(event.get("claimed_user")),
+            trigger if trigger in TRIGGERS else None,
+            event.get("method"),
+            event.get("status_code"),
+            event.get("duration_ms"),
+            json.dumps(clean_items(event.get("items"))),
+            json.dumps(kept, sort_keys=True),
+            event.get("dropped", 0) + more,
         )
-        self._inserts += 1
-        if self._inserts % PRUNE_EVERY == 0:
+
+    _INSERT = (
+        "INSERT OR IGNORE INTO activity (event_id, ts, recorded_at, level, source, kind, "
+        "action, target, outcome, session_id, request_id, claimed_user, trigger, method, "
+        "status_code, duration_ms, items, detail, dropped) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+    )
+
+    def add(self, **event: Any) -> tuple[str, bool]:
+        """Insert one event; returns its id and whether it was stored.
+
+        Takes the fields of `add_many`'s events. A repeated `event_id` is
+        ignored, so a browser that retries a batch does not record it twice.
+        """
+        row = self._row(event, self._clock())
+        changed = self._write(self._INSERT, row)
+        self._counted(1)
+        return row[0], changed == 1
+
+    def add_many(self, events: Iterable[Mapping[str, Any]]) -> tuple[int, int]:
+        """Insert a batch in ONE transaction - a hundred clicks cost one commit,
+        not a hundred - and return (stored, not stored). Every event is
+        checked before any is written, so a bad one refuses the batch."""
+        now = self._clock()
+        rows = [self._row(e, now) for e in events]
+        stored = 0
+        try:
+            with self._lock:
+                self._db.execute("BEGIN")
+                try:
+                    for row in rows:
+                        stored += self._db.execute(self._INSERT, row).rowcount
+                    self._db.execute("COMMIT")
+                except sqlite3.Error:
+                    self._db.execute("ROLLBACK")
+                    raise
+        except sqlite3.Error as exc:
+            self._failed(exc)
+            stored = 0
+        self._counted(len(rows))
+        return stored, len(rows) - stored
+
+    def _counted(self, n: int) -> None:
+        before = self._inserts
+        self._inserts += n
+        if self._inserts // PRUNE_EVERY != before // PRUNE_EVERY:
             self.prune()
-        return event_id, changed == 1
+
+    def note_dropped(self, level: str, reason: str, count: int) -> None:
+        """Count events that are not in the history, so a reader is told."""
+        if level not in EVENT_LEVELS or reason not in DROP_REASONS or count <= 0:
+            return
+        self._write(
+            "INSERT INTO activity_drops (level, reason, count, last_at) VALUES (?, ?, ?, ?) "
+            "ON CONFLICT (level, reason) DO UPDATE SET "
+            "count = count + excluded.count, last_at = excluded.last_at",
+            (level, reason, count, stamp(self._clock())),
+        )
 
     def update(self, event_id: str, **fields: Any) -> bool:
         """Change a stored event's settleable fields."""
@@ -554,53 +610,45 @@ class ActivityStore:
         )
 
     def prune(self) -> None:
-        """Apply both retention bounds: age, then row count."""
-        cutoff = stamp(self._clock() - dt.timedelta(days=self.retention_days))
-        self._write("DELETE FROM activity WHERE recorded_at < ?", (cutoff,))
-        self._write(
-            "DELETE FROM activity WHERE seq <= "
-            "(SELECT seq FROM activity ORDER BY seq DESC LIMIT 1 OFFSET ?)",
-            (self.max_rows,),
-        )
+        """Apply each level's bounds - age, then row count - and count what
+        each removed (`retention`, `row_cap`)."""
+        now = self._clock()
+        for level, bound in self.bounds.items():
+            cutoff = stamp(now - dt.timedelta(days=bound.retention_days))
+            aged = self._write(
+                "DELETE FROM activity WHERE level = ? AND recorded_at < ?", (level, cutoff)
+            )
+            capped = self._write(
+                "DELETE FROM activity WHERE level = ? AND seq <= "
+                "(SELECT seq FROM activity WHERE level = ? ORDER BY seq DESC LIMIT 1 OFFSET ?)",
+                (level, level, bound.max_rows),
+            )
+            self.note_dropped(level, "retention", aged or 0)
+            self.note_dropped(level, "row_cap", capped or 0)
 
     # -- reading --------------------------------------------------------------
 
     def query(self, q: Query) -> list[dict[str, Any]]:
-        """Events matching *q*, newest first."""
-        where: list[str] = []
-        args: list[Any] = []
-        if q.since is not None:
-            where.append("ts >= ?")
-            args.append(stamp(q.since))
-        if q.until is not None:
-            where.append("ts < ?")
-            args.append(stamp(q.until))
-        for column in ("session_id", "request_id", "target", "outcome", "source"):
-            value = getattr(q, column)
-            if value is not None:
-                where.append(f"{column} = ?")
-                args.append(value)
-        if q.action is not None:
-            where.append("(action = ? OR substr(action, 1, ?) = ?)")
-            args.extend([q.action, len(q.action) + 1, q.action + "."])
-        sql = f"SELECT {', '.join(COLUMNS)} FROM activity"  # noqa: S608 - fixed names
-        if where:
-            sql += " WHERE " + " AND ".join(where)
-        sql += " ORDER BY ts DESC, seq DESC LIMIT ?"
-        args.append(max(1, min(q.limit, MAX_LIMIT)))
+        """Events matching *q*, newest first, a page of them."""
         with self._lock:
-            rows = self._db.execute(sql, args).fetchall()
-        out = []
-        for row in rows:
-            event = dict(zip(COLUMNS, row, strict=True))
-            event["items"] = json.loads(event["items"])
-            event["detail"] = json.loads(event["detail"])
-            out.append(event)
-        return out
+            return select(self._db, q)
 
-    def count(self) -> int:
+    def export(self, q: Query) -> list[dict[str, Any]]:
+        """Events matching *q*, newest first, up to activity_log.EXPORT_MAX."""
         with self._lock:
-            return int(self._db.execute("SELECT count(*) FROM activity").fetchone()[0])
+            return select(self._db, q, max_limit=EXPORT_MAX)
+
+    def drops(self) -> list[dict[str, Any]]:
+        """What is not in the history, by level and reason."""
+        with self._lock:
+            return read_drops(self._db)
+
+    def count(self, level: str | None = None) -> int:
+        sql, args = "SELECT count(*) FROM activity", ()
+        if level is not None:
+            sql, args = sql + " WHERE level = ?", (level,)
+        with self._lock:
+            return int(self._db.execute(sql, args).fetchone()[0])
 
     def close(self) -> None:
         with self._lock:

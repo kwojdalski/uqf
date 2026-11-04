@@ -91,7 +91,12 @@ export function FileBrowser({
     <section className="panel" aria-label={`Files on ${target}`}>
       <div className="section-heading">
         <h2>Files on {target}</h2>
-        <button type="button" disabled={deleting} onClick={onClose}>
+        <button
+          type="button"
+          data-activity="files.close"
+          disabled={deleting}
+          onClick={onClose}
+        >
           Close
         </button>
       </div>
@@ -101,7 +106,12 @@ export function FileBrowser({
         </p>
       )}
       <nav aria-label="Path" className="crumbs">
-        <button type="button" disabled={deleting} onClick={() => setPath("")}>
+        <button
+          type="button"
+          data-activity="files.root"
+          disabled={deleting}
+          onClick={() => setPath("")}
+        >
           root
         </button>
         {crumbs.map((crumb, index) => (
@@ -109,6 +119,7 @@ export function FileBrowser({
             {" / "}
             <button
               type="button"
+              data-activity="files.crumb"
               disabled={deleting}
               onClick={() => setPath(crumbs.slice(0, index + 1).join("/"))}
             >
@@ -121,6 +132,7 @@ export function FileBrowser({
         <span role="status">{state.loading ? "Loading…" : ""}</span>
         <button
           type="button"
+          data-activity="files.up"
           disabled={deleting || !path}
           onClick={() => setPath(crumbs.slice(0, -1).join("/"))}
         >
@@ -128,6 +140,7 @@ export function FileBrowser({
         </button>
         <button
           type="button"
+          data-activity="files.refresh"
           disabled={deleting}
           onClick={() => setRevision((r) => r + 1)}
         >

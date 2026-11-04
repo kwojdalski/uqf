@@ -455,6 +455,14 @@ class Meaning:
 #: text that does not match the pattern is a second meaning.
 OPTIONS = {
     "--allow-dirty": Meaning("retired: --override allow-dirty", None),
+    # the frontend's activity history (#2000): one filter each, on list and export alike
+    "--action": Meaning("an activity action, or its dotted prefix", r"dotted prefix"),
+    "--db": Meaning("the activity history's SQLite file", r"activity history's SQLite file"),
+    "--outcome": Meaning("how an activity event ended", r"^only events that ended so"),
+    "--recorded-by": Meaning("the browser or the server's audit", r"^only events recorded by"),
+    "--request": Meaning("one operation's request id", r"correlated by this request id"),
+    "--session": Meaning("one browser session's events", r"browser session id"),
+    "--subject": Meaning("what an activity event is about", r"^only events about this name"),
     "--apply": Meaning("make the changes; without it, a dry run", r"without it, a dry run"),
     "--arch": Meaning("the servers' CPU architecture", r"x86_64"),
     "--attach": Meaning("retired: --attachment - a verb naming a noun (#1855)", None),
@@ -1018,8 +1026,8 @@ def test_rule5_the_marks_beyond_an_effect_are_declared_where_their_command_is():
     a process even in a dry run, or act under an option are marks on the
     commands (`safety.marked`), which `uqs --target` reads too - so a new
     command with one of these properties cannot skip being confirmed."""
-    assert set(OWN_OUTPUT) == {"exec", "job attachment contract export", "setup odbc env",
-                               "target shell"}  # fmt: skip
+    assert set(OWN_OUTPUT) == {"activity export", "exec", "job attachment contract export",
+                               "setup odbc env", "target shell"}  # fmt: skip
     assert set(NO_DRY_RUN) == {"query"}
     starts = set(_marked("dry_run_starts"))
     assert starts == {"job backfill"}

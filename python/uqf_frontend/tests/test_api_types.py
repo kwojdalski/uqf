@@ -47,6 +47,7 @@ REQUESTS = {
     "ActivityBatch": "ActivityBatchRequest",
     "BrowserEvent": "BrowserEventIn",
     "ActivityItem": "ActivityItem",
+    "BrowserDrop": "BrowserDropIn",
 }
 
 #: TypeScript interface -> the model it mirrors: every response, the
@@ -73,6 +74,8 @@ PAIRS = {
     "ActivityEvent": "ActivityEventOut",
     "ActivityPersistence": "ActivityPersistence",
     "ActivityHistory": "ActivityResponse",
+    "ActivityBound": "ActivityBound",
+    "ActivityDrop": "ActivityDrop",
     "ServiceTarget": "ServiceTargetOut",
     "Services": "ServicesResponse",
     "RemoteEntry": "RemoteEntryOut",

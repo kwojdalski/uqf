@@ -162,6 +162,10 @@ class HealthResponse(BaseModel):
     ok: bool
     gateway: Literal["up", "reloading", "unreachable", "wrong_process"]
     detail: str | None = None
+    #: The level a browser session records its activity at until its operator
+    #: picks another (Settings.activity_level, #2000) - served here, beside
+    #: the timeout, so the browser keeps no copy of the server's default.
+    activity_level: SessionLevel
 
 
 class OpsTableResponse(BaseModel):
@@ -553,12 +557,25 @@ class RemoteDeleteResponse(BaseModel):
 
 # ------------------------------------------------------------ activity (#1954)
 
-#: activity.SOURCES, BROWSER_KINDS + SERVER_KIND, OUTCOMES and TRIGGERS, as
-#: words the browser's types are held to (test_activity.py holds these to
-#: activity.py, test_api_types.py holds api.ts to these).
+#: activity.SOURCES, BROWSER_KINDS + SERVER_KIND, OUTCOMES, TRIGGERS and
+#: activity_log's LEVELS and DROP_REASONS, as words the browser's types are
+#: held to (test_activity.py holds these to activity.py, test_api_types.py
+#: holds api.ts to these).
 ActivitySource = Literal["browser", "server"]
-ActivityKind = Literal["navigate", "select", "submit", "confirm", "cancel", "result", "request"]
-BrowserKind = Literal["navigate", "select", "submit", "confirm", "cancel", "result"]
+ActivityKind = Literal[
+    "navigate", "select", "submit", "confirm", "cancel", "result", "interact", "debug", "request"
+]
+BrowserKind = Literal[
+    "navigate", "select", "submit", "confirm", "cancel", "result", "interact", "debug"
+]
+#: What a session records at; `off` records no browser history.
+SessionLevel = Literal["off", "actions", "interactions", "debug"]
+#: What an event is recorded under.
+ActivityLevel = Literal["actions", "interactions", "debug"]
+ActivityDropReason = Literal["sampled", "queue_overflow", "row_cap", "retention"]
+#: The reasons the browser reports; the others are the server's own.
+BrowserDropReason = Literal["sampled", "queue_overflow"]
+ActivityExportFormat = Literal["jsonl", "csv", "text"]
 ActivityOutcome = Literal["pending", "succeeded", "failed", "refused", "accepted", "unknown"]
 ActivityTrigger = Literal["pointer", "keyboard", "programmatic", "unknown"]
 
@@ -599,12 +616,25 @@ class BrowserEventIn(BaseModel):
     detail: dict[str, str | int | float | bool] = Field(default_factory=dict, max_length=32)
 
 
-class ActivityBatchRequest(BaseModel):
-    """What the browser sends: a batch, so navigation does not cost a request each."""
+class BrowserDropIn(BaseModel):
+    """Events the browser did not send, counted: sampled by debug's rate
+    limit, or pushed out of its queue while the API was unreachable."""
 
     model_config = STRICT_REQUEST
 
-    events: list[BrowserEventIn] = Field(min_length=1, max_length=100)
+    level: ActivityLevel
+    reason: BrowserDropReason
+    count: int = Field(ge=1, le=1_000_000)
+
+
+class ActivityBatchRequest(BaseModel):
+    """What the browser sends: a batch, so navigation does not cost a request
+    each - and what it could not send, so nothing is lost without a number."""
+
+    model_config = STRICT_REQUEST
+
+    events: list[BrowserEventIn] = Field(default_factory=list, max_length=100)
+    dropped: list[BrowserDropIn] = Field(default_factory=list, max_length=16)
 
 
 class ActivityBatchResponse(BaseModel):
@@ -627,6 +657,7 @@ class ActivityEventOut(BaseModel):
     event_id: str
     ts: str
     recorded_at: str
+    level: ActivityLevel
     source: ActivitySource
     kind: ActivityKind
     action: str
@@ -654,11 +685,30 @@ class ActivityPersistence(BaseModel):
     last_failure_at: str | None
 
 
+class ActivityBound(BaseModel):
+    """How much of one level is kept: the tighter of the two wins."""
+
+    level: ActivityLevel
+    retention_days: int
+    max_rows: int
+
+
+class ActivityDrop(BaseModel):
+    """Events not in the history, by level and why, since the file began."""
+
+    level: ActivityLevel
+    reason: ActivityDropReason
+    count: int
+    last_at: str
+
+
 class ActivityResponse(BaseModel):
-    """The history, newest first, with how it is kept."""
+    """The history, newest first, with how it is kept and what it lost."""
 
     events: list[ActivityEventOut]
     persistence: ActivityPersistence
-    retention_days: int
-    max_rows: int
+    #: The level a session records at unless its operator picks another.
+    default_level: SessionLevel
+    bounds: list[ActivityBound]
+    drops: list[ActivityDrop]
     poll_seconds: int

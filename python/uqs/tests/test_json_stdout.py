@@ -82,6 +82,10 @@ def test_a_refused_attach_without_json_logs_to_stderr_too(tmp_path):
 CASES: dict[str, tuple[list[str], str]] = {
     "target list": (["target", "list"], "["),
     "target log": (["target", "log"], "edited_outside"),
+    "activity list": (
+        ["activity", "list", "--db", "/nonexistent-2000/activity.sqlite3"],
+        "no activity history at",
+    ),
     "runtime list": (["runtime", "list"], "uqf"),
     "job list": (["job", "list"], "["),
     "process list": (["process", "list"], '"process"'),

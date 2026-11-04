@@ -24,11 +24,12 @@ import pytest
 from fastapi.testclient import TestClient
 
 from uqf_frontend import activity, control, models
-from uqf_frontend.activity import ActivityStore, Query
+from uqf_frontend.activity import ActivityStore
 from uqf_frontend.app import create_app
 from uqf_frontend.config import Settings
 from uqf_frontend.errors import BackfillNotStarted
 from uqf_frontend.gateway import FakeGateway
+from uqs.activity_log import Query
 
 TOKEN = "s3cret-write-token-do-not-store"
 SESSION = "session-abc12345"
@@ -297,10 +298,10 @@ def test_a_worker_config_outcome_is_whether_it_took_effect(tmp_path, answer, out
 
 def test_a_row_left_pending_by_a_restart_is_settled_unknown(tmp_path):
     path = tmp_path / "a.sqlite3"
-    store = ActivityStore(path, retention_days=30, max_rows=100)
+    store = ActivityStore(path, bounds=activity.uniform(30, 100))
     store.add(source="server", kind="request", action="process.stop", outcome="pending")
     store.close()
-    (row,) = ActivityStore(path, retention_days=30, max_rows=100).query(Query())
+    (row,) = ActivityStore(path, bounds=activity.uniform(30, 100)).query(Query())
     assert row["outcome"] == "unknown"
     assert "stopped before the outcome" in row["detail"]["reason"]
 
@@ -505,7 +506,7 @@ class _Clock:
 
 def test_rows_older_than_the_retention_window_are_pruned(tmp_path):
     clock = _Clock(dt.datetime(2026, 1, 1, tzinfo=dt.UTC))
-    store = ActivityStore(tmp_path / "a.sqlite3", retention_days=7, max_rows=100, clock=clock)
+    store = ActivityStore(tmp_path / "a.sqlite3", bounds=activity.uniform(7, 100), clock=clock)
     store.add(source="browser", kind="navigate", action="view.open")
     clock.at += dt.timedelta(days=8)
     store.add(source="browser", kind="navigate", action="view.close")
@@ -514,7 +515,7 @@ def test_rows_older_than_the_retention_window_are_pruned(tmp_path):
 
 
 def test_only_the_newest_max_rows_are_kept(tmp_path):
-    store = ActivityStore(tmp_path / "a.sqlite3", retention_days=30, max_rows=5)
+    store = ActivityStore(tmp_path / "a.sqlite3", bounds=activity.uniform(30, 5))
     for i in range(activity.PRUNE_EVERY):
         store.add(source="browser", kind="select", action="table.select", target=f"t{i}")
     assert store.count() == 5, "pruned on its own, every PRUNE_EVERY inserts"
@@ -525,11 +526,11 @@ def test_only_the_newest_max_rows_are_kept(tmp_path):
 
 def test_retention_is_applied_at_startup(tmp_path):
     path = tmp_path / "a.sqlite3"
-    store = ActivityStore(path, retention_days=30, max_rows=100)
+    store = ActivityStore(path, bounds=activity.uniform(30, 100))
     for _ in range(10):
         store.add(source="browser", kind="select", action="table.select")
     store.close()
-    assert ActivityStore(path, retention_days=30, max_rows=3).count() == 3
+    assert ActivityStore(path, bounds=activity.uniform(30, 3)).count() == 3
 
 
 # ------------------------------------------------------- when persistence fails
@@ -562,7 +563,9 @@ def test_a_history_file_that_cannot_be_opened_stops_the_api(tmp_path):
 
 def test_retention_must_be_positive(tmp_path):
     with pytest.raises(ValueError, match="positive"):
-        ActivityStore(None, retention_days=0, max_rows=1)
+        ActivityStore(None, bounds=activity.uniform(0, 1))
+    with pytest.raises(ValueError, match="missing for levels"):
+        ActivityStore(None, bounds={"actions": activity.Bound(1, 1)})
 
 
 # ------------------------------------------------------- vocabulary

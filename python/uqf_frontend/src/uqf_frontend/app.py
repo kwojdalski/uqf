@@ -20,7 +20,7 @@ from typing import Any
 import polars as pl
 from fastapi import Depends, FastAPI, Request
 from fastapi.concurrency import run_in_threadpool
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from uqf_frontend import (
@@ -55,7 +55,11 @@ from uqf_frontend.gateway import TIERS, Gateway, KolaGateway
 from uqf_frontend.models import (
     ActivityBatchRequest,
     ActivityBatchResponse,
+    ActivityBound,
+    ActivityDrop,
     ActivityEventOut,
+    ActivityExportFormat,
+    ActivityLevel,
     ActivityOutcome,
     ActivityPersistence,
     ActivityResponse,
@@ -93,6 +97,7 @@ from uqf_frontend.models import (
     WorkerConfigResponse,
     WorkerStatusOut,
 )
+from uqs import activity_log
 
 
 def _refused(status_code: int, error: str, detail: str) -> JSONResponse:
@@ -156,8 +161,10 @@ def create_app(
     # in the lifespan, so an unusable file stops the API before it serves.
     history = activity.ActivityStore(
         settings.activity_db,
-        retention_days=settings.activity_retention_days,
-        max_rows=settings.activity_max_rows,
+        bounds={
+            level: activity.Bound(days, rows)
+            for level, (days, rows) in settings.activity_bounds().items()
+        },
     )
 
     # Usage capture, started with the app and stopped with it. Off unless
@@ -321,6 +328,7 @@ def create_app(
                 detail=str(exc),
                 poll_seconds=ops.POLL_SECONDS["health"],
                 request_timeout_seconds=settings.request_timeout,
+                activity_level=typing.cast(Any, settings.activity_level),
             )
         except GatewayUnavailable as exc:
             return HealthResponse(
@@ -329,6 +337,7 @@ def create_app(
                 detail=str(exc),
                 poll_seconds=ops.POLL_SECONDS["health"],
                 request_timeout_seconds=settings.request_timeout,
+                activity_level=typing.cast(Any, settings.activity_level),
             )
         proctype = _reported_proctype(identity)
         # Only a POSITIVE reading of the wrong type is a refusal. A process
@@ -349,12 +358,14 @@ def create_app(
                 ),
                 poll_seconds=ops.POLL_SECONDS["health"],
                 request_timeout_seconds=settings.request_timeout,
+                activity_level=typing.cast(Any, settings.activity_level),
             )
         return HealthResponse(
             ok=True,
             gateway="up",
             poll_seconds=ops.POLL_SECONDS["health"],
             request_timeout_seconds=settings.request_timeout,
+            activity_level=typing.cast(Any, settings.activity_level),
         )
 
     @app.get("/catalog", response_model=CatalogResponse)
@@ -806,34 +817,54 @@ def create_app(
     @app.post("/activity/events", response_model=ActivityBatchResponse)
     def record_activity(batch: ActivityBatchRequest, request: Request) -> ActivityBatchResponse:
         """What an operator did in the UI. Intent, as the browser reports it -
-        the server's own rows are the authority on what happened."""
-        stored = dropped = 0
+        the server's own rows are the authority on what happened. Written in
+        one transaction, and with it the count of what the browser could not
+        send."""
         claimed = request.headers.get(authz.IDENTITY_HEADER)
-        for event in batch.events:
-            _, more = activity.clean_detail(event.detail)
-            dropped += more
-            _, ok = history.add(
-                source="browser",
-                kind=event.kind,
-                action=event.action,
-                ts=event.ts,
-                event_id=event.event_id,
-                target=event.target,
-                outcome=event.outcome,
-                session_id=event.session_id,
-                request_id=event.request_id,
-                claimed_user=claimed,
-                trigger=event.trigger,
-                duration_ms=event.duration_ms,
-                items=[item.model_dump() for item in event.items],
-                detail=event.detail,
-            )
-            stored += ok
+        dropped = sum(activity.clean_detail(event.detail)[1] for event in batch.events)
+        stored, not_stored = history.add_many(
+            {
+                "source": "browser",
+                "kind": event.kind,
+                "action": event.action,
+                "ts": event.ts,
+                "event_id": event.event_id,
+                "target": event.target,
+                "outcome": event.outcome,
+                "session_id": event.session_id,
+                "request_id": event.request_id,
+                "claimed_user": claimed,
+                "trigger": event.trigger,
+                "duration_ms": event.duration_ms,
+                "items": [item.model_dump() for item in event.items],
+                "detail": event.detail,
+            }
+            for event in batch.events
+        )
+        for lost in batch.dropped:
+            history.note_dropped(lost.level, lost.reason, lost.count)
         return ActivityBatchResponse(
             stored=stored,
-            not_stored=len(batch.events) - stored,
+            not_stored=not_stored,
             dropped_detail=dropped,
             persistent=history.persistence.persistent,
+        )
+
+    def _activity_query(
+        filters: dict[str, Any], level: str | None, limit: int
+    ) -> activity_log.Query:
+        """The one reading of the filters, for the view and the export alike."""
+        return activity_log.Query(
+            since=_instant("since", filters["since"]),
+            until=_instant("until", filters["until"]),
+            session_id=filters["session_id"] or None,
+            request_id=filters["request_id"] or None,
+            action=filters["action"] or None,
+            target=filters["target"] or None,
+            outcome=filters["outcome"],
+            source=filters["source"],
+            level=level,
+            limit=limit,
         )
 
     @app.get("/activity", response_model=ActivityResponse)
@@ -846,22 +877,14 @@ def create_app(
         target: str | None = None,
         outcome: ActivityOutcome | None = None,
         source: ActivitySource | None = None,
-        limit: int = activity.DEFAULT_LIMIT,
+        level: ActivityLevel | None = None,
+        limit: int = activity_log.DEFAULT_LIMIT,
     ) -> ActivityResponse:
-        """The history, newest first, filtered; and whether it is being kept."""
-        rows = history.query(
-            activity.Query(
-                since=_instant("since", since),
-                until=_instant("until", until),
-                session_id=session_id or None,
-                request_id=request_id or None,
-                action=action or None,
-                target=target or None,
-                outcome=outcome,
-                source=source,
-                limit=limit,
-            )
-        )
+        """The history, newest first, filtered; whether it is being kept, how
+        much of each level is, and what was not. `level` is the most
+        detailed level shown: `interactions` shows actions too."""
+        filters = dict(locals())
+        rows = history.query(_activity_query(filters, level, limit))
         state = history.persistence
         return ActivityResponse(
             events=[ActivityEventOut(**row) for row in rows],
@@ -872,9 +895,51 @@ def create_app(
                 last_error=state.last_error,
                 last_failure_at=state.last_failure_at,
             ),
-            retention_days=history.retention_days,
-            max_rows=history.max_rows,
+            default_level=typing.cast(Any, settings.activity_level),
+            bounds=[
+                ActivityBound(
+                    level=typing.cast(Any, lvl),
+                    retention_days=b.retention_days,
+                    max_rows=b.max_rows,
+                )
+                for lvl, b in history.bounds.items()
+            ],
+            drops=[ActivityDrop(**row) for row in history.drops()],
             poll_seconds=ops.POLL_SECONDS["activity"],
+        )
+
+    @app.get("/activity/export")
+    def export_activity(
+        format: ActivityExportFormat = "text",  # noqa: A002 - the query parameter's name
+        since: str | None = None,
+        until: str | None = None,
+        session_id: str | None = None,
+        request_id: str | None = None,
+        action: str | None = None,
+        target: str | None = None,
+        outcome: ActivityOutcome | None = None,
+        source: ActivitySource | None = None,
+        level: ActivityLevel | None = None,
+        limit: int = activity_log.EXPORT_DEFAULT,
+    ) -> Response:
+        """The history as a file: JSON Lines, CSV, or a timeline a person
+        reads (activity_log.render) - oldest first, under the same filters as
+        GET /activity, at most activity_log.EXPORT_MAX events."""
+        filters = dict(locals())
+        q = _activity_query(filters, level, limit)
+        now = dt.datetime.now(dt.UTC)
+        body = activity_log.render(
+            history.export(q),
+            format,
+            exported_at=now,
+            filters=q.described(),
+            dropped=history.drops(),
+        )
+        name = f"uqf-activity-{now:%Y%m%dT%H%M%SZ}.{activity_log.EXTENSIONS[format]}"
+        return Response(
+            content=body,
+            media_type=activity_log.MEDIA_TYPES[format],
+            headers={"Content-Disposition": f'attachment; filename="{name}"'},
         )
 
     if settings.web_dist is not None:

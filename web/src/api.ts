@@ -90,6 +90,8 @@ export interface Health extends Pollable {
   ok: boolean;
   gateway: "up" | "reloading" | "unreachable" | "wrong_process";
   detail: string | null;
+  /** the level a tab records its activity at unless its operator picks another (#2000) */
+  activity_level: SessionLevel;
 }
 export interface Worker {
   worker: string;
@@ -227,6 +229,29 @@ export function requestTimeout(): number {
   return requestTimeoutMs;
 }
 
+/** A request's start or finish, for the activity recorder's debug level
+ *  (activity.ts). A note carries the method, the path and the status - never
+ *  a body, a header or the token. */
+export interface RequestNote {
+  phase: "start" | "finish";
+  method: string;
+  path: string;
+  requestId?: string;
+  status?: number;
+  durationMs?: number;
+}
+let requestObserver: ((note: RequestNote) => void) | undefined;
+/** Be told of every request `request` makes; one observer, the recorder.
+ *  Returns the uninstaller. */
+export function observeRequests(
+  observer: (note: RequestNote) => void,
+): () => void {
+  requestObserver = observer;
+  return () => {
+    if (requestObserver === observer) requestObserver = undefined;
+  };
+}
+
 export async function request<T>(
   path: string,
   signal: AbortSignal,
@@ -242,20 +267,37 @@ export async function request<T>(
   const headers: Record<string, string> = { ...extra };
   if (body) headers["Content-Type"] = "application/json";
   if (authorization) headers.Authorization = authorization;
+  const verb = method ?? (body ? "POST" : "GET");
+  const note = {
+    method: verb,
+    path,
+    requestId: extra?.["X-UQF-Request-Id"],
+  };
+  const started = performance.now();
+  requestObserver?.({ ...note, phase: "start" });
+  const finished = (status?: number) =>
+    requestObserver?.({
+      ...note,
+      phase: "finish",
+      status,
+      durationMs: performance.now() - started,
+    });
   try {
     response = await fetch(path, {
       signal: AbortSignal.any([signal, AbortSignal.timeout(requestTimeoutMs)]),
-      method: method ?? (body ? "POST" : "GET"),
+      method: verb,
       headers: Object.keys(headers).length ? headers : undefined,
       body,
     });
   } catch (error) {
+    finished();
     if (signal.aborted) throw error;
     throw new ApiError(
       "The API is unavailable or the request timed out.",
       true,
     );
   }
+  finished(response.status);
   const payload = await response.json().catch(() => null);
   if (!response.ok) {
     const detail = payload?.detail;
@@ -656,7 +698,14 @@ export function uploadRemoteFile(
 /** models.ActivitySource and friends, held to them by test_api_types.py. */
 export type ActivitySource = "browser" | "server";
 export type BrowserKind =
-  "navigate" | "select" | "submit" | "confirm" | "cancel" | "result";
+  | "navigate"
+  | "select"
+  | "submit"
+  | "confirm"
+  | "cancel"
+  | "result"
+  | "interact"
+  | "debug";
 export type ActivityKind =
   | "navigate"
   | "select"
@@ -664,7 +713,18 @@ export type ActivityKind =
   | "confirm"
   | "cancel"
   | "result"
+  | "interact"
+  | "debug"
   | "request";
+/** What a tab records at, least detail first; `off` records no browser
+ *  history - the server's audit of every write is kept regardless. */
+export type SessionLevel = "off" | "actions" | "interactions" | "debug";
+/** What an event is recorded under. */
+export type ActivityLevel = "actions" | "interactions" | "debug";
+export type ActivityDropReason =
+  "sampled" | "queue_overflow" | "row_cap" | "retention";
+export type BrowserDropReason = "sampled" | "queue_overflow";
+export type ActivityExportFormat = "jsonl" | "csv" | "text";
 export type ActivityOutcome =
   "pending" | "succeeded" | "failed" | "refused" | "accepted" | "unknown";
 export type ActivityTrigger =
@@ -690,9 +750,16 @@ export interface BrowserEvent {
   items?: ActivityItem[];
   detail?: Record<string, DetailValue>;
 }
+/** Events the browser did not send, counted - models.BrowserDropIn. */
+export interface BrowserDrop {
+  level: ActivityLevel;
+  reason: BrowserDropReason;
+  count: number;
+}
 /** POST /activity/events - models.ActivityBatchRequest. */
 export interface ActivityBatch {
-  events: BrowserEvent[];
+  events?: BrowserEvent[];
+  dropped?: BrowserDrop[];
 }
 export interface ActivityBatchResult {
   stored: number;
@@ -706,6 +773,7 @@ export interface ActivityEvent {
   event_id: string;
   ts: string;
   recorded_at: string;
+  level: ActivityLevel;
   source: ActivitySource;
   kind: ActivityKind;
   action: string;
@@ -729,12 +797,26 @@ export interface ActivityPersistence {
   last_error: string | null;
   last_failure_at: string | null;
 }
+/** How much of one level is kept - models.ActivityBound. */
+export interface ActivityBound {
+  level: ActivityLevel;
+  retention_days: number;
+  max_rows: number;
+}
+/** Events not in the history, by level and why - models.ActivityDrop. */
+export interface ActivityDrop {
+  level: ActivityLevel;
+  reason: ActivityDropReason;
+  count: number;
+  last_at: string;
+}
 /** GET /activity - models.ActivityResponse. */
 export interface ActivityHistory extends Pollable {
   events: ActivityEvent[];
   persistence: ActivityPersistence;
-  retention_days: number;
-  max_rows: number;
+  default_level: SessionLevel;
+  bounds: ActivityBound[];
+  drops: ActivityDrop[];
 }
 
 export interface RemoteDeleteRequest {
