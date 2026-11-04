@@ -30,6 +30,7 @@ from uqf_frontend import (
     authz,
     catalog,
     charts,
+    compare,
     control,
     health,
     identity,
@@ -82,6 +83,8 @@ from uqf_frontend.models import (
     ChartsResponse,
     ColumnInfo,
     CommandResponse,
+    CompareRequest,
+    CompareResponse,
     ConfigDiffResponse,
     ConfigHistoryResponse,
     ConfigPushCloseRequest,
@@ -1001,6 +1004,19 @@ def create_app(
             body,
         )
         return ChartResponse(name=chart.name, **vars(drawn))
+
+    @app.post("/compare", response_model=CompareResponse)
+    def post_compare(request: Request, req: CompareRequest) -> CompareResponse:
+        """One or more tables on two endpoints - this stack (`local`) or a
+        registered target - over an explicit window, as `uqs data diff --json`
+        compares them (compare.py). Each table is put to the policy like
+        /query's. A target side is reached over ssh, so it needs remote
+        operations, as a tunnel check does."""
+        for table in req.tables:
+            run_policy(request, table=table)
+        if compare.sides(req.left, req.right):
+            _tunnel_gate("a comparison with a target")
+        return CompareResponse(**compare.run(settings, req))
 
     # ------------------------------------------------------ control (writes)
     #

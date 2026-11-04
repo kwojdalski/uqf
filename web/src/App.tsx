@@ -30,6 +30,7 @@ import {
 import { FileBrowser } from "./FileBrowser";
 import { PlotPanel } from "./PlotPanel";
 import { ChartsView } from "./ChartsView";
+import { CompareView } from "./CompareView";
 import { FleetConnections, TunnelPanel } from "./TunnelPanel";
 import { useResource } from "./useResource";
 import { ActivityView } from "./ActivityView";
@@ -47,6 +48,7 @@ const views = [
   "Backfills",
   "Desk",
   "Charts",
+  "Compare",
   "Fleet",
   "Queue",
   "Connections",
@@ -1877,6 +1879,8 @@ function Workspace() {
             <DeskView />
           ) : view === "Charts" ? (
             <ChartsView />
+          ) : view === "Compare" ? (
+            <CompareView />
           ) : view === "Control" ? (
             <ControlView />
           ) : view === "Activity" ? (

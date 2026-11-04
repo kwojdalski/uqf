@@ -59,6 +59,7 @@ The q details this rests on, verified against a live KDB-X process:
   | `POST /query`          | Validated, parameterised table query, tier-routed                                                                                         |
   | `GET /charts`          | The prepared charts, each with its parameters' JSON Schema and its point limit                                                            |
   | `POST /charts/{name}`  | One prepared chart's plotly.py figure, with its point limit and whether it was downsampled or truncated                                   |
+  | `POST /compare`        | Tables on two endpoints (this stack, `local`, or a registered target) over an explicit window: `uqs data diff --json`, delegated whole    |
   | `GET /me/capabilities` | Who the caller is (as a trusted proxy vouches), their groups, and every feature and action the access policy grants them                  |
 
 ### Control routes --- these CHANGE things
@@ -533,6 +534,23 @@ policy.
   | `mid_spread_fills`  | `market_data`'s first level, and `executions` or `trades`   | mid and spread, with buys and sells overlaid              |
   | `ops_latency`       | `.usage.usage` on every process, as `/ops/usage` does       | completed query durations per process, as box plots       |
 
+## Comparing endpoints
+
+`POST /compare` (#2033) is the Compare view's one call. It names both sides
+explicitly - `local` for the stack this frontend serves, or a target in
+`deploy_targets.toml` - with an explicit window (`range_from`/`range_to`, each
+with its zone), filters as typed (`sym=EURUSD`), a row limit per side and,
+optionally, the `source_version` whose coverage to compare. `compare.py` checks
+that a target side is registered and hands the rest to `uqs data diff`'s own
+function (`uqs.cli.data_diff.run`): uqs reaches each side's gateway - a target
+through an ssh tunnel, so a target side needs remote operations on, as a tunnel
+check does - and q decides everything the answer says (src/etl/core/compare.q).
+Each table carries one outcome - `endpoint_unavailable`, `missing_table`,
+`differs`, `incomplete_coverage` or `equal_in_sample` - and the label q wrote
+for it, which for a sample cut at the row limit says it is not proof the tables
+are equal. Every table is put to the table policy like `/query`'s, and the route
+is the `compare` feature's read.
+
 ## Backfill status
 
 `GET /ops/backfill` reads the status files q writes, rather than calling
@@ -712,11 +730,11 @@ never reaches a policy; the activity history still records it, labelled
 
 **What they may do** (`access.py`). A Casbin RBAC policy (pycasbin,
 `policy/model.conf`) over features --- one per view: `coverage`, `backfills`,
-`desk`, `fleet`, `queue`, `connections`, `usage`, `services`, `control`,
-`activity`, `settings` --- and their actions, `read` and `write`.
-`access.ROUTE_PERMISSIONS` is the one place a route is tied to a feature; a
-route missing from it is refused to everyone, and a test fails on it. A refusal
-is 403 and audited: a refused write settles its own audit row with the
+`desk`, `charts`, `compare`, `fleet`, `queue`, `connections`, `usage`,
+`services`, `control`, `activity`, `settings` --- and their actions, `read` and
+`write`. `access.ROUTE_PERMISSIONS` is the one place a route is tied to a
+feature; a route missing from it is refused to everyone, and a test fails on it.
+A refusal is 403 and audited: a refused write settles its own audit row with the
 permission it lacked, and a refused read gets an `authz.refused` row.
 
 ```text

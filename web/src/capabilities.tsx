@@ -10,6 +10,7 @@ export const VIEW_FEATURE: Readonly<Record<string, string>> = {
   Backfills: "backfills",
   Desk: "desk",
   Charts: "charts",
+  Compare: "compare",
   Fleet: "fleet",
   Queue: "queue",
   Connections: "connections",
