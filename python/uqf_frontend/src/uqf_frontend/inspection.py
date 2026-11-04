@@ -24,11 +24,12 @@ TWO SCOPES.
   is per request, so a target put in inspection mode is refused from the next
   write on, without a restart.
 
-THE TARGET A REQUEST ACTS ON is its `{target}` path parameter, or - for a
-frontend whose views are scoped to a workspace (#2029) - whatever the
-workspace layer puts in `request.state.workspace_target` before the guard runs
-(`request_target`). That is the one hook: a workspace that names a target
-inherits that target's inspection mode with no change here.
+THE TARGET A REQUEST ACTS ON is its `{target}` path parameter, else the
+workspace its `X-UQF-Target` header names, read by workspaces.requested - the
+same resolution workspaces.scope_of answers a scoped route from (#2029). The
+guard asks it BEFORE workspace_route refuses an unscoped route a target with
+409, so a write sent under an inspection-only workspace is refused as
+inspection mode, whichever route it names (`request_target`).
 
 EXEMPT routes are writes that change no stack and no server: the browser's
 own activity history. Each carries its reason, and test_inspection.py holds
@@ -64,10 +65,6 @@ EXEMPT: dict[tuple[str, str], str] = {
         "it changes no process, file or setting on any stack or server"
     ),
 }
-
-#: The state attribute a workspace layer (#2029) sets to the target a request
-#: acts on, when its route carries no `{target}`.
-WORKSPACE_TARGET = "workspace_target"
 
 #: What a refusal ends with: what still works, and what this is not.
 _NOTE = (
@@ -115,12 +112,20 @@ def effective(settings: Settings) -> Effective:
 
 
 def request_target(request: Request) -> str | None:
-    """The target a request acts on: its `{target}`, else the workspace's."""
+    """The target a request acts on: its `{target}`, else the workspace its
+    X-UQF-Target names - None for the local stack. A header that is not a
+    target name is None here: workspace_route refuses it after the guard."""
+    from uqf_frontend import workspaces
+    from uqf_frontend.errors import ValidationFailed
+
     named = request.path_params.get("target")
     if named is not None:
         return str(named)
-    found = getattr(request.state, WORKSPACE_TARGET, None)
-    return str(found) if found is not None else None
+    try:
+        found = workspaces.requested(request.headers)
+    except ValidationFailed:
+        return None
+    return None if found == workspaces.LOCAL else found
 
 
 def is_exempt(method: str, template: str | None) -> bool:

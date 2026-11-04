@@ -15,10 +15,9 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from fastapi import Request
 from fastapi.testclient import TestClient
 
-from uqf_frontend import access, inspection, queries
+from uqf_frontend import access, inspection, queries, workspaces
 from uqf_frontend.app import create_app
 from uqf_frontend.config import Settings
 from uqf_frontend.fleet import FakeFleet
@@ -265,25 +264,84 @@ def test_an_unreadable_registry_refuses_writes_naming_a_target(tmp_path, registr
     assert "cannot be read" in resp.json()["detail"]
 
 
-def test_a_workspace_target_inherits_its_inspection_mode(tmp_path, registry):
-    """The hook for target-aware workspaces (#2029): whatever names the
-    request's target in request.state is held to that target's mode."""
+#: Every write route with no `{target}` in its path: what a workspace names.
+WORKSPACE_WRITES = [r for r in WRITES if "{target}" not in r[1]]
+
+
+def _workspace_client(tmp_path: Path, **kw: Any) -> tuple[TestClient, list[str]]:
+    """An app whose workspace opener records what it was asked to open and
+    opens nothing: a write must be refused before any target is reached."""
+    opened: list[str] = []
+
+    def opener(_settings: Settings, name: str):
+        opened.append(name)
+        raise workspaces.TargetUnavailable("no ssh in a test")
+
     app = create_app(
-        gateway=FakeGateway({}), settings=_settings(tmp_path),
-        fleet=FakeFleet(),
+        gateway=FakeGateway({queries.BROWSE: []}), settings=_settings(tmp_path, **kw),
+        fleet=FakeFleet(), remote_runner=Untouchable(), workspace_opener=opener,
     )  # fmt: skip
+    return TestClient(app), opened
 
-    @app.middleware("http")
-    async def workspace(request: Request, call_next):  # noqa: ANN001, ANN202
-        setattr(request.state, inspection.WORKSPACE_TARGET, request.headers.get("x-workspace"))
-        return await call_next(request)
 
-    c = TestClient(app)
-    body = {"procs": "rdb1"}
-    resp = c.post("/control/process/stop", json=body, headers={**AUTH, "x-workspace": "prod"})
-    assert _is_inspection_refusal(resp)
-    resp = c.post("/control/process/stop", json=body, headers={**AUTH, "x-workspace": "uat"})
+@pytest.mark.parametrize(("method", "template"), WORKSPACE_WRITES)
+def test_a_write_under_an_inspection_workspace_is_refused(tmp_path, registry, method, template):
+    """#2029's workspace is the X-UQF-Target header (workspaces.requested):
+    a write sent under an inspection-only target is refused as inspection
+    mode, audited, before workspace_route or any connection to the target."""
+    c, opened = _workspace_client(tmp_path)
+    resp = _call(c, method, template, **{workspaces.TARGET_HEADER: "prod"})
+    assert _is_inspection_refusal(resp), resp.text
+    assert "target prod is in inspection mode" in resp.json()["detail"]
+    assert opened == []
+    rows = _rows(tmp_path / "activity.sqlite3")
+    assert [r["outcome"] for r in rows] == ["refused"]
+    assert '"permission": "inspection"' in rows[0]["detail"]
+
+
+@pytest.mark.parametrize(("method", "template"), WORKSPACE_WRITES)
+def test_a_write_under_another_workspace_is_not_inspection_modes(
+    tmp_path, registry, method, template
+):
+    """Under a target not in inspection mode the write still goes no further
+    than #2029 lets it - its 409 for an unscoped route - but not as
+    inspection mode."""
+    c, _ = _workspace_client(tmp_path)
+    resp = _call(c, method, template, **{workspaces.TARGET_HEADER: "uat"})
     assert not _is_inspection_refusal(resp)
+    assert resp.status_code == 409, resp.text
+
+
+def test_a_read_under_an_inspection_workspace_is_not_refused(tmp_path, registry):
+    """Reads stay: a scoped read under the inspection-only target goes on to
+    open it (here refused by the test's opener, never by inspection mode)."""
+    c, opened = _workspace_client(tmp_path)
+    resp = c.post(
+        "/query", json={"table": "trades", "filters": []},
+        headers={workspaces.TARGET_HEADER: "prod"},
+    )  # fmt: skip
+    assert not _is_inspection_refusal(resp)
+    assert opened == ["prod"]
+    assert c.get("/services", headers={workspaces.TARGET_HEADER: "prod"}).status_code == 200
+
+
+def test_the_local_workspace_follows_the_frontends_own_mode(tmp_path, registry):
+    c, _ = _workspace_client(tmp_path)
+    body = {"procs": "rdb1"}
+    local = {**AUTH, workspaces.TARGET_HEADER: workspaces.LOCAL}
+    assert not _is_inspection_refusal(c.post("/control/process/stop", json=body, headers=local))
+    c, _ = _workspace_client(tmp_path, inspection_mode=True)
+    assert _is_inspection_refusal(c.post("/control/process/stop", json=body, headers=local))
+
+
+def test_a_header_that_is_no_target_name_is_left_to_the_workspace_layer(tmp_path, registry):
+    c, _ = _workspace_client(tmp_path)
+    resp = c.post(
+        "/control/process/stop", json={"procs": "rdb1"},
+        headers={**AUTH, workspaces.TARGET_HEADER: "../prod"},
+    )  # fmt: skip
+    assert not _is_inspection_refusal(resp)
+    assert resp.status_code == 422
 
 
 # --- what the browser is told ------------------------------------------------------

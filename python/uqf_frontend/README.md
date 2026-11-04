@@ -847,10 +847,13 @@ refuses the same target's changes itself (`uqs.deploy.inspection`; see the
 [deploy guide](../../docs/guides/deploy.md#inspection-only-targets)).
 
 **Workspaces (#2029).** The target a request acts on is its `{target}` path
-parameter. A view with no `{target}` in its path can still be scoped to a
-target: a workspace layer sets `request.state.workspace_target` before the guard
-runs (`inspection.WORKSPACE_TARGET`), and the request then follows that target's
-mode. No change is needed here.
+parameter. Otherwise it is the workspace named in the request's `X-UQF-Target`
+header, resolved by `workspaces.requested`, the same way the scoped routes
+resolve it. The guard checks this before `workspace_route` turns an unscoped
+route away from a target with 409. A write sent under an inspection-only
+workspace is therefore a 403 `InspectionMode`, audited, and nothing connects to
+the target. Reads under that workspace go on as before. The local workspace
+follows `UQF_FRONTEND_INSPECTION_MODE` only.
 
 **What the browser is told.** `GET /me/capabilities` reports the effective
 policy. With the whole frontend in inspection mode, `capabilities` leaves out
