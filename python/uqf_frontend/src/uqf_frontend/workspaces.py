@@ -39,6 +39,13 @@ writes on, the write token and an allowed Host. The write guard
 caller without it never opens an ssh (#2067). Routes that open none - the
 neutral ones, and the 409 ones - need no token in a target workspace, so a
 tab left on a target can still list the workspaces and switch back.
+
+IDLE CONNECTIONS ARE CLOSED WHATEVER THE TRAFFIC (#2062). A request holds the
+connection it reads for as long as it runs (`lease`), and a connection no
+request holds and none has used for IDLE_SECONDS is closed - on every request,
+local ones included, and by a reaper thread the app's lifespan runs, so a
+session that went back to local, or a browser that closed, does not leave a
+target's ssh open for the server's lifetime. Shutdown closes every one.
 """
 
 from __future__ import annotations
@@ -46,7 +53,8 @@ from __future__ import annotations
 import re
 import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
 from typing import Any, Protocol
 
@@ -67,6 +75,8 @@ LOCAL = "local"
 _NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}")
 #: Seconds an unused target connection is kept open before it is closed.
 IDLE_SECONDS = 600
+#: Seconds between the reaper thread's sweeps for idle connections.
+REAP_EVERY_SECONDS = 60.0
 LOOPBACK = "127.0.0.1"
 
 #: Routes answered from the selected workspace, as (method, route template).
@@ -190,6 +200,8 @@ class _Open:
     connection: Connection
     scope: Scope
     used: float
+    #: Requests reading through it now: never reaped while above zero.
+    users: int = 0
 
 
 class Workspaces:
@@ -212,23 +224,39 @@ class Workspaces:
         self._open: dict[str, _Open] = {}
         self._locks: dict[str, threading.Lock] = {}
         self._lock = threading.Lock()
+        self._reap_every = REAP_EVERY_SECONDS
+        self._stop = threading.Event()
+        self._reaper: threading.Thread | None = None
 
     @property
     def local(self) -> Scope:
         return self._local
 
-    def scope(self, name: str) -> Scope:
-        """The scope for workspace `name`, opening its connection if it has
-        none or its ssh has gone. Never the local scope for a target."""
+    @contextmanager
+    def lease(self, name: str) -> Iterator[Scope]:
+        """The scope for workspace `name`, held for the `with` block: a
+        target's connection is opened if it has none or its ssh has gone,
+        and is not reaped until the block ends. Never the local scope for a
+        target. Every lease first closes the connections left idle."""
+        self.reap()
         if name == LOCAL:
-            return self._local
+            yield self._local
+            return
+        held = self._acquire(name)
+        try:
+            yield held.scope
+        finally:
+            with self._locks[name]:
+                held.users -= 1
+                held.used = self._clock()
+
+    def _acquire(self, name: str) -> _Open:
         if not self._settings.enable_writes:
             raise WritesDisabled(
                 f"a workspace on target {name} reaches it over ssh, so it needs remote "
                 "operations: set UQF_FRONTEND_ENABLE_WRITES=1 and UQF_FRONTEND_WRITE_TOKEN "
                 "on the server"
             )
-        self._reap(keep=name)
         with self._lock:
             lock = self._locks.setdefault(name, threading.Lock())
         with lock:
@@ -241,7 +269,8 @@ class Workspaces:
                 held = _Open(connection, self._scope_for(name, connection), self._clock())
                 self._open[name] = held
             held.used = self._clock()
-            return held.scope
+            held.users += 1
+            return held
 
     def _scope_for(self, name: str, connection: Connection) -> Scope:
         try:
@@ -290,20 +319,55 @@ class Workspaces:
             close()  # the pooled q handles through the forward
         held.connection.close()
 
-    def _reap(self, keep: str) -> None:
-        """Close every connection unused for longer than the idle limit."""
+    def reap(self) -> None:
+        """Close every connection no request holds and none has used for
+        longer than the idle limit. A target whose lock is taken is being
+        opened or leased right now, so it is left for the next sweep."""
         now = self._clock()
         with self._lock:
-            stale = [n for n, h in self._open.items() if n != keep and now - h.used > self._idle]
+            stale = [n for n, h in self._open.items() if h.users == 0 and now - h.used > self._idle]
         for name in stale:
-            with self._locks[name]:
+            lock = self._locks[name]
+            if not lock.acquire(blocking=False):
+                continue
+            try:
                 held = self._open.get(name)
-                if held is not None and now - held.used > self._idle:
+                if held is not None and held.users == 0 and now - held.used > self._idle:
                     self._discard(name)
+            finally:
+                lock.release()
+
+    def start(self) -> None:
+        """Run `reap` every REAP_EVERY_SECONDS in a daemon thread, so idle
+        connections close with no request arriving at all."""
+        if self._reaper is not None:
+            return
+        self._stop.clear()
+        self._reaper = threading.Thread(
+            target=self._sweep, name="uqf-workspace-reaper", daemon=True
+        )
+        self._reaper.start()
+
+    def _sweep(self) -> None:
+        while not self._stop.wait(self._reap_every):
+            try:
+                self.reap()
+            except Exception:  # noqa: BLE001 - a failed close must not end the reaper
+                pass
 
     def open_targets(self) -> list[str]:
-        return sorted(self._open)
+        with self._lock:
+            return sorted(self._open)
 
     def close(self) -> None:
-        for name in list(self._open):
-            self._discard(name)
+        """Stop the reaper and close every connection, held or not: the
+        server is going away."""
+        self._stop.set()
+        if self._reaper is not None:
+            self._reaper.join()
+            self._reaper = None
+        with self._lock:
+            names = list(self._open)
+        for name in names:
+            with self._locks[name]:
+                self._discard(name)
