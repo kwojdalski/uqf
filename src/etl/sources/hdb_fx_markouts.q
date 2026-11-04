@@ -85,18 +85,25 @@
 /   symbols       reference_symbols
 .qpipe.source.hdb_fx_markouts.reference_read:`date_skew`lookback_cap`symbols!(1;7D;.qpipe.source.hdb_fx_markouts.reference_symbols)
 
-/ The window's executions, from the HDB: the date partition is constrained first (widened by the
+/ The executions query sent to the HDB: the date partition is constrained first (widened by the
 / declared date_skew) and the table is named as a symbol so it resolves at the HDB's root.
+/ @param skew the declared date_skew
+/ @return a lambda of (from_ts; to_ts) for the HDB to run
+/ @private
+.qpipe.source.hdb_fx_markouts.deals_remote:{[skew]
+    {[skew;from_ts;to_ts]
+        `source_time xasc select source_time, venue, sym, side, size, price, fill_id, clock from `executions
+            where date within (neg[skew],skew)+`date$(from_ts;to_ts), source_time>=from_ts, source_time<to_ts
+    }[skew]}
+
+/ The window's executions, from the HDB.
 / @param h an open handle to the HDB
 / @param range_from inclusive lower bound
 / @param range_to exclusive upper bound
 / @return the executions, sorted by source_time
 .qpipe.source.hdb_fx_markouts.read_executions:{[h;range_from;range_to]
     skew:(.qetl.source.reference_read .qpipe.source.hdb_fx_markouts.source_name)`date_skew;
-    .qetl.source.ipc[h;{[skew;from_ts;to_ts]
-        `source_time xasc select source_time, venue, sym, side, size, price, fill_id, clock from `executions
-            where date within (neg[skew],skew)+`date$(from_ts;to_ts), source_time>=from_ts, source_time<to_ts
-      }[skew];range_from;range_to]}
+    .qetl.source.ipc[h;.qpipe.source.hdb_fx_markouts.deals_remote[skew];range_from;range_to]}
 
 / The bounds the books of a window are read between: from the window's start back by the
 / look-back the spec's max_age sets (measured from the window's start, so it already includes the
@@ -113,9 +120,24 @@
     lb:.qetl.source.reference_lookback[.qpipe.source.hdb_fx_markouts.source_name;spec`max_age;early];
     `read_from`early`read_to!(range_from-lb;range_from-early;range_to+0D|max spec`horizons)}
 
-/ The books of some symbols, from the HDB: the declared reference_read's, each (pair, source)'s last
-/ snapshot before the window's start AND every one in the window, both widened by the declared
-/ date_skew. `query` reads every symbol the window needs with this; a batch reads its own.
+/ The books query sent to the HDB: the declared reference_read's, each (pair, source)'s last
+/ snapshot before the window's start AND every one in the window, both widened by date_skew.
+/ @param syms the market_data syms to read
+/ @param skew the declared date_skew
+/ @param read_from where the last-before search starts
+/ @return a lambda of (from_ts; to_ts) for the HDB to run
+/ @private
+.qpipe.source.hdb_fx_markouts.books_remote:{[syms;skew;read_from]
+    {[syms;skew;read_from;from_ts;to_ts]
+        cand:`source_time xasc select source_time, sym, source, bid_prices, bid_sizes, ask_prices, ask_sizes, clock
+            from `market_data where date within (neg[skew],skew)+`date$(read_from;from_ts), source_time>=read_from, source_time<from_ts, sym in syms;
+        before:0!?[cand;();`sym`source!`sym`source;()];
+        inwin:select source_time, sym, source, bid_prices, bid_sizes, ask_prices, ask_sizes, clock from `market_data
+            where date within (neg[skew],skew)+`date$(from_ts;to_ts), source_time>=from_ts, source_time<to_ts, sym in syms;
+        `source_time xasc (cols before)#before,inwin
+      }[syms;skew;read_from]}
+
+/ The books of some symbols (see books_remote), read through the traced send.
 / @param h an open handle to the HDB
 / @param syms the market_data syms to read
 / @param range_from the window's inclusive lower bound
@@ -124,16 +146,7 @@
 .qpipe.source.hdb_fx_markouts.read_books:{[h;syms;range_from;range_to]
     skew:(.qetl.source.reference_read .qpipe.source.hdb_fx_markouts.source_name)`date_skew;
     b:.qpipe.source.hdb_fx_markouts.book_bounds[range_from;range_to];
-    .qetl.source.ipc[h;{[syms;skew;read_from;from_ts;to_ts]
-        cand:`source_time xasc select source_time, sym, source, bid_prices, bid_sizes, ask_prices, ask_sizes, clock
-            from `market_data where date within (neg[skew],skew)+`date$(read_from;from_ts), source_time>=read_from, source_time<from_ts, sym in syms;
-        before:0!?[cand;();`sym`source!`sym`source;()];
-        inwin:select source_time, sym, source, bid_prices, bid_sizes, ask_prices, ask_sizes, clock from `market_data
-            where date within (neg[skew],skew)+`date$(from_ts;to_ts), source_time>=from_ts, source_time<to_ts, sym in syms;
-        `source_time xasc (cols before)#before,inwin
-      }[syms;skew;b`read_from];
-      b`early;
-      b`read_to]}
+    .qetl.source.ipc[h;.qpipe.source.hdb_fx_markouts.books_remote[syms;skew;b`read_from];b`early;b`read_to]}
 
 / The window's executions, and the books they are scored against, both from the HDB: the
 / executions of the window, then the books of the symbols they need (reference_read's `symbols`).
@@ -142,10 +155,13 @@
 / @param range_to exclusive upper bound
 / @return `executions`market_data!(the window's executions; the books they need)
 .qpipe.source.hdb_fx_markouts.query:{[h;range_from;range_to]
-    deals:.qpipe.source.hdb_fx_markouts.read_executions[h;range_from;range_to];
+    rr:.qetl.source.reference_read .qpipe.source.hdb_fx_markouts.source_name;
+    deals:.qetl.source.ipc[h;.qpipe.source.hdb_fx_markouts.deals_remote[rr`date_skew];range_from;range_to];
     if[0=count deals; :`executions`market_data!(deals;0#.qpipe.source.hdb_fx_markouts.supporting`market_data)];
-    syms:(.qetl.source.reference_read .qpipe.source.hdb_fx_markouts.source_name)[`symbols][.qpipe.transform.fx_markout_outputs.job_spec;deals];
-    `executions`market_data!(deals;.qpipe.source.hdb_fx_markouts.read_books[h;syms;range_from;range_to])}
+    syms:rr[`symbols][.qpipe.transform.fx_markout_outputs.job_spec;deals];
+    b:.qpipe.source.hdb_fx_markouts.book_bounds[range_from;range_to];
+    books:.qetl.source.ipc[h;.qpipe.source.hdb_fx_markouts.books_remote[syms;rr`date_skew;b`read_from];b`early;b`read_to];
+    `executions`market_data!(deals;books)}
 
 / The window's executions and a PRESENCE SUMMARY of their books: one row for each (pair, source)
 / that holds a book anywhere in the span the window's books are read over. What `ready` needs to
