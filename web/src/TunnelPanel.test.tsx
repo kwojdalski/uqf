@@ -229,3 +229,58 @@ it("offers the Fleet view the same connection details for a chosen target", asyn
     ),
   );
 });
+
+it("choosing no target clears the previous target's connection rows (#2070)", async () => {
+  mockApi();
+  render(<FleetConnections />);
+  const select = await screen.findByLabelText(/Deployment target/);
+  fireEvent.change(select, { target: { value: "prod" } });
+  await screen.findByRole("button", { name: "Copy rdb1 details" });
+  fireEvent.change(select, { target: { value: "" } });
+  expect(screen.queryByText("127.0.0.1:16002")).toBeNull();
+  expect(
+    screen.queryByRole("button", { name: "Copy rdb1 details" }),
+  ).toBeNull();
+});
+
+it("a check result does not outlive a change of the selection it checked (#2070)", async () => {
+  mockApi();
+  await openTunnel();
+  fireEvent.click(
+    await screen.findByRole("button", { name: "Check connections" }),
+  );
+  await screen.findByText(/hdb1 refused the q login/);
+  fireEvent.click(screen.getByRole("checkbox", { name: "hdb1" }));
+  await waitFor(() => expect(screen.queryByText("Loading plan…")).toBeNull());
+  expect(screen.queryByText(/hdb1 refused the q login/)).toBeNull();
+});
+
+it("a check still in flight when the selection changes cannot land on the new one (#2070)", async () => {
+  const fetcher = mockApi();
+  const base = fetcher.getMockImplementation()!;
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => (release = resolve));
+  fetcher.mockImplementation(async (path: string) =>
+    path.startsWith("/services/prod/tunnel/check")
+      ? held.then(() => ok(CHECK)) // ignores the abort: the response still arrives
+      : base(path),
+  );
+  await openTunnel();
+  fireEvent.click(
+    await screen.findByRole("button", { name: "Check connections" }),
+  );
+  await screen.findByRole("button", { name: "Checking…" });
+  fireEvent.click(screen.getByRole("checkbox", { name: "hdb1" }));
+  await waitFor(() => expect(screen.queryByText("Loading plan…")).toBeNull());
+  // the new selection was never checked, so its button is not busy
+  expect(
+    screen.getByRole("button", { name: "Check connections" }),
+  ).toBeEnabled();
+  const before = fetcher.mock.calls.length;
+  release();
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  expect(screen.queryByText(/hdb1 refused the q login/)).toBeNull();
+  expect(screen.queryByText(/^Checked /)).toBeNull();
+  // nor does the stale result re-ask the plan
+  expect(fetcher.mock.calls.length).toBe(before);
+});

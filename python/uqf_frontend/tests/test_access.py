@@ -152,6 +152,84 @@ def test_an_ipv4_mapped_peer_matches_its_ipv4_proxy():
     assert not identity.peer_is_trusted(None, nets)
 
 
+@pytest.mark.parametrize(
+    ("proxy", "peer"),
+    [
+        # #2073's reproduction: a mapped entry, the peer as a `::` socket shows it
+        ("::ffff:10.0.0.5", "::ffff:10.0.0.5"),
+        ("::ffff:10.0.0.0/104", "::ffff:10.0.0.5"),
+        # a mapped entry, a plain peer
+        ("::ffff:10.0.0.5", "10.0.0.5"),
+        ("::ffff:10.0.0.0/104", "10.0.0.5"),
+        ("::ffff:a00:5", "10.0.0.5"),
+        # a plain entry, a mapped peer
+        ("10.0.0.5", "::ffff:10.0.0.5"),
+        ("10.0.0.0/8", "::ffff:10.0.0.5"),
+        # a plain entry, a plain peer
+        ("10.0.0.5", "10.0.0.5"),
+        # an IPv6 range that holds the whole mapped space
+        ("::ffff:0:0/96", "10.0.0.5"),
+        ("::/0", "::ffff:10.0.0.5"),
+    ],
+)
+def test_an_ipv4_mapped_proxy_or_peer_matches_its_ipv4_form(proxy, peer):
+    """Mapped or not, on either side, an address is the same address (#2073)."""
+    assert identity.peer_is_trusted(peer, identity.parse_proxies([proxy]))
+
+
+@pytest.mark.parametrize(
+    ("proxy", "peer"),
+    [
+        ("::ffff:10.0.0.5", "10.0.0.99"),
+        ("::ffff:10.0.0.5", "::ffff:10.0.0.99"),
+        ("::ffff:10.0.0.0/104", "11.0.0.5"),
+        ("::ffff:10.0.0.0/104", "::ffff:11.0.0.5"),
+        ("10.0.0.5", "::ffff:10.0.0.99"),
+        # mapped is not the same as IPv4-compatible or the plain IPv6 that
+        # spells the same digits
+        ("::ffff:10.0.0.5", "::10.0.0.5"),
+        ("::ffff:10.0.0.5", "2001:db8::a00:5"),
+        ("10.0.0.5", "::10.0.0.5"),
+    ],
+)
+def test_an_ipv4_mapped_proxy_still_refuses_every_other_peer(proxy, peer):
+    assert not identity.peer_is_trusted(peer, identity.parse_proxies([proxy]))
+
+
+def test_a_plain_ipv6_proxy_is_unaffected():
+    nets = identity.parse_proxies(["2001:db8::5", "fd00::/8"])
+    assert nets == (
+        identity.ipaddress.ip_network("2001:db8::5"),
+        identity.ipaddress.ip_network("fd00::/8"),
+    )
+    assert identity.peer_is_trusted("2001:db8::5", nets)
+    assert identity.peer_is_trusted("fd00::1", nets)
+    assert not identity.peer_is_trusted("2001:db8::6", nets)
+    assert not identity.peer_is_trusted("10.0.0.5", nets)
+
+
+def test_a_mapped_proxy_entry_is_stored_as_ipv4():
+    assert identity.parse_proxies(["::ffff:10.0.0.5", "::ffff:10.0.0.0/104"]) == (
+        identity.ipaddress.ip_network("10.0.0.5/32"),
+        identity.ipaddress.ip_network("10.0.0.0/8"),
+    )
+
+
+def test_a_mapped_proxy_names_the_user_behind_it(tmp_path):
+    """End to end: a proxy configured in mapped form vouches for its user."""
+    settings = _settings(tmp_path, trusted_proxies=("::ffff:" + PROXY,))
+    for peer in (PROXY, "::ffff:" + PROXY):
+        me = _client(settings, peer=peer).get("/me/capabilities", headers={HEADER: "bob"}).json()
+        assert (me["identity"], me["authenticated"]) == ("bob", True)
+
+
+def test_a_spoofed_header_is_anonymous_beside_a_mapped_proxy(tmp_path):
+    settings = _settings(tmp_path, trusted_proxies=("::ffff:" + PROXY,))
+    for peer in (ELSEWHERE, "::ffff:" + ELSEWHERE):
+        me = _client(settings, peer=peer).get("/me/capabilities", headers={HEADER: "alice"}).json()
+        assert (me["identity"], me["authenticated"]) == ("anonymous", False)
+
+
 # --- configuration that could not mean what it says ---------------------------
 
 
@@ -169,6 +247,8 @@ def test_an_ipv4_mapped_peer_matches_its_ipv4_proxy():
             "not an identity",
         ),
         ({"trusted_identity_header": HEADER, "trusted_proxies": ("10.0.0.300",)}, "CIDR"),
+        ({"trusted_identity_header": HEADER, "trusted_proxies": ("::ffff:10.0.0.300",)}, "CIDR"),
+        ({"trusted_identity_header": HEADER, "trusted_proxies": ("::ffff:10.0.0.0/129",)}, "CIDR"),
         ({"trusted_groups_header": GROUPS}, "only believed alongside a user"),
         (
             {

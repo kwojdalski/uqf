@@ -317,6 +317,14 @@ remote operations (`UQF_FRONTEND_ENABLE_WRITES`) and `services:read` - none of
 these ever falls back to the local stack. A target workspace is read-only:
 control acts on this API's own stack only.
 
+Because the ssh opens with the operator's key, a scoped route naming a target
+needs what `/services/{target}` needs: the write token and an allowed Host, as
+well as writes on (#2067). Without the token it is refused with 401
+`WriteTokenRequired` before any ssh opens. The local workspace needs no token,
+and neither do the neutral and 409 routes in a target workspace, since they open
+no ssh: a tab left on a target can still list the workspaces and switch back.
+The web UI sends the token it holds with every request naming a target.
+
 ## Running
 
 ```bash
@@ -560,7 +568,7 @@ policy.
   | ---                 | ---                                                         | ---                                                       |
   | `markout_curve`     | `fx_markout` (pips) or `crypto_markout` (bps), `kind` total | mean markout per horizon, a line per venue                |
   | `backfill_coverage` | the status files `/ops/backfill` reads                      | each worker's last run per day, coloured by state         |
-  | `mid_spread_fills`  | `market_data`'s first level, and `executions` or `trades`   | mid and spread, with buys and sells overlaid              |
+  | `mid_spread_fills`  | `market_data`'s first level, and `executions` or `trades`   | mid and spread per `source`, with buys and sells overlaid |
   | `ops_latency`       | `.usage.usage` on every process, as `/ops/usage` does       | completed query durations per process, as box plots       |
 
 ## Comparing endpoints
@@ -889,7 +897,9 @@ The registry is read on each write, so a target put in inspection mode is
 refused from the next request, with no restart. If the registry cannot be read,
 every write naming a target is refused, because its mode is unknown. `uqs`
 refuses the same target's changes itself (`uqs.deploy.inspection`; see the
-[deploy guide](../../docs/guides/deploy.md#inspection-only-targets)).
+[deploy guide](../../docs/guides/deploy.md#inspection-only-targets)). A write
+naming another declared target at the same server (the same ssh and `dest`,
+compared as `uqs` compares them) is refused as that target's.
 
 **Workspaces (#2029).** The target a request acts on is its `{target}` path
 parameter. Otherwise it is the workspace named in the request's `X-UQF-Target`
