@@ -13,6 +13,7 @@ draws the topology.
 - [Commands](#commands)
 - [Replaying a tickerplant log](#replaying-a-tickerplant-log)
 - [Checking a dataset's producers](#checking-a-datasets-producers)
+- [Comparing a table on two endpoints](#comparing-a-table-on-two-endpoints)
 - [Listing things](#listing-things)
 - [What actually starts](#what-actually-starts) --- including
   [runtimes](#runtimes) and [profiles](#profiles)
@@ -509,6 +510,53 @@ The producers come from the job graph (`.qetl.dag.producers`), and everything
 above is decided in q (`.qetl.verify.run`); the command only reads the range and
 prints. It exits 1 on `FAIL`, and with `--fail-unverified` on `UNVERIFIED`.
 `--json` prints the report.
+
+## Comparing a table on two endpoints
+
+Validating local processing against production used to mean querying both and
+comparing by hand. `uqs data diff` compares one table, or several, on two
+endpoints named explicitly - `local` for this machine's stack, or a deploy
+target, whose gateway is reached through an ssh tunnel for the call:
+
+```
+uqs data diff --left local --right prod --table demo_deals --date 2026-09-11 \
+    --filter sym=EURUSD --limit 5000 --source-version v1
+```
+
+It compares three things, each read through the contract the stack already
+serves:
+
+- **schema** - `meta` on each side's RDB: a column one side lacks, or holds as
+  another type.
+- **rows** - at most `--limit` rows per side in the window (and `--filter`s),
+  read with `.uqf.browse` under the gateway's query policy, then paired on the
+  row key and equivalence basis the table's producers declare, as
+  `uqs job check` pairs them (a table nobody keys is matched row by whole row).
+  `time` is stamped on receipt, so it is left out: two environments receive a
+  row at different moments.
+- **coverage** - with `--source-version` (and `--partition`), the coverage
+  ledger's current claims for the window on each side, composed and gapped by
+  `.qetl.coverage`.
+
+Each table reaches one outcome, the first that applies:
+
+  | outcome                | means                                                                                      |
+  | ---------------------- | ------------------------------------------------------------------------------------------ |
+  | `endpoint_unavailable` | a side could not be reached, or did not answer - with its reason                           |
+  | `missing_table`        | a side has no such table                                                                   |
+  | `differs`              | the schemas, the published coverage or the rows differ - each difference named             |
+  | `incomplete_coverage`  | the sides agree, but neither has published the whole window                                |
+  | `equal_in_sample`      | nothing differs in what was read                                                           |
+
+`equal_in_sample` is never "the tables are equal". Its label says whether every
+row in the window was read on both sides, or the read stopped at `--limit` - a
+truncated sample says it is NOT proof, and because each side was cut at its own
+place, a key only one sample holds is counted as unpaired rather than reported
+missing. Narrow the window or raise `--limit` to read it all.
+
+Everything that decides the result is q's (`.qetl.compare.run`,
+src/etl/core/compare.q); the command opens the tunnels and prints. It exits 1 on
+anything but `equal_in_sample`, and `--json` prints the report.
 
 ## Listing things
 
@@ -1774,34 +1822,34 @@ the date partitions whose date lies in the range.
 
 The verbs of rule 4:
 
-  | verb                                          | means                                                     |
-  | ---                                           | ---                                                       |
-  | `status`                                      | the state of something running or installed               |
-  | `check`                                       | actively probe; exit non-zero on a problem                |
-  | `list`                                        | many records                                              |
-  | `show`                                        | one record                                                |
-  | `set`                                         | change one setting                                        |
-  | `add` `remove`                                | create or delete one thing                                |
-  | `start` `stop` `restart` `logs`               | the stack's lifecycle, and a connector's                  |
-  | `clean`                                       | delete the runtime state the stack wrote                  |
-  | `exec`                                        | run any other torq.sh verb, passed straight through       |
-  | `query` `graph` `schema`                      | read a running stack                                      |
-  | `new` `install`                               | write a job into the tree, or place one built elsewhere   |
-  | `backfill` `preview` `gaps` `audit` `receive` | operate a job and its runs                                |
-  | `export` `approve`                            | a receiver contract, on each side                         |
-  | `replay` `seed` `migrate`                     | move data into the HDB                                    |
-  | `upgrade`                                     | bring a store an older uqs wrote up to today's layout     |
-  | `alter`                                       | change one table in every HDB partition holding it        |
-  | `diff` `prepare`                              | compare runtimes; install a runtime's bundles             |
-  | `stub`                                        | add a placeholder source row                              |
-  | `env`                                         | print variables to source                                 |
-  | `build` `push` `rollback` `prune` `history`   | releases and their deployment                             |
-  | `shell`                                       | a shell on a target                                       |
-  | `unset` `rename` `edit`                       | a target's settings: remove one, rename it, edit the file |
-  | `log` `revert`                                | a target's change log, and undoing one change in it       |
-  | `adopt`                                       | take over a release copied onto a server by hand          |
-  | `restore`                                     | a config push's files back as they were, as a new push    |
-  | `plan`                                        | what a tunnel to a target forwards, without opening it    |
+  | verb                                          | means                                                                      |
+  | ---                                           | ---                                                                        |
+  | `status`                                      | the state of something running or installed                                |
+  | `check`                                       | actively probe; exit non-zero on a problem                                 |
+  | `list`                                        | many records                                                               |
+  | `show`                                        | one record                                                                 |
+  | `set`                                         | change one setting                                                         |
+  | `add` `remove`                                | create or delete one thing                                                 |
+  | `start` `stop` `restart` `logs`               | the stack's lifecycle, and a connector's                                   |
+  | `clean`                                       | delete the runtime state the stack wrote                                   |
+  | `exec`                                        | run any other torq.sh verb, passed straight through                        |
+  | `query` `graph` `schema`                      | read a running stack                                                       |
+  | `new` `install`                               | write a job into the tree, or place one built elsewhere                    |
+  | `backfill` `preview` `gaps` `audit` `receive` | operate a job and its runs                                                 |
+  | `export` `approve`                            | a receiver contract, on each side                                          |
+  | `replay` `seed` `migrate`                     | move data into the HDB                                                     |
+  | `upgrade`                                     | bring a store an older uqs wrote up to today's layout                      |
+  | `alter`                                       | change one table in every HDB partition holding it                         |
+  | `diff` `prepare`                              | compare runtimes, or a table on two endpoints; install a runtime's bundles |
+  | `stub`                                        | add a placeholder source row                                               |
+  | `env`                                         | print variables to source                                                  |
+  | `build` `push` `rollback` `prune` `history`   | releases and their deployment                                              |
+  | `shell`                                       | a shell on a target                                                        |
+  | `unset` `rename` `edit`                       | a target's settings: remove one, rename it, edit the file                  |
+  | `log` `revert`                                | a target's change log, and undoing one change in it                        |
+  | `adopt`                                       | take over a release copied onto a server by hand                           |
+  | `restore`                                     | a config push's files back as they were, as a new push                     |
+  | `plan`                                        | what a tunnel to a target forwards, without opening it                     |
 
 Three of these sit beside a near neighbour on purpose (#1756): `log` is a
 record's change history, where `logs` is processes' output and `history` what

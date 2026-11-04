@@ -143,6 +143,22 @@ CASES: dict[str, tuple[list[str], str]] = {
     "job runs show": (["job", "runs", "show", "r", "--attachment", "nosuch"], "no attachment"),
     "job runs audit": (["job", "runs", "audit", "d", "--from", "bad", "--to", "2024-01-02"], "bad"),
     "data snapshot show": (["data", "snapshot", "show", "not an id"], "is not a snapshot id"),
+    # #2033: two sides that are one, refused before anything is reached
+    "data diff": (
+        [
+            "data",
+            "diff",
+            "--left",
+            "prod",
+            "--right",
+            "prod",
+            "--table",
+            "t",
+            "--date",
+            "2026-09-11",
+        ],
+        "both name prod",
+    ),
     "connector status": (["connector", "status", "nosuch"], "no connector 'nosuch'"),
     "connector logs": (["connector", "logs", "crypto", "--follow"], "--follow does not apply"),
     "setup odbc status": (

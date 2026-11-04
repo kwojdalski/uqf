@@ -49,6 +49,23 @@ qetl.coerce,to_symbol,function,1,str
 qetl.coerce,to_symbol_cased,function,1,str
 qetl.coerce,to_timestamp,function,1,str
 qetl.coerce,utc_offset,function,1,str
+qetl.compare,basis,function,1,tbl
+qetl.compare,browse_filters,function,2,m fs
+qetl.compare,coverage,function,3,h tbl req
+qetl.compare,generated,function,1,tbl
+qetl.compare,meta_program,value,,
+qetl.compare,open,function,2,ep login
+qetl.compare,open_timeout,value,,
+qetl.compare,ops,dict,,
+qetl.compare,outcomes,value,,
+qetl.compare,parse_filter,function,1,f
+qetl.compare,rows_compared,function,5,tbl names lr rr trunc
+qetl.compare,run,function,4,left right tabs req
+qetl.compare,schema_differences,function,2,l r
+qetl.compare,snapshot,function,3,h tbl req
+qetl.compare,tiers,value,,
+qetl.compare,typed,function,2,ty v
+qetl.compare,verdict,function,5,tbl names l r lim
 qetl.coverage,attach,function,1,
 qetl.coverage,claims,function,4,ds part release at
 qetl.coverage,compose,function,1,intervals
