@@ -30,6 +30,7 @@ import {
 import { FileBrowser } from "./FileBrowser";
 import { useResource } from "./useResource";
 import { ActivityView } from "./ActivityView";
+import { CapabilitiesProvider, useCapabilities } from "./capabilities";
 import {
   adoptDefaultLevel,
   installActivity,
@@ -1230,6 +1231,7 @@ function workerConfigSettled(r: WorkerConfigResult) {
 }
 
 function ControlView() {
+  const access = useCapabilities();
   const status = useResource<ControlStatus>("/control");
   const [busy, setBusy] = useState("");
   // The destructive action awaiting confirmation, if any, and the selection
@@ -1358,6 +1360,21 @@ function ControlView() {
           They are off by default because this deployment has one shared
           credential and the caller&rsquo;s identity is claimed through a header
           anyone can set. That is safe while every route is a read.
+        </p>
+      </div>
+    );
+
+  // Shown, not enforced: the server refuses these routes to this caller
+  // whether or not the controls are on screen (#2045).
+  if (!access.can("control", "write"))
+    return (
+      <div className="panel">
+        {statusNotice}
+        <h2>Changes are not part of your access</h2>
+        <p>
+          The server&rsquo;s access policy does not grant you{" "}
+          <code>control:write</code>, so it refuses starting, stopping and
+          configuring processes for you. Ask an administrator for it.
         </p>
       </div>
     );
@@ -1695,7 +1712,19 @@ function ControlView() {
   );
 }
 export default function App() {
-  const [view, setView] = useState<View>("Coverage");
+  return (
+    <CapabilitiesProvider>
+      <Workspace />
+    </CapabilitiesProvider>
+  );
+}
+function Workspace() {
+  const access = useCapabilities();
+  // Only the views the server's policy lets this caller read are offered
+  // (#2045); a chosen view that is not falls back to the first that is.
+  const shown = views.filter((item) => access.canView(item));
+  const [chosen, setView] = useState<View>("Coverage");
+  const view = shown.includes(chosen) ? chosen : (shown[0] ?? chosen);
   useEffect(() => installActivity(), []);
   const health = useResource<Health>("/health");
   // The server's default recording level, served beside its timeout (#2000).
@@ -1734,7 +1763,7 @@ export default function App() {
         <aside>
           <p className="eyebrow">WORKSPACE</p>
           <nav aria-label="Workspace views">
-            {views.map((item, index) => (
+            {shown.map((item, index) => (
               <button
                 key={item}
                 data-activity={`nav.${item}`}
@@ -1756,7 +1785,9 @@ export default function App() {
             ))}
           </nav>
           <p className="sidebar-note">
-            Local session
+            {access.authenticated
+              ? `Signed in as ${access.identity}`
+              : "Local session"}
             <br />
             {control.data?.writes_enabled
               ? "Writes enabled"
@@ -1782,7 +1813,12 @@ export default function App() {
               Gateway reload in progress. Views will retry automatically.
             </div>
           )}
-          {view === "Coverage" ? (
+          {access.known && shown.length === 0 ? (
+            <div className="notice error" role="alert">
+              Your access includes none of these views. Ask an administrator to
+              grant you one.
+            </div>
+          ) : view === "Coverage" ? (
             <CoverageView />
           ) : view === "Backfills" ? (
             <BackfillView />

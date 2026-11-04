@@ -154,6 +154,31 @@ class CatalogResponse(BaseModel):
     operators: list[str]
 
 
+class Capability(BaseModel):
+    """One (feature, action) the access policy grants (access.py)."""
+
+    feature: str
+    action: Literal["read", "write"]
+
+
+class CapabilitiesResponse(BaseModel):
+    """GET /me/capabilities (#2045): who the caller is, as far as a trusted
+    proxy vouches, and what the access policy lets them do. The browser hides
+    or disables what is not here; the server refuses it either way."""
+
+    #: The verified user, or `anonymous`.
+    identity: str
+    #: True only when a trusted proxy named the user.
+    authenticated: bool
+    #: The proxy's groups for the user, then the policy's.
+    groups: list[str]
+    capabilities: list[Capability]
+    #: Every feature and its actions, granted or not.
+    features: dict[str, list[str]]
+    #: How often the browser re-asks, so a policy change reaches an open tab.
+    poll_seconds: int
+
+
 class HealthResponse(BaseModel):
     poll_seconds: int
     #: How long the browser waits for any request - Settings.request_timeout,
