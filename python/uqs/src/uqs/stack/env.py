@@ -27,8 +27,6 @@ from uqs.stack import qtree, runs
 
 log = get_logger()
 
-#: The workers' status directory (stack/runs.py, `.qetl.status.status_dir`).
-STATUS_DIR_ENV = "UQF_STATUS_DIR"
 #: The variable naming the deployment set's file to every TorQ process
 #: (stack/deployment.py writes it, scripts/torqcode/handlers/deployment.q reads it).
 DEPLOYMENT_ENV = "UQF_DEPLOYMENT_FILE"
@@ -85,7 +83,8 @@ def build_env(paths: UqsPaths, base_port: int | None = None) -> dict[str, str]:
         # it - the caller's UQF_STATUS_DIR, else $TORQDATA/status - recorded
         # with the stack, so the frontend reads the directory the workers were
         # started with, whatever shell started it (#2038).
-        STATUS_DIR_ENV: str(runs.status_dir(paths)),
+        # Read by runs.status_dir alone - the one reader this side of q.
+        "UQF_STATUS_DIR": str(runs.status_dir(paths)),
         # What KDBSERVCODE's handlers/deployment.q lets TorQ discover (#1207).
         DEPLOYMENT_ENV: str(paths.generated_deployment),
         "RLWRAP": "rlwrap",
