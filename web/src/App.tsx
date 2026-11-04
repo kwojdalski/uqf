@@ -29,6 +29,7 @@ import {
 } from "./api";
 import { FileBrowser } from "./FileBrowser";
 import { PlotPanel } from "./PlotPanel";
+import { ChartsView } from "./ChartsView";
 import { useResource } from "./useResource";
 import { ActivityView } from "./ActivityView";
 import {
@@ -43,6 +44,7 @@ const views = [
   "Coverage",
   "Backfills",
   "Desk",
+  "Charts",
   "Fleet",
   "Queue",
   "Connections",
@@ -1790,7 +1792,7 @@ export default function App() {
           <div className="page-heading">
             <div>
               <p className="eyebrow">
-                {view === "Desk"
+                {view === "Desk" || view === "Charts"
                   ? "PUBLISHED DATA"
                   : view === "Activity"
                     ? "HISTORY"
@@ -1811,6 +1813,8 @@ export default function App() {
             <BackfillView />
           ) : view === "Desk" ? (
             <DeskView />
+          ) : view === "Charts" ? (
+            <ChartsView />
           ) : view === "Control" ? (
             <ControlView />
           ) : view === "Activity" ? (
