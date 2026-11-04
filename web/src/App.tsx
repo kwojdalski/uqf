@@ -31,7 +31,11 @@ import { FileBrowser } from "./FileBrowser";
 import { PlotPanel } from "./PlotPanel";
 import { useResource } from "./useResource";
 import { ActivityView } from "./ActivityView";
-import { CapabilitiesProvider, useCapabilities } from "./capabilities";
+import {
+  CapabilitiesProvider,
+  InspectionBanner,
+  useCapabilities,
+} from "./capabilities";
 import {
   adoptDefaultLevel,
   installActivity,
@@ -894,6 +898,9 @@ function ServicesView() {
                 dest: target.dest,
                 environment: target.environment,
                 remote_user: target.remote_user,
+                ...(data.targets.some((t) => t.inspection)
+                  ? { inspection: target.inspection ? "inspection mode" : null }
+                  : {}),
                 labels:
                   Object.entries(target.labels)
                     .map(([key, value]) => `${key}=${value}`)
@@ -1387,6 +1394,21 @@ function ControlView() {
       </div>
     );
 
+  // Shown, not enforced: the server refuses these routes to everyone while
+  // the whole frontend is in inspection mode (#2032).
+  if (access.inspection?.active)
+    return (
+      <div className="panel">
+        {statusNotice}
+        <h2>Inspection mode</h2>
+        <p>
+          The server refuses starting, stopping and configuring processes and
+          starting backfills while inspection mode is on. The status above is
+          still read live.
+        </p>
+      </div>
+    );
+
   // Shown, not enforced: the server refuses these routes to this caller
   // whether or not the controls are on screen (#2045).
   if (!access.can("control", "write"))
@@ -1812,9 +1834,11 @@ function Workspace() {
               ? `Signed in as ${access.identity}`
               : "Local session"}
             <br />
-            {control.data?.writes_enabled
-              ? "Writes enabled"
-              : "Read-only access"}
+            {access.inspection?.active
+              ? "Inspection mode"
+              : control.data?.writes_enabled
+                ? "Writes enabled"
+                : "Read-only access"}
           </p>
         </aside>
         <main>
@@ -1835,6 +1859,9 @@ function Workspace() {
             <div className="notice pending" role="status">
               Gateway reload in progress. Views will retry automatically.
             </div>
+          )}
+          {access.inspection && (
+            <InspectionBanner inspection={access.inspection} />
           )}
           {access.known && shown.length === 0 ? (
             <div className="notice error" role="alert">

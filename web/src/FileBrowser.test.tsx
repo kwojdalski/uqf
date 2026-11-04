@@ -22,6 +22,7 @@ function services(remote: boolean): Services {
         remote_user: null,
         environment: null,
         labels: {},
+        inspection: false,
         last_deployed: null,
       },
     ],

@@ -1,0 +1,179 @@
+"""Inspection mode: production read through this frontend, never changed (#2032).
+
+A browser on a workstation, reaching production through ssh tunnels, holds the
+same routes as one on the production host. Hiding the buttons changes nothing:
+a direct request still reaches the route. So inspection mode is a policy of
+the SERVER, enforced where every route is - `app.guard`, through the route
+map in access.ROUTE_PERMISSIONS:
+
+- every route mapped to a `write` action is refused with 403 InspectionMode,
+  audited like every refusal, whoever asks and whatever the access policy
+  grants them - lifecycle start/stop/restart, a backfill, a process or worker
+  config write, an upload, a delete, a config push and its restore, and any
+  write route added later, which the route map ties to an action before it
+  can be reached at all;
+- every read stays available.
+
+TWO SCOPES.
+
+- The whole frontend: UQF_FRONTEND_INSPECTION_MODE=1 (Settings.inspection_mode).
+- One target: `inspection = true` on it - or on its environment - in
+  deploy_targets.toml, the registry `uqs` and the Services view read
+  (uqs.deploy.inspection). A write naming that target is refused here, and the
+  same change through uqs is refused by uqs. A target read from the registry
+  is per request, so a target put in inspection mode is refused from the next
+  write on, without a restart.
+
+THE TARGET A REQUEST ACTS ON is its `{target}` path parameter, or - for a
+frontend whose views are scoped to a workspace (#2029) - whatever the
+workspace layer puts in `request.state.workspace_target` before the guard runs
+(`request_target`). That is the one hook: a workspace that names a target
+inherits that target's inspection mode with no change here.
+
+EXEMPT routes are writes that change no stack and no server: the browser's
+own activity history. Each carries its reason, and test_inspection.py holds
+the list to exactly these.
+
+WHAT IT IS NOT. Neither ssh nor a tunnel is made read-only by any of this:
+the frontend and uqs refuse, and anyone who can ssh to the server, or who
+holds a q login with write access, still can change it. The restricted q
+login (Settings.inspection_user) narrows what the frontend's own connection
+could do; the q side's roles are what enforce it (README, "Inspection mode").
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Literal
+
+from uqf_frontend import access
+
+if TYPE_CHECKING:
+    from fastapi import Request
+
+    from uqf_frontend.config import Settings
+
+#: The variable that turns inspection mode on for the whole frontend.
+ENV = "UQF_FRONTEND_INSPECTION_MODE"
+
+#: Write routes inspection mode lets through, each with why it changes nothing
+#: on a stack or a server.
+EXEMPT: dict[tuple[str, str], str] = {
+    ("POST", "/activity/events"): (
+        "a browser recording its own activity history in this frontend's database: "
+        "it changes no process, file or setting on any stack or server"
+    ),
+}
+
+#: The state attribute a workspace layer (#2029) sets to the target a request
+#: acts on, when its route carries no `{target}`.
+WORKSPACE_TARGET = "workspace_target"
+
+#: What a refusal ends with: what still works, and what this is not.
+_NOTE = (
+    "reads stay available. Inspection mode is enforced by this API and by uqs; "
+    "it does not make ssh or the server itself read-only"
+)
+
+
+@dataclass(frozen=True)
+class Effective:
+    """The inspection policy in force, as GET /me/capabilities reports it."""
+
+    #: The whole frontend is in inspection mode.
+    active: bool
+    #: The declared targets in inspection mode (from deploy_targets.toml).
+    targets: tuple[str, ...]
+    #: Which q login the frontend's own gateway and fleet reads use: the
+    #: restricted `inspection` one, or the ordinary `service` one.
+    q_login: Literal["inspection", "service"]
+    #: Why the registry could not be read, when it could not - then every
+    #: write naming a target is refused, since its mode is unknown.
+    registry_error: str | None = None
+
+
+def inspected_targets(settings: Settings) -> tuple[frozenset[str], str | None]:
+    """(the declared targets in inspection mode, why the registry could not
+    be read - or None). Read from the registry every time, like the Services
+    view, so a change to the file is in force at once."""
+    from uqf_frontend import services
+
+    registry = services.read(settings)
+    if registry.invalid is not None:
+        return frozenset(), registry.invalid
+    return frozenset(t["name"] for t in registry.targets if t.get("inspection")), None
+
+
+def effective(settings: Settings) -> Effective:
+    found, error = inspected_targets(settings)
+    return Effective(
+        active=settings.inspection_mode,
+        targets=tuple(sorted(found)),
+        q_login="inspection" if settings.uses_inspection_login else "service",
+        registry_error=error,
+    )
+
+
+def request_target(request: Request) -> str | None:
+    """The target a request acts on: its `{target}`, else the workspace's."""
+    named = request.path_params.get("target")
+    if named is not None:
+        return str(named)
+    found = getattr(request.state, WORKSPACE_TARGET, None)
+    return str(found) if found is not None else None
+
+
+def is_exempt(method: str, template: str | None) -> bool:
+    return (method.upper(), template or "") in EXEMPT
+
+
+def refusal(
+    settings: Settings, method: str, template: str | None, target: str | None
+) -> str | None:
+    """Why inspection mode refuses this write - or None when it does not.
+    Asked only of a route mapped to a `write` action."""
+    if is_exempt(method, template):
+        return None
+    what = f"{method.upper()} {template}"
+    if settings.inspection_mode:
+        return (
+            f"inspection mode is on for this frontend ({ENV}): {what} changes the stack "
+            f"or a server, so it is refused - {_NOTE}"
+        )
+    if target is None:
+        return None
+    found, error = inspected_targets(settings)
+    if error is not None:
+        return (
+            f"the deployment registry cannot be read, so whether target {target!r} is in "
+            f"inspection mode is unknown: {what} is refused - {_NOTE}"
+        )
+    if target in found:
+        return (
+            f"target {target} is in inspection mode (inspection = true in "
+            f"deploy_targets.toml): {what} is refused - {_NOTE}"
+        )
+    return None
+
+
+def effective_capabilities(
+    settings: Settings, granted: list[tuple[str, str]]
+) -> list[tuple[str, str]]:
+    """`granted`, less what inspection mode refuses whoever asks: with the
+    whole frontend in inspection mode, every write but a feature's whose
+    every route is exempt. A target's mode leaves them: it refuses writes to
+    that target only, which the response's `inspection.targets` names."""
+    if not settings.inspection_mode:
+        return granted
+    routes: dict[tuple[str, str], list[tuple[str, str]]] = {}
+    for route, needed in access.ROUTE_PERMISSIONS.items():
+        routes.setdefault(needed, []).append(route)
+    return [
+        (feature, action)
+        for feature, action in granted
+        if action != "write"
+        or (
+            bool(routes.get((feature, action)))
+            and all(is_exempt(*route) for route in routes[(feature, action)])
+        )
+    ]

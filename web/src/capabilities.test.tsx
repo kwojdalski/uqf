@@ -1,15 +1,23 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import App from "./App";
-import type { Capabilities } from "./api";
+import type { Capabilities, Inspection } from "./api";
 import { configureActivity, queuedActivity, record } from "./activity";
 
 const ok = (body: unknown) => ({ ok: true, json: async () => body });
+
+const NO_INSPECTION: Inspection = {
+  active: false,
+  targets: [],
+  q_login: "service",
+  registry_error: null,
+};
 
 function capabilities(
   identity: string,
   groups: string[],
   granted: [string, "read" | "write"][],
+  inspection: Inspection = NO_INSPECTION,
 ): Capabilities {
   return {
     identity,
@@ -18,6 +26,7 @@ function capabilities(
     capabilities: granted.map(([feature, action]) => ({ feature, action })),
     features: {},
     poll_seconds: 60,
+    inspection,
   };
 }
 
@@ -121,4 +130,82 @@ it("records no activity for a caller without activity:write", async () => {
   await waitFor(() => expect(navNames()).toEqual(["Coverage", "Desk"]));
   expect(record("navigate", "view.open", { target: "Desk" })).toBeNull();
   expect(queuedActivity()).toEqual([]);
+});
+
+/** What the server says under inspection mode for the whole frontend: reads
+ *  only, the browser's own history excepted (#2032). */
+const INSPECTOR = capabilities(
+  "dave",
+  ["operators"],
+  [
+    ["control", "read"],
+    ["fleet", "read"],
+    ["activity", "write"],
+  ],
+  {
+    active: true,
+    targets: ["prod"],
+    q_login: "inspection",
+    registry_error: null,
+  },
+);
+
+it("shows the inspection-mode banner the server reports", async () => {
+  serve(INSPECTOR);
+  render(<App />);
+  const banner = await screen.findByRole("status", { name: "Inspection mode" });
+  expect(banner).toHaveTextContent(/refuses every change from this frontend/);
+  expect(banner).toHaveTextContent(/restricted q login/);
+  expect(document.querySelector("aside .sidebar-note")?.textContent).toMatch(
+    /Inspection mode/,
+  );
+});
+
+it("never says the ssh tunnel is what makes it read-only", async () => {
+  serve(INSPECTOR);
+  render(<App />);
+  const banner = await screen.findByRole("status", { name: "Inspection mode" });
+  const text = banner.textContent ?? "";
+  expect(text).toMatch(
+    /not by the ssh\s+tunnel: ssh access to the server is not read-only/,
+  );
+  expect(text).not.toMatch(
+    /(tunnel|ssh|forwarding)[^.]* (is|are|provides?) read-only/i,
+  );
+});
+
+it("names the targets in inspection mode when only they are", async () => {
+  serve(
+    capabilities("dave", [], [["coverage", "read"]], {
+      active: false,
+      targets: ["prod", "prod-b"],
+      q_login: "service",
+      registry_error: null,
+    }),
+  );
+  render(<App />);
+  const banner = await screen.findByRole("status", { name: "Inspection mode" });
+  expect(banner).toHaveTextContent(/every change to targets prod, prod-b/);
+});
+
+it("shows no banner when nothing is in inspection mode", async () => {
+  serve(VIEWER);
+  render(<App />);
+  await waitFor(() => expect(navNames()).toEqual(["Coverage", "Desk"]));
+  expect(
+    screen.queryByRole("status", { name: "Inspection mode" }),
+  ).not.toBeInTheDocument();
+});
+
+it("says inspection mode, not missing access, on the Control view", async () => {
+  serve(INSPECTOR);
+  render(<App />);
+  await waitFor(() => expect(navNames()).toContain("Control"));
+  fireEvent.click(screen.getByRole("button", { name: /Control/ }));
+  expect(
+    await screen.findByRole("heading", { name: "Inspection mode" }),
+  ).toBeInTheDocument();
+  expect(
+    screen.queryByText("Changes are not part of your access"),
+  ).not.toBeInTheDocument();
 });

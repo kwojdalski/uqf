@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, type ReactNode } from "react";
-import type { Capabilities } from "./api";
+import type { Capabilities, Inspection } from "./api";
 import { allowRecording } from "./activity";
 import { useResource } from "./useResource";
 
@@ -29,6 +29,9 @@ export interface Access {
   can(feature: string, action: "read" | "write"): boolean;
   /** Whether a view's feature is readable. */
   canView(view: string): boolean;
+  /** The inspection policy the server enforces (#2032), or null until it
+   *  says. Shown, never enforced here: the server refuses the writes. */
+  inspection: Inspection | null;
 }
 
 /** Until the server answers - or when it answers with something that is not
@@ -42,6 +45,7 @@ const UNKNOWN: Access = {
   groups: [],
   can: () => true,
   canView: () => true,
+  inspection: null,
 };
 
 function fromServer(data: Capabilities | undefined): Access {
@@ -59,6 +63,7 @@ function fromServer(data: Capabilities | undefined): Access {
     can,
     canView: (view) =>
       VIEW_FEATURE[view] === undefined || can(VIEW_FEATURE[view], "read"),
+    inspection: data.inspection ?? null,
   };
 }
 
@@ -81,4 +86,50 @@ export function CapabilitiesProvider({ children }: { children: ReactNode }) {
 /** What this caller may do, for showing and hiding - never for enforcing. */
 export function useCapabilities(): Access {
   return useContext(AccessContext);
+}
+
+/** The inspection-mode banner (#2032): what the server refuses, as it says.
+ *  It never says the ssh tunnel is read-only - it is not: the API and uqs
+ *  refuse changes, and anyone with ssh access to the server still can. */
+export function InspectionBanner({ inspection }: { inspection: Inspection }) {
+  const targets = inspection.targets;
+  if (!inspection.active && targets.length === 0 && !inspection.registry_error)
+    return null;
+  return (
+    <div
+      className="notice inspection"
+      role="status"
+      aria-label="Inspection mode"
+    >
+      <strong>Inspection mode</strong>
+      {inspection.active ? (
+        <p>
+          The server refuses every change from this frontend: starting, stopping
+          and restarting processes, backfills, uploads, deletes, config pushes
+          and restores, and settings. Reads stay available.
+        </p>
+      ) : targets.length > 0 ? (
+        <p>
+          The server refuses every change to{" "}
+          {targets.length === 1 ? "target" : "targets"}{" "}
+          <code>{targets.join(", ")}</code>: uploads, deletes, config pushes and
+          restores. Reads stay available.
+        </p>
+      ) : null}
+      {inspection.registry_error && (
+        <p>
+          The deployment registry cannot be read, so every change naming a
+          target is refused: {inspection.registry_error}
+        </p>
+      )}
+      <p>
+        Enforced by the frontend API and by <code>uqs</code>, not by the ssh
+        tunnel: ssh access to the server is not read-only.
+        {inspection.active &&
+          (inspection.q_login === "inspection"
+            ? " The frontend reads the gateway as a restricted q login."
+            : " The frontend reads the gateway as its ordinary service login; no restricted q login is configured.")}
+      </p>
+    </div>
+  );
 }

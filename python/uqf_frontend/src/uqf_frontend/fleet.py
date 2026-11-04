@@ -77,8 +77,8 @@ class KolaFleet:
         per_proc = Settings(
             host=proc.host,
             port=proc.port,
-            user=self._settings.user,
-            passwd=self._settings.passwd,
+            user=self._settings.service_login[0],
+            passwd=self._settings.service_login[1],
             timeout=self._settings.timeout,
             max_rows=self._settings.max_rows,
         )
@@ -101,8 +101,8 @@ class KolaFleet:
         at = Settings(
             host=host,
             port=port,
-            user=self._settings.user,
-            passwd=self._settings.passwd,
+            user=self._settings.service_login[0],
+            passwd=self._settings.service_login[1],
             timeout=self._settings.timeout,
             max_rows=self._settings.max_rows,
         )

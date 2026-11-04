@@ -35,7 +35,7 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from uqs.cells import Shown
-from uqs.deploy import target_changelog, target_changes, targets
+from uqs.deploy import inspection, target_changelog, target_changes, targets
 from uqs.deploy.config import Config, DeployError
 from uqs.logger import get_logger
 from uqs.paths import UqsError, UqsPaths
@@ -230,7 +230,8 @@ def defaults(root: Path) -> set[int]:
 def target_rows(root: Path) -> list[dict[str, Any]]:
     """`uqs target list`: every declared target - where it is, as whom, its
     labels - and the release last deployed there from this machine. The
-    environment column appears only when a target names one (#1557)."""
+    environment column appears only when a target names one (#1557), and the
+    inspection column only when a target is in inspection mode (#2032)."""
     if not targets.declaration_path(root).is_file():
         return []
     declared = targets.read(root)
@@ -238,10 +239,13 @@ def target_rows(root: Path) -> list[dict[str, Any]]:
         (e.get("ssh"), e.get("dest")): e for e in read(root) if e.get("status") in INSTALLED
     }
     envs = any(targets.ENVIRONMENT in t for t in declared.values())
+    inspected = any(inspection.is_on(t) for t in declared.values())
     rows = []
     for name, t in sorted(declared.items()):
         last = deployed.get((t.get("host"), t.get("dest")))
         env = {"environment": str(t.get(targets.ENVIRONMENT) or "")} if envs else {}
+        if inspected:
+            env["inspection"] = inspection.is_on(t)
         rows.append(
             {
                 "target": name,

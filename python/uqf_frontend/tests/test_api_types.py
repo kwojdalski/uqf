@@ -59,6 +59,7 @@ REQUESTS = {
 PAIRS = {
     "Capabilities": "CapabilitiesResponse",
     "Capability": "Capability",
+    "Inspection": "InspectionOut",
     "RemoteDeleteResult": "RemoteDeleteResult",
     "RemoteDeleteResponse": "RemoteDeleteResponse",
     "Catalog": "CatalogResponse",
