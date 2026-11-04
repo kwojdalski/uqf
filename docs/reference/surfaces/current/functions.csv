@@ -718,6 +718,7 @@ qetl.run,unfinished,function,1,
 qetl.snapshot,attach,function,1,
 qetl.snapshot,audit,function,1,
 qetl.snapshot,content_of,function,1,id
+qetl.snapshot,decode,function,1,cell
 qetl.snapshot,digest,function,2,kind content
 qetl.snapshot,empty,function,1,
 qetl.snapshot,id_digits,value,,

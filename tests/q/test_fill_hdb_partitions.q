@@ -384,15 +384,16 @@
     snap:{[stat] setenv[`UQF_STATUS_DIR;stat]; .qetl.snapshot.reload[]; .qetl.snapshot.audit[]};
     a:snap stat;
     .qunit.assertEquals[count a;3;"three distinct triples in the whole database, three snapshots - (1;execution;USD) once, though two partitions hold it"];
-    triples:{[c] `contract_version`rate_timing`report_ccy!(c`contract_version;c`rate_timing;c`report_ccy)} each a`content;
+    conts:.qetl.snapshot.decode each a`content;
+    triples:{[c] `contract_version`rate_timing`report_ccy!(c`contract_version;c`rate_timing;c`report_ccy)} each conts;
     .qunit.assertEquals[asc triples;asc ((`contract_version`rate_timing`report_ccy)!(1;`execution;`USD);(`contract_version`rate_timing`report_ccy)!(1;`horizon;`EUR);(`contract_version`rate_timing`report_ccy)!(1;`;`));"the triples, and the older partition's own answer: contract 1, the rest unknown"];
-    .qunit.assertTrue[all {x`legacy} each a`content;"each is marked legacy"];
+    .qunit.assertTrue[all {x`legacy} each conts;"each is marked legacy"];
     .qunit.assertTrue[all a`digest_ok;"with a good digest"];
     / the rows link to the snapshot of THEIR triple
     c1:.qt.qproc.fillhdb.col_of[root;2026.01.01;`crypto_markout;]`config_id;
     c2:.qt.qproc.fillhdb.col_of[root;2026.01.02;`crypto_markout;]`config_id;
     c3:.qt.qproc.fillhdb.col_of[root;2026.01.03;`crypto_markout;]`config_id;
-    of:{[a;id] first exec content from a where snapshot_id=id};
+    of:{[a;id] .qetl.snapshot.decode first exec content from a where snapshot_id=id};
     .qunit.assertEquals[(distinct c1;count distinct c2;(c2 0)=c2 3;count distinct c3);(enlist first c1;2;1b;1);"the first partition names one, the second two (rows 0 and 3 share), the third one"];
     .qunit.assertEquals[(of[a;first c1]`rate_timing;of[a;c2 1]`rate_timing;of[a;c2 1]`report_ccy;of[a;first c3]`contract_version);(`execution;`horizon;`EUR;1);"each row's snapshot is the one its old columns described"];
     .qunit.assertEquals[c2 0;first c1;"and the same triple in two partitions is the same snapshot"];

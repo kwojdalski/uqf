@@ -47,8 +47,11 @@
 
 / The store's columns, in order. One constant in one place: a change is an edit
 / here, in empty, and in the writer - the same discipline as .qetl.run.run_schema.
-/ content is the snapshot's parameters as a dictionary of symbol to value, kept as
-/ q values so a reader gets horizons as timespans; reason is a string.
+/ content is the snapshot's parameters, a dictionary of symbol to value, SERIALISED (-8!): a
+/ column of dictionaries is not a column q keeps as one - a list of dictionaries with the
+/ same keys becomes a table, and a row of different keys then fails to insert on PeachQ - so
+/ the cell is the bytes and `decode` is the one way back, with horizons still timespans.
+/ reason is a string.
 .qetl.snapshot.schema:`snapshot_id`kind`digest`content`created_at`actor`reason
 
 / The store's shape, typed and empty.
@@ -68,6 +71,13 @@
 / \d .qetl.snapshot would resolve to a variable that does not exist).
 / @return the in-memory store
 .qetl.snapshot.store:{[] value `etl_config_snapshots}
+
+/ A stored content, read back as the dictionary it was.
+/ @param cell a content cell of the store
+/ @return the content dictionary
+/ @throws error when the bytes are not a serialised value
+/ @eg .qetl.snapshot.decode[-8!enlist[`a]!enlist 1]  ->  enlist[`a]!enlist 1
+.qetl.snapshot.decode:{[cell] -9!cell}
 
 / ------------------------------------------------------------------ DIGEST
 
@@ -147,7 +157,7 @@
 / kind and content. A row whose content cannot be rendered is not ok.
 / @private
 .qetl.snapshot.digest_ok:{[t]
-    {[k;c;d] d~@[.qetl.snapshot.digest[k;];c;{[e] `}]}'[t`kind;t`content;t`digest]}
+    {[k;b;d] d~@[{[k;b] .qetl.snapshot.digest[k;.qetl.snapshot.decode b]}[k;];b;{[e] `}]}'[t`kind;t`content;t`digest]}
 
 / Every snapshot in the file, with a digest_ok column, and no throw over a bad
 / digest: for a reader that must SHOW a damaged store (`uqs data snapshot list`),
@@ -208,14 +218,16 @@
     if[not (10h=type reason) and 0<count reason; '"snapshot: a reason is required - say why this configuration was recorded"];
     if[not (-11h=type actor) and not null actor; '"snapshot: actor must be a non-null symbol"];
     dg:.qetl.snapshot.digest[kind;content];
-    row:(id;kind;dg;content;.z.p;actor;reason);
+    / one row as a table: a row given as a list reads a vector in it as several rows
+    row:([] snapshot_id:enlist id; kind:enlist kind; digest:enlist dg; content:enlist -8!content;
+        created_at:enlist .z.p; actor:enlist actor; reason:enlist reason);
     .qetl.job.bounded.state.with_file_lock[`etl_config_snapshots;{[row]
         .qetl.snapshot.attach[];
-        id:row 0;
+        id:first row`snapshot_id;
         held:select from .qetl.snapshot.store[] where snapshot_id=id;
         if[count held;
-            if[not (first held`digest)~row 2;
-                '"snapshot: ",string[id]," already exists with a different configuration (digest ",string[first held`digest]," against ",string[row 2],") - a snapshot is write-once; a changed configuration is a new snapshot"];
+            if[not (first held`digest)~first row`digest;
+                '"snapshot: ",string[id]," already exists with a different configuration (digest ",string[first held`digest]," against ",string[first row`digest],") - a snapshot is write-once; a changed configuration is a new snapshot"];
             :id];
         `etl_config_snapshots insert row;
         .qetl.job.bounded.state.durable_set[.qetl.snapshot.path[];.qetl.snapshot.store[]];
@@ -268,7 +280,7 @@
 / @return the content dictionary
 / @throws error as require does
 / @eg .qetl.snapshot.content_of .qetl.snapshot.record[`markout;enlist[`a]!enlist 1;"example"]
-.qetl.snapshot.content_of:{[id] first (.qetl.snapshot.require id)`content}
+.qetl.snapshot.content_of:{[id] .qetl.snapshot.decode first (.qetl.snapshot.require id)`content}
 
 / Refuse ids that are not durably recorded: the publish path's guard.
 / .
@@ -299,7 +311,7 @@
     a:`created_at xasc a;
     k:kind;
     a:$[null k; a; select from a where kind=k];
-    a:update datasets:{$[`datasets in key x; `symbol$x`datasets; `symbol$()]} each content from a;
+    a:update datasets:{[b] c:.qetl.snapshot.decode b; $[`datasets in key c; `symbol$c`datasets; `symbol$()]} each content from a;
     `snapshot_id`kind`datasets`digest`created_at`actor`reason`digest_ok#a}
 
 / A snapshot as a reader shows it: one row per recorded field, then one per parameter.
@@ -313,7 +325,7 @@
 .qetl.snapshot.show:{[id]
     s:.qetl.snapshot.require id;
     own:`snapshot_id`kind`digest`created_at`actor`reason!first each (s`snapshot_id;s`kind;s`digest;s`created_at;s`actor;s`reason);
-    all_:own,first s`content;
+    all_:own,.qetl.snapshot.decode first s`content;
     ([] field:key all_; text:{$[10h=type x; x; -11h=type x; string x; .qf.util.full x]} each value all_)}
 
 \d .

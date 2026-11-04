@@ -164,10 +164,11 @@
 / @eg count .qpipe.transform.config_markout.params[0#.qpipe.transform.markout_core.result]  ->  0
 .qpipe.transform.config_markout.params:{[rows]
     s:.qetl.snapshot.require_many distinct rows`config_id;
-    c:s`content;
-    ([] config_id:s`snapshot_id; contract_version:`long$c@\:`contract_version; code_revision:`long$c@\:`code_revision;
-        domain:`symbol$c@\:`domain; domain_revision:`symbol$c@\:`domain_revision; report_ccy:`symbol$c@\:`report_ccy;
-        rate_timing:`symbol$c@\:`rate_timing; max_age:`timespan$c@\:`max_age; legacy:{$[`legacy in key x; x`legacy; 0b]} each c; digest:s`digest)}
+    c:.qetl.snapshot.decode each s`content;
+    field:{[c;f;default] {[f;default;d] $[f in key d; d f; default]}[f;default] each c}[c];
+    ([] config_id:s`snapshot_id; contract_version:`long$field[`contract_version;0N]; code_revision:`long$field[`code_revision;0N];
+        domain:`symbol$field[`domain;`]; domain_revision:`symbol$field[`domain_revision;`]; report_ccy:`symbol$field[`report_ccy;`];
+        rate_timing:`symbol$field[`rate_timing;`]; max_age:`timespan$field[`max_age;0Nn]; legacy:`boolean$field[`legacy;0b]; digest:s`digest)}
 
 / The enriched read projection: the rows with the configuration that produced each
 / one beside them, the fields a row used to repeat.
