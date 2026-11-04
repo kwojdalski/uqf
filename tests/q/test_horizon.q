@@ -93,6 +93,15 @@
     .qunit.assertEquals[d`subscribe_to;`hz_events`hz_refs;"events then reference"];
     .qunit.assertEquals[d`publishes;enlist `hz_priced;"the declared output"]};
 
+.qt.qetl.job.stream.horizons.test_events_and_reference_must_be_distinct_tables:{[t]
+    .qt.qetl.job.stream.horizons.define_transform[];
+    d:.qt.qetl.job.stream.horizons.decl_for[`hz_same_input];
+    d[`reference]:d`events;
+    .qunit.assertThrows[.qetl.job.stream.at_horizons[`hz_same_input;];d;
+        "*needs distinct events and reference tables*";"a batch cannot be routed to both buffers"];
+    .qunit.assertFalse[`hz_same_input in .qetl.job.stream.horizons.defined[];
+        "a refused declaration is not registered"]};
+
 / --- running --------------------------------------------------------------
 
 .qt.qetl.job.stream.horizons.test_an_event_waits_for_its_horizon:{[t]
