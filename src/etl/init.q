@@ -78,6 +78,8 @@
 \l src/etl/core/source_zones.q
 \l src/etl/core/source_local_hdb.q
 \l src/etl/core/source_fetch.q
+\l src/etl/core/source_csv.q
+\l src/etl/core/source_fills.q
 \l src/etl/core/source_batch_read.q
 \l src/etl/core/live_check.q
 \l src/etl/core/bounded_connect.q

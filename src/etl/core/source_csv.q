@@ -1,0 +1,67 @@
+/ source_csv.q - the csv transport: a source that is a delimited text file.
+/ .
+/ Part of the external-source contract (.qetl.source): one namespace spread over
+/ several files, loaded in order by src/etl/init.q. The transport's row is
+/ registered in source_transports.q; this file holds the operations it points at.
+/ .
+/ WHAT THE HANDLE IS. The credential is the path of the file, and the handle is
+/ that path as a file symbol: a file has nothing to connect to, so `open` only
+/ proves the path is a file (a missing one fails at connect, not at the first
+/ window) and `close` has nothing to release. A source's query reads the whole
+/ file for each window and cuts the window itself; a fills drop is small, and a
+/ file that is not is the case for the odbc transport, not for a bigger reader.
+/ .
+/ WHAT THE FILE MAY CONTAIN. A header line, then one row per line, comma
+/ separated, every field read as TEXT. Quoted fields are NOT supported: q's own
+/ reader splits on every comma, so a quoted comma would silently shift every
+/ column to its right. A row with the wrong number of fields is refused for that
+/ reason (csv_rows), not read short. Typing the text is the source's adapter's,
+/ through .qetl.coerce, because a per-source policy (case, a decimal comma,
+/ which zone) is the adapter's to own (source_contract.q).
+
+\d .
+
+/ A csv source's file, from its credential.
+/ @param cred the path of the file, a string
+/ @return the path as a file symbol
+/ @throws error when the credential is not the path of a file that exists
+.qetl.source.csv_path:{[cred]
+    if[0=count cred; '"csv: the credential is the path of a csv file"];
+    p:hsym `$cred;
+    / key of a file is the file itself; of a directory its entries; of a missing path, empty
+    if[not p~key p; '"csv: ",cred," is not a file that exists"];
+    p}
+
+/ The first line of a file, split into its column names.
+/ @param h the file, as a file symbol
+/ @return a symbol vector, one name per header field
+/ @throws error when the file is empty
+.qetl.source.csv_header:{[h]
+    head:read0 (h;0;65536);
+    if[0=count head; '"csv: ",(1_string h)," is empty - a csv source needs a header line"];
+    `$trim each "," vs first head except\: "\r"}
+
+/ A csv file's columns for the live check: each header field, typed general.
+/ @param h the file, as a file symbol
+/ @return ([] c:symbols; t:chars), one row per header field
+.qetl.source.csv_meta:{[h]
+    c:.qetl.source.csv_header[h];
+    ([] c:c; t:(count c)#" ")}
+
+/ Every row of a csv file as text.
+/ @param h the file, as a file symbol
+/ @return a table of strings, one column per header field, one row per data line
+/ @throws error naming the first line whose field count differs from the header's
+.qetl.source.csv_rows:{[h]
+    c:.qetl.source.csv_header[h];
+    lines:1_ read0 h;
+    lines:lines where 0<count each trim each lines;
+    n:count c;
+    width:1+sum each lines="," ;
+    bad:where width<>n;
+    if[count bad;
+        '"csv: ",(1_string h)," line ",string[2+first bad]," has ",string[width first bad]," fields, the header has ",string[n],
+         " (a quoted comma is not supported)"];
+    flip c!flip {x except "\r"} each/: "," vs/: lines}
+
+\d .
