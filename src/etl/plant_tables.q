@@ -726,6 +726,20 @@
 / contract_version. Replaces crypto_execution_quality.
 .qetl.plant.crypto_markout:([]time:`timestamp$(); source_time:`timestamp$(); clock:`symbol$(); venue:`symbol$(); fill_id:`symbol$(); sym:`g#`symbol$(); side:`long$(); size:`float$(); horizon:`timespan$(); kind:`symbol$(); step:`long$(); price:`float$(); quote_ccy:`symbol$(); ref_t0:`float$(); ref_t1:`float$(); move:`float$(); quote_amount:`float$(); rate:`float$(); rate_source:`symbol$(); rate_sym:`symbol$(); rate_time:`timestamp$(); report_amount:`float$(); status:`symbol$(); config_id:`symbol$(); markout_bps:`float$(); fee_quote:`float$(); fee_bps:`float$(); markout_net_bps:`float$())
 
+/ eq_markout1's output (#1981): the equity markout dataset of the markout contract
+/ (docs/architecture/markout-contract.md), one row per execution, horizon and component, in
+/ the contract's 22 core columns (in order, with kind and step after horizon) and the equity
+/ measure after them. kind is `total (the markout against the mid of the venue's book at the
+/ horizon) or `execution (the move from the fill to the reference at the fill); step is 0 for both,
+/ so (venue; fill_id; horizon; kind; step) is a key with no nulls. move is the row's signed move
+/ in price units and positive means the market moved in the fill's favour. markout_bps is
+/ 10000*move%price. A pair whose horizon crosses or lands on the session close, a fill outside
+/ every session and a pair across a halt are `unavailable: the move is null, never an overnight gap.
+/ `clock is the execution's, and so every reference's. config_id names the configuration snapshot
+/ the row was produced under (horizons, max_age, report_ccy, rate_timing, the sessions and halts,
+/ the domain's rules revision - src/etl/core/config_snapshot.q, #1999).
+.qetl.plant.eq_markout:([]time:`timestamp$(); source_time:`timestamp$(); clock:`symbol$(); venue:`symbol$(); fill_id:`symbol$(); sym:`g#`symbol$(); side:`long$(); size:`float$(); horizon:`timespan$(); kind:`symbol$(); step:`long$(); price:`float$(); quote_ccy:`symbol$(); ref_t0:`float$(); ref_t1:`float$(); move:`float$(); quote_amount:`float$(); rate:`float$(); rate_source:`symbol$(); rate_sym:`symbol$(); rate_time:`timestamp$(); report_amount:`float$(); status:`symbol$(); config_id:`symbol$(); markout_bps:`float$())
+
 / last_value1's output. <one line: what a row means>
 .qetl.plant.last_value:([]time:`timestamp$(); sym:`g#`symbol$(); market:`symbol$(); source:`symbol$(); source_time:`timestamp$(); bid:`float$(); ask:`float$(); mid:`float$())
 

@@ -587,6 +587,7 @@ qetl.plant,demo_deals,table,,
 qetl.plant,duckdb_deals,table,,
 qetl.plant,economic_calendar,table,,
 qetl.plant,elements,dict,,
+qetl.plant,eq_markout,table,,
 qetl.plant,equivalence,function,2,table_name basis
 qetl.plant,equivalence_of,dict,,
 qetl.plant,exec_bar,table,,
@@ -1412,6 +1413,17 @@ qpipe.job.eq_fills_backfill,range_to,value,,
 qpipe.job.eq_fills_backfill,run,function,1,
 qpipe.job.eq_fills_backfill,source_version,value,,
 qpipe.job.eq_fills_backfill,spec,function,1,
+qpipe.job.eq_markout,completed,table,,
+qpipe.job.eq_markout,expired,table,,
+qpipe.job.eq_markout,history,table,,
+qpipe.job.eq_markout,keep,function,1,x
+qpipe.job.eq_markout,legs,function,1,pending
+qpipe.job.eq_markout,now,function,1,
+qpipe.job.eq_markout,on_batch,value,,
+qpipe.job.eq_markout,on_timer,value,,
+qpipe.job.eq_markout,pending,table,,
+qpipe.job.eq_markout,publish,value,,
+qpipe.job.eq_markout,score_ready,value,,
 qpipe.job.exec_bars,close_ready,value,,
 qpipe.job.exec_bars,closed,table,,
 qpipe.job.exec_bars,dropped,table,,
@@ -1559,6 +1571,25 @@ qpipe.job.hdb_crypto_markout_backfill,range_to,value,,
 qpipe.job.hdb_crypto_markout_backfill,run,function,1,
 qpipe.job.hdb_crypto_markout_backfill,source_version,value,,
 qpipe.job.hdb_crypto_markout_backfill,spec,function,1,
+qpipe.job.hdb_eq_markout_backfill,checkpoint,function,1,cursor
+qpipe.job.hdb_eq_markout_backfill,cleanup,function,1,
+qpipe.job.hdb_eq_markout_backfill,facts,function,1,batch
+qpipe.job.hdb_eq_markout_backfill,fetch,function,2,from_ts to_ts
+qpipe.job.hdb_eq_markout_backfill,handle,value,,
+qpipe.job.hdb_eq_markout_backfill,init,function,1,run_spec
+qpipe.job.hdb_eq_markout_backfill,last_batch,value,,
+qpipe.job.hdb_eq_markout_backfill,last_window,dict,,
+qpipe.job.hdb_eq_markout_backfill,live,value,,
+qpipe.job.hdb_eq_markout_backfill,phase,value,,
+qpipe.job.hdb_eq_markout_backfill,plan,function,1,
+qpipe.job.hdb_eq_markout_backfill,progress,dict,,
+qpipe.job.hdb_eq_markout_backfill,publish,function,1,batch
+qpipe.job.hdb_eq_markout_backfill,quality_check,function,1,batch
+qpipe.job.hdb_eq_markout_backfill,range_from,value,,
+qpipe.job.hdb_eq_markout_backfill,range_to,value,,
+qpipe.job.hdb_eq_markout_backfill,run,function,1,
+qpipe.job.hdb_eq_markout_backfill,source_version,value,,
+qpipe.job.hdb_eq_markout_backfill,spec,function,1,
 qpipe.job.hdb_exec_bars_backfill,bars,function,1,fill_rows
 qpipe.job.hdb_exec_bars_backfill,checkpoint,function,1,cursor
 qpipe.job.hdb_exec_bars_backfill,cleanup,function,1,
@@ -1858,6 +1889,21 @@ qpipe.source.hdb_crypto_markouts,supporting,dict,,
 qpipe.source.hdb_crypto_markouts,time_column,value,,
 qpipe.source.hdb_crypto_markouts,types,value,,
 qpipe.source.hdb_crypto_markouts,tz,value,,
+qpipe.source.hdb_eq_markouts,columns,value,,
+qpipe.source.hdb_eq_markouts,complete_through,function,1,h
+qpipe.source.hdb_eq_markouts,fixture,function,1,
+qpipe.source.hdb_eq_markouts,query,function,3,h range_from range_to
+qpipe.source.hdb_eq_markouts,raw_executions,function,1,
+qpipe.source.hdb_eq_markouts,raw_market_data,function,1,
+qpipe.source.hdb_eq_markouts,ready,function,3,batch range_from range_to
+qpipe.source.hdb_eq_markouts,reference_read,dict,,
+qpipe.source.hdb_eq_markouts,reference_symbols,function,2,spec rows
+qpipe.source.hdb_eq_markouts,row_key,value,,
+qpipe.source.hdb_eq_markouts,source_name,value,,
+qpipe.source.hdb_eq_markouts,supporting,dict,,
+qpipe.source.hdb_eq_markouts,time_column,value,,
+qpipe.source.hdb_eq_markouts,types,value,,
+qpipe.source.hdb_eq_markouts,tz,value,,
 qpipe.source.hdb_executions,columns,value,,
 qpipe.source.hdb_executions,fixture,function,1,
 qpipe.source.hdb_executions,query,function,3,h range_from range_to
@@ -2007,6 +2053,27 @@ qpipe.transform.eq_domain,require_spec,function,1,spec
 qpipe.transform.eq_domain,resolve,function,2,spec syms
 qpipe.transform.eq_domain,revision,value,,
 qpipe.transform.eq_domain,rows_for,function,2,tbl s
+qpipe.transform.eq_markout_outputs,calendar_from,value,,
+qpipe.transform.eq_markout_outputs,calendar_to,value,,
+qpipe.transform.eq_markout_outputs,config_id,value,,
+qpipe.transform.eq_markout_outputs,executions_in,table,,
+qpipe.transform.eq_markout_outputs,expire_after,value,,
+qpipe.transform.eq_markout_outputs,job_spec,dict,,
+qpipe.transform.eq_markout_outputs,keep,function,1,x
+qpipe.transform.eq_markout_outputs,legs,function,1,pending
+qpipe.transform.eq_markout_outputs,live,function,2,exe md
+qpipe.transform.eq_markout_outputs,lookback,function,1,
+qpipe.transform.eq_markout_outputs,market_data_in,table,,
+qpipe.transform.eq_markout_outputs,max_lateness,value,,
+qpipe.transform.eq_markout_outputs,measures,function,1,rows
+qpipe.transform.eq_markout_outputs,out,table,,
+qpipe.transform.eq_markout_outputs,pin,function,1,
+qpipe.transform.eq_markout_outputs,regular_sessions,function,2,from_d to_d
+qpipe.transform.eq_markout_outputs,remember,value,,
+qpipe.transform.eq_markout_outputs,rows,function,2,exe md
+qpipe.transform.eq_markout_outputs,settle,value,,
+qpipe.transform.eq_markout_outputs,venues,value,,
+qpipe.transform.eq_markout_outputs,wait,function,1,
 qpipe.transform.exec_bars,bars,function,1,x
 qpipe.transform.exec_bars,lateness,value,,
 qpipe.transform.exec_bars,width,value,,

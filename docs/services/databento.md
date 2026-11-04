@@ -64,7 +64,8 @@ subscribe to it; `market_data.from_quote` still passes FX only. Crossed or stale
 snapshots are dropped by `market_data`'s own gate before they publish, and the
 `eq_orderbook` rows are never withheld by it. The historical backfill writes
 `eq_orderbook` only. The equity domain of the markout core is
-`src/etl/transforms/eq_domain.q`.
+`src/etl/transforms/eq_domain.q`, and `eq_markout` is the dataset that scores
+equity fills against these books ([markouts](markouts.md#eq_markout1)).
 
 The handler is not a process.csv row, for the same reason cryptorust is not: a q
 process cannot hold a Databento subscription, so it gets a pidfile and a

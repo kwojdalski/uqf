@@ -65,7 +65,7 @@ asset class's domain columns.
   | ---         | ---                                                                                                    | ---           | ---          |
   | FX          | `fx_markout` (long), with `fx_markout_wide` derived from it                                            | #1933         | #1935        |
   | crypto      | `crypto_markout` (long), replacing `crypto_execution_quality`                                          | #1934         | #1936        |
-  | equity      | a new dataset, once an equity source reaches `market_data` and fills reach `executions` (#1967, #1981) | #1939         | #1981        |
+  | equity      | `eq_markout` (long)                                                                                    | #1939         | #1981        |
 
 The long rows are the stored form. A wide or nested-wide layout is derived from
 the long rows by key and is never recalculated (#1932). This is already true of
