@@ -331,3 +331,127 @@ it("sends the typed write token with an action, and keeps it out of reads", asyn
   expect(status?.headers).toBeUndefined();
   sessionStorage.clear();
 });
+
+it("keeps the view and its last result when a status poll fails, and polls on (#2008)", async () => {
+  let healthy = true;
+  const control = () =>
+    healthy
+      ? ok({
+          writes_enabled: true,
+          lifecycle_actions: ["start", "stop", "restart"],
+          settable_fields: ["startwithall", "port"],
+          processes: PROCESSES,
+          poll_seconds: 0.05,
+        })
+      : { ok: false, status: 500, json: async () => ({}) };
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (path: string) =>
+      path === "/health"
+        ? ok({ ok: true, gateway: "up", poll_seconds: 5 })
+        : path === "/control"
+          ? control()
+          : path === "/ops/processes"
+            ? ok({ processes: FLEET, poll_seconds: 5 })
+            : command("start", "all"),
+    ),
+  );
+  await openControl();
+  fireEvent.click(await screen.findByRole("button", { name: "start" }));
+  expect(await screen.findByText(/start all: exit 0/)).toBeInTheDocument();
+  healthy = false;
+  expect(await screen.findByText(/Request failed \(500\)/)).toBeInTheDocument();
+  // the controls and the outcome just shown stay on screen
+  expect(screen.getByText(/start all: exit 0/)).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "start" })).toBeInTheDocument();
+  expect(
+    screen.getByRole("button", { name: "Refresh control status" }),
+  ).toBeInTheDocument();
+  healthy = true;
+  await waitFor(() =>
+    expect(screen.queryByText(/Request failed \(500\)/)).toBeNull(),
+  );
+  expect(screen.getByText(/start all: exit 0/)).toBeInTheDocument();
+});
+
+it("offers a retry when the first status never loaded (#2008)", async () => {
+  let healthy = false;
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (path: string) =>
+      path === "/control" && !healthy
+        ? { ok: false, status: 500, json: async () => ({}) }
+        : path === "/control"
+          ? ok({
+              writes_enabled: true,
+              lifecycle_actions: ["start"],
+              settable_fields: [],
+              processes: PROCESSES,
+              poll_seconds: 5,
+            })
+          : ok({ ok: true, gateway: "up", poll_seconds: 5, processes: [] }),
+    ),
+  );
+  await openControl();
+  const retry = await screen.findByRole("button", {
+    name: "Refresh control status",
+  });
+  healthy = true;
+  fireEvent.click(retry);
+  expect(
+    await screen.findByRole("button", { name: "start" }),
+  ).toBeInTheDocument();
+});
+
+it("confirms exactly the selection the confirmation opened for (#2009)", async () => {
+  const fetcher = mockApi(true, () => command("stop", "rdb1"));
+  await openControl();
+  fireEvent.click(await screen.findByRole("button", { name: "none" }));
+  fireEvent.click(
+    screen.getByText("rdb1").closest("label")!.querySelector("input")!,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "stop" }));
+  // the picker is frozen while the confirmation is open
+  expect(screen.getByRole("button", { name: "all" })).toBeDisabled();
+  fireEvent.click(screen.getByRole("button", { name: "all" }));
+  expect(
+    screen.getByRole("alertdialog", { name: "Confirm stop" }),
+  ).toHaveTextContent("stop rdb1?");
+  fireEvent.click(screen.getByRole("button", { name: "Confirm stop" }));
+  expect(await lifecycleBody(fetcher, "stop")).toEqual({ procs: "rdb1" });
+});
+
+it("sends a typed procname as one encoded path segment (#2015)", async () => {
+  const fetcher = mockApi(true, () => ok({ procname: "rdb1?x#y", config: {} }));
+  await openControl();
+  fireEvent.change(await screen.findByLabelText("Process"), {
+    target: { value: "rdb1?x#y" },
+  });
+  fireEvent.change(screen.getByLabelText("Field"), {
+    target: { value: "port" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Set field" }));
+  await waitFor(() =>
+    expect(
+      fetcher.mock.calls.map(([path]) => path).filter((p) => /config$/.test(p)),
+    ).toEqual(["/control/process/rdb1%3Fx%23y/config"]),
+  );
+});
+
+it("returns focus to the button that opened the confirmation (#2016)", async () => {
+  mockApi(true, () => command("stop", "all"));
+  await openControl();
+  const stop = await screen.findByRole("button", { name: "stop" });
+  stop.focus();
+  fireEvent.click(stop);
+  expect(document.activeElement).toBe(
+    screen.getByRole("button", { name: "Cancel" }),
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+  await waitFor(() => expect(document.activeElement).toBe(stop));
+
+  fireEvent.click(stop);
+  fireEvent.click(screen.getByRole("button", { name: "Confirm stop" }));
+  expect(await screen.findByText(/stop all: exit 0/)).toBeInTheDocument();
+  await waitFor(() => expect(document.activeElement).toBe(stop));
+});
