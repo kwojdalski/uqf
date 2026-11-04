@@ -181,7 +181,7 @@
 .qpipe.transform.markout_core.require_horizons:{[hs]
     if[not (16h=type hs) and 0<count hs; '"markout_core: horizons must be a non-empty list of timespans, e.g. 0D00:00:01 0D00:00:10"];
     if[any null hs; '"markout_core: horizons must not contain a null timespan"];
-    if[any (abs hs)=0Wn; '"markout_core: horizons must be finite, not an infinite timespan"];
+    if[any (hs=0Wn) or hs=-0Wn; '"markout_core: horizons must be finite, not an infinite timespan"];
     if[any 0<>(abs "j"$hs) mod 1000000; '"markout_core: horizons must be whole milliseconds, got a sub-millisecond offset"];
     if[not (count hs)=count distinct hs; '"markout_core: horizons must be distinct"];
     hs}
