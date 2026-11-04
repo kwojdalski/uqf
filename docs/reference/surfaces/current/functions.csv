@@ -255,8 +255,12 @@ qetl.job.bounded,validate,function,2,worker run_spec
 qetl.job.bounded,version_from_flags,function,2,opts worker
 qetl.job.bounded,worker_cfg,dict,,
 qetl.job.bounded,worker_root,value,,
+qetl.job.bounded.batching,cache,table,,
+qetl.job.bounded.batching,counts,dict,,
 qetl.job.bounded.batching,keys,value,,
 qetl.job.bounded.batching,plan,function,2,spec rows
+qetl.job.bounded.batching,reset_reads,function,1,
+qetl.job.bounded.batching,tick,value,,
 qetl.job.bounded.runtime,airflow_owned,value,,
 qetl.job.bounded.runtime,allows,function,1,effect
 qetl.job.bounded.runtime,backoff_ms,function,2,pol attempt
@@ -710,6 +714,8 @@ qetl.run,runs,function,1,
 qetl.run,table_path,function,1,name
 qetl.run,unfinished,function,1,
 qetl.source,ambiguous_message,function,3,tz bad cs
+qetl.source,batch_read,function,1,source
+qetl.source,batch_read_keys,value,,
 qetl.source,bound_padding,value,,
 qetl.source,clear_settings,function,1,
 qetl.source,clip_to_complete,function,5,worker source h live range_to
@@ -726,6 +732,7 @@ qetl.source,define,function,2,source decl
 qetl.source,defined,function,1,
 qetl.source,expand_path_vars,function,2,who txt
 qetl.source,fetch_window,function,4,source h range_from range_to
+qetl.source,fetch_window_via,function,5,source h range_from range_to read
 qetl.source,fixture_tag,value,,
 qetl.source,fixture_version,function,1,v
 qetl.source,fixture_writes_allowed,function,1,
@@ -1787,13 +1794,19 @@ qpipe.source.hdb_executions,source_name,value,,
 qpipe.source.hdb_executions,time_column,value,,
 qpipe.source.hdb_executions,types,value,,
 qpipe.source.hdb_executions,tz,value,,
+qpipe.source.hdb_fx_markouts,batch_read,dict,,
+qpipe.source.hdb_fx_markouts,book_bounds,function,2,range_from range_to
 qpipe.source.hdb_fx_markouts,columns,value,,
 qpipe.source.hdb_fx_markouts,complete_through,function,1,h
 qpipe.source.hdb_fx_markouts,conversion_pairs,function,2,spec rows
 qpipe.source.hdb_fx_markouts,fixture,function,1,
+qpipe.source.hdb_fx_markouts,needs,function,1,rows
 qpipe.source.hdb_fx_markouts,query,function,3,h range_from range_to
 qpipe.source.hdb_fx_markouts,raw_executions,function,1,
 qpipe.source.hdb_fx_markouts,raw_market_data,function,1,
+qpipe.source.hdb_fx_markouts,read_batch,function,4,h range_from range_to syms
+qpipe.source.hdb_fx_markouts,read_books,function,4,h syms range_from range_to
+qpipe.source.hdb_fx_markouts,read_executions,function,3,h range_from range_to
 qpipe.source.hdb_fx_markouts,ready,function,3,batch range_from range_to
 qpipe.source.hdb_fx_markouts,reference_read,dict,,
 qpipe.source.hdb_fx_markouts,reference_symbols,function,2,spec rows
@@ -1803,6 +1816,7 @@ qpipe.source.hdb_fx_markouts,supporting,dict,,
 qpipe.source.hdb_fx_markouts,time_column,value,,
 qpipe.source.hdb_fx_markouts,types,value,,
 qpipe.source.hdb_fx_markouts,tz,value,,
+qpipe.source.hdb_fx_markouts,window,function,3,h range_from range_to
 qpipe.source.hdb_market_data,columns,value,,
 qpipe.source.hdb_market_data,fixture,function,1,
 qpipe.source.hdb_market_data,query,function,3,h range_from range_to

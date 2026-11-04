@@ -10,10 +10,13 @@
 
 .qt.qetl.job.bounded.batching.worker:`hdb_fx_markouts_backfill
 
-.qt.qetl.job.bounded.batching.spec:{[mr;mg] `group_by`max_rows`max_groups`context!(enlist `sym;mr;mg;(::))}
+.qt.qetl.job.bounded.batching.spec:{[mr;mg] `group_by`max_rows`max_groups`context`source_read`reuse_rows!(enlist `sym;mr;mg;(::);`window;0)}
 
 / The one markout window: the fixture's day.
 .qt.qetl.job.bounded.batching.day:{[] (2026.09.17D00:00:00.000000000;2026.09.18D00:00:00.000000000)}
+
+/ The same window as a window is passed around: a dictionary of its bounds.
+.qt.qetl.job.bounded.batching.window:{[] `range_from`range_to!.qt.qetl.job.bounded.batching.day[]}
 
 / A worker's declaration as define would validate it, over a source: the error text, or the
 / normalised dictionary.
@@ -154,7 +157,7 @@
 
 .qt.qetl.job.bounded.batching.test_a_declaration_is_normalised:{[t]
     r:.qt.qetl.job.bounded.batching.required[`hdb_fx_markouts;`group_by`max_rows!(`sym;500)];
-    .qunit.assertEquals[r;`group_by`max_rows`max_groups`context!(enlist `sym;500;0W;(::));"one column becomes a vector, max_groups defaults to no limit, no context"]};
+    .qunit.assertEquals[r;`group_by`max_rows`max_groups`context`source_read`reuse_rows!(enlist `sym;500;0W;(::);`window;0);"one column becomes a vector, max_groups defaults to no limit, no context, the window read whole, nothing reused"]};
 
 .qt.qetl.job.bounded.batching.test_a_malformed_declaration_is_refused_by_name:{[t]
     req:.qt.qetl.job.bounded.batching.required;
@@ -243,7 +246,7 @@
     inputs[`market_data]:select from inputs`market_data where not sym=`EURPLN;
     plain:.qetl.job.bounded.transform_batch[`hdb_fx_markouts_backfill;inputs];
     .qt.qetl.job.bounded.batching.set_batching[.qt.qetl.job.bounded.batching.spec[1000;1]];
-    batched:.qetl.job.bounded.batching.apply[`hdb_fx_markouts_backfill;inputs];
+    batched:.qetl.job.bounded.batching.apply[`hdb_fx_markouts_backfill;.qt.qetl.job.bounded.batching.window[];inputs];
     k:`venue`fill_id`horizon`kind`step;
     .qunit.assertEquals[k xasc batched;k xasc plain;"unavailable in both, and the rows that are priced are untouched"];
     .qunit.assertTrue[0<exec sum status=`unavailable from batched where kind=`total;"the gap is reported, not dropped"]};
@@ -251,7 +254,7 @@
 .qt.qetl.job.bounded.batching.test_a_window_with_no_executions_is_transformed_as_one_and_keeps_the_outputs_shape:{[t]
     inputs:@[.qpipe.source.hdb_fx_markouts.fixture[];`executions;0#];
     .qt.qetl.job.bounded.batching.set_batching[.qt.qetl.job.bounded.batching.spec[1000;1]];
-    .qunit.assertEquals[.qetl.job.bounded.batching.apply[`hdb_fx_markouts_backfill;inputs];.qetl.job.bounded.transform_batch[`hdb_fx_markouts_backfill;inputs];"as an unbatched window's empty output"]};
+    .qunit.assertEquals[.qetl.job.bounded.batching.apply[`hdb_fx_markouts_backfill;.qt.qetl.job.bounded.batching.window[];inputs];.qetl.job.bounded.transform_batch[`hdb_fx_markouts_backfill;inputs];"as an unbatched window's empty output"]};
 
 / --- readiness (#1927) ---------------------------------------------------------------------------
 / The source says whether the window can be scored, between fetch and transform, over the WHOLE window.
@@ -310,7 +313,7 @@
     inputs:.qt.qetl.job.bounded.batching.late_inputs[];
     plain:.qetl.job.bounded.transform_batch[`hdb_fx_markouts_backfill;inputs];
     .qt.qetl.job.bounded.batching.set_batching[.qt.qetl.job.bounded.batching.spec[1000;1]];
-    twin:.qetl.job.bounded.batching.apply[`hdb_fx_markouts_backfill;inputs];
+    twin:.qetl.job.bounded.batching.apply[`hdb_fx_markouts_backfill;.qt.qetl.job.bounded.batching.window[];inputs];
     k:`venue`fill_id`horizon`kind`step;
     .qunit.assertEquals[k xasc twin;k xasc plain;"the premise: the batched rows are the unbatched rows (three batches, one a crypto fill that scores nothing)"];
     live:update time:2026.09.18D00:00:03.000000000 from delete time from twin;
@@ -333,7 +336,7 @@
     / every execution is the crypto fill: each batch scores nothing
     none:@[inputs;`executions;{select from x where sym=`$"BTC-USDT"}];
     .qt.qetl.job.bounded.batching.set_batching[.qt.qetl.job.bounded.batching.spec[1000;1]];
-    out:.qetl.job.bounded.batching.apply[`hdb_fx_markouts_backfill;none];
+    out:.qetl.job.bounded.batching.apply[`hdb_fx_markouts_backfill;.qt.qetl.job.bounded.batching.window[];none];
     .qunit.assertEquals[count out;0;"nothing is scored, batched"];
     d:.qetl.job.bounded.def `hdb_fx_markouts_backfill;
     o:`on_conflict`row_key`time_column`range_from`range_to!(`replace;d`target_key;d`window_column;2026.09.17D00:00:00.000000000;2026.09.18D00:00:00.000000000);
@@ -351,7 +354,7 @@
     spec:.qt.qetl.job.bounded.batching.spec[1000;1];
     spec[`context]:.qt.qetl.job.bounded.batching.failing_context;
     .qt.qetl.job.bounded.batching.set_batching[spec];
-    .qunit.assertThrows[.qetl.job.bounded.batching.apply[`hdb_fx_markouts_backfill;];.qpipe.source.hdb_fx_markouts.fixture[];
+    .qunit.assertThrows[.qetl.job.bounded.batching.apply[`hdb_fx_markouts_backfill;.qt.qetl.job.bounded.batching.window[];];.qpipe.source.hdb_fx_markouts.fixture[];
         "batch * of 3 (1 rows): boom";"which batch, how many, how big, and why"]};
 
 .qt.qetl.job.bounded.batching.test_a_failing_batch_fails_the_window_before_anything_is_written_or_covered:{[t]
@@ -377,7 +380,7 @@
 
 .qt.qetl.job.bounded.batching.test_a_group_over_the_limit_fails_the_window_with_the_refusal:{[t]
     .qt.qetl.job.bounded.batching.set_batching[.qt.qetl.job.bounded.batching.spec[1;1]];
-    .qunit.assertThrows[.qetl.job.bounded.batching.apply[`hdb_fx_markouts_backfill;];
+    .qunit.assertThrows[.qetl.job.bounded.batching.apply[`hdb_fx_markouts_backfill;.qt.qetl.job.bounded.batching.window[];];
         enlist[`executions]!enlist .qpipe.source.hdb_fx_markouts.raw_executions[] , .qpipe.source.hdb_fx_markouts.raw_executions[];
         "batching: the group sym=`BTC-USDT has 2 rows, over max_rows 1*";"too big to batch: refused, not run over the limit"]};
 
@@ -385,4 +388,4 @@
 
 .qt.qetl.job.bounded.batching.test_an_unbatched_worker_transforms_through_the_one_primitive:{[t]
     f:.qpipe.source.hdb_fx_markouts.fixture[];
-    .qunit.assertEquals[.qetl.job.bounded.transform_window[`hdb_fx_markouts_backfill;f];.qetl.job.bounded.transform_batch[`hdb_fx_markouts_backfill;f];"no batching declared, no change"]};
+    .qunit.assertEquals[.qetl.job.bounded.transform_window[`hdb_fx_markouts_backfill;.qt.qetl.job.bounded.batching.window[];f];.qetl.job.bounded.transform_batch[`hdb_fx_markouts_backfill;f];"no batching declared, no change"]};

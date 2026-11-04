@@ -180,6 +180,19 @@
 / bounds out, timestamps back - so neither the query nor the fixture author
 / has to know about zones. See source_bounds and narrow_to_utc.
 .qetl.source.fetch_window:{[source;h;range_from;range_to]
+    .qetl.source.fetch_window_via[source;h;range_from;range_to;(.qetl.source.def source)`query]}
+
+/ fetch_window with the live read named: a source that reads a window in two steps
+/ (batch_read, #1921) fetches its first step through the same bounds, validation and
+/ logging as the one-step query. The fixture path is the same as fetch_window's.
+/ @param source a registered source name
+/ @param h an open handle, or 0Ni when running on the fixture
+/ @param range_from window start
+/ @param range_to window end, exclusive
+/ @param read a lambda taking (handle;range_from;range_to), the live read to use
+/ @return (`live or `fixture; the table)
+/ @eg .qetl.source.fetch_window_via[`demo_deals;0Ni;2026.09.11D00:00;2026.09.12D00:00;{[h;a;b] ()}] 0  ->  `fixture
+.qetl.source.fetch_window_via:{[source;h;range_from;range_to;read]
     t0:.z.p;
     decl:.qetl.source.def[source];
     bounds:.qetl.source.source_bounds[decl;range_from;range_to];
@@ -188,7 +201,7 @@
             ($[null h;`fixture;`live];range_from;range_to;bounds 0;bounds 1;decl`tz));::];
     page:$[null h;
         (`fixture;.qetl.source.window_fixture[decl;bounds 0;bounds 1]);
-        (`live;(decl`query)[h;bounds 0;bounds 1])];
+        (`live;read[h;bounds 0;bounds 1])];
     out:.qetl.source.narrow_to_utc[decl;page 1;range_from;range_to];
     if[(page 0)=`live; .qetl.source.require_live_window[source;decl;out;range_from;range_to]];
     / fetched vs kept differ only for a zoned source, whose bounds are padded:

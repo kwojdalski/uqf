@@ -935,7 +935,7 @@
     r:.qetl.log.with_context[enlist[`source]!enlist cfg`source;
         .qetl.job.bounded.runtime.with_retry;
         (.qetl.job.bounded.runtime.policy[];
-         {[source;h;from_ts;to_ts;unused] last .qetl.source.fetch_window[source;h;from_ts;to_ts]}[cfg`source;h;from_ts;to_ts])];
+         {[worker;h;from_ts;to_ts;unused] last .qetl.job.bounded.batching.fetch_window[worker;h;from_ts;to_ts]}[worker;h;from_ts;to_ts])];
     .qetl.log.dbg[worker;"fetch attempted";
         `range_from`range_to`state`attempts`rows!(from_ts;to_ts;r`state;r`attempts;
             $[`ok~r`state; count .qetl.source.primary[cfg`source;r`result]; 0N])];
@@ -1373,7 +1373,7 @@
 / window like a failed fetch.
 / @private
 .qetl.job.bounded.stage_transform:{[worker;s]
-    out:@[.qetl.job.bounded.transform_window[worker;];s`batch;{[e] (`transform_failed;e)}];
+    out:@[.qetl.job.bounded.transform_window[worker;s`window;];s`batch;{[e] (`transform_failed;e)}];
     if[(0h=type out) and `transform_failed~first out;
         :.qetl.job.bounded.failed_with[s;"window failed transform";`transform`error!((s`cfg)`transform;last out)]];
     @[s;`batch;:;out]}

@@ -19,6 +19,11 @@
 /   context     optional {[supporting;rows] -> supporting}: the supporting inputs a batch
 /               of these primary rows needs, out of the window's. Without it every batch
 /               is given all of them. Only for a source that declares supporting inputs.
+/   source_read optional `window (default: the window's references are read once) or
+/               `batch (each batch reads its own from the source). `batch needs a source
+/               that declares batch_read, and replaces `context: the source narrows.
+/   reuse_rows  optional, default 0: the most reference rows kept between batches so one
+/               batch's read can serve the next. Needs source_read `batch.
 / .
 / WHAT THE WINDOW DOES WITH IT. The window is fetched ONCE, as it always was, so no batch
 / reads the source again. Its primary rows are planned into batches, each batch is
@@ -37,6 +42,16 @@
 /     and a row stamped after midnight included;
 /   - the durable partitions are not touched: batching creates none.
 / .
+/ SOURCE-SIDE READS (#1921). By default the window's references are read once, whole. A source that
+/ declares `batch_read` (source_batch_read.q) lets the worker say `source_read:`batch: the window is
+/ fetched as its primary rows and a presence summary of the references, `ready` judges the WHOLE
+/ window on that summary exactly as before, and each batch then reads from the source only the
+/ reference keys its own rows need (the source's `needs`, for the FX markouts the legs and the
+/ conversion pairs). Nothing is written until every batch has been read and transformed, so all of
+/ the above holds unchanged. `reuse_rows` lets a book one batch read serve the next, within that
+/ many cached rows, least recently used out first, keyed by worker, source_version and window so
+/ that a different version or window can never be served from it (bounded_batch_read.q).
+/ .
 / WHAT THE WORKER CLAIMS. That its transform, given a group's rows and the context
 / declared for them, produces that group's output whatever other groups are in the window.
 / The framework cannot check that; tests that compare a batched with an unbatched run
@@ -47,7 +62,7 @@
 \d .
 
 / The keys a `batching` declaration may carry.
-.qetl.job.bounded.batching.keys:`group_by`max_rows`max_groups`context
+.qetl.job.bounded.batching.keys:`group_by`max_rows`max_groups`context`source_read`reuse_rows
 
 / ------------------------------------------------------------ DECLARATION
 
@@ -72,10 +87,25 @@
     if[count absent; 'who," needs ",", " sv string absent];
     src:.qetl.source.def decl`source;
     limits:.qetl.job.bounded.batching.require_limits[who;b];
-    `group_by`max_rows`max_groups`context!(
+    ctx:.qetl.job.bounded.batching.require_context[who;decl`source;src;b];
+    rd:.qetl.job.bounded.batching.require_read[who;decl`source;src;b;ctx];
+    `group_by`max_rows`max_groups`context`source_read`reuse_rows!(
         .qetl.job.bounded.batching.require_group_by[who;decl`source;src;b`group_by];
-        limits 0;limits 1;
-        .qetl.job.bounded.batching.require_context[who;decl`source;src;b])}
+        limits 0;limits 1;ctx;rd 0;rd 1)}
+
+/ Private: (source_read; reuse_rows), each checked against the source and the context.
+/ @private
+.qetl.job.bounded.batching.require_read:{[who;source;src;b;ctx]
+    sr:$[`source_read in key b; b`source_read; `window];
+    if[not (-11h=type sr) and sr in `window`batch; 'who,"'s source_read must be `window or `batch"];
+    rr:$[`reuse_rows in key b; b`reuse_rows; 0];
+    if[not (-7h=type rr) and (rr>=0) and rr<0W; 'who,"'s reuse_rows must be a non-negative, finite long - the most reference rows kept between batches"];
+    if[(sr=`window) and rr>0; 'who,"'s reuse_rows needs source_read `batch: a window read whole has nothing to reuse"];
+    if[sr=`batch;
+        if[not 99h=type src`batch_read;
+            'who,"'s source_read `batch needs a source that declares batch_read, and ",string[source]," declares none"];
+        if[not (::)~ctx; 'who,"'s source_read `batch replaces context: the source reads each batch's own references"]];
+    (sr;rr)}
 
 / Private: the group_by columns, as a symbol vector of the source's own columns.
 / @private
@@ -206,13 +236,14 @@
 / batch when the worker declares `batching (bounded_batching.q, #1921). The one place that
 / decides, so a window and a reaction's replay of it cannot disagree.
 / @param worker the worker's name
+/ @param w the window, a dict of range_from and range_to
 / @param batch the fetched window
 / @return the transform's output for the window
 / @private
-.qetl.job.bounded.transform_window:{[worker;batch]
+.qetl.job.bounded.transform_window:{[worker;w;batch]
     $[(::)~(.qetl.job.bounded.def worker)`batching;
         .qetl.job.bounded.transform_batch[worker;batch];
-        .qetl.job.bounded.batching.apply[worker;batch]]}
+        .qetl.job.bounded.batching.apply[worker;w;batch]]}
 
 / ------------------------------------------------------------------ APPLY
 
@@ -225,16 +256,46 @@
     sup:(key batch) except table_name;
     $[(::)~ctx; given,sup#batch; given,ctx[sup#batch;rows]]}
 
+/ Private: is this window's references read a batch at a time from the source? The worker
+/ asks for it AND it is a live run: the fixture has no source to read from, and its window
+/ already holds every reference.
+/ @private
+.qetl.job.bounded.batching.by_source:{[worker;spec]
+    $[`batch=spec`source_read; 1b~.qetl.job.bounded.read_state[worker;`live]; 0b]}
+
+/ Private: one batch, read (when the source reads it) and transformed; a failure names the batch.
+/ @param st the values every batch shares: worker, spec, table_name, sup, batch, prim, n, w, bysrc
+/ @param i the batch's position
+/ @param idx the batch's primary row indexes
+/ @return the batch's transformed output
+/ @private
+.qetl.job.bounded.batching.run_batch:{[st;i;idx]
+    / the inputs are built INSIDE the trap: a context or a read that throws names its batch too
+    r:@[{[st;idx]
+            given:$[st`bysrc;
+                .qetl.job.bounded.batching.source_inputs[st`worker;st`spec;st`table_name;st`w;(st`prim) idx];
+                st`sup;
+                .qetl.job.bounded.batching.inputs[st`spec;st`table_name;st`batch;idx];
+                (st`prim) idx];
+            (1b;.qetl.job.bounded.transform_batch[st`worker;given])}[st;];idx;{[e] (0b;e)}];
+    if[not first r;
+        '"batch ",string[1+i]," of ",string[st`n]," (",string[count idx]," rows): ",last r];
+    last r}
+
 / Transform a fetched window batch by batch and join the outputs.
 / .
 / A batch that fails fails the whole call, naming the batch - the window then fails
 / before anything is published. A window with no primary rows is transformed as one,
 / as an unbatched window is, so its empty output keeps the transform's own shape.
+/ .
+/ With source_read `batch on a live run the window's supporting inputs are only the presence
+/ summary `ready` judged: no batch is given them. Each reads its own from the source.
 / @param worker a defined worker with a batching declaration
+/ @param w the window, a dict of range_from and range_to
 / @param batch the fetched window: a table, or a dictionary of the source's inputs
 / @return the joined output, as .qetl.job.bounded.transform_batch returns it
 / @private
-.qetl.job.bounded.batching.apply:{[worker;batch]
+.qetl.job.bounded.batching.apply:{[worker;w;batch]
     cfg:.qetl.job.bounded.def worker;
     src:.qetl.source.def cfg`source;
     spec:cfg`batching;
@@ -244,18 +305,11 @@
     if[0=count plan; :.qetl.job.bounded.transform_batch[worker;batch]];
     .qetl.log.dbg[worker;"window planned into batches";
         `batches`rows`max_rows`max_groups!(count plan;count prim;spec`max_rows;spec`max_groups)];
+    bysrc:.qetl.job.bounded.batching.by_source[worker;spec];
+    if[bysrc; .qetl.job.bounded.batching.begin_reads[worker;w]];
     / the values every batch shares, in one dictionary: a q lambda takes at most eight arguments
-    st:`worker`spec`table_name`sup`batch`prim`n!(worker;spec;src`table_name;sup;batch;prim;count plan);
-    outs:{[st;i;idx]
-        / the inputs are built INSIDE the trap: a context that throws names its batch too
-        r:@[{[st;idx]
-                given:$[st`sup;
-                    .qetl.job.bounded.batching.inputs[st`spec;st`table_name;st`batch;idx];
-                    (st`prim) idx];
-                (1b;.qetl.job.bounded.transform_batch[st`worker;given])}[st;];idx;{[e] (0b;e)}];
-        if[not first r;
-            '"batch ",string[1+i]," of ",string[st`n]," (",string[count idx]," rows): ",last r];
-        last r}[st]'[til count plan;plan];
+    st:`worker`spec`table_name`sup`batch`prim`n`w`bysrc!(worker;spec;src`table_name;sup;batch;prim;count plan;w;bysrc);
+    outs:.qetl.job.bounded.batching.run_batch[st]'[til count plan;plan];
     raze outs}
 
 \d .
