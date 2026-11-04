@@ -31,11 +31,13 @@ tunnel check` keeps (`annotate`), and a mapping is `verified`, `stale` or
 
 from __future__ import annotations
 
+import fcntl
 import json
 import os
 import shlex
 import socket
 import subprocess
+import tempfile
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import asdict, dataclass, field, replace
 from datetime import UTC, datetime, timedelta
@@ -270,16 +272,32 @@ def read_checks(root: Path) -> dict[str, dict[str, dict[str, Any]]]:
 
 def record_checks(root: Path, target: str, succeeded: Mapping[str, dict[str, Any]]) -> None:
     """Keep each process's newest successful check; a failure changes nothing,
-    so the last success stays visible beside it."""
+    so the last success stays visible beside it.
+
+    The read-modify-write holds an ``flock`` on a lock file beside the record,
+    so a check from the frontend and one from `uqs target tunnel check` at the
+    same moment each keep the other's targets (#2063); the document goes
+    through a temp file of its own and one rename, so a reader never sees half
+    of it. A write that fails raises, and leaves the record as it was."""
     if not succeeded:
         return
-    every = read_checks(root)
-    every.setdefault(target, {}).update(succeeded)
     path = checks_path(root)
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(".tmp")
-    tmp.write_text(json.dumps({"targets": every}, indent=2, sort_keys=True) + "\n")
-    tmp.replace(path)
+    with path.with_name(path.name + ".lock").open("a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        try:
+            every = read_checks(root)
+            every.setdefault(target, {}).update(succeeded)
+            fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
+            try:
+                with os.fdopen(fd, "w") as out:
+                    out.write(json.dumps({"targets": every}, indent=2, sort_keys=True) + "\n")
+                os.replace(tmp, path)
+            except BaseException:
+                Path(tmp).unlink(missing_ok=True)
+                raise
+        finally:
+            fcntl.flock(lock, fcntl.LOCK_UN)
 
 
 def local_listening(port: int) -> bool:
