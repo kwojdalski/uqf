@@ -72,7 +72,7 @@
 / the names are .qetl.job.bounded.defined.
 .qetl.job.bounded.worker_cfg:([name:`symbol$()] source:`symbol$(); dataset:`symbol$(); width:`timespan$();
     transform:`symbol$(); ns:`symbol$(); partition:`symbol$(); procname:`symbol$(); note:();
-    on_conflict:`symbol$(); source_version:`symbol$(); target_key:(); check:(); io:(); facts:(); window_column:`symbol$(); partition_column:`symbol$(); revision:`long$(); align:`timespan$(); batching:())
+    on_conflict:`symbol$(); source_version:`symbol$(); target_key:(); check:(); io:(); facts:(); window_column:`symbol$(); partition_column:`symbol$(); revision:`long$(); align:`timespan$(); batching:(); pin:())
 
 / Every defined worker's name.
 / @return a symbol vector, empty when no worker has been defined
@@ -193,8 +193,8 @@
 / this is where anything needing domain knowledge goes: the min and max of
 / the time column, a null fraction on the column that matters, a checksum.
 / Optional, for the same reason `check` is: metadata written to satisfy a
-/ requirement rather than to be read is worse than none.
-.qetl.job.bounded.optional_cfg:`check`io`facts`partition`batching
+/ requirement rather than to be read is worse than none. `pin` is the configuration-snapshot hook (bounded_pin.q, #1999).
+.qetl.job.bounded.optional_cfg:`check`io`facts`partition`batching`pin
 
 / Declare a worker's configuration.
 / .
@@ -211,7 +211,7 @@
 /   require_window_column), partition_column (the output column holding the partition, #1476) and
 /   source_version (the default release a run records coverage under; none
 /   by default, so a run must name one), revision (the output logic's, #1097), align (bar width; an unaligned run is refused, #1303) and
-/   batching (compute batching inside a window, off unless declared - bounded_batching.q, #1921)
+/   batching (compute batching inside a window, off unless declared - bounded_batching.q, #1921) and pin (a niladic function recording the configuration snapshot its rows name - bounded_pin.q)
 / @throws error naming every missing or malformed field at once
 .qetl.job.bounded.define:{[worker;decl]
     / Both execution modes share .qpipe.job, so a name cannot belong to both.
@@ -304,7 +304,7 @@
     / Batching is validated and normalised HERE, only when declared: a stored declaration
     / read back with .qetl.job.bounded.def carries (::) for it, and that is "off", not a malformed dictionary.
     if[$[`batching in key decl; not (::)~decl`batching; 0b]; decl[`batching]:.qetl.job.bounded.batching.require[worker;decl]];
-    decl[`revision]:.qetl.job.bounded.runtime.require_revision[worker;decl]; decl[`align]:.qetl.job.bounded.runtime.require_align[worker;decl]; decl[`partition_column]:.qetl.job.bounded.runtime.require_partition_column[worker;decl];
+    decl[`revision]:.qetl.job.bounded.runtime.require_revision[worker;decl]; decl[`align]:.qetl.job.bounded.runtime.require_align[worker;decl]; decl[`partition_column]:.qetl.job.bounded.runtime.require_partition_column[worker;decl]; decl[`pin]:.qetl.job.bounded.require_pin[worker;decl];
     / Mask over the WHOLE registry first, then drop this worker - filtering the key
     / list before applying the mask pairs a shortened list with a full-length
     / boolean, which q indexes without complaint and which reports the wrong
@@ -1058,7 +1058,7 @@
     / the run's ledger row too, so every window this run materialises is
     / attributable to it, and an execution that dies mid-flight leaves a row
     / reading `running rather than no trace - see .qetl.run's header.
-    .qetl.job.bounded.advance_phase[worker;`running;""];
+    .qetl.job.bounded.advance_phase[worker;`running;""]; .qetl.job.bounded.pin_config worker; / pinned before anything is planned or fetched (bounded_pin.q)
     recovered:.qetl.job.bounded.recover_unfinished worker;
     replayed:.qetl.job.bounded.replay_reactions worker;
     cursor:.qetl.job.bounded.state.load_checkpoint[worker;.qetl.job.bounded.spec worker];

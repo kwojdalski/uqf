@@ -33,6 +33,8 @@ remains, where the person running it is at a terminal on the host.
 from __future__ import annotations
 
 import datetime as dt
+import re
+import time
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -40,7 +42,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from uqf_frontend.config import Settings
-from uqf_frontend.errors import ValidationFailed, WritesDisabled
+from uqf_frontend.errors import StackBusy, ValidationFailed, WritesDisabled
 from uqs.generated.q_facts import CFG_ENV_LAYER, CFG_OVERRIDE_LAYER
 from uqs.model.qnames import config_env_var
 
@@ -81,18 +83,36 @@ LIFECYCLE_ACTIONS = ("start", "stop", "restart")
 HTTP_REFUSED_FIELDS = frozenset({"qcmd", "host"})
 
 
+#: How long a lifecycle action waits, after torq.sh returns, for the processes
+#: it named to reach the state it promised, and how often it looks (#2027).
+#: torq.sh starts a process in the background and stops one with a signal, so
+#: neither is done the instant torq.sh exits.
+VERIFY_SECONDS = 10.0
+VERIFY_POLL_SECONDS = 0.5
+
+#: torq.sh's line for a stop that found no process: `HH:MM:SS | rdb1 is not
+#: currently running`. It exits 0 either way.
+_NOT_RUNNING = re.compile(r"\|\s*(\S+) is not currently running")
+
+
 @dataclass(frozen=True)
 class CommandResult:
-    """What a subprocess-backed action did."""
+    """What a subprocess-backed action did.
+
+    *problems* are what the process table showed after torq.sh returned and
+    contradicted it (#2027): torq.sh exits 0 for "nothing to stop" and for a
+    start whose process died at once, so its exit code alone is not success.
+    """
 
     action: str
     target: str
     exit_code: int
     output: str
+    problems: tuple[str, ...] = ()
 
     @property
     def ok(self) -> bool:
-        return self.exit_code == 0
+        return self.exit_code == 0 and not self.problems
 
 
 def require_writes(settings: Settings) -> None:
@@ -159,26 +179,127 @@ def lifecycle(settings: Settings, action: str, procs: str) -> CommandResult:
 
     fn = {"start": runtime.start, "stop": runtime.stop, "restart": runtime.restart}[action]
     paths = _paths(settings)
-    _acting()
-    try:
-        # Bounded just inside the browser's own wait (config.lifecycle_timeout),
-        # so a slow `start all` is refused here rather than timing out in the
-        # browser while torq.sh is still running and inviting a second Start.
-        result = fn(
-            paths,
-            procs,
-            base_port=settings.base_port,
-            capture=True,
-            timeout=settings.lifecycle_timeout,
-        )
-    except UqsError as exc:
-        raise ValidationFailed(str(exc)) from None
+    # The base port the stack runs on NOW - setenv.sh as the last bootstrap
+    # wrote it - not the one the frontend started with: after `uqs restart
+    # --base-port 7050` the old one stopped nothing and reported ok (#2027).
+    base_port = settings.facts().base_port
+    started_at = time.monotonic()
+    # The whole action holds the stack - the look before, torq.sh, the look
+    # after - so a second one cannot interleave with it (#2028).
+    with _holding(paths):
+        try:
+            before = _observe(paths, base_port)
+        except UqsError as exc:
+            raise ValidationFailed(str(exc)) from None
+        _acting()
+        try:
+            # Bounded just inside the browser's own wait (config.lifecycle_timeout),
+            # so a slow `start all` is refused here rather than timing out in the
+            # browser while torq.sh is still running and inviting a second Start.
+            result = fn(
+                paths,
+                procs,
+                base_port=base_port,
+                capture=True,
+                timeout=settings.lifecycle_timeout,
+            )
+        except UqsError as exc:
+            raise ValidationFailed(str(exc)) from None
+        output = (result.stdout or "").strip()
+        problems: tuple[str, ...] = ()
+        if result.returncode == 0:
+            deadline = min(
+                started_at + settings.lifecycle_timeout, time.monotonic() + VERIFY_SECONDS
+            )
+            problems = _verify(paths, base_port, action, procs, before, output, deadline)
     return CommandResult(
         action=action,
         target=procs,
         exit_code=result.returncode,
-        output=(result.stdout or "").strip(),
+        output="\n".join((output, *problems)).strip(),
+        problems=problems,
     )
+
+
+@contextmanager
+def _holding(paths: Any) -> Iterator[None]:
+    """The stack's lifecycle lock (uqs.stack.generated), or StackBusy at once:
+    refused rather than queued behind another start, stop or restart. The
+    torq.sh run inside takes it again, which the lock allows."""
+    from uqs.stack import generated
+
+    try:
+        with generated.lifecycle_lock(paths, wait=0):
+            yield
+    except generated.StackBusy as exc:
+        raise StackBusy(str(exc)) from None
+
+
+def _observe(paths: Any, base_port: int) -> dict[str, list[int]]:
+    """procname -> the pids running it at *base_port*, for every process of
+    this stack on this host: the same match torq.sh's findproc makes
+    (uqs.stack.alive). A process configured on another host is absent."""
+    from uqs.stack import alive
+
+    return alive.instances(paths, base_port, timeout=10)
+
+
+def _verify(
+    paths: Any,
+    base_port: int,
+    action: str,
+    procs: str,
+    before: dict[str, list[int]],
+    output: str,
+    deadline: float,
+) -> tuple[str, ...]:
+    """What contradicts torq.sh's exit code 0, or nothing (#2027).
+
+    A stop that torq.sh says found nothing, of a process that was up just
+    before, looked in the wrong place. Otherwise each named process this host
+    can see must reach the state the action promised - down after a stop, up
+    after a start or restart - by *deadline*.
+    """
+    if not before:
+        return ()
+    problems = [
+        f"{name} was running (pid {before[name][-1]}) at base port {base_port}, but torq.sh "
+        f"reported it not running - nothing was stopped"
+        for name in _NOT_RUNNING.findall(output)
+        if before.get(name)
+    ]
+    if problems:
+        return tuple(problems)
+    names = [n for n in _targets(paths, procs) if n in before]
+    want_up = action != "stop"
+    while True:
+        now = _observe(paths, base_port)
+        wrong = [n for n in names if bool(now.get(n)) != want_up]
+        if not wrong or time.monotonic() >= deadline:
+            break
+        time.sleep(VERIFY_POLL_SECONDS)
+    if want_up:
+        return tuple(
+            f"{n} is not running after {action} at base port {base_port} - see `uqs logs {n}`"
+            for n in wrong
+        )
+    return tuple(
+        f"{n} is still running (pid {now[n][-1]}) at base port {base_port} after stop"
+        for n in wrong
+    )
+
+
+def _targets(paths: Any, procs: str) -> list[str]:
+    """The processes torq.sh's selector names: `all` is the startwithall rows."""
+    if procs.strip() != "all":
+        return procs.split()
+    from uqs.stack import procs as stack_procs
+
+    return [
+        row["procname"]
+        for row in stack_procs.list_process_choices(paths)
+        if row["startwithall"] == "1"
+    ]
 
 
 def set_process_field(settings: Settings, procname: str, field: str, value: str) -> dict[str, str]:
@@ -203,7 +324,7 @@ def set_process_field(settings: Settings, procname: str, field: str, value: str)
     _acting()
     try:
         stack_procs.set_process_config(paths, procname, field, value)
-        return stack_procs.get_process_config(paths, procname, base_port=settings.base_port)
+        return stack_procs.get_process_config(paths, procname, base_port=settings.facts().base_port)
     except UqsError as exc:
         raise ValidationFailed(str(exc)) from None
 
@@ -364,15 +485,17 @@ def start_backfill(
     paths = _paths(settings)
     try:
         procname = procname_for(worker)
-        _acting()
-        result = start_backfill(
-            paths,
-            worker,
-            source_version,
-            bound_from,
-            bound_to,
-            base_port=settings.base_port,
-        )
+        # Refused, like a lifecycle action, while another holds the stack (#2028).
+        with _holding(paths):
+            _acting()
+            result = start_backfill(
+                paths,
+                worker,
+                source_version,
+                bound_from,
+                bound_to,
+                base_port=settings.facts().base_port,
+            )
     except UqsError as exc:
         raise ValidationFailed(str(exc)) from None
     if result.returncode != 0:

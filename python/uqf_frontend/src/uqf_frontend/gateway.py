@@ -147,6 +147,7 @@ class KolaGateway:
         self._login = login or (settings.user, settings.passwd)
         self._connect = connect or self._kola_connect
         self._idle: list[Any] = []
+        self._pool_address: tuple[str, int] | None = None
         self._lock = threading.Lock()
         self._data: KolaGateway | None = None
 
@@ -186,26 +187,44 @@ class KolaGateway:
         return Browsed(rows=read["rows"], cap=int(read["cap"]))
 
     def _exec(self, program: str, args: tuple[Any, ...]) -> Any:
-        q = self._checkout()
+        address = self.address()
+        q = self._checkout(address)
         try:
             result = q.sync(program, *args)
         except Exception as exc:
             _close(q)
             raise _classify(exc) from exc
-        self._checkin(q)
+        self._checkin(q, address)
         return result
 
-    def _checkout(self) -> Any:
+    def address(self) -> tuple[str, int]:
+        """The gateway's host and port as the stack declares them now (#2027)."""
+        facts = self._settings.facts()
+        return facts.host, facts.port
+
+    def _checkout(self, address: tuple[str, int] | None = None) -> Any:
+        address = address or self.address()
         with self._lock:
+            # A handle opened to where the gateway USED to be is not reused:
+            # after a restart on another base port it would answer as
+            # whatever now holds the old port, or not at all.
+            if address != self._pool_address:
+                stale, self._idle, self._pool_address = self._idle, [], address
+            else:
+                stale = []
             if self._idle:
                 return self._idle.pop()
+        for q in stale:
+            _close(q)
         # Outside the lock: a slow connect must not stall requests that have
         # an idle handle waiting.
         return self._connect()
 
-    def _checkin(self, q: Any) -> None:
+    def _checkin(self, q: Any, address: tuple[str, int] | None = None) -> None:
         with self._lock:
-            if len(self._idle) < self.MAX_IDLE:
+            # Opened before the gateway moved: not pooled with the new ones.
+            current = address is None or address == self._pool_address
+            if current and len(self._idle) < self.MAX_IDLE:
                 self._idle.append(q)
                 return
         _close(q)
@@ -224,10 +243,11 @@ class KolaGateway:
         import kola
 
         s = self._settings
+        host, port = self.address()
         try:
             q = kola.Q(
-                kola_host(s.host, s.timeout),
-                s.port,
+                kola_host(host, s.timeout),
+                port,
                 user=self._login[0],
                 passwd=self._login[1],
                 timeout=s.timeout,
@@ -244,7 +264,7 @@ class KolaGateway:
             # nothing about where the setting lives - so the reader is left
             # guessing at a package they did not write.
             raise GatewayUnavailable(
-                f"gateway at {s.host}:{s.port} is not reachable: {exc} "
+                f"gateway at {host}:{port} is not reachable: {exc} "
                 f"(set UQF_FRONTEND_STACK_ROOT and UQF_FRONTEND_GATEWAY_USER / _PASSWORD; "
                 f"against the local demo stack that is the checkout and admin/admin)"
             ) from exc

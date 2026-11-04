@@ -655,3 +655,49 @@ pre.diff {
   border: 1px solid #8a8f98;
   border-radius: 4px;
 }
+/* Desk: Table / Plot (#2043) */
+.toggle {
+  display: inline-flex;
+  margin-left: auto;
+}
+.toggle button {
+  border-radius: 0;
+}
+.toggle button:first-child {
+  border-radius: 5px 0 0 5px;
+}
+.toggle button:last-child {
+  border-radius: 0 5px 5px 0;
+  border-left: 0;
+}
+.toggle button[aria-pressed="true"] {
+  background: #e8eefb;
+  border-color: var(--blue);
+  color: var(--blue);
+}
+.plot-y {
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1rem;
+  grid-column: 1 / -1;
+  margin: 0;
+}
+.plot-y legend {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #3f5067;
+}
+.plot-y label.check {
+  flex-direction: row;
+  align-items: center;
+  font-weight: 500;
+}
+.plot-y input {
+  width: auto;
+}
+.plot {
+  margin-top: 1rem;
+  min-width: 0;
+}

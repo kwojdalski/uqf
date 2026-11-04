@@ -163,6 +163,30 @@ person (a column rewrite, as for any stored value). A partition with no
 `market`/`source` (or `venue`) column to read is `unknown` throughout. The run
 prints how many rows of each partition got each clock.
 
+### The markout configuration columns: folded into snapshots (#1999)
+
+A markout row used to repeat `contract_version`, `rate_timing` and `report_ccy`.
+It now carries one `config_id`, the write-once configuration snapshot it was
+produced under (`uqs data snapshot list`, `uqs data snapshot show ID`). A
+partition of `fx_markout`, `fx_markout_wide` or `crypto_markout` written the old
+way is migrated by `uqs data check --apply`, which says so when it asks:
+
+1. one **legacy** snapshot is recorded for each distinct
+   `(contract_version, rate_timing, report_ccy)` in the partition, in the status
+   directory (`markout_legacy_...`; the same triple in two partitions is one
+   snapshot);
+2. a `config_id` column is written naming each row's;
+3. only then are the three columns dropped.
+
+An interruption between 2 and 3 leaves the old columns beside a good
+`config_id`, and the next run only drops them. A partition older than the
+columns holds none to read: its rows are contract version 1, with the rate
+timing and reporting currency unknown. The bootstrap fill that runs with every
+`uqs` command **never** does this - it leaves an existing markout partition as
+it was, and `uqs data check` reports its missing `config_id` until `--apply` -
+because it is the one repair here that deletes a column. The run prints each
+partition's snapshots and the columns it dropped.
+
 ### `crypto_trades.source_time`: history has no venue time (#1936)
 
 cryptorust's fills recorder began sending the venue's own time for each fill as
@@ -347,6 +371,21 @@ uqs connector restart kafka --group uqf-replay     # start's options, given agai
 uqs connector logs kafka -f
 uqs connector stop kafka
 eval "$(uqs setup odbc env)"                       # this shell, on the private ODBC setup
+```
+
+`uqs data snapshot` reads the write-once configuration snapshots that markout
+rows name by `config_id` (#1999). Both commands only read:
+`list [--dataset NAME]` gives each snapshot's id, the datasets it configures,
+when it was recorded (UTC), by whom and why, and whether its digest still
+matches its content - one that does not is shown in red and the command exits 1 -
+and `show SNAPSHOT_ID` prints every field and parameter of one, refusing a
+snapshot whose digest fails. An id nothing is recorded under is a usage error
+naming it. Both read q's own store in the status directory; the other direction,
+from a result to its snapshot, is the `config_id` column.
+
+```bash
+uqs data snapshot list --dataset fx_markout
+uqs data snapshot show markout_5cefbe2bdcc61b7f --json | jq '.parameters.rate_timing'
 ```
 
 Putting a release on a server is `uqs deploy` (`history` lists what this machine
@@ -1679,12 +1718,13 @@ command that breaks a rule, and on a listed exception that has since been fixed.
    spelling; the release after removes it.
 7. **Help says one thing one way** (#1883). A positional is shown as an
    upper-case word of one vocabulary - `PROC`, `JOB`, `TARGET`, `TABLE`,
-   `DATASET`, `SOURCE`, `ATTACHMENT`, `CONNECTOR`, `RUNTIME`, `RUN`, ... - and a
-   placeholder in a command's help is one of that command's own (no `WORKER`, no
-   bare `NAME`). A command's first help paragraph is one line, the one its group
-   lists; option help starts with a capital or a backtick; and help names no
-   issue numbers. Help is text, not Rich markup, so `[process]` in a documented
-   JSON shape stays in it. `-h` is `--help` everywhere.
+   `DATASET`, `SOURCE`, `ATTACHMENT`, `CONNECTOR`, `RUNTIME`, `RUN`,
+   `SNAPSHOT_ID`, ... - and a placeholder in a command's help is one of that
+   command's own (no `WORKER`, no bare `NAME`). A command's first help paragraph
+   is one line, the one its group lists; option help starts with a capital or a
+   backtick; and help names no issue numbers. Help is text, not Rich markup, so
+   `[process]` in a documented JSON shape stays in it. `-h` is `--help`
+   everywhere.
 
 Output into a pipe or a file is neither cut nor wrapped (#1883): a table is as
 wide as its widest row and a line is never broken, so
@@ -2138,29 +2178,31 @@ adds `findings` beside `error`: one record per blocker with its `code` (such as
 
 Each command's `--help` names its document. The commands #1731 added:
 
-  | command                                     | document                                                                                                                                                                                                                                                                         |
-  | ---                                         | ---                                                                                                                                                                                                                                                                              |
-  | `status`                                    | `{interpreter: {binary, actual, problem, runnable, connection_limit, summary}, processes: [{time, process, status, pid, port, heartbeat, responds, batches, depends_on, inputs, outputs, port_source}], silent, failing, starved: [{process, reasons}], heartbeats_collected}`   |
-  | `graph`                                     | `{direction, trees: [{process, status, tables, repeat, children}]}`                                                                                                                                                                                                              |
-  | `query [PROC] EXPR`                         | `{expression, result}`: a table is a list of records                                                                                                                                                                                                                             |
-  | `schema [PROC] [TABLE]`                     | `{process, port, tables: [{table, rows, columns}]}`, or with a TABLE `{process, port, columns: [{table, column, type, q, attribute}]}`                                                                                                                                           |
-  | `logs`                                      | `{lines: [{time, host, process, proctype, loglevel, id, message}]}`; not with `--follow`, `--channel` or `--multitail`                                                                                                                                                           |
-  | `config show PROC [FIELD]`                  | `{process, fields: [{field, value}]}`, or `{process, field, value}`                                                                                                                                                                                                              |
-  | `job gaps`                                  | `{job, gaps: [{range_from, range_to}], sessions, refillable, refills: [{worker, range_from, range_to, command}], today_not_refillable}`                                                                                                                                          |
-  | `job preview`                               | the preview's own result: `{job, mode, state, live, cursor, next_cursor, advances, fetched, rows, sample, failures, trace}`                                                                                                                                                      |
-  | `job check`                                 | `{dataset, range_from, range_to, producers: [{producer, mode, source}], readonly, checks: [{category, status, dataset, scope, range_from, range_to, basis, reason, findings}], behaviours: [...], worst, ok}`                                                                    |
-  | `job runs list [--unfinished]`              | `{runs: [{run_id, worker, dataset, status, range_from, range_to, ...}]}`                                                                                                                                                                                                         |
-  | `job runs show RUN`                         | `{run, facts, logs, rerun}`                                                                                                                                                                                                                                                      |
-  | `job runs audit`                            | `{facts: [{run_id, dataset, range_from, range_to, label, text}]}`                                                                                                                                                                                                                |
-  | `connector status`                          | `{connectors: [{name, running, pid, log, ...}]}`                                                                                                                                                                                                                                 |
-  | `setup odbc status`                         | `{home, current, previous, versions}`; without `--json` it is now a table                                                                                                                                                                                                        |
-  | `deploy check`                              | its report without the `DEPLOY_VERIFY_OK`/`FAILED` marker line                                                                                                                                                                                                                   |
-  | `activity list`                             | `{db, events: [{event_id, ts, recorded_at, level, source, kind, action, target, outcome, session_id, request_id, claimed_user, trigger, method, status_code, duration_ms, items, detail, dropped}], drops: [{level, reason, count, last_at}]}`, events newest first              |
-  | `deploy history`                            | `{deployments: [{default, at, target, host, dest, release, profile, status, stage}]}`                                                                                                                                                                                            |
-  | `target check`                              | `{ok, target, host, dest, remote_user, release}`                                                                                                                                                                                                                                 |
-  | `data check`                                | `{ok, hdb, present, segmented, partitions, missing_tables, missing_columns, types_checked, type_changes}`                                                                                                                                                                        |
-  | `config sources check SOURCE...`            | `{ok, sources: [{source, status, stage, rows, elapsed_ms, diagnostic}]}` - one document, not a line per source                                                                                                                                                                   |
-  | `data check --table`, `data alter`          | `{ok, hdb, resolved_from, ssh, warnings, plan, result}`: `plan` and `result` are `scripts/gates/hdb_alter.q`'s own documents - partitions, shapes, steps, journal, final check                                                                                                   |
+  | command                                     | document                                                                                                                                                                                                                                                                          |
+  | ---                                         | ---                                                                                                                                                                                                                                                                               |
+  | `status`                                    | `{interpreter: {binary, actual, problem, runnable, connection_limit, summary}, processes: [{time, process, status, pid, port, heartbeat, responds, batches, depends_on, inputs, outputs, port_source}], silent, failing, starved: [{process, reasons}], heartbeats_collected}`    |
+  | `graph`                                     | `{direction, trees: [{process, status, tables, repeat, children}]}`                                                                                                                                                                                                               |
+  | `query [PROC] EXPR`                         | `{expression, result}`: a table is a list of records                                                                                                                                                                                                                              |
+  | `schema [PROC] [TABLE]`                     | `{process, port, tables: [{table, rows, columns}]}`, or with a TABLE `{process, port, columns: [{table, column, type, q, attribute}]}`                                                                                                                                            |
+  | `logs`                                      | `{lines: [{time, host, process, proctype, loglevel, id, message}]}`; not with `--follow`, `--channel` or `--multitail`                                                                                                                                                            |
+  | `config show PROC [FIELD]`                  | `{process, fields: [{field, value}]}`, or `{process, field, value}`                                                                                                                                                                                                               |
+  | `job gaps`                                  | `{job, gaps: [{range_from, range_to}], sessions, refillable, refills: [{worker, range_from, range_to, command}], today_not_refillable}`                                                                                                                                           |
+  | `job preview`                               | the preview's own result: `{job, mode, state, live, cursor, next_cursor, advances, fetched, rows, sample, failures, trace}`                                                                                                                                                       |
+  | `job check`                                 | `{dataset, range_from, range_to, producers: [{producer, mode, source}], readonly, checks: [{category, status, dataset, scope, range_from, range_to, basis, reason, findings}], behaviours: [...], worst, ok}`                                                                     |
+  | `job runs list [--unfinished]`              | `{runs: [{run_id, worker, dataset, status, range_from, range_to, ...}]}`                                                                                                                                                                                                          |
+  | `job runs show RUN`                         | `{run, facts, logs, rerun}`                                                                                                                                                                                                                                                       |
+  | `job runs audit`                            | `{facts: [{run_id, dataset, range_from, range_to, label, text}]}`                                                                                                                                                                                                                 |
+  | `data snapshot list`                        | `{snapshots: [{id, kind, datasets, digest, created_at, actor, reason, digest_ok}], ok}`; exits 1 when a digest does not match its content                                                                                                                                         |
+  | `data snapshot show SNAPSHOT_ID`            | `{snapshot: {id, kind, datasets, digest, created_at, actor, reason, digest_ok}, parameters: {name: value as q text}}`                                                                                                                                                             |
+  | `connector status`                          | `{connectors: [{name, running, pid, log, ...}]}`                                                                                                                                                                                                                                  |
+  | `setup odbc status`                         | `{home, current, previous, versions}`; without `--json` it is now a table                                                                                                                                                                                                         |
+  | `deploy check`                              | its report without the `DEPLOY_VERIFY_OK`/`FAILED` marker line                                                                                                                                                                                                                    |
+  | `activity list`                             | `{db, events: [{event_id, ts, recorded_at, level, source, kind, action, target, outcome, session_id, request_id, claimed_user, trigger, method, status_code, duration_ms, items, detail, dropped}], drops: [{level, reason, count, last_at}]}`, events newest first               |
+  | `deploy history`                            | `{deployments: [{default, at, target, host, dest, release, profile, status, stage}]}`                                                                                                                                                                                             |
+  | `target check`                              | `{ok, target, host, dest, remote_user, release}`                                                                                                                                                                                                                                  |
+  | `data check`                                | `{ok, hdb, present, segmented, partitions, missing_tables, missing_columns, types_checked, type_changes}`                                                                                                                                                                         |
+  | `config sources check SOURCE...`            | `{ok, sources: [{source, status, stage, rows, elapsed_ms, diagnostic}]}` - one document, not a line per source                                                                                                                                                                    |
+  | `data check --table`, `data alter`          | `{ok, hdb, resolved_from, ssh, warnings, plan, result}`: `plan` and `result` are `scripts/gates/hdb_alter.q`'s own documents - partitions, shapes, steps, journal, final check                                                                                                    |
 
 ## Installing
 

@@ -18,7 +18,7 @@ from contextlib import asynccontextmanager
 from typing import Annotated, Any
 
 import polars as pl
-from fastapi import Depends, FastAPI, Query, Request
+from fastapi import Body, Depends, FastAPI, Query, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -27,6 +27,7 @@ from uqf_frontend import (
     activity,
     authz,
     catalog,
+    charts,
     control,
     health,
     ops,
@@ -70,6 +71,9 @@ from uqf_frontend.models import (
     BackfillStartedResponse,
     BackfillStatusResponse,
     CatalogResponse,
+    ChartInfo,
+    ChartResponse,
+    ChartsResponse,
     ColumnInfo,
     CommandResponse,
     ConfigDiffResponse,
@@ -425,11 +429,12 @@ def create_app(
         # interrogate. Refuse on what we know, not on what we failed to
         # learn.
         if proctype is not None and proctype not in ("gateway", "unknown"):
+            facts = settings.facts()
             return HealthResponse(
                 ok=False,
                 gateway="wrong_process",
                 detail=(
-                    f"{settings.host}:{settings.port} answers as a {proctype!r} process, "
+                    f"{facts.host}:{facts.port} answers as a {proctype!r} process, "
                     f"not a gateway - routed queries and the ops views all go through "
                     f".gw.*, which only a gateway has. Point UQF_FRONTEND_STACK_ROOT at "
                     f"the stack whose process.csv declares this gateway."
@@ -548,7 +553,8 @@ def create_app(
                 "generated process.csv is the declared process set"
             )
         try:
-            declared = procfile.read(settings.process_csv, settings.base_port)
+            # The base port as setenv.sh says now, not at startup (#2027).
+            declared = procfile.read(settings.process_csv, settings.facts().base_port)
         except FileNotFoundError as exc:
             raise ValidationFailed(str(exc)) from None
 
@@ -828,6 +834,47 @@ def create_app(
             # less (#928), so a cut either one made is reported (#1255).
             truncated=len(rows) >= read.cap < req.limit,
         )
+
+    # ------------------------------------------------------ prepared charts
+
+    @app.get("/charts", response_model=ChartsResponse)
+    def list_charts() -> ChartsResponse:
+        """Every prepared chart and the schema of its parameters (#2044)."""
+        return ChartsResponse(
+            charts=[
+                ChartInfo(
+                    name=c.name,
+                    title=c.title,
+                    description=c.description,
+                    point_limit=c.max_points,
+                    params=c.params.model_json_schema(),
+                )
+                for c in charts.CHARTS.values()
+            ]
+        )
+
+    @app.post("/charts/{name}", response_model=ChartResponse)
+    def draw_chart(
+        name: str,
+        request: Request,
+        body: typing.Annotated[dict[str, Any], Body()],
+    ) -> ChartResponse:
+        """One prepared chart's figure. The body is validated against the
+        chart's own schema; it reads only through the chart's vetted query
+        (charts.py), and a table it reads is put to the policy like /query's."""
+        chart = charts.chart(name)
+        drawn = charts.render(
+            chart,
+            charts.Sources(
+                gateway=gateway,
+                catalog=tables,
+                fleet=fleet,
+                settings=settings,
+                authorize=lambda table: run_policy(request, table=table),
+            ),
+            body,
+        )
+        return ChartResponse(name=chart.name, **vars(drawn))
 
     # ------------------------------------------------------ control (writes)
     #

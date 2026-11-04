@@ -19,7 +19,7 @@
 
 / The core columns, in order: a table of name and q type char (as meta reports it).
 / @return table: c (symbol), t (char)
-/ @eg count .qt.qetl.plant.markout.core[]  ->  24
+/ @eg count .qt.qetl.plant.markout.core[]  ->  22
 .qt.qetl.plant.markout.core:{[]
     m:exec c!t from meta .qpipe.transform.markout_core.result;
     c:.qpipe.transform.markout_core.core_cols;
@@ -65,9 +65,9 @@
     extra:([] c:`domain_a`kind`step;t:"fsj");
     .qt.qetl.plant.markout.build[(2#c),(1#extra),(2_c),1_extra]}
 
-.qt.qetl.plant.markout.test_the_core_is_24_distinct_columns_time_first:{[t]
+.qt.qetl.plant.markout.test_the_core_is_22_distinct_columns_time_first:{[t]
     c:.qt.qetl.plant.markout.core[];
-    .qunit.assertEquals[(count c;count distinct c`c;first c`c);(24;24;`time);"the contract's table"]};
+    .qunit.assertEquals[(count c;count distinct c`c;first c`c);(22;22;`time);"the contract's table"]};
 
 .qt.qetl.plant.markout.test_a_conforming_dataset_has_no_problems:{[t]
     s:.qt.qetl.plant.markout.conforming[];
@@ -137,3 +137,12 @@
 .qt.qetl.plant.markout.test_the_unmigrated_datasets_are_caught_by_the_check:{[t]
     p:count .qt.qetl.plant.markout.problems[delete clock from .qetl.plant.schema `fx_markout;`long];
     .qunit.assertTrue[p>0;"the check finds the missing core columns in real schemas"]};
+
+/ The three fields a row used to repeat are the snapshot's now (#1999): no dataset carries them, and
+/ every one names its snapshot in config_id, the core's last column.
+.qt.qetl.plant.markout.test_no_dataset_repeats_a_configuration_field:{[t]
+    ds:key .qt.qetl.plant.markout.datasets[];
+    moved:`report_ccy`rate_timing`contract_version;
+    .qunit.assertEquals[ds where {[moved;d] any moved in cols .qetl.plant.schema d}[moved] each ds;`symbol$();"report_ccy, rate_timing and contract_version live in the snapshot"];
+    .qunit.assertEquals[last .qpipe.transform.markout_core.core_cols;`config_id;"config_id is the core's last column"];
+    .qunit.assertEquals[ds where not {[d] `config_id in cols .qetl.plant.schema d} each ds;`symbol$();"and every dataset carries it"]};
