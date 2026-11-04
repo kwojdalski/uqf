@@ -92,6 +92,78 @@ def test_a_server_is_matched_by_its_ssh_and_dest_as_well_as_its_name(declared):
     assert inspection.matching(found, name="uat", host="deploy@uat", dest="/srv/uqf-uat") is None
 
 
+# --- the same server under another name or spelling (#2068, #2074) ---------------------
+
+
+ALIASES = """
+[targets.prod-rw]
+ssh = "deploy@prod"
+dest = "/srv/uqf"
+profile = "essential"
+"""
+
+
+@pytest.mark.parametrize(
+    ("host", "dest"),
+    [
+        ("deploy@prod", "/srv/uqf"),
+        ("prod", "/srv/uqf"),  # #2074: the login dropped
+        ("PROD", "/srv/uqf"),
+        ("root@prod", "/srv/uqf"),
+        ("deploy@prod.example.com", "/srv/uqf"),  # a bare name is its FQDN's first label
+        ("ssh://deploy@prod:2222", "/srv/uqf"),
+        ("deploy@prod.", "/srv/uqf"),
+        ("deploy@prod", "/srv//uqf"),
+        ("deploy@prod", "/srv/uqf/"),
+        ("deploy@prod", "/srv/uqf/."),
+        ("deploy@prod", "//srv/uqf"),
+        ("deploy@prod", "/srv/x/../uqf"),
+    ],
+)
+def test_the_same_server_spelled_another_way_is_matched(declared, host, dest):
+    found = targets.read(declared.parent)
+    assert inspection.matching(found, host=host, dest=dest) == "prod"
+
+
+@pytest.mark.parametrize(
+    ("host", "dest"),
+    [
+        ("deploy@prod", "/srv/uqf-other"),
+        ("deploy@prod-b", "/srv/uqf"),
+        ("deploy@production", "/srv/uqf"),
+        ("deploy@uat", "/srv/uqf"),
+        ("deploy@prod", "/srv"),
+    ],
+)
+def test_an_unrelated_server_is_not_matched(declared, host, dest):
+    found = targets.read(declared.parent)
+    assert inspection.matching(found, host=host, dest=dest) is None
+
+
+def test_qualified_names_and_addresses_match_only_themselves():
+    on = {"prod": {"host": "deploy@prod.eu.example", "dest": "/srv/uqf", "inspection": True}}
+    assert inspection.matching(on, host="prod.us.example", dest="/srv/uqf") is None
+    assert inspection.matching(on, host="PROD.EU.EXAMPLE", dest="/srv/uqf") == "prod"
+    assert inspection.matching(on, host="prod", dest="/srv/uqf") == "prod"
+    ip = {"prod": {"host": "deploy@10.0.0.1", "dest": "/srv/uqf", "inspection": True}}
+    assert inspection.matching(ip, host="10.0.0.2", dest="/srv/uqf") is None
+    assert inspection.matching(ip, host="10", dest="/srv/uqf") is None
+    assert inspection.matching(ip, host="root@10.0.0.1", dest="/srv/uqf") == "prod"
+
+
+def test_another_target_at_the_same_server_is_matched_by_its_name(declared):
+    """#2068: a second declared target at prod's ssh and dest is prod, given
+    its name alone - what `uqs target config restore` passes."""
+    declared.write_text(REGISTRY + ALIASES)
+    found = targets.read(declared.parent)
+    assert inspection.matching(found, name="prod-rw") == "prod"
+    assert inspection.matching(found, name="uat") is None
+    with pytest.raises(inspection.InspectionRefused) as refused:
+        inspection.refuse(declared.parent, "x", name="prod-rw")
+    said = "target prod is in inspection mode (target prod-rw is the same server as target prod)"
+    assert said in str(refused.value)
+
+
 # --- uqs --target -------------------------------------------------------------------
 
 
@@ -148,6 +220,22 @@ def test_target_shell_is_refused(declared, no_ssh, log_text):
     result = CliRunner().invoke(app, ["target", "shell", "prod"])
     assert result.exit_code != 0
     assert "inspection mode" in log_text()
+
+
+def test_a_change_forwarded_to_another_target_at_the_same_server_is_refused(declared, no_ssh):
+    """#2068: `uqs --target prod-rw stop` reaches prod's release."""
+    declared.write_text(REGISTRY + ALIASES)
+    with pytest.raises(inspection.InspectionRefused, match="target prod is in inspection mode"):
+        target_cli.forward("prod-rw", True, ["stop"], interactive=False)
+    assert no_ssh == []
+
+
+def test_target_shell_on_another_target_at_the_same_server_is_refused(declared, no_ssh, log_text):
+    declared.write_text(REGISTRY + ALIASES)
+    result = CliRunner().invoke(app, ["target", "shell", "prod-rw"])
+    assert result.exit_code != 0
+    assert "target prod is in inspection mode" in log_text()
+    assert no_ssh == []
 
 
 # --- deploy push, rollback, prune ---------------------------------------------------
@@ -235,3 +323,49 @@ def test_config_restore_on_an_inspection_target_writes_nothing(declared, monkeyp
     assert result.exit_code != 0
     assert "inspection mode" in log_text()
     assert asked == [True]  # the plan was read; nothing was written
+
+
+def test_config_restore_on_a_target_at_an_inspection_server_writes_nothing(
+    declared, monkeypatch, log_text
+):
+    """#2068: restore through a second target at prod's ssh and dest."""
+    from uqf_frontend import remote_files
+
+    declared.write_text(REGISTRY + ALIASES)
+    asked: list[bool] = []
+
+    def restore(r, name, push_id, *, dry_run, **_):
+        asked.append(dry_run)
+        if not dry_run:
+            _never()
+        return {"plan": [{"step": "write", "path": "a.csv"}]}
+
+    monkeypatch.setattr(remote_files, "restore", restore)
+    result = _invoke(
+        "target", "config", "restore", "prod-rw", "20261104T145249000Z-0123abcd", "--yes"
+    )
+    assert result.exit_code != 0
+    assert "target prod-rw is the same server as target prod" in log_text()
+    assert asked == [True]
+
+
+def test_push_to_the_same_server_spelled_another_way_is_refused(
+    declared, tmp_path, no_deploy, log_text
+):
+    """#2074: --ssh prod for a target declared deploy@prod."""
+    artifact = tmp_path / "uqf-release.tar.gz"
+    artifact.write_bytes(b"")
+    _invoke(
+        "deploy", "push", str(artifact), "--ssh", "prod", "--dest", "/srv/uqf",
+        "--profile", "essential",
+    )  # fmt: skip
+    assert "FAILED at inspection" in log_text()
+    assert "the server at prod:/srv/uqf is target prod" in log_text()
+
+
+def test_prune_of_the_same_server_spelled_another_way_is_refused(declared, no_deploy, log_text):
+    result = _invoke(
+        "deploy", "prune", "--ssh", "PROD", "--dest", "/srv/uqf/.", "--keep", "0", "--yes"
+    )
+    assert result.exit_code != 0
+    assert "FAILED at inspection" in log_text()
