@@ -198,6 +198,37 @@
 / an event that happened at `at`, received 30s later
 .qt.qetl.job.stream.horizons.sev:{[s;at;i] ([] time:enlist at+0D00:00:30; source_time:enlist at; sym:enlist s; id:enlist i; px:enlist 1f)}
 
+.qt.qetl.job.stream.horizons.test_compound_identities_keep_field_boundaries_on_redelivery:{[t]
+    nm:.qt.qetl.job.stream.horizons.sjob[`hz_id_pending;`event_time`identity!(`source_time;`sym`id)];
+    a:.qt.qetl.job.stream.horizons.sev[`$"a|b";.qt.qetl.job.stream.horizons.t0;`c];
+    b:.qt.qetl.job.stream.horizons.sev[`a;.qt.qetl.job.stream.horizons.t0;`$"b|c"];
+    (.qt.qetl.job.stream.horizons.ns[nm;`on_batch])[`hz_events;a,b];
+    .qunit.assertEquals[count .qt.qetl.job.stream.horizons.ns[nm;`pending];2;"distinct tuples both wait"];
+    latest:update px:2f from a;
+    (.qt.qetl.job.stream.horizons.ns[nm;`on_batch])[`hz_events;latest];
+    .qunit.assertEquals[.qt.qetl.job.stream.horizons.ns[nm;`pending];b,latest;
+        "redelivery replaces only its exact identity"]};
+
+.qt.qetl.job.stream.horizons.test_completed_identity_does_not_suppress_a_different_tuple:{[t]
+    nm:.qt.qetl.job.stream.horizons.sjob[`hz_id_completed;`event_time`identity!(`source_time;`sym`id)];
+    a:.qt.qetl.job.stream.horizons.sev[`$"a|b";.qt.qetl.job.stream.horizons.t0;`c];
+    b:.qt.qetl.job.stream.horizons.sev[`a;.qt.qetl.job.stream.horizons.t0;`$"b|c"];
+    (.qt.qetl.job.stream.horizons.ns[nm;`on_batch])[`hz_events;a];
+    (.qt.qetl.job.stream.horizons.ns[nm;`score_ready]) .qt.qetl.job.stream.horizons.t0+0D00:00:02;
+    (.qt.qetl.job.stream.horizons.ns[nm;`on_batch])[`hz_events;a,b];
+    .qunit.assertEquals[.qt.qetl.job.stream.horizons.ns[nm;`pending];b;
+        "only the already scored tuple is suppressed"];
+    (.qt.qetl.job.stream.horizons.ns[nm;`score_ready]) .qt.qetl.job.stream.horizons.t0+0D00:00:03;
+    .qunit.assertEquals[count .qt.qetl.job.stream.horizons.sent;2;"both events are scored"]};
+
+.qt.qetl.job.stream.horizons.test_numeric_identity_keeps_precision_and_empty_input_shape:{[t]
+    d:enlist[`identity]!enlist enlist `id;
+    rows:([] id:1.000000001 1.000000002);
+    .qunit.assertEquals[count distinct .qetl.job.stream.horizons.ids_of[d;rows];2;
+        "display precision must not merge distinct numeric identities"];
+    .qunit.assertEquals[.qetl.job.stream.horizons.ids_of[d;0#rows];`symbol$();
+        "no events still gives an empty symbol vector"]};
+
 .qt.qetl.job.stream.horizons.test_maturity_is_measured_on_event_time_not_receipt:{[t]
     nm:.qt.qetl.job.stream.horizons.sjob[`hz_s1;enlist[`event_time]!enlist `source_time];
     (.qt.qetl.job.stream.horizons.ns[nm;`on_batch])[`hz_refs;.qt.qetl.job.stream.horizons.rf[`a;.qt.qetl.job.stream.horizons.t0+0D00:00:00 0D00:00:01.5;1 2f]];
