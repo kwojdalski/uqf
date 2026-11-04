@@ -128,6 +128,11 @@ ROUTE_PERMISSIONS: dict[tuple[str, str], tuple[str, str]] = {
     ("GET", "/activity"): ("activity", "read"),
     ("GET", "/activity/export"): ("activity", "read"),
     ("POST", "/activity/events"): ("activity", "write"),
+    # settings (#2046): reading them, and changing the policy or the runtime
+    # settings - ADMIN
+    ("GET", "/settings"): ("settings", "read"),
+    ("PUT", "/settings/access"): ("settings", "write"),
+    ("PUT", "/settings/runtime"): ("settings", "write"),
 }
 
 
@@ -292,14 +297,22 @@ def _allowed(e: casbin.Enforcer, subjects: Iterable[str], feature: str, action: 
 _NOBODY = "*nobody*"
 
 
-def admins(policy: AccessPolicy, *, identity_header: bool, groups_header: bool) -> set[str]:
+def admins(
+    policy: AccessPolicy,
+    *,
+    identity_header: bool,
+    groups_header: bool,
+    known_groups: Iterable[str] = (),
+) -> set[str]:
     """Who could change the policy under *policy*: the callers that could
     reach ADMIN on this deployment. `*` in the answer means everyone.
 
     `anonymous` counts whenever it reaches ADMIN: some caller is always
     anonymous. Without a trusted identity header EVERY caller is, so nothing
     else counts. With one, a named user counts; a group counts through its
-    members, or by itself when the proxy supplies groups too."""
+    members, or by itself when the proxy supplies groups too. *known_groups*
+    names groups beyond the policy's own - the ones a change is removing the
+    last member of, which would otherwise read as users."""
     e = enforcer(policy)
     feature, action = ADMIN
     if e.enforce(_NOBODY, feature, action):
@@ -307,7 +320,7 @@ def admins(policy: AccessPolicy, *, identity_header: bool, groups_header: bool) 
     found = {ANONYMOUS} if e.enforce(ANONYMOUS, feature, action) else set()
     if not identity_header:
         return found
-    groups = {m.group for m in policy.memberships}
+    groups = {m.group for m in policy.memberships} | set(known_groups)
     names = {g.subject for g in policy.grants} | {m.member for m in policy.memberships}
     names -= {EVERYONE, ANONYMOUS}
     return found | {
@@ -342,6 +355,9 @@ class PolicyStore:
     def __init__(self, path: Path | None) -> None:
         self.path = path
         self._lock = threading.Lock()
+        #: Held by an editor across read-check-write (settings_admin), so two
+        #: changes cannot both be checked against the same version.
+        self.lock = threading.Lock()
         #: The last reload's failure, as its type name and line - never the
         #: file's content - or None.
         self.last_error: str | None = None

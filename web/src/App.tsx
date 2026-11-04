@@ -1,4 +1,11 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import {
+  lazy,
+  Suspense,
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+} from "react";
 import {
   type Backfill,
   type Catalog,
@@ -31,6 +38,8 @@ import { FileBrowser } from "./FileBrowser";
 import { useResource } from "./useResource";
 import { ActivityView } from "./ActivityView";
 import { CapabilitiesProvider, useCapabilities } from "./capabilities";
+// The form library is loaded only when the view is opened (#2046).
+const SettingsView = lazy(() => import("./SettingsView"));
 import {
   adoptDefaultLevel,
   installActivity,
@@ -50,6 +59,7 @@ const views = [
   "Services",
   "Control",
   "Activity",
+  "Settings",
 ] as const;
 type View = (typeof views)[number];
 /** An ISO instant, as the server sends one: a date, a T, a time, and
@@ -1779,7 +1789,9 @@ function Workspace() {
                   setView(item);
                 }}
               >
-                <span className="nav-number">0{index + 1}</span>
+                <span className="nav-number">
+                  {String(index + 1).padStart(2, "0")}
+                </span>
                 {item}
               </button>
             ))}
@@ -1830,6 +1842,10 @@ function Workspace() {
             <ActivityView />
           ) : view === "Services" ? (
             <ServicesView />
+          ) : view === "Settings" ? (
+            <Suspense fallback={<p>Loading…</p>}>
+              <SettingsView />
+            </Suspense>
           ) : (
             <OpsView key={view} view={view} />
           )}

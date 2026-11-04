@@ -174,6 +174,10 @@ class Settings:
     #: memberships. None serves the packaged default - everyone may do
     #: everything - which cannot be changed from the frontend.
     policy_file: Path | None = None
+    #: Where runtime settings changed in the Settings view are kept
+    #: (settings_admin.RuntimeStore), JSON, applied over the environment at
+    #: startup. None: those settings can be read there but not changed.
+    settings_file: Path | None = None
 
     def __post_init__(self) -> None:
         if self.activity_level not in LEVELS:
@@ -271,6 +275,7 @@ class Settings:
             trusted_groups_header=_header_env("UQF_FRONTEND_TRUSTED_GROUPS_HEADER"),
             trusted_proxies=_list_env("UQF_FRONTEND_TRUSTED_PROXIES"),
             policy_file=_path_env("UQF_FRONTEND_POLICY_FILE"),
+            settings_file=_path_env("UQF_FRONTEND_SETTINGS_FILE"),
         )
 
 

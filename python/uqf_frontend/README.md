@@ -685,6 +685,32 @@ The table/path policy is the older seam, still there for a rule that keys on a
 table rather than a feature: `create_app(policy=deny_tables({"position"}))` is a
 403 on that table from `/query` and `/coverage` alike, before any data is read.
 
+### The Settings view: changing the policy and runtime settings
+
+The Settings view (#2046) edits the access policy and the runtime settings ---
+the default activity level, activity retention, config push history --- in forms
+react-jsonschema-form renders from JSON schemas the server builds from its own
+Pydantic models (`GET /settings`), so the browser keeps no list of fields. It is
+loaded only when opened.
+
+  |                         |                                                                                                                               |
+  | ---                     | ---                                                                                                                           |
+  | `GET /settings`         | `settings:read` --- the policy, runtime settings, administrators, which secrets are set (never their values), and the schemas |
+  | `PUT /settings/access`  | `settings:write` --- replace the policy                                                                                       |
+  | `PUT /settings/runtime` | `settings:write` --- replace the runtime settings                                                                             |
+
+A change needs writes on, the write token and an allowed Host like every other
+write, and `settings:write` on top. It is validated by the model (extra keys
+refused) and again by the server's own checks, refused with 409 if the version
+it was edited from is no longer current, or if it would leave nobody able to
+change the policy again. It is then written atomically (temporary file, fsync,
+rename), in force at once without a restart, and audited as `settings.access` or
+`settings.runtime` with its before/after diff in the `changes` detail. The
+policy is kept in `UQF_FRONTEND_POLICY_FILE` and the runtime settings in
+`UQF_FRONTEND_SETTINGS_FILE`; without either, that part is read-only. Settings
+that hold a secret --- the write token, the gateway and data passwords --- are
+never editable or sent: the view says only whether each is set.
+
 ### Running behind oauth2-proxy
 
 oauth2-proxy authenticates against your identity provider and forwards to the
