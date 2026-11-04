@@ -364,8 +364,9 @@ def test_latency_is_drawn_per_process_from_completed_queries():
     t = dt.datetime(2026, 11, 3, 10)
     fleet = FakeFleet(
         {
-            "rdb1": usage([(t, 2_000_000, "c"), (t, 4_000_000, "c"), (t, 0, "b")]),
-            "hdb1": usage([(t, 30_000_000, "c"), (t, None, "e")]),
+            # timer is in microseconds, as TorQ's logusage.q writes it
+            "rdb1": usage([(t, 2_000, "c"), (t, 4_000, "c"), (t, 0, "b")]),
+            "hdb1": usage([(t, 30_000, "c"), (t, None, "e")]),
             "gw1": RuntimeError("connection refused"),
         }
     )
@@ -377,6 +378,16 @@ def test_latency_is_drawn_per_process_from_completed_queries():
     assert body["points"] == 3
     assert any("gw1 unreachable" in n for n in body["notes"])
     assert {(program, args) for _, program, args in fleet.calls} == {(ops.USAGE, (10,))}
+
+
+def test_latency_reads_the_usage_timer_as_microseconds():
+    # logusage.q logs `long$.001*endp-startp: a timespan a thousand times
+    # shorter, whose nanosecond count is the elapsed time in microseconds.
+    # On KDB-X `long$.001*0D00:00:01 is 1000000, so a 1 s query is 1000 ms.
+    t = dt.datetime(2026, 11, 3, 10)
+    fleet = FakeFleet({"rdb1": usage([(t, 1_000_000, "c")])})
+    body = client(fleet=fleet).post("/charts/ops_latency", json={"limit": 10}).json()
+    assert body["figure"]["data"][0]["y"] == [1000.0]
 
 
 def test_latency_says_when_a_process_log_was_cut():
