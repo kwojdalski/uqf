@@ -50,9 +50,10 @@ def require_configured(settings: Settings) -> None:
 
 
 def is_write(method: str, path: str) -> bool:
-    """Does this request change the stack?"""
-    return method.upper() not in _SAFE_METHODS and (
-        path == "/control" or path.startswith("/control/")
+    """Does this request change the stack - or the frontend's own settings
+    and access policy (/settings, #2046)?"""
+    return method.upper() not in _SAFE_METHODS and any(
+        path == root or path.startswith(root + "/") for root in ("/control", "/settings")
     )
 
 

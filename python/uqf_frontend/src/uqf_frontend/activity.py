@@ -185,6 +185,35 @@ def _is_push_id(value: object) -> bool:
     return isinstance(value, str) and bool(PUSH_ID.fullmatch(value))
 
 
+#: Most diff lines one settings change records (`changes`); `change_count`
+#: says how many there were.
+MAX_CHANGES = 256
+
+#: One side of a diff line: a policy rule (`p, viewers, desk, read`) or a
+#: setting's value - names, numbers and the `*` of a grant, never free text.
+_CHANGE_VALUE = re.compile(r"^[A-Za-z0-9_.:/@ ,+*-]{0,200}$")
+
+
+def _is_change_side(value: object) -> bool:
+    return value is None or (isinstance(value, str) and bool(_CHANGE_VALUE.match(value)))
+
+
+def _is_changes(value: object) -> bool:
+    """A settings diff (#2046): at most MAX_CHANGES {field, before, after}."""
+    return (
+        isinstance(value, list)
+        and len(value) <= MAX_CHANGES
+        and all(
+            isinstance(line, dict)
+            and set(line) == {"field", "before", "after"}
+            and _is_name(line["field"])
+            and _is_change_side(line["before"])
+            and _is_change_side(line["after"])
+            for line in value
+        )
+    )
+
+
 def _is_status(value: object) -> bool:
     return isinstance(value, int) and not isinstance(value, bool) and 100 <= value < 600
 
@@ -250,6 +279,10 @@ DETAIL_KEYS: dict[str, Callable[[object], bool]] = {
     # `anonymous`
     "permission": _is_name,
     "identity": _is_name,
+    # settings changes (#2046): the before/after diff, one line per rule or
+    # setting, and how many lines there were in all
+    "changes": _is_changes,
+    "change_count": _is_count,
 }
 
 #: Bounds on what one event may carry.
@@ -348,6 +381,9 @@ SERVER_ACTIONS: dict[tuple[str, str], Callable[[Mapping[str, str]], str]] = {
     ("POST", "/services/{target}/config/pushes"): lambda _: "config.push.open",
     ("POST", "/services/{target}/config/pushes/{push_id}/close"): lambda _: "config.push",
     ("POST", "/services/{target}/config/pushes/{push_id}/restore"): lambda _: "config.restore",
+    # the admin Settings view (#2046): the diff is in `changes`
+    ("PUT", "/settings/access"): lambda _: "settings.access",
+    ("PUT", "/settings/runtime"): lambda _: "settings.runtime",
 }
 
 #: The row a refused request that is not itself an action - a read - is

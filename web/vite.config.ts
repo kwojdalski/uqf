@@ -19,6 +19,7 @@ export const API_PATHS = [
   "activity",
   "services",
   "me",
+  "settings",
   "charts",
   "compare",
   "workspaces",

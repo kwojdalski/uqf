@@ -1,0 +1,164 @@
+{
+  "access": {
+    "$defs": {
+      "PolicyGrant": {
+        "additionalProperties": false,
+        "description": "`p, subject, feature, action` - access.Grant.",
+        "properties": {
+          "subject": {
+            "description": "A user, a group, `anonymous` (a caller no proxy vouched for), or * for everyone",
+            "pattern": "^(\\*|[A-Za-z0-9_.@:/-]{1,128})$",
+            "title": "Who",
+            "type": "string"
+          },
+          "feature": {
+            "description": "A view, or * for every one",
+            "enum": [
+              "coverage",
+              "backfills",
+              "desk",
+              "charts",
+              "compare",
+              "fleet",
+              "queue",
+              "connections",
+              "usage",
+              "services",
+              "control",
+              "activity",
+              "settings",
+              "*"
+            ],
+            "title": "Feature",
+            "type": "string"
+          },
+          "action": {
+            "description": "read, write, or * for both",
+            "enum": ["read", "write", "*"],
+            "title": "Action",
+            "type": "string"
+          }
+        },
+        "required": ["subject", "feature", "action"],
+        "title": "Grant",
+        "type": "object"
+      },
+      "PolicyMembership": {
+        "additionalProperties": false,
+        "description": "`g, member, group` - access.Membership.",
+        "properties": {
+          "member": {
+            "description": "A user, or a group",
+            "pattern": "^[A-Za-z0-9_.@:/-]{1,128}$",
+            "title": "Member",
+            "type": "string"
+          },
+          "group": {
+            "pattern": "^[A-Za-z0-9_.@:/-]{1,128}$",
+            "title": "Group",
+            "type": "string"
+          }
+        },
+        "required": ["member", "group"],
+        "title": "Membership",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "description": "The whole access policy: who may do what, and who is in which group.",
+    "properties": {
+      "grants": {
+        "items": {
+          "$ref": "#/$defs/PolicyGrant"
+        },
+        "maxItems": 1000,
+        "title": "Grants",
+        "type": "array"
+      },
+      "memberships": {
+        "items": {
+          "$ref": "#/$defs/PolicyMembership"
+        },
+        "maxItems": 1000,
+        "title": "Group memberships",
+        "type": "array"
+      }
+    },
+    "required": ["grants", "memberships"],
+    "title": "Access policy",
+    "type": "object"
+  },
+  "runtime": {
+    "additionalProperties": false,
+    "description": "The frontend's settings that take effect without a restart - and\nonly those. A setting that holds a secret is never one of them.",
+    "properties": {
+      "activity_level": {
+        "description": "What a browser tab records unless its operator picks another; the server audits every change whatever this says",
+        "enum": ["off", "actions", "interactions", "debug"],
+        "title": "Default activity level",
+        "type": "string"
+      },
+      "activity_retention_days": {
+        "maximum": 3650,
+        "minimum": 1,
+        "title": "Actions: days kept",
+        "type": "integer"
+      },
+      "activity_max_rows": {
+        "maximum": 10000000,
+        "minimum": 1,
+        "title": "Actions: most rows kept",
+        "type": "integer"
+      },
+      "activity_interactions_retention_days": {
+        "maximum": 3650,
+        "minimum": 1,
+        "title": "Interactions: days kept",
+        "type": "integer"
+      },
+      "activity_interactions_max_rows": {
+        "maximum": 10000000,
+        "minimum": 1,
+        "title": "Interactions: most rows kept",
+        "type": "integer"
+      },
+      "activity_debug_retention_days": {
+        "maximum": 3650,
+        "minimum": 1,
+        "title": "Debug: days kept",
+        "type": "integer"
+      },
+      "activity_debug_max_rows": {
+        "maximum": 10000000,
+        "minimum": 1,
+        "title": "Debug: most rows kept",
+        "type": "integer"
+      },
+      "config_history_keep": {
+        "maximum": 10000,
+        "minimum": 1,
+        "title": "Config pushes kept per target",
+        "type": "integer"
+      },
+      "config_history_days": {
+        "maximum": 3650,
+        "minimum": 1,
+        "title": "Config push history: days kept",
+        "type": "integer"
+      }
+    },
+    "required": [
+      "activity_level",
+      "activity_retention_days",
+      "activity_max_rows",
+      "activity_interactions_retention_days",
+      "activity_interactions_max_rows",
+      "activity_debug_retention_days",
+      "activity_debug_max_rows",
+      "config_history_keep",
+      "config_history_days"
+    ],
+    "title": "Runtime settings",
+    "type": "object"
+  }
+}
