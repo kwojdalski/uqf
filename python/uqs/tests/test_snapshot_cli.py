@@ -28,8 +28,9 @@ SEED = r"""
 \l src/etl/core/status.q
 \l src/etl/core/backfill_state.q
 \l src/etl/core/config_snapshot.q
-c:`contract_version`code_revision`domain`domain_revision`datasets`horizons,
-    `max_age`report_ccy`rate_timing`rates!(1;1;`fx;`fx_r1;`fx_markout`fx_markout_wide;
+k:`contract_version`code_revision`domain`domain_revision`datasets`horizons,
+    `max_age`report_ccy`rate_timing`rates;
+c:k!(1;1;`fx;`fx_r1;`fx_markout`fx_markout_wide;
     0D00:00:01 0D00:00:10;0D00:00:05;`USD;`execution;(enlist `USDT)!enlist 1f);
 .qetl.snapshot.attach[];
 .qetl.snapshot.record_as[`markout_aaaa;`markout;c;`alice;"first configuration"];
