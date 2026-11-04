@@ -241,6 +241,27 @@ def bounded_datasets() -> list[str]:
 
 
 @_never_raises
+def markout_datasets() -> list[str]:
+    """Every markout dataset on the plant: the plant tables that carry `config_id`, the
+    column that names a row's configuration snapshot (#1999)."""
+    from uqs.model import plant_metadata
+
+    return sorted(
+        name
+        for name, table in plant_metadata.load().tables.items()
+        if "config_id" in [c.name for c in table.columns]
+    )
+
+
+@_never_raises
+def snapshot_ids() -> list[str]:
+    """Every configuration snapshot recorded in this runtime's store."""
+    from uqs.stack import snapshots
+
+    return snapshots.ids(stack_paths.default_paths())
+
+
+@_never_raises
 def overrides(ctx: typer.Context) -> list[tuple[str, str]]:
     """The overrides the command being typed takes - `uqs override list`'s
     catalogue (cli/safety.py) - each with what it bypasses. One waived per

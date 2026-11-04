@@ -219,21 +219,31 @@
     n:count fr;
     (raze legrows),([] ri:til n; kind:n#`residual; step:n#0; move:res; status:rs; leg:n#`; invert:n#0b; price_t0:n#0n; price_t1:n#0n)}
 
+/ The revision of the rules that price an FX instrument: the pair's legs and
+/ quote currency, the pip factor, the conversion pair, the leg attribution. The
+/ configuration snapshot records it (#1999); bump it with any change to those rules
+/ that the spec's convention does not already carry.
+.qpipe.transform.fx_domain.revision:`fx_r1
+
 / The FX domain as the markout core takes it: the resolver, the conversion, the
-/ spec keys the domain owns, their validation and the leg attribution.
-.qpipe.transform.fx_domain.domain:`resolve`convert`keys`validate`attribute!(
+/ spec keys the domain owns, their validation, the leg attribution, and its name
+/ and rules revision for the configuration snapshot.
+.qpipe.transform.fx_domain.domain:`resolve`convert`keys`validate`attribute`name`revision`datasets!(
     .qpipe.transform.fx_domain.resolve;
     .qpipe.transform.fx_domain.convert;
     `convention`tolerance;
     {[spec] .qpipe.transform.fx_domain.require_spec[.qpipe.transform.fx_domain.defaults,spec]; .qpipe.transform.fx_domain.defaults,spec};
-    .qpipe.transform.fx_domain.attribution_rows)
+    .qpipe.transform.fx_domain.attribution_rows;
+    `fx;
+    .qpipe.transform.fx_domain.revision;
+    `fx_markout`fx_markout_wide)
 
 
 / ------------------------------------------------------------------ THE LONG ROWS
 
 / The columns FX adds to the core's, in the order the stored long dataset lists them
 / (the core's columns keep their relative order, the contract's Q1).
-.qpipe.transform.fx_domain.long_cols:`time`source_time`clock`venue`fill_id`sym`side`size`horizon`kind`step`leg`invert`price`price_t0`price_t1`quote_ccy`ref_t0`ref_t1`move`pips`pip_factor`pip_value`quote_amount`report_ccy`rate`rate_source`rate_sym`rate_time`rate_timing`report_amount`status`contract_version`version
+.qpipe.transform.fx_domain.long_cols:`time`source_time`clock`venue`fill_id`sym`side`size`horizon`kind`step`leg`invert`price`price_t0`price_t1`quote_ccy`ref_t0`ref_t1`move`pips`pip_factor`pip_value`quote_amount`rate`rate_source`rate_sym`rate_time`report_amount`status`config_id`version
 
 / The core's rows with FX's measures: pips (pip_factor * move), pip_factor, the pip
 / value in quote currency, the convention's version, and the reference prices a

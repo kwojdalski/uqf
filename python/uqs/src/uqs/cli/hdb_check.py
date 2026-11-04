@@ -141,15 +141,16 @@ def _whole_runtime(*, apply: bool, yes: bool, as_json: bool) -> None:
     if apply:
         try:
             handle = resolve(None, None)
-            confirm(handle, "Write every missing declared table and column", yes=yes,
-                    as_json=as_json)  # fmt: skip
+            confirm(handle, "Write every missing declared table and column, and fold the markout "
+                    "configuration columns (contract_version, rate_timing, report_ccy) into "
+                    "configuration snapshots, dropping them", yes=yes, as_json=as_json)  # fmt: skip
         except UqsError as exc:
             _die(exc)
             return
         # what bootstrap writes, so the filler fills from THIS release's schema
         paths.generated_schema.parent.mkdir(parents=True, exist_ok=True)
         paths.generated_schema.write_text(schema)
-        hdb_fill.fill_hdb_partitions(paths)
+        hdb_fill.fill_hdb_partitions(paths, migrate=True)
         try:
             layout = hdb_layout.inspect(paths, hdb_root)
         except UqsError as exc:
