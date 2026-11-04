@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Any, TextIO
 from loguru import logger
 
 from uqs.logger.floats import CutFloatsLogger
+from uqs.logger.highlight import highlight
 
 #: The variable that sets the log level - read by uqs's CLI and by trace_calls.
 LOG_LEVEL_ENV = "LOG_LEVEL"
@@ -60,104 +61,8 @@ _DEFAULT_FMT = (
 
 _PLAIN_FMT = "{time:YYYY-MM-DD HH:mm:ss.SSS} | {level: <8} | {name}:{function}:{line} - {message}"
 
-# Matches the value part of key=value tokens in log messages.
-# Excludes whitespace and most punctuation used by loguru markup (<>) and
-# Python format strings ({}). Commas between digits are allowed so that
-# comma-formatted numbers like 11,643 are captured as a single token.
-_KV_VALUE_RE = re.compile(r"(?<==)([^\s,\)\]\[|{}<>]+(?:,[0-9]+)*)")
-
-_PATH_EXTENSIONS: frozenset[str] = frozenset(
-    {
-        ".py",
-        ".yaml",
-        ".yml",
-        ".npy",
-        ".parquet",
-        ".json",
-        ".csv",
-        ".txt",
-        ".pkl",
-        ".pt",
-        ".pth",
-        ".log",
-        ".db",
-        ".q",
-        ".k",
-    }
-)
-
-
-def _looks_like_path(val: str) -> bool:
-    if val.startswith(("/", "./", "../")):
-        return True
-    dot = val.rfind(".")
-    return dot > 0 and val[dot:] in _PATH_EXTENSIONS
-
-
-def _highlight_kv(msg: str) -> str:
-    """Color key=value tokens by value type:
-    - True -> green, False -> red
-    - None -> dim
-    - paths -> bold
-    - negative numbers -> red, positive numbers -> magenta
-    - strings -> light-cyan
-
-    Literal `<` in the message is escaped as `\\<` HERE rather than by the
-    caller, because the two steps cannot be separated: escaping first leaves
-    a bare `\\` that `_KV_VALUE_RE` matches as a value of its own, and
-    wrapping that backslash in a colour tag divorces it from the `<` it was
-    escaping. `SERVER=<host>` then reached loguru as
-    `<light-cyan>\\</light-cyan><host>`, and loguru raised
-    `Tag "<host>" does not correspond to any known color directive` from
-    inside the handler - which prints a traceback and DROPS the line. The
-    message that hit it was the one telling the operator which environment
-    variable to export, complete with a `DRIVER=...;SERVER=<host>` example.
-    """
-
-    def _colour(val: str) -> str:
-        """The colour tag for one value. `val` never contains `<` or `>` -
-        _KV_VALUE_RE excludes both - so it needs no escaping of its own.
-        """
-        if val == "True":
-            return f"<green>{val}</green>"
-        if val == "False":
-            return f"<red>{val}</red>"
-        if val == "None":
-            return f"<dim>{val}</dim>"
-        if _looks_like_path(val):
-            return f"<bold>{val}</bold>"
-
-        # Strip trailing % and common unit suffixes for numeric check
-        check_val = val.rstrip("%")
-        for suffix in ("us/step", "us", "ms"):
-            if check_val.endswith(suffix) and len(check_val) > len(suffix):
-                check_val = check_val[: -len(suffix)]
-                break
-
-        # Handle N/M fraction (e.g., step=96921/969218) and N/s rate
-        if "/" in check_val:
-            parts = check_val.split("/")
-            if len(parts) == 2:
-                left, right = parts
-                left_ok = left.replace(".", "", 1).replace("-", "", 1).isdigit()
-                right_ok = right == "s" or right.replace(".", "", 1).replace("-", "", 1).isdigit()
-                if left_ok and right_ok:
-                    return f"<magenta>{val}</magenta>"
-
-        try:
-            num = float(check_val.replace(",", ""))
-            return f"<red>{val}</red>" if num < 0 else f"<magenta>{val}</magenta>"
-        except ValueError:
-            return f"<light-cyan>{val}</light-cyan>"
-
-    out: list[str] = []
-    pos = 0
-    for m in _KV_VALUE_RE.finditer(msg):
-        out.append(msg[pos : m.start()].replace("<", "\\<"))
-        out.append(_colour(m.group(1)))
-        pos = m.end()
-    out.append(msg[pos:].replace("<", "\\<"))
-    return "".join(out)
+#: A template's text right after {message} starts with a loguru tag.
+_STARTS_WITH_TAG_RE = re.compile(r"</?(?:[fb]g\s)?[^<>\s]*>")
 
 
 def _make_kv_format(fmt: str | Callable[[dict], str]) -> Any:
@@ -169,14 +74,15 @@ def _make_kv_format(fmt: str | Callable[[dict], str]) -> Any:
     """
 
     def _format(record: dict) -> str:
-        # _highlight_kv escapes bare < as it colours, so loguru's colorizer
-        # does not treat them as colour tags. (In a format callable, loguru
-        # strips the leading \ and renders a plain <.) It has to do both in
-        # one pass - see its docstring for what splitting them broke.
-        highlighted = _highlight_kv(record["message"])
+        template = fmt if isinstance(fmt, str) else fmt(record)
+        after = template.partition("{message}")[2]
+        # highlight() escapes for loguru's colorizer as it colours. (In a
+        # format callable, loguru strips the escaping \ and prints the rest.)
+        highlighted = highlight(
+            record["message"], followed_by_tag=bool(_STARTS_WITH_TAG_RE.match(after))
+        )
         # Escape bare braces so format_map doesn't misinterpret message content.
         safe = highlighted.replace("{", "{{").replace("}", "}}")
-        template = fmt if isinstance(fmt, str) else fmt(record)
         return template.replace("{message}", safe, 1) + "\n"
 
     return _format
