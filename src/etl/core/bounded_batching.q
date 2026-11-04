@@ -50,7 +50,8 @@
 / conversion pairs). Nothing is written until every batch has been read and transformed, so all of
 / the above holds unchanged. `reuse_rows` lets a book one batch read serve the next, within that
 / many cached rows, least recently used out first, keyed by worker, source_version and window so
-/ that a different version or window can never be served from it (bounded_batch_read.q).
+/ that a different version or window can never be served from it. Reuse lasts only within one
+/ transform attempt; a retry starts with fresh references (bounded_batch_read.q).
 / .
 / WHAT THE WORKER CLAIMS. That its transform, given a group's rows and the context
 / declared for them, produces that group's output whatever other groups are in the window.
@@ -306,7 +307,7 @@
     .qetl.log.dbg[worker;"window planned into batches";
         `batches`rows`max_rows`max_groups!(count plan;count prim;spec`max_rows;spec`max_groups)];
     bysrc:.qetl.job.bounded.batching.by_source[worker;spec];
-    if[bysrc; .qetl.job.bounded.batching.begin_reads[worker;w]];
+    if[bysrc; .qetl.job.bounded.batching.begin_reads[worker]];
     / the values every batch shares, in one dictionary: a q lambda takes at most eight arguments
     st:`worker`spec`table_name`sup`batch`prim`n`w`bysrc!(worker;spec;src`table_name;sup;batch;prim;count plan;w;bysrc);
     outs:.qetl.job.bounded.batching.run_batch[st]'[til count plan;plan];

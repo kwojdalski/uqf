@@ -6,8 +6,8 @@
 / .
 /   fetch_window  the WINDOW read: primary rows and a presence summary of the references. What
 /                 `ready` judges, over the whole window, before any batch is read.
-/   begin_reads   at the start of the transform: drop whatever the reuse cache holds for any
-/                 other window or source_version of this worker.
+/   begin_reads   at the start of each transform attempt: drop this worker's previous reads,
+/                 including reads of the same window and source_version before a failure.
 /   source_inputs one batch's inputs: its primary rows and the references its rows need, from
 /                 the cache where it holds them and from the source (under the retry policy,
 /                 as the window's own fetch is) where it does not.
@@ -20,8 +20,8 @@
 / .
 / It is KEYED by worker, source_version and the window's bounds. The version is in the key, and
 / not only in a comment, because the one thing reuse must never do is serve a row read for one
-/ release of a source to a run of another: a hit needs all four to match, and begin_reads drops the
-/ rest. Nothing in it outlives its window.
+/ release of a source to a run of another: a hit needs all four to match. Each transform attempt
+/ starts with fresh reads, so a retry sees books that arrived after the previous attempt failed.
 
 \d .
 
@@ -76,16 +76,14 @@
 .qetl.job.bounded.batching.scope:{[worker;w]
     `worker`version`range_from`range_to!(worker;(.qetl.job.bounded.spec worker)`source_version;w`range_from;w`range_to)}
 
-/ Start a window's reads: drop everything this worker's cache holds for any other window or
-/ source_version. After it, a hit can only be a row read for this window of this version.
+/ Start a transform attempt's reads: drop everything this worker's cache holds, even for the
+/ same window and version. A retry must read references afresh, as its primary rows were.
 / @param worker the worker's name
-/ @param w the window
 / @return the number of entries dropped
 / @private
-.qetl.job.bounded.batching.begin_reads:{[worker;w]
+.qetl.job.bounded.batching.begin_reads:{[worker]
     t:.qetl.job.bounded.batching.cache;
-    sc:.qetl.job.bounded.batching.scope[worker;w];
-    stale:((t`worker)=worker) & not .qetl.job.bounded.batching.in_scope[t;sc];
+    stale:(t`worker)=worker;
     `.qetl.job.bounded.batching.cache set t where not stale;
     `long$sum stale}
 
