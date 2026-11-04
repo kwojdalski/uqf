@@ -61,7 +61,8 @@ const ISO_INSTANT =
   /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.(\d+))?(Z|[+-]\d{2}:\d{2})?$/;
 /** The column types that hold an infinity, and so the only ones whose
  *  "inf" / "-inf" is the server's infinity rather than a symbol that happens
- *  to be spelled that way (#1330) - a timestamp's 0Wp too (#1371). */
+ *  to be spelled that way (#1330) - a timestamp's 0Wp too (#1371), and a
+ *  time's 0Wt and a date's 0Wd (#2037). */
 const NUMERIC = new Set([
   "float",
   "long",
@@ -69,6 +70,8 @@ const NUMERIC = new Set([
   "short",
   "timespan",
   "timestamp",
+  "time",
+  "date",
 ]);
 const INFINITY: Record<string, string> = { inf: "∞", "-inf": "-∞" };
 function text(value: unknown, decimals?: number | null, type?: string) {

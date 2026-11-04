@@ -157,6 +157,10 @@ def make_world(monkeypatch, tmp_path):
     (hdb / "2026.09.11" / DATASET).mkdir(parents=True)
     monkeypatch.setenv(config.ATTACH_DIR_ENV, str(attach_dir))
     monkeypatch.setenv("UQF_STATUS_DIR", str(status))
+    # The local path bootstraps this stack: its data directory, and the setenv.sh that now
+    # records UQF_STATUS_DIR (#2038), belong in the test's tmp, not the checkout's output/.
+    (tmp_path / "data").mkdir()
+    monkeypatch.setenv("UQS_DATA_ROOT", str(tmp_path / "data"))
     # a developer shell may hold the credential: these tests mean the unconfigured source
     monkeypatch.setenv("UQF_SOURCE_CRED_DUCKDB_DEALS", "")
     errors = _ErrorLog()
