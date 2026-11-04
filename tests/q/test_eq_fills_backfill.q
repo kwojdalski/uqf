@@ -97,7 +97,7 @@
 .qt.qpipe.job.eq_fills_backfill.test_a_full_run_leaves_the_range_covered:{[t]
     .qpipe.job.eq_fills_backfill.init[.qt.qpipe.job.eq_fills_backfill.spec_for[`v1;0;2]];
     .qpipe.job.eq_fills_backfill.run[];
-    .qunit.assertTrue[.qetl.coverage.is_covered[`executions;`;`$"v1~fixture";.z.p;.qt.qpipe.job.eq_fills_backfill.d[0];.qt.qpipe.job.eq_fills_backfill.d[2]];
+    .qunit.assertTrue[.qetl.coverage.is_covered[`executions;`XNAS;`$"v1~fixture";.z.p;.qt.qpipe.job.eq_fills_backfill.d[0];.qt.qpipe.job.eq_fills_backfill.d[2]];
         "the two windows compose into the requested range"]};
 
 .qt.qpipe.job.eq_fills_backfill.test_a_second_run_at_the_same_version_is_idle:{[t]
@@ -126,7 +126,7 @@
     r:.qpipe.job.eq_fills_backfill.run[];
     .qunit.assertEquals[(r`state;r`windows_completed);(`completed;2);"both windows read"];
     .qunit.assertEquals[value `executions;.qt.qpipe.job.eq_fills_backfill.expected[];"the file's rows are the fixture's"];
-    .qunit.assertTrue[.qetl.coverage.is_covered[`executions;`;`v1;.z.p;.qt.qpipe.job.eq_fills_backfill.d[0];.qt.qpipe.job.eq_fills_backfill.d[2]];
+    .qunit.assertTrue[.qetl.coverage.is_covered[`executions;`XNAS;`v1;.z.p;.qt.qpipe.job.eq_fills_backfill.d[0];.qt.qpipe.job.eq_fills_backfill.d[2]];
         "covered at v1, not v1~fixture: a live read and a fixture run are not the same claim"]};
 
 .qt.qpipe.job.eq_fills_backfill.test_a_missing_file_fails_at_connect_and_takes_nothing:{[t]
@@ -146,8 +146,8 @@
     r:.qpipe.job.eq_fills_backfill.run[];
     .qunit.assertEquals[(r`windows_completed;r`windows_failed);1 1;"the good day completes, the bad day fails"];
     .qunit.assertEquals[(value `executions)`fill_id;enlist `x0001;"nothing of the bad window is published"];
-    .qunit.assertTrue[.qetl.coverage.is_covered[`executions;`;`v1;.z.p;.qt.qpipe.job.eq_fills_backfill.d[0];.qt.qpipe.job.eq_fills_backfill.d[1]];"the good day is covered"];
-    .qunit.assertFalse[.qetl.coverage.is_covered[`executions;`;`v1;.z.p;.qt.qpipe.job.eq_fills_backfill.d[1];.qt.qpipe.job.eq_fills_backfill.d[2]];
+    .qunit.assertTrue[.qetl.coverage.is_covered[`executions;`XNAS;`v1;.z.p;.qt.qpipe.job.eq_fills_backfill.d[0];.qt.qpipe.job.eq_fills_backfill.d[1]];"the good day is covered"];
+    .qunit.assertFalse[.qetl.coverage.is_covered[`executions;`XNAS;`v1;.z.p;.qt.qpipe.job.eq_fills_backfill.d[1];.qt.qpipe.job.eq_fills_backfill.d[2]];
         "the bad day is not: a re-run redoes it, and no fill is claimed that was not published"]};
 
 / --- the rows scored: equity domain, databento books ----------------------

@@ -282,20 +282,18 @@
         fee;
         $[mapped `fee_ccy; .qetl.source.fills.symbols[0b;pick `fee_ccy]; (count keep)#`])}
 
-/ One window of a csv fills source: the file's rows in [range_from; range_to), typed.
+/ One window of a csv fills source from the file's rows: those in [range_from; range_to), typed.
 / @param source a declared fills source (transport csv)
-/ @param h the file, as a file symbol (.qetl.source.csv_path)
+/ @param raw the file's rows as text (.qetl.source.csv_rows)
 / @param range_from inclusive lower bound
 / @param range_to exclusive upper bound
 / @return the window in the contract's columns
-/ @throws error when the file lacks a mapped column, a time cannot be read or carries an offset, or
+/ @throws error when the rows lack a mapped column, a time cannot be read or carries an offset, or
 /   a row in the window cannot be read (see assemble)
-.qetl.source.fills.read:{[source;h;range_from;range_to]
+.qetl.source.fills.window_rows:{[source;raw;range_from;range_to]
     who:string source;
     r:.qetl.source.fills.registry source;
-    if[not r[`transport]=`csv; :.qetl.source.fills.read_odbc[source;h;range_from;range_to]];
     m:first r`mapping;
-    raw:.qetl.source.csv_rows[h];
     absent:(distinct value m) except cols raw;
     if[count absent; '"fills: ",who,"'s file lacks the mapped column(s): ",", " sv string absent];
     tc:raw m`source_time;
@@ -306,6 +304,17 @@
     keep:where (ts>=range_from) & ts<range_to;
     if[0=count keep; :.qetl.source.fills.empty[]];
     .qetl.source.fills.assemble[source;.qetl.source.fills.csv_fields[source;raw;ts;keep]]}
+
+/ One window of a fills source, over its own transport: a csv file is sent through the traced
+/ .qetl.source.csv, an ODBC handle through .qetl.io.odbc.run_sql.
+/ @param source a declared fills source
+/ @param h the file as a file symbol (csv) or an ODBC handle (odbc)
+/ @param range_from inclusive lower bound
+/ @param range_to exclusive upper bound
+/ @return the window in the contract's columns
+.qetl.source.fills.read:{[source;h;range_from;range_to]
+    if[not ((.qetl.source.fills.registry source)`transport)=`csv; :.qetl.source.fills.read_odbc[source;h;range_from;range_to]];
+    .qetl.source.csv[h;.qetl.source.fills.window_rows[source;;;];range_from;range_to]}
 
 / One window of an ODBC fills source, as the driver returns it for sql_for's statement.
 / @param source a declared fills source (transport odbc)

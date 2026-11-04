@@ -39,7 +39,8 @@
 / @param range_from inclusive lower bound
 / @param range_to exclusive upper bound
 / @return the fills in the window, in the contract's shape
-.qpipe.source.eq_fills.query:{[h;range_from;range_to] .qetl.source.fills.read[`eq_fills;h;range_from;range_to]}
+.qpipe.source.eq_fills.query:{[h;range_from;range_to]
+    .qetl.source.csv[h;{[rows;a;b] .qetl.source.fills.window_rows[`eq_fills;rows;a;b]};range_from;range_to]}
 
 / Five equity fills over two days: the rows of tests/q/data/eq_fills.csv as the contract
 / types them, in the order a window returns them.

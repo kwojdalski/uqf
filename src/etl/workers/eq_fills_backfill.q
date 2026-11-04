@@ -13,9 +13,10 @@
 / `time` is that execution time, not the receipt time a live fill carries. Loaded in plain q
 / it is .qetl.io.memory, and the rows are in an `executions` table in that process.
 / .
-/ A SECOND WORKER ON `executions` MUST NOT SHARE THIS ONE'S source_version. Coverage is kept
-/ per dataset, partition and version, so two files backfilled under one version would let the
-/ second skip every window the first covered. There is deliberately no default version: a
+/ THE PARTITION IS THE VENUE (XNAS). Coverage is kept per dataset, partition and version, and
+/ `executions` has other producers; a second drop for another venue is another worker with its
+/ own partition. Two files for ONE venue under one version would let the second skip every
+/ window the first covered. There is deliberately no default version: a
 / corrected drop is a new version, and a run must say which it is.
 / .
 / IDEMPOTENCE. The row key is (venue; fill_id), the source's, so a window refetched at the
@@ -65,8 +66,12 @@
             book:``; product:``; clock:`venue`venue)))];
 
 .qetl.job.bounded.define[`eq_fills_backfill;
-    `source`dataset`width`transform`check`facts`procname`note!
+    `source`dataset`width`transform`check`facts`procname`note`partition`partition_column!
         (`eq_fills;`executions;1D;`eq_fills_to_executions;
          .qpipe.job.eq_fills_backfill.quality_check;.qpipe.job.eq_fills_backfill.facts;
          `eq_fills_backfill1;
-         "bounded: reads an equity fills csv drop and writes canonical executions, on the declared clock")];
+         "bounded: reads an equity fills csv drop and writes canonical executions, on the declared clock";
+         / Coverage is kept per dataset AND partition. `executions is also what other
+         / producers fill, so this worker's claims are the XNAS venue's: the venue is the
+         / column that holds the partition, and a row of another venue is refused at publish.
+         `XNAS;`venue)];

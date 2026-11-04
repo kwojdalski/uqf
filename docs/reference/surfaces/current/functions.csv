@@ -726,6 +726,7 @@ qetl.source,credential_example,function,1,source
 qetl.source,credential_origin,function,1,source
 qetl.source,credential_prefix,value,,
 qetl.source,credential_var,function,1,source
+qetl.source,csv,function,4,h f range_from range_to
 qetl.source,csv_header,function,1,h
 qetl.source,csv_meta,function,1,h
 qetl.source,csv_path,function,1,cred
@@ -812,6 +813,7 @@ qetl.source.fills,symbols,function,2,cased col
 qetl.source.fills,texts,function,1,col
 qetl.source.fills,transports,value,,
 qetl.source.fills,types,value,,
+qetl.source.fills,window_rows,function,4,source raw range_from range_to
 qetl.status,fields,value,,
 qetl.status,file_path,function,1,instance_id
 qetl.status,file_prefix,value,,
