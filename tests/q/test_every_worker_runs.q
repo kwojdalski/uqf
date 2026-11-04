@@ -50,6 +50,12 @@
 /   otherwise publish into a table of the wrong shape and throw `mismatch
 /   the window is the fixture's own span, widened by one worker width so the
 /   last row falls inside a window rather than on its boundary
+/ The run spec a worker reports after init: the spec asked for, its release tagged as the
+/ run tags it - with the worker's output revision when it declares one (#1097) and as the
+/ fixture's when its source has no credential (#1082).
+.qt.qpipe.worker_runs.expected:{[w;spec]
+    @[spec;`source_version;.qetl.job.bounded.runtime.run_version[.qetl.job.bounded.def w;]]}
+
 .qt.qpipe.worker_runs.prepare:{[w]
     cfg:.qetl.job.bounded.def w;
     src:.qetl.source.def cfg`source;
@@ -104,7 +110,7 @@
     bad:{[w]
         spec:.qt.qpipe.worker_runs.prepare[w];
         .qt.qpipe.worker_runs.call[w;`init][spec];
-        $[(.qt.qpipe.worker_runs.call[w;`spec][])~.qt.support.fixture_spec spec; (); enlist w]} each .qt.qpipe.worker_runs.workers[];
+        $[(.qt.qpipe.worker_runs.call[w;`spec][])~.qt.qpipe.worker_runs.expected[w;spec]; (); enlist w]} each .qt.qpipe.worker_runs.workers[];
     .qunit.assertEquals[count raze bad;0;
         "each worker's spec reads back exactly the run spec init was given"]};
 
@@ -260,7 +266,7 @@
         .qt.qpipe.worker_runs.call[w;`init][spec];
         cursor:spec`range_from;
         .qt.qpipe.worker_runs.call[w;`checkpoint][cursor];
-        $[cursor~.qetl.job.bounded.state.load_checkpoint[w;.qt.support.fixture_spec spec]; (); enlist w]} each .qt.qpipe.worker_runs.workers[];
+        $[cursor~.qetl.job.bounded.state.load_checkpoint[w;.qt.qpipe.worker_runs.expected[w;spec]]; (); enlist w]} each .qt.qpipe.worker_runs.workers[];
     .qunit.assertEquals[count raze bad;0;
         "the cursor written through each delegator is the cursor the shell stores"]};
 
@@ -337,13 +343,13 @@
 
 .qt.qpipe.worker_runs.test_a_hand_copied_output_is_a_departure:{[t]
     / The gate must be able to fail: each way a copy drifts.
-    base:.qetl.plant.published `crypto_execution_quality;
-    .qunit.assertEquals[.qt.qpipe.worker_runs.departure[base;`crypto_execution_quality];"";"the derived output agrees"];
+    base:.qetl.plant.published `crypto_markout;
+    .qunit.assertEquals[.qt.qpipe.worker_runs.departure[base;`crypto_markout];"";"the derived output agrees"];
     .qunit.assertEquals[.qt.qpipe.worker_runs.departure[.qetl.plant.shape `crypto_book_1s;`crypto_book_1s];"";"the time-keeping convention agrees"];
     retyped:update markout_bps:`long$() from base;
     reordered:(reverse cols base)#base;
     extra:update added:`long$() from base;
-    dropped:(cols[base] except `ref_price)#base;
-    found:.qt.qpipe.worker_runs.departure[;`crypto_execution_quality] each (retyped;reordered;extra;dropped);
+    dropped:(cols[base] except `ref_t1)#base;
+    found:.qt.qpipe.worker_runs.departure[;`crypto_markout] each (retyped;reordered;extra;dropped);
     .qunit.assertTrue[all 0<count each found;"a retyped, reordered, extended or shortened copy is each refused"];
-    .qunit.assertTrue[(first found) like "crypto_execution_quality output is *";"and the message names the table"]};
+    .qunit.assertTrue[(first found) like "crypto_markout output is *";"and the message names the table"]};

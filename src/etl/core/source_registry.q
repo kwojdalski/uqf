@@ -68,7 +68,7 @@
 / the declaration it always did.
 .qetl.source.sources:([name:`symbol$()] source:`symbol$(); table_name:`symbol$();
     time_column:`symbol$(); row_key:(); columns:(); types:(); query:(); fixture:();
-    tz:`symbol$(); transport:`symbol$(); credential_example:(); supporting:(); raw:(); complete_through:(); ready:(); reference_read:())
+    tz:`symbol$(); transport:`symbol$(); credential_example:(); supporting:(); raw:(); complete_through:(); ready:(); reference_read:(); batch_read:())
 
 / ------------------------------------------------------- COMPLETE THROUGH
 / .
@@ -221,6 +221,9 @@
 /   ready - a lambda {[batch;range_from;range_to]} returning the window's unmet
 /     requirements as a list of strings, () when it can be scored (see READINESS).
 /     The default is ready for everything.
+/   batch_read - window, needs, read, keys and sort: how the source reads its
+/     supporting inputs a batch at a time, for a worker that batches (see
+/     source_batch_read.q, #1921)
 /   reference_read - date_skew, lookback_cap and symbols, how much of its
 /     supporting inputs the source reads as reference (see REFERENCE READ). Needs
 /     supporting inputs to describe.
@@ -341,6 +344,9 @@
         if[0=count sup;
             '"define: ",string[source]," declares reference_read but no supporting inputs - there is no reference to read"];
         .qetl.source.check_reference_read[source;decl`reference_read]];
+    / A declaration read back from the registry carries the default, (): not declared (see source_batch_read.q).
+    if[(`batch_read in key decl) and not ()~decl`batch_read;
+        .qetl.source.check_batch_read[source;decl`batch_read;decl]];
     tr:$[`transport in key decl; decl`transport; .qetl.source.default_transport];
     if[not tr in .qetl.source.transports[];
         '"define: ",string[source],"'s transport must be one of ",(", " sv string .qetl.source.transports[])];

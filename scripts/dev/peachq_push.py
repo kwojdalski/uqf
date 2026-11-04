@@ -10,7 +10,12 @@ each reproduced on PeachQ locally in about a minute.
 
 What runs: the tests/q/test_*.q files `origin/master...HEAD` adds or changes,
 plus, for each production .q it changes, the suite named after it
-(src/pricing/forwards.q -> tests/q/test_forwards.q) when one exists. Not the
+(src/pricing/forwards.q -> tests/q/test_forwards.q) when one exists, plus
+the documented-examples suite, tests/q/test_docstring_examples.q, when the
+diff of any .q adds or removes an `@eg` tag line (#1978) - a failing `@eg`
+was the commonest PeachQ bounce of all (#1961, #1974), and its module's
+namesake suite does not run it. That suite is all-or-nothing: it scans every
+`@eg` under src/ and scripts/ and adds about 2 s on PeachQ. Not the
 full reach scripts/dev/test_impact.py computes: building its graph takes
 about 45 s of CPU before any test runs, and the q-tests hook beside this one
 already pays that on KDB-X. One PeachQ process runs them, through
@@ -38,6 +43,7 @@ import argparse
 import importlib.util
 import os
 import platform
+import re
 import subprocess
 import sys
 import tempfile
@@ -45,6 +51,10 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
 SUITES = "tests/q"
+#: The suite that runs every `@eg` stating a value (.qt.man.examples).
+EXAMPLES = "test_docstring_examples.q"
+#: An `@eg` tag line, as that suite's own is_tag reads one: "/ @eg <expr>".
+EG_TAG = re.compile(r"^\s*/\s*@eg\b")
 BASE = "origin/master"
 #: Seconds for the one PeachQ process; the selected suites usually take a few.
 TIMEOUT = 900
@@ -70,10 +80,32 @@ def changed(base: str) -> list[str]:
     return [p for p in out.splitlines() if p]
 
 
-def select(paths: list[str], root: Path = REPO) -> list[str]:
+def q_diff(base: str) -> str:
+    """The zero-context diff of the .q files `base...HEAD` adds or changes."""
+    return subprocess.run(
+        ["git", "diff", "-U0", "--diff-filter=AMR", f"{base}...HEAD", "--", "*.q"],
+        cwd=REPO,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+
+
+def touches_eg(diff: str) -> bool:
+    """Does this diff add or remove an `@eg` tag line? Prose that only
+    mentions @eg, and the file headers, do not count."""
+    return any(
+        line[:1] in "+-" and not line.startswith(("+++", "---")) and EG_TAG.match(line[1:])
+        for line in diff.splitlines()
+        if line
+    )
+
+
+def select(paths: list[str], root: Path = REPO, examples: bool = False) -> list[str]:
     """The suite files to run, as bare names: every changed tests/q/test_*.q,
-    and the namesake suite of every changed production .q that has one."""
-    picked: set[str] = set()
+    the namesake suite of every changed production .q that has one, and the
+    documented-examples suite when `examples` (an `@eg` line changed)."""
+    picked: set[str] = {EXAMPLES} if examples else set()
     for path in paths:
         p = Path(path)
         if p.suffix != ".q":
@@ -114,7 +146,11 @@ def run(base: str) -> int:
     except subprocess.CalledProcessError as e:
         print(f"peachq-push: cannot diff against {base}: {e.stderr.strip()} - not run")
         return 0
-    files = select(paths)
+    try:
+        examples = touches_eg(q_diff(base))
+    except subprocess.CalledProcessError:
+        examples = False
+    files = select(paths, examples=examples)
     if not files:
         print(f"peachq-push: no q test file reached in {base}...HEAD - nothing to run on PeachQ")
         return 0

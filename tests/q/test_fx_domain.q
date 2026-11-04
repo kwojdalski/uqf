@@ -60,22 +60,23 @@
     .qunit.assertThrows[.qpipe.transform.fx_domain.require_spec;sp,enlist[`tolerance]!enlist -1f;"fx_markout: tolerance must be a non-negative float, in pips";"refused"];
     .qunit.assertThrows[.qpipe.transform.fx_domain.require_spec;sp,enlist[`convention]!enlist 5;"fx_markout: convention must be a .qf.mkt attribution convention dictionary";"refused"]};
 
-/ The core under the FX domain: pip_factor * move is today's fx_markout pips for
-/ every component and the statuses agree, on both of the transform's worked examples
-/ (a EURUSD buy reported in USD, a USDPLN sell reported in PLN).
-.qt.qpipe.transform.fx_domain.test_the_core_under_the_fx_domain_reproduces_fx_markout:{[tc]
-    ex:(.qetl.transform.def[`fx_markout_calc])`examples;
-    {[ex;rep]
-        exe:update clock:`venue from ex[`inputs]`executions;
-        md:update clock:`venue from ex[`inputs]`market_data;
-        sp:`horizons`report_ccy`rate_timing!(0D00:00:01 0D00:00:10;rep;`execution);
-        got:.qpipe.transform.markout_core.calc[.qpipe.transform.fx_domain.domain;sp;exe;md];
-        want:ex`expected;
-        .qunit.assertEquals[count got;count want;"one core row for every fx_markout row"];
-        .qunit.assertEquals[got`kind;want`kind;"same components, same order"];
-        .qunit.assertEquals[got`step;want`step;"same steps"];
-        .qunit.assertEquals[got`horizon;want`horizon;"same horizons"];
-        pips:(`float$.qpipe.transform.fx_domain.pip_factor_of[got`sym])*got`move;
-        .qunit.assertTrue[all (1e-6>abs pips-want`pips) or (null pips) and null want`pips;"pip_factor * move is the pips fx_markout reports"];
-        .qunit.assertEquals[got`status;want`status;"statuses agree, residual included"]
-      }'[ex;`USD`PLN]}
+/ The core under the FX domain, on the transform's USDPLN worked example (a sell at 3.99 that
+/ the books move from 4.0 to 5.5 through EURUSD inverted and EURPLN): the core's rows carry
+/ FX's leg columns on the leg rows, and long_rows turns them into the stored long rows.
+.qt.qpipe.transform.fx_domain.test_the_core_under_the_fx_domain_carries_the_legs_and_long_rows_add_the_pips:{[tc]
+    ex:((.qetl.transform.def[`fx_markout_calc])`examples) 1;
+    sp:.qpipe.transform.fx_markout.require_spec .qpipe.transform.fx_markout.default_spec;
+    got:.qpipe.transform.markout_core.calc[.qpipe.transform.fx_domain.domain;sp;ex[`inputs]`executions;ex[`inputs]`market_data];
+    h:got where (got`horizon)=0D00:00:01;
+    .qunit.assertEquals[h`kind;`total`execution`leg`leg`residual;"components in order"];
+    .qunit.assertEquals[h`leg;``,`EURUSD`EURPLN,`;"the legs ride on the leg rows"];
+    .qunit.assertEquals[h`invert;00100b;"EURUSD is inverted on the route"];
+    .qunit.assertEquals[h`price_t0;0n 0n 1.25 5 0n;"a leg's mid at the execution; the other kinds are long_rows'"];
+    .qunit.assertEquals[(h`price_t1) 2 3;1 5.5;"and at the horizon"];
+    long:.qpipe.transform.fx_domain.long_rows[sp;got];
+    .qunit.assertEquals[cols long;cols .qpipe.transform.fx_markout.result;"the stored long layout, column for column"];
+    l1:long where (long`horizon)=0D00:00:01;
+    .qunit.assertEquals[l1`pips;-15100 -100 -10000 -5000 0f;"pips are pip_factor * move"];
+    .qunit.assertEquals[l1`price_t0;3.99 3.99 1.25 5 0n;"a total and an execution residual start at the fill"];
+    .qunit.assertEquals[l1`price_t1;5.5 4 1 5.5 0n;"and end at the reference at the horizon and at the execution"];
+    .qunit.assertEquals[l1`pip_value;5#100f;"1e6 USDPLN is 100 PLN a pip"]};

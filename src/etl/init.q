@@ -78,10 +78,13 @@
 \l src/etl/core/source_zones.q
 \l src/etl/core/source_local_hdb.q
 \l src/etl/core/source_fetch.q
+\l src/etl/core/source_batch_read.q
 \l src/etl/core/live_check.q
 \l src/etl/core/bounded_connect.q
 \l src/etl/core/bounded_ready.q
 \l src/etl/core/bounded_worker.q
+\l src/etl/core/bounded_batching.q
+\l src/etl/core/bounded_batch_read.q
 \l src/etl/core/bounded_flags.q
 \l src/etl/core/stream_health.q
 \l src/etl/core/uptime.q

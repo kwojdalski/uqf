@@ -259,6 +259,81 @@
     .qunit.assertTrue[any (r2 0) like "*already rectangular - nothing to do*";"nothing to do the second time"];
     .qunit.assertEquals[.qt.qproc.fillhdb.snapshot[root];after1;"the attributed column is not rewritten"]};
 
+/ --- crypto_trades.source_time: history has no venue time (#1936) ------------
+
+.qt.qproc.fillhdb.test_a_crypto_trades_partition_older_than_source_time_gets_null_not_a_copy_of_time:{[t]
+    root:.qt.qproc.fillhdb.scratch[];
+    t0:2026.01.01D00:00:00.000000000;
+    / one partition recorded before the column existed, one after it, with the venue's own (earlier) time
+    .qt.qproc.fillhdb.put[root;2026.01.01;`crypto_trades;([] time:2#t0; sym:2#`$"BTC-USDT"; venue:2#`binance_spot)];
+    .qt.qproc.fillhdb.put[root;2026.01.02;`crypto_trades;([] time:1#t0+0D01; source_time:enlist t0+0D00:59:59.5; sym:enlist `$"BTC-USDT"; venue:enlist `binance_spot)];
+    schema:"crypto_trades:([] time:`timestamp$(); source_time:`timestamp$(); sym:`symbol$(); venue:`symbol$())\n";
+    r:.qt.qproc.fillhdb.run[root;schema];
+    .qunit.assertEquals[r 1;0;"clean"];
+    st:{[root;part] get ` sv .qt.qproc.fillhdb.dir[root;part;`crypto_trades],`source_time}[root];
+    .qunit.assertEquals[st 2026.01.01;2#0Np;"the old partition has NO venue time: null, which the executions mapping reads as the receipt clock"];
+    .qunit.assertTrue[not (st 2026.01.01)~(get ` sv .qt.qproc.fillhdb.dir[root;2026.01.01;`crypto_trades],`time);"and never a copy of the receipt time, which would pass for a venue stamp"];
+    .qunit.assertEquals[st 2026.01.02;enlist t0+0D00:59:59.5;"a partition that already has the venue's time keeps it"];
+    .qunit.assertEquals[.qt.qproc.fillhdb.cols_of[root;2026.01.01;`crypto_trades];`time`sym`venue`source_time;"appended to .d"];
+    after1:.qt.qproc.fillhdb.snapshot[root];
+    .qt.qproc.fillhdb.run[root;schema];
+    .qunit.assertEquals[.qt.qproc.fillhdb.snapshot[root];after1;"and a second run changes nothing"]};
+
+/ --- the FX markout tables gain the markout contract's columns, derived (#1935) -------
+
+/ A column of a partition's table, decoded against the HDB's sym file when it is a symbol column.
+.qt.qproc.fillhdb.col_of:{[root;part;t;c]
+    v:get ` sv .qt.qproc.fillhdb.dir[root;part;t],c;
+    $[20h=type v; (get hsym `$root,"/sym") v; v]}
+
+/ A USDPLN sell at 3.99 and a EURUSD buy at 1.1001 as the long table stored them before the contract:
+/ every row of an (execution, horizon) repeats the fill, and price_t0/price_t1 are per component.
+.qt.qproc.fillhdb.old_long:{[]
+    t0:2026.01.01D10:00:10.000000000;
+    ([] time:7#t0; source_time:7#t0-0D00:00:10; venue:7#`a; fill_id:(5#`y1),2#`x1; sym:(5#`USDPLN),2#`EURUSD; side:(5#-1),2#1; size:7#1e6;
+        horizon:7#0D00:00:01; kind:`total`execution`leg`leg`residual`total`execution; step:0 0 1 2 0 0 0;
+        leg:``,`EURUSD`EURPLN,```; invert:0b,0b,1b,0b,0b,0b,0b;
+        price_t0:3.99 3.99 1.25 5 0n 1.1001 1.1001; price_t1:5.5 4 1 5.5 0n 1.1005 1.1;
+        pips:-15100 -100 -10000 -5000 0 4 -1f; status:`ok`ok`ok`ok`reconciled`ok`ok; pip_factor:(5#10000),2#10000; version:7#`proposed_v1)}
+
+.qt.qproc.fillhdb.fx_schema:"fx_markout:([] time:`timestamp$(); source_time:`timestamp$(); clock:`symbol$(); venue:`symbol$(); fill_id:`symbol$(); sym:`symbol$(); side:`long$(); size:`float$(); horizon:`timespan$(); kind:`symbol$(); step:`long$(); leg:`symbol$(); invert:`boolean$(); price:`float$(); price_t0:`float$(); price_t1:`float$(); quote_ccy:`symbol$(); ref_t0:`float$(); ref_t1:`float$(); move:`float$(); pips:`float$(); pip_factor:`long$(); pip_value:`float$(); quote_amount:`float$(); report_ccy:`symbol$(); rate:`float$(); rate_source:`symbol$(); rate_sym:`symbol$(); rate_time:`timestamp$(); rate_timing:`symbol$(); report_amount:`float$(); status:`symbol$(); contract_version:`long$(); version:`symbol$())\n"
+
+.qt.qproc.fillhdb.test_fx_markouts_gain_the_contracts_columns_derived_from_the_stored_rows:{[t]
+    root:.qt.qproc.fillhdb.scratch[];
+    .qt.qproc.fillhdb.put[root;2026.01.01;`fx_markout;.qt.qproc.fillhdb.old_long[]];
+    r:.qt.qproc.fillhdb.run[root;.qt.qproc.fillhdb.fx_schema];
+    .qunit.assertEquals[r 1;0;"clean"];
+    c:.qt.qproc.fillhdb.col_of[root;2026.01.01;`fx_markout;];
+    .qunit.assertEquals[c`clock;7#`unknown;"the clock of a stored row is unknown, never a guess and never null"];
+    .qunit.assertEquals[c`contract_version;7#1;"the stored rows are the contract's first version"];
+    .qunit.assertEquals[c`quote_ccy;(5#`PLN),2#`USD;"the pair's quote leg"];
+    .qunit.assertEquals[c`price;(5#3.99),2#1.1001;"the fill price, read off the total row of the (execution, horizon)"];
+    .qunit.assertEquals[c`ref_t0;(5#4f),2#1.1;"the reference at the execution, read off the execution residual's price_t1"];
+    .qunit.assertEquals[c`ref_t1;(5#5.5),2#1.1005;"the reference at the horizon, read off the total's price_t1"];
+    .qunit.assertEquals[c`move;-1.51 -0.01 -1 -0.5 0 4e-4 -1e-4;"pips over the pip factor"];
+    .qunit.assertEquals[c`pip_value;7#100f;"1e6 over a pip factor of 10000"];
+    .qunit.assertEquals[c`quote_amount;-1510000 -10000 -1000000 -500000 0 400 -100f;"the size times the move"];
+    .qunit.assertTrue[all null c`report_amount;"what no stored row can say stays null: no rate was ever declared"];
+    .qunit.assertTrue[all null c`rate;"the rate"];
+    .qunit.assertEquals[c`pips;-15100 -100 -10000 -5000 0 4 -1f;"and nothing already stored is touched"];
+    after:.qt.qproc.fillhdb.snapshot[root];
+    r2:.qt.qproc.fillhdb.run[root;.qt.qproc.fillhdb.fx_schema];
+    .qunit.assertTrue[any (r2 0) like "*already rectangular - nothing to do*";"nothing to do the second time"];
+    .qunit.assertEquals[.qt.qproc.fillhdb.snapshot[root];after;"the derived columns are not rewritten"]};
+
+.qt.qproc.fillhdb.test_the_wide_fx_markout_gains_the_same_derived_columns:{[t]
+    root:.qt.qproc.fillhdb.scratch[];
+    t0:2026.01.01D10:00:10.000000000;
+    / the wide table before the contract: a row per (execution, horizon), the markout in total_pips
+    .qt.qproc.fillhdb.put[root;2026.01.01;`fx_markout_wide;([] time:2#t0; sym:`USDPLN`EURUSD; size:2#1e6; pip_factor:2#10000; total_pips:-15100 4f)];
+    schema:"fx_markout_wide:([] time:`timestamp$(); sym:`symbol$(); size:`float$(); pip_factor:`long$(); total_pips:`float$(); clock:`symbol$(); quote_ccy:`symbol$(); move:`float$(); pip_value:`float$(); quote_amount:`float$(); report_amount:`float$(); contract_version:`long$())\n";
+    r:.qt.qproc.fillhdb.run[root;schema];
+    .qunit.assertEquals[r 1;0;"clean"];
+    c:.qt.qproc.fillhdb.col_of[root;2026.01.01;`fx_markout_wide;];
+    .qunit.assertEquals[(c`clock;c`quote_ccy;c`contract_version);(2#`unknown;`PLN`USD;2#1);"clock unknown, the pair's quote leg, the contract's first version"];
+    .qunit.assertEquals[(c`move;c`pip_value;c`quote_amount);(-1.51 4e-4;2#100f;-1510000 400f);"the markout over the pip factor, and its money in the quote currency"];
+    .qunit.assertTrue[all null c`report_amount;"and nothing is converted that no rate was declared for"]};
+
 / --- idempotency -----------------------------------------------------------
 
 .qt.qproc.fillhdb.test_repeating_a_successful_repair_changes_nothing:{[t]

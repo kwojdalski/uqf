@@ -71,7 +71,7 @@
     bad:update pips:0w from r where i=0;
     f:.qpipe.job.hdb_fx_markouts_backfill.quality_check bad;
     .qunit.assertEquals[(f`check;f`status);(enlist `infinite_pips;enlist `fail);"an infinite markout is refused by name"];
-    unrec:update status:`unreconciled from r where kind=`residual;
+    unrec:update pips:5f from r where kind=`residual;
     .qunit.assertEquals[(.qpipe.job.hdb_fx_markouts_backfill.quality_check unrec)`check;enlist `unreconciled_residual;"and so is a leg allocation that does not add up"]};
 
 .qt.qpipe.job.hdb_fx_markouts_backfill.test_the_facts_count_executions_horizons_and_the_unpriced:{[t]
@@ -141,10 +141,10 @@
     / the EURUSD book live at 10:00:03 was set at 09:50:00 - before the window
     f:{
         `executions set ([] date:enlist 2026.09.17; source_time:enlist 2026.09.17D10:00:03; venue:enlist `a; sym:enlist `EURUSD;
-            side:enlist 1; size:enlist 1e6; price:enlist 1.1; fill_id:enlist `e1);
+            side:enlist 1; size:enlist 1e6; price:enlist 1.1; fill_id:enlist `e1; clock:enlist `venue);
         `market_data set ([] date:2026.09.17 2026.09.17; source_time:2026.09.17D09:50:00 2026.09.17D11:30:00;
             sym:2#`EURUSD; source:2#`a; bid_prices:(enlist 1.1;enlist 1.2); bid_sizes:2#enlist enlist 1e6;
-            ask_prices:(enlist 1.1002;enlist 1.2002); ask_sizes:2#enlist enlist 1e6);
+            ask_prices:(enlist 1.1002;enlist 1.2002); ask_sizes:2#enlist enlist 1e6; clock:2#`venue);
         .qpipe.source.hdb_fx_markouts.query[.qt.qpipe.job.hdb_fx_markouts_backfill.hdb;2026.09.17D10:00:00;2026.09.17D11:00:00]};
     `.qt.qpipe.job.hdb_fx_markouts_backfill.early set f;
     r:.qt.qpipe.job.hdb_fx_markouts_backfill.with_hdb {.qt.qpipe.job.hdb_fx_markouts_backfill.early[]};
@@ -154,9 +154,9 @@
 .qt.qpipe.job.hdb_fx_markouts_backfill.test_the_book_before_a_window_is_bounded_by_the_lookback:{[t]
     f:{
         `executions set ([] date:enlist 2026.09.17; source_time:enlist 2026.09.17D10:00:03; venue:enlist `a; sym:enlist `EURUSD;
-            side:enlist 1; size:enlist 1e6; price:enlist 1.1; fill_id:enlist `e1);
+            side:enlist 1; size:enlist 1e6; price:enlist 1.1; fill_id:enlist `e1; clock:enlist `venue);
         `market_data set ([] date:enlist 2026.09.01; source_time:enlist 2026.09.01D10:00; sym:enlist `EURUSD; source:enlist `a;
-            bid_prices:enlist enlist 1.1; bid_sizes:enlist enlist 1e6; ask_prices:enlist enlist 1.1002; ask_sizes:enlist enlist 1e6);
+            bid_prices:enlist enlist 1.1; bid_sizes:enlist enlist 1e6; ask_prices:enlist enlist 1.1002; ask_sizes:enlist enlist 1e6; clock:enlist `venue);
         .qpipe.source.hdb_fx_markouts.query[.qt.qpipe.job.hdb_fx_markouts_backfill.hdb;2026.09.17D10:00:00;2026.09.17D11:00:00]};
     `.qt.qpipe.job.hdb_fx_markouts_backfill.stale set f;
     r:.qt.qpipe.job.hdb_fx_markouts_backfill.with_hdb {.qt.qpipe.job.hdb_fx_markouts_backfill.stale[]};
@@ -210,7 +210,8 @@
     `executions`market_data!(.qpipe.source.hdb_fx_markouts.raw_executions[];select from b where sym=`EURUSD)}
 
 .qt.qpipe.job.hdb_fx_markouts_backfill.covered:{[]
-    v:.qetl.source.fixture_version `v1;
+    / the worker declares revision 1: its coverage is recorded under v1@r1 (#1097), so a changed output replans
+    v:.qetl.source.fixture_version `$"v1@r1";
     .qetl.coverage.is_covered[`fx_markout;`;v;.z.p;2026.09.17D10:00:00;2026.09.17D11:00:00]}
 
 .qt.qpipe.job.hdb_fx_markouts_backfill.test_a_window_with_executions_and_no_books_is_not_claimed_and_replans_once_they_land:{[t]

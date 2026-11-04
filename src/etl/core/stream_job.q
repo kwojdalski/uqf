@@ -270,7 +270,7 @@
 / @param job the job's name
 / @return the declaration dict
 / @throws error naming the job when register was never called for it
-/ @eg .qetl.job.stream.def[`crypto_markout]`subscribe_to  ->  `crypto_trades`crypto_book
+/ @eg .qetl.job.stream.def[`crypto_markout]`subscribe_to  ->  `executions`market_data
 .qetl.job.stream.def:{[job]
     if[not job in key .qetl.job.stream.jobs;
         '"def: ",string[job]," is not a registered streaming job - a job registers as its own file loads, so this is a wiring bug rather than a lookup miss"];

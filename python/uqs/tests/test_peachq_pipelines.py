@@ -243,7 +243,7 @@ def test_a_bundle_installed_for_peachq_etl_joins_no_other_runtime(monkeypatch):
         "runtimes": ["peachq-etl"],
     }
     monkeypatch.setattr(runtime_members, "_ledger", lambda: {"synthpq": entry})
-    monkeypatch.setattr(runtime_members.profiles, "closure", lambda procs: set(procs))
+    monkeypatch.setattr(runtime_members.profiles, "closure", lambda procs, unfed=(): set(procs))
     rts = runtimes.RUNTIMES
     assert runtime_members.pipeline_procnames(rts["peachq-etl"]) == {"synthfeed1"}
     assert "synthfeed1" not in (runtime_members.pipeline_procnames(rts["crypto"]) or set())
