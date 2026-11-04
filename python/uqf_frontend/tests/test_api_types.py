@@ -52,11 +52,17 @@ REQUESTS = {
     "ConfigPushReport": "ConfigPushReported",
     "ConfigPushCloseBody": "ConfigPushCloseRequest",
     "ConfigRestoreBody": "ConfigRestoreRequest",
+    "AccessChangeBody": "AccessChangeRequest",
+    "RuntimeChangeBody": "RuntimeChangeRequest",
 }
 
 #: TypeScript interface -> the model it mirrors: every response, the
 #: process-health row the browser reads by key, and every request.
 PAIRS = {
+    "SettingsData": "SettingsResponse",
+    "SecretSetting": "SecretSetting",
+    "SettingChange": "SettingChange",
+    "SettingsChangeResult": "SettingsChangeResponse",
     "Capabilities": "CapabilitiesResponse",
     "Capability": "Capability",
     "TunnelCheckRecord": "TunnelCheckRecordOut",

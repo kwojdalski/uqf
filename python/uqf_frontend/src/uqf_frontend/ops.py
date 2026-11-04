@@ -143,6 +143,8 @@ POLL_SECONDS: dict[str, int] = {
     # the access policy can change without a restart (#2045); an open tab
     # learns of it this often
     "capabilities": 60,
+    # the admin Settings view (#2046): changed rarely, and by people
+    "settings": 30,
 }
 
 

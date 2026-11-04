@@ -320,6 +320,27 @@ SAMPLES: dict[tuple[str, str], dict] = {
             ]
         }
     },
+    # the admin Settings view (#2046)
+    ("GET", "/settings"): {},
+    ("PUT", "/settings/access"): {
+        "json": {"version": "0" * 64, "policy": {"grants": [], "memberships": []}}
+    },
+    ("PUT", "/settings/runtime"): {
+        "json": {
+            "version": "0" * 64,
+            "settings": {
+                "activity_level": "actions",
+                "activity_retention_days": 30,
+                "activity_max_rows": 100000,
+                "activity_interactions_retention_days": 7,
+                "activity_interactions_max_rows": 50000,
+                "activity_debug_retention_days": 1,
+                "activity_debug_max_rows": 10000,
+                "config_history_keep": 50,
+                "config_history_days": 90,
+            },
+        }
+    },
     ("POST", "/control/process/{action}"): {"json": {"procs": "rdb1"}},
     ("PUT", "/control/process/{procname}/config"): {"json": {"field": "port", "value": "1"}},
     ("PUT", "/control/worker-config"): {"json": {"key": "k", "value": "v"}},
