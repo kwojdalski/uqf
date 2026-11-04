@@ -1214,6 +1214,14 @@ uqs logs fxorderbookfeed1 -f --level WARNING   # live tail, warnings/errors only
 Lines are sorted by the log's own timestamp. `-f` keeps following across
 restarts and the daily roll. `--level` filters to that level and above.
 
+Values are coloured by what they look like: numbers magenta (red when negative),
+q symbols yellow, dates and timestamps green, UUIDs and 32/40/64-digit hex
+digests light blue, and other `key=value` values light cyan. Each element of a
+vector such as `sizes=1000000 2e+07` or `` symbols=`EURUSD`GBPUSD `` is coloured
+on its own, and so is each atom of a list such as `` x=(1;`a) ``. Text in double
+quotes is never looked inside. The colours change nothing else: with colour off
+the line is the log's text exactly.
+
 An attached backfill or receiver is no TorQ process and has no `out_` log.
 `uqs logs --attachment NAME --worker WORKER` reads its latest run instead, with
 the same `-f`, `-n` and `--level`; `--run` picks an older run
@@ -1599,6 +1607,46 @@ This is not `uqs --target NAME query ...`, which runs `uqs query` on the server
 form names a different machine to run the query, so giving both `--target`
 options is refused.
 
+### A standing tunnel: plan and check
+
+`query --tunnel` opens a tunnel for one call. For a tunnel that stays open while
+you work, `uqs target tunnel plan` prints which processes it forwards and the
+ssh command that opens it. The command holds the ssh destination and the ports,
+never a password. `uqs target tunnel check` then tests each forward.
+
+```
+uqs target tunnel plan prod                        # every rdb, hdb, wdb and gateway
+uqs target tunnel plan prod rdb1 hdb1 --local rdb1:7002 --json
+uqs target tunnel check prod --password-env PROD_Q_PASSWORD
+```
+
+The processes, their roles and their remote ports come from the target's
+release, as `query --tunnel` reads them. A local port is the remote port plus
+`--local-offset` (10000) unless `--local PROC:PORT` names one. The plan refuses
+a process that is not declared there, one that is not an rdb, hdb, wdb or
+gateway, a port out of range, and two forwards sharing one local port. Each
+refusal under `--json` carries a `kind`: `discovery`, `unknown_process`,
+`unsupported_role`, `invalid_port` or `port_conflict`.
+
+The check tests each endpoint in the order a connection is made, and the first
+layer that fails gives the endpoint's status:
+
+- `ssh`: the target cannot be reached.
+- `unreachable`: nothing listens on the remote port. This is asked on the
+  server, so a closed port is never mistaken for a refused login.
+- `auth_refused`: the q login was refused.
+- `identity_mismatch`: `.proc.procname` named another process.
+- `not_ready`: a gateway has no active server.
+- `local_bind`: the planned local port is held by something other than this
+  process's tunnel.
+
+Every endpoint is checked, so one failure does not hide the others. Each one
+that passes is recorded in `tunnel_checks.json`, beside `deploy_targets.toml`
+(or wherever `UQS_TUNNEL_CHECKS` points). The plan reads that record to mark
+each mapping `verified`, `stale` (checked more than an hour ago, or for other
+ports) or `unverified`. The frontend's Services view calls the same two
+functions.
+
 ## MCP server
 
 `uqs-mcp` exposes the CLI's operations as MCP tools (`uqs_start`, `uqs_status`,
@@ -1753,6 +1801,7 @@ The verbs of rule 4:
   | `log` `revert`                                | a target's change log, and undoing one change in it       |
   | `adopt`                                       | take over a release copied onto a server by hand          |
   | `restore`                                     | a config push's files back as they were, as a new push    |
+  | `plan`                                        | what a tunnel to a target forwards, without opening it    |
 
 Three of these sit beside a near neighbour on purpose (#1756): `log` is a
 record's change history, where `logs` is processes' output and `history` what
