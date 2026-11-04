@@ -54,6 +54,42 @@ def test_a_write_that_fails_rolls_back_what_was_written(tmp_path):
     assert target.read_text() == before
 
 
+@pytest.mark.parametrize("existing", [False, True])
+def test_a_partial_write_rolls_back_the_failing_target(tmp_path, monkeypatch, existing):
+    target = tmp_path / "partial" / "target.txt"
+    original = "é€ original contents\r\n"
+    if existing:
+        target.parent.mkdir()
+        target.write_text(original)
+    mode = WriteMode.APPEND if existing else WriteMode.CREATE
+    plan = ScaffoldPlan(
+        "audit",
+        [
+            FileAction(Path("docs/audit/notes.md"), "notes\n"),
+            FileAction(Path("partial/target.txt"), "replacement\n", mode),
+        ],
+    )
+    write_text = Path.write_text
+    failed = False
+
+    def partial_write(path, text, *args, **kwargs):
+        nonlocal failed
+        if path == target and not failed:
+            failed = True
+            path.write_bytes(text.encode()[:3])
+            raise OSError("write failed after truncating the target")
+        return write_text(path, text, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "write_text", partial_write)
+    with pytest.raises(OSError, match="after truncating"):
+        write.apply_plan(plan, tmp_path)
+    assert not (tmp_path / "docs").exists()
+    if existing:
+        assert target.read_bytes() == original.encode()
+    else:
+        assert not target.parent.exists()
+
+
 def test_a_plan_that_applies_writes_every_file(tmp_path):
     tree = _tree(tmp_path, expected_line=True)
     assert write.apply_plan(_plan(), tree) == [Path("docs/audit/notes.md"), STACK_TABLES_TEST]
