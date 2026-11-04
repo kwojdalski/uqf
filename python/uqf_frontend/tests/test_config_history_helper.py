@@ -541,3 +541,19 @@ def test_a_push_goes_to_shared_config_and_nowhere_else(root):
                       destination=destination)  # fmt: skip
         assert answer["error"] == "unsupported", destination
     assert not _history(root).exists()
+
+
+def test_a_restore_removes_no_directory_outside_shared_config(root):
+    """A manifest's created_dirs is read as paths strictly below shared/config:
+    an edited one naming an empty directory elsewhere removes nothing."""
+    (root / "releases" / "x").mkdir(parents=True)
+    push_id = _open(root)
+    _put(root, push_id, "shared/config/only", b"1")
+    manifest_file = _history(root) / push_id / MANIFEST
+    manifest = json.loads(manifest_file.read_text())
+    manifest["files"][0]["created_dirs"] = ["releases/x", "shared/config/../../releases/x"]
+    manifest_file.write_text(json.dumps(manifest))
+    answer = _restore(root, push_id)
+    assert answer["ok"] and answer["results"][0]["outcome"] == "succeeded"
+    assert not (root / "shared/config/only").exists()
+    assert (root / "releases" / "x").is_dir()

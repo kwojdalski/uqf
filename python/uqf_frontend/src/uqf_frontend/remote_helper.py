@@ -1412,8 +1412,10 @@ def _restore_one(root, spfd, npfd, manifest, source, step):
     _write_manifest(npfd, manifest)
     # the directories the push created, deepest first, while empty
     for made in sorted(source.get("created_dirs") or [], key=len, reverse=True):
-        made_parts = split_path(made)
         try:
+            made_parts = upload_parts(made + "/x")[:-1]
+            if len(made_parts) <= len(UPLOAD_ROOT):
+                continue  # strictly below shared/config, never it or above
             dfd = walk(root, made_parts[:-1])
         except Refusal:
             continue
