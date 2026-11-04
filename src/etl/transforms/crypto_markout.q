@@ -138,8 +138,12 @@
 / @throws error when the spec is refused by the core
 / @eg count .qpipe.transform.crypto_markout.score[`horizons`report_ccy`rate_timing!(enlist 0D00:00:10;`USD;`execution);([] source_time:`timestamp$(); venue:`symbol$(); sym:`symbol$(); side:`long$(); size:`float$(); price:`float$(); fill_id:`symbol$(); clock:`symbol$(); fee:`float$(); fee_ccy:`symbol$());0#.qpipe.transform.markout_core.market_data_in]  ->  0
 .qpipe.transform.crypto_markout.score:{[spec;exe;md]
+    spec:.qpipe.transform.markout_core.validate[.qpipe.transform.crypto_markout.domain;spec];
     r:.qpipe.transform.markout_core.calc[.qpipe.transform.crypto_markout.domain;spec;exe;md];
-    .qpipe.transform.crypto_markout.measures[r;select venue, fill_id, fee, fee_ccy from exe]}
+    / Match the core's chosen deliveries: an excluded later row cannot supply
+    / a fee, and a correction's fee must not come from its first delivery.
+    fees:.qpipe.transform.markout_core.last_delivery[exe where null .qpipe.transform.markout_core.why[.qpipe.transform.crypto_markout.domain;spec;exe]];
+    .qpipe.transform.crypto_markout.measures[r;select venue, fill_id, fee, fee_ccy from fees]}
 
 / The crypto domain, as the core takes it (the way .qpipe.transform.fx_domain.domain
 / is): resolve, convert and no spec keys of its own. A fee-adjusted measure is a
