@@ -36,7 +36,7 @@ SCHEMA = [
     for table, columns in {
         "fx_markout": "time:p sym:s venue:s horizon:n kind:s pips:f",
         "crypto_markout": "time:p sym:s venue:s horizon:n kind:s markout_bps:f",
-        "market_data": "time:p sym:s bid_prices:F ask_prices:F",
+        "market_data": "time:p sym:s source:s bid_prices:F ask_prices:F",
         "executions": "time:p sym:s venue:s side:j price:f",
         "trades": "time:p sym:s side:j trade_price:f",
     }.items()
@@ -292,6 +292,7 @@ def book_fixture(count: int) -> pl.DataFrame:
         {
             "time": stamps("2026-11-03T10:00:00+00:00", count, 100),
             "sym": ["EURUSD"] * count,
+            "source": ["UQFDEPTH"] * count,
             "bid_prices": pl.Series(bids, dtype=pl.List(pl.Float64)),
             "ask_prices": pl.Series(asks, dtype=pl.List(pl.Float64)),
         }
@@ -314,13 +315,13 @@ def test_mid_and_spread_are_drawn_with_fills_by_side():
     gw = TableGateway({"market_data": book_fixture(10), "executions": fills_fixture()})
     body = client(gw).post("/charts/mid_spread_fills", json={"sym": "EURUSD"}).json()
     traces = {t["name"]: t for t in body["figure"]["data"]}
-    assert set(traces) == {"mid", "spread", "buy fills", "sell fills"}
-    mid = traces["mid"]
+    assert set(traces) == {"mid · UQFDEPTH", "spread · UQFDEPTH", "buy fills", "sell fills"}
+    mid = traces["mid · UQFDEPTH"]
     assert mid["x"][0] == "2026-11-03 10:00:00.000000"
     assert mid["y"][0] == pytest.approx(1.1001)
     assert mid["y"][3] is None  # the empty bid side is a gap, not 0
-    assert traces["spread"]["y"][0] == pytest.approx(0.0002)
-    assert traces["spread"]["yaxis"] == "y2"
+    assert traces["spread · UQFDEPTH"]["y"][0] == pytest.approx(0.0002)
+    assert traces["spread · UQFDEPTH"]["yaxis"] == "y2"
     assert traces["buy fills"]["y"] == [1.1001, 1.1003]
     assert traces["sell fills"]["x"] == ["2026-11-03 10:00:00.250000"]
     assert body["points"] == 10 + 10 + 3
@@ -343,10 +344,75 @@ def test_a_long_book_is_reduced_to_the_point_limit_and_says_so():
     )
     assert body["downsampled"] is True
     assert body["points"] <= body["point_limit"]
-    mid = next(t for t in body["figure"]["data"] if t["name"] == "mid")
+    mid = next(t for t in body["figure"]["data"] if t["name"] == "mid · UQFDEPTH")
     assert len(mid["x"]) == body["point_limit"] // 3
     assert mid["y"][0] == pytest.approx(1.1001)  # the ends are kept
     assert None in mid["y"]  # and so is the gap
+
+
+def two_venue_book(count: int) -> pl.DataFrame:
+    """Two venues' books for one sym, interleaved in time as market_data
+    holds them: one row replaces the book for (sym, source) (#2077)."""
+    src = ["binance", "okx"] * (count // 2)
+    return pl.DataFrame(
+        {
+            "time": stamps("2026-11-03T10:00:00+00:00", count, 100),
+            "sym": ["BTCUSDT"] * count,
+            "source": src,
+            "bid_prices": pl.Series(
+                [[100.0] if s == "binance" else [110.0] for s in src], dtype=pl.List(pl.Float64)
+            ),
+            "ask_prices": pl.Series(
+                [[100.2] if s == "binance" else [110.4] for s in src], dtype=pl.List(pl.Float64)
+            ),
+        }
+    )
+
+
+def test_each_source_is_its_own_mid_and_spread_never_one_line_through_both():
+    fills = fills_fixture().with_columns(
+        pl.lit("BTCUSDT").alias("sym"), pl.Series("price", [100.1, 110.2, 100.15])
+    )
+    gw = TableGateway({"market_data": two_venue_book(6), "executions": fills})
+    body = client(gw).post("/charts/mid_spread_fills", json={"sym": "BTCUSDT"}).json()
+    traces = {t["name"]: t for t in body["figure"]["data"]}
+    assert set(traces) == {
+        "mid · binance", "spread · binance", "mid · okx", "spread · okx",
+        "buy fills", "sell fills",
+    }  # fmt: skip
+    assert traces["mid · binance"]["y"] == pytest.approx([100.1] * 3)
+    assert traces["mid · okx"]["y"] == pytest.approx([110.2] * 3)
+    assert traces["spread · binance"]["y"] == pytest.approx([0.2] * 3)
+    assert traces["spread · okx"]["y"] == pytest.approx([0.4] * 3)
+    assert traces["mid · okx"]["x"][0] == "2026-11-03 10:00:00.100000"
+    assert traces["spread · okx"]["yaxis"] == "y2"
+    # the fills are still overlaid on the mid panel, by side
+    assert traces["buy fills"]["y"] == [100.1, 100.15]
+    assert traces["sell fills"]["y"] == [110.2]
+    assert traces["buy fills"]["yaxis"] == "y"
+    assert body["points"] == 4 * 3 + 3
+
+
+def test_a_long_two_venue_book_is_reduced_per_source_inside_the_limit():
+    gw = TableGateway({"market_data": two_venue_book(8000)})
+    body = client(gw).post("/charts/mid_spread_fills", json={"sym": "BTCUSDT"}).json()
+    assert body["downsampled"] is True
+    assert body["points"] <= body["point_limit"]
+    by = {t["name"]: t for t in body["figure"]["data"]}
+    each = body["point_limit"] // 3 // 2
+    for venue, mid in (("binance", 100.1), ("okx", 110.2)):
+        assert len(by[f"mid · {venue}"]["y"]) == each
+        assert by[f"mid · {venue}"]["y"] == pytest.approx([mid] * each)  # no zig-zag survives
+
+
+def test_a_source_param_reads_that_source_alone():
+    gw = TableGateway({"market_data": two_venue_book(6).filter(pl.col("source") == "okx")})
+    body = (
+        client(gw).post("/charts/mid_spread_fills", json={"sym": "BTCUSDT", "source": "okx"}).json()
+    )
+    assert {t["name"] for t in body["figure"]["data"]} == {"mid · okx", "spread · okx"}
+    reads = [a[:4] for p, a, _ in gw.routed if p == queries.BROWSE]
+    assert reads[0] == ("market_data", ["sym", "source"], ["eq", "eq"], ["BTCUSDT", "okx"])
 
 
 # ----------------------------------------------------------------- ops latency
