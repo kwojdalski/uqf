@@ -284,7 +284,7 @@ def test_repository_checks_needs_every_job_and_excuses_only_a_scoped_skip():
         assert env[needed.strip('"$')] == f"${{{{ needs.scope.outputs.{output} }}}}"
 
 
-OK = dict(SCOPE="success", CHECKS="success")
+OK = dict(AUTHOR="success", SCOPE="success", CHECKS="success")
 NONE_NEEDED = dict(DOCS_NEEDED="false", Q_NEEDED="false", WEB_NEEDED="false", PYTHON_NEEDED="false")
 ALL_NEEDED = dict(DOCS_NEEDED="true", Q_NEEDED="true", WEB_NEEDED="true", PYTHON_NEEDED="true")
 ALL_SKIPPED = dict(DOCS="skipped", Q="skipped", WEB="skipped", PYTHON="skipped")
@@ -311,6 +311,9 @@ FRONTEND_ONLY = {**NONE_NEEDED, "WEB_NEEDED": "true", **ALL_SKIPPED, "WEB": "suc
         ({**OK, **NONE_NEEDED, **ALL_SKIPPED, "DOCS": "failure"}, False),
         # the static gates never skip
         ({**OK, "CHECKS": "skipped", **NONE_NEEDED, **ALL_SKIPPED}, False),
+        # a pull request by anyone but kwojdalski is never green (CONTRIBUTING.md)
+        ({**OK, "AUTHOR": "failure", **NONE_NEEDED, **ALL_SKIPPED}, False),
+        ({**OK, "AUTHOR": "skipped", **NONE_NEEDED, **ALL_SKIPPED}, False),
     ],
 )
 def test_the_aggregator_step_itself(env, ok):
