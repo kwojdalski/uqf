@@ -25,10 +25,10 @@ from uqs.cli.renames import alias_command, renamed
 from uqs.cli.safety import ChangesState, OverrideOpt, ReadOnly, ReasonOpt, YesOpt
 from uqs.cli.shared import _die, json_refusal
 from uqs.cli.vocabulary import duration
-from uqs.deploy import config, overrides, prune, rollback, status, verify
+from uqs.deploy import config, inspection, overrides, prune, rollback, status, verify
 from uqs.deploy.prune import RELEASE_ID
 from uqs.deploy.remote import Remote
-from uqs.paths import UqsError
+from uqs.paths import UqsError, repo_root
 
 
 def _server(ctx, target, flags: dict, **fixed):
@@ -153,6 +153,10 @@ def rollback_cmd(
             ),
             break_lock=waived.get(overrides.BREAK_LOCK),
         )
+        inspection.refuse_deploy(
+            repo_root(), "`uqs deploy rollback`",
+            name=target, host=cfg.host, dest=cfg.dest, dry_run=dry_run,
+        )  # fmt: skip
         code = rollback.rollback(cfg, remote, to=to, dry_run=dry_run)
     except config.DeployError as exc:
         _failed("uqs deploy rollback", exc.stage, exc)
@@ -200,6 +204,10 @@ def prune_cmd(
                 command_timeout=command_timeout,
             ),
         )
+        inspection.refuse_deploy(
+            repo_root(), "`uqs deploy prune`",
+            name=target, host=cfg.host, dest=cfg.dest, dry_run=dry_run,
+        )  # fmt: skip
         code = prune.prune(
             cfg, remote, keep=keep, dry_run=dry_run, confirm=None if yes else _confirm_prune
         )

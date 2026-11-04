@@ -306,7 +306,8 @@ Each layer overrides the one above it in this table:
 - **Never in a file.** No layer may set the artifact, `--dry-run`, or a named
   override.
 - **Listing.** `uqs target list` shows each target with its layers merged. It
-  adds an `environment` column when a target names one.
+  adds an `environment` column when a target names one, and an `inspection`
+  column when a target is inspection-only.
 
 ### Changing targets
 
@@ -390,6 +391,44 @@ the push created, as a push of its own, so it can be restored in turn. It is
 refused, writing nothing, when a file has changed since the push. Each target
 keeps its newest `UQF_FRONTEND_CONFIG_HISTORY_KEEP` pushes (50), none older than
 `UQF_FRONTEND_CONFIG_HISTORY_DAYS` (90); a pruned push's restore says so.
+
+### Inspection-only targets
+
+A target can be read from this machine but not changed through it. Set
+`inspection = true` on the target, or on its environment or `[defaults]`:
+
+```toml
+[environments.production]
+inspection = true
+
+[targets.prd]
+environment = "production"
+ssh = "deploy@prd"
+dest = "/srv/uqf"
+```
+
+While it is set, every `uqs` command that would change the target is refused
+before anything reaches it, and `--yes` does not get past it:
+
+- `uqs --target prd <command>` for a command that may change state: `start`,
+  `stop`, `restart`, a backfill, or a server-side confirmation such as
+  `data check --apply`. `status`, `summary`, `query` and every `--dry-run` still
+  run.
+- `uqs target shell prd`, which can change anything there.
+- `uqs deploy push`, `rollback` and `prune`, except with `--dry-run`. A list of
+  targets with one inspection target in it pushes to none of them.
+- `uqs target config restore prd PUSH`, except with `-n`.
+
+A server is matched by name **and** by its ssh destination and `dest`, so
+`--ssh deploy@prd --dest /srv/uqf` is refused too. The frontend reads the same
+key and its API refuses every write to that target (see the frontend's
+[README](../../python/uqf_frontend/README.md#inspection-mode)). The value must
+be `true` or `false`; anything else is refused, naming the line.
+
+This is a policy of `uqs` and the frontend on this machine. It does not make
+ssh, a tunnel or the server read-only. Anyone who can ssh to the server, or who
+edits this file, can still change it. It stops accidents through these tools,
+not a change made on purpose around them.
 
 ## Requirements and named overrides
 

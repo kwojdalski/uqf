@@ -92,6 +92,8 @@ def read(settings: Settings) -> Registry:
                 # The column appears only when some target names one.
                 "environment": row.get("environment") or None,
                 "labels": row["labels"],
+                # the column appears only when some target is in inspection mode
+                "inspection": row.get("inspection") is True,
                 "last_deployed": last.value if isinstance(last, Shown) else last,
             }
         )

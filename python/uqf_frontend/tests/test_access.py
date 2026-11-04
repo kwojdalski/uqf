@@ -393,6 +393,7 @@ def test_capabilities_never_carry_a_secret(tmp_path):
         "capabilities",
         "features",
         "poll_seconds",
+        "inspection",
     }
 
 

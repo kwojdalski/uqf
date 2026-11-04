@@ -176,6 +176,17 @@ class Settings:
     #: memberships. None serves the packaged default - everyone may do
     #: everything - which cannot be changed from the frontend.
     policy_file: Path | None = None
+    #: Inspection mode for the whole frontend (inspection.py, #2032): every
+    #: write route refused, whoever asks. Off by default; a target is put in
+    #: inspection mode on its own in deploy_targets.toml.
+    inspection_mode: bool = False
+    #: The restricted q login the frontend's own gateway and fleet reads use
+    #: while inspection mode is on, in place of `user` - a role granted reads
+    #: only (README, "Inspection mode"). Empty keeps `user`, and
+    #: /me/capabilities says so. Set without inspection mode, it is refused:
+    #: it would be used by nothing, and its operator would think otherwise.
+    inspection_user: str = ""
+    inspection_passwd: str = ""
 
     def __post_init__(self) -> None:
         if self.activity_level not in LEVELS:
@@ -185,6 +196,21 @@ class Settings:
             )
         check_history_bound(self.config_history_keep, self.config_history_days)
         check_identity(self)
+        check_inspection(self)
+
+    @property
+    def uses_inspection_login(self) -> bool:
+        """Do the frontend's own q connections use the inspection login?"""
+        return self.inspection_mode and bool(self.inspection_user)
+
+    @property
+    def service_login(self) -> tuple[str, str]:
+        """(user, password) the gateway and fleet connections log in as: the
+        inspection login while inspection mode uses one, else the service
+        login. Never logged, never served."""
+        if self.uses_inspection_login:
+            return self.inspection_user, self.inspection_passwd
+        return self.user, self.passwd
 
     @functools.cached_property
     def proxy_networks(self) -> tuple[identity.ProxyNetwork, ...]:
@@ -294,6 +320,11 @@ class Settings:
             trusted_groups_header=_header_env("UQF_FRONTEND_TRUSTED_GROUPS_HEADER"),
             trusted_proxies=_list_env("UQF_FRONTEND_TRUSTED_PROXIES"),
             policy_file=_path_env("UQF_FRONTEND_POLICY_FILE"),
+            inspection_mode=_flag_env("UQF_FRONTEND_INSPECTION_MODE"),
+            inspection_user=os.environ.get("UQF_FRONTEND_INSPECTION_USER", cls.inspection_user),
+            inspection_passwd=os.environ.get(
+                "UQF_FRONTEND_INSPECTION_PASSWORD", cls.inspection_passwd
+            ),
         )
 
 
@@ -330,6 +361,20 @@ def check_identity(settings: Settings) -> None:
         raise ValueError(
             "UQF_FRONTEND_TRUSTED_PROXIES is set but UQF_FRONTEND_TRUSTED_IDENTITY_HEADER is "
             "not - name the header the proxy puts the authenticated user in"
+        )
+
+
+def check_inspection(settings: Settings) -> None:
+    """Refuse an inspection login that nothing would use, or a password with
+    no login - either says the operator believes something that is not so."""
+    if settings.inspection_passwd and not settings.inspection_user:
+        raise ValueError(
+            "UQF_FRONTEND_INSPECTION_PASSWORD is set but UQF_FRONTEND_INSPECTION_USER is not"
+        )
+    if settings.inspection_user and not settings.inspection_mode:
+        raise ValueError(
+            "UQF_FRONTEND_INSPECTION_USER is set but UQF_FRONTEND_INSPECTION_MODE is not - the "
+            "restricted login is used only in inspection mode, so it would be used by nothing"
         )
 
 

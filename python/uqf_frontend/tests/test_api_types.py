@@ -59,6 +59,7 @@ REQUESTS = {
 PAIRS = {
     "Capabilities": "CapabilitiesResponse",
     "Capability": "Capability",
+    "Inspection": "InspectionOut",
     "TunnelCheckRecord": "TunnelCheckRecordOut",
     "TunnelMapping": "TunnelMappingOut",
     "TunnelPlan": "TunnelPlanResponse",

@@ -806,3 +806,116 @@ must not be reachable at all, and one through the proxy should show your user:
 `curl -b <session cookie> https://uqf.example.com/me/capabilities`. If it says
 `anonymous`, the peer the frontend saw was not `127.0.0.1` --- usually uvicorn
 rewriting it from `X-Forwarded-For`, which `--no-proxy-headers` stops.
+
+## Inspection mode
+
+A browser on a workstation that reaches production through ssh tunnels gets the
+same routes as one on the production host. Hiding the buttons refuses nothing,
+because a direct request still reaches the route. Inspection mode is therefore a
+policy of the server, enforced in `app.guard` (`inspection.py`, #2032):
+
+- **Writes are refused.** Every route that `access.ROUTE_PERMISSIONS` maps to a
+  `write` action is a 403 `InspectionMode`, whoever asks and whatever the access
+  policy grants them. That covers lifecycle start, stop and restart, backfills,
+  process and worker config writes, uploads, deletes, and config pushes and
+  restores. A write route added later is mapped before it can be reached at all,
+  so it is refused without a list of its own here. The refusal is audited like
+  every refusal: the write's own audit row settles `refused`, with
+  `permission: inspection` and `error: InspectionMode`.
+- **Reads stay available.** That includes `/query`, the ops views, Services, the
+  config push history and a restore's plan.
+- **One exemption.** `POST /activity/events` is the browser recording its own
+  history in this frontend's database. It changes nothing on a stack or server.
+  `inspection.EXEMPT` holds it with that reason, and a test holds the list to
+  exactly it.
+- **The other checks still apply.** The write token and the Host check run
+  first, as before. `test_inspection.py` calls every write route directly, with
+  the token and an allowed Host, under a policy that grants everything. It
+  checks that each one is refused and audited, and that nothing reaches ssh.
+
+It has two scopes:
+
+  | Scope           | Turned on by                                                                                  | Refuses                                     |
+  | --------------- | --------------------------------------------------------------------------------------------- | ------------------------------------------- |
+  | the frontend    | `UQF_FRONTEND_INSPECTION_MODE=1`                                                              | every write                                 |
+  | one target      | `inspection = true` on it, or its environment, in `deploy_targets.toml` (`uqs`'s registry)    | every write naming that target              |
+
+The registry is read on each write, so a target put in inspection mode is
+refused from the next request, with no restart. If the registry cannot be read,
+every write naming a target is refused, because its mode is unknown. `uqs`
+refuses the same target's changes itself (`uqs.deploy.inspection`; see the
+[deploy guide](../../docs/guides/deploy.md#inspection-only-targets)).
+
+**Workspaces (#2029).** The target a request acts on is its `{target}` path
+parameter. Otherwise it is the workspace named in the request's `X-UQF-Target`
+header, resolved by `workspaces.requested`, the same way the scoped routes
+resolve it. The guard checks this before `workspace_route` turns an unscoped
+route away from a target with 409. A write sent under an inspection-only
+workspace is therefore a 403 `InspectionMode`, audited, and nothing connects to
+the target. Reads under that workspace go on as before. The local workspace
+follows `UQF_FRONTEND_INSPECTION_MODE` only.
+
+**What the browser is told.** `GET /me/capabilities` reports the effective
+policy. With the whole frontend in inspection mode, `capabilities` leaves out
+every write it refuses, and `inspection` says:
+
+```json
+{"active": true, "targets": ["prd"], "q_login": "inspection", "registry_error": null}
+```
+
+The UI shows an "Inspection mode" banner from this, and the Control view says
+inspection mode rather than "not part of your access". `targets` and
+`registry_error` are given only to a caller who may read the Services view.
+
+**What it is not.** Neither ssh nor a tunnel becomes read-only. The frontend and
+`uqs` refuse the change, but anyone who can ssh to the server, or who holds a q
+login with write access, still can make it. The banner says so, and no part of
+the UI claims otherwise.
+
+### Restricted q logins
+
+The frontend connects to q with two logins:
+
+  | Login                                                     | Used for                                                                                     | Read-only?                                                                                                                                                  |
+  | --------------------------------------------------------- | -------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+  | data, `UQF_FRONTEND_DATA_USER` / `_PASSWORD`              | `/query` table reads, through `.uqf.browse`                                                  | yes, already: the `browser` role (`scripts/torqconfig/permissions/gateway.q`) may run `.uqf.browse` and `.checkinputs.querypolicyfor` and nothing else      |
+  | service, `UQF_FRONTEND_GATEWAY_USER` / `_PASSWORD`        | the catalog, coverage, the ops views, health, the per-process fan-out, and worker config     | no: `admin` on the demo stack, the TorQ `administrator` role                                                                                                |
+
+In inspection mode, `UQF_FRONTEND_INSPECTION_USER` / `_PASSWORD` replaces the
+service login for the gateway and for the per-process fan-out.
+`/me/capabilities` reports which login is in use (`q_login`). Setting it without
+inspection mode refuses to start, because nothing would use it. The data login
+is unchanged.
+
+The q side has to make that login read-only. The frontend cannot. No role for it
+ships with the demo stack, and a deployment adds one. TorQ's permissions
+(`lib/torq/code/handlers/permissions.q`) give two tools, and only the second
+holds for everything:
+
+1. **A role granted named read functions only.** For example, in the
+   deployment's gateway permissions file, next to `browser`:
+
+   ```q
+   .pm.addrole[`inspector;"the frontend's own reads in inspection mode (#2032)"]
+   .pm.grantfunction[;`inspector;{1b}] each
+     `.qcat.surface`.gw.getqueue`.qetl.coverage.claims`.qetl.coverage.ready_claims`.qetl.coverage.compose
+   ```
+
+   Add the user to the deployment's `gateway_users.csv` with role `inspector`,
+   and to each process's access list for the fan-out. Never grant it
+   `.gw.syncexec`, `select` or `*`. **A role alone is not read-only, though.**
+   TorQ runs a lambda for any role once the variables it reads are readable
+   (`.pm.lamq`), and it checks no write the lambda makes. Views that send a
+   lambda or an expression (the schema, the gateway's server and client lists,
+   the usage log, coverage gaps) are refused to the role, or run with only that
+   check.
+
+2. **A read-only process.** `.readonly.enabled:1b` makes TorQ evaluate every
+   client query on that process with `reval`, which refuses any write. It is
+   process-wide, so set it on a gateway that only inspection traffic uses, not
+   on the production gateway that writers share.
+
+For a production that must not be changed through this frontend, use both: an
+`inspector` login, on a read-only gateway. Until that is in place,
+`q_login: "service"` in `/me/capabilities` (and the banner) says the frontend
+still reads as its ordinary login.

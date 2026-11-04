@@ -33,6 +33,7 @@ from uqf_frontend import (
     control,
     health,
     identity,
+    inspection,
     ops,
     procfile,
     queries,
@@ -54,6 +55,7 @@ from uqf_frontend.errors import (
     FrontendError,
     GatewayReloading,
     GatewayUnavailable,
+    InspectionMode,
     TooManyRequests,
     ValidationFailed,
     WritesDisabled,
@@ -99,6 +101,7 @@ from uqf_frontend.models import (
     CoverageResponse,
     FleetHealthResponse,
     HealthResponse,
+    InspectionOut,
     IntervalOut,
     LifecycleRequest,
     OpsTableResponse,
@@ -176,7 +179,12 @@ def identity_kind(request: Request) -> str:
     return "claimed" if request.headers.get(authz.IDENTITY_HEADER) else "anonymous"
 
 
-def _refuse(request: Request, reason: str, permission: str) -> typing.NoReturn:
+def _refuse(
+    request: Request,
+    reason: str,
+    permission: str,
+    error: type[Forbidden] = Forbidden,
+) -> typing.NoReturn:
     """Audit a refusal, then raise it as 403.
 
     A state-changing request already has its audit row (audit_actions), which
@@ -204,7 +212,7 @@ def _refuse(request: Request, reason: str, permission: str) -> typing.NoReturn:
             status_code=403,
             detail={"permission": permission, "identity": identity_kind(request)},
         )
-    raise Forbidden(reason)
+    raise error(reason)
 
 
 def run_policy(request: Request, table: str | None = None) -> None:
@@ -230,9 +238,12 @@ def guard(request: Request) -> None:
     later cannot forget it, and runs before the handler reads anything. The
     one way out is `authz.unguarded` on the endpoint itself.
 
-    Two layers, both of which must allow (#2045): the route's feature and
-    action under the access policy (access.ROUTE_PERMISSIONS - a route with
-    no mapping is refused), then the table/path policy (authz.Policy). A
+    Three layers, each of which must allow: inspection mode, which refuses
+    every route mapped to a `write` action while it is on for the frontend or
+    for the target the request acts on (inspection.py, #2032); the route's
+    feature and action under the access policy (access.ROUTE_PERMISSIONS - a
+    route with no mapping is refused, #2045); then the table/path policy
+    (authz.Policy). A
     route whose table is only known from its input - /query's body,
     /coverage's dataset - calls `run_policy` again with that table once it
     has it. Every refusal is 403 and audited. The write token and Host check
@@ -251,6 +262,14 @@ def guard(request: Request) -> None:
             "unmapped",
         )
     feature, action = needed
+    if action == "write":
+        settings: Settings = request.app.state.settings
+        refused = inspection.refusal(
+            settings, request.method, template, inspection.request_target(request)
+        )
+        if refused is not None:
+            # audited with permission `inspection`, error InspectionMode
+            _refuse(request, refused, "inspection", InspectionMode)
     who = identity_of(request)
     if not request.app.state.access.allowed(who, feature, action):
         _refuse(request, f"{feature}:{action} is not granted to {who.user}", f"{feature}:{action}")
@@ -584,6 +603,11 @@ def create_app(
         from it; the server enforces the same policy on every route, so
         nothing here is a promise the UI keeps on its own."""
         who = identity_of(request)
+        granted = policies.capabilities(who)
+        policy = inspection.effective(settings)
+        # The targets and the registry's state are the Services view's to
+        # show: a caller who may not read it learns neither here.
+        sees_targets = ("services", "read") in granted
         return CapabilitiesResponse(
             identity=who.user,
             authenticated=who.authenticated,
@@ -591,10 +615,16 @@ def create_app(
             capabilities=[
                 # access.FEATURES holds every action to ACTIONS (test_access)
                 Capability(feature=f, action=typing.cast(Any, a))
-                for f, a in policies.capabilities(who)
+                for f, a in inspection.effective_capabilities(settings, granted)
             ],
             features={name: list(actions) for name, actions in access.FEATURES.items()},
             poll_seconds=ops.POLL_SECONDS["capabilities"],
+            inspection=InspectionOut(
+                active=policy.active,
+                targets=list(policy.targets) if sees_targets else [],
+                q_login=policy.q_login,
+                registry_error=policy.registry_error if sees_targets else None,
+            ),
         )
 
     @app.get("/health", response_model=HealthResponse)

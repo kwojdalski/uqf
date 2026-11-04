@@ -72,6 +72,7 @@ def test_lists_every_declared_target_with_its_ssh_root_and_environment(declared)
         "remote_user": None,
         "environment": None,
         "labels": {"region": "ldn"},
+        "inspection": False,
         "last_deployed": None,
     }
     # The environment's layer reaches the target, as a push would see it.

@@ -230,3 +230,16 @@ def confirmed_on_server(args: Sequence[str], yes: bool) -> list[str]:
     if yes and p.given("--apply") and not p.given("--yes"):
         args.append("--yes")
     return args
+
+
+def may_change_the_server(args: Sequence[str]) -> bool:
+    """Whether `args` may change the server at all, for an inspection-only
+    target (#2032): what `changes_the_server` asks about, and also a
+    confirms-on-server command given --apply, which asks there rather than
+    here but changes the server once answered."""
+    if changes_the_server(args):
+        return True
+    p = parse(args)
+    if p is None or p.help or p.command is None:
+        return False  # None: changes_the_server already said it may
+    return effect_of(p.command) is Effect.CONFIRMS_ON_SERVER and bool(p.given("--apply"))

@@ -42,10 +42,11 @@ import inspect
 import os
 import re
 import tomllib
+from functools import partial
 from pathlib import Path
 from typing import Any
 
-from uqs.deploy import components, launch, overrides, target_file
+from uqs.deploy import components, inspection, launch, overrides, target_file
 from uqs.deploy.config import Config, DeployError, make_config
 from uqs.deploy.target_keys import FIELD_OF_KEY, FILE_KEYS, flag
 from uqs.paths import UqsError
@@ -71,8 +72,8 @@ SETTABLE = frozenset(inspect.signature(make_config).parameters) - PER_RUN
 LAUNCH_KEYS = frozenset({"launch_mode", "launch_python", "launch_env_file"})
 #: Keys a target may hold that are not push options: the runtime it must run
 #: (checked against the artifact's), labels, which `uqs target list` shows
-#: and nothing deploys (#956), and the launch keys.
-NOT_PUSH_OPTIONS = frozenset({"runtime", "labels"}) | LAUNCH_KEYS
+#: and nothing deploys (#956), the launch keys, and `inspection` (#2032).
+NOT_PUSH_OPTIONS = frozenset({"runtime", "labels", inspection.KEY}) | LAUNCH_KEYS
 #: The file's tables. Only a target names its environment.
 DEFAULTS, ENVIRONMENTS, TARGETS = "defaults", "environments", "targets"
 ENVIRONMENT = "environment"
@@ -123,6 +124,7 @@ def _tables(text: str, path: Path) -> dict:
     for layer, settings in layers:
         _as_fields(layer, settings, text, path)
         _labels(layer, settings, text, path)
+        inspection.check_layer(layer, settings, partial(_at, text, path, layer, inspection.KEY))
     shared = layers[: 1 + len(envs)]
     for layer, settings in shared:
         if ENVIRONMENT in settings:

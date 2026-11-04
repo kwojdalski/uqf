@@ -145,6 +145,21 @@ export interface Capabilities extends Pollable {
   groups: string[];
   capabilities: Capability[];
   features: Record<string, string[]>;
+  /** the inspection policy the server enforces (#2032) */
+  inspection: Inspection;
+}
+/** Inspection mode as the server enforces it - models.InspectionOut (#2032).
+ *  The API and uqs refuse the writes; an ssh tunnel is not what makes this
+ *  read-only, and nothing in the UI may say it is. */
+export interface Inspection {
+  /** the whole frontend: every write refused */
+  active: boolean;
+  /** declared targets in inspection mode: every write naming one refused */
+  targets: string[];
+  /** which q login the frontend's own reads use */
+  q_login: "inspection" | "service";
+  /** why the target registry could not be read, when it could not */
+  registry_error: string | null;
 }
 export interface Worker {
   worker: string;
@@ -200,6 +215,8 @@ export interface ServiceTarget {
   remote_user: string | null;
   environment: string | null;
   labels: Record<string, string>;
+  /** in inspection mode: the API and uqs refuse every write to it (#2032) */
+  inspection: boolean;
   last_deployed: { release: string; at: string } | null;
 }
 /** GET /services - models.ServicesResponse. `invalid` is the registry's own
