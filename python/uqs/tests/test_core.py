@@ -110,6 +110,25 @@ def test_bootstrap_writes_dqe_its_query_list(fake_paths: UqsPaths, monkeypatch):
     assert "meta_fx_orderbook_by_sym" in fake_paths.generated_dqe_config.read_text()
 
 
+def test_setenv_sh_records_the_status_dir_the_workers_are_started_with(
+    fake_paths: UqsPaths, monkeypatch, tmp_path
+):
+    """#2038: a worker writes its status where the starting shell's
+    UQF_STATUS_DIR says, and setenv.sh records it - the default pinned too -
+    for the frontend, which is started from another shell, to read."""
+    monkeypatch.delenv("UQF_STATUS_DIR", raising=False)
+    fake_paths.torqdata.mkdir(parents=True)
+    runtime.write_setenv(fake_paths, 7000)
+    default = fake_paths.torqdata / "status"
+    assert f'export UQF_STATUS_DIR="{default}"' in fake_paths.generated_setenv.read_text()
+    monkeypatch.setenv("UQF_STATUS_DIR", str(tmp_path / "elsewhere"))
+    env = runtime.write_setenv(fake_paths, 7000)
+    assert env["UQF_STATUS_DIR"] == str(tmp_path / "elsewhere")
+    assert f'export UQF_STATUS_DIR="{tmp_path / "elsewhere"}"' in (
+        fake_paths.generated_setenv.read_text()
+    )
+
+
 def test_bootstrap_is_idempotent(fake_paths: UqsPaths, monkeypatch):
     fake_which(monkeypatch, other="/usr/bin/true")
 

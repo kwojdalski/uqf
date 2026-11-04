@@ -57,6 +57,13 @@ REQUESTS = {
 #: TypeScript interface -> the model it mirrors: every response, the
 #: process-health row the browser reads by key, and every request.
 PAIRS = {
+    "Capabilities": "CapabilitiesResponse",
+    "Capability": "Capability",
+    "TunnelCheckRecord": "TunnelCheckRecordOut",
+    "TunnelMapping": "TunnelMappingOut",
+    "TunnelPlan": "TunnelPlanResponse",
+    "TunnelEndpoint": "TunnelEndpointOut",
+    "TunnelCheck": "TunnelCheckResponse",
     "RemoteDeleteResult": "RemoteDeleteResult",
     "RemoteDeleteResponse": "RemoteDeleteResponse",
     "Catalog": "CatalogResponse",

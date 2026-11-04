@@ -155,6 +155,31 @@ class CatalogResponse(BaseModel):
     operators: list[str]
 
 
+class Capability(BaseModel):
+    """One (feature, action) the access policy grants (access.py)."""
+
+    feature: str
+    action: Literal["read", "write"]
+
+
+class CapabilitiesResponse(BaseModel):
+    """GET /me/capabilities (#2045): who the caller is, as far as a trusted
+    proxy vouches, and what the access policy lets them do. The browser hides
+    or disables what is not here; the server refuses it either way."""
+
+    #: The verified user, or `anonymous`.
+    identity: str
+    #: True only when a trusted proxy named the user.
+    authenticated: bool
+    #: The proxy's groups for the user, then the policy's.
+    groups: list[str]
+    capabilities: list[Capability]
+    #: Every feature and its actions, granted or not.
+    features: dict[str, list[str]]
+    #: How often the browser re-asks, so a policy change reaches an open tab.
+    poll_seconds: int
+
+
 class HealthResponse(BaseModel):
     poll_seconds: int
     #: How long the browser waits for any request - Settings.request_timeout,
@@ -327,6 +352,85 @@ class ServicesResponse(BaseModel):
         "UQF_FRONTEND_ENABLE_WRITES, with its token. Listing never reaches one"
     )
     poll_seconds: int
+
+
+class TunnelCheckRecordOut(BaseModel):
+    """A mapping's last successful check, as `uqs target tunnel check` recorded it."""
+
+    at: str
+    identity: str | None = None
+    remote_port: int | None = None
+    local_port: int | None = None
+    release: str | None = None
+
+
+class TunnelMappingOut(BaseModel):
+    """One forward of a tunnel plan (uqs.deploy.tunnel_plan): configured,
+    and - separately - what its last check proved."""
+
+    process: str
+    role: str = Field(description="rdb, hdb, wdb or gateway: the process's proctype")
+    remote_host: str
+    remote_port: int
+    local_host: str
+    local_port: int
+    production_endpoint: str = Field(description="host:port on the target")
+    local_endpoint: str = Field(description="host:port on this machine, once the tunnel is open")
+    query_command: str = Field(description="a uqs command querying it from here, no credential")
+    state: Literal["verified", "stale", "unverified"] = Field(
+        description="verified: a check in the last hour proved these ports; stale: proved "
+        "longer ago or for other ports; unverified: never proved"
+    )
+    last_check: TunnelCheckRecordOut | None
+    listening: bool = Field(
+        description="something accepts on the local port now - a hint, not proof"
+    )
+
+
+class TunnelPlanResponse(BaseModel):
+    """GET /services/{target}/tunnel: `uqs target tunnel plan --json`."""
+
+    target: str
+    ssh: str
+    release: str | None
+    mappings: list[TunnelMappingOut]
+    launch_argv: list[str]
+    launch_command: str = Field(description="the ssh opening every forward; no credential")
+    available: list[str] = Field(description="forwardable processes the plan did not select")
+
+
+class TunnelEndpointOut(BaseModel):
+    """One endpoint of a tunnel check (uqs.deploy.tunnel_check)."""
+
+    process: str
+    role: str
+    production_endpoint: str
+    local_endpoint: str
+    remote_port: int
+    local_port: int
+    status: str = Field(description="ok, or the category of the first layer that failed")
+    detail: str
+    layers: dict[str, str] = Field(description="each layer: ok, failed or skipped")
+    connected: bool = Field(description="the planned local port already serves this process")
+    identity: str | None = Field(description="what the process answered as, when it answered")
+    gateway_servers: list[str] | None
+    last_success: TunnelCheckRecordOut | None
+
+
+class TunnelCheckResponse(BaseModel):
+    """GET /services/{target}/tunnel/check: `uqs target tunnel check --json`.
+    `category` and `error` are set when no endpoint could be checked."""
+
+    ok: bool
+    target: str
+    ssh: str | None
+    release: str | None
+    checked_at: str
+    category: str | None
+    error: str | None
+    launch_command: str | None = None
+    endpoints: list[TunnelEndpointOut]
+    categories: dict[str, str] = Field(description="every category, and what it means")
 
 
 class RemoteEntryOut(BaseModel):

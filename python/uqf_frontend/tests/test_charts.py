@@ -13,6 +13,7 @@ import json
 import math
 import os
 import socket
+from pathlib import Path
 
 import polars as pl
 import pytest
@@ -227,7 +228,16 @@ def test_a_read_cut_at_the_row_cap_says_so():
 # --------------------------------------------------------- backfill coverage
 
 
-def test_coverage_heatmap_marks_each_workers_days_by_state(tmp_path, monkeypatch):
+def _unbootstrapped_root(factory) -> Path:
+    """A stack root uqs accepts with no setenv.sh: the checkout's own may
+    record a status directory (#2038), which would outrank UQF_STATUS_DIR."""
+    root = factory.mktemp("stack")
+    (root / "src" / "etl").mkdir(parents=True)
+    (root / "python" / "uqs").mkdir(parents=True)
+    return root
+
+
+def test_coverage_heatmap_marks_each_workers_days_by_state(tmp_path, tmp_path_factory, monkeypatch):
     monkeypatch.setenv("UQF_STATUS_DIR", str(tmp_path))
     write_status_file(
         tmp_path, "fx1", worker="fxmarkout1", state="completed",
@@ -237,9 +247,7 @@ def test_coverage_heatmap_marks_each_workers_days_by_state(tmp_path, monkeypatch
         tmp_path, "cr1", worker="cryptomarkout1", state="failed", error="boom",
         range_from="2026-11-02T00:00:00.000000000", range_to="2026-11-02T12:00:00.000000000",
     )  # fmt: skip
-    from uqs import paths as stack_paths
-
-    c = client(stack_root=stack_paths.repo_root())
+    c = client(stack_root=_unbootstrapped_root(tmp_path_factory))
     body = c.post("/charts/backfill_coverage", json={"days": 4, "end": "2026-11-03"}).json()
     heat = body["figure"]["data"][0]
     assert heat["type"] == "heatmap"
@@ -253,16 +261,14 @@ def test_coverage_heatmap_marks_each_workers_days_by_state(tmp_path, monkeypatch
     assert body["points"] == 8
 
 
-def test_coverage_leaves_out_workers_past_the_point_limit(tmp_path, monkeypatch):
+def test_coverage_leaves_out_workers_past_the_point_limit(tmp_path, tmp_path_factory, monkeypatch):
     monkeypatch.setenv("UQF_STATUS_DIR", str(tmp_path))
     for i in range(50):
         write_status_file(
             tmp_path, f"w{i}", worker=f"worker{i:02d}",
             range_from="2026-11-01T00:00:00", range_to="2026-11-02T00:00:00",
         )  # fmt: skip
-    from uqs import paths as stack_paths
-
-    c = client(stack_root=stack_paths.repo_root())
+    c = client(stack_root=_unbootstrapped_root(tmp_path_factory))
     body = c.post("/charts/backfill_coverage", json={"days": 92}).json()
     assert body["points"] <= body["point_limit"]
     assert body["truncated"] is True

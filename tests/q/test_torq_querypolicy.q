@@ -312,6 +312,29 @@
     .qt.qtorq.querypolicy.check_adjacent each 0D00:00:00.001000000 0D00:00:00.000001000 0D00:00:00.000000001;
     }
 
+/ #2034: `time in [...]` bounds the window, from the earliest instant to the
+/ latest. It used to find no bound and read "the latest maxrange ending now",
+/ so instants older than that came back as a complete-looking empty result.
+/ The frontend sends each instant as a one-item timestamp vector (#1371).
+.qt.qtorq.querypolicy.test_browse_takes_its_window_from_a_time_in_list:{[t]
+    asked:2026.10.02D10:00 2026.10.01D10:00;
+    w:.uqf.browse_window[enlist `time;enlist `in;enlist enlist each asked;1D;2026.11.04D00:00];
+    .qunit.assertEquals[w;asc asked;"the earliest instant to the latest, not the policy's latest span"]};
+
+.qt.qtorq.querypolicy.test_browse_hands_getdata_a_window_covering_every_time_in_instant:{[t]
+    .qt.qtorq.querypolicy.browse_with[`maxrange`maxrows!(1D;10);
+        {[] .uqf.browse[`crypto_markout;enlist `time;enlist `in;enlist enlist each 2026.10.01D10:00 2026.10.01D12:00;1000;`rdb`hdb]}];
+    d:.qt.qtorq.querypolicy.asked;
+    .qunit.assertEquals[d`starttime`endtime;2026.10.01D10:00 2026.10.01D12:00;"getdata's window holds both instants"]};
+
+/ A list spanning more than maxrange is held to the policy like any other
+/ window: refused with the policy's own words, not answered with nothing.
+.qt.qtorq.querypolicy.test_a_time_in_list_wider_than_maxrange_is_refused_by_the_policy:{[t]
+    w:.uqf.browse_window[enlist `time;enlist `in;enlist enlist each 2026.10.01D10:00 2026.10.03D10:00;1D;2026.11.04D00:00];
+    req:`tablename`starttime`endtime`instruments!(`mkt_orderbook;w 0;w 1;`EURUSD);
+    .qunit.assertThrows[.checkinputs.checkrequest[.qt.qtorq.querypolicy.policy`mkt_orderbook;`sym];req;
+        "*per request and this one covers 2D00:00:00.000000000*";"the policy's refusal, naming the span"]};
+
 .qt.qtorq.querypolicy.test_browse_refuses_an_unknown_operator:{[t]
     .qunit.assertThrows[{.uqf.browse[`t;enlist `sym;enlist `like;enlist "E*";10;enlist `rdb]};::;
         "uqf.browse: unknown operator like";"named, not run"]};

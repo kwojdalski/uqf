@@ -258,6 +258,84 @@ def test_infinities_reach_the_browser_as_infinities_not_nulls(browse_port):
     ]
 
 
+GUID_TEXT = "8c6b8b64-6815-6084-0a3e-178401251b68"
+
+
+def test_a_guid_reaches_the_browser_as_its_text_and_goes_back_as_a_filter(browse_port):
+    """#2036: kola hands a guid column over as 16 raw bytes. A real one failed
+    JSON serialisation (a 500 for the whole response), and 0Ng went as 16 NUL
+    characters. Now a guid goes as its canonical text - the form a filter
+    takes back - and 0Ng as null."""
+    from uqf_frontend.app import _rows
+    from uqf_frontend.catalog import QType
+    from uqf_frontend.queries import coerce
+
+    gw = KolaGateway(Settings(port=browse_port))
+    got = gw.call(f'{{[unused] ([] g:("G"$"{GUID_TEXT}"),0Ng)}}', 0)
+    rows = _rows(got)
+    assert rows == [{"g": GUID_TEXT}, {"g": None}]
+    back = coerce(rows[0]["g"], QType.GUID, "g", as_list=False)
+    matched = gw.call(f'{{[v] p:.uqf.browse_pair[`eq;v]; p[1]~"G"$"{GUID_TEXT}"}}', back)
+    assert matched is True
+
+
+def test_a_guid_column_through_query_is_not_a_500(browse_port):
+    from fastapi.testclient import TestClient
+
+    from uqf_frontend import queries
+    from uqf_frontend.app import create_app
+    from uqf_frontend.gateway import FakeGateway
+
+    frame = KolaGateway(Settings(port=browse_port)).call(
+        f'{{[unused] ([] time:2#.z.p; g:("G"$"{GUID_TEXT}"),0Ng)}}', 0
+    )
+    gw = FakeGateway({queries.BROWSE: frame})
+    client = TestClient(create_app(gw, Settings()), raise_server_exceptions=False)
+    resp = client.post("/query", json={"table": "trades", "tier": "rdb"})
+    assert resp.status_code == 200, resp.text
+    assert [r["g"] for r in resp.json()["rows"]] == [GUID_TEXT, None]
+
+
+def test_a_time_reaches_the_browser_in_the_form_its_filter_takes(browse_port):
+    """#2037: a time went as "10:00:00.123000", six digits both filters refuse,
+    and 0Wt as the clock time 23:59:59.999999. Now HH:MM:SS.fff, and 0Wt as
+    INFINITY. (-0Wt reaches Python as 00:00:00, which kola makes of midnight
+    too: it cannot be told apart here.)"""
+    from uqf_frontend.app import _rows
+    from uqf_frontend.catalog import QType
+    from uqf_frontend.queries import coerce
+
+    gw = KolaGateway(Settings(port=browse_port))
+    got = gw.call('{[unused] ([] t:"t"$(36000123;0;86399999;0W;0N))}', 0)
+    rows = _rows(got)
+    assert rows == [
+        {"t": "10:00:00.123"},
+        {"t": "00:00:00.000"},
+        {"t": "23:59:59.999"},
+        {"t": "inf"},
+        {"t": None},
+    ]
+    for row in rows[:3]:
+        coerce(row["t"], QType.TIME, "t", as_list=False)  # accepted back as a filter
+
+
+def test_a_date_infinity_is_infinity_not_a_500(browse_port):
+    """#2037: 0Wd made polars panic inside to_dicts, a BaseException, and
+    /query answered 500."""
+    import datetime as dt
+
+    from uqf_frontend.app import _rows
+
+    gw = KolaGateway(Settings(port=browse_port))
+    got = gw.call("{[unused] ([] d:(2026.01.01;0Wd;-0Wd;0Nd))}", 0)
+    assert _rows(got) == [
+        {"d": dt.date(2026, 1, 1)},
+        {"d": "inf"},
+        {"d": "-inf"},
+        {"d": None},
+    ]
+
+
 def test_browse_brings_back_the_cap_the_policy_set(browse_port):
     """#1255: over a real kola connection .uqf.browse's answer is the rows
     and the cap it read under - the policy's 3, not the 50 asked for - so

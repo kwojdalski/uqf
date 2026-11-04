@@ -13,9 +13,10 @@ import math
 import subprocess
 import time
 import typing
+import uuid
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import Any
+from typing import Annotated, Any
 
 import polars as pl
 from fastapi import Body, Depends, FastAPI, Query, Request
@@ -24,12 +25,14 @@ from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from uqf_frontend import (
+    access,
     activity,
     authz,
     catalog,
     charts,
     control,
     health,
+    identity,
     ops,
     procfile,
     queries,
@@ -37,14 +40,16 @@ from uqf_frontend import (
     remote_helper,
     services,
     status,
+    tunnels,
     write_guard,
 )
-from uqf_frontend.authz import Policy, Request_, allow_all, enforce
+from uqf_frontend.authz import Policy, Request_, allow_all
 from uqf_frontend.capture import CaptureScheduler, JsonlSink, UsageCapture
 from uqf_frontend.config import Settings
 from uqf_frontend.errors import (
     BackfillNotStarted,
     CoverageIncomplete,
+    Forbidden,
     FrontendError,
     GatewayReloading,
     GatewayUnavailable,
@@ -69,6 +74,8 @@ from uqf_frontend.models import (
     BackfillRequest,
     BackfillStartedResponse,
     BackfillStatusResponse,
+    CapabilitiesResponse,
+    Capability,
     CatalogResponse,
     ChartInfo,
     ChartResponse,
@@ -107,6 +114,8 @@ from uqf_frontend.models import (
     ServicesResponse,
     ServiceTargetOut,
     TableInfo,
+    TunnelCheckResponse,
+    TunnelPlanResponse,
     UsageResponse,
     WorkerConfigRequest,
     WorkerConfigResponse,
@@ -128,17 +137,85 @@ def _refused(status_code: int, error: str, detail: str) -> JSONResponse:
     )
 
 
+def identity_of(request: Request) -> identity.Identity:
+    """Who is calling, as identity.py can vouch for it - anonymous unless a
+    trusted proxy named the user. Resolved once per request."""
+    found = getattr(request.state, "identity", None)
+    if found is None:
+        settings: Settings = request.app.state.settings
+        found = identity.resolve(
+            request.headers,
+            request.client.host if request.client else None,
+            identity_header=settings.trusted_identity_header,
+            groups_header=settings.trusted_groups_header,
+            proxies=settings.proxy_networks,
+        )
+        request.state.identity = found
+    return found
+
+
+def audit_user(request: Request) -> str | None:
+    """The user an activity row names: the verified user when there is one,
+    else the x-uqf-user CLAIM as before (authz.IDENTITY_HEADER) - which the
+    row's `identity` detail says it is."""
+    who = identity_of(request)
+    if who.authenticated:
+        return who.user
+    return request.headers.get(authz.IDENTITY_HEADER)
+
+
+def identity_kind(request: Request) -> str:
+    """`verified`, `claimed` or `anonymous` - what `audit_user` is."""
+    if identity_of(request).authenticated:
+        return "verified"
+    return "claimed" if request.headers.get(authz.IDENTITY_HEADER) else "anonymous"
+
+
+def _refuse(request: Request, reason: str, permission: str) -> typing.NoReturn:
+    """Audit a refusal, then raise it as 403.
+
+    A state-changing request already has its audit row (audit_actions), which
+    settles `refused` from the 403 and gains the permission here. Any other
+    request - a refused read - gets a row of its own, `authz.refused`, so
+    every refusal is on record whatever the method."""
+    audit = activity.audit_of(request)
+    if audit.event_id is not None:
+        audit.note(permission=permission)
+    else:
+        route = request.scope.get("route")
+        request.app.state.activity.add(
+            source="server",
+            # An attempt, not the audit proper: anyone can provoke a refused
+            # read, so these rows live under the attempts' own small cap and
+            # can never evict the audit of an authorised action (#2019).
+            kind=activity.ATTEMPT_KIND,
+            action=activity.REFUSED_ACTION,
+            target=getattr(route, "path", None) or "(unrouted)",
+            outcome="refused",
+            session_id=request.headers.get(activity.SESSION_ID_HEADER),
+            request_id=request.headers.get(activity.REQUEST_ID_HEADER),
+            claimed_user=audit_user(request),
+            method=request.method.upper(),
+            status_code=403,
+            detail={"permission": permission, "identity": identity_kind(request)},
+        )
+    raise Forbidden(reason)
+
+
 def run_policy(request: Request, table: str | None = None) -> None:
-    """Run the app's policy for this request. The identity is CLAIMED, never
-    verified - see authz.IDENTITY_HEADER."""
-    enforce(
-        request.app.state.policy,
+    """Run the app's table/path policy (authz.Policy) for this request, as
+    the identity identity.py vouches for - never the claimed header."""
+    who = identity_of(request)
+    reason = request.app.state.policy(
         Request_(
-            identity=request.headers.get(authz.IDENTITY_HEADER, authz.ANONYMOUS),
+            identity=who.user,
             path=write_guard.route_path(request.scope),
             table=table,
-        ),
+            groups=who.groups,
+        )
     )
+    if reason is not None:
+        _refuse(request, reason, f"table:{table}" if table is not None else "path")
 
 
 def guard(request: Request) -> None:
@@ -146,13 +223,33 @@ def guard(request: Request) -> None:
 
     Installed on the app rather than called by each handler, so a route added
     later cannot forget it, and runs before the handler reads anything. The
-    one way out is `authz.unguarded` on the endpoint itself. A route whose
-    table is only known from its input - /query's body, /coverage's dataset -
-    calls `run_policy` again with that table once it has it.
+    one way out is `authz.unguarded` on the endpoint itself.
+
+    Two layers, both of which must allow (#2045): the route's feature and
+    action under the access policy (access.ROUTE_PERMISSIONS - a route with
+    no mapping is refused), then the table/path policy (authz.Policy). A
+    route whose table is only known from its input - /query's body,
+    /coverage's dataset - calls `run_policy` again with that table once it
+    has it. Every refusal is 403 and audited. The write token and Host check
+    (write_guard.py) ran before either, and still do.
     """
     route = request.scope.get("route")
-    if authz.unguarded_reason(getattr(route, "endpoint", None)) is None:
-        run_policy(request)
+    if authz.unguarded_reason(getattr(route, "endpoint", None)) is not None:
+        return
+    template = getattr(route, "path", None)
+    needed = access.permission_for(request.method, template)
+    if needed is None:
+        _refuse(
+            request,
+            f"{request.method.upper()} {template} has no feature in the access policy's "
+            "route map, so it is refused to everyone (access.ROUTE_PERMISSIONS)",
+            "unmapped",
+        )
+    feature, action = needed
+    who = identity_of(request)
+    if not request.app.state.access.allowed(who, feature, action):
+        _refuse(request, f"{feature}:{action} is not granted to {who.user}", f"{feature}:{action}")
+    run_policy(request)
 
 
 #: A browser's report on a file the server never recorded, as an outcome.
@@ -211,6 +308,9 @@ def create_app(
     gateway = gateway or KolaGateway(settings)
     fleet = fleet or KolaFleet(settings)
     policy = policy or allow_all
+    # The access policy (access.py): refuses to start on a policy file that
+    # is named but missing or does not parse.
+    policies = access.PolicyStore(settings.policy_file)
 
     # Activity history and the action audit (activity.py). Opened here, not
     # in the lifespan, so an unusable file stops the API before it serves.
@@ -266,6 +366,7 @@ def create_app(
     app.state.catalog = tables
     app.state.fleet = fleet
     app.state.policy = policy
+    app.state.access = policies
     # ssh, injectable so tests reach no server (remote_files.py)
     app.state.remote_runner = remote_runner or subprocess.run
     app.state.capture = scheduler
@@ -338,11 +439,15 @@ def create_app(
             outcome="pending",
             session_id=request.headers.get(activity.SESSION_ID_HEADER),
             request_id=request_id,
-            claimed_user=request.headers.get(authz.IDENTITY_HEADER),
+            claimed_user=audit_user(request),
             method=request.method.upper(),
         )
         audit = activity.audit_of(request)
         audit.store, audit.event_id = history, event_id
+        # Whose name claimed_user is: `verified` or `claimed`; absent, the
+        # caller was anonymous and named nobody.
+        if (kind := identity_kind(request)) != "anonymous":
+            audit.note(identity=kind)
         try:
             response = await call_next(request)
         except Exception:
@@ -384,6 +489,30 @@ def create_app(
                 "detail": str(exc),
                 "transient": exc.transient,
             },
+        )
+
+    @app.get("/me/capabilities", response_model=CapabilitiesResponse)
+    @authz.unguarded(
+        "says what the caller may do - a caller refused it could not find out; "
+        "it carries the caller's own identity and nothing else"
+    )
+    def my_capabilities(request: Request) -> CapabilitiesResponse:
+        """Who the caller is, their groups, and every (feature, action) the
+        access policy grants them (#2045). The browser shows and hides views
+        from it; the server enforces the same policy on every route, so
+        nothing here is a promise the UI keeps on its own."""
+        who = identity_of(request)
+        return CapabilitiesResponse(
+            identity=who.user,
+            authenticated=who.authenticated,
+            groups=policies.groups(who),
+            capabilities=[
+                # access.FEATURES holds every action to ACTIONS (test_access)
+                Capability(feature=f, action=typing.cast(Any, a))
+                for f, a in policies.capabilities(who)
+            ],
+            features={name: list(actions) for name, actions in access.FEATURES.items()},
+            poll_seconds=ops.POLL_SECONDS["capabilities"],
         )
 
     @app.get("/health", response_model=HealthResponse)
@@ -633,6 +762,44 @@ def create_app(
             release=answer["release"],
         )
 
+    def _tunnel_gate(what: str) -> None:
+        if not settings.enable_writes:
+            raise WritesDisabled(
+                f"{what} reaches the server over ssh, so it needs remote operations: set "
+                "UQF_FRONTEND_ENABLE_WRITES=1 and UQF_FRONTEND_WRITE_TOKEN on the server"
+            )
+
+    @app.get("/services/{target}/tunnel", response_model=TunnelPlanResponse)
+    def get_tunnel_plan(
+        request: Request,
+        target: str,
+        process: Annotated[list[str] | None, Query()] = None,
+        local: Annotated[list[str] | None, Query()] = None,
+        offset: int | None = None,
+    ) -> TunnelPlanResponse:
+        """The target's tunnel plan, as `uqs target tunnel plan --json` makes
+        it: processes and ports from its release, each mapping's state from the
+        last check. Opens no tunnel - see tunnels.py."""
+        _tunnel_gate("a tunnel plan")
+        doc = tunnels.plan(settings, target, process or [], local or [], offset,
+                           runner=request.app.state.remote_runner)  # fmt: skip
+        return TunnelPlanResponse(**doc)
+
+    @app.get("/services/{target}/tunnel/check", response_model=TunnelCheckResponse)
+    def get_tunnel_check(
+        request: Request,
+        target: str,
+        process: Annotated[list[str] | None, Query()] = None,
+        local: Annotated[list[str] | None, Query()] = None,
+        offset: int | None = None,
+    ) -> TunnelCheckResponse:
+        """Each mapping checked layer by layer, as `uqs target tunnel check
+        --json` does: a failed endpoint never hides a healthy one."""
+        _tunnel_gate("a tunnel check")
+        doc = tunnels.check(settings, target, process or [], local or [], offset,
+                            runner=request.app.state.remote_runner)  # fmt: skip
+        return TunnelCheckResponse(**doc)
+
     @app.post("/services/{target}/files/delete", response_model=RemoteDeleteResponse)
     def delete_remote_files(
         request: Request, target: str, req: RemoteDeleteRequest
@@ -868,7 +1035,7 @@ def create_app(
             outcome="succeeded",
             session_id=request.headers.get(activity.SESSION_ID_HEADER),
             request_id=request.headers.get(activity.REQUEST_ID_HEADER),
-            claimed_user=request.headers.get(authz.IDENTITY_HEADER),
+            claimed_user=audit_user(request),
             method=request.method.upper(),
             items=[{"target": p["push_id"], "outcome": "succeeded"} for p in pruned],
             detail={"pruned_count": len(pruned)},
@@ -890,7 +1057,7 @@ def create_app(
         answer = remote_files.open_push(
             remote, target, destination=req.destination, file_count=req.file_count,
             total_bytes=req.total_bytes,
-            user=activity.clean_user(request.headers.get(authz.IDENTITY_HEADER)),
+            user=activity.clean_user(audit_user(request)),
             via="frontend", keep=settings.config_history_keep,
             keep_days=settings.config_history_days, runner=request.app.state.remote_runner,
         )  # fmt: skip
@@ -1004,7 +1171,7 @@ def create_app(
         try:
             answer = remote_files.restore(
                 remote, target, push_id, dry_run=False,
-                user=activity.clean_user(request.headers.get(authz.IDENTITY_HEADER)),
+                user=activity.clean_user(audit_user(request)),
                 via="frontend", keep=settings.config_history_keep,
                 keep_days=settings.config_history_days,
                 runner=request.app.state.remote_runner, on_begin=audit.begin,
@@ -1140,7 +1307,7 @@ def create_app(
                 "too many activity events without the write token - the batch is accepted "
                 "again in a few seconds"
             )
-        claimed = request.headers.get(authz.IDENTITY_HEADER)
+        claimed = audit_user(request)
         dropped = sum(activity.clean_detail(event.detail)[1] for event in batch.events)
         stored, not_stored = history.add_many(
             {
@@ -1496,6 +1663,27 @@ _STAMP_INFINITY = {2**63 - 1: 1, -(2**63 - 1) + 946_684_800 * 10**9: -1}
 #: at the microsecond (#1371).
 _STAMP_TEXT = "%Y-%m-%dT%H:%M:%S.%9fZ"
 
+#: A time on the wire: HH:MM:SS.fff, q's own millisecond, and the form both
+#: filters take back (queries._TIME, web/src/api.ts). Rendered by pydantic it
+#: was "10:00:00.123000", six digits both refuse (#2037).
+_TIME_TEXT = "%H:%M:%S%.3f"
+
+#: 0Wt as kola hands it over, in nanoseconds since midnight: 23:59:59.999999,
+#: which no millisecond time spells. -0Wt arrives as 00:00:00, as midnight
+#: does, so it cannot be told apart here.
+_TIME_INFINITY = 86_399_999_999_999
+
+#: The days since 1970 a Python date can hold. kola hands 0Wd and -0Wd over as
+#: dates far outside them, and polars panics converting one - a BaseException,
+#: so /query answered 500 (#2037). Outside them is an infinity, by its sign.
+_DATE_RANGE = (
+    (dt.date.min - dt.date(1970, 1, 1)).days,
+    (dt.date.max - dt.date(1970, 1, 1)).days,
+)
+
+#: 0Ng as kola hands it over: sixteen zero bytes.
+_NULL_GUID = bytes(16)
+
 
 def _rows(result: Any) -> list[dict[str, Any]]:
     """Normalise a kola result into JSON-serialisable rows.
@@ -1532,13 +1720,36 @@ def _wire(frame: pl.DataFrame) -> list[dict[str, Any]]:
     datetime it stopped at the microsecond, so two `.z.p` stamps 765 ns
     apart were sent as one instant, and the value shown could not be typed
     back into a filter (#1371).
+
+    A time goes as HH:MM:SS.fff (_TIME_TEXT) and 0Wt as INFINITY; a date
+    outside what Python can hold - 0Wd, -0Wd - as INFINITY too, where it made
+    the whole response a 500 (#2037). A guid goes as its canonical text, the
+    form a filter takes back, and 0Ng as null: kola hands one over as sixteen
+    raw bytes, which JSON cannot carry (#2036).
     """
     spans = [name for name, kind in frame.schema.items() if isinstance(kind, pl.Duration)]
     floats = [name for name, kind in frame.schema.items() if kind.is_float()]
+    guids = [name for name, kind in frame.schema.items() if kind == pl.Binary]
     frame = frame.with_columns(pl.col(name).dt.total_nanoseconds() for name in spans)
     stamps = {}
     for name, kind in frame.schema.items():
-        if isinstance(kind, pl.Datetime):
+        if kind == pl.Time:
+            nanoseconds = frame.get_column(name).cast(pl.Int64)
+            stamps[name] = nanoseconds.replace_strict({_TIME_INFINITY: 1}, default=None)
+            frame = frame.with_columns(pl.col(name).dt.to_string(_TIME_TEXT))
+        elif kind == pl.Date:
+            days = frame.get_column(name).cast(pl.Int32)
+            low, high = _DATE_RANGE
+            sign = pl.select(
+                pl.when(days > high).then(1).when(days < low).then(-1).otherwise(None)
+            ).to_series()
+            stamps[name] = sign
+            if sign.is_not_null().any():
+                # Nulled before to_dicts, where polars would panic on it.
+                frame = frame.with_columns(
+                    pl.when(sign.is_null()).then(pl.col(name)).otherwise(None).alias(name)
+                )
+        elif isinstance(kind, pl.Datetime):
             column = pl.col(name)
             if kind.time_zone is not None:
                 column = column.dt.convert_time_zone("UTC").dt.replace_time_zone(None)
@@ -1546,6 +1757,11 @@ def _wire(frame: pl.DataFrame) -> list[dict[str, Any]]:
             stamps[name] = nanoseconds.replace_strict(_STAMP_INFINITY, default=None)
             frame = frame.with_columns(column.dt.cast_time_unit("ns").dt.to_string(_STAMP_TEXT))
     rows = frame.to_dicts()
+    for name in guids:
+        for row in rows:
+            raw = row[name]
+            if isinstance(raw, bytes):
+                row[name] = None if raw == _NULL_GUID else str(uuid.UUID(bytes=raw))
     for name, sign in stamps.items():
         for row, infinite in zip(rows, sign, strict=True):
             if infinite is not None:

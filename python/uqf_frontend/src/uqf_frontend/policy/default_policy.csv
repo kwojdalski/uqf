@@ -1,0 +1,18 @@
+# The default access policy (#2045): everyone may do everything, which is
+# exactly what the frontend allowed before a policy existed. The write token
+# and the Host check (write_guard.py) still stand in front of every write.
+#
+# Format, one rule per line (Casbin's CSV):
+#   p, <subject>, <feature>, <action>   grant: subject is a user, a group,
+#                                       `anonymous`, or `*` for everyone
+#   g, <user or group>, <group>         membership
+# A feature or action may be `*`. Lines starting with # are comments.
+#
+# To restrict access, copy this file, edit it, and point
+# UQF_FRONTEND_POLICY_FILE at the copy. For example:
+#   p, viewers, desk, read
+#   p, viewers, coverage, read
+#   p, admins, *, *
+#   g, alice, admins
+#   g, bob, viewers
+p, *, *, *

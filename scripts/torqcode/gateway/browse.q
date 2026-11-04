@@ -61,21 +61,26 @@ browse_pair:{[o;v]
 / read's moment, not a boundary a neighbouring read must tile against.
 / .
 / The time window a read covers: the browser's own bounds on `time` where it
-/ gave them, else the latest window the caller's policy allows.
+/ gave them, else the latest window the caller's policy allows. An `in` list
+/ bounds it both ways, from its earliest instant to its latest (#2034): read as
+/ no bound, it fetched the latest span instead, and instants older than that
+/ came back as a complete-looking empty result. A list wider than the policy's
+/ maxrange is then refused by the policy, as any other window is.
 / @param fc the filter columns
 / @param fo their operators
 / @param fv their values; a timestamp as an atom or a one-item vector, the
-/   form the frontend sends one in (#1371)
+/   form the frontend sends one in (#1371), and an `in` list as a list of those
 / @param span how far back an open window reaches
 / @param now the window's end when none is given
 / @return (starttime;endtime)
 / @eg .uqf.browse_window[`time`sym;`ge`eq;(2026.01.01D10:00;`EURUSD);1D;2026.01.02D00:00]
 browse_window:{[fc;fo;fv;span;now]
     t:where fc=`time;
-    lo:t where fo[t] in `ge`gt`eq;
-    hi:t where fo[t] in `le`lt`eq;
-    e:$[count hi; min raze `timestamp$fv hi; now];
-    s:$[count lo; max raze `timestamp$fv lo; e-span];
+    lo:t where fo[t] in `ge`gt`eq`in;
+    hi:t where fo[t] in `le`lt`eq`in;
+    at:{[fv;i] `timestamp$raze (),/:browse_value each fv i}[fv];
+    e:$[count hi; min raze {[at;fo;i] $[`in=fo i; max at i; min at i]}[at;fo] each hi; now];
+    s:$[count lo; max raze {[at;fo;i] $[`in=fo i; min at i; max at i]}[at;fo] each lo; e-span];
     (s;e)}
 
 / Private: an integral column with an infinity in it, as floats. kola turns

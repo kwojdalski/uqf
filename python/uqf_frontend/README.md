@@ -45,20 +45,21 @@ The q details this rests on, verified against a live KDB-X process:
 
 ## Endpoints
 
-  |                        |                                                                                                                                          |
-  | ---                    | ---                                                                                                                                      |
-  | `GET /health`          | BFF liveness plus gateway reachability. An EOD reload reports `ok: true, gateway: "reloading"` — a known transient state, not a failure  |
-  | `GET /catalog`         | The queryable surface, so a UI builds filter controls from the server's whitelist instead of a hardcoded copy that drifts                |
-  | `GET /coverage`        | Composed coverage intervals and any gaps, for one dataset at one source release                                                          |
-  | `GET /ops/queue`       | Pending and running gateway queries                                                                                                      |
-  | `GET /ops/connections` | Registered backend handles and connected clients                                                                                         |
-  | `GET /ops/usage`       | Fleet-wide query log, assembled here because q has none                                                                                  |
-  | `GET /ops/processes`   | Fleet health for every process `process.csv` declares                                                                                    |
-  | `GET /ops/backfill`    | Backfill and Airflow task status, read from the files q writes                                                                           |
-  | `GET /services`        | The deployment targets `uqs target list --json` lists, read from `deploy_targets.toml` with no ssh, and whether remote operations are on |
-  | `POST /query`          | Validated, parameterised table query, tier-routed                                                                                        |
-  | `GET /charts`          | The prepared charts, each with its parameters' JSON Schema and its point limit                                                           |
-  | `POST /charts/{name}`  | One prepared chart's plotly.py figure, with its point limit and whether it was downsampled or truncated                                  |
+  |                        |                                                                                                                                           |
+  | ---                    | ---                                                                                                                                       |
+  | `GET /health`          | BFF liveness plus gateway reachability. An EOD reload reports `ok: true, gateway: "reloading"` — a known transient state, not a failure   |
+  | `GET /catalog`         | The queryable surface, so a UI builds filter controls from the server's whitelist instead of a hardcoded copy that drifts                 |
+  | `GET /coverage`        | Composed coverage intervals and any gaps, for one dataset at one source release                                                           |
+  | `GET /ops/queue`       | Pending and running gateway queries                                                                                                       |
+  | `GET /ops/connections` | Registered backend handles and connected clients                                                                                          |
+  | `GET /ops/usage`       | Fleet-wide query log, assembled here because q has none                                                                                   |
+  | `GET /ops/processes`   | Fleet health for every process `process.csv` declares                                                                                     |
+  | `GET /ops/backfill`    | Backfill and Airflow task status, read from the files q writes                                                                            |
+  | `GET /services`        | The deployment targets `uqs target list --json` lists, read from `deploy_targets.toml` with no ssh, and whether remote operations are on  |
+  | `POST /query`          | Validated, parameterised table query, tier-routed                                                                                         |
+  | `GET /charts`          | The prepared charts, each with its parameters' JSON Schema and its point limit                                                            |
+  | `POST /charts/{name}`  | One prepared chart's plotly.py figure, with its point limit and whether it was downsampled or truncated                                   |
+  | `GET /me/capabilities` | Who the caller is (as a trusted proxy vouches), their groups, and every feature and action the access policy grants them                  |
 
 ### Control routes --- these CHANGE things
 
@@ -140,6 +141,27 @@ midway), a crashed helper or an answer that cannot be read is 504
 `DeleteOutcomeUncertain` with `transient: false`: some paths may be gone, and
 you list the directory before deleting again. Only a browse's timeout is
 transient (#2023).
+
+### A target's tunnel --- uqs plans and checks it
+
+`GET /services/{target}/tunnel?process=&local=PROC:PORT&offset=` returns the
+target's tunnel plan, and `GET /services/{target}/tunnel/check` with the same
+parameters returns the result of checking it (#2030, #2031). Both are gated like
+browsing, because uqs reads the target's release over ssh. Neither route has ssh
+code of its own: `tunnels.py` calls `uqs.deploy.tunnel_plan` and
+`uqs.deploy.tunnel_check`, the functions behind `uqs target tunnel plan` and
+`uqs target tunnel check`.
+
+Every value the routes return comes from uqs: the processes and their ports,
+each local endpoint, the launch command (which holds no credential), each
+mapping's `verified`, `stale` or `unverified` state, and each endpoint's
+diagnostic category. A refused plan returns 400, and a release that cannot be
+asked for its processes returns 502.
+
+The check logs in to q with this API's gateway credential when one is
+configured, and with uqs's default otherwise. The credential never appears in a
+response. The Services view shows the plan and the check. The Fleet view offers
+the same connection details for whichever target you choose.
 
 ### Uploading to a target's shared/config --- one file per request
 
@@ -611,9 +633,10 @@ value is not) or a file's contents. An error is recorded by its type, never its
 message, which can quote the input back. `test_activity.py` searches the
 database for the write token and for typed values.
 
-**Identity.** `claimed_user` is the `x-uqf-user` header as sent. It is a label
-anyone can set (see the authorisation seam below), stored and shown as claimed,
-never as who called.
+**Identity.** `claimed_user` is the user a trusted proxy named, when one did
+(see the access policy below), and a server row's `identity` detail says
+`verified`. Otherwise it is the `x-uqf-user` header as sent --- a label anyone
+can set, stored with `identity: claimed` and never read as who called.
 
 **Storage and retention.** SQLite, from the standard library: the filters need
 an index rather than a scan of every line, and retention needs a `DELETE` rather
@@ -669,29 +692,89 @@ audit.item(name, "succeeded")  # one per file, for a batch
 audit.settle("failed")  # only where the status code would mislead
 ```
 
-## Authorisation seam
+## Identity and the access policy
 
-`create_app(policy=...)` takes an authorisation policy, defaulting to
-`allow_all`. Every data route passes through it before touching the gateway:
-`/query`, `/ops/queue`, `/ops/connections`, `/ops/usage`, `/ops/processes`,
-`/ops/backfill`. `/health` and `/catalog` are deliberately outside it --- gating
-liveness and the surface description would leave an unauthorised caller unable
-to discover why.
+Two layers decide every request, both in `app.guard`, and both default to
+allowing everything --- so a deployment that configures nothing behaves exactly
+as it always did. They are additional to the write token and the Host check,
+never instead of them: those still stand in front of every write.
 
-It is a seam, not an auth system: the layer connects to q with one service
-credential, so there is no per-user identity to check yet. It is the one place a
-real policy plugs in once there is.
+**Who is calling** (`identity.py`, #2045). The frontend authenticates nobody
+itself. An authenticating proxy in front of it --- oauth2-proxy, Authelia,
+Tailscale serve --- does, and names the user in a header. That header is
+believed only when `UQF_FRONTEND_TRUSTED_IDENTITY_HEADER` names it **and** the
+request's direct TCP peer is in `UQF_FRONTEND_TRUSTED_PROXIES`. From any other
+address, sent twice, or not shaped like a user name, it is ignored and the
+caller is `anonymous`. A spoofed header from a caller that reached the port
+directly is therefore just a header. The old `x-uqf-user` header is a claim and
+never reaches a policy; the activity history still records it, labelled
+`claimed`.
 
-```python
-from uqf_frontend.authz import deny_tables
+**What they may do** (`access.py`). A Casbin RBAC policy (pycasbin,
+`policy/model.conf`) over features --- one per view: `coverage`, `backfills`,
+`desk`, `fleet`, `queue`, `connections`, `usage`, `services`, `control`,
+`activity`, `settings` --- and their actions, `read` and `write`.
+`access.ROUTE_PERMISSIONS` is the one place a route is tied to a feature; a
+route missing from it is refused to everyone, and a test fails on it. A refusal
+is 403 and audited: a refused write settles its own audit row with the
+permission it lacked, and a refused read gets an `authz.refused` row.
 
-app = create_app(policy=deny_tables({"position"}))  # 403 on that table
+```text
+# UQF_FRONTEND_POLICY_FILE - Casbin CSV
+p, viewers, desk, read          # grant: subject, feature, action (* allowed)
+p, viewers, coverage, read
+p, operators, control, *
+p, admins, *, *
+p, anonymous, coverage, read    # callers no proxy vouched for
+g, alice, admins                # membership: user (or group), group
+g, bob, viewers
 ```
 
-The identity comes from an `x-uqf-user` header and is **claimed, not verified** ---
-anyone can set it. It is a label for audit and for a policy to key on, and
-`authz.py` says so at length so nobody mistakes it for proof.
+The packaged default is `p, *, *, *`. A named policy file is read strictly and
+re-read when it changes, without a restart; an edit that does not parse is
+logged and the last good policy stays in force.
 
-A refusal is **403, not 401**: there is no authentication to have failed. And a
-refused query never reaches q --- a test asserts the gateway saw nothing, since
-that is what makes this a gate rather than a filter on the way out.
+**`GET /me/capabilities`** answers with the caller's identity, groups and
+granted features. The browser shows only the views the caller may read and
+disables what they may not change, through one context
+(`web/src/capabilities.tsx`). That is presentation: the server refuses whatever
+the policy does not grant, whether or not the button was on screen.
+
+The table/path policy is the older seam, still there for a rule that keys on a
+table rather than a feature: `create_app(policy=deny_tables({"position"}))` is a
+403 on that table from `/query` and `/coverage` alike, before any data is read.
+
+### Running behind oauth2-proxy
+
+oauth2-proxy authenticates against your identity provider and forwards to the
+frontend with `X-Forwarded-User` (and, with groups, `X-Forwarded-Groups`) set ---
+replacing anything the client sent. Bind the frontend where only the proxy can
+reach it, and tell it to believe the proxy and nobody else:
+
+```bash
+# the frontend: loopback only, believing the proxy on 127.0.0.1
+export UQF_FRONTEND_TRUSTED_IDENTITY_HEADER=x-forwarded-user
+export UQF_FRONTEND_TRUSTED_GROUPS_HEADER=x-forwarded-groups
+export UQF_FRONTEND_TRUSTED_PROXIES=127.0.0.1
+export UQF_FRONTEND_POLICY_FILE=/etc/uqf/policy.csv   # copy policy/default_policy.csv, then edit
+export UQF_FRONTEND_ALLOWED_HOSTS=uqf.example.com     # the name the browser uses, with writes on
+# --no-proxy-headers: the peer the frontend checks must be the proxy itself,
+# not an address uvicorn read out of X-Forwarded-For
+uv run uvicorn --factory uqf_frontend.app:create_app --host 127.0.0.1 --port 8000 --no-proxy-headers
+
+# the proxy, in front of it (secrets from the environment, never the command line)
+oauth2-proxy \
+  --http-address=0.0.0.0:4180 \
+  --upstream=http://127.0.0.1:8000/ \
+  --provider=oidc --oidc-issuer-url=https://id.example.com \
+  --email-domain=example.com \
+  --pass-user-headers=true
+# OAUTH2_PROXY_CLIENT_ID, OAUTH2_PROXY_CLIENT_SECRET and OAUTH2_PROXY_COOKIE_SECRET
+# are read from its environment
+```
+
+Then check it from a shell on another machine: a request straight to port 8000
+must not be reachable at all, and one through the proxy should show your user:
+`curl -b <session cookie> https://uqf.example.com/me/capabilities`. If it says
+`anonymous`, the peer the frontend saw was not `127.0.0.1` --- usually uvicorn
+rewriting it from `X-Forwarded-For`, which `--no-proxy-headers` stops.

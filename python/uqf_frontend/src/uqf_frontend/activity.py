@@ -29,7 +29,9 @@ held to a pattern. Nothing reads the Authorization header, a request body, a
 form value or an upload's bytes into a row. A browser `detail` key outside the
 allowlist is dropped and counted, never stored. The claimed user is the
 x-uqf-user header - CLAIMED, not authenticated (authz.IDENTITY_HEADER) - and
-is stored and shown under that name.
+is stored and shown under that name; when a trusted proxy names the user
+(identity.py, #2045) that verified user is stored instead, and a server row's
+`identity` detail says which it is: `verified`, `claimed` or `anonymous`.
 
 UNCERTAIN OUTCOMES ARE A STATE, NOT A GUESS. A server row starts `pending`
 and is settled when the response is known. A request that had begun to act
@@ -243,6 +245,11 @@ DETAIL_KEYS: dict[str, Callable[[object], bool]] = {
     "level": _is_name,
     # debug (#2000): which attempt a retry is
     "attempt": _is_count,
+    # access (#2045): the `feature:action` a refusal was for, and whether the
+    # row's user is `verified` by a trusted proxy, `claimed` by x-uqf-user, or
+    # `anonymous`
+    "permission": _is_name,
+    "identity": _is_name,
 }
 
 #: Bounds on what one event may carry.
@@ -342,6 +349,10 @@ SERVER_ACTIONS: dict[tuple[str, str], Callable[[Mapping[str, str]], str]] = {
     ("POST", "/services/{target}/config/pushes/{push_id}/close"): lambda _: "config.push",
     ("POST", "/services/{target}/config/pushes/{push_id}/restore"): lambda _: "config.restore",
 }
+
+#: The row a refused request that is not itself an action - a read - is
+#: audited under (app._refuse, #2045). A refused action keeps its own row.
+REFUSED_ACTION = "authz.refused"
 
 #: The row an opening push or a restore adds when retention pruned old pushes:
 #: one item per pruned push id.

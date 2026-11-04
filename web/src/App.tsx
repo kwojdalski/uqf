@@ -30,8 +30,10 @@ import {
 import { FileBrowser } from "./FileBrowser";
 import { PlotPanel } from "./PlotPanel";
 import { ChartsView } from "./ChartsView";
+import { FleetConnections, TunnelPanel } from "./TunnelPanel";
 import { useResource } from "./useResource";
 import { ActivityView } from "./ActivityView";
+import { CapabilitiesProvider, useCapabilities } from "./capabilities";
 import {
   adoptDefaultLevel,
   installActivity,
@@ -61,7 +63,8 @@ const ISO_INSTANT =
   /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.(\d+))?(Z|[+-]\d{2}:\d{2})?$/;
 /** The column types that hold an infinity, and so the only ones whose
  *  "inf" / "-inf" is the server's infinity rather than a symbol that happens
- *  to be spelled that way (#1330) - a timestamp's 0Wp too (#1371). */
+ *  to be spelled that way (#1330) - a timestamp's 0Wp too (#1371), and a
+ *  time's 0Wt and a date's 0Wd (#2037). */
 const NUMERIC = new Set([
   "float",
   "long",
@@ -69,6 +72,8 @@ const NUMERIC = new Set([
   "short",
   "timespan",
   "timestamp",
+  "time",
+  "date",
 ]);
 const INFINITY: Record<string, string> = { inf: "∞", "-inf": "-∞" };
 function text(value: unknown, decimals?: number | null, type?: string) {
@@ -853,6 +858,7 @@ function ServicesView() {
   const resource = useResource<Services>("/services");
   const data = resource.data;
   const [browsing, setBrowsing] = useState<string | null>(null);
+  const [tunnelling, setTunnelling] = useState<string | null>(null);
   return (
     <>
       <ResourceStatus resource={resource} />
@@ -924,6 +930,17 @@ function ServicesView() {
                     Browse {target.name}
                   </button>
                 ))}
+                {data.targets.map((target) => (
+                  <button
+                    type="button"
+                    data-activity="services.tunnel"
+                    key={`tunnel:${target.name}`}
+                    aria-pressed={tunnelling === target.name}
+                    onClick={() => setTunnelling(target.name)}
+                  >
+                    Tunnel {target.name}
+                  </button>
+                ))}
               </div>
             ) : (
               <p className="note">
@@ -940,6 +957,15 @@ function ServicesView() {
             key={browsing}
             target={browsing}
             onClose={() => setBrowsing(null)}
+          />
+        )}
+      {tunnelling &&
+        data?.remote_operations_enabled &&
+        data.targets.some((target) => target.name === tunnelling) && (
+          <TunnelPanel
+            key={tunnelling}
+            target={tunnelling}
+            onClose={() => setTunnelling(null)}
           />
         )}
     </>
@@ -1022,6 +1048,7 @@ function OpsView({
           </section>
         </>
       )}
+      {view === "Fleet" && <FleetConnections />}
     </>
   );
 }
@@ -1255,6 +1282,7 @@ function workerConfigSettled(r: WorkerConfigResult) {
 }
 
 function ControlView() {
+  const access = useCapabilities();
   const status = useResource<ControlStatus>("/control");
   const [busy, setBusy] = useState("");
   // The destructive action awaiting confirmation, if any, and the selection
@@ -1383,6 +1411,21 @@ function ControlView() {
           They are off by default because this deployment has one shared
           credential and the caller&rsquo;s identity is claimed through a header
           anyone can set. That is safe while every route is a read.
+        </p>
+      </div>
+    );
+
+  // Shown, not enforced: the server refuses these routes to this caller
+  // whether or not the controls are on screen (#2045).
+  if (!access.can("control", "write"))
+    return (
+      <div className="panel">
+        {statusNotice}
+        <h2>Changes are not part of your access</h2>
+        <p>
+          The server&rsquo;s access policy does not grant you{" "}
+          <code>control:write</code>, so it refuses starting, stopping and
+          configuring processes for you. Ask an administrator for it.
         </p>
       </div>
     );
@@ -1720,7 +1763,19 @@ function ControlView() {
   );
 }
 export default function App() {
-  const [view, setView] = useState<View>("Coverage");
+  return (
+    <CapabilitiesProvider>
+      <Workspace />
+    </CapabilitiesProvider>
+  );
+}
+function Workspace() {
+  const access = useCapabilities();
+  // Only the views the server's policy lets this caller read are offered
+  // (#2045); a chosen view that is not falls back to the first that is.
+  const shown = views.filter((item) => access.canView(item));
+  const [chosen, setView] = useState<View>("Coverage");
+  const view = shown.includes(chosen) ? chosen : (shown[0] ?? chosen);
   useEffect(() => installActivity(), []);
   const health = useResource<Health>("/health");
   // The server's default recording level, served beside its timeout (#2000).
@@ -1759,7 +1814,7 @@ export default function App() {
         <aside>
           <p className="eyebrow">WORKSPACE</p>
           <nav aria-label="Workspace views">
-            {views.map((item, index) => (
+            {shown.map((item, index) => (
               <button
                 key={item}
                 data-activity={`nav.${item}`}
@@ -1781,7 +1836,9 @@ export default function App() {
             ))}
           </nav>
           <p className="sidebar-note">
-            Local session
+            {access.authenticated
+              ? `Signed in as ${access.identity}`
+              : "Local session"}
             <br />
             {control.data?.writes_enabled
               ? "Writes enabled"
@@ -1807,7 +1864,12 @@ export default function App() {
               Gateway reload in progress. Views will retry automatically.
             </div>
           )}
-          {view === "Coverage" ? (
+          {access.known && shown.length === 0 ? (
+            <div className="notice error" role="alert">
+              Your access includes none of these views. Ask an administrator to
+              grant you one.
+            </div>
+          ) : view === "Coverage" ? (
             <CoverageView />
           ) : view === "Backfills" ? (
             <BackfillView />

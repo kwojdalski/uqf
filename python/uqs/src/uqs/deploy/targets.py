@@ -45,7 +45,7 @@ import tomllib
 from pathlib import Path
 from typing import Any
 
-from uqs.deploy import components, launch, overrides
+from uqs.deploy import components, launch, overrides, target_file
 from uqs.deploy.config import Config, DeployError, make_config
 from uqs.deploy.target_keys import FIELD_OF_KEY, FILE_KEYS, flag
 from uqs.paths import UqsError
@@ -89,7 +89,7 @@ def _load(root: Path) -> dict:
     path = declaration_path(root)
     if not path.is_file():
         raise DeployError("arguments", f"a target needs {path}, which does not exist")
-    return _tables(path.read_text(), path)
+    return _tables(target_file.text_of(path), path)
 
 
 def _tables(text: str, path: Path) -> dict:
@@ -122,6 +122,7 @@ def _tables(text: str, path: Path) -> dict:
     ]
     for layer, settings in layers:
         _as_fields(layer, settings, text, path)
+        _labels(layer, settings, text, path)
     shared = layers[: 1 + len(envs)]
     for layer, settings in shared:
         if ENVIRONMENT in settings:
@@ -150,6 +151,15 @@ def _as_fields(layer: str, settings: dict, text: str, path: Path) -> None:
     for key_, field in FIELD_OF_KEY.items():
         if key_ in settings:
             settings[field] = settings.pop(key_)
+
+
+def _labels(layer: str, settings: dict, text: str, path: Path) -> None:
+    """Refuse a `labels` that is not a table of plain values (#2026)."""
+    labels = settings.get("labels", {})
+    plain = (str, int, float, bool)
+    if not isinstance(labels, dict) or not all(isinstance(v, plain) for v in labels.values()):
+        where, eg = _at(text, path, layer, "labels"), 'labels = { region = "ldn" }'
+        raise DeployError("arguments", f"{where}{layer}: labels must be a table, e.g. {eg}")
 
 
 def to_keys(entry: dict) -> dict:
@@ -214,7 +224,7 @@ def read(root: Path) -> dict[str, dict]:
     path = declaration_path(root)
     if not path.is_file():
         raise DeployError("arguments", f"a target needs {path}, which does not exist")
-    return validate(path.read_text(), path)
+    return validate(target_file.text_of(path), path)
 
 
 def _merge(data: dict, path: Path) -> dict[str, dict]:

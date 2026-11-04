@@ -159,7 +159,10 @@ def test_an_unknown_table_is_422_not_403():
     assert c.post("/query", json={"table": "nope", "filters": []}).status_code == 422
 
 
-def test_the_identity_comes_from_the_header_and_reaches_the_policy():
+def test_the_claimed_header_never_reaches_the_policy():
+    """x-uqf-user is a claim anyone can make (#2045): the policy sees the
+    identity identity.py vouches for, which without a trusted proxy is
+    anonymous whatever the header says. test_access.py covers the proxy."""
     seen: list[str] = []
 
     def spy(req: Request_) -> str | None:
@@ -168,7 +171,7 @@ def test_the_identity_comes_from_the_header_and_reaches_the_policy():
 
     c, _ = client(policy=spy)
     c.get("/ops/queue", headers={authz.IDENTITY_HEADER: "desk-user-7"})
-    assert seen == ["desk-user-7"]
+    assert seen == [authz.ANONYMOUS]
 
 
 def test_a_missing_identity_header_is_anonymous_not_an_error():
@@ -222,6 +225,7 @@ def test_health_and_catalog_are_not_behind_the_seam():
 #: in both directions, so neither a new opt-out nor a stale entry passes.
 UNGUARDED = {
     "/health": "liveness probe - no data, no identity",
+    "/me/capabilities": "what the caller may do - a refused caller must be able to see why",
     "/catalog": "describes the queryable surface - a refused caller must be able to see why",
 }
 
@@ -276,6 +280,8 @@ SAMPLES: dict[tuple[str, str], dict] = {
     ("GET", "/ops/backfill"): {},
     ("GET", "/services"): {},
     ("GET", "/services/{target}/files"): {"params": {"path": "releases"}},
+    ("GET", "/services/{target}/tunnel"): {"params": {"process": "rdb1"}},
+    ("GET", "/services/{target}/tunnel/check"): {"params": {"process": "rdb1"}},
     ("PUT", "/services/{target}/files/content"): {
         "params": {"path": "shared/config/x.csv", "push": "20261104T000000000Z-00000000"},
         "content": b"a,b\n",
@@ -408,3 +414,23 @@ def test_a_denied_coverage_dataset_is_refused_on_query_too():
     metadata = {queries.CATALOG, queries.SCHEMA}
     assert [p for p, _, _ in gw.routed if p not in metadata] == [], "no coverage read"
     assert [p for p, _ in gw.calls if p not in metadata] == []
+
+
+@pytest.mark.parametrize(("method", "path"), sorted(SAMPLES))
+def test_an_access_policy_granting_nothing_refuses_every_guarded_route(tmp_path, method, path):
+    """The same sweep under the access policy (#2045): with no grant for
+    anonymous, every guarded route is 403 and reads no data."""
+    policy = tmp_path / "policy.csv"
+    policy.write_text("p, somebody, desk, read\n")
+    c, gw = client(policy_file=policy)
+    url = (
+        path.replace("{action}", "start")
+        .replace("{procname}", "rdb1")
+        .replace("{target}", "prod-a")
+        .replace("{push_id}", "20261104T000000000Z-00000000")
+    )
+    resp = c.request(method, url, **SAMPLES[(method, path)])
+    assert resp.status_code == 403, resp.text
+    assert "not granted to anonymous" in resp.json()["detail"]
+    metadata = {queries.CATALOG, queries.SCHEMA}
+    assert [p for p, _, _ in gw.routed if p not in metadata] == []

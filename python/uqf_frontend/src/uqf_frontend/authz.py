@@ -1,5 +1,23 @@
 """The authorisation seam.
 
+**Since #2045 there is an identity and a real policy behind this seam**, and
+the history below is kept because it explains the shape. Two layers decide
+now, both in `app.guard`:
+
+- **The access policy** (access.py): a Casbin RBAC policy over FEATURES and
+  their actions, keyed on the identity identity.py vouches for - a user named
+  by a trusted authenticating proxy, or `anonymous`. Every route maps to one
+  feature and action, and a route with no mapping is refused.
+- **The table/path policy** (`Policy`, below): the callable `create_app`
+  takes, defaulting to `allow_all` - the seam this module always was, for a
+  rule that keys on a table rather than a feature.
+
+Both default to allowing everything, so a deployment that configures nothing
+behaves exactly as before; the write token and Host check (write_guard.py)
+stand in front of every write either way.
+
+What follows is the original argument for a seam, from before #2045.
+
 **This is deliberately a seam and not an auth system, and the reason is worth
 stating rather than hiding.** Two answered decisions put a ceiling on what
 B5 can honestly be:
@@ -21,9 +39,10 @@ authorise. That keeps the actual guarantee — credentials stay server-side
 and no client input reaches query text — as the thing carrying the security
 weight, which is already true and already tested.
 
-The identity is read from a header and is **not authenticated**. It is a
-label, useful for audit and for a policy to key on, and this module says so
-loudly so nobody later mistakes it for proof of who is calling.
+The identity was read from a header and was **not authenticated** - a label,
+useful for audit. Since #2045 that header (IDENTITY_HEADER) no longer reaches
+a policy at all: `Request_.identity` is identity.py's, anonymous unless a
+trusted proxy named the caller.
 """
 
 from __future__ import annotations
@@ -32,6 +51,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, TypeVar
 
+from uqf_frontend import identity
 from uqf_frontend.errors import Forbidden
 
 __all__ = [
@@ -48,11 +68,14 @@ __all__ = [
 ]
 
 #: Header carrying the caller's claimed identity. Claimed, not verified -
-#: anyone can set it. See the module docstring.
+#: anyone can set it, so it never reaches a policy: it is recorded in the
+#: activity history as a claim and nothing more. The identity a policy sees
+#: is identity.py's.
 IDENTITY_HEADER = "x-uqf-user"
 
-#: Used when the header is absent, which on a single-host demo is the norm.
-ANONYMOUS = "anonymous"
+#: The identity of a caller no trusted proxy vouched for - on a single-host
+#: demo, every caller.
+ANONYMOUS = identity.ANONYMOUS
 
 
 @dataclass(frozen=True)
@@ -70,6 +93,8 @@ class Request_:
     path: str
     #: Table name for a /query request; None for everything else.
     table: str | None = None
+    #: The groups a trusted proxy put the caller in (identity.py).
+    groups: tuple[str, ...] = ()
 
 
 #: A policy takes a request and returns None to allow, or a reason to refuse.
