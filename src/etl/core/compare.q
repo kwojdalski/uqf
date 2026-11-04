@@ -7,7 +7,7 @@
 / or a deploy target through an ssh tunnel - and hands this file the two
 / addresses. Everything that decides what the comparison SAYS is here, in q:
 / which rows are read, how a filter's text becomes a typed value, how rows
-/ are paired, what counts as a difference, and the five outcomes. uqs opens
+/ are paired, what counts as a difference, and the six outcomes. uqs opens
 / the tunnels and prints; the frontend asks uqs; neither holds a rule.
 / .
 / NOTHING HERE IS A SECOND CONTRACT. Each side is read through what the
@@ -31,12 +31,23 @@
 / the only "equal" there is, and its label says whether every row in the
 / window was read or only a sample - never that the tables are equal.
 / .
+/ A TABLE WITH NO KEY CANNOT BE JUDGED FROM A CUT SAMPLE (#2065). Its rows
+/ are matched whole, so a row whose value changed is not "changed" but one
+/ row on each side alone - exactly what a truncated comparison discards as
+/ unpaired. Pairing by position or by `time` is no remedy: `time` is stamped
+/ on receipt, so the two environments' samples are cut at different rows and
+/ share no common prefix. Such a comparison is `not_comparable`, never
+/ `equal_in_sample`, however many rows differ. Read it whole (narrow the
+/ window, raise the limit) or declare a key.
+/ .
 / THE OUTCOMES, first that applies:
 /   endpoint_unavailable  a side could not be reached or did not answer
 /   missing_table         a side has no such table
 /   differs               the schemas differ, the published coverage differs
 /                         (one side has published part of the window the
 /                         other has not), or the rows differ
+/   not_comparable       the table declares no row key and a sample was cut,
+/                         so no row could be judged (see above)
 /   incomplete_coverage   both sides agree, but neither has published the
 /                         whole window, so nothing past their coverage was
 /                         compared
@@ -50,8 +61,8 @@
 \d .
 
 / The outcomes a comparison reaches, in the order they are decided.
-/ @eg .qetl.compare.outcomes  ->  `endpoint_unavailable`missing_table`differs`incomplete_coverage`equal_in_sample
-.qetl.compare.outcomes:`endpoint_unavailable`missing_table`differs`incomplete_coverage`equal_in_sample
+/ @eg .qetl.compare.outcomes  ->  `endpoint_unavailable`missing_table`differs`not_comparable`incomplete_coverage`equal_in_sample
+.qetl.compare.outcomes:`endpoint_unavailable`missing_table`differs`not_comparable`incomplete_coverage`equal_in_sample
 
 / The tiers a sample is read from.
 .qetl.compare.tiers:`rdb`hdb
@@ -220,6 +231,22 @@
         k=`duplicated; ssr[ssr[d;"first producer";names 0];"second";names 1]; d]}[names]'[diffs`kind;diffs`detail];
     update kind:side, detail:said from diffs}
 
+/ Whether a table is matched whole rows at a time: its producers declare no
+/ key, or a key column is not one both samples hold as one type. Under such a
+/ pairing a changed row is a missing row and an extra one, so a cut sample
+/ cannot judge it.
+/ @param tbl the table
+/ @param lr the left sample
+/ @param rr the right sample
+/ @return a boolean
+/ @eg .qetl.compare.keyless[`demo_deals;([] deal_id:1 2j);([] deal_id:1 2j)]  ->  0b
+.qetl.compare.keyless:{[tbl;lr;rr]
+    b:.qetl.compare.basis[tbl];
+    lt:exec c!t from meta lr; rt:exec c!t from meta rr;
+    same:((cols[lr] inter cols rr) except .qetl.compare.generated[tbl]);
+    same:same where lt[same]=rt same;
+    (0=count b`key) or 0<count (b`key) except same}
+
 / The rows two samples hold, compared: paired on the table's key with
 / .qetl.verify.compare_rows, over the columns both hold as one type, the
 / destination's own (`time`) left out. In a truncated comparison a key either
@@ -293,6 +320,9 @@
     checked:not (::)~l`coverage;
     aspects:(`schema`coverage`rows) where (0<count v`schema;checked and not (~). gaps;0<count v`rows);
     if[count aspects; :v,`outcome`label!(`differs;.qetl.compare.differs_label[v;aspects])];
+    if[trunc and .qetl.compare.keyless[tbl;l`rows;r`rows];
+        :v,`outcome`label!(`not_comparable;"not comparable - ",string[tbl]," declares no row key and a sample was cut at ",
+            string[lim]," rows per side, so a changed row cannot be told from one past the cut; narrow the window or raise the limit to read it whole")];
     if[checked and 0<count first gaps;
         :v,`outcome`label!(`incomplete_coverage;"incomplete coverage - neither side has published the whole window (",
             .qetl.compare.counted[count first gaps;"gap"],"); the rows both have agree")];

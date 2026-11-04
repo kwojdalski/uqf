@@ -53,6 +53,7 @@ qetl.compare,basis,function,1,tbl
 qetl.compare,browse_filters,function,2,m fs
 qetl.compare,coverage,function,3,h tbl req
 qetl.compare,generated,function,1,tbl
+qetl.compare,keyless,function,3,tbl lr rr
 qetl.compare,meta_program,value,,
 qetl.compare,open,function,2,ep login
 qetl.compare,open_timeout,value,,

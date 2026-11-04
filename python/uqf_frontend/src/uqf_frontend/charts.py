@@ -44,7 +44,7 @@ from typing import Any, Literal
 import plotly.graph_objects as go
 import polars as pl
 from plotly.subplots import make_subplots
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator
 
 from uqf_frontend import ops, queries, status
 from uqf_frontend.catalog import Catalog, Table
@@ -400,6 +400,24 @@ class CoverageParams(ChartParams):
         pattern=r"^(\d{4}-\d{2}-\d{2})?$",
     )
 
+    @field_validator("end")
+    @classmethod
+    def _end_is_a_day_the_window_fits(cls, end: str, info: ValidationInfo) -> str:
+        """The pattern lets through 2026-02-30; the calendar does not (#2078).
+        Refused here, so a bad end is a 422 before any read, and the build
+        never steps back past the first day there is."""
+        if not end:
+            return end
+        try:
+            last = dt.date.fromisoformat(end)
+        except ValueError:
+            raise ValueError(f"{end!r} is not a date") from None
+        back = info.data.get("days", 1) - 1
+        if last.toordinal() - back < dt.date.min.toordinal():
+            first = dt.date.min.isoformat()
+            raise ValueError(f"{back} day(s) back from {end} is before the first day ({first})")
+        return end
+
 
 #: A worker's state on a day, worst first: what a cell shows when two runs of
 #: one worker cover the same day. The number is the cell's colour.
@@ -512,6 +530,11 @@ class MidSpreadParams(ChartParams):
         title="Fills",
         description="executions are venue fills, trades client fills",
     )
+    source: str = Field(
+        default="",
+        title="Source",
+        description="one market_data source (venue), or empty for a line per source",
+    )
     range_from: str = Field(default="", title="From", description="ISO-8601 with an offset")
     range_to: str = Field(default="", title="To", description="ISO-8601 with an offset")
     tier: Tier = Field(default="rdb", title="Tier")
@@ -525,7 +548,12 @@ _BOOK = "market_data"
 
 def _mid_spread_read(sources: Sources, p: MidSpreadParams) -> Read:
     window = [("sym", "eq", p.sym), *_time_filters(p.range_from, p.range_to)]
-    book, book_cut = _browse(sources, _BOOK, ["time", "bid_prices", "ask_prices"], window, p.tier)
+    # market_data holds one book per (sym, source) (src/etl/streaming/
+    # market_data.q): each source's rows are its own book, never one market.
+    on = [("source", "eq", p.source)] if p.source else []
+    book, book_cut = _browse(
+        sources, _BOOK, ["time", "source", "bid_prices", "ask_prices"], window + on, p.tier
+    )
     fills, fills_cut = _browse(
         sources, p.fills, ["time", "side", _FILL_PRICE[p.fills]], window, p.tier
     )
@@ -549,36 +577,53 @@ def _mid_spread_build(read: Read, p: MidSpreadParams, cap: int) -> Built:
     fig.update_layout(title={"text": f"{p.sym} · mid and spread with {p.fills}"})
     fig.update_yaxes(title_text="mid", row=1, col=1)
     fig.update_yaxes(title_text="spread", row=2, col=1)
-    # A third of the budget each: mid, spread, fills.
+    # A third of the budget each: mid, spread, fills. A source's rows replace
+    # its own book only, so each source is its own pair of lines: interleaving
+    # two venues' books into one line draws a mid neither of them quoted.
     share = cap // 3
-    points, downsampled = 0, False
+    points, downsampled, dropped = 0, False, 0
     book = read.frames["book"]
     if not book.is_empty():
         book = book.sort("time").with_columns(
+            pl.col("source").cast(pl.String).fill_null(""),
             pl.col("bid_prices").list.first().cast(pl.Float64).alias("bid"),
             pl.col("ask_prices").list.first().cast(pl.Float64).alias("ask"),
         )
-        xs = _nanos(book, "time")
-        times = _instants(book, "time")
-        quotes = list(zip(book["bid"].to_list(), book["ask"].to_list(), strict=True))
-        mid = [_quoted(bid, ask, lambda b, a: (a + b) / 2) for bid, ask in quotes]
-        spread = [_quoted(bid, ask, lambda b, a: a - b) for bid, ask in quotes]
-        for name, ys, row in (("mid", mid, 1), ("spread", spread, 2)):
-            kept, cut = reduce(xs, ys, share)
-            downsampled |= cut
-            points += len(kept)
-            fig.add_trace(
-                go.Scatter(
-                    x=_pick(times, kept),
-                    y=_pick(ys, kept),
-                    name=name,
-                    mode="lines",
-                    connectgaps=False,
-                    line={"width": 1.4},
-                ),
-                row=row,
-                col=1,
-            )
+        # Busiest source first, so a cut drops the sources with least behind them.
+        order = (
+            book.group_by("source")
+            .len()
+            .sort(["len", "source"], descending=[True, False])["source"]
+            .to_list()
+        )
+        fit = max(1, share // 3)
+        dropped = max(0, len(order) - fit)
+        order = order[:fit]
+        each = share // len(order)
+        for source in sorted(order):
+            quotes = book.filter(pl.col("source") == source)
+            xs = _nanos(quotes, "time")
+            times = _instants(quotes, "time")
+            pairs = list(zip(quotes["bid"].to_list(), quotes["ask"].to_list(), strict=True))
+            mid = [_quoted(bid, ask, lambda b, a: (a + b) / 2) for bid, ask in pairs]
+            spread = [_quoted(bid, ask, lambda b, a: a - b) for bid, ask in pairs]
+            for name, ys, row in (("mid", mid, 1), ("spread", spread, 2)):
+                kept, cut = reduce(xs, ys, each)
+                downsampled |= cut
+                points += len(kept)
+                fig.add_trace(
+                    go.Scatter(
+                        x=_pick(times, kept),
+                        y=_pick(ys, kept),
+                        name=f"{name} · {source or '(no source)'}",
+                        legendgroup=source,
+                        mode="lines",
+                        connectgaps=False,
+                        line={"width": 1.4},
+                    ),
+                    row=row,
+                    col=1,
+                )
     fills = read.frames["fills"]
     if not fills.is_empty():
         fills = fills.sort("time")
@@ -606,7 +651,9 @@ def _mid_spread_build(read: Read, p: MidSpreadParams, cap: int) -> Built:
                 col=1,
             )
     notes = [] if points else [f"no book or fills for {p.sym} in this window"]
-    return Built(fig, points, downsampled=downsampled, notes=notes)
+    if dropped:
+        notes.append(f"{dropped} source(s) left out to stay under {cap} points")
+    return Built(fig, points, downsampled=downsampled, truncated=bool(dropped), notes=notes)
 
 
 # ------------------------------------------------------------- ops latency
@@ -649,6 +696,26 @@ def _text(value: Any) -> str:
     return "" if value is None else str(value)
 
 
+def _latency_thin(ms: list[float], share: int) -> list[float]:
+    """At most `share` of the durations `ms`, at evenly spaced ranks that
+    include both ends.
+
+    A box is drawn from its quantiles and its extremes, and on a latency box
+    the slowest query is the one the operator is looking for. A stride over
+    the sorted sample (`sorted(ms)[::step]`) kept the fastest and usually
+    dropped the slowest (#2076); ranks spread from 0 to len-1 keep both, and
+    each kept rank is within half a step of every quantile's. A share of one
+    keeps the slowest alone. A sample within its share is returned as is.
+    """
+    if len(ms) <= share:
+        return ms
+    s = sorted(ms)
+    if share < 2:
+        return s[-1:] if share == 1 else []
+    last = len(s) - 1
+    return [s[round(k * last / (share - 1))] for k in range(share)]
+
+
 def _latency_build(read: Read, p: LatencyParams, cap: int) -> Built:
     # Only a completed query has a duration: TorQ logs `b`efore and `e`rror
     # rows too, whose timer is not one (lib/torq/code/handlers/logusage.q).
@@ -673,9 +740,7 @@ def _latency_build(read: Read, p: LatencyParams, cap: int) -> Built:
     for process in processes:
         ms = done.filter(pl.col("process") == process)["ms"].to_list()
         if len(ms) > share:
-            # A box is drawn from its quantiles; an even stride keeps them.
-            step = -(-len(ms) // share)
-            ms = sorted(ms)[::step]
+            ms = _latency_thin(ms, share)
             downsampled = True
         points += len(ms)
         fig.add_trace(go.Box(y=ms, name=process, boxpoints="outliers"))
@@ -709,7 +774,7 @@ CHARTS: dict[str, Chart] = {
         Chart(
             name="mid_spread_fills",
             title="Mid and spread with fills",
-            description="Top-of-book mid and spread from market_data, with fills overlaid",
+            description="Top-of-book mid and spread per market_data source, with fills overlaid",
             params=MidSpreadParams,
             max_points=3000,
             read=_mid_spread_read,

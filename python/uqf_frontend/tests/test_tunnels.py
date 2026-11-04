@@ -15,6 +15,7 @@ import json
 import re
 import secrets
 import subprocess
+from datetime import UTC, datetime
 
 import pytest
 from fastapi.testclient import TestClient
@@ -167,6 +168,42 @@ def test_a_plan_uqs_refuses_is_a_400_with_its_words(registry, params, said):
     assert resp.status_code == 400
     assert resp.json()["error"] == "TunnelPlanRefused"
     assert said in resp.json()["detail"]
+
+
+def test_a_local_port_in_non_ascii_digits_is_an_invalid_port_400(registry):
+    """'²' passes str.isdigit and fails int() - a refusal, never a 500 (#2064)."""
+    resp = _client(Ssh()).get("/services/box/tunnel", params={"local": ["rdb1:\u00b2"]})
+    assert resp.status_code == 400, resp.text
+    assert resp.json()["error"] == "TunnelPlanRefused"
+    assert "give PROC:PORT" in resp.json()["detail"]
+
+
+MALFORMED_CHECKS = {
+    "naive at": {"box": {"rdb1": {"at": "2026-11-04T10:00:00", "remote_port": 6002,
+                                  "local_port": 16002}}},
+    "record not a dict": {"box": {"rdb1": "x"}},
+    "target not a dict": {"box": ["x"]},
+}  # fmt: skip
+
+
+@pytest.mark.parametrize("targets", MALFORMED_CHECKS.values(), ids=list(MALFORMED_CHECKS))
+def test_a_malformed_check_record_reads_as_unverified_not_a_500(registry, tmp_path, targets):
+    (tmp_path / "tunnel_checks.json").write_text(json.dumps({"targets": targets}))
+    resp = _client(Ssh()).get("/services/box/tunnel")
+    assert resp.status_code == 200, resp.text
+    rdb = next(m for m in resp.json()["mappings"] if m["process"] == "rdb1")
+    assert (rdb["state"], rdb["last_check"]) == ("unverified", None)
+
+
+def test_a_recent_check_record_still_reads_as_verified(registry, tmp_path):
+    at = datetime.now(UTC).isoformat()
+    record = {"at": at, "identity": "rdb1", "remote_port": 6002, "local_port": 16002,
+              "release": "r9"}  # fmt: skip
+    (tmp_path / "tunnel_checks.json").write_text(json.dumps({"targets": {"box": {"rdb1": record}}}))
+    resp = _client(Ssh()).get("/services/box/tunnel")
+    assert resp.status_code == 200, resp.text
+    rdb = next(m for m in resp.json()["mappings"] if m["process"] == "rdb1")
+    assert (rdb["state"], rdb["last_check"]) == ("verified", record)
 
 
 def test_a_server_that_cannot_be_asked_is_a_discovery_failure(registry):

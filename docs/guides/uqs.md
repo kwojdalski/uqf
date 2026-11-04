@@ -545,6 +545,7 @@ Each table reaches one outcome, the first that applies:
   | `endpoint_unavailable` | a side could not be reached, or did not answer - with its reason                           |
   | `missing_table`        | a side has no such table                                                                   |
   | `differs`              | the schemas, the published coverage or the rows differ - each difference named             |
+  | `not_comparable`       | the table declares no row key and a sample was cut at `--limit`: no row could be judged    |
   | `incomplete_coverage`  | the sides agree, but neither has published the whole window                                |
   | `equal_in_sample`      | nothing differs in what was read                                                           |
 

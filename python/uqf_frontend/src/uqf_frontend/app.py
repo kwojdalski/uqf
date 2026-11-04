@@ -1641,13 +1641,24 @@ def _guard_refusal(settings: Settings, request: Request) -> tuple[int, str, str]
     refusal = write_guard.host_refusal(settings, request.headers.get("host"))
     if refusal is not None:
         return 403, "HostNotAllowed", refusal
-    if settings.enable_writes and write_guard.needs_token(
-        request.method, write_guard.route_path(request.scope)
+    if settings.enable_writes and (
+        write_guard.needs_token(request.method, write_guard.route_path(request.scope))
+        or _reaches_target(request)
     ):
         refusal = write_guard.token_refusal(settings, request.headers.get("authorization"))
         if refusal is not None:
             return 401, "WriteTokenRequired", refusal
     return None
+
+
+def _reaches_target(request: Request) -> bool:
+    """Will this request open, or read through, an ssh to a deploy target?
+    A scoped route naming a workspace other than local does: the operator's
+    key opens it, as it does for /services/{target} (#2067)."""
+    if not workspaces.names_target(request.headers):
+        return False
+    template, _ = _route_of(request)
+    return workspaces.is_scoped(request.method, template)
 
 
 def _carries_token(settings: Settings, request: Request) -> bool:

@@ -81,6 +81,42 @@
     .qunit.assertEquals[(v`outcome;v`unpaired;count v`rows);(`equal_in_sample;2j;0);"deals 2 and 4 each in one sample only: not judged"];
     .qunit.assertTrue[v[`label] like "*(2 keys in one sample only, not judged)";"and counted in the label"]};
 
+/ --- a table with no declared key (#2065) --------------------------------
+
+/ Five ticks of a table no producer declares a key for, as the plant holds it.
+.qt.qetl.compare.ticks:{[] ([] time:.qt.qetl.compare.from+0D01*1+til 5; sym:`a`b`c`d`e; px:1 2 3 4 5f)}
+
+.qt.qetl.compare.nokey:{[cmp;t1;t2;given]
+    a:.qt.qetl.compare.target[enlist[`nokey]!enlist t1;.qt.qetl.compare.whole];
+    b:.qt.qetl.compare.target[enlist[`nokey]!enlist t2;.qt.qetl.compare.whole];
+    .qetl.compare.run[.qt.qetl.compare.side["local";a];.qt.qetl.compare.side["prod";b];`nokey;.qt.qetl.compare.req[given]]}
+
+.qt.qetl.compare.test_a_truncated_keyless_table_with_every_row_changed_is_not_equal:{[t]
+    t1:.qt.qetl.compare.ticks[];
+    r:.qt.qetl.compare.nokey[0;t1;update px:px+100 from t1;enlist[`limit]!enlist 3j];
+    v:first r`tables;
+    .qunit.assertTrue[not (r`outcome) in `equal_in_sample`incomplete_coverage;"every row differs, and no sample can say it does not"];
+    .qunit.assertEquals[(r`outcome;v`outcome;v`truncated);(`not_comparable;`not_comparable;1b);"named as not comparable"];
+    .qunit.assertTrue[v[`label] like "not comparable - nokey declares no row key and a sample was cut at 3 rows per side*";"the label says why"];
+    .qunit.assertFalse[v[`label] like "*equal*";"and never says equal"]};
+
+.qt.qetl.compare.test_an_untruncated_keyless_table_still_compares_whole_rows:{[t]
+    t1:.qt.qetl.compare.ticks[];
+    same:.qt.qetl.compare.nokey[0;t1;t1;()!()];
+    .qunit.assertEquals[(same`outcome;(first same`tables)`truncated);(`equal_in_sample;0b);"identical, all read"];
+    diff:.qt.qetl.compare.nokey[0;t1;update px:px+100 from t1;enlist[`limit]!enlist 10j];
+    .qunit.assertEquals[(diff`outcome;count (first diff`tables)`rows);(`differs;10);"each changed row is one only_left and one only_right"]};
+
+.qt.qetl.compare.test_a_truncated_keyless_table_with_a_schema_difference_still_differs:{[t]
+    t1:.qt.qetl.compare.ticks[];
+    r:.qt.qetl.compare.nokey[0;t1;update venue:`x from t1;enlist[`limit]!enlist 3j];
+    .qunit.assertEquals[r`outcome;`differs;"a schema difference is a finding whatever the sample"]};
+
+.qt.qetl.compare.test_a_truncated_keyed_table_is_unchanged_by_keyless_handling:{[t]
+    other:.qt.qetl.compare.target[enlist[`demo_deals]!enlist update rate:1.2 from .qt.qetl.compare.deals[] where deal_id=1;.qt.qetl.compare.whole];
+    v:first .qt.qetl.compare.cmp[.qt.qetl.compare.same[];other;enlist[`limit]!enlist 3j]`tables;
+    .qunit.assertEquals[(v`outcome;v`truncated;count v`rows);(`differs;1b;1);"a paired changed row is still judged"]};
+
 .qt.qetl.compare.test_a_changed_value_differs_and_is_named_by_key:{[t]
     other:.qt.qetl.compare.target[enlist[`demo_deals]!enlist update rate:1.2 from .qt.qetl.compare.deals[] where deal_id=3;.qt.qetl.compare.whole];
     v:first .qt.qetl.compare.cmp[.qt.qetl.compare.same[];other;()!()]`tables;

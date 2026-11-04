@@ -137,7 +137,14 @@ def test_the_response_is_uqs_document_with_its_truncation_label(registry, asked)
 
 @pytest.mark.parametrize(
     "outcome",
-    ["endpoint_unavailable", "missing_table", "differs", "incomplete_coverage", "equal_in_sample"],
+    [
+        "endpoint_unavailable",
+        "missing_table",
+        "differs",
+        "not_comparable",
+        "incomplete_coverage",
+        "equal_in_sample",
+    ],
 )
 def test_every_outcome_is_returned_not_refused(registry, asked, outcome):
     _, answer = asked

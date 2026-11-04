@@ -1,4 +1,9 @@
-import { TARGET_HEADER, currentWorkspace, workspaceSignal } from "./workspace";
+import {
+  LOCAL,
+  TARGET_HEADER,
+  currentWorkspace,
+  workspaceSignal,
+} from "./workspace";
 
 export type Row = Record<string, unknown>;
 export interface Pollable {
@@ -126,6 +131,7 @@ export type CompareOutcome =
   | "endpoint_unavailable"
   | "missing_table"
   | "differs"
+  | "not_comparable"
   | "incomplete_coverage"
   | "equal_in_sample";
 export interface CompareInterval {
@@ -567,7 +573,12 @@ export async function request<T>(
     ...extra,
   };
   if (body) headers["Content-Type"] = "application/json";
-  if (authorization) headers.Authorization = authorization;
+  // A target workspace is reached over ssh with the operator's key, so the
+  // server holds it to the write token as it does /services (#2067): every
+  // request naming a target carries the token this tab holds.
+  const credential =
+    authorization ?? (target === LOCAL ? undefined : authorised());
+  if (credential) headers.Authorization = credential;
   const verb = method ?? (body ? "POST" : "GET");
   const note = {
     method: verb,
