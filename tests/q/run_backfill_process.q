@@ -25,6 +25,7 @@
 \l src/etl/core/intervals.q
 \l src/etl/core/materialisation.q
 \l src/etl/core/run.q
+\l src/etl/core/config_snapshot.q
 \l src/etl/core/worker_config.q
 \l src/etl/core/worker_runtime.q
 
@@ -152,6 +153,22 @@ check["a fresh process sees the run ledger";any runout like\: "RUNS:1*"];
 check["and finds the interrupted run";any runout like\: "UNFINISHED:1*"];
 check["a coverage row's run_id resolves to the run that made it";any runout like\: "RESOLVES:yes*"];
 check["and names the worker that ran it";any runout like\: "WORKER:durable_worker*"];
+
+/ --- configuration snapshots survive the process that recorded them (#1999) ---------------
+
+.qt.support.reset_snapshots[];
+snap:.qetl.snapshot.record[`markout;`horizons`report_ccy`rates!(0D00:00:01 0D00:00:10;`USD;(enlist `USDT)!enlist 1f);"process check"];
+schild:"QHOME=",getenv[`QHOME]," UQF_STATUS_DIR=",statusdir," ",Q," tests/q/read_snapshots.q < /dev/null 2>/dev/null";
+sout:@[{system x};schild;{enlist "SPAWN-FAILED: ",x}];
+check["a fresh process loads the snapshot store";any sout like "SNAPSHOTS:1*"];
+check["with every digest checked and good";any sout like "DIGESTS_OK:1*"];
+check["and finds the snapshot by the id it was recorded under";any sout like "IDS:",string snap];
+check["with its parameters intact";any sout like "*USDT*"];
+/ the file is edited behind the interface's back: the next process refuses it by id
+p:.qetl.snapshot.path[];
+.qetl.job.bounded.state.durable_set[p;update digest:`deadbeefdeadbeefdeadbeefdeadbeef from .qetl.job.bounded.state.durable_get p];
+sout2:@[{system x};schild;{enlist "SPAWN-FAILED: ",x}];
+check["a changed digest is refused by the next process, by id";any sout2 like "REFUSED:snapshot: the digest of ",string[snap]," does not match its content*"];
 
 -1 "";
 -1 "==================== q-backfill-process ====================";

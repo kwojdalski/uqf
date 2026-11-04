@@ -51,6 +51,15 @@
         range_to:`timestamp$(); rows_published:`long$(); recorded_at:`timestamp$();
         superseded_at:`timestamp$(); run_id:0#0Ng)};
 
+// Start a suite with no configuration snapshots, in the status directory it has set:
+// the table, the file and what this process remembers having verified (#1999). Like the
+// coverage ledger the store is persisted, so emptying the table alone is not a reset.
+.qt.support.reset_snapshots:{[]
+    @[{![`.;();0b;enlist `etl_config_snapshots]};::;{[e] (::)}];
+    @[{system"rm -rf ",x,"*"};.qetl.snapshot.path[];{[e] (::)}];
+    `.qetl.snapshot.verified set `symbol$();
+    .qetl.snapshot.attach[]};
+
 .qt.support.reset_coverage_ledger:{[]
     ![`.;();0b;enlist `etl_coverage];
     // The ledger is persisted now, so deleting the in-memory table is no
