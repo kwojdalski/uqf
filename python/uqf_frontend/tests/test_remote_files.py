@@ -478,6 +478,49 @@ def test_deletion_audit_preserves_partial_results(served):
     assert [item["outcome"] for item in rows[0]["items"]] == ["succeeded", "failed"]
 
 
+def _timed_out(argv, **kwargs):
+    raise subprocess.TimeoutExpired(argv, kwargs["timeout"])
+
+
+@pytest.mark.parametrize(
+    "runner",
+    [
+        pytest.param(
+            Recorder(255, stderr="Connection to box closed by remote host."), id="ssh-255"
+        ),
+        pytest.param(Recorder(1, stderr="Traceback ...\nOSError: boom"), id="helper-crash"),
+        pytest.param(_timed_out, id="timeout"),
+        pytest.param(Recorder(stdout="half an ans"), id="lost-answer"),
+    ],
+)
+def test_a_delete_that_may_have_run_is_uncertain_and_never_transient(served, runner):
+    """The helper may have deleted some paths before ssh dropped, it crashed,
+    or the answer was lost: "could not reach" and a retry-safe `transient`
+    were both wrong (#2023). The outcome is uncertain, the caller is told to
+    list before retrying, and nothing marks it safe to retry."""
+    client = _client(runner)
+    response = client.post(
+        "/services/box/files/delete",
+        json={"paths": ["shared/config/sources.csv"], "confirmed": True},
+    )
+    body = response.json()
+    assert response.status_code == 504, body
+    assert body["error"] == "DeleteOutcomeUncertain"
+    assert body["transient"] is False
+    assert "may have" in body["detail"] and "list" in body["detail"]
+    assert "could not reach" not in body["detail"] or "midway" in body["detail"]
+    (row,) = client.get("/activity", params={"action": "files.delete"}).json()["events"]
+    assert row["outcome"] == "unknown"
+
+
+def test_a_browse_timeout_stays_transient_and_says_nothing_of_deletion(served):
+    resp = _get(_timed_out)
+    assert resp.status_code == 504
+    assert resp.json()["error"] == "RemoteTimedOut"
+    assert resp.json()["transient"] is True
+    assert "deletion" not in resp.json()["detail"]
+
+
 def test_deletion_timeout_is_audited_as_unknown_and_not_retried(served):
     calls = []
 

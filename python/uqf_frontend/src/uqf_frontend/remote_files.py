@@ -46,6 +46,14 @@ functions take a target as `control.Remote`, so `uqs target config` drives
 the same helper with no API in between. A restore that timed out or lost its
 answer is RestoreOutcomeUncertain and, like an upload, never retried.
 
+DELETE (#1953). A deletion changes the server, so a failure after ssh was
+started is not "nothing happened": a timeout, ssh exiting 255 (it may have
+dropped midway), a crashed helper or an answer that cannot be read is
+DeleteOutcomeUncertain - some paths may be gone. Never transient, never
+retried here; the operator lists the directory first (#2023). A restore and a
+delete pass `_run` the same `uncertain` pair: the error, and what may be half
+done.
+
 Each failure says which side failed: ssh could not connect (255), no
 release (NO_RELEASE), no release Python (NO_PYTHON), the helper refused the
 path (its ERRORS word), or the helper itself failed.
@@ -133,8 +141,18 @@ class RemoteFailed(FrontendError):
 
 
 class RemoteTimedOut(FrontendError):
+    """A read timed out: nothing changed, so it may be retried."""
+
     status_code = 504
     transient = True
+
+
+class DeleteOutcomeUncertain(FrontendError):
+    """ssh timed out or dropped, the helper crashed, or its answer was lost
+    after a deletion started: some paths may have been deleted. Never
+    transient - list the directory before deleting again (#2023)."""
+
+    status_code = 504
 
 
 class UploadRefused(FrontendError):
@@ -336,6 +354,11 @@ def delete(
         {"op": "delete", "paths": paths, "confirmed": True},
         runner,
         on_begin=on_begin,
+        uncertain=(
+            DeleteOutcomeUncertain,
+            "its outcome is unknown: some paths may have been deleted - list the directory "
+            "before deleting again; nothing is retried automatically",
+        ),
     )
 
 
@@ -348,11 +371,17 @@ def _run(
     on_begin: Callable[[], None] | None = None,
     timeout: int = TIMEOUT,
     refusals: dict[str, type[FrontendError]] = _REFUSALS,
-    uncertain: str | None = None,
+    uncertain: tuple[type[FrontendError], str] | None = None,
 ) -> dict[str, Any]:
     """Run one helper request on target `r` (a control.Remote): its answer,
-    with the root. `uncertain` names what a timeout, a dropped connection or
-    a lost answer may have left half done; without it, those are failures."""
+    with the root.
+
+    `uncertain` is for an op that changes the server - a restore, a delete:
+    the error to raise and what may have been left half done, when a
+    timeout, a dropped connection, a crashed helper or a lost answer leaves
+    the outcome unknown. Without it those are a read's failures - a timeout
+    transient, the rest RemoteFailed. A refusal the helper answered with is
+    certain either way."""
     from uqs.deploy import control
     from uqs.deploy.remote import diagnostic
 
@@ -369,12 +398,10 @@ def _run(
         )  # fmt: skip
     except subprocess.TimeoutExpired:
         if uncertain is not None:
-            raise RestoreOutcomeUncertain(
-                f"target {name}: no answer within {timeout}s - {uncertain}"
-            ) from None
+            error, what = uncertain
+            raise error(f"target {name}: no answer within {timeout}s - {what}") from None
         raise RemoteTimedOut(
-            f"target {name}: remote operation timed out after {timeout}s; "
-            "its outcome may be unknown. Do not automatically retry deletion."
+            f"target {name}: remote operation timed out after {timeout}s"
         ) from None
     except OSError as exc:
         raise RemoteFailed(f"could not run ssh: {exc}") from None
@@ -385,7 +412,8 @@ def _run(
             f"`ssh -o BatchMode=yes {r.host} true` works: a key loaded, the host key known"
         )
         if uncertain is not None:
-            raise RestoreOutcomeUncertain(f"{reach}; or it dropped midway - {uncertain}")
+            error, what = uncertain
+            raise error(f"{reach}; or it dropped midway - {what}")
         raise RemoteFailed(reach)
     if code == NO_RELEASE:
         raise TargetUnusable(f"target {name} has no deployed release under {root}")
@@ -399,13 +427,15 @@ def _run(
         said = diagnostic(done) or "nothing"
         failed = f"target {name}: the browser helper failed (exit {code}): {said}"
         if uncertain is not None:
-            raise RestoreOutcomeUncertain(f"{failed} - {uncertain}")
+            error, what = uncertain
+            raise error(f"{failed} - {what}")
         raise RemoteFailed(failed)
     try:
         answer = _answer(name, done.stdout or "", refusals)
     except RemoteFailed as exc:
         if uncertain is not None:
-            raise RestoreOutcomeUncertain(f"{exc} - {uncertain}") from None
+            error, what = uncertain
+            raise error(f"{exc} - {what}") from None
         raise
     return {**answer, "root": root}
 
@@ -497,8 +527,9 @@ def restore(
         r, name, payload, runner, on_begin=on_begin, timeout=HISTORY_TIMEOUT,
         refusals=_HISTORY_REFUSALS,
         uncertain=None if dry_run else (
+            RestoreOutcomeUncertain,
             "some files may have been restored - read the push history before restoring "
-            "again; nothing is retried automatically"
+            "again; nothing is retried automatically",
         ),
     )  # fmt: skip
 
