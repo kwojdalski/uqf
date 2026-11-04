@@ -251,9 +251,10 @@ browse, delete or upload path may name `.uqf-history`, in any letter case.
   answer is 504 `RestoreOutcomeUncertain`, never retried.
 - **Retention.** Opening a push prunes the target's history to the newest
   `UQF_FRONTEND_CONFIG_HISTORY_KEEP` pushes (50), none older than
-  `UQF_FRONTEND_CONFIG_HISTORY_DAYS` (90). Each pruned id is logged in
-  `.uqf-history/pruned.jsonl`, so its restore is refused as pruned (410
-  `HistoryPruned`), not as unknown.
+  `UQF_FRONTEND_CONFIG_HISTORY_DAYS` (90) - or the values the Settings view kept
+  in `UQF_FRONTEND_SETTINGS_FILE`, which the API and `uqs target config restore`
+  both read over those. Each pruned id is logged in `.uqf-history/pruned.jsonl`,
+  so its restore is refused as pruned (410 `HistoryPruned`), not as unknown.
 - **Audit.** `config.push.open` when a push opens; `file.upload` per file, with
   `push_id` and `previous_sha256` (null on a create); `config.push` when it
   closes, with the destination, file count, bytes and one outcome per file;
@@ -789,6 +790,32 @@ the policy does not grant, whether or not the button was on screen.
 The table/path policy is the older seam, still there for a rule that keys on a
 table rather than a feature: `create_app(policy=deny_tables({"position"}))` is a
 403 on that table from `/query` and `/coverage` alike, before any data is read.
+
+### The Settings view: changing the policy and runtime settings
+
+The Settings view (#2046) edits the access policy and the runtime settings ---
+the default activity level, activity retention, config push history --- in forms
+react-jsonschema-form renders from JSON schemas the server builds from its own
+Pydantic models (`GET /settings`), so the browser keeps no list of fields. It is
+loaded only when opened.
+
+  |                         |                                                                                                                               |
+  | ---                     | ---                                                                                                                           |
+  | `GET /settings`         | `settings:read` --- the policy, runtime settings, administrators, which secrets are set (never their values), and the schemas |
+  | `PUT /settings/access`  | `settings:write` --- replace the policy                                                                                       |
+  | `PUT /settings/runtime` | `settings:write` --- replace the runtime settings                                                                             |
+
+A change needs writes on, the write token and an allowed Host like every other
+write, and `settings:write` on top. It is validated by the model (extra keys
+refused) and again by the server's own checks, refused with 409 if the version
+it was edited from is no longer current, or if it would leave nobody able to
+change the policy again. It is then written atomically (temporary file, fsync,
+rename), in force at once without a restart, and audited as `settings.access` or
+`settings.runtime` with its before/after diff in the `changes` detail. The
+policy is kept in `UQF_FRONTEND_POLICY_FILE` and the runtime settings in
+`UQF_FRONTEND_SETTINGS_FILE`; without either, that part is read-only. Settings
+that hold a secret --- the write token, the gateway and data passwords --- are
+never editable or sent: the view says only whether each is set.
 
 ### Running behind oauth2-proxy
 

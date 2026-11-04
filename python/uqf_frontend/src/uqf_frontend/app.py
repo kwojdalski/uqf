@@ -41,6 +41,7 @@ from uqf_frontend import (
     remote_files,
     remote_helper,
     services,
+    settings_admin,
     status,
     tunnels,
     workspaces,
@@ -377,6 +378,10 @@ def create_app(
     auth system.
     """
     settings = settings or Settings.from_env()
+    # Runtime settings changed in the Settings view (#2046), over the
+    # environment's - and refusing to start on a file that does not parse.
+    runtime = settings_admin.RuntimeStore(settings.settings_file)
+    settings = runtime.apply(settings)
     write_guard.require_configured(settings)
     gateway = gateway or KolaGateway(settings)
     fleet = fleet or KolaFleet(settings)
@@ -441,6 +446,14 @@ def create_app(
     app.state.fleet = fleet
     app.state.policy = policy
     app.state.access = policies
+    app.state.runtime = runtime
+
+    def live() -> Settings:
+        """The settings in force now: the runtime ones change without a
+        restart (settings_admin.RUNTIME_FIELDS), so a handler reading one
+        reads it here rather than from `settings`, which was the start's."""
+        return app.state.settings
+
     # ssh, injectable so tests reach no server (remote_files.py)
     app.state.remote_runner = remote_runner or subprocess.run
     app.state.capture = scheduler
@@ -651,7 +664,7 @@ def create_app(
                 detail=str(exc),
                 poll_seconds=ops.POLL_SECONDS["health"],
                 request_timeout_seconds=settings.request_timeout,
-                activity_level=typing.cast(Any, settings.activity_level),
+                activity_level=typing.cast(Any, live().activity_level),
             )
         except GatewayUnavailable as exc:
             return HealthResponse(
@@ -660,7 +673,7 @@ def create_app(
                 detail=str(exc),
                 poll_seconds=ops.POLL_SECONDS["health"],
                 request_timeout_seconds=settings.request_timeout,
-                activity_level=typing.cast(Any, settings.activity_level),
+                activity_level=typing.cast(Any, live().activity_level),
             )
         proctype = _reported_proctype(identity)
         # Only a POSITIVE reading of the wrong type is a refusal. A process
@@ -682,14 +695,14 @@ def create_app(
                 ),
                 poll_seconds=ops.POLL_SECONDS["health"],
                 request_timeout_seconds=settings.request_timeout,
-                activity_level=typing.cast(Any, settings.activity_level),
+                activity_level=typing.cast(Any, live().activity_level),
             )
         return HealthResponse(
             ok=True,
             gateway="up",
             poll_seconds=ops.POLL_SECONDS["health"],
             request_timeout_seconds=settings.request_timeout,
-            activity_level=typing.cast(Any, settings.activity_level),
+            activity_level=typing.cast(Any, live().activity_level),
         )
 
     @app.get("/catalog", response_model=CatalogResponse)
@@ -1237,15 +1250,15 @@ def create_app(
             remote, target, destination=req.destination, file_count=req.file_count,
             total_bytes=req.total_bytes,
             user=activity.clean_user(audit_user(request)),
-            via="frontend", keep=settings.config_history_keep,
-            keep_days=settings.config_history_days, runner=request.app.state.remote_runner,
+            via="frontend", keep=live().config_history_keep,
+            keep_days=live().config_history_days, runner=request.app.state.remote_runner,
         )  # fmt: skip
         audit.note(push_id=answer["push_id"], pruned_count=len(answer["pruned"]))
         _audit_pruned(request, target, answer["pruned"])
         return ConfigPushOpenResponse(
             target=target, root=answer["root"], push_id=answer["push_id"],
-            pruned=answer["pruned"], keep=settings.config_history_keep,
-            keep_days=settings.config_history_days,
+            pruned=answer["pruned"], keep=live().config_history_keep,
+            keep_days=live().config_history_days,
         )  # fmt: skip
 
     @app.post("/services/{target}/config/pushes/{push_id}/close", response_model=ConfigPushResponse)
@@ -1326,7 +1339,7 @@ def create_app(
         """What restoring the push would do - a dry run, writing nothing."""
         answer = remote_files.restore(
             _remote(target), target, push_id, dry_run=True, user=None, via="frontend",
-            keep=settings.config_history_keep, keep_days=settings.config_history_days,
+            keep=live().config_history_keep, keep_days=live().config_history_days,
             runner=request.app.state.remote_runner,
         )  # fmt: skip
         return _restore_response(target, answer)
@@ -1351,8 +1364,8 @@ def create_app(
             answer = remote_files.restore(
                 remote, target, push_id, dry_run=False,
                 user=activity.clean_user(audit_user(request)),
-                via="frontend", keep=settings.config_history_keep,
-                keep_days=settings.config_history_days,
+                via="frontend", keep=live().config_history_keep,
+                keep_days=live().config_history_days,
                 runner=request.app.state.remote_runner, on_begin=audit.begin,
             )  # fmt: skip
         except remote_files.RestoreOutcomeUncertain:
@@ -1561,7 +1574,7 @@ def create_app(
                 last_error=state.last_error,
                 last_failure_at=state.last_failure_at,
             ),
-            default_level=typing.cast(Any, settings.activity_level),
+            default_level=typing.cast(Any, live().activity_level),
             bounds=[
                 ActivityBound(
                     level=typing.cast(Any, lvl),
@@ -1607,6 +1620,8 @@ def create_app(
             media_type=activity_log.MEDIA_TYPES[format],
             headers={"Content-Disposition": f'attachment; filename="{name}"'},
         )
+
+    settings_admin.install(app)
 
     if settings.web_dist is not None:
         app.mount("/ui", StaticFiles(directory=settings.web_dist, html=True), name="web")

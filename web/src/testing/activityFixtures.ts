@@ -4,13 +4,50 @@
  * screen, and the level tests drive the same app at each level.
  */
 import { vi } from "vitest";
-import type { ActivityHistory, SessionLevel } from "../api";
+import type { ActivityHistory, SessionLevel, SettingsData } from "../api";
+import SCHEMAS from "./settingsSchemas.json";
 
 export const ok = (body: unknown) => ({
   ok: true,
   status: 200,
   json: async () => body,
 });
+
+/** GET /settings, with the schemas the server builds from its models -
+ *  settingsSchemas.json, which test_settings_admin.py holds to them. */
+export const SETTINGS: SettingsData = {
+  access: {
+    grants: [
+      { subject: "admins", feature: "*", action: "*" },
+      { subject: "viewers", feature: "desk", action: "read" },
+    ],
+    memberships: [{ member: "alice", group: "admins" }],
+  },
+  access_version: "a".repeat(64),
+  access_editable: true,
+  access_error: null,
+  administrators: ["alice"],
+  runtime: {
+    activity_level: "actions",
+    activity_retention_days: 30,
+    activity_max_rows: 100000,
+    activity_interactions_retention_days: 7,
+    activity_interactions_max_rows: 50000,
+    activity_debug_retention_days: 1,
+    activity_debug_max_rows: 10000,
+    config_history_keep: 50,
+    config_history_days: 90,
+  },
+  runtime_version: "b".repeat(64),
+  runtime_editable: true,
+  writes_enabled: true,
+  secrets: [
+    { name: "UQF_FRONTEND_WRITE_TOKEN", configured: true },
+    { name: "UQF_FRONTEND_GATEWAY_PASSWORD", configured: false },
+  ],
+  schemas: SCHEMAS,
+  poll_seconds: 30,
+};
 
 export const HISTORY: ActivityHistory = {
   events: [
@@ -269,6 +306,7 @@ export function answer(path: string, level: SessionLevel = "actions"): unknown {
       poll_seconds: 30,
     };
   if (bare === "/activity") return HISTORY;
+  if (bare === "/settings") return SETTINGS;
   if (bare.startsWith("/control/process/"))
     return {
       action: "stop",

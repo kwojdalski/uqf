@@ -261,7 +261,7 @@ def restore(
     from uqf_frontend import config, remote_files
 
     try:
-        keep, keep_days = config.history_bound_from_env()
+        keep, keep_days = config.history_bound()
     except ValueError as exc:
         _die(UqsError(str(exc)))
         return
