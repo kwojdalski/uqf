@@ -273,9 +273,132 @@ def test_scalar_colours_are_as_before(message, expected):
     assert hl(message) == expected
 
 
+# --------------------------------------- q-typed values from .Q.s1 (#2079)
+#
+# `.qetl.log.render` writes every value with `.Q.s1`, which spells many atoms
+# with a type letter. Each spelling below is what KDB-X's .Q.s1 prints.
+
+
+@pytest.mark.parametrize(
+    ("message", "expected"),
+    [
+        ("code=-187i", "code=<red>-187i</red>"),
+        ("n=5j", "n=<magenta>5j</magenta>"),
+        ("w=100h", "w=<magenta>100h</magenta>"),
+        ("px=1.5e", "px=<magenta>1.5e</magenta>"),
+        ("px=1e", "px=<magenta>1e</magenta>"),
+        ("px=1.5e+10e", "px=<magenta>1.5e+10e</magenta>"),
+        ("q=2f", "q=<magenta>2f</magenta>"),
+        ("q=-2.5f", "q=<red>-2.5f</red>"),
+    ],
+)
+def test_a_number_with_a_q_type_letter_is_a_number(message, expected):
+    assert hl(message) == expected
+
+
+@pytest.mark.parametrize(
+    ("message", "expected"),
+    [
+        ("x=0N", "x=<magenta>0N</magenta>"),
+        ("x=0n", "x=<magenta>0n</magenta>"),
+        ("x=0Ni", "x=<magenta>0Ni</magenta>"),
+        ("x=0Ne", "x=<magenta>0Ne</magenta>"),
+        ("x=0Np", "x=<magenta>0Np</magenta>"),
+        ("x=0Nn", "x=<magenta>0Nn</magenta>"),
+        ("x=0Nd", "x=<magenta>0Nd</magenta>"),
+        ("x=0w", "x=<magenta>0w</magenta>"),
+        ("x=0W", "x=<magenta>0W</magenta>"),
+        ("x=0we", "x=<magenta>0we</magenta>"),
+        ("x=0Wp", "x=<magenta>0Wp</magenta>"),
+        ("x=-0w", "x=<red>-0w</red>"),
+        ("x=-0Wi", "x=<red>-0Wi</red>"),
+    ],
+)
+def test_a_q_null_or_infinity_is_a_number(message, expected):
+    assert hl(message) == expected
+
+
+@pytest.mark.parametrize(
+    ("message", "expected"),
+    [
+        ("ok=1b", "ok=<green>1b</green>"),
+        ("ok=0b", "ok=<red>0b</red>"),
+        ("flags=111b", "flags=<green>111b</green>"),
+        ("flags=000b", "flags=<red>000b</red>"),
+        ("flags=101b", "flags=<magenta>101b</magenta>"),
+    ],
+)
+def test_a_q_boolean_is_coloured_like_true_and_false(message, expected):
+    assert hl(message) == expected
+
+
+@pytest.mark.parametrize(
+    ("message", "expected"),
+    [
+        ("sizes=1 2 3i", "sizes=<magenta>1</magenta> <magenta>2</magenta> <magenta>3i</magenta>"),
+        ("w=1 2 3h", "w=<magenta>1</magenta> <magenta>2</magenta> <magenta>3h</magenta>"),
+        ("px=1.5 2e", "px=<magenta>1.5</magenta> <magenta>2e</magenta>"),
+        ("x=1 2 0Ni", "x=<magenta>1</magenta> <magenta>2</magenta> <magenta>0Ni</magenta>"),
+        ("x=-0w 1 2e", "x=<red>-0w</red> <magenta>1</magenta> <magenta>2e</magenta>"),
+    ],
+)
+def test_the_last_element_of_a_typed_q_vector_is_coloured(message, expected):
+    assert hl(message) == expected
+
+
+def test_the_kafka_feed_line_from_the_issue():
+    line = 'stage=`bootstrap kind=`all_down endpoint="" code=-187i error="1/1 brokers are down"'
+    assert "code=<red>-187i</red>" in hl(line)
+
+
+@pytest.mark.parametrize(
+    "value",
+    # Words that merely end in a type letter, q bytes, letters q does not
+    # put after a number, and nulls of a type .Q.s1 never prints that way.
+    [
+        "fib",
+        "ab",
+        "b",
+        "i",
+        "0x01",
+        "0x0102",
+        "2b",
+        "1bb",
+        "12b3",
+        "1d",
+        "5x",
+        "12abc",
+        "1ii",
+        "0Nx",
+        "0Ng",
+        "0N1",
+        "N",
+        "e",
+        "1e+",
+        "-i",
+        "--1i",
+        "0bb",
+    ],
+)
+def test_what_only_looks_q_typed_stays_a_string(value):
+    assert hl(f"v={value}") == f"v=<light-cyan>{value}</light-cyan>"
+
+
+def test_a_q_typed_atom_inside_a_list_is_coloured():
+    assert hl("x=(0N;1.5e;1b)") == (
+        "x=(<magenta>0N</magenta>;<magenta>1.5e</magenta>;<green>1b</green>)"
+    )
+
+
+def test_q_types_are_not_coloured_in_running_text():
+    # As with other numbers, only a value after `=` is a number.
+    assert hl("took 5h and 1b") == "took 5h and 1b"
+
+
 # --------------------------------------------- the text survives exactly
 
 _EXACT = [
+    "code=-187i sizes=1 2 3i x=-0w ok=1b f=101b q=(0N;1.5e;`a) v=0x01 fib=ab",
     "worker=`piggybank range_from=2026.11.02D10:00:00.000000000 symbols=`EURUSD`GBPUSD",
     "sizes=1000000 2e+07 -2.5e-07 run=ceff48fe-c862-1bcf-e2e2-4d5b8fb8256f",
     'msg="a b `c d=1" x=((`a;1);(`b;-2))',
