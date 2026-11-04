@@ -138,6 +138,7 @@ CASES: dict[str, tuple[list[str], str]] = {
     "job runs list": (["job", "runs", "list", "--attachment", "nosuch"], "no attachment"),
     "job runs show": (["job", "runs", "show", "r", "--attachment", "nosuch"], "no attachment"),
     "job runs audit": (["job", "runs", "audit", "d", "--from", "bad", "--to", "2024-01-02"], "bad"),
+    "data snapshot show": (["data", "snapshot", "show", "not an id"], "is not a snapshot id"),
     "connector status": (["connector", "status", "nosuch"], "no connector 'nosuch'"),
     "connector logs": (["connector", "logs", "crypto", "--follow"], "--follow does not apply"),
     "setup odbc status": (
@@ -152,6 +153,8 @@ CASES: dict[str, tuple[list[str], str]] = {
 NO_OFFLINE_CASE = {
     # runs q over the source even to refuse it
     "config sources check": "needs q",
+    # reads the store through a short-lived q, empty or not
+    "data snapshot list": "needs q",
 }
 
 

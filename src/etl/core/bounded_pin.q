@@ -13,18 +13,19 @@
 \d .
 
 / Validate a worker's declared `pin` at declaration time, so a malformed one fails then and not
-/ at the first run.
+/ at the first run. (Its second parameter is `given`, not `decl`: this is not a declaration
+/ verb, which uqs's job-kind table lists by that shape.)
 / @param worker the worker's name
-/ @param decl the declaration
+/ @param given the declaration
 / @return the declared pin, or (::) when the worker declares none
 / @throws error when the declared pin is not a function
 / @eg .qetl.job.bounded.require_pin[`demo;()!()]  ->  (::)
-.qetl.job.bounded.require_pin:{[worker;decl]
-    if[not `pin in key decl; :(::)];
-    if[(::)~decl`pin; :(::)];
-    if[not (type decl`pin) within 100 112h;
+.qetl.job.bounded.require_pin:{[worker;given]
+    if[not `pin in key given; :(::)];
+    if[(::)~given`pin; :(::)];
+    if[not (type given`pin) within 100 112h;
         '"define: ",string[worker],"'s pin must be a niladic function recording the configuration snapshot its rows name"];
-    decl`pin}
+    given`pin}
 
 / Pin the configuration this worker's rows will name, before it calculates.
 / .

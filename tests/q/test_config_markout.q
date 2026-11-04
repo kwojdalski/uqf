@@ -146,7 +146,6 @@
     .qunit.assertThrows[.qpipe.transform.config_markout.require_version[;1];rows;msg;"a consumer pinned to a version"]};
 
 .qt.qpipe.transform.config_markout.test_a_consumer_pinned_to_a_version_refuses_another:{[t]
-    d:.qt.qpipe.transform.config_markout.dom[];
     in_:.qt.qpipe.transform.config_markout.inputs[0D;`x1];
     rows:.qpipe.transform.fx_markout.calc[.qt.qpipe.transform.config_markout.spec[()!()];in_ 0;in_ 1];
     .qpipe.transform.fx_markout_outputs.pin[];
