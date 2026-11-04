@@ -307,10 +307,12 @@
 
 / Private: one symbol per event, from its identity columns - so membership
 / and last-delivery-wins are vector operations on symbols.
+/ Encode the typed tuple losslessly: display strings can round numbers, and
+/ delimiter-joining fields merges (`a|b;`c) with (`a;`b|c).
 / @private
 .qetl.job.stream.horizons.ids_of:{[d;t]
     idc:d`identity;
-    `$$[1=count idc; string t first idc; "|" sv/: flip string t idc]}
+    `${raze string -8!value x} each idc#t}
 
 / Private: per reference key, the earliest and latest reference time held -
 / the anchor and how far the reference has advanced - and `ser`, the latest

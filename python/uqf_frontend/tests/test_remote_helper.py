@@ -414,7 +414,7 @@ def test_a_bad_limit_is_a_bad_request(deployment, limit):
         None,
         [],
         {"protocol": 2, "op": "list", "root": "/"},
-        {"protocol": 1, "op": "delete", "root": "/"},
+        {"protocol": 1, "op": "unsupported", "root": "/"},
         {"protocol": 1, "op": "list", "root": "relative"},
     ],
 )
@@ -484,12 +484,21 @@ def test_the_helper_imports_only_the_standard_library():
     assert not imported & {"subprocess", "shutil", "pty", "multiprocessing"}
 
 
-#: The helper's functions that may write, all of them the upload op's (#1951).
-WRITERS = {"make_dirs", "_new_mode", "_receive", "_publish_new", "sweep", "publish", "upload",
-           "_interrupted"}  # fmt: skip
+#: Only upload and confirmed deletion may write (#1951, #1953).
+WRITERS = {
+    "delete_paths",
+    "make_dirs",
+    "_new_mode",
+    "_receive",
+    "_publish_new",
+    "sweep",
+    "publish",
+    "upload",
+    "_interrupted",
+}
 
 
-def test_only_the_upload_functions_write():
+def test_only_the_upload_and_delete_functions_write():
     """No os call that writes, removes or renames outside the upload op's
     own functions - so `list` reads - and none anywhere that runs a program.
     The helper imports no subprocess (the stdlib test above names them)."""
