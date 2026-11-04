@@ -247,3 +247,15 @@
     r:.qetl.source.fills.adapt[`t_fills_sql;update side:1 2, fill_id:7 8 from .qt.qetl.source.fills.driver_rows[]];
     ![`.qetl.source.fills.registry;enlist (in;`name;enlist `t_fills_sql);0b;`symbol$()];
     .qunit.assertEquals[(r`side;r`fill_id);(1 -1;`$'("7";"8"));"an integer side and an integer id are rendered, then matched"]};
+
+.qt.qetl.source.fills.test_an_odbc_window_sends_the_statement_and_adapts_the_answer:{[t]
+    .qetl.source.fills.declare[`t_fills_sql;.qt.qetl.source.fills.odbc_decl[]];
+    keep:.qetl.io.odbc.run_sql;
+    `.qt.qetl.source.fills.sent set ();
+    .qetl.io.odbc.run_sql:{[h;sql] `.qt.qetl.source.fills.sent set sql; .qt.qetl.source.fills.driver_rows[]};
+    r:@[{.qetl.source.fills.read[`t_fills_sql;42i;x 0;x 1]};(.qt.qetl.source.fills.day[0];.qt.qetl.source.fills.day[1]);{(`threw;x)}];
+    .qetl.io.odbc.run_sql:keep;
+    sql:.qetl.source.fills.sql_for[`t_fills_sql;.qt.qetl.source.fills.day[0];.qt.qetl.source.fills.day[1]];
+    ![`.qetl.source.fills.registry;enlist (in;`name;enlist `t_fills_sql);0b;`symbol$()];
+    .qunit.assertEquals[.qt.qetl.source.fills.sent;sql;"the statement sql_for builds is the one sent"];
+    .qunit.assertEquals[r`fill_id;`x0001`x0002;"and the rows come back in the contract's shape"]};
