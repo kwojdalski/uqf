@@ -227,7 +227,8 @@ def run(
 ) -> dict[str, Any]:
     """The check's document: `ok`, the target, its `release`, a top-level
     `category` and `error` when the check could not reach the endpoints, and
-    one record per endpoint. Never raises for what it finds."""
+    one record per endpoint. Never raises for what it finds; raises
+    UqsError only for a target the registry does not name."""
 
     def scrub(text: str) -> str:
         return tunnel.scrub(text, [passwd])
@@ -241,11 +242,7 @@ def run(
         "ok": False, "target": name, "ssh": None, "release": None, "checked_at": _now(),
         "category": None, "error": None, "endpoints": [], "categories": CATEGORIES,
     }  # fmt: skip
-    try:
-        r = control.remote_for(name, root)
-    except UqsError as exc:
-        report.update(category="discovery", error=scrub(str(exc)))
-        return report
+    r = control.remote_for(name, root)  # an unknown target is a refusal, not a finding
     report["ssh"] = r.host
     try:
         report["release"] = control.current_release(r, runner)

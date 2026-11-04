@@ -134,11 +134,11 @@ def check(
     try:
         passwd = q_password(password_env, None)
         pairs = tunnel_plan.parse_local(local or ())
+        report = tunnel_check.run(name, repo_root(), procs or (), pairs, offset,
+                                  user=user, passwd=passwd, runtime_name=_runtime())  # fmt: skip
     except UqsError as exc:
         _die(exc)
         return
-    report = tunnel_check.run(name, repo_root(), procs or (), pairs, offset,
-                              user=user, passwd=passwd, runtime_name=_runtime())  # fmt: skip
     if as_json:
         emit(report)
     else:
