@@ -118,10 +118,12 @@
     want:id,(spec`shared),spec`own;
     base:?[lng;enlist (=;`kind;enlist spec`base);0b;want!want];
     / executions in first-appearance order, horizons ascending within one
-    rows:flip value flip (spec`execution)#base;
-    base:update zz_ord:(distinct rows)?rows from base;
-    base:`zz_ord`zz_hz xasc update zz_hz:base spec`horizon from base;
-    j:id xkey (`zz_ord`zz_hz) _ base;
+    rows:flip value flip (spec`execution)#lng;
+    base_rows:flip value flip (spec`execution)#base;
+    / Sorting metadata is separate: every payload column belongs to the caller.
+    ordering:([] execution:(distinct rows)?base_rows; horizon:base spec`horizon; idx:til count base);
+    ordering:`execution`horizon xasc ordering;
+    j:id xkey base ordering`idx;
     c:spec`components;
     n:0;
     while[n<count c;
@@ -143,18 +145,21 @@
     if[not 98h=type wde; '"markout_layouts: wide must be a table"];
     keep:(spec`execution),(spec`horizon),spec`shared;
     comps:.qpipe.transform.markout_layouts.all_components[spec];
-    rid:update zz_row:til count wde from wde;
-    parts:();
+    parts:(); row_ids:`long$(); component_ids:`long$();
     n:0;
     while[n<count comps;
         $[n=0; wn:spec`own; wn:.qpipe.transform.markout_layouts.component_names[spec;n-1]];
         if[count m:(keep,wn) except cols wde; '"markout_layouts: wide has no column ",", " sv string m];
-        p:(keep,`zz_row,wn)#rid;
-        p:(keep,`zz_row,spec`own) xcol p;
-        p:update kind:comps[n;`kind], step:comps[n;`step], zz_comp:n from p;
-        parts,:enlist p where not null p spec`present;
+        p:(keep,wn)#wde;
+        p:(keep,spec`own) xcol p;
+        p:update kind:comps[n;`kind], step:comps[n;`step] from p;
+        selected:where not null p spec`present;
+        parts,:enlist p selected;
+        row_ids,:selected;
+        component_ids,:(count selected)#n;
         n+:1];
-    r:`zz_row`zz_comp xasc raze parts;
+    ordering:`row`component xasc ([] row:row_ids; component:component_ids; idx:til count row_ids);
+    r:(raze parts) ordering`idx;
     (spec`columns)#r}
 
 / The nested-wide layout of a long dataset: a row per execution. The per-execution
@@ -173,7 +178,9 @@
         '"markout_layouts: a per-execution column varies across horizons"];
     cs:(cols w) except ex;
     agg:cs!{$[x in y; (first;x); x]}[;pe] each cs;
-    0!?[w;();ex!ex;agg]}
+    n:0!?[w;();ex!ex;agg];
+    / qSQL groups sort their keys; restore the wide rows' first appearance.
+    n (ex#n)?distinct ex#w}
 
 / The wide rows of a nested-wide dataset: the inverse of nested.
 / @param nst the nested rows
