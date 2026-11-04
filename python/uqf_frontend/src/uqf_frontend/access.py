@@ -100,6 +100,9 @@ ROUTE_PERMISSIONS: dict[tuple[str, str], tuple[str, str]] = {
     ("GET", "/coverage"): ("coverage", "read"),
     ("GET", "/ops/backfill"): ("backfills", "read"),
     ("POST", "/query"): ("desk", "read"),
+    # Desk Plot's prepared charts: a read of the same data the Desk queries
+    ("GET", "/charts"): ("desk", "read"),
+    ("POST", "/charts/{name}"): ("desk", "read"),
     ("GET", "/ops/processes"): ("fleet", "read"),
     ("GET", "/ops/queue"): ("queue", "read"),
     ("GET", "/ops/connections"): ("connections", "read"),
@@ -108,6 +111,11 @@ ROUTE_PERMISSIONS: dict[tuple[str, str], tuple[str, str]] = {
     # services: reads list targets and their files and push history; writes
     # change files on a server
     ("GET", "/services"): ("services", "read"),
+    # workspaces (#2029): the same registry /services lists, and the probe of
+    # the one a request names - so a caller refused the registry there is
+    # refused it here too
+    ("GET", "/workspaces"): ("services", "read"),
+    ("GET", "/workspace"): ("services", "read"),
     ("GET", "/services/{target}/files"): ("services", "read"),
     ("GET", "/services/{target}/config/pushes"): ("services", "read"),
     ("GET", "/services/{target}/config/pushes/{push_id}"): ("services", "read"),

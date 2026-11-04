@@ -101,6 +101,13 @@ PAIRS = {
     "RestoreStep": "RestoreStepOut",
     "RestoreResult": "RestoreResultOut",
     "ConfigRestore": "ConfigRestoreResponse",
+    "ChartInfo": "ChartInfo",
+    "ChartList": "ChartsResponse",
+    "ChartResult": "ChartResponse",
+    "Workspace": "WorkspaceOut",
+    "Workspaces": "WorkspacesResponse",
+    "WorkspaceEndpoint": "WorkspaceEndpointOut",
+    "WorkspaceStatus": "WorkspaceResponse",
     **REQUESTS,
 }
 

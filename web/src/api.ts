@@ -1,3 +1,5 @@
+import { TARGET_HEADER, currentWorkspace, workspaceSignal } from "./workspace";
+
 export type Row = Record<string, unknown>;
 export interface Pollable {
   poll_seconds: number;
@@ -83,6 +85,42 @@ export interface QueryResult extends Pollable {
   rows: Row[];
   row_count: number;
   truncated: boolean;
+}
+/** One prepared chart (#2044): defined on the server, drawn here. */
+export interface ChartInfo {
+  name: string;
+  title: string;
+  description: string;
+  point_limit: number;
+  /** The JSON Schema the chart's request body must validate against. */
+  params: ChartSchema;
+}
+export interface ChartList {
+  charts: ChartInfo[];
+}
+/** A drawn chart: plotly.py's figure, and what was done to fit its limit. */
+export interface ChartResult {
+  name: string;
+  figure: { data: unknown[]; layout?: Record<string, unknown> };
+  point_limit: number;
+  points: number;
+  downsampled: boolean;
+  truncated: boolean;
+  notes: string[];
+}
+/** The part of a Pydantic model's JSON Schema a parameter form reads. */
+export interface ChartSchema {
+  properties: Record<string, ChartField>;
+  required?: string[];
+}
+export interface ChartField {
+  type?: "string" | "integer" | "number" | "boolean";
+  enum?: string[];
+  default?: string | number | boolean;
+  title?: string;
+  description?: string;
+  minimum?: number;
+  maximum?: number;
 }
 export interface Health extends Pollable {
   /** seconds the browser waits for any request - the server's UQF_FRONTEND_TIMEOUT plus headroom */
@@ -172,6 +210,42 @@ export interface Services extends Pollable {
   declared: boolean;
   invalid: string | null;
   remote_operations_enabled: boolean;
+}
+/** One workspace - models.WorkspaceOut: `local`, or a target the uqs
+ * registry declares (#2029). The browser keeps no list of its own. */
+export interface Workspace {
+  name: string;
+  kind: "local" | "target";
+  connection: "direct" | "ssh tunnel";
+  access: "read-only" | "read-write";
+  environment: string | null;
+  ssh: string | null;
+  available: boolean;
+  reason: string | null;
+}
+/** GET /workspaces - models.WorkspacesResponse. */
+export interface Workspaces {
+  workspaces: Workspace[];
+  header: string;
+  source: string;
+  invalid: string | null;
+}
+/** One of a target's processes as the server reaches it -
+ * models.WorkspaceEndpointOut. */
+export interface WorkspaceEndpoint {
+  process: string;
+  proctype: string;
+  remote_port: number;
+  local_endpoint: string;
+}
+/** GET /workspace - models.WorkspaceResponse: the workspace this request
+ * named, reached now. */
+export interface WorkspaceStatus extends Pollable {
+  target: string;
+  connection: "direct" | "ssh tunnel";
+  access: "read-only" | "read-write";
+  host: string | null;
+  endpoints: WorkspaceEndpoint[];
 }
 /** One entry of a remote directory - models.RemoteEntryOut. A symlink,
  * special file or undecodable name is `blocked`: listed, never entered. */
@@ -279,7 +353,14 @@ export async function request<T>(
   extra?: Record<string, string>,
 ): Promise<T> {
   let response: Response;
-  const headers: Record<string, string> = { ...extra };
+  // The workspace this request is for, fixed now: a switch while it is in
+  // flight aborts it rather than letting its answer land under the new one.
+  const target = currentWorkspace();
+  const switched = workspaceSignal();
+  const headers: Record<string, string> = {
+    [TARGET_HEADER]: target,
+    ...extra,
+  };
   if (body) headers["Content-Type"] = "application/json";
   if (authorization) headers.Authorization = authorization;
   const verb = method ?? (body ? "POST" : "GET");
@@ -299,20 +380,33 @@ export async function request<T>(
     });
   try {
     response = await fetch(path, {
-      signal: AbortSignal.any([signal, AbortSignal.timeout(requestTimeoutMs)]),
+      signal: AbortSignal.any([
+        signal,
+        switched,
+        AbortSignal.timeout(requestTimeoutMs),
+      ]),
       method: verb,
       headers: Object.keys(headers).length ? headers : undefined,
       body,
     });
   } catch (error) {
     finished();
-    if (signal.aborted) throw error;
+    if (signal.aborted || switched.aborted) throw error;
     throw new ApiError(
       "The API is unavailable or the request timed out.",
       true,
     );
   }
   finished(response.status);
+  // A scoped answer names the workspace it came from. One labelled for any
+  // other is refused - never shown as this workspace's (#2029).
+  const label = response.headers?.get?.(TARGET_HEADER) ?? null;
+  if (label !== null && label !== target)
+    throw new ApiError(
+      `The answer came from ${label}, not ${target}; it was not shown.`,
+    );
+  if (switched.aborted)
+    throw new DOMException("workspace changed", "AbortError");
   const payload = await response.json().catch(() => null);
   if (!response.ok) {
     const detail = payload?.detail;

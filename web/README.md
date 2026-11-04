@@ -45,6 +45,17 @@ Open `http://127.0.0.1:8000/ui/`. API routes and static assets share the same
 origin. The stack root's `web/dist` is mounted when it exists at startup; without
 it the API runs alone.
 
+## Workspace
+
+The header's workspace selector picks the stack this tab reads: `local`, or a
+target from the server's uqs registry (`GET /workspaces`). The choice is this
+tab's own (sessionStorage) and travels on every request as `X-UQF-Target`, so
+another session is never moved by it. Switching aborts what is in flight and
+clears every view's results; each result is labelled with the workspace it
+came from, and an answer labelled for another is refused. A target that cannot
+be reached is shown as an error naming it - the views stay empty rather than
+showing the local stack. The browser holds no target list and no credential.
+
 ## Views
 
 - **Coverage:** explicit dataset, source version and timezone-aware half-open
@@ -71,6 +82,11 @@ it the API runs alone.
   infinities stay gaps, and a truncated result says so on the chart. No new
   request is made. Plotly loads only when a plot is first shown, from its own
   chunk.
+- **Charts:** prepared charts, defined on the server (`GET /charts`). The view
+  draws each chart's form from its parameter schema and renders the plotly.py
+  figure it is sent, with the point limit and whether the figure was
+  downsampled or truncated. It holds no chart-specific code. Plotly comes from
+  the same lazy chunk the Desk's Plot view uses.
 - **Control:** the write surface, rendered only when the API reports writes
   enabled. Processes are picked from the list the API serves, grouped by
   proctype, with `all` meaning torq.sh's own `all` (startwithall=1) rather

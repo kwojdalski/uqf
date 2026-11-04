@@ -29,6 +29,8 @@ import {
 } from "./api";
 import { FileBrowser } from "./FileBrowser";
 import { PlotPanel } from "./PlotPanel";
+import { ChartsView } from "./ChartsView";
+import { TargetLabel, WorkspaceSelector } from "./WorkspaceSelector";
 import { useResource } from "./useResource";
 import { ActivityView } from "./ActivityView";
 import { CapabilitiesProvider, useCapabilities } from "./capabilities";
@@ -44,6 +46,7 @@ const views = [
   "Coverage",
   "Backfills",
   "Desk",
+  "Charts",
   "Fleet",
   "Queue",
   "Connections",
@@ -235,6 +238,7 @@ function ResourceStatus<T>({
             ? ` · Every ${resource.cadence}s`
             : ""}
         </span>
+        <TargetLabel target={resource.target} />
         <button
           type="button"
           data-activity="resource.refresh"
@@ -1773,6 +1777,7 @@ function Workspace() {
         <a className="brand" href="/ui/" data-activity="nav.home">
           uqf<span> / FX DATA</span>
         </a>
+        <WorkspaceSelector />
         <div className="gateway" role="status">
           Gateway <Badge value={gateway} />
           {/* The server's own words on what is wrong and what to set - for
@@ -1821,7 +1826,7 @@ function Workspace() {
           <div className="page-heading">
             <div>
               <p className="eyebrow">
-                {view === "Desk"
+                {view === "Desk" || view === "Charts"
                   ? "PUBLISHED DATA"
                   : view === "Activity"
                     ? "HISTORY"
@@ -1847,6 +1852,8 @@ function Workspace() {
             <BackfillView />
           ) : view === "Desk" ? (
             <DeskView />
+          ) : view === "Charts" ? (
+            <ChartsView />
           ) : view === "Control" ? (
             <ControlView />
           ) : view === "Activity" ? (

@@ -74,7 +74,9 @@ afterEach(() => {
 it("shows a viewer only the views their group may read", async () => {
   serve(VIEWER);
   render(<App />);
-  await waitFor(() => expect(navNames()).toEqual(["Coverage", "Desk"]));
+  await waitFor(() =>
+    expect(navNames()).toEqual(["Coverage", "Desk", "Charts"]),
+  );
   expect(screen.getByText(/Signed in as bob/)).toBeInTheDocument();
 });
 
@@ -102,7 +104,7 @@ it("says changes are not part of a caller's access without control:write", async
 it("shows every view when the server's answer is not a policy", async () => {
   serve({ unexpected: true });
   render(<App />);
-  await waitFor(() => expect(navNames()).toHaveLength(10));
+  await waitFor(() => expect(navNames()).toHaveLength(11));
   expect(screen.getByText(/Local session/)).toBeInTheDocument();
 });
 
@@ -118,7 +120,9 @@ it("records no activity for a caller without activity:write", async () => {
   configureActivity({ transport: async () => {}, flushDelayMs: 60_000 });
   serve(VIEWER);
   render(<App />);
-  await waitFor(() => expect(navNames()).toEqual(["Coverage", "Desk"]));
+  await waitFor(() =>
+    expect(navNames()).toEqual(["Coverage", "Desk", "Charts"]),
+  );
   expect(record("navigate", "view.open", { target: "Desk" })).toBeNull();
   expect(queuedActivity()).toEqual([]);
 });

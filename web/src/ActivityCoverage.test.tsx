@@ -118,11 +118,16 @@ it("names every control every view renders, with a name the server keeps", async
     "desk.refine",
     "desk.tier",
     "desk.show.plot",
+    "charts.choose",
+    "charts.draw",
+    "charts.param.dataset",
+    "charts.param.hdb",
     "control.stop",
     "control.confirm",
     "files.sort.name",
     "files.select",
     "activity.export",
+    "workspace.select",
   ])
     expect(seen).toContain(name);
 });

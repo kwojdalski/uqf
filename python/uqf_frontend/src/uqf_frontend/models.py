@@ -354,6 +354,58 @@ class ServicesResponse(BaseModel):
     poll_seconds: int
 
 
+class WorkspaceOut(BaseModel):
+    """One workspace the browser may select (#2029): `local`, this API's own
+    stack, or a target the uqs registry declares (workspaces.py)."""
+
+    name: str
+    kind: Literal["local", "target"]
+    connection: Literal["direct", "ssh tunnel"] = Field(
+        description="how this API reaches it: its own stack directly, or a target "
+        "through the ssh forwards uqs opens"
+    )
+    access: Literal["read-only", "read-write"] = Field(
+        description="what the workspace allows: a target is read-only - control "
+        "acts on this API's own stack only"
+    )
+    environment: str | None
+    ssh: str | None = Field(description="the target's ssh destination; never contacted to list")
+    available: bool = Field(
+        description="whether it can be selected here: a target needs remote operations"
+    )
+    reason: str | None = Field(description="why it cannot be selected, when it cannot")
+
+
+class WorkspacesResponse(BaseModel):
+    """Every workspace, from the uqs target registry plus `local`. No server
+    is contacted to list them, and the browser keeps no registry of its own."""
+
+    workspaces: list[WorkspaceOut]
+    header: str = Field(description="the request header that names a request's workspace")
+    source: str = Field(description="the deploy_targets.toml that was read, or would be")
+    invalid: str | None = None
+
+
+class WorkspaceEndpointOut(BaseModel):
+    """One of a target's processes, as this API reaches it."""
+
+    process: str
+    proctype: str
+    remote_port: int
+    local_endpoint: str
+
+
+class WorkspaceResponse(BaseModel):
+    """The workspace a request named, reached: proof it is available now."""
+
+    target: str
+    connection: Literal["direct", "ssh tunnel"]
+    access: Literal["read-only", "read-write"]
+    host: str | None = Field(description="the target's ssh host; None for local")
+    endpoints: list[WorkspaceEndpointOut]
+    poll_seconds: int
+
+
 class RemoteEntryOut(BaseModel):
     """One entry of a remote directory (remote_helper.describe). A symlink,
     special file or undecodable name is `blocked`: listed, never entered."""
@@ -948,3 +1000,36 @@ class ActivityResponse(BaseModel):
     bounds: list[ActivityBound]
     drops: list[ActivityDrop]
     poll_seconds: int
+
+
+# ------------------------------------------------------------ prepared charts
+
+
+class ChartInfo(BaseModel):
+    """One prepared chart, as GET /charts lists it (charts.py, #2044)."""
+
+    name: str
+    title: str
+    description: str
+    point_limit: int = Field(description="the most points its figure carries")
+    params: dict[str, Any] = Field(
+        description="the JSON Schema its request body must validate against"
+    )
+
+
+class ChartsResponse(BaseModel):
+    charts: list[ChartInfo]
+
+
+class ChartResponse(BaseModel):
+    """One drawn chart: a plotly.py figure, and what was done to fit it."""
+
+    name: str
+    figure: dict[str, Any] = Field(description="plotly.py's fig.to_json(), as an object")
+    point_limit: int = Field(description="the most points this chart's figure may carry")
+    points: int = Field(description="the points this figure carries")
+    downsampled: bool = Field(description="a series was reduced (LTTB) to fit point_limit")
+    truncated: bool = Field(
+        description="the read was cut at a row cap, or series were left out to fit point_limit"
+    )
+    notes: list[str] = Field(description="what was left out, and why, in words")

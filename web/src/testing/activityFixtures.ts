@@ -145,6 +145,25 @@ export function answer(path: string, level: SessionLevel = "actions"): unknown {
       poll_seconds: 5,
     };
   if (bare.startsWith("/ops/")) return { rows: [{ a: 1 }], poll_seconds: 5 };
+  if (bare === "/charts")
+    return {
+      charts: [
+        {
+          name: "markout_curve",
+          title: "Markout curve",
+          description: "Markout by horizon",
+          point_limit: 600,
+          params: {
+            properties: {
+              dataset: { type: "string", enum: ["fx_markout"] },
+              sym: { type: "string", default: "" },
+              days: { type: "integer", default: 14, minimum: 1 },
+              hdb: { type: "boolean", default: false },
+            },
+          },
+        },
+      ],
+    };
   if (bare === "/catalog")
     return {
       tables: [
@@ -202,6 +221,43 @@ export function answer(path: string, level: SessionLevel = "actions"): unknown {
     return listing(
       new URLSearchParams(path.split("?")[1] ?? "").get("path") ?? "",
     );
+  if (bare === "/workspaces")
+    return {
+      workspaces: [
+        {
+          name: "local",
+          kind: "local",
+          connection: "direct",
+          access: "read-write",
+          environment: null,
+          ssh: null,
+          available: true,
+          reason: null,
+        },
+        {
+          name: "prod-a",
+          kind: "target",
+          connection: "ssh tunnel",
+          access: "read-only",
+          environment: null,
+          ssh: "deploy@prod-a",
+          available: true,
+          reason: null,
+        },
+      ],
+      header: "x-uqf-target",
+      source: "/repo/deploy_targets.toml",
+      invalid: null,
+    };
+  if (bare === "/workspace")
+    return {
+      target: "local",
+      connection: "direct",
+      access: "read-write",
+      host: null,
+      endpoints: [],
+      poll_seconds: 30,
+    };
   if (bare === "/activity") return HISTORY;
   if (bare.startsWith("/control/process/"))
     return {

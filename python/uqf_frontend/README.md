@@ -58,6 +58,10 @@ The q details this rests on, verified against a live KDB-X process:
   | `GET /services`        | The deployment targets `uqs target list --json` lists, read from `deploy_targets.toml` with no ssh, and whether remote operations are on  |
   | `POST /query`          | Validated, parameterised table query, tier-routed                                                                                         |
   | `GET /me/capabilities` | Who the caller is (as a trusted proxy vouches), their groups, and every feature and action the access policy grants them                  |
+  | `GET /charts`          | The prepared charts, each with its parameters' JSON Schema and its point limit                                                            |
+  | `POST /charts/{name}`  | One prepared chart's plotly.py figure, with its point limit and whether it was downsampled or truncated                                   |
+  | `GET /workspaces`      | Every workspace a request may name: `local` and each target the uqs registry declares, with its connection and access mode - no ssh       |
+  | `GET /workspace`       | The workspace the request names, reached now: for a target, the connection uqs holds open and each process's forward                      |
 
 ### Control routes --- these CHANGE things
 
@@ -263,6 +267,32 @@ curl -s localhost:8000/query -H 'content-type: application/json' -d '{
 A timestamp **must** carry an explicit timezone offset. Everything is stored UTC
 and kola rejects a naive datetime anyway --- so a browser's local time is
 refused at the boundary with a reason rather than being silently wrong.
+
+## Workspaces: which stack a request reads
+
+A browser tab picks a workspace - `local`, this API's own stack, or a target the
+uqs registry declares (`GET /workspaces`) - and names it on every request in the
+`X-UQF-Target` header. Nothing about the choice is kept on the server, so two
+sessions on different targets never move each other (`workspaces.py`, #2029).
+
+- **Scoped routes** read the named workspace: `/query`, `/catalog`, `/coverage`,
+  `/charts/{name}`, `/ops/processes`, `/ops/connections`, `/ops/clients`,
+  `/ops/queue`, `/ops/usage` and `/workspace`. Each answer, and each error from
+  one, carries `X-UQF-Target` naming its workspace.
+- **Neutral routes** read no stack and ignore the header: `/health`,
+  `/workspaces`, `/charts`, `/me/capabilities`, `/services*` (which name their
+  target in the path) and `/activity*`.
+- **Every other route** refuses a target with 409 rather than answering for the
+  local stack: control, `/ops/backfill`, and any route added later.
+
+A target is reached through `uqs.deploy.workspace`: its release's
+`uqs process list`, then one ssh with a loopback forward per declared process,
+held open between requests (closed after ten idle minutes, reopened when its ssh
+has gone). The q login is this API's own. An unregistered target is 404, one
+that cannot be reached is 502 naming it and what failed, and a target needs
+remote operations (`UQF_FRONTEND_ENABLE_WRITES`) and `services:read` - none of
+these ever falls back to the local stack. A target workspace is read-only:
+control acts on this API's own stack only.
 
 ## Running
 
@@ -473,6 +503,42 @@ captures each row exactly once.
 
 It ships as a callable, not a daemon: what schedules it - a timer, cron, an
 Airflow task - is a deployment choice.
+
+## Prepared charts
+
+`charts.py` is a registry of named charts (#2044). Each is defined once there,
+and the browser's Charts view holds no chart-specific code: it lists
+`GET /charts`, draws a form from each chart's parameter schema, and renders the
+figure `POST /charts/{name}` returns. An entry is four things:
+
+- **params** - a Pydantic model the request body must validate against. Unknown
+  keys are refused, so a renamed field is a 422, not a default.
+- **read** - the vetted query, through a path this API already trusts and
+  nothing else. A table goes through `/query`'s own path: the catalog checks the
+  table and every filter column, `queries.build_filters` coerces every value,
+  the policy is asked about the table, and `.uqf.browse` reads it as the data
+  login. The fleet's query log goes through `ops.USAGE`, and backfill status
+  through `status.read_dir`. No parameter is rendered into q text.
+- **max_points** - the most points the figure may carry, enforced on the server.
+  A long series is reduced by LTTB (largest triangle three buckets), which keeps
+  peaks, troughs and gaps. Anything that cannot be reduced, such as a venue's
+  whole curve or a worker's row in the heatmap, is left out and named in
+  `notes`.
+- **build** - the figure, built with plotly.py and sent as `fig.to_json()`.
+
+Every response states `point_limit` and `points`. `downsampled` says a series
+was reduced; `truncated` says a read hit its row cap (`UQF_FRONTEND_MAX_ROWS`,
+or the table's policy) or that series were left out. The reduction is done here,
+not with `xbar` in q, because the data login may run `.uqf.browse` and nothing
+else (#889). Bucketing in q would need a second gateway function with its own
+policy.
+
+  | chart               | reads                                                       | draws                                                     |
+  | ---                 | ---                                                         | ---                                                       |
+  | `markout_curve`     | `fx_markout` (pips) or `crypto_markout` (bps), `kind` total | mean markout per horizon, a line per venue                |
+  | `backfill_coverage` | the status files `/ops/backfill` reads                      | each worker's last run per day, coloured by state         |
+  | `mid_spread_fills`  | `market_data`'s first level, and `executions` or `trades`   | mid and spread, with buys and sells overlaid              |
+  | `ops_latency`       | `.usage.usage` on every process, as `/ops/usage` does       | completed query durations per process, as box plots       |
 
 ## Backfill status
 
