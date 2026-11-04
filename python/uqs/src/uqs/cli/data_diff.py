@@ -39,6 +39,7 @@ _STYLE = {
     "equal_in_sample": "green",
     "differs": "red",
     "missing_table": "red",
+    "not_comparable": "yellow",
     "incomplete_coverage": "yellow",
     "endpoint_unavailable": "yellow",
 }
@@ -243,8 +244,9 @@ def diff(
     query policy, at most --limit per side, and paired on the key the table's
     producers declare; `time`, stamped on receipt, is not compared. The result
     per table is one of: equal_in_sample, differs (schema, coverage or rows),
-    missing_table, incomplete_coverage or endpoint_unavailable. equal_in_sample
-    is never full equality: its label says whether every row in the window was
+    missing_table, not_comparable (no row key, and a sample was cut),
+    incomplete_coverage or endpoint_unavailable. equal_in_sample is
+    never full equality: its label says whether every row in the window was
     read, or a sample cut at --limit. Exits 1 on anything but equal_in_sample.
     e.g. `uqs data diff --left local --right prod --table demo_deals --date 2026-09-11`
     """

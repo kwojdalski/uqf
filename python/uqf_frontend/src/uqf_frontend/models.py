@@ -1309,7 +1309,12 @@ class ChartResponse(BaseModel):
 
 #: The outcomes `uqs data diff` reaches, as q names them (.qetl.compare.outcomes).
 CompareOutcome = Literal[
-    "endpoint_unavailable", "missing_table", "differs", "incomplete_coverage", "equal_in_sample"
+    "endpoint_unavailable",
+    "missing_table",
+    "differs",
+    "not_comparable",
+    "incomplete_coverage",
+    "equal_in_sample",
 ]
 
 

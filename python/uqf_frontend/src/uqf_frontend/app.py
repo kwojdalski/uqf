@@ -14,7 +14,7 @@ import subprocess
 import time
 import typing
 import uuid
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Iterator
 from contextlib import asynccontextmanager
 from typing import Annotated, Any
 
@@ -302,7 +302,7 @@ def workspace_route(request: Request) -> None:
         )
 
 
-def scope_of(request: Request) -> workspaces.Scope:
+def scope_of(request: Request) -> Iterator[workspaces.Scope]:
     """The stack a scoped route reads: the named workspace's, opened by uqs
     for a target - or the refusal saying why it cannot be, never local.
 
@@ -312,7 +312,10 @@ def scope_of(request: Request) -> workspaces.Scope:
     name = workspaces.requested(request.headers)
     if name != workspaces.LOCAL:
         require_target_access(request, f"workspace {name}")
-    return request.app.state.workspaces.scope(name)
+    # Held until the route has answered, so the reaper never closes a
+    # connection a request is reading through (#2062).
+    with request.app.state.workspaces.lease(name) as scope:
+        yield scope
 
 
 def require_target_access(request: Request, named: str) -> None:
@@ -425,6 +428,8 @@ def create_app(
         # on the loop it would stall every request for a whole fleet sweep.
         if scheduler is not None:
             scheduler.start()
+        # Idle target connections close on a timer, not only on a request.
+        app.state.workspaces.start()
         try:
             yield
         finally:
@@ -1197,7 +1202,8 @@ def create_app(
         compares them (compare.py). Each table is put to the policy like
         /query's. A target side is held to what /services/{target}/... is,
         since only the body names it (#2066): the write token while writes
-        are on (write_guard's middleware judges by path, and cannot see it),
+        are on (the middleware's gates - by path, and `_reaches_target`'s by
+        header on scoped routes, #2067 - cannot see a side named in the body),
         services:read, and remote operations, as it is reached over ssh with
         the operator's key. The Host check ran in the middleware already."""
         targets = compare.sides(req.left, req.right)
@@ -1655,13 +1661,24 @@ def _guard_refusal(settings: Settings, request: Request) -> tuple[int, str, str]
     refusal = write_guard.host_refusal(settings, request.headers.get("host"))
     if refusal is not None:
         return 403, "HostNotAllowed", refusal
-    if settings.enable_writes and write_guard.needs_token(
-        request.method, write_guard.route_path(request.scope)
+    if settings.enable_writes and (
+        write_guard.needs_token(request.method, write_guard.route_path(request.scope))
+        or _reaches_target(request)
     ):
         refusal = write_guard.token_refusal(settings, request.headers.get("authorization"))
         if refusal is not None:
             return 401, "WriteTokenRequired", refusal
     return None
+
+
+def _reaches_target(request: Request) -> bool:
+    """Will this request open, or read through, an ssh to a deploy target?
+    A scoped route naming a workspace other than local does: the operator's
+    key opens it, as it does for /services/{target} (#2067)."""
+    if not workspaces.names_target(request.headers):
+        return False
+    template, _ = _route_of(request)
+    return workspaces.is_scoped(request.method, template)
 
 
 def _carries_token(settings: Settings, request: Request) -> bool:

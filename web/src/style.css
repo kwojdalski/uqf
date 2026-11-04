@@ -308,6 +308,7 @@ select:focus {
 .badge.unverified,
 .badge.disconnected,
 .badge.incomplete_coverage,
+.badge.not_comparable,
 .badge.endpoint_unavailable {
   color: #76520c;
   background: #fff6d9;

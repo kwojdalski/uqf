@@ -36,7 +36,7 @@ SCHEMA = [
     for table, columns in {
         "fx_markout": "time:p sym:s venue:s horizon:n kind:s pips:f",
         "crypto_markout": "time:p sym:s venue:s horizon:n kind:s markout_bps:f",
-        "market_data": "time:p sym:s bid_prices:F ask_prices:F",
+        "market_data": "time:p sym:s source:s bid_prices:F ask_prices:F",
         "executions": "time:p sym:s venue:s side:j price:f",
         "trades": "time:p sym:s side:j trade_price:f",
     }.items()
@@ -275,6 +275,42 @@ def test_coverage_leaves_out_workers_past_the_point_limit(tmp_path, tmp_path_fac
     assert "worker(s) left out" in body["notes"][-1]
 
 
+@pytest.mark.parametrize(
+    ("body", "said"),
+    [
+        ({"end": "2026-02-30"}, "not a date"),
+        ({"end": "2026-13-01"}, "not a date"),
+        ({"end": "0001-01-01", "days": 2}, "before the first day"),
+        ({"end": "0001-01-13", "days": 14}, "before the first day"),
+    ],
+)
+def test_coverage_refuses_an_end_that_is_no_date_before_any_read(
+    body, said, tmp_path, tmp_path_factory, monkeypatch
+):
+    """An end the pattern lets through but no calendar has (#2078) is a 422
+    on `end`, not a 500 - and no status file is read first."""
+    monkeypatch.setenv("UQF_STATUS_DIR", str(tmp_path))
+    reads: list[object] = []
+    monkeypatch.setattr(status, "read_dir", lambda *a: reads.append(a) or ([], []))
+    c = client(stack_root=_unbootstrapped_root(tmp_path_factory))
+    r = TestClient(c.app, raise_server_exceptions=False).post(
+        "/charts/backfill_coverage", json=body
+    )
+    assert r.status_code == 422, r.text
+    assert r.json()["detail"].startswith("chart 'backfill_coverage': end: ")
+    assert said in r.json()["detail"]
+    assert reads == []
+
+
+def test_coverage_draws_the_earliest_end_its_days_fit(tmp_path, tmp_path_factory, monkeypatch):
+    """The bound is exact: the window may start on the first day there is."""
+    monkeypatch.setenv("UQF_STATUS_DIR", str(tmp_path))
+    c = client(stack_root=_unbootstrapped_root(tmp_path_factory))
+    r = c.post("/charts/backfill_coverage", json={"end": "0001-01-14", "days": 14})
+    assert r.status_code == 200, r.text
+    assert r.json()["figure"]["layout"]["title"]["text"].endswith("0001-01-01 to 0001-01-14")
+
+
 def test_coverage_without_a_status_directory_is_refused():
     r = client().post("/charts/backfill_coverage", json={})
     assert r.status_code == 422
@@ -292,6 +328,7 @@ def book_fixture(count: int) -> pl.DataFrame:
         {
             "time": stamps("2026-11-03T10:00:00+00:00", count, 100),
             "sym": ["EURUSD"] * count,
+            "source": ["UQFDEPTH"] * count,
             "bid_prices": pl.Series(bids, dtype=pl.List(pl.Float64)),
             "ask_prices": pl.Series(asks, dtype=pl.List(pl.Float64)),
         }
@@ -314,13 +351,13 @@ def test_mid_and_spread_are_drawn_with_fills_by_side():
     gw = TableGateway({"market_data": book_fixture(10), "executions": fills_fixture()})
     body = client(gw).post("/charts/mid_spread_fills", json={"sym": "EURUSD"}).json()
     traces = {t["name"]: t for t in body["figure"]["data"]}
-    assert set(traces) == {"mid", "spread", "buy fills", "sell fills"}
-    mid = traces["mid"]
+    assert set(traces) == {"mid · UQFDEPTH", "spread · UQFDEPTH", "buy fills", "sell fills"}
+    mid = traces["mid · UQFDEPTH"]
     assert mid["x"][0] == "2026-11-03 10:00:00.000000"
     assert mid["y"][0] == pytest.approx(1.1001)
     assert mid["y"][3] is None  # the empty bid side is a gap, not 0
-    assert traces["spread"]["y"][0] == pytest.approx(0.0002)
-    assert traces["spread"]["yaxis"] == "y2"
+    assert traces["spread · UQFDEPTH"]["y"][0] == pytest.approx(0.0002)
+    assert traces["spread · UQFDEPTH"]["yaxis"] == "y2"
     assert traces["buy fills"]["y"] == [1.1001, 1.1003]
     assert traces["sell fills"]["x"] == ["2026-11-03 10:00:00.250000"]
     assert body["points"] == 10 + 10 + 3
@@ -343,10 +380,75 @@ def test_a_long_book_is_reduced_to_the_point_limit_and_says_so():
     )
     assert body["downsampled"] is True
     assert body["points"] <= body["point_limit"]
-    mid = next(t for t in body["figure"]["data"] if t["name"] == "mid")
+    mid = next(t for t in body["figure"]["data"] if t["name"] == "mid · UQFDEPTH")
     assert len(mid["x"]) == body["point_limit"] // 3
     assert mid["y"][0] == pytest.approx(1.1001)  # the ends are kept
     assert None in mid["y"]  # and so is the gap
+
+
+def two_venue_book(count: int) -> pl.DataFrame:
+    """Two venues' books for one sym, interleaved in time as market_data
+    holds them: one row replaces the book for (sym, source) (#2077)."""
+    src = ["binance", "okx"] * (count // 2)
+    return pl.DataFrame(
+        {
+            "time": stamps("2026-11-03T10:00:00+00:00", count, 100),
+            "sym": ["BTCUSDT"] * count,
+            "source": src,
+            "bid_prices": pl.Series(
+                [[100.0] if s == "binance" else [110.0] for s in src], dtype=pl.List(pl.Float64)
+            ),
+            "ask_prices": pl.Series(
+                [[100.2] if s == "binance" else [110.4] for s in src], dtype=pl.List(pl.Float64)
+            ),
+        }
+    )
+
+
+def test_each_source_is_its_own_mid_and_spread_never_one_line_through_both():
+    fills = fills_fixture().with_columns(
+        pl.lit("BTCUSDT").alias("sym"), pl.Series("price", [100.1, 110.2, 100.15])
+    )
+    gw = TableGateway({"market_data": two_venue_book(6), "executions": fills})
+    body = client(gw).post("/charts/mid_spread_fills", json={"sym": "BTCUSDT"}).json()
+    traces = {t["name"]: t for t in body["figure"]["data"]}
+    assert set(traces) == {
+        "mid · binance", "spread · binance", "mid · okx", "spread · okx",
+        "buy fills", "sell fills",
+    }  # fmt: skip
+    assert traces["mid · binance"]["y"] == pytest.approx([100.1] * 3)
+    assert traces["mid · okx"]["y"] == pytest.approx([110.2] * 3)
+    assert traces["spread · binance"]["y"] == pytest.approx([0.2] * 3)
+    assert traces["spread · okx"]["y"] == pytest.approx([0.4] * 3)
+    assert traces["mid · okx"]["x"][0] == "2026-11-03 10:00:00.100000"
+    assert traces["spread · okx"]["yaxis"] == "y2"
+    # the fills are still overlaid on the mid panel, by side
+    assert traces["buy fills"]["y"] == [100.1, 100.15]
+    assert traces["sell fills"]["y"] == [110.2]
+    assert traces["buy fills"]["yaxis"] == "y"
+    assert body["points"] == 4 * 3 + 3
+
+
+def test_a_long_two_venue_book_is_reduced_per_source_inside_the_limit():
+    gw = TableGateway({"market_data": two_venue_book(8000)})
+    body = client(gw).post("/charts/mid_spread_fills", json={"sym": "BTCUSDT"}).json()
+    assert body["downsampled"] is True
+    assert body["points"] <= body["point_limit"]
+    by = {t["name"]: t for t in body["figure"]["data"]}
+    each = body["point_limit"] // 3 // 2
+    for venue, mid in (("binance", 100.1), ("okx", 110.2)):
+        assert len(by[f"mid · {venue}"]["y"]) == each
+        assert by[f"mid · {venue}"]["y"] == pytest.approx([mid] * each)  # no zig-zag survives
+
+
+def test_a_source_param_reads_that_source_alone():
+    gw = TableGateway({"market_data": two_venue_book(6).filter(pl.col("source") == "okx")})
+    body = (
+        client(gw).post("/charts/mid_spread_fills", json={"sym": "BTCUSDT", "source": "okx"}).json()
+    )
+    assert {t["name"] for t in body["figure"]["data"]} == {"mid · okx", "spread · okx"}
+    reads = [a[:4] for p, a, _ in gw.routed if p == queries.BROWSE]
+    assert reads[0] == ("market_data", ["sym", "source"], ["eq", "eq"], ["BTCUSDT", "okx"])
 
 
 # ----------------------------------------------------------------- ops latency
@@ -364,8 +466,9 @@ def test_latency_is_drawn_per_process_from_completed_queries():
     t = dt.datetime(2026, 11, 3, 10)
     fleet = FakeFleet(
         {
-            "rdb1": usage([(t, 2_000_000, "c"), (t, 4_000_000, "c"), (t, 0, "b")]),
-            "hdb1": usage([(t, 30_000_000, "c"), (t, None, "e")]),
+            # timer is in microseconds, as TorQ's logusage.q writes it
+            "rdb1": usage([(t, 2_000, "c"), (t, 4_000, "c"), (t, 0, "b")]),
+            "hdb1": usage([(t, 30_000, "c"), (t, None, "e")]),
             "gw1": RuntimeError("connection refused"),
         }
     )
@@ -379,12 +482,70 @@ def test_latency_is_drawn_per_process_from_completed_queries():
     assert {(program, args) for _, program, args in fleet.calls} == {(ops.USAGE, (10,))}
 
 
+def test_latency_reads_the_usage_timer_as_microseconds():
+    # logusage.q logs `long$.001*endp-startp: a timespan a thousand times
+    # shorter, whose nanosecond count is the elapsed time in microseconds.
+    # On KDB-X `long$.001*0D00:00:01 is 1000000, so a 1 s query is 1000 ms.
+    t = dt.datetime(2026, 11, 3, 10)
+    fleet = FakeFleet({"rdb1": usage([(t, 1_000_000, "c")])})
+    body = client(fleet=fleet).post("/charts/ops_latency", json={"limit": 10}).json()
+    assert body["figure"]["data"][0]["y"] == [1000.0]
+
+
 def test_latency_says_when_a_process_log_was_cut():
     t = dt.datetime(2026, 11, 3, 10)
     fleet = FakeFleet({"rdb1": usage([(t, 1_000_000, "c")] * 3)})
     body = client(fleet=fleet).post("/charts/ops_latency", json={"limit": 3}).json()
     assert body["truncated"] is True
     assert "newest 3 queries read from rdb1" in body["notes"][-1]
+
+
+def _thinned_latency(n: int, slowest_us: int) -> dict:
+    """rdb1 with n completed queries of 1..n ms, the last replaced by a slow
+    one, beside a one-query rdb2 - so rdb1's share of the 5000-point cap is
+    2500 and it is thinned (#2076)."""
+    t = dt.datetime(2026, 11, 3, 10)
+    rows = [(t, 1_000 * i, "c") for i in range(1, n + 1)]
+    rows[-1] = (t, slowest_us, "c")
+    fleet = FakeFleet({"rdb1": usage(rows), "rdb2": usage([(t, 1_000, "c")])})
+    return client(fleet=fleet).post("/charts/ops_latency", json={"limit": 5000}).json()
+
+
+def test_latency_thinning_keeps_the_slowest_query():
+    # sorted(ms)[::2] dropped index 4999, so the box topped out at 4.999 ms.
+    body = _thinned_latency(5000, 10_000_000)  # a 10 s query, in microseconds
+    box = next(b for b in body["figure"]["data"] if b["name"] == "rdb1")
+    assert body["downsampled"] is True
+    assert max(box["y"]) == 10_000.0
+
+
+def test_latency_thinning_keeps_the_fastest_query_and_the_cap():
+    body = _thinned_latency(5000, 10_000_000)
+    box = next(b for b in body["figure"]["data"] if b["name"] == "rdb1")
+    assert min(box["y"]) == 1.0
+    assert len(box["y"]) <= 2500
+    assert body["points"] <= body["point_limit"]
+    # evenly spaced ranks: the median of the thinned sample stays the median
+    kept = sorted(box["y"])
+    assert kept[len(kept) // 2] == pytest.approx(2500.0, abs=2.0)
+
+
+@pytest.mark.parametrize("cap", [1, 2, 3, 10])
+def test_latency_thin_keeps_both_ends_under_any_share(cap):
+    ms = [float(i) for i in range(1, 101)]
+    kept = charts._latency_thin(ms, cap)
+    assert len(kept) <= cap
+    assert max(kept) == 100.0
+    if cap >= 2:
+        assert min(kept) == 1.0
+
+
+def test_latency_leaves_a_sample_within_its_share_alone():
+    assert charts._latency_thin([3.0, 1.0, 2.0], 3) == [3.0, 1.0, 2.0]
+    body = _thinned_latency(2500, 10_000_000)
+    box = next(b for b in body["figure"]["data"] if b["name"] == "rdb1")
+    assert body["downsampled"] is False
+    assert len(box["y"]) == 2500
 
 
 # ------------------------------------------------------------- downsampling
