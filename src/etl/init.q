@@ -118,6 +118,7 @@
 \l src/etl/core/verify_behaviour.q
 \l src/etl/core/verify_behaviour_bounded.q
 \l src/etl/core/verify_report.q
+\l src/etl/core/compare.q
 / Every plant table's schema, before any job that publishes or reads one.
 \l src/etl/plant_tables.q
 
