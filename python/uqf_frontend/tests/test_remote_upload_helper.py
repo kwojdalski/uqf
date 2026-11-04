@@ -408,6 +408,37 @@ def test_a_hangup_mid_upload_is_a_refusal_and_cleans_up(root):
     assert signal.getsignal(signal.SIGHUP) is before
 
 
+@pytest.mark.parametrize("signum", [signal.SIGTERM, signal.SIGHUP])
+@pytest.mark.parametrize("overwrite", [True, False])
+def test_a_signal_just_after_publishing_never_says_nothing_was_published(
+    root, monkeypatch, signum, overwrite
+):
+    """Once os.replace (overwrite) or os.link (create) has run, the file is
+    live: a hangup or SIGTERM arriving then must not turn into "nothing was
+    published", which the API reports as a certain failure (#2022). The
+    signals are ignored across the publishing step and its fsync, as #2004's
+    push path does."""
+    target = root / "shared/config/a.toml"
+    if overwrite:
+        target.write_bytes(b"old contents\n")
+    step = "replace" if overwrite else "link"
+    real = getattr(os, step)
+
+    def publish_then_signal(src, dst, *a, **kw):
+        real(src, dst, *a, **kw)
+        if dst == "a.toml":  # the publishing step, not a history manifest's write
+            os.kill(os.getpid(), signum)
+
+    monkeypatch.setattr(remote_helper.os, step, publish_then_signal)
+    before = signal.getsignal(signum)
+    answer = _put(root, "shared/config/a.toml", b"new contents\n", overwrite=overwrite)
+    assert answer["ok"] is True, answer
+    assert answer["replaced"] is overwrite
+    assert target.read_bytes() == b"new contents\n"
+    assert _temps(root / "shared/config") == []
+    assert signal.getsignal(signum) is before
+
+
 def test_stale_temp_files_are_swept_fresh_ones_kept(root):
     config = root / "shared/config"
     stale, fresh = config / f"{TEMP_PREFIX}old.tmp", config / f"{TEMP_PREFIX}new.tmp"

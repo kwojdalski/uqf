@@ -153,7 +153,7 @@ def test_the_levels_are_ordered_and_documented_once():
     assert activity_log.levels_shown("interactions") == ("actions", "interactions")
     assert activity_log.levels_shown(None) == activity_log.EVENT_LEVELS
     assert set(activity.LEVEL_OF_KIND.values()) == set(activity_log.EVENT_LEVELS)
-    assert set(activity.LEVEL_OF_KIND) == {*activity.BROWSER_KINDS, activity.SERVER_KIND}
+    assert set(activity.LEVEL_OF_KIND) == {*activity.BROWSER_KINDS, *activity.SERVER_KINDS}
 
 
 def test_the_server_default_is_served_on_health_and_in_the_history(tmp_path):
