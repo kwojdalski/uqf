@@ -225,6 +225,11 @@ export function UploadPanel({
     setRunning(true);
     setRefusal(null);
     setCloseProblem(null);
+    // Armed before the push is opened, so a Cancel pressed during the open
+    // round trip is honoured (#2010). The open itself is not aborted: it
+    // runs to its answer, so the push it made is closed, not left open.
+    const abort = new AbortController();
+    controller.current = abort;
     let opened: string;
     try {
       const answer = await pushes.open(target, {
@@ -235,14 +240,13 @@ export function UploadPanel({
       opened = answer.push_id;
       setPush({ id: opened, pruned: answer.pruned.length });
     } catch (error: unknown) {
+      controller.current = null;
       setRunning(false);
       setRefusal(
         `The push could not be opened, so nothing was sent: ${error instanceof Error ? error.message : String(error)}`,
       );
       return;
     }
-    const abort = new AbortController();
-    controller.current = abort;
     let wrote = false;
     const reported: ConfigPushReport[] = [];
     for (const [index, item] of queued.entries()) {

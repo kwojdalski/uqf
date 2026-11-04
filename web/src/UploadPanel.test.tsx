@@ -646,3 +646,46 @@ it("sends nothing when the push cannot be opened", async () => {
   expect(closed).toEqual([]);
   expect(row("a.csv")).toHaveTextContent("Queued");
 });
+
+it("honours a cancel pressed while the push is being opened: nothing is sent, and the push is closed with every file cancelled (#2010)", async () => {
+  const { uploader, calls } = fake();
+  let release: () => void = () => {};
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const closed: { push: string; reported: ConfigPushReport[] }[] = [];
+  const pushes: PushOps = {
+    open: async (target) => {
+      await gate;
+      return {
+        target,
+        root: "/srv/uqf",
+        push_id: PUSH,
+        pruned: [],
+        keep: 50,
+        keep_days: 90,
+      };
+    },
+    close: (_target, push, reported) => {
+      closed.push({ push, reported });
+      return Promise.resolve({} as never);
+    },
+  };
+  const { onUploaded } = panel(uploader, "shared/config", pushes);
+  choose([file("a.csv"), file("b.csv")]);
+  await confirm();
+  fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+  release();
+  await vi.waitFor(() => expect(closed).toHaveLength(1));
+  expect(calls).toEqual([]);
+  expect(closed[0]).toEqual({
+    push: PUSH,
+    reported: [
+      { path: "shared/config/a.csv", outcome: "cancelled" },
+      { path: "shared/config/b.csv", outcome: "cancelled" },
+    ],
+  });
+  expect(row("a.csv")).toHaveTextContent("Cancelled - not sent");
+  expect(row("b.csv")).toHaveTextContent("Cancelled - not sent");
+  expect(onUploaded).not.toHaveBeenCalled();
+});

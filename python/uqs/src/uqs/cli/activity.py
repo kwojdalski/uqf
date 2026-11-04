@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Annotated, Any
 
 import typer
+from rich.markup import escape
 from rich.table import Table
 
 from uqs import activity_log, paths, timerange
@@ -204,26 +205,34 @@ def list_(
         return
     for d in dropped:
         console.print(
-            f"[yellow]![/] {d['count']} {d['level']} event(s) not kept: {d['reason']} "
-            f"(last {d['last_at']})"
+            "[yellow]![/] "
+            + escape(
+                f"{d['count']} {d['level']} event(s) not kept: {d['reason']} (last {d['last_at']})"
+            )
         )
     if not events:
-        console.print(f"no activity matches these filters in {path}")
+        console.print(f"no activity matches these filters in {escape(str(path))}")
         return
     table = Table("time (UTC)", "level", "source", "kind", "action", "target", "outcome",
                   "duration ms", "session", "request")  # fmt: skip
     for e in events:
+        # what the history holds is printed literally, never as markup (#2025)
         table.add_row(
-            str(e["ts"]),
-            str(e["level"]),
-            str(e["source"]),
-            str(e["kind"]),
-            str(e["action"]),
-            str(e["target"] or ""),
-            str(e["outcome"] or ""),
-            "" if e["duration_ms"] is None else f"{e['duration_ms']:.0f}",
-            (e["session_id"] or "")[:8],
-            (e["request_id"] or "")[:8],
+            *(
+                escape(cell)
+                for cell in (
+                    str(e["ts"]),
+                    str(e["level"]),
+                    str(e["source"]),
+                    str(e["kind"]),
+                    str(e["action"]),
+                    str(e["target"] or ""),
+                    str(e["outcome"] or ""),
+                    "" if e["duration_ms"] is None else f"{e['duration_ms']:.0f}",
+                    (e["session_id"] or "")[:8],
+                    (e["request_id"] or "")[:8],
+                )
+            )
         )
     _show(table, interactive)
 
@@ -281,4 +290,4 @@ def export_(
         sys.stdout.write(body)
         return
     output.write_text(body)
-    console.print(f"wrote {len(events)} event(s) to {output}")
+    console.print(f"wrote {len(events)} event(s) to {escape(str(output))}")

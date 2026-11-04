@@ -152,3 +152,35 @@ def test_a_conflict_or_a_pruned_push_is_refused_writing_nothing(server, monkeypa
 def test_an_unknown_target_is_refused(server, logged):
     done = _uqs("history", "nosuch")
     assert done.exit_code != 0 and "no target 'nosuch'" in "".join(logged)
+
+
+def test_show_and_history_print_markup_in_server_held_text_literally(server):
+    """A destination, user, via or reported path holding `[...]` is shown as
+    written - never read as rich markup, which crashes on an unbalanced
+    closing tag (#2025)."""
+    (server / "shared/config/conf[/x]").mkdir(parents=True)
+    push_id = remote_files.new_push_id()
+    opened = remote_helper.handle({"protocol": 1, "op": "push_open", "root": str(server),
+                                   "push_id": push_id, "destination": "shared/config/conf[/x]",
+                                   "user": "k[/w]", "via": "web[/v]"})  # fmt: skip
+    assert opened["ok"], opened
+    data = b"a=1\n"
+    answer = remote_helper.handle(
+        {"protocol": 1, "op": "upload", "root": str(server), "path": "shared/config/conf[/x]/a",
+         "size": len(data), "sha256": hashlib.sha256(data).hexdigest(), "overwrite": False,
+         "push_id": push_id},
+        io.BytesIO(data),
+    )  # fmt: skip
+    assert answer["ok"], answer
+    reported = [{"path": "x[/b]", "outcome": "cancelled"}]
+    closed = remote_helper.handle({"protocol": 1, "op": "push_close", "root": str(server),
+                                   "push_id": push_id, "reported": reported})  # fmt: skip
+    assert closed["ok"], closed
+    shown = _uqs("show", "box", push_id)
+    assert shown.exit_code == 0, shown.output
+    said = " ".join(shown.stdout.split())  # the header may wrap
+    for literal in ("to shared/config/conf[/x] by k[/w] via web[/v]", "'x[/b]' (cancelled)"):
+        assert literal in said, shown.stdout
+    listed = _uqs("history", "box")
+    assert listed.exit_code == 0, listed.output
+    assert "k[/w]" in listed.stdout and "web[/v]" in " ".join(listed.stdout.split())

@@ -320,6 +320,14 @@ def _line(row: Mapping[str, Any]) -> str:
     )
 
 
+def _header_value(value: str) -> str:
+    """A filter value as the text header shows it. The filters come from a
+    query string or the command line, unchecked, so one holding a newline or
+    another control character is written JSON-quoted: raw, it would end the
+    `#` line and start one that reads as an event (#2024)."""
+    return value if value.isprintable() else json.dumps(value)
+
+
 def _text(
     rows: Sequence[Mapping[str, Any]],
     exported_at: dt.datetime,
@@ -330,7 +338,7 @@ def _text(
     every event that shares a request id - the browser's submit, confirm and
     result, and the server's audit of the request they caused - grouped
     under one heading at the time the first of them happened."""
-    said = ", ".join(f"{k}={v}" for k, v in filters.items()) or "none"
+    said = ", ".join(f"{k}={_header_value(v)}" for k, v in filters.items()) or "none"
     lines = [
         f"# uqf activity export{_SEP}{stamp(exported_at)}{_SEP}{len(rows)} events, oldest first",
         f"# filters: {said}",

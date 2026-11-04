@@ -361,3 +361,30 @@ it("says plainly when a push's history was pruned", async () => {
   );
   expect(screen.queryByRole("group", { name: "Confirm restore" })).toBeNull();
 });
+
+it("reports a restore that succeeded as restored when reloading the history after it fails (#2011)", async () => {
+  let lists = 0;
+  const { ops } = fakeOps({
+    list: async () => {
+      lists += 1;
+      if (lists > 1) throw new ApiError("Enter the write token", false, 401);
+      return HISTORY;
+    },
+  });
+  const { onRestored } = view(ops);
+  await showPush();
+  fireEvent.click(screen.getByRole("button", { name: "Restore…" }));
+  fireEvent.click(
+    await screen.findByRole("button", { name: "Confirm restore of 2 files" }),
+  );
+  expect(await screen.findByLabelText("Restore results")).toHaveTextContent(
+    "20261104T103500000Z-00000002",
+  );
+  const alert = await screen.findByRole("alert");
+  expect(alert).toHaveTextContent(
+    "Restored; reloading the history failed: Enter the write token",
+  );
+  expect(alert).not.toHaveTextContent("Restore refused");
+  expect(alert).not.toHaveTextContent("Restore outcome uncertain");
+  expect(onRestored).toHaveBeenCalledTimes(1);
+});

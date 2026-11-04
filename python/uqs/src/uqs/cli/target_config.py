@@ -153,13 +153,14 @@ def history(
              | {"target": name})  # fmt: skip
         return
     if not rows:
-        console.print(f"no config pushes recorded on {name}")
+        console.print(f"no config pushes recorded on {escape(name)}")
     else:
         table = Table("push", "when", "who", "what", "files", "bytes", "pending", "failed")
         for row in rows:
             table.add_row(
-                row["push_id"], str(row["created"] or ""),
-                f"{row['user'] or 'unknown'} ({row['via'] or '?'})", escape(str(row["what"])),
+                escape(str(row["push_id"])), escape(str(row["created"] or "")),
+                escape(f"{row['user'] or 'unknown'} ({row['via'] or '?'})"),
+                escape(str(row["what"])),
                 str(row["files"] or 0), str(row["bytes"] or 0), str(row["pending"] or 0),
                 str(row["failed"] or 0),
             )  # fmt: skip
@@ -167,7 +168,8 @@ def history(
     if answer["truncated"]:
         console.print(f"showing {len(rows)} of {answer['total']} pushes - raise --limit")
     for pruned in answer["pruned"][:5]:
-        console.print(f"[dim]pruned {pruned['push_id']} ({pruned['why']}) {pruned['pruned_at']}[/]")
+        said = f"pruned {pruned['push_id']} ({pruned['why']}) {pruned['pruned_at']}"
+        console.print(f"[dim]{escape(said)}[/]")
 
 
 @config_app.command("show", cls=ReadOnly)
@@ -186,21 +188,27 @@ def show(name: TargetArg, push_id: PushArg, as_json: ShowJson = False) -> None:
               "push": {k: v for k, v in manifest.items() if k != "version"}})  # fmt: skip
         return
     kind = manifest["kind"] + (f" of {manifest['restores']}" if manifest["restores"] else "")
+    # every value here is held by the server, and the destination, user and
+    # via came from whoever opened the push: printed literally, never as
+    # rich markup (#2025)
     console.print(
-        f"push {push_id} ({kind}) to {manifest['destination']} by "
-        f"{manifest.get('user') or 'unknown'} via {manifest.get('via') or '?'}, "
-        f"opened {manifest['created']}, closed {manifest.get('closed') or 'never'}"
+        escape(
+            f"push {push_id} ({kind}) to {manifest['destination']} by "
+            f"{manifest.get('user') or 'unknown'} via {manifest.get('via') or '?'}, "
+            f"opened {manifest['created']}, closed {manifest.get('closed') or 'never'}"
+        )
     )
     table = Table("file", "change", "old sha256", "new sha256", "state", "now")
     for f in manifest["files"]:
         table.add_row(
-            escape(repr(f["path"])[1:-1]), f["action"], _short(f.get("previous_sha256")),
-            _short(f.get("sha256")), f["state"] + (f" ({f['error']})" if f.get("error") else ""),
-            f.get("now") or "",
+            escape(repr(f["path"])[1:-1]), escape(str(f["action"])),
+            _short(f.get("previous_sha256")), _short(f.get("sha256")),
+            escape(f["state"] + (f" ({f['error']})" if f.get("error") else "")),
+            escape(str(f.get("now") or "")),
         )  # fmt: skip
     console.print(table)
     for item in manifest.get("reported") or []:
-        console.print(f"never recorded by the server: {item['path']!r} ({item['outcome']})")
+        console.print(escape(f"never recorded by the server: {item['path']!r} ({item['outcome']})"))
 
 
 @config_app.command("diff", cls=ReadOnly)
@@ -267,7 +275,7 @@ def restore(
 
     plan = _call(ask(True), name)["plan"]
     for step in plan:
-        console.print(f"  {step['step']:<9} {escape(repr(step['path']))}"
+        console.print(f"  {escape(str(step['step'])):<9} {escape(repr(step['path']))}"
                       + (f" ({escape(step['error'])})" if step.get("error") else ""))  # fmt: skip
     conflicts = [s for s in plan if s["step"] == "conflict"]
     if conflicts:
@@ -290,7 +298,9 @@ def restore(
     answer = _call(ask(False), name)
     for result in answer["results"]:
         said = "ok" if result["outcome"] == "succeeded" else f"FAILED: {result['error']}"
-        console.print(f"  {result['step']:<9} {escape(repr(result['path']))} {escape(said)}")
-    console.print(f"restored as push {answer['push_id']}")
+        console.print(
+            f"  {escape(str(result['step'])):<9} {escape(repr(result['path']))} {escape(said)}"
+        )
+    console.print(f"restored as push {escape(str(answer['push_id']))}")
     if any(r["outcome"] != "succeeded" for r in answer["results"]):
         raise typer.Exit(code=1)

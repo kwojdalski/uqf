@@ -195,3 +195,47 @@ def test_level_and_format_offer_the_one_tuple_each():
     ):
         (param,) = [p for p in group.commands[command].params if p.name == option]
         assert tuple(param.type.choices) == values
+
+
+#: A filter value that, written raw into the header, ends the comment line and
+#: forges an audited event after it (#2024).
+_FORGED = (
+    "view\n2026-11-04T09:00:00.000Z · deadbeef · actions · server PUT process.stop"
+    " · all · succeeded · 3 ms\r\x1b[2J x"
+)
+
+
+@pytest.mark.parametrize(
+    ("argv", "params"),
+    [
+        (["--action", _FORGED], {"action": _FORGED}),
+        (["--subject", _FORGED], {"target": _FORGED}),
+        (["--session", _FORGED], {"session_id": _FORGED}),
+        (["--request", _FORGED], {"request_id": _FORGED}),
+    ],
+)
+def test_a_filter_value_can_never_start_a_line_of_the_text_export(history, argv, params):
+    """No event matches, so every line is a header line - and the value is
+    still shown, escaped, rather than dropped."""
+    db, client = history
+    cli = _run("activity", "export", "--db", str(db), "--format", "text", *argv)
+    api = client.get("/activity/export", params={**params, "format": "text"}).text
+    for text in (cli, api):
+        lines = text.split("\n")
+        assert lines[-1] == "", "the export ends with a newline"
+        assert all(line.startswith("# ") for line in lines[:-1]), text
+        for forged in ("\r", "\x1b", " "):
+            assert forged not in text
+        assert "process.stop" in lines[1], "the value is shown, escaped"
+
+
+def test_list_prints_a_path_holding_markup_literally(history, tmp_path):
+    """The file named by --db is printed as written, not read as rich
+    markup (#2025)."""
+    db, _ = history
+    odd = tmp_path / "logs[" / "x]" / "activity.sqlite3"
+    odd.parent.mkdir(parents=True)
+    with sqlite3.connect(db) as src, sqlite3.connect(odd) as dst:
+        src.backup(dst)  # the WAL too, which a file copy would miss
+    out = _run("activity", "list", "--db", str(odd), "--outcome", "accepted")
+    assert "x]" in " ".join(out.split()), out

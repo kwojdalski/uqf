@@ -136,9 +136,6 @@ export function ConfigHistory({
       const answer = await ops.restore(target, push);
       setRestored(answer);
       setPlan(undefined);
-      onRestored();
-      const listed = await ops.list(target);
-      setHistory(listed);
     } catch (failure: unknown) {
       // a refusal (4xx) wrote nothing; anything else may have written some
       const certain =
@@ -149,6 +146,18 @@ export function ConfigHistory({
         certain
           ? `Restore refused - nothing was written: ${message(failure)}`
           : `Restore outcome uncertain: ${message(failure)}. Some files may have been restored - reload the history before restoring again; nothing is retried automatically.`,
+      );
+      setBusy(false);
+      return;
+    }
+    onRestored();
+    // The restore's outcome is settled above; a failed reload of the
+    // history afterwards is its own problem, never the restore's (#2011).
+    try {
+      setHistory(await ops.list(target));
+    } catch (failure: unknown) {
+      setError(
+        `Restored; reloading the history failed: ${message(failure)}. The restore results stand - reload the history before doing anything else.`,
       );
     } finally {
       setBusy(false);
