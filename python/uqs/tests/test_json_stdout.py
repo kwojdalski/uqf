@@ -147,6 +147,11 @@ CASES: dict[str, tuple[list[str], str]] = {
     "deploy check": (["deploy", "check", "--profile", "nosuch"], "unknown profile"),
     "deploy history": (["deploy", "history", "nosuch-server-1731"], "deployments"),
     "target check": (["target", "check", "nosuch"], "no target or deployed server"),
+    "target tunnel plan": (["target", "tunnel", "plan", "nosuch"], "no target or deployed server"),
+    "target tunnel check": (
+        ["target", "tunnel", "check", "nosuch"],
+        "no target or deployed server",
+    ),
 }
 #: --json commands with no offline case, and why.
 NO_OFFLINE_CASE = {
@@ -431,7 +436,8 @@ def test_an_older_releases_bare_process_list_still_gives_its_ports():
     remote = control.Remote("t", "h", "/srv/t")
     new = json.dumps({"processes": [{"process": "rdb1", "port": 6052}]})
     old = json.dumps([{"procname": "rdb1", "port": "6052"}])
-    assert tunnel._parse_ports(remote, new) == tunnel._parse_ports(remote, old) == {"rdb1": 6052}
+    rows = [{"process": "rdb1", "proctype": "", "port": 6052}]
+    assert tunnel._parse_rows(remote, new) == tunnel._parse_rows(remote, old) == rows
 
 
 def test_status_json_says_all_its_interpreter_line_says(monkeypatch):

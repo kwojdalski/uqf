@@ -177,6 +177,7 @@ DOMAIN_VERBS = {
     "log": "a record's change history - `logs` is processes' output, `history` deployments",
     "revert": "undo one recorded change, itself recorded - not `rollback`'s release",
     "adopt": "take over what was installed by hand, so uqs can drive it",
+    "plan": "what a tunnel to a target would forward, worked out without opening it",
 }
 
 #: Rule 1: a group named after one of these is a verb with nouns under it.
@@ -503,6 +504,8 @@ OPTIONS = {
     "--level": Meaning("the lowest log level shown", r"this level and above"),
     "--limit": Meaning("show at most N records", r"(most recent|at most) N"),
     "--lines": Meaning("how many lines of a log to show", r"^lines (of|per)\b"),
+    "--local": Meaning("one process's local port in a tunnel plan", r"this local port"),
+    "--local-offset": Meaning("added to each remote port in a tunnel plan", r"each remote port"),
     "--live": Meaning("retired as its own flag: the other side of --fixture/--live", None),
     "--mode": Meaning("backfill's validate/plan/run mode", r"validate"),
     "--odbc-home": Meaning("a private ODBC setup", r"private ODBC setup"),
