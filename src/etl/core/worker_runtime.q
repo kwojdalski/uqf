@@ -231,7 +231,7 @@
 / Suppressing a SUBSET is the dangerous case: rows withheld while coverage is
 / still published leaves the ledger asserting a window is complete when
 / nothing was written.
-.qetl.job.bounded.runtime.suppressed_in_dry_run:`publish_rows`publish_coverage`write_checkpoint`record_run`record_facts`finish_store`notify_reactions
+.qetl.job.bounded.runtime.suppressed_in_dry_run:`publish_rows`publish_coverage`write_checkpoint`record_run`record_facts`finish_store`notify_reactions`pin_config
 
 / This run's mode: `mode` (UQF_MODE, or `uqs job backfill --mode`) when set, else
 / `dry_run when the older dry_run flag is set, else `run.

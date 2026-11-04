@@ -145,6 +145,25 @@ export function answer(path: string, level: SessionLevel = "actions"): unknown {
       poll_seconds: 5,
     };
   if (bare.startsWith("/ops/")) return { rows: [{ a: 1 }], poll_seconds: 5 };
+  if (bare === "/charts")
+    return {
+      charts: [
+        {
+          name: "markout_curve",
+          title: "Markout curve",
+          description: "Markout by horizon",
+          point_limit: 600,
+          params: {
+            properties: {
+              dataset: { type: "string", enum: ["fx_markout"] },
+              sym: { type: "string", default: "" },
+              days: { type: "integer", default: 14, minimum: 1 },
+              hdb: { type: "boolean", default: false },
+            },
+          },
+        },
+      ],
+    };
   if (bare === "/catalog")
     return {
       tables: [

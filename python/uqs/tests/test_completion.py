@@ -136,3 +136,15 @@ def test_a_completer_that_fails_offers_nothing_rather_than_a_traceback(monkeypat
 
     monkeypatch.setattr(listing, "configured_ports", broken)
     assert complete("uqs start ") == []
+
+
+def test_snapshot_commands_complete_the_markout_datasets_and_the_recorded_ids(monkeypatch):
+    """`--dataset` offers the plant tables that carry config_id (#1999) - read off the
+    declared schema, not a list of the three - and SNAPSHOT_ID offers what the store holds."""
+    from uqs.stack import snapshots
+
+    offered = complete("uqs data snapshot list --dataset ")
+    assert {"fx_markout", "fx_markout_wide", "crypto_markout"} <= set(offered)
+    assert "executions" not in offered
+    monkeypatch.setattr(snapshots, "ids", lambda _paths: ["markout_aaaa", "markout_bbbb"])
+    assert complete("uqs data snapshot show ") == ["markout_aaaa", "markout_bbbb"]
