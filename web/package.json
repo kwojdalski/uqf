@@ -8,7 +8,7 @@
   },
   "scripts": {
     "dev": "vite --host 127.0.0.1",
-    "build": "tsc --noEmit && vite build",
+    "build": "tsc --noEmit && vite build && node scripts/check-bundle.mjs",
     "preview": "vite preview --host 127.0.0.1",
     "test": "vitest run",
     "format": "prettier --write .",
@@ -19,8 +19,10 @@
     "@rjsf/utils": "6.11.0",
     "@rjsf/validator-ajv8": "6.11.0",
     "@tanstack/react-table": "9.3.1",
+    "plotly.js-dist-min": "4.2.0",
     "react": "19.3.0",
-    "react-dom": "19.3.0"
+    "react-dom": "19.3.0",
+    "react-plotly.js": "4.1.0"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "7.0.1",
@@ -35,5 +37,8 @@
     "typescript": "7.0.2",
     "vite": "8.3.0",
     "vitest": "5.0.1"
+  },
+  "overrides": {
+    "plotly.js": "npm:plotly.js-dist-min@4.2.0"
   }
 }

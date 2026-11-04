@@ -24,6 +24,7 @@
 .qt.qpipe.job.hdb_crypto_markout_backfill.beforeNamespace_isolate:{[]
     setenv[`UQF_STATUS_DIR;"build/test-status"];
     system"mkdir -p build/test-status";
+    .qt.support.reset_snapshots[];
     }
 
 .qt.qpipe.job.hdb_crypto_markout_backfill.setUp_fresh:{[]
@@ -35,6 +36,7 @@
     .qetl.job.bounded.state.release_lock `hdb_crypto_markout_backfill;
     .qetl.job.bounded.state.clear_checkpoint `hdb_crypto_markout_backfill;
     `crypto_markout set 0#.qetl.plant.shape `crypto_markout;
+    .qt.support.reset_snapshots[];
     }
 
 .qt.qpipe.job.hdb_crypto_markout_backfill.tearDown_release:{[] .qpipe.job.hdb_crypto_markout_backfill.cleanup[];}
@@ -84,6 +86,9 @@
 
 .qt.qpipe.job.hdb_crypto_markout_backfill.test_the_gate_passes_the_fixture_and_names_what_it_refuses:{[t]
     r:.qt.qpipe.job.hdb_crypto_markout_backfill.scored[.qpipe.source.hdb_crypto_markouts.fixture[]];
+    f0:.qpipe.job.hdb_crypto_markout_backfill.quality_check r;
+    .qunit.assertEquals[(f0`check;f0`status);(enlist `config_unpinned;enlist `fail);"rows naming a configuration nobody recorded are refused"];
+    .qpipe.transform.crypto_markout_outputs.pin[];
     .qunit.assertEquals[count .qpipe.job.hdb_crypto_markout_backfill.quality_check r;0;"clean"];
     bad:update markout_bps:0w, markout_net_bps:0w from r where i=0;
     f:.qpipe.job.hdb_crypto_markout_backfill.quality_check bad;
@@ -93,8 +98,8 @@
 
 .qt.qpipe.job.hdb_crypto_markout_backfill.test_the_facts_count_executions_horizons_the_unpriced_and_the_wrong_clock:{[t]
     r:.qt.qpipe.job.hdb_crypto_markout_backfill.scored[.qpipe.source.hdb_crypto_markouts.fixture[]];
-    .qunit.assertEquals[.qpipe.job.hdb_crypto_markout_backfill.facts r;`executions`horizons`unpriced`clock_mismatch!(3;2;0;2);
-        "three executions at two horizons; f3's two totals are on the wrong clock, none merely unpriced"];
+    .qunit.assertEquals[.qpipe.job.hdb_crypto_markout_backfill.facts r;`executions`horizons`unpriced`clock_mismatch`config_id!(3;2;0;2;enlist .qpipe.transform.crypto_markout_outputs.config_id);
+        "three executions at two horizons; f3's two totals are on the wrong clock, none merely unpriced; one configuration"];
     .qunit.assertEquals[.qpipe.job.hdb_crypto_markout_backfill.facts 0#r;(enlist `span)!enlist "empty window";"and an empty window says so"]};
 
 / --- a run ----------------------------------------------------------------------------------
@@ -257,3 +262,10 @@
     `.qt.qpipe.job.hdb_crypto_markout_backfill.empty set f;
     r:.qt.qpipe.job.hdb_crypto_markout_backfill.with_hdb {.qt.qpipe.job.hdb_crypto_markout_backfill.empty[]};
     .qunit.assertEquals[r;-0Wp;"no book yet: nothing is complete, not a wrapped far-future instant"]};
+
+/ A run pins the job spec's snapshot before it calculates, and every row names it (#1999).
+.qt.qpipe.job.hdb_crypto_markout_backfill.test_a_run_pins_the_snapshot_its_rows_name:{[t]
+    .qpipe.job.hdb_crypto_markout_backfill.init[.qt.qpipe.job.hdb_crypto_markout_backfill.spec_for[`v1;.qt.qpipe.job.hdb_crypto_markout_backfill.day[]0;.qt.qpipe.job.hdb_crypto_markout_backfill.day[]1]];
+    r:.qpipe.job.hdb_crypto_markout_backfill.run[];
+    id:.qpipe.transform.crypto_markout_outputs.config_id;
+    .qunit.assertEquals[(r`state;distinct (get `crypto_markout)`config_id;(.qetl.snapshot.list[`])`snapshot_id);(`completed;enlist id;enlist id);"the one snapshot, recorded by the run, named by every row"]};

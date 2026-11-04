@@ -269,11 +269,34 @@ def test_a_refused_read_is_403_and_audited_with_the_verified_user(tmp_path):
     assert resp.status_code == 403
     assert resp.json()["error"] == "Forbidden"
     (row,) = _rows(tmp_path / "activity.sqlite3")
-    assert row["action"] == "authz.refused"
+    assert (row["action"], row["kind"]) == ("authz.refused", "attempt")
     assert row["claimed_user"] == "bob"
     assert row["status_code"] == 403
     assert '"permission": "queue:read"' in row["detail"]
     assert '"identity": "verified"' in row["detail"]
+
+
+def test_refused_reads_cannot_evict_the_audit(tmp_path):
+    """Anyone can provoke a refused read, so its rows are attempts, under
+    their own cap - a flood of them leaves an audited action in place."""
+    from uqf_frontend import activity
+
+    c = _client(
+        _settings(
+            tmp_path, enable_writes=True, write_token=TOKEN,
+            allowed_hosts=("testserver",),
+        )
+    )  # fmt: skip
+    c.post(
+        "/control/process/stop",
+        json={"procs": "rdb1"},
+        headers={HEADER: "bob", "authorization": f"Bearer {TOKEN}"},
+    )
+    for _ in range(activity.MAX_ATTEMPT_ROWS + activity.PRUNE_EVERY + 5):
+        c.get("/ops/queue", headers={HEADER: "bob"})
+    actions = [r["action"] for r in _rows(tmp_path / "activity.sqlite3")]
+    assert "process.stop" in actions
+    assert actions.count("authz.refused") <= activity.MAX_ATTEMPT_ROWS + activity.PRUNE_EVERY
 
 
 def test_a_granted_read_is_allowed_and_not_audited(tmp_path):

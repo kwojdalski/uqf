@@ -188,11 +188,20 @@
 / The equity domain as the core takes it: resolver, conversion, the spec keys it
 / owns, their validation and the calendar's availability rule. No attribution:
 / a single-leg instrument has no legs to split a move over.
-.qpipe.transform.eq_domain.domain:`resolve`convert`keys`validate`available!(
+/ The revision of the rules that price an equity: its declared quote currency,
+/ the session and halt availability rule, the conversion pair. Recorded by the
+/ configuration snapshot (#1999); the calendar itself is a spec key and is recorded
+/ with the spec.
+.qpipe.transform.eq_domain.revision:`eq_r1
+
+.qpipe.transform.eq_domain.domain:`resolve`convert`keys`validate`available`name`revision`datasets!(
     .qpipe.transform.eq_domain.resolve;
     .qpipe.transform.eq_domain.convert;
     `quote_ccy`quote_ccys`benchmark`sessions`halts;
     .qpipe.transform.eq_domain.complete;
-    .qpipe.transform.eq_domain.available)
+    .qpipe.transform.eq_domain.available;
+    `eq;
+    .qpipe.transform.eq_domain.revision;
+    `symbol$())
 
 \d .

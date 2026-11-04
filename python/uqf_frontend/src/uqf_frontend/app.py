@@ -178,7 +178,10 @@ def _refuse(request: Request, reason: str, permission: str) -> typing.NoReturn:
         route = request.scope.get("route")
         request.app.state.activity.add(
             source="server",
-            kind=activity.SERVER_KIND,
+            # An attempt, not the audit proper: anyone can provoke a refused
+            # read, so these rows live under the attempts' own small cap and
+            # can never evict the audit of an authorised action (#2019).
+            kind=activity.ATTEMPT_KIND,
             action=activity.REFUSED_ACTION,
             target=getattr(route, "path", None) or "(unrouted)",
             outcome="refused",
