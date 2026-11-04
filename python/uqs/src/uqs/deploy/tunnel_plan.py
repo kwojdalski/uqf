@@ -240,7 +240,7 @@ def parse_local(pairs: Sequence[str]) -> dict[str, int]:
     out: dict[str, int] = {}
     for pair in pairs:
         proc, sep, port = pair.partition(":")
-        if not sep or not proc or not port.isdigit():
+        if not sep or not proc or not (port.isascii() and port.isdecimal()):
             raise TunnelPlanError("invalid_port", f"--local {pair!r}: give PROC:PORT")
         if proc in out:
             raise TunnelPlanError("invalid_port", f"--local names {proc} twice")
@@ -260,14 +260,21 @@ def checks_path(root: Path) -> Path:
 
 def read_checks(root: Path) -> dict[str, dict[str, dict[str, Any]]]:
     """target -> process -> its last successful check; none when unreadable -
-    a lost record makes a mapping unverified, never a plan fail."""
+    a lost record makes a mapping unverified, never a plan fail. A target
+    entry or a process record that is not an object is dropped (#2064)."""
     path = checks_path(root)
     try:
         doc = json.loads(path.read_text())
     except OSError, ValueError:
         return {}
     found = doc.get("targets") if isinstance(doc, dict) else None
-    return found if isinstance(found, dict) else {}
+    if not isinstance(found, dict):
+        return {}
+    return {
+        target: {proc: rec for proc, rec in records.items() if isinstance(rec, dict)}
+        for target, records in found.items()
+        if isinstance(records, dict)
+    }
 
 
 def record_checks(root: Path, target: str, succeeded: Mapping[str, dict[str, Any]]) -> None:
@@ -322,6 +329,8 @@ def annotate(
     rows = []
     for m in p.mappings:
         last = checks.get(m.process)
+        if checked_at(last) is None:
+            last = None  # a record nobody can read is no record (#2064)
         rows.append(
             {
                 **asdict(m),
@@ -335,12 +344,22 @@ def annotate(
     return doc
 
 
-def mapping_state(m: TunnelMapping, last: Mapping[str, Any] | None, now: datetime) -> str:
-    if not last:
-        return "unverified"
+def checked_at(last: object) -> datetime | None:
+    """When the record `last` says its check ran - an aware datetime - or
+    None when it is not a record, has no `at`, or one without a zone, which
+    cannot be compared with now (#2064)."""
+    if not isinstance(last, Mapping) or not isinstance(last.get("at"), str):
+        return None
     try:
-        at = datetime.fromisoformat(str(last["at"]))
-    except KeyError, ValueError:
+        at = datetime.fromisoformat(last["at"])
+    except ValueError:
+        return None
+    return at if at.utcoffset() is not None else None
+
+
+def mapping_state(m: TunnelMapping, last: Mapping[str, Any] | None, now: datetime) -> str:
+    at = checked_at(last)
+    if last is None or at is None:
         return "unverified"
     same = last.get("remote_port") == m.remote_port and last.get("local_port") == m.local_port
     return "verified" if same and now - at <= STALE_AFTER else "stale"

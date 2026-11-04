@@ -107,7 +107,13 @@ def test_a_release_with_nothing_to_forward_is_a_discovery_refusal():
 
 
 @pytest.mark.parametrize(
-    ("pairs", "said"), [(["rdb1"], "give PROC:PORT"), (["rdb1:7", "rdb1:8"], "twice")]
+    ("pairs", "said"),
+    [
+        (["rdb1"], "give PROC:PORT"),
+        (["rdb1:7", "rdb1:8"], "twice"),
+        (["rdb1:\u00b2"], "give PROC:PORT"),  # isdigit, but not int() (#2064)
+        (["rdb1:\u0667"], "give PROC:PORT"),  # isdecimal, but not ASCII
+    ],
 )
 def test_local_pairs_are_proc_colon_port(pairs, said):
     with pytest.raises(TunnelPlanError, match=said):
@@ -356,6 +362,60 @@ def test_plan_refusal_json_names_its_kind(root, monkeypatch):
     assert run.exit_code != 0
     doc = json.loads(run.stdout)
     assert (doc["ok"], doc["kind"]) == (False, "invalid_port")
+
+
+def test_plan_refuses_a_local_port_in_non_ascii_digits(root, monkeypatch):
+    monkeypatch.setattr(tunnel_plan, "discover", lambda r, runtime=None, runner=None: DECLARED)
+    monkeypatch.setattr(shared, "json_requested", lambda: True)
+    run = CliRunner().invoke(
+        app, ["target", "tunnel", "plan", "prod", "rdb1", "--local", "rdb1:\u00b2", "--json"]
+    )
+    assert run.exit_code != 0
+    doc = json.loads(run.stdout)
+    assert (doc["ok"], doc["kind"]) == (False, "invalid_port")
+
+
+MALFORMED_CHECKS = {
+    "naive at": {"prod": {"rdb1": {"at": "2026-11-04T10:00:00", "remote_port": 6002,
+                                   "local_port": 16002}}},
+    "record not a dict": {"prod": {"rdb1": "x"}},
+    "target not a dict": {"prod": ["x"]},
+}  # fmt: skip
+
+
+def _plan_cli(root, monkeypatch, targets_doc):
+    tunnel_plan.checks_path(root).write_text(json.dumps({"targets": targets_doc}))
+    monkeypatch.setattr(tunnel_plan, "discover", lambda r, runtime=None, runner=None: DECLARED)
+    run = CliRunner().invoke(app, ["target", "tunnel", "plan", "prod", "rdb1", "--json"])
+    assert run.exit_code == 0, run.output
+    return json.loads(run.stdout)["mappings"][0]
+
+
+@pytest.mark.parametrize("targets_doc", MALFORMED_CHECKS.values(), ids=list(MALFORMED_CHECKS))
+def test_plan_reads_a_malformed_check_record_as_unverified(root, monkeypatch, targets_doc):
+    """A record nobody can trust is no record (#2064): never a crash, never verified."""
+    rdb = _plan_cli(root, monkeypatch, targets_doc)
+    assert (rdb["state"], rdb["last_check"]) == ("unverified", None)
+
+
+def test_plan_still_reads_a_recent_check_record_as_verified(root, monkeypatch):
+    record = {"at": datetime.now(UTC).isoformat(), "remote_port": 6002, "local_port": 16002}
+    rdb = _plan_cli(root, monkeypatch, {"prod": {"rdb1": record}})
+    assert (rdb["state"], rdb["last_check"]) == ("verified", record)
+
+
+@pytest.mark.parametrize("last", ["garbage", ["x"], {"at": "2026-11-04T10:00:00"}, {"at": 7}])
+def test_annotate_reads_a_malformed_record_as_unverified(last):
+    doc = tunnel_plan.annotate(_plan(selected=["rdb1"]), {"rdb1": last}, listening=lambda _: False)
+    assert (doc["mappings"][0]["state"], doc["mappings"][0]["last_check"]) == ("unverified", None)
+
+
+@pytest.mark.parametrize("targets_doc", MALFORMED_CHECKS.values(), ids=list(MALFORMED_CHECKS))
+def test_the_check_survives_a_malformed_record_beside_its_own(root, server, targets_doc):
+    tunnel_plan.checks_path(root).write_text(json.dumps({"targets": targets_doc}))
+    report = _check(root, server)
+    assert report["ok"] is True
+    assert _by_process(report)["rdb1"]["last_success"]["identity"] == "rdb1"
 
 
 def test_check_exits_non_zero_when_an_endpoint_fails(root, monkeypatch):
