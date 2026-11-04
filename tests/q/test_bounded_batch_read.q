@@ -261,7 +261,7 @@
     .qunit.assertEquals[count .qetl.job.bounded.batching.take[@[sc;`worker;:;`other];enlist `a];0;"another worker: a miss"];
     .qunit.assertEquals[count .qetl.job.bounded.batching.cache;1;"and it is still held, for the scope that read it"]};
 
-.qt.qetl.job.bounded.batch_read.test_starting_a_window_drops_what_another_window_or_version_left:{[t]
+.qt.qetl.job.bounded.batch_read.test_starting_an_attempt_drops_all_this_workers_previous_reads:{[t]
     .qt.qetl.job.bounded.batch_read.start[];
     w:.qt.qetl.job.bounded.batch_read.worker;
     sc:.qetl.job.bounded.batching.scope[w;.qt.qetl.job.bounded.batch_read.hour[]];
@@ -271,8 +271,8 @@
     .qetl.job.bounded.batching.put[@[sc;`range_to;:;2026.09.17D12:00:00];100;enlist `b;enlist rows];
     .qetl.job.bounded.batching.put[sc;100;enlist `c;enlist rows];
     .qetl.job.bounded.batching.put[@[sc;`worker;:;`other];100;enlist `d;enlist rows];
-    .qunit.assertEquals[.qetl.job.bounded.batching.begin_reads[w;.qt.qetl.job.bounded.batch_read.hour[]];2;"the other version's and the other window's entries"];
-    .qunit.assertEquals[asc .qetl.job.bounded.batching.cache`item;`c`d;"this window's, and another worker's, stay"]};
+    .qunit.assertEquals[.qetl.job.bounded.batching.begin_reads[w];3;"all prior reads, including the same window and version"];
+    .qunit.assertEquals[.qetl.job.bounded.batching.cache`item;enlist `d;"another worker's reads stay"]};
 
 / --- readiness and failure ---------------------------------------------------------------------------
 
@@ -306,6 +306,29 @@
     `.qt.qetl.job.bounded.batch_read.fail_with set "boom";
     .qunit.assertEquals[r;1b;"the window is published after a retry"];
     .qunit.assertEquals[count get `fx_markout;36;"every row"]};
+
+.qt.qetl.job.bounded.batch_read.test_a_failed_window_retry_reads_books_that_arrived_after_the_failure:{[t]
+    .qt.qetl.job.bounded.batch_read.set_batching[.qt.qetl.job.bounded.batch_read.declare[1;`batch;1000]];
+    `.qt.qetl.job.bounded.batch_read.fail_at set 4;
+    .qt.qetl.job.bounded.batch_read.start[];
+    worker:.qt.qetl.job.bounded.batch_read.worker;
+    h:.qt.qetl.job.bounded.batch_read.hour[];
+    .qunit.assertEquals[.qetl.job.bounded.do_window[worker;h];0b;"a later batch fails after EURUSD was cached"];
+    .qunit.assertEquals[.qetl.job.bounded.batching.cache`item;enlist `EURUSD;"the failed attempt left a book"];
+    .qunit.assertEquals[(count get `fx_markout;.qt.qetl.job.bounded.batch_read.claimed[]);(0;0b);"nothing published or covered"];
+    late:0!select by sym,source from `source_time xasc select from market_data where sym=`EURUSD;
+    late:update source_time:h[`range_from]+0D00:00:00.5,
+        bid_prices:bid_prices+0.01,ask_prices:ask_prices+0.01 from late;
+    `market_data set market_data,late;
+    `.qt.qetl.job.bounded.batch_read.fail_at set 0;
+    before:count .qt.qetl.job.bounded.batch_read.sent;
+    .qunit.assertTrue[.qetl.job.bounded.do_window[worker;h];"the same window and version now succeeds"];
+    again:before _ .qt.qetl.job.bounded.batch_read.sent;
+    .qunit.assertTrue[`EURUSD in raze (2_again)[;2];"the retry asked the source for EURUSD again, not the failed attempt's cache (after the executions and presence reads)"];
+    whole:.qpipe.source.hdb_fx_markouts.query[.qt.qetl.job.bounded.batch_read.hdb;h`range_from;h`range_to];
+    expected:`venue`fill_id`horizon`kind`step xasc .qetl.job.bounded.transform_batch[worker;whole];
+    .qunit.assertEquals[.qt.qetl.job.bounded.batch_read.published[];expected;"every value matches a fresh source read, including the late books"];
+    .qunit.assertEquals[(count get `fx_markout;.qt.qetl.job.bounded.batch_read.claimed[]);(36;1b);"all rows published once before coverage"]};
 
 .qt.qetl.job.bounded.batch_read.test_a_source_returning_a_book_nobody_asked_for_is_refused:{[t]
     br:.qetl.source.batch_read `hdb_fx_markouts;
