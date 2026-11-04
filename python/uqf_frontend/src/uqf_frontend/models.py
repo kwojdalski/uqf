@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import datetime as dt
 from typing import Any, Literal
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, field_validator
 
 #: Where a query reads: today's session, completed partitions, or both. One
 #: name for the request and the response, which api.ts mirrors as `Tier`.
@@ -833,7 +834,16 @@ class RemoteDeleteResponse(BaseModel):
 #: holds api.ts to these).
 ActivitySource = Literal["browser", "server"]
 ActivityKind = Literal[
-    "navigate", "select", "submit", "confirm", "cancel", "result", "interact", "debug", "request"
+    "navigate",
+    "select",
+    "submit",
+    "confirm",
+    "cancel",
+    "result",
+    "interact",
+    "debug",
+    "request",
+    "attempt",
 ]
 BrowserKind = Literal[
     "navigate", "select", "submit", "confirm", "cancel", "result", "interact", "debug"
@@ -884,6 +894,16 @@ class BrowserEventIn(BaseModel):
     duration_ms: float | None = Field(default=None, ge=0, le=86_400_000)
     items: list[ActivityItem] = Field(default_factory=list, max_length=256)
     detail: dict[str, str | int | float | bool] = Field(default_factory=dict, max_length=32)
+
+    @field_validator("ts")
+    @classmethod
+    def _held_in_utc(cls, ts: dt.datetime) -> dt.datetime:
+        """An instant UTC can hold - rows are stored in UTC - else the whole
+        batch is a 422 here, before any of it is written (#2021)."""
+        try:
+            return ts.astimezone(dt.UTC)
+        except OverflowError:
+            raise ValueError("ts is outside the range a UTC timestamp can hold") from None
 
 
 class BrowserDropIn(BaseModel):

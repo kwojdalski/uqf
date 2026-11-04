@@ -84,7 +84,11 @@ stop the fleet, "anyone who can reach the port" is the whole access control.
 - **A token.** Every state-changing control request must carry
   `Authorization: Bearer $UQF_FRONTEND_WRITE_TOKEN`; without it the answer is
   401. The server refuses to start with writes on and no token. `GET /control`
-  stays open, since the UI asks it whether to draw controls at all.
+  stays open, since the UI asks it whether to draw controls at all. The check,
+  like the authorisation policy and the audit, judges the path the router
+  routes: behind a proxy that serves the API under a prefix
+  (`--root-path /api`), `/api/control/...` needs the token as `/control/...`
+  does (#2018).
 - **An allowed Host.** Every request's `Host` must be in
   `UQF_FRONTEND_ALLOWED_HOSTS` (default `localhost,127.0.0.1,::1`), or it is
   refused with 403. Binding to 127.0.0.1 does not stop DNS rebinding; this does.
@@ -126,6 +130,14 @@ listed as blocked and cannot be entered; the release `current` names, and the
 fields of its `deploy-report.json`, come back as `release`. A listing returns at
 most `limit` entries (500 by default, 5000 at most) and says when it was
 truncated; the call is held to 20 s.
+
+`POST /services/{target}/files/delete` removes named regular files and empty
+directories, never following a link or recursing (#1953). A deletion changes the
+server, so once ssh has started, a timeout, ssh exiting 255 (it may have dropped
+midway), a crashed helper or an answer that cannot be read is 504
+`DeleteOutcomeUncertain` with `transient: false`: some paths may be gone, and
+you list the directory before deleting again. Only a browse's timeout is
+transient (#2023).
 
 ### A target's tunnel --- uqs plans and checks it
 
@@ -180,9 +192,11 @@ progress and its own outcome.
   its permission bits (not setuid, setgid or sticky). A new file gets 0666 less
   the umask.
 - **Cleanup.** The temp file is removed on every failure. A hangup or SIGTERM
-  from a dropped or timed-out ssh becomes a refusal so that the cleanup runs.
-  Only SIGKILL leaves a temp file behind, and the next upload to that directory
-  sweeps any older than an hour.
+  from a dropped or timed-out ssh while the bytes arrive becomes a refusal so
+  that the cleanup runs. From the publishing step on, both are ignored: the file
+  may be live by then, so the upload finishes and says so rather than report
+  that nothing was published (#2022). Only SIGKILL leaves a temp file behind,
+  and the next upload to that directory sweeps any older than an hour.
 - **Uncertain outcomes.** An existing file without `overwrite` is 409. A refused
   path is 400. Damaged bytes are 502 `UploadIncomplete`. In each of these,
   nothing was written. A timeout (120 s), an ssh failure (255), a helper crash
@@ -513,7 +527,10 @@ ignored by the reader, and a test covers that.
   `POST /activity/events`), written by middleware whether the caller is the UI,
   `curl` or a script. It is written `pending` before the handler runs and
   settled when the response is known, so a request the token or Host check
-  refuses is on record too. This is the authority on what happened.
+  refuses is on record too. This is the authority on what happened. A request
+  that never passed the write guard - Host or token refused, writes off, or no
+  route matched - is kind `attempt` rather than `request`, kept under its own
+  cap (#2019).
 - **browser** --- what an operator did in the UI, at the level the tab records
   at (below). Intent, sent in batches to `POST /activity/events`.
 
@@ -539,11 +556,11 @@ control's name and kind, a change whether a box is checked, a request its route
 (the first two path segments, a name in them replaced by `*`, never the query
 string).
 
-  |                         |                                                                                                                                                                                                                                                                                                   |
-  | ---                     | ---                                                                                                                                                                                                                                                                                               |
-  | `GET /activity`         | The history, newest first. Filters: `since`, `until` (timezone required), `session_id`, `request_id`, `action` (exact, or a dotted prefix: `process` matches `process.stop`), `target`, `outcome`, `source`, `limit` (at most 1000). Says whether it is persistent and whether writes have failed |
-  | `POST /activity/events` | Up to 100 browser events, in one transaction, and the count of any the browser did not send (`dropped`). A repeated `event_id` is ignored, so a retried batch is stored once                                                                                                                      |
-  | `GET /activity/export`  | The history as a file, oldest first, under the same filters plus `format`: `jsonl`, `csv`, or `text` - a timeline `UTC time · session · level · action · target · outcome · duration`, each browser action grouped under the server request it caused (its request id). At most 100000 events     |
+  |                         |                                                                                                                                                                                                                                                                                                                                                                           |
+  | ---                     | ---                                                                                                                                                                                                                                                                                                                                                                       |
+  | `GET /activity`         | The history, newest first. Filters: `since`, `until` (timezone required), `session_id`, `request_id`, `action` (exact, or a dotted prefix: `process` matches `process.stop`), `target`, `outcome`, `source`, `limit` (at most 1000). Says whether it is persistent and whether writes have failed                                                                         |
+  | `POST /activity/events` | Up to 100 browser events, in one transaction, and the count of any the browser did not send (`dropped`). A repeated `event_id` is ignored, so a retried batch is stored once. A body of at most 1 MiB (413). It needs no token; without one, events are rate-limited across all callers (600 at once, 20 a second after; 429, transient). A `ts` UTC cannot hold is a 422 |
+  | `GET /activity/export`  | The history as a file, oldest first, under the same filters plus `format`: `jsonl`, `csv`, or `text` - a timeline `UTC time · session · level · action · target · outcome · duration`, each browser action grouped under the server request it caused (its request id). At most 100000 events                                                                             |
 
 `GET /activity` also takes `level`, the most detailed level shown:
 `interactions` shows actions and interactions. `uqs activity list` and
@@ -594,7 +611,10 @@ which holds the server's audit - keeps 30 days and 100000 rows
 (`UQF_FRONTEND_ACTIVITY_RETENTION_DAYS`, `UQF_FRONTEND_ACTIVITY_MAX_ROWS`),
 `interactions` 7 days and 50000, `debug` 1 day and 10000
 (`UQF_FRONTEND_ACTIVITY_INTERACTIONS_*`, `UQF_FRONTEND_ACTIVITY_DEBUG_*`). A
-flood of clicks therefore never evicts an audit row.
+flood of clicks therefore never evicts an audit row. Within a level, browser
+rows and the server's audit are capped separately, and `attempt` rows have a cap
+of 1000 of their own, so neither the browser's events nor a stranger's refused
+requests can evict the audit of an authorised action (#2019).
 
 **Nothing is lost without a number.** What a level's row cap evicts (`row_cap`),
 what ages out (`retention`), what the browser's debug rate limit sampled away

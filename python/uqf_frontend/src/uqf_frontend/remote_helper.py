@@ -66,9 +66,12 @@ The answer names what was written: `{"ok": true, "path", "size", "sha256",
     permission bits (not setuid, setgid or sticky) are kept; a new file gets
     0o666 less the umask, as any newly created file would.
   - The temp file is removed on every path that does not publish it,
-    including a hangup or SIGTERM (ssh dropped or timed out), which are
-    turned into a refusal so the cleanup runs. Only SIGKILL leaves one; the
-    next upload to that directory sweeps temp files older than STALE_TEMP.
+    including a hangup or SIGTERM (ssh dropped or timed out) while the bytes
+    arrive, which are turned into a refusal so the cleanup runs. From the
+    publishing step on they are ignored (the `keep` hook): the file may be
+    live by then, so the upload finishes and says so rather than claim
+    nothing was published (#2022). Only SIGKILL leaves a temp file; the next
+    upload to that directory sweeps temp files older than STALE_TEMP.
 
 PUSH HISTORY (#2002). Every upload belongs to a push: a file selection, a
 folder or a drop, opened with `push_open` when the operator confirms it and

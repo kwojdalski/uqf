@@ -83,15 +83,18 @@ def check(
 ) -> dict[str, Any]:
     """`uqs target tunnel check NAME --json`'s document: never raises for
     what it finds - each endpoint carries its own status."""
-    from uqs.attach.config import DEFAULT_PASSWORD, DEFAULT_USER
     from uqs.deploy import tunnel_check, tunnel_plan
 
     remote_files.target(settings, name)
     pairs = _choices(local)
-    login = (settings.user, settings.passwd) if settings.user and settings.passwd else None
-    user, passwd = login or (DEFAULT_USER, DEFAULT_PASSWORD)
+    # this API's own credential when it has one; else run()'s, uqs's default
+    login = (
+        {"user": settings.user, "passwd": settings.passwd}
+        if settings.user and settings.passwd
+        else {}
+    )
     return tunnel_check.run(
         name, services.root(settings), processes, pairs,
         tunnel_plan.LOCAL_OFFSET if offset is None else offset,
-        user=user, passwd=passwd, runner=runner,
+        runner=runner, **login,
     )  # fmt: skip
