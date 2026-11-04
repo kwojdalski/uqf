@@ -90,6 +90,7 @@ export function FileDelete({
       )}
       <button
         type="button"
+        data-activity="files.delete"
         disabled={disabled || busy || paths.length === 0 || paths.length > 100}
         onClick={remove}
       >

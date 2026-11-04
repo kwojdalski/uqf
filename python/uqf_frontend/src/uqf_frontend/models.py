@@ -163,6 +163,10 @@ class HealthResponse(BaseModel):
     ok: bool
     gateway: Literal["up", "reloading", "unreachable", "wrong_process"]
     detail: str | None = None
+    #: The level a browser session records its activity at until its operator
+    #: picks another (Settings.activity_level, #2000) - served here, beside
+    #: the timeout, so the browser keeps no copy of the server's default.
+    activity_level: SessionLevel
 
 
 class OpsTableResponse(BaseModel):
@@ -372,6 +376,197 @@ class RemoteUploadResponse(BaseModel):
     replaced: bool = Field(description="an existing file was replaced (overwrite was asked)")
     mode: int = Field(description="the file's permission bits; a replaced file's are kept")
     created: list[str] = Field(description="directories created on the way, relative to the root")
+    push_id: str = Field(description="the push this file belongs to (#2002)")
+    previous_size: int | None = Field(description="bytes of the file replaced; null on create")
+    previous_sha256: str | None = Field(
+        description="sha256 of the file replaced, kept in the push history; null on create"
+    )
+
+
+# ------------------------------------------------------------ config push history (#2002)
+
+
+class ConfigPushOpenRequest(BaseModel):
+    """POST /services/{target}/config/pushes: what the operator confirmed."""
+
+    model_config = STRICT_REQUEST
+    destination: str = Field(description="the directory pushed to, relative to the root")
+    file_count: int = Field(ge=0, le=500)
+    total_bytes: int = Field(ge=0)
+
+
+class PrunedPushOut(BaseModel):
+    """A push whose history retention removed."""
+
+    push_id: str
+    why: Literal["count", "age"]
+    pruned_at: str
+
+
+class ConfigPushOpenResponse(BaseModel):
+    target: str
+    root: str
+    push_id: str = Field(description="every upload of this push names it")
+    pruned: list[PrunedPushOut]
+    keep: int = Field(description="the newest pushes the history keeps")
+    keep_days: int = Field(description="the days the history keeps a push")
+
+
+class ConfigPushReported(BaseModel):
+    """A file the browser sent - or did not - that the server never recorded."""
+
+    model_config = STRICT_REQUEST
+    path: str
+    outcome: Literal["uncertain", "cancelled", "failed", "refused", "invalid"]
+
+
+class ConfigPushCloseRequest(BaseModel):
+    model_config = STRICT_REQUEST
+    reported: list[ConfigPushReported] = Field(max_length=500)
+
+
+class ConfigPushFileOut(BaseModel):
+    """One file of a push, from its manifest: what it did, the hashes before
+    and after, and - when read with `show` - what the file is now."""
+
+    path: str
+    action: Literal["create", "replace", "delete"]
+    size: int | None
+    sha256: str | None
+    mode: int | None
+    previous_size: int | None
+    previous_sha256: str | None
+    previous_mode: int | None
+    created_dirs: list[str]
+    state: Literal["pending", "published", "failed"]
+    error: str | None
+    at: str
+    now: Literal["after", "before", "changed", "blocked"] | None = None
+    now_sha256: str | None = None
+    now_error: str | None = None
+
+
+class ConfigPushSummaryOut(BaseModel):
+    """One push in a target's history. `error` when its manifest could not
+    be read; the other fields are then null."""
+
+    push_id: str
+    kind: Literal["push", "restore"] | None = None
+    restores: str | None = None
+    created: str | None = None
+    closed: str | None = None
+    user: str | None = None
+    target: str | None = None
+    via: str | None = None
+    destination: str | None = None
+    declared: dict[str, int] | None = None
+    file_count: int | None = None
+    total_bytes: int | None = None
+    states: dict[str, int] | None = None
+    reported: int | None = None
+    error: str | None = None
+
+
+class ConfigHistoryResponse(BaseModel):
+    """GET /services/{target}/config/pushes: newest first."""
+
+    target: str
+    root: str
+    pushes: list[ConfigPushSummaryOut]
+    total: int
+    truncated: bool
+    pruned: list[PrunedPushOut] = Field(description="the latest pushes retention removed")
+
+
+class ConfigPushReportedOut(BaseModel):
+    path: str
+    outcome: str
+
+
+class ConfigPushOut(BaseModel):
+    """A push's manifest.json (remote_helper's PUSH HISTORY)."""
+
+    push_id: str
+    kind: Literal["push", "restore"]
+    restores: str | None
+    created: str
+    closed: str | None
+    user: str | None
+    target: str | None
+    via: str | None
+    destination: str
+    declared: dict[str, int]
+    reported: list[ConfigPushReportedOut]
+    files: list[ConfigPushFileOut]
+
+
+class ConfigPushResponse(BaseModel):
+    """GET /services/{target}/config/pushes/{push_id}, and a push closed."""
+
+    target: str
+    root: str
+    summary: ConfigPushSummaryOut
+    push: ConfigPushOut
+
+
+class ConfigDiffFileOut(BaseModel):
+    """Before against after for one file: `text` carries a unified diff; a
+    `binary`, `oversized` or `omitted` (past the answer's cap) file only its
+    sizes and sha256s."""
+
+    path: str
+    action: Literal["create", "replace", "delete"]
+    previous_size: int | None
+    size: int | None
+    previous_sha256: str | None
+    sha256: str | None
+    kind: Literal["text", "binary", "oversized", "omitted", "missing"]
+    diff: str | None
+
+
+class ConfigDiffResponse(BaseModel):
+    target: str
+    root: str
+    push_id: str
+    diff_cap: int = Field(description="the largest file diffed as text, in bytes")
+    files: list[ConfigDiffFileOut]
+
+
+class RestoreStepOut(BaseModel):
+    """What restoring one file takes: write its before content back, delete
+    the file the push created, nothing, or - changed since - a conflict."""
+
+    path: str
+    step: Literal["write", "delete", "unchanged", "conflict"]
+    now_sha256: str | None
+    restore_sha256: str | None
+    error: str | None
+
+
+class RestoreResultOut(BaseModel):
+    path: str
+    step: Literal["write", "delete"]
+    outcome: Literal["succeeded", "failed"]
+    error: str | None
+
+
+class ConfigRestoreRequest(BaseModel):
+    model_config = STRICT_REQUEST
+    confirmed: bool = Field(strict=True)
+
+
+class ConfigRestoreResponse(BaseModel):
+    """A restore's plan (GET) or what it did (POST): the restore is a push
+    of its own, `push_id`, so it can be restored in turn."""
+
+    target: str
+    root: str
+    source_push_id: str
+    dry_run: bool
+    push_id: str | None
+    plan: list[RestoreStepOut]
+    results: list[RestoreResultOut]
+    pruned: list[PrunedPushOut]
 
 
 # ------------------------------------------------------------ control (writes)
@@ -554,14 +749,34 @@ class RemoteDeleteResponse(BaseModel):
 
 # ------------------------------------------------------------ activity (#1954)
 
-#: activity.SOURCES, BROWSER_KINDS + SERVER_KIND, OUTCOMES and TRIGGERS, as
-#: words the browser's types are held to (test_activity.py holds these to
-#: activity.py, test_api_types.py holds api.ts to these).
+#: activity.SOURCES, BROWSER_KINDS + SERVER_KIND, OUTCOMES, TRIGGERS and
+#: activity_log's LEVELS and DROP_REASONS, as words the browser's types are
+#: held to (test_activity.py holds these to activity.py, test_api_types.py
+#: holds api.ts to these).
 ActivitySource = Literal["browser", "server"]
 ActivityKind = Literal[
-    "navigate", "select", "submit", "confirm", "cancel", "result", "request", "attempt"
+    "navigate",
+    "select",
+    "submit",
+    "confirm",
+    "cancel",
+    "result",
+    "interact",
+    "debug",
+    "request",
+    "attempt",
 ]
-BrowserKind = Literal["navigate", "select", "submit", "confirm", "cancel", "result"]
+BrowserKind = Literal[
+    "navigate", "select", "submit", "confirm", "cancel", "result", "interact", "debug"
+]
+#: What a session records at; `off` records no browser history.
+SessionLevel = Literal["off", "actions", "interactions", "debug"]
+#: What an event is recorded under.
+ActivityLevel = Literal["actions", "interactions", "debug"]
+ActivityDropReason = Literal["sampled", "queue_overflow", "row_cap", "retention"]
+#: The reasons the browser reports; the others are the server's own.
+BrowserDropReason = Literal["sampled", "queue_overflow"]
+ActivityExportFormat = Literal["jsonl", "csv", "text"]
 ActivityOutcome = Literal["pending", "succeeded", "failed", "refused", "accepted", "unknown"]
 ActivityTrigger = Literal["pointer", "keyboard", "programmatic", "unknown"]
 
@@ -612,12 +827,25 @@ class BrowserEventIn(BaseModel):
             raise ValueError("ts is outside the range a UTC timestamp can hold") from None
 
 
-class ActivityBatchRequest(BaseModel):
-    """What the browser sends: a batch, so navigation does not cost a request each."""
+class BrowserDropIn(BaseModel):
+    """Events the browser did not send, counted: sampled by debug's rate
+    limit, or pushed out of its queue while the API was unreachable."""
 
     model_config = STRICT_REQUEST
 
-    events: list[BrowserEventIn] = Field(min_length=1, max_length=100)
+    level: ActivityLevel
+    reason: BrowserDropReason
+    count: int = Field(ge=1, le=1_000_000)
+
+
+class ActivityBatchRequest(BaseModel):
+    """What the browser sends: a batch, so navigation does not cost a request
+    each - and what it could not send, so nothing is lost without a number."""
+
+    model_config = STRICT_REQUEST
+
+    events: list[BrowserEventIn] = Field(default_factory=list, max_length=100)
+    dropped: list[BrowserDropIn] = Field(default_factory=list, max_length=16)
 
 
 class ActivityBatchResponse(BaseModel):
@@ -640,6 +868,7 @@ class ActivityEventOut(BaseModel):
     event_id: str
     ts: str
     recorded_at: str
+    level: ActivityLevel
     source: ActivitySource
     kind: ActivityKind
     action: str
@@ -667,11 +896,30 @@ class ActivityPersistence(BaseModel):
     last_failure_at: str | None
 
 
+class ActivityBound(BaseModel):
+    """How much of one level is kept: the tighter of the two wins."""
+
+    level: ActivityLevel
+    retention_days: int
+    max_rows: int
+
+
+class ActivityDrop(BaseModel):
+    """Events not in the history, by level and why, since the file began."""
+
+    level: ActivityLevel
+    reason: ActivityDropReason
+    count: int
+    last_at: str
+
+
 class ActivityResponse(BaseModel):
-    """The history, newest first, with how it is kept."""
+    """The history, newest first, with how it is kept and what it lost."""
 
     events: list[ActivityEventOut]
     persistence: ActivityPersistence
-    retention_days: int
-    max_rows: int
+    #: The level a session records at unless its operator picks another.
+    default_level: SessionLevel
+    bounds: list[ActivityBound]
+    drops: list[ActivityDrop]
     poll_seconds: int

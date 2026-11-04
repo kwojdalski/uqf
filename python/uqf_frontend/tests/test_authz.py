@@ -277,15 +277,26 @@ SAMPLES: dict[tuple[str, str], dict] = {
     ("GET", "/services"): {},
     ("GET", "/services/{target}/files"): {"params": {"path": "releases"}},
     ("PUT", "/services/{target}/files/content"): {
-        "params": {"path": "shared/config/x.csv"},
+        "params": {"path": "shared/config/x.csv", "push": "20261104T000000000Z-00000000"},
         "content": b"a,b\n",
     },
+    # the config push history (#2002)
+    ("POST", "/services/{target}/config/pushes"): {
+        "json": {"destination": "shared/config", "file_count": 1, "total_bytes": 4}
+    },
+    ("POST", "/services/{target}/config/pushes/{push_id}/close"): {"json": {"reported": []}},
+    ("GET", "/services/{target}/config/pushes"): {},
+    ("GET", "/services/{target}/config/pushes/{push_id}"): {},
+    ("GET", "/services/{target}/config/pushes/{push_id}/diff"): {},
+    ("GET", "/services/{target}/config/pushes/{push_id}/restore"): {},
+    ("POST", "/services/{target}/config/pushes/{push_id}/restore"): {"json": {"confirmed": True}},
     ("GET", "/coverage"): {
         "params": {"dataset": "fx_quotes", "partition": "", "source_version": "v1"}
     },
     ("POST", "/query"): {"json": {"table": "trades", "filters": []}},
     ("GET", "/control"): {},
     ("GET", "/activity"): {},
+    ("GET", "/activity/export"): {"params": {"format": "jsonl"}},
     ("POST", "/activity/events"): {
         "json": {
             "events": [
@@ -338,6 +349,7 @@ def test_a_deny_all_policy_refuses_every_guarded_route(method, path):
         path.replace("{action}", "start")
         .replace("{procname}", "rdb1")
         .replace("{target}", "prod-a")
+        .replace("{push_id}", "20261104T000000000Z-00000000")
     )
     resp = c.request(method, url, **SAMPLES[(method, path)])
     assert resp.status_code == 403, resp.text

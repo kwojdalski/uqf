@@ -726,6 +726,11 @@ qetl.source,credential_example,function,1,source
 qetl.source,credential_origin,function,1,source
 qetl.source,credential_prefix,value,,
 qetl.source,credential_var,function,1,source
+qetl.source,csv,function,4,h f range_from range_to
+qetl.source,csv_header,function,1,h
+qetl.source,csv_meta,function,1,h
+qetl.source,csv_path,function,1,cred
+qetl.source,csv_rows,function,1,h
 qetl.source,def,function,1,source
 qetl.source,default_transport,value,,
 qetl.source,define,function,2,source decl
@@ -733,6 +738,7 @@ qetl.source,defined,function,1,
 qetl.source,expand_path_vars,function,2,who txt
 qetl.source,fetch_window,function,4,source h range_from range_to
 qetl.source,fetch_window_via,function,5,source h range_from range_to read
+qetl.source,fills,dict,,
 qetl.source,fixture_tag,value,,
 qetl.source,fixture_version,function,1,v
 qetl.source,fixture_writes_allowed,function,1,
@@ -790,6 +796,24 @@ qetl.source,validate_fixture,function,1,source
 qetl.source,validate_live,function,2,source h
 qetl.source,zone_names,value,,
 qetl.source,zone_table,table,,
+qetl.source.fills,adapt,function,2,source raw
+qetl.source.fills,clocks,value,,
+qetl.source.fills,columns,value,,
+qetl.source.fills,declarations,value,,
+qetl.source.fills,declare,function,2,source decl
+qetl.source.fills,empty,function,1,
+qetl.source.fills,identifier,function,1,name
+qetl.source.fills,optional,value,,
+qetl.source.fills,read,function,4,source h range_from range_to
+qetl.source.fills,registry,dict,,
+qetl.source.fills,required,value,,
+qetl.source.fills,shown,function,1,x
+qetl.source.fills,sql_for,function,3,source range_from range_to
+qetl.source.fills,symbols,function,2,cased col
+qetl.source.fills,texts,function,1,col
+qetl.source.fills,transports,value,,
+qetl.source.fills,types,value,,
+qetl.source.fills,window_rows,function,4,source raw range_from range_to
 qetl.status,fields,value,,
 qetl.status,file_path,function,1,instance_id
 qetl.status,file_prefix,value,,
@@ -1347,6 +1371,25 @@ qpipe.job.duckdb_deals_backfill,range_to,value,,
 qpipe.job.duckdb_deals_backfill,run,function,1,
 qpipe.job.duckdb_deals_backfill,source_version,value,,
 qpipe.job.duckdb_deals_backfill,spec,function,1,
+qpipe.job.eq_fills_backfill,checkpoint,function,1,cursor
+qpipe.job.eq_fills_backfill,cleanup,function,1,
+qpipe.job.eq_fills_backfill,facts,function,1,batch
+qpipe.job.eq_fills_backfill,fetch,function,2,from_ts to_ts
+qpipe.job.eq_fills_backfill,handle,value,,
+qpipe.job.eq_fills_backfill,init,function,1,run_spec
+qpipe.job.eq_fills_backfill,last_batch,value,,
+qpipe.job.eq_fills_backfill,last_window,dict,,
+qpipe.job.eq_fills_backfill,live,value,,
+qpipe.job.eq_fills_backfill,phase,value,,
+qpipe.job.eq_fills_backfill,plan,function,1,
+qpipe.job.eq_fills_backfill,progress,dict,,
+qpipe.job.eq_fills_backfill,publish,function,1,batch
+qpipe.job.eq_fills_backfill,quality_check,function,1,batch
+qpipe.job.eq_fills_backfill,range_from,value,,
+qpipe.job.eq_fills_backfill,range_to,value,,
+qpipe.job.eq_fills_backfill,run,function,1,
+qpipe.job.eq_fills_backfill,source_version,value,,
+qpipe.job.eq_fills_backfill,spec,function,1,
 qpipe.job.exec_bars,close_ready,value,,
 qpipe.job.exec_bars,closed,table,,
 qpipe.job.exec_bars,dropped,table,,
@@ -1763,6 +1806,13 @@ qpipe.source.duckdb_deals,time_column,value,,
 qpipe.source.duckdb_deals,transport,value,,
 qpipe.source.duckdb_deals,types,value,,
 qpipe.source.duckdb_deals,tz,value,,
+qpipe.source.eq_fills,columns_map,dict,,
+qpipe.source.eq_fills,credential_example,value,,
+qpipe.source.eq_fills,declared,dict,,
+qpipe.source.eq_fills,fixture,function,1,
+qpipe.source.eq_fills,query,function,3,h range_from range_to
+qpipe.source.eq_fills,sides,dict,,
+qpipe.source.eq_fills,source_name,value,,
 qpipe.source.hdb_crypto_book,columns,value,,
 qpipe.source.hdb_crypto_book,fixture,function,1,
 qpipe.source.hdb_crypto_book,query,function,3,h range_from range_to

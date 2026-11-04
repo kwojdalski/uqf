@@ -18,3 +18,7 @@
 / connect to. Generate the window's rows from it and the bounds,
 / deterministically: the same seed and window must give the same rows
 / (sidecars/mockups/mock_trades.q)."
+"csv","0","the path of a csv file on this machine, with a header line","/path/to/fills.csv","/ `h` is the file as a file symbol. Read it with .qetl.source.csv_rows[h]: every field
+/ as text, one column per header field. Type the text with .qetl.coerce, cut the
+/ window [range_from;range_to) yourself, and return the declared columns and types
+/ (src/etl/core/source_fills.q)."

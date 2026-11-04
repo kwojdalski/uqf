@@ -54,6 +54,19 @@ def root(tmp_path: Path) -> Path:
     return root
 
 
+def _open_push(root: Path) -> str:
+    """A push for one upload (#2002): every upload belongs to one."""
+    push_id = remote_files.new_push_id()
+    handle({"protocol": 1, "op": "push_open", "root": str(root), "push_id": push_id,
+            "destination": "shared/config"})  # fmt: skip
+    return push_id  # a refused open leaves no push, and the upload says why
+
+
+def _listing(directory: Path) -> list[str]:
+    """What a directory holds, but the push history an upload's push keeps."""
+    return sorted(n for n in os.listdir(directory) if n != remote_helper.HISTORY_DIR)
+
+
 def _request(root: Path, path: str, data: bytes, overwrite: bool = False, **over) -> dict:
     return {
         "protocol": 1,
@@ -63,6 +76,7 @@ def _request(root: Path, path: str, data: bytes, overwrite: bool = False, **over
         "size": len(data),
         "sha256": hashlib.sha256(data).hexdigest(),
         "overwrite": overwrite,
+        "push_id": over.pop("push_id", None) or _open_push(root),
         **over,
     }
 
@@ -97,7 +111,9 @@ def test_shared_config_itself_is_created_when_missing(tmp_path):
     root.mkdir()
     answer = _put(root, "shared/config/x.csv", b"x")
     assert answer["ok"], answer
-    assert answer["created"] == ["shared", "shared/config"]
+    # the push the upload belongs to made them, to keep its history there
+    assert answer["created"] == []
+    assert (root / "shared/config/x.csv").read_bytes() == b"x"
 
 
 @pytest.mark.parametrize(
@@ -136,8 +152,9 @@ def test_a_destination_outside_shared_config_is_unsupported(root, path):
     ],
 )
 def test_traversal_and_malformed_paths_write_nothing(root, tmp_path, path, error):
+    request = _request(root, path, b"x")
     before = sorted(p for p in tmp_path.rglob("*"))
-    answer = _put(root, path, b"x")
+    answer = handle(request, io.BytesIO(b"x"))
     assert answer["ok"] is False and answer["error"] == error, answer
     assert sorted(p for p in tmp_path.rglob("*")) == before
 
@@ -208,8 +225,9 @@ def test_a_directory_swapped_for_a_link_while_creating_is_refused(root, tmp_path
         os.rmdir(name, dir_fd=dir_fd)
         os.symlink(str(tmp_path / "outside"), name, dir_fd=dir_fd)
 
+    push_id = _open_push(root)
     monkeypatch.setattr(remote_helper.os, "mkdir", racing_mkdir)
-    answer = _put(root, "shared/config/new/x.csv", b"x")
+    answer = _put(root, "shared/config/new/x.csv", b"x", push_id=push_id)
     assert answer["ok"] is False and answer["error"] == "refused", answer
     assert list((tmp_path / "outside").iterdir()) == []
 
@@ -367,10 +385,11 @@ def test_a_failure_while_writing_removes_the_temp_file(root, monkeypatch):
     def disk_full(fd, data):
         raise OSError(errno.ENOSPC, "No space left on device")
 
+    push_id = _open_push(root)
     monkeypatch.setattr(remote_helper.os, "write", disk_full)
     with pytest.raises(OSError, match="No space"):
-        _put(root, "shared/config/x.csv", b"x" * 100)
-    assert os.listdir(root / "shared/config") == []
+        _put(root, "shared/config/x.csv", b"x" * 100, push_id=push_id)
+    assert _listing(root / "shared/config") == []
 
 
 def test_a_hangup_mid_upload_is_a_refusal_and_cleans_up(root):
@@ -385,7 +404,7 @@ def test_a_hangup_mid_upload_is_a_refusal_and_cleans_up(root):
     before = signal.getsignal(signal.SIGHUP)
     answer = _put(root, "shared/config/x.csv", b"data", stream=HangsUp(b"data"))
     assert answer["error"] == "incomplete" and "signal" in answer["detail"]
-    assert os.listdir(root / "shared/config") == []
+    assert _listing(root / "shared/config") == []
     assert signal.getsignal(signal.SIGHUP) is before
 
 
@@ -405,9 +424,10 @@ def test_a_signal_just_after_publishing_never_says_nothing_was_published(
     step = "replace" if overwrite else "link"
     real = getattr(os, step)
 
-    def publish_then_signal(*a, **kw):
-        real(*a, **kw)
-        os.kill(os.getpid(), signum)
+    def publish_then_signal(src, dst, *a, **kw):
+        real(src, dst, *a, **kw)
+        if dst == "a.toml":  # the publishing step, not a history manifest's write
+            os.kill(os.getpid(), signum)
 
     monkeypatch.setattr(remote_helper.os, step, publish_then_signal)
     before = signal.getsignal(signum)
@@ -451,7 +471,7 @@ def test_stale_temp_files_are_swept_fresh_ones_kept(root):
 def test_a_malformed_upload_request_is_a_bad_request(root, over):
     answer = handle(_request(root, "shared/config/x", b"x", **over), io.BytesIO(b"x"))
     assert answer["error"] == "bad_request", answer
-    assert os.listdir(root / "shared/config") == []
+    assert _listing(root / "shared/config") == []
 
 
 def test_a_file_over_the_limit_is_refused_before_reading(root):
@@ -522,4 +542,4 @@ def test_a_killed_helper_leaves_nothing_at_the_name(root):
     proc.terminate()
     out, _ = proc.communicate(timeout=10)
     assert json.loads(out)["error"] == "incomplete"
-    assert os.listdir(root / "shared/config") == []
+    assert _listing(root / "shared/config") == []

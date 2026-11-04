@@ -90,6 +90,8 @@ export interface Health extends Pollable {
   ok: boolean;
   gateway: "up" | "reloading" | "unreachable" | "wrong_process";
   detail: string | null;
+  /** the level a tab records its activity at unless its operator picks another (#2000) */
+  activity_level: SessionLevel;
 }
 export interface Worker {
   worker: string;
@@ -227,6 +229,29 @@ export function requestTimeout(): number {
   return requestTimeoutMs;
 }
 
+/** A request's start or finish, for the activity recorder's debug level
+ *  (activity.ts). A note carries the method, the path and the status - never
+ *  a body, a header or the token. */
+export interface RequestNote {
+  phase: "start" | "finish";
+  method: string;
+  path: string;
+  requestId?: string;
+  status?: number;
+  durationMs?: number;
+}
+let requestObserver: ((note: RequestNote) => void) | undefined;
+/** Be told of every request `request` makes; one observer, the recorder.
+ *  Returns the uninstaller. */
+export function observeRequests(
+  observer: (note: RequestNote) => void,
+): () => void {
+  requestObserver = observer;
+  return () => {
+    if (requestObserver === observer) requestObserver = undefined;
+  };
+}
+
 export async function request<T>(
   path: string,
   signal: AbortSignal,
@@ -242,20 +267,37 @@ export async function request<T>(
   const headers: Record<string, string> = { ...extra };
   if (body) headers["Content-Type"] = "application/json";
   if (authorization) headers.Authorization = authorization;
+  const verb = method ?? (body ? "POST" : "GET");
+  const note = {
+    method: verb,
+    path,
+    requestId: extra?.["X-UQF-Request-Id"],
+  };
+  const started = performance.now();
+  requestObserver?.({ ...note, phase: "start" });
+  const finished = (status?: number) =>
+    requestObserver?.({
+      ...note,
+      phase: "finish",
+      status,
+      durationMs: performance.now() - started,
+    });
   try {
     response = await fetch(path, {
       signal: AbortSignal.any([signal, AbortSignal.timeout(requestTimeoutMs)]),
-      method: method ?? (body ? "POST" : "GET"),
+      method: verb,
       headers: Object.keys(headers).length ? headers : undefined,
       body,
     });
   } catch (error) {
+    finished();
     if (signal.aborted) throw error;
     throw new ApiError(
       "The API is unavailable or the request timed out.",
       true,
     );
   }
+  finished(response.status);
   const payload = await response.json().catch(() => null);
   if (!response.ok) {
     const detail = payload?.detail;
@@ -520,6 +562,9 @@ export interface RemoteUpload {
   replaced: boolean;
   mode: number;
   created: string[];
+  push_id: string;
+  previous_size: number | null;
+  previous_sha256: string | null;
 }
 /** Upload limits and destination, held equal to remote_helper.py's by
  * test_remote_upload.py: the browser refuses first, the API and the server
@@ -536,13 +581,19 @@ export const UPLOAD_TIMEOUT_MS = 150 * 1000;
 export const UPLOAD_MAX_FILES = 500;
 export const UPLOAD_MAX_TOTAL_BYTES = 256 * 1024 * 1024;
 
-/** The URL that writes `path` (relative to the deployment root). */
+/** The URL that writes `path` (relative to the deployment root) as one
+ * file of push `push`. */
 export function remoteUploadPath(
   target: string,
   path: string,
   overwrite: boolean,
+  push: string,
 ): string {
-  const query = new URLSearchParams({ path, overwrite: String(overwrite) });
+  const query = new URLSearchParams({
+    path,
+    overwrite: String(overwrite),
+    push,
+  });
   return `/services/${encodeURIComponent(target)}/files/content?${query}`;
 }
 
@@ -595,10 +646,11 @@ export function uploadRemoteFile(
   overwrite: boolean,
   onProgress: (fraction: number) => void,
   signal: AbortSignal,
+  push: string,
 ): Promise<RemoteUpload> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
-    xhr.open("PUT", remoteUploadPath(target, path, overwrite));
+    xhr.open("PUT", remoteUploadPath(target, path, overwrite, push));
     const token = writeToken.get();
     if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
     xhr.setRequestHeader("Content-Type", "application/octet-stream");
@@ -651,12 +703,246 @@ export function uploadRemoteFile(
   });
 }
 
+// --- config push history (#2002) -------------------------------------------
+
+/** POST /services/{target}/config/pushes - models.ConfigPushOpenRequest. */
+export interface ConfigPushOpenBody {
+  destination: string;
+  file_count: number;
+  total_bytes: number;
+}
+/** A push whose history retention removed - models.PrunedPushOut. */
+export interface PrunedPush {
+  push_id: string;
+  why: "count" | "age";
+  pruned_at: string;
+}
+/** models.ConfigPushOpenResponse: the push's id, which every upload names. */
+export interface ConfigPushOpened {
+  target: string;
+  root: string;
+  push_id: string;
+  pruned: PrunedPush[];
+  keep: number;
+  keep_days: number;
+}
+/** What the browser saw of a file the server may never have recorded -
+ * models.ConfigPushReported. */
+export interface ConfigPushReport {
+  path: string;
+  outcome: "uncertain" | "cancelled" | "failed" | "refused" | "invalid";
+}
+/** POST .../config/pushes/{id}/close - models.ConfigPushCloseRequest. */
+export interface ConfigPushCloseBody {
+  reported: ConfigPushReport[];
+}
+/** One file of a push - models.ConfigPushFileOut. */
+export interface ConfigPushFile {
+  path: string;
+  action: "create" | "replace" | "delete";
+  size: number | null;
+  sha256: string | null;
+  mode: number | null;
+  previous_size: number | null;
+  previous_sha256: string | null;
+  previous_mode: number | null;
+  created_dirs: string[];
+  state: "pending" | "published" | "failed";
+  error: string | null;
+  at: string;
+  now?: "after" | "before" | "changed" | "blocked" | null;
+  now_sha256?: string | null;
+  now_error?: string | null;
+}
+/** One push in a target's history - models.ConfigPushSummaryOut. */
+export interface ConfigPushSummary {
+  push_id: string;
+  kind?: "push" | "restore" | null;
+  restores?: string | null;
+  created?: string | null;
+  closed?: string | null;
+  user?: string | null;
+  target?: string | null;
+  via?: string | null;
+  destination?: string | null;
+  declared?: Record<string, number> | null;
+  file_count?: number | null;
+  total_bytes?: number | null;
+  states?: Record<string, number> | null;
+  reported?: number | null;
+  error?: string | null;
+}
+/** GET /services/{target}/config/pushes - models.ConfigHistoryResponse. */
+export interface ConfigHistory {
+  target: string;
+  root: string;
+  pushes: ConfigPushSummary[];
+  total: number;
+  truncated: boolean;
+  pruned: PrunedPush[];
+}
+/** models.ConfigPushReportedOut. */
+export interface ConfigPushReported {
+  path: string;
+  outcome: string;
+}
+/** A push's manifest - models.ConfigPushOut. */
+export interface ConfigPush {
+  push_id: string;
+  kind: "push" | "restore";
+  restores: string | null;
+  created: string;
+  closed: string | null;
+  user: string | null;
+  target: string | null;
+  via: string | null;
+  destination: string;
+  declared: Record<string, number>;
+  reported: ConfigPushReported[];
+  files: ConfigPushFile[];
+}
+/** GET .../config/pushes/{id}, and a push closed - models.ConfigPushResponse. */
+export interface ConfigPushDetail {
+  target: string;
+  root: string;
+  summary: ConfigPushSummary;
+  push: ConfigPush;
+}
+/** Before against after for one file - models.ConfigDiffFileOut. */
+export interface ConfigDiffFile {
+  path: string;
+  action: "create" | "replace" | "delete";
+  previous_size: number | null;
+  size: number | null;
+  previous_sha256: string | null;
+  sha256: string | null;
+  kind: "text" | "binary" | "oversized" | "omitted" | "missing";
+  diff: string | null;
+}
+/** GET .../config/pushes/{id}/diff - models.ConfigDiffResponse. */
+export interface ConfigDiff {
+  target: string;
+  root: string;
+  push_id: string;
+  diff_cap: number;
+  files: ConfigDiffFile[];
+}
+/** What restoring one file takes - models.RestoreStepOut. */
+export interface RestoreStep {
+  path: string;
+  step: "write" | "delete" | "unchanged" | "conflict";
+  now_sha256: string | null;
+  restore_sha256: string | null;
+  error: string | null;
+}
+/** models.RestoreResultOut. */
+export interface RestoreResult {
+  path: string;
+  step: "write" | "delete";
+  outcome: "succeeded" | "failed";
+  error: string | null;
+}
+/** POST .../config/pushes/{id}/restore - models.ConfigRestoreRequest. */
+export interface ConfigRestoreBody {
+  confirmed: boolean;
+}
+/** A restore's plan (GET) or result (POST) - models.ConfigRestoreResponse. */
+export interface ConfigRestore {
+  target: string;
+  root: string;
+  source_push_id: string;
+  dry_run: boolean;
+  push_id: string | null;
+  plan: RestoreStep[];
+  results: RestoreResult[];
+  pruned: PrunedPush[];
+}
+
+function pushesPath(target: string, ...rest: string[]): string {
+  return [
+    `/services/${encodeURIComponent(target)}/config/pushes`,
+    ...rest.map(encodeURIComponent),
+  ].join("/");
+}
+
+function authorised(): string | undefined {
+  const token = writeToken.get();
+  return token ? `Bearer ${token}` : undefined;
+}
+
+/** A push-history read: over ssh on the server, so it carries the token. */
+function readHistory<T>(path: string, signal?: AbortSignal): Promise<T> {
+  return request<T>(
+    path,
+    signal ?? new AbortController().signal,
+    undefined,
+    "GET",
+    authorised(),
+  );
+}
+
+/** A push-history write, sent once: never retried. */
+function writeHistory<T>(path: string, body: unknown): Promise<T> {
+  return request<T>(
+    path,
+    new AbortController().signal,
+    JSON.stringify(body),
+    "POST",
+    authorised(),
+  );
+}
+
+/** The calls a push makes: injectable, so a test reaches no server. */
+export interface PushOps {
+  open(target: string, body: ConfigPushOpenBody): Promise<ConfigPushOpened>;
+  close(
+    target: string,
+    push: string,
+    reported: ConfigPushReport[],
+  ): Promise<ConfigPushDetail>;
+}
+
+export const pushOps: PushOps = {
+  open: (target, body) => writeHistory(pushesPath(target), body),
+  close: (target, push, reported) =>
+    writeHistory(pushesPath(target, push, "close"), { reported }),
+};
+
+/** The calls the history view makes: injectable, as PushOps is. */
+export interface HistoryOps {
+  list(target: string, signal?: AbortSignal): Promise<ConfigHistory>;
+  show(target: string, push: string): Promise<ConfigPushDetail>;
+  diff(target: string, push: string, path?: string): Promise<ConfigDiff>;
+  plan(target: string, push: string): Promise<ConfigRestore>;
+  restore(target: string, push: string): Promise<ConfigRestore>;
+}
+
+export const historyOps: HistoryOps = {
+  list: (target, signal) => readHistory(pushesPath(target), signal),
+  show: (target, push) => readHistory(pushesPath(target, push)),
+  diff: (target, push, path) =>
+    readHistory(
+      pushesPath(target, push, "diff") +
+        (path ? `?${new URLSearchParams({ path })}` : ""),
+    ),
+  plan: (target, push) => readHistory(pushesPath(target, push, "restore")),
+  restore: (target, push) =>
+    writeHistory(pushesPath(target, push, "restore"), { confirmed: true }),
+};
+
 // --- activity history (#1954) ----------------------------------------------
 
 /** models.ActivitySource and friends, held to them by test_api_types.py. */
 export type ActivitySource = "browser" | "server";
 export type BrowserKind =
-  "navigate" | "select" | "submit" | "confirm" | "cancel" | "result";
+  | "navigate"
+  | "select"
+  | "submit"
+  | "confirm"
+  | "cancel"
+  | "result"
+  | "interact"
+  | "debug";
 export type ActivityKind =
   | "navigate"
   | "select"
@@ -664,8 +950,19 @@ export type ActivityKind =
   | "confirm"
   | "cancel"
   | "result"
+  | "interact"
+  | "debug"
   | "request"
   | "attempt";
+/** What a tab records at, least detail first; `off` records no browser
+ *  history - the server's audit of every write is kept regardless. */
+export type SessionLevel = "off" | "actions" | "interactions" | "debug";
+/** What an event is recorded under. */
+export type ActivityLevel = "actions" | "interactions" | "debug";
+export type ActivityDropReason =
+  "sampled" | "queue_overflow" | "row_cap" | "retention";
+export type BrowserDropReason = "sampled" | "queue_overflow";
+export type ActivityExportFormat = "jsonl" | "csv" | "text";
 export type ActivityOutcome =
   "pending" | "succeeded" | "failed" | "refused" | "accepted" | "unknown";
 export type ActivityTrigger =
@@ -691,9 +988,16 @@ export interface BrowserEvent {
   items?: ActivityItem[];
   detail?: Record<string, DetailValue>;
 }
+/** Events the browser did not send, counted - models.BrowserDropIn. */
+export interface BrowserDrop {
+  level: ActivityLevel;
+  reason: BrowserDropReason;
+  count: number;
+}
 /** POST /activity/events - models.ActivityBatchRequest. */
 export interface ActivityBatch {
-  events: BrowserEvent[];
+  events?: BrowserEvent[];
+  dropped?: BrowserDrop[];
 }
 export interface ActivityBatchResult {
   stored: number;
@@ -707,6 +1011,7 @@ export interface ActivityEvent {
   event_id: string;
   ts: string;
   recorded_at: string;
+  level: ActivityLevel;
   source: ActivitySource;
   kind: ActivityKind;
   action: string;
@@ -730,12 +1035,26 @@ export interface ActivityPersistence {
   last_error: string | null;
   last_failure_at: string | null;
 }
+/** How much of one level is kept - models.ActivityBound. */
+export interface ActivityBound {
+  level: ActivityLevel;
+  retention_days: number;
+  max_rows: number;
+}
+/** Events not in the history, by level and why - models.ActivityDrop. */
+export interface ActivityDrop {
+  level: ActivityLevel;
+  reason: ActivityDropReason;
+  count: number;
+  last_at: string;
+}
 /** GET /activity - models.ActivityResponse. */
 export interface ActivityHistory extends Pollable {
   events: ActivityEvent[];
   persistence: ActivityPersistence;
-  retention_days: number;
-  max_rows: number;
+  default_level: SessionLevel;
+  bounds: ActivityBound[];
+  drops: ActivityDrop[];
 }
 
 export interface RemoteDeleteRequest {
