@@ -46,12 +46,21 @@ export function connectionText(mapping: TunnelMapping): string {
   ].join("\n");
 }
 
-function CopyButton({ text, label }: { text: string; label: string }) {
+function CopyButton({
+  text,
+  label,
+  activity,
+}: {
+  text: string;
+  label: string;
+  activity: string;
+}) {
   const [said, setSaid] = useState<string | null>(null);
   return (
     <>
       <button
         type="button"
+        data-activity={activity}
         onClick={() => {
           const clipboard = navigator.clipboard;
           if (!clipboard) {
@@ -117,10 +126,12 @@ export function ConnectionRows({ mappings }: { mappings: TunnelMapping[] }) {
               <td>{mapping.last_check?.at ?? "never"}</td>
               <td>
                 <CopyButton
+                  activity="tunnel.copy-endpoint"
                   label={`Copy ${mapping.process} endpoint`}
                   text={mapping.local_endpoint}
                 />
                 <CopyButton
+                  activity="tunnel.copy-details"
                   label={`Copy ${mapping.process} details`}
                   text={connectionText(mapping)}
                 />
@@ -261,13 +272,17 @@ export function TunnelPanel({
     <section className="panel" aria-label={`Tunnel to ${target}`}>
       <div className="section-heading">
         <h2>Tunnel to {target}</h2>
-        <button type="button" onClick={onClose}>
+        <button type="button" data-activity="tunnel.close" onClick={onClose}>
           Close
         </button>
       </div>
       <div className="refresh">
         <span role="status">{plan.loading ? "Loading plan…" : ""}</span>
-        <button type="button" onClick={() => setRevision((r) => r + 1)}>
+        <button
+          type="button"
+          data-activity="tunnel.refresh"
+          onClick={() => setRevision((r) => r + 1)}
+        >
           Refresh plan
         </button>
       </div>
@@ -287,6 +302,7 @@ export function TunnelPanel({
             {offered.map((process) => (
               <label key={process}>
                 <input
+                  data-activity="tunnel.process"
                   type="checkbox"
                   checked={selected.has(process)}
                   disabled={
@@ -304,13 +320,22 @@ export function TunnelPanel({
           <pre>
             <code>{data.launch_command}</code>
           </pre>
-          <CopyButton label="Copy launch command" text={data.launch_command} />
+          <CopyButton
+            activity="tunnel.copy-launch"
+            label="Copy launch command"
+            text={data.launch_command}
+          />
           <p className="note">
             The command holds the ssh destination and the ports, never a
             password. Run it on this machine, then check the connections.
           </p>
           <h3>Diagnostics</h3>
-          <button type="button" disabled={check.loading} onClick={runCheck}>
+          <button
+            type="button"
+            data-activity="tunnel.check"
+            disabled={check.loading}
+            onClick={runCheck}
+          >
             {check.loading ? "Checking…" : "Check connections"}
           </button>
           {check.error && (
@@ -359,7 +384,11 @@ export function FleetConnections() {
       <h2>Connection details</h2>
       <label>
         Deployment target{" "}
-        <select value={target} onChange={(e) => setTarget(e.target.value)}>
+        <select
+          data-activity="fleet.tunnel-target"
+          value={target}
+          onChange={(e) => setTarget(e.target.value)}
+        >
           <option value="">Choose a target</option>
           {targets.map((t) => (
             <option key={t.name} value={t.name}>

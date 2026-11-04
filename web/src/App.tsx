@@ -875,6 +875,7 @@ function ServicesView() {
                 {data.targets.map((target) => (
                   <button
                     type="button"
+                    data-activity="services.tunnel"
                     key={`tunnel:${target.name}`}
                     aria-pressed={tunnelling === target.name}
                     onClick={() => setTunnelling(target.name)}
