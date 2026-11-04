@@ -44,7 +44,7 @@ from typing import Any, Literal
 import plotly.graph_objects as go
 import polars as pl
 from plotly.subplots import make_subplots
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator
 
 from uqf_frontend import ops, queries, status
 from uqf_frontend.catalog import Catalog, Table
@@ -399,6 +399,24 @@ class CoverageParams(ChartParams):
         description="the last day shown, YYYY-MM-DD; empty for today (UTC)",
         pattern=r"^(\d{4}-\d{2}-\d{2})?$",
     )
+
+    @field_validator("end")
+    @classmethod
+    def _end_is_a_day_the_window_fits(cls, end: str, info: ValidationInfo) -> str:
+        """The pattern lets through 2026-02-30; the calendar does not (#2078).
+        Refused here, so a bad end is a 422 before any read, and the build
+        never steps back past the first day there is."""
+        if not end:
+            return end
+        try:
+            last = dt.date.fromisoformat(end)
+        except ValueError:
+            raise ValueError(f"{end!r} is not a date") from None
+        back = info.data.get("days", 1) - 1
+        if last.toordinal() - back < dt.date.min.toordinal():
+            first = dt.date.min.isoformat()
+            raise ValueError(f"{back} day(s) back from {end} is before the first day ({first})")
+        return end
 
 
 #: A worker's state on a day, worst first: what a cell shows when two runs of

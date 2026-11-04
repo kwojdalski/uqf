@@ -275,6 +275,42 @@ def test_coverage_leaves_out_workers_past_the_point_limit(tmp_path, tmp_path_fac
     assert "worker(s) left out" in body["notes"][-1]
 
 
+@pytest.mark.parametrize(
+    ("body", "said"),
+    [
+        ({"end": "2026-02-30"}, "not a date"),
+        ({"end": "2026-13-01"}, "not a date"),
+        ({"end": "0001-01-01", "days": 2}, "before the first day"),
+        ({"end": "0001-01-13", "days": 14}, "before the first day"),
+    ],
+)
+def test_coverage_refuses_an_end_that_is_no_date_before_any_read(
+    body, said, tmp_path, tmp_path_factory, monkeypatch
+):
+    """An end the pattern lets through but no calendar has (#2078) is a 422
+    on `end`, not a 500 - and no status file is read first."""
+    monkeypatch.setenv("UQF_STATUS_DIR", str(tmp_path))
+    reads: list[object] = []
+    monkeypatch.setattr(status, "read_dir", lambda *a: reads.append(a) or ([], []))
+    c = client(stack_root=_unbootstrapped_root(tmp_path_factory))
+    r = TestClient(c.app, raise_server_exceptions=False).post(
+        "/charts/backfill_coverage", json=body
+    )
+    assert r.status_code == 422, r.text
+    assert r.json()["detail"].startswith("chart 'backfill_coverage': end: ")
+    assert said in r.json()["detail"]
+    assert reads == []
+
+
+def test_coverage_draws_the_earliest_end_its_days_fit(tmp_path, tmp_path_factory, monkeypatch):
+    """The bound is exact: the window may start on the first day there is."""
+    monkeypatch.setenv("UQF_STATUS_DIR", str(tmp_path))
+    c = client(stack_root=_unbootstrapped_root(tmp_path_factory))
+    r = c.post("/charts/backfill_coverage", json={"end": "0001-01-14", "days": 14})
+    assert r.status_code == 200, r.text
+    assert r.json()["figure"]["layout"]["title"]["text"].endswith("0001-01-01 to 0001-01-14")
+
+
 def test_coverage_without_a_status_directory_is_refused():
     r = client().post("/charts/backfill_coverage", json={})
     assert r.status_code == 422
