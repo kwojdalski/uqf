@@ -80,6 +80,7 @@ FEATURES: dict[str, tuple[str, ...]] = {
     "backfills": ("read",),
     "desk": ("read",),
     "charts": ("read",),
+    "compare": ("read",),
     "fleet": ("read",),
     "queue": ("read",),
     "connections": ("read",),
@@ -105,6 +106,8 @@ ROUTE_PERMISSIONS: dict[tuple[str, str], tuple[str, str]] = {
     # parameters and changes nothing - a read, as /query is
     ("GET", "/charts"): ("charts", "read"),
     ("POST", "/charts/{name}"): ("charts", "read"),
+    # a table on two endpoints (#2033): reads both sides and changes nothing
+    ("POST", "/compare"): ("compare", "read"),
     ("GET", "/ops/processes"): ("fleet", "read"),
     ("GET", "/ops/queue"): ("queue", "read"),
     ("GET", "/ops/connections"): ("connections", "read"),

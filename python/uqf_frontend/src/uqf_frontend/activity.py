@@ -400,10 +400,10 @@ _TARGET_PARAMS = ("procname",)
 #: Methods that never change anything.
 SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 
-#: Non-safe routes that are not actions: /query is a read sent as a POST, and
-#: /activity/events is the browser's own history - auditing it would record
-#: every record twice.
-NOT_ACTIONS = frozenset({"/query", "/activity/events"})
+#: Non-safe routes that are not actions: /query and /compare (#2033) are reads
+#: sent as a POST, and /activity/events is the browser's own history -
+#: auditing it would record every record twice.
+NOT_ACTIONS = frozenset({"/query", "/compare", "/activity/events"})
 
 #: Prefixes of non-safe routes that are reads: a prepared chart is drawn by a
 #: POST of its parameters, and changes nothing (#2044).

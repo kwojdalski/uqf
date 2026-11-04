@@ -21,6 +21,7 @@ export const API_PATHS = [
   "me",
   "settings",
   "charts",
+  "compare",
   "workspaces",
   "workspace",
 ];

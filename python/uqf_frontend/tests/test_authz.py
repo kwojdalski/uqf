@@ -304,6 +304,7 @@ SAMPLES: dict[tuple[str, str], dict] = {
     ("POST", "/query"): {"json": {"table": "trades", "filters": []}},
     ("GET", "/charts"): {},
     ("POST", "/charts/{name}"): {"json": {}},
+    ("POST", "/compare"): {"json": {}},
     ("GET", "/control"): {},
     ("GET", "/activity"): {},
     ("GET", "/activity/export"): {"params": {"format": "jsonl"}},

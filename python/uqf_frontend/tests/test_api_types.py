@@ -54,6 +54,7 @@ REQUESTS = {
     "ConfigRestoreBody": "ConfigRestoreRequest",
     "AccessChangeBody": "AccessChangeRequest",
     "RuntimeChangeBody": "RuntimeChangeRequest",
+    "CompareBody": "CompareRequest",
 }
 
 #: TypeScript interface -> the model it mirrors: every response, the
@@ -116,6 +117,12 @@ PAIRS = {
     "ChartInfo": "ChartInfo",
     "ChartList": "ChartsResponse",
     "ChartResult": "ChartResponse",
+    "CompareInterval": "CompareInterval",
+    "CompareCoverageSide": "CompareCoverageSide",
+    "CompareSchemaDifference": "CompareSchemaDifference",
+    "CompareRowDifference": "CompareRowDifference",
+    "CompareTable": "CompareTable",
+    "CompareResult": "CompareResponse",
     "Workspace": "WorkspaceOut",
     "Workspaces": "WorkspacesResponse",
     "WorkspaceEndpoint": "WorkspaceEndpointOut",
