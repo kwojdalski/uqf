@@ -318,7 +318,7 @@ def test_a_read_under_an_inspection_workspace_is_not_refused(tmp_path, registry)
     c, opened = _workspace_client(tmp_path)
     resp = c.post(
         "/query", json={"table": "trades", "filters": []},
-        headers={workspaces.TARGET_HEADER: "prod"},
+        headers={**AUTH, workspaces.TARGET_HEADER: "prod"},
     )  # fmt: skip
     assert not _is_inspection_refusal(resp)
     assert opened == ["prod"]

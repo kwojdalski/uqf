@@ -31,6 +31,14 @@ loopback forward per process - and this module only keeps one such
 connection per target open between requests, reopening it when its ssh has
 gone. The q login is this API's own; the browser holds no credential and no
 registry of its own.
+
+THE TOKEN. The ssh opens with the operator's key, not the caller's, so a
+scoped route naming a target needs what /services/{target} needs (#1950):
+writes on, the write token and an allowed Host. The write guard
+(app._guard_refusal) holds it to the token before any route runs, so a
+caller without it never opens an ssh (#2067). Routes that open none - the
+neutral ones, and the 409 ones - need no token in a target workspace, so a
+tab left on a target can still list the workspaces and switch back.
 """
 
 from __future__ import annotations
@@ -143,6 +151,13 @@ def requested(headers: Any) -> str:
     if not _NAME.fullmatch(raw):
         raise ValidationFailed(f"{TARGET_HEADER} {raw!r} is not a target name")
     return raw
+
+
+def names_target(headers: Any) -> bool:
+    """Does a request name a workspace other than local - malformed names
+    included, so a check made before `requested` validates cannot be
+    stepped round by one?"""
+    return (headers.get(TARGET_HEADER) or "").strip() not in ("", LOCAL)
 
 
 def is_scoped(method: str, template: str | None) -> bool:
