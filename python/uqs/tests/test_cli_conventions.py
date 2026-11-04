@@ -160,7 +160,7 @@ DOMAIN_VERBS = {
     "migrate": "migrate an HDB partition's schema",
     "alter": "change one table in every HDB partition holding it",
     "upgrade": "bring a store an older uqs wrote up to today's layout",
-    "diff": "compare two runtimes",
+    "diff": "compare two runtimes, or a config push's files before and after it",
     "prepare": "install the bundles a runtime declares",
     "stub": "add a placeholder row",
     "env": "print the environment to source",
@@ -168,7 +168,7 @@ DOMAIN_VERBS = {
     "push": "deploy a release onto a server",
     "rollback": "return to the previous release or version",
     "prune": "remove old releases",
-    "history": "what was deployed",
+    "history": "what was deployed, or pushed to a target's config",
     "shell": "open a shell on a target",
     # a target's own changes (#1756): the core verbs cover add, set and remove
     "unset": "remove a setting, so the layer beneath's value applies - `set` cannot say it",
@@ -177,6 +177,8 @@ DOMAIN_VERBS = {
     "log": "a record's change history - `logs` is processes' output, `history` deployments",
     "revert": "undo one recorded change, itself recorded - not `rollback`'s release",
     "adopt": "take over what was installed by hand, so uqs can drive it",
+    # a target's config push history (#2002): `history` and `diff` read it
+    "restore": "put a recorded push's files back as they were before it, as a push of its own",
 }
 
 #: Rule 1: a group named after one of these is a verb with nouns under it.
@@ -455,6 +457,14 @@ class Meaning:
 #: text that does not match the pattern is a second meaning.
 OPTIONS = {
     "--allow-dirty": Meaning("retired: --override allow-dirty", None),
+    # the frontend's activity history (#2000): one filter each, on list and export alike
+    "--action": Meaning("an activity action, or its dotted prefix", r"dotted prefix"),
+    "--db": Meaning("the activity history's SQLite file", r"activity history's SQLite file"),
+    "--outcome": Meaning("how an activity event ended", r"^only events that ended so"),
+    "--recorded-by": Meaning("the browser or the server's audit", r"^only events recorded by"),
+    "--request": Meaning("one operation's request id", r"correlated by this request id"),
+    "--session": Meaning("one browser session's events", r"browser session id"),
+    "--subject": Meaning("what an activity event is about", r"^only events about this name"),
     "--apply": Meaning("make the changes; without it, a dry run", r"without it, a dry run"),
     "--arch": Meaning("the servers' CPU architecture", r"x86_64"),
     "--attach": Meaning("retired: --attachment - a verb naming a noun (#1855)", None),
@@ -971,7 +981,7 @@ ASKS = {c.path for c in TREE if c.path in LEAVES and _kind(c.path) == CONFIRMS} 
 #: give it --yes/-y, then list the module here.
 PROMPTING_MODULES = {
     "attach", "cleanup", "deploy_server", "hdb_scope", "install", "install_bundle", "migrate",
-    "remove", "target", "target_adopt", "target_edit",
+    "remove", "target", "target_adopt", "target_config", "target_edit",
 }  # fmt: skip
 
 #: leaf -> the issue that adds its --json. Empty since #1731: keep it so.
@@ -1018,8 +1028,8 @@ def test_rule5_the_marks_beyond_an_effect_are_declared_where_their_command_is():
     a process even in a dry run, or act under an option are marks on the
     commands (`safety.marked`), which `uqs --target` reads too - so a new
     command with one of these properties cannot skip being confirmed."""
-    assert set(OWN_OUTPUT) == {"exec", "job attachment contract export", "setup odbc env",
-                               "target shell"}  # fmt: skip
+    assert set(OWN_OUTPUT) == {"activity export", "exec", "job attachment contract export",
+                               "setup odbc env", "target shell"}  # fmt: skip
     assert set(NO_DRY_RUN) == {"query"}
     starts = set(_marked("dry_run_starts"))
     assert starts == {"job backfill"}
@@ -1708,7 +1718,7 @@ def test_every_exception_names_the_issue_that_removes_it(allowlist):
 VOCABULARY = {
     "PROC", "JOB", "TARGET", "TABLE", "DATASET", "SOURCE", "KIND", "EXPR", "FIELD",
     "VALUE", "PARTITION", "RUNTIME", "RUN", "ATTACHMENT", "FILE", "CONNECTOR",
-    "PACKAGE", "ARTIFACT", "COMPONENT", "BUNDLE", "KEY", "CHANGE", "NEW",
+    "PACKAGE", "ARTIFACT", "COMPONENT", "BUNDLE", "KEY", "CHANGE", "NEW", "PUSH",
 }  # fmt: skip
 #: Placeholders the vocabulary replaced: in help they may only name a command's
 #: own option (`--override NAME`), never stand for one of the things above.

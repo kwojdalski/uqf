@@ -484,7 +484,8 @@ def test_the_helper_imports_only_the_standard_library():
     assert not imported & {"subprocess", "shutil", "pty", "multiprocessing"}
 
 
-#: Only upload and confirmed deletion may write (#1951, #1953).
+#: Only upload, confirmed deletion and the push history may write (#1951,
+#: #1953, #2002).
 WRITERS = {
     "delete_paths",
     "make_dirs",
@@ -495,6 +496,19 @@ WRITERS = {
     "publish",
     "upload",
     "_interrupted",
+    # the push history (#2002): its directories, copies, manifest, retention
+    # and restore - every one confined to shared/config/.uqf-history but the
+    # restore's own publish and delete
+    "make_dirs_at",
+    "_copy_into",
+    "_remove_copy",
+    "_write_manifest",
+    "_keeper",
+    "_forget",
+    "_rmtree",
+    "prune",
+    "_new_push",
+    "_restore_one",
 }
 
 

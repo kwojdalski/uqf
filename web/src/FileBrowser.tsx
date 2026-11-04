@@ -1,8 +1,11 @@
 import { useEffect, useState } from "react";
+import { ConfigHistory } from "./ConfigHistory";
 import { FileDelete } from "./FileDelete";
 import { FileTable } from "./FileTable";
 import {
   ApiError,
+  type HistoryOps,
+  type PushOps,
   type RemoteEntry,
   type RemoteFiles,
   remoteFilesPath,
@@ -33,11 +36,17 @@ export function FileBrowser({
   target,
   onClose,
   uploader,
+  pushes,
+  history,
 }: {
   target: string;
   onClose: () => void;
   /** Injectable for tests; the real one PUTs over XMLHttpRequest. */
   uploader?: Uploader;
+  /** Injectable for tests: opening and closing a push (#2002). */
+  pushes?: PushOps;
+  /** Injectable for tests: the push history's reads and restore. */
+  history?: HistoryOps;
 }) {
   const [selected, setSelected] = useState<string[]>([]);
   const [deleting, setDeleting] = useState(false);
@@ -91,7 +100,12 @@ export function FileBrowser({
     <section className="panel" aria-label={`Files on ${target}`}>
       <div className="section-heading">
         <h2>Files on {target}</h2>
-        <button type="button" disabled={deleting} onClick={onClose}>
+        <button
+          type="button"
+          data-activity="files.close"
+          disabled={deleting}
+          onClick={onClose}
+        >
           Close
         </button>
       </div>
@@ -101,7 +115,12 @@ export function FileBrowser({
         </p>
       )}
       <nav aria-label="Path" className="crumbs">
-        <button type="button" disabled={deleting} onClick={() => setPath("")}>
+        <button
+          type="button"
+          data-activity="files.root"
+          disabled={deleting}
+          onClick={() => setPath("")}
+        >
           root
         </button>
         {crumbs.map((crumb, index) => (
@@ -109,6 +128,7 @@ export function FileBrowser({
             {" / "}
             <button
               type="button"
+              data-activity="files.crumb"
               disabled={deleting}
               onClick={() => setPath(crumbs.slice(0, index + 1).join("/"))}
             >
@@ -121,6 +141,7 @@ export function FileBrowser({
         <span role="status">{state.loading ? "Loading…" : ""}</span>
         <button
           type="button"
+          data-activity="files.up"
           disabled={deleting || !path}
           onClick={() => setPath(crumbs.slice(0, -1).join("/"))}
         >
@@ -128,6 +149,7 @@ export function FileBrowser({
         </button>
         <button
           type="button"
+          data-activity="files.refresh"
           disabled={deleting}
           onClick={() => setRevision((r) => r + 1)}
         >
@@ -235,6 +257,14 @@ export function FileBrowser({
           directory={data.path}
           onUploaded={() => setRevision((r) => r + 1)}
           uploader={uploader}
+          pushes={pushes}
+        />
+      )}
+      {data && (
+        <ConfigHistory
+          target={target}
+          ops={history}
+          onRestored={() => setRevision((r) => r + 1)}
         />
       )}
     </section>
