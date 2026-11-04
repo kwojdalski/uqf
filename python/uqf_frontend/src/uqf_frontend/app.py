@@ -13,6 +13,7 @@ import math
 import subprocess
 import time
 import typing
+import uuid
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
@@ -1082,6 +1083,27 @@ _STAMP_INFINITY = {2**63 - 1: 1, -(2**63 - 1) + 946_684_800 * 10**9: -1}
 #: at the microsecond (#1371).
 _STAMP_TEXT = "%Y-%m-%dT%H:%M:%S.%9fZ"
 
+#: A time on the wire: HH:MM:SS.fff, q's own millisecond, and the form both
+#: filters take back (queries._TIME, web/src/api.ts). Rendered by pydantic it
+#: was "10:00:00.123000", six digits both refuse (#2037).
+_TIME_TEXT = "%H:%M:%S%.3f"
+
+#: 0Wt as kola hands it over, in nanoseconds since midnight: 23:59:59.999999,
+#: which no millisecond time spells. -0Wt arrives as 00:00:00, as midnight
+#: does, so it cannot be told apart here.
+_TIME_INFINITY = 86_399_999_999_999
+
+#: The days since 1970 a Python date can hold. kola hands 0Wd and -0Wd over as
+#: dates far outside them, and polars panics converting one - a BaseException,
+#: so /query answered 500 (#2037). Outside them is an infinity, by its sign.
+_DATE_RANGE = (
+    (dt.date.min - dt.date(1970, 1, 1)).days,
+    (dt.date.max - dt.date(1970, 1, 1)).days,
+)
+
+#: 0Ng as kola hands it over: sixteen zero bytes.
+_NULL_GUID = bytes(16)
+
 
 def _rows(result: Any) -> list[dict[str, Any]]:
     """Normalise a kola result into JSON-serialisable rows.
@@ -1118,13 +1140,36 @@ def _wire(frame: pl.DataFrame) -> list[dict[str, Any]]:
     datetime it stopped at the microsecond, so two `.z.p` stamps 765 ns
     apart were sent as one instant, and the value shown could not be typed
     back into a filter (#1371).
+
+    A time goes as HH:MM:SS.fff (_TIME_TEXT) and 0Wt as INFINITY; a date
+    outside what Python can hold - 0Wd, -0Wd - as INFINITY too, where it made
+    the whole response a 500 (#2037). A guid goes as its canonical text, the
+    form a filter takes back, and 0Ng as null: kola hands one over as sixteen
+    raw bytes, which JSON cannot carry (#2036).
     """
     spans = [name for name, kind in frame.schema.items() if isinstance(kind, pl.Duration)]
     floats = [name for name, kind in frame.schema.items() if kind.is_float()]
+    guids = [name for name, kind in frame.schema.items() if kind == pl.Binary]
     frame = frame.with_columns(pl.col(name).dt.total_nanoseconds() for name in spans)
     stamps = {}
     for name, kind in frame.schema.items():
-        if isinstance(kind, pl.Datetime):
+        if kind == pl.Time:
+            nanoseconds = frame.get_column(name).cast(pl.Int64)
+            stamps[name] = nanoseconds.replace_strict({_TIME_INFINITY: 1}, default=None)
+            frame = frame.with_columns(pl.col(name).dt.to_string(_TIME_TEXT))
+        elif kind == pl.Date:
+            days = frame.get_column(name).cast(pl.Int32)
+            low, high = _DATE_RANGE
+            sign = pl.select(
+                pl.when(days > high).then(1).when(days < low).then(-1).otherwise(None)
+            ).to_series()
+            stamps[name] = sign
+            if sign.is_not_null().any():
+                # Nulled before to_dicts, where polars would panic on it.
+                frame = frame.with_columns(
+                    pl.when(sign.is_null()).then(pl.col(name)).otherwise(None).alias(name)
+                )
+        elif isinstance(kind, pl.Datetime):
             column = pl.col(name)
             if kind.time_zone is not None:
                 column = column.dt.convert_time_zone("UTC").dt.replace_time_zone(None)
@@ -1132,6 +1177,11 @@ def _wire(frame: pl.DataFrame) -> list[dict[str, Any]]:
             stamps[name] = nanoseconds.replace_strict(_STAMP_INFINITY, default=None)
             frame = frame.with_columns(column.dt.cast_time_unit("ns").dt.to_string(_STAMP_TEXT))
     rows = frame.to_dicts()
+    for name in guids:
+        for row in rows:
+            raw = row[name]
+            if isinstance(raw, bytes):
+                row[name] = None if raw == _NULL_GUID else str(uuid.UUID(bytes=raw))
     for name, sign in stamps.items():
         for row, infinite in zip(rows, sign, strict=True):
             if infinite is not None:

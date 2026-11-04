@@ -149,3 +149,22 @@ it("shows a timestamp's nine digits, and its infinities as infinities", () => {
     "-∞",
   ]);
 });
+
+it("shows a time as sent, and a time's or a date's infinity as one", () => {
+  // #2037: the server sends a time as HH:MM:SS.fff - what the filter takes
+  // back - and 0Wt / 0Wd / -0Wd as infinities.
+  render(
+    <Table
+      rows={[
+        { at: "10:00:00.123", on: "2026-01-01" },
+        { at: "inf", on: "-inf" },
+      ]}
+      decimals={{ at: null, on: null }}
+      types={{ at: "time", on: "date" }}
+    />,
+  );
+  const cells = [...document.querySelectorAll("td")].map(
+    (td) => td.textContent,
+  );
+  expect(cells).toEqual(["10:00:00.123", "2026-01-01", "∞", "-∞"]);
+});
