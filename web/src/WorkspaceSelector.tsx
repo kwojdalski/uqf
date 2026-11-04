@@ -77,7 +77,10 @@ export function WorkspaceSelector() {
       <span className="badge" title="How the server reaches this workspace">
         {chosen?.connection ?? status.data?.connection ?? "…"}
       </span>
-      <span className="badge" title="What this workspace allows">
+      <span
+        className="badge"
+        title="What this frontend allows in this workspace - enforced by its API, not by the ssh tunnel"
+      >
         {chosen?.access ?? status.data?.access ?? "…"}
       </span>
       {workspace !== LOCAL && status.error && (

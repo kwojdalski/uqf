@@ -33,8 +33,12 @@ from uqs.cli.json_out import emit, json_opt
 from uqs.cli.safety import ChangesState, Effect, ReadOnly, dry_run_note, marked
 from uqs.cli.shared import _die, app, console, log
 from uqs.cli.skip_options import forwarded
-from uqs.cli.target_confirm import changes_the_server, confirmed_on_server
-from uqs.deploy import control, target_changelog, target_changes, target_file
+from uqs.cli.target_confirm import (
+    changes_the_server,
+    confirmed_on_server,
+    may_change_the_server,
+)
+from uqs.deploy import control, inspection, target_changelog, target_changes, target_file
 from uqs.deploy.config import DeployError
 from uqs.paths import UqsError, UqsUsageError, repo_root
 
@@ -289,6 +293,8 @@ def shell(
     `exit` comes back."""
     try:
         r = control.remote_for(name, repo_root())
+        # a shell can change anything there (#2032)
+        inspection.refuse(repo_root(), "`uqs target shell`", name=r.name, host=r.host, dest=r.dest)
         console.print(f"connecting to {r.name} ({r.describe()})")
         code = control.run(r, [], tty=True, command=control.shell_command(r))
     except UqsError as exc:
@@ -320,6 +326,9 @@ def forward(name: str, yes: bool, args: list[str], *, interactive: bool) -> int:
     args = confirmed_on_server(forwarded(args), yes)
     r = control.remote_for(name, repo_root())
     shown = " ".join(["uqs", *args])
+    if may_change_the_server(args):
+        # before --yes is read: inspection mode is not a question (#2032)
+        inspection.refuse(repo_root(), f"`{shown}`", name=r.name, host=r.host, dest=r.dest)
     if changes_the_server(args) and not yes:
         if not interactive:
             raise UqsError(

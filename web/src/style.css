@@ -368,6 +368,11 @@ select:focus {
   border-color: #e1b2b7;
   color: #95242e;
 }
+.inspection {
+  background: #eef4fb;
+  border-color: #9fb8d6;
+  color: #1f4370;
+}
 .error-text {
   color: #95242e;
 }

@@ -47,6 +47,7 @@ it("lists each target's ssh destination, root and environment, profile or not", 
             remote_user: null,
             environment: null,
             labels: { region: "ldn" },
+            inspection: false,
             last_deployed: { release: "r42", at: "2026-11-01T09:00:00Z" },
           },
           {
@@ -57,6 +58,7 @@ it("lists each target's ssh destination, root and environment, profile or not", 
             remote_user: "svc",
             environment: "uat",
             labels: {},
+            inspection: false,
             last_deployed: null,
           },
         ],
@@ -144,6 +146,7 @@ it("refreshes on demand, reading the registry again", async () => {
           remote_user: null,
           environment: null,
           labels: {},
+          inspection: false,
           last_deployed: null,
         },
       ],
@@ -159,4 +162,27 @@ it("refreshes on demand, reading the registry again", async () => {
   expect(
     fetcher.mock.calls.filter(([path]) => path === "/services"),
   ).toHaveLength(2);
+});
+
+it("marks a target in inspection mode, and only then shows the column", async () => {
+  mockApi(() =>
+    ok(
+      services({
+        targets: [
+          {
+            name: "prod-a",
+            ssh: "deploy@prod-a",
+            dest: "/srv/uqf",
+            remote_user: null,
+            environment: null,
+            labels: {},
+            inspection: true,
+            last_deployed: null,
+          },
+        ],
+      }),
+    ),
+  );
+  openServices();
+  expect(await screen.findByText("inspection mode")).toBeInTheDocument();
 });
