@@ -175,7 +175,7 @@ def report(outcome: str, **kw) -> dict:
 
 
 @contextmanager
-def _reached(name: str, user: str, passwd: str) -> Iterator[data_diff.Endpoint]:
+def _reached(name: str, user: str, passwd: str, paths=None) -> Iterator[data_diff.Endpoint]:
     yield data_diff.Endpoint(name, "localhost:1")
 
 
@@ -261,10 +261,8 @@ def test_a_command_that_names_nothing_to_compare_is_refused(monkeypatch, extra, 
 
 
 def test_a_local_stack_that_is_down_is_an_unavailable_side(monkeypatch):
-    def down(proc, base_port):
-        raise UqsError(f"{proc} is not running - start it with `uqs start {proc}`")
-
-    monkeypatch.setattr(diff_cli, "_proc_port", down)
+    monkeypatch.setattr(diff_cli.listing, "configured_ports", lambda paths: {"gateway1": "17007"})
+    monkeypatch.setattr(diff_cli.alive, "running", lambda paths: set())
     with diff_cli.reach("local", "u", "p") as ep:
         assert ep == data_diff.Endpoint(
             "local", error="gateway1 on this machine: gateway1 is not running - start it with "
@@ -273,7 +271,8 @@ def test_a_local_stack_that_is_down_is_an_unavailable_side(monkeypatch):
 
 
 def test_a_running_local_stack_is_its_gateways_port(monkeypatch):
-    monkeypatch.setattr(diff_cli, "_proc_port", lambda proc, base_port: 17007)
+    monkeypatch.setattr(diff_cli.listing, "configured_ports", lambda paths: {"gateway1": "17007"})
+    monkeypatch.setattr(diff_cli.alive, "running", lambda paths: {"gateway1"})
     with diff_cli.reach("local", "u", "p") as ep:
         assert ep == data_diff.Endpoint("local", "localhost:17007")
 
@@ -445,7 +444,7 @@ def test_the_command_end_to_end_on_fixture_targets(fixture_targets, monkeypatch)
     sides = {"local": fixture_targets("local"), "prod": fixture_targets("prod", "changed")}
 
     @contextmanager
-    def reached(name, user, passwd):
+    def reached(name, user, passwd, paths=None):
         yield sides[name]
 
     monkeypatch.setattr(diff_cli, "reach", reached)
