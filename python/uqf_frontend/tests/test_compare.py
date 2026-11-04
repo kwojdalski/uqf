@@ -9,9 +9,11 @@ through uqs's real `run`, so the document the browser reads is the one q wrote.
 
 from __future__ import annotations
 
+import json
 import os
 import secrets
 import socket
+import sqlite3
 import subprocess
 import time
 from contextlib import contextmanager
@@ -195,6 +197,92 @@ def test_a_policy_without_compare_refuses_it(registry, asked, tmp_path):
     settings = Settings(enable_writes=True, write_token=TOKEN, policy_file=policy)
     r = _client(settings=settings).post("/compare", json=BODY)
     assert r.status_code == 403 and "compare:read" in r.json()["detail"]
+    assert not asked[0]
+
+
+def _policy(tmp_path, *lines: str) -> Settings:
+    policy = tmp_path / "policy.csv"
+    policy.write_text("".join(f"{line}\n" for line in lines))
+    return Settings(
+        enable_writes=True,
+        write_token=TOKEN,
+        policy_file=policy,
+        activity_db=tmp_path / "activity.sqlite3",
+    )
+
+
+@pytest.mark.parametrize("sides", [{"right": "box"}, {"left": "box", "right": "local"}])
+def test_a_target_side_needs_services_read(registry, asked, tmp_path, sides):
+    """A side names a deploy target, which the workspace header reaches only
+    with services:read (#2066): a caller refused the registry may not read a
+    target's rows through /compare either - and uqs is never called."""
+    settings = _policy(tmp_path, "p, *, compare, read", "p, *, desk, read")
+    c = _client(settings=settings)
+    workspace = c.post(
+        "/query", json={"table": "trades", "limit": 5}, headers={"x-uqf-target": "box"}
+    )
+    assert workspace.status_code == 403 and "services:read" in workspace.json()["detail"]
+    r = c.post("/compare", json=BODY | sides)
+    assert r.status_code == 403, r.text
+    assert r.json()["error"] == "Forbidden"
+    assert r.json()["detail"] == (
+        "target box is a deployment target, and services:read is not granted to anonymous"
+    )
+    assert not asked[0]
+
+
+def test_a_target_side_with_services_read_is_compared(registry, asked, tmp_path):
+    settings = _policy(tmp_path, "p, *, compare, read", "p, *, services, read")
+    r = _client(settings=settings).post("/compare", json=BODY)
+    assert r.status_code == 200, r.text
+    assert [(c["left"], c["right"]) for c in asked[0]] == [("local", "box")]
+
+
+def test_a_local_comparison_needs_no_services_read(registry, asked, tmp_path):
+    settings = _policy(tmp_path, "p, *, compare, read")
+    r = _client(settings=settings).post("/compare", json=BODY | {"right": "local"})
+    assert r.status_code == 200, r.text
+    assert [(c["left"], c["right"]) for c in asked[0]] == [("local", "local")]
+
+
+def test_a_target_side_refused_services_read_is_audited(registry, asked, tmp_path):
+    settings = _policy(tmp_path, "p, *, compare, read")
+    r = _client(settings=settings).post("/compare", json=BODY, headers={"x-uqf-user": "bob"})
+    assert r.status_code == 403, r.text
+    with sqlite3.connect(tmp_path / "activity.sqlite3") as conn:
+        conn.row_factory = sqlite3.Row
+        (row,) = list(conn.execute("SELECT * FROM activity ORDER BY seq"))
+    assert (row["action"], row["kind"], row["outcome"]) == ("authz.refused", "attempt", "refused")
+    assert (row["target"], row["status_code"], row["claimed_user"]) == ("/compare", 403, "bob")
+    assert json.loads(row["detail"])["permission"] == "services:read"
+
+
+def test_a_target_side_needs_the_write_token(registry, asked):
+    """A target side is reached over ssh with the operator's key, so it
+    carries the token as /services/{target}/... does (#1950, #2067)."""
+    settings = Settings(enable_writes=True, write_token=TOKEN)
+    c = TestClient(
+        create_app(gateway=FakeGateway(), settings=settings), base_url="http://localhost"
+    )
+    r = c.post("/compare", json=BODY)
+    assert r.status_code == 401, r.text
+    assert r.json()["error"] == "WriteTokenRequired"
+    assert "need the write token" in r.json()["detail"]
+    assert r.headers["www-authenticate"] == "Bearer"
+    wrong = c.post("/compare", json=BODY, headers={"Authorization": "Bearer nope"})
+    assert wrong.status_code == 401 and "does not match" in wrong.json()["detail"]
+    assert not asked[0]
+    local = c.post("/compare", json=BODY | {"right": "local"})
+    assert local.status_code == 200, local.text
+
+
+def test_a_target_side_needs_an_allowed_host(registry, asked):
+    r = TestClient(
+        create_app(gateway=FakeGateway(), settings=Settings(enable_writes=True, write_token=TOKEN)),
+        base_url="http://evil.example",
+        headers={"Authorization": f"Bearer {TOKEN}"},
+    ).post("/compare", json=BODY)
+    assert r.status_code == 403 and r.json()["error"] == "HostNotAllowed"
     assert not asked[0]
 
 

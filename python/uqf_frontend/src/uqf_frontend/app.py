@@ -61,6 +61,7 @@ from uqf_frontend.errors import (
     TooManyRequests,
     ValidationFailed,
     WritesDisabled,
+    WriteTokenRequired,
 )
 from uqf_frontend.fleet import Fleet, KolaFleet
 from uqf_frontend.gateway import TIERS, Gateway, KolaGateway
@@ -310,15 +311,22 @@ def scope_of(request: Request) -> workspaces.Scope:
     refused it there may not reach them here either."""
     name = workspaces.requested(request.headers)
     if name != workspaces.LOCAL:
-        who = identity_of(request)
-        if not request.app.state.access.allowed(who, "services", "read"):
-            _refuse(
-                request,
-                f"workspace {name} is a deployment target, and services:read is not "
-                f"granted to {who.user}",
-                "services:read",
-            )
+        require_target_access(request, f"workspace {name}")
     return request.app.state.workspaces.scope(name)
+
+
+def require_target_access(request: Request, named: str) -> None:
+    """Refuse, audited, a caller without services:read who names a deploy
+    target - through the workspace header or a /compare side (#2066). The
+    targets are the registry /services lists, and a caller refused it there
+    may not reach them anywhere else. `named` says where the target was named."""
+    who = identity_of(request)
+    if not request.app.state.access.allowed(who, "services", "read"):
+        _refuse(
+            request,
+            f"{named} is a deployment target, and services:read is not granted to {who.user}",
+            "services:read",
+        )
 
 
 #: A scoped route's parameter: the workspace its request names.
@@ -606,6 +614,7 @@ def create_app(
                 "detail": detail,
                 "transient": exc.transient,
             },
+            headers={"WWW-Authenticate": "Bearer"} if exc.status_code == 401 else None,
         )
 
     @app.get("/me/capabilities", response_model=CapabilitiesResponse)
@@ -1186,11 +1195,21 @@ def create_app(
         """One or more tables on two endpoints - this stack (`local`) or a
         registered target - over an explicit window, as `uqs data diff --json`
         compares them (compare.py). Each table is put to the policy like
-        /query's. A target side is reached over ssh, so it needs remote
-        operations, as a tunnel check does."""
+        /query's. A target side is held to what /services/{target}/... is,
+        since only the body names it (#2066): the write token while writes
+        are on (write_guard's middleware judges by path, and cannot see it),
+        services:read, and remote operations, as it is reached over ssh with
+        the operator's key. The Host check ran in the middleware already."""
+        targets = compare.sides(req.left, req.right)
+        if targets and settings.enable_writes:
+            refused = write_guard.token_refusal(settings, request.headers.get("authorization"))
+            if refused is not None:
+                raise WriteTokenRequired(refused)
+        for name in targets:
+            require_target_access(request, f"target {name}")
         for table in req.tables:
             run_policy(request, table=table)
-        if compare.sides(req.left, req.right):
+        if targets:
             _tunnel_gate("a comparison with a target")
         return CompareResponse(**compare.run(settings, req))
 

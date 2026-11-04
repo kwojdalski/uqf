@@ -15,6 +15,7 @@ import {
   type CompareBody,
   type CompareResult,
   type CompareTable,
+  writeToken,
 } from "./api";
 import { useResource } from "./useResource";
 import { record } from "./activity";
@@ -224,10 +225,14 @@ export function CompareView() {
   const [form, setForm] = useState<Form>(START);
   const [problem, setProblem] = useState<string | null>(null);
   const [sent, setSent] = useState<string | null>(null);
+  // A target side is reached over ssh with the API's key, so the request
+  // carries the write token, as browsing a target's files does (#2066).
+  const token = writeToken.get();
   const result = useResource<CompareResult>(
     sent === null ? null : "/compare",
     sent ?? undefined,
     false,
+    token ? `Bearer ${token}` : undefined,
   );
   const set = (name: keyof Form) => (value: string) =>
     setForm((prev) => ({ ...prev, [name]: value }));

@@ -7,6 +7,9 @@ export function useResource<T>(
   path: string | null,
   body?: string,
   poll = true,
+  // `Bearer <token>` for a read that reaches a server over ssh - /compare
+  // naming a target (#2066). Not part of the key: the same read either way.
+  authorization?: string,
 ) {
   const [revision, setRevision] = useState(0);
   const [paused, updatePaused] = useState(false);
@@ -46,7 +49,13 @@ export function useResource<T>(
     async function load() {
       setState((previous) => ({ ...previous, loading: true }));
       try {
-        const data = await request<T>(path!, controller.signal, body);
+        const data = await request<T>(
+          path!,
+          controller.signal,
+          body,
+          undefined,
+          authorization,
+        );
         if (!active) return;
         const seconds = (data as { poll_seconds?: number }).poll_seconds;
         const canPoll =
@@ -94,7 +103,7 @@ export function useResource<T>(
       clearTimeout(timer.current);
       controller.abort();
     };
-  }, [path, body, key, poll, revision, workspace]);
+  }, [path, body, key, poll, revision, workspace, authorization]);
   function setPaused(value: boolean) {
     pausedRef.current = value;
     updatePaused(value);

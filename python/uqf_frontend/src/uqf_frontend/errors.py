@@ -114,6 +114,15 @@ class WritesDisabled(FrontendError):
     status_code = 403
 
 
+class WriteTokenRequired(FrontendError):
+    """A request that needs the write token came without it, or with the
+    wrong one. Raised by a handler that learns only from the body that the
+    token is needed - /compare naming a target (#2066); a request whose path
+    says so is refused by write_guard's middleware under the same name."""
+
+    status_code = 401
+
+
 class Forbidden(FrontendError):
     """An authorisation policy refused the request.
 
