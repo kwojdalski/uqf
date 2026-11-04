@@ -129,13 +129,14 @@ truncated; the call is held to 20 s.
 
 ### Uploading to a target's shared/config --- one file per request
 
-`PUT /services/{target}/files/content?path=&overwrite=false` writes the request
-body to `path` below the target's `shared/config/` - the operator-supplied files
-every release links in - and nowhere else (#1951). It is gated like browsing:
-writes on, the token, an allowed Host, a registered target. The browser's file
-browser shows an upload queue in `shared/config/` and below it. You can choose
-files or a folder, or drag them in. Nested paths are kept. Nothing is sent until
-you confirm the destination. Each file has its own progress and its own outcome.
+`PUT /services/{target}/files/content?path=&overwrite=false&push=` writes the
+request body to `path` below the target's `shared/config/` - the
+operator-supplied files every release links in - and nowhere else (#1951). It is
+gated like browsing: writes on, the token, an allowed Host, a registered target.
+The browser's file browser shows an upload queue in `shared/config/` and below
+it. You can choose files or a folder, or drag them in. Nested paths are kept.
+Nothing is sent until you confirm the destination. Each file has its own
+progress and its own outcome.
 
 - **Limits.** 16 MiB a file, checked in the browser, again by the API before ssh
   (`Content-Length`, then while the body is read: 413), and again on the server.
@@ -173,6 +174,54 @@ you confirm the destination. Each file has its own progress and its own outcome.
   whether it was a create or an overwrite. It never records the file's bytes. An
   uncertain upload is recorded as `unknown`, a refusal as `refused`, and damaged
   bytes as `failed`.
+
+### Config pushes: one push id, history, diff and restore
+
+Every upload belongs to a push (#2002): a file selection, a folder or a drop,
+opened with `POST /services/{target}/config/pushes` when you confirm it. Each
+upload names it (`push=`), and `POST .../config/pushes/{id}/close` closes it
+with what the browser saw of each file. The server keeps, and only the server
+keeps, what the push changed:
+
+```text
+<dest>/shared/config/.uqf-history/<push-id>/      0o700, never browsable
+    manifest.json     who, when, where; per file its action, sizes,
+                      sha256s, modes and state (pending/published/failed)
+    before/<path>     the file a push replaced (or a restore deleted)
+    after/<path>      the file as the push wrote it
+```
+
+A push id is `YYYYMMDDTHHMMSSmmmZ-<8 hex>`, UTC, so ids sort by time. The
+history is walked with the same confined, no-follow descriptor steps, and no
+browse, delete or upload path may name `.uqf-history`, in any letter case.
+
+- **Reads.** `GET .../config/pushes` lists a target's pushes, newest first.
+  `GET .../config/pushes/{id}` shows each file's change, its old and new sha256,
+  and what it is now: as the push left it, as before it (an upload that never
+  landed), or changed since. `GET .../config/pushes/{id}/diff?path=` diffs
+  before against after as text under 256 KiB; a binary or larger file shows
+  sizes and hashes only. These reads are not audited, so a diff's text never
+  reaches the activity store.
+- **Restore.** `GET .../config/pushes/{id}/restore` is the plan; `POST` with
+  `{"confirmed": true}` writes each replaced file's earlier content back and
+  deletes each file the push created (a regular file, never a link), as a push
+  of its own - so a restore can be restored. A file changed since the push
+  refuses the whole restore (409 `RestoreConflict`), writing nothing. A lost
+  answer is 504 `RestoreOutcomeUncertain`, never retried.
+- **Retention.** Opening a push prunes the target's history to the newest
+  `UQF_FRONTEND_CONFIG_HISTORY_KEEP` pushes (50), none older than
+  `UQF_FRONTEND_CONFIG_HISTORY_DAYS` (90). Each pruned id is logged in
+  `.uqf-history/pruned.jsonl`, so its restore is refused as pruned (410
+  `HistoryPruned`), not as unknown.
+- **Audit.** `config.push.open` when a push opens; `file.upload` per file, with
+  `push_id` and `previous_sha256` (null on a create); `config.push` when it
+  closes, with the destination, file count, bytes and one outcome per file;
+  `config.restore` for a restore, with `restores` and its own `push_id`;
+  `config.history.prune`, one item per pruned push. File bytes are never in a
+  row or an export.
+- **CLI.** `uqs target config history TARGET`, and `show`, `diff` and `restore`
+  with a push id, read the same history over ssh with the same helper; `restore`
+  takes `--dry-run` and asks first unless given `--yes`.
 
 A backfill is launched detached rather than awaited: it runs for as long as its
 range takes, and a request that blocked on one would time out mid-run and tell

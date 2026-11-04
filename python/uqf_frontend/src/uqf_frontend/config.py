@@ -11,7 +11,7 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
-from uqf_frontend import stack
+from uqf_frontend import remote_helper, stack
 from uqf_frontend.stack import Process
 from uqs.activity_log import DEFAULT_LEVEL, LEVELS
 
@@ -149,6 +149,12 @@ class Settings:
     #: another for the tab (activity_log.LEVELS). `off` stops browser history
     #: only: the server's audit of every write is kept whatever this says.
     activity_level: str = DEFAULT_LEVEL
+    #: The config push history each target keeps (remote_helper's PUSH
+    #: HISTORY, #2002): the newest `config_history_keep` pushes, none older
+    #: than `config_history_days` - the tighter bound wins. Applied, and its
+    #: pruning audited, whenever a push opens.
+    config_history_keep: int = remote_helper.DEFAULT_KEEP
+    config_history_days: int = remote_helper.DEFAULT_KEEP_DAYS
 
     def __post_init__(self) -> None:
         if self.activity_level not in LEVELS:
@@ -156,6 +162,7 @@ class Settings:
                 f"UQF_FRONTEND_ACTIVITY_LEVEL must be one of {', '.join(LEVELS)}, "
                 f"got {self.activity_level!r}"
             )
+        check_history_bound(self.config_history_keep, self.config_history_days)
 
     def activity_bounds(self) -> dict[str, tuple[int, int]]:
         """Each event level's (retention days, max rows)."""
@@ -233,7 +240,31 @@ class Settings:
                 os.environ.get("UQF_FRONTEND_ACTIVITY_LEVEL", "").strip().lower()
                 or cls.activity_level
             ),
+            config_history_keep=history_bound_from_env()[0],
+            config_history_days=history_bound_from_env()[1],
         )
+
+
+def check_history_bound(keep: int, days: int) -> None:
+    """Refuse a push-history bound the helper would refuse."""
+    if not 1 <= keep <= remote_helper.MAX_KEEP:
+        raise ValueError(
+            f"UQF_FRONTEND_CONFIG_HISTORY_KEEP must be 1 to {remote_helper.MAX_KEEP}, got {keep}"
+        )
+    if not 1 <= days <= remote_helper.MAX_KEEP_DAYS:
+        raise ValueError(
+            f"UQF_FRONTEND_CONFIG_HISTORY_DAYS must be 1 to {remote_helper.MAX_KEEP_DAYS}, "
+            f"got {days}"
+        )
+
+
+def history_bound_from_env() -> tuple[int, int]:
+    """(pushes kept, days kept): UQF_FRONTEND_CONFIG_HISTORY_KEEP and _DAYS,
+    read by the API and by `uqs target config restore` alike."""
+    keep = _int_env("UQF_FRONTEND_CONFIG_HISTORY_KEEP", remote_helper.DEFAULT_KEEP)
+    days = _int_env("UQF_FRONTEND_CONFIG_HISTORY_DAYS", remote_helper.DEFAULT_KEEP_DAYS)
+    check_history_bound(keep, days)
+    return keep, days
 
 
 def _int_env(name: str, default: int) -> int:

@@ -70,6 +70,16 @@ from uqf_frontend.models import (
     CatalogResponse,
     ColumnInfo,
     CommandResponse,
+    ConfigDiffResponse,
+    ConfigHistoryResponse,
+    ConfigPushCloseRequest,
+    ConfigPushOpenRequest,
+    ConfigPushOpenResponse,
+    ConfigPushOut,
+    ConfigPushResponse,
+    ConfigPushSummaryOut,
+    ConfigRestoreRequest,
+    ConfigRestoreResponse,
     ConnectionsResponse,
     ControlStatusResponse,
     CoverageRequirement,
@@ -134,6 +144,42 @@ def guard(request: Request) -> None:
     route = request.scope.get("route")
     if authz.unguarded_reason(getattr(route, "endpoint", None)) is None:
         run_policy(request)
+
+
+#: A browser's report on a file the server never recorded, as an outcome.
+_REPORTED_OUTCOME = {
+    "uncertain": "unknown",
+    "cancelled": "refused",
+    "invalid": "refused",
+    "refused": "refused",
+    "failed": "failed",
+}
+
+
+def _file_outcome(entry: dict[str, Any]) -> str:
+    """A manifest entry's outcome: published, never known (`pending` - the
+    helper stopped before it recorded the publishing step), or not written."""
+    if entry["state"] == "published":
+        return "succeeded"
+    if entry["state"] == "pending":
+        return "unknown"
+    return "failed" if entry.get("error") in ("incomplete", None) else "refused"
+
+
+def _push_response(target: str, root: str, manifest: dict[str, Any]) -> ConfigPushResponse:
+    summary = remote_helper.summarise(manifest)
+    return ConfigPushResponse(
+        target=target, root=root, summary=ConfigPushSummaryOut(**summary, error=None),
+        push=ConfigPushOut(**{k: v for k, v in manifest.items() if k != "version"}),
+    )  # fmt: skip
+
+
+def _restore_response(target: str, answer: dict[str, Any]) -> ConfigRestoreResponse:
+    return ConfigRestoreResponse(
+        target=target, root=answer["root"], source_push_id=answer["source_push_id"],
+        dry_run=answer["dry_run"], push_id=answer["push_id"], plan=answer["plan"],
+        results=answer["results"], pruned=answer["pruned"],
+    )  # fmt: skip
 
 
 def create_app(
@@ -578,7 +624,7 @@ def create_app(
 
     @app.put("/services/{target}/files/content", response_model=RemoteUploadResponse)
     async def put_remote_file(
-        request: Request, target: str, path: str, overwrite: bool = False
+        request: Request, target: str, path: str, push: str, overwrite: bool = False
     ) -> RemoteUploadResponse:
         """Write the request body to `path` below a registered target's
         shared/config, over ssh, with the release's own Python - see
@@ -589,11 +635,15 @@ def create_app(
         Content-Length is over the limit; refuses a body that grows past it
         while read. An existing file is replaced only with `overwrite=true`.
         A timeout or lost answer is 504 UploadOutcomeUncertain, never retried.
+        `push` is the push this file belongs to (POST .../config/pushes):
+        the server keeps what it replaces, and what it wrote, in that push's
+        history (#2002).
         """
-        # Audited as `file.upload` (activity.SERVER_ACTIONS): the target, and
-        # the file's path, size and sha256 - never its bytes.
+        # Audited as `file.upload` (activity.SERVER_ACTIONS): the target, the
+        # push, and the file's path, size and sha256 - never its bytes.
         audit = activity.audit_of(request)
         audit.set_target(target)
+        audit.note(push_id=push)
         if not settings.enable_writes:
             raise WritesDisabled(
                 "uploading to a server reaches it over ssh, so it needs remote "
@@ -601,6 +651,7 @@ def create_app(
                 "on the server"
             )
         remote_files.check_upload_path(path)
+        remote_files.check_push_id(push)
         remote_files.target(settings, target)
         limit = remote_helper.MAX_UPLOAD
         too_large = f"a file may be at most {limit} bytes"
@@ -628,6 +679,7 @@ def create_app(
                 path,
                 data,
                 overwrite,
+                push,
                 runner=request.app.state.remote_runner,
             )
         except remote_files.UploadOutcomeUncertain:
@@ -638,6 +690,7 @@ def create_app(
             # (4xx) is `refused`; damaged bytes or no ssh at all, `failed`.
             audit.settle("refused" if exc.status_code < 500 else "failed")
             raise
+        audit.note(previous_sha256=answer["previous_sha256"])
         return RemoteUploadResponse(
             target=target,
             root=answer["root"],
@@ -647,6 +700,9 @@ def create_app(
             replaced=answer["replaced"],
             mode=answer["mode"],
             created=answer["created"],
+            push_id=answer["push_id"],
+            previous_size=answer["previous_size"],
+            previous_sha256=answer["previous_sha256"],
         )
 
     @app.get("/coverage", response_model=CoverageResponse)
@@ -712,6 +768,187 @@ def create_app(
     #
     # They also pass through `guard` like every read, so a deployment that
     # installs a real policy gets one seam rather than two.
+
+    # ------------------------------------------------------- config pushes (#2002)
+
+    def _remote(target: str):  # noqa: ANN202 - control.Remote, imported lazily
+        if not settings.enable_writes:
+            raise WritesDisabled(
+                "the config push history is on the server, reached over ssh, so it needs "
+                "remote operations: set UQF_FRONTEND_ENABLE_WRITES=1 and "
+                "UQF_FRONTEND_WRITE_TOKEN on the server"
+            )
+        return remote_files.target(settings, target)
+
+    def _audit_pruned(request: Request, target: str, pruned: list[dict[str, Any]]) -> None:
+        """One `config.history.prune` row for what retention removed."""
+        if not pruned:
+            return
+        history.add(
+            source="server",
+            kind=activity.SERVER_KIND,
+            action=activity.PRUNE_ACTION,
+            target=target,
+            outcome="succeeded",
+            session_id=request.headers.get(activity.SESSION_ID_HEADER),
+            request_id=request.headers.get(activity.REQUEST_ID_HEADER),
+            claimed_user=request.headers.get(authz.IDENTITY_HEADER),
+            method=request.method.upper(),
+            items=[{"target": p["push_id"], "outcome": "succeeded"} for p in pruned],
+            detail={"pruned_count": len(pruned)},
+        )
+
+    @app.post("/services/{target}/config/pushes", response_model=ConfigPushOpenResponse)
+    def open_config_push(
+        request: Request, target: str, req: ConfigPushOpenRequest
+    ) -> ConfigPushOpenResponse:
+        """Open a push when the operator confirms it: one id for all its
+        uploads, and its history on the server. Retention prunes old pushes
+        here, each audited."""
+        audit = activity.audit_of(request)
+        audit.set_target(target)
+        audit.note(destination=req.destination, item_count=req.file_count,
+                   size_bytes=req.total_bytes)  # fmt: skip
+        remote = _remote(target)
+        audit.begin()
+        answer = remote_files.open_push(
+            remote, target, destination=req.destination, file_count=req.file_count,
+            total_bytes=req.total_bytes,
+            user=activity.clean_user(request.headers.get(authz.IDENTITY_HEADER)),
+            via="frontend", keep=settings.config_history_keep,
+            keep_days=settings.config_history_days, runner=request.app.state.remote_runner,
+        )  # fmt: skip
+        audit.note(push_id=answer["push_id"], pruned_count=len(answer["pruned"]))
+        _audit_pruned(request, target, answer["pruned"])
+        return ConfigPushOpenResponse(
+            target=target, root=answer["root"], push_id=answer["push_id"],
+            pruned=answer["pruned"], keep=settings.config_history_keep,
+            keep_days=settings.config_history_days,
+        )  # fmt: skip
+
+    @app.post("/services/{target}/config/pushes/{push_id}/close", response_model=ConfigPushResponse)
+    def close_config_push(
+        request: Request, target: str, push_id: str, req: ConfigPushCloseRequest
+    ) -> ConfigPushResponse:
+        """Close a push: the `config.push` summary row - destination, file
+        count, bytes and one outcome per file, from the server's own record
+        where it has one and the browser's report where it never got one."""
+        audit = activity.audit_of(request)
+        audit.set_target(target)
+        audit.note(push_id=push_id)
+        remote = _remote(target)
+        answer = remote_files.close_push(
+            remote, target, push_id, [r.model_dump() for r in req.reported],
+            runner=request.app.state.remote_runner,
+        )  # fmt: skip
+        manifest = answer["manifest"]
+        outcomes = [_file_outcome(entry) for entry in manifest["files"]]
+        for entry, outcome in zip(manifest["files"], outcomes, strict=True):
+            audit.item(entry["path"], outcome)
+        for item in manifest["reported"]:
+            outcome = _REPORTED_OUTCOME[item["outcome"]]
+            outcomes.append(outcome)
+            audit.item(item["path"], outcome)
+        published = [e for e in manifest["files"] if e["state"] != "failed"]
+        audit.note(
+            destination=manifest["destination"], item_count=len(outcomes),
+            size_bytes=sum(e["size"] or 0 for e in published),
+        )  # fmt: skip
+        audit.settle(
+            "succeeded" if outcomes and all(o == "succeeded" for o in outcomes)
+            else "unknown" if "unknown" in outcomes
+            else "failed" if outcomes
+            else "refused"
+        )  # fmt: skip
+        return _push_response(target, answer["root"], manifest)
+
+    @app.get("/services/{target}/config/pushes", response_model=ConfigHistoryResponse)
+    def list_config_pushes(request: Request, target: str) -> ConfigHistoryResponse:
+        """A target's config pushes, newest first, from the server's history."""
+        answer = remote_files.history_list(
+            _remote(target), target, runner=request.app.state.remote_runner
+        )
+        return ConfigHistoryResponse(
+            target=target, root=answer["root"], pushes=answer["pushes"],
+            total=answer["total"], truncated=answer["truncated"], pruned=answer["pruned"],
+        )  # fmt: skip
+
+    @app.get("/services/{target}/config/pushes/{push_id}", response_model=ConfigPushResponse)
+    def show_config_push(request: Request, target: str, push_id: str) -> ConfigPushResponse:
+        """One push: each file's action, hashes and what it is now."""
+        answer = remote_files.history_show(
+            _remote(target), target, push_id, runner=request.app.state.remote_runner
+        )
+        return _push_response(target, answer["root"], answer["manifest"])
+
+    @app.get("/services/{target}/config/pushes/{push_id}/diff", response_model=ConfigDiffResponse)
+    def diff_config_push(
+        request: Request, target: str, push_id: str, path: str | None = None
+    ) -> ConfigDiffResponse:
+        """Before against after, fetched from the server's history on demand:
+        text under the cap, sizes and hashes for anything else. Not audited -
+        a read - and so its text never reaches the activity store."""
+        answer = remote_files.history_diff(
+            _remote(target), target, push_id, path, runner=request.app.state.remote_runner
+        )
+        return ConfigDiffResponse(
+            target=target, root=answer["root"], push_id=push_id,
+            diff_cap=answer["diff_cap"], files=answer["files"],
+        )  # fmt: skip
+
+    @app.get(
+        "/services/{target}/config/pushes/{push_id}/restore",
+        response_model=ConfigRestoreResponse,
+    )
+    def plan_config_restore(request: Request, target: str, push_id: str) -> ConfigRestoreResponse:
+        """What restoring the push would do - a dry run, writing nothing."""
+        answer = remote_files.restore(
+            _remote(target), target, push_id, dry_run=True, user=None, via="frontend",
+            keep=settings.config_history_keep, keep_days=settings.config_history_days,
+            runner=request.app.state.remote_runner,
+        )  # fmt: skip
+        return _restore_response(target, answer)
+
+    @app.post(
+        "/services/{target}/config/pushes/{push_id}/restore",
+        response_model=ConfigRestoreResponse,
+    )
+    def restore_config_push(
+        request: Request, target: str, push_id: str, req: ConfigRestoreRequest
+    ) -> ConfigRestoreResponse:
+        """Put a push's files back as they were before it - deleting those it
+        created - as a confirmed push of its own. Refused, writing nothing,
+        when a file changed since; a lost answer is uncertain, never retried."""
+        audit = activity.audit_of(request)
+        audit.set_target(target)
+        audit.note(restores=push_id)
+        if req.confirmed is not True:
+            raise ValidationFailed("explicit confirmation is required")
+        remote = _remote(target)
+        try:
+            answer = remote_files.restore(
+                remote, target, push_id, dry_run=False,
+                user=activity.clean_user(request.headers.get(authz.IDENTITY_HEADER)),
+                via="frontend", keep=settings.config_history_keep,
+                keep_days=settings.config_history_days,
+                runner=request.app.state.remote_runner, on_begin=audit.begin,
+            )  # fmt: skip
+        except remote_files.RestoreOutcomeUncertain:
+            audit.settle("unknown")
+            raise
+        except FrontendError as exc:
+            audit.settle("refused" if exc.status_code < 500 else "failed")
+            raise
+        for item in answer["results"]:
+            audit.item(item["path"], item["outcome"])
+        audit.note(push_id=answer["push_id"], item_count=len(answer["results"]),
+                   pruned_count=len(answer["pruned"]))  # fmt: skip
+        audit.settle(
+            "succeeded" if all(i["outcome"] == "succeeded" for i in answer["results"])
+            else "failed"
+        )  # fmt: skip
+        _audit_pruned(request, target, answer["pruned"])
+        return _restore_response(target, answer)
 
     @app.get("/control", response_model=ControlStatusResponse)
     def control_status() -> ControlStatusResponse:

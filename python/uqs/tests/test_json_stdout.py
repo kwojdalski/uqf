@@ -151,6 +151,16 @@ CASES: dict[str, tuple[list[str], str]] = {
     "deploy check": (["deploy", "check", "--profile", "nosuch"], "unknown profile"),
     "deploy history": (["deploy", "history", "nosuch-server-1731"], "deployments"),
     "target check": (["target", "check", "nosuch"], "no target or deployed server"),
+    # the config push history (#2002): a target that is not declared, refused offline
+    "target config history": (["target", "config", "history", "nosuch-2002"], "no target"),
+    "target config show": (
+        ["target", "config", "show", "nosuch-2002", "20261104T000000000Z-00000000"],
+        "no target",
+    ),
+    "target config diff": (
+        ["target", "config", "diff", "nosuch-2002", "20261104T000000000Z-00000000"],
+        "no target",
+    ),
 }
 #: --json commands with no offline case, and why.
 NO_OFFLINE_CASE = {

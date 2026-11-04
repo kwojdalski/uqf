@@ -1712,6 +1712,7 @@ The verbs of rule 4:
   | `unset` `rename` `edit`                       | a target's settings: remove one, rename it, edit the file |
   | `log` `revert`                                | a target's change log, and undoing one change in it       |
   | `adopt`                                       | take over a release copied onto a server by hand          |
+  | `restore`                                     | a config push's files back as they were, as a new push    |
 
 Three of these sit beside a near neighbour on purpose (#1756): `log` is a
 record's change history, where `logs` is processes' output and `history` what

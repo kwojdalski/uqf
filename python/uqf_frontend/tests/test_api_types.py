@@ -48,6 +48,10 @@ REQUESTS = {
     "BrowserEvent": "BrowserEventIn",
     "ActivityItem": "ActivityItem",
     "BrowserDrop": "BrowserDropIn",
+    "ConfigPushOpenBody": "ConfigPushOpenRequest",
+    "ConfigPushReport": "ConfigPushReported",
+    "ConfigPushCloseBody": "ConfigPushCloseRequest",
+    "ConfigRestoreBody": "ConfigRestoreRequest",
 }
 
 #: TypeScript interface -> the model it mirrors: every response, the
@@ -82,6 +86,19 @@ PAIRS = {
     "Release": "ReleaseOut",
     "RemoteFiles": "RemoteFilesResponse",
     "RemoteUpload": "RemoteUploadResponse",
+    "PrunedPush": "PrunedPushOut",
+    "ConfigPushOpened": "ConfigPushOpenResponse",
+    "ConfigPushFile": "ConfigPushFileOut",
+    "ConfigPushSummary": "ConfigPushSummaryOut",
+    "ConfigHistory": "ConfigHistoryResponse",
+    "ConfigPushReported": "ConfigPushReportedOut",
+    "ConfigPush": "ConfigPushOut",
+    "ConfigPushDetail": "ConfigPushResponse",
+    "ConfigDiffFile": "ConfigDiffFileOut",
+    "ConfigDiff": "ConfigDiffResponse",
+    "RestoreStep": "RestoreStepOut",
+    "RestoreResult": "RestoreResultOut",
+    "ConfigRestore": "ConfigRestoreResponse",
     **REQUESTS,
 }
 

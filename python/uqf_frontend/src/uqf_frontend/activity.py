@@ -77,6 +77,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from uqf_frontend.remote_helper import PUSH_ID
 from uqs.activity_log import (
     DROP_REASONS,
     EVENT_LEVELS,
@@ -150,6 +151,15 @@ def _is_hex(value: object) -> bool:
     return isinstance(value, str) and bool(_HEX.match(value))
 
 
+def _is_hex_or_none(value: object) -> bool:
+    """A sha256, or None for a file that did not exist before (#2002)."""
+    return value is None or _is_hex(value)
+
+
+def _is_push_id(value: object) -> bool:
+    return isinstance(value, str) and bool(PUSH_ID.fullmatch(value))
+
+
 def _is_status(value: object) -> bool:
     return isinstance(value, int) and not isinstance(value, bool) and 100 <= value < 600
 
@@ -194,6 +204,14 @@ DETAIL_KEYS: dict[str, Callable[[object], bool]] = {
     "sha256": _is_hex,
     "content_type": _is_name,
     "item_count": _is_count,
+    # config pushes (#2002): the push a file belongs to, the hash of what it
+    # replaced (None on create), the push a restore undoes, the destination
+    # directory, and how many old pushes retention pruned - never content
+    "push_id": _is_push_id,
+    "previous_sha256": _is_hex_or_none,
+    "restores": _is_push_id,
+    "destination": _is_name,
+    "pruned_count": _is_count,
     # interactions (#2000): what kind of control, and a toggle's new state -
     # never what was typed into it
     "control": _is_name,
@@ -280,7 +298,16 @@ SERVER_ACTIONS: dict[tuple[str, str], Callable[[Mapping[str, str]], str]] = {
     ("PUT", "/control/worker-config"): lambda _: "worker.config",
     ("POST", "/control/backfill"): lambda _: "backfill.start",
     ("PUT", "/services/{target}/files/content"): lambda _: "file.upload",
+    # config pushes (#2002): `config.push` is the summary row of a whole push,
+    # written when it closes; a restore is a push of its own
+    ("POST", "/services/{target}/config/pushes"): lambda _: "config.push.open",
+    ("POST", "/services/{target}/config/pushes/{push_id}/close"): lambda _: "config.push",
+    ("POST", "/services/{target}/config/pushes/{push_id}/restore"): lambda _: "config.restore",
 }
+
+#: The row an opening push or a restore adds when retention pruned old pushes:
+#: one item per pruned push id.
+PRUNE_ACTION = "config.history.prune"
 
 #: Path parameters that name the target of an action.
 _TARGET_PARAMS = ("procname",)

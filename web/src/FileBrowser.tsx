@@ -1,8 +1,11 @@
 import { useEffect, useState } from "react";
+import { ConfigHistory } from "./ConfigHistory";
 import { FileDelete } from "./FileDelete";
 import { FileTable } from "./FileTable";
 import {
   ApiError,
+  type HistoryOps,
+  type PushOps,
   type RemoteEntry,
   type RemoteFiles,
   remoteFilesPath,
@@ -33,11 +36,17 @@ export function FileBrowser({
   target,
   onClose,
   uploader,
+  pushes,
+  history,
 }: {
   target: string;
   onClose: () => void;
   /** Injectable for tests; the real one PUTs over XMLHttpRequest. */
   uploader?: Uploader;
+  /** Injectable for tests: opening and closing a push (#2002). */
+  pushes?: PushOps;
+  /** Injectable for tests: the push history's reads and restore. */
+  history?: HistoryOps;
 }) {
   const [selected, setSelected] = useState<string[]>([]);
   const [deleting, setDeleting] = useState(false);
@@ -248,6 +257,14 @@ export function FileBrowser({
           directory={data.path}
           onUploaded={() => setRevision((r) => r + 1)}
           uploader={uploader}
+          pushes={pushes}
+        />
+      )}
+      {data && (
+        <ConfigHistory
+          target={target}
+          ops={history}
+          onRestored={() => setRevision((r) => r + 1)}
         />
       )}
     </section>

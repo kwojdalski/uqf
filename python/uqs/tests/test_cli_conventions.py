@@ -160,7 +160,7 @@ DOMAIN_VERBS = {
     "migrate": "migrate an HDB partition's schema",
     "alter": "change one table in every HDB partition holding it",
     "upgrade": "bring a store an older uqs wrote up to today's layout",
-    "diff": "compare two runtimes",
+    "diff": "compare two runtimes, or a config push's files before and after it",
     "prepare": "install the bundles a runtime declares",
     "stub": "add a placeholder row",
     "env": "print the environment to source",
@@ -168,7 +168,7 @@ DOMAIN_VERBS = {
     "push": "deploy a release onto a server",
     "rollback": "return to the previous release or version",
     "prune": "remove old releases",
-    "history": "what was deployed",
+    "history": "what was deployed, or pushed to a target's config",
     "shell": "open a shell on a target",
     # a target's own changes (#1756): the core verbs cover add, set and remove
     "unset": "remove a setting, so the layer beneath's value applies - `set` cannot say it",
@@ -177,6 +177,8 @@ DOMAIN_VERBS = {
     "log": "a record's change history - `logs` is processes' output, `history` deployments",
     "revert": "undo one recorded change, itself recorded - not `rollback`'s release",
     "adopt": "take over what was installed by hand, so uqs can drive it",
+    # a target's config push history (#2002): `history` and `diff` read it
+    "restore": "put a recorded push's files back as they were before it, as a push of its own",
 }
 
 #: Rule 1: a group named after one of these is a verb with nouns under it.
@@ -979,7 +981,7 @@ ASKS = {c.path for c in TREE if c.path in LEAVES and _kind(c.path) == CONFIRMS} 
 #: give it --yes/-y, then list the module here.
 PROMPTING_MODULES = {
     "attach", "cleanup", "deploy_server", "hdb_scope", "install", "install_bundle", "migrate",
-    "remove", "target", "target_adopt", "target_edit",
+    "remove", "target", "target_adopt", "target_config", "target_edit",
 }  # fmt: skip
 
 #: leaf -> the issue that adds its --json. Empty since #1731: keep it so.
@@ -1716,7 +1718,7 @@ def test_every_exception_names_the_issue_that_removes_it(allowlist):
 VOCABULARY = {
     "PROC", "JOB", "TARGET", "TABLE", "DATASET", "SOURCE", "KIND", "EXPR", "FIELD",
     "VALUE", "PARTITION", "RUNTIME", "RUN", "ATTACHMENT", "FILE", "CONNECTOR",
-    "PACKAGE", "ARTIFACT", "COMPONENT", "BUNDLE", "KEY", "CHANGE", "NEW",
+    "PACKAGE", "ARTIFACT", "COMPONENT", "BUNDLE", "KEY", "CHANGE", "NEW", "PUSH",
 }  # fmt: skip
 #: Placeholders the vocabulary replaced: in help they may only name a command's
 #: own option (`--override NAME`), never stand for one of the things above.

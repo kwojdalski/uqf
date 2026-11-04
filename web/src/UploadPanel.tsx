@@ -1,5 +1,9 @@
 import { useRef, useState } from "react";
 import {
+  ApiError,
+  type ConfigPushReport,
+  type PushOps,
+  pushOps,
   type RemoteUpload,
   UPLOAD_MAX_BYTES,
   UPLOAD_MAX_FILES,
@@ -80,25 +84,39 @@ export async function walkEntries(
   return out;
 }
 
+/** What the browser reports, on closing the push, of a file it saw end so. */
+const REPORTED: Partial<Record<Status, ConfigPushReport["outcome"]>> = {
+  uncertain: "uncertain",
+  failed: "failed",
+  cancelled: "cancelled",
+};
+
 /** Upload local files and folders below a target's shared/config (#1951).
  *
  *  Files are queued, checked against the same limits the server holds, and
  *  sent only after the operator confirms the destination - one at a time,
  *  each with its own outcome. Replacing an existing file is off unless
  *  asked for. A cancellation or timeout in flight is reported as uncertain
- *  - the file may have been written - and nothing is ever retried. */
+ *  - the file may have been written - and nothing is ever retried.
+ *
+ *  Confirming opens one push (#2002): every file names its id, the server
+ *  keeps what each replaced in that push's history, and the push is closed
+ *  - with what the browser saw of each file - once the last is sent. */
 export function UploadPanel({
   target,
   root,
   directory,
   onUploaded,
   uploader = uploadRemoteFile,
+  pushes = pushOps,
 }: {
   target: string;
   root: string;
   directory: string;
   onUploaded: () => void;
   uploader?: Uploader;
+  /** Injectable for tests; the real ones POST to /config/pushes. */
+  pushes?: PushOps;
 }) {
   const [items, setItems] = useState<Item[]>([]);
   const [destination, setDestination] = useState<string | null>(null);
@@ -107,6 +125,8 @@ export function UploadPanel({
   const [running, setRunning] = useState(false);
   const [position, setPosition] = useState({ at: 0, of: 0 });
   const [refusal, setRefusal] = useState<string | null>(null);
+  const [push, setPush] = useState<{ id: string; pruned: number } | null>(null);
+  const [closeProblem, setCloseProblem] = useState<string | null>(null);
   const nextId = useRef(1);
   const controller = useRef<AbortController | null>(null);
 
@@ -203,24 +223,46 @@ export function UploadPanel({
   async function start() {
     setConfirming(false);
     setRunning(true);
+    setRefusal(null);
+    setCloseProblem(null);
+    let opened: string;
+    try {
+      const answer = await pushes.open(target, {
+        destination: dest,
+        file_count: queued.length,
+        total_bytes: queuedBytes,
+      });
+      opened = answer.push_id;
+      setPush({ id: opened, pruned: answer.pruned.length });
+    } catch (error: unknown) {
+      setRunning(false);
+      setRefusal(
+        `The push could not be opened, so nothing was sent: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return;
+    }
     const abort = new AbortController();
     controller.current = abort;
     let wrote = false;
+    const reported: ConfigPushReport[] = [];
     for (const [index, item] of queued.entries()) {
       setPosition({ at: index + 1, of: queued.length });
+      const path = `${dest}/${item.relative}`;
       if (abort.signal.aborted) {
         update(item.id, { status: "cancelled", message: "" });
+        reported.push({ path, outcome: "cancelled" });
         continue;
       }
       update(item.id, { status: "uploading", progress: 0 });
       try {
         const done: RemoteUpload = await uploader(
           target,
-          `${dest}/${item.relative}`,
+          path,
           item.file,
           overwrite,
           (progress) => update(item.id, { progress }),
           abort.signal,
+          opened,
         );
         wrote = true;
         update(item.id, {
@@ -231,13 +273,22 @@ export function UploadPanel({
       } catch (error: unknown) {
         const unsure = error instanceof UploadFailed ? error.uncertain : true;
         if (unsure) wrote = true;
+        const status: Status = unsure ? "uncertain" : "failed";
+        reported.push({ path, outcome: REPORTED[status] ?? "failed" });
         update(item.id, {
-          status: unsure ? "uncertain" : "failed",
+          status,
           message: error instanceof Error ? error.message : String(error),
         });
       }
     }
     controller.current = null;
+    try {
+      await pushes.close(target, opened, reported);
+    } catch (error: unknown) {
+      setCloseProblem(
+        `Push ${opened} was not closed: ${error instanceof ApiError ? error.message : String(error)}. Its files are in its history; the summary of the push is not.`,
+      );
+    }
     setRunning(false);
     if (wrote) onUploaded();
   }
@@ -380,6 +431,19 @@ export function UploadPanel({
         <p role="status">
           Uploading {position.at} of {position.of}…
         </p>
+      )}
+      {push && (
+        <p className="note" aria-label="Push">
+          Push <code>{push.id}</code> - the server keeps what each file
+          replaced, so it can be diffed and restored from the push history.
+          {push.pruned > 0 &&
+            ` Retention pruned ${push.pruned} older ${push.pruned === 1 ? "push" : "pushes"}.`}
+        </p>
+      )}
+      {closeProblem && (
+        <div className="notice error" role="alert">
+          {closeProblem}
+        </div>
       )}
       <div className="actions">
         <label>
