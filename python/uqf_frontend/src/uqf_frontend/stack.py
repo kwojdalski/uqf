@@ -18,9 +18,9 @@ is read from where uqs keeps it:
 - web/dist: ``<root>/web/dist``, when it has been built;
 - the status directory: ``status.status_directory``, read per request.
 
-Only ``uqs.paths`` is imported (it loads ``uqs.runtimes`` and the logger, not
-``uqs.stack``), lazily and only when a stack root is set: the read path still
-loads nothing of the orchestrator.
+Only ``uqs.paths`` and the leaf ``uqs.activity_log`` are imported (paths loads
+``uqs.runtimes`` and the logger, not ``uqs.stack``), lazily and only when a
+stack root is set: the read path still loads nothing of the orchestrator.
 """
 
 from __future__ import annotations
@@ -87,6 +87,7 @@ def derive(root: Path | None) -> StackFacts:
     """
     if root is None:
         return StackFacts()
+    from uqs import activity_log
     from uqs import paths as stack_paths
 
     if not stack_paths.is_repo_root(root):
@@ -113,7 +114,7 @@ def derive(root: Path | None) -> StackFacts:
             if p.start_with_all and p.port is not None
         ),
         web_dist=web_dist if web_dist.is_dir() else None,
-        activity_db=paths.torqdata / "frontend" / "activity.sqlite3",
+        activity_db=activity_log.history_file(paths.torqdata),
     )
 
 

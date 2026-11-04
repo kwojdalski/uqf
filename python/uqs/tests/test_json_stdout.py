@@ -82,6 +82,10 @@ def test_a_refused_attach_without_json_logs_to_stderr_too(tmp_path):
 CASES: dict[str, tuple[list[str], str]] = {
     "target list": (["target", "list"], "["),
     "target log": (["target", "log"], "edited_outside"),
+    "activity list": (
+        ["activity", "list", "--db", "/nonexistent-2000/activity.sqlite3"],
+        "no activity history at",
+    ),
     "runtime list": (["runtime", "list"], "uqf"),
     "job list": (["job", "list"], "["),
     "process list": (["process", "list"], '"process"'),
@@ -151,6 +155,16 @@ CASES: dict[str, tuple[list[str], str]] = {
     "target tunnel check": (
         ["target", "tunnel", "check", "nosuch"],
         "no target or deployed server",
+    ),
+    # the config push history (#2002): a target that is not declared, refused offline
+    "target config history": (["target", "config", "history", "nosuch-2002"], "no target"),
+    "target config show": (
+        ["target", "config", "show", "nosuch-2002", "20261104T000000000Z-00000000"],
+        "no target",
+    ),
+    "target config diff": (
+        ["target", "config", "diff", "nosuch-2002", "20261104T000000000Z-00000000"],
+        "no target",
     ),
 }
 #: --json commands with no offline case, and why.

@@ -29,7 +29,8 @@ input,
 select {
   font: inherit;
 }
-button {
+button,
+a.button {
   cursor: pointer;
   border: 1px solid var(--line);
   background: #fff;
@@ -39,7 +40,12 @@ button {
   font-size: 0.875rem;
   font-weight: 600;
 }
-button:hover {
+a.button {
+  display: inline-block;
+  text-decoration: none;
+}
+button:hover,
+a.button:hover {
   border-color: #8294ae;
   background: #f3f6fa;
 }
@@ -625,4 +631,15 @@ tr.blocked td {
   padding: 1rem;
   margin: 0.5rem 0;
   text-align: center;
+}
+
+/* Config push history (#2002): a diff the operator opened. */
+pre.diff {
+  max-height: 24rem;
+  overflow: auto;
+  white-space: pre;
+  font-size: 0.85em;
+  padding: 0.5rem;
+  border: 1px solid #8a8f98;
+  border-radius: 4px;
 }

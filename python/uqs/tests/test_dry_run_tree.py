@@ -147,6 +147,7 @@ CASES = [
     Case("setup odbc rollback", ("--home", "/nonexistent/odbc")),
     Case("target add", ("t1", "--ssh", "u@h", "--dest", "/opt/x")),
     Case("target adopt", ("t1", "--ssh", NOWHERE, "--dest", "/opt/x")),
+    Case("target config restore", ("t1", "20261104T000000000Z-00000000")),
     Case("target edit", ()),
     Case("target remove", ("t1",), _targets, own_copy=True),
     Case("target rename", ("t1", "t2"), _targets, own_copy=True),

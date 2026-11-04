@@ -369,6 +369,28 @@ its block before the change, comments included. It is a change like any other:
 checked, logged, and revertible. It is refused when a table has changed again
 since, rather than overwriting the later change.
 
+### A target's config push history
+
+Files pushed to a target's `shared/config/` through the frontend's file browser
+are kept, on the server only, in `shared/config/.uqf-history/<push-id>/`: what
+each file replaced (`before/`), what the push wrote (`after/`) and a
+`manifest.json` naming who pushed what, when, with each file's sha256 before and
+after. The frontend lists, diffs and restores from it, and so does `uqs`:
+
+```bash
+uqs target config history prd           # newest first; --json, --limit N
+uqs target config show prd PUSH         # each file: created or replaced, hashes, now
+uqs target config diff prd PUSH         # text under 256 KiB; hashes for anything else
+uqs target config restore prd PUSH -n   # what restoring would write and delete
+uqs target config restore prd PUSH      # asks first; --yes does not
+```
+
+A restore writes each replaced file's earlier content back and deletes each file
+the push created, as a push of its own, so it can be restored in turn. It is
+refused, writing nothing, when a file has changed since the push. Each target
+keeps its newest `UQF_FRONTEND_CONFIG_HISTORY_KEEP` pushes (50), none older than
+`UQF_FRONTEND_CONFIG_HISTORY_DAYS` (90); a pruned push's restore says so.
+
 ## Requirements and named overrides
 
 A target can pin what it deploys and what it deploys onto:
