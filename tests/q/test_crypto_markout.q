@@ -17,6 +17,15 @@
 
 
 .qt.qpipe.job.crypto_markout.t:2026.09.17D10:00:00.000000000
+
+/ The job's check holds a batch whose configuration snapshot is not durable (#1999), so the suite
+/ has a status directory of its own and the job's start has pinned what it scores under.
+.qt.qpipe.job.crypto_markout.beforeNamespace_isolate:{[]
+    setenv[`UQF_STATUS_DIR;"build/test-status-crypto-markout-job"];
+    system"mkdir -p build/test-status-crypto-markout-job";
+    .qt.support.reset_snapshots[];
+    .qpipe.transform.crypto_markout_outputs.pin[];
+    }
 .qt.qpipe.job.crypto_markout.btc:`$"BTC-USDT"
 
 .qt.qpipe.job.crypto_markout.sent:()

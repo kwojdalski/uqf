@@ -28,6 +28,17 @@
 /                        book gives report_ccy per quote_ccy, and whether it is
 /                        inverted to do so.
 /   keys       required  the spec keys the domain owns (symbols, possibly none).
+/   name       optional  the domain's name, a symbol, recorded in the configuration
+/                        snapshot (default `unnamed).
+/   revision   optional  the revision of the rules that price an instrument - its
+/                        quote currency, legs and inversion, its conversion pairs -
+/                        a symbol, bumped by whoever changes those rules, and
+/                        recorded in the configuration snapshot so a result can
+/                        be tied to the rules it was priced under (default
+/                        `unversioned, which a reader of a snapshot sees as such).
+/   datasets   optional  the datasets the domain's spec produces, a symbol list, recorded
+/                        in the snapshot so a reader can list the snapshots of one
+/                        dataset (default none).
 /   validate   optional  {[spec]} -> spec, throwing on a domain key it refuses.
 /   available  optional  {[spec;frame]} -> a boolean per (execution, horizon):
 /                        0b marks the pair unpriced for a domain reason.
@@ -56,7 +67,9 @@
 / answer is a change to that name and nowhere else:
 / .
 /   1 2 3  core_cols and long_key_cols (the column list is `result`)
-/   5      contract_version, and the name of that column in `result`
+/   5      contract_version (config_markout.q), which a result no longer repeats on
+/          its rows: it is a field of the configuration snapshot the row's config_id
+/          names (#1999)
 /   6      the report_amount line of `finish`
 /   7      the rates spec key (core_keys)
 /   8      required_keys
@@ -85,17 +98,13 @@
 / takes its inputs positionally, so nothing else changes.
 .qpipe.transform.markout_core.input_names:`markout_executions`markout_market_data
 
-/ The contract version (open question 5: a long starting at 1, apart from FX's
-/ own `version`). A change to anything the contract fixes bumps it.
-.qpipe.transform.markout_core.contract_version:1
-
 / The clocks a row may be on. Anything else - null, `unknown, a typo - is never scored.
 .qpipe.transform.markout_core.clocks:`venue`receipt
 
 / The contract's core columns, in the contract's order (open question 1: a
 / subsequence, with domain columns between them). kind and step are
 / long_key_cols: required in every long dataset, not core (open question 3).
-.qpipe.transform.markout_core.core_cols:`time`source_time`clock`venue`fill_id`sym`side`size`horizon`price`quote_ccy`ref_t0`ref_t1`move`quote_amount`report_ccy`rate`rate_source`rate_sym`rate_time`rate_timing`report_amount`status`contract_version
+.qpipe.transform.markout_core.core_cols:`time`source_time`clock`venue`fill_id`sym`side`size`horizon`price`quote_ccy`ref_t0`ref_t1`move`quote_amount`rate`rate_source`rate_sym`rate_time`report_amount`status`config_id
 
 / The long layout's two extra columns, placed after horizon.
 .qpipe.transform.markout_core.long_key_cols:`kind`step
@@ -103,8 +112,8 @@
 / The core's result: one row per (execution, horizon, component).
 .qpipe.transform.markout_core.result:([] time:`timestamp$(); source_time:`timestamp$(); clock:`symbol$(); venue:`symbol$(); fill_id:`symbol$(); sym:`symbol$(); side:`long$(); size:`float$();
     horizon:`timespan$(); kind:`symbol$(); step:`long$(); price:`float$(); quote_ccy:`symbol$(); ref_t0:`float$(); ref_t1:`float$(); move:`float$(); quote_amount:`float$();
-    report_ccy:`symbol$(); rate:`float$(); rate_source:`symbol$(); rate_sym:`symbol$(); rate_time:`timestamp$(); rate_timing:`symbol$(); report_amount:`float$();
-    status:`symbol$(); contract_version:`long$())
+    rate:`float$(); rate_source:`symbol$(); rate_sym:`symbol$(); rate_time:`timestamp$(); report_amount:`float$();
+    status:`symbol$(); config_id:`symbol$())
 
 / The status a row takes when its only reference is on another clock (open
 / question 12). Set it to `unavailable to count the mismatch in the run's facts
@@ -468,7 +477,7 @@
 
 / Private: the money, the conversion and the status of every component row.
 / @private
-.qpipe.transform.markout_core.finish:{[spec;fr;rt;c]
+.qpipe.transform.markout_core.finish:{[cid;fr;rt;c]
     f:fr c`ri;
     r:(key rt)!(value rt)@\:c`ri;
     qa:(f`size)*c`move;
@@ -478,9 +487,9 @@
     st:?[(c`cause)<>`ok; c`cause; ?[null r`rate; `no_rate; c`dstatus]];
     ([] time:f`time; source_time:f`source_time; clock:f`clock; venue:f`venue; fill_id:f`fill_id; sym:f`sym; side:f`side; size:f`size;
         horizon:f`horizon; kind:c`kind; step:c`step; price:f`price; quote_ccy:f`quote_ccy; ref_t0:f`ref_t0; ref_t1:f`ref_t1;
-        move:c`move; quote_amount:qa; report_ccy:(count c)#spec`report_ccy; rate:r`rate; rate_source:r`rate_source;
-        rate_sym:r`rate_sym; rate_time:r`rate_time; rate_timing:(count c)#spec`rate_timing; report_amount:ra;
-        status:st; contract_version:(count c)#.qpipe.transform.markout_core.contract_version)}
+        move:c`move; quote_amount:qa; rate:r`rate; rate_source:r`rate_source;
+        rate_sym:r`rate_sym; rate_time:r`rate_time; report_amount:ra;
+        status:st; config_id:(count c)#cid)}
 
 / Score executions against market_data at every horizon of the spec.
 / .
@@ -531,20 +540,9 @@
         c:c uj $[count xc; arows,'xc#a; arows]];
     c:`ri`ord xasc c;
     rt:.qpipe.transform.markout_core.rates_at[domain;spec;tob;fr`quote_ccy;fr`clock;$[spec[`rate_timing]=`execution; fr`t0; fr`t1]];
-    out:.qpipe.transform.markout_core.finish[spec;fr;rt;c];
+    out:.qpipe.transform.markout_core.finish[.qpipe.transform.config_markout.id[domain;spec];fr;rt;c];
     out:(cols .qpipe.transform.markout_core.result)#out;
     $[count xc; out,'xc#c; out]}
-
-/ Refuse a result written under another contract version (a consumer pins one).
-/ @param rows a markout dataset's rows
-/ @param version the contract version the consumer reads
-/ @return the rows
-/ @throws error when any row carries another version
-/ @eg count .qpipe.transform.markout_core.require_version[0#.qpipe.transform.markout_core.result;1]  ->  0
-.qpipe.transform.markout_core.require_version:{[rows;version]
-    other:distinct (rows`contract_version) except version;
-    if[count other; '"markout_core: contract version ",(", " sv string other)," is not the pinned ",string version];
-    rows}
 
 / Declare a markout transform of a domain under a spec.
 / .
@@ -574,7 +572,7 @@
 / without the core knowing any asset class.
 / @param inst table sym, quote_ccy, legs, invert
 / @param conv table quote_ccy, report_ccy, leg, invert
-/ @return a domain dictionary with resolve, convert and no keys
+/ @return a domain dictionary with resolve, convert, no keys, the name `table and a revision that is the digest of the two tables
 / @eg .qpipe.transform.markout_core.table_domain[([] sym:enlist `ACME; quote_ccy:enlist `USD; legs:enlist enlist `ACME; invert:enlist enlist 0b);0#([] quote_ccy:`symbol$(); report_ccy:`symbol$(); leg:`symbol$(); invert:`boolean$())][`resolve][()!();enlist `ACME]`quote_ccy  ->  enlist `USD
 .qpipe.transform.markout_core.table_domain:{[inst;conv]
     resolve:{[inst;spec;syms]
@@ -587,7 +585,9 @@
             $[count r; (1b;first r`leg;first r`invert); (0b;`;0b)]}[conv;rep];
         rows:pick each qs;
         ([] ok:`boolean$rows[;0]; leg:`symbol$rows[;1]; invert:`boolean$rows[;2])}[conv];
-    `resolve`convert`keys!(resolve;convert;`symbol$())}
+    / the rules ARE the two tables, so their digest is their revision
+    rev:.qpipe.transform.config_markout.table_revision[inst;conv];
+    `resolve`convert`keys`name`revision`datasets!(resolve;convert;`symbol$();`table;rev;`symbol$())}
 
 / ------------------------------------------------------------- THE EXAMPLES
 
@@ -623,8 +623,8 @@
     row:{[d]
         ([] time:2#d[`t]+0D00:00:10; source_time:2#d`t; clock:2#d`clock; venue:2#d`venue; fill_id:2#d`id; sym:2#d`sym; side:2#d`side; size:2#d`size;
             horizon:2#0D00:00:10; kind:`total`execution; step:2#0; price:2#d`price; quote_ccy:2#d`qccy; ref_t0:2#d`r0; ref_t1:2#d`r1;
-            move:d`moves; quote_amount:(d`size)*d`moves; report_ccy:2#`USD; rate:2#d`rate; rate_source:2#d`rsrc; rate_sym:2#d`rsym; rate_time:2#d`rtime;
-            rate_timing:2#`execution; report_amount:(d`rate)*(d`size)*d`moves; status:2#`ok; contract_version:2#1)};
+            move:d`moves; quote_amount:(d`size)*d`moves; rate:2#d`rate; rate_source:2#d`rsrc; rate_sym:2#d`rsym; rate_time:2#d`rtime;
+            report_amount:(d`rate)*(d`size)*d`moves; status:2#`ok; config_id:2#.qpipe.transform.config_markout.id[.qpipe.transform.markout_core.fixture_domain;.qpipe.transform.markout_core.validate[.qpipe.transform.markout_core.fixture_domain;.qpipe.transform.markout_core.fixture_spec]])};
     / USDJPY buy of 1,000,000 at 150.00; the reference is 150.00 at the execution and 150.05 at +10s
     / (the book of +9s is within max_age): total move 0.05 JPY, 50,000 JPY, at 1/150.00 USD per JPY.
     / The move is written as 150.05-150 because 0.05 is not what that subtraction yields in a float.

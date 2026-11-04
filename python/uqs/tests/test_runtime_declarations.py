@@ -118,7 +118,8 @@ def test_a_runtime_with_pipelines_parses_a_marked_command_as_ever():
 # ------------------------------------------------- which commands are marked
 
 #: The modules that read or run this tree's own pipelines - its bounded
-#: workers and their checkpoints, the run ledger, its streaming jobs' preview,
+#: workers and their checkpoints, the run ledger, the configuration snapshots their
+#: rows name, its streaming jobs' preview,
 #: its connectors and its process graph. A command whose code reaches one
 #: needs them, so carries `needs_pipelines`; each is reached by a marked one.
 PIPELINE_MODULES = {
@@ -127,6 +128,7 @@ PIPELINE_MODULES = {
     "uqs.stack.backfill",
     "uqs.stack.dataset_verify",
     "uqs.stack.runs",
+    "uqs.stack.snapshots",
     "uqs.stack.stream_preview",
 }
 

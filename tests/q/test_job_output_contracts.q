@@ -56,7 +56,16 @@
 / in-flight marker under the status directory: a suite-local one, never the
 / unset default `/status` a non-root runner cannot create (#1851). The harness
 / puts the variable back after the suite.
-.qt.qpipe.job_output_contracts.beforeNamespace_isolate_status:{[] setenv[`UQF_STATUS_DIR;"build/test-status-job-output-contracts"];}
+/ The markout jobs hold a batch whose configuration snapshot is not on disk (#1999), and a real job
+/ pins it in `on_start` before it scores: the markout drivers below run with theirs pinned, in this suite's
+/ own directory.
+.qt.qpipe.job_output_contracts.beforeNamespace_isolate_status:{[]
+    setenv[`UQF_STATUS_DIR;"build/test-status-job-output-contracts"];
+    system"mkdir -p build/test-status-job-output-contracts";
+    .qt.support.reset_snapshots[];
+    .qpipe.transform.fx_markout_outputs.pin[];
+    .qpipe.transform.crypto_markout_outputs.pin[];
+    }
 
 / The plant's columns and type characters for `tbl`, without `time`.
 .qt.qpipe.job_output_contracts.want:{[tbl]

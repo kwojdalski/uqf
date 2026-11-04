@@ -712,7 +712,7 @@
 
 / crypto_markout1's output (#1936): the crypto markout dataset of the markout contract
 / (docs/architecture/markout-contract.md), one row per execution, horizon and component, in
-/ the contract's 24 core columns (in order, with kind and step after horizon) and the crypto
+/ the contract's 22 core columns (in order, with kind and step after horizon) and the crypto
 / measures after them. kind is `total (the markout against the best mid across venues) or
 / `execution (the move from the fill to the reference at the fill); step is 0 for both, so
 / (venue; fill_id; horizon; kind; step) is a key with no nulls. move is the row's signed move in
@@ -720,8 +720,11 @@
 / 10000*move%price. fee_quote is the fill's fee in the QUOTE currency (null when it cannot be
 / valued without a rate), fee_bps that as a share of notional, and markout_net_bps what the fill
 / earned after it - on the `total row only, null elsewhere and null whenever fee_bps is. `clock
-/ is the execution's, and so every reference's. Replaces crypto_execution_quality.
-.qetl.plant.crypto_markout:([]time:`timestamp$(); source_time:`timestamp$(); clock:`symbol$(); venue:`symbol$(); fill_id:`symbol$(); sym:`g#`symbol$(); side:`long$(); size:`float$(); horizon:`timespan$(); kind:`symbol$(); step:`long$(); price:`float$(); quote_ccy:`symbol$(); ref_t0:`float$(); ref_t1:`float$(); move:`float$(); quote_amount:`float$(); report_ccy:`symbol$(); rate:`float$(); rate_source:`symbol$(); rate_sym:`symbol$(); rate_time:`timestamp$(); rate_timing:`symbol$(); report_amount:`float$(); status:`symbol$(); contract_version:`long$(); markout_bps:`float$(); fee_quote:`float$(); fee_bps:`float$(); markout_net_bps:`float$())
+/ is the execution's, and so every reference's. config_id names the configuration snapshot the row was
+/ produced under (horizons, max_age, report_ccy, rate_timing, rates, contract_version, the domain's rules
+/ revision - src/etl/core/config_snapshot.q, #1999): a row no longer repeats report_ccy, rate_timing or
+/ contract_version. Replaces crypto_execution_quality.
+.qetl.plant.crypto_markout:([]time:`timestamp$(); source_time:`timestamp$(); clock:`symbol$(); venue:`symbol$(); fill_id:`symbol$(); sym:`g#`symbol$(); side:`long$(); size:`float$(); horizon:`timespan$(); kind:`symbol$(); step:`long$(); price:`float$(); quote_ccy:`symbol$(); ref_t0:`float$(); ref_t1:`float$(); move:`float$(); quote_amount:`float$(); rate:`float$(); rate_source:`symbol$(); rate_sym:`symbol$(); rate_time:`timestamp$(); report_amount:`float$(); status:`symbol$(); config_id:`symbol$(); markout_bps:`float$(); fee_quote:`float$(); fee_bps:`float$(); markout_net_bps:`float$())
 
 / last_value1's output. <one line: what a row means>
 .qetl.plant.last_value:([]time:`timestamp$(); sym:`g#`symbol$(); market:`symbol$(); source:`symbol$(); source_time:`timestamp$(); bid:`float$(); ask:`float$(); mid:`float$())
@@ -734,15 +737,17 @@
 / favour; price_t0 and price_t1 are per kind - see src/etl/transforms/fx_domain.q. The columns of the markout
 / contract (docs/architecture/markout-contract.md) keep their relative order, with FX's own between them (#1935):
 / clock is whose clock source_time is, quote_ccy what price is in, move the signed move in price units, and
-/ report_amount the move's money in report_ccy, null when no rate is declared (status `no_rate).
-.qetl.plant.fx_markout:([]time:`timestamp$(); source_time:`timestamp$(); clock:`symbol$(); venue:`symbol$(); fill_id:`symbol$(); sym:`g#`symbol$(); side:`long$(); size:`float$(); horizon:`timespan$(); kind:`symbol$(); step:`long$(); leg:`symbol$(); invert:`boolean$(); price:`float$(); price_t0:`float$(); price_t1:`float$(); quote_ccy:`symbol$(); ref_t0:`float$(); ref_t1:`float$(); move:`float$(); pips:`float$(); pip_factor:`long$(); pip_value:`float$(); quote_amount:`float$(); report_ccy:`symbol$(); rate:`float$(); rate_source:`symbol$(); rate_sym:`symbol$(); rate_time:`timestamp$(); rate_timing:`symbol$(); report_amount:`float$(); status:`symbol$(); contract_version:`long$(); version:`symbol$())
+/ report_amount the move's money in the snapshot's report_ccy, null when no rate is declared (status `no_rate).
+/ config_id names the configuration snapshot (report_ccy, rate_timing, contract_version, horizons, ...) the row was
+/ produced under; the rows no longer repeat those three (#1999).
+.qetl.plant.fx_markout:([]time:`timestamp$(); source_time:`timestamp$(); clock:`symbol$(); venue:`symbol$(); fill_id:`symbol$(); sym:`g#`symbol$(); side:`long$(); size:`float$(); horizon:`timespan$(); kind:`symbol$(); step:`long$(); leg:`symbol$(); invert:`boolean$(); price:`float$(); price_t0:`float$(); price_t1:`float$(); quote_ccy:`symbol$(); ref_t0:`float$(); ref_t1:`float$(); move:`float$(); pips:`float$(); pip_factor:`long$(); pip_value:`float$(); quote_amount:`float$(); rate:`float$(); rate_source:`symbol$(); rate_sym:`symbol$(); rate_time:`timestamp$(); report_amount:`float$(); status:`symbol$(); config_id:`symbol$(); version:`symbol$())
 
 / fxmarkoutwide1's output (#1395): fx_markout in a row per (venue; fill_id; horizon) - the markout,
 / the execution residual and the reconciling residual side by side, and up to three legs in route
 / order with their inversion and allocation. status is `ok, `partial (priced but a component is not),
 / `unavailable (not priced) or `unreconciled (the legs do not add up); it carries the contract's
 / columns for the total (move, quote_amount, report_amount, the rate) like the long layout (#1935).
-.qetl.plant.fx_markout_wide:([]time:`timestamp$(); source_time:`timestamp$(); clock:`symbol$(); venue:`symbol$(); fill_id:`symbol$(); sym:`g#`symbol$(); side:`long$(); size:`float$(); horizon:`timespan$(); pip_factor:`long$(); pip_value:`float$(); price:`float$(); quote_ccy:`symbol$(); ref_t0:`float$(); ref_t1:`float$(); move:`float$(); total_pips:`float$(); execution_pips:`float$(); residual_pips:`float$(); leg1:`symbol$(); leg1_invert:`boolean$(); leg1_pips:`float$(); leg2:`symbol$(); leg2_invert:`boolean$(); leg2_pips:`float$(); leg3:`symbol$(); leg3_invert:`boolean$(); leg3_pips:`float$(); quote_amount:`float$(); report_ccy:`symbol$(); rate:`float$(); rate_source:`symbol$(); rate_sym:`symbol$(); rate_time:`timestamp$(); rate_timing:`symbol$(); report_amount:`float$(); status:`symbol$(); contract_version:`long$(); version:`symbol$())
+.qetl.plant.fx_markout_wide:([]time:`timestamp$(); source_time:`timestamp$(); clock:`symbol$(); venue:`symbol$(); fill_id:`symbol$(); sym:`g#`symbol$(); side:`long$(); size:`float$(); horizon:`timespan$(); pip_factor:`long$(); pip_value:`float$(); price:`float$(); quote_ccy:`symbol$(); ref_t0:`float$(); ref_t1:`float$(); move:`float$(); total_pips:`float$(); execution_pips:`float$(); residual_pips:`float$(); leg1:`symbol$(); leg1_invert:`boolean$(); leg1_pips:`float$(); leg2:`symbol$(); leg2_invert:`boolean$(); leg2_pips:`float$(); leg3:`symbol$(); leg3_invert:`boolean$(); leg3_pips:`float$(); quote_amount:`float$(); rate:`float$(); rate_source:`symbol$(); rate_sym:`symbol$(); rate_time:`timestamp$(); report_amount:`float$(); status:`symbol$(); config_id:`symbol$(); version:`symbol$())
 / order_outcomes1's output: the normalized order-outcome contract (#1396), the one
 / shape order_quality1 reads whatever OMS an order came from. One row per STATUS
 / EVENT a source reported, not per order: `source_time` is the source's own stamp

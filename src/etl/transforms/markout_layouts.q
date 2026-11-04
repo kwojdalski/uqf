@@ -201,7 +201,7 @@
 
 / The layout spec of a dataset written under the markout contract (markout_core.q):
 / the component's own columns are move, quote_amount, report_amount and status (the
-/ contract's 14, 15, 22 and 23) plus the domain's; every other column is per
+/ contract's 14, 15, 20 and 21) plus the domain's; every other column is per
 / (execution, horizon). The execution is (venue, fill_id), the base is `total`,
 / and the columns one value per execution are the contract's execution facts
 / present in the dataset. A domain overrides any key with a dict join.
@@ -215,7 +215,7 @@
     shared:columns except `venue`fill_id`horizon`kind`step,own;
     `columns`execution`horizon`shared`own`base`components`present`per_execution!(
         columns;`venue`fill_id;`horizon;shared;own;`total;components;`status;
-        shared inter `source_time`clock`sym`side`size`price`quote_ccy`report_ccy)}
+        shared inter `source_time`clock`sym`side`size`price`quote_ccy`config_id)}
 
 / ----------------------------------------------------------- A WORKED SAMPLE
 / A domain-neutral spec: a `total` and a `part` per horizon, one measure.
