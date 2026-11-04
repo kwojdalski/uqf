@@ -7,6 +7,7 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
 import { CompareView, compareBody } from "./CompareView";
+import { writeToken } from "./api";
 import type { CompareResult, CompareTable } from "./api";
 
 const ok = (body: unknown) => ({ ok: true, json: async () => body });
@@ -91,6 +92,26 @@ it("sends both sides, the window, filters and limit as typed", async () => {
     source_version: null,
     partition: null,
   });
+});
+
+it("carries the write token, since a target side is reached over ssh", async () => {
+  writeToken.set("s3cret");
+  try {
+    const fetcher = serve(ok(result([verdict()])));
+    render(<CompareView />);
+    fill(FORM);
+    fireEvent.click(screen.getByRole("button", { name: "Compare" }));
+    await screen.findByLabelText("Comparison of demo_deals");
+    const [, options] = fetcher.mock.calls.at(-1) as unknown as [
+      string,
+      RequestInit,
+    ];
+    expect((options.headers as Record<string, string>).Authorization).toBe(
+      "Bearer s3cret",
+    );
+  } finally {
+    writeToken.set("");
+  }
 });
 
 it("names both sides, and never shows a truncated sample without its label", async () => {

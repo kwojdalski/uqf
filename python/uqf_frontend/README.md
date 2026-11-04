@@ -580,13 +580,17 @@ with its zone), filters as typed (`sym=EURUSD`), a row limit per side and,
 optionally, the `source_version` whose coverage to compare. `compare.py` checks
 that a target side is registered and hands the rest to `uqs data diff`'s own
 function (`uqs.cli.data_diff.run`): uqs reaches each side's gateway - a target
-through an ssh tunnel, so a target side needs remote operations on, as a tunnel
-check does - and q decides everything the answer says (src/etl/core/compare.q).
-Each table carries one outcome - `endpoint_unavailable`, `missing_table`,
-`differs`, `not_comparable`, `incomplete_coverage` or `equal_in_sample` - and
-the label q wrote for it, which for a sample cut at the row limit says it is not
-proof the tables are equal. Every table is put to the table policy like
-`/query`'s, and the route is the `compare` feature's read.
+through an ssh tunnel - and q decides everything the answer says
+(src/etl/core/compare.q). A target side is held to what `/services/{target}` and
+a target workspace are (#2066): the write token while writes are on (401
+`WriteTokenRequired`), an allowed Host, `services:read` (403, audited like any
+refused read), and remote operations on - each checked before uqs is called. A
+comparison of `local` with itself needs none of these. Each table carries one
+outcome - `endpoint_unavailable`, `missing_table`, `differs`, `not_comparable`,
+`incomplete_coverage` or `equal_in_sample` - and the label q wrote for it, which
+for a sample cut at the row limit says it is not proof the tables are equal.
+Every table is put to the table policy like `/query`'s, and the route is the
+`compare` feature's read.
 
 ## Backfill status
 
