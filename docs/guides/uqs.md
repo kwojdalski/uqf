@@ -1214,6 +1214,14 @@ uqs logs fxorderbookfeed1 -f --level WARNING   # live tail, warnings/errors only
 Lines are sorted by the log's own timestamp. `-f` keeps following across
 restarts and the daily roll. `--level` filters to that level and above.
 
+Values are coloured by what they look like: numbers magenta (red when negative),
+q symbols yellow, dates and timestamps green, UUIDs and 32/40/64-digit hex
+digests light blue, and other `key=value` values light cyan. Each element of a
+vector such as `sizes=1000000 2e+07` or `` symbols=`EURUSD`GBPUSD `` is coloured
+on its own, and so is each atom of a list such as `` x=(1;`a) ``. Text in double
+quotes is never looked inside. The colours change nothing else: with colour off
+the line is the log's text exactly.
+
 An attached backfill or receiver is no TorQ process and has no `out_` log.
 `uqs logs --attachment NAME --worker WORKER` reads its latest run instead, with
 the same `-f`, `-n` and `--level`; `--run` picks an older run
