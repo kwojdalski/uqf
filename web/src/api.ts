@@ -527,6 +527,8 @@ export interface RemoteUpload {
 export const UPLOAD_MAX_BYTES = 16 * 1024 * 1024;
 export const UPLOAD_ROOT = "shared/config";
 export const UPLOAD_MAX_DEPTH = 16;
+/** The longest root-relative path, in characters, the server will split. */
+export const UPLOAD_MAX_PATH = 4096;
 export const UPLOAD_TEMP_PREFIX = ".uqf-upload-";
 /** Longer than the server's own UPLOAD_TIMEOUT, so the server's answer -
  * including "uncertain" - arrives before the browser gives up. */
@@ -550,6 +552,9 @@ export function remoteUploadPath(
  * cannot be uploaded to, or null. The same rules remote_helper.upload_parts
  * applies - the server's word is still final. */
 export function uploadPathProblem(path: string): string | null {
+  // characters as Python's len() counts them: code points, not UTF-16 units
+  if ([...path].length > UPLOAD_MAX_PATH)
+    return `the path is longer than ${UPLOAD_MAX_PATH} characters`;
   if (path.includes("\0")) return "the path contains a NUL byte";
   if (path.startsWith("/")) return "absolute paths are refused";
   const parts = path.split("/").filter((p) => p !== "" && p !== ".");
