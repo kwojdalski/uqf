@@ -273,7 +273,7 @@ def reserved_reason(name: str) -> str | None:
     if name in Q_WORDS:
         return "a q keyword"
     if name in _TORQ_GLOBALS:
-        return "a global every TorQ process defines (an attached table would overwrite it)"
+        return "a global every TorQ process defines (a table would overwrite it)"
     if name in _PARTITION_NAMES:
         return "a partition name of the hdb (it would break date-filtered queries of every table)"
     return None

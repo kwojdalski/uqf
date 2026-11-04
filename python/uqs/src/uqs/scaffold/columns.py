@@ -19,6 +19,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
+from uqs.attach.schema import reserved_reason
 from uqs.generated.q_facts import Q_TYPE_CHARS
 from uqs.model import plant_metadata, schemas
 from uqs.model.qnames import Q_WORDS
@@ -318,6 +319,8 @@ def plant_table_definition(table: str, columns: list[tuple[str, str]]) -> str:
 
     Tables and the plant runtime share `.qetl.plant`, so a table named for one
     of its functions would replace it - refused before anything is written."""
+    if (why := reserved_reason(table)) is not None:
+        raise UqsError(f"{table!r} cannot be a plant table: it is {why}. Pick another name")
     if table in plant_runtime_names():
         raise UqsError(
             f"{table} is a name the plant runtime uses (.qetl.plant.{table}, in "
