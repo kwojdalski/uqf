@@ -328,7 +328,10 @@ it("sends the typed write token with an action, and keeps it out of reads", asyn
     "Bearer tok-123",
   );
   const [, status] = fetcher.mock.calls.find(([path]) => path === "/control")!;
-  expect(status?.headers).toBeUndefined();
+  // a read names its workspace (#2029), never the token
+  expect(
+    (status?.headers as Record<string, string>).Authorization,
+  ).toBeUndefined();
   sessionStorage.clear();
 });
 

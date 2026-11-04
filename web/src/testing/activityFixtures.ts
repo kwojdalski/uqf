@@ -217,10 +217,57 @@ export function answer(path: string, level: SessionLevel = "actions"): unknown {
       remote_operations_enabled: true,
       poll_seconds: 30,
     };
+  if (bare === "/services/prod-a/tunnel")
+    return {
+      target: "prod-a",
+      ssh: "deploy@prod-a",
+      release: null,
+      mappings: [],
+      launch_argv: ["ssh", "-N", "deploy@prod-a"],
+      launch_command: "ssh -N deploy@prod-a",
+      available: [],
+    };
   if (bare.startsWith("/services/prod-a/files"))
     return listing(
       new URLSearchParams(path.split("?")[1] ?? "").get("path") ?? "",
     );
+  if (bare === "/workspaces")
+    return {
+      workspaces: [
+        {
+          name: "local",
+          kind: "local",
+          connection: "direct",
+          access: "read-write",
+          environment: null,
+          ssh: null,
+          available: true,
+          reason: null,
+        },
+        {
+          name: "prod-a",
+          kind: "target",
+          connection: "ssh tunnel",
+          access: "read-only",
+          environment: null,
+          ssh: "deploy@prod-a",
+          available: true,
+          reason: null,
+        },
+      ],
+      header: "x-uqf-target",
+      source: "/repo/deploy_targets.toml",
+      invalid: null,
+    };
+  if (bare === "/workspace")
+    return {
+      target: "local",
+      connection: "direct",
+      access: "read-write",
+      host: null,
+      endpoints: [],
+      poll_seconds: 30,
+    };
   if (bare === "/activity") return HISTORY;
   if (bare.startsWith("/control/process/"))
     return {
