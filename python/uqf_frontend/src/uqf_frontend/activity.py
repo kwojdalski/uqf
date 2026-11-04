@@ -44,6 +44,21 @@ blocks the action being audited: this is operational logging, not a gate and
 not tamper-proof evidence. The failure is counted, logged, reported on
 GET /activity, and the action's response carries `X-UQF-Audit: unrecorded`.
 
+WHAT A STRANGER CAN DO TO IT (#2019). POST /activity/events needs no token,
+and a request the Host or token check refuses is still recorded. Neither may
+push the audit of an authorised action out of the history, so:
+
+  - the row cap is applied to each kind of row on its own (BUCKETS): browser
+    rows, the server's audit (`request`), and `attempt` rows. One can never
+    evict another.
+  - a server row is an `attempt`, not a `request`, when the request never
+    passed the write guard: its Host or token was refused, writes are off,
+    or it matched no route. Attempts are kept - an attempt is worth seeing -
+    under MAX_ATTEMPT_ROWS, far below the audit's cap.
+  - browser events sent without the write token are rate-limited
+    (BROWSER_EVENT_BURST, BROWSER_EVENTS_PER_SECOND; 429, transient), and a
+    batch's body is held to MAX_BATCH_BYTES before it is read (413).
+
 HOOK FOR NEW ACTIONS. Every state-changing request is audited by default
 (is_audited). A new route needs an entry in SERVER_ACTIONS - test_activity.py
 fails until it has one - and, to report a target, per-item outcomes or a
@@ -60,6 +75,7 @@ import logging
 import re
 import sqlite3
 import threading
+import time
 import uuid
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
@@ -75,8 +91,14 @@ SOURCES = ("browser", "server")
 #: of a response - useful for timing, never the authority on the outcome.
 BROWSER_KINDS = ("navigate", "select", "submit", "confirm", "cancel", "result")
 
-#: The one kind the server writes: a request to change something.
+#: The kind the server writes: a request to change something, which passed
+#: the write guard and reached a route - the audit proper.
 SERVER_KIND = "request"
+#: The kind the server writes for a request that never passed the write guard
+#: (Host or token refused, writes off) or matched no route. Kept under its own,
+#: smaller cap, so attempts cannot evict the audit (#2019).
+ATTEMPT_KIND = "attempt"
+SERVER_KINDS = (SERVER_KIND, ATTEMPT_KIND)
 
 #: How an action ended. `pending` until settled; `accepted` for work handed off
 #: (a detached backfill); `refused` when nothing was acted on (401, 403, 422
@@ -175,6 +197,20 @@ MAX_ITEMS = 256
 MAX_LIMIT = 1000
 DEFAULT_LIMIT = 200
 
+#: Attempts kept at most - at most `max_rows`, if that is smaller (#2019).
+MAX_ATTEMPT_ROWS = 1000
+
+#: Browser events accepted without the write token: a bucket of this many,
+#: refilled at this rate. Far above what a person clicking produces - the UI
+#: sends at most a 100-event batch a second - and far below what fills the
+#: browser history's cap in minutes (#2019).
+BROWSER_EVENT_BURST = 600
+BROWSER_EVENTS_PER_SECOND = 20.0
+
+#: The largest POST /activity/events body read, in bytes: 100 events of the
+#: UI's own size are a few tens of KiB (#2019).
+MAX_BATCH_BYTES = 1 << 20
+
 #: Inserts between retention sweeps, so pruning costs one DELETE per batch
 #: rather than one per row.
 PRUNE_EVERY = 200
@@ -187,7 +223,11 @@ def stamp(moment: dt.datetime) -> str:
     """An aware datetime as the fixed-width UTC text rows are stored with."""
     if moment.tzinfo is None:
         raise ValueError("an activity timestamp must carry a timezone")
-    return moment.astimezone(dt.UTC).strftime(_STAMP)
+    try:
+        return moment.astimezone(dt.UTC).strftime(_STAMP)
+    except OverflowError:
+        # 0001-01-01T00:00+01:00 is a datetime; in UTC it would be year 0 (#2021)
+        raise ValueError(f"{moment.isoformat()} is outside the range UTC can hold") from None
 
 
 def _now() -> dt.datetime:
@@ -348,7 +388,16 @@ CREATE INDEX IF NOT EXISTS activity_ts ON activity (ts);
 CREATE INDEX IF NOT EXISTS activity_recorded ON activity (recorded_at);
 CREATE INDEX IF NOT EXISTS activity_request ON activity (request_id);
 CREATE INDEX IF NOT EXISTS activity_session ON activity (session_id);
+CREATE INDEX IF NOT EXISTS activity_bucket ON activity (source, kind, seq);
 """
+
+#: Each kind of row and its own row cap, by the name ActivityStore.caps keys
+#: it under: browser rows, the server's audit, and refused attempts (#2019).
+BUCKETS = {
+    "browser": "source = 'browser'",
+    "audit": f"source = 'server' AND kind = '{SERVER_KIND}'",
+    "attempts": f"source = 'server' AND kind = '{ATTEMPT_KIND}'",
+}
 
 #: Columns a reader gets back, in order.
 COLUMNS = (
@@ -409,6 +458,13 @@ class ActivityStore:
             raise ValueError("activity retention needs positive days and rows")
         self.retention_days = retention_days
         self.max_rows = max_rows
+        #: Each bucket's row cap: browser rows and the audit `max_rows` each,
+        #: attempts far fewer.
+        self.caps = {
+            "browser": max_rows,
+            "audit": max_rows,
+            "attempts": min(MAX_ATTEMPT_ROWS, max_rows),
+        }
         self._clock = clock
         self._lock = threading.Lock()
         self._inserts = 0
@@ -554,14 +610,16 @@ class ActivityStore:
         )
 
     def prune(self) -> None:
-        """Apply both retention bounds: age, then row count."""
+        """Apply both retention bounds: age, then each bucket's row count -
+        so browser rows and attempts never evict the audit (#2019)."""
         cutoff = stamp(self._clock() - dt.timedelta(days=self.retention_days))
         self._write("DELETE FROM activity WHERE recorded_at < ?", (cutoff,))
-        self._write(
-            "DELETE FROM activity WHERE seq <= "
-            "(SELECT seq FROM activity ORDER BY seq DESC LIMIT 1 OFFSET ?)",
-            (self.max_rows,),
-        )
+        for bucket, where in BUCKETS.items():
+            self._write(
+                f"DELETE FROM activity WHERE {where} AND seq <= "  # noqa: S608 - fixed text
+                f"(SELECT seq FROM activity WHERE {where} ORDER BY seq DESC LIMIT 1 OFFSET ?)",
+                (self.caps[bucket],),
+            )
 
     # -- reading --------------------------------------------------------------
 
@@ -605,6 +663,34 @@ class ActivityStore:
     def close(self) -> None:
         with self._lock:
             self._db.close()
+
+
+class RateLimit:
+    """A token bucket: `take(n)` is True while `n` more fit, refilled at
+    `per_second` up to `burst`. Thread-safe: sync routes run in a pool."""
+
+    def __init__(
+        self,
+        burst: float,
+        per_second: float,
+        clock: Callable[[], float] = time.monotonic,
+    ) -> None:
+        self.burst = burst
+        self.per_second = per_second
+        self._clock = clock
+        self._lock = threading.Lock()
+        self._left = burst
+        self._at = clock()
+
+    def take(self, n: int) -> bool:
+        with self._lock:
+            now = self._clock()
+            self._left = min(self.burst, self._left + (now - self._at) * self.per_second)
+            self._at = now
+            if n > self._left:
+                return False
+            self._left -= n
+            return True
 
 
 # ------------------------------------------------------------------ the request hook

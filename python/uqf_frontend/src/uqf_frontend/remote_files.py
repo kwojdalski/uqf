@@ -37,6 +37,12 @@ never came is UploadOutcomeUncertain: the helper publishes in one step at
 the very end, so the file may or may not be there, and it is never retried
 here - the operator lists the directory and decides.
 
+DELETE (#1953). A deletion changes the server, so a failure after ssh was
+started is not "nothing happened": a timeout, ssh exiting 255 (it may have
+dropped midway), a crashed helper or an answer that cannot be read is
+DeleteOutcomeUncertain - some paths may be gone. Never transient, never
+retried here; the operator lists the directory first (#2023).
+
 Each failure says which side failed: ssh could not connect (255), no
 release (NO_RELEASE), no release Python (NO_PYTHON), the helper refused the
 path (its ERRORS word), or the helper itself failed.
@@ -119,8 +125,18 @@ class RemoteFailed(FrontendError):
 
 
 class RemoteTimedOut(FrontendError):
+    """A read timed out: nothing changed, so it may be retried."""
+
     status_code = 504
     transient = True
+
+
+class DeleteOutcomeUncertain(FrontendError):
+    """ssh timed out or dropped, the helper crashed, or its answer was lost
+    after a deletion started: some paths may have been deleted. Never
+    transient - list the directory before deleting again (#2023)."""
+
+    status_code = 504
 
 
 class UploadRefused(FrontendError):
@@ -274,7 +290,16 @@ def delete(
         if not remote_helper.split_path(path):
             raise BrowseRefused("the deployment root cannot be deleted")
     return _call(
-        settings, name, {"op": "delete", "paths": paths, "confirmed": True}, runner, on_begin
+        settings,
+        name,
+        {"op": "delete", "paths": paths, "confirmed": True},
+        runner,
+        on_begin,
+        uncertain=(
+            DeleteOutcomeUncertain,
+            "its outcome is unknown: some paths may have been deleted - list the directory "
+            "before deleting again; nothing is retried automatically",
+        ),
     )
 
 
@@ -284,7 +309,16 @@ def _call(
     payload: dict[str, Any],
     runner: Runner,
     on_begin: Callable[[], None] | None = None,
+    *,
+    uncertain: tuple[type[FrontendError], str] | None = None,
 ) -> dict[str, Any]:
+    """Run one helper request on target `name`: its answer, with the root.
+
+    `uncertain` is for an op that changes the server: the error to raise and
+    what may have been left half done, when a timeout, a dropped connection,
+    a crashed helper or a lost answer leaves the outcome unknown. Without it
+    those are a read's failures - a timeout transient, the rest RemoteFailed.
+    A refusal the helper answered with is certain either way."""
     from uqs.deploy import control
     from uqs.deploy.remote import diagnostic
 
@@ -301,18 +335,24 @@ def _call(
             timeout=TIMEOUT, check=False,
         )  # fmt: skip
     except subprocess.TimeoutExpired:
+        if uncertain is not None:
+            error, what = uncertain
+            raise error(f"target {name}: no answer within {TIMEOUT}s - {what}") from None
         raise RemoteTimedOut(
-            f"target {name}: remote operation timed out after {TIMEOUT}s; "
-            "its outcome may be unknown. Do not automatically retry deletion."
+            f"target {name}: remote operation timed out after {TIMEOUT}s"
         ) from None
     except OSError as exc:
         raise RemoteFailed(f"could not run ssh: {exc}") from None
     code = done.returncode
     if code == SSH_FAILED:
-        raise RemoteFailed(
+        reach = (
             f"could not reach target {name} ({r.host}) over ssh - check that "
             f"`ssh -o BatchMode=yes {r.host} true` works: a key loaded, the host key known"
         )
+        if uncertain is not None:
+            error, what = uncertain
+            raise error(f"{reach}; or it dropped midway - {what}")
+        raise RemoteFailed(reach)
     if code == NO_RELEASE:
         raise TargetUnusable(f"target {name} has no deployed release under {root}")
     if code == NO_PYTHON:
@@ -323,8 +363,19 @@ def _call(
         )
     if code:
         said = diagnostic(done) or "nothing"
-        raise RemoteFailed(f"target {name}: the browser helper failed (exit {code}): {said}")
-    return {**_answer(name, done.stdout or ""), "root": root}
+        failed = f"target {name}: the browser helper failed (exit {code}): {said}"
+        if uncertain is not None:
+            error, what = uncertain
+            raise error(f"{failed} - {what}")
+        raise RemoteFailed(failed)
+    try:
+        answer = _answer(name, done.stdout or "")
+    except RemoteFailed as exc:
+        if uncertain is not None:
+            error, what = uncertain
+            raise error(f"{exc} - {what}") from None
+        raise
+    return {**answer, "root": root}
 
 
 def upload(

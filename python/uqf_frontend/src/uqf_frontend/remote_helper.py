@@ -66,9 +66,12 @@ The answer names what was written: `{"ok": true, "path", "size", "sha256",
     permission bits (not setuid, setgid or sticky) are kept; a new file gets
     0o666 less the umask, as any newly created file would.
   - The temp file is removed on every path that does not publish it,
-    including a hangup or SIGTERM (ssh dropped or timed out), which are
-    turned into a refusal so the cleanup runs. Only SIGKILL leaves one; the
-    next upload to that directory sweeps temp files older than STALE_TEMP.
+    including a hangup or SIGTERM (ssh dropped or timed out) while the bytes
+    arrive, which are turned into a refusal so the cleanup runs. From the
+    publishing step on they are ignored: the file may be live by then, so
+    the upload finishes and says so rather than claim nothing was published
+    (#2022). Only SIGKILL leaves a temp file; the next upload to that
+    directory sweeps temp files older than STALE_TEMP.
 
 FRAMING. `list` is sent as before: the helper's source on stdin to
 `python -I -`. An upload cannot be, because `-` reads stdin to its end as
@@ -496,9 +499,11 @@ def sweep(fd, now=None):
     return swept
 
 
-def publish(fd, name, stream, size, digest, overwrite):
+def publish(fd, name, stream, size, digest, overwrite, *, before_publish=None):
     """Write `name` in directory `fd` from `stream`: a temp file, then one
-    atomic step. Returns (replaced, mode)."""
+    atomic step. Returns (replaced, mode). `before_publish`, if given, is
+    called once the bytes are verified and just before the publishing step -
+    `upload` ignores hangups and SIGTERM there (#2022)."""
     existing = _existing(fd, name, overwrite)
     tmp = TEMP_PREFIX + os.urandom(8).hex() + ".tmp"
     flags = (os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW
@@ -516,6 +521,8 @@ def publish(fd, name, stream, size, digest, overwrite):
             os.fsync(tfd)
         finally:
             os.close(tfd)
+        if before_publish is not None:
+            before_publish()
         if overwrite:
             if existing is None:
                 _existing(fd, name, overwrite)  # what is there now may not be a file
@@ -534,6 +541,22 @@ def publish(fd, name, stream, size, digest, overwrite):
     except OSError:
         pass
     return existing is not None, mode
+
+
+def _held_signals(handler):
+    """Install `handler` for a hangup and SIGTERM; the handlers it replaced."""
+    previous = {}
+    for signum in (signal.SIGHUP, signal.SIGTERM):
+        try:
+            previous[signum] = signal.signal(signum, handler)
+        except ValueError:
+            pass  # not the main thread: only in-process callers, never ssh
+    return previous
+
+
+def _restore_signals(previous):
+    for signum, handler in previous.items():
+        signal.signal(signum, handler)
 
 
 def upload(request, stream):
@@ -557,15 +580,21 @@ def upload(request, stream):
     previous = {}
     try:
         swept = sweep(fd)
-        for signum in (signal.SIGHUP, signal.SIGTERM):
-            try:
-                previous[signum] = signal.signal(signum, _interrupted)
-            except ValueError:
-                pass  # not the main thread: only in-process callers, never ssh
-        replaced, mode = publish(fd, parts[-1], stream, size, digest, overwrite)
+        previous = _held_signals(_interrupted)
+        # From the publishing step on, the file may be live: a signal then
+        # must not say "nothing was published" (#2022). Ignored, so the step,
+        # its fsync and the answer finish whole; `previous` is put back below.
+        replaced, mode = publish(
+            fd,
+            parts[-1],
+            stream,
+            size,
+            digest,
+            overwrite,
+            before_publish=lambda: _held_signals(signal.SIG_IGN),
+        )
     finally:
-        for signum, handler in previous.items():
-            signal.signal(signum, handler)
+        _restore_signals(previous)
         os.close(fd)
     return {
         "protocol": PROTOCOL,

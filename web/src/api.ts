@@ -664,7 +664,8 @@ export type ActivityKind =
   | "confirm"
   | "cancel"
   | "result"
-  | "request";
+  | "request"
+  | "attempt";
 export type ActivityOutcome =
   "pending" | "succeeded" | "failed" | "refused" | "accepted" | "unknown";
 export type ActivityTrigger =

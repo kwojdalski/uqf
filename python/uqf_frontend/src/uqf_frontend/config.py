@@ -129,7 +129,10 @@ class Settings:
     #: with it; name a file elsewhere to keep history past a clean.
     activity_db: Path | None = None
     #: Retention: rows older than this many days are pruned, and only the
-    #: newest `activity_max_rows` are kept.
+    #: newest `activity_max_rows` browser rows and, separately, the newest
+    #: `activity_max_rows` server audit rows are kept - neither can evict the
+    #: other (#2019). Refused attempts have a smaller cap of their own
+    #: (activity.MAX_ATTEMPT_ROWS).
     activity_retention_days: int = DEFAULT_ACTIVITY_RETENTION_DAYS
     activity_max_rows: int = DEFAULT_ACTIVITY_MAX_ROWS
 

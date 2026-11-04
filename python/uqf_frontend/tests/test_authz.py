@@ -110,6 +110,21 @@ def test_a_refusing_policy_blocks_each_ops_route(path):
     assert resp.json()["transient"] is False
 
 
+def test_a_root_path_prefix_does_not_take_a_route_out_of_the_policy():
+    """The policy sees the path the router matched, without the ASGI
+    root_path a proxy adds - else `deny_paths` is bypassed under a prefix
+    (#2018)."""
+    app = create_app(
+        gateway=FakeGateway({queries.BROWSE: []}),
+        settings=Settings(max_rows=5000),
+        fleet=FakeFleet(),
+        policy=deny_paths({"/ops/usage"}),
+    )
+    resp = TestClient(app, root_path="/api").get("/api/ops/usage")
+    assert resp.status_code == 403, resp.text
+    assert resp.json()["error"] == "Forbidden"
+
+
 def test_a_refusing_policy_blocks_query():
     c, _ = client(policy=deny_tables({"trades"}))
     resp = c.post("/query", json={"table": "trades", "filters": []})

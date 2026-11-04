@@ -84,7 +84,11 @@ stop the fleet, "anyone who can reach the port" is the whole access control.
 - **A token.** Every state-changing control request must carry
   `Authorization: Bearer $UQF_FRONTEND_WRITE_TOKEN`; without it the answer is
   401. The server refuses to start with writes on and no token. `GET /control`
-  stays open, since the UI asks it whether to draw controls at all.
+  stays open, since the UI asks it whether to draw controls at all. The check,
+  like the authorisation policy and the audit, judges the path the router
+  routes: behind a proxy that serves the API under a prefix
+  (`--root-path /api`), `/api/control/...` needs the token as `/control/...`
+  does (#2018).
 - **An allowed Host.** Every request's `Host` must be in
   `UQF_FRONTEND_ALLOWED_HOSTS` (default `localhost,127.0.0.1,::1`), or it is
   refused with 403. Binding to 127.0.0.1 does not stop DNS rebinding; this does.
@@ -127,6 +131,14 @@ fields of its `deploy-report.json`, come back as `release`. A listing returns at
 most `limit` entries (500 by default, 5000 at most) and says when it was
 truncated; the call is held to 20 s.
 
+`POST /services/{target}/files/delete` removes named regular files and empty
+directories, never following a link or recursing (#1953). A deletion changes the
+server, so once ssh has started, a timeout, ssh exiting 255 (it may have dropped
+midway), a crashed helper or an answer that cannot be read is 504
+`DeleteOutcomeUncertain` with `transient: false`: some paths may be gone, and
+you list the directory before deleting again. Only a browse's timeout is
+transient (#2023).
+
 ### Uploading to a target's shared/config --- one file per request
 
 `PUT /services/{target}/files/content?path=&overwrite=false` writes the request
@@ -158,9 +170,11 @@ you confirm the destination. Each file has its own progress and its own outcome.
   its permission bits (not setuid, setgid or sticky). A new file gets 0666 less
   the umask.
 - **Cleanup.** The temp file is removed on every failure. A hangup or SIGTERM
-  from a dropped or timed-out ssh becomes a refusal so that the cleanup runs.
-  Only SIGKILL leaves a temp file behind, and the next upload to that directory
-  sweeps any older than an hour.
+  from a dropped or timed-out ssh while the bytes arrive becomes a refusal so
+  that the cleanup runs. From the publishing step on, both are ignored: the file
+  may be live by then, so the upload finishes and says so rather than report
+  that nothing was published (#2022). Only SIGKILL leaves a temp file behind,
+  and the next upload to that directory sweeps any older than an hour.
 - **Uncertain outcomes.** An existing file without `overwrite` is 409. A refused
   path is 400. Damaged bytes are 502 `UploadIncomplete`. In each of these,
   nothing was written. A timeout (120 s), an ssh failure (255), a helper crash
@@ -443,7 +457,10 @@ ignored by the reader, and a test covers that.
   `POST /activity/events`), written by middleware whether the caller is the UI,
   `curl` or a script. It is written `pending` before the handler runs and
   settled when the response is known, so a request the token or Host check
-  refuses is on record too. This is the authority on what happened.
+  refuses is on record too. This is the authority on what happened. A request
+  that never passed the write guard - Host or token refused, writes off, or no
+  route matched - is kind `attempt` rather than `request`, kept under its own
+  cap (#2019).
 - **browser** --- what an operator did in the UI: `navigate`, `select`,
   `submit`, `confirm`, `cancel`, and the `result` the browser saw. Intent, sent
   in batches to `POST /activity/events`. Polling records nothing.
@@ -451,7 +468,7 @@ ignored by the reader, and a test covers that.
   |                         |                                                                                                                                                                                                                                                                                                   |
   | ---                     | ---                                                                                                                                                                                                                                                                                               |
   | `GET /activity`         | The history, newest first. Filters: `since`, `until` (timezone required), `session_id`, `request_id`, `action` (exact, or a dotted prefix: `process` matches `process.stop`), `target`, `outcome`, `source`, `limit` (at most 1000). Says whether it is persistent and whether writes have failed |
-  | `POST /activity/events` | Up to 100 browser events. A repeated `event_id` is ignored, so a retried batch is stored once                                                                                                                                                                                                     |
+  | `POST /activity/events` | Up to 100 browser events, a body of at most 1 MiB (413). A repeated `event_id` is ignored, so a retried batch is stored once. It needs no token; without one, events are rate-limited across all callers (600 at once, 20 a second after; 429, transient). A `ts` UTC cannot hold is a 422        |
 
 **Correlation.** The browser sends `X-UQF-Request-Id` and `X-UQF-Session-Id`
 with every write; the server stores both on its row and echoes the request id
@@ -491,9 +508,12 @@ stack `UQF_FRONTEND_STACK_ROOT` names, beside the workers' status files;
 `UQF_FRONTEND_ACTIVITY_DB` names another. `uqs clean` removes `$TORQDATA`, this
 file with it; put it elsewhere to keep history past a clean. With neither set,
 history is kept in memory and `GET /activity` says it is not persistent. Rows
-older than `UQF_FRONTEND_ACTIVITY_RETENTION_DAYS` (30) are pruned, and only the
-newest `UQF_FRONTEND_ACTIVITY_MAX_ROWS` (100000) kept --- at startup and every
-200 writes.
+older than `UQF_FRONTEND_ACTIVITY_RETENTION_DAYS` (30) are pruned. The row cap,
+`UQF_FRONTEND_ACTIVITY_MAX_ROWS` (100000), applies to browser rows and to the
+server's audit separately, and `attempt` rows have a cap of 1000 of their own,
+so neither the browser's events nor a stranger's refused requests can evict the
+audit of an authorised action (#2019). Pruning runs at startup and every 200
+writes.
 
 **When persistence fails.** A configured file that cannot be opened stops the
 API at startup. After that, a failed write never blocks the action it audits:

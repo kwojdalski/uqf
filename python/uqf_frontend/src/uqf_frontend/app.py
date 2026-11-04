@@ -18,7 +18,7 @@ from contextlib import asynccontextmanager
 from typing import Any
 
 import polars as pl
-from fastapi import Depends, FastAPI, Request
+from fastapi import Depends, FastAPI, Query, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -47,6 +47,7 @@ from uqf_frontend.errors import (
     FrontendError,
     GatewayReloading,
     GatewayUnavailable,
+    TooManyRequests,
     ValidationFailed,
     WritesDisabled,
 )
@@ -94,6 +95,10 @@ from uqf_frontend.models import (
     WorkerStatusOut,
 )
 
+#: A fleet view's row limit. At least one (#2020): ops.USAGE answers `lim <= 0`
+#: with a process's whole usage log, and a negative slice is not a cap.
+OpsLimit = typing.Annotated[int, Query(ge=1)]
+
 
 def _refused(status_code: int, error: str, detail: str) -> JSONResponse:
     """A refusal in the shape every FrontendError is rendered in."""
@@ -111,7 +116,7 @@ def run_policy(request: Request, table: str | None = None) -> None:
         request.app.state.policy,
         Request_(
             identity=request.headers.get(authz.IDENTITY_HEADER, authz.ANONYMOUS),
-            path=request.url.path,
+            path=write_guard.route_path(request.scope),
             table=table,
         ),
     )
@@ -209,22 +214,37 @@ def create_app(
     app.state.capture = scheduler
     app.state.activity = history
 
+    # Browser events sent without the token, all callers together (#2019).
+    app.state.activity_rate = activity.RateLimit(
+        activity.BROWSER_EVENT_BURST, activity.BROWSER_EVENTS_PER_SECOND
+    )
+
+    @app.middleware("http")
+    async def bound_activity_batches(request: Request, call_next):  # noqa: ANN001, ANN202
+        """A browser batch's body is held to activity.MAX_BATCH_BYTES before
+        it is read: the route needs no token (#2019)."""
+        if request.method.upper() == "POST" and (
+            write_guard.route_path(request.scope) == "/activity/events"
+        ):
+            declared = request.headers.get("content-length")
+            if declared is None or not declared.isdigit():
+                return _refused(411, "LengthRequired", "send the batch with a Content-Length")
+            if int(declared) > activity.MAX_BATCH_BYTES:
+                return _refused(
+                    413,
+                    "BatchTooLarge",
+                    f"an activity batch may be at most {activity.MAX_BATCH_BYTES} bytes",
+                )
+        return await call_next(request)
+
     @app.middleware("http")
     async def guard_writes(request: Request, call_next):  # noqa: ANN001, ANN202
         """write_guard's two checks, ahead of every route - including ones
         added later, which cannot forget them. A middleware answers itself:
         FastAPI's exception handlers do not see what is raised here."""
-        refusal = write_guard.host_refusal(settings, request.headers.get("host"))
-        if (
-            refusal is None
-            and settings.enable_writes
-            and write_guard.needs_token(request.method, request.url.path)
-        ):
-            refusal = write_guard.token_refusal(settings, request.headers.get("authorization"))
-            if refusal is not None:
-                return _refused(401, "WriteTokenRequired", refusal)
+        refusal = _guard_refusal(settings, request)
         if refusal is not None:
-            return _refused(403, "HostNotAllowed", refusal)
+            return _refused(*refusal)
         return await call_next(request)
 
     @app.middleware("http")
@@ -232,21 +252,30 @@ def create_app(
         """One audit row per state-changing request, whoever sent it.
 
         Added after guard_writes, so it runs OUTSIDE it: a request the token
-        or Host check refuses is audited as refused. It reads no header but
+        or Host check refuses is audited as refused - as an `attempt`, under
+        its own cap, so it cannot evict the audit (#2019). It reads no header but
         the correlation ids and the claimed user, and no body at all - what a
         handler knows beyond the status code it reports through
         activity.audit_of(request).
         """
-        if not activity.is_audited(request.method, request.url.path):
+        if not activity.is_audited(request.method, write_guard.route_path(request.scope)):
             return await call_next(request)
         started = time.perf_counter()
         template, params = _route_of(request)
+        # Only a request that passes the guard and reaches a route can be an
+        # authorised action. Anything else is an attempt, capped on its own,
+        # so a stranger's requests cannot evict the audit (#2019).
+        authorised = (
+            settings.enable_writes
+            and template is not None
+            and _guard_refusal(settings, request) is None
+        )
         request_id = (
             activity.clean_id(request.headers.get(activity.REQUEST_ID_HEADER)) or activity.new_id()
         )
         event_id, recorded = history.add(
             source="server",
-            kind=activity.SERVER_KIND,
+            kind=activity.SERVER_KIND if authorised else activity.ATTEMPT_KIND,
             action=activity.server_action(request.method, template, params),
             target=activity.server_target(params),
             outcome="pending",
@@ -400,13 +429,13 @@ def create_app(
         )
 
     @app.get("/ops/usage", response_model=UsageResponse)
-    def ops_usage(limit: int = 500) -> UsageResponse:
+    def ops_usage(limit: OpsLimit = 500) -> UsageResponse:
         """Fleet-wide query log, assembled here because none exists in q.
 
         `unreachable` is part of the response rather than an error: one process
         being down must not blank the view for the other nine.
         """
-        capped = min(limit, settings.max_rows)
+        capped = max(1, min(limit, settings.max_rows))
         rows, unreachable = ops.merge_usage(fleet.per_process(ops.USAGE, capped))
         return UsageResponse(
             rows=rows[:capped],
@@ -417,7 +446,7 @@ def create_app(
         )
 
     @app.get("/ops/clients", response_model=UsageResponse)
-    def ops_clients(limit: int = 500) -> UsageResponse:
+    def ops_clients(limit: OpsLimit = 500) -> UsageResponse:
         """Every client connected to any process in the fleet.
 
         Distinct from `/ops/connections`, which reports the GATEWAY's clients.
@@ -435,7 +464,7 @@ def create_app(
         unreachable, and a second identical model would be two places for one
         idea.
         """
-        capped = min(limit, settings.max_rows)
+        capped = max(1, min(limit, settings.max_rows))
         rows, unreachable = ops.merge_process_clients(fleet.per_process(ops.PROCESS_CLIENTS))
         return UsageResponse(
             rows=rows[:capped],
@@ -807,6 +836,13 @@ def create_app(
     def record_activity(batch: ActivityBatchRequest, request: Request) -> ActivityBatchResponse:
         """What an operator did in the UI. Intent, as the browser reports it -
         the server's own rows are the authority on what happened."""
+        if not _carries_token(settings, request) and not request.app.state.activity_rate.take(
+            len(batch.events)
+        ):
+            raise TooManyRequests(
+                "too many activity events without the write token - the batch is accepted "
+                "again in a few seconds"
+            )
         stored = dropped = 0
         claimed = request.headers.get(authz.IDENTITY_HEADER)
         for event in batch.events:
@@ -883,6 +919,29 @@ def create_app(
     return app
 
 
+def _guard_refusal(settings: Settings, request: Request) -> tuple[int, str, str] | None:
+    """write_guard's verdict on this request - (status, error, detail), or
+    None when it may pass. One function, so the guard and the audit's notion
+    of "authorised" cannot disagree."""
+    refusal = write_guard.host_refusal(settings, request.headers.get("host"))
+    if refusal is not None:
+        return 403, "HostNotAllowed", refusal
+    if settings.enable_writes and write_guard.needs_token(
+        request.method, write_guard.route_path(request.scope)
+    ):
+        refusal = write_guard.token_refusal(settings, request.headers.get("authorization"))
+        if refusal is not None:
+            return 401, "WriteTokenRequired", refusal
+    return None
+
+
+def _carries_token(settings: Settings, request: Request) -> bool:
+    """Does this request carry the write token? Never, while there is none."""
+    return bool(settings.write_token) and (
+        write_guard.token_refusal(settings, request.headers.get("authorization")) is None
+    )
+
+
 def _route_of(request: Request) -> tuple[str | None, dict[str, str]]:
     """The route template a request will reach and its path parameters,
     asked of the router before the request is routed - so the audit row is
@@ -913,6 +972,12 @@ def _instant(name: str, raw: str | None) -> dt.datetime | None:
         ) from None
     if parsed.tzinfo is None:
         raise ValidationFailed(f"{name} needs an explicit timezone offset, got {raw!r}")
+    try:
+        activity.stamp(parsed)  # what the query will compare with (#2021)
+    except ValueError:
+        raise ValidationFailed(
+            f"{name} is outside the range a UTC timestamp can hold, got {raw!r}"
+        ) from None
     return parsed
 
 
