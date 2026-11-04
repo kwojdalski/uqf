@@ -192,6 +192,11 @@ UNPROFILED: dict[str, str] = {
         "on demand: it needs an executions and a market_data source a site "
         "wires in, and the fx profile has no free connection slot"
     ),
+    "eq_markout1": (
+        "on demand: it needs equity fills on the live `executions` tape, which no feed in "
+        "this tree publishes (eq_fills_backfill writes the HDB), and the Databento bundle's "
+        "databento1 for the books; hdb_eq_markout_backfill1 scores the HDB's fills meanwhile"
+    ),
     "fxmarkoutwide1": (
         "on demand: the wide layout of fx_markout1, started with it when a site "
         "wants both layouts; the fx profile has no free connection slot"

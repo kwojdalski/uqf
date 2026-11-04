@@ -15,6 +15,7 @@ proctype,tablename,primarytimecolumn,attributecolumn,instrumentcolumn,rolltimeof
 ,demo_deals,time,sym,sym,,,,
 ,duckdb_deals,time,sym,sym,,,,
 ,economic_calendar,time,,,,,,
+,eq_markout,time,sym,sym,,,,
 ,exec_bar,time,sym,sym,,,,
 ,executions,time,sym,sym,,,,
 ,fx_limit_breach,time,sym,sym,,,,

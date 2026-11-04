@@ -9,7 +9,7 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 [docs/guides/uqs.md](../guides/uqs.md); for the topology diagrams see
 [architecture/stack.md](../architecture/stack.md).
 
-**23 vendored processes** plus **42 uqf processes** — 65 in total. Ports are shown at the default base port 6050; every one is `{KDBBASEPORT}+offset`, so a different base shifts them all together.
+**23 vendored processes** plus **44 uqf processes** — 67 in total. Ports are shown at the default base port 6050; every one is `{KDBBASEPORT}+offset`, so a different base shifts them all together.
 
 ## uqf's own processes
 
@@ -57,6 +57,8 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 | `demo_deals_feed1` | 6120 | feed | `processes/torq_stream.q` | `demo_deals` | — | `demo_deals` |
 | `hdb_crypto_markout_backfill1` | 6121 | backfill | `processes/torq_backfill.q` | — | — | — |
 | `eq_fills_backfill1` | 6122 | backfill | `processes/torq_backfill.q` | — | — | — |
+| `eq_markout1` | 6123 | etl | `processes/torq_stream.q` | `eq_markout` | `executions`, `market_data` | `eq_markout` |
+| `hdb_eq_markout_backfill1` | 6124 | backfill | `processes/torq_backfill.q` | — | — | — |
 
 ### Why a row deviates from the defaults
 
@@ -100,6 +102,8 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 - **`demo_deals_feed1`** — polling feed over the demo_deals source, the streaming twin of demo_deals_backfill - started on demand, as an example of the pair `uqs job check` checks
 - **`hdb_crypto_markout_backfill1`** — bounded: marks out the HDB's crypto executions against its market_data, into crypto_markout, with the calculation crypto_markout1 applies live
 - **`eq_fills_backfill1`** — bounded: reads an equity fills csv drop and writes canonical executions, on the declared clock
+- **`eq_markout1`** — markouts on equity fills, in bps against the mid of the venue's book, from the canonical executions and market_data, with the sessions and halts of eq_domain deciding which horizons are priced. Not started with the stack: its books come from the Databento bundle's databento1 and its fills from a live feed a site wires in, neither of which the stack starts
+- **`hdb_eq_markout_backfill1`** — bounded: marks out the HDB's equity executions against its market_data, into eq_markout, with the calculation eq_markout1 applies live
 
 ## Tables these processes publish
 
@@ -115,6 +119,7 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 | `crypto_markout` | `plant_tables.q` | `crypto_markout1` |
 | `crypto_trades` | `plant_tables.q` | `cryptomock1` |
 | `demo_deals` | `plant_tables.q` | `demo_deals_feed1` |
+| `eq_markout` | `plant_tables.q` | `eq_markout1` |
 | `exec_bar` | `plant_tables.q` | `exec_bars1` |
 | `executions` | `plant_tables.q` | `executions1` |
 | `fx_limit_breach` | `plant_tables.q` | `fxpositions1` |
