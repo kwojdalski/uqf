@@ -66,6 +66,11 @@ it the API runs alone.
   is explained. An optional coverage requirement refuses incomplete queries
   and shows the API's 409 missing-range message. Results are bounded by the
   requested row limit and server cap, with no pagination claim.
+  _Plot_ draws the loaded rows instead of tabling them: an x column (numeric
+  or temporal), up to three numeric y columns, as a line or scatter. Nulls and
+  infinities stay gaps, and a truncated result says so on the chart. No new
+  request is made. Plotly loads only when a plot is first shown, from its own
+  chunk.
 - **Control:** the write surface, rendered only when the API reports writes
   enabled. Processes are picked from the list the API serves, grouped by
   proctype, with `all` meaning torq.sh's own `all` (startwithall=1) rather
@@ -146,6 +151,8 @@ They cover typed filters, UTC range validation, cancellation, no-overlap polling
 server cadence, transient recovery, coverage gaps/409s and idle versus failed
 worker states. The CI `Browser application` job runs these and the production
 build. API tests cover the added cadence fields and optional static mount.
+The build ends with `scripts/check-bundle.mjs`, which reads the vite manifest
+and fails if Plotly is in anything the entry loads up front.
 
 Live gateway integration and visual browser QA are separate checks; the unit
 suite uses explicit API fixtures and does not silently replace unavailable

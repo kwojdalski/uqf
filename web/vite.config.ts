@@ -32,6 +32,8 @@ const proxy = {
 };
 export default defineConfig({
   base: "/ui/",
+  // scripts/check-bundle.mjs reads it, to hold Plotly out of the main bundle.
+  build: { manifest: true },
   plugins: [react()],
   server: { proxy },
   preview: { proxy },

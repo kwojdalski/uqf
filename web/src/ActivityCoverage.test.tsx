@@ -117,6 +117,7 @@ it("names every control every view renders, with a name the server keeps", async
     "nav.Desk",
     "desk.refine",
     "desk.tier",
+    "desk.show.plot",
     "control.stop",
     "control.confirm",
     "files.sort.name",

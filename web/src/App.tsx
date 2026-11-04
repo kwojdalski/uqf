@@ -28,6 +28,7 @@ import {
   writeToken,
 } from "./api";
 import { FileBrowser } from "./FileBrowser";
+import { PlotPanel } from "./PlotPanel";
 import { useResource } from "./useResource";
 import { ActivityView } from "./ActivityView";
 import {
@@ -509,6 +510,7 @@ function DeskView() {
   const [requireCoverage, setRequireCoverage] = useState(false);
   const [applied, setApplied] = useState<QueryInput | null>(null);
   const [error, setError] = useState("");
+  const [display, setDisplay] = useState<"Table" | "Plot">("Table");
   const selected =
     catalog.data?.tables.find((item) => item.name === table) ??
     catalog.data?.tables[0];
@@ -627,6 +629,19 @@ function DeskView() {
                   <div className="section-heading">
                     <h2>{resource.data.table}</h2>
                     <Badge value={resource.data.tier.toUpperCase()} />
+                    <div className="toggle" role="group" aria-label="Show as">
+                      {(["Table", "Plot"] as const).map((item) => (
+                        <button
+                          key={item}
+                          type="button"
+                          data-activity={`desk.show.${item.toLowerCase()}`}
+                          aria-pressed={display === item}
+                          onClick={() => setDisplay(item)}
+                        >
+                          {item}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                   <p className="note">
                     {selected?.description}
@@ -640,12 +655,20 @@ function DeskView() {
                           "; more rows may exist"
                         : ""}
                   </p>
-                  <Table
-                    rows={resource.data.rows}
-                    empty="No rows match this query."
-                    decimals={decimalsFor(catalog.data, resource.data.table)}
-                    types={typesFor(catalog.data, resource.data.table)}
-                  />
+                  {display === "Plot" ? (
+                    <PlotPanel
+                      result={resource.data}
+                      limit={applied.limit}
+                      types={typesFor(catalog.data, resource.data.table)}
+                    />
+                  ) : (
+                    <Table
+                      rows={resource.data.rows}
+                      empty="No rows match this query."
+                      decimals={decimalsFor(catalog.data, resource.data.table)}
+                      types={typesFor(catalog.data, resource.data.table)}
+                    />
+                  )}
                 </section>
               )}
             </>
