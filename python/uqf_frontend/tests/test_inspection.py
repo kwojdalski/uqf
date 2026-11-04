@@ -12,6 +12,7 @@ import re
 import sqlite3
 import textwrap
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -74,6 +75,31 @@ def registry(tmp_path, monkeypatch) -> Path:
     monkeypatch.setenv("UQS_DEPLOY_TARGETS", str(path))
     monkeypatch.setenv("UQS_DEPLOY_HISTORY", str(tmp_path / "deploy_history.json"))
     return path
+
+
+@pytest.fixture
+def local_stack(tmp_path, monkeypatch) -> tuple[Path, list[str]]:
+    """A scratch stack root for a local lifecycle call, and the torq.sh stops
+    asked of it. Without one, a local stop that inspection mode let through
+    ran against the checkout: it bootstrapped the checkout's output/uqs -
+    leaving a setenv.sh naming this test's UQF_STATUS_DIR for the next run to
+    read (#2082) - and ran torq.sh there, against whatever stack was up."""
+    from uqs import paths as stack_paths
+    from uqs.stack import runtime
+
+    root = tmp_path / "stack"
+    (root / "src" / "etl").mkdir(parents=True)
+    (root / "python" / "uqs").mkdir(parents=True)
+    stack_paths.paths_for_root(root).torqdata.mkdir(parents=True)
+    stopped: list[str] = []
+
+    def stop(paths, procs, **_):
+        assert paths.repo_root == root
+        stopped.append(procs)
+        return SimpleNamespace(returncode=0, stdout="")
+
+    monkeypatch.setattr(runtime, "stop", stop)
+    return root, stopped
 
 
 def _settings(tmp_path: Path, **kw: Any) -> Settings:
@@ -317,10 +343,12 @@ def test_a_target_at_another_server_is_not_refused(tmp_path, registry, other):
     assert not _is_inspection_refusal(resp), resp.text
 
 
-def test_a_target_in_inspection_mode_leaves_the_local_stack_alone(tmp_path, registry):
-    c = _client(_settings(tmp_path))
+def test_a_target_in_inspection_mode_leaves_the_local_stack_alone(tmp_path, registry, local_stack):
+    root, stopped = local_stack
+    c = _client(_settings(tmp_path, stack_root=root))
     resp = c.post("/control/process/stop", json={"procs": "rdb1"}, headers=AUTH)
     assert not _is_inspection_refusal(resp)
+    assert stopped == ["rdb1"]
 
 
 def test_an_unreadable_registry_refuses_writes_naming_a_target(tmp_path, registry):
@@ -392,13 +420,16 @@ def test_a_read_under_an_inspection_workspace_is_not_refused(tmp_path, registry)
     assert c.get("/services", headers={workspaces.TARGET_HEADER: "prod"}).status_code == 200
 
 
-def test_the_local_workspace_follows_the_frontends_own_mode(tmp_path, registry):
-    c, _ = _workspace_client(tmp_path)
+def test_the_local_workspace_follows_the_frontends_own_mode(tmp_path, registry, local_stack):
+    root, stopped = local_stack
+    c, _ = _workspace_client(tmp_path, stack_root=root)
     body = {"procs": "rdb1"}
     local = {**AUTH, workspaces.TARGET_HEADER: workspaces.LOCAL}
     assert not _is_inspection_refusal(c.post("/control/process/stop", json=body, headers=local))
-    c, _ = _workspace_client(tmp_path, inspection_mode=True)
+    assert stopped == ["rdb1"]
+    c, _ = _workspace_client(tmp_path, inspection_mode=True, stack_root=root)
     assert _is_inspection_refusal(c.post("/control/process/stop", json=body, headers=local))
+    assert stopped == ["rdb1"]
 
 
 def test_a_header_that_is_no_target_name_is_left_to_the_workspace_layer(tmp_path, registry):

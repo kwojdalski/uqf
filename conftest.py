@@ -273,6 +273,18 @@ def _skip_unasked_opt_ins(config, items) -> None:
                 item.add_marker(pytest.mark.skip(reason=f"opt-in: select it with -m {marker}"))
 
 
+# --- no test writes into the checkout's output/ (#2082) -------------------------
+
+#: The packages' tests (python/*/tests), whose stack commands default to the
+#: checkout: scripts/dev/checkout_guard.py fails one that leaves anything new
+#: or changed under output/, which the next run - or the next `uqs` - reads.
+_PYTHON_TESTS = Path(__file__).with_name("python")
+
+checkout_output_untouched = _dev_module("checkout_guard").make_guard(
+    Path(__file__).with_name("output"), lambda path: path.is_relative_to(_PYTHON_TESTS)
+)
+
+
 # --- the tests PeachQ is known to fail (python/peachq_known_gaps.txt) ---------
 
 #: Tests that cannot pass with PeachQ as the q, each with why: strict xfails
