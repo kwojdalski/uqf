@@ -202,6 +202,37 @@
     .qunit.assertThrows[.qetl.compare.browse_filters[m];enlist .qetl.compare.parse_filter "venue=x";"filter on venue: no such column*";"no column"];
     .qunit.assertThrows[.qetl.compare.browse_filters[m];enlist .qetl.compare.parse_filter "px=abc";"filter on px: \"abc\" is not a float (f)*";"not a float"]};
 
+/ demo_deals with a venue column the other side does not have (#2069).
+.qt.qetl.compare.with_venue:{[] update venue:`X from .qt.qetl.compare.deals[]}
+
+/ A second table, with a venue column, held identically by both fixture sides.
+.qt.qetl.compare.venues:{[]
+    ([] time:.qt.qetl.compare.from+0D01:00:00 0D02:00:00; venue:`X`Y; px:1.5 2.5)}
+
+.qt.qetl.compare.test_a_filter_column_only_one_side_has_reports_the_schema_difference:{[t]
+    lhs:.qt.qetl.compare.same[];
+    r:.qt.qetl.compare.target[enlist[`demo_deals]!enlist .qt.qetl.compare.with_venue[];.qt.qetl.compare.whole];
+    res:.qt.qetl.compare.cmp[lhs;r;enlist[`filters]!enlist enlist "venue=X"];
+    v:first res`tables;
+    .qunit.assertEquals[(res`outcome;v`outcome);(`differs;`differs);"differs, not a refusal"];
+    .qunit.assertEquals[v`schema;([] column:enlist `venue; left:enlist "absent"; right:enlist "symbol (s)");"the schema names venue, absent on the left"];
+    .qunit.assertEquals[count v`rows;0;"rows are not compared when the filter could not apply"];
+    .qunit.assertEquals[v`reasons;`left`right!("lacks the filter column venue";"");"the side that lacks it is named"];
+    .qunit.assertEquals[v`label;"differs - schema (1 column); rows not compared: local lacks the filter column venue";"the label names the side"]};
+
+.qt.qetl.compare.test_a_filter_column_one_table_lacks_does_not_stop_the_other_tables:{[t]
+    ts:{[d;v] `demo_deals`demo_venues!(d;v)};
+    lhs:.qt.qetl.compare.target[ts[.qt.qetl.compare.deals[];.qt.qetl.compare.venues[]];.qt.qetl.compare.whole];
+    r:.qt.qetl.compare.target[ts[.qt.qetl.compare.with_venue[];.qt.qetl.compare.venues[]];.qt.qetl.compare.whole];
+    res:.qetl.compare.run[.qt.qetl.compare.side["local";lhs];.qt.qetl.compare.side["prod";r];`demo_deals`demo_venues;
+        .qt.qetl.compare.req[enlist[`filters]!enlist enlist "venue=X"]];
+    .qunit.assertEquals[(res[`tables]`table;res[`tables]`outcome);(`demo_deals`demo_venues;`differs`equal_in_sample);"the other table is still compared, on the filtered rows"];
+    .qunit.assertEquals[(res[`tables] 1)`read;1 1j;"one venue X row each side"]};
+
+.qt.qetl.compare.test_a_filter_column_absent_on_both_sides_is_still_refused:{[t]
+    run:{[x] .qt.qetl.compare.cmp[.qt.qetl.compare.same[];.qt.qetl.compare.same[];enlist[`filters]!enlist enlist "venue=X"]};
+    .qunit.assertThrows[run;::;"filter on venue: no such column*";"on neither side"]};
+
 .qt.qetl.compare.test_an_empty_window_or_no_limit_is_refused:{[t]
     s:.qt.qetl.compare.side["a";.qt.qetl.compare.same[]];
     .qunit.assertThrows[{[s;r] .qetl.compare.run[s;s;`demo_deals;r]}[s];.qt.qetl.compare.req[enlist[`to]!enlist .qt.qetl.compare.from];"the window must be non-empty*";"from = to"];
