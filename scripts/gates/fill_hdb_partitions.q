@@ -268,12 +268,13 @@ derived_fx:{[root;table_name;dir;col]
 / columns they replace.
 load_snapshot_store:{[]
     if[not ()~key `.qetl.snapshot; :1b];
-    if[(0=count getenv`UQF_STATUS_DIR) and 0=count getenv`TORQDATA;
-        die "the markout configuration migration records snapshots in the status directory: set UQF_STATUS_DIR (or TORQDATA) first"];
     f:{[d;n] hsym `$d,"../../src/etl/",n} script_dir;
     needed:f each ("core/status.q";"core/backfill_state.q";"core/config_snapshot.q";"transforms/config_markout.q");
     if[any ()~/:key each needed; die "no src/etl beside this script - the markout configuration migration needs its snapshot store (#1999)"];
     system each "l ",/:1_/:string needed;
+    / the status directory is status.q's to name; with neither of its variables set it is "/status"
+    if["/status"~.qetl.status.status_dir[];
+        die "the markout configuration migration records snapshots in the status directory: set UQF_STATUS_DIR (or TORQDATA) first"];
     1b}
 
 / A markout partition's config_id: the legacy snapshot each row's old configuration columns name.
