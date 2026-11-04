@@ -18,6 +18,14 @@ is read from where uqs keeps it:
 - web/dist: ``<root>/web/dist``, when it has been built;
 - the status directory: ``status.status_directory``, read per request.
 
+They are read PER REQUEST (``current``), not once at startup (#2027). Every
+start, stop and restart rewrites process.csv and setenv.sh, so a copy taken
+at startup went stale: a frontend started before the first bootstrap never
+had a fleet to fan out to, and after `uqs restart --base-port 7050` a Stop
+ran torq.sh at the old base port, found nothing, and reported success.
+``current`` re-derives whenever either file changes, and costs a stat of each
+otherwise.
+
 Only ``uqs.paths`` is imported (it loads ``uqs.runtimes`` and the logger, not
 ``uqs.stack``), lazily and only when a stack root is set: the read path still
 loads nothing of the orchestrator.
@@ -25,7 +33,9 @@ loads nothing of the orchestrator.
 
 from __future__ import annotations
 
+import os
 import re
+import threading
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -115,6 +125,42 @@ def derive(root: Path | None) -> StackFacts:
         web_dist=web_dist if web_dist.is_dir() else None,
         activity_db=paths.torqdata / "frontend" / "activity.sqlite3",
     )
+
+
+#: root -> (the stat signature the facts were derived at, the facts).
+_CURRENT: dict[Path, tuple[tuple[object, ...], StackFacts]] = {}
+_CURRENT_LOCK = threading.Lock()
+
+
+def current(root: Path) -> StackFacts:
+    """``derive(root)``, as of the stack's files now: derived again whenever
+    the generated process.csv or setenv.sh changed since the last call - a
+    rewrite in place or a replace - and otherwise the facts already read."""
+    from uqs import paths as stack_paths
+
+    paths = stack_paths.paths_for_root(root)
+    key = (
+        _signature(paths.generated_procs),
+        _signature(paths.generated_setenv),
+        (root / "web" / "dist").is_dir(),
+    )
+    with _CURRENT_LOCK:
+        cached = _CURRENT.get(root)
+    if cached is not None and cached[0] == key:
+        return cached[1]
+    facts = derive(root)
+    with _CURRENT_LOCK:
+        _CURRENT[root] = (key, facts)
+    return facts
+
+
+def _signature(path: Path) -> tuple[int, int, int, int] | None:
+    """What changes when *path* is rewritten or replaced; None while it is absent."""
+    try:
+        st = os.stat(path)
+    except FileNotFoundError:
+        return None
+    return (st.st_ino, st.st_size, st.st_mtime_ns, st.st_ctime_ns)
 
 
 def generated_base_port(setenv: Path) -> int | None:

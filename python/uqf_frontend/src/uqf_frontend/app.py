@@ -338,11 +338,12 @@ def create_app(
         # interrogate. Refuse on what we know, not on what we failed to
         # learn.
         if proctype is not None and proctype not in ("gateway", "unknown"):
+            facts = settings.facts()
             return HealthResponse(
                 ok=False,
                 gateway="wrong_process",
                 detail=(
-                    f"{settings.host}:{settings.port} answers as a {proctype!r} process, "
+                    f"{facts.host}:{facts.port} answers as a {proctype!r} process, "
                     f"not a gateway - routed queries and the ops views all go through "
                     f".gw.*, which only a gateway has. Point UQF_FRONTEND_STACK_ROOT at "
                     f"the stack whose process.csv declares this gateway."
@@ -459,7 +460,8 @@ def create_app(
                 "generated process.csv is the declared process set"
             )
         try:
-            declared = procfile.read(settings.process_csv, settings.base_port)
+            # The base port as setenv.sh says now, not at startup (#2027).
+            declared = procfile.read(settings.process_csv, settings.facts().base_port)
         except FileNotFoundError as exc:
             raise ValidationFailed(str(exc)) from None
 
