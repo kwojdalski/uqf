@@ -42,6 +42,7 @@ def test_it_declares_a_horizon_job_over_the_two_tables():
     ("kw", "message"),
     [
         ({"subs": ("ev",)}, "--subscribe-to EVENTS,REFERENCE"),
+        ({"subs": ("ev", "ev")}, "distinct events and reference tables"),
         ({"horizon": None}, "needs --horizon"),
         ({"horizon": "10s"}, "a q timespan"),
         ({"columns": None}, "needs --schema"),

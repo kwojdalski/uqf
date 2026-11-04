@@ -34,6 +34,29 @@
     .qunit.assertTrue[(`venue`fill_id`horizon`kind`step xasc r)~`venue`fill_id`horizon`kind`step xasc lg;"a reshuffled long holds the same rows"];
     .qunit.assertEquals[r`horizon;asc r`horizon;"canonically ordered by horizon within the one execution"]};
 
+.qt.qpipe.transform.markout_layouts.test_wide_orders_executions_from_all_components_first_appearance:{[tc]
+    sp:.qpipe.transform.markout_layouts.sample_spec[];
+    a:update venue:`z from .qpipe.transform.markout_layouts.sample_long[];
+    b:update venue:`a from .qpipe.transform.markout_layouts.sample_long[];
+    / z appears first as a part; its total rows arrive after a's.
+    lg:(enlist a 1),b,a 0 2 3;
+    w:.qpipe.transform.markout_layouts.wide[sp;lg];
+    .qunit.assertEquals[w`venue;`z`z`a`a;"first appearance includes non-base components"];
+    .qunit.assertEquals[w`horizon;4#0D00:00:01 0D00:00:10;"horizons ascend within each execution"]};
+
+.qt.qpipe.transform.markout_layouts.test_nested_preserves_execution_order_in_an_exact_round_trip:{[tc]
+    sp:.qpipe.transform.markout_layouts.sample_spec[];
+    a:update venue:`z from .qpipe.transform.markout_layouts.sample_long[];
+    b:update venue:`a from .qpipe.transform.markout_layouts.sample_long[];
+    lg:a,b;
+    w:.qpipe.transform.markout_layouts.wide[sp;lg];
+    n:.qpipe.transform.markout_layouts.nested[sp;lg];
+    .qunit.assertEquals[n`venue;`z`a;"grouping must not sort executions by key"];
+    .qunit.assertEquals[.qpipe.transform.markout_layouts.unnest[n];w;
+        "the exact wide rows and their order come back"];
+    .qunit.assertEquals[.qpipe.transform.markout_layouts.long[sp;.qpipe.transform.markout_layouts.unnest[n]];lg;
+        "the exact canonical long rows come back too"]};
+
 .qt.qpipe.transform.markout_layouts.test_nested_wide_goes_through_wide_to_the_same_long:{[tc]
     sp:.qt.qpipe.transform.markout_layouts.fx_spec[];
     lg:.qt.qpipe.transform.markout_layouts.fx_two[];

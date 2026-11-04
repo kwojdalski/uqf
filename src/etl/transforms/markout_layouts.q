@@ -118,8 +118,9 @@
     want:id,(spec`shared),spec`own;
     base:?[lng;enlist (=;`kind;enlist spec`base);0b;want!want];
     / executions in first-appearance order, horizons ascending within one
-    rows:flip value flip (spec`execution)#base;
-    base:update zz_ord:(distinct rows)?rows from base;
+    rows:flip value flip (spec`execution)#lng;
+    base_rows:flip value flip (spec`execution)#base;
+    base:update zz_ord:(distinct rows)?base_rows from base;
     base:`zz_ord`zz_hz xasc update zz_hz:base spec`horizon from base;
     j:id xkey (`zz_ord`zz_hz) _ base;
     c:spec`components;
@@ -173,7 +174,9 @@
         '"markout_layouts: a per-execution column varies across horizons"];
     cs:(cols w) except ex;
     agg:cs!{$[x in y; (first;x); x]}[;pe] each cs;
-    0!?[w;();ex!ex;agg]}
+    n:0!?[w;();ex!ex;agg];
+    / qSQL groups sort their keys; restore the wide rows' first appearance.
+    n (ex#n)?distinct ex#w}
 
 / The wide rows of a nested-wide dataset: the inverse of nested.
 / @param nst the nested rows
