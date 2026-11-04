@@ -187,7 +187,13 @@ class TimeRange:
             if self.start != _midnight(first):
                 first += timedelta(days=1)
         if self.end is not None:
-            last = (self.end - timedelta(microseconds=1)).date()
+            # `end` is exclusive: a range ending exactly at midnight owns nothing
+            # of that day. Said as a comparison with the midnight, not as "the
+            # last microsecond before end", which would hold only at this
+            # precision (#2055).
+            last = self.end.date()
+            if self.end == _midnight(last):
+                last -= timedelta(days=1)
         return first, last
 
 

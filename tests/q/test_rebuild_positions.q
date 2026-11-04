@@ -104,6 +104,21 @@
     .qunit.assertTrue[(first exec detail from h) like "*outside the window*";"and says why"];
     .qunit.assertTrue[not `stray_out in tables `.;"nothing was written"]};
 
+/ #2055: the window is [from;to). A row AT from is inside; one a nanosecond
+/ before to is inside; one AT to belongs to the next window and is refused -
+/ whatever precision the column has, since no bound is "to minus a tick".
+.qt.qpipe.job.rebuild_positions.test_the_window_admits_its_start_and_refuses_its_end:{[t]
+    f:.qt.qpipe.job.rebuild_positions.d 0; e:.qt.qpipe.job.rebuild_positions.d 1;
+    .qetl.reaction.on[`demo_deals;`edge_in;{[ds;f;t]
+        .qetl.reaction.write[`edge_in_out;`sym;([] time:(f;t-1); sym:`EURUSD`USDJPY)]}];
+    .qetl.reaction.on[`demo_deals;`edge_out;{[ds;f;t]
+        .qetl.reaction.write[`edge_out_out;`sym;([] time:enlist t; sym:enlist `EURUSD)]}];
+    .qetl.reaction.notify_published[`demo_deals;f;e;0#.qpipe.source.demo_deals.fixture[];.qetl.io.memory];
+    h:select name, outcome from .qetl.reaction.history where name in `edge_in`edge_out;
+    .qetl.reaction.off[`demo_deals;`edge_in];
+    .qetl.reaction.off[`demo_deals;`edge_out];
+    .qunit.assertEquals[(h`name)!h`outcome;`edge_in`edge_out!`ok`failed;"[from; to-1ns] is written, a row at to is refused"]};
+
 .qt.qpipe.job.rebuild_positions.test_an_empty_window_writes_nothing:{[t]
     .qetl.reaction.notify_published[`demo_deals;.qt.qpipe.job.rebuild_positions.d 0;.qt.qpipe.job.rebuild_positions.d 1;0#.qpipe.source.demo_deals.fixture[];.qetl.io.memory];
     .qunit.assertEquals[(count .qt.qpipe.job.rebuild_positions.positions[];exec distinct outcome from .qetl.reaction.history);(0;enlist `ok);

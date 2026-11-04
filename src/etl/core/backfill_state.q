@@ -570,7 +570,9 @@
 / while reporting progress.
 / @param worker the worker's name
 / @param spec the run specification - source_version, range_from, range_to
-/ @param cursor how far the run has got
+/ @param cursor how far the run has got: the EXCLUSIVE END of the last completed
+/   window, range_to of [from;to) - not the last event seen (#2055). A resume
+/   starts at it, so a row timed exactly at the cursor is the next window's
 / @return the path written
 .qetl.job.bounded.state.save_checkpoint:{[worker;spec;cursor]
     dir:.qetl.job.bounded.state.lock_dir[];
