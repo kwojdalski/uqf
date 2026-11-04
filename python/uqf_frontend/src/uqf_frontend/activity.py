@@ -55,6 +55,21 @@ cap (Bound), and what a cap evicts, what ages out and what the browser had to
 sample or drop is counted in `activity_drops` and reported on GET /activity -
 never lost without a number.
 
+WHAT A STRANGER CAN DO TO IT (#2019). POST /activity/events needs no token,
+and a request the Host or token check refuses is still recorded. Neither may
+push the audit of an authorised action out of the history, so:
+
+  - inside each level, the row cap is applied to each kind of row on its own
+    (BUCKETS): browser rows, the server's audit (`request`), and `attempt`
+    rows. One can never evict another, though all are `actions`.
+  - a server row is an `attempt`, not a `request`, when the request never
+    passed the write guard: its Host or token was refused, writes are off,
+    or it matched no route. Attempts are kept - an attempt is worth seeing -
+    under MAX_ATTEMPT_ROWS, far below the audit's cap.
+  - browser events sent without the write token are rate-limited
+    (BROWSER_EVENT_BURST, BROWSER_EVENTS_PER_SECOND; 429, transient), and a
+    batch's body is held to MAX_BATCH_BYTES before it is read (413).
+
 HOOK FOR NEW ACTIONS. Every state-changing request is audited by default
 (is_audited). A new route needs an entry in SERVER_ACTIONS - test_activity.py
 fails until it has one - and, to report a target, per-item outcomes or a
@@ -71,6 +86,7 @@ import logging
 import re
 import sqlite3
 import threading
+import time
 import uuid
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
@@ -98,14 +114,21 @@ log = logging.getLogger(__name__)
 #: request, a poll or a retry (the `debug` level).
 BROWSER_KINDS = ("navigate", "select", "submit", "confirm", "cancel", "result", "interact", "debug")
 
-#: The one kind the server writes: a request to change something.
+#: The kind the server writes: a request to change something, which passed
+#: the write guard and reached a route - the audit proper.
 SERVER_KIND = "request"
+#: The kind the server writes for a request that never passed the write guard
+#: (Host or token refused, writes off) or matched no route. Kept under its own,
+#: smaller cap, so attempts cannot evict the audit (#2019).
+ATTEMPT_KIND = "attempt"
+SERVER_KINDS = (SERVER_KIND, ATTEMPT_KIND)
 
 #: The level each kind is recorded under (activity_log.LEVELS). Derived, so a
 #: browser cannot file a click as an action to outlive its level's retention.
 LEVEL_OF_KIND = {
     **dict.fromkeys(("navigate", "select", "submit", "confirm", "cancel", "result"), "actions"),
     SERVER_KIND: "actions",
+    ATTEMPT_KIND: "actions",
     "interact": "interactions",
     "debug": "debug",
 }
@@ -224,6 +247,21 @@ DETAIL_KEYS: dict[str, Callable[[object], bool]] = {
 
 #: Bounds on what one event may carry.
 MAX_ITEMS = 256
+
+#: Attempts kept at most - at most the level's `max_rows`, if that is smaller
+#: (#2019).
+MAX_ATTEMPT_ROWS = 1000
+
+#: Browser events accepted without the write token: a bucket of this many,
+#: refilled at this rate. Far above what a person clicking produces - the UI
+#: sends at most a 100-event batch a second - and far below what fills the
+#: browser history's cap in minutes (#2019).
+BROWSER_EVENT_BURST = 600
+BROWSER_EVENTS_PER_SECOND = 20.0
+
+#: The largest POST /activity/events body read, in bytes: 100 events of the
+#: UI's own size are a few tens of KiB (#2019).
+MAX_BATCH_BYTES = 1 << 20
 
 #: Inserts between retention sweeps, so pruning costs one DELETE per level
 #: per batch rather than one per row. A level holds at most its row cap plus
@@ -411,6 +449,7 @@ CREATE INDEX IF NOT EXISTS activity_ts ON activity (ts);
 CREATE INDEX IF NOT EXISTS activity_recorded ON activity (recorded_at);
 CREATE INDEX IF NOT EXISTS activity_request ON activity (request_id);
 CREATE INDEX IF NOT EXISTS activity_session ON activity (session_id);
+CREATE INDEX IF NOT EXISTS activity_bucket ON activity (source, kind, seq);
 CREATE TABLE IF NOT EXISTS activity_drops (
     level   TEXT NOT NULL,
     reason  TEXT NOT NULL,
@@ -419,6 +458,20 @@ CREATE TABLE IF NOT EXISTS activity_drops (
     PRIMARY KEY (level, reason)
 );
 """
+
+#: Each kind of row that is capped on its own within a level, so browser rows
+#: and refused attempts never evict the server's audit (#2019).
+BUCKETS = {
+    "browser": "source = 'browser'",
+    "audit": f"source = 'server' AND kind = '{SERVER_KIND}'",
+    "attempts": f"source = 'server' AND kind = '{ATTEMPT_KIND}'",
+}
+
+
+def bucket_cap(bucket: str, bound: Bound) -> int:
+    """A bucket's row cap within a level whose bound is `bound`."""
+    return min(MAX_ATTEMPT_ROWS, bound.max_rows) if bucket == "attempts" else bound.max_rows
+
 
 #: Added by #2000. A file #1954 wrote has no `level` column; every row in it
 #: was an action, so that is what the column is filled with.
@@ -628,21 +681,28 @@ class ActivityStore:
         )
 
     def prune(self) -> None:
-        """Apply each level's bounds - age, then row count - and count what
-        each removed (`retention`, `row_cap`)."""
+        """Apply each level's bounds - age, then row count for each of its
+        BUCKETS, so browser rows and attempts never evict the audit (#2019) -
+        and count what each removed (`retention`, `row_cap`)."""
         now = self._clock()
         for level, bound in self.bounds.items():
             cutoff = stamp(now - dt.timedelta(days=bound.retention_days))
             aged = self._write(
                 "DELETE FROM activity WHERE level = ? AND recorded_at < ?", (level, cutoff)
             )
-            capped = self._write(
-                "DELETE FROM activity WHERE level = ? AND seq <= "
-                "(SELECT seq FROM activity WHERE level = ? ORDER BY seq DESC LIMIT 1 OFFSET ?)",
-                (level, level, bound.max_rows),
-            )
+            capped = 0
+            for bucket, where in BUCKETS.items():
+                capped += (
+                    self._write(
+                        f"DELETE FROM activity WHERE level = ? AND {where} AND seq <= "  # noqa: S608 - fixed text
+                        f"(SELECT seq FROM activity WHERE level = ? AND {where} "
+                        "ORDER BY seq DESC LIMIT 1 OFFSET ?)",
+                        (level, level, bucket_cap(bucket, bound)),
+                    )
+                    or 0
+                )
             self.note_dropped(level, "retention", aged or 0)
-            self.note_dropped(level, "row_cap", capped or 0)
+            self.note_dropped(level, "row_cap", capped)
 
     # -- reading --------------------------------------------------------------
 
@@ -671,6 +731,34 @@ class ActivityStore:
     def close(self) -> None:
         with self._lock:
             self._db.close()
+
+
+class RateLimit:
+    """A token bucket: `take(n)` is True while `n` more fit, refilled at
+    `per_second` up to `burst`. Thread-safe: sync routes run in a pool."""
+
+    def __init__(
+        self,
+        burst: float,
+        per_second: float,
+        clock: Callable[[], float] = time.monotonic,
+    ) -> None:
+        self.burst = burst
+        self.per_second = per_second
+        self._clock = clock
+        self._lock = threading.Lock()
+        self._left = burst
+        self._at = clock()
+
+    def take(self, n: int) -> bool:
+        with self._lock:
+            now = self._clock()
+            self._left = min(self.burst, self._left + (now - self._at) * self.per_second)
+            self._at = now
+            if n > self._left:
+                return False
+            self._left -= n
+            return True
 
 
 # ------------------------------------------------------------------ the request hook

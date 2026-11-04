@@ -957,7 +957,8 @@ export type ActivityKind =
   | "result"
   | "interact"
   | "debug"
-  | "request";
+  | "request"
+  | "attempt";
 /** What a tab records at, least detail first; `off` records no browser
  *  history - the server's audit of every write is kept regardless. */
 export type SessionLevel = "off" | "actions" | "interactions" | "debug";

@@ -129,7 +129,11 @@ def stamp(moment: dt.datetime) -> str:
     """An aware datetime as the fixed-width UTC text rows are stored with."""
     if moment.tzinfo is None:
         raise ValueError("an activity timestamp must carry a timezone")
-    return moment.astimezone(dt.UTC).strftime(_STAMP)
+    try:
+        return moment.astimezone(dt.UTC).strftime(_STAMP)
+    except OverflowError:
+        # 0001-01-01T00:00+01:00 is a datetime; in UTC it would be year 0 (#2021)
+        raise ValueError(f"{moment.isoformat()} is outside the range UTC can hold") from None
 
 
 def levels_shown(level: str | None) -> tuple[str, ...]:
