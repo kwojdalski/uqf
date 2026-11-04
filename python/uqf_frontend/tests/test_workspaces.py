@@ -164,8 +164,11 @@ def _app(targets: Targets, local_gw: FakeGateway, *, writes: bool = True):
     )
 
 
-def _client(app) -> TestClient:
-    return TestClient(app, base_url="http://localhost")
+def _client(app, *, token: bool = True) -> TestClient:
+    """A browser in a workspace: it holds the write token, and sends it with
+    every request naming a target (#2067) - unless `token` is False."""
+    headers = {"Authorization": f"Bearer {TOKEN}"} if token else None
+    return TestClient(app, base_url="http://localhost", headers=headers)
 
 
 def _query(c: TestClient, target: str | None):
@@ -275,6 +278,88 @@ def test_a_target_needs_remote_operations_and_never_falls_back(declared, targets
     assert resp.status_code == 403
     assert "remote operations" in resp.json()["detail"]
     assert not targets.opened and local_gw.calls == []
+
+
+# ------------------------------------------------------------- the token
+
+
+def _scoped_request(c: TestClient, method: str, template: str, target: str | None):
+    path = template.replace("{name}", "spread")
+    headers = {HEADER: target} if target else {}
+    if method == "POST":
+        return c.post(path, json={"table": "trades", "limit": 5}, headers=headers)
+    return c.get(path, headers=headers)
+
+
+def test_a_target_workspace_needs_the_write_token_and_opens_nothing_without_it(
+    declared, targets, local_gw
+):
+    """A workspace reaches its target over ssh with the operator's key, as
+    /services/{target}/files does - so, like it, it needs the token (#2067).
+    Refused before any ssh is opened, on every scoped route."""
+    app = _app(targets, local_gw)
+    leased: list[str] = []
+    real_lease = app.state.workspaces.lease
+
+    def lease(name: str):  # noqa: ANN202
+        leased.append(name)
+        return real_lease(name)
+
+    app.state.workspaces.lease = lease
+    c = _client(app, token=False)
+    files = c.get("/services/prod-a/files")
+    assert files.status_code == 401 and files.json()["error"] == "WriteTokenRequired"
+    for method, template in sorted(workspaces.SCOPED):
+        resp = _scoped_request(c, method, template, "prod-a")
+        assert resp.status_code == 401, (method, template, resp.text)
+        assert resp.json()["error"] == "WriteTokenRequired", (method, template)
+    wrong = c.post(
+        "/query",
+        json={"table": "trades", "limit": 5},
+        headers={HEADER: "prod-a", "Authorization": "Bearer " + "x" * 32},
+    )
+    assert wrong.status_code == 401
+    assert not targets.opened
+    assert "prod-a" not in leased  # refused before any lease (#2062)
+    assert targets.gateways[PORTS["prod-a"]].calls == []
+    # the spy is wired: the same request with the token does take a lease
+    ok = c.get("/catalog", headers={HEADER: "prod-a", "Authorization": f"Bearer {TOKEN}"})
+    assert ok.status_code == 200, ok.text
+    assert leased == ["prod-a"]
+
+
+def test_a_target_workspace_with_the_token_is_answered(declared, targets, local_gw):
+    c = _client(_app(targets, local_gw), token=False)
+    resp = c.post(
+        "/query",
+        json={"table": "trades", "limit": 5},
+        headers={HEADER: "prod-a", "Authorization": f"Bearer {TOKEN}"},
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["rows"] == [{"sym": "from-prod-a"}]
+    assert [t.target for t in targets.opened] == ["prod-a"]
+
+
+def test_the_local_workspace_needs_no_token(declared, targets, local_gw):
+    """Reads of this API's own stack are as they were: no token, named or not."""
+    c = _client(_app(targets, local_gw), token=False)
+    for target in (None, "local"):
+        for method, template in sorted(workspaces.SCOPED):
+            resp = _scoped_request(c, method, template, target)
+            assert resp.status_code != 401, (target, method, template, resp.text)
+    assert _query(c, None).json()["rows"] == [{"sym": "from-local"}]
+    assert not targets.opened
+
+
+def test_routes_that_open_no_ssh_need_no_token_in_a_target_workspace(declared, targets, local_gw):
+    """Only what reaches the target is held to the token: a tab left on a
+    target without it can still list the workspaces and switch back."""
+    c = _client(_app(targets, local_gw), token=False)
+    for path in ("/workspaces", "/health", "/me/capabilities", "/services"):
+        resp = c.get(path, headers={HEADER: "prod-a"})
+        assert resp.status_code == 200, (path, resp.text)
+    assert c.get("/control", headers={HEADER: "prod-a"}).status_code == 409
+    assert not targets.opened
 
 
 def test_a_route_that_is_not_scoped_refuses_a_target(declared, targets, local_gw):

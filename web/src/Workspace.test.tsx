@@ -14,7 +14,7 @@ import {
 } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
-import { ApiError, request } from "./api";
+import { ApiError, request, writeToken } from "./api";
 import { mockWholeApi } from "./testing/activityFixtures";
 import { useResource } from "./useResource";
 import {
@@ -26,7 +26,10 @@ import {
 } from "./workspace";
 import { WorkspaceSelector } from "./WorkspaceSelector";
 
-afterEach(() => resetWorkspace());
+afterEach(() => {
+  resetWorkspace();
+  writeToken.set("");
+});
 
 function answer(body: unknown, status = 200, label?: string) {
   return {
@@ -51,6 +54,22 @@ describe("the target travels with each request", () => {
     selectWorkspace("prod-a");
     await request("/ops/queue", new AbortController().signal);
     expect(fetcher.mock.calls.map(named)).toEqual([LOCAL, "prod-a"]);
+  });
+
+  it("sends the write token with a target, and not with local (#2067)", async () => {
+    writeToken.set("s3cret");
+    const fetcher = vi.fn(async () => answer({ ok: 1 }));
+    vi.stubGlobal("fetch", fetcher);
+    await request("/query", new AbortController().signal, "{}");
+    selectWorkspace("prod-a");
+    await request("/query", new AbortController().signal, "{}");
+    await request("/ops/queue", new AbortController().signal);
+    const sent = fetcher.mock.calls.map(
+      (call: unknown[]) =>
+        ((call[1] as RequestInit).headers as Record<string, string>)
+          .Authorization,
+    );
+    expect(sent).toEqual([undefined, "Bearer s3cret", "Bearer s3cret"]);
   });
 
   it("keeps the choice for this tab only, in sessionStorage", () => {

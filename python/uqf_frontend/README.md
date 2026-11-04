@@ -317,6 +317,14 @@ remote operations (`UQF_FRONTEND_ENABLE_WRITES`) and `services:read` - none of
 these ever falls back to the local stack. A target workspace is read-only:
 control acts on this API's own stack only.
 
+Because the ssh opens with the operator's key, a scoped route naming a target
+needs what `/services/{target}` needs: the write token and an allowed Host, as
+well as writes on (#2067). Without the token it is refused with 401
+`WriteTokenRequired` before any ssh opens. The local workspace needs no token,
+and neither do the neutral and 409 routes in a target workspace, since they open
+no ssh: a tab left on a target can still list the workspaces and switch back.
+The web UI sends the token it holds with every request naming a target.
+
 ## Running
 
 ```bash
