@@ -281,12 +281,12 @@ instead, and then:
 
 `reuse_rows` lets a book one batch read serve a later one. The cache is keyed by
 **worker, `source_version`, and the window's bounds**: a hit needs all of them
-to match, and starting a window drops whatever the worker's cache holds for any
-other version or window, so a row read for one release of a source can never be
-served to a run of another, and nothing outlives its window. Once a batch has
-read, the cache is cut to `reuse_rows` rows, least recently used first, and an
-entry bigger than the bound alone is never kept: the worker's peak is one batch
-plus the bound. It is off (`0`) because it only pays when batches share keys.
+to match. Each transform attempt clears this worker's previous reads, including
+those of the same window and version, so a retry sees newly arrived references.
+Once a batch has read, the cache is cut to `reuse_rows` rows, least recently
+used first, and an entry bigger than the bound alone is never kept: the worker's
+peak is one batch plus the bound. It is off (`0`) because it only pays when
+batches share keys.
 
 The batched rows are the unbatched rows: `tests/q/test_bounded_batch_read.q`
 runs the markout worker against a stand-in HDB unbatched, batched per symbol
