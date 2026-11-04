@@ -123,7 +123,7 @@ PYTHON_TESTS_HOOK = "scripts/dev/python_tests_hook.py"
 #: when a tracked file is unknown, so a new area is classified on purpose.
 KNOWN = re.compile(
     r"^(\.claude|\.github|docs|lib|python|scripts|sidecars|src|tests|web)/"
-    r"|^(README\.md|CHANGELOG\.md|CLAUDE\.md|LICENSE|LICENSING\.md|install\.sh"
+    r"|^(README\.md|CHANGELOG\.md|CLAUDE\.md|CONTRIBUTING\.md|LICENSE|LICENSING\.md|install\.sh"
     r"|\.env\.example|\.gitattributes|\.gitignore|\.kodiak\.toml|\.panache\.toml"
     r"|\.pre-commit-config\.yaml"
     r"|\.qlinter-version|\.qlinter\.toml|conftest\.py|pyproject\.toml|uv\.lock)$"
