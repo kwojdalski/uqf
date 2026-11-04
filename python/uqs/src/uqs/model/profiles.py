@@ -99,8 +99,7 @@ PROFILES: dict[str, tuple[str, ...]] = {
     "crypto": ("cryptomock1", "crypto_markout1", "crypto_book_1s1"),
     #: No uqf job at all: just ESSENTIAL_INFRA, via PROFILE_INFRA.
     "essential": (),
-    #: The starter pack with its own demo feed: essential plus feed1, so the
-    #: torq runtime has trade and quote coming in (model/infra.py).
+    #: The starter pack with its own demo feed: essential plus feed1 (model/infra.py).
     "feed": (),
     #: Every process the starter pack starts by default, and monitor1.
     "full": (),
@@ -192,6 +191,7 @@ UNPROFILED: dict[str, str] = {
         "on demand: it needs an executions and a market_data source a site "
         "wires in, and the fx profile has no free connection slot"
     ),
+    "eq_markout1": "on demand: it needs live equity fills, which no feed here publishes",
     "fxmarkoutwide1": (
         "on demand: the wide layout of fx_markout1, started with it when a site "
         "wants both layouts; the fx profile has no free connection slot"
