@@ -84,7 +84,11 @@ stop the fleet, "anyone who can reach the port" is the whole access control.
 - **A token.** Every state-changing control request must carry
   `Authorization: Bearer $UQF_FRONTEND_WRITE_TOKEN`; without it the answer is
   401. The server refuses to start with writes on and no token. `GET /control`
-  stays open, since the UI asks it whether to draw controls at all.
+  stays open, since the UI asks it whether to draw controls at all. The check,
+  like the authorisation policy and the audit, judges the path the router
+  routes: behind a proxy that serves the API under a prefix
+  (`--root-path /api`), `/api/control/...` needs the token as `/control/...`
+  does (#2018).
 - **An allowed Host.** Every request's `Host` must be in
   `UQF_FRONTEND_ALLOWED_HOSTS` (default `localhost,127.0.0.1,::1`), or it is
   refused with 403. Binding to 127.0.0.1 does not stop DNS rebinding; this does.
@@ -127,15 +131,24 @@ fields of its `deploy-report.json`, come back as `release`. A listing returns at
 most `limit` entries (500 by default, 5000 at most) and says when it was
 truncated; the call is held to 20 s.
 
+`POST /services/{target}/files/delete` removes named regular files and empty
+directories, never following a link or recursing (#1953). A deletion changes the
+server, so once ssh has started, a timeout, ssh exiting 255 (it may have dropped
+midway), a crashed helper or an answer that cannot be read is 504
+`DeleteOutcomeUncertain` with `transient: false`: some paths may be gone, and
+you list the directory before deleting again. Only a browse's timeout is
+transient (#2023).
+
 ### Uploading to a target's shared/config --- one file per request
 
-`PUT /services/{target}/files/content?path=&overwrite=false` writes the request
-body to `path` below the target's `shared/config/` - the operator-supplied files
-every release links in - and nowhere else (#1951). It is gated like browsing:
-writes on, the token, an allowed Host, a registered target. The browser's file
-browser shows an upload queue in `shared/config/` and below it. You can choose
-files or a folder, or drag them in. Nested paths are kept. Nothing is sent until
-you confirm the destination. Each file has its own progress and its own outcome.
+`PUT /services/{target}/files/content?path=&overwrite=false&push=` writes the
+request body to `path` below the target's `shared/config/` - the
+operator-supplied files every release links in - and nowhere else (#1951). It is
+gated like browsing: writes on, the token, an allowed Host, a registered target.
+The browser's file browser shows an upload queue in `shared/config/` and below
+it. You can choose files or a folder, or drag them in. Nested paths are kept.
+Nothing is sent until you confirm the destination. Each file has its own
+progress and its own outcome.
 
 - **Limits.** 16 MiB a file, checked in the browser, again by the API before ssh
   (`Content-Length`, then while the body is read: 413), and again on the server.
@@ -158,9 +171,11 @@ you confirm the destination. Each file has its own progress and its own outcome.
   its permission bits (not setuid, setgid or sticky). A new file gets 0666 less
   the umask.
 - **Cleanup.** The temp file is removed on every failure. A hangup or SIGTERM
-  from a dropped or timed-out ssh becomes a refusal so that the cleanup runs.
-  Only SIGKILL leaves a temp file behind, and the next upload to that directory
-  sweeps any older than an hour.
+  from a dropped or timed-out ssh while the bytes arrive becomes a refusal so
+  that the cleanup runs. From the publishing step on, both are ignored: the file
+  may be live by then, so the upload finishes and says so rather than report
+  that nothing was published (#2022). Only SIGKILL leaves a temp file behind,
+  and the next upload to that directory sweeps any older than an hour.
 - **Uncertain outcomes.** An existing file without `overwrite` is 409. A refused
   path is 400. Damaged bytes are 502 `UploadIncomplete`. In each of these,
   nothing was written. A timeout (120 s), an ssh failure (255), a helper crash
@@ -173,6 +188,54 @@ you confirm the destination. Each file has its own progress and its own outcome.
   whether it was a create or an overwrite. It never records the file's bytes. An
   uncertain upload is recorded as `unknown`, a refusal as `refused`, and damaged
   bytes as `failed`.
+
+### Config pushes: one push id, history, diff and restore
+
+Every upload belongs to a push (#2002): a file selection, a folder or a drop,
+opened with `POST /services/{target}/config/pushes` when you confirm it. Each
+upload names it (`push=`), and `POST .../config/pushes/{id}/close` closes it
+with what the browser saw of each file. The server keeps, and only the server
+keeps, what the push changed:
+
+```text
+<dest>/shared/config/.uqf-history/<push-id>/      0o700, never browsable
+    manifest.json     who, when, where; per file its action, sizes,
+                      sha256s, modes and state (pending/published/failed)
+    before/<path>     the file a push replaced (or a restore deleted)
+    after/<path>      the file as the push wrote it
+```
+
+A push id is `YYYYMMDDTHHMMSSmmmZ-<8 hex>`, UTC, so ids sort by time. The
+history is walked with the same confined, no-follow descriptor steps, and no
+browse, delete or upload path may name `.uqf-history`, in any letter case.
+
+- **Reads.** `GET .../config/pushes` lists a target's pushes, newest first.
+  `GET .../config/pushes/{id}` shows each file's change, its old and new sha256,
+  and what it is now: as the push left it, as before it (an upload that never
+  landed), or changed since. `GET .../config/pushes/{id}/diff?path=` diffs
+  before against after as text under 256 KiB; a binary or larger file shows
+  sizes and hashes only. These reads are not audited, so a diff's text never
+  reaches the activity store.
+- **Restore.** `GET .../config/pushes/{id}/restore` is the plan; `POST` with
+  `{"confirmed": true}` writes each replaced file's earlier content back and
+  deletes each file the push created (a regular file, never a link), as a push
+  of its own - so a restore can be restored. A file changed since the push
+  refuses the whole restore (409 `RestoreConflict`), writing nothing. A lost
+  answer is 504 `RestoreOutcomeUncertain`, never retried.
+- **Retention.** Opening a push prunes the target's history to the newest
+  `UQF_FRONTEND_CONFIG_HISTORY_KEEP` pushes (50), none older than
+  `UQF_FRONTEND_CONFIG_HISTORY_DAYS` (90). Each pruned id is logged in
+  `.uqf-history/pruned.jsonl`, so its restore is refused as pruned (410
+  `HistoryPruned`), not as unknown.
+- **Audit.** `config.push.open` when a push opens; `file.upload` per file, with
+  `push_id` and `previous_sha256` (null on a create); `config.push` when it
+  closes, with the destination, file count, bytes and one outcome per file;
+  `config.restore` for a restore, with `restores` and its own `push_id`;
+  `config.history.prune`, one item per pruned push. File bytes are never in a
+  row or an export.
+- **CLI.** `uqs target config history TARGET`, and `show`, `diff` and `restore`
+  with a push id, read the same history over ssh with the same helper; `restore`
+  takes `--dry-run` and asks first unless given `--yes`.
 
 A backfill is launched detached rather than awaited: it runs for as long as its
 range takes, and a request that blocked on one would time out mid-run and tell
@@ -443,15 +506,46 @@ ignored by the reader, and a test covers that.
   `POST /activity/events`), written by middleware whether the caller is the UI,
   `curl` or a script. It is written `pending` before the handler runs and
   settled when the response is known, so a request the token or Host check
-  refuses is on record too. This is the authority on what happened.
-- **browser** --- what an operator did in the UI: `navigate`, `select`,
-  `submit`, `confirm`, `cancel`, and the `result` the browser saw. Intent, sent
-  in batches to `POST /activity/events`. Polling records nothing.
+  refuses is on record too. This is the authority on what happened. A request
+  that never passed the write guard - Host or token refused, writes off, or no
+  route matched - is kind `attempt` rather than `request`, kept under its own
+  cap (#2019).
+- **browser** --- what an operator did in the UI, at the level the tab records
+  at (below). Intent, sent in batches to `POST /activity/events`.
 
-  |                         |                                                                                                                                                                                                                                                                                                   |
-  | ---                     | ---                                                                                                                                                                                                                                                                                               |
-  | `GET /activity`         | The history, newest first. Filters: `since`, `until` (timezone required), `session_id`, `request_id`, `action` (exact, or a dotted prefix: `process` matches `process.stop`), `target`, `outcome`, `source`, `limit` (at most 1000). Says whether it is persistent and whether writes have failed |
-  | `POST /activity/events` | Up to 100 browser events. A repeated `event_id` is ignored, so a retried batch is stored once                                                                                                                                                                                                     |
+**Levels (#2000).** Ordered, least detail first; each records its own events and
+every level's before it. Every row carries the level it was recorded under,
+derived by the server from its kind - the browser cannot send one.
+
+  | level          | records                                                                                                                                                                                                                                                                                    |
+  | ---            | ---                                                                                                                                                                                                                                                                                        |
+  | `off`          | no browser history. The server still audits every write                                                                                                                                                                                                                                    |
+  | `actions`      | `navigate`, `select`, `submit`, `confirm`, `cancel` and the `result` the browser saw, from the handler that performs each - and every server audit row, at any level. The default                                                                                                          |
+  | `interactions` | also `interact`: every control used - `ui.click` (a pointer, or Enter or Space on a focused control), `ui.download`, `ui.change` (a select, a checkbox or a field: that it changed, never to what), `ui.toggle` (a section expanded or collapsed) and `ui.copy` - under the control's name |
+  | `debug`        | also `debug`: each request's `request.start` and `request.finish` (method, route, status, duration), and a polled view's `resource.poll` and `resource.retry`. Rate-limited in the browser (a burst of 30, then 5 a second)                                                                |
+
+`UQF_FRONTEND_ACTIVITY_LEVEL` sets the default, served on `/health`; an operator
+can pick another for one tab in the Activity view (kept in that tab's
+sessionStorage). `interactions` is recorded by one listener at the document, not
+by any component: a control is named by its `data-activity` attribute, and
+`web/src/ActivityCoverage.test.tsx` fails on an interactive element without one -
+in the source and on every rendered view - so a new control is covered the day
+it is added. The allowlist below applies at every level: a click records the
+control's name and kind, a change whether a box is checked, a request its route
+(the first two path segments, a name in them replaced by `*`, never the query
+string).
+
+  |                         |                                                                                                                                                                                                                                                                                                                                                                           |
+  | ---                     | ---                                                                                                                                                                                                                                                                                                                                                                       |
+  | `GET /activity`         | The history, newest first. Filters: `since`, `until` (timezone required), `session_id`, `request_id`, `action` (exact, or a dotted prefix: `process` matches `process.stop`), `target`, `outcome`, `source`, `limit` (at most 1000). Says whether it is persistent and whether writes have failed                                                                         |
+  | `POST /activity/events` | Up to 100 browser events, in one transaction, and the count of any the browser did not send (`dropped`). A repeated `event_id` is ignored, so a retried batch is stored once. A body of at most 1 MiB (413). It needs no token; without one, events are rate-limited across all callers (600 at once, 20 a second after; 429, transient). A `ts` UTC cannot hold is a 422 |
+  | `GET /activity/export`  | The history as a file, oldest first, under the same filters plus `format`: `jsonl`, `csv`, or `text` - a timeline `UTC time · session · level · action · target · outcome · duration`, each browser action grouped under the server request it caused (its request id). At most 100000 events                                                                             |
+
+`GET /activity` also takes `level`, the most detailed level shown:
+`interactions` shows actions and interactions. `uqs activity list` and
+`uqs activity export` read the same file, read-only, with no API running,
+through the same `uqs.activity_log` the API reads it with - so the CLI's export
+is the API's, byte for byte.
 
 **Correlation.** The browser sends `X-UQF-Request-Id` and `X-UQF-Session-Id`
 with every write; the server stores both on its row and echoes the request id
@@ -490,10 +584,27 @@ append-only feed. The file is `$TORQDATA/frontend/activity.sqlite3` for the
 stack `UQF_FRONTEND_STACK_ROOT` names, beside the workers' status files;
 `UQF_FRONTEND_ACTIVITY_DB` names another. `uqs clean` removes `$TORQDATA`, this
 file with it; put it elsewhere to keep history past a clean. With neither set,
-history is kept in memory and `GET /activity` says it is not persistent. Rows
-older than `UQF_FRONTEND_ACTIVITY_RETENTION_DAYS` (30) are pruned, and only the
-newest `UQF_FRONTEND_ACTIVITY_MAX_ROWS` (100000) kept --- at startup and every
-200 writes.
+history is kept in memory and `GET /activity` says it is not persistent. Each
+level has its own bounds, applied at startup and every 200 writes: `actions` -
+which holds the server's audit - keeps 30 days and 100000 rows
+(`UQF_FRONTEND_ACTIVITY_RETENTION_DAYS`, `UQF_FRONTEND_ACTIVITY_MAX_ROWS`),
+`interactions` 7 days and 50000, `debug` 1 day and 10000
+(`UQF_FRONTEND_ACTIVITY_INTERACTIONS_*`, `UQF_FRONTEND_ACTIVITY_DEBUG_*`). A
+flood of clicks therefore never evicts an audit row. Within a level, browser
+rows and the server's audit are capped separately, and `attempt` rows have a cap
+of 1000 of their own, so neither the browser's events nor a stranger's refused
+requests can evict the audit of an authorised action (#2019).
+
+**Nothing is lost without a number.** What a level's row cap evicts (`row_cap`),
+what ages out (`retention`), what the browser's debug rate limit sampled away
+(`sampled`) and what overflowed its queue while the API was unreachable
+(`queue_overflow`) are counted by level in `activity_drops`, shown on
+`GET /activity` and the Activity view, and stated at the head of a text export.
+A batch of browser events is one transaction, and the file runs in WAL mode with
+`synchronous=NORMAL`: a power cut can lose the last writes, never the file.
+`test_activity_levels.py` holds a history written at click rate to its cap:
+10000 clicks against a cap of 2000 leave 2000 rows, the file stops growing after
+the first prune, and a batch of 100 costs about a millisecond.
 
 **When persistence fails.** A configured file that cannot be opened stops the
 API at startup. After that, a failed write never blocks the action it audits:

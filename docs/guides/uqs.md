@@ -17,7 +17,8 @@ draws the topology.
 - [What actually starts](#what-actually-starts) --- including
   [runtimes](#runtimes) and [profiles](#profiles)
 - [Changing a process's config](#changing-a-processs-config)
-- [Logs](#logs)
+- [Logs](#logs) --- including [the frontend's activity
+  history](#the-frontends-activity-history)
 - [Connecting](#connecting)
 - [Services](#services)
 - [Adding a process](#adding-a-process) --- including [installing jobs from
@@ -1346,6 +1347,33 @@ It also prints each process's load time on its latest start:
 └──────────────┴─────────────────────┴───────────┴─────────────────────────────┘
 ```
 
+### The frontend's activity history
+
+The frontend API keeps a history of what operators did in the browser and an
+audit of every request that changed something (python/uqf_frontend/README.md,
+"Activity history and the action audit"). `uqs activity` reads the same SQLite
+file, read-only, with no API running: `--db FILE`, else the file
+`UQF_FRONTEND_ACTIVITY_DB` names, else this stack's
+`$TORQDATA/frontend/activity.sqlite3`.
+
+```bash
+uqs activity list --last 1h --level interactions     # newest first, as the Activity view
+uqs activity list --request 0a1b2c3d... --json       # one operation, browser and server
+uqs activity export --date 2026-11-03 --format csv -o day.csv
+uqs activity export --recorded-by server             # the audit alone, as a timeline
+```
+
+Both take the Activity view's filters - `--from/--to/--date/--last`,
+`--session`, `--request`, `--action` (a dotted prefix matches: `process` is
+every `process.*`), `--subject`, `--outcome`, `--recorded-by` - and `--level`,
+the most detailed level shown: `actions`, `interactions` (and actions) or
+`debug` (everything). `export` writes `--format text` (the default: one event a
+line, `UTC time · session · level · action · target · outcome · duration`, each
+browser action grouped under the server request it caused), `csv` or `jsonl`,
+oldest first - the document `GET /activity/export` serves, byte for byte. Events
+a level's bounds evicted, or the browser had to sample or drop, are counted, and
+both commands say how many.
+
 ## Services
 
 What each process does, one short card each, is [Services -
@@ -1684,6 +1712,7 @@ The verbs of rule 4:
   | `unset` `rename` `edit`                       | a target's settings: remove one, rename it, edit the file |
   | `log` `revert`                                | a target's change log, and undoing one change in it       |
   | `adopt`                                       | take over a release copied onto a server by hand          |
+  | `restore`                                     | a config push's files back as they were, as a new push    |
 
 Three of these sit beside a near neighbour on purpose (#1756): `log` is a
 record's change history, where `logs` is processes' output and `history` what
@@ -2085,6 +2114,7 @@ Each command's `--help` names its document. The commands #1731 added:
   | `connector status`                          | `{connectors: [{name, running, pid, log, ...}]}`                                                                                                                                                                                                                                 |
   | `setup odbc status`                         | `{home, current, previous, versions}`; without `--json` it is now a table                                                                                                                                                                                                        |
   | `deploy check`                              | its report without the `DEPLOY_VERIFY_OK`/`FAILED` marker line                                                                                                                                                                                                                   |
+  | `activity list`                             | `{db, events: [{event_id, ts, recorded_at, level, source, kind, action, target, outcome, session_id, request_id, claimed_user, trigger, method, status_code, duration_ms, items, detail, dropped}], drops: [{level, reason, count, last_at}]}`, events newest first              |
   | `deploy history`                            | `{deployments: [{default, at, target, host, dest, release, profile, status, stage}]}`                                                                                                                                                                                            |
   | `target check`                              | `{ok, target, host, dest, remote_user, release}`                                                                                                                                                                                                                                 |
   | `data check`                                | `{ok, hdb, present, segmented, partitions, missing_tables, missing_columns, types_checked, type_changes}`                                                                                                                                                                        |
