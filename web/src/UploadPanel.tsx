@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ApiError,
   type ConfigPushReport,
@@ -118,8 +118,15 @@ export function UploadPanel({
   /** Injectable for tests; the real ones POST to /config/pushes. */
   pushes?: PushOps;
 }) {
-  const [items, setItems] = useState<Item[]>([]);
-  const [destination, setDestination] = useState<string | null>(null);
+  const [items, setShown] = useState<Item[]>([]);
+  // The queue and its destination as they are now, not as the last render
+  // saw them: a dropped folder is added when its read finishes, which can be
+  // after other files were queued (#2012).
+  const current = useRef<{ items: Item[]; destination: string | null }>({
+    items: [],
+    destination: null,
+  });
+  const [destination, setPinned] = useState<string | null>(null);
   const [overwrite, setOverwrite] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [running, setRunning] = useState(false);
@@ -129,9 +136,32 @@ export function UploadPanel({
   const [closeProblem, setCloseProblem] = useState<string | null>(null);
   const nextId = useRef(1);
   const controller = useRef<AbortController | null>(null);
+  const unmounted = useRef(false);
+  useEffect(() => {
+    unmounted.current = false;
+    return () => {
+      // Close, another target or another view: nothing is sent unseen. The
+      // run sees the abort, reports the rest cancelled and closes its push
+      // (#2007).
+      unmounted.current = true;
+      controller.current?.abort();
+    };
+  }, []);
 
-  const dest = destination ?? directory;
+  const setItems = (change: (items: Item[]) => Item[]) => {
+    current.current.items = change(current.current.items);
+    setShown(current.current.items);
+  };
+  const setDestination = (value: string | null) => {
+    current.current.destination = value;
+    setPinned(value);
+  };
+
   const queued = items.filter((item) => item.status === "queued");
+  // The destination is held only while something is queued or sending; an
+  // emptied queue follows the open directory again (#2013).
+  const pinned = running || queued.length > 0 ? destination : null;
+  const dest = pinned ?? directory;
   const queuedBytes = queued.reduce((sum, item) => sum + item.file.size, 0);
 
   const update = (id: number, change: Partial<Item>) =>
@@ -142,11 +172,15 @@ export function UploadPanel({
   function add(picked: Picked[]) {
     setRefusal(null);
     if (picked.length === 0) return;
-    if (!destination && !uploadable(directory)) {
+    const pending = current.current.items.filter(
+      (item) => item.status === "queued",
+    );
+    const base =
+      (pending.length > 0 ? current.current.destination : null) ?? directory;
+    if (!uploadable(base)) {
       setRefusal(`Open ${UPLOAD_ROOT}/ or a directory in it to upload.`);
       return;
     }
-    const pending = items.filter((item) => item.status === "queued");
     if (pending.length + picked.length > UPLOAD_MAX_FILES) {
       setRefusal(
         `A queue holds at most ${UPLOAD_MAX_FILES} files; this would make ${pending.length + picked.length}.`,
@@ -162,7 +196,6 @@ export function UploadPanel({
       );
       return;
     }
-    const base = destination ?? directory;
     const seen = new Set(pending.map((item) => item.relative));
     const added = picked.map(({ file, relative }): Item => {
       const problem =
@@ -241,6 +274,7 @@ export function UploadPanel({
       setPush({ id: opened, pruned: answer.pruned.length });
     } catch (error: unknown) {
       controller.current = null;
+      if (unmounted.current) return;
       setRunning(false);
       setRefusal(
         `The push could not be opened, so nothing was sent: ${error instanceof Error ? error.message : String(error)}`,
@@ -289,18 +323,18 @@ export function UploadPanel({
     try {
       await pushes.close(target, opened, reported);
     } catch (error: unknown) {
+      if (unmounted.current) return;
       setCloseProblem(
         `Push ${opened} was not closed: ${error instanceof ApiError ? error.message : String(error)}. Its files are in its history; the summary of the push is not.`,
       );
     }
+    if (unmounted.current) return;
     setRunning(false);
     if (wrote) onUploaded();
   }
 
   function clearFinished() {
-    const left = items.filter((item) => item.status === "queued");
-    setItems(left);
-    if (left.length === 0) setDestination(null);
+    setItems((all) => all.filter((item) => item.status === "queued"));
   }
 
   const finished = items.some(
@@ -322,7 +356,7 @@ export function UploadPanel({
             <code>
               {root}/{dest}/
             </code>
-            {destination && destination !== directory && (
+            {pinned && pinned !== directory && (
               <> (where these files were queued, not the open directory)</>
             )}
           </p>

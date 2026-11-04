@@ -227,3 +227,42 @@ it("says a run whose process is gone is abandoned, not in progress", async () =>
   ).toBeInTheDocument();
   expect(screen.queryByText("In progress")).not.toBeInTheDocument();
 });
+it("sends no row limit below 1, and none per keystroke (#2017)", async () => {
+  const fetcher = mockApi((path, options) =>
+    path === "/catalog"
+      ? ok({
+          tables: [{ name: "trades", description: "", columns: [] }],
+          operators: ["eq"],
+        })
+      : ok({
+          table: "trades",
+          tier: "rdb",
+          row_count: 0,
+          truncated: false,
+          rows: [],
+          poll_seconds: 10,
+          limit: JSON.parse(options.body as string).limit,
+        }),
+  );
+  const limits = () =>
+    fetcher.mock.calls
+      .filter(([path]) => path === "/query")
+      .map(([, options]) => JSON.parse(options.body as string).limit);
+  render(<App />);
+  fireEvent.click(screen.getByRole("button", { name: /Desk/ }));
+  await waitFor(() => expect(limits()).toEqual([100]));
+  const field = screen.getByLabelText("Row limit");
+  fireEvent.change(field, { target: { value: "" } });
+  await new Promise((done) => setTimeout(done, 600));
+  expect(limits()).toEqual([100]);
+  expect(field).toHaveAttribute("aria-invalid", "true");
+  fireEvent.change(field, { target: { value: "0" } });
+  for (const value of ["5", "50", "500"])
+    fireEvent.change(field, { target: { value } });
+  await waitFor(() => expect(limits()).toEqual([100, 500]));
+  expect(field).not.toHaveAttribute("aria-invalid", "true");
+  fireEvent.change(field, { target: { value: "0" } });
+  fireEvent.change(field, { target: { value: "20000" } });
+  await new Promise((done) => setTimeout(done, 800));
+  expect(limits()).toEqual([100, 500]);
+});
