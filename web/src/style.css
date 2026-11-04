@@ -701,3 +701,36 @@ pre.diff {
   margin-top: 1rem;
   min-width: 0;
 }
+.workspace-selector {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  font-size: 0.875rem;
+  max-width: 50%;
+}
+.workspace-selector select {
+  margin-left: 0.35rem;
+}
+.workspace-selector .badge.unavailable {
+  color: #9c2834;
+  background: #fff0f0;
+  border-color: #e4b2b7;
+}
+.workspace-selector .badge.connecting {
+  color: #76520c;
+  background: #fff6d9;
+  border-color: #e8d090;
+}
+.workspace-error {
+  color: #ffd7da;
+  font-size: 0.8rem;
+}
+.target-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #344865;
+  border: 1px dashed #c6d3e3;
+  border-radius: 4px;
+  padding: 0.05rem 0.45rem;
+}
