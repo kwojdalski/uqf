@@ -23,7 +23,7 @@ from uqs.interpreter import PEACHQ, Q_INTERPRETER_ENV, peachq_binary, q_command
 from uqs.logger import get_logger
 from uqs.paths import UqsError, UqsPaths
 from uqs.runtimes import RUNTIME_ENV
-from uqs.stack import qtree
+from uqs.stack import qtree, runs
 
 log = get_logger()
 
@@ -79,6 +79,12 @@ def build_env(paths: UqsPaths, base_port: int | None = None) -> dict[str, str]:
         "KDBDQEDB": str(paths.torqdata / "dqe" / "dqedb" / "database"),
         "KDBBASEPORT": str(paths.runtime_declaration.resolve_base_port(base_port)),
         "TORQPROCESSES": str(paths.generated_procs),
+        # Where the workers keep their status files, as this command resolves
+        # it - the caller's UQF_STATUS_DIR, else $TORQDATA/status - recorded
+        # with the stack, so the frontend reads the directory the workers were
+        # started with, whatever shell started it (#2038).
+        # Read by runs.status_dir alone - the one reader this side of q.
+        "UQF_STATUS_DIR": str(runs.status_dir(paths)),
         # What KDBSERVCODE's handlers/deployment.q lets TorQ discover (#1207).
         DEPLOYMENT_ENV: str(paths.generated_deployment),
         "RLWRAP": "rlwrap",

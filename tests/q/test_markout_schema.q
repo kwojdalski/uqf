@@ -28,7 +28,7 @@
 / Every markout dataset on the plant, with its layout (`long or `wide).
 / @return dictionary: table name -> layout
 .qt.qetl.plant.markout.datasets:{[]
-    `fx_markout`fx_markout_wide`crypto_markout!`long`wide`long}
+    `fx_markout`fx_markout_wide`crypto_markout`eq_markout!`long`wide`long`long}
 
 / Datasets that do not yet carry the core, each with the issue that removes the
 / exemption and why. An exemption is deleted by the issue named, not edited.

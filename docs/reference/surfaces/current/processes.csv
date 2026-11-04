@@ -11,6 +11,7 @@ deals_backfill1,backfill,32,,
 demo_deals_feed1,feed,70,,demo_deals
 duckdb_deals_backfill1,backfill,46,,
 eq_fills_backfill1,backfill,72,,
+eq_markout1,metrics,73,executions market_data,eq_markout
 events_backfill1,backfill,33,,
 exec_bars1,metrics,54,executions,exec_bar
 executions1,metrics,36,crypto_trades orders trades,executions
@@ -24,6 +25,7 @@ fxtradesfeed1,feed,29,,trades
 hdb_book_liquidity_1m_backfill1,backfill,63,,
 hdb_crypto_book_backfill1,backfill,58,,
 hdb_crypto_markout_backfill1,backfill,71,,
+hdb_eq_markout_backfill1,backfill,74,,
 hdb_exec_bars_backfill1,backfill,55,,
 hdb_fx_markout_wide_backfill1,backfill,66,,
 hdb_fx_markouts_backfill1,backfill,67,,

@@ -180,9 +180,10 @@ def test_rows_of_the_new_types_serialise(browse_port):
     got = gw.call(
         '{[u] ([] i:1 2i; h:3 4h; c:"ab"; d:2026.01.01 2026.01.02; t:00:00:01.250 00:00:02.000)}', 0
     )
+    # A time as HH:MM:SS.fff, the form its filter takes back (#2037).
     assert _rows(got) == [
-        {"i": 1, "h": 3, "c": "a", "d": dt.date(2026, 1, 1), "t": dt.time(0, 0, 1, 250000)},
-        {"i": 2, "h": 4, "c": "b", "d": dt.date(2026, 1, 2), "t": dt.time(0, 0, 2)},
+        {"i": 1, "h": 3, "c": "a", "d": dt.date(2026, 1, 1), "t": "00:00:01.250"},
+        {"i": 2, "h": 4, "c": "b", "d": dt.date(2026, 1, 2), "t": "00:00:02.000"},
     ]
 
 

@@ -65,9 +65,21 @@ def read(root: Path) -> list[dict]:
     if not path.is_file():
         return []
     try:
-        entries = json.loads(path.read_text()).get("deployments", [])
+        entries = json.loads(path.read_text(encoding="utf-8")).get("deployments", [])
+    except UnicodeDecodeError as exc:
+        raise DeployError(
+            "arguments", f"{path} is not a deployment history: not UTF-8 ({exc})"
+        ) from None
     except (json.JSONDecodeError, AttributeError) as exc:
         raise DeployError("arguments", f"{path} is not a deployment history: {exc}") from None
+    # Refused, not iterated: `{"deployments": 5}` was a TypeError, and a 500
+    # on the Services view (#2026).
+    if not isinstance(entries, list):
+        raise DeployError(
+            "arguments",
+            f"{path} is not a deployment history: deployments is not a list "
+            f"({type(entries).__name__})",
+        )
     return [_ssh(e) for e in entries if isinstance(e, dict)]
 
 

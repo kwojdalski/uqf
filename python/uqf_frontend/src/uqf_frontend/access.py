@@ -114,6 +114,9 @@ ROUTE_PERMISSIONS: dict[tuple[str, str], tuple[str, str]] = {
     # change files on a server
     ("GET", "/services"): ("services", "read"),
     ("GET", "/services/{target}/files"): ("services", "read"),
+    # the ssh tunnel plan and its check (#2042): reads, like the file list
+    ("GET", "/services/{target}/tunnel"): ("services", "read"),
+    ("GET", "/services/{target}/tunnel/check"): ("services", "read"),
     ("GET", "/services/{target}/config/pushes"): ("services", "read"),
     ("GET", "/services/{target}/config/pushes/{push_id}"): ("services", "read"),
     ("GET", "/services/{target}/config/pushes/{push_id}/diff"): ("services", "read"),

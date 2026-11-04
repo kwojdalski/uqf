@@ -59,6 +59,11 @@ REQUESTS = {
 PAIRS = {
     "Capabilities": "CapabilitiesResponse",
     "Capability": "Capability",
+    "TunnelCheckRecord": "TunnelCheckRecordOut",
+    "TunnelMapping": "TunnelMappingOut",
+    "TunnelPlan": "TunnelPlanResponse",
+    "TunnelEndpoint": "TunnelEndpointOut",
+    "TunnelCheck": "TunnelCheckResponse",
     "RemoteDeleteResult": "RemoteDeleteResult",
     "RemoteDeleteResponse": "RemoteDeleteResponse",
     "Catalog": "CatalogResponse",

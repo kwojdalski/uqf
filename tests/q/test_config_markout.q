@@ -54,7 +54,8 @@
     f:{[d;s] .qpipe.transform.config_markout.id[d;.qpipe.transform.markout_core.validate[d;s]]};
     .qunit.assertEquals[.qpipe.transform.fx_markout_outputs.config_id;f[.qpipe.transform.fx_domain.domain;.qpipe.transform.fx_markout_outputs.job_spec];"fx job spec"];
     .qunit.assertEquals[.qpipe.transform.fx_markout.config_id;f[.qpipe.transform.fx_domain.domain;.qpipe.transform.fx_markout.default_spec];"fx default spec"];
-    .qunit.assertEquals[.qpipe.transform.crypto_markout_outputs.config_id;f[.qpipe.transform.crypto_markout.domain;.qpipe.transform.crypto_markout_outputs.job_spec];"crypto job spec"]};
+    .qunit.assertEquals[.qpipe.transform.crypto_markout_outputs.config_id;f[.qpipe.transform.crypto_markout.domain;.qpipe.transform.crypto_markout_outputs.job_spec];"crypto job spec"];
+    .qunit.assertEquals[.qpipe.transform.eq_markout_outputs.config_id;f[.qpipe.transform.eq_domain.domain;.qpipe.transform.eq_markout_outputs.job_spec];"equity job spec"]};
 
 .qt.qpipe.transform.config_markout.test_a_spec_that_states_a_default_is_the_spec_that_leaves_it_out:{[t]
     d:.qt.qpipe.transform.config_markout.dom[];

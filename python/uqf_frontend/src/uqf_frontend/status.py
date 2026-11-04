@@ -114,16 +114,23 @@ def status_directory(settings: Settings) -> Path | None:
     `$TORQDATA/status`, as `.qetl.status.status_dir` in q), applied to the
     stack UQF_FRONTEND_STACK_ROOT names: no second setting that can send a
     worker started by POST /control/backfill to one directory and the
-    `/ops/backfill` view to another (#1367, #1536). With no stack root, None:
+    `/ops/backfill` view to another (#1367, #1536). The directory is the one
+    setenv.sh records - every bootstrap writes the one it started the workers
+    with - and the rule itself only before the first bootstrap (#2038). With
+    no stack root, None:
     the view reports itself unconfigured. Imported lazily, as control.py
     does, so a deployment without a stack root never loads uqs.stack.
     """
     if settings.stack_root is None:
         return None
-    from uqf_frontend import control
+    from uqf_frontend import control, stack
     from uqs.stack import runs
 
-    return runs.status_dir(control._paths(settings))
+    paths = control._paths(settings)
+    # As the stack's last bootstrap recorded it: the directory the workers
+    # were started with, not whatever this process's environment says (#2038).
+    recorded = stack.generated_setting(paths.generated_setenv, "UQF_STATUS_DIR")
+    return Path(recorded) if recorded else runs.status_dir(paths)
 
 
 def read_dir(directory: Path | None) -> tuple[list[WorkerStatus], list[dict[str, str]]]:

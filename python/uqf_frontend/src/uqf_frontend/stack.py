@@ -170,3 +170,13 @@ def generated_base_port(setenv: Path) -> int | None:
         return None
     match = _BASE_PORT_LINE.search(setenv.read_text())
     return int(match.group(1)) if match else None
+
+
+def generated_setting(setenv: Path, name: str) -> str | None:
+    """Variable *name* as the last bootstrap wrote it into setenv.sh - one
+    `export NAME="value"` line each - or None before one has, or without it."""
+    if not setenv.is_file():
+        return None
+    line = re.compile(rf'^export {re.escape(name)}="?(.*?)"?\s*$', re.MULTILINE)
+    match = line.search(setenv.read_text())
+    return match.group(1) if match else None

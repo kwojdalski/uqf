@@ -30,6 +30,7 @@ import {
 import { FileBrowser } from "./FileBrowser";
 import { PlotPanel } from "./PlotPanel";
 import { ChartsView } from "./ChartsView";
+import { FleetConnections, TunnelPanel } from "./TunnelPanel";
 import { useResource } from "./useResource";
 import { ActivityView } from "./ActivityView";
 import { CapabilitiesProvider, useCapabilities } from "./capabilities";
@@ -62,7 +63,8 @@ const ISO_INSTANT =
   /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.(\d+))?(Z|[+-]\d{2}:\d{2})?$/;
 /** The column types that hold an infinity, and so the only ones whose
  *  "inf" / "-inf" is the server's infinity rather than a symbol that happens
- *  to be spelled that way (#1330) - a timestamp's 0Wp too (#1371). */
+ *  to be spelled that way (#1330) - a timestamp's 0Wp too (#1371), and a
+ *  time's 0Wt and a date's 0Wd (#2037). */
 const NUMERIC = new Set([
   "float",
   "long",
@@ -70,6 +72,8 @@ const NUMERIC = new Set([
   "short",
   "timespan",
   "timestamp",
+  "time",
+  "date",
 ]);
 const INFINITY: Record<string, string> = { inf: "∞", "-inf": "-∞" };
 function text(value: unknown, decimals?: number | null, type?: string) {
@@ -854,6 +858,7 @@ function ServicesView() {
   const resource = useResource<Services>("/services");
   const data = resource.data;
   const [browsing, setBrowsing] = useState<string | null>(null);
+  const [tunnelling, setTunnelling] = useState<string | null>(null);
   return (
     <>
       <ResourceStatus resource={resource} />
@@ -925,6 +930,17 @@ function ServicesView() {
                     Browse {target.name}
                   </button>
                 ))}
+                {data.targets.map((target) => (
+                  <button
+                    type="button"
+                    data-activity="services.tunnel"
+                    key={`tunnel:${target.name}`}
+                    aria-pressed={tunnelling === target.name}
+                    onClick={() => setTunnelling(target.name)}
+                  >
+                    Tunnel {target.name}
+                  </button>
+                ))}
               </div>
             ) : (
               <p className="note">
@@ -941,6 +957,15 @@ function ServicesView() {
             key={browsing}
             target={browsing}
             onClose={() => setBrowsing(null)}
+          />
+        )}
+      {tunnelling &&
+        data?.remote_operations_enabled &&
+        data.targets.some((target) => target.name === tunnelling) && (
+          <TunnelPanel
+            key={tunnelling}
+            target={tunnelling}
+            onClose={() => setTunnelling(null)}
           />
         )}
     </>
@@ -1023,6 +1048,7 @@ function OpsView({
           </section>
         </>
       )}
+      {view === "Fleet" && <FleetConnections />}
     </>
   );
 }
