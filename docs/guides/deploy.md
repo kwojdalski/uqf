@@ -420,8 +420,19 @@ before anything reaches it, and `--yes` does not get past it:
 - `uqs target config restore prd PUSH`, except with `-n`.
 
 A server is matched by name **and** by its ssh destination and `dest`, so
-`--ssh deploy@prd --dest /srv/uqf` is refused too. The frontend reads the same
-key and its API refuses every write to that target (see the frontend's
+`--ssh deploy@prd --dest /srv/uqf` is refused too, and so is any other declared
+target with the same ssh and `dest`. The comparison is of the server, not the
+spelling, and errs towards refusing:
+
+- the login is ignored, so `prd`, `deploy@prd` and `root@prd` are one server;
+- the host is compared without case, scheme, port or trailing `.`, and a bare
+  name matches the first label of a qualified one (`prd` is `prd.example.com`);
+- the `dest` is compared as a normalised path (`/srv/uqf/.` is `/srv/uqf`).
+
+An alias in `~/.ssh/config` that points at another host name is not resolved.
+
+The frontend reads the same key and matches the same way, and its API refuses
+every write to that target (see the frontend's
 [README](../../python/uqf_frontend/README.md#inspection-mode)). The value must
 be `true` or `false`; anything else is refused, naming the line.
 
