@@ -124,3 +124,11 @@ class Forbidden(FrontendError):
     """
 
     status_code = 403
+
+
+class TooManyRequests(FrontendError):
+    """More unauthenticated browser events than activity's rate allows (#2019).
+    Transient: the same batch is accepted once the rate allows it again."""
+
+    status_code = 429
+    transient = True

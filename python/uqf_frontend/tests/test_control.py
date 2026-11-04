@@ -115,6 +115,23 @@ def test_an_allowed_host_matches_with_or_without_its_port(gw):
         assert r.status_code == 200, (host, r.text)
 
 
+@pytest.mark.parametrize("path", ["/control/worker-config", "/services/box/files"])
+def test_a_root_path_prefix_does_not_take_a_route_out_of_the_token_check(gw, path):
+    """Behind a reverse proxy the API is served under a prefix (`uvicorn
+    --root-path /api`). The router strips it; the token check must judge the
+    same path the router routes, or every control action and ssh operation
+    runs without the token (#2018)."""
+    c = TestClient(create_app(gateway=gw, settings=_writes_on()), root_path="/api")
+    r = (
+        c.put(f"/api{path}", json={"key": "k", "value": "v"})
+        if "worker" in path
+        else c.get(f"/api{path}")
+    )
+    assert r.status_code == 401, r.text
+    assert r.json()["error"] == "WriteTokenRequired"
+    assert gw.calls == [], "the handler must not have run"
+
+
 def test_with_writes_off_neither_check_applies(gw):
     """A read-only deployment is exactly what it was: any Host, no token."""
     c = TestClient(

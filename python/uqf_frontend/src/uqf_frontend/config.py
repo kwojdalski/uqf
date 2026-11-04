@@ -11,8 +11,9 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
-from uqf_frontend import stack
+from uqf_frontend import remote_helper, stack
 from uqf_frontend.stack import Process
+from uqs.activity_log import DEFAULT_LEVEL, LEVELS
 
 #: Seconds between usage-capture sweeps when nothing overrides it. Well
 #: under `.usage.flushtime`, which is one day in a standard TorQ stack - see
@@ -28,9 +29,16 @@ DEFAULT_CAPTURE_INTERVAL = 900
 DEFAULT_MAX_ROWS = 10_000
 
 #: Days of activity history kept, and the most rows kept whatever their age
-#: (activity.py). Both bounds apply; the tighter one wins.
+#: (activity.py), at each level. Both bounds apply; the tighter one wins. The
+#: `actions` bound holds the server's audit too. A level that records more
+#: keeps less: a day of clicking at `interactions` is thousands of rows, and
+#: `debug` is for the session being troubleshot, not for the record.
 DEFAULT_ACTIVITY_RETENTION_DAYS = 30
 DEFAULT_ACTIVITY_MAX_ROWS = 100_000
+DEFAULT_ACTIVITY_INTERACTIONS_RETENTION_DAYS = 7
+DEFAULT_ACTIVITY_INTERACTIONS_MAX_ROWS = 50_000
+DEFAULT_ACTIVITY_DEBUG_RETENTION_DAYS = 1
+DEFAULT_ACTIVITY_DEBUG_MAX_ROWS = 10_000
 
 #: Seconds a gateway query may take before kola gives up (UQF_FRONTEND_TIMEOUT).
 DEFAULT_TIMEOUT = 30
@@ -131,9 +139,46 @@ class Settings:
     #: with it; name a file elsewhere to keep history past a clean.
     activity_db: Path | None = None
     #: Retention: rows older than this many days are pruned, and only the
-    #: newest `activity_max_rows` are kept.
+    #: newest `activity_max_rows` browser rows and, separately, the newest
+    #: `activity_max_rows` server audit rows are kept - neither can evict the
+    #: other (#2019). Refused attempts have a smaller cap of their own
+    #: (activity.MAX_ATTEMPT_ROWS).
     activity_retention_days: int = DEFAULT_ACTIVITY_RETENTION_DAYS
     activity_max_rows: int = DEFAULT_ACTIVITY_MAX_ROWS
+    #: The same two bounds for the `interactions` and `debug` levels (#2000).
+    activity_interactions_retention_days: int = DEFAULT_ACTIVITY_INTERACTIONS_RETENTION_DAYS
+    activity_interactions_max_rows: int = DEFAULT_ACTIVITY_INTERACTIONS_MAX_ROWS
+    activity_debug_retention_days: int = DEFAULT_ACTIVITY_DEBUG_RETENTION_DAYS
+    activity_debug_max_rows: int = DEFAULT_ACTIVITY_DEBUG_MAX_ROWS
+    #: The level a browser session records at unless its operator picks
+    #: another for the tab (activity_log.LEVELS). `off` stops browser history
+    #: only: the server's audit of every write is kept whatever this says.
+    activity_level: str = DEFAULT_LEVEL
+    #: The config push history each target keeps (remote_helper's PUSH
+    #: HISTORY, #2002): the newest `config_history_keep` pushes, none older
+    #: than `config_history_days` - the tighter bound wins. Applied, and its
+    #: pruning audited, whenever a push opens.
+    config_history_keep: int = remote_helper.DEFAULT_KEEP
+    config_history_days: int = remote_helper.DEFAULT_KEEP_DAYS
+
+    def __post_init__(self) -> None:
+        if self.activity_level not in LEVELS:
+            raise ValueError(
+                f"UQF_FRONTEND_ACTIVITY_LEVEL must be one of {', '.join(LEVELS)}, "
+                f"got {self.activity_level!r}"
+            )
+        check_history_bound(self.config_history_keep, self.config_history_days)
+
+    def activity_bounds(self) -> dict[str, tuple[int, int]]:
+        """Each event level's (retention days, max rows)."""
+        return {
+            "actions": (self.activity_retention_days, self.activity_max_rows),
+            "interactions": (
+                self.activity_interactions_retention_days,
+                self.activity_interactions_max_rows,
+            ),
+            "debug": (self.activity_debug_retention_days, self.activity_debug_max_rows),
+        }
 
     def facts(self) -> stack.StackFacts:
         """The stack facts as they are NOW (#2027): with a stack root, read
@@ -204,7 +249,48 @@ class Settings:
                 "UQF_FRONTEND_ACTIVITY_RETENTION_DAYS", cls.activity_retention_days
             ),
             activity_max_rows=_int_env("UQF_FRONTEND_ACTIVITY_MAX_ROWS", cls.activity_max_rows),
+            activity_interactions_retention_days=_int_env(
+                "UQF_FRONTEND_ACTIVITY_INTERACTIONS_RETENTION_DAYS",
+                cls.activity_interactions_retention_days,
+            ),
+            activity_interactions_max_rows=_int_env(
+                "UQF_FRONTEND_ACTIVITY_INTERACTIONS_MAX_ROWS", cls.activity_interactions_max_rows
+            ),
+            activity_debug_retention_days=_int_env(
+                "UQF_FRONTEND_ACTIVITY_DEBUG_RETENTION_DAYS", cls.activity_debug_retention_days
+            ),
+            activity_debug_max_rows=_int_env(
+                "UQF_FRONTEND_ACTIVITY_DEBUG_MAX_ROWS", cls.activity_debug_max_rows
+            ),
+            activity_level=(
+                os.environ.get("UQF_FRONTEND_ACTIVITY_LEVEL", "").strip().lower()
+                or cls.activity_level
+            ),
+            config_history_keep=history_bound_from_env()[0],
+            config_history_days=history_bound_from_env()[1],
         )
+
+
+def check_history_bound(keep: int, days: int) -> None:
+    """Refuse a push-history bound the helper would refuse."""
+    if not 1 <= keep <= remote_helper.MAX_KEEP:
+        raise ValueError(
+            f"UQF_FRONTEND_CONFIG_HISTORY_KEEP must be 1 to {remote_helper.MAX_KEEP}, got {keep}"
+        )
+    if not 1 <= days <= remote_helper.MAX_KEEP_DAYS:
+        raise ValueError(
+            f"UQF_FRONTEND_CONFIG_HISTORY_DAYS must be 1 to {remote_helper.MAX_KEEP_DAYS}, "
+            f"got {days}"
+        )
+
+
+def history_bound_from_env() -> tuple[int, int]:
+    """(pushes kept, days kept): UQF_FRONTEND_CONFIG_HISTORY_KEEP and _DAYS,
+    read by the API and by `uqs target config restore` alike."""
+    keep = _int_env("UQF_FRONTEND_CONFIG_HISTORY_KEEP", remote_helper.DEFAULT_KEEP)
+    days = _int_env("UQF_FRONTEND_CONFIG_HISTORY_DAYS", remote_helper.DEFAULT_KEEP_DAYS)
+    check_history_bound(keep, days)
+    return keep, days
 
 
 def _int_env(name: str, default: int) -> int:

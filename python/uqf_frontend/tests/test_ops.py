@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import datetime as dt
 
+import pytest
 from fastapi.testclient import TestClient
 
 from uqf_frontend import ops
@@ -116,6 +117,33 @@ def test_usage_limit_is_capped_by_max_rows():
     c = TestClient(create_app(gateway=FakeGateway(), settings=Settings(max_rows=10), fleet=fleet))
     body = c.get("/ops/usage", params={"limit": 999}).json()
     assert body["row_count"] == 10
+
+
+@pytest.mark.parametrize("path", ["/ops/usage", "/ops/clients"])
+@pytest.mark.parametrize("limit", [0, -1, -3])
+def test_a_limit_below_one_is_refused_before_any_process_is_asked(path, limit):
+    """`lim <= 0` makes ops.USAGE return a process's WHOLE usage log, and a
+    negative slice keeps all but the last rows, so max_rows stopped capping
+    and row_count went negative (#2020). Refused, as QueryRequest.limit is."""
+    rows = [{"time": dt.datetime(2026, 9, 15, i), "u": f"c{i}"} for i in range(8)]
+    fleet = FakeFleet({"a": rows})
+    c = TestClient(create_app(gateway=FakeGateway(), settings=Settings(max_rows=5), fleet=fleet))
+    resp = c.get(path, params={"limit": limit})
+    assert resp.status_code == 422, resp.text
+    assert fleet.calls == [], "nothing may be sent to q for a refused limit"
+
+
+@pytest.mark.parametrize("path", ["/ops/usage", "/ops/clients"])
+def test_a_limit_of_one_is_one_row_and_a_large_one_is_capped(path):
+    rows = [{"time": dt.datetime(2026, 9, 15, i), "u": f"c{i}"} for i in range(8)]
+    c = TestClient(
+        create_app(
+            gateway=FakeGateway(), settings=Settings(max_rows=5), fleet=FakeFleet({"a": rows})
+        )
+    )
+    assert c.get(path, params={"limit": 1}).json()["row_count"] == 1
+    body = c.get(path, params={"limit": 10_000}).json()
+    assert body["row_count"] == len(body["rows"]) == 5
 
 
 def test_merge_usage_tolerates_a_row_without_a_timestamp():

@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import {
   type Backfill,
   type Catalog,
@@ -30,7 +30,13 @@ import {
 import { FileBrowser } from "./FileBrowser";
 import { useResource } from "./useResource";
 import { ActivityView } from "./ActivityView";
-import { installActivity, record, tracked, triggerOf } from "./activity";
+import {
+  adoptDefaultLevel,
+  installActivity,
+  record,
+  tracked,
+  triggerOf,
+} from "./activity";
 
 const views = [
   "Coverage",
@@ -227,11 +233,16 @@ function ResourceStatus<T>({
             ? ` · Every ${resource.cadence}s`
             : ""}
         </span>
-        <button type="button" onClick={resource.refresh}>
+        <button
+          type="button"
+          data-activity="resource.refresh"
+          onClick={resource.refresh}
+        >
           Refresh
         </button>
         <button
           type="button"
+          data-activity="resource.pause"
           aria-pressed={resource.paused}
           onClick={() => resource.setPaused(!resource.paused)}
         >
@@ -296,6 +307,7 @@ function RangeFields({
         <label key={key}>
           {label}
           <input
+            data-activity={`range.${key}`}
             // Every field but `partition` must be non-empty. Blank IS the
             // partition's meaningful value - the sentinel for a dataset with
             // no partition dimension - so marking it required would make the
@@ -355,7 +367,9 @@ function CoverageView() {
         <RangeFields value={range} onChange={setRange} />
         <div className="form-footer">
           <span>Half-open intervals · [from, to)</span>
-          <button className="primary">Check coverage</button>
+          <button className="primary" data-activity="coverage.check">
+            Check coverage
+          </button>
         </div>
         {error && (
           <p role="alert" className="error-text">
@@ -462,11 +476,32 @@ function BackfillView() {
     </>
   );
 }
+/** The Desk's row limit bounds, as its field declares them. */
+const MAX_ROW_LIMIT = 10000;
+/** How long the Row limit field must stay unchanged before it re-queries. */
+const LIMIT_SETTLE_MS = 400;
+/** The row limit `text` asks for, or null when it is not one to send. */
+function rowLimit(text: string): number | null {
+  if (!/^\s*\d+\s*$/.test(text)) return null;
+  const value = Number(text);
+  return value >= 1 && value <= MAX_ROW_LIMIT ? value : null;
+}
 function DeskView() {
   const catalog = useResource<Catalog>("/catalog", undefined, false);
   const [table, setTable] = useState("");
   const [tier, setTier] = useState<Tier>("rdb");
   const [limit, setLimit] = useState(100);
+  // What the Row limit field holds. It becomes `limit`, which re-runs the
+  // query, only once it is a whole number in range and has stopped changing:
+  // not 0 while the field is cleared, not 5, 50 and 500 on the way to 5000
+  // (#2017).
+  const [limitText, setLimitText] = useState("100");
+  const typedLimit = rowLimit(limitText);
+  useEffect(() => {
+    if (typedLimit === null) return;
+    const timer = setTimeout(() => setLimit(typedLimit), LIMIT_SETTLE_MS);
+    return () => clearTimeout(timer);
+  }, [typedLimit]);
   const [filters, setFilters] = useState<
     { column: string; op: FilterOp; raw: string }[]
   >([]);
@@ -491,6 +526,7 @@ function DeskView() {
     setFilters([]);
     setTier("rdb");
     setLimit(100);
+    setLimitText("100");
     setApplied({ table: selectedName, tier: "rdb", limit: 100, filters: [] });
     setError("");
   }, [selectedName]); // a new table is a fresh glimpse: tier and limit reset too
@@ -503,6 +539,12 @@ function DeskView() {
     event.preventDefault();
     if (!selected) return;
     try {
+      if (typedLimit === null)
+        throw new Error(
+          `The row limit must be a whole number from 1 to ${MAX_ROW_LIMIT}.`,
+        );
+      const limit = typedLimit;
+      setLimit(limit);
       if (requireCoverage) validateRange(coverage);
       const parsed = filters.map((filter) => {
         const column = columns.find((column) => column.name === filter.column);
@@ -546,7 +588,9 @@ function DeskView() {
       {catalog.error && (
         <div role="alert" className="notice error">
           {catalog.error.message}{" "}
-          <button onClick={catalog.refresh}>Retry catalog</button>
+          <button data-activity="desk.catalog-retry" onClick={catalog.refresh}>
+            Retry catalog
+          </button>
         </div>
       )}
       <div className="desk">
@@ -558,6 +602,7 @@ function DeskView() {
               key={item.name}
               type="button"
               className="table-choice"
+              data-activity="desk.table"
               aria-pressed={item.name === selected?.name}
               title={item.description}
               onClick={(event) => {
@@ -606,12 +651,15 @@ function DeskView() {
             </>
           )}
           <details className="panel">
-            <summary>Refine · tier, row limit, filters, coverage</summary>
+            <summary data-activity="desk.refine">
+              Refine · tier, row limit, filters, coverage
+            </summary>
             <form onSubmit={submit}>
               <div className="fields">
                 <label>
                   Storage tier
                   <select
+                    data-activity="desk.tier"
                     value={tier}
                     onChange={(event) => {
                       setTier(event.target.value as Tier);
@@ -629,12 +677,14 @@ function DeskView() {
                 <label>
                   Row limit
                   <input
+                    data-activity="desk.limit"
                     type="number"
                     min="1"
-                    max="10000"
+                    max={MAX_ROW_LIMIT}
                     required
-                    value={limit}
-                    onChange={(event) => setLimit(Number(event.target.value))}
+                    value={limitText}
+                    aria-invalid={typedLimit === null}
+                    onChange={(event) => setLimitText(event.target.value)}
                   />
                 </label>
               </div>
@@ -648,6 +698,7 @@ function DeskView() {
                 <h3>Filters</h3>
                 <button
                   type="button"
+                  data-activity="desk.filter.add"
                   disabled={!columns.length || filters.length >= 16}
                   onClick={() =>
                     setFilters([
@@ -664,6 +715,7 @@ function DeskView() {
                   <label>
                     Column
                     <select
+                      data-activity="desk.filter.column"
                       value={filter.column}
                       onChange={(event) =>
                         setFilters(
@@ -685,6 +737,7 @@ function DeskView() {
                   <label>
                     Operator
                     <select
+                      data-activity="desk.filter.op"
                       value={filter.op}
                       onChange={(event) =>
                         setFilters(
@@ -709,6 +762,7 @@ function DeskView() {
                   <label>
                     Value{filter.op === "in" ? " (JSON list)" : ""}
                     <input
+                      data-activity="desk.filter.value"
                       required
                       value={filter.raw}
                       onChange={(event) =>
@@ -724,6 +778,7 @@ function DeskView() {
                   </label>
                   <button
                     type="button"
+                    data-activity="desk.filter.remove"
                     aria-label={`Remove filter ${index + 1}`}
                     onClick={() =>
                       setFilters(filters.filter((_, i) => i !== index))
@@ -736,6 +791,7 @@ function DeskView() {
               <label className="checkbox">
                 <input
                   type="checkbox"
+                  data-activity="desk.require-coverage"
                   checked={requireCoverage}
                   onChange={(event) => setRequireCoverage(event.target.checked)}
                 />
@@ -746,7 +802,11 @@ function DeskView() {
               )}
               <div className="form-footer">
                 <span>Read-only · filters validated by the API</span>
-                <button disabled={!selected} className="primary">
+                <button
+                  disabled={!selected}
+                  className="primary"
+                  data-activity="desk.apply"
+                >
                   Apply filters
                 </button>
               </div>
@@ -831,6 +891,7 @@ function ServicesView() {
                 {data.targets.map((target) => (
                   <button
                     type="button"
+                    data-activity="services.browse"
                     key={target.name}
                     aria-pressed={browsing === target.name}
                     onClick={() => setBrowsing(target.name)}
@@ -968,12 +1029,15 @@ function ProcessPicker({
   picked,
   onChange,
   liveness,
+  disabled = false,
 }: {
   processes: ControlProcess[];
   mode: "all" | "pick";
   picked: ReadonlySet<string>;
   onChange: (mode: "all" | "pick", picked: ReadonlySet<string>) => void;
   liveness: Map<string, boolean> | null;
+  /** Frozen while a stop or restart awaits confirmation (#2009). */
+  disabled?: boolean;
 }) {
   const groups = new Map<string, ControlProcess[]>();
   for (const p of processes) {
@@ -994,7 +1058,7 @@ function ProcessPicker({
   const count = mode === "all" ? startedByAll.length : picked.size;
 
   return (
-    <fieldset className="picker">
+    <fieldset className="picker" disabled={disabled}>
       <legend>
         Processes
         <span className="muted">
@@ -1007,6 +1071,7 @@ function ProcessPicker({
         <button
           type="button"
           className={mode === "all" ? "chip active" : "chip"}
+          data-activity="control.pick.all"
           onClick={() => onChange("all", picked)}
         >
           all
@@ -1014,6 +1079,7 @@ function ProcessPicker({
         <button
           type="button"
           className="chip"
+          data-activity="control.pick.startwithall"
           onClick={() => onChange("pick", new Set(startedByAll))}
         >
           startwithall only
@@ -1023,6 +1089,7 @@ function ProcessPicker({
             <button
               type="button"
               className="chip"
+              data-activity="control.pick.down"
               onClick={() =>
                 onChange(
                   "pick",
@@ -1039,6 +1106,7 @@ function ProcessPicker({
             <button
               type="button"
               className="chip"
+              data-activity="control.pick.up"
               onClick={() =>
                 onChange(
                   "pick",
@@ -1057,6 +1125,7 @@ function ProcessPicker({
         <button
           type="button"
           className="chip"
+          data-activity="control.pick.none"
           onClick={() => onChange("pick", new Set())}
         >
           none
@@ -1071,6 +1140,7 @@ function ProcessPicker({
               <label className="picker-row picker-head">
                 <input
                   type="checkbox"
+                  data-activity="control.pick.type"
                   aria-label={`every ${proctype}`}
                   checked={mode === "pick" && chosen === names.length}
                   ref={(el) => {
@@ -1089,6 +1159,7 @@ function ProcessPicker({
                   <label key={p.procname} className="picker-row">
                     <input
                       type="checkbox"
+                      data-activity="control.pick.process"
                       checked={
                         mode === "all"
                           ? p.start_with_all
@@ -1161,8 +1232,30 @@ function workerConfigSettled(r: WorkerConfigResult) {
 function ControlView() {
   const status = useResource<ControlStatus>("/control");
   const [busy, setBusy] = useState("");
-  // The destructive action awaiting confirmation, if any.
+  // The destructive action awaiting confirmation, if any, and the selection
+  // it was opened for: Confirm acts on exactly that (#2009).
   const [confirming, setConfirming] = useState("");
+  const [held, setHeld] = useState<{ procs: string; mode: "all" | "pick" }>({
+    procs: "",
+    mode: "all",
+  });
+  // The button that opened the confirmation. Focus goes back to it when the
+  // confirmation closes, once it is enabled again (#2016).
+  const opener = useRef<HTMLButtonElement | null>(null);
+  useEffect(() => {
+    if (confirming || busy || !opener.current) return;
+    const button = opener.current;
+    opener.current = null;
+    const focused = document.activeElement;
+    if (!focused || focused === document.body) button.focus();
+  }, [confirming, busy]);
+  // A failed status poll keeps the view (#2008). useResource retries only a
+  // transient failure, so a lasting one is retried here at the same cadence.
+  useEffect(() => {
+    if (!status.error || status.error.transient || status.paused) return;
+    const timer = setTimeout(status.refresh, (status.cadence ?? 5) * 1000);
+    return () => clearTimeout(timer);
+  }, [status.error]);
   const [result, setResult] = useState<string>("");
   const [error, setError] = useState("");
 
@@ -1191,16 +1284,17 @@ function ControlView() {
     action: string,
     kind: "submit" | "confirm",
     trigger: ReturnType<typeof triggerOf>,
+    target = procs,
+    chosen = mode,
   ) {
-    const target = procs;
     run(action, async () => {
       const r = await tracked(
         kind,
         `process.${action}`,
-        { target, trigger, detail: { mode } },
+        { target, trigger, detail: { mode: chosen } },
         (correlation) =>
           mutate<CommandResult>(
-            `/control/process/${action}`,
+            `/control/process/${encodeURIComponent(action)}`,
             { procs: target } satisfies LifecycleBody,
             "POST",
             correlation,
@@ -1211,7 +1305,7 @@ function ControlView() {
     });
   }
   function cancel(trigger: ReturnType<typeof triggerOf>) {
-    record("cancel", `process.${confirming}`, { target: procs, trigger });
+    record("cancel", `process.${confirming}`, { target: held.procs, trigger });
     setConfirming("");
   }
 
@@ -1228,17 +1322,32 @@ function ControlView() {
     }
   }
 
-  if (status.error)
-    return (
-      <p role="alert" className="error-text">
-        {status.error.message}
+  const statusNotice = status.error && (
+    <div
+      className={`notice ${status.error.transient ? "pending" : "error"}`}
+      role={status.error.transient ? "status" : "alert"}
+    >
+      <strong>Could not refresh the control status</strong>
+      <p>{status.error.message}</p>
+      <p>
+        {status.data ? "Showing the last status loaded. " : ""}Retrying
+        automatically.
       </p>
-    );
-  if (!status.data) return <p>Loading…</p>;
+      <button
+        type="button"
+        data-activity="control.status-refresh"
+        onClick={status.refresh}
+      >
+        Refresh control status
+      </button>
+    </div>
+  );
+  if (!status.data) return statusNotice || <p>Loading…</p>;
 
   if (!status.data.writes_enabled)
     return (
       <div className="panel">
+        {statusNotice}
         <h2>Writes are disabled</h2>
         <p>
           Every control route returns 403. Set{" "}
@@ -1255,6 +1364,7 @@ function ControlView() {
 
   return (
     <>
+      {statusNotice}
       {error && (
         <p role="alert" className="error-text">
           {error}
@@ -1266,6 +1376,7 @@ function ControlView() {
         <label>
           Write token
           <input
+            data-activity="control.token"
             type="password"
             autoComplete="off"
             value={token}
@@ -1304,6 +1415,7 @@ function ControlView() {
             });
           }}
           liveness={liveness}
+          disabled={confirming !== ""}
         />
         <div className="form-footer">
           <span>
@@ -1315,6 +1427,7 @@ function ControlView() {
               <button
                 key={action}
                 type="button"
+                data-activity={`control.${action}`}
                 className={action === "stop" ? "danger" : "primary"}
                 disabled={busy !== "" || procs === "" || confirming !== ""}
                 onClick={(event) => {
@@ -1325,6 +1438,8 @@ function ControlView() {
                     trigger: triggerOf(event),
                     detail: { mode },
                   });
+                  opener.current = event.currentTarget;
+                  setHeld({ procs, mode });
                   setConfirming(action);
                 }}
               >
@@ -1343,20 +1458,29 @@ function ControlView() {
             }}
           >
             <p>
-              {confirming} <code>{procs}</code>? Running processes will go down.
+              {confirming} <code>{held.procs}</code>? Running processes will go
+              down.
             </p>
             <button
               type="button"
               className="danger"
+              data-activity="control.confirm"
               onClick={(event) => {
                 setConfirming("");
-                lifecycle(confirming, "confirm", triggerOf(event));
+                lifecycle(
+                  confirming,
+                  "confirm",
+                  triggerOf(event),
+                  held.procs,
+                  held.mode,
+                );
               }}
             >
               Confirm {confirming}
             </button>{" "}
             <button
               type="button"
+              data-activity="control.cancel"
               autoFocus
               onClick={(event) => cancel(triggerOf(event))}
             >
@@ -1382,7 +1506,7 @@ function ControlView() {
               },
               (correlation) =>
                 mutate<ProcessConfigResult>(
-                  `/control/process/${cfg.procname}/config`,
+                  `/control/process/${encodeURIComponent(cfg.procname)}/config`,
                   {
                     field: cfg.field,
                     value: cfg.value,
@@ -1400,6 +1524,7 @@ function ControlView() {
           <label>
             Process
             <input
+              data-activity="control.config.process"
               required
               value={cfg.procname}
               onChange={(e) => setCfg({ ...cfg, procname: e.target.value })}
@@ -1408,6 +1533,7 @@ function ControlView() {
           <label>
             Field
             <select
+              data-activity="control.config.field"
               required
               value={cfg.field}
               onChange={(e) => setCfg({ ...cfg, field: e.target.value })}
@@ -1423,6 +1549,7 @@ function ControlView() {
           <label>
             Value
             <input
+              data-activity="control.config.value"
               value={cfg.value}
               onChange={(e) => setCfg({ ...cfg, value: e.target.value })}
             />
@@ -1432,7 +1559,11 @@ function ControlView() {
           <span>
             Persisted to process_overrides.csv; applied on the next start.
           </span>
-          <button className="primary" disabled={busy !== ""}>
+          <button
+            className="primary"
+            data-activity="control.config.set"
+            disabled={busy !== ""}
+          >
             Set field
           </button>
         </div>
@@ -1469,6 +1600,7 @@ function ControlView() {
           <label>
             Key
             <input
+              data-activity="control.worker.key"
               required
               value={wcfg.key}
               onChange={(e) => setWcfg({ ...wcfg, key: e.target.value })}
@@ -1477,6 +1609,7 @@ function ControlView() {
           <label>
             Value
             <input
+              data-activity="control.worker.value"
               value={wcfg.value}
               onChange={(e) => setWcfg({ ...wcfg, value: e.target.value })}
             />
@@ -1484,7 +1617,11 @@ function ControlView() {
         </div>
         <div className="form-footer">
           <span>In memory only — lost when the process restarts.</span>
-          <button className="primary" disabled={busy !== ""}>
+          <button
+            className="primary"
+            data-activity="control.worker.set"
+            disabled={busy !== ""}
+          >
             Set override
           </button>
         </div>
@@ -1535,6 +1672,7 @@ function ControlView() {
             <label key={key}>
               {label}
               <input
+                data-activity={`control.backfill.${key}`}
                 required
                 value={bf[key]}
                 onChange={(e) => setBf({ ...bf, [key]: e.target.value })}
@@ -1544,7 +1682,11 @@ function ControlView() {
         </div>
         <div className="form-footer">
           <span>Detached — watch Backfill for the outcome.</span>
-          <button className="primary" disabled={busy !== ""}>
+          <button
+            className="primary"
+            data-activity="control.backfill.start"
+            disabled={busy !== ""}
+          >
             Start backfill
           </button>
         </div>
@@ -1556,6 +1698,9 @@ export default function App() {
   const [view, setView] = useState<View>("Coverage");
   useEffect(() => installActivity(), []);
   const health = useResource<Health>("/health");
+  // The server's default recording level, served beside its timeout (#2000).
+  const serverLevel = health.data?.activity_level;
+  useEffect(() => adoptDefaultLevel(serverLevel), [serverLevel]);
   // Asked once here so the sidebar can say what this deployment actually is,
   // rather than asserting "read-only" on a server where it is not true.
   const control = useResource<ControlStatus>("/control");
@@ -1573,7 +1718,7 @@ export default function App() {
   return (
     <div className="app">
       <header>
-        <a className="brand" href="/ui/">
+        <a className="brand" href="/ui/" data-activity="nav.home">
           uqf<span> / FX DATA</span>
         </a>
         <div className="gateway" role="status">
@@ -1592,6 +1737,7 @@ export default function App() {
             {views.map((item, index) => (
               <button
                 key={item}
+                data-activity={`nav.${item}`}
                 className={view === item ? "selected" : ""}
                 aria-current={view === item ? "page" : undefined}
                 onClick={(event) => {
