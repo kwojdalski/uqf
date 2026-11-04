@@ -213,6 +213,8 @@
         'who," declares ",(", " sv string unknown),", which a horizon job does not take"];
     if[not all -11h=type each decl`events`reference`transform`publishes;
         'who,"'s events, reference, transform and publishes must each be one table or transform name, a symbol"];
+    if[decl[`events]=decl`reference;
+        'who," needs distinct events and reference tables"];
     / $[], not `and`: q's `and` evaluates both sides, so a mistyped value
     / would throw a bare 'type before the message naming it
     if[not $[-16h=type decl`horizon; 0D<decl`horizon; 0b];
@@ -305,10 +307,12 @@
 
 / Private: one symbol per event, from its identity columns - so membership
 / and last-delivery-wins are vector operations on symbols.
+/ Encode the typed tuple losslessly: display strings can round numbers, and
+/ delimiter-joining fields merges (`a|b;`c) with (`a;`b|c).
 / @private
 .qetl.job.stream.horizons.ids_of:{[d;t]
     idc:d`identity;
-    `$$[1=count idc; string t first idc; "|" sv/: flip string t idc]}
+    `${raze string -8!value x} each idc#t}
 
 / Private: per reference key, the earliest and latest reference time held -
 / the anchor and how far the reference has advanced - and `ser`, the latest

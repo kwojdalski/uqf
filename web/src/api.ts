@@ -736,3 +736,18 @@ export interface ActivityHistory extends Pollable {
   retention_days: number;
   max_rows: number;
 }
+
+export interface RemoteDeleteRequest {
+  paths: string[];
+  confirmed: boolean;
+}
+export interface RemoteDeleteResult {
+  path: string;
+  deleted: boolean;
+  error: string | null;
+}
+export interface RemoteDeleteResponse {
+  target: string;
+  root: string;
+  results: RemoteDeleteResult[];
+}

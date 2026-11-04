@@ -249,6 +249,7 @@ def clean_items(raw: Iterable[Mapping[str, object]] | None) -> list[dict[str, st
 #: and test_activity.py fails until it is named - the hook #1951 and #1953
 #: add their upload and delete routes to.
 SERVER_ACTIONS: dict[tuple[str, str], Callable[[Mapping[str, str]], str]] = {
+    ("POST", "/services/{target}/files/delete"): lambda _: "files.delete",
     ("POST", "/control/process/{action}"): lambda p: (
         f"process.{p['action']}" if p.get("action") in ("start", "stop", "restart") else "process"
     ),
