@@ -10,6 +10,7 @@ cryptomock1,feed,35,,crypto_book crypto_trades
 deals_backfill1,backfill,32,,
 demo_deals_feed1,feed,70,,demo_deals
 duckdb_deals_backfill1,backfill,46,,
+eq_fills_backfill1,backfill,72,,
 events_backfill1,backfill,33,,
 exec_bars1,metrics,54,executions,exec_bar
 executions1,metrics,36,crypto_trades orders trades,executions

@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { record } from "./activity";
 import {
-  type ActivityOutcome,
+  ApiError,
+  type ConfigPushReport,
+  type PushOps,
+  pushOps,
   type RemoteUpload,
   UPLOAD_MAX_BYTES,
   UPLOAD_MAX_FILES,
@@ -82,25 +84,39 @@ export async function walkEntries(
   return out;
 }
 
+/** What the browser reports, on closing the push, of a file it saw end so. */
+const REPORTED: Partial<Record<Status, ConfigPushReport["outcome"]>> = {
+  uncertain: "uncertain",
+  failed: "failed",
+  cancelled: "cancelled",
+};
+
 /** Upload local files and folders below a target's shared/config (#1951).
  *
  *  Files are queued, checked against the same limits the server holds, and
  *  sent only after the operator confirms the destination - one at a time,
  *  each with its own outcome. Replacing an existing file is off unless
  *  asked for. A cancellation or timeout in flight is reported as uncertain
- *  - the file may have been written - and nothing is ever retried. */
+ *  - the file may have been written - and nothing is ever retried.
+ *
+ *  Confirming opens one push (#2002): every file names its id, the server
+ *  keeps what each replaced in that push's history, and the push is closed
+ *  - with what the browser saw of each file - once the last is sent. */
 export function UploadPanel({
   target,
   root,
   directory,
   onUploaded,
   uploader = uploadRemoteFile,
+  pushes = pushOps,
 }: {
   target: string;
   root: string;
   directory: string;
   onUploaded: () => void;
   uploader?: Uploader;
+  /** Injectable for tests; the real ones POST to /config/pushes. */
+  pushes?: PushOps;
 }) {
   const [items, setShown] = useState<Item[]>([]);
   // The queue and its destination as they are now, not as the last render
@@ -116,13 +132,17 @@ export function UploadPanel({
   const [running, setRunning] = useState(false);
   const [position, setPosition] = useState({ at: 0, of: 0 });
   const [refusal, setRefusal] = useState<string | null>(null);
+  const [push, setPush] = useState<{ id: string; pruned: number } | null>(null);
+  const [closeProblem, setCloseProblem] = useState<string | null>(null);
   const nextId = useRef(1);
   const controller = useRef<AbortController | null>(null);
   const unmounted = useRef(false);
   useEffect(() => {
     unmounted.current = false;
     return () => {
-      // Close, another target or another view: nothing is sent unseen (#2007)
+      // Close, another target or another view: nothing is sent unseen. The
+      // run sees the abort, reports the rest cancelled and closes its push
+      // (#2007).
       unmounted.current = true;
       controller.current?.abort();
     };
@@ -236,25 +256,51 @@ export function UploadPanel({
   async function start() {
     setConfirming(false);
     setRunning(true);
+    setRefusal(null);
+    setCloseProblem(null);
+    // Armed before the push is opened, so a Cancel pressed during the open
+    // round trip is honoured (#2010). The open itself is not aborted: it
+    // runs to its answer, so the push it made is closed, not left open.
     const abort = new AbortController();
     controller.current = abort;
+    let opened: string;
+    try {
+      const answer = await pushes.open(target, {
+        destination: dest,
+        file_count: queued.length,
+        total_bytes: queuedBytes,
+      });
+      opened = answer.push_id;
+      setPush({ id: opened, pruned: answer.pruned.length });
+    } catch (error: unknown) {
+      controller.current = null;
+      if (unmounted.current) return;
+      setRunning(false);
+      setRefusal(
+        `The push could not be opened, so nothing was sent: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return;
+    }
     let wrote = false;
+    const reported: ConfigPushReport[] = [];
     for (const [index, item] of queued.entries()) {
       setPosition({ at: index + 1, of: queued.length });
+      const path = `${dest}/${item.relative}`;
       if (abort.signal.aborted) {
         update(item.id, { status: "cancelled", message: "" });
+        reported.push({ path, outcome: "cancelled" });
         continue;
       }
       update(item.id, { status: "uploading", progress: 0 });
-      let outcome: ActivityOutcome = "succeeded";
       try {
         const done: RemoteUpload = await uploader(
           target,
-          `${dest}/${item.relative}`,
+          path,
           item.file,
           overwrite,
           (progress) => update(item.id, { progress }),
           abort.signal,
+          opened,
         );
         wrote = true;
         update(item.id, {
@@ -265,26 +311,24 @@ export function UploadPanel({
       } catch (error: unknown) {
         const unsure = error instanceof UploadFailed ? error.uncertain : true;
         if (unsure) wrote = true;
+        const status: Status = unsure ? "uncertain" : "failed";
+        reported.push({ path, outcome: REPORTED[status] ?? "failed" });
         update(item.id, {
-          status: unsure ? "uncertain" : "failed",
+          status,
           message: error instanceof Error ? error.message : String(error),
         });
-        outcome = unsure ? "unknown" : "failed";
-      }
-      if (unmounted.current) {
-        // Nobody can see this panel any more (#2007): the history says how
-        // the file in flight ended - a cancelled one may have been written -
-        // and how many were never sent. Nothing else is sent.
-        record("cancel", "file.upload", {
-          target,
-          trigger: "programmatic",
-          items: [{ target: `${dest}/${item.relative}`, outcome }],
-          detail: { reason: "closed", item_count: queued.length - index - 1 },
-        });
-        return;
       }
     }
     controller.current = null;
+    try {
+      await pushes.close(target, opened, reported);
+    } catch (error: unknown) {
+      if (unmounted.current) return;
+      setCloseProblem(
+        `Push ${opened} was not closed: ${error instanceof ApiError ? error.message : String(error)}. Its files are in its history; the summary of the push is not.`,
+      );
+    }
+    if (unmounted.current) return;
     setRunning(false);
     if (wrote) onUploaded();
   }
@@ -321,6 +365,7 @@ export function UploadPanel({
               Choose files{" "}
               <input
                 type="file"
+                data-activity="upload.files"
                 multiple
                 disabled={running}
                 onChange={fromInput}
@@ -330,6 +375,7 @@ export function UploadPanel({
               Choose a folder{" "}
               <input
                 type="file"
+                data-activity="upload.folder"
                 multiple
                 disabled={running}
                 ref={(element) => element?.setAttribute("webkitdirectory", "")}
@@ -401,6 +447,7 @@ export function UploadPanel({
                         item.status === "invalid") && (
                         <button
                           type="button"
+                          data-activity="upload.remove"
                           aria-label={`Remove ${item.relative}`}
                           onClick={() =>
                             setItems((current) =>
@@ -423,10 +470,24 @@ export function UploadPanel({
           Uploading {position.at} of {position.of}…
         </p>
       )}
+      {push && (
+        <p className="note" aria-label="Push">
+          Push <code>{push.id}</code> - the server keeps what each file
+          replaced, so it can be diffed and restored from the push history.
+          {push.pruned > 0 &&
+            ` Retention pruned ${push.pruned} older ${push.pruned === 1 ? "push" : "pushes"}.`}
+        </p>
+      )}
+      {closeProblem && (
+        <div className="notice error" role="alert">
+          {closeProblem}
+        </div>
+      )}
       <div className="actions">
         <label>
           <input
             type="checkbox"
+            data-activity="upload.overwrite"
             checked={overwrite}
             disabled={running}
             onChange={(event) => setOverwrite(event.target.checked)}
@@ -436,6 +497,7 @@ export function UploadPanel({
         {!running && !confirming && (
           <button
             type="button"
+            data-activity="upload.review"
             disabled={queued.length === 0 || !canUpload}
             onClick={() => setConfirming(true)}
           >
@@ -443,12 +505,20 @@ export function UploadPanel({
           </button>
         )}
         {running && (
-          <button type="button" onClick={() => controller.current?.abort()}>
+          <button
+            type="button"
+            data-activity="upload.cancel"
+            onClick={() => controller.current?.abort()}
+          >
             Cancel
           </button>
         )}
         {!running && finished && (
-          <button type="button" onClick={clearFinished}>
+          <button
+            type="button"
+            data-activity="upload.clear"
+            onClick={clearFinished}
+          >
             Clear finished
           </button>
         )}
@@ -468,10 +538,14 @@ export function UploadPanel({
               ? "Existing files with the same path WILL BE REPLACED (their permissions are kept)."
               : "Existing files are left alone: an upload whose path exists is refused."}
           </p>
-          <button type="button" onClick={start}>
+          <button type="button" data-activity="upload.confirm" onClick={start}>
             Confirm upload
           </button>{" "}
-          <button type="button" onClick={() => setConfirming(false)}>
+          <button
+            type="button"
+            data-activity="upload.back"
+            onClick={() => setConfirming(false)}
+          >
             Back
           </button>
         </div>

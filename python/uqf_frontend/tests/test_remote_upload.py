@@ -30,7 +30,7 @@ from uqf_frontend.config import Settings
 from uqf_frontend.gateway import FakeGateway
 
 TOKEN = secrets.token_hex(32)
-RELEASE = "20261101T090000Z-abc1234"
+RELEASE = "20261101T090000000Z-abc1234"
 UNUSUAL = [
     "with space",
     "it's quoted",
@@ -113,11 +113,29 @@ def served(tmp_path, monkeypatch):
     registry.write_text(f'[targets.box]\nssh = "ops@box"\ndest = "{dest}"\n')
     monkeypatch.setenv("UQS_DEPLOY_TARGETS", str(registry))
     monkeypatch.setenv("UQS_DEPLOY_HISTORY", str(tmp_path / "deploy_history.json"))
+    monkeypatch.setattr(sys.modules[__name__], "SERVED", dest)
     return dest
 
 
-def _put(runner, path, data=b"a,b\n", target="box", overwrite=None, **kw):
-    params = {"path": path}
+#: The deployment `served` made: _put opens each upload's push in it, in
+#: process, so a test's runner sees only the upload (#2002).
+SERVED: Path | None = None
+#: The push an upload names when no deployment is served - a canned runner
+#: never reads it.
+CANNED_PUSH = "20261104T000000000Z-00000000"
+
+
+def _open_push() -> str:
+    if SERVED is None:
+        return CANNED_PUSH
+    push_id = remote_files.new_push_id()
+    remote_helper.handle({"protocol": 1, "op": "push_open", "root": str(SERVED),
+                          "push_id": push_id, "destination": "shared/config"})  # fmt: skip
+    return push_id
+
+
+def _put(runner, path, data=b"a,b\n", target="box", overwrite=None, push=None, **kw):
+    params = {"path": path, "push": push or _open_push()}
     if overwrite is not None:
         params["overwrite"] = overwrite
     client = kw.pop("client", None) or _client(runner)
@@ -128,7 +146,8 @@ def _ok_answer(path, data, **over):
     return json.dumps({
         "protocol": 1, "ok": True, "path": path, "size": len(data),
         "sha256": hashlib.sha256(data).hexdigest(), "replaced": False, "mode": 0o644,
-        "created": [], "swept": 0, **over,
+        "created": [], "swept": 0, "push_id": CANNED_PUSH, "previous_size": None,
+        "previous_sha256": None, **over,
     }) + "\n"  # fmt: skip
 
 
@@ -223,7 +242,9 @@ def test_the_upload_function_refuses_too_large_data_itself(served, monkeypatch):
     from uqf_frontend.config import Settings
 
     with pytest.raises(remote_files.UploadTooLarge):
-        remote_files.upload(Settings(), "box", "shared/config/x", b"xxxx", False, Recorder())
+        remote_files.upload(
+            Settings(), "box", "shared/config/x", b"xxxx", False, CANNED_PUSH, Recorder()
+        )
 
 
 # ------------------------------------------------------------ the ssh call
@@ -232,7 +253,8 @@ def test_the_upload_function_refuses_too_large_data_itself(served, monkeypatch):
 def test_one_batch_mode_call_framed_as_the_helper_then_the_bytes(served):
     data = b"\x00\x01binary\r\n"
     runner = Loopback()
-    resp = _put(runner, "shared/config/x.bin", data=data)
+    push_id = _open_push()
+    resp = _put(runner, "shared/config/x.bin", data=data, push=push_id)
     assert resp.status_code == 200, resp.text
     assert len(runner.calls) == 1
     argv, kwargs = runner.calls[0]
@@ -252,6 +274,7 @@ def test_one_batch_mode_call_framed_as_the_helper_then_the_bytes(served):
     assert request == {
         "protocol": 1, "op": "upload", "root": str(served), "path": "shared/config/x.bin",
         "size": len(data), "sha256": hashlib.sha256(data).hexdigest(), "overwrite": False,
+        "push_id": push_id,
     }  # fmt: skip
     assert (served / "shared/config/x.bin").read_bytes() == data
 
@@ -268,6 +291,9 @@ def test_the_answer_says_what_was_written(served):
         "replaced": False,
         "mode": body["mode"],
         "created": ["shared/config/scripts", "shared/config/scripts/torqconfig"],
+        "push_id": body["push_id"],
+        "previous_size": None,
+        "previous_sha256": None,
     }
 
 
@@ -465,6 +491,8 @@ def test_an_upload_is_audited_with_metadata_and_never_its_bytes(served, tmp_path
         "size_bytes": len(SECRET),
         "sha256": hashlib.sha256(SECRET).hexdigest(),
         "mode": "create",
+        "push_id": resp.json()["push_id"],
+        "previous_sha256": None,
     }
     assert SECRET.decode() not in dump
     assert base64.b64encode(SECRET).decode() not in dump

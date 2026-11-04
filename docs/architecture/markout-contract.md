@@ -61,11 +61,11 @@ that `fx_markout` and `crypto_markout` already share: `.qf.mkt.top_sides`
 There is one dataset per asset class. Each one is the core columns plus that
 asset class's domain columns.
 
-  | Asset class | Dataset                                                           | Domain module | Issue        |
-  | ---         | ---                                                               | ---           | ---          |
-  | FX          | `fx_markout` (long), with `fx_markout_wide` derived from it       | #1933         | #1935        |
-  | crypto      | `crypto_markout` (long), replacing `crypto_execution_quality`     | #1934         | #1936        |
-  | equity      | a new dataset, once an equity source reaches `market_data`        | #1939         | #1939        |
+  | Asset class | Dataset                                                                                                | Domain module | Issue        |
+  | ---         | ---                                                                                                    | ---           | ---          |
+  | FX          | `fx_markout` (long), with `fx_markout_wide` derived from it                                            | #1933         | #1935        |
+  | crypto      | `crypto_markout` (long), replacing `crypto_execution_quality`                                          | #1934         | #1936        |
+  | equity      | a new dataset, once an equity source reaches `market_data` and fills reach `executions` (#1967, #1981) | #1939         | #1981        |
 
 The long rows are the stored form. A wide or nested-wide layout is derived from
 the long rows by key and is never recalculated (#1932). This is already true of

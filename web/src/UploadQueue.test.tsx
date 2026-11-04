@@ -1,7 +1,8 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
-import { queuedActivity } from "./activity";
 import {
+  type ConfigPushReport,
+  type PushOps,
   type RemoteUpload,
   UPLOAD_MAX_FILES,
   UPLOAD_MAX_PATH,
@@ -29,15 +30,44 @@ function answer(path: string): RemoteUpload {
     replaced: false,
     mode: 0o644,
     created: [],
+    push_id: "20261104T103442123Z-9aa36609",
+    previous_size: null,
+    previous_sha256: null,
   };
 }
 
-function panel(uploader: Uploader, directory = "shared/config") {
+/** Push calls that open one push and record how it was closed. */
+function fakePushes() {
+  const closed: ConfigPushReport[][] = [];
+  const pushes: PushOps = {
+    open: (target) =>
+      Promise.resolve({
+        target,
+        root: "/srv/uqf",
+        push_id: "20261104T103442123Z-9aa36609",
+        pruned: [],
+        keep: 50,
+        keep_days: 90,
+      }),
+    close: (_target, _push, reported) => {
+      closed.push(reported);
+      return Promise.resolve({} as never);
+    },
+  };
+  return { pushes, closed };
+}
+
+function panel(
+  uploader: Uploader,
+  directory = "shared/config",
+  pushes = fakePushes().pushes,
+) {
   const props = {
     target: "prod-a",
     root: "/srv/uqf",
     onUploaded: () => {},
     uploader,
+    pushes,
   };
   const view = render(<UploadPanel {...props} directory={directory} />);
   return {
@@ -71,24 +101,22 @@ it("aborts the upload in flight and sends nothing more when the panel goes away 
       ),
     );
   };
-  const { unmount } = panel(uploader);
+  const { pushes, closed } = fakePushes();
+  const { unmount } = panel(uploader, "shared/config", pushes);
   choose([file("a.csv"), file("b.csv"), file("c.csv")]);
   confirm();
   await vi.waitFor(() => expect(calls).toHaveLength(1));
   unmount(); // Close, or Browse another target, or another view
   expect(calls[0].signal.aborted).toBe(true);
-  await act(async () => {});
+  await vi.waitFor(() => expect(closed).toHaveLength(1));
   expect(calls.map((call) => call.path)).toEqual(["shared/config/a.csv"]);
-  // nobody sees the panel any more, so the history says how it ended: the
-  // file in flight may have been written, the rest were never sent
-  const closed = queuedActivity().find(
-    (event) => event.kind === "cancel" && event.action === "file.upload",
-  );
-  expect(closed?.target).toBe("prod-a");
-  expect(closed?.items).toEqual([
-    { target: "shared/config/a.csv", outcome: "unknown" },
+  // the push is closed with how each file ended: the one in flight may have
+  // been written, the rest were never sent
+  expect(closed[0]).toEqual([
+    { path: "shared/config/a.csv", outcome: "uncertain" },
+    { path: "shared/config/b.csv", outcome: "cancelled" },
+    { path: "shared/config/c.csv", outcome: "cancelled" },
   ]);
-  expect(closed?.detail).toMatchObject({ item_count: 2 });
 });
 
 it("holds a dropped folder to the queue as it is when the folder is read (#2012)", async () => {
