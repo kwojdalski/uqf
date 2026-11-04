@@ -126,6 +126,7 @@ export type CompareOutcome =
   | "endpoint_unavailable"
   | "missing_table"
   | "differs"
+  | "not_comparable"
   | "incomplete_coverage"
   | "equal_in_sample";
 export interface CompareInterval {
