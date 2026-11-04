@@ -118,7 +118,7 @@
     spec:.qpipe.transform.fx_markout_outputs.job_spec;
     early:.qpipe.transform.fx_markout.lookback[spec];
     lb:.qetl.source.reference_lookback[.qpipe.source.hdb_fx_markouts.source_name;spec`max_age;early];
-    `read_from`early`read_to!(range_from-lb;range_from-early;range_to+0D|max spec`horizons)}
+    `read_from`early`read_to!(range_from-lb;range_from-early;range_to+.qpipe.transform.markout_core.reach spec)}
 
 / The books query sent to the HDB: the declared reference_read's, each (pair, source)'s last
 / snapshot before the window's start AND every one in the window, both widened by date_skew.
@@ -219,7 +219,7 @@
 .qpipe.source.hdb_fx_markouts.complete_through:{[h]
     latest:.qetl.source.ipc_call[h;{[unused] exec max source_time from `market_data where date=max date};enlist 0b];
     / max of no rows is -0Wp, and arithmetic on it wraps to a far-future instant
-    $[latest<=-0Wp; -0Wp; latest-0D|max (.qpipe.transform.fx_markout_outputs.job_spec)`horizons]}
+    $[latest<=-0Wp; -0Wp; latest-.qpipe.transform.markout_core.reach .qpipe.transform.fx_markout_outputs.job_spec]}
 
 / Can this window be scored, or are its books absent? The core's gate (markout_core.unmet,
 / #1927): an execution with no book for one of its route's legs is a legitimate

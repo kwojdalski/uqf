@@ -82,7 +82,7 @@
     `venue`fill_id;
     .qpipe.transform.eq_markout_outputs.remember;
     .qpipe.transform.eq_markout_outputs.max_lateness;
-    .qpipe.transform.eq_markout_outputs.expire_after;
+    .qpipe.transform.eq_markout_outputs.expire_after[];
     .qpipe.job.eq_markout.keep;
     "markouts on equity fills, in bps against the mid of the venue's book, from the canonical executions and market_data, with the sessions and halts of eq_domain deciding which horizons are priced. Not started with the stack: its books come from the Databento bundle's databento1 and its fills from a live feed a site wires in, neither of which the stack starts";
     "fills waiting for their horizons at a restart are not scored, and the book history is rebuilt from the next books; the job publishes scores, it holds no book of record - hdb_eq_markout_backfill re-derives any window from the HDB";

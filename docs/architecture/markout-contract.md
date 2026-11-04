@@ -118,6 +118,21 @@ move and stored as domain columns:
   `side*pip_factor*(ref-price)` (`fx_markout.q:308-312`).
 - Crypto bps are `10000 * move % price` (`crypto_markout.q:86-87`).
 
+## The horizon grid
+
+A job declares its horizons once, in its spec, and every consumer reads that one
+validated list: the reference fetch (`markout_core.reach`, `lookback`), the
+calculation, the configuration snapshot, the live holdback (`markout_core.wait`)
+and any output naming. A grid is refused, by name, unless it is a non-empty list
+of distinct, finite timespans in whole milliseconds.
+
+`markout_core.horizon_labels[horizons]` names each horizon by its exact
+milliseconds in input order: `-0D00:00:01` is `neg_1000`, `0D` is `0`, `+500ms`
+is `500`. `horizon_columns[stem;horizons]` builds `stem_label` column names from
+the same labels. The shipped layouts carry a `horizon` column, not a column per
+horizon, so nothing existing is renamed, and no stored table changes: a job that
+wants per-horizon columns regenerates its schema explicitly.
+
 ## Conversion to a reporting currency
 
 The spec declares:
