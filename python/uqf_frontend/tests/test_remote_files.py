@@ -404,3 +404,94 @@ def test_a_login_banner_before_the_answer_is_skipped(served):
     answer = remote_helper.handle({})  # a refusal is still an answer
     resp = _get(Recorder(stdout="Welcome to box\n" + json.dumps(answer) + "\n"))
     assert resp.status_code == 422  # bad_request -> ValidationFailed
+
+
+def test_api_confirmation_and_auth_before_ssh(served):
+    runner = Recorder()
+    for payload in (
+        {"paths": ["shared/config/sources.csv"]},
+        {"paths": ["shared/config/sources.csv"], "confirmed": False},
+    ):
+        assert _client(runner).post("/services/box/files/delete", json=payload).status_code in (
+            400,
+            422,
+        )
+    assert (
+        _client(runner, token=None)
+        .post("/services/box/files/delete", json={"paths": ["x"], "confirmed": True})
+        .status_code
+        == 401
+    )
+    assert (
+        _client(runner, writes=False)
+        .post("/services/box/files/delete", json={"paths": ["x"], "confirmed": True})
+        .status_code
+        == 403
+    )
+    assert not runner.calls
+
+
+def test_api_loopback_reports_each_result(served):
+    response = _client(Loopback()).post(
+        "/services/box/files/delete",
+        json={
+            "paths": ["shared/config/sources.csv", "shared/config", "missing"],
+            "confirmed": True,
+        },
+    )
+    assert response.status_code == 200, response.text
+    assert [r["deleted"] for r in response.json()["results"]] == [True, True, False]
+    assert not (served / "shared/config").exists()
+
+
+@pytest.mark.parametrize("paths", [["../escape"], ["/etc/passwd"], [""], ["x"] * 101])
+def test_deletion_invalid_paths_are_refused_before_ssh(served, paths):
+    runner = Recorder()
+    response = _client(runner).post(
+        "/services/box/files/delete", json={"paths": paths, "confirmed": True}
+    )
+    assert response.status_code in (400, 422)
+    assert runner.calls == []
+
+
+def test_deletion_checks_host_before_ssh(served):
+    runner = Recorder()
+    response = _client(runner).post(
+        "/services/box/files/delete",
+        json={"paths": ["x"], "confirmed": True},
+        headers={"Host": "evil.example"},
+    )
+    assert response.status_code == 403
+    assert not runner.calls
+
+
+def test_deletion_audit_preserves_partial_results(served):
+    client = _client(Loopback())
+    response = client.post(
+        "/services/box/files/delete",
+        json={"paths": ["shared/config/sources.csv", "missing"], "confirmed": True},
+    )
+    assert response.status_code == 200
+    rows = client.get("/activity", params={"action": "files.delete"}).json()["events"]
+    assert len(rows) == 1
+    assert rows[0]["outcome"] == "failed"
+    assert [item["outcome"] for item in rows[0]["items"]] == ["succeeded", "failed"]
+
+
+def test_deletion_timeout_is_audited_as_unknown_and_not_retried(served):
+    calls = []
+
+    def timeout(argv, **kwargs):
+        calls.append(argv)
+        raise subprocess.TimeoutExpired(argv, kwargs["timeout"])
+
+    client = _client(timeout)
+    response = client.post(
+        "/services/box/files/delete",
+        json={"paths": ["shared/config/sources.csv"], "confirmed": True},
+    )
+    assert response.status_code == 504
+    assert "unknown" in response.json()["detail"]
+    (row,) = client.get("/activity", params={"action": "files.delete"}).json()["events"]
+    assert row["outcome"] == "unknown"
+    assert len(calls) == 1

@@ -5,8 +5,8 @@ WHAT RUNS. remote_helper.py's source goes in on ssh's stdin to
 `<dest>/current/.venv/bin/python -I -`, the interpreter `uqs deploy push`
 installed with the release. Nothing else is tried: a release without that
 interpreter is refused with NO_PYTHON and its own message, and nothing is
-installed. The helper reads one directory and one deploy report; it never
-deploys, starts, stops or writes anything.
+installed. Listing reads one directory and one deploy report. Confirmed deletion removes
+regular files and empty directories; neither operation deploys or restarts services.
 
 WHERE. Only a target the registry declares (deploy_targets.toml, read as
 GET /services reads it) can be browsed, by its name: the ssh destination,
@@ -253,25 +253,58 @@ def remote_command(
 def browse(
     settings: Settings, name: str, path: str, limit: int, runner: Runner = subprocess.run
 ) -> dict[str, Any]:
-    """List `path` under target `name`'s deployment root: the helper's
-    answer, with the root it was listed under."""
+    check_path(path)
+    return _call(settings, name, {"op": "list", "path": path, "limit": limit}, runner)
+
+
+def delete(
+    settings: Settings,
+    name: str,
+    paths: list[str],
+    confirmed: bool,
+    runner: Runner = subprocess.run,
+    on_begin: Callable[[], None] | None = None,
+) -> dict[str, Any]:
+    if confirmed is not True:
+        raise ValidationFailed("explicit confirmation is required")
+    if not 1 <= len(paths) <= remote_helper.MAX_DELETE:
+        raise ValidationFailed(f"select between 1 and {remote_helper.MAX_DELETE} paths")
+    for path in paths:
+        check_path(path)
+        if not remote_helper.split_path(path):
+            raise BrowseRefused("the deployment root cannot be deleted")
+    return _call(
+        settings, name, {"op": "delete", "paths": paths, "confirmed": True}, runner, on_begin
+    )
+
+
+def _call(
+    settings: Settings,
+    name: str,
+    payload: dict[str, Any],
+    runner: Runner,
+    on_begin: Callable[[], None] | None = None,
+) -> dict[str, Any]:
     from uqs.deploy import control
     from uqs.deploy.remote import diagnostic
 
-    check_path(path)
     r = target(settings, name)
     root = r.dest.rstrip("/") or "/"
-    request = {"protocol": remote_helper.PROTOCOL, "op": "list", "root": root,
-               "path": path, "limit": limit}  # fmt: skip
+    request = {**payload, "protocol": remote_helper.PROTOCOL, "root": root}
     command = remote_command(r.dest, r.remote_user, remote_helper.encode(request))
     argv = control.ssh_argv(r, (), tty=False, command=command)
     try:
+        if on_begin is not None:
+            on_begin()
         done = runner(
             argv, input=helper_source(), capture_output=True, text=True,
             timeout=TIMEOUT, check=False,
         )  # fmt: skip
     except subprocess.TimeoutExpired:
-        raise RemoteTimedOut(f"target {name}: browsing did not finish within {TIMEOUT}s") from None
+        raise RemoteTimedOut(
+            f"target {name}: remote operation timed out after {TIMEOUT}s; "
+            "its outcome may be unknown. Do not automatically retry deletion."
+        ) from None
     except OSError as exc:
         raise RemoteFailed(f"could not run ssh: {exc}") from None
     code = done.returncode
