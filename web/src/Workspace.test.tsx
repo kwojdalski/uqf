@@ -158,6 +158,12 @@ describe("the selector", () => {
     expect(currentWorkspace()).toBe("prod-a");
     expect(await screen.findByText("ssh tunnel")).toBeInTheDocument();
     expect(screen.getByText("read-only")).toBeInTheDocument();
+    // "ssh tunnel" beside "read-only" must not read as a read-only tunnel
+    // (#2032): the badge says what enforces it.
+    expect(screen.getByText("read-only")).toHaveAttribute(
+      "title",
+      expect.stringMatching(/enforced by its API, not by the ssh tunnel/),
+    );
   });
 
   it("says a target is unavailable, in its own words", async () => {

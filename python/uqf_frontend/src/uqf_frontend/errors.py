@@ -126,6 +126,13 @@ class Forbidden(FrontendError):
     status_code = 403
 
 
+class InspectionMode(Forbidden):
+    """A write refused because inspection mode is on (inspection.py, #2032):
+    for the whole frontend, or for the target the request would change.
+    A type of its own, so the browser and the audit can tell "inspection
+    mode" from "not granted to you"."""
+
+
 class TooManyRequests(FrontendError):
     """More unauthenticated browser events than activity's rate allows (#2019).
     Transient: the same batch is accepted once the rate allows it again."""

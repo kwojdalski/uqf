@@ -162,6 +162,23 @@ class Capability(BaseModel):
     action: Literal["read", "write"]
 
 
+class InspectionOut(BaseModel):
+    """Inspection mode as the server enforces it (inspection.py, #2032)."""
+
+    #: The whole frontend: every write but the browser's own history refused.
+    active: bool
+    #: Declared targets in inspection mode: every write naming one refused.
+    #: Empty for a caller who may not read the Services view.
+    targets: list[str]
+    #: Which q login the frontend's own reads use: the restricted
+    #: `inspection` one, or the ordinary `service` one. Table reads always
+    #: use the data login (UQF_FRONTEND_DATA_USER).
+    q_login: Literal["inspection", "service"]
+    #: Why the target registry could not be read - every write naming a
+    #: target is then refused. None for a caller who may not read Services.
+    registry_error: str | None
+
+
 class CapabilitiesResponse(BaseModel):
     """GET /me/capabilities (#2045): who the caller is, as far as a trusted
     proxy vouches, and what the access policy lets them do. The browser hides
@@ -178,6 +195,9 @@ class CapabilitiesResponse(BaseModel):
     features: dict[str, list[str]]
     #: How often the browser re-asks, so a policy change reaches an open tab.
     poll_seconds: int
+    #: The inspection policy in force (#2032). `capabilities` already leaves
+    #: out the writes it refuses everywhere.
+    inspection: InspectionOut
 
 
 class HealthResponse(BaseModel):
@@ -331,6 +351,10 @@ class ServiceTargetOut(BaseModel):
         description="the [environments.NAME] layer the target names, if any"
     )
     labels: dict[str, str]
+    inspection: bool = Field(
+        default=False,
+        description="in inspection mode: the API and uqs refuse every write to it (#2032)",
+    )
     last_deployed: DeployedOut | None = Field(
         description="from this workstation's deploy_history.json, not from the server"
     )
