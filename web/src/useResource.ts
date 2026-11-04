@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ApiError, request } from "./api";
 import { noteResource } from "./activity";
+import { useWorkspace } from "./workspace";
 
 export function useResource<T>(
   path: string | null,
@@ -12,12 +13,17 @@ export function useResource<T>(
   const pausedRef = useRef(false);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const lastCadence = useRef({ key: "", seconds: 5 });
-  const key = `${path}\n${body ?? ""}`;
+  // The workspace is part of what is asked (#2029): a switch is a new key,
+  // so what was shown for the old one is dropped, not kept as "last result".
+  const workspace = useWorkspace();
+  const key = `${workspace}\n${path}\n${body ?? ""}`;
   const [state, setState] = useState<{
     key?: string;
     data?: T;
     error?: ApiError;
     loading: boolean;
+    /** The workspace `data` and `error` came from. */
+    target?: string;
     updated?: Date;
     cadence?: number;
   }>({ loading: false });
@@ -54,6 +60,7 @@ export function useResource<T>(
         setState({
           key,
           data,
+          target: workspace,
           loading: false,
           updated: new Date(),
           cadence: canPoll ? cadence : undefined,
@@ -71,6 +78,7 @@ export function useResource<T>(
         setState((previous) => ({
           ...previous,
           error: failure,
+          target: workspace,
           loading: false,
         }));
         if (poll && failure.transient && !pausedRef.current)
@@ -86,7 +94,7 @@ export function useResource<T>(
       clearTimeout(timer.current);
       controller.abort();
     };
-  }, [path, body, key, poll, revision]);
+  }, [path, body, key, poll, revision, workspace]);
   function setPaused(value: boolean) {
     pausedRef.current = value;
     updatePaused(value);

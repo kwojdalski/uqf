@@ -32,6 +32,8 @@ import { PlotPanel } from "./PlotPanel";
 import { ChartsView } from "./ChartsView";
 import { CompareView } from "./CompareView";
 import { FleetConnections, TunnelPanel } from "./TunnelPanel";
+import { TargetLabel, WorkspaceSelector } from "./WorkspaceSelector";
+import { useWorkspaceTarget } from "./workspace";
 import { useResource } from "./useResource";
 import { ActivityView } from "./ActivityView";
 import { CapabilitiesProvider, useCapabilities } from "./capabilities";
@@ -243,6 +245,7 @@ function ResourceStatus<T>({
             ? ` · Every ${resource.cadence}s`
             : ""}
         </span>
+        <TargetLabel target={resource.target} />
         <button
           type="button"
           data-activity="resource.refresh"
@@ -859,8 +862,17 @@ function DeskView() {
 function ServicesView() {
   const resource = useResource<Services>("/services");
   const data = resource.data;
-  const [browsing, setBrowsing] = useState<string | null>(null);
-  const [tunnelling, setTunnelling] = useState<string | null>(null);
+  // Services reads follow the workspace (#2029): a selected target is the
+  // one browsed and planned, until the operator picks another here.
+  const scoped = useWorkspaceTarget();
+  const [browsing, setBrowsing] = useState<string | null>(scoped);
+  const [tunnelling, setTunnelling] = useState<string | null>(scoped);
+  const [followed, setFollowed] = useState(scoped);
+  if (followed !== scoped) {
+    setFollowed(scoped);
+    setBrowsing(scoped);
+    setTunnelling(scoped);
+  }
   return (
     <>
       <ResourceStatus resource={resource} />
@@ -1803,6 +1815,7 @@ function Workspace() {
         <a className="brand" href="/ui/" data-activity="nav.home">
           uqf<span> / FX DATA</span>
         </a>
+        <WorkspaceSelector />
         <div className="gateway" role="status">
           Gateway <Badge value={gateway} />
           {/* The server's own words on what is wrong and what to set - for

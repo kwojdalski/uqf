@@ -264,3 +264,14 @@ def test_the_view_reads_q_s_own_document_from_fixture_targets(registry, tmp_path
     assert t["rows"] == [
         {"rowkey": "deal_id=3", "kind": "changed", "detail": "rate: 1.0847 -> 1.2"}
     ]
+
+
+def test_the_tabs_workspace_does_not_move_a_comparison(registry, asked):
+    """Both sides are in the body, so the workspace header is ignored (#2029):
+    a tab working in `box` still compares exactly what it names."""
+    calls, _ = asked
+    r = _client().post(
+        "/compare", json=BODY | {"right": "local", "left": "local"}, headers={"X-UQF-Target": "box"}
+    )
+    assert r.status_code == 200, r.text
+    assert (calls[0]["left"], calls[0]["right"]) == ("local", "local")

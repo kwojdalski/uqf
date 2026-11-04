@@ -116,6 +116,10 @@ PAIRS = {
     "CompareRowDifference": "CompareRowDifference",
     "CompareTable": "CompareTable",
     "CompareResult": "CompareResponse",
+    "Workspace": "WorkspaceOut",
+    "Workspaces": "WorkspacesResponse",
+    "WorkspaceEndpoint": "WorkspaceEndpointOut",
+    "WorkspaceStatus": "WorkspaceResponse",
     **REQUESTS,
 }
 

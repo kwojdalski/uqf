@@ -127,6 +127,7 @@ it("names every control every view renders, with a name the server keeps", async
     "files.sort.name",
     "files.select",
     "activity.export",
+    "workspace.select",
   ])
     expect(seen).toContain(name);
 });

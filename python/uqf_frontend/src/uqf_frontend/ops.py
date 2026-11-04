@@ -143,6 +143,8 @@ POLL_SECONDS: dict[str, int] = {
     # the access policy can change without a restart (#2045); an open tab
     # learns of it this often
     "capabilities": 60,
+    # a selected target re-proves its connection this often (#2029)
+    "workspace": 30,
 }
 
 
