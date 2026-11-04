@@ -86,6 +86,41 @@
     .qt.support.assertApprox[.qt.qpipe.transform.crypto_markout.total[r;0D00:00:10;`markout_net_bps];2.41935483871-1;1e-9;"and 2.4194 - 1 at 10s"];
     .qunit.assertTrue[all null (r`markout_net_bps) where (r`kind)<>`total;"the fee is charged once per fill, on the total"]};
 
+.qt.qpipe.transform.crypto_markout.test_a_corrected_fill_uses_the_latest_valid_fee:{[t]
+    old:.qt.qpipe.transform.crypto_markout.fill[1;15.5;`USDT];
+    latest:.qt.qpipe.transform.crypto_markout.fill[1;3.1;`USDT];
+    r:.qpipe.transform.crypto_markout.score[.qt.qpipe.transform.crypto_markout.spec[];old,latest;.qt.qpipe.transform.crypto_markout.books[]];
+    .qt.support.assertApprox[.qt.qpipe.transform.crypto_markout.total[r;0D00:00:10;`fee_bps];1f;1e-9;
+        "the corrected 3.1 USDT fee on 31000 is 1 bp"];
+    .qunit.assertEquals[r;.qt.qpipe.transform.crypto_markout.score[1;3.1;`USDT];
+        "replay and final delivery alone produce identical gross and net markouts"]};
+
+.qt.qpipe.transform.crypto_markout.test_a_correction_can_change_the_fee_currency:{[t]
+    old:.qt.qpipe.transform.crypto_markout.fill[1;3.1;`BNB];
+    latest:.qt.qpipe.transform.crypto_markout.fill[1;0.00005;`BTC];
+    r:.qpipe.transform.crypto_markout.score[.qt.qpipe.transform.crypto_markout.spec[];old,latest;.qt.qpipe.transform.crypto_markout.books[]];
+    .qt.support.assertApprox[.qt.qpipe.transform.crypto_markout.total[r;0D00:00:01;`fee_quote];3.1;1e-9;
+        "the corrected base-currency fee can be valued"];
+    .qunit.assertEquals[r;.qt.qpipe.transform.crypto_markout.score[1;0.00005;`BTC];
+        "fee amount and currency come from the same selected delivery"]};
+
+.qt.qpipe.transform.crypto_markout.test_an_excluded_later_delivery_cannot_replace_the_fee:{[t]
+    good:.qt.qpipe.transform.crypto_markout.fill[1;3.1;`USDT];
+    bad:update price:0f, fee:99f from good;
+    r:.qpipe.transform.crypto_markout.score[.qt.qpipe.transform.crypto_markout.spec[];good,bad;.qt.qpipe.transform.crypto_markout.books[]];
+    .qunit.assertEquals[r;.qt.qpipe.transform.crypto_markout.score[1;3.1;`USDT];
+        "the core excludes the bad price, so the valid fill's fee still applies"]};
+
+.qt.qpipe.transform.crypto_markout.test_fee_corrections_are_scoped_by_venue_and_fill_id:{[t]
+    old:.qt.qpipe.transform.crypto_markout.fill[1;15.5;`USDT];
+    latest:.qt.qpipe.transform.crypto_markout.fill[1;3.1;`USDT];
+    other:update venue:`b from .qt.qpipe.transform.crypto_markout.fill[1;6.2;`USDT];
+    sp:.qt.qpipe.transform.crypto_markout.spec[];
+    books:.qt.qpipe.transform.crypto_markout.books[];
+    r:.qpipe.transform.crypto_markout.score[sp;old,other,latest;books];
+    want:.qpipe.transform.crypto_markout.score[sp;other,latest;books];
+    .qunit.assertEquals[r;want;"the same fill id at another venue is independent"]};
+
 .qt.qpipe.transform.crypto_markout.test_a_base_currency_fee_is_valued_at_the_fill_price:{[t]
     / 0.0005 BTC at 62000 is 31 USDT = 10 bps of the 31000 notional
     r:.qt.qpipe.transform.crypto_markout.score[1;0.0005;`BTC];
