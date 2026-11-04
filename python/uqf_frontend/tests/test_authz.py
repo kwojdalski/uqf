@@ -276,6 +276,8 @@ SAMPLES: dict[tuple[str, str], dict] = {
     ("GET", "/ops/backfill"): {},
     ("GET", "/services"): {},
     ("GET", "/services/{target}/files"): {"params": {"path": "releases"}},
+    ("GET", "/services/{target}/tunnel"): {"params": {"process": "rdb1"}},
+    ("GET", "/services/{target}/tunnel/check"): {"params": {"process": "rdb1"}},
     ("PUT", "/services/{target}/files/content"): {
         "params": {"path": "shared/config/x.csv", "push": "20261104T000000000Z-00000000"},
         "content": b"a,b\n",

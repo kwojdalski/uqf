@@ -30,6 +30,7 @@ import {
 import { FileBrowser } from "./FileBrowser";
 import { PlotPanel } from "./PlotPanel";
 import { ChartsView } from "./ChartsView";
+import { FleetConnections, TunnelPanel } from "./TunnelPanel";
 import { useResource } from "./useResource";
 import { ActivityView } from "./ActivityView";
 import {
@@ -856,6 +857,7 @@ function ServicesView() {
   const resource = useResource<Services>("/services");
   const data = resource.data;
   const [browsing, setBrowsing] = useState<string | null>(null);
+  const [tunnelling, setTunnelling] = useState<string | null>(null);
   return (
     <>
       <ResourceStatus resource={resource} />
@@ -927,6 +929,17 @@ function ServicesView() {
                     Browse {target.name}
                   </button>
                 ))}
+                {data.targets.map((target) => (
+                  <button
+                    type="button"
+                    data-activity="services.tunnel"
+                    key={`tunnel:${target.name}`}
+                    aria-pressed={tunnelling === target.name}
+                    onClick={() => setTunnelling(target.name)}
+                  >
+                    Tunnel {target.name}
+                  </button>
+                ))}
               </div>
             ) : (
               <p className="note">
@@ -943,6 +956,15 @@ function ServicesView() {
             key={browsing}
             target={browsing}
             onClose={() => setBrowsing(null)}
+          />
+        )}
+      {tunnelling &&
+        data?.remote_operations_enabled &&
+        data.targets.some((target) => target.name === tunnelling) && (
+          <TunnelPanel
+            key={tunnelling}
+            target={tunnelling}
+            onClose={() => setTunnelling(null)}
           />
         )}
     </>
@@ -1025,6 +1047,7 @@ function OpsView({
           </section>
         </>
       )}
+      {view === "Fleet" && <FleetConnections />}
     </>
   );
 }
