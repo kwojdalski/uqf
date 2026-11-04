@@ -20,7 +20,10 @@ TWO SCOPES.
 - One target: `inspection = true` on it - or on its environment - in
   deploy_targets.toml, the registry `uqs` and the Services view read
   (uqs.deploy.inspection). A write naming that target is refused here, and the
-  same change through uqs is refused by uqs. A target read from the registry
+  same change through uqs is refused by uqs. So is a write naming ANOTHER
+  declared target at the same server - the same ssh and dest, under the
+  spellings uqs.deploy.inspection.same_server treats as one (#2068, #2074):
+  the match is uqs's own `matching`, so the two cannot disagree. A target read from the registry
   is per request, so a target put in inspection mode is refused from the next
   write on, without a restart.
 
@@ -89,16 +92,43 @@ class Effective:
     registry_error: str | None = None
 
 
-def inspected_targets(settings: Settings) -> tuple[frozenset[str], str | None]:
-    """(the declared targets in inspection mode, why the registry could not
-    be read - or None). Read from the registry every time, like the Services
-    view, so a change to the file is in force at once."""
+def _registry(settings: Settings) -> tuple[list[dict], str | None]:
+    """(the registry's target rows, why it could not be read - or None).
+    Read every time, like the Services view, so a change to the file is in
+    force at once."""
     from uqf_frontend import services
 
     registry = services.read(settings)
     if registry.invalid is not None:
-        return frozenset(), registry.invalid
-    return frozenset(t["name"] for t in registry.targets if t.get("inspection")), None
+        return [], registry.invalid
+    return list(registry.targets), None
+
+
+def inspected_targets(settings: Settings) -> tuple[frozenset[str], str | None]:
+    """(the declared targets in inspection mode, why the registry could not
+    be read - or None)."""
+    rows, error = _registry(settings)
+    return frozenset(t["name"] for t in rows if t.get("inspection")), error
+
+
+def inspected_target(settings: Settings, target: str) -> tuple[str | None, str | None]:
+    """(the inspection-only target that `target` is - by its name, or by the
+    server it is declared at - or None; why the registry could not be read,
+    or None). Matched by uqs.deploy.inspection.matching, as uqs matches."""
+    from uqs.deploy import inspection as uqs_inspection
+
+    rows, error = _registry(settings)
+    if error is not None:
+        return None, error
+    declared = {
+        str(t["name"]): {
+            "host": t.get("ssh"),
+            "dest": t.get("dest"),
+            uqs_inspection.KEY: t.get("inspection") is True,
+        }
+        for t in rows
+    }
+    return uqs_inspection.matching(declared, name=target), None
 
 
 def effective(settings: Settings) -> Effective:
@@ -147,18 +177,19 @@ def refusal(
         )
     if target is None:
         return None
-    found, error = inspected_targets(settings)
+    found, error = inspected_target(settings, target)
     if error is not None:
         return (
             f"the deployment registry cannot be read, so whether target {target!r} is in "
             f"inspection mode is unknown: {what} is refused - {_NOTE}"
         )
-    if target in found:
-        return (
-            f"target {target} is in inspection mode (inspection = true in "
-            f"deploy_targets.toml): {what} is refused - {_NOTE}"
-        )
-    return None
+    if found is None:
+        return None
+    via = "" if found == target else f" (target {target} is the same server as target {found})"
+    return (
+        f"target {found} is in inspection mode (inspection = true in "
+        f"deploy_targets.toml){via}: {what} is refused - {_NOTE}"
+    )
 
 
 def effective_capabilities(
