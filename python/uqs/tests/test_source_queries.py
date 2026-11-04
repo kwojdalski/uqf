@@ -1,10 +1,10 @@
 """Every source sends its query through a path `--trace` can see.
 
-`uqs job backfill --trace` logs each query a source is sent, at TRACE, from two
-places: `.qetl.source.ipc` for a q lambda over IPC, and `.qetl.io.odbc.run_sql`
-for SQL (`window_query` sends through it too). A source whose `query` calls
-the handle itself - `h({...};from;to)` - still works, and its queries are
-invisible to the switch that exists to show them. Nothing would fail: the
+`uqs job backfill --trace` logs each query a source is sent, at TRACE, from a few
+places: `.qetl.source.ipc` for a q lambda over IPC, `.qetl.source.csv` for a csv
+file, and `.qetl.io.odbc.run_sql` for SQL (`window_query` sends through it too).
+A source whose `query` calls the handle itself - `h({...};from;to)` - still works,
+and its queries are invisible to the switch that exists to show them. Nothing would fail: the
 trace would just be missing the one query someone turned it on to see.
 
 Read as text, so it needs no q.
@@ -25,6 +25,7 @@ SOURCES = sorted((repo_root() / "src" / "etl" / "sources").glob("*.q"))
 TRACED = (
     ".qetl.source.ipc[",
     ".qetl.source.local[",
+    ".qetl.source.csv[",
     ".qetl.io.odbc.run_sql[",
     ".qetl.io.odbc.window_query[",
 )

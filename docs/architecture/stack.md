@@ -9,13 +9,14 @@ uqf's own additions (`fxfeed1`, `fxorderbookfeed1`, `widefeed1`, `cross1`,
 `superbook1`, `arbitrage1`, `crossarb1`, `crypto_markout1`, `alert_sink1`,
 `last_value1`, `exec_bars1`, `crypto_book_1s1`, `order_quality1`, `fxmarkout1`,
 `fxmarkoutwide1`, `order_outcomes1`, `book_liquidity_1m1`, `demo_deals_feed1`),
-and twelve bounded backfill processes (`deals_backfill1`, `events_backfill1`,
+and thirteen bounded backfill processes (`deals_backfill1`, `events_backfill1`,
 `upstream_backfill1`, `duckdb_deals_backfill1`, `hdb_transfer_backfill1`,
 `hdb_exec_bars_backfill1`, `hdb_crypto_book_backfill1`,
 `hdb_order_quality_backfill1`, `hdb_book_liquidity_1m_backfill1`,
 `hdb_fx_markouts_backfill1`, `hdb_fx_markout_wide_backfill1`,
-`hdb_crypto_markout_backfill1`). Declared is not the same as running here - see
-[what starts with the stack](#what-starts-and-why-not-all-of-it).
+`hdb_crypto_markout_backfill1`, `eq_fills_backfill1`). Declared is not the same
+as running here - see [what starts with the
+stack](#what-starts-and-why-not-all-of-it).
 
 Five more processes exist only when a sidecar bundle is installed, because each
 is tied to one outside system: `databento1` and `databento_backfill1`

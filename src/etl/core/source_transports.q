@@ -67,7 +67,7 @@
 
 / Every registered transport's name.
 / @return a symbol vector
-/ @eg .qetl.source.transports[]  ->  `ipc`odbc`local`mock
+/ @eg .qetl.source.transports[]  ->  `ipc`odbc`local`mock`csv
 .qetl.source.transports:{[] (key .qetl.source.transport)`name}
 
 / A transport's row, or a refusal naming it and the ones there are - before
@@ -143,6 +143,17 @@
     "an integer seed: the same seed and window always give the same rows";
     "42";
     "/ `h` is the seed: the credential, opened as a long - there is nothing to\n/ connect to. Generate the window's rows from it and the bounds,\n/ deterministically: the same seed and window must give the same rows\n/ (sidecars/mockups/mock_trades.q).")];
+
+/ A source that is a delimited text file: the credential is its path. For a
+/ drop of fills or reference rows a site hands over as a file, where the odbc
+/ transport would need a database around it. See source_csv.q.
+.qetl.source.register_transport[`csv;.qetl.source.transport_fields!(
+    {[cred] .qetl.source.csv_path cred};
+    {[h] (::)};
+    {[h;table_name] .qetl.source.csv_meta[h]}; / noqa: QF016 a file holds one table
+    "the path of a csv file on this machine, with a header line";
+    "/path/to/fills.csv";
+    "/ `h` is the file as a file symbol. Read it with .qetl.source.csv_rows[h]: every field\n/ as text, one column per header field. Type the text with .qetl.coerce, cut the\n/ window [range_from;range_to) yourself, and return the declared columns and types\n/ (src/etl/core/source_fills.q).")];
 
 .qetl.source.default_transport:`ipc
 
