@@ -32,14 +32,21 @@
     if[not p~key p; '"csv: ",cred," is not a file that exists"];
     p}
 
+/ The column names a file's lines open with.
+/ @param h the file, as a file symbol, for the message
+/ @param lines the file's lines
+/ @return a symbol vector, one name per header field
+/ @throws error when there are no lines
+/ @private
+.qetl.source.csv_names:{[h;lines]
+    if[0=count lines; '"csv: ",(1_string h)," is empty - a csv source needs a header line"];
+    `$trim each "," vs (first lines) except "\r"}
+
 / The first line of a file, split into its column names.
 / @param h the file, as a file symbol
 / @return a symbol vector, one name per header field
 / @throws error when the file is empty
-.qetl.source.csv_header:{[h]
-    head:read0 (h;0;65536);
-    if[0=count head; '"csv: ",(1_string h)," is empty - a csv source needs a header line"];
-    `$trim each "," vs first head except\: "\r"}
+.qetl.source.csv_header:{[h] .qetl.source.csv_names[h;read0 h]}
 
 / A csv file's columns for the live check: each header field, typed general.
 / @param h the file, as a file symbol
@@ -53,8 +60,9 @@
 / @return a table of strings, one column per header field, one row per data line
 / @throws error naming the first line whose field count differs from the header's
 .qetl.source.csv_rows:{[h]
-    c:.qetl.source.csv_header[h];
-    lines:1_ read0 h;
+    all_lines:read0 h;
+    c:.qetl.source.csv_names[h;all_lines];
+    lines:1_ all_lines;
     lines:lines where 0<count each trim each lines;
     n:count c;
     width:1+sum each lines="," ;
