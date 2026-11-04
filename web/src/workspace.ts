@@ -71,6 +71,13 @@ export function useWorkspace(): string {
   return useSyncExternalStore(subscribeWorkspace, currentWorkspace);
 }
 
+/** The selected target, or null for the local stack: what a view that
+ *  names its target itself (Services, Fleet's connection details) starts on. */
+export function useWorkspaceTarget(): string | null {
+  const workspace = useWorkspace();
+  return workspace === LOCAL ? null : workspace;
+}
+
 /** For tests: back to local, with nothing stored. */
 export function resetWorkspace(): void {
   selectWorkspace(LOCAL);

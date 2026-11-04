@@ -74,9 +74,7 @@ afterEach(() => {
 it("shows a viewer only the views their group may read", async () => {
   serve(VIEWER);
   render(<App />);
-  await waitFor(() =>
-    expect(navNames()).toEqual(["Coverage", "Desk", "Charts"]),
-  );
+  await waitFor(() => expect(navNames()).toEqual(["Coverage", "Desk"]));
   expect(screen.getByText(/Signed in as bob/)).toBeInTheDocument();
 });
 
@@ -120,9 +118,7 @@ it("records no activity for a caller without activity:write", async () => {
   configureActivity({ transport: async () => {}, flushDelayMs: 60_000 });
   serve(VIEWER);
   render(<App />);
-  await waitFor(() =>
-    expect(navNames()).toEqual(["Coverage", "Desk", "Charts"]),
-  );
+  await waitFor(() => expect(navNames()).toEqual(["Coverage", "Desk"]));
   expect(record("navigate", "view.open", { target: "Desk" })).toBeNull();
   expect(queuedActivity()).toEqual([]);
 });

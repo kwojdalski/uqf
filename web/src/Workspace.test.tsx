@@ -191,10 +191,24 @@ describe("the selector", () => {
   it("labels each view's result with the workspace it came from", async () => {
     mockWholeApi();
     render(<App />);
-    fireEvent.click(await screen.findByRole("button", { name: /Fleet/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /Queue/ }));
     expect(await screen.findAllByText("Local stack")).not.toHaveLength(0);
     act(() => selectWorkspace("prod-a"));
     expect(await screen.findAllByText("Target prod-a")).not.toHaveLength(0);
     expect(screen.queryByText("Local stack")).toBeNull();
+  });
+
+  it("points the Services reads at the selected target", async () => {
+    const fetcher = mockWholeApi();
+    selectWorkspace("prod-a");
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: /Services/ }));
+    // the target's files are browsed without picking it again
+    await screen.findByRole("button", { name: "releases/" });
+    expect(
+      fetcher.mock.calls.some(([path]) =>
+        String(path).startsWith("/services/prod-a/files"),
+      ),
+    ).toBe(true);
   });
 });

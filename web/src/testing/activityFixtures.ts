@@ -217,6 +217,16 @@ export function answer(path: string, level: SessionLevel = "actions"): unknown {
       remote_operations_enabled: true,
       poll_seconds: 30,
     };
+  if (bare === "/services/prod-a/tunnel")
+    return {
+      target: "prod-a",
+      ssh: "deploy@prod-a",
+      release: null,
+      mappings: [],
+      launch_argv: ["ssh", "-N", "deploy@prod-a"],
+      launch_command: "ssh -N deploy@prod-a",
+      available: [],
+    };
   if (bare.startsWith("/services/prod-a/files"))
     return listing(
       new URLSearchParams(path.split("?")[1] ?? "").get("path") ?? "",
