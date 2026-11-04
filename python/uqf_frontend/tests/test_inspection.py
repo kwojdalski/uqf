@@ -76,6 +76,37 @@ def registry(tmp_path, monkeypatch) -> Path:
     return path
 
 
+#: prod-rw shares prod's (ssh, dest) but is not itself `inspection = true`.
+ALIASED_REGISTRY = textwrap.dedent(
+    """\
+    [environments.production]
+    inspection = true
+
+    [targets.prod]
+    ssh = "deploy@prod"
+    dest = "/srv/uqf"
+    environment = "production"
+
+    [targets.prod-rw]
+    ssh = "deploy@prod"
+    dest = "/srv/uqf"
+
+    [targets.uat]
+    ssh = "deploy@uat"
+    dest = "/srv/uqf-uat"
+    """
+)
+
+
+@pytest.fixture
+def aliased_registry(tmp_path, monkeypatch) -> Path:
+    path = tmp_path / "deploy_targets.toml"
+    path.write_text(ALIASED_REGISTRY)
+    monkeypatch.setenv("UQS_DEPLOY_TARGETS", str(path))
+    monkeypatch.setenv("UQS_DEPLOY_HISTORY", str(tmp_path / "deploy_history.json"))
+    return path
+
+
 def _settings(tmp_path: Path, **kw: Any) -> Settings:
     base: dict[str, Any] = {
         "enable_writes": True,
@@ -248,6 +279,23 @@ def test_another_target_is_not_refused(tmp_path, registry, method, template):
     )
     resp = c.request(method, _path(template).replace("/prod/", "/uat/"), json={}, headers=AUTH)
     assert not _is_inspection_refusal(resp)
+
+
+@pytest.mark.parametrize(("method", "template"), TARGET_WRITES)
+def test_a_second_target_at_the_same_server_is_refused_too(
+    tmp_path, aliased_registry, method, template
+):
+    """prod-rw names no target itself in inspection mode, but reaches the
+    same server as prod - refused the same way `uqs deploy push prod-rw` is
+    refused by (host, dest) (#2068)."""
+    runner = Untouchable()
+    c = _client(_settings(tmp_path), runner)
+    resp = c.request(method, _path(template).replace("/prod/", "/prod-rw/"), json={}, headers=AUTH)
+    assert _is_inspection_refusal(resp), resp.text
+    detail = resp.json()["detail"]
+    assert "target prod is in inspection mode" in detail
+    assert "the server at deploy@prod:/srv/uqf is target prod" in detail
+    assert runner.calls == []
 
 
 def test_a_target_in_inspection_mode_leaves_the_local_stack_alone(tmp_path, registry):

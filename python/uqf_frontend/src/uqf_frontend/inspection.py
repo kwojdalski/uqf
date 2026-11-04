@@ -89,16 +89,32 @@ class Effective:
     registry_error: str | None = None
 
 
-def inspected_targets(settings: Settings) -> tuple[frozenset[str], str | None]:
-    """(the declared targets in inspection mode, why the registry could not
-    be read - or None). Read from the registry every time, like the Services
-    view, so a change to the file is in force at once."""
+def declared_targets(settings: Settings) -> tuple[dict[str, dict], str | None]:
+    """Every declared target's name, its (host, dest) and whether it is in
+    inspection mode - or why the registry could not be read. Read from the
+    registry every time, like the Services view, so a change to the file is
+    in force at once."""
     from uqf_frontend import services
 
     registry = services.read(settings)
     if registry.invalid is not None:
-        return frozenset(), registry.invalid
-    return frozenset(t["name"] for t in registry.targets if t.get("inspection")), None
+        return {}, registry.invalid
+    return (
+        {
+            t["name"]: {"host": t["ssh"], "dest": t["dest"], "inspection": t["inspection"]}
+            for t in registry.targets
+        },
+        None,
+    )
+
+
+def inspected_targets(settings: Settings) -> tuple[frozenset[str], str | None]:
+    """(the declared targets in inspection mode, why the registry could not
+    be read - or None)."""
+    declared, error = declared_targets(settings)
+    if error is not None:
+        return frozenset(), error
+    return frozenset(name for name, t in declared.items() if t["inspection"]), None
 
 
 def effective(settings: Settings) -> Effective:
@@ -147,16 +163,27 @@ def refusal(
         )
     if target is None:
         return None
-    found, error = inspected_targets(settings)
+    declared, error = declared_targets(settings)
     if error is not None:
         return (
             f"the deployment registry cannot be read, so whether target {target!r} is in "
             f"inspection mode is unknown: {what} is refused - {_NOTE}"
         )
-    if target in found:
+    from uqs.deploy import inspection as deploy_inspection
+
+    own = declared.get(target, {})
+    found = deploy_inspection.matching(
+        declared, name=target, host=own.get("host"), dest=own.get("dest")
+    )
+    if found is not None:
+        via = (
+            ""
+            if target == found
+            else f" (the server at {own.get('host')}:{own.get('dest')} is target {found})"
+        )
         return (
-            f"target {target} is in inspection mode (inspection = true in "
-            f"deploy_targets.toml): {what} is refused - {_NOTE}"
+            f"target {found} is in inspection mode (inspection = true in "
+            f"deploy_targets.toml){via}: {what} is refused - {_NOTE}"
         )
     return None
 

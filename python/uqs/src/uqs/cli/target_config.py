@@ -288,8 +288,15 @@ def restore(
         console.print(dry_run_note())
         return
     try:
-        # the plan above only read; writing it is refused (#2032)
-        inspection.refuse(repo_root(), f"`uqs target config restore {name}`", name=name)
+        # the plan above only read; writing it is refused (#2032) - matched by
+        # name AND by (host, dest), as target.py:297 matches `target shell`
+        root = repo_root()
+        declared = targets.read(root) if targets.declaration_path(root).is_file() else {}
+        own = declared.get(name, {})
+        inspection.refuse(
+            root, f"`uqs target config restore {name}`",
+            name=name, host=own.get("host"), dest=own.get("dest"),
+        )  # fmt: skip
         safety.confirm(
             f"Restore {len(steps)} file(s) on {name} to how they were before push {push_id}?",
             yes=yes,

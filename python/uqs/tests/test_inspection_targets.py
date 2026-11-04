@@ -27,6 +27,11 @@ dest = "/srv/uqf"
 profile = "essential"
 environment = "production"
 
+[targets.prod-rw]
+ssh = "deploy@prod"
+dest = "/srv/uqf"
+profile = "essential"
+
 [targets.uat]
 ssh = "deploy@uat"
 dest = "/srv/uqf-uat"
@@ -232,6 +237,30 @@ def test_config_restore_on_an_inspection_target_writes_nothing(declared, monkeyp
 
     monkeypatch.setattr(remote_files, "restore", restore)
     result = _invoke("target", "config", "restore", "prod", "20261104T145249000Z-0123abcd", "--yes")
+    assert result.exit_code != 0
+    assert "inspection mode" in log_text()
+    assert asked == [True]  # the plan was read; nothing was written
+
+
+def test_config_restore_on_an_aliased_target_is_refused(declared, monkeypatch, log_text):
+    """prod-rw shares prod's (ssh, dest) but is not itself declared `inspection
+    = true` - it must still be refused, as `uqs deploy push prod-rw` is (#2068)."""
+    from uqf_frontend import remote_files
+
+    asked: list[bool] = []
+
+    def restore(r, name, push_id, *, dry_run, **_):
+        asked.append(dry_run)
+        if not dry_run:
+            _never()
+        return {"plan": [{"step": "write", "path": "a.csv"}]}
+
+    monkeypatch.setattr(remote_files, "restore", restore)
+    result = _invoke(
+        "target", "config", "restore", "prod-rw", "20261104T145249000Z-0123abcd", "--yes"
+    )
+    if result.exception and not isinstance(result.exception, SystemExit):
+        raise result.exception
     assert result.exit_code != 0
     assert "inspection mode" in log_text()
     assert asked == [True]  # the plan was read; nothing was written
