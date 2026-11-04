@@ -213,6 +213,8 @@
         'who," declares ",(", " sv string unknown),", which a horizon job does not take"];
     if[not all -11h=type each decl`events`reference`transform`publishes;
         'who,"'s events, reference, transform and publishes must each be one table or transform name, a symbol"];
+    if[decl[`events]=decl`reference;
+        'who," needs distinct events and reference tables"];
     / $[], not `and`: q's `and` evaluates both sides, so a mistyped value
     / would throw a bare 'type before the message naming it
     if[not $[-16h=type decl`horizon; 0D<decl`horizon; 0b];
