@@ -19,10 +19,9 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-from uqs.attach.schema import reserved_reason
 from uqs.generated.q_facts import Q_TYPE_CHARS
 from uqs.model import plant_metadata, schemas
-from uqs.model.qnames import Q_WORDS
+from uqs.model.qnames import Q_WORDS, reserved_reason
 from uqs.paths import TABLES_FILE, UqsError
 
 #: The column every plant table leads with: `.u.upd` stamps it, and every
