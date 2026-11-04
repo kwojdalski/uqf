@@ -77,6 +77,17 @@ class CoverageIncomplete(FrontendError):
     status_code = 409
 
 
+class StackBusy(FrontendError):
+    """Another start, stop or restart holds the stack's lifecycle lock (#2028).
+
+    409, and refused rather than queued: a second Start waiting behind the
+    first would run against whatever the first left, long after the operator
+    who clicked it has looked away.
+    """
+
+    status_code = 409
+
+
 class BackfillNotStarted(FrontendError):
     """TorQ's launcher (torq.sh start) did not start the backfill process.
 

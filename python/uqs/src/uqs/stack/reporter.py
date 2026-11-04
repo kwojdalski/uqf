@@ -50,6 +50,7 @@ query failure this module exists to remove.
 from __future__ import annotations
 
 import csv
+import io
 import re
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -60,7 +61,7 @@ from uqs.model.dependencies import external_producers, outputs_by_process
 from uqs.model.runtime_members import _bundle_split, pipeline_procnames, plant_tables
 from uqs.paths import UqsError, UqsPaths, repo_root
 from uqs.runtimes import Runtime
-from uqs.stack import deployment
+from uqs.stack import deployment, generated
 
 log = get_logger()
 
@@ -321,12 +322,13 @@ def write_reporter_config(
     kept, left_out = reporter_plan(paths.runtime_declaration, procnames, selected=selected)
     for reason in left_out:
         log.info("reporter1: leaving out check {}", reason)
-    with paths.generated_reporter_config.open("w", newline="") as f:
-        # Plain \n, as process.csv: q's 0: would glue a \r onto daysofweek.
-        writer = csv.DictWriter(
-            f, fieldnames=REPORTER_FIELDS, delimiter="|", lineterminator="\n",
-            quoting=csv.QUOTE_NONE, escapechar=None,
-        )  # fmt: skip
-        writer.writeheader()
-        writer.writerows(c.row() for c in kept)
+    f = io.StringIO()
+    # Plain \n, as process.csv: q's 0: would glue a \r onto daysofweek.
+    writer = csv.DictWriter(
+        f, fieldnames=REPORTER_FIELDS, delimiter="|", lineterminator="\n",
+        quoting=csv.QUOTE_NONE, escapechar=None,
+    )  # fmt: skip
+    writer.writeheader()
+    writer.writerows(c.row() for c in kept)
+    generated.write_text(paths.generated_reporter_config, f.getvalue())
     return kept

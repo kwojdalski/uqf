@@ -49,6 +49,18 @@
 / The grid and policy the live job and its twin score with - one definition.
 .qpipe.transform.crypto_markout_outputs.job_spec:`horizons`report_ccy`rate_timing`rates`max_age!(0D00:00:01 0D00:00:10;`USD;`execution;(enlist `USDT)!enlist 1f;.qf.mkt.reference_max_age)
 
+/ The snapshot id the job spec's results belong to: stamped by the live job, its bounded twin
+/ and the examples. The spec is complete, so config_markout.id takes it as it stands;
+/ tests/q/test_config_markout.q holds that equal to the validated spec's.
+.qpipe.transform.crypto_markout_outputs.config_id:.qpipe.transform.config_markout.id[.qpipe.transform.crypto_markout.domain;.qpipe.transform.crypto_markout_outputs.job_spec]
+
+/ Pin the job spec's configuration snapshot: the live job's `on_start` and its twin's `pin`
+/ call it, so the snapshot is durable before the first calculation (#1999).
+/ @return the snapshot id, as a one-item list
+/ @eg count .qpipe.transform.crypto_markout_outputs.pin[]  ->  1
+.qpipe.transform.crypto_markout_outputs.pin:{[]
+    enlist .qpipe.transform.config_markout.pin[.qpipe.transform.crypto_markout.domain;.qpipe.transform.crypto_markout_outputs.job_spec;"crypto_markout job spec: the live job crypto_markout1 and its bounded twin"]}
+
 / The least a job waits before scoring, however early its horizons are.
 .qpipe.transform.crypto_markout_outputs.settle:0D00:00:01
 
@@ -156,9 +168,9 @@
     ([] time:n#2026.09.17D10:00:10; source_time:n#2026.09.17D10:00:00; clock:n#`venue; venue:n#`a; fill_id:n#`f1; sym:n#`$"BTC-USDT";
         side:n#1; size:n#0.25; horizon:0D00:00:01 0D00:00:01 0D00:00:10 0D00:00:10; kind:n#`total`execution; step:n#0;
         price:n#62000f; quote_ccy:n#`USDT; ref_t0:n#62006f; ref_t1:62006 62006 62015 62015f;
-        move:6 6 15 6f; quote_amount:1.5 1.5 3.75 1.5; report_ccy:n#`USD; rate:n#1f; rate_source:n#`fixed;
-        rate_sym:n#`; rate_time:n#0Np; rate_timing:n#`execution; report_amount:1.5 1.5 3.75 1.5;
-        status:n#`ok; contract_version:n#1;
+        move:6 6 15 6f; quote_amount:1.5 1.5 3.75 1.5; rate:n#1f; rate_source:n#`fixed;
+        rate_sym:n#`; rate_time:n#0Np; report_amount:1.5 1.5 3.75 1.5;
+        status:n#`ok; config_id:n#.qpipe.transform.crypto_markout_outputs.config_id;
         markout_bps:10000*6 6 15 6f%62000; fee_quote:n#15.5; fee_bps:n#10f;
         markout_net_bps:(-10+10000*6%62000;0n;-10+10000*15%62000;0n))}
 

@@ -55,10 +55,11 @@ One long table, one row per `(execution, horizon, component)`:
 `pips` is `pip_factor × move`, where `move` (the contract's column) is the
 signed move in price units. `pip_value` is the money one pip is worth per trade
 in the quote currency, `size ÷ pip_factor`. `quote_amount` is `size × move`;
-`report_amount` is that in `report_ccy` (USD in the jobs) at the book of the
-execution's instant. A quote currency with no declared rate in the spec's
-`rates` is `no_rate`: the pips and `quote_amount` are kept and `report_amount`
-is null. A site declares the rate book each of its currencies converts through.
+`report_amount` is that in the snapshot's `report_ccy` (USD in the jobs) at the
+book of the execution's instant. A quote currency with no declared rate in the
+spec's `rates` is `no_rate`: the pips and `quote_amount` are kept and
+`report_amount` is null. A site declares the rate book each of its currencies
+converts through.
 
 So `total = execution + Σ leg + residual` for every `(execution, horizon)`.
 Reference and allocation are priced along one route, so the residual is float
@@ -245,23 +246,41 @@ an idempotent replace in the HDB.
 ## Moving to the contract's columns (#1935)
 
 `fx_markout` and `fx_markout_wide` gained the contract's columns: `clock`,
-`price`, `quote_ccy`, `ref_t0`, `ref_t1`, `move`, `quote_amount`, `report_ccy`,
-`rate`, `rate_source`, `rate_sym`, `rate_time`, `rate_timing`, `report_amount`
-and `contract_version`, plus FX's `pip_value`. The core columns keep their
-relative order; FX's own sit between them. Both workers declare `revision` 1, so
-every window is planned again under `<release>@r1` and the new columns are
-written.
+`price`, `quote_ccy`, `ref_t0`, `ref_t1`, `move`, `quote_amount`, `rate`,
+`rate_source`, `rate_sym`, `rate_time` and `report_amount`, plus FX's
+`pip_value` and `config_id` (below). The core columns keep their relative order;
+FX's own sit between them. Both workers declare `revision` 1, so every window is
+planned again under `<release>@r1` and the new columns are written.
 
 History is filled, not recomputed. `fill_hdb_partitions.q` (the repair behind
 `uqs data check --apply`) adds each missing column to every partition and
 derives what the stored rows already say: `clock` is `unknown` (no stored fill
-says whose clock it was scored on), `contract_version` is 1, `quote_ccy` is the
-pair's quote leg, `move` is `pips ÷ pip_factor`, `pip_value` is
-`size ÷ pip_factor`, `quote_amount` is `size × move`, and in the long table
-`price`, `ref_t0` and `ref_t1` are read off the `total` and `execution` rows of
-the same `(execution, horizon)`. `report_ccy`, the rate columns and
-`report_amount` stay null: no rate was ever declared for a stored row. A refill
-under `revision` 1 replaces a window with rows that carry every column.
+says whose clock it was scored on), `quote_ccy` is the pair's quote leg, `move`
+is `pips ÷ pip_factor`, `pip_value` is `size ÷ pip_factor`, `quote_amount` is
+`size × move`, and in the long table `price`, `ref_t0` and `ref_t1` are read off
+the `total` and `execution` rows of the same `(execution, horizon)`. The rate
+columns and `report_amount` stay null: no rate was ever declared for a stored
+row. A refill under `revision` 1 replaces a window with rows that carry every
+column.
+
+## The configuration a row was produced under (#1999)
+
+A row does not repeat `contract_version`, `rate_timing` or `report_ccy`. It
+carries `config_id`, and the write-once snapshot that id names holds those three
+with the horizons, `max_age`, the declared rates, the FX convention and
+tolerance and the revisions of the code and of the pair rules.
+`uqs data snapshot list --dataset fx_markout` lists them and
+`uqs data snapshot show ID` prints one. The jobs record their snapshot before
+they score, and a batch naming a snapshot that is not on disk is held, so a row
+is never visible without it. See [the markout
+contract](../architecture/markout-contract.md#configuration-snapshots).
+
+History written before snapshots held the three columns.
+`uqs data check --apply` (it asks first) records one legacy snapshot per
+distinct triple in each partition, writes `config_id` and drops the three
+columns; a partition older than the columns reads as contract version 1 with the
+rate timing and reporting currency unknown. The bootstrap fill never does this
+on its own.
 
 ## The bounded twins
 

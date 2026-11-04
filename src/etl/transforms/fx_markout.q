@@ -97,6 +97,10 @@
 / a site declares one, so a pair quoted in another currency is `no_rate.
 .qpipe.transform.fx_markout.default_spec:`horizons`convention`max_age`tolerance`report_ccy`rate_timing`rates!(0D00:00:01 0D00:00:10;.qf.mkt.attribution_convention;.qf.mkt.reference_max_age;1e-6;`USD;`execution;(`symbol$())!())
 
+/ The snapshot id the default spec's results belong to (the hand-worked examples below stamp
+/ it): the default spec is complete, so config_markout.id takes it as it stands.
+.qpipe.transform.fx_markout.config_id:.qpipe.transform.config_markout.id[.qpipe.transform.fx_domain.domain;.qpipe.transform.fx_markout.default_spec]
+
 / Refuse a spec the calculation cannot honour, naming the first problem, and complete it.
 / @param spec dict horizons, convention, max_age, tolerance, report_ccy, rate_timing, rates
 / @return the spec
@@ -229,8 +233,8 @@
             quote_ccy:8#`USD; ref_t0:8#1.1; ref_t1:(4#1.1005),4#1.10095;
             move:4e-4 -1e-4 5e-4 0f,8.5e-4 -1e-4 9.5e-4 0f; pips:4 -1 5 0f,8.5 -1 9.5 0f;
             pip_factor:(8#.qf.px.pip_factor `EURUSD); pip_value:8#100f; quote_amount:400 -100 500 0f,850 -100 950 0f;
-            report_ccy:8#`USD; rate:8#1f; rate_source:8#`fixed; rate_sym:8#`; rate_time:8#0Np; rate_timing:8#`execution;
-            report_amount:400 -100 500 0f,850 -100 950 0f; status:8#`ok`ok`ok`reconciled; contract_version:8#1; version:8#`proposed_v1));
+            rate:8#1f; rate_source:8#`fixed; rate_sym:8#`; rate_time:8#0Np;
+            report_amount:400 -100 500 0f,850 -100 950 0f; status:8#`ok`ok`ok`reconciled; config_id:8#.qpipe.transform.fx_markout.config_id; version:8#`proposed_v1));
      `inputs`expected!(
         `executions`market_data!(
             ([] source_time:enlist 2026.09.17D10:00:00; venue:enlist `a; sym:enlist `USDPLN; side:enlist -1;
@@ -246,6 +250,6 @@
             quote_ccy:10#`PLN; ref_t0:10#4.0; ref_t1:10#5.5;
             move:10#-1.51 -0.01 -1 -0.5 0f; pips:10#-15100 -100 -10000 -5000 0f;
             pip_factor:(10#.qf.px.pip_factor `USDPLN); pip_value:10#100f; quote_amount:10#-1510000 -10000 -1000000 -500000 0f;
-            report_ccy:10#`USD; rate:10#0n; rate_source:10#`; rate_sym:10#`; rate_time:10#0Np; rate_timing:10#`execution;
-            report_amount:10#0n; status:10#`no_rate; contract_version:10#1; version:10#`proposed_v1)))
+            rate:10#0n; rate_source:10#`; rate_sym:10#`; rate_time:10#0Np;
+            report_amount:10#0n; status:10#`no_rate; config_id:10#.qpipe.transform.fx_markout.config_id; version:10#`proposed_v1)))
     )];

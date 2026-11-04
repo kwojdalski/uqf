@@ -149,3 +149,82 @@ def test_the_base_port_line_is_the_one_bootstrap_writes(tmp_path):
     setenv.write_text("\n".join(f'export {k}="{v}"' for k, v in env.items()) + "\n")
     assert stack.generated_base_port(setenv) == 7123
     assert stack.generated_base_port(tmp_path / "absent.sh") is None
+
+
+# ------------------------------------------- facts as current as their files (#2027)
+
+
+def test_a_process_csv_written_after_startup_reaches_the_fan_out(tmp_path, monkeypatch):
+    """The normal order on a fresh deploy: the frontend starts, then the stack's
+    first bootstrap writes process.csv. The fan-out used to stay empty - and
+    `/ops/usage` said `processes_configured: 0` - until the frontend restarted."""
+    from fastapi.testclient import TestClient
+
+    from uqf_frontend.app import create_app
+    from uqf_frontend.fleet import KolaFleet
+    from uqf_frontend.gateway import FakeGateway
+
+    root = _root(tmp_path)
+    monkeypatch.setenv("UQF_FRONTEND_STACK_ROOT", str(root))
+    s = Settings.from_env()
+    fleet = KolaFleet(s)
+    assert fleet.processes == ()
+
+    # A base port nothing listens on: the usage sweep below really connects.
+    _bootstrapped(
+        root,
+        39900,
+        _row("localhost", "{KDBBASEPORT}+2", "rdb", "rdb1"),
+        _row("localhost", "{KDBBASEPORT}+7", "gateway", "gateway1"),
+    )
+    assert fleet.processes == ("rdb1", "gateway1")
+    client = TestClient(create_app(gateway=FakeGateway(), settings=s, fleet=fleet))
+    assert client.get("/ops/usage").json()["processes_configured"] == 2
+
+
+def test_a_base_port_change_moves_the_gateway_and_the_fan_out(tmp_path, monkeypatch):
+    """`uqs restart all --base-port 7050` rewrites setenv.sh under a running
+    frontend; every address it uses follows."""
+    from uqf_frontend.fleet import KolaFleet
+    from uqf_frontend.gateway import KolaGateway
+
+    root = _root(tmp_path)
+    rows = (
+        _row("localhost", "{KDBBASEPORT}+2", "rdb", "rdb1"),
+        _row("localhost", "{KDBBASEPORT}+7", "gateway", "gateway1"),
+    )
+    paths = _bootstrapped(root, 6050, *rows)
+    monkeypatch.setenv("UQF_FRONTEND_STACK_ROOT", str(root))
+    s = Settings.from_env()
+    assert s.facts().base_port == 6050
+
+    paths.generated_setenv.write_text('export KDBBASEPORT="7050"\n')
+    facts = s.facts()
+    assert (facts.base_port, facts.port) == (7050, 7057)
+    assert KolaGateway(s).address() == ("localhost", 7057)
+    assert dict((p.name, p.port) for p in facts.processes) == {"rdb1": 7052, "gateway1": 7057}
+    assert KolaFleet(s).processes == ("rdb1", "gateway1")
+
+
+def test_facts_are_read_again_only_when_a_file_changes(tmp_path, monkeypatch):
+    """Cheap per request: an unchanged stack is not re-parsed."""
+    root = _root(tmp_path)
+    _bootstrapped(root, 6050, _row("localhost", "{KDBBASEPORT}+2", "rdb", "rdb1"))
+    calls: list[Path] = []
+    real = stack.derive
+    monkeypatch.setattr(stack, "derive", lambda r: calls.append(r) or real(r))
+    first = stack.current(root)
+    assert stack.current(root) is first
+    assert len(calls) == 1
+
+
+def test_without_a_stack_root_the_facts_are_the_settings_own(tmp_path):
+    """Tests and the read-only deployment construct Settings directly."""
+    s = Settings(host="h", port=1, base_port=2, processes=(Process("p", "h", 3),))
+    facts = s.facts()
+    assert (facts.host, facts.port, facts.base_port, facts.processes) == (
+        "h",
+        1,
+        2,
+        (Process("p", "h", 3),),
+    )

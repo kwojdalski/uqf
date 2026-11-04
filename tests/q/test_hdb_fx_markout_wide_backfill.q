@@ -10,6 +10,7 @@
 .qt.qpipe.job.hdb_fx_markout_wide_backfill.beforeNamespace_isolate:{[]
     setenv[`UQF_STATUS_DIR;"build/test-status"];
     system"mkdir -p build/test-status";
+    .qt.support.reset_snapshots[];
     }
 
 .qt.qpipe.job.hdb_fx_markout_wide_backfill.setUp_fresh:{[]
@@ -21,6 +22,7 @@
     .qetl.job.bounded.state.release_lock `hdb_fx_markout_wide_backfill;
     .qetl.job.bounded.state.clear_checkpoint `hdb_fx_markout_wide_backfill;
     `fx_markout_wide set 0#.qetl.plant.shape `fx_markout_wide;
+    .qt.support.reset_snapshots[];
     }
 
 .qt.qpipe.job.hdb_fx_markout_wide_backfill.tearDown_release:{[] .qpipe.job.hdb_fx_markout_wide_backfill.cleanup[];}
@@ -60,9 +62,20 @@
 
 .qt.qpipe.job.hdb_fx_markout_wide_backfill.test_the_gate_and_facts:{[t]
     w:.qetl.transform.apply[`hdb_fx_markouts_wide;.qpipe.source.hdb_fx_markouts.fixture[]];
+    f0:.qpipe.job.hdb_fx_markout_wide_backfill.quality_check w;
+    .qunit.assertEquals[(f0`check;f0`status);(enlist `config_unpinned;enlist `fail);"rows naming a configuration nobody recorded are refused"];
+    .qpipe.transform.fx_markout_outputs.pin[];
     .qunit.assertEquals[count .qpipe.job.hdb_fx_markout_wide_backfill.quality_check w;0;"clean"];
     f:.qpipe.job.hdb_fx_markout_wide_backfill.quality_check update total_pips:0w from w where i=0;
     .qunit.assertEquals[f`check;enlist `infinite_pips;"an infinite markout is refused"];
     f2:.qpipe.job.hdb_fx_markout_wide_backfill.quality_check update status:`unreconciled from w where i=0;
     .qunit.assertEquals[f2`check;enlist `unreconciled_residual;"and so is a row whose legs do not add up"];
-    .qunit.assertEquals[.qpipe.job.hdb_fx_markout_wide_backfill.facts w;`executions`horizons`unpriced!(2;4;0);"two executions at four horizons"]};
+    .qunit.assertEquals[.qpipe.job.hdb_fx_markout_wide_backfill.facts w;`executions`horizons`unpriced`config_id!(2;4;0;enlist .qpipe.transform.fx_markout_outputs.config_id);"two executions at four horizons, under one configuration"]};
+
+/ A run pins the job spec's snapshot, which the wide rows name beside the long ones: one configuration (#1999).
+.qt.qpipe.job.hdb_fx_markout_wide_backfill.test_a_run_pins_the_snapshot_its_rows_name:{[t]
+    day:2026.09.17D00:00:00.000000000 2026.09.18D00:00:00.000000000;
+    .qpipe.job.hdb_fx_markout_wide_backfill.init[.qt.qpipe.job.hdb_fx_markout_wide_backfill.spec_for[`v1;day 0;day 1]];
+    r:.qpipe.job.hdb_fx_markout_wide_backfill.run[];
+    id:.qpipe.transform.fx_markout_outputs.config_id;
+    .qunit.assertEquals[(r`state;distinct (get `fx_markout_wide)`config_id;(.qetl.snapshot.list[`])`snapshot_id);(`completed;enlist id;enlist id);"the one snapshot, recorded by the run, named by every wide row"]};

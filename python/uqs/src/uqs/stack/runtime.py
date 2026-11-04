@@ -7,7 +7,6 @@ still being correct)."""
 
 from __future__ import annotations
 
-import csv
 import os
 import shutil
 import socket
@@ -24,6 +23,7 @@ from uqs.stack import (
     attached_publisher,
     deployment,
     gateway_access,
+    generated,
     qtree,
     start_lines,
     start_overrides,
@@ -31,7 +31,6 @@ from uqs.stack import (
 )
 from uqs.stack import procs as stack_procs
 from uqs.stack import render as stack_render
-from uqs.stack.carriable import check_carriable
 from uqs.stack.dqe import write_dqe_config
 from uqs.stack.env import build_env, interpreter_env, with_interpreter
 from uqs.stack.hdb_fill import fill_hdb_partitions
@@ -39,7 +38,6 @@ from uqs.stack.hdb_types import declared_schema
 from uqs.stack.launcher import torq_launcher
 from uqs.stack.procs import effective_process_rows
 from uqs.stack.reporter import write_reporter_config
-from uqs.stack.site_fields import process_csv_fields
 
 log = get_logger()
 
@@ -55,21 +53,21 @@ def bootstrap(
 
     _seed_data_dir(paths)
     rows = effective_process_rows(paths, q_command(with_interpreter(paths)), selected)
-    write_process_csv(paths, rows)
+    generated.write_process_csv(paths, rows)
 
     # Without overlays (the torq runtime) the schema is the starter pack's
     # own, copied so the HDB filler below and `uqs` read it from the one place
     # every runtime keeps it. Its gateway1 keeps the vendored access list, so
     # there is none to write.
     if not paths.runtime_declaration.overlays:
-        paths.generated_schema.write_text(declared_schema(paths))
+        generated.write_text(paths.generated_schema, declared_schema(paths))
     else:
         # gateway1's and sctp1's access lists, and the data-access table list
         # the rdbs, hdbs and gateways are started with (stack/gateway_access.py).
         gateway_access.write(paths)
         # Same extend-never-edit approach as process.csv above, for stp1's
         # -schemafile (see _generated_schema_content/_composed_rows).
-        paths.generated_schema.write_text(declared_schema(paths))
+        generated.write_text(paths.generated_schema, declared_schema(paths))
         # Same again for DQE's query list (stack/dqe.py), and for reporter1's checks,
         # validated against this deployment, not the site's reporter.csv (stack/reporter.py).
         write_dqe_config(paths)
@@ -114,7 +112,7 @@ def bootstrap_publisher(
     if starting:
         how = attached_publisher.auth(paths, procs)
         rows, extra = attached_publisher.with_auth(rows, procs, how), how.env()
-    write_process_csv(paths, rows)
+    generated.write_process_csv(paths, rows)
     return write_setenv(paths, base_port, extra)
 
 
@@ -131,33 +129,6 @@ def _seed_data_dir(paths: UqsPaths) -> None:
         (paths.torqdata / sub).mkdir(parents=True, exist_ok=True)
 
 
-def write_process_csv(paths: UqsPaths, rows: list[dict[str, str]]) -> None:
-    """The process.csv torq.sh starts from: `rows`, as effective_process_rows
-    composes them.
-
-    Extend (never edit in place) the vendored process.csv with uqf's own extra
-    processes (fxfeed1) and any process_overrides.csv fields set via
-    set_process_config()/`config set`/uqs_set_config. Each row TorQ leaves to
-    its default interpreter - an empty qcmd, or `q` spelled out, as the starter
-    pack and the pipeline rows both do - names the configured one: QCMD, or the
-    runtime's own (#764). torq.sh prefers a row's qcmd to $QCMD, so a row saying
-    `q` ran PATH's q whatever QCMD named, and a site launcher need not fall back
-    to $QCMD at all. An operator's override still wins, even one to bare `q`.
-    """
-    check_carriable(rows)
-    with paths.generated_procs.open("w", newline="") as f:
-        # torq.sh's own field lookups are a naive awk -F, parse expecting
-        # plain \n line endings, like the vendored csv itself - csv module's
-        # default \r\n (the "excel" dialect) corrupts the last column's
-        # value (a trailing \r glued onto qcmd breaks the qcmd==qcmd header
-        # match, which every single process start looks up), producing a
-        # bare `print $` awk syntax error for every process - hard-won via
-        # `start all` throwing exactly that for every process at once.
-        writer = csv.DictWriter(f, fieldnames=process_csv_fields(), lineterminator="\n")
-        writer.writeheader()
-        writer.writerows(rows)
-
-
 def write_setenv(
     paths: UqsPaths, base_port: int | None, extra: dict[str, str] | None = None, target=None
 ) -> dict[str, str]:
@@ -172,7 +143,7 @@ def write_setenv(
     # which would overwrite TORQAPPHOME/TORQPROCESSES/etc back to lib/torq's
     # own defaults) - generate our own and point SETENV at it instead.
     setenv_lines = [f'export {k}="{v}"' for k, v in env.items()]
-    target.write_text("\n".join(setenv_lines) + "\n")
+    generated.write_text(target, "\n".join(setenv_lines) + "\n")
     env["SETENV"] = str(target)
     return env
 
@@ -185,6 +156,7 @@ def run_torq_sh(
     timeout: float | None = None,
     selected: Sequence[str] | None = None,
     skips: start_overrides.Overrides = start_overrides.NONE,
+    lock_wait: float | None = None,
 ) -> subprocess.CompletedProcess[str]:
     """Check the TorQ launcher, bootstrap, then run the launcher with *args*
     under the generated env: `$TORQHOME/torq.sh`, or `UQS_TORQ_LAUNCHER`
@@ -204,12 +176,31 @@ def run_torq_sh(
 
     `selected` is a profile start's set: what TorQ discovers (stack/deployment.py).
     `skips` names refusals to skip for this start (stack/start_overrides.py).
+
+    From bootstrap to torq.sh's exit the stack's lifecycle lock is held
+    (stack/generated.py, #2028), so two commands on one stack - `uqs` and the
+    frontend, or two tabs - cannot interleave. `lock_wait` is how long to wait
+    for another holder: None waits as long as it takes, 0 refuses at once.
     """
     start_policy.refuse_start(paths, args, base_port, skips)
     args = start_policy.with_publisher_extras(paths, args)
     # The launcher first: bootstrap writes the data directory, process.csv and setenv.sh,
     # and a launcher that is going to be refused must not have had that written for it.
     launcher = torq_launcher(paths)
+    with generated.lifecycle_lock(paths, wait=lock_wait):
+        return _bootstrap_and_run(paths, args, launcher, base_port, capture, timeout, selected)
+
+
+def _bootstrap_and_run(
+    paths: UqsPaths,
+    args: list[str],
+    launcher: Path,
+    base_port: int | None,
+    capture: bool,
+    timeout: float | None,
+    selected: Sequence[str] | None,
+) -> subprocess.CompletedProcess[str]:
+    """run_torq_sh's work once it holds the stack: bootstrap, then the launcher."""
     plan = deployment.planned(paths, args, selected)
     if attached := attached_publisher.publishers(args):
         starting = bool(args) and args[0] in start_policy.STARTING_VERBS
