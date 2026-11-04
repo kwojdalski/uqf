@@ -9,6 +9,7 @@ import {
   tunnelPath,
   writeToken,
 } from "./api";
+import { useWorkspaceTarget } from "./workspace";
 import { useResource } from "./useResource";
 
 /** GET one of a target's tunnel routes with the write token: each reaches
@@ -355,7 +356,14 @@ export function TunnelPanel({
  *  connection details are listed beside the local fleet (#2035). */
 export function FleetConnections() {
   const services = useResource<Services>("/services");
-  const [target, setTarget] = useState("");
+  // The selected workspace's target, until another is picked here (#2029).
+  const scoped = useWorkspaceTarget() ?? "";
+  const [target, setTarget] = useState(scoped);
+  const [followed, setFollowed] = useState(scoped);
+  if (followed !== scoped) {
+    setFollowed(scoped);
+    setTarget(scoped);
+  }
   const [plan, setPlan] = useState<{
     data?: TunnelPlan;
     error?: ApiError;

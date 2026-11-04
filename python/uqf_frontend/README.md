@@ -60,6 +60,8 @@ The q details this rests on, verified against a live KDB-X process:
   | `GET /charts`          | The prepared charts, each with its parameters' JSON Schema and its point limit                                                            |
   | `POST /charts/{name}`  | One prepared chart's plotly.py figure, with its point limit and whether it was downsampled or truncated                                   |
   | `GET /me/capabilities` | Who the caller is (as a trusted proxy vouches), their groups, and every feature and action the access policy grants them                  |
+  | `GET /workspaces`      | Every workspace a request may name: `local` and each target the uqs registry declares, with its connection and access mode - no ssh       |
+  | `GET /workspace`       | The workspace the request names, reached now: for a target, the connection uqs holds open and each process's forward                      |
 
 ### Control routes --- these CHANGE things
 
@@ -286,6 +288,32 @@ curl -s localhost:8000/query -H 'content-type: application/json' -d '{
 A timestamp **must** carry an explicit timezone offset. Everything is stored UTC
 and kola rejects a naive datetime anyway --- so a browser's local time is
 refused at the boundary with a reason rather than being silently wrong.
+
+## Workspaces: which stack a request reads
+
+A browser tab picks a workspace - `local`, this API's own stack, or a target the
+uqs registry declares (`GET /workspaces`) - and names it on every request in the
+`X-UQF-Target` header. Nothing about the choice is kept on the server, so two
+sessions on different targets never move each other (`workspaces.py`, #2029).
+
+- **Scoped routes** read the named workspace: `/query`, `/catalog`, `/coverage`,
+  `/charts/{name}`, `/ops/processes`, `/ops/connections`, `/ops/clients`,
+  `/ops/queue`, `/ops/usage` and `/workspace`. Each answer, and each error from
+  one, carries `X-UQF-Target` naming its workspace.
+- **Neutral routes** read no stack and ignore the header: `/health`,
+  `/workspaces`, `/charts`, `/me/capabilities`, `/services*` (which name their
+  target in the path) and `/activity*`.
+- **Every other route** refuses a target with 409 rather than answering for the
+  local stack: control, `/ops/backfill`, and any route added later.
+
+A target is reached through `uqs.deploy.workspace`: its release's
+`uqs process list`, then one ssh with a loopback forward per declared process,
+held open between requests (closed after ten idle minutes, reopened when its ssh
+has gone). The q login is this API's own. An unregistered target is 404, one
+that cannot be reached is 502 naming it and what failed, and a target needs
+remote operations (`UQF_FRONTEND_ENABLE_WRITES`) and `services:read` - none of
+these ever falls back to the local stack. A target workspace is read-only:
+control acts on this API's own stack only.
 
 ## Running
 

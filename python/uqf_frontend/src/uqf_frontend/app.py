@@ -42,6 +42,7 @@ from uqf_frontend import (
     services,
     status,
     tunnels,
+    workspaces,
     write_guard,
 )
 from uqf_frontend.authz import Policy, Request_, allow_all
@@ -123,6 +124,10 @@ from uqf_frontend.models import (
     WorkerConfigRequest,
     WorkerConfigResponse,
     WorkerStatusOut,
+    WorkspaceEndpointOut,
+    WorkspaceOut,
+    WorkspaceResponse,
+    WorkspacesResponse,
 )
 from uqs import activity_log
 
@@ -271,6 +276,51 @@ def guard(request: Request) -> None:
     run_policy(request)
 
 
+def workspace_route(request: Request) -> None:
+    """The workspace a request names, held to its route (workspaces.py).
+
+    A route that reads a stack is answered from the named workspace; one that
+    reads none ignores it; every other route refuses a target with 409, so a
+    route nobody scoped answers for the local stack only and says so, never
+    with the local stack's data in place of a target's. Runs after `guard`,
+    so a caller refused the route learns nothing of the target."""
+    name = workspaces.requested(request.headers)
+    route = request.scope.get("route")
+    template = getattr(route, "path", None)
+    if workspaces.is_scoped(request.method, template):
+        # What the answer - or the error - is labelled with.
+        request.state.workspace_target = name
+    elif name != workspaces.LOCAL and not workspaces.is_neutral(template):
+        raise workspaces.TargetNotScoped(
+            f"{request.method.upper()} {template} reads this server's own stack only, "
+            f"so it is not available in workspace {name} - switch to local for it"
+        )
+
+
+def scope_of(request: Request) -> workspaces.Scope:
+    """The stack a scoped route reads: the named workspace's, opened by uqs
+    for a target - or the refusal saying why it cannot be, never local.
+
+    Naming a target needs services:read as well as the route's own
+    permission: the targets are the registry /services lists, and a caller
+    refused it there may not reach them here either."""
+    name = workspaces.requested(request.headers)
+    if name != workspaces.LOCAL:
+        who = identity_of(request)
+        if not request.app.state.access.allowed(who, "services", "read"):
+            _refuse(
+                request,
+                f"workspace {name} is a deployment target, and services:read is not "
+                f"granted to {who.user}",
+                "services:read",
+            )
+    return request.app.state.workspaces.scope(name)
+
+
+#: A scoped route's parameter: the workspace its request names.
+ScopeOf = typing.Annotated[workspaces.Scope, Depends(scope_of)]
+
+
 #: A browser's report on a file the server never recorded, as an outcome.
 _REPORTED_OUTCOME = {
     "uncertain": "unknown",
@@ -313,6 +363,7 @@ def create_app(
     fleet: Fleet | None = None,
     policy: Policy | None = None,
     remote_runner: remote_files.Runner | None = None,
+    workspace_opener: workspaces.Opener | None = None,
 ) -> FastAPI:
     """Build the app. Every dependency is injectable so tests need no q
     process and no environment.
@@ -366,6 +417,7 @@ def create_app(
             # The gateway's pooled connections, held between requests now.
             if isinstance(gateway, KolaGateway):
                 gateway.close()
+            app.state.workspaces.close()
             history.close()
 
     app = FastAPI(
@@ -373,7 +425,7 @@ def create_app(
         summary="Validated, parameterised access to the uqf TorQ gateway",
         version="0.1.0",
         lifespan=lifespan,
-        dependencies=[Depends(guard)],
+        dependencies=[Depends(guard), Depends(workspace_route)],
     )
     app.state.settings = settings
     app.state.gateway = gateway
@@ -390,6 +442,31 @@ def create_app(
     app.state.remote_runner = remote_runner or subprocess.run
     app.state.capture = scheduler
     app.state.activity = history
+    # The workspaces a request may name (#2029): this API's own stack, and a
+    # connection per target that uqs opens on first use.
+    app.state.workspaces = workspaces.Workspaces(
+        settings,
+        workspaces.Scope(
+            target=workspaces.LOCAL,
+            gateway=gateway,
+            fleet=fleet,
+            catalog=tables,
+            settings=settings,
+            connection="direct",
+            access="read-write" if settings.enable_writes else "read-only",
+        ),
+        opener=workspace_opener or workspaces.open_with_uqs,
+    )
+
+    @app.middleware("http")
+    async def label_workspace(request: Request, call_next):  # noqa: ANN001, ANN202
+        """Every scoped answer, and every error from one, names the workspace
+        it came from in X-UQF-Target (#2029)."""
+        response = await call_next(request)
+        target = request.scope.get("state", {}).get("workspace_target")
+        if target is not None:
+            response.headers[workspaces.TARGET_HEADER] = target
+        return response
 
     # Browser events sent without the token, all callers together (#2019).
     app.state.activity_rate = activity.RateLimit(
@@ -501,11 +578,16 @@ def create_app(
         # The error's TYPE, for an audited action: never its message, which
         # can quote the input back.
         activity.audit_of(request).note(error=type(exc).__name__)
+        detail = str(exc)
+        target = getattr(request.state, "workspace_target", None)
+        if target not in (None, workspaces.LOCAL) and f"target {target}" not in detail:
+            # A target's failure is never mistaken for the local stack's.
+            detail = f"target {target}: {detail}"
         return JSONResponse(
             status_code=exc.status_code,
             content={
                 "error": type(exc).__name__,
-                "detail": str(exc),
+                "detail": detail,
                 "transient": exc.transient,
             },
         )
@@ -612,7 +694,7 @@ def create_app(
         "describes the queryable surface and carries no data - a caller "
         "refused it could not find out why"
     )
-    def get_catalog() -> CatalogResponse:
+    def get_catalog(scope: ScopeOf) -> CatalogResponse:
         return CatalogResponse(
             tables=[
                 TableInfo(
@@ -628,46 +710,46 @@ def create_app(
                         for c, qt in t.columns.items()
                     ],
                 )
-                for t in tables.tables().values()
+                for t in scope.catalog.tables().values()
             ],
             operators=sorted(catalog.OPERATORS),
         )
 
     @app.get("/ops/queue", response_model=OpsTableResponse)
-    def ops_queue() -> OpsTableResponse:
+    def ops_queue(scope: ScopeOf) -> OpsTableResponse:
         """Pending and running queries on the gateway."""
         return OpsTableResponse(
-            rows=_rows(gateway.call(ops.QUEUE)), poll_seconds=ops.POLL_SECONDS["queue"]
+            rows=_rows(scope.gateway.call(ops.QUEUE)), poll_seconds=ops.POLL_SECONDS["queue"]
         )
 
     @app.get("/ops/connections", response_model=ConnectionsResponse)
-    def ops_connections() -> ConnectionsResponse:
+    def ops_connections(scope: ScopeOf) -> ConnectionsResponse:
         """Which backend handles the gateway has, and who is connected."""
         return ConnectionsResponse(
-            servers=_rows(gateway.call(ops.SERVERS)),
-            clients=_rows(gateway.call(ops.CLIENTS)),
+            servers=_rows(scope.gateway.call(ops.SERVERS)),
+            clients=_rows(scope.gateway.call(ops.CLIENTS)),
             poll_seconds=ops.POLL_SECONDS["connections"],
         )
 
     @app.get("/ops/usage", response_model=UsageResponse)
-    def ops_usage(limit: OpsLimit = 500) -> UsageResponse:
+    def ops_usage(scope: ScopeOf, limit: OpsLimit = 500) -> UsageResponse:
         """Fleet-wide query log, assembled here because none exists in q.
 
         `unreachable` is part of the response rather than an error: one process
         being down must not blank the view for the other nine.
         """
         capped = max(1, min(limit, settings.max_rows))
-        rows, unreachable = ops.merge_usage(fleet.per_process(ops.USAGE, capped))
+        rows, unreachable = ops.merge_usage(scope.fleet.per_process(ops.USAGE, capped))
         return UsageResponse(
             rows=rows[:capped],
             row_count=min(len(rows), capped),
             unreachable=unreachable,
-            processes_configured=len(fleet.processes),
+            processes_configured=len(scope.fleet.processes),
             poll_seconds=ops.POLL_SECONDS["usage"],
         )
 
     @app.get("/ops/clients", response_model=UsageResponse)
-    def ops_clients(limit: OpsLimit = 500) -> UsageResponse:
+    def ops_clients(scope: ScopeOf, limit: OpsLimit = 500) -> UsageResponse:
         """Every client connected to any process in the fleet.
 
         Distinct from `/ops/connections`, which reports the GATEWAY's clients.
@@ -686,23 +768,27 @@ def create_app(
         idea.
         """
         capped = max(1, min(limit, settings.max_rows))
-        rows, unreachable = ops.merge_process_clients(fleet.per_process(ops.PROCESS_CLIENTS))
+        rows, unreachable = ops.merge_process_clients(scope.fleet.per_process(ops.PROCESS_CLIENTS))
         return UsageResponse(
             rows=rows[:capped],
             row_count=min(len(rows), capped),
             unreachable=unreachable,
-            processes_configured=len(fleet.processes),
+            processes_configured=len(scope.fleet.processes),
             poll_seconds=ops.POLL_SECONDS["connections"],
         )
 
     @app.get("/ops/processes", response_model=FleetHealthResponse)
-    def ops_processes() -> FleetHealthResponse:
-        """Fleet health for every process process.csv declares.
+    def ops_processes(scope: ScopeOf) -> FleetHealthResponse:
+        """Fleet health for every process process.csv declares - or, in a
+        target's workspace, every process its release declares, probed
+        through the forwards uqs holds open.
 
         Liveness comes from an IPC probe rather than OS process inspection,
         so the same mechanism works whether or not the process is on this
         machine - see health.py for why that matters.
         """
+        if scope.declared is not None:
+            return _fleet_health(scope.fleet, scope.declared, scope.source or scope.target)
         if settings.process_csv is None:
             raise ValidationFailed(
                 "fleet health needs UQF_FRONTEND_STACK_ROOT set to the stack, whose "
@@ -713,19 +799,7 @@ def create_app(
             declared = procfile.read(settings.process_csv, settings.facts().base_port)
         except FileNotFoundError as exc:
             raise ValidationFailed(str(exc)) from None
-
-        checked = health.check(fleet, declared)
-        groups: dict[str, int] = {}
-        for proc in declared:
-            groups[proc.group] = groups.get(proc.group, 0) + 1
-
-        return FleetHealthResponse(
-            summary=health.summarise(checked),
-            processes=[ProcessHealthOut(**vars(h)) for h in checked],
-            groups=dict(sorted(groups.items())),
-            source=str(settings.process_csv),
-            poll_seconds=ops.POLL_SECONDS["processes"],
-        )
+        return _fleet_health(scope.fleet, declared, str(settings.process_csv))
 
     @app.get("/ops/backfill", response_model=BackfillStatusResponse)
     def ops_backfill() -> BackfillStatusResponse:
@@ -743,6 +817,62 @@ def create_app(
             unreadable=unreadable,
             source=str(directory) if directory else None,
             poll_seconds=ops.POLL_SECONDS["backfill"],
+        )
+
+    # ------------------------------------------------------ workspaces (#2029)
+
+    @app.get("/workspaces", response_model=WorkspacesResponse)
+    def list_workspaces() -> WorkspacesResponse:
+        """Every workspace a request may name: `local` and each target the
+        uqs registry declares, read as /services reads it - no server is
+        contacted. Which one a request reads is the request's own header."""
+        found = services.read(settings)
+        local = WorkspaceOut(
+            name=workspaces.LOCAL, kind="local", connection="direct",
+            access="read-write" if settings.enable_writes else "read-only",
+            environment=None, ssh=None, available=True, reason=None,
+        )  # fmt: skip
+        listed = [local]
+        for t in found.targets:
+            reason = (
+                "the name is reserved for this server's own stack"
+                if t["name"] == workspaces.LOCAL
+                else None
+                if settings.enable_writes
+                else "a target is reached over ssh, so it needs remote operations enabled"
+            )
+            listed.append(
+                WorkspaceOut(
+                    name=t["name"],
+                    kind="target",
+                    connection="ssh tunnel",
+                    access="read-only",
+                    environment=t["environment"],
+                    ssh=t["ssh"],
+                    available=reason is None,
+                    reason=reason,
+                )  # fmt: skip
+            )
+        return WorkspacesResponse(
+            workspaces=listed,
+            header=workspaces.TARGET_HEADER,
+            source=found.source,
+            invalid=found.invalid,
+        )
+
+    @app.get("/workspace", response_model=WorkspaceResponse)
+    def get_workspace(scope: ScopeOf) -> WorkspaceResponse:
+        """The workspace this request names, reached now: for a target, the
+        connection uqs holds open and each process's forward. A target that
+        cannot be reached is an error naming it - never the local answer."""
+        detail = scope.detail
+        return WorkspaceResponse(
+            target=scope.target,
+            connection=typing.cast(Any, scope.connection),
+            access=typing.cast(Any, scope.access),
+            host=detail.get("host"),
+            endpoints=[WorkspaceEndpointOut(**e) for e in detail.get("endpoints", [])],
+            poll_seconds=ops.POLL_SECONDS["workspace"],
         )
 
     @app.get("/services", response_model=ServicesResponse)
@@ -940,6 +1070,7 @@ def create_app(
     @app.get("/coverage", response_model=CoverageResponse)
     def get_coverage(
         request: Request,
+        scope: ScopeOf,
         dataset: str,
         partition: str,
         source_version: str,
@@ -957,11 +1088,12 @@ def create_app(
         # The dataset as the table: a policy refusing a table must refuse its
         # coverage too, or /coverage reads round what /query refuses.
         run_policy(request, table=dataset)
-        return _coverage(gateway, dataset, partition, source_version, range_from, range_to)
+        return _coverage(scope.gateway, dataset, partition, source_version, range_from, range_to)
 
     @app.post("/query", response_model=QueryResponse)
-    def run_query(req: QueryRequest, request: Request) -> QueryResponse:
-        tbl = tables.table(req.table)
+    def run_query(req: QueryRequest, request: Request, scope: ScopeOf) -> QueryResponse:
+        gateway = scope.gateway
+        tbl = scope.catalog.table(req.table)
         # After catalog.table, so an unknown table is a 422 rather than a 403
         # from a table policy. `guard` has already asked about the path.
         run_policy(request, table=tbl.name)
@@ -1014,6 +1146,7 @@ def create_app(
         name: str,
         request: Request,
         body: typing.Annotated[dict[str, Any], Body()],
+        scope: ScopeOf,
     ) -> ChartResponse:
         """One prepared chart's figure. The body is validated against the
         chart's own schema; it reads only through the chart's vetted query
@@ -1022,10 +1155,10 @@ def create_app(
         drawn = charts.render(
             chart,
             charts.Sources(
-                gateway=gateway,
-                catalog=tables,
-                fleet=fleet,
-                settings=settings,
+                gateway=scope.gateway,
+                catalog=scope.catalog,
+                fleet=scope.fleet,
+                settings=scope.settings,
                 authorize=lambda table: run_policy(request, table=table),
             ),
             body,
@@ -1573,6 +1706,23 @@ def _iso(row: dict[str, Any]) -> IntervalOut:
     if not all(isinstance(row[k], str) for k in ("range_from", "range_to")):
         row = _wire(pl.DataFrame([row]))[0]
     return IntervalOut(range_from=row["range_from"], range_to=row["range_to"])
+
+
+def _fleet_health(
+    fleet: Fleet, declared: list[procfile.DeclaredProcess], source: str
+) -> FleetHealthResponse:
+    """Each declared process probed, and the groups they fall in."""
+    checked = health.check(fleet, declared)
+    groups: dict[str, int] = {}
+    for proc in declared:
+        groups[proc.group] = groups.get(proc.group, 0) + 1
+    return FleetHealthResponse(
+        summary=health.summarise(checked),
+        processes=[ProcessHealthOut(**vars(h)) for h in checked],
+        groups=dict(sorted(groups.items())),
+        source=source,
+        poll_seconds=ops.POLL_SECONDS["processes"],
+    )
 
 
 def _coverage(

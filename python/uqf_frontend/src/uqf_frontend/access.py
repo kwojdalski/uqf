@@ -113,6 +113,11 @@ ROUTE_PERMISSIONS: dict[tuple[str, str], tuple[str, str]] = {
     # services: reads list targets and their files and push history; writes
     # change files on a server
     ("GET", "/services"): ("services", "read"),
+    # workspaces (#2029): the same registry /services lists, and the probe of
+    # the one a request names - so a caller refused the registry there is
+    # refused it here too
+    ("GET", "/workspaces"): ("services", "read"),
+    ("GET", "/workspace"): ("services", "read"),
     ("GET", "/services/{target}/files"): ("services", "read"),
     # the ssh tunnel plan and its check (#2042): reads, like the file list
     ("GET", "/services/{target}/tunnel"): ("services", "read"),
