@@ -31,6 +31,7 @@ accident through these tools, not one made on purpose round them.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 
 from uqs.paths import UqsError
@@ -55,6 +56,20 @@ def check_value(where: str, value: object) -> None:
     "false" must not read as on, nor "yes" as off."""
     if not isinstance(value, bool):
         raise UqsError(f"{where}: {KEY} must be true or false, got {value!r}")
+
+
+def check_layer(layer: str, settings: dict, at: Callable[[], str]) -> None:
+    """A deploy_targets.toml layer's `inspection`, if it sets one, checked as
+    `check_value` does - refused as the registry's DeployError, its line
+    named by `at()`."""
+    if KEY not in settings:
+        return
+    from uqs.deploy.config import DeployError
+
+    try:
+        check_value(layer, settings[KEY])
+    except UqsError as exc:
+        raise DeployError("arguments", f"{at()}{exc}") from None
 
 
 def is_on(settings: dict) -> bool:

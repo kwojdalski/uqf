@@ -286,7 +286,7 @@ def _backfill_args() -> dict[str, str]:
     }
 
 
-def test_a_bootstrap_failure_before_a_backfill_is_reported(monkeypatch):
+def test_a_bootstrap_failure_before_a_backfill_is_reported(monkeypatch, tmp_path):
     from uqs import paths as stack_paths
     from uqs.paths import UqsError
     from uqs.runtimes import DEFAULT_RUNTIME, RUNTIMES
@@ -305,6 +305,8 @@ def test_a_bootstrap_failure_before_a_backfill_is_reported(monkeypatch):
             runtime_declaration=RUNTIMES[DEFAULT_RUNTIME],
             # read for the deployment set a start is about to record (#1248)
             generated_deployment=Path("/repo/data/deployment"),
+            # where the stack's lifecycle lock is taken, before bootstrap (#2028)
+            torqdata=tmp_path / "data",
         ),
     )
     monkeypatch.setattr(runtime, "bootstrap", refuse)

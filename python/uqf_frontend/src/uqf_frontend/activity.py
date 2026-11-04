@@ -369,12 +369,20 @@ SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 #: every record twice.
 NOT_ACTIONS = frozenset({"/query", "/activity/events"})
 
+#: Prefixes of non-safe routes that are reads: a prepared chart is drawn by a
+#: POST of its parameters, and changes nothing (#2044).
+NOT_ACTION_PREFIXES = ("/charts/",)
+
 
 def is_audited(method: str, path: str) -> bool:
     """Is this request an action the server must audit? Every non-safe
-    request but the reads in NOT_ACTIONS - so a route added later is audited
-    without doing anything."""
-    return method.upper() not in SAFE_METHODS and path not in NOT_ACTIONS
+    request but the reads in NOT_ACTIONS and under NOT_ACTION_PREFIXES - so
+    a route added later is audited without doing anything."""
+    return (
+        method.upper() not in SAFE_METHODS
+        and path not in NOT_ACTIONS
+        and not path.startswith(NOT_ACTION_PREFIXES)
+    )
 
 
 def server_action(method: str, template: str | None, params: Mapping[str, str]) -> str:

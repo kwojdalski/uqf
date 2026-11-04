@@ -79,6 +79,7 @@ FEATURES: dict[str, tuple[str, ...]] = {
     "coverage": ("read",),
     "backfills": ("read",),
     "desk": ("read",),
+    "charts": ("read",),
     "fleet": ("read",),
     "queue": ("read",),
     "connections": ("read",),
@@ -100,6 +101,10 @@ ROUTE_PERMISSIONS: dict[tuple[str, str], tuple[str, str]] = {
     ("GET", "/coverage"): ("coverage", "read"),
     ("GET", "/ops/backfill"): ("backfills", "read"),
     ("POST", "/query"): ("desk", "read"),
+    # prepared charts (#2051): the POST runs a chart over the caller's
+    # parameters and changes nothing - a read, as /query is
+    ("GET", "/charts"): ("charts", "read"),
+    ("POST", "/charts/{name}"): ("charts", "read"),
     ("GET", "/ops/processes"): ("fleet", "read"),
     ("GET", "/ops/queue"): ("queue", "read"),
     ("GET", "/ops/connections"): ("connections", "read"),
@@ -109,6 +114,9 @@ ROUTE_PERMISSIONS: dict[tuple[str, str], tuple[str, str]] = {
     # change files on a server
     ("GET", "/services"): ("services", "read"),
     ("GET", "/services/{target}/files"): ("services", "read"),
+    # the ssh tunnel plan and its check (#2042): reads, like the file list
+    ("GET", "/services/{target}/tunnel"): ("services", "read"),
+    ("GET", "/services/{target}/tunnel/check"): ("services", "read"),
     ("GET", "/services/{target}/config/pushes"): ("services", "read"),
     ("GET", "/services/{target}/config/pushes/{push_id}"): ("services", "read"),
     ("GET", "/services/{target}/config/pushes/{push_id}/diff"): ("services", "read"),

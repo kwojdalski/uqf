@@ -220,7 +220,7 @@ def test_an_unreachable_target_says_ssh_failed(server):
 def test_output_that_is_not_the_json_list_is_refused():
     r = control.Remote("dev", "h", "/srv")
     with pytest.raises(UqsError, match="did not list its processes as JSON"):
-        tunnel._parse_ports(r, "Usage: uqs list [OPTIONS]\nNo such option: --json\n")
+        tunnel._parse_rows(r, "Usage: uqs list [OPTIONS]\nNo such option: --json\n")
 
 
 def test_an_unknown_target_is_refused(server, died):
