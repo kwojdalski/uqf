@@ -324,6 +324,97 @@ def test_an_idle_connection_is_closed(declared, targets, local_gw):
     assert targets.opened[0].closed
 
 
+def test_an_idle_target_is_closed_once_the_session_is_back_on_local(declared, targets, local_gw):
+    """#2062: reaping does not wait for a request naming another target - an
+    hour of local-only traffic closes the target left idle."""
+    app = _app(targets, local_gw)
+    now = [0.0]
+    ws = app.state.workspaces
+    ws._clock = lambda: now[0]
+    c = _client(app)
+    assert _query(c, "prod-a").status_code == 200
+    for _ in range(6):  # an hour on local
+        now[0] += workspaces.IDLE_SECONDS
+        assert _query(c, None).status_code == 200
+        assert c.get("/catalog").status_code == 200
+    assert ws.open_targets() == []
+    assert targets.opened[0].closed
+
+
+def test_the_reaper_closes_an_idle_target_with_no_request_at_all(declared, targets, local_gw):
+    """#2062: the app's own reaper closes an idle target even when no request
+    of any kind arrives after it."""
+    app = _app(targets, local_gw)
+    now = [0.0]
+    ws = app.state.workspaces
+    ws._clock = lambda: now[0]
+    ws._reap_every = 0.01
+    with _client(app) as c:
+        assert _query(c, "prod-a").status_code == 200
+        now[0] += workspaces.IDLE_SECONDS + 1
+        for _ in range(500):
+            if targets.opened[0].closed:
+                break
+            threading.Event().wait(0.01)
+        assert targets.opened[0].closed
+        assert ws.open_targets() == []
+
+
+def test_a_connection_in_use_is_never_reaped(declared, targets, local_gw):
+    """#2062: a request reading a target holds its connection: a reap that
+    runs meanwhile - however long the request takes - leaves it open."""
+    app = _app(targets, local_gw)
+    now = [0.0]
+    ws = app.state.workspaces
+    ws._clock = lambda: now[0]
+    seen: list[bool] = []
+    target_gw = targets.gateways[PORTS["prod-a"]]
+    plain = target_gw.browse
+
+    def slow_browse(*args):  # noqa: ANN002, ANN202
+        now[0] += workspaces.IDLE_SECONDS * 10  # a very long query
+        ws.reap()
+        seen.append(targets.opened[0].closed)
+        return plain(*args)
+
+    target_gw.browse = slow_browse
+    c = _client(app)
+    assert _query(c, "prod-a").status_code == 200
+    assert seen == [False]
+    # Released when the request ended, and only idle from then on.
+    assert ws.open_targets() == ["prod-a"]
+    ws.reap()
+    assert ws.open_targets() == ["prod-a"]
+    now[0] += workspaces.IDLE_SECONDS + 1
+    ws.reap()
+    assert ws.open_targets() == [] and targets.opened[0].closed
+
+
+def test_a_held_lease_survives_a_reap(declared, targets, local_gw):
+    app = _app(targets, local_gw)
+    now = [0.0]
+    ws = app.state.workspaces
+    ws._clock = lambda: now[0]
+    with ws.lease("prod-a") as scope:
+        assert scope.target == "prod-a"
+        now[0] += workspaces.IDLE_SECONDS * 10
+        ws.reap()
+        assert not targets.opened[0].closed
+    now[0] += workspaces.IDLE_SECONDS + 1
+    ws.reap()
+    assert targets.opened[0].closed
+
+
+def test_shutdown_closes_every_target_connection(declared, targets, local_gw):
+    app = _app(targets, local_gw)
+    with _client(app) as c:
+        assert _query(c, "prod-a").status_code == 200
+        assert _query(c, "uat-b").status_code == 200
+        assert app.state.workspaces.open_targets() == ["prod-a", "uat-b"]
+    assert app.state.workspaces.open_targets() == []
+    assert [conn.closed for conn in targets.opened] == [True, True]
+
+
 # ------------------------------------------------------------- the registry
 
 
