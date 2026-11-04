@@ -109,7 +109,7 @@ def _write_all(contents: dict[Path, str], created: set[Path], repo_root: Path) -
     """Write every file in `contents`, or, if one write fails, put back the
     ones already written: files this plan created are removed (with any
     folders made for them), appended files get their old text back."""
-    originals = {t: t.read_text() for t in contents if t not in created}
+    originals = {t: t.read_bytes() for t in contents if t not in created}
     made_dirs: list[Path] = []
     done: list[Path] = []
     try:
@@ -117,14 +117,16 @@ def _write_all(contents: dict[Path, str], created: set[Path], repo_root: Path) -
             missing = [p for p in [target.parent, *target.parent.parents] if not p.exists()]
             target.parent.mkdir(parents=True, exist_ok=True)
             made_dirs.extend(reversed(missing))
-            target.write_text(text)
             done.append(target)
+            target.write_text(text)
     except BaseException:
         for target in done:
             if target in created:
                 target.unlink(missing_ok=True)
-            else:
-                target.write_text(originals[target])
+            elif target.read_bytes() != originals[target]:
+                # An open refused before truncation leaves the file unchanged
+                # (and may still refuse writes). Restore only changed bytes.
+                target.write_bytes(originals[target])
         for folder in reversed(made_dirs):
             if folder.is_dir() and folder != repo_root and not any(folder.iterdir()):
                 folder.rmdir()
