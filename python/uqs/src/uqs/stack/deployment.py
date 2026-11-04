@@ -30,7 +30,7 @@ from collections.abc import Iterable, Sequence
 
 from uqs.model import profiles
 from uqs.paths import UqsPaths
-from uqs.stack import start_policy
+from uqs.stack import generated, start_policy
 from uqs.stack.procs import effective_process_rows
 
 
@@ -46,7 +46,7 @@ def members(paths: UqsPaths) -> tuple[str, ...] | None:
 def _write(paths: UqsPaths, procnames: Iterable[str]) -> None:
     paths.generated_deployment.parent.mkdir(parents=True, exist_ok=True)
     names = list(dict.fromkeys(procnames))
-    paths.generated_deployment.write_text("".join(f"{name}\n" for name in names))
+    generated.write_text(paths.generated_deployment, "".join(f"{name}\n" for name in names))
 
 
 def select(paths: UqsPaths, procnames: Iterable[str]) -> None:

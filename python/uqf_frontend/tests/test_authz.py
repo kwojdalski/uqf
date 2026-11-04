@@ -280,6 +280,8 @@ SAMPLES: dict[tuple[str, str], dict] = {
     ("GET", "/ops/backfill"): {},
     ("GET", "/services"): {},
     ("GET", "/services/{target}/files"): {"params": {"path": "releases"}},
+    ("GET", "/services/{target}/tunnel"): {"params": {"process": "rdb1"}},
+    ("GET", "/services/{target}/tunnel/check"): {"params": {"process": "rdb1"}},
     ("PUT", "/services/{target}/files/content"): {
         "params": {"path": "shared/config/x.csv", "push": "20261104T000000000Z-00000000"},
         "content": b"a,b\n",
@@ -298,6 +300,8 @@ SAMPLES: dict[tuple[str, str], dict] = {
         "params": {"dataset": "fx_quotes", "partition": "", "source_version": "v1"}
     },
     ("POST", "/query"): {"json": {"table": "trades", "filters": []}},
+    ("GET", "/charts"): {},
+    ("POST", "/charts/{name}"): {"json": {}},
     ("GET", "/control"): {},
     ("GET", "/activity"): {},
     ("GET", "/activity/export"): {"params": {"format": "jsonl"}},
@@ -375,6 +379,7 @@ def test_a_deny_all_policy_refuses_every_guarded_route(method, path):
         .replace("{procname}", "rdb1")
         .replace("{target}", "prod-a")
         .replace("{push_id}", "20261104T000000000Z-00000000")
+        .replace("{name}", "markout_curve")
     )
     resp = c.request(method, url, **SAMPLES[(method, path)])
     assert resp.status_code == 403, resp.text

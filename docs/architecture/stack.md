@@ -160,6 +160,18 @@ with the same transform and writes the same table, replacing what the live job
 wrote for the window, so the fills `crypto_markout1` never saw are marked out
 too.
 
+`eq_markout1` is the equity counterpart (#1981), over the same two canonical
+tables: it scores the fills of the equity venues (`XNAS`) at 5s, 30s and 1min in
+basis points against the mid of the venue's book into `eq_markout`, with the
+sessions and halts of `eq_domain` deciding which horizons are priced - a horizon
+that crosses or lands on the close is `unavailable`, not an overnight gap. It is
+on demand and in no profile: its books come from the Databento bundle's
+`databento1` and its fills from a live feed a site wires in, which this tree
+does not ship (`eq_fills_backfill1` lands a drop in the HDB).
+`hdb_eq_markout_backfill1` is its bounded twin and, until such a feed exists,
+the job that does the work: it scores the HDB's equity `executions` against its
+`market_data` with the same transform.
+
 `executions1` and `marketdata1` are **normalizers** - a job kind of their own
 (`.qetl.job.stream.normalizer`, `src/etl/core/normalizer.q`). A normalizer
 subscribes to several tables that carry the same fact in different shapes and

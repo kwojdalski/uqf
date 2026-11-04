@@ -22,9 +22,11 @@ one slot to spare - starting DQE with the stack is a separate decision.
 from __future__ import annotations
 
 import csv
+import io
 
 from uqs.model.runtime_members import plant_tables
 from uqs.paths import UqsPaths
+from uqs.stack import generated
 
 #: The vendored file's columns, in its order.
 DQE_CONFIG_FIELDS = ("query", "params", "proc", "querytype", "starttime")
@@ -76,9 +78,10 @@ def dqe_config_rows(paths: UqsPaths) -> list[dict[str, str]]:
 
 def write_dqe_config(paths: UqsPaths) -> None:
     """Write the generated copy DQE reads (see the module docstring)."""
-    with paths.generated_dqe_config.open("w", newline="") as f:
-        # Plain \n, as process.csv: q's 0: reads the file, and a \r would
-        # end up glued to each row's starttime.
-        writer = csv.DictWriter(f, fieldnames=DQE_CONFIG_FIELDS, lineterminator="\n")
-        writer.writeheader()
-        writer.writerows(dqe_config_rows(paths))
+    f = io.StringIO()
+    # Plain \n, as process.csv: q's 0: reads the file, and a \r would
+    # end up glued to each row's starttime.
+    writer = csv.DictWriter(f, fieldnames=DQE_CONFIG_FIELDS, lineterminator="\n")
+    writer.writeheader()
+    writer.writerows(dqe_config_rows(paths))
+    generated.write_text(paths.generated_dqe_config, f.getvalue())

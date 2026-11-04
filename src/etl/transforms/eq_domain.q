@@ -3,9 +3,9 @@
 / WHAT THIS IS. What the markout core (markout_core.q, #1929) needs to know
 / about an EQUITY and nothing else: a domain dictionary (resolve, convert, keys,
 / validate, available). It owns no queue, no clock rule, no horizon expansion
-/ and no dataset - those are the core's, and there is no equity dataset or job
-/ yet, because no equity fills source exists (#1939). docs/architecture/
-/ markout-contract.md is the contract; fx_domain.q is the FX counterpart.
+/ and no dataset - those are the core's. The dataset and its jobs are
+/ eq_markout_outputs.q's (#1981). docs/architecture/markout-contract.md is the
+/ contract; fx_domain.q is the FX counterpart.
 / .
 / THE RESOLVER. An equity is a single leg: its reference is the book of its
 / own symbol, never inverted. Its symbol does not spell its currency (AAPL,
@@ -202,6 +202,6 @@
     .qpipe.transform.eq_domain.available;
     `eq;
     .qpipe.transform.eq_domain.revision;
-    `symbol$())
+    enlist `eq_markout)
 
 \d .

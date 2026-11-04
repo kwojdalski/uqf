@@ -20,6 +20,7 @@ export const API_PATHS = [
   "services",
   "me",
   "settings",
+  "charts",
 ];
 
 // The write token (#631), added here on the server side so a dev browser

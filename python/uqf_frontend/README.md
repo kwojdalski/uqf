@@ -57,6 +57,8 @@ The q details this rests on, verified against a live KDB-X process:
   | `GET /ops/backfill`    | Backfill and Airflow task status, read from the files q writes                                                                            |
   | `GET /services`        | The deployment targets `uqs target list --json` lists, read from `deploy_targets.toml` with no ssh, and whether remote operations are on  |
   | `POST /query`          | Validated, parameterised table query, tier-routed                                                                                         |
+  | `GET /charts`          | The prepared charts, each with its parameters' JSON Schema and its point limit                                                            |
+  | `POST /charts/{name}`  | One prepared chart's plotly.py figure, with its point limit and whether it was downsampled or truncated                                   |
   | `GET /me/capabilities` | Who the caller is (as a trusted proxy vouches), their groups, and every feature and action the access policy grants them                  |
 
 ### Control routes --- these CHANGE things
@@ -139,6 +141,27 @@ midway), a crashed helper or an answer that cannot be read is 504
 `DeleteOutcomeUncertain` with `transient: false`: some paths may be gone, and
 you list the directory before deleting again. Only a browse's timeout is
 transient (#2023).
+
+### A target's tunnel --- uqs plans and checks it
+
+`GET /services/{target}/tunnel?process=&local=PROC:PORT&offset=` returns the
+target's tunnel plan, and `GET /services/{target}/tunnel/check` with the same
+parameters returns the result of checking it (#2030, #2031). Both are gated like
+browsing, because uqs reads the target's release over ssh. Neither route has ssh
+code of its own: `tunnels.py` calls `uqs.deploy.tunnel_plan` and
+`uqs.deploy.tunnel_check`, the functions behind `uqs target tunnel plan` and
+`uqs target tunnel check`.
+
+Every value the routes return comes from uqs: the processes and their ports,
+each local endpoint, the launch command (which holds no credential), each
+mapping's `verified`, `stale` or `unverified` state, and each endpoint's
+diagnostic category. A refused plan returns 400, and a release that cannot be
+asked for its processes returns 502.
+
+The check logs in to q with this API's gateway credential when one is
+configured, and with uqs's default otherwise. The credential never appears in a
+response. The Services view shows the plan and the check. The Fleet view offers
+the same connection details for whichever target you choose.
 
 ### Uploading to a target's shared/config --- one file per request
 
@@ -473,6 +496,42 @@ captures each row exactly once.
 
 It ships as a callable, not a daemon: what schedules it - a timer, cron, an
 Airflow task - is a deployment choice.
+
+## Prepared charts
+
+`charts.py` is a registry of named charts (#2044). Each is defined once there,
+and the browser's Charts view holds no chart-specific code: it lists
+`GET /charts`, draws a form from each chart's parameter schema, and renders the
+figure `POST /charts/{name}` returns. An entry is four things:
+
+- **params** - a Pydantic model the request body must validate against. Unknown
+  keys are refused, so a renamed field is a 422, not a default.
+- **read** - the vetted query, through a path this API already trusts and
+  nothing else. A table goes through `/query`'s own path: the catalog checks the
+  table and every filter column, `queries.build_filters` coerces every value,
+  the policy is asked about the table, and `.uqf.browse` reads it as the data
+  login. The fleet's query log goes through `ops.USAGE`, and backfill status
+  through `status.read_dir`. No parameter is rendered into q text.
+- **max_points** - the most points the figure may carry, enforced on the server.
+  A long series is reduced by LTTB (largest triangle three buckets), which keeps
+  peaks, troughs and gaps. Anything that cannot be reduced, such as a venue's
+  whole curve or a worker's row in the heatmap, is left out and named in
+  `notes`.
+- **build** - the figure, built with plotly.py and sent as `fig.to_json()`.
+
+Every response states `point_limit` and `points`. `downsampled` says a series
+was reduced; `truncated` says a read hit its row cap (`UQF_FRONTEND_MAX_ROWS`,
+or the table's policy) or that series were left out. The reduction is done here,
+not with `xbar` in q, because the data login may run `.uqf.browse` and nothing
+else (#889). Bucketing in q would need a second gateway function with its own
+policy.
+
+  | chart               | reads                                                       | draws                                                     |
+  | ---                 | ---                                                         | ---                                                       |
+  | `markout_curve`     | `fx_markout` (pips) or `crypto_markout` (bps), `kind` total | mean markout per horizon, a line per venue                |
+  | `backfill_coverage` | the status files `/ops/backfill` reads                      | each worker's last run per day, coloured by state         |
+  | `mid_spread_fills`  | `market_data`'s first level, and `executions` or `trades`   | mid and spread, with buys and sells overlaid              |
+  | `ops_latency`       | `.usage.usage` on every process, as `/ops/usage` does       | completed query durations per process, as box plots       |
 
 ## Backfill status
 

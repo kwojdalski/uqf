@@ -387,7 +387,7 @@ def test_targets_are_listed_by_their_own_noun(server):
     assert isinstance(group, typer.core.TyperGroup)
     assert set(group.commands) == {
         "add", "set", "unset", "rename", "remove", "edit", "log", "revert", "adopt",
-        "list", "check", "shell", "config",
+        "list", "check", "shell", "config", "tunnel",
     }  # fmt: skip
 
 
@@ -604,3 +604,16 @@ def test_dry_runs_of_add_and_remove_check_and_write_nothing(server):
     removed = runner.invoke(app, ["target", "remove", some, "--dry-run"])
     assert removed.exit_code == 0, removed.output
     assert declared.read_text() == before
+
+
+def test_list_targets_refuses_labels_that_are_not_a_table(server, log_text):
+    """#2026: `labels = "prod"` was accepted, then the listing crashed with
+    AttributeError. It is refused now, naming the file and its line."""
+    declared = Path(os.environ[targets.DECLARATION_ENV])
+    declared.write_text(
+        declared.read_text() + '\n[targets.prod]\nssh = "p"\ndest = "/srv/p"\nlabels = "prod"\n'
+    )
+    result = CliRunner().invoke(app, ["target", "list", "--json"])
+    assert result.exit_code != 0
+    assert not isinstance(result.exception, AttributeError), result.exception
+    assert "target prod: labels must be a table" in log_text()

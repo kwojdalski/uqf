@@ -31,9 +31,10 @@ dependencies = [
     # Reimplementing either here would make a second writer to one file,
     # which is worse than a dependency by any measure used in this tree.
     "uqs",
-    # pycasbin: the feature/action RBAC policy (authz_policy.py, #2045). Pinned
+    # pycasbin: the feature/action RBAC policy (access.py, #2045). Pinned
     # exactly - it decides who may do what, so an upgrade is a reviewed change.
     "casbin==1.43.0",
+    "plotly>=6",
 ]
 
 [build-system]

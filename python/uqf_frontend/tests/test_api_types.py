@@ -65,6 +65,11 @@ PAIRS = {
     "SettingsChangeResult": "SettingsChangeResponse",
     "Capabilities": "CapabilitiesResponse",
     "Capability": "Capability",
+    "TunnelCheckRecord": "TunnelCheckRecordOut",
+    "TunnelMapping": "TunnelMappingOut",
+    "TunnelPlan": "TunnelPlanResponse",
+    "TunnelEndpoint": "TunnelEndpointOut",
+    "TunnelCheck": "TunnelCheckResponse",
     "RemoteDeleteResult": "RemoteDeleteResult",
     "RemoteDeleteResponse": "RemoteDeleteResponse",
     "Catalog": "CatalogResponse",
@@ -107,6 +112,9 @@ PAIRS = {
     "RestoreStep": "RestoreStepOut",
     "RestoreResult": "RestoreResultOut",
     "ConfigRestore": "ConfigRestoreResponse",
+    "ChartInfo": "ChartInfo",
+    "ChartList": "ChartsResponse",
+    "ChartResult": "ChartResponse",
     **REQUESTS,
 }
 

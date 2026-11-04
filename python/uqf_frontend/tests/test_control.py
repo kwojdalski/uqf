@@ -31,6 +31,9 @@ from uqf_frontend.config import Settings
 from uqf_frontend.errors import ValidationFailed
 from uqf_frontend.gateway import FakeGateway
 
+#: The real lock, before conftest's autouse fixture stands it in.
+REAL_HOLDING = control._holding
+
 
 @dataclass
 class FakeCompleted:
@@ -326,6 +329,158 @@ def test_clean_is_not_reachable(writeable):
     with a claimed identity. `uqs clean` remains, at a terminal."""
     assert writeable.post("/control/process/clean", json={"procs": "all"}).status_code == 422
     assert "clean" not in control.LIFECYCLE_ACTIONS
+
+
+# ------------------------------------- lifecycle against the stack as it is now (#2027)
+
+
+def _stack_root(tmp_path, base_port: int):
+    """A stack root uqs accepts, bootstrapped at *base_port*: its setenv.sh."""
+    from uqs import paths as stack_paths
+
+    root = tmp_path / "stack"
+    (root / "src" / "etl").mkdir(parents=True)
+    (root / "python" / "uqs").mkdir(parents=True)
+    paths = stack_paths.paths_for_root(root)
+    paths.torqdata.mkdir(parents=True)
+    paths.generated_setenv.write_text(f'export KDBBASEPORT="{base_port}"\n')
+    return root, paths
+
+
+def _observed(monkeypatch, *states: dict[str, list[int]]) -> list[int]:
+    """Answer the process table with *states* in turn - before the action,
+    then each look after it - the last repeating. Returns the base ports asked."""
+    asked: list[int] = []
+    queue = list(states)
+
+    def observe(paths, base_port):
+        asked.append(base_port)
+        return queue.pop(0) if len(queue) > 1 else queue[0]
+
+    monkeypatch.setattr(control, "_observe", observe)
+    monkeypatch.setattr(control, "VERIFY_POLL_SECONDS", 0)
+    return asked
+
+
+def test_a_stop_after_a_base_port_change_runs_at_the_new_base_port(tmp_path, monkeypatch):
+    """`uqs restart all --base-port 7050` under a running frontend: its Stop
+    used to run torq.sh at 6050, which found nothing, exited 0 - and the API
+    said ok while rdb1 kept running at 7050."""
+    from uqs.stack import runtime
+
+    root, paths = _stack_root(tmp_path, 6050)
+    settings = Settings(enable_writes=True, write_token=TOKEN, stack_root=root, base_port=6050)
+    paths.generated_setenv.write_text('export KDBBASEPORT="7050"\n')
+    seen: dict[str, Any] = {}
+
+    def stop(p, procs, base_port=None, **k):
+        seen.update(bp=base_port)
+        return FakeCompleted()
+
+    monkeypatch.setattr(runtime, "stop", stop)
+    asked = _observed(monkeypatch, {"rdb1": [41]}, {"rdb1": []})
+    result = control.lifecycle(settings, "stop", "rdb1")
+    assert seen["bp"] == 7050
+    assert set(asked) == {7050}
+    assert result.ok
+
+
+def test_torq_sh_finding_nothing_to_stop_is_not_success_when_the_process_was_up(
+    tmp_path, monkeypatch
+):
+    """torq.sh prints "not currently running" and exits 0 when it looked in
+    the wrong place. The process was up a moment before: that is a failure."""
+    from uqs.stack import runtime
+
+    root, _ = _stack_root(tmp_path, 6050)
+    settings = Settings(enable_writes=True, write_token=TOKEN, stack_root=root)
+    monkeypatch.setattr(
+        runtime,
+        "stop",
+        lambda *a, **k: FakeCompleted(stdout="10:00:00 | rdb1 is not currently running"),
+    )
+    _observed(monkeypatch, {"rdb1": [41]})
+    result = control.lifecycle(settings, "stop", "rdb1")
+    assert result.exit_code == 0
+    assert not result.ok
+    assert "rdb1 was running" in result.output
+
+
+def test_a_stop_that_leaves_the_process_running_is_not_success(tmp_path, monkeypatch):
+    from uqs.stack import runtime
+
+    root, _ = _stack_root(tmp_path, 6050)
+    settings = Settings(enable_writes=True, write_token=TOKEN, stack_root=root)
+    shutting = FakeCompleted(stdout="Shutting down rdb1...")
+    monkeypatch.setattr(runtime, "stop", lambda *a, **k: shutting)
+    monkeypatch.setattr(control, "VERIFY_SECONDS", 0)
+    _observed(monkeypatch, {"rdb1": [41]})
+    result = control.lifecycle(settings, "stop", "rdb1")
+    assert not result.ok
+    assert "rdb1 is still running" in result.output
+
+
+@pytest.mark.parametrize("action", ["start", "restart"])
+def test_a_start_is_success_only_once_the_process_is_up(tmp_path, monkeypatch, action):
+    from uqs.stack import runtime
+
+    root, _ = _stack_root(tmp_path, 6050)
+    settings = Settings(enable_writes=True, write_token=TOKEN, stack_root=root)
+    monkeypatch.setattr(runtime, action, lambda *a, **k: FakeCompleted(stdout="Starting rdb1..."))
+    _observed(monkeypatch, {"rdb1": []}, {"rdb1": []}, {"rdb1": [42]})
+    assert control.lifecycle(settings, action, "rdb1").ok
+
+    monkeypatch.setattr(control, "VERIFY_SECONDS", 0)
+    _observed(monkeypatch, {"rdb1": []})
+    result = control.lifecycle(settings, action, "rdb1")
+    assert not result.ok
+    assert "rdb1 is not running" in result.output
+
+
+def test_a_process_this_host_cannot_see_is_not_judged(tmp_path, monkeypatch):
+    """A process.csv row on another host has no local pid to look for:
+    torq.sh's exit code is all there is, as before."""
+    from uqs.stack import runtime
+
+    root, _ = _stack_root(tmp_path, 6050)
+    settings = Settings(enable_writes=True, write_token=TOKEN, stack_root=root)
+    monkeypatch.setattr(runtime, "start", lambda *a, **k: FakeCompleted())
+    _observed(monkeypatch, {})
+    assert control.lifecycle(settings, "start", "remote1").ok
+
+
+def test_a_lifecycle_action_while_another_holds_the_stack_is_a_409(tmp_path, monkeypatch, gw):
+    """Two tabs, or a tab and a terminal: the second is refused rather than
+    queued behind the first, and runs nothing (#2028)."""
+    import threading
+
+    from uqs.stack import generated, runtime
+
+    root, paths = _stack_root(tmp_path, 6050)
+    monkeypatch.setattr(control, "_holding", REAL_HOLDING)
+    monkeypatch.setattr(runtime, "stop", lambda *a, **k: pytest.fail("ran torq.sh"))
+    _observed(monkeypatch, {})
+    client = TestClient(
+        create_app(gateway=gw, settings=_writes_on(stack_root=root)),
+        headers={"Authorization": f"Bearer {TOKEN}"},
+    )
+    taken, release = threading.Event(), threading.Event()
+
+    def hold() -> None:
+        with generated.lifecycle_lock(paths):
+            taken.set()
+            release.wait(10)
+
+    holder = threading.Thread(target=hold)
+    holder.start()
+    try:
+        assert taken.wait(10)
+        resp = client.post("/control/process/stop", json={"procs": "rdb1"})
+    finally:
+        release.set()
+        holder.join()
+    assert resp.status_code == 409
+    assert "another start, stop or restart" in resp.json()["detail"]
 
 
 # ------------------------------------------------------ process config
