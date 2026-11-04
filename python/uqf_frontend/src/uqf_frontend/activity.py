@@ -109,10 +109,6 @@ LEVEL_OF_KIND = {
     "debug": "debug",
 }
 
-#: The reasons the browser reports for events it did not send (DROP_REASONS):
-#: the others are the server's own.
-BROWSER_DROP_REASONS = ("sampled", "queue_overflow")
-
 #: How a browser action was triggered.
 TRIGGERS = ("pointer", "keyboard", "programmatic", "unknown")
 
@@ -359,11 +355,6 @@ class Bound:
     def __post_init__(self) -> None:
         if self.retention_days <= 0 or self.max_rows <= 0:
             raise ValueError("activity retention needs positive days and rows")
-
-
-def uniform(retention_days: int, max_rows: int) -> dict[str, Bound]:
-    """The same bound at every level."""
-    return dict.fromkeys(EVENT_LEVELS, Bound(retention_days, max_rows))
 
 
 _SCHEMA = """

@@ -141,11 +141,6 @@ def levels_shown(level: str | None) -> tuple[str, ...]:
     return EVENT_LEVELS[: LEVELS.index(level)]
 
 
-def records_at(session_level: str, event_level: str) -> bool:
-    """Whether a session recording at `session_level` keeps an event of `event_level`."""
-    return event_level in levels_shown(session_level)
-
-
 @dataclass(frozen=True)
 class Query:
     """A filter over the history. Every field narrows; None means any."""

@@ -322,7 +322,8 @@ it("counts what overflows the queue while the API is down, and reports it later"
 });
 
 it("batches interactions: 500 clicks cost 5 requests and little time", async () => {
-  vi.useFakeTimers();
+  // timers only: the clock stays real, so the cost of a click is measured
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
   collect("interactions");
   const uninstall = installActivity();
   const button = document.createElement("button");

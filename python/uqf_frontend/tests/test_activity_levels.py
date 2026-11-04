@@ -150,8 +150,8 @@ def test_the_levels_are_ordered_and_documented_once():
     assert activity_log.LEVELS == ("off", "actions", "interactions", "debug")
     assert set(activity_log.LEVEL_NOTES) == set(activity_log.LEVELS)
     assert activity_log.levels_shown("off") == ()
-    assert activity_log.records_at("interactions", "actions")
-    assert not activity_log.records_at("actions", "interactions")
+    assert activity_log.levels_shown("interactions") == ("actions", "interactions")
+    assert activity_log.levels_shown(None) == activity_log.EVENT_LEVELS
     assert set(activity.LEVEL_OF_KIND.values()) == set(activity_log.EVENT_LEVELS)
     assert set(activity.LEVEL_OF_KIND) == {*activity.BROWSER_KINDS, activity.SERVER_KIND}
 
