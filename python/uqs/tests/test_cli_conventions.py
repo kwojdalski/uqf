@@ -160,7 +160,8 @@ DOMAIN_VERBS = {
     "migrate": "migrate an HDB partition's schema",
     "alter": "change one table in every HDB partition holding it",
     "upgrade": "bring a store an older uqs wrote up to today's layout",
-    "diff": "compare two runtimes, or a config push's files before and after it",
+    "diff": "compare two runtimes, a config push's files before and after it, or a table "
+    "on two endpoints",
     "prepare": "install the bundles a runtime declares",
     "stub": "add a placeholder row",
     "env": "print the environment to source",
@@ -559,6 +560,10 @@ OPTIONS = {
     "--schema": Meaning("tables' columns and their types", r"^its table's schema"),
     "--schema-file": Meaning("a tickerplant's schema file", r"^(load|pin) (this|the) schema file"),
     "--sort": Meaning("sort by a column", r"sort by"),
+    "--source-version": Meaning(
+        "a source release coverage is recorded under", r"^the source_version\b"
+    ),
+    "--partition": Meaning("the slice of a dataset", r"^the slice of\b"),
     "--start-with-all": Meaning("whether a `start all` starts the process", r"start all"),
     "--ssh": Meaning("the ssh destination of a target", r"ssh destination"),
     "--table": Meaning("one table to act on", r"this table"),

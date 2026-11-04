@@ -126,6 +126,7 @@ PIPELINE_MODULES = {
     "uqs.external.feeds",
     "uqs.model.process_graph",
     "uqs.stack.backfill",
+    "uqs.stack.data_diff",
     "uqs.stack.dataset_verify",
     "uqs.stack.runs",
     "uqs.stack.snapshots",
