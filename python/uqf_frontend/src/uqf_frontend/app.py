@@ -14,7 +14,7 @@ import subprocess
 import time
 import typing
 import uuid
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Iterator
 from contextlib import asynccontextmanager
 from typing import Annotated, Any
 
@@ -301,7 +301,7 @@ def workspace_route(request: Request) -> None:
         )
 
 
-def scope_of(request: Request) -> workspaces.Scope:
+def scope_of(request: Request) -> Iterator[workspaces.Scope]:
     """The stack a scoped route reads: the named workspace's, opened by uqs
     for a target - or the refusal saying why it cannot be, never local.
 
@@ -318,7 +318,10 @@ def scope_of(request: Request) -> workspaces.Scope:
                 f"granted to {who.user}",
                 "services:read",
             )
-    return request.app.state.workspaces.scope(name)
+    # Held until the route has answered, so the reaper never closes a
+    # connection a request is reading through (#2062).
+    with request.app.state.workspaces.lease(name) as scope:
+        yield scope
 
 
 #: A scoped route's parameter: the workspace its request names.
@@ -417,6 +420,8 @@ def create_app(
         # on the loop it would stall every request for a whole fleet sweep.
         if scheduler is not None:
             scheduler.start()
+        # Idle target connections close on a timer, not only on a request.
+        app.state.workspaces.start()
         try:
             yield
         finally:
@@ -1636,13 +1641,24 @@ def _guard_refusal(settings: Settings, request: Request) -> tuple[int, str, str]
     refusal = write_guard.host_refusal(settings, request.headers.get("host"))
     if refusal is not None:
         return 403, "HostNotAllowed", refusal
-    if settings.enable_writes and write_guard.needs_token(
-        request.method, write_guard.route_path(request.scope)
+    if settings.enable_writes and (
+        write_guard.needs_token(request.method, write_guard.route_path(request.scope))
+        or _reaches_target(request)
     ):
         refusal = write_guard.token_refusal(settings, request.headers.get("authorization"))
         if refusal is not None:
             return 401, "WriteTokenRequired", refusal
     return None
+
+
+def _reaches_target(request: Request) -> bool:
+    """Will this request open, or read through, an ssh to a deploy target?
+    A scoped route naming a workspace other than local does: the operator's
+    key opens it, as it does for /services/{target} (#2067)."""
+    if not workspaces.names_target(request.headers):
+        return False
+    template, _ = _route_of(request)
+    return workspaces.is_scoped(request.method, template)
 
 
 def _carries_token(settings: Settings, request: Request) -> bool:
