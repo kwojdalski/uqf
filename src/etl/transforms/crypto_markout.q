@@ -144,6 +144,11 @@
 / The crypto domain, as the core takes it (the way .qpipe.transform.fx_domain.domain
 / is): resolve, convert and no spec keys of its own. A fee-adjusted measure is a
 / presentation column, so there is no attribute and no availability rule.
-.qpipe.transform.crypto_markout.domain:`resolve`convert`keys!(.qpipe.transform.crypto_markout.resolve;.qpipe.transform.crypto_markout.convert;`symbol$())
+/ revision is the rules that price a pair - BASE-QUOTE parsed from the symbol, the
+/ conversion pair BASE-REPORT - recorded by the configuration snapshot (#1999); bump
+/ it with a change to resolve or convert.
+.qpipe.transform.crypto_markout.revision:`crypto_r1
+
+.qpipe.transform.crypto_markout.domain:`resolve`convert`keys`name`revision`datasets!(.qpipe.transform.crypto_markout.resolve;.qpipe.transform.crypto_markout.convert;`symbol$();`crypto;.qpipe.transform.crypto_markout.revision;enlist `crypto_markout)
 
 \d .

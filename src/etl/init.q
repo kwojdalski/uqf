@@ -51,6 +51,7 @@
 \l src/etl/core/intervals.q
 \l src/etl/core/materialisation.q
 \l src/etl/core/run.q
+\l src/etl/core/config_snapshot.q
 \l src/etl/core/io_manager.q
 \l src/etl/core/io_hdb.q
 \l src/etl/core/io_hdb_scoped.q
@@ -83,6 +84,7 @@
 \l src/etl/core/bounded_connect.q
 \l src/etl/core/bounded_ready.q
 \l src/etl/core/bounded_worker.q
+\l src/etl/core/bounded_pin.q
 \l src/etl/core/bounded_batching.q
 \l src/etl/core/bounded_batch_read.q
 \l src/etl/core/bounded_flags.q
