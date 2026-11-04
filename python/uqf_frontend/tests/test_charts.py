@@ -36,7 +36,7 @@ SCHEMA = [
     for table, columns in {
         "fx_markout": "time:p sym:s venue:s horizon:n kind:s pips:f",
         "crypto_markout": "time:p sym:s venue:s horizon:n kind:s markout_bps:f",
-        "market_data": "time:p sym:s bid_prices:F ask_prices:F",
+        "market_data": "time:p sym:s source:s bid_prices:F ask_prices:F",
         "executions": "time:p sym:s venue:s side:j price:f",
         "trades": "time:p sym:s side:j trade_price:f",
     }.items()
@@ -328,6 +328,7 @@ def book_fixture(count: int) -> pl.DataFrame:
         {
             "time": stamps("2026-11-03T10:00:00+00:00", count, 100),
             "sym": ["EURUSD"] * count,
+            "source": ["UQFDEPTH"] * count,
             "bid_prices": pl.Series(bids, dtype=pl.List(pl.Float64)),
             "ask_prices": pl.Series(asks, dtype=pl.List(pl.Float64)),
         }
@@ -350,13 +351,13 @@ def test_mid_and_spread_are_drawn_with_fills_by_side():
     gw = TableGateway({"market_data": book_fixture(10), "executions": fills_fixture()})
     body = client(gw).post("/charts/mid_spread_fills", json={"sym": "EURUSD"}).json()
     traces = {t["name"]: t for t in body["figure"]["data"]}
-    assert set(traces) == {"mid", "spread", "buy fills", "sell fills"}
-    mid = traces["mid"]
+    assert set(traces) == {"mid · UQFDEPTH", "spread · UQFDEPTH", "buy fills", "sell fills"}
+    mid = traces["mid · UQFDEPTH"]
     assert mid["x"][0] == "2026-11-03 10:00:00.000000"
     assert mid["y"][0] == pytest.approx(1.1001)
     assert mid["y"][3] is None  # the empty bid side is a gap, not 0
-    assert traces["spread"]["y"][0] == pytest.approx(0.0002)
-    assert traces["spread"]["yaxis"] == "y2"
+    assert traces["spread · UQFDEPTH"]["y"][0] == pytest.approx(0.0002)
+    assert traces["spread · UQFDEPTH"]["yaxis"] == "y2"
     assert traces["buy fills"]["y"] == [1.1001, 1.1003]
     assert traces["sell fills"]["x"] == ["2026-11-03 10:00:00.250000"]
     assert body["points"] == 10 + 10 + 3
@@ -379,10 +380,75 @@ def test_a_long_book_is_reduced_to_the_point_limit_and_says_so():
     )
     assert body["downsampled"] is True
     assert body["points"] <= body["point_limit"]
-    mid = next(t for t in body["figure"]["data"] if t["name"] == "mid")
+    mid = next(t for t in body["figure"]["data"] if t["name"] == "mid · UQFDEPTH")
     assert len(mid["x"]) == body["point_limit"] // 3
     assert mid["y"][0] == pytest.approx(1.1001)  # the ends are kept
     assert None in mid["y"]  # and so is the gap
+
+
+def two_venue_book(count: int) -> pl.DataFrame:
+    """Two venues' books for one sym, interleaved in time as market_data
+    holds them: one row replaces the book for (sym, source) (#2077)."""
+    src = ["binance", "okx"] * (count // 2)
+    return pl.DataFrame(
+        {
+            "time": stamps("2026-11-03T10:00:00+00:00", count, 100),
+            "sym": ["BTCUSDT"] * count,
+            "source": src,
+            "bid_prices": pl.Series(
+                [[100.0] if s == "binance" else [110.0] for s in src], dtype=pl.List(pl.Float64)
+            ),
+            "ask_prices": pl.Series(
+                [[100.2] if s == "binance" else [110.4] for s in src], dtype=pl.List(pl.Float64)
+            ),
+        }
+    )
+
+
+def test_each_source_is_its_own_mid_and_spread_never_one_line_through_both():
+    fills = fills_fixture().with_columns(
+        pl.lit("BTCUSDT").alias("sym"), pl.Series("price", [100.1, 110.2, 100.15])
+    )
+    gw = TableGateway({"market_data": two_venue_book(6), "executions": fills})
+    body = client(gw).post("/charts/mid_spread_fills", json={"sym": "BTCUSDT"}).json()
+    traces = {t["name"]: t for t in body["figure"]["data"]}
+    assert set(traces) == {
+        "mid · binance", "spread · binance", "mid · okx", "spread · okx",
+        "buy fills", "sell fills",
+    }  # fmt: skip
+    assert traces["mid · binance"]["y"] == pytest.approx([100.1] * 3)
+    assert traces["mid · okx"]["y"] == pytest.approx([110.2] * 3)
+    assert traces["spread · binance"]["y"] == pytest.approx([0.2] * 3)
+    assert traces["spread · okx"]["y"] == pytest.approx([0.4] * 3)
+    assert traces["mid · okx"]["x"][0] == "2026-11-03 10:00:00.100000"
+    assert traces["spread · okx"]["yaxis"] == "y2"
+    # the fills are still overlaid on the mid panel, by side
+    assert traces["buy fills"]["y"] == [100.1, 100.15]
+    assert traces["sell fills"]["y"] == [110.2]
+    assert traces["buy fills"]["yaxis"] == "y"
+    assert body["points"] == 4 * 3 + 3
+
+
+def test_a_long_two_venue_book_is_reduced_per_source_inside_the_limit():
+    gw = TableGateway({"market_data": two_venue_book(8000)})
+    body = client(gw).post("/charts/mid_spread_fills", json={"sym": "BTCUSDT"}).json()
+    assert body["downsampled"] is True
+    assert body["points"] <= body["point_limit"]
+    by = {t["name"]: t for t in body["figure"]["data"]}
+    each = body["point_limit"] // 3 // 2
+    for venue, mid in (("binance", 100.1), ("okx", 110.2)):
+        assert len(by[f"mid · {venue}"]["y"]) == each
+        assert by[f"mid · {venue}"]["y"] == pytest.approx([mid] * each)  # no zig-zag survives
+
+
+def test_a_source_param_reads_that_source_alone():
+    gw = TableGateway({"market_data": two_venue_book(6).filter(pl.col("source") == "okx")})
+    body = (
+        client(gw).post("/charts/mid_spread_fills", json={"sym": "BTCUSDT", "source": "okx"}).json()
+    )
+    assert {t["name"] for t in body["figure"]["data"]} == {"mid · okx", "spread · okx"}
+    reads = [a[:4] for p, a, _ in gw.routed if p == queries.BROWSE]
+    assert reads[0] == ("market_data", ["sym", "source"], ["eq", "eq"], ["BTCUSDT", "okx"])
 
 
 # ----------------------------------------------------------------- ops latency
@@ -432,6 +498,54 @@ def test_latency_says_when_a_process_log_was_cut():
     body = client(fleet=fleet).post("/charts/ops_latency", json={"limit": 3}).json()
     assert body["truncated"] is True
     assert "newest 3 queries read from rdb1" in body["notes"][-1]
+
+
+def _thinned_latency(n: int, slowest_us: int) -> dict:
+    """rdb1 with n completed queries of 1..n ms, the last replaced by a slow
+    one, beside a one-query rdb2 - so rdb1's share of the 5000-point cap is
+    2500 and it is thinned (#2076)."""
+    t = dt.datetime(2026, 11, 3, 10)
+    rows = [(t, 1_000 * i, "c") for i in range(1, n + 1)]
+    rows[-1] = (t, slowest_us, "c")
+    fleet = FakeFleet({"rdb1": usage(rows), "rdb2": usage([(t, 1_000, "c")])})
+    return client(fleet=fleet).post("/charts/ops_latency", json={"limit": 5000}).json()
+
+
+def test_latency_thinning_keeps_the_slowest_query():
+    # sorted(ms)[::2] dropped index 4999, so the box topped out at 4.999 ms.
+    body = _thinned_latency(5000, 10_000_000)  # a 10 s query, in microseconds
+    box = next(b for b in body["figure"]["data"] if b["name"] == "rdb1")
+    assert body["downsampled"] is True
+    assert max(box["y"]) == 10_000.0
+
+
+def test_latency_thinning_keeps_the_fastest_query_and_the_cap():
+    body = _thinned_latency(5000, 10_000_000)
+    box = next(b for b in body["figure"]["data"] if b["name"] == "rdb1")
+    assert min(box["y"]) == 1.0
+    assert len(box["y"]) <= 2500
+    assert body["points"] <= body["point_limit"]
+    # evenly spaced ranks: the median of the thinned sample stays the median
+    kept = sorted(box["y"])
+    assert kept[len(kept) // 2] == pytest.approx(2500.0, abs=2.0)
+
+
+@pytest.mark.parametrize("cap", [1, 2, 3, 10])
+def test_latency_thin_keeps_both_ends_under_any_share(cap):
+    ms = [float(i) for i in range(1, 101)]
+    kept = charts._latency_thin(ms, cap)
+    assert len(kept) <= cap
+    assert max(kept) == 100.0
+    if cap >= 2:
+        assert min(kept) == 1.0
+
+
+def test_latency_leaves_a_sample_within_its_share_alone():
+    assert charts._latency_thin([3.0, 1.0, 2.0], 3) == [3.0, 1.0, 2.0]
+    body = _thinned_latency(2500, 10_000_000)
+    box = next(b for b in body["figure"]["data"] if b["name"] == "rdb1")
+    assert body["downsampled"] is False
+    assert len(box["y"]) == 2500
 
 
 # ------------------------------------------------------------- downsampling

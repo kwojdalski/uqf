@@ -114,12 +114,32 @@ def parse_proxies(raw: Iterable[str]) -> tuple[ProxyNetwork, ...]:
         if not text:
             continue
         try:
-            networks.append(ipaddress.ip_network(text, strict=False))
+            networks.append(_unmapped(ipaddress.ip_network(text, strict=False)))
         except ValueError:
             raise ValueError(
                 f"UQF_FRONTEND_TRUSTED_PROXIES must list IP addresses or CIDR ranges, got {text!r}"
             ) from None
     return tuple(networks)
+
+
+#: Every IPv4-mapped IPv6 address (`::ffff:a.b.c.d`) - an IPv4 address,
+#: as a dual-stack `::` socket shows an IPv4 peer.
+_MAPPED = ipaddress.IPv6Network("::ffff:0:0/96")
+
+
+def _unmapped(network: ProxyNetwork) -> ProxyNetwork:
+    """*network*, as IPv4 when it lies wholly in the IPv4-mapped range (#2073).
+
+    `::ffff:10.0.0.5` and `::ffff:10.0.0.0/104` name the IPv4 proxies
+    `10.0.0.5` and `10.0.0.0/8`, and a peer is compared in its IPv4 form, so
+    a mapped entry stored as written would be accepted and never match. A
+    wider IPv6 range is kept as written: peer_is_trusted tests a mapped
+    peer as written too."""
+    if isinstance(network, ipaddress.IPv6Network) and network.subnet_of(_MAPPED):
+        mapped = network.network_address.ipv4_mapped
+        assert mapped is not None  # network_address is inside _MAPPED
+        return ipaddress.IPv4Network((mapped, network.prefixlen - 96))
+    return network
 
 
 def peer_is_trusted(peer: str | None, proxies: tuple[ProxyNetwork, ...]) -> bool:
@@ -131,9 +151,12 @@ def peer_is_trusted(peer: str | None, proxies: tuple[ProxyNetwork, ...]) -> bool
         address = ipaddress.ip_address(peer)
     except ValueError:
         return False
+    addresses: list[ipaddress.IPv4Address | ipaddress.IPv6Address] = [address]
     if isinstance(address, ipaddress.IPv6Address) and address.ipv4_mapped is not None:
-        address = address.ipv4_mapped
-    return any(address in network for network in proxies)
+        # A mapped peer is its IPv4 address (#2073); tested as written too, so
+        # an IPv6 range wider than the mapped one still holds it.
+        addresses.append(address.ipv4_mapped)
+    return any(a in network for a in addresses for network in proxies)
 
 
 class Headers(Protocol):

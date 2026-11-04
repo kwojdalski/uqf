@@ -19,8 +19,30 @@ the same key, so its API refuses the same target's writes (uqf_frontend's
 inspection.py).
 
 The refusal matches a server by its declared name AND by its (ssh, dest):
-naming the server by --ssh/--dest, or by the history entry `uqs --target`
-falls back to, reaches the same release, so it is refused the same way.
+naming the server by --ssh/--dest, by the history entry `uqs --target` falls
+back to, or by a second declared target pointing at the same place (an old
+alias, a "-rw" twin) reaches the same release, so it is refused the same way
+(#2068). A name is matched through its declared (ssh, dest) as well as by
+itself, so a caller that knows only the name is covered too.
+
+THE SAME SERVER, SPELLED ANOTHER WAY (#2074). Both sides are compared by
+`same_server`, not as strings:
+
+- the login is dropped: `deploy@prod`, `root@prod` and `prod` are one server.
+  Which account ssh logs in as when none is given (ssh_config's User, else
+  the local user) is not resolved here; ignoring the login entirely is the
+  fail-closed reading, since any account on the server reaches the release.
+- the host is lower-cased, with any `ssh://` scheme, `:port`, `[...]` around
+  an IPv6 literal and trailing `.` removed.
+- a bare name and a qualified one match on the first label: `prod` is
+  `prod.example.com`. Two qualified names must be equal, and an IP literal
+  matches only itself.
+- the dest is compared after posixpath.normpath, with `//`, `/./` and a
+  trailing `/` gone: `/srv//uqf`, `/srv/uqf/` and `/srv/uqf/.` are `/srv/uqf`.
+
+What this does not resolve: a Host alias in ~/.ssh/config whose HostName is
+another name, or a DNS alias - those are the same server under a name these
+rules cannot see.
 
 WHAT IT IS NOT. A policy of the tools - uqs and the frontend - on a
 workstation. It does not make ssh, a tunnel, or the q processes on the server
@@ -31,6 +53,8 @@ accident through these tools, not one made on purpose round them.
 
 from __future__ import annotations
 
+import ipaddress
+import posixpath
 from collections.abc import Callable
 from pathlib import Path
 
@@ -77,8 +101,58 @@ def is_on(settings: dict) -> bool:
     return settings.get(KEY) is True
 
 
-def _same_dest(a: object, b: object) -> bool:
-    return isinstance(a, str) and isinstance(b, str) and a.rstrip("/") == b.rstrip("/")
+def _host_of(ssh: object) -> str | None:
+    """The machine an ssh destination names, lower-cased, without the login,
+    scheme, port or brackets - None when there is none to compare."""
+    if not isinstance(ssh, str):
+        return None
+    host = ssh.strip().lower().removeprefix("ssh://").rsplit("@", 1)[-1]
+    if host.startswith("["):  # [v6]:port
+        host = host[1:].partition("]")[0]
+    elif host.count(":") == 1:  # host:port; more colons is a bare IPv6 literal
+        host = host.partition(":")[0]
+    host = host.rstrip(".")
+    return host or None
+
+
+def _is_ip(host: str) -> bool:
+    try:
+        ipaddress.ip_address(host)
+    except ValueError:
+        return False
+    return True
+
+
+def _same_host(a: str, b: str) -> bool:
+    if a == b:
+        return True
+    if _is_ip(a) or _is_ip(b):
+        return False
+    # a bare name is the first label of a qualified one: prod ~ prod.example.com
+    if "." in a and "." in b:
+        return False
+    return a.split(".", 1)[0] == b.split(".", 1)[0]
+
+
+def _dest_of(dest: object) -> str | None:
+    """`dest` as one path: `//`, `.` and trailing `/` gone - None when none."""
+    if not isinstance(dest, str) or not dest.strip():
+        return None
+    path = posixpath.normpath(dest.strip())
+    # normpath keeps a leading `//` (POSIX leaves it implementation-defined)
+    return "/" + path.lstrip("/") if path.startswith("/") else path
+
+
+def same_server(host_a: object, dest_a: object, host_b: object, dest_b: object) -> bool:
+    """Whether two (ssh, dest) pairs name one release, under the rules in
+    this module's docstring. A missing host on either side is no match - a
+    target with no ssh reaches no server; a missing dest beside a matching
+    host is a match, since which release is meant is then unknown."""
+    a, b = _host_of(host_a), _host_of(host_b)
+    if a is None or b is None or not _same_host(a, b):
+        return False
+    da, db = _dest_of(dest_a), _dest_of(dest_b)
+    return da is None or db is None or da == db
 
 
 def matching(
@@ -89,17 +163,21 @@ def matching(
     dest: str | None = None,
 ) -> str | None:
     """The inspection-only target among `declared` (targets.read's answer)
-    that `name`, or the server at (`host`, `dest`), is - or None."""
+    that `name`, or the server at (`host`, `dest`), is - or None. `name` is
+    matched by itself and by the server it is declared at, so another target
+    at an inspection target's (ssh, dest) is that target (#2068)."""
+    servers: list[tuple[object, object]] = []
+    if host is not None:
+        servers.append((host, dest))
+    if name is not None and name in declared:
+        servers.append((declared[name].get("host"), declared[name].get("dest")))
+    if name is not None and is_on(declared.get(name, {})):
+        return name
     for label, settings in sorted(declared.items()):
         if not is_on(settings):
             continue
-        if name is not None and label == name:
-            return label
-        if (
-            host is not None
-            and settings.get("host") == host
-            and _same_dest(settings.get("dest"), dest)
-        ):
+        at = (settings.get("host"), settings.get("dest"))
+        if any(same_server(*at, *server) for server in servers):
             return label
     return None
 
@@ -128,7 +206,12 @@ def refuse(
     found = matching(declared_targets(root), name=name, host=host, dest=dest)
     if found is None:
         return
-    via = "" if name == found else f" (the server at {host}:{dest} is target {found})"
+    if name == found:
+        via = ""
+    elif host is not None:
+        via = f" (the server at {host}:{dest} is target {found})"
+    else:
+        via = f" (target {name} is the same server as target {found})"
     raise InspectionRefused(
         f"target {found} is in inspection mode{via}: {what} is refused - {_NOTE}"
     )
