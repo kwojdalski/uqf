@@ -398,6 +398,54 @@ def test_latency_says_when_a_process_log_was_cut():
     assert "newest 3 queries read from rdb1" in body["notes"][-1]
 
 
+def _thinned_latency(n: int, slowest_us: int) -> dict:
+    """rdb1 with n completed queries of 1..n ms, the last replaced by a slow
+    one, beside a one-query rdb2 - so rdb1's share of the 5000-point cap is
+    2500 and it is thinned (#2076)."""
+    t = dt.datetime(2026, 11, 3, 10)
+    rows = [(t, 1_000 * i, "c") for i in range(1, n + 1)]
+    rows[-1] = (t, slowest_us, "c")
+    fleet = FakeFleet({"rdb1": usage(rows), "rdb2": usage([(t, 1_000, "c")])})
+    return client(fleet=fleet).post("/charts/ops_latency", json={"limit": 5000}).json()
+
+
+def test_latency_thinning_keeps_the_slowest_query():
+    # sorted(ms)[::2] dropped index 4999, so the box topped out at 4.999 ms.
+    body = _thinned_latency(5000, 10_000_000)  # a 10 s query, in microseconds
+    box = next(b for b in body["figure"]["data"] if b["name"] == "rdb1")
+    assert body["downsampled"] is True
+    assert max(box["y"]) == 10_000.0
+
+
+def test_latency_thinning_keeps_the_fastest_query_and_the_cap():
+    body = _thinned_latency(5000, 10_000_000)
+    box = next(b for b in body["figure"]["data"] if b["name"] == "rdb1")
+    assert min(box["y"]) == 1.0
+    assert len(box["y"]) <= 2500
+    assert body["points"] <= body["point_limit"]
+    # evenly spaced ranks: the median of the thinned sample stays the median
+    kept = sorted(box["y"])
+    assert kept[len(kept) // 2] == pytest.approx(2500.0, abs=2.0)
+
+
+@pytest.mark.parametrize("cap", [1, 2, 3, 10])
+def test_latency_thin_keeps_both_ends_under_any_share(cap):
+    ms = [float(i) for i in range(1, 101)]
+    kept = charts._latency_thin(ms, cap)
+    assert len(kept) <= cap
+    assert max(kept) == 100.0
+    if cap >= 2:
+        assert min(kept) == 1.0
+
+
+def test_latency_leaves_a_sample_within_its_share_alone():
+    assert charts._latency_thin([3.0, 1.0, 2.0], 3) == [3.0, 1.0, 2.0]
+    body = _thinned_latency(2500, 10_000_000)
+    box = next(b for b in body["figure"]["data"] if b["name"] == "rdb1")
+    assert body["downsampled"] is False
+    assert len(box["y"]) == 2500
+
+
 # ------------------------------------------------------------- downsampling
 
 

@@ -649,6 +649,26 @@ def _text(value: Any) -> str:
     return "" if value is None else str(value)
 
 
+def _latency_thin(ms: list[float], share: int) -> list[float]:
+    """At most `share` of the durations `ms`, at evenly spaced ranks that
+    include both ends.
+
+    A box is drawn from its quantiles and its extremes, and on a latency box
+    the slowest query is the one the operator is looking for. A stride over
+    the sorted sample (`sorted(ms)[::step]`) kept the fastest and usually
+    dropped the slowest (#2076); ranks spread from 0 to len-1 keep both, and
+    each kept rank is within half a step of every quantile's. A share of one
+    keeps the slowest alone. A sample within its share is returned as is.
+    """
+    if len(ms) <= share:
+        return ms
+    s = sorted(ms)
+    if share < 2:
+        return s[-1:] if share == 1 else []
+    last = len(s) - 1
+    return [s[round(k * last / (share - 1))] for k in range(share)]
+
+
 def _latency_build(read: Read, p: LatencyParams, cap: int) -> Built:
     # Only a completed query has a duration: TorQ logs `b`efore and `e`rror
     # rows too, whose timer is not one (lib/torq/code/handlers/logusage.q).
@@ -673,9 +693,7 @@ def _latency_build(read: Read, p: LatencyParams, cap: int) -> Built:
     for process in processes:
         ms = done.filter(pl.col("process") == process)["ms"].to_list()
         if len(ms) > share:
-            # A box is drawn from its quantiles; an even stride keeps them.
-            step = -(-len(ms) // share)
-            ms = sorted(ms)[::step]
+            ms = _latency_thin(ms, share)
             downsampled = True
         points += len(ms)
         fig.add_trace(go.Box(y=ms, name=process, boxpoints="outliers"))
