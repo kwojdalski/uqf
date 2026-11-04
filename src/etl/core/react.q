@@ -144,7 +144,7 @@
 / @param outputs the dataset(s) this handler writes, as a symbol or vector
 / @throws error when outputs is not a symbol or symbol vector, or when no
 /   bounded worker fills `dataset`
-/ @eg .qetl.reaction.on_writing[`demo_deals;`rebuild_positions;`positions;{[ds;f;t] count select from demo_deals where deal_time within (f;t-1)}]
+/ @eg .qetl.reaction.on_writing[`demo_deals;`rebuild_positions;`positions;{[ds;f;t] count select from demo_deals where deal_time>=f, deal_time<t}]
 .qetl.reaction.on_writing:{[dataset;nm;outputs;handler]
     .qetl.reaction.require_handler[dataset;nm;handler];
     if[not 11h=abs type outputs;
@@ -717,7 +717,9 @@
     if[not `time in cols rows;
         '"write: ",string[target],"'s rows need a time column - the window is cleared by it"];
     w:.qetl.reaction.window_now;
-    if[count outside:select from rows where not time within (w 0;w[1]-1);
+    / the window is [w 0; w 1): a row AT w 1 belongs to the next window, and
+    / "w 1 minus one tick" would make the bound depend on the column's precision
+    if[count outside:select from rows where not (time>=w 0) and time<w 1;
         '"write: ",string[count outside]," row(s) of ",string[target],
          " lie outside the window being reacted to, ",string[w 0]," to ",string w 1];
     mgr:$[99h=type .qetl.reaction.io_now; .qetl.reaction.io_now; .qetl.io.default];
