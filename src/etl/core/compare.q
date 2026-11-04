@@ -148,13 +148,19 @@
 / @param req a dict from, to, filters (parsed), limit, source_version (` for
 /   none: coverage not checked), partition (` for none)
 / @return a dict available, reason, exists, schema (c, t), rows, truncated,
-/   coverage ((::) when not checked, else a dict covered, gaps)
+/   coverage ((::) when not checked, else a dict covered, gaps), filter_absent
+/   (the filter columns the table lacks on this side; when any, the side is
+/   returned with its schema and no rows, since the filter cannot apply -
+/   `verdict` reports that as a schema difference, or refuses it when both
+/   sides lack the column)
 .qetl.compare.snapshot:{[h;tbl;req]
-    none:`available`reason`exists`schema`rows`truncated`coverage!(1b;"";0b;([] c:`symbol$(); t:`char$());();0b;(::));
+    none:`available`reason`exists`schema`rows`truncated`coverage`filter_absent!(1b;"";0b;([] c:`symbol$(); t:`char$());();0b;(::);`symbol$());
     m:@[h;(`.gw.syncexec;(.qetl.compare.meta_program;tbl);`rdb);{[e] (`failed;e)}];
     if[(0h=type m) and `failed~first m; :none,`available`reason!(0b;"reading ",string[tbl],"'s schema failed: ",last m)];
     if[0=count m; :none];
     m:select c, t from 0!m;
+    lack:distinct (`symbol$({x`column} each req`filters)) except m`c;
+    if[count lack; :none,`exists`schema`filter_absent!(1b;m;lack)];
     fl:.qetl.compare.browse_filters[m;req`filters];
     lim:req`limit;
     got:@[h;(`.uqf.browse;tbl;`time`time,fl 0;`ge`lt,fl 1;(req`from;req`to),fl 2;lim+1;.qetl.compare.tiers);{[e] (`failed;e)}];
@@ -292,6 +298,26 @@
             $[v`unpaired; " (",.qetl.compare.counted[v`unpaired;"key"]," in one sample only, not judged)"; ""];
         "equal in the sample - every row in the window was read on both sides and compared (",string[first v`read]," rows)"]}
 
+/ Private: the filter columns each snapshot lacks, as (left;right); a column
+/ both lack is the filter's mistake, not a difference, and is refused.
+/ @private
+.qetl.compare.absent_filters:{[l;r]
+    absent:{[s] $[`filter_absent in key s; s`filter_absent; `symbol$()]} each (l;r);
+    both:(absent 0) inter absent 1;
+    if[count both; '"filter on ",string[first both],": no such column"];
+    absent}
+
+/ Private: the verdict of a table where a filter column is absent on one side:
+/ the filter cannot apply there, so the schema difference is the finding and no
+/ rows are compared.
+/ @private
+.qetl.compare.filter_absent:{[v;names;ls;rs;absent]
+    lacks:0<count each absent;
+    v[`schema]:.qetl.compare.schema_differences[ls;rs];
+    v[`reasons]:`left`right!{[a] $[count a; "lacks the filter column ",", " sv string a; ""]} each absent;
+    said:"; " sv {[n;a] n," lacks the filter column ",", " sv string a}'[names where lacks;absent where lacks];
+    v,`outcome`label!(`differs;.qetl.compare.differs_label[v;enlist `schema],"; rows not compared: ",said)}
+
 / Compare one table's two snapshots. Pure: reads nothing but its arguments
 / and the tree's declarations of the table's key and basis.
 / @param tbl the table
@@ -312,6 +338,8 @@
         :v,`outcome`label!(`endpoint_unavailable;"endpoint unavailable - ",", " sv {[n;s] n,": ",s`reason}'[names where down;(l;r) where down])];
     gone:not (l`exists;r`exists);
     if[any gone; :v,`outcome`label!(`missing_table;"missing table - ",string[tbl]," is not on ",(" or " sv names where gone))];
+    absent:.qetl.compare.absent_filters[l;r];
+    if[any 0<count each absent; :.qetl.compare.filter_absent[v;names;l`schema;r`schema;absent]];
     trunc:any (l`truncated;r`truncated);
     v,:`truncated`read`schema`coverage!(trunc;(count l`rows;count r`rows);.qetl.compare.schema_differences[l`schema;r`schema];
         `left`right!.qetl.compare.coverage_out each (l`coverage;r`coverage));
