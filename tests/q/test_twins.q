@@ -17,7 +17,7 @@
 
 / stream job -> (stream transform; twin transform; twin input name for each stream input)
 / Stream transform input -> twin transform input, where they differ.
-.qt.qpipe.twins.renames:(`exec_bars`crypto_book_1s`order_quality`book_liquidity_1m`fx_markout`fx_markout_wide`crypto_markout`demo_deals_feed)!(enlist[`tape]!enlist `executions;enlist[`book]!enlist `book;()!();enlist[`books]!enlist `books;()!();()!();()!();()!())
+.qt.qpipe.twins.renames:(`exec_bars`crypto_book_1s`order_quality`book_liquidity_1m`fx_markout`fx_markout_wide`crypto_markout`eq_markout`demo_deals_feed)!(enlist[`tape]!enlist `executions;enlist[`book]!enlist `book;()!();enlist[`books]!enlist `books;()!();()!();()!();()!();()!())
 
 / A bundle's twin pair lists its own renaming, as .qt.qpipe.job.<job>.twin_renames in its test file
 / (the databento bundle's eq_orderbook is one): a name the job's suite owns has no load order, and the

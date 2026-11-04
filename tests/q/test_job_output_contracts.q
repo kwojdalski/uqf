@@ -65,6 +65,7 @@
     .qt.support.reset_snapshots[];
     .qpipe.transform.fx_markout_outputs.pin[];
     .qpipe.transform.crypto_markout_outputs.pin[];
+    .qpipe.transform.eq_markout_outputs.pin[];
     }
 
 / The plant's columns and type characters for `tbl`, without `time`.

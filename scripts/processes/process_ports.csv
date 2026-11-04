@@ -55,3 +55,5 @@ crypto_book_decoder1,69
 demo_deals_feed1,70
 hdb_crypto_markout_backfill1,71
 eq_fills_backfill1,72
+eq_markout1,73
+hdb_eq_markout_backfill1,74
