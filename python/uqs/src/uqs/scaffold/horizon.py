@@ -85,6 +85,8 @@ def horizon_job(
             "--kind horizon needs --subscribe-to EVENTS,REFERENCE: the table whose rows "
             "are evaluated, then the table they are evaluated against"
         )
+    if subscribe_to[0] == subscribe_to[1]:
+        raise UqsError("a horizon job needs distinct events and reference tables")
     if publishes:
         raise UqsError("a horizon job publishes its own NAME - drop --publishes")
     if not columns:

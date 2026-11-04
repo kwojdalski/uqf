@@ -9,7 +9,13 @@
 // True if actual and expected are within tol of each other. Reduced with
 // `all` so it also works when actual/expected are equal-length vectors
 // (assertThat needs a single boolean, not a vector of them).
-.qt.support.approx:{[tol;a;b] all tol>=abs a-b};
+// Null positions must match: q orders a null difference below any tolerance.
+.qt.support.approx:{[tol;a;b]
+    missing_a:null a;
+    missing_b:null b;
+    matched_nulls:missing_a & missing_b;
+    numeric:(not missing_a) & not missing_b;
+    all matched_nulls | numeric & (tol>=abs a-b)};
 
 // assertThat wrapper for approximate numeric equality.
 .qt.support.assertApprox:{[actual;expected;tol;msg] .qunit.assertThat[actual;.qt.support.approx[tol];expected;msg]};
