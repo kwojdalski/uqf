@@ -29,6 +29,7 @@ from loguru import logger
 # tell the logger's module of the same name from it.
 from uqs.logger import core as logcore
 from uqs.logger import floats
+from uqs.logger.highlight import highlight
 from uqs.paths import UqsPaths
 from uqs.stack import logs
 
@@ -74,23 +75,23 @@ def _capture() -> list[str]:
 def test_a_value_is_coloured_by_what_it_is(message, expected):
     """The point of the colouring is reading a line at a glance - a negative
     number in red is how a loss stands out from a gain."""
-    assert logcore._highlight_kv(message) == expected
+    assert highlight(message) == expected
 
 
 @pytest.mark.parametrize(
     "path", ["/tmp/x.log", "./out", "../up", "config.yaml", "tests/run_tests.q"]
 )
 def test_a_path_is_bold_rather_than_read_as_a_number_or_word(path):
-    assert logcore._highlight_kv(f"file={path}") == f"file=<bold>{path}</bold>"
+    assert highlight(f"file={path}") == f"file=<bold>{path}</bold>"
 
 
 def test_a_dotted_word_that_is_not_a_known_extension_is_not_a_path():
     # `.qf.px` is a namespace, not a file; only the listed extensions count.
-    assert "<bold>" not in logcore._highlight_kv("ns=a.qf.px")
+    assert "<bold>" not in highlight("ns=a.qf.px")
 
 
 def test_text_without_key_value_pairs_is_untouched():
-    assert logcore._highlight_kv("plain message, no pairs") == "plain message, no pairs"
+    assert highlight("plain message, no pairs") == "plain message, no pairs"
 
 
 def test_the_format_callable_escapes_what_loguru_would_misread():
@@ -112,7 +113,7 @@ def test_an_angle_bracket_inside_a_value_stays_escaped():
     own and separated from its `<`. loguru then raised inside the handler and
     dropped the line - and the line was the one naming the credential to set.
     """
-    out = logcore._highlight_kv('example="DRIVER=x;SERVER=<host>;PORT=3306"')
+    out = highlight('example="DRIVER=x;SERVER=<host>;PORT=3306"')
     assert r"\<host>" in out
     # Every `<` that is not one of our own colour tags must carry its escape.
     ours = {"green", "red", "dim", "bold", "magenta", "light-cyan"}
@@ -122,7 +123,7 @@ def test_an_angle_bracket_inside_a_value_stays_escaped():
 
 
 def test_a_message_that_is_only_angle_brackets_still_round_trips():
-    assert logcore._highlight_kv("<a><b>") == r"\<a>\<b>"
+    assert highlight("<a><b>") == r"\<a>\<b>"
 
 
 # ------------------------------------------------------------ setup_logging

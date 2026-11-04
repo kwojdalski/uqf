@@ -1,6 +1,6 @@
 """The shared console highlighter: vectors, symbols, ids and timestamps (#2048).
 
-`_highlight_kv` is what colours every console log line - `uqs logs`, `start -f`,
+`uqs.logger.highlight` is what colours every console log line - `uqs logs`, `start -f`,
 and through them a `job backfill --trace` run's query lines. It used to colour
 only the first word after `=`, so the rest of a vector took the level's colour.
 
@@ -25,8 +25,9 @@ from rich.text import Text
 # Aliased `logcore`, as in test_logger.py: test_module_split.py reads `core.<name>`
 # in a test file as a use of the orchestrator's `core` facade.
 from uqs.logger import core as logcore
+from uqs.logger.highlight import highlight
 
-hl = logcore._highlight_kv
+hl = highlight
 
 
 @pytest.fixture(autouse=True)
