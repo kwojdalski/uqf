@@ -337,8 +337,8 @@
 / many small misses, and one huge miss can swamp the ratio the way it
 / wouldn't in `count mode).
 / @param requests table with at least `time`hit`size, plus whatever columns group_cols names
-/ @param range_from only consider requests at or after this time
-/ @param range_to only consider requests at or before this time
+/ @param range_from inclusive start: requests at or after this time are considered
+/ @param range_to exclusive end: a request AT this time belongs to the next window, so adjacent windows [a;b) and [b;c) count it once
 / @param bucket_size a timespan to floor time into buckets by (xbar) and
 /   group by alongside group_cols, e.g. 0D01:00:00 for hourly, 1D for
 /   daily - a null timespan (0Nn) disables time-bucketing entirely (no
@@ -357,7 +357,7 @@
     group_cols:group_cols,();
     .qf.util.require_cols[`hit_ratio_by;`requests;requests;distinct `time`hit`size,group_cols];
     if[not mode in `count`amount; '"hit_ratio_by: mode must be `count or `amount, got ",string mode];
-    windowed:select from requests where time within (range_from;range_to);
+    windowed:select from requests where time>=range_from, time<range_to;
     windowed:$[null bucket_size; windowed; update time:bucket_size xbar time from windowed];
     time_group:$[null bucket_size; `symbol$(); enlist `time];
     effective_group_cols:time_group,group_cols;
@@ -381,8 +381,8 @@
 / (number rejected / number of requests) and `amount (size-weighted, so one
 / large reject counts for more than several small ones).
 / @param requests table with at least `time`reject`size, plus whatever columns group_cols names
-/ @param range_from only consider requests at or after this time
-/ @param range_to only consider requests at or before this time
+/ @param range_from inclusive start: requests at or after this time are considered
+/ @param range_to exclusive end: a request AT this time belongs to the next window, so adjacent windows [a;b) and [b;c) count it once
 / @param bucket_size a timespan to floor time into buckets by (xbar) and group
 /   by alongside group_cols, e.g. 0D01:00:00 for hourly - a null timespan
 /   (0Nn) disables time-bucketing entirely
@@ -400,7 +400,7 @@
     group_cols:group_cols,();
     .qf.util.require_cols[`reject_ratio_by;`requests;requests;distinct `time`reject`size,group_cols];
     if[not mode in `count`amount; '"reject_ratio_by: mode must be `count or `amount, got ",string mode];
-    windowed:select from requests where time within (range_from;range_to);
+    windowed:select from requests where time>=range_from, time<range_to;
     windowed:$[null bucket_size; windowed; update time:bucket_size xbar time from windowed];
     time_group:$[null bucket_size; `symbol$(); enlist `time];
     effective_group_cols:time_group,group_cols;

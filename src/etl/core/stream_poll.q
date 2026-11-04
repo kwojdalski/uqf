@@ -41,7 +41,13 @@
 /     start_cursor optional [instant] -> the cursor positioned just before
 /                  `instant`: fetching after it returns the rows at or after
 /                  it. What `uqs job preview --last` starts from (#681).
-/                  A timestamp cursor needs none - it is instant minus 1ns -
+/                  A timestamp cursor needs none - it is the LAST EVENT
+/                  OBSERVED, so the cursor just before an instant is the
+/                  largest timestamp below it, instant minus 1ns (q's
+/                  timestamps are nanoseconds, so there is nothing between
+/                  the two; a fetch after it returns the rows AT or after
+/                  the instant). A recent-data window is therefore [from;to):
+/                  a row at `to` is out, a row at `from` is in (#2055) -
 /                  but a feed with its own load/save/advances must declare
 /                  one, because only the feed knows its tie-breakers
 /     page_limit   optional positive long, the most rows fetch returns in one

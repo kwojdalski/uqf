@@ -213,6 +213,22 @@
     r:.qf.exec.hit_ratio_by[requests;t0;t0+0D00:30:00;0Nn;`symbol$();`count];
     .qt.support.assertApprox[first r`hit_ratio;1f;1e-9;"only the first two (both-hit) EURUSD rows fall inside the window"]};
 
+/ #2055: [from;to) - a request AT range_to belongs to the next window. Adjacent
+/ windows partition the requests: each is counted in exactly one, so their counts
+/ add up to the combined window's, at ms, us and ns alignment of the boundary.
+.qt.qf.exec.execution.test_hit_ratio_by_adjacent_windows_count_the_boundary_request_once:{[t]
+    b:2026.01.02D00:00:00.000000000;
+    {[b;u]
+        / a hit a tick before b, a miss AT b, a hit AT b, a miss at b+tick
+        reqs:([] time:(b-u),b,b,b+u; sym:4#`EURUSD; size:4#100; hit:1010b);
+        n:{[reqs;lo;hi] first exec hit_ratio from .qf.exec.hit_ratio_by[reqs;lo;hi;0Nn;`symbol$();`count]}[reqs;;];
+        left:n[b-u;b]; right:n[b;b+u]; whole:n[b-u;b+u];
+        .qt.support.assertApprox[left;1f;1e-9;"[a;b) holds only the request before b: ",string u];
+        .qt.support.assertApprox[right;0.5;1e-9;"[b;c) holds both requests at b (one hit) and not the one at c: ",string u];
+        .qt.support.assertApprox[whole*3;(left*1)+right*2;1e-9;"the windows' counts add to the combined window's: ",string u]
+        }[b;] each 0D00:00:00.001000000 0D00:00:00.000001000 0D00:00:00.000000001;
+    }
+
 .qt.qf.exec.execution.test_hit_ratio_by_hourly_bucket_grouped_by_sym:{[t]
     requests:.qt.qf.exec.execution.mk_hit_ratio_requests[::];
     t0:2026.01.01D08:00:00.000000000;

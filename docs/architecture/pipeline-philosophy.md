@@ -147,6 +147,31 @@ the first read that would depend on it:
 Each refusal names a specific failure it prevents. A guard whose comment cannot
 name one is usually guarding nothing.
 
+### Bounded windows are `[start, end)`, everywhere (#2055)
+
+One contract for every bounded request: `ts >= start` and `ts < end`. Adjacent
+requests `[a, b)` and `[b, c)` then compose without a gap and without the row at
+`b` twice, and `tests/q/test_half_open_windows.q` holds that for every shipped
+HDB source, the local reader, the bounded worker and the preview window, at
+millisecond, microsecond and nanosecond alignment with several events sharing
+the boundary instant.
+
+- An exclusive end is never written as "end minus one tick". That spelling is
+  right at one timestamp precision and wrong at the others, and leaves every
+  caller to repeat it. Where a *date* is wanted from an exclusive end (partition
+  pruning, which is inclusive on dates and followed by a timestamp filter), the
+  comparison is with midnight, not with the previous microsecond.
+- A provider's own semantics stay inside its adapter. TorQ's `getdata` reads
+  `time within (starttime; endtime)`, closed at both ends, so the browser's
+  `.uqf.browse` sends every `time` condition as a column filter too: the window
+  only narrows what is read, and the operators decide the boundary.
+- A cursor is one of two things, and says which. A *continuous* cursor is the
+  last event observed (a fetch takes rows strictly after it). A *bounded*
+  checkpoint is the exclusive end of the last completed window (a resume starts
+  at it).
+- What is deliberately not half-open: rolling analytics that are right-closed
+  (`(as_of - reach, as_of]`), as-of lookups, and containment tests on claims.
+
 The inverse --- silent healing --- is treated as a bug even in test scaffolding.
 `.qt.support.reset_coverage_ledger` carries a comment about a version that
 returned an empty *symbol vector* instead of an empty table, which every suite
