@@ -469,7 +469,10 @@ OPTIONS = {
     "--command-timeout": Meaning("seconds per remote step", r"remote step"),
     "--connect-timeout": Meaning("ssh/scp seconds", r"ssh/scp"),
     "--date": Meaning("one day of a time range: --from D --to D+1", r"--from D --to D\+1"),
-    "--dataset": Meaning("the dataset a bounded worker fills", r"table it fills"),
+    "--dataset": Meaning(
+        "a dataset by name: the one a worker fills, or the markout dataset a snapshot configures",
+        r"table it fills|snapshots that configure this markout dataset",
+    ),
     "--debug": Meaning("log at DEBUG", r"^Log at DEBUG\. Same as LOG_LEVEL"),
     "--dest": Meaning(
         "the absolute directory on the server", r"(directory|root) on the server|installs, absolute"
@@ -1708,7 +1711,7 @@ def test_every_exception_names_the_issue_that_removes_it(allowlist):
 VOCABULARY = {
     "PROC", "JOB", "TARGET", "TABLE", "DATASET", "SOURCE", "KIND", "EXPR", "FIELD",
     "VALUE", "PARTITION", "RUNTIME", "RUN", "ATTACHMENT", "FILE", "CONNECTOR",
-    "PACKAGE", "ARTIFACT", "COMPONENT", "BUNDLE", "KEY", "CHANGE", "NEW",
+    "PACKAGE", "ARTIFACT", "COMPONENT", "BUNDLE", "KEY", "CHANGE", "NEW", "SNAPSHOT_ID",
 }  # fmt: skip
 #: Placeholders the vocabulary replaced: in help they may only name a command's
 #: own option (`--override NAME`), never stand for one of the things above.

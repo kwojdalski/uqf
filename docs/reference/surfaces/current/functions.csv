@@ -1907,6 +1907,8 @@ qpipe.transform.config_markout,default_revision,value,,
 qpipe.transform.config_markout,enrich,function,1,rows
 qpipe.transform.config_markout,id,function,2,domain spec
 qpipe.transform.config_markout,kind,value,,
+qpipe.transform.config_markout,legacy_content,function,4,dataset cv rt rc
+qpipe.transform.config_markout,legacy_pin,function,4,dataset cv rt rc
 qpipe.transform.config_markout,params,function,1,rows
 qpipe.transform.config_markout,pin,function,3,domain spec reason
 qpipe.transform.config_markout,require_version,function,2,rows version

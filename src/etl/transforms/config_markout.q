@@ -126,12 +126,40 @@
     r:@[{(1b;.qetl.snapshot.require_pinned x)};batch`config_id;{[e] (0b;e)}];
     $[first r; .qetl.job.bounded.no_failures[]; ([] check:enlist `config_unpinned; status:enlist `fail; detail:enlist last r)]}
 
+/ The snapshot for rows written before snapshots existed (#1999): all that was ever recorded
+/ about them is the three fields they repeated, so those are its parameters and everything
+/ else is null or empty, and `legacy` says so. scripts/gates/fill_hdb_partitions.q records one
+/ per distinct triple in an HDB partition when `uqs data check --apply` folds the old columns.
+/ @param dataset the dataset the rows are in, a symbol
+/ @param cv the contract version the rows carried
+/ @param rt the rate timing they carried
+/ @param rc the reporting currency they carried
+/ @return the snapshot content
+/ @eg (.qpipe.transform.config_markout.legacy_content[`fx_markout;1;`execution;`USD])`legacy  ->  1b
+.qpipe.transform.config_markout.legacy_content:{[dataset;cv;rt;rc]
+    `contract_version`code_revision`domain`domain_revision`datasets`horizons`max_age`report_ccy`rate_timing`rates`domain_spec`legacy!(
+        cv;0N;`legacy;`legacy;enlist dataset;`timespan$();0Nn;rc;rt;(`symbol$())!();(`symbol$())!();1b)}
+
+/ Record the legacy snapshot of a triple, or find it: the id is the content's digest, so the
+/ same triple is the same snapshot wherever and however often it is pinned.
+/ @param dataset the dataset the rows are in
+/ @param cv the contract version
+/ @param rt the rate timing
+/ @param rc the reporting currency
+/ @return the snapshot id
+/ @eg .qpipe.transform.config_markout.legacy_pin[`fx_markout;1;`execution;`USD] like "markout_legacy_*"  ->  1b
+.qpipe.transform.config_markout.legacy_pin:{[dataset;cv;rt;rc]
+    c:.qpipe.transform.config_markout.legacy_content[dataset;cv;rt;rc];
+    id:`$"markout_legacy_",12#string .qetl.snapshot.digest[.qpipe.transform.config_markout.kind;c];
+    .qetl.snapshot.record_as[id;.qpipe.transform.config_markout.kind;c;`fill_hdb_partitions;
+        "legacy: rows written before configuration snapshots (#1999); only contract_version, rate_timing and report_ccy were ever recorded for them"]}
+
 / What the snapshots the rows name say, one row per distinct config_id.
 / .
 / Resolves each id to the snapshot that PRODUCED it, from the file, digest checked.
 / An id nobody recorded is an error - there is no latest-configuration fallback.
 / @param rows a markout dataset's rows, with config_id
-/ @return config_id, contract_version, code_revision, domain, domain_revision, report_ccy, rate_timing, max_age, digest
+/ @return config_id, contract_version, code_revision, domain, domain_revision, report_ccy, rate_timing, max_age, legacy, digest
 / @throws error when a row names no snapshot, an unrecorded one, or one whose digest fails
 / @eg count .qpipe.transform.config_markout.params[0#.qpipe.transform.markout_core.result]  ->  0
 .qpipe.transform.config_markout.params:{[rows]
@@ -139,7 +167,7 @@
     c:s`content;
     ([] config_id:s`snapshot_id; contract_version:`long$c@\:`contract_version; code_revision:`long$c@\:`code_revision;
         domain:`symbol$c@\:`domain; domain_revision:`symbol$c@\:`domain_revision; report_ccy:`symbol$c@\:`report_ccy;
-        rate_timing:`symbol$c@\:`rate_timing; max_age:`timespan$c@\:`max_age; digest:s`digest)}
+        rate_timing:`symbol$c@\:`rate_timing; max_age:`timespan$c@\:`max_age; legacy:{$[`legacy in key x; x`legacy; 0b]} each c; digest:s`digest)}
 
 / The enriched read projection: the rows with the configuration that produced each
 / one beside them, the fields a row used to repeat.
@@ -148,7 +176,7 @@
 / results reads them here, from the producing snapshot - never from whatever is
 / current.
 / @param rows a markout dataset's rows, with config_id
-/ @return the rows, then contract_version, code_revision, domain, domain_revision, report_ccy, rate_timing, max_age, digest
+/ @return the rows, then contract_version, code_revision, domain, domain_revision, report_ccy, rate_timing, max_age, legacy, digest
 / @throws error as params does
 / @eg count .qpipe.transform.config_markout.enrich[0#.qpipe.transform.markout_core.result]  ->  0
 .qpipe.transform.config_markout.enrich:{[rows]

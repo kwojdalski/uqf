@@ -130,7 +130,7 @@
     .qpipe.transform.fx_markout_outputs.pin[];
     e:.qpipe.transform.config_markout.enrich rows;
     .qunit.assertEquals[count e;count rows;"one row in, one row out"];
-    .qunit.assertEquals[(cols e) except cols rows;`contract_version`code_revision`domain`domain_revision`report_ccy`rate_timing`max_age`digest;"the configuration's fields are added"];
+    .qunit.assertEquals[(cols e) except cols rows;`contract_version`code_revision`domain`domain_revision`report_ccy`rate_timing`max_age`legacy`digest;"the configuration's fields are added"];
     .qunit.assertEquals[distinct select contract_version, report_ccy, rate_timing from e;([] contract_version:enlist 1; report_ccy:enlist `USD; rate_timing:enlist `execution);"read from the producing snapshot"];
     .qunit.assertEquals[distinct e`domain_revision;enlist `fx_r1;"with the rules' revision"]};
 
