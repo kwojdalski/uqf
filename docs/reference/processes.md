@@ -9,7 +9,7 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 [docs/guides/uqs.md](../guides/uqs.md); for the topology diagrams see
 [architecture/stack.md](../architecture/stack.md).
 
-**23 vendored processes** plus **41 uqf processes** — 64 in total. Ports are shown at the default base port 6050; every one is `{KDBBASEPORT}+offset`, so a different base shifts them all together.
+**23 vendored processes** plus **42 uqf processes** — 65 in total. Ports are shown at the default base port 6050; every one is `{KDBBASEPORT}+offset`, so a different base shifts them all together.
 
 ## uqf's own processes
 
@@ -56,6 +56,7 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 | `kafka_feed1` | 6118 | feed | `processes/torq_stream.q` | `kafka_message` | — | `kafka_message` |
 | `demo_deals_feed1` | 6120 | feed | `processes/torq_stream.q` | `demo_deals` | — | `demo_deals` |
 | `hdb_crypto_markout_backfill1` | 6121 | backfill | `processes/torq_backfill.q` | — | — | — |
+| `eq_fills_backfill1` | 6122 | backfill | `processes/torq_backfill.q` | — | — | — |
 
 ### Why a row deviates from the defaults
 
@@ -98,6 +99,7 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 - **`kafka_feed1`** — the native q Kafka consumer (KX kfk, pinned v1.6.6): publishes every record undecoded onto kafka_message, committing offsets only after the publish returned. Needs UQF_KFK_HOME and UQF_KAFKA_BROKERS, so it is started on demand, never with the stack. The Python consumer (uqs connector start kafka) publishes the same table; run one per group
 - **`demo_deals_feed1`** — polling feed over the demo_deals source, the streaming twin of demo_deals_backfill - started on demand, as an example of the pair `uqs job check` checks
 - **`hdb_crypto_markout_backfill1`** — bounded: marks out the HDB's crypto executions against its market_data, into crypto_markout, with the calculation crypto_markout1 applies live
+- **`eq_fills_backfill1`** — bounded: reads an equity fills csv drop and writes canonical executions, on the declared clock
 
 ## Tables these processes publish
 

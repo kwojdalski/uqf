@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { ApiError, request } from "./api";
+import { noteResource } from "./activity";
 
 export function useResource<T>(
   path: string | null,
@@ -30,6 +31,7 @@ export function useResource<T>(
     if (lastCadence.current.key !== key)
       lastCadence.current = { key, seconds: 5 };
     let cadence = lastCadence.current.seconds;
+    let retries = 0;
     setState((previous) =>
       previous.key === key
         ? { ...previous, loading: true }
@@ -56,8 +58,12 @@ export function useResource<T>(
           updated: new Date(),
           cadence: canPoll ? cadence : undefined,
         });
+        retries = 0;
         if (poll && canPoll && !pausedRef.current)
-          timer.current = setTimeout(load, cadence * 1000);
+          timer.current = setTimeout(() => {
+            noteResource("poll", path!);
+            void load();
+          }, cadence * 1000);
       } catch (error) {
         if (!active) return;
         const failure =
@@ -68,7 +74,10 @@ export function useResource<T>(
           loading: false,
         }));
         if (poll && failure.transient && !pausedRef.current)
-          timer.current = setTimeout(load, cadence * 1000);
+          timer.current = setTimeout(() => {
+            noteResource("retry", path!, ++retries);
+            void load();
+          }, cadence * 1000);
       }
     }
     void load();

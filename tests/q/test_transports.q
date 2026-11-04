@@ -25,7 +25,7 @@
 / ------------------------------------------------------------ registration
 
 .qt.qetl.source.transport.test_the_built_in_transports_are_registered:{[t]
-    .qunit.assertEquals[.qetl.source.transports[];`ipc`odbc`local`mock;"ipc, odbc, local and mock"];
+    .qunit.assertEquals[.qetl.source.transports[];`ipc`odbc`local`mock`csv;"ipc, odbc, local, mock and csv"];
     .qunit.assertEquals[98h=type key .qetl.source.transport;1b;"in a declared keyed table (#512)"]};
 
 .qt.qetl.source.transport.test_a_mock_credential_is_its_seed:{[t]

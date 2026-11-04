@@ -26,6 +26,7 @@ def test_health_reports_up(client):
         "detail": None,
         "poll_seconds": 5,
         "request_timeout_seconds": Settings().request_timeout,
+        "activity_level": "actions",
     }
 
 
