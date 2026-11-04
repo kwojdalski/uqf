@@ -279,6 +279,8 @@ SAMPLES: dict[tuple[str, str], dict] = {
     ("GET", "/ops/processes"): {},
     ("GET", "/ops/backfill"): {},
     ("GET", "/services"): {},
+    ("GET", "/workspaces"): {},
+    ("GET", "/workspace"): {},
     ("GET", "/services/{target}/files"): {"params": {"path": "releases"}},
     ("GET", "/services/{target}/tunnel"): {"params": {"process": "rdb1"}},
     ("GET", "/services/{target}/tunnel/check"): {"params": {"process": "rdb1"}},

@@ -14,6 +14,12 @@ function me(granted: [string, "read" | "write"][]): Capabilities {
     groups: [],
     capabilities: granted.map(([feature, action]) => ({ feature, action })),
     features: {},
+    inspection: {
+      active: false,
+      targets: [],
+      q_login: "service",
+      registry_error: null,
+    },
     poll_seconds: 60,
   };
 }

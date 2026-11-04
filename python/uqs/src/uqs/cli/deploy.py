@@ -34,6 +34,7 @@ from uqs.deploy import (
     driver,
     frontend,
     history,
+    inspection,
     kafka,
     overrides,
     portable,
@@ -375,6 +376,7 @@ def push(
                     )
             # an option left unset (None) takes make_config's default
             cfgs = [config.make_config(**{k: v for k, v in options.items() if v is not None})]
+        inspection.refuse_push(repo_root(), cfgs, dry_run=dry_run)  # #2032
         for cfg in cfgs:
             if cfg.target:
                 log.info("target {}: {}:{}", cfg.target, cfg.host, cfg.dest)

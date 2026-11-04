@@ -14,6 +14,7 @@ const SERVICES: Services = {
       remote_user: null,
       environment: null,
       labels: {},
+      inspection: false,
       last_deployed: null,
     },
   ],

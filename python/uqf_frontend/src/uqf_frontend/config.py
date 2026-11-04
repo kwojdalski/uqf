@@ -11,6 +11,7 @@ import functools
 import os
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from uqf_frontend import identity, remote_helper, stack
 from uqf_frontend.stack import Process
@@ -180,6 +181,17 @@ class Settings:
     #: (settings_admin.RuntimeStore), JSON, applied over the environment at
     #: startup. None: those settings can be read there but not changed.
     settings_file: Path | None = None
+    #: Inspection mode for the whole frontend (inspection.py, #2032): every
+    #: write route refused, whoever asks. Off by default; a target is put in
+    #: inspection mode on its own in deploy_targets.toml.
+    inspection_mode: bool = False
+    #: The restricted q login the frontend's own gateway and fleet reads use
+    #: while inspection mode is on, in place of `user` - a role granted reads
+    #: only (README, "Inspection mode"). Empty keeps `user`, and
+    #: /me/capabilities says so. Set without inspection mode, it is refused:
+    #: it would be used by nothing, and its operator would think otherwise.
+    inspection_user: str = ""
+    inspection_passwd: str = ""
 
     def __post_init__(self) -> None:
         if self.activity_level not in LEVELS:
@@ -189,6 +201,21 @@ class Settings:
             )
         check_history_bound(self.config_history_keep, self.config_history_days)
         check_identity(self)
+        check_inspection(self)
+
+    @property
+    def uses_inspection_login(self) -> bool:
+        """Do the frontend's own q connections use the inspection login?"""
+        return self.inspection_mode and bool(self.inspection_user)
+
+    @property
+    def service_login(self) -> tuple[str, str]:
+        """(user, password) the gateway and fleet connections log in as: the
+        inspection login while inspection mode uses one, else the service
+        login. Never logged, never served."""
+        if self.uses_inspection_login:
+            return self.inspection_user, self.inspection_passwd
+        return self.user, self.passwd
 
     @functools.cached_property
     def proxy_networks(self) -> tuple[identity.ProxyNetwork, ...]:
@@ -292,13 +319,18 @@ class Settings:
                 os.environ.get("UQF_FRONTEND_ACTIVITY_LEVEL", "").strip().lower()
                 or cls.activity_level
             ),
-            config_history_keep=history_bound_from_env()[0],
-            config_history_days=history_bound_from_env()[1],
+            config_history_keep=_history_bound_env()[0],
+            config_history_days=_history_bound_env()[1],
             trusted_identity_header=_header_env("UQF_FRONTEND_TRUSTED_IDENTITY_HEADER"),
             trusted_groups_header=_header_env("UQF_FRONTEND_TRUSTED_GROUPS_HEADER"),
             trusted_proxies=_list_env("UQF_FRONTEND_TRUSTED_PROXIES"),
             policy_file=_path_env("UQF_FRONTEND_POLICY_FILE"),
             settings_file=_path_env("UQF_FRONTEND_SETTINGS_FILE"),
+            inspection_mode=_flag_env("UQF_FRONTEND_INSPECTION_MODE"),
+            inspection_user=os.environ.get("UQF_FRONTEND_INSPECTION_USER", cls.inspection_user),
+            inspection_passwd=os.environ.get(
+                "UQF_FRONTEND_INSPECTION_PASSWORD", cls.inspection_passwd
+            ),
         )
 
 
@@ -338,6 +370,20 @@ def check_identity(settings: Settings) -> None:
         )
 
 
+def check_inspection(settings: Settings) -> None:
+    """Refuse an inspection login that nothing would use, or a password with
+    no login - either says the operator believes something that is not so."""
+    if settings.inspection_passwd and not settings.inspection_user:
+        raise ValueError(
+            "UQF_FRONTEND_INSPECTION_PASSWORD is set but UQF_FRONTEND_INSPECTION_USER is not"
+        )
+    if settings.inspection_user and not settings.inspection_mode:
+        raise ValueError(
+            "UQF_FRONTEND_INSPECTION_USER is set but UQF_FRONTEND_INSPECTION_MODE is not - the "
+            "restricted login is used only in inspection mode, so it would be used by nothing"
+        )
+
+
 def check_history_bound(keep: int, days: int) -> None:
     """Refuse a push-history bound the helper would refuse."""
     if not 1 <= keep <= remote_helper.MAX_KEEP:
@@ -351,13 +397,48 @@ def check_history_bound(keep: int, days: int) -> None:
         )
 
 
-def history_bound_from_env() -> tuple[int, int]:
-    """(pushes kept, days kept): UQF_FRONTEND_CONFIG_HISTORY_KEEP and _DAYS,
-    read by the API and by `uqs target config restore` alike."""
+def _history_bound_env() -> tuple[int, int]:
+    """(pushes kept, days kept) from UQF_FRONTEND_CONFIG_HISTORY_KEEP and
+    _DAYS alone - the API's starting point, before the Settings view's file."""
     keep = _int_env("UQF_FRONTEND_CONFIG_HISTORY_KEEP", remote_helper.DEFAULT_KEEP)
     days = _int_env("UQF_FRONTEND_CONFIG_HISTORY_DAYS", remote_helper.DEFAULT_KEEP_DAYS)
     check_history_bound(keep, days)
     return keep, days
+
+
+def history_bound() -> tuple[int, int]:
+    """(pushes kept, days kept) as the frontend enforces them: the
+    environment, then what the Settings view kept in
+    UQF_FRONTEND_SETTINGS_FILE over it - the same order the API applies at
+    startup (settings_admin.RuntimeStore). `uqs target config restore` reads
+    this, so a restore prunes to the retention the Settings view shows, not
+    to the environment's defaults (#2072)."""
+    keep, days = _history_bound_env()
+    kept = runtime_file_values(_path_env("UQF_FRONTEND_SETTINGS_FILE"))
+    keep = kept.get("config_history_keep", keep)
+    days = kept.get("config_history_days", days)
+    check_history_bound(keep, days)
+    return keep, days
+
+
+def runtime_file_values(path: Path | None) -> dict[str, Any]:
+    """The runtime settings the Settings view kept in *path*
+    (UQF_FRONTEND_SETTINGS_FILE), checked by their model; empty when there
+    is no file. A file that does not parse is an error, never skipped."""
+    if path is None or not path.exists():
+        return {}
+    # Here, not at the top: models imports access, which imports casbin -
+    # more than a CLI reading two numbers should load before it needs to.
+    from uqf_frontend.models import RuntimeSettingsBody
+
+    try:
+        body = RuntimeSettingsBody.model_validate_json(path.read_text(encoding="utf-8"))
+    except ValueError as exc:
+        raise ValueError(
+            f"UQF_FRONTEND_SETTINGS_FILE {path} is not valid runtime settings: "
+            f"{type(exc).__name__} - fix or remove it"
+        ) from None
+    return body.model_dump()
 
 
 def _int_env(name: str, default: int) -> int:

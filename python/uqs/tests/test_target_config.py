@@ -16,6 +16,7 @@ import json
 import os
 import sys
 from pathlib import Path
+from typing import Any
 
 import pytest
 from typer.testing import CliRunner
@@ -184,3 +185,58 @@ def test_show_and_history_print_markup_in_server_held_text_literally(server):
     listed = _uqs("history", "box")
     assert listed.exit_code == 0, listed.output
     assert "k[/w]" in listed.stdout and "web[/v]" in " ".join(listed.stdout.split())
+
+
+def test_restore_prunes_to_the_retention_set_in_the_settings_view(server, monkeypatch, tmp_path):
+    """#2072: retention changed through PUT /settings/runtime is the bound a
+    CLI restore passes - not the environment's defaults, which would prune
+    away the pushes the Settings view promised to keep."""
+    from fastapi.testclient import TestClient
+
+    from uqf_frontend.app import create_app
+    from uqf_frontend.config import Settings
+    from uqf_frontend.fleet import FakeFleet
+    from uqf_frontend.gateway import FakeGateway
+
+    monkeypatch.delenv("UQF_FRONTEND_CONFIG_HISTORY_KEEP", raising=False)
+    monkeypatch.delenv("UQF_FRONTEND_CONFIG_HISTORY_DAYS", raising=False)
+    kept = tmp_path / "settings.json"
+    token = "k" * 64
+    api = TestClient(
+        create_app(
+            gateway=FakeGateway({}),
+            fleet=FakeFleet(),
+            settings=Settings(
+                enable_writes=True, write_token=token, allowed_hosts=("testserver",),
+                settings_file=kept, activity_db=tmp_path / "a.sqlite3",
+            ),
+        )
+    )  # fmt: skip
+    seen = api.get("/settings").json()
+    changed = api.put(
+        "/settings/runtime",
+        json={
+            "version": seen["runtime_version"],
+            "settings": {
+                **seen["runtime"],
+                "config_history_keep": 500,
+                "config_history_days": 3000,
+            },
+        },
+        headers={"authorization": f"Bearer {token}"},
+    )
+    assert changed.status_code == 200, changed.text
+
+    monkeypatch.setenv("UQF_FRONTEND_SETTINGS_FILE", str(kept))
+    bounds: list[tuple[Any, Any]] = []
+    real: Any = remote_files.restore
+
+    def spy(*args: Any, **kw: Any) -> Any:
+        bounds.append((kw["keep"], kw["keep_days"]))
+        return real(*args, **kw)
+
+    monkeypatch.setattr(remote_files, "restore", spy)
+    push = _push(server, {"shared/config/app.env": b"a=2\n"})
+    done = _uqs("restore", "box", push, "--dry-run")
+    assert done.exit_code == 0, done.output
+    assert bounds == [(500, 3000)]

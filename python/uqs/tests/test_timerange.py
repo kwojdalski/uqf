@@ -188,3 +188,44 @@ def test_anything_but_one_whole_day_is_refused_by_what_needs_one(lo, hi):
 )
 def test_the_partition_dates_are_those_whose_midnight_is_in_the_range(lo, hi, dates):
     assert timerange.resolve(lo, hi, open_ended=True).partition_dates() == dates
+
+
+# --- the half-open contract (#2055) ---------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("hi", "last"),
+    [
+        ("2026.09.15D00:00:00.000000", date(2026, 9, 14)),
+        ("2026.09.15D00:00:00.000001", date(2026, 9, 15)),
+        ("2026.09.15D00:00:00.001", date(2026, 9, 15)),
+        ("2026.09.14D23:59:59.999999", date(2026, 9, 14)),
+    ],
+)
+def test_the_last_partition_is_the_one_before_an_end_at_midnight_at_any_precision(hi, last):
+    """An end exactly at midnight owns none of that day; one tick after it owns the day."""
+    assert timerange.resolve("2026-09-13", hi).partition_dates()[1] == last
+
+
+def test_adjacent_ranges_share_their_boundary_exactly_once():
+    """[a, b) and [b, c) tile [a, c): no instant lies in both, none between."""
+    a, b, c = (
+        timerange.resolve(x, None, open_ended=True).start
+        for x in ("2026-09-13", "2026-09-14", "2026-09-15")
+    )
+    left, right, whole = (
+        timerange.resolve("2026-09-13", "2026-09-14"),
+        timerange.resolve("2026-09-14", "2026-09-15"),
+        timerange.resolve("2026-09-13", "2026-09-15"),
+    )
+    assert (left.start, left.end, right.start, right.end) == (a, b, b, c)
+    assert (whole.start, whole.end) == (a, c)
+    assert left.end == right.start
+    days = left.partition_dates() + right.partition_dates()
+    assert days == (date(2026, 9, 13), date(2026, 9, 13), date(2026, 9, 14), date(2026, 9, 14))
+    assert whole.partition_dates() == (date(2026, 9, 13), date(2026, 9, 14))
+
+
+def test_a_reversed_range_is_refused_like_an_empty_one():
+    with pytest.raises(UqsError, match="the range is empty"):
+        timerange.resolve("2026-09-14", "2026-09-13")

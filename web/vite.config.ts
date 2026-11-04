@@ -21,6 +21,8 @@ export const API_PATHS = [
   "me",
   "settings",
   "charts",
+  "workspaces",
+  "workspace",
 ];
 
 // The write token (#631), added here on the server side so a dev browser

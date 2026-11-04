@@ -145,6 +145,8 @@ POLL_SECONDS: dict[str, int] = {
     "capabilities": 60,
     # the admin Settings view (#2046): changed rarely, and by people
     "settings": 30,
+    # a selected target re-proves its connection this often (#2029)
+    "workspace": 30,
 }
 
 

@@ -51,7 +51,7 @@ from pathlib import Path
 import casbin
 from casbin.model import Model
 
-from uqf_frontend.identity import ANONYMOUS, EVERYONE, Identity, is_name
+from uqf_frontend.identity import ANONYMOUS, EVERYONE, Identity, is_name, is_user
 
 log = logging.getLogger(__name__)
 
@@ -113,6 +113,11 @@ ROUTE_PERMISSIONS: dict[tuple[str, str], tuple[str, str]] = {
     # services: reads list targets and their files and push history; writes
     # change files on a server
     ("GET", "/services"): ("services", "read"),
+    # workspaces (#2029): the same registry /services lists, and the probe of
+    # the one a request names - so a caller refused the registry there is
+    # refused it here too
+    ("GET", "/workspaces"): ("services", "read"),
+    ("GET", "/workspace"): ("services", "read"),
     ("GET", "/services/{target}/files"): ("services", "read"),
     # the ssh tunnel plan and its check (#2042): reads, like the file list
     ("GET", "/services/{target}/tunnel"): ("services", "read"),
@@ -317,8 +322,17 @@ def admins(
 
     `anonymous` counts whenever it reaches ADMIN: some caller is always
     anonymous. Without a trusted identity header EVERY caller is, so nothing
-    else counts. With one, a named user counts; a group counts through its
-    members, or by itself when the proxy supplies groups too. *known_groups*
+    else counts. With one, a name counts only as something the identity
+    layer can actually produce (#2071):
+
+      a user   a name that is not a group and that identity.is_user accepts -
+               a proxy never names a user `ops/admins`, `org:alice` or
+               anything over 64 characters, so those are nobody;
+      a group  only when the proxy supplies groups (the groups header), since
+               it could then put a caller in it - and then any name the
+               policy accepts may be such a group.
+
+    A group's members count in their own right, as users. *known_groups*
     names groups beyond the policy's own - the ones a change is removing the
     last member of, which would otherwise read as users."""
     e = enforcer(policy)
@@ -331,11 +345,13 @@ def admins(
     groups = {m.group for m in policy.memberships} | set(known_groups)
     names = {g.subject for g in policy.grants} | {m.member for m in policy.memberships}
     names -= {EVERYONE, ANONYMOUS}
-    return found | {
-        name
-        for name in names
-        if (name not in groups or groups_header) and e.enforce(name, feature, action)
-    }
+
+    def reachable(name: str) -> bool:
+        if groups_header:
+            return is_name(name)
+        return name not in groups and is_user(name)
+
+    return found | {name for name in names if reachable(name) and e.enforce(name, feature, action)}
 
 
 # ------------------------------------------------------------------ the store

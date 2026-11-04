@@ -45,6 +45,17 @@ Open `http://127.0.0.1:8000/ui/`. API routes and static assets share the same
 origin. The stack root's `web/dist` is mounted when it exists at startup; without
 it the API runs alone.
 
+## Workspace
+
+The header's workspace selector picks the stack this tab reads: `local`, or a
+target from the server's uqs registry (`GET /workspaces`). The choice is this
+tab's own (sessionStorage) and travels on every request as `X-UQF-Target`, so
+another session is never moved by it. Switching aborts what is in flight and
+clears every view's results; each result is labelled with the workspace it
+came from, and an answer labelled for another is refused. A target that cannot
+be reached is shown as an error naming it - the views stay empty rather than
+showing the local stack. The browser holds no target list and no credential.
+
 ## Views
 
 - **Coverage:** explicit dataset, source version and timezone-aware half-open

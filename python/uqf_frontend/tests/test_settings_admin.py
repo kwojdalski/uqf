@@ -141,6 +141,25 @@ def test_with_writes_off_nothing_changes(tmp_path):
     assert resp.json()["error"] == "WritesDisabled"
 
 
+def test_inspection_mode_refuses_every_settings_change(tmp_path):
+    """#2032: a settings write is a write, so inspection mode refuses it,
+    whatever the policy grants - and the settings stay readable."""
+    c = _client(_settings(tmp_path, inspection_mode=True))
+    seen = _current(c)
+    resp = _put_access(c, seen["access"])
+    assert resp.status_code == 403
+    assert resp.json()["error"] == "InspectionMode"
+    resp = c.put(
+        "/settings/runtime",
+        json={"version": seen["runtime_version"], "settings": seen["runtime"]},
+        headers=_as("alice"),
+    )
+    assert resp.status_code == 403
+    assert resp.json()["error"] == "InspectionMode"
+    assert (tmp_path / "policy.csv").read_text() == POLICY
+    assert not (tmp_path / "settings.json").exists()
+
+
 # --- a change: validated, atomic, live, audited ------------------------------------
 
 
@@ -249,6 +268,22 @@ def test_a_change_that_leaves_no_admin_is_refused(tmp_path):
     assert (row["outcome"], row["status_code"]) == ("refused", 409)
 
 
+@pytest.mark.parametrize("name", ["ops/admins", "org:alice", "a" * 65])
+def test_handing_admin_to_a_name_no_proxy_can_send_is_refused(tmp_path, name):
+    """#2071: a member the identity layer can never produce as a user is not
+    an admin - replacing the last real one with it is a lockout."""
+    c = _client(_settings(tmp_path))
+    body = _current(c)["access"]
+    body["memberships"] = [
+        {"member": name, "group": "admins"} if m["member"] == "alice" else m
+        for m in body["memberships"]
+    ]
+    resp = _put_access(c, body)
+    assert resp.status_code == 409, resp.text
+    assert "no caller could change the policy" in resp.json()["detail"]
+    assert ("settings", "write") in _caps(c, "alice")
+
+
 def test_handing_admin_to_someone_else_is_allowed(tmp_path):
     c = _client(_settings(tmp_path))
     body = _current(c)["access"]
@@ -303,6 +338,7 @@ def test_no_secret_is_ever_sent(tmp_path):
         "UQF_FRONTEND_WRITE_TOKEN": True,
         "UQF_FRONTEND_GATEWAY_PASSWORD": True,
         "UQF_FRONTEND_DATA_PASSWORD": True,
+        "UQF_FRONTEND_INSPECTION_PASSWORD": False,
     }
 
 

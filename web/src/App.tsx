@@ -38,9 +38,15 @@ import { FileBrowser } from "./FileBrowser";
 import { PlotPanel } from "./PlotPanel";
 import { ChartsView } from "./ChartsView";
 import { FleetConnections, TunnelPanel } from "./TunnelPanel";
+import { TargetLabel, WorkspaceSelector } from "./WorkspaceSelector";
+import { useWorkspaceTarget } from "./workspace";
 import { useResource } from "./useResource";
 import { ActivityView } from "./ActivityView";
-import { CapabilitiesProvider, useCapabilities } from "./capabilities";
+import {
+  CapabilitiesProvider,
+  InspectionBanner,
+  useCapabilities,
+} from "./capabilities";
 // The form library is loaded only when the view is opened (#2046).
 const SettingsView = lazy(() => import("./SettingsView"));
 import {
@@ -251,6 +257,7 @@ function ResourceStatus<T>({
             ? ` · Every ${resource.cadence}s`
             : ""}
         </span>
+        <TargetLabel target={resource.target} />
         <button
           type="button"
           data-activity="resource.refresh"
@@ -867,8 +874,17 @@ function DeskView() {
 function ServicesView() {
   const resource = useResource<Services>("/services");
   const data = resource.data;
-  const [browsing, setBrowsing] = useState<string | null>(null);
-  const [tunnelling, setTunnelling] = useState<string | null>(null);
+  // Services reads follow the workspace (#2029): a selected target is the
+  // one browsed and planned, until the operator picks another here.
+  const scoped = useWorkspaceTarget();
+  const [browsing, setBrowsing] = useState<string | null>(scoped);
+  const [tunnelling, setTunnelling] = useState<string | null>(scoped);
+  const [followed, setFollowed] = useState(scoped);
+  if (followed !== scoped) {
+    setFollowed(scoped);
+    setBrowsing(scoped);
+    setTunnelling(scoped);
+  }
   return (
     <>
       <ResourceStatus resource={resource} />
@@ -911,6 +927,9 @@ function ServicesView() {
                 dest: target.dest,
                 environment: target.environment,
                 remote_user: target.remote_user,
+                ...(data.targets.some((t) => t.inspection)
+                  ? { inspection: target.inspection ? "inspection mode" : null }
+                  : {}),
                 labels:
                   Object.entries(target.labels)
                     .map(([key, value]) => `${key}=${value}`)
@@ -1425,6 +1444,21 @@ function ControlView() {
       </div>
     );
 
+  // Shown, not enforced: the server refuses these routes to everyone while
+  // the whole frontend is in inspection mode (#2032).
+  if (access.inspection?.active)
+    return (
+      <div className="panel">
+        {statusNotice}
+        <h2>Inspection mode</h2>
+        <p>
+          The server refuses starting, stopping and configuring processes and
+          starting backfills while inspection mode is on. The status above is
+          still read live.
+        </p>
+      </div>
+    );
+
   // Shown, not enforced: the server refuses these routes to this caller
   // whether or not the controls are on screen (#2045).
   if (!access.can("control", "write"))
@@ -1811,6 +1845,7 @@ function Workspace() {
         <a className="brand" href="/ui/" data-activity="nav.home">
           uqf<span> / FX DATA</span>
         </a>
+        <WorkspaceSelector />
         <div className="gateway" role="status">
           Gateway <Badge value={gateway} />
           {/* The server's own words on what is wrong and what to set - for
@@ -1852,9 +1887,11 @@ function Workspace() {
               ? `Signed in as ${access.identity}`
               : "Local session"}
             <br />
-            {control.data?.writes_enabled
-              ? "Writes enabled"
-              : "Read-only access"}
+            {access.inspection?.active
+              ? "Inspection mode"
+              : control.data?.writes_enabled
+                ? "Writes enabled"
+                : "Read-only access"}
           </p>
         </aside>
         <main>
@@ -1875,6 +1912,9 @@ function Workspace() {
             <div className="notice pending" role="status">
               Gateway reload in progress. Views will retry automatically.
             </div>
+          )}
+          {access.inspection && (
+            <InspectionBanner inspection={access.inspection} />
           )}
           {access.known && shown.length === 0 ? (
             <div className="notice error" role="alert">

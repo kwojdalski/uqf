@@ -42,7 +42,7 @@ from uqs.cli.shared import (
     console,
 )
 from uqs.cli.target import target_app
-from uqs.deploy import control, targets
+from uqs.deploy import control, inspection, targets
 from uqs.deploy.config import DeployError
 from uqs.paths import UqsError, repo_root
 
@@ -261,7 +261,7 @@ def restore(
     from uqf_frontend import config, remote_files
 
     try:
-        keep, keep_days = config.history_bound_from_env()
+        keep, keep_days = config.history_bound()
     except ValueError as exc:
         _die(UqsError(str(exc)))
         return
@@ -288,6 +288,8 @@ def restore(
         console.print(dry_run_note())
         return
     try:
+        # the plan above only read; writing it is refused (#2032)
+        inspection.refuse(repo_root(), f"`uqs target config restore {name}`", name=name)
         safety.confirm(
             f"Restore {len(steps)} file(s) on {name} to how they were before push {push_id}?",
             yes=yes,

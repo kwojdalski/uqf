@@ -65,6 +65,7 @@ PAIRS = {
     "SettingsChangeResult": "SettingsChangeResponse",
     "Capabilities": "CapabilitiesResponse",
     "Capability": "Capability",
+    "Inspection": "InspectionOut",
     "TunnelCheckRecord": "TunnelCheckRecordOut",
     "TunnelMapping": "TunnelMappingOut",
     "TunnelPlan": "TunnelPlanResponse",
@@ -115,6 +116,10 @@ PAIRS = {
     "ChartInfo": "ChartInfo",
     "ChartList": "ChartsResponse",
     "ChartResult": "ChartResponse",
+    "Workspace": "WorkspaceOut",
+    "Workspaces": "WorkspacesResponse",
+    "WorkspaceEndpoint": "WorkspaceEndpointOut",
+    "WorkspaceStatus": "WorkspaceResponse",
     **REQUESTS,
 }
 

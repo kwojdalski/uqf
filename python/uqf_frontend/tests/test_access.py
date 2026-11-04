@@ -393,6 +393,7 @@ def test_capabilities_never_carry_a_secret(tmp_path):
         "capabilities",
         "features",
         "poll_seconds",
+        "inspection",
     }
 
 
@@ -477,6 +478,15 @@ def test_parse_and_render_round_trip():
         ("p, root, *, *\ng, ops, root\n", True, False, {"ops"}),
         ("p, root, *, *\ng, ops, root\n", True, True, {"ops", "root"}),
         ("p, viewers, desk, read\ng, bob, viewers\n", True, True, set()),
+        # #2071: only a name the identity layer can produce is a user. A
+        # proxy never names a user `ops/admins`, `org:alice` or anything
+        # over 64 characters, so without a groups header none of them counts
+        ("p, admins, *, *\ng, ops/admins, admins\n", True, False, set()),
+        ("p, admins, *, *\ng, org:alice, admins\n", True, False, set()),
+        ("p, admins, *, *\ng, " + "a" * 65 + ", admins\n", True, False, set()),
+        ("p, org:alice, settings, write\n", True, False, set()),
+        # ...but a proxy may put a caller in a group of that name
+        ("p, admins, *, *\ng, ops/admins, admins\n", True, True, {"admins", "ops/admins"}),
     ],
 )
 def test_admins(text, identity_header, groups_header, expected):

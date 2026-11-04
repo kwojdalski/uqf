@@ -44,7 +44,7 @@ from typing import Any
 
 from fastapi import FastAPI, Request
 
-from uqf_frontend import access, activity, ops
+from uqf_frontend import access, activity, config, ops
 from uqf_frontend.config import Settings
 from uqf_frontend.errors import FrontendError, ValidationFailed, WritesDisabled
 from uqf_frontend.models import (
@@ -71,6 +71,7 @@ SECRETS = {
     "UQF_FRONTEND_WRITE_TOKEN": "write_token",
     "UQF_FRONTEND_GATEWAY_PASSWORD": "passwd",
     "UQF_FRONTEND_DATA_PASSWORD": "data_passwd",
+    "UQF_FRONTEND_INSPECTION_PASSWORD": "inspection_passwd",
 }
 
 
@@ -115,16 +116,7 @@ class RuntimeStore:
     def apply(self, settings: Settings) -> Settings:
         """*settings* with the file's values over them, checked as Settings
         checks any value. A file that does not parse stops the API."""
-        if self.path is None or not self.path.exists():
-            return settings
-        try:
-            body = RuntimeSettingsBody.model_validate_json(self.path.read_text(encoding="utf-8"))
-            return dataclasses.replace(settings, **body.model_dump())
-        except ValueError as exc:
-            raise ValueError(
-                f"UQF_FRONTEND_SETTINGS_FILE {self.path} is not valid runtime settings: "
-                f"{type(exc).__name__} - fix or remove it"
-            ) from None
+        return dataclasses.replace(settings, **config.runtime_file_values(self.path))
 
     def write(self, body: RuntimeSettingsBody) -> None:
         assert self.path is not None

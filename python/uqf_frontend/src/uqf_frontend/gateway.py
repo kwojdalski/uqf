@@ -144,7 +144,7 @@ class KolaGateway:
         login: tuple[str, str] | None = None,
     ) -> None:
         self._settings = settings
-        self._login = login or (settings.user, settings.passwd)
+        self._login = login or settings.service_login
         self._connect = connect or self._kola_connect
         self._idle: list[Any] = []
         self._pool_address: tuple[str, int] | None = None

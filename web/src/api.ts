@@ -1,3 +1,5 @@
+import { TARGET_HEADER, currentWorkspace, workspaceSignal } from "./workspace";
+
 export type Row = Record<string, unknown>;
 export interface Pollable {
   poll_seconds: number;
@@ -143,6 +145,21 @@ export interface Capabilities extends Pollable {
   groups: string[];
   capabilities: Capability[];
   features: Record<string, string[]>;
+  /** the inspection policy the server enforces (#2032) */
+  inspection: Inspection;
+}
+/** Inspection mode as the server enforces it - models.InspectionOut (#2032).
+ *  The API and uqs refuse the writes; an ssh tunnel is not what makes this
+ *  read-only, and nothing in the UI may say it is. */
+export interface Inspection {
+  /** the whole frontend: every write refused */
+  active: boolean;
+  /** declared targets in inspection mode: every write naming one refused */
+  targets: string[];
+  /** which q login the frontend's own reads use */
+  q_login: "inspection" | "service";
+  /** why the target registry could not be read, when it could not */
+  registry_error: string | null;
 }
 /** A form's data, shaped by the JSON schema the server sends with it: the
  *  browser keeps no list of its own of the fields (#2046). */
@@ -241,6 +258,8 @@ export interface ServiceTarget {
   remote_user: string | null;
   environment: string | null;
   labels: Record<string, string>;
+  /** in inspection mode: the API and uqs refuse every write to it (#2032) */
+  inspection: boolean;
   last_deployed: { release: string; at: string } | null;
 }
 /** GET /services - models.ServicesResponse. `invalid` is the registry's own
@@ -251,6 +270,42 @@ export interface Services extends Pollable {
   declared: boolean;
   invalid: string | null;
   remote_operations_enabled: boolean;
+}
+/** One workspace - models.WorkspaceOut: `local`, or a target the uqs
+ * registry declares (#2029). The browser keeps no list of its own. */
+export interface Workspace {
+  name: string;
+  kind: "local" | "target";
+  connection: "direct" | "ssh tunnel";
+  access: "read-only" | "read-write";
+  environment: string | null;
+  ssh: string | null;
+  available: boolean;
+  reason: string | null;
+}
+/** GET /workspaces - models.WorkspacesResponse. */
+export interface Workspaces {
+  workspaces: Workspace[];
+  header: string;
+  source: string;
+  invalid: string | null;
+}
+/** One of a target's processes as the server reaches it -
+ * models.WorkspaceEndpointOut. */
+export interface WorkspaceEndpoint {
+  process: string;
+  proctype: string;
+  remote_port: number;
+  local_endpoint: string;
+}
+/** GET /workspace - models.WorkspaceResponse: the workspace this request
+ * named, reached now. */
+export interface WorkspaceStatus extends Pollable {
+  target: string;
+  connection: "direct" | "ssh tunnel";
+  access: "read-only" | "read-write";
+  host: string | null;
+  endpoints: WorkspaceEndpoint[];
 }
 /** One entry of a remote directory - models.RemoteEntryOut. A symlink,
  * special file or undecodable name is `blocked`: listed, never entered. */
@@ -435,7 +490,14 @@ export async function request<T>(
   extra?: Record<string, string>,
 ): Promise<T> {
   let response: Response;
-  const headers: Record<string, string> = { ...extra };
+  // The workspace this request is for, fixed now: a switch while it is in
+  // flight aborts it rather than letting its answer land under the new one.
+  const target = currentWorkspace();
+  const switched = workspaceSignal();
+  const headers: Record<string, string> = {
+    [TARGET_HEADER]: target,
+    ...extra,
+  };
   if (body) headers["Content-Type"] = "application/json";
   if (authorization) headers.Authorization = authorization;
   const verb = method ?? (body ? "POST" : "GET");
@@ -455,20 +517,33 @@ export async function request<T>(
     });
   try {
     response = await fetch(path, {
-      signal: AbortSignal.any([signal, AbortSignal.timeout(requestTimeoutMs)]),
+      signal: AbortSignal.any([
+        signal,
+        switched,
+        AbortSignal.timeout(requestTimeoutMs),
+      ]),
       method: verb,
       headers: Object.keys(headers).length ? headers : undefined,
       body,
     });
   } catch (error) {
     finished();
-    if (signal.aborted) throw error;
+    if (signal.aborted || switched.aborted) throw error;
     throw new ApiError(
       "The API is unavailable or the request timed out.",
       true,
     );
   }
   finished(response.status);
+  // A scoped answer names the workspace it came from. One labelled for any
+  // other is refused - never shown as this workspace's (#2029).
+  const label = response.headers?.get?.(TARGET_HEADER) ?? null;
+  if (label !== null && label !== target)
+    throw new ApiError(
+      `The answer came from ${label}, not ${target}; it was not shown.`,
+    );
+  if (switched.aborted)
+    throw new DOMException("workspace changed", "AbortError");
   const payload = await response.json().catch(() => null);
   if (!response.ok) {
     const detail = payload?.detail;

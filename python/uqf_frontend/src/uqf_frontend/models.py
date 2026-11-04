@@ -162,6 +162,23 @@ class Capability(BaseModel):
     action: Literal["read", "write"]
 
 
+class InspectionOut(BaseModel):
+    """Inspection mode as the server enforces it (inspection.py, #2032)."""
+
+    #: The whole frontend: every write but the browser's own history refused.
+    active: bool
+    #: Declared targets in inspection mode: every write naming one refused.
+    #: Empty for a caller who may not read the Services view.
+    targets: list[str]
+    #: Which q login the frontend's own reads use: the restricted
+    #: `inspection` one, or the ordinary `service` one. Table reads always
+    #: use the data login (UQF_FRONTEND_DATA_USER).
+    q_login: Literal["inspection", "service"]
+    #: Why the target registry could not be read - every write naming a
+    #: target is then refused. None for a caller who may not read Services.
+    registry_error: str | None
+
+
 class CapabilitiesResponse(BaseModel):
     """GET /me/capabilities (#2045): who the caller is, as far as a trusted
     proxy vouches, and what the access policy lets them do. The browser hides
@@ -178,6 +195,9 @@ class CapabilitiesResponse(BaseModel):
     features: dict[str, list[str]]
     #: How often the browser re-asks, so a policy change reaches an open tab.
     poll_seconds: int
+    #: The inspection policy in force (#2032). `capabilities` already leaves
+    #: out the writes it refuses everywhere.
+    inspection: InspectionOut
 
 
 class HealthResponse(BaseModel):
@@ -331,6 +351,10 @@ class ServiceTargetOut(BaseModel):
         description="the [environments.NAME] layer the target names, if any"
     )
     labels: dict[str, str]
+    inspection: bool = Field(
+        default=False,
+        description="in inspection mode: the API and uqs refuse every write to it (#2032)",
+    )
     last_deployed: DeployedOut | None = Field(
         description="from this workstation's deploy_history.json, not from the server"
     )
@@ -351,6 +375,58 @@ class ServicesResponse(BaseModel):
         description="whether an action reaching a server could run here: "
         "UQF_FRONTEND_ENABLE_WRITES, with its token. Listing never reaches one"
     )
+    poll_seconds: int
+
+
+class WorkspaceOut(BaseModel):
+    """One workspace the browser may select (#2029): `local`, this API's own
+    stack, or a target the uqs registry declares (workspaces.py)."""
+
+    name: str
+    kind: Literal["local", "target"]
+    connection: Literal["direct", "ssh tunnel"] = Field(
+        description="how this API reaches it: its own stack directly, or a target "
+        "through the ssh forwards uqs opens"
+    )
+    access: Literal["read-only", "read-write"] = Field(
+        description="what the workspace allows: a target is read-only - control "
+        "acts on this API's own stack only"
+    )
+    environment: str | None
+    ssh: str | None = Field(description="the target's ssh destination; never contacted to list")
+    available: bool = Field(
+        description="whether it can be selected here: a target needs remote operations"
+    )
+    reason: str | None = Field(description="why it cannot be selected, when it cannot")
+
+
+class WorkspacesResponse(BaseModel):
+    """Every workspace, from the uqs target registry plus `local`. No server
+    is contacted to list them, and the browser keeps no registry of its own."""
+
+    workspaces: list[WorkspaceOut]
+    header: str = Field(description="the request header that names a request's workspace")
+    source: str = Field(description="the deploy_targets.toml that was read, or would be")
+    invalid: str | None = None
+
+
+class WorkspaceEndpointOut(BaseModel):
+    """One of a target's processes, as this API reaches it."""
+
+    process: str
+    proctype: str
+    remote_port: int
+    local_endpoint: str
+
+
+class WorkspaceResponse(BaseModel):
+    """The workspace a request named, reached: proof it is available now."""
+
+    target: str
+    connection: Literal["direct", "ssh tunnel"]
+    access: Literal["read-only", "read-write"]
+    host: str | None = Field(description="the target's ssh host; None for local")
+    endpoints: list[WorkspaceEndpointOut]
     poll_seconds: int
 
 
