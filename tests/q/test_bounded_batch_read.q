@@ -67,7 +67,9 @@
     .qpipe.job.hdb_fx_markouts_backfill.init[`source_version`range_from`range_to!(`v1;h`range_from;h`range_to)];
     .qetl.job.bounded.write_state[.qt.qetl.job.bounded.batch_read.worker;`handle;.qt.qetl.job.bounded.batch_read.hdb];
     .qetl.job.bounded.write_state[.qt.qetl.job.bounded.batch_read.worker;`live;1b];
-    .qetl.job.bounded.write_state[.qt.qetl.job.bounded.batch_read.worker;`progress;.qetl.job.bounded.no_progress]}
+    .qetl.job.bounded.write_state[.qt.qetl.job.bounded.batch_read.worker;`progress;.qetl.job.bounded.no_progress];
+    / a run pins its configuration before its first window (#1999); do_window alone does not
+    .qetl.job.bounded.pin_config .qt.qetl.job.bounded.batch_read.worker}
 
 / One window through every stage, as a run takes it: 1b when it was published.
 .qt.qetl.job.bounded.batch_read.window_run:{[]

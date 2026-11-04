@@ -73,7 +73,19 @@
 / file or directory". Same cause (the schema grew after the partition was
 / written), same repair, so both happen here in one pass.
 / .
-/ ADDITIVE, ALWAYS. A table directory that holds a `.d` is never emptied and a
+/ ONE MIGRATION, ONLY WHEN ASKED (#1999). A third argument, `migrate`, folds the three
+/ configuration columns a markout row used to repeat (contract_version, rate_timing,
+/ report_ccy) into configuration snapshots: per partition, one LEGACY snapshot for each
+/ distinct triple found (recorded in the snapshot store, in $UQF_STATUS_DIR, as the
+/ markout jobs record theirs), a `config_id` column naming each row's, and then the three
+/ columns dropped. In that order, so an interruption leaves the old columns beside a good
+/ config_id (the next run only drops them) and never a row without its configuration.
+/ Without `migrate` an existing markout partition gets no config_id at all and is left as it
+/ was - the bootstrap fill never deletes a column; `uqs data check` reports the gap. A partition older
+/ than the columns has none to read: its rows are the contract's first version, with the
+/ rate timing and reporting currency unknown.
+/ .
+/ ADDITIVE, ALWAYS - but for that migration. A table directory that holds a `.d` is never emptied and a
 / column that exists is never rewritten, whatever is in it. A table or a
 / column a partition holds and database.q no longer declares is left alone:
 / that is history, and deleting history is not this script's business. A
@@ -105,6 +117,8 @@ die:{[msg] -2 "fill_hdb_partitions: ",msg; exit 1}
 
 hdb_root:hsym `$first .z.x;
 schema_file:hsym `$.z.x 1;
+/ the markout configuration migration (#1999) runs only when asked
+migrate:(2<count .z.x) and "migrate"~.z.x 2;
 
 if[()~key hdb_root; die "no HDB at ",string hdb_root];
 if[()~key schema_file; die "no schema at ",string schema_file];
@@ -176,11 +190,17 @@ clock_rules:{[]
 
 / The columns the FX markout tables gained with the markout contract (#1935) whose
 / missing values are DERIVED from the columns the stored rows already hold, not null:
-/ the contract's move, quote_ccy, quote_amount, price, ref_t0, ref_t1 and
-/ contract_version, FX's pip_value, and the clock. What a stored row cannot say stays
-/ the declared null: report_ccy, rate and report_amount, because no rate was ever
-/ declared for a stored row. The wide table already held price, ref_t0 and ref_t1.
-fx_derived:`fx_markout`fx_markout_wide!(`clock`quote_ccy`move`pip_value`quote_amount`contract_version`price`ref_t0`ref_t1;`clock`quote_ccy`move`pip_value`quote_amount`contract_version)
+/ the contract's move, quote_ccy, quote_amount, price, ref_t0 and ref_t1, FX's
+/ pip_value, and the clock. What a stored row cannot say stays the declared null: rate and
+/ report_amount, because no rate was ever declared for a stored row. The wide table already
+/ held price, ref_t0 and ref_t1. config_id is derived too, but from a different place
+/ (derived_config below): the snapshot store.
+fx_derived:`fx_markout`fx_markout_wide!(`clock`quote_ccy`move`pip_value`quote_amount`price`ref_t0`ref_t1;`clock`quote_ccy`move`pip_value`quote_amount)
+
+/ The markout datasets whose rows used to repeat their configuration (#1999), and the three
+/ columns that were: the migration's inputs, dropped once config_id names the snapshot.
+markout_tables:`fx_markout`fx_markout_wide`crypto_markout
+legacy_config_cols:`contract_version`rate_timing`report_ccy
 
 / Is this column one whose missing values are derived, not null (#1925, #1935)?
 / @param table_name the table
@@ -188,7 +208,8 @@ fx_derived:`fx_markout`fx_markout_wide!(`clock`quote_ccy`move`pip_value`quote_am
 / @return 1b for `clock on executions and market_data (attributed by rule), and for a
 /   derived contract column of the FX markout tables
 derived_column:{[table_name;col]
-    $[table_name in `executions`market_data; col=`clock;
+    $[(table_name in markout_tables) and col=`config_id; 1b;
+      table_name in `executions`market_data; col=`clock;
       table_name in key fx_derived; col in fx_derived table_name;
       0b]}
 
@@ -198,7 +219,7 @@ derived_column:{[table_name;col]
 / @return the columns it needs, none for a constant
 fx_needs:{[table_name;col]
     pf:$[table_name=`fx_markout; `pips; `total_pips];
-    $[col in `clock`contract_version; `$();
+    $[col=`clock; `$();
       col=`quote_ccy; enlist `sym;
       col=`move; `pip_factor,pf;
       col=`pip_value; `size`pip_factor;
@@ -232,7 +253,6 @@ derived_fx:{[root;table_name;dir;col]
     d:$[count need; need!{[dir;c] v:get ` sv dir,c; $[type[v] within 20 76h; value v; v]}[dir] each need; ()!()];
     pips_col:$[table_name=`fx_markout; `pips; `total_pips];
     v:$[col=`clock; n#`unknown;
-        col=`contract_version; n#1;
         col=`quote_ccy; [u:distinct d`sym; q:{`$-3#string x} each u; q u?d`sym];
         col=`move; (`float$d pips_col)%`float$d`pip_factor;
         col=`pip_value; (`float$d`size)%`float$d`pip_factor;
@@ -241,6 +261,74 @@ derived_fx:{[root;table_name;dir;col]
         col=`ref_t0; by_component[d;`execution;`price_t1];
         by_component[d;`total;`price_t1]];
     $[11h=abs type v; (.Q.en[root] flip enlist[`v]!enlist v)`v; v]}
+
+/ Load the snapshot store and the markout configuration's legacy pin, once, from this script's own
+/ tree (scripts/gates/ is two levels below src/), and refuse to go on if the status directory the
+/ store lives in is not named: a migration that cannot record its snapshots must not drop the
+/ columns they replace.
+load_snapshot_store:{[]
+    if[not ()~key `.qetl.snapshot; :1b];
+    f:{[d;n] hsym `$d,"../../src/etl/",n} script_dir;
+    needed:f each ("core/status.q";"core/backfill_state.q";"core/config_snapshot.q";"transforms/config_markout.q");
+    if[any ()~/:key each needed; die "no src/etl beside this script - the markout configuration migration needs its snapshot store (#1999)"];
+    system each "l ",/:1_/:string needed;
+    / the status directory is status.q's to name; with neither of its variables set it is "/status"
+    if["/status"~.qetl.status.status_dir[];
+        die "the markout configuration migration records snapshots in the status directory: set UQF_STATUS_DIR (or TORQDATA) first"];
+    1b}
+
+/ A markout partition's config_id: the legacy snapshot each row's old configuration columns name.
+/ .
+/ One snapshot per DISTINCT (contract_version, rate_timing, report_ccy) in the partition,
+/ recorded in the store (idempotently: the id is the triple's digest, so the same triple in
+/ another partition, or on a second run, is the same snapshot). A column the partition lacks
+/ reads as the old rows' own answer: contract_version 1, the rate timing and reporting
+/ currency unknown.
+/ @param root the HDB root, whose sym file a symbol column enumerates against
+/ @param table_name a markout table
+/ @param dir a table directory that holds a `.d`
+/ @return the config_id column, enumerated
+derived_config:{[root;table_name;dir]
+    load_snapshot_store[];
+    n:count get ` sv dir,first disk_cols dir;
+    have:disk_cols dir;
+    `sym set get ` sv root,`sym;
+    read:{[dir;c] v:get ` sv dir,c; $[type[v] within 20 76h; value v; v]}[dir];
+    cv:$[`contract_version in have; `long$read `contract_version; n#1];
+    rt:$[`rate_timing in have; `symbol$read `rate_timing; n#`];
+    rc:$[`report_ccy in have; `symbol$read `report_ccy; n#`];
+    trip:flip `cv`rt`rc!(cv;rt;rc);
+    u:distinct trip;
+    ids:{[table_name;p] .qpipe.transform.config_markout.legacy_pin[table_name;p`cv;p`rt;p`rc]}[table_name] each u;
+    v:`symbol$ids u?trip;
+    -1 "  ",partition_name[dir],"/",string[table_name],": config_id from ",string[count u]," legacy snapshot(s) - ",
+        ", " sv string distinct v;
+    (.Q.en[root] flip enlist[`v]!enlist v)`v}
+
+/ Drop one column from one table directory: out of `.d` first, so the table stops listing it
+/ before its file goes, then the file. A kill between the two leaves an orphan file and a
+/ table that is already right.
+/ @param dir a table directory that holds a `.d`
+/ @param col the column
+drop_col:{[dir;col]
+    (` sv dir,`.d) set (disk_cols dir) except col;
+    @[hdel;` sv dir,col;{[e] (::)}];}
+
+/ After a markout partition holds a config_id, the configuration columns it replaces go.
+/ Only when config_id is there and as long as the table is, so nothing is dropped that the
+/ snapshot does not already name.
+/ @param table_name a markout table
+/ @param dir a table directory that holds a `.d`
+/ @return the columns dropped
+drop_legacy:{[table_name;dir]
+    d:disk_cols dir;
+    old:legacy_config_cols inter d;
+    if[(not `config_id in d) or 0=count old; :`$()];
+    n:count get ` sv dir,first d except `config_id,old;
+    if[n<>count get ` sv dir,`config_id; die "config_id is shorter than ",string[table_name]," in ",(1_string dir)," - the legacy columns are kept"];
+    drop_col[dir;] each old;
+    -1 "  ",partition_name[dir],"/",string[table_name],": dropped ",", " sv string old;
+    old}
 
 / The clock of each (market, name) pair, by the rules: an exact market-and-name
 / rule wins over a `*` rule for that market, and a pair no rule names is
@@ -302,11 +390,16 @@ repair_dir:{[root;table_name;dir]
         (` sv dir,`) set .Q.en[root;0#value table_name];
         :`table];
     absent:missing_cols[table_name;dir];
+    / a markout partition that already exists gets no config_id unless the migration was asked
+    / for: it is derived from the old configuration columns, which only the migration drops (#1999)
+    if[(not migrate) and table_name in markout_tables; absent:absent except `config_id];
     {[root;table_name;dir;col]
         v:$[not derived_column[table_name;col]; declared_default[root;table_name;col];
+            col=`config_id; derived_config[root;table_name;dir];
             table_name in key fx_derived; derived_fx[root;table_name;dir;col];
             (.Q.en[root] flip enlist[`v]!enlist derived_clock[root;table_name;dir])`v];
         add1col[dir;col;v]}[root;table_name;dir] each absent;
+    if[migrate and table_name in markout_tables; drop_legacy[table_name;dir]];
     absent}
 
 / What is still wrong, read back from disk rather than taken from what the
@@ -315,9 +408,11 @@ repair_dir:{[root;table_name;dir]
 / @return one line per problem, empty if the database is whole
 problems_in:{[table_name;dir]
     if[()~key ` sv dir,`.d; :enlist "no table at ",1_string dir];
-    lacks:missing_cols[table_name;dir];
+    / not migrating, an existing markout partition has no config_id by design
+    held:$[(not migrate) and table_name in markout_tables; enlist `config_id; `$()];
+    lacks:missing_cols[table_name;dir] except held;
     if[count lacks; :enlist "columns not in .d of ",(1_string dir),": ",", " sv string lacks];
-    declared_cols:cols value table_name;
+    declared_cols:(cols value table_name) except held;
     files:` sv/:dir,/:declared_cols;
     gone:declared_cols where {()~key x} each files;
     $[count gone; enlist "column files missing in ",(1_string dir),": ",", " sv string gone; ()]}

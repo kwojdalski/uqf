@@ -47,6 +47,21 @@
 / The repair, as the CLI runs it.
 .qt.qproc.fillhdb.run:{[root;schema] .qt.qproc.fillhdb.run_script[root;schema;"scripts/gates/fill_hdb_partitions.q"]}
 
+/ The repair with the markout configuration migration asked for (`uqs data check --apply`, #1999),
+/ recording its snapshots in `stat`, a status directory.
+/ @param root the HDB root, as a string
+/ @param schema the declared schema, as text
+/ @param stat the status directory the snapshot store lives in
+/ @return (output lines; exit code)
+.qt.qproc.fillhdb.run_migrating:{[root;schema;stat]
+    sf:root,".database.q";
+    (hsym `$sf) 0: enlist schema;
+    out:root,".out.txt";
+    cmd:"env UQF_STATUS_DIR=",stat," ",.qt.support.q_interpreter[]," scripts/gates/fill_hdb_partitions.q ",root," ",sf,
+        " migrate < /dev/null > ",out," 2>&1; echo $?";
+    code:"J"$first system cmd;
+    (read0 hsym `$out;code)}
+
 / The partition's table directory.
 .qt.qproc.fillhdb.dir:{[root;part;t] ` sv (.Q.par[hsym `$root;part;t];`)}
 
@@ -296,16 +311,18 @@
         price_t0:3.99 3.99 1.25 5 0n 1.1001 1.1001; price_t1:5.5 4 1 5.5 0n 1.1005 1.1;
         pips:-15100 -100 -10000 -5000 0 4 -1f; status:`ok`ok`ok`ok`reconciled`ok`ok; pip_factor:(5#10000),2#10000; version:7#`proposed_v1)}
 
-.qt.qproc.fillhdb.fx_schema:"fx_markout:([] time:`timestamp$(); source_time:`timestamp$(); clock:`symbol$(); venue:`symbol$(); fill_id:`symbol$(); sym:`symbol$(); side:`long$(); size:`float$(); horizon:`timespan$(); kind:`symbol$(); step:`long$(); leg:`symbol$(); invert:`boolean$(); price:`float$(); price_t0:`float$(); price_t1:`float$(); quote_ccy:`symbol$(); ref_t0:`float$(); ref_t1:`float$(); move:`float$(); pips:`float$(); pip_factor:`long$(); pip_value:`float$(); quote_amount:`float$(); report_ccy:`symbol$(); rate:`float$(); rate_source:`symbol$(); rate_sym:`symbol$(); rate_time:`timestamp$(); rate_timing:`symbol$(); report_amount:`float$(); status:`symbol$(); contract_version:`long$(); version:`symbol$())\n"
+.qt.qproc.fillhdb.fx_schema:"fx_markout:([] time:`timestamp$(); source_time:`timestamp$(); clock:`symbol$(); venue:`symbol$(); fill_id:`symbol$(); sym:`symbol$(); side:`long$(); size:`float$(); horizon:`timespan$(); kind:`symbol$(); step:`long$(); leg:`symbol$(); invert:`boolean$(); price:`float$(); price_t0:`float$(); price_t1:`float$(); quote_ccy:`symbol$(); ref_t0:`float$(); ref_t1:`float$(); move:`float$(); pips:`float$(); pip_factor:`long$(); pip_value:`float$(); quote_amount:`float$(); rate:`float$(); rate_source:`symbol$(); rate_sym:`symbol$(); rate_time:`timestamp$(); report_amount:`float$(); status:`symbol$(); config_id:`symbol$(); version:`symbol$())\n"
 
 .qt.qproc.fillhdb.test_fx_markouts_gain_the_contracts_columns_derived_from_the_stored_rows:{[t]
     root:.qt.qproc.fillhdb.scratch[];
     .qt.qproc.fillhdb.put[root;2026.01.01;`fx_markout;.qt.qproc.fillhdb.old_long[]];
-    r:.qt.qproc.fillhdb.run[root;.qt.qproc.fillhdb.fx_schema];
+    stat:.qt.qproc.fillhdb.scratch[];
+    r:.qt.qproc.fillhdb.run_migrating[root;.qt.qproc.fillhdb.fx_schema;stat];
     .qunit.assertEquals[r 1;0;"clean"];
     c:.qt.qproc.fillhdb.col_of[root;2026.01.01;`fx_markout;];
     .qunit.assertEquals[c`clock;7#`unknown;"the clock of a stored row is unknown, never a guess and never null"];
-    .qunit.assertEquals[c`contract_version;7#1;"the stored rows are the contract's first version"];
+    .qunit.assertEquals[count distinct c`config_id;1;"the stored rows name one legacy configuration"];
+    .qunit.assertTrue[(string first c`config_id) like "markout_legacy_*";"a legacy snapshot"];
     .qunit.assertEquals[c`quote_ccy;(5#`PLN),2#`USD;"the pair's quote leg"];
     .qunit.assertEquals[c`price;(5#3.99),2#1.1001;"the fill price, read off the total row of the (execution, horizon)"];
     .qunit.assertEquals[c`ref_t0;(5#4f),2#1.1;"the reference at the execution, read off the execution residual's price_t1"];
@@ -317,7 +334,7 @@
     .qunit.assertTrue[all null c`rate;"the rate"];
     .qunit.assertEquals[c`pips;-15100 -100 -10000 -5000 0 4 -1f;"and nothing already stored is touched"];
     after:.qt.qproc.fillhdb.snapshot[root];
-    r2:.qt.qproc.fillhdb.run[root;.qt.qproc.fillhdb.fx_schema];
+    r2:.qt.qproc.fillhdb.run_migrating[root;.qt.qproc.fillhdb.fx_schema;stat];
     .qunit.assertTrue[any (r2 0) like "*already rectangular - nothing to do*";"nothing to do the second time"];
     .qunit.assertEquals[.qt.qproc.fillhdb.snapshot[root];after;"the derived columns are not rewritten"]};
 
@@ -326,13 +343,101 @@
     t0:2026.01.01D10:00:10.000000000;
     / the wide table before the contract: a row per (execution, horizon), the markout in total_pips
     .qt.qproc.fillhdb.put[root;2026.01.01;`fx_markout_wide;([] time:2#t0; sym:`USDPLN`EURUSD; size:2#1e6; pip_factor:2#10000; total_pips:-15100 4f)];
-    schema:"fx_markout_wide:([] time:`timestamp$(); sym:`symbol$(); size:`float$(); pip_factor:`long$(); total_pips:`float$(); clock:`symbol$(); quote_ccy:`symbol$(); move:`float$(); pip_value:`float$(); quote_amount:`float$(); report_amount:`float$(); contract_version:`long$())\n";
-    r:.qt.qproc.fillhdb.run[root;schema];
+    schema:"fx_markout_wide:([] time:`timestamp$(); sym:`symbol$(); size:`float$(); pip_factor:`long$(); total_pips:`float$(); clock:`symbol$(); quote_ccy:`symbol$(); move:`float$(); pip_value:`float$(); quote_amount:`float$(); report_amount:`float$(); config_id:`symbol$())\n";
+    r:.qt.qproc.fillhdb.run_migrating[root;schema;.qt.qproc.fillhdb.scratch[]];
     .qunit.assertEquals[r 1;0;"clean"];
     c:.qt.qproc.fillhdb.col_of[root;2026.01.01;`fx_markout_wide;];
-    .qunit.assertEquals[(c`clock;c`quote_ccy;c`contract_version);(2#`unknown;`PLN`USD;2#1);"clock unknown, the pair's quote leg, the contract's first version"];
+    .qunit.assertEquals[(c`clock;c`quote_ccy;count distinct c`config_id);(2#`unknown;`PLN`USD;1);"clock unknown, the pair's quote leg, one legacy configuration"];
     .qunit.assertEquals[(c`move;c`pip_value;c`quote_amount);(-1.51 4e-4;2#100f;-1510000 400f);"the markout over the pip factor, and its money in the quote currency"];
     .qunit.assertTrue[all null c`report_amount;"and nothing is converted that no rate was declared for"]};
+
+/ --- the markout configuration migration (#1999) ---------------------------------------
+
+/ crypto_markout after the migration, in the one shape the tests need: the columns the migration
+/ does not touch, and config_id where the three configuration columns were.
+.qt.qproc.fillhdb.cfg_schema:"crypto_markout:([] time:`timestamp$(); fill_id:`symbol$(); status:`symbol$(); config_id:`symbol$())\n"
+
+/ A partition as the markout writers left it before snapshots: the three configuration columns beside the rest.
+.qt.qproc.fillhdb.legacy_rows:{[cv;rt;rc]
+    n:count cv;
+    ([] time:n#2026.01.01D10:00:00.000000000; fill_id:`$"f",/:string til n; status:n#`ok; contract_version:cv; rate_timing:rt; report_ccy:rc)}
+
+/ A scratch HDB with crypto_markout in three partitions: one configuration; two (one of them the first's);
+/ and one older than the configuration columns, which holds none of them.
+.qt.qproc.fillhdb.cfg_build:{[]
+    root:.qt.qproc.fillhdb.scratch[];
+    .qt.qproc.fillhdb.put[root;2026.01.01;`crypto_markout;.qt.qproc.fillhdb.legacy_rows[3#1;3#`execution;3#`USD]];
+    .qt.qproc.fillhdb.put[root;2026.01.02;`crypto_markout;.qt.qproc.fillhdb.legacy_rows[1 1 1 1;`execution`horizon`horizon`execution;`USD`EUR`EUR`USD]];
+    .qt.qproc.fillhdb.put[root;2026.01.03;`crypto_markout;([] time:2#2026.01.03D10:00:00.000000000; fill_id:`g0`g1; status:`ok`unavailable)];
+    root}
+
+.qt.qproc.fillhdb.test_the_migration_folds_the_configuration_columns_into_legacy_snapshots_and_drops_them:{[t]
+    root:.qt.qproc.fillhdb.cfg_build[];
+    stat:.qt.qproc.fillhdb.scratch[];
+    before:.qt.qproc.fillhdb.snapshot[root];
+    r:.qt.qproc.fillhdb.run_migrating[root;.qt.qproc.fillhdb.cfg_schema;stat];
+    .qunit.assertEquals[r 1;0;"the migration exits clean"];
+    .qunit.assertEquals[.qt.qproc.fillhdb.cols_of[root;;`crypto_markout] each .qt.qproc.fillhdb.parts;3#enlist `time`fill_id`status`config_id;"every partition lists the declared columns and not the three that were folded"];
+    gone:raze {[root;p] ` sv/: .qt.qproc.fillhdb.dir[root;p;`crypto_markout],/:`contract_version`rate_timing`report_ccy}[root] each .qt.qproc.fillhdb.parts;
+    .qunit.assertEquals[{()~key x} each gone;9#1b;"and their files are gone"];
+    / the snapshots: one per distinct triple, across all partitions, each with the triple it stands for
+    snap:{[stat] setenv[`UQF_STATUS_DIR;stat]; .qetl.snapshot.reload[]; .qetl.snapshot.audit[]};
+    a:snap stat;
+    .qunit.assertEquals[count a;3;"three distinct triples in the whole database, three snapshots - (1;execution;USD) once, though two partitions hold it"];
+    conts:.qetl.snapshot.decode each a`content;
+    triples:{[c] `contract_version`rate_timing`report_ccy!(c`contract_version;c`rate_timing;c`report_ccy)} each conts;
+    .qunit.assertEquals[asc triples;asc ((`contract_version`rate_timing`report_ccy)!(1;`execution;`USD);(`contract_version`rate_timing`report_ccy)!(1;`horizon;`EUR);(`contract_version`rate_timing`report_ccy)!(1;`;`));"the triples, and the older partition's own answer: contract 1, the rest unknown"];
+    .qunit.assertTrue[all {x`legacy} each conts;"each is marked legacy"];
+    .qunit.assertTrue[all a`digest_ok;"with a good digest"];
+    / the rows link to the snapshot of THEIR triple
+    c1:.qt.qproc.fillhdb.col_of[root;2026.01.01;`crypto_markout;]`config_id;
+    c2:.qt.qproc.fillhdb.col_of[root;2026.01.02;`crypto_markout;]`config_id;
+    c3:.qt.qproc.fillhdb.col_of[root;2026.01.03;`crypto_markout;]`config_id;
+    of:{[a;id] .qetl.snapshot.decode first exec content from a where snapshot_id=id};
+    .qunit.assertEquals[(distinct c1;count distinct c2;(c2 0)=c2 3;count distinct c3);(enlist first c1;2;1b;1);"the first partition names one, the second two (rows 0 and 3 share), the third one"];
+    .qunit.assertEquals[(of[a;first c1]`rate_timing;of[a;c2 1]`rate_timing;of[a;c2 1]`report_ccy;of[a;first c3]`contract_version);(`execution;`horizon;`EUR;1);"each row's snapshot is the one its old columns described"];
+    .qunit.assertEquals[c2 0;first c1;"and the same triple in two partitions is the same snapshot"];
+    / nothing else moved
+    after:.qt.qproc.fillhdb.snapshot[root];
+    kept:(key before) where {any x like/: ("*/crypto_markout/fill_id";"*/crypto_markout/status";"*/crypto_markout/time")} each key before;
+    .qunit.assertEquals[after kept;before kept;"the columns that were not folded are byte-identical"]};
+
+.qt.qproc.fillhdb.test_the_migration_is_idempotent_and_finishes_what_an_interruption_left:{[t]
+    root:.qt.qproc.fillhdb.cfg_build[];
+    stat:.qt.qproc.fillhdb.scratch[];
+    .qunit.assertEquals[(.qt.qproc.fillhdb.run_migrating[root;.qt.qproc.fillhdb.cfg_schema;stat]) 1;0;"first run"];
+    after:.qt.qproc.fillhdb.snapshot[root];
+    st1:.qt.qproc.fillhdb.snapshot[stat];
+    r2:.qt.qproc.fillhdb.run_migrating[root;.qt.qproc.fillhdb.cfg_schema;stat];
+    .qunit.assertEquals[r2 1;0;"a second run is clean"];
+    .qunit.assertEquals[.qt.qproc.fillhdb.snapshot[root];after;"and changes nothing in the HDB"];
+    .qunit.assertEquals[.qt.qproc.fillhdb.snapshot[stat];st1;"nor in the snapshot store: the same triples are the same snapshots"];
+    / an interruption after config_id was written and before the old columns were dropped: put them back by hand
+    d:.qt.qproc.fillhdb.dir[root;2026.01.01;`crypto_markout];
+    (` sv d,`contract_version) set 3#1;
+    (` sv d,`.d) set (get ` sv d,`.d),`contract_version;
+    r3:.qt.qproc.fillhdb.run_migrating[root;.qt.qproc.fillhdb.cfg_schema;stat];
+    .qunit.assertEquals[r3 1;0;"the next run is clean"];
+    .qunit.assertEquals[.qt.qproc.fillhdb.cols_of[root;2026.01.01;`crypto_markout];`time`fill_id`status`config_id;"and only drops the leftover column: config_id was already there and is not rewritten"]};
+
+.qt.qproc.fillhdb.test_without_the_migration_switch_an_existing_markout_partition_is_left_alone:{[t]
+    root:.qt.qproc.fillhdb.cfg_build[];
+    before:.qt.qproc.fillhdb.snapshot[root];
+    r:.qt.qproc.fillhdb.run[root;.qt.qproc.fillhdb.cfg_schema];
+    .qunit.assertEquals[r 1;0;"the bootstrap fill is clean"];
+    .qunit.assertEquals[.qt.qproc.fillhdb.snapshot[root];before;"it deletes nothing and adds no config_id to a partition that already holds the table: that is the migration's, which is asked for"]};
+
+.qt.qproc.fillhdb.test_a_migration_with_nowhere_to_record_its_snapshots_stops_before_it_drops_anything:{[t]
+    root:.qt.qproc.fillhdb.cfg_build[];
+    before:.qt.qproc.fillhdb.snapshot[root];
+    sf:root,".database.q";
+    (hsym `$sf) 0: enlist .qt.qproc.fillhdb.cfg_schema;
+    out:root,".out.txt";
+    cmd:"env -u UQF_STATUS_DIR -u TORQDATA ",.qt.support.q_interpreter[]," scripts/gates/fill_hdb_partitions.q ",root," ",sf," migrate < /dev/null > ",out," 2>&1; echo $?";
+    code:"J"$first system cmd;
+    .qunit.assertEquals[code;1;"refused"];
+    .qunit.assertTrue[any (read0 hsym `$out) like "*set UQF_STATUS_DIR*";"saying what to set"];
+    .qunit.assertEquals[.qt.qproc.fillhdb.snapshot[root];before;"and the HDB is as it was"]};
 
 / --- idempotency -----------------------------------------------------------
 

@@ -11,6 +11,15 @@
 
 .qt.qpipe.job.fx_markout.t:2026.09.17D10:00:00.000000000
 
+/ The jobs' check holds a batch whose configuration snapshot is not durable (#1999), so the suite
+/ has a status directory of its own and the jobs' start has pinned what they score under.
+.qt.qpipe.job.fx_markout.beforeNamespace_isolate:{[]
+    setenv[`UQF_STATUS_DIR;"build/test-status-fx-markout-job"];
+    system"mkdir -p build/test-status-fx-markout-job";
+    .qt.support.reset_snapshots[];
+    .qpipe.transform.fx_markout_outputs.pin[];
+    }
+
 .qt.qpipe.job.fx_markout.sent:()
 
 / Both jobs, state emptied and publish pointing at a recorder.
@@ -254,6 +263,20 @@
     .qetl.job.stream.wire[`fx_markout;{[tb;x] .qt.qpipe.job.fx_markout.sent,:enlist (`fx_markout;tb;x); count x}];
     .qt.qpipe.job.fx_markout.tick[`fx_markout;.qt.qpipe.job.fx_markout.t+0D00:00:11];
     .qunit.assertEquals[count .qt.qpipe.job.fx_markout.published `fx_markout;16;"and the next tick publishes it"]};
+
+/ A result must not become visible before the configuration that explains it is on disk (#1999): the
+/ jobs' check holds a batch whose rows name a snapshot nobody recorded, whole, and publishes it once
+/ the snapshot is there. The execution is scored either way; only its publication waits.
+.qt.qpipe.job.fx_markout.test_rows_naming_an_unrecorded_configuration_are_held_until_it_is_pinned:{[tc]
+    .qt.support.reset_snapshots[];
+    .qt.qpipe.job.fx_markout.feed[`fx_markout;`market_data;.qt.qpipe.job.fx_markout.covered[]];
+    .qt.qpipe.job.fx_markout.feed[`fx_markout;`executions;.qt.qpipe.job.fx_markout.buy[]];
+    .qt.qpipe.job.fx_markout.tick[`fx_markout;.qt.qpipe.job.fx_markout.t+0D00:00:10];
+    .qunit.assertEquals[count .qt.qpipe.job.fx_markout.published `fx_markout;0;"scored, but nothing is published while the snapshot is unrecorded"];
+    .qpipe.transform.fx_markout_outputs.pin[];
+    .qt.qpipe.job.fx_markout.feed[`fx_markout;`executions;.qt.qpipe.job.fx_markout.ex[.qt.qpipe.job.fx_markout.t;.qt.qpipe.job.fx_markout.t+0D00:00:00.2;`EURUSD;1;1.1001;`x2]];
+    .qt.qpipe.job.fx_markout.tick[`fx_markout;.qt.qpipe.job.fx_markout.t+0D00:00:11];
+    .qunit.assertEquals[distinct (.qt.qpipe.job.fx_markout.published `fx_markout)`config_id;enlist .qpipe.transform.fx_markout_outputs.config_id;"once pinned the rows go out, each naming it"]};
 
 .qt.qpipe.job.fx_markout.test_a_calculation_failure_leaves_the_execution_queued_for_retry:{[tc]
     .qt.qpipe.job.fx_markout.feed[`fx_markout;`market_data;.qt.qpipe.job.fx_markout.covered[]];

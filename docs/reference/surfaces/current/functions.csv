@@ -234,6 +234,7 @@ qetl.job.bounded,optional_cfg,value,,
 qetl.job.bounded,owed_reactions,function,1,worker
 qetl.job.bounded,partition_of,function,1,worker
 qetl.job.bounded,phases,dict,,
+qetl.job.bounded,pin_config,function,1,worker
 qetl.job.bounded,plan,function,1,worker
 qetl.job.bounded,plan_only,function,2,worker run_spec
 qetl.job.bounded,process_worker,value,,
@@ -242,6 +243,7 @@ qetl.job.bounded,publish_last_batch,function,2,worker unused
 qetl.job.bounded,read_instrument_column,function,1,d
 qetl.job.bounded,read_time_column,function,1,d
 qetl.job.bounded,require_flags,function,1,opts
+qetl.job.bounded,require_pin,function,2,worker given
 qetl.job.bounded,required_cfg,value,,
 qetl.job.bounded,required_flags,value,,
 qetl.job.bounded,run,function,1,worker
@@ -713,6 +715,26 @@ qetl.run,run_schema,value,,
 qetl.run,runs,function,1,
 qetl.run,table_path,function,1,name
 qetl.run,unfinished,function,1,
+qetl.snapshot,attach,function,1,
+qetl.snapshot,audit,function,1,
+qetl.snapshot,content_of,function,1,id
+qetl.snapshot,decode,function,1,cell
+qetl.snapshot,digest,function,2,kind content
+qetl.snapshot,empty,function,1,
+qetl.snapshot,id_digits,value,,
+qetl.snapshot,id_of,function,2,kind content
+qetl.snapshot,list,function,1,kind
+qetl.snapshot,path,function,1,
+qetl.snapshot,record,function,3,kind content reason
+qetl.snapshot,record_as,function,5,id kind content actor reason
+qetl.snapshot,reload,function,1,
+qetl.snapshot,require,function,1,id
+qetl.snapshot,require_many,function,1,ids
+qetl.snapshot,require_pinned,function,1,ids
+qetl.snapshot,schema,value,,
+qetl.snapshot,show,function,1,id
+qetl.snapshot,store,function,1,
+qetl.snapshot,verified,value,,
 qetl.source,ambiguous_message,function,3,tz bad cs
 qetl.source,batch_read,function,1,source
 qetl.source,batch_read_keys,value,,
@@ -1927,6 +1949,21 @@ qpipe.transform.book_liquidity_1m,bars,function,1,x
 qpipe.transform.book_liquidity_1m,lateness,value,,
 qpipe.transform.book_liquidity_1m,sizes,value,,
 qpipe.transform.book_liquidity_1m,width,value,,
+qpipe.transform.config_markout,check_pinned,function,1,batch
+qpipe.transform.config_markout,code_revision,value,,
+qpipe.transform.config_markout,content,function,2,domain spec
+qpipe.transform.config_markout,contract_version,value,,
+qpipe.transform.config_markout,default_name,value,,
+qpipe.transform.config_markout,default_revision,value,,
+qpipe.transform.config_markout,enrich,function,1,rows
+qpipe.transform.config_markout,id,function,2,domain spec
+qpipe.transform.config_markout,kind,value,,
+qpipe.transform.config_markout,legacy_content,function,4,dataset cv rt rc
+qpipe.transform.config_markout,legacy_pin,function,4,dataset cv rt rc
+qpipe.transform.config_markout,params,function,1,rows
+qpipe.transform.config_markout,pin,function,3,domain spec reason
+qpipe.transform.config_markout,require_version,function,2,rows version
+qpipe.transform.config_markout,table_revision,function,2,inst conv
 qpipe.transform.crypto_book_1s,lateness,value,,
 qpipe.transform.crypto_book_1s,order_by,value,,
 qpipe.transform.crypto_book_1s,snapshots,function,1,x
@@ -1937,8 +1974,10 @@ qpipe.transform.crypto_markout,fee_quote,function,4,sym price fee fee_ccy
 qpipe.transform.crypto_markout,measures,function,2,rows fees
 qpipe.transform.crypto_markout,quote_ccy,function,1,syms
 qpipe.transform.crypto_markout,resolve,function,2,spec syms
+qpipe.transform.crypto_markout,revision,value,,
 qpipe.transform.crypto_markout,score,function,3,spec exe md
 qpipe.transform.crypto_markout,split_sym,function,1,syms
+qpipe.transform.crypto_markout_outputs,config_id,value,,
 qpipe.transform.crypto_markout_outputs,executions_in,table,,
 qpipe.transform.crypto_markout_outputs,expire_after,value,,
 qpipe.transform.crypto_markout_outputs,job_spec,dict,,
@@ -1949,6 +1988,7 @@ qpipe.transform.crypto_markout_outputs,lookback,function,1,
 qpipe.transform.crypto_markout_outputs,market_data_in,table,,
 qpipe.transform.crypto_markout_outputs,max_lateness,value,,
 qpipe.transform.crypto_markout_outputs,out,table,,
+qpipe.transform.crypto_markout_outputs,pin,function,1,
 qpipe.transform.crypto_markout_outputs,rate_syms,function,1,
 qpipe.transform.crypto_markout_outputs,remember,value,,
 qpipe.transform.crypto_markout_outputs,rows,function,2,exe md
@@ -1965,6 +2005,7 @@ qpipe.transform.eq_domain,in_session,function,4,sessions s t0 t1
 qpipe.transform.eq_domain,interval_table,function,3,tbl from_c to_c
 qpipe.transform.eq_domain,require_spec,function,1,spec
 qpipe.transform.eq_domain,resolve,function,2,spec syms
+qpipe.transform.eq_domain,revision,value,,
 qpipe.transform.eq_domain,rows_for,function,2,tbl s
 qpipe.transform.exec_bars,bars,function,1,x
 qpipe.transform.exec_bars,lateness,value,,
@@ -1983,10 +2024,12 @@ qpipe.transform.fx_domain,pips,function,3,side pip_factor diff
 qpipe.transform.fx_domain,require_spec,function,1,spec
 qpipe.transform.fx_domain,residual_status,function,2,tolerance residual
 qpipe.transform.fx_domain,resolve,function,2,spec syms
+qpipe.transform.fx_domain,revision,value,,
 qpipe.transform.fx_domain,routable,function,2,conv syms
 qpipe.transform.fx_domain,route,function,2,conv sym
 qpipe.transform.fx_domain,waterfall_mids,function,2,at0 at1
 qpipe.transform.fx_markout,calc,function,3,spec exe md
+qpipe.transform.fx_markout,config_id,value,,
 qpipe.transform.fx_markout,default_spec,dict,,
 qpipe.transform.fx_markout,executions_in,table,,
 qpipe.transform.fx_markout,kinds,value,,
@@ -2000,6 +2043,7 @@ qpipe.transform.fx_markout,route,function,2,conv sym
 qpipe.transform.fx_markout,scoreable,function,2,spec exe
 qpipe.transform.fx_markout,unscoreable,function,2,spec exe
 qpipe.transform.fx_markout,wait,function,2,spec settle
+qpipe.transform.fx_markout_outputs,config_id,value,,
 qpipe.transform.fx_markout_outputs,expire_after,value,,
 qpipe.transform.fx_markout_outputs,identity,value,,
 qpipe.transform.fx_markout_outputs,job_spec,dict,,
@@ -2007,6 +2051,7 @@ qpipe.transform.fx_markout_outputs,layout_spec,function,1,
 qpipe.transform.fx_markout_outputs,long,function,1,res
 qpipe.transform.fx_markout_outputs,long_out,table,,
 qpipe.transform.fx_markout_outputs,max_lateness,value,,
+qpipe.transform.fx_markout_outputs,pin,function,1,
 qpipe.transform.fx_markout_outputs,remember,value,,
 qpipe.transform.fx_markout_outputs,score_with,function,4,spec layout exe md
 qpipe.transform.fx_markout_outputs,settle,value,,
@@ -2030,7 +2075,6 @@ qpipe.transform.kafka_client_flow,message,table,,
 qpipe.transform.markout_core,calc,function,4,domain spec exe md
 qpipe.transform.markout_core,chain_mid,function,1,books
 qpipe.transform.markout_core,clocks,value,,
-qpipe.transform.markout_core,contract_version,value,,
 qpipe.transform.markout_core,conversion_pairs,function,3,domain spec pending
 qpipe.transform.markout_core,core_cols,value,,
 qpipe.transform.markout_core,core_keys,value,,
@@ -2052,7 +2096,6 @@ qpipe.transform.markout_core,rate_kind,function,1,entry
 qpipe.transform.markout_core,rate_max_age,function,1,spec
 qpipe.transform.markout_core,rate_same_clock,value,,
 qpipe.transform.markout_core,refuse_undeclared,value,,
-qpipe.transform.markout_core,require_version,function,2,rows version
 qpipe.transform.markout_core,required_keys,value,,
 qpipe.transform.markout_core,result,table,,
 qpipe.transform.markout_core,spec_defaults,dict,,

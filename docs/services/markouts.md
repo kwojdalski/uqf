@@ -41,9 +41,10 @@ from the fill to the reference at the fill).
   of a figure that mixes two clocks. The retired job read the plant's receipt
   `time` on both sides, which was consistent only because it never used the
   venue's stamp.
-- **USDT is declared worth 1 USD.** Amounts are reported in USD (`report_ccy`),
-  through a fixed rate the spec declares and every row marks (`rate_source` is
-  `fixed`). A site with a USDT-USD book declares it in the spec instead.
+- **USDT is declared worth 1 USD.** Amounts are reported in USD (the
+  configuration snapshot's `report_ccy`, #1999), through a fixed rate the spec
+  declares and every row marks (`rate_source` is `fixed`). A site with a
+  USDT-USD book declares it in the spec instead.
 
 A fill with no live book at a horizon keeps its row, with a null `ref_t1` and
 `markout_bps` and the status `unavailable`.
