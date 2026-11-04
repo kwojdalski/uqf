@@ -104,7 +104,9 @@ def fake_q(monkeypatch, answer: dict) -> dict:
         sent["script"] = Path(cmd[1]).read_text()
         login = Path(cmd[1]).parent / "login"
         sent["login"] = (login.read_text(), login.stat().st_mode & 0o777)
-        out = f"loading\nUQS_DIFF {json.dumps(answer)}\n"
+        head = {k: v for k, v in answer.items() if k != "tables"}
+        rows = "".join(f"UQS_DIFF_TABLE {json.dumps(t)}\n" for t in answer.get("tables", []))
+        out = f"loading\nUQS_DIFF {json.dumps(head)}\n{rows}"
         return subprocess.CompletedProcess(cmd, 0, stdout=out, stderr="")
 
     monkeypatch.setattr(data_diff.subprocess, "run", run)

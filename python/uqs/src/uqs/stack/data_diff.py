@@ -46,6 +46,10 @@ LOCAL = "local"
 _NAME = re.compile(r"[A-Za-z][A-Za-z0-9_]*")
 _SYMBOL = re.compile(r"[A-Za-z0-9_.:-]+")
 _MARK = "UQS_DIFF "
+#: One table's verdict per line: the verdicts collapse to a table whose cells
+#: are dictionaries and tables, which PeachQ's .j.j does not serialise ('nyi),
+#: while each verdict on its own does.
+_TABLE_MARK = "UQS_DIFF_TABLE "
 _TREE = ("src/init.q", "src/etl/init.q")
 
 
@@ -113,7 +117,8 @@ def script(
         [
             *(f"\\l {f}" for f in _TREE),
             f"r:@[{{[x] {call}}};::;{{[e] enlist[`error]!enlist e}}];",
-            f'-1 "{_MARK}",.j.j r;',
+            f'{{[r] -1 "{_MARK}",.j.j `tables _ r; '
+            f'{{-1 "{_TABLE_MARK}",.j.j x}} each r`tables}} r;',
             "exit 0",
             "",
         ]
@@ -172,6 +177,13 @@ def compare(
             f"the comparison did not run:\n{(result.stdout + result.stderr).strip()[-1500:]}"
         )
     report = json.loads(found[-1])
+    marked = len(_TABLE_MARK)
+    if "error" not in report:
+        report["tables"] = [
+            json.loads(line[marked:])
+            for line in result.stdout.splitlines()
+            if line.startswith(_TABLE_MARK)
+        ]
     if "error" in report:
         raise UqsError(f"data diff: {report['error']}")
     return report
