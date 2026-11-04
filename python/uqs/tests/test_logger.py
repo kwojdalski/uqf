@@ -97,8 +97,11 @@ def test_the_format_callable_escapes_what_loguru_would_misread():
     """A `<` in a message would be taken for a colour tag, and a brace for a
     format field - either would garble or break the line."""
     fmt = logcore._make_kv_format("{level} - {message}")
-    out = fmt({"message": "a<b {not_a_field} n=1"})
-    assert r"a\<b" in out
+    out = fmt({"message": "a<b> {not_a_field} n=1"})
+    assert r"a\<b>" in out
+    # A `<` that is not tag-shaped is not a tag to loguru, so it is not
+    # escaped: escaping it printed the backslash (#2048).
+    assert "a<b c" in fmt({"message": "a<b c"})
     assert "{{not_a_field}}" in out
     assert out.endswith("\n")
 
