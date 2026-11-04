@@ -43,6 +43,26 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  author:
+    name: Pull request author
+    # Only pull requests authored by kwojdalski may merge (CONTRIBUTING.md).
+    # No checkout: another author's code never runs here. The login reaches
+    # the script through env, never interpolated into it. On a push to master
+    # there is no pull request, and the job succeeds.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: The author is the owner
+        shell: bash
+        env:
+          EVENT: ${{ github.event_name }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+        run: |
+          if [ "$EVENT" = pull_request ] && [ "$PR_AUTHOR" != kwojdalski ]; then
+            echo "::error::Pull requests are accepted only from kwojdalski; this one is by $PR_AUTHOR. See CONTRIBUTING.md."
+            exit 1
+          fi
+          echo "author check passed ($EVENT${PR_AUTHOR:+ by $PR_AUTHOR})"
   scope:
     name: Scope
     # Which verification groups this run needs, and why (the step summary).
@@ -458,12 +478,13 @@ jobs:
   repository-checks:
     name: Repository checks
     if: ${{ always() }}
-    needs: [scope, checks, doc-links, peachq-q, peachq-python, web]
+    needs: [author, scope, checks, doc-links, peachq-q, peachq-python, web]
     runs-on: ubuntu-24.04
     timeout-minutes: 2
     steps:
       - name: Every job passed, or was not needed
         env:
+          AUTHOR: ${{ needs.author.result }}
           SCOPE: ${{ needs.scope.result }}
           CHECKS: ${{ needs.checks.result }}
           PYTHON: ${{ needs.peachq-python.result }}
@@ -482,6 +503,7 @@ jobs:
             if [ "$2" = skipped ] && [ "$3" = false ]; then echo "$1: skipped - nothing it checks changed"
             else need "$1" "$2"; fi
           }
+          need "Pull request author" "$AUTHOR"
           need "Scope" "$SCOPE"
           need "Hooks and static gates" "$CHECKS"
           filtered "Docs links" "$DOCS" "$DOCS_NEEDED"
