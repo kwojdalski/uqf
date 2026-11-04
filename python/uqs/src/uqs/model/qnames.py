@@ -46,3 +46,31 @@ Q_WORDS = frozenset(
         "rlike"
     ).split()
 )
+
+#: Globals every TorQ process of the supported version defines at its root (read with
+#: `system"f"` / `system"v"` on an isolated 5.2.12 stack) - the entry points the plant calls
+#: by name, the views it keeps, and `sym`, the enumeration domain the wdb and hdb share.
+#: A table of one of these names would overwrite it (#1450). The names are static so
+#: scaffolds and bundles can refuse them without a stack; attachment preflight also
+#: reads the running stack's own names from its probe (NAME_RESERVED).
+_TORQ_GLOBALS = frozenset(
+    "upd tablelist init setup subdetails loadschemas generateschemas createlogs tptype "
+    "loghandles endofday endofperiod reload countbysym hloc sym".split()
+)
+#: The hdb's partition domain: `date` for the default `.Q.pf`, and the other partition
+#: types. A table with one of these names in a partition breaks every date-filtered
+#: query of every table (`'splay`).
+_PARTITION_NAMES = frozenset("date month year int".split())
+
+
+def reserved_reason(name: str) -> str | None:
+    """Why `name` cannot be a table name on a TorQ stack, or None when nothing
+    static forbids it (the running processes may still hold the name, which
+    attachment preflight reads from the probe)."""
+    if name in Q_WORDS:
+        return "a q keyword"
+    if name in _TORQ_GLOBALS:
+        return "a global every TorQ process defines (a table would overwrite it)"
+    if name in _PARTITION_NAMES:
+        return "a partition name of the hdb (it would break date-filtered queries of every table)"
+    return None
