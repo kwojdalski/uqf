@@ -583,10 +583,10 @@ function (`uqs.cli.data_diff.run`): uqs reaches each side's gateway - a target
 through an ssh tunnel, so a target side needs remote operations on, as a tunnel
 check does - and q decides everything the answer says (src/etl/core/compare.q).
 Each table carries one outcome - `endpoint_unavailable`, `missing_table`,
-`differs`, `incomplete_coverage` or `equal_in_sample` - and the label q wrote
-for it, which for a sample cut at the row limit says it is not proof the tables
-are equal. Every table is put to the table policy like `/query`'s, and the route
-is the `compare` feature's read.
+`differs`, `not_comparable`, `incomplete_coverage` or `equal_in_sample` - and
+the label q wrote for it, which for a sample cut at the row limit says it is not
+proof the tables are equal. Every table is put to the table policy like
+`/query`'s, and the route is the `compare` feature's read.
 
 ## Backfill status
 
