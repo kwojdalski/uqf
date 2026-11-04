@@ -127,6 +127,27 @@ fields of its `deploy-report.json`, come back as `release`. A listing returns at
 most `limit` entries (500 by default, 5000 at most) and says when it was
 truncated; the call is held to 20 s.
 
+### A target's tunnel --- uqs plans and checks it
+
+`GET /services/{target}/tunnel?process=&local=PROC:PORT&offset=` returns the
+target's tunnel plan, and `GET /services/{target}/tunnel/check` with the same
+parameters returns the result of checking it (#2030, #2031). Both are gated like
+browsing, because uqs reads the target's release over ssh. Neither route has ssh
+code of its own: `tunnels.py` calls `uqs.deploy.tunnel_plan` and
+`uqs.deploy.tunnel_check`, the functions behind `uqs target tunnel plan` and
+`uqs target tunnel check`.
+
+Every value the routes return comes from uqs: the processes and their ports,
+each local endpoint, the launch command (which holds no credential), each
+mapping's `verified`, `stale` or `unverified` state, and each endpoint's
+diagnostic category. A refused plan returns 400, and a release that cannot be
+asked for its processes returns 502.
+
+The check logs in to q with this API's gateway credential when one is
+configured, and with uqs's default otherwise. The credential never appears in a
+response. The Services view shows the plan and the check. The Fleet view offers
+the same connection details for whichever target you choose.
+
 ### Uploading to a target's shared/config --- one file per request
 
 `PUT /services/{target}/files/content?path=&overwrite=false` writes the request

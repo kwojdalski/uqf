@@ -15,10 +15,10 @@ import time
 import typing
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import Any
+from typing import Annotated, Any
 
 import polars as pl
-from fastapi import Depends, FastAPI, Request
+from fastapi import Depends, FastAPI, Query, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -36,6 +36,7 @@ from uqf_frontend import (
     remote_helper,
     services,
     status,
+    tunnels,
     write_guard,
 )
 from uqf_frontend.authz import Policy, Request_, allow_all, enforce
@@ -88,6 +89,8 @@ from uqf_frontend.models import (
     ServicesResponse,
     ServiceTargetOut,
     TableInfo,
+    TunnelCheckResponse,
+    TunnelPlanResponse,
     UsageResponse,
     WorkerConfigRequest,
     WorkerConfigResponse,
@@ -540,6 +543,44 @@ def create_app(
             truncated=answer["truncated"],
             release=answer["release"],
         )
+
+    def _tunnel_gate(what: str) -> None:
+        if not settings.enable_writes:
+            raise WritesDisabled(
+                f"{what} reaches the server over ssh, so it needs remote operations: set "
+                "UQF_FRONTEND_ENABLE_WRITES=1 and UQF_FRONTEND_WRITE_TOKEN on the server"
+            )
+
+    @app.get("/services/{target}/tunnel", response_model=TunnelPlanResponse)
+    def get_tunnel_plan(
+        request: Request,
+        target: str,
+        process: Annotated[list[str] | None, Query()] = None,
+        local: Annotated[list[str] | None, Query()] = None,
+        offset: int | None = None,
+    ) -> TunnelPlanResponse:
+        """The target's tunnel plan, as `uqs target tunnel plan --json` makes
+        it: processes and ports from its release, each mapping's state from the
+        last check. Opens no tunnel - see tunnels.py."""
+        _tunnel_gate("a tunnel plan")
+        doc = tunnels.plan(settings, target, process or [], local or [], offset,
+                           runner=request.app.state.remote_runner)  # fmt: skip
+        return TunnelPlanResponse(**doc)
+
+    @app.get("/services/{target}/tunnel/check", response_model=TunnelCheckResponse)
+    def get_tunnel_check(
+        request: Request,
+        target: str,
+        process: Annotated[list[str] | None, Query()] = None,
+        local: Annotated[list[str] | None, Query()] = None,
+        offset: int | None = None,
+    ) -> TunnelCheckResponse:
+        """Each mapping checked layer by layer, as `uqs target tunnel check
+        --json` does: a failed endpoint never hides a healthy one."""
+        _tunnel_gate("a tunnel check")
+        doc = tunnels.check(settings, target, process or [], local or [], offset,
+                            runner=request.app.state.remote_runner)  # fmt: skip
+        return TunnelCheckResponse(**doc)
 
     @app.post("/services/{target}/files/delete", response_model=RemoteDeleteResponse)
     def delete_remote_files(
