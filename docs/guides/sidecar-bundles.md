@@ -82,7 +82,7 @@ with its options, and the dependency warnings know what it feeds.
 `uqs job new` takes `--bundle FOLDER` for every kind of job:
 
 ```bash
-uqs job new mock_trades --kind backfill --dataset mock_trades \
+uqs job new mock_trades --kind backfill --outputs mock_trades \
     --schema "sym:symbol, px:float" --bundle sidecars/mockups --dry-run
 uqs job new mock_rollup --triggered-by mock_trades --bundle sidecars/mockups
 ```

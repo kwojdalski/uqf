@@ -21,7 +21,7 @@ from uqs.model.jobs import bounded_producers, job_rows
 from uqs.paths import UqsError, UqsUsageError
 from uqs.scaffold import reaction
 
-#: `job new`'s two options of a reaction's own.
+#: `job new`'s option of a reaction's own (its outputs are the shared `--outputs`).
 TriggeredByOpt = Annotated[
     str | None,
     typer.Option(
@@ -31,34 +31,22 @@ TriggeredByOpt = Annotated[
         autocompletion=completion.bounded_datasets,
     ),
 ]
-WritesOpt = Annotated[
-    str | None,
-    typer.Option(
-        "--writes",
-        metavar="TABLE,...",
-        help="Tables the reaction writes",
-        autocompletion=completion.plant_tables,
-    ),
-]
 
 
 def scaffold_reaction(
     name: str,
-    triggered_by: str | None,
-    writes: str | None,
+    triggered_by: str,
+    outputs: str | None,
     others: dict[str, bool],
     *,
     bundle: Path | None = None,
     dry_run: bool,
 ) -> None:
-    """`uqs job new NAME --triggered-by DATASET [--writes T]`: a reaction.
+    """`uqs job new NAME --triggered-by DATASET [--outputs T]`: a reaction.
 
     Every option that shapes a process is refused rather than ignored, because
     a reaction has no process: it runs inside the one that publishes DATASET.
     """
-    if triggered_by is None:
-        _die(UqsError("--writes is for a reaction - give --triggered-by DATASET too"))
-        return
     for option in (o for o, used in others.items() if used):
         _die(
             UqsUsageError(
@@ -73,7 +61,7 @@ def scaffold_reaction(
             plan = reaction.reaction(
                 name,
                 triggered_by.strip(),
-                [w.strip() for w in (writes or "").split(",") if w.strip()],
+                [w.strip() for w in (outputs or "").split(",") if w.strip()],
                 producers=bounded_producers(root),
                 taken={row["job"] for row in job_rows(root)},
                 streaming_tables={t for d in read_declarations(root) for t in d.publishes},

@@ -88,7 +88,7 @@ def horizon_job(
     if subscribe_to[0] == subscribe_to[1]:
         raise UqsError("a horizon job needs distinct events and reference tables")
     if publishes:
-        raise UqsError("a horizon job publishes its own NAME - drop --publishes")
+        raise UqsError("a horizon job publishes its own NAME - drop --outputs")
     if not columns:
         raise UqsError("--kind horizon needs --schema: the table it publishes")
     if not horizon:

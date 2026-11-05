@@ -13,7 +13,7 @@ Kafka](../services/README.md#external-sources) are:
 
 ```bash
 uqs job new ws_quotes --kind connector --raw-table ws_quotes_raw \
-    --publishes ws_quotes_book --schema "sym:symbol, bid:float, ask:float"
+    --outputs ws_quotes_book --schema "sym:symbol, bid:float, ask:float"
 ```
 
 It writes:
@@ -23,7 +23,7 @@ It writes:
   | `python/uqs/src/uqs/external/NAME_streamer.py` | the publisher process. Write **`batches()`**, which yields lists of records from the source. Connecting, converting to columns and `.u.upd` are done.                     |
   | `python/uqs/src/uqs/external/NAME_feed.py`     | its lifecycle, on the shared `DetachedProcess`, and a `FEED` that `uqs connector start\|stop\|restart\|status\|logs NAME` finds with no CLI edit                          |
   | `python/uqs/tests/test_NAME_streamer.py`       | a test that fails until it's written                                                                                                                                      |
-  | the raw table and `src/etl/streaming/NAME.q`   | the q job subscribing to `--raw-table` and publishing `--publishes`, with its own failing test                                                                            |
+  | the raw table and `src/etl/streaming/NAME.q`   | the q job subscribing to `--raw-table` and publishing `--outputs`, with its own failing test                                                                              |
 
 Both tables start with the same `--schema`. The q job is where they come to
 differ, as `databento1` folds 40 per-level columns into four vectors.
