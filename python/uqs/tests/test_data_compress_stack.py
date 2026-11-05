@@ -118,9 +118,15 @@ def test_the_plan_then_the_run_on_a_live_hdb(stack):
     count = f"count select from {TABLE}"
     rows = stack.q(3, count)
 
+    one = stack.compress("--table", TABLE, "--date", "2015-01-07", "--apply", "--yes")
+    assert one["ok"] is True, one
+    assert [p["partition"] for p in one["result"]["partitions"]] == ["2015-01-07"]
+    assert not stack.q(3, f'count -21!hsym `$"{stack.hdb / "2015.01.08" / TABLE / "time"}"')
+    assert one["result"]["reload"]["reloaded"] >= 1, "hdb1 reloaded once"
+
     done = stack.compress("--table", TABLE, "--apply", "--yes")
     assert done["ok"] is True, done
-    assert [p["partition"] for p in done["result"]["partitions"]] == todo
+    assert [p["partition"] for p in done["result"]["partitions"]] == ["2015-01-08"]
     assert done["result"]["failed"] is None
 
     cols = stack.q(3, f"1_cols {TABLE}")  # not the partition column, which has no file
@@ -134,9 +140,8 @@ def test_the_plan_then_the_run_on_a_live_hdb(stack):
     history = json.loads(
         stack.uqs("activity", "list", "--action", "hdb.compress", "--json").stdout
     )["events"]
-    (event,) = history
-    assert (event["outcome"], event["method"]) == ("succeeded", "CLI")
-    assert [i["target"] for i in event["items"]] == todo
+    assert [e["outcome"] for e in history] == ["succeeded", "succeeded"]
+    assert sorted(i["target"] for e in history for i in e["items"]) == todo
 
     again = stack.compress("--table", TABLE)
     assert not [p for p in again["partitions"] if p["compress"]], "nothing is left to compress"

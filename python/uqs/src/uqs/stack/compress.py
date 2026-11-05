@@ -32,6 +32,7 @@ import re
 import shutil
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -49,9 +50,6 @@ SAMPLE_ROWS = 100_000
 SURVEY_TIMEOUT_S = 1800
 PARTITION_TIMEOUT_S = 3 * 3600
 
-#: The oldest partition .cmp considers: all of them.
-MAXAGE = "0W"
-
 #: A day, in seconds: TorQ ages partitions in whole days.
 DAY_S = 86_400
 
@@ -67,12 +65,18 @@ Query = Callable[..., Any]
 @dataclass(frozen=True)
 class Scope:
     """What one run may reach: these tables (all when empty), partitions at
-    least `older_days` old."""
+    least `older_days` old - or, when `days` names them, the partitions in
+    [first, last] whatever the policy's minimum age - and, for a one-off run,
+    another algorithm, block size or level on .cmp's plan rows."""
 
     tables: tuple[str, ...] = ()
     older_days: int = 0
     #: the stack's base port, KDBBASEPORT; None for the runtime's own
     base_port: int | None = None
+    #: (first, last) partition dates, inclusive, either None for open; None for the policy's
+    days: tuple[date | None, date | None] | None = None
+    #: calgo, cblocksize, clevel for this run alone, by .cmp's plan columns
+    change: tuple[tuple[str, int], ...] = ()
 
 
 def older_days(seconds: int | None) -> int:
@@ -89,12 +93,53 @@ def older_days(seconds: int | None) -> int:
     return seconds // DAY_S
 
 
-def scope(tables: Iterable[str], seconds: int | None, base_port: int | None = None) -> Scope:
-    """The scope a command line names, each table checked to be a q name."""
+def scope(
+    tables: Iterable[str],
+    seconds: int | None,
+    base_port: int | None = None,
+    days: tuple[date | None, date | None] | None = None,
+    algo: str | None = None,
+    blocksize: int | None = None,
+    level: int | None = None,
+) -> Scope:
+    """The scope a command line names, each table checked to be a q name, and a
+    one-off algorithm, block size or level given as .cmp's plan columns
+    (calgo, cblocksize, clevel) - .cmp.checkcsv judges them in q."""
     names = tuple(dict.fromkeys(t.strip() for t in tables if t.strip()))
     if bad := [t for t in names if not _NAME.fullmatch(t)]:
         raise UqsUsageError(f"--table {', '.join(bad)}: not a table name")
-    return Scope(names, older_days(seconds), base_port)
+    if days is not None and days[0] is not None and days[1] is not None and days[0] > days[1]:
+        raise UqsUsageError("the range holds no whole partition day")
+    by_name = {v: k for k, v in ALGOS.items()}
+    change = tuple(
+        (k, v)
+        for k, v in (
+            ("calgo", None if algo is None else by_name[algo]),
+            ("cblocksize", blocksize),
+            ("clevel", level),
+        )
+        if v is not None
+    )
+    return Scope(names, older_days(seconds), base_port, days, change)
+
+
+def _q_days(days: tuple[date | None, date | None] | None) -> str:
+    if days is None:
+        return "()"
+    return "(" + ";".join("0Nd" if d is None else d.strftime("%Y.%m.%d") for d in days) + ")"
+
+
+def _q_change(change: tuple[tuple[str, int], ...]) -> str:
+    if not change:
+        return "()!()"
+    keys = "".join(f"`{k}" for k, _ in change)
+    vals = ";".join(str(int(v)) for _, v in change)
+    return f"(enlist {keys})!enlist {vals}" if len(change) == 1 else f"{keys}!({vals})"
+
+
+def _q_scope(sc: Scope) -> str:
+    """`only;older;days;change`, as survey and apply_partition take them."""
+    return f"{_q_symbols(sc.tables)};{sc.older_days};{_q_days(sc.days)};{_q_change(sc.change)}"
 
 
 def _q_string(text: str) -> str:
@@ -150,10 +195,7 @@ def survey(paths: UqsPaths, sc: Scope, *, query: Query | None = None) -> dict[st
     """What a run of `sc` would do, as `.qtorq.compress.survey` returns it,
     with the disk each filesystem needs and has, and which policy each table
     takes."""
-    expr = (
-        f".qtorq.compress.survey[{_hdb(paths)};.cmp.inputcsv;{MAXAGE};"
-        f"{_q_symbols(sc.tables)};{sc.older_days};{SAMPLE_ROWS}]"
-    )
+    expr = f".qtorq.compress.survey[{_hdb(paths)};.cmp.inputcsv;{_q_scope(sc)};{SAMPLE_ROWS}]"
     doc = _ask(paths, sc, expr, SURVEY_TIMEOUT_S, query)
     parts = doc.get("partitions") or []
     acting = [p for p in parts if p.get("status") == "act"]
@@ -267,16 +309,24 @@ def refuse_short_disk(disk: list[dict[str, Any]]) -> None:
 def run_partition(
     paths: UqsPaths, sc: Scope, partition: str, *, query: Query | None = None
 ) -> list[dict[str, Any]]:
-    """Compress one partition through `.qtorq.compress.run` (TorQ's .cmp, the
-    read-back check, the HDB reload): one row per file changed.
+    """Compress one partition of the selection through
+    `.qtorq.compress.apply_partition` (TorQ's .cmp.compressfromtable over its plan
+    rows, then the read-back check): one row per file changed. The HDB is not
+    reloaded: `reload` does that once, after the last.
 
     @raise UqsError with .qtorq.compress's named error when a file did not reach
     its target state - every file before it stays valid."""
     expr = (
-        f".qtorq.compress.run_partition[{_hdb(paths)};.cmp.inputcsv;"
-        f"{_q_symbols(sc.tables)};{sc.older_days};{_q_string(partition)}]"
+        f".qtorq.compress.apply_partition[{_hdb(paths)};.cmp.inputcsv;{_q_scope(sc)};"
+        f"{_q_string(partition)}]"
     )
     return list(_ask(paths, sc, expr, PARTITION_TIMEOUT_S, query))
+
+
+def reload(paths: UqsPaths, sc: Scope, *, query: Query | None = None) -> dict[str, Any]:
+    """Ask every HDB to reload, once, through housekeeping1's `.qtorq.reload_hdb`
+    (TorQ's (`reload;date) message): how many were registered, opened, reloaded."""
+    return dict(_ask(paths, sc, ".qtorq.reload_hdb[]", 120, query))
 
 
 def partitions_to_run(doc: dict[str, Any]) -> list[str]:

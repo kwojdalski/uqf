@@ -30,10 +30,12 @@ from typing import Annotated, Any
 import typer
 from rich.table import Table
 
-from uqs import activity_log
+from uqs import activity_log, timerange
 from uqs.cli import completion, safety
+from uqs.cli.choices import ChoiceOpt
 from uqs.cli.hdb_scope import tables_given
 from uqs.cli.json_out import emit, json_opt
+from uqs.cli.range_options import DateOpt, LastOpt, RangeFromOpt, RangeToOpt
 from uqs.cli.safety import ConfirmsOnServer
 from uqs.cli.shared import BasePortOpt, _die, _paths, console, data_app
 from uqs.cli.vocabulary import duration
@@ -53,6 +55,15 @@ CompressJson = json_opt(
     "[{table, partition, age, status, compress, decompress, skip, compressed, files, bytes_now, "
     'bytes_after, bytes_written, dir}], "sample", "disk": [{filesystem, needed_bytes, '
     'free_bytes, ok}], "totals", "result": null or {partitions, failed, audit}}'
+)
+
+
+#: --algo: TorQ's .cmp algorithms by name, `none` decompressing.
+AlgoOpt = ChoiceOpt(
+    tuple(stack_compress.ALGOS.values()),
+    "--algo",
+    "This run only: the algorithm, instead of the policy's - set on the rows of .cmp's own "
+    "plan, checked by .cmp.checkcsv",
 )
 
 
@@ -76,6 +87,23 @@ def compress(
             "of the policy's own minimum age",
         ),
     ] = None,
+    range_from: RangeFromOpt = None,
+    range_to: RangeToOpt = None,
+    day: DateOpt = None,
+    last: LastOpt = None,
+    algo: AlgoOpt = None,
+    blocksize: Annotated[
+        int | None,
+        typer.Option(
+            "--blocksize",
+            help="This run only: the logical block size, a power of two (16 is 64 KB), "
+            "instead of the policy's",
+        ),
+    ] = None,
+    level: Annotated[
+        int | None,
+        typer.Option("--level", help="This run only: the gzip level, instead of the policy's"),
+    ] = None,
     base_port: BasePortOpt = None,
     apply: safety.ApplyOpt = False,
     yes: safety.ApplyYesOpt = False,
@@ -91,25 +119,39 @@ def compress(
     checked and the HDB reloaded, stopping at the first failure.
     """
     try:
-        paths = _paths()
-        sc = stack_compress.scope(tables_given(table), older_than, base_port)
-        doc = stack_compress.survey(paths, sc)
-        doc.update(
-            hdb=str(paths.hdb_dir),
-            process=stack_compress.PROCESS,
-            scope={"tables": list(sc.tables), "older_than_days": sc.older_days},
-        )
-        if not as_json:
-            show(doc)
-        todo = stack_compress.partitions_to_run(doc)
-        result = None
-        if apply and todo:
-            stack_compress.refuse_short_disk(doc["disk"])
-            _confirm(paths, todo, yes=yes, as_json=as_json)
-            result = run(paths, sc, todo, as_json=as_json)
-        finish(doc, result, as_json=as_json, applied=apply)
+        window = timerange.resolve(range_from, range_to, day, last, open_ended=True)
+        named = any(v is not None for v in (range_from, range_to, day, last))
+        sc = stack_compress.scope(
+            tables_given(table), older_than, base_port,
+            window.partition_dates() if named else None, algo, blocksize, level,
+        )  # fmt: skip
+        plan_and_apply(sc, apply=apply, yes=yes, as_json=as_json)
     except UqsError as exc:
         _die(exc)
+
+
+def plan_and_apply(sc: stack_compress.Scope, *, apply: bool, yes: bool, as_json: bool) -> None:
+    """The plan; with `apply`, after asking, the run."""
+    paths = _paths()
+    doc = stack_compress.survey(paths, sc)
+    days = None if sc.days is None else [None if d is None else d.isoformat() for d in sc.days]
+    doc.update(
+        hdb=str(paths.hdb_dir),
+        process=stack_compress.PROCESS,
+        scope={
+            "tables": list(sc.tables), "older_than_days": sc.older_days,
+            "days": days, "change": dict(sc.change),
+        },
+    )  # fmt: skip
+    if not as_json:
+        show(doc)
+    todo = stack_compress.partitions_to_run(doc)
+    result = None
+    if apply and todo:
+        stack_compress.refuse_short_disk(doc["disk"])
+        _confirm(paths, todo, yes=yes, as_json=as_json)
+        result = run(paths, sc, todo, as_json=as_json)
+    finish(doc, result, as_json=as_json, applied=apply)
 
 
 def _confirm(paths: UqsPaths, todo: list[str], *, yes: bool, as_json: bool) -> None:
@@ -130,6 +172,7 @@ def run(paths: UqsPaths, sc: stack_compress.Scope, todo: list[str], *, as_json: 
     done: list[dict[str, Any]] = []
     failed = None
     started = time.monotonic()
+    reloaded = None
     with hdb_alter.write_lock(paths):
         for part in todo:
             try:
@@ -144,10 +187,18 @@ def run(paths: UqsPaths, sc: stack_compress.Scope, todo: list[str], *, as_json: 
                 d = done[-1]
                 console.print(
                     f"  [green]compressed[/] {part}: {d['files']} file(s), "
-                    f"{_size(d['bytes_before'])} -> {_size(d['bytes_after'])}; HDB asked to reload"
+                    f"{_size(d['bytes_before'])} -> {_size(d['bytes_after'])}"
                 )
+        # once, after the last partition - and after a failure too, since every
+        # partition before it changed
+        reloaded = stack_compress.reload(paths, sc) if any(d["files"] for d in done) else None
+    if reloaded is not None and not as_json:
+        console.print(
+            f"  HDB reload: {reloaded.get('reloaded')} of {reloaded.get('registered')} "
+            "registered HDB(s) reloaded"
+        )
     recorded = audit.settle(done, failed, (time.monotonic() - started) * 1000)
-    return {"partitions": done, "failed": failed, "audit": recorded}
+    return {"partitions": done, "failed": failed, "reload": reloaded, "audit": recorded}
 
 
 class Audit:
@@ -275,6 +326,12 @@ def show(doc: dict[str, Any]) -> None:
             else "declared"
         )
         console.print(f"policy     {p['table']}: {how} - {_policy_line(p)}")
+    for p in doc.get("partitions") or []:
+        if p.get("early") and stack_compress.changes(p) and p["status"] == "act":
+            console.print(
+                f"[yellow]named      {p['table']} {p['partition']}: compressing it although the "
+                f"policy's minage is {p['policy_minage']} (it is {p['age']} days old)[/]"
+            )
     for h in doc.get("held") or []:
         console.print(f"[yellow]held       {h['dataset']} {h['date']}: still being written[/]")
     rows = stack_compress.by_table(doc.get("partitions") or [])

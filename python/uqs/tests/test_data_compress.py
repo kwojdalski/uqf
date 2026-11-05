@@ -17,6 +17,7 @@ import csv
 import io
 import json
 import sqlite3
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -115,7 +116,9 @@ def answers(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 
     def query(expr: str, port: int, timeout: int = 0) -> str:
         asked.append(expr)
-        if "run_partition" in expr:
+        if "reload_hdb" in expr:
+            return json.dumps({"registered": 1, "opened": 1, "reloaded": 1})
+        if "apply_partition" in expr:
             day = expr.rsplit('"', 2)[-2]
             rows = [
                 {
@@ -161,7 +164,7 @@ def test_the_survey_asks_housekeeping1_with_the_scope(answers):
     (expr,) = asked
     assert expr.startswith(".j.j .qtorq.compress.survey[(hsym `$")
     assert f'"{paths.hdb_dir}"' in expr
-    assert expr.endswith(f";.cmp.inputcsv;0W;`market_data;7;{stack_compress.SAMPLE_ROWS}]")
+    assert expr.endswith(f";.cmp.inputcsv;`market_data;7;();()!();{stack_compress.SAMPLE_ROWS}]")
     # held partitions are shown, never counted; a partition with nothing to change is not one
     assert doc["totals"] == {
         "partitions": 2,
@@ -208,7 +211,7 @@ def test_a_partition_run_names_its_partition_and_scope(answers):
     rows = stack_compress.run_partition(
         real_paths(), stack_compress.Scope(), "2026-10-20", query=query
     )
-    assert asked[-1].endswith(';.cmp.inputcsv;`symbol$();0;"2026-10-20"]')
+    assert asked[-1].endswith(';.cmp.inputcsv;`symbol$();0;();()!();"2026-10-20"]')
     assert stack_compress.summary("2026-10-20", rows) == {
         "partition": "2026-10-20",
         "tables": ["market_data"],
@@ -281,7 +284,7 @@ def test_without_apply_nothing_runs_and_the_plan_says_so(cli):
     run, asked, _, history = cli
     done = run()
     assert done.exit_code == 0, done.output
-    assert not any("run_partition" in a for a in asked)
+    assert not any("apply_partition" in a for a in asked)
     assert "stack default" in done.output and "dry run: nothing was changed" in done.output
     assert "held       fx_markout 2026-10-30: still being written" in done.output
     assert not history.exists()
@@ -291,7 +294,7 @@ def test_apply_runs_each_partition_oldest_first_and_audits_each(cli):
     run, asked, _, history = cli
     done = run("--apply", "--yes")
     assert done.exit_code == 0, done.output
-    runs = [a for a in asked if "run_partition" in a]
+    runs = [a for a in asked if "apply_partition" in a]
     assert [r.rsplit('"', 2)[-2] for r in runs] == ["2026-10-20", "2026-10-21"]
     (row,) = _audit(history)
     assert (row["source"], row["kind"], row["outcome"], row["method"]) == (
@@ -339,7 +342,7 @@ def test_apply_is_refused_before_anything_when_the_disk_is_short(cli, monkeypatc
     monkeypatch.setattr(stack_compress.shutil, "disk_usage", lambda d: Usage())
     done = run("--apply", "--yes")
     assert done.exit_code != 0
-    assert not any("run_partition" in a for a in asked)
+    assert not any("apply_partition" in a for a in asked)
     assert not history.exists()
 
 
@@ -347,14 +350,19 @@ def test_json_cannot_ask(cli):
     run, asked, _, _ = cli
     done = run("--apply", "--json")
     assert done.exit_code == 2, "a usage refusal: --json cannot ask, and --yes was not given"
-    assert not any("run_partition" in a for a in asked)
+    assert not any("apply_partition" in a for a in asked)
 
 
 def test_the_json_document_carries_the_plan(cli):
     run, *_ = cli
     doc = json.loads(run("--json", "--table", "market_data", "--older-than", "7d").stdout)
     assert doc["ok"] is True and doc["result"] is None
-    assert doc["scope"] == {"tables": ["market_data"], "older_than_days": 7}
+    assert doc["scope"] == {
+        "tables": ["market_data"],
+        "older_than_days": 7,
+        "days": None,
+        "change": {},
+    }
     assert {"policies", "held", "partitions", "sample", "disk", "totals"} <= set(doc)
 
 
@@ -397,3 +405,57 @@ def test_housekeeping1_points_cmp_at_the_policy_before_and_loads_the_wrapper_aft
         )
         if "$" not in path:
             assert Path(path).is_file(), path
+
+
+# ------------------------------------------------------------- named days
+
+
+def test_the_days_and_a_one_off_change_reach_q_as_its_literals():
+    sc = stack_compress.scope([], None, None, (date(2026, 11, 2), None), "qipc", 17)
+    assert stack_compress._q_scope(sc) == "`symbol$();0;(2026.11.02;0Nd);`calgo`cblocksize!(1;17)"
+    one = stack_compress.scope([], None, level=9)
+    assert stack_compress._q_change(one.change) == "(enlist `clevel)!enlist 9"
+
+
+def _scope_of(cli, monkeypatch, *args):
+    run, *_ = cli
+    seen = {}
+    real = data_compress.plan_and_apply
+
+    def spy(sc, **kw):
+        seen["sc"] = sc
+        return real(sc, **kw)
+
+    monkeypatch.setattr(data_compress, "plan_and_apply", spy)
+    done = run(*args)
+    assert done.exit_code == 0, done.output
+    return seen["sc"]
+
+
+def test_a_date_names_that_one_partition(cli, monkeypatch):
+    assert _scope_of(cli, monkeypatch, "--date", "2026-11-02").days == (
+        date(2026, 11, 2),
+        date(2026, 11, 2),
+    )
+
+
+def test_from_to_is_half_open(cli, monkeypatch):
+    sc = _scope_of(cli, monkeypatch, "--from", "2026-10-20", "--to", "2026-10-22")
+    assert sc.days == (date(2026, 10, 20), date(2026, 10, 21)), "--to's day is not in"
+
+
+def test_without_a_range_the_policy_chooses(cli, monkeypatch):
+    assert _scope_of(cli, monkeypatch).days is None
+
+
+def test_the_dry_run_says_a_named_day_is_younger_than_the_policy(cli):
+    run, _, doc, _ = cli
+    doc["partitions"][2].update(early=True, policy_minage=7, age=1)
+    out = run("--date", "2026-10-21").output
+    assert "compressing it although the policy's minage is 7" in out
+
+
+def test_apply_reloads_the_hdbs_once(cli):
+    run, asked, _, _ = cli
+    assert run("--apply", "--yes").exit_code == 0
+    assert sum("reload_hdb" in a for a in asked) == 1
