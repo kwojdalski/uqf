@@ -204,38 +204,21 @@
 
 / --- reload ----------------------------------------------------------------
 
-/ Stand-in for .servers: the hdbs it finds are function handles that record the call.
-.qt.qtorq.compress.servers:{[handles]
-    had:`getservers in key `.servers;
-    `.qt.qtorq.compress.had_servers set had;
-    `.qt.qtorq.compress.old_servers set $[had; .servers.getservers; ::];
-    `.servers.getservers set {[hs;a;b;c;d;e] ([] w:hs)}[handles]; }
-
-.qt.qtorq.compress.unservers:{[]
-    if[.qt.qtorq.compress.had_servers; `.servers.getservers set .qt.qtorq.compress.old_servers];
-    if[not .qt.qtorq.compress.had_servers; .qt.fixture.torq_cmp.drop[`.servers;`getservers]]; }
-
-.qt.qtorq.compress.calls:()
+/ run's reload is .qtorq.reload_hdb; swap it for a recorder and put it back.
+.qt.qtorq.compress.reloads:0
 
 .qt.qtorq.compress.test_run_reloads_the_hdbs_only_when_a_file_changed:{[t]
     root:.qt.qtorq.compress.hdb[];
     conf:.qt.qtorq.compress.conf[root;.qt.qtorq.compress.default_rows[]];
-    `.qt.qtorq.compress.calls set ();
-    h:{`.qt.qtorq.compress.calls set .qt.qtorq.compress.calls,enlist x; (1b;`)};
-    .qt.qtorq.compress.servers[enlist h];
-    .qtorq.compress.run[root;conf;365];
-    .qunit.assertEquals[count .qt.qtorq.compress.calls;1];
-    .qunit.assertEquals[last first .qt.qtorq.compress.calls;1_string root];
-    .qtorq.compress.run[root;conf;365];
-    .qunit.assertEquals[count .qt.qtorq.compress.calls;1];
-    .qt.qtorq.compress.unservers[];
-    ::}
-
-.qt.qtorq.compress.test_a_failing_reload_is_named_not_swallowed:{[t]
-    `.qt.qtorq.compress.calls set ();
-    good:{(1b;`)};
-    bad:{'"hdb is busy"};
-    .qt.qtorq.compress.servers[(good;bad)];
-    msg:@[{.qtorq.compress.reload `:/hdb; ""};::;{x}];
-    .qt.qtorq.compress.unservers[];
-    .qunit.assertEquals[msg;"qtorq.compress: 1 hdb(s) failed to reload: hdb is busy"]}
+    `.qt.qtorq.compress.reloads set 0;
+    old:.qtorq.reload_hdb;
+    `.qtorq.reload_hdb set {`.qt.qtorq.compress.reloads set 1+.qt.qtorq.compress.reloads; `registered`opened`reloaded!0 0 0};
+    r1:.qtorq.compress.run[root;conf;365];
+    n1:.qt.qtorq.compress.reloads;
+    r2:.qtorq.compress.run[root;conf;365];
+    n2:.qt.qtorq.compress.reloads;
+    `.qtorq.reload_hdb set old;
+    .qunit.assertEquals[count r1;12];
+    .qunit.assertEquals[n1;1];
+    .qunit.assertEquals[count r2;0];
+    .qunit.assertEquals[n2;1]}

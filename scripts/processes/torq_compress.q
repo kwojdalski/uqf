@@ -22,9 +22,9 @@
 /           the same as one that worked. apply reads -21! on every file it
 /           planned to change, and on its # hash files, and refuses with a named
 /           error listing each one that is not in its target state.
-/   reload  TorQ's own HDB reload, as .wdb does it (a sync `reload call to every
-/           hdb found through .servers), refusing when one fails.
-/   run     apply, then reload only if something changed.
+/   run     apply, then TorQ's HDB reload (.qtorq.reload_hdb, which already
+/           exists in torq_pipeline.q: the (`reload;date) message to every hdb
+/           found through .servers) only if something changed.
 / .
 / WHAT STAYS TORQ'S, and is worth knowing: .cmp swaps file by file as each one
 / verifies, so a refused run may have converted some files before the one that
@@ -37,7 +37,7 @@
 / WHERE IT RUNS. .cmp lives in the process TorQ's compression.q starts (or any
 / process that loads common/compress.q); this file is loaded after it there, as
 / torq_pipeline.q is loaded after TorQ's own code, and needs .cmp,
-/ .lg and (for reload) .servers. Nothing under src/ calls it. The conf is the
+/ .lg and (for run) .qtorq.reload_hdb. Nothing under src/ calls it. The conf is the
 / one .cmp.inputcsv names; #2152 generates it.
 
 \d .
@@ -112,30 +112,18 @@
             "; files converted before them are valid, and a second run continues"];
     update bytes_before:before, bytes_after:after from out todo}
 
-/ Ask every hdb TorQ knows of to reload, as .wdb does: a sync `reload call through the
-/ handles .servers gives. Every handle is tried; a failure is collected, not hidden.
-/ @param hdb the HDB root, a file symbol - what the hdbs are told to load
-/ @return the number of hdbs reloaded
-/ @throws "qtorq.compress: n hdb(s) failed to reload ..." naming each error
-/ @eg .qtorq.compress.reload `:/data/hdb
-.qtorq.compress.reload:{[hdb]
-    hs:exec w from .servers.getservers[`proctype;`hdb;()!();1b;0b];
-    d:1_string hdb;
-    r:{[d;h] @[h;({(1b;`reload x)};d);{(0b;x)}]}[d] each hs;
-    bad:r where not first each r;
-    if[count bad; '"qtorq.compress: ",string[count bad]," hdb(s) failed to reload: ","; " sv last each bad];
-    count hs}
-
-/ apply, then reload the hdbs if (and only if) a file changed.
+/ apply, then ask every running HDB to reload (.qtorq.reload_hdb - TorQ's own
+/ (`reload;date) message found through .servers, which logs a refusal and does not
+/ raise) if, and only if, a file changed.
 / @param hdb the HDB root, a file symbol
 / @param conf the compression config
 / @param maxage the oldest partition to consider, in days
-/ @return what apply returns
+/ @return what apply returns; the reload's own counts are in .qtorq.reload_hdb's log line
 / @throws what apply or reload throws
 / @eg .qtorq.compress.run[`:/data/hdb;`:/data/config/compressionconfig.csv;365]
 .qtorq.compress.run:{[hdb;conf;maxage]
     r:.qtorq.compress.apply[hdb;conf;maxage];
-    if[count r; .qtorq.compress.reload hdb];
+    if[count r; .qtorq.reload_hdb[]];
     r}
 
 \d .
