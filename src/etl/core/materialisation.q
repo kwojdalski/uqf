@@ -318,7 +318,7 @@
     .qetl.coverage.require_schema[];
     `etl_coverage}
 
-/ The claims one dataset, partition and release holds at `at`, read from
+/ The claims one dataset, partition and release holds at `as_of`, read from
 / the ledger the workers persist - for a reader that is not a worker (#1081).
 / .
 / The ledger lives in one file, beside the checkpoints (ledger_path). It is
@@ -333,18 +333,18 @@
 / dimension" sentinel and matches only rows recorded under it.
 / @param ds the dataset
 / @param part the partition, or ` for a dataset with none
-/ @param release the source version
-/ @param at the as-of: claims recorded by then and not yet superseded
+/ @param version the source version
+/ @param as_of the as-of: claims recorded by then and not yet superseded
 / @return table range_from, range_to - for compose and gaps
 / @eg count .qetl.coverage.claims[`no_such_dataset;`;`v1;.z.p]  ->  0
-.qetl.coverage.claims:{[ds;part;release;at]
+.qetl.coverage.claims:{[ds;part;version;as_of]
     p:hsym `$.qetl.coverage.ledger_path[];
     t:$[()~key p; 0#([] dataset:`symbol$(); partition:`symbol$(); source_version:`symbol$();
           range_from:`timestamp$(); range_to:`timestamp$(); rows_published:`long$(); recorded_at:`timestamp$(); superseded_at:`timestamp$());
         .qetl.job.bounded.state.durable_get .qetl.coverage.ledger_path[]];
     select range_from, range_to from t
-        where dataset=ds, partition=part, source_version=release,
-              recorded_at<=at, at<superseded_at, range_to>range_from}
+        where dataset=ds, partition=part, source_version=version,
+              recorded_at<=as_of, as_of<superseded_at, range_to>range_from}
 
 / The named partitions a dataset has ever been claimed under, in this
 / process's ledger or the persisted one: what a worker that loads only itself
@@ -754,24 +754,24 @@
 / require_coverage composes (#1094), read on the gateway like `claims`.
 / @param ds the dataset
 / @param part the partition, or `
-/ @param release the source version
-/ @param at the as-of
+/ @param version the source version
+/ @param as_of the as-of
 / @return table range_from, range_to - for compose and gaps
 / @eg count .qetl.coverage.ready_claims[`no_such_dataset;`;`v1;.z.p]  ->  0
-.qetl.coverage.ready_claims:{[ds;part;release;at]
-    w:(.qetl.coverage.ready_table[])[`dataset`partition`source_version!(ds;part;release)]`ready_at;
-    w:at&0Np^w;
-    select range_from, range_to from .qetl.coverage.claims_at[ds;part;release;at] where recorded_at<=w}
+.qetl.coverage.ready_claims:{[ds;part;version;as_of]
+    w:(.qetl.coverage.ready_table[])[`dataset`partition`source_version!(ds;part;version)]`ready_at;
+    w:as_of&0Np^w;
+    select range_from, range_to from .qetl.coverage.claims_at[ds;part;version;as_of] where recorded_at<=w}
 
 / Private: the current claims with their recorded_at - claims' read.
 / @private
-.qetl.coverage.claims_at:{[ds;part;release;at]
+.qetl.coverage.claims_at:{[ds;part;version;as_of]
     p:hsym `$.qetl.coverage.ledger_path[];
     t:$[()~key p; 0#([] dataset:`symbol$(); partition:`symbol$(); source_version:`symbol$();
           range_from:`timestamp$(); range_to:`timestamp$(); rows_published:`long$(); recorded_at:`timestamp$(); superseded_at:`timestamp$());
         .qetl.job.bounded.state.durable_get .qetl.coverage.ledger_path[]];
     select range_from, range_to, rows_published, recorded_at from t
-        where dataset=ds, partition=part, source_version=release,
-              recorded_at<=at, at<superseded_at, range_to>range_from}
+        where dataset=ds, partition=part, source_version=version,
+              recorded_at<=as_of, as_of<superseded_at, range_to>range_from}
 
 \d .
