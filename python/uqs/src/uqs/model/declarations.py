@@ -331,8 +331,8 @@ class Reaction:
 
     name: str
     dataset: str
-    #: What `on_writing` claims the handler writes; empty for `on`.
-    writes: tuple[str, ...]
+    #: What `on_writing` claims the handler's outputs are; empty for `on`.
+    outputs: tuple[str, ...]
 
 
 def reaction_calls(source: str) -> list[Reaction]:
@@ -346,8 +346,8 @@ def reaction_calls(source: str) -> list[Reaction]:
         dataset, name = symbols(parts[0]), symbols(parts[1])
         if len(dataset) != 1 or len(name) != 1:
             continue
-        writes = symbols(parts[2]) if match.group(1) == "on_writing" else ()
-        found.append(Reaction(name[0], dataset[0], writes))
+        outputs = symbols(parts[2]) if match.group(1) == "on_writing" else ()
+        found.append(Reaction(name[0], dataset[0], outputs))
     return found
 
 

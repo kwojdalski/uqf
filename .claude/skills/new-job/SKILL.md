@@ -40,27 +40,27 @@ expensive to undo.
 ```bash
 # continuous: subscribes to two tables, publishes one
 uqs job new markout2 --subscribe-to trades,quote \
-    --publishes my_metric --schema "sym:symbol, px:float" --dry-run
+    --outputs my_metric --schema "sym:symbol, px:float" --dry-run
 
 # continuous FEED: subscribes to nothing, publishes on a timer
-uqs job new tickfeed --publishes ticks --schema "sym:symbol, px:float"
+uqs job new tickfeed --outputs ticks --schema "sym:symbol, px:float"
 
 # bounded worker: source + worker + transform together
-uqs job new fx_rates --kind backfill --dataset fx_rates \
+uqs job new fx_rates --kind backfill --outputs fx_rates \
     --schema "sym:symbol, mid:float" --width 1D
 
 # the same, reading a database over ODBC rather than a q process
-uqs job new ledger --kind backfill --dataset ledger \
+uqs job new ledger --kind backfill --outputs ledger \
     --schema "sym:symbol, amt:float" --transport odbc
 
 # an adapter that reads other columns than it returns: declare the physical side
 # (`raw`) - the source check holds the table to it, and the rows to --schema
-uqs job new events --kind backfill --dataset events --transport odbc \
+uqs job new events --kind backfill --outputs events --transport odbc \
     --schema "sym:symbol, px:float" \
     --raw-table EVENTS --raw-columns "CREATED_AT:timestamp, PAYLOAD:any"
 
 # a second worker over that source, into its own dataset: the source is reused
-uqs job new fx_rates_1h --kind backfill --dataset fx_rates_1h \
+uqs job new fx_rates_1h --kind backfill --outputs fx_rates_1h \
     --source fx_rates --schema "sym:symbol, mid:float" --width 0D01
 
 # normalizer: several tables carrying one fact, one canonical table out -
@@ -74,8 +74,8 @@ uqs job new fill_marks --kind horizon --subscribe-to executions,market_data \
     --horizon 0D00:01:00 --schema "sym:symbol, markout_bps:float" --dry-run
 
 # reaction: recompute each time a bounded worker publishes a window of a dataset.
-# No process of its own - it runs in the worker's. --writes puts it in the job graph
-uqs job new rebuild_positions --triggered-by demo_deals --writes positions --dry-run
+# No process of its own - it runs in the worker's. --outputs puts it in the job graph
+uqs job new rebuild_positions --triggered-by demo_deals --outputs positions --dry-run
 ```
 
 A reaction's DATASET must be one a bounded worker fills: only a worker's window
@@ -129,9 +129,9 @@ to `plant_tables.q` and the table list in `test_stack_tables.q`, which are files
 they may have opinions about.
 
 `kind` is derived for a streaming job --- no `--subscribe-to` means a feed ---
-so do not ask for it. `--publishes` takes a comma list. A table the plant
-already defines is published onto as it is - no `--schema`, and none is accepted -
-so `--schema` (or `--schema-from TABLE`, which copies an existing plant table's
+so do not ask for it. `--outputs` takes a comma list. A table the plant already
+defines is published onto as it is - no `--schema`, and none is accepted - so
+`--schema` (or `--schema-from TABLE`, which copies an existing plant table's
 shape exactly; `venue:g#symbol` groups a column other than `sym`, `x:list` is a
 vector column) shapes the one NEW table, and two new tables in one scaffold are
 refused. `--subscribe-to` must name tables the plant defines (`plant_tables.q`
