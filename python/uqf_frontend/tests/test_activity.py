@@ -593,7 +593,7 @@ def test_browser_events_without_the_token_cannot_evict_the_server_audit(tmp_path
     row cap with the server's audit, so anyone who reached the port could
     prune the record of a stop or a delete. Each now has its own cap."""
     monkeypatch.setattr(activity, "BROWSER_EVENT_BURST", 10_000)
-    app, op = _audited_worker_config(tmp_path, activity_max_rows=50)
+    app, op = _audited_worker_config(tmp_path, activity_max_kept=50)
     stranger = TestClient(app)
     for _ in range(3):
         events = [_event() for _ in range(100)]
@@ -617,7 +617,7 @@ def test_refused_and_unrouted_requests_cannot_evict_the_audit(tmp_path, base_url
     POSTs: each was a server row, written before the Host and token checks,
     in the same bucket as the audit. They are still recorded - an attempt is
     worth seeing - but as `attempt` rows under their own, smaller cap."""
-    app, op = _audited_worker_config(tmp_path, activity_max_rows=50)
+    app, op = _audited_worker_config(tmp_path, activity_max_kept=50)
     evil = TestClient(app, base_url=base_url, headers=headers)
     path = "/x" if status == 404 else "/control/process/stop"
     for _ in range(250):
@@ -751,9 +751,9 @@ def test_the_environment_names_the_file_and_the_bounds(monkeypatch, tmp_path):
     monkeypatch.delenv("UQF_FRONTEND_STACK_ROOT", raising=False)
     monkeypatch.setenv("UQF_FRONTEND_ACTIVITY_DB", str(tmp_path / "h.sqlite3"))
     monkeypatch.setenv("UQF_FRONTEND_ACTIVITY_RETENTION_DAYS", "7")
-    monkeypatch.setenv("UQF_FRONTEND_ACTIVITY_MAX_ROWS", "500")
+    monkeypatch.setenv("UQF_FRONTEND_ACTIVITY_MAX_KEPT", "500")
     s = Settings.from_env()
-    assert (s.activity_db, s.activity_retention_days, s.activity_max_rows) == (
+    assert (s.activity_db, s.activity_retention_days, s.activity_max_kept) == (
         tmp_path / "h.sqlite3",
         7,
         500,

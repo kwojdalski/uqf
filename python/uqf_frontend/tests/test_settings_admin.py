@@ -397,16 +397,16 @@ def test_a_runtime_change_is_live_kept_and_audited(tmp_path):
     settings = _settings(tmp_path)
     c = _client(settings)
     assert c.get("/health").json()["activity_level"] == "actions"
-    resp = _put_runtime(c, activity_level="debug", activity_debug_max_rows=500)
+    resp = _put_runtime(c, activity_level="debug", activity_debug_max_kept=500)
     assert resp.status_code == 200, resp.text
     assert {ch["field"] for ch in resp.json()["changes"]} == {
         "activity_level",
-        "activity_debug_max_rows",
+        "activity_debug_max_kept",
     }
     # live: what /health serves, and the store's own bounds
     assert c.get("/health").json()["activity_level"] == "debug"
     bounds = c.get("/activity", headers=_as("alice")).json()["bounds"]
-    assert {"level": "debug", "retention_days": 1, "max_rows": 500} in bounds
+    assert {"level": "debug", "retention_days": 1, "max_kept": 500} in bounds
     # kept: a restart starts with it
     again = _client(settings)
     assert again.get("/health").json()["activity_level"] == "debug"
@@ -418,7 +418,7 @@ def test_a_runtime_change_is_live_kept_and_audited(tmp_path):
 
 @pytest.mark.parametrize(
     "change",
-    [{"config_history_keep": 0}, {"activity_level": "loud"}, {"activity_max_rows": -1}],
+    [{"config_history_max_kept": 0}, {"activity_level": "loud"}, {"activity_max_kept": -1}],
 )
 def test_an_invalid_runtime_change_is_refused(tmp_path, change):
     c = _client(_settings(tmp_path))

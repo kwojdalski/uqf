@@ -197,7 +197,7 @@ export interface ChartField {
   maximum?: number;
 }
 export interface Health extends Pollable {
-  /** seconds the browser waits for any request - the server's UQF_FRONTEND_TIMEOUT plus headroom */
+  /** seconds the browser waits for any request - the server's UQF_FRONTEND_TIMEOUT_SECONDS plus headroom */
   request_timeout_seconds: number;
   ok: boolean;
   gateway: "up" | "reloading" | "unreachable" | "wrong_process";
@@ -1057,7 +1057,7 @@ export interface ConfigPushOpenBody {
 /** A push whose history retention removed - models.PrunedPushOut. */
 export interface PrunedPush {
   push_id: string;
-  why: "count" | "age";
+  why: "row_cap" | "retention";
   pruned_at: string;
 }
 /** models.ConfigPushOpenResponse: the push's id, which every upload names. */
@@ -1066,8 +1066,8 @@ export interface ConfigPushOpened {
   root: string;
   push_id: string;
   pruned: PrunedPush[];
-  keep: number;
-  keep_days: number;
+  max_kept: number;
+  retention_days: number;
 }
 /** What the browser saw of a file the server may never have recorded -
  * models.ConfigPushReported. */
@@ -1382,7 +1382,7 @@ export interface ActivityPersistence {
 export interface ActivityBound {
   level: ActivityLevel;
   retention_days: number;
-  max_rows: number;
+  max_kept: number;
 }
 /** Events not in the history, by level and why - models.ActivityDrop. */
 export interface ActivityDrop {

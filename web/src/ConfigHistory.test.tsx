@@ -63,7 +63,7 @@ const HISTORY: History = {
   pruned: [
     {
       push_id: "20261001T000000000Z-00000001",
-      why: "count",
+      why: "row_cap",
       pruned_at: "2026-11-04T10:34:42Z",
     },
   ],
@@ -227,7 +227,7 @@ it("reads nothing from the server until asked, then lists the pushes and the pru
   expect(table).toHaveTextContent("push to shared/config");
   expect(table).toHaveTextContent("1 failed");
   expect(screen.getByLabelText("Pruned pushes")).toHaveTextContent(
-    "20261001T000000000Z-00000001 (count",
+    "20261001T000000000Z-00000001 (row_cap",
   );
 });
 
@@ -347,7 +347,7 @@ it("says plainly when a push's history was pruned", async () => {
   const { ops } = fakeOps({
     plan: async () => {
       throw new ApiError(
-        `push ${PUSH}'s history was pruned at 2026-11-05T00:00:00Z (count bound) - it can no longer be shown, diffed or restored`,
+        `push ${PUSH}'s history was pruned at 2026-11-05T00:00:00Z (row_cap bound) - it can no longer be shown, diffed or restored`,
         false,
         410,
       );

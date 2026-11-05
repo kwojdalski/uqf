@@ -583,7 +583,10 @@ class PrunedPushOut(BaseModel):
     """A push whose history retention removed."""
 
     push_id: str
-    why: Literal["count", "age"]
+    #: The drop reasons the activity history uses for the same two bounds
+    #: (#2111): `row_cap` past the newest `max_kept`, `retention` past
+    #: `retention_days`.
+    why: Literal["row_cap", "retention"]
     pruned_at: str
 
 
@@ -592,8 +595,8 @@ class ConfigPushOpenResponse(BaseModel):
     root: str
     push_id: str = Field(description="every upload of this push names it")
     pruned: list[PrunedPushOut]
-    keep: int = Field(description="the newest pushes the history keeps")
-    keep_days: int = Field(description="the days the history keeps a push")
+    max_kept: int = Field(description="the newest pushes the history keeps")
+    retention_days: int = Field(description="the days the history keeps a push")
 
 
 class ConfigPushReported(BaseModel):
@@ -1085,7 +1088,7 @@ class ActivityBound(BaseModel):
 
     level: ActivityLevel
     retention_days: int
-    max_rows: int
+    max_kept: int
 
 
 class ActivityDrop(BaseModel):
@@ -1195,17 +1198,19 @@ class RuntimeSettingsBody(BaseModel):
         "the server audits every change whatever this says",
     )
     activity_retention_days: int = Field(title="Actions: days kept", ge=1, le=3650)
-    activity_max_rows: int = Field(title="Actions: most rows kept", ge=1, le=10_000_000)
+    activity_max_kept: int = Field(title="Actions: most rows kept", ge=1, le=10_000_000)
     activity_interactions_retention_days: int = Field(
         title="Interactions: days kept", ge=1, le=3650
     )
-    activity_interactions_max_rows: int = Field(
+    activity_interactions_max_kept: int = Field(
         title="Interactions: most rows kept", ge=1, le=10_000_000
     )
     activity_debug_retention_days: int = Field(title="Debug: days kept", ge=1, le=3650)
-    activity_debug_max_rows: int = Field(title="Debug: most rows kept", ge=1, le=10_000_000)
-    config_history_keep: int = Field(title="Config pushes kept per target", ge=1, le=10_000)
-    config_history_days: int = Field(title="Config push history: days kept", ge=1, le=3650)
+    activity_debug_max_kept: int = Field(title="Debug: most rows kept", ge=1, le=10_000_000)
+    config_history_retention_days: int = Field(
+        title="Config push history: days kept", ge=1, le=3650
+    )
+    config_history_max_kept: int = Field(title="Config pushes kept per target", ge=1, le=10_000)
 
 
 class AccessChangeRequest(BaseModel):
