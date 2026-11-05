@@ -54,7 +54,7 @@ const HISTORY: History = {
       file_count: 3,
       total_bytes: 9,
       states: { published: 2, pending: 0, failed: 1 },
-      reported: 0,
+      reported_count: 0,
       error: null,
     },
   ],
@@ -84,7 +84,7 @@ const DETAIL: ConfigPushDetail = {
     via: "frontend",
     destination: "shared/config",
     declared: { file_count: 3, total_bytes: 9 },
-    reported: [{ path: "shared/config/lost", outcome: "uncertain" }],
+    reported: [{ path: "shared/config/lost", outcome: "unknown" }],
     files: [
       file({}),
       file({
@@ -125,7 +125,7 @@ function plan(steps: ConfigRestore["plan"]): ConfigRestore {
   return {
     target: "prod-a",
     root: "/srv/uqf",
-    source_push_id: PUSH,
+    restores: PUSH,
     dry_run: true,
     push_id: null,
     plan: steps,
@@ -245,7 +245,7 @@ it("shows each file's change, old and new hashes, and what it is now", async () 
   expect(rows[2]).toHaveTextContent("-"); // no previous hash on create
   expect(rows[3]).toHaveTextContent("failed (exists)");
   expect(within(rows[3]).queryByRole("button", { name: /Diff/ })).toBeNull();
-  expect(push).toHaveTextContent("shared/config/lost (uncertain)");
+  expect(push).toHaveTextContent("shared/config/lost (unknown)");
 });
 
 it("fetches a diff on demand: text as a diff, binary as sizes and hashes", async () => {
@@ -319,8 +319,8 @@ it("tells a refused restore from an uncertain one, and retries neither", async (
       new ApiError("changed since", false, 409),
       "Restore refused - nothing was written",
     ],
-    [new ApiError("no answer", false, 504), "Restore outcome uncertain"],
-    [new ApiError("API unreachable", true), "Restore outcome uncertain"],
+    [new ApiError("no answer", false, 504), "Restore outcome unknown"],
+    [new ApiError("API unreachable", true), "Restore outcome unknown"],
   ] as const) {
     let attempts = 0;
     const { ops } = fakeOps({
@@ -385,6 +385,6 @@ it("reports a restore that succeeded as restored when reloading the history afte
     "Restored; reloading the history failed: Enter the write token",
   );
   expect(alert).not.toHaveTextContent("Restore refused");
-  expect(alert).not.toHaveTextContent("Restore outcome uncertain");
+  expect(alert).not.toHaveTextContent("Restore outcome unknown");
   expect(onRestored).toHaveBeenCalledTimes(1);
 });

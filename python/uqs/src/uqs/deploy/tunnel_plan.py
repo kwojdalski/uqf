@@ -8,13 +8,13 @@ target and of what its release declares (`plan`): nothing here opens a
 connection except `discover`, which reads the declared processes the way
 `query --tunnel` does (deploy/tunnel.py's `remote_processes`).
 
-    mapping = {process, role, remote_host, remote_port, local_host, local_port,
+    mapping = {process, proctype, remote_host, remote_port, local_host, local_port,
                production_endpoint, local_endpoint, query_command}
 
-  - process, role and remote_port are the release's own - `uqs process list
+  - process, proctype and remote_port are the release's own - `uqs process list
     --json` on the server, so never this checkout's ports or a list in the UI;
-  - role is the process's proctype, and only rdb, hdb, wdb and gateway are
-    forwarded (ROLES): those are the processes an operator reads from;
+  - only an rdb, hdb, wdb or gateway proctype is forwarded
+    (FORWARDED_PROCTYPES): those are the processes an operator reads from;
   - local_port is remote_port + the offset (LOCAL_OFFSET unless given), or the
     port `--local PROC:PORT` names - validated: in range, unprivileged, and
     no two mappings sharing one.
@@ -48,7 +48,7 @@ from uqs.deploy import control, history, targets, tunnel
 from uqs.paths import UqsError
 
 #: The process types a plan forwards: what an operator reads data from.
-ROLES = ("rdb", "hdb", "wdb", "gateway")
+FORWARDED_PROCTYPES = ("rdb", "hdb", "wdb", "gateway")
 #: A local port is the remote one plus this, unless given: clear of a local
 #: stack on the same base port, and predictable from the production port.
 LOCAL_OFFSET = 10000
@@ -67,7 +67,7 @@ Runner = Callable[..., subprocess.CompletedProcess]
 class TunnelPlanError(UqsError):
     """A plan refused, with the kind of refusal a caller can act on:
     `discovery` (the release's processes could not be read), `unknown_process`,
-    `unsupported_role`, `invalid_port` or `port_conflict`."""
+    `unsupported_proctype`, `invalid_port` or `port_conflict`."""
 
     def __init__(self, kind: str, message: str) -> None:
         super().__init__(message)
@@ -89,7 +89,7 @@ class Declared:
 @dataclass(frozen=True)
 class TunnelMapping:
     process: str
-    role: str
+    proctype: str
     remote_host: str
     remote_port: int
     local_host: str
@@ -108,7 +108,7 @@ class TunnelPlan:
     launch_argv: list[str]
     launch_command: str
     release: str | None = None
-    #: Declared processes of a forwarded role the plan did not select.
+    #: Declared processes of a forwarded proctype the plan did not select.
     available: list[str] = field(default_factory=list)
 
 
@@ -122,16 +122,17 @@ def plan(
     offset: int = LOCAL_OFFSET,
     release: str | None = None,
 ) -> TunnelPlan:
-    """The plan for `selected` (every process of a forwarded role when none
+    """The plan for `selected` (every process of a forwarded proctype when none
     is named) among `declared`. Pure: refuses with a TunnelPlanError."""
     local = dict(local or {})
     by_name = {d.process: d for d in declared}
-    forwardable = sorted(d.process for d in declared if d.proctype in ROLES)
+    forwardable = sorted(d.process for d in declared if d.proctype in FORWARDED_PROCTYPES)
     names = list(dict.fromkeys(selected)) or forwardable
     if not names:
         raise TunnelPlanError(
             "discovery",
-            f"target {target}: its release declares no {', '.join(ROLES)} process to forward",
+            f"target {target}: its release declares no "
+            f"{', '.join(FORWARDED_PROCTYPES)} process to forward",
         )
     unknown = [n for n in names if n not in by_name]
     if unknown:
@@ -140,12 +141,12 @@ def plan(
             f"{', '.join(unknown)}: not declared on target {target} - it declares: "
             f"{', '.join(sorted(by_name))}",
         )
-    other = [n for n in names if by_name[n].proctype not in ROLES]
+    other = [n for n in names if by_name[n].proctype not in FORWARDED_PROCTYPES]
     if other:
         said = ", ".join(f"{n} ({by_name[n].proctype or 'no proctype'})" for n in other)
         raise TunnelPlanError(
-            "unsupported_role",
-            f"{said}: a tunnel forwards only {', '.join(ROLES)} processes - "
+            "unsupported_proctype",
+            f"{said}: a tunnel forwards only {', '.join(FORWARDED_PROCTYPES)} processes - "
             f"on target {target} those are: {', '.join(forwardable) or 'none'}",
         )
     stray = sorted(set(local) - set(names))
@@ -168,7 +169,7 @@ def plan(
         mappings.append(
             TunnelMapping(
                 process=name,
-                role=d.proctype,
+                proctype=d.proctype,
                 remote_host=host,
                 remote_port=d.port,
                 local_host=tunnel.LOOPBACK,

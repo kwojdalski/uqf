@@ -3,7 +3,7 @@ as uqs makes them (#2030, #2031, #2035).
 
 NOTHING HERE OPENS A CONNECTION. The plan is `uqs.deploy.tunnel_plan`'s and
 the check `uqs.deploy.tunnel_check`'s - the functions `uqs target tunnel plan`
-and `uqs target tunnel check` call - so the processes, their roles and ports,
+and `uqs target tunnel check` call - so the processes, their proctypes and ports,
 the local endpoints, the launch command and every diagnostic come from uqs,
 which reads them from the target's release. This module only names the
 target the registry declares (remote_files.target, as browsing does), passes
@@ -28,7 +28,7 @@ from uqf_frontend.errors import FrontendError
 
 class TunnelPlanRefused(FrontendError):
     """The choices cannot make a plan: a process not declared there, not a
-    forwarded role, a local port out of range or shared by two mappings."""
+    forwarded proctype, a local port out of range or shared by two mappings."""
 
     status_code = 400
 

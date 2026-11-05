@@ -3,7 +3,7 @@
 The target is one already declared for `uqs deploy push ARTIFACT TARGET`, in
 deploy_targets.toml (deploy/targets.py), so a server is described once and
 both pushed to and driven from that one entry. Only three of its keys matter
-here: `host` (the ssh destination), `dest` (where push installed) and
+here: `ssh` (the ssh destination), `dest` (where push installed) and
 `remote_user` (the service account push runs every step as), with
 `connect_timeout` if it sets one. Nothing else about the stack is read on
 this side. The command runs the release's own `<dest>/current/.venv/bin/uqs`
@@ -46,7 +46,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from uqs.deploy import history, targets
+from uqs.deploy import history, target_keys, targets
 from uqs.deploy.config import DEFAULT_CONNECT_TIMEOUT, DeployError
 from uqs.deploy.launch import (
     NO_RELEASE,
@@ -58,7 +58,6 @@ from uqs.deploy.launch import (
     uqs_command,
 )
 from uqs.deploy.remote import diagnostic
-from uqs.deploy.target_keys import FIELD_OF_KEY
 from uqs.paths import UqsError
 
 #: What ssh exits with when it, rather than the remote command, failed.
@@ -102,28 +101,30 @@ def settings_for(name: str | None, root: Path) -> tuple[str, dict]:
     if name in declared:
         t, label = declared[name], name
     elif last is not None:
-        # the entry's keys as make_config's options: `ssh` is `host` (#1888)
-        t = {FIELD_OF_KEY.get(k, k): v for k, v in last.items()}
-        label = str(last.get("target") or history.server_of(str(last["ssh"])))
+        # a history entry holds the target's keys: `ssh`, `dest`, `remote_user`
+        t, label = last, str(last.get("target") or history.server_of(str(last["ssh"])))
+    elif name:
+        raise target_keys.unknown_target(
+            name, declared, targets.declaration_path(root), deployed=True
+        )
     else:
         known = ", ".join(sorted(declared)) or "none"
-        what = f"no target or deployed server {name!r}" if name else "no deployment recorded"
         raise UqsError(
-            f"{what} - targets in {targets.declaration_path(root)}: {known}; "
+            f"no deployment recorded - {targets.declaration_path(root)} declares: {known}; "
             "`uqs deploy history` shows the deployments"
         )
     return label, t
 
 
 def remote_from(label: str, t: dict) -> Remote:
-    """A Remote from a target's merged settings `t`, which name host and
+    """A Remote from a target's merged settings `t`, which name ssh and
     dest: a declared target, or one `uqs target add --reach` is about to save."""
-    absent = [k for k in ("host", "dest") if not t.get(k)]
+    absent = [k for k in ("ssh", "dest") if not t.get(k)]
     if absent:
         raise UqsError(f"target {label} sets no {', '.join(absent)}")
     # The same shapes make_config holds a push to: both reach a remote shell.
     targets.remote_shape(label, t)
-    host, dest, user = str(t["host"]), str(t["dest"]), t.get("remote_user")
+    host, dest, user = str(t["ssh"]), str(t["dest"]), t.get("remote_user")
     mode, python, env_file = settings(label, t)
     return Remote(
         label, host, dest, str(user) if user else None,

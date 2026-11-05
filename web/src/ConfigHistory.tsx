@@ -105,16 +105,16 @@ export function ConfigHistory({
     if (listed) setHistory(listed);
   }
 
-  async function open(push: string) {
+  async function open(pushId: string) {
     setPlan(undefined);
     setRestored(undefined);
     setDiffs({});
-    const shown = await run(() => ops.show(target, push));
+    const shown = await run(() => ops.show(target, pushId));
     if (shown) setDetail(shown);
   }
 
-  async function diff(push: string, path: string) {
-    const answer = await run(() => ops.diff(target, push, path));
+  async function diff(pushId: string, path: string) {
+    const answer = await run(() => ops.diff(target, pushId, path));
     if (!answer) return;
     setDiffCap(answer.diff_cap);
     setDiffs((current) => ({
@@ -123,17 +123,17 @@ export function ConfigHistory({
     }));
   }
 
-  async function review(push: string) {
+  async function review(pushId: string) {
     setRestored(undefined);
-    const answer = await run(() => ops.plan(target, push));
+    const answer = await run(() => ops.plan(target, pushId));
     if (answer) setPlan(answer);
   }
 
-  async function restore(push: string) {
+  async function restore(pushId: string) {
     setBusy(true);
     setError("");
     try {
-      const answer = await ops.restore(target, push);
+      const answer = await ops.restore(target, pushId);
       setRestored(answer);
       setPlan(undefined);
     } catch (failure: unknown) {
@@ -145,7 +145,7 @@ export function ConfigHistory({
       setError(
         certain
           ? `Restore refused - nothing was written: ${message(failure)}`
-          : `Restore outcome uncertain: ${message(failure)}. Some files may have been restored - reload the history before restoring again; nothing is retried automatically.`,
+          : `Restore outcome unknown: ${message(failure)}. Some files may have been restored - reload the history before restoring again; nothing is retried automatically.`,
       );
       setBusy(false);
       return;
@@ -336,7 +336,7 @@ export function ConfigHistory({
       {plan && (
         <div className="notice" role="group" aria-label="Confirm restore">
           <p>
-            Restore push <code>{plan.source_push_id}</code> on{" "}
+            Restore push <code>{plan.restores}</code> on{" "}
             <strong>{target}</strong>? Each file goes back to how it was before
             that push, as a new push of its own:
           </p>
@@ -360,7 +360,7 @@ export function ConfigHistory({
               type="button"
               data-activity="config.restore.confirm"
               disabled={busy}
-              onClick={() => restore(plan.source_push_id)}
+              onClick={() => restore(plan.restores)}
             >
               Confirm restore of {steps.length}{" "}
               {steps.length === 1 ? "file" : "files"}

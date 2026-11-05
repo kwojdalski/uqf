@@ -87,7 +87,7 @@ class Server:
         if r.returncode:
             raise DeployError(
                 "preflight",
-                f"the login user on {self.cfg.host} cannot run commands as {user} through "
+                f"the login user on {self.cfg.ssh} cannot run commands as {user} through "
                 f"`sudo -n -iu {user}` without a password: " + diagnostic(r),
             )
         got = (r.stdout or "").strip().splitlines()[-1:] or [""]
@@ -103,7 +103,7 @@ class Server:
         torq_home, torq_app_home = c.torq_home, c.torq_app_home
         if self.torq_runtime is not None:
             torq_home, torq_app_home = self.torq_runtime.homes(c.dest)
-        q_env = [(k, self.q_env.get(k, v)) for k, v in (("QCMD", c.qcmd), ("QHOME", c.qhome))]
+        q_env = [(k, self.q_env.get(k, v)) for k, v in (("QCMD", c.q_cmd), ("QHOME", c.q_home))]
         if self.q_runtime is not None:
             q_env = self.q_runtime.env(c.dest)
         python_env = self.python_runtime.env(c.dest) if self.python_runtime else []
@@ -143,8 +143,8 @@ class Server:
         c = self.cfg
         values = {
             "dest": c.dest,
-            "qcmd_flag": c.qcmd or "",
-            "qhome_flag": c.qhome or "",
+            "qcmd_flag": c.q_cmd or "",
+            "qhome_flag": c.q_home or "",
             "torq_home": c.torq_home or "",
             "torq_app_home": c.torq_app_home or "",
             "torq_launcher": c.torq_launcher or "",
@@ -203,7 +203,7 @@ class Server:
         if facts.get("release_exists"):
             raise DeployError(
                 "preflight",
-                f"release {self.release} is already on {self.cfg.host} under {self.releases} - "
+                f"release {self.release} is already on {self.cfg.ssh} under {self.releases} - "
                 "an artifact is deployed to a destination once; build a new one to redeploy",
             )
         if facts.get("current") and not self.cfg.restart:

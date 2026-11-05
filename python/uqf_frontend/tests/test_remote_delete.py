@@ -23,7 +23,10 @@ def test_partial_success_and_nonrecursive_confinement(tmp_path):
     paths = ["link", "fifo", "file", "empty", "occupied", "missing", "", "../escape", "/etc/passwd"]
     result = delete(tmp_path, paths)
     assert result["ok"]
-    assert [r["path"] for r in result["results"] if r["deleted"]] == ["file", "empty"]
+    assert [r["path"] for r in result["results"] if r["outcome"] == "succeeded"] == [
+        "file",
+        "empty",
+    ]
     assert (tmp_path / "occupied" / "keep").read_text() == "keep"
     assert (tmp_path / "link").is_symlink()
 
@@ -47,6 +50,6 @@ def test_symlink_parent_and_unusual_filenames(tmp_path):
     for name in names:
         (root / name).write_text("x")
     result = delete(root, ["escape/keep", *names])
-    assert not result["results"][0]["deleted"]
-    assert all(r["deleted"] for r in result["results"][1:])
+    assert result["results"][0]["outcome"] == "failed"
+    assert all(r["outcome"] == "succeeded" for r in result["results"][1:])
     assert (outside / "keep").read_text() == "keep"

@@ -63,6 +63,12 @@
     .qunit.assertEquals[(key .qt.qpipe.twins.renames) except .qt.qpipe.twins.with_twins[];`symbol$();
         "and nothing listed here has lost its twin"]};
 
+/ The relationship is the worker's own declaration (twin_of, #2103), not only a shared dataset:
+/ q then refuses the pair when the live job's output moves (tests/q/test_twin_contracts.q).
+.qt.qpipe.twins.test_every_twin_pair_is_declared_by_its_backfill:{[t]
+    .qunit.assertEquals[.qt.qpipe.twins.with_twins[] except exec distinct live from .qetl.twin.report[];`symbol$();
+        "a stream job whose table a backfill re-derives is named in that backfill's twin_of"]};
+
 / The twin's transform reproduces each of the stream transform's examples.
 .qt.qpipe.twins.test_a_stream_job_with_a_twin_declares_its_transform:{[t]
     / What --twin-of scaffolds into the twin, and what this suite compares.

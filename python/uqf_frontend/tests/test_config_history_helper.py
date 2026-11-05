@@ -78,7 +78,7 @@ def _manifest(root: Path, push_id: str) -> dict:
 
 
 def _restore(root: Path, source: str, **over) -> dict:
-    fields = {"source_push_id": source, "push_id": remote_files.new_push_id(), "confirmed": True}
+    fields = {"restores": source, "push_id": remote_files.new_push_id(), "confirmed": True}
     return _ask(root, "restore", **{**fields, **over})
 
 
@@ -225,7 +225,7 @@ def test_an_interrupted_upload_is_pending_and_show_tells_what_landed(root, monke
     }
     assert (root / "shared/config/kept").read_bytes() == b"before"
     # the restore undoes what landed, and leaves what did not alone
-    plan = _ask(root, "restore", source_push_id=push_id, dry_run=True)["plan"]
+    plan = _ask(root, "restore", restores=push_id, dry_run=True)["plan"]
     assert {p["path"]: p["step"] for p in plan} == {
         "shared/config/landed": "delete",
         "shared/config/kept": "unchanged",
@@ -244,7 +244,7 @@ def test_the_file_being_replaced_must_fit_the_history(root, monkeypatch):
 def test_close_records_what_the_browser_saw_of_files_never_recorded(root):
     push_id = _open(root)
     assert _put(root, push_id, "shared/config/a", b"1")["ok"]
-    reported = [{"path": "shared/config/a", "outcome": "uncertain"},
+    reported = [{"path": "shared/config/a", "outcome": "unknown"},
                 {"path": "shared/config/b", "outcome": "cancelled"}]  # fmt: skip
     manifest = _ask(root, "push_close", push_id=push_id, reported=reported)["manifest"]
     # the server's own record wins for a file it has
@@ -348,7 +348,7 @@ def test_a_restore_needs_confirming_and_a_dry_run_writes_nothing(root):
     unconfirmed = _restore(root, push_id, confirmed=False)
     assert unconfirmed["error"] == "refused" and "confirmation" in unconfirmed["detail"]
     before = sorted(p for p in root.rglob("*"))
-    plan = _ask(root, "restore", source_push_id=push_id, dry_run=True)
+    plan = _ask(root, "restore", restores=push_id, dry_run=True)
     assert plan["dry_run"] and plan["push_id"] is None and plan["results"] == []
     assert [p["step"] for p in plan["plan"]] == ["delete"]
     assert sorted(p for p in root.rglob("*")) == before
@@ -367,7 +367,7 @@ def test_a_file_changed_since_the_push_refuses_the_whole_restore(root):
     assert '"shared/config/b"' in refused["detail"] and "nothing was written" in refused["detail"]
     assert (config / "a").read_bytes() == b"1" and (config / "b").read_bytes() == b"edited later"
     assert sorted(p.name for p in _history(root).iterdir()) == pushes_before
-    plan = _ask(root, "restore", source_push_id=push_id, dry_run=True)["plan"]
+    plan = _ask(root, "restore", restores=push_id, dry_run=True)["plan"]
     assert [p["step"] for p in plan] == ["write", "conflict"]
 
 
@@ -423,7 +423,7 @@ def test_a_restore_after_pruning_is_refused_clearly(root):
     _ask(root, "push_open", push_id="20261104T100001000Z-00000002", destination="shared/config",
          max_kept=1)  # fmt: skip
     for op, extra in (("restore", {"dry_run": True}), ("history_show", {}), ("history_diff", {})):
-        key = "source_push_id" if op == "restore" else "push_id"
+        key = "restores" if op == "restore" else "push_id"
         answer = _ask(root, op, **{key: gone}, **extra)
         assert answer["error"] == "pruned", answer
         assert "pruned" in answer["detail"] and "row_cap bound" in answer["detail"]
@@ -477,7 +477,7 @@ def test_no_browse_delete_or_upload_reaches_the_history(root, path):
     listed = _ask(root, "list", path=path)
     assert listed["error"] == "refused" and "config push history" in listed["detail"]
     deleted = _ask(root, "delete", paths=[path, f"{path}/{push_id}/{MANIFEST}"], confirmed=True)
-    assert all(not r["deleted"] for r in deleted["results"])
+    assert all(r["outcome"] == "failed" for r in deleted["results"])
     uploaded = _put(root, push_id, f"{path}/y", b"evil")
     assert uploaded["ok"] is False
     assert (_history(root) / push_id / MANIFEST).exists()
@@ -530,7 +530,7 @@ def test_a_restore_deletes_only_a_regular_file(root):
     _put(root, push_id, "shared/config/a", b"1")
     (root / "shared/config/a").unlink()
     (root / "shared/config/a").mkdir()
-    plan = _ask(root, "restore", source_push_id=push_id, dry_run=True)["plan"]
+    plan = _ask(root, "restore", restores=push_id, dry_run=True)["plan"]
     assert plan[0]["step"] == "conflict" and "not a regular file" in plan[0]["error"]
     assert _restore(root, push_id)["error"] == "conflict"
     assert (root / "shared/config/a").is_dir()

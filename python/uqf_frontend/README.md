@@ -68,9 +68,9 @@ The q details this rests on, verified against a live KDB-X process:
 
   |                                                |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
   | ---                                            | ---                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-  | `GET /control`                                 | Whether writes are on, what can be set, and (with writes on) every process a selector may name — `procname`, `proctype`, and whether `all` starts it — from the orchestrator's effective `process.csv`. Not itself gated: a UI needs this to decide whether to render controls, and finding out by provoking a 403 on a lifecycle route means having already stopped the fleet                                                                                                                               |
+  | `GET /control`                                 | Whether writes are on, what can be set, and (with writes on) every process a selector may name — `process`, `proctype`, and whether `all` starts it — from the orchestrator's effective `process.csv`. Not itself gated: a UI needs this to decide whether to render controls, and finding out by provoking a 403 on a lifecycle route means having already stopped the fleet                                                                                                                                |
   | `POST /control/process/{start\|stop\|restart}` | Lifecycle for a process selector — a name, several separated by spaces, or `all`, passed to `torq.sh` unreinterpreted                                                                                                                                                                                                                                                                                                                                                                                        |
-  | `PUT /control/process/{procname}/config`       | One `process.csv` field override, persisted to `process_overrides.csv` and applied on the next start. Returns the effective row. `qcmd` and `host` are refused: they choose what program runs and where, so only `uqs config set` on the host sets them                                                                                                                                                                                                                                                      |
+  | `PUT /control/process/{process}/config`        | One `process.csv` field override, persisted to `process_overrides.csv` and applied on the next start. Returns the effective row. `qcmd` and `host` are refused: they choose what program runs and where, so only `uqs config set` on the host sets them                                                                                                                                                                                                                                                      |
   | `PUT /control/worker-config`                   | One `.qetl.cfg` override in the live process the gateway addresses, lost when it restarts. Returns `.qetl.cfg.explain`, and `shadowed` with the `UQF_<KEY>` variable when the environment outranks the override                                                                                                                                                                                                                                                                                              |
   | `POST /control/backfill`                       | Launch a bounded worker over a range. **Detached** — watch `/ops/backfill` for the outcome                                                                                                                                                                                                                                                                                                                                                                                                                   |
 
@@ -168,7 +168,7 @@ the same connection details for whichever target you choose.
 
 ### Uploading to a target's shared/config --- one file per request
 
-`PUT /services/{target}/files/content?path=&overwrite=false&push=` writes the
+`PUT /services/{target}/files/content?path=&overwrite=false&push_id=` writes the
 request body to `path` below the target's `shared/config/` - the
 operator-supplied files every release links in - and nowhere else (#1951). It is
 gated like browsing: writes on, the token, an allowed Host, a registered target.
@@ -208,8 +208,8 @@ progress and its own outcome.
   nothing was written. A timeout (120 s), an ssh failure (255), a helper crash
   or a lost answer is 504 `UploadOutcomeUncertain`, with `transient: false`. The
   file may or may not be there, and neither the API nor the browser retries: the
-  queue shows "Outcome uncertain", and you list the directory before uploading
-  it again. Cancelling an upload in flight is reported the same way.
+  queue shows "Outcome unknown", and you list the directory before uploading it
+  again. Cancelling an upload in flight is reported the same way.
 - **Audit.** Each upload is one `files.upload` row in the activity history
   (#1954). The row records the target, the file's path, size, sha256, and
   whether it was a create or an overwrite. It never records the file's bytes. An
@@ -492,7 +492,8 @@ just don't answer.
 
 ### Three states, not two
 
-- **up** --- answered, with its self-reported pid, port, procname and proctype.
+- **up** --- answered, with its self-reported pid, port and `.proc.procname`
+  (`reported_process`).
 - **down** --- didn't answer. `down_unexpected` excludes `startwithall=0`
   processes, since those being down is configured behaviour rather than a fault.
   `tap1` is exactly that case, and counting it would make the headline number

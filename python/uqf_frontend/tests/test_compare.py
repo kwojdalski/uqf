@@ -64,8 +64,8 @@ def document(outcome: str = "equal_in_sample", **kw) -> dict:
         "outcome": outcome,
         "left": "local",
         "right": "box",
-        "from": "2026-09-11T00:00:00.000000000+00:00",
-        "to": "2026-09-16T00:00:00.000000000+00:00",
+        "range_from": "2026-09-11T00:00:00.000000000+00:00",
+        "range_to": "2026-09-16T00:00:00.000000000+00:00",
         "limit": 50,
         "filters": ["sym=EURUSD"],
         "source_version": "",
@@ -126,7 +126,7 @@ def test_the_request_reaches_uqs_as_given(registry, asked):
 
 def test_the_response_is_uqs_document_with_its_truncation_label(registry, asked):
     doc = _client().post("/compare", json=BODY).json()
-    assert (doc["outcome"], doc["from"], doc["left"], doc["right"]) == (
+    assert (doc["outcome"], doc["range_from"], doc["left"], doc["right"]) == (
         "equal_in_sample",
         "2026-09-11T00:00:00.000000000+00:00",
         "local",

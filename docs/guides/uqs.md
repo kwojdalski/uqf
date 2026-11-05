@@ -1670,13 +1670,13 @@ uqs target tunnel plan prod rdb1 hdb1 --local rdb1:7002 --json
 uqs target tunnel check prod --password-env PROD_Q_PASSWORD
 ```
 
-The processes, their roles and their remote ports come from the target's
+The processes, their proctypes and their remote ports come from the target's
 release, as `query --tunnel` reads them. A local port is the remote port plus
 `--local-offset` (10000) unless `--local PROC:PORT` names one. The plan refuses
 a process that is not declared there, one that is not an rdb, hdb, wdb or
 gateway, a port out of range, and two forwards sharing one local port. Each
 refusal under `--json` carries a `kind`: `discovery`, `unknown_process`,
-`unsupported_role`, `invalid_port` or `port_conflict`.
+`unsupported_proctype`, `invalid_port` or `port_conflict`.
 
 The check tests each endpoint in the order a connection is made, and the first
 layer that fails gives the endpoint's status:
@@ -1790,9 +1790,9 @@ command that breaks a rule, and on a listed exception that has since been fixed.
    fleet's last start left it, and is refused, naming `uqs start`, when that
    directory is not bootstrapped; it rehearses against the real coverage ledger,
    which a scratch directory would not hold. What the worker itself writes - its
-   log and its status file - is the rehearsal's output. `deploy prune` and
-   `deploy rollback` print a JSON report, so their note goes to stderr; their
-   dry runs read the deploy lock and take nothing
+   log and its status file - is the rehearsal's output. Under `--json`,
+   `deploy push`, `prune` and `rollback` put their note on stderr, after the one
+   document on stdout; their dry runs read the deploy lock and take nothing
    ([deploy.md](deploy.md#rolling-back)).
 6. **A rename ships with a hidden alias for one release**, which prints the new
    spelling; the release after removes it.
@@ -2229,10 +2229,23 @@ One contract holds for every document (#1882):
   cell shows: a port is a number, a flag `true`/`false`, a set of names a list.
   Where the table shows words for a missing value - `(chosen at start)`,
   `no cap`, `(nothing declares it)` - the document has `null` or `[]`;
-- a process is `process`, wherever the table calls it `procname`;
+- one concept has one key, at every depth of the document, not only on a list's
+  records (#2122): a process is `process` wherever the table calls it
+  `procname`, the start-all flag `start_with_all` (process.csv's
+  `startwithall`), a job `job` (the run ledger's `worker`), a stack's base port
+  `base_port` (an attached destination's `stack_id`), and a time range
+  `range_from`/`range_to`, never a `range` object;
 - a document that reports a verdict says it as `ok`, `false` exactly when the
   command exits non-zero (`deploy check` keeps `passed` beside it, which a
-  deploying uqs of another version reads; `job check` keeps `worst`);
+  deploying uqs of another version reads, and so does `deploy status`'s
+  `health`; `job check` keeps `worst`). `ok` is a bool wherever it appears: a
+  row with a richer result says it under `outcome` beside it - `data alter`'s
+  readers are `{process, ok, outcome, detail}`, `outcome` one of `reloaded`,
+  `failed`, `down`, `skipped`, `not asked`, and only `reloaded` is `ok`. `uqs`
+  refuses to print a document that breaks this, rather than print one a script
+  would misread;
+- what a document carries as data - a `query`'s result, `job preview`'s sampled
+  rows, `data diff`'s rows - keeps the data's own column names;
 - a time is ISO-8601 with an explicit offset: q's local `.z.P` (a log line,
   TorQ's clock) carries this machine's, a ledger's `.z.p` `+00:00`, and a
   fraction of a second keeps all its digits.
@@ -2265,10 +2278,10 @@ Each command's `--help` names its document. The commands #1731 added:
   | `schema [PROC] [TABLE]`                     | `{process, port, tables: [{table, rows, columns}]}`, or with a TABLE `{process, port, columns: [{table, column, type, q, attribute}]}`                                                                                                                                            |
   | `logs`                                      | `{lines: [{time, host, process, proctype, loglevel, id, message}]}`; not with `--follow`, `--channel` or `--multitail`                                                                                                                                                            |
   | `config show PROC [FIELD]`                  | `{process, fields: [{field, value}]}`, or `{process, field, value}`                                                                                                                                                                                                               |
-  | `job gaps`                                  | `{job, gaps: [{range_from, range_to}], sessions, refillable, refills: [{worker, range_from, range_to, command}], today_not_refillable}`                                                                                                                                           |
+  | `job gaps`                                  | `{job, gaps: [{range_from, range_to}], sessions, refillable, refills: [{job, range_from, range_to, command}], today_not_refillable}`                                                                                                                                              |
   | `job preview`                               | the preview's own result: `{job, mode, state, live, cursor, next_cursor, advances, fetched, rows, sample, failures, trace}`                                                                                                                                                       |
   | `job check`                                 | `{dataset, range_from, range_to, producers: [{producer, mode, source}], readonly, checks: [{category, status, dataset, scope, range_from, range_to, basis, reason, findings}], behaviours: [...], worst, ok}`                                                                     |
-  | `job runs list [--unfinished]`              | `{runs: [{run_id, worker, dataset, status, range_from, range_to, ...}]}`                                                                                                                                                                                                          |
+  | `job runs list [--unfinished]`              | `{runs: [{run_id, job, dataset, status, range_from, range_to, ...}]}`                                                                                                                                                                                                             |
   | `job runs show RUN`                         | `{run, facts, logs, rerun}`                                                                                                                                                                                                                                                       |
   | `job runs audit`                            | `{facts: [{run_id, dataset, range_from, range_to, label, text}]}`                                                                                                                                                                                                                 |
   | `data snapshot list`                        | `{snapshots: [{id, kind, datasets, digest, created_at, actor, reason, digest_ok}], ok}`; exits 1 when a digest does not match its content                                                                                                                                         |
@@ -2276,9 +2289,12 @@ Each command's `--help` names its document. The commands #1731 added:
   | `connector status`                          | `{connectors: [{name, running, pid, log, ...}]}`                                                                                                                                                                                                                                  |
   | `setup odbc status`                         | `{home, current, previous, versions}`; without `--json` it is now a table                                                                                                                                                                                                         |
   | `deploy check`                              | its report without the `DEPLOY_VERIFY_OK`/`FAILED` marker line                                                                                                                                                                                                                    |
+  | `deploy push`                               | `{ok, deployments: [{target, release, revision, artifact, ssh, dest, profile, status, stage, error, rollback, ...}]}`: a report per target, `status` `planned` on a dry run                                                                                                       |
+  | `deploy rollback`                           | `{ok, rollback, from, to, stop, start, current}`: `rollback` is `planned`, `done` or `failed`, with `reason` and `restore` when it failed                                                                                                                                         |
+  | `deploy prune`                              | `{ok, prune, kept: [{release, why}], removed, freed_bytes, runtimes}`: `prune` is `planned`, `done` or `declined`; ok false when declined                                                                                                                                         |
   | `activity list`                             | `{db, events: [{event_id, ts, recorded_at, level, source, kind, action, target, outcome, session_id, request_id, claimed_user, trigger, method, status_code, duration_ms, items, detail, dropped}], drops: [{level, reason, count, last_at}]}`, events newest first               |
-  | `deploy history`                            | `{deployments: [{default, at, target, host, dest, release, profile, status, stage}]}`                                                                                                                                                                                             |
-  | `target check`                              | `{ok, target, host, dest, remote_user, release}`                                                                                                                                                                                                                                  |
+  | `deploy history`                            | `{deployments: [{default, at, target, ssh, dest, release, profile, status, stage}]}`                                                                                                                                                                                              |
+  | `target check`                              | `{ok, target, ssh, dest, remote_user, release}`                                                                                                                                                                                                                                   |
   | `data check`                                | `{ok, hdb, present, segmented, partitions, missing_tables, missing_columns, types_checked, type_changes}`                                                                                                                                                                         |
   | `config sources check SOURCE...`            | `{ok, sources: [{source, status, stage, rows, elapsed_ms, diagnostic}]}` - one document, not a line per source                                                                                                                                                                    |
   | `data check --table`, `data alter`          | `{ok, hdb, resolved_from, ssh, warnings, plan, result}`: `plan` and `result` are `scripts/gates/hdb_alter.q`'s own documents - partitions, shapes, steps, journal, final check                                                                                                    |

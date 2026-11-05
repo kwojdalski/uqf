@@ -45,7 +45,7 @@ UPLOAD_ROOT (shared/config/, the operator-supplied files every release
 links in). Its request carries the destination path, the file's `size` and
 `sha256`, and `overwrite`; the bytes follow the helper on stdin (FRAMING).
 The answer names what was written: `{"ok": true, "path", "size", "sha256",
-"replaced", "mode", "created", "swept"}`.
+"replaced", "mode", "created_dirs", "swept"}`.
 
   - The destination path is confined as a browse path is, and must name a
     file strictly below UPLOAD_ROOT, at most MAX_UPLOAD_DEPTH deep, each
@@ -140,7 +140,7 @@ REPORT_FIELDS = (
     "stage",
     "error",
     "profile",
-    "host",
+    "ssh",
     "dest",
     "previous_release",
     "dirty",
@@ -324,6 +324,14 @@ def _readable_name(name):
         return raw.decode("utf-8", "replace"), "name is not valid UTF-8"
 
 
+def _mtime(ns):
+    """A file's st_mtime_ns as the API sends every instant: ISO-8601 in UTC,
+    to the nanosecond, with its `Z` - not the float of epoch seconds it was,
+    the one instant in the API that was not text (#2104)."""
+    seconds, fraction = divmod(ns, 10**9)
+    return time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(seconds)) + f".{fraction:09d}Z"
+
+
 def describe(fd, name):
     """One listing entry for `name` in directory `fd`, never following it."""
     shown, bad_name = _readable_name(name)
@@ -333,7 +341,8 @@ def describe(fd, name):
         return {"name": shown, "kind": "unknown", "size": None, "mtime": None,
                 "blocked": True, "reason": f"cannot be read: {exc.strerror}"}  # fmt: skip
     mode = st.st_mode
-    entry = {"name": shown, "size": None, "mtime": st.st_mtime, "blocked": False, "reason": None}
+    entry = {"name": shown, "size": None, "mtime": _mtime(st.st_mtime_ns), "blocked": False,
+             "reason": None}  # fmt: skip
     if stat.S_ISDIR(mode):
         entry["kind"] = "dir"
     elif stat.S_ISREG(mode):
@@ -405,6 +414,9 @@ def _read_report(root, release):
         os.close(fd)
     if not isinstance(data, dict):
         return None, "deploy-report.json is not a JSON object"
+    if "host" in data and "ssh" not in data:
+        # a report written before #2123 named the ssh destination `host`
+        data["ssh"] = data.pop("host")
     return {k: data[k] for k in REPORT_FIELDS if k in data}, None
 
 
@@ -709,7 +721,7 @@ def upload(request, stream):
         "sha256": digest,
         "replaced": replaced,
         "mode": mode,
-        "created": created,
+        "created_dirs": created,
         "swept": swept,
         "push_id": push_id,
         "previous_size": entry["previous_size"],
@@ -978,6 +990,7 @@ def _read_manifest(pfd):
         raise Refusal("refused", f"the push's manifest.json is not version {MANIFEST_VERSION}")
     if not isinstance(manifest.get("files"), list):
         raise Refusal("refused", "the push's manifest.json has no file list")
+    manifest["reported"] = read_reported(manifest)
     return manifest
 
 
@@ -1155,8 +1168,18 @@ def push_open(request):
     return {"protocol": PROTOCOL, "ok": True, "push_id": push_id, "pruned": pruned}
 
 
-#: The outcomes a browser may report for a file the server never recorded.
-REPORTED = ("uncertain", "cancelled", "failed", "refused", "invalid")
+#: The outcomes a browser may report for a file the server never recorded:
+#: models.FileOutcome's words, less `succeeded`, which it cannot know (#2108).
+REPORTED = ("unknown", "cancelled", "failed", "refused", "invalid")
+#: A reported outcome as a manifest written before #2108 stores it. Manifests
+#: already on servers keep it; they are read in the new word, never written.
+_STORED_OUTCOME = {"uncertain": "unknown"}
+
+
+def read_reported(manifest):
+    """The manifest's reported files, each outcome in the current word."""
+    return [{**r, "outcome": _STORED_OUTCOME.get(r.get("outcome"), r.get("outcome"))}
+            for r in manifest.get("reported") or []]  # fmt: skip
 
 
 def push_close(request):
@@ -1202,7 +1225,7 @@ def summarise(manifest):
         "file_count": len(files),
         "total_bytes": sum(e.get("size") or 0 for e in files if e.get("state") != "failed"),
         "states": states,
-        "reported": len(manifest.get("reported") or []),
+        "reported_count": len(manifest.get("reported") or []),
     }  # fmt: skip
 
 
@@ -1444,11 +1467,11 @@ def _restore_one(root, spfd, npfd, manifest, source, step):
 
 
 def restore(request):
-    """Restore push `source_push_id` to its before state, as push `push_id`:
+    """Restore push `restores` to its before state, as push `push_id`:
     with `dry_run`, only the plan; else, confirmed, every step, or nothing
     when any file changed since the push."""
     root = request.get("root")
-    source_id = _push_id(request.get("source_push_id"))
+    source_id = _push_id(request.get("restores"))
     dry_run = request.get("dry_run", False)
     if not isinstance(dry_run, bool):
         raise Refusal("bad_request", "dry_run must be true or false")
@@ -1458,7 +1481,7 @@ def restore(request):
     try:
         source = _read_manifest(spfd)
         plan = _plan(root, source)
-        answer = {"protocol": PROTOCOL, "ok": True, "source_push_id": source_id,
+        answer = {"protocol": PROTOCOL, "ok": True, "restores": source_id,
                   "dry_run": dry_run, "plan": plan, "push_id": None, "results": [],
                   "pruned": []}  # fmt: skip
         if dry_run:
@@ -1549,10 +1572,10 @@ def delete_paths(root, paths, confirmed):
                     )
             finally:
                 os.close(fd)
-            results.append({"path": path, "deleted": True, "error": None})
+            results.append({"path": path, "outcome": "succeeded", "error": None})
         except (Refusal, OSError) as exc:
             detail = exc.detail if isinstance(exc, Refusal) else exc.strerror
-            results.append({"path": path, "deleted": False, "error": detail})
+            results.append({"path": path, "outcome": "failed", "error": detail})
     return {"protocol": PROTOCOL, "ok": True, "results": results}
 
 

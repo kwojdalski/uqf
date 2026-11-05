@@ -507,7 +507,7 @@ def history_diff(
 def restore(
     r: Any,
     name: str,
-    source_push_id: str,
+    restores: str,
     *,
     dry_run: bool,
     user: str | None,
@@ -517,11 +517,11 @@ def restore(
     runner: Runner = subprocess.run,
     on_begin: Callable[[], None] | None = None,
 ) -> dict[str, Any]:
-    """Restore push `source_push_id`'s before state on target `r`, as a push
+    """Restore push `restores`'s before state on target `r`, as a push
     of its own - or, `dry_run`, only say what that would take. Run once,
     never retried: a lost answer is RestoreOutcomeUncertain."""
-    check_push_id(source_push_id)
-    payload = {"op": "restore", "source_push_id": source_push_id, "dry_run": dry_run,
+    check_push_id(restores)
+    payload = {"op": "restore", "restores": restores, "dry_run": dry_run,
                "confirmed": not dry_run, "push_id": new_push_id(), "user": user,
                "target": name, "via": via, "max_kept": max_kept,
                "retention_days": retention_days}  # fmt: skip

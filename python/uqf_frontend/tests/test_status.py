@@ -150,10 +150,10 @@ def test_failed_run_surfaces_its_error_window_and_cursor(tmp_path):
     assert s.state == "failed" and not s.ok
     assert s.error == "source read failed: connection refused"
     assert (s.range_from, s.range_to) == (
-        "2026-09-13T00:00:00.000000000",
-        "2026-09-14T00:00:00.000000000",
+        "2026-09-13T00:00:00.000000000Z",
+        "2026-09-14T00:00:00.000000000Z",
     )
-    assert s.cursor == "2026-09-13T12:00:00.000000000"
+    assert s.cursor == "2026-09-13T12:00:00.000000000Z"
     assert s.rows_published == 500, "partial progress is preserved"
 
 
@@ -327,6 +327,31 @@ def client_for(status_dir, monkeypatch):
             fleet=FakeFleet(),
         )
     )
+
+
+def test_every_time_ops_backfill_sends_carries_its_zone(tmp_path, monkeypatch):
+    """q's `.j.j` writes a timestamp with no zone, and the API passed it on:
+    a window shown in the Backfills view could not be pasted into the Backfill
+    form, which refuses a zone-less bound, and a reader could not tell it was
+    UTC (#2104). Every instant goes with its `Z`, as /coverage's do."""
+    write_status_file(tmp_path, "crypto_markout1", state="running")
+    write_status_file(tmp_path, "crypto_markout2", cursor="")
+    rows = client_for(tmp_path, monkeypatch).get("/ops/backfill").json()["workers"]
+    by_id = {w["instance_id"]: w for w in rows}
+    first = by_id["crypto_markout1"]
+    assert (first["range_from"], first["range_to"], first["cursor"], first["updated_at"]) == (
+        "2026-09-13T00:00:00.000000000Z",
+        "2026-09-14T00:00:00.000000000Z",
+        "2026-09-14T00:00:00.000000000Z",
+        "2026-09-15T18:41:14.475818000Z",
+    )
+    assert by_id["crypto_markout2"]["cursor"] is None, "q's null timestamp is no cursor"
+
+
+def test_a_status_file_whose_window_is_not_a_time_is_unreadable(tmp_path):
+    write_status_file(tmp_path, "bad", range_from="soon")
+    statuses, unreadable = status.read_dir(tmp_path)
+    assert statuses == [] and "soon" in unreadable[0]["error"]
 
 
 def test_endpoint_returns_workers_and_a_poll_cadence(tmp_path, monkeypatch):

@@ -158,7 +158,7 @@ def test_an_unknown_attachment_and_an_unknown_worker_are_refused(world):
 def test_the_writers_and_the_readers_that_serve_the_destination_are_found(world):
     plan_ = plan_with(world, facts_of())
     assert plan_["writers"] == ["rdb1", "wdb1"]
-    assert plan_["reload_targets"] == [{"procname": "hdb1", "port": 6003}]
+    assert plan_["reload_targets"] == [{"process": "hdb1", "port": 6003}]
 
 
 def test_a_reader_of_another_directory_is_not_a_reload_target(world, monkeypatch):
@@ -167,8 +167,8 @@ def test_a_reader_of_another_directory_is_not_a_reload_target(world, monkeypatch
     stack = HdbStack(world.hdb, other=elsewhere)
     monkeypatch.setattr(service, "ipc_for", lambda att: stack)
     plan_ = plan_with(world, facts_of(), ipc=stack)
-    assert [t["procname"] for t in plan_["reload_targets"]] == ["hdb1"]
-    assert plan_["readers_not_serving"] == [{"procname": "hdb2", "detail": f"serves {elsewhere}"}]
+    assert [t["process"] for t in plan_["reload_targets"]] == ["hdb1"]
+    assert plan_["readers_not_serving"] == [{"process": "hdb2", "detail": f"serves {elsewhere}"}]
 
 
 def test_an_hdb_reader_that_is_not_running_is_not_a_reload_target_and_is_said_so(world):
@@ -176,7 +176,7 @@ def test_an_hdb_reader_that_is_not_running_is_not_a_reload_target_and_is_said_so
     p = plan_with(world, facts_of())
     assert p["reload_targets"] == []
     assert p["readers_not_serving"] == [
-        {"procname": "hdb1", "detail": "not running (connection refused)"}
+        {"process": "hdb1", "detail": "not running (connection refused)"}
     ]
 
 
@@ -210,17 +210,17 @@ def test_an_unreachable_discovery_is_a_blocker(world):
 
 def test_the_plan_reports_everything_the_issue_asks_for(world):
     p = plan_with(world, facts_of())
-    assert p["worker"] == WORKER and p["attachment"] == "pb-uat" and p["mutates"] is False
+    assert p["job"] == WORKER and p["attachment"] == "pb-uat" and p["mutates"] is False
     assert p["source"] == {"name": DATASET, "live": True}
-    assert p["range"]["from"] == "2026-09-11T00:00:00+00:00"
-    assert p["range"]["to"] == "2026-09-13T00:00:00+00:00"
-    assert p["range"]["half_open"] == "[from, to)"
+    assert p["range_from"] == "2026-09-11T00:00:00+00:00"
+    assert p["range_to"] == "2026-09-13T00:00:00+00:00"
+    assert "range" not in p, "one range, spelt as its windows are (#2122)"
     assert p["conflict_policy"] == "upsert"
     assert [w["decision"] for w in p["windows"]] == ["covered", "fetch"]
     assert p["coverage"] == {"fetch": 1, "covered": 1, "deferred": 0}
     assert p["native_partitions"] == [{"date": "2026-09-12", "exists": False, "has_dataset": False}]
     assert p["destination"]["hdb_dir"] == str(world.hdb.resolve())
-    assert p["reload_targets"] == [{"procname": "hdb1", "port": 6003}]
+    assert p["reload_targets"] == [{"process": "hdb1", "port": 6003}]
 
 
 def test_native_partitions_say_what_already_exists(world):
@@ -384,7 +384,7 @@ def test_cli_plan_prints_the_report_and_json_matches(world, monkeypatch):
     out = " ".join(text.output.split())
     assert "attachment pb-uat (nothing was written)" in out and "reload hdb1:6003" in out
     as_json = invoke(*COMMON, "--mode", "plan", "--json")
-    assert json.loads(as_json.output)["reload_targets"] == [{"procname": "hdb1", "port": 6003}]
+    assert json.loads(as_json.output)["reload_targets"] == [{"process": "hdb1", "port": 6003}]
 
 
 def test_json_without_attach_reports_the_local_run(world):

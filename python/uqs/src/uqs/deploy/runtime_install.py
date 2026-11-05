@@ -122,7 +122,7 @@ Runtime = torq_runtime.Runtime | q_runtime.QRuntime | python_runtime.PythonRunti
 def load(component: str, path: str | None) -> Runtime:
     """The bundled runtime of `component` a push was given, checked whole."""
     if not path:
-        needs = f"{component}_mode is bundled, and needs {component}_runtime"
+        needs = f"{component}_mode is bundled, and needs {component}_component"
         raise DeployError("arguments", needs)
     try:
         return READERS[component](Path(path))

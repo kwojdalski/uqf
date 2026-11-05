@@ -7,16 +7,16 @@ const ok = (body: unknown) => ({ ok: true, json: async () => body });
 /** What the API reads from the effective process.csv: two rdbs, a feed, and
  * one process "all" does not start. */
 const PROCESSES = [
-  { procname: "rdb1", proctype: "rdb", start_with_all: true },
-  { procname: "rdb2", proctype: "rdb", start_with_all: true },
-  { procname: "feed1", proctype: "feed", start_with_all: true },
-  { procname: "tap1", proctype: "metrics", start_with_all: false },
+  { process: "rdb1", proctype: "rdb", start_with_all: true },
+  { process: "rdb2", proctype: "rdb", start_with_all: true },
+  { process: "feed1", proctype: "feed", start_with_all: true },
+  { process: "tap1", proctype: "metrics", start_with_all: false },
 ];
 const FLEET = [
-  { procname: "rdb1", up: true },
-  { procname: "rdb2", up: false },
-  { procname: "feed1", up: true },
-  { procname: "tap1", up: false },
+  { process: "rdb1", up: true },
+  { process: "rdb2", up: false },
+  { process: "feed1", up: true },
+  { process: "tap1", up: false },
 ];
 
 /** The control status the app asks for on mount, plus whatever else a test
@@ -424,8 +424,8 @@ it("confirms exactly the selection the confirmation opened for (#2009)", async (
   expect(await lifecycleBody(fetcher, "stop")).toEqual({ procs: "rdb1" });
 });
 
-it("sends a typed procname as one encoded path segment (#2015)", async () => {
-  const fetcher = mockApi(true, () => ok({ procname: "rdb1?x#y", config: {} }));
+it("sends a typed process as one encoded path segment (#2015)", async () => {
+  const fetcher = mockApi(true, () => ok({ process: "rdb1?x#y", config: {} }));
   await openControl();
   fireEvent.change(await screen.findByLabelText("Process"), {
     target: { value: "rdb1?x#y" },

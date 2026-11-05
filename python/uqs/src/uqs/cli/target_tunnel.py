@@ -1,7 +1,7 @@
 """`uqs target tunnel plan` and `uqs target tunnel check`: a target's rdb,
 hdb, wdb and gateway forwarded to this machine (#2030, #2031).
 
-`plan` prints the mappings - each process, its role, its production endpoint
+`plan` prints the mappings - each process, its proctype, its production endpoint
 and the local one - and the one ssh command that opens them all, with no
 credential in it. `check` proves each mapping layer by layer and names the
 layer that failed. Both are deploy/tunnel_plan.py's and tunnel_check.py's,
@@ -60,13 +60,13 @@ Offset = Annotated[
     ),
 ]
 PlanJson = json_opt(
-    '{"target", "ssh", "release", "mappings": [{process, role, remote_host, remote_port, '
+    '{"target", "ssh", "release", "mappings": [{process, proctype, remote_host, remote_port, '
     "local_host, local_port, production_endpoint, local_endpoint, query_command, state, "
     'last_check, listening}], "launch_command", "launch_argv", "available"}'
 )
 CheckJson = json_opt(
     '{"ok", "target", "ssh", "release", "checked_at", "category", "error", "launch_command", '
-    '"endpoints": [{process, role, production_endpoint, local_endpoint, status, detail, '
+    '"endpoints": [{process, proctype, production_endpoint, local_endpoint, status, detail, '
     'layers, connected, identity, gateway_servers, last_success}], "categories"}'
 )
 
@@ -102,11 +102,11 @@ def plan(
         emit(doc)
         return
     table = Table(title=f"tunnel plan for {p.target} ({p.ssh})")
-    for column in ("process", "role", "production", "local", "state", "last checked"):
+    for column in ("process", "proctype", "production", "local", "state", "last checked"):
         table.add_column(column)
     for m in doc["mappings"]:
         last = (m["last_check"] or {}).get("at") or "-"
-        table.add_row(m["process"], m["role"], m["production_endpoint"], m["local_endpoint"],
+        table.add_row(m["process"], m["proctype"], m["production_endpoint"], m["local_endpoint"],
                       m["state"], last)  # fmt: skip
     console.print(table)
     console.print("open it with:")

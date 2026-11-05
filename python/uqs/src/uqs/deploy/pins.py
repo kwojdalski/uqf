@@ -3,8 +3,8 @@ before any Config is made (#1557) - split from config.py, which calls
 `checked` and turns its ValueError into the push's refusal.
 
 Four artifacts can be pinned: the release (`expected_sha256`) and, when
-bundled, the TorQ runtime (`torq_runtime_sha256`), the q runtime
-(`q_runtime_sha256`) and the Python runtime (`python_runtime_sha256`). An
+bundled, the TorQ runtime (`torq_component_sha256`), the q runtime
+(`q_component_sha256`) and the Python runtime (`python_component_sha256`). An
 override with nothing to relax is refused, never recorded as idle:
 
   --override accept-digest   needs a pin on any of them;
@@ -22,9 +22,9 @@ from uqs.deploy.artifact import q_requirement
 @dataclass(frozen=True)
 class Pins:
     expected_sha256: str | None
-    torq_runtime_sha256: str | None
-    q_runtime_sha256: str | None
-    python_runtime_sha256: str | None
+    torq_component_sha256: str | None
+    q_component_sha256: str | None
+    python_component_sha256: str | None
     q_version: str | None
     accept_digest: str | None
     accept_q_version: str | None
@@ -58,41 +58,41 @@ def q_version(value: str | None) -> str | None:
 def checked(
     *,
     expected_sha256: str | None,
-    torq_runtime_sha256: str | None,
-    q_runtime_sha256: str | None,
-    python_runtime_sha256: str | None,
+    torq_component_sha256: str | None,
+    q_component_sha256: str | None,
+    python_component_sha256: str | None,
     q_version_: str | None,
     accept_digest: str | None,
     accept_q_version: str | None,
     allow_unpinned: str | None,
-    torq_runtime: str | None,
-    q_runtime: str | None,
-    python_runtime: str | None,
+    torq_component: str | None,
+    q_component: str | None,
+    python_component: str | None,
 ) -> Pins:
     """Every pin and override, normalised, or the ValueError that refuses
-    them. `torq_runtime`, `q_runtime` and `python_runtime` are the bundled
+    them. `torq_component`, `q_component` and `python_component` are the bundled
     runtimes' paths, when they ship."""
     pins = Pins(
         expected_sha256=sha256("expected_sha256", expected_sha256),
-        torq_runtime_sha256=sha256("torq_component_sha256", torq_runtime_sha256),
-        q_runtime_sha256=sha256("q_component_sha256", q_runtime_sha256),
-        python_runtime_sha256=sha256("python_component_sha256", python_runtime_sha256),
+        torq_component_sha256=sha256("torq_component_sha256", torq_component_sha256),
+        q_component_sha256=sha256("q_component_sha256", q_component_sha256),
+        python_component_sha256=sha256("python_component_sha256", python_component_sha256),
         q_version=q_version(q_version_),
         accept_digest=reason("--override accept-digest", accept_digest),
         accept_q_version=reason("--override accept-q-version", accept_q_version),
         allow_unpinned=reason("--override allow-unpinned", allow_unpinned),
     )
     runtimes = (
-        (torq_runtime, pins.torq_runtime_sha256),
-        (q_runtime, pins.q_runtime_sha256),
-        (python_runtime, pins.python_runtime_sha256),
+        (torq_component, pins.torq_component_sha256),
+        (q_component, pins.q_component_sha256),
+        (python_component, pins.python_component_sha256),
     )
     if pins.accept_digest is not None and not (
         pins.expected_sha256 or any(pin for _, pin in runtimes)
     ):
         raise ValueError(
-            "--override accept-digest relaxes expected_sha256 (or torq_runtime_sha256, "
-            "q_runtime_sha256, python_runtime_sha256), and this deployment sets none"
+            "--override accept-digest relaxes expected_sha256 (or torq_component_sha256, "
+            "q_component_sha256, python_component_sha256), and this deployment sets none"
         )
     if pins.accept_q_version is not None and pins.q_version is None:
         raise ValueError(

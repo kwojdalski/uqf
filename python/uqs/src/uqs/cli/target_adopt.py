@@ -120,7 +120,7 @@ def adopt_(
             raise UqsError(f"target name {name!r}: lower-case letters, digits, - and _")
         if remote_user is not None and not _ACCOUNT.fullmatch(remote_user):
             raise UqsError(f"--remote-user {remote_user!r} is not an account name")
-        targets.remote_shape(name, {"host": ssh, "dest": dest})
+        targets.remote_shape(name, {"ssh": ssh, "dest": dest})
         r = control.Remote(name, ssh, dest.rstrip("/") or "/", remote_user)
         survey = adopt.survey(r, release, launch_python, launch_env_file)
     except UqsError as exc:
@@ -133,10 +133,7 @@ def adopt_(
     entry = adopt.block(survey, r)
     console.print("  target       would save:")
     console.print(
-        "\n".join(
-            f"    {ln}"
-            for ln in target_file.render(("targets", name), targets.to_keys(entry)).splitlines()
-        ),
+        "\n".join(f"    {ln}" for ln in target_file.render(("targets", name), entry).splitlines()),
         markup=False,
         highlight=False,
     )

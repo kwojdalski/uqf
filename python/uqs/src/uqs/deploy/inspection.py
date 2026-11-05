@@ -159,24 +159,24 @@ def matching(
     declared: dict[str, dict],
     *,
     name: str | None = None,
-    host: str | None = None,
+    ssh: str | None = None,
     dest: str | None = None,
 ) -> str | None:
     """The inspection-only target among `declared` (targets.read's answer)
-    that `name`, or the server at (`host`, `dest`), is - or None. `name` is
+    that `name`, or the server at (`ssh`, `dest`), is - or None. `name` is
     matched by itself and by the server it is declared at, so another target
     at an inspection target's (ssh, dest) is that target (#2068)."""
     servers: list[tuple[object, object]] = []
-    if host is not None:
-        servers.append((host, dest))
+    if ssh is not None:
+        servers.append((ssh, dest))
     if name is not None and name in declared:
-        servers.append((declared[name].get("host"), declared[name].get("dest")))
+        servers.append((declared[name].get("ssh"), declared[name].get("dest")))
     if name is not None and is_on(declared.get(name, {})):
         return name
     for label, settings in sorted(declared.items()):
         if not is_on(settings):
             continue
-        at = (settings.get("host"), settings.get("dest"))
+        at = (settings.get("ssh"), settings.get("dest"))
         if any(same_server(*at, *server) for server in servers):
             return label
     return None
@@ -197,19 +197,19 @@ def refuse(
     what: str,
     *,
     name: str | None = None,
-    host: str | None = None,
+    ssh: str | None = None,
     dest: str | None = None,
 ) -> None:
     """Raise InspectionRefused when the target `name`, or the server at
-    (`host`, `dest`), is in inspection mode; `what` is the refused change,
+    (`ssh`, `dest`), is in inspection mode; `what` is the refused change,
     in words ("`uqs deploy push`")."""
-    found = matching(declared_targets(root), name=name, host=host, dest=dest)
+    found = matching(declared_targets(root), name=name, ssh=ssh, dest=dest)
     if found is None:
         return
     if name == found:
         via = ""
-    elif host is not None:
-        via = f" (the server at {host}:{dest} is target {found})"
+    elif ssh is not None:
+        via = f" (the server at {ssh}:{dest} is target {found})"
     else:
         via = f" (target {name} is the same server as target {found})"
     raise InspectionRefused(
@@ -218,7 +218,7 @@ def refuse(
 
 
 def refuse_deploy(
-    root: Path, what: str, *, name: str | None, host: str, dest: str, dry_run: bool
+    root: Path, what: str, *, name: str | None, ssh: str, dest: str, dry_run: bool
 ) -> None:
     """`refuse`, as the DeployError at stage `inspection` a deploy command
     reports; a dry run changes nothing, so it is never refused."""
@@ -227,7 +227,7 @@ def refuse_deploy(
     from uqs.deploy.config import DeployError
 
     try:
-        refuse(root, what, name=name, host=host, dest=dest)
+        refuse(root, what, name=name, ssh=ssh, dest=dest)
     except InspectionRefused as exc:
         raise DeployError("inspection", str(exc)) from None
 
@@ -238,5 +238,5 @@ def refuse_push(root: Path, cfgs: list, *, dry_run: bool) -> None:
     for cfg in cfgs:
         refuse_deploy(
             root, "`uqs deploy push`",
-            name=cfg.target, host=cfg.host, dest=cfg.dest, dry_run=dry_run,
+            name=cfg.target, ssh=cfg.ssh, dest=cfg.dest, dry_run=dry_run,
         )  # fmt: skip

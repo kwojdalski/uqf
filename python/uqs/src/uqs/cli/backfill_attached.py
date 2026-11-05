@@ -168,7 +168,7 @@ def _validate(
     stack_backfill.backfill_flags(
         worker, version, bound_from, bound_to, on_conflict=on_conflict, mode=mode
     )
-    out = {"mode": "validate", "worker": worker, "destination": dest.as_dict(), "mutates": False}
+    out = {"mode": "validate", "job": worker, "destination": dest.as_dict(), "mutates": False}
     return out, (
         f"{worker} -> attachment {attachment}: destination {dest.hdb_dir} resolves (nothing opened)"
     )
@@ -213,7 +213,7 @@ def _execute(
     except UqsError as exc:
         _die(exc)
         return
-    info = {"mode": mode, "worker": worker, "plan": plan, **run_.as_dict()}
+    info = {"mode": mode, "job": worker, "plan": plan, **run_.as_dict()}
     if not wait:
         _report(
             info,
