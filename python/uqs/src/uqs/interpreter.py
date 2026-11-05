@@ -38,6 +38,7 @@ from types import ModuleType
 
 from uqs.logger import get_logger
 from uqs.paths import UqsError, repo_root
+from uqs.renamed_env import RENAMED_ENV
 
 log = get_logger()
 
@@ -69,13 +70,6 @@ REMOVED_ENV = {
     "UQF_PEACHQ_REASON": (
         "a PeachQ in QCMD that is not the pinned build is named in a warning instead"
     ),
-}
-#: Variables renamed rather than retired, refused the same way, naming the new
-#: name (#1890): one prefix for what q reads, UQF_, and one spelling, PASSWORD.
-RENAMED_ENV = {
-    "UQS_REQUIRE_LIVE_SOURCES": "set UQF_LIVE_SOURCES_REQUIRED=1 (#1890)",
-    "UQF_FRONTEND_GATEWAY_PASSWD": "set UQF_FRONTEND_GATEWAY_PASSWORD (#1890)",
-    "UQF_FRONTEND_DATA_PASSWD": "set UQF_FRONTEND_DATA_PASSWORD (#1890)",
 }
 
 #: A q script printing which implementation runs it. `.pq.load_natives` is

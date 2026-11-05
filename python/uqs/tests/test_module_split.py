@@ -114,7 +114,8 @@ def test_every_exempt_module_still_exists_and_is_still_over():
 #: `paths` and `logger` are omitted from every list because everything may
 #: import them: they are leaves that import nothing from this package, so they
 #: cannot take part in a cycle. `interpreter` is too - it imports `paths` and
-#: nothing else, which test_the_leaves_stay_leaves holds it to - and so are
+#: `renamed_env` and nothing else, which test_the_leaves_stay_leaves holds it
+#: to - and so are
 #: `runtimes`, `timefmt`, `liveness` and `portexpr`, which import nothing at all.
 #: `timefmt` and `liveness` must stay that way: uqf_frontend's read path
 #: imports them (#1326, #1362). `guardrails` (#1825) is the declaration model
@@ -127,6 +128,8 @@ def test_every_exempt_module_still_exists_and_is_still_over():
 #: `duration` (#2121) is the one grammar of a span of time, which the CLI, the
 #: scaffolder, the deploy target file and `timerange` all read, so it imports
 #: nothing.
+#: `renamed_env` (#2111) is the renamed variables `uqs` and the frontend both
+#: refuse; uqf_frontend.config imports it at startup, so it imports nothing.
 LEAVES = {
     "duration",
     "activity_log",
@@ -140,6 +143,7 @@ LEAVES = {
     "liveness",
     "portexpr",
     "guardrails",
+    "renamed_env",
 }
 #: `generated` sits under everything: modules written from the q tree
 #: (uqs.generated.q_facts, #818), which import nothing from this package -
@@ -197,7 +201,7 @@ def test_the_leaves_stay_leaves():
     source = (PKG / "src" / "uqs" / "interpreter.py").read_text()
     reached = {m.group(1) or m.group(2) for m in _IMPORT.finditer(source)}
     # logger reaches nothing of uqs beyond itself, as paths already relies on.
-    assert reached <= {"paths", "logger"}, reached
+    assert reached <= {"paths", "logger", "renamed_env"}, reached
     # uqs.timerange (#1735): the one time-range parser, for every layer
     source = (PKG / "src" / "uqs" / "timerange.py").read_text()
     reached = {m.group(1) or m.group(2) for m in _IMPORT.finditer(source)}
@@ -210,6 +214,7 @@ def test_the_leaves_stay_leaves():
         "guardrails.py",
         "cells.py",
         "duration.py",
+        "renamed_env.py",
     )
     for leaf in leaves:
         source = (PKG / "src" / "uqs" / leaf).read_text()

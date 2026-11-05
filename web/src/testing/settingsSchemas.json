@@ -104,7 +104,7 @@
         "title": "Actions: days kept",
         "type": "integer"
       },
-      "activity_max_rows": {
+      "activity_max_kept": {
         "maximum": 10000000,
         "minimum": 1,
         "title": "Actions: most rows kept",
@@ -116,7 +116,7 @@
         "title": "Interactions: days kept",
         "type": "integer"
       },
-      "activity_interactions_max_rows": {
+      "activity_interactions_max_kept": {
         "maximum": 10000000,
         "minimum": 1,
         "title": "Interactions: most rows kept",
@@ -128,35 +128,35 @@
         "title": "Debug: days kept",
         "type": "integer"
       },
-      "activity_debug_max_rows": {
+      "activity_debug_max_kept": {
         "maximum": 10000000,
         "minimum": 1,
         "title": "Debug: most rows kept",
         "type": "integer"
       },
-      "config_history_keep": {
-        "maximum": 10000,
-        "minimum": 1,
-        "title": "Config pushes kept per target",
-        "type": "integer"
-      },
-      "config_history_days": {
+      "config_history_retention_days": {
         "maximum": 3650,
         "minimum": 1,
         "title": "Config push history: days kept",
+        "type": "integer"
+      },
+      "config_history_max_kept": {
+        "maximum": 10000,
+        "minimum": 1,
+        "title": "Config pushes kept per target",
         "type": "integer"
       }
     },
     "required": [
       "activity_level",
       "activity_retention_days",
-      "activity_max_rows",
+      "activity_max_kept",
       "activity_interactions_retention_days",
-      "activity_interactions_max_rows",
+      "activity_interactions_max_kept",
       "activity_debug_retention_days",
-      "activity_debug_max_rows",
-      "config_history_keep",
-      "config_history_days"
+      "activity_debug_max_kept",
+      "config_history_retention_days",
+      "config_history_max_kept"
     ],
     "title": "Runtime settings",
     "type": "object"

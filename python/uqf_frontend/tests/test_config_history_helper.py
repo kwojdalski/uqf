@@ -21,6 +21,7 @@ from pathlib import Path
 import pytest
 
 from uqf_frontend import remote_files, remote_helper
+from uqf_frontend.models import PrunedPushOut
 from uqf_frontend.remote_helper import HISTORY_DIR, MANIFEST, handle
 
 UNUSUAL = [
@@ -395,9 +396,9 @@ def test_retention_keeps_the_newest_pushes_and_logs_the_pruned(root):
     ids = [f"20261104T10000{i}000Z-0000000{i}" for i in range(4)]
     for push_id in ids[:3]:
         _open(root, push_id)
-    answer = _ask(root, "push_open", push_id=ids[3], destination="shared/config", keep=2)
+    answer = _ask(root, "push_open", push_id=ids[3], destination="shared/config", max_kept=2)
     assert [p["push_id"] for p in answer["pruned"]] == [ids[1], ids[0]]
-    assert {p["why"] for p in answer["pruned"]} == {"count"}
+    assert {p["why"] for p in answer["pruned"]} == {"row_cap"}
     assert sorted(p.name for p in _history(root).iterdir() if p.is_dir()) == ids[2:]
     logged = [json.loads(line)["push_id"] for line in (_history(root) / "pruned.jsonl").open()]
     assert logged == [ids[1], ids[0]]
@@ -410,9 +411,9 @@ def test_retention_by_age(root):
     old = "20200101T000000000Z-00000001"
     _open(root, old)
     answer = _ask(root, "push_open", push_id=remote_files.new_push_id(),
-                  destination="shared/config", keep_days=30)  # fmt: skip
+                  destination="shared/config", retention_days=30)  # fmt: skip
     assert answer["pruned"] == [
-        {"push_id": old, "why": "age", "pruned_at": answer["pruned"][0]["pruned_at"]}
+        {"push_id": old, "why": "retention", "pruned_at": answer["pruned"][0]["pruned_at"]}
     ]
 
 
@@ -420,18 +421,18 @@ def test_a_restore_after_pruning_is_refused_clearly(root):
     gone = _open(root, "20261104T100000000Z-00000001")
     _put(root, gone, "shared/config/a", b"1")
     _ask(root, "push_open", push_id="20261104T100001000Z-00000002", destination="shared/config",
-         keep=1)  # fmt: skip
+         max_kept=1)  # fmt: skip
     for op, extra in (("restore", {"dry_run": True}), ("history_show", {}), ("history_diff", {})):
         key = "restores" if op == "restore" else "push_id"
         answer = _ask(root, op, **{key: gone}, **extra)
         assert answer["error"] == "pruned", answer
-        assert "pruned" in answer["detail"] and "count bound" in answer["detail"]
+        assert "pruned" in answer["detail"] and "row_cap bound" in answer["detail"]
     never = _ask(root, "history_show", push_id="20261104T100009000Z-00000009")
     assert never["error"] == "not_found"
 
 
 def test_a_bound_outside_its_limits_is_refused(root):
-    for over in ({"keep": 0}, {"keep_days": 0}, {"keep": remote_helper.MAX_KEEP + 1}):
+    for over in ({"max_kept": 0}, {"retention_days": 0}, {"max_kept": remote_helper.MAX_KEEP + 1}):
         answer = _ask(root, "push_open", push_id=remote_files.new_push_id(),
                       destination="shared/config", **over)  # fmt: skip
         assert answer["error"] == "bad_request", over
@@ -557,3 +558,21 @@ def test_a_restore_removes_no_directory_outside_shared_config(root):
     assert answer["ok"] and answer["results"][0]["outcome"] == "succeeded"
     assert not (root / "shared/config/only").exists()
     assert (root / "releases" / "x").is_dir()
+
+
+def test_a_pruned_log_written_before_2111_is_read_in_todays_words(root):
+    """A server's PRUNED_LOG outlives the release that wrote it: a line in the
+    pre-#2111 reasons (`count`, `age`) is listed in today's (`row_cap`,
+    `retention`), so the API's strict response model still reads it."""
+    gone = _open(root, "20261104T100000000Z-00000001")
+    _ask(root, "push_open", push_id="20261104T100001000Z-00000002", destination="shared/config",
+         max_kept=1)  # fmt: skip
+    log = _history(root) / "pruned.jsonl"
+    old = [{"push_id": gone, "why": "count", "pruned_at": "2026-11-04T10:00:00Z"},
+           {"push_id": "20200101T000000000Z-00000009", "why": "age",
+            "pruned_at": "2026-11-04T10:00:00Z"}]  # fmt: skip
+    log.write_text("".join(json.dumps(r) + "\n" for r in old), encoding="utf-8")
+    listed = _ask(root, "history_list")
+    assert sorted(p["why"] for p in listed["pruned"]) == ["retention", "row_cap"]
+    for record in listed["pruned"]:
+        PrunedPushOut.model_validate(record)

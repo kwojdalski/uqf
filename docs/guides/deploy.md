@@ -392,8 +392,9 @@ uqs target config restore prd PUSH      # asks first; --yes does not
 A restore writes each replaced file's earlier content back and deletes each file
 the push created, as a push of its own, so it can be restored in turn. It is
 refused, writing nothing, when a file has changed since the push. Each target
-keeps its newest `UQF_FRONTEND_CONFIG_HISTORY_KEEP` pushes (50), none older than
-`UQF_FRONTEND_CONFIG_HISTORY_DAYS` (90); a pruned push's restore says so.
+keeps its newest `UQF_FRONTEND_CONFIG_HISTORY_MAX_KEPT` pushes (50), none older
+than `UQF_FRONTEND_CONFIG_HISTORY_RETENTION_DAYS` (90); a pruned push's restore
+says so.
 
 ### Inspection-only targets
 
