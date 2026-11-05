@@ -29,7 +29,7 @@ AUTH = {"authorization": f"Bearer {TOKEN}"}
 PUSH = "20261104T145249000Z-0123abcd"
 
 #: A value for every path parameter a write route takes.
-PARAMS = {"target": "prod", "push_id": PUSH, "action": "stop", "procname": "rdb1"}
+PARAMS = {"target": "prod", "push_id": PUSH, "action": "stop", "process": "rdb1"}
 
 #: Every write route, but the exempt ones: what the sweep calls.
 WRITES = sorted(
@@ -151,7 +151,7 @@ def test_the_sweep_covers_every_kind_of_write_the_issue_names():
     for route in (
         ("POST", "/control/process/{action}"),
         ("POST", "/control/backfill"),
-        ("PUT", "/control/process/{procname}/config"),
+        ("PUT", "/control/process/{process}/config"),
         ("PUT", "/control/worker-config"),
         ("PUT", "/services/{target}/files/content"),
         ("POST", "/services/{target}/files/delete"),

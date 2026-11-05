@@ -134,6 +134,11 @@ check["backfill derive worker registered"; registered[.qetl.job.bounded.def;`smo
 check["backfill derive transform fails verification until written";
     not all exec passed from .qetl.transform.verify `smokebfd_backfill_transform]
 check["a twin is its streaming job's twin"; `smoketwin_backfill in .qetl.uptime.twins `smokefeed]
+check["a scaffolded twin declares the job it repairs, and q holds the pair to it (#2103)";
+    `smokefeed~(.qetl.job.bounded.def `smoketwin_backfill)`twin_of]
+check["and reports its calculation as not established, never implied";
+    `not_established~first exec calculation from .qetl.twin.report[]
+        where worker=`smoketwin_backfill]
 exit 0
 """
 
@@ -252,7 +257,12 @@ def _scaffold_every_kind(root: Path) -> None:
     # A twin is planned from the tree, so after the feed it twins is written:
     # its dataset and columns are read from smokefeed's declaration (#716).
     dataset, cols = twin_target(root, "smokefeed", None, None, {"smoke_ticks": feed_table})
-    write.apply_plan(backfill.bounded_worker("smoketwin", dataset, cols, define_table=False), root)
+    write.apply_plan(
+        backfill.bounded_worker(
+            "smoketwin", dataset, cols, define_table=False, twin_of="smokefeed"
+        ),
+        root,
+    )
 
 
 def test_the_checks_are_all_named():

@@ -41,8 +41,8 @@ it("reports partial success independently from a subsequent refresh failure", as
       target: "box",
       root: "/srv/uqf",
       results: [
-        { path: "shared/a", deleted: true, error: null },
-        { path: "shared/b", deleted: false, error: "Directory not empty" },
+        { path: "shared/a", outcome: "succeeded", error: null },
+        { path: "shared/b", outcome: "failed", error: "Directory not empty" },
       ],
     }),
   });

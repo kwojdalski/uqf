@@ -628,7 +628,7 @@ def test_a_dry_run_prints_the_plan_as_json_and_saves_nothing(cli_stack, bundle, 
     )  # fmt: skip
     assert result.exit_code == 0, result.output
     data = json.loads(result.output)["plan"]
-    assert data["stack"]["id"] == 6000 and data["stack"]["discovery"] == "localhost:6001"
+    assert data["stack"]["base_port"] == 6000 and data["stack"]["discovery"] == "localhost:6001"
     assert data["ok"] is True and data["changes"][0]["action"] == "register table"
     assert not (tmp_path / "attachments").exists()
 

@@ -238,7 +238,7 @@ def test_attach_plans_and_applies_on_the_stack_s_host_and_reloads_its_readers(wo
     r = doc(applied)["result"]
     assert applied.exit_code == 0 and r["final_check"]["clean"], (applied.output, world.errors)
     assert attached.stack.reloaded == ["hdb1"]
-    assert {"procname": "hdb1", "ok": "yes", "detail": ""} in r["readers"]
+    assert {"process": "hdb1", "ok": True, "outcome": "reloaded", "detail": ""} in r["readers"]
     # a plan, then --apply's plan and its write: each one ssh session to the stack's host
     assert attached.log.read_text().split() == ["testhost"] * 3
     assert not list(attached.remote_tmp.iterdir()), "the copied script is removed after each run"

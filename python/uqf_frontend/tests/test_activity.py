@@ -275,7 +275,7 @@ def test_an_invalid_action_is_refused_before_acting(tmp_path):
 def test_a_detached_backfill_is_accepted_not_succeeded(tmp_path, monkeypatch):
     def fake(settings, **kw):
         control._acting()
-        return {**kw, "procname": "x1", "status_path": "/ops/backfill"}
+        return {**kw, "process": "x1", "status_path": "/ops/backfill"}
 
     monkeypatch.setattr(control, "start_backfill", fake)
     c = _client(_settings(tmp_path))

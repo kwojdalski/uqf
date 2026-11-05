@@ -40,7 +40,7 @@
 .qt.qetl.compare.side:{[name;h] `name`h!(name;h)}
 
 .qt.qetl.compare.req:{[given]
-    (`from`to`filters`limit`source_version`partition`login!(
+    (`range_from`range_to`filters`limit`source_version`partition`login!(
         .qt.qetl.compare.from;.qt.qetl.compare.to;();100j;`;`;"u:p")),given}
 
 / Compare demo_deals on two fixture targets.
@@ -77,7 +77,7 @@
     d:.qt.qetl.compare.deals[];
     / prod's sample is cut at another place: deal 2 arrives last there
     late:.qt.qetl.compare.target[enlist[`demo_deals]!enlist update time:time+5D from d where deal_id=2;.qt.qetl.compare.whole];
-    v:first .qt.qetl.compare.cmp[.qt.qetl.compare.same[];late;`limit`to!(3j;.qt.qetl.compare.to+10D)]`tables;
+    v:first .qt.qetl.compare.cmp[.qt.qetl.compare.same[];late;`limit`range_to!(3j;.qt.qetl.compare.to+10D)]`tables;
     .qunit.assertEquals[(v`outcome;v`unpaired;count v`rows);(`equal_in_sample;2j;0);"deals 2 and 4 each in one sample only: not judged"];
     .qunit.assertTrue[v[`label] like "*(2 keys in one sample only, not judged)";"and counted in the label"]};
 
@@ -235,7 +235,7 @@
 
 .qt.qetl.compare.test_an_empty_window_or_no_limit_is_refused:{[t]
     s:.qt.qetl.compare.side["a";.qt.qetl.compare.same[]];
-    .qunit.assertThrows[{[s;r] .qetl.compare.run[s;s;`demo_deals;r]}[s];.qt.qetl.compare.req[enlist[`to]!enlist .qt.qetl.compare.from];"the window must be non-empty*";"from = to"];
+    .qunit.assertThrows[{[s;r] .qetl.compare.run[s;s;`demo_deals;r]}[s];.qt.qetl.compare.req[enlist[`range_to]!enlist .qt.qetl.compare.from];"the window must be non-empty*";"from = to"];
     .qunit.assertThrows[{[s;r] .qetl.compare.run[s;s;`demo_deals;r]}[s];.qt.qetl.compare.req[enlist[`limit]!enlist 0j];"the row limit must be positive*";"no rows"]};
 
 / --- the key ---------------------------------------------------------------

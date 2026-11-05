@@ -68,7 +68,8 @@ PushArg = Annotated[
 ]
 HistoryJson = json_opt(
     '{"target", "root", "pushes": [{push_id, kind, restores, created, closed, user, via, '
-    'destination, file_count, total_bytes, states, error}], newest first, "total", '
+    "destination, declared, file_count, total_bytes, states, reported_count, error}], "
+    'newest first, "total", '
     '"truncated", "pruned": [{push_id, why, pruned_at}]}'
 )
 ShowJson = json_opt(

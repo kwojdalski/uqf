@@ -241,6 +241,8 @@ aliases.
   | `revision`         | no       | positive long, default none                                                  | the revision of the worker's output logic (#1097). Coverage is recorded under `<release>@r<revision>`, so bumping it when a transform or scoring rule changes plans every window again rather than mixing the old logic's windows with the new; old claims keep their own identity. Bump it with the change, in the same commit                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | not a positive long                                                                                                                                                                                                            |
   | `batching`         | no       | dict, default none (off)                                                     | compute batching inside each window, off unless declared (#1921): `group_by`, `max_rows`, optionally `max_groups`, `context`, `source_read` and `reuse_rows`. See [Compute batching](#compute-batching)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | malformed; `group_by` not a source column; `max_rows` not a positive, finite long; a bad `context`, `source_read` or `reuse_rows`, `source_read` or `reuse_rows`                                                               |
   | `pin`              | no       | function, default none                                                       | a niladic function a run calls once, before it plans or fetches anything, that records (pins) the configuration snapshot the worker's rows name and returns the snapshot ids, a symbol list (#1999, `src/etl/core/bounded_pin.q`). Off unless declared; a dry run does not call it. The worker's `check` is where a batch naming a snapshot that is not durably recorded is refused                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | not a function; a pin that throws fails the run before its first window, and one that returns anything but symbols fails it too                                                                                                |
+  | `twin_of`          | no       | symbol, default none                                                         | the streaming job this worker repairs: a **declared twin** (see below). `outputs` is the live output it repairs, so a live job with several needs no second key. Validated whenever both declarations are loaded, from either end                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | not a symbol, null, itself or a bounded worker; later, any of the refusals below                                                                                                                                               |
+  | `twin_calculation` | no       | `` `shared ``, default none                                                  | the promise that the twin and its live job apply one registered `transform`. Needs `twin_of`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | not `` `shared ``, or declared without `twin_of`; later, a transform that differs from the live job's                                                                                                                          |
 
 `ns` is **not** a key: the namespace is always `.qpipe.job.<worker>`, and a
 supplied `ns` is refused. `define` writes the lifecycle methods (`init`, `plan`,
@@ -250,6 +252,54 @@ calling `define`.
 
 A worker has no `start_with_all`: a backfill runs its range and exits, so it
 never starts with the stack.
+
+### Twins --- a backfill that repairs a live job
+
+A backfill that refills a streaming job's table is only useful while it still
+writes what the job publishes. `twin_of` declares that, on the backfill, and q
+holds the pair to it whenever both declarations are loaded (#2103) --- with no
+CLI involved, and from whichever end loads last: `.qetl.job.bounded.define`
+checks a twin whose live job is already loaded, `.qetl.job.stream.define` the
+twins waiting for it, and a process that loads every declaration refuses a
+`twin_of` that names no loaded job (`.qetl.twin.require_resolved`).
+
+```q
+.qetl.job.bounded.define[`hdb_exec_bars_backfill;
+    `source`outputs`width`transform`twin_of!
+    (`hdb_executions;enlist `exec_bar;0D01:00:00;`hdb_exec_bars;`exec_bars)];
+```
+
+  | held to                  | refusal (`twin: <worker> is declared a twin of <job> but ...`)                                                                                                                                              |
+  | ---                      | ---                                                                                                                                                                                                         |
+  | its destination          | `it writes marks, which fx_markout does not list among its outputs (marks_v2) - a twin repairs one of the live job's outputs, even when another table has the same columns`                                 |
+  | the dataset contract     | the twin's transform output against the plant's table (`.qetl.plant.problems`): `marks.px is typed "j" - the plant takes "f"`, `marks has columns px - the plant takes px qty`, or `x is not a plant table` |
+  | a promised calculation   | `it promises a shared calculation (twin_calculation `shared) but applies A where B applies C`, or `B declares no transform`                                                                                 |
+
+The destination check is the point of the declaration: the live job moving to
+`marks_v2`, another valid table with the same columns, leaves each producer
+satisfying its own schema and the backfill no longer repairing the live output.
+It is refused when the live job loads, whatever the schemas say. A live job with
+several outputs needs nothing more: the twin's single output is the one it
+repairs, and it must be among them.
+
+**The calculation is never assumed.** A twin reads another source through
+another transform, so matching columns say nothing about matching arithmetic.
+`.qetl.twin.report[]` lists every declared twin with one of:
+
+  | `calculation`      | meaning                                                                                                                                                                                                                                                            |
+  | ---                | ---                                                                                                                                                                                                                                                                |
+  | `shared`           | both apply one registered transform. Declare `twin_calculation: `shared` to make q refuse a pair that stops doing so; an unpromised pair that happens to share one is reported too                                                                                 |
+  | `not_established`  | no shared transform --- allowed, since a twin's transform is usually an adapter over the same core, but recorded, logged and reported as "calculation equivalence not established". `tests/q/test_twins.q` holds the pairs it lists to the live job's own examples |
+  | `unchecked`        | the live job is not loaded in this process                                                                                                                                                                                                                         |
+
+Only a declared twin is validated. Two producers of one dataset are not a twin
+(`eq_fills_backfill` and the `executions` normalizer both write `executions`),
+and nothing looks at datasets to find a pair. Transport, timestamps, windowing,
+width, source and the whole execution lifecycle stay free to differ.
+(`.qetl.uptime.twins`, which `uqs job gaps` uses to pick the backfill that
+refills an outage, still goes by dataset.)
+`uqs job new --kind backfill --twin-of JOB` writes the declaration, and
+`twin_calculation` when JOB declares a transform the twin then applies.
 
 ### Compute batching
 
