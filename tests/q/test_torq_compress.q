@@ -18,17 +18,22 @@
 
 / Load TorQ's compress.q against stand-ins for .lg and .proc.getconfigfile.
 .qt.fixture.torq_cmp.load:{[]
-    if[not `o in key `.lg; `.lg.o set {[a;b]}; `.lg.e set {[a;b]}; `.qt.qtorq.compress.added set .qt.qtorq.compress.added,`lg];
-    if[not `getconfigfile in key `.proc; `.proc.getconfigfile set {[n] enlist `:build/none.csv}; `.qt.qtorq.compress.added set .qt.qtorq.compress.added,`proc];
+    if[not `o in key `.lg; `.lg.o set {[a;b]}; `.qt.qtorq.compress.added set .qt.qtorq.compress.added,`lg_o];
+    if[not `e in key `.lg; `.lg.e set {[a;b]}; `.qt.qtorq.compress.added set .qt.qtorq.compress.added,`lg_e];
+    if[not `getconfigfile in key `.proc; `.proc.getconfigfile set {[n] enlist `:build/none.csv}; `.qt.qtorq.compress.added set .qt.qtorq.compress.added,`proc_getconfigfile];
     system"l lib/torq/code/common/compress.q"; }
 
 .qt.fixture.torq_cmp.clear:{[ns]
     {[ns;n] ![ns;();0b;enlist n]}[ns] each (key ns) except `;}
 
+/ Remove one member of a namespace, leaving the rest.
+.qt.fixture.torq_cmp.drop:{[ns;n] ![ns;();0b;enlist n]; }
+
 .qt.fixture.torq_cmp.unload:{[]
     .qt.fixture.torq_cmp.clear[`.cmp];
-    if[`lg in .qt.qtorq.compress.added; .qt.fixture.torq_cmp.clear[`.lg]];
-    if[`proc in .qt.qtorq.compress.added; .qt.fixture.torq_cmp.clear[`.proc]];
+    if[`lg_o in .qt.qtorq.compress.added; .qt.fixture.torq_cmp.drop[`.lg;`o]];
+    if[`lg_e in .qt.qtorq.compress.added; .qt.fixture.torq_cmp.drop[`.lg;`e]];
+    if[`proc_getconfigfile in .qt.qtorq.compress.added; .qt.fixture.torq_cmp.drop[`.proc;`getconfigfile]];
     `.qt.qtorq.compress.added set `symbol$(); }
 
 .qt.qtorq.compress.setUp_fresh:{[]
@@ -208,7 +213,7 @@
 
 .qt.qtorq.compress.unservers:{[]
     if[.qt.qtorq.compress.had_servers; `.servers.getservers set .qt.qtorq.compress.old_servers];
-    if[not .qt.qtorq.compress.had_servers; .qt.fixture.torq_cmp.clear[`.servers]]; }
+    if[not .qt.qtorq.compress.had_servers; .qt.fixture.torq_cmp.drop[`.servers;`getservers]]; }
 
 .qt.qtorq.compress.calls:()
 
