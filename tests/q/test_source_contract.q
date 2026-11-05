@@ -764,7 +764,7 @@
     .qunit.assertThrows[{.qetl.source.define[`t;x]};@[d;`reference_read;:;@[rr;`date_skew;:;-1]];"*date_skew*";"a negative skew"];
     .qunit.assertThrows[{.qetl.source.define[`t;x]};@[d;`reference_read;:;@[rr;`lookback_cap;:;0Wn]];"*lookback_cap*";"a cap that is no cap"];
     .qunit.assertThrows[{.qetl.source.define[`t;x]};@[d;`reference_read;:;@[rr;`symbols;:;{[x] x}]];"*symbols*";"a symbols lambda takes spec and rows"];
-    .qunit.assertThrows[{.qetl.source.define[`t;x]};@[d;`reference_read;:;@[rr;`extra;:;1]];"*which it does not take*";"an unknown key"]};
+    .qunit.assertThrows[{.qetl.source.define[`t;x]};@[d;`reference_read;:;@[rr;`extra;:;1]];"*extra, which a reference_read does not take*";"an unknown key"]};
 
 .qt.qetl.source.test_reference_read_needs_supporting_inputs:{[t]
     .qunit.assertThrows[{.qetl.source.define[`t;x]};@[.qt.qetl.source.decl[];`reference_read;:;.qt.qetl.source.rr[]];"*no supporting inputs*";"there is no reference to read"]};

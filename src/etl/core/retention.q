@@ -101,6 +101,7 @@
     if[not -11h=type name; '"retention: a retention's name must be a symbol"];
     if[name in key .qetl.retention.decls; '"retention: ",string[name]," is already declared"];
     if[not 99h=type decl; '"retention: ",string[name]," needs a declaration dict"];
+    .qetl.declared.refuse_unknown["retention: ",string name;"a retention";decl;`kind`horizon`root`table`dataset];
     if[not (`kind in key decl) and `horizon in key decl;
         '"retention: ",string[name]," must name its `kind and its `horizon - there is no default horizon"];
     if[not decl[`kind] in .qetl.retention.kinds;

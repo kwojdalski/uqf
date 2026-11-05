@@ -130,9 +130,9 @@
 .qetl.reaction.require_handler:{[dataset;nm;handler]
     if[not -11h=type dataset; '"on: dataset must be a symbol"];
     if[not -11h=type nm; '"on: name must be a symbol"];
-    if[not (type handler) within 100 112h;
+    if[not .qetl.declared.callable handler;
         '"on: ",string[nm]," must be a function taking (dataset;range_from;range_to)"];
-    if[(100h=type handler) and not 3=count (value handler) 1;
+    if[(.qetl.declared.lambda handler) and not 3=count (value handler) 1;
         '"on: ",string[nm]," must take exactly 3 arguments (dataset;range_from;range_to)"];
     1b}
 
@@ -188,9 +188,9 @@
     if[not null .qetl.run.proc_name[];
         '"on_worker: ",string[worker]," cannot run as a reaction inside TorQ process ",
          string[.qetl.run.proc_name[]],": one bounded worker per process, and the reaction would run in the publisher's"];
-    if[not (type spec_fn) within 100 112h;
+    if[not .qetl.declared.callable spec_fn;
         '"on_worker: ",string[worker],"'s spec_fn must be a function taking (range_from;range_to)"];
-    if[(100h=type spec_fn) and not 2=count (value spec_fn) 1;
+    if[(.qetl.declared.lambda spec_fn) and not 2=count (value spec_fn) 1;
         '"on_worker: ",string[worker],"'s spec_fn must take exactly 2 arguments (range_from;range_to)"];
     ns:.qetl.job.bounded.namespace worker;
     h:{[worker;ns;spec_fn;ds;range_from;range_to] / noqa: QF016 reaction handler signature

@@ -14,6 +14,23 @@ pipeline](../guides/new-pipeline.md); for why the blocks are shaped this way,
   | streaming job     | `.qetl.job.stream.define`             | `src/etl/streaming/<job>.q`, namespace `.qpipe.job.<job>`        | which tables it reads and writes, and its handlers     |
   | normalizer        | `.qetl.job.stream.normalize`          | `src/etl/streaming/<name>.q`, namespace `.qpipe.job.<name>`      | many sources, one canonical table, a transform each    |
 
+Two rules hold for every `define`, and live once in `src/etl/core/declared.q`
+(`.qetl.declared`):
+
+- **An unknown key is refused**, by name, together with the keys the declaration
+  does take. It is the first check on the dictionary, so a misspelled key
+  (`start_with_al`, `on_endofdya`, `transfrom`) names itself instead of
+  registering and never being read.
+- **A function is anything callable except `(::)`**: a lambda, a projection, a
+  composition or an iterator. A projection counts because binding a handle or a
+  configuration into a function is how authors hand one over. Arity is checked
+  only for a lambda, the one shape whose parameter list q can read. Every
+  function-valued key, bounded `check`, `facts` and `pin` included, is checked
+  when the declaration is made, not at its first use.
+
+`tests/q/test_declared.q` finds every `define` in the tree and holds each to
+both rules.
+
 The namespaces separate framework machinery from concrete pipelines:
 
 - `.qetl` owns contracts, registries and execution services.

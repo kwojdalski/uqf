@@ -53,11 +53,10 @@
     who:"register_transport: ",string name;
     if[not -11h=type name; '"register_transport: a transport's name is a symbol"];
     if[not 99h=type decl; 'who,": the declaration must be a dictionary of ",", " sv string .qetl.source.transport_fields];
+    .qetl.declared.refuse_unknown[who;"a transport";decl;.qetl.source.transport_fields];
     missing:.qetl.source.transport_fields except key decl;
     if[count missing; 'who," is missing ",", " sv string missing];
-    unknown:(key decl) except .qetl.source.transport_fields;
-    if[count unknown; 'who," declares ",(", " sv string unknown),", which a transport does not take"];
-    notfn:.qetl.source.transport_functions where not {(type x) within 100 112h} each decl .qetl.source.transport_functions;
+    notfn:.qetl.source.transport_functions where not {.qetl.declared.callable x} each decl .qetl.source.transport_functions;
     if[count notfn; 'who,": ",(", " sv string notfn)," must be function(s)"];
     words:.qetl.source.transport_fields except .qetl.source.transport_functions;
     notstr:words where not 10h=type each decl words;

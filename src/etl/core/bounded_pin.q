@@ -23,9 +23,27 @@
 .qetl.job.bounded.require_pin:{[worker;given]
     if[not `pin in key given; :(::)];
     if[(::)~given`pin; :(::)];
-    if[not (type given`pin) within 100 112h;
+    if[not .qetl.declared.callable given`pin;
         '"define: ",string[worker],"'s pin must be a niladic function recording the configuration snapshot its rows name"];
     given`pin}
+
+/ Validate every function a worker declares - `check`, `facts` and `pin` - at declaration time,
+/ so a malformed one fails then and not at the first window (#2114). `check` and `facts` once
+/ reached only the first window: a `check` written as a projection passed define and then failed
+/ every window, and a `facts` that was not a function logged "facts function failed" on each. A
+/ stored declaration carries (::) for a hook the worker does not declare, and that is "none".
+/ @param worker the worker's name
+/ @param given the declaration
+/ @return the declared pin, or (::) when the worker declares none
+/ @throws error naming the key when check, facts or pin is declared and is not a function
+/ @eg .qetl.job.bounded.require_hooks[`demo;()!()]  ->  (::)
+.qetl.job.bounded.require_hooks:{[worker;given]
+    who:"define: ",string worker;
+    if[$[`check in key given; not (::)~given`check; 0b];
+        .qetl.declared.require_callable[who;`check;given`check;"a function taking the batch and returning a table of failures"]];
+    if[$[`facts in key given; not (::)~given`facts; 0b];
+        .qetl.declared.require_callable[who;`facts;given`facts;"a function taking the batch and returning a dictionary of facts"]];
+    .qetl.job.bounded.require_pin[worker;given]}
 
 / Pin the configuration this worker's rows will name, before it calculates.
 / .

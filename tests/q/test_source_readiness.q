@@ -24,7 +24,7 @@
 
 .qt.qetl.source.readiness.test_a_ready_that_is_not_a_lambda_is_refused:{[t]
     .qunit.assertThrows[{.qetl.source.define[`rd_bad;x]};.qt.qetl.source.readiness.decl[enlist[`ready]!enlist 1b];
-        "define: rd_bad's ready must be a lambda taking the fetched batch and the window's bounds and returning its unmet requirements";
+        "define: rd_bad's ready must be a function taking the fetched batch and the window's bounds and returning its unmet requirements";
         "a flag is not a hook"]};
 
 .qt.qetl.source.readiness.test_a_ready_of_the_wrong_arity_is_refused:{[t]
