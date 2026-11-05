@@ -64,6 +64,7 @@
 .qetl.job.stream.normalizer.define:{[name;decl]
     who:"define: normalizer ",string[name];
     if[not 99h=type decl; 'who,"'s declaration must be a dictionary"];
+    .qetl.declared.refuse_unknown[who;"a normalizer";decl;.qetl.job.stream.normalizer.required_keys,.qetl.job.stream.passthrough_keys];
     missing:.qetl.job.stream.normalizer.required_keys where not .qetl.job.stream.normalizer.required_keys in key decl;
     if[count missing; 'who," is missing ",", " sv string missing];
     out:decl`output;

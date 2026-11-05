@@ -367,17 +367,17 @@ def _file_outcome(entry: dict[str, Any]) -> str:
     return "failed" if entry.get("error") in ("incomplete", None) else "refused"
 
 
-def _push_response(target: str, root: str, manifest: dict[str, Any]) -> ConfigPushResponse:
+def _push_response(target: str, dest: str, manifest: dict[str, Any]) -> ConfigPushResponse:
     summary = remote_helper.summarise(manifest)
     return ConfigPushResponse(
-        target=target, root=root, summary=ConfigPushSummaryOut(**summary, error=None),
+        target=target, dest=dest, summary=ConfigPushSummaryOut(**summary, error=None),
         push=ConfigPushOut(**{k: v for k, v in manifest.items() if k != "version"}),
     )  # fmt: skip
 
 
 def _restore_response(target: str, answer: dict[str, Any]) -> ConfigRestoreResponse:
     return ConfigRestoreResponse(
-        target=target, root=answer["root"], restores=answer["restores"],
+        target=target, dest=answer["dest"], restores=answer["restores"],
         dry_run=answer["dry_run"], push_id=answer["push_id"], plan=answer["plan"],
         results=answer["results"], pruned=answer["pruned"],
     )  # fmt: skip
@@ -922,7 +922,7 @@ def create_app(
         contacted. Which one a request reads is the request's own header."""
         found = services.read(settings)
         local = WorkspaceOut(
-            name=workspaces.LOCAL, kind="local", connection="direct",
+            target=workspaces.LOCAL, kind="local", connection="direct",
             access="read-write" if settings.enable_writes else "read-only",
             environment=None, ssh=None, available=True, reason=None,
         )  # fmt: skip
@@ -930,14 +930,14 @@ def create_app(
         for t in found.targets:
             reason = (
                 "the name is reserved for this server's own stack"
-                if t["name"] == workspaces.LOCAL
+                if t["target"] == workspaces.LOCAL
                 else None
                 if settings.enable_writes
                 else "a target is reached over ssh, so it needs remote operations enabled"
             )
             listed.append(
                 WorkspaceOut(
-                    name=t["name"],
+                    target=t["target"],
                     kind="target",
                     connection="ssh tunnel",
                     access="read-only",
@@ -964,7 +964,7 @@ def create_app(
             target=scope.target,
             connection=typing.cast(Any, scope.connection),
             access=typing.cast(Any, scope.access),
-            host=detail.get("host"),
+            ssh=detail.get("ssh"),
             endpoints=[WorkspaceEndpointOut(**e) for e in detail.get("endpoints", [])],
             poll_seconds=ops.POLL_SECONDS["workspace"],
         )
@@ -980,7 +980,7 @@ def create_app(
             source=found.source,
             declared=found.declared,
             invalid=found.invalid,
-            remote_operations_enabled=settings.enable_writes,
+            writes_enabled=settings.enable_writes,
             poll_seconds=ops.POLL_SECONDS["services"],
         )
 
@@ -1008,7 +1008,7 @@ def create_app(
         )
         return RemoteFilesResponse(
             target=target,
-            root=answer["root"],
+            dest=answer["dest"],
             path=answer["path"],
             parent=answer["parent"],
             entries=answer["entries"],
@@ -1079,7 +1079,7 @@ def create_app(
             if all(item["outcome"] == "succeeded" for item in answer["results"])
             else "failed"
         )
-        return RemoteDeleteResponse(target=target, root=answer["root"], results=answer["results"])
+        return RemoteDeleteResponse(target=target, dest=answer["dest"], results=answer["results"])
 
     @app.put(
         "/services/{target}/files/content",
@@ -1156,7 +1156,7 @@ def create_app(
         audit.note(previous_sha256=answer["previous_sha256"])
         return RemoteUploadResponse(
             target=target,
-            root=answer["root"],
+            dest=answer["dest"],
             path=answer["path"],
             size=answer["size"],
             sha256=answer["sha256"],
@@ -1338,12 +1338,12 @@ def create_app(
         here, each audited."""
         audit = activity.audit_of(request)
         audit.set_target(target)
-        audit.note(destination=req.destination, item_count=req.file_count,
+        audit.note(config_dir=req.config_dir, item_count=req.file_count,
                    size_bytes=req.total_bytes)  # fmt: skip
         remote = _remote(target)
         audit.begin()
         answer = remote_files.open_push(
-            remote, target, destination=req.destination, file_count=req.file_count,
+            remote, target, config_dir=req.config_dir, file_count=req.file_count,
             total_bytes=req.total_bytes,
             user=activity.clean_user(audit_user(request)),
             via="frontend", max_kept=live().config_history_max_kept,
@@ -1353,7 +1353,7 @@ def create_app(
         audit.note(push_id=answer["push_id"], pruned_count=len(answer["pruned"]))
         _audit_pruned(request, target, answer["pruned"])
         return ConfigPushOpenResponse(
-            target=target, root=answer["root"], push_id=answer["push_id"],
+            target=target, dest=answer["dest"], push_id=answer["push_id"],
             pruned=answer["pruned"], max_kept=live().config_history_max_kept,
             retention_days=live().config_history_retention_days,
         )  # fmt: skip
@@ -1362,7 +1362,7 @@ def create_app(
     def close_config_push(
         request: Request, target: str, push_id: str, req: ConfigPushCloseRequest
     ) -> ConfigPushResponse:
-        """Close a push: the `config.push` summary row - destination, file
+        """Close a push: the `config.push` summary row - config_dir, file
         count, bytes and one outcome per file, from the server's own record
         where it has one and the browser's report where it never got one."""
         audit = activity.audit_of(request)
@@ -1383,7 +1383,7 @@ def create_app(
             audit.item(item["path"], outcome)
         published = [e for e in manifest["files"] if e["state"] != "failed"]
         audit.note(
-            destination=manifest["destination"], item_count=len(outcomes),
+            config_dir=manifest["config_dir"], item_count=len(outcomes),
             size_bytes=sum(e["size"] or 0 for e in published),
         )  # fmt: skip
         audit.settle(
@@ -1392,7 +1392,7 @@ def create_app(
             else "failed" if outcomes
             else "refused"
         )  # fmt: skip
-        return _push_response(target, answer["root"], manifest)
+        return _push_response(target, answer["dest"], manifest)
 
     @app.get("/services/{target}/config/pushes", response_model=ConfigHistoryResponse)
     def list_config_pushes(request: Request, target: str) -> ConfigHistoryResponse:
@@ -1401,7 +1401,7 @@ def create_app(
             _remote(target), target, runner=request.app.state.remote_runner
         )
         return ConfigHistoryResponse(
-            target=target, root=answer["root"], pushes=answer["pushes"],
+            target=target, dest=answer["dest"], pushes=answer["pushes"],
             total=answer["total"], truncated=answer["truncated"], pruned=answer["pruned"],
         )  # fmt: skip
 
@@ -1411,7 +1411,7 @@ def create_app(
         answer = remote_files.history_show(
             _remote(target), target, push_id, runner=request.app.state.remote_runner
         )
-        return _push_response(target, answer["root"], answer["manifest"])
+        return _push_response(target, answer["dest"], answer["manifest"])
 
     @app.get("/services/{target}/config/pushes/{push_id}/diff", response_model=ConfigDiffResponse)
     def diff_config_push(
@@ -1424,7 +1424,7 @@ def create_app(
             _remote(target), target, push_id, path, runner=request.app.state.remote_runner
         )
         return ConfigDiffResponse(
-            target=target, root=answer["root"], push_id=push_id,
+            target=target, dest=answer["dest"], push_id=push_id,
             diff_cap=answer["diff_cap"], files=answer["files"],
         )  # fmt: skip
 

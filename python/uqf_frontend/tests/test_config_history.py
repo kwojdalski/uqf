@@ -89,10 +89,20 @@ def _use(c: TestClient, runner) -> None:
 
 
 def _open(c: TestClient, files: int = 2, total: int = 50) -> str:
-    body = {"destination": "shared/config", "file_count": files, "total_bytes": total}
+    body = {"config_dir": "shared/config", "file_count": files, "total_bytes": total}
     resp = c.post("/services/box/config/pushes", json=body)
     assert resp.status_code == 200, resp.text
     return resp.json()["push_id"]
+
+
+def test_the_old_destination_key_is_refused_naming_config_dir(served, tmp_path):
+    """`destination` sat beside `dest`, the deployment root it is under
+    (#2107): a body that still sends it is told the new name, not a bare 422."""
+    c = _client(Loopback(), tmp_path)
+    body = {"destination": "shared/config", "file_count": 1, "total_bytes": 1}
+    resp = c.post("/services/box/config/pushes", json=body)
+    assert resp.status_code == 422
+    assert "`destination` is now `config_dir`" in resp.text
 
 
 def _upload(c: TestClient, push: str, path: str, data: bytes, overwrite: bool = False):
@@ -138,7 +148,7 @@ def test_a_push_has_one_id_on_every_row_and_a_summary(served, tmp_path):
     (summary,) = rows["config.push"]
     assert summary["target"] == "box" and summary["outcome"] == "succeeded"
     assert summary["detail"] == {
-        "push_id": push, "destination": "shared/config", "item_count": 2,
+        "push_id": push, "config_dir": "shared/config", "item_count": 2,
         "size_bytes": len(NEW_SECRET) + 4,
         # the x-uqf-user header is a claim, and the row says so (#2045)
         "identity": "claimed",
@@ -354,7 +364,7 @@ def test_the_history_needs_remote_operations(served, tmp_path):
     pushes = "/services/box/config/pushes"
     assert c.get(pushes).status_code == 403
     assert c.get(f"{pushes}/20261104T000000000Z-00000000").status_code == 403
-    body = {"destination": "shared/config", "file_count": 1, "total_bytes": 1}
+    body = {"config_dir": "shared/config", "file_count": 1, "total_bytes": 1}
     assert c.post(pushes, json=body).status_code == 403
     assert c.get("/services/box/config/pushes/bad-id").status_code in (403, 422)
 

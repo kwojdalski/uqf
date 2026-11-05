@@ -137,7 +137,7 @@
     .qunit.assertTrue[c[br;@[d;`tz;:;`$"Europe/London"]] like "*is for a UTC source*";"a zoned source"];
     .qunit.assertTrue[c[1b;d] like "*must be a dict of window, needs, read, keys, sort";"not a dictionary"];
     .qunit.assertTrue[c[4#br;d] like "*is missing sort";"a missing key"];
-    .qunit.assertTrue[c[br,enlist[`speed]!enlist 1;d] like "*declares speed, which it does not take*";"an unknown key"];
+    .qunit.assertTrue[c[br,enlist[`speed]!enlist 1;d] like "*declares speed, which a batch_read does not take*";"an unknown key"];
     .qunit.assertTrue[c[@[br;`needs;:;{[a;b] a}];d] like "*malformed needs (a lambda taking the primary rows)*";"wrong arity for needs"];
     .qunit.assertTrue[c[@[br;`read;:;{[h;a;b] a}];d] like "*malformed read (a lambda taking handle*";"wrong arity for read"];
     .qunit.assertTrue[c[@[br;`keys;:;enlist[`other]!enlist `sym];d] like "*malformed keys*";"keys must name the supporting inputs"];

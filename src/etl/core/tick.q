@@ -134,7 +134,7 @@
 / to a message is q's own async send, so a real subscriber and a test
 / recorder are called by identical code.
 / @private
-.qetl.tick.can_send:{[sink] ((type sink) within 100 112h) or (type sink) in -6 -7h}
+.qetl.tick.can_send:{[sink] (.qetl.declared.callable sink) or (type sink) in -6 -7h}
 
 / ------------------------------------------------------------- PUBLISHING
 

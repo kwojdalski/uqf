@@ -217,6 +217,10 @@
     / Both execution modes share .qpipe.job, so a name cannot belong to both.
     if[worker in key @[value;`.qetl.job.stream.jobs;{()}];
         '"define: ",string[worker]," is already a streaming job - job names must be unique across execution modes"];
+    / `dataset` is retired, and require_outputs says so with a migration message of
+    / its own: it is left out of the unknown-key check so that message is the one raised.
+    .qetl.declared.refuse_unknown["define: ",string worker;"a worker";`dataset _ decl;
+        `outputs,(cols value .qetl.job.bounded.worker_cfg) except `dataset];
     decl:.qetl.twin.require_declared[worker;.qetl.job.bounded.require_outputs[worker;decl]];
     missing:.qetl.job.bounded.required_cfg where not .qetl.job.bounded.required_cfg in key decl;
     if[count missing;
@@ -227,12 +231,8 @@
     / that from a contract failure at init, not from define naming the key.
     if[`ns in key decl;
         '"define: ",string[worker],"'s namespace is derived - .qpipe.job.",string[worker]," - not configured; drop the ns key"];
-    / A key no column holds would have nowhere to go: refused by name, where
+    / A key no column holds would have nowhere to go: refused by name (above, first), where
     / the collapsed dictionary this was refused it with a bare 'mismatch.
-    unknown:(key decl) except `outputs,cols value .qetl.job.bounded.worker_cfg;
-    if[count unknown;
-        '"define: ",string[worker]," declares ",(", " sv string unknown),
-         ", which a worker does not take - the keys are ",", " sv string `outputs,(cols value .qetl.job.bounded.worker_cfg) except `dataset];
     decl[`ns]:.qetl.job.bounded.namespace worker;
     if[not -16h=type decl`width;
         '"define: ",string[worker],"'s width must be a timespan, e.g. 1D"];
@@ -304,7 +304,7 @@
     / Batching is validated and normalised HERE, only when declared: a stored declaration
     / read back with .qetl.job.bounded.def carries (::) for it, and that is "off", not a malformed dictionary.
     if[$[`batching in key decl; not (::)~decl`batching; 0b]; decl[`batching]:.qetl.job.bounded.batching.require[worker;decl]];
-    decl[`revision]:.qetl.job.bounded.runtime.require_revision[worker;decl]; decl[`align]:.qetl.job.bounded.runtime.require_align[worker;decl]; decl[`partition_column]:.qetl.job.bounded.runtime.require_partition_column[worker;decl]; decl[`pin]:.qetl.job.bounded.require_pin[worker;decl];
+    decl[`revision]:.qetl.job.bounded.runtime.require_revision[worker;decl]; decl[`align]:.qetl.job.bounded.runtime.require_align[worker;decl]; decl[`partition_column]:.qetl.job.bounded.runtime.require_partition_column[worker;decl]; decl[`pin]:.qetl.job.bounded.require_hooks[worker;decl];
     / Mask over the WHOLE registry first, then drop this worker - filtering the key
     / list before applying the mask pairs a shortened list with a full-length
     / boolean, which q indexes without complaint and which reports the wrong
@@ -1242,7 +1242,7 @@
     if[not `check in key cfg; :.qetl.job.bounded.no_failures[]];
     c:cfg`check;
     if[(::)~c; :.qetl.job.bounded.no_failures[]];
-    if[not 100h=type c;
+    if[not .qetl.declared.callable c;
         '"run_check: ",string[worker],"'s check must be a function taking the batch"];
     r:c batch;
     / A check that returns something other than a table is refused rather

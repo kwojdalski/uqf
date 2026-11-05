@@ -8,14 +8,14 @@ import {
 
 export function FileDelete({
   target,
-  root,
+  dest,
   paths,
   disabled,
   onBusy,
   onRefresh,
 }: {
   target: string;
-  root: string;
+  dest: string;
   paths: string[];
   disabled: boolean;
   onBusy: (busy: boolean) => void;
@@ -29,7 +29,7 @@ export function FileDelete({
     const chosen = [...paths];
     if (
       !window.confirm(
-        `Delete ${chosen.length} selected entries?\nTarget: ${target}\nDeployment root: ${root}\nPaths relative to the deployment root:\n${chosen.map((p) => JSON.stringify(p)).join("\n")}\nDeletion is permanent. Only regular files and empty directories will be removed.`,
+        `Delete ${chosen.length} selected entries?\nTarget: ${target}\nDeployment root: ${dest}\nPaths relative to the deployment root:\n${chosen.map((p) => JSON.stringify(p)).join("\n")}\nDeletion is permanent. Only regular files and empty directories will be removed.`,
       )
     )
       return;
@@ -77,7 +77,7 @@ export function FileDelete({
       {paths.length > 0 && paths.length <= 100 && (
         <>
           <p>
-            Target: <code>{target}</code>; deployment root: <code>{root}</code>
+            Target: <code>{target}</code>; deployment root: <code>{dest}</code>
           </p>
           <ul aria-label="Selected paths to delete">
             {paths.map((path) => (

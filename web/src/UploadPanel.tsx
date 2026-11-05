@@ -104,14 +104,14 @@ const REPORTED: Partial<Record<Status, ConfigPushReport["outcome"]>> = {
  *  - with what the browser saw of each file - once the last is sent. */
 export function UploadPanel({
   target,
-  root,
+  dest,
   directory,
   onUploaded,
   uploader = uploadRemoteFile,
   pushes = pushOps,
 }: {
   target: string;
-  root: string;
+  dest: string;
   directory: string;
   onUploaded: () => void;
   uploader?: Uploader;
@@ -161,7 +161,7 @@ export function UploadPanel({
   // The destination is held only while something is queued or sending; an
   // emptied queue follows the open directory again (#2013).
   const pinned = running || queued.length > 0 ? destination : null;
-  const dest = pinned ?? directory;
+  const configDir = pinned ?? directory;
   const queuedBytes = queued.reduce((sum, item) => sum + item.file.size, 0);
 
   const update = (id: number, change: Partial<Item>) =>
@@ -266,7 +266,7 @@ export function UploadPanel({
     let opened: string;
     try {
       const answer = await pushes.open(target, {
-        destination: dest,
+        config_dir: configDir,
         file_count: queued.length,
         total_bytes: queuedBytes,
       });
@@ -285,7 +285,7 @@ export function UploadPanel({
     const reported: ConfigPushReport[] = [];
     for (const [index, item] of queued.entries()) {
       setPosition({ at: index + 1, of: queued.length });
-      const path = `${dest}/${item.relative}`;
+      const path = `${configDir}/${item.relative}`;
       if (abort.signal.aborted) {
         update(item.id, { status: "cancelled", message: "" });
         reported.push({ path, outcome: "cancelled" });
@@ -340,7 +340,7 @@ export function UploadPanel({
   const finished = items.some(
     (item) => item.status !== "queued" && item.status !== "uploading",
   );
-  const canUpload = uploadable(dest);
+  const canUpload = uploadable(configDir);
   return (
     <section className="panel" aria-label="Upload files">
       <h3>Upload to {target}</h3>
@@ -354,7 +354,7 @@ export function UploadPanel({
           <p className="note">
             Destination:{" "}
             <code>
-              {root}/{dest}/
+              {dest}/{configDir}/
             </code>
             {pinned && pinned !== directory && (
               <> (where these files were queued, not the open directory)</>
@@ -528,7 +528,7 @@ export function UploadPanel({
             Upload {queued.length} {queued.length === 1 ? "file" : "files"} (
             {size(queuedBytes)}) to <strong>{target}</strong> at{" "}
             <code>
-              {root}/{dest}/
+              {dest}/{configDir}/
             </code>
             ?
           </p>

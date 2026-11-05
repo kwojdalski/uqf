@@ -109,7 +109,7 @@ const PROCESSES = [
 function listing(path: string) {
   return {
     target: "prod-a",
-    root: "/srv/uqf",
+    dest: "/srv/uqf",
     path,
     parent: path ? "" : null,
     entries: [
@@ -239,7 +239,7 @@ export function answer(path: string, level: SessionLevel = "actions"): unknown {
     return {
       targets: [
         {
-          name: "prod-a",
+          target: "prod-a",
           ssh: "deploy@prod-a",
           dest: "/srv/uqf",
           remote_user: null,
@@ -251,7 +251,7 @@ export function answer(path: string, level: SessionLevel = "actions"): unknown {
       source: "/repo/deploy_targets.toml",
       declared: true,
       invalid: null,
-      remote_operations_enabled: true,
+      writes_enabled: true,
       poll_seconds: 30,
     };
   if (bare === "/services/prod-a/tunnel")
@@ -272,7 +272,7 @@ export function answer(path: string, level: SessionLevel = "actions"): unknown {
     return {
       workspaces: [
         {
-          name: "local",
+          target: "local",
           kind: "local",
           connection: "direct",
           access: "read-write",
@@ -282,7 +282,7 @@ export function answer(path: string, level: SessionLevel = "actions"): unknown {
           reason: null,
         },
         {
-          name: "prod-a",
+          target: "prod-a",
           kind: "target",
           connection: "ssh tunnel",
           access: "read-only",
@@ -301,7 +301,7 @@ export function answer(path: string, level: SessionLevel = "actions"): unknown {
       target: "local",
       connection: "direct",
       access: "read-write",
-      host: null,
+      ssh: null,
       endpoints: [],
       poll_seconds: 30,
     };
