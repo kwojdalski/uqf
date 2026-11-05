@@ -119,7 +119,7 @@
     / Each of these used to be read as the bid side and return a number (#415):
     / a typo, a trade-direction word, and the trade-direction encoding.
     {[s] .qunit.assertThrows[.qf.mkt.book_convexity[enlist 1.1000 1.0998 1.0995;];s;
-        "book_convexity: side must be `bid or `ask, got *";
+        "book_convexity: book_side must be `bid or `ask, got *";
         "a side that is not a book side is refused by name, not read as `bid"]} each (`aks;`sell;-1)};
 
 / ---- vamp ----
@@ -236,13 +236,13 @@
         bid_prices:enlist enlist 1.10; bid_sizes:enlist enlist 100;
         ask_prices:enlist enlist 1.11; ask_sizes:enlist enlist 100);
     wrapper:{[q] .qf.mkt.queue_depletion_rate[q;`EURUSD;`mid]};
-    .qunit.assertThrows[wrapper;quotes;"queue_depletion_rate: side must be `bid or `ask, got `mid";
+    .qunit.assertThrows[wrapper;quotes;"queue_depletion_rate: book_side must be `bid or `ask, got `mid";
         "side other than `bid/`ask is rejected"];
     / A non-SYMBOL side used to reach `string` and throw a bare 'type, losing
     / the message this test exists to assert. #415 fixed that for the three
     / functions it named; these two kept the old shape.
     .qunit.assertThrows[{[q] .qf.mkt.queue_depletion_rate[q;`EURUSD;1]};quotes;
-        "queue_depletion_rate: side must be `bid or `ask, got 1";
+        "queue_depletion_rate: book_side must be `bid or `ask, got 1";
         "an integer side is named too, rather than throwing a bare 'type"]};
 
 / ---- ofi ----
@@ -769,7 +769,7 @@
 
 .qt.qf.mkt.microstructure.test_an_empty_sym_still_validates_the_side:{[t]
     .qunit.assertThrows[.qf.mkt.queue_depletion_rate[1#.qt.qf.mkt.microstructure.mk_mid_quotes[::];`GBPUSD;];`mid;
-        "queue_depletion_rate: side must be `bid or `ask*";"a bad side is refused even with no rows"]};
+        "queue_depletion_rate: book_side must be `bid or `ask*";"a bad side is refused even with no rows"]};
 / --- the stream reads a withdrawn side as ofi does (#1111) ------------------
 / #1032 moved the batch functions onto side_transition, which reads an
 / absent ask as 0w with size 0. The stream kept raw nulls, so a withdrawn
