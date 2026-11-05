@@ -395,7 +395,7 @@ def test_attest_records_the_tree_only_when_every_hook_passes(repo, monkeypatch):
 ALL = sorted(attest.HOOKS)
 #: What a .q change outside the plant tables needs: every KDB-X hook but
 #: plant-schema, whose scope is plant_tables.q and what it generates.
-Q_HOOKS = [h for h in ALL if h != "plant-schema"]
+Q_HOOKS = [h for h in ALL if h not in ("plant-schema", "compression-config")]
 
 
 @pytest.mark.parametrize(

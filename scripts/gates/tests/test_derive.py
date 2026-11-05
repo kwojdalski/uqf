@@ -217,6 +217,7 @@ GENERATORS = {
     "contract-surface": "contract_surface",
     "q-facts": "q_facts",
     "plant-schema": "uqs.model.plant_metadata_gen",
+    "compression-config": "compression_config",
 }
 
 
@@ -394,3 +395,54 @@ def test_plant_schema_reports_a_refusal_without_a_traceback(monkeypatch, capsys)
     monkeypatch.setattr(plant_metadata_gen, "generate", no_q)
     assert derive.main(["plant-schema", "--check"]) == 1
     assert "plant-schema: no q interpreter" in capsys.readouterr().err
+
+
+# -------------------------------------------------------- compression-config
+
+
+def test_compression_config_check_reports_a_stale_file_and_writes_nothing(monkeypatch, capsys):
+    """Without q: the render is replaced by the committed text with a row changed."""
+    config = derive.load("compression_config")
+    committed = config.OUT.read_text()
+    changed = committed.replace("default,7,default,2,16,6", "default,8,default,2,16,6")
+    assert changed != committed
+    monkeypatch.setattr(config, "render", lambda: changed)
+    assert derive.main(["compression-config", "--check"]) == 1
+    err = capsys.readouterr().err
+    assert "compressionconfig.csv is stale" in err and "derive.py compression-config" in err
+    assert config.OUT.read_text() == committed
+
+
+def test_compression_config_without_q_refuses(monkeypatch):
+    config = derive.load("compression_config")
+    import uqs.interpreter
+
+    monkeypatch.setattr(uqs.interpreter, "q_interpreter", lambda env=None: None)
+    with pytest.raises(SystemExit, match="no q interpreter"):
+        config.render()
+
+
+def test_the_committed_compression_config_passes_torqs_own_checkcsv():
+    """The point of the file: the vendored `.cmp` accepts it. Its loader and
+    checkcsv (lib/torq/code/common/compress.q, read only) run over the committed
+    CSV, so a policy row that function would reject cannot be committed."""
+    config = derive.load("compression_config")
+    text = config.OUT.read_text()
+    assert config.torq_check(text) == len(text.splitlines()) - 1
+
+
+@pytest.mark.parametrize(
+    "row, message",
+    [
+        ("t,7,default,4,16,6", "incorrect compression algo"),
+        ("t,7,default,5,16,6", "incorrect compression algo"),
+        ("t,7,default,2,21,6", "incorrect compression blocksize"),
+        ("t,7,default,2,16,10", "incorrect compression level"),
+    ],
+)
+def test_torqs_checkcsv_refuses_what_the_policy_must_never_render(row, message):
+    """The control for the test above: the same harness fails when it should, so
+    its passing is not the harness accepting anything."""
+    config = derive.load("compression_config")
+    with pytest.raises(SystemExit, match=message):
+        config.torq_check(config.OUT.read_text() + row + "\n")
