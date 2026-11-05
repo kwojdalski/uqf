@@ -77,6 +77,16 @@ def test_a_worker_with_no_procname_runs_as_its_name_and_1():
     assert (d.procname, d.worker, d.kind) == ("w1", "w", PipelineKind.BACKFILL)
 
 
+def test_a_streaming_job_and_a_kind_with_no_procname_run_as_their_name_and_1():
+    """q defaults procname in both shells (#2115), so this side must too."""
+    j = _one(".qetl.job.stream.define[`j;`subscribe_to`outputs!(`a;`b)];")
+    k = _one(
+        ".qetl.job.stream.at_bars[`k;"
+        "`events`transform`outputs`width`lateness`period!(`a;`t;`b;1D;0D;1D)];"
+    )
+    assert (j.procname, k.procname) == ("j1", "k1")
+
+
 def test_a_worker_carries_the_source_it_reads_and_the_dataset_it_writes():
     """What `uqs status` shows for a backfill: without these its row was all
     dashes, the same as a process that touches nothing."""

@@ -80,7 +80,7 @@
 / one second; thirty seconds leaves room for a slow poll and a reconnect without
 / holding a day of every venue's books (the kind's default for an event on
 / source_time). A fill later than this may find its books evicted and expires unscored.
-.qpipe.transform.crypto_markout_outputs.max_lateness:0D00:00:30
+.qpipe.transform.crypto_markout_outputs.lateness:0D00:00:30
 
 / How long a job waits before scoring a fill: its furthest horizon, but never less than settle.
 / @return the horizon the horizon kind declares

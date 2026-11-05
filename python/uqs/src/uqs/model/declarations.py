@@ -16,7 +16,7 @@ optional keys, validated by the q function that takes them:
     start_with_all   1b to start with the stack; absent means on demand. Streaming
                 jobs only: a bounded worker never starts with the stack.
     note        why the process is deployed the way it is, for processes.md.
-    procname    a worker's process; defaults to `<worker>1`, as in q.
+    procname    a job's process; defaults to `<job>1` in both shells, as in q (#2115).
 
 READ AS TEXT, never by running q. Nothing in this package may need a q
 interpreter to know which processes exist. So this is a small parser for the
@@ -236,9 +236,9 @@ def _declaration(fn: str, name: str, fields: dict[str, str], path: Path) -> Decl
             source_version=version[0] if version else "",
             transform=transform[0] if transform else "",
         )
-    proc = symbols(fields.get("procname", ""))
+    proc = symbols(fields["procname"]) if "procname" in fields else (f"{name}1",)
     if not proc:
-        raise UqsError(f"{where}: declares no procname")
+        raise UqsError(f"{where}: declares an empty procname")
     start_with_all = (
         _boolean(fields["start_with_all"], where) if "start_with_all" in fields else False
     )

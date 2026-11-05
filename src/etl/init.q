@@ -86,6 +86,7 @@
 \l src/etl/core/live_check.q
 \l src/etl/core/bounded_connect.q
 \l src/etl/core/bounded_ready.q
+\l src/etl/core/job_facts.q
 \l src/etl/core/bounded_worker.q
 \l src/etl/core/bounded_pin.q
 \l src/etl/core/bounded_outputs.q

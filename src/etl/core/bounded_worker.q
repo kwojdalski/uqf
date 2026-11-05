@@ -204,7 +204,7 @@
 / loads.
 / @param worker the worker's name
 / @param decl dict of source, outputs (exactly one dataset), width, transform, and optionally
-/   check, facts, partition, io, procname (default `<worker>1), note,
+/   check, facts, partition, io, procname (default `<worker>1, unique across both shells), note,
 /   on_conflict (default `upsert - see .qetl.io's CONFLICTS), target_key
 /   (default the source's row_key - see require_target_key),
 /   window_column (the OUTPUT column that carries the window's time - see
@@ -277,10 +277,7 @@
     / before storage for the reason partition is: worker_cfg's rows share one
     / shape, and a column that is a symbol on one row and (::) on the next
     / stops the next assignment fitting.
-    proc:$[`procname in key decl; decl`procname; `$string[worker],"1"];
-    if[not -11h=type proc;
-        '"define: ",string[worker],"'s procname must be a symbol naming the process that runs it, e.g. `",string[worker],"1"];
-    decl[`procname]:proc;
+    decl[`procname]:.qetl.job.claim_procname["define: ",string worker;worker;decl;worker];
     note:$[`note in key decl; decl`note; ""];
     if[not 10h=type note;
         '"define: ",string[worker],"'s note must be a string"];

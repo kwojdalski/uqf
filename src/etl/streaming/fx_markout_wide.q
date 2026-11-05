@@ -26,7 +26,7 @@
 /                               last book of a leg, as the best-of-sources reference needs
 /   identity (venue; fill_id)   a redelivery before scoring replaces the pending
 /                               execution; one scored within `remember` is dropped
-/   max_lateness                how late an execution may arrive and still find its books:
+/   lateness                how late an execution may arrive and still find its books:
 /                               bounds the history instead of the kind's day-long default
 /   expire_after                an execution whose references never cover it is given
 /                               up on, with the reason in `expired`
@@ -62,7 +62,7 @@
 
 \d .
 
-.qetl.job.stream.at_horizons[`fx_markout_wide;`procname`events`reference`transform`outputs`horizon`period`event_time`reference_time`ready_on`legs`lookback`max_age`by`retain_by`identity`remember`max_lateness`expire_after`keep`note`ephemeral`on_start`check`on_fail!(
+.qetl.job.stream.at_horizons[`fx_markout_wide;`procname`events`reference`transform`outputs`horizon`period`event_time`reference_time`ready_on`legs`lookback`max_age`by`retain_by`identity`remember`lateness`expire_after`keep`note`ephemeral`on_start`check`on_fail!(
     `fxmarkoutwide1;
     `executions;
     `market_data;
@@ -80,7 +80,7 @@
     `sym`source;
     `venue`fill_id;
     .qpipe.transform.fx_markout_outputs.remember;
-    .qpipe.transform.fx_markout_outputs.max_lateness;
+    .qpipe.transform.fx_markout_outputs.lateness;
     .qpipe.transform.fx_markout_outputs.expire_after[];
     .qpipe.job.fx_markout_wide.keep;
     "normalized FX markouts, wide layout: the markout, the execution residual, each cross leg's allocation and the residual, from the canonical executions and market_data. On demand - it needs executions and market_data sources a site wires in";

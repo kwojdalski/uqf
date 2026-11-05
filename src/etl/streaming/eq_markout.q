@@ -33,7 +33,7 @@
 /                               last book of it
 /   identity (venue; fill_id)   a redelivery before scoring replaces the pending fill;
 /                               one scored within `remember` is dropped
-/   max_lateness                how late a fill may arrive and still find its books: a broker's
+/   lateness                how late a fill may arrive and still find its books: a broker's
 /                               drop copy trails the exchange by seconds
 /   keep                        only the equity venues' fills the core can score, and only the
 /                               equity venues' books, so the queue never holds an FX or crypto
@@ -63,7 +63,7 @@
 
 \d .
 
-.qetl.job.stream.at_horizons[`eq_markout;`procname`events`reference`transform`outputs`horizon`period`event_time`reference_time`ready_on`legs`lookback`max_age`by`retain_by`identity`remember`max_lateness`expire_after`keep`note`ephemeral`on_start`check`on_fail!(
+.qetl.job.stream.at_horizons[`eq_markout;`procname`events`reference`transform`outputs`horizon`period`event_time`reference_time`ready_on`legs`lookback`max_age`by`retain_by`identity`remember`lateness`expire_after`keep`note`ephemeral`on_start`check`on_fail!(
     `eq_markout1;
     `executions;
     `market_data;
@@ -81,7 +81,7 @@
     `sym`source;
     `venue`fill_id;
     .qpipe.transform.eq_markout_outputs.remember;
-    .qpipe.transform.eq_markout_outputs.max_lateness;
+    .qpipe.transform.eq_markout_outputs.lateness;
     .qpipe.transform.eq_markout_outputs.expire_after[];
     .qpipe.job.eq_markout.keep;
     "markouts on equity fills, in bps against the mid of the venue's book, from the canonical executions and market_data, with the sessions and halts of eq_domain deciding which horizons are priced. Not started with the stack: its books come from the Databento bundle's databento1 and its fills from a live feed a site wires in, neither of which the stack starts";
