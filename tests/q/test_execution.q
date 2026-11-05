@@ -619,7 +619,11 @@
 
 .qt.qf.exec.execution.test_fill_probability_refuses_a_bucket_named_like_an_output:{[t]
     .qunit.assertThrows[.qt.qf.exec.execution.fill_call;@[.qt.qf.exec.execution.fill_args[];(0;2);:;(update target:`x from .qt.qf.exec.execution.mk_fill_orders[];enlist `target)];
-        "fill_probability_by: bucket column(s) target would collide*";"an output column cannot also be a bucket"]};
+        "fill_probability_by: group column(s) target would collide*";"an output column cannot also be a bucket"]};
+
+.qt.qf.exec.execution.test_fill_probability_refuses_a_timespan_for_group_cols:{[t]
+    .qunit.assertThrows[.qt.qf.exec.execution.fill_call;@[.qt.qf.exec.execution.fill_args[];2;:;0D00:01];
+        "fill_probability_by: group_cols must be a symbol*";"a timespan is named as a bad group_cols, not a bare 'type"]};
 
 / ---- venue_quality: the abstract scorecard (#338) ---------------------------
 / .

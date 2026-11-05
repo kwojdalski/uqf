@@ -92,7 +92,7 @@ def redact(text: str) -> str:
 
 @dataclass
 class Config:
-    host: str
+    ssh: str
     dest: str
     profile: str
     artifact: str = ""
@@ -103,8 +103,8 @@ class Config:
     launcher_env: dict[str, str] = field(default_factory=dict)
     #: a site launcher's own process.csv columns, UQS_PROCESS_FIELDS (#1191)
     process_fields: tuple[str, ...] = ()
-    qcmd: str | None = None
-    qhome: str | None = None
+    q_cmd: str | None = None
+    q_home: str | None = None
     data_dir: str | None = None
     dry_run: bool = False
     restart: bool = False
@@ -151,16 +151,16 @@ class Config:
     python_mode: str = components.EXISTING
     #: torq_mode bundled's: the TorQ runtime artifact (`uqs deploy component build
     #: torq`), a local path, and the sha256 a target pins it to
-    torq_runtime: str | None = None
-    torq_runtime_sha256: str | None = None
+    torq_component: str | None = None
+    torq_component_sha256: str | None = None
     #: q_mode bundled's: the q runtime artifact (`uqs deploy component build q`,
     #: PeachQ only), a local path, and the sha256 a target pins it to
-    q_runtime: str | None = None
-    q_runtime_sha256: str | None = None
+    q_component: str | None = None
+    q_component_sha256: str | None = None
     #: python_mode bundled's: the Python runtime artifact (`uqs deploy
     #: component build python`), a local path, and the sha256 a target pins it to
-    python_runtime: str | None = None
-    python_runtime_sha256: str | None = None
+    python_component: str | None = None
+    python_component_sha256: str | None = None
 
     #: --override fix-hdb's reason: fill the HDB's missing tables, columns (#870)
     fix_hdb: str | None = None
@@ -235,7 +235,7 @@ def _required_absolute(name: str, value: str) -> str:
 def make_config(
     *,
     artifact: str,
-    host: str,
+    ssh: str,
     dest: str,
     profile: str,
     remote_user: str | None = None,
@@ -244,8 +244,8 @@ def make_config(
     torq_launcher: str | None = None,
     launcher_env: Sequence[str] | None = None,
     process_fields: str = "",
-    qcmd: str | None = None,
-    qhome: str | None = None,
+    q_cmd: str | None = None,
+    q_home: str | None = None,
     data_dir: str | None = None,
     dry_run: bool = False,
     restart: bool = False,
@@ -270,12 +270,12 @@ def make_config(
     q_mode: str = components.EXISTING,
     torq_mode: str = components.EXISTING,
     python_mode: str = components.EXISTING,
-    torq_runtime: str | None = None,
-    torq_runtime_sha256: str | None = None,
-    q_runtime: str | None = None,
-    q_runtime_sha256: str | None = None,
-    python_runtime: str | None = None,
-    python_runtime_sha256: str | None = None,
+    torq_component: str | None = None,
+    torq_component_sha256: str | None = None,
+    q_component: str | None = None,
+    q_component_sha256: str | None = None,
+    python_component: str | None = None,
+    python_component_sha256: str | None = None,
     fix_hdb: str | None = None,
     keep: int | None = None,
     soak: int | None = None,
@@ -283,8 +283,8 @@ def make_config(
 ) -> Config:
     """A Config from `uqs deploy push`'s options - each value checked, since
     every one of them ends up inside a script the server's shell runs."""
-    if not _HOST.fullmatch(host):
-        raise DeployError("arguments", f"--ssh {host!r} is not an ssh destination")
+    if not _HOST.fullmatch(ssh):
+        raise DeployError("arguments", f"--ssh {ssh!r} is not an ssh destination")
     if remote_user is not None and not _USER.fullmatch(remote_user):
         raise DeployError("arguments", f"--remote-user {remote_user!r} is not an account name")
     if not _PROFILE.fullmatch(profile):
@@ -319,16 +319,16 @@ def make_config(
     try:
         pinned = pins.checked(
             expected_sha256=expected_sha256,
-            torq_runtime_sha256=torq_runtime_sha256,
-            q_runtime_sha256=q_runtime_sha256,
-            python_runtime_sha256=python_runtime_sha256,
+            torq_component_sha256=torq_component_sha256,
+            q_component_sha256=q_component_sha256,
+            python_component_sha256=python_component_sha256,
             q_version_=q_version,
             accept_digest=accept_digest,
             accept_q_version=accept_q_version,
             allow_unpinned=allow_unpinned,
-            torq_runtime=torq_runtime,
-            q_runtime=q_runtime,
-            python_runtime=python_runtime,
+            torq_component=torq_component,
+            q_component=q_component,
+            python_component=python_component,
         )
         components.check(modes, locals())
         accepted = pins.reason("--override accept-converted-release", accept_converted_release)
@@ -338,7 +338,7 @@ def make_config(
     if path == "/":
         raise DeployError("arguments", "--dest must not be /")
     return Config(
-        host=host,
+        ssh=ssh,
         dest=path,
         artifact=artifact,
         remote_user=remote_user,
@@ -348,8 +348,8 @@ def make_config(
         torq_launcher=_absolute("--torq-launcher", torq_launcher),
         launcher_env=_launcher_env(launcher_env or ()),
         process_fields=_process_fields(process_fields),
-        qcmd=_q_path("--q-cmd", qcmd),
-        qhome=_q_path("--q-home", qhome),
+        q_cmd=_q_path("--q-cmd", q_cmd),
+        q_home=_q_path("--q-home", q_home),
         data_dir=_absolute("--data-dir", data_dir),
         dry_run=dry_run,
         restart=restart,
@@ -373,13 +373,13 @@ def make_config(
         allow_unpinned=pinned.allow_unpinned,
         q_mode=q_mode,
         torq_mode=torq_mode,
-        torq_runtime=torq_runtime,
-        torq_runtime_sha256=pinned.torq_runtime_sha256,
-        q_runtime=q_runtime,
-        q_runtime_sha256=pinned.q_runtime_sha256,
+        torq_component=torq_component,
+        torq_component_sha256=pinned.torq_component_sha256,
+        q_component=q_component,
+        q_component_sha256=pinned.q_component_sha256,
         python_mode=python_mode,
-        python_runtime=python_runtime,
-        python_runtime_sha256=pinned.python_runtime_sha256,
+        python_component=python_component,
+        python_component_sha256=pinned.python_component_sha256,
         fix_hdb=fix_hdb,
         keep=keep,
         soak=soak,

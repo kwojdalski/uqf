@@ -183,11 +183,11 @@
 / from it - as the tests of other workers do, to make a variant - is not a malformed declaration.
 .qt.qetl.job.bounded.batching.test_a_stored_declaration_can_define_another_worker:{[t]
     d:@[.qt.support.declaration `demo_deals_backfill;`outputs;:;enlist `batching_roundtrip];
-    .qetl.job.bounded.define[`batching_roundtrip_worker;(`ns`procname`note) _ d];
+    .qetl.job.bounded.define[`batching_roundtrip_worker;(`ns`procname`note`twin_of`twin_calculation) _ d];
     .qunit.assertEquals[(.qetl.job.bounded.def `batching_roundtrip_worker)`batching;(::);"still off"];
     on:@[d;`batching;:;.qt.qetl.job.bounded.batching.spec[500;2]];
     on:@[on;`outputs;:;enlist `batching_roundtrip_on];
-    .qetl.job.bounded.define[`batching_roundtrip_on_worker;(`ns`procname`note) _ on];
+    .qetl.job.bounded.define[`batching_roundtrip_on_worker;(`ns`procname`note`twin_of`twin_calculation) _ on];
     stored:(.qetl.job.bounded.def `batching_roundtrip_on_worker)`batching;
     .qunit.assertEquals[(stored`group_by;stored`max_rows;stored`max_groups);(enlist `sym;500;2);"declared, it is validated and normalised before it is stored"]};
 

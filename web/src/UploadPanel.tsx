@@ -28,7 +28,7 @@ type Status =
   | "uploading"
   | "done"
   | "failed"
-  | "uncertain"
+  | "unknown"
   | "cancelled";
 
 interface Item extends Picked {
@@ -46,7 +46,7 @@ const STATUS: Record<Status, string> = {
   uploading: "Uploading",
   done: "Uploaded",
   failed: "Failed - nothing written",
-  uncertain: "Outcome uncertain",
+  unknown: "Outcome unknown",
   cancelled: "Cancelled - not sent",
 };
 
@@ -86,7 +86,7 @@ export async function walkEntries(
 
 /** What the browser reports, on closing the push, of a file it saw end so. */
 const REPORTED: Partial<Record<Status, ConfigPushReport["outcome"]>> = {
-  uncertain: "uncertain",
+  unknown: "unknown",
   failed: "failed",
   cancelled: "cancelled",
 };
@@ -96,7 +96,7 @@ const REPORTED: Partial<Record<Status, ConfigPushReport["outcome"]>> = {
  *  Files are queued, checked against the same limits the server holds, and
  *  sent only after the operator confirms the destination - one at a time,
  *  each with its own outcome. Replacing an existing file is off unless
- *  asked for. A cancellation or timeout in flight is reported as uncertain
+ *  asked for. A cancellation or timeout in flight is reported as unknown
  *  - the file may have been written - and nothing is ever retried.
  *
  *  Confirming opens one push (#2002): every file names its id, the server
@@ -311,7 +311,7 @@ export function UploadPanel({
       } catch (error: unknown) {
         const unsure = error instanceof UploadFailed ? error.uncertain : true;
         if (unsure) wrote = true;
-        const status: Status = unsure ? "uncertain" : "failed";
+        const status: Status = unsure ? "unknown" : "failed";
         reported.push({ path, outcome: REPORTED[status] ?? "failed" });
         update(item.id, {
           status,
@@ -406,9 +406,8 @@ export function UploadPanel({
       <p className="note" role="note">
         Each file is published in one step, so the server shows the old file or
         the whole new one. But a cancellation or a timeout while a file is in
-        flight can leave its outcome uncertain: it may have been written.
-        Nothing is retried automatically - list the directory before uploading
-        it again.
+        flight can leave its outcome unknown: it may have been written. Nothing
+        is retried automatically - list the directory before uploading it again.
       </p>
       {items.length > 0 && (
         <div className="table-scroll" tabIndex={0} aria-label="Upload queue">

@@ -254,7 +254,7 @@ class UsageResponse(BaseModel):
 
 
 class ProcessHealthOut(BaseModel):
-    procname: str
+    process: str
     proctype: str
     group: str
     host: str
@@ -263,7 +263,7 @@ class ProcessHealthOut(BaseModel):
     up: bool
     pid: int | None = None
     reported_port: int | None = None
-    reported_procname: str | None = None
+    reported_process: str | None = None
     error: str | None = None
     identity_mismatch: str | None = Field(
         default=None,
@@ -449,7 +449,7 @@ class TunnelMappingOut(BaseModel):
     and - separately - what its last check proved."""
 
     process: str
-    role: str = Field(description="rdb, hdb, wdb or gateway: the process's proctype")
+    proctype: str = Field(description="rdb, hdb, wdb or gateway")
     remote_host: str
     remote_port: int
     local_host: str
@@ -483,7 +483,7 @@ class TunnelEndpointOut(BaseModel):
     """One endpoint of a tunnel check (uqs.deploy.tunnel_check)."""
 
     process: str
-    role: str
+    proctype: str
     production_endpoint: str
     local_endpoint: str
     remote_port: int
@@ -559,7 +559,9 @@ class RemoteUploadResponse(BaseModel):
     sha256: str = Field(description="of the bytes written, as the server checked them")
     replaced: bool = Field(description="an existing file was replaced (overwrite was asked)")
     mode: int = Field(description="the file's permission bits; a replaced file's are kept")
-    created: list[str] = Field(description="directories created on the way, relative to the root")
+    created_dirs: list[str] = Field(
+        description="directories created on the way, relative to the root"
+    )
     push_id: str = Field(description="the push this file belongs to (#2002)")
     previous_size: int | None = Field(description="bytes of the file replaced; null on create")
     previous_sha256: str | None = Field(
@@ -596,12 +598,38 @@ class ConfigPushOpenResponse(BaseModel):
     keep_days: int = Field(description="the days the history keeps a push")
 
 
+#: What happened to one file, in every per-file result the config-push and
+#: file surfaces answer (#2108): a delete, a restore step, a file the browser
+#: reports. ActivityOutcome's words, so `unknown` - may have happened - is the
+#: one spelling, plus the two only the browser can know: `cancelled` (never
+#: sent) and `invalid` (refused by its own checks).
+FileOutcome = Literal["succeeded", "failed", "refused", "unknown", "cancelled", "invalid"]
+
+#: The words a per-file result used before #2108, and what replaced them.
+_RENAMED_OUTCOMES = {"uncertain": "unknown"}
+
+
 class ConfigPushReported(BaseModel):
     """A file the browser sent - or did not - that the server never recorded."""
 
     model_config = STRICT_REQUEST
     path: str
-    outcome: Literal["uncertain", "cancelled", "failed", "refused", "invalid"]
+    outcome: FileOutcome
+
+    @field_validator("outcome", mode="before")
+    @classmethod
+    def _renamed_or_recorded(cls, value: object) -> object:
+        if isinstance(value, str) and value in _RENAMED_OUTCOMES:
+            raise ValueError(
+                f"`{value}` is now `{_RENAMED_OUTCOMES[value]}`: a per-file outcome "
+                "is one of FileOutcome's words (#2108)"
+            )
+        if value == "succeeded":
+            raise ValueError(
+                "a reported file is one the server never recorded, so it cannot "
+                "be known to have succeeded"
+            )
+        return value
 
 
 class ConfigPushCloseRequest(BaseModel):
@@ -647,7 +675,9 @@ class ConfigPushSummaryOut(BaseModel):
     file_count: int | None = None
     total_bytes: int | None = None
     states: dict[str, int] | None = None
-    reported: int | None = None
+    reported_count: int | None = Field(
+        default=None, description="files the browser reported; `push.reported` lists them"
+    )
     error: str | None = None
 
 
@@ -664,7 +694,7 @@ class ConfigHistoryResponse(BaseModel):
 
 class ConfigPushReportedOut(BaseModel):
     path: str
-    outcome: str
+    outcome: FileOutcome
 
 
 class ConfigPushOut(BaseModel):
@@ -730,7 +760,7 @@ class RestoreStepOut(BaseModel):
 class RestoreResultOut(BaseModel):
     path: str
     step: Literal["write", "delete"]
-    outcome: Literal["succeeded", "failed"]
+    outcome: FileOutcome
     error: str | None
 
 
@@ -745,7 +775,7 @@ class ConfigRestoreResponse(BaseModel):
 
     target: str
     root: str
-    source_push_id: str
+    restores: str = Field(description="the push this restore undoes, as its manifest names it")
     dry_run: bool
     push_id: str | None
     plan: list[RestoreStepOut]
@@ -759,7 +789,7 @@ class ConfigRestoreResponse(BaseModel):
 class ControlProcessOut(BaseModel):
     """One process a lifecycle selector may name."""
 
-    procname: str
+    process: str
     proctype: str
     start_with_all: bool = Field(
         description='whether torq.sh\'s "all" selector includes it - the effective value, '
@@ -835,7 +865,7 @@ class ProcessConfigResponse(BaseModel):
     learn it will sometimes not bother.
     """
 
-    procname: str
+    process: str
     config: dict[str, str]
     settable_fields: list[str]
 
@@ -909,7 +939,7 @@ class BackfillStartedResponse(BaseModel):
     range_from: AwareInstant
     range_to: AwareInstant
     #: The TorQ process running it - what `uqs logs` takes.
-    procname: str
+    process: str
     status_path: str
 
 
@@ -921,7 +951,7 @@ class RemoteDeleteRequest(BaseModel):
 
 class RemoteDeleteResult(BaseModel):
     path: str
-    deleted: bool
+    outcome: FileOutcome
     error: str | None
 
 

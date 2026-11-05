@@ -1670,13 +1670,13 @@ uqs target tunnel plan prod rdb1 hdb1 --local rdb1:7002 --json
 uqs target tunnel check prod --password-env PROD_Q_PASSWORD
 ```
 
-The processes, their roles and their remote ports come from the target's
+The processes, their proctypes and their remote ports come from the target's
 release, as `query --tunnel` reads them. A local port is the remote port plus
 `--local-offset` (10000) unless `--local PROC:PORT` names one. The plan refuses
 a process that is not declared there, one that is not an rdb, hdb, wdb or
 gateway, a port out of range, and two forwards sharing one local port. Each
 refusal under `--json` carries a `kind`: `discovery`, `unknown_process`,
-`unsupported_role`, `invalid_port` or `port_conflict`.
+`unsupported_proctype`, `invalid_port` or `port_conflict`.
 
 The check tests each endpoint in the order a connection is made, and the first
 layer that fails gives the endpoint's status:
@@ -1790,9 +1790,9 @@ command that breaks a rule, and on a listed exception that has since been fixed.
    fleet's last start left it, and is refused, naming `uqs start`, when that
    directory is not bootstrapped; it rehearses against the real coverage ledger,
    which a scratch directory would not hold. What the worker itself writes - its
-   log and its status file - is the rehearsal's output. `deploy prune` and
-   `deploy rollback` print a JSON report, so their note goes to stderr; their
-   dry runs read the deploy lock and take nothing
+   log and its status file - is the rehearsal's output. Under `--json`,
+   `deploy push`, `prune` and `rollback` put their note on stderr, after the one
+   document on stdout; their dry runs read the deploy lock and take nothing
    ([deploy.md](deploy.md#rolling-back)).
 6. **A rename ships with a hidden alias for one release**, which prints the new
    spelling; the release after removes it.
@@ -2291,9 +2291,12 @@ Each command's `--help` names its document. The commands #1731 added:
   | `connector status`                          | `{connectors: [{name, running, pid, log, ...}]}`                                                                                                                                                                                                                                  |
   | `setup odbc status`                         | `{home, current, previous, versions}`; without `--json` it is now a table                                                                                                                                                                                                         |
   | `deploy check`                              | its report without the `DEPLOY_VERIFY_OK`/`FAILED` marker line                                                                                                                                                                                                                    |
+  | `deploy push`                               | `{ok, deployments: [{target, release, revision, artifact, ssh, dest, profile, status, stage, error, rollback, ...}]}`: a report per target, `status` `planned` on a dry run                                                                                                       |
+  | `deploy rollback`                           | `{ok, rollback, from, to, stop, start, current}`: `rollback` is `planned`, `done` or `failed`, with `reason` and `restore` when it failed                                                                                                                                         |
+  | `deploy prune`                              | `{ok, prune, kept: [{release, why}], removed, freed_bytes, runtimes}`: `prune` is `planned`, `done` or `declined`; ok false when declined                                                                                                                                         |
   | `activity list`                             | `{db, events: [{event_id, ts, recorded_at, level, source, kind, action, target, outcome, session_id, request_id, claimed_user, trigger, method, status_code, duration_ms, items, detail, dropped}], drops: [{level, reason, count, last_at}]}`, events newest first               |
-  | `deploy history`                            | `{deployments: [{default, at, target, host, dest, release, profile, status, stage}]}`                                                                                                                                                                                             |
-  | `target check`                              | `{ok, target, host, dest, remote_user, release}`                                                                                                                                                                                                                                  |
+  | `deploy history`                            | `{deployments: [{default, at, target, ssh, dest, release, profile, status, stage}]}`                                                                                                                                                                                              |
+  | `target check`                              | `{ok, target, ssh, dest, remote_user, release}`                                                                                                                                                                                                                                   |
   | `data check`                                | `{ok, hdb, present, segmented, partitions, missing_tables, missing_columns, types_checked, type_changes}`                                                                                                                                                                         |
   | `config sources check SOURCE...`            | `{ok, sources: [{source, status, stage, rows, elapsed_ms, diagnostic}]}` - one document, not a line per source                                                                                                                                                                    |
   | `data check --table`, `data alter`          | `{ok, hdb, resolved_from, ssh, warnings, plan, result}`: `plan` and `result` are `scripts/gates/hdb_alter.q`'s own documents - partitions, shapes, steps, journal, final check                                                                                                    |

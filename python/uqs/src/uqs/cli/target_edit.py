@@ -11,6 +11,7 @@ import os
 import shlex
 import subprocess
 import tempfile
+import tomllib
 from pathlib import Path
 from typing import Annotated
 
@@ -21,7 +22,7 @@ from uqs.cli.concepts import TargetArg
 from uqs.cli.safety import ChangesState, YesOpt, dry_run_note
 from uqs.cli.shared import _die, console
 from uqs.cli.target import DryRun, _change, _command, _done, target_app
-from uqs.deploy import target_changes, targets
+from uqs.deploy import target_changes, target_keys, targets
 from uqs.deploy.config import DeployError
 from uqs.paths import UqsError, repo_root
 
@@ -71,7 +72,7 @@ def edit(
     if name is not None:
         at = targets.line_of(original, f"{targets.TARGETS}.{name}")
         if at is None:
-            _die(UqsError(f"no target {name!r} declared as a table in {path}"))
+            _die(_not_a_table(original, name, path))
             return
     text, problem = original, None
     with tempfile.TemporaryDirectory(prefix="uqs-target-edit-") as scratch:
@@ -150,3 +151,20 @@ def remove(
         f"target {name} removed",
         dry_run,
     )
+
+
+def _not_a_table(text: str, name: str, path: Path) -> UqsError:
+    """Why `name` cannot be opened at its table: declared inline, or - the
+    one refusal for an unknown target (#2124) - not declared at all. The file
+    may not parse: fixing it is what `target edit` is for."""
+    try:
+        declared = tomllib.loads(text).get(targets.TARGETS, {})
+    except tomllib.TOMLDecodeError:
+        declared = {}
+    if isinstance(declared, dict) and name in declared:
+        return UqsError(
+            f"target {name} is declared inline in {path}, not as a [{targets.TARGETS}.{name}] "
+            "table, so it cannot be opened at its line - `uqs target edit` opens the whole file"
+        )
+    known = declared if isinstance(declared, dict) else {}
+    return target_keys.unknown_target(name, known, path)

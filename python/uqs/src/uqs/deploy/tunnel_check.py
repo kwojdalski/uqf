@@ -55,7 +55,7 @@ CATEGORIES = {
     "ssh": "ssh could not reach the target, or could not hold the check's tunnel",
     "discovery": "the target's release did not list its processes",
     "unknown_process": "a process named is not declared on the target",
-    "unsupported_role": "a process named is not an rdb, hdb, wdb or gateway",
+    "unsupported_proctype": "a process named is not an rdb, hdb, wdb or gateway",
     "invalid_port": "a local port is out of range or names no forwarded process",
     "port_conflict": "two mappings would share one local port",
     "unreachable": "nothing on the target answers on the remote port",
@@ -78,7 +78,7 @@ Query = Callable[[str, int], object]
 @dataclass
 class EndpointCheck:
     process: str
-    role: str
+    proctype: str
     production_endpoint: str
     local_endpoint: str
     remote_port: int
@@ -163,7 +163,7 @@ def _probe(e: EndpointCheck, port: int, query: Query, scrub: Callable[[str], str
                f"port {e.remote_port} answered as {answer!r}, not {e.process}")  # fmt: skip
         return
     e.layers["identity"] = "ok"
-    if e.role != "gateway":
+    if e.proctype != "gateway":
         e.layers["ready"] = "ok"
         return
     try:
@@ -259,8 +259,13 @@ def run(
     report["launch_command"] = p.launch_command
     ends = [
         EndpointCheck(
-            m.process, m.role, m.production_endpoint, m.local_endpoint, m.remote_port, m.local_port
-        )  # fmt: skip
+            m.process,
+            m.proctype,
+            m.production_endpoint,
+            m.local_endpoint,
+            m.remote_port,
+            m.local_port,
+        )
         for m in p.mappings
     ]
     for e in ends:

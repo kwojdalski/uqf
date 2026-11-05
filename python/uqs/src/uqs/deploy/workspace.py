@@ -8,8 +8,8 @@ of these; nothing in the frontend opens ssh or reads a port itself.
   - The processes and their ports are the target's release's own, read the
     way `query --tunnel` and the tunnel plan read them
     (tunnel.remote_processes): never this checkout's process.csv.
-  - Every declared process is forwarded, not only the roles a tunnel plan
-    offers an operator (tunnel_plan.ROLES): fleet health probes each.
+  - Every declared process is forwarded, not only the proctypes a tunnel plan
+    offers an operator (tunnel_plan.FORWARDED_PROCTYPES): fleet health probes each.
   - The local ports are free loopback ports the OS hands out, so two
     workspaces, a manual tunnel plan and a local stack never collide.
   - One ssh holds every forward (tunnel.forwarded); `close` ends it. A

@@ -51,9 +51,9 @@ def _plan(**kw):
 # ------------------------------------------------------------------ the plan
 
 
-def test_a_plan_forwards_every_reading_role_by_default():
+def test_a_plan_forwards_every_reading_proctype_by_default():
     p = _plan()
-    assert [(m.process, m.role) for m in p.mappings] == [
+    assert [(m.process, m.proctype) for m in p.mappings] == [
         ("gateway1", "gateway"), ("hdb1", "hdb"), ("rdb1", "rdb"), ("wdb1", "wdb"),
     ]  # fmt: skip
     rdb = next(m for m in p.mappings if m.process == "rdb1")
@@ -82,7 +82,7 @@ def test_a_local_port_can_be_named_and_the_offset_changed():
     ("kw", "kind", "said"),
     [
         ({"selected": ["nosuch1"]}, "unknown_process", "nosuch1: not declared on target prod"),
-        ({"selected": ["stp1"]}, "unsupported_role", r"stp1 \(segmentedtickerplant\)"),
+        ({"selected": ["stp1"]}, "unsupported_proctype", r"stp1 \(segmentedtickerplant\)"),
         ({"selected": ["rdb1"], "local": {"hdb1": 7000}}, "invalid_port", "does not forward"),
         ({"selected": ["rdb1"], "local": {"rdb1": 80}}, "invalid_port", "outside 1024-65535"),
         ({"offset": 60000}, "invalid_port", "smaller --local-offset"),
@@ -326,7 +326,7 @@ def test_ssh_failure_is_its_own_category(root, server):
 
 def test_a_plan_refusal_keeps_its_kind(root, server):
     report = _check(root, server, selected=["stp1"])
-    assert report["category"] == "unsupported_role"
+    assert report["category"] == "unsupported_proctype"
 
 
 def test_a_held_local_port_is_a_bind_conflict_and_our_own_tunnel_is_connected(root, server):
@@ -351,6 +351,21 @@ def test_plan_json_is_the_annotated_plan(root, monkeypatch):
     assert doc["mappings"][0]["local_endpoint"] == "127.0.0.1:16002"
     assert doc["mappings"][0]["state"] == "unverified"
     assert doc["launch_command"].startswith("ssh ")
+
+
+def test_plan_and_check_key_a_process_and_its_type_as_uqs_json_does(root, server, monkeypatch):
+    """A forward is `{process, proctype}`, the keys `process list --json`
+    gives (#1882) and the frontend's /workspace uses - never `role`, which
+    means a component role in `uqs attach`, or `procname` (#2109)."""
+    monkeypatch.setattr(tunnel_plan, "discover", lambda r, runtime=None, runner=None: DECLARED)
+    run = CliRunner().invoke(app, ["target", "tunnel", "plan", "prod", "rdb1", "--json"])
+    assert run.exit_code == 0, run.output
+    rows = json.loads(run.stdout)["mappings"] + _check(root, server)["endpoints"]
+    for row in rows:
+        assert {"process", "proctype"} <= row.keys(), row
+        assert not {"role", "procname"} & row.keys(), row
+    pairs = {(r["process"], r["proctype"]) for r in rows}
+    assert pairs >= {("rdb1", "rdb"), ("gateway1", "gateway")}
 
 
 def test_plan_refusal_json_names_its_kind(root, monkeypatch):
@@ -506,5 +521,5 @@ def test_the_check_document_round_trips(root, server, monkeypatch):
 
 
 def test_an_unknown_target_is_a_refusal_not_a_finding(root, server):
-    with pytest.raises(tunnel_plan.UqsError, match="no target or deployed server 'nosuch'"):
+    with pytest.raises(tunnel_plan.UqsError, match="no target or deployed server nosuch - "):
         tunnel_check.run("nosuch", root, runner=server.run)

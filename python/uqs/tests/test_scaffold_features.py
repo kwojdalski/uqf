@@ -377,6 +377,31 @@ def test_a_twin_applies_the_transform_its_job_declares():
     assert "passthrough" not in body, "no transform of its own is written"
 
 
+def test_a_scaffolded_twin_declares_the_job_it_repairs():
+    """#2103: --twin-of used to read the job once and leave nothing behind, so a
+    later change to the job's output could not be told from the backfill's."""
+    plain = templates.worker_body(
+        "mk_backfill", "mk", "arb_out", "1D", "mk_backfill1", twin_of="arbitrage"
+    )
+    assert "`twin_of`procname`note!" in plain
+    assert ";`arbitrage;\n" in plain
+    assert "twin_calculation" not in plain, "no shared transform, so no promise is written"
+    assert "calculation equivalence is not established" in plain
+    shared = templates.worker_body(
+        "mk_backfill", "mk", "crypto_markout", "1D", "mk_backfill1",
+        shared=("crypto_markout", "crypto_markout_score"), twin_of="crypto_markout",
+    )  # fmt: skip
+    assert "`twin_of`twin_calculation`procname`note!" in shared
+    assert ";`crypto_markout;`shared;\n" in shared, "the promise to apply the one transform"
+    assert "twin_of" not in templates.worker_body("w_backfill", "w", "d", "1D", "w1")
+
+
+def test_a_planned_twin_writes_its_declaration():
+    fields = _fields(_twin("arb_refill", "arbitrage"), "arb_refill_backfill.q")
+    assert symbols(fields["twin_of"]) == ("arbitrage",)
+    assert "twin_calculation" not in fields, "arbitrage declares no transform"
+
+
 def test_transform_beside_a_declared_one_is_refused():
     with pytest.raises(UqsError, match="drop --transform"):
         create_backfill.shared_transform(UQF_ROOT, "crypto_markout", "derive")

@@ -318,7 +318,7 @@ Edit the file by hand, or change it through `uqs`:
 
 ```bash
 uqs target add prd --ssh svc@prd.example --dest /srv/uqf --label tier=prod --reach
-uqs target set prd host=svc@prd2.example connect_timeout=20
+uqs target set prd ssh=svc@prd2.example connect_timeout=20
 uqs target set prd launch_mode=source launch_python=/opt/py/bin/python3 \
     launch_env_file=/srv/uqf/current/output/uqs/setenv.sh
 uqs target set prd labels.owner=desk environment=uat
@@ -942,10 +942,20 @@ Each stage stops the deployment if it fails:
   | report    | `deploy-report.json` is written into the release **before** activation, and a failed write fails the deployment: the next upgrade reads it to know which processes to stop                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
   | activate  | `current` moves to the new release in a single rename. The previous release stays where it was                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 
-The tool prints a report as JSON when it finishes, and leaves it in the release
-as `deploy-report.json`. The report names the release, the source revision, each
-process and what it answered, the stage that failed if one did, and, separately,
-how the rollback went. Any unsuccessful deployment exits 1.
+The tool prints what happened when it finishes, and leaves the report in the
+release as `deploy-report.json`. The report names the release, the source
+revision, the ssh destination (`ssh`), each process and what it answered, the
+stage that failed if one did, and, separately, how the rollback went. Any
+unsuccessful deployment exits 1.
+
+Without `--json` it prints a line or two per target. With `--json` stdout is one
+document, `{ok, deployments: [...]}`, with one report per target in the order
+they were pushed - on a dry run too, each `status` then `planned`. Everything
+else - the plan of a dry run, its note, a new server's registration - goes to
+stderr, so a CD script parses stdout whatever happened. A push refused part-way
+prints `{ok: false, error, deployments}`, holding the targets it did push
+(#2125). A report a release wrote before #2123 names the ssh destination `host`;
+everything that reads one takes either spelling.
 
 ## The shared HDB and a new schema
 
@@ -1051,15 +1061,17 @@ processes, starts the target's from the target's own release, and moves
 verify is stopped, and the current release's processes are started and verified
 again, so the server ends where it began. Nothing is deleted.
 
-`--dry-run` prints the plan - what it would stop and what it would start - as
-JSON on stdout, and the dry-run note on stderr, so stdout still parses. It takes
-no lock (#1902), and `prune --dry-run` none either: taking it writes on the
-server - the lock directory, its owner and heartbeat, and `--dest` itself when
-it is missing - and a dry run promises to change nothing. The lock keeps two
-runs that act from acting at once; a dry run does not act, and the real run
-decides again under the lock. So a dry run reads the lock instead, and warns,
-naming the holder, when another deployment holds it: the plan it prints is the
-server as it is now, and may not survive that deployment.
+`--dry-run` prints the plan - what it would stop and what it would start - and
+the dry-run note; with `--json`, the plan is the one document on stdout,
+`{ok, rollback: "planned", from, to, stop, start}`, and the note goes to stderr,
+so stdout still parses. It takes no lock (#1902), and `prune --dry-run` none
+either: taking it writes on the server - the lock directory, its owner and
+heartbeat, and `--dest` itself when it is missing - and a dry run promises to
+change nothing. The lock keeps two runs that act from acting at once; a dry run
+does not act, and the real run decides again under the lock. So a dry run reads
+the lock instead, and warns, naming the holder, when another deployment holds
+it: the plan it prints is the server as it is now, and may not survive that
+deployment.
 
 A target is verified with `uqs deploy check`, so a release from before that
 command existed (#835) cannot be a rollback target: its verification fails and
@@ -1073,12 +1085,14 @@ Every push leaves its release, with its own offline `.venv`, in `releases/`.
 `uqs deploy prune` removes all but the newest `--keep N`, under the deploy lock.
 It names each release it would remove and asks first; `--yes` does not ask.
 `--dry-run` takes no lock, as for [a rollback](#rolling-back), and ends with the
-dry-run note on stderr after its JSON:
+dry-run note - on stderr under `--json`, whose document is
+`{ok, prune, kept, removed, freed_bytes}`. `--keep` defaults to the target's own
+`keep`, the one `deploy push` prunes to (#2123):
 
 ```bash
 uqs deploy prune prod-a --keep 3 --dry-run
 uqs deploy prune prod-a --keep 3          # asks
-uqs deploy prune prod-a --keep 3 --yes    # from a script
+uqs deploy prune prod-a --yes             # from a script, to the target's keep
 ```
 
 Three releases are never removed, whatever `--keep` is, even 0:

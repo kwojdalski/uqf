@@ -12,6 +12,7 @@ the logger cannot see.
 
 from __future__ import annotations
 
+import ast
 import json
 import os
 import re
@@ -124,6 +125,16 @@ CASES: dict[str, tuple[list[str], str]] = {
     "job attachment remove": (["job", "attachment", "remove", "nosuch"], "no attachment 'nosuch'"),
     "deploy status": (
         ["deploy", "status", "--ssh", "nosuch.invalid", "--dest", "relative/dest"],
+        "must be an absolute path",
+    ),
+    # #2125: push, rollback and prune print one document too, only under --json
+    "deploy push": (["deploy", "push", "nosuch.tar.gz", "nosuch-target-2125"], "deployments"),
+    "deploy rollback": (
+        ["deploy", "rollback", "--ssh", "nosuch.invalid", "--dest", "relative/dest"],
+        "must be an absolute path",
+    ),
+    "deploy prune": (
+        ["deploy", "prune", "--ssh", "nosuch.invalid", "--dest", "relative/dest", "--keep", "1"],
         "must be an absolute path",
     ),
     # #1731: every reporting command
@@ -364,10 +375,41 @@ def test_an_unknown_target_under_json_is_a_refusal(sandbox):
     assert doc["ok"] is False and "nosuch-1882" in doc["error"]
 
 
+def _printed_json(path: Path) -> list[str]:
+    """Where `path` prints a json.dumps: given to print (to any stream - the
+    report went to an `out` that was stdout), typer.echo or sys.stdout.write -
+    a JSON printer. A json.dumps written into a file through its handle is
+    not one, nor is one inside a script's text that runs on a server."""
+
+    def printer(call: ast.Call) -> bool:
+        f = call.func
+        if isinstance(f, ast.Name):
+            return f.id == "print"
+        return isinstance(f, ast.Attribute) and (
+            f.attr == "echo" or (f.attr == "write" and ast.unparse(f.value) == "sys.stdout")
+        )
+
+    def dumps(node: ast.AST) -> bool:
+        return (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "dumps"
+        )
+
+    found = []
+    for node in ast.walk(ast.parse(path.read_text())):
+        if isinstance(node, ast.Call) and printer(node):
+            if any(dumps(n) for a in node.args for n in ast.walk(a)):
+                found.append(f"{path.parent.name}/{path.name}:{node.lineno}")
+    return found
+
+
 def test_no_command_prints_json_but_through_emit():
     """One printer, so one contract: every document is json_out.emit's - an
     object, its values plain, its times zoned. A json.dumps written to stdout
-    anywhere else in the CLI is a second printer that holds to none of it."""
+    anywhere else in the CLI is a second printer that holds to none of it.
+    deploy/ too (#2125): push, rollback and prune printed their reports there,
+    outside emit and with no --json, where a scan of cli/ alone never looked."""
     cli_dir = Path(cli.__file__).parent
     found = [
         f"{path.name}:{n}"
@@ -376,7 +418,26 @@ def test_no_command_prints_json_but_through_emit():
         for n, line in enumerate(path.read_text().splitlines(), 1)
         if "json.dumps(" in line
     ]
+    deploy_dir = cli_dir.parent / "deploy"
+    found += [hit for path in sorted(deploy_dir.glob("*.py")) for hit in _printed_json(path)]
     assert not found, found
+
+
+def test_the_json_printer_scan_finds_a_printer_and_nothing_else(tmp_path):
+    """The deploy/ scan's own check: the shapes the three commands printed in
+    are found, a file write and a server script's text are not."""
+    path = tmp_path / "mod.py"
+    path.write_text(
+        "import json, sys\n"
+        "print(json.dumps({}, indent=2), file=out)\n"
+        "typer.echo(json.dumps({}))\n"
+        "sys.stdout.write(json.dumps({}))\n"
+        "fh.write_text(json.dumps({}))\n"
+        "handle.write(json.dumps({}) + '\\n')\n"
+        "body = json.dumps({})\n"
+        "SCRIPT = 'print(json.dumps(out))'\n"
+    )
+    assert _printed_json(path) == [f"{tmp_path.name}/mod.py:{n}" for n in (2, 3, 4)]
 
 
 def test_emit_refuses_a_document_that_is_not_an_object():
@@ -461,16 +522,23 @@ def test_list_processes_carries_numbers_bools_and_lists():
     assert isinstance(rdb["inputs"], list) and isinstance(rdb["outputs"], list)
 
 
-def test_an_older_releases_bare_process_list_still_gives_its_ports():
+def test_an_older_releases_bare_process_list_is_refused_with_the_redeploy():
     """`--target` tunnels read the SERVER's `process list --json`, which is
-    whatever release was deployed there: both shapes give the same ports."""
+    whatever release was deployed there. The #1882 document gives the ports;
+    the bare `procname` list from before it is refused, not read under the
+    old key (#2109)."""
     from uqs.deploy import control, tunnel
+    from uqs.paths import UqsError
 
     remote = control.Remote("t", "h", "/srv/t")
-    new = json.dumps({"processes": [{"process": "rdb1", "port": 6052}]})
+    new = json.dumps({"processes": [{"process": "rdb1", "proctype": "rdb", "port": 6052}]})
+    assert tunnel._parse_rows(remote, new) == [{"process": "rdb1", "proctype": "rdb", "port": 6052}]
     old = json.dumps([{"procname": "rdb1", "port": "6052"}])
-    rows = [{"process": "rdb1", "proctype": "", "port": 6052}]
-    assert tunnel._parse_rows(remote, new) == tunnel._parse_rows(remote, old) == rows
+    with pytest.raises(UqsError, match=r"target t: .*before #1882 \(`procname`, not `process`\)"):
+        tunnel._parse_rows(remote, old)
+    keyed = json.dumps({"processes": [{"procname": "rdb1", "port": 6052}]})
+    with pytest.raises(UqsError, match="did not list its processes as JSON"):
+        tunnel._parse_rows(remote, keyed)
 
 
 def test_status_json_says_all_its_interpreter_line_says(monkeypatch):

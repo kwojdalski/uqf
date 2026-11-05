@@ -8,7 +8,7 @@ a file the operator keeps outside the source - like runtime_bundles.json
 (#852) - at the repository root, or wherever $UQS_DEPLOY_TARGETS names:
 
     [targets.prod-a]
-    host = "deploy@prod-a"
+    ssh = "deploy@prod-a"
     remote_user = "svc"
     dest = "/srv/uqf"
     runtime = "crypto"
@@ -17,9 +17,10 @@ a file the operator keeps outside the source - like runtime_bundles.json
     live = true
     live_check = ["deals_db"]
 
-Each key is a `uqs deploy push` option, spelt as its parameter (`torq_home`
-for --torq-home; `host` for --ssh). The values go through make_config like the flags', so a
-file is held to exactly the same checks. A flag given on the command line
+Each key is a `uqs deploy push` option, spelt as its flag (`torq_home` for
+--torq-home, `ssh` for --ssh) and as make_config's parameter and the Config's
+field - one name in every place (#2123). The values go through make_config
+like the flags', so a file is held to exactly the same checks. A flag given on the command line
 wins over the file. Each value's source - the target, or the flag - is kept
 in the Config, and the plan prints it. `runtime`, which push otherwise reads
 from the artifact, is the one key that is not a flag: it must match the
@@ -48,7 +49,7 @@ from typing import Any
 
 from uqs.deploy import components, inspection, launch, overrides, target_file
 from uqs.deploy.config import Config, DeployError, make_config
-from uqs.deploy.target_keys import FIELD_OF_KEY, FILE_KEYS, flag, read_durations
+from uqs.deploy.target_keys import RENAMED, flag, read_durations, unknown_target
 from uqs.paths import UqsError
 
 DECLARATION = "deploy_targets.toml"
@@ -77,6 +78,10 @@ NOT_PUSH_OPTIONS = frozenset({"runtime", "labels", inspection.KEY}) | LAUNCH_KEY
 #: The file's tables. Only a target names its environment.
 DEFAULTS, ENVIRONMENTS, TARGETS = "defaults", "environments", "targets"
 ENVIRONMENT = "environment"
+#: The stage a target's lookup and its file's checks fail at: a refusal,
+#: exit 1, like every other unknown name (#1885, #2124) - not `arguments`,
+#: a usage error.
+TARGET = "target"
 
 
 def declaration_path(root: Path) -> Path:
@@ -89,7 +94,7 @@ def _load(root: Path) -> dict:
     targets}. Each key's name is checked by configs, layer by layer."""
     path = declaration_path(root)
     if not path.is_file():
-        raise DeployError("arguments", f"a target needs {path}, which does not exist")
+        raise DeployError(TARGET, f"a target needs {path}, which does not exist")
     return _tables(target_file.text_of(path), path)
 
 
@@ -99,14 +104,14 @@ def _tables(text: str, path: Path) -> dict:
     try:
         data = tomllib.loads(text)
     except tomllib.TOMLDecodeError as exc:
-        raise DeployError("arguments", f"{path}: not TOML ({exc})") from None
+        raise DeployError(TARGET, f"{path}: not TOML ({exc})") from None
     shape = (
         f"declare targets as [{TARGETS}.<name>] tables, beside an optional "
         f"[{DEFAULTS}] and [{ENVIRONMENTS}.<name>] tables"
     )
     unknown = sorted(set(data) - {DEFAULTS, ENVIRONMENTS, TARGETS})
     if unknown:
-        raise DeployError("arguments", f"{path}: unknown table(s) {', '.join(unknown)} - {shape}")
+        raise DeployError(TARGET, f"{path}: unknown table(s) {', '.join(unknown)} - {shape}")
     # A file holding only shared layers may have no target yet (`uqs target add`);
     # nor may one every target was removed from.
     found = data.get(TARGETS, {})
@@ -115,14 +120,14 @@ def _tables(text: str, path: Path) -> dict:
     if not isinstance(defaults, dict) or not all(
         isinstance(t, dict) and all(isinstance(v, dict) for v in t.values()) for t in tables
     ):
-        raise DeployError("arguments", f"{path}: {shape}")
+        raise DeployError(TARGET, f"{path}: {shape}")
     layers = [
         (DEFAULTS, defaults),
         *((f"environment {n}", e) for n, e in envs.items()),
         *((f"target {n}", t) for n, t in found.items()),
     ]
     for layer, settings in layers:
-        _as_fields(layer, settings, text, path)
+        _old_keys(layer, settings, text, path)
         read_durations(layer, settings, partial(_at, text, path, layer))
         _labels(layer, settings, text, path)
         inspection.check_layer(layer, settings, partial(_at, text, path, layer, inspection.KEY))
@@ -130,28 +135,24 @@ def _tables(text: str, path: Path) -> dict:
     for layer, settings in shared:
         if ENVIRONMENT in settings:
             raise DeployError(
-                "arguments",
+                TARGET,
                 f"{_at(text, path, layer)}{layer}: sets environment - only a target names "
                 "its environment",
             )
     return {DEFAULTS: defaults, ENVIRONMENTS: envs, TARGETS: found}
 
 
-def _as_fields(layer: str, settings: dict, text: str, path: Path) -> None:
-    """`settings`' keys, as the file spells them (`ssh`, `q_cmd`), renamed in
-    place to make_config's options (`host`, `qcmd`), so everything past the
-    file reads one set of names. A key spelt as the option's old name is
-    refused, naming the key now (#1888)."""
-    old = sorted(set(settings) & set(FILE_KEYS))
+def _old_keys(layer: str, settings: dict, text: str, path: Path) -> None:
+    """Refuse a key spelt as a setting's name before #1888, naming the key now."""
+    old = sorted(set(settings) & set(RENAMED))
     if old:
         raise DeployError(
-            "arguments",
+            TARGET,
             f"{_at(text, path, layer, old[0])}{layer}: "
-            + ", ".join(f"{k} is {FILE_KEYS[k]}" for k in old)
+            + ", ".join(f"{k} is {RENAMED[k]}" for k in old)
             + " - rename the key: the file spells each setting as push's option "
             "(`uqs target edit` opens it)",
         )
-    settings.update({f: settings.pop(k) for k, f in FIELD_OF_KEY.items() if k in settings})
 
 
 def _labels(layer: str, settings: dict, text: str, path: Path) -> None:
@@ -160,13 +161,7 @@ def _labels(layer: str, settings: dict, text: str, path: Path) -> None:
     plain = (str, int, float, bool)
     if not isinstance(labels, dict) or not all(isinstance(v, plain) for v in labels.values()):
         where, eg = _at(text, path, layer, "labels"), 'labels = { region = "ldn" }'
-        raise DeployError("arguments", f"{where}{layer}: labels must be a table, e.g. {eg}")
-
-
-def to_keys(entry: dict) -> dict:
-    """A target's settings, as make_config names them, as the file spells
-    them: what `uqs target add`, `adopt` and a push's registration write."""
-    return {FILE_KEYS.get(k, k): v for k, v in entry.items()}
+        raise DeployError(TARGET, f"{where}{layer}: labels must be a table, e.g. {eg}")
 
 
 def _header(layer: str) -> str:
@@ -210,7 +205,7 @@ def _layers(data: dict, name: str, path: Path) -> list[tuple[str, dict]]:
         if not isinstance(env, str) or env not in data[ENVIRONMENTS]:
             known = ", ".join(sorted(data[ENVIRONMENTS])) or "none"
             raise DeployError(
-                "arguments",
+                TARGET,
                 f"target {name}: environment {env!r} is not declared in {path} - "
                 f"it declares: {known}",
             )
@@ -224,7 +219,7 @@ def read(root: Path) -> dict[str, dict]:
     target keeps its `environment` key."""
     path = declaration_path(root)
     if not path.is_file():
-        raise DeployError("arguments", f"a target needs {path}, which does not exist")
+        raise DeployError(TARGET, f"a target needs {path}, which does not exist")
     return validate(target_file.text_of(path), path)
 
 
@@ -242,7 +237,7 @@ def _merge(data: dict, path: Path) -> dict[str, dict]:
 
 #: Stand-ins for the three settings push needs and a target may leave to the
 #: command line, so validate can hold the rest of a target to make_config.
-_STAND_INS = {"host": "validate", "dest": "/validate", "profile": "validate"}
+_STAND_INS = {"ssh": "validate", "dest": "/validate", "profile": "validate"}
 
 
 def validate(text: str, path: Path) -> dict[str, dict]:
@@ -267,11 +262,11 @@ def validate(text: str, path: Path) -> dict[str, dict]:
             said = str(exc)
             if said.startswith(str(path)):
                 raise
-            raise DeployError("arguments", f"{where}target {name}: {_bare(exc, name)}") from None
+            raise DeployError(TARGET, f"{where}target {name}: {_bare(exc, name)}") from None
         except (TypeError, ValueError) as exc:
             # make_config compares and splits; a value of the wrong type fails there
             raise DeployError(
-                "arguments", f"{where}target {name}: a setting has the wrong type ({exc})"
+                TARGET, f"{where}target {name}: a setting has the wrong type ({exc})"
             ) from None
     return _merge(data, path)
 
@@ -282,13 +277,13 @@ def _bare(exc: Exception, name: str) -> str:
 
 
 def remote_shape(label: str, t: dict) -> None:
-    """The shapes `uqs --target` holds host and dest to, when set: both reach
+    """The shapes `uqs --target` holds ssh and dest to, when set: both reach
     a remote shell."""
-    host, dest = t.get("host"), t.get("dest")
-    if host is not None and (
-        not isinstance(host, str) or host.startswith("-") or any(c.isspace() for c in host)
+    ssh, dest = t.get("ssh"), t.get("dest")
+    if ssh is not None and (
+        not isinstance(ssh, str) or ssh.startswith("-") or any(c.isspace() for c in ssh)
     ):
-        raise UqsError(f"target {label}: ssh {host!r} is not an ssh destination")
+        raise UqsError(f"target {label}: ssh {ssh!r} is not an ssh destination")
     if dest is not None and (
         not isinstance(dest, str) or not dest.startswith("/") or any(c.isspace() for c in dest)
     ):
@@ -304,7 +299,7 @@ def _options(layer: str, declared: dict, text: str = "", path: Path | None = Non
         if path is not None:
             where = _at(text, path, layer, overridden[0])
         raise DeployError(
-            "arguments",
+            TARGET,
             f"{where}{layer}: {', '.join(overridden)} - an override is given on the command "
             "line, with its reason, for one push; the file never sets one",
         )
@@ -313,7 +308,7 @@ def _options(layer: str, declared: dict, text: str = "", path: Path | None = Non
         if path is not None:
             where = _at(text, path, layer, unknown[0])
         raise DeployError(
-            "arguments",
+            TARGET,
             f"{where}{layer}: unknown setting(s) {', '.join(unknown)} - the file sets push's "
             "options, spelt as their flags (torq_home for --torq-home, ssh for --ssh)",
         )
@@ -363,18 +358,18 @@ def configs(names: str, artifact: str, explicit: dict, dry_run: bool, root: Path
     for env, settings in data[ENVIRONMENTS].items():
         _options(f"environment {env}", settings)
     wanted = [n.strip() for n in names.split(",") if n.strip()]
+    if not wanted:
+        raise DeployError("arguments", f"no target named in {names!r}")
     missing = [n for n in wanted if n not in declared]
-    if not wanted or missing:
-        known = ", ".join(sorted(declared)) or "none"
-        asked = ", ".join(missing) or repr(names)
-        raise DeployError("arguments", f"no target {asked} in {path} - it declares: {known}")
+    if missing:
+        raise DeployError(TARGET, str(unknown_target(missing, declared, path)))
     out = []
     for name in wanted:
         options, sources, runtime = _merged(data, name, path)
         components.switch(options, sources, explicit)
         options.update(explicit)
         sources.update({k: _flag(k) for k in explicit})
-        absent = [k for k in ("host", "dest", "profile") if options.get(k) is None]
+        absent = [k for k in ("ssh", "dest", "profile") if options.get(k) is None]
         if absent:
             raise DeployError(
                 "arguments",
