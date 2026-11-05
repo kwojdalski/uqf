@@ -212,3 +212,27 @@ def test_a_uqs_variable_is_read_only_by_the_uqs_package():
     assert cer.prefix_problems(reads) == {
         "UQS_REQUIRE_LIVE_SOURCES": ["src/etl/core/source_credentials.q"]
     }
+
+
+def test_a_duration_variable_must_name_its_unit():
+    """#2111: a timeout, interval or retention whose name omits its unit is
+    flagged; one that ends in its unit, or holds no duration, is not."""
+    flagged = cer.unitless_durations(
+        {
+            "UQF_FRONTEND_TIMEOUT",
+            "UQF_FRONTEND_CAPTURE_INTERVAL",
+            "UQF_X_RETENTION",
+            "UQF_FRONTEND_TIMEOUT_SECONDS",
+            "UQF_HDB_RELOAD_SECONDS",
+            "UQF_FRONTEND_ACTIVITY_RETENTION_DAYS",
+            "UQF_POLL_INTERVAL_MS",
+            "UQF_FRONTEND_MAX_ROWS",
+            "UQF_Q_COVERAGE_RAN",
+        }
+    )
+    assert flagged == ["UQF_FRONTEND_CAPTURE_INTERVAL", "UQF_FRONTEND_TIMEOUT", "UQF_X_RETENTION"]
+
+
+def test_every_duration_variable_in_the_tree_names_its_unit():
+    reads = set(cer.read_names(REPO)) | cer.produced_names(REPO) | cer.documented(REPO)[0]
+    assert cer.unitless_durations(reads) == []

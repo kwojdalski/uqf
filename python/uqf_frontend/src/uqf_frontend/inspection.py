@@ -108,7 +108,7 @@ def inspected_targets(settings: Settings) -> tuple[frozenset[str], str | None]:
     """(the declared targets in inspection mode, why the registry could not
     be read - or None)."""
     rows, error = _registry(settings)
-    return frozenset(t["name"] for t in rows if t.get("inspection")), error
+    return frozenset(t["target"] for t in rows if t.get("inspection")), error
 
 
 def inspected_target(settings: Settings, target: str) -> tuple[str | None, str | None]:
@@ -121,7 +121,7 @@ def inspected_target(settings: Settings, target: str) -> tuple[str | None, str |
     if error is not None:
         return None, error
     declared = {
-        str(t["name"]): {
+        str(t["target"]): {
             "ssh": t.get("ssh"),
             "dest": t.get("dest"),
             uqs_inspection.KEY: t.get("inspection") is True,

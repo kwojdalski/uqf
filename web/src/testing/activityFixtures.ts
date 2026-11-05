@@ -30,13 +30,13 @@ export const SETTINGS: SettingsData = {
   runtime: {
     activity_level: "actions",
     activity_retention_days: 30,
-    activity_max_rows: 100000,
+    activity_max_kept: 100000,
     activity_interactions_retention_days: 7,
-    activity_interactions_max_rows: 50000,
+    activity_interactions_max_kept: 50000,
     activity_debug_retention_days: 1,
-    activity_debug_max_rows: 10000,
-    config_history_keep: 50,
-    config_history_days: 90,
+    activity_debug_max_kept: 10000,
+    config_history_max_kept: 50,
+    config_history_retention_days: 90,
   },
   runtime_version: "b".repeat(64),
   runtime_editable: true,
@@ -85,9 +85,9 @@ export const HISTORY: ActivityHistory = {
   },
   default_level: "actions",
   bounds: [
-    { level: "actions", retention_days: 30, max_rows: 100000 },
-    { level: "interactions", retention_days: 7, max_rows: 50000 },
-    { level: "debug", retention_days: 1, max_rows: 10000 },
+    { level: "actions", retention_days: 30, max_kept: 100000 },
+    { level: "interactions", retention_days: 7, max_kept: 50000 },
+    { level: "debug", retention_days: 1, max_kept: 10000 },
   ],
   drops: [
     {
@@ -109,7 +109,7 @@ const PROCESSES = [
 function listing(path: string) {
   return {
     target: "prod-a",
-    root: "/srv/uqf",
+    dest: "/srv/uqf",
     path,
     parent: path ? "" : null,
     entries: [
@@ -239,7 +239,7 @@ export function answer(path: string, level: SessionLevel = "actions"): unknown {
     return {
       targets: [
         {
-          name: "prod-a",
+          target: "prod-a",
           ssh: "deploy@prod-a",
           dest: "/srv/uqf",
           remote_user: null,
@@ -251,7 +251,7 @@ export function answer(path: string, level: SessionLevel = "actions"): unknown {
       source: "/repo/deploy_targets.toml",
       declared: true,
       invalid: null,
-      remote_operations_enabled: true,
+      writes_enabled: true,
       poll_seconds: 30,
     };
   if (bare === "/services/prod-a/tunnel")
@@ -272,7 +272,7 @@ export function answer(path: string, level: SessionLevel = "actions"): unknown {
     return {
       workspaces: [
         {
-          name: "local",
+          target: "local",
           kind: "local",
           connection: "direct",
           access: "read-write",
@@ -282,7 +282,7 @@ export function answer(path: string, level: SessionLevel = "actions"): unknown {
           reason: null,
         },
         {
-          name: "prod-a",
+          target: "prod-a",
           kind: "target",
           connection: "ssh tunnel",
           access: "read-only",
@@ -301,7 +301,7 @@ export function answer(path: string, level: SessionLevel = "actions"): unknown {
       target: "local",
       connection: "direct",
       access: "read-write",
-      host: null,
+      ssh: null,
       endpoints: [],
       poll_seconds: 30,
     };

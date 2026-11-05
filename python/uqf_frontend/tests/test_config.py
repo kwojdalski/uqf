@@ -68,7 +68,7 @@ def test_a_malformed_numeric_setting_fails_loudly(monkeypatch):
 
 
 def test_empty_env_value_falls_back_to_the_default(monkeypatch):
-    monkeypatch.setenv("UQF_FRONTEND_TIMEOUT", "")
+    monkeypatch.setenv("UQF_FRONTEND_TIMEOUT_SECONDS", "")
     assert Settings.from_env().timeout == Settings().timeout
 
 

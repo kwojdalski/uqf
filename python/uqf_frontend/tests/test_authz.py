@@ -290,7 +290,7 @@ SAMPLES: dict[tuple[str, str], dict] = {
     },
     # the config push history (#2002)
     ("POST", "/services/{target}/config/pushes"): {
-        "json": {"destination": "shared/config", "file_count": 1, "total_bytes": 4}
+        "json": {"config_dir": "shared/config", "file_count": 1, "total_bytes": 4}
     },
     ("POST", "/services/{target}/config/pushes/{push_id}/close"): {"json": {"reported": []}},
     ("GET", "/services/{target}/config/pushes"): {},
@@ -334,13 +334,13 @@ SAMPLES: dict[tuple[str, str], dict] = {
             "settings": {
                 "activity_level": "actions",
                 "activity_retention_days": 30,
-                "activity_max_rows": 100000,
+                "activity_max_kept": 100000,
                 "activity_interactions_retention_days": 7,
-                "activity_interactions_max_rows": 50000,
+                "activity_interactions_max_kept": 50000,
                 "activity_debug_retention_days": 1,
-                "activity_debug_max_rows": 10000,
-                "config_history_keep": 50,
-                "config_history_days": 90,
+                "activity_debug_max_kept": 10000,
+                "config_history_max_kept": 50,
+                "config_history_retention_days": 90,
             },
         }
     },

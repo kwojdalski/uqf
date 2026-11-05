@@ -259,12 +259,12 @@ DETAIL_KEYS: dict[str, Callable[[object], bool]] = {
     "content_type": _is_name,
     "item_count": _is_count,
     # config pushes (#2002): the push a file belongs to, the hash of what it
-    # replaced (None on create), the push a restore undoes, the destination
-    # directory, and how many old pushes retention pruned - never content
+    # replaced (None on create), the push a restore undoes, the directory
+    # pushed to (config_dir), and how many old pushes retention pruned - never content
     "push_id": _is_push_id,
     "previous_sha256": _is_hex_or_none,
     "restores": _is_push_id,
-    "destination": _is_name,
+    "config_dir": _is_name,
     "pruned_count": _is_count,
     # interactions (#2000): what kind of control, and a toggle's new state -
     # never what was typed into it
@@ -288,7 +288,7 @@ DETAIL_KEYS: dict[str, Callable[[object], bool]] = {
 #: Bounds on what one event may carry.
 MAX_ITEMS = 256
 
-#: Attempts kept at most - at most the level's `max_rows`, if that is smaller
+#: Attempts kept at most - at most the level's `max_kept`, if that is smaller
 #: (#2019).
 MAX_ATTEMPT_ROWS = 1000
 
@@ -467,13 +467,13 @@ class Persistence:
 @dataclass(frozen=True)
 class Bound:
     """How much of one level is kept: rows younger than `retention_days`, and
-    of those only the newest `max_rows`. The tighter bound wins."""
+    of those only the newest `max_kept`. The tighter bound wins."""
 
     retention_days: int
-    max_rows: int
+    max_kept: int
 
     def __post_init__(self) -> None:
-        if self.retention_days <= 0 or self.max_rows <= 0:
+        if self.retention_days <= 0 or self.max_kept <= 0:
             raise ValueError("activity retention needs positive days and rows")
 
 
@@ -525,7 +525,7 @@ BUCKETS = {
 
 def bucket_cap(bucket: str, bound: Bound) -> int:
     """A bucket's row cap within a level whose bound is `bound`."""
-    return min(MAX_ATTEMPT_ROWS, bound.max_rows) if bucket == "attempts" else bound.max_rows
+    return min(MAX_ATTEMPT_ROWS, bound.max_kept) if bucket == "attempts" else bound.max_kept
 
 
 #: Added by #2000. A file #1954 wrote has no `level` column; every row in it

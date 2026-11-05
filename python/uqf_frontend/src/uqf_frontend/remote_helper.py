@@ -97,8 +97,8 @@ push of its own, so a restore can itself be restored. A file changed since
 the push is a conflict: the restore is refused and nothing written.
 `history_diff` diffs before and after as text under DIFF_CAP; a binary or
 larger file is told by its sizes and sha256s only. Opening a push prunes the
-history to its bound - the newest `keep` pushes, none older than
-`keep_days` (the tighter wins) - and logs each pruned id in PRUNED_LOG, so a
+history to its bound - the newest `max_kept` pushes, none older than
+`retention_days` (the tighter wins) - and logs each pruned id in PRUNED_LOG, so a
 restore of one is refused as pruned, not as never having existed.
 
 FRAMING. `list` is sent as before: the helper's source on stdin to
@@ -792,8 +792,14 @@ def _history_root(root, create=False):
     return hfd
 
 
+#: PRUNED_LOG's reasons before #2111, each with the word it is read as now.
+#: A server's log outlives the release that wrote it, so a line in the old
+#: words is read in the new ones - never refused, never served as written.
+PRUNED_WHY_RENAMED = {"count": "row_cap", "age": "retention"}
+
+
 def _pruned_records(hfd):
-    """The pruned pushes, oldest first."""
+    """The pruned pushes, oldest first, each `why` in today's words."""
     try:
         data, _ = _read_bytes(hfd, PRUNED_LOG, MAX_MANIFEST)
     except Refusal:
@@ -805,6 +811,9 @@ def _pruned_records(hfd):
         except ValueError:
             continue
         if isinstance(record, dict) and isinstance(record.get("push_id"), str):
+            why = record.get("why")
+            if isinstance(why, str):
+                record["why"] = PRUNED_WHY_RENAMED.get(why, why)
             out.append(record)
     return out
 
@@ -982,6 +991,10 @@ def _read_manifest(pfd):
     if not isinstance(manifest.get("files"), list):
         raise Refusal("refused", "the push's manifest.json has no file list")
     manifest["reported"] = read_reported(manifest)
+    # A manifest written before #2107 says `destination`: still read, and
+    # written back as `config_dir` the next time this push's manifest is.
+    if "destination" in manifest:
+        manifest.setdefault("config_dir", manifest.pop("destination"))
     return manifest
 
 
@@ -1073,26 +1086,30 @@ def _rmtree(dfd, name):
 
 
 def _bounds(request):
-    keep = _count(request, "keep", DEFAULT_KEEP, MAX_KEEP)
-    days = _count(request, "keep_days", DEFAULT_KEEP_DAYS, MAX_KEEP_DAYS)
-    if keep < 1 or days < 1:
-        raise Refusal("bad_request", "keep and keep_days must be at least 1")
-    return keep, days
+    max_kept = _count(request, "max_kept", DEFAULT_KEEP, MAX_KEEP)
+    days = _count(request, "retention_days", DEFAULT_KEEP_DAYS, MAX_KEEP_DAYS)
+    if max_kept < 1 or days < 1:
+        raise Refusal("bad_request", "max_kept and retention_days must be at least 1")
+    return max_kept, days
 
 
-def prune(hfd, keep, keep_days, protect=(), now=None):
-    """Remove the pushes past the bound - beyond the newest `keep`, or opened
-    more than `keep_days` ago - but never one in `protect`; log each in
+def prune(hfd, max_kept, retention_days, protect=(), now=None):
+    """Remove the pushes past the bound - beyond the newest `max_kept`, or opened
+    more than `retention_days` ago - but never one in `protect`; log each in
     PRUNED_LOG and return them."""
     now = time.time() if now is None else now
     with os.scandir(hfd) as it:
         names = sorted((e.name for e in it if PUSH_ID.fullmatch(e.name)), reverse=True)
-    cutoff = now - keep_days * 86400
+    cutoff = now - retention_days * 86400
     gone = []
     for i, name in enumerate(names):
         if name in protect:
             continue
-        why = "count" if i >= keep else "age" if _push_time(name) < cutoff else None
+        # The activity history's words for the same two bounds (#2111);
+        # _pruned_records reads a line written before in the old ones.
+        why = "row_cap" if i >= max_kept else None
+        if why is None and _push_time(name) < cutoff:
+            why = "retention"
         if why is None:
             continue
         _rmtree(hfd, name)
@@ -1112,7 +1129,7 @@ def prune(hfd, keep, keep_days, protect=(), now=None):
     return gone
 
 
-def _new_push(root, push_id, fields, keep, keep_days, protect=()):
+def _new_push(root, push_id, fields, max_kept, retention_days, protect=()):
     """Create <history>/<push_id> with its manifest, then prune; the pruned."""
     hfd = _history_root(root, create=True)
     try:
@@ -1127,7 +1144,7 @@ def _new_push(root, push_id, fields, keep, keep_days, protect=()):
             _write_manifest(pfd, manifest)
         finally:
             os.close(pfd)
-        return prune(hfd, keep, keep_days, protect=(push_id, *protect))
+        return prune(hfd, max_kept, retention_days, protect=(push_id, *protect))
     finally:
         os.close(hfd)
 
@@ -1135,14 +1152,14 @@ def _new_push(root, push_id, fields, keep, keep_days, protect=()):
 def push_open(request):
     """Open a push: its history directory and manifest, then retention."""
     push_id = _push_id(request.get("push_id"))
-    parts = split_path(request.get("destination"))
+    parts = split_path(request.get("config_dir"))
     if tuple(parts[: len(UPLOAD_ROOT)]) != UPLOAD_ROOT:
         raise Refusal("unsupported", f"a push goes to {'/'.join(UPLOAD_ROOT)}/ or below it")
-    keep, keep_days = _bounds(request)
+    max_kept, retention_days = _bounds(request)
     fields = {
         "kind": "push",
         "restores": None,
-        "destination": "/".join(parts),
+        "config_dir": "/".join(parts),
         "declared": {
             "file_count": _count(request, "file_count", 0, MAX_PUSH_FILES),
             "total_bytes": _count(request, "total_bytes", 0),
@@ -1151,7 +1168,7 @@ def push_open(request):
         "target": _label(request.get("target"), "target"),
         "via": _label(request.get("via"), "via"),
     }
-    pruned = _new_push(request.get("root"), push_id, fields, keep, keep_days)
+    pruned = _new_push(request.get("root"), push_id, fields, max_kept, retention_days)
     return {"protocol": PROTOCOL, "ok": True, "push_id": push_id, "pruned": pruned}
 
 
@@ -1208,7 +1225,7 @@ def summarise(manifest):
     }
     return {
         **{k: manifest.get(k) for k in ("push_id", "kind", "restores", "created", "closed",
-                                         "user", "target", "via", "destination", "declared")},
+                                         "user", "target", "via", "config_dir", "declared")},
         "file_count": len(files),
         "total_bytes": sum(e.get("size") or 0 for e in files if e.get("state") != "failed"),
         "states": states,
@@ -1486,8 +1503,8 @@ def restore(request):
             raise Refusal("refused", f"nothing to restore - every file of push {source_id} "
                           "is as it was before it")  # fmt: skip
         push_id = _push_id(request.get("push_id"))
-        keep, keep_days = _bounds(request)
-        fields = {"kind": "restore", "restores": source_id, "destination": "/".join(UPLOAD_ROOT),
+        max_kept, retention_days = _bounds(request)
+        fields = {"kind": "restore", "restores": source_id, "config_dir": "/".join(UPLOAD_ROOT),
                   "declared": {"file_count": len(steps), "total_bytes": 0},
                   "user": _label(request.get("user"), "user"),
                   "target": _label(request.get("target"), "target"),
@@ -1520,7 +1537,7 @@ def restore(request):
             _restore_signals(previous)
         hfd = _history_root(root)
         try:
-            answer["pruned"] = prune(hfd, keep, keep_days, protect=(push_id, source_id))
+            answer["pruned"] = prune(hfd, max_kept, retention_days, protect=(push_id, source_id))
         finally:
             os.close(hfd)
         answer["push_id"] = push_id

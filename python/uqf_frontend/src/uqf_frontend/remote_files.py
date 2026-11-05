@@ -437,7 +437,7 @@ def _run(
             error, what = uncertain
             raise error(f"{exc} - {what}") from None
         raise
-    return {**answer, "root": root}
+    return {**answer, "dest": root}
 
 
 # ------------------------------------------------------------ push history (#2002)
@@ -447,20 +447,21 @@ def open_push(
     r: Any,
     name: str,
     *,
-    destination: str,
+    config_dir: str,
     file_count: int,
     total_bytes: int,
     user: str | None,
     via: str,
-    keep: int,
-    keep_days: int,
+    max_kept: int,
+    retention_days: int,
     runner: Runner = subprocess.run,
 ) -> dict[str, Any]:
     """Open a push on target `r`: its id, and the pushes retention pruned."""
-    check_path(destination)
-    payload = {"op": "push_open", "push_id": new_push_id(), "destination": destination,
+    check_path(config_dir)
+    payload = {"op": "push_open", "push_id": new_push_id(), "config_dir": config_dir,
                "file_count": file_count, "total_bytes": total_bytes, "user": user,
-               "target": name, "via": via, "keep": keep, "keep_days": keep_days}  # fmt: skip
+               "target": name, "via": via, "max_kept": max_kept,
+               "retention_days": retention_days}  # fmt: skip
     return _run(r, name, payload, runner, refusals=_HISTORY_REFUSALS)
 
 
@@ -511,8 +512,8 @@ def restore(
     dry_run: bool,
     user: str | None,
     via: str,
-    keep: int,
-    keep_days: int,
+    max_kept: int,
+    retention_days: int,
     runner: Runner = subprocess.run,
     on_begin: Callable[[], None] | None = None,
 ) -> dict[str, Any]:
@@ -522,7 +523,8 @@ def restore(
     check_push_id(restores)
     payload = {"op": "restore", "restores": restores, "dry_run": dry_run,
                "confirmed": not dry_run, "push_id": new_push_id(), "user": user,
-               "target": name, "via": via, "keep": keep, "keep_days": keep_days}  # fmt: skip
+               "target": name, "via": via, "max_kept": max_kept,
+               "retention_days": retention_days}  # fmt: skip
     return _run(
         r, name, payload, runner, on_begin=on_begin, timeout=HISTORY_TIMEOUT,
         refusals=_HISTORY_REFUSALS,
@@ -603,7 +605,7 @@ def upload(
         raise UploadOutcomeUncertain(
             f"target {name}: the helper confirmed other bytes - {_UNCERTAIN}"
         )
-    return {**answer, "root": root}
+    return {**answer, "dest": root}
 
 
 def _text(out: bytes | str | None) -> str:

@@ -11,7 +11,7 @@ function services(over: Partial<Services> = {}): Services {
     source: SOURCE,
     declared: true,
     invalid: null,
-    remote_operations_enabled: false,
+    writes_enabled: false,
     poll_seconds: 30,
     ...over,
   };
@@ -41,7 +41,7 @@ it("lists each target's ssh destination, root and environment, profile or not", 
       services({
         targets: [
           {
-            name: "prod-a",
+            target: "prod-a",
             ssh: "deploy@prod-a",
             dest: "/srv/uqf",
             remote_user: null,
@@ -52,7 +52,7 @@ it("lists each target's ssh destination, root and environment, profile or not", 
           },
           {
             // ssh and root only, no deployment profile
-            name: "uat-b",
+            target: "uat-b",
             ssh: "deploy@uat-b",
             dest: "/srv/uqf-uat",
             remote_user: "svc",
@@ -78,7 +78,7 @@ it("lists each target's ssh destination, root and environment, profile or not", 
 });
 
 it("says whether remote operations are enabled", async () => {
-  mockApi(() => ok(services({ remote_operations_enabled: true })));
+  mockApi(() => ok(services({ writes_enabled: true })));
   openServices();
   expect(
     await screen.findByText("Remote operations enabled"),
@@ -140,7 +140,7 @@ it("refreshes on demand, reading the registry again", async () => {
     services({
       targets: [
         {
-          name: "added",
+          target: "added",
           ssh: "ops@box",
           dest: "/opt/uqf",
           remote_user: null,
@@ -170,7 +170,7 @@ it("marks a target in inspection mode, and only then shows the column", async ()
       services({
         targets: [
           {
-            name: "prod-a",
+            target: "prod-a",
             ssh: "deploy@prod-a",
             dest: "/srv/uqf",
             remote_user: null,

@@ -197,7 +197,7 @@ export interface ChartField {
   maximum?: number;
 }
 export interface Health extends Pollable {
-  /** seconds the browser waits for any request - the server's UQF_FRONTEND_TIMEOUT plus headroom */
+  /** seconds the browser waits for any request - the server's UQF_FRONTEND_TIMEOUT_SECONDS plus headroom */
   request_timeout_seconds: number;
   ok: boolean;
   gateway: "up" | "reloading" | "unreachable" | "wrong_process";
@@ -326,7 +326,7 @@ export interface ProcessHealth {
 /** One deployment target - models.ServiceTargetOut, as `uqs target list
  * --json` lists it. Read from deploy_targets.toml: the server is never asked. */
 export interface ServiceTarget {
-  name: string;
+  target: string;
   ssh: string;
   dest: string;
   remote_user: string | null;
@@ -343,12 +343,12 @@ export interface Services extends Pollable {
   source: string;
   declared: boolean;
   invalid: string | null;
-  remote_operations_enabled: boolean;
+  writes_enabled: boolean;
 }
 /** One workspace - models.WorkspaceOut: `local`, or a target the uqs
  * registry declares (#2029). The browser keeps no list of its own. */
 export interface Workspace {
-  name: string;
+  target: string;
   kind: "local" | "target";
   connection: "direct" | "ssh tunnel";
   access: "read-only" | "read-write";
@@ -378,7 +378,7 @@ export interface WorkspaceStatus extends Pollable {
   target: string;
   connection: "direct" | "ssh tunnel";
   access: "read-only" | "read-write";
-  host: string | null;
+  ssh: string | null;
   endpoints: WorkspaceEndpoint[];
 }
 /** One entry of a remote directory - models.RemoteEntryOut. A symlink,
@@ -403,7 +403,7 @@ export interface Release {
  * each listing is an ssh round trip, made only when the operator asks. */
 export interface RemoteFiles {
   target: string;
-  root: string;
+  dest: string;
   path: string;
   parent: string | null;
   entries: RemoteEntry[];
@@ -895,7 +895,7 @@ export const writeToken = {
  * file written below the target's shared/config, published atomically. */
 export interface RemoteUpload {
   target: string;
-  root: string;
+  dest: string;
   path: string;
   size: number;
   sha256: string;
@@ -1056,24 +1056,24 @@ export type FileOutcome =
 
 /** POST /services/{target}/config/pushes - models.ConfigPushOpenRequest. */
 export interface ConfigPushOpenBody {
-  destination: string;
+  config_dir: string;
   file_count: number;
   total_bytes: number;
 }
 /** A push whose history retention removed - models.PrunedPushOut. */
 export interface PrunedPush {
   push_id: string;
-  why: "count" | "age";
+  why: "row_cap" | "retention";
   pruned_at: string;
 }
 /** models.ConfigPushOpenResponse: the push's id, which every upload names. */
 export interface ConfigPushOpened {
   target: string;
-  root: string;
+  dest: string;
   push_id: string;
   pruned: PrunedPush[];
-  keep: number;
-  keep_days: number;
+  max_kept: number;
+  retention_days: number;
 }
 /** What the browser saw of a file the server may never have recorded -
  * models.ConfigPushReported. */
@@ -1113,7 +1113,7 @@ export interface ConfigPushSummary {
   user?: string | null;
   target?: string | null;
   via?: string | null;
-  destination?: string | null;
+  config_dir?: string | null;
   declared?: Record<string, number> | null;
   file_count?: number | null;
   total_bytes?: number | null;
@@ -1124,7 +1124,7 @@ export interface ConfigPushSummary {
 /** GET /services/{target}/config/pushes - models.ConfigHistoryResponse. */
 export interface ConfigHistory {
   target: string;
-  root: string;
+  dest: string;
   pushes: ConfigPushSummary[];
   total: number;
   truncated: boolean;
@@ -1145,7 +1145,7 @@ export interface ConfigPush {
   user: string | null;
   target: string | null;
   via: string | null;
-  destination: string;
+  config_dir: string;
   declared: Record<string, number>;
   reported: ConfigPushReported[];
   files: ConfigPushFile[];
@@ -1153,7 +1153,7 @@ export interface ConfigPush {
 /** GET .../config/pushes/{id}, and a push closed - models.ConfigPushResponse. */
 export interface ConfigPushDetail {
   target: string;
-  root: string;
+  dest: string;
   summary: ConfigPushSummary;
   push: ConfigPush;
 }
@@ -1171,7 +1171,7 @@ export interface ConfigDiffFile {
 /** GET .../config/pushes/{id}/diff - models.ConfigDiffResponse. */
 export interface ConfigDiff {
   target: string;
-  root: string;
+  dest: string;
   push_id: string;
   diff_cap: number;
   files: ConfigDiffFile[];
@@ -1198,7 +1198,7 @@ export interface ConfigRestoreBody {
 /** A restore's plan (GET) or result (POST) - models.ConfigRestoreResponse. */
 export interface ConfigRestore {
   target: string;
-  root: string;
+  dest: string;
   restores: string;
   dry_run: boolean;
   push_id: string | null;
@@ -1388,7 +1388,7 @@ export interface ActivityPersistence {
 export interface ActivityBound {
   level: ActivityLevel;
   retention_days: number;
-  max_rows: number;
+  max_kept: number;
 }
 /** Events not in the history, by level and why - models.ActivityDrop. */
 export interface ActivityDrop {
@@ -1417,6 +1417,6 @@ export interface RemoteDeleteResult {
 }
 export interface RemoteDeleteResponse {
   target: string;
-  root: string;
+  dest: string;
   results: RemoteDeleteResult[];
 }

@@ -133,7 +133,7 @@ def _get(runner, target="box", **params):
 # ------------------------------------------------------------ gates before ssh
 
 
-def test_browsing_needs_remote_operations_enabled(served):
+def test_browsing_needs_writes_enabled(served):
     runner = Recorder()
     resp = _client(runner, writes=False, token=None).get("/services/box/files")
     assert resp.status_code == 403
