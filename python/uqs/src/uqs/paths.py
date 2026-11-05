@@ -161,6 +161,10 @@ class UqsPaths:
         return self.torqdata / "reporter.csv"
 
     @property
+    def generated_housekeeping_config(self) -> Path:
+        return self.torqdata / "housekeeping.csv"
+
+    @property
     def generated_setenv(self) -> Path:
         return self.torqdata / "setenv.sh"
 

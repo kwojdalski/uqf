@@ -99,6 +99,10 @@ VENDORED_STARTWITHALL_OVERLAY = {"monitor1": "1", "feed1": "0"}
 #: `.rp.inputcsv` once as it loads: after every settings layer, so the site's
 #: own settings cannot point it back at a reporter.csv naming tables this
 #: deployment does not publish (stack/reporter.py, #1209).
+#:
+#: housekeeping1 - uqs_housekeeping.q BEFORE housekeeping.q, which reads
+#: `.hk.inputcsv` once as it loads: this tree's rules in TORQDATA, not the
+#: site's, which tar tickerplant logs (stack/housekeeping.py, #2155).
 VENDORED_LOAD_OVERLAY: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
     "gateway1": (
         (),
@@ -116,6 +120,7 @@ VENDORED_LOAD_OVERLAY: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
         ("${UQF_ROOT}/src/metadata/metatables.q", "${UQF_SCRIPTS}/processes/torq_metatables.q"),
     ),
     "reporter1": (("${UQF_SCRIPTS}/processes/uqs_reporter_config.q",), ()),
+    "housekeeping1": (("${UQF_SCRIPTS}/processes/uqs_housekeeping.q",), ()),
 }
 
 
