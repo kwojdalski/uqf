@@ -33,14 +33,30 @@ lost a table - and nothing here can tell those days from the rest. Deleting
 is the operator's decision, made knowing which days are safely in the HDB;
 gzip already takes a log to a fraction of its size.
 
-#2150 extends this file: the full generated rule list, and compression
-scheduled through TorQ's `.cmp`, are rows appended to `housekeeping_rows`.
+HDB COMPRESSION (#2150). One more row runs `hdbcompress` once per run on the
+HDB root: TorQ's `.cmp`, driven by the declared compression policy (#2152,
+.cmp.inputcsv) through `.qtorq.compress.run` (#2146) - the checked apply, then
+the HDB reload, the same path a hand-run compression takes. Never housekeeping.q's
+`kdbzip`, which hard-codes one algorithm for every file. Which partitions are old
+enough is the policy's `minage`, table by table, so the row itself is not aged:
+`.cmp` leaves the young ones alone. The function and what housekeeping1 loads for
+it are scripts/processes/uqs_housekeeping.q and VENDORED_LOAD_OVERLAY.
+
+THE SCHEDULE. When housekeeping1 runs its rules is declared here too
+(`HOUSEKEEPING_RUNTIMES`), written beside the rules and read into `.hk.runtimes`
+by the same overlay, so `uqs config housekeeping show` shows what runs, and when.
+
+`scripts/generate/derive.py housekeeping-config` keeps a committed rendering
+(scripts/torqconfig/housekeeping.csv and housekeeping_schedule.csv) current, so
+a change to the rules is reviewed as the file housekeeping1 will read.
 """
 
 from __future__ import annotations
 
 import csv
 import io
+import re
+from collections.abc import Mapping
 from pathlib import Path
 
 from uqs.paths import UqsPaths
@@ -75,12 +91,55 @@ def config_path(paths: UqsPaths) -> Path:
     return paths.torqdata / "housekeeping.csv"
 
 
+#: The rule function for the HDB, defined at the root by
+#: scripts/processes/uqs_housekeeping.q: TorQ's `.cmp` through
+#: `.qtorq.compress.run`, by the declared compression policy.
+COMPRESS_FUNCTION = "hdbcompress"
+
+#: The HDB root's name under TORQDATA (UqsPaths.hdb_dir, TorQ's KDBHDB).
+#: housekeeping's find lists a directory's entries, so the HDB is found as
+#: the entry of TORQDATA with this name.
+HDB_DIR_NAME = "hdb"
+
+#: When housekeeping1 runs every rule, each day: `.hk.runtimes`, times of day
+#: on the process's own clock (`.proc.cd`), TorQ's settings/housekeeping.q
+#: default. The small hours: after end of day has written yesterday's
+#: partition, before the desk is in.
+HOUSEKEEPING_RUNTIMES: tuple[str, ...] = ("02:00:00",)
+
+#: The schedule file's one column, as uqs_housekeeping.q reads it.
+SCHEDULE_FIELDS = ("runtime",)
+
+#: What housekeeping1 loads BEFORE housekeeping.q (VENDORED_LOAD_OVERLAY in
+#: stack/procs.py): this tree's rules and schedule (uqs_housekeeping.q), then
+#: what the compression rule needs - the policy's path set and TorQ's
+#: common/compress.q loaded again to read it (.cmp reads it once, as the common
+#: code loads, before any file named here), and the .qetl.log and .qtorq
+#: reload_hdb torq_compress.q's run uses. Before, not after: housekeeping.q
+#: runs its rules as it loads when given -runnow.
+LOAD_BEFORE = (
+    "${UQF_SCRIPTS}/processes/uqs_housekeeping.q",
+    "${UQF_SCRIPTS}/processes/uqs_compression_config.q",
+    "${KDBCODE}/common/compress.q",
+    "${UQF_ROOT}/src/etl/core/log.q",
+    "${UQF_SCRIPTS}/processes/torq_pipeline.q",
+    "${UQF_SCRIPTS}/processes/torq_compress.q",
+)
+
+
+def schedule_path(paths: UqsPaths) -> Path:
+    """The generated schedule, in TORQDATA beside the rules (config_path)."""
+    return paths.torqdata / "housekeeping_schedule.csv"
+
+
 def housekeeping_rows() -> list[dict[str, str]]:
     """This tree's rules, as the CSV's rows.
 
     Process logs as the starter pack keeps them: gzipped after ten days, the
     gzipped ones removed after thirty. Tickerplant log directories gzipped
-    past the retention window, and nothing else done to them.
+    past the retention window, and nothing else done to them. The HDB brought
+    to the compression policy, last: a failure there is logged and stops no
+    other rule, and the logs are tidied first whatever it does.
     """
     if TPLOG_REPLAY_RETENTION_DAYS < 1:
         raise ValueError("TPLOG_REPLAY_RETENTION_DAYS must be at least 1: today's log is live")
@@ -94,14 +153,79 @@ def housekeeping_rows() -> list[dict[str, str]]:
             "age": str(TPLOG_REPLAY_RETENTION_DAYS),
             "checkfordirectory": "1",
         },
+        # find's `-mmin +0`: the HDB root once nothing has written to it for
+        # a minute - an end of day hours before the run, normally. The
+        # policy ages each table's partitions; a whole-day `age` here would
+        # skip a root that every end of day touches (GNU find's `-mtime +0`
+        # is more than 24 hours).
+        {
+            "function": COMPRESS_FUNCTION,
+            "path": "{TORQDATA}/",
+            "match": HDB_DIR_NAME,
+            "age": "0",
+            "agemin": "1",
+            "checkfordirectory": "1",
+        },
     ]
 
 
-def write_housekeeping_config(paths: UqsPaths) -> None:
-    """Write the generated copy housekeeping1 reads (see the module docstring)."""
+def render_housekeeping_csv() -> str:
+    """The rules as housekeeping.q reads them."""
     f = io.StringIO()
     # Plain \n, as process.csv: q's 0: reads the file.
     writer = csv.DictWriter(f, fieldnames=HOUSEKEEPING_FIELDS, restval="", lineterminator="\n")
     writer.writeheader()
     writer.writerows(housekeeping_rows())
-    generated.write_text(config_path(paths), f.getvalue())
+    return f.getvalue()
+
+
+def render_housekeeping_schedule() -> str:
+    """The schedule as uqs_housekeeping.q reads it into `.hk.runtimes`."""
+    if not HOUSEKEEPING_RUNTIMES:
+        raise ValueError("HOUSEKEEPING_RUNTIMES is empty: housekeeping1 would never run")
+    for runtime in HOUSEKEEPING_RUNTIMES:
+        hh, mm, ss = (int(part) for part in runtime.split(":"))
+        if not (0 <= hh < 24 and 0 <= mm < 60 and 0 <= ss < 60):
+            raise ValueError(f"housekeeping runtime {runtime!r} is not a time of day")
+    return "\n".join((*SCHEDULE_FIELDS, *HOUSEKEEPING_RUNTIMES)) + "\n"
+
+
+def write_housekeeping_config(paths: UqsPaths) -> None:
+    """Write the generated copies housekeeping1 reads (see the module docstring)."""
+    generated.write_text(config_path(paths), render_housekeeping_csv())
+    generated.write_text(schedule_path(paths), render_housekeeping_schedule())
+
+
+def effective_schedule(
+    paths: UqsPaths, env: Mapping[str, str], localtime: bool = True
+) -> list[dict[str, str]]:
+    """What housekeeping1 runs, and when: `uqs config housekeeping show`'s rows.
+
+    The generated files in TORQDATA, which housekeeping1 reads, where bootstrap
+    has written them; before it has, what it will write. One row per rule, in
+    the order housekeeping.q runs them, its `{VAR}` placeholders resolved
+    against `env` as TorQ's .rmvr.removeenvvar resolves them. `localtime` is
+    housekeeping1's process.csv column: whether its clock, and so each
+    runtime, is local time or UTC.
+    """
+    rules = config_path(paths)
+    schedule = schedule_path(paths)
+    rules_text = rules.read_text() if rules.is_file() else render_housekeeping_csv()
+    schedule_text = schedule.read_text() if schedule.is_file() else render_housekeeping_schedule()
+    zone = "local" if localtime else "UTC"
+    runs = ", ".join(f"daily {t} {zone}" for t in schedule_text.split()[1:])
+
+    def resolved(text: str) -> str:
+        return re.sub(r"\{(\w+)\}", lambda m: env.get(m.group(1), m.group(0)), text)
+
+    return [
+        {
+            "runs": runs,
+            "function": row["function"],
+            "on": "directories" if row["checkfordirectory"] == "1" else "files",
+            "matching": resolved(row["path"]) + row["match"],
+            "except": row["exclude"],
+            "older_than": f"{row['age']} {'minutes' if row['agemin'] == '1' else 'days'}",
+        }
+        for row in csv.DictReader(io.StringIO(rules_text))
+    ]
