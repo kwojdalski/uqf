@@ -141,7 +141,7 @@ Only mounted views poll. Each successful response supplies `poll_seconds`;
 requests are scheduled after completion, so slow HDB calls never overlap.
 The browser cancels requests on navigation, replacement or refresh, and ignores
 late responses. A browser request times out after
-`UQF_FRONTEND_TIMEOUT` plus 15 seconds, which `/health` serves as
+`UQF_FRONTEND_TIMEOUT_SECONDS` plus 15 seconds, which `/health` serves as
 `request_timeout_seconds` (45 seconds with the default 30 until the first
 answer); start/stop/restart are killed 5 seconds sooner, so the server's
 refusal arrives before the browser gives up.

@@ -336,6 +336,27 @@ def prefix_problems(reads: dict[str, list[str]]) -> dict[str, list[str]]:
     }
 
 
+#: Words that make a variable's value a length of time, as `_` tokens of its
+#: name. `UQF_FRONTEND_TIMEOUT` held seconds and said so nowhere: an operator
+#: who set `UQF_FRONTEND_TIMEOUT_SECONDS` by analogy with
+#: `UQF_HDB_RELOAD_SECONDS` was ignored without a word (#2111).
+DURATION_WORDS = frozenset(
+    {"TIMEOUT", "INTERVAL", "RETENTION", "DELAY", "TTL", "PERIOD", "WAIT", "BACKOFF", "DURATION"}
+)
+#: The unit a duration variable's name ends in.
+DURATION_UNITS = ("MS", "SECONDS", "MINUTES", "HOURS", "DAYS")
+
+
+def unitless_durations(names: set[str]) -> list[str]:
+    """The variables in `names` that hold a length of time - by a word in
+    DURATION_WORDS - and do not end in one of DURATION_UNITS."""
+    return sorted(
+        name
+        for name in names
+        if DURATION_WORDS & set(name.split("_")) and name.rsplit("_", 1)[-1] not in DURATION_UNITS
+    )
+
+
 def run(root: Path) -> int:
     """Report every disagreement between the page and the code under `root`;
     the exit status. The findings are grouped by direction, each group with
@@ -366,6 +387,17 @@ def run(root: Path) -> int:
     )
 
     problems = 0
+    unitless = unitless_durations(set(reads) | produced | exact)
+    if unitless:
+        problems += len(unitless)
+        print("A duration variable whose name does not say its unit:", file=sys.stderr)
+        for name in unitless:
+            print(f"  {name}", file=sys.stderr)
+        print(
+            f"\nEnd it in one of {', '.join('_' + u for u in DURATION_UNITS)} (#2111), and refuse "
+            "the old name in uqs.renamed_env.RENAMED_ENV.",
+            file=sys.stderr,
+        )
     misprefixed = prefix_problems(reads)
     if misprefixed:
         problems += len(misprefixed)

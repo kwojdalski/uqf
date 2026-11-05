@@ -65,8 +65,8 @@ function fakePushes(open?: () => Promise<never>, closeFails = false) {
         root: "/srv/uqf",
         push_id: PUSH,
         pruned: [],
-        keep: 50,
-        keep_days: 90,
+        max_kept: 50,
+        retention_days: 90,
       });
     },
     close: (_target, push, reported) => {
@@ -690,8 +690,8 @@ it("honours a cancel pressed while the push is being opened: nothing is sent, an
         root: "/srv/uqf",
         push_id: PUSH,
         pruned: [],
-        keep: 50,
-        keep_days: 90,
+        max_kept: 50,
+        retention_days: 90,
       };
     },
     close: (_target, push, reported) => {
