@@ -20,6 +20,10 @@ back instead of recomputing it:
   native start    the site's process registry the publisher is registered in,
                   and whether its `start all` starts it (native.py, #1845).
 
+The file spells the stack id `stack.base_port` and the publisher's process
+`publisher.process`, as every --json document does (#2122); a file written
+before says `stack.id` and `publisher.procname`, and still loads.
+
 A directory per attachment holds `attachment.json` (this) and `manifest.json`
 (manifest.py). The directory is `$UQS_ATTACH_DIR`, else `$UQS_DATA_ROOT` or the
 checkout's `output/`, plus `attachments/`.
@@ -189,6 +193,8 @@ def names(root: Path | None = None) -> list[str]:
 def to_json(att: Attachment) -> dict:
     data = asdict(att)
     data["schema"] = SCHEMA_VERSION
+    data["stack"]["base_port"] = data["stack"].pop("id")
+    data["publisher"]["process"] = data["publisher"].pop("procname")
     data["tables"] = [
         {"name": t.name, "columns": t.as_pairs(), "sort": t.sort_pairs()} for t in att.tables
     ]
@@ -204,13 +210,18 @@ def from_json(data: dict) -> Attachment:
             "written by another uqs; plan it again"
         )
     stack = dict(data["stack"])
+    stack["id"] = attach_state.stored_base_port(data)
+    stack.pop("base_port", None)
     stack["consumers"] = tuple(stack.get("consumers", ()))
+    publisher = dict(data["publisher"])
+    publisher["procname"] = attach_state.stored_publisher(data)
+    publisher.pop("process", None)
     if data.get("persist") not in PERSIST_MODES:
         raise AttachmentError(f"persist must be one of {PERSIST_MODES}")
     return Attachment(
         name=data["name"],
         stack=Stack(**stack),
-        publisher=Publisher(**data["publisher"]),
+        publisher=Publisher(**publisher),
         tables=tuple(
             TableSpec(
                 t["name"],

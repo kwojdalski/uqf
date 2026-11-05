@@ -82,7 +82,7 @@ def widen_to_grain(ledger_value: str, align_ns: int | None, *, upper: bool = Fal
 
 GapsJson = json_opt(
     '{"job", "gaps": [{range_from, range_to}], "sessions", "refillable": bool, '
-    '"refills": [{worker, range_from, range_to, command}], "today_not_refillable": bool}'
+    '"refills": [{job, range_from, range_to, command}], "today_not_refillable": bool}'
 )
 
 

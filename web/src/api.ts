@@ -174,8 +174,8 @@ export interface CompareResult {
   outcome: CompareOutcome;
   left: string;
   right: string;
-  from: string;
-  to: string;
+  range_from: string;
+  range_to: string;
   limit: number;
   filters: string[];
   source_version: string;
@@ -387,7 +387,8 @@ export interface RemoteEntry {
   name: string;
   kind: "dir" | "file" | "symlink" | "special" | "unknown";
   size: number | null;
-  mtime: number | null;
+  /** Last modified: ISO-8601, UTC to the nanosecond. */
+  mtime: string | null;
   blocked: boolean;
   reason: string | null;
 }

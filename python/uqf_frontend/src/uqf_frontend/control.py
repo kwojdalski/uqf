@@ -32,7 +32,6 @@ remains, where the person running it is at a terminal on the host.
 
 from __future__ import annotations
 
-import datetime as dt
 import re
 import time
 from collections.abc import Callable, Iterator
@@ -41,6 +40,7 @@ from contextvars import ContextVar
 from dataclasses import dataclass
 from typing import Any
 
+from uqf_frontend import instants
 from uqf_frontend.config import Settings
 from uqf_frontend.errors import StackBusy, ValidationFailed, WritesDisabled
 from uqs.generated.q_facts import CFG_ENV_LAYER, CFG_OVERRIDE_LAYER
@@ -469,8 +469,11 @@ def start_backfill(
     for name, raw in (("range_from", range_from), ("range_to", range_to)):
         if not raw:
             raise ValidationFailed(f"{name} is required - a backfill with no range is not a range")
-    bound_from = _require_utc("range_from", range_from)
-    bound_to = _require_utc("range_to", range_to)
+    # Exact or refused (instants.to_datetime): `uqs job backfill` takes a
+    # datetime, and a bound 789 ns short of the one sent would be recorded as
+    # covered for the wrong window.
+    bound_from = instants.bound("range_from", range_from)
+    bound_to = instants.bound("range_to", range_to)
 
     from uqf_frontend.errors import BackfillNotStarted
     from uqs.attach import live as _registers_live_check  # noqa: F401 - the start gate's (#1651)
@@ -511,35 +514,3 @@ def start_backfill(
         "process": procname,
         "status_path": "/ops/backfill",
     }
-
-
-def _require_utc(name: str, raw: str) -> dt.datetime:
-    """The bound parsed, or a refusal: no explicit offset, or finer than a
-    microsecond.
-
-    Identical reasoning to the coverage endpoint's: a naive timestamp is read
-    as the server's local time, and a backfill an hour wide of where the
-    caller meant records coverage for the wrong window. And the rule
-    `uqs job backfill` applies to its own bounds (uqs.timerange): a datetime
-    stops at the microsecond, and `fromisoformat` would keep the first six
-    digits of a finer fraction without a word - a range 789 ns short of the
-    one the caller sent, recorded as covered.
-    """
-    from uqs.timefmt import finer_than_a_microsecond
-
-    if finer_than_a_microsecond(raw):
-        raise ValidationFailed(
-            f"{name} {raw!r} is finer than a microsecond, which this cannot carry"
-        )
-    try:
-        parsed = dt.datetime.fromisoformat(raw)
-    except ValueError:
-        raise ValidationFailed(
-            f"{name} must be ISO-8601, e.g. 2026-09-11T00:00:00Z; got {raw!r}"
-        ) from None
-    if parsed.tzinfo is None:
-        raise ValidationFailed(
-            f"{name} needs an explicit timezone offset; {raw!r} would be read as "
-            "the server's local time and cover the wrong window"
-        )
-    return parsed

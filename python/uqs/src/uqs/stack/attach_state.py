@@ -104,7 +104,7 @@ def _scan(root: Path | None = None) -> tuple[list[Published], list[str]]:
             # read, not is_file first: is_file says False for a folder this
             # user may not enter, which would make that attachment invisible
             cfg = json.loads(cfg_path.read_text())
-            procname, stack_id = cfg["publisher"]["procname"], int(cfg["stack"]["id"])
+            procname, stack_id = stored_publisher(cfg), stored_base_port(cfg)
             if not isinstance(procname, str) or not procname:
                 raise ValueError(f"publisher.procname is {procname!r}")
         except FileNotFoundError, NotADirectoryError:
@@ -123,6 +123,20 @@ def _scan(root: Path | None = None) -> tuple[list[Published], list[str]]:
 #: Names that are always this machine. uqs.attach.facts holds the same three;
 #: `stack` may not import `attach`.
 _LOOPBACK = ("localhost", "127.0.0.1", "::1")
+
+
+def stored_base_port(cfg: dict) -> int:
+    """An attachment.json's stack base port: `stack.base_port`, or `stack.id` in a
+    file written before #2122."""
+    stack = cfg["stack"]
+    return int(stack["base_port"] if "base_port" in stack else stack["id"])
+
+
+def stored_publisher(cfg: dict) -> str:
+    """An attachment.json's publisher process: `publisher.process`, or
+    `publisher.procname` in a file written before #2122."""
+    pub = cfg["publisher"]
+    return pub["process"] if "process" in pub else pub["procname"]
 
 
 def _remote_discovery(cfg: dict) -> str:

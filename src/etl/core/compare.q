@@ -145,8 +145,8 @@
 / every read is `h (name; args...)`.
 / @param h the side's gateway
 / @param tbl the table
-/ @param req a dict from, to, filters (parsed), limit, source_version (` for
-/   none: coverage not checked), partition (` for none)
+/ @param req a dict range_from, range_to, filters (parsed), limit,
+/   source_version (` for none: coverage not checked), partition (` for none)
 / @return a dict available, reason, exists, schema (c, t), rows, truncated,
 /   coverage ((::) when not checked, else a dict covered, gaps), filter_absent
 /   (the filter columns the table lacks on this side; when any, the side is
@@ -163,7 +163,7 @@
     if[count lack; :none,`exists`schema`filter_absent!(1b;m;lack)];
     fl:.qetl.compare.browse_filters[m;req`filters];
     lim:req`limit;
-    got:@[h;(`.uqf.browse;tbl;`time`time,fl 0;`ge`lt,fl 1;(req`from;req`to),fl 2;lim+1;.qetl.compare.tiers);{[e] (`failed;e)}];
+    got:@[h;(`.uqf.browse;tbl;`time`time,fl 0;`ge`lt,fl 1;(req`range_from;req`range_to),fl 2;lim+1;.qetl.compare.tiers);{[e] (`failed;e)}];
     if[(0h=type got) and `failed~first got; :none,`available`reason`exists`schema!(0b;"reading ",string[tbl],"'s rows failed: ",last got;1b;m)];
     rows:0!got`rows;
     trimmed:(lim<count rows) or (count[rows]>=got`cap) and got[`cap]<=lim;
@@ -181,7 +181,7 @@
 .qetl.compare.coverage:{[h;tbl;req]
     c:@[h;(`.qetl.coverage.claims;tbl;req`partition;req`source_version;.z.p);{[e] (`failed;e)}];
     if[(0h=type c) and `failed~first c; :"reading ",string[tbl],"'s coverage failed: ",last c];
-    `covered`gaps!(.qetl.coverage.compose c;.qetl.coverage.gaps[req`from;req`to;c])}
+    `covered`gaps!(.qetl.coverage.compose c;.qetl.coverage.gaps[req`range_from;req`range_to;c])}
 
 / ------------------------------------------------------------ THE VERDICT
 
@@ -363,15 +363,15 @@
 /   handle-like function (a fixture) under `h
 / @param right the right endpoint
 / @param tabs the tables, symbols
-/ @param req a dict from, to, filters (the texts, as typed), limit,
+/ @param req a dict range_from, range_to, filters (the texts, as typed), limit,
 /   source_version (` for none), partition (` for none), login ("user:password")
-/ @return a dict left, right (the sides' names), from, to, limit, filters,
+/ @return a dict left, right (the sides' names), range_from, range_to, limit, filters,
 /   source_version, tables (one verdict per table), outcome (the first of
 /   .qetl.compare.outcomes any table reached)
 / @throws error naming a filter that is not COLUMN OP VALUE, a limit that is
 /   not positive, or an empty window
 .qetl.compare.run:{[left;right;tabs;req]
-    if[not req[`to]>req`from; '"the window must be non-empty: --from before --to"];
+    if[not req[`range_to]>req`range_from; '"the window must be non-empty: --from before --to"];
     if[not 0<req`limit; '"the row limit must be positive"];
     tabs:(),tabs;
     if[0=count tabs; '"name at least one table"];
@@ -384,7 +384,7 @@
         .qetl.compare.verdict[tbl;names;s 0;s 1;r2`limit]}[hs;names;r2] each tabs;
     {[h] if[-6h=type h; @[hclose;h;{[e] ::}]]} each hs;
     worst:.qetl.compare.outcomes min .qetl.compare.outcomes?one`outcome;
-    `left`right`from`to`limit`filters`source_version`partition`tables`outcome!(
-        names 0;names 1;req`from;req`to;req`limit;req`filters;req`source_version;req`partition;one;worst)}
+    `left`right`range_from`range_to`limit`filters`source_version`partition`tables`outcome!(
+        names 0;names 1;req`range_from;req`range_to;req`limit;req`filters;req`source_version;req`partition;one;worst)}
 
 \d .

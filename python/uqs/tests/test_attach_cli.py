@@ -484,7 +484,7 @@ def test_the_credential_is_redacted_in_every_output_mode(world, monkeypatch, mod
         assert data["plan"]["stack"]["password_env"] == "ATTACH_PW"
         assert ("debug" in data) is debug
     if "--json" in mode:
-        gw = next(c for c in data["plan"]["components"] if c["procname"] == "gw1")
+        gw = next(c for c in data["plan"]["components"] if c["process"] == "gw1")
         assert gw["endpoint"] == ":testhost:6007:admin:***"
         if debug:
             assert any(line.startswith("configuration: new") for line in data["debug"])
