@@ -3,9 +3,10 @@
 
 CI is the full, clean run: a Linux checkout with nothing left over, PeachQ as
 its q. "Hooks and static gates" runs every hook over every file on every run.
-The four other groups are expensive and irrelevant to some changes, so a pull
-request runs each only when it changes what that group checks, and runs the
-group COMPLETE - CI never selects single tests (the commit hooks do):
+The four other groups are expensive and irrelevant to some changes, so a run
+that is not full runs each only when the change reaches what that group checks
+(and a pull request runs only the browser application of them, below), and
+runs the group COMPLETE - CI never selects single tests (the commit hooks do):
 
 * "Docs links" (`docs`) renders docs/ with Quarto, writing the q API pages
   from src/'s qDoc comments first - minutes, and the critical path. It runs
@@ -50,11 +51,20 @@ A skipped group counts as passed for "Repository checks", the one required
 check, only when this said to skip it: a skip with no decision behind it - this
 failed, or the job did not run although this asked for it - fails that check.
 
+A PULL REQUEST RUNS NONE OF THE TEST SUITES (#2167): "Docs links", "PeachQ q
+tests" and "PeachQ Python tests" are left to master and the nightly run
+(ON_MASTER), whatever the change reaches. Its hooks already ran the reached
+tests at push, and its KDB-X attestation the q gates; the suites cost minutes
+on every pull request and found little those had not. What a pull request
+still runs: the author check, "Hooks and static gates" and, for a web/ change,
+"Browser application". Label it `ci:full` to run everything.
+
 FULL MODE runs every group, whatever changed:
 
 * every push - CI runs on pushes to master alone, so master always runs
   everything - and release.yml's run (a called workflow sees its caller's
   event: a tag push, or a dispatch whose `full` input defaults true there);
+* the nightly schedule, on master;
 * workflow_dispatch with `full: true`;
 * a pull request labelled `ci:full`.
 
@@ -136,6 +146,9 @@ GROUPS = {
     "frontend": "Browser application",
     "python": "PeachQ Python tests",
 }
+#: The groups a pull request leaves to master and the nightly run (#2167).
+ON_MASTER = ("docs", "q", "python")
+
 #: What a skipped group's line says.
 SKIPPED = {
     "docs": "nothing it renders or links changed",
@@ -303,9 +316,9 @@ def full_reason(event: str, labels: Iterable[str], full_input: bool) -> str | No
         return f"the pull request is labelled {FULL_LABEL}" if FULL_LABEL in labels else None
     if event == "workflow_dispatch":
         return "workflow_dispatch with full: true" if full_input else None
-    # A push (to master; release.yml calls this on a tag push too) or
-    # anything else: everything.
-    return f"a {event} - every push runs every job"
+    # A push (to master; release.yml calls this on a tag push too), the
+    # nightly schedule, or anything else: everything.
+    return f"a {event} - every push and the nightly run run every job"
 
 
 def _python_why(path: str) -> str:
@@ -359,6 +372,19 @@ def decide(
     return Scope(False, *(bool(why[g]) for g in GROUPS), why=why)
 
 
+def for_pull_request(scope: Scope) -> Scope:
+    """`scope` as a pull request without `ci:full` runs it: no ON_MASTER group.
+    What the change reaches is still said, as what master will run."""
+    for group in ON_MASTER:
+        reached = scope.why.get(group, [])
+        setattr(scope, group, False)
+        scope.why[group] = [
+            f"a pull request leaves it to master and the nightly run (label {FULL_LABEL} "
+            f"to run it here); the change reaches it through {len(reached)} path(s)"
+        ]
+    return scope
+
+
 def report(scope: Scope, changes: int) -> str:
     lines = [f"### CI scope ({'full' if scope.full else f'{changes} changed path(s)'})", ""]
     lines.append("- **Hooks and static gates**: runs - every hook, every file, every run")
@@ -387,6 +413,8 @@ def main(argv: list[str] | None = None) -> int:
     full = full_reason(args.event, labels, args.full_input.lower() == "true")
     changes = [] if full else changed(args.base, args.head)
     scope = decide(changes, full)
+    if args.event == "pull_request" and not full:
+        scope = for_pull_request(scope)
     text = report(scope, len(changes))
     print(text, end="")
     print(" ".join(f"{k}={v}" for k, v in scope.outputs().items()))

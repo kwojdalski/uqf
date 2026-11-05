@@ -181,17 +181,20 @@ uv run pytest tests/qrun/test_external_smoke.py -m external --smoke-targets HOST
 ### Where each check runs
 
 Each check runs in one place, chosen by what it needs (#1879). A commit's hooks
-are **fast**, a push's are **targeted test suites**, and CI is the **full,
-clean** run - a Linux checkout with nothing left over, PeachQ as its q.
+are **fast**, a push's are **targeted test suites**, a pull request's CI runs
+the **gates and attestation**, and master's CI - every push, and nightly - is
+the **full, clean** run: a Linux checkout with nothing left over, PeachQ as its
+q.
 
-  | Check                                                             | Before #1965 | Now                |
-  | ---                                                               | ---          | ---                |
-  | format, lint, `ty`, static gates, generated-file checks, `q-docs` | commit       | commit             |
-  | `python-tests` (the Python tests the change reaches)              | commit       | push               |
-  | `q-tests`, `q-coverage` (the q suites the branch reaches, KDB-X)  | commit       | push               |
-  | `peachq-push` (changed q test files on PeachQ)                    | -            | push               |
-  | whole Python suite, whole q suite on PeachQ, docs render          | CI           | CI                 |
-  | `regenerate-merged` (generated files a merge kept one side of)    | -            | after merge/rebase |
+  | Check                                                             | Before #1965 | Now                      |
+  | ---                                                               | ---          | ---                      |
+  | format, lint, `ty`, static gates, generated-file checks, `q-docs` | commit       | commit, and every CI run |
+  | `python-tests` (the Python tests the change reaches)              | commit       | push                     |
+  | `q-tests`, `q-coverage` (the q suites the branch reaches, KDB-X)  | commit       | push                     |
+  | `peachq-push` (changed q test files on PeachQ)                    | -            | push                     |
+  | KDB-X attestation check, browser application (for `web/`)         | CI           | pull request CI          |
+  | whole Python suite, whole q suite on PeachQ, docs render          | CI           | master CI and nightly    |
+  | `regenerate-merged` (generated files a merge kept one side of)    | -            | after merge/rebase       |
 
 - **Commit hooks.** The static hooks run on what is staged, in seconds.
 
@@ -224,17 +227,17 @@ clean** run - a Linux checkout with nothing left over, PeachQ as its q.
   CI and Kodiak never merge locally and need neither. A clone without the driver
   merges these files as text, as before.
 
-- **CI.** Every hook again over every file, on every run. Then each complete
-  group the change can affect (#1955): the whole Python suite in four PeachQ
-  shards, the whole q suite on PeachQ, the docs render, and the browser
-  application's check and build. `scripts/dev/ci_scope.py` decides, and says why -
-  for each group run and each skipped - in the "Scope" job's summary. The Python
-  suite runs for every change but a `web/` file no Python file names (a `.q`
-  file starts q in Python tests, a document's q blocks run as one); the browser
-  application only for `web/`; and every group for the shared test configuration
-  (`conftest.py`, `pyproject.toml`, `uv.lock`, the workflow and its planner) or
-  a path in no known area. "Repository checks" counts a skipped job as passed
-  only when Scope said to skip it.
+- **CI.** Every hook again over every file, on every run. On a pull request that
+  is all, beside the author check, the KDB-X attestation check and, for a `web/`
+  change, the browser application's check and build (#2167): its push hooks
+  already ran the tests it reaches. On every push to master and nightly (and on
+  a pull request labelled `ci:full`, or `gh workflow run ci.yml -f full=true`)
+  every group runs too: the whole Python suite in four PeachQ shards, the whole
+  q suite on PeachQ, the docs render, and the browser application.
+  `scripts/dev/ci_scope.py` decides, and says why - for each group run and each
+  skipped, and on a pull request what master will run - in the "Scope" job's
+  summary. "Repository checks" counts a skipped job as passed only when Scope
+  said to skip it.
 
 - **KDB-X attestation.** The KDB-X gates run locally
   (`uv run python scripts/dev/attest_kdbx.py`), and CI checks the trailer.
