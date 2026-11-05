@@ -36,6 +36,7 @@ from uqs.stack.dqe import write_dqe_config
 from uqs.stack.env import build_env, interpreter_env, with_interpreter
 from uqs.stack.hdb_fill import fill_hdb_partitions
 from uqs.stack.hdb_types import declared_schema
+from uqs.stack.housekeeping import write_housekeeping_config
 from uqs.stack.launcher import torq_launcher
 from uqs.stack.procs import effective_process_rows
 from uqs.stack.reporter import write_reporter_config
@@ -73,6 +74,9 @@ def bootstrap(
         # validated against this deployment, not the site's reporter.csv (stack/reporter.py).
         write_dqe_config(paths)
         write_reporter_config(paths, (r["procname"] for r in rows), selected)
+        # And housekeeping1's rules, which keep tickerplant logs replayable
+        # rather than the site's, which tar them (stack/housekeeping.py, #2155).
+        write_housekeeping_config(paths)
 
     # TorQ's .cmp policy, copied beside the rest of the generated files for
     # scripts/processes/uqs_compression_config.q to point it at (stack/compression.py).

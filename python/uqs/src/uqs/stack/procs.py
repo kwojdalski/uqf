@@ -95,10 +95,10 @@ VENDORED_STARTWITHALL_OVERLAY = {"monitor1": "1", "feed1": "0"}
 #: after its own script, and uqs_dqe_config.q BEFORE it, because dqe.q reads
 #: `.dqe.configcsv` once as it loads (stack/dqe.py). hdb2 is not a DQE target.
 #:
-#: reporter1 - uqs_reporter_config.q BEFORE reporter.q, which reads
-#: `.rp.inputcsv` once as it loads: after every settings layer, so the site's
-#: own settings cannot point it back at a reporter.csv naming tables this
-#: deployment does not publish (stack/reporter.py, #1209).
+#: reporter1 and housekeeping1 - uqs_reporter_config.q / uqs_housekeeping.q
+#: BEFORE reporter.q / housekeeping.q, each reading `.rp.inputcsv` / `.hk.inputcsv`
+#: once as it loads, after every settings layer: the site's settings cannot point
+#: it back at the site's file (stack/reporter.py #1209, stack/housekeeping.py #2155).
 VENDORED_LOAD_OVERLAY: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
     "gateway1": (
         (),
@@ -116,6 +116,7 @@ VENDORED_LOAD_OVERLAY: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
         ("${UQF_ROOT}/src/metadata/metatables.q", "${UQF_SCRIPTS}/processes/torq_metatables.q"),
     ),
     "reporter1": (("${UQF_SCRIPTS}/processes/uqs_reporter_config.q",), ()),
+    "housekeeping1": (("${UQF_SCRIPTS}/processes/uqs_housekeeping.q",), ()),
 }
 
 
