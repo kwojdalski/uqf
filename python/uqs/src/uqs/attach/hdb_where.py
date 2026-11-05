@@ -35,6 +35,7 @@ from uqs.attach.config import Attachment, AttachmentError
 from uqs.attach.facts import Host
 from uqs.attach.remote import Endpoint, Ipc, IpcError
 from uqs.attach.topology import Observation, Proc, observe
+from uqs.stack.hdb_alter import reader_row
 
 #: This machine, as the resolution asks about it (a test replaces it).
 HOST = Host()
@@ -153,23 +154,23 @@ def refuse_running_writers(where: AttachedHdb, ipc: Ipc, root: Path | None = Non
             )
 
 
-def reload_readers(where: AttachedHdb, ipc: Ipc) -> list[dict[str, str]]:
+def reload_readers(where: AttachedHdb, ipc: Ipc) -> list[dict[str, Any]]:
     """Ask each HDB reader serving the directory to reload; one row per reader
-    discovery lists, `ok` "yes", "no" or "skipped" (serves something else)."""
+    discovery lists: `ok` whether it reloaded, `outcome` "reloaded", "failed"
+    or "skipped" (serves something else)."""
     if where.observation is None or not where.observation.discovery.up:
-        return [{"procname": "?", "ok": "no", "detail": "the stack does not answer"}]
+        return [reader_row("?", "failed", "the stack does not answer")]
     out = []
     hdb = canonical(where.hdb) if where.ssh is None else Path(where.hdb)
     for r in readers_of(where.att, where.observation, hdb, ipc):
         if not r.serves:
-            out.append({"procname": r.procname, "ok": "skipped", "detail": r.detail})
+            out.append(reader_row(r.procname, "skipped", r.detail))
             continue
         try:
             said = ipc.call(Endpoint(r.procname, where.att.stack.host, r.port), "hdb_reload", {})
         except IpcError as exc:
-            out.append({"procname": r.procname, "ok": "no", "detail": exc.reason})
+            out.append(reader_row(r.procname, "failed", exc.reason))
             continue
-        ok = said.get("status") == "reloaded"
-        out.append({"procname": r.procname, "ok": "yes" if ok else "no",
-                    "detail": str(said.get("detail", ""))})  # fmt: skip
+        outcome = "reloaded" if said.get("status") == "reloaded" else "failed"
+        out.append(reader_row(r.procname, outcome, str(said.get("detail", ""))))
     return out

@@ -184,14 +184,14 @@ class Plan:
             "attachment": att.name,
             "ok": self.ok,
             "stack": {
-                "id": att.stack.id,
+                "base_port": att.stack.id,
                 "host": att.stack.host,
                 "discovery": f"{att.stack.discovery_host}:{att.stack.discovery_port}",
                 "tickerplant": att.stack.tickerplant,
                 "user": att.stack.user,
                 "password_env": att.stack.password_env or "(TorQ default credential)",
             },
-            "job": {"name": att.publisher.job, "procname": att.publisher.procname, **att.origin},
+            "job": {"name": att.publisher.job, "process": att.publisher.procname, **att.origin},
             "publisher_port": self.publisher_port.port,
             "tables": [
                 {"name": t.name, "columns": t.as_pairs(), "sort": t.sort_pairs()}

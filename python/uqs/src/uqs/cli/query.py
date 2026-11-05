@@ -22,7 +22,7 @@ from uqs.cli import completion
 from uqs.cli import query_target as via_target
 from uqs.cli.choices import ChoiceOpt
 from uqs.cli.concepts import target_opt
-from uqs.cli.json_out import emit, json_opt
+from uqs.cli.json_out import Verbatim, emit, json_opt
 from uqs.cli.q_login import (
     DEFAULT_PASSWORD,
     DEFAULT_USER,
@@ -369,7 +369,7 @@ def _ask(
         return
     if as_json:
         _export(result, export)  # first: a result it cannot write is refused alone
-        emit({"expression": shown, "result": result})
+        emit({"expression": shown, "result": Verbatim(result)})
         return
     if size is not None:
         _show_q(stack_render.text(result))

@@ -58,11 +58,10 @@ def _now() -> str:
 def command_of(worker: str, attachment: str, plan: dict[str, Any], mode: str, version: str) -> str:
     """The command, rebuilt from the run's own arguments - never argv, which a caller could
     have given anything - with each waiver as `--override NAME`; the reason is its own field."""
-    rng = plan["range"]
     waivers = "".join(f" --override {o['override']}" for o in plan.get("overrides", []))
     return (
-        f"uqs job backfill {worker} --attachment {attachment} --mode {mode} --from {rng['from']} "
-        f"--to {rng['to']} --source-version {version}{waivers}"
+        f"uqs job backfill {worker} --attachment {attachment} --mode {mode} "
+        f"--from {plan['range_from']} --to {plan['range_to']} --source-version {version}{waivers}"
     )
 
 
@@ -86,9 +85,10 @@ def entries(
             "operator": who,
             "host": host,
             "command": command,
-            "worker": plan["worker"],
+            "job": plan["job"],
             "destination": plan["destination"],
-            "range": plan["range"],
+            "range_from": plan["range_from"],
+            "range_to": plan["range_to"],
             "bounds": {
                 "last_writable_date": co["last_writable_date"],
                 "writes_stop_at": co["writes_stop_at"],
@@ -150,8 +150,24 @@ def read(path: Path) -> list[dict[str, Any]]:
         except ValueError:
             continue
         if isinstance(entry, dict):
-            out.append(entry)
+            out.append(_current(entry))
     return out
+
+
+def _current(entry: dict[str, Any]) -> dict[str, Any]:
+    """`entry` as this uqs writes one: a line written before #2122 says `worker`, gives its
+    range as `range: {from, to, half_open}` and its destination's base port as `stack_id`."""
+    entry = dict(entry)
+    if "worker" in entry and "job" not in entry:
+        entry["job"] = entry.pop("worker")
+    rng = entry.pop("range", None)
+    if isinstance(rng, dict):
+        entry.setdefault("range_from", rng.get("from"))
+        entry.setdefault("range_to", rng.get("to"))
+    dest = entry.get("destination")
+    if isinstance(dest, dict) and "stack_id" in dest and "base_port" not in dest:
+        entry["destination"] = {("base_port" if k == "stack_id" else k): v for k, v in dest.items()}
+    return entry
 
 
 def of_attachment(paths: UqsPaths, attachment: str) -> tuple[Path | None, list[dict[str, Any]]]:

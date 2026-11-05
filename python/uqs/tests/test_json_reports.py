@@ -120,7 +120,7 @@ def test_job_gaps_prints_the_gaps_and_their_refills(monkeypatch):
     utc = [{k: f"{v}+00:00" for k, v in h.items()} for h in holes]
     assert doc["gaps"] == utc and doc["sessions"] == 2 and doc["refillable"]
     (refill,) = doc["refills"]
-    assert refill["worker"] == "w_backfill"
+    assert refill["job"] == "w_backfill"
     assert refill["command"].startswith("uqs job backfill w_backfill --from ")
 
 

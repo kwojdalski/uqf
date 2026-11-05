@@ -22,7 +22,7 @@ from uqs.cli import completion
 from uqs.cli import query_target as via_target
 from uqs.cli.concepts import target_opt
 from uqs.cli.hdb_scope import tables_given
-from uqs.cli.json_out import emit, json_opt, timestamp
+from uqs.cli.json_out import Verbatim, emit, json_opt, timestamp
 from uqs.cli.pipelines import needs_pipelines
 from uqs.cli.q_login import DEFAULT_PASSWORD, DEFAULT_USER, QPasswordEnvOpt, QUserOpt, q_password
 from uqs.cli.range_options import DateOpt, LastOpt, RangeFromOpt, RangeToOpt
@@ -262,7 +262,9 @@ def diff(
         _die(exc)
         return
     if as_json:
-        emit(report)
+        # a table's rows are its own columns' - data, not keys the document spells
+        tables = [t | {"rows": Verbatim(t["rows"])} if "rows" in t else t for t in report["tables"]]
+        emit(report | {"tables": tables})
     else:
         render(report)
     if not report["ok"]:
