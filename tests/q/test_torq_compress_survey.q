@@ -150,3 +150,13 @@
     c:.qtorq.compress.scope[.qt.qtorq.compress.survey.rows[];`trade;0;()!()];
     .qunit.assertEquals[exec minage from c where table=`trade, column=`default;enlist 10i;"trade's default columns are in"];
     .qunit.assertEquals[exec minage from c where table=`default;enlist .qtorq.compress.never;"and every other table is out"]}
+
+.qt.qtorq.compress.survey.test_a_decompression_is_estimated_at_its_full_size:{[t]
+    root:.qt.qtorq.compress.survey.hdb[];
+    .qtorq.compress.run_partition[root;.qt.qtorq.compress.survey.conf[root];`quote;0;string .z.D-30];
+    f:` sv root,`plain.csv;
+    f 0: ("table,minage,column,calgo,cblocksize,clevel";"default,10,default,0,0,0");
+    p:select from .qtorq.compress.survey[root;f;0W;`quote;0;1000][`partitions] where partition=.z.D-30;
+    .qunit.assertEquals[asc first p`decompress;`ask`bid`sym;"every compressed column comes back"];
+    .qunit.assertEquals[first p`bytes_after;sum hcount each {[root;c] ` sv root,(`$string .z.D-30),`quote,c}[root] each `sym`bid`ask;
+        "at the uncompressed bytes -21! records, not today's"]}
