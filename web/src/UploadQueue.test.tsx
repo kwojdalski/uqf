@@ -23,7 +23,7 @@ function file(name: string): File {
 function answer(path: string): RemoteUpload {
   return {
     target: "prod-a",
-    root: "/srv/uqf",
+    dest: "/srv/uqf",
     path,
     size: 4,
     sha256: "0".repeat(64),
@@ -43,7 +43,7 @@ function fakePushes() {
     open: (target) =>
       Promise.resolve({
         target,
-        root: "/srv/uqf",
+        dest: "/srv/uqf",
         push_id: "20261104T103442123Z-9aa36609",
         pruned: [],
         keep: 50,
@@ -64,7 +64,7 @@ function panel(
 ) {
   const props = {
     target: "prod-a",
-    root: "/srv/uqf",
+    dest: "/srv/uqf",
     onUploaded: () => {},
     uploader,
     pushes,

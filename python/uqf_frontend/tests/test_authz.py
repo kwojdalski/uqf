@@ -290,7 +290,7 @@ SAMPLES: dict[tuple[str, str], dict] = {
     },
     # the config push history (#2002)
     ("POST", "/services/{target}/config/pushes"): {
-        "json": {"destination": "shared/config", "file_count": 1, "total_bytes": 4}
+        "json": {"config_dir": "shared/config", "file_count": 1, "total_bytes": 4}
     },
     ("POST", "/services/{target}/config/pushes/{push_id}/close"): {"json": {"reported": []}},
     ("GET", "/services/{target}/config/pushes"): {},

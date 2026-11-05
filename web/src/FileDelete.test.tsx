@@ -7,7 +7,7 @@ function mount(refresh = vi.fn().mockResolvedValue(undefined)) {
   render(
     <FileDelete
       target="box"
-      root="/srv/uqf"
+      dest="/srv/uqf"
       paths={["shared/a", "shared/b"]}
       disabled={false}
       onBusy={vi.fn()}
@@ -39,7 +39,7 @@ it("reports partial success independently from a subsequent refresh failure", as
     ok: true,
     json: async () => ({
       target: "box",
-      root: "/srv/uqf",
+      dest: "/srv/uqf",
       results: [
         { path: "shared/a", outcome: "succeeded", error: null },
         { path: "shared/b", outcome: "failed", error: "Directory not empty" },
