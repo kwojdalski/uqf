@@ -100,6 +100,7 @@ bootstrap: "bootstrap() — every command, not once" {
   schema: "_generated_schema_content()\nvendored tables + uqf's own" { class: step }
   dqe: "write_dqe_config()\nvendored checks + the metatables" { class: step }
   reporter: "write_reporter_config()\nuqf's own checks, validated\nagainst the deployment" { class: step }
+  housekeeping: "write_housekeeping_config()\nuqf's own rules: tickerplant logs\nkept, then only gzipped" { class: step }
 }
 
 outputs: "Generated — output/uqs/" {
@@ -116,6 +117,7 @@ outputs: "Generated — output/uqs/" {
 
   gen_dqe: "dqengineconfig.csv" { class: generated }
   gen_reporter: "reporter.csv" { class: generated }
+  gen_housekeeping: "housekeeping.csv" { class: generated }
   gen_csv -> gen_schema: "stp1's -schemafile\npoints here" { style.stroke: "#3d7a5a" }
 }
 
@@ -132,6 +134,7 @@ bootstrap.rows -> outputs.gen_csv
 bootstrap.schema -> outputs.gen_schema
 bootstrap.dqe -> outputs.gen_dqe
 bootstrap.reporter -> outputs.gen_reporter
+bootstrap.housekeeping -> outputs.gen_housekeeping
 inputs.overrides -> outputs.gen_csv: "field overrides,\napplied last" { style.stroke: "#a8762f" }
 
 outputs.gen_csv -> torqsh
