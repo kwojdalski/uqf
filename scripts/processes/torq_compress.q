@@ -176,12 +176,12 @@
 .qtorq.compress.judge:{[params;dir;t;p]
     sp:.qtorq.compress.sort_rows[params;t];
     have:get ` sv dir,`.d;
-    by:exec column from sp where sort, not null column, column in have;
+    sort_cols:exec column from sp where sort, not null column, column in have;
     atts:exec column!att from sp where not null att, column in have;
     d:get ` sv dir,`;
     found:{[d;c] attr d c}[d] each key atts;
-    ([] table:enlist t; partition:enlist p; rows:count d; sort_by:enlist by;
-        sorted:$[count by; (til count d)~iasc by#d; 1b];
+    ([] table:enlist t; partition:enlist p; rows:count d; sort_by:enlist sort_cols;
+        sorted:$[count sort_cols; (til count d)~iasc sort_cols#d; 1b];
         missing_attr:enlist (key atts) where not found=value atts;
         declared_attr:enlist atts)}
 
