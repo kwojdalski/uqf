@@ -471,10 +471,10 @@
 .qt.qf.px.forwards.test_cross_size_at_price_rejects_bad_side:{[t]
     quotes:.qt.qf.px.forwards.mk_quotes_table[::];
     wrapper:{[q] .qf.mkt.cross_size_at_price[q;`AUDPLN;2026.01.02D00:00:00.000000000;`mid;2.5650]};
-    .qunit.assertError[wrapper;quotes;"side must be `bid or `ask"];
+    .qunit.assertError[wrapper;quotes;"book_side must be `bid or `ask"];
     / As above: an integer side reached `string` and threw a bare 'type.
     .qunit.assertThrows[{[q] .qf.mkt.cross_size_at_price[q;`EURUSD;2026.01.01D0;1;1.0]};quotes;
-        "cross_size_at_price: side must be `bid or `ask, got 1";
+        "cross_size_at_price: book_side must be `bid or `ask, got 1";
         "an integer side is named, not a bare 'type"]};
 
 .qt.qf.px.forwards.test_cross_size_at_price_near_zero_when_even_negligible_size_breaches:{[t]

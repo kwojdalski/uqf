@@ -418,7 +418,7 @@
 / answered by counting what happened to comparable orders before. Each
 / order is one row of our OWN order lifecycle, supplied by the caller: the
 / market's add/cancel/trade tape says nothing about whether OUR order
-/ filled. Comparable means same values in the caller's bucket columns -
+/ filled. Comparable means same values in the caller's group columns -
 / distance from touch, visible depth, a volatility regime - which the caller
 / computes at decision time, so no feature can see the outcome it predicts.
 / .
@@ -457,7 +457,7 @@
 / `sparse - 30 by default, a conventional floor rather than a derived one.
 .qf.exec.fill_probability_defaults:`cancel_policy`min_count!(`exclude;30)
 
-/ Output column names, which a bucket column may not reuse.
+/ Output column names, which a group column may not reuse.
 .qf.exec.fill_probability_cols:`horizon`target`order_count`fill_count`failure_count`cancelled_count`censored_count`observed_count`fill_probability`status
 
 / Empirical probability that a resting order fills within a horizon,
@@ -469,31 +469,32 @@
 / exactly at submit_time+h does not count as cancelled (the order was
 / exposed for the whole horizon); events after observed_until are ignored.
 / @param orders table, one row per order, with the timestamp columns in
-/   fill_order_time_cols plus every column named in bucket_cols
+/   fill_order_time_cols plus every column named in group_cols
 / @param horizons a positive timespan, or a vector of them, e.g. 0D00:00:10
-/ @param bucket_cols columns to group comparable orders by, e.g. `sym`dist_bucket
+/ @param group_cols columns to group comparable orders by, e.g. `sym`dist_bucket
 /   - empty for one bucket over every order
 / @param as_of timestamp the estimate is made at; nothing later is used
 / @param opts (::) for the defaults, or a dict of any of cancel_policy
 /   (`exclude or `failure) and min_count (an integer) - see fill_probability_defaults
-/ @return a table sorted by bucket_cols, horizon, target, one row per
-/   combination present: bucket_cols, horizon, target (`any or `full),
+/ @return a table sorted by group_cols, horizon, target, one row per
+/   combination present: group_cols, horizon, target (`any or `full),
 /   order_count, fill_count, failure_count, cancelled_count, censored_count,
 /   observed_count, fill_probability (fill_count % observed_count, a float
 /   in [0,1], null when observed_count is 0), status (`ok, `sparse when
 /   observed_count < min_count, `empty when it is 0)
-/ @throws error naming what is wrong: a missing column, a non-timestamp time
-/   column, a bucket column named like an output column, a non-positive
+/ @throws error naming what is wrong: a group_cols that is not symbols (a
+/   timespan there is the bucket_size slot of the other *_by functions), a missing column, a non-timestamp time
+/   column, a group column named like an output column, a non-positive
 /   horizon, a non-timestamp as_of, an unknown option or policy, an event
 /   before its order's submit_time, or a full_fill_time with no first_fill_time
 /   at or before it
 / @eg .qf.exec.fill_probability_by[fill_orders;0D00:01:00 0D00:02:00;enlist `sym;2026.01.01D12:00:00.000000000;::]
 / @eg exec fill_probability from .qf.exec.fill_probability_by[fill_orders;0D00:01:00;`symbol$();2026.01.01D12:00:00.000000000;::] where target=`full  -> ,0.4
 / @eg .qf.exec.fill_probability_by[fill_orders;0D00:01:00;`symbol$();2026.01.01D12:00:00.000000000;(enlist `cancel_policy)!enlist `ignore]  -> throws
-.qf.exec.fill_probability_by:{[orders;horizons;bucket_cols;as_of;opts]
-    bucket_cols:(),bucket_cols;
+.qf.exec.fill_probability_by:{[orders;horizons;group_cols;as_of;opts]
+    group_cols:(),group_cols;
     hs:(),horizons;
-    .qf.exec.fill_probability_require_args[orders;hs;bucket_cols;as_of];
+    .qf.exec.fill_probability_require_args[orders;hs;group_cols;as_of];
     o:.qf.exec.fill_probability_opts[opts];
     orders:0!orders;
     / Orders that existed at as_of. A later order is not censored, it is
@@ -513,11 +514,11 @@
     horizon_end:(expanded`submit_time)+h;
     any_outcome:.qf.exec.fill_outcome[expanded`first_fill_time;expanded`cancel_time;horizon_end;known_by];
     full_outcome:.qf.exec.fill_outcome[expanded`full_fill_time;expanded`cancel_time;horizon_end;known_by];
-    / Column by column, rather than `expanded bucket_cols`: with no bucket
+    / Column by column, rather than `expanded group_cols`: with no bucket
     / columns that would index the table by an empty list.
-    grouping:(bucket_cols!{[tbl;c] tbl c}[expanded] each bucket_cols),(enlist `horizon)!enlist h;
+    grouping:(group_cols!{[tbl;c] tbl c}[expanded] each group_cols),(enlist `horizon)!enlist h;
     scored:.qf.exec.fill_outcome_rows[grouping;`any;any_outcome],.qf.exec.fill_outcome_rows[grouping;`full;full_outcome];
-    by_names:bucket_cols,`horizon`target;
+    by_names:group_cols,`horizon`target;
     agg:`order_count`fill_count`failure_count`cancelled_count`censored_count!(
         (count;`i);(sum;`fill_count);(sum;`failure_count);(sum;`cancelled_count);(sum;`censored_count));
     r:0!?[scored;();by_names!by_names;agg];
@@ -530,12 +531,14 @@
 
 / Private: refuse fill_probability_by's arguments, naming what is wrong.
 / @private
-.qf.exec.fill_probability_require_args:{[orders;hs;bucket_cols;as_of]
+.qf.exec.fill_probability_require_args:{[orders;hs;group_cols;as_of]
     if[not .Q.qt orders; '"fill_probability_by: orders must be a table"];
-    .qf.util.require_cols[`fill_probability_by;`orders;0!orders;distinct .qf.exec.fill_order_time_cols,bucket_cols];
-    clash:bucket_cols where bucket_cols in .qf.exec.fill_probability_cols;
+    if[(0<count group_cols) and not 11h=type group_cols;
+        '"fill_probability_by: group_cols must be a symbol or symbol list of column names, got type ",string type group_cols];
+    .qf.util.require_cols[`fill_probability_by;`orders;0!orders;distinct .qf.exec.fill_order_time_cols,group_cols];
+    clash:group_cols where group_cols in .qf.exec.fill_probability_cols;
     if[count clash;
-        '"fill_probability_by: bucket column(s) ",(", " sv string clash)," would collide with an output column of the same name"];
+        '"fill_probability_by: group column(s) ",(", " sv string clash)," would collide with an output column of the same name"];
     if[not 16h=type hs;
         '"fill_probability_by: horizons must be a timespan or timespan vector, e.g. 0D00:00:10"];
     if[0=count hs; '"fill_probability_by: horizons is empty"];
