@@ -303,6 +303,9 @@ Each layer overrides the one above it in this table:
 - **Same checks.** Every layer's keys are checked, and a refusal names the layer
   and the key. An undeclared environment is refused. The merged values go
   through the same checks as the flags.
+- **Spans of time.** Each `*_timeout` key and `soak` takes what its flag takes:
+  a DURATION string (`verify_timeout = "5m"`) or a number of seconds
+  (`verify_timeout = 300`).
 - **Never in a file.** No layer may set the artifact, `--dry-run`, or a named
   override.
 - **Listing.** `uqs target list` shows each target with its layers merged. It
@@ -389,8 +392,9 @@ uqs target config restore prd PUSH      # asks first; --yes does not
 A restore writes each replaced file's earlier content back and deletes each file
 the push created, as a push of its own, so it can be restored in turn. It is
 refused, writing nothing, when a file has changed since the push. Each target
-keeps its newest `UQF_FRONTEND_CONFIG_HISTORY_KEEP` pushes (50), none older than
-`UQF_FRONTEND_CONFIG_HISTORY_DAYS` (90); a pruned push's restore says so.
+keeps its newest `UQF_FRONTEND_CONFIG_HISTORY_MAX_KEPT` pushes (50), none older
+than `UQF_FRONTEND_CONFIG_HISTORY_RETENTION_DAYS` (90); a pruned push's restore
+says so.
 
 ### Inspection-only targets
 

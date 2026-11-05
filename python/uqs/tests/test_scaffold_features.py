@@ -66,23 +66,32 @@ def test_an_etl_without_a_period_has_no_timer():
 @pytest.mark.parametrize(
     ("period", "message"),
     [
-        ("5s", "must be a q timespan"),
+        ("5x", "must be a DURATION .* or a q timespan"),
         ("0D00:00:00", "must be positive"),
+        ("0s", "must be positive"),
         # #1598: a component q refuses to parse, or a day count past q's
         # 64-bit timespans - 106752D wraps negative, 213504D to ~25 minutes.
-        ("0D00:60:00", "must be a q timespan"),
-        ("0D00:00:60", "must be a q timespan"),
-        ("0D99:99:99", "must be a q timespan"),
-        ("106752D00:00:00", "must be a q timespan"),
-        ("213504D00:00:00", "must be a q timespan"),
-        ("999999999D00:00:00", "must be a q timespan"),
-        ("\u0661D00:00:01", "must be a q timespan"),
+        ("0D00:60:00", "or a q timespan"),
+        ("0D00:00:60", "or a q timespan"),
+        ("0D99:99:99", "or a q timespan"),
+        ("106752D00:00:00", "or a q timespan"),
+        ("213504D00:00:00", "or a q timespan"),
+        ("999999999D00:00:00", "or a q timespan"),
+        ("\u0661D00:00:01", "or a q timespan"),
         ("0D00:00:00.0000000001", "must be positive"),
     ],
 )
 def test_a_period_define_would_refuse_is_refused_here(period, message):
     with pytest.raises(UqsError, match=message):
         jobs.streaming_job("f", [], "fo", "px:float", period=period)
+
+
+@pytest.mark.parametrize(("period", "tick"), [("5s", "0D00:00:05"), ("1D", "1D")])
+def test_a_period_is_a_duration_or_a_q_timespan(period, tick):
+    """#2121: `--period 5s` was refused on the one command whose value is a
+    timer tick, and `1D` too, which `--width` took."""
+    plan = jobs.streaming_job("f", [], "fo", "px:float", period=period)
+    assert f"\n    {tick};" in next(a.body for a in plan.actions if str(a.path).endswith("f.q"))
 
 
 # -------------------------------------------------------- --partition, --check

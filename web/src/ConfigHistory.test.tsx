@@ -38,7 +38,7 @@ function file(over: Partial<ConfigPushFile>): ConfigPushFile {
 
 const HISTORY: History = {
   target: "prod-a",
-  root: "/srv/uqf",
+  dest: "/srv/uqf",
   pushes: [
     {
       push_id: PUSH,
@@ -49,7 +49,7 @@ const HISTORY: History = {
       user: "kw",
       target: "prod-a",
       via: "frontend",
-      destination: "shared/config",
+      config_dir: "shared/config",
       declared: { file_count: 3, total_bytes: 9 },
       file_count: 3,
       total_bytes: 9,
@@ -63,7 +63,7 @@ const HISTORY: History = {
   pruned: [
     {
       push_id: "20261001T000000000Z-00000001",
-      why: "count",
+      why: "row_cap",
       pruned_at: "2026-11-04T10:34:42Z",
     },
   ],
@@ -71,7 +71,7 @@ const HISTORY: History = {
 
 const DETAIL: ConfigPushDetail = {
   target: "prod-a",
-  root: "/srv/uqf",
+  dest: "/srv/uqf",
   summary: HISTORY.pushes[0],
   push: {
     push_id: PUSH,
@@ -82,7 +82,7 @@ const DETAIL: ConfigPushDetail = {
     user: "kw",
     target: "prod-a",
     via: "frontend",
-    destination: "shared/config",
+    config_dir: "shared/config",
     declared: { file_count: 3, total_bytes: 9 },
     reported: [{ path: "shared/config/lost", outcome: "unknown" }],
     files: [
@@ -124,7 +124,7 @@ const DIFFS: Record<string, ConfigDiff["files"][number]> = {
 function plan(steps: ConfigRestore["plan"]): ConfigRestore {
   return {
     target: "prod-a",
-    root: "/srv/uqf",
+    dest: "/srv/uqf",
     restores: PUSH,
     dry_run: true,
     push_id: null,
@@ -166,7 +166,7 @@ function fakeOps(over: Partial<HistoryOps> = {}) {
       calls.push(`diff ${push} ${path}`);
       return {
         target: "prod-a",
-        root: "/srv/uqf",
+        dest: "/srv/uqf",
         push_id: push,
         diff_cap: 262144,
         files: [DIFFS[path as string]],
@@ -227,7 +227,7 @@ it("reads nothing from the server until asked, then lists the pushes and the pru
   expect(table).toHaveTextContent("push to shared/config");
   expect(table).toHaveTextContent("1 failed");
   expect(screen.getByLabelText("Pruned pushes")).toHaveTextContent(
-    "20261001T000000000Z-00000001 (count",
+    "20261001T000000000Z-00000001 (row_cap",
   );
 });
 
@@ -347,7 +347,7 @@ it("says plainly when a push's history was pruned", async () => {
   const { ops } = fakeOps({
     plan: async () => {
       throw new ApiError(
-        `push ${PUSH}'s history was pruned at 2026-11-05T00:00:00Z (count bound) - it can no longer be shown, diffed or restored`,
+        `push ${PUSH}'s history was pruned at 2026-11-05T00:00:00Z (row_cap bound) - it can no longer be shown, diffed or restored`,
         false,
         410,
       );

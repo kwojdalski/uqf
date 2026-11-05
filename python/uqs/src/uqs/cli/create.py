@@ -31,6 +31,7 @@ from uqs.cli.shared import (
     app,
     job_app,
 )
+from uqs.cli.vocabulary import q_timespan
 from uqs.model.kinds import SCAFFOLD_KINDS
 from uqs.paths import UqsError, UqsUsageError
 from uqs.scaffold import columns as columns_mod
@@ -118,10 +119,10 @@ def new_job(
     ] = None,
     width: Annotated[
         str | None,
-        typer.Option(
+        q_timespan(
             "--width",
-            help=f"Window width, as a q timespan; default {worker_mod.DEFAULT_WIDTH}"
-            + for_kinds("--width"),
+            help="Window width, a DURATION or a q timespan; default "
+            f"{worker_mod.DEFAULT_WIDTH}" + for_kinds("--width"),
         ),
     ] = None,
     procname: Annotated[
@@ -148,16 +149,18 @@ def new_job(
     ] = None,
     period: Annotated[
         str | None,
-        typer.Option(
+        q_timespan(
             "--period",
-            help="Timer period: a feed's tick, or an etl's added on_timer" + for_kinds("--period"),
+            help="Timer period, a DURATION or a q timespan: a feed's tick, or an etl's added "
+            "on_timer" + for_kinds("--period"),
         ),
     ] = None,
     horizon: Annotated[
         str | None,
-        typer.Option(
+        q_timespan(
             "--horizon",
-            help="How long an event waits before it is evaluated" + for_kinds("--horizon"),
+            help="How long an event waits before it is evaluated, a DURATION or a q timespan"
+            + for_kinds("--horizon"),
         ),
     ] = None,
     poll: Annotated[

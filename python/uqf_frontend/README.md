@@ -250,11 +250,12 @@ browse, delete or upload path may name `.uqf-history`, in any letter case.
   refuses the whole restore (409 `RestoreConflict`), writing nothing. A lost
   answer is 504 `RestoreOutcomeUncertain`, never retried.
 - **Retention.** Opening a push prunes the target's history to the newest
-  `UQF_FRONTEND_CONFIG_HISTORY_KEEP` pushes (50), none older than
-  `UQF_FRONTEND_CONFIG_HISTORY_DAYS` (90) - or the values the Settings view kept
-  in `UQF_FRONTEND_SETTINGS_FILE`, which the API and `uqs target config restore`
-  both read over those. Each pruned id is logged in `.uqf-history/pruned.jsonl`,
-  so its restore is refused as pruned (410 `HistoryPruned`), not as unknown.
+  `UQF_FRONTEND_CONFIG_HISTORY_MAX_KEPT` pushes (50), none older than
+  `UQF_FRONTEND_CONFIG_HISTORY_RETENTION_DAYS` (90) - or the values the Settings
+  view kept in `UQF_FRONTEND_SETTINGS_FILE`, which the API and
+  `uqs target config restore` both read over those. Each pruned id is logged in
+  `.uqf-history/pruned.jsonl`, so its restore is refused as pruned (410
+  `HistoryPruned`), not as unknown.
 - **Audit.** `config.push.open` when a push opens; `files.upload` per file, with
   `push_id` and `previous_sha256` (null on a create); `config.push` when it
   closes, with the destination, file count, bytes and one outcome per file;
@@ -363,7 +364,7 @@ Configuration is environment-only, so credentials stay server-side:
   | `UQF_FRONTEND_STACK_ROOT`                 | unset — the gateway at `localhost:6057`; fleet health, the query log, backfill status and `/ui/` report themselves unconfigured |
   | `UQF_FRONTEND_GATEWAY_USER` / `_PASSWORD` | empty — set both; `admin`/`admin` for the demo stack                                                                            |
   | `UQF_FRONTEND_DATA_USER` / `_PASSWORD`    | empty — set both; `browser`/`browser` for the demo stack. Without it `/query` refuses with 503, naming these                    |
-  | `UQF_FRONTEND_TIMEOUT`                    | `30`                                                                                                                            |
+  | `UQF_FRONTEND_TIMEOUT_SECONDS`            | `30`                                                                                                                            |
   | `UQF_FRONTEND_MAX_ROWS`                   | `10000`                                                                                                                         |
 
 A malformed numeric value, or a stack root that is not the repository, fails at
@@ -708,7 +709,7 @@ file with it; put it elsewhere to keep history past a clean. With neither set,
 history is kept in memory and `GET /activity` says it is not persistent. Each
 level has its own bounds, applied at startup and every 200 writes: `actions` -
 which holds the server's audit - keeps 30 days and 100000 rows
-(`UQF_FRONTEND_ACTIVITY_RETENTION_DAYS`, `UQF_FRONTEND_ACTIVITY_MAX_ROWS`),
+(`UQF_FRONTEND_ACTIVITY_RETENTION_DAYS`, `UQF_FRONTEND_ACTIVITY_MAX_KEPT`),
 `interactions` 7 days and 50000, `debug` 1 day and 10000
 (`UQF_FRONTEND_ACTIVITY_INTERACTIONS_*`, `UQF_FRONTEND_ACTIVITY_DEBUG_*`). A
 flood of clicks therefore never evicts an audit row. Within a level, browser

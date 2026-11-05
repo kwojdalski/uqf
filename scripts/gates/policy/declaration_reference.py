@@ -38,7 +38,11 @@ BLOCKS: dict[str, tuple[str, tuple[str, ...], frozenset[str]]] = {
     "## Bounded worker": ("bounded_worker.q", ("required_cfg", "optional_cfg"), frozenset()),
     # `ns` is in the list because register stamps it before checking; a job
     # never writes it, and the page says so in prose.
-    "## Streaming job": ("stream_job.q", ("required_declarations",), frozenset({"ns"})),
+    "## Streaming job": (
+        "stream_job.q",
+        ("required_declarations", "optional_declarations"),
+        frozenset({"ns"}),
+    ),
     "## Normalizer": ("normalizer.q", ("required_keys",), frozenset()),
     # The three stream kinds (#1331). Each also lists its own optional keys;
     # the passthrough ones it forwards are counted as mentioned below.

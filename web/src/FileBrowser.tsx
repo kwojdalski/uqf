@@ -111,7 +111,7 @@ export function FileBrowser({
       </div>
       {data && (
         <p className="note">
-          Deployment root: <code>{data.root}</code>
+          Deployment root: <code>{data.dest}</code>
         </p>
       )}
       <nav aria-label="Path" className="crumbs">
@@ -191,7 +191,7 @@ export function FileBrowser({
         <FileDelete
           key={`delete:${target}:${path}`}
           target={target}
-          root={data.root}
+          dest={data.dest}
           paths={selected.map((name) =>
             data.path ? `${data.path}/${name}` : name,
           )}
@@ -253,7 +253,7 @@ export function FileBrowser({
       {data && (
         <UploadPanel
           target={target}
-          root={data.root}
+          dest={data.dest}
           directory={data.path}
           onUploaded={() => setRevision((r) => r + 1)}
           uploader={uploader}

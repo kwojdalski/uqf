@@ -247,6 +247,7 @@
     who:"define: kafka topic ",string topic;
     if[not -11h=type topic; '"define: a kafka topic is named by a symbol"];
     if[not 99h=type decl; 'who,"'s declaration must be a dictionary"];
+    .qetl.declared.refuse_unknown[who;"a kafka topic";decl;`mapping`output`format`job`expand];
     if[count miss:`mapping`output except key decl; 'who," is missing ",", " sv string miss];
     fmt:$[`format in key decl; decl`format; `json];
     owner:$[`job in key decl; decl`job; `];

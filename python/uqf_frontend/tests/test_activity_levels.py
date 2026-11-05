@@ -174,9 +174,9 @@ def test_the_environment_sets_the_default_and_refuses_a_level_that_is_not_one(mo
 def test_the_environment_bounds_each_level(monkeypatch):
     monkeypatch.delenv("UQF_FRONTEND_STACK_ROOT", raising=False)
     monkeypatch.setenv("UQF_FRONTEND_ACTIVITY_INTERACTIONS_RETENTION_DAYS", "3")
-    monkeypatch.setenv("UQF_FRONTEND_ACTIVITY_INTERACTIONS_MAX_ROWS", "300")
+    monkeypatch.setenv("UQF_FRONTEND_ACTIVITY_INTERACTIONS_MAX_KEPT", "300")
     monkeypatch.setenv("UQF_FRONTEND_ACTIVITY_DEBUG_RETENTION_DAYS", "2")
-    monkeypatch.setenv("UQF_FRONTEND_ACTIVITY_DEBUG_MAX_ROWS", "200")
+    monkeypatch.setenv("UQF_FRONTEND_ACTIVITY_DEBUG_MAX_KEPT", "200")
     bounds = Settings.from_env().activity_bounds()
     assert bounds["interactions"] == (3, 300)
     assert bounds["debug"] == (2, 200)

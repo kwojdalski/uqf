@@ -95,7 +95,7 @@
     d:`source`table_name`time_column`row_key`columns`types`query`fixture`tz`complete_through!
         (`ct_bad;`t;`time;`time;enlist `time;enlist "p";{[h;a;b] ()};{[] ()};`UTC;2026.09.01D00:00);
     .qunit.assertThrows[{.qetl.source.define[`ct_bad;x]};d;
-        "define: ct_bad's complete_through must be a lambda*";"a timestamp is not a function"]};
+        "define: ct_bad's complete_through must be a function*";"a timestamp is not a function"]};
 
 .qt.qetl.source.complete_through.test_a_complete_through_of_the_wrong_arity_is_refused:{[t]
     d:`source`table_name`time_column`row_key`columns`types`query`fixture`tz`complete_through!

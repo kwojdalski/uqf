@@ -899,7 +899,7 @@ function ServicesView() {
             <h2>Deployment targets</h2>
             <Badge
               value={
-                data.remote_operations_enabled
+                data.writes_enabled
                   ? "Remote operations enabled"
                   : "Remote operations disabled"
               }
@@ -924,7 +924,7 @@ function ServicesView() {
           ) : (
             <Table
               rows={data.targets.map((target) => ({
-                target: target.name,
+                target: target.target,
                 ssh: target.ssh,
                 dest: target.dest,
                 environment: target.environment,
@@ -948,28 +948,28 @@ function ServicesView() {
             server is contacted.
           </p>
           {data.targets.length > 0 &&
-            (data.remote_operations_enabled ? (
+            (data.writes_enabled ? (
               <div className="actions" aria-label="Browse files">
                 {data.targets.map((target) => (
                   <button
                     type="button"
                     data-activity="services.browse"
-                    key={target.name}
-                    aria-pressed={browsing === target.name}
-                    onClick={() => setBrowsing(target.name)}
+                    key={target.target}
+                    aria-pressed={browsing === target.target}
+                    onClick={() => setBrowsing(target.target)}
                   >
-                    Browse {target.name}
+                    Browse {target.target}
                   </button>
                 ))}
                 {data.targets.map((target) => (
                   <button
                     type="button"
                     data-activity="services.tunnel"
-                    key={`tunnel:${target.name}`}
-                    aria-pressed={tunnelling === target.name}
-                    onClick={() => setTunnelling(target.name)}
+                    key={`tunnel:${target.target}`}
+                    aria-pressed={tunnelling === target.target}
+                    onClick={() => setTunnelling(target.target)}
                   >
-                    Tunnel {target.name}
+                    Tunnel {target.target}
                   </button>
                 ))}
               </div>
@@ -982,8 +982,8 @@ function ServicesView() {
         </section>
       )}
       {browsing &&
-        data?.remote_operations_enabled &&
-        data.targets.some((target) => target.name === browsing) && (
+        data?.writes_enabled &&
+        data.targets.some((target) => target.target === browsing) && (
           <FileBrowser
             key={browsing}
             target={browsing}
@@ -991,8 +991,8 @@ function ServicesView() {
           />
         )}
       {tunnelling &&
-        data?.remote_operations_enabled &&
-        data.targets.some((target) => target.name === tunnelling) && (
+        data?.writes_enabled &&
+        data.targets.some((target) => target.target === tunnelling) && (
           <TunnelPanel
             key={tunnelling}
             target={tunnelling}

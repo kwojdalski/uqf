@@ -79,7 +79,7 @@ class _Connection:
     def describe(self) -> dict[str, Any]:
         return {
             "target": self.target,
-            "host": self.host,
+            "ssh": self.host,
             "endpoints": [
                 {"process": e.process, "proctype": e.proctype, "remote_port": e.remote_port,
                  "local_endpoint": f"127.0.0.1:{e.local_port}"}
@@ -506,9 +506,9 @@ def test_shutdown_closes_every_target_connection(declared, targets, local_gw):
 def test_workspaces_are_local_plus_the_uqs_registry(declared, targets, local_gw):
     c = _client(_app(targets, local_gw))
     body = c.get("/workspaces").json()
-    rows = {w["name"]: w for w in body["workspaces"] if w["kind"] == "target"}
+    rows = {w["target"]: w for w in body["workspaces"] if w["kind"] == "target"}
     local = body["workspaces"][0]
-    assert (local["name"], local["connection"], local["access"]) == (
+    assert (local["target"], local["connection"], local["access"]) == (
         "local", "direct", "read-write",
     )  # fmt: skip
     assert rows["prod-a"]["connection"] == "ssh tunnel"
@@ -523,7 +523,7 @@ def test_workspaces_are_local_plus_the_uqs_registry(declared, targets, local_gw)
 def test_without_remote_operations_targets_are_listed_but_unavailable(declared, targets, local_gw):
     c = _client(_app(targets, local_gw, writes=False))
     body = c.get("/workspaces").json()
-    target = next(w for w in body["workspaces"] if w["name"] == "prod-a")
+    target = next(w for w in body["workspaces"] if w["target"] == "prod-a")
     assert target["available"] is False
     assert "remote operations" in target["reason"]
 
@@ -531,7 +531,7 @@ def test_without_remote_operations_targets_are_listed_but_unavailable(declared, 
 def test_the_workspace_probe_describes_the_connection(declared, targets, local_gw):
     c = _client(_app(targets, local_gw))
     body = c.get("/workspace", headers={HEADER: "prod-a"}).json()
-    assert body["target"] == "prod-a" and body["host"] == "deploy@prod-a"
+    assert body["target"] == "prod-a" and body["ssh"] == "deploy@prod-a"
     assert body["connection"] == "ssh tunnel" and body["access"] == "read-only"
     assert {e["process"] for e in body["endpoints"]} == {"gateway1", "rdb1"}
     local = c.get("/workspace").json()

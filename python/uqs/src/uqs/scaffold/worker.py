@@ -29,16 +29,11 @@ from uqs.scaffold.templates import (
     test_stub,
     worker_body,
 )
+from uqs.scaffold.timespan import q_timespan
 from uqs.scaffold.transform import check_mode
 
 #: A partition is a q symbol: `EURUSD, `binance_spot.
 _PARTITION = re.compile(r"^[A-Za-z0-9_]+$")
-
-#: A q timespan literal as a width is written: 1D, 0D01, 0D01:30, 0D01:00:00.5.
-_WIDTH = re.compile(r"(\d+)D(?:(\d{1,2})(?::(\d{2})(?::(\d{2})(?:\.(\d{1,9}))?)?)?)?", re.ASCII)
-_DAY_NS = 86_400 * 10**9
-#: The largest day count a q timespan holds; past it the literal wraps (#1576).
-_MAX_DAYS = 106_751
 
 
 def check_width(width: str) -> str:
@@ -46,27 +41,11 @@ def check_width(width: str) -> str:
 
     It wants a positive timespan. Written verbatim, a malformed width is a
     parse error in the generated worker and a zero or negative one a refusal,
-    both found only when the tree next loads. Components are range-checked
-    and the total computed here, so a value below q's nanosecond precision or
-    past its range is refused rather than becoming zero or wrapping.
+    both found only when the tree next loads. The check is `--period`'s and
+    `--horizon`'s (scaffold/timespan.py, #2121): a q timespan as written, or
+    a DURATION rendered as one.
     """
-    m = _WIDTH.fullmatch(width)
-    hint = "a positive q timespan, e.g. 1D, 0D01 or 0D01:00:00"
-    if m is None:
-        raise UqsError(f"--width {width!r} must be {hint}")
-    days, hh, mm, ss, frac = m.groups()
-    if int(hh or 0) > 23 or int(mm or 0) > 59 or int(ss or 0) > 59:
-        raise UqsError(f"--width {width!r} has an out-of-range field - it must be {hint}")
-    ns = (
-        int(days) * _DAY_NS
-        + (int(hh or 0) * 3600 + int(mm or 0) * 60 + int(ss or 0)) * 10**9
-        + int((frac or "").ljust(9, "0"))
-    )
-    if ns <= 0:
-        raise UqsError(f"--width {width!r} must be positive - a zero width plans no windows")
-    if ns > _MAX_DAYS * _DAY_NS:
-        raise UqsError(f"--width {width!r} is past what a q timespan holds ({_MAX_DAYS}D)")
-    return width
+    return q_timespan(width, "--width")
 
 
 #: A bounded worker's window width when `job new --width` is not given.
@@ -136,7 +115,7 @@ def bounded_worker(
     mapping between the two is never guessed - the query is the author's.
     """
     check_mode(transform)
-    check_width(width)
+    width = check_width(width)
     _check_name(name, "worker name")
     if name.endswith("_backfill"):
         # NAME is the base the worker, its source and its example are named

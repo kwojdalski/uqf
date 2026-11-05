@@ -97,13 +97,13 @@
     / `(enlist `close) inter`, never `` `close inter ``: inter indexes its left
     / argument, and an atom cannot be indexed - 'type at every define.
     fns:.qetl.job.stream.poll_keys,`close`start_cursor inter key p;
-    if[count bad:fns where not .qetl.job.stream.is_callable each p fns;
+    if[count bad:fns where not .qetl.declared.callable each p fns;
         '"define: ",string[job],"'s poll ",(", " sv string bad)," must be functions"];
     custom:`load`save`advances inter key p;
     if[(count custom) and 3<>count custom;
         '"define: ",string[job],"'s poll declares ",(", " sv string custom),
          " - a custom cursor needs load, save and advances together, or none of them for a timestamp"];
-    if[count bad:custom where not .qetl.job.stream.is_callable each p custom;
+    if[count bad:custom where not .qetl.declared.callable each p custom;
         '"define: ",string[job],"'s poll ",(", " sv string bad)," must be functions"];
     if[count bad:(`source`cursor inter key p) where not -11h=type each p `source`cursor inter key p;
         '"define: ",string[job],"'s poll ",(", " sv string bad)," must be symbols"];

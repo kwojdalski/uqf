@@ -58,12 +58,11 @@
     if[0=count sup; 'who,"needs supporting inputs: there is no reference to read a batch at a time"];
     if[not `UTC~decl`tz; 'who,"is for a UTC source: a zoned source's bounds are padded and narrowed in fetch_window, which a per-batch read has no step for"];
     if[not 99h=type br; 'who,"must be a dict of ",", " sv string .qetl.source.batch_read_keys];
+    .qetl.declared.refuse_unknown[who;"a batch_read";br;.qetl.source.batch_read_keys];
     miss:.qetl.source.batch_read_keys except key br;
     if[count miss; 'who,"is missing ",", " sv string miss];
-    extra:(key br) except .qetl.source.batch_read_keys;
-    if[count extra; 'who,"declares ",(", " sv string extra),", which it does not take"];
     bad:();
-    arity:{[f;n] (100h=type f) and n=count (value f) 1};
+    arity:{[f;n] (.qetl.declared.callable f) and $[.qetl.declared.lambda f; n=count (value f) 1; 1b]};
     if[not arity[br`window;3]; bad,:enlist "window (a lambda taking handle, range_from and range_to)"];
     if[not arity[br`needs;1]; bad,:enlist "needs (a lambda taking the primary rows)"];
     if[not arity[br`read;4]; bad,:enlist "read (a lambda taking handle, range_from, range_to and the keys)"];
