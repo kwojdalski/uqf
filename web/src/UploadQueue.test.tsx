@@ -46,8 +46,8 @@ function fakePushes() {
         dest: "/srv/uqf",
         push_id: "20261104T103442123Z-9aa36609",
         pruned: [],
-        keep: 50,
-        keep_days: 90,
+        max_kept: 50,
+        retention_days: 90,
       }),
     close: (_target, _push, reported) => {
       closed.push(reported);

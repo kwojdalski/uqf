@@ -142,8 +142,8 @@ def test_a_conflict_or_a_pruned_push_is_refused_writing_nothing(server, monkeypa
     refused = _uqs("restore", "box", push, "--yes")
     assert refused.exit_code != 0 and "changed since push" in "".join(logged)
     assert (server / "shared/config/app.env").read_bytes() == b"edited\n"
-    monkeypatch.setenv("UQF_FRONTEND_CONFIG_HISTORY_KEEP", "1")
-    remote_helper.handle({"protocol": 1, "op": "push_open", "root": str(server), "keep": 1,
+    monkeypatch.setenv("UQF_FRONTEND_CONFIG_HISTORY_MAX_KEPT", "1")
+    remote_helper.handle({"protocol": 1, "op": "push_open", "root": str(server), "max_kept": 1,
                           "push_id": remote_files.new_push_id(),
                           "config_dir": "shared/config"})  # fmt: skip
     gone = _uqs("restore", "box", push, "--yes")
@@ -222,8 +222,8 @@ def test_restore_prunes_to_the_retention_set_in_the_settings_view(server, monkey
     from uqf_frontend.fleet import FakeFleet
     from uqf_frontend.gateway import FakeGateway
 
-    monkeypatch.delenv("UQF_FRONTEND_CONFIG_HISTORY_KEEP", raising=False)
-    monkeypatch.delenv("UQF_FRONTEND_CONFIG_HISTORY_DAYS", raising=False)
+    monkeypatch.delenv("UQF_FRONTEND_CONFIG_HISTORY_MAX_KEPT", raising=False)
+    monkeypatch.delenv("UQF_FRONTEND_CONFIG_HISTORY_RETENTION_DAYS", raising=False)
     kept = tmp_path / "settings.json"
     token = "k" * 64
     api = TestClient(
@@ -243,8 +243,8 @@ def test_restore_prunes_to_the_retention_set_in_the_settings_view(server, monkey
             "version": seen["runtime_version"],
             "settings": {
                 **seen["runtime"],
-                "config_history_keep": 500,
-                "config_history_days": 3000,
+                "config_history_max_kept": 500,
+                "config_history_retention_days": 3000,
             },
         },
         headers={"authorization": f"Bearer {token}"},
@@ -256,7 +256,7 @@ def test_restore_prunes_to_the_retention_set_in_the_settings_view(server, monkey
     real: Any = remote_files.restore
 
     def spy(*args: Any, **kw: Any) -> Any:
-        bounds.append((kw["keep"], kw["keep_days"]))
+        bounds.append((kw["max_kept"], kw["retention_days"]))
         return real(*args, **kw)
 
     monkeypatch.setattr(remote_files, "restore", spy)
@@ -264,3 +264,36 @@ def test_restore_prunes_to_the_retention_set_in_the_settings_view(server, monkey
     done = _uqs("restore", "box", push, "--dry-run")
     assert done.exit_code == 0, done.output
     assert bounds == [(500, 3000)]
+
+
+@pytest.mark.parametrize(
+    ("old", "new"),
+    [
+        ("UQF_FRONTEND_CONFIG_HISTORY_KEEP", "UQF_FRONTEND_CONFIG_HISTORY_MAX_KEPT"),
+        ("UQF_FRONTEND_CONFIG_HISTORY_DAYS", "UQF_FRONTEND_CONFIG_HISTORY_RETENTION_DAYS"),
+    ],
+)
+def test_restore_refuses_a_history_bound_variable_renamed_by_2111(
+    server, monkeypatch, logged, old, new
+):
+    """The pre-#2111 name is refused by name, never ignored: ignored, the
+    restore would prune to the default bound while the operator believed
+    their own was in force."""
+    push = _push(server, {"shared/config/app.env": b"a=2\n"})
+    monkeypatch.setenv(old, "1")
+    refused = _uqs("restore", "box", push, "--yes")
+    said = "".join(logged)
+    assert refused.exit_code != 0
+    assert f"{old} is no longer read - set {new}" in said, said
+
+
+def test_restore_refuses_a_settings_file_written_before_2111(server, monkeypatch, logged, tmp_path):
+    """A settings file holding a pre-#2111 key names the key it is now."""
+    kept = tmp_path / "settings.json"
+    kept.write_text(json.dumps({"config_history_keep": 5}), encoding="utf-8")
+    monkeypatch.setenv("UQF_FRONTEND_SETTINGS_FILE", str(kept))
+    push = _push(server, {"shared/config/app.env": b"a=2\n"})
+    refused = _uqs("restore", "box", push, "--yes")
+    said = "".join(logged)
+    assert refused.exit_code != 0
+    assert "`config_history_keep` is now `config_history_max_kept`" in said, said

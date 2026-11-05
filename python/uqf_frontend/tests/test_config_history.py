@@ -324,7 +324,7 @@ def test_a_lost_restore_answer_is_uncertain_and_not_retried(served, tmp_path):
 
 
 def test_a_restore_after_pruning_is_refused_clearly(served, tmp_path):
-    c = _client(Loopback(), tmp_path, config_history_keep=1)
+    c = _client(Loopback(), tmp_path, config_history_max_kept=1)
     gone = _open(c)
     _upload(c, gone, "shared/config/x", b"x")
     newer = _open(c)
@@ -376,7 +376,7 @@ def test_no_file_bytes_reach_the_activity_store_or_any_export(served, tmp_path):
     """Every push action - open, overwrite, create, close, list, show, diff,
     plan, restore, prune - then the database file and every export format at
     every level, searched for the files' bytes, raw and base64."""
-    c = _client(Loopback(), tmp_path, config_history_keep=2)
+    c = _client(Loopback(), tmp_path, config_history_max_kept=2)
     push = _open(c)
     _upload(c, push, "shared/config/app.env", NEW_SECRET, overwrite=True)
     _upload(c, push, "shared/config/more.env", NEW_SECRET)

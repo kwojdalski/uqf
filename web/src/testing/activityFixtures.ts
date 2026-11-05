@@ -30,13 +30,13 @@ export const SETTINGS: SettingsData = {
   runtime: {
     activity_level: "actions",
     activity_retention_days: 30,
-    activity_max_rows: 100000,
+    activity_max_kept: 100000,
     activity_interactions_retention_days: 7,
-    activity_interactions_max_rows: 50000,
+    activity_interactions_max_kept: 50000,
     activity_debug_retention_days: 1,
-    activity_debug_max_rows: 10000,
-    config_history_keep: 50,
-    config_history_days: 90,
+    activity_debug_max_kept: 10000,
+    config_history_max_kept: 50,
+    config_history_retention_days: 90,
   },
   runtime_version: "b".repeat(64),
   runtime_editable: true,
@@ -85,9 +85,9 @@ export const HISTORY: ActivityHistory = {
   },
   default_level: "actions",
   bounds: [
-    { level: "actions", retention_days: 30, max_rows: 100000 },
-    { level: "interactions", retention_days: 7, max_rows: 50000 },
-    { level: "debug", retention_days: 1, max_rows: 10000 },
+    { level: "actions", retention_days: 30, max_kept: 100000 },
+    { level: "interactions", retention_days: 7, max_kept: 50000 },
+    { level: "debug", retention_days: 1, max_kept: 10000 },
   ],
   drops: [
     {

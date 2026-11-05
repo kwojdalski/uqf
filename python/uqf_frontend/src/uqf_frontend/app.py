@@ -1346,15 +1346,16 @@ def create_app(
             remote, target, config_dir=req.config_dir, file_count=req.file_count,
             total_bytes=req.total_bytes,
             user=activity.clean_user(audit_user(request)),
-            via="frontend", keep=live().config_history_keep,
-            keep_days=live().config_history_days, runner=request.app.state.remote_runner,
+            via="frontend", max_kept=live().config_history_max_kept,
+            retention_days=live().config_history_retention_days,
+            runner=request.app.state.remote_runner,
         )  # fmt: skip
         audit.note(push_id=answer["push_id"], pruned_count=len(answer["pruned"]))
         _audit_pruned(request, target, answer["pruned"])
         return ConfigPushOpenResponse(
             target=target, dest=answer["dest"], push_id=answer["push_id"],
-            pruned=answer["pruned"], keep=live().config_history_keep,
-            keep_days=live().config_history_days,
+            pruned=answer["pruned"], max_kept=live().config_history_max_kept,
+            retention_days=live().config_history_retention_days,
         )  # fmt: skip
 
     @app.post("/services/{target}/config/pushes/{push_id}/close", response_model=ConfigPushResponse)
@@ -1435,7 +1436,8 @@ def create_app(
         """What restoring the push would do - a dry run, writing nothing."""
         answer = remote_files.restore(
             _remote(target), target, push_id, dry_run=True, user=None, via="frontend",
-            keep=live().config_history_keep, keep_days=live().config_history_days,
+            max_kept=live().config_history_max_kept,
+            retention_days=live().config_history_retention_days,
             runner=request.app.state.remote_runner,
         )  # fmt: skip
         return _restore_response(target, answer)
@@ -1460,8 +1462,8 @@ def create_app(
             answer = remote_files.restore(
                 remote, target, push_id, dry_run=False,
                 user=activity.clean_user(audit_user(request)),
-                via="frontend", keep=live().config_history_keep,
-                keep_days=live().config_history_days,
+                via="frontend", max_kept=live().config_history_max_kept,
+                retention_days=live().config_history_retention_days,
                 runner=request.app.state.remote_runner, on_begin=audit.begin,
             )  # fmt: skip
         except remote_files.RestoreOutcomeUncertain:
@@ -1675,7 +1677,7 @@ def create_app(
                 ActivityBound(
                     level=typing.cast(Any, lvl),
                     retention_days=b.retention_days,
-                    max_rows=b.max_rows,
+                    max_kept=b.max_kept,
                 )
                 for lvl, b in history.bounds.items()
             ],

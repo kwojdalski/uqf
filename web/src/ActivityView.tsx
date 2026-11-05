@@ -374,7 +374,7 @@ export function ActivityView() {
             {data.bounds
               .map(
                 (b) =>
-                  `${b.level} ${b.retention_days} days, newest ${b.max_rows.toLocaleString()}`,
+                  `${b.level} ${b.retention_days} days, newest ${b.max_kept.toLocaleString()}`,
               )
               .join(" · ")}
             . Operational logging, not tamper-proof evidence. Browser rows are

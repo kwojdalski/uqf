@@ -262,7 +262,7 @@ def restore(
     from uqf_frontend import config, remote_files
 
     try:
-        keep, keep_days = config.history_bound()
+        max_kept, retention_days = config.history_bound()
     except ValueError as exc:
         _die(UqsError(str(exc)))
         return
@@ -270,8 +270,8 @@ def restore(
 
     def ask(dry: bool) -> Callable[[Any], dict[str, Any]]:
         return lambda r: remote_files.restore(
-            r, name, push_id, dry_run=dry, user=user, via="cli", keep=keep,
-            keep_days=keep_days, runner=RUNNER,
+            r, name, push_id, dry_run=dry, user=user, via="cli", max_kept=max_kept,
+            retention_days=retention_days, runner=RUNNER,
         )  # fmt: skip
 
     plan = _call(ask(True), name)["plan"]
