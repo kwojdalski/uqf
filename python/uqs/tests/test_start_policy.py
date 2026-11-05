@@ -15,6 +15,7 @@ import subprocess
 from datetime import UTC, datetime
 
 import pytest
+from mcp_support import call, refused
 
 from uqs import interpreter, mcp
 from uqs import paths as stack_paths
@@ -49,13 +50,11 @@ def test_all_is_still_torq_shs_own_selector(monkeypatch):
 
 
 def test_the_mcp_server_refuses_an_unknown_name(no_torq):
-    said = mcp.uqs_start("nosuchproc1")
-    assert said.startswith("ERROR:") and "nosuchproc1" in said
+    assert "nosuchproc1" in refused(call("uqs_start", procs=["nosuchproc1"]))
 
 
 def test_the_mcp_server_refuses_an_unknown_profile(no_torq):
-    said = mcp.uqs_start(profile="nosuchprofile")
-    assert said.startswith("ERROR:") and "nosuchprofile" in said
+    assert "nosuchprofile" in refused(call("uqs_start", profile="nosuchprofile"))
 
 
 def test_the_mcp_server_starts_a_profile_as_the_cli_resolves_it(monkeypatch):

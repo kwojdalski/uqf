@@ -483,7 +483,7 @@ def test_an_upload_is_audited_with_metadata_and_never_its_bytes(served, tmp_path
     resp, rows, dump = _audited(tmp_path, Loopback())
     assert resp.status_code == 200, resp.text
     (row,) = rows
-    assert row["action"] == "file.upload"
+    assert row["action"] == "files.upload"
     assert row["target"] == "box"
     assert row["outcome"] == "succeeded"
     assert row["detail"] == {

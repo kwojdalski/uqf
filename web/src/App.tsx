@@ -593,7 +593,7 @@ function DeskView() {
       setError("");
       resource.refresh();
       // How many filters, never their values: those are whatever was typed.
-      record("submit", "query.apply", {
+      record("submit", "desk.apply", {
         target: selected.name,
         detail: {
           tier,
@@ -604,7 +604,7 @@ function DeskView() {
       });
     } catch (error) {
       setError((error as Error).message);
-      record("submit", "query.apply", {
+      record("submit", "desk.apply", {
         target: selected.name,
         outcome: "refused",
         detail: { reason: "invalid input" },
@@ -635,7 +635,7 @@ function DeskView() {
               title={item.description}
               onClick={(event) => {
                 if (item.name !== selected?.name)
-                  record("select", "table.select", {
+                  record("select", "desk.table", {
                     target: item.name,
                     trigger: triggerOf(event),
                   });
@@ -712,7 +712,7 @@ function DeskView() {
                     value={tier}
                     onChange={(event) => {
                       setTier(event.target.value as Tier);
-                      record("select", "query.tier", {
+                      record("select", "desk.tier", {
                         target: selected?.name,
                         detail: { tier: event.target.value },
                       });

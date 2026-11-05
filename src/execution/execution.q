@@ -585,14 +585,7 @@
 / @throws error naming an unknown key, an unknown cancel_policy or a bad min_count
 / @private
 .qf.exec.fill_probability_opts:{[opts]
-    if[(::)~opts; :.qf.exec.fill_probability_defaults];
-    if[not 99h=type opts;
-        '"fill_probability_by: opts must be (::) or a dictionary of cancel_policy and/or min_count"];
-    unknown:(key opts) except key .qf.exec.fill_probability_defaults;
-    if[count unknown;
-        '"fill_probability_by: unknown option(s) ",(", " sv string unknown),
-         " - known: ",", " sv string key .qf.exec.fill_probability_defaults];
-    o:.qf.exec.fill_probability_defaults,opts;
+    o:.qf.util.resolve_opts[`fill_probability_by;opts;.qf.exec.fill_probability_defaults];
     if[not (o`cancel_policy) in `exclude`failure;
         '"fill_probability_by: cancel_policy must be `exclude or `failure, got ",-3!o`cancel_policy];
     if[not (type o`min_count) in -5 -6 -7h;
@@ -622,7 +615,7 @@
 
 / ---- venue_quality: a per-venue execution-quality scorecard (#338) -------
 / .
-/ ABSTRACT FOR NOW. The signature, inputs, config and output below are the
+/ ABSTRACT FOR NOW. The signature, inputs, opts and output below are the
 / contract; the computation is not written yet. venue_quality validates
 / everything it is given - that part is real and tested - and then throws
 / "not implemented". Implementing #338 means replacing its last line, not
@@ -639,7 +632,7 @@
 / possible result. Such a row is `incomplete and names the component in
 / `missing`, and a composite score over it is null.
 
-/ What venue_quality uses when config does not say.
+/ What venue_quality uses when opts does not say.
 / .
 / stale_after: a quote older than this at the end of its bucket counts as
 / stale - 5s by default, a convention rather than a derived number.
@@ -671,30 +664,32 @@
 /   reject_rate        rejects % requests; reject_rate_size weights by size
 /   n_fills            fills in the bucket
 /   markout_pips       mean post-fill markout per horizon, a float vector
-/                      aligned with config`horizons - positive when the market
+/                      aligned with the horizons argument - positive when the market
 /                      moved in the fill's favour, as markout
 /   status             `complete, `sparse (a component under min_count) or
 /                      `incomplete (a component with no observations)
 /   missing            the components with no observations
-/   score              the weighted composite, null without config`weights
+/   score              the weighted composite, null without opts`weights
 /                      and null for an `incomplete row
 / .
-/ Nothing after config`as_of is used, from any input.
+/ Nothing after as_of is used, from any input.
 / @param quotes table, one row per quote update: `time`sym`venue`bid`ask`bsize`asize
 / @param requests table, one row per request: `time`sym`venue`size`hit`reject
 /   - hit and reject are booleans, as hit_ratio_by and reject_ratio_by take
 / @param trades table, one row per fill: `time`sym`venue`side`trade_price`pip_factor
 /   - the shape markout_at_horizons takes, plus venue
 / @param window a positive timespan to bucket time by, e.g. 0D01:00:00
-/ @param config a dict: as_of (timestamp, required), horizons (timespan or
-/   timespans for the post-fill markouts, required), and optionally
-/   stale_after, min_count, weights and normalise - see venue_quality_defaults
+/ @param as_of the timestamp the scorecard is made at; nothing later is used
+/ @param horizons a timespan, or timespans, for the post-fill markouts
+/ @param opts (::) for the defaults, or a dict of any of stale_after,
+/   min_count, weights and normalise - see venue_quality_defaults; an
+/   unknown key is refused
 / @return the scorecard table described above
 / @throws error naming what is wrong with an argument; otherwise
 /   "not implemented" until #338 is built
-.qf.exec.venue_quality:{[quotes;requests;trades;window;config]
+.qf.exec.venue_quality:{[quotes;requests;trades;window;as_of;horizons;opts]
     .qf.exec.venue_quality_require_args[quotes;requests;trades;window];
-    .qf.exec.venue_quality_config[config];
+    .qf.exec.venue_quality_opts[as_of;horizons;opts];
     '"venue_quality: not implemented yet (#338) - the contract is fixed, the computation is not"};
 
 / Private: refuse venue_quality's tables and window, naming what is wrong.
@@ -710,23 +705,16 @@
     if[not window>0D00:00:00; '"venue_quality: window must be positive"];
     };
 
-/ Private: venue_quality's config, checked and resolved against the defaults.
-/ @throws error naming a missing or unknown key, or a value of the wrong kind
+/ Private: venue_quality's as_of, horizons and opts, checked and resolved
+/ against the defaults.
+/ @throws error naming an unknown option, or a value of the wrong kind
 / @private
-.qf.exec.venue_quality_config:{[config]
-    if[not 99h=type config;
-        '"venue_quality: config must be a dictionary with at least as_of and horizons"];
-    missing:`as_of`horizons except key config;
-    if[count missing; '"venue_quality: config is missing ",", " sv string missing];
-    unknown:(key config) except `as_of`horizons,key .qf.exec.venue_quality_defaults;
-    if[count unknown;
-        '"venue_quality: unknown config key(s) ",(", " sv string unknown),
-         " - known: as_of, horizons, ",", " sv string key .qf.exec.venue_quality_defaults];
-    c:.qf.exec.venue_quality_defaults,config;
-    if[not -12h=type c`as_of;
+.qf.exec.venue_quality_opts:{[as_of;horizons;opts]
+    c:.qf.util.resolve_opts[`venue_quality;opts;.qf.exec.venue_quality_defaults];
+    if[not -12h=type as_of;
         '"venue_quality: as_of must be a timestamp - nothing after it is used"];
-    if[null c`as_of; '"venue_quality: as_of is null"];
-    hs:(),c`horizons;
+    if[null as_of; '"venue_quality: as_of is null"];
+    hs:(),horizons;
     if[not 16h=type hs;
         '"venue_quality: horizons must be a timespan or timespan vector, e.g. 0D00:00:01 0D00:01:00"];
     if[0=count hs; '"venue_quality: horizons is empty"];
