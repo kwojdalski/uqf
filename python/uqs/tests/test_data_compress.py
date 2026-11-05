@@ -25,7 +25,7 @@ import pytest
 from typer.testing import CliRunner
 
 import uqs.cli.entry  # noqa: F401 - registers every command on the app
-from uqs.cli import data_compress
+from uqs.cli import compress_plan as data_compress
 from uqs.cli.shared import app
 from uqs.cli.target_confirm import changes_the_server, may_change_the_server
 from uqs.paths import UqsError, UqsUsageError
@@ -459,3 +459,16 @@ def test_apply_reloads_the_hdbs_once(cli):
     run, asked, _, _ = cli
     assert run("--apply", "--yes").exit_code == 0
     assert sum("reload_hdb" in a for a in asked) == 1
+
+
+def test_the_report_takes_no_plan_option_and_the_plan_no_hdb(cli):
+    run, asked, *_ = cli
+    done = run("--report", "--apply")
+    assert done.exit_code == 2 and not asked
+    done = run("--hdb", "/tmp")
+    assert done.exit_code == 2 and not asked
+
+
+def test_a_one_off_algorithm_reaches_the_plan(cli, monkeypatch):
+    sc = _scope_of(cli, monkeypatch, "--algo", "qipc", "--gzip-level", "0")
+    assert dict(sc.change) == {"calgo": 1, "clevel": 0}

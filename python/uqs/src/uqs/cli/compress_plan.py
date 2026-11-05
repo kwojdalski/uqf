@@ -1,5 +1,6 @@
-"""`uqs data compress`: the HDB's compression - planned, estimated and, with
---apply, run one partition at a time by TorQ's .cmp (#2147, #2148).
+"""`uqs data compress` without --report (cli/compress.py): the HDB's
+compression - planned, estimated and, with --apply, run one partition at a
+time by TorQ's .cmp (#2147, #2148).
 
 Without --apply nothing is changed: the plan is TorQ's `.cmp.showcomp` over
 the policy (`.qtorq.compress.plan`), each table's policy is named - its own or
@@ -25,20 +26,17 @@ import getpass
 import os
 import time
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Any
 
 import typer
 from rich.table import Table
 
 from uqs import activity_log, timerange
-from uqs.cli import completion, safety
+from uqs.cli import safety
 from uqs.cli.choices import ChoiceOpt
 from uqs.cli.hdb_scope import tables_given
-from uqs.cli.json_out import emit, json_opt
-from uqs.cli.range_options import DateOpt, LastOpt, RangeFromOpt, RangeToOpt
-from uqs.cli.safety import ConfirmsOnServer
-from uqs.cli.shared import BasePortOpt, _die, _paths, console, data_app
-from uqs.cli.vocabulary import duration
+from uqs.cli.json_out import emit
+from uqs.cli.shared import _paths, console
 from uqs.logger import get_logger
 from uqs.paths import UqsError, UqsPaths, UqsUsageError
 from uqs.stack import compress as stack_compress
@@ -48,14 +46,6 @@ log = get_logger()
 
 #: The activity history's action for a run.
 ACTION = "hdb.compress"
-
-CompressJson = json_opt(
-    '{"ok", "hdb", "process", "scope": {tables, older_than_days}, "policies": [{table, policy, '
-    'algo, blocksize, level, minage, columns}], "held": [{dataset, date}], "partitions": '
-    "[{table, partition, age, status, compress, decompress, skip, compressed, files, bytes_now, "
-    'bytes_after, bytes_written, dir}], "sample", "disk": [{filesystem, needed_bytes, '
-    'free_bytes, ok}], "totals", "result": null or {partitions, failed, audit}}'
-)
 
 
 #: --algo: TorQ's .cmp algorithms by name, `none` decompressing.
@@ -67,67 +57,26 @@ AlgoOpt = ChoiceOpt(
 )
 
 
-@data_app.command("compress", cls=ConfirmsOnServer)
-def compress(
-    table: Annotated[
-        list[str] | None,
-        typer.Option(
-            "--table",
-            metavar="TABLE",
-            help="Compress only this table; repeatable, and TABLE,TABLE also works",
-            autocompletion=completion.plant_table,
-        ),
-    ] = None,
-    older_than: Annotated[
-        int | None,
-        duration(
-            "--older-than",
-            integer=True,
-            help="Only partitions at least this old, a DURATION in whole days (7d), on top "
-            "of the policy's own minimum age",
-        ),
-    ] = None,
-    range_from: RangeFromOpt = None,
-    range_to: RangeToOpt = None,
-    day: DateOpt = None,
-    last: LastOpt = None,
-    algo: AlgoOpt = None,
-    blocksize: Annotated[
-        int | None,
-        typer.Option(
-            "--blocksize",
-            help="This run only: the logical block size, a power of two (16 is 64 KB), "
-            "instead of the policy's",
-        ),
-    ] = None,
-    level: Annotated[
-        int | None,
-        typer.Option("--level", help="This run only: the gzip level, instead of the policy's"),
-    ] = None,
-    base_port: BasePortOpt = None,
-    apply: safety.ApplyOpt = False,
-    yes: safety.ApplyYesOpt = False,
-    as_json: CompressJson = False,
-) -> None:
-    """Compress older HDB partitions as the policy says, through TorQ's .cmp.
-
-    TorQ's .cmp plans and compresses, in housekeeping1; this shows the
-    partitions and columns it would change and their state now, which policy
-    each table takes, the saving estimated on a sample, and the free disk the
-    run needs. Partitions the coverage ledger says are still being written are
-    held back. With --apply, after asking: one partition at a time, each
-    checked and the HDB reloaded, stopping at the first failure.
-    """
-    try:
-        window = timerange.resolve(range_from, range_to, day, last, open_ended=True)
-        named = any(v is not None for v in (range_from, range_to, day, last))
-        sc = stack_compress.scope(
-            tables_given(table), older_than, base_port,
-            window.partition_dates() if named else None, algo, blocksize, level,
-        )  # fmt: skip
-        plan_and_apply(sc, apply=apply, yes=yes, as_json=as_json)
-    except UqsError as exc:
-        _die(exc)
+def scope_given(
+    table: list[str] | None,
+    older_than: int | None,
+    base_port: int | None,
+    range_from: str | None,
+    range_to: str | None,
+    day: str | None,
+    last: float | None,
+    algo: str | None,
+    blocksize: int | None,
+    level: int | None,
+) -> stack_compress.Scope:
+    """The scope the command line names: days only when a range option was given
+    (the shared --from/--to/--date/--last, half-open), else the policy's."""
+    window = timerange.resolve(range_from, range_to, day, last, open_ended=True)
+    named = any(v is not None for v in (range_from, range_to, day, last))
+    return stack_compress.scope(
+        tables_given(table), older_than, base_port,
+        window.partition_dates() if named else None, algo, blocksize, level,
+    )  # fmt: skip
 
 
 def plan_and_apply(sc: stack_compress.Scope, *, apply: bool, yes: bool, as_json: bool) -> None:

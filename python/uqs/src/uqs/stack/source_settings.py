@@ -68,16 +68,17 @@ class Row:
     line: int
 
 
-def layers(paths: UqsPaths) -> list[Path]:
-    """Where sources.csv may be, most specific first. A runtime without a
-    service layer (the pure `torq` one) has two."""
+def layers(paths: UqsPaths, name: str = SETTINGS_FILE) -> list[Path]:
+    """Where a config file - sources.csv unless `name` says otherwise - may
+    be, most specific first. A runtime without a service layer (the pure
+    `torq` one) has two."""
     env = build_env(paths)
-    return [Path(env[var]) / SETTINGS_FILE for var in LAYER_VARS if var in env]
+    return [Path(env[var]) / name for var in LAYER_VARS if var in env]
 
 
-def selected(paths: UqsPaths) -> Path | None:
+def selected(paths: UqsPaths, name: str = SETTINGS_FILE) -> Path | None:
     """The file the stack reads: the first layer that has one, or None."""
-    return next((p for p in layers(paths) if p.is_file()), None)
+    return next((p for p in layers(paths, name) if p.is_file()), None)
 
 
 def inline_secret(transport: str, setting: str) -> bool:

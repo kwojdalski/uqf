@@ -25,6 +25,13 @@
 /   run     apply, then TorQ's HDB reload (.qtorq.reload_hdb, which already
 /           exists in torq_pipeline.q: the (`reload;date) message to every hdb
 /           found through .servers) only if something changed.
+/   report  what the HDB holds now, per table and column: the algorithm, block
+/           size and ratio -21! reads, the largest uncompressed partitions, and
+/           the partitions that are not sorted, or lack the attribute, that
+/           TorQ's sort.csv declares (the order and attribute the wdb gives a
+/           partition at end of day; KX's whitepaper measures sorted data
+/           compressing 669x against 10x unsorted). It walks the HDB with
+/           .cmp.hdbstructure, as plan does. Reads only: it never sorts.
 / .
 / WHAT STAYS TORQ'S, and is worth knowing: .cmp swaps file by file as each one
 / verifies, so a refused run may have converted some files before the one that
@@ -145,5 +152,89 @@
     r:.qtorq.compress.apply[hdb;conf;maxage];
     if[count r; .qtorq.reload_hdb[]];
     r}
+
+/ ------------------------------------------------------------------ REPORT
+
+/ Private: one file's compression as -21! reads it. A file -21! says nothing of is
+/ uncompressed: algorithm 0, and its bytes on disk are its raw bytes.
+/ @private
+.qtorq.compress.file_state:{[f]
+    h:-21!f;
+    k:`compressed`algo`blocksize`level`bytes`raw_bytes;
+    $[count h;
+        k!(1b;`int$h`algorithm;`int$h`logicalBlockSize;`int$h`zipLevel;h`compressedLength;h`uncompressedLength);
+        k!(0b;0i;0Ni;0Ni;b;b:hcount f)]}
+
+/ Every column file under an HDB with its compression state, walked by TorQ's own
+/ .cmp.hdbstructure (each par.txt segment, as .cmp.showcomp walks it), so the report
+/ sees exactly the files plan and apply would: no .d, no hash files, no root sym.
+/ @param hdb the HDB root, a file symbol
+/ @return table fullpath, table, partition, column, compressed, algo, blocksize (log2, as
+/   compressionconfig.csv's cblocksize), level, bytes (on disk), raw_bytes (uncompressed), ratio
+/ @throws error when .cmp is not loaded
+/ @eg .qtorq.compress.files `:/data/hdb
+.qtorq.compress.files:{[hdb]
+    .qtorq.compress.require_cmp[];
+    pt:` sv hdb,`par.txt;
+    roots:$[count key pt; hsym each `$read0 pt; enlist hdb];
+    t:select fullpath, table, partition, column from (raze .cmp.hdbstructure each roots) where not null table;
+    st:$[count t; .qtorq.compress.file_state each t`fullpath;
+        ([] compressed:`boolean$(); algo:`int$(); blocksize:`int$(); level:`int$(); bytes:`long$(); raw_bytes:`long$())];
+    t:flip flip[t],flip st;
+    update ratio:raw_bytes%bytes from t}
+
+/ Private: the sort.csv rows that apply to a table - its own, else the default ones -
+/ by the rule TorQ's .sort.sorttab uses at end of day.
+/ @private
+.qtorq.compress.sort_rows:{[params;t]
+    $[count r:select from params where tabname=t; r; select from params where tabname=`default]}
+
+/ Private: one table directory (a partition's, or a splayed table's) judged against
+/ its sort.csv rows: is it in the declared order, and does each column carry its
+/ declared attribute. Rows naming a column the table lacks are not judged here.
+/ @private
+.qtorq.compress.judge:{[params;dir;t;p]
+    sp:.qtorq.compress.sort_rows[params;t];
+    have:get ` sv dir,`.d;
+    sort_cols:exec column from sp where sort, not null column, column in have;
+    atts:exec column!att from sp where not null att, column in have;
+    d:get ` sv dir,`;
+    found:{[d;c] attr d c}[d] each key atts;
+    ([] table:enlist t; partition:enlist p; rows:count d; sort_by:enlist sort_cols;
+        sorted:$[count sort_cols; (til count d)~iasc sort_cols#d; 1b];
+        missing_attr:enlist (key atts) where not found=value atts;
+        declared_attr:enlist atts)}
+
+/ What an HDB's storage looks like now, per table and column: how each is compressed,
+/ where the uncompressed bytes are, and which partitions are out of the order or lack
+/ the attribute TorQ's sort.csv declares - unsorted data compresses tens of times worse.
+/ Reads file headers and the sort columns; writes nothing and re-sorts nothing.
+/ Symbol columns are judged in their enumeration's order, so the HDB's domain (its
+/ sym file) must be loaded, as in any process that has loaded the HDB.
+/ @param hdb the HDB root, a file symbol
+/ @param params sort.csv's rows as TorQ's .sort.getsortcsv loads them into .sort.params:
+/   tabname, att, column, sort
+/ @param n how many of the largest uncompressed partitions to list
+/ @return dictionary of three tables -
+/   columns: table, column, files, compressed (count), algos, blocksizes, bytes, raw_bytes, ratio
+/   (over every file) and compressed_ratio (over the compressed files only, null when none is);
+/   largest_uncompressed: table, partition, files, bytes, the n largest, largest first;
+/   unsorted: table, partition, rows, sort_by, sorted, missing_attr, declared_attr - only the
+/   table directories not sorted by their sort columns or missing a declared attribute
+/ @throws error when .cmp is not loaded
+/ @eg .qtorq.compress.report[`:/data/hdb;.sort.params;10]
+.qtorq.compress.report:{[hdb;params;n]
+    f:.qtorq.compress.files[hdb];
+    cs:0!select files:count i, compressed:sum compressed, algos:distinct algo,
+        blocksizes:distinct blocksize where not null blocksize, bytes:sum bytes,
+        raw_bytes:sum raw_bytes, ratio:(sum raw_bytes)%sum bytes,
+        compressed_ratio:(sum raw_bytes where compressed)%sum bytes where compressed by table, column from f;
+    big:n sublist `bytes xdesc 0!select files:count i, bytes:sum bytes by table, partition from f where not compressed;
+    dirs:0!select first table, first partition by dir from update dir:{` sv -1_` vs x} each fullpath from f;
+    dirs:select from dirs where {[d] not ()~key ` sv d,`.d} each dir;
+    j:$[count dirs;
+        raze {[params;r] .qtorq.compress.judge[params;r`dir;r`table;r`partition]}[params] each dirs;
+        ([] table:`symbol$(); partition:(); rows:`long$(); sort_by:(); sorted:`boolean$(); missing_attr:(); declared_attr:())];
+    `columns`largest_uncompressed`unsorted!(cs;big;select from j where (not sorted) or 0<count each missing_attr)}
 
 \d .

@@ -198,6 +198,9 @@
         ".qtorq.compress.plan[`:/data/hdb;`:/data/config/compressionconfig.csv;365]";
         ".qtorq.compress.apply[`:/data/hdb;`:/data/config/compressionconfig.csv;365]";
         ".qtorq.compress.run[`:/data/hdb;`:/data/config/compressionconfig.csv;365]";
+        ".qtorq.compress.files `:/data/hdb";
+        ".qtorq.compress.report[`:/data/hdb;.sort.params;10]";
+        ".qtorq.compress.apply_plan select from .qtorq.compress.plan[`:/data/hdb;`:/data/config/compressionconfig.csv;0W] where partition=2026.11.02";
         ".qetl.io.odbc.window_query[h;`deals;`deal_time;`deal_id`rate;from_ts;to_ts]";
         ".qdata.getBySymbolDate[`AAPL;2026.02.25]";
         ".qpipe.job.alert_sink.post[`$\":http://localhost:9/hook\";\"{}\"]";
@@ -218,6 +221,9 @@
         "runs TorQ's .cmp (showcomp), which a test process loads only inside the .qtorq.compress suite";
         "runs TorQ's .cmp (compressmaxage) over a real HDB, which a test process loads only inside the .qtorq.compress suite";
         "runs TorQ's .cmp over a real HDB, then asks the running hdbs to reload through .servers";
+        "walks a real HDB with TorQ's .cmp.hdbstructure, which a test process loads only inside the .qtorq.compress suite";
+        "reads a real HDB through TorQ's .cmp and .sort.params (sort.csv, as .sort.getsortcsv loads it), which a test process does not load";
+        "runs TorQ's .cmp (compressfromtable) over a real HDB's plan rows, which a test process loads only inside the .qtorq.compress suite";
         "opens an ODBC connection, which needs a licensed driver this tree does not require";
         "opens a Databento parquet file, which exists only where that data has been downloaded";
         "POSTs to a webhook, which needs an HTTP endpoint listening (#947)";

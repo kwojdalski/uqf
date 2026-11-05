@@ -231,3 +231,97 @@
     .qunit.assertEquals[n1;1];
     .qunit.assertEquals[count r2;0];
     .qunit.assertEquals[n2;1]}
+
+/ --- report (#2149) ---------------------------------------------------------
+
+/ sort.csv's default rows as TorQ ships them (lib/torq/config/sort.csv), in the shape
+/ .sort.getsortcsv loads them into .sort.params.
+.qt.qtorq.compress.sort_rows:{[] ([] tabname:`default`default; att:`p`; column:`sym`time; sort:11b)}
+
+/ One day of trade: sorted by sym then time with p#sym, as TorQ's wdb leaves it, or not.
+/ qty counts rows in the sorted order, so a shuffled day is out of order on qty as well.
+.qt.qtorq.compress.report_day:{[in_order;with_attr]
+    n:.qt.qtorq.compress.n;
+    t:`sym`time xasc ([] sym:n?`aa`bb`cc; time:n?0D23:59; px:n#1.5);
+    t:update qty:til n from t;
+    if[not in_order; t:t neg[n]?n];
+    $[with_attr; update `p#sym from t; t]}
+
+/ A fresh HDB of four days: two old ones as the wdb writes them, with px compressed at
+/ gzip level 6 and qty at gzip level 1 (set with a compression triple, the one way PeachQ
+/ writes a compressed file, #2153); a day 10 days old whose rows are out of order and
+/ carry no attribute; and one 5 days old in order but without p#.
+.qt.qtorq.compress.report_hdb:{[]
+    root:`$":",first system"mktemp -d";
+    days:.z.D-30 20 10 5;
+    {[root;d;s;a] (` sv root,`$string[d],"/trade/") set .Q.en[root;.qt.qtorq.compress.report_day[s;a]]}[root]'[days;1100b;1100b];
+    {[root;d;c;lvl] f:` sv root,(`$string d),`trade,c; v:get f; hdel f; (f;17;2;lvl) set v}[root]'[
+        days 0 0 1 1;`px`qty`px`qty;6 1 6 1];
+    root}
+
+.qt.qtorq.compress.test_report_reads_each_columns_algorithm_block_size_and_ratio:{[t]
+    root:.qt.qtorq.compress.report_hdb[];
+    r:.qtorq.compress.report[root;.qt.qtorq.compress.sort_rows[];10];
+    c:`column xkey r`columns;
+    .qunit.assertEquals[asc exec column from r`columns;`px`qty`sym`time];
+    .qunit.assertEquals[c[`px;`files];4];
+    .qunit.assertEquals[c[`px;`compressed];2];
+    .qunit.assertEquals[asc c[`px;`algos];0 2i];
+    .qunit.assertEquals[asc c[`qty;`algos];0 2i];
+    .qunit.assertEquals[c[`px;`blocksizes];enlist 17i];
+    .qunit.assertTrue[c[`px;`compressed_ratio]>50f;"a constant column shrinks by orders of magnitude"];
+    / ratio is over every file, the uncompressed ones at 1x, so it sits below the compressed one
+    .qunit.assertTrue[c[`px;`ratio]<c[`px;`compressed_ratio];"the whole column's ratio counts its plain files"];
+    .qunit.assertEquals[c[`sym;`compressed];0];
+    .qunit.assertTrue[null c[`sym;`compressed_ratio];"no compressed file, no compressed ratio"];
+    .qunit.assertEquals[c[`sym;`blocksizes];`int$()];
+    / the walk is .cmp's: no .d, no root sym file among the columns
+    .qunit.assertEquals[count .qtorq.compress.files root;16];
+    ::}
+
+.qt.qtorq.compress.test_report_lists_the_largest_uncompressed_partitions_first:{[t]
+    root:.qt.qtorq.compress.report_hdb[];
+    big:(.qtorq.compress.report[root;.qt.qtorq.compress.sort_rows[];2])`largest_uncompressed;
+    .qunit.assertEquals[count big;2];
+    / the two young days hold four plain files each; the old ones two
+    .qunit.assertEquals[asc big`partition;.z.D-10 5];
+    .qunit.assertEquals[big`files;4 4];
+    .qunit.assertTrue[(>=) . big`bytes;"largest first"];
+    all3:(.qtorq.compress.report[root;.qt.qtorq.compress.sort_rows[];10])`largest_uncompressed;
+    .qunit.assertEquals[count all3;4];
+    .qunit.assertEquals[all3`bytes;desc all3`bytes];
+    ::}
+
+.qt.qtorq.compress.test_report_names_the_unsorted_partition_and_the_one_missing_its_attribute:{[t]
+    root:.qt.qtorq.compress.report_hdb[];
+    u:`partition xasc (.qtorq.compress.report[root;.qt.qtorq.compress.sort_rows[];10])`unsorted;
+    .qunit.assertEquals[u`partition;.z.D-10 5];
+    .qunit.assertEquals[u`sorted;01b];
+    .qunit.assertEquals[u`missing_attr;(enlist `sym;enlist `sym)];
+    .qunit.assertEquals[first u`sort_by;`sym`time];
+    .qunit.assertEquals[first u`declared_attr;(enlist `sym)!enlist `p];
+    .qunit.assertEquals[u`rows;2#.qt.qtorq.compress.n];
+    ::}
+
+.qt.qtorq.compress.test_report_judges_a_table_by_its_own_sort_rows_before_the_default:{[t]
+    root:.qt.qtorq.compress.report_hdb[];
+    own:.qt.qtorq.compress.sort_rows[],([] tabname:enlist `trade; att:enlist `; column:enlist `qty; sort:enlist 1b);
+    u:(.qtorq.compress.report[root;own;10])`unsorted;
+    / trade's own row sorts by qty and declares no attribute: only the shuffled day fails
+    .qunit.assertEquals[u`partition;enlist .z.D-10];
+    .qunit.assertEquals[u`sort_by;enlist enlist `qty];
+    .qunit.assertEquals[u`missing_attr;enlist `symbol$()];
+    ::}
+
+.qt.qtorq.compress.test_report_writes_nothing_and_never_sorts:{[t]
+    root:.qt.qtorq.compress.report_hdb[];
+    b0:.qt.qtorq.compress.bytes root;
+    .qtorq.compress.report[root;.qt.qtorq.compress.sort_rows[];10];
+    .qunit.assertEquals[.qt.qtorq.compress.bytes root;b0];
+    ::}
+
+.qt.qtorq.compress.test_report_on_an_hdb_with_no_tables_is_empty:{[t]
+    root:`$":",first system"mktemp -d";
+    r:.qtorq.compress.report[root;.qt.qtorq.compress.sort_rows[];10];
+    .qunit.assertEquals[count each r;`columns`largest_uncompressed`unsorted!0 0 0];
+    ::}
