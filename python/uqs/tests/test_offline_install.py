@@ -275,10 +275,10 @@ def test_a_push_installs_the_release_offline_on_its_bundled_python(built, tmp_pa
     offline, pkg = Offline(tmp_path), built["pkg"]
     dest = tmp_path / "uqf"
     cfg = make_config(
-        artifact=str(pkg.path), host="uqf-server", dest=str(dest), profile="capture",
+        artifact=str(pkg.path), ssh="uqf-server", dest=str(dest), profile="capture",
         init_data=True, torq_home="/opt/torq",
-        q_mode="bundled", q_runtime=str(built["q"].path),
-        python_mode="bundled", python_runtime=str(built["python"].path),
+        q_mode="bundled", q_component=str(built["q"].path),
+        python_mode="bundled", python_component=str(built["python"].path),
     )  # fmt: skip
     dep = Deployment(cfg, offline, target=pkg.manifest["target"], release=RID)
     dep.runtime = artifact.release_runtime(pkg.manifest)

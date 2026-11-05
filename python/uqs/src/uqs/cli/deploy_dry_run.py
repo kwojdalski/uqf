@@ -34,14 +34,9 @@ def say_composition(composition: dict) -> None:
     console.print(dry_run_note())
 
 
-def end(dry_run: bool, code: int) -> None:
-    """A push's note, after a dry run that planned every target."""
+def end(dry_run: bool, code: int, as_json: bool = False) -> None:
+    """A dry run's note, once it planned everything: after the plan on
+    stdout, or - under --json, where stdout is the one document - on stderr
+    (#2125)."""
     if dry_run and not code:
-        console.print(dry_run_note())
-
-
-def end_json(dry_run: bool, code: int) -> None:
-    """prune's and rollback's note, on stderr: their stdout is the JSON report
-    another program reads, which a prose line after it would stop parsing."""
-    if dry_run and not code:
-        Console(stderr=True).print(dry_run_note())
+        (Console(stderr=True) if as_json else console).print(dry_run_note())

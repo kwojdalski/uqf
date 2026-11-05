@@ -225,7 +225,7 @@ def test_output_that_is_not_the_json_list_is_refused():
 
 def test_an_unknown_target_is_refused(server, died):
     result = _invoke("--tunnel", "nope", "1+1")
-    assert "no target or deployed server 'nope'" in str(result.exception)
+    assert "no target or deployed server nope - " in str(result.exception)
 
 
 # --- the tunnel ------------------------------------------------------------

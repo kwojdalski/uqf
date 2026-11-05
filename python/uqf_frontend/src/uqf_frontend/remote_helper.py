@@ -140,7 +140,7 @@ REPORT_FIELDS = (
     "stage",
     "error",
     "profile",
-    "host",
+    "ssh",
     "dest",
     "previous_release",
     "dirty",
@@ -414,6 +414,9 @@ def _read_report(root, release):
         os.close(fd)
     if not isinstance(data, dict):
         return None, "deploy-report.json is not a JSON object"
+    if "host" in data and "ssh" not in data:
+        # a report written before #2123 named the ssh destination `host`
+        data["ssh"] = data.pop("host")
     return {k: data[k] for k in REPORT_FIELDS if k in data}, None
 
 
