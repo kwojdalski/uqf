@@ -54,7 +54,7 @@ With `-keep`, the destination is an ordinary HDB: `q <its path>` loads it, and
 ## How the job was made
 
 ```bash
-uqs job new hdb_transfer --kind backfill --transport local --dataset trades_copy \
+uqs job new hdb_transfer --kind backfill --transport local --outputs trades_copy \
     --schema 'trade_id:long,sym:symbol,price:float,size:long,side:symbol,notional:float'
 ```
 

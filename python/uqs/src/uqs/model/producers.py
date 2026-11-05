@@ -90,7 +90,7 @@ def producers(root: Path) -> dict[str, tuple[Producer, ...]]:
     for path in sorted((root / REACTION_DIR).glob("*.q")):
         for r in reaction_calls(path.read_text()):
             job = Producer(reaction_job(r.dataset, r.name), REACTION, fillers.get(r.dataset, ()))
-            for table in dict.fromkeys(r.writes):
+            for table in dict.fromkeys(r.outputs):
                 found.setdefault(table, []).append(job)
     return {t: tuple(sorted(found[t], key=lambda p: p.job)) for t in sorted(found)}
 
