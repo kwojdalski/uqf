@@ -1,7 +1,7 @@
 """One request timeout, owned by the server (#1370).
 
 The browser used to hard-code 45 s (web/src/api.ts) while the server's own
-timeout was UQF_FRONTEND_TIMEOUT, so raising the latter changed nothing the
+timeout was UQF_FRONTEND_TIMEOUT_SECONDS, so raising the latter changed nothing the
 operator saw, and a `start all` slower than 45 s read as "timed out" in the
 browser while torq.sh was still running. Now `Settings.request_timeout` is the
 authority and /health serves it; api.ts keeps only the value that applies
