@@ -1021,7 +1021,7 @@ qf.exec,run,function,2,trades opts
 qf.exec,slippage,function,4,side arrival_price exec_price pip_factor
 qf.exec,summary,function,2,matches group_cols
 qf.exec,unrealised,function,2,lots marks
-qf.exec,venue_quality,function,5,quotes requests trades window config
+qf.exec,venue_quality,function,7,quotes requests trades window as_of horizons opts
 qf.exec,venue_quality_defaults,dict,,
 qf.exec,vwap,function,2,prices sizes
 qf.exec,vwap_expanding,function,2,prices sizes
@@ -1109,13 +1109,13 @@ qf.mkt,single_leg_at_one_size,function,4,cross_sym leg_book invert size
 qf.mkt,spread_bps,function,2,bid_prices ask_prices
 qf.mkt,spread_ratio,function,3,quotes target_sym window
 qf.mkt,stream_defaults,dict,,
-qf.mkt,stream_init,function,2,metrics config
+qf.mkt,stream_init,function,2,metrics opts
 qf.mkt,stream_metrics,value,,
 qf.mkt,stream_quote_metrics,value,,
 qf.mkt,stream_reset,function,2,state syms
 qf.mkt,stream_snapshot,function,1,state
 qf.mkt,stream_tape_metrics,value,,
-qf.mkt,stream_update,function,3,state batch config
+qf.mkt,stream_update,function,3,state batch opts
 qf.mkt,stream_version,value,,
 qf.mkt,summarize_checks,function,1,named_checks
 qf.mkt,sweep_price,function,3,prices sizes target_size
@@ -1180,7 +1180,7 @@ qf.px,ccy_pair_symbol,function,2,base quote
 qf.px,cont_to_simple,function,2,r t
 qf.px,convention_defaults,dict,,
 qf.px,convention_keys,value,,
-qf.px,convert_quotes,function,3,quotes target_conventions opts
+qf.px,convert_quotes,function,3,quotes target_conventions pip_factors
 qf.px,cross_rate,function,2,ab_rate bc_rate
 qf.px,cross_rate_shared_base,function,2,rate_ax rate_ay
 qf.px,d1,function,6,s k rd rf sigma t
@@ -1192,6 +1192,7 @@ qf.px,df_cont,function,2,r t
 qf.px,df_simple,function,2,r t
 qf.px,extrapolations,value,,
 qf.px,forward_at_date,function,5,spot curve value_date pip_factor opts
+qf.px,forward_at_date_defaults,dict,,
 qf.px,forward_date,function,5,spot_date tenor pair calendars conventions
 qf.px,fwd_cont,function,4,spot rd rf t
 qf.px,fwd_points,function,3,fwd spot pip_factor
@@ -1239,7 +1240,8 @@ qf.px,simple_to_cont,function,2,r t
 qf.px,spot_date,function,4,trade_date pair calendars conventions
 qf.px,swap_cashflows,function,1,swap
 qf.px,swap_keys,value,,
-qf.px,swap_value,function,4,swap market valuation_date opts
+qf.px,swap_value,function,5,swap market valuation_date pip_factor opts
+qf.px,swap_value_defaults,dict,,
 qf.px,weekday,function,1,d
 qf.px,weekdays,value,,
 qf.px,year_frac,function,3,conv d1 d2
@@ -1260,6 +1262,7 @@ qf.util,refresh,function,3,current spec partitions
 qf.util,require_cols,function,4,fn_name table_name tbl req
 qf.util,require_depth_quotes,function,2,fn_name quotes
 qf.util,require_name,function,1,name
+qf.util,resolve_opts,function,3,fn_name opts defaults
 qpipe.job.alert_sink,alert_period,value,,
 qpipe.job.alert_sink,alerts,dict,,
 qpipe.job.alert_sink,breach_cols,value,,

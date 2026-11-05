@@ -130,6 +130,9 @@ def _health(dep: Deployment, current: str, report: dict | None) -> dict:
     )
     return {
         "checked": True,
+        # `ok` is every --json document's success flag (#2122); `passed` stays for a
+        # deploying uqs of another version, as in `deploy check` (#1882)
+        "ok": bool(result.get("passed")),
         "passed": bool(result.get("passed")),
         "reason": result.get("reason") or "",
         "processes": result.get("processes", []),

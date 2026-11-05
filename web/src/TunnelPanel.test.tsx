@@ -27,7 +27,7 @@ const SERVICES: Services = {
 function mapping(over: Partial<TunnelMapping> = {}): TunnelMapping {
   return {
     process: "rdb1",
-    role: "rdb",
+    proctype: "rdb",
     remote_host: "prod.example",
     remote_port: 6002,
     local_host: "127.0.0.1",
@@ -55,7 +55,7 @@ const PLAN: TunnelPlan = {
     mapping(),
     mapping({
       process: "hdb1",
-      role: "hdb",
+      proctype: "hdb",
       remote_port: 6003,
       local_port: 16003,
       production_endpoint: "prod.example:6003",
@@ -82,7 +82,7 @@ const CHECK: TunnelCheck = {
   endpoints: [
     {
       process: "rdb1",
-      role: "rdb",
+      proctype: "rdb",
       production_endpoint: "prod.example:6002",
       local_endpoint: "127.0.0.1:16002",
       remote_port: 6002,
@@ -97,7 +97,7 @@ const CHECK: TunnelCheck = {
     },
     {
       process: "hdb1",
-      role: "hdb",
+      proctype: "hdb",
       production_endpoint: "prod.example:6003",
       local_endpoint: "127.0.0.1:16003",
       remote_port: 6003,

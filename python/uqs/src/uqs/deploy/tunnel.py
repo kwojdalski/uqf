@@ -51,14 +51,23 @@ Popen = Callable[..., Any]
 USAGE_ERROR = 2
 
 
-def list_args(runtime: str | None, base_port: int | None, current: bool = True) -> list[str]:
+def list_args(runtime: str | None, base_port: int | None) -> list[str]:
     """The remote uqs's argv for its process list: the runtime only when one
-    was chosen here, so the release's own deploy.env otherwise decides. A
-    release from before #1858 lists them as `uqs process list` (`current`
-    False)."""
+    was chosen here, so the release's own deploy.env otherwise decides."""
     args = ["--runtime", runtime] if runtime else []
-    args += ["process", "list", "--json"] if current else ["list", "processes", "--json"]
+    args += ["process", "list", "--json"]
     return args + (["--base-port", str(base_port)] if base_port is not None else [])
+
+
+def _too_old(r: control.Remote) -> UqsError:
+    """A release that lists its processes in a form from before #1882 - as
+    `{procname}` rows, or not as `uqs process list` at all (#1858). Refused
+    with the redeploy that fixes it, never read under the old key (#2109)."""
+    return UqsError(
+        f"target {r.name}: its release lists its processes in the form from before "
+        "#1882 (`procname`, not `process`) - `uqs deploy` a current release there, "
+        "or give --port"
+    )
 
 
 def remote_ports(
@@ -67,8 +76,8 @@ def remote_ports(
     base_port: int | None = None,
     runner: Runner = subprocess.run,
 ) -> dict[str, int]:
-    """procname -> port, as the target's deployed release resolves them: by
-    `uqs process list`, or on a release from before it `uqs process list`."""
+    """process -> port, as the target's deployed release resolves them by
+    `uqs process list`."""
     return {row["process"]: row["port"] for row in remote_processes(r, runtime, base_port, runner)}
 
 
@@ -79,13 +88,10 @@ def remote_processes(
     runner: Runner = subprocess.run,
 ) -> list[dict[str, Any]]:
     """Every process the target's deployed release declares, as
-    `{process, proctype, port}` - proctype "" where a release's list did not
-    carry it. The one discovery both `query --tunnel` and the tunnel plan
+    `{process, proctype, port}`. The one discovery both `query --tunnel` and the tunnel plan
     (deploy/tunnel_plan.py) read."""
     try:
         done = _list(r, list_args(runtime, base_port), runner)
-        if done.returncode == USAGE_ERROR:
-            done = _list(r, list_args(runtime, base_port, current=False), runner)
     except subprocess.TimeoutExpired:
         raise UqsError(
             f"target {r.name}: listing its processes did not finish within "
@@ -94,6 +100,8 @@ def remote_processes(
     except OSError as exc:
         raise UqsError(f"could not run ssh: {exc}") from None
     control.refuse_unreached(r, done.returncode)
+    if done.returncode == USAGE_ERROR:
+        raise _too_old(r)
     if done.returncode:
         said = diagnostic(done) or "nothing"
         raise UqsError(
@@ -115,16 +123,17 @@ def _list(r: control.Remote, args: list[str], runner: Runner) -> subprocess.Comp
 
 def _parse_rows(r: control.Remote, out: str) -> list[dict[str, Any]]:
     """The document `uqs process list --json` prints, from where it starts:
-    `{"processes": [{process, port}]}` (#1882), or the bare list of
-    `{procname, port}` a release from before it printed - the release on the
-    server is whatever was deployed there, not this checkout."""
+    `{"processes": [{process, proctype, port}]}` (#1882). The bare list of
+    `{procname, port}` an older release printed is refused (`_too_old`)."""
     start = min((i for i in (out.find("{"), out.find("[")) if i >= 0), default=-1)
     try:
-        doc = json.loads(out[start:]) if start >= 0 else []
-        rows: list = doc["processes"] if isinstance(doc, dict) else doc
+        doc = json.loads(out[start:]) if start >= 0 else {}
+        rows = doc["processes"] if isinstance(doc, dict) else None
+        if rows is None:
+            raise _too_old(r)
         found = [
             {
-                "process": str(row.get("process", row.get("procname"))),
+                "process": str(row["process"]),
                 "proctype": str(row.get("proctype") or ""),
                 "port": int(row["port"]),
             }

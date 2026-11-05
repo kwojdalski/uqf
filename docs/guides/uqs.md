@@ -1670,13 +1670,13 @@ uqs target tunnel plan prod rdb1 hdb1 --local rdb1:7002 --json
 uqs target tunnel check prod --password-env PROD_Q_PASSWORD
 ```
 
-The processes, their roles and their remote ports come from the target's
+The processes, their proctypes and their remote ports come from the target's
 release, as `query --tunnel` reads them. A local port is the remote port plus
 `--local-offset` (10000) unless `--local PROC:PORT` names one. The plan refuses
 a process that is not declared there, one that is not an rdb, hdb, wdb or
 gateway, a port out of range, and two forwards sharing one local port. Each
 refusal under `--json` carries a `kind`: `discovery`, `unknown_process`,
-`unsupported_role`, `invalid_port` or `port_conflict`.
+`unsupported_proctype`, `invalid_port` or `port_conflict`.
 
 The check tests each endpoint in the order a connection is made, and the first
 layer that fails gives the endpoint's status:
@@ -1699,18 +1699,40 @@ functions.
 
 ## MCP server
 
-`uqs-mcp` exposes the CLI's operations as MCP tools (`uqs_start`, `uqs_status`,
-`uqs_query`, ... - [`mcp.py`](../../python/uqs/src/uqs/mcp.py) has the list),
-for an MCP client to drive the stack. `exec` is not exposed. Point the client's
-server command at:
+`uqs-mcp` exposes the CLI's operations as MCP tools, for an MCP client to drive
+the stack. `exec` is not exposed. Point the client's server command at:
 
 ```
 uv run uqs-mcp
 ```
 
-(stdio transport). `uqs_query` returns row dicts for a table. `uqs_start` takes
-a `profile` too, and refuses what `uqs start` refuses: an unknown process or an
-unrunnable profile.
+(stdio transport). Each tool is one CLI command, named after it, and takes that
+command's options spelled as identifiers (#2120):
+
+  | Tool                                                                                                                                                                                                                | CLI command                         |
+  | ---                                                                                                                                                                                                                 | ---                                 |
+  | `uqs_start`, `uqs_stop`, `uqs_restart`, `uqs_status`, `uqs_clean`                                                                                                                                                   | `uqs start`, ...                    |
+  | `uqs_query`                                                                                                                                                                                                         | `uqs query`                         |
+  | `uqs_logs`                                                                                                                                                                                                          | `uqs logs --json`                   |
+  | `uqs_config_show`, `uqs_config_set`                                                                                                                                                                                 | `uqs config show`, `uqs config set` |
+  | `uqs_process_list`, `uqs_profile_list`, `uqs_config_field_list`, `uqs_config_list`, `uqs_config_env`, `uqs_job_list`, `uqs_target_list`, `uqs_runtime_list`, `uqs_job_attachment_list`, `uqs_job_attachment_status` | each noun's `list`                  |
+  | `uqs_connector_start`, `uqs_connector_stop`, `uqs_connector_status`                                                                                                                                                 | `uqs connector ...`                 |
+
+So `base_port` is the stack's base port wherever a stack is meant, and `port` is
+only ever one process's - `uqs_query`'s, as `--port` is on the CLI. `procs` is a
+list of process names, `proc` one; `uqs_query` takes `password_env`, the name of
+the variable holding the password, never the password; `uqs_start` takes
+`profile`, and `dry_run=true` for the start lines alone. `uqs_start` refuses
+what `uqs start` refuses: an unknown process or an unrunnable profile.
+
+Every tool returns one JSON object - a list tool its noun's `--json` document,
+`uqs_query` `{"expression", "result"}` - and every failure is the CLI's one
+refusal, `{"ok": false, "error": "..."}`, marked as an error: a refused start,
+an unknown tool, a bad argument and a query that cannot connect alike. A retired
+tool or parameter (`uqs_summary`, `uqs_list`, `uqs_print`, `uqs_get_config`,
+`uqs_crypto_*`, `port` for a base port, `passwd`, `procname`, `min_level`) is
+refused naming what replaced it. `python/uqs/tests/test_mcp_vocabulary.py` holds
+every tool to its CLI command's names and types.
 
 ## Other commands
 
@@ -2041,8 +2063,7 @@ A fixed verb vocabulary (#1733):
 `status` is the state of something running, `check` a probe that exits non-zero
 on a problem, `list` many records and `show` one. A push or rollback asks a
 release for `deploy check`, or for `deploy verify` on a release from before it.
-The MCP tool `uqs_summary` is `uqs_status`, and `uqs_summary` stays for one
-release.
+The MCP tool `uqs_summary` is `uqs_status`, and is refused naming it.
 
 One vocabulary (#1857):
 
@@ -2208,10 +2229,23 @@ One contract holds for every document (#1882):
   cell shows: a port is a number, a flag `true`/`false`, a set of names a list.
   Where the table shows words for a missing value - `(chosen at start)`,
   `no cap`, `(nothing declares it)` - the document has `null` or `[]`;
-- a process is `process`, wherever the table calls it `procname`;
+- one concept has one key, at every depth of the document, not only on a list's
+  records (#2122): a process is `process` wherever the table calls it
+  `procname`, the start-all flag `start_with_all` (process.csv's
+  `startwithall`), a job `job` (the run ledger's `worker`), a stack's base port
+  `base_port` (an attached destination's `stack_id`), and a time range
+  `range_from`/`range_to`, never a `range` object;
 - a document that reports a verdict says it as `ok`, `false` exactly when the
   command exits non-zero (`deploy check` keeps `passed` beside it, which a
-  deploying uqs of another version reads; `job check` keeps `worst`);
+  deploying uqs of another version reads, and so does `deploy status`'s
+  `health`; `job check` keeps `worst`). `ok` is a bool wherever it appears: a
+  row with a richer result says it under `outcome` beside it - `data alter`'s
+  readers are `{process, ok, outcome, detail}`, `outcome` one of `reloaded`,
+  `failed`, `down`, `skipped`, `not asked`, and only `reloaded` is `ok`. `uqs`
+  refuses to print a document that breaks this, rather than print one a script
+  would misread;
+- what a document carries as data - a `query`'s result, `job preview`'s sampled
+  rows, `data diff`'s rows - keeps the data's own column names;
 - a time is ISO-8601 with an explicit offset: q's local `.z.P` (a log line,
   TorQ's clock) carries this machine's, a ledger's `.z.p` `+00:00`, and a
   fraction of a second keeps all its digits.
@@ -2244,10 +2278,10 @@ Each command's `--help` names its document. The commands #1731 added:
   | `schema [PROC] [TABLE]`                     | `{process, port, tables: [{table, rows, columns}]}`, or with a TABLE `{process, port, columns: [{table, column, type, q, attribute}]}`                                                                                                                                            |
   | `logs`                                      | `{lines: [{time, host, process, proctype, loglevel, id, message}]}`; not with `--follow`, `--channel` or `--multitail`                                                                                                                                                            |
   | `config show PROC [FIELD]`                  | `{process, fields: [{field, value}]}`, or `{process, field, value}`                                                                                                                                                                                                               |
-  | `job gaps`                                  | `{job, gaps: [{range_from, range_to}], sessions, refillable, refills: [{worker, range_from, range_to, command}], today_not_refillable}`                                                                                                                                           |
+  | `job gaps`                                  | `{job, gaps: [{range_from, range_to}], sessions, refillable, refills: [{job, range_from, range_to, command}], today_not_refillable}`                                                                                                                                              |
   | `job preview`                               | the preview's own result: `{job, mode, state, live, cursor, next_cursor, advances, fetched, rows, sample, failures, trace}`                                                                                                                                                       |
   | `job check`                                 | `{dataset, range_from, range_to, producers: [{producer, mode, source}], readonly, checks: [{category, status, dataset, scope, range_from, range_to, basis, reason, findings}], behaviours: [...], worst, ok}`                                                                     |
-  | `job runs list [--unfinished]`              | `{runs: [{run_id, worker, dataset, status, range_from, range_to, ...}]}`                                                                                                                                                                                                          |
+  | `job runs list [--unfinished]`              | `{runs: [{run_id, job, dataset, status, range_from, range_to, ...}]}`                                                                                                                                                                                                             |
   | `job runs show RUN`                         | `{run, facts, logs, rerun}`                                                                                                                                                                                                                                                       |
   | `job runs audit`                            | `{facts: [{run_id, dataset, range_from, range_to, label, text}]}`                                                                                                                                                                                                                 |
   | `data snapshot list`                        | `{snapshots: [{id, kind, datasets, digest, created_at, actor, reason, digest_ok}], ok}`; exits 1 when a digest does not match its content                                                                                                                                         |

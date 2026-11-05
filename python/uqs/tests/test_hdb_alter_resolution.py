@@ -142,7 +142,7 @@ def test_the_readers_serving_the_hdb_are_reloaded(monkeypatch, tmp_path):
     where = hdb_where.resolve("pb", fake)
     rows = hdb_where.reload_readers(where, fake)
     assert fake.reloaded == ["hdb1"]
-    assert rows == [{"procname": "hdb1", "ok": "yes", "detail": ""}]
+    assert rows == [{"process": "hdb1", "ok": True, "outcome": "reloaded", "detail": ""}]
 
 
 # ------------------------------------------------------------------ ssh

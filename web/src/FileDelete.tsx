@@ -105,7 +105,9 @@ export function FileDelete({
           {report.results.map((item, index) => (
             <li key={index}>
               <code>{JSON.stringify(item.path)}</code>:{" "}
-              {item.deleted ? "Deleted" : `Not deleted: ${item.error}`}
+              {item.outcome === "succeeded"
+                ? "Deleted"
+                : `Not deleted: ${item.error}`}
             </li>
           ))}
         </ul>

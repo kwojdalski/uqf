@@ -40,7 +40,7 @@ export function mappingMarks(mapping: TunnelMapping): string[] {
  *  the plan holds none. */
 export function connectionText(mapping: TunnelMapping): string {
   return [
-    `${mapping.process} (${mapping.role}) [${mappingMarks(mapping).join(", ")}]`,
+    `${mapping.process} (${mapping.proctype}) [${mappingMarks(mapping).join(", ")}]`,
     `production: ${mapping.production_endpoint}`,
     `local: ${mapping.local_endpoint}`,
     `query: ${mapping.query_command}`,
@@ -100,7 +100,7 @@ export function ConnectionRows({ mappings }: { mappings: TunnelMapping[] }) {
         <thead>
           <tr>
             <th>process</th>
-            <th>role</th>
+            <th>proctype</th>
             <th>production</th>
             <th>local</th>
             <th>state</th>
@@ -112,7 +112,7 @@ export function ConnectionRows({ mappings }: { mappings: TunnelMapping[] }) {
           {mappings.map((mapping) => (
             <tr key={mapping.process}>
               <td>{mapping.process}</td>
-              <td>{mapping.role}</td>
+              <td>{mapping.proctype}</td>
               <td>
                 <code>{mapping.production_endpoint}</code>
               </td>

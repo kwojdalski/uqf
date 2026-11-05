@@ -174,8 +174,8 @@ export interface CompareResult {
   outcome: CompareOutcome;
   left: string;
   right: string;
-  from: string;
-  to: string;
+  range_from: string;
+  range_to: string;
   limit: number;
   filters: string[];
   source_version: string;
@@ -309,7 +309,7 @@ export interface Backfill extends Pollable {
  * Row read by string key, so a renamed `up` is a compile error and a failing
  * test_api_types.py, not every process shown Down (#1361). */
 export interface ProcessHealth {
-  procname: string;
+  process: string;
   proctype: string;
   group: string;
   host: string;
@@ -318,7 +318,7 @@ export interface ProcessHealth {
   up: boolean;
   pid: number | null;
   reported_port: number | null;
-  reported_procname: string | null;
+  reported_process: string | null;
   error: string | null;
   identity_mismatch: string | null;
   port_unresolved: boolean;
@@ -387,7 +387,8 @@ export interface RemoteEntry {
   name: string;
   kind: "dir" | "file" | "symlink" | "special" | "unknown";
   size: number | null;
-  mtime: number | null;
+  /** Last modified: ISO-8601, UTC to the nanosecond. */
+  mtime: string | null;
   blocked: boolean;
   reason: string | null;
 }
@@ -428,7 +429,7 @@ export interface TunnelCheckRecord {
  * here is uqs's; the browser never builds one from a port. */
 export interface TunnelMapping {
   process: string;
-  role: string;
+  proctype: string;
   remote_host: string;
   remote_port: number;
   local_host: string;
@@ -454,7 +455,7 @@ export interface TunnelPlan {
 /** One endpoint of a tunnel check - models.TunnelEndpointOut. */
 export interface TunnelEndpoint {
   process: string;
-  role: string;
+  proctype: string;
   production_endpoint: string;
   local_endpoint: string;
   remote_port: number;
@@ -758,7 +759,7 @@ function instant(value: string): bigint {
 // --- control (writes) ------------------------------------------------------
 
 export interface ControlProcess {
-  procname: string;
+  process: string;
   proctype: string;
   start_with_all: boolean;
 }
@@ -774,7 +775,7 @@ export interface ControlStatus extends Pollable {
 export interface LifecycleBody {
   procs: string;
 }
-/** PUT /control/process/{procname}/config - models.ProcessConfigRequest. */
+/** PUT /control/process/{process}/config - models.ProcessConfigRequest. */
 export interface ProcessConfigBody {
   field: string;
   value: string;
@@ -799,7 +800,7 @@ export interface CommandResult {
   output: string;
 }
 export interface ProcessConfigResult {
-  procname: string;
+  process: string;
   config: Record<string, string>;
   settable_fields: string[];
 }
@@ -822,7 +823,7 @@ export interface BackfillStarted {
   source_version: string;
   range_from: string;
   range_to: string;
-  procname: string;
+  process: string;
   status_path: string;
 }
 
@@ -900,7 +901,7 @@ export interface RemoteUpload {
   sha256: string;
   replaced: boolean;
   mode: number;
-  created: string[];
+  created_dirs: string[];
   push_id: string;
   previous_size: number | null;
   previous_sha256: string | null;
@@ -923,17 +924,17 @@ export const UPLOAD_MAX_FILES = 500;
 export const UPLOAD_MAX_TOTAL_BYTES = 256 * 1024 * 1024;
 
 /** The URL that writes `path` (relative to the deployment root) as one
- * file of push `push`. */
+ * file of push `pushId`. */
 export function remoteUploadPath(
   target: string,
   path: string,
   overwrite: boolean,
-  push: string,
+  pushId: string,
 ): string {
   const query = new URLSearchParams({
     path,
     overwrite: String(overwrite),
-    push,
+    push_id: pushId,
   });
   return `/services/${encodeURIComponent(target)}/files/content?${query}`;
 }
@@ -990,11 +991,11 @@ export function uploadRemoteFile(
   overwrite: boolean,
   onProgress: (fraction: number) => void,
   signal: AbortSignal,
-  push: string,
+  pushId: string,
 ): Promise<RemoteUpload> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
-    xhr.open("PUT", remoteUploadPath(target, path, overwrite, push));
+    xhr.open("PUT", remoteUploadPath(target, path, overwrite, pushId));
     const token = writeToken.get();
     if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
     xhr.setRequestHeader("Content-Type", "application/octet-stream");
@@ -1048,6 +1049,11 @@ export function uploadRemoteFile(
 
 // --- config push history (#2002) -------------------------------------------
 
+/** What happened to one file - models.FileOutcome, the one vocabulary every
+ * per-file result uses (#2108): a delete, a restore step, a reported file. */
+export type FileOutcome =
+  "succeeded" | "failed" | "refused" | "unknown" | "cancelled" | "invalid";
+
 /** POST /services/{target}/config/pushes - models.ConfigPushOpenRequest. */
 export interface ConfigPushOpenBody {
   destination: string;
@@ -1073,7 +1079,7 @@ export interface ConfigPushOpened {
  * models.ConfigPushReported. */
 export interface ConfigPushReport {
   path: string;
-  outcome: "uncertain" | "cancelled" | "failed" | "refused" | "invalid";
+  outcome: FileOutcome;
 }
 /** POST .../config/pushes/{id}/close - models.ConfigPushCloseRequest. */
 export interface ConfigPushCloseBody {
@@ -1112,7 +1118,7 @@ export interface ConfigPushSummary {
   file_count?: number | null;
   total_bytes?: number | null;
   states?: Record<string, number> | null;
-  reported?: number | null;
+  reported_count?: number | null;
   error?: string | null;
 }
 /** GET /services/{target}/config/pushes - models.ConfigHistoryResponse. */
@@ -1127,7 +1133,7 @@ export interface ConfigHistory {
 /** models.ConfigPushReportedOut. */
 export interface ConfigPushReported {
   path: string;
-  outcome: string;
+  outcome: FileOutcome;
 }
 /** A push's manifest - models.ConfigPushOut. */
 export interface ConfigPush {
@@ -1182,7 +1188,7 @@ export interface RestoreStep {
 export interface RestoreResult {
   path: string;
   step: "write" | "delete";
-  outcome: "succeeded" | "failed";
+  outcome: FileOutcome;
   error: string | null;
 }
 /** POST .../config/pushes/{id}/restore - models.ConfigRestoreRequest. */
@@ -1193,7 +1199,7 @@ export interface ConfigRestoreBody {
 export interface ConfigRestore {
   target: string;
   root: string;
-  source_push_id: string;
+  restores: string;
   dry_run: boolean;
   push_id: string | null;
   plan: RestoreStep[];
@@ -1240,37 +1246,37 @@ export interface PushOps {
   open(target: string, body: ConfigPushOpenBody): Promise<ConfigPushOpened>;
   close(
     target: string,
-    push: string,
+    pushId: string,
     reported: ConfigPushReport[],
   ): Promise<ConfigPushDetail>;
 }
 
 export const pushOps: PushOps = {
   open: (target, body) => writeHistory(pushesPath(target), body),
-  close: (target, push, reported) =>
-    writeHistory(pushesPath(target, push, "close"), { reported }),
+  close: (target, pushId, reported) =>
+    writeHistory(pushesPath(target, pushId, "close"), { reported }),
 };
 
 /** The calls the history view makes: injectable, as PushOps is. */
 export interface HistoryOps {
   list(target: string, signal?: AbortSignal): Promise<ConfigHistory>;
-  show(target: string, push: string): Promise<ConfigPushDetail>;
-  diff(target: string, push: string, path?: string): Promise<ConfigDiff>;
-  plan(target: string, push: string): Promise<ConfigRestore>;
-  restore(target: string, push: string): Promise<ConfigRestore>;
+  show(target: string, pushId: string): Promise<ConfigPushDetail>;
+  diff(target: string, pushId: string, path?: string): Promise<ConfigDiff>;
+  plan(target: string, pushId: string): Promise<ConfigRestore>;
+  restore(target: string, pushId: string): Promise<ConfigRestore>;
 }
 
 export const historyOps: HistoryOps = {
   list: (target, signal) => readHistory(pushesPath(target), signal),
-  show: (target, push) => readHistory(pushesPath(target, push)),
-  diff: (target, push, path) =>
+  show: (target, pushId) => readHistory(pushesPath(target, pushId)),
+  diff: (target, pushId, path) =>
     readHistory(
-      pushesPath(target, push, "diff") +
+      pushesPath(target, pushId, "diff") +
         (path ? `?${new URLSearchParams({ path })}` : ""),
     ),
-  plan: (target, push) => readHistory(pushesPath(target, push, "restore")),
-  restore: (target, push) =>
-    writeHistory(pushesPath(target, push, "restore"), { confirmed: true }),
+  plan: (target, pushId) => readHistory(pushesPath(target, pushId, "restore")),
+  restore: (target, pushId) =>
+    writeHistory(pushesPath(target, pushId, "restore"), { confirmed: true }),
 };
 
 // --- activity history (#1954) ----------------------------------------------
@@ -1406,7 +1412,7 @@ export interface RemoteDeleteRequest {
 }
 export interface RemoteDeleteResult {
   path: string;
-  deleted: boolean;
+  outcome: FileOutcome;
   error: string | null;
 }
 export interface RemoteDeleteResponse {

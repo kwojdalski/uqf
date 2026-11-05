@@ -58,8 +58,8 @@ FAKE_UQS = """#!/bin/bash
 echo "$@" > "$FAKE_SSH_LOG/uqs.args"
 echo "some notice before the rows"
 cat <<'JSON'
-[{"procname": "gateway1", "proctype": "gateway", "port": "17007"},
- {"procname": "rdb1", "proctype": "rdb", "port": "17002"}]
+{"processes": [{"process": "gateway1", "proctype": "gateway", "port": 17007},
+               {"process": "rdb1", "proctype": "rdb", "port": 17002}]}
 JSON
 """
 
@@ -400,17 +400,17 @@ def test_split_global_takes_yes_as_y_too():
     assert control.split_global(["-y", "--target", "uat", "stop"]) == ("uat", True, ["stop"])
 
 
-def test_a_release_from_before_process_list_is_asked_with_list_processes():
-    """#1858: the ports come from `uqs process list --json`; a release from
-    before it has only `uqs list processes`, which answers the usage error."""
+def test_a_release_from_before_process_list_is_refused_with_the_redeploy():
+    """#1858: the ports come from `uqs process list --json`. A release from
+    before it answers the usage error, and its `uqs list processes` printed
+    `procname` rows: it is refused, not asked again the old way (#2109)."""
     seen = []
 
     def runner(argv, **_kw):
         seen.append(argv)
-        old = "processes" in " ".join(map(str, argv))
-        out = '[{"procname": "rdb1", "port": 6052}]' if old else ""
-        return subprocess.CompletedProcess(argv, 0 if old else tunnel.USAGE_ERROR, out, "")
+        return subprocess.CompletedProcess(argv, tunnel.USAGE_ERROR, "", "")
 
     r = control.Remote("dev", "h", "/srv")
-    assert tunnel.remote_ports(r, None, runner=runner) == {"rdb1": 6052}
-    assert len(seen) == 2 and "processes" not in " ".join(map(str, seen[0]))
+    with pytest.raises(UqsError, match=r"target dev: .*before #1882 .*`uqs deploy` a current"):
+        tunnel.remote_ports(r, None, runner=runner)
+    assert len(seen) == 1

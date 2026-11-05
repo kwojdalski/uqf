@@ -141,7 +141,7 @@ it("actions records what was done, and no control or request", async () => {
   const events = await script();
   expect(kinds(events).every((k) => ACTION_KINDS.includes(k))).toBe(true);
   expect(actions(events, "navigate")).toEqual(["view.open"]);
-  expect(actions(events, "select")).toEqual(["query.tier", "table.select"]);
+  expect(actions(events, "select")).toEqual(["desk.table", "desk.tier"]);
   expect(actions(events, "submit")).toEqual(["process.stop"]);
   expect(actions(events, "cancel")).toEqual(["process.stop"]);
 });
@@ -217,7 +217,7 @@ it("records a file input by how many files, never their names", async () => {
   const uninstall = installActivity();
   const input = document.createElement("input");
   input.type = "file";
-  input.setAttribute("data-activity", "upload.files");
+  input.setAttribute("data-activity", "files.upload.files");
   document.body.append(input);
   const file = new File(["secret,row"], "SECRET-FILE-NAME.csv");
   Object.defineProperty(input, "files", { value: [file] });
@@ -225,7 +225,7 @@ it("records a file input by how many files, never their names", async () => {
   uninstall();
   const events = await recorded();
   expect(events.map((e) => [e.action, e.target, e.detail])).toEqual([
-    ["ui.change", "upload.files", { control: "file", item_count: 1 }],
+    ["ui.change", "files.upload.files", { control: "file", item_count: 1 }],
   ]);
   expect(JSON.stringify(events)).not.toContain("SECRET");
 });
