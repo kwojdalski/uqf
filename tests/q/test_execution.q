@@ -637,9 +637,8 @@
 .qt.qf.exec.execution.mk_vq_trades:{[]
     ([] time:`timestamp$(); sym:`symbol$(); venue:`symbol$(); side:`long$(); trade_price:`float$();
         pip_factor:`long$())}
-.qt.qf.exec.execution.vq_config:{[] `as_of`horizons!(2026.09.15D12:00:00.000000000;0D00:00:01 0D00:01:00)}
 .qt.qf.exec.execution.vq_call:{[args] .qf.exec.venue_quality . args}
-.qt.qf.exec.execution.vq_args:{[] (.qt.qf.exec.execution.mk_vq_quotes[];.qt.qf.exec.execution.mk_vq_requests[];.qt.qf.exec.execution.mk_vq_trades[];0D01:00:00;.qt.qf.exec.execution.vq_config[])}
+.qt.qf.exec.execution.vq_args:{[] (.qt.qf.exec.execution.mk_vq_quotes[];.qt.qf.exec.execution.mk_vq_requests[];.qt.qf.exec.execution.mk_vq_trades[];0D01:00:00;2026.09.15D12:00:00.000000000;0D00:00:01 0D00:01:00;::)}
 
 .qt.qf.exec.execution.test_venue_quality_is_abstract_for_now:{[t]
     .qunit.assertThrows[.qt.qf.exec.execution.vq_call;.qt.qf.exec.execution.vq_args[];
@@ -663,29 +662,29 @@
     .qunit.assertThrows[.qt.qf.exec.execution.vq_call;@[.qt.qf.exec.execution.vq_args[];3;:;`hourly];
         "venue_quality: window must be a timespan*";"a window is a timespan"]};
 
-.qt.qf.exec.execution.test_venue_quality_refuses_a_config_missing_as_of:{[t]
-    .qunit.assertThrows[.qt.qf.exec.execution.vq_call;@[.qt.qf.exec.execution.vq_args[];4;{`as_of _ x}];
-        "venue_quality: config is missing as_of";"no cutoff means hindsight can leak in"]};
+.qt.qf.exec.execution.test_venue_quality_refuses_a_null_as_of:{[t]
+    .qunit.assertThrows[.qt.qf.exec.execution.vq_call;@[.qt.qf.exec.execution.vq_args[];4;:;0Np];
+        "venue_quality: as_of is null";"no cutoff means hindsight can leak in"]};
 
-.qt.qf.exec.execution.test_venue_quality_refuses_an_unknown_config_key:{[t]
-    .qunit.assertThrows[.qt.qf.exec.execution.vq_call;@[.qt.qf.exec.execution.vq_args[];4;{x,(enlist `foo)!enlist 1}];
-        "venue_quality: unknown config key(s) foo*";"a typo in a key is not silently ignored"]};
+.qt.qf.exec.execution.test_venue_quality_refuses_an_unknown_option:{[t]
+    .qunit.assertThrows[.qt.qf.exec.execution.vq_call;@[.qt.qf.exec.execution.vq_args[];6;:;(enlist `foo)!enlist 1];
+        "venue_quality: unknown option(s) foo - known: stale_after, min_count, weights, normalise";"a typo in a key is not silently ignored"]};
 
 .qt.qf.exec.execution.test_venue_quality_refuses_a_non_timestamp_as_of:{[t]
-    .qunit.assertThrows[.qt.qf.exec.execution.vq_call;@[.qt.qf.exec.execution.vq_args[];4;{x,(enlist `as_of)!enlist 2026.09.15}];
+    .qunit.assertThrows[.qt.qf.exec.execution.vq_call;@[.qt.qf.exec.execution.vq_args[];4;:;2026.09.15];
         "venue_quality: as_of must be a timestamp*";"a date is not an instant"]};
 
 .qt.qf.exec.execution.test_venue_quality_refuses_a_non_positive_horizon:{[t]
-    .qunit.assertThrows[.qt.qf.exec.execution.vq_call;@[.qt.qf.exec.execution.vq_args[];4;{x,(enlist `horizons)!enlist -0D00:00:01}];
+    .qunit.assertThrows[.qt.qf.exec.execution.vq_call;@[.qt.qf.exec.execution.vq_args[];5;:;-0D00:00:01];
         "venue_quality: every horizon must be positive";"a markout looks forward"]};
 
 .qt.qf.exec.execution.test_venue_quality_refuses_weights_without_normalise:{[t]
-    .qunit.assertThrows[.qt.qf.exec.execution.vq_call;@[.qt.qf.exec.execution.vq_args[];4;{x,(enlist `weights)!enlist `spread_bps`fill_rate!0.5 0.5}];
+    .qunit.assertThrows[.qt.qf.exec.execution.vq_call;@[.qt.qf.exec.execution.vq_args[];6;{[x] (enlist `weights)!enlist `spread_bps`fill_rate!0.5 0.5}];
         "venue_quality: weights need a normalise method*";"raw bps, rates and pips are not one scale"]};
 
 .qt.qf.exec.execution.test_venue_quality_accepts_weights_with_normalise:{[t]
-    .qunit.assertThrows[.qt.qf.exec.execution.vq_call;@[.qt.qf.exec.execution.vq_args[];4;{x,`weights`normalise!(`spread_bps`fill_rate!0.5 0.5;`zscore)}];
-        "venue_quality: not implemented yet (#338)*";"a complete config gets as far as the computation"]};
+    .qunit.assertThrows[.qt.qf.exec.execution.vq_call;@[.qt.qf.exec.execution.vq_args[];6;{[x] `weights`normalise!(`spread_bps`fill_rate!0.5 0.5;`zscore)}];
+        "venue_quality: not implemented yet (#338)*";"a complete opts gets as far as the computation"]};
 
 
 .qt.qf.exec.execution.test_markout_at_horizons_on_no_trades_is_empty_not_an_error:{[t]
