@@ -68,7 +68,7 @@ qetl.compare,tiers,value,,
 qetl.compare,typed,function,2,ty v
 qetl.compare,verdict,function,5,tbl names l r lim
 qetl.coverage,attach,function,1,
-qetl.coverage,claims,function,4,ds part release at
+qetl.coverage,claims,function,4,ds part version as_of
 qetl.coverage,compose,function,1,intervals
 qetl.coverage,contributing_runs,function,3,ds part version
 qetl.coverage,defer_ready,value,,
@@ -88,7 +88,7 @@ qetl.coverage,note_written,function,3,ds part version
 qetl.coverage,outstanding,function,3,ds part version
 qetl.coverage,partitions_of,function,1,ds
 qetl.coverage,persist,function,1,
-qetl.coverage,ready_claims,function,4,ds part release at
+qetl.coverage,ready_claims,function,4,ds part version as_of
 qetl.coverage,ready_path,function,1,
 qetl.coverage,release_dates,function,2,ks at
 qetl.coverage,release_ready,function,1,at
@@ -998,7 +998,7 @@ qf.exec,markout_at_horizons,function,3,trades quotes horizons
 qf.exec,markout_cols,value,,
 qf.exec,methods,dict,,
 qf.exec,position,function,2,lots group_cols
-qf.exec,position_at,function,3,trades opts ts
+qf.exec,position_at,function,3,trades opts as_of
 qf.exec,reject_ratio,function,2,num_rejects num_requests
 qf.exec,reject_ratio_by,function,6,requests range_from range_to bucket_size group_cols mode
 qf.exec,require_method,function,1,decl
@@ -1248,6 +1248,7 @@ qf.util,profile,function,3,time_cols null_cols rules
 qf.util,quoted,function,1,s
 qf.util,reconcile,function,5,metatable dates ds part version
 qf.util,refresh,function,3,current spec partitions
+qf.util,renamed_opts,dict,,
 qf.util,require_cols,function,4,fn_name table_name tbl req
 qf.util,require_depth_quotes,function,2,fn_name quotes
 qf.util,require_name,function,1,name

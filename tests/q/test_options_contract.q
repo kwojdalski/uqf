@@ -79,3 +79,29 @@
     .qunit.assertEquals[.qf.util.resolve_opts[`f;enlist[`b]!enlist 2;d];`a`b!1 2;"a given key wins"];
     .qunit.assertThrows[.qf.util.resolve_opts[`f;;d];5;"f: opts must be (::) for the defaults, or a dictionary of a, b";"not a dictionary"];
     .qunit.assertThrows[.qf.util.resolve_opts[`f;;d];`c`d!1 2;"f: unknown option(s) c, d - known: a, b";"every unknown key is named"]};
+
+/ ------------------------------------------------------------- AS-OF SPELLING (#2119)
+/ The instant a computation is "as of" is `as_of` everywhere: a parameter, an
+/ options key, a column. `asof` (a q keyword, and the old .qf.exec.run key) and
+/ `ts` (the old position_at parameter) are refused. The coverage readers keep
+/ ds/version/part/from_ts/to_ts on purpose - those are ledger column names, and
+/ they are not as-of spellings, so this gate does not touch them.
+
+.qt.qf.util.options_contract.test_no_function_spells_the_as_of_instant_asof_or_ts:{[t]
+    f:.qt.qf.util.options_contract.functions[];
+    bad:exec fn from f where {any x in `asof`ts} each params;
+    .qunit.assertEquals[bad;`symbol$();"a .qf function parameter spells the as-of instant asof or ts, not as_of"]};
+
+.qt.qf.util.options_contract.test_the_old_asof_key_is_refused_naming_as_of:{[t]
+    {[n]
+        .qunit.assertThrows[.qt.qf.util.options_contract.probes n;(enlist `asof)!enlist 1;"*`asof is now `as_of*";
+            (string n)," must refuse asof and say it is now as_of"]} each .qt.qf.util.options_contract.opts_functions[]};
+
+.qt.qf.util.options_contract.test_no_options_key_is_ts:{[t]
+    {[n]
+        .qunit.assertThrows[.qt.qf.util.options_contract.probes n;(enlist `ts)!enlist 1;"*unknown option(s) ts*";
+            (string n)," must not accept ts as an option"]} each .qt.qf.util.options_contract.opts_functions[]};
+
+.qt.qf.util.options_contract.test_run_takes_as_of_and_truncates:{[t]
+    trades:.qt.qf.exec.allocation.mk_two_lots[];
+    .qunit.assertEquals[count .qf.exec.residual[trades;`method`as_of!(`fifo;2026.01.01D10:30:00.000000000)];2;"as_of is the truncation key"]};
