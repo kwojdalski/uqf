@@ -244,17 +244,15 @@ def build_plan(
     )
     return {
         "mode": "plan",
-        "worker": worker,
+        "job": worker,
         "attachment": att.name,
         "destination": dest.as_dict(),
         "source": {"name": facts["source"], "live": facts["live"]},
         "dataset": facts["dataset"],
         "source_version": version,
-        "range": {
-            "from": range_from.astimezone(UTC).isoformat(),
-            "to": range_to.astimezone(UTC).isoformat(),
-            "half_open": "[from, to)",
-        },
+        # half-open, [range_from, range_to): spelt as every window and ledger row is (#2122)
+        "range_from": range_from.astimezone(UTC).isoformat(),
+        "range_to": range_to.astimezone(UTC).isoformat(),
         "conflict_policy": facts["on_conflict"],
         "reload_owed": facts["reload_owed"],
         "windows": windows,
@@ -271,10 +269,10 @@ def build_plan(
             "write_lock": f"{dest.hdb_dir}.write.lock",
         },
         "reload_targets": [
-            {"procname": r.procname, "port": r.port} for r in admission.reload_targets
+            {"process": r.procname, "port": r.port} for r in admission.reload_targets
         ],
         "readers_not_serving": [
-            {"procname": r.procname, "detail": r.detail} for r in admission.readers if not r.serves
+            {"process": r.procname, "detail": r.detail} for r in admission.readers if not r.serves
         ],
         "mutates": False,
     }
@@ -282,16 +280,16 @@ def build_plan(
 
 def render(plan: dict[str, Any]) -> str:
     """The plan as an operator reads it."""
-    d, cov, rng = plan["destination"], plan["coverage"], plan["range"]
-    head = f"admission plan: {plan['worker']} -> attachment {plan['attachment']}"
+    d, cov = plan["destination"], plan["coverage"]
+    head = f"admission plan: {plan['job']} -> attachment {plan['attachment']}"
     lines = [
         f"{head} (nothing was written)",
         f"  destination   {d['hdb_dir']}",
-        f"                stack {d['stack_id']} on {d['host']}, id {d['identity']}",
+        f"                stack {d['base_port']} on {d['host']}, id {d['identity']}",
         f"  state         {d['state_dir']}",
         f"  source        {plan['source']['name']} -> {plan['dataset']}",
         f"  version       {plan['source_version']}",
-        f"  range         {rng['from']} to {rng['to']}  {rng['half_open']}",
+        f"  range         {plan['range_from']} to {plan['range_to']}  [from, to)",
         f"  conflict      {plan['conflict_policy']}",
         f"  windows       {len(plan['windows'])}: fetch {cov['fetch']}, already covered "
         f"{cov['covered']}, deferred {cov['deferred']}",
@@ -322,10 +320,10 @@ def render(plan: dict[str, Any]) -> str:
         f"  beside root   {plan['beside_the_root']['staging']} (staging), "
         f"{plan['beside_the_root']['write_lock']} (write lock)"
     )
-    targets = ", ".join(f"{t['procname']}:{t['port']}" for t in plan["reload_targets"]) or "none"
+    targets = ", ".join(f"{t['process']}:{t['port']}" for t in plan["reload_targets"]) or "none"
     lines.append(f"  reload        {targets}")
     for r in plan["readers_not_serving"]:
-        lines.append(f"    not reloaded  {r['procname']} ({r['detail']})")
+        lines.append(f"    not reloaded  {r['process']} ({r['detail']})")
     return "\n".join(lines)
 
 

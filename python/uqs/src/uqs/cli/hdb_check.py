@@ -34,7 +34,7 @@ from uqs.cli.hdb_scope import (
     run_scoped,
     tables_given,
 )
-from uqs.cli.json_out import emit, json_opt
+from uqs.cli.json_out import Verbatim, emit, json_opt
 from uqs.cli.renames import ATTACHMENT, alias_command, renamed
 from uqs.cli.safety import ConfirmsOnServer
 from uqs.cli.shared import _die, _paths, console, data_app
@@ -174,8 +174,11 @@ def _whole_runtime(*, apply: bool, yes: bool, as_json: bool) -> None:
             "present": True,
             "segmented": layout.segmented,
             "partitions": len(layout.listing),
-            "missing_tables": {p: sorted(t) for p, t in short.items()},
-            "missing_columns": {p: {t: sorted(c) for t, c in by.items()} for p, by in thin.items()},
+            # keyed by partition, then table: names, not keys the document spells
+            "missing_tables": Verbatim({p: sorted(t) for p, t in short.items()}),
+            "missing_columns": Verbatim(
+                {p: {t: sorted(c) for t, c in by.items()} for p, by in thin.items()}
+            ),
             "types_checked": changed is not None,
             "type_changes": changed or [],
         })  # fmt: skip

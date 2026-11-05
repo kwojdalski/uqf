@@ -304,7 +304,7 @@ def backfill(
         )
         procname = stack_backfill.procname_for(worker)
         started = {
-            "worker": worker, "process": procname, "source_version": resolved,
+            "job": worker, "process": procname, "source_version": resolved,
             "range_from": bound_from.isoformat(), "range_to": bound_to.isoformat(),
             "mode": mode or "run", "started": result.returncode == 0,
             "output": (result.stdout or "").splitlines() if as_json else [],

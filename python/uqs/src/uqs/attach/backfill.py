@@ -89,7 +89,7 @@ class Destination:
     def as_dict(self) -> dict[str, Any]:
         return {
             "attachment": self.attachment,
-            "stack_id": self.stack_id,
+            "base_port": self.stack_id,
             "host": self.host,
             "hdb_dir": str(self.hdb_dir),
             "dataset": self.dataset,
