@@ -22,10 +22,13 @@
     if[not `getconfigfile in key `.proc; `.proc.getconfigfile set {[n] enlist `:build/none.csv}; `.qt.qtorq.compress.added set .qt.qtorq.compress.added,`proc];
     system"l lib/torq/code/common/compress.q"; }
 
+.qt.fixture.torq_cmp.clear:{[ns]
+    {[ns;n] ![ns;();0b;enlist n]}[ns] each (key ns) except `;}
+
 .qt.fixture.torq_cmp.unload:{[]
-    delete from `.cmp;
-    if[`lg in .qt.qtorq.compress.added; delete from `.lg];
-    if[`proc in .qt.qtorq.compress.added; delete from `.proc];
+    .qt.fixture.torq_cmp.clear[`.cmp];
+    if[`lg in .qt.qtorq.compress.added; .qt.fixture.torq_cmp.clear[`.lg]];
+    if[`proc in .qt.qtorq.compress.added; .qt.fixture.torq_cmp.clear[`.proc]];
     `.qt.qtorq.compress.added set `symbol$(); }
 
 .qt.qtorq.compress.setUp_fresh:{[]
@@ -87,7 +90,7 @@
 
 .qt.qtorq.compress.test_plan_refuses_where_torqs_compression_is_not_loaded:{[t]
     / the runner's setUp has loaded .cmp for this test; take it away again
-    delete from `.cmp;
+    .qt.fixture.torq_cmp.clear[`.cmp];
     m:@[{.qtorq.compress.plan[`:/nowhere;`:/nowhere.csv;365]; ""};::;{x}];
     .qunit.assertTrue[m like "qtorq.compress: TorQ's .cmp is not loaded*";"named: ",m]}
 
@@ -204,7 +207,8 @@
     `.servers.getservers set {[hs;a;b;c;d;e] ([] w:hs)}[handles]; }
 
 .qt.qtorq.compress.unservers:{[]
-    $[.qt.qtorq.compress.had_servers; `.servers.getservers set .qt.qtorq.compress.old_servers; delete from `.servers]; }
+    if[.qt.qtorq.compress.had_servers; `.servers.getservers set .qt.qtorq.compress.old_servers];
+    if[not .qt.qtorq.compress.had_servers; .qt.fixture.torq_cmp.clear[`.servers]]; }
 
 .qt.qtorq.compress.calls:()
 
