@@ -392,7 +392,7 @@
 
 .qt.qpipe.job.demo_deals_backfill.test_define_refuses_an_unknown_on_conflict:{[t]
     d:@[.qt.support.declaration `demo_deals_backfill;`outputs`on_conflict;:;(enlist `ddbftest_oc;`merge)];
-    .qunit.assertThrows[{.qetl.job.bounded.define[`ddbftest_oc_worker;x]};(`ns`procname`note) _ d;
+    .qunit.assertThrows[{.qetl.job.bounded.define[`ddbftest_oc_worker;x]};(`ns`procname`note`twin_of`twin_calculation) _ d;
         "on_conflict must be one of *";"a typo fails the declaration, not the first window"]};
 
 / A worker over a source that can be restated declares no default, so a run
@@ -403,7 +403,7 @@
 
 .qt.qpipe.job.demo_deals_backfill.test_a_declared_default_source_version_is_kept:{[t]
     d:@[.qt.support.declaration `demo_deals_backfill;`outputs`source_version;:;(enlist `ddbftest_sv;`v7)];
-    .qetl.job.bounded.define[`ddbftest_sv_worker;(`ns`procname`note) _ d];
+    .qetl.job.bounded.define[`ddbftest_sv_worker;(`ns`procname`note`twin_of`twin_calculation) _ d];
     .qunit.assertEquals[.qetl.job.bounded.default_version `ddbftest_sv_worker;`v7;
         "a run that names no version records coverage under v7"]};
 
@@ -423,7 +423,7 @@
 
 .qt.qpipe.job.demo_deals_backfill.test_a_command_line_without_version_takes_the_declared_default:{[t]
     d:@[.qt.support.declaration `demo_deals_backfill;`outputs`source_version;:;(enlist `ddbftest_flags;`v9)];
-    .qetl.job.bounded.define[`ddbftest_flags_worker;(`ns`procname`note) _ d];
+    .qetl.job.bounded.define[`ddbftest_flags_worker;(`ns`procname`note`twin_of`twin_calculation) _ d];
     s:.qetl.job.bounded.spec_from_flags .qt.qpipe.job.demo_deals_backfill.flags[`ddbftest_flags_worker;"";"2026.09.13";"2026.09.14"];
     .qunit.assertEquals[s[`spec]`source_version;`v9;
         "the declared default, on either launcher - the dev one used to refuse here"]};
@@ -452,7 +452,7 @@
 
 .qt.qpipe.job.demo_deals_backfill.test_define_refuses_a_source_version_that_is_not_a_symbol:{[t]
     d:@[.qt.support.declaration `demo_deals_backfill;`outputs`source_version;:;(enlist `ddbftest_sv2;"v1")];
-    .qunit.assertThrows[{.qetl.job.bounded.define[`ddbftest_sv2_worker;x]};(`ns`procname`note) _ d;
+    .qunit.assertThrows[{.qetl.job.bounded.define[`ddbftest_sv2_worker;x]};(`ns`procname`note`twin_of`twin_calculation) _ d;
         "*source_version must be a symbol*";"a string is refused at declaration"]};
 
 .qt.qpipe.job.demo_deals_backfill.test_the_target_key_defaults_to_the_source_row_key:{[t]
@@ -464,14 +464,14 @@
 .qt.qpipe.job.demo_deals_backfill.test_define_refuses_a_source_row_key_the_transform_renames:{[t]
     d:@[.qt.support.declaration `upstream_trades_backfill;`outputs;:;enlist `ddbftest_tk];
     / Two patterns, not "*...*...*": KDB-X's like throws 'nyi past two wildcards.
-    e:.qunit.assertThrows[{.qetl.job.bounded.define[`ddbftest_tk_worker;x]};`ns`procname`note`target_key _ d;
+    e:.qunit.assertThrows[{.qetl.job.bounded.define[`ddbftest_tk_worker;x]};`ns`procname`note`twin_of`twin_calculation`target_key _ d;
         "*source row_key names ex which transform upstream_trades_to_local does not output*";
         "a key the transform drops fails the declaration, not every window"];
     .qunit.assertTrue[e like "*declare target_key*";"and the refusal says what to do"]};
 
 .qt.qpipe.job.demo_deals_backfill.test_define_refuses_a_target_key_outside_the_output:{[t]
     d:@[.qt.support.declaration `demo_deals_backfill;`outputs`target_key;:;(enlist `ddbftest_tk;`deal_ref)];
-    .qunit.assertThrows[{.qetl.job.bounded.define[`ddbftest_tk_worker;x]};`ns`procname`note _ d;
+    .qunit.assertThrows[{.qetl.job.bounded.define[`ddbftest_tk_worker;x]};`ns`procname`note`twin_of`twin_calculation _ d;
         "*target_key names deal_ref which transform demo_deals_passthrough does not output*";
         "a declared key is held to the output too"]};
 
@@ -483,11 +483,11 @@
 
 .qt.qpipe.job.demo_deals_backfill.test_define_refuses_a_window_column_outside_the_output:{[t]
     d:@[.qt.support.declaration `demo_deals_backfill;`outputs`window_column;:;(enlist `ddbftest_wc;`nosuch)];
-    .qunit.assertThrows[{.qetl.job.bounded.define[`ddbftest_wc_worker;x]};`ns`procname`note _ d;
+    .qunit.assertThrows[{.qetl.job.bounded.define[`ddbftest_wc_worker;x]};`ns`procname`note`twin_of`twin_calculation _ d;
         "*window_column nosuch is not among transform demo_deals_passthrough's output columns*";
         "a declared window column is held to the output"];
     d2:@[.qt.support.declaration `demo_deals_backfill;`outputs`window_column;:;(enlist `ddbftest_wc;"deal_time")];
-    .qunit.assertThrows[{.qetl.job.bounded.define[`ddbftest_wc_worker;x]};`ns`procname`note _ d2;
+    .qunit.assertThrows[{.qetl.job.bounded.define[`ddbftest_wc_worker;x]};`ns`procname`note`twin_of`twin_calculation _ d2;
         "*window_column must be a symbol*";"and must be a symbol"]};
 
 / A transform that drops every time column leaves `replace nothing to clear by.

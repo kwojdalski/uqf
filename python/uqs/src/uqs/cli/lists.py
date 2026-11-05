@@ -75,9 +75,9 @@ JsonOpt = Annotated[
     ),
 ]
 
-#: The key a kind's rows are under in its --json document, where it is not
-#: the kind's own name.
-_JSON_KEY = {"named overrides": "overrides", "env": "variables"}
+#: The key a kind's rows are under in its --json document, and in uqs-mcp's
+#: list tool's, where it is not the kind's own name.
+JSON_KEY = {"named overrides": "overrides", "env": "variables"}
 _SORT_HELP = "Sort by this column (case-insensitive, numeric-aware)."
 
 
@@ -98,7 +98,7 @@ def _print(kind, base_port, export, sort, reverse, interactive, as_json, rows=No
     items = _sorted_items(items, sort, reverse)
     shown = [cells(item) for item in items]  # what a table cell and an export hold
     if as_json:
-        emit({_JSON_KEY.get(kind, kind): records(items)})
+        emit({JSON_KEY.get(kind, kind): records(items)})
         _export(shown, export)
         return
     table = Table(title=f"{kind} ({len(items)})")

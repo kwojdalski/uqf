@@ -46,7 +46,7 @@ class Refusing:
 
 
 def _dep(**kw) -> Deployment:
-    cfg = make_config(artifact="", host="h", dest="/opt/uqf", profile="essential", **kw)
+    cfg = make_config(artifact="", ssh="h", dest="/opt/uqf", profile="essential", **kw)
     return Deployment(cfg, Refusing())
 
 

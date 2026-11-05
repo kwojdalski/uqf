@@ -126,6 +126,33 @@ def test_every_state_changing_route_is_named_in_server_actions():
     assert _write_routes() == set(activity.SERVER_ACTIONS)
 
 
+#: The one action prefix each area of state-changing routes is audited under,
+#: by the start of the route template (#2110). `GET /activity?action=` matches
+#: a dotted prefix, so `?action=files` must find every file write - and a
+#: route of an area with a stray prefix (`file.upload` beside `files.delete`)
+#: would hide from it.
+_ACTION_AREAS = {
+    "/services/{target}/files/": "files",
+    "/services/{target}/config/": "config",
+    "/control/process": "process",
+    "/control/worker-config": "worker",
+    "/control/backfill": "backfill",
+    "/settings/": "settings",
+}
+
+
+def test_every_server_action_shares_its_areas_prefix():
+    params = {"target": "t", "procname": "p", "push_id": "1"}
+    stray = {}
+    for (method, route), name_of in activity.SERVER_ACTIONS.items():
+        (prefix,) = [p for start, p in _ACTION_AREAS.items() if route.startswith(start)] or [None]
+        for action in ("start", "stop", "restart", "other"):
+            name = name_of({**params, "action": action})
+            if prefix is None or (name != prefix and not name.startswith(prefix + ".")):
+                stray[(method, route)] = (name, prefix)
+    assert stray == {}
+
+
 def test_the_reads_sent_as_posts_are_not_actions():
     assert not activity.is_audited("POST", "/query")
     assert not activity.is_audited("POST", "/activity/events")
@@ -248,7 +275,7 @@ def test_an_invalid_action_is_refused_before_acting(tmp_path):
 def test_a_detached_backfill_is_accepted_not_succeeded(tmp_path, monkeypatch):
     def fake(settings, **kw):
         control._acting()
-        return {**kw, "procname": "x1", "status_path": "/ops/backfill"}
+        return {**kw, "process": "x1", "status_path": "/ops/backfill"}
 
     monkeypatch.setattr(control, "start_backfill", fake)
     c = _client(_settings(tmp_path))
@@ -554,7 +581,7 @@ def test_rows_older_than_the_retention_window_are_pruned(tmp_path):
 def test_only_the_newest_max_rows_are_kept(tmp_path):
     store = ActivityStore(tmp_path / "a.sqlite3", bounds=_uniform(30, 5))
     for i in range(activity.PRUNE_EVERY):
-        store.add(source="browser", kind="select", action="table.select", target=f"t{i}")
+        store.add(source="browser", kind="select", action="desk.table", target=f"t{i}")
     assert store.count() == 5, "pruned on its own, every PRUNE_EVERY inserts"
     assert [r["target"] for r in store.query(Query())] == [
         f"t{i}" for i in range(activity.PRUNE_EVERY - 1, activity.PRUNE_EVERY - 6, -1)
@@ -565,7 +592,7 @@ def test_retention_is_applied_at_startup(tmp_path):
     path = tmp_path / "a.sqlite3"
     store = ActivityStore(path, bounds=_uniform(30, 100))
     for _ in range(10):
-        store.add(source="browser", kind="select", action="table.select")
+        store.add(source="browser", kind="select", action="desk.table")
     store.close()
     assert ActivityStore(path, bounds=_uniform(30, 3)).count() == 3
 

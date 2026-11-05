@@ -159,7 +159,7 @@ def test_the_record_names_the_override_who_when_where_and_what_it_accepted(world
     assert e["operator"] == getpass.getuser() and e["host"] and e["at"]
     assert e["command"] == (
         f"uqs job backfill {WORKER} --attachment pb-uat --mode {mode} --from "
-        f"{plan['range']['from']} --to {plan['range']['to']} --source-version v1 "
+        f"{plan['range_from']} --to {plan['range_to']} --source-version v1 "
         "--override eod-fence"
     )
     d = e["destination"]
@@ -176,7 +176,7 @@ def test_the_record_names_the_override_who_when_where_and_what_it_accepted(world
     assert accepted["level"] != "pass" and accepted["reason"] == REASON
     [observed] = e["observed"]
     assert observed == {"component": "wdb1", **accepted["facts"]} and "window" in observed
-    assert e["worker"] == WORKER and e["log"] == str(run.log) and e["run"] == run.log.stem
+    assert e["job"] == WORKER and e["log"] == str(run.log) and e["run"] == run.log.stem
 
 
 def test_a_waiver_nobody_needed_is_recorded_as_not_needed(world):

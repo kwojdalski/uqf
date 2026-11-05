@@ -16,7 +16,7 @@ from rich.table import Table
 from uqs import timerange
 from uqs.cli import completion
 from uqs.cli.concepts import job_arg
-from uqs.cli.json_out import emit, json_opt
+from uqs.cli.json_out import Verbatim, emit, json_opt
 from uqs.cli.pipelines import needs_pipelines
 from uqs.cli.range_options import DateOpt, LastOpt, RangeFromOpt, RangeToOpt
 from uqs.cli.renames import DROPPED, renamed
@@ -118,7 +118,9 @@ def preview(
         return
     if as_json:
         traced = [{"level": lv, "source": src, "message": m} for lv, src, m in r.get("trace", [])]
-        emit(r | {"job": job, "trace": traced})
+        # the sampled rows are the tables' own: data, not keys the document spells
+        data = {k: Verbatim(r[k]) for k in ("rows", "sample") if k in r}
+        emit(r | data | {"job": job, "trace": traced})
         if r["state"] == "invalid":
             raise typer.Exit(code=1)
         return

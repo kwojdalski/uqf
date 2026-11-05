@@ -165,8 +165,8 @@ def report(outcome: str, **kw) -> dict:
     return {
         "left": "local",
         "right": "prod",
-        "from": "2026-09-11T00:00:00.000000000",
-        "to": "2026-09-16T00:00:00.000000000",
+        "range_from": "2026-09-11T00:00:00.000000000",
+        "range_to": "2026-09-16T00:00:00.000000000",
         "limit": 1000,
         "filters": [],
         "source_version": "",
@@ -210,7 +210,7 @@ def test_json_carries_every_table_and_its_times_in_utc(monkeypatch):
     assert r.exit_code == 1
     doc = json.loads(r.stdout)
     assert doc["ok"] is False and doc["outcome"] == "differs"
-    assert doc["from"] == "2026-09-11T00:00:00.000000000+00:00"
+    assert doc["range_from"] == "2026-09-11T00:00:00.000000000+00:00"
     assert doc["tables"][0]["coverage"]["right"]["gaps"] == [
         {
             "range_from": "2026-09-13T00:00:00.000000000+00:00",
@@ -458,4 +458,4 @@ def test_the_command_end_to_end_on_fixture_targets(fixture_targets, monkeypatch)
     assert r.exit_code == 1, r.output
     doc = json.loads(r.stdout)
     assert (doc["outcome"], doc["left"], doc["right"]) == ("differs", "local", "prod")
-    assert doc["to"] == "2026-09-16T00:00:00.000000000+00:00"
+    assert doc["range_to"] == "2026-09-16T00:00:00.000000000+00:00"

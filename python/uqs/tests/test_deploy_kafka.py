@@ -15,11 +15,12 @@ import subprocess
 import tarfile
 from pathlib import Path
 
+import deploy_support as capture
 import pytest
 from test_build_release import _built, _tools, _tree
 from test_deploy import _HEALTHY, ARGS, FakeRemote, _done, _verified, parse_args
 
-from uqs.deploy import artifact, driver, kafka
+from uqs.deploy import artifact, kafka
 from uqs.deploy import build as release_build
 from uqs.deploy.artifact import ReleaseError
 from uqs.external import connection, kafka_feed
@@ -281,7 +282,7 @@ def _kafka_artifact(tmp_path: Path) -> Path:
 def _push(path: Path, rules: dict, *extra: str):
     remote = FakeRemote({**_HEALTHY, "uqs deploy verify --profile": _verified(True), **rules})
     out = io.StringIO()
-    code = driver.deploy(parse_args([str(path), *ARGS, *extra]), remote, out=out)
+    code = capture.deploy(parse_args([str(path), *ARGS, *extra]), remote, out=out)
     return code, remote, (json.loads(out.getvalue()) if out.getvalue().startswith("{") else None)
 
 
@@ -331,7 +332,7 @@ def test_the_dry_run_plan_names_the_kafka_check(tmp_path):
                          "qhome=/q\nqcmd=/q/q\ndata=present\n")})  # fmt: skip
     out = io.StringIO()
     cfg = parse_args([str(_kafka_artifact(tmp_path)), *ARGS, "--dry-run"])
-    assert driver.deploy(cfg, remote, out=out) == 0
+    assert capture.deploy(cfg, remote, out=out) == 0
     assert "; UQF_KFK_HOME=/opt/uqf/releases/" in out.getvalue()
     assert "kfk.q loaded once in $QCMD (no broker)" in out.getvalue()
 

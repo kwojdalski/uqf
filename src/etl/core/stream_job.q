@@ -258,7 +258,7 @@
         if[not .qetl.job.stream.is_callable decl`on_timer;
             '"define: ",string[job],"'s on_timer must be a niladic function"]];
     .qetl.job.stream.check_optional[job;decl];
-    .qetl.job.stream.check_replay[job;decl];
+    .qetl.job.stream.check_replay[job;decl]; .qetl.twin.check_live[job;decl];
     .qetl.job.stream.jobs[job]:enlist decl;
     .qetl.job.stream.procnames[decl`procname]:job;
     .[{.qetl.log.dbg[x;y;z]};(job;"streaming job registered";

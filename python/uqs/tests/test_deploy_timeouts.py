@@ -71,13 +71,16 @@ def _record(monkeypatch) -> dict[str, config.Config]:
     def fake(name):
         def step(cfg, remote, **_kw):
             seen[name] = cfg
-            return 0
+            # push's driver returns its code; rollback and prune their document too
+            return 0 if name == "push" else (0, {"ok": True})
 
         return step
 
     monkeypatch.setattr(deploy_cli.driver, "deploy", fake("push"))
     monkeypatch.setattr(deploy_server.rollback, "rollback", fake("rollback"))
     monkeypatch.setattr(deploy_server.prune, "prune", fake("prune"))
+    monkeypatch.setattr(deploy_server.rollback, "render", lambda doc: "rolled back")
+    monkeypatch.setattr(deploy_server.prune, "render", lambda doc: "pruned")
     return seen
 
 

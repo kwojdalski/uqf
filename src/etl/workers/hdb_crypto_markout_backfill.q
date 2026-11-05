@@ -64,9 +64,9 @@
         .qpipe.transform.crypto_markout_outputs.sample_rows[]))];
 
 .qetl.job.bounded.define[`hdb_crypto_markout_backfill;
-    `source`outputs`width`transform`check`facts`procname`note`target_key`window_column`on_conflict`pin!
+    `source`outputs`width`transform`check`facts`procname`note`target_key`window_column`on_conflict`pin`twin_of!
     (`hdb_crypto_markouts;enlist `crypto_markout;0D01;`hdb_crypto_markout_long;
      .qpipe.job.hdb_crypto_markout_backfill.quality_check;.qpipe.job.hdb_crypto_markout_backfill.facts;
      `hdb_crypto_markout_backfill1;
      "bounded: marks out the HDB's crypto executions against its market_data, into crypto_markout, with the calculation crypto_markout1 applies live";
-     `venue`fill_id`horizon`kind`step;`source_time;`replace;.qpipe.transform.crypto_markout_outputs.pin)];
+     `venue`fill_id`horizon`kind`step;`source_time;`replace;.qpipe.transform.crypto_markout_outputs.pin;`crypto_markout)];

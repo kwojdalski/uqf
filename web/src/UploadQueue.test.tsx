@@ -29,7 +29,7 @@ function answer(path: string): RemoteUpload {
     sha256: "0".repeat(64),
     replaced: false,
     mode: 0o644,
-    created: [],
+    created_dirs: [],
     push_id: "20261104T103442123Z-9aa36609",
     previous_size: null,
     previous_sha256: null,
@@ -113,7 +113,7 @@ it("aborts the upload in flight and sends nothing more when the panel goes away 
   // the push is closed with how each file ended: the one in flight may have
   // been written, the rest were never sent
   expect(closed[0]).toEqual([
-    { path: "shared/config/a.csv", outcome: "uncertain" },
+    { path: "shared/config/a.csv", outcome: "unknown" },
     { path: "shared/config/b.csv", outcome: "cancelled" },
     { path: "shared/config/c.csv", outcome: "cancelled" },
   ]);

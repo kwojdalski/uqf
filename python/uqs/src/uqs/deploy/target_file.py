@@ -290,7 +290,7 @@ def changed(before: str, after: str) -> list[dict]:
 def parse_value(text: str) -> object:
     """A value given on the command line: a TOML value when it is one
     (`20`, `true`, `["a", "b"]`, `"quoted"`), else the text itself, so
-    `host=deploy@prod` needs no quotes."""
+    `ssh=deploy@prod` needs no quotes."""
     try:
         return tomllib.loads(f"v = {text}")["v"]
     except tomllib.TOMLDecodeError:

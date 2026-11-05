@@ -47,7 +47,7 @@ it("locks selection during deletion and preserves outcomes when refresh fails", 
     ok({
       target: "box",
       root: "/srv/uqf",
-      results: [{ path: "config.csv", deleted: true, error: null }],
+      results: [{ path: "config.csv", outcome: "succeeded", error: null }],
     }),
   );
   await waitFor(() =>

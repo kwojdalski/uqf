@@ -113,7 +113,7 @@ def test_apply_links_the_release_saves_the_target_and_it_then_runs(server, tmp_p
     assert (release / ".hidden").is_file() and (release / "python" / "uqs").is_dir()
     saved = targets.read(Path("."))["lvc"]
     assert saved == {
-        "host": "svc@lvc",
+        "ssh": "svc@lvc",
         "dest": str(server),
         "launch_mode": "source",
         "launch_python": sys.executable,
@@ -165,7 +165,7 @@ def test_a_pushed_release_already_linked_is_saved_as_is(server, tmp_path):
     r = _adopt(server, "--apply")
     assert r.exit_code == 0, r.output
     assert _has(r.output, "launches as pushed")
-    assert targets.read(Path("."))["lvc"] == {"host": "svc@lvc", "dest": str(server)}
+    assert targets.read(Path("."))["lvc"] == {"ssh": "svc@lvc", "dest": str(server)}
     assert history.read(Path("."))[0]["release"] == release.name
 
 

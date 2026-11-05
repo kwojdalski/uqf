@@ -77,10 +77,10 @@ AttachOpt = attach_opt(
 )
 
 
-RunsJson = json_opt('{"runs": [{run_id, worker, dataset, status, range_from, ...}]}')
+RunsJson = json_opt('{"runs": [{run_id, job, dataset, status, range_from, ...}]}')
 FactsJson = json_opt('{"facts": [{run_id, dataset, range_from, range_to, label, text}]}')
 ShowJson = json_opt(
-    '{"run": {run_id, worker, ...}, "facts": [...], "logs": [path, ...], "rerun": command}'
+    '{"run": {run_id, job, ...}, "facts": [...], "logs": [path, ...], "rerun": command}'
 )
 
 

@@ -130,7 +130,7 @@ UNKNOWN = {
     "graph": (["graph", "nosuch1885", "--offline"], "no process nosuch1885 in this runtime"),
     "schema": (["schema", "nosuch1885", "trade"], "no process nosuch1885 in this runtime"),
     "query": (["query", "nosuch1885", "1+1"], "no process nosuch1885 in this runtime"),
-    "target log": (["target", "log", "nosuch1885"], "no target 'nosuch1885'"),
+    "target log": (["target", "log", "nosuch1885"], "no target nosuch1885 - "),
     "target check": (["target", "check", "nosuch1885"], "nosuch1885"),
     "job preview": (["job", "preview", "nosuch1885"], "no streaming job 'nosuch1885'"),
     "job runs show": (

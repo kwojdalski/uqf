@@ -12,6 +12,7 @@ the logger cannot see.
 
 from __future__ import annotations
 
+import ast
 import json
 import os
 import re
@@ -124,6 +125,16 @@ CASES: dict[str, tuple[list[str], str]] = {
     "job attachment remove": (["job", "attachment", "remove", "nosuch"], "no attachment 'nosuch'"),
     "deploy status": (
         ["deploy", "status", "--ssh", "nosuch.invalid", "--dest", "relative/dest"],
+        "must be an absolute path",
+    ),
+    # #2125: push, rollback and prune print one document too, only under --json
+    "deploy push": (["deploy", "push", "nosuch.tar.gz", "nosuch-target-2125"], "deployments"),
+    "deploy rollback": (
+        ["deploy", "rollback", "--ssh", "nosuch.invalid", "--dest", "relative/dest"],
+        "must be an absolute path",
+    ),
+    "deploy prune": (
+        ["deploy", "prune", "--ssh", "nosuch.invalid", "--dest", "relative/dest", "--keep", "1"],
         "must be an absolute path",
     ),
     # #1731: every reporting command
@@ -364,10 +375,41 @@ def test_an_unknown_target_under_json_is_a_refusal(sandbox):
     assert doc["ok"] is False and "nosuch-1882" in doc["error"]
 
 
+def _printed_json(path: Path) -> list[str]:
+    """Where `path` prints a json.dumps: given to print (to any stream - the
+    report went to an `out` that was stdout), typer.echo or sys.stdout.write -
+    a JSON printer. A json.dumps written into a file through its handle is
+    not one, nor is one inside a script's text that runs on a server."""
+
+    def printer(call: ast.Call) -> bool:
+        f = call.func
+        if isinstance(f, ast.Name):
+            return f.id == "print"
+        return isinstance(f, ast.Attribute) and (
+            f.attr == "echo" or (f.attr == "write" and ast.unparse(f.value) == "sys.stdout")
+        )
+
+    def dumps(node: ast.AST) -> bool:
+        return (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "dumps"
+        )
+
+    found = []
+    for node in ast.walk(ast.parse(path.read_text())):
+        if isinstance(node, ast.Call) and printer(node):
+            if any(dumps(n) for a in node.args for n in ast.walk(a)):
+                found.append(f"{path.parent.name}/{path.name}:{node.lineno}")
+    return found
+
+
 def test_no_command_prints_json_but_through_emit():
     """One printer, so one contract: every document is json_out.emit's - an
     object, its values plain, its times zoned. A json.dumps written to stdout
-    anywhere else in the CLI is a second printer that holds to none of it."""
+    anywhere else in the CLI is a second printer that holds to none of it.
+    deploy/ too (#2125): push, rollback and prune printed their reports there,
+    outside emit and with no --json, where a scan of cli/ alone never looked."""
     cli_dir = Path(cli.__file__).parent
     found = [
         f"{path.name}:{n}"
@@ -376,7 +418,26 @@ def test_no_command_prints_json_but_through_emit():
         for n, line in enumerate(path.read_text().splitlines(), 1)
         if "json.dumps(" in line
     ]
+    deploy_dir = cli_dir.parent / "deploy"
+    found += [hit for path in sorted(deploy_dir.glob("*.py")) for hit in _printed_json(path)]
     assert not found, found
+
+
+def test_the_json_printer_scan_finds_a_printer_and_nothing_else(tmp_path):
+    """The deploy/ scan's own check: the shapes the three commands printed in
+    are found, a file write and a server script's text are not."""
+    path = tmp_path / "mod.py"
+    path.write_text(
+        "import json, sys\n"
+        "print(json.dumps({}, indent=2), file=out)\n"
+        "typer.echo(json.dumps({}))\n"
+        "sys.stdout.write(json.dumps({}))\n"
+        "fh.write_text(json.dumps({}))\n"
+        "handle.write(json.dumps({}) + '\\n')\n"
+        "body = json.dumps({})\n"
+        "SCRIPT = 'print(json.dumps(out))'\n"
+    )
+    assert _printed_json(path) == [f"{tmp_path.name}/mod.py:{n}" for n in (2, 3, 4)]
 
 
 def test_emit_refuses_a_document_that_is_not_an_object():
@@ -457,20 +518,27 @@ def test_a_list_is_an_object_of_typed_records(argv, key):
 def test_list_processes_carries_numbers_bools_and_lists():
     doc = json.loads(CliRunner().invoke(cli.app, ["process", "list", "--json"]).stdout)
     rdb = next(r for r in doc["processes"] if r["process"] == "rdb1")
-    assert isinstance(rdb["port"], int) and isinstance(rdb["startwithall"], bool)
+    assert isinstance(rdb["port"], int) and isinstance(rdb["start_with_all"], bool)
     assert isinstance(rdb["inputs"], list) and isinstance(rdb["outputs"], list)
 
 
-def test_an_older_releases_bare_process_list_still_gives_its_ports():
+def test_an_older_releases_bare_process_list_is_refused_with_the_redeploy():
     """`--target` tunnels read the SERVER's `process list --json`, which is
-    whatever release was deployed there: both shapes give the same ports."""
+    whatever release was deployed there. The #1882 document gives the ports;
+    the bare `procname` list from before it is refused, not read under the
+    old key (#2109)."""
     from uqs.deploy import control, tunnel
+    from uqs.paths import UqsError
 
     remote = control.Remote("t", "h", "/srv/t")
-    new = json.dumps({"processes": [{"process": "rdb1", "port": 6052}]})
+    new = json.dumps({"processes": [{"process": "rdb1", "proctype": "rdb", "port": 6052}]})
+    assert tunnel._parse_rows(remote, new) == [{"process": "rdb1", "proctype": "rdb", "port": 6052}]
     old = json.dumps([{"procname": "rdb1", "port": "6052"}])
-    rows = [{"process": "rdb1", "proctype": "", "port": 6052}]
-    assert tunnel._parse_rows(remote, new) == tunnel._parse_rows(remote, old) == rows
+    with pytest.raises(UqsError, match=r"target t: .*before #1882 \(`procname`, not `process`\)"):
+        tunnel._parse_rows(remote, old)
+    keyed = json.dumps({"processes": [{"procname": "rdb1", "port": 6052}]})
+    with pytest.raises(UqsError, match="did not list its processes as JSON"):
+        tunnel._parse_rows(remote, keyed)
 
 
 def test_status_json_says_all_its_interpreter_line_says(monkeypatch):
@@ -508,8 +576,135 @@ def _bad_keys(doc, path="") -> list[str]:
     ]
 
 
+#: A spelling a document used before #2122 settled it, at any depth, and the one it
+#: uses now. KEYS' are renamed by `emit`; `stack.id` is a stack's base port.
+RETIRED = {**json_out.KEYS, "half_open": "range_from/range_to"}
+
+
+def _breaches(doc, path="$") -> list[str]:
+    """Every place below `doc` where the #1882 key contract does not hold: a
+    retired spelling, an `ok` that is not a bool, a range that is an object, a
+    stack whose base port is `id`. Every key, at every depth: the contract is
+    the document's, not only its top level's (#2122)."""
+    if isinstance(doc, list):
+        return [b for i, v in enumerate(doc) for b in _breaches(v, f"{path}[{i}]")]
+    if not isinstance(doc, dict):
+        return []
+    bad = [f"{path}.{k}: say {RETIRED[k]}" for k in doc if k in RETIRED]
+    if "ok" in doc and not isinstance(doc["ok"], bool):
+        bad.append(f"{path}.ok = {doc['ok']!r}: a bool")
+    if isinstance(doc.get("range"), dict):
+        bad.append(f"{path}.range: say range_from/range_to")
+    if isinstance(doc.get("stack"), dict) and "id" in doc["stack"]:
+        bad.append(f"{path}.stack.id: say base_port")
+    return bad + [b for k, v in doc.items() for b in _breaches(v, f"{path}.{k}")]
+
+
 @pytest.mark.parametrize("command", sorted(CASES))
 def test_every_json_key_is_snake_case(tmp_path, command):
     argv, _ = CASES[command]
     run = _uqs(tmp_path, *argv, "--json")
-    assert not _bad_keys(json.loads(run.stdout))
+    doc = json.loads(run.stdout)
+    assert not _bad_keys(doc)
+    assert not _breaches(doc)
+
+
+# ------------------------------------------- the contract below the top level (#2122)
+
+
+def _emitted(capsys, document) -> dict:
+    json_out.emit(document)
+    return json.loads(capsys.readouterr().out)
+
+
+def test_emit_spells_every_key_at_every_depth(capsys):
+    """`data alter`'s readers said `procname` two levels down, `process list`
+    said `startwithall`, `job backfill` `worker` and its destination `stack_id`:
+    one concept, one key, wherever in the document it sits."""
+    doc = _emitted(capsys, {
+        "ok": True,
+        "result": {"readers": [{"procname": "hdb1", "ok": False, "outcome": "skipped"}]},
+        "processes": [{"procname": "rdb1", "startwithall": True}],
+        "job": "markout", "plan": {"worker": "w", "destination": {"stack_id": 6000}},
+    })  # fmt: skip
+    assert doc["result"]["readers"] == [{"process": "hdb1", "ok": False, "outcome": "skipped"}]
+    assert doc["processes"] == [{"process": "rdb1", "start_with_all": True}]
+    assert doc["plan"] == {"job": "w", "destination": {"base_port": 6000}}
+    assert not _breaches(doc)
+
+
+def test_verbatim_data_keeps_its_own_keys(capsys):
+    """A query's result is the table's: a column called `procname` is the
+    column's name, not a key the document spells."""
+    rows = [{"procname": "rdb1", "ok": "yes", "range": {"from": 1}}]
+    doc = _emitted(capsys, {"expression": "x", "result": json_out.Verbatim(rows)})
+    assert doc["result"] == rows
+
+
+@pytest.mark.parametrize(
+    ("document", "said"),
+    [
+        ({"result": {"readers": [{"ok": "skipped"}]}}, "`ok` is a --json document's success flag"),
+        ({"ok": True, "plan": {"range": {"from": "a", "to": "b"}}}, "range_from"),
+        ({"rows": [{"procname": "a", "process": "b"}]}, "both 'procname' and 'process'"),
+    ],
+)
+def test_emit_refuses_a_document_that_breaks_the_contract_below_the_top(document, said):
+    """A string `ok` is truthy whatever it says - `jq 'select(.ok)'` picked
+    every reader, failed ones included - and a range has one shape: the tree's
+    bug, refused, rather than printed for a script to misread."""
+    with pytest.raises(ValueError, match=re.escape(said)):
+        json_out.emit(document)
+
+
+def test_a_reader_row_types_its_ok_and_says_its_outcome_apart():
+    from uqs.stack.hdb_alter import READER_OUTCOMES, reader_row
+
+    rows = {o: reader_row("hdb1", o, "") for o in READER_OUTCOMES}
+    assert [o for o, r in rows.items() if r["ok"]] == ["reloaded"]
+    assert all(r["ok"] is False for o, r in rows.items() if o != "reloaded")
+    assert rows["skipped"] == {"process": "hdb1", "ok": False, "outcome": "skipped", "detail": ""}
+    assert not _breaches({"ok": True, "result": {"readers": list(rows.values())}})
+
+
+def test_attachment_json_writes_the_documents_keys_and_reads_an_older_files(tmp_path):
+    """attachment.json is persisted, and `job attachment show --json` prints it:
+    a new file says `stack.base_port` and `publisher.process`, and one written
+    before #2122 (`stack.id`, `publisher.procname`) still loads, the same."""
+    from uqs.attach import config
+    from uqs.stack import attach_state
+
+    att = config.Attachment(
+        name="a2122",
+        stack=config.Stack(id=6000, host="localhost", discovery_host="localhost",
+                           discovery_port=6001),
+        publisher=config.Publisher(job="markout", procname="markout1"),
+        tables=(),
+    )  # fmt: skip
+    new = config.to_json(att)
+    assert new["stack"]["base_port"] == 6000 and "id" not in new["stack"]
+    assert new["publisher"]["process"] == "markout1" and "procname" not in new["publisher"]
+    assert not _breaches(new)
+    old = json.loads(json.dumps(new))
+    old["stack"]["id"] = old["stack"].pop("base_port")
+    old["publisher"]["procname"] = old["publisher"].pop("process")
+    assert config.from_json(old) == config.from_json(new) == att
+    for cfg in (old, new):
+        assert attach_state.stored_base_port(cfg) == 6000
+        assert attach_state.stored_publisher(cfg) == "markout1"
+
+
+def test_an_override_record_written_before_2122_reads_as_one_written_now(tmp_path):
+    """backfill_overrides.jsonl is persisted and `attachment show` prints it: an
+    entry that says `worker`, `range: {from, to}` and `stack_id` reads with the
+    keys every document uses."""
+    from uqs.attach import backfill_audit
+
+    log = tmp_path / backfill_audit.OVERRIDES_LOG
+    old = {"event": "override", "worker": "w", "destination": {"stack_id": 6000},
+           "range": {"from": "a", "to": "b", "half_open": "[from, to)"}}  # fmt: skip
+    log.write_text(json.dumps(old) + "\n")
+    [entry] = backfill_audit.read(log)
+    assert entry == {"event": "override", "job": "w", "destination": {"base_port": 6000},
+                     "range_from": "a", "range_to": "b"}  # fmt: skip
+    assert not _breaches(entry)

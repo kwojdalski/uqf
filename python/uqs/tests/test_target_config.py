@@ -152,7 +152,7 @@ def test_a_conflict_or_a_pruned_push_is_refused_writing_nothing(server, monkeypa
 
 def test_an_unknown_target_is_refused(server, logged):
     done = _uqs("history", "nosuch")
-    assert done.exit_code != 0 and "no target 'nosuch'" in "".join(logged)
+    assert done.exit_code != 0 and "no target nosuch - " in "".join(logged)
 
 
 def test_show_and_history_print_markup_in_server_held_text_literally(server):
@@ -185,6 +185,30 @@ def test_show_and_history_print_markup_in_server_held_text_literally(server):
     listed = _uqs("history", "box")
     assert listed.exit_code == 0, listed.output
     assert "k[/w]" in listed.stdout and "web[/v]" in " ".join(listed.stdout.split())
+
+
+def test_a_manifest_stored_before_2108_reads_in_the_current_words(server):
+    """Manifests already on servers say `uncertain` for a file the browser
+    could not confirm; it is shown as `unknown`, the one word every per-file
+    result now uses, and the summary counts the reported files as
+    `reported_count`, leaving `reported` the list (#2108)."""
+    push_id = remote_files.new_push_id()
+    remote_helper.handle({"protocol": 1, "op": "push_open", "root": str(server),
+                          "push_id": push_id, "destination": "shared/config"})  # fmt: skip
+    reported = [{"path": "shared/config/x", "outcome": "unknown"}]
+    closed = remote_helper.handle({"protocol": 1, "op": "push_close", "root": str(server),
+                                   "push_id": push_id, "reported": reported})  # fmt: skip
+    assert closed["ok"], closed
+    stored = server / "shared/config/.uqf-history" / push_id / "manifest.json"
+    stored.write_text(stored.read_text().replace('"unknown"', '"uncertain"'))
+    shown = _uqs("show", "box", push_id)
+    assert shown.exit_code == 0, shown.output
+    assert "'shared/config/x' (unknown)" in shown.stdout
+    doc = json.loads(_uqs("show", "box", push_id, "--json").stdout)
+    assert doc["push"]["reported"] == [{"path": "shared/config/x", "outcome": "unknown"}]
+    assert doc["summary"]["reported_count"] == 1 and "reported" not in doc["summary"]
+    (listed,) = json.loads(_uqs("history", "box", "--json").stdout)["pushes"]
+    assert listed["reported_count"] == 1 and "reported" not in listed
 
 
 def test_restore_prunes_to_the_retention_set_in_the_settings_view(server, monkeypatch, tmp_path):

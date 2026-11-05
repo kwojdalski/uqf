@@ -93,7 +93,7 @@ def extract(
     except UqsError as exc:
         _die(exc)
         return
-    info = {"mode": mode, "worker": worker, "writer": writer, "plan": plan, **run_.as_dict()}
+    info = {"mode": mode, "job": worker, "writer": writer, "plan": plan, **run_.as_dict()}
     if not wait:
         _report(
             info,
@@ -144,7 +144,7 @@ ListenPortOpt = Annotated[
 _STARTED = '{"attachment", "dataset", "contract", "port", "hdb_dir", "pid", "log", ...}'
 ReceiverJson = json_opt(_STARTED)
 ReceiveJson = json_opt(_STARTED, 'With --stop, {"stopped": [...]}')
-StoppedJson = json_opt('{"stopped": [{worker, pid, ...}], "dry_run"}')
+StoppedJson = json_opt('{"stopped": [{job, pid, ...}], "dry_run"}')
 
 
 @receiver_app.command("start", cls=ChangesState)

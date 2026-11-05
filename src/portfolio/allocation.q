@@ -236,14 +236,10 @@
 / @private
 .qf.exec.normalised_opts:{[opts]
     o:$[-11h=type opts; (enlist `method)!enlist opts;
+        (::)~opts; opts;
         99h=type opts; opts;
-        '"allocate: opts must be a dictionary of options, or a method name"];
-    supplied:key o;
-    unknown:supplied where not supplied in key .qf.exec.default_opts;
-    if[count unknown;
-        '"allocate: unknown option ",(", " sv string unknown),
-         " - have ",", " sv string key .qf.exec.default_opts];
-    o:.qf.exec.default_opts,o;
+        '"allocate: opts must be (::) for the defaults, a dictionary of options, or a method name"];
+    o:.qf.util.resolve_opts[`allocate;o;.qf.exec.default_opts];
     / 100 104h rather than 100h alone: by_cols returns a PROJECTION, so the
     / filter a caller is most likely to pass is not a plain lambda.
     if[not all (type each o`universe`where) within 100 104h;

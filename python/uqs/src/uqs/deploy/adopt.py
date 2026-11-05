@@ -220,7 +220,7 @@ def problems(s: Survey) -> list[str]:
 
 def block(s: Survey, r: Remote) -> dict:
     """The target's settings adopting would save."""
-    entry: dict = {"host": r.host, "dest": r.dest, "remote_user": r.remote_user}
+    entry: dict = {"ssh": r.host, "dest": r.dest, "remote_user": r.remote_user}
     if s.mode == launch.SOURCE and s.python is not None and s.env_file is not None:
         entry["launch_mode"] = launch.SOURCE
         entry["launch_python"] = _in_current(s, str(s.python.path))

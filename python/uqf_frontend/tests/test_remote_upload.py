@@ -135,7 +135,7 @@ def _open_push() -> str:
 
 
 def _put(runner, path, data=b"a,b\n", target="box", overwrite=None, push=None, **kw):
-    params = {"path": path, "push": push or _open_push()}
+    params = {"path": path, "push_id": push or _open_push()}
     if overwrite is not None:
         params["overwrite"] = overwrite
     client = kw.pop("client", None) or _client(runner)
@@ -146,7 +146,7 @@ def _ok_answer(path, data, **over):
     return json.dumps({
         "protocol": 1, "ok": True, "path": path, "size": len(data),
         "sha256": hashlib.sha256(data).hexdigest(), "replaced": False, "mode": 0o644,
-        "created": [], "swept": 0, "push_id": CANNED_PUSH, "previous_size": None,
+        "created_dirs": [], "swept": 0, "push_id": CANNED_PUSH, "previous_size": None,
         "previous_sha256": None, **over,
     }) + "\n"  # fmt: skip
 
@@ -290,7 +290,7 @@ def test_the_answer_says_what_was_written(served):
         "sha256": hashlib.sha256(b"a,b\n").hexdigest(),
         "replaced": False,
         "mode": body["mode"],
-        "created": ["shared/config/scripts", "shared/config/scripts/torqconfig"],
+        "created_dirs": ["shared/config/scripts", "shared/config/scripts/torqconfig"],
         "push_id": body["push_id"],
         "previous_size": None,
         "previous_sha256": None,
@@ -483,7 +483,7 @@ def test_an_upload_is_audited_with_metadata_and_never_its_bytes(served, tmp_path
     resp, rows, dump = _audited(tmp_path, Loopback())
     assert resp.status_code == 200, resp.text
     (row,) = rows
-    assert row["action"] == "file.upload"
+    assert row["action"] == "files.upload"
     assert row["target"] == "box"
     assert row["outcome"] == "succeeded"
     assert row["detail"] == {

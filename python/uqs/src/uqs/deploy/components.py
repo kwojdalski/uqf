@@ -4,17 +4,17 @@ mode (#1557, step 4).
 A component is either `existing`, a path already on the server that
 preflight resolves and probes, or `bundled`, an artifact shipped with the
 release. TorQ can be bundled (step 5, deploy/torq_runtime.py): its fields
-are `torq_runtime`, the artifact `uqs deploy component build torq` makes, and
-`torq_runtime_sha256` to pin it. So can q (step 6, deploy/q_runtime.py) -
-PeachQ only, `q_runtime` and `q_runtime_sha256`, from `uqs deploy
+are `torq_component`, the artifact `uqs deploy component build torq` makes, and
+`torq_component_sha256` to pin it. So can q (step 6, deploy/q_runtime.py) -
+PeachQ only, `q_component` and `q_component_sha256`, from `uqs deploy
 component build q`; KX's q is licensed to its server, and stays `existing`.
-So can Python (step 7, deploy/python_runtime.py): `python_runtime` and
-`python_runtime_sha256`, the CPython `uqs deploy component build python` packs,
-which the release's .venv is made from - or, with no `python_runtime`, the
+So can Python (step 7, deploy/python_runtime.py): `python_component` and
+`python_component_sha256`, the CPython `uqs deploy component build python` packs,
+which the release's .venv is made from - or, with no `python_component`, the
 one the release itself carries (#1646).
 
-`existing` mode's fields are the push options that already exist - qcmd and
-qhome for q; torq_home, torq_app_home and torq_launcher for TorQ; Python has
+`existing` mode's fields are the push options that already exist - q_cmd and
+q_home for q; torq_home, torq_app_home and torq_launcher for TorQ; Python has
 none, uv finds it - so a source-only push is configured exactly as before.
 The one new key per component is its mode, `q_mode`, `torq_mode` and
 `python_mode`, defaulting to `existing`, layered like any other key.
@@ -22,7 +22,7 @@ The one new key per component is its mode, `q_mode`, `torq_mode` and
 Switching a mode keeps nothing of the old one. A layer (or flag) that sets a
 component's mode to something other than what the layers below it chose
 drops the old mode's fields they set (`switch`); a field of another mode set
-at or above that layer is refused (`check`). So `[defaults] qcmd = ...` under
+at or above that layer is refused (`check`). So `[defaults] q_cmd = ...` under
 a target with `q_mode = "bundled"` is dropped, never inherited.
 
 `observed` is what the report and the deploy history record of each: its
@@ -42,17 +42,17 @@ EXISTING, BUNDLED = "existing", "bundled"
 MODES = (EXISTING, BUNDLED)
 #: The push options each mode of each component reads.
 FIELDS: dict[str, dict[str, tuple[str, ...]]] = {
-    "q": {EXISTING: ("qcmd", "qhome"), BUNDLED: ("q_runtime", "q_runtime_sha256")},
+    "q": {EXISTING: ("q_cmd", "q_home"), BUNDLED: ("q_component", "q_component_sha256")},
     "torq": {
         EXISTING: ("torq_home", "torq_app_home", "torq_launcher"),
-        BUNDLED: ("torq_runtime", "torq_runtime_sha256"),
+        BUNDLED: ("torq_component", "torq_component_sha256"),
     },
-    "python": {EXISTING: (), BUNDLED: ("python_runtime", "python_runtime_sha256")},
+    "python": {EXISTING: (), BUNDLED: ("python_component", "python_component_sha256")},
 }
 #: The field a mode cannot go without. A bundled Python can do without
-#: `python_runtime` when the release carries one (`uqs deploy build
+#: `python_component` when the release carries one (`uqs deploy build
 #: --python-component`, #1646): only the artifact says, so bundled.attach checks.
-REQUIRED = {(c, BUNDLED): f"{c}_runtime" for c in COMPONENTS if c != "python"}
+REQUIRED = {(c, BUNDLED): f"{c}_component" for c in COMPONENTS if c != "python"}
 
 
 def mode_key(component: str) -> str:

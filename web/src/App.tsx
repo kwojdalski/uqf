@@ -593,7 +593,7 @@ function DeskView() {
       setError("");
       resource.refresh();
       // How many filters, never their values: those are whatever was typed.
-      record("submit", "query.apply", {
+      record("submit", "desk.apply", {
         target: selected.name,
         detail: {
           tier,
@@ -604,7 +604,7 @@ function DeskView() {
       });
     } catch (error) {
       setError((error as Error).message);
-      record("submit", "query.apply", {
+      record("submit", "desk.apply", {
         target: selected.name,
         outcome: "refused",
         detail: { reason: "invalid input" },
@@ -635,7 +635,7 @@ function DeskView() {
               title={item.description}
               onClick={(event) => {
                 if (item.name !== selected?.name)
-                  record("select", "table.select", {
+                  record("select", "desk.table", {
                     target: item.name,
                     trigger: triggerOf(event),
                   });
@@ -712,7 +712,7 @@ function DeskView() {
                     value={tier}
                     onChange={(event) => {
                       setTier(event.target.value as Tier);
-                      record("select", "query.tier", {
+                      record("select", "desk.tier", {
                         target: selected?.name,
                         detail: { tier: event.target.value },
                       });
@@ -1137,7 +1137,7 @@ function ProcessPicker({
   };
   const startedByAll = processes
     .filter((p) => p.start_with_all)
-    .map((p) => p.procname);
+    .map((p) => p.process);
   const count = mode === "all" ? startedByAll.length : picked.size;
 
   return (
@@ -1178,8 +1178,8 @@ function ProcessPicker({
                   "pick",
                   new Set(
                     processes
-                      .filter((p) => liveness.get(p.procname) === false)
-                      .map((p) => p.procname),
+                      .filter((p) => liveness.get(p.process) === false)
+                      .map((p) => p.process),
                   ),
                 )
               }
@@ -1195,8 +1195,8 @@ function ProcessPicker({
                   "pick",
                   new Set(
                     processes
-                      .filter((p) => liveness.get(p.procname) === true)
-                      .map((p) => p.procname),
+                      .filter((p) => liveness.get(p.process) === true)
+                      .map((p) => p.process),
                   ),
                 )
               }
@@ -1216,7 +1216,7 @@ function ProcessPicker({
       </div>
       <div className="picker-groups">
         {[...groups.entries()].map(([proctype, list]) => {
-          const names = list.map((p) => p.procname);
+          const names = list.map((p) => p.process);
           const chosen = names.filter((n) => picked.has(n)).length;
           return (
             <div key={proctype} className="picker-group">
@@ -1237,21 +1237,21 @@ function ProcessPicker({
                 <span className="muted">{names.length}</span>
               </label>
               {list.map((p) => {
-                const up = liveness?.get(p.procname);
+                const up = liveness?.get(p.process);
                 return (
-                  <label key={p.procname} className="picker-row">
+                  <label key={p.process} className="picker-row">
                     <input
                       type="checkbox"
                       data-activity="control.pick.process"
                       checked={
                         mode === "all"
                           ? p.start_with_all
-                          : picked.has(p.procname)
+                          : picked.has(p.process)
                       }
                       disabled={mode === "all"}
-                      onChange={(e) => pick([p.procname], e.target.checked)}
+                      onChange={(e) => pick([p.process], e.target.checked)}
                     />
-                    <code>{p.procname}</code>
+                    <code>{p.process}</code>
                     {up !== undefined && (
                       <span className={up ? "badge up" : "badge down"}>
                         {up ? "up" : "down"}
@@ -1351,10 +1351,10 @@ function ControlView() {
   // picker is complete without it.
   const fleet = useResource<OpsData>("/ops/processes");
   const liveness = fleet.data?.processes
-    ? new Map(fleet.data.processes.map((row) => [row.procname, row.up]))
+    ? new Map(fleet.data.processes.map((row) => [row.process, row.up]))
     : null;
   const procs = selectorFor(mode, picked);
-  const [cfg, setCfg] = useState({ procname: "", field: "", value: "" });
+  const [cfg, setCfg] = useState({ process: "", field: "", value: "" });
   const [wcfg, setWcfg] = useState<WorkerConfigBody>({ key: "", value: "" });
   const [bf, setBf] = useState<BackfillBody>({
     worker: "",
@@ -1614,13 +1614,13 @@ function ControlView() {
               "submit",
               "process.config",
               {
-                target: cfg.procname,
+                target: cfg.process,
                 trigger: triggerOf(),
-                detail: { procname: cfg.procname, field: cfg.field },
+                detail: { process: cfg.process, field: cfg.field },
               },
               (correlation) =>
                 mutate<ProcessConfigResult>(
-                  `/control/process/${encodeURIComponent(cfg.procname)}/config`,
+                  `/control/process/${encodeURIComponent(cfg.process)}/config`,
                   {
                     field: cfg.field,
                     value: cfg.value,
@@ -1629,7 +1629,7 @@ function ControlView() {
                   correlation,
                 ),
             );
-            return `${r.procname} now: ${JSON.stringify(r.config, null, 2)}`;
+            return `${r.process} now: ${JSON.stringify(r.config, null, 2)}`;
           });
         }}
       >
@@ -1640,8 +1640,8 @@ function ControlView() {
             <input
               data-activity="control.config.process"
               required
-              value={cfg.procname}
-              onChange={(e) => setCfg({ ...cfg, procname: e.target.value })}
+              value={cfg.process}
+              onChange={(e) => setCfg({ ...cfg, process: e.target.value })}
             />
           </label>
           <label>
@@ -1769,7 +1769,7 @@ function ControlView() {
               // Handed off, not finished: the Backfills view says how it went.
               () => "accepted",
             );
-            return `started ${r.worker} as ${r.procname}\nwatch ${r.status_path}, or \`uqs logs ${r.procname}\``;
+            return `started ${r.worker} as ${r.process}\nwatch ${r.status_path}, or \`uqs logs ${r.process}\``;
           });
         }}
       >

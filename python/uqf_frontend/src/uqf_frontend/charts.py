@@ -52,6 +52,7 @@ from uqf_frontend.config import Settings
 from uqf_frontend.errors import ValidationFailed
 from uqf_frontend.fleet import Fleet
 from uqf_frontend.gateway import TIERS, Gateway
+from uqf_frontend.instants import AwareInstantOrBlank
 
 Tier = Literal["rdb", "hdb", "both"]
 
@@ -304,12 +305,12 @@ class MarkoutParams(ChartParams):
         description="fx_markout is in pips, crypto_markout in bps",
     )
     sym: str = Field(default="", title="Symbol", description="one symbol, or empty for all")
-    range_from: str = Field(
+    range_from: AwareInstantOrBlank = Field(
         default="",
         title="From",
         description="fills at or after, ISO-8601 with an offset; empty for the policy's window",
     )
-    range_to: str = Field(
+    range_to: AwareInstantOrBlank = Field(
         default="", title="To", description="fills before, ISO-8601 with an offset"
     )
     tier: Tier = Field(default="rdb", title="Tier")
@@ -535,8 +536,12 @@ class MidSpreadParams(ChartParams):
         title="Source",
         description="one market_data source (venue), or empty for a line per source",
     )
-    range_from: str = Field(default="", title="From", description="ISO-8601 with an offset")
-    range_to: str = Field(default="", title="To", description="ISO-8601 with an offset")
+    range_from: AwareInstantOrBlank = Field(
+        default="", title="From", description="ISO-8601 with an offset"
+    )
+    range_to: AwareInstantOrBlank = Field(
+        default="", title="To", description="ISO-8601 with an offset"
+    )
     tier: Tier = Field(default="rdb", title="Tier")
 
 

@@ -91,6 +91,7 @@ def bounded_worker(
     check: bool = False,
     transform: str = "passthrough",
     shared: tuple[str, str] | None = None,
+    twin_of: str | None = None,
     raw: tuple[str, list[tuple[str, str]]] | None = None,
     target_columns: list[tuple[str, str]] | None = None,
 ) -> ScaffoldPlan:
@@ -125,7 +126,9 @@ def bounded_worker(
     `transform` is `passthrough` (the batch published as fetched) or `derive`
     (a `.qetl.transform.define` whose example fails until it is written) - see
     scaffold/transform.py. `shared` is (stream job, transform) for a twin of
-    a job that declares its transform: the twin applies that one (#884).
+    a job that declares its transform: the twin applies that one (#884). `twin_of`
+    is the streaming job the worker repairs: written into the declaration, so q
+    keeps holding the pair to it after this scaffold is gone (#2103).
 
     `raw` is (physical table, columns) when the new source's adapter reads
     columns other than those it returns: written as the source's `raw`
@@ -233,6 +236,7 @@ def bounded_worker(
                 check=check,
                 transform=transform,
                 shared=shared,
+                twin_of=twin_of,
             ),
         )
     )
