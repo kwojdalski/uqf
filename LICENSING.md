@@ -3,6 +3,16 @@
 Everything in this repository is MIT licensed (see [`LICENSE`](LICENSE)),
 **except** the seven vendored dependencies below:
 
+Every tree under `lib/` is recorded in [`lib/VENDORED.toml`](lib/VENDORED.toml):
+its upstream, pinned commit, licence and what was copied, with each file's git
+blob id in `lib/.vendored/<tree>.tsv`. They are never edited here: the
+`vendored` pre-commit hook (`python3 scripts/gates/check.py vendored`)
+recomputes every file's blob id and fails on any byte that is not upstream's,
+and `python3 scripts/dev/revendor.py <tree> [--commit SHA]` is the one way to
+change a tree - it refetches upstream and rewrites the record in the same
+commit. Four trees carry whitespace changes made when they were vendored; they
+are listed, not accepted, in `lib/.vendored/<tree>.drift.tsv`.
+
 - `tests/lib/qunit.q`, vendored from [TimeStored's
   qUnit](https://github.com/timestored/kdb/blob/master/qunit/qunit.q) (see also
   [the guide](https://www.timestored.com/kdb-guides/kdb-regression-unit-tests)),
