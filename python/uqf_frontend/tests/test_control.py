@@ -721,13 +721,13 @@ def test_a_naive_range_bound_is_refused(writeable):
         "/control/backfill", json=_backfill_body(range_from="2026-09-11T00:00:00")
     )
     assert resp.status_code == 422
-    assert "timezone" in resp.json()["detail"]
+    assert "needs an explicit timezone offset" in resp.text
 
 
 def test_a_malformed_range_bound_says_what_it_wanted(writeable):
     resp = writeable.post("/control/backfill", json=_backfill_body(range_to="not-a-date"))
     assert resp.status_code == 422
-    assert "ISO-8601" in resp.json()["detail"]
+    assert "is not an ISO-8601 instant" in resp.text
 
 
 def test_a_range_bound_finer_than_a_microsecond_is_refused_not_truncated(writeable, monkeypatch):
@@ -741,7 +741,7 @@ def test_a_range_bound_finer_than_a_microsecond_is_refused_not_truncated(writeab
     )
     assert resp.status_code == 422, resp.text
     detail = resp.json()["detail"]
-    assert "range_to '2026-09-12T00:00:00.123456789Z' is finer than a microsecond" in detail
+    assert "range_to: '2026-09-12T00:00:00.123456789Z' is finer than a microsecond" in detail
     assert "args" not in seen, "refused before any process starts"
 
 

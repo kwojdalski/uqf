@@ -364,8 +364,8 @@ export function CompareView() {
               <span className={`badge ${doc.outcome}`}>{doc.outcome}</span>
             </div>
             <p className="note mono">
-              [{doc.from}, {doc.to}) · at most {doc.limit.toLocaleString()} rows
-              per side
+              [{doc.range_from}, {doc.range_to}) · at most{" "}
+              {doc.limit.toLocaleString()} rows per side
               {doc.filters.length > 0 && ` · ${doc.filters.join(" and ")}`}
               {doc.source_version &&
                 ` · coverage at ${doc.source_version}${doc.partition ? `/${doc.partition}` : ""}`}

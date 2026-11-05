@@ -1699,18 +1699,40 @@ functions.
 
 ## MCP server
 
-`uqs-mcp` exposes the CLI's operations as MCP tools (`uqs_start`, `uqs_status`,
-`uqs_query`, ... - [`mcp.py`](../../python/uqs/src/uqs/mcp.py) has the list),
-for an MCP client to drive the stack. `exec` is not exposed. Point the client's
-server command at:
+`uqs-mcp` exposes the CLI's operations as MCP tools, for an MCP client to drive
+the stack. `exec` is not exposed. Point the client's server command at:
 
 ```
 uv run uqs-mcp
 ```
 
-(stdio transport). `uqs_query` returns row dicts for a table. `uqs_start` takes
-a `profile` too, and refuses what `uqs start` refuses: an unknown process or an
-unrunnable profile.
+(stdio transport). Each tool is one CLI command, named after it, and takes that
+command's options spelled as identifiers (#2120):
+
+  | Tool                                                                                                                                                                                                                | CLI command                         |
+  | ---                                                                                                                                                                                                                 | ---                                 |
+  | `uqs_start`, `uqs_stop`, `uqs_restart`, `uqs_status`, `uqs_clean`                                                                                                                                                   | `uqs start`, ...                    |
+  | `uqs_query`                                                                                                                                                                                                         | `uqs query`                         |
+  | `uqs_logs`                                                                                                                                                                                                          | `uqs logs --json`                   |
+  | `uqs_config_show`, `uqs_config_set`                                                                                                                                                                                 | `uqs config show`, `uqs config set` |
+  | `uqs_process_list`, `uqs_profile_list`, `uqs_config_field_list`, `uqs_config_list`, `uqs_config_env`, `uqs_job_list`, `uqs_target_list`, `uqs_runtime_list`, `uqs_job_attachment_list`, `uqs_job_attachment_status` | each noun's `list`                  |
+  | `uqs_connector_start`, `uqs_connector_stop`, `uqs_connector_status`                                                                                                                                                 | `uqs connector ...`                 |
+
+So `base_port` is the stack's base port wherever a stack is meant, and `port` is
+only ever one process's - `uqs_query`'s, as `--port` is on the CLI. `procs` is a
+list of process names, `proc` one; `uqs_query` takes `password_env`, the name of
+the variable holding the password, never the password; `uqs_start` takes
+`profile`, and `dry_run=true` for the start lines alone. `uqs_start` refuses
+what `uqs start` refuses: an unknown process or an unrunnable profile.
+
+Every tool returns one JSON object - a list tool its noun's `--json` document,
+`uqs_query` `{"expression", "result"}` - and every failure is the CLI's one
+refusal, `{"ok": false, "error": "..."}`, marked as an error: a refused start,
+an unknown tool, a bad argument and a query that cannot connect alike. A retired
+tool or parameter (`uqs_summary`, `uqs_list`, `uqs_print`, `uqs_get_config`,
+`uqs_crypto_*`, `port` for a base port, `passwd`, `procname`, `min_level`) is
+refused naming what replaced it. `python/uqs/tests/test_mcp_vocabulary.py` holds
+every tool to its CLI command's names and types.
 
 ## Other commands
 
@@ -2041,8 +2063,7 @@ A fixed verb vocabulary (#1733):
 `status` is the state of something running, `check` a probe that exits non-zero
 on a problem, `list` many records and `show` one. A push or rollback asks a
 release for `deploy check`, or for `deploy verify` on a release from before it.
-The MCP tool `uqs_summary` is `uqs_status`, and `uqs_summary` stays for one
-release.
+The MCP tool `uqs_summary` is `uqs_status`, and is refused naming it.
 
 One vocabulary (#1857):
 

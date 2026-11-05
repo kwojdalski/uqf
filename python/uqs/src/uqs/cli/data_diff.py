@@ -59,7 +59,7 @@ def _side_opt(flag: str, which: str) -> Any:
 LeftOpt = _side_opt("--left", "left")
 RightOpt = _side_opt("--right", "right")
 DiffJson = json_opt(
-    '{"ok", "outcome", "left", "right", "from", "to", "limit", "filters", '
+    '{"ok", "outcome", "left", "right", "range_from", "range_to", "limit", "filters", '
     '"tables": [{table, outcome, label, truncated, read, schema, rows, coverage}]}'
 )
 
@@ -115,7 +115,7 @@ def _utc(value: Any) -> Any:
     """Every time in a report as ISO-8601 in UTC: q's `.j.j` writes a timestamp
     with no zone, and each one here is `.z.p`'s."""
     if isinstance(value, dict):
-        times = ("from", "to", "range_from", "range_to")
+        times = ("range_from", "range_to")
         return {k: timestamp(v, naive="utc") if k in times else _utc(v) for k, v in value.items()}
     if isinstance(value, list):
         return [_utc(v) for v in value]
@@ -160,7 +160,8 @@ def render(report: dict) -> None:
     """The report as text: the window, then each table's outcome and its specifics."""
     console.print(
         f"[bold]{escape(report['left'])}[/] (left) against [bold]{escape(report['right'])}[/] "
-        f"(right), [{report['from']}, {report['to']}), at most {report['limit']} rows per side"
+        f"(right), [{report['range_from']}, {report['range_to']}), "
+        f"at most {report['limit']} rows per side"
     )
     if report["filters"]:
         console.print(f"  filters  {escape(' and '.join(report['filters']))}")
