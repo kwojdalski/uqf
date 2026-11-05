@@ -61,11 +61,6 @@
 / that more is finished - a TorQ runner asks the HDB to reload. Kept off the
 / store so the store stays TorQ-free (scripts/gates/check_etl_layering.py).
 
-/ Private: can this value be called? A lambda, or a projection over one -
-/ the HDB writer's functions are projections over its root and column.
-/ @private
-.qetl.io.callable:{[v] (type v) within 100 112h}
-
 / Refuse a manager that is not one, naming what is wrong.
 / .
 / Checked at DECLARATION rather than at first write, because a worker with a
@@ -81,17 +76,17 @@
     missing:.qetl.io.required where not .qetl.io.required in key mgr;
     if[count missing;
         '"require_manager: io manager is missing ",", " sv string missing];
-    if[not .qetl.io.callable mgr`write;
+    if[not .qetl.declared.callable mgr`write;
         '"require_manager: an io manager's write must be a function taking (target;batch)"];
-    if[(`finish in key mgr) and not .qetl.io.callable mgr`finish;
+    if[(`finish in key mgr) and not .qetl.declared.callable mgr`finish;
         '"require_manager: an io manager's finish must be a niladic function"];
-    if[(`write_keyed in key mgr) and not .qetl.io.callable mgr`write_keyed;
+    if[(`write_keyed in key mgr) and not .qetl.declared.callable mgr`write_keyed;
         '"require_manager: an io manager's write_keyed must be a function taking (target;batch;opts)"];
-    if[(`flush in key mgr) and not .qetl.io.callable mgr`flush;
+    if[(`flush in key mgr) and not .qetl.declared.callable mgr`flush;
         '"require_manager: an io manager's flush must be a function taking a timestamp"];
-    if[(`recover in key mgr) and not .qetl.io.callable mgr`recover;
+    if[(`recover in key mgr) and not .qetl.declared.callable mgr`recover;
         '"require_manager: an io manager's recover must be a function taking (target;range_from;range_to)"];
-    if[(`on_ready in key mgr) and not .qetl.io.callable mgr`on_ready;
+    if[(`on_ready in key mgr) and not .qetl.declared.callable mgr`on_ready;
         '"require_manager: an io manager's on_ready must be a function taking a dictionary"];
     1b}
 

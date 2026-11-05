@@ -229,7 +229,7 @@
 
 .qt.qetl.job.stream.endofday.test_a_carry_takes_only_state_table_and_a_positive_cap:{[t]
     d:`procname`subscribe_to`outputs`on_batch`replay`carry!(`eodcar1;enlist `executions;enlist `eodx_open;{[t;x]};1b;`state`table`window!(`book;`eodx_open;0D00:01));
-    .qunit.assertThrows[.qetl.job.stream.define[`eod_car;];d;"*takes state, table and cap, not window*";"the old time window is gone"];
+    .qunit.assertThrows[.qetl.job.stream.define[`eod_car;];d;"*declares window, which a carry does not take - the keys are state, table, cap";"the old time window is gone"];
     d[`carry]:`state`table`cap!(`book;`eodx_open;0);
     .qunit.assertThrows[.qetl.job.stream.define[`eod_car;];d;"*cap must be a positive long*";"a cap that holds nothing"]};
 

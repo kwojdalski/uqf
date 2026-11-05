@@ -220,4 +220,4 @@
 
 .qt.qetl.job.stream.delivery.test_wire_refuses_a_hook_it_does_not_know:{[t]
     .qunit.assertThrows[{.qetl.job.stream.delivery.wire[`sdt_feed;enlist[`confirm]!enlist {x}]};::;
-        "delivery.wire: sdt_feed was given confirm, which is not a delivery hook";"named"]};
+        "delivery.wire: sdt_feed declares confirm, which a delivery hook set does not take - the keys are *";"named"]};

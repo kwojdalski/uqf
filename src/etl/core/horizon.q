@@ -145,7 +145,7 @@
         'who,"'s max_lateness must be a timespan, how much older than its arrival an event's event_time can be"];
     if[not (d`ready_on) in .qetl.job.stream.horizons.ready_rules;
         'who,"'s ready_on must be one of ",", " sv string .qetl.job.stream.horizons.ready_rules];
-    if[$[`legs in key d; not 100h<=type d`legs; 0b]; 'who,"'s legs must be a function of the pending events"];
+    if[`legs in key d; .qetl.declared.require_callable[who;`legs;d`legs;"a function of the pending events"]];
     if[(`legs in key d) and not .qetl.job.stream.horizons.reads_reference[d`ready_on];
         'who," declares legs, which only ready_on `reference reads (or `both)"];
     if[.qetl.job.stream.horizons.reads_reference[d`ready_on];
@@ -207,11 +207,9 @@
     who:"define: horizon job ",string[name];
     if[not 99h=type decl; 'who,"'s declaration must be a dictionary"];
     .qetl.job.stream.refuse_publishes[who;decl];
+    .qetl.declared.refuse_unknown[who;"a horizon job";decl;.qetl.job.stream.horizons.required_keys,.qetl.job.stream.horizons.optional_keys];
     missing:.qetl.job.stream.horizons.required_keys where not .qetl.job.stream.horizons.required_keys in key decl;
     if[count missing; 'who," is missing ",", " sv string missing];
-    unknown:(key decl) except .qetl.job.stream.horizons.required_keys,.qetl.job.stream.horizons.optional_keys;
-    if[count unknown;
-        'who," declares ",(", " sv string unknown),", which a horizon job does not take"];
     if[not all -11h=type each decl`events`reference`transform;
         'who,"'s events, reference, transform must each be one table or transform name, a symbol"];
     if[not $[11h=type decl`outputs; 1=count decl`outputs; 0b];
@@ -230,7 +228,7 @@
     if[2<>count ins;
         'who,"'s transform ",string[decl`transform]," takes ",string[count ins]," inputs - it takes two: the events, then the reference"];
     d:.qetl.job.stream.horizons.normalise[who;decl;ins];
-    if[$[`keep in key decl; not 100h<=type decl`keep; 0b]; 'who,"'s keep must be a function of a batch"];
+    if[`keep in key decl; .qetl.declared.require_callable[who;`keep;decl`keep;"a function of a batch"]];
     ns:.qetl.job.stream.namespace name;
     / the state and the surface every job has, in the one place a test, a
     / reader or the runner looks for them

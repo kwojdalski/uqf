@@ -126,10 +126,9 @@
     who:"define: rolling job ",string[name];
     if[not 99h=type decl; 'who,"'s declaration must be a dictionary"];
     .qetl.job.stream.refuse_publishes[who;decl];
+    .qetl.declared.refuse_unknown[who;"a rolling job";decl;.qetl.job.stream.rolling.required_keys,.qetl.job.stream.rolling.optional_keys];
     missing:.qetl.job.stream.rolling.required_keys where not .qetl.job.stream.rolling.required_keys in key decl;
     if[count missing; 'who," is missing ",", " sv string missing];
-    unknown:(key decl) except .qetl.job.stream.rolling.required_keys,.qetl.job.stream.rolling.optional_keys;
-    if[count unknown; 'who," declares ",(", " sv string unknown),", which a rolling job does not take"];
     if[not all -11h=type each decl`events`transform;
         'who,"'s events, transform must each be one table or transform name, a symbol"];
     if[not $[11h=type decl`outputs; 1=count decl`outputs; 0b];

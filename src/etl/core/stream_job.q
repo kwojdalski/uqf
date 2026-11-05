@@ -72,22 +72,19 @@
 / state it does not replay, has a use for it.
 .qetl.job.stream.passthrough_keys:`start_with_all`note`on_start`check`on_fail
 
+/ The keys `define` reads besides required_declarations, and so the only others
+/ it takes (#2112). A key outside both is refused by name: `start_with_al`,
+/ `on_endofdya` and `transfrom` once registered without a word and were never
+/ read - the job missed the stack, never rolled at end of day, declared no
+/ shared transform. `ns` is in neither: define derives it. This is the one list;
+/ a key a reader starts to read is added here, and nowhere else.
+.qetl.job.stream.optional_declarations:`on_batch`on_timer`period`poll`transform`on_endofday`replay`restore_from`carry`on_replayed`state`ephemeral,.qetl.job.stream.passthrough_keys
+
 / The passthrough options a declaration carries, to forward to `define`.
 / @param decl a kind instance's declaration dict
 / @return the sub-dictionary of decl on `passthrough_keys`
 / @eg .qetl.job.stream.passthrough `a`note!(1;"n")  ->  enlist[`note]!enlist "n"
 .qetl.job.stream.passthrough:{[decl] (.qetl.job.stream.passthrough_keys inter key decl)#decl}
-
-/ Private: can this value be called?
-/ .
-/ Not `100h=type`, which is a LAMBDA only. The natural way to hand a job a
-/ publisher is to bind the handle into one - `.qtorq.publish[h;;]` - and
-/ that is a projection (104h), as is a test's recorder bound to a job name.
-/ Refusing those would mean the seam only accepted the one shape nobody
-/ writes. 100-112h covers lambdas, operators, projections, compositions and
-/ q's own iterators.
-/ @private
-.qetl.job.stream.is_callable:{[v] (type v) within 100 112h}
 
 / The namespace every job instance lives under, as .qpipe.job.<job>.
 / .
@@ -119,11 +116,11 @@
         '"define: ",string[job],"'s note must be a string"];
     / What the job does when the plant's day ends (#943): roll, snapshot or
     / reset whatever state it carries. Called with the date that ended.
-    if[(`on_endofday in key decl) and not .qetl.job.stream.is_callable decl`on_endofday;
+    if[(`on_endofday in key decl) and not .qetl.declared.callable decl`on_endofday;
         '"define: ",string[job],"'s on_endofday must be a function of the date that ended"];
     / What the job loads before it runs (#1112): configuration a running
     / process needs and a declaration cannot hold, such as a limits file.
-    if[(`on_start in key decl) and not .qetl.job.stream.is_callable decl`on_start;
+    if[(`on_start in key decl) and not .qetl.declared.callable decl`on_start;
         '"define: ",string[job],"'s on_start must be a niladic function"];
     / The shared transform the job applies, when it applies one: what a twin
     / refilling its table must apply too, and what `uqs job new --twin-of`
@@ -141,7 +138,7 @@
     if[(`on_fail in key decl) and not `check in key decl;
         '"define: ",string[job]," declares on_fail without a check - there is nothing to fail"];
     if[`check in key decl;
-        if[not .qetl.job.stream.is_callable decl`check;
+        if[not .qetl.declared.callable decl`check;
             '"define: ",string[job],"'s check must be a function of the rows about to be published, returning the offending rows"];
         if[not (`on_fail in key decl) and -11h=type decl`on_fail;
             '"define: ",string[job]," declares a check but no on_fail - say `drop (publish the clean rows) or `hold (withhold the whole batch)"];
@@ -169,7 +166,7 @@
             '"define: ",string[job]," declares restore_from but no on_batch to read it with"]];
     if[`carry in key decl; .qetl.job.stream.check_carry[job;decl;replays]];
     if[`on_replayed in key decl;
-        if[not .qetl.job.stream.is_callable decl`on_replayed;
+        if[not .qetl.declared.callable decl`on_replayed;
             '"define: ",string[job],"'s on_replayed must be a niladic function"];
         if[not replays;
             '"define: ",string[job]," declares on_replayed without replay 1b - it would never be called"]];
@@ -219,6 +216,8 @@
         '"define: ",string[job]," is already a bounded job - job names must be unique across execution modes"];
     if[not 99h=type decl; '"define: ",string[job],"'s declaration must be a dictionary"];
     .qetl.job.stream.refuse_publishes["define: ",string job;decl];
+    .qetl.declared.refuse_unknown["define: ",string job;"a streaming job";decl;
+        (.qetl.job.stream.required_declarations except `ns),.qetl.job.stream.optional_declarations];
     decl[`ns]:.qetl.job.stream.namespace[job];
     missing:.qetl.job.stream.required_declarations where not .qetl.job.stream.required_declarations in key decl;
     if[count missing;
@@ -235,7 +234,7 @@
     / timer built from them (stream_poll.q) - before the checks below, which
     / then see an ordinary feed.
     if[`poll in key decl; decl:.qetl.job.stream.poll_declared[job;decl]];
-    if[(`on_batch in key decl) and not .qetl.job.stream.is_callable decl`on_batch;
+    if[(`on_batch in key decl) and not .qetl.declared.callable decl`on_batch;
         '"define: ",string[job],"'s on_batch must be a function taking (table name; rows), [t;x] as in TorQ's upd"];
     / A subscriber with no handler receives every batch and drops it, and a
     / job with neither handler nor timer runs nothing at all - both look
@@ -255,7 +254,7 @@
             '"define: ",string[job],"'s period must be a timespan, e.g. 0D00:00:01"];
         if[not (decl`period)>0D00:00;
             '"define: ",string[job],"'s period must be positive"];
-        if[not .qetl.job.stream.is_callable decl`on_timer;
+        if[not .qetl.declared.callable decl`on_timer;
             '"define: ",string[job],"'s on_timer must be a niladic function"]];
     .qetl.job.stream.check_optional[job;decl];
     .qetl.job.stream.check_replay[job;decl]; .qetl.twin.check_live[job;decl];
@@ -326,7 +325,7 @@
 / @param publisher a function of (table name; rows)
 / @return the job name
 .qetl.job.stream.wire:{[job;publisher]
-    if[not .qetl.job.stream.is_callable publisher;
+    if[not .qetl.declared.callable publisher;
         '"wire: ",string[job],"'s publisher must be callable as (table; rows) - a lambda or a projection over one"];
     d:.qetl.job.stream.def[job];
     / A declared check sits in the seam itself, so every route a row takes out
@@ -707,7 +706,7 @@
     if[not -11h=type c`state; 'who,"'s state must be the name of a variable in the job's namespace"];
     if[not (c`table) in (),decl`outputs; 'who,"'s table ",string[c`table]," must be one the job publishes"];
     if[not replays; 'who," needs replay 1b - the snapshot is read back by a replay"];
-    if[count (key c) except `state`table`cap; 'who," takes state, table and cap, not ",", " sv string (key c) except `state`table`cap];
+    .qetl.declared.refuse_unknown[who;"a carry";c;`state`table`cap];
     if[$[`cap in key c; not (-7h=type c`cap) and 0<c`cap; 0b]; 'who,"'s cap must be a positive long, the rows a replay may hold"];
     }
 
