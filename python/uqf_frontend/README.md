@@ -210,7 +210,7 @@ progress and its own outcome.
   file may or may not be there, and neither the API nor the browser retries: the
   queue shows "Outcome unknown", and you list the directory before uploading it
   again. Cancelling an upload in flight is reported the same way.
-- **Audit.** Each upload is one `file.upload` row in the activity history
+- **Audit.** Each upload is one `files.upload` row in the activity history
   (#1954). The row records the target, the file's path, size, sha256, and
   whether it was a create or an overwrite. It never records the file's bytes. An
   uncertain upload is recorded as `unknown`, a refusal as `refused`, and damaged
@@ -255,7 +255,7 @@ browse, delete or upload path may name `.uqf-history`, in any letter case.
   in `UQF_FRONTEND_SETTINGS_FILE`, which the API and `uqs target config restore`
   both read over those. Each pruned id is logged in `.uqf-history/pruned.jsonl`,
   so its restore is refused as pruned (410 `HistoryPruned`), not as unknown.
-- **Audit.** `config.push.open` when a push opens; `file.upload` per file, with
+- **Audit.** `config.push.open` when a push opens; `files.upload` per file, with
   `push_id` and `previous_sha256` (null on a create); `config.push` when it
   closes, with the destination, file count, bytes and one outcome per file;
   `config.restore` for a restore, with `restores` and its own `push_id`;

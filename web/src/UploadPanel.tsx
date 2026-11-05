@@ -365,7 +365,7 @@ export function UploadPanel({
               Choose files{" "}
               <input
                 type="file"
-                data-activity="upload.files"
+                data-activity="files.upload.files"
                 multiple
                 disabled={running}
                 onChange={fromInput}
@@ -375,7 +375,7 @@ export function UploadPanel({
               Choose a folder{" "}
               <input
                 type="file"
-                data-activity="upload.folder"
+                data-activity="files.upload.folder"
                 multiple
                 disabled={running}
                 ref={(element) => element?.setAttribute("webkitdirectory", "")}
@@ -446,7 +446,7 @@ export function UploadPanel({
                         item.status === "invalid") && (
                         <button
                           type="button"
-                          data-activity="upload.remove"
+                          data-activity="files.upload.remove"
                           aria-label={`Remove ${item.relative}`}
                           onClick={() =>
                             setItems((current) =>
@@ -486,7 +486,7 @@ export function UploadPanel({
         <label>
           <input
             type="checkbox"
-            data-activity="upload.overwrite"
+            data-activity="files.upload.overwrite"
             checked={overwrite}
             disabled={running}
             onChange={(event) => setOverwrite(event.target.checked)}
@@ -496,7 +496,7 @@ export function UploadPanel({
         {!running && !confirming && (
           <button
             type="button"
-            data-activity="upload.review"
+            data-activity="files.upload.review"
             disabled={queued.length === 0 || !canUpload}
             onClick={() => setConfirming(true)}
           >
@@ -506,7 +506,7 @@ export function UploadPanel({
         {running && (
           <button
             type="button"
-            data-activity="upload.cancel"
+            data-activity="files.upload.cancel"
             onClick={() => controller.current?.abort()}
           >
             Cancel
@@ -515,7 +515,7 @@ export function UploadPanel({
         {!running && finished && (
           <button
             type="button"
-            data-activity="upload.clear"
+            data-activity="files.upload.clear"
             onClick={clearFinished}
           >
             Clear finished
@@ -537,12 +537,16 @@ export function UploadPanel({
               ? "Existing files with the same path WILL BE REPLACED (their permissions are kept)."
               : "Existing files are left alone: an upload whose path exists is refused."}
           </p>
-          <button type="button" data-activity="upload.confirm" onClick={start}>
+          <button
+            type="button"
+            data-activity="files.upload.confirm"
+            onClick={start}
+          >
             Confirm upload
           </button>{" "}
           <button
             type="button"
-            data-activity="upload.back"
+            data-activity="files.upload.back"
             onClick={() => setConfirming(false)}
           >
             Back
