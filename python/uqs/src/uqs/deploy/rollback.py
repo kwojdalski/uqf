@@ -27,8 +27,8 @@ releases/, so a push of the same artifact is refused and a rollback with
 from __future__ import annotations
 
 import json
-import sys
 
+from uqs.deploy import report as deploy_report
 from uqs.deploy.config import REPORT, UNREADABLE_REPORT, Config, DeployError, redact
 from uqs.deploy.remote import Transport, q
 from uqs.deploy.selection import Selection, started_by
@@ -45,7 +45,7 @@ def _report(dep: Deployment, release: str) -> dict:
         f"cat {q(dep.releases)}/{q(release)}/{REPORT}",
     )
     try:
-        report = json.loads(out)
+        report = deploy_report.read(json.loads(out))
         return {
             **report,
             "profile": report["profile"],
@@ -117,16 +117,17 @@ def _plan(dep: Deployment, cfg: Config, to: str | None) -> tuple[dict, dict, dic
 
 
 def rollback(
-    cfg: Config, remote: Transport, *, to: str | None = None, dry_run: bool = False, out=sys.stdout
-) -> int:
-    """Move the server at cfg.host:cfg.dest back to an earlier release.
-    Returns 0 when the target is running, verified and `current`."""
+    cfg: Config, remote: Transport, *, to: str | None = None, dry_run: bool = False
+) -> tuple[int, dict]:
+    """Move the server at cfg.ssh:cfg.dest back to an earlier release.
+    Returns (0 when the target is running, verified and `current`, else 1;
+    what happened, as the command's document - its verdict under `rollback`:
+    planned, done or failed). Printed by the command, never here (#2125)."""
     dep = Deployment(cfg, remote)
     dep.check_sudo()
     if dry_run:  # reads the lock, takes nothing: Deployment.read_lock says why
         dep.read_lock("rollback")
-        print(json.dumps({"rollback": "planned", **_plan(dep, cfg, to)[0]}, indent=2), file=out)
-        return 0
+        return 0, {"ok": True, "rollback": "planned", **_plan(dep, cfg, to)[0]}
     dep.take_lock("rollback")
     try:
         plan, now, then = _plan(dep, cfg, to)
@@ -159,10 +160,25 @@ def rollback(
             restored = _start_and_verify(dep, current, now, f"release {current} again")
             outcome = "restored" if restored.get("passed") else "NOT restored - check by hand"
             failed = {"rollback": "failed", **plan, "reason": reason, "current": current}
-            print(json.dumps({**failed, "restore": outcome}, indent=2), file=out)
-            return 1
+            return 1, {"ok": False, **failed, "restore": outcome}
         dep.activate(target)
-        print(json.dumps({"rollback": "done", **plan, "current": target}, indent=2), file=out)
-        return 0
+        return 0, {"ok": True, "rollback": "done", **plan, "current": target}
     finally:
         dep.release_lock()
+
+
+def render(doc: dict) -> str:
+    """A rollback's document for a terminal."""
+    start = doc["start"]
+    extra = start["extra_processes"]
+    starts = f"profile {start['profile']}" + (f" and {', '.join(extra)}" if extra else "")
+    stops = ", ".join(doc["stop"]) or "nothing"
+    verdict = doc["rollback"]
+    if verdict == "planned":
+        return f"would roll back from {doc['from']} to {doc['to']}: stop {stops}; start {starts}"
+    if verdict == "done":
+        return f"rolled back from {doc['from']} to {doc['to']} ({starts}); current is {doc['to']}"
+    return (
+        f"rollback from {doc['from']} to {doc['to']} FAILED: {redact(str(doc['reason']))}; "
+        f"release {doc['current']} {doc['restore']}"
+    )

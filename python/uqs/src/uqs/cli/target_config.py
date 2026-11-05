@@ -42,7 +42,7 @@ from uqs.cli.shared import (
     console,
 )
 from uqs.cli.target import target_app
-from uqs.deploy import control, inspection, targets
+from uqs.deploy import control, inspection, target_keys, targets
 from uqs.deploy.config import DeployError
 from uqs.paths import UqsError, repo_root
 
@@ -93,7 +93,7 @@ def _call(work: Callable[[Any], dict[str, Any]], name: str) -> dict[str, Any]:
         _die(UqsError(str(exc)))
         raise AssertionError from None  # _die exits
     if name not in declared:
-        _die(UqsError(f"no target {name!r} - `uqs target list` names them"))
+        _die(target_keys.unknown_target(name, declared, targets.declaration_path(root)))
     try:
         return work(control.remote_from(name, declared[name]))
     except (FrontendError, UqsError) as exc:

@@ -54,7 +54,7 @@ def test_each_layer_overrides_the_one_beneath_it(root):
         "torq_home": "defaults",
         "profile": "environment uat",
         "verify_timeout": "target alpha",
-        "host": "target alpha",
+        "ssh": "target alpha",
         "dest": "target alpha",
         "keep": "--keep",
     }
@@ -84,7 +84,7 @@ def test_the_plan_names_each_layer_lowest_first(root):
     assert plan._source_lines(cfg) == [
         "settings: remote_user, torq_home from defaults",
         "settings: profile from environment uat",
-        "settings: dest, host, verify_timeout from target alpha",
+        "settings: dest, ssh, verify_timeout from target alpha",
         "settings: keep from --keep",
     ]
 
@@ -145,12 +145,12 @@ def test_a_file_without_the_new_tables_behaves_as_before(root):
     """A plain [targets.*] file: the same Config, every source the target."""
     _write(root, '[targets.a]\nssh = "h"\ndest = "/d"\nprofile = "p"\nruntime = "crypto"\n')
     (cfg,) = targets.configs("a", "x", {"profile": "q"}, False, root)
-    assert cfg.sources == {"host": "target a", "dest": "target a", "profile": "--profile"}
+    assert cfg.sources == {"ssh": "target a", "dest": "target a", "profile": "--profile"}
     assert cfg.runtime == "crypto"
-    want = make_config(artifact="x", host="h", dest="/d", profile="q")
-    assert (cfg.host, cfg.dest, cfg.profile) == (want.host, want.dest, want.profile)
+    want = make_config(artifact="x", ssh="h", dest="/d", profile="q")
+    assert (cfg.ssh, cfg.dest, cfg.profile) == (want.ssh, want.dest, want.profile)
     assert targets.read(root) == {
-        "a": {"host": "h", "dest": "/d", "profile": "p", "runtime": "crypto"}
+        "a": {"ssh": "h", "dest": "/d", "profile": "p", "runtime": "crypto"}
     }
     assert list(history.target_rows(root)[0]) == ["target", "ssh", "dest", "remote_user", "labels",
                                                   "last_deployed"]  # fmt: skip
@@ -171,7 +171,7 @@ def test_list_targets_shows_the_merged_target_and_its_environment(root):
 
 
 def test_target_add_and_remove_keep_the_shared_layers(root):
-    target_changes.add(root, "gamma", {"host": "deploy@gamma", "dest": "/srv/g"}, "test")
+    target_changes.add(root, "gamma", {"ssh": "deploy@gamma", "dest": "/srv/g"}, "test")
     (cfg,) = targets.configs("gamma", "x", {}, False, root)
     assert (cfg.profile, cfg.remote_user) == ("essential", "svc")
     target_changes.remove(root, "alpha", "test")
@@ -182,5 +182,5 @@ def test_target_add_and_remove_keep_the_shared_layers(root):
 def test_a_file_with_only_shared_layers_takes_its_first_target(root):
     _write(root, '[defaults]\nprofile = "p"\n')
     assert targets.read(root) == {}
-    target_changes.add(root, "a", {"host": "h", "dest": "/d"}, "test")
+    target_changes.add(root, "a", {"ssh": "h", "dest": "/d"}, "test")
     assert targets.configs("a", "x", {}, False, root)[0].profile == "p"

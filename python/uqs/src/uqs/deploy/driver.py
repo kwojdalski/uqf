@@ -1,12 +1,15 @@
 """A deployment end to end: the run, and the rollback when a stage fails, or
 the push is interrupted, after the previous release was stopped. What
---dry-run shows is plan.py's."""
+--dry-run shows is plan.py's.
+
+The report is handed to `on_result`, never printed here: the command prints
+it, as text or - with --json - in its one document (#2125)."""
 
 from __future__ import annotations
 
-import json
 import sys
 import time
+from collections.abc import Callable
 from datetime import UTC, datetime
 
 from uqs.deploy import bundled, components, converted_override, fetch, hdb, overrides
@@ -25,7 +28,22 @@ from uqs.stack.converted import ATTEMPT_VAR
 log = get_logger()
 
 
-def deploy(cfg: Config, remote: Transport, *, out=sys.stdout, on_report=None) -> int:
+#: What a caller is handed the push's report through, when it ends.
+OnReport = Callable[[Report], None]
+
+
+def deploy(
+    cfg: Config,
+    remote: Transport,
+    *,
+    out=sys.stdout,
+    on_report: OnReport | None = None,
+    on_result: OnReport | None = None,
+) -> int:
+    """Push `cfg.artifact` to cfg's server; 0 when it deployed (or, as a dry
+    run, was planned). `out` takes a dry run's plan; `on_report` the report
+    of a push that ran, for the history; `on_result` the report it ended
+    with, a dry run's included - status `planned`."""
     local = fetch.resolve(cfg.artifact, repo=cfg.release_repo, root=repo_root())
     log.info("checking {}", local)
     pkg = load_artifact(local)
@@ -55,7 +73,7 @@ def deploy(cfg: Config, remote: Transport, *, out=sys.stdout, on_report=None) ->
         revision=pkg.manifest["revision"],
         artifact={"name": pkg.path.name, "sha256": pkg.sha256},
         dirty=pkg.manifest["dirty"],
-        host=cfg.host,
+        ssh=cfg.ssh,
         dest=cfg.dest,
         profile=cfg.profile,
         jobs=dep.selection.jobs,
@@ -64,7 +82,7 @@ def deploy(cfg: Config, remote: Transport, *, out=sys.stdout, on_report=None) ->
         live=cfg.live,
     )
 
-    log.info("preflight on {}{}", cfg.host, f" as {cfg.remote_user}" if cfg.remote_user else "")
+    log.info("preflight on {}{}", cfg.ssh, f" as {cfg.remote_user}" if cfg.remote_user else "")
     dep.check_sudo()
     facts = dep.preflight()
     report.previous_release = facts.get("current")
@@ -81,8 +99,14 @@ def deploy(cfg: Config, remote: Transport, *, out=sys.stdout, on_report=None) ->
     if cfg.dry_run:
         facts = {**facts, "hdb": hdb.planned(dep, pkg.manifest)}
         print(plan(cfg, pkg, rid, facts, dep, exceptions, report.components), file=out)
+        report.status, report.stage = "planned", "dry-run"
+        if on_result:
+            on_result(report)
         return 0
-    return _run(dep, cfg, pkg, rid, report, facts, out, on_report)
+    code = _run(dep, cfg, pkg, rid, report, facts, on_report)
+    if on_result:
+        on_result(report)
+    return code
 
 
 def _run(
@@ -92,8 +116,7 @@ def _run(
     rid: str,
     report: Report,
     facts: dict,
-    out,
-    on_report=None,
+    on_report: OnReport | None = None,
 ) -> int:
     dep.take_lock()
     release: str | None = None
@@ -232,7 +255,6 @@ def _run(
         dep.release_lock()
         if on_report:  # the workstation's deployment history (#956)
             on_report(report)
-    print(json.dumps(report.as_dict(), indent=2), file=out)
     return 0 if report.status == "deployed" else 1
 
 

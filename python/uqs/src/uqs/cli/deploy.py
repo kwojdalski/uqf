@@ -5,9 +5,10 @@ push command's parameters are named exactly as uqs.deploy.config.make_config's,
 which checks them, so the options and their validation cannot drift apart.
 
 Progress goes through uqs.logger on stderr, like every other command's (#1881):
-stdout carries what another program reads - build's artifact path, push's
-report and verify's result as JSON, whose last two lines the push that ran it
-parses.
+stdout carries what another program reads - build's artifact path, and
+check's result, whose last two lines the push that ran it parses. push,
+rollback and prune print what happened as text, or with --json as one
+document through json_out.emit like every other command (#2125).
 """
 
 from __future__ import annotations
@@ -22,12 +23,13 @@ from uqs.cli import completion
 from uqs.cli import deploy_components as components
 from uqs.cli import deploy_connection as conn
 from uqs.cli import deploy_dry_run as dry
+from uqs.cli import deploy_output as deploy_out
 from uqs.cli import deploy_policy as policy
 from uqs.cli.choices import ChoiceOpt
 from uqs.cli.concepts import profile_opt
 from uqs.cli.renames import renamed
 from uqs.cli.safety import ChangesState, DryRunOpt, OverrideOpt, ReasonOpt
-from uqs.cli.shared import EXIT_REFUSED, EXIT_USAGE, app, json_refusal
+from uqs.cli.shared import app
 from uqs.deploy import build as release_build
 from uqs.deploy import (
     config,
@@ -64,18 +66,6 @@ ArchOpt = ChoiceOpt(
     PLATFORMS, "--arch", "The servers' architecture", default=DEFAULT_ARCH, required=True
 )
 log = get_logger()
-
-
-#: The stage a deploy command refuses its own command line at: a usage error,
-#: exit 2 like any other (#1885); every other stage's failure exits 1.
-ARGUMENTS = "arguments"
-
-
-def _failed(prefix: str, stage: str, exc: Exception) -> None:
-    message = f"{prefix}: FAILED at {stage}: {config.redact(str(exc))}"
-    log.error("{}", message)
-    json_refusal(message)
-    raise typer.Exit(code=EXIT_USAGE if stage == ARGUMENTS else EXIT_REFUSED)
 
 
 #: `--output` is a FILE, as `contract export -o` writes one; a directory is
@@ -133,7 +123,7 @@ def build(
     with_kafka_connector: Annotated[
         bool, typer.Option("--kafka-connector/--no-kafka-connector", help=kafka.CONNECTOR_HELP)
     ] = False,
-    python_runtime: components.CarriedPythonRuntime = None,
+    python_component: components.CarriedPythonRuntime = None,
     frontend_dist: Annotated[
         Path | None, typer.Option("--frontend", metavar="DIST", help=frontend.HELP)
     ] = None,
@@ -146,7 +136,7 @@ def build(
     try:
         waived = policy.waived("deploy build", override, reason)
     except config.DeployError as exc:
-        _failed("uqs deploy build", exc.stage, exc)
+        deploy_out.failed("uqs deploy build", exc.stage, exc)
         return
     if dry_run:
         try:
@@ -154,12 +144,12 @@ def build(
                 runtime, repo_root(), [str(b) for b in bundle or ()]
             )
         except ReleaseError as exc:
-            _failed("uqs deploy build", exc.stage, exc)
+            deploy_out.failed("uqs deploy build", exc.stage, exc)
             return
         dry.say_composition(runtime_bundles.composition(runtime, members))
         return
     if shutil.which("uv") is None:
-        _failed("uqs deploy build", "prerequisites", RuntimeError("uv is not on PATH"))
+        deploy_out.failed("uqs deploy build", "prerequisites", RuntimeError("uv is not on PATH"))
     try:
         artifact = release_build.build(
             output,
@@ -173,11 +163,11 @@ def build(
             allow_computed_names=portable.ALLOW_COMPUTED_NAMES in waived,
             kafka_home=kafka_home,
             kafka_connector=with_kafka_connector,
-            python_runtime_file=python_runtime,
+            python_runtime_file=python_component,
             frontend_dist=frontend_dist,
         )
     except ReleaseError as exc:
-        _failed("uqs deploy build", exc.stage, exc)
+        deploy_out.failed("uqs deploy build", exc.stage, exc)
     print(artifact.path)
 
 
@@ -212,7 +202,7 @@ def push(
             show_default=False,
         ),
     ] = None,
-    host: conn.Host = None,
+    ssh: conn.Ssh = None,
     dest: conn.Dest = None,
     profile: _ProfileOpt = None,
     target: Annotated[
@@ -259,8 +249,8 @@ def push(
             "Persisted in deploy.env as UQS_PROCESS_FIELDS",
         ),
     ] = "",
-    qcmd: components.Qcmd = None,
-    qhome: components.Qhome = None,
+    q_cmd: components.Qcmd = None,
+    q_home: components.Qhome = None,
     data_dir: Annotated[
         str | None,
         typer.Option("--data-dir", help="Runtime data directory; default: <dest>/shared/data"),
@@ -327,12 +317,12 @@ def push(
     q_mode: components.QMode = components.DEFAULT,
     torq_mode: components.TorqMode = components.DEFAULT,
     python_mode: components.PythonMode = components.DEFAULT,
-    torq_runtime: components.TorqRuntime = None,
-    torq_runtime_sha256: components.TorqRuntimeSha256 = None,
-    q_runtime: components.QRuntime = None,
-    q_runtime_sha256: components.QRuntimeSha256 = None,
-    python_runtime: components.PythonRuntime = None,
-    python_runtime_sha256: components.PythonRuntimeSha256 = None,
+    torq_component: components.TorqRuntime = None,
+    torq_component_sha256: components.TorqRuntimeSha256 = None,
+    q_component: components.QRuntime = None,
+    q_component_sha256: components.QRuntimeSha256 = None,
+    python_component: components.PythonRuntime = None,
+    python_component_sha256: components.PythonRuntimeSha256 = None,
     keep: Annotated[
         int | None,
         typer.Option(
@@ -343,12 +333,14 @@ def push(
     ] = None,
     soak: conn.Soak = None,
     register: conn.Register = True,
+    as_json: deploy_out.PushJson = False,
 ) -> None:
     """Deploy a release onto a server, on its TorQ and q or bundled ones, and verify it there."""
     options = conn.config_options(dict(locals()))
     del options["ctx"], options["target"], options["target_names"]
     del options["override"], options["reason"]
     code = 0
+    shown = deploy_out.PushOutput(as_json, dry_run)
     try:
         bypass = policy.bypasses(override, reason)
         options.update(bypass)
@@ -368,7 +360,7 @@ def push(
             } | {k: v for k, v in bypass.items() if v is not None}
             cfgs = targets.configs(names, artifact, given, dry_run, repo_root())
         else:
-            for name in ("host", "dest", "profile"):
+            for name in ("ssh", "dest", "profile"):
                 if options[name] is None:
                     raise config.DeployError(
                         "arguments",
@@ -379,14 +371,16 @@ def push(
         inspection.refuse_push(repo_root(), cfgs, dry_run=dry_run)  # #2032
         for cfg in cfgs:
             if cfg.target:
-                log.info("target {}: {}:{}", cfg.target, cfg.host, cfg.dest)
-            remote = Remote(cfg.host, cfg.connect_timeout, remote_user=cfg.remote_user)
+                log.info("target {}: {}:{}", cfg.target, cfg.ssh, cfg.dest)
+            remote = Remote(cfg.ssh, cfg.connect_timeout, remote_user=cfg.remote_user)
             code = driver.deploy(
                 cfg,
                 remote,
+                out=shown.plan,
                 on_report=lambda rep, c=cfg: history.record(
-                    repo_root(), c, rep, register=register, say=typer.echo
+                    repo_root(), c, rep, register=register, say=shown.say
                 ),
+                on_result=shown.on_result(cfg),
             )
             if code:
                 if len(cfgs) > 1:
@@ -395,6 +389,6 @@ def push(
                     )
                 break
     except config.DeployError as exc:
-        _failed("uqs deploy push", exc.stage, exc)
-    dry.end(dry_run, code)
+        deploy_out.failed("uqs deploy push", exc.stage, exc, {"deployments": shown.deployments})
+    shown.end(code)
     raise typer.Exit(code=code)

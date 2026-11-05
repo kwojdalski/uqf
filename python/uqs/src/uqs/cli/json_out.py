@@ -165,3 +165,12 @@ def emit(document: Mapping[str, Any]) -> None:
     if not isinstance(document, Mapping):
         raise TypeError(f"a --json document is an object, not {type(document).__name__}")
     print(json.dumps(plain(document), indent=2))
+
+
+def emit_line(document: Mapping[str, Any]) -> None:
+    """`document` on one line, for a program that reads it beside a marker
+    line rather than as the whole of stdout: `deploy check`'s result, which a
+    push of any version parses (deploy/selection.py). Under --json, `emit`."""
+    if not isinstance(document, Mapping):
+        raise TypeError(f"a document is an object, not {type(document).__name__}")
+    print(json.dumps(plain(document)))

@@ -203,13 +203,15 @@ def test_target_check_prints_the_release(monkeypatch):
                    "remote_user": None, "release": "rel-1"}  # fmt: skip
 
 
-def test_deploy_verify_json_leaves_out_the_marker(monkeypatch, capsys):
+def test_deploy_verify_json_leaves_out_the_marker(monkeypatch):
     monkeypatch.setattr(verify, "_expected", lambda *_a: ({"rdb1": 6002}, set()))
     monkeypatch.setattr(verify, "busy_ports", lambda expected, _c: {})
-    assert verify.run("p", ports_free=True, marker=False) == 0
-    assert json.loads(capsys.readouterr().out) == {"ok": True, "profile": "p", "busy": {}}
-    verify.run("p", ports_free=True)
-    assert capsys.readouterr().out.splitlines()[-1] == verify.OK_MARKER
+    argv = ["deploy", "check", "--profile", "p", "--ports-free"]
+    assert _doc(argv) == {"ok": True, "profile": "p", "busy": {}}
+    # without --json: the result on one line, then the marker a push reads
+    lines = runner.invoke(cli.app, argv).stdout.splitlines()
+    assert json.loads(lines[-2]) == {"ok": True, "profile": "p", "busy": {}}
+    assert lines[-1] == verify.OK_MARKER
 
 
 def test_summary_json_carries_the_lines_under_the_table(monkeypatch):

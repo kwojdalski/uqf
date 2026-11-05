@@ -139,7 +139,7 @@ def _health(dep: Deployment, current: str, report: dict | None) -> dict:
 
 
 def status(cfg: Config, remote: Transport, *, health: bool = True) -> dict:
-    """What cfg.host:cfg.dest runs. Takes no lock and changes nothing."""
+    """What cfg.ssh:cfg.dest runs. Takes no lock and changes nothing."""
     dep = Deployment(cfg, remote)
     dep.check_sudo()
     out = dep.run(
@@ -159,7 +159,7 @@ def status(cfg: Config, remote: Transport, *, health: bool = True) -> dict:
     named = {current, previous} - {None}
     result = {
         "format": FORMAT,
-        "ssh": cfg.host,
+        "ssh": cfg.ssh,
         "dest": cfg.dest,
         "current": _release(dep, current, kept),
         "previous": _release(dep, previous, kept),

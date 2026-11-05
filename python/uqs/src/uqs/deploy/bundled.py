@@ -43,7 +43,7 @@ def attach(cfg: Config, dep: Deployment, pkg: Artifact) -> list[dict]:
     for component in components.COMPONENTS:
         if getattr(cfg, components.mode_key(component)) != components.BUNDLED:
             continue
-        path = getattr(cfg, f"{component}_runtime")
+        path = getattr(cfg, f"{component}_component")
         if component == "python" and not path:
             rt = _carried(pkg)
         else:

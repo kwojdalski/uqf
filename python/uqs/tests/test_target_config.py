@@ -152,7 +152,7 @@ def test_a_conflict_or_a_pruned_push_is_refused_writing_nothing(server, monkeypa
 
 def test_an_unknown_target_is_refused(server, logged):
     done = _uqs("history", "nosuch")
-    assert done.exit_code != 0 and "no target 'nosuch'" in "".join(logged)
+    assert done.exit_code != 0 and "no target nosuch - " in "".join(logged)
 
 
 def test_show_and_history_print_markup_in_server_held_text_literally(server):
