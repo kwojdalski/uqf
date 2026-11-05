@@ -713,7 +713,7 @@ def test_the_real_check_selects_with_test_impact(repo, monkeypatch):
 
 def test_ci_installs_the_pinned_graph_qlinter_for_the_check():
     wf = _attestation_workflow()
-    assert ".qlinter-version" in wf and "releases/download" in wf
+    assert ".qlinter-version" in wf and "uses: ./.github/actions/install-qlinter" in wf
     assert "UQF_QLINTER:" in wf and "analyze graph" in wf
 
 
