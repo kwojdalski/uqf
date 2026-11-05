@@ -103,14 +103,30 @@
 / @throws "qtorq.compress: n file(s) were not brought to their target state ..." listing them,
 /   with each such original kept by TorQ; also what .cmp throws
 / @eg .qtorq.compress.apply[`:/data/hdb;`:/data/config/compressionconfig.csv;365]
-.qtorq.compress.apply:{[hdb;conf;maxage]
-    p:.qtorq.compress.plan[hdb;conf;maxage];
-    todo:select from p where action<>`skip;
+.qtorq.compress.apply:{[hdb;conf;maxage] .qtorq.compress.apply_plan .qtorq.compress.plan[hdb;conf;maxage]}
+
+/ apply, over a plan the caller chose rows of: TorQ's .cmp.compressfromtable - the
+/ function .cmp.compressmaxage hands .cmp.showcomp's table to - over the rows that change,
+/ then the same read-back check. So a run can be narrowed to some partitions or tables,
+/ or given another algorithm, by filtering or updating the plan's rows (`uqs data
+/ compress --date`, #2147): .cmp compresses, verifies and swaps exactly as it would.
+/ @param p rows of a plan (.qtorq.compress.plan), in its columns; `action` is recomputed
+/   from calgo and the file's state, so a row whose calgo was changed is planned anew
+/ @return what apply returns
+/ @throws what apply throws
+/ @eg .qtorq.compress.apply_plan select from .qtorq.compress.plan[`:/data/hdb;`:/data/config/compressionconfig.csv;0W] where partition=2026.11.02
+.qtorq.compress.apply_plan:{[p]
+    .qtorq.compress.require_cmp[];
     out:{[t] select fullpath, table, partition, column, action from t};
+    if[0=count p; :update bytes_before:`long$(), bytes_after:`long$() from out update action:`symbol$() from p];
+    p:update compressed:.qtorq.compress.is_compressed each fullpath from p;
+    p:update action:?[calgo=0; ?[compressed;`decompress;`skip]; ?[compressed;`skip;`compress]] from p;
+    todo:select from p where action<>`skip;
     if[0=count todo; :update bytes_before:`long$(), bytes_after:`long$() from out todo];
     hashes:(todo`fullpath)!{[f] read1 each .qtorq.compress.companions f} each todo`fullpath;
     before:.qtorq.compress.disk_bytes each todo`fullpath;
-    .cmp.compressmaxage[hdb;conf;maxage];
+    .cmp.compressfromtable `fullpath`table`partition`column`age`compressage`calgo`cblocksize`clevel`currentsize#todo;
+    .cmp.summarystats[];
     after:.qtorq.compress.disk_bytes each todo`fullpath;
     ok:(.qtorq.compress.is_compressed each todo`fullpath)=todo[`calgo]>0;
     hashes_ok:{[f;h] (read1 each .qtorq.compress.companions f)~h}'[todo`fullpath;value hashes];

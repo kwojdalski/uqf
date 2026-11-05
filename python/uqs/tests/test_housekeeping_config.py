@@ -53,11 +53,12 @@ def test_housekeeping1_loads_the_overlay_before_housekeeping_q():
     upstream = {r["procname"]: r["load"] for r in csv.DictReader(io.StringIO(vendored))}
     composed = {r["procname"]: r for r in stack_procs.effective_process_rows(real)}
     loads = composed["housekeeping1"]["load"].split()
-    assert loads[0] == OVERLAY and loads[-1] == upstream["housekeeping1"]
+    n = len(housekeeping.LOAD_BEFORE)
+    assert loads[0] == OVERLAY and loads[n] == upstream["housekeeping1"]
     # The compression rule's files (#2150): the policy's path before TorQ's
     # compress.q reads it, and the wrapper TorQ's run goes through.
-    assert loads[:-1] == list(housekeeping.LOAD_BEFORE)
-    assert loads[1:-1] == [
+    assert loads[:n] == list(housekeeping.LOAD_BEFORE)
+    assert loads[1:n] == [
         "${UQF_SCRIPTS}/processes/uqs_compression_config.q",
         "${KDBCODE}/common/compress.q",
         "${UQF_ROOT}/src/etl/core/log.q",

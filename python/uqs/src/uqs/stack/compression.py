@@ -25,6 +25,41 @@ from uqs.stack import generated
 #: Where the derived file is committed, under scripts/.
 COMPRESSION_CONFIG = Path("torqconfig") / "compressionconfig.csv"
 
+#: What housekeeping1 loads around TorQ's own housekeeping.q, as (before, after)
+#: (VENDORED_LOAD_OVERLAY in stack/procs.py): the process `uqs data compress`
+#: runs TorQ's .cmp in (stack/compress.py, #2147). TorQ's HDB-maintenance process,
+#: running housekeeping.q unchanged, which loads .cmp with TorQ's common code.
+#: BEFORE it, uqs_compression_config.q points `.cmp.inputcsv` at this module's
+#: copy of the policy. AFTER it: the coverage ledger's reader, as gateway1 loads
+#: it, and log.q, which the HDB reload logs through; torq_pipeline.q, for
+#: .qtorq.reload_hdb; the wrapper over .cmp; the survey that scopes a run; and the
+#: HDB connections the reload needs (uqs_compression_process.q).
+CMP_PROCESS_LOAD = (
+    ("${UQF_SCRIPTS}/processes/uqs_compression_config.q",),
+    (
+        "${UQF_ROOT}/src/etl/core/log.q",
+        "${UQF_ROOT}/src/etl/core/status.q",
+        "${UQF_ROOT}/src/etl/core/backfill_state.q",
+        "${UQF_ROOT}/src/etl/core/intervals.q",
+        "${UQF_ROOT}/src/etl/core/materialisation.q",
+        "${UQF_SCRIPTS}/processes/torq_pipeline.q",
+        "${UQF_SCRIPTS}/processes/torq_compress.q",
+        "${UQF_SCRIPTS}/processes/torq_compress_survey.q",
+        "${UQF_SCRIPTS}/processes/uqs_compression_process.q",
+    ),
+)
+
+
+def with_cmp(
+    load: tuple[tuple[str, ...], tuple[str, ...]],
+) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """housekeeping1's other (before, after) overlay, with CMP_PROCESS_LOAD's added -
+    each file once: #2150's housekeeping rule loads the policy, log.q, torq_pipeline.q
+    and the wrapper before housekeeping.q already, and a file loaded there stays there."""
+    before = load[0] + tuple(f for f in CMP_PROCESS_LOAD[0] if f not in load[0])
+    after = load[1] + tuple(f for f in CMP_PROCESS_LOAD[1] if f not in before + load[1])
+    return (before, after)
+
 
 def target(paths: UqsPaths) -> Path:
     """The copy `.cmp` is pointed at, beside the other generated files."""

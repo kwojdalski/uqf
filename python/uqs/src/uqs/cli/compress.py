@@ -1,5 +1,9 @@
 """`uqs data compress`: the HDB's compression, through TorQ's own `.cmp`.
 
+Without --report, the plan - and with --apply, the run - of
+cli/compress_plan.py (#2147, #2148): what TorQ's .cmp would compress, the
+estimate, the disk it needs; then one partition at a time, audited.
+
 `--report` reads what the HDB holds now (stack/hdb_compression.py): per table
 and column the algorithm, block size and ratio, the largest uncompressed
 partitions, and the partitions out of the order, or without the attribute,
@@ -14,18 +18,24 @@ from typing import Annotated, Any
 import typer
 from rich.table import Table
 
+from uqs.cli import completion, compress_plan, safety
+from uqs.cli.compress_plan import AlgoOpt
 from uqs.cli.hdb_scope import HdbOpt, resolve
 from uqs.cli.json_out import Verbatim, emit, json_opt
-from uqs.cli.safety import ReadOnly
-from uqs.cli.shared import _die, console, data_app
+from uqs.cli.range_options import DateOpt, LastOpt, RangeFromOpt, RangeToOpt
+from uqs.cli.safety import ConfirmsOnServer
+from uqs.cli.shared import BasePortOpt, _die, console, data_app
+from uqs.cli.vocabulary import duration
 from uqs.paths import UqsError, UqsUsageError
 from uqs.stack import hdb_compression
 
 #: How many of the largest uncompressed partitions `--report` lists by default.
 DEFAULT_LIMIT = 10
 
-ReportJson = json_opt(
-    "{hdb, present, columns: [{table, column, files, compressed, algos, blocksizes, bytes, "
+CompressJson = json_opt(
+    "the plan's {ok, hdb, process, scope, config, policies, held, partitions, sample, ratios, "
+    "disk, totals, result}; with --report {hdb, present, columns: [{table, column, files, "
+    "compressed, algos, blocksizes, bytes, "
     "raw_bytes, ratio, compressed_ratio}], largest_uncompressed: [{table, partition, files, "
     "bytes}], unsorted: [{table, partition, rows, sort_by, sorted, missing_attr, declared_attr}]}"
 )
@@ -91,8 +101,50 @@ def _print_report(r: dict[str, Any], hdb: str) -> None:
     )
 
 
-@data_app.command("compress", cls=ReadOnly)
+@data_app.command("compress", cls=ConfirmsOnServer)
 def compress(
+    table: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--table",
+            metavar="TABLE",
+            help="Compress only this table; repeatable, and TABLE,TABLE also works",
+            autocompletion=completion.plant_table,
+        ),
+    ] = None,
+    older_than: Annotated[
+        int | None,
+        duration(
+            "--older-than",
+            integer=True,
+            help="Only partitions at least this old, a DURATION in whole days (7d), on top "
+            "of the policy's own minimum age",
+        ),
+    ] = None,
+    range_from: RangeFromOpt = None,
+    range_to: RangeToOpt = None,
+    day: DateOpt = None,
+    last: LastOpt = None,
+    algo: AlgoOpt = None,
+    blocksize: Annotated[
+        int | None,
+        typer.Option(
+            "--blocksize",
+            help="This run only: the logical block size, a power of two (16 is 64 KB), "
+            "instead of the policy's",
+        ),
+    ] = None,
+    level: Annotated[
+        int | None,
+        typer.Option(
+            "--gzip-level",
+            help="This run only: gzip's level, 0-9, instead of the policy's (`--level` is "
+            "the log level everywhere)",
+        ),
+    ] = None,
+    base_port: BasePortOpt = None,
+    apply: safety.ApplyOpt = False,
+    yes: safety.ApplyYesOpt = False,
     report: Annotated[
         bool,
         typer.Option(
@@ -108,9 +160,18 @@ def compress(
         ),
     ] = DEFAULT_LIMIT,
     hdb: HdbOpt = None,
-    as_json: ReportJson = False,
+    as_json: CompressJson = False,
 ) -> None:
-    """The HDB's compression, through TorQ's own `.cmp`.
+    """The HDB's compression, through TorQ's own `.cmp`: plan, run or report it.
+
+    Without --report: what TorQ's .cmp, in housekeeping1, would compress -
+    the partitions and columns and their state now, which policy each table
+    takes, the saving estimated on a sample, the free disk the run needs.
+    Partitions the coverage ledger says are still being written are held.
+    --date/--from/--to/--last name days, compressed whatever the policy's
+    minimum age; --algo/--blocksize/--gzip-level change this run alone. With
+    --apply, after asking: one partition at a time, each checked, stopping at
+    the first failure, then one HDB reload.
 
     `--report` lists, per table and column, the algorithm, block size and
     compression ratio `-21!` reads; the largest uncompressed partitions; and
@@ -122,8 +183,25 @@ def compress(
     """
     try:
         if not report:
+            if hdb is not None:
+                raise UqsUsageError(
+                    "--hdb is for --report: the plan and the run are housekeeping1's, on "
+                    "this runtime's HDB (`uqs --target TARGET data compress` for a release's)"
+                )
+            sc = compress_plan.scope_given(
+                table, older_than, base_port, range_from, range_to, day, last,
+                algo, blocksize, level,
+            )  # fmt: skip
+            compress_plan.plan_and_apply(sc, apply=apply, yes=yes, as_json=as_json)
+            return
+        plan_options = {
+            "--apply": apply, "--table": table, "--older-than": older_than, "--date": day,
+            "--from": range_from, "--to": range_to, "--last": last, "--algo": algo,
+            "--blocksize": blocksize, "--gzip-level": level,
+        }  # fmt: skip
+        if given := [f for f, v in plan_options.items() if v]:
             raise UqsUsageError(
-                "`uqs data compress` needs a mode: --report reads how the HDB is compressed"
+                f"--report reads the whole HDB and changes nothing: not with {', '.join(given)}"
             )
         handle = resolve(None, hdb)
         root = Path(handle.hdb)

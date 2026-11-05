@@ -59,7 +59,7 @@ JOB_OPERATIONS_PANEL = "Operations"
 data_app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
-    help="Put data in the HDB, check, change, compare it: replay, seed, migrate, check, alter, "
+    help="Fill, check, change and compare the HDB: replay, seed, migrate, check, alter, "
     "compress, snapshot, diff.",
 )
 
