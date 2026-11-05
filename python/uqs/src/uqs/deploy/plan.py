@@ -35,10 +35,10 @@ def plan(
     steps = [
         "identity  "
         + (
-            f"ssh/scp as {cfg.host}; every step below as {cfg.remote_user} "
+            f"ssh/scp as {cfg.ssh}; every step below as {cfg.remote_user} "
             f"(sudo -n -iu {cfg.remote_user})"
             if cfg.remote_user
-            else f"ssh/scp and every step as {cfg.host}"
+            else f"ssh/scp and every step as {cfg.ssh}"
         ),
         "q         "
         + f"QHOME={facts.get('qhome', '?')} ({facts.get('qhome_from', '?')}), "
@@ -57,7 +57,7 @@ def plan(
             f"scp {pkg.path.name} to a private upload directory, then {cfg.remote_user} "
             f"copies it into {cfg.dest}/staging/{rid}/ (sha256 {pkg.sha256})"
             if cfg.remote_user
-            else f"scp {pkg.path.name} {cfg.host}:{cfg.dest}/staging/{rid}/ (sha256 {pkg.sha256})"
+            else f"scp {pkg.path.name} {cfg.ssh}:{cfg.dest}/staging/{rid}/ (sha256 {pkg.sha256})"
         ),
         "prepare   "
         + f"{release}: deploy.env ({exported}); offline install of "

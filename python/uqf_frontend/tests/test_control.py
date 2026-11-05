@@ -215,8 +215,8 @@ def test_the_control_status_route_lists_the_processes_a_selector_may_name(writea
     )
     body = writeable.get("/control").json()
     assert body["processes"] == [
-        {"procname": "rdb1", "proctype": "rdb", "start_with_all": True},
-        {"procname": "cross1", "proctype": "metrics", "start_with_all": False},
+        {"process": "rdb1", "proctype": "rdb", "start_with_all": True},
+        {"process": "cross1", "proctype": "metrics", "start_with_all": False},
     ]
 
 
@@ -663,7 +663,7 @@ def test_a_backfill_is_started_through_torq_sh_as_uqs_backfill_starts_it(writeab
 
     assert r.status_code == 200, r.text
     body = r.json()
-    assert body["procname"] == "deals_backfill1", "the process to `uqs logs`"
+    assert body["process"] == "deals_backfill1", "the process to `uqs logs`"
     assert body["status_path"] == "/ops/backfill"
     args = seen["args"]
     assert args[:3] == ["start", "deals_backfill1", "-extras"], (

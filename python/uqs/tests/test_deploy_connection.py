@@ -51,10 +51,10 @@ def _run(monkeypatch, command: str, argv: list[str]):
         seen.append(cfg)
         if command == "status":
             return {"health": {"checked": False, "passed": True}}
-        return 0
+        return 0, {"ok": True}
 
     monkeypatch.setattr(getattr(deploy_server, module), module, fake)
-    monkeypatch.setattr(deploy_server.status, "render", lambda result: "rendered")
+    monkeypatch.setattr(getattr(deploy_server, module), "render", lambda result: "rendered")
     r = CliRunner().invoke(cli.app, ["deploy", command, *argv, *extra])
     return r, seen
 
@@ -64,7 +64,7 @@ def test_a_target_names_the_server(root, monkeypatch, command):
     r, seen = _run(monkeypatch, command, ["prod-a"])
     assert r.exit_code == 0, r.output
     (cfg,) = seen
-    assert (cfg.host, cfg.dest, cfg.remote_user, cfg.connect_timeout) == (
+    assert (cfg.ssh, cfg.dest, cfg.remote_user, cfg.connect_timeout) == (
         "deploy@prod-a",
         "/srv/uqf",
         "svc",
@@ -76,7 +76,7 @@ def test_a_target_names_the_server(root, monkeypatch, command):
 def test_a_flag_given_wins_over_the_targets_value(root, monkeypatch, command):
     r, seen = _run(monkeypatch, command, ["prod-a", "--dest", "/srv/other"])
     assert r.exit_code == 0, r.output
-    assert (seen[0].host, seen[0].dest) == ("deploy@prod-a", "/srv/other")
+    assert (seen[0].ssh, seen[0].dest) == ("deploy@prod-a", "/srv/other")
     assert seen[0].connect_timeout == 7, "a flag left at its default does not override"
 
 
@@ -84,7 +84,7 @@ def test_a_flag_given_wins_over_the_targets_value(root, monkeypatch, command):
 def test_the_flags_still_name_a_server_no_target_declares(root, monkeypatch, command):
     r, seen = _run(monkeypatch, command, ["--ssh", "h", "--dest", "/opt/uqf"])
     assert r.exit_code == 0, r.output
-    assert (seen[0].host, seen[0].dest, seen[0].remote_user) == ("h", "/opt/uqf", None)
+    assert (seen[0].ssh, seen[0].dest, seen[0].remote_user) == ("h", "/opt/uqf", None)
 
 
 @pytest.mark.parametrize("command", sorted(COMMANDS))
@@ -97,7 +97,7 @@ def test_no_target_and_no_flags_is_refused(root, monkeypatch, command, log_text)
 def test_an_unknown_target_is_refused_naming_the_known_ones(root, monkeypatch, log_text):
     r, seen = _run(monkeypatch, "status", ["prod-z"])
     assert r.exit_code == 1 and not seen
-    assert "no target or deployed server 'prod-z'" in log_text() and "prod-a" in log_text()
+    assert "no target or deployed server prod-z" in log_text() and "prod-a" in log_text()
 
 
 def test_the_connection_flags_read_the_same_wherever_they_are_accepted():
@@ -124,7 +124,7 @@ def test_the_old_host_spelling_still_names_the_ssh_destination(root, monkeypatch
     monkeypatch.setattr(renames, "warn_renamed", lambda old, new: said.append((old, new)))
     r, seen = _run(monkeypatch, command, ["--host", "h", "--dest", "/opt/uqf"])
     assert r.exit_code == 0, r.output
-    assert seen[0].host == "h"
+    assert seen[0].ssh == "h"
     assert said == [("--host", "--ssh")]
 
 
@@ -137,8 +137,11 @@ def test_rollback_to_is_release_and_the_old_spelling_still_parses(root, monkeypa
     monkeypatch.setattr(renames, "warn_renamed", lambda old, new: said.append((old, new)))
     to = []
     monkeypatch.setattr(
-        deploy_server.rollback, "rollback", lambda cfg, remote, **kw: to.append(kw["to"]) or 0
+        deploy_server.rollback,
+        "rollback",
+        lambda cfg, remote, **kw: (0, to.append(kw["to"]) or {"ok": True}),
     )
+    monkeypatch.setattr(deploy_server.rollback, "render", lambda result: "rendered")
     release = "20260101T000000Z-abc123456789"
     for flag in ("--release", "--to"):
         r = CliRunner().invoke(cli.app, ["deploy", "rollback", "prod-a", flag, release])

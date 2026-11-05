@@ -233,7 +233,7 @@ def test_fleet_and_connections_read_the_target(declared, targets, local_gw):
     fleet = c.get("/ops/processes", headers={HEADER: "prod-a"})
     assert fleet.status_code == 200, fleet.text
     body = fleet.json()
-    assert sorted(p["procname"] for p in body["processes"]) == ["gateway1", "rdb1"]
+    assert sorted(p["process"] for p in body["processes"]) == ["gateway1", "rdb1"]
     assert "target prod-a" in body["source"]
     assert fleet.headers[HEADER] == "prod-a"
 

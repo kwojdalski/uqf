@@ -107,7 +107,7 @@ def _server(*, facts: str | None = None, health=True, failing="{}", **extra):
 
 
 def _cfg():
-    return make_config(artifact="", host="uqf-server", dest="/opt/uqf", profile="unused")
+    return make_config(artifact="", ssh="uqf-server", dest="/opt/uqf", profile="unused")
 
 
 def test_it_reports_current_previous_and_how_many_others_are_kept():
@@ -133,7 +133,7 @@ def test_the_json_keys_are_the_documented_ones():
         "format", "ssh", "dest", "current", "previous", "releases",
         "last_deployment", "health", "lock",
     }  # fmt: skip
-    assert set(s["health"]) == {"checked", "passed", "reason", "processes", "failing_jobs"}
+    assert set(s["health"]) == {"checked", "ok", "passed", "reason", "processes", "failing_jobs"}
     json.dumps(s)  # and all of it serialises
 
 
@@ -161,7 +161,7 @@ def test_the_health_timeout_is_the_verifiers_deadline():
     seconds, not a push's three-minute readiness wait."""
     remote = _server()
     cfg = make_config(
-        artifact="", host="uqf-server", dest="/opt/uqf", profile="unused", verify_timeout=7
+        artifact="", ssh="uqf-server", dest="/opt/uqf", profile="unused", verify_timeout=7
     )
     status.status(cfg, remote)
     check = next(sc for sc in remote.scripts if "uqs deploy verify" in sc)

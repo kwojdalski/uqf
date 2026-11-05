@@ -15,7 +15,7 @@ import subprocess
 import time
 import typing
 import uuid
-from collections.abc import AsyncIterator, Iterator
+from collections.abc import AsyncIterator, Callable, Iterator
 from contextlib import asynccontextmanager
 from typing import Annotated, Any
 
@@ -338,14 +338,23 @@ def require_target_access(request: Request, named: str) -> None:
 ScopeOf = typing.Annotated[workspaces.Scope, Depends(scope_of)]
 
 
-#: A browser's report on a file the server never recorded, as an outcome.
-_REPORTED_OUTCOME = {
-    "uncertain": "unknown",
-    "cancelled": "refused",
-    "invalid": "refused",
-    "refused": "refused",
-    "failed": "failed",
-}
+#: The FileOutcome words ActivityOutcome has no word for, as the audit
+#: records them: a file the browser never sent, or refused itself.
+_AUDIT_OUTCOME = {"cancelled": "refused", "invalid": "refused"}
+
+
+def _renamed_query(**renamed: str) -> Callable[[Request], None]:
+    """A route dependency refusing a query parameter by its old name, with
+    the new one: one-way, so a client is told rather than silently given a
+    default (#2108). Runs before the route's own parameters are checked, so
+    the old name is named even where the new one is required."""
+
+    def refuse(request: Request) -> None:
+        for old, new in renamed.items():
+            if old in request.query_params:
+                raise ValidationFailed(f"`{old}` is now `{new}`: send ?{new}=<id> (#2108)")
+
+    return refuse
 
 
 def _file_outcome(entry: dict[str, Any]) -> str:
@@ -368,7 +377,7 @@ def _push_response(target: str, root: str, manifest: dict[str, Any]) -> ConfigPu
 
 def _restore_response(target: str, answer: dict[str, Any]) -> ConfigRestoreResponse:
     return ConfigRestoreResponse(
-        target=target, root=answer["root"], source_push_id=answer["source_push_id"],
+        target=target, root=answer["root"], restores=answer["restores"],
         dry_run=answer["dry_run"], push_id=answer["push_id"], plan=answer["plan"],
         results=answer["results"], pruned=answer["pruned"],
     )  # fmt: skip
@@ -1064,15 +1073,21 @@ def create_app(
             on_begin=audit.begin,
         )
         for item in answer["results"]:
-            audit.item(item["path"], "succeeded" if item["deleted"] else "failed")
+            audit.item(item["path"], item["outcome"])
         audit.settle(
-            "succeeded" if all(item["deleted"] for item in answer["results"]) else "failed"
+            "succeeded"
+            if all(item["outcome"] == "succeeded" for item in answer["results"])
+            else "failed"
         )
         return RemoteDeleteResponse(target=target, root=answer["root"], results=answer["results"])
 
-    @app.put("/services/{target}/files/content", response_model=RemoteUploadResponse)
+    @app.put(
+        "/services/{target}/files/content",
+        response_model=RemoteUploadResponse,
+        dependencies=[Depends(_renamed_query(push="push_id"))],
+    )
     async def put_remote_file(
-        request: Request, target: str, path: str, push: str, overwrite: bool = False
+        request: Request, target: str, path: str, push_id: str, overwrite: bool = False
     ) -> RemoteUploadResponse:
         """Write the request body to `path` below a registered target's
         shared/config, over ssh, with the release's own Python - see
@@ -1083,7 +1098,7 @@ def create_app(
         Content-Length is over the limit; refuses a body that grows past it
         while read. An existing file is replaced only with `overwrite=true`.
         A timeout or lost answer is 504 UploadOutcomeUncertain, never retried.
-        `push` is the push this file belongs to (POST .../config/pushes):
+        `push_id` is the push this file belongs to (POST .../config/pushes):
         the server keeps what it replaces, and what it wrote, in that push's
         history (#2002).
         """
@@ -1091,7 +1106,7 @@ def create_app(
         # push, and the file's path, size and sha256 - never its bytes.
         audit = activity.audit_of(request)
         audit.set_target(target)
-        audit.note(push_id=push)
+        audit.note(push_id=push_id)
         if not settings.enable_writes:
             raise WritesDisabled(
                 "uploading to a server reaches it over ssh, so it needs remote "
@@ -1099,7 +1114,7 @@ def create_app(
                 "on the server"
             )
         remote_files.check_upload_path(path)
-        remote_files.check_push_id(push)
+        remote_files.check_push_id(push_id)
         remote_files.target(settings, target)
         limit = remote_helper.MAX_UPLOAD
         too_large = f"a file may be at most {limit} bytes"
@@ -1127,7 +1142,7 @@ def create_app(
                 path,
                 data,
                 overwrite,
-                push,
+                push_id,
                 runner=request.app.state.remote_runner,
             )
         except remote_files.UploadOutcomeUncertain:
@@ -1147,7 +1162,7 @@ def create_app(
             sha256=answer["sha256"],
             replaced=answer["replaced"],
             mode=answer["mode"],
-            created=answer["created"],
+            created_dirs=answer["created_dirs"],
             push_id=answer["push_id"],
             previous_size=answer["previous_size"],
             previous_sha256=answer["previous_sha256"],
@@ -1362,7 +1377,7 @@ def create_app(
         for entry, outcome in zip(manifest["files"], outcomes, strict=True):
             audit.item(entry["path"], outcome)
         for item in manifest["reported"]:
-            outcome = _REPORTED_OUTCOME[item["outcome"]]
+            outcome = _AUDIT_OUTCOME.get(item["outcome"], item["outcome"])
             outcomes.append(outcome)
             audit.item(item["path"], outcome)
         published = [e for e in manifest["files"] if e["state"] != "failed"]
@@ -1504,18 +1519,18 @@ def create_app(
             output=result.output,
         )
 
-    @app.put("/control/process/{procname}/config", response_model=ProcessConfigResponse)
+    @app.put("/control/process/{process}/config", response_model=ProcessConfigResponse)
     def control_process_config(
-        procname: str, req: ProcessConfigRequest, request: Request
+        process: str, req: ProcessConfigRequest, request: Request
     ) -> ProcessConfigResponse:
         """Persist one process.csv field override, applied on the next start."""
         audit = activity.audit_of(request)
         # The field, never the value: a value is whatever was typed.
-        audit.note(procname=procname, field=req.field_name)
+        audit.note(process=process, field=req.field_name)
         with control.reporting_acting(audit.begin):
-            row = control.set_process_field(settings, procname, req.field_name, req.value)
+            row = control.set_process_field(settings, process, req.field_name, req.value)
         return ProcessConfigResponse(
-            procname=procname,
+            process=process,
             config=row,
             settable_fields=control.settable_fields(settings),
         )

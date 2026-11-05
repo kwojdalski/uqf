@@ -43,7 +43,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from uqs.deploy import target_changelog as changelog
-from uqs.deploy import target_file, targets
+from uqs.deploy import target_file, target_keys, targets
 from uqs.deploy.config import DeployError
 from uqs.deploy.target_file import UNSET, Key
 
@@ -182,8 +182,7 @@ def _target(name: str) -> Key:
 
 def _declared(data: Mapping, name: str, path: Path) -> None:
     if name not in data.get(targets.TARGETS, {}):
-        known = ", ".join(sorted(data.get(targets.TARGETS, {}))) or "none"
-        raise _refuse(f"no target {name!r} in {path} - it declares: {known}")
+        raise _refuse(str(target_keys.unknown_target(name, data.get(targets.TARGETS, {}), path)))
 
 
 def _new_name(data: Mapping, name: str, path: Path) -> None:
@@ -218,9 +217,9 @@ def _copy(value):
 
 def add(root: Path, name: str, entry: dict, command: str, **kw) -> Result:
     """[targets.NAME] appended, its empty values left out; `entry` names push's
-    options as make_config does, written as the file spells them (#1888)."""
+    options as the file, the flags and make_config all do (#2123)."""
     path = targets.declaration_path(root)
-    settings = {k: v for k, v in targets.to_keys(entry).items() if v not in (None, "", {}, [])}
+    settings = {k: v for k, v in entry.items() if v not in (None, "", {}, [])}
 
     def edit(text: str, data: dict) -> Edit:
         _new_name(data, name, path)

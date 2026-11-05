@@ -102,7 +102,7 @@ def test_a_file_lands_below_shared_config_with_nested_dirs_created(root):
     assert answer["size"] == 8
     assert answer["sha256"] == hashlib.sha256(b"a,b\n1,2\n").hexdigest()
     assert answer["replaced"] is False
-    assert answer["created"] == ["shared/config/scripts", "shared/config/scripts/torqconfig"]
+    assert answer["created_dirs"] == ["shared/config/scripts", "shared/config/scripts/torqconfig"]
     assert _temps(written.parent) == []
 
 
@@ -112,7 +112,7 @@ def test_shared_config_itself_is_created_when_missing(tmp_path):
     answer = _put(root, "shared/config/x.csv", b"x")
     assert answer["ok"], answer
     # the push the upload belongs to made them, to keep its history there
-    assert answer["created"] == []
+    assert answer["created_dirs"] == []
     assert (root / "shared/config/x.csv").read_bytes() == b"x"
 
 

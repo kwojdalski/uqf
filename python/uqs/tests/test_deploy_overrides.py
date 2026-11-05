@@ -14,6 +14,7 @@ import json
 import tarfile
 from pathlib import Path
 
+import deploy_support as capture
 import pytest
 from test_deploy import (
     _HEALTHY,
@@ -52,7 +53,7 @@ def _deploy(path: Path, *extra: str, q: str = "5.0", rules: dict | None = None):
         }
     )
     out = io.StringIO()
-    code = driver.deploy(parse_args(_args(path, *extra)), remote, out=out)
+    code = capture.deploy(parse_args(_args(path, *extra)), remote, out=out)
     return code, remote, out.getvalue()
 
 
@@ -90,7 +91,7 @@ def test_the_old_spelling_still_gives_the_override_and_its_reason():
     [
         (
             ["--override", "accept-digest", "--reason", "r"],
-            r"--override accept-digest relaxes expected_sha256 \(or torq_runtime",
+            r"--override accept-digest relaxes expected_sha256 \(or torq_component",
         ),
         (
             ["--override", "accept-q-version", "--reason", "r"],

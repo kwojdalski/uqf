@@ -489,7 +489,7 @@ def test_only_the_readers_that_serve_the_destination_are_asked_to_reload(world, 
     finally:
         other.stop()
     assert code == 0 and result["readers"] == ["hdb1"], "hdb2 serves another directory"
-    assert [t["procname"] for t in plan["reload_targets"]] == ["hdb1"]
+    assert [t["process"] for t in plan["reload_targets"]] == ["hdb1"]
     assert (world.reader.reloads, other.reloads) == (1, 0)
 
 

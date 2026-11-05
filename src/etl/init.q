@@ -88,6 +88,7 @@
 \l src/etl/core/bounded_worker.q
 \l src/etl/core/bounded_pin.q
 \l src/etl/core/bounded_outputs.q
+\l src/etl/core/twin.q
 \l src/etl/core/bounded_batching.q
 \l src/etl/core/bounded_batch_read.q
 \l src/etl/core/bounded_flags.q
@@ -167,3 +168,7 @@
 / Then the graph those declarations form must be acyclic (#1090): the check is
 / here, at load, because nothing else in a running process asks for an order.
 .qetl.dag.check_acyclic[];
+/ And every declared twin must name a streaming job that loaded (#2103): a typo in
+/ twin_of would otherwise never be checked. A partial load (.qetl.load.only) lacks
+/ jobs on purpose, so only the full one asks.
+if[0=count `only`only_sources inter key `.qetl.load; .qetl.twin.require_resolved[]];

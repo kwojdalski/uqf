@@ -356,7 +356,7 @@ def process_choices(settings: Settings) -> list[dict[str, Any]]:
 
     return [
         {
-            "procname": row["procname"],
+            "process": row["procname"],
             "proctype": row["proctype"],
             "start_with_all": row["startwithall"] == "1",
         }
@@ -511,6 +511,6 @@ def start_backfill(
         "source_version": source_version,
         "range_from": range_from,
         "range_to": range_to,
-        "procname": procname,
+        "process": procname,
         "status_path": "/ops/backfill",
     }

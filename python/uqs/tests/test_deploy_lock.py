@@ -39,7 +39,7 @@ class LocalRemote:
 def _server(dest: Path, break_lock: bool = False) -> Server:
     cfg = make_config(
         artifact="",
-        host="uqf-server",
+        ssh="uqf-server",
         dest=str(dest),
         profile="essential",
         break_lock="the holder died" if break_lock else None,
@@ -83,12 +83,12 @@ def test_only_a_holder_that_stopped_beating_may_be_broken(info, alive, ok, why):
 
 
 def test_the_limit_is_the_holders_longest_step_and_some():
-    cfg = make_config(artifact="", host="h", dest="/d", profile="p", command_timeout=900)
+    cfg = make_config(artifact="", ssh="h", dest="/d", profile="p", command_timeout=900)
     assert lock.stale_after(cfg) == 900 + lock.MARGIN
 
 
 def test_a_long_soak_does_not_make_its_own_lock_look_dead():
-    cfg = make_config(artifact="", host="h", dest="/d", profile="p", command_timeout=900, soak=1800)
+    cfg = make_config(artifact="", ssh="h", dest="/d", profile="p", command_timeout=900, soak=1800)
     assert lock.stale_after(cfg) == 1800 + 900 + lock.MARGIN
 
 
