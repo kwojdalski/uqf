@@ -107,7 +107,7 @@ def script(
         raise UqsError(f"--limit {limit}: expected 1 to {MAX_LIMIT} rows per side")
     start, end = window.bounds
     req = (
-        "`from`to`filters`limit`source_version`partition`login!("
+        "`range_from`range_to`filters`limit`source_version`partition`login!("
         f"{runs.to_q_timestamp(start)};{runs.to_q_timestamp(end)};{_q_strings(filters)};{limit}j;"
         f"{_q_symbol(source_version, '--source-version')};{_q_symbol(partition, '--partition')};"
         f'first read0 hsym `$"{login_file}")'

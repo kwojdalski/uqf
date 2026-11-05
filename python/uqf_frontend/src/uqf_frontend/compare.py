@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from uqf_frontend import control, remote_files
+from uqf_frontend import control, instants, remote_files
 from uqf_frontend.config import Settings
 from uqf_frontend.errors import FrontendError, ValidationFailed
 
@@ -45,10 +45,15 @@ def run(settings: Settings, req: Any) -> dict[str, Any]:
     from uqs.cli import data_diff
     from uqs.paths import UqsError, UqsUsageError
 
+    # Exact or refused, before anything is reached: uqs's range is a datetime,
+    # and `uqs data diff` refuses a bound finer than a microsecond rather than
+    # compare a window up to 999 ns short of it - so does this (#2105).
+    start = instants.bound("range_from", req.range_from)
+    end = instants.bound("range_to", req.range_to)
     for name in sides(req.left, req.right):
         remote_files.target(settings, name)  # a registered target, or 404/409
     try:
-        window = timerange.resolve(req.range_from.isoformat(), req.range_to.isoformat(), None, None)
+        window = timerange.resolve(start.isoformat(), end.isoformat(), None, None)
     except UqsError as exc:
         raise ValidationFailed(str(exc)) from None
     # this API's own gateway credential when it has one; else uqs's default

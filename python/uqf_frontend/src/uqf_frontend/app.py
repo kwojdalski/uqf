@@ -35,6 +35,7 @@ from uqf_frontend import (
     health,
     identity,
     inspection,
+    instants,
     ops,
     procfile,
     queries,
@@ -65,6 +66,7 @@ from uqf_frontend.errors import (
 )
 from uqf_frontend.fleet import Fleet, KolaFleet
 from uqf_frontend.gateway import TIERS, Gateway, KolaGateway
+from uqf_frontend.instants import AwareInstant
 from uqf_frontend.models import (
     ActivityBatchRequest,
     ActivityBatchResponse,
@@ -1104,8 +1106,8 @@ def create_app(
         dataset: str,
         partition: str,
         source_version: str,
-        range_from: str | None = None,
-        range_to: str | None = None,
+        range_from: AwareInstant | None = None,
+        range_to: AwareInstant | None = None,
     ) -> CoverageResponse:
         """Composed coverage for one dataset, partition and source release,
         plus the gaps in a requested range if one is given.
@@ -1531,7 +1533,7 @@ def create_app(
                 "source": "browser",
                 "kind": event.kind,
                 "action": event.action,
-                "ts": event.ts,
+                "ts": instants.to_datetime(event.ts),
                 "event_id": event.event_id,
                 "target": event.target,
                 "outcome": event.outcome,
@@ -1573,8 +1575,8 @@ def create_app(
 
     @app.get("/activity", response_model=ActivityResponse)
     def list_activity(
-        since: str | None = None,
-        until: str | None = None,
+        since: AwareInstant | None = None,
+        until: AwareInstant | None = None,
         session_id: str | None = None,
         request_id: str | None = None,
         action: str | None = None,
@@ -1615,8 +1617,8 @@ def create_app(
     @app.get("/activity/export")
     def export_activity(
         format: ActivityExportFormat = "text",  # noqa: A002 - the query parameter's name
-        since: str | None = None,
-        until: str | None = None,
+        since: AwareInstant | None = None,
+        until: AwareInstant | None = None,
         session_id: str | None = None,
         request_id: str | None = None,
         action: str | None = None,
@@ -1707,17 +1709,11 @@ def _elapsed_ms(started: float) -> float:
 
 
 def _instant(name: str, raw: str | None) -> dt.datetime | None:
-    """A filter bound, which must carry its timezone."""
-    if raw is None or raw == "":
+    """A filter bound - an AwareInstant the route has already checked - as
+    the datetime the activity log compares, exactly or refused."""
+    if raw is None:
         return None
-    try:
-        parsed = dt.datetime.fromisoformat(raw)
-    except ValueError:
-        raise ValidationFailed(
-            f"{name} must be ISO-8601, e.g. 2026-09-11T00:00:00Z; got {raw!r}"
-        ) from None
-    if parsed.tzinfo is None:
-        raise ValidationFailed(f"{name} needs an explicit timezone offset, got {raw!r}")
+    parsed = instants.bound(name, raw)
     try:
         activity.stamp(parsed)  # what the query will compare with (#2021)
     except ValueError:
