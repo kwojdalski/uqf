@@ -58,6 +58,14 @@ re-derives what the job publishes, and `--transform` is refused. The source's
 fetch must hand over that transform's inputs, by name. A job that declares no
 transform gets the usual `--transform` scaffold.
 
+The scaffold also writes the relationship into the worker, as `twin_of` (and
+`twin_calculation` `` `shared `` when the transform is shared), so it outlives
+the command: q refuses the pair at load if the job later publishes a different
+table or the twin's output stops satisfying the dataset's contract, even when
+the two tables have identical columns. A job that declares no transform leaves
+the calculation "not established", and `.qetl.twin.report[]` says so. See
+[Twins](../reference/pipeline-declarations.md#twins-----a-backfill-that-repairs-a-live-job).
+
 ```
 uqs job new myjob_hist --kind backfill --twin-of myjob
 ```

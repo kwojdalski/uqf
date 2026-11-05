@@ -284,6 +284,7 @@ def backfill_plan(
         check=check,
         transform=transform or "passthrough",
         shared=shared,
+        twin_of=twin_of,
         raw=raw,
         reuse_source=reuse_source,
         define_table=define_table,
