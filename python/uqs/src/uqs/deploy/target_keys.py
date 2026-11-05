@@ -8,6 +8,10 @@ own.
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
+from uqs import duration
+
 #: make_config's options whose key in deploy_targets.toml - and so whose flag
 #: - is not the option's own name (#1888): the file spells each as push's
 #: option, `ssh` for `--ssh` (not `host`, which is a q host everywhere else,
@@ -37,3 +41,31 @@ def flag(option: str) -> str:
     """How make_config's `option` is given on the command line: `--ssh` for
     `host`, `--torq-home` for `torq_home`."""
     return "--" + key(option).replace("_", "-")
+
+
+#: make_config's spans of time, in whole seconds: push takes each as a
+#: DURATION flag, and the file as a DURATION string (`"5m"`) or a number of
+#: seconds, both read by uqs/duration.py into the same value (#2121).
+DURATIONS = (
+    "connect_timeout",
+    "command_timeout",
+    "smoke_timeout",
+    "verify_timeout",
+    "live_check_timeout",
+    "soak",
+)
+
+
+def read_durations(layer: str, settings: dict, at: Callable[[str], str]) -> None:
+    """A deploy_targets.toml layer's spans of time as the whole seconds push's
+    flags give make_config, in place - read by the flags' own parser, so the
+    file takes what `--verify-timeout` does. A value that is no DURATION is
+    refused as the registry's DeployError, naming its key, its line by `at`."""
+    from uqs.deploy.config import DeployError
+
+    for option in DURATIONS:
+        if option in settings:
+            try:
+                settings[option] = duration.whole_seconds(settings[option])
+            except duration.DurationError as exc:
+                raise DeployError("arguments", f"{at(option)}{layer}: {option} {exc}") from None

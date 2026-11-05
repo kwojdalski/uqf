@@ -126,6 +126,15 @@ def test_set_changes_one_value_and_nothing_else(declared):
     assert targets.read(ROOT)["prod"]["connect_timeout"] == 20
 
 
+def test_set_takes_a_span_of_time_as_its_flag_does(declared):
+    """#2121: `target set a verify_timeout=5m` was refused as "the wrong
+    type"; the file now holds the DURATION as written, read as seconds."""
+    r = uqs("target", "set", "prod", "verify_timeout=5m")
+    assert r.exit_code == 0, r.output
+    assert 'verify_timeout = "5m"' in declared.read_text()
+    assert targets.read(ROOT)["prod"]["verify_timeout"] == 300
+
+
 def test_remove_takes_its_block_and_its_own_comment_only(declared):
     block = (
         "# production: careful\n[targets.prod]\n"
@@ -181,7 +190,9 @@ def test_add_appends_a_block_and_a_remove_takes_it_away_again(declared):
         ),
         (["set", "prod", "launch_mode=venv"], "launch_mode 'venv' is not one of"),
         (["set", "prod", "accept_digest=x"], "an override is given on the command line"),
-        (["set", "prod", "connect_timeout=soon"], "wrong type"),
+        (["set", "prod", "connect_timeout=soon"],
+         r"line \d+: target prod: connect_timeout 'soon': a duration is a number of seconds, "
+         "or a number and a unit"),
         (["set", "prod", "environment=nowhere"], "environment 'nowhere' is not declared"),
         (["set", "prod", "dest=relative"], "dest 'relative' must be an absolute path"),
         (["add", "uat", "--ssh", "h", "--dest", "/d"], "target uat is already declared"),

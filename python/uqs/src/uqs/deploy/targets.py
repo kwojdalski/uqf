@@ -48,7 +48,7 @@ from typing import Any
 
 from uqs.deploy import components, inspection, launch, overrides, target_file
 from uqs.deploy.config import Config, DeployError, make_config
-from uqs.deploy.target_keys import FIELD_OF_KEY, FILE_KEYS, flag
+from uqs.deploy.target_keys import FIELD_OF_KEY, FILE_KEYS, flag, read_durations
 from uqs.paths import UqsError
 
 DECLARATION = "deploy_targets.toml"
@@ -123,6 +123,7 @@ def _tables(text: str, path: Path) -> dict:
     ]
     for layer, settings in layers:
         _as_fields(layer, settings, text, path)
+        read_durations(layer, settings, partial(_at, text, path, layer))
         _labels(layer, settings, text, path)
         inspection.check_layer(layer, settings, partial(_at, text, path, layer, inspection.KEY))
     shared = layers[: 1 + len(envs)]
@@ -150,9 +151,7 @@ def _as_fields(layer: str, settings: dict, text: str, path: Path) -> None:
             + " - rename the key: the file spells each setting as push's option "
             "(`uqs target edit` opens it)",
         )
-    for key_, field in FIELD_OF_KEY.items():
-        if key_ in settings:
-            settings[field] = settings.pop(key_)
+    settings.update({f: settings.pop(k) for k, f in FIELD_OF_KEY.items() if k in settings})
 
 
 def _labels(layer: str, settings: dict, text: str, path: Path) -> None:

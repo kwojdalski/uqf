@@ -90,9 +90,12 @@ checked for shape.
 ## Timer
 
 `period` is `0D00:00:01` by default --- one second --- and `--period` sets it:
-`--period 0D00:00:00.500` for twice a second. It is a field in the declaration,
-so changing it later is a one-line edit, and a feed that should tick faster than
-the plant can absorb is a decision to make deliberately rather than discover.
+`--period 500ms` for twice a second, written into the declaration as
+`0D00:00:00.500`. Like every span of time `uqs` takes it is a DURATION (`30`
+seconds, `500ms`, `5m`, `1d`), or a q timespan kept as written. It is a field in
+the declaration, so changing it later is a one-line edit, and a feed that should
+tick faster than the plant can absorb is a decision to make deliberately rather
+than discover.
 
 ## Polling a source
 

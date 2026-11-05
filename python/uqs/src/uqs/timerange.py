@@ -23,6 +23,7 @@ import re
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
 
+from uqs import duration
 from uqs.paths import UqsUsageError
 from uqs.timefmt import finer_than_a_microsecond
 
@@ -48,16 +49,6 @@ _Q_TIMESTAMP = re.compile(
 
 #: A day alone, either way: 2026-09-13 or 2026.09.13.
 _DAY = re.compile(r"(\d{4})[.-](\d{2})[.-](\d{2})")
-
-#: A duration: a positive whole number and a unit.
-_DURATION = re.compile(r"([0-9]+)(ms|s|m|h|d)")
-_UNIT = {
-    "ms": timedelta(milliseconds=1),
-    "s": timedelta(seconds=1),
-    "m": timedelta(minutes=1),
-    "h": timedelta(hours=1),
-    "d": timedelta(days=1),
-}
 
 
 def _from_q_literal(name: str, text: str) -> datetime | None:
@@ -128,19 +119,19 @@ def parse_day(name: str, text: str) -> date:
         raise UqsUsageError(f"{name} {text!r} is not a real date: {exc}") from None
 
 
-def parse_duration(name: str, text: str) -> timedelta:
-    """`30s`, `5m`, `2h`, `7d` or `500ms` - what `--last` takes.
+def parse_duration(name: str, value: str | float) -> timedelta:
+    """A DURATION (uqs/duration.py) - `30`, `1.5m`, `30s`, `7d`; bare is
+    seconds - or the seconds a DURATION option's parser already gave: what
+    `--last` takes.
 
     @raise UqsUsageError for anything else, and for zero - a range must cover time.
     """
-    m = _DURATION.fullmatch(text.strip())
-    if not m:
-        raise UqsUsageError(
-            f"{name} {text!r}: expected a whole number and a unit - ms, s, m, h or d - e.g. 30s"
-        )
-    span = int(m.group(1)) * _UNIT[m.group(2)]
+    try:
+        span = timedelta(seconds=duration.seconds(value))
+    except duration.DurationError as exc:
+        raise UqsUsageError(f"{name} {exc}") from None
     if span <= timedelta(0):
-        raise UqsUsageError(f"{name} {text!r}: the range must be longer than zero")
+        raise UqsUsageError(f"{name} {value!r}: the range must be longer than zero")
     return span
 
 
@@ -201,7 +192,7 @@ def resolve(
     range_from: str | None,
     range_to: str | None,
     day: str | None = None,
-    last: str | None = None,
+    last: str | float | None = None,
     *,
     open_ended: bool = False,
     now: datetime | None = None,
@@ -231,7 +222,7 @@ def resolve(
         if day is not None:
             first = parse_day("--date", day)
             return TimeRange(_midnight(first), _midnight(first + timedelta(days=1)))
-        span = parse_duration("--last", last or "")
+        span = parse_duration("--last", "" if last is None else last)
         end = (now or datetime.now(UTC)).astimezone(UTC)
         return TimeRange(end - span, end, span)
     if not open_ended and (range_from is None or range_to is None):

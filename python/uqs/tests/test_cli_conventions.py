@@ -42,7 +42,7 @@ import typer.main
 from typer.testing import CliRunner
 
 import uqs.cli.entry  # noqa: F401 - registers every command on the app
-from uqs import paths
+from uqs import duration, paths
 from uqs.cells import cell as cell_text
 from uqs.cli import lists, rendering, safety, shared, skip_options, vocabulary
 from uqs.cli.shared import app
@@ -714,7 +714,9 @@ def test_the_vocabulary_holds_every_command_to_its_names_and_types():
 OWN_UNIT = {"--interval-ms", "--poll-interval-ms"}
 
 #: What makes an option a span of time: its name, or its help naming a unit.
-_TIME_NAME = re.compile(r"-timeout$|^--(every|soak|deadline|window)$")
+#: `--last` is how far back, and `job new`'s `--period`, `--horizon` and
+#: `--width` a span written into q (#2121).
+_TIME_NAME = re.compile(r"-timeout$|^--(every|soak|deadline|window|last|period|horizon|width)$")
 _TIME_HELP = re.compile(r"\b(seconds|minutes|milliseconds)\b", re.I)
 
 
@@ -730,6 +732,39 @@ def test_every_duration_is_a_duration():
         and not _is_duration(p)
     }
     assert not found, f"spans of time that are no DURATION: {sorted(found)}"
+
+
+#: A grammar spelt out in a help: two or more examples of a duration in a row.
+_GRAMMAR_LIST = re.compile(r"\b\d+(?:\.\d+)?(?:ms|s|m|h|d)\b(?:,\s*\d+(?:\.\d+)?(?:ms|s|m|h|d)\b)+")
+
+
+def test_an_option_documented_as_a_duration_reads_it_with_the_shared_parser():
+    """#2121: `--last`'s help said DURATION and its parser refused `30` and
+    `1.5m`, which every other DURATION takes. An option whose help or metavar
+    says DURATION is parsed by uqs/duration.py, through one of
+    vocabulary.PARSERS; one parsed so says DURATION, by its metavar and its
+    help; and no help spells out a grammar of its own beside the shared one."""
+    unparsed, unsaid, own_grammar = set(), set(), set()
+    for cmd in TREE:
+        for p in cmd.options:
+            said = "DURATION" in (p.help or "") or p.metavar == "DURATION"
+            if said and not _is_duration(p):
+                unparsed.add((cmd.path, _long(p)))
+            if _is_duration(p) and not (p.metavar == "DURATION" and "DURATION" in (p.help or "")):
+                unsaid.add((cmd.path, _long(p)))
+            if _GRAMMAR_LIST.search(p.help or ""):
+                own_grammar.add((cmd.path, _long(p)))
+    assert not unparsed, f"documented as a DURATION, parsed otherwise: {sorted(unparsed)}"
+    assert not unsaid, f"parsed as a DURATION, not documented as one: {sorted(unsaid)}"
+    assert not own_grammar, f"a grammar of its own in the help: {sorted(own_grammar)}"
+
+
+def test_the_shared_parsers_read_the_shared_grammar():
+    """The parsers the gate above looks for are the grammar's, not a copy."""
+    assert vocabulary.seconds("1.5m") == duration.seconds("1.5m") == 90.0
+    assert vocabulary.whole_seconds("500ms") == duration.whole_seconds("500ms") == 1
+    assert vocabulary.timespan("5s") == "0D00:00:05"
+    assert vocabulary.timespan("1D") == "1D"
 
 
 def test_a_negative_flag_has_its_positive():
@@ -1330,11 +1365,15 @@ def _defaults() -> dict[tuple[str, str], object]:
     """(command, option) -> the authority for a default its help states where
     the option's own default is not it: one a feed, a target or the scaffold
     applies when the option is not given."""
+    from uqs.cli import source_check
     from uqs.cli.external import FEEDS
     from uqs.deploy import config
     from uqs.scaffold import worker
 
-    out: dict[tuple[str, str], object] = {("job new", "--width"): worker.DEFAULT_WIDTH}
+    out: dict[tuple[str, str], object] = {
+        ("job new", "--width"): worker.DEFAULT_WIDTH,
+        ("config sources check", "--last"): source_check.DEFAULT_LAST,
+    }
     for command in ("deploy push", "deploy rollback", "deploy prune"):
         out[(command, "--command-timeout")] = config.DEFAULT_COMMAND_TIMEOUT
     for command in ("deploy push", "deploy rollback"):

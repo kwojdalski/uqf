@@ -303,6 +303,9 @@ Each layer overrides the one above it in this table:
 - **Same checks.** Every layer's keys are checked, and a refusal names the layer
   and the key. An undeclared environment is refused. The merged values go
   through the same checks as the flags.
+- **Spans of time.** Each `*_timeout` key and `soak` takes what its flag takes:
+  a DURATION string (`verify_timeout = "5m"`) or a number of seconds
+  (`verify_timeout = 300`).
 - **Never in a file.** No layer may set the artifact, `--dry-run`, or a named
   override.
 - **Listing.** `uqs target list` shows each target with its layers merged. It
