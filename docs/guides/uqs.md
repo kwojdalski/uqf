@@ -1670,13 +1670,13 @@ uqs target tunnel plan prod rdb1 hdb1 --local rdb1:7002 --json
 uqs target tunnel check prod --password-env PROD_Q_PASSWORD
 ```
 
-The processes, their roles and their remote ports come from the target's
+The processes, their proctypes and their remote ports come from the target's
 release, as `query --tunnel` reads them. A local port is the remote port plus
 `--local-offset` (10000) unless `--local PROC:PORT` names one. The plan refuses
 a process that is not declared there, one that is not an rdb, hdb, wdb or
 gateway, a port out of range, and two forwards sharing one local port. Each
 refusal under `--json` carries a `kind`: `discovery`, `unknown_process`,
-`unsupported_role`, `invalid_port` or `port_conflict`.
+`unsupported_proctype`, `invalid_port` or `port_conflict`.
 
 The check tests each endpoint in the order a connection is made, and the first
 layer that fails gives the endpoint's status:
