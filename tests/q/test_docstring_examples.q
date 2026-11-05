@@ -195,6 +195,9 @@
         ".qtorq.publish[h;`trades;(enlist `EURUSD;enlist 1;enlist 1.085;enlist 1e6;enlist 10000)]";
         ".qtorq.safe_timer[`crypto_markout;0D00:00:01.000;`.qproc.stream.tick;\"Run the markout streaming job\"]";
         ".qtorq.reload_hdb[]";
+        ".qtorq.compress.plan[`:/data/hdb;`:/data/config/compressionconfig.csv;365]";
+        ".qtorq.compress.apply[`:/data/hdb;`:/data/config/compressionconfig.csv;365]";
+        ".qtorq.compress.run[`:/data/hdb;`:/data/config/compressionconfig.csv;365]";
         ".qetl.io.odbc.window_query[h;`deals;`deal_time;`deal_id`rate;from_ts;to_ts]";
         ".qdata.getBySymbolDate[`AAPL;2026.02.25]";
         ".qpipe.job.alert_sink.post[`$\":http://localhost:9/hook\";\"{}\"]";
@@ -212,6 +215,9 @@
         "sends .u.upd over a tickerplant handle";
         "registers a TorQ timer, which needs .timer and .proc from a TorQ process";
         "finds the HDB through TorQ discovery, which needs .servers from a TorQ process";
+        "runs TorQ's .cmp (showcomp), which a test process loads only inside the .qtorq.compress suite";
+        "runs TorQ's .cmp (compressmaxage) over a real HDB, which a test process loads only inside the .qtorq.compress suite";
+        "runs TorQ's .cmp over a real HDB, then asks the running hdbs to reload through .servers";
         "opens an ODBC connection, which needs a licensed driver this tree does not require";
         "opens a Databento parquet file, which exists only where that data has been downloaded";
         "POSTs to a webhook, which needs an HTTP endpoint listening (#947)";
