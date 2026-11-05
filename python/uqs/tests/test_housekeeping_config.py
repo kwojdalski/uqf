@@ -61,8 +61,8 @@ def test_the_generated_file_is_in_torqdata_and_the_sites_is_neither_read_nor_wri
     site.write_text("function,path,match,exclude,age,agemin,checkfordirectory\nbogus,,,,,,\n")
     before = site.read_text()
     housekeeping.write_housekeeping_config(paths)
-    assert paths.generated_housekeeping_config == paths.torqdata / "housekeeping.csv"
-    text = paths.generated_housekeeping_config.read_text()
+    assert housekeeping.config_path(paths) == paths.torqdata / "housekeeping.csv"
+    text = housekeeping.config_path(paths).read_text()
     assert "bogus" not in text
     assert site.read_text() == before
     assert text.splitlines()[0] == ",".join(housekeeping.HOUSEKEEPING_FIELDS)
@@ -197,6 +197,12 @@ def stack(q_binary, repo_root, tmp_path):
     return run, paths, old, recent
 
 
+#: The tests that replay a GZIPPED log need KDB-X (the `kdbx` fixture): TorQ's
+#: replay reads one through a named pipe (readintofifo), and PeachQ's `-11!`
+#: never returns from reading a fifo - the run blocks until it times out. The
+#: ones that replay only plain logs run on either.
+
+
 def _listing(d: Path) -> list[str]:
     return sorted(p.name for p in d.iterdir())
 
@@ -204,10 +210,11 @@ def _listing(d: Path) -> list[str]:
 def test_housekeeping_q_reads_the_generated_file_not_the_sites(stack):
     run, paths, _old, _recent = stack
     lines = run(gz=False)
-    assert f"INPUTCSV :{paths.generated_housekeeping_config}" in lines
+    assert f"INPUTCSV :{housekeeping.config_path(paths)}" in lines
 
 
-def test_a_log_housekeeping_zipped_is_still_replayed(stack):
+@pytest.mark.kdbx
+def test_a_log_housekeeping_zipped_is_still_replayed(kdbx, stack):
     run, _paths_, old, _recent = stack
     lines = run(gz=True)
     assert _listing(old) == [
@@ -218,14 +225,16 @@ def test_a_log_housekeeping_zipped_is_still_replayed(stack):
     assert "REPLAYED 6" in lines, lines
 
 
-def test_a_log_inside_the_window_is_never_touched(stack):
+@pytest.mark.kdbx
+def test_a_log_inside_the_window_is_never_touched(kdbx, stack):
     run, _paths_, _old, recent = stack
     before = {p.name: p.stat().st_mtime for p in recent.iterdir()}
     run(gz=True)
     assert {p.name: p.stat().st_mtime for p in recent.iterdir()} == before
 
 
-def test_no_tarball_is_ever_produced(stack):
+@pytest.mark.kdbx
+def test_no_tarball_is_ever_produced(kdbx, stack):
     """The site's file tars every log directory; the generated one is read."""
     run, _paths_, old, _recent = stack
     run(gz=True)

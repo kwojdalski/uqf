@@ -41,6 +41,7 @@ from __future__ import annotations
 
 import csv
 import io
+from pathlib import Path
 
 from uqs.paths import UqsPaths
 from uqs.stack import generated
@@ -67,6 +68,11 @@ TPLOG_FUNCTION = "tplogzip"
 #: A segmented tickerplant's log directory for one day:
 #: `<procname>_<YYYY.MM.DD>` (`.stplg.createdld` in TorQ's stplog.q).
 TPLOG_DIR_MATCH = "*_[0-9][0-9][0-9][0-9].[0-9][0-9].[0-9][0-9]"
+
+
+def config_path(paths: UqsPaths) -> Path:
+    """The generated file, in TORQDATA beside reporter.csv and process.csv."""
+    return paths.torqdata / "housekeeping.csv"
 
 
 def housekeeping_rows() -> list[dict[str, str]]:
@@ -98,4 +104,4 @@ def write_housekeeping_config(paths: UqsPaths) -> None:
     writer = csv.DictWriter(f, fieldnames=HOUSEKEEPING_FIELDS, restval="", lineterminator="\n")
     writer.writeheader()
     writer.writerows(housekeeping_rows())
-    generated.write_text(paths.generated_housekeeping_config, f.getvalue())
+    generated.write_text(config_path(paths), f.getvalue())
