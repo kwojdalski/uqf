@@ -440,7 +440,6 @@ qetl.job.stream,tick,function,1,job
 qetl.job.stream,transport_keys,value,,
 qetl.job.stream,unwired,function,1,job
 qetl.job.stream,wire,function,2,job publisher
-qetl.job.stream,with_lateness,function,2,who decl
 qetl.job.stream,withheld_n,value,,
 qetl.job.stream.bars,assign,function,3,width tc x
 qetl.job.stream.bars,close_ready,function,2,name now

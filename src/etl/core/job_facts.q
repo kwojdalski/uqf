@@ -75,6 +75,7 @@
 / @return decl with lateness 0D filled in when event_time is `time and none is declared
 / @throws error when the declaration still uses max_lateness
 / @eg (.qetl.job.stream.with_lateness["define: bars job x";()!()])`lateness  ->  0D
+/ @private
 .qetl.job.stream.with_lateness:{[who;decl]
     if[`max_lateness in key decl;
         'who," declares max_lateness, which is now lateness - one name for the bound in bars, rolling and horizon jobs"];
