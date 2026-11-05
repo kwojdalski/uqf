@@ -136,6 +136,7 @@ ALLOWED = frozenset(
         ("forwards", "book"),
         ("forwards", "ccy"),
         ("forwards", "rates"),
+        ("forwards", "schema"),
         ("limits", "schema"),
         ("microstructure", "book"),
         ("microstructure", "execution"),

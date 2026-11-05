@@ -77,7 +77,6 @@ def _hidden(*path: str) -> Any:
 HAND_KEPT: dict[str, Callable[[], bool]] = {
     **{f"uqs list {kind}": (lambda k=kind: k in lists.MOVED) for kind in lists.MOVED},
     "uqs data seed --from RUNTIME": lambda: "range_from in RUNTIMES" in inspect.getsource(seed),
-    "mcp uqs_summary": lambda: hasattr(__import__("uqs.mcp").mcp, "uqs_summary"),
     # an old VALUE, which only the command's own code reads (#1856)
     "uqs data alter --rename OLD=NEW": lambda: "def _old_rename" in inspect.getsource(hdb_alter),
     # hidden since #1858, its own old spelling kept with it

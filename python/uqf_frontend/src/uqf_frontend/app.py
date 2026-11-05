@@ -1087,7 +1087,7 @@ def create_app(
         the server keeps what it replaces, and what it wrote, in that push's
         history (#2002).
         """
-        # Audited as `file.upload` (activity.SERVER_ACTIONS): the target, the
+        # Audited as `files.upload` (activity.SERVER_ACTIONS): the target, the
         # push, and the file's path, size and sha256 - never its bytes.
         audit = activity.audit_of(request)
         audit.set_target(target)
