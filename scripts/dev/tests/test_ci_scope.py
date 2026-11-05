@@ -208,6 +208,107 @@ def test_full_mode_is_a_push_the_label_or_the_dispatch_input(event, labels, full
         assert all(s.why[g] == [why] for g in scope.GROUPS)
 
 
+def _run_main(monkeypatch, tmp_path, changes, *args):
+    """ci_scope.main over `changes`, as the Scope job runs it: its outputs."""
+    monkeypatch.setattr(scope, "changed", lambda base, head: changes)
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    out = tmp_path / "out"
+    scope.main([*args, "--output", str(out)])
+    return dict(line.split("=", 1) for line in out.read_text().splitlines())
+
+
+#: A change every group would run for, by its paths.
+EVERYWHERE = [("M", "src/pricing/forwards.q"), ("M", "web/src/App.tsx"), ("M", "conftest.py")]
+
+
+def test_a_pull_request_leaves_the_test_suites_to_master(monkeypatch, tmp_path):
+    """#2167: whatever it reaches, a pull request runs no Python, q or docs
+    suite - those are master's and the nightly run's - while the browser
+    application still runs for a web/ change."""
+    out = _run_main(monkeypatch, tmp_path, EVERYWHERE, "--event", "pull_request")
+    assert out == {"full": "false", "docs": "false", "q": "false", "frontend": "true",
+                   "python": "false"}  # fmt: skip
+    out = _run_main(monkeypatch, tmp_path / "py", [("M", "README.md")], "--event", "pull_request")
+    assert (out["python"], out["frontend"]) == ("false", "false")
+
+
+def test_a_pull_request_says_why_a_reached_suite_did_not_run():
+    reached = scope.decide(EVERYWHERE, None)
+    counts = {g: len(reached.why[g]) for g in scope.ON_MASTER}
+    s = scope.for_pull_request(reached)
+    for group in scope.ON_MASTER:
+        assert not getattr(s, group)
+        assert s.why[group] == [
+            f"a pull request leaves it to master and the nightly run (label {scope.FULL_LABEL} "
+            "to run it here, or set CI_PR_TESTS=full for every pull request); "
+            f"the change reaches it through {counts[group]} path(s)"
+        ]
+    assert s.frontend
+
+
+@pytest.mark.parametrize(
+    "args",
+    [
+        ("--event", "pull_request", "--labels", "ci:full"),
+        ("--event", "push"),
+        ("--event", "schedule"),
+        ("--event", "workflow_dispatch", "--full-input", "true"),
+    ],
+)
+def test_ci_full_a_push_the_nightly_run_and_a_full_dispatch_run_everything(
+    monkeypatch, tmp_path, args
+):
+    out = _run_main(monkeypatch, tmp_path, [("M", "README.md")], *args)
+    assert out == dict.fromkeys(("full", "docs", "q", "frontend", "python"), "true")
+
+
+@pytest.mark.parametrize(
+    "mode", [(), ("--pr-tests", ""), ("--pr-tests", "lean"), ("--pr-tests", "LEAN")]
+)
+def test_ci_pr_tests_unset_or_lean_skips_the_suites(monkeypatch, tmp_path, mode):
+    out = _run_main(monkeypatch, tmp_path, EVERYWHERE, "--event", "pull_request", *mode)
+    assert (out["docs"], out["q"], out["python"], out["full"]) == ("false",) * 4
+
+
+def test_ci_pr_tests_full_runs_each_group_the_change_reaches_as_before(monkeypatch, tmp_path):
+    """The switch back: every group the paths reach, scoped exactly as decide()
+    scopes them - the behaviour before #2167."""
+    args = ("--event", "pull_request", "--pr-tests", "full")
+    out = _run_main(monkeypatch, tmp_path, EVERYWHERE, *args)
+    assert out == dict(full="false", docs="true", q="true", frontend="true", python="true")
+    out = _run_main(monkeypatch, tmp_path / "web", [("M", "web/src/App.tsx")], *args)
+    assert (out["docs"], out["q"], out["frontend"], out["python"]) == (
+        "false",
+        "false",
+        "true",
+        "false",
+    )
+
+
+@pytest.mark.parametrize("mode", ["", "lean", "full"])
+def test_the_label_forces_a_full_run_in_either_mode(monkeypatch, tmp_path, mode):
+    args = ("--event", "pull_request", "--labels", "ci:full", "--pr-tests", mode)
+    out = _run_main(monkeypatch, tmp_path, [("M", "README.md")], *args)
+    assert out == dict.fromkeys(("full", "docs", "q", "frontend", "python"), "true")
+
+
+def test_an_unknown_ci_pr_tests_is_refused_rather_than_guessed(monkeypatch, tmp_path):
+    with pytest.raises(SystemExit):
+        _run_main(monkeypatch, tmp_path, EVERYWHERE, "--event", "pull_request", "--pr-tests", "ful")
+
+
+def test_the_scope_job_passes_the_repository_variable():
+    step = next(st for st in CI["jobs"]["scope"]["steps"] if "ci_scope.py" in st.get("run", ""))
+    assert step["env"]["PR_TESTS"] == "${{ vars.CI_PR_TESTS }}"
+    assert '--pr-tests "$PR_TESTS"' in step["run"]
+
+
+def test_a_dispatch_without_full_is_still_scoped_by_its_paths(monkeypatch, tmp_path):
+    out = _run_main(monkeypatch, tmp_path, [("M", "src/pricing/forwards.q")],
+                    "--event", "workflow_dispatch")  # fmt: skip
+    assert (out["q"], out["python"], out["full"]) == ("true", "true", "false")
+
+
 def test_the_q_job_s_python_is_read_from_its_imports():
     """A list of files would go stale; the imports cannot."""
     found = scope.imported(scope.Q_ENTRIES)
@@ -243,6 +344,7 @@ def test_the_workflow_offers_every_full_switch():
     assert on["workflow_dispatch"]["inputs"]["full"]["default"] is False
     assert on["workflow_call"]["inputs"]["full"]["default"] is True, "a release runs everything"
     assert on["push"]["branches"] == ["master"]
+    assert [c["cron"] for c in on["schedule"]] == ["0 3 * * *"], "the nightly full run"
     step = CI["jobs"]["scope"]["steps"][-1]
     assert "ci_scope.py" in step["run"] and step["env"]["FULL"] == "${{ inputs.full }}"
 

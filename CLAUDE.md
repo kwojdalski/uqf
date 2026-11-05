@@ -59,24 +59,32 @@ work by label.
 
 ## Each check runs in one place
 
-Hooks are targeted; CI runs every affected group in full (#1879, #1955). A
-commit runs only the fast set - format, lint, static gates, the generated-file
-checks - and takes seconds. A push runs the test suites (#1965): `python-tests`
-only the Python tests the push reaches, `q-tests` and `q-coverage` only the q
-suites the branch reaches, and `peachq-push` the q test files the branch adds or
-changes on PeachQ - plus `test_docstring_examples.q` when an `@eg` line changes
-(#1978) - with `tests/q/peachq_known_gaps.txt` expected. That last is an early
-catch, not a second home: CI's PeachQ job still runs the whole suite and
-decides. The docs render and the docs' q blocks on PeachQ run in CI only. On a
-pull request `scripts/dev/ci_scope.py` picks the whole groups (docs, q, browser
-app, Python) a change reaches - never single tests - and the static gates always
-run. Full mode is one switch away: `UQF_HOOKS_FULL=1 git commit` or `git push`,
-or `python3 scripts/dev/hooks_full.py --all` for both stages without either
+Hooks are targeted; a pull request's CI runs the gates and attestation, and
+master and the nightly run run the full suites (#1879, #2167). A commit runs
+only the fast set - format, lint, static gates, the generated-file checks - and
+takes seconds. A push runs the test suites (#1965): `python-tests` only the
+Python tests the push reaches, `q-tests` and `q-coverage` only the q suites the
+branch reaches, and `peachq-push` the q test files the branch adds or changes on
+PeachQ - plus `test_docstring_examples.q` when an `@eg` line changes (#1978) -
+with `tests/q/peachq_known_gaps.txt` expected. That last is an early catch, not
+a second home: CI's PeachQ job still runs the whole suite and decides. A pull
+request's CI runs the author check, every hook and static gate, the KDB-X
+attestation check and, for a `web/` change, the browser application; the whole
+Python suite, the whole q suite on PeachQ and the docs render (with the docs' q
+blocks on PeachQ) run on every push to master and nightly
+(`scripts/dev/ci_scope.py`), so a regression they catch surfaces on master
+within a run. That is a switch, not a removal: the repository variable
+`CI_PR_TESTS` (Settings -> Secrets and variables -> Actions -> Variables) unset
+or `lean` is the above, and `CI_PR_TESTS=full` has every pull request run each
+test group its change reaches again, as before #2167; tag
+`ci/full-pr-tests-baseline` is master's `ci.yml` from before the change. Full
+mode is one switch away: `UQF_HOOKS_FULL=1 git commit` or `git push`, or
+`python3 scripts/dev/hooks_full.py --all` for both stages without either
 (`UQF_Q_TESTS_FULL=1` still runs the whole q suite alone); in CI, the `ci:full`
-PR label, `gh workflow run ci.yml --ref <branch> -f full=true`, and every push
-to master. A generated file never stops a merge: `.gitattributes` keeps one
-side, the post-merge hook regenerates it, and its `--check` gate still decides -
-register the driver once per clone with
+PR label, `gh workflow run ci.yml --ref <branch> -f full=true`, every push to
+master and the nightly schedule. A generated file never stops a merge:
+`.gitattributes` keeps one side, the post-merge hook regenerates it, and its
+`--check` gate still decides - register the driver once per clone with
 `python3 scripts/dev/merge_generated.py install` and install the push and merge
 hooks with `pre-commit install`. README's Testing section says where each check
 runs.

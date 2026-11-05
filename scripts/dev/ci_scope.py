@@ -3,9 +3,10 @@
 
 CI is the full, clean run: a Linux checkout with nothing left over, PeachQ as
 its q. "Hooks and static gates" runs every hook over every file on every run.
-The four other groups are expensive and irrelevant to some changes, so a pull
-request runs each only when it changes what that group checks, and runs the
-group COMPLETE - CI never selects single tests (the commit hooks do):
+The four other groups are expensive and irrelevant to some changes, so a run
+that is not full runs each only when the change reaches what that group checks
+(and a pull request runs only the browser application of them, below), and
+runs the group COMPLETE - CI never selects single tests (the commit hooks do):
 
 * "Docs links" (`docs`) renders docs/ with Quarto, writing the q API pages
   from src/'s qDoc comments first - minutes, and the critical path. It runs
@@ -50,11 +51,27 @@ A skipped group counts as passed for "Repository checks", the one required
 check, only when this said to skip it: a skip with no decision behind it - this
 failed, or the job did not run although this asked for it - fails that check.
 
+A PULL REQUEST RUNS NONE OF THE TEST SUITES (#2167), in the default `lean`
+mode: "Docs links", "PeachQ q tests" and "PeachQ Python tests" are left to
+master and the nightly run (ON_MASTER), whatever the change reaches. Its hooks
+already ran the reached tests at push, and its KDB-X attestation the q gates;
+the suites cost minutes on every pull request and found little those had not.
+What a pull request still runs: the author check, "Hooks and static gates"
+and, for a web/ change, "Browser application". Label it `ci:full` to run
+everything.
+
+The mode is a switch (PR_TESTS_MODES), the repository variable CI_PR_TESTS,
+which the Scope job passes as `--pr-tests`: unset or `lean` is the above, and
+`full` brings back the behaviour before #2167 - each group a pull request's
+change reaches runs, complete. Nothing else in the workflow changes with it;
+tag `ci/full-pr-tests-baseline` is master's workflow from before.
+
 FULL MODE runs every group, whatever changed:
 
 * every push - CI runs on pushes to master alone, so master always runs
   everything - and release.yml's run (a called workflow sees its caller's
   event: a tag push, or a dispatch whose `full` input defaults true there);
+* the nightly schedule, on master;
 * workflow_dispatch with `full: true`;
 * a pull request labelled `ci:full`.
 
@@ -136,6 +153,12 @@ GROUPS = {
     "frontend": "Browser application",
     "python": "PeachQ Python tests",
 }
+#: The groups a pull request leaves to master and the nightly run (#2167).
+ON_MASTER = ("docs", "q", "python")
+#: The repository variable CI_PR_TESTS: what a pull request's test groups do.
+#: An unset variable reaches here as "" and means the first, the default.
+PR_TESTS_MODES = ("lean", "full")
+
 #: What a skipped group's line says.
 SKIPPED = {
     "docs": "nothing it renders or links changed",
@@ -303,9 +326,9 @@ def full_reason(event: str, labels: Iterable[str], full_input: bool) -> str | No
         return f"the pull request is labelled {FULL_LABEL}" if FULL_LABEL in labels else None
     if event == "workflow_dispatch":
         return "workflow_dispatch with full: true" if full_input else None
-    # A push (to master; release.yml calls this on a tag push too) or
-    # anything else: everything.
-    return f"a {event} - every push runs every job"
+    # A push (to master; release.yml calls this on a tag push too), the
+    # nightly schedule, or anything else: everything.
+    return f"a {event} - every push and the nightly run run every job"
 
 
 def _python_why(path: str) -> str:
@@ -359,6 +382,20 @@ def decide(
     return Scope(False, *(bool(why[g]) for g in GROUPS), why=why)
 
 
+def for_pull_request(scope: Scope) -> Scope:
+    """`scope` as a pull request without `ci:full` runs it: no ON_MASTER group.
+    What the change reaches is still said, as what master will run."""
+    for group in ON_MASTER:
+        reached = scope.why.get(group, [])
+        setattr(scope, group, False)
+        scope.why[group] = [
+            f"a pull request leaves it to master and the nightly run (label {FULL_LABEL} "
+            f"to run it here, or set CI_PR_TESTS=full for every pull request); "
+            f"the change reaches it through {len(reached)} path(s)"
+        ]
+    return scope
+
+
 def report(scope: Scope, changes: int) -> str:
     lines = [f"### CI scope ({'full' if scope.full else f'{changes} changed path(s)'})", ""]
     lines.append("- **Hooks and static gates**: runs - every hook, every file, every run")
@@ -381,12 +418,22 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--full-input", default="false", help="the `full` input, true or false")
     ap.add_argument("--output", type=Path, help="append name=value lines here")
     ap.add_argument("--summary", type=Path, help="append the why, as markdown, here")
+    ap.add_argument(
+        "--pr-tests",
+        default="",
+        help=f"the CI_PR_TESTS variable: {' or '.join(PR_TESTS_MODES)} (unset: lean)",
+    )
     args = ap.parse_args(argv)
+    pr_tests = args.pr_tests.strip().lower() or PR_TESTS_MODES[0]
+    if pr_tests not in PR_TESTS_MODES:
+        ap.error(f"CI_PR_TESTS is {args.pr_tests!r}: want {' or '.join(PR_TESTS_MODES)}, or unset")
 
     labels = {lab.strip() for lab in args.labels.split(",") if lab.strip()}
     full = full_reason(args.event, labels, args.full_input.lower() == "true")
     changes = [] if full else changed(args.base, args.head)
     scope = decide(changes, full)
+    if args.event == "pull_request" and not full and pr_tests == "lean":
+        scope = for_pull_request(scope)
     text = report(scope, len(changes))
     print(text, end="")
     print(" ".join(f"{k}={v}" for k, v in scope.outputs().items()))

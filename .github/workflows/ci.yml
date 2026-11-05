@@ -2,12 +2,15 @@ name: CI
 
 # The full, clean run (#1879): a Linux checkout with nothing left over, PeachQ
 # as its q. A commit's hooks are targeted (scripts/dev/hooks_full.py); this is
-# where every check runs in full - every job on master, and on a pull request
-# the hooks and static gates plus each complete verification group its change
-# can affect ("Docs links", "PeachQ q tests", "Browser application", "PeachQ
-# Python tests"; scripts/dev/ci_scope.py decides, in the "Scope" job, and says
-# why in its summary). Full mode runs every group: every push, a `ci:full`
-# label on the pull request, or workflow_dispatch with `full: true`.
+# where every check runs in full - every job on master and nightly. A pull
+# request runs the author check, the hooks and static gates and, for a web/
+# change, "Browser application"; the test suites ("Docs links", "PeachQ q
+# tests", "PeachQ Python tests") are left to master and the nightly run (#2167)
+# - while the repository variable CI_PR_TESTS is unset or `lean`; `full` runs
+# each group the change reaches, as before.
+# scripts/dev/ci_scope.py decides, in the "Scope" job, and says why in its
+# summary. Full mode runs every group: every push, the nightly schedule, a
+# `ci:full` label on the pull request, or workflow_dispatch with `full: true`.
 
 on:
   push:
@@ -17,6 +20,10 @@ on:
     # re-runs it as an ordinary run of the same head: never a run that
     # reports without checking (a skipped required check counts as passed).
     types: [opened, synchronize, reopened, labeled]
+  # The full set on master every night (#2167): what pull requests no longer
+  # run is caught within a day even when nothing merges.
+  schedule:
+    - cron: "0 3 * * *"
   workflow_dispatch:
     inputs:
       full:
@@ -114,10 +121,15 @@ jobs:
           HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
           LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
           FULL: ${{ inputs.full }}
+          # The pull-request mode switch (#2167): the repository variable
+          # CI_PR_TESTS - unset or `lean`, a pull request leaves the test
+          # suites to master and nightly; `full`, it runs each group its
+          # change reaches, as before. ci_scope.py's docstring says more.
+          PR_TESTS: ${{ vars.CI_PR_TESTS }}
         run: >-
           uv run --no-project --python 3.14 python scripts/dev/ci_scope.py
           --event "$EVENT" --base "$BASE" --head "$HEAD" --labels "$LABELS" --full-input "$FULL"
-          --output "$GITHUB_OUTPUT" --summary "$GITHUB_STEP_SUMMARY"
+          --pr-tests "$PR_TESTS" --output "$GITHUB_OUTPUT" --summary "$GITHUB_STEP_SUMMARY"
 
   checks:
     name: Hooks and static gates
