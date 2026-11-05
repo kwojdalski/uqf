@@ -39,6 +39,10 @@
     if[count missing;
         '(string fn_name),": ",(string table_name)," is missing required column(s) ",", " sv string missing];
     }
+/ Option keys that were renamed, old -> new: an unknown key found here is
+/ refused with a migration message instead of the generic one (#2119). Add a
+/ row when an option is renamed; there is no alias, the old key still fails.
+.qf.util.renamed_opts:(enlist `asof)!enlist `as_of
 / Resolve an options dictionary against its defaults, refusing a key the
 / function does not know. The one refusal for every `opts` parameter in the
 / library (#2113): a misspelt option used to be dropped in pricing and
@@ -60,6 +64,10 @@
     if[not 99h=type opts;
         '(string fn_name),": opts must be (::) for the defaults, or a dictionary of ",known];
     unknown:(key opts) except key defaults;
+    moved:unknown inter key .qf.util.renamed_opts;
+    if[count moved;
+        '(string fn_name),": ",(", " sv {"`",string[x]," is now `",string .qf.util.renamed_opts x} each moved),
+            " - options keys are renamed, not aliased"];
     if[count unknown;
         '(string fn_name),": unknown option(s) ",(", " sv string unknown)," - known: ",known];
     defaults,opts}
