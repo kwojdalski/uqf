@@ -84,9 +84,8 @@
 / @eg .qetl.job.stream.delivery.wire[`fx_feed;`present`logged!({[t;k] (count k)#0b};{[t] 0})]  ->  `fx_feed
 .qetl.job.stream.delivery.wire:{[job;hooks]
     if[not 99h=type hooks; '"delivery.wire: ",string[job],"'s hooks must be a dictionary of ",", " sv string .qetl.job.stream.delivery.hook_keys];
-    if[count bad:(key hooks) except .qetl.job.stream.delivery.hook_keys;
-        '"delivery.wire: ",string[job]," was given ",(", " sv string bad),", which is not a delivery hook"];
-    if[count bad:(key hooks) where not .qetl.job.stream.is_callable each value hooks;
+    .qetl.declared.refuse_unknown["delivery.wire: ",string job;"a delivery hook set";hooks;.qetl.job.stream.delivery.hook_keys];
+    if[count bad:(key hooks) where not .qetl.declared.callable each value hooks;
         '"delivery.wire: ",string[job],"'s ",(", " sv string bad)," must be functions"];
     / enlisted, read back with first (hook): a bare indexed write can collapse a registry (#1030)
     if[`present in key hooks; .qetl.job.stream.delivery.present[job]:enlist hooks`present];

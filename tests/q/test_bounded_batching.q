@@ -162,7 +162,7 @@
 .qt.qetl.job.bounded.batching.test_a_malformed_declaration_is_refused_by_name:{[t]
     req:.qt.qetl.job.bounded.batching.required;
     .qunit.assertTrue[(req[`hdb_fx_markouts;`sym]) like "define: probe's batching must be a dictionary*";"not a dictionary"];
-    .qunit.assertTrue[(req[`hdb_fx_markouts;`group_by`max_rows`speed!(`sym;5;1)]) like "*has speed, which it does not take*";"an unknown key"];
+    .qunit.assertTrue[(req[`hdb_fx_markouts;`group_by`max_rows`speed!(`sym;5;1)]) like "*declares speed, which batching does not take*";"an unknown key"];
     .qunit.assertTrue[(req[`hdb_fx_markouts;enlist[`group_by]!enlist `sym]) like "*needs max_rows";"max_rows is required"];
     .qunit.assertTrue[(req[`hdb_fx_markouts;`group_by`max_rows!(`nope;5)]) like "*group_by names nope, which source hdb_fx_markouts does not return*";"a column the source does not return"];
     .qunit.assertTrue[(req[`hdb_fx_markouts;`group_by`max_rows!(`sym`sym;5)]) like "*names a column more than once";"a repeated column"];

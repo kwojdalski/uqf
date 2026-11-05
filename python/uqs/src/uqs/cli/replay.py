@@ -38,7 +38,7 @@ app.add_typer(data_app, name="data")
 
 
 def _day(
-    day: str | None, range_from: str | None, range_to: str | None, last: str | None = None
+    day: str | None, range_from: str | None, range_to: str | None, last: float | None = None
 ) -> str | None:
     """The one day to replay, as the log directories spell it (2026.09.23), or
     None for the plant's newest. A log is one day's, so the range must be one -

@@ -81,9 +81,7 @@
     b:decl`batching;
     if[not $[99h=type b; 11h=type key b; 0b];
         'who," must be a dictionary of group_by, max_rows and optionally max_groups and context"];
-    unknown:(key b) except .qetl.job.bounded.batching.keys;
-    if[count unknown;
-        'who," has ",(", " sv string unknown),", which it does not take - the keys are ",", " sv string .qetl.job.bounded.batching.keys];
+    .qetl.declared.refuse_unknown[who;"batching";b;.qetl.job.bounded.batching.keys];
     absent:`group_by`max_rows where not `group_by`max_rows in key b;
     if[count absent; 'who," needs ",", " sv string absent];
     src:.qetl.source.def decl`source;
@@ -137,11 +135,11 @@
 .qetl.job.bounded.batching.require_context:{[who;source;src;b]
     ctx:$[`context in key b; b`context; (::)];
     if[(::)~ctx; :ctx];
-    if[not type[ctx] in 100 104h;
+    if[not .qetl.declared.callable ctx;
         'who,"'s context must be a function of (supporting; rows)"];
     if[0=count src`supporting;
         'who,"'s context narrows supporting inputs, and source ",string[source]," declares none"];
-    if[(100h=type ctx) and not 2=count (value ctx) 1;
+    if[(.qetl.declared.lambda ctx) and not 2=count (value ctx) 1;
         'who,"'s context must take exactly two arguments: the window's supporting inputs and the batch's primary rows"];
     ctx}
 

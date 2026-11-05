@@ -991,6 +991,10 @@ def _read_manifest(pfd):
     if not isinstance(manifest.get("files"), list):
         raise Refusal("refused", "the push's manifest.json has no file list")
     manifest["reported"] = read_reported(manifest)
+    # A manifest written before #2107 says `destination`: still read, and
+    # written back as `config_dir` the next time this push's manifest is.
+    if "destination" in manifest:
+        manifest.setdefault("config_dir", manifest.pop("destination"))
     return manifest
 
 
@@ -1148,14 +1152,14 @@ def _new_push(root, push_id, fields, max_kept, retention_days, protect=()):
 def push_open(request):
     """Open a push: its history directory and manifest, then retention."""
     push_id = _push_id(request.get("push_id"))
-    parts = split_path(request.get("destination"))
+    parts = split_path(request.get("config_dir"))
     if tuple(parts[: len(UPLOAD_ROOT)]) != UPLOAD_ROOT:
         raise Refusal("unsupported", f"a push goes to {'/'.join(UPLOAD_ROOT)}/ or below it")
     max_kept, retention_days = _bounds(request)
     fields = {
         "kind": "push",
         "restores": None,
-        "destination": "/".join(parts),
+        "config_dir": "/".join(parts),
         "declared": {
             "file_count": _count(request, "file_count", 0, MAX_PUSH_FILES),
             "total_bytes": _count(request, "total_bytes", 0),
@@ -1221,7 +1225,7 @@ def summarise(manifest):
     }
     return {
         **{k: manifest.get(k) for k in ("push_id", "kind", "restores", "created", "closed",
-                                         "user", "target", "via", "destination", "declared")},
+                                         "user", "target", "via", "config_dir", "declared")},
         "file_count": len(files),
         "total_bytes": sum(e.get("size") or 0 for e in files if e.get("state") != "failed"),
         "states": states,
@@ -1500,7 +1504,7 @@ def restore(request):
                           "is as it was before it")  # fmt: skip
         push_id = _push_id(request.get("push_id"))
         max_kept, retention_days = _bounds(request)
-        fields = {"kind": "restore", "restores": source_id, "destination": "/".join(UPLOAD_ROOT),
+        fields = {"kind": "restore", "restores": source_id, "config_dir": "/".join(UPLOAD_ROOT),
                   "declared": {"file_count": len(steps), "total_bytes": 0},
                   "user": _label(request.get("user"), "user"),
                   "target": _label(request.get("target"), "target"),

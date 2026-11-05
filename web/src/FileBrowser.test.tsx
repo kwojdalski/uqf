@@ -16,7 +16,7 @@ function services(remote: boolean): Services {
   return {
     targets: [
       {
-        name: "prod-a",
+        target: "prod-a",
         ssh: "deploy@prod-a",
         dest: "/srv/uqf",
         remote_user: null,
@@ -29,7 +29,7 @@ function services(remote: boolean): Services {
     source: "/repo/deploy_targets.toml",
     declared: true,
     invalid: null,
-    remote_operations_enabled: remote,
+    writes_enabled: remote,
     poll_seconds: 30,
   };
 }
@@ -49,7 +49,7 @@ function entry(over: Partial<RemoteEntry>): RemoteEntry {
 function listing(path: string, entries: RemoteEntry[]): RemoteFiles {
   return {
     target: "prod-a",
-    root: "/srv/uqf",
+    dest: "/srv/uqf",
     path,
     parent: path ? path.split("/").slice(0, -1).join("/") : null,
     entries,

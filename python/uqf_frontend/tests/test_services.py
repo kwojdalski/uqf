@@ -54,7 +54,7 @@ def _client(**settings) -> TestClient:
 
 
 def _targets(body: dict) -> dict[str, dict]:
-    return {t["name"]: t for t in body["targets"]}
+    return {t["target"]: t for t in body["targets"]}
 
 
 def test_lists_every_declared_target_with_its_ssh_root_and_environment(declared):
@@ -66,7 +66,7 @@ def test_lists_every_declared_target_with_its_ssh_root_and_environment(declared)
     assert body["poll_seconds"] == POLL_SECONDS["services"]
     found = _targets(body)
     assert found["prod-a"] == {
-        "name": "prod-a",
+        "target": "prod-a",
         "ssh": "deploy@prod-a",
         "dest": "/srv/uqf",
         "remote_user": None,
@@ -98,7 +98,7 @@ def test_the_rows_are_uqs_target_lists(declared):
     cli = records(history.target_rows(repo_root()))
     api = _client().get("/services").json()["targets"]
     assert [(r["target"], r["ssh"], r["dest"]) for r in cli] == [
-        (t["name"], t["ssh"], t["dest"]) for t in api
+        (t["target"], t["ssh"], t["dest"]) for t in api
     ]
 
 
@@ -241,7 +241,7 @@ def test_listing_opens_no_ssh_connection(declared, monkeypatch):
 
 
 def test_remote_operations_follow_the_write_switch_and_are_off_by_default(declared):
-    assert _client().get("/services").json()["remote_operations_enabled"] is False
+    assert _client().get("/services").json()["writes_enabled"] is False
     token = secrets.token_hex(32)
     on = _client(enable_writes=True, write_token=token)
-    assert on.get("/services").json()["remote_operations_enabled"] is True
+    assert on.get("/services").json()["writes_enabled"] is True

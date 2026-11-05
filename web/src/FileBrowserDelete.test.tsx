@@ -5,7 +5,7 @@ import { FileBrowser } from "./FileBrowser";
 
 const listing = {
   target: "box",
-  root: "/srv/uqf",
+  dest: "/srv/uqf",
   path: "",
   parent: null,
   entries: [
@@ -46,7 +46,7 @@ it("locks selection during deletion and preserves outcomes when refresh fails", 
   finish(
     ok({
       target: "box",
-      root: "/srv/uqf",
+      dest: "/srv/uqf",
       results: [{ path: "config.csv", outcome: "succeeded", error: null }],
     }),
   );

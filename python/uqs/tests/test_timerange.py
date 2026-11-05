@@ -9,7 +9,7 @@ from datetime import UTC, date, datetime, timedelta
 
 import pytest
 
-from uqs import timerange
+from uqs import duration, timerange
 from uqs.paths import UqsError
 
 FROM = datetime(2026, 9, 13, tzinfo=UTC)
@@ -105,6 +105,10 @@ def test_date_takes_a_day_alone(text):
         ("5m", timedelta(minutes=5)),
         ("2h", timedelta(hours=2)),
         ("7d", timedelta(days=7)),
+        # #2121: a DURATION as every other option takes one - bare is seconds
+        ("300", timedelta(seconds=300)),
+        ("1.5m", timedelta(seconds=90)),
+        (300.0, timedelta(seconds=300)),
     ],
 )
 def test_last_is_the_duration_up_to_now(text, span):
@@ -112,9 +116,17 @@ def test_last_is_the_duration_up_to_now(text, span):
     assert (r.start, r.end, r.last) == (NOW - span, NOW, span)
 
 
-@pytest.mark.parametrize("text", ["0s", "5", "m", "1.5h", "-1h", "1w"])
-def test_last_takes_a_positive_whole_number_and_a_unit(text):
-    with pytest.raises(UqsError, match=re.escape(f"--last {text!r}")):
+@pytest.mark.parametrize("text", ["m", "-1h", "1w", "1D", "5 m"])
+def test_last_is_a_duration(text):
+    with pytest.raises(
+        UqsError, match=re.escape(f"--last {text!r}: a duration is {duration.FORMS}")
+    ):
+        timerange.resolve(None, None, last=text)
+
+
+@pytest.mark.parametrize("text", ["0s", "0", 0.0])
+def test_last_must_cover_time(text):
+    with pytest.raises(UqsError, match=re.escape(f"--last {text!r}: the range must be longer")):
         timerange.resolve(None, None, last=text)
 
 

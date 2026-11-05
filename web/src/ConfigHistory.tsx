@@ -220,7 +220,7 @@ export function ConfigHistory({
                         ? `unreadable: ${p.error}`
                         : p.kind === "restore"
                           ? `restore of ${p.restores}`
-                          : `push to ${p.destination}`}
+                          : `push to ${p.config_dir}`}
                     </td>
                     <td>
                       {p.file_count ?? 0} ({size(p.total_bytes ?? 0)})

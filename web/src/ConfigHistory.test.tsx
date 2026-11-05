@@ -38,7 +38,7 @@ function file(over: Partial<ConfigPushFile>): ConfigPushFile {
 
 const HISTORY: History = {
   target: "prod-a",
-  root: "/srv/uqf",
+  dest: "/srv/uqf",
   pushes: [
     {
       push_id: PUSH,
@@ -49,7 +49,7 @@ const HISTORY: History = {
       user: "kw",
       target: "prod-a",
       via: "frontend",
-      destination: "shared/config",
+      config_dir: "shared/config",
       declared: { file_count: 3, total_bytes: 9 },
       file_count: 3,
       total_bytes: 9,
@@ -71,7 +71,7 @@ const HISTORY: History = {
 
 const DETAIL: ConfigPushDetail = {
   target: "prod-a",
-  root: "/srv/uqf",
+  dest: "/srv/uqf",
   summary: HISTORY.pushes[0],
   push: {
     push_id: PUSH,
@@ -82,7 +82,7 @@ const DETAIL: ConfigPushDetail = {
     user: "kw",
     target: "prod-a",
     via: "frontend",
-    destination: "shared/config",
+    config_dir: "shared/config",
     declared: { file_count: 3, total_bytes: 9 },
     reported: [{ path: "shared/config/lost", outcome: "unknown" }],
     files: [
@@ -124,7 +124,7 @@ const DIFFS: Record<string, ConfigDiff["files"][number]> = {
 function plan(steps: ConfigRestore["plan"]): ConfigRestore {
   return {
     target: "prod-a",
-    root: "/srv/uqf",
+    dest: "/srv/uqf",
     restores: PUSH,
     dry_run: true,
     push_id: null,
@@ -166,7 +166,7 @@ function fakeOps(over: Partial<HistoryOps> = {}) {
       calls.push(`diff ${push} ${path}`);
       return {
         target: "prod-a",
-        root: "/srv/uqf",
+        dest: "/srv/uqf",
         push_id: push,
         diff_cap: 262144,
         files: [DIFFS[path as string]],

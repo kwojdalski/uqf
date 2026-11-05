@@ -85,7 +85,7 @@ def read(settings: Settings) -> Registry:
         last = row.get("last_deployed")
         out.append(
             {
-                "name": row["target"],
+                "target": row["target"],
                 "ssh": row["ssh"],
                 "dest": row["dest"],
                 "remote_user": row["remote_user"] or None,

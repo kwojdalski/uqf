@@ -11,6 +11,7 @@ from typing import Annotated
 
 import typer
 
+from uqs.cli.vocabulary import duration
 from uqs.timerange import BOUND_FORMS, DAY_FORMS
 
 #: A time range, the one way every command takes it (#1735): --from/--to,
@@ -33,9 +34,9 @@ DateOpt = Annotated[
     ),
 ]
 LastOpt = Annotated[
-    str | None,
-    typer.Option(
+    float | None,
+    duration(
         "--last",
-        help="A DURATION up to now - 30s, 5m, 2h, 7d: the same as --from now-DURATION --to now",
+        help="Up to now, a DURATION - the same as --from now-DURATION --to now",
     ),
 ]

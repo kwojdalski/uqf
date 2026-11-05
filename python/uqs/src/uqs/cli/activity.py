@@ -125,7 +125,7 @@ def _query(
     range_from: str | None,
     range_to: str | None,
     day: str | None,
-    last: str | None,
+    last: float | None,
     filters: dict[str, Any],
     limit: int,
 ) -> activity_log.Query:

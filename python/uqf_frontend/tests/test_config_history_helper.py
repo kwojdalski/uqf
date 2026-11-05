@@ -53,7 +53,7 @@ def _ask(root: Path, op: str, **fields) -> dict:
 
 def _open(root: Path, push_id: str | None = None, **fields) -> str:
     push_id = push_id or remote_files.new_push_id()
-    answer = _ask(root, "push_open", push_id=push_id, destination="shared/config", **fields)
+    answer = _ask(root, "push_open", push_id=push_id, config_dir="shared/config", **fields)
     assert answer["ok"], answer
     return push_id
 
@@ -92,10 +92,27 @@ def test_a_push_opens_its_history_closed_to_other_users(root):
     manifest = _manifest(root, push_id)
     assert manifest == {
         "version": 1, "push_id": push_id, "kind": "push", "restores": None,
-        "created": manifest["created"], "closed": None, "destination": "shared/config",
+        "created": manifest["created"], "closed": None, "config_dir": "shared/config",
         "declared": {"file_count": 2, "total_bytes": 9}, "user": "kw", "target": "box",
         "via": "frontend", "reported": [], "files": [],
     }  # fmt: skip
+
+
+def test_a_manifest_an_older_release_wrote_is_read_and_written_back_as_config_dir(root):
+    """A manifest stays on the server across releases: one written before
+    #2107 says `destination`. It is still read, as `config_dir`, and the next
+    write of it says only `config_dir`."""
+    push_id = _open(root)
+    path = _history(root) / push_id / MANIFEST
+    old = json.loads(path.read_text())
+    old["destination"] = old.pop("config_dir")
+    path.write_text(json.dumps(old))
+    (summary,) = _ask(root, "history_list")["pushes"]
+    assert summary["config_dir"] == "shared/config" and "destination" not in summary
+    assert _ask(root, "history_show", push_id=push_id)["manifest"]["config_dir"] == "shared/config"
+    assert _ask(root, "push_close", push_id=push_id)["ok"]
+    written = _manifest(root, push_id)
+    assert written["config_dir"] == "shared/config" and "destination" not in written
 
 
 def test_an_overwrite_keeps_the_previous_content_and_a_create_has_no_previous(root):
@@ -396,7 +413,7 @@ def test_retention_keeps_the_newest_pushes_and_logs_the_pruned(root):
     ids = [f"20261104T10000{i}000Z-0000000{i}" for i in range(4)]
     for push_id in ids[:3]:
         _open(root, push_id)
-    answer = _ask(root, "push_open", push_id=ids[3], destination="shared/config", max_kept=2)
+    answer = _ask(root, "push_open", push_id=ids[3], config_dir="shared/config", max_kept=2)
     assert [p["push_id"] for p in answer["pruned"]] == [ids[1], ids[0]]
     assert {p["why"] for p in answer["pruned"]} == {"row_cap"}
     assert sorted(p.name for p in _history(root).iterdir() if p.is_dir()) == ids[2:]
@@ -411,7 +428,7 @@ def test_retention_by_age(root):
     old = "20200101T000000000Z-00000001"
     _open(root, old)
     answer = _ask(root, "push_open", push_id=remote_files.new_push_id(),
-                  destination="shared/config", retention_days=30)  # fmt: skip
+                  config_dir="shared/config", retention_days=30)  # fmt: skip
     assert answer["pruned"] == [
         {"push_id": old, "why": "retention", "pruned_at": answer["pruned"][0]["pruned_at"]}
     ]
@@ -420,7 +437,7 @@ def test_retention_by_age(root):
 def test_a_restore_after_pruning_is_refused_clearly(root):
     gone = _open(root, "20261104T100000000Z-00000001")
     _put(root, gone, "shared/config/a", b"1")
-    _ask(root, "push_open", push_id="20261104T100001000Z-00000002", destination="shared/config",
+    _ask(root, "push_open", push_id="20261104T100001000Z-00000002", config_dir="shared/config",
          max_kept=1)  # fmt: skip
     for op, extra in (("restore", {"dry_run": True}), ("history_show", {}), ("history_diff", {})):
         key = "restores" if op == "restore" else "push_id"
@@ -434,7 +451,7 @@ def test_a_restore_after_pruning_is_refused_clearly(root):
 def test_a_bound_outside_its_limits_is_refused(root):
     for over in ({"max_kept": 0}, {"retention_days": 0}, {"max_kept": remote_helper.MAX_KEEP + 1}):
         answer = _ask(root, "push_open", push_id=remote_files.new_push_id(),
-                      destination="shared/config", **over)  # fmt: skip
+                      config_dir="shared/config", **over)  # fmt: skip
         assert answer["error"] == "bad_request", over
 
 
@@ -494,7 +511,7 @@ def test_a_history_dir_that_is_a_link_is_refused_not_followed(root, tmp_path):
     outside = tmp_path / "outside"
     _history(root).symlink_to(outside)
     answer = _ask(root, "push_open", push_id=remote_files.new_push_id(),
-                  destination="shared/config")  # fmt: skip
+                  config_dir="shared/config")  # fmt: skip
     assert answer["error"] == "refused" and "symbolic link" in answer["detail"]
     assert list(outside.iterdir()) == []
     assert _ask(root, "history_list")["error"] == "refused"
@@ -539,7 +556,7 @@ def test_a_restore_deletes_only_a_regular_file(root):
 def test_a_push_goes_to_shared_config_and_nowhere_else(root):
     for destination in ("shared/data", "releases", ""):
         answer = _ask(root, "push_open", push_id=remote_files.new_push_id(),
-                      destination=destination)  # fmt: skip
+                      config_dir=destination)  # fmt: skip
         assert answer["error"] == "unsupported", destination
     assert not _history(root).exists()
 
@@ -565,7 +582,7 @@ def test_a_pruned_log_written_before_2111_is_read_in_todays_words(root):
     pre-#2111 reasons (`count`, `age`) is listed in today's (`row_cap`,
     `retention`), so the API's strict response model still reads it."""
     gone = _open(root, "20261104T100000000Z-00000001")
-    _ask(root, "push_open", push_id="20261104T100001000Z-00000002", destination="shared/config",
+    _ask(root, "push_open", push_id="20261104T100001000Z-00000002", config_dir="shared/config",
          max_kept=1)  # fmt: skip
     log = _history(root) / "pruned.jsonl"
     old = [{"push_id": gone, "why": "count", "pruned_at": "2026-11-04T10:00:00Z"},

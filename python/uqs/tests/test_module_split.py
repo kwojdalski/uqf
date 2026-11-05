@@ -125,9 +125,13 @@ def test_every_exempt_module_still_exists_and_is_still_over():
 #: every layer's listings produce and the CLI prints, so it imports nothing.
 #: `activity_log` (#2000) reads the frontend's activity history for the API and
 #: `uqs activity` alike; uqf_frontend imports it, so it imports nothing either.
+#: `duration` (#2121) is the one grammar of a span of time, which the CLI, the
+#: scaffolder, the deploy target file and `timerange` all read, so it imports
+#: nothing.
 #: `renamed_env` (#2111) is the renamed variables `uqs` and the frontend both
 #: refuse; uqf_frontend.config imports it at startup, so it imports nothing.
 LEAVES = {
+    "duration",
     "activity_log",
     "cells",
     "paths",
@@ -201,7 +205,7 @@ def test_the_leaves_stay_leaves():
     # uqs.timerange (#1735): the one time-range parser, for every layer
     source = (PKG / "src" / "uqs" / "timerange.py").read_text()
     reached = {m.group(1) or m.group(2) for m in _IMPORT.finditer(source)}
-    assert reached <= {"paths", "timefmt"}, reached
+    assert reached <= {"paths", "timefmt", "duration"}, reached
     leaves = (
         "runtimes.py",
         "timefmt.py",
@@ -209,6 +213,7 @@ def test_the_leaves_stay_leaves():
         "portexpr.py",
         "guardrails.py",
         "cells.py",
+        "duration.py",
         "renamed_env.py",
     )
     for leaf in leaves:

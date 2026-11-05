@@ -48,6 +48,7 @@
 \l src/etl/core/backfill_state.q
 \l src/etl/core/log.q
 \l src/etl/core/coercion.q
+\l src/etl/core/declared.q
 \l src/etl/core/intervals.q
 \l src/etl/core/materialisation.q
 \l src/etl/core/run.q
