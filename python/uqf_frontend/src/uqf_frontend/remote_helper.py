@@ -324,6 +324,14 @@ def _readable_name(name):
         return raw.decode("utf-8", "replace"), "name is not valid UTF-8"
 
 
+def _mtime(ns):
+    """A file's st_mtime_ns as the API sends every instant: ISO-8601 in UTC,
+    to the nanosecond, with its `Z` - not the float of epoch seconds it was,
+    the one instant in the API that was not text (#2104)."""
+    seconds, fraction = divmod(ns, 10**9)
+    return time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(seconds)) + f".{fraction:09d}Z"
+
+
 def describe(fd, name):
     """One listing entry for `name` in directory `fd`, never following it."""
     shown, bad_name = _readable_name(name)
@@ -333,7 +341,8 @@ def describe(fd, name):
         return {"name": shown, "kind": "unknown", "size": None, "mtime": None,
                 "blocked": True, "reason": f"cannot be read: {exc.strerror}"}  # fmt: skip
     mode = st.st_mode
-    entry = {"name": shown, "size": None, "mtime": st.st_mtime, "blocked": False, "reason": None}
+    entry = {"name": shown, "size": None, "mtime": _mtime(st.st_mtime_ns), "blocked": False,
+             "reason": None}  # fmt: skip
     if stat.S_ISDIR(mode):
         entry["kind"] = "dir"
     elif stat.S_ISREG(mode):
