@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import datetime as dt
 import hashlib
+import http
 import math
 import subprocess
 import time
@@ -21,8 +22,10 @@ from typing import Annotated, Any
 import polars as pl
 from fastapi import Body, Depends, FastAPI, Query, Request
 from fastapi.concurrency import run_in_threadpool
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from uqf_frontend import (
     access,
@@ -35,6 +38,7 @@ from uqf_frontend import (
     health,
     identity,
     inspection,
+    limits,
     ops,
     procfile,
     queries,
@@ -135,10 +139,6 @@ from uqf_frontend.models import (
     WorkspacesResponse,
 )
 from uqs import activity_log
-
-#: A fleet view's row limit. At least one (#2020): ops.USAGE answers `lim <= 0`
-#: with a process's whole usage log, and a negative slice is not a cap.
-OpsLimit = typing.Annotated[int, Query(ge=1)]
 
 
 def _refused(status_code: int, error: str, detail: str) -> JSONResponse:
@@ -599,27 +599,78 @@ def create_app(
         )
         return response
 
+    def _error(
+        request: Request,
+        status_code: int,
+        error: str,
+        detail: str,
+        *,
+        transient: bool = False,
+        headers: typing.Mapping[str, str] | None = None,
+        **extra: Any,
+    ) -> JSONResponse:
+        """Every error this API answers, in its one shape (#2106):
+        `{"error": <type>, "detail": <text>, "transient": <bool>}`, plus any
+        `extra` keys a particular kind carries (a 422's `errors`)."""
+        # The error's TYPE, for an audited action: never its message, which
+        # can quote the input back.
+        activity.audit_of(request).note(error=error)
+        target = getattr(request.state, "workspace_target", None)
+        if target not in (None, workspaces.LOCAL) and f"target {target}" not in detail:
+            # A target's failure is never mistaken for the local stack's.
+            detail = f"target {target}: {detail}"
+        merged = dict(headers or {})
+        if status_code == 401:
+            merged["WWW-Authenticate"] = "Bearer"
+        return JSONResponse(
+            status_code=status_code,
+            content={"error": error, "detail": detail, "transient": transient, **extra},
+            headers=merged or None,
+        )
+
     @app.exception_handler(FrontendError)
     async def _handle(request: Request, exc: FrontendError) -> JSONResponse:
         """Render a typed failure, keeping the transient flag the UI needs to
         tell an EOD reload window apart from a real error.
         """
-        # The error's TYPE, for an audited action: never its message, which
-        # can quote the input back.
-        activity.audit_of(request).note(error=type(exc).__name__)
-        detail = str(exc)
-        target = getattr(request.state, "workspace_target", None)
-        if target not in (None, workspaces.LOCAL) and f"target {target}" not in detail:
-            # A target's failure is never mistaken for the local stack's.
-            detail = f"target {target}: {detail}"
-        return JSONResponse(
-            status_code=exc.status_code,
-            content={
-                "error": type(exc).__name__,
-                "detail": detail,
-                "transient": exc.transient,
-            },
-            headers={"WWW-Authenticate": "Bearer"} if exc.status_code == 401 else None,
+        return _error(
+            request, exc.status_code, type(exc).__name__, str(exc), transient=exc.transient
+        )
+
+    @app.exception_handler(RequestValidationError)
+    async def _handle_invalid(request: Request, exc: RequestValidationError) -> JSONResponse:
+        """A request FastAPI refused before any handler ran - a malformed body,
+        a query parameter out of range - in the shape every other refusal
+        has. `detail` is one readable line; `errors` keeps each failure's
+        `loc`, `msg` and `type` for a form that marks the field. Never the
+        `input`, which would quote the request back."""
+        errors = [
+            {"loc": list(e.get("loc", ())), "msg": str(e.get("msg", "")), "type": e.get("type")}
+            for e in exc.errors()
+        ]
+        detail = "; ".join(
+            f"{'.'.join(str(part) for part in e['loc'])}: {e['msg']}" for e in errors
+        )
+        return _error(request, 422, "RequestInvalid", detail or "invalid request", errors=errors)
+
+    @app.exception_handler(StarletteHTTPException)
+    async def _handle_http(request: Request, exc: StarletteHTTPException) -> JSONResponse:
+        """Starlette's own refusals - 404 for no such route, 405 for a method
+        the route does not take - named by their status (`NotFound`,
+        `MethodNotAllowed`), keeping the headers they carry (405's `Allow`)."""
+        phrase = http.HTTPStatus(exc.status_code).phrase
+        error = "".join(ch for ch in phrase.title() if ch.isalnum())
+        return _error(request, exc.status_code, error, str(exc.detail), headers=exc.headers)
+
+    @app.exception_handler(Exception)
+    async def _handle_unexpected(request: Request, exc: Exception) -> JSONResponse:
+        """A failure nothing named: 500 in the same shape, saying where to look
+        rather than quoting the exception, whose text can hold anything."""
+        return _error(
+            request,
+            500,
+            "InternalError",
+            f"the server failed unexpectedly ({type(exc).__name__}); see its log",
         )
 
     @app.get("/me/capabilities", response_model=CapabilitiesResponse)
@@ -762,24 +813,27 @@ def create_app(
         )
 
     @app.get("/ops/usage", response_model=UsageResponse)
-    def ops_usage(scope: ScopeOf, limit: OpsLimit = 500) -> UsageResponse:
+    def ops_usage(
+        scope: ScopeOf, limit: int = limits.row_limit(500, settings.max_rows)
+    ) -> UsageResponse:
         """Fleet-wide query log, assembled here because none exists in q.
 
         `unreachable` is part of the response rather than an error: one process
         being down must not blank the view for the other nine.
         """
-        capped = max(1, min(limit, settings.max_rows))
-        rows, unreachable = ops.merge_usage(scope.fleet.per_process(ops.USAGE, capped))
+        rows, unreachable = ops.merge_usage(scope.fleet.per_process(ops.USAGE, limit))
         return UsageResponse(
-            rows=rows[:capped],
-            row_count=min(len(rows), capped),
+            rows=rows[:limit],
+            row_count=min(len(rows), limit),
             unreachable=unreachable,
             processes_configured=len(scope.fleet.processes),
             poll_seconds=ops.POLL_SECONDS["usage"],
         )
 
     @app.get("/ops/clients", response_model=UsageResponse)
-    def ops_clients(scope: ScopeOf, limit: OpsLimit = 500) -> UsageResponse:
+    def ops_clients(
+        scope: ScopeOf, limit: int = limits.row_limit(500, settings.max_rows)
+    ) -> UsageResponse:
         """Every client connected to any process in the fleet.
 
         Distinct from `/ops/connections`, which reports the GATEWAY's clients.
@@ -797,11 +851,10 @@ def create_app(
         unreachable, and a second identical model would be two places for one
         idea.
         """
-        capped = max(1, min(limit, settings.max_rows))
         rows, unreachable = ops.merge_process_clients(scope.fleet.per_process(ops.PROCESS_CLIENTS))
         return UsageResponse(
-            rows=rows[:capped],
-            row_count=min(len(rows), capped),
+            rows=rows[:limit],
+            row_count=min(len(rows), limit),
             unreachable=unreachable,
             processes_configured=len(scope.fleet.processes),
             poll_seconds=ops.POLL_SECONDS["connections"],
@@ -922,7 +975,10 @@ def create_app(
 
     @app.get("/services/{target}/files", response_model=RemoteFilesResponse)
     def get_remote_files(
-        request: Request, target: str, path: str = "", limit: int = remote_files.DEFAULT_LIMIT
+        request: Request,
+        target: str,
+        path: str = "",
+        limit: int = limits.row_limit(remote_files.DEFAULT_LIMIT, remote_helper.MAX_LIMIT),
     ) -> RemoteFilesResponse:
         """List one directory under a registered target's deployment root,
         over ssh, with the release's own Python - see remote_files.py.
@@ -936,8 +992,6 @@ def create_app(
                 "operations: set UQF_FRONTEND_ENABLE_WRITES=1 and UQF_FRONTEND_WRITE_TOKEN "
                 "on the server"
             )
-        if not 1 <= limit <= remote_helper.MAX_LIMIT:
-            raise ValidationFailed(f"limit must be between 1 and {remote_helper.MAX_LIMIT}")
         answer = remote_files.browse(
             settings, target, path, limit, runner=request.app.state.remote_runner
         )
@@ -1582,7 +1636,7 @@ def create_app(
         outcome: ActivityOutcome | None = None,
         source: ActivitySource | None = None,
         level: ActivityLevel | None = None,
-        limit: int = activity_log.DEFAULT_LIMIT,
+        limit: int = limits.row_limit(activity_log.DEFAULT_LIMIT, activity_log.MAX_LIMIT),
     ) -> ActivityResponse:
         """The history, newest first, filtered; whether it is being kept, how
         much of each level is, and what was not. `level` is the most
@@ -1624,7 +1678,7 @@ def create_app(
         outcome: ActivityOutcome | None = None,
         source: ActivitySource | None = None,
         level: ActivityLevel | None = None,
-        limit: int = activity_log.EXPORT_DEFAULT,
+        limit: int = limits.row_limit(activity_log.EXPORT_DEFAULT, activity_log.EXPORT_MAX),
     ) -> Response:
         """The history as a file: JSON Lines, CSV, or a timeline a person
         reads (activity_log.render) - oldest first, under the same filters as
