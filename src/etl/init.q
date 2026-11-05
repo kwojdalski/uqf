@@ -51,6 +51,7 @@
 \l src/etl/core/declared.q
 \l src/etl/core/intervals.q
 \l src/etl/core/materialisation.q
+\l src/etl/core/compression.q
 \l src/etl/core/run.q
 \l src/etl/core/config_snapshot.q
 \l src/etl/core/io_manager.q
@@ -126,6 +127,9 @@
 \l src/etl/core/compare.q
 / Every plant table's schema, before any job that publishes or reads one.
 \l src/etl/plant_tables.q
+
+/ How the HDB's tables are compressed, declared against the plant just loaded.
+\l src/etl/compression_policy.q
 
 / The invented market the demo's feeds publish and its jobs consume. Before
 / the core declarations, because a job filters on .qf.demo.pairs.

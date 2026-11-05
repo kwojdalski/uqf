@@ -470,6 +470,19 @@ repos:
         pass_filenames: false
         files: '^src/etl/plant_tables\.q$|^scripts/torqconfig/dataaccess/tableproperties\.csv$|^python/uqs/src/uqs/(generated/q_facts|stack/gateway_access)\.py$|^scripts/generate/derive\.py$'
 
+      - id: compression-config
+        name: Check TorQ's compressionconfig.csv matches the declared compression policy
+        # scripts/torqconfig/compressionconfig.csv is generated (#2152) from
+        # src/etl/compression_policy.q, validated by core/compression.q: a
+        # hand-written CSV would be a second copy of facts that belong to the
+        # datasets. KDB-X only, like q-facts: it FAILS without an interpreter.
+        # To accept an intended change:
+        #   uv run python scripts/generate/derive.py compression-config
+        entry: uv run python scripts/generate/derive.py compression-config --check
+        language: system
+        pass_filenames: false
+        files: '^src/etl/(compression_policy\.q|core/compression\.q|plant_tables\.q)$|^scripts/torqconfig/compressionconfig\.csv$|^scripts/generate/(derive\.py|compression_config\.py|export_compression_config\.q)$'
+
       - id: q-coverage
         name: Check every function a test should reach is reached
         entry: bash

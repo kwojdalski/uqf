@@ -108,7 +108,15 @@ _SOURCE = REPO
 #: no-q branch adds to SKIP, which test_check_kdbx_attestation.py holds equal
 #: in both directions: one skipped there and missing here ran nowhere that was
 #: checked (plant-schema, #1794).
-HOOKS = ("q-tests", "q-coverage", "q-docs", "contract-surface", "q-facts", "plant-schema")
+HOOKS = (
+    "q-tests",
+    "q-coverage",
+    "q-docs",
+    "contract-surface",
+    "q-facts",
+    "plant-schema",
+    "compression-config",
+)
 
 #: The pre-commit CI runs the hooks with: ci.yml's, held equal to it by
 #: `scripts/gates/check.py tool-pins`.

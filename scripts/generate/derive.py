@@ -243,6 +243,20 @@ def _table_properties(args: argparse.Namespace) -> int:
     return settle([rows], check=args.check, hint=_hint("table-properties"))
 
 
+def _compression_config(args: argparse.Namespace) -> int:
+    """scripts/torqconfig/compressionconfig.csv (#2152): TorQ's .cmp policy file,
+    rendered by q from the compression policy declared in
+    src/etl/compression_policy.q. KDB-X only. It refuses, naming the rows, a
+    policy the vendored .cmp would reject on load."""
+    _uqs()
+    config = load("compression_config")
+    return settle(
+        [text(config.OUT, config.render())],
+        check=args.check,
+        hint=_hint("compression-config"),
+    )
+
+
 def _diagrams_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--require",
@@ -410,6 +424,12 @@ TARGETS: dict[str, Target] = {
             "table-properties",
             "getdata's table list, from the plant tables and the workers' datasets",
             _table_properties,
+        ),
+        Target(
+            "compression-config",
+            "scripts/torqconfig/compressionconfig.csv, TorQ's compression policy, from the "
+            "declared policy (needs KDB-X)",
+            _compression_config,
         ),
         Target(
             "diagrams",

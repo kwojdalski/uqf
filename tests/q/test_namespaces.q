@@ -221,6 +221,7 @@
 .qt.qf.util.namespaces.writes_into:(`symbol$())!();
 .qt.qf.util.namespaces.writes_into[`.z]:"q's own handlers (.z.ts, .z.po ...), assigned by the process scripts that need one.";
 .qt.qf.util.namespaces.writes_into[`.servers]:"TorQ's connection settings, set by scripts/processes/torq_tap.q where TorQ reads them.";
+.qt.qf.util.namespaces.writes_into[`.cmp]:"TorQ's compression namespace - scripts/processes/uqs_compression_config.q sets .cmp.inputcsv there before compress.q reads it (#2152).";
 .qt.qf.util.namespaces.writes_into[`.pc]:"scripts/portable/checks/status_intervals.q's own helpers - a check that runs on a 4.0 build and so cannot use the prefix convention's tooling.";
 
 / Private: the top segment of a namespace, `.qpipe.job.cross -> `.qpipe.
