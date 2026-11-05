@@ -170,6 +170,10 @@ DYNAMIC_REVIEWED: dict[str, tuple[str, str]] = {
         "own",
         "a worker's state and the delegates to .qetl.job.bounded.<method> it builds",
     ),
+    "src/etl/core/compression.q": (
+        "data",
+        "a column file and its temp file, read back to check a rewrite",
+    ),
     "src/etl/core/config_audit.q": (
         "job-state",
         "the settings a job registers through .qetl.cfg.audit.watch, and its publish",

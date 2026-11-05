@@ -93,6 +93,15 @@
     .qunit.assertEquals[.qt.qtorq.compress.bytes root;b0];
     ::}
 
+.qt.qtorq.compress.test_plan_of_nothing_old_enough_is_an_empty_typed_table_and_apply_changes_nothing:{[t]
+    root:.qt.qtorq.compress.hdb[];
+    conf:.qt.qtorq.compress.conf[root;enlist "default,36500,default,2,17,6"];
+    p:.qtorq.compress.plan[root;conf;365];
+    .qunit.assertEquals[count p;0;"no file is 36500 days old"];
+    .qunit.assertEquals[(type p`compressed;type p`action);(1h;11h);"the two added columns are typed, not general lists"];
+    .qunit.assertEquals[count .qtorq.compress.apply[root;conf;365];0;"and apply of it changes nothing, rather than throwing 'type"];
+    ::}
+
 .qt.qtorq.compress.test_plan_refuses_where_torqs_compression_is_not_loaded:{[t]
     / the runner's setUp has loaded .cmp for this test; take it away again
     .qt.fixture.torq_cmp.clear[`.cmp];

@@ -52,8 +52,8 @@ adds takes the overlay in `VENDORED_LOAD_OVERLAY` (`stack/procs.py`).
 
 ## The shape
 
-One q dict per table. Keys `algo`, `blocksize`, `level`, `minage` and `columns` ---
-the library that applies a policy reads exactly this.
+One q dict per table. Keys `algo`, `blocksize`, `level`, `minage`, `columns` and
+`mode` --- the library that applies a policy reads exactly this.
 
   | Key         | Meaning                                                                        | Accepted                                                           |
   | ---         | ---                                                                            | ---                                                                |
@@ -62,6 +62,7 @@ the library that applies a policy reads exactly this.
   | `level`     | the algorithm's level                                                          | gzip 0--9; qipc and snappy take none (0)                           |
   | `minage`    | whole days a partition must be old before it is compressed                     | 0 or more                                                          |
   | `columns`   | column to `(algo;blocksize;level)`, for the columns that differ from the table | columns of the table                                               |
+  | `mode`      | *when* it is compressed: see [Write time or age](#write-time-or-age)           | `age` (the default), `write`, `both`                               |
 
 ```q
 stack:`algo`blocksize`level`minage!(2;16;6;7)
@@ -95,6 +96,76 @@ Declaration refuses, naming the key and the range:
 
 Generation refuses a table that is neither a plant table nor a bounded worker's
 dataset, so a misspelt name does not compress nothing and say nothing.
+
+## Write time or age
+
+`mode` is the one choice that is not about *how* a table is compressed but
+*when*. Default `age`, which is what the stack did before it existed.
+
+  | `mode`  | At save (the HDB writer)               | Later (TorQ's `.cmp`, `minage` days on)                          |
+  | ---     | ---                                    | ---                                                              |
+  | `age`   | writes uncompressed                    | compresses the partition                                         |
+  | `write` | compresses with the table's policy     | held out: the generated CSV gives the table `minage` 36500       |
+  | `both`  | compresses with the table's policy     | keeps its rows; finds nothing to do in a partition already done  |
+
+**The trade-off** (KX whitepaper, <https://code.kx.com/q/wp/compress/>).
+Write-time compression spends CPU at the moment of the write --- end of day for
+TorQ, the window finish for a backfill --- and from then on every read of the
+partition inflates blocks. Age-based compression leaves the hot partitions, the
+ones queried at random all day, as fast as they are written, and pays the CPU
+later, in a housekeeping window, once the partition is cold. So: `age` for a
+table that is queried while fresh (the default, and every table this stack
+declares); `write` for a table that is written once, scanned in bulk, and whose
+disk is the constraint; `both` when the writer should compress but a partition
+some other writer left uncompressed must still be caught.
+
+**Never twice.** A partition is compressed once, whoever gets there first:
+
+- The writer applies a policy only to a partition none of whose columns is
+  compressed (`.qetl.compression.for_write` reads `-21!`). A later finish of a
+  compressed partition (another backfill window appended to it) leaves it as it
+  is, even if the policy has changed since: changing a policy re-compresses
+  nothing that exists. To change a partition's algorithm, decompress it (a
+  policy of algorithm 0 through the age pass) and compress again.
+- TorQ's `.cmp` skips a file already compressed, whatever it was compressed
+  with. `.qtorq.compress.plan` shows that as `action = skip`, so `--report` and
+  `--apply` count a `both` partition as done.
+- A `write` table never reaches the age pass. `.cmp` has no row meaning "leave
+  this table alone": algorithm 0 *decompresses* what the writer compressed, so
+  the generated CSV instead gives the table a `minage` of 36500 days, which no
+  partition reaches.
+
+**How the writer does it.** `.qetl.io.finish_parts` (the finish of every bounded
+worker, `flush` included) sorts each partition it wrote --- the one write that
+rewrites every column file --- under `.qetl.compression.with_zd`, which sets
+`.z.zd` to `(blocksize;algo;level)` for the sort and puts it back as it found it
+(unset, or the value an operator set), also when the write fails, because
+`.z.zd` is the process's and a writer that left it set would compress everything
+the process wrote afterwards. A column that declares its own triple is then
+rewritten on its own (`apply_columns`; `-19!` to a temp file, kept only if it
+reads back equal, hash files moved with it). Appending a window to a partition
+is not itself compressed: it happens before the finish, which is where a
+partition is compressed. A later window appended to a partition that is already
+compressed is appended to the compressed files (KDB-X allows it), and its finish
+finds the partition compressed and leaves it so.
+
+A table whose finish rewrites nothing (no `sym` or `time` column and no sort
+rule) has no write to compress under, so it is not compressed at save; give it
+`both` and the age pass catches it.
+
+### Who writes the HDB, and what each does about compression
+
+  | Writer                                                                                            | Compression today                                                                                                                                                                                                                                                                                                              |
+  | ---                                                                                               | ---                                                                                                                                                                                                                                                                                                                            |
+  | `.qetl.io.finish_parts` (`src/etl/core/io_hdb.q`): bounded workers' finish and `flush`            | the policy's `mode`: `write`/`both` compress under `.z.zd`; `age` writes uncompressed                                                                                                                                                                                                                                          |
+  | `.qetl.io.write_hdb` append, `.qetl.io.stage` and `swap` (same file)                              | uncompressed by design; the finish that follows compresses the partition                                                                                                                                                                                                                                                       |
+  | TorQ end of day: wdb `.wdb.endofdaysort`, and the sort workers (`.wdb.setcompression`)            | the process setting `compression` (`lib/torq/config/settings/wdb.q`, `sort.q`), empty here, so uncompressed. One triple for every table: it cannot express a per-table mode, so a `write` table written by end of day stays uncompressed and is not caught by the age pass. Use `both` or `age` for a table end of day writes. |
+  | `uqs data hdb-check --fix` / `scripts/gates/fill_hdb_partitions.q` (KX dbmaint)                   | `set` with `.z.zd` unset: columns it adds are uncompressed, whatever the rest of the partition is; the age pass (`both`, `age`) compresses them later                                                                                                                                                                          |
+  | `uqs data migrate` (`scripts/gates/stage_hdb_migration.q`)                                        | `set` with `.z.zd` unset: the rebuilt partition is uncompressed                                                                                                                                                                                                                                                                |
+  | `scripts/gates/seed_hdb_partitions.q`, `scripts/examples/hdb_transfer_example.q`, `uqs` scaffolds | `set` with `.z.zd` unset: test and example data, uncompressed                                                                                                                                                                                                                                                                  |
+
+No writer in the tree sets `.z.zd` or passes compression parameters to `set`
+except the finish above.
 
 ## What no policy can include
 
