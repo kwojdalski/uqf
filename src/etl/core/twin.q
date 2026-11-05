@@ -126,7 +126,9 @@
         p,:enlist "it writes ",string[ds],", which ",string[job]," does not list among its outputs (",(", " sv string out),
             ") - a twin repairs one of the live job's outputs, even when another table has the same columns; ",
             "point outputs at one of them, or update twin_of"];
-    p,:.qetl.twin.contract_problems[ds;cfg`transform];
+    / guarded: PeachQ's `,:` of () onto a one-string list appends an empty element
+    c:.qetl.twin.contract_problems[ds;cfg`transform];
+    if[count c; p,:c];
     lt:.qetl.twin.live_transform[live];
     if[(cfg[`twin_calculation]=`shared) and not lt=cfg`transform;
         p,:enlist "it promises a shared calculation (twin_calculation `shared) but ",
@@ -146,7 +148,8 @@
     if[not dataset in .qetl.plant.names[];
         :enlist string[dataset]," is not a plant table, so there is no dataset contract to hold the twin's transform to"];
     s:.qetl.transform.output_schema transform;
-    .qetl.plant.problems[dataset;(cols[s] except `time)#s]}
+    r:.qetl.plant.problems[dataset;(cols[s] except `time)#s];
+    r where 0<count each r}
 
 / Check one declared twin against its live job, or refuse it. A twin with no
 / shared transform passes and is logged as not established.
