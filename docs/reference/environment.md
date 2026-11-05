@@ -332,6 +332,32 @@ not apply: on PeachQ a start is held to no connection budget, `uqs profile list`
 shows `no cap`, and monitor1 watches every process. `UQS_LICENCE_CONNECTIONS`,
 if set, still wins.
 
+### PeachQ and file compression
+
+What HDB compression (#2146-#2152) needs from q, measured on the pinned build
+and KDB-X 4.x on macOS arm64 (#2153). `tests/q/test_compression_primitives.q`
+pins each row. Its PeachQ failures are in `tests/q/peachq_known_gaps.txt`, so
+compression tests run on KDB-X only.
+
+  | Primitive                                                  | KDB-X                                                    | Pinned PeachQ                                                      |
+  | ---------------------------------------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------ |
+  | `-19!` compress a file                                     | algorithms 0-5; 3-5 need libsnappy, liblz4 or libzstd    | `'nyi` for every algorithm, block size and level                   |
+  | `(file;blocksize;algo;level) set v`                        | algorithms 0-5                                           | algorithms 0 and 2 (gzip) only. 1, 3, 4 and 5 throw `'nyi`         |
+  | `.z.zd:(blocksize;algo;level)` as the default for `set`    | yes, for a vector, a splayed table and a partition       | yes, for gzip only                                                 |
+  | `.z.zd` as a column dictionary                             | yes                                                      | ignored: every column is written plain                             |
+  | malformed `.z.zd`                                          | `set` is refused                                         | ignored: the file is written plain                                 |
+  | `-21!` inspect a file                                      | yes; an empty dictionary for a plain file                | yes, for its own files                                             |
+  | read a compressed column with `get` or a splayed table     | yes; it is mapped (`.Q.w[]` counts it as `mmap`)         | yes, but read onto the heap, not mapped                            |
+  | `select` on a compressed partitioned HDB                   | yes                                                      | no: `\l` of any partitioned database defines no table              |
+  | `s#` on a compressed column                                | kept                                                     | kept                                                               |
+  | `p#` on a compressed column                                | kept                                                     | dropped, as on a plain one                                         |
+  | a bad algorithm, level or block size                       | refused, naming the value and the file                   | bare `'nyi` (algorithm) or `'domain` (level, block size)           |
+  | read the other's compressed file                           | one block: yes. More: `'bad logicalBlockSize`            | one block: yes. More: `'corrupt`                                   |
+
+Two facts hold on both. The smallest block size is the page size: 2^12 on Linux
+x86-64, but 2^14 on macOS arm64, where 12 and 13 are refused. And the
+enumeration domain that `.Q.en` writes stays plain under `.z.zd`.
+
 ## Prerequisites, not configuration
 
 `QHOME` must point at a real q installation (`~/.kx` for KDB-X, the preferred
