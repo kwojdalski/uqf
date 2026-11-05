@@ -101,7 +101,7 @@ start only when named: `uqs start mock_ticks1 mock_mids1`.
 Scaffold it into the bundle, then implement what the scaffold leaves failing:
 
 ```bash
-uqs job new mock_quotes --publishes mock_quotes \
+uqs job new mock_quotes --outputs mock_quotes \
     --columns "source_time:timestamp, sym:symbol, px:float" --bundle sidecars/mockups --dry-run
 ```
 

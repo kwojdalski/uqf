@@ -499,7 +499,7 @@ def test_coverage_requires_a_partition(client):
     """
     resp = client.get("/coverage", params={"dataset": "trades", "source_version": "v1"})
     assert resp.status_code == 422
-    assert any(d["loc"][-1] == "partition" for d in resp.json()["detail"])
+    assert any(d["loc"][-1] == "partition" for d in resp.json()["errors"])
 
 
 def test_the_empty_partition_is_the_sentinel_not_a_wildcard(client_for):
@@ -662,6 +662,6 @@ def test_a_query_with_an_unknown_key_is_refused_rather_than_read_without_it(gw, 
     c = TestClient(create_app(gateway=gw))
     resp = c.post("/query", json=body)
     assert resp.status_code == 422, resp.text
-    extra = [e for e in resp.json()["detail"] if e["type"] == "extra_forbidden"]
+    extra = [e for e in resp.json()["errors"] if e["type"] == "extra_forbidden"]
     assert [tuple(e["loc"]) for e in extra] == [("body", *loc)]
     assert gw.routed == [], "nothing reached the gateway"

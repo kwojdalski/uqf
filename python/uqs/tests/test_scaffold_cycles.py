@@ -57,7 +57,7 @@ def test_job_new_refuses_the_cycle_before_writing(monkeypatch):
         raise SystemExit(1)
 
     monkeypatch.setattr(create, "_die", record)
-    argv = ["job", "new", "loopy", "--subscribe-to", "executions", "--publishes", "trades",
+    argv = ["job", "new", "loopy", "--subscribe-to", "executions", "--outputs", "trades",
             "--unprofiled", "probe", "--dry-run"]  # fmt: skip
     result = CliRunner().invoke(cli.app, argv)
     assert result.exit_code == 1

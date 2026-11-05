@@ -99,7 +99,7 @@ def job_rows(repo_root: Path) -> list[dict[str, Any]]:
                     # No process of its own: it runs in whichever publishes.
                     "procname": ", ".join(producers.get(r.dataset, [])) or Shown(None, "-"),
                     "reads": [r.dataset],
-                    "writes": list(r.writes),
+                    "writes": list(r.outputs),
                     "starts": "triggered",
                     "state": "scaffolded" if SCAFFOLD_MARKER in text else "written",
                     "file": str(path.relative_to(repo_root)),

@@ -102,7 +102,7 @@ one place, `python/uqs/src/uqs/scaffold/columns.py`. A test holds it to the
 When the new table is shaped like one the plant already has, copy it instead:
 
 ```bash
-uqs job new spread2 --subscribe-to quote --publishes spread2 --schema-from fx_orderbook
+uqs job new spread2 --subscribe-to quote --outputs spread2 --schema-from fx_orderbook
 ```
 
 `--schema-from TABLE` takes that table's columns exactly, attributes included,

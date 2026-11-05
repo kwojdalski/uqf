@@ -280,7 +280,7 @@ def test_a_lifecycle_request_without_procs_is_refused_not_read_as_all(writeable,
     resp = writeable.post("/control/process/stop", json=body)
     assert resp.status_code == 422, resp.text
     assert called == []
-    locs = [tuple(e["loc"]) for e in resp.json()["detail"]]
+    locs = [tuple(e["loc"]) for e in resp.json()["errors"]]
     assert ("body", "procs") in locs, "the refusal names the missing field"
 
 
@@ -311,7 +311,7 @@ def test_a_control_request_with_an_unknown_key_is_refused(
     resp = getattr(writeable, method)(path, json={**body, "stale": "x"})
     assert resp.status_code == 422, resp.text
     assert called == []
-    (error,) = resp.json()["detail"]
+    (error,) = resp.json()["errors"]
     assert error["type"] == "extra_forbidden"
     assert tuple(error["loc"]) == ("body", "stale")
 

@@ -8,7 +8,7 @@
 / example script points .qetl.io.default at a second HDB directory.
 / .
 / Scaffolded with:
-/   uqs job new hdb_transfer --kind backfill --transport local --dataset trades_copy \
+/   uqs job new hdb_transfer --kind backfill --transport local --outputs trades_copy \
 /       --columns 'trade_id:long,sym:symbol,price:float,size:long,side:symbol,notional:float'
 
 \d .
