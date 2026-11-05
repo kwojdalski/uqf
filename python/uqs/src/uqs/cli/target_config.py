@@ -67,14 +67,14 @@ PushArg = Annotated[
     ),
 ]
 HistoryJson = json_opt(
-    '{"target", "root", "pushes": [{push_id, kind, restores, created, closed, user, via, '
-    "destination, declared, file_count, total_bytes, states, reported_count, error}], "
+    '{"target", "dest", "pushes": [{push_id, kind, restores, created, closed, user, via, '
+    "config_dir, declared, file_count, total_bytes, states, reported_count, error}], "
     'newest first, "total", '
     '"truncated", "pruned": [{push_id, why, pruned_at}]}'
 )
 ShowJson = json_opt(
-    '{"target", "root", "summary", "push": {push_id, kind, restores, created, closed, user, '
-    "via, destination, declared, reported, files: [{path, action, size, sha256, "
+    '{"target", "dest", "summary", "push": {push_id, kind, restores, created, closed, user, '
+    "via, config_dir, declared, reported, files: [{path, action, size, sha256, "
     "previous_size, previous_sha256, state, error, now}]}}"
 )
 DiffJson = json_opt(
@@ -134,7 +134,7 @@ def history(
             or (
                 f"restore of {p.get('restores')}"
                 if p.get("kind") == "restore"
-                else f"push to {p.get('destination')}"
+                else f"push to {p.get('config_dir')}"
             ),
             "files": p.get("file_count"),
             "bytes": p.get("total_bytes"),
@@ -150,7 +150,7 @@ def history(
         return
     _export(rows, export)
     if as_json:
-        emit({k: answer[k] for k in ("root", "pushes", "total", "truncated", "pruned")}
+        emit({k: answer[k] for k in ("dest", "pushes", "total", "truncated", "pruned")}
              | {"target": name})  # fmt: skip
         return
     if not rows:
@@ -185,16 +185,16 @@ def show(name: TargetArg, push_id: PushArg, as_json: ShowJson = False) -> None:
     answer = _call(lambda r: remote_files.history_show(r, name, push_id, runner=RUNNER), name)
     manifest = answer["manifest"]
     if as_json:
-        emit({"target": name, "root": answer["root"], "summary": answer["summary"],
+        emit({"target": name, "dest": answer["dest"], "summary": answer["summary"],
               "push": {k: v for k, v in manifest.items() if k != "version"}})  # fmt: skip
         return
     kind = manifest["kind"] + (f" of {manifest['restores']}" if manifest["restores"] else "")
-    # every value here is held by the server, and the destination, user and
+    # every value here is held by the server, and the config_dir, user and
     # via came from whoever opened the push: printed literally, never as
     # rich markup (#2025)
     console.print(
         escape(
-            f"push {push_id} ({kind}) to {manifest['destination']} by "
+            f"push {push_id} ({kind}) to {manifest['config_dir']} by "
             f"{manifest.get('user') or 'unknown'} via {manifest.get('via') or '?'}, "
             f"opened {manifest['created']}, closed {manifest.get('closed') or 'never'}"
         )
