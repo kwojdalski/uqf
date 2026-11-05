@@ -378,10 +378,8 @@ def test_housekeeping1_points_cmp_at_the_policy_before_and_loads_the_wrapper_aft
     upstream = {r["procname"]: r["load"] for r in csv.DictReader(io.StringIO(vendored))}
     composed = {r["procname"]: r for r in stack_procs.effective_process_rows(real)}
     load = composed["housekeeping1"]["load"].split()
-    assert load[:2] == [
-        "${UQF_SCRIPTS}/processes/uqs_compression_config.q",
-        upstream["housekeeping1"],
-    ]
+    config = load.index("${UQF_SCRIPTS}/processes/uqs_compression_config.q")
+    assert config < load.index(upstream["housekeeping1"]), ".cmp.inputcsv is set before"
     order = [
         load.index(f"${{UQF_SCRIPTS}}/processes/{f}")
         for f in (

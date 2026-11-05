@@ -50,6 +50,13 @@ CMP_PROCESS_LOAD = (
 )
 
 
+def with_cmp(
+    load: tuple[tuple[str, ...], tuple[str, ...]],
+) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """housekeeping1's other (before, after) overlay, with CMP_PROCESS_LOAD's added."""
+    return (load[0] + CMP_PROCESS_LOAD[0], load[1] + CMP_PROCESS_LOAD[1])
+
+
 def target(paths: UqsPaths) -> Path:
     """The copy `.cmp` is pointed at, beside the other generated files."""
     return paths.torqdata / COMPRESSION_CONFIG.name

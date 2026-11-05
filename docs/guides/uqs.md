@@ -990,6 +990,16 @@ HDB, and started without them it exits at startup, before it reads or empties
 anything - so expect it shown down. Composing `essential` with a job profile -
 `--profile essential,fx` - starts both sets.
 
+**`housekeeping1` keeps tickerplant logs replayable.** On a runtime with this
+tree's overlays it doesn't read the site's `appconfig/housekeeping.csv`, which
+tars tickerplant log directories a day after they are written, into a form
+replay cannot read. It reads `housekeeping.csv` in the data directory, which
+bootstrap writes on every start (`python/uqs/src/uqs/stack/housekeeping.py`).
+Process logs are kept as the starter pack keeps them. A tickerplant log
+directory is left exactly as written for `TPLOG_REPLAY_RETENTION_DAYS` (7) days,
+then gzipped, and only on Linux, where TorQ's replay reads a gzipped log. No
+rule deletes or tars a tickerplant log.
+
 **TorQ discovers only what the profile started.** `process.csv` still lists
 every process, but TorQ's discovery would hand all of them out, so under
 `essential` `sort1` would keep retrying `sortworker2`'s port. A profile start
