@@ -5,9 +5,10 @@ written as TorQ's wdb leaves a partition (sorted by sym then time, `p#sym`)
 with `px` and `qty` compressed, one day whose rows are out of order and carry
 no attribute, and one in order without `p#`. The command then runs as an
 operator runs it, through the CLI, against TorQ's own sort.csv and `.cmp`, and
-the files are compared byte for byte afterwards. KDB-X only: PeachQ has no
-`-19!`/compressed `set` for these algorithms (#2153), so each case is in
-python/peachq_known_gaps.txt.
+the files are compared byte for byte afterwards. The compressed columns are
+gzip, written by `set` with a compression triple, so the cases run on PeachQ
+too (#2153) - all but the one that lists every column, since PeachQ keeps `p#`
+in a side file TorQ's walker counts as a column (python/peachq_known_gaps.txt).
 """
 
 from __future__ import annotations
@@ -35,12 +36,10 @@ day:{[n;in_order;with_attr]
 put:{[r;d;t] (` sv r,(`$string d),`trade`) set .Q.en[r] t};
 days:2026.01.01+til 4;
 {[r;d;o;a] put[r;d;day[o;a]]}[r]'[days;1101b;1100b];
-/ px with gzip, qty with q IPC, on the two oldest days only: -19! beside, then renamed over
-cmp:{[r;d;c;a]
-    f:1_string ` sv r,(`$string d),`trade,c;
-    -19!(hsym `$f;hsym `$f,"_z";17;a;$[a=2;6;0]);
-    system "mv ",f,"_z ",f};
-cmp[r]'[days 0 0 1 1;`px`qty`px`qty;2 1 2 1];
+/ px at gzip level 6, qty at level 1, on the two oldest days only - a set with a
+/ compression triple, the one way PeachQ writes a compressed file (#2153)
+{[r;d;c;lvl] f:` sv r,(`$string d),`trade,c; v:get f; hdel f; (f;17;2;lvl) set v}[r]'[
+    days 0 0 1 1;`px`qty`px`qty;6 1 6 1];
 exit 0
 """
 
@@ -82,7 +81,7 @@ def test_the_report_reads_each_columns_compression_and_names_the_unsorted_partit
     cols = {c["column"]: c for c in doc["columns"]}
     assert set(cols) == {"sym", "time", "px", "qty"}
     assert (cols["px"]["files"], cols["px"]["compressed"]) == (4, 2)
-    assert sorted(cols["px"]["algos"]) == [0, 2] and sorted(cols["qty"]["algos"]) == [0, 1]
+    assert sorted(cols["px"]["algos"]) == [0, 2] and sorted(cols["qty"]["algos"]) == [0, 2]
     assert cols["px"]["blocksizes"] == [17]
     assert cols["px"]["compressed_ratio"] > 50, "a constant column shrinks by orders of magnitude"
     assert cols["sym"]["compressed"] == 0 and cols["sym"]["compressed_ratio"] is None
