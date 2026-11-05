@@ -35,6 +35,17 @@ those. Before, the process name was read four times in three files, each
 with its own fallback, and nothing stopped a fifth. TorQ stays the authority;
 this only says where src/ asks it.
 
+Every OTHER namespace TorQ defines is refused in src/ outright (#2156): no
+file under src/ may know TorQ exists beyond those three reads. The set is
+derived from TorQ itself - every `\\d .ns` and every `.ns.name` definition
+under lib/torq/code and lib/torq/torq.q - not typed out here, because a
+hand-kept list of the owned namespaces is how `.cmp`, `.hk`, `.dotz` and `.wdb`
+went unguarded, and it would fall behind again the next time TorQ is updated.
+What is let through is explicit and carries its reason: the namespaces q
+itself reserves (TorQ only adds to them), and the remote calls in
+TORQ_REMOTE_CALLS, each a symbol sent down a handle to a TorQ process rather
+than a read of TorQ in this one.
+
 The fourth rule is about outbound HTTP (#988). Under src/etl/ the one place
 that speaks it is src/etl/core/webhook.q: `.Q.hp`, `.Q.hg`, `.Q.hmb`, `.Q.hap`
 and a `:http(s):// address are refused everywhere else. A declaration that owned
@@ -54,6 +65,7 @@ from __future__ import annotations
 import argparse
 import re
 import sys
+from collections.abc import Iterator
 from pathlib import Path
 
 # parents[2], not parent.parent: this file sits one level deeper since
@@ -80,9 +92,71 @@ TORQ_OWNERS = {
     ".proc": "src/etl/core/run.q",
 }
 
+#: The vendored TorQ, read only to learn which namespaces it defines.
+TORQ = REPO / "lib" / "torq"
+
+#: A namespace TorQ defines: `\d .cmp`, or a definition such as
+#: `.hk.rmfiles:{...}` written from the root at the start of a line.
+TORQ_DEF_RE = re.compile(
+    r"^(?:\\d[ \t]+(\.[A-Za-z][A-Za-z0-9_]*)\b|(\.[A-Za-z][A-Za-z0-9_]*)\.[A-Za-z_])",
+    re.MULTILINE,
+)
+
+#: Namespaces TorQ defines names in that are not TorQ's. q reserves every
+#: single-letter namespace for itself; TorQ adds to them, but src/ using one
+#: is using q, not TorQ.
+NOT_TORQ = {
+    ".h": "kdb+'s own HTTP/markup namespace; TorQ only adds helpers to it",
+}
+
+#: TorQ API src/ names on purpose, outside any owner: (file, namespace) ->
+#: why. Each is a function name sent down an open handle to a TorQ process -
+#: the wire contract of a stack src/ talks to - so it needs no TorQ loaded in
+#: the calling process. An entry nothing uses any more is reported, so the
+#: list cannot outlive its reason.
+TORQ_REMOTE_CALLS = {
+    ("src/etl/core/compare.q", ".gw"): (
+        "reads each side's schema through the gateway's .gw.syncexec, over the handle "
+        "the comparison opened to that side's gateway"
+    ),
+    ("src/etl/core/verify_complete.q", ".dataaccess"): (
+        "the destination reader asks the gateway's .dataaccess.getdata, the entry point "
+        "the query policies (docs/architecture/query-policies.md) apply to"
+    ),
+}
+
+
+def torq_namespaces(torq: Path = TORQ) -> frozenset[str]:
+    """Every namespace TorQ defines under `torq`'s code/ and torq.q, less NOT_TORQ.
+
+    Whole-line comments are skipped: a definition behind `/` is not one.
+    """
+    found: set[str] = set()
+    sources = [*sorted((torq / "code").rglob("*.q")), torq / "torq.q"]
+    for path in sources:
+        if not path.is_file():
+            continue
+        text = "\n".join(
+            "" if line.lstrip().startswith("/") else line
+            for line in path.read_text(encoding="utf-8", errors="replace").splitlines()
+        )
+        for cd, defined in TORQ_DEF_RE.findall(text):
+            found.add(cd or defined)
+    return frozenset(found - NOT_TORQ.keys())
+
+
+#: What src/ may not read except through an owner: TorQ's namespaces, plus the
+#: owned ones in case the vendored tree is ever missing one of them.
+TORQ_NAMESPACES = torq_namespaces() | TORQ_OWNERS.keys()
+
 #: A reference to one of them: `.lg.l`, `` `.proc ``. Not `.qetl.run.proc_name`
-#: or `.foo.lg.x`, where the name is a segment of another namespace.
-TORQ_RE = re.compile(r"(?<![\w.])(" + "|".join(re.escape(ns) for ns in TORQ_OWNERS) + r")\b")
+#: or `.foo.lg.x`, where the name is a segment of another namespace. Longest
+#: first, so `.dqc` is not read as `.dq`.
+TORQ_RE = re.compile(
+    r"(?<![\w.])("
+    + "|".join(re.escape(ns) for ns in sorted(TORQ_NAMESPACES, key=lambda n: (-len(n), n)))
+    + r")\b"
+)
 
 #: The one file under src/etl/ allowed to speak HTTP, and what speaking it looks like.
 HTTP_OWNER = "src/etl/core/webhook.q"
@@ -174,18 +248,35 @@ def strip_comments_and_strings(text: str) -> str:
     return "\n".join(out_lines)
 
 
-def torq_reach(root: Path) -> list[str]:
-    """Every read of a TorQ namespace in `root`'s src/ outside its owner file."""
-    hits = []
+def _torq_reads(root: Path) -> Iterator[tuple[str, int, str]]:
+    """(file, line number, namespace) for every TorQ name in `root`'s src/ code."""
     for path in sorted((root / "src").rglob("*.q")):
         rel = path.relative_to(root).as_posix()
         code = strip_comments_and_strings(path.read_text(encoding="utf-8"))
         for lineno, line in enumerate(code.splitlines(), 1):
             for match in TORQ_RE.finditer(line):
-                ns = match.group(1)
-                if TORQ_OWNERS[ns] != rel:
-                    hits.append(f"{rel}:{lineno}: reads {ns} - only {TORQ_OWNERS[ns]} may")
+                yield rel, lineno, match.group(1)
+
+
+def torq_reach(root: Path) -> list[str]:
+    """Every read of a TorQ namespace in `root`'s src/ that is not allowed:
+    an owned one outside its owner file, any other one outside TORQ_REMOTE_CALLS.
+    """
+    hits = []
+    for rel, lineno, ns in _torq_reads(root):
+        owner = TORQ_OWNERS.get(ns)
+        if owner is not None:
+            if owner != rel:
+                hits.append(f"{rel}:{lineno}: reads {ns} - only {owner} may")
+        elif (rel, ns) not in TORQ_REMOTE_CALLS:
+            hits.append(f"{rel}:{lineno}: reads {ns}, a TorQ namespace - src/ may not know TorQ")
     return hits
+
+
+def unused_remote_calls(root: Path) -> list[str]:
+    """Every TORQ_REMOTE_CALLS entry `root`'s src/ no longer makes."""
+    made = {(rel, ns) for rel, _, ns in _torq_reads(root)}
+    return [f"{rel}: {ns}" for rel, ns in sorted(TORQ_REMOTE_CALLS) if (rel, ns) not in made]
 
 
 def http_reach(root: Path) -> list[str]:
@@ -243,6 +334,26 @@ def main() -> int:
     if absent:
         print(f"error: TorQ owner file(s) missing: {', '.join(absent)}", file=sys.stderr)
         return 1
+    derived = torq_namespaces()
+    unknown = sorted(set(TORQ_OWNERS) - derived)
+    if not derived or unknown:
+        print(
+            f"error: lib/torq defines {len(derived)} namespace(s), and not the owned "
+            f"{', '.join(unknown) or '(none)'} - has the vendored TorQ moved? refusing to "
+            "report success over a set that no longer describes it.",
+            file=sys.stderr,
+        )
+        return 1
+    stale = unused_remote_calls(REPO)
+    if stale:
+        print("TORQ_REMOTE_CALLS allows calls src/ no longer makes:", file=sys.stderr)
+        for v in stale:
+            print(f"  {v}", file=sys.stderr)
+        print(
+            "\nRemove the entry: an allowance with no call is one waiting to be misused.",
+            file=sys.stderr,
+        )
+        return 1
     torq_hits = torq_reach(REPO)
     if torq_hits:
         print("src/ reads a TorQ facility outside the file that owns it:", file=sys.stderr)
@@ -250,7 +361,9 @@ def main() -> int:
             print(f"  {v}", file=sys.stderr)
         print(
             "\n#619: go through the owner - .qetl.log for logging, .qetl.job.bounded.runtime\n"
-            "for connected services, .qetl.run.proc_name for this process's name.",
+            "for connected services, .qetl.run.proc_name for this process's name.\n"
+            "#2156: any other TorQ namespace stays out of src/ - TorQ's own machinery\n"
+            "(.cmp, .hk, .wdb, ...) is driven from scripts/ and the TorQ config overlay.",
             file=sys.stderr,
         )
         return 1
@@ -286,7 +399,9 @@ def main() -> int:
     print(
         f"check_etl_layering: {len(list(CORE.glob('*.q')))} core file(s) depend on none "
         f"of the {len(declared)} declaring namespace(s); nothing under src/etl/ calls "
-        f"{ADAPTER_NS}; each of {', '.join(TORQ_OWNERS)} is read only by its owner file; "
+        f"{ADAPTER_NS}; each of {', '.join(TORQ_OWNERS)} is read only by its owner file "
+        f"and no other of TorQ's {len(derived)} namespace(s) is read beyond "
+        f"{len(TORQ_REMOTE_CALLS)} allowed remote call(s); "
         f"HTTP only in {HTTP_OWNER}"
     )
     return 0
