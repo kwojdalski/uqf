@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from uqf_frontend.instants import AwareInstant, to_datetime
 from uqf_frontend.limits import limit_field
@@ -337,6 +337,11 @@ class BackfillStatusResponse(BaseModel):
 # ------------------------------------------------------------------ services
 
 
+#: A target's deployment root, named as uqs names it (#2107): `Config.dest`,
+#: which uqs normalises as this is, without a trailing `/`.
+DEST = "the target's deployment root: its registry `dest`, without a trailing /"
+
+
 class DeployedOut(BaseModel):
     """The release last deployed to a target from this workstation."""
 
@@ -345,9 +350,10 @@ class DeployedOut(BaseModel):
 
 
 class ServiceTargetOut(BaseModel):
-    """One deployment target, as `uqs target list --json` lists it."""
+    """One deployment target, as `uqs target list --json` lists it: the same
+    keys (#2107)."""
 
-    name: str
+    target: str
     ssh: str = Field(description="the ssh destination, user@host - never contacted to list it")
     dest: str = Field(description="the deployment root on that server")
     remote_user: str | None
@@ -375,7 +381,7 @@ class ServicesResponse(BaseModel):
     source: str = Field(description="the deploy_targets.toml that was read, or would be")
     declared: bool = Field(description="whether that file exists")
     invalid: str | None = None
-    remote_operations_enabled: bool = Field(
+    writes_enabled: bool = Field(
         description="whether an action reaching a server could run here: "
         "UQF_FRONTEND_ENABLE_WRITES, with its token. Listing never reaches one"
     )
@@ -384,9 +390,11 @@ class ServicesResponse(BaseModel):
 
 class WorkspaceOut(BaseModel):
     """One workspace the browser may select (#2029): `local`, this API's own
-    stack, or a target the uqs registry declares (workspaces.py)."""
+    stack, or a target the uqs registry declares (workspaces.py). `target`
+    as in WorkspaceResponse and the x-uqf-target header: `local` is a name
+    the registry reserves (#2107)."""
 
-    name: str
+    target: str
     kind: Literal["local", "target"]
     connection: Literal["direct", "ssh tunnel"] = Field(
         description="how this API reaches it: its own stack directly, or a target "
@@ -429,7 +437,7 @@ class WorkspaceResponse(BaseModel):
     target: str
     connection: Literal["direct", "ssh tunnel"]
     access: Literal["read-only", "read-write"]
-    host: str | None = Field(description="the target's ssh host; None for local")
+    ssh: str | None = Field(description="the target's ssh destination; None for local")
     endpoints: list[WorkspaceEndpointOut]
     poll_seconds: int
 
@@ -539,7 +547,7 @@ class RemoteFilesResponse(BaseModel):
     """GET /services/{target}/files: one directory under a deployment root."""
 
     target: str
-    root: str = Field(description="the target's deployment root, from the registry")
+    dest: str = Field(description=DEST)
     path: str = Field(description="the directory listed, relative to the root; empty is the root")
     parent: str | None = Field(description="the parent directory's path; null at the root")
     entries: list[RemoteEntryOut]
@@ -553,7 +561,7 @@ class RemoteUploadResponse(BaseModel):
     target's shared/config, published in one atomic step (#1951)."""
 
     target: str
-    root: str = Field(description="the target's deployment root, from the registry")
+    dest: str = Field(description=DEST)
     path: str = Field(description="the file written, relative to the root")
     size: int = Field(description="bytes written")
     sha256: str = Field(description="of the bytes written, as the server checked them")
@@ -576,9 +584,20 @@ class ConfigPushOpenRequest(BaseModel):
     """POST /services/{target}/config/pushes: what the operator confirmed."""
 
     model_config = STRICT_REQUEST
-    destination: str = Field(description="the directory pushed to, relative to the root")
+    config_dir: str = Field(description="the directory pushed to, relative to dest")
     file_count: int = Field(ge=0, le=500)
     total_bytes: int = Field(ge=0)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _renamed(cls, data: Any) -> Any:
+        """`destination` read as `dest`, the deployment root it is under."""
+        if isinstance(data, dict) and "destination" in data:
+            raise ValueError(
+                "`destination` is now `config_dir`: the directory pushed to, "
+                "relative to the target's `dest` (#2107)"
+            )
+        return data
 
 
 class PrunedPushOut(BaseModel):
@@ -594,7 +613,7 @@ class PrunedPushOut(BaseModel):
 
 class ConfigPushOpenResponse(BaseModel):
     target: str
-    root: str
+    dest: str = Field(description=DEST)
     push_id: str = Field(description="every upload of this push names it")
     pruned: list[PrunedPushOut]
     max_kept: int = Field(description="the newest pushes the history keeps")
@@ -673,7 +692,7 @@ class ConfigPushSummaryOut(BaseModel):
     user: str | None = None
     target: str | None = None
     via: str | None = None
-    destination: str | None = None
+    config_dir: str | None = None
     declared: dict[str, int] | None = None
     file_count: int | None = None
     total_bytes: int | None = None
@@ -688,7 +707,7 @@ class ConfigHistoryResponse(BaseModel):
     """GET /services/{target}/config/pushes: newest first."""
 
     target: str
-    root: str
+    dest: str = Field(description=DEST)
     pushes: list[ConfigPushSummaryOut]
     total: int
     truncated: bool
@@ -711,7 +730,7 @@ class ConfigPushOut(BaseModel):
     user: str | None
     target: str | None
     via: str | None
-    destination: str
+    config_dir: str
     declared: dict[str, int]
     reported: list[ConfigPushReportedOut]
     files: list[ConfigPushFileOut]
@@ -721,7 +740,7 @@ class ConfigPushResponse(BaseModel):
     """GET /services/{target}/config/pushes/{push_id}, and a push closed."""
 
     target: str
-    root: str
+    dest: str = Field(description=DEST)
     summary: ConfigPushSummaryOut
     push: ConfigPushOut
 
@@ -743,7 +762,7 @@ class ConfigDiffFileOut(BaseModel):
 
 class ConfigDiffResponse(BaseModel):
     target: str
-    root: str
+    dest: str = Field(description=DEST)
     push_id: str
     diff_cap: int = Field(description="the largest file diffed as text, in bytes")
     files: list[ConfigDiffFileOut]
@@ -777,7 +796,7 @@ class ConfigRestoreResponse(BaseModel):
     of its own, `push_id`, so it can be restored in turn."""
 
     target: str
-    root: str
+    dest: str = Field(description=DEST)
     restores: str = Field(description="the push this restore undoes, as its manifest names it")
     dry_run: bool
     push_id: str | None
@@ -960,7 +979,7 @@ class RemoteDeleteResult(BaseModel):
 
 class RemoteDeleteResponse(BaseModel):
     target: str
-    root: str
+    dest: str = Field(description=DEST)
     results: list[RemoteDeleteResult]
 
 

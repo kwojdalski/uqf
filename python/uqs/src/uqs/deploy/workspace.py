@@ -87,7 +87,7 @@ class Connection:
         """The connection as JSON: no credential, nothing secret."""
         return {
             "target": self.target,
-            "host": self.host,
+            "ssh": self.host,
             "endpoints": [
                 {
                     "process": e.process,

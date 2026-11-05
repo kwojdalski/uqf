@@ -32,7 +32,7 @@ function file(name: string, body = "a,b\n", relative?: string): File {
 function answer(path: string, over: Partial<RemoteUpload> = {}): RemoteUpload {
   return {
     target: "prod-a",
-    root: "/srv/uqf",
+    dest: "/srv/uqf",
     path,
     size: 4,
     sha256: "0".repeat(64),
@@ -50,19 +50,19 @@ const PUSH = "20261104T103442123Z-9aa36609";
 
 /** Push calls that record what they were asked, opening PUSH. */
 function fakePushes(open?: () => Promise<never>, closeFails = false) {
-  const opened: { target: string; destination: string; files: number }[] = [];
+  const opened: { target: string; config_dir: string; files: number }[] = [];
   const closed: { push: string; reported: ConfigPushReport[] }[] = [];
   const pushes: PushOps = {
     open: (target, body) => {
       opened.push({
         target,
-        destination: body.destination,
+        config_dir: body.config_dir,
         files: body.file_count,
       });
       if (open) return open();
       return Promise.resolve({
         target,
-        root: "/srv/uqf",
+        dest: "/srv/uqf",
         push_id: PUSH,
         pruned: [],
         max_kept: 50,
@@ -117,7 +117,7 @@ function panel(
   render(
     <UploadPanel
       target="prod-a"
-      root="/srv/uqf"
+      dest="/srv/uqf"
       directory={directory}
       onUploaded={onUploaded}
       uploader={uploader}
@@ -577,7 +577,7 @@ it("appears in the browser below shared/config and refreshes the listing after",
   };
   const listing = (path: string): RemoteFiles => ({
     target: "prod-a",
-    root: "/srv/uqf",
+    dest: "/srv/uqf",
     path,
     parent: path ? path.split("/").slice(0, -1).join("/") : null,
     entries: (children[path] ?? []).map((name) => ({
@@ -641,7 +641,7 @@ it("opens one push on confirming, names it on every file, and closes it with wha
   await confirm();
   await vi.waitFor(() => expect(closed).toHaveLength(1));
   expect(opened).toEqual([
-    { target: "prod-a", destination: "shared/config", files: 3 },
+    { target: "prod-a", config_dir: "shared/config", files: 3 },
   ]);
   expect(calls.map((c) => c.push)).toEqual([PUSH, PUSH, PUSH]);
   expect(calls).toHaveLength(3); // the uncertain one is not retried
@@ -687,7 +687,7 @@ it("honours a cancel pressed while the push is being opened: nothing is sent, an
       await gate;
       return {
         target,
-        root: "/srv/uqf",
+        dest: "/srv/uqf",
         push_id: PUSH,
         pruned: [],
         max_kept: 50,

@@ -259,12 +259,12 @@ DETAIL_KEYS: dict[str, Callable[[object], bool]] = {
     "content_type": _is_name,
     "item_count": _is_count,
     # config pushes (#2002): the push a file belongs to, the hash of what it
-    # replaced (None on create), the push a restore undoes, the destination
-    # directory, and how many old pushes retention pruned - never content
+    # replaced (None on create), the push a restore undoes, the directory
+    # pushed to (config_dir), and how many old pushes retention pruned - never content
     "push_id": _is_push_id,
     "previous_sha256": _is_hex_or_none,
     "restores": _is_push_id,
-    "destination": _is_name,
+    "config_dir": _is_name,
     "pruned_count": _is_count,
     # interactions (#2000): what kind of control, and a toggle's new state -
     # never what was typed into it

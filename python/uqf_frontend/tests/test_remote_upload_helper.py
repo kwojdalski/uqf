@@ -58,7 +58,7 @@ def _open_push(root: Path) -> str:
     """A push for one upload (#2002): every upload belongs to one."""
     push_id = remote_files.new_push_id()
     handle({"protocol": 1, "op": "push_open", "root": str(root), "push_id": push_id,
-            "destination": "shared/config"})  # fmt: skip
+            "config_dir": "shared/config"})  # fmt: skip
     return push_id  # a refused open leaves no push, and the upload says why
 
 

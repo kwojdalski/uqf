@@ -33,7 +33,7 @@ export function WorkspaceSelector() {
   const list = useResource<Workspaces>(allowed ? "/workspaces" : null);
   const status = useResource<WorkspaceStatus>(allowed ? "/workspace" : null);
   const known = list.data?.workspaces ?? [];
-  const chosen = known.find((item) => item.name === workspace);
+  const chosen = known.find((item) => item.target === workspace);
   const state = !allowed
     ? "Local only"
     : status.error
@@ -56,12 +56,12 @@ export function WorkspaceSelector() {
           {!chosen && <option value={workspace}>{workspace}</option>}
           {known.map((item) => (
             <option
-              key={item.name}
-              value={item.name}
-              disabled={!item.available && item.name !== workspace}
+              key={item.target}
+              value={item.target}
+              disabled={!item.available && item.target !== workspace}
               title={item.reason ?? item.ssh ?? undefined}
             >
-              {item.name}
+              {item.target}
               {item.environment ? ` (${item.environment})` : ""}
               {item.available ? "" : " - unavailable"}
             </option>

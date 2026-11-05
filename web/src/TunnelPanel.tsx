@@ -407,7 +407,7 @@ export function FleetConnections() {
     };
   }, [target]);
   const targets = services.data?.targets ?? [];
-  if (!services.data?.remote_operations_enabled || !targets.length) return null;
+  if (!services.data?.writes_enabled || !targets.length) return null;
   return (
     <section className="panel" aria-label="Connection details">
       <h2>Connection details</h2>
@@ -420,8 +420,8 @@ export function FleetConnections() {
         >
           <option value="">Choose a target</option>
           {targets.map((t) => (
-            <option key={t.name} value={t.name}>
-              {t.name}
+            <option key={t.target} value={t.target}>
+              {t.target}
             </option>
           ))}
         </select>

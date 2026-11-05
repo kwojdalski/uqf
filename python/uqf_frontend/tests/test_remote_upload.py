@@ -130,7 +130,7 @@ def _open_push() -> str:
         return CANNED_PUSH
     push_id = remote_files.new_push_id()
     remote_helper.handle({"protocol": 1, "op": "push_open", "root": str(SERVED),
-                          "push_id": push_id, "destination": "shared/config"})  # fmt: skip
+                          "push_id": push_id, "config_dir": "shared/config"})  # fmt: skip
     return push_id
 
 
@@ -154,7 +154,7 @@ def _ok_answer(path, data, **over):
 # ------------------------------------------------------------ gates before ssh
 
 
-def test_uploading_needs_remote_operations_enabled(served):
+def test_uploading_needs_writes_enabled(served):
     runner = Recorder()
     client = _client(runner, writes=False, token=None)
     resp = _put(runner, "shared/config/x", client=client)
@@ -284,7 +284,7 @@ def test_the_answer_says_what_was_written(served):
     body = resp.json()
     assert body == {
         "target": "box",
-        "root": str(served),
+        "dest": str(served),
         "path": "shared/config/scripts/torqconfig/sources.csv",
         "size": 4,
         "sha256": hashlib.sha256(b"a,b\n").hexdigest(),

@@ -437,7 +437,7 @@ def _run(
             error, what = uncertain
             raise error(f"{exc} - {what}") from None
         raise
-    return {**answer, "root": root}
+    return {**answer, "dest": root}
 
 
 # ------------------------------------------------------------ push history (#2002)
@@ -447,7 +447,7 @@ def open_push(
     r: Any,
     name: str,
     *,
-    destination: str,
+    config_dir: str,
     file_count: int,
     total_bytes: int,
     user: str | None,
@@ -457,8 +457,8 @@ def open_push(
     runner: Runner = subprocess.run,
 ) -> dict[str, Any]:
     """Open a push on target `r`: its id, and the pushes retention pruned."""
-    check_path(destination)
-    payload = {"op": "push_open", "push_id": new_push_id(), "destination": destination,
+    check_path(config_dir)
+    payload = {"op": "push_open", "push_id": new_push_id(), "config_dir": config_dir,
                "file_count": file_count, "total_bytes": total_bytes, "user": user,
                "target": name, "via": via, "max_kept": max_kept,
                "retention_days": retention_days}  # fmt: skip
@@ -605,7 +605,7 @@ def upload(
         raise UploadOutcomeUncertain(
             f"target {name}: the helper confirmed other bytes - {_UNCERTAIN}"
         )
-    return {**answer, "root": root}
+    return {**answer, "dest": root}
 
 
 def _text(out: bytes | str | None) -> str:

@@ -8,7 +8,7 @@ const ok = (body: unknown) => ({ ok: true, json: async () => body });
 const SERVICES: Services = {
   targets: [
     {
-      name: "prod",
+      target: "prod",
       ssh: "ops@prod.example",
       dest: "/srv/uqf",
       remote_user: null,
@@ -21,7 +21,7 @@ const SERVICES: Services = {
   source: "/repo/deploy_targets.toml",
   declared: true,
   invalid: null,
-  remote_operations_enabled: true,
+  writes_enabled: true,
   poll_seconds: 30,
 };
 function mapping(over: Partial<TunnelMapping> = {}): TunnelMapping {

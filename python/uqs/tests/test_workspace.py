@@ -117,6 +117,8 @@ def test_describe_carries_no_credential():
     conn, _ = _open()
     doc = conn.describe()
     assert doc["target"] == "prod-a"
+    # the ssh destination is `ssh`, as uqs names it everywhere (#1888, #2107)
+    assert set(doc) == {"target", "ssh", "endpoints"}
     assert {"process": "rdb1", "proctype": "rdb", "remote_port": 6002,
             "local_endpoint": "127.0.0.1:40002"} in doc["endpoints"]  # fmt: skip
     assert "passwd" not in json.dumps(doc)
