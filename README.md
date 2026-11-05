@@ -239,6 +239,14 @@ q.
   summary. "Repository checks" counts a skipped job as passed only when Scope
   said to skip it.
 
+  The pull-request mode is a switch, the repository variable `CI_PR_TESTS`:
+  unset or `lean` is the above; `full` has every pull request run each test
+  group its change reaches, complete, as before #2167. Flip it in Settings ->
+  Secrets and variables -> Actions -> Variables (`CI_PR_TESTS=full`), or
+  `gh variable set CI_PR_TESTS --body full`. Nothing else changes with it: every
+  job and condition stays in `ci.yml`. The tag `ci/full-pr-tests-baseline`
+  points at master's `ci.yml` from before the change.
+
 - **KDB-X attestation.** The KDB-X gates run locally
   (`uv run python scripts/dev/attest_kdbx.py`), and CI checks the trailer.
 

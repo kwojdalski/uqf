@@ -73,11 +73,16 @@ attestation check and, for a `web/` change, the browser application; the whole
 Python suite, the whole q suite on PeachQ and the docs render (with the docs' q
 blocks on PeachQ) run on every push to master and nightly
 (`scripts/dev/ci_scope.py`), so a regression they catch surfaces on master
-within a run. Full mode is one switch away: `UQF_HOOKS_FULL=1 git commit` or
-`git push`, or `python3 scripts/dev/hooks_full.py --all` for both stages without
-either (`UQF_Q_TESTS_FULL=1` still runs the whole q suite alone); in CI, the
-`ci:full` PR label, `gh workflow run ci.yml --ref <branch> -f full=true`, every
-push to master and the nightly schedule. A generated file never stops a merge:
+within a run. That is a switch, not a removal: the repository variable
+`CI_PR_TESTS` (Settings -> Secrets and variables -> Actions -> Variables) unset
+or `lean` is the above, and `CI_PR_TESTS=full` has every pull request run each
+test group its change reaches again, as before #2167; tag
+`ci/full-pr-tests-baseline` is master's `ci.yml` from before the change. Full
+mode is one switch away: `UQF_HOOKS_FULL=1 git commit` or `git push`, or
+`python3 scripts/dev/hooks_full.py --all` for both stages without either
+(`UQF_Q_TESTS_FULL=1` still runs the whole q suite alone); in CI, the `ci:full`
+PR label, `gh workflow run ci.yml --ref <branch> -f full=true`, every push to
+master and the nightly schedule. A generated file never stops a merge:
 `.gitattributes` keeps one side, the post-merge hook regenerates it, and its
 `--check` gate still decides - register the driver once per clone with
 `python3 scripts/dev/merge_generated.py install` and install the push and merge
