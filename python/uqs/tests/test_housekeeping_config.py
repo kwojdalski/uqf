@@ -52,7 +52,18 @@ def test_housekeeping1_loads_the_overlay_before_housekeeping_q():
     vendored = (real.torqapphome / "appconfig" / "process.csv").read_text()
     upstream = {r["procname"]: r["load"] for r in csv.DictReader(io.StringIO(vendored))}
     composed = {r["procname"]: r for r in stack_procs.effective_process_rows(real)}
-    assert composed["housekeeping1"]["load"].split() == [OVERLAY, upstream["housekeeping1"]]
+    loads = composed["housekeeping1"]["load"].split()
+    assert loads[0] == OVERLAY and loads[-1] == upstream["housekeeping1"]
+    # The compression rule's files (#2150): the policy's path before TorQ's
+    # compress.q reads it, and the wrapper TorQ's run goes through.
+    assert loads[:-1] == list(housekeeping.LOAD_BEFORE)
+    assert loads[1:-1] == [
+        "${UQF_SCRIPTS}/processes/uqs_compression_config.q",
+        "${KDBCODE}/common/compress.q",
+        "${UQF_ROOT}/src/etl/core/log.q",
+        "${UQF_SCRIPTS}/processes/torq_pipeline.q",
+        "${UQF_SCRIPTS}/processes/torq_compress.q",
+    ]
 
 
 def test_the_generated_file_is_in_torqdata_and_the_sites_is_neither_read_nor_written(tmp_path):

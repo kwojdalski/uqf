@@ -470,6 +470,18 @@ repos:
         pass_filenames: false
         files: '^src/etl/plant_tables\.q$|^scripts/torqconfig/dataaccess/tableproperties\.csv$|^python/uqs/src/uqs/(generated/q_facts|stack/gateway_access)\.py$|^scripts/generate/derive\.py$'
 
+      - id: housekeeping-config
+        name: Check the committed housekeeping rules match stack/housekeeping.py
+        # scripts/torqconfig/housekeeping.csv and housekeeping_schedule.csv are
+        # what bootstrap writes into TORQDATA for housekeeping1 (#2150),
+        # committed so a change to its rules is reviewed as the files it reads.
+        # To accept an intended change:
+        #   uv run python scripts/generate/derive.py housekeeping-config
+        entry: uv run python scripts/generate/derive.py housekeeping-config --check
+        language: system
+        pass_filenames: false
+        files: '^python/uqs/src/uqs/stack/housekeeping\.py$|^scripts/torqconfig/housekeeping(_schedule)?\.csv$|^scripts/generate/(derive|housekeeping_config)\.py$'
+
       - id: compression-config
         name: Check TorQ's compressionconfig.csv matches the declared compression policy
         # scripts/torqconfig/compressionconfig.csv is generated (#2152) from

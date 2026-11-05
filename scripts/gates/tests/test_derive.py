@@ -218,6 +218,7 @@ GENERATORS = {
     "q-facts": "q_facts",
     "plant-schema": "uqs.model.plant_metadata_gen",
     "compression-config": "compression_config",
+    "housekeeping-config": "housekeeping_config",
 }
 
 
@@ -446,3 +447,42 @@ def test_torqs_checkcsv_refuses_what_the_policy_must_never_render(row, message):
     config = derive.load("compression_config")
     with pytest.raises(SystemExit, match=message):
         config.torq_check(config.OUT.read_text() + row + "\n")
+
+
+# -------------------------------------------------------- housekeeping-config
+
+
+def test_housekeeping_config_is_current_and_its_check_writes_nothing():
+    out = REPO / "scripts" / "torqconfig"
+    files = [out / "housekeeping.csv", out / "housekeeping_schedule.csv"]
+    before = [f.stat().st_mtime_ns for f in files]
+    result = _run("housekeeping-config", "--check")
+    assert result.returncode == 0, result.stderr
+    assert [f.stat().st_mtime_ns for f in files] == before
+
+
+def test_housekeeping_config_is_what_bootstrap_writes(tmp_path):
+    """The committed rendering and housekeeping1's generated copy are one text."""
+    from uqs.paths import UqsPaths
+    from uqs.stack import housekeeping
+
+    paths = UqsPaths(
+        repo_root=tmp_path, torqhome=tmp_path, torqapphome=tmp_path, torqdata=tmp_path / "data",
+        scripts_dir=tmp_path, orchestrator_dir=tmp_path, runtime="uqf",
+    )  # fmt: skip
+    housekeeping.write_housekeeping_config(paths)
+    out = REPO / "scripts" / "torqconfig"
+    assert housekeeping.config_path(paths).read_text() == (out / "housekeeping.csv").read_text()
+    assert (
+        housekeeping.schedule_path(paths).read_text()
+        == (out / "housekeeping_schedule.csv").read_text()
+    )
+
+
+def test_housekeeping_config_check_fails_when_a_rule_changes(monkeypatch, capsys):
+    from uqs.stack import housekeeping
+
+    monkeypatch.setattr(housekeeping, "TPLOG_REPLAY_RETENTION_DAYS", 8)
+    assert derive.main(["housekeeping-config", "--check"]) == 1
+    err = capsys.readouterr().err
+    assert "housekeeping.csv is stale" in err and "derive.py housekeeping-config" in err

@@ -93,6 +93,7 @@ CASES: dict[str, tuple[list[str], str]] = {
     "profile list": (["profile", "list"], "["),
     "config field list": (["config", "field", "list"], "["),
     "config env": (["config", "env"], "KDBBASEPORT"),
+    "config housekeeping show": (["config", "housekeeping", "show"], "hdbcompress"),
     "job attachment status": (["job", "attachment", "status"], "["),
     "config list": (["config", "list"], "["),
     "job attachment list": (["job", "attachment", "list"], "["),
