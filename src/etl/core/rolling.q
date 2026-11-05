@@ -95,7 +95,7 @@
 .qetl.job.stream.registries:distinct .qetl.job.stream.registries,`.qetl.job.stream.rolling.registry;
 
 / What every rolling job declares.
-.qetl.job.stream.rolling.required_keys:`procname`events`transform`publishes`windows`lateness`period
+.qetl.job.stream.rolling.required_keys:`procname`events`transform`outputs`windows`lateness`period
 
 / What it may declare besides: the grouping columns (default `sym) and the
 / column the window is read from (default `time).
@@ -114,7 +114,7 @@
 / Declare a job that keeps a statistic over rolling windows.
 / @param name the job's name
 / @param decl dict of procname, events (the table read), transform (one input:
-/   the events plus window, as_of and inside), publishes (the table written),
+/   the events plus window, as_of and inside), outputs (a one-table symbol list: the table written),
 /   windows (the window lengths, timespans), lateness (a timespan, 0D for
 /   none) and period (the timer, and the grid the windows end on); optionally
 /   by (grouping columns, default `sym), event_time (default `time),
@@ -125,12 +125,15 @@
 .qetl.job.stream.rolling.define:{[name;decl]
     who:"define: rolling job ",string[name];
     if[not 99h=type decl; 'who,"'s declaration must be a dictionary"];
+    .qetl.job.stream.refuse_publishes[who;decl];
     missing:.qetl.job.stream.rolling.required_keys where not .qetl.job.stream.rolling.required_keys in key decl;
     if[count missing; 'who," is missing ",", " sv string missing];
     unknown:(key decl) except .qetl.job.stream.rolling.required_keys,.qetl.job.stream.rolling.optional_keys;
     if[count unknown; 'who," declares ",(", " sv string unknown),", which a rolling job does not take"];
-    if[not all -11h=type each decl`events`transform`publishes;
-        'who,"'s events, transform and publishes must each be one table or transform name, a symbol"];
+    if[not all -11h=type each decl`events`transform;
+        'who,"'s events, transform must each be one table or transform name, a symbol"];
+    if[not $[11h=type decl`outputs; 1=count decl`outputs; 0b];
+        'who,"'s outputs must be a symbol list of exactly one table - the table it publishes, e.g. enlist `my_table"];
     ws:(),decl`windows;
     if[not $[16h=type ws; $[count ws; all ws>0D; 0b]; 0b];
         'who,"'s windows must be timespans, each positive"];
@@ -171,17 +174,17 @@
     (` sv ns,`on_endofday) set .qetl.job.stream.rolling.end_of_day[name;];
     (` sv ns,`on_timer) set {[ns;tick] (get ` sv ns,`evaluate) (get ` sv ns,`now)[]}[ns]; / noqa: QF016 on_timer callback signature
     extra:(.qetl.job.stream.passthrough decl),enlist[`state]!enlist `pending`dropped`last_as_of`covered_from`withheld;
-    .qetl.job.stream.define[name;(`procname`subscribe_to`publishes`on_batch`period`on_timer`transform`on_endofday`replay`restore_from!(
+    .qetl.job.stream.define[name;(`procname`subscribe_to`outputs`on_batch`period`on_timer`transform`on_endofday`replay`restore_from!(
         decl`procname;
         enlist decl`events;
-        enlist decl`publishes;
+        decl`outputs;
         get ` sv ns,`on_batch;
         decl`period;
         get ` sv ns,`on_timer;
         decl`transform;
         get ` sv ns,`on_endofday;
         1b;
-        enlist decl`publishes)),extra];
+        decl`outputs)),extra];
     .qetl.job.stream.rolling.registry[name]:enlist d;
     name}
 
@@ -270,7 +273,7 @@
 .qetl.job.stream.rolling.on_batch:{[name;t;x]
     d:.qetl.job.stream.rolling.def[name];
     ns:.qetl.job.stream.namespace name;
-    if[t=d`publishes; :.qetl.job.stream.rolling.mark_published[ns;x]];
+    if[t=first d`outputs; :.qetl.job.stream.rolling.mark_published[ns;x]];
     if[(t<>d`events) or 0=count x; :()];
     pq:` sv ns,`pending;
     now:(get ` sv ns,`now)[];
@@ -331,7 +334,7 @@
     cf:get ` sv ns,`covered_from;
     .qetl.job.stream.rolling.note_withheld[name;ns;as_of;cf];
     out:.qetl.job.stream.rolling.compute[name;get pq;as_of;cf];
-    if[count out; (get ` sv ns,`publish)[d`publishes;out]];
+    if[count out; (get ` sv ns,`publish)[first d`outputs;out]];
     lq set as_of;
     span:(last d`windows)+d`lateness;
     keep_from:as_of-span;
@@ -367,7 +370,7 @@
 
 / Declare a streaming job that keeps a statistic over rolling windows.
 / @param name the job name
-/ @param decl events, transform, publishes, windows, lateness, period and the process declaration
+/ @param decl events, transform, outputs, windows, lateness, period and the process declaration
 / @return the registered streaming job name
 / @throws error when the transform is not a one-input contract carrying window, as_of and inside
 .qetl.job.stream.at_rolling:{[name;decl] .qetl.job.stream.rolling.define[name;decl]}

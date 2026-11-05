@@ -880,10 +880,10 @@ def test_list_processes_gives_a_bounded_worker_its_dataset_as_output(fake_paths:
     workers = fake_paths.repo_root / "src" / "etl" / "workers"
     workers.mkdir(parents=True)
     (workers / "w.q").write_text(
-        "/ .qetl.job.bounded.define[`commented;`source`dataset!(`s;`nope)];\n"
-        ".qetl.job.bounded.define[`demo_deals_backfill;`source`dataset`width`procname!(\n"
-        "    `demo_deals;`demo_deals;1D;`deals_backfill1)];\n"
-        ".qetl.job.bounded.define[`x_backfill;`source`dataset`width!(`x;`x_rows;1D)];\n"
+        "/ .qetl.job.bounded.define[`commented;`source`outputs!(`s;enlist `nope)];\n"
+        ".qetl.job.bounded.define[`demo_deals_backfill;`source`outputs`width`procname!(\n"
+        "    `demo_deals;enlist `demo_deals;1D;`deals_backfill1)];\n"
+        ".qetl.job.bounded.define[`x_backfill;`source`outputs`width!(`x;enlist `x_rows;1D)];\n"
     )
     assert listing._worker_datasets(fake_paths) == {
         "deals_backfill1": "demo_deals",
@@ -1776,7 +1776,7 @@ def test_generated_schema_covers_every_published_table(fake_paths: UqsPaths):
 
 
 def test_declared_dataflow_edges_match_the_q_scripts():
-    """Every pipeline's `subscribe_to`/`publishes` declaration agrees with the
+    """Every pipeline's `subscribe_to`/`outputs` declaration agrees with the
     `.sub.subscribe` / `.qtorq.subscribe_etl` / `.u.upd` calls in its own
     script.
 

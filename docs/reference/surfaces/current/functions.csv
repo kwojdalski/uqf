@@ -261,6 +261,7 @@ qetl.job.bounded,publish_last_batch,function,2,worker unused
 qetl.job.bounded,read_instrument_column,function,1,d
 qetl.job.bounded,read_time_column,function,1,d
 qetl.job.bounded,require_flags,function,1,opts
+qetl.job.bounded,require_outputs,function,2,worker given
 qetl.job.bounded,require_pin,function,2,worker given
 qetl.job.bounded,required_cfg,value,,
 qetl.job.bounded,required_flags,value,,

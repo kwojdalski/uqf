@@ -56,13 +56,13 @@
 / at end of day and restores open ones from the log. Per (sym, source): a provider
 / is its own window group; settlement, category and size are in the row, not the
 / window's key, because the calculation sets them.
-.qetl.job.stream.at_bars[`book_liquidity_1m;`procname`events`event_time`by`transform`publishes`width`lateness`period`start_with_all`note!(
+.qetl.job.stream.at_bars[`book_liquidity_1m;`procname`events`event_time`by`transform`outputs`width`lateness`period`start_with_all`note!(
     `book_liquidity_1m1;
     `market_data;
     `source_time;
     `sym`source;
     `book_liquidity_1m;
-    `book_liquidity_1m;
+    enlist `book_liquidity_1m;
     .qpipe.transform.book_liquidity_1m.width;
     .qpipe.transform.book_liquidity_1m.lateness;
     0D00:00:01;

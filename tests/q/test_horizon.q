@@ -34,8 +34,8 @@
             ([] sym:enlist `a; event_time:enlist .qt.qetl.job.stream.horizons.t0; px:enlist 1f; ref:enlist 1.5)))];
     }
 
-.qt.qetl.job.stream.horizons.decl:{[] `procname`events`reference`transform`publishes`horizon`period`ephemeral!(
-    `hzt1;`hz_events;`hz_refs;`horizontest_px;`hz_priced;0D00:00:01;0D00:00:01;"a test fixture")}
+.qt.qetl.job.stream.horizons.decl:{[] `procname`events`reference`transform`outputs`horizon`period`ephemeral!(
+    `hzt1;`hz_events;`hz_refs;`horizontest_px;enlist `hz_priced;0D00:00:01;0D00:00:01;"a test fixture")}
 
 / one process per job, as .qetl.job.stream.define insists
 .qt.qetl.job.stream.horizons.decl_for:{[nm] @[.qt.qetl.job.stream.horizons.decl[];`procname;:;`$string[nm],"1"]}
@@ -82,6 +82,16 @@
         "*claims procname hz_l1 which hz_l already runs*";"the streaming registry refuses it"];
     .qunit.assertFalse[`hz_m in .qetl.job.stream.horizons.defined[];"and nothing half-registered is left"]};
 
+.qt.qetl.job.stream.horizons.test_the_retired_publishes_key_is_refused_and_outputs_holds_exactly_one_table:{[t]
+    .qt.qetl.job.stream.horizons.define_transform[];
+    old:(`outputs _ .qt.qetl.job.stream.horizons.decl[]),enlist[`publishes]!enlist `hz_out;
+    .qunit.assertThrows[.qetl.job.stream.at_horizons[`hz_x;];old;
+        "*declares publishes, which is now outputs - rename the key*";"the old spelling is refused with its migration"];
+    .qunit.assertThrows[.qetl.job.stream.at_horizons[`hz_x;];@[.qt.qetl.job.stream.horizons.decl[];`outputs;:;`hz_a`hz_b];
+        "*outputs must be a symbol list of exactly one table*";"a job of this kind writes one table"];
+    .qunit.assertThrows[.qetl.job.stream.at_horizons[`hz_x;];@[.qt.qetl.job.stream.horizons.decl[];`outputs;:;`hz_a];
+        "*outputs must be a symbol list of exactly one table*";"an atom is not a list of one"]};
+
 .qt.qetl.job.stream.horizons.test_an_unknown_key_is_refused:{[t]
     .qt.qetl.job.stream.horizons.define_transform[];
     .qunit.assertThrows[.qetl.job.stream.at_horizons[`hz_d;];.qt.qetl.job.stream.horizons.decl[],enlist[`widht]!enlist 1;
@@ -91,7 +101,7 @@
     .qt.qetl.job.stream.horizons.job[`hz_e;()!()];
     d:.qetl.job.stream.def `hz_e;
     .qunit.assertEquals[d`subscribe_to;`hz_events`hz_refs;"events then reference"];
-    .qunit.assertEquals[d`publishes;enlist `hz_priced;"the declared output"]};
+    .qunit.assertEquals[d`outputs;enlist `hz_priced;"the declared output"]};
 
 .qt.qetl.job.stream.horizons.test_events_and_reference_must_be_distinct_tables:{[t]
     .qt.qetl.job.stream.horizons.define_transform[];

@@ -66,8 +66,8 @@
             ask_sizes:(2 2f;6 6f;5 5f;4 4f;7 7f;8 8f))))];
 
 .qetl.job.bounded.define[`hdb_crypto_book_backfill;
-    `source`dataset`width`transform`check`procname`note`target_key`window_column`align!
-    (`hdb_crypto_book;`crypto_book_1s;0D01:00:00;`hdb_crypto_book_1s;
+    `source`outputs`width`transform`check`procname`note`target_key`window_column`align!
+    (`hdb_crypto_book;enlist `crypto_book_1s;0D01:00:00;`hdb_crypto_book_1s;
      .qpipe.job.hdb_crypto_book_backfill.quality_check;
      `hdb_crypto_book_backfill1;
      "bounded: rebuilds the one-second book snapshots from the HDB's crypto_book with the pick crypto_book_1s1 applies live";

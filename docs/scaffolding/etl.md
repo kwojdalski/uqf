@@ -55,7 +55,7 @@ error and no symptom except an output table that stays empty.
 
 \d .
 
-.qetl.job.stream.define[`spreadmon;`procname`subscribe_to`publishes`on_batch`note!(
+.qetl.job.stream.define[`spreadmon;`procname`subscribe_to`outputs`on_batch`note!(
     `spreadmon1;
     `fx_orderbook;
     enlist `spread_bps;

@@ -141,7 +141,7 @@
 / @return the worker names, a symbol list
 / @eg .qetl.uptime.twins `fx_markout  ->  ,`hdb_fx_markouts_backfill
 .qetl.uptime.twins:{[job]
-    out:(),(.qetl.job.stream.def job)`publishes;
+    out:(),(.qetl.job.stream.def job)`outputs;
     workers:.qetl.job.bounded.defined[];
     workers where {[out;w] ((.qetl.job.bounded.def w)`dataset) in out}[out] each workers}
 

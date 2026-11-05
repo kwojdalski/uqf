@@ -41,7 +41,7 @@
 .qt.qetl.job.stream.normalizer.test_define_registers_the_job_with_its_edges_derived:{[t]
     .qt.qetl.job.stream.normalizer.define_ok[`nt_a;`nta1];
     d:.qetl.job.stream.def `nt_a;
-    .qunit.assertEquals[(d`subscribe_to;d`publishes);(enlist `src;enlist `nt_a);
+    .qunit.assertEquals[(d`subscribe_to;d`outputs);(enlist `src;enlist `nt_a);
         "subscribe_to is the source list and publishes is the normalizer's own name - an instance cannot declare them differently from its mappings"];
     .qunit.assertTrue[`nt_a in .qetl.job.stream.normalizer.defined[];"and it is a defined normalizer"];
     .qt.qetl.job.stream.normalizer.forget[`nt_a]};

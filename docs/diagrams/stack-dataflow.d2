@@ -14,7 +14,7 @@
 # Everything else drawn as a cylinder round-trips through the tickerplant
 # into rdb1 and on to the HDB, and survives its producer restarting. Two
 # jobs that look identical in src/etl/streaming/ differ exactly here, and
-# the difference is one declaration: whether `publishes` names a table.
+# the difference is one declaration: whether `outputs` names a table.
 
 # Down, not right. Left to right is the natural reading for a pipeline and
 # was the first try, but five stages of producer - table - job - table -

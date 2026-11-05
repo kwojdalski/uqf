@@ -172,7 +172,7 @@
 / (#295, #1033).
 .qetl.cfg.audit.watch[`superbook;`.qpipe.job.superbook.max_age`.qf.mkt.max_clock_lead];
 
-.qetl.job.stream.define[`superbook;`procname`subscribe_to`publishes`on_batch`period`on_timer`note`state`ephemeral!(
+.qetl.job.stream.define[`superbook;`procname`subscribe_to`outputs`on_batch`period`on_timer`note`state`ephemeral!(
     `superbook1;
     enlist `market_data;
     `superbook`config_change;

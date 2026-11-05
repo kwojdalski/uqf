@@ -34,7 +34,7 @@ ROOT = Path(__file__).resolve().parents[3]
 def stream(name: str, table: str) -> str:
     return (
         f".qetl.job.stream.define[`{name};"
-        f"`procname`subscribe_to`publishes!(`{name}1;enlist `quote;enlist `{table})];\n"
+        f"`procname`subscribe_to`outputs!(`{name}1;enlist `quote;enlist `{table})];\n"
     )
 
 

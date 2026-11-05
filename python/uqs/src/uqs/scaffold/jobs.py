@@ -234,7 +234,7 @@ def streaming_job(
     actions: list[FileAction] = []
     notes: list[str] = []
 
-    # `enlist` for one table, as for `publishes` below and as the tree's own
+    # `enlist` for one table, as for `outputs` below and as the tree's own
     # jobs write it: a bare `trades is an atom, which define accepts but which
     # reads as a different shape from every other declaration.
     sub_literal = "`symbol$()" if is_feed else poll_steps.symbol_list(subscribe_to)
@@ -307,7 +307,7 @@ publish:.qetl.job.stream.unwired `{name};
 / The process registry is read from this declaration: `procname` is the
 / process that runs it, and `start_with_all` whether `uqs start all` starts it
 / (absent: on demand, until the connection budget has room).
-.qetl.job.stream.define[`{name};`procname`subscribe_to`publishes{keys}{swa_key}`note!(
+.qetl.job.stream.define[`{name};`procname`subscribe_to`outputs{keys}{swa_key}`note!(
     `{proc};
     {sub_literal};
     {pub_literal};{values}{swa_value}

@@ -186,7 +186,7 @@
 / The process registry is read from this declaration: `procname` is the
 / process that runs it, and `start_with_all` whether `uqs start all` starts it
 / (absent: on demand, until the connection budget has room).
-.qetl.job.stream.define[`crypto_book_decoder;`procname`subscribe_to`publishes`on_batch`replay`restore_from`on_replayed`note`state!(
+.qetl.job.stream.define[`crypto_book_decoder;`procname`subscribe_to`outputs`on_batch`replay`restore_from`on_replayed`note`state!(
     `crypto_book_decoder1;
     enlist `kafka_message;
     `crypto_book_snapshot`kafka_dead_letter;

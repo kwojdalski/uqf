@@ -156,7 +156,7 @@
         2026.09.17D10:00:01);
     1b)];
 
-.qetl.job.stream.define[`cross;`procname`subscribe_to`publishes`on_batch`note`state`ephemeral!(
+.qetl.job.stream.define[`cross;`procname`subscribe_to`outputs`on_batch`note`state`ephemeral!(
     `cross1;
     enlist `fx_orderbook;
     `symbol$();

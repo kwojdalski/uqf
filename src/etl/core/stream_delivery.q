@@ -54,7 +54,7 @@
 / Private: refuse a malformed `row_key` or `ack` in a poll declaration.
 / Called by poll_declared.
 / @param job the job's name
-/ @param decl the declaration, carrying `poll` and `publishes`
+/ @param decl the declaration, carrying `poll` and `outputs`
 / @return nothing - it throws naming the job and the key
 / @private
 .qetl.job.stream.delivery.check:{[job;decl]
@@ -66,7 +66,7 @@
         k:(),k;
         if[`time in k;
             '"define: ",string[job],"'s poll row_key includes time - the tickerplant stamps its own, so a republished row never matches"];
-        plant:((),decl`publishes) inter .qetl.plant.names[];
+        plant:((),decl`outputs) inter .qetl.plant.names[];
         if[count bad:plant where not all each k in/: cols each .qetl.plant.published each plant;
             '"define: ",string[job],"'s poll row_key ",(", " sv string k)," is not in the columns of ",", " sv string bad]];
     if[(`ack in key p) and not -1h=type p`ack;

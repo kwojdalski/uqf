@@ -20,7 +20,7 @@
 
 / A feed over demo_deals whose fetch breaks the promise: it saves its own cursor.
 .qt.qetl.verify.capture.declare_rogue:{[fetch]
-    .qetl.job.stream.define[.qt.qetl.verify.capture.rogue;`procname`subscribe_to`publishes`period`poll!(
+    .qetl.job.stream.define[.qt.qetl.verify.capture.rogue;`procname`subscribe_to`outputs`period`poll!(
         `vc_rogue1;`symbol$();enlist `demo_deals;0D00:00:01;
         `fetch`normalize`next_cursor!(fetch;{[p] (cols .qetl.plant.published `demo_deals)#p};{[p] last p`deal_time}))]}
 

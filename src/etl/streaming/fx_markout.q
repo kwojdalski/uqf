@@ -62,12 +62,12 @@
 
 \d .
 
-.qetl.job.stream.at_horizons[`fx_markout;`procname`events`reference`transform`publishes`horizon`period`event_time`reference_time`ready_on`legs`lookback`max_age`by`retain_by`identity`remember`max_lateness`expire_after`keep`note`ephemeral`on_start`check`on_fail!(
+.qetl.job.stream.at_horizons[`fx_markout;`procname`events`reference`transform`outputs`horizon`period`event_time`reference_time`ready_on`legs`lookback`max_age`by`retain_by`identity`remember`max_lateness`expire_after`keep`note`ephemeral`on_start`check`on_fail!(
     `fxmarkout1;
     `executions;
     `market_data;
     `fx_markout_score_long;
-    `fx_markout;
+    enlist `fx_markout;
     .qpipe.transform.fx_markout.wait[.qpipe.transform.fx_markout_outputs.job_spec;.qpipe.transform.fx_markout_outputs.settle];
     0D00:00:01;
     `source_time;

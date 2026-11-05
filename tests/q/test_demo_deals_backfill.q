@@ -391,7 +391,7 @@
     .qunit.assertEquals[(ok;after-before);(0b;1);"one failure path: logged, counted once, 0b to do_window"]};
 
 .qt.qpipe.job.demo_deals_backfill.test_define_refuses_an_unknown_on_conflict:{[t]
-    d:@[.qetl.job.bounded.def `demo_deals_backfill;`dataset`on_conflict;:;(`ddbftest_oc;`merge)];
+    d:@[.qt.support.declaration `demo_deals_backfill;`outputs`on_conflict;:;(enlist `ddbftest_oc;`merge)];
     .qunit.assertThrows[{.qetl.job.bounded.define[`ddbftest_oc_worker;x]};(`ns`procname`note) _ d;
         "on_conflict must be one of *";"a typo fails the declaration, not the first window"]};
 
@@ -402,7 +402,7 @@
         "deals can be corrected upstream, so a run names its version"]};
 
 .qt.qpipe.job.demo_deals_backfill.test_a_declared_default_source_version_is_kept:{[t]
-    d:@[.qetl.job.bounded.def `demo_deals_backfill;`dataset`source_version;:;(`ddbftest_sv;`v7)];
+    d:@[.qt.support.declaration `demo_deals_backfill;`outputs`source_version;:;(enlist `ddbftest_sv;`v7)];
     .qetl.job.bounded.define[`ddbftest_sv_worker;(`ns`procname`note) _ d];
     .qunit.assertEquals[.qetl.job.bounded.default_version `ddbftest_sv_worker;`v7;
         "a run that names no version records coverage under v7"]};
@@ -422,7 +422,7 @@
         "and the spec, typed"]};
 
 .qt.qpipe.job.demo_deals_backfill.test_a_command_line_without_version_takes_the_declared_default:{[t]
-    d:@[.qetl.job.bounded.def `demo_deals_backfill;`dataset`source_version;:;(`ddbftest_flags;`v9)];
+    d:@[.qt.support.declaration `demo_deals_backfill;`outputs`source_version;:;(enlist `ddbftest_flags;`v9)];
     .qetl.job.bounded.define[`ddbftest_flags_worker;(`ns`procname`note) _ d];
     s:.qetl.job.bounded.spec_from_flags .qt.qpipe.job.demo_deals_backfill.flags[`ddbftest_flags_worker;"";"2026.09.13";"2026.09.14"];
     .qunit.assertEquals[s[`spec]`source_version;`v9;
@@ -451,7 +451,7 @@
         "and a bound that is not a q timestamp says which"]};
 
 .qt.qpipe.job.demo_deals_backfill.test_define_refuses_a_source_version_that_is_not_a_symbol:{[t]
-    d:@[.qetl.job.bounded.def `demo_deals_backfill;`dataset`source_version;:;(`ddbftest_sv2;"v1")];
+    d:@[.qt.support.declaration `demo_deals_backfill;`outputs`source_version;:;(enlist `ddbftest_sv2;"v1")];
     .qunit.assertThrows[{.qetl.job.bounded.define[`ddbftest_sv2_worker;x]};(`ns`procname`note) _ d;
         "*source_version must be a symbol*";"a string is refused at declaration"]};
 
@@ -462,7 +462,7 @@
 / The bug target_key exists for: upstream_trades' transform renames ex to
 / venue, so the source row_key names a column the published batch lacks.
 .qt.qpipe.job.demo_deals_backfill.test_define_refuses_a_source_row_key_the_transform_renames:{[t]
-    d:@[.qetl.job.bounded.def `upstream_trades_backfill;`dataset;:;`ddbftest_tk];
+    d:@[.qt.support.declaration `upstream_trades_backfill;`outputs;:;enlist `ddbftest_tk];
     / Two patterns, not "*...*...*": KDB-X's like throws 'nyi past two wildcards.
     e:.qunit.assertThrows[{.qetl.job.bounded.define[`ddbftest_tk_worker;x]};`ns`procname`note`target_key _ d;
         "*source row_key names ex which transform upstream_trades_to_local does not output*";
@@ -470,7 +470,7 @@
     .qunit.assertTrue[e like "*declare target_key*";"and the refusal says what to do"]};
 
 .qt.qpipe.job.demo_deals_backfill.test_define_refuses_a_target_key_outside_the_output:{[t]
-    d:@[.qetl.job.bounded.def `demo_deals_backfill;`dataset`target_key;:;(`ddbftest_tk;`deal_ref)];
+    d:@[.qt.support.declaration `demo_deals_backfill;`outputs`target_key;:;(enlist `ddbftest_tk;`deal_ref)];
     .qunit.assertThrows[{.qetl.job.bounded.define[`ddbftest_tk_worker;x]};`ns`procname`note _ d;
         "*target_key names deal_ref which transform demo_deals_passthrough does not output*";
         "a declared key is held to the output too"]};
@@ -482,11 +482,11 @@
         "a passthrough keeps the column the window was cut on"]};
 
 .qt.qpipe.job.demo_deals_backfill.test_define_refuses_a_window_column_outside_the_output:{[t]
-    d:@[.qetl.job.bounded.def `demo_deals_backfill;`dataset`window_column;:;(`ddbftest_wc;`nosuch)];
+    d:@[.qt.support.declaration `demo_deals_backfill;`outputs`window_column;:;(enlist `ddbftest_wc;`nosuch)];
     .qunit.assertThrows[{.qetl.job.bounded.define[`ddbftest_wc_worker;x]};`ns`procname`note _ d;
         "*window_column nosuch is not among transform demo_deals_passthrough's output columns*";
         "a declared window column is held to the output"];
-    d2:@[.qetl.job.bounded.def `demo_deals_backfill;`dataset`window_column;:;(`ddbftest_wc;"deal_time")];
+    d2:@[.qt.support.declaration `demo_deals_backfill;`outputs`window_column;:;(enlist `ddbftest_wc;"deal_time")];
     .qunit.assertThrows[{.qetl.job.bounded.define[`ddbftest_wc_worker;x]};`ns`procname`note _ d2;
         "*window_column must be a symbol*";"and must be a symbol"]};
 
@@ -499,7 +499,7 @@
         enlist `inputs`expected!((enlist `batch)!enlist .qpipe.source.demo_deals.fixture[];
             select deal_id, notional from .qpipe.source.demo_deals.fixture[]))];
     .qetl.job.bounded.define[`ddbftest_nowin;
-        `source`dataset`width`transform`target_key!(`demo_deals;`ddbftest_nowin_ds;1D;`ddbftest_ids;`deal_id)];
+        `source`outputs`width`transform`target_key!(`demo_deals;enlist `ddbftest_nowin_ds;1D;`ddbftest_ids;`deal_id)];
     .qunit.assertEquals[(.qetl.job.bounded.def `ddbftest_nowin)`window_column;`;"none declared, none found"];
     / upsert never asks for it
     .qunit.assertEquals[(.qetl.job.bounded.validate[`ddbftest_nowin;.qt.qpipe.job.demo_deals_backfill.spec_for[`v1;1;4]])`on_conflict;`upsert;
@@ -833,7 +833,7 @@
     .qetl.job.bounded.state.release_lock `overriding_worker;
     .qetl.job.bounded.state.clear_checkpoint `overriding_worker;
     .qetl.job.bounded.define[`overriding_worker;
-        `source`dataset`width`transform!(`demo_deals;`overriding_worker_ds;1D;`demo_deals_passthrough)];
+        `source`outputs`width`transform!(`demo_deals;enlist `overriding_worker_ds;1D;`demo_deals_passthrough)];
     .qpipe.job.overriding_worker.init[.qt.qpipe.job.demo_deals_backfill.spec_for[`v1;1;4]];
     r:.qpipe.job.overriding_worker.run[];
     .qpipe.job.overriding_worker.cleanup[];
@@ -855,7 +855,7 @@
     .qetl.job.bounded.state.clear_checkpoint `own_dataset_worker;
     `ddbftest_own_ds set 0#.qpipe.source.demo_deals.fixture[];
     .qetl.job.bounded.define[`own_dataset_worker;
-        `source`dataset`width`transform!(`demo_deals;`ddbftest_own_ds;1D;`demo_deals_passthrough)];
+        `source`outputs`width`transform!(`demo_deals;enlist `ddbftest_own_ds;1D;`demo_deals_passthrough)];
     .qpipe.job.own_dataset_worker.init[.qt.qpipe.job.demo_deals_backfill.spec_for[`v1;1;4]];
     r:.qpipe.job.own_dataset_worker.run[];
     .qpipe.job.own_dataset_worker.cleanup[];
@@ -875,8 +875,8 @@
     .qpipe.job.demo_deals_backfill.init[.qt.qpipe.job.demo_deals_backfill.spec_for[`v1;1;4]];
     .qt.qpipe.job.demo_deals_backfill.with_declaration_restored[{
         .qetl.job.bounded.define[`demo_deals_backfill;
-            `source`dataset`width`transform`check!
-            (`demo_deals;`demo_deals;1D;`demo_deals_passthrough;.qpipe.job.demo_deals_backfill.quality_check)]}];
+            `source`outputs`width`transform`check!
+            (`demo_deals;enlist `demo_deals;1D;`demo_deals_passthrough;.qpipe.job.demo_deals_backfill.quality_check)]}];
     .qunit.assertEquals[.qpipe.job.demo_deals_backfill.spec[];.qt.qpipe.job.demo_deals_backfill.spec_for[.qt.qpipe.job.demo_deals_backfill.fv;1;4];
         "a second define fills only absent names, and the run specification is not one"]};
 
@@ -903,12 +903,12 @@
     / meet that as a contract failure at init naming every missing method
     / rather than as a sentence naming the key they passed.
     .qunit.assertError[{.qetl.job.bounded.define[`ns_supplying_worker;x]};
-        `ns`source`dataset`width`transform!(`.qddbf;`demo_deals;`some_other_ds;1D;`demo_deals_passthrough);
+        `ns`source`outputs`width`transform!(`.qddbf;`demo_deals;enlist `some_other_ds;1D;`demo_deals_passthrough);
         "a worker may not choose its own namespace"]};
 
 .qt.qpipe.job.demo_deals_backfill.test_the_refusal_names_the_namespace_it_would_have_used:{[t]
     err:@[{.qetl.job.bounded.define[`ns_supplying_worker;x]; ""};
-        `ns`source`dataset`width`transform!(`.qddbf;`demo_deals;`some_other_ds;1D;`demo_deals_passthrough);{x}];
+        `ns`source`outputs`width`transform!(`.qddbf;`demo_deals;enlist `some_other_ds;1D;`demo_deals_passthrough);{x}];
     .qunit.assertTrue[err like "*.qpipe.job.ns_supplying_worker*";
         "the refusal says which namespace the worker will actually live in"]};
 
@@ -918,12 +918,12 @@
 / #185 is that the pair, not the dataset alone, is what has to be unique.
 .qt.qpipe.job.demo_deals_backfill.test_two_workers_may_not_claim_one_dataset_and_partition:{[t]
     .qunit.assertError[{.qetl.job.bounded.define[`clashing_worker;x]};
-        `source`dataset`width`transform!(`demo_deals;`demo_deals;1D;`demo_deals_passthrough);
+        `source`outputs`width`transform!(`demo_deals;enlist `demo_deals;1D;`demo_deals_passthrough);
         "a second worker on one dataset and partition would produce coverage rows nothing can tell apart (#60)"]};
 
 .qt.qpipe.job.demo_deals_backfill.test_the_clash_error_names_the_existing_claimant:{[t]
     err:@[{.qetl.job.bounded.define[`clashing_worker;x]; ""};
-        `source`dataset`width`transform!(`demo_deals;`demo_deals;1D;`demo_deals_passthrough);{x}];
+        `source`outputs`width`transform!(`demo_deals;enlist `demo_deals;1D;`demo_deals_passthrough);{x}];
     .qunit.assertEquals[err like "*demo_deals_backfill*";1b;"the refusal names who already owns the dataset"]};
 
 / The name appearing is not enough. q evaluates right to left, so
@@ -933,7 +933,7 @@
 / because the name was still there immediately before the wreckage.
 .qt.qpipe.job.demo_deals_backfill.test_the_clash_error_reads_as_a_sentence:{[t]
     err:@[{.qetl.job.bounded.define[`clashing_worker;x]; ""};
-        `source`dataset`width`transform!(`demo_deals;`demo_deals;1D;`demo_deals_passthrough);{x}];
+        `source`outputs`width`transform!(`demo_deals;enlist `demo_deals;1D;`demo_deals_passthrough);{x}];
     .qunit.assertTrue[err like "*produce coverage rows nothing can tell apart";
         "the explanation survives intact to the end of the message"]};
 
@@ -947,7 +947,7 @@
 
 .qt.qpipe.job.demo_deals_backfill.test_a_worker_declaring_no_procname_runs_as_its_name_and_1:{[t]
     .qetl.job.bounded.define[`noproc_slice;
-        `source`dataset`width`transform`partition`partition_column!(`demo_deals;`demo_deals;1D;`demo_deals_passthrough;`NOPROC;`sym)];
+        `source`outputs`width`transform`partition`partition_column!(`demo_deals;enlist `demo_deals;1D;`demo_deals_passthrough;`NOPROC;`sym)];
     cfg:.qetl.job.bounded.def `noproc_slice;
     .qt.support.drop_rows[`.qetl.job.bounded.worker_cfg;`noproc_slice];
     .qunit.assertEquals[(cfg`procname;cfg`note);(`noproc_slice1;"");
@@ -955,7 +955,7 @@
 
 .qt.qpipe.job.demo_deals_backfill.test_a_procname_that_is_not_a_symbol_is_refused:{[t]
     .qunit.assertThrows[{.qetl.job.bounded.define[`badproc_slice;x]};
-        `source`dataset`width`transform`partition`procname!(`demo_deals;`demo_deals;1D;`demo_deals_passthrough;`BADPROC;"p1");
+        `source`outputs`width`transform`partition`procname!(`demo_deals;enlist `demo_deals;1D;`demo_deals_passthrough;`BADPROC;"p1");
         "*procname must be a symbol*";
         "a process name is a symbol, as everywhere else in the registry"]};
 
@@ -967,10 +967,10 @@
 / distinguishable and no read composes them.
 .qt.qpipe.job.demo_deals_backfill.test_two_workers_may_claim_one_dataset_in_different_partitions:{[t]
     .qetl.job.bounded.define[`eurusd_slice;
-        `source`dataset`width`transform`partition`partition_column!(`demo_deals;`demo_deals;1D;`demo_deals_passthrough;`EURUSD;`sym)];
+        `source`outputs`width`transform`partition`partition_column!(`demo_deals;enlist `demo_deals;1D;`demo_deals_passthrough;`EURUSD;`sym)];
     .qunit.assertEquals[
         .qetl.job.bounded.define[`usdjpy_slice;
-            `source`dataset`width`transform`partition`partition_column!(`demo_deals;`demo_deals;1D;`demo_deals_passthrough;`USDJPY;`sym)];
+            `source`outputs`width`transform`partition`partition_column!(`demo_deals;enlist `demo_deals;1D;`demo_deals_passthrough;`USDJPY;`sym)];
         `usdjpy_slice;
         "two partitions of one dataset are two distinguishable claims, so both register"];
     .qt.support.drop_rows[`.qetl.job.bounded.worker_cfg;`eurusd_slice`usdjpy_slice];};
@@ -979,9 +979,9 @@
 / different worker is the case that was always wrong and still is.
 .qt.qpipe.job.demo_deals_backfill.test_two_workers_may_not_claim_one_partition_of_a_dataset:{[t]
     .qetl.job.bounded.define[`eurusd_slice;
-        `source`dataset`width`transform`partition`partition_column!(`demo_deals;`demo_deals;1D;`demo_deals_passthrough;`EURUSD;`sym)];
+        `source`outputs`width`transform`partition`partition_column!(`demo_deals;enlist `demo_deals;1D;`demo_deals_passthrough;`EURUSD;`sym)];
     err:@[{.qetl.job.bounded.define[`another_eurusd_slice;x]; ""};
-        `source`dataset`width`transform`partition`partition_column!(`demo_deals;`demo_deals;1D;`demo_deals_passthrough;`EURUSD;`sym);{x}];
+        `source`outputs`width`transform`partition`partition_column!(`demo_deals;enlist `demo_deals;1D;`demo_deals_passthrough;`EURUSD;`sym);{x}];
     .qt.support.drop_rows[`.qetl.job.bounded.worker_cfg;`eurusd_slice];
     .qunit.assertEquals[err like "*eurusd_slice*";1b;
         "the second claim on one dataset AND partition is refused, naming the holder"]};
@@ -995,14 +995,14 @@
 
 .qt.qpipe.job.demo_deals_backfill.test_a_declared_partition_is_stored_as_given:{[t]
     .qetl.job.bounded.define[`eurusd_slice;
-        `source`dataset`width`transform`partition`partition_column!(`demo_deals;`demo_deals;1D;`demo_deals_passthrough;`EURUSD;`sym)];
+        `source`outputs`width`transform`partition`partition_column!(`demo_deals;enlist `demo_deals;1D;`demo_deals_passthrough;`EURUSD;`sym)];
     r:.qetl.job.bounded.partition_of `eurusd_slice;
     .qt.support.drop_rows[`.qetl.job.bounded.worker_cfg;`eurusd_slice];
     .qunit.assertEquals[r;`EURUSD;"the declared partition is what coverage will be recorded under"]};
 
 .qt.qpipe.job.demo_deals_backfill.test_a_non_symbol_partition_is_refused:{[t]
     .qunit.assertError[{.qetl.job.bounded.define[`bad_slice;x]};
-        `source`dataset`width`transform`partition!(`demo_deals;`demo_deals;1D;`demo_deals_passthrough;"EURUSD");
+        `source`outputs`width`transform`partition!(`demo_deals;enlist `demo_deals;1D;`demo_deals_passthrough;"EURUSD");
         "a string partition would be recorded as a char vector and match no read"]};
 
 / Redefining the SAME worker must stay legal - the shell's define is called
@@ -1011,7 +1011,7 @@
     .qunit.assertEquals[
         .qt.qpipe.job.demo_deals_backfill.with_declaration_restored[{
             .qetl.job.bounded.define[`demo_deals_backfill;
-                `source`dataset`width`transform!(`demo_deals;`demo_deals;1D;`demo_deals_passthrough)]}];
+                `source`outputs`width`transform!(`demo_deals;enlist `demo_deals;1D;`demo_deals_passthrough)]}];
         `demo_deals_backfill;
         "reloading a worker file re-runs its own define, which must not trip the clash guard"]};
 
@@ -1147,22 +1147,50 @@
         (3;0;0b);
         "a transform that throws takes the failed-fetch path: nothing published, nothing covered, the run continues"]};
 
+/ --- outputs: one declaration key for what a job produces (#2102) --------
+
+.qt.qpipe.job.demo_deals_backfill.test_the_retired_dataset_key_is_refused_with_its_migration:{[t]
+    .qunit.assertThrows[{.qetl.job.bounded.define[`outputs_old_key;x]};
+        `source`dataset`width`transform!(`demo_deals;`outputs_old_key_ds;1D;`demo_deals_passthrough);
+        "*declares dataset, which is now outputs - rename the key and enlist the value*";
+        "the old spelling is refused with the one-way migration, not read as an alias"];
+    .qunit.assertFalse[`outputs_old_key in .qetl.job.bounded.defined[];"and the refused worker is not registered"]};
+
+.qt.qpipe.job.demo_deals_backfill.test_a_bounded_worker_must_declare_exactly_one_output:{[t]
+    base:`source`width`transform!(`demo_deals;1D;`demo_deals_passthrough);
+    .qunit.assertThrows[{.qetl.job.bounded.define[`outputs_none;x]};
+        base,enlist[`outputs]!enlist `symbol$();
+        "*declares 0 outputs - a bounded worker fills exactly one dataset*";"no output is refused"];
+    .qunit.assertThrows[{.qetl.job.bounded.define[`outputs_two;x]};
+        base,enlist[`outputs]!enlist `outputs_two_a`outputs_two_b;
+        "*declares 2 outputs - a bounded worker fills exactly one dataset*";"several outputs are refused"];
+    .qunit.assertThrows[{.qetl.job.bounded.define[`outputs_atom;x]};
+        base,enlist[`outputs]!enlist `outputs_atom_ds;
+        "*outputs must be a symbol list holding exactly one dataset*";"an atom is not a list of one"];
+    .qunit.assertEquals[(`outputs_none`outputs_two`outputs_atom) inter .qetl.job.bounded.defined[];`symbol$();
+        "none of the refused workers was registered"]};
+
+.qt.qpipe.job.demo_deals_backfill.test_the_one_output_is_the_dataset_coverage_is_recorded_under:{[t]
+    cfg:.qetl.job.bounded.def `demo_deals_backfill;
+    .qunit.assertEquals[(cfg`dataset;`outputs in key cfg);(`demo_deals;0b);
+        "the declared output is stored as the dataset coverage and publication are keyed on; the list is not stored beside it"]};
+
 .qt.qpipe.job.demo_deals_backfill.test_a_worker_without_a_transform_is_refused:{[t]
     err:@[{.qetl.job.bounded.define[`no_transform;x]; ""};
-        `source`dataset`width!(`demo_deals;`no_transform_ds;1D);{x}];
+        `source`outputs`width!(`demo_deals;enlist `no_transform_ds;1D);{x}];
     .qunit.assertEquals[err like "*transform*";1b;"every job has a transform, even one that changes nothing"]};
 
 .qt.qpipe.job.demo_deals_backfill.test_a_transform_that_does_not_read_the_source_contract_is_refused:{[t]
     .qetl.transform.passthrough[`ddbftest_wrong_shape;`batch;([] sym:`symbol$(); px:`float$());([] sym:enlist `EURUSD; px:enlist 1.1)];
     err:@[{.qetl.job.bounded.define[`wrong_shape;x]; ""};
-        `source`dataset`width`transform!(`demo_deals;`wrong_shape_ds;1D;`ddbftest_wrong_shape);{x}];
+        `source`outputs`width`transform!(`demo_deals;enlist `wrong_shape_ds;1D;`ddbftest_wrong_shape);{x}];
     .qt.support.drop_rows[`.qetl.transform.registry;`ddbftest_wrong_shape];
     .qunit.assertEquals[err like "*does not read source demo_deals*";1b;
         "a transform written against another shape fails at declaration, not on the first window"]};
 
 .qt.qpipe.job.demo_deals_backfill.test_a_clocked_transform_is_refused_for_a_bounded_worker:{[t]
     err:@[{.qetl.job.bounded.define[`clocked;x]; ""};
-        `source`dataset`width`transform!(`demo_deals;`clocked_ds;1D;`cross_quotes);{x}];
+        `source`outputs`width`transform!(`demo_deals;enlist `clocked_ds;1D;`cross_quotes);{x}];
     .qunit.assertEquals[err like "*takes as_of*";1b;"a window has no single instant to hand a transform, so one that needs it is refused by name"]};
 
 / --- the data-quality gate -----------------------------------------------
@@ -1236,7 +1264,7 @@
 
 .qt.qpipe.job.demo_deals_backfill.test_a_zero_width_is_refused:{[t]
     .qunit.assertError[{.qetl.job.bounded.define[`zero_width;x]};
-        `source`dataset`width`transform!(`demo_deals;`something_else;0D00:00;`demo_deals_passthrough);
+        `source`outputs`width`transform!(`demo_deals;enlist `something_else;0D00:00;`demo_deals_passthrough);
         "a zero width plans infinitely many empty windows"]};
 
 

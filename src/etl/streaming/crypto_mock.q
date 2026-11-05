@@ -269,7 +269,7 @@
 
 \d .
 
-.qetl.job.stream.define[`crypto_mock;`procname`subscribe_to`publishes`period`on_timer`note`state`ephemeral!(
+.qetl.job.stream.define[`crypto_mock;`procname`subscribe_to`outputs`period`on_timer`note`state`ephemeral!(
     `cryptomock1;
     `symbol$();
     `crypto_book`crypto_trades;

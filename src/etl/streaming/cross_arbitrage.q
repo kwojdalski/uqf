@@ -258,7 +258,7 @@
 .qetl.cfg.audit.watch[`cross_arbitrage;
     `.qpipe.job.cross_arbitrage.notional`.qpipe.job.cross_arbitrage.max_skew];
 
-.qetl.job.stream.define[`cross_arbitrage;`procname`subscribe_to`publishes`on_batch`note`state`ephemeral!(
+.qetl.job.stream.define[`cross_arbitrage;`procname`subscribe_to`outputs`on_batch`note`state`ephemeral!(
     `crossarb1;
     enlist `superbook;
     `cross_arbitrage`config_change;

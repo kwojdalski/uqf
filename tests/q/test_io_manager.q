@@ -805,7 +805,7 @@
     / At DEFINE time, not at first write. A worker with a broken manager
     / should fail before it has fetched a window it cannot store.
     .qunit.assertError[{.qetl.job.bounded.define[`io_broken;x]};
-        `source`dataset`width`transform`io!(`demo_deals;`io_broken_ds;1D;`demo_deals_passthrough;42);
+        `source`outputs`width`transform`io!(`demo_deals;enlist `io_broken_ds;1D;`demo_deals_passthrough;42);
         "a malformed io manager stops the worker at declaration"]};
 
 .qt.qetl.io.test_a_custom_manager_receives_the_target_and_batch:{[t]
@@ -837,7 +837,7 @@
     / had could not be registered at all. Registration order silently decided
     / which declarations were legal.
     .qunit.assertEquals[.qetl.job.bounded.define[`io_newkey;
-        `source`dataset`width`transform`io!(`demo_deals;`io_newkey_ds;1D;`demo_deals_passthrough;.qetl.io.discard)];
+        `source`outputs`width`transform`io!(`demo_deals;enlist `io_newkey_ds;1D;`demo_deals_passthrough;.qetl.io.discard)];
         `io_newkey;
         "a worker declaring an optional key registers regardless of order"]};
 

@@ -330,7 +330,7 @@
 / The limits are loaded at start (on_start) and watched, so a change over
 / IPC, or a restart that drops one, lands in config_change (#1112).
 .qetl.cfg.audit.watch[`fx_positions;enlist `.qpipe.job.fx_positions.limits];
-.qetl.job.stream.define[`fx_positions;`procname`subscribe_to`publishes`on_batch`period`on_timer`on_start`start_with_all`replay`restore_from`carry`note`state!(
+.qetl.job.stream.define[`fx_positions;`procname`subscribe_to`outputs`on_batch`period`on_timer`on_start`start_with_all`replay`restore_from`carry`note`state!(
     `fxpositions1;
     enlist `executions;
     `fx_position`fx_limit_breach`fx_position_open`config_change;

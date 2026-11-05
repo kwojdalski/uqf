@@ -79,7 +79,7 @@
 
 .qt.qpipe.job.eq_markout.test_the_job_is_declared_over_the_canonical_tables_and_publishes_the_dataset:{[tc]
     d:.qetl.job.stream.horizons.def `eq_markout;
-    .qunit.assertEquals[(d`events;d`reference;d`publishes);(`executions;`market_data;`eq_markout);"the two canonical tables in, the dataset out"];
+    .qunit.assertEquals[(d`events;d`reference;first d`outputs);(`executions;`market_data;`eq_markout);"the two canonical tables in, the dataset out"];
     .qunit.assertEquals[(d`event_time;d`reference_time;d`ready_on);(`source_time;`source_time;`both);"source_time on both clocks, wall and reference readiness"];
     .qunit.assertEquals[(d`identity;d`retain_by;d`by);(`venue`fill_id;`sym`source;enlist `sym);"identity, per-source retention, readiness keyed by symbol"];
     .qunit.assertEquals[(d`horizon;d`lookback;d`max_age);(0D00:01:00;0D;0D00:01:00);"the furthest horizon, no reach back, a minute of staleness"];

@@ -58,7 +58,7 @@ LEDGER_Q = (
 )
 JOB_Q = (
     ".qetl.job.stream.define[`pb_general_ledger;"
-    "`procname`subscribe_to`publishes`note!(`pb_ledger1;`symbol$();enlist `{table};"
+    "`procname`subscribe_to`outputs`note!(`pb_ledger1;`symbol$();enlist `{table};"
     '"publishes the general ledger")];\n'
 )
 #: Root globals of a starter-pack process (`system"f"` / `system"v"`), as the probe reports them.

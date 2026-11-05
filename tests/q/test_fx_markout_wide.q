@@ -24,8 +24,8 @@
 .qt.qpipe.job.fx_markout_wide.test_the_wide_job_is_the_long_job_with_the_other_layout:{[tc]
     long_job:.qetl.job.stream.horizons.def `fx_markout;
     w:.qetl.job.stream.horizons.def `fx_markout_wide;
-    .qunit.assertEquals[(w`events;w`reference;w`transform;w`publishes);(`executions;`market_data;`fx_markout_score_wide;`fx_markout_wide);"the same inputs, the wide scoring, the wide table"];
-    .qunit.assertEquals[(`procname`transform`publishes`note`ephemeral`keep`legs) _ long_job;(`procname`transform`publishes`note`ephemeral`keep`legs) _ w;"and every other declared choice identical"]};
+    .qunit.assertEquals[(w`events;w`reference;w`transform;first w`outputs);(`executions;`market_data;`fx_markout_score_wide;`fx_markout_wide);"the same inputs, the wide scoring, the wide table"];
+    .qunit.assertEquals[(`procname`transform`outputs`note`ephemeral`keep`legs) _ long_job;(`procname`transform`outputs`note`ephemeral`keep`legs) _ w;"and every other declared choice identical"]};
 
 .qt.qpipe.job.fx_markout_wide.test_the_wide_example_is_the_long_example_reshaped:{[tc]
     / the two hand-written worked examples of fx_markout_outputs.q must be the same numbers in two layouts

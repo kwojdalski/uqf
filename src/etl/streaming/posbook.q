@@ -290,7 +290,7 @@
 / The book carries across days (#943, #963): the shell publishes it onto
 / position_open at end of day and, on replay, sets it from that snapshot and
 / re-applies whatever was logged ahead of it - fills included, in order.
-.qetl.job.stream.define[`posbook;`procname`subscribe_to`publishes`on_batch`start_with_all`replay`carry`note`state!(
+.qetl.job.stream.define[`posbook;`procname`subscribe_to`outputs`on_batch`start_with_all`replay`carry`note`state!(
     `posbook1;
     `executions`market_data;
     `position`position_open;

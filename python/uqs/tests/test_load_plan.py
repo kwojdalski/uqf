@@ -26,7 +26,7 @@ SIDECAR = {
     "src/etl/sources/zz_side_src.q": (".qpipe.source.zz_side_src.source_name:`zz_side_src\n"),
     "src/etl/streaming/zz_side.q": (
         ".qpipe.job.zz_side.read:{[h] .qpipe.source.zz_side_src.source_name}\n"
-        ".qetl.job.stream.define[`zz_side;`procname`subscribe_to`publishes`note!"
+        ".qetl.job.stream.define[`zz_side;`procname`subscribe_to`outputs`note!"
         '(`zzside1;`symbol$();enlist `zz_tape;"a sidecar")];\n'
     ),
 }

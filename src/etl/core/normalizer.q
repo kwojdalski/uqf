@@ -34,7 +34,7 @@
 / REGISTERED AS A STREAMING JOB, because it is one: the runner subscribes,
 / wires publish and installs upd exactly as for any other job. define
 / performs the .qetl.job.stream.define itself - subscribe_to is the source list,
-/ publishes is the output, on_batch is the dispatcher - so an instance
+/ outputs is the one table it is named for, on_batch is the dispatcher - so an instance
 / cannot declare its edges differently from its mappings.
 
 \d .
@@ -83,7 +83,7 @@
     (` sv (.qetl.job.stream.namespace name),`on_batch) set handler;
     / The passthrough options (start_with_all, note, on_start, check, on_fail)
     / go straight to define, which validates them once (#1232).
-    .qetl.job.stream.define[name;(`procname`subscribe_to`publishes`on_batch!(
+    .qetl.job.stream.define[name;(`procname`subscribe_to`outputs`on_batch!(
         decl`procname; key srcs; enlist name; handler)),.qetl.job.stream.passthrough decl];
     / registered only once the streaming job is, as horizon does
     .qetl.job.stream.normalizer.registry[name]:enlist decl;

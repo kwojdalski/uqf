@@ -104,13 +104,32 @@
 .qt.qetl.job.stream.test_a_subscriber_with_no_handler_is_refused:{[t]
     / It would receive every batch and drop it, and look healthy doing so.
     .qunit.assertError[{.qetl.job.stream.define[`handlerless;x]};
-        `procname`subscribe_to`publishes`period`on_timer!(
+        `procname`subscribe_to`outputs`period`on_timer!(
             `handlerless1;enlist `trades;`symbol$();0D00:00:01;{[] ()});
         "a job that subscribes must say what to do with a batch"]};
 
+.qt.qetl.job.stream.test_the_retired_publishes_key_is_refused_with_its_migration:{[t]
+    .qunit.assertThrows[{.qetl.job.stream.define[`sj_old_key;x]};
+        `procname`subscribe_to`publishes`period`on_timer!(
+            `sjoldkey1;`symbol$();enlist `sj_old_key_out;0D00:00:01;{[] ()});
+        "*declares publishes, which is now outputs - rename the key*";
+        "the old spelling is refused with the one-way migration, not read as an alias"];
+    .qunit.assertFalse[`sj_old_key in .qetl.job.stream.defined[];"and the refused job is not registered"]};
+
+.qt.qetl.job.stream.test_outputs_may_be_empty_or_several_for_a_streaming_job:{[t]
+    .qetl.job.stream.define[`sj_out_none;`procname`subscribe_to`outputs`period`on_timer!(
+        `sjoutnone1;`symbol$();`symbol$();0D00:00:01;{[] ()})];
+    .qetl.job.stream.define[`sj_out_two;`procname`subscribe_to`outputs`period`on_timer!(
+        `sjouttwo1;`symbol$();`sj_out_a`sj_out_b;0D00:00:01;{[] ()})];
+    r:(count .qetl.job.stream.def[`sj_out_none]`outputs;.qetl.job.stream.def[`sj_out_two]`outputs);
+    `.qetl.job.stream.jobs set (`sj_out_none`sj_out_two) _ .qetl.job.stream.jobs;
+    `.qetl.job.stream.initial set (`sj_out_none`sj_out_two) _ .qetl.job.stream.initial;
+    `.qetl.job.stream.procnames set (`sjoutnone1`sjouttwo1) _ .qetl.job.stream.procnames;
+    .qunit.assertEquals[r;(0;`sj_out_a`sj_out_b);"a streaming job keeps its rules: none for a job that keeps its output local, several for one that fans out"]};
+
 .qt.qetl.job.stream.test_a_job_that_does_nothing_is_refused:{[t]
     .qunit.assertError[{.qetl.job.stream.define[`idle;x]};
-        `procname`subscribe_to`publishes!(`idle1;`symbol$();`symbol$());
+        `procname`subscribe_to`outputs!(`idle1;`symbol$();`symbol$());
         "a job with neither a handler nor a timer runs nothing at all"]};
 
 / start_with_all and note are read by uqs's process registry, which is derived
@@ -118,21 +137,21 @@
 / rather than read later as a registry that quietly disagrees.
 .qt.qetl.job.stream.test_an_autostart_that_is_not_a_boolean_is_refused:{[t]
     .qunit.assertThrows[{.qetl.job.stream.define[`badstart;x]};
-        `procname`subscribe_to`publishes`period`on_timer`start_with_all!(
+        `procname`subscribe_to`outputs`period`on_timer`start_with_all!(
             `badstart1;`symbol$();`symbol$();0D00:00:01;{[] ()};`yes);
         "*start_with_all must be a boolean*";
         "start_with_all is a flag, not a word that reads like one"]};
 
 .qt.qetl.job.stream.test_a_note_that_is_not_a_string_is_refused:{[t]
     .qunit.assertThrows[{.qetl.job.stream.define[`badnote;x]};
-        `procname`subscribe_to`publishes`period`on_timer`note!(
+        `procname`subscribe_to`outputs`period`on_timer`note!(
             `badnote1;`symbol$();`symbol$();0D00:00:01;{[] ()};`why);
         "*note must be a string*";
         "a note is prose for the process table, so a symbol is refused"]};
 
 .qt.qetl.job.stream.test_state_naming_a_variable_the_job_lacks_is_refused:{[t]
     .qunit.assertThrows[{.qetl.job.stream.define[`badstate;x]};
-        `procname`subscribe_to`publishes`period`on_timer`state!(
+        `procname`subscribe_to`outputs`period`on_timer`state!(
             `badstate1;`symbol$();`symbol$();0D00:00:01;{[] ()};enlist `nosuch);
         "*state names nosuch, which .qpipe.job.badstate does not define*";
         "a declared variable that does not exist would make reset a silent no-op"]};
@@ -173,20 +192,20 @@
 
 .qt.qetl.job.stream.test_a_declaration_missing_a_field_is_refused:{[t]
     .qunit.assertError[{.qetl.job.stream.define[`incomplete;x]};
-        `procname`subscribe_to`publishes!(`incomplete1;enlist `t;`symbol$());
+        `procname`subscribe_to`outputs!(`incomplete1;enlist `t;`symbol$());
         "a job with no on_batch is refused at declaration"]};
 
 .qt.qetl.job.stream.test_half_a_timer_is_refused:{[t]
     / A period with no body is a job whose timer never does anything, and
     / every other test still passes.
     .qunit.assertError[{.qetl.job.stream.define[`halftimer;x]};
-        `procname`subscribe_to`publishes`on_batch`period!(
+        `procname`subscribe_to`outputs`on_batch`period!(
             `halftimer1;enlist `t;`symbol$();{[t;x] ()};0D00:00:01);
         "a period without an on_timer is refused"]};
 
 .qt.qetl.job.stream.test_two_jobs_may_not_claim_one_process:{[t]
     .qunit.assertError[{.qetl.job.stream.define[`impostor;x]};
-        `procname`subscribe_to`publishes`on_batch!(
+        `procname`subscribe_to`outputs`on_batch!(
             `crypto_markout1;enlist `t;`symbol$();{[t;x] ()});
         "one process runs one job, so a second claim on crypto_markout1 is refused"]};
 
@@ -291,7 +310,7 @@
 
 / Every registered job that publishes on a timer.
 .qt.qetl.job.stream.feeds:{[] .qetl.job.stream.defined[] where
-    {[j] d:.qetl.job.stream.def j; (`period in key d) and count d`publishes} each .qetl.job.stream.defined[]}
+    {[j] d:.qetl.job.stream.def j; (`period in key d) and count d`outputs} each .qetl.job.stream.defined[]}
 
 / Invariant 3, plus the length agreement it exists to protect: a batch's
 / row count comes from its first column, so a column of a different
@@ -796,7 +815,7 @@
 .qt.qetl.job.stream.test_the_mock_publishes_no_sim_fills:{[t]
     / The paper strategy's table. A mock that published it would tempt a
     / position engine into consuming it.
-    .qunit.assertFalse[`crypto_sim_fills in .qetl.job.stream.def[`crypto_mock]`publishes;
+    .qunit.assertFalse[`crypto_sim_fills in .qetl.job.stream.def[`crypto_mock]`outputs;
         "crypto_sim_fills is not something this mock claims to publish"]};
 
 / --- the normalizers and posbook over them -------------------------------
@@ -1415,7 +1434,7 @@
         "but the graph sees only its input, so it draws no cycle"]};
 
 .qt.qetl.job.stream.test_restore_declarations_are_refused_without_a_replay:{[t]
-    base:`procname`subscribe_to`publishes`on_batch!(`sjrestoreprobe1;enlist `quote;`symbol$();{[t;x]});
+    base:`procname`subscribe_to`outputs`on_batch!(`sjrestoreprobe1;enlist `quote;`symbol$();{[t;x]});
     .qunit.assertThrows[.qetl.job.stream.define[`sj_restore_probe;];base,enlist[`restore_from]!enlist enlist `quote;
         "*restore_from without replay 1b*";"restore tables are read only by a replay"];
     .qunit.assertThrows[.qetl.job.stream.define[`sj_restore_probe;];base,enlist[`on_replayed]!enlist {[] };
@@ -1433,7 +1452,7 @@
 
 .qt.qetl.job.stream.check_probe:{[name;procname;mode;chk]
     / A feed that keeps its output local, so the output-contract suite has nothing to drive.
-    .qetl.job.stream.define[name;`procname`subscribe_to`publishes`period`on_timer`check`on_fail!(
+    .qetl.job.stream.define[name;`procname`subscribe_to`outputs`period`on_timer`check`on_fail!(
         procname;`symbol$();`symbol$();0D00:00:01;{[] };chk;mode)];
     .qt.qetl.job.stream.reset[];
     .qetl.job.stream.wire[name;.qt.qetl.job.stream.recorder[name]];
@@ -1504,7 +1523,7 @@
     .qunit.assertEquals[h`last_error;`$"check threw: boom";"with the check's own error"]};
 
 .qt.qetl.job.stream.test_a_check_must_declare_what_failure_does:{[t]
-    base:`procname`subscribe_to`publishes`on_batch!(`sjcheckbad1;enlist `quote;`symbol$();{[t;x]});
+    base:`procname`subscribe_to`outputs`on_batch!(`sjcheckbad1;enlist `quote;`symbol$();{[t;x]});
     .qunit.assertThrows[.qetl.job.stream.define[`sj_check_bad;];base,enlist[`check]!enlist .qt.qetl.job.stream.neg_check;
         "*declares a check but no on_fail*";"the author decides whether bad rows hold their neighbours"];
     .qunit.assertThrows[.qetl.job.stream.define[`sj_check_bad;];base,`check`on_fail!(.qt.qetl.job.stream.neg_check;`skip);
@@ -1631,7 +1650,7 @@
         "a change over IPC, or a restart that drops one, reaches config_change"]};
 
 .qt.qetl.job.stream.test_on_start_must_be_callable:{[t]
-    base:`procname`subscribe_to`publishes`period`on_timer!(`sjonstart1;`symbol$();`symbol$();0D00:00:01;{[] });
+    base:`procname`subscribe_to`outputs`period`on_timer!(`sjonstart1;`symbol$();`symbol$();0D00:00:01;{[] });
     .qunit.assertThrows[.qetl.job.stream.define[`sj_on_start_bad;];base,enlist[`on_start]!enlist 1;
         "*on_start must be a niladic function*";"refused at declaration"]};
 
@@ -1689,7 +1708,7 @@
 .qt.qetl.job.stream.recovering:{[extra]
     `.qpipe.job.sj_rec.book set ([] sym:`symbol$(); qty:`float$());
     / the dict in parentheses: right to left, `,extra` would join the values
-    (`procname`subscribe_to`publishes`on_batch`state!(`sjrec1;enlist `quote;`symbol$();{[t;x]};enlist `book)),extra}
+    (`procname`subscribe_to`outputs`on_batch`state!(`sjrec1;enlist `quote;`symbol$();{[t;x]};enlist `book)),extra}
 
 .qt.qetl.job.stream.test_state_without_a_recovery_policy_is_refused:{[t]
     .qunit.assertThrows[.qetl.job.stream.define[`sj_rec;];.qt.qetl.job.stream.recovering[()!()];

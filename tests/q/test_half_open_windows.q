@@ -142,7 +142,7 @@
             enlist[`batch]!enlist ([] time:enlist 2026.10.09D10:00; id:enlist 1; px:enlist 1f);
             ([] time:enlist 2026.10.09D10:00; id:enlist 1; px:enlist 1f)))];
     .qetl.job.bounded.define[`ho_backfill;
-        `source`dataset`width`transform!(`ho_src;`ho_out;1D;`ho_passthrough)];
+        `source`outputs`width`transform!(`ho_src;enlist `ho_out;1D;`ho_passthrough)];
     }
 
 .qt.qetl.half_open.setUp_fresh:{[]
@@ -253,7 +253,7 @@
     ts:.qt.qetl.half_open.events[u];
     `.qetl.job.stream.jobs set `ho_feed _ .qetl.job.stream.jobs;
     `.qetl.job.stream.procnames set `ho_feed1 _ .qetl.job.stream.procnames;
-    .qetl.job.stream.define[`ho_feed;`procname`subscribe_to`publishes`period`poll!(
+    .qetl.job.stream.define[`ho_feed;`procname`subscribe_to`outputs`period`poll!(
         `ho_feed1;`symbol$();enlist `ho_feed_out;0D00:00:01;
         `fetch`normalize`next_cursor!(.qt.qetl.half_open.after[u;];{[page] select ts, id from page};{[page] last page`ts}))];
     kept:{[ts;lo;hi] .qetl.job.stream.preview_window[`ho_feed;10;lo;hi]`kept}[ts;;];

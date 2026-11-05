@@ -191,4 +191,4 @@
 .qt.qpipe.job.alert_sink.test_the_job_is_declared_as_a_subscriber_to_fx_limit_breach:{[t]
     d:.qetl.job.stream.def `alert_sink;
     .qunit.assertEquals[d`subscribe_to;enlist `fx_limit_breach;"it reads the breaches"];
-    .qunit.assertEquals[count d`publishes;0;"and publishes nothing"]};
+    .qunit.assertEquals[count d`outputs;0;"and publishes nothing"]};

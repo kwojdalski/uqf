@@ -192,7 +192,7 @@
         nms:key[ns] except `;
         nms:nms where {[ns;nm] 98h=type get ` sv ns,nm}[ns] each nms;
         ([] job:(count nms)#job; tbl:nms;
-            role:{[d;nm] $[nm in d`subscribe_to;`subscribe_to;nm in d`publishes;`publishes;`internal]}[d] each nms)
+            role:{[d;nm] $[nm in d`subscribe_to;`subscribe_to;nm in d`outputs;`outputs;`internal]}[d] each nms)
       } each .qetl.job.stream.defined[]}
 
 .qt.qetl.plant.tables.test_every_job_declares_the_shape_the_plant_actually_carries:{[t]
@@ -202,7 +202,7 @@
     {[row]
         plant:cols .qt.qetl.plant.tables.tbl row`tbl;
         theirs:cols get ` sv (.qetl.job.stream.namespace row`job),row`tbl;
-        want:$[row[`role]=`publishes; 1_plant; plant];
+        want:$[row[`role]=`outputs; 1_plant; plant];
         if[not theirs~want;
             `.qt.qetl.plant.tables.bad set .qt.qetl.plant.tables.bad,enlist
                 (string[row`job],"/",string[row`tbl]," (",string[row`role],"): job has ",

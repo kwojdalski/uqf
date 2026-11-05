@@ -37,12 +37,12 @@
 / A one-minute bar, closed 5 seconds after its minute ends (a fill may be that
 / late and still amend it), looked for every second. The kind also closes the
 / day's last windows at end of day and restores open ones from the log.
-.qetl.job.stream.at_bars[`exec_bars;`procname`events`event_time`transform`publishes`width`lateness`period`start_with_all`note!(
+.qetl.job.stream.at_bars[`exec_bars;`procname`events`event_time`transform`outputs`width`lateness`period`start_with_all`note!(
     `exec_bars1;
     `executions;
     `source_time;
     `exec_bars;
-    `exec_bar;
+    enlist `exec_bar;
     .qpipe.transform.exec_bars.width;
     .qpipe.transform.exec_bars.lateness;
     0D00:00:01;

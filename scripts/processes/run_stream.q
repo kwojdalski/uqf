@@ -29,7 +29,7 @@
 / UPSTREAM IS DERIVED, NOT NAMED (#927). With the plant in this process,
 / -job also starts every in-tree job upstream of it - each job publishing a
 / table it subscribes to, and theirs in turn - read from the jobs' own
-/ subscribe_to/publishes, as `uqs start --profile` reads the same graph. So
+/ subscribe_to/outputs, as `uqs start --profile` reads the same graph. So
 / moving a job onto a normalized table never changes its run command: the
 / executions normalizer above is started because fx_positions subscribes to
 / executions, not because the command line says so. Feeds are never added:
@@ -238,7 +238,7 @@ if[`verbose in key .qproc.standalone.opts; .qetl.log.debug 1b];
     reg:.qetl.job.stream.jobs;
     known:key reg;
     subs:{[reg;j] (first reg j)`subscribe_to}[reg] each known;
-    pubs:{[reg;j] (first reg j)`publishes}[reg] each known;
+    pubs:{[reg;j] (first reg j)`outputs}[reg] each known;
     makers:known where 0<count each subs;
     made:pubs where 0<count each subs;
     seen:jobs; frontier:jobs; chain:`symbol$();

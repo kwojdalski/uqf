@@ -210,7 +210,7 @@ def test_only_a_starting_verb_prepares_the_tree(monkeypatch, tmp_path):
 
 BUNDLE_JOB = (
     "\\d .qpipe.job.synth_feed\nsent:0\non_timer:{[] sent+:1}\n\\d .\n"
-    ".qetl.job.stream.define[`synth_feed;`procname`subscribe_to`publishes!"
+    ".qetl.job.stream.define[`synth_feed;`procname`subscribe_to`outputs!"
     "(`synthfeed1;`symbol$();enlist `synth_tape)];\n"
 )
 
@@ -289,7 +289,7 @@ def test_every_held_plant_table_is_listed_for_getdata(tmp_path: Path, monkeypatc
 
 # ------------------------------------------------------------ capabilities
 
-WORKER = ".qetl.job.bounded.define[`w;`source`dataset`width`procname!(`s;`d;1D;`w1)];\n"
+WORKER = ".qetl.job.bounded.define[`w;`source`outputs`width`procname!(`s;enlist `d;1D;`w1)];\n"
 
 
 def _worker(root: Path, text: str, transport: str, monkeypatch):
@@ -431,7 +431,7 @@ SYNTH = {
         "px:enlist 100f+sent)];\n"
         "    }\n"
         "\\d .\n"
-        ".qetl.job.stream.define[`synth_feed;`procname`subscribe_to`publishes`period`on_timer`note!(\n"
+        ".qetl.job.stream.define[`synth_feed;`procname`subscribe_to`outputs`period`on_timer`note!(\n"
         "    `synthfeed1;`symbol$();enlist `synth_tape;0D00:00:01.000;"
         '.qpipe.job.synth_feed.on_timer;"five deterministic rows")];\n'
     ),
@@ -458,8 +458,8 @@ SYNTH = {
         ".qetl.transform.passthrough[`synth_hist_passthrough;`batch;"
         "0#.qpipe.source.synth_src.fixture[];.qpipe.source.synth_src.fixture[]];\n"
         ".qetl.job.bounded.define[`synth_hist_backfill;\n"
-        "    `source`dataset`width`transform`procname`note`source_version!\n"
-        "        (`synth_src;`synth_hist;0D01:00:00;`synth_hist_passthrough;`synthhist1;\n"
+        "    `source`outputs`width`transform`procname`note`source_version!\n"
+        "        (`synth_src;enlist `synth_hist;0D01:00:00;`synth_hist_passthrough;`synthhist1;\n"
         '         "copies synth_tape into the HDB";`v1)];\n'
     ),
     "tables.q": (

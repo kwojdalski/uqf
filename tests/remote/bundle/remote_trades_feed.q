@@ -20,7 +20,7 @@
 
 \d .
 
-.qetl.job.stream.define[`remote_trades_feed;`procname`subscribe_to`publishes`period`on_timer`note!(
+.qetl.job.stream.define[`remote_trades_feed;`procname`subscribe_to`outputs`period`on_timer`note!(
     `remote_trades_feed1;
     `symbol$();
     enlist `remote_trades;

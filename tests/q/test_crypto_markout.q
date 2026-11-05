@@ -84,7 +84,7 @@
 
 .qt.qpipe.job.crypto_markout.test_the_job_is_declared_over_the_canonical_tables_and_publishes_the_dataset:{[tc]
     d:.qetl.job.stream.horizons.def `crypto_markout;
-    .qunit.assertEquals[(d`events;d`reference;d`publishes);(`executions;`market_data;`crypto_markout);"the two canonical tables in, the dataset out - never crypto_trades or crypto_book"];
+    .qunit.assertEquals[(d`events;d`reference;first d`outputs);(`executions;`market_data;`crypto_markout);"the two canonical tables in, the dataset out - never crypto_trades or crypto_book"];
     .qunit.assertEquals[(d`event_time;d`reference_time;d`ready_on);(`source_time;`source_time;`both);"source_time on both clocks, wall and reference readiness"];
     .qunit.assertEquals[(d`identity;d`retain_by;d`by);(`venue`fill_id;`sym`source;enlist `sym);"identity, per-venue retention, readiness keyed by pair"];
     .qunit.assertEquals[(d`horizon;d`lookback;d`max_age);(0D00:00:10;0D;.qf.mkt.reference_max_age);"the furthest horizon, no reach back, the library's staleness limit"];

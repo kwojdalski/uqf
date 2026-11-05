@@ -29,7 +29,7 @@ MAPPING = "src/etl/transforms/kafka_client_flow.q"
 SIDE_MAP = ".qetl.transform.define[`zz_map;`inputs`output`fn!(()!();()!();{[m] m})];\n"
 SIDE_JOB = (
     ".qetl.kafka.topic.define[`zz.topic;`mapping`output`job!(`zz_map;`zz_out;`zz_decoder)];\n"
-    ".qetl.job.stream.define[`zz_decoder;`procname`subscribe_to`publishes`note!"
+    ".qetl.job.stream.define[`zz_decoder;`procname`subscribe_to`outputs`note!"
     '(`zzdecoder1;enlist `kafka_message;`zz_out`kafka_dead_letter;"a sidecar decoder")];\n'
 )
 

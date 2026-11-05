@@ -1084,9 +1084,10 @@ uqs status --sort Status --columns status
 is the question behind every `up, but idle` line above. A table produced from
 outside the process list is named as external. A backfill subscribes and
 publishes nothing on the plant, so its row shows what its bounded worker
-declares instead: the `source` it reads, marked `(source)`, and the `dataset` it
-writes. A process with no declared edges - every vendored TorQ one - shows a
-dash. On a narrow terminal, `--columns status` drops the graph columns.
+declares instead: the `source` it reads, marked `(source)`, and the dataset it
+writes (its one `outputs`). A process with no declared edges - every vendored
+TorQ one - shows a dash. On a narrow terminal, `--columns status` drops the
+graph columns.
 
 ### Responds column
 

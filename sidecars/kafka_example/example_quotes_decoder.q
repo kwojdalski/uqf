@@ -73,7 +73,7 @@
 
 .qetl.kafka.topic.define[`example.quotes;`mapping`output`job!(`example_quote_map;`example_quote;`example_quotes_decoder)];
 
-.qetl.job.stream.define[`example_quotes_decoder;`procname`subscribe_to`publishes`on_batch`replay`restore_from`on_replayed`note`state!(
+.qetl.job.stream.define[`example_quotes_decoder;`procname`subscribe_to`outputs`on_batch`replay`restore_from`on_replayed`note`state!(
     `examplequotes1;
     enlist `kafka_message;
     `example_quote`kafka_dead_letter;

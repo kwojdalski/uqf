@@ -134,7 +134,7 @@ def test_a_scaffolded_worker_declares_its_source_and_dataset():
     plan = backfill.bounded_worker("fx_rates", "fx_rates", "sym:symbol, mid:float")
     worker = _body(plan, "fx_rates_backfill.q")
     assert ".qetl.job.bounded.define[`fx_rates_backfill;" in worker
-    assert "`fx_rates;`fx_rates;1D;" in worker
+    assert "`fx_rates;enlist `fx_rates;1D;" in worker
 
 
 def test_a_scaffolded_fixture_carries_a_row():
@@ -407,9 +407,9 @@ def test_a_job_publishing_nothing_is_not_sent_to_the_catalog():
 
 
 def test_a_bounded_worker_is_told_about_its_dataset():
-    """A backfill's new table is its `dataset`, not a `publishes`, so it needs
-    the note by a different name - and the first version of this only wired it
-    into the streaming path."""
+    """A backfill's new table is its dataset (the worker's one output), not a
+    published table, so it needs the note by a different name - and the first
+    version of this only wired it into the streaming path."""
     plan = backfill.bounded_worker("fxprobe", "fx_probe", "sym:symbol, mid:float")
     notes = " ".join(plan.notes)
     assert "uqs_catalog.q" in notes and "fx_probe" in notes

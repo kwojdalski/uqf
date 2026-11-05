@@ -241,6 +241,6 @@ test_an_atom_then_a_list_does_not_break_the_memory:{[t]
     `.qetl.cfg.audit.watched set .qt.qetl.cfg.audit.saved_watched;
     owners:key .qetl.cfg.audit.watched;
     owners:owners where owners in .qetl.job.stream.defined[];
-    bad:owners where not {[j] `config_change in (.qetl.job.stream.def j)`publishes} each owners;
+    bad:owners where not {[j] `config_change in (.qetl.job.stream.def j)`outputs} each owners;
     .qunit.assertEquals[count bad;0;
         "a job that audits its config must declare config_change among its publishes"]};

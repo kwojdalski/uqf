@@ -45,7 +45,7 @@ scaffold pulsefeed:
 
 \d .
 
-.qetl.job.stream.define[`pulsefeed;`procname`subscribe_to`publishes`period`on_timer`note!(
+.qetl.job.stream.define[`pulsefeed;`procname`subscribe_to`outputs`period`on_timer`note!(
     `pulsefeed1;
     `symbol$();                    / subscribes to nothing - this is what makes it a feed
     enlist `pulse;
@@ -117,7 +117,7 @@ built from them that fetches the page after its cursor, normalizes it, publishes
 it and then advances the cursor:
 
 ```q
-.qetl.job.stream.define[`vectorize2;`procname`subscribe_to`publishes`period`poll!(
+.qetl.job.stream.define[`vectorize2;`procname`subscribe_to`outputs`period`poll!(
     `vectorize2_1;`symbol$();enlist `wide_orderbook;0D00:00:05;
     `fetch`normalize`next_cursor`source!(
         fetch;                         / [cursor] -> the page after it

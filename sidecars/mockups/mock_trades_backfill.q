@@ -20,7 +20,7 @@
 .qetl.transform.passthrough[`mock_trades_passthrough;`mock_trades;.qetl.plant.shape `mock_trades;.qpipe.source.mock_trades.fixture[]];
 
 .qetl.job.bounded.define[`mock_trades_backfill;
-    `source`dataset`width`transform`facts`procname`note!
-        (`mock_trades;`mock_trades;1D;`mock_trades_passthrough;.qpipe.job.mock_trades_backfill.facts;
+    `source`outputs`width`transform`facts`procname`note!
+        (`mock_trades;enlist `mock_trades;1D;`mock_trades_passthrough;.qpipe.job.mock_trades_backfill.facts;
          `mock_trades_backfill1;
          "Synthetic FX trades over any date range, from the mockups bundle's seeded mock transport - for exercising backfills with no data source")];

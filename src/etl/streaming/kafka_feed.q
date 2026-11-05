@@ -320,7 +320,7 @@
 
 \d .
 
-.qetl.job.stream.define[`kafka_feed;`procname`subscribe_to`publishes`period`on_timer`on_start`note!(
+.qetl.job.stream.define[`kafka_feed;`procname`subscribe_to`outputs`period`on_timer`on_start`note!(
     `kafka_feed1;
     `symbol$();
     enlist `kafka_message;

@@ -87,6 +87,7 @@
 \l src/etl/core/bounded_ready.q
 \l src/etl/core/bounded_worker.q
 \l src/etl/core/bounded_pin.q
+\l src/etl/core/bounded_outputs.q
 \l src/etl/core/bounded_batching.q
 \l src/etl/core/bounded_batch_read.q
 \l src/etl/core/bounded_flags.q
@@ -94,6 +95,7 @@
 \l src/etl/core/uptime.q
 \l src/etl/core/retention.q
 \l src/etl/core/stream_job.q
+\l src/etl/core/stream_outputs.q
 \l src/etl/core/stream_registries.q
 \l src/etl/core/stream_carry_recovery.q
 \l src/etl/core/stream_delivery.q

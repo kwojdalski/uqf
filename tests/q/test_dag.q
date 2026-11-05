@@ -299,7 +299,7 @@
     .qunit.assertTrue[0<count js;"there are streaming jobs to check"];
     bad:js where not {[j]
         d:.qetl.job.stream.def j; g:.qetl.dag.def j;
-        (((),d`subscribe_to)~g`inputs) and ((),d`publishes)~g`outputs
+        (((),d`subscribe_to)~g`inputs) and ((),d`outputs)~g`outputs
       } each js;
     .qunit.assertEquals[bad;`symbol$();"every streaming job's node carries its declared inputs and outputs"]};
 
@@ -330,7 +330,7 @@
 / check src/etl/streaming against the registry.
 .qt.qetl.dag.test_a_job_q_knows_about_is_in_the_graph_without_regenerating:{[t]
     saved:.qetl.job.stream.jobs;
-    decl:`ns`procname`subscribe_to`publishes!(`.qt.qetl.dag.probe;`dagprobe1;enlist`quote;enlist`dag_probe_out);
+    decl:`ns`procname`subscribe_to`outputs!(`.qt.qetl.dag.probe;`dagprobe1;enlist`quote;enlist`dag_probe_out);
     .qetl.job.stream.jobs[`dag_probe]:enlist decl;
     r:@[{.qetl.dag.adopt_all[]; .qetl.dag.def `dag_probe};::;{x}];
     .qetl.job.stream.jobs:saved;

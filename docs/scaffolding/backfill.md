@@ -170,8 +170,8 @@ facts:{[batch]
 .qetl.transform.passthrough[`fxprobe_passthrough;`batch;.qetl.plant.shape `fx_probe;.qpipe.source.fxprobe.fixture[]];
 
 .qetl.job.bounded.define[`fxprobe_backfill;
-    `source`dataset`width`transform`facts`procname`note!
-        (`fxprobe;`fx_probe;1D;`fxprobe_passthrough;.qpipe.job.fxprobe_backfill.facts;
+    `source`outputs`width`transform`facts`procname`note!
+        (`fxprobe;enlist `fx_probe;1D;`fxprobe_passthrough;.qpipe.job.fxprobe_backfill.facts;
          `fxprobe_backfill1;
          "SCAFFOLDED: bounded - say what this backfill is for")];
 ```

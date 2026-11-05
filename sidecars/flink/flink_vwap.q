@@ -47,7 +47,7 @@
 
 \d .
 
-.qetl.job.stream.define[`flink_vwap;`procname`subscribe_to`publishes`on_batch`note`state`ephemeral!(
+.qetl.job.stream.define[`flink_vwap;`procname`subscribe_to`outputs`on_batch`note`state`ephemeral!(
     `flink_vwap1;
     enlist `flink_vwap_raw;
     enlist `flink_vwap;

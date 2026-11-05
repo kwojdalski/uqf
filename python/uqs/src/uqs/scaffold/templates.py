@@ -240,8 +240,8 @@ facts:{{[batch]
 / `procname` is the process that runs this worker - the process registry is
 / read from this declaration, so there is no entry to add anywhere else.
 .qetl.job.bounded.define[`{worker};
-    `source`dataset`width`transform`facts{extra_keys}`procname`note!
-        (`{src};`{dataset};{width};`{transform_name};.qpipe.job.{worker}.facts{extra_values};
+    `source`outputs`width`transform`facts{extra_keys}`procname`note!
+        (`{src};enlist `{dataset};{width};`{transform_name};.qpipe.job.{worker}.facts{extra_values};
          `{proc};
          "SCAFFOLDED: bounded - say what this backfill is for")];
 """

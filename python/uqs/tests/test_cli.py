@@ -1934,9 +1934,9 @@ def test_a_dataset_an_unpartitioned_worker_fills_is_found(tmp_path):
     rather than write a tree that no longer loads."""
     root = _worker_tree(
         tmp_path,
-        "/ .qetl.job.bounded.define[`commented;`source`dataset!(`s;`fx)];\n"
-        ".qetl.job.bounded.define[`w;\n    `source`dataset`width`transform!\n"
-        "    (`s;`fx;1D;`s_passthrough)];\n",
+        "/ .qetl.job.bounded.define[`commented;`source`outputs!(`s;enlist `fx)];\n"
+        ".qetl.job.bounded.define[`w;\n    `source`outputs`width`transform!\n"
+        "    (`s;enlist `fx;1D;`s_passthrough)];\n",
     )
     assert create_backfill.workers_filling(root, "fx") == ["w"]
     assert create_backfill.workers_filling(root, "other") == []
@@ -1945,8 +1945,8 @@ def test_a_dataset_an_unpartitioned_worker_fills_is_found(tmp_path):
 def test_a_partitioned_worker_leaves_room_for_another(tmp_path):
     root = _worker_tree(
         tmp_path,
-        ".qetl.job.bounded.define[`w;`source`dataset`width`transform`partition!"
-        "(`s;`fx;1D;`s_passthrough;`EURUSD)];\n",
+        ".qetl.job.bounded.define[`w;`source`outputs`width`transform`partition!"
+        "(`s;enlist `fx;1D;`s_passthrough;`EURUSD)];\n",
     )
     assert create_backfill.workers_filling(root, "fx") == []
 

@@ -67,13 +67,13 @@
 / Every five seconds, over the last minute, five minutes and hour, on the outcome's
 / source time. An outcome received more than the lateness after it is dropped and
 / logged. The kind carries the buffer across midnight and replays it.
-.qetl.job.stream.at_rolling[`order_quality;`procname`events`by`event_time`transform`publishes`windows`lateness`period`start_with_all`note!(
+.qetl.job.stream.at_rolling[`order_quality;`procname`events`by`event_time`transform`outputs`windows`lateness`period`start_with_all`note!(
     `order_quality1;
     `order_outcomes;
     `book;
     `source_time;
     `order_quality;
-    `order_quality;
+    enlist `order_quality;
     .qpipe.transform.order_quality.windows;
     .qpipe.transform.order_quality.lateness;
     .qpipe.transform.order_quality.period;

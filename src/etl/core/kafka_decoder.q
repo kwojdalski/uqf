@@ -6,7 +6,7 @@
 / This was kafka_flow.q's body. It moved here so a SIDECAR can declare a
 / decoder of its own - its own process, topics, mappings and output tables -
 / without editing a file in this tree. The job file keeps what the tooling
-/ must read as literals (`publishes`, the publish calls) and hands everything
+/ must read as literals (`outputs`, the publish calls) and hands everything
 / else to the functions below, keyed by the job's name:
 / .
 /   .qpipe.job.<job>.publish          the stub .qetl.job.stream.wire replaces
@@ -81,7 +81,7 @@
 / @return a symbol vector, empty when the job can publish every output it decodes into
 / @eg .qetl.kafka.decoder.unpublished `kafka_flow  ->  `symbol$()
 .qetl.kafka.decoder.unpublished:{[job]
-    pub:(.qetl.job.stream.def job)`publishes;
+    pub:(.qetl.job.stream.def job)`outputs;
     exec topic from .qetl.kafka.topic.registry where owner=job, not output in pub}
 
 / Refuse a decoder job that is not whole, at load: an owned topic whose output it does not publish, no dead-letter table, or a missing function.
@@ -93,7 +93,7 @@
     who:"kafka decoder ",string job;
     ns:.qetl.job.stream.namespace job;
     if[count miss:`publish_dead`publish_decoded except key ns; 'who," defines no ",", " sv string miss];
-    if[not `kafka_dead_letter in (.qetl.job.stream.def job)`publishes; 'who," does not publish kafka_dead_letter"];
+    if[not `kafka_dead_letter in (.qetl.job.stream.def job)`outputs; 'who," does not publish kafka_dead_letter"];
     if[not (.qetl.job.stream.def job)[`state]~.qetl.kafka.decoder.state_names; 'who," must declare `marks`held`done as its state"];
     if[count bad:.qetl.kafka.decoder.unpublished[job];
         'who,": topic(s) ",(", " sv string bad)," declare an output it does not publish - add the table to its publishes and to publish_decoded"];
@@ -169,7 +169,7 @@
 / @eg .qetl.kafka.decoder.on_batch[`kafka_flow;`quote;()]
 .qetl.kafka.decoder.on_batch:{[job;t;x]
     if[0=count x; :()];
-    if[t in (.qetl.job.stream.def job)`publishes;
+    if[t in (.qetl.job.stream.def job)`outputs;
         if[.qetl.job.stream.replaying;
             mine:.qetl.kafka.decoder.mine[job;x];
             .qetl.kafka.decoder.put[job;`done;(.qetl.kafka.decoder.var[job;`done]) upsert .qetl.kafka.coordinate_set mine]];

@@ -66,8 +66,8 @@
             book:``; product:``; clock:`venue`venue)))];
 
 .qetl.job.bounded.define[`eq_fills_backfill;
-    `source`dataset`width`transform`check`facts`procname`note`partition`partition_column!
-        (`eq_fills;`executions;1D;`eq_fills_to_executions;
+    `source`outputs`width`transform`check`facts`procname`note`partition`partition_column!
+        (`eq_fills;enlist `executions;1D;`eq_fills_to_executions;
          .qpipe.job.eq_fills_backfill.quality_check;.qpipe.job.eq_fills_backfill.facts;
          `eq_fills_backfill1;
          "bounded: reads an equity fills csv drop and writes canonical executions, on the declared clock";

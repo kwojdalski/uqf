@@ -55,8 +55,8 @@ def test_a_backfill_reads_its_source_and_writes_its_dataset_and_partition(tmp_pa
     root = _tree(
         tmp_path,
         {
-            "src/etl/workers/w.q": ".qetl.job.bounded.define[`w;`source`dataset`width`transform"
-            "`partition`procname!(`s;`fx;1D;`s_passthrough;`EURUSD;`wbf1)];\n"
+            "src/etl/workers/w.q": ".qetl.job.bounded.define[`w;`source`outputs`width`transform"
+            "`partition`procname!(`s;enlist `fx;1D;`s_passthrough;`EURUSD;`wbf1)];\n"
         },
     )
     (row,) = job_rows(root)
@@ -74,7 +74,7 @@ def test_a_backfill_reads_its_source_and_writes_its_dataset_and_partition(tmp_pa
 
 def test_state_tells_a_scaffold_from_written_work(tmp_path):
     decl = (
-        ".qetl.job.stream.define[`{n};`procname`subscribe_to`publishes`period`on_timer!"
+        ".qetl.job.stream.define[`{n};`procname`subscribe_to`outputs`period`on_timer!"
         "(`{n}1;`symbol$();enlist `t;0D00:00:01;{{}})];\n"
     )
     root = _tree(

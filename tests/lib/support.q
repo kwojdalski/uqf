@@ -594,3 +594,11 @@ setenv[`UQF_FIXTURE_WRITES;enlist "1"];
 // Which namespaces are suites, and the layout rules that keep a renamed suite
 // from silently ceasing to run.
 system "l tests/lib/discovery.q";
+
+// A defined bounded worker's configuration, shaped as the declaration that
+// would define it again: the dataset it fills is `outputs`, a list of one
+// (#2102). The stored configuration keeps the dataset as `dataset`, derived;
+// a test that re-defines a worker from it with one field changed starts here.
+.qt.support.declaration:{[worker]
+    cfg:.qetl.job.bounded.def worker;
+    (enlist[`outputs]!enlist enlist cfg`dataset),`dataset _ cfg};

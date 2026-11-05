@@ -62,8 +62,8 @@
         .qpipe.transform.eq_markout_outputs.sample_rows[]))];
 
 .qetl.job.bounded.define[`hdb_eq_markout_backfill;
-    `source`dataset`width`transform`check`facts`procname`note`target_key`window_column`on_conflict`pin!
-    (`hdb_eq_markouts;`eq_markout;0D01;`hdb_eq_markout_long;
+    `source`outputs`width`transform`check`facts`procname`note`target_key`window_column`on_conflict`pin!
+    (`hdb_eq_markouts;enlist `eq_markout;0D01;`hdb_eq_markout_long;
      .qpipe.job.hdb_eq_markout_backfill.quality_check;.qpipe.job.hdb_eq_markout_backfill.facts;
      `hdb_eq_markout_backfill1;
      "bounded: marks out the HDB's equity executions against its market_data, into eq_markout, with the calculation eq_markout1 applies live";

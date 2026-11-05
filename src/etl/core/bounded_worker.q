@@ -51,7 +51,7 @@
 \d .
 
 / worker -> its configuration. `source` is the worker's registered .qetl.source
-/ source, `dataset` the name coverage is recorded under, `width` its window
+/ source, `dataset` the name coverage is recorded under (derived from `outputs`), `width` its window
 / size, `transform` the registered .qetl.transform transform its rows go through
 / between fetch and publish, and `ns` its namespace - DERIVED by define,
 / never supplied: see worker_root.
@@ -84,7 +84,7 @@
 / worker that publishes what it fetched says so by declaring a pass-through
 / transform, with examples - which makes "this job changes nothing" a tested
 / claim rather than an absence nobody decided.
-.qetl.job.bounded.required_cfg:`source`dataset`width`transform
+.qetl.job.bounded.required_cfg:`source`outputs`width`transform
 
 / Every worker instance lives under this one namespace, as
 / .qpipe.job.<worker>: .qpipe.job.demo_deals_backfill, .qpipe.job.upstream_trades_backfill.
@@ -203,7 +203,7 @@
 / and the opposite of .qetl.job.bounded.state.register, whose methods appear as a file
 / loads.
 / @param worker the worker's name
-/ @param decl dict of source, dataset, width, transform, and optionally
+/ @param decl dict of source, outputs (exactly one dataset), width, transform, and optionally
 /   check, facts, partition, io, procname (default `<worker>1), note,
 /   on_conflict (default `upsert - see .qetl.io's CONFLICTS), target_key
 /   (default the source's row_key - see require_target_key),
@@ -217,22 +217,22 @@
     / Both execution modes share .qpipe.job, so a name cannot belong to both.
     if[worker in key @[value;`.qetl.job.stream.jobs;{()}];
         '"define: ",string[worker]," is already a streaming job - job names must be unique across execution modes"];
+    decl:.qetl.job.bounded.require_outputs[worker;decl];
     missing:.qetl.job.bounded.required_cfg where not .qetl.job.bounded.required_cfg in key decl;
     if[count missing;
         '"define: ",string[worker]," is missing ",", " sv string missing];
     / The namespace is not configurable, and a supplied one is refused rather
-    / than overwritten: a worker declared with `ns`.qddbf would be looked
-    / for under .qpipe.job.demo_deals_backfill regardless, and the author would
-    / learn that from a contract failure at init naming twelve missing
-    / methods rather than from define naming the key.
+    / than overwritten: a worker declared with `ns`.qddbf would be looked for
+    / under .qpipe.job.demo_deals_backfill regardless, and the author would learn
+    / that from a contract failure at init, not from define naming the key.
     if[`ns in key decl;
         '"define: ",string[worker],"'s namespace is derived - .qpipe.job.",string[worker]," - not configured; drop the ns key"];
     / A key no column holds would have nowhere to go: refused by name, where
     / the collapsed dictionary this was refused it with a bare 'mismatch.
-    unknown:(key decl) except cols value .qetl.job.bounded.worker_cfg;
+    unknown:(key decl) except `outputs,cols value .qetl.job.bounded.worker_cfg;
     if[count unknown;
         '"define: ",string[worker]," declares ",(", " sv string unknown),
-         ", which a worker does not take - the keys are ",", " sv string cols value .qetl.job.bounded.worker_cfg];
+         ", which a worker does not take - the keys are ",", " sv string `outputs,(cols value .qetl.job.bounded.worker_cfg) except `dataset];
     decl[`ns]:.qetl.job.bounded.namespace worker;
     if[not -16h=type decl`width;
         '"define: ",string[worker],"'s width must be a timespan, e.g. 1D"];

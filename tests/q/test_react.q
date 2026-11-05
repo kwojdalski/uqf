@@ -455,7 +455,7 @@
     .qetl.source.define[`rxp_src;`source`table_name`time_column`row_key`columns`types`query`fixture`tz!
         (`rxp_src;`rxp_tab;`time;`id;`id`time`px;"jpf";{[h;f;t] .qetl.source.ipc[h;{[a;b] select from rxp_tab where time>=a, time<b};f;t]};dfx;`UTC)];
     .qetl.transform.passthrough[`rxp_pass;`batch;0#dfx[];dfx[]];
-    .qetl.job.bounded.define[`rxp_worker;`source`dataset`width`transform`check!(`rxp_src;`rxp_tab;1D;`rxp_pass;
+    .qetl.job.bounded.define[`rxp_worker;`source`outputs`width`transform`check!(`rxp_src;enlist `rxp_tab;1D;`rxp_pass;
         {[b] ([] check:count[b]#`always; status:count[b]#`breach; detail:count[b]#enlist "x")})];
     {.qetl.job.bounded.state.release_lock x; .qetl.job.bounded.state.clear_checkpoint x} `rxp_worker;
     .qetl.reaction.on_worker[`demo_deals;`rxp_worker;{[f;tt] `source_version`range_from`range_to!(`v1;f;tt)}];
@@ -475,7 +475,7 @@
     .qetl.source.define[`rxs_src;`source`table_name`time_column`row_key`columns`types`query`fixture`tz!
         (`rxs_src;`rxs_tab;`time;`id;`id`time`px;"jpf";{[h;f;t] .qetl.source.ipc[h;{[a;b] select from rxs_tab where time>=a, time<b};f;t]};dfx;`UTC)];
     .qetl.transform.passthrough[`rxs_pass;`batch;0#dfx[];dfx[]];
-    .qetl.job.bounded.define[`rxs_worker;`source`dataset`width`transform!(`rxs_src;`rxs_tab;1D;`rxs_pass)];
+    .qetl.job.bounded.define[`rxs_worker;`source`outputs`width`transform!(`rxs_src;enlist `rxs_tab;1D;`rxs_pass)];
     .qetl.reaction.on_worker[`demo_deals;`rxs_worker;{[f;tt] `source_version`range_from`range_to!(`v1;f;tt)}];
     ns:.qetl.job.bounded.namespace `rxs_worker;
     states:`completed`idle`partial`failed`validated`planned;

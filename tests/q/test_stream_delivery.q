@@ -21,7 +21,7 @@
 
 / A polling feed over `upstream`, with `extra` added to its poll.
 .qt.qetl.job.stream.delivery.declare:{[extra]
-    .qetl.job.stream.define[`sdt_feed;`procname`subscribe_to`publishes`period`poll!(
+    .qetl.job.stream.define[`sdt_feed;`procname`subscribe_to`outputs`period`poll!(
         `sdt_feed1;`symbol$();enlist `sdt_out;0D00:00:01;
         (`fetch`normalize`next_cursor!(.qt.qetl.job.stream.delivery.after;{[page] select ts, id, v from page};{[page] last page`ts})),extra)];
     (` sv .qetl.job.stream.namespace[`sdt_feed],`publish) set .qt.qetl.job.stream.delivery.record;
@@ -208,7 +208,7 @@
         "define: sdt_feed's poll row_key must be a symbol or symbols*";"a string is not a column name"]};
 
 .qt.qetl.job.stream.delivery.test_define_refuses_a_row_key_the_plant_table_lacks:{[t]
-    .qunit.assertThrows[{.qetl.job.stream.define[`sdt_feed;`procname`subscribe_to`publishes`period`poll!(
+    .qunit.assertThrows[{.qetl.job.stream.define[`sdt_feed;`procname`subscribe_to`outputs`period`poll!(
             `sdt_feed1;`symbol$();enlist `mkt_orderbook;0D00:00:01;
             `fetch`normalize`next_cursor`row_key!(.qt.qetl.job.stream.delivery.after;{[p] p};{[p] last p`ts};`nosuch))]};::;
         "define: sdt_feed's poll row_key nosuch is not in the columns of mkt_orderbook";

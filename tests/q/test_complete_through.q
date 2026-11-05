@@ -29,9 +29,9 @@
             enlist[`batch]!enlist ([] time:enlist 2026.09.01D00:00; px:enlist 1f);
             ([] time:enlist 2026.09.01D00:00; px:enlist 1f)))];
     .qetl.job.bounded.define[`ct_backfill;
-        `source`dataset`width`transform!(`ct_src;`ct_out;1D;`ct_passthrough)];
+        `source`outputs`width`transform!(`ct_src;enlist `ct_out;1D;`ct_passthrough)];
     .qetl.job.bounded.define[`ct_bar_backfill;
-        `source`dataset`width`transform`align!(`ct_src;`ct_bar_out;1D;`ct_passthrough;0D01:00)];
+        `source`outputs`width`transform`align!(`ct_src;enlist `ct_bar_out;1D;`ct_passthrough;0D01:00)];
     }
 
 .qt.qetl.source.complete_through.setUp_fresh:{[]

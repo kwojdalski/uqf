@@ -190,7 +190,7 @@
 / The process registry is read from this declaration: `procname` is the
 / process that runs it, and `start_with_all` whether `uqs start all` starts it
 / (absent: on demand, until the connection budget has room).
-.qetl.job.stream.define[`alert_sink;`procname`subscribe_to`publishes`on_batch`period`on_timer`note`state`ephemeral!(
+.qetl.job.stream.define[`alert_sink;`procname`subscribe_to`outputs`on_batch`period`on_timer`note`state`ephemeral!(
     `alert_sink1;
     enlist `fx_limit_breach;
     `symbol$();

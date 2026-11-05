@@ -58,8 +58,8 @@
             volume:6e6 1e6 5e5; vwap:(6.68%6;1.20;150.0); trades:3 1 1)))];
 
 .qetl.job.bounded.define[`hdb_exec_bars_backfill;
-    `source`dataset`width`transform`check`procname`note`target_key`window_column`align!
-    (`hdb_executions;`exec_bar;0D01:00:00;`hdb_exec_bars;
+    `source`outputs`width`transform`check`procname`note`target_key`window_column`align!
+    (`hdb_executions;enlist `exec_bar;0D01:00:00;`hdb_exec_bars;
      .qpipe.job.hdb_exec_bars_backfill.quality_check;
      `hdb_exec_bars_backfill1;
      "bounded: rebuilds the fill bars from the HDB's executions with the aggregation exec_bars1 applies live";

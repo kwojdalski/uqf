@@ -91,8 +91,8 @@
 / day is a dozen windows and a partial run leaves something visible to
 / resume from.
 .qetl.job.bounded.define[`upstream_trades_backfill;
-    `source`dataset`width`transform`check`facts`procname`note`target_key!
-    (`upstream_trades;`imported_trades;0D01:00:00;`upstream_trades_to_local;
+    `source`outputs`width`transform`check`facts`procname`note`target_key!
+    (`upstream_trades;enlist `imported_trades;0D01:00:00;`upstream_trades_to_local;
      .qpipe.job.upstream_trades_backfill.quality_check;.qpipe.job.upstream_trades_backfill.facts;
      `upstream_backfill1;
      "bounded: reads an upstream q process over IPC";

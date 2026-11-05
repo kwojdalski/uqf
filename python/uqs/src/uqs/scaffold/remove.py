@@ -41,7 +41,7 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from uqs.model.declarations import declaration_calls, symbols
+from uqs.model.declarations import declaration_calls, declared_outputs, symbols
 from uqs.model.kinds import DECLARATION_VERBS
 from uqs.paths import (
     CATALOG_FILE,
@@ -132,7 +132,7 @@ def plan_removal(repo_root: Path, name: str, *, force: bool = False) -> Removal:
     kept: set[str] = set()
 
     if fn == "qetl.job.bounded.define":
-        tables = list(symbols(fields.get("dataset", ""))[:1])
+        tables = list(declared_outputs(fields, job)[:1])
         source = symbols(fields.get("source", ""))[:1]
         if source:
             src_file = SOURCE_DIR / f"{source[0]}.q"
@@ -153,7 +153,7 @@ def plan_removal(repo_root: Path, name: str, *, force: bool = False) -> Removal:
     elif fn == "qetl.job.stream.normalize":
         tables = [job]
     else:
-        tables = list(symbols(fields.get("publishes", "")))
+        tables = list(declared_outputs(fields, job))
         # An external feed (#715): its Python publisher, the feed module the CLI
         # discovers, their test - and the raw table the publisher writes, which
         # is the job's subscription. What the feed produces goes with its module

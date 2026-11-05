@@ -85,7 +85,7 @@
 .qetl.job.stream.registries:distinct .qetl.job.stream.registries,`.qetl.job.stream.horizons.registry;
 
 / What every horizon job declares.
-.qetl.job.stream.horizons.required_keys:`procname`events`reference`transform`publishes`horizon`period
+.qetl.job.stream.horizons.required_keys:`procname`events`reference`transform`outputs`horizon`period
 
 / What it may declare besides. The first five are the kind as #945 shipped
 / it; the rest (#952) are each OFF unless declared, so a declaration that
@@ -185,7 +185,7 @@
 / @param name the job's name
 / @param decl dict of procname, events (the table carrying events), reference
 /   (the table they are scored against), transform (two inputs, events first),
-/   publishes (the table it publishes), horizon (how long an event waits, a
+/   outputs (a one-table symbol list: the table it publishes), horizon (how long an event waits, a
 /   timespan), period (the timer); optionally max_age (a timespan, see the
 /   header), max_lateness (a timespan, see the header), by (the reference's key columns, default `sym), keep (a function
 /   of a batch returning which rows to buffer), the passthrough options of .qetl.job.stream.define
@@ -206,13 +206,16 @@
 .qetl.job.stream.horizons.define:{[name;decl]
     who:"define: horizon job ",string[name];
     if[not 99h=type decl; 'who,"'s declaration must be a dictionary"];
+    .qetl.job.stream.refuse_publishes[who;decl];
     missing:.qetl.job.stream.horizons.required_keys where not .qetl.job.stream.horizons.required_keys in key decl;
     if[count missing; 'who," is missing ",", " sv string missing];
     unknown:(key decl) except .qetl.job.stream.horizons.required_keys,.qetl.job.stream.horizons.optional_keys;
     if[count unknown;
         'who," declares ",(", " sv string unknown),", which a horizon job does not take"];
-    if[not all -11h=type each decl`events`reference`transform`publishes;
-        'who,"'s events, reference, transform and publishes must each be one table or transform name, a symbol"];
+    if[not all -11h=type each decl`events`reference`transform;
+        'who,"'s events, reference, transform must each be one table or transform name, a symbol"];
+    if[not $[11h=type decl`outputs; 1=count decl`outputs; 0b];
+        'who,"'s outputs must be a symbol list of exactly one table - the table it publishes, e.g. enlist `my_table"];
     if[decl[`events]=decl`reference;
         'who," needs distinct events and reference tables"];
     / $[], not `and`: q's `and` evaluates both sides, so a mistyped value
@@ -251,10 +254,10 @@
     (` sv ns,`on_timer) set {[ns;tick] (get ` sv ns,`score_ready) (get ` sv ns,`now)[]}[ns]; / noqa: QF016 on_timer callback signature
     / the buffers and ledgers, so `reset` empties exactly what define made (#967)
     extra:((.qetl.job.stream.passthrough decl),(enlist[`ephemeral] inter key decl)#decl),enlist[`state]!enlist `pending`history`completed`expired;
-    .qetl.job.stream.define[name;(`procname`subscribe_to`publishes`on_batch`period`on_timer`transform!(
+    .qetl.job.stream.define[name;(`procname`subscribe_to`outputs`on_batch`period`on_timer`transform!(
         decl`procname;
         decl`events`reference;
-        enlist decl`publishes;
+        decl`outputs;
         get ` sv ns,`on_batch;
         decl`period;
         get ` sv ns,`on_timer;
@@ -421,7 +424,7 @@
         ins:key .qetl.transform.def[d`transform]`inputs;
         ready:pending where mask;
         out:.qetl.transform.apply[d`transform;ins!(ready;get hq)];
-        (get ` sv ns,`publish)[d`publishes;out];
+        (get ` sv ns,`publish)[first d`outputs;out];
         if[`identity in key d; cq insert ([] id:.qetl.job.stream.horizons.ids_of[d;ready]; at:(count ready)#now)];
         .qetl.job.stream.evict[pq;mask]];
     if[`expire_after in key d;
@@ -450,7 +453,7 @@
 
 / Declare a streaming job that scores each event once its horizon has passed.
 / @param name the job name
-/ @param decl events, reference, transform, publishes, horizon, period and the process declaration
+/ @param decl events, reference, transform, outputs, horizon, period and the process declaration
 / @return the registered streaming job name
 / @throws error when the transform is not a two-input contract for the declared tables
 .qetl.job.stream.at_horizons:{[name;decl] .qetl.job.stream.horizons.define[name;decl]}

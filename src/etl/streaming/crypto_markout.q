@@ -67,12 +67,12 @@
 
 \d .
 
-.qetl.job.stream.at_horizons[`crypto_markout;`procname`events`reference`transform`publishes`horizon`period`event_time`reference_time`ready_on`legs`lookback`max_age`by`retain_by`identity`remember`max_lateness`expire_after`keep`note`ephemeral`on_start`check`on_fail!(
+.qetl.job.stream.at_horizons[`crypto_markout;`procname`events`reference`transform`outputs`horizon`period`event_time`reference_time`ready_on`legs`lookback`max_age`by`retain_by`identity`remember`max_lateness`expire_after`keep`note`ephemeral`on_start`check`on_fail!(
     `crypto_markout1;
     `executions;
     `market_data;
     `crypto_markout_score;
-    `crypto_markout;
+    enlist `crypto_markout;
     .qpipe.transform.crypto_markout_outputs.wait[];
     0D00:00:01;
     `source_time;

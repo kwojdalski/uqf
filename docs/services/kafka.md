@@ -285,7 +285,7 @@ this tree by declaring a decoder job of its own.
 [`sidecars/kafka_example`](../../sidecars/kafka_example/example_quotes_decoder.q)
 is the generic worked one. The job file holds the topic's mapping (a
 `.qetl.transform`), the `.qetl.kafka.topic.define` with `job` set to the job,
-and the job itself, with its own `procname`, a literal `publishes` and a literal
+and the job itself, with its own `procname`, a literal `outputs` and a literal
 branch in `publish_decoded` for each output table. The table goes in the
 bundle's `tables.q` and must carry the provenance columns below. The machinery ---
 marks, deduplication, dead letters, restart replay --- is

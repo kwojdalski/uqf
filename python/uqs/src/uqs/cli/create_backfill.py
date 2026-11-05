@@ -14,6 +14,7 @@ from pathlib import Path
 from uqs.model import plant_metadata
 from uqs.model.declarations import (
     declaration_calls,
+    declared_outputs,
     read_declarations,
     strip_q_comments,
     symbols,
@@ -46,7 +47,7 @@ def workers_filling(repo_root: Path, dataset: str, partition: str | None = None)
             if fn != "qetl.job.bounded.define":
                 continue
             claimed = symbols(fields["partition"])[:1] if "partition" in fields else ()
-            if symbols(fields.get("dataset", "")) == (dataset,) and claimed == (
+            if declared_outputs(fields, name) == (dataset,) and claimed == (
                 (partition,) if partition else ()
             ):
                 found.append(name)

@@ -26,7 +26,7 @@
 
 / A polling feed over `upstream`, publishing `out` through `normalize`.
 .qt.qetl.job.stream.poll.declare:{[job;out;normalize;fetch]
-    .qetl.job.stream.define[job;`procname`subscribe_to`publishes`period`poll!(
+    .qetl.job.stream.define[job;`procname`subscribe_to`outputs`period`poll!(
         `$string[job],"1";`symbol$();enlist out;0D00:00:01;
         `fetch`normalize`next_cursor`close!(fetch;normalize;{[page] last page`ts};
             {[] `.qt.qetl.job.stream.poll.closed set 1b}))];
@@ -149,7 +149,7 @@
 
 .qt.qetl.job.stream.poll.test_a_cursor_that_would_not_advance_is_invalid:{[t]
     .qt.qetl.job.stream.poll.forget[];
-    .qetl.job.stream.define[`spt_feed;`procname`subscribe_to`publishes`period`poll!(
+    .qetl.job.stream.define[`spt_feed;`procname`subscribe_to`outputs`period`poll!(
         `spt_feed1;`symbol$();enlist `spt_out;0D00:00:01;
         `fetch`normalize`next_cursor!(.qt.qetl.job.stream.poll.after;{[page] page};{[page] 0Np}))];
     r:.qetl.job.stream.preview[`spt_feed;5];
@@ -181,7 +181,7 @@
 / --- what define refuses ---------------------------------------------------
 
 .qt.qetl.job.stream.poll.poll_decl:{[extra]
-    (`procname`subscribe_to`publishes`period`poll!(`spt_broken1;`symbol$();enlist `spt_out;0D00:00:01;
+    (`procname`subscribe_to`outputs`period`poll!(`spt_broken1;`symbol$();enlist `spt_out;0D00:00:01;
         `fetch`normalize`next_cursor!({[c] ([] ts:`timestamp$())};{[p] p};{[p] 0Np}))),extra}
 
 .qt.qetl.job.stream.poll.test_define_refuses_poll_with_on_timer:{[t]
@@ -218,7 +218,7 @@
     2 sublist after}
 
 .qt.qetl.job.stream.poll.compound:{[advances]
-    .qetl.job.stream.define[`spt_compound;`procname`subscribe_to`publishes`period`poll!(
+    .qetl.job.stream.define[`spt_compound;`procname`subscribe_to`outputs`period`poll!(
         `spt_compound1;`symbol$();enlist `spt_out;0D00:00:01;
         `fetch`normalize`next_cursor`load`save`advances!(
             .qt.qetl.job.stream.poll.page_of_two;
@@ -289,7 +289,7 @@
 
 .qt.qetl.job.stream.poll.recent_feed:{[extra]
     .qt.qetl.job.stream.poll.fresh_rows[];
-    .qetl.job.stream.define[`spt_quote;`procname`subscribe_to`publishes`period`poll!(
+    .qetl.job.stream.define[`spt_quote;`procname`subscribe_to`outputs`period`poll!(
         `spt_quote1;`symbol$();enlist `spt_out;0D00:00:01;
         (`fetch`normalize`next_cursor!(.qt.qetl.job.stream.poll.after_fresh;{[page] select ts, v from page};{[page] last page`ts})),extra)];
     (` sv .qetl.job.stream.namespace[`spt_quote],`publish) set .qt.qetl.job.stream.poll.record;
@@ -365,7 +365,7 @@
 
 .qt.qetl.job.stream.poll.test_a_recent_preview_traces_its_bounds_and_limit:{[t]
     .qt.qetl.job.stream.poll.fresh_rows[];
-    .qetl.job.stream.define[`spt_quote;`procname`subscribe_to`publishes`period`poll!(
+    .qetl.job.stream.define[`spt_quote;`procname`subscribe_to`outputs`period`poll!(
         `spt_quote1;`symbol$();enlist `spt_out;0D00:00:01;
         `fetch`normalize`next_cursor`page_limit!(
             {[cursor] .qetl.source.ipc_call[{value x};.qt.qetl.job.stream.poll.after_fresh;enlist cursor]};
@@ -395,7 +395,7 @@
     .qunit.assertEquals[kept`securityId;`a`b`c;"all three rows at the start's time, none at the end's"]};
 
 .qt.qetl.job.stream.poll.test_a_compound_feed_with_start_cursor_previews_recent_data:{[t]
-    .qetl.job.stream.define[`spt_compound;`procname`subscribe_to`publishes`period`poll!(
+    .qetl.job.stream.define[`spt_compound;`procname`subscribe_to`outputs`period`poll!(
         `spt_compound1;`symbol$();enlist `spt_out;0D00:00:01;
         `fetch`normalize`next_cursor`load`save`advances`start_cursor!(
             .qt.qetl.job.stream.poll.page_of_two;

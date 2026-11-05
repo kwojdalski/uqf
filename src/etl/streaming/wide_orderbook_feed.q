@@ -53,7 +53,7 @@
 
 \d .
 
-.qetl.job.stream.define[`wide_orderbook_feed;`procname`subscribe_to`publishes`period`on_timer`note!(
+.qetl.job.stream.define[`wide_orderbook_feed;`procname`subscribe_to`outputs`period`on_timer`note!(
     `widefeed1;
     `symbol$();
     enlist `wide_orderbook;

@@ -50,7 +50,7 @@
 .qetl.job.stream.registries:distinct .qetl.job.stream.registries,`.qetl.job.stream.bars.registry;
 
 / What every bars job declares.
-.qetl.job.stream.bars.required_keys:`procname`events`transform`publishes`width`lateness`period
+.qetl.job.stream.bars.required_keys:`procname`events`transform`outputs`width`lateness`period
 
 / What it may declare besides: the grouping columns (default `sym) and the
 / column the window is read from (default `time).
@@ -77,7 +77,7 @@
 / Declare a job that aggregates a stream into time bars.
 / @param name the job's name
 / @param decl dict of procname, events (the table aggregated), transform (one
-/   input, the events plus bar_start), publishes (the bar table), width and
+/   input, the events plus bar_start), outputs (a one-table symbol list: the bar table), width and
 /   lateness (timespans, lateness may be 0D), period (the timer, how often
 /   closed windows are looked for); optionally by (grouping columns, default
 /   `sym), event_time (default `time), and the passthrough options of
@@ -87,12 +87,15 @@
 .qetl.job.stream.bars.define:{[name;decl]
     who:"define: bars job ",string[name];
     if[not 99h=type decl; 'who,"'s declaration must be a dictionary"];
+    .qetl.job.stream.refuse_publishes[who;decl];
     missing:.qetl.job.stream.bars.required_keys where not .qetl.job.stream.bars.required_keys in key decl;
     if[count missing; 'who," is missing ",", " sv string missing];
     unknown:(key decl) except .qetl.job.stream.bars.required_keys,.qetl.job.stream.bars.optional_keys;
     if[count unknown; 'who," declares ",(", " sv string unknown),", which a bars job does not take"];
-    if[not all -11h=type each decl`events`transform`publishes;
-        'who,"'s events, transform and publishes must each be one table or transform name, a symbol"];
+    if[not all -11h=type each decl`events`transform;
+        'who,"'s events, transform must each be one table or transform name, a symbol"];
+    if[not $[11h=type decl`outputs; 1=count decl`outputs; 0b];
+        'who,"'s outputs must be a symbol list of exactly one table - the table it publishes, e.g. enlist `my_table"];
     if[not $[-16h=type decl`width; 0D<decl`width; 0b];
         'who,"'s width must be a positive timespan"];
     if[not $[-16h=type decl`lateness; 0D<=decl`lateness; 0b];
@@ -124,17 +127,17 @@
     (` sv ns,`on_timer) set {[ns;tick] (get ` sv ns,`close_ready) (get ` sv ns,`now)[]}[ns]; / noqa: QF016 on_timer callback signature
     / the buffers and ledgers, so `reset` empties exactly what define made (#967)
     extra:(.qetl.job.stream.passthrough decl),enlist[`state]!enlist `pending`closed`dropped;
-    .qetl.job.stream.define[name;(`procname`subscribe_to`publishes`on_batch`period`on_timer`transform`on_endofday`replay`restore_from!(
+    .qetl.job.stream.define[name;(`procname`subscribe_to`outputs`on_batch`period`on_timer`transform`on_endofday`replay`restore_from!(
         decl`procname;
         enlist decl`events;
-        enlist decl`publishes;
+        decl`outputs;
         get ` sv ns,`on_batch;
         decl`period;
         get ` sv ns,`on_timer;
         decl`transform;
         get ` sv ns,`on_endofday;
         1b;
-        enlist decl`publishes)),extra];
+        decl`outputs)),extra];
     .qetl.job.stream.bars.registry[name]:enlist d;
     name}
 
@@ -165,7 +168,7 @@
     d:.qetl.job.stream.bars.def[name];
     ns:.qetl.job.stream.namespace name;
     ck:d[`by],`bar_start;
-    if[t=d`publishes; :.qetl.job.stream.bars.mark_published[ns;ck;x]];
+    if[t=first d`outputs; :.qetl.job.stream.bars.mark_published[ns;ck;x]];
     if[(t<>d`events) or 0=count x; :()];
     pq:` sv ns,`pending;
     now:(get ` sv ns,`now)[];
@@ -209,7 +212,7 @@
     if[not any mask; :0];
     ready:(get pq) where mask;
     out:.qetl.transform.apply[d`transform;enlist[d`input]!enlist ready];
-    if[count out; (get ` sv ns,`publish)[d`publishes;out]];
+    if[count out; (get ` sv ns,`publish)[first d`outputs;out]];
     (` sv ns,`closed) insert distinct ck#ready;
     .qetl.job.stream.evict[pq;mask];
     count out}
@@ -240,7 +243,7 @@
 
 / Declare a streaming job that aggregates its input into time bars.
 / @param name the job name
-/ @param decl events, transform, publishes, width, lateness, period and the process declaration
+/ @param decl events, transform, outputs, width, lateness, period and the process declaration
 / @return the registered streaming job name
 / @throws error when the transform is not a one-input contract carrying the window
 .qetl.job.stream.at_bars:{[name;decl] .qetl.job.stream.bars.define[name;decl]}

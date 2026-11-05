@@ -166,7 +166,7 @@ def test_a_job_the_bundle_does_not_declare_is_refused_naming_what_it_has(bundle)
 def test_a_published_table_the_bundle_does_not_define_is_external(tmp_path):
     folder = make_bundle(tmp_path / "pb2")
     (folder / "pb_general_ledger.q").write_text(
-        ".qetl.job.stream.define[`pb_general_ledger;`procname`subscribe_to`publishes!"
+        ".qetl.job.stream.define[`pb_general_ledger;`procname`subscribe_to`outputs!"
         "(`pb_ledger1;`symbol$();`piggybank_general_ledger`quote)];\n"
     )
     spec = jobs.from_bundle("pb_general_ledger", folder)

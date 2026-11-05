@@ -54,7 +54,7 @@
     .qetl.job.stream.reset each `fx_positions`posbook;
     }
 
-.qt.qetl.job.stream.endofday.feed:{[nm;eod] `procname`subscribe_to`publishes`period`on_timer`on_endofday!(
+.qt.qetl.job.stream.endofday.feed:{[nm;eod] `procname`subscribe_to`outputs`period`on_timer`on_endofday!(
     `$string[nm],"1";`symbol$();`symbol$();0D00:00:01;{[] };eod)}
 
 .qt.qetl.job.stream.endofday.test_on_endofday_must_be_a_function:{[t]
@@ -220,7 +220,7 @@
 / --- the shell's carry (#963) ---------------------------------------------
 
 .qt.qetl.job.stream.endofday.test_a_malformed_carry_is_refused:{[t]
-    d:`procname`subscribe_to`publishes`on_batch`replay`carry!(`eodcar1;enlist `executions;enlist `eodx_open;{[t;x]};1b;0);
+    d:`procname`subscribe_to`outputs`on_batch`replay`carry!(`eodcar1;enlist `executions;enlist `eodx_open;{[t;x]};1b;0);
     .qunit.assertThrows[.qetl.job.stream.define[`eod_car;];d;"*carry must be a dict of state and table*";"not a dict"];
     d[`carry]:`state`table!(`book;`elsewhere);
     .qunit.assertThrows[.qetl.job.stream.define[`eod_car;];d;"*must be one the job publishes*";"a table it does not publish"];
@@ -228,7 +228,7 @@
     .qunit.assertThrows[.qetl.job.stream.define[`eod_car;];d;"*needs replay 1b*";"nothing would read it back"]};
 
 .qt.qetl.job.stream.endofday.test_a_carry_takes_only_state_table_and_a_positive_cap:{[t]
-    d:`procname`subscribe_to`publishes`on_batch`replay`carry!(`eodcar1;enlist `executions;enlist `eodx_open;{[t;x]};1b;`state`table`window!(`book;`eodx_open;0D00:01));
+    d:`procname`subscribe_to`outputs`on_batch`replay`carry!(`eodcar1;enlist `executions;enlist `eodx_open;{[t;x]};1b;`state`table`window!(`book;`eodx_open;0D00:01));
     .qunit.assertThrows[.qetl.job.stream.define[`eod_car;];d;"*takes state, table and cap, not window*";"the old time window is gone"];
     d[`carry]:`state`table`cap!(`book;`eodx_open;0);
     .qunit.assertThrows[.qetl.job.stream.define[`eod_car;];d;"*cap must be a positive long*";"a cap that holds nothing"]};
@@ -283,7 +283,7 @@
 .qt.qetl.job.stream.endofday.capped:{[]
     if[not `eod_cap in key .qetl.job.stream.jobs;
         `.qpipe.job.eod_cap.book set ([] sym:`symbol$(); qty:`float$());
-        .qetl.job.stream.define[`eod_cap;`procname`subscribe_to`publishes`on_batch`replay`carry!(
+        .qetl.job.stream.define[`eod_cap;`procname`subscribe_to`outputs`on_batch`replay`carry!(
             `eodcap1;enlist `executions;enlist `eodx_open;{[t;x] `.qpipe.job.eod_cap.book upsert select sym, qty:size from x};1b;
             `state`table`cap!(`book;`eodx_open;1))]];
     `.qpipe.job.eod_cap.book set ([] sym:`symbol$(); qty:`float$());
@@ -305,7 +305,7 @@
 .qt.qetl.job.stream.endofday.capped2:{[extra]
     if[not `eod_cap2 in key .qetl.job.stream.jobs;
         `.qpipe.job.eod_cap2.book set ([] sym:`symbol$(); qty:`float$());
-        .qetl.job.stream.define[`eod_cap2;`procname`subscribe_to`publishes`on_batch`replay`carry!(
+        .qetl.job.stream.define[`eod_cap2;`procname`subscribe_to`outputs`on_batch`replay`carry!(
             `eodcap2;enlist `executions;enlist `eodx_open;{[t;x] `.qpipe.job.eod_cap2.book upsert select sym, qty:size from x};1b;
             `state`table`cap!(`book;`eodx_open;2))]];
     `.qpipe.job.eod_cap2.book set ([] sym:`symbol$(); qty:`float$());

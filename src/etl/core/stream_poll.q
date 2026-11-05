@@ -134,15 +134,15 @@
 / @throws error when the result is neither a table nor such a dictionary
 / @private
 .qetl.job.stream.outputs:{[job;out]
-    pubs:(.qetl.job.stream.def job)`publishes;
+    pubs:(.qetl.job.stream.def job)`outputs;
     if[.Q.qt out;
         if[1<>count pubs;
-            '"normalize: ",string[job]," returned one table but publishes ",(", " sv string pubs)," - return a dictionary of table -> rows"];
+            '"normalize: ",string[job]," returned one table but declares outputs ",(", " sv string pubs)," - return a dictionary of table -> rows"];
         :(enlist first pubs)!enlist out];
     if[not 99h=type out;
         '"normalize: ",string[job]," must return a table, or a dictionary of published table -> rows"];
     if[count bad:(key out) except pubs;
-        '"normalize: ",string[job]," returned ",(", " sv string bad),", which it does not declare in publishes"];
+        '"normalize: ",string[job]," returned ",(", " sv string bad),", which it does not declare in outputs"];
     out}
 
 / Private: the timestamp cursor's advance rule, .qetl.job.continuous.advance's.

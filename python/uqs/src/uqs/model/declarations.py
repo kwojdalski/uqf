@@ -55,8 +55,9 @@ class Declaration:
     note: str
     path: Path
     #: A bounded worker's `source` - where it reads, outside the stack - and
-    #: `dataset`, the table it writes. Empty for a streaming job, whose edges
-    #: are its tickerplant subscriptions and publishes instead.
+    #: `dataset`, the one table its `outputs` names - the table it writes. Empty for
+    #: a streaming job, whose edges are its tickerplant subscriptions and its
+    #: `outputs` (kept here as `publishes`: the tables it publishes) instead.
     source: str = ""
     dataset: str = ""
     #: A bounded worker's declared default source_version, "" when it declares
@@ -168,6 +169,35 @@ def symbols(value: str) -> tuple[str, ...]:
     return tuple(part.strip() for part in value.split("`") if part.strip())
 
 
+#: The declaration keys `outputs` replaced (#2102), with the migration each one
+#: is refused with. A bounded worker used to say `dataset` (one table, as an
+#: atom) and a streaming job `publishes` (a list); both now say `outputs`, a
+#: symbol list. There is no alias: the q refuses the old key at load, and this
+#: refuses it where a file is merely READ, so a stale declaration is named
+#: rather than read as one that produces nothing.
+RETIRED_OUTPUT_KEYS = {
+    "dataset": "`dataset` is now `outputs`: rename the key and enlist the value "
+    "(`outputs: enlist `<dataset>`); a bounded worker's outputs hold exactly one dataset",
+    "publishes": "`publishes` is now `outputs`: rename the key; the value is unchanged "
+    "(the symbol list of tables the job publishes)",
+}
+
+
+def declared_outputs(fields: dict[str, str], where: str = "declaration") -> tuple[str, ...]:
+    """The datasets a declaration produces, from its `outputs` key.
+
+    One key for both job types; what the job TYPE does with them differs - a
+    bounded worker's one output is the dataset coverage and replacement are
+    keyed on, a streaming job's are the tables it publishes onto the
+    tickerplant. Refuses a retired key (`RETIRED_OUTPUT_KEYS`) with its
+    migration.
+    """
+    for key, migration in RETIRED_OUTPUT_KEYS.items():
+        if key in fields:
+            raise UqsError(f"{where}: {migration}")
+    return symbols(fields.get("outputs", ""))
+
+
 def _boolean(value: str, where: str) -> bool:
     if value not in ("1b", "0b"):
         raise UqsError(f"{where}: start_with_all must be 1b or 0b, not {value!r}")
@@ -189,7 +219,7 @@ def _declaration(fn: str, name: str, fields: dict[str, str], path: Path) -> Decl
             raise UqsError(f"{where}: a bounded worker never starts with the stack")
         proc = symbols(fields["procname"]) if "procname" in fields else (f"{name}1",)
         source = symbols(fields.get("source", ""))
-        dataset = symbols(fields.get("dataset", ""))
+        dataset = declared_outputs(fields, where)
         version = symbols(fields.get("source_version", ""))
         transform = symbols(fields.get("transform", ""))
         return Declaration(
@@ -233,7 +263,7 @@ def _declaration(fn: str, name: str, fields: dict[str, str], path: Path) -> Decl
             proc[0],
             PipelineKind.ETL,
             symbols(fields.get("events", "")),
-            symbols(fields.get("publishes", "")),
+            declared_outputs(fields, where),
             start_with_all,
             note,
             path,
@@ -248,7 +278,7 @@ def _declaration(fn: str, name: str, fields: dict[str, str], path: Path) -> Decl
             proc[0],
             PipelineKind.ETL,
             symbols(fields.get("events", "")) + symbols(fields.get("reference", "")),
-            symbols(fields.get("publishes", "")),
+            declared_outputs(fields, where),
             start_with_all,
             note,
             path,
@@ -256,7 +286,7 @@ def _declaration(fn: str, name: str, fields: dict[str, str], path: Path) -> Decl
         )
     subscribe_to = symbols(fields.get("subscribe_to", ""))
     kind = PipelineKind.ETL if subscribe_to else PipelineKind.FEED
-    publishes = symbols(fields.get("publishes", ""))
+    publishes = declared_outputs(fields, where)
     transform = symbols(fields.get("transform", ""))
     return Declaration(
         name,
@@ -274,7 +304,7 @@ def _declaration(fn: str, name: str, fields: dict[str, str], path: Path) -> Decl
 def declaration_calls(source: str) -> list[tuple[str, str, dict[str, str]]]:
     """Every declaration call in q `source`, as (function, name, {key: value
     text}) - the raw fields, for a caller that needs one this module does not
-    model, such as a worker's `dataset`."""
+    model, such as a worker's `partition`."""
     source = strip_q_comments(source)
     found = []
     for match in _CALL_RE.finditer(source):

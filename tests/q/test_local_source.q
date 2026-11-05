@@ -53,7 +53,7 @@
             enlist[`batch]!enlist ([] time:enlist 2026.09.17D10:00; sym:enlist `EURUSD; px:enlist 1.1);
             ([] time:enlist 2026.09.17D10:00; sym:enlist `EURUSD; px:enlist 1.1)))];
     .qetl.job.bounded.define[`loctest_backfill;
-        `source`dataset`width`transform!(`loctest_src;`loctest_out;1D;`loctest_passthrough)];
+        `source`outputs`width`transform!(`loctest_src;enlist `loctest_out;1D;`loctest_passthrough)];
     }
 
 .qt.qetl.source.local.setUp_fresh:{[]

@@ -113,7 +113,7 @@ def test_a_backfill_procname_is_checked_like_every_other_kinds():
 
 
 def test_one_subscription_is_written_as_a_list_like_the_tree_writes_it():
-    """`enlist `trades`, as `publishes` and the tree's own jobs spell it - not
+    """`enlist `trades`, as `outputs` and the tree's own jobs spell it - not
     the atom `trades`, which define accepts but no other declaration uses."""
     plan = jobs.streaming_job("m", ["trades"], "m_out", "px:float")
     body = _body(plan, "m.q")

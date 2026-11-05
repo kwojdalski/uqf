@@ -43,7 +43,7 @@
 
 \d .
 
-.qetl.job.stream.define[`mock_ticks;`procname`subscribe_to`publishes`period`on_timer`note!(
+.qetl.job.stream.define[`mock_ticks;`procname`subscribe_to`outputs`period`on_timer`note!(
     `mock_ticks1;
     `symbol$();
     enlist `mock_ticks;

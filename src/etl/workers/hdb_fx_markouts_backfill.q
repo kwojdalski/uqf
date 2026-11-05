@@ -65,8 +65,8 @@
         (cols .qetl.plant.shape `fx_markout)#(([] time:16#2026.09.17D10:00:10),'.qpipe.transform.fx_markout_outputs.sample_long[])))];
 
 .qetl.job.bounded.define[`hdb_fx_markouts_backfill;
-    `source`dataset`width`transform`check`facts`procname`note`target_key`window_column`on_conflict`revision`pin!
-    (`hdb_fx_markouts;`fx_markout;0D01;`hdb_fx_markouts_long;
+    `source`outputs`width`transform`check`facts`procname`note`target_key`window_column`on_conflict`revision`pin!
+    (`hdb_fx_markouts;enlist `fx_markout;0D01;`hdb_fx_markouts_long;
      .qpipe.job.hdb_fx_markouts_backfill.quality_check;.qpipe.job.hdb_fx_markouts_backfill.facts;
      `hdb_fx_markouts_backfill1;
      "bounded: marks out the HDB's executions against its market_data, into fx_markout, with the calculation fx_markout1 applies live";

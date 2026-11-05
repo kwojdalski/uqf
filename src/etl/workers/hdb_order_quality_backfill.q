@@ -133,8 +133,8 @@
         .qpipe.job.hdb_order_quality_backfill.expected_rows[]))];
 
 .qetl.job.bounded.define[`hdb_order_quality_backfill;
-    `source`dataset`width`transform`check`facts`procname`note`target_key`window_column`align`on_conflict!
-    (`hdb_orders;`order_quality;.qpipe.job.hdb_order_quality_backfill.width;`hdb_order_quality;
+    `source`outputs`width`transform`check`facts`procname`note`target_key`window_column`align`on_conflict!
+    (`hdb_orders;enlist `order_quality;.qpipe.job.hdb_order_quality_backfill.width;`hdb_order_quality;
      .qpipe.job.hdb_order_quality_backfill.quality_check;.qpipe.job.hdb_order_quality_backfill.facts;
      `hdb_order_quality_backfill1;
      "bounded: recomputes the rolling order-quality series from the HDB's orders with the adapter and statistic order_quality1 applies live";

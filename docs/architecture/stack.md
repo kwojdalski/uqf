@@ -88,7 +88,7 @@ discovery/registration only.
 
 Two different connection patterns coexist, deliberately - **and since #204 no
 job performs either one itself**. A streaming job declares `subscribe_to` and
-`publishes`; `.qtorq` opens whichever handle that implies, and
+`outputs`; `.qtorq` opens whichever handle that implies, and
 `scripts/processes/torq_stream.q` wires the job's `publish` to it. The patterns
 are still worth knowing, because they are why some processes need a credential
 and some do not:
@@ -340,7 +340,7 @@ The rule now holds from both ends:
   is absent - naming every missing one, so a single restart fixes them all.
 
 Adding a table is therefore two edits and no third: define it in
-`plant_tables.q`, and name it in the publishing pipeline's `publishes`.
+`plant_tables.q`, and name it in the publishing pipeline's `outputs`.
 
 ## Config generation
 

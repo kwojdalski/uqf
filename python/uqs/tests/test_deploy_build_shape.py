@@ -128,7 +128,7 @@ def test_a_shape_that_cannot_be_composed_is_none_not_a_failed_build(staged, monk
 STREAM = """\
 / piggy_spread.q - a sidecar bundle's streaming job, for the shape test.
 .qetl.job.stream.define[`piggy_spread;
-    `procname`subscribe_to`publishes`note!(`piggy_spread1;enlist `quote;enlist `piggy_quote;
+    `procname`subscribe_to`outputs`note!(`piggy_spread1;enlist `quote;enlist `piggy_quote;
         "copies quotes into piggy_quote")];
 .qpipe.job.piggy_spread.upd:{[t;x] .qpipe.job.piggy_spread.publish[`piggy_quote;x]}
 """

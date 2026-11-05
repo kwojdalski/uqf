@@ -27,7 +27,7 @@
 
 \d .
 
-.qetl.job.stream.define[`mock_mids;`procname`subscribe_to`publishes`on_batch`note!(
+.qetl.job.stream.define[`mock_mids;`procname`subscribe_to`outputs`on_batch`note!(
     `mock_mids1;
     enlist `mock_ticks;
     enlist `mock_mids;

@@ -153,8 +153,8 @@ def test_a_second_worker_needs_another_partition(tmp_path):
     workers = tmp_path / "src" / "etl" / "workers"
     workers.mkdir(parents=True)
     (workers / "w.q").write_text(
-        ".qetl.job.bounded.define[`w;`source`dataset`width`transform`partition!"
-        "(`s;`fx;1D;`s_passthrough;`EURUSD)];\n"
+        ".qetl.job.bounded.define[`w;`source`outputs`width`transform`partition!"
+        "(`s;enlist `fx;1D;`s_passthrough;`EURUSD)];\n"
     )
     assert create_backfill.workers_filling(tmp_path, "fx", "EURUSD") == ["w"]
     assert create_backfill.workers_filling(tmp_path, "fx", "GBPUSD") == []
@@ -364,7 +364,7 @@ def test_a_twin_applies_the_transform_its_job_declares():
         "mk_backfill", "mk", "crypto_markout", "1D", "mk_backfill1",
         shared=("crypto_markout", "crypto_markout_score"),
     )  # fmt: skip
-    assert "`mk;`crypto_markout;1D;`crypto_markout_score;" in body
+    assert "`mk;enlist `crypto_markout;1D;`crypto_markout_score;" in body
     assert "passthrough" not in body, "no transform of its own is written"
 
 
@@ -490,7 +490,7 @@ def test_a_twin_reuses_an_existing_source_without_columns_it_never_passed():
     assert not any(p.endswith("plant_tables.q") for p in written), "table not redefined"
     fields = _fields(plan, "exec_refill_backfill.q")
     assert symbols(fields["source"]) == ("hdb_executions",)
-    assert symbols(fields["dataset"]) == ("executions",)
+    assert symbols(fields["outputs"]) == ("executions",)
 
 
 # ---------------------------------- a passthrough between two different shapes

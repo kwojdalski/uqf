@@ -99,7 +99,7 @@
 
 .qt.qpipe.job.kafka_feed.test_the_feed_is_a_feed_that_is_not_in_the_default_start:{[t]
     d:.qetl.job.stream.def `kafka_feed;
-    .qunit.assertEquals[(d`subscribe_to;d`publishes;d`procname);(`symbol$();enlist `kafka_message;`kafka_feed1);"publishes the envelope, subscribes to nothing"];
+    .qunit.assertEquals[(d`subscribe_to;d`outputs;d`procname);(`symbol$();enlist `kafka_message;`kafka_feed1);"publishes the envelope, subscribes to nothing"];
     .qunit.assertFalse[$[`start_with_all in key d; d`start_with_all; 0b];"it needs a broker, so it is on demand"]};
 
 .qt.qpipe.job.kafka_feed.test_read_env_reads_every_setting_and_the_password_by_reference:{[t]

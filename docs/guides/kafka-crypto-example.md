@@ -26,7 +26,7 @@ grow a table for a demo. A [sidecar bundle](sidecar-bundles.md) adds a table, a
 mapping, topics and a job without editing the tree, and `sidecars/kafka_example`
 is the precedent. Everything it does is declared the way a production decoder is
 (`.qetl.kafka.topic.define` with `job` set, a `.qetl.transform` mapping verified
-by the test suite, a literal `publishes`), so lifting it into the tree is a file
+by the test suite, a literal `outputs`), so lifting it into the tree is a file
 move.
 
 ## The data

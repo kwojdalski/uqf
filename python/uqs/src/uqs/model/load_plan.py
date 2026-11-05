@@ -47,6 +47,7 @@ from pathlib import Path
 
 from uqs.model.declarations import (
     declaration_calls,
+    declared_outputs,
     reaction_calls,
     read_file_text,
     strip_q_comments,
@@ -126,9 +127,7 @@ def facts(rel: str, text: str) -> FileFacts:
         defines.add(f"job:{name}")
         for key, kind in (("source", "source"), ("transform", "transform")):
             refers |= {f"{kind}:{s}" for s in symbols(fields.get(key, ""))}
-        writes |= set(symbols(fields.get("dataset", ""))) | set(
-            symbols(fields.get("publishes", ""))
-        )
+        writes |= set(declared_outputs(fields, name))
     for d in read_file_text(text, Path(rel)):
         jobs.append((d.name, d.procname))
     watches = {r.dataset for r in reaction_calls(text)}

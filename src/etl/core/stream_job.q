@@ -53,13 +53,12 @@
 / demanding a batch handler of it would mean writing an empty one. A job
 / with neither is declared but does nothing, which is refused.
 / .
-/ `subscribe_to` and `publishes` are the wiring the runner performs on the
-/ job's behalf, and they are also what uqs's pipeline_edges
-/ checks the Python registry against - so the q file and the registry cannot
-/ drift. `procname` is the TorQ process that runs this job, and is how the
+/ `subscribe_to` and `outputs` are the wiring the runner performs on the
+/ job's behalf, and what uqs's pipeline_edges checks the Python registry
+/ against - so the q file and the registry cannot drift. `procname` is the TorQ process that runs this job, and is how the
 / runner knows which job it is: one generic process script, and the name it
 / was started under decides. `on_batch` is the job itself.
-.qetl.job.stream.required_declarations:`ns`procname`subscribe_to`publishes
+.qetl.job.stream.required_declarations:`ns`procname`subscribe_to`outputs
 
 / The options of `define` that every job KIND (bars, horizon, rolling,
 / normalizer) accepts and forwards unchanged: job-level facts independent of
@@ -202,7 +201,7 @@
 / declaration and its implementation cannot drift - there is no way to have
 / one without the other.
 / @param job the job's name, e.g. `crypto_markout
-/ @param decl dict of procname, subscribe_to, publishes, and then on_batch
+/ @param decl dict of procname, subscribe_to, outputs (the tables it publishes onto the tickerplant, empty for none), and then on_batch
 /   (required when it subscribes), period and on_timer (a pair) - or period
 /   and poll, for a polling feed (see stream_poll.q); optionally
 /   start_with_all (a boolean, default 0b), note (a string), transform
@@ -219,6 +218,7 @@
     if[job in @[{.qetl.job.bounded.defined[]};::;{[e] `symbol$()}];
         '"define: ",string[job]," is already a bounded job - job names must be unique across execution modes"];
     if[not 99h=type decl; '"define: ",string[job],"'s declaration must be a dictionary"];
+    .qetl.job.stream.refuse_publishes["define: ",string job;decl];
     decl[`ns]:.qetl.job.stream.namespace[job];
     missing:.qetl.job.stream.required_declarations where not .qetl.job.stream.required_declarations in key decl;
     if[count missing;
@@ -229,8 +229,8 @@
         '"define: ",string[job]," claims procname ",string[decl`procname]," which ",(string .qetl.job.stream.procnames decl`procname)," already runs - one process runs one job"];
     if[not 11h=abs type decl`subscribe_to;
         '"define: ",string[job],"'s subscribe_to must be a symbol list of table names"];
-    if[not 11h=abs type decl`publishes;
-        '"define: ",string[job],"'s publishes must be a symbol list, empty for a job that keeps its output local"];
+    if[not 11h=abs type decl`outputs;
+        '"define: ",string[job],"'s outputs must be a symbol list, empty for a job that keeps its output local"];
     / A polling feed declares its steps rather than its timer, and gets the
     / timer built from them (stream_poll.q) - before the checks below, which
     / then see an ordinary feed.
@@ -262,7 +262,7 @@
     .qetl.job.stream.jobs[job]:enlist decl;
     .qetl.job.stream.procnames[decl`procname]:job;
     .[{.qetl.log.dbg[x;y;z]};(job;"streaming job registered";
-        `procname`subscribe_to`publishes`timer!(decl`procname;decl`subscribe_to;decl`publishes;
+        `procname`subscribe_to`outputs`timer!(decl`procname;decl`subscribe_to;decl`outputs;
             $[has_period; decl`period; 0Nn]));::];
     job}
 
@@ -332,9 +332,9 @@
     / A declared check sits in the seam itself, so every route a row takes out
     / of the job - batch handler, timer, poll, on_replayed - passes through it.
     / The plant's contract sits under the check, at the transport (#1074).
-    p:.qetl.job.stream.contracted[job;(),(d`publishes) inter .qetl.plant.names[];publisher];
+    p:.qetl.job.stream.contracted[job;(),(d`outputs) inter .qetl.plant.names[];publisher];
     (` sv (d`ns),`publish) set $[`check in key d; .qetl.job.stream.checked[job;d`check;d`on_fail;p]; p];
-    .[{.qetl.log.dbg[x;y;z]};(job;"publish seam wired";enlist[`publishes]!enlist d`publishes);::];
+    .[{.qetl.log.dbg[x;y;z]};(job;"publish seam wired";enlist[`outputs]!enlist d`outputs);::];
     job}
 
 / Private: a publisher that holds every batch for a plant table to that
@@ -594,13 +594,13 @@
     replay:$[`replay in key d; d`replay; 0b];
     tbls:.qetl.job.stream.subscriptions[job];
     .[{.qetl.log.info[x;y;z]};(job;"starting streaming job";
-        `subscribe_to`publishes`replay`timer!(tbls;d`publishes;replay;
+        `subscribe_to`outputs`replay`timer!(tbls;d`outputs;replay;
             $[`period in key d; d`period; 0Nn]));::];
     if[`on_start in key d; (d`on_start)[]];
     tr[`connect][];
     .qetl.job.stream.require_recovery[job;tr];
-    if[count d`publishes;
-        if[`check_publishable in key tr; tr[`check_publishable] d`publishes];
+    if[count d`outputs;
+        if[`check_publishable in key tr; tr[`check_publishable] d`outputs];
         .qetl.job.stream.wire[job;tr[`publisher][]]];
     if[count tbls;
         live:get pub:` sv (d`ns),`publish;
@@ -628,7 +628,7 @@
         tr[`timer][`$(string job),"_config";.qetl.cfg.audit.period;.qetl.cfg.audit.poll_and_publish]];
     `.qetl.job.stream.running set distinct .qetl.job.stream.running,job;
     .[{.qetl.log.info[x;y;z]};(job;"streaming job wired - running";
-        `subscribe_to`publishes!(tbls;d`publishes));::];
+        `subscribe_to`outputs!(tbls;d`outputs));::];
     job}
 
 / The jobs this process has started, in the order it started them: whom
@@ -705,7 +705,7 @@
     if[not 99h=type c; 'who," must be a dict of state and table"];
     if[count `state`table except key c; 'who," needs state (the variable it carries) and table (where its snapshot goes)"];
     if[not -11h=type c`state; 'who,"'s state must be the name of a variable in the job's namespace"];
-    if[not (c`table) in (),decl`publishes; 'who,"'s table ",string[c`table]," must be one the job publishes"];
+    if[not (c`table) in (),decl`outputs; 'who,"'s table ",string[c`table]," must be one the job publishes"];
     if[not replays; 'who," needs replay 1b - the snapshot is read back by a replay"];
     if[count (key c) except `state`table`cap; 'who," takes state, table and cap, not ",", " sv string (key c) except `state`table`cap];
     if[$[`cap in key c; not (-7h=type c`cap) and 0<c`cap; 0b]; 'who,"'s cap must be a positive long, the rows a replay may hold"];

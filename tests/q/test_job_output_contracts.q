@@ -4,7 +4,7 @@
 / The declarations were already checked end to end except at one link:
 / .qt.qetl.plant.tables holds each job's declared table to the plant's, and
 / python/uqs/tests/test_publish_declarations.py holds each publish call to
-/ the job's `publishes`. Neither runs a job, so neither sees the rows it
+/ the job's `outputs`. Neither runs a job, so neither sees the rows it
 / builds - and those rows are what the plant receives.
 / .
 / That link matters more than it looks. .qtorq.publish sends a table to
@@ -157,7 +157,7 @@
     {[] .qt.qetl.job.stream.bars.contract_driver[]})
 
 / Every registered job that declares at least one published table.
-.qt.qpipe.job_output_contracts.publishing:{[] j where {[j] 0<count (),.qetl.job.stream.def[j]`publishes} each j:.qetl.job.stream.defined[]}
+.qt.qpipe.job_output_contracts.publishing:{[] j where {[j] 0<count (),.qetl.job.stream.def[j]`outputs} each j:.qetl.job.stream.defined[]}
 
 / A feed drives itself: it subscribes to nothing and publishes on a timer.
 / Fifty ticks because crypto_mock's fills are a draw - .qt.qetl.job.stream relies on
@@ -250,7 +250,7 @@
     `.qt.qpipe.job_output_contracts.bad set ();
     {[r;excused;j]
         seen:distinct exec tbl from r j;
-        owed:((),.qetl.job.stream.def[j]`publishes) except seen;
+        owed:((),.qetl.job.stream.def[j]`outputs) except seen;
         owed:owed where not ({`$string[x],"/",string y}[j] each owed) in excused;
         if[count owed; `.qt.qpipe.job_output_contracts.bad set .qt.qpipe.job_output_contracts.bad,enlist string[j]," never published ",", " sv string owed]
       }[r;excused] each key r;
@@ -303,9 +303,9 @@
 
 .qt.qpipe.job_output_contracts.test_the_excuses_still_describe_something_real:{[t]
     / So neither list can rot into cover for the next real gap.
-    stale:.qt.qpipe.job_output_contracts.not_built where not {[p] p[1] in (),.qetl.job.stream.def[p 0]`publishes} each .qt.qpipe.job_output_contracts.not_built;
+    stale:.qt.qpipe.job_output_contracts.not_built where not {[p] p[1] in (),.qetl.job.stream.def[p 0]`outputs} each .qt.qpipe.job_output_contracts.not_built;
     .qunit.assertEquals[count stale;0;"every not_built pair is still declared by its job"];
-    owners:raze {[j] (),.qetl.job.stream.def[j]`publishes} each .qt.qpipe.job_output_contracts.publishing[];
+    owners:raze {[j] (),.qetl.job.stream.def[j]`outputs} each .qt.qpipe.job_output_contracts.publishing[];
     .qunit.assertEquals[(key .qt.qpipe.job_output_contracts.unowned) except owners;`symbol$();
         "every unowned table is still published by some job"];
     .qunit.assertEquals[(key .qt.qpipe.job_output_contracts.unowned) inter key .qt.qpipe.job_output_contracts.shapes;`symbol$();
@@ -316,7 +316,7 @@
 .qt.qpipe.job_output_contracts.test_restoring_the_stream_registries_removes_what_a_suite_defined:{[t]
     before:key .qetl.job.stream.jobs;
     .qt.support.save_stream_jobs[`.qt.qpipe.job_output_contracts];
-    .qetl.job.stream.define[`jo_scratch;`procname`subscribe_to`publishes`on_batch!(
+    .qetl.job.stream.define[`jo_scratch;`procname`subscribe_to`outputs`on_batch!(
         `joscratch1;enlist `jo_in;enlist `jo_out;{[t;x] }[::])];
     .qunit.assertTrue[`jo_scratch in key .qetl.job.stream.jobs;"defined"];
     .qt.support.restore_stream_jobs[`.qt.qpipe.job_output_contracts];

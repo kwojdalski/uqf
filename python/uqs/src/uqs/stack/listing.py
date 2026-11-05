@@ -11,7 +11,7 @@ from uqs.cells import Shown
 from uqs.interpreter import InterpreterStatus, interpreter_status
 from uqs.logger import get_logger
 from uqs.model import profiles
-from uqs.model.declarations import declaration_calls, symbols
+from uqs.model.declarations import declaration_calls, declared_outputs, symbols
 from uqs.model.dependencies import dependency_rows, inputs_by_process, outputs_by_process
 from uqs.model.jobs import job_rows
 from uqs.model.registry import PIPELINES
@@ -47,9 +47,7 @@ def _worker_datasets(paths: UqsPaths) -> dict[str, str]:
     out: dict[str, str] = {}
     for path in sorted((paths.repo_root / WORKER_DIR).glob("*.q")):
         for fn, name, fields in declaration_calls(path.read_text()):
-            if fn != "qetl.job.bounded.define" or not (
-                dataset := symbols(fields.get("dataset", ""))
-            ):
+            if fn != "qetl.job.bounded.define" or not (dataset := declared_outputs(fields, name)):
                 continue
             procname = symbols(fields["procname"])[0] if "procname" in fields else f"{name}1"
             out[procname] = dataset[0]

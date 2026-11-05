@@ -64,7 +64,7 @@
 / The process registry is read from this declaration: `procname` is the
 / process that runs it, and `start_with_all` whether `uqs start all` starts it
 / (absent: on demand, until the connection budget has room).
-.qetl.job.stream.define[`demo_deals_feed;`procname`subscribe_to`publishes`period`poll`transform`note!(
+.qetl.job.stream.define[`demo_deals_feed;`procname`subscribe_to`outputs`period`poll`transform`note!(
     `demo_deals_feed1;
     `symbol$();
     enlist `demo_deals;

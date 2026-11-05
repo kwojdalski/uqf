@@ -170,7 +170,7 @@
             ask_prices:(189.52 189.53;`float$()); ask_sizes:(100 400f;`float$()); clock:`venue`venue)))];
 
 .qetl.job.stream.define[`eq_orderbook;
-    `procname`subscribe_to`publishes`on_batch`transform`check`on_fail`note!(
+    `procname`subscribe_to`outputs`on_batch`transform`check`on_fail`note!(
         `databento1;
         enlist `databento_mbp10;
         `eq_orderbook`market_data;

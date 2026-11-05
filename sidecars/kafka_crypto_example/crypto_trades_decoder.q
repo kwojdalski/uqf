@@ -95,7 +95,7 @@
 .qetl.kafka.topic.define[`example.crypto.trades;`mapping`output`job!(`crypto_trade_map;`crypto_trade;`crypto_trades_decoder)];
 .qetl.kafka.topic.define[`example.crypto.trades.b;`mapping`output`job!(`crypto_trade_map;`crypto_trade;`crypto_trades_decoder)];
 
-.qetl.job.stream.define[`crypto_trades_decoder;`procname`subscribe_to`publishes`on_batch`replay`restore_from`on_replayed`note`state!(
+.qetl.job.stream.define[`crypto_trades_decoder;`procname`subscribe_to`outputs`on_batch`replay`restore_from`on_replayed`note`state!(
     `cryptotrades1;
     enlist `kafka_message;
     `crypto_trade`kafka_dead_letter;

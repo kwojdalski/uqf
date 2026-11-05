@@ -47,8 +47,8 @@
             ([] k:`a`b; window:2#0D00:01; as_of:2#2026.10.09D10:01:00; n:1 1; total:1 5f; mean:1 5f)))];
     }
 
-.qt.qetl.job.stream.rolling.decl:{[] `procname`events`by`event_time`transform`publishes`windows`lateness`period!(
-    `rtd1;`rt_events;`k;`t;`rollingtest_stat;`rt_out;0D00:01 0D00:05;0D00:00:10;0D00:00:01)}
+.qt.qetl.job.stream.rolling.decl:{[] `procname`events`by`event_time`transform`outputs`windows`lateness`period!(
+    `rtd1;`rt_events;`k;`t;`rollingtest_stat;enlist `rt_out;0D00:01 0D00:05;0D00:00:10;0D00:00:01)}
 
 / A rolling job named nm over the test statistic: state emptied, publish recorded.
 .qt.qetl.job.stream.rolling.job:{[nm] .qt.qetl.job.stream.rolling.jobwith[nm;.qt.qetl.job.stream.rolling.decl[]]}
@@ -96,6 +96,16 @@
         "*rt_x's windows must be timespans, each positive*";"a window has to have an extent"];
     .qunit.assertThrows[.qetl.job.stream.at_rolling[`rt_x;];@[.qt.qetl.job.stream.rolling.decl[];`windows;:;60 300];
         "*rt_x's windows must be timespans, each positive*";"longs are not seconds"]};
+
+.qt.qetl.job.stream.rolling.test_the_retired_publishes_key_is_refused_and_outputs_holds_exactly_one_table:{[t]
+    .qt.qetl.job.stream.rolling.define_transform[];
+    old:(`outputs _ .qt.qetl.job.stream.rolling.decl[]),enlist[`publishes]!enlist `rt_out;
+    .qunit.assertThrows[.qetl.job.stream.at_rolling[`rt_x;];old;
+        "*declares publishes, which is now outputs - rename the key*";"the old spelling is refused with its migration"];
+    .qunit.assertThrows[.qetl.job.stream.at_rolling[`rt_x;];@[.qt.qetl.job.stream.rolling.decl[];`outputs;:;`rt_a`rt_b];
+        "*outputs must be a symbol list of exactly one table*";"a job of this kind writes one table"];
+    .qunit.assertThrows[.qetl.job.stream.at_rolling[`rt_x;];@[.qt.qetl.job.stream.rolling.decl[];`outputs;:;`rt_a];
+        "*outputs must be a symbol list of exactly one table*";"an atom is not a list of one"]};
 
 .qt.qetl.job.stream.rolling.test_an_unknown_key_is_refused:{[t]
     .qt.qetl.job.stream.rolling.define_transform[];

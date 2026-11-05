@@ -218,8 +218,8 @@ minute's volume); choose rolling when the question is about "right now". Both
 are a transform plus a declaration:
 
 ```q
-.qetl.job.stream.at_rolling[`order_quality;`procname`events`by`event_time`transform`publishes`windows`lateness`period!(
-    `order_quality1;`order_outcomes;`book;`source_time;`order_quality;`order_quality;
+.qetl.job.stream.at_rolling[`order_quality;`procname`events`by`event_time`transform`outputs`windows`lateness`period!(
+    `order_quality1;`order_outcomes;`book;`source_time;`order_quality;enlist `order_quality;
     0D00:01 0D00:05 0D01;0D00:00:05;0D00:00:05)];
 ```
 
@@ -396,8 +396,8 @@ Mostly a declaration. Create `src/etl/workers/fx_rates_backfill.q`:
         ([] rate_time:2026.09.11D09:00 2026.09.12D09:00; sym:`EURUSD`USDJPY; mid:1.0842 149.82; pip_factor:10000 100)))];
 
 .qetl.job.bounded.define[`fx_rates_backfill;
-    `source`dataset`width`transform`check!
-    (`fx_rates;`fx_rates;1D;`fx_rates_pips;.qpipe.job.fx_rates_backfill.quality_check)];
+    `source`outputs`width`transform`check!
+    (`fx_rates;enlist `fx_rates;1D;`fx_rates_pips;.qpipe.job.fx_rates_backfill.quality_check)];
 ```
 
 **The namespace is `.qpipe.job.<worker name>`, and you do not choose it.** Every
@@ -492,8 +492,8 @@ A worker's declaration names its process, and may say why it exists:
 
 ```q
 .qetl.job.bounded.define[`fx_rates_backfill;
-    `source`dataset`width`transform`procname`note!
-    (`fx_rates;`fx_rates;1D;`fx_rates_passthrough;
+    `source`outputs`width`transform`procname`note!
+    (`fx_rates;enlist `fx_rates;1D;`fx_rates_passthrough;
      `fx_rates_backfill1;
      "bounded: reads the vendor's daily fixings over ODBC")];
 ```
@@ -502,8 +502,14 @@ A worker's declaration names its process, and may say why it exists:
 A backfill never starts with the stack - it registers with discovery, runs its
 range and exits - so a worker has no `start_with_all`.
 
-A streaming job already names its `procname`, `subscribe_to` and `publishes`,
-and those are its process's edges. Two more keys are optional:
+Both job types name what they produce under `outputs`, a symbol list --- and the
+job type decides what that means. A worker's holds exactly one dataset
+(`enlist `fx_rates`), the one its coverage is recorded under and its `replace` is keyed on; zero or several is refused at declaration. A streaming job's holds the tables it publishes onto the tickerplant, none or many, and nothing records them as complete. The old spellings, a worker's `dataset` and a streaming job's `publishes\`,
+are refused with the rename. See
+[Outputs](../reference/pipeline-declarations.md#outputs-----one-key-two-meanings).
+
+A streaming job already names its `procname`, `subscribe_to` and `outputs`, and
+those are its process's edges. Two more keys are optional:
 
   | key              | means                                                | absent    |
   | ---              | ---                                                  | ---       |
@@ -793,7 +799,7 @@ workers can fill one dataset at once:
 
 ```q
 .qetl.job.bounded.define[`fx_rates_eurusd;
-    `source`dataset`width`transform`partition!(`fx_rates;`fx_rates;1D;`fx_rates_pips;`EURUSD)];
+    `source`outputs`width`transform`partition!(`fx_rates;enlist `fx_rates;1D;`fx_rates_pips;`EURUSD)];
 ```
 
 Coverage is then recorded and read under that partition, and **no read unions
