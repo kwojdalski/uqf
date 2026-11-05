@@ -461,16 +461,23 @@ def test_list_processes_carries_numbers_bools_and_lists():
     assert isinstance(rdb["inputs"], list) and isinstance(rdb["outputs"], list)
 
 
-def test_an_older_releases_bare_process_list_still_gives_its_ports():
+def test_an_older_releases_bare_process_list_is_refused_with_the_redeploy():
     """`--target` tunnels read the SERVER's `process list --json`, which is
-    whatever release was deployed there: both shapes give the same ports."""
+    whatever release was deployed there. The #1882 document gives the ports;
+    the bare `procname` list from before it is refused, not read under the
+    old key (#2109)."""
     from uqs.deploy import control, tunnel
+    from uqs.paths import UqsError
 
     remote = control.Remote("t", "h", "/srv/t")
-    new = json.dumps({"processes": [{"process": "rdb1", "port": 6052}]})
+    new = json.dumps({"processes": [{"process": "rdb1", "proctype": "rdb", "port": 6052}]})
+    assert tunnel._parse_rows(remote, new) == [{"process": "rdb1", "proctype": "rdb", "port": 6052}]
     old = json.dumps([{"procname": "rdb1", "port": "6052"}])
-    rows = [{"process": "rdb1", "proctype": "", "port": 6052}]
-    assert tunnel._parse_rows(remote, new) == tunnel._parse_rows(remote, old) == rows
+    with pytest.raises(UqsError, match=r"target t: .*before #1882 \(`procname`, not `process`\)"):
+        tunnel._parse_rows(remote, old)
+    keyed = json.dumps({"processes": [{"procname": "rdb1", "port": 6052}]})
+    with pytest.raises(UqsError, match="did not list its processes as JSON"):
+        tunnel._parse_rows(remote, keyed)
 
 
 def test_status_json_says_all_its_interpreter_line_says(monkeypatch):

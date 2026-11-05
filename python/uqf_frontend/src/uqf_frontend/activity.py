@@ -243,7 +243,7 @@ DETAIL_KEYS: dict[str, Callable[[object], bool]] = {
     "field": _is_name,
     "key": _is_name,
     "worker": _is_name,
-    "procname": _is_name,
+    "process": _is_name,
     # results
     "status": _is_status,
     "error": _is_name,
@@ -372,7 +372,7 @@ SERVER_ACTIONS: dict[tuple[str, str], Callable[[Mapping[str, str]], str]] = {
     ("POST", "/control/process/{action}"): lambda p: (
         f"process.{p['action']}" if p.get("action") in ("start", "stop", "restart") else "process"
     ),
-    ("PUT", "/control/process/{procname}/config"): lambda _: "process.config",
+    ("PUT", "/control/process/{process}/config"): lambda _: "process.config",
     ("PUT", "/control/worker-config"): lambda _: "worker.config",
     ("POST", "/control/backfill"): lambda _: "backfill.start",
     ("PUT", "/services/{target}/files/content"): lambda _: "file.upload",
@@ -395,7 +395,7 @@ REFUSED_ACTION = "authz.refused"
 PRUNE_ACTION = "config.history.prune"
 
 #: Path parameters that name the target of an action.
-_TARGET_PARAMS = ("procname",)
+_TARGET_PARAMS = ("process",)
 
 #: Methods that never change anything.
 SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})

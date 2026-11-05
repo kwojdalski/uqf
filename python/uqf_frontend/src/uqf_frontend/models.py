@@ -254,7 +254,7 @@ class UsageResponse(BaseModel):
 
 
 class ProcessHealthOut(BaseModel):
-    procname: str
+    process: str
     proctype: str
     group: str
     host: str
@@ -263,7 +263,7 @@ class ProcessHealthOut(BaseModel):
     up: bool
     pid: int | None = None
     reported_port: int | None = None
-    reported_procname: str | None = None
+    reported_process: str | None = None
     error: str | None = None
     identity_mismatch: str | None = Field(
         default=None,
@@ -449,7 +449,7 @@ class TunnelMappingOut(BaseModel):
     and - separately - what its last check proved."""
 
     process: str
-    role: str = Field(description="rdb, hdb, wdb or gateway: the process's proctype")
+    proctype: str = Field(description="rdb, hdb, wdb or gateway")
     remote_host: str
     remote_port: int
     local_host: str
@@ -483,7 +483,7 @@ class TunnelEndpointOut(BaseModel):
     """One endpoint of a tunnel check (uqs.deploy.tunnel_check)."""
 
     process: str
-    role: str
+    proctype: str
     production_endpoint: str
     local_endpoint: str
     remote_port: int
@@ -759,7 +759,7 @@ class ConfigRestoreResponse(BaseModel):
 class ControlProcessOut(BaseModel):
     """One process a lifecycle selector may name."""
 
-    procname: str
+    process: str
     proctype: str
     start_with_all: bool = Field(
         description='whether torq.sh\'s "all" selector includes it - the effective value, '
@@ -835,7 +835,7 @@ class ProcessConfigResponse(BaseModel):
     learn it will sometimes not bother.
     """
 
-    procname: str
+    process: str
     config: dict[str, str]
     settable_fields: list[str]
 
@@ -909,7 +909,7 @@ class BackfillStartedResponse(BaseModel):
     range_from: str
     range_to: str
     #: The TorQ process running it - what `uqs logs` takes.
-    procname: str
+    process: str
     status_path: str
 
 

@@ -101,9 +101,9 @@ export const HISTORY: ActivityHistory = {
 };
 
 const PROCESSES = [
-  { procname: "rdb1", proctype: "rdb", start_with_all: true },
-  { procname: "rdb2", proctype: "rdb", start_with_all: true },
-  { procname: "feed1", proctype: "feed", start_with_all: false },
+  { process: "rdb1", proctype: "rdb", start_with_all: true },
+  { process: "rdb2", proctype: "rdb", start_with_all: true },
+  { process: "feed1", proctype: "feed", start_with_all: false },
 ];
 
 function listing(path: string) {
@@ -169,7 +169,7 @@ export function answer(path: string, level: SessionLevel = "actions"): unknown {
         host: "localhost",
         declared_port: 1,
         port: 1,
-        up: p.procname !== "feed1",
+        up: p.process !== "feed1",
       })),
       poll_seconds: 5,
     };

@@ -309,7 +309,7 @@ export interface Backfill extends Pollable {
  * Row read by string key, so a renamed `up` is a compile error and a failing
  * test_api_types.py, not every process shown Down (#1361). */
 export interface ProcessHealth {
-  procname: string;
+  process: string;
   proctype: string;
   group: string;
   host: string;
@@ -318,7 +318,7 @@ export interface ProcessHealth {
   up: boolean;
   pid: number | null;
   reported_port: number | null;
-  reported_procname: string | null;
+  reported_process: string | null;
   error: string | null;
   identity_mismatch: string | null;
   port_unresolved: boolean;
@@ -428,7 +428,7 @@ export interface TunnelCheckRecord {
  * here is uqs's; the browser never builds one from a port. */
 export interface TunnelMapping {
   process: string;
-  role: string;
+  proctype: string;
   remote_host: string;
   remote_port: number;
   local_host: string;
@@ -454,7 +454,7 @@ export interface TunnelPlan {
 /** One endpoint of a tunnel check - models.TunnelEndpointOut. */
 export interface TunnelEndpoint {
   process: string;
-  role: string;
+  proctype: string;
   production_endpoint: string;
   local_endpoint: string;
   remote_port: number;
@@ -758,7 +758,7 @@ function instant(value: string): bigint {
 // --- control (writes) ------------------------------------------------------
 
 export interface ControlProcess {
-  procname: string;
+  process: string;
   proctype: string;
   start_with_all: boolean;
 }
@@ -774,7 +774,7 @@ export interface ControlStatus extends Pollable {
 export interface LifecycleBody {
   procs: string;
 }
-/** PUT /control/process/{procname}/config - models.ProcessConfigRequest. */
+/** PUT /control/process/{process}/config - models.ProcessConfigRequest. */
 export interface ProcessConfigBody {
   field: string;
   value: string;
@@ -799,7 +799,7 @@ export interface CommandResult {
   output: string;
 }
 export interface ProcessConfigResult {
-  procname: string;
+  process: string;
   config: Record<string, string>;
   settable_fields: string[];
 }
@@ -822,7 +822,7 @@ export interface BackfillStarted {
   source_version: string;
   range_from: string;
   range_to: string;
-  procname: string;
+  process: string;
   status_path: string;
 }
 

@@ -1502,18 +1502,18 @@ def create_app(
             output=result.output,
         )
 
-    @app.put("/control/process/{procname}/config", response_model=ProcessConfigResponse)
+    @app.put("/control/process/{process}/config", response_model=ProcessConfigResponse)
     def control_process_config(
-        procname: str, req: ProcessConfigRequest, request: Request
+        process: str, req: ProcessConfigRequest, request: Request
     ) -> ProcessConfigResponse:
         """Persist one process.csv field override, applied on the next start."""
         audit = activity.audit_of(request)
         # The field, never the value: a value is whatever was typed.
-        audit.note(procname=procname, field=req.field_name)
+        audit.note(process=process, field=req.field_name)
         with control.reporting_acting(audit.begin):
-            row = control.set_process_field(settings, procname, req.field_name, req.value)
+            row = control.set_process_field(settings, process, req.field_name, req.value)
         return ProcessConfigResponse(
-            procname=procname,
+            process=process,
             config=row,
             settable_fields=control.settable_fields(settings),
         )
