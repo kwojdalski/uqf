@@ -482,8 +482,8 @@ OPTIONS = {
     "--connect-timeout": Meaning("ssh/scp seconds", r"ssh/scp"),
     "--date": Meaning("one day of a time range: --from D --to D+1", r"--from D --to D\+1"),
     "--dataset": Meaning(
-        "a dataset by name: the one a worker fills, or the markout dataset a snapshot configures",
-        r"table it fills|snapshots that configure this markout dataset",
+        "the markout dataset a snapshot configures (a job's tables are --outputs, #2102)",
+        r"snapshots that configure this markout dataset",
     ),
     "--debug": Meaning("log at DEBUG", r"^Log at DEBUG\. Same as LOG_LEVEL"),
     "--dest": Meaning(
@@ -526,6 +526,9 @@ OPTIONS = {
     "--on-conflict": Meaning(
         "what a write does with a row already there",
         r"what a (write|copy) (may )?do(es)? with a (row|partition)",
+    ),
+    "--outputs": Meaning(
+        "the tables a job produces: published, filled or written", r"tables it produces"
     ),
     "--output": Meaning("a FILE to write instead of stdout", r"^write it to this file"),
     "--output-dir": Meaning("a directory to write into", r"^directory to write"),
@@ -1430,7 +1433,8 @@ def test_job_new_kind_tags_are_shapes():
 
 def test_job_new_refuses_a_misplaced_option_it_was_never_told_about(monkeypatch):
     """`used` is read from Click, so every SHAPES row is checked: a backfill
-    given --publishes was scaffolded with it dropped (#1893)."""
+    given --outputs was scaffolded with it dropped (#1893). A normalizer and a
+    horizon job publish their own NAME, so --outputs shapes neither (#2102)."""
     from typer.testing import CliRunner
 
     from uqs.cli import create
@@ -1442,9 +1446,9 @@ def test_job_new_refuses_a_misplaced_option_it_was_never_told_about(monkeypatch)
         raise SystemExit(1)
 
     monkeypatch.setattr(create, "_die", record)
-    argv = ["job", "new", "x", "--kind", "backfill", "--publishes", "t", "--dry-run"]
+    argv = ["job", "new", "x", "--kind", "normalizer", "--outputs", "t", "--dry-run"]
     CliRunner().invoke(app, argv)
-    assert refused == ["--publishes does not apply to --kind backfill"]
+    assert refused == ["--outputs does not apply to --kind normalizer"]
 
 
 def test_status_presets_are_one_table():
@@ -1979,3 +1983,14 @@ def test_a_start_line_is_not_broken_into_a_pipe():
     (line,) = [ln for ln in run.stdout.splitlines() if "-procname rdb1" in ln]
     assert line.split()[0].endswith("nohup") or "torq.q" in line
     assert "torq.q" in line and "-proctype rdb" in line
+
+
+@pytest.mark.parametrize("old", ["--publishes", "--dataset", "--writes"])
+def test_job_new_refuses_the_retired_output_options(old):
+    """`--publishes`, `--dataset` and `--writes` are all `--outputs` now (#2102);
+    none survives as an alias, so each is an unknown option."""
+    from typer.testing import CliRunner
+
+    result = CliRunner().invoke(app, ["job", "new", "x", old, "t", "--dry-run"])
+    assert result.exit_code == 2
+    assert "No such option" in result.output

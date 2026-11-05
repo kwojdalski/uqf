@@ -24,7 +24,7 @@ from uqs.scaffold.templates import reaction_body, test_stub
 def reaction(
     name: str,
     dataset: str,
-    writes: list[str],
+    outputs: list[str],
     *,
     producers: dict[str, list[str]],
     taken: set[str],
@@ -40,8 +40,8 @@ def reaction(
     """
     _check_name(name, "reaction name")
     _check_name(dataset, "--triggered-by")
-    for table in writes:
-        _check_name(table, "--writes")
+    for table in outputs:
+        _check_name(table, "--outputs")
     if name in taken:
         raise UqsError(
             f"a job called {name!r} already exists, and a reaction shares its namespace "
@@ -59,16 +59,16 @@ def reaction(
             f"no bounded worker fills {dataset!r}, so nothing would ever fire this reaction. "
             f"Datasets that can: {known}"
         )
-    if dataset in writes:
+    if dataset in outputs:
         raise UqsError(
-            f"--writes {dataset} is the dataset this reacts to: the job graph refuses that "
+            f"--outputs {dataset} is the dataset this reacts to: the job graph refuses that "
             "cycle when the file loads, so the tree would stop loading"
         )
 
     procs = producers[dataset]
     ns = test_namespace(name)
     actions = [
-        FileAction(REACTION_DIR / f"{name}.q", reaction_body(name, dataset, writes, procs)),
+        FileAction(REACTION_DIR / f"{name}.q", reaction_body(name, dataset, outputs, procs)),
         FileAction(
             TEST_DIR / f"test_{name}.q",
             test_stub(name, ns, f"the {name} reaction to {dataset}"),
@@ -78,9 +78,9 @@ def reaction(
         f"implement .qpipe.job.{name}.handler, then replace the scaffolded test",
         f"it runs inside {', '.join(procs)} - the process(es) that fill {dataset}",
     ]
-    if writes:
+    if outputs:
         notes.append(
-            f"--writes {', '.join(writes)} is asserted, not derived: the handler must write "
+            f"--outputs {', '.join(outputs)} is asserted, not derived: the handler must write "
             "exactly that, and nothing checks it does"
         )
     return ScaffoldPlan(name=name, actions=actions, notes=notes)

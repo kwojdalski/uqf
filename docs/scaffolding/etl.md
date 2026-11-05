@@ -13,14 +13,14 @@ If your rows come from a timer rather than a subscription you want
 
 ```bash
 uqs job new spreadmon --subscribe-to fx_orderbook \
-    --publishes spread_bps --schema "sym:symbol, spread:float"
+    --outputs spread_bps --schema "sym:symbol, spread:float"
 ```
 
 `--subscribe-to` is what makes it an etl rather than a feed. It takes a
 comma-separated list --- subscribing to two tables is legal and common
 (`crypto_markout1` reads `crypto_trades` and `crypto_book`).
 
-<!-- scaffold-transcript: spreadmon --subscribe-to fx_orderbook --publishes spread_bps --schema "sym:symbol, spread:float" -->
+<!-- scaffold-transcript: spreadmon --subscribe-to fx_orderbook --outputs spread_bps --schema "sym:symbol, spread:float" -->
 ```
 scaffold spreadmon:
   create src/etl/streaming/spreadmon.q
@@ -85,9 +85,9 @@ When the job only forwards or reshapes one table, the scaffold can write the
 handler too:
 
 ```
-uqs job new trades_echo --subscribe-to trades --publishes trades_copy \
+uqs job new trades_echo --subscribe-to trades --outputs trades_copy \
     --schema-from trades --transform passthrough
-uqs job new trades_notional --subscribe-to trades --publishes notional \
+uqs job new trades_notional --subscribe-to trades --outputs notional \
     --schema "sym:symbol, notional:float" --transform derive
 ```
 

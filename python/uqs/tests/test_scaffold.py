@@ -123,7 +123,7 @@ def test_publishing_without_columns_is_refused():
 
 
 def test_columns_without_publishing_is_refused():
-    with pytest.raises(UqsError, match="no --publishes"):
+    with pytest.raises(UqsError, match="no --outputs"):
         jobs.streaming_job("j", ["trades"], None, "px:float")
 
 
@@ -428,7 +428,7 @@ def _writes_to(plan: jobs.ScaffoldPlan, path: Path) -> bool:
 
 @pytest.mark.parametrize("publishes", ["My_Table", "a b", "1st"])
 def test_a_published_table_name_is_checked_like_every_other_name(publishes):
-    """It was not, and `--publishes a,b` wrote `enlist `a,b` into the job and
+    """It was not, and `--outputs a,b` wrote `enlist `a,b` into the job and
     `a,b:([]...)` into plant_tables.q - q that does not load."""
     with pytest.raises(UqsError, match="published table"):
         jobs.streaming_job("j", ["quote"], publishes, "v:float", known_tables=_PLANT)

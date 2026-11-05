@@ -2,6 +2,7 @@ import { expect, it, vi } from "vitest";
 import {
   DEFAULT_REQUEST_TIMEOUT_MS,
   adoptRequestTimeout,
+  errorBody,
   request,
   requestTimeout,
   filterValue,
@@ -119,4 +120,32 @@ it("takes its request timeout from what /health serves, not a copy of its own (#
   adoptRequestTimeout(0);
   expect(requestTimeout()).toBe(90000);
   adoptRequestTimeout(DEFAULT_REQUEST_TIMEOUT_MS / 1000);
+});
+it("reads every error in the one shape the API answers (#2106)", () => {
+  expect(
+    errorBody(
+      {
+        error: "RequestInvalid",
+        detail: "query.limit: too small",
+        transient: false,
+      },
+      422,
+    ),
+  ).toEqual({
+    error: "RequestInvalid",
+    detail: "query.limit: too small",
+    transient: false,
+    errors: undefined,
+  });
+  expect(
+    errorBody(
+      { error: "GatewayReloading", detail: "eod", transient: true },
+      503,
+    ).transient,
+  ).toBe(true);
+  // An answer not in the shape - a proxy's page, or none - names the status.
+  expect(errorBody(null, 502).detail).toBe("Request failed (502).");
+  expect(errorBody({ detail: ["x"] }, 422).detail).toBe(
+    "Request failed (422).",
+  );
 });

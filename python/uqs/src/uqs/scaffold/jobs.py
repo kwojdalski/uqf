@@ -231,7 +231,7 @@ def streaming_job(
             "delivers its input, so there is no page to fetch - drop --poll or --subscribe-to"
         )
     if poll and not pubs:
-        raise UqsError("--poll needs --publishes: a polling feed publishes what it fetches")
+        raise UqsError("--poll needs --outputs: a polling feed publishes what it fetches")
     actions: list[FileAction] = []
     notes: list[str] = []
 
@@ -321,14 +321,14 @@ publish:.qetl.job.stream.unwired `{name};
     # cannot carry, so that is refused rather than guessed at.
     if len(new_tables) > 1:
         raise UqsError(
-            f"--publishes names {len(new_tables)} tables the plant does not define yet "
+            f"--outputs names {len(new_tables)} tables the plant does not define yet "
             f"({', '.join(new_tables)}), and --schema can shape only one - scaffold with one "
             "new table and add the others to src/etl/plant_tables.q by hand"
         )
     if new_tables:
         if not columns:
             raise UqsError(
-                f"--publishes {new_tables[0]} needs --schema: the plant must define a table "
+                f"--outputs {new_tables[0]} needs --schema: the plant must define a table "
                 "before anything writes to it, or .u.upd discards the rows in silence"
             )
         cols = as_columns(columns)
@@ -349,7 +349,7 @@ publish:.qetl.job.stream.unwired `{name};
             + (
                 f"{', '.join(pubs)} already defined by the plant - drop --schema"
                 if pubs
-                else "no --publishes, so there is no table to define"
+                else "no --outputs, so there is no table to define"
             )
         )
 

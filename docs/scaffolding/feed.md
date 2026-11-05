@@ -7,14 +7,14 @@ feeds. If your rows come from a plant table, you want [etl.md](etl.md) instead.
 ## Command
 
 ```bash
-uqs job new pulsefeed --publishes pulse --schema "sym:symbol, px:float"
+uqs job new pulsefeed --outputs pulse --schema "sym:symbol, px:float"
 ```
 
 **There is no `--kind feed`.** A streaming job that subscribes to nothing is a
 feed, and the scaffold derives that. Omitting `--subscribe-to` is the whole
 signal.
 
-<!-- scaffold-transcript: pulsefeed --publishes pulse --schema "sym:symbol, px:float" -->
+<!-- scaffold-transcript: pulsefeed --outputs pulse --schema "sym:symbol, px:float" -->
 ```
 scaffold pulsefeed:
   create src/etl/streaming/pulsefeed.q
@@ -103,8 +103,8 @@ A feed that ticks makes rows up; a feed that polls fetches them from somewhere
 else. Scaffold the second with `--poll`:
 
 ```
-uqs job new rates_feed --publishes rates --schema "sym:symbol, mid:float" --poll
-uqs job new book_feed --publishes books --schema "sym:symbol, px:float" \
+uqs job new rates_feed --outputs rates --schema "sym:symbol, mid:float" --poll
+uqs job new book_feed --outputs books --schema "sym:symbol, px:float" \
     --poll --cursor-fields time,securityId,priceBookType
 ```
 
