@@ -39,10 +39,6 @@
 
 \d .
 
-/ The day .cmp ages partitions from: its hdbstructure takes .z.D, the local date, so
-/ a scope that is to agree with .cmp's plan takes the same one.
-.qtorq.compress.today:{[] .z.D}
-
 / A minage no partition reaches: the age of a partition 2,700 years old.
 .qtorq.compress.never:1000000i
 
