@@ -2311,7 +2311,11 @@ def test_every_overlaid_file_exists():
     """A path in the `load` column that does not exist fails only when that
     process starts - and dqe1 does not start with the stack."""
     real = stack_paths.default_paths()
-    roots = {"${UQF_ROOT}": real.repo_root, "${UQF_SCRIPTS}": real.scripts_dir}
+    roots = {
+        "${UQF_ROOT}": real.repo_root,
+        "${UQF_SCRIPTS}": real.scripts_dir,
+        "${KDBCODE}": real.torqhome / "code",
+    }
     for before, after in stack_procs.VENDORED_LOAD_OVERLAY.values():
         for entry in (*before, *after):
             var, rest = entry.split("/", 1)
