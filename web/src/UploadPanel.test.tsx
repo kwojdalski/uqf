@@ -38,7 +38,7 @@ function answer(path: string, over: Partial<RemoteUpload> = {}): RemoteUpload {
     sha256: "0".repeat(64),
     replaced: false,
     mode: 0o644,
-    created: [],
+    created_dirs: [],
     push_id: PUSH,
     previous_size: null,
     previous_sha256: null,
@@ -340,7 +340,7 @@ it("gives each upload its own outcome: done, failed, uncertain", async () => {
   choose([file("a.csv"), file("b.csv"), file("c.csv")]);
   await confirm();
   await vi.waitFor(() =>
-    expect(row("c.csv")).toHaveTextContent("Outcome uncertain"),
+    expect(row("c.csv")).toHaveTextContent("Outcome unknown"),
   );
   expect(row("a.csv")).toHaveTextContent("Uploaded");
   expect(row("b.csv")).toHaveTextContent("Failed - nothing written");
@@ -372,7 +372,7 @@ it("shows progress, and a cancel leaves the in-flight file uncertain and sends n
   await vi.waitFor(() =>
     expect(row("b.csv")).toHaveTextContent("Cancelled - not sent"),
   );
-  expect(row("a.csv")).toHaveTextContent("Outcome uncertain");
+  expect(row("a.csv")).toHaveTextContent("Outcome unknown");
   expect(calls).toHaveLength(1);
   // the listing is refreshed: the uncertain one may be there
   expect(onUploaded).toHaveBeenCalledTimes(1);
@@ -384,7 +384,7 @@ it("shows progress, and a cancel leaves the in-flight file uncertain and sends n
 it("warns about uncertain outcomes before anything is sent", () => {
   panel(fake().uploader);
   expect(screen.getByRole("note")).toHaveTextContent(
-    "a cancellation or a timeout while a file is in flight can leave its outcome uncertain",
+    "a cancellation or a timeout while a file is in flight can leave its outcome unknown",
   );
 });
 
@@ -414,7 +414,7 @@ it("checks paths as the server does", () => {
 
 it("encodes the target, path, overwrite and push in the URL", () => {
   expect(remoteUploadPath("a/b", "shared/config/x?y", true, PUSH)).toBe(
-    `/services/a%2Fb/files/content?path=shared%2Fconfig%2Fx%3Fy&overwrite=true&push=${PUSH}`,
+    `/services/a%2Fb/files/content?path=shared%2Fconfig%2Fx%3Fy&overwrite=true&push_id=${PUSH}`,
   );
 });
 
@@ -648,7 +648,7 @@ it("opens one push on confirming, names it on every file, and closes it with wha
   expect(closed[0]).toEqual({
     push: PUSH,
     reported: [
-      { path: "shared/config/b.csv", outcome: "uncertain" },
+      { path: "shared/config/b.csv", outcome: "unknown" },
       { path: "shared/config/c.csv", outcome: "failed" },
     ],
   });

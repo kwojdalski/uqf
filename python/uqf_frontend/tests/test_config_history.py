@@ -96,7 +96,7 @@ def _open(c: TestClient, files: int = 2, total: int = 50) -> str:
 
 
 def _upload(c: TestClient, push: str, path: str, data: bytes, overwrite: bool = False):
-    params = {"path": path, "push": push, "overwrite": str(overwrite).lower()}
+    params = {"path": path, "push_id": push, "overwrite": str(overwrite).lower()}
     return c.put("/services/box/files/content", params=params, content=data)
 
 
@@ -230,15 +230,15 @@ def test_an_interrupted_push_is_never_retried_and_history_shows_what_landed(serv
     second = _upload(c, push, "shared/config/lost", b"2")
     assert second.status_code == 504 and len(sent) == 1
     _use(c, Loopback())
-    reported = [{"path": "shared/config/landed", "outcome": "uncertain"},
-                {"path": "shared/config/lost", "outcome": "uncertain"}]  # fmt: skip
+    reported = [{"path": "shared/config/landed", "outcome": "unknown"},
+                {"path": "shared/config/lost", "outcome": "unknown"}]  # fmt: skip
     closed = c.post(f"/services/box/config/pushes/{push}/close", json={"reported": reported})
     assert closed.status_code == 200, closed.text
     shown = c.get(f"/services/box/config/pushes/{push}").json()["push"]
     assert [(f["path"], f["state"], f["now"]) for f in shown["files"]] == [
         ("shared/config/landed", "published", "after"),
     ]
-    assert shown["reported"] == [{"path": "shared/config/lost", "outcome": "uncertain"}]
+    assert shown["reported"] == [{"path": "shared/config/lost", "outcome": "unknown"}]
     assert not (served / "shared/config/lost").exists()
     rows = _by_action(c)
     assert {r["outcome"] for r in rows["file.upload"]} == {"unknown"}

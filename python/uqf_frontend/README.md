@@ -168,7 +168,7 @@ the same connection details for whichever target you choose.
 
 ### Uploading to a target's shared/config --- one file per request
 
-`PUT /services/{target}/files/content?path=&overwrite=false&push=` writes the
+`PUT /services/{target}/files/content?path=&overwrite=false&push_id=` writes the
 request body to `path` below the target's `shared/config/` - the
 operator-supplied files every release links in - and nowhere else (#1951). It is
 gated like browsing: writes on, the token, an allowed Host, a registered target.
@@ -208,8 +208,8 @@ progress and its own outcome.
   nothing was written. A timeout (120 s), an ssh failure (255), a helper crash
   or a lost answer is 504 `UploadOutcomeUncertain`, with `transient: false`. The
   file may or may not be there, and neither the API nor the browser retries: the
-  queue shows "Outcome uncertain", and you list the directory before uploading
-  it again. Cancelling an upload in flight is reported the same way.
+  queue shows "Outcome unknown", and you list the directory before uploading it
+  again. Cancelling an upload in flight is reported the same way.
 - **Audit.** Each upload is one `file.upload` row in the activity history
   (#1954). The row records the target, the file's path, size, sha256, and
   whether it was a create or an overwrite. It never records the file's bytes. An
