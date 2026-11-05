@@ -555,7 +555,7 @@ def test_every_written_mention_of_the_pin_agrees():
         tags = re.findall(r"q-lint --tag (v[\d.]+)", (cqt.REPO / name).read_text())
         assert tags, f"{name} no longer quotes the install command"
         assert set(tags) == {pinned}, f"{name} quotes {tags}, the pin is {pinned}"
-    for name in (".github/workflows/ci.yml", "install.sh"):
+    for name in (".github/actions/install-qlinter/action.yml", "install.sh"):
         text = (cqt.REPO / name).read_text()
         assert ".qlinter-version" in text, f"{name} no longer reads the pin"
         assert not re.search(r"QLINT_VERSION[:=]\s*\"?v\d", text), f"{name} writes its own pin"
