@@ -1,0 +1,108 @@
+name: Install the pinned qlinter
+description: >-
+  Installs the q-lint release .qlinter-version pins to /usr/local/bin/qlinter,
+  from the Actions cache when it holds that release and from GitHub otherwise
+  (#2171). The one copy of this install: ci.yml's jobs and the KDB-X
+  attestation workflow all use it.
+
+# Why it is shaped like this (#2171):
+#   - Cached, keyed by the pinned version: a warm run makes no network fetch,
+#     so a GitHub release-download outage (a 504 turned a run red on
+#     2026-11-05) cannot fail a change that has nothing to do with it.
+#   - Restore and save are separate steps, and the save runs straight after
+#     the download: the combined actions/cache saves only when the whole job
+#     succeeds, so a job that went red for an unrelated reason would never
+#     warm the cache.
+#   - Verified against the sha256 GitHub records for the asset at upload (the
+#     release's `digest`; q-lint publishes no checksum file). The verified
+#     hash is cached beside the tarball, and a cache hit is checked against it.
+#   - A missing asset is one clear error, found by a HEAD request before any
+#     download: a pin bump pushed before q-lint's release finished uploading
+#     used to fail as a bare curl 404 (2026-11-05).
+#   - Transient failures (5xx, refused connections) are retried with curl's
+#     exponential backoff; a 404 is not transient and is not retried.
+
+outputs:
+  version:
+    description: The installed release tag, e.g. v0.14.20.
+    value: ${{ steps.pin.outputs.version }}
+
+runs:
+  using: composite
+  steps:
+    - name: Read the pin
+      id: pin
+      shell: bash
+      run: |
+        set -euo pipefail
+        read -r version < .qlinter-version
+        if [[ ! "$version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+          echo "::error file=.qlinter-version::.qlinter-version holds '$version', not a release tag like v0.14.20."
+          exit 1
+        fi
+        asset="qlinter-${version}-x86_64-unknown-linux-gnu.tar.gz"
+        {
+          echo "version=$version"
+          echo "asset=$asset"
+          echo "url=https://github.com/kwojdalski/q-lint/releases/download/${version}/${asset}"
+          echo "dir=$HOME/.cache/uqf/tools/qlinter-${version}"
+        } >> "$GITHUB_OUTPUT"
+    - name: Restore qlinter from the cache
+      id: cache
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ steps.pin.outputs.dir }}
+        key: qlinter-${{ steps.pin.outputs.version }}-${{ runner.os }}-${{ runner.arch }}
+    - name: Download qlinter (cache miss)
+      if: ${{ steps.cache.outputs.cache-hit != 'true' }}
+      shell: bash
+      env:
+        VERSION: ${{ steps.pin.outputs.version }}
+        ASSET: ${{ steps.pin.outputs.asset }}
+        URL: ${{ steps.pin.outputs.url }}
+        DIR: ${{ steps.pin.outputs.dir }}
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        set -euo pipefail
+        retry=(--retry 5 --retry-connrefused --retry-max-time 180)
+        code="$(curl -sSIL "${retry[@]}" -o /dev/null -w '%{http_code}' "$URL" || true)"
+        if [ "$code" != 200 ]; then
+          echo "::error file=.qlinter-version::qlinter ${VERSION} has no published Linux asset (HTTP ${code:-none} for ${URL}). If .qlinter-version was just bumped, the q-lint release is probably still uploading its assets: wait for https://github.com/kwojdalski/q-lint/releases/tag/${VERSION} to list ${ASSET}, then re-run."
+          exit 1
+        fi
+        digest=""
+        for wait in 2 4 8 16; do
+          digest="$(gh api "repos/kwojdalski/q-lint/releases/tags/${VERSION}" \
+            --jq ".assets[] | select(.name == \"${ASSET}\") | .digest" || true)"
+          [ -n "$digest" ] && break
+          sleep "$wait"
+        done
+        if [[ "$digest" != sha256:* ]]; then
+          echo "::error::GitHub records no sha256 for ${ASSET} (got '${digest}'); refusing to install an unverified qlinter."
+          exit 1
+        fi
+        mkdir -p "$DIR"
+        curl -sSfL "${retry[@]}" "$URL" -o "$DIR/qlinter.tar.gz"
+        echo "${digest#sha256:}  qlinter.tar.gz" > "$DIR/qlinter.tar.gz.sha256"
+        (cd "$DIR" && sha256sum -c qlinter.tar.gz.sha256)
+    - name: Save qlinter to the cache
+      if: ${{ steps.cache.outputs.cache-hit != 'true' }}
+      # Another job of the same run may save the same key first; that is a
+      # warning from the action, not a failure.
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ steps.pin.outputs.dir }}
+        key: ${{ steps.cache.outputs.cache-primary-key }}
+    - name: Install qlinter
+      shell: bash
+      env:
+        VERSION: ${{ steps.pin.outputs.version }}
+        DIR: ${{ steps.pin.outputs.dir }}
+        HIT: ${{ steps.cache.outputs.cache-hit }}
+      run: |
+        set -euo pipefail
+        (cd "$DIR" && sha256sum -c qlinter.tar.gz.sha256)
+        tar xzf "$DIR/qlinter.tar.gz" -C "$RUNNER_TEMP"
+        install -m755 "$RUNNER_TEMP/qlinter-${VERSION}-x86_64-unknown-linux-gnu/qlinter" /usr/local/bin/qlinter
+        qlinter --rules > /dev/null
+        echo "qlinter ${VERSION} installed ($([ "$HIT" = true ] && echo 'cache hit' || echo 'downloaded'))"
