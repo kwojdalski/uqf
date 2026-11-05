@@ -55,10 +55,10 @@
 / .
 / `subscribe_to` and `outputs` are the wiring the runner performs on the
 / job's behalf, and what uqs's pipeline_edges checks the Python registry
-/ against - so the q file and the registry cannot drift. `procname` is the TorQ process that runs this job, and is how the
-/ runner knows which job it is: one generic process script, and the name it
-/ was started under decides. `on_batch` is the job itself.
-.qetl.job.stream.required_declarations:`ns`procname`subscribe_to`outputs
+/ against - so the q file and the registry cannot drift. `procname` (default `<job>1, as
+/ for a worker, #2115) is the TorQ process that runs the job: the name a generic
+/ process script was started under decides which job it is. `on_batch` is the job itself.
+.qetl.job.stream.required_declarations:`subscribe_to`outputs
 
 / The options of `define` that every job KIND (bars, horizon, rolling,
 / normalizer) accepts and forwards unchanged: job-level facts independent of
@@ -219,14 +219,14 @@
         '"define: ",string[job]," is already a bounded job - job names must be unique across execution modes"];
     if[not 99h=type decl; '"define: ",string[job],"'s declaration must be a dictionary"];
     .qetl.job.stream.refuse_publishes["define: ",string job;decl];
+    / A supplied ns is refused, not overwritten, as .qetl.job.bounded.define does (#2115)
+    if[`ns in key decl;
+        '"define: ",string[job],"'s namespace is derived - ",string[.qetl.job.stream.namespace[job]]," - not configured; drop the ns key"];
     decl[`ns]:.qetl.job.stream.namespace[job];
+    decl[`procname]:.qetl.job.claim_procname["define: ",string job;job;decl;`];
     missing:.qetl.job.stream.required_declarations where not .qetl.job.stream.required_declarations in key decl;
     if[count missing;
         '"define: ",string[job]," is missing ",", " sv string missing];
-    if[not -11h=type decl`procname;
-        '"define: ",string[job],"'s procname must be a symbol naming the TorQ process that runs it, e.g. `crypto_markout1"];
-    if[(decl`procname) in key .qetl.job.stream.procnames;
-        '"define: ",string[job]," claims procname ",string[decl`procname]," which ",(string .qetl.job.stream.procnames decl`procname)," already runs - one process runs one job"];
     if[not 11h=abs type decl`subscribe_to;
         '"define: ",string[job],"'s subscribe_to must be a symbol list of table names"];
     if[not 11h=abs type decl`outputs;

@@ -95,11 +95,11 @@
 .qetl.job.stream.registries:distinct .qetl.job.stream.registries,`.qetl.job.stream.rolling.registry;
 
 / What every rolling job declares.
-.qetl.job.stream.rolling.required_keys:`procname`events`transform`outputs`windows`lateness`period
+.qetl.job.stream.rolling.required_keys:`events`transform`outputs`windows`lateness`period
 
 / What it may declare besides: the grouping columns (default `sym) and the
 / column the window is read from (default `time).
-.qetl.job.stream.rolling.optional_keys:`by`event_time,.qetl.job.stream.passthrough_keys
+.qetl.job.stream.rolling.optional_keys:`procname`by`event_time,.qetl.job.stream.passthrough_keys
 
 / The columns the shell adds to the transform's input, with their types.
 .qetl.job.stream.rolling.shell_columns:`window`as_of`inside!"npb"
@@ -126,6 +126,7 @@
     who:"define: rolling job ",string[name];
     if[not 99h=type decl; 'who,"'s declaration must be a dictionary"];
     .qetl.job.stream.refuse_publishes[who;decl];
+    decl:.qetl.job.stream.with_lateness[who;decl];
     missing:.qetl.job.stream.rolling.required_keys where not .qetl.job.stream.rolling.required_keys in key decl;
     if[count missing; 'who," is missing ",", " sv string missing];
     unknown:(key decl) except .qetl.job.stream.rolling.required_keys,.qetl.job.stream.rolling.optional_keys;
@@ -175,7 +176,7 @@
     (` sv ns,`on_timer) set {[ns;tick] (get ` sv ns,`evaluate) (get ` sv ns,`now)[]}[ns]; / noqa: QF016 on_timer callback signature
     extra:(.qetl.job.stream.passthrough decl),enlist[`state]!enlist `pending`dropped`last_as_of`covered_from`withheld;
     .qetl.job.stream.define[name;(`procname`subscribe_to`outputs`on_batch`period`on_timer`transform`on_endofday`replay`restore_from!(
-        decl`procname;
+        .qetl.job.procname_of[name;decl];
         enlist decl`events;
         decl`outputs;
         get ` sv ns,`on_batch;

@@ -209,7 +209,8 @@
 .qt.qetl.job.stream.horizons.sjob:{[nm;extra]
     .qt.qetl.job.stream.horizons.define_src_transform[];
     d:@[.qt.qetl.job.stream.horizons.decl_for[nm];`transform;:;`horizontest_src];
-    .qetl.job.stream.at_horizons[nm;d,extra];
+    / a source-stamp job must declare its lateness (#2116); an hour unless a test says otherwise
+    .qetl.job.stream.at_horizons[nm;d,(enlist[`lateness]!enlist 0D01),extra];
     `.qt.qetl.job.stream.horizons.sent set ();
     .qetl.job.stream.wire[nm;{[t;x] .qt.qetl.job.stream.horizons.sent,:enlist (t;x); count x}];
     nm}
@@ -334,7 +335,7 @@
 
 .qt.qetl.job.stream.horizons.test_the_new_keys_are_refused_when_malformed:{[t]
     .qt.qetl.job.stream.horizons.define_src_transform[];
-    d:@[.qt.qetl.job.stream.horizons.decl_for[`hz_s11];`transform;:;`horizontest_src];
+    d:@[.qt.qetl.job.stream.horizons.decl_for[`hz_s11];`transform`lateness;:;(`horizontest_src;0D)];
     .qunit.assertThrows[.qetl.job.stream.at_horizons[`hz_s11;];d,enlist[`event_time]!enlist `when;
         "*events input carries no when*";"an event_time the events lack"];
     .qunit.assertThrows[.qetl.job.stream.at_horizons[`hz_s11;];d,enlist[`ready_on]!enlist `soon;
@@ -352,20 +353,22 @@
 
 .qt.qetl.job.stream.horizons.test_a_late_event_finds_its_reference_after_an_idle_tick:{[t]
     / received 30s after it happened; an idle tick at t0+25s must not have evicted t0's rows
-    nm:.qt.qetl.job.stream.horizons.sjob[`hz_l1;`event_time`max_lateness!(`source_time;0D00:01)];
+    nm:.qt.qetl.job.stream.horizons.sjob[`hz_l1;`event_time`lateness!(`source_time;0D00:01)];
     (.qt.qetl.job.stream.horizons.ns[nm;`on_batch])[`hz_refs;.qt.qetl.job.stream.horizons.late_refs[]];
     (.qt.qetl.job.stream.horizons.ns[nm;`score_ready]) .qt.qetl.job.stream.horizons.t0+0D00:00:25;
     (.qt.qetl.job.stream.horizons.ns[nm;`on_batch])[`hz_events;.qt.qetl.job.stream.horizons.sev[`a;.qt.qetl.job.stream.horizons.t0;`e1]];
     (.qt.qetl.job.stream.horizons.ns[nm;`score_ready]) .qt.qetl.job.stream.horizons.t0+0D00:00:30;
     .qunit.assertEquals[exec ref from last last .qt.qetl.job.stream.horizons.sent;enlist 1.5;"the answer the full history gives"]};
 
-.qt.qetl.job.stream.horizons.test_the_default_lateness_bound_covers_a_source_time_event:{[t]
-    nm:.qt.qetl.job.stream.horizons.sjob[`hz_l2;enlist[`event_time]!enlist `source_time];
-    (.qt.qetl.job.stream.horizons.ns[nm;`on_batch])[`hz_refs;.qt.qetl.job.stream.horizons.late_refs[]];
-    (.qt.qetl.job.stream.horizons.ns[nm;`score_ready]) .qt.qetl.job.stream.horizons.t0+0D00:00:25;
-    (.qt.qetl.job.stream.horizons.ns[nm;`on_batch])[`hz_events;.qt.qetl.job.stream.horizons.sev[`a;.qt.qetl.job.stream.horizons.t0;`e1]];
-    (.qt.qetl.job.stream.horizons.ns[nm;`score_ready]) .qt.qetl.job.stream.horizons.t0+0D00:00:30;
-    .qunit.assertEquals[exec ref from last last .qt.qetl.job.stream.horizons.sent;enlist 1.5;"no declared bound: the documented default applies"]};
+.qt.qetl.job.stream.horizons.test_a_source_stamp_job_must_declare_its_lateness:{[t]
+    .qt.qetl.job.stream.horizons.define_src_transform[];
+    d:@[.qt.qetl.job.stream.horizons.decl_for[`hz_l2];`transform`event_time;:;(`horizontest_src;`source_time)];
+    .qunit.assertThrows[.qetl.job.stream.at_horizons[`hz_l2;];d;
+        "*horizon job hz_l2 is missing lateness*";"no implicit one-hour retention"]};
+
+.qt.qetl.job.stream.horizons.test_the_old_max_lateness_spelling_is_refused_naming_the_new_one:{[t]
+    .qunit.assertThrows[.qetl.job.stream.at_horizons[`hz_l7;];.qt.qetl.job.stream.horizons.decl_for[`hz_l7],enlist[`max_lateness]!enlist 0D00:00:30;
+        "*max_lateness, which is now lateness*";"the old key"]};
 
 .qt.qetl.job.stream.horizons.test_a_late_event_is_not_falsely_expired_under_reference_readiness:{[t]
     nm:.qt.qetl.job.stream.horizons.sjob[`hz_l3;`event_time`ready_on`expire_after!(`source_time;`reference;0D00:01)];
@@ -376,21 +379,21 @@
     .qunit.assertEquals[(count .qt.qetl.job.stream.horizons.sent;count .qt.qetl.job.stream.horizons.ns[nm;`expired]);1 0;"scored, not given up on"]};
 
 .qt.qetl.job.stream.horizons.test_the_lateness_bound_still_trims_the_history:{[t]
-    nm:.qt.qetl.job.stream.horizons.sjob[`hz_l4;`event_time`max_lateness!(`source_time;0D00:00:02)];
+    nm:.qt.qetl.job.stream.horizons.sjob[`hz_l4;`event_time`lateness!(`source_time;0D00:00:02)];
     (.qt.qetl.job.stream.horizons.ns[nm;`on_batch])[`hz_refs;.qt.qetl.job.stream.horizons.late_refs[]];
     (.qt.qetl.job.stream.horizons.ns[nm;`score_ready]) .qt.qetl.job.stream.horizons.t0+0D00:00:25;
     .qunit.assertEquals[exec time from .qt.qetl.job.stream.horizons.ns[nm;`history];enlist .qt.qetl.job.stream.horizons.t0+0D00:00:20;"only the as-of row below now-horizon-lateness"]};
 
 .qt.qetl.job.stream.horizons.test_a_receipt_time_job_has_no_lateness:{[t]
     nm:.qt.qetl.job.stream.horizons.job[`hz_l5;()!()];
-    .qunit.assertEquals[(.qetl.job.stream.horizons.def nm)`max_lateness;0D;"event_time is `time"]};
+    .qunit.assertEquals[(.qetl.job.stream.horizons.def nm)`lateness;0D;"event_time is `time"]};
 
-.qt.qetl.job.stream.horizons.test_max_lateness_must_be_a_non_negative_timespan:{[t]
+.qt.qetl.job.stream.horizons.test_lateness_must_be_a_non_negative_timespan:{[t]
     .qt.qetl.job.stream.horizons.define_transform[];
-    .qunit.assertThrows[.qetl.job.stream.at_horizons[`hz_l6;];.qt.qetl.job.stream.horizons.decl_for[`hz_l6],enlist[`max_lateness]!enlist -0D00:00:01;
-        "*max_lateness must be a timespan*";"negative"];
-    .qunit.assertThrows[.qetl.job.stream.at_horizons[`hz_l6;];.qt.qetl.job.stream.horizons.decl_for[`hz_l6],enlist[`max_lateness]!enlist 5;
-        "*max_lateness must be a timespan*";"not a timespan"]};
+    .qunit.assertThrows[.qetl.job.stream.at_horizons[`hz_l6;];.qt.qetl.job.stream.horizons.decl_for[`hz_l6],enlist[`lateness]!enlist -0D00:00:01;
+        "*lateness must be a timespan*";"negative"];
+    .qunit.assertThrows[.qetl.job.stream.at_horizons[`hz_l6;];.qt.qetl.job.stream.horizons.decl_for[`hz_l6],enlist[`lateness]!enlist 5;
+        "*lateness must be a timespan*";"not a timespan"]};
 
 / the anchor is at t0-2s, past max_age 1s; the reference reaches t0+1s only after a tick
 .qt.qetl.job.stream.horizons.anchor_run:{[nm;tick]
@@ -514,7 +517,7 @@
 
 .qt.qetl.job.stream.horizons.test_both_is_refused_without_a_one_column_by:{[t]
     .qt.qetl.job.stream.horizons.define_src_transform[];
-    d:@[.qt.qetl.job.stream.horizons.decl_for[`hz_b5];`transform;:;`horizontest_src];
+    d:@[.qt.qetl.job.stream.horizons.decl_for[`hz_b5];`transform`lateness;:;(`horizontest_src;0D)];
     .qunit.assertThrows[.qetl.job.stream.at_horizons[`hz_b5;];d,`event_time`ready_on`by!(`source_time;`both;`sym`mid);
         "*ready_on `both needs a one-column by*";"the key its legs name"]};
 
@@ -594,8 +597,8 @@
 
 / --- readiness per series, and the grace that bounds it (#1523, #1524) -----------------------------
 
-/ The declaration fields readiness reads: horizon 10s, lookback 2s, max_age 5s, max_lateness 30s.
-.qt.qetl.job.stream.horizons.rd:{[] `by`retain_by`reference_time`horizon`lookback`max_age`max_lateness!(enlist `sym;`sym`source;`time;0D00:00:10;0D00:00:02;0D00:00:05;0D00:00:30)}
+/ The declaration fields readiness reads: horizon 10s, lookback 2s, max_age 5s, lateness 30s.
+.qt.qetl.job.stream.horizons.rd:{[] `by`retain_by`reference_time`horizon`lookback`max_age`lateness!(enlist `sym;`sym`source;`time;0D00:00:10;0D00:00:02;0D00:00:05;0D00:00:30)}
 
 .qt.qetl.job.stream.horizons.why:{[rows;now]
     d:.qt.qetl.job.stream.horizons.rd[];
@@ -609,10 +612,10 @@
     .qunit.assertEquals[.qt.qetl.job.stream.horizons.why[rows,enlist (`b;10);12];"";"ready once b has reached the horizon too"];
     .qunit.assertEquals[.qt.qetl.job.stream.horizons.why[((`a;-3);(`b;-3);(`a;11);(`b;4));12];"";"a source whose last book is older than max_age at the horizon sets nothing"]};
 
-.qt.qetl.job.stream.horizons.test_the_grace_after_max_lateness_waives_a_silent_source_and_the_lookback_reach:{[t]
+.qt.qetl.job.stream.horizons.test_the_grace_after_lateness_waives_a_silent_source_and_the_lookback_reach:{[t]
     behind:((`a;-3);(`b;-3);(`a;11);(`b;8));
-    .qunit.assertEquals[.qt.qetl.job.stream.horizons.why[behind;39];"a source has not reached 2026.10.09D10:00:10.000000000 for a";"a second short of horizon + max_lateness"];
-    .qunit.assertEquals[.qt.qetl.job.stream.horizons.why[behind;40];"";"at horizon + max_lateness a book stamped earlier cannot still arrive"];
+    .qunit.assertEquals[.qt.qetl.job.stream.horizons.why[behind;39];"a source has not reached 2026.10.09D10:00:10.000000000 for a";"a second short of horizon + lateness"];
+    .qunit.assertEquals[.qt.qetl.job.stream.horizons.why[behind;40];"";"at horizon + lateness a book stamped earlier cannot still arrive"];
     / no book at or before T-2s, one at T-0.5s: the lookback reach alone
     start:((`a;-0.5);(`a;11));
     .qunit.assertEquals[.qt.qetl.job.stream.horizons.why[start;12];"no time at or before 2026.10.09D09:59:58.000000000 for a";"an older book could still arrive"];

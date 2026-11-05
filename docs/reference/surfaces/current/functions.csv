@@ -229,6 +229,12 @@ qetl.io.remote.contract,require,function,1,c
 qetl.io.remote.contract,require_opts,function,2,k o
 qetl.io.remote.contract,schema,function,1,k
 qetl.io.remote.contract,versions,value,,
+qetl.job,bounded,dict,,
+qetl.job,claim_procname,function,4,who name decl self
+qetl.job,continuous,dict,,
+qetl.job,default_procname,function,1,name
+qetl.job,procname_of,function,2,name decl
+qetl.job,stream,dict,,
 qetl.job.bounded,batching,dict,,
 qetl.job.bounded,checkpoint,function,2,worker cursor
 qetl.job.bounded,cleanup,function,1,worker
@@ -434,6 +440,7 @@ qetl.job.stream,tick,function,1,job
 qetl.job.stream,transport_keys,value,,
 qetl.job.stream,unwired,function,1,job
 qetl.job.stream,wire,function,2,job publisher
+qetl.job.stream,with_lateness,function,2,who decl
 qetl.job.stream,withheld_n,value,,
 qetl.job.stream.bars,assign,function,3,width tc x
 qetl.job.stream.bars,close_ready,function,2,name now
@@ -2061,11 +2068,11 @@ qpipe.transform.crypto_markout_outputs,executions_in,table,,
 qpipe.transform.crypto_markout_outputs,expire_after,function,1,
 qpipe.transform.crypto_markout_outputs,job_spec,dict,,
 qpipe.transform.crypto_markout_outputs,keep,function,1,x
+qpipe.transform.crypto_markout_outputs,lateness,value,,
 qpipe.transform.crypto_markout_outputs,legs,function,1,pending
 qpipe.transform.crypto_markout_outputs,live,function,2,exe md
 qpipe.transform.crypto_markout_outputs,lookback,function,1,
 qpipe.transform.crypto_markout_outputs,market_data_in,table,,
-qpipe.transform.crypto_markout_outputs,max_lateness,value,,
 qpipe.transform.crypto_markout_outputs,out,table,,
 qpipe.transform.crypto_markout_outputs,pin,function,1,
 qpipe.transform.crypto_markout_outputs,rate_syms,function,1,
@@ -2093,11 +2100,11 @@ qpipe.transform.eq_markout_outputs,executions_in,table,,
 qpipe.transform.eq_markout_outputs,expire_after,function,1,
 qpipe.transform.eq_markout_outputs,job_spec,dict,,
 qpipe.transform.eq_markout_outputs,keep,function,1,x
+qpipe.transform.eq_markout_outputs,lateness,value,,
 qpipe.transform.eq_markout_outputs,legs,function,1,pending
 qpipe.transform.eq_markout_outputs,live,function,2,exe md
 qpipe.transform.eq_markout_outputs,lookback,function,1,
 qpipe.transform.eq_markout_outputs,market_data_in,table,,
-qpipe.transform.eq_markout_outputs,max_lateness,value,,
 qpipe.transform.eq_markout_outputs,measures,function,1,rows
 qpipe.transform.eq_markout_outputs,out,table,,
 qpipe.transform.eq_markout_outputs,pin,function,1,
@@ -2147,10 +2154,10 @@ qpipe.transform.fx_markout_outputs,config_id,value,,
 qpipe.transform.fx_markout_outputs,expire_after,function,1,
 qpipe.transform.fx_markout_outputs,identity,value,,
 qpipe.transform.fx_markout_outputs,job_spec,dict,,
+qpipe.transform.fx_markout_outputs,lateness,value,,
 qpipe.transform.fx_markout_outputs,layout_spec,function,1,
 qpipe.transform.fx_markout_outputs,long,function,1,res
 qpipe.transform.fx_markout_outputs,long_out,table,,
-qpipe.transform.fx_markout_outputs,max_lateness,value,,
 qpipe.transform.fx_markout_outputs,pin,function,1,
 qpipe.transform.fx_markout_outputs,remember,value,,
 qpipe.transform.fx_markout_outputs,score_with,function,4,spec layout exe md

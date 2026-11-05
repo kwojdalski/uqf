@@ -190,7 +190,7 @@ deduplication and expiry are the horizon kind's. Neither is in a start profile
   | `horizon`, `lookback`          | 10s, 1s                                  | the furthest horizon; the -1s horizon reaches one second back                                                     |
   | `by`, `retain_by`              | `sym`, `sym` + `source`                  | readiness waits on a leg; eviction keeps each source's last book of a leg                                         |
   | `identity`, `remember`         | `venue` + `fill_id`, 1 day               | a redelivery before scoring replaces the pending execution; one scored within a day is dropped                    |
-  | `max_lateness`                 | 30s                                      | how late an execution may arrive and still find its books; bounds the history (the kind's default is a day)       |
+  | `lateness`                     | 30s                                      | how late an execution may arrive and still find its books; bounds the history (the kind's default is a day)       |
   | `expire_after`                 | 5m10s                                    | an execution whose books never cover it is given up on, with the reason, in `.qpipe.job.<name>.expired`           |
 
 The horizons are `-1s, 0, +1s, +10s` (`job_spec` in
@@ -212,9 +212,9 @@ coverage.
 Coverage is per source: every source with a book within `max_age` of the
 furthest horizon must have advanced to it, not just the first to pass it. The
 source wait and the reach back to the most negative horizon each last only until
-`max_lateness` after the horizon on the plant clock; then a silent source, or
-books that start inside the lookback, leave those horizons `unavailable` as a
-refill does, rather than holding or dropping the execution.
+`lateness` after the horizon on the plant clock; then a silent source, or books
+that start inside the lookback, leave those horizons `unavailable` as a refill
+does, rather than holding or dropping the execution.
 
 Under the same rule a live job and a refill can differ in one place only: an
 execution whose books never cover it is **not scored** live (and sits in

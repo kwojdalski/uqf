@@ -50,11 +50,11 @@
 .qetl.job.stream.registries:distinct .qetl.job.stream.registries,`.qetl.job.stream.bars.registry;
 
 / What every bars job declares.
-.qetl.job.stream.bars.required_keys:`procname`events`transform`outputs`width`lateness`period
+.qetl.job.stream.bars.required_keys:`events`transform`outputs`width`lateness`period
 
 / What it may declare besides: the grouping columns (default `sym) and the
 / column the window is read from (default `time).
-.qetl.job.stream.bars.optional_keys:`by`event_time,.qetl.job.stream.passthrough_keys
+.qetl.job.stream.bars.optional_keys:`procname`by`event_time,.qetl.job.stream.passthrough_keys
 
 / What define installs in .qpipe.job.<name>: pending (rows of windows still
 / open), closed (windows published, until their lateness has passed),
@@ -79,7 +79,7 @@
 / @param decl dict of procname, events (the table aggregated), transform (one
 /   input, the events plus bar_start), outputs (a one-table symbol list: the bar table), width and
 /   lateness (timespans, lateness may be 0D), period (the timer, how often
-/   closed windows are looked for); optionally by (grouping columns, default
+/   closed windows are looked for); optionally procname (default `<name>1), by (grouping columns, default
 /   `sym), event_time (default `time), and the passthrough options of
 /   .qetl.job.stream.define (start_with_all, note, on_start, check with on_fail)
 / @return the name
@@ -88,6 +88,7 @@
     who:"define: bars job ",string[name];
     if[not 99h=type decl; 'who,"'s declaration must be a dictionary"];
     .qetl.job.stream.refuse_publishes[who;decl];
+    decl:.qetl.job.stream.with_lateness[who;decl];
     missing:.qetl.job.stream.bars.required_keys where not .qetl.job.stream.bars.required_keys in key decl;
     if[count missing; 'who," is missing ",", " sv string missing];
     unknown:(key decl) except .qetl.job.stream.bars.required_keys,.qetl.job.stream.bars.optional_keys;
@@ -128,7 +129,7 @@
     / the buffers and ledgers, so `reset` empties exactly what define made (#967)
     extra:(.qetl.job.stream.passthrough decl),enlist[`state]!enlist `pending`closed`dropped;
     .qetl.job.stream.define[name;(`procname`subscribe_to`outputs`on_batch`period`on_timer`transform`on_endofday`replay`restore_from!(
-        decl`procname;
+        .qetl.job.procname_of[name;decl];
         enlist decl`events;
         decl`outputs;
         get ` sv ns,`on_batch;

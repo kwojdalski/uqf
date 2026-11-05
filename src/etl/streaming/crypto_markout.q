@@ -38,7 +38,7 @@
 /                               last book of it, as the best-across-venues reference needs
 /   identity (venue; fill_id)   a redelivery before scoring replaces the pending fill;
 /                               one scored within `remember` is dropped
-/   max_lateness                how late a fill may arrive and still find its books: a polled
+/   lateness                how late a fill may arrive and still find its books: a polled
 /                               feed trails the venue by up to a poll interval
 /   keep                        only fills the core can score, and only books of pairs it
 /                               prices from, so the queue never holds a fill that fails every tick
@@ -67,7 +67,7 @@
 
 \d .
 
-.qetl.job.stream.at_horizons[`crypto_markout;`procname`events`reference`transform`outputs`horizon`period`event_time`reference_time`ready_on`legs`lookback`max_age`by`retain_by`identity`remember`max_lateness`expire_after`keep`note`ephemeral`on_start`check`on_fail!(
+.qetl.job.stream.at_horizons[`crypto_markout;`procname`events`reference`transform`outputs`horizon`period`event_time`reference_time`ready_on`legs`lookback`max_age`by`retain_by`identity`remember`lateness`expire_after`keep`note`ephemeral`on_start`check`on_fail!(
     `crypto_markout1;
     `executions;
     `market_data;
@@ -85,7 +85,7 @@
     `sym`source;
     `venue`fill_id;
     .qpipe.transform.crypto_markout_outputs.remember;
-    .qpipe.transform.crypto_markout_outputs.max_lateness;
+    .qpipe.transform.crypto_markout_outputs.lateness;
     .qpipe.transform.crypto_markout_outputs.expire_after[];
     .qpipe.job.crypto_markout.keep;
     "markouts on real crypto fills, in bps against the best mid across venues and net of the fee, from the canonical executions and market_data. Not started with the stack: its inputs come from cryptorust's recorders, or from cryptomock1 in their place, neither of which starts by default - `uqs start --profile crypto` brings it up with the mock";

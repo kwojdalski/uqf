@@ -471,7 +471,7 @@ markout. They are #1926's scope. Today the rules are hard-coded in
 on `source_time`. The source declares how many days apart the two can be. Today
 this is a fixed `(-1 1)` at `hdb_fx_markouts.q:68` and `:78`. The declared skew
 must be a non-negative whole number of days, and at least what the live job's
-`max_lateness` allows for (`fx_markout_outputs.q:119`).
+`lateness` allows for (`fx_markout_outputs.q:119`).
 
 **Symbol filter.** Only the readiness legs are read: for the window's
 executions, the union of the resolver `legs` and the conversion legs. Today the
@@ -593,8 +593,8 @@ none is decided until the maintainer approves it.
 15. **How the core receives a domain module.** As an argument, as a spec entry,
     or as a registered name? The record fixes the layering but not the call
     shape, so #1929 proposes it.
-16. **Date skew and `max_lateness`.** Should the source's date skew be derived
-    from the live job's `max_lateness`, instead of declared beside it?
+16. **Date skew and `lateness`.** Should the source's date skew be derived from
+    the live job's `lateness`, instead of declared beside it?
 17. **The crypto dataset's name.** `crypto_markout` (#1936): the table takes the
     job's name, as `fx_markout` does. It is a long dataset; the live job is
     `crypto_markout1` and its bounded twin `hdb_crypto_markout_backfill1`.

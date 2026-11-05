@@ -130,7 +130,7 @@
 / kind's day-long default for an event on source_time, which would hold a day of
 / every pair's books. An execution that arrives later than this after it happened
 / may find its books evicted and expires unscored, with the reason.
-.qpipe.transform.fx_markout_outputs.max_lateness:0D00:00:30
+.qpipe.transform.fx_markout_outputs.lateness:0D00:00:30
 
 / The calculation and one layout, with `time` as the core stamps it: the execution's
 / time plus the furthest horizon, the earliest a live row could have been stamped (all

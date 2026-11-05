@@ -47,7 +47,7 @@
 .qetl.job.stream.registries:distinct .qetl.job.stream.registries,`.qetl.job.stream.normalizer.registry;
 
 / What every normalizer must declare.
-.qetl.job.stream.normalizer.required_keys:`procname`output`input
+.qetl.job.stream.normalizer.required_keys:`output`input
 
 / Declare a normalizer: its canonical output and one transform per source.
 / .
@@ -84,7 +84,7 @@
     / The passthrough options (start_with_all, note, on_start, check, on_fail)
     / go straight to define, which validates them once (#1232).
     .qetl.job.stream.define[name;(`procname`subscribe_to`outputs`on_batch!(
-        decl`procname; key srcs; enlist name; handler)),.qetl.job.stream.passthrough decl];
+        .qetl.job.procname_of[name;decl]; key srcs; enlist name; handler)),.qetl.job.stream.passthrough decl];
     / registered only once the streaming job is, as horizon does
     .qetl.job.stream.normalizer.registry[name]:enlist decl;
     name}
