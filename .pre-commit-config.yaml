@@ -177,6 +177,18 @@ repos:
         pass_filenames: false
         always_run: true
 
+      # Every tree under lib/ is byte-identical to the upstream commit
+      # lib/VENDORED.toml records (#2157): each file's git blob id is
+      # recomputed and compared with lib/.vendored/<tree>.tsv. The hooks
+      # above exclude lib/ so they never rewrite it; this refuses anyone
+      # else's edit. A tree changes only through scripts/dev/revendor.py.
+      - id: vendored
+        name: Hold every vendored tree under lib/ to its recorded upstream
+        entry: python3 scripts/gates/check.py vendored
+        language: system
+        pass_filenames: false
+        files: '^lib/|^scripts/gates/(check|policy/vendored)\.py$'
+
       - id: bundle-blocks
         name: Refuse an installed bundle's blocks in tracked q files
         entry: python3 scripts/gates/check_bundle_blocks.py
