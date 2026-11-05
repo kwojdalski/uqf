@@ -72,7 +72,7 @@
 / the names are .qetl.job.bounded.defined.
 .qetl.job.bounded.worker_cfg:([name:`symbol$()] source:`symbol$(); dataset:`symbol$(); width:`timespan$();
     transform:`symbol$(); ns:`symbol$(); partition:`symbol$(); procname:`symbol$(); note:();
-    on_conflict:`symbol$(); source_version:`symbol$(); target_key:(); check:(); io:(); facts:(); window_column:`symbol$(); partition_column:`symbol$(); revision:`long$(); align:`timespan$(); batching:(); pin:())
+    on_conflict:`symbol$(); source_version:`symbol$(); target_key:(); check:(); io:(); facts:(); window_column:`symbol$(); partition_column:`symbol$(); revision:`long$(); align:`timespan$(); batching:(); pin:(); twin_of:`symbol$(); twin_calculation:`symbol$())
 
 / Every defined worker's name.
 / @return a symbol vector, empty when no worker has been defined
@@ -211,13 +211,13 @@
 /   require_window_column), partition_column (the output column holding the partition, #1476) and
 /   source_version (the default release a run records coverage under; none
 /   by default, so a run must name one), revision (the output logic's, #1097), align (bar width; an unaligned run is refused, #1303) and
-/   batching (compute batching inside a window, off unless declared - bounded_batching.q, #1921) and pin (a niladic function recording the configuration snapshot its rows name - bounded_pin.q)
+/   batching (compute batching inside a window, off unless declared - bounded_batching.q, #1921) pin (a niladic function recording the configuration snapshot its rows name - bounded_pin.q), and `twin_of with `twin_calculation (the streaming job it repairs, held to its output, contract and calculation whenever both load - twin.q, #2103)
 / @throws error naming every missing or malformed field at once
 .qetl.job.bounded.define:{[worker;decl]
     / Both execution modes share .qpipe.job, so a name cannot belong to both.
     if[worker in key @[value;`.qetl.job.stream.jobs;{()}];
         '"define: ",string[worker]," is already a streaming job - job names must be unique across execution modes"];
-    decl:.qetl.job.bounded.require_outputs[worker;decl];
+    decl:.qetl.twin.require_declared[worker;.qetl.job.bounded.require_outputs[worker;decl]];
     missing:.qetl.job.bounded.required_cfg where not .qetl.job.bounded.required_cfg in key decl;
     if[count missing;
         '"define: ",string[worker]," is missing ",", " sv string missing];
@@ -243,7 +243,7 @@
     / backfill having already fetched a window it is now unable to store.
     .qetl.io.for_cfg decl;
     .qetl.source.def decl`source;
-    .qetl.job.bounded.require_transform[worker;decl];
+    .qetl.job.bounded.require_transform[worker;decl]; .qetl.twin.check_worker[worker;decl];
 
     / Refuse two workers filling one dataset AND PARTITION (#60, #185).
     / .
