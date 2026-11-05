@@ -194,9 +194,15 @@ LogsJson = json_opt(
 _LINE_KEYS = ("time", "host", "procname", "proctype", "loglevel", "id", "message")
 
 
-def _json_lines(rows: list[dict]) -> None:  # q's local .z.P, with this machine's offset
+def lines_document(rows: list[dict]) -> dict:
+    """`logs --json`'s document for log records - uqs-mcp's `uqs_logs` returns it too.
+    A time is q's local .z.P, given this machine's offset."""
     lines = records([{k: r.get(k) for k in _LINE_KEYS} for r in rows])
-    emit({"lines": [line | {"time": timestamp(line["time"])} for line in lines]})
+    return {"lines": [line | {"time": timestamp(line["time"])} for line in lines]}
+
+
+def _json_lines(rows: list[dict]) -> None:
+    emit(lines_document(rows))
 
 
 _LevelOpt = ChoiceOpt(

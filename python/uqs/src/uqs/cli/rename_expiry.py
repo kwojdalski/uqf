@@ -108,7 +108,6 @@ RENAMED_AFTER: dict[str, frozenset[str]] = {
             "uqs job contract export",
             "uqs job contract approve",
             "uqs job contract list",
-            "mcp uqs_summary",
         }
     ),
     "stable/2026-10-29": frozenset(
