@@ -208,6 +208,16 @@ def test_a_current_pointing_outside_is_not_read(deployment, link, said):
     assert said in release["report_error"]
 
 
+@pytest.mark.parametrize("key", ["ssh", "host"])
+def test_a_reports_ssh_destination_is_ssh_whichever_release_wrote_it(deployment, key):
+    """#2123: a report names the ssh destination `ssh`; one from a release
+    before then, still on the server, names it `host` - read as `ssh` too."""
+    report = deployment / "releases" / "20261101T090000Z-abc1234" / "deploy-report.json"
+    report.write_text(json.dumps({**json.loads(report.read_text()), key: "svc@box"}))
+    shown = _list(deployment)["release"]["report"]
+    assert shown["ssh"] == "svc@box" and "host" not in shown
+
+
 def test_a_report_that_is_a_link_is_not_read(deployment, tmp_path):
     report = deployment / "releases" / "20261101T090000Z-abc1234" / "deploy-report.json"
     report.unlink()

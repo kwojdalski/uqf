@@ -153,7 +153,7 @@ def test_unset_set_and_rename_keep_the_rest_byte_for_byte(declared):
     after = declared.read_text()
     _outside(HAND_WRITTEN, after, uat)
     assert targets.read(ROOT)["staging"] == {
-        "profile": "essential", "dest": "/srv/uat", "host": "deploy@uat",
+        "profile": "essential", "dest": "/srv/uat", "ssh": "deploy@uat",
         "labels": {"owner": "desk"}, "live": True,
     }  # fmt: skip
     assert "uat" not in targets.read(ROOT)
@@ -187,7 +187,7 @@ def test_add_appends_a_block_and_a_remove_takes_it_away_again(declared):
         (["add", "uat", "--ssh", "h", "--dest", "/d"], "target uat is already declared"),
         (["add", "Bad", "--ssh", "h", "--dest", "/d"], "target name 'Bad'"),
         (["rename", "prod", "uat"], "target uat is already declared"),
-        (["remove", "nope"], "no target 'nope'.*declares: prod, uat"),
+        (["remove", "nope"], "no target nope - .*declares: prod, uat; `uqs target list`"),
         (["unset", "prod", "jobs"], "target prod sets no jobs"),
     ],
 )  # fmt: skip
@@ -400,7 +400,7 @@ def test_rename_keeps_the_deployments_recorded_under_the_old_name(declared):
 def _cfg(host: str, dest: str):
     from types import SimpleNamespace
 
-    return SimpleNamespace(host=host, dest=dest, remote_user=None, target=None, runtime="uqf")
+    return SimpleNamespace(ssh=host, dest=dest, remote_user=None, target=None, runtime="uqf")
 
 
 def _deployed():

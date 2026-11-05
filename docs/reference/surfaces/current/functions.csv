@@ -1005,7 +1005,7 @@ qf.exec,define,function,2,name decl
 qf.exec,defined,function,1,
 qf.exec,eff_spread,function,4,side trade_price mid_at_trade pip_factor
 qf.exec,fill_order_time_cols,value,,
-qf.exec,fill_probability_by,function,5,orders horizons bucket_cols as_of opts
+qf.exec,fill_probability_by,function,5,orders horizons group_cols as_of opts
 qf.exec,fill_probability_cols,value,,
 qf.exec,fill_probability_defaults,dict,,
 qf.exec,fill_ratio,function,2,num_fills num_quotes
@@ -1050,7 +1050,7 @@ qf.mkt,attribution_route_with,function,2,conv pair
 qf.mkt,attribution_usd_baseline,function,1,conv
 qf.mkt,best_across_venues,function,3,tob targets max_age
 qf.mkt,best_mid_across_venues,function,3,tob targets max_age
-qf.mkt,book_convexity,function,2,prices side
+qf.mkt,book_convexity,function,2,prices book_side
 qf.mkt,book_crossed,function,1,book
 qf.mkt,book_from_wide_levels,function,3,tbl level_groups sym_cols
 qf.mkt,book_pressure_at_level,function,3,bid_sizes ask_sizes level
@@ -1070,7 +1070,7 @@ qf.mkt,cross_book_chain_at_one_size,function,3,syms books size
 qf.mkt,cross_book_chain_at_sizes,function,4,syms books sizes sides
 qf.mkt,cross_decomp,function,2,avail_syms sym
 qf.mkt,cross_ref_price_at,function,4,quotes sym as_of ref_size
-qf.mkt,cross_size_at_price,function,5,quotes sym as_of side price_limit
+qf.mkt,cross_size_at_price,function,5,quotes sym as_of book_side price_limit
 qf.mkt,crossed_top,function,1,x
 qf.mkt,cumulative_trade_flow,function,1,tape
 qf.mkt,depth_ratio,function,2,bid_sizes ask_sizes
@@ -1104,7 +1104,7 @@ qf.mkt,order_book_imbalance,function,3,bid_sizes ask_sizes n_levels
 qf.mkt,own_book_mids,function,1,x
 qf.mkt,price_rule,function,1,markets
 qf.mkt,price_rules,dict,,
-qf.mkt,queue_depletion_rate,function,3,quotes target_sym side
+qf.mkt,queue_depletion_rate,function,3,quotes target_sym book_side
 qf.mkt,reference_max_age,value,,
 qf.mkt,require_tape,function,1,tape
 qf.mkt,result_cols,value,,

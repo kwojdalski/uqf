@@ -157,7 +157,7 @@ def add(
     labels = _labels(label)
     if remote_user is not None and not _ACCOUNT.fullmatch(remote_user):
         _die(UqsError(f"--remote-user {remote_user!r} is not an account name"))
-    entry = {"host": ssh, "dest": dest, "remote_user": remote_user, "labels": labels or None}
+    entry = {"ssh": ssh, "dest": dest, "remote_user": remote_user, "labels": labels or None}
     words = [name, "--ssh", ssh, "--dest", dest]
     words += ["--remote-user", remote_user] if remote_user else []
     words += [w for pair in label or [] for w in ("--label", pair)]
@@ -184,7 +184,7 @@ def set_(
         list[str],
         typer.Argument(
             metavar="KEY=VALUE...",
-            help="Settings, spelt as in the file: host=deploy@prod connect_timeout=20 "
+            help="Settings, spelt as in the file: ssh=deploy@prod connect_timeout=20 "
             'launch_mode=source labels.tier=uat live_check=\'["a", "b"]\'. A VALUE is '
             'read as TOML when it is one (20, true, [..], "quoted"), else as text',
             show_default=False,
@@ -294,7 +294,7 @@ def shell(
     try:
         r = control.remote_for(name, repo_root())
         # a shell can change anything there (#2032)
-        inspection.refuse(repo_root(), "`uqs target shell`", name=r.name, host=r.host, dest=r.dest)
+        inspection.refuse(repo_root(), "`uqs target shell`", name=r.name, ssh=r.host, dest=r.dest)
         console.print(f"connecting to {r.name} ({r.describe()})")
         code = control.run(r, [], tty=True, command=control.shell_command(r))
     except UqsError as exc:
@@ -328,7 +328,7 @@ def forward(name: str, yes: bool, args: list[str], *, interactive: bool) -> int:
     shown = " ".join(["uqs", *args])
     if may_change_the_server(args):
         # before --yes is read: inspection mode is not a question (#2032)
-        inspection.refuse(repo_root(), f"`{shown}`", name=r.name, host=r.host, dest=r.dest)
+        inspection.refuse(repo_root(), f"`{shown}`", name=r.name, ssh=r.host, dest=r.dest)
     if changes_the_server(args) and not yes:
         if not interactive:
             raise UqsError(

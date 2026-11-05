@@ -259,7 +259,10 @@ def test_check_names_the_running_release(server):
 
 
 def test_an_unknown_target_lists_the_declared_ones(server):
-    with pytest.raises(UqsError, match="'nope' - targets in .*: bare, down, uat"):
+    with pytest.raises(
+        UqsError,
+        match="no target or deployed server nope - .*declares: bare, down, uat; `uqs target list`",
+    ):
         control.remote_for("nope", Path("."))
 
 
@@ -412,7 +415,7 @@ def test_add_appends_and_remove_deletes_only_that_table(server):
     )  # fmt: skip
     assert added.exit_code == 0, added.output
     assert targets.read(Path("."))["prod"] == {
-        "host": "svc@prod",
+        "ssh": "svc@prod",
         "dest": "/srv/uqf",
         "remote_user": "efx",
         "labels": {"env": "prod"},
@@ -479,7 +482,7 @@ def _cfg(host: str, dest: str, target: str | None = None, user: str | None = Non
     from types import SimpleNamespace
 
     return SimpleNamespace(
-        host=host, dest=dest, remote_user=user, target=target, runtime="uqf", profile="essential"
+        ssh=host, dest=dest, remote_user=user, target=target, runtime="uqf", profile="essential"
     )
 
 
@@ -504,7 +507,7 @@ def test_a_push_is_recorded_and_its_server_registered(server):
         "deployed",
     )
     assert targets.read(root)["new-example-new"] == {
-        "host": "svc@new.example",
+        "ssh": "svc@new.example",
         "dest": "/srv/new",
         "remote_user": "efx",
     }
@@ -524,7 +527,7 @@ def test_a_failed_push_is_recorded_and_registers_nothing(server):
 def test_a_push_to_a_declared_target_keeps_its_name(server):
     root = Path(".")
     uat = targets.read(root)["uat"]
-    history.record(root, _cfg(uat["host"], uat["dest"]), _report("r9"))
+    history.record(root, _cfg(uat["ssh"], uat["dest"]), _report("r9"))
     assert history.read(root)[0]["target"] == "uat"
 
 

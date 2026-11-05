@@ -99,13 +99,13 @@
 / final cross. If this leg doesn't need inverting, that's just its own
 / same-named side; if it does, it's the *other* original side, inverted
 / (an inverted bid becomes an ask, and vice versa).
-/ @param side `bid or `ask - the side of the final cross being priced
+/ @param book_side `bid or `ask - the side of the final cross being priced
 / @param book dict `bid_prices`bid_sizes`ask_prices`ask_sizes for this leg
 / @param invert 1b if this leg's convention needs flipping
 / @return (prices;sizes) to pass to sweep_price
 / @private
-.qf.mkt.oriented_levels:{[side;book;invert]
-    $[side=`ask;
+.qf.mkt.oriented_levels:{[book_side;book;invert]
+    $[book_side=`ask;
         $[invert; .qf.mkt.invert_book_depth[book`bid_prices;book`bid_sizes]; (book`ask_prices;book`ask_sizes)];
         $[invert; .qf.mkt.invert_book_depth[book`ask_prices;book`ask_sizes]; (book`bid_prices;book`bid_sizes)]]};
 
@@ -114,17 +114,17 @@
 / currency that leg 1's sweep actually produced, not at the raw input size.
 / @param book1 dict `bid_prices`bid_sizes`ask_prices`ask_sizes for leg 1
 / @param book2 dict `bid_prices`bid_sizes`ask_prices`ask_sizes for leg 2
-/ @param side `bid or `ask - the side of the final cross being priced
+/ @param book_side `bid or `ask - the side of the final cross being priced
 / @param size the size to sweep, in leg 1's relevant currency
 / @param invert1 1b if leg 1 needs its convention flipped
 / @param invert2 1b if leg 2 needs its convention flipped
 / @return dict `price`filled_size`fully_filled for this side of the cross
 / @private
-.qf.mkt.cross_sweep_side:{[book1;book2;side;size;invert1;invert2]
-    lvl1:.qf.mkt.oriented_levels[side;book1;invert1];
+.qf.mkt.cross_sweep_side:{[book1;book2;book_side;size;invert1;invert2]
+    lvl1:.qf.mkt.oriented_levels[book_side;book1;invert1];
     sweep1:.qf.mkt.sweep_price[lvl1 0;lvl1 1;size];
     bridge_notional:sweep1[`filled_size]*sweep1[`avg_price];
-    lvl2:.qf.mkt.oriented_levels[side;book2;invert2];
+    lvl2:.qf.mkt.oriented_levels[book_side;book2;invert2];
     empty_sweep:`avg_price`worst_price`filled_size`fully_filled!(0n;0n;0f;0b);
     sweep2:$[bridge_notional>0; .qf.mkt.sweep_price[lvl2 0;lvl2 1;bridge_notional]; empty_sweep];
     price:sweep1[`avg_price]*sweep2[`avg_price];
@@ -226,7 +226,7 @@
 / completely.
 / @param books list of dicts `bid_prices`bid_sizes`ask_prices`ask_sizes,
 /   one per leg
-/ @param side `bid or `ask - the side of the final cross being priced
+/ @param book_side `bid or `ask - the side of the final cross being priced
 / @param size the size to sweep, in leg 1's relevant currency
 / @param inverts boolean list, one per leg, from ccy_orient_chain
 / @return dict `price`filled_size`fully_filled`legs for this side of the
@@ -234,9 +234,9 @@
 /   was swept at (leg 0: size; later legs: the previous bridge notional, 0 if
 /   none) and the indices into that leg's ORIGINAL oriented ladder it consumed
 / @private
-.qf.mkt.cross_sweep_chain:{[books;side;size;inverts]
+.qf.mkt.cross_sweep_chain:{[books;book_side;size;inverts]
     n:count books;
-    lvl0:.qf.mkt.oriented_levels[side;books 0;inverts 0];
+    lvl0:.qf.mkt.oriented_levels[book_side;books 0;inverts 0];
     sweep0:.qf.mkt.sweep_price[lvl0 0;lvl0 1;size];
     empty_sweep:`avg_price`worst_price`filled_size`fully_filled`levels_used!(0n;0n;0f;0b;`long$());
     acc:sweep0;
@@ -247,7 +247,7 @@
     i:1;
     while[i<n;
         bridge_notional:acc[`filled_size]*acc[`avg_price];
-        lvl:.qf.mkt.oriented_levels[side;books i;inverts i];
+        lvl:.qf.mkt.oriented_levels[book_side;books i;inverts i];
         sweep_i:$[bridge_notional>0; .qf.mkt.sweep_price[lvl 0;lvl 1;bridge_notional]; empty_sweep];
         legs,:enlist `notional`levels_used!(0f|bridge_notional;sweep_i`levels_used);
         price*:sweep_i[`avg_price];
@@ -472,19 +472,19 @@
         .qf.mkt.single_leg_at_sizes[cross_sym;.qf.mkt.leg_book_as_of[quotes;as_of;path 0];.qf.mkt.leg_inverts[path 0;cross_sym];sizes;sides];
         .qf.mkt.cross_book_chain_at_sizes[path;.qf.mkt.leg_book_as_of[quotes;as_of;] each path;sizes;sides]]};
 
-/ Private: true if sweeping `size` on `side` (via cross_book_at) still
+/ Private: true if sweeping `size` on `book_side` (via cross_book_at) still
 / lands at an average price at least as good as price_limit, and the
 / sweep is fully filled. `bid` side: good means avg_price>=price_limit
 / (selling at proceeds no worse than wanted); `ask` side: good means
 / avg_price<=price_limit (buying at cost no worse than wanted).
 / @private
-.qf.mkt.cross_price_ok_at_size:{[quotes;sym;as_of;side;price_limit;size]
+.qf.mkt.cross_price_ok_at_size:{[quotes;sym;as_of;book_side;price_limit;size]
     if[size<=0; :1b];
-    r:.qf.mkt.cross_book_at[quotes;sym;as_of;enlist size;enlist side];
-    px:first r side;
-    fully_col:`$(string side),"_fully_filled";
+    r:.qf.mkt.cross_book_at[quotes;sym;as_of;enlist size;enlist book_side];
+    px:first r book_side;
+    fully_col:`$(string book_side),"_fully_filled";
     fully:first r fully_col;
-    fully and $[side=`bid; px>=price_limit; px<=price_limit]};
+    fully and $[book_side=`bid; px>=price_limit; px<=price_limit]};
 
 / Configurable search tuning for cross_size_at_price's two-phase binary
 / search - max_doublings bounds the initial upper-bound search (a hi of
@@ -511,28 +511,28 @@
 / @param quotes table `time`sym`bid_prices`bid_sizes`ask_prices`ask_sizes, sorted `sym`time xasc
 / @param sym the pair to price, any format ccy.q's normalize_ccy_pair accepts
 / @param as_of only consider quotes at or before this time
-/ @param side `bid (how much can be SOLD at avg price at least price_limit) or
+/ @param book_side `bid (how much can be SOLD at avg price at least price_limit) or
 /   `ask (how much can be BOUGHT at avg price at most price_limit)
 / @param price_limit the price boundary
 / @return the largest size tradeable without the average price crossing
 /   price_limit; 0 if even a negligible size already breaches it
-/ @throws error if side isn't `bid or `ask, or anything cross_book_at itself throws
+/ @throws error if book_side isn't `bid or `ask, or anything cross_book_at itself throws
 / @eg .qf.mkt.cross_size_at_price[quotes;`AUDPLN;.z.p;`bid;2.5650]
 / @eg .qf.mkt.cross_size_at_price[quotes;`AUDPLN;.z.p;`ask;2.5700]  -> the ask-side (buy) boundary at a different price limit
-.qf.mkt.cross_size_at_price:{[quotes;sym;as_of;side;price_limit]
-    if[not $[-11h=type side; side in `bid`ask; 0b];
-        '"cross_size_at_price: side must be `bid or `ask, got ",.Q.s1 side];
+.qf.mkt.cross_size_at_price:{[quotes;sym;as_of;book_side;price_limit]
+    if[not $[-11h=type book_side; book_side in `bid`ask; 0b];
+        '"cross_size_at_price: book_side must be `bid or `ask, got ",.Q.s1 book_side];
     lo:0f;
     hi:1f;
     doublings:0;
-    while[(.qf.mkt.cross_price_ok_at_size[quotes;sym;as_of;side;price_limit;hi]) and doublings<.qf.mkt.CROSS_SIZE_MAX_DOUBLINGS;
+    while[(.qf.mkt.cross_price_ok_at_size[quotes;sym;as_of;book_side;price_limit;hi]) and doublings<.qf.mkt.CROSS_SIZE_MAX_DOUBLINGS;
         hi*:2;
         doublings+:1];
     tol:hi*.qf.mkt.CROSS_SIZE_REL_TOL;
     halvings:0;
     while[((hi-lo)>tol) and halvings<.qf.mkt.CROSS_SIZE_MAX_HALVINGS;
         probe:0.5*lo+hi;
-        $[.qf.mkt.cross_price_ok_at_size[quotes;sym;as_of;side;price_limit;probe]; lo:probe; hi:probe];
+        $[.qf.mkt.cross_price_ok_at_size[quotes;sym;as_of;book_side;price_limit;probe]; lo:probe; hi:probe];
         halvings+:1];
     lo};
 

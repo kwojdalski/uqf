@@ -26,7 +26,7 @@ from uqs.deploy.config import Config, make_config
 
 REQUIRED: dict[str, Any] = {
     "artifact": "dist/uqf.tar.gz",
-    "host": "uqf-server",
+    "ssh": "uqf-server",
     "dest": "/opt/uqf",
     "profile": "fx",
 }
@@ -35,7 +35,7 @@ REQUIRED: dict[str, Any] = {
 #: required ones differ from REQUIRED's, so they are proven to arrive too.
 SAMPLES: dict[str, Any] = {
     "artifact": "dist/other.tar.gz",
-    "host": "other-server",
+    "ssh": "other-server",
     "dest": "/srv/uqf",
     "profile": "essential",
     "remote_user": "uqf",
@@ -44,8 +44,8 @@ SAMPLES: dict[str, Any] = {
     "torq_launcher": "/opt/torq/torq.sh",
     "launcher_env": ["UQF_X=1"],
     "process_fields": "taskset_no",
-    "qcmd": "/opt/kx/bin/q",
-    "qhome": "/opt/kx",
+    "q_cmd": "/opt/kx/bin/q",
+    "q_home": "/opt/kx",
     "data_dir": "/data/uqf",
     "dry_run": True,
     "restart": True,
@@ -68,14 +68,14 @@ SAMPLES: dict[str, Any] = {
     "accept_q_version": "4.0 is what this site runs",
     "allow_unpinned": "a local development build",
     "torq_mode": "bundled",
-    "torq_runtime": "dist/torq-runtime.tar.gz",
-    "torq_runtime_sha256": "cd" * 32,
+    "torq_component": "dist/torq-runtime.tar.gz",
+    "torq_component_sha256": "cd" * 32,
     "q_mode": "bundled",
-    "q_runtime": "dist/q-runtime.tar.gz",
-    "q_runtime_sha256": "ef" * 32,
+    "q_component": "dist/q-runtime.tar.gz",
+    "q_component_sha256": "ef" * 32,
     "python_mode": "bundled",
-    "python_runtime": "dist/python-runtime.tar.gz",
-    "python_runtime_sha256": "12" * 32,
+    "python_component": "dist/python-runtime.tar.gz",
+    "python_component_sha256": "12" * 32,
     "fix_hdb": "the release adds a column",
     "keep": 3,
     "soak": 45,
@@ -91,17 +91,17 @@ RELAXES: dict[str, dict[str, Any]] = {
 #: What a sample needs beside it in its own call, where the baseline must not
 #: have it: a bundled TorQ and its fields come together or not at all.
 BESIDE: dict[str, dict[str, Any]] = {
-    "torq_mode": {"torq_runtime": "dist/torq-runtime.tar.gz"},
-    "torq_runtime": {"torq_mode": "bundled"},
-    "torq_runtime_sha256": {"torq_mode": "bundled", "torq_runtime": "dist/torq-runtime.tar.gz"},
-    "q_mode": {"q_runtime": "dist/q-runtime.tar.gz"},
-    "q_runtime": {"q_mode": "bundled"},
-    "q_runtime_sha256": {"q_mode": "bundled", "q_runtime": "dist/q-runtime.tar.gz"},
-    "python_mode": {"python_runtime": "dist/python-runtime.tar.gz"},
-    "python_runtime": {"python_mode": "bundled"},
-    "python_runtime_sha256": {
+    "torq_mode": {"torq_component": "dist/torq-runtime.tar.gz"},
+    "torq_component": {"torq_mode": "bundled"},
+    "torq_component_sha256": {"torq_mode": "bundled", "torq_component": "dist/torq-runtime.tar.gz"},
+    "q_mode": {"q_component": "dist/q-runtime.tar.gz"},
+    "q_component": {"q_mode": "bundled"},
+    "q_component_sha256": {"q_mode": "bundled", "q_component": "dist/q-runtime.tar.gz"},
+    "python_mode": {"python_component": "dist/python-runtime.tar.gz"},
+    "python_component": {"python_mode": "bundled"},
+    "python_component_sha256": {
         "python_mode": "bundled",
-        "python_runtime": "dist/python-runtime.tar.gz",
+        "python_component": "dist/python-runtime.tar.gz",
     },
 }
 

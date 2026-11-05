@@ -16,9 +16,10 @@ from typing import Annotated
 
 import typer
 
+from uqs.cli import deploy_output as deploy_out
 from uqs.cli.choices import ChoiceOpt
 from uqs.cli.concepts import ComponentArg
-from uqs.cli.deploy import DEFAULT_ARCH, _failed, deploy_app
+from uqs.cli.deploy import DEFAULT_ARCH, deploy_app
 from uqs.cli.renames import renamed
 from uqs.cli.safety import ChangesState, dry_run_note
 from uqs.cli.shared import console
@@ -110,9 +111,9 @@ def _build(
     dry_run: bool = False,
 ) -> None:
     if component.lower() in KX_NAMES:
-        _failed(command, "arguments", ValueError(q_runtime.KX_REFUSAL))
+        deploy_out.failed(command, "arguments", ValueError(q_runtime.KX_REFUSAL))
     if component not in COMPONENTS:
-        _failed(
+        deploy_out.failed(
             command,
             "arguments",
             ValueError(f"no {component} component - one of {', '.join(COMPONENTS)}"),
@@ -142,7 +143,7 @@ def _build(
             return
         qrt = q_runtime.build_runtime(q_runtime.pinned_peachq(root / "scripts"), out)
     except ReleaseError as exc:
-        _failed(command, exc.stage, exc)
+        deploy_out.failed(command, exc.stage, exc)
         return
     log.info("PeachQ {} runtime for {}, sha256 {}", qrt.manifest["commit"][:12],
              " ".join(qrt.platform), qrt.sha256)  # fmt: skip
