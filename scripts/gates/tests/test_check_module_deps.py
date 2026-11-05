@@ -11,6 +11,8 @@ import importlib.util
 import sys
 from pathlib import Path
 
+import pytest
+
 REPO = Path(__file__).resolve().parents[3]
 
 # scripts/ is not a package, so the gate is loaded by path, as the other gate
@@ -23,6 +25,15 @@ cmd = importlib.util.module_from_spec(_SPEC)
 sys.modules["check_module_deps"] = cmd
 _SPEC.loader.exec_module(cmd)
 
+# Every edge comes from `qlinter analyze graph`, so a test that draws edges
+# needs that binary. Without it they skip, saying why, rather than erroring
+# in qlint_graph: CI's "Install qlinter" step fails the job on its own when
+# the pinned release cannot be had, so a skip there never reads as a pass.
+needs_graph = pytest.mark.skipif(
+    not cmd.qlint_graph.available(),
+    reason=f"no qlinter with `analyze graph`; needs {cmd.qlint_graph.NEEDED}",
+)
+
 
 def _tree(tmp_path: Path, files: dict[str, str]) -> Path:
     for rel, text in files.items():
@@ -31,10 +42,12 @@ def _tree(tmp_path: Path, files: dict[str, str]) -> Path:
     return tmp_path
 
 
+@needs_graph
 def test_the_real_library_passes():
     assert cmd.problems() == []
 
 
+@needs_graph
 def test_the_restructured_edges_are_gone():
     """#626's acceptance: execution no longer reaches into forwards, synthetic
     pricing does not depend on execution, and foundation depends on nothing
@@ -62,6 +75,7 @@ def test_every_library_file_is_in_a_domain_or_the_data_module():
     }, namespaces
 
 
+@needs_graph
 def test_a_new_edge_fails_naming_its_file(tmp_path):
     root = _tree(
         tmp_path,
@@ -78,6 +92,7 @@ def test_a_new_edge_fails_naming_its_file(tmp_path):
     ]
 
 
+@needs_graph
 def test_an_edge_inside_one_domain_is_still_an_edge(tmp_path):
     """Two files of one namespace are still two modules: sharing `.qf.px` is not
     permission to depend on each other unreviewed."""
@@ -91,6 +106,7 @@ def test_an_edge_inside_one_domain_is_still_an_edge(tmp_path):
     assert set(cmd.edges(root)) == {("b", "a")}
 
 
+@needs_graph
 def test_strings_and_comments_are_not_edges(tmp_path):
     root = _tree(
         tmp_path,
@@ -102,6 +118,7 @@ def test_strings_and_comments_are_not_edges(tmp_path):
     assert cmd.edges(root) == {}
 
 
+@needs_graph
 def test_a_reference_to_a_name_nobody_defines_is_not_an_edge(tmp_path):
     root = _tree(
         tmp_path,
@@ -113,6 +130,7 @@ def test_a_reference_to_a_name_nobody_defines_is_not_an_edge(tmp_path):
     assert cmd.edges(root) == {}
 
 
+@needs_graph
 def test_a_stale_allowed_edge_fails(tmp_path):
     root = _tree(tmp_path, {"src/foundation/a.q": ".qf.px.f:{x}\n"})
     assert cmd.problems(root, frozenset({("a", "b")})) == [
@@ -120,6 +138,7 @@ def test_a_stale_allowed_edge_fails(tmp_path):
     ]
 
 
+@needs_graph
 def test_a_cycle_fails(tmp_path):
     root = _tree(
         tmp_path,
@@ -132,6 +151,7 @@ def test_a_cycle_fails(tmp_path):
     assert any("cycle: a -> b -> a" in p for p in out), out
 
 
+@needs_graph
 def test_a_removed_edge_is_refused_even_when_listed(tmp_path):
     root = _tree(
         tmp_path,
@@ -144,6 +164,7 @@ def test_a_removed_edge_is_refused_even_when_listed(tmp_path):
     assert "src/pricing/cross.q: cross -> execution is refused" in out[0]
 
 
+@needs_graph
 def test_a_module_split_across_files_keeps_every_files_edges(tmp_path):
     """A module split by concern keeps its edges (#990): the second file must
     not hide the first one's dependencies, and its calls into the first are not
@@ -206,10 +227,12 @@ def test_a_namespace_only_file_is_read_for_duplicates(tmp_path):
 # qlinter (0.14.15) draws.
 
 
+@needs_graph
 def test_the_graph_finds_exactly_the_reviewed_edges_on_this_tree():
     assert set(cmd.edges()) == set(cmd.ALLOWED)
 
 
+@needs_graph
 def test_the_graph_reader_fails_a_new_edge_too(tmp_path):
     root = _tree(
         tmp_path,
@@ -221,6 +244,7 @@ def test_the_graph_reader_fails_a_new_edge_too(tmp_path):
     assert cmd.edges(root) == {("b", "a"): "src/pricing/b.q"}
 
 
+@needs_graph
 def test_a_comment_or_a_string_draws_no_edge(tmp_path):
     root = _tree(
         tmp_path,
