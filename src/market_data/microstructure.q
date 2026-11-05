@@ -228,34 +228,34 @@
 / side=`ask. Nulls out a row with fewer than 3 levels rather than
 / indexing out of bounds.
 / @private
-.qf.mkt.book_convexity_one:{[prices;side]
+.qf.mkt.book_convexity_one:{[prices;book_side]
     $[3>count prices;
         0n;
         [raw:(prices[0]-prices[1])-(prices[1]-prices[2]);
-         $[side=`ask; neg raw; raw]]]};
+         $[book_side=`ask; neg raw; raw]]]};
 
 / Book convexity: (P0-P1)-(P1-P2), measuring curvature of the price
-/ ladder away from the touch. Negated when side=`ask - bid prices
+/ ladder away from the touch. Negated when book_side=`ask - bid prices
 / decrease level-by-level while ask prices increase, so mirroring the
 / ask-side sign keeps convexity comparably signed across both sides
 / (a "cheaper to go deeper than the first step implies" book reads the
 / same sign whichever side it's on). Needs >=3 levels; a shorter row is
 / nulled, not an error.
 / @param prices a vector of vectors, one level-0-first vector per row
-/ @param side `bid or `ask - which side prices belongs to
+/ @param book_side `bid or `ask - which side prices belongs to
 / @return a vector, convexity per row
-/ @throws error if side isn't `bid or `ask - checked once here, because
-/   book_convexity_one's `$[side=`ask; ...]` reads anything else as the bid
+/ @throws error if book_side isn't `bid or `ask - checked once here, because
+/   book_convexity_one's `$[book_side=`ask; ...]` reads anything else as the bid
 /   side and returns a plausible number with the wrong sign (#415)
 / @eg .qf.mkt.book_convexity[enlist 1.1000 1.0998 1.0995;`bid]  -> ,-0.0001
-.qf.mkt.book_convexity:{[prices;side]
-    if[not $[-11h=type side; side in `bid`ask; 0b];
-        '"book_convexity: side must be `bid or `ask, got ",.Q.s1 side];
+.qf.mkt.book_convexity:{[prices;book_side]
+    if[not $[-11h=type book_side; book_side in `bid`ask; 0b];
+        '"book_convexity: book_side must be `bid or `ask, got ",.Q.s1 book_side];
     n:count prices;
     result:n#0n;
     i:0;
     while[i<n;
-        result[i]:.qf.mkt.book_convexity_one[prices i;side];
+        result[i]:.qf.mkt.book_convexity_one[prices i;book_side];
         i+:1];
     result};
 
@@ -342,21 +342,21 @@
 / returning one improves. Callers null row 0.
 / @param sub quotes for one sym, in time order
 / @param level the level index, 0 the touch
-/ @param side `bid or `ask
+/ @param book_side `bid or `ask
 / @return dict `move`size`prev_size, each a vector with one value per row
 / @private
-.qf.mkt.side_transition:{[sub;level;side]
-    bid:side=`bid;
+.qf.mkt.side_transition:{[sub;level;book_side]
+    bid:book_side=`bid;
     px:.qf.mkt.level_at[sub $[bid;`bid_prices;`ask_prices];level];
     if[not bid; px:0w^px];
     sz:0^.qf.mkt.level_at[sub $[bid;`bid_sizes;`ask_sizes];level];
-    .qf.mkt.transition[side;px;sz;prev px;prev sz]};
+    .qf.mkt.transition[book_side;px;sz;prev px;prev sz]};
 
 / Private: side_transition's rule on read prices/sizes and the prior row's; the stream's too (#1111).
 / @private
-.qf.mkt.transition:{[side;px;sz;prev_px;prev_sz]
+.qf.mkt.transition:{[book_side;px;sz;prev_px;prev_sz]
     / Arithmetic, not a nested ?[]: PeachQ makes that () on no rows (#1047).
-    `move`size`prev_size!($[side=`bid;1;-1]*(px>prev_px)-px<prev_px;sz;prev_sz)};
+    `move`size`prev_size!($[book_side=`bid;1;-1]*(px>prev_px)-px<prev_px;sz;prev_sz)};
 
 / Private: Cont-Kukanov-Stoikov per-side flow: new size if improved, size
 / change if held, minus the prior size if worsened (that queue is gone).
@@ -372,15 +372,15 @@
 / 0n. For the raw size change, use `deltas level_at[...;0]`.
 / @param quotes table `time`sym`bid_prices`bid_sizes`ask_prices`ask_sizes
 / @param target_sym the sym to compute depletion for
-/ @param side `bid or `ask
+/ @param book_side `bid or `ask
 / @return a vector, one depletion rate per quote row for target_sym, in time order
-/ @throws error if quotes is missing a required column, or side isn't `bid or `ask
+/ @throws error if quotes is missing a required column, or book_side isn't `bid or `ask
 / @eg .qf.mkt.queue_depletion_rate[quotes;`EURUSD;`bid]
-.qf.mkt.queue_depletion_rate:{[quotes;target_sym;side]
+.qf.mkt.queue_depletion_rate:{[quotes;target_sym;book_side]
     sub:.qf.mkt.quotes_for_sym[`queue_depletion_rate;quotes;target_sym];
-    if[not $[-11h=type side; side in `bid`ask; 0b];
-        '"queue_depletion_rate: side must be `bid or `ask, got ",.Q.s1 side];
-    tr:.qf.mkt.side_transition[sub;0;side];
+    if[not $[-11h=type book_side; book_side in `bid`ask; 0b];
+        '"queue_depletion_rate: book_side must be `bid or `ask, got ",.Q.s1 book_side];
+    tr:.qf.mkt.side_transition[sub;0;book_side];
     held:(0|tr[`prev_size]-tr`size)%tr`prev_size;
     rate:?[0=tr`move; held; ?[1=tr`move; 0f; 1f]];
     "f"$@[rate;til 1&count rate;:;0n]};
