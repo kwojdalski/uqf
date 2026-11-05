@@ -67,22 +67,32 @@ qetl.compare,snapshot,function,3,h tbl req
 qetl.compare,tiers,value,,
 qetl.compare,typed,function,2,ty v
 qetl.compare,verdict,function,5,tbl names l r lim
+qetl.compression,age_minage,function,1,r
 qetl.compression,algos,dict,,
+qetl.compression,apply_columns,function,2,tbl dir
 qetl.compression,beyond_torq,dict,,
 qetl.compression,block_range,value,,
 qetl.compression,column_policy,dict,,
+qetl.compression,column_triples,function,1,tbl
 qetl.compression,csv,function,1,
 qetl.compression,declare,function,2,tbl spec
 qetl.compression,declared,function,1,
 qetl.compression,excluded,value,,
+qetl.compression,for_write,function,2,tbl dir
+qetl.compression,is_compressed,function,1,f
 qetl.compression,keys,value,,
 qetl.compression,known,function,1,
 qetl.compression,levels,dict,,
+qetl.compression,modes,value,,
+qetl.compression,never,value,,
+qetl.compression,partition_compressed,function,1,dir
+qetl.compression,recompress_column,function,2,f triple
 qetl.compression,resolve,function,1,tbl
 qetl.compression,rows,function,1,
 qetl.compression,set_default,function,1,spec
 qetl.compression,stack_default,dict,,
 qetl.compression,table_policy,dict,,
+qetl.compression,with_zd,function,3,triple f args
 qetl.coverage,attach,function,1,
 qetl.coverage,claims,function,4,ds part version as_of
 qetl.coverage,compose,function,1,intervals
