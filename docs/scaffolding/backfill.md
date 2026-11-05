@@ -12,11 +12,11 @@ process that stays up.
 ## Command
 
 ```bash
-uqs job new fxprobe --kind backfill --dataset fx_probe \
+uqs job new fxprobe --kind backfill --outputs fx_probe \
     --schema "sym:symbol, mid:float" --width 1D
 ```
 
-`--dataset` is the table it fills, and it is **required** --- a backfill with no
+`--outputs` is the table it fills, and it is **required** --- a backfill with no
 dataset has nothing to record coverage against. `--width` is the window size as
 a q timespan. `--transport odbc` scaffolds a source read from a database rather
 than a q process: it declares `transport` and a `credential_example`, and its
@@ -34,7 +34,7 @@ When the adapter reads different columns from those it returns, `--raw-table`
 and `--raw-columns` declare its physical side apart from `--schema`:
 
 ```bash
-uqs job new events --kind backfill --dataset events --transport odbc \
+uqs job new events --kind backfill --outputs events --transport odbc \
     --schema "sym:symbol, px:float" \
     --raw-table EVENTS --raw-columns "CREATED_AT:timestamp, PAYLOAD:any"
 ```
@@ -49,8 +49,8 @@ the query you write: it is never guessed.
 refills the table the job publishes, which is what `uqs job gaps JOB` looks for.
 The dataset and columns are taken from the job's declaration and the plant's
 definition rather than given, so the twin writes the right table by
-construction. `--schema` is refused, and so is a `--dataset` the job does not
-publish. A job that publishes several tables needs `--dataset` to pick one.
+construction. `--schema` is refused, and so is a `--outputs` the job does not
+publish. A job that publishes several tables needs `--outputs` to pick one.
 
 When the job declares the transform it applies (`transform` in its
 `.qetl.job.stream.define`), the twin applies that same transform, so a refill
@@ -69,7 +69,7 @@ NAME is the base the files are named from, twin or not: the worker is
 `_backfill` is refused, saying what to pass instead, rather than doubling the
 suffix.
 
-<!-- scaffold-transcript: fxprobe --kind backfill --dataset fx_probe --schema "sym:symbol, mid:float" --width 1D -->
+<!-- scaffold-transcript: fxprobe --kind backfill --outputs fx_probe --schema "sym:symbol, mid:float" --width 1D -->
 ```
 scaffold fxprobe_backfill:
   create src/etl/sources/fxprobe.q

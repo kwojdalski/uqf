@@ -81,7 +81,7 @@ def backfilled_tables() -> list[str]:
     found: set[str] = {d.dataset for d in read_declarations(ROOT) if d.dataset}
     for path in sorted((ROOT / "src" / "etl" / "reactions").glob("*.q")):
         for reaction in reaction_calls(strip_q_comments(path.read_text())):
-            found.update(reaction.writes)
+            found.update(reaction.outputs)
     return sorted(found)
 
 

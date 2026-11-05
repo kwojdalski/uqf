@@ -22,7 +22,7 @@ from uqs.stack import bundles
 
 UQF_ROOT = Path(__file__).resolve().parents[3]
 TRADES = [
-    "mock_trades", "--kind", "backfill", "--dataset", "mock_trades",
+    "mock_trades", "--kind", "backfill", "--outputs", "mock_trades",
     "--schema", "trade_time:timestamp, sym:symbol, px:float",
 ]  # fmt: skip
 
@@ -78,9 +78,9 @@ def test_a_second_job_sees_the_first(tmp_path, monkeypatch, tree_files):
 
 def test_a_streaming_job_may_subscribe_to_a_bundle_table(tmp_path, monkeypatch, tree_files):
     folder = tmp_path / "mockups"
-    feed = ["mock_ticks", "--publishes", "mock_ticks", "--schema", "sym:symbol, bid:float"]
+    feed = ["mock_ticks", "--outputs", "mock_ticks", "--schema", "sym:symbol, bid:float"]
     _job_new([*feed, "--bundle", str(folder)], monkeypatch)
-    etl = ["mock_mids", "--subscribe-to", "mock_ticks", "--publishes", "mock_mids",
+    etl = ["mock_mids", "--subscribe-to", "mock_ticks", "--outputs", "mock_mids",
            "--schema", "sym:symbol, mid:float", "--bundle", str(folder)]  # fmt: skip
     _out, refused = _job_new(etl, monkeypatch)
     assert refused == []
@@ -96,7 +96,7 @@ def test_a_dry_run_writes_nothing(tmp_path, monkeypatch, tree_files):
 
 @pytest.mark.parametrize("option", [["--profile", "essential"], ["--unprofiled", "why"]])
 def test_a_profile_option_is_refused(tmp_path, monkeypatch, option):
-    argv = ["mock_ticks", "--publishes", "mock_ticks", "--schema", "sym:symbol", *option]
+    argv = ["mock_ticks", "--outputs", "mock_ticks", "--schema", "sym:symbol", *option]
     _out, refused = _job_new([*argv, "--bundle", str(tmp_path / "mockups")], monkeypatch)
     assert refused and "does not apply with --bundle" in refused[0]
 
@@ -128,7 +128,7 @@ def test_a_job_named_like_a_test_is_refused_before_writing(tmp_path, monkeypatch
     """#1583: the installer reads every test_*.q as a test, so a job so named
     would land in the bundle and then never install."""
     folder = tmp_path / "mockups"
-    argv = ["test_audit_feed", "--kind", "backfill", "--dataset", "test_audit_feed",
+    argv = ["test_audit_feed", "--kind", "backfill", "--outputs", "test_audit_feed",
             "--schema", "trade_time:timestamp, sym:symbol, px:float"]  # fmt: skip
     _out, refused = _job_new([*argv, "--bundle", str(folder)], monkeypatch)
     assert any("test_" in r for r in refused), refused
@@ -141,7 +141,7 @@ def test_an_external_feed_lands_in_a_bundle_with_its_connector(tmp_path, monkeyp
     the bundle beside the q job and the raw table - and nothing into uqs."""
     folder = tmp_path / "mockups"
     argv = ["audit_ext", "--kind", "connector", "--raw-table", "audit_ext_raw",
-            "--publishes", "audit_ext_out", "--schema", "sym:symbol, px:float"]  # fmt: skip
+            "--outputs", "audit_ext_out", "--schema", "sym:symbol, px:float"]  # fmt: skip
     _out, refused = _job_new([*argv, "--bundle", str(folder)], monkeypatch)
     assert refused == []
     names = {p.name for p in folder.iterdir()}

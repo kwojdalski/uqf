@@ -57,7 +57,7 @@ def test_what_it_writes_is_read_back_by_the_tree_reader():
     template it cannot parse would be a reaction nothing lists."""
     for writes, expected in (((), ()), (["a", "b"], ("a", "b")), (["p"], ("p",))):
         [found] = reaction_calls(_plan(writes=writes).actions[0].body)
-        assert (found.name, found.dataset, found.writes) == ("rebuild", "demo_deals", expected)
+        assert (found.name, found.dataset, found.outputs) == ("rebuild", "demo_deals", expected)
 
 
 def test_it_writes_a_failing_test_in_its_own_namespace():
@@ -150,7 +150,3 @@ def _refusal(argv: list[str], monkeypatch) -> str:
 )
 def test_process_options_are_refused_not_ignored(extra, message, monkeypatch):
     assert message in _refusal(["rx", "--triggered-by", "demo_deals", *extra], monkeypatch)
-
-
-def test_writes_without_triggered_by_is_refused(monkeypatch):
-    assert "give --triggered-by" in _refusal(["rx", "--writes", "t"], monkeypatch)

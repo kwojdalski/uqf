@@ -12,7 +12,7 @@ table, profile or port for it.
 ## Command
 
 ```bash
-uqs job new deal_volume --triggered-by demo_deals --writes deal_volume
+uqs job new deal_volume --triggered-by demo_deals --outputs deal_volume
 ```
 
 `--triggered-by` is the dataset whose publication runs it, and it must be one a
@@ -43,20 +43,20 @@ one answer per window rather than a second copy. The rows need a `time` column
 inside that window, which is how the HDB writer partitions them and how the
 window is cleared.
 
-`--writes` is optional: the tables the handler writes. With it, the reaction
+`--outputs` is optional: the tables the handler writes. With it, the reaction
 registers through `on_writing` and becomes a node in the job graph, where a
 cycle is refused when the file loads. Writing the dataset it watches is refused
 up front for that reason. Every option that shapes a process (`--proc`,
 `--period`, `--profile`, `--schema`, ...) is refused rather than ignored.
 
-<!-- scaffold-transcript: deal_volume --triggered-by demo_deals --writes deal_volume -->
+<!-- scaffold-transcript: deal_volume --triggered-by demo_deals --outputs deal_volume -->
 ```
 scaffold deal_volume:
   create src/etl/reactions/deal_volume.q
   create tests/q/test_deal_volume.q
   note: implement .qpipe.job.deal_volume.handler, then replace the scaffolded test
   note: it runs inside deals_backfill1 - the process(es) that fill demo_deals
-  note: --writes deal_volume is asserted, not derived: the handler must write exactly that, and nothing checks it does
+  note: --outputs deal_volume is asserted, not derived: the handler must write exactly that, and nothing checks it does
 ```
 
 ## The file
@@ -84,7 +84,7 @@ logged, and the next run of the worker fires it again for that window. So until
 the handler is written, each window of `demo_deals` records a failed reaction,
 and the scaffolded test fails.
 
-**What `--writes` claims is not checked.** A handler can write anywhere, so the
+**What `--outputs` claims is not checked.** A handler can write anywhere, so the
 graph edge is a promise (`derived` is `0b`, see `.qetl.reaction.on`). Where the
 downstream work is a registered bounded worker, `.qetl.reaction.on_worker`
 derives the edge instead; write that by hand in place of the scaffolded call.

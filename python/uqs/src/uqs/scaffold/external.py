@@ -22,7 +22,7 @@ This writes both halves:
   python/uqs/tests/test_NAME_streamer.py         a failing test, as every scaffold
   the raw table, and the q job NAME              via scaffold/jobs.streaming_job:
                                                  subscribes to the raw table,
-                                                 publishes --publishes
+                                                 publishes --outputs
 
 The raw table and the published one start with the same --schema: the q job
 is where they come to differ, as a fold of forty per-level columns into four
@@ -77,7 +77,7 @@ def external_feed(
         )
     if raw_table == publishes:
         raise UqsError(
-            "--raw-table and --publishes must differ: the q job reads one, writes the other"
+            "--raw-table and --outputs must differ: the q job reads one, writes the other"
         )
     cols = as_columns(columns)
     fields = [c for c, _ in cols if c != "time"]
