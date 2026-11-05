@@ -1,0 +1,28 @@
+# Files in lib/qAutomatedTrading whose bytes differ from upstream e508156fb6b0 (#2157).
+#
+# NOT reviewed or accepted: recorded so the gate can hold them where they are
+# while the owner decides. They were changed when the tree was vendored
+# (c252fd85), most likely by this repository's own pre-commit hooks - trailing-whitespace,
+# end-of-file-fixer, mixed-line-ending - which ran over lib/ until lib/ was
+# excluded from them. kind "whitespace": the change is only trailing spaces or
+# tabs, a CR, or blank lines and the newline at the end of the file. kind
+# "edit": anything else; see the vendoring commit's message.
+#
+# To revert to upstream: python3 scripts/dev/revendor.py qAutomatedTrading
+# (which deletes this file). To accept a change as a patch instead, it stays
+# listed here with a reason. The gate fails if any listed file changes again.
+#
+# path	upstream blob	local blob	kind
+LICENSE-qAutomatedTrading	a4026ff24bd2751f1b8312d75af0df39e6267cc3	c90aa23053c018f1407160bcf3b56cb0eb71fd0f	whitespace
+boosting/readme.MD	8b137891791fe96927ad78e64b0aad7bded08bdc	e69de29bb2d1d6434b8b29ae775ad8c2e48c5391	whitespace
+histTickData/readme.MD	9828ac257c317f6143b1929d65ebee4e9fd48418	1dae898918e03cbdc8e3d9a647167ba802c8558e	whitespace
+orderManagement/readme.MD	139597f9cb07c5d48bed18984ec4747f4b4f3438	e69de29bb2d1d6434b8b29ae775ad8c2e48c5391	whitespace
+portfolioTracker/README.md	b560bec3de87d8882dae982478078d9f567ca18d	985d72e224889facfcc2048a10dabacf753f3bab	whitespace
+portfolioTracker/execsvc.q	59a69633d09e85716bd6332a7e711a3d56591204	e1a015b05007b59c3636e8c12975ed5a637082ae	whitespace
+portfolioTracker/pnl.q	ce77b3875f061ee5249490e22e5982f17d4025cc	94124db0e99e903827f53610426ac96e2bfeb266	whitespace
+portfolioTracker/pnlsvc.q	a034a7984bcfc4882cd2a92971ea7b207cedc03d	b5ffd7bc4ade59a407749f24969b6837c5bd035f	whitespace
+portfolioTracker/u2.q	7eff28dd301c45b4ab8a42d0f7c24c0474616119	c5aa81d3aa493b9c205f46200b8a20882bee6b1b	whitespace
+portfolioTracker/ui/pnl.js	d7cd5bed94bc15f4225d9fe14479633bbffc16b9	8ae8ba5169ab92490068c7fa2c46b9f0878e27ef	whitespace
+portfolioTracker/ui/processTrade.js	46fc6679eec3b57920634759d8c195605868f6c4	f5c1bbe147fecce25148f006ddd810821ec95f9c	whitespace
+portfolioTracker/yahooProductData.q	b4c9cd9acf6ffe00b9b6125154d9d1c7fb2c81da	25297455c3dfb1cbdb1a727df353d7d2f6dec38a	whitespace
+portfolioTracker/yhfh.q	a50f2b02925d24af353a03ea51552a7218375302	86270caa2f65b70e199e91c7d2fc39876fa1c103	whitespace
