@@ -17,12 +17,12 @@ uqs job new all_fills --kind normalizer \
     --schema "sym:symbol, venue:symbol, size:float"
 ```
 
-**Do not pass `--publishes`.** A normalizer publishes the table it is named for,
+**Do not pass `--outputs`.** A normalizer publishes the table it is named for,
 and the scaffold refuses the redundancy rather than reconciling it:
 
 ```
-$ uqs job new all_fills --kind normalizer --subscribe-to trades,crypto_trades --publishes all_fills ...
-a normalizer publishes its own NAME - drop --publishes
+$ uqs job new all_fills --kind normalizer --subscribe-to trades,crypto_trades --outputs all_fills ...
+--outputs does not apply to --kind normalizer
 ```
 
 So `--schema` describes the **canonical output**, and each subscribed table is

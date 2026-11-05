@@ -21,7 +21,7 @@ from uqs.cli.create_backfill import backfill_plan
 from uqs.cli.create_bundle import planning_root, refuse_tree_only, write_bundle_plan
 from uqs.cli.create_kinds import DEFAULT_KIND, KindOpt, for_kinds, given_options, misplaced
 from uqs.cli.create_plant import plant_definitions, plant_tables
-from uqs.cli.create_reaction import TriggeredByOpt, WritesOpt, scaffold_reaction
+from uqs.cli.create_reaction import TriggeredByOpt, scaffold_reaction
 from uqs.cli.regenerate import write_plan
 from uqs.cli.renames import renamed
 from uqs.cli.shared import (
@@ -71,18 +71,16 @@ def new_job(
             autocompletion=completion.plant_tables,
         ),
     ] = None,
-    publishes: Annotated[
+    outputs: Annotated[
         str | None,
         typer.Option(
-            "--publishes",
+            "--outputs",
             metavar="TABLE,...",
-            help="Comma-separated tables it writes; an existing one is published onto"
-            + for_kinds("--publishes"),
+            help="Comma-separated tables it produces: a streaming job's are published "
+            "(an existing one is published onto), a backfill's is the one it fills, a "
+            "reaction's are the ones it writes" + for_kinds("--outputs"),
             autocompletion=completion.plant_tables,
         ),
-    ] = None,
-    dataset: Annotated[
-        str | None, typer.Option("--dataset", help=f"The table it fills{for_kinds('--dataset')}")
     ] = None,
     raw_table: Annotated[
         str | None,
@@ -194,7 +192,7 @@ def new_job(
     partition: Annotated[
         str | None,
         typer.Option(
-            "--partition", help="The slice of --dataset it fills" + for_kinds("--partition")
+            "--partition", help="The slice of --outputs it fills" + for_kinds("--partition")
         ),
     ] = None,
     partition_column: Annotated[
@@ -220,7 +218,6 @@ def new_job(
     ] = None,
     transform: _TransformOpt = None,
     triggered_by: TriggeredByOpt = None,
-    writes: WritesOpt = None,
     bundle: Annotated[
         Path | None,
         typer.Option(
@@ -244,36 +241,36 @@ def new_job(
     Streaming, reading two tables and writing one:
 
         uqs job new markout2 --subscribe-to trades,quote \\
-            --publishes my_metric --schema "sym:symbol, px:float"
+            --outputs my_metric --schema "sym:symbol, px:float"
 
     Bounded worker, with its source and transform - JOB is the base, so this writes worker
     fx_rates_backfill over source fx_rates (a JOB already ending in _backfill is refused):
 
-        uqs job new fx_rates --kind backfill --dataset fx_rates \\
+        uqs job new fx_rates --kind backfill --outputs fx_rates \\
             --schema "sym:symbol, mid:float" --width 1D
 
     One table in, one out, with the handler written - passthrough or derive:
 
-        uqs job new trades_copy --subscribe-to trades --publishes trades_copy_out \\
+        uqs job new trades_copy --subscribe-to trades --outputs trades_copy_out \\
             --schema-from trades --transform passthrough
 
     Polling feed, as steps `uqs job preview` can run without publishing:
 
-        uqs job new rates_feed --publishes rates --schema "sym:symbol, mid:float" --poll
+        uqs job new rates_feed --outputs rates --schema "sym:symbol, mid:float" --poll
 
     Reaction, run each time a bounded worker publishes a window of demo_deals:
 
-        uqs job new rebuild_positions --triggered-by demo_deals --writes positions
+        uqs job new rebuild_positions --triggered-by demo_deals --outputs positions
     """
     subs = [s.strip() for s in (subscribe_to or "").split(",") if s.strip()]
     repo_root = _paths().repo_root
     used = given_options(ctx)
-    if triggered_by is not None or writes is not None:
+    if triggered_by is not None:
         scaffold_reaction(
             name,
             triggered_by,
-            writes,
-            used,
+            outputs,
+            {o: v for o, v in used.items() if o != "--outputs"},
             bundle=bundle,
             dry_run=dry_run,
         )
@@ -281,6 +278,13 @@ def new_job(
     # Options that shape one kind only are refused on the others, not ignored.
     if refusal := misplaced(kind, used):
         _die(UqsError(refusal))
+        return
+    # One flag, what the job type does with it differing: a streaming job publishes
+    # them, a backfill fills the one (#2102).
+    publishes = outputs
+    dataset = outputs
+    if kind == "backfill" and outputs and "," in outputs:
+        _die(UqsUsageError("--kind backfill fills exactly one dataset: give --outputs one table"))
         return
 
     def _plan(root: Path):
@@ -328,7 +332,7 @@ def new_job(
             )
         if kind == "normalizer":
             if publishes:
-                raise UqsError("a normalizer publishes its own NAME - drop --publishes")
+                raise UqsError("a normalizer publishes its own NAME - drop --outputs")
             if not shape:
                 raise UqsUsageError("--kind normalizer needs --schema: its canonical table")
             return normalizer.normalizer(
@@ -348,7 +352,7 @@ def new_job(
             )
         if kind == "connector":
             if not (raw_table and publishes and shape):
-                raise UqsUsageError("--kind connector needs --raw-table, --publishes and --schema")
+                raise UqsUsageError("--kind connector needs --raw-table, --outputs and --schema")
             return external.external_feed(
                 name,
                 raw_table,

@@ -59,7 +59,6 @@ SHAPES: dict[str, tuple[str, ...]] = {
     "--partition": _BACKFILL,
     "--partition-column": _BACKFILL,
     "--check": _BACKFILL,
-    "--dataset": _BACKFILL,
     "--source": _BACKFILL,
     "--width": _BACKFILL,
     "--twin-of": _BACKFILL,
@@ -75,8 +74,8 @@ SHAPES: dict[str, tuple[str, ...]] = {
     "--unprofiled": _STANDING,
     # every kind declares whether `uqs start all` starts it (#1893)
     "--start-with-all": SCAFFOLD_KINDS,
-    # a normalizer and a horizon job publish their own NAME; a backfill fills --dataset
-    "--publishes": ("streaming", "connector"),
+    # a normalizer and a horizon job publish their own NAME; a backfill fills its one output
+    "--outputs": ("streaming", "connector", "backfill"),
     # a backfill reads its source, a connector job --raw-table
     "--subscribe-to": ("streaming", "normalizer", "horizon"),
 }
@@ -99,7 +98,7 @@ def misplaced(kind: str, used: dict[str, bool]) -> str | None:
 
 
 #: The options that are not a job's shape: a reaction's own, and how to write.
-NOT_SHAPING = frozenset({"--triggered-by", "--writes", "--bundle", "--dry-run"})
+NOT_SHAPING = frozenset({"--triggered-by", "--bundle", "--dry-run"})
 
 
 def given_options(ctx: Any, exclude: frozenset[str] = NOT_SHAPING) -> dict[str, bool]:

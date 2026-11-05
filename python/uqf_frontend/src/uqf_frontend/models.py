@@ -7,6 +7,8 @@ from typing import Any, Literal
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, field_validator
 
+from uqf_frontend.limits import limit_field
+
 #: Where a query reads: today's session, completed partitions, or both. One
 #: name for the request and the response, which api.ts mirrors as `Tier`.
 Tier = Literal["rdb", "hdb", "both"]
@@ -69,7 +71,9 @@ class QueryRequest(BaseModel):
 
     table: str = Field(min_length=1)
     filters: list[Filter] = Field(default_factory=list, max_length=16)
-    limit: int = Field(default=1000, ge=1)
+    limit: int = limit_field(
+        1000, None, "rows to return; cut at the server's max_rows, reported as `truncated`"
+    )
     tier: Tier = Field(
         default="both",
         description="rdb = today's session, hdb = completed partitions, both = razed. "
@@ -1329,7 +1333,7 @@ class CompareRequest(BaseModel):
     range_to: AwareDatetime
     filters: list[str] = Field(default_factory=list, max_length=20,
                                description="COLUMN OP VALUE, e.g. sym=EURUSD")  # fmt: skip
-    limit: int = Field(default=1000, ge=1, le=100_000, description="rows read per side, at most")
+    limit: int = limit_field(1000, 100_000, "rows read per side, at most")
     source_version: str | None = Field(default=None, max_length=128)
     partition: str | None = Field(default=None, max_length=128)
 

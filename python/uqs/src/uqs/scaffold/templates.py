@@ -264,21 +264,21 @@ facts:{{[batch]
 """
 
 
-def reaction_body(name: str, dataset: str, writes: list[str], producers: list[str]) -> str:
+def reaction_body(name: str, dataset: str, outputs: list[str], producers: list[str]) -> str:
     """A reaction file: a handler that throws, registered on `dataset`.
 
-    `writes` switches `on` for `on_writing`, which puts the reaction in the job
+    `outputs` switches `on` for `on_writing`, which puts the reaction in the job
     graph as a node that writes those tables - a CLAIM, since a handler can
     write anywhere (`derived` is 0b; see .qetl.reaction.on).
     """
     runs_in = ", ".join(producers)
-    if writes:
-        outputs = f"enlist `{writes[0]}" if len(writes) == 1 else "`" + "`".join(writes)
+    if outputs:
+        declared = f"enlist `{outputs[0]}" if len(outputs) == 1 else "`" + "`".join(outputs)
         register = (
-            f".qetl.reaction.on_writing[`{dataset};`{name};{outputs};.qpipe.job.{name}.handler];"
+            f".qetl.reaction.on_writing[`{dataset};`{name};{declared};.qpipe.job.{name}.handler];"
         )
         claim = (
-            f"/ on_writing, because this handler writes {', '.join(writes)}: that puts it in\n"
+            f"/ on_writing, because this handler writes {', '.join(outputs)}: that puts it in\n"
             "/ the job graph, where a cycle is refused at load. It is a CLAIM nothing\n"
             "/ checks - keep it true when you write the handler.\n"
         )
