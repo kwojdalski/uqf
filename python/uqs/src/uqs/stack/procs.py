@@ -27,6 +27,7 @@ from uqs.model.runtime_members import pipeline_procnames
 from uqs.paths import UqsError, UqsPaths
 from uqs.stack import overrides as override_files
 from uqs.stack.carriable import refuse_unsafe_override
+from uqs.stack.compression import CMP_PROCESS_LOAD
 from uqs.stack.env import build_env
 from uqs.stack.monitor_budget import (
     MONITOR_QUIET_EXTRAS,
@@ -66,13 +67,11 @@ VENDORED_STARTWITHALL_OVERLAY = {"monitor1": "1", "feed1": "0"}
 #: Extra q a vendored process loads, as (before, after) its vendored `load`
 #: column: each path is pathed through an env var torq.sh's envsubst expands.
 #:
-#: gateway1 - the desk catalog, after.
-#: `.qcat` is the desk catalog's authored half - what each table is for, and
-#: which are deliberately not browsable. It has to answer on the process the
-#: BFF already talks to, and that is the gateway: `Gateway.call` runs a
-#: program on the gateway process itself, while `route` reaches the data
-#: tiers. The columns and types come from the tiers via `meta`; only the
-#: prose lives here.
+#: gateway1 - the desk catalog, after. `.qcat` is the desk catalog's authored half - what
+#: each table is for, and which are deliberately not browsable. It has to answer on the
+#: process the BFF already talks to, and that is the gateway: `Gateway.call` runs a program
+#: on the gateway process itself, while `route` reaches the data tiers. The columns and
+#: types come from the tiers via `meta`; only the prose lives here.
 #:
 #: Not the generated database.q, which would have been the obvious carrier:
 #: only stp1 is given `-schemafile`, so nothing else would see it.
@@ -116,6 +115,7 @@ VENDORED_LOAD_OVERLAY: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
         ("${UQF_ROOT}/src/metadata/metatables.q", "${UQF_SCRIPTS}/processes/torq_metatables.q"),
     ),
     "reporter1": (("${UQF_SCRIPTS}/processes/uqs_reporter_config.q",), ()),
+    "housekeeping1": CMP_PROCESS_LOAD,  # `uqs data compress`'s .cmp: see stack/compression.py
 }
 
 

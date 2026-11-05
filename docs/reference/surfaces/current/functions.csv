@@ -117,6 +117,7 @@ qetl.coverage,stage_completion,function,6,dataset partition source_version range
 qetl.coverage,still_current,value,,
 qetl.coverage,supersede,function,5,ds part version from_ts to_ts
 qetl.coverage,unready,table,,
+qetl.coverage,unreleased,function,1,at
 qetl.coverage,with_lock,function,2,f args
 qetl.dag,adopt_all,function,1,
 qetl.dag,adopt_feeders,function,1,

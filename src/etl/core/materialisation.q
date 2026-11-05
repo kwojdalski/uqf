@@ -749,6 +749,22 @@
         ([] dataset:count[ds]#k`dataset; partition:count[ds]#k`partition; source_version:count[ds]#k`source_version; date:asc ds)}[at];
     raze per each 0!distinct ks}
 
+/ The days a dataset is still being written to: every date a current claim with rows
+/ covers that its readers have not been released to see - release_dates over every key
+/ the ledger holds. A run writes, and its deployment releases once the HDB has reloaded
+/ what it wrote (release_ready), so a date here is one a writer is still busy with, and
+/ that HDB maintenance (`uqs data compress`, #2147) leaves alone. A key with no watermark
+/ at all counts as unreleased, as `outstanding` and `ready_claims` read it.
+/ @param at the as-of: claims recorded after it are not counted
+/ @return table dataset, date - distinct, sorted; empty when there is no ledger
+/ @eg .qetl.coverage.unreleased[.z.p]
+.qetl.coverage.unreleased:{[at]
+    out:([] dataset:`symbol$(); date:`date$());
+    if[()~key hsym `$.qetl.coverage.ledger_path[]; :out];
+    t:.qetl.job.bounded.state.durable_get .qetl.coverage.ledger_path[];
+    ks:distinct select dataset, partition, source_version from t;
+    `dataset`date xasc distinct select dataset, date from .qetl.coverage.release_dates[ks;at]}
+
 / The coverage claims a reader can query now: claims as `claims` returns
 / them, recorded at or before the key's readiness watermark. What /query's
 / require_coverage composes (#1094), read on the gateway like `claims`.

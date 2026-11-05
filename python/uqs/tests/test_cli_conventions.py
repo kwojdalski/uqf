@@ -159,6 +159,7 @@ DOMAIN_VERBS = {
     "seed": "copy another runtime's HDB",
     "migrate": "migrate an HDB partition's schema",
     "alter": "change one table in every HDB partition holding it",
+    "compress": "bring an HDB's older partitions to their compression policy, through TorQ's .cmp",
     "upgrade": "bring a store an older uqs wrote up to today's layout",
     "diff": "compare two runtimes, a config push's files before and after it, or a table "
     "on two endpoints",
@@ -1030,7 +1031,7 @@ ASKS = {c.path for c in TREE if c.path in LEAVES and _kind(c.path) == CONFIRMS} 
 #: give it --yes/-y, then list the module here.
 PROMPTING_MODULES = {
     "attach", "cleanup", "deploy_server", "hdb_scope", "install", "install_bundle", "migrate",
-    "remove", "target", "target_adopt", "target_config", "target_edit",
+    "remove", "target", "target_adopt", "target_config", "target_edit", "data_compress",
 }  # fmt: skip
 
 #: leaf -> the issue that adds its --json. Empty since #1731: keep it so.

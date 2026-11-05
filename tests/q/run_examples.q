@@ -28,6 +28,7 @@
 \l docs/man.q
 \l scripts/processes/torq_pipeline.q
 \l scripts/processes/torq_compress.q
+\l scripts/processes/torq_compress_survey.q
 \l scripts/processes/torq_metatables.q
 \l scripts/processes/uqs_catalog.q
 \l src/etl/init.q
