@@ -502,6 +502,31 @@ export interface OpsData extends Pollable {
   processes_configured?: number;
 }
 
+/** Every error the API answers, in its one shape (app.py `_error`, #2106):
+ *  its type, a readable reason, and whether retrying may help. A 422 from
+ *  request validation also carries `errors`, each failure's `loc` and `msg`. */
+export interface ErrorBody {
+  error: string;
+  detail: string;
+  transient: boolean;
+  errors?: { loc: (string | number)[]; msg: string; type?: string }[];
+}
+
+/** Read an error response's body. Anything not in the shape - an answer a
+ *  proxy gave, or none - falls back to naming the status, never to "". */
+export function errorBody(payload: unknown, status: number): ErrorBody {
+  const body = (payload ?? {}) as Partial<ErrorBody>;
+  return {
+    error: typeof body.error === "string" ? body.error : "",
+    detail:
+      typeof body.detail === "string" && body.detail
+        ? body.detail
+        : `Request failed (${status}).`,
+    transient: body.transient === true,
+    errors: Array.isArray(body.errors) ? body.errors : undefined,
+  };
+}
+
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -625,19 +650,8 @@ export async function request<T>(
     throw new DOMException("workspace changed", "AbortError");
   const payload = await response.json().catch(() => null);
   if (!response.ok) {
-    const detail = payload?.detail;
-    const message =
-      typeof detail === "string"
-        ? detail
-        : Array.isArray(detail)
-          ? detail
-              .map(
-                (item: { loc?: string[]; msg: string }) =>
-                  `${item.loc?.join(".")}: ${item.msg}`,
-              )
-              .join("; ")
-          : `Request failed (${response.status}).`;
-    throw new ApiError(message, payload?.transient === true, response.status);
+    const failure = errorBody(payload, response.status);
+    throw new ApiError(failure.detail, failure.transient, response.status);
   }
   if (payload === null)
     throw new ApiError("The API returned an invalid response.", true);
@@ -998,7 +1012,7 @@ export function uploadRemoteFile(
         ),
       );
     xhr.onload = () => {
-      let payload: { error?: unknown; detail?: unknown } | null = null;
+      let payload: unknown = null;
       try {
         payload = JSON.parse(xhr.responseText);
       } catch {
@@ -1006,20 +1020,19 @@ export function uploadRemoteFile(
       }
       if (xhr.status >= 200 && xhr.status < 300 && payload) {
         onProgress(1);
-        resolve(payload as unknown as RemoteUpload);
+        resolve(payload as RemoteUpload);
         return;
       }
-      const detail =
-        typeof payload?.detail === "string"
-          ? payload.detail
-          : `Upload failed (${xhr.status}).`;
+      // The same reading as every other request: a validation refusal's
+      // reason reaches the operator too, not "Upload failed (422)." (#2106).
+      const failure = errorBody(payload, xhr.status);
       // Only the server's word, or an answer it never gave, is uncertain; a
       // refusal (4xx) and a failure it names as certain wrote nothing.
       const unsure =
-        payload?.error === "UploadOutcomeUncertain" ||
+        failure.error === "UploadOutcomeUncertain" ||
         payload === null ||
         xhr.status === 504;
-      reject(new UploadFailed(detail, xhr.status, unsure));
+      reject(new UploadFailed(failure.detail, xhr.status, unsure));
     };
     xhr.onerror = () => uncertain("The connection to the API failed");
     xhr.ontimeout = () => uncertain("The upload timed out");

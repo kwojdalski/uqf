@@ -541,6 +541,34 @@ it("treats a refusal as certain and a 504, a lost answer or a timeout as uncerta
   }
 });
 
+it("shows a validation refusal's reason, not just its status (#2106)", async () => {
+  stubXhr(
+    422,
+    JSON.stringify({
+      error: "RequestInvalid",
+      detail: "query.overwrite: Input should be a valid boolean",
+      transient: false,
+      errors: [
+        { loc: ["query", "overwrite"], msg: "Input should be a valid boolean" },
+      ],
+    }),
+  );
+  const failure = await uploadRemoteFile(
+    "prod-a",
+    "shared/config/x",
+    file("x"),
+    false,
+    () => {},
+    new AbortController().signal,
+    PUSH,
+  ).catch((error: unknown) => error);
+  expect(failure).toBeInstanceOf(UploadFailed);
+  expect((failure as UploadFailed).message).toBe(
+    "query.overwrite: Input should be a valid boolean",
+  );
+  expect((failure as UploadFailed).uncertain).toBe(false);
+});
+
 it("appears in the browser below shared/config and refreshes the listing after", async () => {
   const children: Record<string, string[]> = {
     "": ["shared"],
