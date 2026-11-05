@@ -588,7 +588,7 @@ def test_coverage_rejects_a_naive_requested_range(client_for):
         },
     )
     assert resp.status_code == 422
-    assert "timezone" in resp.json()["detail"]
+    assert "needs an explicit timezone offset" in resp.text
 
 
 def test_query_is_refused_when_coverage_is_written_but_not_loaded(client_for):

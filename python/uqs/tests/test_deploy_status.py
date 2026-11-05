@@ -133,7 +133,7 @@ def test_the_json_keys_are_the_documented_ones():
         "format", "ssh", "dest", "current", "previous", "releases",
         "last_deployment", "health", "lock",
     }  # fmt: skip
-    assert set(s["health"]) == {"checked", "passed", "reason", "processes", "failing_jobs"}
+    assert set(s["health"]) == {"checked", "ok", "passed", "reason", "processes", "failing_jobs"}
     json.dumps(s)  # and all of it serialises
 
 

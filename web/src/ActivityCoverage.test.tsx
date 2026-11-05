@@ -71,6 +71,81 @@ it("names every control the source writes", () => {
   expect(unnamed).toEqual([]);
 });
 
+/** The one prefix every activity name a view writes shares, by its source:
+ *  a file, or `file#Component` for a view App.tsx defines (#2110). The
+ *  server's `?action=` filter matches a dotted prefix, so a view's submit
+ *  event and its interactions must share one - `chart.draw` beside
+ *  `charts.*` hid the row that says a chart was drawn from `?action=charts`.
+ *  ControlView is not here on purpose: its submits carry the server's
+ *  operation names (`process.*`, `backfill.start`), so the browser and the
+ *  server row of one write share a name, while its controls are `control.*`. */
+const AREAS: Record<string, string> = {
+  "App.tsx#DeskView": "desk",
+  "PlotPanel.tsx": "desk",
+  "ChartsView.tsx": "charts",
+  "FileBrowser.tsx": "files",
+  "FileTable.tsx": "files",
+  "FileDelete.tsx": "files",
+  "UploadPanel.tsx": "files",
+  "ActivityView.tsx": "activity",
+  "CompareView.tsx": "compare",
+  "ConfigHistory.tsx": "config",
+  "SettingsView.tsx": "settings",
+  "WorkspaceSelector.tsx": "workspace",
+};
+
+/** The activity names a source spells: each `data-activity` or `activity`
+ *  prop and each `record(kind, name)`, as written - a template up to its
+ *  first `${`, so `desk.show.${item}` is checked as `desk.show.`. */
+export function activityNames(source: string): string[] {
+  const quoted = String.raw`"([^"]*)"|\{\x60([^\x60$]*)`;
+  const patterns = [
+    new RegExp(String.raw`\b(?:data-)?activity=(?:${quoted})`, "g"),
+    new RegExp(
+      String.raw`\brecord\(\s*"[^"]*",\s*(?:"([^"]*)"|\x60([^\x60$]*))`,
+      "g",
+    ),
+  ];
+  return patterns.flatMap((pattern) =>
+    [...source.matchAll(pattern)].map((m) => m[1] ?? m[2]),
+  );
+}
+
+/** The source of `component` in `source`: from its `function` line to the
+ *  next top-level declaration. */
+function componentSource(source: string, component: string): string {
+  const start = source.indexOf(`\nfunction ${component}(`);
+  expect(start, `${component} is not defined`).toBeGreaterThan(-1);
+  const end = source
+    .slice(start + 1)
+    .search(/\n(?:export )?(?:function|const) /);
+  return end < 0 ? source.slice(start) : source.slice(start, start + 1 + end);
+}
+
+it("reads the names a source spells, templates by their fixed part", () => {
+  expect(
+    activityNames(
+      'data-activity="a.b" activity="c.d" data-activity={`e.${x}`} ' +
+        'record("submit", "f.g", {}) record("select", `h.${y}`)',
+    ),
+  ).toEqual(["a.b", "c.d", "e.", "f.g", "h."]);
+});
+
+it("gives every activity name a view writes its view's prefix", () => {
+  const dir = import.meta.dirname + "/";
+  const stray: string[] = [];
+  for (const [where, prefix] of Object.entries(AREAS)) {
+    const [file, component] = where.split("#");
+    let source = readFileSync(dir + file, "utf8");
+    if (component) source = componentSource(source, component);
+    const names = activityNames(source);
+    expect(names.length, `${where} spells no activity name`).toBeGreaterThan(0);
+    for (const name of names)
+      if (!name.startsWith(prefix + ".")) stray.push(`${where}: ${name}`);
+  }
+  expect(stray).toEqual([]);
+});
+
 /** Every control on screen without a usable name. */
 function unnamedOnScreen(): string[] {
   return [...document.querySelectorAll(INTERACTIVE)]

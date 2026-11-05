@@ -284,7 +284,7 @@ def approve(
             "attachment": att.name,
             "destination": dest.identity,
             "host": dest.host,
-            "stack_id": dest.stack_id,
+            "base_port": dest.stack_id,
             "hdb_dir": str(dest.hdb_dir),
             "users": [att.stack.user],
             "conflict_policies": sorted(set(policies)),

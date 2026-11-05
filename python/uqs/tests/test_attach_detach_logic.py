@@ -889,7 +889,7 @@ def test_a_backfill_launch_refuses_an_attachment_detached_after_its_admission(wo
     monkeypatch.setattr(backfill_run, "q_interpreter", lambda env: Path("/bin/false"))
     where = {"hdb_dir": str(state / "hdb"), "state_dir": str(state / "run")}
     admitted = {
-        "destination": {"attachment": "pb-uat", "stack_id": 6000, "host": "localhost",
+        "destination": {"attachment": "pb-uat", "base_port": 6000, "host": "localhost",
                         "dataset": TABLE, "identity": "abc"} | where,
         "reload_targets": [],
     }  # fmt: skip

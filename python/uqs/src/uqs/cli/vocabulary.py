@@ -22,7 +22,7 @@ the option changes; `--last` takes seconds too, and `job new`'s timespans
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Annotated
+from typing import Annotated, Any
 
 import typer
 
@@ -126,6 +126,17 @@ TERMS = (
     Term("the kdb+ version", "--q-version", "str", retired=("--q-target",)),
     Term("how many records to show", "--limit", "int", retired=("--sample",)),
     Term("how many lines of a log to show", "--lines", "int"),
+    Term("the lowest log level shown", "--level", "choice", retired=("--min-level",)),
+    # a stack is named by its base port, a process by its own port: `--port`
+    # never means a base port (#1729), on the CLI or uqs-mcp (#2120)
+    Term("the stack's base port, KDBBASEPORT", "--base-port", "int"),
+    Term("one process's port", "--port", "int"),
+    Term(
+        "the variable holding a q login's password",
+        "--password-env",
+        "str",
+        retired=("--passwd",),
+    ),  # fmt: skip
     Term(
         "the most rows one message carries", "--max-message-rows", "int", retired=("--max-rows",)
     ),  # fmt: skip
@@ -145,3 +156,29 @@ EveryOpt = Annotated[
         show_default=False,
     ),
 ]
+
+
+def identifier(name: str) -> str:
+    """A term's name as an identifier names it: `--base-port` -> base_port,
+    `PROC` -> proc. uqs-mcp's tool parameters are spelled so (#2120)."""
+    return name.removeprefix("--").replace("-", "_").lower()
+
+
+#: A positional's metavar that is a name: PROC, CONNECTOR - not FIELD=VALUE.
+_NAMED = re.compile(r"[A-Z][A-Z0-9_-]*")
+
+
+def spelling(param: Any) -> str:  # a click Parameter (typer vendors its own click)
+    """How a CLI parameter is spelled on a surface that names it with an
+    identifier - uqs-mcp's tools (#2120): an option by its long name
+    (`--base-port` -> base_port), a positional by its metavar (`PROC` -> proc,
+    and many of them, `PROC...`, -> procs), else by its own name
+    (`FIELD=VALUE...` -> pairs)."""
+    if param.param_type_name == "option":
+        return identifier(next(o for o in param.opts + param.secondary_opts if o.startswith("--")))
+    metavar = (param.metavar or "").strip("[]{}")
+    many = metavar.endswith("...")
+    metavar = metavar.removesuffix("...")
+    if not _NAMED.fullmatch(metavar):
+        return str(param.name)
+    return identifier(metavar) + ("s" if many else "")
