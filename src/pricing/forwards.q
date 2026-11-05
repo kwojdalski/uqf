@@ -122,6 +122,9 @@
     if[not dates~asc dates; '"forward_at_date: curve must be sorted by value_date"];
     }
 
+/ forward_at_date's options and their defaults.
+.qf.px.forward_at_date_defaults:(enlist `extrapolation)!enlist `none
+
 / The forward for a value date between curve nodes, by linear interpolation
 / of forward points in actual days.
 / .
@@ -133,15 +136,15 @@
 / @param value_date the date to price
 / @param pip_factor 10000 for most pairs, 100 for JPY quotes
 / @param opts (::) for the defaults, or a dict with `extrapolation, one of
-/   `none`flat`linear (default `none)
+/   `none`flat`linear (default `none); an unknown key is refused
 / @return dict value_date, points, outright, lower, upper (the bracketing
 /   node dates), lower_weight, upper_weight, extrapolated
-/ @throws error for a malformed curve, a duplicate date, or a date outside
-/   the curve under the `none policy
+/ @throws error for a malformed curve, a duplicate date, an unknown option,
+/   or a date outside the curve under the `none policy
 / @eg (.qf.px.forward_at_date[1.10;([] value_date:2026.10.01 2026.10.11; forward_points:10 30f);2026.10.06;10000;::])`outright  -> 1.102
 .qf.px.forward_at_date:{[spot;curve;value_date;pip_factor;opts]
     .qf.px.require_curve curve;
-    policy:$[99h=type opts; $[`extrapolation in key opts; opts`extrapolation; `none]; `none];
+    policy:(.qf.util.resolve_opts[`forward_at_date;opts;.qf.px.forward_at_date_defaults])`extrapolation;
     if[not policy in .qf.px.extrapolations;
         '"forward_at_date: extrapolation must be one of ",(", " sv string .qf.px.extrapolations),", got ",string policy];
     dates:curve`value_date;
@@ -225,6 +228,9 @@
     undiscounted:per_unit*notional;
     undiscounted*df}
 
+/ swap_value's options and their defaults.
+.qf.px.swap_value_defaults:(enlist `bump_pips)!enlist 1
+
 / Value an FX swap: each leg's PV, the total, the market and contracted swap
 / points, and each leg's sensitivity to its forward.
 / .
@@ -236,22 +242,21 @@
 / @param market dict near_fwd, far_fwd (mark outrights for the two dates)
 /   and near_df, far_df (quote-currency discount factors to them)
 / @param valuation_date the date the swap is valued on
-/ @param opts dict pip_factor (required), bump_pips (default 1)
+/ @param pip_factor 10000 for most pairs, 100 for JPY quotes
+/ @param opts (::) for the defaults, or a dict with bump_pips (default 1); an
+/   unknown key is refused
 / @return dict near_pv, far_pv, pv (quote currency), market_points,
 /   contract_points (pips), settled (legs), near_pv01, far_pv01 (PV change
 /   for bump_pips on that leg's mark)
-/ @throws error naming malformed terms, market data or opts
-/ @eg (.qf.px.swap_value[.qf.px.mock_swap;.qf.px.mock_swap_market;2026.09.18;enlist[`pip_factor]!enlist 10000])`pv  -> -1976.08
-.qf.px.swap_value:{[swap;market;valuation_date;opts]
+/ @throws error naming malformed terms, market data or an unknown option
+/ @eg (.qf.px.swap_value[.qf.px.mock_swap;.qf.px.mock_swap_market;2026.09.18;10000;::])`pv  -> -1976.08
+.qf.px.swap_value:{[swap;market;valuation_date;pip_factor;opts]
     .qf.px.require_swap swap;
     need:`near_fwd`far_fwd`near_df`far_df;
     if[not 99h=type market; '"swap_value: market must be a dictionary of ",", " sv string need];
     if[count missing:need where not need in key market;
         '"swap_value: market is missing ",", " sv string missing];
-    if[not 99h=type opts; '"swap_value: opts must be a dictionary carrying pip_factor"];
-    if[not `pip_factor in key opts; '"swap_value: opts must carry pip_factor - 10000, or 100 for a JPY quote"];
-    pip_factor:opts`pip_factor;
-    bump:$[`bump_pips in key opts; opts`bump_pips; 1];
+    bump:(.qf.util.resolve_opts[`swap_value;opts;.qf.px.swap_value_defaults])`bump_pips;
     notional:`float$swap`notional;
     near_side:swap`near_side;
     far_side:neg near_side;
@@ -290,14 +295,14 @@
 / @param quotes table with sym and the columns above
 / @param target_conventions dict source pair -> target pair: itself, or its
 /   inverse (legs swapped)
-/ @param opts dict pip_factors (pair -> pip factor) - required when the table
-/   carries fwd_points, for every source and target pair; (::) otherwise
+/ @param pip_factors dict pair -> pip factor, for every source and target pair
+/   when the table carries fwd_points; (::) when it does not
 / @return the table in target conventions, with source_sym and inverted
 / @throws error for a sym with no target, a target that is neither the pair
 /   nor its inverse, half a size pair, points without spot, a mid column on
 /   an inverted row, or a missing pip factor
 / @eg raze value exec bid,ask from .qf.px.convert_quotes[([] sym:enlist `EURUSD; bid:enlist 2f; ask:enlist 2.5);(enlist `EURUSD)!enlist `USDEUR;::]  -> 0.4 0.5
-.qf.px.convert_quotes:{[quotes;target_conventions;opts]
+.qf.px.convert_quotes:{[quotes;target_conventions;pip_factors]
     if[not 98h=type quotes; '"convert_quotes: quotes must be an unkeyed table with a sym column"];
     if[not `sym in cols quotes; '"convert_quotes: quotes must have a sym column"];
     if[not 99h=type target_conventions; '"convert_quotes: target_conventions must be a dictionary of source pair -> target pair"];
@@ -311,9 +316,8 @@
     flips:{[s;t] $[s=t; 0b; t=.qf.px.inverse_pair[s]; 1b;
         '"convert_quotes: ",string[t]," is neither ",string[s]," nor its inverse"]}'[srcs;targets];
     if[`fwd_points in c;
-        if[not 99h=type opts; '"convert_quotes: fwd_points need opts`pip_factors - pip factor per pair"];
-        if[not `pip_factors in key opts; '"convert_quotes: fwd_points need opts`pip_factors - pip factor per pair"];
-        pf:opts`pip_factors;
+        if[not 99h=type pip_factors; '"convert_quotes: fwd_points need pip_factors - a dict of pip factor per pair"];
+        pf:pip_factors;
         if[count gone:(distinct srcs,targets) where not (distinct srcs,targets) in key pf;
             '"convert_quotes: no pip factor for ",", " sv string gone]];
     if[(`mid in c) and any flips;

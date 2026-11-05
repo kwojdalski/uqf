@@ -673,9 +673,9 @@
     .qunit.assertThrows[.qf.mkt.stream_init[;::];`vpin;"stream_init: unknown metric(s) vpin*";"vpin is not streamed"];
     .qunit.assertThrows[.qf.mkt.stream_init[`ofi;];(enlist `window_mode)!enlist `time;"stream: window_mode must be `count*";"no time window yet"]};
 
-.qt.qf.mkt.microstructure.test_stream_refuses_a_config_that_is_not_a_dictionary:{[t]
+.qt.qf.mkt.microstructure.test_stream_refuses_opts_that_are_not_a_dictionary:{[t]
     / Each of these used to run on the default 20-row window (#804).
-    msg:"stream: config must be (::) for the defaults, or a dictionary*";
+    msg:"stream: opts must be (::) for the defaults, or a dictionary of*";
     / `window!enlist 5 is ENUMERATION (type 20), the case #804 found. KDB-X
     / refuses it with the message above; PeachQ throws 'window first, the
     / moment the value is used (its enumeration domain names no variable).
@@ -687,6 +687,10 @@
     .qunit.assertThrows[.qf.mkt.stream_init[`ofi;];5;msg;"a bare window"];
     .qunit.assertThrows[.qf.mkt.stream_init[`ofi;];`windw;msg;"a symbol"];
     .qunit.assertEquals[(.qf.mkt.stream_init[`ofi;::])[`config;`window];20;"(::) still gives the defaults"]};
+
+.qt.qf.mkt.microstructure.test_stream_refuses_an_unknown_option:{[t]
+    .qunit.assertThrows[.qf.mkt.stream_init[`ofi;];(enlist `windw)!enlist 5;
+        "stream: unknown option(s) windw - known: window, window_mode, late";"a misspelt window is refused, not run on 20 rows"]};
 
 .qt.qf.mkt.microstructure.test_stream_snapshot_reports_each_sym:{[t]
     q:.qt.qf.mkt.microstructure.st_quotes[];
