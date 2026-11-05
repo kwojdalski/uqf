@@ -12,15 +12,16 @@ import re
 from pathlib import Path
 from typing import Any
 
+import deploy_support as capture
 import pytest
 from test_deploy import _HEALTHY, SERVER, FakeRemote, _args, _artifact, _done, _verified, parse_args
 
-from uqs.deploy import driver, history, targets
+from uqs.deploy import history, targets
 from uqs.deploy.config import DeployError, make_config
 
 GOLDEN = Path(__file__).parent / "golden" / "source_only_push.txt"
 VERIFIED = {"uqs deploy verify --profile": _verified(True)}
-BASE: dict[str, Any] = {"artifact": "x", "host": "h", "dest": "/srv/uqf", "profile": "essential"}
+BASE: dict[str, Any] = {"artifact": "x", "ssh": "h", "dest": "/srv/uqf", "profile": "essential"}
 
 
 def _push(tmp_path: Path, *extra: str, facts: str = "") -> tuple[FakeRemote, dict]:
@@ -31,7 +32,7 @@ def _push(tmp_path: Path, *extra: str, facts: str = "") -> tuple[FakeRemote, dic
     remote = FakeRemote(rules)
     out = io.StringIO()
     cfg = parse_args(_args(_artifact(tmp_path), "--torq-home", "/opt/torq", *extra))
-    assert driver.deploy(cfg, remote, out=out) == 0
+    assert capture.deploy(cfg, remote, out=out) == 0
     return remote, json.loads(out.getvalue())
 
 
@@ -90,7 +91,7 @@ def test_every_component_defaults_to_existing():
 @pytest.mark.parametrize("component", ["q", "torq"])
 def test_bundled_needs_its_runtime(component):
     with pytest.raises(DeployError, match=f"{component}_mode is bundled, and needs "
-                       f"{component}_runtime"):  # fmt: skip
+                       f"{component}_component"):  # fmt: skip
         make_config(**BASE, **{f"{component}_mode": "bundled"})
 
 
@@ -102,7 +103,7 @@ def test_a_mode_that_is_not_one_is_refused():
 @pytest.mark.parametrize(
     ("component", "fields", "named"),
     [
-        ("q", {"qcmd": "/opt/kx/bin/q"}, "qcmd - existing mode's - is set"),
+        ("q", {"q_cmd": "/opt/kx/bin/q"}, "q_cmd - existing mode's - is set"),
         ("torq", {"torq_home": "/opt/torq", "torq_launcher": "/opt/t.sh"},
          "torq_home, torq_launcher - existing mode's - are set"),
     ],
@@ -118,7 +119,7 @@ def test_the_cli_takes_each_mode():
                       "--torq-mode", "existing", "--python-mode", "bundled",
                       "--python-component", "dist/py.tar.gz"])  # fmt: skip
     assert (cfg.torq_mode, cfg.python_mode) == ("existing", "bundled")
-    assert cfg.python_runtime == "dist/py.tar.gz"
+    assert cfg.python_component == "dist/py.tar.gz"
 
 
 # --- layering: a switch drops the old mode's fields -----------------------------
@@ -162,34 +163,34 @@ def root(tmp_path, monkeypatch):
 
 def test_a_mode_is_layered_like_any_key(root):
     (cfg,) = targets.configs("restated", "x", {}, False, root)
-    assert (cfg.q_mode, cfg.qcmd, cfg.qhome) == ("existing", "/opt/kx/bin/q", "/opt/kx")
+    assert (cfg.q_mode, cfg.q_cmd, cfg.q_home) == ("existing", "/opt/kx/bin/q", "/opt/kx")
     assert cfg.sources["q_mode"] == "target restated"
-    assert cfg.sources["qcmd"] == "defaults"
+    assert cfg.sources["q_cmd"] == "defaults"
 
 
 def test_switching_drops_the_old_fields_and_keeps_every_other(root):
-    """[defaults]' qcmd and qhome are existing mode's: the target that switches
+    """[defaults]' q_cmd and q_home are existing mode's: the target that switches
     q to bundled does not inherit them - its q table is replaced whole."""
     (cfg,) = targets.configs("switched", "x", {}, False, root)
-    assert (cfg.q_mode, cfg.qcmd, cfg.qhome) == ("bundled", None, None)
-    assert "qcmd" not in cfg.sources and "qhome" not in cfg.sources
+    assert (cfg.q_mode, cfg.q_cmd, cfg.q_home) == ("bundled", None, None)
+    assert "q_cmd" not in cfg.sources and "q_home" not in cfg.sources
     assert cfg.torq_home == "/opt/torq"  # another component's: untouched
     # a flag switching back is a switch too, and drops nothing it does not own
     (cfg,) = targets.configs("switched", "x", {"q_mode": "existing"}, False, root)
-    assert (cfg.q_mode, cfg.qcmd, cfg.q_runtime) == ("existing", None, None)
+    assert (cfg.q_mode, cfg.q_cmd, cfg.q_component) == ("existing", None, None)
 
 
 def test_a_flag_switching_a_mode_drops_the_targets_fields(root):
-    """The flag drops [defaults]' qcmd and qhome, so the refusal is bundled's own."""
-    with pytest.raises(DeployError, match="q_mode is bundled, and needs q_runtime"):
+    """The flag drops [defaults]' q_cmd and q_home, so the refusal is bundled's own."""
+    with pytest.raises(DeployError, match="q_mode is bundled, and needs q_component"):
         targets.configs("kx", "x", {"q_mode": "bundled"}, False, root)
-    flags = {"q_mode": "bundled", "q_runtime": "dist/q-runtime.tar.gz"}
+    flags = {"q_mode": "bundled", "q_component": "dist/q-runtime.tar.gz"}
     (cfg,) = targets.configs("kx", "x", flags, False, root)
-    assert (cfg.qcmd, cfg.qhome, cfg.q_runtime) == (None, None, "dist/q-runtime.tar.gz")
+    assert (cfg.q_cmd, cfg.q_home, cfg.q_component) == (None, None, "dist/q-runtime.tar.gz")
 
 
 def test_a_field_set_beside_the_switch_is_refused(root):
-    with pytest.raises(DeployError, match="q_mode is bundled, but qcmd"):
+    with pytest.raises(DeployError, match="q_mode is bundled, but q_cmd"):
         targets.configs("both", "x", {}, False, root)
 
 
@@ -220,7 +221,7 @@ def test_the_history_records_the_components(tmp_path, monkeypatch):
     rules["uv python find"] = _done(SERVER + "qversion=5.0\ndata=present\n")
     cfg = parse_args(_args(_artifact(tmp_path), "--torq-home", "/opt/torq"))
     out = io.StringIO()
-    driver.deploy(
+    capture.deploy(
         cfg, FakeRemote(rules), out=out, on_report=lambda r: history.record(tmp_path, cfg, r)
     )
     (entry,) = history.read(tmp_path)
@@ -232,7 +233,7 @@ def test_the_dry_run_shows_the_components(tmp_path):
     rules = {"uv python find": _done(SERVER + "qversion=5.0\ndata=present\n")}
     out = io.StringIO()
     cfg = parse_args(_args(_artifact(tmp_path), "--torq-home", "/opt/torq", "--dry-run"))
-    assert driver.deploy(cfg, FakeRemote(rules), out=out) == 0
+    assert capture.deploy(cfg, FakeRemote(rules), out=out) == 0
     shown = out.getvalue()
     assert "COMPONENTS - what the release runs on:" in shown
     assert "q      existing (default): /opt/kx home/bin/q, version 5.0" in shown

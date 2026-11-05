@@ -9,13 +9,14 @@ import json
 import subprocess
 from pathlib import Path
 
+import deploy_support as capture
 import pytest
 from typer.main import get_group
 
 from uqs.cli import deploy_policy
 from uqs.cli.deploy import deploy_app
 from uqs.cli.deploy_connection import config_options
-from uqs.deploy import artifact, driver, payload, verify
+from uqs.deploy import artifact, payload, verify
 from uqs.deploy import build as release_build
 from uqs.deploy.config import Config, DeployError, make_config
 from uqs.deploy.selection import Selection, verify_command
@@ -144,7 +145,7 @@ def _deploy(tmp_path, *args, rules=None, bundles=BUNDLES):
     remote = FakeRemote(merged)
     out = io.StringIO()
     cfg = parse_args([str(_artifact(tmp_path, bundles)), *ARGS, *args])
-    code = driver.deploy(cfg, remote, out=out)
+    code = capture.deploy(cfg, remote, out=out)
     return code, remote, out.getvalue()
 
 

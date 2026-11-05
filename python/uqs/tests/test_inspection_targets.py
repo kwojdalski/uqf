@@ -87,9 +87,9 @@ def test_target_list_shows_the_column_only_when_a_target_is_inspection_only(decl
 def test_a_server_is_matched_by_its_ssh_and_dest_as_well_as_its_name(declared):
     found = targets.read(declared.parent)
     assert inspection.matching(found, name="prod") == "prod"
-    assert inspection.matching(found, host="deploy@prod", dest="/srv/uqf/") == "prod"
-    assert inspection.matching(found, host="deploy@prod", dest="/srv/other") is None
-    assert inspection.matching(found, name="uat", host="deploy@uat", dest="/srv/uqf-uat") is None
+    assert inspection.matching(found, ssh="deploy@prod", dest="/srv/uqf/") == "prod"
+    assert inspection.matching(found, ssh="deploy@prod", dest="/srv/other") is None
+    assert inspection.matching(found, name="uat", ssh="deploy@uat", dest="/srv/uqf-uat") is None
 
 
 # --- the same server under another name or spelling (#2068, #2074) ---------------------
@@ -122,7 +122,7 @@ profile = "essential"
 )
 def test_the_same_server_spelled_another_way_is_matched(declared, host, dest):
     found = targets.read(declared.parent)
-    assert inspection.matching(found, host=host, dest=dest) == "prod"
+    assert inspection.matching(found, ssh=host, dest=dest) == "prod"
 
 
 @pytest.mark.parametrize(
@@ -137,18 +137,18 @@ def test_the_same_server_spelled_another_way_is_matched(declared, host, dest):
 )
 def test_an_unrelated_server_is_not_matched(declared, host, dest):
     found = targets.read(declared.parent)
-    assert inspection.matching(found, host=host, dest=dest) is None
+    assert inspection.matching(found, ssh=host, dest=dest) is None
 
 
 def test_qualified_names_and_addresses_match_only_themselves():
-    on = {"prod": {"host": "deploy@prod.eu.example", "dest": "/srv/uqf", "inspection": True}}
-    assert inspection.matching(on, host="prod.us.example", dest="/srv/uqf") is None
-    assert inspection.matching(on, host="PROD.EU.EXAMPLE", dest="/srv/uqf") == "prod"
-    assert inspection.matching(on, host="prod", dest="/srv/uqf") == "prod"
-    ip = {"prod": {"host": "deploy@10.0.0.1", "dest": "/srv/uqf", "inspection": True}}
-    assert inspection.matching(ip, host="10.0.0.2", dest="/srv/uqf") is None
-    assert inspection.matching(ip, host="10", dest="/srv/uqf") is None
-    assert inspection.matching(ip, host="root@10.0.0.1", dest="/srv/uqf") == "prod"
+    on = {"prod": {"ssh": "deploy@prod.eu.example", "dest": "/srv/uqf", "inspection": True}}
+    assert inspection.matching(on, ssh="prod.us.example", dest="/srv/uqf") is None
+    assert inspection.matching(on, ssh="PROD.EU.EXAMPLE", dest="/srv/uqf") == "prod"
+    assert inspection.matching(on, ssh="prod", dest="/srv/uqf") == "prod"
+    ip = {"prod": {"ssh": "deploy@10.0.0.1", "dest": "/srv/uqf", "inspection": True}}
+    assert inspection.matching(ip, ssh="10.0.0.2", dest="/srv/uqf") is None
+    assert inspection.matching(ip, ssh="10", dest="/srv/uqf") is None
+    assert inspection.matching(ip, ssh="root@10.0.0.1", dest="/srv/uqf") == "prod"
 
 
 def test_another_target_at_the_same_server_is_matched_by_its_name(declared):
@@ -296,11 +296,11 @@ def test_rollback_and_prune_of_an_inspection_target_are_refused(
 
 def test_refuse_deploy_lets_a_dry_run_through(declared):
     inspection.refuse_deploy(
-        declared.parent, "x", name="prod", host="deploy@prod", dest="/srv/uqf", dry_run=True
+        declared.parent, "x", name="prod", ssh="deploy@prod", dest="/srv/uqf", dry_run=True
     )
     with pytest.raises(DeployError, match="inspection mode"):
         inspection.refuse_deploy(
-            declared.parent, "x", name="prod", host="deploy@prod", dest="/srv/uqf", dry_run=False
+            declared.parent, "x", name="prod", ssh="deploy@prod", dest="/srv/uqf", dry_run=False
         )
 
 
