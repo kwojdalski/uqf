@@ -31,6 +31,7 @@ from uqs.stack import (
 )
 from uqs.stack import procs as stack_procs
 from uqs.stack import render as stack_render
+from uqs.stack.compression import write_compression_config
 from uqs.stack.dqe import write_dqe_config
 from uqs.stack.env import build_env, interpreter_env, with_interpreter
 from uqs.stack.hdb_fill import fill_hdb_partitions
@@ -76,6 +77,10 @@ def bootstrap(
         # And housekeeping1's rules, which keep tickerplant logs replayable
         # rather than the site's, which tar them (stack/housekeeping.py, #2155).
         write_housekeeping_config(paths)
+
+    # TorQ's .cmp policy, copied beside the rest of the generated files for
+    # scripts/processes/uqs_compression_config.q to point it at (stack/compression.py).
+    write_compression_config(paths)
 
     # Make the HDB rectangular, now that database.q says what it should
     # hold. A partitioned kdb+ database needs every table in every
