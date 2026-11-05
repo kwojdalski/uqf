@@ -11,7 +11,6 @@ the server's own programs (as test_deploy_prune.py's are).
 
 from __future__ import annotations
 
-import io
 import json
 import os
 import shutil
@@ -54,7 +53,7 @@ def _runtime(tmp_path: Path, name: str, torq_q: str = "/ TorQ core\n") -> torq_r
 
 
 def _dep(dest: Path, remote: LocalRemote | None = None) -> Deployment:
-    cfg = make_config(artifact="", host="uqf-server", dest=str(dest), profile="essential")
+    cfg = make_config(artifact="", ssh="uqf-server", dest=str(dest), profile="essential")
     return Deployment(cfg, remote or LocalRemote())
 
 
@@ -237,9 +236,8 @@ def test_prune_keeps_every_runtime_a_remaining_release_names(server, keep):
     """R1 goes, and with it C, which only it named, and D, which none did. A
     stays for R2, the rollback target; B for R3, current."""
     dest, rts, _ = server
-    out = io.StringIO()
-    assert prune.prune(_dep(dest).cfg, LocalRemote(), keep=keep, out=out) == 0
-    result = json.loads(out.getvalue())
+    code, result = prune.prune(_dep(dest).cfg, LocalRemote(), keep=keep)
+    assert code == 0
     assert result["removed"] == [R1]
     assert sorted(result["runtimes"]["removed"]) == sorted([_id(rts["C"]), _id(rts["D"])])
     kept = {k["runtime"]: k["why"] for k in result["runtimes"]["kept"]}
@@ -250,9 +248,8 @@ def test_prune_keeps_every_runtime_a_remaining_release_names(server, keep):
 
 def test_a_prune_dry_run_removes_no_runtime(server):
     dest, rts, _ = server
-    out = io.StringIO()
-    prune.prune(_dep(dest).cfg, LocalRemote(), keep=0, dry_run=True, out=out)
-    assert _id(rts["D"]) in json.loads(out.getvalue())["runtimes"]["removed"]
+    _, result = prune.prune(_dep(dest).cfg, LocalRemote(), keep=0, dry_run=True)
+    assert _id(rts["D"]) in result["runtimes"]["removed"]
     assert _runtimes(dest) == {rt.sha256 for rt in rts.values()} | {"notes"}
 
 
@@ -260,8 +257,7 @@ def test_rollback_runs_the_target_on_its_own_runtime(server):
     """current (R3, on B) stops on B; R2 starts and verifies on A - each from
     its own deploy.env, whatever runtime the other names."""
     dest, rts, log = server
-    out = io.StringIO()
-    assert rollback.rollback(_dep(dest).cfg, LocalRemote(), out=out) == 0
+    assert rollback.rollback(_dep(dest).cfg, LocalRemote())[0] == 0
     a, b = (f"{rts[n].directory(str(dest))}/torq" for n in "AB")
     assert log.read_text().splitlines() == [f"{R3} stop {b}", f"{R2} start {a}", f"{R2} deploy {a}"]
     assert os.readlink(dest / "current") == f"releases/{R2}"

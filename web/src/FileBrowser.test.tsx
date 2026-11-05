@@ -39,7 +39,7 @@ function entry(over: Partial<RemoteEntry>): RemoteEntry {
     name: "x",
     kind: "file",
     size: null,
-    mtime: 0,
+    mtime: "1970-01-01T00:00:00.000000000Z",
     blocked: false,
     reason: null,
     ...over,

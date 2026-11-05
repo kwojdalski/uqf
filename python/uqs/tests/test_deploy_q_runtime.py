@@ -17,17 +17,18 @@ import tarfile
 from pathlib import Path
 from typing import Any
 
+import deploy_support as capture
 import pytest
 from test_deploy import _HEALTHY, FakeRemote, _done, _verified, parse_args
 
-from uqs.deploy import artifact, driver, q_runtime, targets, torq_runtime
+from uqs.deploy import artifact, q_runtime, targets, torq_runtime
 from uqs.deploy import build as release_build
 from uqs.deploy.artifact import ReleaseError
 from uqs.deploy.config import DeployError, make_config
 
 ROOT = Path(__file__).resolve().parents[3]
 
-BASE: dict[str, Any] = {"artifact": "x", "host": "h", "dest": "/srv/uqf", "profile": "capture"}
+BASE: dict[str, Any] = {"artifact": "x", "ssh": "h", "dest": "/srv/uqf", "profile": "capture"}
 COMMIT = "a872e258f59ae218c8c516485d7d49607e6386ec"
 
 
@@ -215,19 +216,19 @@ def test_a_torq_runtime_is_not_a_q_runtime(tmp_path):
 
 
 def test_bundled_q_needs_a_runtime():
-    with pytest.raises(DeployError, match="q_mode is bundled, and needs q_runtime"):
+    with pytest.raises(DeployError, match="q_mode is bundled, and needs q_component"):
         make_config(**BASE, q_mode="bundled")
 
 
-@pytest.mark.parametrize("field", ["qcmd", "qhome"])
+@pytest.mark.parametrize("field", ["q_cmd", "q_home"])
 def test_an_existing_q_field_beside_bundled_is_refused(field):
     with pytest.raises(DeployError, match=f"q_mode is bundled, but {field} - existing mode's"):
-        make_config(**BASE, q_mode="bundled", q_runtime="q.tar.gz", **{field: "/opt/kx"})
+        make_config(**BASE, q_mode="bundled", q_component="q.tar.gz", **{field: "/opt/kx"})
 
 
 def test_a_q_runtime_without_bundled_is_refused():
-    with pytest.raises(DeployError, match="q_mode is existing, but q_runtime - bundled"):
-        make_config(**BASE, q_runtime="q.tar.gz")
+    with pytest.raises(DeployError, match="q_mode is existing, but q_component - bundled"):
+        make_config(**BASE, q_component="q.tar.gz")
 
 
 LAYERED = """
@@ -256,17 +257,17 @@ q_cmd = "/opt/kx5/bin/q"
 
 
 def test_a_layer_switching_q_replaces_its_whole_table(tmp_path, monkeypatch):
-    """[environments.uat] switches q to bundled: [defaults]' qcmd and qhome
+    """[environments.uat] switches q to bundled: [defaults]' q_cmd and q_home
     go; [targets.kx] switches back: uat's runtime and its pin go, and only
     what kx itself sets of existing mode is there."""
     monkeypatch.delenv(targets.DECLARATION_ENV, raising=False)
     (tmp_path / targets.DECLARATION).write_text(LAYERED.format(pin="ab" * 32))
     (a,) = targets.configs("a", "x", {}, False, tmp_path)
-    assert (a.q_mode, a.qcmd, a.qhome) == ("bundled", None, None)
-    assert (a.q_runtime, a.q_runtime_sha256) == ("dist/q-runtime.tar.gz", "ab" * 32)
-    assert a.sources["q_runtime"] == "environment uat"
+    assert (a.q_mode, a.q_cmd, a.q_home) == ("bundled", None, None)
+    assert (a.q_component, a.q_component_sha256) == ("dist/q-runtime.tar.gz", "ab" * 32)
+    assert a.sources["q_component"] == "environment uat"
     (kx,) = targets.configs("kx", "x", {}, False, tmp_path)
-    assert (kx.q_mode, kx.qcmd, kx.qhome, kx.q_runtime, kx.q_runtime_sha256) == (
+    assert (kx.q_mode, kx.q_cmd, kx.q_home, kx.q_component, kx.q_component_sha256) == (
         "existing", "/opt/kx5/bin/q", None, None, None)  # fmt: skip
 
 
@@ -315,7 +316,7 @@ def push(tmp_path: Path, rt: q_runtime.QRuntime, *extra: str, state: dict | None
     argv = [str(pkg), "--ssh", "uqf-server", "--dest", "/opt/uqf", "--profile", "capture",
             "--torq-home", "/opt/torq", "--q-mode", "bundled",
             "--q-component", str(rt.path)]  # fmt: skip
-    code = driver.deploy(parse_args([*argv, *extra]), remote, out=out)
+    code = capture.deploy(parse_args([*argv, *extra]), remote, out=out)
     return code, remote, out.getvalue()
 
 
@@ -416,7 +417,7 @@ def test_an_unpinned_q_runtime_is_refused_without_allow_unpinned(tmp_path):
     rt = runtime(tmp_path)
     Path(f"{rt.path}.sha256").unlink()
     with pytest.raises(
-        DeployError, match="no q_runtime_sha256 pins it - pass --override allow-unpinned"
+        DeployError, match="no q_component_sha256 pins it - pass --override allow-unpinned"
     ):
         push(tmp_path, rt)
     code, _, out = push(
@@ -440,9 +441,9 @@ def test_a_q_runtime_that_is_not_the_pinned_one_needs_accept_digest(tmp_path):
 
 
 def test_allow_unpinned_may_relax_the_q_runtime_when_the_release_is_pinned():
-    cfg = make_config(**BASE, q_mode="bundled", q_runtime="q.tar.gz",
+    cfg = make_config(**BASE, q_mode="bundled", q_component="q.tar.gz",
                       expected_sha256="ab" * 32, allow_unpinned="dev PeachQ")  # fmt: skip
     assert cfg.allow_unpinned == "dev PeachQ"
     with pytest.raises(DeployError, match="nothing for it to relax"):
-        make_config(**BASE, q_mode="bundled", q_runtime="q.tar.gz", expected_sha256="ab" * 32,
-                    q_runtime_sha256="cd" * 32, allow_unpinned="dev PeachQ")  # fmt: skip
+        make_config(**BASE, q_mode="bundled", q_component="q.tar.gz", expected_sha256="ab" * 32,
+                    q_component_sha256="cd" * 32, allow_unpinned="dev PeachQ")  # fmt: skip

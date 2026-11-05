@@ -35,7 +35,7 @@ from uqf_frontend.procfile import DeclaredProcess
 class ProcessHealth:
     """One declared process, and what probing it found."""
 
-    procname: str
+    process: str
     proctype: str
     group: str
     host: str
@@ -45,7 +45,7 @@ class ProcessHealth:
     up: bool
     pid: int | None = None
     reported_port: int | None = None
-    reported_procname: str | None = None
+    reported_process: str | None = None
     error: str | None = None
     #: Set when the process that answered is not the one declared on that
     #: port - a stale process squatting a port, which looks healthy to any
@@ -69,7 +69,7 @@ def check(fleet: Fleet, declared: list[DeclaredProcess]) -> list[ProcessHealth]:
         if proc.port is None:
             out.append(
                 ProcessHealth(
-                    procname=proc.procname,
+                    process=proc.procname,
                     proctype=proc.proctype,
                     group=proc.group,
                     host=proc.host,
@@ -86,7 +86,7 @@ def check(fleet: Fleet, declared: list[DeclaredProcess]) -> list[ProcessHealth]:
         if not result.ok:
             out.append(
                 ProcessHealth(
-                    procname=proc.procname,
+                    process=proc.procname,
                     proctype=proc.proctype,
                     group=proc.group,
                     host=proc.host,
@@ -109,7 +109,7 @@ def check(fleet: Fleet, declared: list[DeclaredProcess]) -> list[ProcessHealth]:
 
         out.append(
             ProcessHealth(
-                procname=proc.procname,
+                process=proc.procname,
                 proctype=proc.proctype,
                 group=proc.group,
                 host=proc.host,
@@ -118,7 +118,7 @@ def check(fleet: Fleet, declared: list[DeclaredProcess]) -> list[ProcessHealth]:
                 up=True,
                 pid=_int(row.get("pid")),
                 reported_port=_int(row.get("port")),
-                reported_procname=reported,
+                reported_process=reported,
                 identity_mismatch=mismatch,
             )
         )

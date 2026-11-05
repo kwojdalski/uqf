@@ -909,6 +909,17 @@ qetl.transform,require_verified,function,1,name
 qetl.transform,required_keys,value,,
 qetl.transform,verify,function,1,name
 qetl.transform,verify_all,function,1,
+qetl.twin,calculation,function,2,twin_transform live
+qetl.twin,check,function,3,worker cfg live
+qetl.twin,check_live,function,2,job decl
+qetl.twin,check_worker,function,2,worker cfg
+qetl.twin,contract_problems,function,2,dataset transform
+qetl.twin,promises,value,,
+qetl.twin,report,function,1,
+qetl.twin,require_declared,function,2,worker decl
+qetl.twin,require_resolved,function,1,
+qetl.twin,unestablished,value,,
+qetl.twin,unresolved,function,1,
 qetl.uptime,attach,function,1,
 qetl.uptime,beat,function,1,
 qetl.uptime,begin,function,1,job

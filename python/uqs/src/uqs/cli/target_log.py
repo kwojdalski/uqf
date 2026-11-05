@@ -29,7 +29,7 @@ from uqs.cli.shared import (
     console,
 )
 from uqs.cli.target import DryRun, _change, _command, target_app
-from uqs.deploy import target_changelog, target_changes, targets
+from uqs.deploy import target_changelog, target_changes, target_keys, targets
 from uqs.deploy.config import DeployError
 from uqs.paths import UqsError, repo_root
 
@@ -39,11 +39,10 @@ LogJson = json_opt(
 )
 
 
-def _declared(root, name: str) -> bool:
-    try:
-        return name in targets.read(root)
-    except DeployError:
-        return False
+def _declared(root) -> dict[str, dict]:
+    """The declared targets; a file that does not load is refused as it is
+    everywhere, never taken for "no such target" (#2124)."""
+    return targets.read(root) if targets.declaration_path(root).is_file() else {}
 
 
 def _about(entry: dict, name: str) -> bool:
@@ -83,10 +82,16 @@ def log_(
         _die(UqsError(str(exc)))
         return
     found = [(n, e) for n, e in enumerate(entries, 1) if name is None or _about(e, name)]
-    if name is not None and not found and not _declared(root, name):
+    if name is not None and not found:
         # an unknown name is a refusal; a known target with no change, an empty log (#1885)
-        _die(UqsError(f"no target {name!r} - `uqs target list` names them, and no change names it"))
-        return
+        try:
+            declared = _declared(root)
+        except DeployError as exc:
+            _die(UqsError(str(exc)))
+            return
+        if name not in declared:
+            _die(target_keys.unknown_target(name, declared, targets.declaration_path(root)))
+            return
     changes: list[dict[str, Any]] = [
         {
             "number": n,

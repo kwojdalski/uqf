@@ -137,7 +137,7 @@ def runner_flags(
         "-owner",
         str(owner),
         "-readers",
-        ",".join(f"{r['procname']}@{host}:{r['port']}" for r in plan["reload_targets"]) or "_none_",
+        ",".join(f"{r['process']}@{host}:{r['port']}" for r in plan["reload_targets"]) or "_none_",
         "-user",
         user,
     ]
@@ -257,7 +257,7 @@ def _destination(plan: dict[str, Any]) -> dict[str, Any]:
     d = plan["destination"]
     return {
         "attachment": d["attachment"],
-        "stack_id": d["stack_id"],
+        "stack_id": d["base_port"],
         "host": d["host"],
         "hdb_dir": Path(d["hdb_dir"]),
         "dataset": d["dataset"],

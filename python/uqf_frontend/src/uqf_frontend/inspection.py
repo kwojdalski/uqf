@@ -122,7 +122,7 @@ def inspected_target(settings: Settings, target: str) -> tuple[str | None, str |
         return None, error
     declared = {
         str(t["name"]): {
-            "host": t.get("ssh"),
+            "ssh": t.get("ssh"),
             "dest": t.get("dest"),
             uqs_inspection.KEY: t.get("inspection") is True,
         }

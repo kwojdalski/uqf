@@ -26,12 +26,12 @@ log = get_logger()
 
 #: The flags that say where a server is and how to reach it, as
 #: make_config's parameter names.
-CONNECTION = ("host", "dest", "remote_user", "connect_timeout")
+CONNECTION = ("ssh", "dest", "remote_user", "connect_timeout")
 
 Target = target_arg(f"{TARGET_HELP}; for one neither knows, give --ssh and --dest", latest=True)
 #: `--ssh`, as `uqs target add` names it; `--host` until #1768, where every
 #: other command's --host is a q host. The old spelling parses for one release.
-Host = Annotated[
+Ssh = Annotated[
     str | None,
     typer.Option(
         "--ssh",
@@ -125,7 +125,7 @@ def server(ctx: typer.Context, target: str | None, **flags) -> dict:
     flags alone, which must then name the server. A flag left unset (None)
     is left out, so make_config's default applies."""
     if target is None:
-        absent = [target_keys.flag(k) for k in ("host", "dest") if flags[k] is None]
+        absent = [target_keys.flag(k) for k in ("ssh", "dest") if flags[k] is None]
         if absent:
             raise DeployError(
                 "arguments",
@@ -138,9 +138,9 @@ def server(ctx: typer.Context, target: str | None, **flags) -> dict:
     except UqsError as exc:  # an unknown name: a refusal (1), not a usage error (#1885)
         raise DeployError("target", str(exc)) from None
     out = targets.push_options(label, settings)
-    out.update(host=r.host, dest=r.dest, remote_user=r.remote_user)
+    out.update(ssh=r.host, dest=r.dest, remote_user=r.remote_user)
     out.update({k: v for k, v in flags.items() if on_command_line(ctx, k)})
-    log.info("target {}: {}:{}", r.name, out["host"], out["dest"])
+    log.info("target {}: {}:{}", r.name, out["ssh"], out["dest"])
     return out
 
 
@@ -183,10 +183,12 @@ Soak = Annotated[
 def config_options(params: dict) -> dict:
     """`deploy push`'s parameters as make_config takes them (#1857): `live`
     refuses a fixture (the option is `--fixture/--live`), a server path is
-    text, and `--register` is a choice about this machine, not the push."""
+    text, and `--register` and `--json` are choices about this machine, not
+    the push."""
     options = dict(params)
     options.pop("register", None)
+    options.pop("as_json", None)
     options["live"] = not options.pop("fixture")
-    for name in ("odbc_home", "qhome"):
+    for name in ("odbc_home", "q_home"):
         options[name] = None if options[name] is None else str(options[name])
     return options

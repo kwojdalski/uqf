@@ -19,16 +19,17 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
+import deploy_support as capture
 import pytest
 from test_deploy import SERVER, FakeRemote, _done, _verified, parse_args
 from test_deploy_q_runtime import release
 
-from uqs.deploy import artifact, driver, prune, python_runtime
+from uqs.deploy import artifact, prune, python_runtime
 from uqs.deploy import build as release_build
 from uqs.deploy.artifact import ReleaseError, glibc_floor
 from uqs.deploy.config import DeployError, make_config
 
-BASE: dict[str, Any] = {"artifact": "x", "host": "h", "dest": "/srv/uqf", "profile": "capture"}
+BASE: dict[str, Any] = {"artifact": "x", "ssh": "h", "dest": "/srv/uqf", "profile": "capture"}
 KEY = "cpython-3.14.9-linux-x86_64-gnu"
 
 
@@ -194,13 +195,13 @@ def test_a_release_carries_it_for_the_installer(tmp_path):
 
 
 def test_bundled_python_needs_a_runtime_and_pins_it_like_the_others():
-    # without python_runtime it may be the release's own (#1646): the push decides
-    assert make_config(**BASE, python_mode="bundled").python_runtime is None
-    with pytest.raises(DeployError, match="python_runtime - bundled mode's - is set"):
-        make_config(**BASE, python_runtime="py.tar.gz")
-    cfg = make_config(**BASE, python_mode="bundled", python_runtime="py.tar.gz",
-                      python_runtime_sha256="AB" * 32, accept_digest="rebuilt")  # fmt: skip
-    assert cfg.python_runtime_sha256 == "ab" * 32 and cfg.accept_digest == "rebuilt"
+    # without python_component it may be the release's own (#1646): the push decides
+    assert make_config(**BASE, python_mode="bundled").python_component is None
+    with pytest.raises(DeployError, match="python_component - bundled mode's - is set"):
+        make_config(**BASE, python_component="py.tar.gz")
+    cfg = make_config(**BASE, python_mode="bundled", python_component="py.tar.gz",
+                      python_component_sha256="AB" * 32, accept_digest="rebuilt")  # fmt: skip
+    assert cfg.python_component_sha256 == "ab" * 32 and cfg.accept_digest == "rebuilt"
 
 
 # --- the push --------------------------------------------------------------------------
@@ -225,7 +226,7 @@ def push(tmp_path: Path, rt: python_runtime.PythonRuntime, *extra: str, state: d
     argv = [str(pkg), "--ssh", "uqf-server", "--dest", "/opt/uqf", "--profile", "capture",
             "--torq-home", "/opt/torq", "--python-mode", "bundled",
             "--python-component", str(rt.path)]  # fmt: skip
-    code = driver.deploy(parse_args([*argv, *extra]), remote, out=out)
+    code = capture.deploy(parse_args([*argv, *extra]), remote, out=out)
     return code, remote, out.getvalue()
 
 
@@ -290,7 +291,7 @@ def test_the_dry_run_shows_it(tmp_path):
 def test_an_unpinned_python_runtime_needs_allow_unpinned(tmp_path):
     rt = runtime(tmp_path)
     Path(f"{rt.path}.sha256").unlink()
-    with pytest.raises(DeployError, match="no python_runtime_sha256 pins it"):
+    with pytest.raises(DeployError, match="no python_component_sha256 pins it"):
         push(tmp_path, rt)
 
 
@@ -315,9 +316,9 @@ def test_it_installs_write_once_and_prune_keeps_it_while_named(tmp_path):
     dep.python_runtime = rt
     (dest / "releases" / R2 / "deploy.env").write_text("\n".join(dep.env_lines()) + "\n")
     (dest / "current").symlink_to(f"releases/{R2}")
-    out = io.StringIO()
-    assert prune.prune(dep.cfg, LocalRemote(), keep=0, out=out) == 0
-    kept = {k["runtime"]: k["why"] for k in json.loads(out.getvalue())["runtimes"]["kept"]}
+    code, result = prune.prune(dep.cfg, LocalRemote(), keep=0)
+    assert code == 0
+    kept = {k["runtime"]: k["why"] for k in result["runtimes"]["kept"]}
     assert kept[f"python/{rt.sha256}"] == f"named by {R2}"
     assert home.is_dir()
 
@@ -391,7 +392,7 @@ def push_carried(tmp_path: Path, pkg: Path, *extra: str, state: dict | None = No
     remote, out = FakeRemote({**ABSENT, **(state or {})}), io.StringIO()
     argv = [str(pkg), "--ssh", "uqf-server", "--dest", "/opt/uqf", "--profile", "capture",
             "--torq-home", "/opt/torq", "--python-mode", "bundled"]  # fmt: skip
-    code = driver.deploy(parse_args([*argv, *extra]), remote, out=out)
+    code = capture.deploy(parse_args([*argv, *extra]), remote, out=out)
     return code, remote, out.getvalue()
 
 

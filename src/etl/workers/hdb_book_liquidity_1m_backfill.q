@@ -70,9 +70,9 @@
             bid_full_ratio:1 1 0 1 0 0f; ask_full_ratio:1 1 0 1 0 0f)))];
 
 .qetl.job.bounded.define[`hdb_book_liquidity_1m_backfill;
-    `source`outputs`width`transform`check`procname`note`target_key`window_column`align!
+    `source`outputs`width`transform`check`procname`note`target_key`window_column`align`twin_of!
     (`hdb_market_data;enlist `book_liquidity_1m;0D01:00:00;`hdb_book_liquidity_1m;
      .qpipe.job.hdb_book_liquidity_1m_backfill.quality_check;
      `hdb_book_liquidity_1m_backfill1;
      "bounded: rebuilds the one-minute book liquidity from the HDB's market_data with the calculation book_liquidity_1m1 applies live";
-     `sym`source`settlement`category`req_size`bar_start;`bar_start;.qpipe.transform.book_liquidity_1m.width)];
+     `sym`source`settlement`category`req_size`bar_start;`bar_start;.qpipe.transform.book_liquidity_1m.width;`book_liquidity_1m)];

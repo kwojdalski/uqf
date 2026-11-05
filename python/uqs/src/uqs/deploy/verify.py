@@ -36,7 +36,6 @@ anything else fails the deployment before a process can wedge on it.
 
 from __future__ import annotations
 
-import json
 import socket
 import time
 from collections.abc import Callable
@@ -255,17 +254,13 @@ def run(
     tables: list[str] | None = None,
     live: bool = False,
     ports_free: bool = False,
-    marker: bool = True,
-) -> int:
-    """Check the profile, print the result and - unless not `marker`, for
-    `--json` - its marker line; the exit code."""
+) -> tuple[int, dict]:
+    """Check the profile: (the exit code, the result). `uqs deploy check`
+    prints it - with its marker line, or under --json alone (#2125)."""
     expected, pipelines = _expected(profile, port, procs)
     if ports_free:
         busy = busy_ports(expected, _listening)
-        print(json.dumps({"ok": not busy, "profile": profile, "busy": busy}))
-        if marker:
-            print(FAILED_MARKER if busy else OK_MARKER)
-        return 1 if busy else 0
+        return (1 if busy else 0), {"ok": not busy, "profile": profile, "busy": busy}
 
     def query(expr: str, port: int) -> object:
         return runtime.query(expr, port, timeout=query_timeout)
@@ -282,7 +277,4 @@ def run(
         "reason": why,
         "processes": [asdict(r) for r in results],
     }
-    print(json.dumps(report))
-    if marker:
-        print(OK_MARKER if passed else FAILED_MARKER)
-    return 0 if passed else 1
+    return (0 if passed else 1), report

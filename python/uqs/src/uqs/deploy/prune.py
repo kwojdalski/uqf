@@ -29,7 +29,6 @@ from __future__ import annotations
 
 import json
 import re
-import sys
 from collections.abc import Callable
 
 from uqs.deploy.components import COMPONENTS
@@ -205,31 +204,44 @@ def prune(
     *,
     keep: int,
     dry_run: bool = False,
-    out=sys.stdout,
     confirm: Callable[[dict], bool] | None = None,
-) -> int:
+) -> tuple[int, dict]:
     """Remove the server's releases beyond the newest `keep`, under the lock.
     A dry run lists them without taking it (Deployment.read_lock, #1902).
 
     With `confirm`, what would go is decided first, under the same lock, and
     handed to it; nothing is removed unless it answers yes (#1854) - a removed
-    release cannot be brought back. Exits 1 when declined."""
+    release cannot be brought back. Returns (1 when declined, else 0; what
+    stayed and went, as the command's document - its verdict under `prune`:
+    planned, declined or done). Printed by the command, never here (#2125)."""
     dep = Deployment(cfg, remote)
     dep.check_sudo()
     if dry_run:  # reads the lock, takes nothing: Deployment.read_lock says why
         dep.read_lock("prune")
-        print(json.dumps(prune_locked(dep, keep, dry_run=True), indent=2), file=out)
-        return 0
+        return 0, {"ok": True, **prune_locked(dep, keep, dry_run=True)}
     dep.take_lock("prune")
     try:
         if confirm is not None:
             planned = decide(_listing(dep), keep)
             going = planned["removed"] + planned.get("runtimes", {}).get("removed", [])
             if going and not confirm(planned):
-                print(json.dumps({"prune": "declined", **planned}, indent=2), file=out)
-                return 1
+                return 1, {"ok": False, "prune": "declined", **planned}
         result = prune_locked(dep, keep)
     finally:
         dep.release_lock()
-    print(json.dumps(result, indent=2), file=out)
-    return 0
+    return 0, {"ok": True, **result}
+
+
+def render(doc: dict) -> str:
+    """A prune's document for a terminal: what went (or would), what stayed and why."""
+    verb = {"planned": "would remove", "declined": "declined to remove"}.get(
+        doc["prune"], "removed"
+    )
+    runtimes = doc.get("runtimes") or {}
+    gone = [f"release {n}" for n in doc["removed"]]
+    gone += [f"runtime {n}" for n in runtimes.get("removed", [])]
+    lines = [f"{verb} {len(doc['removed'])} release(s), {doc['freed_bytes']} bytes"]
+    lines += [f"  - {n}" for n in gone]
+    lines += [f"  kept release {k['release']}: {k['why']}" for k in doc["kept"]]
+    lines += [f"  kept runtime {k['runtime']}: {k['why']}" for k in runtimes.get("kept", [])]
+    return "\n".join(lines)

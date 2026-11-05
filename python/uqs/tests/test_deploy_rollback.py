@@ -6,7 +6,6 @@ records every script, as in test_deploy.py.
 
 from __future__ import annotations
 
-import io
 import json
 import subprocess
 from pathlib import Path
@@ -84,13 +83,11 @@ def _server(target_verifies: bool = True, current: str = NEW, previous: str | No
 
 
 def _cfg():
-    return make_config(artifact="", host="uqf-server", dest="/opt/uqf", profile="rollback")
+    return make_config(artifact="", ssh="uqf-server", dest="/opt/uqf", profile="rollback")
 
 
 def _roll(remote, **kw):
-    out = io.StringIO()
-    code = rollback.rollback(_cfg(), remote, out=out, **kw)
-    return code, json.loads(out.getvalue())
+    return rollback.rollback(_cfg(), remote, **kw)
 
 
 def test_it_returns_to_the_release_current_replaced_in_the_order_a_push_restarts():
@@ -154,7 +151,7 @@ def test_a_current_that_will_not_stop_is_restarted_and_nothing_else_runs():
     remote = _server()
     remote.rules[".venv/bin/uqs stop rdb1 hdb1"] = _done(rc=1)
     with pytest.raises(DeployError):
-        rollback.rollback(_cfg(), remote, out=io.StringIO())
+        rollback.rollback(_cfg(), remote)
     stop = remote.index(".venv/bin/uqs stop rdb1 hdb1")
     restart = remote.index(
         f"cd /opt/uqf/releases/{NEW}\n", ".venv/bin/uqs start --profile essential"
@@ -219,11 +216,16 @@ def test_the_command_ends_a_dry_run_with_the_note_on_stderr_after_the_json(monke
     from uqs.cli.safety import dry_run_note
 
     monkeypatch.setattr(deploy_server, "Remote", lambda *a, **k: _server())
-    r = CliRunner().invoke(
-        cli.app, ["deploy", "rollback", "--ssh", "h", "--dest", "/opt/uqf", "--dry-run"]
-    )
+    argv = ["deploy", "rollback", "--ssh", "h", "--dest", "/opt/uqf", "--dry-run"]
+    note = Text.from_markup(dry_run_note()).plain
+    r = CliRunner().invoke(cli.app, [*argv, "--json"])
     assert r.exit_code == 0, r.output
-    assert r.stderr.strip().splitlines()[-1] == Text.from_markup(dry_run_note()).plain
+    doc = json.loads(r.stdout)  # #2125: the one document, the note beside it on stderr
+    assert (doc["ok"], doc["rollback"], doc["from"], doc["to"]) == (True, "planned", NEW, OLD)
+    assert r.stderr.strip().splitlines()[-1] == note
+    text = CliRunner().invoke(cli.app, argv)
+    assert text.stdout.startswith(f"would roll back from {NEW} to {OLD}: stop ")
+    assert text.stdout.strip().splitlines()[-1] == note
 
 
 def test_without_a_recorded_predecessor_it_asks_for_to():
