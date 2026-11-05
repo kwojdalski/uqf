@@ -120,7 +120,7 @@ def test_incompatible_requests_are_refused(kwargs, said):
 
 
 def test_poll_needs_something_to_publish():
-    with pytest.raises(UqsError, match="--poll needs --publishes"):
+    with pytest.raises(UqsError, match="--poll needs --outputs"):
         jobs.streaming_job("ratefeed", [], None, None, poll=True)
 
 
@@ -128,6 +128,6 @@ def test_poll_needs_something_to_publish():
 def test_the_cli_refuses_poll_on_other_kinds(flag):
     result = runner.invoke(
         cli.app,
-        ["job", "new", "fx", "--kind", "backfill", "--dataset", "fx", "--dry-run", *flag],
+        ["job", "new", "fx", "--kind", "backfill", "--outputs", "fx", "--dry-run", *flag],
     )
     assert result.exit_code == 1

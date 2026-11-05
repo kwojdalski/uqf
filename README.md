@@ -98,14 +98,14 @@ create or append to without writing any of them:
 ```
 # a streaming job: reads quote, publishes a table of its own
 uv run uqs job new spread_stats --subscribe-to quote \
-    --publishes spread_stats --schema "sym:symbol, spread_pips:float" --dry-run
+    --outputs spread_stats --schema "sym:symbol, spread_pips:float" --dry-run
 
 # a feed: subscribes to nothing, publishes on a timer
-uv run uqs job new rates_feed --publishes rates \
+uv run uqs job new rates_feed --outputs rates \
     --schema "sym:symbol, mid:float" --dry-run
 
 # a bounded worker, with its source and transform, one day per window
-uv run uqs job new eod_rates --kind backfill --dataset eod_rates \
+uv run uqs job new eod_rates --kind backfill --outputs eod_rates \
     --schema "sym:symbol, mid:float" --width 1D --dry-run
 ```
 

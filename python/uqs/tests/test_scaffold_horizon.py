@@ -46,7 +46,7 @@ def test_it_declares_a_horizon_job_over_the_two_tables():
         ({"horizon": None}, "needs --horizon"),
         ({"horizon": "10s"}, "a q timespan"),
         ({"columns": None}, "needs --schema"),
-        ({"publishes": "x"}, "drop --publishes"),
+        ({"publishes": "x"}, "drop --outputs"),
         ({"subs": ("ev", "nosym")}, "carries no sym"),
         ({"subs": ("ev", "gone")}, "no plant definition to read for gone"),
     ],

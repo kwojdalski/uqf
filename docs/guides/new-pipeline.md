@@ -46,12 +46,12 @@ tests it holds, so naming it is the whole of adding it.
 
 ```
 uqs job new markout2 --subscribe-to trades,quote \
-    --publishes my_metric --schema "sym:symbol, px:float"
+    --outputs my_metric --schema "sym:symbol, px:float"
 
-uqs job new fx_rates --kind backfill --dataset fx_rates \
+uqs job new fx_rates --kind backfill --outputs fx_rates \
     --schema "sym:symbol, mid:float" --width 1D
 
-uqs job new fx_rates_1h --kind backfill --dataset fx_rates_1h \
+uqs job new fx_rates_1h --kind backfill --outputs fx_rates_1h \
     --source fx_rates --schema "sym:symbol, mid:float" --width 0D01
 ```
 
@@ -72,8 +72,8 @@ table is reused, not rewritten. `--schema` is required whenever a new source or
 table is written, and refused otherwise. Two workers cannot fill one dataset
 without a partition - see [below](#filling-one-dataset-with-several-workers).
 
-A streaming job follows the same rule for what it publishes: `--publishes` takes
-a comma list, a table the plant already defines is published onto without
+A streaming job follows the same rule for what it publishes: `--outputs` takes a
+comma list, a table the plant already defines is published onto without
 `--schema`, and `--schema` shapes the one new table. Its `--subscribe-to` must
 name tables the plant defines, so a producer is scaffolded before its consumer.
 
@@ -96,7 +96,7 @@ until written - the batch
 drives the job with to hold every table it publishes to its plant table:
 
 ```
-uqs job new dxprobe --subscribe-to trades --publishes dx_t --schema "sym:symbol, v:float"
+uqs job new dxprobe --subscribe-to trades --outputs dx_t --schema "sym:symbol, v:float"
 q tests/run_tests.q
 ```
 
