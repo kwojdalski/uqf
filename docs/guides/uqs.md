@@ -1670,13 +1670,13 @@ uqs target tunnel plan prod rdb1 hdb1 --local rdb1:7002 --json
 uqs target tunnel check prod --password-env PROD_Q_PASSWORD
 ```
 
-The processes, their roles and their remote ports come from the target's
+The processes, their proctypes and their remote ports come from the target's
 release, as `query --tunnel` reads them. A local port is the remote port plus
 `--local-offset` (10000) unless `--local PROC:PORT` names one. The plan refuses
 a process that is not declared there, one that is not an rdb, hdb, wdb or
 gateway, a port out of range, and two forwards sharing one local port. Each
 refusal under `--json` carries a `kind`: `discovery`, `unknown_process`,
-`unsupported_role`, `invalid_port` or `port_conflict`.
+`unsupported_proctype`, `invalid_port` or `port_conflict`.
 
 The check tests each endpoint in the order a connection is made, and the first
 layer that fails gives the endpoint's status:
@@ -2229,10 +2229,23 @@ One contract holds for every document (#1882):
   cell shows: a port is a number, a flag `true`/`false`, a set of names a list.
   Where the table shows words for a missing value - `(chosen at start)`,
   `no cap`, `(nothing declares it)` - the document has `null` or `[]`;
-- a process is `process`, wherever the table calls it `procname`;
+- one concept has one key, at every depth of the document, not only on a list's
+  records (#2122): a process is `process` wherever the table calls it
+  `procname`, the start-all flag `start_with_all` (process.csv's
+  `startwithall`), a job `job` (the run ledger's `worker`), a stack's base port
+  `base_port` (an attached destination's `stack_id`), and a time range
+  `range_from`/`range_to`, never a `range` object;
 - a document that reports a verdict says it as `ok`, `false` exactly when the
   command exits non-zero (`deploy check` keeps `passed` beside it, which a
-  deploying uqs of another version reads; `job check` keeps `worst`);
+  deploying uqs of another version reads, and so does `deploy status`'s
+  `health`; `job check` keeps `worst`). `ok` is a bool wherever it appears: a
+  row with a richer result says it under `outcome` beside it - `data alter`'s
+  readers are `{process, ok, outcome, detail}`, `outcome` one of `reloaded`,
+  `failed`, `down`, `skipped`, `not asked`, and only `reloaded` is `ok`. `uqs`
+  refuses to print a document that breaks this, rather than print one a script
+  would misread;
+- what a document carries as data - a `query`'s result, `job preview`'s sampled
+  rows, `data diff`'s rows - keeps the data's own column names;
 - a time is ISO-8601 with an explicit offset: q's local `.z.P` (a log line,
   TorQ's clock) carries this machine's, a ledger's `.z.p` `+00:00`, and a
   fraction of a second keeps all its digits.
@@ -2265,10 +2278,10 @@ Each command's `--help` names its document. The commands #1731 added:
   | `schema [PROC] [TABLE]`                     | `{process, port, tables: [{table, rows, columns}]}`, or with a TABLE `{process, port, columns: [{table, column, type, q, attribute}]}`                                                                                                                                            |
   | `logs`                                      | `{lines: [{time, host, process, proctype, loglevel, id, message}]}`; not with `--follow`, `--channel` or `--multitail`                                                                                                                                                            |
   | `config show PROC [FIELD]`                  | `{process, fields: [{field, value}]}`, or `{process, field, value}`                                                                                                                                                                                                               |
-  | `job gaps`                                  | `{job, gaps: [{range_from, range_to}], sessions, refillable, refills: [{worker, range_from, range_to, command}], today_not_refillable}`                                                                                                                                           |
+  | `job gaps`                                  | `{job, gaps: [{range_from, range_to}], sessions, refillable, refills: [{job, range_from, range_to, command}], today_not_refillable}`                                                                                                                                              |
   | `job preview`                               | the preview's own result: `{job, mode, state, live, cursor, next_cursor, advances, fetched, rows, sample, failures, trace}`                                                                                                                                                       |
   | `job check`                                 | `{dataset, range_from, range_to, producers: [{producer, mode, source}], readonly, checks: [{category, status, dataset, scope, range_from, range_to, basis, reason, findings}], behaviours: [...], worst, ok}`                                                                     |
-  | `job runs list [--unfinished]`              | `{runs: [{run_id, worker, dataset, status, range_from, range_to, ...}]}`                                                                                                                                                                                                          |
+  | `job runs list [--unfinished]`              | `{runs: [{run_id, job, dataset, status, range_from, range_to, ...}]}`                                                                                                                                                                                                             |
   | `job runs show RUN`                         | `{run, facts, logs, rerun}`                                                                                                                                                                                                                                                       |
   | `job runs audit`                            | `{facts: [{run_id, dataset, range_from, range_to, label, text}]}`                                                                                                                                                                                                                 |
   | `data snapshot list`                        | `{snapshots: [{id, kind, datasets, digest, created_at, actor, reason, digest_ok}], ok}`; exits 1 when a digest does not match its content                                                                                                                                         |

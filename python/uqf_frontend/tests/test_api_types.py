@@ -28,6 +28,7 @@ import types
 import typing
 from pathlib import Path
 
+import pydantic
 import pytest
 
 from uqf_frontend import models
@@ -260,3 +261,53 @@ def test_a_literal_field_offers_the_same_words_on_both_sides(interface, model):
             f"{interface}.{name}: TypeScript allows {sorted(ts_words)}, "
             f"{model}.{name} allows {sorted(words)}"
         )
+
+
+#: A process is `process` and its type `proctype`, in every response and
+#: request (#2109): `process` is uqs's JSON key (#1882) and `proctype` TorQ's
+#: column. `procname` stays TorQ's own column in process.csv and `.proc`, and
+#: `role` means a component's role in `uqs attach` - neither names a field
+#: here, so a reader joining /ops/processes to /workspace or a tunnel plan
+#: never maps one key to the other.
+LOSING_KEYS = {"procname": "process", "reported_procname": "reported_process", "role": "proctype"}
+
+
+def _api_models() -> dict[str, type[pydantic.BaseModel]]:
+    return {
+        name: obj
+        for name, obj in vars(models).items()
+        if isinstance(obj, type)
+        and issubclass(obj, pydantic.BaseModel)
+        and obj.__module__ == models.__name__
+    }
+
+
+def _losing_keys(names: typing.Iterable[str]) -> list[str]:
+    return [f"`{n}` is now `{LOSING_KEYS[n]}`" for n in names if n in LOSING_KEYS]
+
+
+def test_no_model_names_a_process_or_its_type_the_losing_way():
+    found = {name: bad for name in _api_models() if (bad := _losing_keys(_wire_fields(name)))}
+    assert len(_api_models()) > 50, "the scan found too few models to mean anything"
+    assert not found, found
+
+
+def test_no_api_ts_interface_names_a_process_or_its_type_the_losing_way():
+    """api.ts's unpaired interfaces too: a view-only type is still the API's."""
+    found = {name: bad for name, fields in _interfaces().items() if (bad := _losing_keys(fields))}
+    assert not found, found
+
+
+def test_no_route_takes_a_process_by_the_losing_name():
+    from uqf_frontend import access
+
+    bad = [route for route in access.ROUTE_PERMISSIONS if "{procname}" in route[1]]
+    assert not bad, f"a path parameter naming a process is `{{process}}`: {bad}"
+    assert ("PUT", "/control/process/{process}/config") in access.ROUTE_PERMISSIONS
+
+
+def test_the_key_scan_catches_a_losing_key():
+    """The gate itself, staged: TunnelMapping's old `role` field."""
+    staged = API_TS.read_text().replace("  proctype: string;", "  role: string;", 1)
+    assert staged != API_TS.read_text()
+    assert any(_losing_keys(fields) for fields in _interfaces(staged).values())

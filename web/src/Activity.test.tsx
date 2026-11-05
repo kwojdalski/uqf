@@ -35,8 +35,8 @@ async function recorded(): Promise<BrowserEvent[]> {
 }
 
 const PROCESSES = [
-  { procname: "rdb1", proctype: "rdb", start_with_all: true },
-  { procname: "rdb2", proctype: "rdb", start_with_all: true },
+  { process: "rdb1", proctype: "rdb", start_with_all: true },
+  { process: "rdb2", proctype: "rdb", start_with_all: true },
 ];
 function mockApi(
   handler: (path: string, options: RequestInit) => unknown = () => ok({}),
@@ -179,7 +179,7 @@ it("a non-zero exit is recorded as failed, a refusal as refused", async () => {
 });
 
 it("never records a typed value or the write token", async () => {
-  mockApi(() => ok({ procname: "rdb1", config: {}, settable_fields: [] }));
+  mockApi(() => ok({ process: "rdb1", config: {}, settable_fields: [] }));
   await openControl();
   fireEvent.change(screen.getByLabelText("Write token"), {
     target: { value: "TOKEN-SHOULD-NOT-APPEAR" },
@@ -201,7 +201,7 @@ it("never records a typed value or the write token", async () => {
   expect(text).not.toContain("TOKEN-SHOULD-NOT-APPEAR");
   expect(text).not.toContain("VALUE-SHOULD-NOT-APPEAR");
   expect(events.find((e) => e.kind === "submit")?.detail).toEqual({
-    procname: "rdb1",
+    process: "rdb1",
     field: "extras",
   });
 });

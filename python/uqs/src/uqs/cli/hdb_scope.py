@@ -177,16 +177,15 @@ def apply_plan(
     return result
 
 
-def readers(handle: Handle) -> list[dict[str, str]]:
+def readers(handle: Handle) -> list[dict[str, Any]]:
     """Reload the HDB processes serving the directory; for --hdb, say how."""
     if handle.kind == "attach":
         assert handle.where is not None
         return hdb_where.reload_readers(handle.where, service.ipc_for(handle.where.att))
     if handle.kind == "runtime":
         return hdb_alter.reload_own_readers(handle.paths)
-    return [{"procname": "-", "ok": "not asked",
-             "detail": f'reload each HDB process serving {handle.hdb}: `system "l ."` '
-                       "(TorQ: `reload[]`)"}]  # fmt: skip
+    how = f'reload each HDB process serving {handle.hdb}: `system "l ."` (TorQ: `reload[]`)'
+    return [hdb_alter.reader_row("-", "not asked", how)]
 
 
 def finish(
@@ -212,8 +211,8 @@ def finish(
         console.print(f"[green]applied[/] in {len(result.get('partitions_touched') or [])} "
                       "partition(s); final check clean")  # fmt: skip
         for r in result.get("readers", []):
-            style = {"yes": "green", "no": "red"}.get(r["ok"], "dim")
-            console.print(f"  reload {r['procname']}: [{style}]{r['ok']}[/] {r['detail']}")
+            style = {"reloaded": "green", "failed": "red"}.get(r["outcome"], "dim")
+            console.print(f"  reload {r['process']}: [{style}]{r['outcome']}[/] {r['detail']}")
     if not ok:
         raise typer.Exit(code=1)
 

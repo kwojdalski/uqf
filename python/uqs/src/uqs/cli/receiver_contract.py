@@ -101,7 +101,7 @@ def export(
 
 
 ApproveJson = json_opt(
-    '{"contract", "binding": {attachment, destination, host, stack_id, hdb_dir, users, '
+    '{"contract", "binding": {attachment, destination, host, base_port, hdb_dir, users, '
     "conflict_policies, max_rows, approved_at, ...}}"
 )
 

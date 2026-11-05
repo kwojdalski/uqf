@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import datetime as dt
 from typing import Any, Literal
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from uqf_frontend.instants import AwareInstant, to_datetime
 from uqf_frontend.limits import limit_field
 
 #: Where a query reads: today's session, completed partitions, or both. One
@@ -62,8 +62,8 @@ class CoverageRequirement(BaseModel):
         description='the slice to check; "" for a dataset with no partition dimension'
     )
     source_version: str = Field(min_length=1)
-    range_from: str = Field(description="ISO-8601 with an explicit offset")
-    range_to: str = Field(description="ISO-8601 with an explicit offset, exclusive")
+    range_from: AwareInstant = Field(description="ISO-8601 with an explicit offset")
+    range_to: AwareInstant = Field(description="ISO-8601 with an explicit offset, exclusive")
 
 
 class QueryRequest(BaseModel):
@@ -94,8 +94,8 @@ class QueryResponse(BaseModel):
 
 
 class IntervalOut(BaseModel):
-    range_from: str
-    range_to: str
+    range_from: AwareInstant
+    range_to: AwareInstant
 
 
 class CoverageResponse(BaseModel):
@@ -254,7 +254,7 @@ class UsageResponse(BaseModel):
 
 
 class ProcessHealthOut(BaseModel):
-    procname: str
+    process: str
     proctype: str
     group: str
     host: str
@@ -263,7 +263,7 @@ class ProcessHealthOut(BaseModel):
     up: bool
     pid: int | None = None
     reported_port: int | None = None
-    reported_procname: str | None = None
+    reported_process: str | None = None
     error: str | None = None
     identity_mismatch: str | None = Field(
         default=None,
@@ -290,9 +290,9 @@ class WorkerStatusOut(BaseModel):
     instance_id: str
     state: RunState
     source_version: str
-    range_from: str
-    range_to: str
-    cursor: str | None = None
+    range_from: AwareInstant
+    range_to: AwareInstant
+    cursor: AwareInstant | None = None
     rows_published: int
     windows_completed: int
     reactions_owed: int = Field(
@@ -300,7 +300,7 @@ class WorkerStatusOut(BaseModel):
         " - a derived dataset is stale"
     )
     error: str | None = None
-    updated_at: str
+    updated_at: AwareInstant
     terminal: bool
     pid: int
     host: str
@@ -341,7 +341,7 @@ class DeployedOut(BaseModel):
     """The release last deployed to a target from this workstation."""
 
     release: str
-    at: str
+    at: AwareInstant
 
 
 class ServiceTargetOut(BaseModel):
@@ -437,7 +437,7 @@ class WorkspaceResponse(BaseModel):
 class TunnelCheckRecordOut(BaseModel):
     """A mapping's last successful check, as `uqs target tunnel check` recorded it."""
 
-    at: str
+    at: AwareInstant
     identity: str | None = None
     remote_port: int | None = None
     local_port: int | None = None
@@ -449,7 +449,7 @@ class TunnelMappingOut(BaseModel):
     and - separately - what its last check proved."""
 
     process: str
-    role: str = Field(description="rdb, hdb, wdb or gateway: the process's proctype")
+    proctype: str = Field(description="rdb, hdb, wdb or gateway")
     remote_host: str
     remote_port: int
     local_host: str
@@ -483,7 +483,7 @@ class TunnelEndpointOut(BaseModel):
     """One endpoint of a tunnel check (uqs.deploy.tunnel_check)."""
 
     process: str
-    role: str
+    proctype: str
     production_endpoint: str
     local_endpoint: str
     remote_port: int
@@ -505,7 +505,7 @@ class TunnelCheckResponse(BaseModel):
     target: str
     ssh: str | None
     release: str | None
-    checked_at: str
+    checked_at: AwareInstant
     category: str | None
     error: str | None
     launch_command: str | None = None
@@ -520,7 +520,7 @@ class RemoteEntryOut(BaseModel):
     name: str
     kind: Literal["dir", "file", "symlink", "special", "unknown"]
     size: int | None = Field(description="bytes, for a regular file")
-    mtime: float | None
+    mtime: AwareInstant | None = Field(description="last modified, UTC to the nanosecond")
     blocked: bool
     reason: str | None
 
@@ -586,7 +586,7 @@ class PrunedPushOut(BaseModel):
 
     push_id: str
     why: Literal["count", "age"]
-    pruned_at: str
+    pruned_at: AwareInstant
 
 
 class ConfigPushOpenResponse(BaseModel):
@@ -652,7 +652,7 @@ class ConfigPushFileOut(BaseModel):
     created_dirs: list[str]
     state: Literal["pending", "published", "failed"]
     error: str | None
-    at: str
+    at: AwareInstant
     now: Literal["after", "before", "changed", "blocked"] | None = None
     now_sha256: str | None = None
     now_error: str | None = None
@@ -665,8 +665,8 @@ class ConfigPushSummaryOut(BaseModel):
     push_id: str
     kind: Literal["push", "restore"] | None = None
     restores: str | None = None
-    created: str | None = None
-    closed: str | None = None
+    created: AwareInstant | None = None
+    closed: AwareInstant | None = None
     user: str | None = None
     target: str | None = None
     via: str | None = None
@@ -703,8 +703,8 @@ class ConfigPushOut(BaseModel):
     push_id: str
     kind: Literal["push", "restore"]
     restores: str | None
-    created: str
-    closed: str | None
+    created: AwareInstant
+    closed: AwareInstant | None
     user: str | None
     target: str | None
     via: str | None
@@ -789,7 +789,7 @@ class ConfigRestoreResponse(BaseModel):
 class ControlProcessOut(BaseModel):
     """One process a lifecycle selector may name."""
 
-    procname: str
+    process: str
     proctype: str
     start_with_all: bool = Field(
         description='whether torq.sh\'s "all" selector includes it - the effective value, '
@@ -865,7 +865,7 @@ class ProcessConfigResponse(BaseModel):
     learn it will sometimes not bother.
     """
 
-    procname: str
+    process: str
     config: dict[str, str]
     settable_fields: list[str]
 
@@ -922,8 +922,8 @@ class BackfillRequest(BaseModel):
 
     worker: str = Field(min_length=1)
     source_version: str = Field(min_length=1)
-    range_from: str = Field(description="ISO-8601 with an explicit offset")
-    range_to: str = Field(description="ISO-8601 with an explicit offset, exclusive")
+    range_from: AwareInstant = Field(description="ISO-8601 with an explicit offset")
+    range_to: AwareInstant = Field(description="ISO-8601 with an explicit offset, exclusive")
 
 
 class BackfillStartedResponse(BaseModel):
@@ -936,10 +936,10 @@ class BackfillStartedResponse(BaseModel):
 
     worker: str
     source_version: str
-    range_from: str
-    range_to: str
+    range_from: AwareInstant
+    range_to: AwareInstant
     #: The TorQ process running it - what `uqs logs` takes.
-    procname: str
+    process: str
     status_path: str
 
 
@@ -1019,7 +1019,7 @@ class BrowserEventIn(BaseModel):
     event_id: str = Field(pattern=_ACTIVITY_ID)
     session_id: str = Field(pattern=_ACTIVITY_ID)
     #: When it happened, by the browser's clock; must carry a timezone.
-    ts: AwareDatetime
+    ts: AwareInstant
     kind: BrowserKind
     action: str = Field(pattern=r"^[a-z][a-z0-9_.-]{0,63}$")
     target: str | None = Field(default=None, max_length=200)
@@ -1032,13 +1032,11 @@ class BrowserEventIn(BaseModel):
 
     @field_validator("ts")
     @classmethod
-    def _held_in_utc(cls, ts: dt.datetime) -> dt.datetime:
-        """An instant UTC can hold - rows are stored in UTC - else the whole
-        batch is a 422 here, before any of it is written (#2021)."""
-        try:
-            return ts.astimezone(dt.UTC)
-        except OverflowError:
-            raise ValueError("ts is outside the range a UTC timestamp can hold") from None
+    def _held_in_utc(cls, ts: str) -> str:
+        """An instant UTC can hold, to the microsecond rows are stored at -
+        else the whole batch is a 422 here, before any of it is written (#2021)."""
+        to_datetime(ts)
+        return ts
 
 
 class BrowserDropIn(BaseModel):
@@ -1080,8 +1078,8 @@ class ActivityEventOut(BaseModel):
     label, never an authenticated identity."""
 
     event_id: str
-    ts: str
-    recorded_at: str
+    ts: AwareInstant
+    recorded_at: AwareInstant
     level: ActivityLevel
     source: ActivitySource
     kind: ActivityKind
@@ -1107,7 +1105,7 @@ class ActivityPersistence(BaseModel):
     path: str | None
     failures: int
     last_error: str | None
-    last_failure_at: str | None
+    last_failure_at: AwareInstant | None
 
 
 class ActivityBound(BaseModel):
@@ -1124,7 +1122,7 @@ class ActivityDrop(BaseModel):
     level: ActivityLevel
     reason: ActivityDropReason
     count: int
-    last_at: str
+    last_at: AwareInstant
 
 
 class ActivityResponse(BaseModel):
@@ -1359,8 +1357,8 @@ class CompareRequest(BaseModel):
     left: str = Field(min_length=1, max_length=64, description="`local`, or a registered target")
     right: str = Field(min_length=1, max_length=64, description="`local`, or a registered target")
     tables: list[str] = Field(min_length=1, max_length=20)
-    range_from: AwareDatetime
-    range_to: AwareDatetime
+    range_from: AwareInstant
+    range_to: AwareInstant
     filters: list[str] = Field(default_factory=list, max_length=20,
                                description="COLUMN OP VALUE, e.g. sym=EURUSD")  # fmt: skip
     limit: int = limit_field(1000, 100_000, "rows read per side, at most")
@@ -1369,8 +1367,8 @@ class CompareRequest(BaseModel):
 
 
 class CompareInterval(BaseModel):
-    range_from: str
-    range_to: str
+    range_from: AwareInstant
+    range_to: AwareInstant
 
 
 class CompareCoverageSide(BaseModel):
@@ -1419,12 +1417,10 @@ class CompareResponse(BaseModel):
     outcome: CompareOutcome
     left: str
     right: str
-    range_from: str = Field(alias="from")
-    range_to: str = Field(alias="to")
+    range_from: AwareInstant
+    range_to: AwareInstant
     limit: int
     filters: list[str]
     source_version: str
     partition: str
     tables: list[CompareTable]
-
-    model_config = ConfigDict(populate_by_name=True)

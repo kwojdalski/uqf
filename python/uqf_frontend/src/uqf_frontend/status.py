@@ -28,6 +28,7 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
+from uqf_frontend import instants
 from uqf_frontend.config import Settings
 from uqf_frontend.errors import ValidationFailed
 
@@ -200,14 +201,14 @@ def _parse(text: str) -> WorkerStatus:
         instance_id=str(raw["instance_id"]),
         state=state,
         source_version=str(raw["source_version"]),
-        range_from=str(raw["range_from"]),
-        range_to=str(raw["range_to"]),
-        cursor=_or_none(raw["cursor"]),
+        range_from=_instant(raw["range_from"]),
+        range_to=_instant(raw["range_to"]),
+        cursor=_instant_or_none(raw["cursor"]),
         rows_published=int(raw["rows_published"]),
         windows_completed=int(raw["windows_completed"]),
         reactions_owed=int(raw["reactions_owed"]),
         error=_or_none(raw["error"]),
-        updated_at=str(raw["updated_at"]),
+        updated_at=_instant(raw["updated_at"]),
         pid=int(raw["pid"]),
         host=str(raw["host"]),
         run_id=_or_none(raw["run_id"]),
@@ -223,6 +224,19 @@ def _process_gone(status: WorkerStatus) -> bool:
     the one `uqs job backfill --wait` and the Airflow sensor apply too (#1362).
     """
     return not status.terminal and process_gone(status.host, status.pid)
+
+
+def _instant(value: Any) -> str:
+    """A time the writer recorded, as the API sends every instant: UTC with
+    its `Z` (#2104). `.j.j` gives a q timestamp no zone, and one shown without
+    it could not be pasted back into the Backfill form, which requires one."""
+    return instants.from_q(str(value))  # a ValueError, so the file reads as unreadable
+
+
+def _instant_or_none(value: Any) -> str | None:
+    """`_instant`, or None for q's null timestamp - which `.j.j` writes as ""."""
+    text = _or_none(value)
+    return None if text is None else _instant(text)
 
 
 def _or_none(value: Any) -> str | None:

@@ -345,7 +345,7 @@ SAMPLES: dict[tuple[str, str], dict] = {
         }
     },
     ("POST", "/control/process/{action}"): {"json": {"procs": "rdb1"}},
-    ("PUT", "/control/process/{procname}/config"): {"json": {"field": "port", "value": "1"}},
+    ("PUT", "/control/process/{process}/config"): {"json": {"field": "port", "value": "1"}},
     ("PUT", "/control/worker-config"): {"json": {"key": "k", "value": "v"}},
     ("POST", "/control/backfill"): {
         "json": {
@@ -379,7 +379,7 @@ def test_a_deny_all_policy_refuses_every_guarded_route(method, path):
     c, gw = client(policy=_deny_all)
     url = (
         path.replace("{action}", "start")
-        .replace("{procname}", "rdb1")
+        .replace("{process}", "rdb1")
         .replace("{target}", "prod-a")
         .replace("{push_id}", "20261104T000000000Z-00000000")
         .replace("{name}", "markout_curve")
@@ -449,7 +449,7 @@ def test_an_access_policy_granting_nothing_refuses_every_guarded_route(tmp_path,
     c, gw = client(policy_file=policy)
     url = (
         path.replace("{action}", "start")
-        .replace("{procname}", "rdb1")
+        .replace("{process}", "rdb1")
         .replace("{target}", "prod-a")
         .replace("{push_id}", "20261104T000000000Z-00000000")
     )

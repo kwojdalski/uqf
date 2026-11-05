@@ -103,8 +103,8 @@ def render_plan(out: Output, d: dict) -> None:
     changes, findings and accepted risks."""
     st = d["stack"]
     out.text(
-        f"[bold]{d['attachment']}[/]: job {d['job']['name']} ({d['job']['procname']}) -> "
-        f"stack {st['id']} on {st['host']}, discovery {st['discovery']}"
+        f"[bold]{d['attachment']}[/]: job {d['job']['name']} ({d['job']['process']}) -> "
+        f"stack {st['base_port']} on {st['host']}, discovery {st['discovery']}"
     )
     out.text(
         f"credential: {st['user']} / {st['password_env']}   persist: {d['persist']}   "
