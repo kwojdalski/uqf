@@ -440,7 +440,11 @@ def test_api_loopback_reports_each_result(served):
         },
     )
     assert response.status_code == 200, response.text
-    assert [r["deleted"] for r in response.json()["results"]] == [True, True, False]
+    assert [r["outcome"] for r in response.json()["results"]] == [
+        "succeeded",
+        "succeeded",
+        "failed",
+    ]
     assert not (served / "shared/config").exists()
 
 

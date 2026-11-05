@@ -285,7 +285,7 @@ SAMPLES: dict[tuple[str, str], dict] = {
     ("GET", "/services/{target}/tunnel"): {"params": {"process": "rdb1"}},
     ("GET", "/services/{target}/tunnel/check"): {"params": {"process": "rdb1"}},
     ("PUT", "/services/{target}/files/content"): {
-        "params": {"path": "shared/config/x.csv", "push": "20261104T000000000Z-00000000"},
+        "params": {"path": "shared/config/x.csv", "push_id": "20261104T000000000Z-00000000"},
         "content": b"a,b\n",
     },
     # the config push history (#2002)
