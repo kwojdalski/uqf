@@ -160,7 +160,7 @@
     t:select fullpath, table, partition, column from (raze .cmp.hdbstructure each roots) where not null table;
     st:$[count t; .qtorq.compress.file_state each t`fullpath;
         ([] compressed:`boolean$(); algo:`int$(); blocksize:`int$(); level:`int$(); bytes:`long$(); raw_bytes:`long$())];
-    t:t,'st;
+    t:flip flip[t],flip st;
     update ratio:raw_bytes%bytes from t}
 
 / Private: the sort.csv rows that apply to a table - its own, else the default ones -

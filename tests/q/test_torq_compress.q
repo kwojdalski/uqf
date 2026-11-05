@@ -238,15 +238,16 @@
     if[not in_order; t:t neg[n]?n];
     $[with_attr; update `p#sym from t; t]}
 
-/ A fresh HDB of four days: two old ones as the wdb writes them, then px and qty of those
-/ two compressed through .cmp; a day 10 days old whose rows are out of order and carry no
-/ attribute; and one 5 days old in order but without p#.
+/ A fresh HDB of four days: two old ones as the wdb writes them, with px compressed at
+/ gzip level 6 and qty at gzip level 1 (set with a compression triple, the one way PeachQ
+/ writes a compressed file, #2153); a day 10 days old whose rows are out of order and
+/ carry no attribute; and one 5 days old in order but without p#.
 .qt.qtorq.compress.report_hdb:{[]
     root:`$":",first system"mktemp -d";
     days:.z.D-30 20 10 5;
     {[root;d;s;a] (` sv root,`$string[d],"/trade/") set .Q.en[root;.qt.qtorq.compress.report_day[s;a]]}[root]'[days;1100b;1100b];
-    conf:.qt.qtorq.compress.conf[root;("default,15,default,0,17,0";"trade,15,px,2,17,6";"trade,15,qty,1,17,0")];
-    .qtorq.compress.apply[root;conf;365];
+    {[root;d;c;lvl] f:` sv root,(`$string d),`trade,c; v:get f; hdel f; (f;17;2;lvl) set v}[root]'[
+        days 0 0 1 1;`px`qty`px`qty;6 1 6 1];
     root}
 
 .qt.qtorq.compress.test_report_reads_each_columns_algorithm_block_size_and_ratio:{[t]
@@ -257,7 +258,7 @@
     .qunit.assertEquals[c[`px;`files];4];
     .qunit.assertEquals[c[`px;`compressed];2];
     .qunit.assertEquals[asc c[`px;`algos];0 2i];
-    .qunit.assertEquals[asc c[`qty;`algos];0 1i];
+    .qunit.assertEquals[asc c[`qty;`algos];0 2i];
     .qunit.assertEquals[c[`px;`blocksizes];enlist 17i];
     .qunit.assertTrue[c[`px;`compressed_ratio]>50f;"a constant column shrinks by orders of magnitude"];
     / ratio is over every file, the uncompressed ones at 1x, so it sits below the compressed one
