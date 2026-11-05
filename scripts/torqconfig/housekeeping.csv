@@ -1,0 +1,5 @@
+function,path,match,exclude,age,agemin,checkfordirectory
+zip,{KDBLOG}/,*.log,,10,,
+rm,{KDBLOG}/,*.gz,,30,,
+tplogzip,{KDBTPLOG}/,*_[0-9][0-9][0-9][0-9].[0-9][0-9].[0-9][0-9],,7,,1
+hdbcompress,{TORQDATA}/,hdb,,0,1,1

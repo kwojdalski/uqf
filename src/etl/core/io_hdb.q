@@ -464,6 +464,26 @@
     order:`sym`time inter c;
     order!{$[x=`sym;`p;`]} each order}
 
+/ Private: sort a partition by its rule and put each attribute on, which is every
+/ column file this finish rewrites.
+/ @private
+.qetl.io.sort_and_attribute:{[part;rule]
+    if[count rule; (key rule) xasc part];
+    / PeachQ keeps no attribute (.qetl.io.on_peachq).
+    if[not .qetl.io.on_peachq;
+        {[part;col;a] if[not null a; @[part;col;#[a;]]]}[part]'[key rule;value rule]];
+    }
+
+/ Private: what this partition is compressed with when it is finished: the
+/ table's write-time triple, or the empty list. Never on PeachQ, which has no
+/ -19! and no .z.zd compression (#2153); and nothing where the policy module is
+/ not loaded.
+/ @private
+.qetl.io.write_triple:{[tbl;part]
+    if[.qetl.io.on_peachq; :()];
+    if[not `for_write in key `.qetl.compression; :()];
+    .qetl.compression.for_write[tbl;part]}
+
 / Private: sort and attribute these partitions of `root`, fill every
 / partition with every table, and forget them.
 / @param root the HDB directory
@@ -478,10 +498,15 @@
         part:hsym `$base,"/";
         c:get hsym `$base,"/.d";
         rule:.qetl.io.sort_rule[t;c];
-        if[count rule; (key rule) xasc part];
-        / PeachQ keeps no attribute (.qetl.io.on_peachq).
-        if[not .qetl.io.on_peachq;
-            {[part;col;a] if[not null a; @[part;col;#[a;]]]}[part]'[key rule;value rule]];
+        / WRITE-TIME COMPRESSION (#2151), when the table's policy says `write or
+        / `both. The sort is the write that touches every column file, so it is
+        / what runs under .z.zd - the way TorQ's own end-of-day sort does
+        / (.wdb.setcompression) - and .z.zd is put back after, so nothing else
+        / this process writes is compressed. A partition already compressed
+        / gets no triple: it is not compressed again, and xasc leaves it as it is.
+        zd:.qetl.io.write_triple[t;part];
+        .qetl.compression.with_zd[zd;.qetl.io.sort_and_attribute;(part;rule)];
+        if[(count zd) and count rule; .qetl.compression.apply_columns[t;part]];
         }[root]'[todo`dt;todo`tbl];
     / Not over a native stack's root (io_hdb_scoped.q): it would fill dates and
     / tables nobody asked about.

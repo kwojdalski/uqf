@@ -53,8 +53,12 @@ CMP_PROCESS_LOAD = (
 def with_cmp(
     load: tuple[tuple[str, ...], tuple[str, ...]],
 ) -> tuple[tuple[str, ...], tuple[str, ...]]:
-    """housekeeping1's other (before, after) overlay, with CMP_PROCESS_LOAD's added."""
-    return (load[0] + CMP_PROCESS_LOAD[0], load[1] + CMP_PROCESS_LOAD[1])
+    """housekeeping1's other (before, after) overlay, with CMP_PROCESS_LOAD's added -
+    each file once: #2150's housekeeping rule loads the policy, log.q, torq_pipeline.q
+    and the wrapper before housekeeping.q already, and a file loaded there stays there."""
+    before = load[0] + tuple(f for f in CMP_PROCESS_LOAD[0] if f not in load[0])
+    after = load[1] + tuple(f for f in CMP_PROCESS_LOAD[1] if f not in before + load[1])
+    return (before, after)
 
 
 def target(paths: UqsPaths) -> Path:

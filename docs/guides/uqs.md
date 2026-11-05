@@ -634,6 +634,9 @@ The stack's own tables:
   `FIELD` accepts)
 - `uqs config env` - `build_env()`'s resolved `KDBBASEPORT`/`KDBHDB`/... values
   (the same env `config show`'s placeholder resolution and `torq.sh` use)
+- `uqs config housekeeping show` - `housekeeping1`'s effective schedule: when it
+  runs each day, and each rule - its function, what it matches, and how old a
+  match must be - with paths resolved as TorQ resolves them
 - `uqs graph --upstream --offline` - what each process needs, and who publishes
   it, before starting it on its own
 - `uqs job attachment status` - every attached destination a
@@ -999,6 +1002,18 @@ Process logs are kept as the starter pack keeps them. A tickerplant log
 directory is left exactly as written for `TPLOG_REPLAY_RETENTION_DAYS` (7) days,
 then gzipped, and only on Linux, where TorQ's replay reads a gzipped log. No
 rule deletes or tars a tickerplant log.
+
+**`housekeeping1` compresses the HDB by the declared policy.** Its last rule,
+`hdbcompress`, runs TorQ's `.cmp` with the compression policy
+(`compressionconfig.csv` in the data directory, declared in
+`src/etl/compression_policy.q`) through `.qtorq.compress.run`: each file is
+checked after it is swapped, and the HDBs are told to reload when anything
+changed. A partition younger than its table's `minage` is left alone. A failed
+run is logged as an error and doesn't stop the other rules; the next run
+continues from where it stopped. It never uses housekeeping's own `kdbzip`,
+which compresses every file one hard-coded way. The rules run daily at
+`HOUSEKEEPING_RUNTIMES` (02:00), and `uqs config housekeeping show` shows the
+schedule in effect.
 
 **TorQ discovers only what the profile started.** `process.csv` still lists
 every process, but TorQ's discovery would hand all of them out, so under

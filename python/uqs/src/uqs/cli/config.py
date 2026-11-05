@@ -47,8 +47,9 @@ from uqs.stack import procs as stack_procs
 config_app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
-    help="Process configuration: show, set, unset, list, env, field, sources.\n\nprocess.csv "
-    "fields, set in process_overrides.csv; the resolved env; the sources the stack reads.",
+    help="Process configuration: show, set, unset, list, env, housekeeping, field, sources.\n\n"
+    "process.csv fields, set in process_overrides.csv; the resolved env; housekeeping1's "
+    "schedule; the sources the stack reads.",
 )
 app.add_typer(config_app, name="config")
 

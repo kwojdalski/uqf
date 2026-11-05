@@ -100,7 +100,7 @@ bootstrap: "bootstrap() — every command, not once" {
   schema: "_generated_schema_content()\nvendored tables + uqf's own" { class: step }
   dqe: "write_dqe_config()\nvendored checks + the metatables" { class: step }
   reporter: "write_reporter_config()\nuqf's own checks, validated\nagainst the deployment" { class: step }
-  housekeeping: "write_housekeeping_config()\nuqf's own rules: tickerplant logs\nkept, then only gzipped" { class: step }
+  housekeeping: "write_housekeeping_config()\nuqf's own rules and schedule: tickerplant\nlogs kept, then only gzipped; the HDB\ncompressed by the policy" { class: step }
 }
 
 outputs: "Generated — output/uqs/" {
@@ -117,7 +117,7 @@ outputs: "Generated — output/uqs/" {
 
   gen_dqe: "dqengineconfig.csv" { class: generated }
   gen_reporter: "reporter.csv" { class: generated }
-  gen_housekeeping: "housekeeping.csv" { class: generated }
+  gen_housekeeping: "housekeeping.csv\nhousekeeping_schedule.csv" { class: generated }
   gen_csv -> gen_schema: "stp1's -schemafile\npoints here" { style.stroke: "#3d7a5a" }
 }
 

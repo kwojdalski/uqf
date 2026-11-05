@@ -243,6 +243,19 @@ def _table_properties(args: argparse.Namespace) -> int:
     return settle([rows], check=args.check, hint=_hint("table-properties"))
 
 
+def _housekeeping_config(args: argparse.Namespace) -> int:
+    """scripts/torqconfig/housekeeping.csv and housekeeping_schedule.csv (#2150):
+    housekeeping1's rules and daily schedule, rendered by stack/housekeeping.py
+    exactly as bootstrap writes them into TORQDATA. Needs no q."""
+    _uqs()
+    config = load("housekeeping_config")
+    return settle(
+        [text(path, content) for path, content in config.render().items()],
+        check=args.check,
+        hint=_hint("housekeeping-config"),
+    )
+
+
 def _compression_config(args: argparse.Namespace) -> int:
     """scripts/torqconfig/compressionconfig.csv (#2152): TorQ's .cmp policy file,
     rendered by q from the compression policy declared in
@@ -424,6 +437,12 @@ TARGETS: dict[str, Target] = {
             "table-properties",
             "getdata's table list, from the plant tables and the workers' datasets",
             _table_properties,
+        ),
+        Target(
+            "housekeeping-config",
+            "scripts/torqconfig/housekeeping.csv and housekeeping_schedule.csv, housekeeping1's "
+            "rules and schedule, from stack/housekeeping.py",
+            _housekeeping_config,
         ),
         Target(
             "compression-config",
