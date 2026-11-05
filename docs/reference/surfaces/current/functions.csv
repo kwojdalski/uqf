@@ -86,7 +86,6 @@ qetl.compression,levels,dict,,
 qetl.compression,modes,value,,
 qetl.compression,never,value,,
 qetl.compression,partition_compressed,function,1,dir
-qetl.compression,recompress_column,function,2,f triple
 qetl.compression,resolve,function,1,tbl
 qetl.compression,rows,function,1,
 qetl.compression,set_default,function,1,spec

@@ -416,7 +416,7 @@
 / @param triple (blocksize;algo;level); algorithm 0 decompresses
 / @return the file
 / @throws error when the rewritten column does not read back equal, with the original kept
-/ @eg .qetl.compression.recompress_column[`:/data/hdb/2026.01.01/trade/price;17 2 9]
+/ @private
 .qetl.compression.recompress_column:{[f;triple]
     tmp:hsym `$(string f),"_kdbtempzip";
     -19!(f;tmp;triple 0;triple 1;triple 2);
