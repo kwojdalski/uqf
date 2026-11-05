@@ -1837,8 +1837,9 @@ A time range is given one way, on every command that takes one (`job backfill`,
   timestamp, ISO-8601 or a q literal - `2026-09-13`, `2026-09-13T06:00`,
   `2026-09-13T06:00+02:00`, `2026.09.13D06:00` - and is UTC without an offset;
 - `--date D` is one day, `--from D --to D+1`;
-- `--last DURATION` is up to now, `--from now-DURATION --to now`: `30s`, `5m`,
-  `2h`, `7d`, `500ms`.
+- `--last DURATION` is up to now, `--from now-DURATION --to now`: `300`
+  (seconds), `30s`, `1.5m`, `2h`, `7d`, `500ms` - the DURATION every span of
+  time takes.
 
 A command whose unit is coarser takes the range in that unit: `data replay`
 replays one day's log, so its range must be one whole day; `data seed` copies
@@ -1894,8 +1895,9 @@ retired.
   | a process as a property or a filter           | `--proc NAME`                        | a name; repeatable where several fit      |
   | a job acted on                                | `JOB`                                | a name                                    |
   | a span of time                                | `--*-timeout`, `--every`, `--soak`   | a DURATION: `30` (seconds), `500ms`, `5m` |
-  | a time range up to now                        | `--last DURATION`                    | `30s`, `5m`, `2h`, `7d`                   |
+  | a time range up to now                        | `--last DURATION`                    | a DURATION                                |
   | the readiness wait of a deploy                | `--verify-timeout`                   | a DURATION                                |
+  | a span of time written into q                 | `job new --period/--horizon/--width` | a DURATION, or a q timespan as written    |
   | a source with no credential on its fixture    | `--fixture/--live`                   | a flag pair; the default is the command's |
   | what a write does with a row already there    | `--on-conflict POLICY`               | upsert, replace, ignore, append, fail     |
   | a private ODBC setup                          | `--odbc-home DIR`                    | a path                                    |

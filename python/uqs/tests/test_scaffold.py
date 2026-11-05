@@ -597,5 +597,5 @@ def test_a_trailing_newline_does_not_pass_as_part_of_a_name():
 
 
 def test_a_period_refuses_a_trailing_newline():
-    with pytest.raises(UqsError, match="must be a q timespan"):
+    with pytest.raises(UqsError, match="or a q timespan"):
         jobs.check_period("0D00:00:01\n")

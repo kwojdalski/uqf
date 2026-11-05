@@ -12,46 +12,53 @@ spelling a term retires is an option on no command.
 
 A duration is a DURATION everywhere: a bare number is seconds, as every
 duration option took before, and a unit may be given - `500ms`, `30s`, `5m`,
-`2h`, `7d` - as `--last` takes one. `seconds` parses it, and gives the command
-the seconds as it used them, float or (`whole_seconds`, rounded up) int, so
-nothing downstream of the option changes.
+`2h`, `7d`. uqs/duration.py holds the grammar, the one parser every span of
+time goes through (#2121): `seconds` gives a command the seconds as it used
+them, float or (`whole_seconds`, rounded up) int, so nothing downstream of
+the option changes; `--last` takes seconds too, and `job new`'s timespans
+(`timespan`) take a DURATION or a q timespan, as the q literal they write.
 """
 
 from __future__ import annotations
 
-import math
 import re
 from dataclasses import dataclass
 from typing import Annotated, Any
 
 import typer
 
-#: A duration: a number, with a unit or (seconds) none.
-_DURATION = re.compile(r"(\d+(?:\.\d+)?)(ms|s|m|h|d)?")
-_SECONDS = {"ms": 0.001, "s": 1.0, "m": 60.0, "h": 3600.0, "d": 86400.0}
+from uqs import duration as grammar
+from uqs.scaffold.timespan import q_literal
 
 
 def seconds(value: str | float) -> float:
     """DURATION -> seconds: `30`, `30s`, `500ms`, `5m`, `2h`, `7d`; bare is seconds."""
-    if isinstance(value, int | float) and not isinstance(value, bool):
-        return float(value)
-    m = _DURATION.fullmatch(str(value).strip())
-    if not m:
-        raise typer.BadParameter(
-            f"{value!r}: a duration is a number of seconds, or a number and a unit - "
-            "ms, s, m, h or d - e.g. 30s, 5m"
-        )
-    return float(m.group(1)) * _SECONDS[m.group(2) or "s"]
+    try:
+        return grammar.seconds(value)
+    except grammar.DurationError as exc:
+        raise typer.BadParameter(str(exc)) from None
 
 
 def whole_seconds(value: str | float) -> int:
     """DURATION -> whole seconds, rounded up: an ssh ConnectTimeout or a remote
     `timeout` takes no fraction."""
-    return math.ceil(seconds(value))
+    try:
+        return grammar.whole_seconds(value)
+    except grammar.DurationError as exc:
+        raise typer.BadParameter(str(exc)) from None
+
+
+def timespan(value: str) -> str:
+    """DURATION or q timespan -> the q timespan literal a declaration holds:
+    `5s` -> 0D00:00:05, `0D00:00:05` as written."""
+    try:
+        return q_literal(value)
+    except grammar.DurationError as exc:
+        raise typer.BadParameter(str(exc)) from None
 
 
 #: The parsers a DURATION option takes, which the conventions test looks for.
-PARSERS = (seconds, whole_seconds)
+PARSERS = (seconds, whole_seconds, timespan)
 
 
 def duration(*names: str, help: str, integer: bool = False, **kw) -> typer.models.OptionInfo:  # noqa: A002
@@ -60,6 +67,12 @@ def duration(*names: str, help: str, integer: bool = False, **kw) -> typer.model
     return typer.Option(
         *names, parser=whole_seconds if integer else seconds, metavar="DURATION", help=help, **kw
     )
+
+
+def q_timespan(*names: str, help: str, **kw) -> typer.models.OptionInfo:  # noqa: A002
+    """A span of time written into q: a DURATION or a q timespan; the command
+    gets the q literal."""
+    return typer.Option(*names, parser=timespan, metavar="DURATION", help=help, **kw)
 
 
 @dataclass(frozen=True)
@@ -100,7 +113,7 @@ TERMS = (
         "seconds",
         retired=("--deadline",),
     ),  # fmt: skip
-    Term("a time range up to now", "--last", "str", retired=("--window",)),
+    Term("a time range up to now", "--last", "duration", "seconds", retired=("--window",)),
     Term("whether a source with no credential may run on its fixture", "--fixture", "flag"),
     Term(
         "what a write does with a row already there",

@@ -40,7 +40,7 @@ from uqs.scaffold.jobs import (
 from uqs.scaffold.plan import FileAction, ScaffoldPlan, WriteMode
 from uqs.scaffold.profile import membership, profile_names
 from uqs.scaffold.templates import test_stub
-from uqs.scaffold.timespan import check_positive_timespan
+from uqs.scaffold.timespan import q_timespan
 
 #: What the file binds in the job's namespace besides the output NAME (#1573).
 _GENERATED = {
@@ -93,9 +93,10 @@ def horizon_job(
         raise UqsError("--kind horizon needs --schema: the table it publishes")
     if not horizon:
         raise UqsError(
-            f"--kind horizon needs --horizon, a q timespan such as 0D00:00:10, not {horizon!r}"
+            "--kind horizon needs --horizon, a DURATION (10s) or a q timespan such as "
+            f"0D00:00:10, not {horizon!r}"
         )
-    check_positive_timespan(horizon, "--horizon", "0D00:00:10")
+    horizon = q_timespan(horizon, "--horizon")
     if name in known_tables:
         raise UqsError(f"{name!r} is already a plant table - a horizon job owns its output")
     if name in _GENERATED:

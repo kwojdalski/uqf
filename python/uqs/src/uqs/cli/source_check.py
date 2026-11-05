@@ -33,6 +33,10 @@ SourcesJson = json_opt(
 )
 
 
+#: How far back `config sources check` reads when --last is not given.
+DEFAULT_LAST = "1h"
+
+
 #: `--window N` was minutes back; a duration is a DURATION on every command,
 #: and "up to now" is `--last` (#1857). The old spelling's value is minutes,
 #: so it is read and converted here, not renamed by name.
@@ -43,14 +47,14 @@ def sources_check(
         float, duration("--timeout", help="Seconds (a DURATION) for every check together")
     ] = 120.0,
     last: Annotated[
-        str,
-        typer.Option(
+        float | None,
+        duration(
             "--last",
-            help="A DURATION up to now - 30s, 5m, 2h, 7d: how far back the bounded read "
-            "reaches (default 1h)",
+            help="Up to now, a DURATION - how far back the bounded read reaches "
+            f"(default {DEFAULT_LAST})",
             show_default=False,
         ),
-    ] = "1h",
+    ] = None,
     window: Annotated[int | None, old_spelling("--last", "--window")] = None,
     odbc: Annotated[
         Path | None,
@@ -69,9 +73,10 @@ def sources_check(
     nothing and recording nothing. Exits 1 when any source fails."""
     if window is not None:  # #1857: minutes, where every duration is a DURATION now
         warn_renamed(f"--window {window}", f"--last {window}m")
-        last = f"{window}m"
+        last = window * 60.0
     try:
-        minutes = math.ceil(timerange.parse_duration("--last", last).total_seconds() / 60)
+        span = timerange.parse_duration("--last", DEFAULT_LAST if last is None else last)
+        minutes = math.ceil(span.total_seconds() / 60)
         env = None
         if odbc is not None:
             version = odbc_home.current(odbc)

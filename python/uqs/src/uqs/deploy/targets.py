@@ -49,7 +49,7 @@ from typing import Any
 
 from uqs.deploy import components, inspection, launch, overrides, target_file
 from uqs.deploy.config import Config, DeployError, make_config
-from uqs.deploy.target_keys import RENAMED, flag, unknown_target
+from uqs.deploy.target_keys import RENAMED, flag, read_durations, unknown_target
 from uqs.paths import UqsError
 
 DECLARATION = "deploy_targets.toml"
@@ -128,6 +128,7 @@ def _tables(text: str, path: Path) -> dict:
     ]
     for layer, settings in layers:
         _old_keys(layer, settings, text, path)
+        read_durations(layer, settings, partial(_at, text, path, layer))
         _labels(layer, settings, text, path)
         inspection.check_layer(layer, settings, partial(_at, text, path, layer, inspection.KEY))
     shared = layers[: 1 + len(envs)]

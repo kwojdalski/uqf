@@ -46,7 +46,7 @@ from uqs.scaffold.docs import ANALYTICS, FEEDS, doc_stub_actions
 from uqs.scaffold.plan import FileAction, ScaffoldPlan, WriteMode
 from uqs.scaffold.profile import membership, profile_names
 from uqs.scaffold.templates import test_stub
-from uqs.scaffold.timespan import check_positive_timespan
+from uqs.scaffold.timespan import q_timespan
 from uqs.scaffold.transform import (
     check_passthrough_shapes,
     check_streaming,
@@ -114,9 +114,10 @@ def check_period(period: str) -> str:
     the generated file, and a zero one a refusal - both found only when the
     tree next loads, far from the typo. The check is on the value q reads
     (#1598): a minute of 60 does not parse, and a day count past q's 64-bit
-    range wraps - 213504D becomes about 25 minutes, and loads.
+    range wraps - 213504D becomes about 25 minutes, and loads. A DURATION -
+    `5s` - is rendered as the q timespan it is (#2121).
     """
-    return check_positive_timespan(period, "--period", "0D00:00:05 or 0D00:00:00.500")
+    return q_timespan(period, "--period")
 
 
 def start_with_all_field(start_with_all: bool) -> tuple[str, str]:
@@ -203,7 +204,7 @@ def streaming_job(
     """
     _check_name(name, "job name")
     if period is not None:
-        check_period(period)
+        period = check_period(period)
     proc = procname or f"{name}1"
     _check_name(proc, "procname")
     for table in subscribe_to:
