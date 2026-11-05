@@ -102,6 +102,10 @@ CASES: dict[str, tuple[list[str], str]] = {
         ["data", "alter", "pb", "--hdb", "/nonexistent-1755", "--reorder", "a"],
         "no such directory",
     ),
+    "data compress": (
+        ["data", "compress", "--report", "--hdb", "/nonexistent-2149"],
+        "no such directory",
+    ),
     "runtime diff": (["runtime", "diff", "nosuch1", "nosuch2"], "is not a runtime"),
     "job receiver start": (
         ["job", "receiver", "start", "--attachment", "nosuch"],

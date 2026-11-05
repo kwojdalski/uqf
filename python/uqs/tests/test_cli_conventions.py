@@ -159,6 +159,7 @@ DOMAIN_VERBS = {
     "seed": "copy another runtime's HDB",
     "migrate": "migrate an HDB partition's schema",
     "alter": "change one table in every HDB partition holding it",
+    "compress": "how an HDB's column files are compressed",
     "upgrade": "bring a store an older uqs wrote up to today's layout",
     "diff": "compare two runtimes, a config push's files before and after it, or a table "
     "on two endpoints",

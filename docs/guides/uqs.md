@@ -137,6 +137,29 @@ case-sensitively against the names the process reported. An exact name is just a
 pattern that matches itself, so there is one behaviour rather than two - quote
 the pattern, or the shell will try to expand it against your filenames first.
 
+### How the HDB is compressed
+
+```
+uqs data compress --report            # per table and column: algorithm, block size, ratio
+uqs data compress --report --json     # the same, as one document
+uqs --target uat data compress --report
+```
+
+`--report` reads what the HDB holds now and changes nothing (#2149). It walks
+the HDB with TorQ's own `.cmp.hdbstructure` - the walker `.cmp` compresses by -
+and reads each column file's header with `-21!`, through uqf's wrapper over
+`.cmp` (`scripts/processes/torq_compress.q`). Per table and column it lists the
+algorithm, the block size (log2, as `compressionconfig.csv`'s `cblocksize`) and
+the ratio over the compressed files; then the largest uncompressed partitions
+(`--limit`, 10 by default); then every partition that is not in the order, or
+lacks the attribute, that `sort.csv` declares - the order and attribute TorQ's
+wdb gives a partition at end of day, read from the first config layer that has
+the file, as TorQ reads it. The plant schema's `g#sym` is an in-memory index the
+tickerplant and RDB keep, not what a partition on disk carries, so it is not
+what this judges. Unsorted data compresses far worse - KX's whitepaper
+(<https://code.kx.com/q/wp/compress/>) measures 669x against 10x - but the
+report never re-sorts: it names the partitions, and the fix is the wdb's.
+
 ### The `clock` column on `executions` and `market_data` (#1925)
 
 Every row of `executions` and `market_data` says whose clock its `source_time`
@@ -1865,6 +1888,7 @@ The verbs of rule 4:
   | `replay` `seed` `migrate`                     | move data into the HDB                                                     |
   | `upgrade`                                     | bring a store an older uqs wrote up to today's layout                      |
   | `alter`                                       | change one table in every HDB partition holding it                         |
+  | `compress`                                    | how an HDB's column files are compressed                                   |
   | `diff` `prepare`                              | compare runtimes, or a table on two endpoints; install a runtime's bundles |
   | `stub`                                        | add a placeholder source row                                               |
   | `env`                                         | print variables to source                                                  |
@@ -2300,6 +2324,7 @@ Each command's `--help` names its document. The commands #1731 added:
   | `data check`                                | `{ok, hdb, present, segmented, partitions, missing_tables, missing_columns, types_checked, type_changes}`                                                                                                                                                                         |
   | `config sources check SOURCE...`            | `{ok, sources: [{source, status, stage, rows, elapsed_ms, diagnostic}]}` - one document, not a line per source                                                                                                                                                                    |
   | `data check --table`, `data alter`          | `{ok, hdb, resolved_from, ssh, warnings, plan, result}`: `plan` and `result` are `scripts/gates/hdb_alter.q`'s own documents - partitions, shapes, steps, journal, final check                                                                                                    |
+  | `data compress --report`                    | `{hdb, present, columns: [{table, column, files, compressed, algos, blocksizes, bytes, raw_bytes, ratio, compressed_ratio}], largest_uncompressed: [{table, partition, files, bytes}], unsorted: [{table, partition, rows, sort_by, sorted, missing_attr, declared_attr}]}`       |
 
 ## Installing
 

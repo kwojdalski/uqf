@@ -48,6 +48,7 @@ from uqs.cli import verify  # noqa: F401
 from uqs.cli import replay  # noqa: F401
 from uqs.cli import seed  # noqa: F401
 from uqs.cli import migrate  # noqa: F401
+from uqs.cli import compress  # noqa: F401
 from uqs.cli import hdb_check  # noqa: F401
 from uqs.cli import hdb_alter  # noqa: F401
 from uqs.cli import snapshot  # noqa: F401
