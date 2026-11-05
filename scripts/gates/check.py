@@ -148,6 +148,21 @@ def _tool_pins(pins: ModuleType, root: Path) -> int:
     )
 
 
+def _vendored(vendored: ModuleType, root: Path) -> int:
+    """Every tree under lib/ holds the bytes its record says, upstream's (#2157)."""
+    findings = vendored.problems(root)
+    return report(
+        "vendored",
+        findings,
+        vendored.summary(root) if not findings else "",
+        footer=(
+            f"\n{len(findings)} problem(s) under lib/. Vendored trees are never edited here:"
+            " restore upstream's bytes with `python3 scripts/dev/revendor.py TREE`,"
+            " or move to another upstream commit with `--commit SHA`."
+        ),
+    )
+
+
 @dataclass(frozen=True)
 class Check:
     name: str
@@ -199,6 +214,12 @@ CHECKS: dict[str, Check] = {
             "every copy of a tool's version (uv, pre-commit, Python...) matches its authority",
             "tool_pins",
             _tool_pins,
+        ),
+        Check(
+            "vendored",
+            "every tree under lib/ is byte-identical to the upstream commit it records",
+            "vendored",
+            _vendored,
         ),
     )
 }

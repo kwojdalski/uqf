@@ -1,0 +1,41 @@
+# Files in lib/torq-finance-starter-pack whose bytes differ from upstream 50fcd5ad6d8e (#2157).
+#
+# NOT reviewed or accepted: recorded so the gate can hold them where they are
+# while the owner decides. They were changed when the tree was vendored
+# (2a9cf11b), most likely by this repository's own pre-commit hooks - trailing-whitespace,
+# end-of-file-fixer, mixed-line-ending - which ran over lib/ until lib/ was
+# excluded from them. kind "whitespace": the change is only trailing spaces or
+# tabs, a CR, or blank lines and the newline at the end of the file. kind
+# "edit": anything else; see the vendoring commit's message.
+#
+# To revert to upstream: python3 scripts/dev/revendor.py torq-finance-starter-pack
+# (which deletes this file). To accept a change as a patch instead, it stays
+# listed here with a reason. The gate fails if any listed file changes again.
+#
+# path	upstream blob	local blob	kind
+LICENSE-torq-finance-starter-pack	2d9d163c364281d0151f940a8d4f6ce75afd46de	4f15b3b7491e3d7dfd0a0f1fa63c34edbf56e6cc	whitespace
+appconfig/dqedetail.csv	a71dbe21c84020b5f73f7f560ead45b1482977a1	802f178a62744b257b058e9b6b4dc77a8ed16465	whitespace
+appconfig/dqengineconfig.csv	88548bd9f46092170117b2a58e64ea384cafe686	12b790c5d82bc06a99dfd65cb31478e31cb9eed5	whitespace
+appconfig/process.csv	b4e1071a93f77eaabca16959629c41e45e7d4642	88d80aa100bfbcf6947fb404eafb8bcdaeb0470d	whitespace
+appconfig/settings/chainedtp.q	fe5a63cc5c4b61e56a04601799664eb21f80da32	fcc4d2d7a0d93f05b284395be7a68383bf9a37bd	whitespace
+appconfig/settings/compression.q	b8ac040542cce385ad214534ed8811d3043116f1	7cf20ec7548e8aaf15a7c39d80e1fba6f432a26f	whitespace
+appconfig/settings/feed.q	e476a3065920fb398e134252f7099a5bdd1a4f17	7822bc58bb73da56ced972d3e0c3d47f46623ae0	whitespace
+appconfig/settings/filealerter.q	b3e81d8aa84214132f5718dc2666d8ee354570a3	3ee546cf0306bb006e98f336beadeeb08d7b2d62	whitespace
+appconfig/settings/gateway.q	215c3b7e3e782a7bdb4f0e4f30bcef27d46b7ddf	bccc771aab2fe41e13120b9e30757e51b1438349	whitespace
+appconfig/settings/segmentedchainedtickerplant.q	d2d90a7a4cff7484b9900acffadc13f230a251f5	71e6f0e84f4d529569d99e9bf0ad1720c3ce0fed	whitespace
+appconfig/settings/sort.q	c0af70f35c69c74a0b4ec261bdafbcc9c63ed9e7	2321b915e20cadaae9d8f64ffd7694b17560fc3d	whitespace
+appconfig/settings/tickerplant.q	b386d24b4a3e764cdecce518f5d0242ebbe2bee0	84ecf2d85cecfe4291d13413cdf47489298caaba	whitespace
+appconfig/stpcustom.csv	b545e59aa111d7793004e875517ae60f06b5582e	855733b65151c7e7be0b7c7bca1b49103ab2b7af	whitespace
+code/processes/metrics.q	d1e8d276088712986b0d900bfd022b68ef973194	170906937e3bb949be55110c816b17eeee5873b3	whitespace
+code/processes/vwapsub.q	db10da3d9a87ebc23ebcb5e06d1756a7b31eaf40	e35ab6153af078c5e3b3fef94d1399c47fbbb027	whitespace
+database.q	48cee5ac304b40895b75be15e8169264e900ca41	57e9ad640decfc8e462de7233b83f97490db245e	whitespace
+docs/architecture.md	fcd9f4abe01199ad110f1430a1f18c117783d5a1	c38691eac7948122325dc8342c007fec44d61e2b	whitespace
+dqe/dqcdb/database/2020.04.17/configtable/params#	4fd08839f2a082dfdedb483c62a6cfc25dd9c525	e5998edec55028465ef850ef20814a83d2b6e218	whitespace
+dqe/dqcdb/database/2020.04.17/configtable/proc#	f175db15129f7768ac649ebcf548c5bcd753ada2	689aa1ac5700e8174b4c795b9d73106505693d10	whitespace
+dqe/dqcdb/database/2020.04.17/results/descp#	05a5aab34ff9349b642ac58e4417e8b5c762cbd1	7be4c77e90af7581bf3568c55a8b11f6c3074381	whitespace
+installlatest.sh	e942af3ec1aef191741cc8ca751300d073868e75	4612c4aecf9e60c3152c0dfdb37effd2cf80390c	whitespace
+mkdocs.yml	a0c6fea482633f647eaa0e06f51b1c48af1e2b2d	aa8e156c5730a6a39f48b9cc177656990cea7b70	edit
+start_torq_demo.bat	de108819d642210f40cffe072cdc3f07ce4f8184	2476e32154d068201bf8ab57193f6cfdd8a0438e	whitespace
+start_torq_demo_extra.bat	0131395a7e170fe7df3c6ab378399796f55d4a81	da5df4d1640e3328e39b01479cab623ecfcf0ac2	whitespace
+start_torq_demo_mac.sh	482ff2e90b855ede77981d6c6b5287fc3efd8726	e6adfae39efaa455de6af389e446d19c70fca805	whitespace
+start_torq_demo_mac_extra.sh	7dedb0135dc39d11ac1c6281f1c0f1cd1f15b9b4	8585933952c12285bdec6317f0c4b450b5b33693	whitespace
