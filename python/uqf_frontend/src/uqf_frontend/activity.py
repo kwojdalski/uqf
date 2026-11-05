@@ -375,7 +375,7 @@ SERVER_ACTIONS: dict[tuple[str, str], Callable[[Mapping[str, str]], str]] = {
     ("PUT", "/control/process/{procname}/config"): lambda _: "process.config",
     ("PUT", "/control/worker-config"): lambda _: "worker.config",
     ("POST", "/control/backfill"): lambda _: "backfill.start",
-    ("PUT", "/services/{target}/files/content"): lambda _: "file.upload",
+    ("PUT", "/services/{target}/files/content"): lambda _: "files.upload",
     # config pushes (#2002): `config.push` is the summary row of a whole push,
     # written when it closes; a restore is a push of its own
     ("POST", "/services/{target}/config/pushes"): lambda _: "config.push.open",

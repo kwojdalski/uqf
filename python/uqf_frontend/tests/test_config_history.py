@@ -129,7 +129,7 @@ def test_a_push_has_one_id_on_every_row_and_a_summary(served, tmp_path):
     rows = _by_action(c)
     (opened,) = rows["config.push.open"]
     assert opened["detail"]["push_id"] == push and opened["outcome"] == "succeeded"
-    uploads = {r["detail"]["file_name"]: r for r in rows["file.upload"]}
+    uploads = {r["detail"]["file_name"]: r for r in rows["files.upload"]}
     assert {r["detail"]["push_id"] for r in uploads.values()} == {push}
     assert uploads["shared/config/app.env"]["detail"]["previous_sha256"] == (
         hashlib.sha256(OLD_SECRET).hexdigest()
@@ -241,7 +241,7 @@ def test_an_interrupted_push_is_never_retried_and_history_shows_what_landed(serv
     assert shown["reported"] == [{"path": "shared/config/lost", "outcome": "uncertain"}]
     assert not (served / "shared/config/lost").exists()
     rows = _by_action(c)
-    assert {r["outcome"] for r in rows["file.upload"]} == {"unknown"}
+    assert {r["outcome"] for r in rows["files.upload"]} == {"unknown"}
     (summary,) = rows["config.push"]
     assert summary["outcome"] == "unknown"
     assert summary["items"] == [
