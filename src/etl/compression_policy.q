@@ -10,6 +10,12 @@
 / (#2146) and this is the file it reads. lz4hc and zstd are refused at
 / declaration, naming that.
 / .
+/ MODE (#2151) says WHEN a table is compressed: `age (the default, and every
+/ declaration below), `write or `both. Nothing here changes it, so every table
+/ keeps being compressed by TorQ's age pass and written uncompressed: it is a
+/ choice for a table that is scanned in bulk and whose disk is the constraint.
+/ docs/reference/compression-policy.md has the trade-off and what each does.
+/ .
 / A table that is not named here takes the stack default. A declaration is
 / PARTIAL: it states only what differs from that default.
 

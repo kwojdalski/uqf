@@ -34,8 +34,8 @@
     .qt.qetl.compression.sandbox {[]
         .qt.qetl.compression.gz[];
         r:.qetl.compression.resolve `orders;
-        .qunit.assertEquals[r;`algo`blocksize`level`minage`columns!(2j;16j;6j;7j;(`symbol$())!());
-            "no declaration is the default, with no column overrides"]}};
+        .qunit.assertEquals[r;`algo`blocksize`level`minage`columns`mode!(2j;16j;6j;7j;(`symbol$())!();`age);
+            "no declaration is the default, with no column overrides, compressed by age"]}};
 
 .qt.qetl.compression.test_a_table_declares_only_what_differs:{[t]
     .qt.qetl.compression.sandbox {[]
@@ -145,7 +145,7 @@
     .qt.qetl.compression.sandbox {[]
         .qunit.assertThrows[{[s] .qetl.compression.set_default s};`algo`minage!(2;7);"*needs blocksize, level*";"gzip needs both"];
         r:.qetl.compression.set_default `algo`minage!(0;7);
-        .qunit.assertEquals[r;`algo`blocksize`level`minage!0 0 0 7j;"algorithm 0 needs neither"]}};
+        .qunit.assertEquals[r;`algo`blocksize`level`minage`mode!(0j;0j;0j;7j;`age);"algorithm 0 needs neither"]}};
 
 .qt.qetl.compression.test_a_column_override_must_name_a_column_of_the_table:{[t]
     .qt.qetl.compression.sandbox {[]

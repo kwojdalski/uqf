@@ -43,7 +43,9 @@ from uqs.cli.shared import (
 from uqs.cli.target import target_app
 from uqs.deploy import targets
 from uqs.paths import UqsError
-from uqs.stack import listing
+from uqs.stack import housekeeping, listing
+from uqs.stack.env import build_env
+from uqs.stack.procs import get_process_config
 
 #: Kinds of `uqs list` that moved to their noun's own list -> the command now.
 MOVED = {
@@ -218,6 +220,33 @@ attachment_app.command("status", cls=safety.ReadOnly)(
         "backfills",
         "Show each destination a `uqs job backfill --attachment` has run into.\n\nIts "
         "attachment, worker, state, outcome, whether its rows are queryable, and its latest log.",
+    )
+)
+
+
+def _housekeeping() -> list[dict]:
+    paths = _paths()
+    try:
+        localtime = get_process_config(paths, "housekeeping1")["localtime"] != "0"
+    except UqsError:  # a runtime without housekeeping1: the rules it would run
+        localtime = True
+    return housekeeping.effective_schedule(paths, build_env(paths), localtime)
+
+
+housekeeping_app = typer.Typer(
+    no_args_is_help=True,
+    add_completion=False,
+    help="housekeeping1's schedule: show.",
+)
+config_app.add_typer(housekeeping_app, name="housekeeping")
+housekeeping_app.command("show", cls=safety.ReadOnly)(
+    _noun_list(
+        "housekeeping",
+        "Show housekeeping1's effective schedule: when it runs, and each rule it runs.\n\n"
+        "Log and tickerplant-log retention, and HDB compression by the declared policy, "
+        "as generated into TORQDATA (stack/housekeeping.py).",
+        _housekeeping,
+        ("runs", "function", "on", "matching", "except", "older_than"),
     )
 )
 

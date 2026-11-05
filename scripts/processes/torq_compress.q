@@ -79,6 +79,10 @@
 .qtorq.compress.plan:{[hdb;conf;maxage]
     .qtorq.compress.require_cmp[];
     t:.cmp.showcomp[hdb;conf;maxage];
+    / Nothing old enough, or a config that holds every table out of the age pass (a
+    / `write table, #2151): the ?[] below is 'type on zero rows, so the answer is
+    / given with its two columns typed.
+    if[0=count t; :update compressed:`boolean$(), action:`symbol$() from t];
     t:update compressed:.qtorq.compress.is_compressed each fullpath from t;
     update action:?[calgo=0; ?[compressed;`decompress;`skip]; ?[compressed;`skip;`compress]] from t}
 
