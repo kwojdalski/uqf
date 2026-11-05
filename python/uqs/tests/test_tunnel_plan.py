@@ -506,5 +506,5 @@ def test_the_check_document_round_trips(root, server, monkeypatch):
 
 
 def test_an_unknown_target_is_a_refusal_not_a_finding(root, server):
-    with pytest.raises(tunnel_plan.UqsError, match="no target or deployed server 'nosuch'"):
+    with pytest.raises(tunnel_plan.UqsError, match="no target or deployed server nosuch - "):
         tunnel_check.run("nosuch", root, runner=server.run)
