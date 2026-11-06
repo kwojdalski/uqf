@@ -1037,14 +1037,16 @@ rule deletes or tars a tickerplant log.
 **`housekeeping1` compresses the HDB by the declared policy.** Its last rule,
 `hdbcompress`, runs TorQ's `.cmp` with the compression policy
 (`compressionconfig.csv` in the data directory, declared in
-`src/etl/compression_policy.q`) through `.qtorq.compress.run`: each file is
-checked after it is swapped, and the HDBs are told to reload when anything
-changed. A partition younger than its table's `minage` is left alone. A failed
-run is logged as an error and doesn't stop the other rules; the next run
-continues from where it stopped. It never uses housekeeping's own `kdbzip`,
-which compresses every file one hard-coded way. The rules run daily at
-`HOUSEKEEPING_RUNTIMES` (02:00), and `uqs config housekeeping show` shows the
-schedule in effect.
+`src/etl/compression_policy.q`) through `.qtorq.compress.run_held`, which
+selects exactly what `uqs data compress --apply` would: each file is checked
+after it is swapped, and the HDBs are told to reload when anything changed. A
+partition younger than its table's `minage` is left alone, and so is one the
+coverage ledger says a backfill is still writing; each partition is compressed
+holding the HDB write lock backfills take. A failed run is logged as an error
+and doesn't stop the other rules; the next run continues from where it stopped.
+It never uses housekeeping's own `kdbzip`, which compresses every file one
+hard-coded way. The rules run daily at `HOUSEKEEPING_RUNTIMES` (02:00), and
+`uqs config housekeeping show` shows the schedule in effect.
 
 **TorQ discovers only what the profile started.** `process.csv` still lists
 every process, but TorQ's discovery would hand all of them out, so under

@@ -34,8 +34,9 @@
 / WHERE IT RUNS. housekeeping1 - TorQ's own HDB-maintenance process, which loads
 / .cmp with the rest of TorQ's common code - loads it after torq_compress.q
 / (VENDORED_LOAD_OVERLAY in python/uqs/src/uqs/stack/procs.py), and `uqs data
-/ compress` calls it over IPC. It needs .qetl.coverage (src/etl/core/
-/ materialisation.q and what it loads) for the hold.
+/ compress` calls it over IPC, and housekeeping's hdbcompress rule calls run_held. It
+/ needs .qetl.coverage (src/etl/core/materialisation.q and what it loads) for the hold,
+/ and .qetl.io.locked (src/etl/core/io_hdb.q) for run_held's write lock.
 
 \d .
 
@@ -183,6 +184,25 @@
 / @private
 .qtorq.compress.plain_bytes:{[f] h:-21!f; $[count h; h`uncompressedLength; hcount f]}
 
+/ The hold, and the one place it is written: each row of a selection given its status,
+/ `held where the coverage ledger says its table's partition is still being written
+/ (`u`, .qetl.coverage.unreleased's dataset and date), else `act. The survey shows it;
+/ every run reads the ledger again and applies it as it reaches each partition
+/ (.qtorq.compress.apply_held), the hand-run and the scheduled alike.
+/ @param u table dataset, date: what is being written
+/ @param p rows of .qtorq.compress.selected
+/ @return p, with status
+.qtorq.compress.hold:{[u;p] update status:?[([] dataset:table; date:partition) in u;`held;`act] from p}
+
+/ Run rows of a selection through .qtorq.compress.apply_plan, less every row the hold
+/ keeps back, the ledger read now - as a run reaches the rows, not when it planned them,
+/ so a partition a writer claimed since is left for a later run.
+/ @param p rows of .qtorq.compress.selected
+/ @return what .qtorq.compress.apply_plan returns: one row per file changed
+/ @throws what .qtorq.compress.apply_plan throws, and the ledger's read
+.qtorq.compress.apply_held:{[p]
+    .qtorq.compress.apply_plan delete status from select from .qtorq.compress.hold[.qetl.coverage.unreleased[.z.p];p] where status=`act}
+
 / Everything `uqs data compress` shows before it changes anything: TorQ's config,
 / what the coverage ledger holds back, and per table partition the columns .cmp
 / would compress, decompress or leave, with today's bytes and the estimate.
@@ -205,7 +225,7 @@
 .qtorq.compress.survey:{[hdb;conf;only;older;days;change;n]
     p:.qtorq.compress.selected[hdb;conf;only;older;days;change];
     u:.qetl.coverage.unreleased[.z.p];
-    p:update status:?[([] dataset:table; date:partition) in u;`held;`act] from p;
+    p:.qtorq.compress.hold[u;p];
     est:.qtorq.compress.estimate[select from p where status=`act;n];
     p:p lj `table`column xkey select table, column, r:bytes_after%bytes_before from est 0;
     p:p lj select tr:(sum bytes_after)%sum bytes_before by table from est 0;
@@ -221,10 +241,11 @@
     parts:update early:age<policy_minage from parts;
     `config`held`partitions`sample`ratios!(.cmp.compressioncsv;u;`partition xasc parts;est 1;est 0)}
 
-/ Run one partition of a selection: its rows of .qtorq.compress.selected, less any
-/ table whose partition is still being written, through .qtorq.compress.apply_plan
-/ (.cmp.compressfromtable and the read-back check). The HDB is not reloaded here: the
-/ caller reloads once, after the last partition (.qtorq.reload_hdb).
+/ Run one partition of a selection: its rows of .qtorq.compress.selected through
+/ .qtorq.compress.apply_held - less any table whose partition is still being written,
+/ then .cmp.compressfromtable and the read-back check. The HDB is not reloaded here: the
+/ caller reloads once, after the last partition (.qtorq.reload_hdb). `uqs data compress
+/ --apply` calls it per partition holding the HDB write lock itself, so it takes none.
 / @param hdb the HDB root, a file symbol
 / @param conf the compression config, a file symbol or string path
 / @param only the tables to reach, or () for all
@@ -236,9 +257,32 @@
 / @throws what .qtorq.compress.apply_plan throws - a named error when a file did not reach its target state
 .qtorq.compress.apply_partition:{[hdb;conf;only;older;days;change;part]
     pt:.qtorq.compress.partition_of[part];
-    p:select from .qtorq.compress.selected[hdb;conf;only;older;days;change] where partition=pt;
-    u:.qetl.coverage.unreleased[.z.p];
-    p:select from p where not ([] dataset:table; date:partition) in u;
-    .qtorq.compress.apply_plan p}
+    .qtorq.compress.apply_held[select from .qtorq.compress.selected[hdb;conf;only;older;days;change] where partition=pt]}
+
+/ The scheduled run (housekeeping1's hdbcompress, #2150): the selection `uqs data compress
+/ --apply` makes with no scope given - .qtorq.compress.selected over the whole policy -
+/ run as that command runs it, partition by partition, oldest first, each through
+/ .qtorq.compress.apply_held, so the hold is read again as each partition is reached
+/ (#2176). Each partition is run holding the HDB root's write lock (.qetl.io.locked), the
+/ one every uqf writer holds for each write, flush and finish, and `uqs data compress
+/ --apply` for its whole run: no backfill appends to a partition while .cmp swaps its
+/ files, which is what would put a column's older contents back. A writer holding the
+/ lock past .qetl.io.hdb_lock_wait fails the run, which a later run continues. Then the
+/ HDB reload, once, if a file changed.
+/ .
+/ WHAT IT CANNOT HOLD OFF. TorQ's own end of day takes no lock (io_hdb.q): it writes
+/ today's partition, which no policy's minage reaches. A writer that takes no root
+/ lock is not seen until its claim is in the ledger.
+/ @param hdb the HDB root, a file symbol
+/ @param conf the compression config, a file symbol or string path (.cmp.inputcsv)
+/ @return what .qtorq.compress.apply_plan returns, over every partition: one row per file changed
+/ @throws what apply_held throws - a named error when a file did not reach its target
+/   state, every partition before it done and valid - and the lock's error after its wait
+.qtorq.compress.run_held:{[hdb;conf]
+    p:select from .qtorq.compress.selected[hdb;conf;();0;();()!()] where action<>`skip;
+    r:.qtorq.compress.apply_plan 0#p;
+    r:r,raze {[hdb;p;pt] .qetl.io.locked[hdb;.qtorq.compress.apply_held;enlist select from p where partition=pt]}[hdb;p] each asc distinct p`partition;
+    if[count r; .qtorq.reload_hdb[]];
+    r}
 
 \d .
