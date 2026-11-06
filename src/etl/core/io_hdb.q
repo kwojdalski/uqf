@@ -124,21 +124,31 @@
     / the arguments, not projections of `locked`: a fully-applied projection
     / is a CALL, and would run the write before the lock is taken.
     / finish takes a second, ignored argument so it stays a function of one.
-    `write`write_keyed`flush`finish`recover`eod_waiting!(
+    `write`write_keyed`flush`finish`recover`eod_waiting`days_of!(
         {[r;p;t;b] .qetl.io.locked[r;.qetl.io.write_hdb;(r;p;t;b)]}[root;partition_col];
         {[r;p;t;b;o] .qetl.io.locked[r;.qetl.io.write_hdb_keyed;(r;p;t;b;o)]}[root;partition_col];
         {[r;u] .qetl.io.locked[r;.qetl.io.flush_hdb;(r;u)]}[root];
         {[r;x] .qetl.io.locked[r;.qetl.io.finish_hdb;(r;x)]}[root];
         {[r;a;b;c] .qetl.io.locked[r;.qetl.io.recover_hdb;(r;a;b;c)]}[root];
         / which dates end of day has not yet handed over - the plan reads it (#2186)
-        .qetl.io.eod_waiting[root])}
+        .qetl.io.eod_waiting[root];
+        / the root's own partition calendar, so a plan's range maps to the dates written (#2193)
+        .qetl.io.days_of[root])}
+
+/ The partition date of each time: the calendar date, except in a root a scoped manager was made
+/ for, where it is the native stack's own (.qetl.io.scoped_day_of, #2193).
+/ @param root the HDB root
+/ @param times a timestamp or a list of them
+/ @return the date or dates
+/ @eg .qetl.io.days_of[`:/no/such/root;2026.01.02D10:00:00.000000000]  ->  2026.01.02
+.qetl.io.days_of:{[root;times] $[.qetl.io.is_scoped root; .qetl.io.scoped_day_of times; `date$times]}
 
 / Private: append one window into its date partitions.
 / @private
 .qetl.io.write_hdb:{[root;partition_col;target;batch]
     if[0=count batch; :0];
     data:.Q.en[root;.qetl.io.hdb_rows[root;partition_col;target;batch]];
-    days:`date$data`time;
+    days:.qetl.io.days_of[root;data`time];
     {[root;target;data;days;d]
         part:hsym `$(string .Q.par[root;d;target]),"/";
         rows:data where days=d;
@@ -181,7 +191,7 @@
     if[not any (tc;partition_col) in cols batch;
         '"hdb: ",string[target],"'s batch has neither time nor ",string[partition_col]," to partition by"];
     data:$[tc in cols batch; batch; tc xcols ![batch;();0b;enlist[tc]!enlist partition_col]];
-    days:`date$data tc;
+    days:.qetl.io.days_of[root;data tc];
     if[any null days;
         '"hdb: ",string[target]," has rows with a null time - no partition to put them in"];
     .qetl.io.require_handed_over[root;target;distinct days];
@@ -218,7 +228,7 @@
     / Shaped even when empty: a `replace of a day the source has emptied
     / still needs the target's columns to resolve against.
     data:.Q.en[root;.qetl.io.hdb_rows[root;partition_col;target;batch]];
-    days:`date$data`time;
+    days:.qetl.io.days_of[root;data`time];
     dates:distinct days;
     / NEW KEYS ARE APPENDED, not resolved into a rewrite (#1086). Every
     / window used to read its date whole, resolve and swap it back, so a
@@ -248,7 +258,7 @@
             not any (kc#rows) in ?[part;();0b;kc!kc]}[root;target;kc]'[folds;dates];
         if[all clean; .qetl.io.write_hdb[root;partition_col;target;fold]; :count batch]];
     if[`replace=strategy;
-        span:{[f;t] f+til 1+t-f}[`date$opts`range_from;`date$opts[`range_to]-1];
+        span:{[f;t] f+til 1+t-f}[.qetl.io.days_of[root;opts`range_from];.qetl.io.days_of[root;opts[`range_to]-1]];
         dates:distinct dates,span where (span<.z.d) and
             {[root;target;d] not ()~key hsym `$(string .Q.par[root;d;target]),"/"}[root;target] each span;
         / a visited day is written too, rows or not (#2186)
@@ -299,7 +309,7 @@
 / @return () or one (part;date;rows) step, as write_hdb_keyed plans them
 / @private
 .qetl.io.spill:{[root;target;data;opts;dates]
-    d:`date$opts`range_to;
+    d:.qetl.io.days_of[root;opts`range_to];
     part:hsym `$(string .Q.par[root;d;target]),"/";
     if[(d in dates) or (d>=.z.d) or ()~key part; :()];
     kc:(),opts`row_key;
@@ -633,7 +643,7 @@
     / First what a killed keyed write left in staging, so the partitions read
     / below are the ones the HDB will map.
     restored:.qetl.io.sweep_staging[root;target];
-    span:{[f;t] f+til 1+t-f}[`date$from_ts;`date$to_ts-1];
+    span:{[f;t] f+til 1+t-f}[.qetl.io.days_of[root;from_ts];.qetl.io.days_of[root;to_ts-1]];
     / A table with a column file missing is set aside first (#2185), so the trim
     / below never meets a column it cannot read.
     quarantined:span where .qetl.io.quarantine_incomplete[root;;target] each span;
@@ -657,7 +667,7 @@
 / many of its partitions are still open after them.
 / @private
 .qetl.io.flush_hdb:{[root;upto]
-    n:.qetl.io.finish_parts[root;distinct select dt, tbl from .qetl.io.touched where hdb_root=root, dt<`date$upto];
+    n:.qetl.io.finish_parts[root;distinct select dt, tbl from .qetl.io.touched where hdb_root=root, dt<.qetl.io.days_of[root;upto]];
     `finished`pending!(n;count distinct select dt, tbl from .qetl.io.touched where hdb_root=root)}
 
 \d .

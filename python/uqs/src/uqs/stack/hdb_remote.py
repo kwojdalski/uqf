@@ -41,7 +41,7 @@ SCHEMA_NAME = "database.q"
 Runner = Callable[..., subprocess.CompletedProcess]
 
 
-def _heredoc(target: str, data: bytes) -> str:
+def heredoc(target: str, data: bytes) -> str:
     """Write `data` to "$tmp/<target>" from an inline base64 block."""
     encoded = base64.b64encode(data).decode()
     lines = [encoded[i : i + 76] for i in range(0, len(encoded), 76)] or [""]
@@ -66,7 +66,7 @@ def remote_script(repo_root: Path, req: Request, *, apply: bool) -> str:
         'tmp=$(mktemp -d "${TMPDIR:-/tmp}/uqf-hdb-alter.XXXXXX") || exit ' + str(NO_TEMP),
         "trap 'rm -rf \"$tmp\"' EXIT",
         'mkdir -p "$tmp/scripts/gates" "$tmp/lib/kx-dbmaint"',
-        *(_heredoc(target, data) for target, data in files.items()),
+        *(heredoc(target, data) for target, data in files.items()),
         'q_cmd="${QCMD:-q}"',
         'if ! command -v "${q_cmd%% *}" >/dev/null 2>&1; then',
         '  echo "no q on this host: $q_cmd is not on PATH - set QCMD" >&2; exit ' + str(NO_Q),
