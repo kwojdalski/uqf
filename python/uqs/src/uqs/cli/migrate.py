@@ -35,6 +35,15 @@ def migrate(
             "(the target type is always the declared one, so it takes no :TYPE); repeatable",
         ),
     ] = None,
+    reset_empty: Annotated[
+        bool,
+        typer.Option(
+            "--reset-empty",
+            help="Rebuild a table whose every stored column is empty (obsolete columns "
+            "included) from its current declaration; refuses a populated, unreadable or "
+            "inconsistent table, and cannot be combined with --rename or --cast",
+        ),
+    ] = False,
     apply: safety.ApplyOpt = False,
     yes: safety.ApplyYesOpt = False,
     dry_run: safety.DefaultDryRunOpt = False,
@@ -49,6 +58,10 @@ def migrate(
     nothing - the default, and it stays so. --apply shows the plan,
     asks, then writes; --yes does not ask. The old table is retained at the
     path reported after a successful atomic exchange.
+
+    With --reset-empty the table is rebuilt from its current declaration
+    instead, but only if q finds every stored column empty (checked again under
+    the writer lock before staging).
     """
     try:
         safety.dry_unless_applied(dry_run, apply)
@@ -65,14 +78,18 @@ def migrate(
             renames[old] = new
         casts = set(cast or [])
         if not apply or not yes:  # the plan: shown, and asked about before --apply writes
-            report = hdb_migrate.migrate(_paths(), table, day, renames, casts, apply=False)
+            report = hdb_migrate.migrate(
+                _paths(), table, day, renames, casts, apply=False, reset_empty=reset_empty
+            )
         if apply and not yes:
             console.print(report, markup=False, highlight=False)
             safety.confirm(
                 f"Migrate {table} {partition} as above? (stop the stack first)", yes=False
             )
         if apply:
-            report = hdb_migrate.migrate(_paths(), table, day, renames, casts, apply=True)
+            report = hdb_migrate.migrate(
+                _paths(), table, day, renames, casts, apply=True, reset_empty=reset_empty
+            )
     except UqsError as exc:
         _die(exc)
         return

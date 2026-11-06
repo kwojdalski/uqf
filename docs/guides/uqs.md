@@ -245,6 +245,20 @@ backup path for rollback. A source column not named in the current schema must
 be mapped with `--rename` rather than silently dropped. The command refuses
 segmented HDBs.
 
+An empty table that kept an obsolete schema (so a backfill cannot publish into
+it) is rebuilt from its current declaration instead (#2251):
+
+```
+uqs data migrate trade 2026-01-01 --reset-empty          # eligibility and the schema change; writes nothing
+uqs data migrate trade 2026-01-01 --reset-empty --apply  # after asking; --yes does not ask
+```
+
+q refuses unless every stored column file, obsolete ones included, is readable
+and holds no rows, and checks again under the writer lock just before staging.
+It cannot be combined with `--rename` or `--cast`, uses the shared `sym` file,
+leaves other partitions alone, and keeps the old table at the reported backup
+path.
+
 ### One table, in any HDB
 
 `data migrate` rebuilds one date of THIS runtime's HDB to its declared schema.

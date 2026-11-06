@@ -136,6 +136,63 @@ def _write_lock(paths: UqsPaths, q: Path, env: dict[str, str], action: str) -> s
     return lines[0].split("|", 1)[1]
 
 
+def _run_stage(
+    paths: UqsPaths,
+    q: Path,
+    env: dict[str, str],
+    root: Path,
+    partition: date,
+    table: str,
+    stage: Path,
+    mode: str,
+    renames: dict[str, str] | None = None,
+    casts: set[str] | None = None,
+) -> str:
+    """Run STAGE_SCRIPT; return the staged row count, or for `reset-check` the
+    `stored|declared` column specs it printed. Raises with q's last words."""
+    renames, casts = renames or {}, casts or set()
+    schema = declared_schema(paths)
+    # q's system "l <path>" cannot load a path with spaces. Load a copy from
+    # the OS temp directory whose generated name has no spaces.
+    with tempfile.TemporaryDirectory(prefix="uqf_migration_schema_") as schema_tmp:
+        schema_file = Path(schema_tmp) / "database.q"
+        schema_file.write_text(schema)
+        result = subprocess.run(
+            [
+                str(q),
+                str(paths.scripts_dir / STAGE_SCRIPT),
+                str(root),
+                str(schema_file),
+                partition.strftime("%Y.%m.%d"),
+                table,
+                str(stage),
+                ",".join(renames) or "-",
+                ",".join(renames.values()) or "-",
+                ",".join(sorted(casts)) or "-",
+                mode,
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+            cwd=paths.repo_root,
+            env=env,
+            stdin=subprocess.DEVNULL,
+            timeout=600,
+        )
+    tag = "PLAN|" if mode == "reset-check" else "STAGED|"
+    lines = [line for line in result.stdout.splitlines() if line.startswith(tag)]
+    if result.returncode != 0 or len(lines) != 1:
+        said = (result.stderr or result.stdout).strip().splitlines()[-3:]
+        raise UqsError(f"HDB migration stage failed: {' '.join(said)}")
+    if mode == "reset-check":
+        return lines[0].split("|", 1)[1]
+    _, count, source = lines[0].split("|", 2)
+    live = root / partition.strftime("%Y.%m.%d") / table
+    if Path(source).resolve() != live.resolve() or not count.isdecimal():
+        raise UqsError("HDB migration stage reported an unexpected source path or row count")
+    return count
+
+
 def migrate(
     paths: UqsPaths,
     table: str,
@@ -144,6 +201,7 @@ def migrate(
     casts: set[str],
     *,
     apply: bool = False,
+    reset_empty: bool = False,
 ) -> str:
     """Migrate one date/table to this release's schema; dry-run by default.
 
@@ -151,6 +209,13 @@ def migrate(
     listed in `casts`, and q accepts it only when casting back reproduces
     every original value. `apply` stages, validates and atomically exchanges
     the table; the previous table is retained at the reported backup path.
+
+    `reset_empty` (#2251) instead rebuilds a table whose every stored column
+    is empty - obsolete ones included - from its current declaration, through
+    this same lock, staging, validation, exchange and backup. q checks the
+    emptiness (and checks it again under the lock, just before staging); the
+    dry run reports the schema change from that same check and writes nothing.
+    It takes no renames or casts.
     """
     _name(table)
     for old, new in renames.items():
@@ -160,7 +225,12 @@ def migrate(
         _name(column)
     if len(set(renames.values())) != len(renames):
         raise UqsError("two source columns cannot rename to the same target")
-    if not renames and not casts:
+    if reset_empty and (renames or casts):
+        raise UqsError(
+            "--reset-empty rebuilds an empty table from its declaration; "
+            "it cannot be combined with --rename or --cast"
+        )
+    if not reset_empty and not renames and not casts:
         raise UqsError("name at least one --rename or --cast")
 
     if paths.hdb_dir.is_symlink():
@@ -173,12 +243,29 @@ def migrate(
     live = root / partition.strftime("%Y.%m.%d") / table
     if not (live.is_dir() and (live / ".d").is_file()):
         raise UqsError(f"no splayed table at {live}")
-    description = f"{partition:%Y.%m.%d}/{table}: rename {renames or '{}'}, cast {sorted(casts)}"
-    if not apply:
-        return f"would migrate {description}; pass --apply after stopping the stack"
-
+    if reset_empty:
+        description = f"{partition:%Y.%m.%d}/{table}: reset empty table to its declaration"
+    else:
+        description = (
+            f"{partition:%Y.%m.%d}/{table}: rename {renames or '{}'}, cast {sorted(casts)}"
+        )
     env = with_interpreter(paths)
     q = q_interpreter(env)
+    if reset_empty and q is None:
+        raise UqsError("HDB migration needs q; set QCMD")
+    if not apply:
+        if reset_empty:
+            assert q is not None
+            plan = _run_stage(paths, q, env, root, partition, table, Path("-"), "reset-check")
+            old, new = plan.split("|", 1)
+            return (
+                f"would migrate {description}; every stored column is empty\n"
+                f"  stored:   {old.replace(',', ', ')}\n"
+                f"  declared: {new.replace(',', ', ')}\n"
+                "pass --apply after stopping the stack"
+            )
+        return f"would migrate {description}; pass --apply after stopping the stack"
+
     if q is None:
         raise UqsError("HDB migration needs q; set QCMD")
     _write_lock(paths, q, env, "acquire")
@@ -189,8 +276,7 @@ def migrate(
         stage_root = Path(tempfile.mkdtemp(prefix=root.name + ".migration-", dir=root.parent))
         stage = stage_root / "new" / partition.strftime("%Y.%m.%d") / table
         stage.mkdir(parents=True)
-        schema = declared_schema(paths)
-        (stage_root / "database.q").write_text(schema)
+        (stage_root / "database.q").write_text(declared_schema(paths))
         (stage_root / "migration.json").write_text(
             json.dumps(
                 {
@@ -199,44 +285,13 @@ def migrate(
                     "table": table,
                     "renames": renames,
                     "casts": sorted(casts),
+                    "reset_empty": reset_empty,
                 },
                 indent=2,
             )
         )
-        # q's system "l <path>" cannot load a path with spaces. Keep the
-        # schema used for this migration beside the backup, but load a copy
-        # from the OS temp directory whose generated name has no spaces.
-        with tempfile.TemporaryDirectory(prefix="uqf_migration_schema_") as schema_tmp:
-            schema_file = Path(schema_tmp) / "database.q"
-            schema_file.write_text(schema)
-            result = subprocess.run(
-                [
-                    str(q),
-                    str(paths.scripts_dir / STAGE_SCRIPT),
-                    str(root),
-                    str(schema_file),
-                    partition.strftime("%Y.%m.%d"),
-                    table,
-                    str(stage),
-                    ",".join(renames) or "-",
-                    ",".join(renames.values()) or "-",
-                    ",".join(sorted(casts)) or "-",
-                ],
-                capture_output=True,
-                text=True,
-                check=False,
-                cwd=paths.repo_root,
-                env=env,
-                stdin=subprocess.DEVNULL,
-                timeout=600,
-            )
-        lines = [line for line in result.stdout.splitlines() if line.startswith("STAGED|")]
-        if result.returncode != 0 or len(lines) != 1:
-            said = (result.stderr or result.stdout).strip().splitlines()[-3:]
-            raise UqsError(f"HDB migration stage failed: {' '.join(said)}")
-        _, count, source = lines[0].split("|", 2)
-        if Path(source).resolve() != live.resolve() or not count.isdecimal():
-            raise UqsError("HDB migration stage reported an unexpected source path or row count")
+        mode = "reset" if reset_empty else "migrate"
+        count = _run_stage(paths, q, env, root, partition, table, stage, mode, renames, casts)
         _exchange(live, stage)
         swapped = True
         return f"migrated {description}; {count} row(s); previous table retained at {stage}"

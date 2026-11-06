@@ -276,3 +276,201 @@ def test_a_killed_migrations_lock_is_broken_by_the_next_q_writer(hdb, q_binary, 
     out = _write_as_a_q_writer(q_binary, tmp_path, hdb, "absolute")
     assert "WROTE" in out, out
     assert not lock.exists()
+
+
+# --reset-empty (#2251): an empty table with an obsolete schema, rebuilt from
+# the declaration through the same lock, staging, validation and exchange.
+EMPTY_BUILD = """\
+root:hsym `$first .z.x;
+mk:{[root;d;t] (` sv .Q.par[root;d;`trade],`) set .Q.en[root;t]};
+/ an obsolete schema: px and an extra column no longer declared, empty
+mk[root;2026.01.01;([] time:`timestamp$(); sym:`symbol$(); px:`long$(); legacy:`long$())];
+/ a populated neighbour and the shared sym file
+mk[root;2026.01.02;([] time:enlist 2026.01.02D10:00; sym:enlist `EURUSD;
+  px:enlist 1j; legacy:enlist 7j)];
+exit 0
+"""
+
+
+@pytest.fixture
+def empty_hdb(hdb, q_binary, tmp_path) -> UqsPaths:
+    import shutil
+
+    shutil.rmtree(hdb.hdb_dir / "2026.01.01")
+    build = tmp_path / "empty_build.q"
+    build.write_text(EMPTY_BUILD)
+    result = _run(q_binary, build, hdb.hdb_dir)
+    assert result.returncode == 0, result.stdout + result.stderr
+    return hdb
+
+
+def _tree(root: Path) -> dict[str, bytes]:
+    return {
+        str(p.relative_to(root)): p.read_bytes() for p in sorted(root.rglob("*")) if p.is_file()
+    }
+
+
+def _reset(paths: UqsPaths, **kw) -> str:
+    return hdb_migrate.migrate(paths, "trade", DAY, {}, set(), reset_empty=True, **kw)
+
+
+def _lock(paths: UqsPaths) -> Path:
+    return paths.hdb_dir.with_name(paths.hdb_dir.name + ".write.lock")
+
+
+def test_reset_empty_dry_run_reports_the_change_and_writes_nothing(empty_hdb):
+    before = _tree(empty_hdb.hdb_dir)
+    report = _reset(empty_hdb)
+    assert report.startswith("would migrate 2026.01.01/trade: reset empty table")
+    assert "legacy:7" in report and "price:9" in report
+    assert _tree(empty_hdb.hdb_dir) == before
+    assert not _lock(empty_hdb).exists()
+
+
+def test_reset_empty_rebuilds_from_the_declaration_and_keeps_the_rest(empty_hdb, q_binary):
+    root = empty_hdb.hdb_dir
+    live = root / "2026.01.01" / "trade"
+    original = _snapshot(live)
+    neighbour = _tree(root / "2026.01.02")
+    sym = (root / "sym").read_bytes()
+
+    report = _reset(empty_hdb, apply=True)
+    backup = Path(report.split("previous table retained at ", 1)[1])
+    assert _snapshot(backup) == original
+    assert (root / "sym").read_bytes() == sym
+    assert _tree(root / "2026.01.02") == neighbour
+    assert not _lock(empty_hdb).exists()
+
+    read = root.parent / "read.q"
+    read.write_text(
+        "root:hsym `$first .z.x; "
+        't:select from get hsym `$(string .Q.par[root;2026.01.01;`trade]),"/"; '
+        '-1 "cols=",.Q.s1 cols t; -1 "types=",.Q.s1 type each exec time,sym,price from t; '
+        '-1 "rows=",string count t; -1 "attr=",string attr exec sym from t; exit 0'
+    )
+    out = _run(q_binary, read, root).stdout
+    assert "cols=`time`sym`price" in out and "rows=0" in out
+    assert "types=`time`sym`price!12 20 9h" in out
+    assert "attr=g" in out
+    found = hdb_layout.inspect(empty_hdb, root).dirs
+    assert hdb_types.type_changes(empty_hdb, empty_hdb.torqapphome / "database.q", found) == []
+
+
+def _write_q(root: Path, q_binary, code: str) -> None:
+    script = root.parent / "mutate.q"
+    script.write_text("root:hsym `$first .z.x; " + code + " exit 0\n")
+    result = _run(q_binary, script, root)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_reset_empty_refuses_a_populated_column(empty_hdb, q_binary):
+    # Only the OBSOLETE column holds a row: still a refusal.
+    root = empty_hdb.hdb_dir
+    _write_q(
+        root,
+        q_binary,
+        "d:.Q.par[root;2026.01.01;`trade]; (` sv d,`legacy) set enlist 7j;",
+    )
+    before = _tree(root)
+    for apply in (False, True):
+        with pytest.raises(UqsError, match="populated column.*legacy"):
+            _reset(empty_hdb, apply=apply)
+    assert _tree(root) == before
+    assert not _lock(empty_hdb).exists()
+
+
+def test_reset_empty_refuses_an_unreadable_column(empty_hdb):
+    root = empty_hdb.hdb_dir
+    (root / "2026.01.01" / "trade" / "px").write_bytes(b"not a q file")
+    before = _tree(root)
+    with pytest.raises(UqsError, match="unreadable column.*px"):
+        _reset(empty_hdb, apply=True)
+    assert _tree(root) == before
+    assert not _lock(empty_hdb).exists()
+
+
+def test_reset_empty_refuses_a_file_the_table_does_not_list(empty_hdb):
+    stray = empty_hdb.hdb_dir / "2026.01.01" / "trade" / "orphan"
+    stray.write_bytes(b"x")
+    with pytest.raises(UqsError, match="files .d does not list: orphan"):
+        _reset(empty_hdb)
+
+
+def test_reset_empty_cannot_be_combined_with_rename_or_cast(empty_hdb):
+    before = _tree(empty_hdb.hdb_dir)
+    with pytest.raises(UqsError, match="cannot be combined with --rename or --cast"):
+        hdb_migrate.migrate(
+            empty_hdb, "trade", DAY, {"px": "price"}, set(), reset_empty=True, apply=True
+        )
+    with pytest.raises(UqsError, match="cannot be combined with --rename or --cast"):
+        hdb_migrate.migrate(empty_hdb, "trade", DAY, {}, {"price"}, reset_empty=True)
+    assert _tree(empty_hdb.hdb_dir) == before
+
+
+def test_reset_empty_respects_the_writer_lock(empty_hdb):
+    _lock(empty_hdb).mkdir()
+    before = _tree(empty_hdb.hdb_dir)
+    with pytest.raises(UqsError, match="write lock already held"):
+        _reset(empty_hdb, apply=True)
+    assert _tree(empty_hdb.hdb_dir) == before
+
+
+def test_reset_empty_rechecks_emptiness_under_the_lock(empty_hdb, q_binary, monkeypatch):
+    """A row published after the plan but before staging refuses the apply."""
+    root = empty_hdb.hdb_dir
+    acquire = hdb_migrate._write_lock
+
+    def populate_then_lock(paths, q, env, action):
+        if action == "acquire":
+            _write_q(
+                root,
+                q_binary,
+                "d:.Q.par[root;2026.01.01;`trade]; (` sv d,`px) set enlist 5j;",
+            )
+        return acquire(paths, q, env, action)
+
+    monkeypatch.setattr(hdb_migrate, "_write_lock", populate_then_lock)
+    with pytest.raises(UqsError, match="populated column.*px"):
+        _reset(empty_hdb, apply=True)
+    assert not _lock(empty_hdb).exists()
+
+
+def test_reset_empty_failure_leaves_the_original_and_releases_the_lock(empty_hdb, monkeypatch):
+    root = empty_hdb.hdb_dir
+    before = _tree(root)
+
+    def refuse(*_args):
+        raise UqsError("exchange unavailable")
+
+    monkeypatch.setattr(hdb_migrate, "_exchange", refuse)
+    with pytest.raises(UqsError, match="exchange unavailable"):
+        _reset(empty_hdb, apply=True)
+    assert _tree(root) == before
+    assert not _lock(empty_hdb).exists()
+    assert not list(root.parent.glob("*.migration-*"))
+
+
+def test_the_cli_passes_reset_empty_through_and_keeps_the_dry_run_default(monkeypatch):
+    from typer.testing import CliRunner
+
+    from uqs.cli.entry import app
+
+    seen = []
+
+    def migrate(_paths, table, day, renames, casts, **kw):
+        seen.append((table, day, renames, casts, kw))
+        return "plan"
+
+    monkeypatch.setattr(hdb_migrate, "migrate", migrate)
+    runner = CliRunner()
+    assert (
+        runner.invoke(app, ["data", "migrate", "trade", "2026.01.01", "--reset-empty"]).exit_code
+        == 0
+    )
+    assert seen == [("trade", DAY, {}, set(), {"apply": False, "reset_empty": True})]
+    seen.clear()
+    result = runner.invoke(
+        app, ["data", "migrate", "trade", "2026.01.01", "--reset-empty", "--apply", "--yes"]
+    )
+    assert result.exit_code == 0, result.output
+    assert seen == [("trade", DAY, {}, set(), {"apply": True, "reset_empty": True})]
