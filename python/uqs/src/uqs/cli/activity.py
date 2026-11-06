@@ -81,7 +81,8 @@ SubjectOpt = Annotated[
     typer.Option(
         "--subject",
         metavar="NAME",
-        help="Only events about this name - a view, a table, a process selector or a control",
+        help="Only events about this name - a view, a table, a process selector, a worker, "
+        "a cfg key or a control",
     ),
 ]
 OutcomeOpt = ChoiceOpt(activity_log.OUTCOMES, "--outcome", "Only events that ended so")
@@ -106,8 +107,9 @@ FormatOpt = ChoiceOpt(
 )
 ListJson = json_opt(
     '{"db": path, "events": [{event_id, ts, recorded_at, level, source, kind, action, target, '
-    "outcome, session_id, request_id, claimed_user, trigger, method, status_code, duration_ms, "
-    'items, detail, dropped}], newest first, "drops": [{level, reason, count, last_at}]}'
+    "subject, outcome, session_id, request_id, claimed_user, trigger, method, status_code, "
+    'duration_ms, items, detail, dropped}], newest first, "drops": [{level, reason, count, '
+    "last_at}]}"
 )
 
 
@@ -136,7 +138,7 @@ def _query(
         session_id=filters["session"],
         request_id=filters["request"],
         action=filters["action"],
-        target=filters["subject"],
+        subject=filters["subject"],
         outcome=filters["outcome"],
         source=filters["recorded_by"],
         level=filters["level"],
@@ -213,8 +215,8 @@ def list_(
     if not events:
         console.print(f"no activity matches these filters in {escape(str(path))}")
         return
-    table = Table("time (UTC)", "level", "source", "kind", "action", "target", "outcome",
-                  "duration ms", "session", "request")  # fmt: skip
+    table = Table("time (UTC)", "level", "source", "kind", "action", "target", "subject",
+                  "outcome", "duration ms", "session", "request")  # fmt: skip
     for e in events:
         # what the history holds is printed literally, never as markup (#2025)
         table.add_row(
@@ -227,6 +229,7 @@ def list_(
                     str(e["kind"]),
                     str(e["action"]),
                     str(e["target"] or ""),
+                    str(e["subject"] or ""),
                     str(e["outcome"] or ""),
                     "" if e["duration_ms"] is None else f"{e['duration_ms']:.0f}",
                     (e["session_id"] or "")[:8],

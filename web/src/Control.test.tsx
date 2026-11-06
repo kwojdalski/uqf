@@ -88,8 +88,8 @@ async function lifecycleBody(
   return body;
 }
 
-const command = (action: string, target: string) =>
-  ok({ action, target, exit_code: 0, ok: true, output: "done" });
+const command = (action: string, procs: string) =>
+  ok({ action, procs, exit_code: 0, ok: true, output: "done" });
 
 it("defaults to torq.sh's own “all”, sent as the word and not spelled out", async () => {
   // "all" means startwithall=1 to torq.sh. Sending every name instead would
@@ -150,7 +150,7 @@ it("reports a non-zero exit rather than showing success", async () => {
   mockApi(true, () =>
     ok({
       action: "start",
-      target: "all",
+      procs: "all",
       exit_code: 3,
       ok: false,
       output: "could not start rdb1",

@@ -87,7 +87,7 @@ def _event(**over: Any) -> dict[str, Any]:
         "ts": "2026-11-03T10:00:00Z",
         "kind": "navigate",
         "action": "view.open",
-        "target": "Control",
+        "subject": "Control",
         "trigger": "keyboard",
     }
     return {**body, **over}
@@ -172,7 +172,7 @@ def test_a_caller_that_bypasses_the_ui_is_audited(tmp_path, monkeypatch):
     assert r.headers[activity.AUDIT_HEADER] == "recorded"
     (row,) = _history(c, source="server")
     assert row["action"] == "process.start"
-    assert row["target"] == "rdb1 rdb2"
+    assert (row["target"], row["subject"]) == ("local", "rdb1 rdb2")
     assert row["outcome"] == "succeeded"
     assert row["request_id"] == request_id
     assert row["session_id"] is None
@@ -180,8 +180,8 @@ def test_a_caller_that_bypasses_the_ui_is_audited(tmp_path, monkeypatch):
     assert row["method"] == "POST"
     assert row["duration_ms"] >= 0
     assert row["items"] == [
-        {"target": "rdb1", "outcome": "succeeded"},
-        {"target": "rdb2", "outcome": "succeeded"},
+        {"subject": "rdb1", "outcome": "succeeded"},
+        {"subject": "rdb2", "outcome": "succeeded"},
     ]
     assert row["detail"]["exit_code"] == 0
 
@@ -288,7 +288,7 @@ def test_a_detached_backfill_is_accepted_not_succeeded(tmp_path, monkeypatch):
     }
     assert c.post("/control/backfill", json=body).status_code == 200
     (row,) = _history(c)
-    assert (row["action"], row["target"], row["outcome"]) == (
+    assert (row["action"], row["subject"], row["outcome"]) == (
         "backfill.start",
         "demo_deals_backfill",
         "accepted",
@@ -327,7 +327,7 @@ def test_a_worker_config_outcome_is_whether_it_took_effect(tmp_path, answer, out
     c = _client(_settings(tmp_path), gw)
     c.put("/control/worker/config", json={"key": "dry_run", "value": "1"})
     (row,) = _history(c)
-    assert (row["action"], row["target"], row["outcome"]) == ("worker.config", "dry_run", outcome)
+    assert (row["action"], row["subject"], row["outcome"]) == ("worker.config", "dry_run", outcome)
 
 
 def test_a_row_left_pending_by_a_restart_is_settled_unknown(tmp_path):
@@ -427,11 +427,11 @@ def test_an_unknown_top_level_field_is_refused(tmp_path):
     assert c.get("/activity").json()["events"] == []
 
 
-def test_a_target_that_is_not_a_name_is_stored_as_invalid(tmp_path):
+def test_a_subject_that_is_not_a_name_is_stored_as_invalid(tmp_path):
     c = _client(_settings(tmp_path))
-    c.post("/activity/events", json={"events": [_event(target='{"password": "p"}')]})
+    c.post("/activity/events", json={"events": [_event(subject='{"password": "p"}')]})
     (row,) = _history(c)
-    assert row["target"] == "(invalid)"
+    assert row["subject"] == "(invalid)"
 
 
 def test_a_naive_browser_timestamp_is_refused(tmp_path):
@@ -490,25 +490,25 @@ def test_an_upload_records_metadata_through_the_hook_never_contents():
 # ------------------------------------------------------- history: filters, retention
 
 
-def test_events_are_filtered_by_session_action_target_outcome_and_time(tmp_path):
+def test_events_are_filtered_by_session_action_subject_outcome_and_time(tmp_path):
     c = _client(_settings(tmp_path))
     c.post(
         "/activity/events",
         json={
             "events": [
-                _event(ts="2026-11-01T00:00:00Z", action="view.open", target="Desk"),
+                _event(ts="2026-11-01T00:00:00Z", action="view.open", subject="Desk"),
                 _event(
                     ts="2026-11-02T00:00:00Z",
                     kind="result",
                     action="process.stop",
-                    target="rdb1",
+                    subject="rdb1",
                     outcome="failed",
                 ),
                 _event(
                     ts="2026-11-03T00:00:00Z",
                     session_id="other-session-1",
                     action="process.start",
-                    target="rdb1",
+                    subject="rdb1",
                     outcome="succeeded",
                 ),
             ]
@@ -521,7 +521,7 @@ def test_events_are_filtered_by_session_action_target_outcome_and_time(tmp_path)
     ]
     assert len(_history(c, action="process")) == 2, "a dotted prefix matches"
     assert _history(c, action="proc") == [], "but not a bare prefix"
-    assert len(_history(c, target="rdb1")) == 2
+    assert len(_history(c, subject="rdb1")) == 2
     assert [e["outcome"] for e in _history(c, outcome="failed")] == ["failed"]
     window = _history(c, since="2026-11-02T00:00:00Z", until="2026-11-03T00:00:00Z")
     assert [e["action"] for e in window] == ["process.stop"]
@@ -582,9 +582,9 @@ def test_rows_older_than_the_retention_window_are_pruned(tmp_path):
 def test_only_the_newest_max_rows_are_kept(tmp_path):
     store = ActivityStore(tmp_path / "a.sqlite3", bounds=_uniform(30, 5))
     for i in range(activity.PRUNE_EVERY):
-        store.add(source="browser", kind="select", action="desk.table", target=f"t{i}")
+        store.add(source="browser", kind="select", action="desk.table", subject=f"t{i}")
     assert store.count() == 5, "pruned on its own, every PRUNE_EVERY inserts"
-    assert [r["target"] for r in store.query(Query())] == [
+    assert [r["subject"] for r in store.query(Query())] == [
         f"t{i}" for i in range(activity.PRUNE_EVERY - 1, activity.PRUNE_EVERY - 6, -1)
     ]
 

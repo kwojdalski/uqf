@@ -333,7 +333,7 @@ def test_a_route_with_no_mapping_is_refused_and_audited(tmp_path):
     assert resp.status_code == 403
     assert "no feature" in resp.json()["detail"]
     (row,) = _rows(tmp_path / "a.sqlite3")
-    assert (row["action"], row["outcome"], row["target"]) == (
+    assert (row["action"], row["outcome"], row["subject"]) == (
         "authz.refused",
         "refused",
         "/unmapped",

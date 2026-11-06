@@ -198,3 +198,69 @@ def test_the_audit_says_how_its_user_was_established_as_identity_source():
 
     assert "identity_source" in activity.DETAIL_KEYS
     assert "identity" not in activity.DETAIL_KEYS
+
+
+# ------------------------------------- `target` is a deployment target (#2234)
+
+#: Every model field called `target`: each one is a registered deployment
+#: target or `local`. A new one is added here only if it means the same.
+DEPLOYMENT_TARGET_FIELDS = {
+    (m, "target")
+    for m in (
+        "ActivityEventOut", "ConfigDiffResponse", "ConfigHistoryResponse",
+        "ConfigPushOpenResponse", "ConfigPushOut", "ConfigPushResponse",
+        "ConfigPushSummaryOut", "ConfigRestoreResponse", "RemoteDeleteResponse",
+        "RemoteFilesResponse", "RemoteUploadResponse", "ServiceTargetOut",
+        "TunnelCheckResponse", "TunnelPlanResponse", "WorkspaceOut", "WorkspaceResponse",
+    )
+}  # fmt: skip
+
+
+def test_target_names_a_deployment_target_and_nothing_else():
+    """CommandResponse's `target` was torq.sh's selector; an activity item's
+    and a browser event's were a file, a process or a view. Those are `procs`
+    and `subject` now."""
+    assert _fields_named("target") == DEPLOYMENT_TARGET_FIELDS
+    assert "procs" in models.CommandResponse.model_fields
+
+
+@pytest.mark.parametrize("model", [models.ActivityItem, models.BrowserEventIn])
+def test_an_activity_target_is_refused_by_its_new_name(model):
+    with pytest.raises(pydantic.ValidationError, match="`target` is `subject`"):
+        model.model_validate({"target": "Desk"})
+
+
+def test_every_audited_route_records_a_deployment_target():
+    """The audit row's `target` is the path's `{target}`, else `local`: what
+    a route acted on goes to `subject`, so `?target=prod` never matches a
+    process, a cfg key or a worker that happens to share the name."""
+    from uqf_frontend import activity
+
+    for (_method, template), _name in activity.SERVER_ACTIONS.items():
+        names = re.findall(r"\{(\w+)\}", template)
+        params = {n: {"target": "prod"}.get(n, "x") for n in names}
+        expected = "prod" if "{target}" in template else "local"
+        assert activity.server_target(template, params) == expected, template
+    assert activity.server_subject({"process": "rdb1"}) == "rdb1"
+
+
+def test_a_lifecycle_action_is_audited_on_local_about_its_selector(tmp_path, monkeypatch):
+    from uqf_frontend import control
+
+    token = "s3cret-write-token"
+    settings = Settings(
+        enable_writes=True, write_token=token, allowed_hosts=("localhost", "testserver"),
+        activity_db=tmp_path / "a.sqlite3",
+    )  # fmt: skip
+    done = control.CommandResult(action="start", procs="rdb1 rdb2", exit_code=0, output="")
+    monkeypatch.setattr(control, "lifecycle", lambda *a, **k: done)
+    client = TestClient(
+        create_app(gateway=FakeGateway({}), settings=settings, fleet=FakeFleet()),
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    resp = client.post("/control/lifecycle/start", json={"procs": "rdb1 rdb2"})
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["procs"] == "rdb1 rdb2" and "target" not in resp.json()
+    (row,) = client.get("/activity", params={"subject": "rdb1 rdb2"}).json()["events"]
+    assert (row["target"], row["subject"], row["action"]) == ("local", "rdb1 rdb2", "process.start")
+    assert client.get("/activity", params={"target": "rdb1 rdb2"}).json()["events"] == []

@@ -154,8 +154,8 @@ def test_a_push_has_one_id_on_every_row_and_a_summary(served, tmp_path):
         "identity_source": "claimed",
     }  # fmt: skip
     assert summary["items"] == [
-        {"target": "shared/config/app.env", "outcome": "succeeded"},
-        {"target": "shared/config/sub/new.csv", "outcome": "succeeded"},
+        {"subject": "shared/config/app.env", "outcome": "succeeded"},
+        {"subject": "shared/config/sub/new.csv", "outcome": "succeeded"},
     ]
 
 
@@ -255,8 +255,8 @@ def test_an_interrupted_push_is_never_retried_and_history_shows_what_landed(serv
     (summary,) = rows["config.push"]
     assert summary["outcome"] == "unknown"
     assert summary["items"] == [
-        {"target": "shared/config/landed", "outcome": "succeeded"},
-        {"target": "shared/config/lost", "outcome": "unknown"},
+        {"subject": "shared/config/landed", "outcome": "succeeded"},
+        {"subject": "shared/config/lost", "outcome": "unknown"},
     ]
 
 
@@ -285,8 +285,8 @@ def test_restore_round_trip_is_a_confirmed_audited_push(served, tmp_path):
     (row,) = restored
     assert row["detail"]["restores"] == push and row["detail"]["push_id"] == body["push_id"]
     assert row["items"] == [
-        {"target": "shared/config/app.env", "outcome": "succeeded"},
-        {"target": "shared/config/new/x.csv", "outcome": "succeeded"},
+        {"subject": "shared/config/app.env", "outcome": "succeeded"},
+        {"subject": "shared/config/new/x.csv", "outcome": "succeeded"},
     ]
     listed = c.get("/services/box/config/pushes").json()["pushes"]
     assert listed[0]["kind"] == "restore" and listed[0]["restores"] == push
@@ -334,7 +334,7 @@ def test_a_restore_after_pruning_is_refused_clearly(served, tmp_path):
     assert c.get(f"/services/box/config/pushes/{gone}").status_code == 410
     # pruning is audited: which push, by the open that pruned it
     (pruned,) = _by_action(c)["config.history.prune"]
-    assert pruned["items"] == [{"target": gone, "outcome": "succeeded"}]
+    assert pruned["items"] == [{"subject": gone, "outcome": "succeeded"}]
     assert pruned["detail"] == {"pruned_count": 1}
     opens = _by_action(c)["config.push.open"]
     assert [o["detail"]["pruned_count"] for o in opens if o["detail"]["push_id"] == newer] == [1]

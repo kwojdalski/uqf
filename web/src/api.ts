@@ -793,7 +793,8 @@ export interface BackfillBody {
 }
 export interface CommandResult {
   action: string;
-  target: string;
+  /** torq.sh's selector, as sent - not a deployment target (#2234) */
+  procs: string;
   exit_code: number;
   ok: boolean;
   output: string;
@@ -1318,7 +1319,7 @@ export type ActivityTrigger =
 /** A `detail` value. Only the keys activity.DETAIL_KEYS allows are kept. */
 export type DetailValue = string | number | boolean;
 export interface ActivityItem {
-  target: string;
+  subject: string;
   outcome: ActivityOutcome;
 }
 /** POST /activity/events, one event - models.BrowserEventIn. */
@@ -1328,7 +1329,8 @@ export interface BrowserEvent {
   ts: string;
   kind: BrowserKind;
   action: string;
-  target?: string | null;
+  /** what the event is about - a view, a control, a process selector */
+  subject?: string | null;
   trigger: ActivityTrigger;
   request_id?: string | null;
   outcome?: ActivityOutcome | null;
@@ -1363,7 +1365,10 @@ export interface ActivityEvent {
   source: ActivitySource;
   kind: ActivityKind;
   action: string;
+  /** the deployment target a server row acted on, `local` for this stack */
   target: string | null;
+  /** what it acted on: a process selector, a cfg key, a worker, a view */
+  subject: string | null;
   outcome: ActivityOutcome | null;
   session_id: string | null;
   request_id: string | null;

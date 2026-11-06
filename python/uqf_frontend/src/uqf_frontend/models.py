@@ -877,7 +877,9 @@ class CommandResponse(BaseModel):
     """
 
     action: str
-    target: str
+    #: torq.sh's selector, as LifecycleRequest sent it. Not `target`, which is
+    #: a deployment target everywhere (#2234): control acts on `local` only.
+    procs: str
     exit_code: int
     ok: bool
     output: str
@@ -1046,13 +1048,31 @@ ActivityTrigger = Literal["pointer", "keyboard", "programmatic", "unknown"]
 _ACTIVITY_ID = r"^[A-Za-z0-9_-]{8,64}$"
 
 
+#: The refusal of an activity event's or item's old `target` (#2234).
+_SUBJECT_RENAMED = (
+    "`target` is `subject`: what the event is about - a view, a control, a process "
+    "selector. `target` names a deployment target (#2234)"
+)
+
+
+def _refuse_target(data: Any) -> Any:
+    if isinstance(data, dict) and "target" in data:
+        raise ValueError(_SUBJECT_RENAMED)
+    return data
+
+
 class ActivityItem(BaseModel):
     """One item's outcome, for an action over several things."""
 
     model_config = STRICT_REQUEST
 
-    target: str = Field(min_length=1, max_length=200)
+    subject: str = Field(min_length=1, max_length=200)
     outcome: ActivityOutcome
+
+    @model_validator(mode="before")
+    @classmethod
+    def _renamed(cls, data: Any) -> Any:
+        return _refuse_target(data)
 
 
 class BrowserEventIn(BaseModel):
@@ -1071,13 +1091,19 @@ class BrowserEventIn(BaseModel):
     ts: AwareInstant
     kind: BrowserKind
     action: str = Field(pattern=r"^[a-z][a-z0-9_.-]{0,63}$")
-    target: str | None = Field(default=None, max_length=200)
+    #: What the event is about: a view, a control, a process selector.
+    subject: str | None = Field(default=None, max_length=200)
     trigger: ActivityTrigger
     request_id: str | None = Field(default=None, pattern=_ACTIVITY_ID)
     outcome: ActivityOutcome | None = None
     duration_ms: float | None = Field(default=None, ge=0, le=86_400_000)
     items: list[ActivityItem] = Field(default_factory=list, max_length=256)
     detail: dict[str, str | int | float | bool] = Field(default_factory=dict, max_length=32)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _renamed(cls, data: Any) -> Any:
+        return _refuse_target(data)
 
     @field_validator("ts")
     @classmethod
@@ -1133,7 +1159,12 @@ class ActivityEventOut(BaseModel):
     source: ActivitySource
     kind: ActivityKind
     action: str
+    #: The deployment target a server row acted on, `local` for this
+    #: server's own stack; None for a browser row and an unrouted request.
     target: str | None
+    #: What it acted on: a process selector, a cfg key, a worker, a route, a
+    #: view or a control (#2234).
+    subject: str | None
     outcome: ActivityOutcome | None
     session_id: str | None
     request_id: str | None

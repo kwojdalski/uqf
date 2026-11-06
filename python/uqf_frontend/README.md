@@ -656,11 +656,11 @@ control's name and kind, a change whether a box is checked, a request its route
 (the first two path segments, a name in them replaced by `*`, never the query
 string).
 
-  |                         |                                                                                                                                                                                                                                                                                                                                                                           |
-  | ---                     | ---                                                                                                                                                                                                                                                                                                                                                                       |
-  | `GET /activity`         | The history, newest first. Filters: `since`, `until` (timezone required), `session_id`, `request_id`, `action` (exact, or a dotted prefix: `process` matches `process.stop`), `target`, `outcome`, `source`, `limit` (at most 1000). Says whether it is persistent and whether writes have failed                                                                         |
-  | `POST /activity/events` | Up to 100 browser events, in one transaction, and the count of any the browser did not send (`dropped`). A repeated `event_id` is ignored, so a retried batch is stored once. A body of at most 1 MiB (413). It needs no token; without one, events are rate-limited across all callers (600 at once, 20 a second after; 429, transient). A `ts` UTC cannot hold is a 422 |
-  | `GET /activity/export`  | The history as a file, oldest first, under the same filters plus `format`: `jsonl`, `csv`, or `text` - a timeline `UTC time · session · level · action · target · outcome · duration`, each browser action grouped under the server request it caused (its request id). At most 100000 events                                                                             |
+  |                         |                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+  | ---                     | ---                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+  | `GET /activity`         | The history, newest first. Filters: `since`, `until` (timezone required), `session_id`, `request_id`, `action` (exact, or a dotted prefix: `process` matches `process.stop`), `target` (a deployment target, or `local`), `subject` (what was acted on there), `outcome`, `source`, `limit` (at most 1000). Says whether it is persistent and whether writes have failed                                                                         |
+  | `POST /activity/events` | Up to 100 browser events, in one transaction, and the count of any the browser did not send (`dropped`). A repeated `event_id` is ignored, so a retried batch is stored once. A body of at most 1 MiB (413). It needs no token; without one, events are rate-limited across all callers (600 at once, 20 a second after; 429, transient). A `ts` UTC cannot hold is a 422                                                                        |
+  | `GET /activity/export`  | The history as a file, oldest first, under the same filters plus `format`: `jsonl`, `csv`, or `text` - a timeline `UTC time · session · level · action · target · subject · outcome · duration`, each browser action grouped under the server request it caused (its request id). At most 100000 events                                                                                                                                          |
 
 `GET /activity` also takes `level`, the most detailed level shown:
 `interactions` shows actions and interactions. `uqs activity list` and
@@ -672,8 +672,14 @@ is the API's, byte for byte.
 with every write; the server stores both on its row and echoes the request id
 (making one up when none, or a malformed one, is sent). The browser's `confirm`
 or `submit`, its `result` and the server row of one operation share that id.
-Every row has a UTC timestamp, its target, a duration and, for an action over
-several processes, per-item outcomes.
+Every row has a UTC timestamp, a duration and, for an action over several
+processes or files, per-item outcomes. `target` is only ever a deployment
+target: a server row's is the path's `{target}`, or `local` for a route that
+acts on this server's own stack (control, settings), and a browser row has none.
+What the action was on there - a process selector, a `.qetl.cfg` key, a worker,
+a view or a control - is its `subject`, and each item names its own `subject`
+(#2234). A history file kept before the split is rewritten once when the API
+opens it; `uqs activity` refuses one it has not yet opened.
 
 **Outcomes, including the uncertain ones.** `pending`, `succeeded`, `failed`,
 `refused` (nothing was acted on: 401, 403, a 422 before acting), `accepted` (a
@@ -747,7 +753,7 @@ Its handler then reports what the status code cannot:
 
 ```python
 audit = activity.audit_of(request)
-audit.set_target(name)  # written at once: survives a crash mid-action
+audit.set_subject(name)  # written at once: survives a crash mid-action
 audit.note(file_name=name, size_bytes=size, sha256=digest)  # never the bytes
 audit.begin()  # past here, a failure is `unknown`
 ...

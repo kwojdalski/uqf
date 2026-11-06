@@ -108,7 +108,7 @@ class CommandResult:
     """
 
     action: str
-    target: str
+    procs: str
     exit_code: int
     output: str
     problems: tuple[str, ...] = ()
@@ -217,7 +217,7 @@ def lifecycle(settings: Settings, action: str, procs: str) -> CommandResult:
             problems = _verify(paths, base_port, action, procs, before, output, deadline)
     return CommandResult(
         action=action,
-        target=procs,
+        procs=procs,
         exit_code=result.returncode,
         output="\n".join((output, *problems)).strip(),
         problems=problems,

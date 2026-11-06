@@ -162,7 +162,7 @@ it("interactions adds every control used, by name, and no request", async () => 
   ]);
   const used = events
     .filter((e) => e.kind === "interact")
-    .map((e) => [e.action, e.target]);
+    .map((e) => [e.action, e.subject]);
   expect(used).toEqual(
     expect.arrayContaining([
       ["ui.click", "nav.Desk"],
@@ -181,7 +181,7 @@ it("interactions adds every control used, by name, and no request", async () => 
   expect(used.some(([, target]) => target === "unnamed")).toBe(false);
   // the keyboard press that activated Cancel is the click's trigger
   const cancel = events.find(
-    (e) => e.kind === "interact" && e.target === "control.cancel",
+    (e) => e.kind === "interact" && e.subject === "control.cancel",
   )!;
   expect(cancel.trigger).toBe("keyboard");
   const toggle = events.find((e) => e.action === "ui.toggle")!;
@@ -197,7 +197,7 @@ it("debug adds requests, and every level's events with it", async () => {
   );
   expect(actions(events, "debug")).toEqual(["request.finish", "request.start"]);
   const finish = events.find((e) => e.action === "request.finish")!;
-  expect(finish.target).toMatch(/^GET \//);
+  expect(finish.subject).toMatch(/^GET \//);
   expect(finish.outcome).toBe("succeeded");
   expect(finish.detail).toEqual({ status: 200 });
 });
@@ -224,7 +224,7 @@ it("records a file input by how many files, never their names", async () => {
   fireEvent.change(input);
   uninstall();
   const events = await recorded();
-  expect(events.map((e) => [e.action, e.target, e.detail])).toEqual([
+  expect(events.map((e) => [e.action, e.subject, e.detail])).toEqual([
     ["ui.change", "files.upload.files", { control: "file", item_count: 1 }],
   ]);
   expect(JSON.stringify(events)).not.toContain("SECRET");
@@ -254,7 +254,7 @@ it("follows the server's default from /health until the tab picks its own", asyn
   expect(effectiveLevel()).toBe("interactions");
   // switching off records nothing after it: the Desk click above is absent
   const events = await recorded();
-  expect(events.some((e) => e.target === "nav.Desk")).toBe(false);
+  expect(events.some((e) => e.subject === "nav.Desk")).toBe(false);
 });
 
 it("shows what each level keeps and what was not kept", async () => {
@@ -310,7 +310,7 @@ it("counts what overflows the queue while the API is down, and reports it later"
     },
   });
   for (let i = 0; i < 1100; i++)
-    record("interact", "ui.click", { target: "nav.Desk" });
+    record("interact", "ui.click", { subject: "nav.Desk" });
   await flushActivity();
   expect(queuedActivity()).toHaveLength(1000);
   down = false;

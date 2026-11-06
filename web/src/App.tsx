@@ -372,7 +372,7 @@ function CoverageView() {
       setError("");
       resource.refresh();
       record("submit", "coverage.check", {
-        target: range.dataset,
+        subject: range.dataset,
         detail: {
           dataset: range.dataset,
           source_version: range.source_version,
@@ -594,7 +594,7 @@ function DeskView() {
       resource.refresh();
       // How many filters, never their values: those are whatever was typed.
       record("submit", "desk.apply", {
-        target: selected.name,
+        subject: selected.name,
         detail: {
           tier,
           limit,
@@ -605,7 +605,7 @@ function DeskView() {
     } catch (error) {
       setError((error as Error).message);
       record("submit", "desk.apply", {
-        target: selected.name,
+        subject: selected.name,
         outcome: "refused",
         detail: { reason: "invalid input" },
       });
@@ -636,7 +636,7 @@ function DeskView() {
               onClick={(event) => {
                 if (item.name !== selected?.name)
                   record("select", "desk.table", {
-                    target: item.name,
+                    subject: item.name,
                     trigger: triggerOf(event),
                   });
                 setTable(item.name);
@@ -713,7 +713,7 @@ function DeskView() {
                     onChange={(event) => {
                       setTier(event.target.value as Tier);
                       record("select", "desk.tier", {
-                        target: selected?.name,
+                        subject: selected?.name,
                         detail: { tier: event.target.value },
                       });
                     }}
@@ -1368,28 +1368,28 @@ function ControlView() {
     action: string,
     kind: "submit" | "confirm",
     trigger: ReturnType<typeof triggerOf>,
-    target = procs,
+    selector = procs,
     chosen = mode,
   ) {
     run(action, async () => {
       const r = await tracked(
         kind,
         `process.${action}`,
-        { target, trigger, detail: { mode: chosen } },
+        { subject: selector, trigger, detail: { mode: chosen } },
         (correlation) =>
           mutate<CommandResult>(
             `/control/lifecycle/${encodeURIComponent(action)}`,
-            { procs: target } satisfies LifecycleBody,
+            { procs: selector } satisfies LifecycleBody,
             "POST",
             correlation,
           ),
         (r) => (r.ok ? "succeeded" : "failed"),
       );
-      return `${r.action} ${r.target}: exit ${r.exit_code}\n${r.output}`;
+      return `${r.action} ${r.procs}: exit ${r.exit_code}\n${r.output}`;
     });
   }
   function cancel(trigger: ReturnType<typeof triggerOf>) {
-    record("cancel", `process.${confirming}`, { target: held.procs, trigger });
+    record("cancel", `process.${confirming}`, { subject: held.procs, trigger });
     setConfirming("");
   }
 
@@ -1548,7 +1548,7 @@ function ControlView() {
                   if (!DESTRUCTIVE.has(action))
                     return lifecycle(action, "submit", triggerOf(event));
                   record("submit", `process.${action}`, {
-                    target: procs,
+                    subject: procs,
                     trigger: triggerOf(event),
                     detail: { mode },
                   });
@@ -1614,7 +1614,7 @@ function ControlView() {
               "submit",
               "process.config",
               {
-                target: cfg.process,
+                subject: cfg.process,
                 trigger: triggerOf(),
                 detail: { process: cfg.process, field: cfg.field },
               },
@@ -1692,7 +1692,7 @@ function ControlView() {
               "submit",
               "worker.config",
               {
-                target: wcfg.key,
+                subject: wcfg.key,
                 trigger: triggerOf(),
                 detail: { key: wcfg.key },
               },
@@ -1750,7 +1750,7 @@ function ControlView() {
               "submit",
               "backfill.start",
               {
-                target: bf.worker,
+                subject: bf.worker,
                 trigger: triggerOf(),
                 detail: {
                   worker: bf.worker,
@@ -1870,7 +1870,7 @@ function Workspace() {
                 onClick={(event) => {
                   if (item !== view)
                     record("navigate", "view.open", {
-                      target: item,
+                      subject: item,
                       trigger: triggerOf(event),
                       detail: { from_view: view },
                     });

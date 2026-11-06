@@ -77,7 +77,7 @@ it("records navigation once per change, and how it was triggered", async () => {
   fireEvent.click(screen.getByRole("button", { name: /Desk/ }), { detail: 1 });
   pressEnter(screen.getByRole("button", { name: /Fleet/ }));
   const events = (await recorded()).filter((e) => e.kind === "navigate");
-  expect(events.map((e) => [e.target, e.trigger, e.detail?.from_view])).toEqual(
+  expect(events.map((e) => [e.subject, e.trigger, e.detail?.from_view])).toEqual(
     [
       ["Desk", "pointer", "Coverage"],
       ["Fleet", "keyboard", "Desk"],
@@ -113,7 +113,7 @@ it("asks before a stop, and a keyboard cancel sends nothing", async () => {
     fetcher.mock.calls.filter(([path]) => path.startsWith("/control/lifecycle")),
   ).toEqual([]);
   const events = (await recorded()).filter((e) => e.action === "process.stop");
-  expect(events.map((e) => [e.kind, e.trigger, e.target])).toEqual([
+  expect(events.map((e) => [e.kind, e.trigger, e.subject])).toEqual([
     ["submit", "keyboard", "all"],
     ["cancel", "keyboard", "all"],
   ]);
@@ -123,7 +123,7 @@ it("a confirmed stop carries one request id from the click to the server and bac
   const fetcher = mockApi(() =>
     ok({
       action: "stop",
-      target: "all",
+      procs: "all",
       exit_code: 0,
       ok: true,
       output: "done",
@@ -158,7 +158,7 @@ it("a non-zero exit is recorded as failed, a refusal as refused", async () => {
     path.endsWith("/start")
       ? ok({
           action: "start",
-          target: "all",
+          procs: "all",
           exit_code: 3,
           ok: false,
           output: "boom",
@@ -254,12 +254,12 @@ it("keeps events the API did not take, and sends them next time", async () => {
       sent.push(...events);
     },
   });
-  record("navigate", "view.open", { target: "Desk" });
+  record("navigate", "view.open", { subject: "Desk" });
   await flushActivity();
   expect(queuedActivity()).toHaveLength(1);
   fail = false;
   await flushActivity();
-  expect(sent.map((e) => e.target)).toEqual(["Desk"]);
+  expect(sent.map((e) => e.subject)).toEqual(["Desk"]);
   expect(queuedActivity()).toHaveLength(0);
 });
 

@@ -212,7 +212,10 @@ def _refuse(
             # can never evict the audit of an authorised action (#2019).
             kind=activity.ATTEMPT_KIND,
             action=activity.REFUSED_ACTION,
-            target=getattr(route, "path", None) or "(unrouted)",
+            target=activity.server_target(
+                getattr(route, "path", None), request.scope.get("path_params", {})
+            ),
+            subject=getattr(route, "path", None) or "(unrouted)",
             outcome="refused",
             session_id=request.headers.get(activity.SESSION_ID_HEADER),
             request_id=request.headers.get(activity.REQUEST_ID_HEADER),
@@ -595,7 +598,8 @@ def create_app(
             source="server",
             kind=activity.SERVER_KIND if authorised else activity.ATTEMPT_KIND,
             action=activity.server_action(request.method, template, params),
-            target=activity.server_target(params),
+            target=activity.server_target(template, params),
+            subject=activity.server_subject(params),
             outcome="pending",
             session_id=request.headers.get(activity.SESSION_ID_HEADER),
             request_id=request_id,
@@ -1353,7 +1357,7 @@ def create_app(
             request_id=request.headers.get(activity.REQUEST_ID_HEADER),
             claimed_user=audit_user(request),
             method=request.method.upper(),
-            items=[{"target": p["push_id"], "outcome": "succeeded"} for p in pruned],
+            items=[{"subject": p["push_id"], "outcome": "succeeded"} for p in pruned],
             detail={"pruned_count": len(pruned)},
         )
 
@@ -1534,7 +1538,7 @@ def create_app(
     ) -> CommandResponse:
         """Start, stop or restart processes (action is start|stop|restart)."""
         audit = activity.audit_of(request)
-        audit.set_target(req.procs)
+        audit.set_subject(req.procs)
         with control.reporting_acting(audit.begin):
             result = control.lifecycle(settings, action, req.procs)
         # torq.sh reports one exit code for the whole selector: success says
@@ -1545,7 +1549,7 @@ def create_app(
         audit.note(exit_code=result.exit_code)
         return CommandResponse(
             action=result.action,
-            target=result.target,
+            procs=result.procs,
             exit_code=result.exit_code,
             ok=result.ok,
             output=result.output,
@@ -1571,7 +1575,7 @@ def create_app(
     def control_worker_config(req: WorkerConfigRequest, request: Request) -> WorkerConfigResponse:
         """Set a `.qetl.cfg` override in the live process the gateway addresses."""
         audit = activity.audit_of(request)
-        audit.set_target(req.key)
+        audit.set_subject(req.key)
         audit.note(key=req.key)
         with control.reporting_acting(audit.begin):
             out = control.set_worker_config(gateway, settings, req.key, req.value)
@@ -1589,7 +1593,7 @@ def create_app(
     def control_backfill(req: BackfillRequest, request: Request) -> BackfillStartedResponse:
         """Launch a bounded worker over a range. Detached; watch /ops/backfill."""
         audit = activity.audit_of(request)
-        audit.set_target(req.worker)
+        audit.set_subject(req.worker)
         audit.note(
             worker=req.worker,
             source_version=req.source_version,
@@ -1636,7 +1640,7 @@ def create_app(
                 "action": event.action,
                 "ts": instants.to_datetime(event.ts),
                 "event_id": event.event_id,
-                "target": event.target,
+                "subject": event.subject,
                 "outcome": event.outcome,
                 "session_id": event.session_id,
                 "request_id": event.request_id,
@@ -1668,6 +1672,7 @@ def create_app(
             request_id=filters["request_id"] or None,
             action=filters["action"] or None,
             target=filters["target"] or None,
+            subject=filters["subject"] or None,
             outcome=filters["outcome"],
             source=filters["source"],
             level=level,
@@ -1682,6 +1687,7 @@ def create_app(
         request_id: str | None = None,
         action: str | None = None,
         target: str | None = None,
+        subject: str | None = None,
         outcome: ActivityOutcome | None = None,
         source: ActivitySource | None = None,
         level: ActivityLevel | None = None,
@@ -1724,6 +1730,7 @@ def create_app(
         request_id: str | None = None,
         action: str | None = None,
         target: str | None = None,
+        subject: str | None = None,
         outcome: ActivityOutcome | None = None,
         source: ActivitySource | None = None,
         level: ActivityLevel | None = None,

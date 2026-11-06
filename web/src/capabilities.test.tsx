@@ -128,7 +128,7 @@ it("records no activity for a caller without activity:write", async () => {
   serve(VIEWER);
   render(<App />);
   await waitFor(() => expect(navNames()).toEqual(["Coverage", "Desk"]));
-  expect(record("navigate", "view.open", { target: "Desk" })).toBeNull();
+  expect(record("navigate", "view.open", { subject: "Desk" })).toBeNull();
   expect(queuedActivity()).toEqual([]);
 });
 

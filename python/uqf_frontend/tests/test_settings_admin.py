@@ -178,7 +178,7 @@ def test_a_change_takes_effect_at_once_and_is_audited_as_a_diff(tmp_path):
         POLICY + "p, viewers, usage, read\n"
     )
     (row,) = [r for r in _audit(tmp_path / "activity.sqlite3") if r["action"] == "settings.access"]
-    assert (row["outcome"], row["claimed_user"], row["target"]) == ("succeeded", "alice", "access")
+    assert (row["outcome"], row["claimed_user"], row["subject"]) == ("succeeded", "alice", "access")
     assert row["detail"]["changes"] == [
         {"field": "grant", "before": None, "after": "p, viewers, usage, read"}
     ]

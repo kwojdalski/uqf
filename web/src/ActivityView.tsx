@@ -50,6 +50,7 @@ interface Filters {
   thisSession: boolean;
   action: string;
   target: string;
+  subject: string;
   outcome: ActivityOutcome | "";
   source: ActivitySource | "";
   level: ActivityLevel | "";
@@ -62,6 +63,7 @@ const EMPTY: Filters = {
   thisSession: false,
   action: "",
   target: "",
+  subject: "",
   outcome: "",
   source: "",
   level: "",
@@ -75,6 +77,7 @@ function filterParams(filters: Filters): URLSearchParams {
   if (filters.thisSession) params.set("session_id", sessionId());
   if (filters.action) params.set("action", filters.action);
   if (filters.target) params.set("target", filters.target);
+  if (filters.subject) params.set("subject", filters.subject);
   if (filters.outcome) params.set("outcome", filters.outcome);
   if (filters.source) params.set("source", filters.source);
   if (filters.requestId) params.set("request_id", filters.requestId);
@@ -112,7 +115,7 @@ function useLevel() {
 
 function items(event: ActivityEvent): string {
   return event.items
-    .map((item) => `${item.target}: ${item.outcome}`)
+    .map((item) => `${item.subject}: ${item.outcome}`)
     .join(", ");
 }
 
@@ -135,7 +138,7 @@ export function ActivityView() {
     // After the change, so turning a level on records that it was turned
     // on, and turning it off records nothing.
     record("select", "activity.level", {
-      target: "Activity",
+      subject: "Activity",
       detail: { level: value || "default" },
     });
   }
@@ -146,7 +149,7 @@ export function ActivityView() {
     // The filter's shape, not its text: a target someone typed may be anything.
     record("submit", "activity.filter", {
       trigger,
-      target: "Activity",
+      subject: "Activity",
       detail: { filter_count: Object.values(next).filter(Boolean).length },
     });
   }
@@ -223,7 +226,17 @@ export function ActivityView() {
             <input
               data-activity="activity.filter.target"
               value={draft.target}
+              placeholder="local, or a deployment target"
               onChange={(e) => setDraft({ ...draft, target: e.target.value })}
+            />
+          </label>
+          <label>
+            Subject
+            <input
+              data-activity="activity.filter.subject"
+              value={draft.subject}
+              placeholder="a process, a cfg key, a worker, a view"
+              onChange={(e) => setDraft({ ...draft, subject: e.target.value })}
             />
           </label>
           <label>
@@ -408,6 +421,7 @@ export function ActivityView() {
                     <th>kind</th>
                     <th>action</th>
                     <th>target</th>
+                    <th>subject</th>
                     <th>outcome</th>
                     <th>items</th>
                     <th>trigger</th>
@@ -428,6 +442,7 @@ export function ActivityView() {
                         <code>{event.action}</code>
                       </td>
                       <td>{event.target ?? "—"}</td>
+                      <td>{event.subject ?? "—"}</td>
                       <td>
                         {event.outcome ? (
                           <span className={`badge ${event.outcome}`}>
