@@ -917,6 +917,17 @@ $ uqs start
 ERROR    | the torq runtime's stack (base port 6050) is already using ports this start needs: stp1 :6050 (pid 4242), ... Stop it with `uqs --runtime torq stop --base-port 6050`, or start this one elsewhere with --base-port.
 ```
 
+A port held by anything else - a q started by hand, which answers like an empty
+stack - is refused the same way, with the pid and command line of what listens
+on it (#2180).
+
+torq.sh returns once each process is forked, not once it is up. So after the
+launch, `start` and `restart` (without `--follow`) wait `--grace` (3 seconds by
+default) and check every process they started the way `uqs status` does: by its
+pid, and by who listens on its port. One that died while loading, or whose port
+another process answers, fails the command with a non-zero exit, naming it, why,
+and the last lines of its log. A one-shot such as `tpreplay1` is not checked.
+
 `uqs status` names the runtime and base port it is reporting on in its title.
 
 On `torq`, `list processes` shows the 23 starter-pack processes. `essential`
