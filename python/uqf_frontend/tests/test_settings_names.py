@@ -21,16 +21,15 @@ import typing
 from pathlib import Path
 
 import pytest
+from api_support import route_modules
 
 from uqf_frontend import app as app_module
-from uqf_frontend import config, models
+from uqf_frontend import config
 from uqf_frontend.config import RENAMED_SETTINGS_KEYS, Settings
-from uqf_frontend.models import (
-    ActivityBound,
-    ConfigPushOpenResponse,
-    PrunedPushOut,
-    RuntimeSettingsBody,
-)
+from uqf_frontend.models.activity import ActivityBound, ActivityResponse
+from uqf_frontend.models.config_push import ConfigPushOpenResponse, PrunedPushOut
+from uqf_frontend.models.health import HealthResponse
+from uqf_frontend.models.settings import RuntimeSettingsBody
 from uqs import activity_log
 from uqs.renamed_env import RENAMED_ENV
 
@@ -141,10 +140,13 @@ def test_a_response_serving_the_default_activity_level_names_it_activity_level()
     /health and /settings; /activity once served the same value as
     `default_level` (#2240). Every response field set from
     `live().activity_level` must carry the setting's own name."""
-    source = Path(app_module.__file__).read_text(encoding="utf-8")
+    source = "".join(
+        Path(module.__file__ or "").read_text(encoding="utf-8")
+        for module in (app_module, *route_modules())
+    )
     named = re.findall(r"(\w+)=typing\.cast\(Any, live\(\)\.activity_level\)", source)
     assert named, "no response serves the activity level any more - update this gate"
     assert set(named) == {"activity_level"}
-    for model in (models.ActivityResponse, models.HealthResponse):
+    for model in (ActivityResponse, HealthResponse):
         fields = model.model_fields
         assert "activity_level" in fields and "default_level" not in fields, model.__name__

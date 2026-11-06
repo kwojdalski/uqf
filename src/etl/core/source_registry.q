@@ -366,8 +366,8 @@
     / a general column on the first registration and refuse the next one.
     decl:.qetl.source.optional_declarations,@[decl;`row_key`columns`types;:;(key_cols;(),decl`columns;(),decl`types)];
     `.qetl.source.sources upsert (source,decl cols value .qetl.source.sources);
-    .[{.qetl.log.dbg[x;y;z]};(source;"source registered";
-        `columns`time_column`tz`transport`row_key!(decl`columns;decl`time_column;decl`tz;tr;key_cols));::];
+    .[{.qetl.log.ch.dbg[x;y;z]};(`config;"source registered";
+        `source`columns`time_column`tz`transport`row_key!(source;decl`columns;decl`time_column;decl`tz;tr;key_cols));::];
     source}
 
 / Every registered source's name.

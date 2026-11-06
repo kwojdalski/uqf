@@ -26,7 +26,7 @@ import typer
 from uqs.cli.choices import ChoiceOpt
 from uqs.cli.shared import _paths, console, log
 from uqs.paths import UqsError
-from uqs.stack import listing, runtime
+from uqs.stack import listing, log_follow, runtime
 from uqs.stack import logs as stack_logs
 
 FollowOpt = Annotated[
@@ -99,7 +99,7 @@ def follow(
     # still stops what did start, because the console is the run.
     exit_code = 0
     try:
-        stack_logs.follow_during(_paths(), wanted, launch, min_level=level)
+        log_follow.follow_during(_paths(), wanted, launch, min_level=level)
     except UqsError as exc:
         log.error("{}", exc)
         exit_code = 1

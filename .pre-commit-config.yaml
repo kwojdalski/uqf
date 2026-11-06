@@ -2,6 +2,11 @@
 # Local hooks are scoped for q/qUnit since the library itself is pure q.
 # The Python packages under python/ get ruff and pytest hooks over every .py
 # file outside lib/.
+#
+# A hook that needs a q, which hosted CI has none of, carries `# kdbx-only` on
+# the line under its `- id:` (#2170). That tag is the one place the set is
+# written: attest_kdbx.HOOKS and ci.yml's no-q SKIP list read it
+# (scripts/gates/check_hook_scopes.py --kdbx-only).
 repos:
   # Basic file hygiene
   #
@@ -298,6 +303,7 @@ repos:
       # python-tests: the three that run test suites made a commit take 10-30
       # minutes under load. attest_kdbx.py runs them by id, at their stage.
       - id: q-tests
+        # kdbx-only
         name: Run qUnit tests for uqf
         entry: bash
         language: system
@@ -364,6 +370,7 @@ repos:
       # finds. Every other .md cannot change what q-docs runs, so it needs no
       # KDB-X attestation (scripts/dev/attest_kdbx.py).
       - id: q-docs
+        # kdbx-only
         name: Run the q blocks in docs/ on KDB-X
         # tests/qrun/test_doc_blocks.py, a test per document; -m kdbx picks
         # the KDB-X half, and --require-q kdbx fails a run without KDB-X
@@ -408,6 +415,7 @@ repos:
         pass_filenames: false
         files: '^docs/.*\.(md|qmd)$|^docs/_quarto\.yml$|^docs/man\.q$|^scripts/gates/check_doc_links\.py$|^scripts/generate/(q_api_docs\.py|export_api_reference\.q)$'
       - id: contract-surface
+        # kdbx-only
         name: Check the committed contract surface matches the tree
         # docs/reference/surfaces/current/ used to be checked in CI alone,
         # and hosted CI has no KDB-X, so that check skipped on every run:
@@ -427,6 +435,7 @@ repos:
         files: '\.(q|py)$|^scripts/processes/|^docs/reference/surfaces/'
 
       - id: q-facts
+        # kdbx-only
         name: Check the generated q facts match the q tree
         # uqs runs without q, so the q values it needs (conflict strategies,
         # run modes, log levels, ledger columns, the status file's states and
@@ -443,6 +452,7 @@ repos:
         files: '\.q$|^python/uqs/src/uqs/generated/|^python/uqf_airflow_provider/src/uqf_airflow_provider/q_facts\.py$|^scripts/generate/(derive\.py|q_facts\.py|export_q_facts\.q)$'
 
       - id: plant-schema
+        # kdbx-only
         name: Check the plant schema metadata matches what q evaluates
         # uqs reads the plant tables' columns, types, attributes, nested element
         # types and sort rules from src/etl/generated/plant_schema.json, which
@@ -494,6 +504,7 @@ repos:
         files: '^docs/reference/environment(\.md|/[a-z]+\.csv)$|^scripts/generate/(derive|environment_tables)\.py$|^scripts/gates/policy/env_reference\.py$'
 
       - id: compression-config
+        # kdbx-only
         name: Check TorQ's compressionconfig.csv matches the declared compression policy
         # scripts/torqconfig/compressionconfig.csv is generated (#2152) from
         # src/etl/compression_policy.q, validated by core/compression.q: a
@@ -507,6 +518,7 @@ repos:
         files: '^src/etl/(compression_policy\.q|core/compression\.q|plant_tables\.q)$|^scripts/torqconfig/compressionconfig\.csv$|^scripts/generate/(derive\.py|compression_config\.py|export_compression_config\.q)$'
 
       - id: q-coverage
+        # kdbx-only
         name: Check every function a test should reach is reached
         entry: bash
         language: system

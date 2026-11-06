@@ -1,7 +1,12 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import App from "./App";
-import type { Services, TunnelCheck, TunnelMapping, TunnelPlan } from "./api";
+import type {
+  Services,
+  TunnelCheck,
+  TunnelMapping,
+  TunnelPlan,
+} from "./api/services";
 import { connectionText, FleetConnections, mappingMarks } from "./TunnelPanel";
 
 const ok = (body: unknown) => ({ ok: true, json: async () => body });

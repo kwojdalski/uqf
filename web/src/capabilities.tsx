@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, type ReactNode } from "react";
-import type { Capabilities, Inspection } from "./api";
+import type { Capabilities, Inspection } from "./api/access";
 import { allowRecording } from "./activity";
 import { useResource } from "./useResource";
 

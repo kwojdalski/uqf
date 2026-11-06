@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import App from "./App";
-import type { Capabilities, Inspection } from "./api";
+import type { Capabilities, Inspection } from "./api/access";
 import { configureActivity, queuedActivity, record } from "./activity";
 
 const ok = (body: unknown) => ({ ok: true, json: async () => body });

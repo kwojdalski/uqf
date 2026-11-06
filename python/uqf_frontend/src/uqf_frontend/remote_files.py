@@ -86,7 +86,7 @@ DEFAULT_LIMIT = 500
 #: Bytes of helper output read as an answer; more is a failure, not a parse.
 MAX_ANSWER = 8 * 1024 * 1024
 #: Seconds one upload may take, connection included: a whole MAX_UPLOAD file
-#: over a slow link. The browser waits longer (web/src/api.ts).
+#: over a slow link. The browser waits longer (web/src/api/).
 UPLOAD_TIMEOUT = 120
 #: The fixed program an upload runs with `python -I -c`: read one decimal
 #: line N, then N bytes of the helper's source, run it, and hand it the rest

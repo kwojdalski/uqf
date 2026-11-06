@@ -17,7 +17,7 @@
     source:(.qetl.job.bounded.def worker)`source;
     cred:.qetl.source.require_credentials source;
     transport:(.qetl.source.def source)`transport;
-    .qetl.log.dbg[worker;"connecting to the source";`source`transport!(source;transport)];
+    .qetl.log.ch.dbg[`ipc;"connecting to the source";`worker`source`transport!(worker;source;transport)];
     opener:(.qetl.source.transport_def transport)`open;
     @[opener;cred;{[source;e] '.qetl.job.bounded.connect_error[source;e]}[source]]}
 

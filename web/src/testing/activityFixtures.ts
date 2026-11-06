@@ -4,7 +4,8 @@
  * screen, and the level tests drive the same app at each level.
  */
 import { vi } from "vitest";
-import type { ActivityHistory, SessionLevel, SettingsData } from "../api";
+import type { ActivityHistory, SessionLevel } from "../api/activity";
+import type { SettingsData } from "../api/settings";
 import SCHEMAS from "./settingsSchemas.json";
 
 export const ok = (body: unknown) => ({

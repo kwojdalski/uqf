@@ -134,3 +134,14 @@
 .qt.qetl.io.hdb_eod.tearDown_clean:{[]
     .qt.qetl.io.hdb_eod.setUp_clean[];
     }
+
+.qt.qetl.io.hdb_eod.test_a_plan_clipped_for_eod_is_on_the_eod_channel:{[t]
+    .qt.qetl.io.hdb_eod.setUp_clean[];
+    st:.qt.qetl.io.hdb_eod.stack[];
+    D:.qt.qetl.io.hdb_eod.D;
+    `.qetl.io.default set .qetl.io.hdb[st`root;`time];
+    lines:.qt.support.captured_log[0b;{
+        D:.qt.qetl.io.hdb_eod.D;
+        .qetl.io.clip_to_eod[`demo_deals_backfill;.qetl.job.bounded.def `demo_deals_backfill;`timestamp$D-1;`timestamp$D+1]}];
+    .qunit.assertEquals[(lines[;0];lines[;1]);(enlist `WARNING;enlist `eod);"the handover clip is an eod line"];
+    .qunit.assertEquals[((first lines)[3])`worker;`demo_deals_backfill;"and the worker it clipped is a field"]};

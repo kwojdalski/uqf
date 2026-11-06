@@ -96,7 +96,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from uqf_frontend.models import LifecycleAction
+from uqf_frontend.models.control import LifecycleAction
 from uqf_frontend.remote_helper import PUSH_ID
 from uqf_frontend.workspaces import LOCAL as LOCAL_TARGET
 from uqs.activity_log import (

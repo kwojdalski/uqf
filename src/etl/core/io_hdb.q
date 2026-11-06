@@ -596,7 +596,7 @@
     / waits for end of day: its empty tables there are what makes movetohdb abort (#2186).
     if[not .qetl.io.on_peachq or .qetl.io.is_scoped root;
         $[count w:.qetl.io.eod_waiting[root;.qetl.io.part_dates root];
-            .qetl.log.warn[`hdb;"not filling the HDB's missing tables - a partition is still waiting for end of day";enlist[`waiting]!enlist w];
+            .qetl.log.ch.warn[`eod;"not filling the HDB's missing tables - a partition is still waiting for end of day";enlist[`waiting]!enlist w];
             .Q.chk root]];
     `.qetl.io.touched set .qetl.io.touched except ([] hdb_root:count[todo]#root),'todo;
     count todo}
@@ -649,7 +649,7 @@
     quarantined:span where .qetl.io.quarantine_incomplete[root;;target] each span;
     torn:span where .qetl.io.repair_torn[root;;target] each span;
     if[(restored>0) or (count torn) or count quarantined;
-        @[{.qetl.log.warn[`qetl.io;"repaired partitions a killed write left behind";x]};
+        @[{.qetl.log.ch.warn[`storage;"repaired partitions a killed write left behind";x]};
           `restored`trimmed`quarantined!(restored;torn;quarantined);{[e] (::)}]];
     / A trimmed partition is queued whatever its attributes say: trimming
     / rewrote only the long columns, so p#sym can survive on a partition that

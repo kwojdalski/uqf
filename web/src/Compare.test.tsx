@@ -13,8 +13,8 @@ import {
 } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
 import { CompareView, compareBody, compareFilter } from "./CompareView";
-import { writeToken } from "./api";
-import type { CompareResult, CompareTable } from "./api";
+import { writeToken } from "./api/client";
+import type { CompareResult, CompareTable } from "./api/compare";
 
 const ok = (body: unknown) => ({ ok: true, json: async () => body });
 

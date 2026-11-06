@@ -64,7 +64,7 @@ DEFAULT_TIMEOUT = 30
 
 #: Seconds the browser waits BEYOND the gateway timeout before it abandons a
 #: request: the API's own round trip, and a lifecycle route's torq.sh. The
-#: browser used to hard-code 45 s (web/src/api.ts), so raising
+#: browser used to hard-code 45 s (web/src/api/), so raising
 #: UQF_FRONTEND_TIMEOUT_SECONDS changed nothing it saw; now it is served as
 #: `request_timeout_seconds` on /health and this is the one place the sum is
 #: made. DEFAULT_TIMEOUT + this = 45 s, what the browser always used.
@@ -486,7 +486,7 @@ def runtime_file_values(path: Path | None) -> dict[str, Any]:
             )
     # Here, not at the top: models imports access, which imports casbin -
     # more than a CLI reading two numbers should load before it needs to.
-    from uqf_frontend.models import RuntimeSettingsBody
+    from uqf_frontend.models.settings import RuntimeSettingsBody
 
     try:
         body = RuntimeSettingsBody.model_validate_json(text)

@@ -1454,24 +1454,77 @@ uqs logs --multitail stp1 -l 100 --show-command        # show the multitail comm
 A process that has never started has no log and gets no pane; a name that is not
 a process is refused. Press `q` to leave multitail.
 
-`uqs logs --channel` subscribes to the lines the processes publish instead of
+### Channels: which subsystem a line concerns
+
+A line has three things to say apart: **which process** wrote it, **how severe**
+it is (`--level`), and **which subsystem** it concerns - its *channel*. TorQ's
+log line has a column for each, `time|host|proctype|proc|level|id|message`; the
+ETL layer fills `proc` with the process that actually wrote the line (its
+procname) and `id` with the channel. The worker, source, run and window a line
+is about stay in the message as `key=value` fields, never in a channel of their
+own.
+
+  | Channel     | Scope                                                          |
+  | ---         | ---                                                            |
+  | `lifecycle` | process and job startup, shutdown, run and window completion   |
+  | `ipc`       | connections, requests, responses, timeouts, retries            |
+  | `source`    | source readiness, fetching, queries                            |
+  | `transform` | normalisation, matching, calculations, rejected rows           |
+  | `storage`   | writes, persistence, sorting, compression                      |
+  | `coverage`  | coverage updates, checkpoints, replay decisions                |
+  | `eod`       | rollover, handover, reload coordination                        |
+  | `config`    | configuration, file loading, declarations                      |
+
+`uqs logs` shows the channel beside the process, and `--channel NAME` keeps only
+that subsystem's lines. It repeats - `--channel source --channel ipc` keeps
+either - and it combines with the process names and `--level`, for the recent
+lines and for `-f` alike:
+
+```
+uqs logs rdb1 --channel source                       # recent lines of one subsystem
+uqs logs rdb1 -f --channel source --channel ipc --level DEBUG
+uqs logs --json --channel coverage                   # each line carries "channel"
+```
+
+**`--channel` filters what you view. It does not stop a record being generated
+or rendered:** whether a line is written at all is its level's decision
+(`.qetl.log.debug[1b]`, `.qetl.log.trace[1b]`), and a hidden channel's lines are
+still produced, still in the file and still published where the level is
+published. Per-channel verbosity, a runtime switch per channel and a file per
+channel are not built.
+
+A channel name has to be one of the eight above; anything else is refused with
+the list, because a misspelt channel would read as a quiet subsystem. A line
+whose `id` is not a channel - one TorQ's own code wrote (`main`, `dotz`, ...),
+or an older line that still names a worker - is shown as it is, never dropped.
+It has no channel to select, so `--channel` leaves it out. In the file the
+channel is the `id` field: a TorQ process started with `-jsonlogs` writes it as
+`"id"`, and a published `logmsg` row carries it in its `id` column, with the
+emitting process in `sym`.
+
+Two names changed with this (#2274), with no alias: `--id` was the filter on the
+same column and is refused, naming `--channel`; the old `--channel`, which took
+no value and subscribed, is now `--subscribe`.
+
+`uqs logs --subscribe` subscribes to the lines the processes publish instead of
 reading their files. Every TorQ process publishes its log to a `logmsg` table
-through its own pub/sub, which is what TorQ's monitor reads. A channel picks the
-processes, the worker or component (`--id`, repeatable) and a minimum `--level`,
-and prints matching lines live until Ctrl-C:
+through its own pub/sub, which is what TorQ's monitor reads. A subscription
+picks the processes, the channels (`--channel`, repeatable) and a minimum
+`--level`, and prints matching lines live until Ctrl-C:
 
 ```
-uqs logs all --channel --level ERROR                  # every error, from every process
-uqs logs fxpositions1 --channel --id fx_positions     # one job's warnings and errors
+uqs logs all --subscribe --level ERROR                  # every error, from every process
+uqs logs fxpositions1 --subscribe --channel source      # one process's source warnings and errors
 ```
 
-Only what a process publishes reaches a channel. WARNING and ERROR are published
-by default, INFO and below are not (`scripts/torqconfig/settings/default.q` maps
-`.lg.pubmap` onto these names). A process that is down, or restarts, is reported
-once and resubscribed. Each subscribed process holds one more connection, so on
-a stack near its licence connection limit, name processes rather than `all`.
-`-f` reads the files, so it is the one to use when a process is not running or
-is not a TorQ process, such as the external feeds.
+Only what a process publishes reaches a subscription. WARNING and ERROR are
+published by default, INFO and below are not
+(`scripts/torqconfig/settings/default.q` maps `.lg.pubmap` onto these names);
+`--channel` here is again only a filter on the arriving rows. A process that is
+down, or restarts, is reported once and resubscribed. Each subscribed process
+holds one more connection, so on a stack near its licence connection limit, name
+processes rather than `all`. `-f` reads the files, so it is the one to use when
+a process is not running or is not a TorQ process, such as the external feeds.
 
 **`uqs start --follow` (`-f`) is the foreground form of all this**: it starts
 what `start` would - the same names, `all`, or `--profile` - then streams those

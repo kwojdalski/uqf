@@ -183,3 +183,14 @@
     .qunit.assertEquals[(key hsym `$base,"/uqf/hdb";key hsym `$base,"/uqf";sweep;retired);
         (enlist `precious.txt;enlist `hdb;0;1b);"the sibling directory survives every step"];
     .qunit.assertEquals[(key hsym `$base,"/prod";asc key hsym `$base,"/uqf prod");(();asc (`hdb;`$"hdb.staging"));"nothing stray beside it"]};
+
+/ --- #2274: the repair a recovery reports is on the storage channel ------------
+
+.qt.qetl.hdb_crash.test_a_recovery_reports_its_repair_on_the_storage_channel:{[t]
+    rm:.qt.qetl.hdb_crash.written[]; m:rm 1;
+    .qt.qetl.hdb_crash.kill_at[`live_retired;{[m;u] m[`finish][::]}[m]];
+    `.qetl.io.touched set 0#.qetl.io.touched;
+    lines:.qt.support.captured_log[0b;{[m;u] .qt.qetl.hdb_crash.window m}[m]];
+    repaired:lines where lines[;2]~\:"repaired partitions a killed write left behind";
+    .qunit.assertEquals[(count repaired;distinct repaired[;1]);(1;enlist `storage);
+        "one repair line, on the storage channel, not under a component name"]};

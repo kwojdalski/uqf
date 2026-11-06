@@ -412,7 +412,7 @@
         call (`.qetl.io.remote.submit;.qetl.io.remote.request_keys!(attachment;dataset;target;id;o;batch))];
     if[not r[`status] in `committed`duplicate; '"remote: the receiver answered ",.Q.s1 r];
     if[`duplicate=r`status;
-        .[{.qetl.log.info[x;y;z]};(`qetl.io.remote;"the receiver already holds this batch - not sent twice";
+        .[{.qetl.log.ch.info[x;y;z]};(`ipc;"the receiver already holds this batch - not sent twice";
             `target`batch_id`rows!(target;id;r`rows));::]];
     r`rows}
 
@@ -434,7 +434,7 @@
     asked:.z.p;
     r:.qetl.io.remote.noted[asked;call (`.qetl.io.remote.finish;attachment;dataset)];
     if[`failed=r`reload;
-        .[{.qetl.log.warn[x;y;z]};(`qetl.io.remote;"written durably, but the readers did not reload";
+        .[{.qetl.log.ch.warn[x;y;z]};(`ipc;"written durably, but the readers did not reload";
             `attachment`dataset`error!(attachment;dataset;r`error));::]];
     r`finished}
 

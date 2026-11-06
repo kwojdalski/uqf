@@ -18,9 +18,9 @@ from typing import Any
 
 import pytest
 
-from uqf_frontend.app import _coverage
 from uqf_frontend.config import Settings
 from uqf_frontend.gateway import KolaGateway
+from uqf_frontend.routes.query import _coverage
 from uqs.interpreter import PEACHQ, q_impl
 from uqs.stack.procs import VENDORED_LOAD_OVERLAY
 

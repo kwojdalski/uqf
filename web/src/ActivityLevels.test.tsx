@@ -10,7 +10,7 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
 import App from "./App";
-import type { BrowserDrop, BrowserEvent, SessionLevel } from "./api";
+import type { BrowserDrop, BrowserEvent, SessionLevel } from "./api/activity";
 import {
   configureActivity,
   effectiveLevel,

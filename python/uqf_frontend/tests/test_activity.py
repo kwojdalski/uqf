@@ -23,12 +23,24 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
-from uqf_frontend import activity, control, models
+from uqf_frontend import activity, control
 from uqf_frontend.activity import ActivityStore
 from uqf_frontend.app import create_app
 from uqf_frontend.config import Settings
 from uqf_frontend.errors import BackfillNotStarted
 from uqf_frontend.gateway import FakeGateway
+from uqf_frontend.models.activity import (
+    ActivityDropReason,
+    ActivityExportFormat,
+    ActivityKind,
+    ActivityLevel,
+    ActivityOutcome,
+    ActivitySource,
+    ActivityTrigger,
+    BrowserDropReason,
+    BrowserKind,
+    SessionLevel,
+)
 from uqs import activity_log
 from uqs.activity_log import Query
 
@@ -746,15 +758,15 @@ def test_retention_must_be_positive(tmp_path):
 @pytest.mark.parametrize(
     ("literal", "words"),
     [
-        (models.ActivitySource, activity_log.SOURCES),
-        (models.BrowserKind, activity.BROWSER_KINDS),
-        (models.ActivityKind, (*activity.BROWSER_KINDS, *activity.SERVER_KINDS)),
-        (models.ActivityOutcome, activity_log.OUTCOMES),
-        (models.ActivityTrigger, activity.TRIGGERS),
-        (models.SessionLevel, activity_log.LEVELS),
-        (models.ActivityLevel, activity_log.EVENT_LEVELS),
-        (models.ActivityDropReason, activity_log.DROP_REASONS),
-        (models.ActivityExportFormat, activity_log.EXPORT_FORMATS),
+        (ActivitySource, activity_log.SOURCES),
+        (BrowserKind, activity.BROWSER_KINDS),
+        (ActivityKind, (*activity.BROWSER_KINDS, *activity.SERVER_KINDS)),
+        (ActivityOutcome, activity_log.OUTCOMES),
+        (ActivityTrigger, activity.TRIGGERS),
+        (SessionLevel, activity_log.LEVELS),
+        (ActivityLevel, activity_log.EVENT_LEVELS),
+        (ActivityDropReason, activity_log.DROP_REASONS),
+        (ActivityExportFormat, activity_log.EXPORT_FORMATS),
     ],
 )
 def test_the_models_offer_exactly_the_stores_words(literal, words):
@@ -763,7 +775,7 @@ def test_the_models_offer_exactly_the_stores_words(literal, words):
 
 def test_the_browser_reports_only_the_drops_it_makes():
     """It samples and it overflows its queue; a cap or an age is the server's."""
-    reported = set(typing.get_args(models.BrowserDropReason))
+    reported = set(typing.get_args(BrowserDropReason))
     assert reported == set(activity_log.DROP_REASONS) - {"row_cap", "retention"}
 
 

@@ -44,8 +44,8 @@
 .qetl.source.clip_to_complete:{[worker;source;h;live;range_to]
     bound:.qetl.source.complete_through_of[source;h;live];
     if[bound>=range_to; :range_to];
-    .qetl.log.warn[worker;"range clipped to the source's complete_through - the rest stays uncovered for the next run";
-        `source`complete_through`requested_to!(source;bound;range_to)];
+    .qetl.log.ch.warn[`source;"range clipped to the source's complete_through - the rest stays uncovered for the next run";
+        `worker`source`complete_through`requested_to!(worker;source;bound;range_to)];
     bound}
 
 / ------------------------------------------------------------- FETCHING
@@ -99,12 +99,12 @@
     if[not .qetl.log.enabled`TRACE; :h msg];
     t0:.z.p;
     req:`transport`request!(`ipc;.qetl.log.next_request[]);
-    .[{.qetl.log.trc[x;y;z]};(`ipc;"query sent";(enlist[`call]!enlist .qetl.source.call_text f),.qetl.source.qsql_fields[f;args],req,shown);::];
+    .[{.qetl.log.ch.trc[x;y;z]};(`source;"query sent";(enlist[`call]!enlist .qetl.source.call_text f),.qetl.source.qsql_fields[f;args],req,shown);::];
     r:@[h;msg;{[req;t0;e]
-        .[{.qetl.log.trc[x;y;z]};(`ipc;"query failed";
+        .[{.qetl.log.ch.trc[x;y;z]};(`source;"query failed";
             req,`error`ms!(e;`long$(.z.p-t0)%1000000));::];
         'e}[req;t0]];
-    .[{.qetl.log.trc[x;y;z]};(`ipc;"query returned";
+    .[{.qetl.log.ch.trc[x;y;z]};(`source;"query returned";
         req,`rows`ms!(count r;`long$(.z.p-t0)%1000000));::];
     r}
 
@@ -213,9 +213,9 @@
     t0:.z.p;
     decl:.qetl.source.def[source];
     bounds:.qetl.source.source_bounds[decl;range_from;range_to];
-    .[{.qetl.log.dbg[x;y;z]};(source;"fetching";
-        `path`range_from`range_to`source_from`source_to`tz!
-            ($[null h;`fixture;`live];range_from;range_to;bounds 0;bounds 1;decl`tz));::];
+    .[{.qetl.log.ch.dbg[x;y;z]};(`source;"fetching";
+        `source`path`range_from`range_to`source_from`source_to`tz!
+            (source;$[null h;`fixture;`live];range_from;range_to;bounds 0;bounds 1;decl`tz));::];
     page:$[null h;
         (`fixture;.qetl.source.window_fixture[decl;bounds 0;bounds 1]);
         (`live;read[h;bounds 0;bounds 1])];
@@ -223,8 +223,8 @@
     if[(page 0)=`live; .qetl.source.require_live_window[source;decl;out;range_from;range_to]];
     / fetched vs kept differ only for a zoned source, whose bounds are padded:
     / the difference is the neighbouring windows' rows, dropped on purpose.
-    .[{.qetl.log.dbg[x;y;z]};(source;"fetched";
-        `path`fetched`kept`ms!(page 0;count .qetl.source.primary[source;page 1];count .qetl.source.primary[source;out];
+    .[{.qetl.log.ch.dbg[x;y;z]};(`source;"fetched";
+        `source`path`fetched`kept`ms!(source;page 0;count .qetl.source.primary[source;page 1];count .qetl.source.primary[source;out];
             `long$(.z.p-t0)%1000000));::];
     (page 0;out)}
 

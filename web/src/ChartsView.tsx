@@ -5,7 +5,12 @@
  * the figure it is sent. Nothing here knows any chart by name.
  */
 import { useState, type FormEvent } from "react";
-import type { ChartField, ChartInfo, ChartList, ChartResult } from "./api";
+import type {
+  ChartField,
+  ChartInfo,
+  ChartList,
+  ChartResult,
+} from "./api/charts";
 import { PlotlyFigure } from "./Plotly";
 import { useResource } from "./useResource";
 import { record } from "./activity";

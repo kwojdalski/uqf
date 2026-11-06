@@ -6,34 +6,33 @@ import {
   useState,
   type FormEvent,
 } from "react";
+import { mutate, type Row, writeToken } from "./api/client";
+import type {
+  BackfillStarted,
+  BackfillBody,
+  CommandResult,
+  ControlProcess,
+  ControlStatus,
+  LifecycleBody,
+  ProcessConfigBody,
+  ProcessConfigResult,
+  WorkerConfigBody,
+  WorkerConfigResult,
+} from "./api/control";
+import type { Health } from "./api/health";
+import type { Backfill, OpsData } from "./api/ops";
 import {
-  type Backfill,
   type Catalog,
   type Coverage,
-  type BackfillStarted,
-  type BackfillBody,
-  type CommandResult,
-  type ControlProcess,
-  type ControlStatus,
   type CoverageRequest,
   type FilterOp,
-  type LifecycleBody,
-  type ProcessConfigBody,
-  type ProcessConfigResult,
-  type WorkerConfigBody,
-  type WorkerConfigResult,
-  mutate,
-  type Health,
-  type OpsData,
   type QueryInput,
   type QueryResult,
-  type Row,
-  type Services,
   type Tier,
   filterValue,
   validateRange,
-  writeToken,
-} from "./api";
+} from "./api/query";
+import type { Services } from "./api/services";
 import { FileBrowser } from "./FileBrowser";
 import { PlotPanel } from "./PlotPanel";
 import { ChartsView } from "./ChartsView";

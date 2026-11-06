@@ -20,19 +20,24 @@ import re
 import types
 import typing
 from collections import defaultdict
-from pathlib import Path
 
 import pytest
+from api_support import api_text, defined_models
 from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 from pydantic import BaseModel, ValidationError
 
-from uqf_frontend import models, remote_helper
+from uqf_frontend import remote_helper
 from uqf_frontend.app import create_app
 from uqf_frontend.config import Settings
 from uqf_frontend.gateway import FakeGateway
-
-API_TS = Path(__file__).resolve().parents[3] / "web" / "src" / "api.ts"
+from uqf_frontend.models.activity import ActivityOutcome
+from uqf_frontend.models.config_push import (
+    ConfigPushOut,
+    ConfigPushReported,
+    ConfigRestoreResponse,
+    FileOutcome,
+)
 
 #: Field names that already have two JSON kinds in models.py, outside the
 #: config-push surface this test was written for. Fix one and delete its
@@ -52,11 +57,7 @@ _KNOWN_TWO_KINDS = frozenset(
 
 
 def _models() -> list[type[BaseModel]]:
-    return [
-        c
-        for c in vars(models).values()
-        if inspect.isclass(c) and issubclass(c, BaseModel) and c.__module__ == models.__name__
-    ]
+    return [c for c in defined_models().values() if inspect.isclass(c) and issubclass(c, BaseModel)]
 
 
 def _json_kinds(annotation: object) -> frozenset[str]:
@@ -113,30 +114,30 @@ def test_every_per_file_result_says_its_outcome_in_one_vocabulary():
         fields = model.model_fields
         assert "deleted" not in fields, f"{model.__name__}.deleted: say `outcome`"
         if "path" in fields and "outcome" in fields:
-            assert fields["outcome"].annotation is models.FileOutcome, model.__name__
+            assert fields["outcome"].annotation is FileOutcome, model.__name__
 
 
 def test_unknown_is_the_word_for_may_have_happened():
-    words = set(typing.get_args(models.FileOutcome))
+    words = set(typing.get_args(FileOutcome))
     assert "unknown" in words and "uncertain" not in words
-    assert set(typing.get_args(models.ActivityOutcome)) >= words - {"cancelled", "invalid"}
+    assert set(typing.get_args(ActivityOutcome)) >= words - {"cancelled", "invalid"}
 
 
 def test_a_restore_names_the_push_it_undoes_as_the_manifest_does():
-    fields = models.ConfigRestoreResponse.model_fields
+    fields = ConfigRestoreResponse.model_fields
     assert "restores" in fields and "source_push_id" not in fields
-    assert "restores" in models.ConfigPushOut.model_fields
+    assert "restores" in ConfigPushOut.model_fields
 
 
 def test_a_reported_uncertain_is_refused_with_its_new_word():
     with pytest.raises(ValidationError, match="`uncertain` is now `unknown`"):
-        models.ConfigPushReported(path="shared/config/a", outcome="uncertain")  # type: ignore[arg-type]
+        ConfigPushReported(path="shared/config/a", outcome="uncertain")  # type: ignore[arg-type]
 
 
 def test_a_reported_file_cannot_have_succeeded():
     """The server never recorded it, so the browser cannot know it landed."""
     with pytest.raises(ValidationError):
-        models.ConfigPushReported(path="shared/config/a", outcome="succeeded")
+        ConfigPushReported(path="shared/config/a", outcome="succeeded")
 
 
 def test_a_manifest_written_before_the_rename_reads_uncertain_as_unknown():
@@ -146,7 +147,7 @@ def test_a_manifest_written_before_the_rename_reads_uncertain_as_unknown():
         {"path": "a", "outcome": "unknown"},
         {"path": "b", "outcome": "cancelled"},
     ]
-    assert set(remote_helper.REPORTED) <= set(typing.get_args(models.FileOutcome))
+    assert set(remote_helper.REPORTED) <= set(typing.get_args(FileOutcome))
 
 
 def _routes() -> list[APIRoute]:
@@ -166,7 +167,7 @@ def test_push_is_never_a_bare_id_parameter():
 def test_the_browser_never_names_a_push_id_push():
     """The same rule in api.ts: a push's id is `pushId` wherever it is a
     parameter, and the upload's query says `push_id`."""
-    text = API_TS.read_text()
+    text = api_text()
     assert not re.findall(r"\bpush: string\b", text)
     assert "push_id: pushId" in text
 

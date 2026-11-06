@@ -38,9 +38,9 @@ from typing import Any
 
 from uqs.attach import live as _registers_live_check  # noqa: F401 - the start gate's (#1651)
 from uqs.cli import lists as cli_lists
-from uqs.cli.config import lines_document
 from uqs.cli.external import BROKEN, ENV_SUFFIX, FEEDS, _secrets_from_env, _status_record
 from uqs.cli.json_out import plain, records
+from uqs.cli.logs import lines_document
 from uqs.cli.q_login import DEFAULT_USER, q_password
 from uqs.cli.shared import _procs
 from uqs.deploy import history as _registers_list_targets  # noqa: F401 - `target list`
@@ -259,7 +259,7 @@ for _kind, _path in LISTS.items():
 @tool("logs")
 def uqs_logs(procs: Procs = None, lines: int = 20, level: str | None = None) -> dict[str, Any]:
     """The last `lines` lines of each process's out_/err_ log (procs', or
-    every one's) - `uqs logs --json`: {"lines": [{time, host, process, proctype, level, id,
+    every one's) - `uqs logs --json`: {"lines": [{time, host, process, proctype, level, channel,
     message}]}, merged and sorted by time. level (TRACE, DEBUG, INFO, WARNING
     or ERROR) shows only that level and above. A snapshot, not a live stream -
     call again for newer lines.
