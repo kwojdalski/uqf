@@ -1,0 +1,112 @@
+/ test_io_hdb_eod.q - a backfill must not write a date TorQ's end of day has
+/ not yet moved into the HDB (#2186), against TorQ's REAL movetohdb.
+/ .
+/ movetohdb is read out of lib/torq/code/processes/wdb.q and defined verbatim,
+/ so these tests fail the way the wdb does if the writer leaves an hdb/D
+/ that clashes with the wdb's copy.
+
+.qt.qetl.io.hdb_eod.D:2026.11.05
+
+/ Private: a scratch pair of directories, the older end of day already in the HDB
+/ and day D waiting in the wdb, as TorQ leaves them at midnight.
+.qt.qetl.io.hdb_eod.stack:{[]
+    s:first system"mktemp -d";
+    root:hsym `$s,"/hdb"; wdb:hsym `$s,"/wdbhdb";
+    D:.qt.qetl.io.hdb_eod.D;
+    .Q.dpft[root;D-3;`sym;`trade] [`trade set ([] sym:`a`b; time:2#D-3+0D12; px:1 2f)];
+    .Q.dpft[root;D-3;`sym;`quote] [`quote set ([] sym:`a`b; time:2#D-3+0D12; bid:1 2f)];
+    .Q.dpft[wdb;D;`sym;`trade] [`trade set ([] sym:`a`b`c; time:3#D+0D12; px:1 2 3f)];
+    .Q.dpft[wdb;D;`sym;`quote] [`quote set ([] sym:`a`b`c; time:3#D+0D12; bid:1 2 3f)];
+    .qetl.io.watch_eod[root;wdb];
+    `root`wdb!(root;wdb)}
+
+/ Private: TorQ's movetohdb, verbatim, run for day D in a child q so TorQ's .os
+/ and .lg never enter this process (other suites load their own); returns the
+/ ERR lines it logged.
+.qt.qetl.io.hdb_eod.torq_move:{[st]
+    D:.qt.qetl.io.hdb_eod.D;
+    f:(first system"mktemp -d"),"/move.q";
+    hsym[`$f] 0: (
+        "\\l lib/torq/code/common/os.q";
+        ".lg.o:{[a;b] ()}; .lg.e:{[a;b] -1 \"ERR \",b};";
+        "src:read0 `:lib/torq/code/processes/wdb.q;";
+        "i:first where src like \"movetohdb:*\"; j:i+first where (i _ src) like \" }*\";";
+        "`.wdb.movetohdb set value (count \"movetohdb:\")_\"\\n\" sv src i+til 1+j-i;";
+        (".wdb.movetohdb[\"",(1_string ` sv st[`wdb],`$string D),"\";\"",(1_string ` sv st[`root],`$string D),"\";",string[D],"];");
+        "exit 0");
+    out:system (getenv`QCMD)," ",f," -q 2>&1";
+    out where out like "ERR *"}
+
+/ Private: what end of day does after the move - the wdb opens the next day.
+.qt.qetl.io.hdb_eod.open_next:{[st]
+    .Q.dpft[st`wdb;.qt.qetl.io.hdb_eod.D+1;`sym;`trade] [`trade set ([] sym:`symbol$(); time:`timestamp$(); px:`float$())]}
+
+.qt.qetl.io.hdb_eod.setUp_clean:{[]
+    `.qetl.io.eod_wdb set (`symbol$())!();
+    `.qetl.io.touched set 0#.qetl.io.touched;
+    `.qetl.io.default set .qetl.io.memory;
+    }
+
+.qt.qetl.io.hdb_eod.rows:{[] ([] time:enlist .qt.qetl.io.hdb_eod.D+0D10; sym:enlist `x; v:enlist 1f)}
+
+.qt.qetl.io.hdb_eod.test_a_backfill_of_yesterday_before_eod_is_refused_and_eod_moves_the_live_day:{[t]
+    .qt.qetl.io.hdb_eod.setUp_clean[];
+    st:.qt.qetl.io.hdb_eod.stack[];
+    D:.qt.qetl.io.hdb_eod.D;
+    m:.qetl.io.hdb[st`root;`time];
+    .qunit.assertThrows[{x[`write][`upstream_trades;y]}[m];.qt.qetl.io.hdb_eod.rows[];
+        "hdb: upstream_trades would write 2026.11.05 into the HDB before TorQ's end of day has moved that date there:*";
+        "the refusal names end of day and the way out"];
+    m[`finish][::];
+    .qunit.assertEquals[key ` sv st[`root],`$string D;();"the refused backfill created no partition for end of day to clash with"];
+    errs:.qt.qetl.io.hdb_eod.torq_move st;
+    .qunit.assertEquals[count errs;0;"TorQ's movetohdb logged no error"];
+    .qunit.assertEquals[count get ` sv st[`root],(`$string D),`trade`;3;"the live day reached the HDB intact"];
+    .qunit.assertEquals[key ` sv st[`wdb],`$string D;();"the wdb handed the day over"]};
+
+.qt.qetl.io.hdb_eod.test_after_eod_the_backfill_proceeds:{[t]
+    .qt.qetl.io.hdb_eod.setUp_clean[];
+    st:.qt.qetl.io.hdb_eod.stack[];
+    D:.qt.qetl.io.hdb_eod.D;
+    .qt.qetl.io.hdb_eod.torq_move st;
+    .qt.qetl.io.hdb_eod.open_next st;
+    m:.qetl.io.hdb[st`root;`time];
+    .qunit.assertEquals[m[`eod_waiting] D;`date$();"the day is no longer waiting"];
+    .qunit.assertEquals[m[`write][`upstream_trades;.qt.qetl.io.hdb_eod.rows[]];1;"the backfill writes the handed-over day"];
+    m[`finish][::];
+    .qunit.assertEquals[count get ` sv st[`root],(`$string D),`upstream_trades`;1;"the backfilled rows are there"];
+    .qunit.assertEquals[count get ` sv st[`root],(`$string D),`trade`;3;"and the live rows it sits beside are untouched"]};
+
+.qt.qetl.io.hdb_eod.test_the_plan_waits_for_eod_and_says_so:{[t]
+    .qt.qetl.io.hdb_eod.setUp_clean[];
+    st:.qt.qetl.io.hdb_eod.stack[];
+    D:.qt.qetl.io.hdb_eod.D;
+    `.qetl.io.default set .qetl.io.hdb[st`root;`time];
+    f:`timestamp$D-1; to:`timestamp$D+1;
+    .qunit.assertEquals[.qetl.io.eod_waiting_for[.qetl.job.bounded.def `demo_deals_backfill;f;to];enlist D;"the report names the waiting day"];
+    .qunit.assertEquals[.qetl.io.clip_to_eod[`demo_deals_backfill;.qetl.job.bounded.def `demo_deals_backfill;f;to];`timestamp$D;
+        "the plan stops at the start of the waiting day; the day itself stays uncovered"];
+    .qt.qetl.io.hdb_eod.torq_move st;
+    .qt.qetl.io.hdb_eod.open_next st;
+    .qunit.assertEquals[.qetl.io.clip_to_eod[`demo_deals_backfill;.qetl.job.bounded.def `demo_deals_backfill;f;to];to;"once end of day has run the plan is whole"]};
+
+.qt.qetl.io.hdb_eod.test_a_root_with_no_wdb_has_nothing_to_wait_for:{[t]
+    .qt.qetl.io.hdb_eod.setUp_clean[];
+    .qunit.assertEquals[.qetl.io.eod_waiting[`:/no/such/hdb;enlist .qt.qetl.io.hdb_eod.D];`date$();
+        "a root nobody registered a wdb for is not fenced"]};
+
+.qt.qetl.io.hdb_eod.test_finish_does_not_fill_a_partition_that_waits:{[t]
+    .qt.qetl.io.hdb_eod.setUp_clean[];
+    st:.qt.qetl.io.hdb_eod.stack[];
+    D:.qt.qetl.io.hdb_eod.D;
+    / a partition already in the HDB for a waiting day (made before this fence, or by hand)
+    .Q.dpft[st`root;D;`sym;`other] [`other set ([] sym:enlist `a; time:enlist D+0D01; z:enlist 1f)];
+    m:.qetl.io.hdb[st`root;`time];
+    m[`write][`upstream_trades;([] time:enlist D-1+0D10; sym:enlist `x; v:enlist 1f)];
+    m[`finish][::];
+    .qunit.assertEquals[key ` sv st[`root],(`$string D),`trade;();"no empty trade table was made in the waiting day"]};
+
+/ Leave nothing registered for the suites that run after this one.
+.qt.qetl.io.hdb_eod.tearDown_clean:{[]
+    .qt.qetl.io.hdb_eod.setUp_clean[];
+    }
