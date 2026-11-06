@@ -2,9 +2,9 @@
 """Report whether a pull request's tree has passed the KDB-X gates (#1014).
 
 Hosted CI has no KDB-X licence, so the hooks scripts/dev/attest_kdbx.py
-names (q-tests, q-coverage, q-docs, contract-surface, q-facts, plant-schema,
-compression-config) run only on a contributor's machine - and master needed a
-repair commit for them on almost every day of a fortnight: a change merged on a
+names (the ones .pre-commit-config.yaml tags `# kdbx-only`) run only on a
+contributor's machine - and master needed a repair commit for them on almost
+every day of a fortnight: a change merged on a
 green CI that no KDB-X run had seen, and the next KDB-X session paid for it
 inside an unrelated diff.
 
