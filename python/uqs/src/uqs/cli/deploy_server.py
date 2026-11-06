@@ -31,11 +31,12 @@ from uqs.deploy.remote import Remote
 from uqs.paths import UqsError, repo_root
 
 
-def _server(ctx, target, flags: dict, **fixed):
+def _server(ctx, target, flags: dict, unnamed: str | None = None, **fixed):
     """The Config and Remote for a command that reaches one server: TARGET's
     settings - its timeouts too (#1892) - under the `flags` given on the
-    command line, under `fixed`, which this command alone decides."""
-    settings = conn.server(ctx, target, **flags) | fixed
+    command line, under `fixed`, which this command alone decides. `unnamed`
+    refuses a call that names no server (conn.server)."""
+    settings = conn.server(ctx, target, unnamed=unnamed, **flags) | fixed
     # profile is unused: each release's own report names the profile it runs
     settings["profile"] = "unused"
     cfg = config.make_config(artifact="", **settings)
@@ -103,7 +104,7 @@ def status_cmd(
 )
 def rollback_cmd(
     ctx: typer.Context,
-    target: conn.Target = None,
+    target: conn.NamedTarget = None,
     to: Annotated[
         str | None,
         typer.Option(
@@ -153,6 +154,7 @@ def rollback_cmd(
                 command_timeout=command_timeout,
                 verify_timeout=verify_timeout,
             ),
+            unnamed="name the server to roll back: `uqs deploy rollback TARGET`",
             break_lock=waived.get(overrides.BREAK_LOCK),
         )
         inspection.refuse_deploy(
@@ -170,7 +172,7 @@ def rollback_cmd(
 @deploy_app.command("prune", cls=renamed(conn.OLD_SPELLINGS, ChangesState))
 def prune_cmd(
     ctx: typer.Context,
-    target: conn.Target = None,
+    target: conn.NamedTarget = None,
     keep: Annotated[
         int | None,
         typer.Option(
@@ -215,6 +217,7 @@ def prune_cmd(
                 command_timeout=command_timeout,
                 keep=keep,
             ),
+            unnamed="name the server to prune: `uqs deploy prune TARGET`",
         )
         if cfg.keep is None:
             raise config.DeployError(
