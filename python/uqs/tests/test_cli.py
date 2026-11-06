@@ -51,6 +51,7 @@ from uqs import paths as stack_paths
 from uqs.checks import schema_view
 from uqs.cli import (
     create_backfill,
+    json_out,
     lifecycle,
     lists,
     pipelines,
@@ -1550,8 +1551,44 @@ def test_connector_logs_shows_the_tail_of_the_log_its_status_names(monkeypatch, 
     assert json.loads(as_json.stdout) == {
         "name": "crypto",
         "log": str(log),
-        "lines": ["line 28", "line 29"],
+        "lines": [{"time": None, "level": None, "message": f"line {i}"} for i in (28, 29)],
     }
+
+
+@pytest.mark.parametrize(
+    ("line", "record"),
+    [
+        (
+            "2026-10-20T09:00:00.5Z  WARN cryptorust::feed: reconnecting",
+            {"time": "2026-10-20T09:00:00.5+00:00", "level": "WARNING",
+             "message": "cryptorust::feed: reconnecting"},
+        ),
+        (
+            "2026-10-20 09:00:00+00:00 | ERROR    | kafka_feed:run:12 - broker down",
+            {"time": "2026-10-20T09:00:00+00:00", "level": "ERROR",
+             "message": "kafka_feed:run:12 - broker down"},
+        ),
+        (
+            "2026.10.20D09:00:00.000000000|h|feed|kafka1|INF|id|a|b",
+            {"time": json_out.timestamp("2026.10.20D09:00:00.000000000"), "level": "INFO",
+             "message": "a|b"},
+        ),
+        ("started, pid 42", {"time": None, "level": None, "message": "started, pid 42"}),
+    ],
+)  # fmt: skip
+def test_connector_logs_json_lines_are_records_as_logs_prints_them(
+    monkeypatch, tmp_path, line, record
+):
+    """#2241: `connector logs --json` printed bare strings under the `lines` key `logs`
+    fills with records; a line is one record, `{time, level, message}`, whatever wrote it."""
+    log = tmp_path / "crypto.log"
+    log.write_text(line + "\n")
+    _crypto_running(monkeypatch, True, log)
+    result = runner.invoke(cli.app, ["connector", "logs", "crypto", "--json"])
+    assert result.exit_code == 0, result.output
+    (got,) = json.loads(result.stdout)["lines"]
+    assert got == record
+    assert tuple(got) == json_out.LINE_KEYS
 
 
 def test_connector_logs_follow_reads_the_same_file(monkeypatch, tmp_path):

@@ -157,6 +157,9 @@ def test_logs_prints_the_lines(monkeypatch):
     monkeypatch.setattr(stack_logs, "get_recent_logs", lambda *_a: [line])
     (got,) = _doc(["logs", "rdb1"])["lines"]
     assert got["message"] == "m" and got["host"] is None
+    # #2241: the level is `level`, as the --level that filters it, never TorQ's `loglevel`
+    assert got["level"] == "INFO" and "loglevel" not in got
+    assert set(json_out.LINE_KEYS) <= got.keys()
 
 
 def test_logs_attach_prints_the_runs_lines(monkeypatch):

@@ -189,7 +189,7 @@ def config_unset(
 
 
 LogsJson = json_opt(
-    '{"lines": [{time, host, process, proctype, loglevel, id, message}]} - the history '
+    '{"lines": [{time, host, process, proctype, level, id, message}]} - the history '
     "only: not with --follow, --channel or --multitail; time ISO-8601 with its offset"
 )
 _LINE_KEYS = ("time", "host", "procname", "proctype", "loglevel", "id", "message")

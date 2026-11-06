@@ -90,6 +90,9 @@ def test_list_reads_the_file_newest_first_as_json(history):
     doc = json.loads(_run("activity", "list", "--db", str(db), "--json"))
     assert doc["db"] == str(db)
     assert [e["action"] for e in doc["events"]][:2] == ["request.finish", "process.stop"]
+    # #2241: an event says when under `time`, as every log line's record does - never `ts`
+    assert all("time" in e and "ts" not in e and "level" in e for e in doc["events"])
+    assert doc["events"][0]["time"].startswith("2026-11-03T10:00:04")
     assert doc["drops"] == [
         {"level": "debug", "reason": "sampled", "count": 5, "last_at": doc["drops"][0]["last_at"]}
     ]

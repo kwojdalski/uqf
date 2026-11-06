@@ -57,13 +57,22 @@ def json_opt(shape: str | None = None, note: str | None = None) -> Any:
 #: as the CLI flag does. A job is `job`, the argument's name on every command
 #: that takes one (the run ledger and a bounded job's state say `worker`), and
 #: a stack's base port is `base_port`, `--base-port`'s name (#1855), where an
-#: attached destination says `stack_id`.
+#: attached destination says `stack_id`. A log line's level is `level`, the
+#: name of the `--level` option that filters it on every command (#2241),
+#: where TorQ's log line calls it `loglevel`.
 KEYS = {
     "procname": "process",
     "startwithall": "start_with_all",
     "worker": "job",
     "stack_id": "base_port",
+    "loglevel": "level",
 }
+
+#: The keys a log line is a record of in every document that prints log lines,
+#: `logs` and `connector logs` (#2241): when, how severe, and what it said. A
+#: command adds its own keys beside them; `activity list`'s events say when and
+#: how severe under the same two, `time` and `level`.
+LINE_KEYS = ("time", "level", "message")
 
 
 @dataclasses.dataclass(frozen=True)
