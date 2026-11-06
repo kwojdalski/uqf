@@ -369,3 +369,47 @@ def test_prune_of_the_same_server_spelled_another_way_is_refused(declared, no_de
     )
     assert result.exit_code != 0
     assert "FAILED at inspection" in log_text()
+
+
+# --- the gate: every command that changes a server asks inspection first ---------------
+
+#: (module alias, function): each changes what a server holds. A CLI module that
+#: calls one must also call inspection.refuse* - `target adopt --apply` did not,
+#: and rearranged an inspection-only server reached under a new name (#2231).
+SERVER_CHANGES = {
+    ("adopt", "apply"),
+    ("control", "run"),
+    ("driver", "deploy"),
+    ("prune", "prune"),
+    ("remote_files", "restore"),
+    ("rollback", "rollback"),
+}
+REFUSALS = {"refuse", "refuse_deploy", "refuse_push"}
+
+
+def _calls(tree) -> set[tuple[str, str]]:
+    import ast
+
+    return {
+        (node.func.value.id, node.func.attr)
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and isinstance(node.func.value, ast.Name)
+    }
+
+
+def test_every_cli_module_that_changes_a_server_asks_inspection_first():
+    import ast
+
+    cli = Path(target_cli.__file__).parent
+    changing: list[str] = []
+    missing: list[str] = []
+    for path in sorted(cli.glob("*.py")):
+        calls = _calls(ast.parse(path.read_text()))
+        if calls & SERVER_CHANGES:
+            changing.append(path.name)
+            if not {("inspection", r) for r in REFUSALS} & calls:
+                missing.append(path.name)
+    assert "target_adopt.py" in changing, "the gate no longer sees adopt.apply"
+    assert not missing, f"change a server without inspection.refuse: {missing}"
