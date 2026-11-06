@@ -73,7 +73,7 @@ export const HISTORY: ActivityHistory = {
         { target: "rdb2", outcome: "unknown" },
       ],
       detail: {},
-      dropped: 0,
+      dropped_detail: 0,
     },
   ],
   persistence: {

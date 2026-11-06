@@ -61,7 +61,7 @@ def history(tmp_path) -> tuple[Path, TestClient]:
                 _event("2026-11-03T10:00:04Z", "debug", "request.finish",
                        target="GET /ops/queue", outcome="succeeded", duration_ms=3.0),
             ],
-            "dropped": [{"level": "debug", "reason": "sampled", "count": 5}],
+            "drops": [{"level": "debug", "reason": "sampled", "count": 5}],
         },
     )  # fmt: skip
     store: activity.ActivityStore = client.app.state.activity  # ty: ignore[unresolved-attribute]

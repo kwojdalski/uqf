@@ -105,8 +105,14 @@ COLUMNS = (
     "duration_ms",
     "items",
     "detail",
-    "dropped",
+    "dropped_detail",
 )
+
+#: Columns renamed in the history file, old -> new. The frontend API renames
+#: them when it opens a file (activity.ActivityStore); a reader refuses a file
+#: not yet migrated rather than reading it under both names. `dropped` was the
+#: detail keys dropped, beside a batch's `drops` of whole events (#2242).
+RENAMED_COLUMNS = {"dropped": "dropped_detail"}
 
 
 def history_file(torqdata: Path) -> Path:
@@ -201,6 +207,7 @@ def select(db: sqlite3.Connection, q: Query, *, max_limit: int = MAX_LIMIT) -> l
             return []
         where.append(f"level IN ({', '.join('?' for _ in shown)})")
         args.extend(shown)
+    unmigrated(db)
     sql = f"SELECT {', '.join(COLUMNS)} FROM activity"  # noqa: S608 - fixed names
     if where:
         sql += " WHERE " + " AND ".join(where)
@@ -213,6 +220,18 @@ def select(db: sqlite3.Connection, q: Query, *, max_limit: int = MAX_LIMIT) -> l
         event["detail"] = json.loads(event["detail"])
         out.append(event)
     return out
+
+
+def unmigrated(db: sqlite3.Connection) -> None:
+    """Refuse a file written before a column was renamed (RENAMED_COLUMNS),
+    naming the rename: it is migrated, never read under both names."""
+    columns = {row[1] for row in db.execute("PRAGMA table_info(activity)")}
+    for old, new in RENAMED_COLUMNS.items():
+        if old in columns and new not in columns:
+            raise sqlite3.OperationalError(
+                f"its `{old}` column is `{new}` now (#2242) - start the frontend API on this "
+                "file once, which migrates it, then read it again"
+            )
 
 
 def drops(db: sqlite3.Connection) -> list[dict[str, Any]]:
@@ -239,7 +258,7 @@ def render(
     *,
     exported_at: dt.datetime,
     filters: Mapping[str, str] | None = None,
-    dropped: Iterable[Mapping[str, Any]] = (),
+    drops: Iterable[Mapping[str, Any]] = (),
 ) -> str:
     """`rows` (newest first, as `select` returns them) written as `fmt`,
     oldest first: a history is read forwards."""
@@ -249,7 +268,7 @@ def render(
     if fmt == "csv":
         return _csv(forwards)
     if fmt == "text":
-        return _text(forwards, exported_at, filters or {}, list(dropped))
+        return _text(forwards, exported_at, filters or {}, list(drops))
     raise ValueError(f"unknown export format {fmt!r}: one of {', '.join(EXPORT_FORMATS)}")
 
 
@@ -336,7 +355,7 @@ def _text(
     rows: Sequence[Mapping[str, Any]],
     exported_at: dt.datetime,
     filters: Mapping[str, str],
-    dropped: list[Mapping[str, Any]],
+    drops: list[Mapping[str, Any]],
 ) -> str:
     """A timeline a person can follow: one event a line, oldest first, and
     every event that shares a request id - the browser's submit, confirm and
@@ -348,8 +367,8 @@ def _text(
         f"# filters: {said}",
         f"# columns: {_SEP.join(TEXT_COLUMNS)}",
     ]
-    if dropped:
-        lost = ", ".join(f"{d['level']} {d['reason']} {d['count']}" for d in dropped)
+    if drops:
+        lost = ", ".join(f"{d['level']} {d['reason']} {d['count']}" for d in drops)
         lines.append(f"# not in the history (counted, not shown): {lost}")
     groups: dict[str, list[Mapping[str, Any]]] = {}
     for row in rows:

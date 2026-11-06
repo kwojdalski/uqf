@@ -398,7 +398,7 @@ def test_a_detail_key_outside_the_allowlist_is_dropped_and_counted(tmp_path, key
     assert r.json()["dropped_detail"] == 1
     (row,) = _history(c)
     assert row["detail"] == {"view": "Control"}
-    assert row["dropped"] == 1
+    assert row["dropped_detail"] == 1
     assert "PRIVATE-VALUE" not in _dump(tmp_path / "activity.sqlite3")
 
 

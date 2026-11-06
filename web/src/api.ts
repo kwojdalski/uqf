@@ -1348,7 +1348,7 @@ export interface BrowserDrop {
 /** POST /activity/events - models.ActivityBatchRequest. */
 export interface ActivityBatch {
   events?: BrowserEvent[];
-  dropped?: BrowserDrop[];
+  drops?: BrowserDrop[];
 }
 export interface ActivityBatchResult {
   stored: number;
@@ -1377,7 +1377,8 @@ export interface ActivityEvent {
   duration_ms: number | null;
   items: ActivityItem[];
   detail: Record<string, unknown>;
-  dropped: number;
+  /** `detail` keys dropped - the batch result's `dropped_detail`. */
+  dropped_detail: number;
 }
 export interface ActivityPersistence {
   persistent: boolean;

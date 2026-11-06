@@ -43,7 +43,6 @@ _KNOWN_TWO_KINDS = frozenset(
         "available",
         "declared",
         "detail",
-        "dropped",
         "groups",
         "inspection",
         "key",

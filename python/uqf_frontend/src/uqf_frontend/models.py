@@ -1084,7 +1084,16 @@ class ActivityBatchRequest(BaseModel):
     model_config = STRICT_REQUEST
 
     events: list[BrowserEventIn] = Field(default_factory=list, max_length=100)
-    dropped: list[BrowserDropIn] = Field(default_factory=list, max_length=16)
+    #: Events this browser did not send, by level and reason - the same
+    #: records GET /activity answers as `drops` (#2242).
+    drops: list[BrowserDropIn] = Field(default_factory=list, max_length=16)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _renamed(cls, data: Any) -> Any:
+        if isinstance(data, dict) and "dropped" in data:
+            raise ValueError("`dropped` is `drops`: the events this browser did not send (#2242)")
+        return data
 
 
 class ActivityBatchResponse(BaseModel):
@@ -1122,7 +1131,9 @@ class ActivityEventOut(BaseModel):
     duration_ms: float | None
     items: list[ActivityItem]
     detail: dict[str, Any]
-    dropped: int
+    #: `detail` keys dropped for being outside the allowlist or ill-formed,
+    #: named as the batch response names them (#2242).
+    dropped_detail: int
 
 
 class ActivityPersistence(BaseModel):

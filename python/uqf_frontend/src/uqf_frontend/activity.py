@@ -101,6 +101,7 @@ from uqs.activity_log import (
     EVENT_LEVELS,
     EXPORT_MAX,
     OUTCOMES,
+    RENAMED_COLUMNS,
     SOURCES,
     Query,
     select,
@@ -498,7 +499,7 @@ CREATE TABLE IF NOT EXISTS activity (
     acting       INTEGER NOT NULL DEFAULT 0,
     items        TEXT NOT NULL DEFAULT '[]',
     detail       TEXT NOT NULL DEFAULT '{}',
-    dropped      INTEGER NOT NULL DEFAULT 0
+    dropped_detail INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS activity_ts ON activity (ts);
 CREATE INDEX IF NOT EXISTS activity_recorded ON activity (recorded_at);
@@ -579,6 +580,9 @@ class ActivityStore:
             columns = {row[1] for row in self._db.execute("PRAGMA table_info(activity)")}
             if "level" not in columns:
                 self._db.execute(_LEVEL_COLUMN)
+            for old, new in RENAMED_COLUMNS.items():
+                if old in columns and new not in columns:
+                    self._db.execute(f"ALTER TABLE activity RENAME COLUMN {old} TO {new}")
             self._db.execute(_LEVEL_INDEX)
         except (sqlite3.Error, OSError) as exc:
             raise ValueError(
@@ -639,13 +643,13 @@ class ActivityStore:
             event.get("duration_ms"),
             json.dumps(clean_items(event.get("items"))),
             json.dumps(kept, sort_keys=True),
-            event.get("dropped", 0) + more,
+            more,
         )
 
     _INSERT = (
         "INSERT OR IGNORE INTO activity (event_id, ts, recorded_at, level, source, kind, "
         "action, target, outcome, session_id, request_id, claimed_user, trigger, method, "
-        "status_code, duration_ms, items, detail, dropped) "
+        "status_code, duration_ms, items, detail, dropped_detail) "
         "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
     )
 
@@ -720,7 +724,7 @@ class ActivityStore:
             return True
         sets = ", ".join(f"{name} = ?" for name in fields)
         changed = self._write(
-            f"UPDATE activity SET {sets}, dropped = dropped + ? WHERE event_id = ?",  # noqa: S608 - names from `allowed`
+            f"UPDATE activity SET {sets}, dropped_detail = dropped_detail + ? WHERE event_id = ?",  # noqa: S608 - names from `allowed`
             (*fields.values(), dropped, event_id),
         )
         return changed == 1

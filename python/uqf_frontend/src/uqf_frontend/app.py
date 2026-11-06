@@ -1621,7 +1621,7 @@ def create_app(
                 "again in a few seconds"
             )
         claimed = audit_user(request)
-        dropped = sum(activity.clean_detail(event.detail)[1] for event in batch.events)
+        dropped_detail = sum(activity.clean_detail(event.detail)[1] for event in batch.events)
         stored, not_stored = history.add_many(
             {
                 "source": "browser",
@@ -1641,12 +1641,12 @@ def create_app(
             }
             for event in batch.events
         )
-        for lost in batch.dropped:
+        for lost in batch.drops:
             history.note_dropped(lost.level, lost.reason, lost.count)
         return ActivityBatchResponse(
             stored=stored,
             not_stored=not_stored,
-            dropped_detail=dropped,
+            dropped_detail=dropped_detail,
             persistent=history.persistence.persistent,
         )
 
@@ -1733,7 +1733,7 @@ def create_app(
             format,
             exported_at=now,
             filters=q.described(),
-            dropped=history.drops(),
+            drops=history.drops(),
         )
         name = f"uqf-activity-{now:%Y%m%dT%H%M%SZ}.{activity_log.EXTENSIONS[format]}"
         return Response(
