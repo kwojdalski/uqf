@@ -7,6 +7,8 @@ cannot come back:
   `category` and `error`, at the top of a check and on each endpoint (#2238);
 - `drops` are events not sent or not kept, in both directions, and
   `dropped_detail` the `detail` keys one batch or event lost (#2242);
+- an activity event says when it happened under `time`, in the API's record,
+  the history file and `uqs activity list --json` alike (#2254);
 - an upload's or push's audit row names its facts as the route's own request
   and response do (#2246);
 - a remote file is one resource, `/services/{target}/files`, whose method is
@@ -19,6 +21,7 @@ import ast
 import dataclasses
 import datetime as dt
 import inspect
+import json
 import sqlite3
 import typing
 from pathlib import Path
@@ -33,7 +36,8 @@ from uqf_frontend import app as app_module
 from uqf_frontend.app import RENAMED_ROUTES, create_app
 from uqf_frontend.config import Settings
 from uqf_frontend.gateway import FakeGateway
-from uqs import activity_log
+from uqs import activity_export, activity_log
+from uqs.cli import json_out
 from uqs.deploy import tunnel_check, tunnel_plan
 
 
@@ -112,17 +116,18 @@ def test_the_api_refuses_dropped_rather_than_ignoring_it(tmp_path):
     assert "`dropped` is `drops`" in resp.json()["detail"]
 
 
-#: A history file from before #2234, #2236 and #2242: `level`, `target` for
-#: everything acted on, `identity` in detail, `dropped` for lost detail keys,
-#: and `PRAGMA user_version` 0.
+#: A history file from before #2234, #2236, #2242 and #2254: `level`, `target`
+#: for everything acted on, `identity` in detail, `dropped` for lost detail
+#: keys, `ts` for when, and `PRAGMA user_version` 0.
 _BEFORE_ALL = activity._SCHEMA + (
     "ALTER TABLE activity ADD COLUMN level TEXT NOT NULL DEFAULT 'actions';"
 )
 
 
-def _old_history(path: Path, *, version: int = 0) -> None:
+def _old_history(path: Path, *, version: int = 0) -> str:
     """A history file an earlier release left: at user_version 0 it has had
-    none of _MIGRATIONS, and at *version* the first that many of them."""
+    none of _MIGRATIONS, and at *version* the first that many of them. One
+    event, and when it happened."""
     with sqlite3.connect(path) as db:
         db.executescript(_BEFORE_ALL)
         now = activity_log.stamp(dt.datetime.now(dt.UTC))
@@ -137,6 +142,7 @@ def _old_history(path: Path, *, version: int = 0) -> None:
             for sql in statements:
                 db.execute(sql)
         db.execute(f"PRAGMA user_version = {version}")
+    return now
 
 
 def _opened(path: Path) -> dict:
@@ -145,29 +151,37 @@ def _opened(path: Path) -> dict:
     return row
 
 
-def test_the_dropped_rename_is_a_step_of_the_one_history_version():
+def test_the_renames_are_steps_of_the_one_history_version():
     """One version scheme for the history file: #2242's column rename is the
-    step after #2234's subject split, and the reader expects all of them."""
-    assert activity_log.SCHEMA_VERSION == len(activity._MIGRATIONS) == 3
+    step after #2234's subject split, #2254's `ts` -> `time` the step after
+    that, and the reader expects all of them."""
+    assert activity_log.SCHEMA_VERSION == len(activity._MIGRATIONS) == 4
     assert activity._MIGRATIONS[2] == (
         "ALTER TABLE activity RENAME COLUMN dropped TO dropped_detail",
     )
+    assert activity._MIGRATIONS[3][0] == "ALTER TABLE activity RENAME COLUMN ts TO time"
 
 
 def test_a_file_from_before_every_rename_is_upgraded_through_all_of_them(tmp_path):
-    """A file older than #2236, #2234 and #2242 takes their steps in order,
-    once: the detail key, the target/subject split and the column rename."""
+    """A file older than #2236, #2234, #2242 and #2254 takes their steps in
+    order, once: the detail key, the target/subject split, the `dropped`
+    rename and the `ts` rename, whose index moves with it."""
     path = tmp_path / "a.sqlite3"
-    _old_history(path)
+    when = _old_history(path)
     row = _opened(path)
     assert (row["target"], row["subject"]) == ("local", "rdb1")
     assert row["items"] == [{"subject": "rdb1", "outcome": "succeeded"}]
     assert row["detail"] == {"identity_source": "claimed"}
     assert row["dropped_detail"] == 2
+    assert row["time"] == when
     with sqlite3.connect(path) as db:
         columns = {r[1] for r in db.execute("PRAGMA table_info(activity)")}
+        indexes = {r[1] for r in db.execute("PRAGMA index_list(activity)")}
+        (indexed,) = [r[2] for r in db.execute("PRAGMA index_info(activity_time)")]
         version = db.execute("PRAGMA user_version").fetchone()[0]
     assert "dropped_detail" in columns and "dropped" not in columns
+    assert "time" in columns and "ts" not in columns
+    assert "activity_ts" not in indexes and indexed == "time"
     assert version == activity_log.SCHEMA_VERSION
     # opened again, nothing moves twice
     assert _opened(path) == row
@@ -175,13 +189,33 @@ def test_a_file_from_before_every_rename_is_upgraded_through_all_of_them(tmp_pat
 
 def test_a_file_already_split_into_target_and_subject_takes_only_the_rename(tmp_path):
     """A file #2258's release upgraded (user_version 2) still has `dropped`:
-    only the rename is left to do, and the split is not done again."""
+    only the renames are left to do, and the split is not done again."""
     path = tmp_path / "a.sqlite3"
-    _old_history(path, version=2)
+    when = _old_history(path, version=2)
     row = _opened(path)
     assert (row["target"], row["subject"]) == ("local", "rdb1")
     assert row["detail"] == {"identity_source": "claimed"}
     assert row["dropped_detail"] == 2
+    assert row["time"] == when
+
+
+def test_a_file_at_version_3_takes_only_the_time_rename(tmp_path):
+    """A file at user_version 3 has had every step but #2254's: opening it
+    renames `ts` to `time` and runs none of the earlier steps again - a detail
+    still saying `identity` is left as it is, which step 1 would rewrite."""
+    path = tmp_path / "a.sqlite3"
+    when = _old_history(path, version=3)
+    with sqlite3.connect(path) as db:
+        db.execute("""UPDATE activity SET detail = '{"identity": "claimed"}'""")
+    row = _opened(path)
+    assert row["time"] == when
+    assert row["detail"] == {"identity": "claimed"}
+    assert (row["target"], row["subject"]) == ("local", "rdb1")
+    with sqlite3.connect(path) as db:
+        columns = {r[1] for r in db.execute("PRAGMA table_info(activity)")}
+        version = db.execute("PRAGMA user_version").fetchone()[0]
+    assert "time" in columns and "ts" not in columns
+    assert version == 4
 
 
 def test_a_new_file_ends_at_the_same_shape_as_an_upgraded_one(tmp_path):
@@ -204,8 +238,78 @@ def test_a_new_file_ends_at_the_same_shape_as_an_upgraded_one(tmp_path):
 def test_a_reader_refuses_a_file_not_yet_migrated(tmp_path):
     path = tmp_path / "a.sqlite3"
     _old_history(path, version=2)
-    with pytest.raises(sqlite3.DatabaseError, match="schema 2, this reads 3"):
+    with pytest.raises(sqlite3.DatabaseError, match="schema 2, this reads 4"):
         activity_log.open_readonly(path)
+
+
+def test_a_reader_refuses_a_file_still_saying_ts(tmp_path):
+    """A file at version 3 still says `ts`: the reader refuses it, naming the
+    upgrade, rather than reading when an event happened under the old name."""
+    path = tmp_path / "a.sqlite3"
+    _old_history(path, version=3)
+    with pytest.raises(sqlite3.DatabaseError, match="schema 3, this reads 4"):
+        activity_log.open_readonly(path)
+
+
+# ------------------------------------------------------------- time (#2254)
+
+
+def _cli_events(db: Path) -> list[dict]:
+    from typer.testing import CliRunner
+
+    import uqs.cli.entry  # noqa: F401 - registers every command on the app
+    from uqs.cli.shared import app as cli
+
+    result = CliRunner().invoke(cli, ["activity", "list", "--db", str(db), "--json"])
+    assert result.exit_code == 0, result.output
+    return json.loads(result.stdout)["events"]
+
+
+def test_the_cli_and_the_api_record_an_activity_event_under_the_same_keys(tmp_path):
+    """One event, read back by GET /activity and by `uqs activity list --json`:
+    the same keys, so `time` is `time` on both - the CLI said `time` and the
+    API `ts` (#2254)."""
+    db = tmp_path / "a.sqlite3"
+    c = TestClient(create_app(gateway=FakeGateway({}), settings=Settings(activity_db=db)))
+    event = {
+        "event_id": activity.new_id(),
+        "session_id": "session-abc12345",
+        "time": "2026-11-03T10:00:00Z",
+        "kind": "navigate",
+        "action": "view.open",
+        "trigger": "pointer",
+    }
+    assert c.post("/activity/events", json={"events": [event]}).status_code == 200
+    (api,) = c.get("/activity").json()["events"]
+    (cli,) = _cli_events(db)
+    assert set(api) == set(cli) == set(models.ActivityEventOut.model_fields)
+    assert "time" in api and "ts" not in api
+    assert api["time"] == cli["time"]
+
+
+def test_when_an_event_happened_is_time_everywhere():
+    for model in (models.BrowserEventIn, models.ActivityEventOut):
+        assert "time" in model.model_fields and "ts" not in model.model_fields, model.__name__
+    assert "time" in activity_log.COLUMNS and "ts" not in activity_log.COLUMNS
+    assert json_out.LINE_KEYS[0] == "time", "the key every log-line record says when under"
+
+
+def test_an_event_sending_ts_is_refused_naming_time(tmp_path):
+    c = TestClient(
+        create_app(gateway=FakeGateway({}), settings=Settings(activity_db=tmp_path / "a.db"))
+    )
+    event = {
+        "event_id": activity.new_id(),
+        "session_id": "session-abc12345",
+        "ts": "2026-11-03T10:00:00Z",
+        "kind": "navigate",
+        "action": "view.open",
+        "trigger": "pointer",
+    }
+    resp = c.post("/activity/events", json={"events": [event]})
+    assert resp.status_code == 422
+    assert "`ts` is `time`" in resp.json()["detail"]
+    assert c.get("/activity").json()["events"] == []
 
 
 # ------------------------------------------------------------ audit names (#2246)
@@ -308,7 +412,7 @@ def test_files_are_counted_one_way_and_the_old_audit_keys_are_gone():
 
 
 def test_the_text_export_names_the_old_audit_keys_rather_than_mapping_them():
-    text = activity_log.render([], "text", exported_at=dt.datetime(2026, 1, 1, tzinfo=dt.UTC))
+    text = activity_export.render([], "text", exported_at=dt.datetime(2026, 1, 1, tzinfo=dt.UTC))
     for old, new in _RENAMED_AUDIT_KEYS.items():
         assert f"{old} is {new}" in text
 

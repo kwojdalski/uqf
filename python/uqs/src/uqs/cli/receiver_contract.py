@@ -30,16 +30,14 @@ from uqs.cli.shared import (
     JOB_OPERATIONS_PANEL,
     ExportOpt,
     InteractiveOpt,
-    ReverseOpt,
-    SortOpt,
     _die,
     _export,
     _paths,
     _show,
-    _sorted_items,
     console,
     job_app,
 )
+from uqs.cli.sorting import ReverseOpt, SortOpt, _sorted_items
 from uqs.paths import UqsError
 
 contract_app = typer.Typer(

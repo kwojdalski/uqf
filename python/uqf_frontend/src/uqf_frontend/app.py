@@ -145,7 +145,7 @@ from uqf_frontend.models import (
     WorkspaceResponse,
     WorkspacesResponse,
 )
-from uqs import activity_log
+from uqs import activity_export, activity_log
 
 
 def _refused(status_code: int, error: str, detail: str) -> JSONResponse:
@@ -1709,7 +1709,7 @@ def create_app(
                 "source": "browser",
                 "kind": event.kind,
                 "action": event.action,
-                "ts": instants.to_datetime(event.ts),
+                "time": instants.to_datetime(event.time),
                 "event_id": event.event_id,
                 "subject": event.subject,
                 "outcome": event.outcome,
@@ -1810,12 +1810,12 @@ def create_app(
         limit: int = limits.row_limit(activity_log.EXPORT_DEFAULT, activity_log.EXPORT_MAX),
     ) -> Response:
         """The history as a file: JSON Lines, CSV, or a timeline a person
-        reads (activity_log.render) - oldest first, under the same filters as
+        reads (activity_export.render) - oldest first, under the same filters as
         GET /activity, at most activity_log.EXPORT_MAX events."""
         filters = dict(locals())
         q = _activity_query(filters, level, limit)
         now = dt.datetime.now(dt.UTC)
-        body = activity_log.render(
+        body = activity_export.render(
             history.export(q),
             format,
             exported_at=now,

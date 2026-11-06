@@ -35,7 +35,7 @@ def _event(ts: str, kind: str, action: str, **over: object) -> dict:
     return {
         "event_id": activity.new_id(),
         "session_id": SESSION,
-        "ts": ts,
+        "time": ts,
         "kind": kind,
         "action": action,
         "trigger": "pointer",
@@ -69,7 +69,7 @@ def history(tmp_path) -> tuple[Path, TestClient]:
         source="server",
         kind="request",
         action="process.stop",
-        ts=dt.datetime(2026, 11, 3, 10, 0, 3, tzinfo=dt.UTC),
+        time=dt.datetime(2026, 11, 3, 10, 0, 3, tzinfo=dt.UTC),
         subject="rdb1",
         outcome="refused",
         request_id=RID,

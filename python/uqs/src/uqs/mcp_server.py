@@ -63,6 +63,12 @@ def tool_name(path: str) -> str:
     return "uqs_" + vocabulary.identifier(path.replace(" ", "_"))
 
 
+#: The parameter a tool takes in place of its CLI command's `--yes/-y` (#2257).
+#: MCP has no terminal to ask on, so a tool mirroring a command that asks
+#: before a deletion it cannot undo is a dry run unless given confirm=true:
+#: the command's question answered yes, as the frontend's `confirmed: true` is.
+CONFIRM = "confirm"
+
 #: tool name -> the CLI command it mirrors
 MIRRORS: dict[str, str] = {}
 #: tool name -> its parameters
@@ -121,6 +127,10 @@ RETIRED_PARAMETERS: dict[str, tuple[str, str]] = {
         "password given to a tool is kept in the client's transcript (#1853)",
     ),
     "resolve": ("unresolved", ": its opposite - unresolved=true shows ${VAR} placeholders"),
+    "dry_run": (
+        CONFIRM,
+        ": a dry run is what the tool does unless confirm=true, which deletes (#2257)",
+    ),
 }
 
 

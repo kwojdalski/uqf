@@ -3,8 +3,8 @@ history, read from its SQLite file (#2000).
 
 The frontend API writes the history (uqf_frontend/activity.py); this reads the
 same file, opened read-only, through the same `uqs.activity_log.select` and
-`render` the API's view and export use - so a filter means one thing and a
-timeline has one layout, whichever is asked. No running API is needed: the
+`uqs.activity_export.render` the API's view and export use - so a filter means
+one thing and a timeline has one layout, whichever is asked. No running API is needed: the
 file is `$TORQDATA/frontend/activity.sqlite3` for this stack, or the one
 UQF_FRONTEND_ACTIVITY_DB or --db names.
 """
@@ -22,23 +22,13 @@ import typer
 from rich.markup import escape
 from rich.table import Table
 
-from uqs import activity_log, paths, timerange
+from uqs import activity_export, activity_log, paths, timerange
 from uqs.cli.choices import ChoiceOpt
 from uqs.cli.json_out import emit, json_opt
 from uqs.cli.range_options import DateOpt, LastOpt, RangeFromOpt, RangeToOpt
 from uqs.cli.safety import Effect, ReadOnly, marked
-from uqs.cli.shared import (
-    ExportOpt,
-    InteractiveOpt,
-    ReverseOpt,
-    SortOpt,
-    _die,
-    _export,
-    _show,
-    _sorted_items,
-    app,
-    console,
-)
+from uqs.cli.shared import ExportOpt, InteractiveOpt, _die, _export, _show, app, console
+from uqs.cli.sorting import ReverseOpt, SortOpt, _sorted_items
 from uqs.paths import UqsError
 
 activity_app = typer.Typer(
@@ -111,13 +101,6 @@ ListJson = json_opt(
     'duration_ms, items, detail, dropped_detail}], newest first, "drops": [{level, reason, count, '
     "last_at}]}"
 )
-
-
-def _event(event: dict[str, Any]) -> dict[str, Any]:
-    """An event as `--json` prints it: when it happened is `time`, the key every log-line
-    record says it under (json_out.LINE_KEYS, #2241), where the history file's column - and
-    the frontend API's record - is `ts`."""
-    return {("time" if k == "ts" else k): v for k, v in event.items()}
 
 
 def _db(db: Path | None) -> Path:
@@ -208,9 +191,9 @@ def list_(
     except UqsError as exc:
         _die(exc)
         return
-    _export([activity_log.flat(e) for e in events], export)
+    _export([activity_export.flat(e) for e in events], export)
     if as_json:
-        emit({"db": str(path), "events": [_event(e) for e in events], "drops": drops})
+        emit({"db": str(path), "events": events, "drops": drops})
         return
     for d in drops:
         console.print(
@@ -230,7 +213,7 @@ def list_(
             *(
                 escape(cell)
                 for cell in (
-                    str(e["ts"]),
+                    str(e["time"]),
                     str(e["level"]),
                     str(e["source"]),
                     str(e["kind"]),
@@ -289,7 +272,7 @@ def export_(
     except UqsError as exc:
         _die(exc)
         return
-    body = activity_log.render(
+    body = activity_export.render(
         events,
         str(fmt),
         exported_at=dt.datetime.now(dt.UTC),

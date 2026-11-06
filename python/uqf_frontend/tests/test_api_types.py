@@ -222,6 +222,21 @@ def test_a_field_renamed_in_a_request_type_is_caught():
     assert "only in the model ['procs']" in problem
 
 
+def test_an_activity_event_left_saying_ts_in_typescript_is_caught():
+    """#2254 staged: the browser still sending, and reading, `ts` after the
+    models said `time`, as `uqs activity list --json` does."""
+    text = API_TS.read_text()
+    assert text.count("  time: string;") >= 2, "BrowserEvent/ActivityEvent.time is not declared"
+    stale = text.replace("  time: string;", "  ts: string;")
+    for interface, model in (
+        ("BrowserEvent", "BrowserEventIn"),
+        ("ActivityEvent", "ActivityEventOut"),
+    ):
+        problem = _disagreement(interface, model, stale)
+        assert problem is not None and "only in TypeScript ['ts']" in problem, interface
+        assert "only in the model ['time']" in problem, interface
+
+
 @pytest.mark.parametrize(("interface", "model"), sorted(REQUESTS.items()))
 def test_a_field_the_request_model_requires_is_not_optional_in_typescript(interface, model):
     """A required request field the browser's type marks optional can be left

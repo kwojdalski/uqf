@@ -37,7 +37,7 @@ from uqf_frontend.activity import ActivityStore, Bound
 from uqf_frontend.app import create_app
 from uqf_frontend.config import Settings
 from uqf_frontend.gateway import FakeGateway
-from uqs import activity_log
+from uqs import activity_export, activity_log
 from uqs.activity_log import Query
 
 TOKEN = "s3cret-write-token-do-not-store"
@@ -64,7 +64,7 @@ def _event(**over: Any) -> dict[str, Any]:
     return {
         "event_id": activity.new_id(),
         "session_id": SESSION,
-        "ts": "2026-11-03T10:00:00Z",
+        "time": "2026-11-03T10:00:00Z",
         "kind": "navigate",
         "action": "view.open",
         "subject": "Control",
@@ -76,10 +76,10 @@ def _event(**over: Any) -> dict[str, Any]:
 #: One event of every kind the browser sends, at a second apiece.
 def _one_of_each() -> list[dict[str, Any]]:
     return [
-        _event(ts="2026-11-03T10:00:01Z", kind="navigate", action="view.open", subject="Desk"),
-        _event(ts="2026-11-03T10:00:02Z", kind="interact", action="ui.click", subject="nav.Desk"),
+        _event(time="2026-11-03T10:00:01Z", kind="navigate", action="view.open", subject="Desk"),
+        _event(time="2026-11-03T10:00:02Z", kind="interact", action="ui.click", subject="nav.Desk"),
         _event(
-            ts="2026-11-03T10:00:03Z",
+            time="2026-11-03T10:00:03Z",
             kind="debug",
             action="request.finish",
             subject="GET /ops/queue",
@@ -287,11 +287,11 @@ def _correlated(c: TestClient, monkeypatch) -> str:
         "/activity/events",
         json={
             "events": [
-                _event(ts="2026-11-03T10:00:00Z", kind="interact", action="ui.click",
+                _event(time="2026-11-03T10:00:00Z", kind="interact", action="ui.click",
                        subject="nav.Control"),
-                _event(ts="2026-11-03T10:00:01Z", kind="submit", action="process.stop",
+                _event(time="2026-11-03T10:00:01Z", kind="submit", action="process.stop",
                        subject="rdb1", request_id=rid),
-                _event(ts="2026-11-03T10:00:02Z", kind="confirm", action="process.stop",
+                _event(time="2026-11-03T10:00:02Z", kind="confirm", action="process.stop",
                        subject="rdb1", request_id=rid),
             ]
         },
@@ -306,10 +306,10 @@ def _correlated(c: TestClient, monkeypatch) -> str:
         "/activity/events",
         json={
             "events": [
-                _event(ts=now, kind="result", action="process.stop", subject="rdb1",
+                _event(time=now, kind="result", action="process.stop", subject="rdb1",
                        request_id=rid, outcome="succeeded", duration_ms=40.5,
                        trigger="programmatic"),
-                _event(ts=now, kind="debug", action="request.finish", subject="GET /ops/queue",
+                _event(time=now, kind="debug", action="request.finish", subject="GET /ops/queue",
                        outcome="succeeded", duration_ms=3.0, trigger="programmatic"),
             ]
         },
@@ -393,7 +393,7 @@ def test_the_export_says_what_is_not_in_the_history(tmp_path):
 
 def test_a_csv_cell_a_spreadsheet_would_run_is_quoted():
     rows = [{c: None for c in activity_log.COLUMNS} | {"target": "+cmd", "items": [], "detail": {}}]
-    out = activity_log.render(rows, "csv", exported_at=dt.datetime.now(dt.UTC))
+    out = activity_export.render(rows, "csv", exported_at=dt.datetime.now(dt.UTC))
     (row,) = csv.DictReader(io.StringIO(out))
     assert row["target"] == "'+cmd"
 

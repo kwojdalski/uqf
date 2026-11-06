@@ -1339,7 +1339,7 @@ export interface ActivityItem {
 export interface BrowserEvent {
   event_id: string;
   session_id: string;
-  ts: string;
+  time: string;
   kind: BrowserKind;
   action: string;
   /** what the event is about - a view, a control, a process selector */
@@ -1372,7 +1372,7 @@ export interface ActivityBatchResult {
  *  anyone can set: shown as claimed, never as who it was. */
 export interface ActivityEvent {
   event_id: string;
-  ts: string;
+  time: string;
   recorded_at: string;
   level: ActivityLevel;
   source: ActivitySource;
