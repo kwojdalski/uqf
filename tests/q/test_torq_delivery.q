@@ -45,6 +45,28 @@
     .qunit.assertThrows[{[r] .qtorq.publish[r;`trades;([] sym:`a`b; px:1 2f)]};enlist refuser;
         "qtorq.publish: the tickerplant refused a batch of 2 trades rows*length"]};
 
+/ accept_fn runs on the plant; here it runs on stand-ins for TorQ's own
+/ .stp.upd and .stplg.badmsg, put back afterwards.
+.qt.qtorq.delivery.badlog:()
+
+.qt.qtorq.delivery.test_accept_fn_returns_the_error_a_plant_in_error_mode_trapped:{[t]
+    `.qt.qtorq.delivery.badlog set ();
+    `.stp.upd set {[t;x] '"length"};
+    `.stplg.badmsg set {[e;t;x] `.qt.qtorq.delivery.badlog set enlist (e;t;x);};
+    r:.qtorq.accept_fn[`trades;enlist 1 2];
+    ![`.stp;();0b;enlist `upd]; ![`.stplg;();0b;enlist `badmsg];
+    .qunit.assertEquals[r;"length";"the refusal is the reply"];
+    .qunit.assertEquals[.qt.qtorq.delivery.badlog;enlist ("length";`trades;enlist 1 2);
+        "and it still reached TorQ's error log"]};
+
+.qt.qtorq.delivery.test_accept_fn_accepts_what_the_plant_stored:{[t]
+    `.qt.qtorq.delivery.badlog set ();
+    `.stp.upd set {[t;x] t};
+    `.stplg.badmsg set {[e;t;x] `.qt.qtorq.delivery.badlog set enlist (e;t;x);};
+    r:.qtorq.accept_fn[`trades;enlist 1 2];
+    ![`.stp;();0b;enlist `upd]; ![`.stplg;();0b;enlist `badmsg];
+    .qunit.assertEquals[(r;.qt.qtorq.delivery.badlog);(1b;());"accepted, and nothing logged as bad"]};
+
 / --- reconnecting -----------------------------------------------------------
 
 .qt.qtorq.delivery.test_a_closed_handle_is_reopened_and_the_publish_lands:{[t]
