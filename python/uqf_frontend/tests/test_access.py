@@ -368,7 +368,7 @@ def test_refused_reads_cannot_evict_the_audit(tmp_path):
         )
     )  # fmt: skip
     c.post(
-        "/control/process/stop",
+        "/control/lifecycle/stop",
         json={"procs": "rdb1"},
         headers={HEADER: "bob", "authorization": f"Bearer {TOKEN}"},
     )
@@ -400,7 +400,7 @@ def test_a_refused_write_is_one_row_naming_the_permission(tmp_path):
         )
     )  # fmt: skip
     resp = c.post(
-        "/control/process/stop",
+        "/control/lifecycle/stop",
         json={"procs": "rdb1"},
         headers={HEADER: "bob", "authorization": f"Bearer {TOKEN}"},
     )
@@ -424,7 +424,7 @@ def test_the_write_token_still_stands_in_front_of_a_granted_write(tmp_path):
             allowed_hosts=("testserver",),
         )
     )  # fmt: skip
-    resp = c.post("/control/process/stop", json={"procs": "rdb1"}, headers={HEADER: "alice"})
+    resp = c.post("/control/lifecycle/stop", json={"procs": "rdb1"}, headers={HEADER: "alice"})
     assert resp.status_code == 401
 
 

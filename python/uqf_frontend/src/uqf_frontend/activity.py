@@ -89,12 +89,14 @@ import re
 import sqlite3
 import threading
 import time
+import typing
 import uuid
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from uqf_frontend.models import LifecycleAction
 from uqf_frontend.remote_helper import PUSH_ID
 from uqs.activity_log import (
     DROP_REASONS,
@@ -367,13 +369,18 @@ def clean_items(raw: Iterable[Mapping[str, object]] | None) -> list[dict[str, st
 #: it is audited under. A route missing here is audited as `http.<method>`,
 #: and test_activity.py fails until it is named - the hook #1951 and #1953
 #: add their upload and delete routes to.
+#: models.LifecycleAction's words: a request whose verb is not one is refused
+#: 422, but its attempt is still audited, and never under a name it chose.
+LIFECYCLE_VERBS = frozenset(typing.get_args(LifecycleAction))
+
 SERVER_ACTIONS: dict[tuple[str, str], Callable[[Mapping[str, str]], str]] = {
     ("POST", "/services/{target}/files/delete"): lambda _: "files.delete",
-    ("POST", "/control/process/{action}"): lambda p: (
-        f"process.{p['action']}" if p.get("action") in ("start", "stop", "restart") else "process"
+    # `process.<verb>`: the verb is the path's own segment, typed (#2230)
+    ("POST", "/control/lifecycle/{action}"): lambda p: (
+        f"process.{p['action']}" if p.get("action") in LIFECYCLE_VERBS else "process"
     ),
-    ("PUT", "/control/process/{process}/config"): lambda _: "process.config",
-    ("PUT", "/control/worker-config"): lambda _: "worker.config",
+    ("PUT", "/control/processes/{process}/config"): lambda _: "process.config",
+    ("PUT", "/control/worker/config"): lambda _: "worker.config",
     ("POST", "/control/backfill"): lambda _: "backfill.start",
     ("PUT", "/services/{target}/files/content"): lambda _: "files.upload",
     # config pushes (#2002): `config.push` is the summary row of a whole push,

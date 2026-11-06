@@ -149,10 +149,10 @@ def test_the_sweep_covers_every_kind_of_write_the_issue_names():
     process and worker config: each is in the swept set."""
     swept = set(WRITES)
     for route in (
-        ("POST", "/control/process/{action}"),
+        ("POST", "/control/lifecycle/{action}"),
         ("POST", "/control/backfill"),
-        ("PUT", "/control/process/{process}/config"),
-        ("PUT", "/control/worker-config"),
+        ("PUT", "/control/processes/{process}/config"),
+        ("PUT", "/control/worker/config"),
         ("PUT", "/services/{target}/files/content"),
         ("POST", "/services/{target}/files/delete"),
         ("POST", "/services/{target}/config/pushes"),
@@ -237,14 +237,14 @@ def test_reads_stay_available(tmp_path, registry, method, path, body):
 
 def test_the_write_token_still_stands_in_front(tmp_path):
     c = _client(_settings(tmp_path, inspection_mode=True))
-    resp = c.post("/control/process/stop", json={"procs": "rdb1"})
+    resp = c.post("/control/lifecycle/stop", json={"procs": "rdb1"})
     assert resp.status_code == 401
 
 
 def test_the_host_check_still_stands_in_front(tmp_path):
     c = _client(_settings(tmp_path, inspection_mode=True))
     resp = c.post(
-        "/control/process/stop", json={"procs": "rdb1"}, headers={**AUTH, "host": "evil.example"}
+        "/control/lifecycle/stop", json={"procs": "rdb1"}, headers={**AUTH, "host": "evil.example"}
     )
     assert resp.status_code == 403
     assert resp.json()["error"] == "HostNotAllowed"
@@ -323,7 +323,7 @@ def test_a_workspace_at_an_inspection_server_is_refused(tmp_path, registry):
     registry.write_text(REGISTRY + ALIASES)
     c, opened = _workspace_client(tmp_path)
     resp = c.post(
-        "/control/process/stop", json={"procs": "rdb1"},
+        "/control/lifecycle/stop", json={"procs": "rdb1"},
         headers={**AUTH, workspaces.TARGET_HEADER: "prod-rw"},
     )  # fmt: skip
     assert _is_inspection_refusal(resp), resp.text
@@ -346,7 +346,7 @@ def test_a_target_at_another_server_is_not_refused(tmp_path, registry, other):
 def test_a_target_in_inspection_mode_leaves_the_local_stack_alone(tmp_path, registry, local_stack):
     root, stopped = local_stack
     c = _client(_settings(tmp_path, stack_root=root))
-    resp = c.post("/control/process/stop", json={"procs": "rdb1"}, headers=AUTH)
+    resp = c.post("/control/lifecycle/stop", json={"procs": "rdb1"}, headers=AUTH)
     assert not _is_inspection_refusal(resp)
     assert stopped == ["rdb1"]
 
@@ -425,17 +425,17 @@ def test_the_local_workspace_follows_the_frontends_own_mode(tmp_path, registry, 
     c, _ = _workspace_client(tmp_path, stack_root=root)
     body = {"procs": "rdb1"}
     local = {**AUTH, workspaces.TARGET_HEADER: workspaces.LOCAL}
-    assert not _is_inspection_refusal(c.post("/control/process/stop", json=body, headers=local))
+    assert not _is_inspection_refusal(c.post("/control/lifecycle/stop", json=body, headers=local))
     assert stopped == ["rdb1"]
     c, _ = _workspace_client(tmp_path, inspection_mode=True, stack_root=root)
-    assert _is_inspection_refusal(c.post("/control/process/stop", json=body, headers=local))
+    assert _is_inspection_refusal(c.post("/control/lifecycle/stop", json=body, headers=local))
     assert stopped == ["rdb1"]
 
 
 def test_a_header_that_is_no_target_name_is_left_to_the_workspace_layer(tmp_path, registry):
     c, _ = _workspace_client(tmp_path)
     resp = c.post(
-        "/control/process/stop", json={"procs": "rdb1"},
+        "/control/lifecycle/stop", json={"procs": "rdb1"},
         headers={**AUTH, workspaces.TARGET_HEADER: "../prod"},
     )  # fmt: skip
     assert not _is_inspection_refusal(resp)

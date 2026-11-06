@@ -110,7 +110,7 @@ it("asks before a stop, and a keyboard cancel sends nothing", async () => {
   fireEvent.keyDown(dialog, { key: "Escape" });
   expect(screen.queryByRole("alertdialog")).toBeNull();
   expect(
-    fetcher.mock.calls.filter(([path]) => path.startsWith("/control/process")),
+    fetcher.mock.calls.filter(([path]) => path.startsWith("/control/lifecycle")),
   ).toEqual([]);
   const events = (await recorded()).filter((e) => e.action === "process.stop");
   expect(events.map((e) => [e.kind, e.trigger, e.target])).toEqual([
@@ -136,7 +136,7 @@ it("a confirmed stop carries one request id from the click to the server and bac
   });
   await screen.findByText(/exit 0/);
   const call = fetcher.mock.calls.find(([path]) =>
-    path.startsWith("/control/process/stop"),
+    path.startsWith("/control/lifecycle/stop"),
   )!;
   const headers = call[1].headers as Record<string, string>;
   const events = (await recorded()).filter((e) => e.action === "process.stop");

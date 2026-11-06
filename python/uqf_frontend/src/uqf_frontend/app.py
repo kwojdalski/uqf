@@ -11,6 +11,7 @@ import datetime as dt
 import hashlib
 import http
 import math
+import re
 import subprocess
 import time
 import typing
@@ -114,6 +115,7 @@ from uqf_frontend.models import (
     HealthResponse,
     InspectionOut,
     IntervalOut,
+    LifecycleAction,
     LifecycleRequest,
     OpsTableResponse,
     ProcessConfigRequest,
@@ -341,6 +343,28 @@ ScopeOf = typing.Annotated[workspaces.Scope, Depends(scope_of)]
 #: The FileOutcome words ActivityOutcome has no word for, as the audit
 #: records them: a file the browser never sent, or refused itself.
 _AUDIT_OUTCOME = {"cancelled": "refused", "invalid": "refused"}
+
+
+#: Routes renamed by #2230, as (method, old path, old template, new
+#: template): the old path answers 410 naming the new one. One-way - never a
+#: route that still works - so a client is told, not served twice.
+RENAMED_ROUTES: tuple[tuple[str, re.Pattern[str], str, str], ...] = (
+    ("POST", re.compile(r"/control/process/[^/]+"),
+     "/control/process/{action}", "/control/lifecycle/{action}"),
+    ("PUT", re.compile(r"/control/process/[^/]+/config"),
+     "/control/process/{process}/config", "/control/processes/{process}/config"),
+    ("PUT", re.compile(r"/control/worker-config"),
+     "/control/worker-config", "/control/worker/config"),
+)  # fmt: skip
+
+
+def renamed_route(method: str, path: str) -> str | None:
+    """Why `method path` is gone and where it went, or None when it never
+    was a route (RENAMED_ROUTES)."""
+    for verb, old_path, old, new in RENAMED_ROUTES:
+        if method.upper() == verb and old_path.fullmatch(path):
+            return f"`{verb} {old}` is `{verb} {new}` (#2230)"
+    return None
 
 
 def _renamed_query(**renamed: str) -> Callable[[Request], None]:
@@ -669,6 +693,10 @@ def create_app(
         """Starlette's own refusals - 404 for no such route, 405 for a method
         the route does not take - named by their status (`NotFound`,
         `MethodNotAllowed`), keeping the headers they carry (405's `Allow`)."""
+        if exc.status_code in (404, 405) and (
+            moved := renamed_route(request.method, write_guard.route_path(request.scope))
+        ):
+            return _error(request, 410, "Gone", moved)
         phrase = http.HTTPStatus(exc.status_code).phrase
         error = "".join(ch for ch in phrase.title() if ch.isalnum())
         return _error(request, exc.status_code, error, str(exc.detail), headers=exc.headers)
@@ -1500,8 +1528,10 @@ def create_app(
             poll_seconds=ops.POLL_SECONDS["processes"],
         )
 
-    @app.post("/control/process/{action}", response_model=CommandResponse)
-    def control_lifecycle(action: str, req: LifecycleRequest, request: Request) -> CommandResponse:
+    @app.post("/control/lifecycle/{action}", response_model=CommandResponse)
+    def control_lifecycle(
+        action: LifecycleAction, req: LifecycleRequest, request: Request
+    ) -> CommandResponse:
         """Start, stop or restart processes (action is start|stop|restart)."""
         audit = activity.audit_of(request)
         audit.set_target(req.procs)
@@ -1521,7 +1551,7 @@ def create_app(
             output=result.output,
         )
 
-    @app.put("/control/process/{process}/config", response_model=ProcessConfigResponse)
+    @app.put("/control/processes/{process}/config", response_model=ProcessConfigResponse)
     def control_process_config(
         process: str, req: ProcessConfigRequest, request: Request
     ) -> ProcessConfigResponse:
@@ -1537,7 +1567,7 @@ def create_app(
             settable_fields=control.settable_fields(settings),
         )
 
-    @app.put("/control/worker-config", response_model=WorkerConfigResponse)
+    @app.put("/control/worker/config", response_model=WorkerConfigResponse)
     def control_worker_config(req: WorkerConfigRequest, request: Request) -> WorkerConfigResponse:
         """Set a `.qetl.cfg` override in the live process the gateway addresses."""
         audit = activity.audit_of(request)

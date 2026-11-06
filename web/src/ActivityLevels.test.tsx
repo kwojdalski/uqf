@@ -234,7 +234,7 @@ it("records a request's route, never its query string or a name in it", () => {
   expect(routeOf("/coverage?dataset=SECRET&range_from=x")).toBe("/coverage");
   expect(routeOf("/services/prod-a/files?path=SECRET")).toBe("/services/*");
   expect(routeOf("/ops/processes")).toBe("/ops/processes");
-  expect(routeOf("/control/process/stop")).toBe("/control/process");
+  expect(routeOf("/control/lifecycle/stop")).toBe("/control/lifecycle");
 });
 
 it("follows the server's default from /health until the tab picks its own", async () => {

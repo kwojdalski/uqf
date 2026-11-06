@@ -344,9 +344,9 @@ SAMPLES: dict[tuple[str, str], dict] = {
             },
         }
     },
-    ("POST", "/control/process/{action}"): {"json": {"procs": "rdb1"}},
-    ("PUT", "/control/process/{process}/config"): {"json": {"field": "port", "value": "1"}},
-    ("PUT", "/control/worker-config"): {"json": {"key": "k", "value": "v"}},
+    ("POST", "/control/lifecycle/{action}"): {"json": {"procs": "rdb1"}},
+    ("PUT", "/control/processes/{process}/config"): {"json": {"field": "port", "value": "1"}},
+    ("PUT", "/control/worker/config"): {"json": {"key": "k", "value": "v"}},
     ("POST", "/control/backfill"): {
         "json": {
             "worker": "w",

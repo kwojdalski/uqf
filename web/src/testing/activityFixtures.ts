@@ -307,7 +307,7 @@ export function answer(path: string, level: SessionLevel = "actions"): unknown {
     };
   if (bare === "/activity") return HISTORY;
   if (bare === "/settings") return SETTINGS;
-  if (bare.startsWith("/control/process/"))
+  if (bare.startsWith("/control/lifecycle/"))
     return {
       action: "stop",
       target: "all",

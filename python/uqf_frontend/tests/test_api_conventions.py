@@ -8,10 +8,19 @@ word, one shape per kind of route, and one rule for what must be confirmed.
 
 from __future__ import annotations
 
+import re
+import typing
+
 import pydantic
 import pytest
+from fastapi.routing import APIRoute
+from fastapi.testclient import TestClient
 
-from uqf_frontend import models
+from uqf_frontend import access, models
+from uqf_frontend.app import RENAMED_ROUTES, create_app
+from uqf_frontend.config import Settings
+from uqf_frontend.fleet import FakeFleet
+from uqf_frontend.gateway import FakeGateway
 
 
 def _models() -> dict[str, type[pydantic.BaseModel]]:
@@ -56,3 +65,86 @@ def test_process_config_refuses_the_old_spelling_by_name():
     assert (
         models.ProcessConfigRequest.model_validate({"field": "port", "value": "1"}).field == "port"
     )
+
+
+# --------------------------------------------------- route shapes (#2230)
+
+
+def _routes() -> list[APIRoute]:
+    app = create_app(gateway=FakeGateway({}), settings=Settings(), fleet=FakeFleet())
+    return [r for r in app.routes if isinstance(r, APIRoute)]
+
+
+def _segments(path: str) -> list[str]:
+    return [s for s in path.split("/") if s]
+
+
+def test_every_literal_segment_is_one_lowercase_word_or_snake_case():
+    """`worker-config` was the API's one hyphenated segment; a multi-word
+    path parameter was already snake_case (`{push_id}`)."""
+    bad = {
+        r.path
+        for r in _routes()
+        for s in _segments(r.path)
+        if not s.startswith("{") and not re.fullmatch(r"[a-z][a-z0-9_]*", s)
+    }
+    assert bad == set()
+
+
+def test_no_position_holds_a_verb_beside_a_resource_name():
+    """`/control/process/{action}` and `/control/process/{process}/config`
+    put a lifecycle verb and a process name in one position (#2230). A
+    path parameter that takes a verb is typed to its words, under a segment
+    of its own, and no other route's parameter shares its position."""
+    params: dict[tuple[str, ...], set[str]] = {}
+    for r in _routes():
+        parts = _segments(r.path)
+        for i, part in enumerate(parts):
+            if part.startswith("{"):
+                params.setdefault(tuple(parts[:i]), set()).add(part)
+    shared = {"/".join(k): v for k, v in params.items() if len(v) > 1}
+    assert shared == {}
+
+
+def test_the_lifecycle_verb_is_typed_in_the_path():
+    (route,) = [r for r in _routes() if r.path == "/control/lifecycle/{action}"]
+    (param,) = route.dependant.path_params
+    assert set(typing.get_args(param.field_info.annotation)) == {"start", "stop", "restart"}
+
+
+def test_a_collection_of_processes_is_plural_as_on_ops():
+    paths = {r.path for r in _routes()}
+    assert "/ops/processes" in paths and "/control/processes/{process}/config" in paths
+    assert not [p for p in paths if "/process/" in p or p.endswith("/process")]
+
+
+@pytest.mark.parametrize(
+    ("method", "old", "new"),
+    [
+        ("post", "/control/process/stop", "/control/lifecycle/{action}"),
+        ("put", "/control/process/rdb1/config", "/control/processes/{process}/config"),
+        ("put", "/control/worker-config", "/control/worker/config"),
+    ],
+)
+def test_a_renamed_route_is_gone_and_names_its_new_path(method, old, new):
+    """One-way: the old path answers 410 with the new one and does nothing -
+    it is not a second route that still works."""
+    token = "s3cret-write-token"
+    settings = Settings(
+        enable_writes=True, write_token=token, allowed_hosts=("localhost", "testserver")
+    )
+    client = TestClient(
+        create_app(gateway=FakeGateway({}), settings=settings, fleet=FakeFleet()),
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    resp = getattr(client, method)(old, json={})
+    assert resp.status_code == 410, resp.text
+    assert resp.json()["error"] == "Gone"
+    assert new in resp.json()["detail"]
+
+
+def test_every_renamed_route_names_a_route_that_exists():
+    paths = {(m, r.path) for r in _routes() for m in r.methods or ()}
+    for method, _pattern, _old, new in RENAMED_ROUTES:
+        assert (method, new) in paths
+        assert (method, new) in access.ROUTE_PERMISSIONS

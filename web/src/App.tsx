@@ -1378,7 +1378,7 @@ function ControlView() {
         { target, trigger, detail: { mode: chosen } },
         (correlation) =>
           mutate<CommandResult>(
-            `/control/process/${encodeURIComponent(action)}`,
+            `/control/lifecycle/${encodeURIComponent(action)}`,
             { procs: target } satisfies LifecycleBody,
             "POST",
             correlation,
@@ -1620,7 +1620,7 @@ function ControlView() {
               },
               (correlation) =>
                 mutate<ProcessConfigResult>(
-                  `/control/process/${encodeURIComponent(cfg.process)}/config`,
+                  `/control/processes/${encodeURIComponent(cfg.process)}/config`,
                   {
                     field: cfg.field,
                     value: cfg.value,
@@ -1698,7 +1698,7 @@ function ControlView() {
               },
               (correlation) =>
                 mutate<WorkerConfigResult>(
-                  "/control/worker-config",
+                  "/control/worker/config",
                   wcfg,
                   "PUT",
                   correlation,

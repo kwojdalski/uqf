@@ -80,7 +80,7 @@ async function lifecycleBody(
   let body: unknown;
   await waitFor(() => {
     const call = fetcher.mock.calls.find(([path]) =>
-      path.startsWith(`/control/process/${action}`),
+      path.startsWith(`/control/lifecycle/${action}`),
     );
     expect(call).toBeTruthy();
     body = JSON.parse(call![1].body as string);
@@ -318,11 +318,11 @@ it("sends the typed write token with an action, and keeps it out of reads", asyn
   fireEvent.click(screen.getByRole("button", { name: "start" }));
   await waitFor(() =>
     expect(
-      fetcher.mock.calls.some(([path]) => path.startsWith("/control/process/")),
+      fetcher.mock.calls.some(([path]) => path.startsWith("/control/lifecycle/")),
     ).toBe(true),
   );
   const [, action] = fetcher.mock.calls.find(([path]) =>
-    path.startsWith("/control/process/"),
+    path.startsWith("/control/lifecycle/"),
   )!;
   expect((action.headers as Record<string, string>).Authorization).toBe(
     "Bearer tok-123",
@@ -437,7 +437,7 @@ it("sends a typed process as one encoded path segment (#2015)", async () => {
   await waitFor(() =>
     expect(
       fetcher.mock.calls.map(([path]) => path).filter((p) => /config$/.test(p)),
-    ).toEqual(["/control/process/rdb1%3Fx%23y/config"]),
+    ).toEqual(["/control/processes/rdb1%3Fx%23y/config"]),
   );
 });
 

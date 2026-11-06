@@ -1,7 +1,7 @@
 """What a start may start: the refusals every front end applies (#887).
 
 `uqs start`, the MCP server's `uqs_start` and the browser's
-`POST /control/process/start` are three front ends over one stack. The
+`POST /control/lifecycle/start` are three front ends over one stack. The
 refusals used to live in the CLI, so the other two started what the CLI
 refused - a misspelt name exited 0 and the HTTP route answered `ok: true`.
 They live here now, below every front end:

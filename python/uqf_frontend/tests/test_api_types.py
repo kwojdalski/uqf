@@ -304,7 +304,7 @@ def test_no_route_takes_a_process_by_the_losing_name():
 
     bad = [route for route in access.ROUTE_PERMISSIONS if "{procname}" in route[1]]
     assert not bad, f"a path parameter naming a process is `{{process}}`: {bad}"
-    assert ("PUT", "/control/process/{process}/config") in access.ROUTE_PERMISSIONS
+    assert ("PUT", "/control/processes/{process}/config") in access.ROUTE_PERMISSIONS
 
 
 def test_the_key_scan_catches_a_losing_key():

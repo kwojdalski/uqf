@@ -769,18 +769,18 @@ export interface ControlStatus extends Pollable {
   settable_fields: string[];
   processes: ControlProcess[];
 }
-/** POST /control/process/{action} - models.LifecycleRequest. `procs` is
+/** POST /control/lifecycle/{action} - models.LifecycleRequest. `procs` is
  * required on both sides: it once defaulted to "all" on the server, so a body
  * without it stopped the whole fleet (#1361). */
 export interface LifecycleBody {
   procs: string;
 }
-/** PUT /control/process/{process}/config - models.ProcessConfigRequest. */
+/** PUT /control/processes/{process}/config - models.ProcessConfigRequest. */
 export interface ProcessConfigBody {
   field: string;
   value: string;
 }
-/** PUT /control/worker-config - models.WorkerConfigRequest. */
+/** PUT /control/worker/config - models.WorkerConfigRequest. */
 export interface WorkerConfigBody {
   key: string;
   value: string;

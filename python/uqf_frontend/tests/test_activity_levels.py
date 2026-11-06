@@ -188,7 +188,7 @@ def test_the_environment_bounds_each_level(monkeypatch):
 def test_off_still_audits_a_write(tmp_path, monkeypatch):
     _patch_start(monkeypatch)
     c = _client(tmp_path, activity_level="off")
-    assert c.post("/control/process/start", json={"procs": "rdb1"}).status_code == 200
+    assert c.post("/control/lifecycle/start", json={"procs": "rdb1"}).status_code == 200
     (row,) = c.get("/activity").json()["events"]
     assert (row["source"], row["action"], row["level"], row["outcome"]) == (
         "server",
@@ -240,9 +240,9 @@ def test_a_target_that_is_free_text_is_stored_as_invalid_at_every_level(tmp_path
 def test_the_write_token_never_reaches_the_history_at_any_level(tmp_path, monkeypatch, level):
     _patch_start(monkeypatch)
     c = _client(tmp_path, activity_level=level)
-    c.post("/control/process/start", json={"procs": "rdb1"})
+    c.post("/control/lifecycle/start", json={"procs": "rdb1"})
     c.post("/activity/events", json={"events": _one_of_each()})
-    c.post("/control/process/stop", json={"procs": "rdb1"}, headers={"Authorization": "Bearer x"})
+    c.post("/control/lifecycle/stop", json={"procs": "rdb1"}, headers={"Authorization": "Bearer x"})
     dump = _dump(tmp_path / "activity.sqlite3")
     assert TOKEN not in dump and "Bearer" not in dump
     for fmt in activity_log.EXPORT_FORMATS:
@@ -279,7 +279,7 @@ def _correlated(c: TestClient, monkeypatch) -> str:
         },
     )  # fmt: skip
     c.post(
-        "/control/process/stop",
+        "/control/lifecycle/stop",
         json={"procs": "rdb1"},
         headers={activity.REQUEST_ID_HEADER: rid, activity.SESSION_ID_HEADER: SESSION},
     )
@@ -532,6 +532,6 @@ def test_a_worker_config_change_is_still_audited_with_its_level(tmp_path):
         ),
         headers={"Authorization": f"Bearer {TOKEN}"},
     )
-    c.put("/control/worker-config", json={"key": "dry_run", "value": "1"})
+    c.put("/control/worker/config", json={"key": "dry_run", "value": "1"})
     (row,) = c.get("/activity", params={"level": "actions"}).json()["events"]
     assert (row["action"], row["level"]) == ("worker.config", "actions")

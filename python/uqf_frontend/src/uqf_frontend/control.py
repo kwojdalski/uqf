@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import re
 import time
+import typing
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -43,6 +44,7 @@ from typing import Any
 from uqf_frontend import instants
 from uqf_frontend.config import Settings
 from uqf_frontend.errors import StackBusy, ValidationFailed, WritesDisabled
+from uqf_frontend.models import LifecycleAction
 from uqs.generated.q_facts import CFG_ENV_LAYER, CFG_OVERRIDE_LAYER
 from uqs.model.qnames import config_env_var
 
@@ -69,9 +71,10 @@ def _acting() -> None:
         callback()
 
 
-#: The three lifecycle verbs this seam exposes. `clean` is excluded on
-#: purpose - see the module docstring.
-LIFECYCLE_ACTIONS = ("start", "stop", "restart")
+#: The three lifecycle verbs this seam exposes - models.LifecycleAction, the
+#: type the route's path takes. `clean` is excluded on purpose - see the
+#: module docstring.
+LIFECYCLE_ACTIONS: tuple[str, ...] = typing.get_args(LifecycleAction)
 
 #: process.csv fields HTTP may NOT override, though `uqs config set` may.
 #: torq.sh composes `sline="$qcmd ..."` and evals it on the next start, so a

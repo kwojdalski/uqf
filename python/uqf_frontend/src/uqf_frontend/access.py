@@ -136,9 +136,9 @@ ROUTE_PERMISSIONS: dict[tuple[str, str], tuple[str, str]] = {
     ("POST", "/services/{target}/config/pushes/{push_id}/restore"): ("services", "write"),
     # control: the status read, and every change to the stack
     ("GET", "/control"): ("control", "read"),
-    ("POST", "/control/process/{action}"): ("control", "write"),
-    ("PUT", "/control/process/{process}/config"): ("control", "write"),
-    ("PUT", "/control/worker-config"): ("control", "write"),
+    ("POST", "/control/lifecycle/{action}"): ("control", "write"),
+    ("PUT", "/control/processes/{process}/config"): ("control", "write"),
+    ("PUT", "/control/worker/config"): ("control", "write"),
     ("POST", "/control/backfill"): ("control", "write"),
     # activity: reading the history, and a browser recording its own
     ("GET", "/activity"): ("activity", "read"),
