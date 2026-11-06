@@ -26,14 +26,16 @@ export const API_PATHS = [
   "workspace",
 ];
 
-// The write token (#631), added here on the server side so a dev browser
-// never holds it. The built app served at /ui/ has no proxy in front of it;
-// there the Control view asks for the token instead (api.ts writeToken).
-const writeToken = process.env.UQF_FRONTEND_WRITE_TOKEN;
-const proxy = {
+// The proxy adds no credential. It once added the write token (#631) to
+// every request it forwarded, so anything that could reach the dev port - a
+// page on another origin, another local user, a tunnel - made authorised
+// writes (#2182). The dev UI now sends the token itself, as the built app
+// at /ui/ does: the operator types it in the Control view (api.ts
+// writeToken). src/proxy.test.ts holds the proxy to forwarding what the
+// browser sent and nothing more.
+export const proxy = {
   [`^/(${API_PATHS.join("|")})(/|\\?|$)`]: {
     target: process.env.UQF_API_ORIGIN || "http://127.0.0.1:8000",
-    headers: writeToken ? { Authorization: `Bearer ${writeToken}` } : undefined,
   },
 };
 export default defineConfig({

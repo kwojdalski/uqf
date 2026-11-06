@@ -94,7 +94,11 @@ records it `published`: a helper killed in between leaves `pending`, and
 `restore` writes a push's `before/` files back - deleting the files it
 created, regular files only, never following a link (#1953's rules) - as a
 push of its own, so a restore can itself be restored. A file changed since
-the push is a conflict: the restore is refused and nothing written.
+the push is a conflict: the restore is refused and nothing written. The
+history root's `.lock` (WRITE_LOCK) makes that check hold at the write: an
+upload holds it for its one publishing step, and a restore for its check
+and every write after it, so a push that lands between a restore's first
+look and its writes is seen and refused, never overwritten (#2181).
 `history_diff` diffs before and after as text under DIFF_CAP; a binary or
 larger file is told by its sizes and sha256s only. Opening a push prunes the
 history to its bound - the newest `max_kept` pushes, none older than
@@ -195,6 +199,8 @@ HISTORY_PARTS = (*UPLOAD_ROOT, HISTORY_DIR)
 #: digits - so names sort in time order.
 PUSH_ID = re.compile(r"[0-9]{8}T[0-9]{9}Z-[0-9a-f]{8}")
 MANIFEST = "manifest.json"
+#: The lock file, in a push's directory and in the history root (WRITE_LOCK).
+LOCK = ".lock"
 MANIFEST_VERSION = 1
 #: Largest manifest read, in bytes.
 MAX_MANIFEST = 4 * 1024 * 1024
@@ -592,13 +598,26 @@ def sweep(fd, now=None):
     return swept
 
 
-def publish(fd, name, stream, size, digest, overwrite, *, mode=None, keep=None):
+def _publish_step(fd, tmp, name, existing, mode, overwrite, keep):
+    """publish's one step: `keep`, then `tmp` becomes `name`."""
+    if keep is not None:
+        keep(fd, tmp, existing, mode)
+    if overwrite:
+        if existing is None:
+            _existing(fd, name, overwrite)  # what is there now may not be a file
+        os.replace(tmp, name, src_dir_fd=fd, dst_dir_fd=fd)
+    else:
+        _publish_new(fd, tmp, name)
+
+
+def publish(fd, name, stream, size, digest, overwrite, *, mode=None, keep=None, lock=None):
     """Write `name` in directory `fd` from `stream`: a temp file, then one
     atomic step. Returns (replaced, mode). `mode` sets the permission bits
     (else a replaced file's are kept and a new file gets _new_mode); `keep`,
     called with (fd, temp name, existing stat or None, mode) once the bytes
     are verified and before the one publishing step, records the push's
-    history - a refusal from it publishes nothing."""
+    history - a refusal from it publishes nothing. `lock`, when given, is
+    made and held around `keep` and the publishing step (WRITE_LOCK)."""
     existing = _existing(fd, name, overwrite)
     tmp = TEMP_PREFIX + os.urandom(8).hex() + ".tmp"
     flags = (os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW
@@ -617,14 +636,11 @@ def publish(fd, name, stream, size, digest, overwrite, *, mode=None, keep=None):
             os.fsync(tfd)
         finally:
             os.close(tfd)
-        if keep is not None:
-            keep(fd, tmp, existing, mode)
-        if overwrite:
-            if existing is None:
-                _existing(fd, name, overwrite)  # what is there now may not be a file
-            os.replace(tmp, name, src_dir_fd=fd, dst_dir_fd=fd)
+        if lock is None:
+            _publish_step(fd, tmp, name, existing, mode, overwrite, keep)
         else:
-            _publish_new(fd, tmp, name)
+            with lock():
+                _publish_step(fd, tmp, name, existing, mode, overwrite, keep)
         published = True
     finally:
         if not published:
@@ -702,7 +718,7 @@ def upload(request, stream):
                 keep = _keeper(pfd, manifest, entry, parts[len(UPLOAD_ROOT) :])
                 try:
                     replaced, mode = publish(fd, parts[-1], stream, size, digest, overwrite,
-                                             keep=keep)  # fmt: skip
+                                             keep=keep, lock=lambda: _WriteLock(root))  # fmt: skip
                 except Refusal as exc:
                     _forget(pfd, manifest, entry, parts[len(UPLOAD_ROOT) :], exc.error)
                     raise
@@ -770,7 +786,7 @@ class _Locked:
 
     def __init__(self, pfd):
         flags = os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0)
-        self.fd = os.open(".lock", flags, 0o600, dir_fd=pfd)
+        self.fd = os.open(LOCK, flags, 0o600, dir_fd=pfd)
 
     def __enter__(self):
         fcntl.flock(self.fd, fcntl.LOCK_EX)
@@ -778,6 +794,21 @@ class _Locked:
 
     def __exit__(self, *exc):
         os.close(self.fd)
+
+
+class _WriteLock(_Locked):
+    """WRITE_LOCK: the history root's lock, which every write to a config file
+    a push records takes - an upload around its one publishing step, a
+    restore around its check and all its writes - so what a restore checked
+    is what it overwrites (#2181). Always taken inside a push's own lock,
+    never around one, so the two cannot deadlock."""
+
+    def __init__(self, root):
+        hfd = _history_root(root)
+        try:
+            super().__init__(hfd)
+        finally:
+            os.close(hfd)
 
 
 def _history_root(root, create=False):
@@ -1470,6 +1501,34 @@ def _restore_one(root, spfd, npfd, manifest, source, step):
             os.close(dfd)
 
 
+def _restore_steps(plan, source_id):
+    """The write and delete steps of a restore `plan`, or Refusal: `conflict`
+    when any file changed since push `source_id`, `refused` when none needs
+    restoring."""
+    conflicts = [p["path"] for p in plan if p["step"] == "conflict"]
+    if conflicts:
+        shown = ", ".join(json.dumps(p) for p in conflicts[:10])
+        raise Refusal(
+            "conflict",
+            f"{len(conflicts)} file(s) changed since push {source_id}: {shown} - the "
+            "restore would overwrite those changes, so nothing was written",
+        )
+    steps = [p for p in plan if p["step"] in ("write", "delete")]
+    if not steps:
+        raise Refusal("refused", f"nothing to restore - every file of push {source_id} "
+                      "is as it was before it")  # fmt: skip
+    return steps
+
+
+def _drop_push(root, push_id):
+    """Remove push `push_id`'s history: a restore refused before it wrote."""
+    hfd = _history_root(root)
+    try:
+        _rmtree(hfd, push_id)
+    finally:
+        os.close(hfd)
+
+
 def restore(request):
     """Restore push `restores` to its before state, as push `push_id`:
     with `dry_run`, only the plan; else, confirmed, every step, or nothing
@@ -1490,18 +1549,7 @@ def restore(request):
                   "pruned": []}  # fmt: skip
         if dry_run:
             return answer
-        conflicts = [p["path"] for p in plan if p["step"] == "conflict"]
-        if conflicts:
-            shown = ", ".join(json.dumps(p) for p in conflicts[:10])
-            raise Refusal(
-                "conflict",
-                f"{len(conflicts)} file(s) changed since push {source_id}: {shown} - the "
-                "restore would overwrite those changes, so nothing was written",
-            )
-        steps = [p for p in plan if p["step"] in ("write", "delete")]
-        if not steps:
-            raise Refusal("refused", f"nothing to restore - every file of push {source_id} "
-                          "is as it was before it")  # fmt: skip
+        steps = _restore_steps(plan, source_id)
         push_id = _push_id(request.get("push_id"))
         max_kept, retention_days = _bounds(request)
         fields = {"kind": "restore", "restores": source_id, "config_dir": "/".join(UPLOAD_ROOT),
@@ -1514,7 +1562,16 @@ def restore(request):
         try:
             npfd = _push_dir(root, push_id)
             try:
-                with _Locked(npfd):
+                with _Locked(npfd), _WriteLock(root):
+                    # The first plan was unlocked: look again, now that no push
+                    # can write until this restore is done, and refuse as it
+                    # would have (#2181) - leaving no restore push behind.
+                    try:
+                        plan = answer["plan"] = _plan(root, source)
+                        steps = _restore_steps(plan, source_id)
+                    except Refusal:
+                        _drop_push(root, push_id)
+                        raise
                     manifest = _read_manifest(npfd)
                     by_path = {e["path"]: e for e in source["files"] if e.get("state") != "failed"}
                     for step in steps:

@@ -504,6 +504,7 @@ WRITERS = {
     "_publish_new",
     "sweep",
     "publish",
+    "_publish_step",
     "upload",
     "_interrupted",
     # the push history (#2002): its directories, copies, manifest, retention
