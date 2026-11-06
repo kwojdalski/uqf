@@ -106,11 +106,18 @@ FormatOpt = ChoiceOpt(
     default="text",
 )
 ListJson = json_opt(
-    '{"db": path, "events": [{event_id, ts, recorded_at, level, source, kind, action, target, '
+    '{"db": path, "events": [{event_id, time, recorded_at, level, source, kind, action, target, '
     "subject, outcome, session_id, request_id, claimed_user, trigger, method, status_code, "
     'duration_ms, items, detail, dropped_detail}], newest first, "drops": [{level, reason, count, '
     "last_at}]}"
 )
+
+
+def _event(event: dict[str, Any]) -> dict[str, Any]:
+    """An event as `--json` prints it: when it happened is `time`, the key every log-line
+    record says it under (json_out.LINE_KEYS, #2241), where the history file's column - and
+    the frontend API's record - is `ts`."""
+    return {("time" if k == "ts" else k): v for k, v in event.items()}
 
 
 def _db(db: Path | None) -> Path:
@@ -203,7 +210,7 @@ def list_(
         return
     _export([activity_log.flat(e) for e in events], export)
     if as_json:
-        emit({"db": str(path), "events": events, "drops": drops})
+        emit({"db": str(path), "events": [_event(e) for e in events], "drops": drops})
         return
     for d in drops:
         console.print(

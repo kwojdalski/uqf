@@ -1772,13 +1772,50 @@ def test_each_concept_completes_with_its_completer():
 
 def test_the_target_argument_is_one_definition():
     """#1884: a TARGET is TARGET everywhere and completes targets; a command
-    that only reads a server falls back to the latest deployment."""
+    that only reads a server falls back to the latest deployment. #2243: one
+    that changes a server never does - `deploy rollback` and `prune` take
+    --ssh/--dest in its place, so their TARGET is optional, but their help
+    claims no default and a bare call is refused."""
     for path in ("target check", "target shell", "deploy status"):
         param = next(p for p in LEAVES[path].command.params if p.metavar == "TARGET")
         assert not param.required, path
+        assert LATEST in _help(param), path
     for path in ("target set", "target unset", "target remove"):
         param = next(p for p in LEAVES[path].command.params if p.metavar == "TARGET")
         assert param.required, path
+    for path in ("deploy rollback", "deploy prune"):
+        param = next(p for p in LEAVES[path].command.params if p.metavar == "TARGET")
+        assert LATEST not in _help(param), path
+
+
+#: What a TARGET's help says when the command falls back to the latest deployment.
+LATEST = "default: the most recent deployment"
+
+
+def _help(param) -> str:
+    return getattr(param, "help", None) or ""
+
+
+#: Commands that change state and still fall back to the latest deployment, each with why.
+LATEST_THOUGH_IT_CHANGES = {
+    "target shell": "it does nothing by itself: it says which server it connected to, then a "
+    "person types - the shell is marked as changing state because what they type can",
+}
+
+
+def test_only_a_command_that_reads_a_server_falls_back_to_the_latest_deployment():
+    """#2243: `deploy rollback`'s help promised it would act on whichever server was
+    deployed last - a command that changes a server must be told which. Every TARGET
+    that claims the fallback is on a command that only reads."""
+    found = {
+        c.path
+        for c in TREE
+        if c.path in LEAVES
+        for p in c.command.params
+        if p.metavar == "TARGET" and LATEST in _help(p)
+        and effect_of(c.command) is not safety.Effect.READ_ONLY
+    }  # fmt: skip
+    _hold("a TARGET that changes a server falls back to nothing", found, LATEST_THOUGH_IT_CHANGES)
 
 
 def test_a_comma_separated_option_says_so_in_its_metavar():

@@ -45,7 +45,7 @@ def extract(
 ) -> None:
     """`uqs job backfill --attachment ATTACHMENT --writer HOST:PORT`: plan or start the extractor.
     With `force`, HOST:PORT is any q process (a wdb), written to with nothing checked."""
-    from uqs.cli.backfill_attached import _outcome_text, _report, logs_command
+    from uqs.cli.backfill_attached import _outcome_text, _report, exit_code, logs_command, outcome
 
     if fixture:
         _die(
@@ -106,9 +106,10 @@ def extract(
         console.print(
             f"[dim]following {worker} (pid {run_.pid}); Ctrl-C stops waiting, not the run[/]"
         )
-    code, result = backfill_run.follow(run_)
+    runner, result = backfill_run.follow(run_)
+    code = exit_code(runner)
     _report(
-        {**info, "result": result, "exit_code": code},
+        {**info, "result": result, **outcome(result.get("state") or "unknown", code)},
         as_json,
         _outcome_text(worker, run_, code, result),
     )

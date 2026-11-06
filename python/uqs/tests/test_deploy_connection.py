@@ -5,6 +5,7 @@ declared once (cli/deploy_connection.py) so every command spells them alike."""
 
 from __future__ import annotations
 
+import json
 from typing import Any, cast
 
 import pytest
@@ -88,10 +89,48 @@ def test_the_flags_still_name_a_server_no_target_declares(root, monkeypatch, com
 
 
 @pytest.mark.parametrize("command", sorted(COMMANDS))
-def test_no_target_and_no_flags_is_refused(root, monkeypatch, command, log_text):
+def test_half_a_server_is_refused_naming_the_missing_half(root, monkeypatch, command, log_text):
+    r, seen = _run(monkeypatch, command, ["--ssh", "h"])
+    assert r.exit_code == 2 and not seen, "a usage error (#1885)"
+    assert "give a TARGET, or --dest" in log_text()
+
+
+@pytest.mark.parametrize(
+    ("command", "said"),
+    [
+        ("rollback", "name the server to roll back: `uqs deploy rollback TARGET`"),
+        ("prune", "name the server to prune: `uqs deploy prune TARGET`"),
+    ],
+)
+def test_a_command_that_changes_a_server_never_guesses_which(
+    root, monkeypatch, command, said, log_text
+):
+    """#2243: rollback and prune stop processes and delete releases, so a bare call is a
+    usage error - even with a deployment recorded, it is not the server they act on."""
+    _deployed(root)
     r, seen = _run(monkeypatch, command, [])
     assert r.exit_code == 2 and not seen, "a usage error (#1885)"
-    assert "give a TARGET, or --ssh and --dest" in log_text()
+    assert said in log_text() and "--ssh and --dest" in log_text()
+
+
+def _deployed(root) -> None:
+    entry = {"status": "deployed", "ssh": "deploy@last", "dest": "/srv/last", "target": None}
+    (root / "deploy_history.json").write_text(json.dumps({"deployments": [entry]}))
+
+
+def test_status_with_no_target_reads_the_most_recent_deployment(root, monkeypatch):
+    """#2243: `deploy status` only reads a server, so - as `target check` does - with
+    nothing named it reads the one deployed to last, as its help says."""
+    _deployed(root)
+    r, seen = _run(monkeypatch, "status", [])
+    assert r.exit_code == 0, r.output
+    assert (seen[0].ssh, seen[0].dest) == ("deploy@last", "/srv/last")
+
+
+def test_status_with_no_target_and_no_deployment_is_refused(root, monkeypatch, log_text):
+    r, seen = _run(monkeypatch, "status", [])
+    assert r.exit_code == 1 and not seen, "nothing to fall back to: a refusal, not a usage error"
+    assert "no deployment recorded" in log_text()
 
 
 def test_an_unknown_target_is_refused_naming_the_known_ones(root, monkeypatch, log_text):
