@@ -210,7 +210,8 @@
 / files under this one: both writers, one key, two partitions, and a
 / `replace of this day alone would leave the live copy as a duplicate.
 / So under `replace, the partition holding the window's END loses every
-/ row whose key the window wrote. Only when the key leaves out the time
+/ row whose key the window wrote AND whose time column lies inside the
+/ window (#2197: by key alone it deleted the next day's own rows). Only when the key leaves out the time
 / column - with time in the key, a later partition cannot hold the same
 / key - and never in today's partition, which is the tickerplant's: a
 / refill of yesterday cannot reach a row still on its way to end-of-day.
@@ -288,7 +289,8 @@
     {[root;target;step] .qetl.io.swap[root;step 1;target]; `.qetl.io.touched upsert (root;step 1;target);}[root;target] each plan;
     count batch}
 
-/ Private: the partition after a `replace window, without the window's keys.
+/ Private: the partition after a `replace window, without the window's late-filed twins:
+/ rows whose key the window wrote AND whose time column lies inside the window.
 / .
 / Empty when there is nothing to do: the window ends at midnight on a day
 / already planned, on today or later, on a day with no such partition, or
@@ -306,7 +308,13 @@
     if[(d in dates) or (d>=.z.d) or ()~key part; :()];
     kc:(),opts`row_key;
     existing:flip {x til count x} each flip select from get part;
-    keep:existing where not (kc#existing) in kc#data;
+    / A twin is a row of the window filed late: its own time column still lies
+    / inside [range_from, range_to). A key alone proves nothing - the next
+    / day's row of the same account is a different row (#2197).
+    t:existing opts`time_column;
+    twin:(t>=opts`range_from) and t<opts`range_to;
+    hit:twin and (kc#existing) in kc#data;
+    keep:existing where not hit;
     $[count[keep]<count existing; enlist (part;d;.qetl.io.plain keep); ()]}
 
 / ------------------------------------------------------------ STAGING
