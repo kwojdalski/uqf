@@ -18,7 +18,14 @@ avoid. A reference is any of
 
   - `.qpipe.job.<name>`, `.qpipe.source.<name>` or `.qpipe.transform.<name>`
     (a shared transform's namespace, #884), outside a comment;
+    - its helper namespace is a kind of its own, `transform_ns`: a job may
+      register transform `<name>` while `.qpipe.transform.<name>.*` lives in another
+      file, and one key for both hid that file (#2177);
   - `.qetl.transform.apply[`X` (and its variants), or a declared `transform`;
+    `.qetl.transform.define` and `.qetl.transform.passthrough` register one;
+  - `.qetl.job.stream.normalizer.normalize[`X` or
+    `.qetl.job.stream.rolling.series[`X` (and their variants): the live job
+    `X`, whose registration a bounded twin computes through;
   - a worker's declared `source`;
   - a Kafka topic declaration's mapping,
     `.qetl.kafka.topic.define[`topic;`mapping`output!(`transform;`table)]`
@@ -70,8 +77,15 @@ _NAMESPACE = re.compile(
 #: `\\d .qpipe.job.<name>` loads on KDB-X: this tree writes none.
 _NAMESPACE_BLOCK = re.compile(r"^\\d\s+\.qpipe\.(job|source|transform)\.(\w+)\s*$", re.MULTILINE)
 _QPIPE_REF = re.compile(r"\.qpipe\.(job|source|transform)\.([a-zA-Z_]\w*)")
-_TRANSFORM_DEF = re.compile(r"\.qetl\.transform\.define\[\s*`(\w+)")
+#: Every verb that puts a transform in the registry: `passthrough` registers
+#: through `define`, and a file using it defines that transform (#2177).
+_TRANSFORM_DEF = re.compile(r"\.qetl\.transform\.(?:define|passthrough)\[\s*`(\w+)")
 _TRANSFORM_USE = re.compile(r"\.qetl\.transform\.\w+\[\s*`(\w+)")
+#: A call naming a normalizer or rolling job by its name
+#: (`.qetl.job.stream.normalizer.normalize[`X;...]`,
+#: `.qetl.job.stream.rolling.series[`X;...]`): a bounded twin that computes
+#: through the live job's registration needs that job's declaration.
+_JOB_USE = re.compile(r"\.qetl\.job\.stream\.(?:normalizer|rolling)\.\w+\[\s*`(\w+)")
 _SOURCE_DEF = re.compile(r"\.qetl\.source\.define\[\s*`(\w+)")
 #: A topic declaration as the one shape the plan can read: a literal topic, and
 #: `mapping` the first key, so the first value is the transform it maps through.
@@ -98,8 +112,9 @@ class FileFacts:
     #: the Kafka topics it declares, each owned by the one job the file declares
     topics: tuple[str, ...] = ()
     #: the sources and transforms it REGISTERS: a transform's namespace
-    #: (its helpers under one name) is a `defines` key too, but only a
-    #: `.qetl.transform.define` puts a transform in the registry (#1545)
+    #: (its helpers under one name) is a `transform_ns` key in `defines`, but
+    #: only `.qetl.transform.define` or `passthrough` puts a transform in the
+    #: registry (#1545, #2177)
     registers: frozenset[str] = frozenset()
 
 
@@ -111,17 +126,27 @@ def declaration_files(root: Path) -> list[str]:
     return found
 
 
+def _ns(kind: str) -> str:
+    """The key kind of a `.qpipe.<kind>.<name>` namespace. A transform's
+    helper namespace is not the registered transform of the same name: a job
+    may register `exec_bars` in its own file and call the helpers
+    `.qpipe.transform.exec_bars.*` from another, so the two keys must differ
+    or the registration hides the reference to the helpers' file (#2177)."""
+    return "transform_ns" if kind == "transform" else kind
+
+
 def facts(rel: str, text: str) -> FileFacts:
     """What `text` (the file at `rel`) defines and refers to."""
     code = strip_q_comments(text)
-    defines = {f"{k}:{n}" for k, n in _NAMESPACE.findall(code)}
-    defines |= {f"{k}:{n}" for k, n in _NAMESPACE_BLOCK.findall(code)}
+    defines = {f"{_ns(k)}:{n}" for k, n in _NAMESPACE.findall(code)}
+    defines |= {f"{_ns(k)}:{n}" for k, n in _NAMESPACE_BLOCK.findall(code)}
     registers = {f"transform:{n}" for n in _TRANSFORM_DEF.findall(code)}
     registers |= {f"source:{n}" for n in _SOURCE_DEF.findall(code)}
     defines |= registers
     registers |= {k for k in defines if k.startswith("source:")}
-    refers = {f"{k}:{n}" for k, n in _QPIPE_REF.findall(code)}
+    refers = {f"{_ns(k)}:{n}" for k, n in _QPIPE_REF.findall(code)}
     refers |= {f"transform:{n}" for n in _TRANSFORM_USE.findall(code)}
+    refers |= {f"job:{n}" for n in _JOB_USE.findall(code)}
     jobs, writes = [], set()
     for _fn, name, fields in declaration_calls(text):
         defines.add(f"job:{name}")

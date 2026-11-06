@@ -35,8 +35,10 @@ gzip already takes a log to a fraction of its size.
 
 HDB COMPRESSION (#2150). One more row runs `hdbcompress` once per run on the
 HDB root: TorQ's `.cmp`, driven by the declared compression policy (#2152,
-.cmp.inputcsv) through `.qtorq.compress.run` (#2146) - the checked apply, then
-the HDB reload, the same path a hand-run compression takes. Never housekeeping.q's
+.cmp.inputcsv) through `.qtorq.compress.run_held` - the selection and the hold
+`uqs data compress --apply` makes (a partition the coverage ledger says is still
+being written is left alone, #2176), partition by partition under the HDB write
+lock, the checked apply, then the HDB reload. Never housekeeping.q's
 `kdbzip`, which hard-codes one algorithm for every file. Which partitions are old
 enough is the policy's `minage`, table by table, so the row itself is not aged:
 `.cmp` leaves the young ones alone. The function and what housekeeping1 loads for
@@ -93,7 +95,7 @@ def config_path(paths: UqsPaths) -> Path:
 
 #: The rule function for the HDB, defined at the root by
 #: scripts/processes/uqs_housekeeping.q: TorQ's `.cmp` through
-#: `.qtorq.compress.run`, by the declared compression policy.
+#: `.qtorq.compress.run_held`, by the declared compression policy.
 COMPRESS_FUNCTION = "hdbcompress"
 
 #: The HDB root's name under TORQDATA (UqsPaths.hdb_dir, TorQ's KDBHDB).

@@ -498,6 +498,10 @@ OPTIONS = {
     "--stop-on-exit": Meaning(
         "with --follow: stop what it started when the stream ends", r"stop what this started"
     ),
+    "--grace": Meaning(
+        "how long a start waits before it fails on a process that died",
+        r"fail if a process this started has died",
+    ),
     "--export": Meaning("also write the rows to FILE", r"write output to FILE"),
     "--follow": Meaning("keep streaming log lines until Ctrl-C", r"streaming (new|every)"),
     "--force": Meaning("retired: each use gets its own name", None),

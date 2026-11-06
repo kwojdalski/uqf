@@ -917,6 +917,17 @@ $ uqs start
 ERROR    | the torq runtime's stack (base port 6050) is already using ports this start needs: stp1 :6050 (pid 4242), ... Stop it with `uqs --runtime torq stop --base-port 6050`, or start this one elsewhere with --base-port.
 ```
 
+A port held by anything else - a q started by hand, which answers like an empty
+stack - is refused the same way, with the pid and command line of what listens
+on it (#2180).
+
+torq.sh returns once each process is forked, not once it is up. So after the
+launch, `start` and `restart` (without `--follow`) wait `--grace` (3 seconds by
+default) and check every process they started the way `uqs status` does: by its
+pid, and by who listens on its port. One that died while loading, or whose port
+another process answers, fails the command with a non-zero exit, naming it, why,
+and the last lines of its log. A one-shot such as `tpreplay1` is not checked.
+
 `uqs status` names the runtime and base port it is reporting on in its title.
 
 On `torq`, `list processes` shows the 23 starter-pack processes. `essential`
@@ -1037,14 +1048,16 @@ rule deletes or tars a tickerplant log.
 **`housekeeping1` compresses the HDB by the declared policy.** Its last rule,
 `hdbcompress`, runs TorQ's `.cmp` with the compression policy
 (`compressionconfig.csv` in the data directory, declared in
-`src/etl/compression_policy.q`) through `.qtorq.compress.run`: each file is
-checked after it is swapped, and the HDBs are told to reload when anything
-changed. A partition younger than its table's `minage` is left alone. A failed
-run is logged as an error and doesn't stop the other rules; the next run
-continues from where it stopped. It never uses housekeeping's own `kdbzip`,
-which compresses every file one hard-coded way. The rules run daily at
-`HOUSEKEEPING_RUNTIMES` (02:00), and `uqs config housekeeping show` shows the
-schedule in effect.
+`src/etl/compression_policy.q`) through `.qtorq.compress.run_held`, which
+selects exactly what `uqs data compress --apply` would: each file is checked
+after it is swapped, and the HDBs are told to reload when anything changed. A
+partition younger than its table's `minage` is left alone, and so is one the
+coverage ledger says a backfill is still writing; each partition is compressed
+holding the HDB write lock backfills take. A failed run is logged as an error
+and doesn't stop the other rules; the next run continues from where it stopped.
+It never uses housekeeping's own `kdbzip`, which compresses every file one
+hard-coded way. The rules run daily at `HOUSEKEEPING_RUNTIMES` (02:00), and
+`uqs config housekeeping show` shows the schedule in effect.
 
 **TorQ discovers only what the profile started.** `process.csv` still lists
 every process, but TorQ's discovery would hand all of them out, so under

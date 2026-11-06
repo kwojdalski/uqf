@@ -290,7 +290,11 @@ def query(
             )
             return
         try:
-            with via_target.connect(target, proc, port, base_port, user, passwd) as via:
+            # any q expression, or a q session, may change the server (#2179)
+            change = f"`uqs query --tunnel {target}`"
+            with via_target.connect(
+                target, proc, port, base_port, user, passwd, change=change
+            ) as via:
                 _ask(expr, routed, via_target.LOOPBACK, via.port, user, passwd,
                      servers, render, export, via, as_json=as_json)  # fmt: skip
         except UqsError as exc:
