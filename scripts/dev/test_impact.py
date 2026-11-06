@@ -200,6 +200,11 @@ DYNAMIC_REVIEWED: dict[str, tuple[str, str]] = {
     "src/etl/core/tick.q": ("data", "the tick log file"),
     "src/etl/plant_tables.q": ("own", "the plant's table schemas under .qetl.plant"),
     "src/namespaces.q": ("reflective", "walks every live namespace to list what is defined"),
+    "scripts/dev/attached_calendar.q": (
+        "data",
+        "TorQ's eodtime settings and the timezone table, set by name, and the file it loads",
+    ),
+    "scripts/dev/attached_forced.q": ("data", "a partition's column files, read to compare types"),
     "scripts/dev/coverage.q": ("reflective", "instruments every function it finds by name"),
 }
 

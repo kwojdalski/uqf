@@ -120,7 +120,8 @@ if[not `worker in key opts:.Q.opt .z.x;
     text:first opts`deadline;
     deadline:$["0Wp"~text; 0Wp; "P"$text];
     if[null deadline; '"-deadline ",text," is not a timestamp (0Wp for none)"];
-    `max_date`deadline`destination!("D"$first opts`max_date;deadline;`$first opts`destid)}
+    base:`max_date`deadline`destination!("D"$first opts`max_date;deadline;`$first opts`destid);
+    base,.qetl.io.calendar_bound opts}
 
 / Record who is running into which destination.
 / @param opts the parsed command line
@@ -141,6 +142,7 @@ if[not `worker in key opts:.Q.opt .z.x;
 / Naming the readers, asking each to reload, and the reload state: scripts/dev/attached_readers.q,
 / which the destination's receiver (scripts/dev/remote_receiver.q, #1650) loads too.
 system"l scripts/dev/attached_readers.q";
+system"l scripts/dev/attached_calendar.q";
 
 / The writer's on_ready: reload the named readers when .qetl.io.due says so, and release coverage to the
 / readers only when every one acknowledged with nothing open. A reader that failed is asked again at the
@@ -265,7 +267,7 @@ $[remote;
      .qdev.attached.readers_named:.qdev.attached.readers enlist[`readers]!enlist enlist "_none_";
      $[forced;
         [froot:$["_own_"~first o`force_hdb; `; hsym `$first o`force_hdb];
-         fbounds:`max_date`destination!(@[.qdev.attached.forced_max_date;o;{[e] -1 e; exit 2}];bounds`destination);
+         fbounds:(`max_date`destination!(@[.qdev.attached.forced_max_date;o;{[e] -1 e; exit 2}];bounds`destination)),.qetl.io.calendar_bound o;
          .qetl.io.default:.qdev.attached.forced_manager[call;froot;(.qetl.source.def decl`source)`time_column;fbounds];
          .qetl.log.warn[worker;"FORCED: appending straight into the writer's HDB - nothing is checked there, a re-run duplicates rows, and no reader is told to reload";
             `attachment`destination`writer`root`state`max_date!(`$first o`attachment;bounds`destination;`$first o`writer;$[null froot;`$".wdb.hdbdir";froot];state;fbounds`max_date)]];

@@ -936,8 +936,14 @@ Nothing is checked on the stack's side:
   because resolving keys would mean reading what the wdb holds. Without one, the
   run appends whatever the worker declares.
 - **No schema or date checks.** Columns that differ from a partition already on
-  disk fail inside the wdb, possibly after some dates are written. Rows dated
-  today land in a partition that the wdb's own end of day then writes over.
+  disk fail inside the wdb, possibly after some dates are written: the wdb
+  compares the batch's column names and types with the partition's before it
+  writes a byte, and names each column with its native and its batch type
+  (#2194). Rows are filed under the stack's own day, `.eodtime.getday`, so a
+  stack that rolls at 17:00 gets the 17:30 rows in the next day's partition
+  (#2193); a stack that stamps `time` in a data zone other than UTC is refused.
+  Rows dated today land in a partition that the wdb's own end of day then writes
+  over.
 - **The wdb blocks** while it evaluates each call, so live ingestion queues
   behind a large date.
 - **No reader is told to reload.** Run `\l .` on the HDB processes yourself.
