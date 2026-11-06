@@ -7,6 +7,8 @@ cannot come back:
   `category` and `error`, at the top of a check and on each endpoint (#2238);
 - `drops` are events not sent or not kept, in both directions, and
   `dropped_detail` the `detail` keys one batch or event lost (#2242);
+- an activity event says when it happened under `time`, in the API's record,
+  the history file and `uqs activity list --json` alike (#2254);
 - an upload's or push's audit row names its facts as the route's own request
   and response do (#2246);
 - a remote file is one resource, `/services/{target}/files`, whose method is
@@ -19,6 +21,7 @@ import ast
 import dataclasses
 import datetime as dt
 import inspect
+import json
 import sqlite3
 import typing
 from pathlib import Path
@@ -34,6 +37,7 @@ from uqf_frontend.app import MOVED_ROUTES, create_app
 from uqf_frontend.config import Settings
 from uqf_frontend.gateway import FakeGateway
 from uqs import activity_log
+from uqs.cli import json_out
 from uqs.deploy import tunnel_check, tunnel_plan
 
 
@@ -112,15 +116,27 @@ def test_the_api_refuses_dropped_rather_than_ignoring_it(tmp_path):
     assert "`dropped` is `drops`" in resp.json()["detail"]
 
 
-def _old_history(path: Path) -> None:
+def _old_history(path: Path, *, renamed: tuple[str, ...] = ()) -> str:
+    """A history file written before the columns RENAMED_COLUMNS lists were
+    renamed, but for those in `renamed`, with the index `ts` had: one event,
+    and when it happened."""
+    schema = activity._SCHEMA
+    if "dropped" not in renamed:
+        schema = schema.replace("dropped_detail INTEGER", "dropped INTEGER")
+    if "ts" not in renamed:
+        schema = schema.replace("    time         TEXT", "    ts           TEXT")
+        schema += "CREATE INDEX activity_ts ON activity (ts);"
+    dropped = "dropped_detail" if "dropped" in renamed else "dropped"
+    time = "time" if "ts" in renamed else "ts"
     with sqlite3.connect(path) as db:
-        db.executescript(activity._SCHEMA.replace("dropped_detail INTEGER", "dropped INTEGER"))
+        db.executescript(schema)
         now = activity_log.stamp(dt.datetime.now(dt.UTC))
         db.execute(
-            "INSERT INTO activity (event_id, ts, recorded_at, source, kind, action, dropped) "
-            "VALUES ('old-event-1', ?, ?, 'browser', 'navigate', 'view.open', 2)",
+            f"INSERT INTO activity (event_id, {time}, recorded_at, source, kind, action, "  # noqa: S608
+            f"{dropped}) VALUES ('old-event-1', ?, ?, 'browser', 'navigate', 'view.open', 2)",
             (now, now),
         )
+    return now
 
 
 def test_a_history_file_from_before_the_rename_is_migrated_when_the_api_opens_it(tmp_path):
@@ -141,6 +157,92 @@ def test_a_reader_refuses_a_file_not_yet_migrated_naming_the_rename(tmp_path):
     with (
         activity_log.open_readonly(path) as db,
         pytest.raises(sqlite3.OperationalError, match="`dropped` column is `dropped_detail`"),
+    ):
+        activity_log.select(db, activity_log.Query())
+
+
+# ------------------------------------------------------------- time (#2254)
+
+
+def _cli_events(db: Path) -> list[dict]:
+    from typer.testing import CliRunner
+
+    import uqs.cli.entry  # noqa: F401 - registers every command on the app
+    from uqs.cli.shared import app as cli
+
+    result = CliRunner().invoke(cli, ["activity", "list", "--db", str(db), "--json"])
+    assert result.exit_code == 0, result.output
+    return json.loads(result.stdout)["events"]
+
+
+def test_the_cli_and_the_api_record_an_activity_event_under_the_same_keys(tmp_path):
+    """One event, read back by GET /activity and by `uqs activity list --json`:
+    the same keys, so `time` is `time` on both - the CLI said `time` and the
+    API `ts` (#2254)."""
+    db = tmp_path / "a.sqlite3"
+    c = TestClient(create_app(gateway=FakeGateway({}), settings=Settings(activity_db=db)))
+    event = {
+        "event_id": activity.new_id(),
+        "session_id": "session-abc12345",
+        "time": "2026-11-03T10:00:00Z",
+        "kind": "navigate",
+        "action": "view.open",
+        "trigger": "pointer",
+    }
+    assert c.post("/activity/events", json={"events": [event]}).status_code == 200
+    (api,) = c.get("/activity").json()["events"]
+    (cli,) = _cli_events(db)
+    assert set(api) == set(cli) == set(models.ActivityEventOut.model_fields)
+    assert "time" in api and "ts" not in api
+    assert api["time"] == cli["time"]
+
+
+def test_when_an_event_happened_is_time_everywhere():
+    for model in (models.BrowserEventIn, models.ActivityEventOut):
+        assert "time" in model.model_fields and "ts" not in model.model_fields, model.__name__
+    assert "time" in activity_log.COLUMNS and "ts" not in activity_log.COLUMNS
+    assert json_out.LINE_KEYS[0] == "time", "the key every log-line record says when under"
+
+
+def test_an_event_sending_ts_is_refused_naming_time(tmp_path):
+    c = TestClient(
+        create_app(gateway=FakeGateway({}), settings=Settings(activity_db=tmp_path / "a.db"))
+    )
+    event = {
+        "event_id": activity.new_id(),
+        "session_id": "session-abc12345",
+        "ts": "2026-11-03T10:00:00Z",
+        "kind": "navigate",
+        "action": "view.open",
+        "trigger": "pointer",
+    }
+    resp = c.post("/activity/events", json={"events": [event]})
+    assert resp.status_code == 422
+    assert "`ts` is `time`" in resp.json()["detail"]
+    assert c.get("/activity").json()["events"] == []
+
+
+def test_a_history_file_with_ts_is_migrated_to_time_when_the_api_opens_it(tmp_path):
+    path = tmp_path / "a.sqlite3"
+    when = _old_history(path)
+    bounds = {level: activity.Bound(30, 100) for level in activity_log.EVENT_LEVELS}
+    store = activity.ActivityStore(path, bounds=bounds)
+    (row,) = store.query(activity_log.Query())
+    assert row["time"] == when
+    with sqlite3.connect(path) as db:
+        columns = {r[1] for r in db.execute("PRAGMA table_info(activity)")}
+        indexes = {r[1]: r[2] for r in db.execute("PRAGMA index_list(activity)")}
+        (indexed,) = [r[2] for r in db.execute("PRAGMA index_info(activity_time)")]
+    assert "time" in columns and "ts" not in columns
+    assert "activity_ts" not in indexes and indexed == "time"
+
+
+def test_a_reader_refuses_a_file_still_saying_ts_naming_time(tmp_path):
+    path = tmp_path / "a.sqlite3"
+    _old_history(path, renamed=("dropped",))
+    with (
+        activity_log.open_readonly(path) as db,
+        pytest.raises(sqlite3.OperationalError, match=r"`ts` column is `time` now \(#2254\)"),
     ):
         activity_log.select(db, activity_log.Query())
 

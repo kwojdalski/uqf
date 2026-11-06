@@ -1627,7 +1627,7 @@ def create_app(
                 "source": "browser",
                 "kind": event.kind,
                 "action": event.action,
-                "ts": instants.to_datetime(event.ts),
+                "time": instants.to_datetime(event.time),
                 "event_id": event.event_id,
                 "target": event.target,
                 "outcome": event.outcome,

@@ -84,7 +84,7 @@ def _event(**over: Any) -> dict[str, Any]:
     body = {
         "event_id": activity.new_id(),
         "session_id": SESSION,
-        "ts": "2026-11-03T10:00:00Z",
+        "time": "2026-11-03T10:00:00Z",
         "kind": "navigate",
         "action": "view.open",
         "target": "Control",
@@ -435,7 +435,7 @@ def test_a_target_that_is_not_a_name_is_stored_as_invalid(tmp_path):
 
 def test_a_naive_browser_timestamp_is_refused(tmp_path):
     c = _client(_settings(tmp_path))
-    r = c.post("/activity/events", json={"events": [_event(ts="2026-11-03T10:00:00")]})
+    r = c.post("/activity/events", json={"events": [_event(time="2026-11-03T10:00:00")]})
     assert r.status_code == 422
 
 
@@ -452,9 +452,9 @@ def test_a_browser_timestamp_utc_cannot_hold_refuses_the_whole_batch(tmp_path, t
         create_app(gateway=FakeGateway(), settings=_settings(tmp_path)),
         raise_server_exceptions=False,
     )
-    r = c.post("/activity/events", json={"events": [_event(), _event(ts=ts)]})
+    r = c.post("/activity/events", json={"events": [_event(), _event(time=ts)]})
     assert r.status_code == 422, r.text
-    assert "ts" in r.text
+    assert "time" in r.text
     assert _history(c) == []
 
 
@@ -495,16 +495,16 @@ def test_events_are_filtered_by_session_action_target_outcome_and_time(tmp_path)
         "/activity/events",
         json={
             "events": [
-                _event(ts="2026-11-01T00:00:00Z", action="view.open", target="Desk"),
+                _event(time="2026-11-01T00:00:00Z", action="view.open", target="Desk"),
                 _event(
-                    ts="2026-11-02T00:00:00Z",
+                    time="2026-11-02T00:00:00Z",
                     kind="result",
                     action="process.stop",
                     target="rdb1",
                     outcome="failed",
                 ),
                 _event(
-                    ts="2026-11-03T00:00:00Z",
+                    time="2026-11-03T00:00:00Z",
                     session_id="other-session-1",
                     action="process.start",
                     target="rdb1",

@@ -309,7 +309,7 @@ export function record(
   const event: BrowserEvent = {
     event_id: newId(),
     session_id: sessionId(),
-    ts: new Date().toISOString(),
+    time: new Date().toISOString(),
     kind,
     action,
     target: options.target || null,

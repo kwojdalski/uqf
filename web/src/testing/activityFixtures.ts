@@ -53,7 +53,7 @@ export const HISTORY: ActivityHistory = {
   events: [
     {
       event_id: "e1",
-      ts: "2026-11-03T10:00:00.000000Z",
+      time: "2026-11-03T10:00:00.000000Z",
       recorded_at: "2026-11-03T10:00:00.000000Z",
       level: "actions",
       source: "server",

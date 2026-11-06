@@ -64,7 +64,7 @@ def _event(**over: Any) -> dict[str, Any]:
     return {
         "event_id": activity.new_id(),
         "session_id": SESSION,
-        "ts": "2026-11-03T10:00:00Z",
+        "time": "2026-11-03T10:00:00Z",
         "kind": "navigate",
         "action": "view.open",
         "target": "Control",
@@ -76,10 +76,10 @@ def _event(**over: Any) -> dict[str, Any]:
 #: One event of every kind the browser sends, at a second apiece.
 def _one_of_each() -> list[dict[str, Any]]:
     return [
-        _event(ts="2026-11-03T10:00:01Z", kind="navigate", action="view.open", target="Desk"),
-        _event(ts="2026-11-03T10:00:02Z", kind="interact", action="ui.click", target="nav.Desk"),
+        _event(time="2026-11-03T10:00:01Z", kind="navigate", action="view.open", target="Desk"),
+        _event(time="2026-11-03T10:00:02Z", kind="interact", action="ui.click", target="nav.Desk"),
         _event(
-            ts="2026-11-03T10:00:03Z",
+            time="2026-11-03T10:00:03Z",
             kind="debug",
             action="request.finish",
             target="GET /ops/queue",
@@ -283,11 +283,11 @@ def _correlated(c: TestClient, monkeypatch) -> str:
         "/activity/events",
         json={
             "events": [
-                _event(ts="2026-11-03T10:00:00Z", kind="interact", action="ui.click",
+                _event(time="2026-11-03T10:00:00Z", kind="interact", action="ui.click",
                        target="nav.Control"),
-                _event(ts="2026-11-03T10:00:01Z", kind="submit", action="process.stop",
+                _event(time="2026-11-03T10:00:01Z", kind="submit", action="process.stop",
                        target="rdb1", request_id=rid),
-                _event(ts="2026-11-03T10:00:02Z", kind="confirm", action="process.stop",
+                _event(time="2026-11-03T10:00:02Z", kind="confirm", action="process.stop",
                        target="rdb1", request_id=rid),
             ]
         },
@@ -302,10 +302,10 @@ def _correlated(c: TestClient, monkeypatch) -> str:
         "/activity/events",
         json={
             "events": [
-                _event(ts=now, kind="result", action="process.stop", target="rdb1",
+                _event(time=now, kind="result", action="process.stop", target="rdb1",
                        request_id=rid, outcome="succeeded", duration_ms=40.5,
                        trigger="programmatic"),
-                _event(ts=now, kind="debug", action="request.finish", target="GET /ops/queue",
+                _event(time=now, kind="debug", action="request.finish", target="GET /ops/queue",
                        outcome="succeeded", duration_ms=3.0, trigger="programmatic"),
             ]
         },

@@ -2405,7 +2405,7 @@ One contract holds for every document (#1882):
   `time` and `level` null where a line names none. Its level is `level`, the
   name of the `--level` that filters it, never TorQ's `loglevel`; and
   `activity list`'s events say when and how severe under the same `time` and
-  `level` (the history file's column is `ts`).
+  `level`, as the frontend API's record and the history file do (#2254).
 
 ```bash
 uqs job runs list --json | jq -r '.runs[] | select(.status == "failed") | .run_id'

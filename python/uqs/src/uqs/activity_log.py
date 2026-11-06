@@ -88,7 +88,7 @@ EXTENSIONS = {"jsonl": "jsonl", "csv": "csv", "text": "txt"}
 #: The columns a reader gets back, in order.
 COLUMNS = (
     "event_id",
-    "ts",
+    "time",
     "recorded_at",
     "level",
     "source",
@@ -108,11 +108,14 @@ COLUMNS = (
     "dropped_detail",
 )
 
-#: Columns renamed in the history file, old -> new. The frontend API renames
-#: them when it opens a file (activity.ActivityStore); a reader refuses a file
-#: not yet migrated rather than reading it under both names. `dropped` was the
-#: detail keys dropped, beside a batch's `drops` of whole events (#2242).
-RENAMED_COLUMNS = {"dropped": "dropped_detail"}
+#: Columns renamed in the history file, old -> (new, the issue). The frontend
+#: API renames them when it opens a file (activity.ActivityStore); a reader
+#: refuses a file not yet migrated rather than reading it under both names.
+#: `dropped` was the detail keys dropped, beside a batch's `drops` of whole
+#: events (#2242); `ts` is `time`, the key every log-line record says when
+#: under (json_out.LINE_KEYS), so the history, the API and `activity list
+#: --json` spell one event one way (#2254).
+RENAMED_COLUMNS = {"dropped": ("dropped_detail", 2242), "ts": ("time", 2254)}
 
 #: `detail` keys an audit row used before #2246, which named an upload's and a
 #: push's facts other than their routes do. Rows recorded before it keep them:
@@ -196,10 +199,10 @@ def select(db: sqlite3.Connection, q: Query, *, max_limit: int = MAX_LIMIT) -> l
     where: list[str] = []
     args: list[Any] = []
     if q.since is not None:
-        where.append("ts >= ?")
+        where.append("time >= ?")
         args.append(stamp(q.since))
     if q.until is not None:
-        where.append("ts < ?")
+        where.append("time < ?")
         args.append(stamp(q.until))
     for column in ("session_id", "request_id", "target", "outcome", "source"):
         value = getattr(q, column)
@@ -219,7 +222,7 @@ def select(db: sqlite3.Connection, q: Query, *, max_limit: int = MAX_LIMIT) -> l
     sql = f"SELECT {', '.join(COLUMNS)} FROM activity"  # noqa: S608 - fixed names
     if where:
         sql += " WHERE " + " AND ".join(where)
-    sql += " ORDER BY ts DESC, seq DESC LIMIT ?"
+    sql += " ORDER BY time DESC, seq DESC LIMIT ?"
     args.append(max(1, min(q.limit, max_limit)))
     out = []
     for row in db.execute(sql, args).fetchall():
@@ -234,10 +237,10 @@ def unmigrated(db: sqlite3.Connection) -> None:
     """Refuse a file written before a column was renamed (RENAMED_COLUMNS),
     naming the rename: it is migrated, never read under both names."""
     columns = {row[1] for row in db.execute("PRAGMA table_info(activity)")}
-    for old, new in RENAMED_COLUMNS.items():
+    for old, (new, issue) in RENAMED_COLUMNS.items():
         if old in columns and new not in columns:
             raise sqlite3.OperationalError(
-                f"its `{old}` column is `{new}` now (#2242) - start the frontend API on this "
+                f"its `{old}` column is `{new}` now (#{issue}) - start the frontend API on this "
                 "file once, which migrates it, then read it again"
             )
 
@@ -325,9 +328,9 @@ _SEP = " · "
 _NONE = "—"
 
 
-def _when(ts: str | None) -> str:
+def _when(time: str | None) -> str:
     """Milliseconds are enough to read by: 2026-11-03T10:00:00.123Z."""
-    return f"{ts[:23]}Z" if ts and len(ts) >= 23 else (ts or _NONE)
+    return f"{time[:23]}Z" if time and len(time) >= 23 else (time or _NONE)
 
 
 def _duration(ms: float | None) -> str:
@@ -340,7 +343,7 @@ def _line(row: Mapping[str, Any]) -> str:
     how = row.get("method") if row.get("source") == "server" else row.get("kind")
     return _SEP.join(
         [
-            _when(row.get("ts")),
+            _when(row.get("time")),
             (row.get("session_id") or "-")[:8],
             str(row.get("level") or _NONE),
             f"{row.get('source')} {how} {row.get('action')}",

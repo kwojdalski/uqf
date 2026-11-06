@@ -154,7 +154,7 @@ def test_compare_refuses_a_bound_finer_than_a_microsecond(monkeypatch):
 
 #: Field names that hold an instant wherever they appear in a model.
 INSTANT_NAMES = {
-    "range_from", "range_to", "cursor", "since", "until", "ts", "at",
+    "range_from", "range_to", "cursor", "since", "until", "time", "at",
     "mtime", "created", "closed",
 }  # fmt: skip
 

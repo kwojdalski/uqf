@@ -492,7 +492,7 @@ _SCHEMA = """
 CREATE TABLE IF NOT EXISTS activity (
     seq          INTEGER PRIMARY KEY AUTOINCREMENT,
     event_id     TEXT NOT NULL UNIQUE,
-    ts           TEXT NOT NULL,
+    time         TEXT NOT NULL,
     recorded_at  TEXT NOT NULL,
     source       TEXT NOT NULL,
     kind         TEXT NOT NULL,
@@ -511,11 +511,6 @@ CREATE TABLE IF NOT EXISTS activity (
     detail       TEXT NOT NULL DEFAULT '{}',
     dropped_detail INTEGER NOT NULL DEFAULT 0
 );
-CREATE INDEX IF NOT EXISTS activity_ts ON activity (ts);
-CREATE INDEX IF NOT EXISTS activity_recorded ON activity (recorded_at);
-CREATE INDEX IF NOT EXISTS activity_request ON activity (request_id);
-CREATE INDEX IF NOT EXISTS activity_session ON activity (session_id);
-CREATE INDEX IF NOT EXISTS activity_bucket ON activity (source, kind, seq);
 CREATE TABLE IF NOT EXISTS activity_drops (
     level   TEXT NOT NULL,
     reason  TEXT NOT NULL,
@@ -523,6 +518,18 @@ CREATE TABLE IF NOT EXISTS activity_drops (
     last_at TEXT NOT NULL,
     PRIMARY KEY (level, reason)
 );
+"""
+
+#: The indexes, made once the columns are renamed (RENAMED_COLUMNS): on a file
+#: written before #2254, `time` is still `ts` until then. `activity_ts` was the
+#: index on it, which the rename carries over to `time`, so it is dropped.
+_INDEXES = """
+DROP INDEX IF EXISTS activity_ts;
+CREATE INDEX IF NOT EXISTS activity_time ON activity (time);
+CREATE INDEX IF NOT EXISTS activity_recorded ON activity (recorded_at);
+CREATE INDEX IF NOT EXISTS activity_request ON activity (request_id);
+CREATE INDEX IF NOT EXISTS activity_session ON activity (session_id);
+CREATE INDEX IF NOT EXISTS activity_bucket ON activity (source, kind, seq);
 """
 
 #: Each kind of row that is capped on its own within a level, so browser rows
@@ -590,9 +597,10 @@ class ActivityStore:
             columns = {row[1] for row in self._db.execute("PRAGMA table_info(activity)")}
             if "level" not in columns:
                 self._db.execute(_LEVEL_COLUMN)
-            for old, new in RENAMED_COLUMNS.items():
+            for old, (new, _issue) in RENAMED_COLUMNS.items():
                 if old in columns and new not in columns:
                     self._db.execute(f"ALTER TABLE activity RENAME COLUMN {old} TO {new}")
+            self._db.executescript(_INDEXES)
             self._db.execute(_LEVEL_INDEX)
         except (sqlite3.Error, OSError) as exc:
             raise ValueError(
@@ -636,7 +644,7 @@ class ActivityStore:
         trigger = event.get("trigger")
         return (
             clean_id(event.get("event_id")) or new_id(),
-            stamp(event.get("ts") or now),
+            stamp(event.get("time") or now),
             stamp(now),
             LEVEL_OF_KIND[kind],
             source,
@@ -657,7 +665,7 @@ class ActivityStore:
         )
 
     _INSERT = (
-        "INSERT OR IGNORE INTO activity (event_id, ts, recorded_at, level, source, kind, "
+        "INSERT OR IGNORE INTO activity (event_id, time, recorded_at, level, source, kind, "
         "action, target, outcome, session_id, request_id, claimed_user, trigger, method, "
         "status_code, duration_ms, items, detail, dropped_detail) "
         "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
