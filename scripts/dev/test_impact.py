@@ -188,6 +188,10 @@ DYNAMIC_REVIEWED: dict[str, tuple[str, str]] = {
         "job-state",
         "a reaction's init/run/cleanup, registered through .qetl.reaction.register",
     ),
+    "src/etl/core/qsql_text.q": (
+        "data",
+        "the vendored lib/unparse script, loaded by path when the tree carries it",
+    ),
     "src/etl/core/rolling.q": ("job-state", "a rolling job's buffers and callbacks"),
     "src/etl/core/run.q": ("data", "the run ledger file"),
     "src/etl/core/source_local_hdb.q": ("data", "HDB partition directories and column files"),
