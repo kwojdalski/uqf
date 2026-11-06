@@ -26,6 +26,7 @@ from uqs.cli.json_out import Verbatim, emit, json_opt, timestamp
 from uqs.cli.pipelines import needs_pipelines
 from uqs.cli.q_login import DEFAULT_PASSWORD, DEFAULT_USER, QPasswordEnvOpt, QUserOpt, q_password
 from uqs.cli.range_options import DateOpt, LastOpt, RangeFromOpt, RangeToOpt
+from uqs.cli.renames import SLICE, refused
 from uqs.cli.safety import ReadOnly
 from uqs.cli.shared import _die, _paths, console, data_app
 from uqs.deploy import control, tunnel
@@ -141,13 +142,13 @@ def run(
     """The comparison `uqs data diff --json` prints: both sides reached, q's
     report, its times in UTC and `ok` - what the frontend's /compare returns.
 
-    @raise UqsUsageError for two sides that are one, or a --partition with no
+    @raise UqsUsageError for two sides that are one, or a --slice with no
     --source-version; UqsError for an undeclared target or a request q refuses.
     """
     if left == right:
         raise UqsUsageError(f"--left and --right both name {left} - compare two endpoints")
     if partition and not source_version:
-        raise UqsUsageError("--partition reads coverage, which needs --source-version")
+        raise UqsUsageError("--slice reads coverage, which needs --source-version")
     with reach(left, user, passwd, paths) as lside, reach(right, user, passwd, paths) as rside:
         report = data_diff.compare(
             paths, lside, rside, tables, window,
@@ -185,7 +186,9 @@ def render(report: dict) -> None:
 
 @data_app.command(
     "diff",
-    cls=needs_pipelines("reads this tree's declarations of each table's row key", ReadOnly),
+    cls=needs_pipelines(
+        "reads this tree's declarations of each table's row key", refused(SLICE, ReadOnly)
+    ),
 )
 def diff(
     left: LeftOpt,
@@ -232,8 +235,9 @@ def diff(
     partition: Annotated[
         str | None,
         typer.Option(
-            "--partition",
-            help="The slice of the table whose coverage is read, with --source-version",
+            "--slice",
+            help="The slice of the table whose coverage is read, with --source-version - a "
+            "coverage key such as a symbol, not a date",
         ),
     ] = None,
     user: QUserOpt = DEFAULT_USER,

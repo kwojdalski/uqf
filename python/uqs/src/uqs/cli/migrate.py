@@ -6,23 +6,43 @@ from typing import Annotated
 
 import typer
 
+from uqs import timerange
 from uqs.cli import safety
 from uqs.cli.concepts import table_arg
+from uqs.cli.hdb_scope import AttachOpt, HdbOpt, local_hdb
+from uqs.cli.range_options import DateOpt, DayFromOpt, DayLastOpt, DayToOpt
+from uqs.cli.renames import refused
 from uqs.cli.safety import ChangesState, dry_run_note
 from uqs.cli.shared import _die, _paths, console, data_app
-from uqs.paths import UqsError
+from uqs.paths import UqsError, UqsUsageError
 from uqs.stack import hdb_migrate
-from uqs.timerange import DAY_FORMS, parse_day
 
 _TableOpt = table_arg("The declared HDB table")
 
+#: The day is `--date D` - or any one-day range, as on `data replay` (#2239,
+#: #2249): the positional PARTITION it was is refused, naming `--date`.
+_POSITIONAL_DATE = (
+    "`data migrate TABLE PARTITION` is now `data migrate TABLE --date D`, the day option "
+    "every data command takes (#2239)"
+)
 
-@data_app.command("migrate", cls=ChangesState)
+
+#: Why `data migrate --attachment` is refused (#2237).
+_NO_ATTACHMENT = (
+    "a migration takes the HDB write lock this machine's writers share, which an attached "
+    "stack's do not - stop that stack and migrate on its own host, with --hdb DIR"
+)
+
+
+@data_app.command("migrate", cls=refused({}, ChangesState, extra_argument=_POSITIONAL_DATE))
 def migrate(
     table: _TableOpt,
-    partition: Annotated[
-        str, typer.Argument(metavar="PARTITION", help=f"One partition's date, {DAY_FORMS}")
-    ],
+    day: DateOpt = None,
+    range_from: DayFromOpt = None,
+    range_to: DayToOpt = None,
+    last: DayLastOpt = None,
+    hdb: HdbOpt = None,
+    attach: AttachOpt = None,
     rename: Annotated[
         list[str] | None,
         typer.Option("--rename", help="OLD:NEW - rename a column; repeatable"),
@@ -50,6 +70,9 @@ def migrate(
 ) -> None:
     """Migrate one HDB partition of a table to this release's schema.
 
+    The partition is one day: --date D, --from D --to D+1, or --last 1d
+    (yesterday). The HDB is this runtime's, or --hdb DIR on this machine.
+
     Stages, validates
     and replaces the table partition.
 
@@ -69,7 +92,11 @@ def migrate(
         _die(exc)
         return
     try:
-        day = parse_day("PARTITION", partition)
+        root = local_hdb(attach, hdb, command="data migrate", why=_NO_ATTACHMENT)
+        if all(v is None for v in (day, range_from, range_to, last)):
+            raise UqsUsageError("name the partition to migrate: --date D, e.g. --date 2026-09-13")
+        window = timerange.resolve(range_from, range_to, day, last)
+        partition = window.day("data migrate migrates")
         renames: dict[str, str] = {}
         for pair in rename or []:
             old, sep, new = pair.partition(":")
@@ -79,16 +106,30 @@ def migrate(
         casts = set(cast or [])
         if not apply or not yes:  # the plan: shown, and asked about before --apply writes
             report = hdb_migrate.migrate(
-                _paths(), table, day, renames, casts, apply=False, reset_empty=reset_empty
+                _paths(),
+                table,
+                partition,
+                renames,
+                casts,
+                apply=False,
+                hdb=root,
+                reset_empty=reset_empty,
             )
         if apply and not yes:
             console.print(report, markup=False, highlight=False)
             safety.confirm(
-                f"Migrate {table} {partition} as above? (stop the stack first)", yes=False
+                f"Migrate {table} {partition:%Y.%m.%d} as above? (stop the stack first)", yes=False
             )
         if apply:
             report = hdb_migrate.migrate(
-                _paths(), table, day, renames, casts, apply=True, reset_empty=reset_empty
+                _paths(),
+                table,
+                partition,
+                renames,
+                casts,
+                apply=True,
+                hdb=root,
+                reset_empty=reset_empty,
             )
     except UqsError as exc:
         _die(exc)

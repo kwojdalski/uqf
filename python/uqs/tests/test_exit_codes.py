@@ -82,7 +82,7 @@ USAGE = {
     "query PROC and --port": ["query", "rdb1", "1+1", "--port", "6052"],
     "logs --id without --channel": ["logs", "--id", "x"],
     "start --level without --follow": ["start", "--level", "INFO"],
-    "--dry-run with --apply": ["data", "migrate", "trade", "2026-09-01", "--apply", "-n"],
+    "--dry-run with --apply": ["data", "migrate", "trade", "--date", "2026-09-01", "--apply", "-n"],
 }
 
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 import signal
 import subprocess
 import sys
@@ -109,6 +110,24 @@ def test_rename_and_lossless_type_change_keep_rows_and_a_rollback_copy(hdb, q_bi
     assert "EURUSD`USDJPY" in result.stdout
     found = hdb_layout.inspect(hdb, hdb.hdb_dir).dirs
     assert hdb_types.type_changes(hdb, hdb.torqapphome / "database.q", found) == []
+
+
+def test_an_hdb_named_by_hdb_is_the_one_migrated_and_locked(hdb, tmp_path):
+    """#2237: `data migrate --hdb DIR` - the root it migrates, and the one whose
+    write lock it takes, is DIR, not this runtime's."""
+    other = tmp_path / "elsewhere" / "hdb"
+    other.parent.mkdir()
+    shutil.move(hdb.hdb_dir, other)
+    with pytest.raises(UqsError, match="no HDB at"):
+        hdb_migrate.migrate(hdb, "trade", DAY, {"px": "price"}, {"price"})
+    dry = hdb_migrate.migrate(hdb, "trade", DAY, {"px": "price"}, {"price"}, hdb=other)
+    assert dry.startswith("would migrate")
+    report = hdb_migrate.migrate(
+        hdb, "trade", DAY, {"px": "price"}, {"price"}, apply=True, hdb=other
+    )
+    backup = Path(report.split("previous table retained at ", 1)[1])
+    assert backup.is_relative_to(other.parent)
+    assert not hdb.hdb_dir.exists()
 
 
 def test_an_unmapped_source_column_is_refused_without_replacing_it(hdb):
@@ -420,14 +439,14 @@ def test_reset_empty_rechecks_emptiness_under_the_lock(empty_hdb, q_binary, monk
     root = empty_hdb.hdb_dir
     acquire = hdb_migrate._write_lock
 
-    def populate_then_lock(paths, q, env, action):
+    def populate_then_lock(paths, q, env, action, *rest):
         if action == "acquire":
             _write_q(
                 root,
                 q_binary,
                 "d:.Q.par[root;2026.01.01;`trade]; (` sv d,`px) set enlist 5j;",
             )
-        return acquire(paths, q, env, action)
+        return acquire(paths, q, env, action, *rest)
 
     monkeypatch.setattr(hdb_migrate, "_write_lock", populate_then_lock)
     with pytest.raises(UqsError, match="populated column.*px"):
@@ -464,13 +483,16 @@ def test_the_cli_passes_reset_empty_through_and_keeps_the_dry_run_default(monkey
     monkeypatch.setattr(hdb_migrate, "migrate", migrate)
     runner = CliRunner()
     assert (
-        runner.invoke(app, ["data", "migrate", "trade", "2026.01.01", "--reset-empty"]).exit_code
+        runner.invoke(
+            app, ["data", "migrate", "trade", "--date", "2026-01-01", "--reset-empty"]
+        ).exit_code
         == 0
     )
-    assert seen == [("trade", DAY, {}, set(), {"apply": False, "reset_empty": True})]
+    assert seen == [("trade", DAY, {}, set(), {"apply": False, "reset_empty": True, "hdb": None})]
     seen.clear()
     result = runner.invoke(
-        app, ["data", "migrate", "trade", "2026.01.01", "--reset-empty", "--apply", "--yes"]
+        app,
+        ["data", "migrate", "trade", "--date", "2026-01-01", "--reset-empty", "--apply", "--yes"],
     )
     assert result.exit_code == 0, result.output
-    assert seen == [("trade", DAY, {}, set(), {"apply": True, "reset_empty": True})]
+    assert seen == [("trade", DAY, {}, set(), {"apply": True, "reset_empty": True, "hdb": None})]

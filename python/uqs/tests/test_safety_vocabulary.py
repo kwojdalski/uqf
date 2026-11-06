@@ -42,7 +42,7 @@ def test_data_migrate_is_dry_unless_apply_which_asks(monkeypatch, terminal):
     shows the plan and asks; --yes does not ask; the old -n still parses."""
     calls = []
     monkeypatch.setattr(hdb_migrate, "migrate", lambda *a, **kw: calls.append(kw) or "plan")
-    argv = ["data", "migrate", "trade", "2026-09-01"]
+    argv = ["data", "migrate", "trade", "--date", "2026-09-01"]
     assert runner.invoke(cli.app, argv).exit_code == 0
     assert [c["apply"] for c in calls] == [False]
     assert runner.invoke(cli.app, [*argv, "-n"]).exit_code == 0

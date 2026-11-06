@@ -119,7 +119,6 @@ RENAMED_AFTER: dict[str, frozenset[str]] = {
             "uqs job new --procname",
             "uqs deploy check --procs",
             "uqs deploy check --deadline",
-            "uqs config sources check --window",
             "uqs data seed --overwrite",
             "uqs job attachment contract approve --conflict",
             "uqs job attachment contract approve --max-rows",

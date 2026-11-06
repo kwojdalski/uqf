@@ -29,6 +29,7 @@ import subprocess
 import tempfile
 import time
 from collections.abc import Callable, Sequence
+from datetime import timedelta
 from pathlib import Path
 
 from uqs.interpreter import q_interpreter
@@ -36,6 +37,8 @@ from uqs.paths import UqsError, UqsPaths
 from uqs.stack import source_settings
 from uqs.stack.env import build_env
 from uqs.stack.redact import redact
+from uqs.stack.runs import to_q_timestamp
+from uqs.timerange import TimeRange
 
 #: A source name as q declares it - checked before it is spliced into q.
 _SOURCE = re.compile(r"[A-Za-z][A-Za-z0-9_]*")
@@ -49,7 +52,16 @@ _ETL = "src/etl/init.q"
 Runner = Callable[..., subprocess.CompletedProcess]
 
 
-def _script(source: str, window_minutes: int, settings: Path | None) -> str:
+def q_window(window: TimeRange) -> str:
+    """The window as `.qetl.livecheck.check` takes it (#2249): `--last` as a q
+    timespan back from q's own now, any other range as its (start;end)."""
+    if window.last is not None:
+        return f"(`timespan${int(window.last / timedelta(microseconds=1)) * 1000}j)"
+    start, end = window.bounds
+    return f"({to_q_timestamp(start)};{to_q_timestamp(end)})"
+
+
+def _script(source: str, window: TimeRange, settings: Path | None) -> str:
     load = (
         [f'.qetl.source.load_settings[hsym `$"{settings}";`{"`".join(source_settings.PATH_VARS)}];']
         if settings
@@ -61,7 +73,7 @@ def _script(source: str, window_minutes: int, settings: Path | None) -> str:
             f".qetl.load.only_sources:enlist `{source};",
             f"\\l {_ETL}",
             *load,
-            f"-1 .j.j .qetl.livecheck.check[`{source};0D00:01*{window_minutes}];",
+            f"-1 .j.j .qetl.livecheck.check[`{source};{q_window(window)}];",
             "exit 0",
             "",
         ]
@@ -80,8 +92,8 @@ def _failed(source: str, stage: str, diagnostic: str, elapsed_ms: int | None = N
     }
 
 
-#: How far back the bounded read reaches, in minutes, unless told otherwise.
-DEFAULT_WINDOW_MINUTES = 60
+#: How far back the bounded read reaches when no range is given: `--last 1h`.
+DEFAULT_LAST = timedelta(hours=1)
 
 
 def check(
@@ -89,13 +101,14 @@ def check(
     sources: Sequence[str],
     *,
     timeout: float,
-    window_minutes: int = DEFAULT_WINDOW_MINUTES,
+    window: TimeRange | None = None,
     odbc_env: dict[str, str] | None = None,
     runner: Runner = subprocess.run,
     clock: Callable[[], float] = time.monotonic,
 ) -> list[dict]:
     """One result per source, in the order asked: status ok, empty or failed,
-    the stage it stopped at, rows read, milliseconds and a redacted diagnostic."""
+    the stage it stopped at, rows read, milliseconds and a redacted diagnostic.
+    `window` is what the bounded read reaches; None is the last hour."""
     for source in sources:
         if not _SOURCE.fullmatch(source):
             raise UqsError(f"{source!r} is not a source name")
@@ -109,6 +122,8 @@ def check(
         **(odbc_env or {}),
         "UQF_LIVE_SOURCES_REQUIRED": "1",
     }
+    if window is None:
+        window = TimeRange(None, None, DEFAULT_LAST)
     deadline = clock() + timeout
     results = []
     for source in sources:
@@ -118,15 +133,15 @@ def check(
                 _failed(source, "timeout", f"not checked: the {timeout:g}s overall timeout ran out")
             )
             continue
-        results.append(_one(q, paths, source, window_minutes, settings, env, left, runner, clock))
+        results.append(_one(q, paths, source, window, settings, env, left, runner, clock))
     return results
 
 
-def _one(q, paths, source, window_minutes, settings, env, left, runner, clock) -> dict:
+def _one(q, paths, source, window, settings, env, left, runner, clock) -> dict:
     started = clock()
     with tempfile.TemporaryDirectory() as tmp:
         script = Path(tmp) / "live_check.q"
-        script.write_text(_script(source, window_minutes, settings))
+        script.write_text(_script(source, window, settings))
         try:
             r = runner(
                 [str(q), str(script), "-q"],

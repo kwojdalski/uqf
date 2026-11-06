@@ -98,14 +98,14 @@ def _lock_code(paths: UqsPaths, env: dict[str, str]) -> Iterator[Path]:
 
 
 def _run_lock_script(
-    paths: UqsPaths, q: Path, env: dict[str, str], action: str, code: Path
+    paths: UqsPaths, q: Path, env: dict[str, str], action: str, code: Path, hdb: Path
 ) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [
             str(q),
             str(paths.scripts_dir / LOCK_SCRIPT),
             action,
-            str(paths.hdb_dir.absolute()),
+            str(hdb.absolute()),
             str(os.getpid()),
         ],
         capture_output=True,
@@ -118,14 +118,17 @@ def _run_lock_script(
     )
 
 
-def _write_lock(paths: UqsPaths, q: Path, env: dict[str, str], action: str) -> str:
+def _write_lock(
+    paths: UqsPaths, q: Path, env: dict[str, str], action: str, hdb: Path | None = None
+) -> str:
     """Acquire or release the HDB root's write lock through q, for this pid.
 
     The root is passed as the writers are given it (KDBHDB), made absolute but
     not resolved: .qetl.io.hdb_lock computes the path, so both sides agree.
+    `hdb` is a root named by --hdb; None, this runtime's.
     """
     with _lock_code(paths, env) as code:
-        result = _run_lock_script(paths, q, env, action, code)
+        result = _run_lock_script(paths, q, env, action, code, hdb or paths.hdb_dir)
     tag = "LOCKED|" if action == "acquire" else "RELEASED|"
     lines = [line for line in result.stdout.splitlines() if line.startswith(tag)]
     if result.returncode != 0 or len(lines) != 1:
@@ -202,8 +205,11 @@ def migrate(
     *,
     apply: bool = False,
     reset_empty: bool = False,
+    hdb: Path | None = None,
 ) -> str:
     """Migrate one date/table to this release's schema; dry-run by default.
+
+    `hdb` is the HDB root, `--hdb DIR`; None is this runtime's (#2237).
 
     `renames` maps old to new column names. Any type change must also be
     listed in `casts`, and q accepts it only when casting back reproduces
@@ -233,9 +239,10 @@ def migrate(
     if not reset_empty and not renames and not casts:
         raise UqsError("name at least one --rename or --cast")
 
-    if paths.hdb_dir.is_symlink():
+    given = hdb if hdb is not None else paths.hdb_dir
+    if given.is_symlink():
         raise UqsError("symlinked HDB roots need a migration that shares the writer's lock path")
-    root = paths.hdb_dir.resolve()
+    root = given.resolve()
     if not root.is_dir():
         raise UqsError(f"no HDB at {root}")
     if (root / "par.txt").exists():
@@ -268,7 +275,7 @@ def migrate(
 
     if q is None:
         raise UqsError("HDB migration needs q; set QCMD")
-    _write_lock(paths, q, env, "acquire")
+    _write_lock(paths, q, env, "acquire", given)
 
     stage_root: Path | None = None
     swapped = False
@@ -302,4 +309,4 @@ def migrate(
         # cannot strand the root: the lock names this pid, so the next q
         # writer breaks it once uqs has exited.
         with contextlib.suppress(UqsError):
-            _write_lock(paths, q, env, "release")
+            _write_lock(paths, q, env, "release", given)

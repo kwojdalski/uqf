@@ -33,6 +33,10 @@ from uqs.cli.renames import QUIET_KEY, _rewrite_renamed
 from uqs.cli.safety import Effect
 from uqs.paths import UqsError, UqsUsageError
 
+#: The refusal of two options that each name an HDB, `--target` among them
+#: (cli/hdb_scope.py's `resolve` says it too, #1755).
+AMBIGUOUS = "give one of --target, --attachment and --hdb: each names an HDB"
+
 #: The marks under which a command does not ask here: it cannot change the
 #: server, or it asks there, after showing its plan.
 _NO_ASK = (Effect.READ_ONLY, Effect.CONFIRMS_ON_SERVER)
@@ -226,7 +230,7 @@ def confirmed_on_server(args: Sequence[str], yes: bool) -> list[str]:
     if p is None or p.help or effect_of(p.command) is not Effect.CONFIRMS_ON_SERVER:
         return args
     if p.given("--attachment") is not None or p.given("--hdb") is not None:
-        raise UqsUsageError("give one of --target, --attachment and --hdb: each names an HDB")
+        raise UqsUsageError(AMBIGUOUS)
     if yes and p.given("--apply") and not p.given("--yes"):
         args.append("--yes")
     return args

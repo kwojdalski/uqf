@@ -119,7 +119,7 @@ CASES = [
     Case("connector start", ("kafka",)),
     Case("connector stop", ("kafka",)),
     Case("connector restart", ("kafka",)),
-    Case("data migrate", ("quote", "2015-01-07", "--rename", "bid:bid2"), _hdb("uqs")),
+    Case("data migrate", ("quote", "--date", "2015-01-07", "--rename", "bid:bid2"), _hdb("uqs")),
     Case("data replay", ()),
     Case("data seed", ("--from-runtime", "torq", "--date", "2015-01-07"), _hdb("uqs-torq")),
     Case("deploy build", ()),

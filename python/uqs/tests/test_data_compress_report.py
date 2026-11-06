@@ -22,6 +22,7 @@ import pytest
 from typer.testing import CliRunner
 
 import uqs.cli.entry  # noqa: F401 - registers every command on the app
+from uqs.cli import compress as compress_cli
 from uqs.cli import shared
 from uqs.cli.shared import app
 
@@ -128,3 +129,30 @@ def test_without_a_mode_it_is_a_usage_error_and_reads_nothing(tmp_path, monkeypa
     r = run_uqs("data", "compress", "--hdb", str(tmp_path))
     assert r.exit_code == 2
     assert any("--report" in s for s in said), said
+
+
+def _attached(monkeypatch, where: Path, ssh: str | None) -> None:
+    """--attachment ATT resolving to `where`, on `ssh` (None: this machine)."""
+    from uqs.cli import hdb_scope
+
+    handle = hdb_scope.Handle("attach", str(where), "pinned", hdb_scope._paths())
+    monkeypatch.setattr(type(handle), "ssh", property(lambda self: ssh))
+    monkeypatch.setattr(compress_cli, "resolve", lambda attach, hdb: handle)
+
+
+def test_the_report_reads_an_attachments_hdb_on_this_machine(hdb, monkeypatch):
+    """#2237: `data compress` took --hdb but not --attachment, as check does."""
+    _attached(monkeypatch, hdb, None)
+    r = run_uqs("data", "compress", "--report", "--json", "--attachment", "pb-uat")
+    assert r.exit_code == 0, r.output
+    assert json.loads(r.stdout)["hdb"] == str(hdb)
+
+
+def test_the_report_refuses_an_attachments_hdb_on_another_host(hdb, monkeypatch):
+    _attached(monkeypatch, hdb, "ops@pb-uat")
+    died: list[Exception] = []
+    monkeypatch.setattr(compress_cli, "_die", died.append)
+    run_uqs("data", "compress", "--report", "--attachment", "pb-uat")
+    assert len(died) == 1
+    assert "--report reads the HDB's files on this machine" in str(died[0])
+    assert "ops@pb-uat" in str(died[0])

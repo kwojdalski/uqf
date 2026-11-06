@@ -10,7 +10,10 @@ Which HDB is named once, by what already knows it - never a path to remember:
   uqs data ... --hdb DIR       a directory on this machine, for anything else
 
 With none of them, this runtime's own HDB - which is what a release runs when
-`--target` reaches it. Every decision about the database is
+`--target` reaches it. Every `data` command that reads or writes one HDB takes
+the same `--hdb`/`--attachment` pair, with this one help (#2237); a command
+that cannot act on an attachment's HDB refuses it saying why (`local_hdb`),
+rather than not knowing the option. Every decision about the database is
 scripts/gates/hdb_alter.q's (stack/hdb_alter.py); this module resolves the HDB,
 shows the plan, asks, checks the writers, runs it and reloads the readers.
 """
@@ -31,6 +34,7 @@ from uqs.cli.concepts import attach_opt
 from uqs.cli.json_out import emit
 from uqs.cli.safety import dry_run_note
 from uqs.cli.shared import _paths, console
+from uqs.cli.target_confirm import AMBIGUOUS
 from uqs.paths import UqsError, UqsPaths, UqsUsageError
 from uqs.stack import hdb_alter, hdb_remote
 from uqs.stack.hdb_alter import Request
@@ -73,7 +77,7 @@ def resolve(attach: str | None, hdb: Path | str | None) -> Handle:
     """The one HDB named: --attachment, --hdb, or (neither) this runtime's own."""
     paths = _paths()
     if attach and hdb:
-        raise UqsUsageError("give one of --target, --attachment and --hdb: each names an HDB")
+        raise UqsUsageError(AMBIGUOUS)
     if attach:
         ipc = service.ipc_for(attach_config.load(attach))
         where = hdb_where.resolve(attach, ipc)
@@ -89,6 +93,18 @@ def resolve(attach: str | None, hdb: Path | str | None) -> Handle:
         )
         return Handle("hdb", str(root.resolve()), "--hdb", paths, warnings=[unchecked])
     return Handle("runtime", str(paths.hdb_dir), f"this runtime's HDB ({paths.runtime})", paths)
+
+
+def local_hdb(attach: str | None, hdb: Path | None, *, command: str, why: str) -> Path | None:
+    """The HDB a command that writes only on this machine was named: `--hdb DIR`,
+    or None for its own default. `--attachment` is refused, saying `why` the
+    command cannot act on an attached stack's HDB (#2237) - check and alter
+    can, because they check the attached stack's writers first."""
+    if attach and hdb:
+        raise UqsUsageError(AMBIGUOUS)
+    if attach:
+        raise UqsUsageError(f"{command} cannot take --attachment {attach}: {why}")
+    return Path(hdb).expanduser() if hdb else None
 
 
 def tables_given(values: list[str] | None) -> list[str]:
