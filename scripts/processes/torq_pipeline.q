@@ -309,6 +309,28 @@ has_log:{[root;plant;want;day]
     logs:day_logs[day_dir[root;plant;day];(),want];
     any {not () ~ key x} each logs`logname}
 
+/ Name a logged message's columns from the schemas recorded with the day's
+/ logs, not from the plant's tables as they are today (#2195). A log holds
+/ what .u.upd received - a list of columns - and a plant redeployed mid-day
+/ with a column added wrote the first half of its logs one column narrower;
+/ naming them from today's table threw 'length, and TorQ abandoned the rest of
+/ the file. The candidates are in the order the plant opened the logs, a
+/ schema changes only forward in time, so the search starts at the one the
+/ previous message matched: `start_at`. A schema fits a message with the same
+/ number of columns whose types agree, column for column.
+/ @param cands the recorded schemas of one table, oldest log first (empty tables)
+/ @param start_at the index to start from - the candidate the last message matched
+/ @param x the message: a list of column vectors
+/ @return (index of the matching schema; the message as a table)
+/ @throws error when no candidate from `start_at` on fits the message
+/ @eg .qtorq.name_columns[enlist ([] time:`timestamp$(); sym:`symbol$());0;(enlist 2026.11.06D00:00:00;enlist `EURUSD)]  / (0;table of time,sym)
+name_columns:{[cands;start_at;x]
+    ty:type each x;
+    fits:{[ty;s] $[(count cols s)=count ty; ty~type each value flip s; 0b]}[ty] each cands;
+    idx:first where fits and (til count cands)>=start_at;
+    if[null idx; '"qtorq.name_columns: no schema recorded with the day's logs fits a message of ",(string count x)," columns (types ",(" " sv string ty),") - ",string count cands," recorded"];
+    (idx;flip (cols cands idx)!x)}
+
 / Private: the wanted messages of ONE log, as (day;seq;time;table;rows).
 / Read with .qetl.tick.replay, which is -11! with a torn tail tolerated and
 / the root upd put back after. A message is a list of columns; they are named
@@ -461,6 +483,125 @@ assert_publishable:{[h;pub_tables]
 feed_handle:{[]
     wait_for_tickerplant `qtorq;
     .servers.gethandlebytype[tp_type;`any]}
+
+/ ------------------------------------------------------- RESUBSCRIPTION
+/ What a tickerplant restart costs a streaming subscriber (#2201), and what a
+/ replayed message is named by (#2195). torq_stream.q wires it.
+
+/ The job this process subscribes for, and the global holding its plant handle.
+sub_job:`
+sub_handle:`
+
+/ How often a stream process asks .servers to retry its closed handles.
+sub_retry_period:0D00:00:15
+
+/ The latest plant `time` received per table: what a resubscription's replay
+/ has already been given. Exact when the plant stamps a message once, as the
+/ segmented tickerplant does; a second message in the same nanosecond as the
+/ last one received before an outage would be dropped as a duplicate.
+sub_hwm:(`symbol$())!`timestamp$()
+
+/ While a resubscription replays: the hwm it started from. Empty otherwise,
+/ and then nothing is filtered (a startup replay delivers every message once).
+sub_since:(`symbol$())!`timestamp$()
+
+/ Per table, the schemas recorded with the day's logs, oldest first, and the
+/ index of the one the last message matched.
+sub_cands:(`symbol$())!()
+sub_sch_at:(`symbol$())!`long$()
+
+/ Read, from the plant's stpmeta, the schema each of the day's logs was written
+/ under, per table. A plant that cannot say falls back to its current table:
+/ the old behaviour, logged, never a guess made silently.
+/ @param h the plant handle
+/ @param tbls the tables
+/ @return the tables
+/ @private
+sub_load_schemas:{[h;tbls]
+    logs:.[{[h;tbls] loc:h"(.stplg.kdbtplog;.proc.procname;.stplg.dldir)";
+            day_logs[day_dir[loc 0;loc 1;dir_day loc 2];tbls]};(h;tbls);
+        {[e] .qetl.log.warn[`qtorq;"could not read the logs' recorded schemas - naming replayed messages from the plant's current tables";enlist[`error]!enlist e];
+            ([] seq:`int$(); logname:`symbol$(); schema:())}];
+    recorded:exec schema from logs;
+    {[h;recorded;t]
+        c:(recorded where {[t;s] t in key s}[t] each recorded)@\:t;
+        .qtorq.sub_cands[t]:$[count c; c; enlist 0#h({value x};t)];
+        .qtorq.sub_sch_at[t]:0}[h;recorded] each tbls;
+    tbls}
+
+/ A replayed message as the table the job expects, named by the schema its log
+/ was written under. A live batch is already a table.
+/ @private
+sub_shape:{[t;x]
+    if[not 0h=type x; :x];
+    r:name_columns[sub_cands t;0^sub_sch_at t;x];
+    .qtorq.sub_sch_at[t]:r 0;
+    r 1}
+
+/ The root `upd` a streaming subscriber installs: shape the message, drop what
+/ a resubscription's replay was already given, count it, hand it on. A message
+/ that cannot be shaped is quarantined while a catch-up is running (replay
+/ would otherwise end there for the whole file, #2195) and raised live.
+/ @param job the job's name
+/ @param h the job's handler, a function of (table; rows)
+/ @param t the table
+/ @param x the message: a table (live) or a list of columns (logged)
+/ @return the handler's result, () when nothing was handed on
+/ @private
+sub_upd:{[job;h;t;x]
+    r:.[{(1b;sub_shape[x;y])};(t;x);{(0b;x)}];
+    if[not first r;
+        if[not .qetl.job.stream.trapping; 'last r];
+        .qetl.job.stream.quarantine[job;t;.qetl.job.stream.next_position job;last r;x];
+        :()];
+    x:last r;
+    tm:$[`time in cols x; x`time; `timestamp$()];
+    if[count tm;
+        s:sub_since;
+        if[t in key s; x:x where tm>s t];
+        .qtorq.sub_hwm[t]:sub_hwm[t]|max tm];
+    if[0=count x; :()];
+    record_received[t;x];
+    h[t;x]}
+
+/ TorQ's own resubscription (.sub.autoreconnect, switched on by AUTORECONNECT)
+/ calls this for each subscription that went inactive once the tickerplant's
+/ handle is back. TorQ's version subscribes WITHOUT replay, so everything the
+/ plant logged between coming back and this call was never delivered. This
+/ subscribes the same way and replays the log, delivering only what is newer
+/ than the last message received (sub_hwm): the job's own replay path, with
+/ publish live, because these messages are new to the job.
+/ @param row the inactive SUBSCRIPTIONS row with its procname, proctype and new handle
+/ @return the subscription result, () when it failed (logged: the subscription then stays inactive and the beat reports it)
+/ @private
+sub_resubscribe:{[row]
+    t:row`table;
+    .qetl.log.info[`qtorq;"tickerplant is back - resubscribing and replaying what it logged since";`job`table`since!(sub_job;t;sub_hwm t)];
+    if[not handle_open get sub_handle; sub_handle set row`w];
+    sub_load_schemas[row`w;(),t];
+    `.qtorq.sub_since set sub_hwm;
+    .qetl.job.stream.catching_up[sub_job;1b];
+    insts:row`instruments;
+    r:.[{[t;insts;proc] (1b;.sub.subscribe[t;$[((),`)~insts;`;insts];0b;1b;proc])};(t;insts;3#row);{(0b;x)}];
+    `.qtorq.sub_since set (`symbol$())!`timestamp$();
+    .qetl.job.stream.catching_up[sub_job;0b];
+    if[not first r;
+        .qetl.log.err[sub_job;"resubscription failed - the job stays unsubscribed";enlist[`error]!enlist last r];
+        :()];
+    last r}
+
+/ Turn on TorQ's resubscription for this process and point it at ours.
+/ @param handle_name the global holding the plant handle, e.g. `.qproc.stream.h
+/ @private
+sub_arm_resubscribe:{[handle_name]
+    `.qtorq.sub_handle set handle_name;
+    `.sub.AUTORECONNECT set 1b;
+    `.sub.retrysubscription set sub_resubscribe;
+    / .servers retries a closed handle every RETRY, five minutes by default and
+    / registered when the process booted; that is how long a restarted plant
+    / would go unnoticed. TorQ's own retry, run more often (.servers.retry
+    / only touches closed handles).
+    safe_timer[`servers_retry;sub_retry_period;`.servers.retry;"Retry closed server handles, so a restarted tickerplant is resubscribed promptly"];}
 
 / ----------------------------------------------------------------- STATE
 

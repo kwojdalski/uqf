@@ -60,7 +60,7 @@
 / @return the transport dictionary
 .qproc.stream.transport:{[job]
     feed:0=count .qetl.job.stream.subscriptions job;
-    base:`connect`publisher`check_publishable`subscribe`timer!(
+    base:`connect`publisher`check_publishable`subscribe`timer`subscribed!(
         / A projection still owed its one argument: start calls connect[]. Fully
         / applied it ran HERE, while the transport was being built - before
         / on_start, and before anything else had a say (#1219).
@@ -82,18 +82,25 @@
             / threw 'type on the first replayed batch, and TorQ abandoned the
             / rest of the file. The plant's column names, asked once here,
             / turn a list of columns back into the table the job expects.
-            names:tbls!{[h;t] h({cols x};t)}[.qproc.stream.h] each tbls;
-            `upd set {[names;h;t;x]
-                x:$[0h=type x; flip (names t)!x; x];
-                .qtorq.record_received[t;x];
-                h[t;x]}[names;handler];
-            .qtorq.subscribe_tables[job;tbls;replay];}[job];
+            / Named from the schema each log was written under (#2195), and
+            / a message that cannot be named is quarantined, not fatal.
+            .qtorq.sub_arm_resubscribe[`.qproc.stream.h];
+            `.qtorq.sub_job set job;
+            .qtorq.sub_load_schemas[.qproc.stream.h;tbls];
+            / A job that does not replay never asked for history: a later
+            / resubscription replays what came after it started, not the day.
+            if[not replay; `.qtorq.sub_hwm set tbls!(count tbls)#.z.p];
+            `upd set .qtorq.sub_upd[job;handler];
+            .qtorq.subscribe_tables[job;tbls;replay]}[job];
         {[name;period;f]
             / .qtorq.safe_timer schedules a function by NAME, so each one
             / gets a global of its own under .qproc.stream.timers.
             fn:` sv `.qproc.stream.timers,name;
             fn set f;
-            .qtorq.safe_timer[name;period;fn;"Run ",(string name)," for its streaming job"];});
+            .qtorq.safe_timer[name;period;fn;"Run ",(string name)," for its streaming job"];};
+        / Whether TorQ still holds an active subscription for every table: a
+        / tickerplant restart leaves them inactive until it resubscribes (#2201).
+        {[tbls;unused] all (),tbls in exec table from .sub.SUBSCRIPTIONS where active}[.qetl.job.stream.subscriptions job]);
     / The logs of the days a carrying job was down across (#1072), the
     / plant's current log day (#1190) and whether a day's log exists
     / (#1189). They are the plant's own files, so the plant is asked

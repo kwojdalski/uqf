@@ -603,14 +603,14 @@
         .qetl.job.stream.wire[job;tr[`publisher][]]];
     if[count tbls;
         live:get pub:` sv (d`ns),`publish;
-        if[replay; pub set {[t;x] count x}; `.qetl.job.stream.replaying set 1b]; / noqa: QF016 publish signature, replay discards
+        / a batch that fails to apply while replaying is quarantined, not fatal (#2195)
+        if[replay; pub set {[t;x] count x}; `.qetl.job.stream.replaying set 1b; .qetl.job.stream.catching_up[job;1b]]; / noqa: QF016 publish signature, replay discards
         today:.qetl.job.stream.plant_today tr;
         r:@[{[job;tr;tbls;h;replay]
                 if[replay and `carry in key .qetl.job.stream.def job; .qetl.job.stream.catch_up[job;tr;tbls;h]];
-                tr[`subscribe][tbls;h;replay]; (1b;::)}[job;tr;tbls;.qetl.job.stream.handler[job]];
+                tr[`subscribe][tbls;h;replay]; (1b;::)}[job;tr;tbls;.qetl.job.stream.tolerant[job;.qetl.job.stream.handler[job]]];
             replay;{[e] (0b;e)}];
-        pub set live;
-        `.qetl.job.stream.replaying set 0b;
+        pub set live; `.qetl.job.stream.replaying set 0b; .qetl.job.stream.catching_up[job;0b];
         if[replay and `carry in key d; .qetl.job.stream.missed_end_of_day[job;today]];
         .qetl.job.stream.replayed[job];
         if[not first r; 'last r];
@@ -618,7 +618,7 @@
         / Protected: a record that cannot be written must never stop the job
         / it records. Logged, so a missing session is explained.
         .[{[tr;job] .qetl.uptime.begin job;
-            tr[`timer][`$(string job),"_uptime";.qetl.uptime.period;{@[.qetl.uptime.beat;::;{[e] .qetl.log.warn[`uptime;"could not record a beat";enlist[`error]!enlist e];}]}]};
+            tr[`timer][`$(string job),"_uptime";.qetl.uptime.period;{[job;tr;unused] .qetl.job.stream.watch_subscription[job;tr]; @[.qetl.uptime.beat;::;{[e] .qetl.log.warn[`uptime;"could not record a beat";enlist[`error]!enlist e];}]}[job;tr]]};
           (tr;job);
           {[job;e] .qetl.log.warn[job;"could not open an uptime session - its gaps will read as down";enlist[`error]!enlist e];}[job]]];
     if[`period in key d; tr[`timer][job;d`period;d`on_timer]];
