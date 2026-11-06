@@ -246,3 +246,63 @@ def test_the_suite_records_through_the_root_conftest(tmp_path):
 def test_a_test_id_drops_the_group_xdist_adds():
     assert reach.test_id("a.py::t@grp", ["xdist_group"]) == "a.py::t"
     assert reach.test_id("a.py::t[x@y]", []) == "a.py::t[x@y]"
+
+
+def _work_tree(root: Path, linked: bool) -> Path:
+    """A work tree at `root`: its own .git directory, or - as a linked
+    worktree has - a .git file naming one elsewhere. Its git directory."""
+    root.mkdir(parents=True)
+    if not linked:
+        (root / ".git").mkdir()
+        return root / ".git"
+    gitdir = root.parent / "common" / "worktrees" / root.name
+    gitdir.mkdir(parents=True)
+    (root / ".git").write_text(f"gitdir: {gitdir}\n")
+    return gitdir
+
+
+@pytest.mark.parametrize("linked", [False, True])
+def test_the_record_is_written_whole_from_the_git_directory(tmp_path, linked):
+    """#2273: the copy that replaces the record is written in the git
+    directory, so a write cut short leaves no file in the work tree."""
+    tree = tmp_path / "wt"
+    gitdir = _work_tree(tree, linked)
+    record = tree / ".testreach.json"
+    assert reach.scratch_dir(record).resolve() == gitdir.resolve()
+    reach.write_whole(record, '{"version": 1}')
+    assert json.loads(record.read_text()) == {"version": 1}
+    assert sorted(p.name for p in tree.iterdir()) == [".git", ".testreach.json"]
+    assert list(gitdir.iterdir()) == [], "the copy became the record"
+
+
+def test_a_record_outside_a_work_tree_root_is_written_beside_itself(tmp_path):
+    assert reach.scratch_dir(tmp_path / "r.json") == tmp_path
+
+
+def test_an_interrupted_write_leaves_no_copy_behind(tmp_path, monkeypatch):
+    """A write that fails before the copy replaces the record removes the
+    copy, and the record it would have replaced is untouched."""
+    tree = tmp_path / "wt"
+    gitdir = _work_tree(tree, linked=True)
+    record = tree / ".testreach.json"
+    record.write_text("old")
+
+    def interrupted(src, dst):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(reach.os, "replace", interrupted)
+    with pytest.raises(KeyboardInterrupt):
+        reach.write_whole(record, "new")
+    assert record.read_text() == "old"
+    assert sorted(p.name for p in tree.iterdir()) == [".git", ".testreach.json"]
+    assert list(gitdir.iterdir()) == []
+
+
+def test_a_run_leaves_no_copy_of_the_record_in_the_work_tree(tmp_path):
+    """The recorder's own write, at the end of a run, goes through write_whole."""
+    tree = tmp_path / "wt"
+    _work_tree(tree, linked=True)
+    recorder = reach.Recorder(tree / ".testreach.json")
+    recorder.pytest_sessionfinish(None)
+    assert reach.load(tree / ".testreach.json") is not None
+    assert sorted(p.name for p in tree.iterdir()) == [".git", ".testreach.json"]

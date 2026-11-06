@@ -48,6 +48,13 @@ between the two trees is a change like any other.
 Every run leaves out the q_backend tests: q-tests runs the worked examples,
 q-docs the docs' q blocks, each on the interpreter it requires (#1808).
 
+A test that JUDGES the reach record (marked `judges_reach_record`, today
+test_ci_scope's check that CI and the record agree about web/) runs after
+the others, once their reads are merged into the record (#2273). Run beside
+them, it judged the record the push was about to correct: a branch adding a
+web/ file failed the check against a record from before the file existed,
+and an identical second push passed.
+
     uv run python scripts/dev/python_tests_hook.py            # what the hook runs
     uv run python scripts/dev/python_tests_hook.py --dry-run  # say what it would run
 """
@@ -100,8 +107,13 @@ SHAPES_EVERY_TEST = {
 #: The tests a q hook runs at commit (the q_backend marker, conftest.py) are
 #: left out: q-tests runs the worked examples and q-docs the docs' q blocks,
 #: each on the interpreter it requires, so a commit runs each test once (#1808).
-NOT_Q_HOOKS = ["-m", "not q_backend"]
-PYTEST = ["uv", "run", "pytest", "-q", "-n", "auto", "--dist", "loadgroup", *NOT_Q_HOOKS]
+NOT_Q_HOOKS = "not q_backend"
+#: The marker of a test that judges the reach record: it runs after the record
+#: is rewritten, never beside the tests that rewrite it (#2273).
+JUDGES_RECORD = "judges_reach_record"
+PYTEST = ["uv", "run", "pytest", "-q"]
+#: The tests themselves, spread over the cores; a judge runs alone after them.
+SPREAD = ["-n", "auto", "--dist", "loadgroup"]
 #: pytest's exit status when nothing was selected: nothing failed.
 NO_TESTS = 5
 
@@ -251,20 +263,62 @@ def publish(records: Iterable[Path], shared: Path | None) -> None:
 # --- running -----------------------------------------------------------------
 
 
-def commands(decision: Decision, ids_file: Path, reach: Path) -> list[list[str]]:
-    """The pytest runs `decision` takes, each recording into the records."""
+def commands(
+    decision: Decision, ids_file: Path, reach: Path, *, judges: bool = False
+) -> list[list[str]]:
+    """The pytest runs `decision` takes, each recording into the records.
+
+    `judges` False: every test it selects but those that judge the reach
+    record. True: the same selection, only those - run once the first runs
+    have written the record they judge (`reach` is then the record itself)."""
     record = ["--testmon", "--record-reach", str(reach)]
+    if judges:
+        base = [*PYTEST, "-m", f"{JUDGES_RECORD} and {NOT_Q_HOOKS}"]
+    else:
+        base = [*PYTEST, *SPREAD, "-m", f"{NOT_Q_HOOKS} and not {JUDGES_RECORD}"]
     if decision.full:
-        return [[*PYTEST, *record]]
+        return [[*base, *record]]
     runs = []
     if decision.testmon:
-        runs.append([*PYTEST, *record, "--testmon-forceselect"])
+        runs.append([*base, *record, "--testmon-forceselect"])
     if decision.tests:
         modules = sorted({t.split("::", 1)[0] for t in decision.tests})
         modules = [m for m in modules if (REPO / m).is_file()]
         if modules:
-            runs.append([*PYTEST, *record, "--select-tests", str(ids_file), *modules])
+            runs.append([*base, *record, "--select-tests", str(ids_file), *modules])
     return runs
+
+
+def run(decision: Decision, *, dry_run: bool = False) -> int:
+    """Run what `decision` selects: the tests, then the record's judges against
+    the record those tests have just rewritten. The worst exit status, with
+    pytest's "nothing selected" counted a pass."""
+    with tempfile.TemporaryDirectory(prefix="python-tests-") as tmp:
+        ids_file = Path(tmp) / "tests.txt"
+        ids_file.write_text("\n".join(sorted(decision.tests)) + "\n")
+        # The whole suite rewrites the reach record rather than adding to it.
+        reach = Path(tmp) / REACH_DATA.name if decision.full else REACH_DATA
+        if dry_run:
+            for cmd in [
+                *commands(decision, ids_file, reach),
+                *commands(decision, ids_file, REACH_DATA, judges=True),
+            ]:
+                print(" ".join(cmd))
+            return 0
+        code = _run_all(commands(decision, ids_file, reach))
+        if decision.full and reach.is_file():
+            shutil.move(reach, REACH_DATA)
+        judged = _run_all(commands(decision, ids_file, REACH_DATA, judges=True))
+    return code or judged
+
+
+def _run_all(runs: list[list[str]]) -> int:
+    code = 0
+    for cmd in runs:
+        rc = subprocess.run(cmd, cwd=REPO, check=False).returncode
+        if rc not in (0, NO_TESTS) and code == 0:
+            code = rc
+    return code
 
 
 def main() -> int:
@@ -290,24 +344,9 @@ def main() -> int:
     if len(decision.tests) > 5:
         print(f"  ... and {len(decision.tests) - 5} more")
 
-    with tempfile.TemporaryDirectory(prefix="python-tests-") as tmp:
-        ids_file = Path(tmp) / "tests.txt"
-        ids_file.write_text("\n".join(sorted(decision.tests)) + "\n")
-        # The whole suite rewrites the reach record rather than adding to it.
-        reach = Path(tmp) / REACH_DATA.name if decision.full else REACH_DATA
-        runs = commands(decision, ids_file, reach)
-        if args.dry_run:
-            for cmd in runs:
-                print(" ".join(cmd))
-            return 0
-        code = 0
-        for cmd in runs:
-            rc = subprocess.run(cmd, cwd=REPO, check=False).returncode
-            if rc not in (0, NO_TESTS) and code == 0:
-                code = rc
-        if decision.full and reach.is_file():
-            shutil.move(reach, REACH_DATA)
-    publish(records, shared)
+    code = run(decision, dry_run=args.dry_run)
+    if not args.dry_run:
+        publish(records, shared)
     return code
 
 

@@ -163,8 +163,13 @@ def _reach_record() -> dict | None:
     return record
 
 
+@pytest.mark.judges_reach_record
 def test_the_reach_record_agrees_about_which_web_files_python_reads():
     """CI's rule against the hooks' record, so the two never contradict.
+
+    Marked a judge of the record: the python-tests hook runs it after the
+    tests a push reaches, so a web/ file the branch adds is judged against a
+    record whose scans have seen it (#2273).
 
     A web/ file the planner calls Python-free may be read by a Python test only
     as part of SCANNING web/ - reading every tracked web/ file of its kind

@@ -8,7 +8,10 @@ that cannot be decided, or full mode (UQF_HOOKS_FULL=1) asks for it.
 from __future__ import annotations
 
 import importlib.util
+import json
+import os
 import sqlite3
+import subprocess
 import sys
 from pathlib import Path
 
@@ -156,7 +159,147 @@ def test_the_whole_suite_records_into_both_records_and_a_pick_runs_only_its_test
     assert chosen[chosen.index("--select-tests") + 1] == str(ids)
     assert chosen[-1] == "scripts/dev/tests/test_python_tests_hook.py"
     for cmd in (*full, testmon, chosen):
-        assert cmd[cmd.index("-m") + 1] == "not q_backend"
+        assert cmd[cmd.index("-m") + 1] == "not q_backend and not judges_reach_record"
+
+
+def test_the_record_s_judges_run_alone_after_the_tests_with_the_same_selection(tmp_path):
+    """#2273: a judge of the reach record never runs beside the tests that
+    rewrite it; the second pass runs only judges, over the same selection,
+    recording into the record itself."""
+    ids, record = tmp_path / "ids.txt", tmp_path / ".testreach.json"
+    picked = hook.Decision(
+        "x", testmon=True, tests={"scripts/dev/tests/test_python_tests_hook.py::t": "w"}
+    )
+    for decision in (hook.Decision("x", full=True), picked):
+        first = hook.commands(decision, ids, tmp_path / "r.json")
+        judges = hook.commands(decision, ids, record, judges=True)
+        assert len(judges) == len(first)
+        for a, b in zip(first, judges, strict=True):
+            assert b[b.index("-m") + 1] == "judges_reach_record and not q_backend"
+            assert b[b.index("--record-reach") + 1] == str(record)
+            assert "-n" not in b and "-n" in a
+            assert _after_testmon(a) == _after_testmon(b)
+    assert hook.commands(hook.Decision("x"), ids, record, judges=True) == []
+
+
+def _after_testmon(cmd: list[str]) -> list[str]:
+    """What a run selects with: its words from --testmon on, but the record."""
+    record = cmd[cmd.index("--record-reach") + 1]
+    return [w for w in cmd[cmd.index("--testmon") :] if w != record]
+
+
+_CONFTEST = """
+import importlib.util, sys
+from pathlib import Path
+
+spec = importlib.util.spec_from_file_location("test_reach", {test_reach!r})
+reach = importlib.util.module_from_spec(spec)
+sys.modules["test_reach"] = reach
+spec.loader.exec_module(reach)
+reach.REPO = Path(__file__).resolve().parent
+
+
+def pytest_addoption(parser):
+    for flag in ("--testmon", "--testmon-forceselect"):
+        parser.addoption(flag, action="store_true")
+    parser.addoption("--record-reach")
+    parser.addoption("--select-tests")
+
+
+def pytest_configure(config):
+    config.addinivalue_line("markers", "judges_reach_record: judges the record")
+    config.addinivalue_line("markers", "q_backend: a q script")
+    path = config.getoption("--record-reach")
+    if path:
+        recorder = reach.Recorder(Path(path).resolve())
+        reach.install(recorder)
+        config.pluginmanager.register(recorder, "test-reach")
+
+
+def pytest_collection_modifyitems(config, items):
+    path = config.getoption("--select-tests")
+    if path:
+        wanted = set(Path(path).read_text().split())
+        items[:] = [i for i in items if i.nodeid in wanted]
+"""
+
+#: A scan reads every web/*.ts; the judge - CI's rule in miniature - fails
+#: when a test reads some web/*.ts files but not all, as a scan judged by a
+#: record from before a file was added does.
+_TESTS = """
+import json
+from pathlib import Path
+
+import pytest
+
+ROOT = Path(__file__).resolve().parent
+
+
+def test_scan():
+    for path in sorted((ROOT / "web").glob("*.ts")):
+        path.read_text()
+
+
+@pytest.mark.judges_reach_record
+def test_judge():
+    if not (ROOT / ".testreach.json").is_file():
+        pytest.skip("no record yet, as the real judge skips")
+    record = json.loads((ROOT / ".testreach.json").read_text())
+    web = {f"web/{p.name}" for p in (ROOT / "web").glob("*.ts")}
+    for test, keys in record["tests"].items():
+        reads = set()
+        for key in keys:
+            reads.update(record["owners"].get(key, {}).get("reads", []))
+        assert reads & web in (set(), web), f"{test} reads {sorted(reads & web)} of {sorted(web)}"
+"""
+
+
+def test_a_push_adding_a_file_a_scan_reads_passes_the_first_time(tmp_path, monkeypatch):
+    """#2273, end to end: a record from before a web/ file was added, and one
+    run of what the hook selects for the push adding it, passes - where the
+    judge run beside the scan, as it was, failed against the stale record."""
+    project = tmp_path / "project"
+    (project / "web").mkdir(parents=True)
+    (project / "conftest.py").write_text(
+        _CONFTEST.replace("{test_reach!r}", repr(str(hook.HERE / "test_reach.py")))
+    )
+    (project / "test_web.py").write_text(_TESTS)
+    for name in ("a.ts", "b.ts"):
+        (project / "web" / name).write_text("export {};\n")
+    record = project / ".testreach.json"
+    for key in [k for k in os.environ if k.startswith("PYTEST_")]:
+        monkeypatch.delenv(key)
+    monkeypatch.setattr(hook, "REPO", project)
+    monkeypatch.setattr(hook, "REACH_DATA", record)
+    monkeypatch.setattr(hook, "SPREAD", [])
+    monkeypatch.setattr(
+        hook, "PYTEST",
+        [sys.executable, "-m", "pytest", "-q", f"--rootdir={project}", "-p", "no:cacheprovider",
+         "-p", "no:pytest-testmon", "-p", "no:xdist"],
+    )  # fmt: skip
+
+    assert hook.run(hook.Decision("first record", full=True)) == 0
+    (project / "web" / "c.ts").write_text("export {};\n")
+    stale = record.read_text()
+    assert "web/c.ts" not in stale
+
+    beside = subprocess.run(
+        [*hook.PYTEST, "--record-reach", str(record), "test_web.py"],
+        cwd=project, capture_output=True, text=True,
+    )  # fmt: skip
+    assert beside.returncode == 1 and "test_judge" in beside.stdout, beside.stdout
+    record.write_text(stale)
+
+    push = hook.decide(
+        [("A", "web/c.ts")],
+        full_mode=False,
+        known=set(),
+        record=json.loads(stale),
+        q_readers=_no_q_readers,
+    )
+    assert set(push.tests) == {"test_web.py::test_scan", "test_web.py::test_judge"}
+    assert hook.run(push) == 0
+    assert "web/c.ts" in record.read_text()
 
 
 def test_the_records_seed_a_new_worktree_and_are_written_back(tmp_path):

@@ -357,11 +357,47 @@ class Recorder:
             return
         parts = sorted(self.path.parent.glob(f"{self.path.name}.*.part"))
         merged = merge(load(self.path), [self.data(), *(json.loads(p.read_text()) for p in parts)])
-        tmp = self.path.with_name(f".{self.path.name}.{os.getpid()}")
-        tmp.write_text(json.dumps(merged, indent=0, sort_keys=True))
-        os.replace(tmp, self.path)
+        write_whole(self.path, json.dumps(merged, indent=0, sort_keys=True))
         for p in parts:
             p.unlink(missing_ok=True)
+
+
+def scratch_dir(path: Path) -> Path:
+    """Where a whole new copy of `path` is written before it replaces it: the
+    git directory of the work tree `path` sits at the root of, so a write cut
+    short leaves nothing in the work tree for `git status` to show (#2273) -
+    an untracked file there made attest_kdbx.py refuse the tree. Beside `path`
+    when it is not at a work tree's root, or the git directory is on another
+    file system (os.replace cannot cross one)."""
+    parent = path.parent
+    dotgit = parent / ".git"
+    gitdir: Path | None = None
+    if dotgit.is_dir():
+        gitdir = dotgit
+    elif dotgit.is_file():
+        line = dotgit.read_text(errors="replace").strip()
+        if line.startswith("gitdir:"):
+            gitdir = (parent / line.removeprefix("gitdir:").strip()).resolve()
+    try:
+        if gitdir and gitdir.is_dir() and gitdir.stat().st_dev == parent.stat().st_dev:
+            return gitdir
+    except OSError:
+        pass
+    return parent
+
+
+def write_whole(path: Path, text: str) -> None:
+    """Replace `path` with `text` at once: a reader sees the old record or the
+    new one, never half of one. The copy is written in `scratch_dir` and
+    removed if anything stops it reaching `path`."""
+    fd, name = tempfile.mkstemp(prefix=f".{path.name}.", dir=scratch_dir(path))
+    tmp = Path(name)
+    try:
+        with os.fdopen(fd, "w") as f:
+            f.write(text)
+        os.replace(tmp, path)
+    finally:
+        tmp.unlink(missing_ok=True)
 
 
 _ACTIVE: list[Recorder] = []
