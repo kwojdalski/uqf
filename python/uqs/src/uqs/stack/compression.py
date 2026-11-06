@@ -31,7 +31,8 @@ COMPRESSION_CONFIG = Path("torqconfig") / "compressionconfig.csv"
 #: running housekeeping.q unchanged, which loads .cmp with TorQ's common code.
 #: BEFORE it, uqs_compression_config.q points `.cmp.inputcsv` at this module's
 #: copy of the policy. AFTER it: the coverage ledger's reader, as gateway1 loads
-#: it, and log.q, which the HDB reload logs through; torq_pipeline.q, for
+#: it, and log.q, which the HDB reload logs through; io_hdb.q, for the HDB write
+#: lock the scheduled run holds (.qetl.io.locked, #2176); torq_pipeline.q, for
 #: .qtorq.reload_hdb; the wrapper over .cmp; the survey that scopes a run; and the
 #: HDB connections the reload needs (uqs_compression_process.q).
 CMP_PROCESS_LOAD = (
@@ -40,6 +41,7 @@ CMP_PROCESS_LOAD = (
         "${UQF_ROOT}/src/etl/core/log.q",
         "${UQF_ROOT}/src/etl/core/status.q",
         "${UQF_ROOT}/src/etl/core/backfill_state.q",
+        "${UQF_ROOT}/src/etl/core/io_hdb.q",
         "${UQF_ROOT}/src/etl/core/intervals.q",
         "${UQF_ROOT}/src/etl/core/materialisation.q",
         "${UQF_SCRIPTS}/processes/torq_pipeline.q",

@@ -103,7 +103,14 @@ def deploy(
         if on_result:
             on_result(report)
         return 0
-    code = _run(dep, cfg, pkg, rid, report, facts, on_report)
+    try:
+        code = _run(dep, cfg, pkg, rid, report, facts, on_report)
+    except BaseException:
+        # An interruption _run settled - rolled back, or deployed with its
+        # prune incomplete (#2174) - is shown before it goes on.
+        if on_result and report.status != "running":
+            on_result(report)
+        raise
     if on_result:
         on_result(report)
     return code
@@ -135,6 +142,7 @@ def _run(
     prev_extra: list[str] = []
     stopped_previous = False
     started = False
+    activated = False
     try:
         bundled.install(dep, rid, report)
         log.info("transferring release {}", rid)
@@ -226,10 +234,13 @@ def _run(
         report.stage = "done"
         dep.write_report(release, report, required=True)
         dep.activate(rid)
+        # From here the push has succeeded: the new release is verified and
+        # `current`. Nothing after this may roll it back (#2174).
+        activated = True
         if cfg.keep is not None:
-            dep.beat()
-            report.pruned = _prune_after(dep, cfg.keep)
+            _prune_after(dep, report, cfg.keep)
     except DeployError as exc:
+        # never after activation: _prune_after catches every DeployError
         report.status = "failed"
         report.stage = exc.stage
         report.error = str(exc)
@@ -238,12 +249,14 @@ def _run(
             dep, release, started, stopped_previous, previous, (prev_profile, prev_extra)
         )
     except BaseException as exc:
+        if activated:
+            raise  # deployed; _prune_after recorded the prune as interrupted
         # Ctrl-C in the verify wait, or a bug's KeyError: the previous release
         # may already be down, so it is rolled back as a failed stage is, and
         # then the interruption goes on to the caller (#1664).
         report.status = "failed"
         report.stage = "interrupted"
-        report.error = ": ".join(filter(None, (type(exc).__name__, str(exc))))
+        report.error = _describe(exc)
         log.error("INTERRUPTED: {}", redact(report.error))
         report.rollback = _rollback(
             dep, release, started, stopped_previous, previous, (prev_profile, prev_extra)
@@ -258,15 +271,31 @@ def _run(
     return 0 if report.status == "deployed" else 1
 
 
-def _prune_after(dep: Deployment, keep: int) -> dict:
+def _prune_after(dep: Deployment, report: Report, keep: int) -> None:
     """--keep, once the release is current and the lock still held. The
     deployment has succeeded by then, so a prune that fails is reported, not
-    rolled back."""
+    rolled back - and one interrupted is reported, then the interruption goes
+    on: the push is still `deployed`, its prune incomplete (#2174)."""
     try:
-        return prune_locked(dep, keep)
+        dep.beat()
+        report.pruned = prune_locked(dep, keep)
     except DeployError as exc:
         log.warning("the deployment succeeded, but pruning old releases failed: {}", exc)
-        return {"prune": "failed", "error": redact(str(exc))}
+        report.pruned = {"prune": "failed", "keep": keep, "error": redact(str(exc))}
+    except BaseException as exc:
+        error = redact(_describe(exc))
+        log.error(
+            "deployed; prune incomplete: the new release is current and running, but pruning "
+            "old releases was interrupted ({}) - `uqs deploy prune --keep {}` finishes it",
+            error,
+            keep,
+        )
+        report.pruned = {"prune": "interrupted", "keep": keep, "error": error}
+        raise
+
+
+def _describe(exc: BaseException) -> str:
+    return ": ".join(filter(None, (type(exc).__name__, str(exc))))
 
 
 def _now() -> str:
