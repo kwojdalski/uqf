@@ -148,3 +148,33 @@ def test_every_renamed_route_names_a_route_that_exists():
     for method, _pattern, _old, new in RENAMED_ROUTES:
         assert (method, new) in paths
         assert (method, new) in access.ROUTE_PERMISSIONS
+
+
+# --------------------------------------------- one word, one meaning (#2232)
+
+#: `group`/`groups` is the access policy's word: the caller's groups and a
+#: membership's group. A process's type is `proctype`, TorQ's column.
+ACCESS_GROUP_FIELDS = {("CapabilitiesResponse", "groups"), ("PolicyMembership", "group")}
+
+
+def _fields_named(*names: str) -> set[tuple[str, str]]:
+    return {
+        (model, field)
+        for model, cls in _models().items()
+        for field, info in cls.model_fields.items()
+        if (info.alias or field) in names
+    }
+
+
+def test_group_means_only_an_access_group():
+    assert _fields_named("group", "groups") == ACCESS_GROUP_FIELDS
+
+
+def test_a_process_row_reports_its_type_once():
+    """Responses are not strict, so the row's fields are pinned: a `group`
+    beside `proctype` showed the Fleet view one fact as two columns."""
+    assert set(models.ProcessHealthOut.model_fields) == {
+        "process", "proctype", "host", "declared_port", "start_with_all", "up", "pid",
+        "reported_port", "reported_process", "error", "identity_mismatch", "port_unresolved",
+    }  # fmt: skip
+    assert "proctypes" in models.FleetHealthResponse.model_fields

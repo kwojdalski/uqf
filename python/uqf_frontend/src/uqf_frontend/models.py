@@ -254,9 +254,12 @@ class UsageResponse(BaseModel):
 
 
 class ProcessHealthOut(BaseModel):
+    """One row of /ops/processes. The process's type is `proctype`, TorQ's
+    column, and only that: a `group` field repeated it under a word that means
+    an access group elsewhere (#2232)."""
+
     process: str
     proctype: str
-    group: str
     host: str
     declared_port: int | None
     start_with_all: bool
@@ -280,7 +283,7 @@ class FleetHealthResponse(BaseModel):
         "down is configured behaviour rather than a fault"
     )
     processes: list[ProcessHealthOut]
-    groups: dict[str, int] = Field(description="declared process count per proctype")
+    proctypes: dict[str, int] = Field(description="declared process count per proctype")
     source: str | None = Field(default=None, description="the process.csv that was read")
     poll_seconds: int
 

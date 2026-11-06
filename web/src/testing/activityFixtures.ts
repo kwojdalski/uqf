@@ -165,7 +165,6 @@ export function answer(path: string, level: SessionLevel = "actions"): unknown {
     return {
       processes: PROCESSES.map((p) => ({
         ...p,
-        group: "g",
         host: "localhost",
         declared_port: 1,
         port: 1,

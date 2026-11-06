@@ -68,9 +68,11 @@ def test_rows_without_a_procname_are_skipped(tmp_path):
     assert read(path, 6050) == []
 
 
-def test_group_is_the_proctype():
+def test_the_process_type_has_one_name():
+    """`group` repeated `proctype` under an access-policy word (#2232)."""
     p = DeclaredProcess("rdb1", "rdb", "localhost", 6052, True)
-    assert p.group == "rdb"
+    assert p.proctype == "rdb"
+    assert not hasattr(p, "group")
 
 
 def test_a_missing_file_raises_with_the_path(tmp_path):

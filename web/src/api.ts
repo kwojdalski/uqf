@@ -311,7 +311,6 @@ export interface Backfill extends Pollable {
 export interface ProcessHealth {
   process: string;
   proctype: string;
-  group: string;
   host: string;
   declared_port: number | null;
   start_with_all: boolean;

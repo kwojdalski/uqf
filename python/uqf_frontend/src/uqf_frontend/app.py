@@ -1875,15 +1875,15 @@ def _iso(row: dict[str, Any]) -> IntervalOut:
 def _fleet_health(
     fleet: Fleet, declared: list[procfile.DeclaredProcess], source: str
 ) -> FleetHealthResponse:
-    """Each declared process probed, and the groups they fall in."""
+    """Each declared process probed, and how many there are of each proctype."""
     checked = health.check(fleet, declared)
-    groups: dict[str, int] = {}
+    proctypes: dict[str, int] = {}
     for proc in declared:
-        groups[proc.group] = groups.get(proc.group, 0) + 1
+        proctypes[proc.proctype] = proctypes.get(proc.proctype, 0) + 1
     return FleetHealthResponse(
         summary=health.summarise(checked),
         processes=[ProcessHealthOut(**vars(h)) for h in checked],
-        groups=dict(sorted(groups.items())),
+        proctypes=dict(sorted(proctypes.items())),
         source=source,
         poll_seconds=ops.POLL_SECONDS["processes"],
     )
