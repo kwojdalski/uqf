@@ -1193,6 +1193,41 @@ def test_rule5c_the_commands_that_ask_are_the_known_ones():
     assert asking == PROMPTING_MODULES
 
 
+#: Every leaf that takes --json and --yes -> the test that runs it with --json
+#: and no --yes, a terminal ready to answer y, and holds it to the one refusal
+#: (#2229): exit 1, `{"ok": false}` naming --yes, nothing asked or changed.
+#: Three behaviours were one mistake's: exit 2 (data check/alter/compress),
+#: exit 1 (job attachment add/remove) and a prompt mid-run (deploy prune).
+JSON_WITHOUT_YES = {
+    "data alter": "test_hdb_alter_cli.py::test_json_without_yes_is_refused_and_writes_nothing",
+    "data check": "test_hdb_alter_cli.py::test_json_without_yes_is_refused_and_writes_nothing",
+    "data compress": "test_data_compress.py::test_json_cannot_ask",
+    "deploy prune": (
+        "test_deploy_prune.py::test_json_without_yes_is_refused_before_the_server_is_reached"
+    ),
+    "job attachment add": (
+        "test_attach_cli.py::test_json_execution_without_yes_refuses_with_a_json_error"
+    ),
+    "job attachment remove": (
+        "test_attach_cli.py::test_json_execution_without_yes_refuses_with_a_json_error"
+    ),
+}
+
+
+def test_rule5f_json_without_yes_is_one_refusal():
+    both = {p for p, c in LEAVES.items() if _flag(c, "--json") and _flag(c, "--yes")}
+    assert both == set(JSON_WITHOUT_YES), "name the test that holds each to safety.json_needs_yes"
+    here = Path(__file__).parent
+    for path, test in JSON_WITHOUT_YES.items():
+        file, name = test.split("::")
+        assert re.search(rf"^def {name}\(", (here / file).read_text(), re.M), (path, test)
+    cli_dir = Path(shared.__file__).parent
+    worded = {
+        f.stem for f in cli_dir.glob("*.py") if "cannot ask for confirmation" in f.read_text()
+    }
+    assert worded == {"safety"}, "the refusal is safety.json_needs_yes's alone"
+
+
 def test_rule5e_one_write_model_per_kind_of_change():
     """#1854: a command that writes with --apply is dry by default, asks before
     --apply writes and takes --yes/-y for that question, and takes no visible

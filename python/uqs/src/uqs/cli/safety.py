@@ -177,6 +177,17 @@ def ask(question: str, *, default: bool = False) -> bool:
         return False
 
 
+def json_needs_yes(as_json: bool, yes: bool, what: str) -> None:
+    """Refuse a command that would ask, under --json without --yes (#2229):
+    --json is one document on stdout and nothing interactive, so it never
+    prompts. A refusal, exit 1 - nothing was changed, as `ask` refuses with no
+    terminal - not a usage error. `what` ends "add --yes to ..."."""
+    if as_json and not yes:
+        raise UqsError(
+            f"--json cannot ask for confirmation: add --yes to {what}. Nothing was changed."
+        )
+
+
 def confirm(question: str, *, yes: bool) -> None:
     """Ask `question` unless `yes`; a no ends the command with EXIT_DECLINED,
     having changed nothing."""

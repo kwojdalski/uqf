@@ -151,13 +151,8 @@ def show_plan(handle: Handle, doc: dict[str, Any]) -> None:
 
 def confirm(handle: Handle, what: str, *, yes: bool, as_json: bool) -> None:
     """Ask once before the first write; without a terminal, --yes or nothing."""
-    if yes:
-        return
-    if as_json:
-        raise UqsUsageError(
-            "--json cannot ask for confirmation: add --yes to write. Nothing was written."
-        )
-    safety.confirm(f"{what} in {handle.hdb}?", yes=False)
+    safety.json_needs_yes(as_json, yes, "write")
+    safety.confirm(f"{what} in {handle.hdb}?", yes=yes)
 
 
 def apply_plan(

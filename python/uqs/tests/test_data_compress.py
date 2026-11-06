@@ -346,10 +346,16 @@ def test_apply_is_refused_before_anything_when_the_disk_is_short(cli, monkeypatc
     assert not history.exists()
 
 
-def test_json_cannot_ask(cli):
-    run, asked, _, _ = cli
-    done = run("--apply", "--json")
-    assert done.exit_code == 2, "a usage refusal: --json cannot ask, and --yes was not given"
+def test_json_cannot_ask(cli, terminal, monkeypatch):
+    """#2229: a refusal (exit 1), as every --json command without --yes is."""
+    _, asked, _, _ = cli
+    argv = ["data", "compress", "--apply", "--json"]
+    monkeypatch.setattr("sys.argv", ["uqs", *argv])  # json_requested reads it
+    done = CliRunner().invoke(app, argv, input="y\n")
+    assert done.exit_code == 1, done.output
+    doc = json.loads(done.stdout)
+    assert doc["ok"] is False
+    assert "--json cannot ask for confirmation: add --yes to compress" in doc["error"]
     assert not any("apply_partition" in a for a in asked)
 
 
