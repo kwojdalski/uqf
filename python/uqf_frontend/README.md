@@ -158,8 +158,12 @@ fields of its `deploy-report.json`, come back as `release`. A listing returns at
 most `limit` entries (500 by default, 5000 at most) and says when it was
 truncated; the call is held to 20 s.
 
-`POST /services/{target}/files/delete` removes named regular files and empty
-directories, never following a link or recursing (#1953). A deletion changes the
+`DELETE /services/{target}/files`, with the body
+`{"paths": [...], "confirmed": true}`, removes named regular files and empty
+directories, never following a link or recursing (#1953). A remote file is one
+resource whose method is the operation (#2248): `GET` lists, `PUT` writes and
+`DELETE` removes. The old `POST .../files/delete` and `PUT .../files/content`
+answer 410 `Gone` naming the route that replaced them. A deletion changes the
 server, so once ssh has started, a timeout, ssh exiting 255 (it may have dropped
 midway), a crashed helper or an answer that cannot be read is 504
 `DeleteOutcomeUncertain` with `transient: false`: some paths may be gone, and
@@ -189,14 +193,13 @@ the same connection details for whichever target you choose.
 
 ### Uploading to a target's shared/config --- one file per request
 
-`PUT /services/{target}/files/content?path=&overwrite=false&push_id=` writes the
-request body to `path` below the target's `shared/config/` - the
-operator-supplied files every release links in - and nowhere else (#1951). It is
-gated like browsing: writes on, the token, an allowed Host, a registered target.
-The browser's file browser shows an upload queue in `shared/config/` and below
-it. You can choose files or a folder, or drag them in. Nested paths are kept.
-Nothing is sent until you confirm the destination. Each file has its own
-progress and its own outcome.
+`PUT /services/{target}/files?path=&overwrite=false&push_id=` writes the request
+body to `path` below the target's `shared/config/` - the operator-supplied files
+every release links in - and nowhere else (#1951). It is gated like browsing:
+writes on, the token, an allowed Host, a registered target. The browser's file
+browser shows an upload queue in `shared/config/` and below it. You can choose
+files or a folder, or drag them in. Nested paths are kept. Nothing is sent until
+you confirm the destination. Each file has its own progress and its own outcome.
 
 - **Limits.** 16 MiB a file, checked in the browser, again by the API before ssh
   (`Content-Length`, then while the body is read: 413), and again on the server.
@@ -707,7 +710,7 @@ string).
   |                         |                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
   | ---                     | ---                                                                                                                                                                                                                                                                                                                                                                                                                                              |
   | `GET /activity`         | The history, newest first. Filters: `since`, `until` (timezone required), `session_id`, `request_id`, `action` (exact, or a dotted prefix: `process` matches `process.stop`), `target` (a deployment target, or `local`), `subject` (what was acted on there), `outcome`, `source`, `limit` (at most 1000). Says whether it is persistent and whether writes have failed                                                                         |
-  | `POST /activity/events` | Up to 100 browser events, in one transaction, and the count of any the browser did not send (`dropped`). A repeated `event_id` is ignored, so a retried batch is stored once. A body of at most 1 MiB (413). It needs no token; without one, events are rate-limited across all callers (600 at once, 20 a second after; 429, transient). A `ts` UTC cannot hold is a 422                                                                        |
+  | `POST /activity/events` | Up to 100 browser events, in one transaction, and the count of any the browser did not send (`drops`). A repeated `event_id` is ignored, so a retried batch is stored once. A body of at most 1 MiB (413). It needs no token; without one, events are rate-limited across all callers (600 at once, 20 a second after; 429, transient). A `ts` UTC cannot hold is a 422                                                                          |
   | `GET /activity/export`  | The history as a file, oldest first, under the same filters plus `format`: `jsonl`, `csv`, or `text` - a timeline `UTC time · session · level · action · target · subject · outcome · duration`, each browser action grouped under the server request it caused (its request id). At most 100000 events                                                                                                                                          |
 
 `GET /activity` also takes `level`, the most detailed level shown:
@@ -802,7 +805,7 @@ Its handler then reports what the status code cannot:
 ```python
 audit = activity.audit_of(request)
 audit.set_subject(name)  # written at once: survives a crash mid-action
-audit.note(file_name=name, size_bytes=size, sha256=digest)  # never the bytes
+audit.note(path=path, size=size, sha256=digest)  # never the bytes
 audit.begin()  # past here, a failure is `unknown`
 ...
 audit.item(name, "succeeded")  # one per file, for a batch

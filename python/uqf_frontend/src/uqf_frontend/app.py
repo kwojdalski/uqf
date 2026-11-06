@@ -351,25 +351,41 @@ ScopeOf = typing.Annotated[workspaces.Scope, Depends(scope_of)]
 _AUDIT_OUTCOME = {"cancelled": "refused", "invalid": "refused"}
 
 
-#: Routes renamed by #2230, as (method, old path, old template, new
-#: template): the old path answers 410 naming the new one. One-way - never a
-#: route that still works - so a client is told, not served twice.
-RENAMED_ROUTES: tuple[tuple[str, re.Pattern[str], str, str], ...] = (
-    ("POST", re.compile(r"/control/process/[^/]+"),
-     "/control/process/{action}", "/control/lifecycle/{action}"),
-    ("PUT", re.compile(r"/control/process/[^/]+/config"),
-     "/control/process/{process}/config", "/control/processes/{process}/config"),
-    ("PUT", re.compile(r"/control/worker-config"),
-     "/control/worker-config", "/control/worker/config"),
+class RenamedRoute(typing.NamedTuple):
+    """A route renamed or moved, whose old path answers 410 naming the new
+    one. One-way - never a route that still works - so a client is told, not
+    served twice. A move can change the method as well as the path (#2248)."""
+
+    method: str
+    old_path: re.Pattern[str]
+    old: str
+    new_method: str
+    new: str
+    issue: int
+
+
+#: Routes renamed by #2230 and moved by #2248.
+RENAMED_ROUTES: tuple[RenamedRoute, ...] = (
+    RenamedRoute("POST", re.compile(r"/control/process/[^/]+"),
+                 "/control/process/{action}", "POST", "/control/lifecycle/{action}", 2230),
+    RenamedRoute("PUT", re.compile(r"/control/process/[^/]+/config"),
+                 "/control/process/{process}/config",
+                 "PUT", "/control/processes/{process}/config", 2230),
+    RenamedRoute("PUT", re.compile(r"/control/worker-config"),
+                 "/control/worker-config", "PUT", "/control/worker/config", 2230),
+    RenamedRoute("POST", re.compile(r"/services/[^/]+/files/delete"),
+                 "/services/{target}/files/delete", "DELETE", "/services/{target}/files", 2248),
+    RenamedRoute("PUT", re.compile(r"/services/[^/]+/files/content"),
+                 "/services/{target}/files/content", "PUT", "/services/{target}/files", 2248),
 )  # fmt: skip
 
 
 def renamed_route(method: str, path: str) -> str | None:
     """Why `method path` is gone and where it went, or None when it never
     was a route (RENAMED_ROUTES)."""
-    for verb, old_path, old, new in RENAMED_ROUTES:
-        if method.upper() == verb and old_path.fullmatch(path):
-            return f"`{verb} {old}` is `{verb} {new}` (#2230)"
+    for r in RENAMED_ROUTES:
+        if method.upper() == r.method and r.old_path.fullmatch(path):
+            return f"`{r.method} {r.old}` is `{r.new_method} {r.new}` (#{r.issue})"
     return None
 
 
@@ -723,7 +739,8 @@ def create_app(
     async def _handle_http(request: Request, exc: StarletteHTTPException) -> JSONResponse:
         """Starlette's own refusals - 404 for no such route, 405 for a method
         the route does not take - named by their status (`NotFound`,
-        `MethodNotAllowed`), keeping the headers they carry (405's `Allow`)."""
+        `MethodNotAllowed`), keeping the headers they carry (405's `Allow`).
+        A route that was renamed or moved is 410 `Gone`, naming where it went."""
         if exc.status_code in (404, 405) and (
             moved := renamed_route(request.method, write_guard.route_path(request.scope))
         ):
@@ -1118,7 +1135,7 @@ def create_app(
                             runner=request.app.state.remote_runner)  # fmt: skip
         return TunnelCheckResponse(**doc)
 
-    @app.post("/services/{target}/files/delete", response_model=RemoteDeleteResponse)
+    @app.delete("/services/{target}/files", response_model=RemoteDeleteResponse)
     def delete_remote_files(
         request: Request, target: str, req: RemoteDeleteRequest
     ) -> RemoteDeleteResponse:
@@ -1126,7 +1143,7 @@ def create_app(
             raise WritesDisabled("remote deletion requires remote operations to be enabled")
         audit = activity.audit_of(request)
         audit.set_target(target)
-        audit.note(item_count=len(req.paths))
+        audit.note(file_count=len(req.paths))
         answer = remote_files.delete(
             settings,
             target,
@@ -1144,7 +1161,7 @@ def create_app(
         return RemoteDeleteResponse(target=target, dest=answer["dest"], results=answer["results"])
 
     @app.put(
-        "/services/{target}/files/content",
+        "/services/{target}/files",
         response_model=RemoteUploadResponse,
         dependencies=[Depends(_renamed_query(push="push_id"))],
     )
@@ -1190,8 +1207,8 @@ def create_app(
                 raise remote_files.UploadTooLarge(too_large)
         data = bytes(body)
         audit.note(
-            file_name=path,
-            size_bytes=len(data),
+            path=path,
+            size=len(data),
             sha256=hashlib.sha256(data).hexdigest(),
             mode="overwrite" if overwrite else "create",
         )
@@ -1422,8 +1439,8 @@ def create_app(
         here, each audited."""
         audit = activity.audit_of(request)
         audit.set_target(target)
-        audit.note(config_dir=req.config_dir, item_count=req.file_count,
-                   size_bytes=req.total_bytes)  # fmt: skip
+        audit.note(config_dir=req.config_dir, file_count=req.file_count,
+                   total_bytes=req.total_bytes)  # fmt: skip
         remote = _remote(target)
         audit.begin()
         answer = remote_files.open_push(
@@ -1467,8 +1484,8 @@ def create_app(
             audit.item(item["path"], outcome)
         published = [e for e in manifest["files"] if e["state"] != "failed"]
         audit.note(
-            config_dir=manifest["config_dir"], item_count=len(outcomes),
-            size_bytes=sum(e["size"] or 0 for e in published),
+            config_dir=manifest["config_dir"], file_count=len(outcomes),
+            total_bytes=sum(e["size"] or 0 for e in published),
         )  # fmt: skip
         audit.settle(
             "succeeded" if outcomes and all(o == "succeeded" for o in outcomes)
@@ -1556,7 +1573,7 @@ def create_app(
             raise
         for item in answer["results"]:
             audit.item(item["path"], item["outcome"])
-        audit.note(push_id=answer["push_id"], item_count=len(answer["results"]),
+        audit.note(push_id=answer["push_id"], file_count=len(answer["results"]),
                    pruned_count=len(answer["pruned"]))  # fmt: skip
         audit.settle(
             "succeeded" if all(i["outcome"] == "succeeded" for i in answer["results"])
@@ -1686,7 +1703,7 @@ def create_app(
                 "again in a few seconds"
             )
         claimed = audit_user(request)
-        dropped = sum(activity.clean_detail(event.detail)[1] for event in batch.events)
+        dropped_detail = sum(activity.clean_detail(event.detail)[1] for event in batch.events)
         stored, not_stored = history.add_many(
             {
                 "source": "browser",
@@ -1706,12 +1723,12 @@ def create_app(
             }
             for event in batch.events
         )
-        for lost in batch.dropped:
+        for lost in batch.drops:
             history.note_dropped(lost.level, lost.reason, lost.count)
         return ActivityBatchResponse(
             stored=stored,
             not_stored=not_stored,
-            dropped_detail=dropped,
+            dropped_detail=dropped_detail,
             persistent=history.persistence.persistent,
         )
 
@@ -1764,7 +1781,7 @@ def create_app(
                 last_error=state.last_error,
                 last_failure_at=state.last_failure_at,
             ),
-            default_level=typing.cast(Any, live().activity_level),
+            activity_level=typing.cast(Any, live().activity_level),
             bounds=[
                 ActivityBound(
                     level=typing.cast(Any, lvl),
@@ -1803,7 +1820,7 @@ def create_app(
             format,
             exported_at=now,
             filters=q.described(),
-            dropped=history.drops(),
+            drops=history.drops(),
         )
         name = f"uqf-activity-{now:%Y%m%dT%H%M%SZ}.{activity_log.EXTENSIONS[format]}"
         return Response(

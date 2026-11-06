@@ -152,9 +152,9 @@ def test_a_renamed_route_is_gone_and_names_its_new_path(method, old, new):
 
 def test_every_renamed_route_names_a_route_that_exists():
     paths = {(m, r.path) for r in _routes() for m in r.methods or ()}
-    for method, _pattern, _old, new in RENAMED_ROUTES:
-        assert (method, new) in paths
-        assert (method, new) in access.ROUTE_PERMISSIONS
+    for r in RENAMED_ROUTES:
+        assert (r.new_method, r.new) in paths
+        assert (r.new_method, r.new) in access.ROUTE_PERMISSIONS
 
 
 # --------------------------------------------- one word, one meaning (#2232)
@@ -285,7 +285,7 @@ CONFIRMED_ROUTES = {
         "config_dir": "shared/config", "file_count": 1, "total_bytes": 1,
     },
     ("post", "/services/prod/config/pushes/p1/restore"): {},
-    ("post", "/services/prod/files/delete"): {"paths": ["shared/config/x"]},
+    ("delete", "/services/prod/files"): {"paths": ["shared/config/x"]},
 }  # fmt: skip
 
 
@@ -329,7 +329,7 @@ def _writer(tmp_path) -> TestClient:
 def test_an_unconfirmed_destructive_request_is_refused(tmp_path, route, body, confirmed):
     method, path = route
     sent = body if confirmed is None else {**body, "confirmed": confirmed}
-    resp = getattr(_writer(tmp_path), method)(path, json=sent)
+    resp = _writer(tmp_path).request(method, path, json=sent)
     assert resp.status_code == 422, resp.text
     assert models.CONFIRMATION_REQUIRED in resp.json()["detail"]
 

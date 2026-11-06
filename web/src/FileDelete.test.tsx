@@ -56,8 +56,8 @@ it("reports partial success independently from a subsequent refresh failure", as
   ).toBeInTheDocument();
   expect(screen.getByText(/refreshing the listing failed/)).toBeInTheDocument();
   const [path, options] = fetcher.mock.calls[0];
-  expect(path).toBe("/services/box/files/delete");
-  expect(options.method).toBe("POST");
+  expect(path).toBe("/services/box/files");
+  expect(options.method).toBe("DELETE");
   expect(JSON.parse(options.body)).toEqual({
     paths: ["shared/a", "shared/b"],
     confirmed: true,

@@ -84,15 +84,16 @@ const DEBUG_PER_SECOND = 5;
 
 export type Transport = (
   events: BrowserEvent[],
-  dropped: BrowserDrop[],
+  lost: BrowserDrop[],
 ) => Promise<void>;
 
 /** POST the batch. A 422 is not retried: the same events would be refused again. */
-const httpTransport: Transport = async (events, dropped) => {
+const httpTransport: Transport = async (events, lost) => {
   const response = await fetch("/activity/events", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ events, dropped }),
+    // `drops`, as GET /activity names the same records (#2242).
+    body: JSON.stringify({ events, drops: lost }),
     // Lets the last batch out as the tab closes.
     keepalive: true,
   });
@@ -479,7 +480,7 @@ export function installActivity(target: Document = document): () => void {
           control === "checkbox" || control === "radio"
             ? input.checked
             : undefined,
-        item_count: control === "file" ? (input.files?.length ?? 0) : undefined,
+        file_count: control === "file" ? (input.files?.length ?? 0) : undefined,
       },
     });
   };

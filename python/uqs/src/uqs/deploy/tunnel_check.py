@@ -29,7 +29,9 @@ shows its last success beside a failure that came after it.
 Nothing secret is reported: the q password is never in the document, and any
 error text that could carry it is scrubbed (tunnel.scrub). The configured
 mapping (`configured`: what the plan says) is kept apart from what was proved
-(`reported_process`, `status`, `connected`).
+(`reported_process`, `category`, `connected`). An endpoint's `category` and
+`error` are the top level's names: None when it passed, else the first
+failing layer's category (a key of `categories`) and its text.
 """
 
 from __future__ import annotations
@@ -83,8 +85,10 @@ class EndpointCheck:
     local_endpoint: str
     remote_port: int
     local_port: int
-    status: str = "ok"
-    detail: str = ""
+    #: None when the endpoint passed, else the category of the first layer
+    #: that failed - a key of CATEGORIES, as the report's own `category`.
+    category: str | None = None
+    error: str | None = None
     layers: dict[str, str] = field(default_factory=lambda: dict.fromkeys(LAYERS, "skipped"))
     #: The planned local port already serves this very process.
     connected: bool = False
@@ -95,10 +99,10 @@ class EndpointCheck:
     gateway_servers: list[str] | None = None
     last_success: dict[str, Any] | None = None
 
-    def fail(self, layer: str, category: str, detail: str) -> None:
+    def fail(self, layer: str, category: str, error: str) -> None:
         self.layers[layer] = "failed"
-        if self.status == "ok":
-            self.status, self.detail = category, detail
+        if self.category is None:
+            self.category, self.error = category, error
 
 
 def _now() -> str:
@@ -191,7 +195,7 @@ def _local(e: EndpointCheck, listening: Callable[[int], bool], query: Query) -> 
     if answer == e.process:
         e.connected = True
         e.layers["local"] = "ok"
-    elif answer is None and e.status != "ok":
+    elif answer is None and e.category is not None:
         # a tunnel to a process that is down answers nothing either
         e.layers["local"] = "skipped"
     else:
@@ -239,12 +243,11 @@ def run(
                              timeout=QUERY_TIMEOUT)  # fmt: skip
 
     q = query or ask
+    r = control.remote_for(name, root)  # an unknown target is a refusal, not a finding
     report: dict[str, Any] = {
-        "ok": False, "target": name, "ssh": None, "release": None, "checked_at": _now(),
+        "ok": False, "target": name, "ssh": r.host, "release": None, "checked_at": _now(),
         "category": None, "error": None, "endpoints": [], "categories": CATEGORIES,
     }  # fmt: skip
-    r = control.remote_for(name, root)  # an unknown target is a refusal, not a finding
-    report["ssh"] = r.host
     try:
         report["release"] = control.current_release(r, runner)
     except UqsError as exc:
@@ -277,9 +280,9 @@ def run(
         for e in ends:
             e.fail("ssh", "ssh", scrub(str(exc)))
         open_ = {}
-    reachable = [e for e in ends if e.status == "ok" and open_.get(e.remote_port)]
+    reachable = [e for e in ends if e.category is None and open_.get(e.remote_port)]
     for e in ends:
-        if e.status == "ok" and not open_.get(e.remote_port):
+        if e.category is None and not open_.get(e.remote_port):
             e.fail("destination", "unreachable",
                    f"nothing on {r.name} listens on port {e.remote_port} - is {e.process} "
                    f"running? `uqs --target {r.name} status` shows")  # fmt: skip
@@ -301,11 +304,11 @@ def run(
             e.process: {"at": at, "reported_process": e.reported_process,
                         "remote_port": e.remote_port, "local_port": e.local_port,
                         "release": report["release"]}
-            for e in ends if e.status == "ok"
+            for e in ends if e.category is None
         })  # fmt: skip
     last = tunnel_plan.read_checks(root).get(r.name, {})
     for e in ends:
         e.last_success = last.get(e.process)
     report["endpoints"] = [asdict(e) for e in ends]
-    report["ok"] = all(e.status == "ok" for e in ends)
+    report["ok"] = all(e.category is None for e in ends)
     return report

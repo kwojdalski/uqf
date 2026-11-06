@@ -136,7 +136,7 @@ def test_the_plan_is_uqs_s_with_its_endpoints_and_launch_command(registry):
     rdb = plan["mappings"][2]
     assert rdb["production_endpoint"] == "box.example:6002"
     assert rdb["local_endpoint"] == "127.0.0.1:16002"
-    assert rdb["state"] == "unverified" and rdb["last_check"] is None
+    assert rdb["state"] == "unverified" and rdb["last_success"] is None
     assert plan["launch_command"].startswith("ssh ")
     assert "ops@box.example" in plan["launch_command"]
     assert all(call[0] == "ssh" for call in ssh.calls)  # only uqs's own ssh ran
@@ -192,7 +192,7 @@ def test_a_malformed_check_record_reads_as_unverified_not_a_500(registry, tmp_pa
     resp = _client(Ssh()).get("/services/box/tunnel")
     assert resp.status_code == 200, resp.text
     rdb = next(m for m in resp.json()["mappings"] if m["process"] == "rdb1")
-    assert (rdb["state"], rdb["last_check"]) == ("unverified", None)
+    assert (rdb["state"], rdb["last_success"]) == ("unverified", None)
 
 
 def test_a_recent_check_record_still_reads_as_verified(registry, tmp_path):
@@ -203,7 +203,7 @@ def test_a_recent_check_record_still_reads_as_verified(registry, tmp_path):
     resp = _client(Ssh()).get("/services/box/tunnel")
     assert resp.status_code == 200, resp.text
     rdb = next(m for m in resp.json()["mappings"] if m["process"] == "rdb1")
-    assert (rdb["state"], rdb["last_check"]) == ("verified", record)
+    assert (rdb["state"], rdb["last_success"]) == ("verified", record)
 
 
 def test_a_server_that_cannot_be_asked_is_a_discovery_failure(registry):
@@ -238,9 +238,9 @@ def test_the_check_reports_each_endpoint_and_feeds_the_plan_its_states(registry,
     assert resp.status_code == 200, resp.text
     report = resp.json()
     by = {e["process"]: e for e in report["endpoints"]}
-    assert (by["rdb1"]["status"], by["rdb1"]["reported_process"]) == ("ok", "rdb1")
+    assert (by["rdb1"]["category"], by["rdb1"]["reported_process"]) == (None, "rdb1")
     assert by["gateway1"]["gateway_servers"] == ["rdb"]
-    assert by["hdb1"]["status"] == "unreachable"  # healthy ones stay visible beside it
+    assert by["hdb1"]["category"] == "unreachable"  # healthy ones stay visible beside it
     assert report["ok"] is False and report["release"] == "r9"
     states = {
         m["process"]: m["state"] for m in client.get("/services/box/tunnel").json()["mappings"]
