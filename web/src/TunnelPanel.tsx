@@ -104,7 +104,7 @@ export function ConnectionRows({ mappings }: { mappings: TunnelMapping[] }) {
             <th>production</th>
             <th>local</th>
             <th>state</th>
-            <th>last checked</th>
+            <th>last success</th>
             <th>copy</th>
           </tr>
         </thead>
@@ -124,7 +124,7 @@ export function ConnectionRows({ mappings }: { mappings: TunnelMapping[] }) {
                   <StateBadge key={mark} value={mark} />
                 ))}
               </td>
-              <td>{mapping.last_check?.at ?? "never"}</td>
+              <td>{mapping.last_success?.at ?? "never"}</td>
               <td>
                 <CopyButton
                   activity="tunnel.copy-endpoint"
@@ -166,11 +166,11 @@ function CheckResult({ check }: { check: TunnelCheck }) {
           <thead>
             <tr>
               <th>process</th>
-              <th>status</th>
+              <th>category</th>
               <th>reported process</th>
               <th>layers</th>
               <th>last success</th>
-              <th>detail</th>
+              <th>error</th>
             </tr>
           </thead>
           <tbody>
@@ -178,7 +178,7 @@ function CheckResult({ check }: { check: TunnelCheck }) {
               <tr key={endpoint.process}>
                 <td>{endpoint.process}</td>
                 <td>
-                  <StateBadge value={endpoint.status} />
+                  <StateBadge value={endpoint.category ?? "ok"} />
                   {endpoint.connected && <StateBadge value="connected" />}
                 </td>
                 <td>{endpoint.reported_process ?? "-"}</td>
@@ -189,7 +189,7 @@ function CheckResult({ check }: { check: TunnelCheck }) {
                 </td>
                 <td>{endpoint.last_success?.at ?? "never"}</td>
                 <td>
-                  {endpoint.detail ||
+                  {endpoint.error ||
                     (endpoint.gateway_servers
                       ? `routes to ${endpoint.gateway_servers.join(", ")}`
                       : "")}

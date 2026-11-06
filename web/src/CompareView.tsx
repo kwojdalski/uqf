@@ -42,7 +42,7 @@ interface Form {
   filters: FilterDraft[];
   limit: string;
   sourceVersion: string;
-  partition: string;
+  slice: string;
 }
 type TextField = Exclude<keyof Form, "filters">;
 
@@ -76,7 +76,7 @@ const START: Form = {
   filters: [],
   limit: "1000",
   sourceVersion: "",
-  partition: "",
+  slice: "",
 };
 
 /** The body to send, or why the form cannot be sent. Only what the request
@@ -107,14 +107,12 @@ export function compareBody(form: Form): CompareBody {
     filters: form.filters.map(compareFilter),
     limit,
     source_version: sourceVersion,
-    // With a source version the slice is always said, and a blank partition
-    // is "" - the dataset has no partition dimension - as on the Coverage
-    // view (#2221). Without one, a partition is sent as typed, so the server
-    // refuses it rather than this form dropping it.
-    partition:
-      sourceVersion !== null
-        ? form.partition.trim()
-        : form.partition.trim() || null,
+    // With a source version the slice is always said, and a blank slice is
+    // "" - the dataset has no slice dimension - as on the Coverage view
+    // (#2221). Without one, a slice is sent as typed, so the server refuses
+    // it rather than this form dropping it.
+    slice:
+      sourceVersion !== null ? form.slice.trim() : form.slice.trim() || null,
   };
 }
 
@@ -367,11 +365,11 @@ export function CompareView() {
               placeholder="optional"
             />
             <Input
-              name="partition"
+              name="slice"
               label="Slice (coverage)"
-              value={form.partition}
-              onChange={set("partition")}
-              placeholder="blank: no partition dimension"
+              value={form.slice}
+              onChange={set("slice")}
+              placeholder="blank: no slice dimension"
             />
           </div>
           <div className="section-heading">
@@ -476,7 +474,7 @@ export function CompareView() {
               {doc.filters.length > 0 &&
                 ` · ${doc.filters.map((f) => `${f.column} ${f.op} ${JSON.stringify(f.value)}`).join(" and ")}`}
               {doc.source_version !== null &&
-                ` · coverage at ${doc.source_version}, ${doc.partition ? `partition ${doc.partition}` : "no partition dimension"}`}
+                ` · coverage at ${doc.source_version}, ${doc.slice ? `slice ${doc.slice}` : "no slice dimension"}`}
             </p>
           </section>
           {doc.tables.map((t) => (

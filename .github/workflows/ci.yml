@@ -32,11 +32,23 @@ on:
         default: false
   # release.yml runs these same checks before it builds an artifact (#872),
   # every one of them.
+  # Every checkout below names `inputs.ref` (#2200): empty on every other
+  # event, so actions/checkout takes the event's own revision; release.yml
+  # passes the tag's commit, so these check the revision it builds and not
+  # the dispatching branch's head. `checked_sha` says which one they checked.
   workflow_call:
     inputs:
       full:
         type: boolean
         default: true
+      ref:
+        description: "The commit to check out and check (empty: the event's own)"
+        type: string
+        default: ""
+    outputs:
+      checked_sha:
+        description: "The commit every job here checked out"
+        value: ${{ jobs.scope.outputs.sha }}
 
 permissions:
   contents: read
@@ -81,12 +93,26 @@ jobs:
       q: ${{ steps.scope.outputs.q }}
       frontend: ${{ steps.scope.outputs.frontend }}
       python: ${{ steps.scope.outputs.python }}
+      sha: ${{ steps.checked.outputs.sha }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          ref: ${{ inputs.ref }}
           # the merge base, for the pull request's three-dot diff
           fetch-depth: 0
           persist-credentials: false
+      - name: The revision checked out is the one asked for
+        id: checked
+        shell: bash
+        env:
+          WANTED: ${{ inputs.ref }}
+        run: |
+          sha=$(git rev-parse HEAD)
+          if [ -n "$WANTED" ] && [ "$sha" != "$(git rev-parse "$WANTED^{commit}")" ]; then
+            echo "::error::checked out $sha, but the caller asked for $WANTED"
+            exit 1
+          fi
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
       - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
         # The repository's Python: ci_scope.py reads q_readers from
         # scripts/dev/test_impact.py, written for 3.14.
@@ -118,7 +144,7 @@ jobs:
         env:
           EVENT: ${{ github.event_name }}
           BASE: ${{ github.event.pull_request.base.sha || 'origin/master' }}
-          HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha || inputs.ref || github.sha }}
           LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
           FULL: ${{ inputs.full }}
           # The pull-request mode switch (#2167): the repository variable
@@ -161,6 +187,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          ref: ${{ inputs.ref }}
           persist-credentials: false
       - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
         with:
@@ -297,6 +324,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          ref: ${{ inputs.ref }}
           persist-credentials: false
       - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
         with:
@@ -383,6 +411,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          ref: ${{ inputs.ref }}
           persist-credentials: false
       - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
         with:
@@ -491,6 +520,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          ref: ${{ inputs.ref }}
           persist-credentials: false
       - name: Install Quarto
         # The doc-links hook renders docs/ to resolve every link. Pinned for
@@ -590,6 +620,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          ref: ${{ inputs.ref }}
           persist-credentials: false
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
