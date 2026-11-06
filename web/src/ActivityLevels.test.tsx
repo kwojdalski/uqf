@@ -225,7 +225,7 @@ it("records a file input by how many files, never their names", async () => {
   uninstall();
   const events = await recorded();
   expect(events.map((e) => [e.action, e.subject, e.detail])).toEqual([
-    ["ui.change", "files.upload.files", { control: "file", item_count: 1 }],
+    ["ui.change", "files.upload.files", { control: "file", file_count: 1 }],
   ]);
   expect(JSON.stringify(events)).not.toContain("SECRET");
 });

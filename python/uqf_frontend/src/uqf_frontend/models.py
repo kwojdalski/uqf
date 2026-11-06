@@ -35,6 +35,25 @@ STRICT_REQUEST = ConfigDict(extra="forbid")
 #: `refuse_unconfirmed`, the one place it is made.
 CONFIRMATION_REQUIRED = "explicit confirmation is required - send confirmed: true"
 
+#: ONE NAME FOR THE COVERAGE SLICE (#2261). The slice of a dataset a coverage
+#: claim is recorded under - a symbol, say - is `slice` on every route, as it
+#: is `--slice` on `uqs data diff` and `uqs job new` (#2239). "Partition" in
+#: this API means only a date partition of the HDB. The ledger's q column is
+#: still `partition`: it is mapped at the q boundary (app._coverage and
+#: compare.run), not migrated on disk. A request still sending `partition` is
+#: refused with this text rather than read as a missing slice.
+PARTITION_IS_SLICE = (
+    '`partition` is now `slice`: the coverage slice, "" for a dataset with no slice '
+    "dimension - a partition in this API is only a date partition (#2261)"
+)
+
+
+def refuse_partition(data: Any) -> Any:
+    """A request body naming the coverage slice by its old name, refused."""
+    if isinstance(data, dict) and "partition" in data:
+        raise ValueError(PARTITION_IS_SLICE)
+    return data
+
 
 def refuse_unconfirmed(data: Any, *, required: bool = True) -> Any:
     """The confirmation rule, on a request body before it is parsed: refused
@@ -79,8 +98,8 @@ class CoverageRequirement(BaseModel):
     coverage consumers to filter on it - coverage under one source release
     says nothing about another.
 
-    ``partition`` is mandatory for the same reason and is NOT ``min_length=1``:
-    the empty string is the legitimate "this dataset has no partition
+    ``slice`` is mandatory for the same reason and is NOT ``min_length=1``:
+    the empty string is the legitimate "this dataset has no slice
     dimension" sentinel, which q records as the null symbol. Requiring the
     field while allowing it to be empty is the distinction that matters - the
     caller must say which slice they mean, and "the whole dataset" is one of
@@ -90,12 +109,17 @@ class CoverageRequirement(BaseModel):
     model_config = STRICT_REQUEST
 
     dataset: str = Field(min_length=1)
-    partition: str = Field(
-        description='the slice to check; "" for a dataset with no partition dimension'
+    slice: str = Field(
+        description='the coverage slice to check; "" for a dataset with no slice dimension'
     )
     source_version: str = Field(min_length=1)
     range_from: AwareInstant = Field(description="ISO-8601 with an explicit offset")
     range_to: AwareInstant = Field(description="ISO-8601 with an explicit offset, exclusive")
+
+    @model_validator(mode="before")
+    @classmethod
+    def _renamed(cls, data: Any) -> Any:
+        return refuse_partition(data)
 
 
 class QueryRequest(BaseModel):
@@ -512,7 +536,9 @@ class TunnelMappingOut(BaseModel):
         description="verified: a check in the last hour proved these ports; stale: proved "
         "longer ago or for other ports; unverified: never proved"
     )
-    last_check: TunnelCheckRecordOut | None
+    last_success: TunnelCheckRecordOut | None = Field(
+        description="the last check that proved this mapping; a failure never writes it"
+    )
     listening: bool = Field(
         description="something accepts on the local port now - a hint, not proof"
     )
@@ -539,8 +565,11 @@ class TunnelEndpointOut(BaseModel):
     local_endpoint: str
     remote_port: int
     local_port: int
-    status: str = Field(description="ok, or the category of the first layer that failed")
-    detail: str
+    category: str | None = Field(
+        description="None when it passed, else the first failing layer's category - a key of "
+        "`categories`, as the response's own `category`"
+    )
+    error: str | None = Field(description="what failed, when `category` is set")
     layers: dict[str, str] = Field(description="each layer: ok, failed or skipped")
     connected: bool = Field(description="the planned local port already serves this process")
     reported_process: str | None = Field(
@@ -557,7 +586,7 @@ class TunnelCheckResponse(BaseModel):
 
     ok: bool
     target: str
-    ssh: str | None
+    ssh: str
     release: str | None
     checked_at: AwareInstant
     category: str | None
@@ -603,7 +632,7 @@ class RemoteFilesResponse(BaseModel):
 
 
 class RemoteUploadResponse(BaseModel):
-    """PUT /services/{target}/files/content: one file written below the
+    """PUT /services/{target}/files: one file written below the
     target's shared/config, published in one atomic step (#1951)."""
 
     target: str
@@ -1191,7 +1220,16 @@ class ActivityBatchRequest(BaseModel):
     model_config = STRICT_REQUEST
 
     events: list[BrowserEventIn] = Field(default_factory=list, max_length=100)
-    dropped: list[BrowserDropIn] = Field(default_factory=list, max_length=16)
+    #: Events this browser did not send, by level and reason - the same
+    #: records GET /activity answers as `drops` (#2242).
+    drops: list[BrowserDropIn] = Field(default_factory=list, max_length=16)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _renamed(cls, data: Any) -> Any:
+        if isinstance(data, dict) and "dropped" in data:
+            raise ValueError("`dropped` is `drops`: the events this browser did not send (#2242)")
+        return data
 
 
 class ActivityBatchResponse(BaseModel):
@@ -1234,7 +1272,9 @@ class ActivityEventOut(BaseModel):
     duration_ms: float | None
     items: list[ActivityItem]
     detail: dict[str, Any]
-    dropped: int
+    #: `detail` keys dropped for being outside the allowlist or ill-formed,
+    #: named as the batch response names them (#2242).
+    dropped_detail: int
 
 
 class ActivityPersistence(BaseModel):
@@ -1272,8 +1312,9 @@ class ActivityResponse(BaseModel):
         description="more events matched than were returned: `limit` cut them (#2220)"
     )
     persistence: ActivityPersistence
-    #: The level a session records at unless its operator picks another.
-    default_level: SessionLevel
+    #: The level a session records at unless its operator picks another - the
+    #: `activity_level` setting, named as /health and /settings name it (#2240).
+    activity_level: SessionLevel
     bounds: list[ActivityBound]
     drops: list[ActivityDrop]
     poll_seconds: int
@@ -1515,11 +1556,17 @@ class CompareRequest(BaseModel):
         max_length=128,
         description="the release whose coverage to compare; null compares no coverage",
     )
-    partition: str | None = Field(
+    slice: str | None = Field(
         default=None,
         max_length=128,
-        description='required with source_version; "" for a dataset with no partition dimension',
+        description='the coverage slice, required with source_version; "" for a dataset '
+        "with no slice dimension",
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _renamed(cls, data: Any) -> Any:
+        return refuse_partition(data)
 
     @field_validator("filters", mode="before")
     @classmethod
@@ -1537,15 +1584,15 @@ class CompareRequest(BaseModel):
     @model_validator(mode="after")
     def _a_coverage_check_names_its_slice(self) -> CompareRequest:
         """/coverage's rule (#185, #2221): once coverage is asked for, the
-        slice is said - `""` is the explicit "no partition dimension" - and
-        never defaulted to the one nothing partitioned is recorded under."""
-        if self.source_version is not None and self.partition is None:
+        slice is said - `""` is the explicit "no slice dimension" - and
+        never defaulted to the one nothing sliced is recorded under."""
+        if self.source_version is not None and self.slice is None:
             raise ValueError(
-                'partition is required with source_version - give "" for a dataset '
-                "with no partition dimension"
+                'slice is required with source_version - give "" for a dataset '
+                "with no slice dimension"
             )
-        if self.partition is not None and self.source_version is None:
-            raise ValueError("partition reads coverage, which needs source_version")
+        if self.slice is not None and self.source_version is None:
+            raise ValueError("slice reads coverage, which needs source_version")
         return self
 
 
@@ -1605,5 +1652,7 @@ class CompareResponse(BaseModel):
     limit: int
     filters: list[Filter] = Field(description="the filters as they were sent")
     source_version: str | None = Field(description="null when no coverage was compared")
-    partition: str | None = Field(description="null when no coverage was compared")
+    slice: str | None = Field(
+        description="the coverage slice compared; null when no coverage was compared"
+    )
     tables: list[CompareTable]

@@ -138,3 +138,55 @@ def test_a_job_with_a_dead_subscription_is_reported_failing_at_its_next_beat(tmp
         )
     finally:
         st.teardown()
+
+
+def test_a_resubscription_that_fails_once_is_retried_and_delivers_once(tmp_path):
+    """The first resubscription throws; the retry tick runs the second (#2214)."""
+    base = int(os.environ.get("UQS_STACK_BASE_PORT") or pick_base_port())
+    st = IsolatedStack(tmp_path, base_port=base)
+    st.env.pop("UQS_RUNTIME", None)
+    st.env.pop("TORQAPPHOME", None)
+    try:
+        st.start("discovery1", "stp1")
+        run = st.uqs("start", "executions1", "--base-port", str(base))
+        assert run.returncode == 0, run.stdout + run.stderr
+        executions = base + 36
+        import kola
+
+        def q(expr):
+            conn = kola.Q("127.0.0.1", executions, user="admin", passwd="admin", timeout=15000)
+            try:
+                return conn.sync(expr)
+            finally:
+                conn.disconnect()
+
+        def received():
+            try:
+                return int(q("0^.qtorq.received`orders"))
+            except Exception:
+                return 0
+
+        _until(lambda: q("0<count select from .sub.SUBSCRIPTIONS where active"), 90, "subscribed")
+        # the plant is "not ready" for the first resubscription only
+        q(
+            "{.sub.orig:.sub.subscribe; .sub.calls:0; .sub.subscribe:{[t;i;s;r;p] "
+            '.sub.calls+:1; if[.sub.calls=1; \'"plant not ready"]; .sub.orig[t;i;s;r;p]}; 1b}[]'
+        )
+        st.q("stp1", ORDER, 1)
+        _until(lambda: received() == 1, 30, "order 1 received")
+        st.stop("stp1")
+        _until(
+            lambda: not q("all exec active from .sub.SUBSCRIPTIONS"), 30, "subscription inactive"
+        )
+        st.start("stp1")
+        st.q("stp1", ORDER, 2)  # the outage's message
+        # the beat says failing once the first resubscription has thrown
+        _until(lambda: int(q(".sub.calls")) >= 1, 90, "first resubscription attempted")
+        _until(lambda: q("all exec active from .sub.SUBSCRIPTIONS"), 150, "retried resubscription")
+        assert int(q(".sub.calls")) >= 2, "failed once, succeeded on a retry"
+        _until(lambda: received() == 2, 30, "order 2 replayed")
+        time.sleep(5)  # a duplicate would have arrived by now
+        assert received() == 2
+        assert int(q("count .qetl.job.stream.quarantined")) == 0
+    finally:
+        st.teardown()
