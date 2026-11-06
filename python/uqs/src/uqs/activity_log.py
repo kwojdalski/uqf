@@ -114,6 +114,14 @@ COLUMNS = (
 #: detail keys dropped, beside a batch's `drops` of whole events (#2242).
 RENAMED_COLUMNS = {"dropped": "dropped_detail"}
 
+#: `detail` keys an audit row used before #2246, which named an upload's and a
+#: push's facts other than their routes do. Rows recorded before it keep them:
+#: an export says so, rather than rewriting what was recorded.
+RENAMED_DETAIL_NOTE = (
+    "detail keys before #2246, kept as recorded: file_name is path, size_bytes is size "
+    "(one file) or total_bytes (a push), item_count is file_count"
+)
+
 
 def history_file(torqdata: Path) -> Path:
     """Where a stack keeps its activity history: beside the workers' status
@@ -370,6 +378,7 @@ def _text(
     if drops:
         lost = ", ".join(f"{d['level']} {d['reason']} {d['count']}" for d in drops)
         lines.append(f"# not in the history (counted, not shown): {lost}")
+    lines.append(f"# {RENAMED_DETAIL_NOTE}")
     groups: dict[str, list[Mapping[str, Any]]] = {}
     for row in rows:
         if row.get("request_id"):

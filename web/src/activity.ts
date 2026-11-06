@@ -479,7 +479,7 @@ export function installActivity(target: Document = document): () => void {
           control === "checkbox" || control === "radio"
             ? input.checked
             : undefined,
-        item_count: control === "file" ? (input.files?.length ?? 0) : undefined,
+        file_count: control === "file" ? (input.files?.length ?? 0) : undefined,
       },
     });
   };

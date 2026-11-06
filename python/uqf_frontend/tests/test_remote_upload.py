@@ -487,8 +487,8 @@ def test_an_upload_is_audited_with_metadata_and_never_its_bytes(served, tmp_path
     assert row["target"] == "box"
     assert row["outcome"] == "succeeded"
     assert row["detail"] == {
-        "file_name": "shared/config/x.csv",
-        "size_bytes": len(SECRET),
+        "path": "shared/config/x.csv",
+        "size": len(SECRET),
         "sha256": hashlib.sha256(SECRET).hexdigest(),
         "mode": "create",
         "push_id": resp.json()["push_id"],

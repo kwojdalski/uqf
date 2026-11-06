@@ -253,12 +253,22 @@ DETAIL_KEYS: dict[str, Callable[[object], bool]] = {
     "shadowed": _is_bool,
     "saved": _is_bool,
     "reason": _is_name,
-    # uploads (#1951) and deletions (#1953): metadata about a file, never its bytes
-    "file_name": _is_name,
-    "size_bytes": _is_count,
+    # uploads (#1951), deletions (#1953) and pushes (#2002): metadata about a
+    # file, never its bytes - named as the route's own request and response
+    # name them (#2246). `path` is the whole relative path, `size` one file's
+    # bytes, `total_bytes` a whole push's, and `file_count` how many files any
+    # of these touched. Rows recorded before #2246 keep `file_name`,
+    # `size_bytes` and `item_count`.
+    "path": _is_name,
+    "size": _is_count,
+    "total_bytes": _is_count,
+    "file_count": _is_count,
     "sha256": _is_hex,
     "content_type": _is_name,
-    "item_count": _is_count,
+    # `uqs compress apply` (#2148): the partitions compressed and the bytes
+    # saved, as its report names them
+    "partition_count": _is_count,
+    "bytes_saved": _is_count,
     # config pushes (#2002): the push a file belongs to, the hash of what it
     # replaced (None on create), the push a restore undoes, the directory
     # pushed to (config_dir), and how many old pushes retention pruned - never content

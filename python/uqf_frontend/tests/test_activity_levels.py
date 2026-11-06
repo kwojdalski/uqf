@@ -206,7 +206,21 @@ def test_off_still_audits_a_write(tmp_path, monkeypatch):
     [("submit", "process.config"), ("interact", "ui.change"), ("debug", "request.finish")],
 )
 @pytest.mark.parametrize(
-    "key", ["value", "token", "authorization", "text", "content", "query", "body", "path"]
+    "key",
+    # `file_name`, `size_bytes` and `item_count` were renamed (#2246): the old
+    # keys are no longer kept either
+    [
+        "value",
+        "token",
+        "authorization",
+        "text",
+        "content",
+        "query",
+        "body",
+        "file_name",
+        "size_bytes",
+        "item_count",
+    ],  # fmt: skip
 )
 def test_a_detail_key_outside_the_allowlist_is_dropped_at_every_level(tmp_path, kind, action, key):
     c = _client(tmp_path)

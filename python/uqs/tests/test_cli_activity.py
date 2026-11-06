@@ -149,8 +149,9 @@ def test_the_text_export_groups_the_stop_under_its_request(history):
     text = _run("activity", "export", "--db", str(db), "--request", RID)
     lines = text.splitlines()
     assert lines[3] == "# not in the history (counted, not shown): debug sampled 5"
-    assert lines[4] == f"request {RID[:8]} · process.stop · refused"
-    assert [line.split(" · ")[3] for line in lines[5:]] == [
+    assert lines[4] == f"# {activity_log.RENAMED_DETAIL_NOTE}"
+    assert lines[5] == f"request {RID[:8]} · process.stop · refused"
+    assert [line.split(" · ")[3] for line in lines[6:]] == [
         "browser submit process.stop",
         "browser confirm process.stop",
         "server POST process.stop",

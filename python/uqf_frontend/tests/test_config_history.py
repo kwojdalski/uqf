@@ -139,7 +139,7 @@ def test_a_push_has_one_id_on_every_row_and_a_summary(served, tmp_path):
     rows = _by_action(c)
     (opened,) = rows["config.push.open"]
     assert opened["detail"]["push_id"] == push and opened["outcome"] == "succeeded"
-    uploads = {r["detail"]["file_name"]: r for r in rows["files.upload"]}
+    uploads = {r["detail"]["path"]: r for r in rows["files.upload"]}
     assert {r["detail"]["push_id"] for r in uploads.values()} == {push}
     assert uploads["shared/config/app.env"]["detail"]["previous_sha256"] == (
         hashlib.sha256(OLD_SECRET).hexdigest()
@@ -148,8 +148,8 @@ def test_a_push_has_one_id_on_every_row_and_a_summary(served, tmp_path):
     (summary,) = rows["config.push"]
     assert summary["target"] == "box" and summary["outcome"] == "succeeded"
     assert summary["detail"] == {
-        "push_id": push, "config_dir": "shared/config", "item_count": 2,
-        "size_bytes": len(NEW_SECRET) + 4,
+        "push_id": push, "config_dir": "shared/config", "file_count": 2,
+        "total_bytes": len(NEW_SECRET) + 4,
         # the x-uqf-user header is a claim, and the row says so (#2045)
         "identity": "claimed",
     }  # fmt: skip

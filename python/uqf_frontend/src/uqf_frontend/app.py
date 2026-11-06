@@ -1086,7 +1086,7 @@ def create_app(
             raise WritesDisabled("remote deletion requires remote operations to be enabled")
         audit = activity.audit_of(request)
         audit.set_target(target)
-        audit.note(item_count=len(req.paths))
+        audit.note(file_count=len(req.paths))
         answer = remote_files.delete(
             settings,
             target,
@@ -1151,8 +1151,8 @@ def create_app(
                 raise remote_files.UploadTooLarge(too_large)
         data = bytes(body)
         audit.note(
-            file_name=path,
-            size_bytes=len(data),
+            path=path,
+            size=len(data),
             sha256=hashlib.sha256(data).hexdigest(),
             mode="overwrite" if overwrite else "create",
         )
@@ -1361,8 +1361,8 @@ def create_app(
         here, each audited."""
         audit = activity.audit_of(request)
         audit.set_target(target)
-        audit.note(config_dir=req.config_dir, item_count=req.file_count,
-                   size_bytes=req.total_bytes)  # fmt: skip
+        audit.note(config_dir=req.config_dir, file_count=req.file_count,
+                   total_bytes=req.total_bytes)  # fmt: skip
         remote = _remote(target)
         audit.begin()
         answer = remote_files.open_push(
@@ -1406,8 +1406,8 @@ def create_app(
             audit.item(item["path"], outcome)
         published = [e for e in manifest["files"] if e["state"] != "failed"]
         audit.note(
-            config_dir=manifest["config_dir"], item_count=len(outcomes),
-            size_bytes=sum(e["size"] or 0 for e in published),
+            config_dir=manifest["config_dir"], file_count=len(outcomes),
+            total_bytes=sum(e["size"] or 0 for e in published),
         )  # fmt: skip
         audit.settle(
             "succeeded" if outcomes and all(o == "succeeded" for o in outcomes)
@@ -1497,7 +1497,7 @@ def create_app(
             raise
         for item in answer["results"]:
             audit.item(item["path"], item["outcome"])
-        audit.note(push_id=answer["push_id"], item_count=len(answer["results"]),
+        audit.note(push_id=answer["push_id"], file_count=len(answer["results"]),
                    pruned_count=len(answer["pruned"]))  # fmt: skip
         audit.settle(
             "succeeded" if all(i["outcome"] == "succeeded" for i in answer["results"])

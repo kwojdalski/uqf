@@ -749,7 +749,7 @@ Its handler then reports what the status code cannot:
 ```python
 audit = activity.audit_of(request)
 audit.set_target(name)  # written at once: survives a crash mid-action
-audit.note(file_name=name, size_bytes=size, sha256=digest)  # never the bytes
+audit.note(path=path, size=size, sha256=digest)  # never the bytes
 audit.begin()  # past here, a failure is `unknown`
 ...
 audit.item(name, "succeeded")  # one per file, for a batch
