@@ -36,7 +36,7 @@ from uqf_frontend import app as app_module
 from uqf_frontend.app import RENAMED_ROUTES, create_app
 from uqf_frontend.config import Settings
 from uqf_frontend.gateway import FakeGateway
-from uqs import activity_log
+from uqs import activity_export, activity_log
 from uqs.cli import json_out
 from uqs.deploy import tunnel_check, tunnel_plan
 
@@ -412,7 +412,7 @@ def test_files_are_counted_one_way_and_the_old_audit_keys_are_gone():
 
 
 def test_the_text_export_names_the_old_audit_keys_rather_than_mapping_them():
-    text = activity_log.render([], "text", exported_at=dt.datetime(2026, 1, 1, tzinfo=dt.UTC))
+    text = activity_export.render([], "text", exported_at=dt.datetime(2026, 1, 1, tzinfo=dt.UTC))
     for old, new in _RENAMED_AUDIT_KEYS.items():
         assert f"{old} is {new}" in text
 

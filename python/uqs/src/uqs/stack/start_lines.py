@@ -27,10 +27,11 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 from uqs.interpreter import q_command
-from uqs.paths import UqsPaths, check_prerequisites
+from uqs.paths import UqsPaths
 from uqs.stack import attach_state, attached_publisher, deployment
 from uqs.stack.env import build_env, interpreter_env, with_interpreter
 from uqs.stack.launcher import torq_launcher
+from uqs.stack.prerequisites import check_prerequisites
 from uqs.stack.procs import effective_process_rows
 
 #: torq.sh startline's `params`: the process.csv columns each line carries as `-name value`.

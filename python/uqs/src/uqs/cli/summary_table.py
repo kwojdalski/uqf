@@ -17,7 +17,8 @@ from rich.table import Table
 from rich.text import Text
 
 from uqs.cli.json_out import snake, timestamp
-from uqs.cli.shared import _lines, _paths, _sorted_items, log
+from uqs.cli.shared import _lines, _paths, log
+from uqs.cli.sorting import _sorted_items
 from uqs.cli.summary_graph import attach_graph_columns
 from uqs.paths import UqsError
 from uqs.stack import listing, probe, runtime, stream_health

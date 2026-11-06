@@ -10,7 +10,7 @@ processes that are up rather than from the configuration that describes them.
 
 WHY THE RUNNING PROCESS AND NOT THE CONFIG. The two disagree, and the
 disagreement is silent. This tree's data directory moved from
-`scripts/output/uqf-stack` to `output/uqs` (paths._FORMER_DATA_DIRS), so a
+`scripts/output/uqf-stack` to `output/uqs` (prerequisites._FORMER_DATA_DIRS), so a
 plant started before the move still writes its log under the old path while
 every config-derived answer names the new one. A replay aimed by config would
 have found a log directory, replayed it without complaint, and written down a

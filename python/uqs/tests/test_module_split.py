@@ -125,6 +125,8 @@ def test_every_exempt_module_still_exists_and_is_still_over():
 #: every layer's listings produce and the CLI prints, so it imports nothing.
 #: `activity_log` (#2000) reads the frontend's activity history for the API and
 #: `uqs activity` alike; uqf_frontend imports it, so it imports nothing either.
+#: `activity_export` writes what it reads out as a file, for the same two, so it
+#: imports `activity_log` and nothing else.
 #: `duration` (#2121) is the one grammar of a span of time, which the CLI, the
 #: scaffolder, the deploy target file and `timerange` all read, so it imports
 #: nothing.
@@ -133,6 +135,7 @@ def test_every_exempt_module_still_exists_and_is_still_over():
 LEAVES = {
     "duration",
     "activity_log",
+    "activity_export",
     "cells",
     "paths",
     "logger",
@@ -206,6 +209,9 @@ def test_the_leaves_stay_leaves():
     source = (PKG / "src" / "uqs" / "timerange.py").read_text()
     reached = {m.group(1) or m.group(2) for m in _IMPORT.finditer(source)}
     assert reached <= {"paths", "timefmt", "duration"}, reached
+    source = (PKG / "src" / "uqs" / "activity_export.py").read_text()
+    reached = {m.group(1) or m.group(2) for m in _IMPORT.finditer(source)}
+    assert reached <= {"activity_log"}, reached
     leaves = (
         "runtimes.py",
         "timefmt.py",
