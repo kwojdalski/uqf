@@ -486,6 +486,26 @@ def test_a_file_from_before_levels_opens_and_its_rows_are_actions(tmp_path):
     assert row["level"] == "actions"
 
 
+def test_a_row_kept_before_2236_says_how_its_user_was_known_as_identity_source(tmp_path):
+    """The history is persisted, so the renamed detail key is rewritten in
+    the rows already kept - once, by the file's user_version - and never
+    read under both names."""
+    path = tmp_path / "a.sqlite3"
+    ActivityStore(path, bounds=_bounds()).close()
+    with sqlite3.connect(path) as db:
+        db.execute("PRAGMA user_version = 0")
+        stamp = activity_log.stamp(dt.datetime.now(dt.UTC))
+        db.execute(
+            "INSERT INTO activity (event_id, ts, recorded_at, source, kind, action, detail) "
+            "VALUES ('old-event-1', ?, ?, 'server', 'request', 'process.stop', ?)",
+            (stamp, stamp, '{"identity": "claimed", "exit_code": 0}'),
+        )
+    (row,) = ActivityStore(path, bounds=_bounds()).query(Query())
+    assert row["detail"] == {"identity_source": "claimed", "exit_code": 0}
+    with sqlite3.connect(path) as db:
+        assert db.execute("PRAGMA user_version").fetchone()[0] >= 1
+
+
 def test_storage_stops_growing_at_interactions(tmp_path):
     """A day of clicking, at the interactions cap: the row count is held to
     the cap plus one prune interval, and the file to the pages that many

@@ -151,7 +151,7 @@ def test_a_push_has_one_id_on_every_row_and_a_summary(served, tmp_path):
         "push_id": push, "config_dir": "shared/config", "item_count": 2,
         "size_bytes": len(NEW_SECRET) + 4,
         # the x-uqf-user header is a claim, and the row says so (#2045)
-        "identity": "claimed",
+        "identity_source": "claimed",
     }  # fmt: skip
     assert summary["items"] == [
         {"target": "shared/config/app.env", "outcome": "succeeded"},

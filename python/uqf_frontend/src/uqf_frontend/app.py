@@ -174,14 +174,14 @@ def identity_of(request: Request) -> identity.Identity:
 def audit_user(request: Request) -> str | None:
     """The user an activity row names: the verified user when there is one,
     else the x-uqf-user CLAIM as before (authz.IDENTITY_HEADER) - which the
-    row's `identity` detail says it is."""
+    row's `identity_source` detail says it is."""
     who = identity_of(request)
     if who.authenticated:
         return who.user
     return request.headers.get(authz.IDENTITY_HEADER)
 
 
-def identity_kind(request: Request) -> str:
+def identity_source(request: Request) -> str:
     """`verified`, `claimed` or `anonymous` - what `audit_user` is."""
     if identity_of(request).authenticated:
         return "verified"
@@ -219,7 +219,7 @@ def _refuse(
             claimed_user=audit_user(request),
             method=request.method.upper(),
             status_code=403,
-            detail={"permission": permission, "identity": identity_kind(request)},
+            detail={"permission": permission, "identity_source": identity_source(request)},
         )
     raise error(reason)
 
@@ -606,8 +606,8 @@ def create_app(
         audit.store, audit.event_id = history, event_id
         # Whose name claimed_user is: `verified` or `claimed`; absent, the
         # caller was anonymous and named nobody.
-        if (kind := identity_kind(request)) != "anonymous":
-            audit.note(identity=kind)
+        if (source := identity_source(request)) != "anonymous":
+            audit.note(identity_source=source)
         try:
             response = await call_next(request)
         except Exception:
@@ -729,7 +729,7 @@ def create_app(
         # show: a caller who may not read it learns neither here.
         sees_targets = ("services", "read") in granted
         return CapabilitiesResponse(
-            identity=who.user,
+            user=who.user,
             authenticated=who.authenticated,
             groups=policies.groups(who),
             capabilities=[

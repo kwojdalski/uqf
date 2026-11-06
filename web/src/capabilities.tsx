@@ -24,7 +24,7 @@ export const VIEW_FEATURE: Readonly<Record<string, string>> = {
 export interface Access {
   /** True once the server has said what this caller may do. */
   known: boolean;
-  identity: string | null;
+  user: string | null;
   authenticated: boolean;
   groups: readonly string[];
   /** Whether the server's policy grants `feature:action`. */
@@ -42,7 +42,7 @@ export interface Access {
  *  whether or not the button was on screen. */
 const UNKNOWN: Access = {
   known: false,
-  identity: null,
+  user: null,
   authenticated: false,
   groups: [],
   can: () => true,
@@ -59,7 +59,7 @@ function fromServer(data: Capabilities | undefined): Access {
     granted.has(`${feature}:${action}`);
   return {
     known: true,
-    identity: data.identity,
+    user: data.user,
     authenticated: data.authenticated,
     groups: data.groups,
     can,

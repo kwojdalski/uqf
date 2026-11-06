@@ -695,9 +695,11 @@ message, which can quote the input back. `test_activity.py` searches the
 database for the write token and for typed values.
 
 **Identity.** `claimed_user` is the user a trusted proxy named, when one did
-(see the access policy below), and a server row's `identity` detail says
+(see the access policy below), and a server row's `identity_source` detail says
 `verified`. Otherwise it is the `x-uqf-user` header as sent --- a label anyone
-can set, stored with `identity: claimed` and never read as who called.
+can set, stored with `identity_source: claimed` and never read as who called. A
+history file kept before `identity_source` had that name is rewritten once when
+the API opens it.
 
 **Storage and retention.** SQLite, from the standard library: the filters need
 an index rather than a scan of every line, and retention needs a `DELETE` rather
@@ -795,9 +797,9 @@ The packaged default is `p, *, *, *`. A named policy file is read strictly and
 re-read when it changes, without a restart; an edit that does not parse is
 logged and the last good policy stays in force.
 
-**`GET /me/capabilities`** answers with the caller's identity, groups and
-granted features. The browser shows only the views the caller may read and
-disables what they may not change, through one context
+**`GET /me/capabilities`** answers with the caller's `user` (or `anonymous`),
+groups and granted features. The browser shows only the views the caller may
+read and disables what they may not change, through one context
 (`web/src/capabilities.tsx`). That is presentation: the server refuses whatever
 the policy does not grant, whether or not the button was on screen.
 

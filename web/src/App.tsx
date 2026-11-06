@@ -1886,7 +1886,7 @@ function Workspace() {
           </nav>
           <p className="sidebar-note">
             {access.authenticated
-              ? `Signed in as ${access.identity}`
+              ? `Signed in as ${access.user}`
               : "Local session"}
             <br />
             {access.inspection?.active

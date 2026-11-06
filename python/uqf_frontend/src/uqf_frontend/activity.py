@@ -31,7 +31,7 @@ allowlist is dropped and counted, never stored. The claimed user is the
 x-uqf-user header - CLAIMED, not authenticated (authz.IDENTITY_HEADER) - and
 is stored and shown under that name; when a trusted proxy names the user
 (identity.py, #2045) that verified user is stored instead, and a server row's
-`identity` detail says which it is: `verified`, `claimed` or `anonymous`.
+`identity_source` detail says which it is: `verified`, `claimed` or `anonymous`.
 
 UNCERTAIN OUTCOMES ARE A STATE, NOT A GUESS. A server row starts `pending`
 and is settled when the response is known. A request that had begun to act
@@ -278,9 +278,9 @@ DETAIL_KEYS: dict[str, Callable[[object], bool]] = {
     "attempt": _is_count,
     # access (#2045): the `feature:action` a refusal was for, and whether the
     # row's user is `verified` by a trusted proxy, `claimed` by x-uqf-user, or
-    # `anonymous`
+    # `anonymous` - how the user was established, never who (#2236)
     "permission": _is_name,
-    "identity": _is_name,
+    "identity_source": _is_name,
     # settings changes (#2046): the before/after diff, one line per rule or
     # setting, and how many lines there were in all
     "changes": _is_changes,
@@ -540,6 +540,35 @@ def bucket_cap(bucket: str, bound: Bound) -> int:
 _LEVEL_COLUMN = "ALTER TABLE activity ADD COLUMN level TEXT NOT NULL DEFAULT 'actions'"
 _LEVEL_INDEX = "CREATE INDEX IF NOT EXISTS activity_level ON activity (level, seq)"
 
+#: One-way rewrites of rows an earlier release stored, in order: the file's
+#: `PRAGMA user_version` is how many it has had. The history is persisted
+#: data, so a renamed word is rewritten in the rows already kept, once, and
+#: never read under both spellings.
+_MIGRATIONS: tuple[tuple[str, ...], ...] = (
+    # 1 (#2236): a row's detail said how its user was established under
+    # `identity`, which elsewhere is a user or an answering process.
+    (
+        "UPDATE activity SET detail = json_remove(json_set(detail, '$.identity_source', "
+        "json_extract(detail, '$.identity')), '$.identity') "
+        "WHERE json_type(detail, '$.identity') IS NOT NULL",
+    ),
+)
+
+
+def _migrate(db: sqlite3.Connection) -> None:
+    """Bring a history file up to _MIGRATIONS, each step in one transaction."""
+    (version,) = db.execute("PRAGMA user_version").fetchone()
+    for step, statements in enumerate(_MIGRATIONS[version:], start=version + 1):
+        db.execute("BEGIN")
+        try:
+            for sql in statements:
+                db.execute(sql)
+            db.execute(f"PRAGMA user_version = {step}")
+            db.execute("COMMIT")
+        except sqlite3.Error:
+            db.execute("ROLLBACK")
+            raise
+
 
 class ActivityStore:
     """The history, in SQLite. Thread-safe: sync routes run in a pool.
@@ -587,6 +616,7 @@ class ActivityStore:
             if "level" not in columns:
                 self._db.execute(_LEVEL_COLUMN)
             self._db.execute(_LEVEL_INDEX)
+            _migrate(self._db)
         except (sqlite3.Error, OSError) as exc:
             raise ValueError(
                 f"activity history cannot be kept at {path}: {exc} - set "

@@ -14,13 +14,13 @@ const NO_INSPECTION: Inspection = {
 };
 
 function capabilities(
-  identity: string,
+  user: string,
   groups: string[],
   granted: [string, "read" | "write"][],
   inspection: Inspection = NO_INSPECTION,
 ): Capabilities {
   return {
-    identity,
+    user,
     authenticated: true,
     groups,
     capabilities: granted.map(([feature, action]) => ({ feature, action })),

@@ -188,8 +188,9 @@ class CapabilitiesResponse(BaseModel):
     proxy vouches, and what the access policy lets them do. The browser hides
     or disables what is not here; the server refuses it either way."""
 
-    #: The verified user, or `anonymous`.
-    identity: str
+    #: The verified user, or `anonymous` - `claimed_user`'s and Casbin's
+    #: subject, so `user` (#2236).
+    user: str
     #: True only when a trusted proxy named the user.
     authenticated: bool
     #: The proxy's groups for the user, then the policy's.
@@ -449,7 +450,7 @@ class TunnelCheckRecordOut(BaseModel):
     """A mapping's last successful check, as `uqs target tunnel check` recorded it."""
 
     at: AwareInstant
-    identity: str | None = None
+    reported_process: str | None = None
     remote_port: int | None = None
     local_port: int | None = None
     release: str | None = None
@@ -503,7 +504,10 @@ class TunnelEndpointOut(BaseModel):
     detail: str
     layers: dict[str, str] = Field(description="each layer: ok, failed or skipped")
     connected: bool = Field(description="the planned local port already serves this process")
-    identity: str | None = Field(description="what the process answered as, when it answered")
+    reported_process: str | None = Field(
+        description="the process the port answered as, when it answered - "
+        "ProcessHealthOut.reported_process's name for the same fact (#2236)"
+    )
     gateway_servers: list[str] | None
     last_success: TunnelCheckRecordOut | None
 

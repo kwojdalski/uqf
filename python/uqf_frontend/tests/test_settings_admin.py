@@ -183,7 +183,7 @@ def test_a_change_takes_effect_at_once_and_is_audited_as_a_diff(tmp_path):
         {"field": "grant", "before": None, "after": "p, viewers, usage, read"}
     ]
     assert row["detail"]["change_count"] == 1
-    assert row["detail"]["identity"] == "verified"
+    assert row["detail"]["identity_source"] == "verified"
 
 
 def test_a_removal_is_audited_with_its_before(tmp_path):

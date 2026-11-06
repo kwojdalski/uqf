@@ -178,3 +178,23 @@ def test_a_process_row_reports_its_type_once():
         "reported_port", "reported_process", "error", "identity_mismatch", "port_unresolved",
     }  # fmt: skip
     assert "proctypes" in models.FleetHealthResponse.model_fields
+
+
+# ----------------------------------------------- `identity` is no field (#2236)
+
+
+def test_no_model_has_a_field_called_identity():
+    """It meant the caller's user, the process a port answered as, and how
+    the user was established. Those are `user`, `reported_process` and the
+    audit detail's `identity_source` now."""
+    assert _fields_named("identity") == set()
+    assert ("CapabilitiesResponse", "user") in _fields_named("user")
+    answering = {"TunnelEndpointOut", "ProcessHealthOut", "TunnelCheckRecordOut"}
+    assert {(m, "reported_process") for m in answering} <= _fields_named("reported_process")
+
+
+def test_the_audit_says_how_its_user_was_established_as_identity_source():
+    from uqf_frontend import activity
+
+    assert "identity_source" in activity.DETAIL_KEYS
+    assert "identity" not in activity.DETAIL_KEYS

@@ -214,7 +214,7 @@ export interface Capability {
  *  vouches, and what the server's access policy lets them do. The browser
  *  hides what is not here; the server refuses it either way. */
 export interface Capabilities extends Pollable {
-  identity: string;
+  user: string;
   authenticated: boolean;
   groups: string[];
   capabilities: Capability[];
@@ -419,7 +419,7 @@ export function remoteFilesPath(target: string, path: string): string {
  * recorded it - models.TunnelCheckRecordOut. */
 export interface TunnelCheckRecord {
   at: string;
-  identity: string | null;
+  reported_process: string | null;
   remote_port: number | null;
   local_port: number | null;
   release: string | null;
@@ -463,7 +463,7 @@ export interface TunnelEndpoint {
   detail: string;
   layers: Record<string, string>;
   connected: boolean;
-  identity: string | null;
+  reported_process: string | null;
   gateway_servers: string[] | null;
   last_success: TunnelCheckRecord | null;
 }
