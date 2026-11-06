@@ -250,8 +250,8 @@ is deliberately not.
 or changes one, stop the stack and migrate each affected date/table explicitly:
 
 ```
-uqs data migrate trade 2026-01-01 --rename old_price:price --cast price
-uqs data migrate trade 2026-01-01 --rename old_price:price --cast price --apply
+uqs data migrate trade --date 2026-01-01 --rename old_price:price --cast price
+uqs data migrate trade --date 2026-01-01 --rename old_price:price --cast price --apply
 uqs data check
 uqs restart hdb1
 ```
@@ -509,14 +509,14 @@ backfill wrote that its readers have not been released to see
 
 `--table` (repeatable) and `--older-than` (a DURATION in whole days, on top of
 the policy's own minimum age) narrow a run. **Named days** - `--date D`,
-`--from`/`--to` (half-open: `--to`'s day is not in) or `--last` - compress the
-partitions in them on demand, the policy's minimum age set aside; the plan says
-so for each ("compressing it although the policy's minage is 7"). `--algo`,
-`--blocksize` and `--gzip-level` change one run's algorithm, block size or gzip
-level. Every one of these selects or sets rows of `.cmp`'s own plan table
-(`.cmp.showcomp`), which `.cmp.compressfromtable` then compresses, so the plan
-shown and the run are the same rows; a one-off setting is checked by
-`.cmp.checkcsv` first.
+`--from`/`--to` (half-open: `--to`'s day is not in; whole days only) or `--last`
+(whole days before today) - compress the partitions in them on demand, the
+policy's minimum age set aside; the plan says so for each ("compressing it
+although the policy's minage is 7"). `--algo`, `--blocksize` and `--gzip-level`
+change one run's algorithm, block size or gzip level. Every one of these selects
+or sets rows of `.cmp`'s own plan table (`.cmp.showcomp`), which
+`.cmp.compressfromtable` then compresses, so the plan shown and the run are the
+same rows; a one-off setting is checked by `.cmp.checkcsv` first.
 
 `--apply` asks first (`--yes` answers), and is refused before anything is
 written when a filesystem is short of the space it needs. It then holds the HDB
@@ -639,8 +639,8 @@ serves:
   `uqs job check` pairs them (a table nobody keys is matched row by whole row).
   `time` is stamped on receipt, so it is left out: two environments receive a
   row at different moments.
-- **coverage** - with `--source-version` (and `--partition`), the coverage
-  ledger's current claims for the window on each side, composed and gapped by
+- **coverage** - with `--source-version` (and `--slice`), the coverage ledger's
+  current claims for the window on each side, composed and gapped by
   `.qetl.coverage`.
 
 Each table reaches one outcome, the first that applies:
@@ -1980,8 +1980,10 @@ the default is no; an EOF or Ctrl-C is a no; and with no terminal to ask on it
 refuses at once, naming `--yes`, instead of prompting into the void.
 
 A time range is given one way, on every command that takes one (`job backfill`,
-`job gaps`, `job preview`, `job check`, `job runs audit`, `data seed`,
-`data replay`), and read by one parser, `uqs.timerange`:
+`job gaps`, `job preview`, `job check`, `job runs list`, `job runs audit`,
+`data seed`, `data replay`, `data compress`, `data migrate`, `data diff`,
+`activity list`, `activity export`, `config sources check`), all four options or
+none (#2249), and read by one parser, `uqs.timerange`:
 
 - `--from A --to B` is `[A, B)`: `B` is excluded. A bound is a date or a
   timestamp, ISO-8601 or a q literal - `2026-09-13`, `2026-09-13T06:00`,
@@ -1991,9 +1993,20 @@ A time range is given one way, on every command that takes one (`job backfill`,
   (seconds), `30s`, `1.5m`, `2h`, `7d`, `500ms` - the DURATION every span of
   time takes.
 
-A command whose unit is coarser takes the range in that unit: `data replay`
-replays one day's log, so its range must be one whole day; `data seed` copies
-the date partitions whose date lies in the range.
+A command that acts on whole HDB partitions - `data replay`, `data seed`,
+`data compress`, `data migrate` - takes whole days only, and refuses rather than
+rounds anything else (#2245): a `--from` or `--to` that is not a UTC midnight is
+refused naming the days either side ("`data seed` copies whole partitions:
+--from 2026-09-13T06:00:00 is not a day boundary; give --from 2026-09-13 or
+2026-09-14"), and `--last` must be whole days - `--last 3d` is the three days
+before today, so today's live partition is never in it. `data replay` replays
+one day's log, and `data migrate` rebuilds one partition, so each takes one day:
+`--date D`, `--from D --to D+1`, or `--last 1d` (yesterday).
+
+`config sources check` reads a bounded window over the same range, and only it
+has a default: with no range at all, `--last 1h`. A source quiet now - a
+weekend, out of hours - is checked over a window that had data with `--date D`
+or `--from`/`--to` (#2249).
 
 The verbs of rule 4:
 
@@ -2236,7 +2249,8 @@ One vocabulary (#1857):
   | `setup odbc ... --home DIR`                                   | `--odbc-home DIR`                     |
 
 A duration that was a bare number still is one - seconds - so only `--window`'s
-minutes changed meaning, and its old spelling is converted. `deploy push` asks
+minutes changed meaning; its old spelling was converted for one release, and is
+refused now, naming the time range that replaced it (#2249). `deploy push` asks
 the release it verifies which spelling its `deploy check` takes, so a push or a
 rollback to a release from before this still verifies.
 
@@ -2286,6 +2300,31 @@ pairs of verbs stay apart on purpose: `clean` deletes what the stack wrote where
 rule, and `job runs upgrade` changes the ledger's layout where `data migrate`
 changes an HDB partition's schema. None of the hidden aliases has passed its one
 release yet (`cli/rename_expiry.py`), so none is removed.
+
+"Partition" is an HDB date partition (#2239), as kdb+ has it; the old spelling
+is refused naming the new one, with no alias:
+
+  | old                                      | new                                      |
+  | ---                                      | ---                                      |
+  | `data diff --partition KEY`              | `--slice KEY`, the coverage slice        |
+  | `job new --partition SYM`                | `--slice SYM`                            |
+  | `job new --partition-column COL`         | `--slice-column COL`                     |
+  | `data migrate TABLE PARTITION`           | `data migrate TABLE --date D`            |
+
+`data check --template DATE` keeps its name: it is a date partition.
+
+Every `data` command that reads or writes one HDB names it the same ways
+(#2237): `--hdb DIR` (a directory on this machine), `--attachment NAME` (an
+attached stack's pinned HDB, else its live wdb's), `uqs --target TARGET` (a
+release's own), and otherwise this runtime's - one help each, from
+`cli/hdb_scope.py`. `data migrate --hdb` and `data seed --hdb` (the destination)
+are new. A command that cannot act on an attachment's HDB knows the option and
+refuses it saying why: `data replay`, `data migrate` and `data seed` cannot
+check or pause an attached stack's writers, as `data check` and `data alter` do,
+and `data compress` plans and runs through this stack's housekeeping1 (its
+`--report` reads an attachment's HDB when it is on this machine). `data diff`
+compares two endpoints, and `data snapshot` reads the configuration snapshots,
+so neither takes them.
 
 One meaning per word (#1855):
 

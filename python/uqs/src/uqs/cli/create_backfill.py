@@ -244,12 +244,12 @@ def backfill_plan(
         raise UqsUsageError("--kind backfill needs --outputs: the table it fills")
     claimed = workers_filling(repo_root, dataset, partition)
     if claimed:
-        where = f"partition {partition!r}" if partition else "no partition"
+        where = f"slice {partition!r}" if partition else "no slice"
         raise UqsError(
             f"dataset {dataset!r} is already filled by {', '.join(claimed)} "
             f"in {where}, "
             "and .qetl.job.bounded.define refuses two workers on one dataset and "
-            "partition - pick another --outputs, or another --partition"
+            "slice - pick another --outputs, or another --slice"
         )
     # An existing source is reused, not rewritten, and an existing
     # table is not defined twice: a second worker over rows someone

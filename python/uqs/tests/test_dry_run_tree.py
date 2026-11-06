@@ -119,7 +119,7 @@ CASES = [
     Case("connector start", ("kafka",)),
     Case("connector stop", ("kafka",)),
     Case("connector restart", ("kafka",)),
-    Case("data migrate", ("quote", "2015-01-07", "--rename", "bid:bid2"), _hdb("uqs")),
+    Case("data migrate", ("quote", "--date", "2015-01-07", "--rename", "bid:bid2"), _hdb("uqs")),
     # the --apply commands' defaults (#2235): each a dry run
     Case("data check", (), _hdb("uqs")),
     Case("data alter", ("quote", "--rename", "bid:bid2"), _hdb("uqs")),

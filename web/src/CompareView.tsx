@@ -368,7 +368,7 @@ export function CompareView() {
             />
             <Input
               name="partition"
-              label="Partition (coverage)"
+              label="Slice (coverage)"
               value={form.partition}
               onChange={set("partition")}
               placeholder="blank: no partition dimension"

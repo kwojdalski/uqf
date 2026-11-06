@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import subprocess
 from datetime import date
+from pathlib import Path
 
 from uqs.interpreter import q_interpreter
 from uqs.paths import UqsError, UqsPaths
@@ -29,6 +30,7 @@ def seed(
     last: date | None = None,
     overwrite: bool = False,
     dry_run: bool = False,
+    hdb: Path | None = None,
 ) -> str:
     """Copy `source`'s HDB partitions of `tables` (every table the target
     declares when None), dated `first`..`last` inclusive, into `target`'s.
@@ -39,12 +41,14 @@ def seed(
     partitions, so a table the source lacked a column of is rectangular.
     With `dry_run`, the source's partitions in range are named and nothing
     is written: the schema comparison is the copy's own, and is not run.
+    `hdb` is the destination, `--hdb DIR`, filled and re-enumerated against
+    the target runtime's schema; None, the target runtime's own HDB (#2237).
     """
     if target.runtime == source.runtime:
         raise UqsError(
             f"--from-runtime {source.runtime} is the runtime being seeded - name another"
         )
-    src_hdb, dst_hdb = source.hdb_dir, target.hdb_dir
+    src_hdb, dst_hdb = source.hdb_dir, hdb if hdb is not None else target.hdb_dir
     if not src_hdb.is_dir():
         raise UqsError(
             f"the {source.runtime} runtime has no HDB at {src_hdb} - start it once, "
@@ -54,6 +58,8 @@ def seed(
         raise UqsError(f"no partition date lies in the range: {first} is after {last}")
     if dry_run:
         return _plan(src_hdb, tables, first, last)
+    if hdb is not None and not dst_hdb.is_dir():
+        raise UqsError(f"--hdb {dst_hdb}: no such directory on this machine")
     if not (dst_hdb.is_dir() and target.generated_schema.is_file()):
         raise UqsError(f"the {target.runtime} runtime is not bootstrapped: no {dst_hdb}")
     q = q_interpreter()
@@ -74,7 +80,7 @@ def seed(
     if result.returncode != 0:
         why = (result.stderr or result.stdout).strip().splitlines()
         raise UqsError(why[-1] if why else f"seeding failed (exit {result.returncode})")
-    fill_hdb_partitions(target)
+    fill_hdb_partitions(target, hdb=hdb)
     return result.stdout.strip()
 
 

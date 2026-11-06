@@ -13,6 +13,7 @@ import json
 import os
 import re
 import subprocess
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -20,6 +21,7 @@ import pytest
 from uqs.interpreter import q_interpreter
 from uqs.paths import UqsError, default_paths
 from uqs.stack import live_check, redact
+from uqs.timerange import TimeRange
 
 REPO = Path(__file__).resolve().parents[3]
 
@@ -86,9 +88,22 @@ def test_each_source_runs_in_its_own_q_with_live_sources_required(monkeypatch):
 def test_the_check_loads_only_the_source_s_own_declarations():
     """An unrelated job whose plant table this site lacks must not stop the
     check: the q selects the source's closure before the ETL tree loads."""
-    script = live_check._script("duckdb_deals", 60, None)
+    script = live_check._script("duckdb_deals", TimeRange(None, None, timedelta(hours=1)), None)
     select = script.index(".qetl.load.only_sources:enlist `duckdb_deals;")
     assert script.index("\\l src/init.q") < select < script.index("\\l src/etl/init.q")
+
+
+def test_the_window_reaches_q_as_a_span_or_as_its_bounds():
+    """#2249: `--last` is a timespan back from q's own now; a past window,
+    --from/--to or --date, its (start;end)."""
+    assert live_check.q_window(TimeRange(None, None, timedelta(minutes=90))) == (
+        "(`timespan$5400000000000j)"
+    )
+    day = TimeRange(datetime(2026, 9, 13, tzinfo=UTC), datetime(2026, 9, 14, tzinfo=UTC))
+    assert live_check.q_window(day) == (
+        "(2026.09.13D00:00:00.000000000;2026.09.14D00:00:00.000000000)"
+    )
+    assert ".qetl.livecheck.check[`deals;(2026.09.13D" in live_check._script("deals", day, None)
 
 
 def test_an_empty_read_passes_and_a_failure_does_not():
@@ -180,5 +195,45 @@ def test_a_real_source_is_checked_end_to_end(tmp_path, monkeypatch):
     monkeypatch.setenv("UQF_SOURCE_CRED_HDB_TRANSFER", str(hdb))
     (r,) = live_check.check(default_paths(), ["hdb_transfer"], timeout=60)
     assert (r["status"], r["stage"], r["rows"]) == ("ok", "done", 1), r
-    (r,) = live_check.check(default_paths(), ["hdb_transfer"], timeout=60, window_minutes=5)
+    last5 = TimeRange(None, None, timedelta(minutes=5))
+    (r,) = live_check.check(default_paths(), ["hdb_transfer"], timeout=60, window=last5)
     assert (r["status"], r["rows"]) == ("empty", 0), "nothing in the last five minutes"
+    today = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+    past = TimeRange(today - timedelta(days=1), today)
+    (r,) = live_check.check(default_paths(), ["hdb_transfer"], timeout=60, window=past)
+    assert (r["status"], r["rows"]) == ("empty", 0), "nothing yesterday: the window is read"
+
+
+# --- the shared time range (#2249) -------------------------------------------
+
+
+@pytest.fixture
+def window_given(monkeypatch):
+    """The window `config sources check` hands the check, for an argv."""
+    from typer.testing import CliRunner
+
+    from uqs import cli
+    from uqs.cli import source_check
+
+    seen: dict = {}
+    monkeypatch.setattr(source_check.live_check, "check", lambda *a, **k: seen.update(k) or [])
+
+    def run(*argv: str) -> TimeRange:
+        result = CliRunner().invoke(cli.app, ["config", "sources", "check", "src1", *argv])
+        assert result.exit_code == 0, result.output
+        return seen["window"]
+
+    return run
+
+
+def test_with_no_range_the_check_reads_the_last_hour(window_given):
+    assert window_given().last == timedelta(hours=1)
+
+
+def test_the_check_takes_the_whole_shared_range(window_given):
+    """A source quiet now - a weekend, out of hours - is checked over a window
+    that had data, as every range-taking command names one."""
+    day = (datetime(2026, 9, 13, tzinfo=UTC), datetime(2026, 9, 14, tzinfo=UTC))
+    assert window_given("--date", "2026-09-13").bounds == day
+    assert window_given("--from", "2026-09-13", "--to", "2026-09-14").bounds == day
+    assert window_given("--last", "90m").last == timedelta(minutes=90)

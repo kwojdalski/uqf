@@ -23,7 +23,7 @@ from uqs.cli.create_kinds import DEFAULT_KIND, KindOpt, for_kinds, given_options
 from uqs.cli.create_plant import plant_definitions, plant_tables
 from uqs.cli.create_reaction import TriggeredByOpt, scaffold_reaction
 from uqs.cli.regenerate import write_plan
-from uqs.cli.renames import renamed
+from uqs.cli.renames import SLICE, SLICE_COLUMN, refused, renamed
 from uqs.cli.shared import (
     JOB_AUTHORING_PANEL,
     _die,
@@ -55,7 +55,9 @@ _TransformOpt = ChoiceOpt(
 
 
 @job_app.command(
-    "new", rich_help_panel=JOB_AUTHORING_PANEL, cls=renamed(_RENAMES, safety.ChangesState)
+    "new",
+    rich_help_panel=JOB_AUTHORING_PANEL,
+    cls=renamed(_RENAMES, refused({**SLICE, **SLICE_COLUMN}, safety.ChangesState)),
 )
 def new_job(
     ctx: typer.Context,
@@ -195,15 +197,17 @@ def new_job(
     partition: Annotated[
         str | None,
         typer.Option(
-            "--partition", help="The slice of --outputs it fills" + for_kinds("--partition")
+            "--slice",
+            help="The slice of --outputs it fills: a coverage key such as a symbol, not a "
+            "date" + for_kinds("--slice"),
         ),
     ] = None,
     partition_column: Annotated[
         str | None,
         typer.Option(
-            "--partition-column",
-            help="The column holding --partition; default "
-            f"{worker_mod.DEFAULT_PARTITION_COLUMN}{for_kinds('--partition-column')}",
+            "--slice-column",
+            help="The column holding --slice; default "
+            f"{worker_mod.DEFAULT_PARTITION_COLUMN}{for_kinds('--slice-column')}",
         ),
     ] = None,
     check: Annotated[
