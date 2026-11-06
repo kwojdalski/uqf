@@ -111,40 +111,13 @@ def test_every_exempt_module_still_exists_and_is_still_over():
 #: a release of it on a server, and `cli/` and `scaffold/` are front ends,
 #: which import what they use from where it is defined.
 #:
-#: `paths` and `logger` are omitted from every list because everything may
-#: import them: they are leaves that import nothing from this package, so they
-#: cannot take part in a cycle. `interpreter` is too - it imports `paths` and
-#: `renamed_env` and nothing else, which test_the_leaves_stay_leaves holds it
-#: to - and so are
-#: `runtimes`, `timefmt`, `liveness` and `portexpr`, which import nothing at all.
-#: `timefmt` and `liveness` must stay that way: uqf_frontend's read path
-#: imports them (#1326, #1362). `guardrails` (#1825) is the declaration model
-#: every owner of a guardrail imports, so it imports nothing either; the
-#: registry that gathers the owners lives in cli/safety.py. `cells` (#1882)
-#: is a listed row's values - typed for a document, rendered for a table - which
-#: every layer's listings produce and the CLI prints, so it imports nothing.
-#: `activity_log` (#2000) reads the frontend's activity history for the API and
-#: `uqs activity` alike; uqf_frontend imports it, so it imports nothing either.
-#: `duration` (#2121) is the one grammar of a span of time, which the CLI, the
-#: scaffolder, the deploy target file and `timerange` all read, so it imports
-#: nothing.
-#: `renamed_env` (#2111) is the renamed variables `uqs` and the frontend both
-#: refuse; uqf_frontend.config imports it at startup, so it imports nothing.
-LEAVES = {
-    "duration",
-    "activity_log",
-    "cells",
-    "paths",
-    "logger",
-    "interpreter",
-    "runtimes",
-    "timefmt",
-    "timerange",
-    "liveness",
-    "portexpr",
-    "guardrails",
-    "renamed_env",
-}
+#: The LEAVES - `paths`, `logger`, `duration`, `cells`, `timefmt`, ... - are
+#: omitted from every list because everything may import them. They are not
+#: listed anywhere (#2170): `_leaves()` reads them from the source, as the
+#: top-level modules and the `logger` package whose uqs imports reach only
+#: other leaves, so they cannot take part in a cycle. A new leaf module is one
+#: new file; one that starts importing a folder simply stops being a leaf, and
+#: the layering test then holds its importers to that folder's rules.
 #: `generated` sits under everything: modules written from the q tree
 #: (uqs.generated.q_facts, #818), which import nothing from this package -
 #: so any layer may read them and none of them can close a cycle.
@@ -187,6 +160,38 @@ def _uqs_targets(source: str) -> set[str]:
     return out
 
 
+def _unit_imports() -> dict[str, set[str]]:
+    """Each top-level module and package of uqs, and the other top-level names
+    its source imports. `__init__`/`__main__` are the package's entry, not units."""
+    root = PKG / "src" / "uqs"
+    units: dict[str, list[Path]] = {}
+    for path in sorted(root.glob("*.py")):
+        if not path.name.startswith("__"):
+            units[path.stem] = [path]
+    for folder in sorted(p for p in root.iterdir() if (p / "__init__.py").is_file()):
+        units[folder.name] = sorted(folder.rglob("*.py"))
+    return {
+        name: set().union(*(_uqs_targets(f.read_text()) for f in files)) - {name}
+        for name, files in units.items()
+    }
+
+
+def _leaves() -> set[str]:
+    """The units that import no folder of uqs (#2170): the largest set of units
+    each of whose uqs imports is itself in the set. Read from the source, so
+    a leaf is added by writing the file and lost by importing a layer."""
+    imports = _unit_imports()
+    leaves = {name for name in imports if name not in ALLOWED_IMPORTS}
+    while True:
+        kept = {name for name in leaves if imports[name] <= leaves}
+        if kept == leaves:
+            return leaves
+        leaves = kept
+
+
+LEAVES = _leaves()
+
+
 def _folder_imports(folder: str) -> set[str]:
     """Which other folders the modules in `folder` reach into."""
     out: set[str] = set()
@@ -206,19 +211,29 @@ def test_the_leaves_stay_leaves():
     source = (PKG / "src" / "uqs" / "timerange.py").read_text()
     reached = {m.group(1) or m.group(2) for m in _IMPORT.finditer(source)}
     assert reached <= {"paths", "timefmt", "duration"}, reached
-    leaves = (
-        "runtimes.py",
-        "timefmt.py",
-        "liveness.py",
-        "portexpr.py",
-        "guardrails.py",
-        "cells.py",
-        "duration.py",
-        "renamed_env.py",
-    )
-    for leaf in leaves:
-        source = (PKG / "src" / "uqs" / leaf).read_text()
-        assert not {m.group(1) or m.group(2) for m in _IMPORT.finditer(source)}, leaf
+    # `timefmt` and `liveness` must import nothing: uqf_frontend's read path
+    # imports them (#1326, #1362). `runtimes` is what `paths` builds on.
+    imports = _unit_imports()
+    for leaf in ("runtimes", "timefmt", "liveness", "portexpr"):
+        assert not imports[leaf], leaf
+    # a leaf cycle would be one the layering never sees: leaves import leaves
+    order: list[str] = []
+    pending = {name: imports[name] & LEAVES for name in LEAVES}
+    while pending:
+        free = sorted(n for n, deps in pending.items() if not deps - set(order))
+        assert free, f"leaves import each other in a cycle: {sorted(pending)}"
+        order += free
+        pending = {n: d for n, d in pending.items() if n not in free}
+
+
+def test_the_derived_leaves_equal_the_hand_kept_list_they_replaced():
+    """The migration pin (#2170): the one deliberate copy, so that a module
+    gaining or losing leaf status is noticed. mcp and mcp_server import cli."""
+    assert LEAVES == {
+        "duration", "activity_log", "cells", "paths", "logger", "interpreter",
+        "runtimes", "timefmt", "timerange", "liveness", "portexpr", "guardrails",
+        "renamed_env",
+    }  # fmt: skip
 
 
 @pytest.mark.parametrize("folder", sorted(ALLOWED_IMPORTS))
