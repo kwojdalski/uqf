@@ -10,6 +10,7 @@ test has one runner.
 
 from __future__ import annotations
 
+import importlib.util
 import os
 import signal
 import subprocess
@@ -195,12 +196,25 @@ def test_each_q_hook_runs_its_tests_through_pytest_and_no_lane_runs_them_too() -
     assert "-m peachq --require-q peachq tests/qrun/test_doc_blocks.py" in _hook(
         config, "q-docs-peachq"
     )
-    hook = (REPO / "scripts/dev/python_tests_hook.py").read_text()
-    assert 'NOT_Q_HOOKS = ["-m", "not q_backend"]' in hook
-    # every run the hook makes - the whole suite, testmon's pick, the record's -
-    # is PYTEST, which leaves them out
-    assert "PYTEST = [" in hook and hook.count("*NOT_Q_HOOKS]") == 1
-    assert hook.count("[*PYTEST,") == 3
+    # every run the hook makes - the whole suite, testmon's pick, the record's,
+    # and the record's judges after them (#2273) - leaves them out
+    spec = importlib.util.spec_from_file_location(
+        "python_tests_hook", REPO / "scripts/dev/python_tests_hook.py"
+    )
+    assert spec and spec.loader
+    hook = sys.modules.setdefault("python_tests_hook", importlib.util.module_from_spec(spec))
+    if not hasattr(hook, "commands"):
+        spec.loader.exec_module(hook)
+    picked = hook.Decision("x", testmon=True, tests={"tests/qrun/test_qrun_support.py::t": "w"})
+    runs = [
+        cmd
+        for decision in (hook.Decision("x", full=True), picked)
+        for judges in (False, True)
+        for cmd in hook.commands(decision, REPO / "ids", REPO / "r.json", judges=judges)
+    ]
+    assert len(runs) == 6
+    for cmd in runs:
+        assert cmd.count("-m") == 1 and "not q_backend" in cmd[cmd.index("-m") + 1], cmd
     coverage = _hook(config, "q-coverage")
     assert "-m coverage --require-q kdbx tests/qrun/test_q_coverage.py" in coverage
 
