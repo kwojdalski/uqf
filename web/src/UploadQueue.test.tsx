@@ -1,14 +1,13 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
+import type { ConfigPushReport, PushOps } from "./api/config_push";
 import {
-  type ConfigPushReport,
-  type PushOps,
   type RemoteUpload,
   UPLOAD_MAX_FILES,
   UPLOAD_MAX_PATH,
   UploadFailed,
   uploadPathProblem,
-} from "./api";
+} from "./api/services";
 import { UploadPanel, type Uploader } from "./UploadPanel";
 
 /** The upload queue's bookkeeping across renders: what happens when the

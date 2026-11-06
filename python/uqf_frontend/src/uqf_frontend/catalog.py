@@ -93,7 +93,7 @@ class QType(StrEnum):
     other homes of the set are held to it by tests: uqs's scaffold
     (`uqs.scaffold.columns.TYPES`) may only accept types listed here,
     `models.ColumnInfo.type` is a Literal of exactly these values, and
-    web/src/api.ts `ColumnType` offers the same words (test_api_types.py).
+    web/src/api/ `ColumnType` offers the same words (test_api_types.py).
     """
 
     SYMBOL = "symbol"
@@ -324,7 +324,7 @@ class Catalog:
                     table,
                     f"{table}.{row['column']}: meta reports type character {char!r}, "
                     "which this layer cannot coerce - add it to QType "
-                    "(and web/src/api.ts ColumnType), or the column "
+                    "(and web/src/api/ ColumnType), or the column "
                     "cannot be filtered on safely",
                 )
                 continue

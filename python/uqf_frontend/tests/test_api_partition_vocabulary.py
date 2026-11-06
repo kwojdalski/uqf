@@ -26,9 +26,9 @@ from collections.abc import Iterator
 from typing import Any
 
 import pytest
+from api_support import defined_models
 from fastapi.testclient import TestClient
 
-from uqf_frontend import models
 from uqf_frontend.app import create_app
 from uqf_frontend.config import Settings
 from uqf_frontend.gateway import FakeGateway
@@ -117,12 +117,8 @@ def test_the_gate_catches_a_field_named_partition():
 def _models_with_a_slice() -> list[type]:
     return [
         obj
-        for obj in vars(models).values()
-        if isinstance(obj, type)
-        and issubclass(obj, models.BaseModel)
-        and obj.__module__ == models.__name__
-        and obj.model_config.get("extra") == "forbid"
-        and "slice" in obj.model_fields
+        for obj in defined_models().values()
+        if obj.model_config.get("extra") == "forbid" and "slice" in obj.model_fields
     ]
 
 

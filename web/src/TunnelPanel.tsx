@@ -1,14 +1,12 @@
 import { useEffect, useRef, useState } from "react";
+import { ApiError, request, writeToken } from "./api/client";
 import {
-  ApiError,
-  request,
   type Services,
   type TunnelCheck,
   type TunnelMapping,
   type TunnelPlan,
   tunnelPath,
-  writeToken,
-} from "./api";
+} from "./api/services";
 import { useWorkspaceTarget } from "./workspace";
 import { useResource } from "./useResource";
 

@@ -2,7 +2,7 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { expect, it, vi } from "vitest";
 import { FileTable } from "./FileTable";
-import type { RemoteEntry } from "./api";
+import type { RemoteEntry } from "./api/services";
 
 const entries: RemoteEntry[] = [
   {

@@ -442,7 +442,7 @@ def test_a_settings_file_that_does_not_parse_refuses_to_start(tmp_path):
 
 def test_the_schemas_are_the_models(tmp_path):
     """The browser keeps no list of its own: the forms are these schemas."""
-    from uqf_frontend.models import AccessPolicyBody, RuntimeSettingsBody
+    from uqf_frontend.models.settings import AccessPolicyBody, RuntimeSettingsBody
 
     schemas = _current(_client(_settings(tmp_path)))["schemas"]
     assert schemas == {
@@ -463,12 +463,12 @@ def test_the_browser_fixture_holds_the_current_schemas():
     the Settings forms from; it must be what the server serves, or those
     tests prove a form nobody sees. Regenerate it with:
 
-        uv run python -c "import json; from uqf_frontend.models import *; print(json.dumps(
+        uv run python -c "import json; from uqf_frontend.models.settings import *; print(json.dumps(
             {'access': AccessPolicyBody.model_json_schema(),
              'runtime': RuntimeSettingsBody.model_json_schema()}, indent=2))" \
             > web/src/testing/settingsSchemas.json
     """
-    from uqf_frontend.models import AccessPolicyBody, RuntimeSettingsBody
+    from uqf_frontend.models.settings import AccessPolicyBody, RuntimeSettingsBody
 
     fixture = Path(__file__).resolve().parents[3] / "web/src/testing/settingsSchemas.json"
     assert json.loads(fixture.read_text()) == {

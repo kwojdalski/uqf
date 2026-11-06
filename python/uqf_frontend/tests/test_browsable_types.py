@@ -18,13 +18,15 @@ import polars as pl
 import pytest
 from fastapi.testclient import TestClient
 
-from uqf_frontend import models, queries
-from uqf_frontend.app import _rows, create_app
+from uqf_frontend import queries
+from uqf_frontend.app import create_app
 from uqf_frontend.catalog import UNFILTERABLE, QType, _qtype
 from uqf_frontend.config import Settings
 from uqf_frontend.errors import ValidationFailed
 from uqf_frontend.gateway import FakeGateway, KolaGateway
+from uqf_frontend.models.query import ColumnType
 from uqf_frontend.queries import coerce
+from uqf_frontend.routes.common import _rows
 from uqs.model.schemas import _DEFINITION
 from uqs.paths import TABLES_FILE
 from uqs.scaffold.columns import TYPES, definition_columns, type_char
@@ -87,7 +89,7 @@ def test_every_plant_table_column_type_is_a_browsable_type():
 
 
 def test_column_info_type_is_exactly_the_qtype_words():
-    words = set(typing.get_args(models.ColumnType))
+    words = set(typing.get_args(ColumnType))
     assert words == {q.value for q in QType}
 
 

@@ -5,11 +5,13 @@ import {
   errorBody,
   request,
   requestTimeout,
+} from "./api/client";
+import {
   filterValue,
   validateRange,
   type Column,
   type ColumnType,
-} from "./api";
+} from "./api/query";
 const column = (type: ColumnType): Column => ({
   name: "value",
   type,

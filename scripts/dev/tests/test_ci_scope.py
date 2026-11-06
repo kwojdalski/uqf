@@ -47,12 +47,15 @@ ALL = (True, True, True, True)
         ([("A", "web/src/Chart.tsx")], (False, False, True, False)),
         # a web/ file a Python file names: the API types uqf_frontend's tests
         # hold to its models, and the Node pin the tool-pins gate reads
-        ([("M", "web/src/api.ts")], (False, False, True, True)),
+        ([("M", "web/src/api/query.ts")], (False, False, True, True)),
         ([("M", "web/package.json")], (False, False, True, True)),
         ([("M", "web/README.md")], (False, False, True, True)),
         # -- Python ------------------------------------------------------
         ([("M", "python/uqf_frontend/src/uqf_frontend/app.py")], (False, False, False, True)),
-        ([("M", "python/uqf_frontend/src/uqf_frontend/models.py")], (False, False, False, True)),
+        (
+            [("M", "python/uqf_frontend/src/uqf_frontend/models/query.py")],
+            (False, False, False, True),
+        ),
         ([("M", "scripts/gates/check_hook_scopes.py")], (False, False, False, True)),
         # -- q: the q suite, and the Python tests that start a q ----------
         ([("M", "src/pricing/forwards.q")], (True, True, False, True)),
@@ -73,7 +76,7 @@ ALL = (True, True, True, True)
         # -- deletions -------------------------------------------------------
         # a deletion a document links to
         ([("D", "scripts/dev/odbc_rosetta.sh")], (True, True, False, True)),
-        ([("D", "web/src/api.ts")], (False, False, True, True)),
+        ([("D", "web/src/api/query.ts")], (False, False, True, True)),
         ([("D", "web/src/App.tsx")], (False, False, True, False)),
         ([("D", "src/pricing/forwards.q")], (True, True, False, True)),
         # -- shared test configuration: every group --------------------------
@@ -124,12 +127,12 @@ def test_a_skipped_group_says_why_it_was_skipped():
 
 
 def test_a_python_reader_of_a_web_file_is_named():
-    """The cross-language edge: web/src/api.ts mirrors the API models, and
+    """The cross-language edge: web/src/api/ mirrors the API models, and
     uqf_frontend's tests read it to hold the two together."""
-    named = scope.named_by_python(["web/src/api.ts", "web/src/App.tsx"])
-    assert set(named) == {"web/src/api.ts"}
-    s = scope.decide([("M", "web/src/api.ts")], None)
-    assert s.why["python"] == [f"web/src/api.ts: named by {named['web/src/api.ts']}"]
+    named = scope.named_by_python(["web/src/api/query.ts", "web/src/App.tsx"])
+    assert set(named) == {"web/src/api/query.ts"}
+    s = scope.decide([("M", "web/src/api/query.ts")], None)
+    assert s.why["python"] == [f"web/src/api/query.ts: named by {named['web/src/api/query.ts']}"]
 
 
 def test_shared_configuration_is_the_python_tests_hook_s_own_list():

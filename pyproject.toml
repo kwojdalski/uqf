@@ -19,7 +19,7 @@
 #   - python/uqf_frontend/tests/ (test_status.py, test_security.py,
 #     test_api_types.py and others) resolve parents[3] to read files of the
 #     tree - src/etl/core/status.q, scripts/torqcode/gateway/browse.q,
-#     web/src/api.ts - as TEXT, never importing uqs
+#     web/src/api/ - as TEXT, never importing uqs
 #   - python/uqs/tests/test_contract_surface.py and test_etl_standalone_load.py
 #     resolve parents[3] to the repo root, to reach scripts/ and run q there
 # Moving the packages would break both.
@@ -118,6 +118,8 @@ root = [
     "python/uqs/src",
     "python/uqf_frontend/src",
     "python/uqs/tests",
+    # api_support.py, the API tests' view of every model and api module (#2168).
+    "python/uqf_frontend/tests",
     # The remote-stack lane's helpers, imported by its tests by bare name.
     "tests/remote",
     # qrun_support.py, the q-running tests' shared runner, likewise (#1808).

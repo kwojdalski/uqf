@@ -14,7 +14,7 @@ import {
 } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
-import { ApiError, request, writeToken } from "./api";
+import { ApiError, request, writeToken } from "./api/client";
 import { mockWholeApi } from "./testing/activityFixtures";
 import { useResource } from "./useResource";
 import {

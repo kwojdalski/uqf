@@ -10,16 +10,14 @@
  * says whether every row was read or only a sample.
  */
 import { useState, type FormEvent } from "react";
+import { writeToken } from "./api/client";
+import type { CompareBody, CompareResult, CompareTable } from "./api/compare";
 import {
   validateTime,
   type Catalog,
-  type CompareBody,
-  type CompareResult,
-  type CompareTable,
   type FilterOp,
   type QueryFilter,
-  writeToken,
-} from "./api";
+} from "./api/query";
 import { useResource } from "./useResource";
 import { record } from "./activity";
 

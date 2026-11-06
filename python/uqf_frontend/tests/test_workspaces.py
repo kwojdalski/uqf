@@ -547,7 +547,7 @@ def test_every_scoped_route_takes_the_workspace():
     for key in workspaces.SCOPED:
         assert key in routes, key
         deps = [d.call for d in routes[key].dependant.dependencies]
-        from uqf_frontend.app import scope_of
+        from uqf_frontend.routes.common import scope_of
 
         assert scope_of in deps, key
 

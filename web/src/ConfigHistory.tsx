@@ -1,6 +1,6 @@
 import { useState } from "react";
+import { ApiError } from "./api/client";
 import {
-  ApiError,
   type ConfigDiffFile,
   type ConfigHistory as History,
   type ConfigPushDetail,
@@ -8,7 +8,7 @@ import {
   type ConfigRestore,
   type HistoryOps,
   historyOps,
-} from "./api";
+} from "./api/config_push";
 import { size } from "./FileTable";
 
 const ACTION: Record<ConfigPushFile["action"], string> = {

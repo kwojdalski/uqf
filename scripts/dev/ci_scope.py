@@ -25,7 +25,7 @@ runs the group COMPLETE - CI never selects single tests (the commit hooks do):
   names. Everything else can reach a Python test - a .py file; a .q file,
   since the Python tests start q; a document, since tests/qrun runs the
   docs' q blocks; a CSV, a config or a workflow a gate's tests read. A web/
-  file a Python file DOES name runs it: web/src/api.ts is the browser's copy
+  file a Python file DOES name runs it: web/src/api/ is the browser's copy
   of the API models, and uqf_frontend's tests hold the two to each other.
 
   The commit hooks select by a record of what each test reads, lists and
@@ -248,7 +248,26 @@ def named_in_docs(paths: Iterable[str], root: Path = REPO) -> dict[str, str]:
 #: A path component naming the browser package: `"web/..."`, `/ "web" /`.
 _WEB_WORD = re.compile(r"[\"'/]web[\"'/]")
 #: This file and its tests name web/ paths as examples, not as reads.
-_NOT_READERS = {"scripts/dev/ci_scope.py", "scripts/dev/tests/test_ci_scope.py"}
+_NOT_READERS = {
+    "scripts/dev/ci_scope.py",
+    "scripts/dev/tests/test_ci_scope.py",
+    # the one-shot split of api.ts (#2168), whose rules name the old paths
+    "scripts/dev/split_frontend.py",
+}
+
+
+def _names_directory(text: str, directory: Path) -> bool:
+    """Does `text` name `directory` itself - `"web/src/api"` or
+    `/ "web" / "src" / "api"`, a reader of every file in it - rather than a
+    path below it? web/src/api/ is read whole by the API-type tests (#2168).
+    Never `web` alone: a bare `"web"` is a word, not a read of the package."""
+    if len(directory.parts) < 2:
+        return False
+    joined = " / ".join(f'"{part}"' for part in directory.parts)
+    slashed = re.escape(directory.as_posix())
+    return bool(
+        re.search(re.escape(joined) + r"(?!\s*/)", text) or re.search(rf"[\"']{slashed}[\"']", text)
+    )
 
 
 def named_by_python(paths: Iterable[str], root: Path = REPO) -> dict[str, str]:
@@ -270,7 +289,9 @@ def named_by_python(paths: Iterable[str], root: Path = REPO) -> dict[str, str]:
             (
                 f
                 for f, text in texts.items()
-                if path in text or (name in text and _WEB_WORD.search(text))
+                if path in text
+                or (name in text and _WEB_WORD.search(text))
+                or _names_directory(text, Path(path).parent)
             ),
             None,
         )
