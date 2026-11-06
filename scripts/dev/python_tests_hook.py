@@ -53,7 +53,9 @@ test_ci_scope's check that CI and the record agree about web/) runs after
 the others, once their reads are merged into the record (#2273). Run beside
 them, it judged the record the push was about to correct: a branch adding a
 web/ file failed the check against a record from before the file existed,
-and an identical second push passed.
+and an identical second push passed. A scan the push does not reach but
+whose record predates a web/ file the tree now has (one master added) is
+rerun before the judges too (test_reach.stale_scans, #2276).
 
     uv run python scripts/dev/python_tests_hook.py            # what the hook runs
     uv run python scripts/dev/python_tests_hook.py --dry-run  # say what it would run
@@ -111,6 +113,8 @@ NOT_Q_HOOKS = "not q_backend"
 #: The marker of a test that judges the reach record: it runs after the record
 #: is rewritten, never beside the tests that rewrite it (#2273).
 JUDGES_RECORD = "judges_reach_record"
+#: The tree the judges hold the record to: test_ci_scope's web/ rule.
+JUDGED = "web/"
 PYTEST = ["uv", "run", "pytest", "-q"]
 #: The tests themselves, spread over the cores; a judge runs alone after them.
 SPREAD = ["-n", "auto", "--dist", "loadgroup"]
@@ -308,8 +312,29 @@ def run(decision: Decision, *, dry_run: bool = False) -> int:
         code = _run_all(commands(decision, ids_file, reach))
         if decision.full and reach.is_file():
             shutil.move(reach, REACH_DATA)
-        judged = _run_all(commands(decision, ids_file, REACH_DATA, judges=True))
+        judges = commands(decision, ids_file, REACH_DATA, judges=True)
+        stale = _stale_scans() if judges else set()
+        if stale:
+            # A scan recorded before a web/ file was added, and not rerun by
+            # this push (the file came from master, say): rerun it first (#2276).
+            print(
+                f"python-tests: {len(stale)} scan(s) recorded before {JUDGED} changed", flush=True
+            )
+            stale_ids = Path(tmp) / "stale.txt"
+            stale_ids.write_text("\n".join(sorted(stale)) + "\n")
+            rescan = Decision("stale scans", tests=dict.fromkeys(stale, "stale"))
+            code = _run_all(commands(rescan, stale_ids, REACH_DATA)) or code
+        judged = _run_all(judges)
     return code or judged
+
+
+def _stale_scans() -> set[str]:
+    """The tests whose recorded scan of JUDGED misses a file it has now."""
+    record = test_reach.load(REACH_DATA)
+    if record is None:
+        return set()
+    files = [f for f in _sibling("test_impact").tracked(REPO) if f.startswith(JUDGED)]
+    return test_reach.stale_scans(record, files)
 
 
 def _run_all(runs: list[list[str]]) -> int:

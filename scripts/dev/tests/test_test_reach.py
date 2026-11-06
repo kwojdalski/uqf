@@ -306,3 +306,28 @@ def test_a_run_leaves_no_copy_of_the_record_in_the_work_tree(tmp_path):
     recorder.pytest_sessionfinish(None)
     assert reach.load(tree / ".testreach.json") is not None
     assert sorted(p.name for p in tree.iterdir()) == [".git", ".testreach.json"]
+
+
+def test_a_file_s_scan_is_its_kind_or_the_whole_tree_when_it_is_alone():
+    files = ["web/a.ts", "web/b.ts", "web/c.mjs"]
+    assert reach.scan_of("web/a.ts", files) == ["web/a.ts", "web/b.ts"]
+    assert reach.scan_of("web/c.mjs", files) == files
+
+
+def test_a_scan_recorded_before_a_file_was_added_is_stale_and_a_named_read_is_not():
+    """#2276: a test that listed web/ and read every .ts there, before d.ts
+    was added, is rerun before the record is judged; one that reads a single
+    file by name, though it lists the root too, is the judge's to find."""
+    record = {
+        "version": 1,
+        "owners": {
+            "t.py::scan": {"reads": ["web/a.ts", "web/b.ts", "web/c.ts"], "lists": ["web"]},
+            "t.py::named": {"reads": ["web/a.ts"], "lists": ["."]},
+            "t.py::whole": {"reads": ["web/a.ts", "web/b.ts", "web/c.ts", "web/d.ts"]},
+            "t.py::unlisted": {"reads": ["web/a.ts", "web/b.ts", "web/c.ts"]},
+        },
+        "tests": {t: [t] for t in ("t.py::scan", "t.py::named", "t.py::whole", "t.py::unlisted")},
+    }
+    files = ["web/a.ts", "web/b.ts", "web/c.ts", "web/d.ts"]
+    assert reach.stale_scans(record, files) == {"t.py::scan"}
+    assert reach.stale_scans(record, files[:3]) == set()

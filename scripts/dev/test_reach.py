@@ -527,3 +527,39 @@ def _why(seen: dict[str, set[str]], status: str, path: str, q_reads: dict[str, l
 def starters(record: dict, kind: str) -> set[str]:
     """The tests that start a process of `kind`."""
     return {t for t in record["tests"] if kind in reach(record, t).get("starts", set())}
+
+
+def scan_of(path: str, files: Iterable[str]) -> list[str]:
+    """What a test reading `path` as part of SCANNING `files` reads: every file
+    of its kind (its suffix), or every file when it is the only one of its kind."""
+    files = list(files)
+    kind = [f for f in files if Path(f).suffix == Path(path).suffix]
+    return kind if len(kind) > 1 else files
+
+
+def stale_scans(record: dict, files: Iterable[str]) -> set[str]:
+    """The tests whose record shows a scan of `files` as they were before some
+    were added (#2276): each read at least half of a scan but not all of it,
+    and lists a directory every file it missed is under - so a run now would
+    read them. A test that judges the record by `scan_of` has them run first.
+    One reading a file or two by name reads too little of a scan to be taken
+    for one, and is left for the judge to find; rerunning a test is never a
+    reason for the judge to pass, only for its record to be current."""
+    files = list(files)
+    known = set(files)
+    out = set()
+    for nodeid in record["tests"]:
+        seen = reach(record, nodeid)
+        reads = seen.get("reads", set())
+        lists = seen.get("lists", set())
+        for path in sorted(reads & known):
+            scan = set(scan_of(path, files))
+            missing = scan - reads
+            if (
+                missing
+                and 2 * len(scan & reads) >= len(scan)
+                and all(any(_under(m, d) for d in lists) for m in missing)
+            ):
+                out.add(nodeid)
+                break
+    return out

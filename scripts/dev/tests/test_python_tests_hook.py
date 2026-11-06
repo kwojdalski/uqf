@@ -302,6 +302,38 @@ def test_a_push_adding_a_file_a_scan_reads_passes_the_first_time(tmp_path, monke
     assert "web/c.ts" in record.read_text()
 
 
+def test_a_scan_the_push_does_not_reach_is_rerun_before_the_judge(tmp_path, monkeypatch):
+    """#2276: web/c.ts came from master, not from this push, so nothing the
+    push reaches rereads web/ - the scan's record still predates c.ts. The
+    hook reruns that scan before it runs the judge, which passes."""
+    project = tmp_path / "project"
+    (project / "web").mkdir(parents=True)
+    (project / "conftest.py").write_text(
+        _CONFTEST.replace("{test_reach!r}", repr(str(hook.HERE / "test_reach.py")))
+    )
+    (project / "test_web.py").write_text(_TESTS)
+    for name in ("a.ts", "b.ts"):
+        (project / "web" / name).write_text("export {};\n")
+    record = project / ".testreach.json"
+    for key in [k for k in os.environ if k.startswith("PYTEST_")]:
+        monkeypatch.delenv(key)
+    monkeypatch.setattr(hook, "REPO", project)
+    monkeypatch.setattr(hook, "REACH_DATA", record)
+    monkeypatch.setattr(hook, "SPREAD", [])
+    monkeypatch.setattr(
+        hook, "PYTEST",
+        [sys.executable, "-m", "pytest", "-q", f"--rootdir={project}", "-p", "no:cacheprovider",
+         "-p", "no:pytest-testmon", "-p", "no:xdist"],
+    )  # fmt: skip
+
+    assert hook.run(hook.Decision("first record", full=True)) == 0
+    (project / "web" / "c.ts").write_text("export {};\n")
+    assert hook._stale_scans() == {"test_web.py::test_scan"}
+    assert hook.run(hook.Decision("only the judge", tests={"test_web.py::test_judge": "x"})) == 0
+    assert "web/c.ts" in record.read_text()
+    assert hook._stale_scans() == set()
+
+
 def test_the_records_seed_a_new_worktree_and_are_written_back(tmp_path):
     shared, local = tmp_path / "shared", tmp_path / "wt"
     shared.mkdir()

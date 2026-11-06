@@ -184,8 +184,7 @@ def test_the_reach_record_agrees_about_which_web_files_python_reads():
     web = [f for f in scope._test_impact().tracked(REPO) if f.startswith("web/")]
     reads = {t: test_reach.reach(record, t).get("reads", set()) for t in record["tests"]}
     for path in web:
-        kind = [w for w in web if Path(w).suffix == Path(path).suffix]
-        scan = kind if len(kind) > 1 else web
+        scan = test_reach.scan_of(path, web)
         specific = [t for t, r in reads.items() if path in r and not set(scan) <= r]
         if specific:
             s = scope.decide([("M", path)], None)
