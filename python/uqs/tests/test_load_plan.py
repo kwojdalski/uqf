@@ -8,12 +8,16 @@ selection names is tests/q/test_declaration_load.q's.
 
 from __future__ import annotations
 
+import os
+import subprocess
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
 
 from uqs.deploy import verify
 from uqs.deploy.selection import Selection, smoke_args
+from uqs.interpreter import identify, q_interpreter
 from uqs.model import infra, load_plan
 from uqs.paths import UqsError
 from uqs.stack import qtree
@@ -140,6 +144,38 @@ def test_two_files_registering_one_source_or_transform_are_refused():
         )
 
 
+def test_a_job_reaches_the_helpers_of_the_transform_it_registers_by_their_name():
+    """Registering transform `zz_t` must not hide `.qpipe.transform.zz_t.*`
+    in another file (exec_bars, #2177)."""
+    plan = load_plan.load_plan(
+        REPO,
+        {
+            "src/etl/transforms/zz_t.q": ".qpipe.transform.zz_t.bars:{x}\n",
+            "src/etl/streaming/zz_t.q": (
+                ".qetl.transform.define[`zz_t;`inputs`output`fn`examples!(();();"
+                ".qpipe.transform.zz_t.bars;())]\n"
+                ".qetl.job.stream.define[`zz_t;`procname`subscribe_to`outputs`transform!"
+                "(`zzt1;`symbol$();enlist `zz_tape;`zz_t)];\n"
+            ),
+        },
+    )
+    assert plan.for_proc("zzt1") == ["src/etl/transforms/zz_t.q", "src/etl/streaming/zz_t.q"]
+
+
+def test_a_passthrough_registers_the_transform_a_job_declares(plan):
+    """demo_deals_feed's transform is registered by `.qetl.transform.passthrough`
+    in the backfill worker's file (#2177)."""
+    assert "src/etl/workers/demo_deals_backfill.q" in plan.for_proc("demo_deals_feed1")
+
+
+def test_a_twin_computing_through_a_live_job_loads_that_job(plan):
+    """hdb_order_quality_backfill normalizes through order_outcomes and rolls
+    through order_quality's registrations."""
+    files = plan.for_proc("hdb_order_quality_backfill1")
+    assert "src/etl/streaming/order_outcomes.q" in files
+    assert "src/etl/streaming/order_quality.q" in files
+
+
 def test_a_transform_namespace_beside_its_define_is_not_a_second_definition():
     """A shared transform's helpers live under .qpipe.transform.<name> in one
     file and the job registers the transform in another (book_liquidity_1m)."""
@@ -150,6 +186,50 @@ def test_a_transform_namespace_beside_its_define_is_not_a_second_definition():
             "src/etl/streaming/zz_t.q": TRANSFORM.format(name="zz_t"),
         },
     )
+
+
+#: What .qtorq.load_uqf does for a process naming what it runs, then every
+#: transform that load registered run on its own examples - so a transform
+#: whose helpers, registration or normalizer the plan left out fails here.
+SELECTED_LOAD = """\
+.qetl.load.only:enlist `$.z.x 0;
+r:@[{system"l src/init.q"; system"l src/etl/init.q";
+    bad:$[count .qetl.transform.defined[];
+        select from .qetl.transform.verify_all[] where not passed; ()];
+    $[count bad;
+        "transform ",string[first bad`transform]," failed: ",first bad`detail;
+        `ok]};::;{x}];
+-1 $[r~`ok;"ok";r]; exit 0
+"""
+
+
+def test_every_process_loads_its_plan_alone_and_its_transforms_run(plan, tmp_path):
+    """Every process in the plan, loaded on its own as TorQ loads it (#2177):
+    a dependency the plan drops fails only a selected load, never the full
+    load the rest of the suite does, so it reached production silently."""
+    q = q_interpreter(os.environ)
+    if q is None or identify(q) != "kdbx":
+        pytest.skip("needs KDB-X - set $QCMD to it")
+    script = tmp_path / "selected_load.q"
+    script.write_text(SELECTED_LOAD)
+    env = {k: v for k, v in os.environ.items() if not k.startswith("UQF_PEACHQ")}
+
+    def load(proc: str) -> tuple[str, str]:
+        out = subprocess.run(
+            [str(q), str(script), proc, "-q"],
+            cwd=REPO,
+            capture_output=True,
+            text=True,
+            env=env,
+            stdin=subprocess.DEVNULL,
+            timeout=120,
+            check=False,
+        )
+        return proc, (out.stdout.strip().splitlines()[-1:] or [out.stderr.strip()])[0]
+
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        failed = {p: r for p, r in pool.map(load, sorted(plan.procs)) if r != "ok"}
+    assert not failed, failed
 
 
 def _init_q_declaration_dirs() -> tuple[str, ...]:
