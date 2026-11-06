@@ -519,6 +519,7 @@ qetl.job.stream.rolling,installed,value,,
 qetl.job.stream.rolling,optional_keys,value,,
 qetl.job.stream.rolling,registry,dict,,
 qetl.job.stream.rolling,required_keys,value,,
+qetl.job.stream.rolling,roll_hooks,dict,,
 qetl.job.stream.rolling,series,function,3,name rows as_ofs
 qetl.job.stream.rolling,shell_columns,dict,,
 qetl.kafka,above_marks,function,2,marks rows
