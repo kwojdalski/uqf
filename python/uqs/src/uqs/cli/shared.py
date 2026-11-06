@@ -291,6 +291,10 @@ def _lines(result) -> int:
 #: a check that fails - is 1; a command line wrong as given is 2, as Click's
 #: own usage errors are. An empty result is 0, and so is nothing to do.
 EXIT_REFUSED, EXIT_USAGE = 1, 2
+#: A job that did part of its job and says how to finish it (#2226): an
+#: attached backfill whose rows are written and covered but which a reader
+#: has not reloaded - running the same command again asks the readers again.
+EXIT_PARTIAL = 3
 
 
 def _die(exc: UqsError) -> None:

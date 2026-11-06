@@ -28,7 +28,12 @@ log = get_logger()
 #: make_config's parameter names.
 CONNECTION = ("ssh", "dest", "remote_user", "connect_timeout")
 
+#: `deploy status`'s: it only reads a server, so without one it reads the most recent deployment's,
+#: as `target check` does.
 Target = target_arg(f"{TARGET_HELP}; for one neither knows, give --ssh and --dest", latest=True)
+#: `deploy rollback`'s and `prune`'s: they change a server, so it is named - as a TARGET or by
+#: --ssh and --dest - and never guessed from whichever was deployed last (#2243).
+NamedTarget = target_arg(f"{TARGET_HELP}; or give --ssh and --dest instead", flags=True)
 #: `--ssh`, as `uqs target add` names it; `--host` until #1768, where every
 #: other command's --host is a q host. The old spelling parses for one release.
 Ssh = Annotated[
@@ -118,20 +123,30 @@ def on_command_line(ctx: typer.Context, name: str) -> bool:
     return source is not None and source.name == "COMMANDLINE"
 
 
-def server(ctx: typer.Context, target: str | None, **flags) -> dict:
+def server(ctx: typer.Context, target: str | None, *, unnamed: str | None = None, **flags) -> dict:
     """make_config's keyword arguments for a command that reaches one server:
     every push option TARGET sets - its connection and its timeouts alike -
     with each flag given on the command line over it; with no TARGET, the
     flags alone, which must then name the server. A flag left unset (None)
-    is left out, so make_config's default applies."""
+    is left out, so make_config's default applies.
+
+    With neither a TARGET nor a connection flag, a command that only reads the
+    server (`unnamed` None) reads the most recent deployment's, as `target
+    check` does, refused (1) when there is none; one that changes it is
+    refused as a usage error (2) saying `unnamed` - never guessed (#2243)."""
     if target is None:
         absent = [target_keys.flag(k) for k in ("ssh", "dest") if flags[k] is None]
-        if absent:
+        if not absent:
+            return {k: v for k, v in flags.items() if v is not None}
+        if len(absent) == 1:  # half a server: say which half is missing
             raise DeployError(
-                "arguments",
-                f"give a TARGET, or {' and '.join(absent)} for a server no target declares",
+                "arguments", f"give a TARGET, or {absent[0]} for a server no target declares"
             )
-        return {k: v for k, v in flags.items() if v is not None}
+        if unnamed is not None:
+            raise DeployError(
+                "arguments", f"{unnamed}, or --ssh and --dest for a server no target declares"
+            )
+        # nothing names it, and this only reads it: the most recent deployment's, below
     try:
         label, settings = control.settings_for(target, repo_root())
         r = control.remote_from(label, settings)

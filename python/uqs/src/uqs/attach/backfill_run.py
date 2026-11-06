@@ -267,9 +267,10 @@ def _destination(plan: dict[str, Any]) -> dict[str, Any]:
 
 
 def follow(run: Launched, *, poll: float = 0.5, timeout: float | None = None) -> tuple[int, dict]:
-    """Wait for the runner; its exit code and what it reported. The code is the lifecycle's: 0
-    for completed or idle, non-zero for anything that did not do its job, and EXIT_NOT_QUERYABLE
-    for rows written and covered that a reader has not yet reloaded."""
+    """Wait for the runner; its exit code and what it reported. The code is the runner's own: 0
+    for completed or idle, 2 for a refusal, EXIT_NOT_QUERYABLE for rows written and covered that
+    a reader has not yet reloaded, and another non-zero for anything that did not do its job.
+    `uqs job backfill` exits with it as the CLI's (cli/backfill_attached.exit_code, #2226)."""
     started = time.monotonic()
     while True:
         code = run.process.poll()

@@ -259,7 +259,7 @@ for _kind, _path in LISTS.items():
 @tool("logs")
 def uqs_logs(procs: Procs = None, lines: int = 20, level: str | None = None) -> dict[str, Any]:
     """The last `lines` lines of each process's out_/err_ log (procs', or
-    every one's) - `uqs logs --json`: {"lines": [{time, host, process, proctype, loglevel, id,
+    every one's) - `uqs logs --json`: {"lines": [{time, host, process, proctype, level, id,
     message}]}, merged and sorted by time. level (TRACE, DEBUG, INFO, WARNING
     or ERROR) shows only that level and above. A snapshot, not a live stream -
     call again for newer lines.

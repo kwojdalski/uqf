@@ -252,11 +252,14 @@ failure, and `status`, `rollback`, `prune` and `history TARGET`. `status`,
 `rollback` and `prune` also take a server a push from here registered (see
 `uqs deploy history`). `--ssh`, `--dest`, `--remote-user` and
 `--connect-timeout` remain for a server no target declares, and read the same on
-every command. Given beside a TARGET, they override its values.
-`push --target A,B`, the spelling before #1736, still works for one release and
-prints the new one. So does `--host`, the ssh destination's name before #1768:
-`--ssh` now, as `uqs target add` spells it, since every other command's `--host`
-is a q host.
+every command. Given beside a TARGET, they override its values. With neither,
+`status`, which only reads a server, reads the most recent deployment's, as
+`uqs target check` does, and exits 1 when nothing was deployed; `rollback` and
+`prune` change a server, so they are refused (exit 2) until one is named:
+`uqs deploy rollback TARGET` (#2243). `push --target A,B`, the spelling before
+#1736, still works for one release and prints the new one. So does `--host`, the
+ssh destination's name before #1768: `--ssh` now, as `uqs target add` spells it,
+since every other command's `--host` is a q host.
 
 - **The keys.** Each key is a `push` option, spelt as its parameter (`torq_home`
   for `--torq-home`). The values go through the same checks as the flags, and an
@@ -1037,6 +1040,7 @@ What a server runs, without ssh-ing in:
 
 ```bash
 uqs deploy status prod-a
+uqs deploy status                                           # the most recent deployment
 uqs deploy status prod-a --json                             # to script against
 uqs deploy status --ssh uqf-server --dest /opt/uqf          # a server no target declares
 ```
