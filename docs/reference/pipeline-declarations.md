@@ -782,11 +782,13 @@ is a transform and not an accumulator.
 A rolling window is not day-bucketed: at end of day nothing is published and the
 buffer is kept, so the series carries on across midnight. The plant's log is per
 day, though, so after a restart the replay holds only today's rows; the job
-records `covered_from`, the start of that day, and withholds a window length
-whose span reaches before it (logged when the set changes) rather than
-publishing a rate over part of its window. The job replays its input and
-restores from its own output (`restore_from`), so the first publication after a
-restart is the one an uninterrupted job would make.
+records `covered_from`, the instant the plant says its log began (the
+transport's optional `plant_roll`: TorQ's STP roll, GMT by default; run_stream's
+local midnight; the first message where the plant cannot say; never the host's
+zone, #2191), and withholds a window length whose span reaches before it (logged
+when the set changes) rather than publishing a rate over part of its window. The
+job replays its input and restores from its own output (`restore_from`), so the
+first publication after a restart is the one an uninterrupted job would make.
 `.qetl.job.stream.rolling.compute` and `series` are the pure form, for a
 backfill twin reading the HDB at a fixed cadence. `define` installs `pending`,
 `dropped`, `last_as_of`, `covered_from`, `withheld`, `publish`, `now`,
