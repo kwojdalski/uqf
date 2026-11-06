@@ -346,6 +346,26 @@
 // it runs, so the children run the binary the runner itself was started with.
 .qt.support.q_interpreter:{[] $[""~getenv `QCMD; "q"; getenv `QCMD]}
 
+// A port nothing answers on, for a child q this process starts (#2259).
+//
+// The OS picks it: listening on 0W takes an ephemeral port, clear of the
+// fixed ranges TorQ stacks use, so a busy machine never hands out a taken one
+// the way a random draw from 5010+ did. One that answers anyway - something
+// took it in between - is skipped rather than tested as the child, and a
+// taken port never fails the caller: only ten in a row does. The caller's own
+// listening port, if any, is restored.
+.qt.support.free_port:{[]
+    own:system"p";
+    answers:{not null @[{hclose h:hopen (`$":localhost:",string x;200); h};x;{0Ni}]};
+    tries:0; port:0Ni;
+    while[(null port) and tries<10;
+        system"p 0W"; p:system"p"; system"p 0";
+        if[not answers p; port:p];
+        tries+:1];
+    system"p ",string own;
+    if[null port; '"free_port: ten ports in a row already answered"];
+    port}
+
 // Every .q file under a directory, recursively.
 //
 // `key` on a directory returns a symbol LIST (11h) and on a file an atom
