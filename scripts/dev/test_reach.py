@@ -347,7 +347,12 @@ class Recorder:
             key: {f: sorted(v) for f, v in sorted(fields.items()) if v}
             for key, fields in self.owners.items()
         }
-        return {"owners": {k: v for k, v in owners.items() if v}, "tests": self.tests}
+        where = str(REPO.resolve())
+        return {
+            "owners": {k: v for k, v in owners.items() if v},
+            "tests": self.tests,
+            "where": dict.fromkeys(self.tests, where),
+        }
 
     def pytest_sessionfinish(self, session) -> None:
         self._read_children()
@@ -454,6 +459,7 @@ def merge(old: dict | None, runs: list[dict]) -> dict:
     sets up only some of what a fixture can do."""
     owners: dict[str, dict[str, set[str]]] = defaultdict(lambda: defaultdict(set))
     tests: dict[str, list[str]] = dict((old or {}).get("tests", {}))
+    where: dict[str, str] = dict((old or {}).get("where", {}))
     ran = {t for run in runs for t in run.get("tests", {})}
     for key, fields in (old or {}).get("owners", {}).items():
         if key in ran:
@@ -462,6 +468,7 @@ def merge(old: dict | None, runs: list[dict]) -> dict:
             owners[key][f].update(values)
     for run in runs:
         tests.update(run.get("tests", {}))
+        where.update(run.get("where", {}))
         for key, fields in run.get("owners", {}).items():
             for f, values in fields.items():
                 owners[key][f].update(values)
@@ -469,7 +476,20 @@ def merge(old: dict | None, runs: list[dict]) -> dict:
         "version": VERSION,
         "owners": {k: {f: sorted(v) for f, v in sorted(fs.items())} for k, fs in owners.items()},
         "tests": tests,
+        "where": where,
     }
+
+
+def recorded_here(record: dict, root: Path = REPO) -> set[str]:
+    """The tests whose entry a run in the work tree at `root` wrote (#2276).
+
+    The record is shared between the worktrees of a clone (python_tests_hook.py
+    seeds a new one from the last any of them wrote), so it also holds what
+    tests did on other branches - reads of files this tree has not got, or
+    has differently. Each run stamps the tests it ran with its root (`where`);
+    what judges the record against this tree judges only these."""
+    here = str(Path(root).resolve())
+    return {t for t, w in record.get("where", {}).items() if w == here and t in record["tests"]}
 
 
 def reach(record: dict, nodeid: str) -> dict[str, set[str]]:
@@ -537,18 +557,19 @@ def scan_of(path: str, files: Iterable[str]) -> list[str]:
     return kind if len(kind) > 1 else files
 
 
-def stale_scans(record: dict, files: Iterable[str]) -> set[str]:
+def stale_scans(record: dict, files: Iterable[str], tests: Iterable[str] | None = None) -> set[str]:
     """The tests whose record shows a scan of `files` as they were before some
     were added (#2276): each read at least half of a scan but not all of it,
     and lists a directory every file it missed is under - so a run now would
     read them. A test that judges the record by `scan_of` has them run first.
     One reading a file or two by name reads too little of a scan to be taken
     for one, and is left for the judge to find; rerunning a test is never a
-    reason for the judge to pass, only for its record to be current."""
+    reason for the judge to pass, only for its record to be current. `tests`
+    narrows it to some (by default every test in the record)."""
     files = list(files)
     known = set(files)
     out = set()
-    for nodeid in record["tests"]:
+    for nodeid in record["tests"] if tests is None else tests:
         seen = reach(record, nodeid)
         reads = seen.get("reads", set())
         lists = seen.get("lists", set())

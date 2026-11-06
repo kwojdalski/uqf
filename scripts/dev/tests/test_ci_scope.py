@@ -149,18 +149,10 @@ def test_every_tracked_file_is_in_a_known_area():
 
 
 def _reach_record() -> dict | None:
-    """The local record of what each Python test reads (the python-tests hook
-    writes it; CI has none): this checkout's, else the one its clone shares."""
-    test_reach = _load("test_reach")
-    record = test_reach.load()
-    if record is None:
-        common = subprocess.run(
-            ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
-            cwd=REPO, capture_output=True, text=True,
-        ).stdout.strip()  # fmt: skip
-        if common:
-            record = test_reach.load(Path(common) / "uqf-test-records" / test_reach.RECORD.name)
-    return record
+    """This checkout's record of what each Python test reads (the python-tests
+    hook writes it; CI has none). Never the clone's shared copy: every
+    worktree writes that, so it holds what tests read on other branches (#2276)."""
+    return _load("test_reach").load()
 
 
 @pytest.mark.judges_reach_record
@@ -180,15 +172,60 @@ def test_the_reach_record_agrees_about_which_web_files_python_reads():
     record = _reach_record()
     if record is None:
         pytest.skip("no .testreach.json: the python-tests hook writes one at commit")
-    test_reach = _load("test_reach")
     web = [f for f in scope._test_impact().tracked(REPO) if f.startswith("web/")]
-    reads = {t: test_reach.reach(record, t).get("reads", set()) for t in record["tests"]}
+    for path, specific in _named_reads(record, web, REPO).items():
+        s = scope.decide([("M", path)], None)
+        assert s.python, f"{path} is read by {specific[:3]}, but CI would skip the Python tests"
+
+
+def _named_reads(record: dict, web: list[str], root: Path) -> dict[str, list[str]]:
+    """{web/ file: the tests that read it by name rather than in a scan}, by
+    what this tree's runs recorded of this tree's files: a test another
+    worktree last ran, and a file only another branch has, are not this
+    tree's to judge (#2276)."""
+    test_reach = _load("test_reach")
+    here = test_reach.recorded_here(record, root)
+    reads = {t: test_reach.reach(record, t).get("reads", set()) & set(web) for t in here}
+    named = {}
     for path in web:
-        scan = test_reach.scan_of(path, web)
-        specific = [t for t, r in reads.items() if path in r and not set(scan) <= r]
+        scan = set(test_reach.scan_of(path, web))
+        specific = sorted(t for t, r in reads.items() if path in r and not scan <= r)
         if specific:
-            s = scope.decide([("M", path)], None)
-            assert s.python, f"{path} is read by {specific[:3]}, but CI would skip the Python tests"
+            named[path] = specific
+    return named
+
+
+def test_another_worktree_s_reads_in_the_record_are_not_judged(tmp_path):
+    """#2276: the record a worktree starts from is the clone's, so it holds
+    what tests did on other branches - a scan of a tree with other files, a
+    read of a file this branch has not got. Only this tree's runs, of this
+    tree's files, are judged; a test this tree ran that names a file still is."""
+    here, there = tmp_path / "here", tmp_path / "there"
+    web = ["web/a.ts", "web/b.ts", "web/c.ts", "web/x.mjs"]
+    record = {
+        "version": 1,
+        "owners": {
+            # this tree: a scan of every .ts, and one test naming x.mjs
+            "t.py::scan": {"reads": ["web/a.ts", "web/b.ts", "web/c.ts"]},
+            "t.py::names": {"reads": ["web/x.mjs"]},
+            # another branch: its scan, before c.ts; a read of its own file
+            "t.py::their_scan": {"reads": ["web/a.ts", "web/b.ts", "web/src/api/q.ts"]},
+            "t.py::their_named": {"reads": ["web/a.ts", "web/src/api/q.ts"]},
+        },
+        "tests": {
+            t: [t] for t in ("t.py::scan", "t.py::names", "t.py::their_scan", "t.py::their_named")
+        },
+        "where": {
+            "t.py::scan": str(here.resolve()),
+            "t.py::names": str(here.resolve()),
+            "t.py::their_scan": str(there.resolve()),
+            "t.py::their_named": str(there.resolve()),
+        },
+    }
+    assert _named_reads(record, web, here) == {"web/x.mjs": ["t.py::names"]}
+    assert _named_reads(record, web, tmp_path / "elsewhere") == {}
+    del record["where"]
+    assert _named_reads(record, web, here) == {}, "a record no run here stamped judges nothing"
 
 
 @pytest.mark.parametrize(

@@ -329,12 +329,13 @@ def run(decision: Decision, *, dry_run: bool = False) -> int:
 
 
 def _stale_scans() -> set[str]:
-    """The tests whose recorded scan of JUDGED misses a file it has now."""
+    """The tests this tree recorded whose scan of JUDGED misses a file it has
+    now. Another worktree's are not judged here, so are not rerun either."""
     record = test_reach.load(REACH_DATA)
     if record is None:
         return set()
     files = [f for f in _sibling("test_impact").tracked(REPO) if f.startswith(JUDGED)]
-    return test_reach.stale_scans(record, files)
+    return test_reach.stale_scans(record, files, test_reach.recorded_here(record, REPO))
 
 
 def _run_all(runs: list[list[str]]) -> int:

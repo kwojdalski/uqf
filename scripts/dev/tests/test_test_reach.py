@@ -331,3 +331,21 @@ def test_a_scan_recorded_before_a_file_was_added_is_stale_and_a_named_read_is_no
     files = ["web/a.ts", "web/b.ts", "web/c.ts", "web/d.ts"]
     assert reach.stale_scans(record, files) == {"t.py::scan"}
     assert reach.stale_scans(record, files[:3]) == set()
+
+
+def test_each_test_is_stamped_with_the_tree_whose_run_wrote_it(tmp_path):
+    """#2276: a merge keeps each test's stamp from the run that last ran it,
+    so a record seeded from another worktree says which entries are whose."""
+    old = {
+        "version": 1,
+        "owners": {"a": {"reads": ["x"]}, "b": {"reads": ["y"]}},
+        "tests": {"a": ["a"], "b": ["b"]},
+        "where": {"a": "/elsewhere", "b": "/elsewhere"},
+    }
+    recorder = reach.Recorder(tmp_path / "r.json")
+    recorder.tests = {"b": ["b"]}
+    merged = reach.merge(old, [recorder.data()])
+    here = str(reach.REPO.resolve())
+    assert merged["where"] == {"a": "/elsewhere", "b": here}
+    assert reach.recorded_here(merged) == {"b"}
+    assert reach.recorded_here({"tests": {"b": []}}) == set()
