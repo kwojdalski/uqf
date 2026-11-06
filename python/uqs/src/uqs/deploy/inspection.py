@@ -16,8 +16,9 @@ confirms-on-server command with --apply), `uqs target shell`, `uqs deploy
 push`, `rollback` and `prune`, `uqs target config restore`, and `uqs query
 --tunnel T` (#2179) - a q expression or session is a change wherever it runs,
 as `uqs --target T query` is. Reads - a status, `uqs schema --tunnel`, `uqs
-data diff`, the tunnel check, a dry run, the config history - still run: each
-sends only a program this tree wrote. Every caller that opens a tunnel to a
+data diff`, the tunnel check, a dry run, the config history, `uqs --target T
+data compress --report --hdb DIR` (#2219) - still run: each sends only a
+program this tree wrote. Every caller that opens a tunnel to a
 target's q is held to this by tests/test_tunnel_inspection.py. The frontend reads
 the same key, so its API refuses the same target's writes (uqf_frontend's
 inspection.py).
