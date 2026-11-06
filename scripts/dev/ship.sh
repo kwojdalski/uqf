@@ -30,7 +30,23 @@ root=$(cd "$(dirname "$0")/../.." && git rev-parse --path-format=absolute --git-
 [ -d "$wt" ] || wt="$root/.claude/worktrees/$wt"
 cd "$wt" || { echo "$pr: no worktree $wt"; exit 1; }
 logs=$(mktemp -d "${TMPDIR:-/tmp}/ship-$pr.XXXXXX")
-push() { timeout 120 git -c credential.helper= -c 'credential.helper=!gh auth git-credential' push -q 2>&1 | tail -1; }
+# An explicit refspec, because agent branches are --no-track (#2102), and a
+# timeout longer than the pre-push hooks, which take 8-25 minutes. A refused or
+# timed-out push fails the ship, and so does a remote head that is not HEAD
+# afterwards: CI on the old head would only fail on its missing attestation
+# (#2217).
+push() {
+  local branch rc=0
+  branch=$(git branch --show-current)
+  timeout 3600 git -c credential.helper= -c 'credential.helper=!gh auth git-credential' \
+    push -q origin "HEAD:refs/heads/$branch" > "$logs/push.log" 2>&1 || rc=$?
+  if [ "$rc" != "0" ]; then
+    echo "$pr: push failed (exit $rc, log $logs/push.log):"; grep -E "FAILED|error|rejected" "$logs/push.log" | head -5
+    return 1
+  fi
+  [ "$(git ls-remote origin "refs/heads/$branch" | cut -f1)" = "$(git rev-parse HEAD)" ] \
+    || { echo "$pr: push exited 0 but origin/$branch is not HEAD"; return 1; }
+}
 gate_ok() { python3 scripts/gates/check_kdbx_attestation.py origin/master HEAD > "$logs/gate.log" 2>&1; }
 # merge-tree exits 1 for a conflict, 0 for a clean merge, >1 for an error
 conflicted() {
@@ -82,7 +98,7 @@ for _ in 1 2 3; do
   fi
   upstream="origin/$(git branch --show-current)"
   if [ "$changed" = "1" ] || [ "$(git rev-list --count "$upstream"..HEAD 2>/dev/null || echo 1)" != "0" ]; then
-    push
+    push || exit 1
     echo "$pr: pushed"
     sleep 20
   fi

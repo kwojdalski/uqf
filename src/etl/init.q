@@ -56,6 +56,7 @@
 \l src/etl/core/config_snapshot.q
 \l src/etl/core/io_manager.q
 \l src/etl/core/io_hdb.q
+\l src/etl/core/io_hdb_eod.q
 \l src/etl/core/io_hdb_scoped.q
 \l src/etl/core/io_remote.q
 \l src/etl/core/io_remote_chunks.q

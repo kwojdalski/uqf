@@ -17,7 +17,13 @@
 / cycle commits a partition's offset only after .qetl publish of the record
 / RETURNED. Over the TorQ transport that call is a synchronous .u.upd to the
 / segmented tickerplant, so "returned" means the STP ran its update handler
-/ without error. In its default batch mode (`defaultbatch`) that handler has
+/ without error - which is the publisher's to prove, because the STP's error
+/ mode (its default) swallows a failing update and answers success. The TorQ
+/ publisher (.qtorq.publish, #2192) therefore throws when the plant refused the
+/ batch: it counts as a publish that threw, below. The batch is RETRIED, not
+/ quarantined - it stays in the backlog and publish_errors rises each cycle -
+/ because a refusal of the fixed envelope is the plant's state (a schema skew
+/ mid-deploy), not the records', and it clears when the plant does. In its default batch mode (`defaultbatch`) that handler has
 / also handed the record to its log file's write handle; in `memorybatch` it
 / has not even done that, and in either mode the write is the operating
 / system's to flush, not an fsync. So the claim is "the tickerplant had the

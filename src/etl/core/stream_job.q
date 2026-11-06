@@ -597,6 +597,7 @@
             $[`period in key d; d`period; 0Nn]));::];
     if[`on_start in key d; (d`on_start)[]];
     tr[`connect][];
+    .qetl.job.stream.rolling.roll_hooks[job]:enlist $[`plant_roll in key tr; tr`plant_roll; {[] 0Np}];
     .qetl.job.stream.require_recovery[job;tr];
     if[count d`outputs;
         if[`check_publishable in key tr; tr[`check_publishable] d`outputs];
