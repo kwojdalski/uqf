@@ -629,7 +629,7 @@ sub_note_failure:{[t]
 / @param t the table
 / @return 1b when no backoff is pending or it has elapsed
 / @private
-sub_due:{[t] $[t in key sub_next_try; .z.p>=sub_next_try[t]-sub_retry_period%2; 1b]}
+sub_due:{[t] $[t in key sub_next_try; .z.p>=sub_next_try[t]-`timespan$(`long$sub_retry_period) div 2; 1b]}
 
 / TorQ's .servers.retry reopens a closed handle and .sub.autoreconnect then
 / resubscribes once. If that resubscription fails the handle stays open, so
@@ -644,7 +644,8 @@ sub_retry_tick:{[]
     rows:rows where sub_due each rows`table;
     if[0=count rows; :`symbol$()];
     / the plant handle as it is now, not the dead one the failed row remembers
-    sub_resubscribe each ![rows;();0b;enlist[`w]!enlist enlist h];
+    rows[`w]:(count rows)#h;
+    sub_resubscribe each rows;
     rows`table}
 
 / Turn on TorQ's resubscription for this process and point it at ours.
