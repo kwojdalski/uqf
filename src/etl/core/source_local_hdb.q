@@ -250,13 +250,13 @@
     if[not .qetl.log.enabled`TRACE; :f[read;range_from;range_to]];
     t0:.z.p;
     req:`transport`request!(`local;.qetl.log.next_request[]);
-    .[{.qetl.log.trc[x;y;z]};(`local;"query sent";
+    .[{.qetl.log.ch.trc[x;y;z]};(`source;"query sent";
         (enlist[`call]!enlist .qetl.source.call_text f),req,`range_from`range_to!(range_from;range_to));::];
     r:.[f;(read;range_from;range_to);{[req;t0;e]
-        .[{.qetl.log.trc[x;y;z]};(`local;"query failed";
+        .[{.qetl.log.ch.trc[x;y;z]};(`source;"query failed";
             req,`error`ms!(e;`long$(.z.p-t0)%1000000));::];
         'e}[req;t0]];
-    .[{.qetl.log.trc[x;y;z]};(`local;"query returned";
+    .[{.qetl.log.ch.trc[x;y;z]};(`source;"query returned";
         req,`rows`ms!(count r;`long$(.z.p-t0)%1000000));::];
     r}
 

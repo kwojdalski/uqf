@@ -32,8 +32,8 @@
     owed:.qetl.job.bounded.owed_reactions[worker];
     ws:distinct select range_from, range_to from owed;
     if[0=count ws; :0];
-    .qetl.log.warn[worker;"re-firing reactions for windows covered without a successful reaction";
-        `windows`reactions!(count ws;distinct owed`name)];
+    .qetl.log.ch.warn[`coverage;"re-firing reactions for windows covered without a successful reaction";
+        (enlist[`worker]!enlist worker),`windows`reactions!(count ws;distinct owed`name)];
     sum .qetl.job.bounded.replay_window[worker] each ws}
 
 / The reactions this run's range still owes: (name; range_from; range_to) for
@@ -61,8 +61,8 @@
         (cfg`dataset;cfg`partition;s`source_version;s`range_from;s`range_to);
         {[e] (0b;e)}];
     if[first r; :last r];
-    .qetl.log.err[worker;"cannot tell which reactions are owed - the reaction or coverage ledger is unreadable";
-        `dataset`error!(cfg`dataset;last r)];
+    .qetl.log.ch.err[`coverage;"cannot tell which reactions are owed - the reaction or coverage ledger is unreadable";
+        (enlist[`worker]!enlist worker),`dataset`error!(cfg`dataset;last r)];
     '"owed_reactions: cannot tell which reactions ",string[worker]," owes - ",last r}
 
 / Private: the error a run that leaves reactions owed ends `partial with.
@@ -83,13 +83,13 @@
     cfg:.qetl.job.bounded.def worker;
     f:.qetl.job.bounded.own[worker;`fetch][w`range_from;w`range_to];
     if[`failed~f`state;
-        .qetl.log.err[worker;"could not re-fetch a window to re-fire its reactions";
-            `range_from`range_to`error!(w`range_from;w`range_to;f`error)];
+        .qetl.log.ch.err[`coverage;"could not re-fetch a window to re-fire its reactions";
+            (enlist[`worker]!enlist worker),`range_from`range_to`error!(w`range_from;w`range_to;f`error)];
         :0];
     out:@[.qetl.job.bounded.transform_window[worker;w;];f`result;{[e] (`transform_failed;e)}];
     if[(0h=type out) and `transform_failed~first out;
-        .qetl.log.err[worker;"could not transform a window to re-fire its reactions";
-            `range_from`range_to`error!(w`range_from;w`range_to;last out)];
+        .qetl.log.ch.err[`coverage;"could not transform a window to re-fire its reactions";
+            (enlist[`worker]!enlist worker),`range_from`range_to`error!(w`range_from;w`range_to;last out)];
         :0];
     @[{[a] .qetl.reaction.notify_published_for . a};
       (cfg`dataset;cfg`partition;(.qetl.job.bounded.spec worker)`source_version;w`range_from;w`range_to;out;.qetl.io.for_cfg cfg);

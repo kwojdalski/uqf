@@ -418,7 +418,7 @@
     / Never fails the reaction it records: a ledger that cannot be written is
     / logged, and the next run's `pending` simply sees the window as not done.
     @[.qetl.reaction.persist_outcome;(item`dataset;item`partition;item`source_version;name;item`range_from;item`range_to;outcome;.z.p;.qetl.reaction.revision_of[item`dataset;name]);
-      {[e] @[{.qetl.log.err[`qetl.reaction;"could not record a reaction outcome";enlist[`error]!enlist x]};e;{[e2] (::)}]}];
+      {[e] @[{.qetl.log.ch.err[`coverage;"could not record a reaction outcome";enlist[`error]!enlist x]};e;{[e2] (::)}]}];
     }
 
 / ------------------------------------------------------ DURABLE OUTCOMES
@@ -619,7 +619,7 @@
 / failure rather than an error inside an error handler.
 / @private
 .qetl.reaction.log_failure:{[item;nm;e]
-    @[{.qetl.log.err[`qetl.reaction;"reaction failed";
+    @[{.qetl.log.ch.err[`lifecycle;"reaction failed";
         `dataset`reaction`range_from`range_to`error!
         (x`dataset;y;x`range_from;x`range_to;z)]}[item;nm];e;{[e] (::)}]}
 

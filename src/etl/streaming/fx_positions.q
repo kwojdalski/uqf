@@ -71,8 +71,8 @@
     / the batch with it, so it is dropped and said out loud.
     bad:(null rows`side) or (null rows`size) or null rows`price;
     if[any bad;
-        .qetl.log.warn[`fx_positions;"dropped fills with a null side, size or price - they cannot be netted";
-            enlist[`fills]!enlist `long$sum bad]];
+        .qetl.log.ch.warn[`transform;"dropped fills with a null side, size or price - they cannot be netted";
+            (enlist[`job]!enlist `fx_positions),enlist[`fills]!enlist `long$sum bad]];
     updated:.qf.port.apply_desk_fills[
         .qpipe.job.fx_positions.dimensions xkey book;
         rows where not bad];
@@ -206,8 +206,8 @@
     path:getenv `UQF_FX_POSITION_LIMITS;
     if[count path; .qpipe.job.fx_positions.load_limits[.qpipe.job.fx_positions.read_limits[path]]];
     if[0=count .qpipe.job.fx_positions.limits;
-        .qetl.log.warn[`fx_positions;"no limits loaded - fx_limit_breach stays empty and nothing is policed. Name a limits CSV in UQF_FX_POSITION_LIMITS, or load one over IPC with load_limits";
-            enlist[`variable]!enlist "UQF_FX_POSITION_LIMITS"]];
+        .qetl.log.ch.warn[`config;"no limits loaded - fx_limit_breach stays empty and nothing is policed. Name a limits CSV in UQF_FX_POSITION_LIMITS, or load one over IPC with load_limits";
+            (enlist[`job]!enlist `fx_positions),enlist[`variable]!enlist "UQF_FX_POSITION_LIMITS"]];
     count .qpipe.job.fx_positions.limits}
 
 / Net one batch of fills into the book.

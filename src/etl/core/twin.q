@@ -166,7 +166,7 @@
         '"twin: ",string[worker]," is declared a twin of ",string[job]," but ","; " sv p];
     c:.qetl.twin.calculation[cfg`transform;live];
     if[c=`not_established;
-        .[{.qetl.log.dbg[x;y;z]};(worker;"twin declared: ",.qetl.twin.unestablished;
+        .[{.qetl.log.ch.dbg[`config;y;(enlist[`worker]!enlist x),z]};(worker;"twin declared: ",.qetl.twin.unestablished;
             `twin_of`outputs`transform`live_transform!(job;cfg`dataset;cfg`transform;.qetl.twin.live_transform[live]));::]];
     c}
 

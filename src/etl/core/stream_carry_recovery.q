@@ -37,11 +37,11 @@
 / @return 1b when the marker was recorded
 / @eg .qetl.job.stream.carry_end_of_day[2026.10.09;`no_such_job]  / 0b: the snapshot failed, so no marker
 .qetl.job.stream.carry_end_of_day:{[dt;j]
-    ok:@[{.qetl.job.stream.snapshot x; 1b};j;{[dt;j;e] .qetl.log.err[j;"carry snapshot failed";`date`error!(dt;e)]; 0b}[dt;j]];
+    ok:@[{.qetl.job.stream.snapshot x; 1b};j;{[dt;j;e] .qetl.log.ch.err[`eod;"carry snapshot failed";(enlist[`job]!enlist j),`date`error!(dt;e)]; 0b}[dt;j]];
     if[not ok; :0b];
     / A one-row table, not a bare date: PeachQ cannot read a `set atom back.
     @[{[dt;j] .qetl.job.bounded.state.durable_set[.qetl.job.stream.carry_marker_path[j];([] last_end_of_day:enlist dt)]; 1b}[dt];j;
-        {[j;e] .qetl.log.warn[j;"could not record the end of day it carried";enlist[`error]!enlist e]; 0b}[j]]}
+        {[j;e] .qetl.log.ch.warn[`eod;"could not record the end of day it carried";(enlist[`job]!enlist j),enlist[`error]!enlist e]; 0b}[j]]}
 
 / The keys of a transport that can recover a carrying job across an end of day.
 .qetl.job.stream.recovery_keys:`earlier_days`plant_day`has_log
@@ -63,8 +63,8 @@
             ", " sv string .qetl.job.stream.recovery_keys except present];
     / $[], not `and`: q evaluates both sides, and tr`recovery of a transport without it is a null
     if[$[`recovery in key tr; not tr`recovery; 0b]; :job];
-    .qetl.log.err[job;"this transport has none of earlier_days, plant_day and has_log, so a restart across an end of day will lose the state this job carries - give the transport all three, or state recovery:0b if it cannot recover";
-        enlist[`transport_keys]!enlist key tr];
+    .qetl.log.ch.err[`eod;"this transport has none of earlier_days, plant_day and has_log, so a restart across an end of day will lose the state this job carries - give the transport all three, or state recovery:0b if it cannot recover";
+        (enlist[`job]!enlist job),enlist[`transport_keys]!enlist key tr];
     job}
 
 / The day the plant's log is on - the log `subscribe` is about to replay (#1190).
@@ -106,8 +106,8 @@
     msgs:tr[`earlier_days][tbls;last_eod+1;today-1];
     if[`has_log in key tr; .qetl.job.stream.caught_up[job]:tr[`has_log][last_eod+1]];
     {[h;m] h . m}[h] each msgs;
-    .qetl.log.info[job;"replayed the logs of the days it was down across, to rebuild the state it carried";
-        `last_end_of_day`through`messages!(last_eod;today-1;count msgs)];
+    .qetl.log.ch.info[`eod;"replayed the logs of the days it was down across, to rebuild the state it carried";
+        (enlist[`job]!enlist job),`last_end_of_day`through`messages!(last_eod;today-1;count msgs)];
     count msgs}
 
 / After a carrying job's replay, say whether it found no snapshot because
@@ -130,8 +130,8 @@
     if[job in key .qetl.job.stream.caught_up; if[.qetl.job.stream.caught_up job; :0b]];
     last_eod:.qetl.job.stream.last_end_seen[job];
     if[(null last_eod) or last_eod>=today-1; :0b];
-    .qetl.log.err[job;"replayed with no carried snapshot, and the last end of day this job saw was before yesterday - it was down at an end of day, so the state carried from before today is missing, and no earlier log held it";
-        `last_end_of_day`today`table!(last_eod;today;.qetl.job.stream.def[job][`carry]`table)];
+    .qetl.log.ch.err[`eod;"replayed with no carried snapshot, and the last end of day this job saw was before yesterday - it was down at an end of day, so the state carried from before today is missing, and no earlier log held it";
+        (enlist[`job]!enlist job),`last_end_of_day`today`table!(last_eod;today;.qetl.job.stream.def[job][`carry]`table)];
     1b}
 
 \d .

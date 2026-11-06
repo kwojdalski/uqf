@@ -100,7 +100,7 @@ if[`verbose in key .qproc.standalone.opts; .qetl.log.debug 1b];
     .qproc.standalone.declare_schemas[];
     existing:.qetl.tick.open_log[.qproc.standalone.opt[`logdir;"tplog"];`$"uqf",$[null port;"local";string port];.z.D];
     if[not null port; system "p ",string port];
-    .qetl.log.info[`run_stream;"plant started";
+    .qetl.log.ch.info[`lifecycle;"plant started";
         `port`log`existing_messages!(port;.qetl.tick.log_path;existing)];
     / A subscriber that drops must stop receiving, or every publish throws
     / on a dead handle and takes the plant down with it.
@@ -130,7 +130,7 @@ if[`verbose in key .qproc.standalone.opts; .qetl.log.debug 1b];
         row:.qproc.standalone.timers i;
         if[not (null row 3) or now>=(row 3)+row 2; :()];
         .qproc.standalone.timers[i;3]:now;
-        @[row 1;::;{[job;e] .qetl.log.err[job;"timer function failed";enlist[`error]!enlist e];}[row 0]];
+        @[row 1;::;{[job;e] .qetl.log.ch.err[`lifecycle;"timer function failed";(enlist[`job]!enlist job),enlist[`error]!enlist e];}[row 0]];
         }[now];
     fire each til count .qproc.standalone.timers;
     }
@@ -142,7 +142,7 @@ if[`verbose in key .qproc.standalone.opts; .qetl.log.debug 1b];
 / @return the date that ended
 .qproc.standalone.end_day:{[today]
     ended:.qetl.tick.roll today;
-    .qetl.log.info[`run_stream;"end of day";`ended`today!(ended;today)];
+    .qetl.log.ch.info[`eod;"end of day";`ended`today!(ended;today)];
     .qetl.job.stream.end_of_day ended;
     ended}
 
@@ -212,7 +212,7 @@ if[`verbose in key .qproc.standalone.opts; .qetl.log.debug 1b];
 .qproc.standalone.remote_transport:{[tp]
     `connect`publisher`subscribe`timer`earlier_days`plant_day`has_log`plant_roll!(
         {[tp]
-            .qetl.log.info[`run_stream;"connecting to the plant";enlist[`port]!enlist tp];
+            .qetl.log.ch.info[`ipc;"connecting to the plant";enlist[`port]!enlist tp];
             `.qproc.standalone.h set @[hopen;tp;{[tp;e]
                 '"run_stream: cannot connect to the plant on port ",string[tp]," (",e,") - is it running? start one with -plant ",string tp}[tp]];}[tp];
         {[] {[h;t;x] h(`.qetl.tick.publish;t;x)}[.qproc.standalone.h]};
@@ -276,7 +276,7 @@ if[`verbose in key .qproc.standalone.opts; .qetl.log.debug 1b];
         asked:jobs;
         jobs:.qproc.standalone.with_upstream jobs;
         if[count added:jobs except asked;
-            .qetl.log.info[`run_stream;"starting what the jobs subscribe to";
+            .qetl.log.ch.info[`lifecycle;"starting what the jobs subscribe to";
                 `asked`upstream!(asked;added)]];
         .qproc.standalone.start_plant plant_port];
     if[not null listen; system "p ",string listen];

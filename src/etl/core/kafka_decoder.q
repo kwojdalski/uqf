@@ -133,7 +133,7 @@
     rows:.qetl.kafka.envelope_columns#rows;
     back:.qetl.kafka.restarted[.qetl.kafka.decoder.var[job;`marks];rows];
     if[count back;
-        .qetl.log.warn[job;"partition offsets went backwards - its mark is reset and the new records are decoded";enlist[`partitions]!enlist count back];
+        .qetl.log.ch.warn[`source;"partition offsets went backwards - its mark is reset and the new records are decoded";(enlist[`job]!enlist job),enlist[`partitions]!enlist count back];
         .qetl.kafka.decoder.put[job;`marks;.qetl.kafka.forget[.qetl.kafka.decoder.var[job;`marks];back]];
         .qetl.kafka.decoder.put[job;`done;.qetl.kafka.forget[.qetl.kafka.decoder.var[job;`done];back]]];
     .qetl.kafka.admit[.qetl.kafka.decoder.var[job;`marks];rows]}
@@ -200,7 +200,7 @@
     .qetl.kafka.decoder.put[job;`marks;.qetl.kafka.decoder.restart_marks[.qetl.kafka.decoder.var[job;`marks];held]];
     .qetl.kafka.decoder.put[job;`held;0#held];
     .qetl.kafka.decoder.put[job;`done;.qetl.kafka.coordinate_set 0#.qetl.kafka.envelope_empty];
-    if[count todo; .[{.qetl.log.info[x;y;z]};(job;"handled records that arrived while this job was down";enlist[`records]!enlist count todo);::]];
+    if[count todo; .[{.qetl.log.ch.info[`lifecycle;y;(enlist[`job]!enlist x),z]};(job;"handled records that arrived while this job was down";enlist[`records]!enlist count todo);::]];
     n}
 
 \d .

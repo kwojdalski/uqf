@@ -149,7 +149,7 @@
     if[m~(::); :m];
     if[current~m`to;
         .qetl.job.stream.delivery.unmark[name];
-        .[{.qetl.log.dbg[x;y;z]};(name;"in-flight marker cleared - its page was saved";`from`to!m`from`to);::];
+        .[{.qetl.log.ch.dbg[`coverage;y;(enlist[`job]!enlist x),z]};(name;"in-flight marker cleared - its page was saved";`from`to!m`from`to);::];
         :(::)];
     m}
 
@@ -177,12 +177,12 @@
         out:(key out)!kept;
         n:sum count each kept;
         .qetl.stream_health.record_doubt[job;1b;sent-n;m];
-        .[{.qetl.log.warn[x;y;z]};(job;"in-doubt page resolved by row key";
+        .[{.qetl.log.ch.warn[`coverage;y;(enlist[`job]!enlist x),z]};(job;"in-doubt page resolved by row key";
             `from`to`fetched`already_published`publishing!(m`from;m`to;sent;sent-n;n));::];
         :out];
     why:$[`row_key in key p; "no reader of the published tables is wired"; "the job declares no poll row_key"];
     .qetl.stream_health.record_doubt[job;0b;sent;m];
-    .[{.qetl.log.warn[x;y;z]};(job;"in-doubt page published again - possibly duplicated";
+    .[{.qetl.log.ch.warn[`coverage;y;(enlist[`job]!enlist x),z]};(job;"in-doubt page published again - possibly duplicated";
         `from`to`rows`reason!(m`from;m`to;sent;why));::];
     out}
 
@@ -229,7 +229,7 @@
         '"tick: ",string[job],"'s publish of ",string[n]," row(s) onto ",string[t],
          " was not acknowledged - the tickerplant's logged count went from ",string[before]," to ",string[after],
          ", so the cursor stays and the page is in doubt"];
-    .[{.qetl.log.dbg[x;y;z]};(job;"publish acknowledged";`table`rows`logged!(t;n;after));::];
+    .[{.qetl.log.ch.dbg[`ipc;y;(enlist[`job]!enlist x),z]};(job;"publish acknowledged";`table`rows`logged!(t;n;after));::];
     r}
 
 \d .

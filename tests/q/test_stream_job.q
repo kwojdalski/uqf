@@ -446,9 +446,10 @@
 / because the transform `f` calls logs lines of its own.
 .qt.qetl.job.stream.logged:{[id;f]
     keep:.qetl.log.line; `.qt.qetl.job.stream.lines set ();
-    .qetl.log.line:{[level;who;text;fields] .qt.qetl.job.stream.lines,:enlist (who;level;text;fields)};
+    .qetl.log.line:{[level;channel;text;fields] .qt.qetl.job.stream.lines,:enlist ($[`job in key fields; fields`job; `];level;text;fields)};
     r:@[f;::;{x}]; .qetl.log.line:keep;
     if[10h=type r; 'r];
+    / The job is a FIELD, not the category (#2279): select a job's lines by it.
     1_/:.qt.qetl.job.stream.lines where id=first each .qt.qetl.job.stream.lines}
 
 .qt.qetl.job.stream.test_cross_warns_once_per_change_in_the_unpriced_pairs:{[t]
@@ -1067,13 +1068,14 @@
 
 .qt.qetl.job.stream.test_positions_drop_and_log_a_null_priced_fill:{[t]
     .qt.qetl.job.stream.reset[];
-    saved:.qetl.log.warn;
-    `.qetl.log.warn set {[id;text;fields] `.qt.qetl.job.stream.fx_warned set (id;text;fields);};
+    saved:.qetl.log.ch.warn;
+    `.qetl.log.ch.warn set {[channel;text;fields] `.qt.qetl.job.stream.fx_warned set (channel;text;fields);};
     b:update price:0n from .qt.qetl.job.stream.orders_batch[] where order_id=2;
-    r:@[{.qt.qetl.job.stream.to_fx_positions[x]; 1b};b;{[saved;e] `.qetl.log.warn set saved; 'e}[saved]];
-    `.qetl.log.warn set saved;
+    r:@[{.qt.qetl.job.stream.to_fx_positions[x]; 1b};b;{[saved;e] `.qetl.log.ch.warn set saved; 'e}[saved]];
+    `.qetl.log.ch.warn set saved;
     .qunit.assertEquals[r;1b;"a null-priced fill does not crash the stream job"];
-    .qunit.assertEquals[(.qt.qetl.job.stream.fx_warned 0);`fx_positions;"it is logged"];
+    .qunit.assertEquals[(.qt.qetl.job.stream.fx_warned 0);`transform;"it is logged on the transform channel"];
+    .qunit.assertEquals[(.qt.qetl.job.stream.fx_warned 2)`job;`fx_positions;"naming the job as a field"];
     .qunit.assertEquals[(.qt.qetl.job.stream.fx_warned 2)`fills;1j;"naming how many"];
     .qt.support.assertApprox[.qpipe.job.fx_positions.positions[`EURUSD`london`spot]`base_qty;1000000f;1e-9;
         "and the unpriced 400k sale is in neither leg of london's book"];

@@ -44,10 +44,9 @@
 / process, and `id` named nothing a reader could select on. Now `proc` is the
 / emitting process (TorQ's procname; outside TorQ, the runner's name -
 / .qetl.log.process), and a call made through .qetl.log.ch carries a
-/ channel from the one declared list. A call made through the older
-/ trc/dbg/info/warn/err still passes its first argument through as the id, so
-/ a line no one has assigned a channel yet reads as an unfamiliar category,
-/ which the reader shows as it is.
+/ channel from the one declared list: every call goes through .qetl.log.ch,
+/ which refuses a name that is not declared. There is no id-first form, so a
+/ worker or source name can no longer pass as a category (#2279).
 / .
 / A channel FILTERS WHAT A READER SHOWS (`uqs logs --channel`). It does not
 / stop a record being generated, and does not save the cost of rendering it:
@@ -220,8 +219,7 @@
 
 / Private: the transport. TorQ's .lg.l when loaded, stdout otherwise.
 / .
-/ `id` is the channel (or, for an unassigned call, the caller's own category):
-/ TorQ's `id` column. `proc` is the emitting process, never the id.
+/ `id` is the channel: TorQ's `id` column. `proc` is the emitting process, never the id.
 / Level gating outside TorQ mirrors TorQ's own default: DEBUG is suppressed
 / unless debug[] was called, TRACE unless trace[] was, everything else prints.
 / That way a test that asserts "this DEBUG line was not emitted" gets the same
@@ -351,29 +349,9 @@
 .qetl.log.request_seq:0
 .qetl.log.next_request:{[] .qetl.log.request_seq::.qetl.log.request_seq+1; .qetl.log.request_seq}
 
-/ The five levels, for a call with no channel yet. `id` is passed through as
-/ TorQ's `id` column unchanged - a worker or component name, which a reader
-/ shows as an unfamiliar category. New call sites use .qetl.log.ch.
-/ @param id the worker or component, as a symbol
-/ @param text a short fixed message - what happened, not the values
-/ @param fields a dict of the values, rendered k=v after the text
-/ @eg .qetl.log.info[`demo_deals_backfill;"window published";
-/        `range_from`range_to`rows!(2026.09.11D00:00;2026.09.12D00:00;1234)]
-.qetl.log.trc:{[id;text;fields]  .qetl.log.line[`TRACE;id;text;fields]}
-.qetl.log.dbg:{[id;text;fields]  .qetl.log.line[`DEBUG;id;text;fields]}
-.qetl.log.info:{[id;text;fields] .qetl.log.line[`INFO;id;text;fields]}
-.qetl.log.warn:{[id;text;fields] .qetl.log.line[`WARNING;id;text;fields]}
-
-/ Log an error. Does NOT throw and does NOT exit - TorQ's .lg.e does both
-/ depending on .proc state, which is right for an init failure and wrong
-/ for a worker recording that one window failed and moving on. A
-/ worker that wants to abort throws itself; this only records.
-.qetl.log.err:{[id;text;fields]  .qetl.log.line[`ERROR;id;text;fields]}
-
 / ------------------------------------------------------------ CHANNELS
 / .
-/ The same five levels for a call that knows which subsystem it concerns:
-/ (channel; text; fields). The channel must be one of .qetl.log.channels and
+/ The five levels, each taking (channel; text; fields). The channel must be one of .qetl.log.channels and
 / is refused otherwise - at the call site, so a test that reaches the line
 / finds a misspelling. The worker, source or window the line is about is a
 / FIELD (or the scoped context), not an argument.
@@ -388,6 +366,10 @@
         '"unknown log channel ",.Q.s1[channel],": one of ",", " sv string .qetl.log.channels];
     channel}
 
+/ err records an error. It does NOT throw and does NOT exit - TorQ's .lg.e does
+/ both depending on .proc state, right for an init failure and wrong for a
+/ worker recording that one window failed and moving on. A worker that wants
+/ to abort throws itself; this only records.
 / @param channel one of .qetl.log.channels
 / @param text a short fixed message - what happened, not the values
 / @param fields a dict of the values, rendered k=v after the text

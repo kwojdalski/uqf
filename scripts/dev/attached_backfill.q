@@ -163,7 +163,7 @@ system"l scripts/dev/attached_calendar.q";
         `.qdev.attached.last_failed set r`failed;
         if[not s`dirty; .qetl.coverage.release_ready asked];
         if[s[`dirty] and status`final;
-            .qetl.log.err[`attached_backfill;"rows are written and covered but NOT queryable: a reader has not reloaded - re-run the same command to ask again, nothing will be rewritten";
+            .qetl.log.ch.err[`storage;"rows are written and covered but NOT queryable: a reader has not reloaded - re-run the same command to ask again, nothing will be rewritten";
                 `readers`failed!(`$", " sv string .qdev.attached.readers_named`name;", " sv r`failed)]]];
     `.qdev.attached.reload_state set s;
     d`act}
@@ -180,7 +180,7 @@ system"l scripts/dev/attached_calendar.q";
     if[not .qetl.coverage.outstanding[cfg`dataset;cfg`partition;v]; :0b];
     `.qetl.coverage.unready set distinct .qetl.coverage.unready,([] dataset:enlist cfg`dataset; partition:enlist cfg`partition; source_version:enlist v);
     @[`.qdev.attached.reload_state;`dirty;:;1b];
-    .qetl.log.info[worker;"coverage the readers have not loaded yet - this run asks them to reload";`dataset`source_version!(cfg`dataset;v)];
+    .qetl.log.ch.info[`coverage;"coverage the readers have not loaded yet - this run asks them to reload";(enlist[`worker]!enlist worker),`dataset`source_version!(cfg`dataset;v)];
     1b}
 
 / ------------------------------------------------------------ REMOTE WRITER (#1650)
@@ -269,11 +269,11 @@ $[remote;
         [froot:$["_own_"~first o`force_hdb; `; hsym `$first o`force_hdb];
          fbounds:(`max_date`destination!(@[.qdev.attached.forced_max_date;o;{[e] -1 e; exit 2}];bounds`destination)),.qetl.io.calendar_bound o;
          .qetl.io.default:.qdev.attached.forced_manager[call;froot;(.qetl.source.def decl`source)`time_column;fbounds];
-         .qetl.log.warn[worker;"FORCED: appending straight into the writer's HDB - nothing is checked there, a re-run duplicates rows, and no reader is told to reload";
-            `attachment`destination`writer`root`state`max_date!(`$first o`attachment;bounds`destination;`$first o`writer;$[null froot;`$".wdb.hdbdir";froot];state;fbounds`max_date)]];
+         .qetl.log.ch.warn[`storage;"FORCED: appending straight into the writer's HDB - nothing is checked there, a re-run duplicates rows, and no reader is told to reload";
+            (enlist[`worker]!enlist worker),`attachment`destination`writer`root`state`max_date!(`$first o`attachment;bounds`destination;`$first o`writer;$[null froot;`$".wdb.hdbdir";froot];state;fbounds`max_date)]];
         [.qetl.io.default:.qetl.io.remote.manager[call;`$first o`attachment;decl`dataset],enlist[`on_ready]!enlist .qdev.attached.remote_ready;
-         .qetl.log.info[worker;"extracting here; the receiver on the destination's machine writes the HDB";
-            `attachment`destination`writer`state!(`$first o`attachment;bounds`destination;`$first o`writer;state)]]]];
+         .qetl.log.ch.info[`lifecycle;"extracting here; the receiver on the destination's machine writes the HDB";
+            (enlist[`worker]!enlist worker),`attachment`destination`writer`state!(`$first o`attachment;bounds`destination;`$first o`writer;state)]]]];
     [root:hsym `$first o`hdb;
      col:(.qetl.source.def decl`source)`time_column;
      bounds:@[.qdev.attached.bounds;o;{[e] -1 "attached_backfill: bad bounds: ",e; exit 2}];
@@ -282,8 +282,8 @@ $[remote;
      .qdev.attached.readers_named:.qdev.attached.readers o;
      .qdev.attached.reach_user:first o`user;
      .qetl.io.default:mgr,enlist[`on_ready]!enlist .qdev.attached.on_ready;
-     .qetl.log.info[worker;"writing into an attached stack's HDB";
-        `attachment`destination`root`partition_col`max_date`deadline`state`readers!(`$first o`attachment;bounds`destination;root;col;bounds`max_date;bounds`deadline;state;`$", " sv string .qdev.attached.readers_named`name)]]];
+     .qetl.log.ch.info[`storage;"writing into an attached stack's HDB";
+        (enlist[`worker]!enlist worker),`attachment`destination`root`partition_col`max_date`deadline`state`readers!(`$first o`attachment;bounds`destination;root;col;bounds`max_date;bounds`deadline;state;`$", " sv string .qdev.attached.readers_named`name)]]];
 / forced: no reader is told, so coverage cannot wait for one
 .qetl.coverage.defer_ready:not forced;
 
@@ -293,8 +293,8 @@ if[.qetl.job.bounded.runtime.allows`record_run; .qetl.run.attach[]];
 / catch-up sits between init and run: it is what lets an idle re-run ask the readers again.
 result:.Q.trp[{[ns;spec;w;ignored] (` sv ns,`init)[spec]; .qdev.attached.catch_up w; (` sv ns,`run)[]}[decl`ns;s`spec;worker];::;
     {[e;bt]
-        .qetl.log.err[`attached_backfill;"run failed";enlist[`error]!enlist e];
-        .qetl.log.err[`attached_backfill;"backtrace";enlist[`trace]!enlist .Q.sbt bt];
+        .qetl.log.ch.err[`lifecycle;"run failed";enlist[`error]!enlist e];
+        .qetl.log.ch.err[`lifecycle;"backtrace";enlist[`trace]!enlist .Q.sbt bt];
         `state`error!(`failed;e)}];
 / An idle run never finishes its store, so what catch_up took on is asked here; a run that wrote has
 / already asked and released, or failed to.
@@ -303,7 +303,7 @@ if[count .qetl.coverage.unready;
     $[remote; [.qetl.io.finish .qetl.io.default]; .qdev.attached.on_ready `finished`pending`final!(0;0;1b)]];
 .qdev.attached.release o;
 fin:.qdev.attached.outcome[result;not .qetl.job.bounded.runtime.allows`finish_store;forced];
-.qetl.log.info[worker;"attached backfill finished";result,fin,`destination`reload_owed!(bounds`destination;.qdev.attached.reload_state`dirty)];
+.qetl.log.ch.info[`lifecycle;"attached backfill finished";(enlist[`worker]!enlist worker),result,fin,`destination`reload_owed!(bounds`destination;.qdev.attached.reload_state`dirty)];
 / the launcher reads this line: written and queryable are different things
 -1 "RESULT ",.j.j `worker`state`outcome`queryable`error`destination`readers`failed_readers!(string worker;string result`state;string fin`outcome;fin`queryable;$[`error in key result;$[10h=type e:result`error;e;string e];""];string bounds`destination;string .qdev.attached.readers_named`name;.qdev.attached.last_failed);
 exit fin`code;

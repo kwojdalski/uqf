@@ -299,7 +299,7 @@
         why:?[null et;`no_event_time;`late];
         gone:(x where out),'flip enlist[`reason]!enlist why where out;
         (` sv ns,`dropped) set -1000 sublist (get ` sv ns,`dropped),gone;
-        .qetl.log.warn[name;"row dropped - late or without an event time";`rows`first_event!(count gone;min gone tc)]];
+        .qetl.log.ch.warn[`transform;"row dropped - late or without an event time";(enlist[`transform]!enlist name),`rows`first_event!(count gone;min gone tc)]];
     pq insert x where not out;
     stamps:rcv where not null rcv;
     if[count stamps;
@@ -325,7 +325,7 @@
     if[not name in key h; :.qetl.job.stream.rolling.day_start clock];
     r:@[{(1b;x[])};first h name;{(0b;x)}];
     if[not first r;
-        .qetl.log.warn[name;"the plant could not say when its log began - covering from the first message";enlist[`error]!enlist last r];
+        .qetl.log.ch.warn[`transform;"the plant could not say when its log began - covering from the first message";(enlist[`transform]!enlist name),enlist[`error]!enlist last r];
         :0Np];
     $[-12h=type last r; last r; 0Np]}
 
@@ -383,8 +383,8 @@
     if[now_withheld~get wq; :()];
     wq set now_withheld;
     $[count now_withheld;
-        .qetl.log.warn[name;"windows withheld until the buffer covers them - the replayed log began later than they reach";`windows`covered_from!(now_withheld;cf)];
-        .qetl.log.info[name;"every window is covered";enlist[`covered_from]!enlist cf]];
+        .qetl.log.ch.warn[`transform;"windows withheld until the buffer covers them - the replayed log began later than they reach";(enlist[`transform]!enlist name),`windows`covered_from!(now_withheld;cf)];
+        .qetl.log.ch.info[`transform;"every window is covered";(enlist[`transform]!enlist name),enlist[`covered_from]!enlist cf]];
     }
 
 / The plant's day has ended. A rolling window is not day-bucketed, so nothing
@@ -395,7 +395,7 @@
 / @eg .qpipe.job.order_quality.on_endofday 2026.10.09
 .qetl.job.stream.rolling.end_of_day:{[name;dt]
     n:count get ` sv (.qetl.job.stream.namespace name),`pending;
-    .qetl.log.info[name;"end of day - windows roll on across it";`date`buffered!(dt;n)];
+    .qetl.log.ch.info[`eod;"end of day - windows roll on across it";(enlist[`transform]!enlist name),`date`buffered!(dt;n)];
     n}
 
 \d .

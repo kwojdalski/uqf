@@ -113,7 +113,7 @@ system "mkdir -p ",output_dir;
 
 mean_gap:0D00:00:00.200; std_gap:0D00:00:00.050; min_gap:0D00:00:00.050;
 p:1e-9+(1-2e-9)*n_ticks?1.0;
-.qetl.log.dbg[`timer_replay;"running: .qf.math.inv_ncdf p";()!()];
+.qetl.log.ch.dbg[`lifecycle;"running: .qf.math.inv_ncdf p";enlist[`example]!enlist `timer_replay];
 z:.qf.math.inv_ncdf p;
 gaps:min_gap|mean_gap+std_gap*z;
 hist_ts:.z.p+sums gaps;
@@ -125,8 +125,8 @@ hist_spots:1.0850+0.00002*til n_ticks;
 / book_from_wide_levels/symbolize_columns exist to fix, matching how a
 / real CSV/vendor feed would actually arrive.
 hist_wide:([] time:hist_ts; sym:n_ticks#enlist "EURUSD"),'(mk_wide_row each hist_spots);
-.qetl.log.info[`timer_replay;"historical - ",.Q.s1[n_ticks]," pre-generated EURUSD ticks in wide column form, ready to replay";()!()];
-.qetl.log.dbg[`timer_replay;"running: .qf.mkt.derive_level_groups[cols hist_wide;level_prefix_targets]";()!()];
+.qetl.log.ch.info[`lifecycle;"historical - ",.Q.s1[n_ticks]," pre-generated EURUSD ticks in wide column form, ready to replay";enlist[`example]!enlist `timer_replay];
+.qetl.log.ch.dbg[`lifecycle;"running: .qf.mkt.derive_level_groups[cols hist_wide;level_prefix_targets]";enlist[`example]!enlist `timer_replay];
 level_groups:.qf.mkt.derive_level_groups[cols hist_wide;level_prefix_targets];
 
 / ==== Step 2: replay onto a live, growing quotes table on a timer ====
@@ -149,21 +149,21 @@ cnt:0;
 / interactive prompt.
 .z.ts:{
     wide_row:1#cnt _ hist_wide;
-    .qetl.log.dbg[`timer_replay;"running: .qf.mkt.book_from_wide_levels[wide_row;level_groups;`sym]";()!()];
+    .qetl.log.ch.dbg[`lifecycle;"running: .qf.mkt.book_from_wide_levels[wide_row;level_groups;`sym]";enlist[`example]!enlist `timer_replay];
     row:col_order#.qf.mkt.book_from_wide_levels[wide_row;level_groups;`sym];
     quotes,:row;
-    .qetl.log.dbg[`timer_replay;"running: .qf.mkt.mid_price[quotes`bid_prices;quotes`ask_prices]";()!()];
+    .qetl.log.ch.dbg[`lifecycle;"running: .qf.mkt.mid_price[quotes`bid_prices;quotes`ask_prices]";enlist[`example]!enlist `timer_replay];
     mid:.qf.mkt.mid_price[quotes`bid_prices;quotes`ask_prices];
     output_path set quotes;
-    .qetl.log.info[`timer_replay;"tick ",.Q.s1[cnt+1],"/",.Q.s1[n_ticks]," - quotes has ",.Q.s1[count quotes]," row(s) now, latest mid ",.Q.s1[last mid],", persisted to ",.Q.s1[output_path];()!()];
+    .qetl.log.ch.info[`lifecycle;"tick ",.Q.s1[cnt+1],"/",.Q.s1[n_ticks]," - quotes has ",.Q.s1[count quotes]," row(s) now, latest mid ",.Q.s1[last mid],", persisted to ",.Q.s1[output_path];enlist[`example]!enlist `timer_replay];
     cnt+:1;
     if[cnt>=n_ticks;
         system "t 0";
-        .qetl.log.info[`timer_replay;"replay complete - stopping the timer; final table persisted at ",.Q.s1[output_path];()!()];
+        .qetl.log.ch.info[`lifecycle;"replay complete - stopping the timer; final table persisted at ",.Q.s1[output_path];enlist[`example]!enlist `timer_replay];
         show quotes;
         exit 0]};
 
-.qetl.log.info[`timer_replay;"starting replay - one historical tick appended every ",.Q.s1[tick_ms],"ms of wall-clock time";()!()];
+.qetl.log.ch.info[`lifecycle;"starting replay - one historical tick appended every ",.Q.s1[tick_ms],"ms of wall-clock time";enlist[`example]!enlist `timer_replay];
 system "t ",string tick_ms;
 
 / Self-check (#1338): the process ending before every tick replayed - stdin
@@ -175,7 +175,7 @@ replay_failed:0b;
 .z.exit:{[code]
     if[(not replay_failed) and cnt<n_ticks;
         replay_failed::1b;
-        .qetl.log.err[`timer_replay;"replayed ",.Q.s1[cnt]," of ",.Q.s1[n_ticks]," tick(s) before the process ended";()!()];
+        .qetl.log.ch.err[`lifecycle;"replayed ",.Q.s1[cnt]," of ",.Q.s1[n_ticks]," tick(s) before the process ended";enlist[`example]!enlist `timer_replay];
         exit 1]};
 
 // exit 0

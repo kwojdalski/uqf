@@ -418,7 +418,7 @@
 .qetl.kafka.take:{[tr;st]
     r:.qetl.kafka.try[tr`poll;enlist .qetl.kafka.poll_max];
     if[not first r;
-        .qetl.log.err[`kafka;"poll failed";enlist[`error]!enlist last r];
+        .qetl.log.ch.err[`source;"poll failed";enlist[`error]!enlist last r];
         :.qetl.kafka.bump[st;`poll_errors;1]];
     msgs:last r;
     ev:.qetl.kafka.events[msgs];
@@ -477,7 +477,7 @@
 .qetl.kafka.reset_restarted:{[st;b]
     back:.qetl.kafka.restarted[st`marks;b];
     if[0=count back; :st];
-    .qetl.log.warn[`kafka;"partition offsets went backwards - its mark is reset and the new records are published";enlist[`partitions]!enlist count back];
+    .qetl.log.ch.warn[`source;"partition offsets went backwards - its mark is reset and the new records are published";enlist[`partitions]!enlist count back];
     st[`marks]:.qetl.kafka.forget[st`marks;back];
     st}
 
@@ -491,7 +491,7 @@
     fresh:.qetl.kafka.admit[st`marks;b];
     r:.qetl.kafka.try[{[tr;f] if[count f; tr[`publish][`kafka_message;f]]; count f};(tr;fresh)];
     if[not first r;
-        .qetl.log.err[`kafka;"publish failed - nothing will be committed";`rows`error!(count fresh;last r)];
+        .qetl.log.ch.err[`ipc;"publish failed - nothing will be committed";`rows`error!(count fresh;last r)];
         :.qetl.kafka.bump[st;`publish_errors;1]];
     st[`marks]:.qetl.kafka.advance_runs[st`marks;fresh];
     st:.qetl.kafka.plan_commit[st;b];
@@ -520,7 +520,7 @@
     pend:0!st`pending;
     mine:.qetl.kafka.pair_key[pend`topic;pend`partition] in held;
     if[not all mine;
-        .qetl.log.warn[`kafka;"partitions revoked - their uncommitted offsets are dropped; the broker redelivers and the marks absorb it";enlist[`partitions]!enlist sum not mine];
+        .qetl.log.ch.warn[`source;"partitions revoked - their uncommitted offsets are dropped; the broker redelivers and the marks absorb it";enlist[`partitions]!enlist sum not mine];
         st[`pending]:.qetl.kafka.keep[st`pending;mine];
         st:.qetl.kafka.bump[st;`revoked;sum not mine]];
     mk:0!st`marks;
@@ -537,11 +537,11 @@
     if[first r;
         st[`pending]:.qetl.kafka.keep[st`pending;not pend[`topic]=t];
         :.qetl.kafka.bump[st;`commits;count p]];
-    .qetl.log.warn[`kafka;"offset commit failed - kept for the next cycle";`topic`error!(t;last r)];
+    .qetl.log.ch.warn[`ipc;"offset commit failed - kept for the next cycle";`topic`error!(t;last r)];
     pend:update tries:tries+1 from pend where topic=t;
     spent:pend[`tries]>=.qetl.kafka.commit_tries;
     if[any spent;
-        .qetl.log.err[`kafka;"offset commit given up on - the broker redelivers and the marks absorb it";`topic`partitions!(t;sum spent)]];
+        .qetl.log.ch.err[`ipc;"offset commit given up on - the broker redelivers and the marks absorb it";`topic`partitions!(t;sum spent)]];
     st[`pending]:`topic`partition xkey pend where not spent;
     .qetl.kafka.bump[st;`commit_errors;1]}
 

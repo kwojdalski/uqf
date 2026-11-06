@@ -270,13 +270,13 @@
     / Numbered so sent, returned and failed share `request` - see
     / .qetl.source.ipc, which this mirrors for SQL.
     req:`transport`request!(`odbc;.qetl.log.next_request[]);
-    .[{.qetl.log.trc[x;y;z]};(`odbc;"sql sent";(enlist[`statement]!enlist sql),req);::];
+    .[{.qetl.log.ch.trc[x;y;z]};(`source;"sql sent";(enlist[`statement]!enlist sql),req);::];
     r:.[{[hd;st] .odbc.eval[hd;st]};(h;sql);
       {[sql;req;t0;e]
-        .[{.qetl.log.trc[x;y;z]};(`odbc;"sql failed";
+        .[{.qetl.log.ch.trc[x;y;z]};(`source;"sql failed";
             req,`error`ms!(e;`long$(.z.p-t0)%1000000));::];
         '"qetl.io.odbc.run_sql: ",e," - statement: ",sql}[sql;req;t0]];
-    .[{.qetl.log.trc[x;y;z]};(`odbc;"sql returned";
+    .[{.qetl.log.ch.trc[x;y;z]};(`source;"sql returned";
         req,`rows`ms!(count r;`long$(.z.p-t0)%1000000));::];
     r}
 
