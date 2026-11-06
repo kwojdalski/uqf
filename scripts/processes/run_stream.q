@@ -152,9 +152,7 @@ if[`verbose in key .qproc.standalone.opts; .qetl.log.debug 1b];
 / The UTC instant a plant's log for `day` began (#2191): this plant names and
 / rolls its log by the host's LOCAL date (.z.D), so the log begins at that
 / date's local midnight. Null for no day.
-/ @param day the plant's current day
-/ @return a timestamp
-/ @eg .qproc.standalone.roll_of 0Nd  / 0Np
+/ @private
 .qproc.standalone.roll_of:{[day] $[null day; 0Np; .qetl.job.stream.rolling.day_start (`timestamp$day)+0D12]}
 
 / The transport for a plant IN this process: .qetl.tick directly.
