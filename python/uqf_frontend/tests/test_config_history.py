@@ -89,7 +89,8 @@ def _use(c: TestClient, runner) -> None:
 
 
 def _open(c: TestClient, files: int = 2, total: int = 50) -> str:
-    body = {"config_dir": "shared/config", "file_count": files, "total_bytes": total}
+    body = {"config_dir": "shared/config", "file_count": files, "total_bytes": total,
+            "confirmed": True}  # fmt: skip
     resp = c.post("/services/box/config/pushes", json=body)
     assert resp.status_code == 200, resp.text
     return resp.json()["push_id"]
@@ -151,11 +152,11 @@ def test_a_push_has_one_id_on_every_row_and_a_summary(served, tmp_path):
         "push_id": push, "config_dir": "shared/config", "file_count": 2,
         "total_bytes": len(NEW_SECRET) + 4,
         # the x-uqf-user header is a claim, and the row says so (#2045)
-        "identity": "claimed",
+        "identity_source": "claimed",
     }  # fmt: skip
     assert summary["items"] == [
-        {"target": "shared/config/app.env", "outcome": "succeeded"},
-        {"target": "shared/config/sub/new.csv", "outcome": "succeeded"},
+        {"subject": "shared/config/app.env", "outcome": "succeeded"},
+        {"subject": "shared/config/sub/new.csv", "outcome": "succeeded"},
     ]
 
 
@@ -255,8 +256,8 @@ def test_an_interrupted_push_is_never_retried_and_history_shows_what_landed(serv
     (summary,) = rows["config.push"]
     assert summary["outcome"] == "unknown"
     assert summary["items"] == [
-        {"target": "shared/config/landed", "outcome": "succeeded"},
-        {"target": "shared/config/lost", "outcome": "unknown"},
+        {"subject": "shared/config/landed", "outcome": "succeeded"},
+        {"subject": "shared/config/lost", "outcome": "unknown"},
     ]
 
 
@@ -285,8 +286,8 @@ def test_restore_round_trip_is_a_confirmed_audited_push(served, tmp_path):
     (row,) = restored
     assert row["detail"]["restores"] == push and row["detail"]["push_id"] == body["push_id"]
     assert row["items"] == [
-        {"target": "shared/config/app.env", "outcome": "succeeded"},
-        {"target": "shared/config/new/x.csv", "outcome": "succeeded"},
+        {"subject": "shared/config/app.env", "outcome": "succeeded"},
+        {"subject": "shared/config/new/x.csv", "outcome": "succeeded"},
     ]
     listed = c.get("/services/box/config/pushes").json()["pushes"]
     assert listed[0]["kind"] == "restore" and listed[0]["restores"] == push
@@ -334,7 +335,7 @@ def test_a_restore_after_pruning_is_refused_clearly(served, tmp_path):
     assert c.get(f"/services/box/config/pushes/{gone}").status_code == 410
     # pruning is audited: which push, by the open that pruned it
     (pruned,) = _by_action(c)["config.history.prune"]
-    assert pruned["items"] == [{"target": gone, "outcome": "succeeded"}]
+    assert pruned["items"] == [{"subject": gone, "outcome": "succeeded"}]
     assert pruned["detail"] == {"pruned_count": 1}
     opens = _by_action(c)["config.push.open"]
     assert [o["detail"]["pruned_count"] for o in opens if o["detail"]["push_id"] == newer] == [1]
@@ -364,7 +365,7 @@ def test_the_history_needs_remote_operations(served, tmp_path):
     pushes = "/services/box/config/pushes"
     assert c.get(pushes).status_code == 403
     assert c.get(f"{pushes}/20261104T000000000Z-00000000").status_code == 403
-    body = {"config_dir": "shared/config", "file_count": 1, "total_bytes": 1}
+    body = {"config_dir": "shared/config", "file_count": 1, "total_bytes": 1, "confirmed": True}
     assert c.post(pushes, json=body).status_code == 403
     assert c.get("/services/box/config/pushes/bad-id").status_code in (403, 422)
 

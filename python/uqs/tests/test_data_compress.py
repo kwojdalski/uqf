@@ -17,7 +17,7 @@ import csv
 import io
 import json
 import sqlite3
-from datetime import date
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -25,6 +25,7 @@ import pytest
 from typer.testing import CliRunner
 
 import uqs.cli.entry  # noqa: F401 - registers every command on the app
+from uqs.cli import compress as compress_cmd
 from uqs.cli import compress_plan as data_compress
 from uqs.cli.shared import app
 from uqs.cli.target_confirm import changes_the_server, may_change_the_server
@@ -304,9 +305,11 @@ def test_apply_runs_each_partition_oldest_first_and_audits_each(cli):
         "CLI",
     )
     assert json.loads(row["items"]) == [
-        {"target": "2026-10-20", "outcome": "succeeded"},
-        {"target": "2026-10-21", "outcome": "succeeded"},
+        {"subject": "2026-10-20", "outcome": "succeeded"},
+        {"subject": "2026-10-21", "outcome": "succeeded"},
     ]
+    # this stack's own HDB: target `local`, its directory the subject (#2234)
+    assert row["target"] == "local" and row["subject"]
     assert json.loads(row["detail"])["process"] == "housekeeping1"
 
 
@@ -330,7 +333,7 @@ def test_apply_stops_at_the_first_named_error(cli, monkeypatch):
     assert calls == ["2026-10-20"], "nothing after the failure is tried"
     (row,) = _audit(history)
     assert row["outcome"] == "failed"
-    assert json.loads(row["items"]) == [{"target": "2026-10-20", "outcome": "failed"}]
+    assert json.loads(row["items"]) == [{"subject": "2026-10-20", "outcome": "failed"}]
 
 
 def test_apply_is_refused_before_anything_when_the_disk_is_short(cli, monkeypatch):
@@ -448,6 +451,36 @@ def test_a_date_names_that_one_partition(cli, monkeypatch):
 def test_from_to_is_half_open(cli, monkeypatch):
     sc = _scope_of(cli, monkeypatch, "--from", "2026-10-20", "--to", "2026-10-22")
     assert sc.days == (date(2026, 10, 20), date(2026, 10, 21)), "--to's day is not in"
+
+
+@pytest.mark.parametrize(
+    ("args", "said"),
+    [
+        (("--from", "2026-10-20T06:00", "--to", "2026-10-22"), "--from 2026-10-20T06:00:00 is not"),
+        (
+            ("--from", "2026-10-20", "--to", "2026-10-22T06:00"),
+            "give --to 2026-10-22 or 2026-10-23",
+        ),
+        (("--last", "12h"), "--last 12h is not a whole number of days"),
+    ],
+)
+def test_a_range_off_whole_days_is_refused_before_the_plan(cli, monkeypatch, args, said):
+    """#2245: a partial day was rounded - the last one taken whole past --to,
+    and --last N put today's partition in the scope."""
+    run, *_ = cli
+    monkeypatch.setattr(data_compress, "plan_and_apply", lambda *a, **k: pytest.fail("planned"))
+    refused: list[str] = []
+    monkeypatch.setattr(compress_cmd, "_die", lambda exc: refused.append(str(exc)))
+    run(*args)
+    assert len(refused) == 1
+    assert refused[0].startswith("`data compress` compresses whole partitions: ")
+    assert said in refused[0]
+
+
+def test_last_is_the_whole_days_before_today(cli, monkeypatch):
+    sc = _scope_of(cli, monkeypatch, "--last", "2d")
+    today = datetime.now(UTC).date()
+    assert sc.days == (today - timedelta(days=2), today - timedelta(days=1)), "today is not in"
 
 
 def test_without_a_range_the_policy_chooses(cli, monkeypatch):

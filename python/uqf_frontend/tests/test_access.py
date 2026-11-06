@@ -82,7 +82,7 @@ def _rows(db: Path) -> list[sqlite3.Row]:
 def test_the_proxy_header_from_the_proxy_names_the_user(tmp_path):
     c = _client(_settings(tmp_path))
     me = c.get("/me/capabilities", headers={HEADER: "bob"}).json()
-    assert (me["identity"], me["authenticated"]) == ("bob", True)
+    assert (me["user"], me["authenticated"]) == ("bob", True)
     assert me["groups"] == ["viewers"]
 
 
@@ -91,7 +91,7 @@ def test_a_spoofed_header_from_another_address_is_anonymous(tmp_path):
     proxy can send any header, so from anywhere else it is ignored."""
     c = _client(_settings(tmp_path), peer=ELSEWHERE)
     me = c.get("/me/capabilities", headers={HEADER: "alice"}).json()
-    assert (me["identity"], me["authenticated"]) == ("anonymous", False)
+    assert (me["user"], me["authenticated"]) == ("anonymous", False)
     assert me["capabilities"] == []
     resp = c.get("/control", headers={HEADER: "alice"})
     assert resp.status_code == 403
@@ -102,7 +102,7 @@ def test_x_forwarded_for_naming_the_proxy_changes_nothing(tmp_path):
     """Only the TCP peer counts - never what the request says about itself."""
     c = _client(_settings(tmp_path), peer=ELSEWHERE)
     me = c.get("/me/capabilities", headers={HEADER: "alice", "x-forwarded-for": PROXY}).json()
-    assert me["identity"] == "anonymous"
+    assert me["user"] == "anonymous"
 
 
 def test_a_repeated_identity_header_is_anonymous(tmp_path):
@@ -110,13 +110,13 @@ def test_a_repeated_identity_header_is_anonymous(tmp_path):
     must not let the client's value through."""
     c = _client(_settings(tmp_path))
     me = c.get("/me/capabilities", headers=[(HEADER, "bob"), (HEADER, "alice")]).json()
-    assert me["identity"] == "anonymous"
+    assert me["user"] == "anonymous"
 
 
 @pytest.mark.parametrize("value", ["", "anonymous", "*", "bob smith", "a" * 65, "x,y", "eve!"])
 def test_a_header_that_is_not_a_user_name_is_anonymous(tmp_path, value):
     c = _client(_settings(tmp_path))
-    assert c.get("/me/capabilities", headers={HEADER: value}).json()["identity"] == "anonymous"
+    assert c.get("/me/capabilities", headers={HEADER: value}).json()["user"] == "anonymous"
 
 
 def test_without_a_configured_header_no_header_is_an_identity(tmp_path):
@@ -126,7 +126,7 @@ def test_without_a_configured_header_no_header_is_an_identity(tmp_path):
         _settings(tmp_path, trusted_identity_header="", trusted_proxies=(), policy_file=None)
     )
     me = c.get("/me/capabilities", headers={HEADER: "alice", authz.IDENTITY_HEADER: "alice"}).json()
-    assert me["identity"] == "anonymous"
+    assert me["user"] == "anonymous"
 
 
 def test_the_proxy_groups_header_adds_groups(tmp_path):
@@ -134,7 +134,7 @@ def test_the_proxy_groups_header_adds_groups(tmp_path):
     me = c.get(
         "/me/capabilities", headers={HEADER: "dave", GROUPS: "operators, bad group,org:team"}
     ).json()
-    assert me["identity"] == "dave"
+    assert me["user"] == "dave"
     assert me["groups"] == ["operators", "org:team"]
     assert {"feature": "control", "action": "write"} in me["capabilities"]
 
@@ -142,7 +142,7 @@ def test_the_proxy_groups_header_adds_groups(tmp_path):
 def test_a_groups_header_from_another_address_is_ignored(tmp_path):
     c = _client(_settings(tmp_path, trusted_groups_header=GROUPS), peer=ELSEWHERE)
     me = c.get("/me/capabilities", headers={HEADER: "dave", GROUPS: "admins"}).json()
-    assert (me["identity"], me["groups"], me["capabilities"]) == ("anonymous", [], [])
+    assert (me["user"], me["groups"], me["capabilities"]) == ("anonymous", [], [])
 
 
 def test_an_ipv4_mapped_peer_matches_its_ipv4_proxy():
@@ -220,14 +220,14 @@ def test_a_mapped_proxy_names_the_user_behind_it(tmp_path):
     settings = _settings(tmp_path, trusted_proxies=("::ffff:" + PROXY,))
     for peer in (PROXY, "::ffff:" + PROXY):
         me = _client(settings, peer=peer).get("/me/capabilities", headers={HEADER: "bob"}).json()
-        assert (me["identity"], me["authenticated"]) == ("bob", True)
+        assert (me["user"], me["authenticated"]) == ("bob", True)
 
 
 def test_a_spoofed_header_is_anonymous_beside_a_mapped_proxy(tmp_path):
     settings = _settings(tmp_path, trusted_proxies=("::ffff:" + PROXY,))
     for peer in (ELSEWHERE, "::ffff:" + ELSEWHERE):
         me = _client(settings, peer=peer).get("/me/capabilities", headers={HEADER: "alice"}).json()
-        assert (me["identity"], me["authenticated"]) == ("anonymous", False)
+        assert (me["user"], me["authenticated"]) == ("anonymous", False)
 
 
 # --- configuration that could not mean what it says ---------------------------
@@ -333,7 +333,7 @@ def test_a_route_with_no_mapping_is_refused_and_audited(tmp_path):
     assert resp.status_code == 403
     assert "no feature" in resp.json()["detail"]
     (row,) = _rows(tmp_path / "a.sqlite3")
-    assert (row["action"], row["outcome"], row["target"]) == (
+    assert (row["action"], row["outcome"], row["subject"]) == (
         "authz.refused",
         "refused",
         "/unmapped",
@@ -353,7 +353,7 @@ def test_a_refused_read_is_403_and_audited_with_the_verified_user(tmp_path):
     assert row["claimed_user"] == "bob"
     assert row["status_code"] == 403
     assert '"permission": "queue:read"' in row["detail"]
-    assert '"identity": "verified"' in row["detail"]
+    assert '"identity_source": "verified"' in row["detail"]
 
 
 def test_refused_reads_cannot_evict_the_audit(tmp_path):
@@ -368,8 +368,8 @@ def test_refused_reads_cannot_evict_the_audit(tmp_path):
         )
     )  # fmt: skip
     c.post(
-        "/control/process/stop",
-        json={"procs": "rdb1"},
+        "/control/lifecycle/stop",
+        json={"procs": "rdb1", "confirmed": True},
         headers={HEADER: "bob", "authorization": f"Bearer {TOKEN}"},
     )
     for _ in range(activity.MAX_ATTEMPT_ROWS + activity.PRUNE_EVERY + 5):
@@ -400,8 +400,8 @@ def test_a_refused_write_is_one_row_naming_the_permission(tmp_path):
         )
     )  # fmt: skip
     resp = c.post(
-        "/control/process/stop",
-        json={"procs": "rdb1"},
+        "/control/lifecycle/stop",
+        json={"procs": "rdb1", "confirmed": True},
         headers={HEADER: "bob", "authorization": f"Bearer {TOKEN}"},
     )
     assert resp.status_code == 403
@@ -424,7 +424,11 @@ def test_the_write_token_still_stands_in_front_of_a_granted_write(tmp_path):
             allowed_hosts=("testserver",),
         )
     )  # fmt: skip
-    resp = c.post("/control/process/stop", json={"procs": "rdb1"}, headers={HEADER: "alice"})
+    resp = c.post(
+        "/control/lifecycle/stop",
+        json={"procs": "rdb1", "confirmed": True},
+        headers={HEADER: "alice"},
+    )
     assert resp.status_code == 401
 
 
@@ -467,7 +471,7 @@ def test_capabilities_never_carry_a_secret(tmp_path):
     for secret in (TOKEN, "gw-secret", "data-secret"):
         assert secret not in body
     assert set(c.get("/me/capabilities").json()) == {
-        "identity",
+        "user",
         "authenticated",
         "groups",
         "capabilities",

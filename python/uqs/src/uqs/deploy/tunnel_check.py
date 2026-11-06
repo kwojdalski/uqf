@@ -23,13 +23,13 @@ first layer that fails names the endpoint's category:
 
 One endpoint failing never hides the others: every endpoint is checked and
 reported. Each that passes is recorded (tunnel_plan.record_checks) with the
-identity it answered and when, so a later plan - and the Services view -
+process it answered as (`reported_process`) and when, so a later plan - and the Services view -
 shows its last success beside a failure that came after it.
 
 Nothing secret is reported: the q password is never in the document, and any
 error text that could carry it is scrubbed (tunnel.scrub). The configured
 mapping (`configured`: what the plan says) is kept apart from what was proved
-(`identity`, `category`, `connected`). An endpoint's `category` and
+(`reported_process`, `category`, `connected`). An endpoint's `category` and
 `error` are the top level's names: None when it passed, else the first
 failing layer's category (a key of `categories`) and its text.
 """
@@ -92,8 +92,9 @@ class EndpointCheck:
     layers: dict[str, str] = field(default_factory=lambda: dict.fromkeys(LAYERS, "skipped"))
     #: The planned local port already serves this very process.
     connected: bool = False
-    #: What the process answered as, when it answered.
-    identity: str | None = None
+    #: The process the port answered as, when it answered - the frontend's
+    #: /ops/processes calls the same fact `reported_process` (#2236).
+    reported_process: str | None = None
     #: A gateway's active server types.
     gateway_servers: list[str] | None = None
     last_success: dict[str, Any] | None = None
@@ -161,7 +162,7 @@ def _probe(e: EndpointCheck, port: int, query: Query, scrub: Callable[[str], str
                    f"{type(exc).__name__}: {scrub(str(exc))}")  # fmt: skip
         return
     e.layers["destination"] = e.layers["auth"] = "ok"
-    e.identity = answer
+    e.reported_process = answer
     if answer != e.process:
         e.fail("identity", "identity_mismatch",
                f"port {e.remote_port} answered as {answer!r}, not {e.process}")  # fmt: skip
@@ -300,8 +301,9 @@ def run(
     at = report["checked_at"]
     if record:
         _record(root, r.name, {
-            e.process: {"at": at, "identity": e.identity, "remote_port": e.remote_port,
-                        "local_port": e.local_port, "release": report["release"]}
+            e.process: {"at": at, "reported_process": e.reported_process,
+                        "remote_port": e.remote_port, "local_port": e.local_port,
+                        "release": report["release"]}
             for e in ends if e.category is None
         })  # fmt: skip
     last = tunnel_plan.read_checks(root).get(r.name, {})

@@ -60,7 +60,8 @@ export const HISTORY: ActivityHistory = {
       source: "server",
       kind: "request",
       action: "process.stop",
-      target: "rdb1 rdb2",
+      target: "local",
+      subject: "rdb1 rdb2",
       outcome: "unknown",
       session_id: null,
       request_id: "req0123456789",
@@ -70,8 +71,8 @@ export const HISTORY: ActivityHistory = {
       status_code: 422,
       duration_ms: 35000,
       items: [
-        { target: "rdb1", outcome: "unknown" },
-        { target: "rdb2", outcome: "unknown" },
+        { subject: "rdb1", outcome: "unknown" },
+        { subject: "rdb2", outcome: "unknown" },
       ],
       detail: {},
       dropped_detail: 0,
@@ -166,7 +167,6 @@ export function answer(path: string, level: SessionLevel = "actions"): unknown {
     return {
       processes: PROCESSES.map((p) => ({
         ...p,
-        group: "g",
         host: "localhost",
         declared_port: 1,
         port: 1,
@@ -309,10 +309,10 @@ export function answer(path: string, level: SessionLevel = "actions"): unknown {
     };
   if (bare === "/activity") return HISTORY;
   if (bare === "/settings") return SETTINGS;
-  if (bare.startsWith("/control/process/"))
+  if (bare.startsWith("/control/lifecycle/"))
     return {
       action: "stop",
-      target: "all",
+      procs: "all",
       exit_code: 0,
       ok: true,
       output: "done",

@@ -15,7 +15,7 @@ X-UQF-Request-Id with every write and the server echoes it), so the two halves
 of one operation can be read together.
 
 WHY SQLITE. It is the one store here that answers the filters the view needs
-(time, session, action, target, outcome) without reading the whole history,
+(time, session, action, target, subject, outcome) without reading the whole history,
 deletes by age and by count without rewriting a file, and survives restarts -
 and it is in the standard library, so it adds no dependency. The JSONL
 pattern capture.py uses is right for an append-only feed nobody filters; it
@@ -31,7 +31,7 @@ allowlist is dropped and counted, never stored. The claimed user is the
 x-uqf-user header - CLAIMED, not authenticated (authz.IDENTITY_HEADER) - and
 is stored and shown under that name; when a trusted proxy names the user
 (identity.py, #2045) that verified user is stored instead, and a server row's
-`identity` detail says which it is: `verified`, `claimed` or `anonymous`.
+`identity_source` detail says which it is: `verified`, `claimed` or `anonymous`.
 
 UNCERTAIN OUTCOMES ARE A STATE, NOT A GUESS. A server row starts `pending`
 and is settled when the response is known. A request that had begun to act
@@ -89,20 +89,22 @@ import re
 import sqlite3
 import threading
 import time
+import typing
 import uuid
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from uqf_frontend.models import LifecycleAction
 from uqf_frontend.remote_helper import PUSH_ID
+from uqf_frontend.workspaces import LOCAL as LOCAL_TARGET
 from uqs.activity_log import (
     DROP_REASONS,
     EVENT_LEVELS,
     EXPORT_MAX,
     MAX_LIMIT,
     OUTCOMES,
-    RENAMED_COLUMNS,
     SOURCES,
     Query,
     select,
@@ -149,9 +151,13 @@ AUDIT_HEADER = "x-uqf-audit"
 
 _ID = re.compile(r"^[A-Za-z0-9_-]{8,64}$")
 _ACTION = re.compile(r"^[a-z][a-z0-9_.-]{0,63}$")
-#: A target names a thing - a view, a table, a process selector, a worker -
-#: never free text: no quotes, braces, `=` or newlines.
-_TARGET = re.compile(r"^[A-Za-z0-9_.:/@ ,+-]{1,200}$")
+#: A row's `target` is the deployment target it acted on - a registered
+#: target, or `local` for this server's own stack - and its `subject` WHAT it
+#: acted on there: a process selector, a `.qetl.cfg` key, a worker, a view, a
+#: control (#2234). An item, one of several things an action was over, is a
+#: subject too. Both name a thing, never free text: no quotes, braces, `=` or
+#: newlines.
+_NAMED = re.compile(r"^[A-Za-z0-9_.:/@ ,+-]{1,200}$")
 _USER = re.compile(r"^[A-Za-z0-9_.@-]{1,64}$")
 _NAME = re.compile(r"^[A-Za-z0-9_.:/@ ,+-]{0,128}$")
 _INSTANT = re.compile(r"^[0-9T:.+Z -]{1,40}$")
@@ -288,9 +294,9 @@ DETAIL_KEYS: dict[str, Callable[[object], bool]] = {
     "attempt": _is_count,
     # access (#2045): the `feature:action` a refusal was for, and whether the
     # row's user is `verified` by a trusted proxy, `claimed` by x-uqf-user, or
-    # `anonymous`
+    # `anonymous` - how the user was established, never who (#2236)
     "permission": _is_name,
-    "identity": _is_name,
+    "identity_source": _is_name,
     # settings changes (#2046): the before/after diff, one line per rule or
     # setting, and how many lines there were in all
     "changes": _is_changes,
@@ -334,12 +340,12 @@ def clean_id(raw: str | None) -> str | None:
     return raw if raw is not None and _ID.match(raw) else None
 
 
-def clean_target(raw: str | None) -> str | None:
-    """A target, or `(invalid)` when the value does not look like a name -
-    recording the attempt matters more than recording what was typed."""
+def clean_named(raw: str | None) -> str | None:
+    """A target or a subject, or `(invalid)` when the value does not look like
+    a name - recording the attempt matters more than recording what was typed."""
     if raw is None or raw == "":
         return None
-    return raw if _TARGET.match(raw) else "(invalid)"
+    return raw if _NAMED.match(raw) else "(invalid)"
 
 
 def clean_user(raw: str | None) -> str | None:
@@ -363,13 +369,13 @@ def clean_detail(raw: Mapping[str, object] | None) -> tuple[dict[str, object], i
 
 
 def clean_items(raw: Iterable[Mapping[str, object]] | None) -> list[dict[str, str]]:
-    """Per-item outcomes: a target and an outcome each, nothing else."""
+    """Per-item outcomes: a subject and an outcome each, nothing else."""
     items: list[dict[str, str]] = []
     for item in list(raw or [])[:MAX_ITEMS]:
-        target = clean_target(str(item.get("target") or ""))
+        subject = clean_named(str(item.get("subject") or ""))
         outcome = item.get("outcome")
-        if target is not None and outcome in OUTCOMES:
-            items.append({"target": target, "outcome": str(outcome)})
+        if subject is not None and outcome in OUTCOMES:
+            items.append({"subject": subject, "outcome": str(outcome)})
     return items
 
 
@@ -379,13 +385,18 @@ def clean_items(raw: Iterable[Mapping[str, object]] | None) -> list[dict[str, st
 #: it is audited under. A route missing here is audited as `http.<method>`,
 #: and test_activity.py fails until it is named - the hook #1951 and #1953
 #: add their upload and delete routes to.
+#: models.LifecycleAction's words: a request whose verb is not one is refused
+#: 422, but its attempt is still audited, and never under a name it chose.
+LIFECYCLE_VERBS = frozenset(typing.get_args(LifecycleAction))
+
 SERVER_ACTIONS: dict[tuple[str, str], Callable[[Mapping[str, str]], str]] = {
     ("DELETE", "/services/{target}/files"): lambda _: "files.delete",
-    ("POST", "/control/process/{action}"): lambda p: (
-        f"process.{p['action']}" if p.get("action") in ("start", "stop", "restart") else "process"
+    # `process.<verb>`: the verb is the path's own segment, typed (#2230)
+    ("POST", "/control/lifecycle/{action}"): lambda p: (
+        f"process.{p['action']}" if p.get("action") in LIFECYCLE_VERBS else "process"
     ),
-    ("PUT", "/control/process/{process}/config"): lambda _: "process.config",
-    ("PUT", "/control/worker-config"): lambda _: "worker.config",
+    ("PUT", "/control/processes/{process}/config"): lambda _: "process.config",
+    ("PUT", "/control/worker/config"): lambda _: "worker.config",
     ("POST", "/control/backfill"): lambda _: "backfill.start",
     ("PUT", "/services/{target}/files"): lambda _: "files.upload",
     # config pushes (#2002): `config.push` is the summary row of a whole push,
@@ -406,8 +417,9 @@ REFUSED_ACTION = "authz.refused"
 #: one item per pruned push id.
 PRUNE_ACTION = "config.history.prune"
 
-#: Path parameters that name the target of an action.
-_TARGET_PARAMS = ("process",)
+#: Path parameters that name the subject of an action. `{target}` is the
+#: deployment target, its own column.
+_SUBJECT_PARAMS = ("process",)
 
 #: Methods that never change anything.
 SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
@@ -441,10 +453,21 @@ def server_action(method: str, template: str | None, params: Mapping[str, str]) 
     return named(params) if named is not None else f"http.{method.lower()}"
 
 
-def server_target(params: Mapping[str, str]) -> str | None:
-    for name in _TARGET_PARAMS:
+def server_target(template: str | None, params: Mapping[str, str]) -> str | None:
+    """The deployment target a request acts on: its path's `{target}`, else
+    `local` - a route without one acts on this server's own stack. None for a
+    request that matched no route, which acted on nothing."""
+    if template is None:
+        return None
+    return clean_named(params.get("target") or LOCAL_TARGET)
+
+
+def server_subject(params: Mapping[str, str]) -> str | None:
+    """What a request acts on, when its path names it (`{process}`); a
+    handler names the rest with `Audit.set_subject`."""
+    for name in _SUBJECT_PARAMS:
         if name in params:
-            return clean_target(params[name])
+            return clean_named(params[name])
     return None
 
 
@@ -489,6 +512,9 @@ class Bound:
             raise ValueError("activity retention needs positive days and rows")
 
 
+#: The table as a file starts, at `PRAGMA user_version` 0: _MIGRATIONS brings
+#: it, like any older file, to activity_log.SCHEMA_VERSION, so a new file and
+#: an upgraded one take the same steps and end the same.
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS activity (
     seq          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -510,7 +536,7 @@ CREATE TABLE IF NOT EXISTS activity (
     acting       INTEGER NOT NULL DEFAULT 0,
     items        TEXT NOT NULL DEFAULT '[]',
     detail       TEXT NOT NULL DEFAULT '{}',
-    dropped_detail INTEGER NOT NULL DEFAULT 0
+    dropped      INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS activity_ts ON activity (ts);
 CREATE INDEX IF NOT EXISTS activity_recorded ON activity (recorded_at);
@@ -544,6 +570,54 @@ def bucket_cap(bucket: str, bound: Bound) -> int:
 #: was an action, so that is what the column is filled with.
 _LEVEL_COLUMN = "ALTER TABLE activity ADD COLUMN level TEXT NOT NULL DEFAULT 'actions'"
 _LEVEL_INDEX = "CREATE INDEX IF NOT EXISTS activity_level ON activity (level, seq)"
+
+#: One-way rewrites of rows an earlier release stored, in order: the file's
+#: `PRAGMA user_version` is how many it has had. The history is persisted
+#: data, so a renamed word is rewritten in the rows already kept, once, and
+#: never read under both spellings.
+_MIGRATIONS: tuple[tuple[str, ...], ...] = (
+    # 1 (#2236): a row's detail said how its user was established under
+    # `identity`, which elsewhere is a user or an answering process.
+    (
+        "UPDATE activity SET detail = json_remove(json_set(detail, '$.identity_source', "
+        "json_extract(detail, '$.identity')), '$.identity') "
+        "WHERE json_type(detail, '$.identity') IS NOT NULL",
+    ),
+    # 2 (#2234): `target` held a deployment target, a process selector, a cfg
+    # key, a worker, a route or a view. What was acted on moves to `subject`;
+    # `target` keeps the deployment target, `local` for a control action.
+    (
+        "ALTER TABLE activity ADD COLUMN subject TEXT",
+        "UPDATE activity SET subject = target, target = NULL WHERE source = 'browser'",
+        "UPDATE activity SET subject = target, target = 'local' WHERE source = 'server' "
+        "AND (action = 'process' OR action LIKE 'process.%' OR action LIKE 'worker.%' "
+        "OR action LIKE 'backfill.%' OR action LIKE 'settings.%' OR action LIKE 'hdb.%')",
+        "UPDATE activity SET subject = target, target = NULL WHERE action = 'authz.refused'",
+        # an item is {"target": <name>, "outcome": <word>}, json.dumps'd: a
+        # name cannot hold a quote, so the key is the only `"target": ` there
+        "UPDATE activity SET items = replace(items, '\"target\": ', '\"subject\": ') "
+        "WHERE items != '[]'",
+        "CREATE INDEX IF NOT EXISTS activity_subject ON activity (subject)",
+    ),
+    # 3 (#2242): `dropped` counted the detail keys a row lost, beside a
+    # batch's `drops` of whole events.
+    ("ALTER TABLE activity RENAME COLUMN dropped TO dropped_detail",),
+)
+
+
+def _migrate(db: sqlite3.Connection) -> None:
+    """Bring a history file up to _MIGRATIONS, each step in one transaction."""
+    (version,) = db.execute("PRAGMA user_version").fetchone()
+    for step, statements in enumerate(_MIGRATIONS[version:], start=version + 1):
+        db.execute("BEGIN")
+        try:
+            for sql in statements:
+                db.execute(sql)
+            db.execute(f"PRAGMA user_version = {step}")
+            db.execute("COMMIT")
+        except sqlite3.Error:
+            db.execute("ROLLBACK")
+            raise
 
 
 class ActivityStore:
@@ -591,10 +665,8 @@ class ActivityStore:
             columns = {row[1] for row in self._db.execute("PRAGMA table_info(activity)")}
             if "level" not in columns:
                 self._db.execute(_LEVEL_COLUMN)
-            for old, new in RENAMED_COLUMNS.items():
-                if old in columns and new not in columns:
-                    self._db.execute(f"ALTER TABLE activity RENAME COLUMN {old} TO {new}")
             self._db.execute(_LEVEL_INDEX)
+            _migrate(self._db)
         except (sqlite3.Error, OSError) as exc:
             raise ValueError(
                 f"activity history cannot be kept at {path}: {exc} - set "
@@ -643,7 +715,8 @@ class ActivityStore:
             source,
             kind,
             action,
-            clean_target(event.get("target")),
+            clean_named(event.get("target")),
+            clean_named(event.get("subject")),
             outcome,
             clean_id(event.get("session_id")),
             clean_id(event.get("request_id")),
@@ -659,9 +732,9 @@ class ActivityStore:
 
     _INSERT = (
         "INSERT OR IGNORE INTO activity (event_id, ts, recorded_at, level, source, kind, "
-        "action, target, outcome, session_id, request_id, claimed_user, trigger, method, "
-        "status_code, duration_ms, items, detail, dropped_detail) "
-        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+        "action, target, subject, outcome, session_id, request_id, claimed_user, trigger, "
+        "method, status_code, duration_ms, items, detail, dropped_detail) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
     )
 
     def add(self, **event: Any) -> tuple[str, bool]:
@@ -717,14 +790,18 @@ class ActivityStore:
 
     def update(self, event_id: str, **fields: Any) -> bool:
         """Change a stored event's settleable fields."""
-        allowed = {"target", "outcome", "status_code", "duration_ms", "acting", "items", "detail"}
+        allowed = {
+            "target", "subject", "outcome", "status_code", "duration_ms", "acting", "items",
+            "detail",
+        }  # fmt: skip
         unknown = set(fields) - allowed
         if unknown:
             raise ValueError(f"not updatable: {sorted(unknown)}")
         if "outcome" in fields and fields["outcome"] not in OUTCOMES:
             raise ValueError(f"unknown outcome {fields['outcome']!r}")
-        if "target" in fields:
-            fields["target"] = clean_target(fields["target"])
+        for name in ("target", "subject"):
+            if name in fields:
+                fields[name] = clean_named(fields[name])
         if "items" in fields:
             fields["items"] = json.dumps(clean_items(fields["items"]))
         dropped = 0
@@ -846,17 +923,25 @@ class Audit:
     store: ActivityStore | None = None
     event_id: str | None = None
     target: str | None = None
+    subject: str | None = None
     acting: bool = False
     outcome: str | None = None
     items: list[dict[str, str]] = field(default_factory=list)
     detail: dict[str, object] = field(default_factory=dict)
 
     def set_target(self, target: str) -> None:
-        """Name what the action is applied to; written at once, so a crash
-        mid-action still leaves the target on record."""
-        self.target = clean_target(target)
+        """Name the deployment target the action is on; written at once, so a
+        crash mid-action still leaves it on record."""
+        self.target = clean_named(target)
         if self.store is not None and self.event_id is not None:
             self.store.update(self.event_id, target=target)
+
+    def set_subject(self, subject: str) -> None:
+        """Name what the action is applied to on its target - a process
+        selector, a cfg key, a worker; written at once, like the target."""
+        self.subject = clean_named(subject)
+        if self.store is not None and self.event_id is not None:
+            self.store.update(self.event_id, subject=subject)
 
     def begin(self) -> None:
         """Mark the point past which the action may have changed something:
@@ -865,9 +950,9 @@ class Audit:
         if self.store is not None and self.event_id is not None:
             self.store.update(self.event_id, acting=1)
 
-    def item(self, target: str, outcome: str) -> None:
+    def item(self, subject: str, outcome: str) -> None:
         """Record one item's outcome, for an action over several things."""
-        self.items.extend(clean_items([{"target": target, "outcome": outcome}]))
+        self.items.extend(clean_items([{"subject": subject, "outcome": outcome}]))
 
     def note(self, **detail: object) -> None:
         """Add allowlisted detail; a key outside DETAIL_KEYS is dropped."""

@@ -8,7 +8,9 @@ seed script on whatever q is configured (QCMD), skipping when none is.
 from __future__ import annotations
 
 import hashlib
+import shutil
 import subprocess
+from dataclasses import replace
 from datetime import date
 from pathlib import Path
 
@@ -164,6 +166,32 @@ def test_only_the_dates_asked_for_are_copied(hdbs, tmp_path):
     assert dates == {"2026.01.02", "2026.01.03"}
 
 
+def test_an_hdb_named_by_hdb_is_the_destination(hdbs, tmp_path):
+    """#2237: `data seed --hdb DIR` copies into DIR, re-enumerated against DIR's
+    sym file, and leaves this runtime's own HDB alone."""
+    src, dst, q = hdbs
+    own = dst.torqdata / "hdb"
+    other = tmp_path / "elsewhere" / "hdb"
+    other.parent.mkdir()
+    shutil.copytree(own, other)
+    before = _tree(own)
+    hdb_seed.seed(dst, src, hdb=other)
+    assert _tree(own) == before
+    moved = replace(dst, torqdata=other.parent)
+    assert {r.split(",")[0] for r in _rows(moved, q, tmp_path)} >= {"2026.01.01", "2026.01.02"}
+
+
+def test_an_hdb_that_is_not_a_directory_is_refused(hdbs, tmp_path):
+    src, dst, _ = hdbs
+    with pytest.raises(UqsError, match="--hdb .*: no such directory on this machine"):
+        hdb_seed.seed(dst, src, hdb=tmp_path / "nowhere")
+
+
+def test_the_command_hands_hdb_on_as_the_destination(seeded, tmp_path):
+    seen = seeded("--from-runtime", "uqf", "--hdb", str(tmp_path))
+    assert seen["hdb"] == tmp_path
+
+
 def test_a_column_whose_type_differs_is_refused_with_nothing_written(hdbs):
     src, dst, _ = hdbs
     dst.generated_schema.write_text(SCHEMA.replace("price:`float$()", "price:`long$()"))
@@ -203,8 +231,8 @@ def seeded(monkeypatch, tmp_path):
     )
     monkeypatch.setattr(cli_seed, "_die", lambda exc: seen.setdefault("refused", str(exc)))
 
-    def seed(target, source, tables, first, last, overwrite, dry_run=False):
-        seen.update(source=source.runtime, first=first, last=last)
+    def seed(target, source, tables, first, last, overwrite, dry_run=False, hdb=None):
+        seen.update(source=source.runtime, first=first, last=last, hdb=hdb)
         return "seeded"
 
     monkeypatch.setattr(cli_seed.hdb_seed, "seed", seed)
@@ -224,16 +252,30 @@ def seeded(monkeypatch, tmp_path):
         (["--date", "2026-09-05"], (date(2026, 9, 5), date(2026, 9, 5))),
         (["--from", "2026-09-01"], (date(2026, 9, 1), None)),
         (["--to", "2026-09-03"], (None, date(2026, 9, 2))),
-        (
-            ["--from", "2026-09-01T06:00", "--to", "2026-09-03"],
-            (date(2026, 9, 2), date(2026, 9, 2)),
-        ),
     ],
 )
 def test_the_partitions_are_the_dates_in_the_range(seeded, argv, want):
     seen = seeded("--from-runtime", "uqf", *argv)
     assert (seen["source"], seen["first"], seen["last"]) == ("uqf", *want)
     assert seen["renamed"] == []
+
+
+@pytest.mark.parametrize(
+    ("argv", "said"),
+    [
+        # a partial first day was dropped, a partial last one copied whole past --to
+        (["--from", "2026-09-01T06:00"], "--from 2026-09-01T06:00:00 is not a day boundary"),
+        (["--to", "2026-09-03T06:00"], "give --to 2026-09-03 or 2026-09-04"),
+        (["--last", "36h"], "--last 36h is not a whole number of days"),
+    ],
+)
+def test_a_range_off_whole_days_is_refused_with_nothing_copied(seeded, argv, said):
+    """#2245: `data seed` rounded a partial day - and `--last 1d` replaced
+    today's live partition. It refuses instead, naming the whole days."""
+    seen = seeded("--from-runtime", "uqf", *argv)
+    assert "first" not in seen
+    assert seen["refused"].startswith("`data seed` copies whole partitions: ")
+    assert said in seen["refused"]
 
 
 def test_from_naming_a_runtime_is_the_old_spelling_and_says_the_new(seeded):
@@ -285,7 +327,7 @@ def copying(monkeypatch, tmp_path):
     monkeypatch.setattr(cli_seed, "_paths", lambda: _paths(tmp_path, "torq"))
     monkeypatch.setattr(cli_seed.runtime, "bootstrap", lambda p: calls.append("bootstrap"))
 
-    def seed(target, source, tables, first, last, overwrite, dry_run=False):
+    def seed(target, source, tables, first, last, overwrite, dry_run=False, hdb=None):
         calls.append("plan" if dry_run else "copy")
         return "2026.09.01 trade"
 

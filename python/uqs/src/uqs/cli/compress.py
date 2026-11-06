@@ -28,9 +28,9 @@ from rich.table import Table
 
 from uqs.cli import completion, compress_plan, safety
 from uqs.cli.compress_plan import AlgoOpt
-from uqs.cli.hdb_scope import Handle, HdbOpt, resolve
+from uqs.cli.hdb_scope import AttachOpt, Handle, HdbOpt, resolve
 from uqs.cli.json_out import Verbatim, emit, json_opt
-from uqs.cli.range_options import DateOpt, LastOpt, RangeFromOpt, RangeToOpt
+from uqs.cli.range_options import DateOpt, DayFromOpt, DayLastOpt, DayToOpt
 from uqs.cli.safety import ConfirmsOnServer
 from uqs.cli.shared import BasePortOpt, _die, console, data_app
 from uqs.cli.vocabulary import duration
@@ -144,10 +144,10 @@ def compress(
             "of the policy's own minimum age",
         ),
     ] = None,
-    range_from: RangeFromOpt = None,
-    range_to: RangeToOpt = None,
+    range_from: DayFromOpt = None,
+    range_to: DayToOpt = None,
     day: DateOpt = None,
-    last: LastOpt = None,
+    last: DayLastOpt = None,
     algo: AlgoOpt = None,
     blocksize: Annotated[
         int | None,
@@ -183,6 +183,7 @@ def compress(
         ),
     ] = DEFAULT_LIMIT,
     hdb: HdbOpt = None,
+    attach: AttachOpt = None,
     sort_csv: Annotated[
         str | None,
         typer.Option(
@@ -201,8 +202,9 @@ def compress(
     the partitions and columns and their state now, which policy each table
     takes, the saving estimated on a sample, the free disk the run needs.
     Partitions the coverage ledger says are still being written are held.
-    --date/--from/--to/--last name days, compressed whatever the policy's
-    minimum age; --algo/--blocksize/--gzip-level change this run alone. With
+    --date/--from/--to/--last name whole days, compressed whatever the
+    policy's minimum age - a bound off a midnight is refused, and --last 3d is
+    the three days before today; --algo/--blocksize/--gzip-level change this run alone. With
     --apply, after asking: one partition at a time, each checked, stopping at
     the first failure, then one HDB reload.
 
@@ -211,18 +213,19 @@ def compress(
     the partitions that are not sorted, or lack the attribute, that sort.csv
     declares - the order and attribute the wdb gives a partition at end of
     day. It reads file headers and the sort columns and writes nothing - on
-    a large HDB that is still substantial read I/O. Without --hdb: this
-    runtime's HDB (`uqs --target TARGET data compress --report` is a release's
-    own). `uqs --target TARGET data compress --report --hdb DIR` reads DIR on
-    the target, over its ssh with its q, and needs no uqf there; its sorting
-    is checked only against --sort-csv's file.
+    a large HDB that is still substantial read I/O. Without --hdb or
+    --attachment (an attachment whose HDB is on this machine): this runtime's
+    HDB (`uqs --target TARGET data compress --report` is a release's own).
+    `uqs --target TARGET data compress --report --hdb DIR` reads DIR on the
+    target, over its ssh with its q, and needs no uqf there; its sorting is
+    checked only against --sort-csv's file.
     """
     try:
         if not report:
-            if hdb is not None or sort_csv is not None:
-                flag = "--hdb" if hdb is not None else "--sort-csv"
+            given = (("--hdb", hdb), ("--attachment", attach), ("--sort-csv", sort_csv))
+            if flags := [f for f, v in given if v is not None]:
                 raise UqsUsageError(
-                    f"{flag} is for --report: the plan and the run are housekeeping1's, on "
+                    f"{flags[0]} is for --report: the plan and the run are housekeeping1's, on "
                     "this runtime's HDB (`uqs --target TARGET data compress` for a release's)"
                 )
             sc = compress_plan.scope_given(
@@ -240,7 +243,12 @@ def compress(
             raise UqsUsageError(
                 f"--report reads the whole HDB and changes nothing: not with {', '.join(given)}"
             )
-        handle = resolve(None, hdb)
+        handle = resolve(attach, hdb)
+        if handle.ssh:
+            raise UqsUsageError(
+                f"--report reads the HDB's files on this machine, and {attach}'s is on "
+                f"{handle.ssh}: run `uqs data compress --report --hdb {handle.hdb}` there"
+            )
         if handle.target is not None:
             r, shown = _target_report(handle, limit, sort_csv, as_json), handle.hdb
         else:

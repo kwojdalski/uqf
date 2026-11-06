@@ -95,6 +95,7 @@ COLUMNS = (
     "kind",
     "action",
     "target",
+    "subject",
     "outcome",
     "session_id",
     "request_id",
@@ -107,12 +108,6 @@ COLUMNS = (
     "detail",
     "dropped_detail",
 )
-
-#: Columns renamed in the history file, old -> new. The frontend API renames
-#: them when it opens a file (activity.ActivityStore); a reader refuses a file
-#: not yet migrated rather than reading it under both names. `dropped` was the
-#: detail keys dropped, beside a batch's `drops` of whole events (#2242).
-RENAMED_COLUMNS = {"dropped": "dropped_detail"}
 
 #: `detail` keys an audit row used before #2246, which named an upload's and a
 #: push's facts other than their routes do. Rows recorded before it keep them:
@@ -170,7 +165,11 @@ class Query:
     #: An action name, or a dotted prefix of one: `process` matches
     #: `process.stop`.
     action: str | None = None
+    #: The deployment target an action was on (`local` for this stack's own).
     target: str | None = None
+    #: What it was on there: a process selector, a cfg key, a worker, a
+    #: view or a control (#2234).
+    subject: str | None = None
     outcome: str | None = None
     source: str | None = None
     #: The most detailed level shown (module docstring); None shows every level.
@@ -184,7 +183,9 @@ class Query:
             value = getattr(self, name)
             if value is not None:
                 out[name] = stamp(value)
-        for name in ("session_id", "request_id", "action", "target", "outcome", "source", "level"):
+        for name in (
+            "session_id", "request_id", "action", "target", "subject", "outcome", "source", "level",
+        ):  # fmt: skip
             value = getattr(self, name)
             if value is not None:
                 out[name] = str(value)
@@ -201,7 +202,7 @@ def select(db: sqlite3.Connection, q: Query, *, max_limit: int = MAX_LIMIT) -> l
     if q.until is not None:
         where.append("ts < ?")
         args.append(stamp(q.until))
-    for column in ("session_id", "request_id", "target", "outcome", "source"):
+    for column in ("session_id", "request_id", "target", "subject", "outcome", "source"):
         value = getattr(q, column)
         if value is not None:
             where.append(f"{column} = ?")
@@ -215,7 +216,6 @@ def select(db: sqlite3.Connection, q: Query, *, max_limit: int = MAX_LIMIT) -> l
             return []
         where.append(f"level IN ({', '.join('?' for _ in shown)})")
         args.extend(shown)
-    unmigrated(db)
     sql = f"SELECT {', '.join(COLUMNS)} FROM activity"  # noqa: S608 - fixed names
     if where:
         sql += " WHERE " + " AND ".join(where)
@@ -230,18 +230,6 @@ def select(db: sqlite3.Connection, q: Query, *, max_limit: int = MAX_LIMIT) -> l
     return out
 
 
-def unmigrated(db: sqlite3.Connection) -> None:
-    """Refuse a file written before a column was renamed (RENAMED_COLUMNS),
-    naming the rename: it is migrated, never read under both names."""
-    columns = {row[1] for row in db.execute("PRAGMA table_info(activity)")}
-    for old, new in RENAMED_COLUMNS.items():
-        if old in columns and new not in columns:
-            raise sqlite3.OperationalError(
-                f"its `{old}` column is `{new}` now (#2242) - start the frontend API on this "
-                "file once, which migrates it, then read it again"
-            )
-
-
 def drops(db: sqlite3.Connection) -> list[dict[str, Any]]:
     """What was not kept, by level and reason, with when it last happened."""
     rows = db.execute(
@@ -250,11 +238,26 @@ def drops(db: sqlite3.Connection) -> list[dict[str, Any]]:
     return [dict(zip(("level", "reason", "count", "last_at"), row, strict=True)) for row in rows]
 
 
+#: The `PRAGMA user_version` a history file this release reads has: the
+#: frontend API brings an older file up to it when it opens it
+#: (uqf_frontend/activity.py `_MIGRATIONS`), and a read-only reader cannot.
+SCHEMA_VERSION = 3
+
+
 def open_readonly(path: Path) -> sqlite3.Connection:
-    """The history file, opened so that reading it can change nothing."""
+    """The history file, opened so that reading it can change nothing -
+    refused, naming the fix, when an older frontend wrote it."""
     if not path.is_file():
         raise FileNotFoundError(f"no activity history at {path}")
-    return sqlite3.connect(f"{path.resolve().as_uri()}?mode=ro", uri=True)
+    conn = sqlite3.connect(f"{path.resolve().as_uri()}?mode=ro", uri=True)
+    (version,) = conn.execute("PRAGMA user_version").fetchone()
+    if version < SCHEMA_VERSION:
+        conn.close()
+        raise sqlite3.DatabaseError(
+            f"it was written by an older frontend (schema {version}, this reads "
+            f"{SCHEMA_VERSION}) - start the frontend API once, which upgrades it"
+        )
+    return conn
 
 
 # ------------------------------------------------------------------ rendering
@@ -320,7 +323,9 @@ def _csv(rows: Sequence[Mapping[str, Any]]) -> str:
 
 
 #: The text timeline's columns, as its header names them.
-TEXT_COLUMNS = ("UTC time", "session", "level", "action", "target", "outcome", "duration")
+TEXT_COLUMNS = (
+    "UTC time", "session", "level", "action", "target", "subject", "outcome", "duration",
+)  # fmt: skip
 _SEP = " · "
 _NONE = "—"
 
@@ -345,6 +350,7 @@ def _line(row: Mapping[str, Any]) -> str:
             str(row.get("level") or _NONE),
             f"{row.get('source')} {how} {row.get('action')}",
             str(row.get("target") or _NONE),
+            str(row.get("subject") or _NONE),
             str(row.get("outcome") or _NONE),
             _duration(row.get("duration_ms")),
         ]

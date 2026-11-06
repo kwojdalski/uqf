@@ -219,7 +219,7 @@ export interface Capability {
  *  vouches, and what the server's access policy lets them do. The browser
  *  hides what is not here; the server refuses it either way. */
 export interface Capabilities extends Pollable {
-  identity: string;
+  user: string;
   authenticated: boolean;
   groups: string[];
   capabilities: Capability[];
@@ -316,7 +316,6 @@ export interface Backfill extends Pollable {
 export interface ProcessHealth {
   process: string;
   proctype: string;
-  group: string;
   host: string;
   declared_port: number | null;
   start_with_all: boolean;
@@ -425,7 +424,7 @@ export function remoteFilesPath(target: string, path: string): string {
  * recorded it - models.TunnelCheckRecordOut. */
 export interface TunnelCheckRecord {
   at: string;
-  identity: string | null;
+  reported_process: string | null;
   remote_port: number | null;
   local_port: number | null;
   release: string | null;
@@ -470,7 +469,7 @@ export interface TunnelEndpoint {
   error: string | null;
   layers: Record<string, string>;
   connected: boolean;
-  identity: string | null;
+  reported_process: string | null;
   gateway_servers: string[] | null;
   last_success: TunnelCheckRecord | null;
 }
@@ -778,18 +777,20 @@ export interface ControlStatus extends Pollable {
   settable_fields: string[];
   processes: ControlProcess[];
 }
-/** POST /control/process/{action} - models.LifecycleRequest. `procs` is
+/** POST /control/lifecycle/{action} - models.LifecycleRequest. `procs` is
  * required on both sides: it once defaulted to "all" on the server, so a body
  * without it stopped the whole fleet (#1361). */
 export interface LifecycleBody {
   procs: string;
+  /** required true for stop and restart, which the UI confirms (#2244) */
+  confirmed?: boolean;
 }
-/** PUT /control/process/{process}/config - models.ProcessConfigRequest. */
+/** PUT /control/processes/{process}/config - models.ProcessConfigRequest. */
 export interface ProcessConfigBody {
   field: string;
   value: string;
 }
-/** PUT /control/worker-config - models.WorkerConfigRequest. */
+/** PUT /control/worker/config - models.WorkerConfigRequest. */
 export interface WorkerConfigBody {
   key: string;
   value: string;
@@ -803,7 +804,8 @@ export interface BackfillBody {
 }
 export interface CommandResult {
   action: string;
-  target: string;
+  /** torq.sh's selector, as sent - not a deployment target (#2234) */
+  procs: string;
   exit_code: number;
   ok: boolean;
   output: string;
@@ -1065,6 +1067,8 @@ export type FileOutcome =
 
 /** POST /services/{target}/config/pushes - models.ConfigPushOpenRequest. */
 export interface ConfigPushOpenBody {
+  /** the operator confirmed the push: required true (#2244) */
+  confirmed: boolean;
   config_dir: string;
   file_count: number;
   total_bytes: number;
@@ -1328,7 +1332,7 @@ export type ActivityTrigger =
 /** A `detail` value. Only the keys activity.DETAIL_KEYS allows are kept. */
 export type DetailValue = string | number | boolean;
 export interface ActivityItem {
-  target: string;
+  subject: string;
   outcome: ActivityOutcome;
 }
 /** POST /activity/events, one event - models.BrowserEventIn. */
@@ -1338,7 +1342,8 @@ export interface BrowserEvent {
   ts: string;
   kind: BrowserKind;
   action: string;
-  target?: string | null;
+  /** what the event is about - a view, a control, a process selector */
+  subject?: string | null;
   trigger: ActivityTrigger;
   request_id?: string | null;
   outcome?: ActivityOutcome | null;
@@ -1373,7 +1378,10 @@ export interface ActivityEvent {
   source: ActivitySource;
   kind: ActivityKind;
   action: string;
+  /** the deployment target a server row acted on, `local` for this stack */
   target: string | null;
+  /** what it acted on: a process selector, a cfg key, a worker, a view */
+  subject: string | null;
   outcome: ActivityOutcome | null;
   session_id: string | null;
   request_id: string | null;

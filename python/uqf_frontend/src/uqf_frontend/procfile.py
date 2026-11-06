@@ -38,11 +38,6 @@ class DeclaredProcess:
     #: example in this repo - so the health view must not report it as one.
     start_with_all: bool
 
-    @property
-    def group(self) -> str:
-        """Group membership. proctype is TorQ's own grouping axis."""
-        return self.proctype
-
 
 def resolve_port(raw: str, base_port: int) -> int | None:
     """Resolve a process.csv port cell, or None if it cannot be resolved.

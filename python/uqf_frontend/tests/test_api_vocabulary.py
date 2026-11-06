@@ -30,7 +30,7 @@ from pydantic import BaseModel, ValidationError
 
 from uqf_frontend import access, activity, models
 from uqf_frontend import app as app_module
-from uqf_frontend.app import MOVED_ROUTES, create_app
+from uqf_frontend.app import RENAMED_ROUTES, create_app
 from uqf_frontend.config import Settings
 from uqf_frontend.gateway import FakeGateway
 from uqs import activity_log
@@ -112,37 +112,100 @@ def test_the_api_refuses_dropped_rather_than_ignoring_it(tmp_path):
     assert "`dropped` is `drops`" in resp.json()["detail"]
 
 
-def _old_history(path: Path) -> None:
+#: A history file from before #2234, #2236 and #2242: `level`, `target` for
+#: everything acted on, `identity` in detail, `dropped` for lost detail keys,
+#: and `PRAGMA user_version` 0.
+_BEFORE_ALL = activity._SCHEMA + (
+    "ALTER TABLE activity ADD COLUMN level TEXT NOT NULL DEFAULT 'actions';"
+)
+
+
+def _old_history(path: Path, *, version: int = 0) -> None:
+    """A history file an earlier release left: at user_version 0 it has had
+    none of _MIGRATIONS, and at *version* the first that many of them."""
     with sqlite3.connect(path) as db:
-        db.executescript(activity._SCHEMA.replace("dropped_detail INTEGER", "dropped INTEGER"))
+        db.executescript(_BEFORE_ALL)
         now = activity_log.stamp(dt.datetime.now(dt.UTC))
         db.execute(
-            "INSERT INTO activity (event_id, ts, recorded_at, source, kind, action, dropped) "
-            "VALUES ('old-event-1', ?, ?, 'browser', 'navigate', 'view.open', 2)",
+            "INSERT INTO activity (event_id, ts, recorded_at, source, kind, action, target, "
+            "items, detail, dropped) VALUES ('old-event-1', ?, ?, 'server', 'request', "
+            '\'process.stop\', \'rdb1\', \'[{"target": "rdb1", "outcome": "succeeded"}]\', '
+            '\'{"identity": "claimed"}\', 2)',
             (now, now),
         )
+        for statements in activity._MIGRATIONS[:version]:
+            for sql in statements:
+                db.execute(sql)
+        db.execute(f"PRAGMA user_version = {version}")
 
 
-def test_a_history_file_from_before_the_rename_is_migrated_when_the_api_opens_it(tmp_path):
+def _opened(path: Path) -> dict:
+    bounds = {level: activity.Bound(30, 100) for level in activity_log.EVENT_LEVELS}
+    (row,) = activity.ActivityStore(path, bounds=bounds).query(activity_log.Query())
+    return row
+
+
+def test_the_dropped_rename_is_a_step_of_the_one_history_version():
+    """One version scheme for the history file: #2242's column rename is the
+    step after #2234's subject split, and the reader expects all of them."""
+    assert activity_log.SCHEMA_VERSION == len(activity._MIGRATIONS) == 3
+    assert activity._MIGRATIONS[2] == (
+        "ALTER TABLE activity RENAME COLUMN dropped TO dropped_detail",
+    )
+
+
+def test_a_file_from_before_every_rename_is_upgraded_through_all_of_them(tmp_path):
+    """A file older than #2236, #2234 and #2242 takes their steps in order,
+    once: the detail key, the target/subject split and the column rename."""
     path = tmp_path / "a.sqlite3"
     _old_history(path)
-    bounds = {level: activity.Bound(30, 100) for level in activity_log.EVENT_LEVELS}
-    store = activity.ActivityStore(path, bounds=bounds)
-    (row,) = store.query(activity_log.Query())
+    row = _opened(path)
+    assert (row["target"], row["subject"]) == ("local", "rdb1")
+    assert row["items"] == [{"subject": "rdb1", "outcome": "succeeded"}]
+    assert row["detail"] == {"identity_source": "claimed"}
     assert row["dropped_detail"] == 2
     with sqlite3.connect(path) as db:
         columns = {r[1] for r in db.execute("PRAGMA table_info(activity)")}
+        version = db.execute("PRAGMA user_version").fetchone()[0]
     assert "dropped_detail" in columns and "dropped" not in columns
+    assert version == activity_log.SCHEMA_VERSION
+    # opened again, nothing moves twice
+    assert _opened(path) == row
 
 
-def test_a_reader_refuses_a_file_not_yet_migrated_naming_the_rename(tmp_path):
+def test_a_file_already_split_into_target_and_subject_takes_only_the_rename(tmp_path):
+    """A file #2258's release upgraded (user_version 2) still has `dropped`:
+    only the rename is left to do, and the split is not done again."""
     path = tmp_path / "a.sqlite3"
-    _old_history(path)
-    with (
-        activity_log.open_readonly(path) as db,
-        pytest.raises(sqlite3.OperationalError, match="`dropped` column is `dropped_detail`"),
-    ):
-        activity_log.select(db, activity_log.Query())
+    _old_history(path, version=2)
+    row = _opened(path)
+    assert (row["target"], row["subject"]) == ("local", "rdb1")
+    assert row["detail"] == {"identity_source": "claimed"}
+    assert row["dropped_detail"] == 2
+
+
+def test_a_new_file_ends_at_the_same_shape_as_an_upgraded_one(tmp_path):
+    bounds = {level: activity.Bound(30, 100) for level in activity_log.EVENT_LEVELS}
+    activity.ActivityStore(tmp_path / "new.sqlite3", bounds=bounds)
+    _old_history(tmp_path / "old.sqlite3")
+    _opened(tmp_path / "old.sqlite3")
+    shapes = []
+    for name in ("new.sqlite3", "old.sqlite3"):
+        with sqlite3.connect(tmp_path / name) as db:
+            shapes.append(
+                (
+                    {r[1] for r in db.execute("PRAGMA table_info(activity)")},
+                    db.execute("PRAGMA user_version").fetchone()[0],
+                )
+            )
+    assert shapes[0] == shapes[1]
+
+
+def test_a_reader_refuses_a_file_not_yet_migrated(tmp_path):
+    path = tmp_path / "a.sqlite3"
+    _old_history(path, version=2)
+    with pytest.raises(sqlite3.DatabaseError, match="schema 2, this reads 3"):
+        activity_log.open_readonly(path)
 
 
 # ------------------------------------------------------------ audit names (#2246)
@@ -283,10 +346,10 @@ def test_a_remote_file_is_one_resource_whose_method_is_the_operation():
 
 def test_a_moved_route_is_no_route_at_all():
     live = {(m, r.path) for r in _routes() for m in r.methods or ()}
-    assert set(MOVED_ROUTES).isdisjoint(live)
-    for new in MOVED_ROUTES.values():
-        method, path = new.split(" ", 1)
-        assert (method, path) in live, new
+    moved = [r for r in RENAMED_ROUTES if r.issue == 2248]
+    assert {(r.method, r.old) for r in moved}.isdisjoint(live)
+    for r in moved:
+        assert (r.new_method, r.new) in live, r.new
 
 
 @pytest.mark.parametrize(
@@ -308,7 +371,7 @@ def test_a_moved_route_answers_410_naming_its_replacement(method, path, said):
     c = TestClient(create_app(gateway=FakeGateway({}), settings=Settings()))
     resp = c.request(method, path, json={"paths": ["x"], "confirmed": True})
     assert resp.status_code == 410
-    assert resp.json()["error"] == "RouteGone"
+    assert resp.json()["error"] == "Gone"
     assert said in resp.json()["detail"]
 
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 import signal
 import subprocess
 import sys
@@ -109,6 +110,24 @@ def test_rename_and_lossless_type_change_keep_rows_and_a_rollback_copy(hdb, q_bi
     assert "EURUSD`USDJPY" in result.stdout
     found = hdb_layout.inspect(hdb, hdb.hdb_dir).dirs
     assert hdb_types.type_changes(hdb, hdb.torqapphome / "database.q", found) == []
+
+
+def test_an_hdb_named_by_hdb_is_the_one_migrated_and_locked(hdb, tmp_path):
+    """#2237: `data migrate --hdb DIR` - the root it migrates, and the one whose
+    write lock it takes, is DIR, not this runtime's."""
+    other = tmp_path / "elsewhere" / "hdb"
+    other.parent.mkdir()
+    shutil.move(hdb.hdb_dir, other)
+    with pytest.raises(UqsError, match="no HDB at"):
+        hdb_migrate.migrate(hdb, "trade", DAY, {"px": "price"}, {"price"})
+    dry = hdb_migrate.migrate(hdb, "trade", DAY, {"px": "price"}, {"price"}, hdb=other)
+    assert dry.startswith("would migrate")
+    report = hdb_migrate.migrate(
+        hdb, "trade", DAY, {"px": "price"}, {"price"}, apply=True, hdb=other
+    )
+    backup = Path(report.split("previous table retained at ", 1)[1])
+    assert backup.is_relative_to(other.parent)
+    assert not hdb.hdb_dir.exists()
 
 
 def test_an_unmapped_source_column_is_refused_without_replacing_it(hdb):
@@ -286,7 +305,7 @@ def migrating(monkeypatch):
     """Each hdb_migrate.migrate call's `apply`."""
     calls: list[bool] = []
 
-    def migrate(paths, table, day, renames, casts, *, apply=False):
+    def migrate(paths, table, day, renames, casts, *, apply=False, hdb=None):
         calls.append(apply)
         return f"plan for {table}"
 
@@ -299,7 +318,7 @@ def _migrate(*argv: str, **kw):
 
     from uqs.cli import app
 
-    line = ["data", "migrate", "quote", "2026.09.13", "--rename", "bid:bid2", *argv]
+    line = ["data", "migrate", "quote", "--date", "2026.09.13", "--rename", "bid:bid2", *argv]
     return CliRunner().invoke(app, line, **kw)
 
 
@@ -319,7 +338,8 @@ def test_json_without_yes_apply_is_refused(migrating, terminal, monkeypatch):
     """#2229: --json never asks, even at a terminal that would say y."""
     import json
 
-    argv = ["data", "migrate", "quote", "2026.09.13", "--rename", "bid:bid2", "--apply", "--json"]
+    argv = ["data", "migrate", "quote", "--date", "2026.09.13", "--rename", "bid:bid2"]
+    argv += ["--apply", "--json"]
     monkeypatch.setattr("sys.argv", ["uqs", *argv])  # json_requested reads it
     result = _migrate("--apply", "--json", input="y\n")
     assert result.exit_code == 1

@@ -719,6 +719,13 @@ qetl.plant,undeclared,function,1,
 qetl.plant,vendored,value,,
 qetl.plant,vendored_path,value,,
 qetl.plant,wide_orderbook,table,,
+qetl.qsql,available,function,1,
+qetl.qsql,cut_at,value,,
+qetl.qsql,full,function,1,x
+qetl.qsql,load,function,1,
+qetl.qsql,of_call,function,2,f args
+qetl.qsql,render,function,1,tree
+qetl.qsql,unparse_file,value,,
 qetl.reaction,audit,function,1,
 qetl.reaction,dag_consumers,function,1,dataset
 qetl.reaction,draining,value,,
