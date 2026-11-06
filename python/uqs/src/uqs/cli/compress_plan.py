@@ -210,8 +210,8 @@ class Audit:
             items.append({"subject": failed["partition"], "outcome": "failed"})
         detail = {
             "process": stack_compress.PROCESS,
-            "item_count": len(done),
-            "size_bytes": max(0, sum(d["bytes_before"] - d["bytes_after"] for d in done)),
+            "partition_count": len(done),
+            "bytes_saved": max(0, sum(d["bytes_before"] - d["bytes_after"] for d in done)),
         }
         if failed:
             detail["error"] = "QError"

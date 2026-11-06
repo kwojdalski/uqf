@@ -114,13 +114,15 @@ BROWSE = ".uqf.browse"
 #: CALLED - not when it is defined, and whether or not the body references it.
 #: `test_q_programs.py` caught this before it shipped, which is the fourth
 #: name this repository has lost to that trap.
-#: `partition` is required for the same reason again, one dimension further
-#: out (#185). A coverage read that names a dataset but not a partition
-#: aggregates across every partition, so a range published for EURUSD alone
+#: The coverage slice is required for the same reason again, one dimension
+#: further out (#185). A coverage read that names a dataset but not a slice
+#: aggregates across every slice, so a range published for EURUSD alone
 #: reports as covered for every symbol - the exact failure the column was
-#: added to prevent, rebuilt on the HTTP side. The empty string maps to the
-#: q null symbol `, which is .qetl.coverage's "this dataset has no partition
-#: dimension" sentinel and matches only rows recorded under it.
+#: added to prevent, rebuilt on the HTTP side. The API calls it `slice`; the
+#: ledger's q column and this function's argument are still `partition`
+#: (#2261). The empty string maps to the q null symbol `, which is
+#: .qetl.coverage's "this dataset has no slice dimension" sentinel and
+#: matches only rows recorded under it.
 #: Since #1081 a NAME on the gateway, not a lambda routed to the tiers: the
 #: ledger is a file the workers persist (.qetl.coverage.ledger_path), not a
 #: table any RDB or HDB holds, and gateway1 loads the reader. The same

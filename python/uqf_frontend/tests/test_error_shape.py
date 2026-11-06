@@ -198,7 +198,7 @@ def test_an_upload_refused_by_validation_names_its_reason(client):
     """The upload view read only a string `detail`, so a Pydantic 422 reached
     the operator as "Upload failed (422)." with the reason dropped."""
     resp = client.put(
-        "/services/box/files/content",
+        "/services/box/files",
         params={"path": "shared/a.txt", "overwrite": "maybe"},
         content=b"x",
         headers={"Content-Type": "application/octet-stream"},

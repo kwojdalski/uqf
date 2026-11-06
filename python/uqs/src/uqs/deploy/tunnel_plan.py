@@ -24,7 +24,7 @@ holding every forward: the ssh destination and the ports, never a password -
 the q credentials are not part of a tunnel.
 
 Configured is not verified: a plan says what WOULD be forwarded. Whether a
-mapping was ever proved is `last_check`, read from the record `uqs target
+mapping was ever proved is `last_success`, read from the record `uqs target
 tunnel check` keeps (`annotate`), and a mapping is `verified`, `stale` or
 `unverified` by it - never by the plan itself.
 """
@@ -335,7 +335,7 @@ def annotate(
 ) -> dict[str, Any]:
     """The plan as its document: each mapping with its `state` - `verified`
     (a recent check proved this very mapping), `stale` (proved, but long ago
-    or for other ports) or `unverified` (never) - its `last_check`, and
+    or for other ports) or `unverified` (never) - its `last_success`, and
     whether its local port is `listening` now, which is a hint, not proof."""
     now = now or datetime.now(UTC)
     rows = []
@@ -347,7 +347,7 @@ def annotate(
             {
                 **asdict(m),
                 "state": mapping_state(m, last, now),
-                "last_check": last,
+                "last_success": last,
                 "listening": listening(m.local_port),
             }
         )

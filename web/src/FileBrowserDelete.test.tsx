@@ -29,7 +29,7 @@ it("locks selection during deletion and preserves outcomes when refresh fails", 
   let finish!: (value: unknown) => void;
   let reads = 0;
   const fetcher = vi.fn((_url: string, options: RequestInit) => {
-    if (options.method === "POST")
+    if (options.method === "DELETE")
       return new Promise((resolve) => {
         finish = resolve;
       });
@@ -60,6 +60,6 @@ it("locks selection during deletion and preserves outcomes when refresh fails", 
   ).toHaveTextContent('"config.csv": Deleted');
   expect(screen.getByLabelText("Select config.csv")).toBeDisabled();
   expect(
-    fetcher.mock.calls.filter(([, options]) => options.method === "POST"),
+    fetcher.mock.calls.filter(([, options]) => options.method === "DELETE"),
   ).toHaveLength(1);
 });

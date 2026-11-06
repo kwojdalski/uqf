@@ -30,6 +30,7 @@ keys to prove the precedence order, and demanding rows for ``UQF_X`` and
 
 from __future__ import annotations
 
+import csv
 import re
 import sys
 from pathlib import Path
@@ -37,6 +38,15 @@ from pathlib import Path
 #: Every path below is relative to the repository root, which
 #: scripts/gates/check.py resolves and passes in.
 DOC = Path("docs/reference/environment.md")
+
+#: THE declaration of every variable the page documents (#2169): one CSV row
+#: each, whose first column is the name. The page's two variable tables are
+#: rendered from these by `derive.py environment-tables` (scripts/generate/
+#: environment_tables.py), and `documented` below reads the same rows, so a
+#: variable is declared in exactly one place. Adding one is adding a row.
+READ_TABLE = Path("docs/reference/environment/read.csv")
+PRODUCED_TABLE = Path("docs/reference/environment/produced.csv")
+DECLARATIONS = (READ_TABLE, PRODUCED_TABLE)
 
 #: Directories whose reads are an operator's business. `web/` is included
 #: because a Vite config's `process.env` is as much a knob as a q `getenv`.
@@ -270,30 +280,31 @@ def producer_consumers(root: Path, produced: set[str]) -> dict[str, list[str]]:
     return found
 
 
-def documented(root: Path) -> tuple[set[str], set[str]]:
-    """(exact names, prefixes) declared by the doc's table rows.
+def declared_rows(root: Path, table: Path) -> list[dict[str, str]]:
+    """The rows of one declaration file, by column name: the one parser of the
+    format, which the table generator imports rather than repeats."""
+    with (root / table).open(newline="", encoding="utf-8") as handle:
+        return list(csv.DictReader(handle))
 
-    Only table rows count. Prose may name anything it likes - the stale check
-    would otherwise fire on a sentence explaining why a variable was removed.
+
+def documented(root: Path) -> tuple[set[str], set[str]]:
+    """(exact names, prefixes) declared in DECLARATIONS.
+
+    Only declared rows count; prose may name anything it likes - the stale
+    check would otherwise fire on a sentence explaining why a variable was
+    removed. A `NAME<PLACEHOLDER>` row declares a prefix.
     """
     exact: set[str] = set()
     prefixes: set[str] = set()
-    for line in (root / DOC).read_text(encoding="utf-8").splitlines():
-        # `lstrip` because the formatter indents tables by two spaces, which
-        # is still a table to any markdown renderer (a block may be indented
-        # up to three) but was not to this parser: the whole page read as
-        # zero documented variables and every read variable as undocumented.
-        line = line.lstrip()
-        if not line.startswith("|"):
-            continue
-        cell = line.split("|")[1].strip()
-        match = re.fullmatch(r"`([A-Z][A-Z0-9_]*)(<[A-Z_]+>)?`", cell)
-        if not match:
-            continue
-        if match.group(2):
-            prefixes.add(match.group(1))
-        else:
-            exact.add(match.group(1))
+    for table in DECLARATIONS:
+        for row in declared_rows(root, table):
+            match = re.fullmatch(r"`([A-Z][A-Z0-9_]*)(<[A-Z_]+>)?`", row["variable"].strip())
+            if not match:
+                continue
+            if match.group(2):
+                prefixes.add(match.group(1))
+            else:
+                exact.add(match.group(1))
     return exact, prefixes
 
 
@@ -361,9 +372,10 @@ def run(root: Path) -> int:
     """Report every disagreement between the page and the code under `root`;
     the exit status. The findings are grouped by direction, each group with
     what to do about it, so the rule reports them itself."""
-    if not (root / DOC).is_file():
-        print(f"error: {DOC} is missing", file=sys.stderr)
-        return 1
+    for needed in (DOC, *DECLARATIONS):
+        if not (root / needed).is_file():
+            print(f"error: {needed} is missing", file=sys.stderr)
+            return 1
 
     reads = read_names(root)
     produced = produced_names(root)
@@ -411,7 +423,11 @@ def run(root: Path) -> int:
         )
     if undocumented:
         problems += len(undocumented)
-        print("Read by the code, absent from docs/reference/environment.md:", file=sys.stderr)
+        print(
+            "Read by the code, absent from docs/reference/environment/read.csv "
+            "(add a row, then `derive.py environment-tables`):",
+            file=sys.stderr,
+        )
         for name, files in undocumented.items():
             print(f"  {name}  ({', '.join(sorted(set(files))[:3])})", file=sys.stderr)
     if missing_produced:

@@ -219,6 +219,7 @@ GENERATORS = {
     "plant-schema": "uqs.model.plant_metadata_gen",
     "compression-config": "compression_config",
     "housekeeping-config": "housekeeping_config",
+    "environment-tables": "environment_tables",
 }
 
 
@@ -486,3 +487,70 @@ def test_housekeeping_config_check_fails_when_a_rule_changes(monkeypatch, capsys
     assert derive.main(["housekeeping-config", "--check"]) == 1
     err = capsys.readouterr().err
     assert "housekeeping.csv is stale" in err and "derive.py housekeeping-config" in err
+
+
+# -------------------------------------------------------- environment-tables
+
+
+def test_environment_tables_are_current_and_their_check_writes_nothing():
+    page = derive.REPO / "docs" / "reference" / "environment.md"
+    before = page.read_bytes()
+    result = _run("environment-tables", "--check")
+    assert result.returncode == 0, result.stderr
+    assert page.read_bytes() == before
+
+
+def test_environment_tables_declare_what_the_gate_documents():
+    """One list: the variables the gate treats as documented are the rows the
+    page renders, and every one is in the page."""
+    gate = derive.load("environment_tables")._gate()
+    exact, prefixes = gate.documented(derive.REPO)
+    page = (derive.REPO / gate.DOC).read_text()
+    for name in sorted(exact | {p + "<" for p in prefixes}):
+        assert f"| `{name}" in page, name
+
+
+def test_environment_tables_check_fails_on_a_hand_edit_and_on_an_unrendered_row(
+    monkeypatch, tmp_path, capsys
+):
+    import shutil
+
+    tables = derive.load("environment_tables")
+    root = tmp_path
+    for rel in ("docs/reference/environment.md", "docs/reference/environment/read.csv"):
+        (root / rel).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy(derive.REPO / rel, root / rel)
+    shutil.copy(
+        derive.REPO / "docs/reference/environment/produced.csv",
+        root / "docs/reference/environment/produced.csv",
+    )
+    monkeypatch.setattr(tables, "REPO", root)
+    monkeypatch.setattr(derive, "REPO", root)
+    assert derive.main(["environment-tables", "--check"]) == 0
+
+    page = root / "docs/reference/environment.md"
+    good = page.read_text()
+    page.write_text(good.replace("| `UQF_MODE` |", "| `UQF_MODE_X` |", 1))
+    assert derive.main(["environment-tables", "--check"]) == 1
+    assert "derive.py environment-tables" in capsys.readouterr().err
+
+    page.write_text(good)
+    csv_file = root / "docs/reference/environment/read.csv"
+    csv_file.write_text(csv_file.read_text() + "UQF_NEW,somewhere,no,nothing\n")
+    assert derive.main(["environment-tables", "--check"]) == 1
+
+
+def test_environment_tables_survive_the_formatter_untouched():
+    """The block is fenced from panache, which would realign a padded table on
+    every change; if panache is installed, it must leave the page as it is."""
+    import shutil
+    import subprocess
+
+    panache = shutil.which("panache")
+    if panache is None:
+        pytest.skip("panache is not installed")
+    page = derive.REPO / "docs" / "reference" / "environment.md"
+    result = subprocess.run(
+        [panache, "format", "--check", str(page)], capture_output=True, text=True, check=False
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
