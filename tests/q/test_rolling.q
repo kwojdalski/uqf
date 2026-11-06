@@ -394,19 +394,76 @@
     .qunit.assertTrue[0D00:05 in (.qt.qetl.job.stream.rolling.published[])`window;"covered from 00:05"];
     .qunit.assertEquals[.qt.qetl.job.stream.rolling.ns[nm;`withheld];`timespan$();"and no longer withheld"]};
 
-.qt.qetl.job.stream.rolling.test_a_restart_on_a_non_utc_host_covers_from_the_local_roll:{[t]
-    / the plant rolls its log at LOCAL midnight (run_stream names it by .z.D);
-    / on a host an hour ahead of UTC the 10-10 log begins at 10-09 23:00 UTC
+/ A job stood as `start` leaves it: the transport's plant_roll recorded for it.
+.qt.qetl.job.stream.rolling.with_roll:{[nm;hook] `.qetl.job.stream.rolling.roll_hooks set .qetl.job.stream.rolling.roll_hooks,enlist[nm]!enlist enlist hook;}
+
+/ Forget a job's recorded hook.
+.qt.qetl.job.stream.rolling.drop_roll:{[nm] `.qetl.job.stream.rolling.roll_hooks set (enlist nm) _ .qetl.job.stream.rolling.roll_hooks;}
+
+/ The job run twice over a plant day whose log begins at `roll`: uninterrupted
+/ (it saw `earlier` too) and restarted (it replays only `rows`, the log's own),
+/ each asked for its 5m window at `at`. `hook` is the plant_roll the restarted
+/ job's transport reports, or null for a transport without one.
+.qt.qetl.job.stream.rolling.after_roll:{[tag;hook;earlier;rows;at]
+    nm:.qt.qetl.job.stream.rolling.job`$"u",tag;
+    {[nm;r] .qt.qetl.job.stream.rolling.feed[nm;r 0;`a;r 1]}[nm] each earlier,rows;
+    `.qt.qetl.job.stream.rolling.sent set ();
+    `.qt.qetl.job.stream.rolling.clock set at;
+    .qt.qetl.job.stream.rolling.ns[nm;`evaluate] at;
+    whole:select from .qt.qetl.job.stream.rolling.published[] where window=0D00:05;
+    nm2:.qt.qetl.job.stream.rolling.job`$"r",tag;
+    .qt.qetl.job.stream.rolling.with_roll[nm2;hook];
+    .qt.qetl.job.stream.rolling.restart[nm2;{(`rt_events;.qt.qetl.job.stream.rolling.row[x 0;x 0;`a;x 1])} each rows];
+    `.qt.qetl.job.stream.rolling.sent set ();
+    `.qt.qetl.job.stream.rolling.clock set at;
+    .qt.qetl.job.stream.rolling.ns[nm2;`evaluate] at;
+    out:`whole`restarted`withheld`covered_from!(whole;select from .qt.qetl.job.stream.rolling.published[] where window=0D00:05;.qt.qetl.job.stream.rolling.ns[nm2;`withheld];.qt.qetl.job.stream.rolling.ns[nm2;`covered_from]);
+    .qt.qetl.job.stream.rolling.drop_roll nm2;
+    out}
+
+.qt.qetl.job.stream.rolling.test_a_restart_after_the_gmt_roll_never_publishes_fewer_rows:{[t]
+    / TorQ's segmented STP rolls at GMT whatever zone the host is in (#2191): the
+    / 10-10 log holds only the 00:02 row, the 23:59 row is in 10-09's. The suite
+    / runs this under TZ=America/New_York and with the host stood at UTC+1; the
+    / transport's plant_roll, not the host, says when the log began
     old:.qetl.job.stream.rolling.zone_offset;
     .qetl.job.stream.rolling.zone_offset:{0D01:00};
-    nm:.qt.qetl.job.stream.rolling.job`rt_z;
-    lg:enlist (`rt_events;.qt.qetl.job.stream.rolling.row[2026.10.09D23:02:30;2026.10.09D23:02:30;`a;1f]);
-    r:.[{[nm;lg] .qt.qetl.job.stream.rolling.restart[nm;lg]; .qt.qetl.job.stream.rolling.ns[nm;`covered_from]};(nm;lg);{x}];
+    r:.[.qt.qetl.job.stream.rolling.after_roll;("gmt";{[] 2026.10.10D00:00:00};enlist (2026.10.09D23:59:00;1f);enlist (2026.10.10D00:02:00;10f);2026.10.10D00:03:00);{x}];
     .qetl.job.stream.rolling.zone_offset:old;
-    .qunit.assertEquals[r;2026.10.09D23:00:00;"covered from the local roll in UTC, not from the UTC date's midnight"];
-    `.qt.qetl.job.stream.rolling.clock set 2026.10.09D23:03:00;
-    .qt.qetl.job.stream.rolling.ns[nm;`evaluate] .qt.qetl.job.stream.rolling.clock;
-    .qunit.assertEquals[distinct (.qt.qetl.job.stream.rolling.published[])`window;enlist 0D00:01;"the 5m window reaches before the roll: withheld"]};
+    .qunit.assertEquals[(first r`whole)`n;2;"the uninterrupted job counts both rows"];
+    .qunit.assertEquals[r`covered_from;2026.10.10D00:00:00;"covered from the plant's roll, not the host's midnight"];
+    .qunit.assertEquals[count r`restarted;0;"the restarted job holds one of the two rows: the window is withheld"];
+    .qunit.assertEquals[r`withheld;enlist 0D00:05;"and said so"]};
+
+.qt.qetl.job.stream.rolling.test_a_restart_on_a_standalone_plant_covers_from_its_local_roll:{[t]
+    / run_stream's plant rolls at the host's LOCAL midnight (#1250): at UTC+1 the
+    / 10-10 log begins at 10-09 23:00 UTC. Its transport says so through plant_roll
+    old:.qetl.job.stream.rolling.zone_offset;
+    .qetl.job.stream.rolling.zone_offset:{0D01:00};
+    r:.[.qt.qetl.job.stream.rolling.after_roll;("loc";{[] .qetl.job.stream.rolling.day_start 2026.10.10D12:00:00};enlist (2026.10.09D22:59:00;1f);enlist (2026.10.09D23:02:00;10f);2026.10.09D23:03:00);{x}];
+    .qetl.job.stream.rolling.zone_offset:old;
+    .qunit.assertEquals[r`covered_from;2026.10.09D23:00:00;"covered from the local roll in UTC"];
+    .qunit.assertEquals[(first r`whole)`n;2;"the uninterrupted job counts both rows"];
+    .qunit.assertEquals[count r`restarted;0;"the restarted window is withheld, not published over one row"]};
+
+.qt.qetl.job.stream.rolling.test_a_transport_that_cannot_say_covers_from_the_first_message:{[t]
+    / no plant_roll (or a plant that does not answer): the first message is never
+    / before the log began, so the claim only under-states
+    r:.qt.qetl.job.stream.rolling.after_roll["nul";{[] 0Np};enlist (2026.10.09D23:59:00;1f);enlist (2026.10.10D00:02:00;10f);2026.10.10D00:03:00];
+    .qunit.assertEquals[r`covered_from;2026.10.10D00:02:00;"covered from the first message"];
+    .qunit.assertEquals[count r`restarted;0;"the 5m window is withheld"];
+    r2:.qt.qetl.job.stream.rolling.after_roll["err";{[] '"no plant"};();enlist (2026.10.10D00:02:00;10f);2026.10.10D00:03:00];
+    .qunit.assertEquals[r2`covered_from;2026.10.10D00:02:00;"a hook that throws costs the claim, not the job"]};
+
+.qt.qetl.job.stream.rolling.test_a_roll_after_the_first_message_is_not_believed:{[t]
+    r:.qt.qetl.job.stream.rolling.after_roll["lat";{[] 2026.10.10D06:00:00};();enlist (2026.10.10D00:02:00;10f);2026.10.10D00:03:00];
+    .qunit.assertEquals[r`covered_from;2026.10.10D00:02:00;"a log cannot begin after its own first message"]};
+
+.qt.qetl.job.stream.rolling.test_a_window_the_replayed_log_fully_covers_is_published:{[t]
+    / a restart whose log holds the whole window publishes what the uninterrupted job does
+    r:.qt.qetl.job.stream.rolling.after_roll["cov";{[] 2026.10.10D00:00:00};();((2026.10.10D00:00:30;1f);(2026.10.10D00:04:00;10f));2026.10.10D00:08:00];
+    .qunit.assertEquals[r`restarted;r`whole;"identical to the uninterrupted job"];
+    .qunit.assertEquals[r`withheld;`timespan$();"nothing withheld"]};
 
 .qt.qetl.job.stream.rolling.test_a_replayed_publication_is_not_published_again:{[t]
     nm:.qt.qetl.job.stream.rolling.job`rt_r;

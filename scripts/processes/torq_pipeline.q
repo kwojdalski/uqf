@@ -413,6 +413,17 @@ plant_hooks:{[ask;want]
         {[id;ask;want;day]
             plant_try[id;ask;"has_log says no log";0b;{[want;day;loc] has_log[loc 0;loc 1;want;day]}[want;day]]}[id;ask;want])}
 
+/ The UTC instant the plant's current log began (#2191): the plant's own roll
+/ boundary, asked of it, never the job's zone or UTC midnight - the segmented
+/ STP rolls at .eodtime.rolltimezone (GMT by default), whatever the host's zone
+/ is. The plant keeps the NEXT roll (.eodtime.nextroll), so the log began a day
+/ before it. (On a roll zone with daylight saving, the two days a year of 23 or
+/ 25 hours put this an hour out; GMT, the default, has none.)
+/ @param h the handle to the plant
+/ @return a timestamp
+/ @eg .qtorq.plant_roll {[q] 2026.10.11D00:00:00}  / 2026.10.10D00:00:00.000000000
+plant_roll:{[h] (h".eodtime.nextroll")-1D}
+
 / Scratch for earlier_days: one log's messages, and the span's.
 collected:()
 got:()
@@ -538,6 +549,47 @@ install_period_handlers:{[]
         };
     `endofperiod`endofday}
 
+/ The call a publish sends in place of a bare `.u.upd`, run ON the plant.
+/ .
+/ WHY (#2192). TorQ's segmented tickerplant runs in error mode by default
+/ (lib/torq/config/settings/segmentedtickerplant.q: errmode:1b), which
+/ replaces .u.upd with a trap around the real update, now `.stp.upd`:
+/ a failing update is handed to .stplg.badmsg - written to the STP's ERROR
+/ log - and the call RETURNS. The publisher sees a success for rows the
+/ plant stored and logged nowhere else. The error log is the plant's only
+/ record of it, and nothing reads that.
+/ .
+/ This runs the same trap TorQ installs, but keeps its outcome: it calls
+/ .stp.upd under a protected call, still hands a failure to .stplg.badmsg (so
+/ the error log is exactly what it was), and returns the error text instead
+/ of swallowing it. A plant without error mode has no .stp.upd, so .u.upd is
+/ called plainly and a failure reaches the publisher as the error it is.
+/ Every name is qualified, because the lambda is evaluated in the plant's
+/ context.
+/ @param t the table
+/ @param x the columns, as .u.upd takes them
+/ @return 1b when the plant accepted the batch, otherwise the error text
+/ @private
+accept_fn:{[t;x]
+    if[not `upd in key `.stp; .u.upd[t;x]; :1b];
+    r:.[{[t;x] .stp.upd[t;x]; 1b};(t;x);{[e] $[10h=type e; e; "refused"]}];
+    if[10h=type r; .stplg.badmsg[r;t;x]];
+    r}
+
+/ Send one batch to the plant and refuse it unless the plant accepted it.
+/ A reply that is a string is the plant's error text (accept_fn); anything
+/ else - a stand-in handle's reply included - is acceptance.
+/ @param h the publish handle
+/ @param t the table
+/ @param x the columns, as .u.upd takes them
+/ @return nothing
+/ @throws error carrying the plant's reason when the plant refused the batch
+/ @private
+send_batch:{[h;t;x]
+    r:h (accept_fn;t;x);
+    if[10h=type r;
+        '"qtorq.publish: the tickerplant refused a batch of ",string[count first x]," ",string[t]," rows - it is in the tickerplant's error log and was NOT stored: ",r]}
+
 / Publish rows onto the tickerplant (invariants 1, 2, 3 and 5). The one and
 / only way a pipeline in this demo should send data.
 / @param h the publish handle (passed explicitly, never read from a global -
@@ -556,14 +608,14 @@ publish:{[h;t;x]
         / is where .u.upd takes it from too.
         n:count first x;
         if[0=n; :0];
-        h (`.u.upd;t;x);
+        send_batch[h;t;x];
         :record_published[t;n]];
     out:as_table x;
     if[0=count out; :0];
     / invariant 1: .u.upd stamps its own `time` - sending ours makes the
     / message one column too wide.
     out:$[`time in cols out; ![out;();0b;enlist `time]; out];
-    h (`.u.upd;t;value flip out);
+    send_batch[h;t;value flip out];
     record_published[t;count out]}
 
 / -------------------------------------------------------------- DELIVERY

@@ -177,10 +177,14 @@ qetl.hb,report,function,1,
 qetl.hb,require_schema,function,1,
 qetl.hb,stale,function,1,max_age
 qetl.io,acknowledged,function,2,state result
+qetl.io,clip_to_eod,function,4,worker cfg range_from range_to
 qetl.io,default,dict,,
 qetl.io,default_strategy,value,,
 qetl.io,discard,dict,,
 qetl.io,due,function,4,state status now interval
+qetl.io,eod_waiting,function,2,root dates
+qetl.io,eod_waiting_for,function,3,cfg range_from range_to
+qetl.io,eod_wdb,dict,,
 qetl.io,finish,function,1,mgr
 qetl.io,flush,function,2,mgr upto
 qetl.io,folded,function,3,target batch row_key
@@ -196,6 +200,7 @@ qetl.io,on_peachq,value,,
 qetl.io,optional,value,,
 qetl.io,recover,function,4,mgr target range_from range_to
 qetl.io,remote,dict,,
+qetl.io,require_eod_done,function,3,root target dates
 qetl.io,require_manager,function,1,mgr
 qetl.io,require_strategy,function,1,strategy
 qetl.io,required,value,,
@@ -205,6 +210,7 @@ qetl.io,scoped_check_date,function,5,bounds partition_col target batch window_to
 qetl.io,scoped_roots,value,,
 qetl.io,strategies,value,,
 qetl.io,touched,table,,
+qetl.io,watch_eod,function,2,root wdb_dir
 qetl.io,write,function,3,mgr target batch
 qetl.io,write_keyed,function,4,mgr target batch opts
 qetl.io.odbc,available,function,1,
@@ -519,6 +525,7 @@ qetl.job.stream.rolling,installed,value,,
 qetl.job.stream.rolling,optional_keys,value,,
 qetl.job.stream.rolling,registry,dict,,
 qetl.job.stream.rolling,required_keys,value,,
+qetl.job.stream.rolling,roll_hooks,dict,,
 qetl.job.stream.rolling,series,function,3,name rows as_ofs
 qetl.job.stream.rolling,shell_columns,dict,,
 qetl.kafka,above_marks,function,2,marks rows

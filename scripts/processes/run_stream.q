@@ -149,6 +149,12 @@ if[`verbose in key .qproc.standalone.opts; .qetl.log.debug 1b];
 / Private: the timer half both transports share.
 .qproc.standalone.add_timer:{[name;period;f] `.qproc.standalone.timers set .qproc.standalone.timers,enlist (name;f;period;0Np);}
 
+/ The UTC instant a plant's log for `day` began (#2191): this plant names and
+/ rolls its log by the host's LOCAL date (.z.D), so the log begins at that
+/ date's local midnight. Null for no day.
+/ @private
+.qproc.standalone.roll_of:{[day] $[null day; 0Np; .qetl.job.stream.rolling.day_start (`timestamp$day)+0D12]}
+
 / The transport for a plant IN this process: .qetl.tick directly.
 / .
 / A replay reads the plant's own log - only the tables asked for, since the
@@ -161,7 +167,7 @@ if[`verbose in key .qproc.standalone.opts; .qetl.log.debug 1b];
 / the handler to one argument and make a projection rather than an error.
 / @return the transport dictionary
 .qproc.standalone.local_transport:{[]
-    `connect`publisher`subscribe`timer`earlier_days`plant_day`has_log!(
+    `connect`publisher`subscribe`timer`earlier_days`plant_day`has_log`plant_roll!(
         {[] };
         {[] {[t;r] .qetl.tick.publish[t;r]}};
         {[tbls;handler;replay]
@@ -172,7 +178,8 @@ if[`verbose in key .qproc.standalone.opts; .qetl.log.debug 1b];
         .qproc.standalone.add_timer;
         {[tbls;first_day;last_day] .qetl.tick.earlier_days[tbls;first_day;last_day]};
         {[] .qetl.tick.plant_day[]};
-        {[dt] .qetl.tick.has_log dt})}
+        {[dt] .qetl.tick.has_log dt};
+        {[] .qproc.standalone.roll_of .qetl.tick.plant_day[]})}
 
 / The transport for a plant in ANOTHER process, on port `tp`.
 / .
@@ -203,7 +210,7 @@ if[`verbose in key .qproc.standalone.opts; .qetl.log.debug 1b];
 / @param tp the plant's port
 / @return the transport dictionary
 .qproc.standalone.remote_transport:{[tp]
-    `connect`publisher`subscribe`timer`earlier_days`plant_day`has_log!(
+    `connect`publisher`subscribe`timer`earlier_days`plant_day`has_log`plant_roll!(
         {[tp]
             .qetl.log.info[`run_stream;"connecting to the plant";enlist[`port]!enlist tp];
             `.qproc.standalone.h set @[hopen;tp;{[tp;e]
@@ -218,7 +225,8 @@ if[`verbose in key .qproc.standalone.opts; .qetl.log.debug 1b];
         .qproc.standalone.add_timer;
         {[tbls;first_day;last_day] .qproc.standalone.h({[w;a;b] .qetl.tick.earlier_days[w;a;b]};tbls;first_day;last_day)};
         {[] .qproc.standalone.h({[] .qetl.tick.plant_day[]};())};
-        {[dt] .qproc.standalone.h({[d] .qetl.tick.has_log d};dt)})}
+        {[dt] .qproc.standalone.h({[d] .qetl.tick.has_log d};dt)};
+        {[] .qproc.standalone.roll_of .qproc.standalone.h({[] .qetl.tick.plant_day[]};())})}
 
 / The jobs to run for `jobs` with the plant in this process: every in-tree
 / producer upstream of them, producers first, then `jobs` themselves.
