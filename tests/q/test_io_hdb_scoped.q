@@ -332,3 +332,33 @@ system "l scripts/dev/attached_calendar.q";
     .qunit.assertEquals[n;2;"both rows written"];
     .qunit.assertEquals[0<count each key each hsym each `$(string root),/:("/2026.03.10/iodeals";"/2026.03.11/iodeals");11b;"one row in each native partition"];
     .qunit.assertEquals[count get hsym `$(string root),"/2026.03.11/iodeals/time";1;"and the 17:30 row is in the later one"]};
+
+/ #2197: the issue's repro - one balance per account per day, keyed by account (time not in the key).
+/ Re-backfilling the 1st through the scoped manager must leave the 2nd's rows byte-identical.
+.qt.qetl.hdb_scoped.test_replace_by_a_key_without_time_leaves_the_next_day_byte_identical:{[t]
+    root:`$":",first system"mktemp -d";
+    rows:{[d;v] ([] time:2#`timestamp$d+0D17; sym:`ACC1`ACC2; account:`A1`A2; bal:v)};
+    .qt.qetl.hdb_scoped.put[root;`balances;rows[2026.01.01;100 200f]];
+    .qt.qetl.hdb_scoped.put[root;`balances;rows[2026.01.02;110 210f]];
+    m:.qetl.io.hdb_scoped[root;`time;`max_date`deadline`destination!(2026.01.31;2099.01.01D00:00:00.000000000;`dest_test)];
+    o:`on_conflict`row_key`time_column`range_from`range_to!(`replace;`account;`time;2026.01.01D00:00:00.000000000;2026.01.02D00:00:00.000000000);
+    before:.qt.qetl.hdb_scoped.part[root;2026.01.02;`balances];
+    .qetl.io.write_keyed[m;`balances;1#rows[2026.01.01;101 0f];o];
+    .qetl.io.finish[m];
+    .qunit.assertEquals[.qt.qetl.hdb_scoped.part[root;2026.01.02;`balances];before;"the 2nd is byte-identical"];
+    .qunit.assertEquals[(.qt.qetl.hdb_scoped.part[root;2026.01.02;`balances])`account;before`account;"and still holds A1"];
+    .qunit.assertEquals[.qt.qetl.hdb_scoped.part[root;2026.01.01;`balances]`bal;-3!enlist 101f;"the window holds the replacement"]};
+
+/ The same case through uqf's own HDB writer.
+.qt.qetl.hdb_scoped.test_replace_by_a_key_without_time_leaves_uqfs_own_next_day_byte_identical:{[t]
+    root:`$":",first system"mktemp -d";
+    rows:{[d;v] ([] time:2#`timestamp$d+0D17; sym:`ACC1`ACC2; account:`A1`A2; bal:v)};
+    m:.qetl.io.hdb[root;`time];
+    .qetl.io.write[m;`balances;rows[2026.01.01;100 200f]];
+    .qetl.io.write[m;`balances;rows[2026.01.02;110 210f]];
+    o:`on_conflict`row_key`time_column`range_from`range_to!(`replace;`account;`time;2026.01.01D00:00:00.000000000;2026.01.02D00:00:00.000000000);
+    before:.qt.qetl.hdb_scoped.part[root;2026.01.02;`balances];
+    .qetl.io.write_keyed[m;`balances;1#rows[2026.01.01;101 0f];o];
+    .qetl.io.finish[m];
+    .qunit.assertEquals[`time`account`bal#.qt.qetl.hdb_scoped.part[root;2026.01.02;`balances];`time`account`bal#before;"the 2nd keeps both accounts: the rewrite of a partition may add the sym attribute, so the data columns are compared"];
+    .qunit.assertEquals[.qt.qetl.hdb_scoped.part[root;2026.01.01;`balances]`bal;-3!enlist 101f;"the window holds the replacement"]};

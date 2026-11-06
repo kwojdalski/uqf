@@ -106,6 +106,30 @@
     m[`finish][::];
     .qunit.assertEquals[key ` sv st[`root],(`$string D),`trade;();"no empty trade table was made in the waiting day"]};
 
+.qt.qetl.io.hdb_eod.test_handed_over_is_before_today_and_past_the_wdbs_directory:{[t]
+    .qt.qetl.io.hdb_eod.setUp_clean[];
+    s:first system"mktemp -d";
+    wdb:hsym `$s,"/wdbhdb";
+    t0:.z.d-3; t1:.z.d-2; t2:.z.d-1;
+    / the wdb holds t0, t1 and t2: nothing has been moved yet
+    system "mkdir -p ",s,"/wdbhdb/",string t2;
+    system "mkdir -p ",s,"/wdbhdb/",string t0;
+    system "mkdir -p ",s,"/wdbhdb/",string t1;
+    .qetl.io.watch_eod[`:/no/such/hdb;wdb];
+    .qunit.assertEquals[.qetl.io.handed_over[`:/no/such/hdb;(t0;t1;t2;.z.d)];`date$();"every date the wdb still holds is waiting, and today is never handed over"];
+    / end of day moved t0 and t1 out of the directory
+    system "rm -r ",s,"/wdbhdb/",string t0;
+    system "rm -r ",s,"/wdbhdb/",string t1;
+    .qunit.assertEquals[.qetl.io.handed_over[`:/no/such/hdb;(t0;t1;t2;.z.d)];t0,t1;"the days the wdb has moved on from are handed over; the day it still holds, and today, are not"];
+    .qetl.io.eod_wdb:(`symbol$())!();
+    .qunit.assertEquals[.qetl.io.handed_over[`:/no/such/hdb;(t2;.z.d)];enlist t2;"with no wdb registered only today is excluded"]};
+
+.qt.qetl.io.hdb_eod.test_require_handed_over_refuses_today_and_a_waiting_day:{[t]
+    .qt.qetl.io.hdb_eod.setUp_clean[];
+    .qunit.assertTrue[.qetl.io.require_handed_over[`:/no/such/hdb;`replay;.z.d-1];"a past day with no wdb is fine"];
+    r:@[.qetl.io.require_handed_over[`:/no/such/hdb;`replay];.z.d;{x}];
+    .qunit.assertTrue[r like "*belong to the tickerplant and end-of-day*";"today is refused with the named error"]};
+
 / Leave nothing registered for the suites that run after this one.
 .qt.qetl.io.hdb_eod.tearDown_clean:{[]
     .qt.qetl.io.hdb_eod.setUp_clean[];

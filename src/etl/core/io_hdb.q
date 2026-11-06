@@ -194,18 +194,7 @@
     days:.qetl.io.days_of[root;data tc];
     if[any null days;
         '"hdb: ",string[target]," has rows with a null time - no partition to put them in"];
-    / Names the REMEDY, not only the refusal. The rule is a boundary - today
-    / is the plant's, yesterday and earlier are the backfill's, and
-    / end-of-day is the handover - but an operator meeting it for the first
-    / time meets it as a wall, after the fetch and the quality gate have both
-    / passed, which is a confusing place to learn a policy.
-    if[any days>=.z.d;
-        '"hdb: ",string[target]," has rows dated ",string[max days],
-         " - today and later belong to the tickerplant and end-of-day, not a backfill.",
-         " Backfill a range ending on or before ",string[.z.d-1],
-         ", or let today's rows arrive through the live path"];
-    / Yesterday is the backfill's only once end of day has moved it (#2186).
-    .qetl.io.require_eod_done[root;target;distinct days];
+    .qetl.io.require_handed_over[root;target;distinct days];
     data}
 
 / Private: write a batch under opts`on_conflict, one date partition at a time.
@@ -225,7 +214,8 @@
 / files under this one: both writers, one key, two partitions, and a
 / `replace of this day alone would leave the live copy as a duplicate.
 / So under `replace, the partition holding the window's END loses every
-/ row whose key the window wrote. Only when the key leaves out the time
+/ row whose key the window wrote AND whose time column lies inside the
+/ window (#2197: by key alone it deleted the next day's own rows). Only when the key leaves out the time
 / column - with time in the key, a later partition cannot hold the same
 / key - and never in today's partition, which is the tickerplant's: a
 / refill of yesterday cannot reach a row still on its way to end-of-day.
@@ -305,7 +295,8 @@
     {[root;target;step] .qetl.io.swap[root;step 1;target]; `.qetl.io.touched upsert (root;step 1;target);}[root;target] each plan;
     count batch}
 
-/ Private: the partition after a `replace window, without the window's keys.
+/ Private: the partition after a `replace window, without the window's late-filed twins:
+/ rows whose key the window wrote AND whose time column lies inside the window.
 / .
 / Empty when there is nothing to do: the window ends at midnight on a day
 / already planned, on today or later, on a day with no such partition, or
@@ -323,7 +314,13 @@
     if[(d in dates) or (d>=.z.d) or ()~key part; :()];
     kc:(),opts`row_key;
     existing:flip {x til count x} each flip select from get part;
-    keep:existing where not (kc#existing) in kc#data;
+    / A twin is a row of the window filed late: its own time column still lies
+    / inside [range_from, range_to). A key alone proves nothing - the next
+    / day's row of the same account is a different row (#2197).
+    t:existing opts`time_column;
+    twin:(t>=opts`range_from) and t<opts`range_to;
+    hit:twin and (kc#existing) in kc#data;
+    keep:existing where not hit;
     $[count[keep]<count existing; enlist (part;d;.qetl.io.plain keep); ()]}
 
 / ------------------------------------------------------------ STAGING

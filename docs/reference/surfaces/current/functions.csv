@@ -193,6 +193,7 @@ qetl.io,finish,function,1,mgr
 qetl.io,flush,function,2,mgr upto
 qetl.io,folded,function,3,target batch row_key
 qetl.io,for_cfg,function,1,cfg
+qetl.io,handed_over,function,2,root dates
 qetl.io,hdb,function,2,root partition_col
 qetl.io,hdb_lock,function,1,root
 qetl.io,hdb_lock_wait,value,,
@@ -206,6 +207,7 @@ qetl.io,optional,value,,
 qetl.io,recover,function,4,mgr target range_from range_to
 qetl.io,remote,dict,,
 qetl.io,require_eod_done,function,3,root target dates
+qetl.io,require_handed_over,function,3,root target days
 qetl.io,require_manager,function,1,mgr
 qetl.io,require_strategy,function,1,strategy
 qetl.io,required,value,,
@@ -437,6 +439,8 @@ qetl.job.stream,carry_end_of_day,function,2,dt j
 qetl.job.stream,carry_log,dict,,
 qetl.job.stream,carry_marker_path,function,1,job
 qetl.job.stream,catch_up,function,4,job tr tbls h
+qetl.job.stream,catching_up,function,2,job on
+qetl.job.stream,catchup_position,dict,,
 qetl.job.stream,caught_up,dict,,
 qetl.job.stream,clock,function,1,x
 qetl.job.stream,clock_of,function,2,now x
@@ -458,6 +462,7 @@ qetl.job.stream,jobs,dict,,
 qetl.job.stream,last_end_seen,function,1,job
 qetl.job.stream,missed_end_of_day,function,2,job today
 qetl.job.stream,namespace,function,1,job
+qetl.job.stream,next_position,function,1,job
 qetl.job.stream,normalize,function,2,name decl
 qetl.job.stream,normalizer,dict,,
 qetl.job.stream,optional_declarations,value,,
@@ -469,6 +474,8 @@ qetl.job.stream,preview,function,2,job n
 qetl.job.stream,preview_recent,function,3,job n span
 qetl.job.stream,preview_window,function,4,job n window_start window_end
 qetl.job.stream,procnames,dict,,
+qetl.job.stream,quarantine,function,5,job t position err rows
+qetl.job.stream,quarantined,table,,
 qetl.job.stream,recovery_keys,value,,
 qetl.job.stream,registries,value,,
 qetl.job.stream,replayed,function,1,job
@@ -482,8 +489,11 @@ qetl.job.stream,snapshot,function,1,job
 qetl.job.stream,start,function,2,job tr
 qetl.job.stream,subscriptions,function,1,job
 qetl.job.stream,tick,function,1,job
+qetl.job.stream,tolerant,function,4,job h t x
 qetl.job.stream,transport_keys,value,,
+qetl.job.stream,trapping,value,,
 qetl.job.stream,unwired,function,1,job
+qetl.job.stream,watch_subscription,function,2,job tr
 qetl.job.stream,wire,function,2,job publisher
 qetl.job.stream,withheld_n,value,,
 qetl.job.stream.bars,assign,function,3,width tc x

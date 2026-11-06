@@ -74,6 +74,40 @@
          " Backfill up to ",string[first[w]-1],", or run again once end of day has finished"];
     1b}
 
+/ Refuse a write into any day that is not the HDB's yet: today and later
+/ belong to the tickerplant, and yesterday and earlier are the HDB's only once
+/ TorQ's end of day has moved them (require_eod_done). The one rule every HDB
+/ writer shares: hdb_rows (backfills) and `uqs data replay` both call it.
+/ @param root the HDB root, a file symbol
+/ @param target the table (or other writer name), for the message
+/ @param days the dates the write would touch
+/ @return 1b when every day is handed over
+/ @throws error naming the dates and the way out
+/ @eg .qetl.io.require_handed_over[`:/no/such/hdb;`t;2026.01.01]
+.qetl.io.require_handed_over:{[root;target;days]
+    / Names the REMEDY, not only the refusal. The rule is a boundary - today
+    / is the plant's, yesterday and earlier are the backfill's, and
+    / end-of-day is the handover - but an operator meeting it for the first
+    / time meets it as a wall, after the fetch and the quality gate have both
+    / passed, which is a confusing place to learn a policy.
+    days:(),days;
+    if[any days>=.z.d;
+        '"hdb: ",string[target]," has rows dated ",string[max days],
+         " - today and later belong to the tickerplant and end-of-day, not a backfill.",
+         " Backfill a range ending on or before ",string[.z.d-1],
+         ", or let today's rows arrive through the live path"];
+    .qetl.io.require_eod_done[root;target;distinct days]}
+
+/ Which of these dates are the HDB's to write: before today, and end of day
+/ has handed them over.
+/ @param root the HDB root, a file symbol
+/ @param dates a list of dates
+/ @return those dates, ascending
+/ @eg .qetl.io.handed_over[`:/no/such/hdb;2026.01.01 2026.01.02]  ->  2026.01.01 2026.01.02
+.qetl.io.handed_over:{[root;dates]
+    dates:asc distinct d where (d:(),dates)<.z.d;
+    dates except .qetl.io.eod_waiting[root;dates]}
+
 / The days of a range that TorQ's end of day has not yet handed over to the
 / HDB a worker writes into (#2186). None when its io manager does not know
 / (memory, discard, an HDB with no wdb registered).

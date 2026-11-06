@@ -366,3 +366,79 @@ def test_a_refusal_exits_one_rather_than_raising(monkeypatch):
     monkeypatch.setattr(replay, "_command_lines", lambda timeout=None: [])
     result = runner.invoke(cli.app, ["data", "replay"])
     assert result.exit_code == 1
+
+
+# ---------------------------------------------------------------- the live day (#2196)
+
+
+def _live_stack(tmp_path):
+    """A plant mid-day: logs for two past days and today, a wdb whose save
+    directory holds today only (end of day has moved the older days out and
+    opened nothing later), and an HDB dir. Returns (plant, hdb, wdb, days)."""
+    import datetime
+
+    today = datetime.datetime.now(datetime.UTC).date()
+    days = [(today - datetime.timedelta(days=n)).strftime("%Y.%m.%d") for n in (2, 1, 0)]
+    tplogdir = tmp_path / "tplogs"
+    for day in days:
+        (tplogdir / f"stp1_{day}").mkdir(parents=True)
+    wdb = tmp_path / "wdbhdb"
+    (wdb / days[2]).mkdir(parents=True)
+    hdb = tmp_path / "hdb"
+    (hdb / days[0]).mkdir(parents=True)
+    plant = replay.RunningPlant("stp1", "segmentedtickerplant", 100, 6050, tplogdir, Path(SCHEMA))
+    return plant, hdb, wdb, days
+
+
+def _plan(plant, hdb, wdb, monkeypatch, **kw):
+    monkeypatch.setattr(replay, "resolve_plant", lambda *a, **k: plant)
+    return replay.plan(hdb_dir=hdb, schema_file=Path(SCHEMA), base_port=6050, wdb_dir=wdb, **kw)
+
+
+def test_the_default_day_is_never_the_live_day(tmp_path, monkeypatch):
+    """With a wdb holding today, the newest log is today's; the default must be
+    the newest day end of day has handed over - here, the day before."""
+    plant, hdb, wdb, days = _live_stack(tmp_path)
+    planned = _plan(plant, hdb, wdb, monkeypatch)
+    assert planned.log_dir.name == f"stp1_{days[1]}"
+
+
+def test_an_explicit_live_day_is_refused_with_the_fences_error(tmp_path, monkeypatch):
+    plant, hdb, wdb, days = _live_stack(tmp_path)
+    with pytest.raises(UqsError, match="today and later belong to the tickerplant and end-of-day"):
+        _plan(plant, hdb, wdb, monkeypatch, date=days[2])
+
+
+def test_a_day_the_wdb_still_holds_is_refused(tmp_path, monkeypatch):
+    """Yesterday, with end of day not yet run: the wdb's directory still holds it."""
+    plant, hdb, wdb, days = _live_stack(tmp_path)
+    (wdb / days[1]).mkdir()
+    with pytest.raises(UqsError, match="before TorQ's end of day has moved that date"):
+        _plan(plant, hdb, wdb, monkeypatch, date=days[1])
+    assert _plan(plant, hdb, wdb, monkeypatch).log_dir.name == f"stp1_{days[0]}"
+
+
+def test_a_handed_over_day_replays(tmp_path, monkeypatch):
+    plant, hdb, wdb, days = _live_stack(tmp_path)
+    planned = _plan(plant, hdb, wdb, monkeypatch, date=days[0])
+    assert planned.log_dir.name == f"stp1_{days[0]}"
+
+
+def test_only_the_live_day_logged_has_no_default(tmp_path, monkeypatch):
+    plant, hdb, wdb, days = _live_stack(tmp_path)
+    for day in days[:2]:
+        (plant.tplogdir / f"stp1_{day}").rmdir()
+    with pytest.raises(UqsError, match="no log for a day end of day has handed over"):
+        _plan(plant, hdb, wdb, monkeypatch)
+
+
+def test_a_named_plant_log_directory_of_today_is_refused(tmp_path, monkeypatch):
+    plant, hdb, wdb, days = _live_stack(tmp_path)
+    with pytest.raises(UqsError, match="today and later belong"):
+        replay.plan(
+            log_dir=plant.tplogdir / f"stp1_{days[2]}",
+            hdb_dir=hdb,
+            schema_file=Path(SCHEMA),
+            base_port=6050,
+            wdb_dir=wdb,
+        )
