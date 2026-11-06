@@ -49,7 +49,8 @@ def test_hostile_symbol_value_travels_as_an_argument_not_as_text(client, gw):
     assert program == queries.BROWSE
     assert hostile not in program
     # present as data, in the values list, and nowhere else
-    assert args == ("trades", ["sym"], ["eq"], [hostile], 10)
+    # 11: the limit and one row past it, which says whether more exist (#2220)
+    assert args == ("trades", ["sym"], ["eq"], [hostile], 11)
     assert tiers == ["rdb", "hdb"]
 
 

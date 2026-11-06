@@ -89,7 +89,10 @@ export interface QueryResult extends Pollable {
   tier: Tier;
   rows: Row[];
   row_count: number;
+  /** More rows existed than were returned, whatever cut them (#2220). */
   truncated: boolean;
+  /** What cut them: the caller's `limit`, or a server row cap. */
+  cut_by: "limit" | "max_rows" | null;
 }
 /** One prepared chart (#2044): defined on the server, drawn here. */
 export interface ChartInfo {
@@ -114,14 +117,14 @@ export interface ChartResult {
   notes: string[];
 }
 /** POST /compare's body (#2033): two explicit sides, an explicit window,
- *  filters as typed (COLUMN OP VALUE) and the rows read per side. */
+ *  filters as /query takes them (#2223) and the rows read per side. */
 export interface CompareBody {
   left: string;
   right: string;
   tables: string[];
   range_from: string;
   range_to: string;
-  filters: string[];
+  filters: QueryFilter[];
   limit: number;
   source_version?: string | null;
   partition?: string | null;
@@ -177,9 +180,11 @@ export interface CompareResult {
   range_from: string;
   range_to: string;
   limit: number;
-  filters: string[];
-  source_version: string;
-  partition: string;
+  /** The filters as they were sent. */
+  filters: QueryFilter[];
+  /** null when no coverage was compared; partition "" is the no-partition slice. */
+  source_version: string | null;
+  partition: string | null;
   tables: CompareTable[];
 }
 /** The part of a Pydantic model's JSON Schema a parameter form reads. */
@@ -501,6 +506,8 @@ export interface OpsData extends Pollable {
   summary?: Record<string, number>;
   unreachable?: Row[];
   processes_configured?: number;
+  /** /ops/usage: more rows existed than the `limit` returned (#2220). */
+  truncated?: boolean;
 }
 
 /** Every error the API answers, in its one shape (app.py `_error`, #2106):
@@ -1400,6 +1407,8 @@ export interface ActivityDrop {
 /** GET /activity - models.ActivityResponse. */
 export interface ActivityHistory extends Pollable {
   events: ActivityEvent[];
+  /** More events matched than the `limit` returned (#2220). */
+  truncated: boolean;
   persistence: ActivityPersistence;
   default_level: SessionLevel;
   bounds: ActivityBound[];
