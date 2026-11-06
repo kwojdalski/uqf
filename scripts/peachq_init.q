@@ -40,5 +40,10 @@ if[10h=type @[value;`.Q.chk;{x}];
         {[root;tabs;empty;dir;have]
             miss:where not tabs in have;
             if[0=count miss; :()];
-            {[root;dir;t;e] (` sv dir,t,`) set .Q.en[root] e; dir}[root;dir]'[tabs miss; empty miss]
+            {[root;dir;t;e]
+                / column by column: a splayed set puts a sym file in the date folder (#2285)
+                d:` sv dir,t; e:.Q.en[root] e;
+                `sym set get ` sv root,`sym;
+                {[d;c;v] (` sv d,c) set v}[d]'[cols e; {$[11h=type x; `sym$x; x]} each e cols e];
+                (` sv d,`.d) set cols e; dir}[root;dir]'[tabs miss; empty miss]
             }[root;tabs;empty]'[dirs;held]}]

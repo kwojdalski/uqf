@@ -168,11 +168,27 @@
         / by one, so a kill left a partition the HDB could not read and recover
         / threw on. Staged, it appears whole or not at all.
         $[()~existing; [.qetl.io.stage[root;d;target;rows]; .qetl.io.swap[root;d;target]];
-          .qetl.io.on_peachq; part set .Q.en[root] t,(cols t:.qetl.io.read_part[part])#rows;
+          .qetl.io.on_peachq; [.qetl.io.write_splay[root;part;.Q.en[root] t,(cols t:.qetl.io.read_part[part])#rows]; ::];
           part upsert rows];
         `.qetl.io.touched upsert (root;d;target);
         }[root;target;data;days] each distinct days;
     count batch}
+
+/ Private: write a table, already run through .Q.en against root, as a splayed table at dir.
+/ .
+/ On PeachQ `set` of a splayed table enumerates its symbol columns AGAIN, against a `sym`
+/ file it creates in dir's PARENT - the date folder, once the table is in its partition (#2285).
+/ A partitioned HDB keeps one sym, at its root, and KDB-X refuses one inside a partition. So
+/ there each column is cast against root's sym and written file by file, then .d: the same bytes
+/ KDB-X writes, with the sym file where it belongs. Elsewhere it is a plain `set`.
+/ @private
+.qetl.io.write_splay:{[root;dir;t]
+    if[not .qetl.io.on_peachq; dir set t; :dir];
+    `sym set get ` sv root,`sym;
+    c:cols t;
+    {[dir;c;v] (` sv dir,c) set v}[dir]'[c;{$[11h=type x; `sym$x; x]} each t c];
+    (` sv dir,`.d) set c;
+    dir}
 
 / Private: a partition on disk as a table, symbols decoded - what PeachQ
 / appends to by writing the partition again whole.
@@ -373,7 +389,7 @@
     .qetl.io.sh["rm -rf";p];
     .qetl.io.sh["mkdir -p";p];
     .qetl.io.step`staged_dir;
-    (hsym `$p,"/") set rows;
+    .qetl.io.write_splay[root;hsym `$p,"/";rows];
     .qetl.io.step`staged;
     p}
 
@@ -535,11 +551,25 @@
     order:`sym`time inter c;
     order!{$[x=`sym;`p;`]} each order}
 
+/ Private: sort a splayed partition on PeachQ by these columns, file by file.
+/ .
+/ PeachQ's xasc over a path re-enumerates the symbol columns against a `sym` file it makes beside
+/ the table (#2285), which leaves their indices relative to that file and not to the root's. So
+/ the permutation is worked out from the decoded key columns and applied to each column file as
+/ it is, enumerated indices untouched.
+/ @private
+.qetl.io.sort_files:{[part;order_cols]
+    base:-1_string part;
+    c:get hsym `$base,"/.d";
+    key_cols:{[base;col] v:get hsym `$base,"/",string col; $[type[v] within 20 76h; value v; v]}[base] each order_cols;
+    idx:exec ix from order_cols xasc update ix:i from flip order_cols!key_cols;
+    {[base;idx;col] f:hsym `$base,"/",string col; f set (get f) idx}[base;idx] each c;}
+
 / Private: sort a partition by its rule and put each attribute on, which is every
 / column file this finish rewrites.
 / @private
 .qetl.io.sort_and_attribute:{[part;rule]
-    if[count rule; (key rule) xasc part];
+    if[count rule; $[.qetl.io.on_peachq; .qetl.io.sort_files[part;key rule]; (key rule) xasc part]];
     / PeachQ keeps no attribute (.qetl.io.on_peachq).
     if[not .qetl.io.on_peachq;
         {[part;col;a] if[not null a; @[part;col;#[a;]]]}[part]'[key rule;value rule]];

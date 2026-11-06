@@ -42,7 +42,6 @@ platform: Linux-x86_64
 
 .qt.qpipe.event_tape.test_undefined_if_zero_is_the_guard_and_only_the_guard  # peachq-lacks: type promotion in the vector conditional - ?[1010b;0n;0 2 0 5] gives a general list, not a float vector
 
-.qt.qetl.io.test_a_keyed_write_leaves_nothing_in_staging  # peachq-lacks: a splayed `set` of a table with an enumerated column also writes the domain (`sym`) into the parent directory, so staging/new/<date>/sym is left behind
 .qt.qetl.io.test_a_table_without_sym_is_judged_by_its_sorted_time  # peachq-lacks: reading or rewriting a partitioned HDB on disk ('io)
 .qt.qetl.io.test_finish_after_flush_does_only_what_flush_left  # peachq-lacks: on-disk attributes, so finish leaves no p#sym there (src/etl/core/io_hdb.q) - the test asserts it
 .qt.qetl.io.test_flush_finishes_only_the_days_wholly_behind_it  # peachq-lacks: on-disk attributes, so finish leaves no p#sym there (src/etl/core/io_hdb.q) - the test asserts it

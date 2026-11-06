@@ -95,3 +95,7 @@
 # test_attached_readers.q, and the whole of it, on real q processes with a fake HDB reader, by
 # python/uqs/tests/test_attach_backfill_run.py and test_attach_backfill_remote.py.
 .qdev.attached.reload_one
+
+# .qetl.io.sort_files runs only on PeachQ (the KDB-X path is xasc over the partition), and
+# coverage is measured on KDB-X. test_io_hdb_crash.q's finish tests enter it on PeachQ (#2285).
+.qetl.io.sort_files

@@ -598,6 +598,10 @@ def test_a_bundles_jobs_run_on_peachq(peachq, stack_copy):
         [str(peachq), str(read), "-q"], capture_output=True, text=True, timeout=60, check=False
     ).stdout.splitlines()
     assert written == ["1 2 3 4 5", "101 102 103 104 105f"], "yesterday's partition, in order"
+    # one sym, at the HDB root: KDB-X refuses an HDB with one in a date folder (#2285)
+    hdb = part.parent.parent
+    stray = [p for p in hdb.glob("*/sym") if p.is_file()]
+    assert (hdb / "sym").is_file() and not stray, f"sym files inside partitions: {stray}"
 
 
 #: The starter pack's own tables, which a managed TorQ install need not have.
