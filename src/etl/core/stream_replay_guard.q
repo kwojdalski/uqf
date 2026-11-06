@@ -51,9 +51,8 @@
     .[{.qetl.log.err[x;y;z]};(job;"batch quarantined - replay continues";`table`position`error!(t;position;err));::];
     / Never let keeping the evidence stop the catch-up it is evidence of.
     .[{[who] q:select from .qetl.job.stream.quarantined where job=who;
-        dir:.qetl.status.status_dir[];
-        system"mkdir -p ",dir;
-        (hsym `$dir,"/stream_quarantine_",string who) set q};enlist job;
+        / set makes the status directory if it is missing: no shell needed
+        (hsym `$.qetl.status.status_dir[],"/stream_quarantine_",string who) set q};enlist job;
         {[job;e] .qetl.log.warn[job;"could not write its quarantine file";enlist[`error]!enlist e];}[job]];
     n:job;
     exec count i from .qetl.job.stream.quarantined where job=n}
