@@ -144,6 +144,7 @@ the pattern, or the shell will try to expand it against your filenames first.
 uqs data compress --report            # per table and column: algorithm, block size, ratio
 uqs data compress --report --json     # the same, as one document
 uqs --target uat data compress --report
+uqs --target kdb_prd data compress --report --hdb /data/hdb   # a TorQ server without uqf
 ```
 
 `--report` reads what the HDB holds now and changes nothing (#2149). It walks
@@ -159,7 +160,26 @@ the file, as TorQ reads it. The plant schema's `g#sym` is an in-memory index the
 tickerplant and RDB keep, not what a partition on disk carries, so it is not
 what this judges. Unsorted data compresses far worse - KX's whitepaper
 (<https://code.kx.com/q/wp/compress/>) measures 669x against 10x - but the
-report never re-sorts: it names the partitions, and the fix is the wdb's.
+report never re-sorts: it names the partitions, and the fix is the wdb's. It
+writes nothing, but on a large HDB reading every header and every partition's
+sort columns is still substantial read I/O.
+
+`--hdb DIR` names the directory instead. Under `--target`, DIR is on that target
+and nowhere is it checked against this machine (#2219): the command runs here,
+and reaches the target by its own declared `ssh`, account and connect timeout,
+with one ssh session that writes the report script, `torq_compress.q` and the
+two TorQ files they load into a temporary directory there, runs the target's q
+(its `q_cmd`, else the account's `$QCMD`, else `q` on its `PATH`, else
+`$QHOME`'s), and removes the directory however it ends. So the target needs q
+and the HDB - an existing TorQ deployment - and no uqf, release or `deploy.env`.
+Sorting is judged only against `--sort-csv FILE` (a path on the target); without
+it the report says "sorting not checked", and `--json` gives
+`sort_checked: false` and `unsorted: null`, never the empty list that means
+every partition is sorted. It is a read, so an inspection-only target runs it;
+`--apply` with `--hdb` under `--target` is refused before anything reaches the
+target, because compressing goes through a managed deployment's writer lock,
+policy and reload. Without `--hdb`, `--target` runs the release's own command on
+its configured HDB, as before.
 
 ### The `clock` column on `executions` and `market_data` (#1925)
 
@@ -438,13 +458,15 @@ message torn.
 
 ### Cleaning up
 
-`uqs clean` wipes `output/uqs/`. `--match REGEX` keeps only the entries whose
-path *under* `output/uqs/` the regex finds:
+`uqs clean` wipes `output/uqs/`, the HDB included. It lists what would go, with
+sizes, and asks first; `--yes` does not ask, and without a terminal it is
+needed. `--match REGEX` keeps only the entries whose path *under* `output/uqs/`
+the regex finds:
 
 ```
 uqs clean --dry-run                           # what a full wipe would remove
 uqs clean --match '^logs$' --dry-run          # the logs alone, still removing nothing
-uqs clean --match '^(logs|tplogs)$'           # and now actually remove them
+uqs clean --match '^(logs|tplogs)$'           # and now remove them, after asking
 uqs clean --match 'out_rdb1'                  # one process's files, wherever they sit
 uqs job checkpoint remove demo_deals_backfill # one backfill worker's resume point
 ```
@@ -515,9 +537,13 @@ target refuses `--apply` before it leaves this machine.
 the aiming done for you:
 
 ```
-uqs data replay --dry-run
-uqs data replay --date 2026-09-22 --table quote --table trade
+uqs data replay                                                   # the plan; runs nothing
+uqs data replay --date 2026-09-22 --table quote --table trade --apply
 ```
+
+A replay empties the tables it replays in the partitions it touches before it
+writes them, so it is a dry run unless `--apply`, which shows the plan and asks
+first; `--yes` answers that (#2235). `--dry-run` is refused: it is the default.
 
 What it replays, and into what, is read off the processes that are **running**,
 not off the configuration that describes them:
@@ -879,9 +905,14 @@ compare it with `uqf` on the same history, copy `uqf`'s partitions of the tables
 both declare:
 
 ```
-uqs --runtime torq data seed --from-runtime uqf     # every table torq declares
-uqs --runtime torq data seed --from-runtime uqf --table trade --table quote --from 2026-09-01 --to 2026-10-01
+uqs --runtime torq data seed --from-runtime uqf             # the partitions it would copy
+uqs --runtime torq data seed --from-runtime uqf --apply     # every table torq declares
+uqs --runtime torq data seed --from-runtime uqf --table trade --table quote --from 2026-09-01 --to 2026-10-01 --apply
 ```
+
+Like `data replay`, it is a dry run unless `--apply`, which names the partitions
+and asks first; `--yes` answers that. With `--on-conflict replace` it copies
+over each table already here, every partition when no range is given.
 
 The partitions copied are those whose date lies in the [time
 range](#cli-conventions); either bound may be left off. `--from RUNTIME` and
@@ -2121,8 +2152,8 @@ One safety vocabulary (#1732):
   | `data migrate` (dry by default)                             | still dry by default; `--apply` writes, after asking (#1854) |
 
 Every command that changes state now takes `--dry-run`/`-n`, among them `stop`,
-`restart`, `config set`, `data seed`, `job receiver start`, `job backfill`
-(`--dry-run`), `job runs upgrade`, `job attachment contract approve`,
+`restart`, `config set`, `job receiver start`, `job backfill` (`--dry-run`),
+`job runs upgrade`, `job attachment contract approve`,
 `connector start`/`stop`/`restart`, `setup odbc install`/`rollback`,
 `deploy component build` and `target add`/`remove`. The old
 `--accept-...`/`--skip-...` options each took their own reason; given together,
@@ -2130,15 +2161,16 @@ their reasons are joined into the one `--reason`.
 
 One write model per kind of change (#1854). A command that changes this machine
 writes by default and takes `--dry-run`/`-n`. A command that rewrites data in
-place - `data check`, `data alter`, `data migrate`, `target adopt` - is a dry
-run by default and writes only with `--apply`, which shows the plan and asks;
-`--yes`/`-y` answers that question, and nothing else. Their `--dry-run` says
-nothing more than the default: it still parses for one release, hidden, and is
-refused beside `--apply`. `data migrate`'s default, which was to flip to
-writing, stays a dry run. Every deletion that cannot be undone asks first and
-takes `--yes`/`-y`: `deploy prune`, `job checkpoint remove`, `target remove`
-(which `target revert` can undo), beside `job remove` and
-`job attachment remove`.
+place - `data check`, `data alter`, `data compress`, `data migrate`,
+`data replay`, `data seed`, `target adopt` - is a dry run by default and writes
+only with `--apply`, which shows the plan and asks; `--yes`/`-y` answers that
+question, and nothing else. Their `--dry-run` says nothing more than the
+default: it still parses for one release, hidden, and is refused beside
+`--apply`. `data migrate`'s default, which was to flip to writing, stays a dry
+run. Every deletion that cannot be undone asks first and takes `--yes`/`-y`:
+`clean` (the whole data directory, the HDB with it, unless `--match` narrows
+it), `deploy prune`, `job checkpoint remove`, `target remove` (which
+`target revert` can undo), beside `job remove` and `job attachment remove`.
 
 Every bypass is a named override with a reason (#1852): the bare flags that
 lifted a refusal and recorded no reason are `--override NAME --reason TEXT`,
@@ -2344,6 +2376,13 @@ document `{"ok": false, "error": "..."}`, so stdout always parses: exit code 1
 for a refusal, 2 for a usage error - Click's own, a missing argument or an
 unknown option, and the command's (#1882, #1885).
 
+`--json` never asks a question. A command that would ask before changing
+something - `data check`/`alter`/`compress`/`migrate`/`replay`/`seed --apply`,
+`deploy prune`, `job attachment add`/`remove` - is refused under `--json`
+without `--yes`, even at a terminal: exit 1,
+`{"ok": false, "error": "--json cannot ask for confirmation: add --yes to ..."}`,
+nothing changed (#2229).
+
 One contract holds for every document (#1882):
 
 - it is an object, never a bare list: a list command prints `{<kind>: [...]}` -
@@ -2432,7 +2471,7 @@ Each command's `--help` names its document. The commands #1731 added:
   | `data check`                                | `{ok, hdb, present, segmented, partitions, missing_tables, missing_columns, types_checked, type_changes}`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
   | `config sources check SOURCE...`            | `{ok, sources: [{source, status, stage, rows, elapsed_ms, diagnostic}]}` - one document, not a line per source                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
   | `data check --table`, `data alter`          | `{ok, hdb, resolved_from, ssh, warnings, plan, result}`: `plan` and `result` are `scripts/gates/hdb_alter.q`'s own documents - partitions, shapes, steps, journal, final check                                                                                                                                                                                                                                                                                                                                                                                                                                |
-  | `data compress --report`                    | `{hdb, present, columns: [{table, column, files, compressed, algos, blocksizes, bytes, raw_bytes, ratio, compressed_ratio}], largest_uncompressed: [{table, partition, files, bytes}], unsorted: [{table, partition, rows, sort_by, sorted, missing_attr, declared_attr}]}`                                                                                                                                                                                                                                                                                                                                   |
+  | `data compress --report`                    | `{hdb, target, present, columns: [{table, column, files, compressed, algos, blocksizes, bytes, raw_bytes, ratio, compressed_ratio}], largest_uncompressed: [{table, partition, files, bytes}], sort_checked, sort_csv, unsorted: [{table, partition, rows, sort_by, sorted, missing_attr, declared_attr}]}`: `unsorted` is null when `sort_checked` is false                                                                                                                                                                                                                                                  |
   | `data compress`                             | `{ok, hdb, process, scope: {tables, older_than_days, days, change}, config, policies: [{table, policy, algo, blocksize, level, minage, columns}], held: [{dataset, date}], partitions: [{table, partition, age, status, policy_minage, early, dir, compress, decompress, skip, compressed, files, bytes_now, bytes_after, bytes_written}], sample, ratios, disk: [{filesystem, needed_bytes, free_bytes, ok}], totals, result}`: `result` is null without `--apply`, else `{partitions: [{partition, tables, files, bytes_before, bytes_after}], failed, reload, audit}`; ok false when a partition failed    |
 
 ## Installing

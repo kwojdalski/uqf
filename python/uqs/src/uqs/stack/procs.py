@@ -24,7 +24,7 @@ from uqs import portexpr
 from uqs.logger import get_logger
 from uqs.model.pipelines import _pipeline_rows
 from uqs.model.runtime_members import pipeline_procnames
-from uqs.paths import UqsError, UqsPaths
+from uqs.paths import UqsPaths, UqsUnknownProcess
 from uqs.stack import housekeeping
 from uqs.stack import overrides as override_files
 from uqs.stack.carriable import refuse_unsafe_override
@@ -279,14 +279,14 @@ def list_process_names(paths: UqsPaths) -> list[str]:
     return [row["procname"] for row in effective_process_rows(paths)]
 
 
-def unknown_processes(names: list[str] | str, then: str = "") -> UqsError:
+def unknown_processes(names: list[str] | str, then: str = "") -> UqsUnknownProcess:
     """The one refusal for a process name this runtime does not declare (#1885):
     the names asked for and where the real ones are - it was phrased four ways,
     two dumping all 65 names as a Python list. `then` says what was not done."""
     names = [names] if isinstance(names, str) else names
     word = "process" if len(names) == 1 else "processes"
     then = f". {then}" if then else ""
-    return UqsError(
+    return UqsUnknownProcess(
         f"no {word} {', '.join(names)} in this runtime - `uqs process list` names them{then}"
     )
 
@@ -386,9 +386,11 @@ def set_process_config(
     only file this touches; the vendored process.csv is never edited.
     With `dry_run`, every check runs and nothing is written.
     """
-    refuse_unknown_field(field, "unknown process.csv field")
+    # The process first: a name that is not there is answered as such (404 on
+    # the frontend's route, #2224), whatever the field and value say.
     if procname not in list_process_names(paths):
         raise unknown_processes(procname)
+    refuse_unknown_field(field, "unknown process.csv field")
     refuse_unsafe_override(procname, field, value)
     if dry_run:
         return

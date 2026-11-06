@@ -273,3 +273,69 @@ def test_a_malformed_dates_is_refused(seeded):
 def test_no_runtime_to_copy_from_is_refused(seeded):
     seen = seeded("--from", "2026-09-01")
     assert seen["refused"].startswith("name the runtime to copy from: --from-runtime")
+
+
+# ------------------------------------------------- a dry run unless --apply (#2235)
+
+
+@pytest.fixture
+def copying(monkeypatch, tmp_path):
+    """Each hdb_seed.seed call's dry_run, and whether the target was bootstrapped."""
+    calls: list = []
+    monkeypatch.setattr(cli_seed, "_paths", lambda: _paths(tmp_path, "torq"))
+    monkeypatch.setattr(cli_seed.runtime, "bootstrap", lambda p: calls.append("bootstrap"))
+
+    def seed(target, source, tables, first, last, overwrite, dry_run=False):
+        calls.append("plan" if dry_run else "copy")
+        return "2026.09.01 trade"
+
+    monkeypatch.setattr(cli_seed.hdb_seed, "seed", seed)
+    return calls
+
+
+def _seed(*argv: str, **kw):
+    return CliRunner().invoke(cli.app, ["data", "seed", "--from-runtime", "uqf", *argv], **kw)
+
+
+def test_without_apply_it_names_the_partitions_and_writes_nothing(copying):
+    result = _seed("--on-conflict", "replace")
+    assert result.exit_code == 0, result.output
+    assert copying == ["plan"]
+    assert "Run it again with --apply" in result.output
+
+
+def test_dry_run_is_refused_naming_apply(copying, log_text):
+    assert _seed("--dry-run").exit_code == 2
+    assert "`data seed` is a dry run unless --apply: drop --dry-run" in log_text()
+    assert copying == []
+
+
+def test_apply_asks_and_a_no_copies_nothing(copying, terminal):
+    result = _seed("--on-conflict", "replace", "--apply", input="n\n")
+    assert result.exit_code == 1
+    assert "copying over the tables already here?" in result.output
+    assert copying == ["plan"]
+
+
+def test_apply_without_a_terminal_refuses_naming_yes(copying, log_text):
+    assert _seed("--apply").exit_code == 1
+    assert "there is no terminal to ask on: add --yes" in log_text()
+    assert copying == ["plan"]
+
+
+def test_apply_yes_copies_without_asking(copying):
+    assert _seed("--apply", "--yes").exit_code == 0
+    assert copying == ["bootstrap", "copy"]
+
+
+def test_json_without_yes_apply_is_refused(copying, terminal, monkeypatch):
+    """#2229: --json never asks, even at a terminal that would say y."""
+    import json
+
+    argv = ["data", "seed", "--from-runtime", "uqf", "--apply", "--json"]
+    monkeypatch.setattr("sys.argv", ["uqs", *argv])  # json_requested reads it
+    result = CliRunner().invoke(cli.app, argv, input="y\n")
+    assert result.exit_code == 1
+    doc = json.loads(result.stdout)
+    assert doc["ok"] is False and "cannot ask for confirmation: add --yes to seed" in doc["error"]
+    assert "copy" not in copying

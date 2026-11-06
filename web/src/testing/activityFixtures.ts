@@ -50,6 +50,7 @@ export const SETTINGS: SettingsData = {
 };
 
 export const HISTORY: ActivityHistory = {
+  truncated: false,
   events: [
     {
       event_id: "e1",
@@ -223,6 +224,7 @@ export function answer(path: string, level: SessionLevel = "actions"): unknown {
       rows: [{ sym: "EURUSD", px: 1.1 }],
       row_count: 1,
       truncated: false,
+      cut_by: null,
       poll_seconds: 5,
     };
   if (bare === "/coverage")

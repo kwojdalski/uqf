@@ -8,7 +8,8 @@ import typer
 
 from uqs.cli import safety
 from uqs.cli.concepts import table_arg
-from uqs.cli.safety import ChangesState, dry_run_note
+from uqs.cli.json_out import emit, json_opt
+from uqs.cli.safety import ConfirmsOnServer, dry_run_note
 from uqs.cli.shared import _die, _paths, console, data_app
 from uqs.paths import UqsError
 from uqs.stack import hdb_migrate
@@ -17,7 +18,12 @@ from uqs.timerange import DAY_FORMS, parse_day
 _TableOpt = table_arg("The declared HDB table")
 
 
-@data_app.command("migrate", cls=ChangesState)
+MigrateJson = json_opt('{"ok", "table", "partition", "applied", "report"}')
+
+
+#: Confirms on the server, as its --apply siblings `data alter` and `data check`
+#: do (#2247): under `uqs --target` it shows its plan and asks there.
+@data_app.command("migrate", cls=ConfirmsOnServer)
 def migrate(
     table: _TableOpt,
     partition: Annotated[
@@ -37,6 +43,7 @@ def migrate(
     ] = None,
     apply: safety.ApplyOpt = False,
     yes: safety.ApplyYesOpt = False,
+    as_json: MigrateJson = False,
     dry_run: safety.DefaultDryRunOpt = False,
 ) -> None:
     """Migrate one HDB partition of a table to this release's schema.
@@ -66,6 +73,8 @@ def migrate(
         casts = set(cast or [])
         if not apply or not yes:  # the plan: shown, and asked about before --apply writes
             report = hdb_migrate.migrate(_paths(), table, day, renames, casts, apply=False)
+        if apply:
+            safety.json_needs_yes(as_json, yes, "migrate")
         if apply and not yes:
             console.print(report, markup=False, highlight=False)
             safety.confirm(
@@ -75,6 +84,10 @@ def migrate(
             report = hdb_migrate.migrate(_paths(), table, day, renames, casts, apply=True)
     except UqsError as exc:
         _die(exc)
+        return
+    if as_json:
+        emit({"ok": True, "table": table, "partition": partition, "applied": apply,
+              "report": report})  # fmt: skip
         return
     console.print(report, markup=False, highlight=False)
     if apply:

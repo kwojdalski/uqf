@@ -100,6 +100,7 @@ from uqs.activity_log import (
     DROP_REASONS,
     EVENT_LEVELS,
     EXPORT_MAX,
+    MAX_LIMIT,
     OUTCOMES,
     SOURCES,
     Query,
@@ -762,9 +763,10 @@ class ActivityStore:
     # -- reading --------------------------------------------------------------
 
     def query(self, q: Query) -> list[dict[str, Any]]:
-        """Events matching *q*, newest first, a page of them."""
+        """Events matching *q*, newest first, a page of them - and one more
+        past MAX_LIMIT, so a full page can say whether more matched (#2220)."""
         with self._lock:
-            return select(self._db, q)
+            return select(self._db, q, max_limit=MAX_LIMIT + 1)
 
     def export(self, q: Query) -> list[dict[str, Any]]:
         """Events matching *q*, newest first, up to activity_log.EXPORT_MAX."""
