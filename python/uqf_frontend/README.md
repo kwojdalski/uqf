@@ -78,6 +78,13 @@ Every request body is held to its model: a key the model does not know is a 422,
 never ignored, and the lifecycle body's `procs` is required. It once defaulted
 to `all`, so a body that lost the field stopped the whole fleet (#1361).
 
+**What the UI confirms, the API requires confirmed** (#2244). A stop or a
+restart, opening a config push, a restore and a file delete each need
+`"confirmed": true` in the body; anything else - missing, `false`, `1`, `"true"` -
+is a 422, "explicit confirmation is required - send confirmed: true", and
+nothing runs. A start takes none. The one check is `models.ConfirmedRequest`, so
+a script or a second client gets the guard the browser's dialog stands for.
+
 **They are off by default, and that is the security posture rather than
 caution.** `UQF_FRONTEND_ENABLE_WRITES` must be set on the server or every one
 of them returns 403 naming that variable. The reason: this deployment has one
@@ -219,10 +226,10 @@ progress and its own outcome.
 ### Config pushes: one push id, history, diff and restore
 
 Every upload belongs to a push (#2002): a file selection, a folder or a drop,
-opened with `POST /services/{target}/config/pushes` when you confirm it. Each
-upload names it (`push=`), and `POST .../config/pushes/{id}/close` closes it
-with what the browser saw of each file. The server keeps, and only the server
-keeps, what the push changed:
+opened with `POST /services/{target}/config/pushes` when you confirm it, so the
+open carries `"confirmed": true`. Each upload names it (`push=`), and
+`POST .../config/pushes/{id}/close` closes it with what the browser saw of each
+file. The server keeps, and only the server keeps, what the push changed:
 
 ```text
 <dest>/shared/config/.uqf-history/<push-id>/      0o700, never browsable

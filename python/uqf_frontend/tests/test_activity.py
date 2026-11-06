@@ -196,7 +196,7 @@ def test_the_browser_and_the_server_rows_share_the_request_id(tmp_path, monkeypa
     )
     c.post(
         "/control/lifecycle/stop",
-        json={"procs": "rdb1"},
+        json={"procs": "rdb1", "confirmed": True},
         headers={activity.REQUEST_ID_HEADER: rid, activity.SESSION_ID_HEADER: SESSION},
     )
     rows = _history(c, request_id=rid)
@@ -224,7 +224,10 @@ def test_a_malformed_request_id_is_replaced_not_stored(tmp_path, monkeypatch):
 
 def test_a_request_without_the_token_is_audited_as_refused(tmp_path):
     c = TestClient(create_app(gateway=FakeGateway(), settings=_settings(tmp_path)))
-    assert c.post("/control/lifecycle/stop", json={"procs": "all"}).status_code == 401
+    assert (
+        c.post("/control/lifecycle/stop", json={"procs": "all", "confirmed": True}).status_code
+        == 401
+    )
     (row,) = _history(c, source="server")
     assert (row["action"], row["outcome"], row["status_code"]) == ("process.stop", "refused", 401)
 
@@ -244,7 +247,7 @@ def test_a_nonzero_exit_is_failed_and_its_items_unknown(tmp_path, monkeypatch):
     process failed, so no item is claimed failed or succeeded."""
     _patch_core(monkeypatch, restart=lambda *a, **k: _Done(returncode=3))
     c = _client(_settings(tmp_path))
-    c.post("/control/lifecycle/restart", json={"procs": "rdb1 hdb1"})
+    c.post("/control/lifecycle/restart", json={"procs": "rdb1 hdb1", "confirmed": True})
     (row,) = _history(c)
     assert row["outcome"] == "failed"
     assert {i["outcome"] for i in row["items"]} == {"unknown"}

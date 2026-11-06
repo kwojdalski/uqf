@@ -89,7 +89,8 @@ def _use(c: TestClient, runner) -> None:
 
 
 def _open(c: TestClient, files: int = 2, total: int = 50) -> str:
-    body = {"config_dir": "shared/config", "file_count": files, "total_bytes": total}
+    body = {"config_dir": "shared/config", "file_count": files, "total_bytes": total,
+            "confirmed": True}  # fmt: skip
     resp = c.post("/services/box/config/pushes", json=body)
     assert resp.status_code == 200, resp.text
     return resp.json()["push_id"]
@@ -364,7 +365,7 @@ def test_the_history_needs_remote_operations(served, tmp_path):
     pushes = "/services/box/config/pushes"
     assert c.get(pushes).status_code == 403
     assert c.get(f"{pushes}/20261104T000000000Z-00000000").status_code == 403
-    body = {"config_dir": "shared/config", "file_count": 1, "total_bytes": 1}
+    body = {"config_dir": "shared/config", "file_count": 1, "total_bytes": 1, "confirmed": True}
     assert c.post(pushes, json=body).status_code == 403
     assert c.get("/services/box/config/pushes/bad-id").status_code in (403, 422)
 

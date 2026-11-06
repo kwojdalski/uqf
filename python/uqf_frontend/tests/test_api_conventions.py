@@ -264,3 +264,86 @@ def test_a_lifecycle_action_is_audited_on_local_about_its_selector(tmp_path, mon
     (row,) = client.get("/activity", params={"subject": "rdb1 rdb2"}).json()["events"]
     assert (row["target"], row["subject"], row["action"]) == ("local", "rdb1 rdb2", "process.start")
     assert client.get("/activity", params={"target": "rdb1 rdb2"}).json()["events"] == []
+
+
+# ------------------------------------------------- one confirmation rule (#2244)
+
+#: Every request the UI puts behind a confirmation dialog, as the route and
+#: a body that is otherwise valid. Each must be refused, with the one text,
+#: unless it says `confirmed: true`.
+CONFIRMED_ROUTES = {
+    ("post", "/control/lifecycle/stop"): {"procs": "all"},
+    ("post", "/control/lifecycle/restart"): {"procs": "rdb1"},
+    ("post", "/services/prod/config/pushes"): {
+        "config_dir": "shared/config", "file_count": 1, "total_bytes": 1,
+    },
+    ("post", "/services/prod/config/pushes/p1/restore"): {},
+    ("post", "/services/prod/files/delete"): {"paths": ["shared/config/x"]},
+}  # fmt: skip
+
+
+def test_the_confirmed_models_are_the_ones_the_ui_confirms():
+    confirmed = {n for n, m in _models().items() if issubclass(m, models.ConfirmedRequest)}
+    assert confirmed - {"ConfirmedRequest"} == {
+        "ConfirmedLifecycleRequest", "ConfigPushOpenRequest", "ConfigRestoreRequest",
+        "RemoteDeleteRequest",
+    }  # fmt: skip
+    assert models.CONFIRMED_LIFECYCLE == {"stop", "restart"}
+
+
+def test_only_the_rule_checks_confirmed():
+    """A `confirmed` field outside ConfirmedRequest is a second check waiting
+    to drift - LifecycleRequest's alone, which the route holds to the rule
+    by its verb. No route body reads it."""
+    holders = {n for n, m in _models().items() if "confirmed" in m.model_fields}
+    outside = {n for n in holders if not issubclass(_models()[n], models.ConfirmedRequest)}
+    assert outside == {"LifecycleRequest"}
+    import inspect
+
+    from uqf_frontend import app as app_module
+
+    assert ".confirmed" not in inspect.getsource(app_module)
+
+
+def _writer(tmp_path) -> TestClient:
+    token = "s3cret-write-token"
+    settings = Settings(
+        enable_writes=True, write_token=token, allowed_hosts=("localhost", "testserver"),
+        activity_db=tmp_path / "a.sqlite3",
+    )  # fmt: skip
+    return TestClient(
+        create_app(gateway=FakeGateway({}), settings=settings, fleet=FakeFleet()),
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+
+@pytest.mark.parametrize("confirmed", [None, False, "true", 1])
+@pytest.mark.parametrize(("route", "body"), sorted(CONFIRMED_ROUTES.items()))
+def test_an_unconfirmed_destructive_request_is_refused(tmp_path, route, body, confirmed):
+    method, path = route
+    sent = body if confirmed is None else {**body, "confirmed": confirmed}
+    resp = getattr(_writer(tmp_path), method)(path, json=sent)
+    assert resp.status_code == 422, resp.text
+    assert models.CONFIRMATION_REQUIRED in resp.json()["detail"]
+
+
+def test_a_start_takes_no_confirmation(tmp_path, monkeypatch):
+    from uqf_frontend import control
+
+    done = control.CommandResult(action="start", procs="all", exit_code=0, output="")
+    monkeypatch.setattr(control, "lifecycle", lambda *a, **k: done)
+    resp = _writer(tmp_path).post("/control/lifecycle/start", json={"procs": "all"})
+    assert resp.status_code == 200, resp.text
+
+
+def test_a_confirmed_stop_runs(tmp_path, monkeypatch):
+    from uqf_frontend import control
+
+    calls = []
+    done = control.CommandResult(action="stop", procs="all", exit_code=0, output="")
+    monkeypatch.setattr(control, "lifecycle", lambda *a, **k: calls.append(a) or done)
+    resp = _writer(tmp_path).post(
+        "/control/lifecycle/stop", json={"procs": "all", "confirmed": True}
+    )
+    assert resp.status_code == 200, resp.text
+    assert len(calls) == 1

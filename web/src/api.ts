@@ -773,6 +773,8 @@ export interface ControlStatus extends Pollable {
  * without it stopped the whole fleet (#1361). */
 export interface LifecycleBody {
   procs: string;
+  /** required true for stop and restart, which the UI confirms (#2244) */
+  confirmed?: boolean;
 }
 /** PUT /control/processes/{process}/config - models.ProcessConfigRequest. */
 export interface ProcessConfigBody {
@@ -1056,6 +1058,8 @@ export type FileOutcome =
 
 /** POST /services/{target}/config/pushes - models.ConfigPushOpenRequest. */
 export interface ConfigPushOpenBody {
+  /** the operator confirmed the push: required true (#2244) */
+  confirmed: boolean;
   config_dir: string;
   file_count: number;
   total_bytes: number;

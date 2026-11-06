@@ -147,8 +147,8 @@ def test_with_writes_off_neither_check_applies(gw):
     ("method", "path", "body"),
     [
         ("post", "/control/lifecycle/start", {"procs": "all"}),
-        ("post", "/control/lifecycle/stop", {"procs": "rdb1"}),
-        ("post", "/control/lifecycle/restart", {"procs": "all"}),
+        ("post", "/control/lifecycle/stop", {"procs": "rdb1", "confirmed": True}),
+        ("post", "/control/lifecycle/restart", {"procs": "all", "confirmed": True}),
         ("put", "/control/processes/rdb1/config", {"field": "startwithall", "value": "1"}),
         ("put", "/control/worker/config", {"key": "dry_run", "value": "true"}),
         (
@@ -255,7 +255,7 @@ def test_each_lifecycle_verb_reaches_its_own_function(writeable, monkeypatch, ac
         stop=lambda *a, **k: called.append("stop") or FakeCompleted(),
         restart=lambda *a, **k: called.append("restart") or FakeCompleted(),
     )
-    writeable.post(f"/control/lifecycle/{action}", json={"procs": "all"})
+    writeable.post(f"/control/lifecycle/{action}", json={"procs": "all", "confirmed": True})
     assert called == [action]
 
 
@@ -287,7 +287,7 @@ def test_a_lifecycle_request_without_procs_is_refused_not_read_as_all(writeable,
 @pytest.mark.parametrize(
     ("method", "path", "body"),
     [
-        ("post", "/control/lifecycle/stop", {"procs": "rdb1"}),
+        ("post", "/control/lifecycle/stop", {"procs": "rdb1", "confirmed": True}),
         ("put", "/control/processes/rdb1/config", {"field": "startwithall", "value": "1"}),
         ("put", "/control/worker/config", {"key": "dry_run", "value": "true"}),
         (
@@ -475,7 +475,7 @@ def test_a_lifecycle_action_while_another_holds_the_stack_is_a_409(tmp_path, mon
     holder.start()
     try:
         assert taken.wait(10)
-        resp = client.post("/control/lifecycle/stop", json={"procs": "rdb1"})
+        resp = client.post("/control/lifecycle/stop", json={"procs": "rdb1", "confirmed": True})
     finally:
         release.set()
         holder.join()

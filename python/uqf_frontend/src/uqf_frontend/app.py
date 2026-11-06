@@ -21,6 +21,7 @@ from contextlib import asynccontextmanager
 from typing import Annotated, Any
 
 import polars as pl
+import pydantic
 from fastapi import Body, Depends, FastAPI, Query, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.exceptions import RequestValidationError
@@ -73,6 +74,7 @@ from uqf_frontend.fleet import Fleet, KolaFleet
 from uqf_frontend.gateway import TIERS, Gateway, KolaGateway
 from uqf_frontend.instants import AwareInstant
 from uqf_frontend.models import (
+    CONFIRMED_LIFECYCLE,
     ActivityBatchRequest,
     ActivityBatchResponse,
     ActivityBound,
@@ -107,6 +109,7 @@ from uqf_frontend.models import (
     ConfigPushSummaryOut,
     ConfigRestoreRequest,
     ConfigRestoreResponse,
+    ConfirmedLifecycleRequest,
     ConnectionsResponse,
     ControlStatusResponse,
     CoverageRequirement,
@@ -368,6 +371,20 @@ def renamed_route(method: str, path: str) -> str | None:
         if method.upper() == verb and old_path.fullmatch(path):
             return f"`{verb} {old}` is `{verb} {new}` (#2230)"
     return None
+
+
+def lifecycle_request(action: LifecycleAction, req: LifecycleRequest) -> LifecycleRequest:
+    """The lifecycle body, held to the confirmation rule when its verb takes
+    something down (models.CONFIRMED_LIFECYCLE, #2244): the check is
+    ConfirmedRequest's, refused as any other invalid body is."""
+    if action not in CONFIRMED_LIFECYCLE:
+        return req
+    try:
+        return ConfirmedLifecycleRequest.model_validate(req.model_dump(exclude_unset=True))
+    except pydantic.ValidationError as exc:
+        raise RequestValidationError(
+            [{**e, "loc": ("body", *e["loc"])} for e in exc.errors(include_input=False)]
+        ) from None
 
 
 def _renamed_query(**renamed: str) -> Callable[[Request], None]:
@@ -1100,7 +1117,6 @@ def create_app(
             settings,
             target,
             req.paths,
-            req.confirmed,
             runner=request.app.state.remote_runner,
             on_begin=audit.begin,
         )
@@ -1487,8 +1503,6 @@ def create_app(
         audit = activity.audit_of(request)
         audit.set_target(target)
         audit.note(restores=push_id)
-        if req.confirmed is not True:
-            raise ValidationFailed("explicit confirmation is required")
         remote = _remote(target)
         try:
             answer = remote_files.restore(
@@ -1534,7 +1548,9 @@ def create_app(
 
     @app.post("/control/lifecycle/{action}", response_model=CommandResponse)
     def control_lifecycle(
-        action: LifecycleAction, req: LifecycleRequest, request: Request
+        action: LifecycleAction,
+        req: Annotated[LifecycleRequest, Depends(lifecycle_request)],
+        request: Request,
     ) -> CommandResponse:
         """Start, stop or restart processes (action is start|stop|restart)."""
         audit = activity.audit_of(request)

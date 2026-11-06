@@ -77,12 +77,12 @@ it("records navigation once per change, and how it was triggered", async () => {
   fireEvent.click(screen.getByRole("button", { name: /Desk/ }), { detail: 1 });
   pressEnter(screen.getByRole("button", { name: /Fleet/ }));
   const events = (await recorded()).filter((e) => e.kind === "navigate");
-  expect(events.map((e) => [e.subject, e.trigger, e.detail?.from_view])).toEqual(
-    [
-      ["Desk", "pointer", "Coverage"],
-      ["Fleet", "keyboard", "Desk"],
-    ],
-  );
+  expect(
+    events.map((e) => [e.subject, e.trigger, e.detail?.from_view]),
+  ).toEqual([
+    ["Desk", "pointer", "Coverage"],
+    ["Fleet", "keyboard", "Desk"],
+  ]);
 });
 
 it("records nothing while views poll", async () => {
@@ -110,7 +110,9 @@ it("asks before a stop, and a keyboard cancel sends nothing", async () => {
   fireEvent.keyDown(dialog, { key: "Escape" });
   expect(screen.queryByRole("alertdialog")).toBeNull();
   expect(
-    fetcher.mock.calls.filter(([path]) => path.startsWith("/control/lifecycle")),
+    fetcher.mock.calls.filter(([path]) =>
+      path.startsWith("/control/lifecycle"),
+    ),
   ).toEqual([]);
   const events = (await recorded()).filter((e) => e.action === "process.stop");
   expect(events.map((e) => [e.kind, e.trigger, e.subject])).toEqual([

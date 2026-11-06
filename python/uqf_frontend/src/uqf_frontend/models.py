@@ -26,6 +26,38 @@ RunState = Literal["starting", "running", "idle", "completed", "failed"]
 #: test_api_types.py holds every request model to it.
 STRICT_REQUEST = ConfigDict(extra="forbid")
 
+#: THE CONFIRMATION RULE (#2244). Every request the UI puts behind a
+#: confirmation dialog - a lifecycle stop or restart, opening a config push,
+#: a restore, a delete - carries `confirmed`, strictly a boolean, and is
+#: refused unless it is `true`. A script or a second client gets the same
+#: guard the browser's dialog stands for, and a body that lost the field (the
+#: #1361 case) is refused rather than read as consent. The check is
+#: `refuse_unconfirmed`, the one place it is made.
+CONFIRMATION_REQUIRED = "explicit confirmation is required - send confirmed: true"
+
+
+def refuse_unconfirmed(data: Any, *, required: bool = True) -> Any:
+    """The confirmation rule, on a request body before it is parsed: refused
+    unless `confirmed` is the JSON `true` - missing (when `required`), false,
+    1 and "true" alike, with the one text."""
+    if isinstance(data, dict) and (required or "confirmed" in data):
+        if data.get("confirmed") is not True:
+            raise ValueError(CONFIRMATION_REQUIRED)
+    return data
+
+
+class ConfirmedRequest(BaseModel):
+    """A request for something the operator must confirm (the rule above)."""
+
+    model_config = STRICT_REQUEST
+
+    confirmed: bool = Field(strict=True, description="must be true: the operator confirmed it")
+
+    @model_validator(mode="before")
+    @classmethod
+    def _confirmed(cls, data: Any) -> Any:
+        return refuse_unconfirmed(data)
+
 
 class Filter(BaseModel):
     """One validated predicate. ``value`` stays ``Any`` here on purpose: the
@@ -587,8 +619,9 @@ class RemoteUploadResponse(BaseModel):
 # ------------------------------------------------------------ config push history (#2002)
 
 
-class ConfigPushOpenRequest(BaseModel):
-    """POST /services/{target}/config/pushes: what the operator confirmed."""
+class ConfigPushOpenRequest(ConfirmedRequest):
+    """POST /services/{target}/config/pushes: what the operator confirmed -
+    the uploads overwrite server config, so `confirmed` is required (#2244)."""
 
     model_config = STRICT_REQUEST
     config_dir: str = Field(description="the directory pushed to, relative to dest")
@@ -793,9 +826,8 @@ class RestoreResultOut(BaseModel):
     error: str | None
 
 
-class ConfigRestoreRequest(BaseModel):
+class ConfigRestoreRequest(ConfirmedRequest):
     model_config = STRICT_REQUEST
-    confirmed: bool = Field(strict=True)
 
 
 class ConfigRestoreResponse(BaseModel):
@@ -866,6 +898,26 @@ class LifecycleRequest(BaseModel):
     model_config = STRICT_REQUEST
 
     procs: str = Field(min_length=1)
+    #: Required true for the verbs in CONFIRMED_LIFECYCLE (#2244), which the
+    #: route holds to ConfirmedLifecycleRequest; `start` needs none, and one
+    #: sent is held to the same rule.
+    confirmed: bool | None = Field(default=None, strict=True)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _confirmed_if_sent(cls, data: Any) -> Any:
+        return refuse_unconfirmed(data, required=False)
+
+
+#: The lifecycle verbs that take something down: the UI asks before each, so
+#: the API requires `confirmed: true` for them (the confirmation rule).
+CONFIRMED_LIFECYCLE: frozenset[str] = frozenset({"stop", "restart"})
+
+
+class ConfirmedLifecycleRequest(ConfirmedRequest, LifecycleRequest):
+    """A stop or a restart: LifecycleRequest, held to the confirmation rule."""
+
+    model_config = STRICT_REQUEST
 
 
 class CommandResponse(BaseModel):
@@ -994,10 +1046,9 @@ class BackfillStartedResponse(BaseModel):
     status_path: str
 
 
-class RemoteDeleteRequest(BaseModel):
+class RemoteDeleteRequest(ConfirmedRequest):
     model_config = STRICT_REQUEST
     paths: list[str] = Field(min_length=1, max_length=100)
-    confirmed: bool = Field(strict=True)
 
 
 class RemoteDeleteResult(BaseModel):

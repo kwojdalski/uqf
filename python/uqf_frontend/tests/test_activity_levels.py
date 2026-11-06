@@ -242,7 +242,11 @@ def test_the_write_token_never_reaches_the_history_at_any_level(tmp_path, monkey
     c = _client(tmp_path, activity_level=level)
     c.post("/control/lifecycle/start", json={"procs": "rdb1"})
     c.post("/activity/events", json={"events": _one_of_each()})
-    c.post("/control/lifecycle/stop", json={"procs": "rdb1"}, headers={"Authorization": "Bearer x"})
+    c.post(
+        "/control/lifecycle/stop",
+        json={"procs": "rdb1", "confirmed": True},
+        headers={"Authorization": "Bearer x"},
+    )
     dump = _dump(tmp_path / "activity.sqlite3")
     assert TOKEN not in dump and "Bearer" not in dump
     for fmt in activity_log.EXPORT_FORMATS:
@@ -280,7 +284,7 @@ def _correlated(c: TestClient, monkeypatch) -> str:
     )  # fmt: skip
     c.post(
         "/control/lifecycle/stop",
-        json={"procs": "rdb1"},
+        json={"procs": "rdb1", "confirmed": True},
         headers={activity.REQUEST_ID_HEADER: rid, activity.SESSION_ID_HEADER: SESSION},
     )
     now = dt.datetime.now(dt.UTC).isoformat()

@@ -336,12 +336,12 @@ def delete(
     settings: Settings,
     name: str,
     paths: list[str],
-    confirmed: bool,
     runner: Runner = subprocess.run,
     on_begin: Callable[[], None] | None = None,
 ) -> dict[str, Any]:
-    if confirmed is not True:
-        raise ValidationFailed("explicit confirmation is required")
+    """Delete `paths` below a target's root. The request was confirmed:
+    models.RemoteDeleteRequest refuses one that is not (#2244), and the
+    helper on the server refuses an unconfirmed request again."""
     if not 1 <= len(paths) <= remote_helper.MAX_DELETE:
         raise ValidationFailed(f"select between 1 and {remote_helper.MAX_DELETE} paths")
     for path in paths:

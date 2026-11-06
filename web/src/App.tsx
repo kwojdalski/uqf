@@ -1304,7 +1304,9 @@ export function workerConfigOutcome(r: WorkerConfigResult): string {
   );
 }
 
-/** Lifecycle actions that take something down: each asks to be confirmed. */
+/** Lifecycle actions that take something down: each asks to be confirmed,
+ *  and the server refuses one sent without `confirmed: true`
+ *  (models.CONFIRMED_LIFECYCLE, #2244). */
 const DESTRUCTIVE = new Set(["stop", "restart"]);
 
 /** The outcome a worker-config response supports (#634): set is not in effect. */
@@ -1379,7 +1381,9 @@ function ControlView() {
         (correlation) =>
           mutate<CommandResult>(
             `/control/lifecycle/${encodeURIComponent(action)}`,
-            { procs: selector } satisfies LifecycleBody,
+            (DESTRUCTIVE.has(action)
+              ? { procs: selector, confirmed: kind === "confirm" }
+              : { procs: selector }) satisfies LifecycleBody,
             "POST",
             correlation,
           ),
