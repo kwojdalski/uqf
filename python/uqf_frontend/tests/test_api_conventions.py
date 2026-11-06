@@ -106,10 +106,17 @@ def test_no_position_holds_a_verb_beside_a_resource_name():
     assert shared == {}
 
 
-def test_the_lifecycle_verb_is_typed_in_the_path():
-    (route,) = [r for r in _routes() if r.path == "/control/lifecycle/{action}"]
-    (param,) = route.dependant.path_params
-    assert set(typing.get_args(param.field_info.annotation)) == {"start", "stop", "restart"}
+@pytest.mark.parametrize("verb", ["obliterate", "clean", "rdb1"])
+def test_the_lifecycle_verb_is_validated_and_an_unknown_one_is_not_found(tmp_path, verb):
+    """The verb sits under a segment of its own and takes only
+    models.LifecycleAction's words. Anything else is a name that is not
+    there: 404 naming its kind, as every unknown path name is (#2224) - and
+    nothing runs, confirmed or not."""
+    assert set(typing.get_args(models.LifecycleAction)) == {"start", "stop", "restart"}
+    resp = _writer(tmp_path).post(f"/control/lifecycle/{verb}", json={"procs": "all"})
+    assert resp.status_code == 404, resp.text
+    assert resp.json()["error"] == "ActionNotFound"
+    assert "unknown action" in resp.json()["detail"]
 
 
 def test_a_collection_of_processes_is_plural_as_on_ops():

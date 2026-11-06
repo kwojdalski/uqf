@@ -877,9 +877,10 @@ class ControlStatusResponse(BaseModel):
     poll_seconds: int
 
 
-#: The lifecycle verbs, typed in the path so `/control/lifecycle/{action}`
-#: never takes anything else (#2230). `clean` is left out on purpose - see
-#: control.py's docstring.
+#: The lifecycle verbs `/control/lifecycle/{action}` takes (#2230). The path
+#: takes a str and control.lifecycle refuses any other verb 404 (#2224), so
+#: an unknown verb is a name that is not there. `clean` is left out on
+#: purpose - see control.py's docstring.
 LifecycleAction = Literal["start", "stop", "restart"]
 
 

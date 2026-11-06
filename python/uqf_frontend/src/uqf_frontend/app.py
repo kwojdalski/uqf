@@ -118,7 +118,6 @@ from uqf_frontend.models import (
     HealthResponse,
     InspectionOut,
     IntervalOut,
-    LifecycleAction,
     LifecycleRequest,
     OpsTableResponse,
     ProcessConfigRequest,
@@ -373,7 +372,7 @@ def renamed_route(method: str, path: str) -> str | None:
     return None
 
 
-def lifecycle_request(action: LifecycleAction, req: LifecycleRequest) -> LifecycleRequest:
+def lifecycle_request(action: str, req: LifecycleRequest) -> LifecycleRequest:
     """The lifecycle body, held to the confirmation rule when its verb takes
     something down (models.CONFIRMED_LIFECYCLE, #2244): the check is
     ConfirmedRequest's, refused as any other invalid body is."""
@@ -1548,7 +1547,9 @@ def create_app(
 
     @app.post("/control/lifecycle/{action}", response_model=CommandResponse)
     def control_lifecycle(
-        action: LifecycleAction,
+        # str, not LifecycleAction: an unknown verb is a thing that is not
+        # there, a 404 from control.lifecycle (#2224), never a 422
+        action: str,
         req: Annotated[LifecycleRequest, Depends(lifecycle_request)],
         request: Request,
     ) -> CommandResponse:
