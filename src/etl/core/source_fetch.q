@@ -99,7 +99,7 @@
     if[not .qetl.log.enabled`TRACE; :h msg];
     t0:.z.p;
     req:`transport`request!(`ipc;.qetl.log.next_request[]);
-    .[{.qetl.log.trc[x;y;z]};(`ipc;"query sent";(enlist[`call]!enlist .qetl.source.call_text f),req,shown);::];
+    .[{.qetl.log.trc[x;y;z]};(`ipc;"query sent";(enlist[`call]!enlist .qetl.source.call_text f),.qetl.source.qsql_fields[f;args],req,shown);::];
     r:@[h;msg;{[req;t0;e]
         .[{.qetl.log.trc[x;y;z]};(`ipc;"query failed";
             req,`error`ms!(e;`long$(.z.p-t0)%1000000));::];
@@ -107,6 +107,23 @@
     .[{.qetl.log.trc[x;y;z]};(`ipc;"query returned";
         req,`rows`ms!(count r;`long$(.z.p-t0)%1000000));::];
     r}
+
+/ Private: the query as the far side will run it, for the TRACE line - the
+/ lambda's body with its arguments resolved and rendered as qSQL (.qetl.qsql),
+/ so a currency pair and a timestamp read as values, not as the names of the
+/ lambda's parameters. This is the construction boundary: the source has
+/ built `f` (closing over its own values) and `args` are what it runs on.
+/ Only `f` and `args` are rendered; the handle - the connection - never is.
+/ A rendering that throws is reported as the TRACE line's own `qsql_error`
+/ rather than costing the query its trace, or the query itself.
+/ @param f the function sent
+/ @param args its arguments, a list
+/ @return a dictionary of `qsql_form (`qsql, `tree or `lambda) and `qsql (the text, in full)
+/ @eg first key .qetl.source.qsql_fields[{[a] a+1};enlist 41]  ->  `qsql_form
+/ @private
+.qetl.source.qsql_fields:{[f;args]
+    r:@[.qetl.qsql.of_call[f];args;{[e] (`error;"qsql: ",e)}];
+    `qsql_form`qsql!(r 0;r 1)}
 
 / Private: a query lambda's text for a trace - IN FULL. `string` for a
 / lambda: -3! stops at the console width (79 characters by default), and cut

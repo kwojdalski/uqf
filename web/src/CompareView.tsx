@@ -297,7 +297,7 @@ export function CompareView() {
     setProblem(null);
     const next = JSON.stringify(body);
     record("submit", "compare.run", {
-      target: `${body.left}..${body.right}`,
+      subject: `${body.left}..${body.right}`,
     });
     if (next === sent) result.refresh();
     setSent(next);

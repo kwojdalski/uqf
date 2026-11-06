@@ -197,7 +197,7 @@ def test_a_malformed_check_record_reads_as_unverified_not_a_500(registry, tmp_pa
 
 def test_a_recent_check_record_still_reads_as_verified(registry, tmp_path):
     at = datetime.now(UTC).isoformat()
-    record = {"at": at, "identity": "rdb1", "remote_port": 6002, "local_port": 16002,
+    record = {"at": at, "reported_process": "rdb1", "remote_port": 6002, "local_port": 16002,
               "release": "r9"}  # fmt: skip
     (tmp_path / "tunnel_checks.json").write_text(json.dumps({"targets": {"box": {"rdb1": record}}}))
     resp = _client(Ssh()).get("/services/box/tunnel")
@@ -238,7 +238,7 @@ def test_the_check_reports_each_endpoint_and_feeds_the_plan_its_states(registry,
     assert resp.status_code == 200, resp.text
     report = resp.json()
     by = {e["process"]: e for e in report["endpoints"]}
-    assert (by["rdb1"]["status"], by["rdb1"]["identity"]) == ("ok", "rdb1")
+    assert (by["rdb1"]["status"], by["rdb1"]["reported_process"]) == ("ok", "rdb1")
     assert by["gateway1"]["gateway_servers"] == ["rdb"]
     assert by["hdb1"]["status"] == "unreachable"  # healthy ones stay visible beside it
     assert report["ok"] is False and report["release"] == "r9"

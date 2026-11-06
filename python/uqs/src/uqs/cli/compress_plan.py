@@ -184,7 +184,10 @@ class Audit:
                 source="server",
                 kind=activity.SERVER_KIND,
                 action=ACTION,
-                target=str(paths.hdb_dir),
+                # this stack's own HDB: `local`, and the directory is what
+                # was acted on there (#2234)
+                target="local",
+                subject=str(paths.hdb_dir),
                 outcome="pending",
                 claimed_user=getpass.getuser(),
                 method="CLI",
@@ -202,9 +205,9 @@ class Audit:
     def _write(self, done: list[dict], failed: dict | None, **fields: Any) -> None:
         if self.store is None or self.event_id is None:
             return
-        items = [{"target": d["partition"], "outcome": "succeeded"} for d in done]
+        items = [{"subject": d["partition"], "outcome": "succeeded"} for d in done]
         if failed:
-            items.append({"target": failed["partition"], "outcome": "failed"})
+            items.append({"subject": failed["partition"], "outcome": "failed"})
         detail = {
             "process": stack_compress.PROCESS,
             "item_count": len(done),

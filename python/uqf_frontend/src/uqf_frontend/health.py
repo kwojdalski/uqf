@@ -37,7 +37,6 @@ class ProcessHealth:
 
     process: str
     proctype: str
-    group: str
     host: str
     declared_port: int | None
     start_with_all: bool
@@ -71,7 +70,6 @@ def check(fleet: Fleet, declared: list[DeclaredProcess]) -> list[ProcessHealth]:
                 ProcessHealth(
                     process=proc.procname,
                     proctype=proc.proctype,
-                    group=proc.group,
                     host=proc.host,
                     declared_port=None,
                     start_with_all=proc.start_with_all,
@@ -88,7 +86,6 @@ def check(fleet: Fleet, declared: list[DeclaredProcess]) -> list[ProcessHealth]:
                 ProcessHealth(
                     process=proc.procname,
                     proctype=proc.proctype,
-                    group=proc.group,
                     host=proc.host,
                     declared_port=proc.port,
                     start_with_all=proc.start_with_all,
@@ -111,7 +108,6 @@ def check(fleet: Fleet, declared: list[DeclaredProcess]) -> list[ProcessHealth]:
             ProcessHealth(
                 process=proc.procname,
                 proctype=proc.proctype,
-                group=proc.group,
                 host=proc.host,
                 declared_port=proc.port,
                 start_with_all=proc.start_with_all,
