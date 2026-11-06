@@ -1203,6 +1203,7 @@ JSON_WITHOUT_YES = {
     "data alter": "test_hdb_alter_cli.py::test_json_without_yes_is_refused_and_writes_nothing",
     "data check": "test_hdb_alter_cli.py::test_json_without_yes_is_refused_and_writes_nothing",
     "data compress": "test_data_compress.py::test_json_cannot_ask",
+    "data migrate": "test_hdb_migrate.py::test_json_without_yes_apply_is_refused",
     "data replay": "test_replay.py::test_json_is_the_plan_and_without_yes_apply_is_refused",
     "data seed": "test_hdb_seed.py::test_json_without_yes_apply_is_refused",
     "deploy prune": (

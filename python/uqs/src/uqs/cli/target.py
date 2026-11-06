@@ -35,7 +35,7 @@ from uqs.cli.shared import _die, app, console, log
 from uqs.cli.skip_options import forwarded
 from uqs.cli.target_confirm import (
     changes_the_server,
-    confirmed_on_server,
+    for_the_server,
     may_change_the_server,
 )
 from uqs.deploy import control, inspection, target_changelog, target_changes, target_file
@@ -323,7 +323,7 @@ def forward(name: str, yes: bool, args: list[str], *, interactive: bool) -> int:
             f"`uqs {words[0]} --tunnel NAME` runs it here through an ssh tunnel"
         )
     # a --skip-<id> goes as its --override, which an older server's uqs takes (#1826)
-    args = confirmed_on_server(forwarded(args), yes)
+    args = for_the_server(forwarded(args), yes)
     r = control.remote_for(name, repo_root())
     shown = " ".join(["uqs", *args])
     if may_change_the_server(args):

@@ -2352,7 +2352,7 @@ for a refusal, 2 for a usage error - Click's own, a missing argument or an
 unknown option, and the command's (#1882, #1885).
 
 `--json` never asks a question. A command that would ask before changing
-something - `data check`/`alter`/`compress`/`replay`/`seed --apply`,
+something - `data check`/`alter`/`compress`/`migrate`/`replay`/`seed --apply`,
 `deploy prune`, `job attachment add`/`remove` - is refused under `--json`
 without `--yes`, even at a terminal: exit 1,
 `{"ok": false, "error": "--json cannot ask for confirmation: add --yes to ..."}`,
