@@ -31,6 +31,21 @@ def own_lifecycle_lock(tmp_path, monkeypatch):
     monkeypatch.setattr(generated, "lock_path", lambda paths: lock)
 
 
+@pytest.fixture(autouse=True)
+def no_live_port_or_start_checks(monkeypatch):
+    """A start's checks that read the machine itself (#2180) - who listens on a
+    port (alive.listeners), and whether what a start launched stayed up
+    (start_check) - see nothing here, so a test that fakes the launcher is not
+    failed by a developer's own stack, or by the processes it never really
+    started. test_start_check.py puts the real ones back.
+    """
+    from uqs.stack import alive, start_check
+
+    monkeypatch.setattr(alive, "listeners", lambda ports, timeout=None: {})
+    monkeypatch.setattr(start_check, "snapshot", lambda paths, base_port: {})
+    monkeypatch.setattr(start_check, "confirm", lambda *_a, **_k: [])
+
+
 @pytest.fixture(scope="session", autouse=True)
 def no_receiver_outlives_the_run(tmp_path_factory):
     yield
