@@ -85,6 +85,20 @@ is a 422, "explicit confirmation is required - send confirmed: true", and
 nothing runs. A start takes none. The one check is `models.ConfirmedRequest`, so
 a script or a second client gets the guard the browser's dialog stands for.
 
+An unknown name in the path is 404, with an error naming the kind:
+`TargetNotFound`, `ChartNotFound`, `ActionNotFound`, `ProcessNotFound`. 422 is
+for a body or query that is refused, and 400 only for `QueryRejected`, where q
+failed on input that passed validation (#2224, #2225). `errors.py` tables the
+status of every error the API raises, and `test_error_shape.py` holds the code
+to that table.
+
+Every route that takes a `limit`, or applies a row cap, answers `truncated`:
+more rows existed than were returned, whatever cut them (#2220). Each reads one
+row past what it returns to know. `/query` also says which bound cut it in
+`cut_by`: `limit`, the caller's own, or `max_rows`, a server cap
+(`UQF_FRONTEND_MAX_ROWS` or the query policy's maxrows). A read that stops at
+the policy's cap cannot see past it, so reaching that cap counts as cut.
+
 **They are off by default, and that is the security posture rather than
 caution.** `UQF_FRONTEND_ENABLE_WRITES` must be set on the server or every one
 of them returns 403 naming that variable. The reason: this deployment has one
@@ -136,7 +150,7 @@ release without that interpreter is refused (409) with nothing else tried and
 nothing installed. The path travels base64-encoded, so it never reaches a shell.
 
 `path` is relative to the root: an absolute path, `..`, a NUL byte or a path
-through a symbolic link is refused (400) before ssh and again on the server,
+through a symbolic link is refused (422) before ssh and again on the server,
 which walks one directory descriptor at a time with `O_NOFOLLOW`. Links -
 `current` included - FIFOs, sockets, devices and names that are not UTF-8 are
 listed as blocked and cannot be entered; the release `current` names, and the
@@ -165,7 +179,7 @@ code of its own: `tunnels.py` calls `uqs.deploy.tunnel_plan` and
 Every value the routes return comes from uqs: the processes and their ports,
 each local endpoint, the launch command (which holds no credential), each
 mapping's `verified`, `stale` or `unverified` state, and each endpoint's
-diagnostic category. A refused plan returns 400, and a release that cannot be
+diagnostic category. A refused plan returns 422, and a release that cannot be
 asked for its processes returns 502.
 
 The check logs in to q with this API's gateway credential when one is
@@ -211,12 +225,14 @@ progress and its own outcome.
   that nothing was published (#2022). Only SIGKILL leaves a temp file behind,
   and the next upload to that directory sweeps any older than an hour.
 - **Uncertain outcomes.** An existing file without `overwrite` is 409. A refused
-  path is 400. Damaged bytes are 502 `UploadIncomplete`. In each of these,
-  nothing was written. A timeout (120 s), an ssh failure (255), a helper crash
-  or a lost answer is 504 `UploadOutcomeUncertain`, with `transient: false`. The
-  file may or may not be there, and neither the API nor the browser retries: the
-  queue shows "Outcome unknown", and you list the directory before uploading it
-  again. Cancelling an upload in flight is reported the same way.
+  path is 422, and a push the upload names that does not exist, or a deployment
+  root that is not there, is 404 `PathNotFound`. Damaged bytes are 502
+  `UploadIncomplete`. In each of these, nothing was written. A timeout (120 s),
+  an ssh failure (255), a helper crash or a lost answer is 504
+  `UploadOutcomeUncertain`, with `transient: false`. The file may or may not be
+  there, and neither the API nor the browser retries: the queue shows "Outcome
+  unknown", and you list the directory before uploading it again. Cancelling an
+  upload in flight is reported the same way.
 - **Audit.** Each upload is one `files.upload` row in the activity history
   (#1954). The row records the target, the file's path, size, sha256, and
   whether it was a create or an overwrite. It never records the file's bytes. An
@@ -428,6 +444,10 @@ filter on it --- coverage under one source release says nothing about another.
 The filter is applied inside the q program rather than afterwards in Python, so
 a caller cannot omit it.
 
+A requested range on `GET /coverage` is both bounds or neither, as everywhere a
+coverage window is named: `range_from` alone, or `range_to` alone, is a 422
+naming the missing bound (#2222), never a 200 that ignored it.
+
 Interval composition: `[range_from, range_to)` is half-open and adjacent
 intervals compose **only at their common boundary**, so `[Mon,Tue)` and
 `[Tue,Wed)` merge while `[Mon,Tue)` and `[Wed,Thu)` leave Tuesday as a reported
@@ -585,21 +605,32 @@ policy.
 `POST /compare` (#2033) is the Compare view's one call. It names both sides
 explicitly - `local` for the stack this frontend serves, or a target in
 `deploy_targets.toml` - with an explicit window (`range_from`/`range_to`, each
-with its zone), filters as typed (`sym=EURUSD`), a row limit per side and,
-optionally, the `source_version` whose coverage to compare. `compare.py` checks
-that a target side is registered and hands the rest to `uqs data diff`'s own
-function (`uqs.cli.data_diff.run`): uqs reaches each side's gateway - a target
-through an ssh tunnel - and q decides everything the answer says
-(src/etl/core/compare.q). A target side is held to what `/services/{target}` and
-a target workspace are (#2066): the write token while writes are on (401
-`WriteTokenRequired`), an allowed Host, `services:read` (403, audited like any
-refused read), and remote operations on - each checked before uqs is called. A
-comparison of `local` with itself needs none of these. Each table carries one
-outcome - `endpoint_unavailable`, `missing_table`, `differs`, `not_comparable`,
-`incomplete_coverage` or `equal_in_sample` - and the label q wrote for it, which
-for a sample cut at the row limit says it is not proof the tables are equal.
-Every table is put to the table policy like `/query`'s, and the route is the
-`compare` feature's read.
+with its zone), filters, a row limit per side and, optionally, the
+`source_version` whose coverage to compare. With a `source_version`, `partition`
+is required as it is on `/coverage`, and `""` is the explicit answer for a
+dataset with no partition dimension: one omitted is a 422, never the
+no-partition slice by default, and a `partition` without a `source_version` is
+refused too (#185, #2221). A comparison that checked no coverage answers
+`source_version` and `partition` as `null`. `filters` are the
+`{column, op, value}` objects `/query` takes, with `/catalog`'s operators (`in`
+takes a list): `compare.py` renders each to the `COLUMN OP VALUE` text
+`uqs data diff --filter` takes, and the API does not expose that grammar. A
+string filter is a 422 saying what it is now, and a value that cannot be
+rendered (a comma in a single value, a list for an operator other than `in`) is
+refused before uqs is called (#2223). The response echoes the filters as they
+were sent. `compare.py` checks that a target side is registered and hands the
+rest to `uqs data diff`'s own function (`uqs.cli.data_diff.run`): uqs reaches
+each side's gateway - a target through an ssh tunnel - and q decides everything
+the answer says (src/etl/core/compare.q). A target side is held to what
+`/services/{target}` and a target workspace are (#2066): the write token while
+writes are on (401 `WriteTokenRequired`), an allowed Host, `services:read` (403,
+audited like any refused read), and remote operations on - each checked before
+uqs is called. A comparison of `local` with itself needs none of these. Each
+table carries one outcome - `endpoint_unavailable`, `missing_table`, `differs`,
+`not_comparable`, `incomplete_coverage` or `equal_in_sample` - and the label q
+wrote for it, which for a sample cut at the row limit says it is not proof the
+tables are equal. Every table is put to the table policy like `/query`'s, and
+the route is the `compare` feature's read.
 
 ## Backfill status
 

@@ -163,17 +163,17 @@ def test_the_chosen_processes_and_local_ports_pass_through(registry):
         ({"local": ["rdb1"]}, "give PROC:PORT"),
     ],
 )
-def test_a_plan_uqs_refuses_is_a_400_with_its_words(registry, params, said):
+def test_a_plan_uqs_refuses_is_a_422_with_its_words(registry, params, said):
     resp = _client(Ssh()).get("/services/box/tunnel", params=params)
-    assert resp.status_code == 400
+    assert resp.status_code == 422
     assert resp.json()["error"] == "TunnelPlanRefused"
     assert said in resp.json()["detail"]
 
 
-def test_a_local_port_in_non_ascii_digits_is_an_invalid_port_400(registry):
+def test_a_local_port_in_non_ascii_digits_is_an_invalid_port_422(registry):
     """'²' passes str.isdigit and fails int() - a refusal, never a 500 (#2064)."""
     resp = _client(Ssh()).get("/services/box/tunnel", params={"local": ["rdb1:\u00b2"]})
-    assert resp.status_code == 400, resp.text
+    assert resp.status_code == 422, resp.text
     assert resp.json()["error"] == "TunnelPlanRefused"
     assert "give PROC:PORT" in resp.json()["detail"]
 

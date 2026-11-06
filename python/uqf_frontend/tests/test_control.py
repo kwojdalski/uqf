@@ -319,7 +319,8 @@ def test_a_control_request_with_an_unknown_key_is_refused(
 def test_an_unknown_action_is_refused(writeable, monkeypatch):
     _patch_core(monkeypatch, start=lambda *a, **k: FakeCompleted())
     resp = writeable.post("/control/lifecycle/obliterate", json={"procs": "all"})
-    assert resp.status_code == 422
+    assert resp.status_code == 404
+    assert resp.json()["error"] == "ActionNotFound"
 
 
 def test_clean_is_not_reachable(writeable):
@@ -327,7 +328,7 @@ def test_clean_is_not_reachable(writeable):
     sample data - the one orchestrator verb whose blast radius is DATA, and
     not something to offer to anyone who can reach the port on a deployment
     with a claimed identity. `uqs clean` remains, at a terminal."""
-    assert writeable.post("/control/lifecycle/clean", json={"procs": "all"}).status_code == 422
+    assert writeable.post("/control/lifecycle/clean", json={"procs": "all"}).status_code == 404
     assert "clean" not in control.LIFECYCLE_ACTIONS
 
 

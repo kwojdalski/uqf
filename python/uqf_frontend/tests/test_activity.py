@@ -271,7 +271,7 @@ def test_a_lifecycle_that_times_out_after_starting_is_unknown_not_refused(tmp_pa
 
 def test_an_invalid_action_is_refused_before_acting(tmp_path):
     c = _client(_settings(tmp_path))
-    assert c.post("/control/lifecycle/obliterate", json={"procs": "all"}).status_code == 422
+    assert c.post("/control/lifecycle/obliterate", json={"procs": "all"}).status_code == 404
     (row,) = _history(c)
     assert (row["action"], row["outcome"]) == ("process", "refused")
 
@@ -789,3 +789,24 @@ def test_the_environment_names_the_file_and_the_bounds(monkeypatch, tmp_path):
         7,
         500,
     )
+
+
+def test_a_history_cut_at_the_limit_says_so(tmp_path):
+    """The Activity view showed the newest `limit` events as if they were the
+    whole history (#2220)."""
+    from uqf_frontend import activity
+
+    app = create_app(gateway=FakeGateway(), settings=_settings(tmp_path))
+    c = TestClient(app, headers={"Authorization": f"Bearer {TOKEN}"})
+    for i in range(3):
+        app.state.activity.add(
+            source="server",
+            kind=activity.SERVER_KIND,
+            action=activity.PRUNE_ACTION,
+            target=f"t{i}",
+            outcome="succeeded",
+        )
+    cut = c.get("/activity", params={"limit": 2}).json()
+    assert (len(cut["events"]), cut["truncated"]) == (2, True)
+    whole = c.get("/activity", params={"limit": 3}).json()
+    assert (len(whole["events"]), whole["truncated"]) == (3, False)
