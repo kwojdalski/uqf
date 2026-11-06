@@ -81,6 +81,7 @@ from uqs.stack import (
     alive,
     deployment,
     listing,
+    log_follow,
     probe,
     runtime,
     stream_health,
@@ -316,7 +317,7 @@ def _up(
         follow.update(procnames=procnames, min_level=min_level)
         start_fn()
 
-    monkeypatch.setattr(stack_logs, "follow_during", fake_follow)
+    monkeypatch.setattr(log_follow, "follow_during", fake_follow)
     result = runner.invoke(cli.app, [*command, *args])
     return result, start, stop, follow
 
@@ -364,7 +365,7 @@ def test_a_failed_start_still_stops_what_it_started_and_keeps_its_exit_code(monk
     monkeypatch.setattr(stack_logs, "resolve_procnames", lambda paths, names: names.split())
     monkeypatch.setattr(lifecycle, "_running", lambda port: set())
     monkeypatch.setattr(
-        stack_logs, "follow_during", lambda paths, procnames, start_fn, min_level=None: start_fn()
+        log_follow, "follow_during", lambda paths, procnames, start_fn, min_level=None: start_fn()
     )
     result = runner.invoke(cli.app, ["start", "rdb1", "-f", "--stop-on-exit"])
     assert start.calls, "it started"
@@ -1304,7 +1305,7 @@ def test_logs_defaults_to_a_bounded_tail_not_a_follow(monkeypatch):
     """`follow` blocks until Ctrl-C. Defaulting to it would hang any script
     that ran `uqs logs`."""
     recent = _patch(monkeypatch, stack_logs, "print_recent_logs")
-    follow = _patch(monkeypatch, stack_logs, "follow_logs")
+    follow = _patch(monkeypatch, log_follow, "follow_logs")
     result = runner.invoke(cli.app, ["logs"])
     assert result.exit_code == 0
     assert follow.calls == []
@@ -1313,7 +1314,7 @@ def test_logs_defaults_to_a_bounded_tail_not_a_follow(monkeypatch):
 
 def test_follow_selects_the_streaming_path(monkeypatch):
     recent = _patch(monkeypatch, stack_logs, "print_recent_logs")
-    follow = _patch(monkeypatch, stack_logs, "follow_logs")
+    follow = _patch(monkeypatch, log_follow, "follow_logs")
     runner.invoke(cli.app, ["logs", "--follow"])
     assert recent.calls == []
     assert len(follow.calls) == 1
@@ -1321,7 +1322,7 @@ def test_follow_selects_the_streaming_path(monkeypatch):
 
 def test_follow_opens_on_the_same_history_logs_shows(monkeypatch):
     """`logs -f` used to open empty, starting at the end of every file."""
-    follow = _patch(monkeypatch, stack_logs, "follow_logs")
+    follow = _patch(monkeypatch, log_follow, "follow_logs")
     runner.invoke(cli.app, ["logs", "-f", "--lines", "7"])
     assert follow.kwargs["lines"] == 7
 
@@ -1822,7 +1823,7 @@ def test_channels_filter_the_recent_lines_with_the_level_and_the_process(monkeyp
 
 
 def test_channels_filter_a_followed_log_too(monkeypatch):
-    follow = _patch(monkeypatch, stack_logs, "follow_logs")
+    follow = _patch(monkeypatch, log_follow, "follow_logs")
     result = runner.invoke(cli.app, ["logs", "rdb1", "-f", "--channel", "ipc", "--level", "DEBUG"])
     assert result.exit_code == 0, result.output
     assert list(follow.kwargs["channels"]) == ["ipc"] and follow.kwargs["min_level"] == "DEBUG"

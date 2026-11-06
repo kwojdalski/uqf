@@ -19,7 +19,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from uqs.paths import UqsError, UqsPaths
-from uqs.stack import logs, runs
+from uqs.stack import log_follow, logs, runs
 from uqs.stack.backfill_status import STATE_SUBDIR
 
 #: <attachment>-<12 hex digits>: a destination's state directory (uqs.attach.backfill.identity_of)
@@ -164,7 +164,7 @@ def show(
     files = [chosen.path]
     history = _history(chosen, lines)
     if follow:
-        logs._follow(files, min_level, history=lambda: history, parse=parse)
+        log_follow.follow_files(files, min_level, history=lambda: history, parse=parse)
         return
     sink = logs.log_sink()
     for rec in history:

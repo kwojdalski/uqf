@@ -16,10 +16,10 @@ from pathlib import Path
 
 import pytest
 
-from uqs.cli.config import lines_document
+from uqs.cli.logs import lines_document
 from uqs.generated import q_facts
 from uqs.paths import UqsPaths, UqsUsageError
-from uqs.stack import logs
+from uqs.stack import log_follow, logs
 
 REPO = Path(__file__).resolve().parents[3]
 
@@ -263,7 +263,7 @@ def _follow(paths, monkeypatch, appended: list[str], count: int, **kw) -> list[s
             f.write("".join(f"{line}\n" for line in appended))
 
     threading.Thread(target=append_later, daemon=True).start()
-    logs.follow_logs(paths, "rdb1", **kw)
+    log_follow.follow_logs(paths, "rdb1", **kw)
     return sink.shown
 
 
@@ -290,4 +290,4 @@ def test_following_combines_level_and_channel(paths, monkeypatch):
 
 def test_following_refuses_an_undeclared_channel_before_following(paths):
     with pytest.raises(UqsUsageError):
-        logs.follow_logs(paths, "rdb1", channels=["nope"])
+        log_follow.follow_logs(paths, "rdb1", channels=["nope"])
