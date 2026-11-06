@@ -322,7 +322,7 @@ SAMPLES: dict[tuple[str, str], dict] = {
                     "ts": "2026-01-01T00:00:00Z",
                     "kind": "navigate",
                     "action": "view.open",
-                    "target": "Control",
+                    "subject": "Control",
                     "trigger": "pointer",
                 }
             ]
