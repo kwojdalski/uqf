@@ -186,8 +186,14 @@ def launch_remote(
         forced_bound: list[str] = []
         if force:
             host, wport = parse_writer(writer)
-            last = backfill_forced.last_completed_date(host, wport, ipc or service.ipc_for(att))
-            forced_bound = ["-max_date", q_date(last)]
+            last, calendar = backfill_forced.completed_bounds(
+                host, wport, ipc or service.ipc_for(att)
+            )
+            forced_bound = [
+                "-max_date",
+                q_date(last),
+                *(["-calendar", calendar] if calendar else []),
+            ]
         flags = [
             *stack_backfill.backfill_flags(
                 worker, version, range_from, range_to,
@@ -281,6 +287,7 @@ def receive(
             "-max_date", q_date(datetime.fromisoformat(co["last_writable_date"]).date()),
             "-deadline", runs.to_q_timestamp(datetime.fromisoformat(co["writes_stop_at"])),
             "-readers", readers or "_none_", "-user", att.stack.user,
+            *(["-calendar", co["calendar"]] if co.get("calendar") else []),
             "-journal", str(dest.state_dir / JOURNAL), "-writers", ",".join(users),
             "-max_rows", str(int(binding.get("max_rows", receiver_contract.DEFAULT_MAX_ROWS))),
         ]  # fmt: skip

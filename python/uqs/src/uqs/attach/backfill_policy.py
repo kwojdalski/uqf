@@ -55,6 +55,11 @@ POLICY: dict[str, Policy] = {
         False,
         "an end-of-day reload is open on a writer: the HDB is changing under it now, not possibly",
     ),
+    "native-calendar": Policy(
+        False,
+        "the stack stamps `time` in a data zone this backfill does not stamp: its rows would "
+        "sit hours away from the live rows of the same table",
+    ),
     "remote-host": Policy(False, _UNSUPPORTED),
     "network-filesystem": Policy(False, _UNSUPPORTED),
     "segmented-hdb": Policy(False, _UNSUPPORTED),
@@ -153,6 +158,8 @@ class Coordination:
     eod_fence_bypassed: bool = False
     #: the blockers a waiver lifted, at level `accepted` with their reason
     accepted: list[Finding] = field(default_factory=list)
+    #: the wdb's calendar for the q runner (`off=<ns>,adj=<ns>`); '' when it files by UTC midnight
+    calendar: str = ""
 
     @property
     def writes_stop_at(self) -> datetime | None:
@@ -178,6 +185,7 @@ class Coordination:
             "next_roll": self.next_roll.isoformat(),
             "eod_guard_minutes": self.guard_minutes,
             "writers": self.writers,
+            "calendar": self.calendar,
             "warnings": self.warnings,
             "accepted": [f.as_dict() for f in self.accepted],
         }
