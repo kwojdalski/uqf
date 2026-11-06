@@ -1157,8 +1157,9 @@ class ActivityResponse(BaseModel):
 
     events: list[ActivityEventOut]
     persistence: ActivityPersistence
-    #: The level a session records at unless its operator picks another.
-    default_level: SessionLevel
+    #: The level a session records at unless its operator picks another - the
+    #: `activity_level` setting, named as /health and /settings name it (#2240).
+    activity_level: SessionLevel
     bounds: list[ActivityBound]
     drops: list[ActivityDrop]
     poll_seconds: int

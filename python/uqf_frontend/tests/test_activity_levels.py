@@ -159,7 +159,7 @@ def test_the_levels_are_ordered_and_documented_once():
 def test_the_server_default_is_served_on_health_and_in_the_history(tmp_path):
     c = _client(tmp_path, activity_level="debug")
     assert c.get("/health").json()["activity_level"] == "debug"
-    assert c.get("/activity").json()["default_level"] == "debug"
+    assert c.get("/activity").json()["activity_level"] == "debug"
 
 
 def test_the_environment_sets_the_default_and_refuses_a_level_that_is_not_one(monkeypatch):

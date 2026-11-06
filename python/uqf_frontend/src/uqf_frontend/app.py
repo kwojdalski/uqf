@@ -1672,7 +1672,7 @@ def create_app(
                 last_error=state.last_error,
                 last_failure_at=state.last_failure_at,
             ),
-            default_level=typing.cast(Any, live().activity_level),
+            activity_level=typing.cast(Any, live().activity_level),
             bounds=[
                 ActivityBound(
                     level=typing.cast(Any, lvl),

@@ -1402,7 +1402,7 @@ export interface ActivityDrop {
 export interface ActivityHistory extends Pollable {
   events: ActivityEvent[];
   persistence: ActivityPersistence;
-  default_level: SessionLevel;
+  activity_level: SessionLevel;
   bounds: ActivityBound[];
   drops: ActivityDrop[];
 }

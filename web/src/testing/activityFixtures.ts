@@ -83,7 +83,7 @@ export const HISTORY: ActivityHistory = {
     last_error: "OperationalError: disk I/O error",
     last_failure_at: null,
   },
-  default_level: "actions",
+  activity_level: "actions",
   bounds: [
     { level: "actions", retention_days: 30, max_kept: 100000 },
     { level: "interactions", retention_days: 7, max_kept: 50000 },

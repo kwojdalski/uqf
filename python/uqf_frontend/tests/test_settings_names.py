@@ -16,11 +16,14 @@ the operator believes their own value is.
 from __future__ import annotations
 
 import json
+import re
 import typing
+from pathlib import Path
 
 import pytest
 
-from uqf_frontend import config
+from uqf_frontend import app as app_module
+from uqf_frontend import config, models
 from uqf_frontend.config import RENAMED_SETTINGS_KEYS, Settings
 from uqf_frontend.models import (
     ActivityBound,
@@ -131,3 +134,17 @@ def test_the_api_refuses_to_start_on_a_settings_file_written_before_the_rename(t
             fleet=FakeFleet(),
             settings=Settings(settings_file=path, activity_db=tmp_path / "a.sqlite3"),
         )
+
+
+def test_a_response_serving_the_default_activity_level_names_it_activity_level():
+    """The setting is `activity_level` in Settings, its environment variable,
+    /health and /settings; /activity once served the same value as
+    `default_level` (#2240). Every response field set from
+    `live().activity_level` must carry the setting's own name."""
+    source = Path(app_module.__file__).read_text(encoding="utf-8")
+    named = re.findall(r"(\w+)=typing\.cast\(Any, live\(\)\.activity_level\)", source)
+    assert named, "no response serves the activity level any more - update this gate"
+    assert set(named) == {"activity_level"}
+    for model in (models.ActivityResponse, models.HealthResponse):
+        fields = model.model_fields
+        assert "activity_level" in fields and "default_level" not in fields, model.__name__
