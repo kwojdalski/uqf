@@ -64,10 +64,12 @@ tplogzip:{[dir]
   {[f] @[hdel;hsym `$f;{[f;e] .lg.e[`housekeeping;"Failed to remove ",f," : ",e]}[f]]} each (dir,"/"),/:logs;
   };
 
-/ Compress one HDB to the policy .cmp.inputcsv names, with .qtorq.compress.run.
+/ Compress one HDB to the policy .cmp.inputcsv names, with .qtorq.compress.run_held
+/ (torq_compress_survey.q): the selection and the hold `uqs data compress` makes, so a
+/ partition the coverage ledger says is still being written is left alone (#2176).
 / @param dir string   the HDB root
-/ @return table       .qtorq.compress.run's, a row per file changed
-/ @throws what .qtorq.compress.run throws, and .cmp.inputcsv's undefined-name error where
+/ @return table       .qtorq.compress.run_held's, a row per file changed
+/ @throws what .qtorq.compress.run_held throws, and .cmp.inputcsv's undefined-name error where
 /   TorQ's compress.q is not loaded
 .qtorq.hk.compress:{[dir]
   conf:.cmp.inputcsv;
@@ -77,21 +79,22 @@ tplogzip:{[dir]
   / to report, as it does.
   @[.servers.startup;::;{[e] .lg.w[`housekeeping;"could not register the HDBs to reload: ",e]}];
   .lg.o[`housekeeping;"compressing ",dir," to the compression policy ",conf];
-  .qtorq.compress.run[hsym `$dir;conf;0W]};
+  .qtorq.compress.run_held[hsym `$dir;conf]};
 
 / The rule function for the HDB (#2150): bring it to the declared compression
-/ policy with TorQ's .cmp, through .qtorq.compress.run (torq_compress.q) - the
-/ checked apply, then the HDB reload when a file changed. Never housekeeping.q's
+/ policy with TorQ's .cmp, through .qtorq.compress.run_held - partition by
+/ partition under the HDB write lock, holding back what is still being written,
+/ the checked apply, then the HDB reload when a file changed. Never housekeeping.q's
 / kdbzip, which compresses every file with one hard-coded algorithm. The
 / policy ages each table's partitions (its minage), so young ones are left
-/ alone; maxage 0W considers every partition older than that.
+/ alone; every partition older than that is considered.
 / .
 / A failed run - .cmp refusing the config, or a file not brought to its target
 / state - is logged as an error, as housekeeping.q's rm and zip log theirs, and
 / returned as an empty list: housekeeping runs its rules one after another,
 / and a rule that raised would stop the rest of the run.
 / @param dir string   the HDB root, as housekeeping's find returns it
-/ @return table       .qtorq.compress.run's, a row per file changed; () after a failure
+/ @return table       .qtorq.compress.run_held's, a row per file changed; () after a failure
 hdbcompress:{[dir]
   r:@[.qtorq.hk.compress;dir;{[dir;e] .lg.e[`housekeeping;"Failed to compress ",dir," : ",e]; ()}[dir]];
   if[98h=type r; .lg.o[`housekeeping;"compressed ",string[count r]," file(s) under ",dir]];

@@ -13,12 +13,13 @@ code lives, not about what anyone types.
 
 from __future__ import annotations
 
+import time
 from typing import Annotated, Any
 
 import typer
 
 from uqs.attach import live as _registers_live_check  # noqa: F401 - the start gate's (#1651)
-from uqs.cli import completion, start_follow, start_warnings
+from uqs.cli import completion, start_follow, start_warnings, vocabulary
 from uqs.cli.force_stop import ForceOpt, _force_stop
 from uqs.cli.renames import BASE_PORT, alias_command, renamed
 from uqs.cli.safety import ChangesState, Effect, OverrideOpt, ReasonOpt, dry_run_note, marked
@@ -40,7 +41,7 @@ from uqs.cli.start_warnings import running as _running
 from uqs.model import profiles
 from uqs.paths import UqsError, UqsUsageError
 from uqs.stack import procs as procs_model
-from uqs.stack import runtime, start_policy
+from uqs.stack import runtime, start_check, start_policy
 from uqs.stack.start_overrides import NONE, Overrides
 
 ProfileOpt = Annotated[
@@ -123,6 +124,18 @@ DryRunOpt = Annotated[
     ),
 ]
 
+GraceOpt = Annotated[
+    float,
+    vocabulary.duration(
+        "--grace",
+        help=(
+            "Wait DURATION after launching, then fail if a process this started "
+            f"has died or another process holds its port (default {start_check.DEFAULT_GRACE:g}s)"
+        ),
+        show_default=False,
+    ),
+]
+
 #: The options `start` and `restart` share, word for word (#1734): the
 #: selection `stop` takes too - PROC..., --profile, --base-port - and what a
 #: launch adds to it. A test holds the two signatures equal. --print, then
@@ -142,6 +155,7 @@ def _launch(
     override: list[str] | None,
     reason: str | None,
     stop_on_exit: bool = False,
+    grace: float = start_check.DEFAULT_GRACE,
 ) -> None:
     """`start` and `restart`, which differ only in the torq.sh verb they run."""
     if level is not None and not follow:
@@ -160,7 +174,7 @@ def _launch(
     kwargs: dict[str, Any] = {"base_port": port, "selected": selected, "skips": overrides}
     if not follow:
         _launch_checks(verb, names, port, profile)
-        _run_streaming(launch, names, **kwargs)
+        _launch_and_confirm(verb, launch, names, port, grace, kwargs)
         return
     try:
         wanted = start_follow.procnames_started_by(names, port)
@@ -180,6 +194,34 @@ def _launch(
     start_follow.follow(wanted, already, before, port, level, stop=stop_on_exit)
 
 
+def _launch_and_confirm(
+    verb: str, launch: Any, names: str, port: int | None, grace: float, kwargs: dict[str, Any]
+) -> None:
+    """Launch, then wait `grace` and fail, naming each one, if a process this
+    started died or is not the one on its port (#2180): torq.sh returns once
+    each is forked, not once it is up."""
+    try:
+        before = start_check.snapshot(_paths(), port)
+        since = time.time()
+        result = launch(_paths(), names, capture=False, **kwargs)
+    except UqsError as exc:
+        _die(exc)
+        return
+    if result.returncode:
+        raise typer.Exit(code=result.returncode)
+    failed = start_check.confirm(
+        _paths(),
+        lambda: start_follow.procnames_started_by(names, port),
+        before,
+        port,
+        grace,
+        restarted=verb == "restart",
+        since=since,
+    )
+    if failed:
+        _die(UqsError(start_check.describe(failed, grace)))
+
+
 @app.command(cls=renamed(_LAUNCH_RENAMES, ChangesState))
 def start(
     procs: ProcsArg = None,
@@ -191,6 +233,7 @@ def start(
     print_only: DryRunOpt = False,
     override: OverrideOpt = None,
     reason: ReasonOpt = None,
+    grace: GraceOpt = start_check.DEFAULT_GRACE,
 ) -> None:
     """Start every startwithall=1 process (or specific process name(s)).
 
@@ -207,7 +250,7 @@ def start(
     """
     _launch(
         "start", procs, port, profile, follow, level, print_only,
-        override, reason, stop_on_exit,
+        override, reason, stop_on_exit, grace,
     )  # fmt: skip
 
 
@@ -222,6 +265,7 @@ def restart(
     print_only: DryRunOpt = False,
     override: OverrideOpt = None,
     reason: ReasonOpt = None,
+    grace: GraceOpt = start_check.DEFAULT_GRACE,
 ) -> None:
     """Restart every startwithall=1 process (or specific process name(s)).
 
@@ -231,7 +275,7 @@ def restart(
     """
     _launch(
         "restart", procs, port, profile, follow, level, print_only,
-        override, reason, stop_on_exit,
+        override, reason, stop_on_exit, grace,
     )  # fmt: skip
 
 

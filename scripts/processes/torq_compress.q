@@ -141,7 +141,9 @@
 
 / apply, then ask every running HDB to reload (.qtorq.reload_hdb - TorQ's own
 / (`reload;date) message found through .servers, which logs a refusal and does not
-/ raise) if, and only if, a file changed.
+/ raise) if, and only if, a file changed. It holds nothing back and takes no lock:
+/ a running stack's HDB is compressed through .qtorq.compress.run_held
+/ (torq_compress_survey.q), which leaves a partition still being written alone.
 / @param hdb the HDB root, a file symbol
 / @param conf the compression config
 / @param maxage the oldest partition to consider, in days

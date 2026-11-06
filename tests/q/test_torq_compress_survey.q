@@ -18,7 +18,7 @@
 
 .qt.qtorq.compress.survey.setUp_fresh:{[]
     .qt.fixture.torq_cmp.load[];
-    `.qt.qtorq.compress.survey.saved set (.qetl.coverage.unreleased;.qtorq.reload_hdb);
+    `.qt.qtorq.compress.survey.saved set (.qetl.coverage.unreleased;.qtorq.reload_hdb;.qtorq.compress.apply_plan);
     `.qt.qtorq.compress.survey.writing set ([] dataset:`symbol$(); date:`date$());
     `.qetl.coverage.unreleased set {[at] .qt.qtorq.compress.survey.writing};
     `.qt.qtorq.compress.survey.reloads set 0;
@@ -28,6 +28,7 @@
 .qt.qtorq.compress.survey.tearDown_fresh:{[]
     `.qetl.coverage.unreleased set .qt.qtorq.compress.survey.saved 0;
     `.qtorq.reload_hdb set .qt.qtorq.compress.survey.saved 1;
+    `.qtorq.compress.apply_plan set .qt.qtorq.compress.survey.saved 2;
     .qt.fixture.torq_cmp.unload[];
     }
 
@@ -195,3 +196,57 @@
     .qunit.assertEquals[count r;3;"quote's columns"];
     p:.qt.qtorq.compress.survey.part[root;.z.D-30;`quote];
     .qunit.assertEquals[distinct {[p;c] (-21!` sv p,c)`algorithm}[p] each `sym`bid`ask;enlist 1i;"qipc, not the policy's gzip"]}
+
+/ --- the scheduled run (housekeeping1's hdbcompress, #2176) -----------------
+
+.qt.qtorq.compress.survey.scheduled:{[root] .qtorq.compress.run_held[root;.qt.qtorq.compress.survey.conf[root]]}
+
+.qt.qtorq.compress.survey.test_the_scheduled_run_never_compresses_a_day_being_written:{[t]
+    root:.qt.qtorq.compress.survey.hdb[];
+    `.qt.qtorq.compress.survey.writing set ([] dataset:enlist `trade; date:enlist .z.D-30);
+    held:.qt.qtorq.compress.survey.part[root;.z.D-30;`trade];
+    b0:.qt.qtorq.compress.survey.bytes[held];
+    r:.qt.qtorq.compress.survey.scheduled[root];
+    .qunit.assertEquals[.qt.qtorq.compress.survey.bytes[held];b0;"the day being written is byte for byte as it was"];
+    .qunit.assertEquals[exec count i from r where table=`trade, partition=.z.D-30;0;"and no row of the run names it"];
+    .qunit.assertTrue[all .qt.qtorq.compress.survey.compressed[root;.z.D-20;`trade];"a released day of the same table is compressed"];
+    .qunit.assertTrue[all .qt.qtorq.compress.survey.compressed[root;.z.D-30;`quote];"as is another table on the held day"];
+    .qunit.assertTrue[not any .qt.qtorq.compress.survey.compressed[root;.z.D-2;`trade];"a day younger than minage is not"];
+    .qunit.assertEquals[.qt.qtorq.compress.survey.reloads;1;"the HDB is reloaded once"]}
+
+.qt.qtorq.compress.survey.test_the_scheduled_run_reads_the_hold_again_at_each_partition:{[t]
+    / a backfill claims 20 days ago after the run has planned it and compressed 30 days ago
+    root:.qt.qtorq.compress.survey.hdb[];
+    `.qtorq.compress.apply_plan set {[f;p]
+        r:f p;
+        `.qt.qtorq.compress.survey.writing set ([] dataset:enlist `trade; date:enlist .z.D-20);
+        r}[.qtorq.compress.apply_plan];
+    r:.qt.qtorq.compress.survey.scheduled[root];
+    .qunit.assertTrue[all .qt.qtorq.compress.survey.compressed[root;.z.D-30;`trade];"the partition run before the claim is compressed"];
+    .qunit.assertTrue[not any .qt.qtorq.compress.survey.compressed[root;.z.D-20;`trade];"the one claimed since is left alone"];
+    .qunit.assertEquals[exec distinct partition from r where table=`trade;enlist .z.D-30;"and the run says so"]}
+
+.qt.qtorq.compress.survey.test_the_scheduled_run_holds_the_hdb_write_lock_for_each_partition:{[t]
+    root:.qt.qtorq.compress.survey.hdb[];
+    `.qt.qtorq.compress.survey.locked set ();
+    `.qtorq.compress.apply_plan set {[root;f;p]
+        `.qt.qtorq.compress.survey.locked set .qt.qtorq.compress.survey.locked,not ()~key hsym `$.qetl.io.hdb_lock root;
+        f p}[root;.qtorq.compress.apply_plan];
+    .qt.qtorq.compress.survey.scheduled[root];
+    .qunit.assertEquals[.qt.qtorq.compress.survey.locked;011b;"the empty shape outside it, then each partition under it"]}
+
+.qt.qtorq.compress.survey.test_the_scheduled_run_selects_what_uqs_data_compress_runs:{[t]
+    / the same HDB twice, one day being written: `uqs data compress --apply`'s path on
+    / one (the survey, then apply_partition on each partition it marks act), the
+    / schedule's on the other
+    a:.qt.qtorq.compress.survey.hdb[];
+    b:`$":",first system"mktemp -d";
+    system"cp -R ",(1_string a),"/. ",1_string b;
+    `.qt.qtorq.compress.survey.writing set ([] dataset:enlist `trade; date:enlist .z.D-20);
+    s:.qt.qtorq.compress.survey.survey[a;();0;()];
+    todo:asc exec distinct partition from s[`partitions] where status=`act, 0<count each (compress,'decompress);
+    cli:raze {[a;d] .qtorq.compress.apply_partition[a;.qt.qtorq.compress.survey.conf[a];();0;();()!();string d]}[a] each todo;
+    hk:.qt.qtorq.compress.survey.scheduled[b];
+    shape:{[t] `table`partition`column xasc select table, partition, column, action from t};
+    .qunit.assertEquals[shape hk;shape cli;"the same files, changed the same way"];
+    .qunit.assertTrue[0<count hk;"and something was changed"]}
