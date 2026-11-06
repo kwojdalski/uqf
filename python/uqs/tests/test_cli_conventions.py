@@ -1283,6 +1283,32 @@ def test_rule5c_every_irreversible_deletion_asks():
     assert not unnamed, f"the guide's rule does not name {sorted(unnamed)}"
 
 
+def test_rule5c_every_irreversible_deletion_asks_on_mcp_too():
+    """uqs-mcp has no terminal and no --yes, and its `uqs_clean` deleted the
+    data directory, the HDB with it, in one call (#2257). A tool mirroring an
+    IRREVERSIBLE command is a dry run unless confirm=true - required, never a
+    default - and takes no dry_run or yes beside it; no other tool takes it."""
+    from mcp_support import tools
+
+    from uqs import mcp, mcp_server
+
+    schemas = {t.name: t.input_schema for t in tools()}
+    mirrored = {path: name for name, path in mcp.MIRRORS.items()}
+    assert "clean" in mirrored, "uqs_clean is the tool #2257 is about"
+    wrong = {}
+    for path in IRREVERSIBLE & set(mirrored):
+        schema = schemas[mirrored[path]]
+        props = schema["properties"]
+        default = props.get(mcp_server.CONFIRM, {}).get("default")
+        if default is not False or {"dry_run", "yes"} & set(props):
+            wrong[path] = sorted(props)
+    assert not wrong, f"irreversible tools not a dry run unless {mcp_server.CONFIRM}=true: {wrong}"
+    confirming = {
+        mcp.MIRRORS[n] for n, s in schemas.items() if mcp_server.CONFIRM in s["properties"]
+    }
+    assert confirming <= IRREVERSIBLE, sorted(confirming - IRREVERSIBLE)
+
+
 def test_rule5c_the_commands_that_ask_are_the_known_ones():
     """Every question is asked through safety.ask, confirm or choose (#1885):
     one default (No), one refusal without a terminal, one exit code for a no.

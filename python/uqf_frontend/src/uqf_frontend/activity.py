@@ -602,6 +602,14 @@ _MIGRATIONS: tuple[tuple[str, ...], ...] = (
     # 3 (#2242): `dropped` counted the detail keys a row lost, beside a
     # batch's `drops` of whole events.
     ("ALTER TABLE activity RENAME COLUMN dropped TO dropped_detail",),
+    # 4 (#2254): when an event happened was `ts`, where `uqs activity list
+    # --json` and every log-line record say `time` (json_out.LINE_KEYS). Its
+    # index moves with it, under the column's new name.
+    (
+        "ALTER TABLE activity RENAME COLUMN ts TO time",
+        "DROP INDEX IF EXISTS activity_ts",
+        "CREATE INDEX IF NOT EXISTS activity_time ON activity (time)",
+    ),
 )
 
 
@@ -661,7 +669,11 @@ class ActivityStore:
                 # last writes to a power cut, which operational logging can
                 # afford and a click-rate history cannot afford to fsync for.
                 self._db.execute("PRAGMA synchronous=NORMAL")
-            self._db.executescript(_SCHEMA)
+            # _SCHEMA is version 0: a file past it has the table already, and
+            # its version-0 `activity_ts` index names a column since renamed.
+            (version,) = self._db.execute("PRAGMA user_version").fetchone()
+            if version == 0:
+                self._db.executescript(_SCHEMA)
             columns = {row[1] for row in self._db.execute("PRAGMA table_info(activity)")}
             if "level" not in columns:
                 self._db.execute(_LEVEL_COLUMN)
@@ -709,7 +721,7 @@ class ActivityStore:
         trigger = event.get("trigger")
         return (
             clean_id(event.get("event_id")) or new_id(),
-            stamp(event.get("ts") or now),
+            stamp(event.get("time") or now),
             stamp(now),
             LEVEL_OF_KIND[kind],
             source,
@@ -731,7 +743,7 @@ class ActivityStore:
         )
 
     _INSERT = (
-        "INSERT OR IGNORE INTO activity (event_id, ts, recorded_at, level, source, kind, "
+        "INSERT OR IGNORE INTO activity (event_id, time, recorded_at, level, source, kind, "
         "action, target, subject, outcome, session_id, request_id, claimed_user, trigger, "
         "method, status_code, duration_ms, items, detail, dropped_detail) "
         "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"

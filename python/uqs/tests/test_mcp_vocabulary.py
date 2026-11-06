@@ -19,11 +19,12 @@ here.
 from __future__ import annotations
 
 import dataclasses
+import types
 
 import pytest
 from mcp_support import call, refused, tools
 
-from uqs import mcp
+from uqs import mcp, mcp_server
 from uqs.cli import vocabulary
 from uqs.paths import UqsError
 
@@ -34,9 +35,14 @@ _CLICK_TO_JSON = {"int": "integer", "boolean": "boolean"}
 
 
 def _cli_params(tool: str) -> dict[str, object]:
-    """The mirrored command's parameters a caller can give, by their spelling."""
+    """The mirrored command's parameters a caller can give, by their spelling.
+    Its `--yes` is spelled `confirm` (mcp_server.CONFIRM, #2257): a tool has no
+    terminal to ask on, so its question is answered in the call."""
     command = mcp.cli_command(mcp.MIRRORS[tool])
-    return {vocabulary.spelling(p): p for p in command.params if not getattr(p, "hidden", False)}
+    given = {vocabulary.spelling(p): p for p in command.params if not getattr(p, "hidden", False)}
+    if "yes" in given:
+        given[mcp_server.CONFIRM] = given.pop("yes")
+    return given
 
 
 def _json_type(schema: dict) -> str | None:
@@ -118,6 +124,7 @@ def test_every_tool_returns_an_object():
         ("uqs_config_show", {"procname": "rdb1"}, "`procname` is now `proc`"),
         ("uqs_config_show", {"proc": "rdb1", "resolve": False}, "`resolve` is now `unresolved`"),
         ("uqs_logs", {"min_level": "WARNING"}, "`min_level` is now `level`"),
+        ("uqs_clean", {"dry_run": True}, "`dry_run` is now `confirm`"),
     ],
 )
 def test_a_retired_parameter_is_refused_naming_its_replacement(tool, arguments, says):
@@ -205,3 +212,28 @@ def test_a_connector_starts_with_its_own_options_and_refuses_anothers(monkeypatc
     assert seen["top_n_levels"] == 3 and seen["base_port"] == 7000
     error = refused(call("uqs_connector_start", connector="crypto", brokers="localhost:9092"))
     assert "brokers does not apply to connector crypto" in error
+
+
+def test_clean_is_a_dry_run_unless_confirmed(tmp_path, monkeypatch):
+    """uqs_clean deleted the data directory, the HDB with it, in one call
+    (#2257). Without confirm=true it lists each entry with its bytes and
+    removes nothing; confirm=true removes exactly what that listed."""
+    data = tmp_path / "data"
+    (data / "hdb" / "2026.01.02").mkdir(parents=True)
+    (data / "hdb" / "2026.01.02" / "price").write_bytes(b"x" * 10)
+    (data / "logs").mkdir()
+    (data / "logs" / "rdb1.log").write_bytes(b"y" * 3)
+    monkeypatch.setattr(mcp, "_paths", lambda: types.SimpleNamespace(torqdata=data))
+
+    dry = call("uqs_clean").structured_content
+    assert dry == {"dry_run": True, "entries": [{"path": str(data), "bytes": 13}], "bytes": 13}
+    assert (data / "hdb" / "2026.01.02" / "price").exists()
+
+    logs = call("uqs_clean", match="^logs$").structured_content
+    assert logs["entries"] == [{"path": str(data / "logs"), "bytes": 3}]
+    assert (data / "logs").exists()
+
+    done = call("uqs_clean", match="^logs$", confirm=True).structured_content
+    assert done == {"dry_run": False, "entries": logs["entries"], "bytes": 3}
+    assert not (data / "logs").exists()
+    assert (data / "hdb").exists()

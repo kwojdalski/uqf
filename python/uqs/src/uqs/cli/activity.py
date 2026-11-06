@@ -113,13 +113,6 @@ ListJson = json_opt(
 )
 
 
-def _event(event: dict[str, Any]) -> dict[str, Any]:
-    """An event as `--json` prints it: when it happened is `time`, the key every log-line
-    record says it under (json_out.LINE_KEYS, #2241), where the history file's column - and
-    the frontend API's record - is `ts`."""
-    return {("time" if k == "ts" else k): v for k, v in event.items()}
-
-
 def _db(db: Path | None) -> Path:
     """The history file: --db, else UQF_FRONTEND_ACTIVITY_DB, else this stack's."""
     if db is not None:
@@ -210,7 +203,7 @@ def list_(
         return
     _export([activity_log.flat(e) for e in events], export)
     if as_json:
-        emit({"db": str(path), "events": [_event(e) for e in events], "drops": drops})
+        emit({"db": str(path), "events": events, "drops": drops})
         return
     for d in drops:
         console.print(
@@ -230,7 +223,7 @@ def list_(
             *(
                 escape(cell)
                 for cell in (
-                    str(e["ts"]),
+                    str(e["time"]),
                     str(e["level"]),
                     str(e["source"]),
                     str(e["kind"]),

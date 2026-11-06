@@ -440,7 +440,7 @@ export function ActivityView() {
                 <tbody>
                   {data.events.map((event) => (
                     <tr key={event.event_id}>
-                      <td className="mono">{event.ts}</td>
+                      <td className="mono">{event.time}</td>
                       <td>{event.level}</td>
                       <td>{event.source}</td>
                       <td>{event.kind}</td>

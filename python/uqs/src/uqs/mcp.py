@@ -117,14 +117,21 @@ def uqs_status(base_port: int | None = None) -> dict[str, Any]:
 
 
 @tool("clean")
-def uqs_clean(match: str | None = None, dry_run: bool = False) -> dict[str, Any]:
-    """Delete the runtime state the stack wrote - `uqs clean`: the data
-    directory (logs, tplogs, wdb, the copied sample data), or only the paths
-    under it `match` (a regex) selects. Stop the stack first - this does not
-    stop running processes. dry_run=true lists what would go, removing nothing.
+def uqs_clean(match: str | None = None, confirm: bool = False) -> dict[str, Any]:
+    """Wipe the runtime's data directory - `uqs clean`: the HDB, logs, tplogs,
+    wdb, the copied sample data - or only the paths under it `match` (a regex)
+    selects. A dry run unless confirm=true (#2257): it returns what would go,
+    each entry's path and bytes, and removes nothing. The deletion cannot be
+    undone, and MCP has no terminal to ask on, so confirm=true is the CLI's
+    question answered yes - show the dry run to the user first. Stop the stack
+    first - this does not stop running processes.
     """
-    removed = stack_clean.clean(_paths(), match=match, dry_run=dry_run)
-    return {"removed": plain(removed), "dry_run": dry_run}
+    targets = stack_clean.clean(_paths(), match=match, dry_run=not confirm)
+    return {
+        "dry_run": not confirm,
+        "entries": [{"path": str(entry), "bytes": size} for entry, size in targets],
+        "bytes": sum(size for _entry, size in targets),
+    }
 
 
 # -------------------------------------------------------------------- a query
