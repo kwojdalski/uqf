@@ -153,7 +153,11 @@
                 $[count r:.qetl.io.declared_rule target; key r; `sym]];
         / PeachQ cannot upsert onto a splayed table on disk ('type), so there
         / the partition is read back and written again whole.
-        $[()~existing; part set rows;
+        / The FIRST write of a table into a date is staged and swapped in like a
+        / keyed one (#2185): a bare `set` writes .d and then the column files one
+        / by one, so a kill left a partition the HDB could not read and recover
+        / threw on. Staged, it appears whole or not at all.
+        $[()~existing; [.qetl.io.stage[root;d;target;rows]; .qetl.io.swap[root;d;target]];
           .qetl.io.on_peachq; part set .Q.en[root] t,(cols t:.qetl.io.read_part[part])#rows;
           part upsert rows];
         `.qetl.io.touched upsert (root;d;target);
@@ -340,14 +344,43 @@
 / @private
 .qetl.io.part_path:{[root;d;t] 1_string .Q.par[root;d;t]}
 
+/ Private: a path as one shell word (#2187). An HDB root may hold a space, and
+/ an unquoted path split into several words made rm -rf delete a sibling.
+/ @private
+.qetl.io.sh:{[cmd;paths]
+    paths:$[10h=type paths; enlist paths; paths];
+    system cmd," "," " sv .qetl.job.bounded.state.shell_word each paths}
+
+/ Private: the step marker of the stage-and-swap protocol. A no-op; the kill
+/ tests replace it with a function that throws, which leaves the disk exactly
+/ as a kill at that step would, because no cleanup follows a throw.
+/ @param name the step just completed
+/ @private
+.qetl.io.step:{[name] (::)}
+
 / Private: write one date's resolved table into the staging area.
 / @return the staged path
 / @private
 .qetl.io.stage:{[root;d;t;rows]
     p:.qetl.io.staged[root;`new;d;t];
-    system"rm -rf ",p;
-    system"mkdir -p ",p;
+    .qetl.io.sh["rm -rf";p];
+    .qetl.io.sh["mkdir -p";p];
+    .qetl.io.step`staged_dir;
     (hsym `$p,"/") set rows;
+    .qetl.io.step`staged;
+    p}
+
+/ Private: stage a COPY of the live partition, for finish to sort and attribute
+/ there (#2184). The copy is of the files as they are, so enumerations,
+/ attributes and compression carry over.
+/ @return the staged path
+/ @private
+.qetl.io.stage_copy:{[root;d;t]
+    p:.qetl.io.staged[root;`new;d;t];
+    .qetl.io.sh["rm -rf";p];
+    .qetl.io.sh["mkdir -p";p];
+    .qetl.io.sh["cp -R";(.qetl.io.part_path[root;d;t],"/.";p)];
+    .qetl.io.step`staged;
     p}
 
 / Private: rename a staged table into its partition, retiring the old one.
@@ -355,13 +388,15 @@
 .qetl.io.swap:{[root;d;t]
     live:.qetl.io.part_path[root;d;t];
     old:.qetl.io.staged[root;`old;d;t];
-    system"rm -rf ",old;
-    system"mkdir -p ",(.qetl.io.staging[root]),"/old/",string d;
+    .qetl.io.sh["rm -rf";old];
+    .qetl.io.sh["mkdir -p";(.qetl.io.staging[root]),"/old/",string d];
     / The date directory, whatever its segment: the live path less its table.
-    system"mkdir -p ",(neg 1+count string t)_live;
-    if[not ()~key hsym `$live; system"mv ",live," ",old];
-    system"mv ",.qetl.io.staged[root;`new;d;t]," ",live;
-    system"rm -rf ",old;
+    .qetl.io.sh["mkdir -p";(neg 1+count string t)_live];
+    if[not ()~key hsym `$live; .qetl.io.sh["mv";(live;old)]];
+    .qetl.io.step`live_retired;
+    .qetl.io.sh["mv";(.qetl.io.staged[root;`new;d;t];live)];
+    .qetl.io.step`swapped_in;
+    .qetl.io.sh["rm -rf";old];
     }
 
 / Remove one date's table from the HDB, through the staging area.
@@ -384,12 +419,12 @@
     live:.qetl.io.part_path[root;d;t];
     if[()~key hsym `$live; :0b];
     old:.qetl.io.staged[root;`old;d;t];
-    system"rm -rf ",old;
-    system"mkdir -p ",(.qetl.io.staging[root]),"/old/",string d;
-    system"mv ",live," ",old;
-    system"rm -rf ",old;
+    .qetl.io.sh["rm -rf";old];
+    .qetl.io.sh["mkdir -p";(.qetl.io.staging[root]),"/old/",string d];
+    .qetl.io.sh["mv";(live;old)];
+    .qetl.io.sh["rm -rf";old];
     datedir:(neg 1+count string t)_live;
-    if[0=count key hsym `$datedir; system"rmdir ",datedir];
+    if[0=count key hsym `$datedir; .qetl.io.sh["rmdir";datedir]];
     1b}
 
 / Private: put right what a run killed mid-write left in the staging area,
@@ -413,7 +448,7 @@
     s:.qetl.io.staging[root];
     if[()~key hsym `$s; :0];
     under:{[s;kind] $[()~key hsym `$s,"/",kind; `symbol$(); key hsym `$s,"/",kind]}[s];
-    {[s;target;d] system"rm -rf ",s,"/new/",string[d],"/",string target}[s;target] each under "new";
+    {[s;target;d] .qetl.io.sh["rm -rf";s,"/new/",string[d],"/",string target]}[s;target] each under "new";
     dates:under "old";
     pairs:{[target;d] (d;target)}[target] each dates where
         {[s;target;d] not ()~key hsym `$s,"/old/",string[d],"/",string target}[s;target] each dates;
@@ -422,24 +457,46 @@
         live:.qetl.io.part_path[root;d;pr 1];
         old:.qetl.io.staged[root;`old;d;pr 1];
         $[()~key hsym `$live;
-            [system"mkdir -p ",(neg 1+count string pr 1)_live; system"mv ",old," ",live; 1];
-            [system"rm -rf ",old; 0]]}[root] each pairs;
+            [.qetl.io.sh["mkdir -p";(neg 1+count string pr 1)_live]; .qetl.io.sh["mv";(old;live)]; 1];
+            [.qetl.io.sh["rm -rf";old]; 0]]}[root] each pairs;
     / "j"$ before sum: with nothing to restore, `each` over no pairs gives a
     / general empty list, `sum` leaves it `()`, and recover's `restored>0`
     / threw 'type - every recover of a table with no old staging failed.
     sum "j"$restored}
+
+/ Private: set aside a table whose .d lists a column that has no file (#2185).
+/ .
+/ That is a first write a kill cut short (before the first write was staged) or
+/ a .Q.chk fill a kill cut short: the rows it held were never covered, so the
+/ next run writes them again. The directory is MOVED to the staging area's
+/ quarantine, not deleted - whatever else is in it stays inspectable - and the
+/ date then reads as absent, which an HDB can load.
+/ @return 1b when it set a table aside
+/ @private
+.qetl.io.quarantine_incomplete:{[root;d;t]
+    base:.qetl.io.part_path[root;d;t];
+    if[()~key hsym `$base,"/.d"; :0b];
+    c:get hsym `$base,"/.d";
+    if[all {[base;c] not ()~key hsym `$base,"/",string c}[base] each c; :0b];
+    q:(.qetl.io.staging[root]),"/quarantine/",string[d],"/",string t;
+    .qetl.io.sh["rm -rf";q];
+    .qetl.io.sh["mkdir -p";(.qetl.io.staging[root]),"/quarantine/",string d];
+    .qetl.io.sh["mv";(base;q)];
+    1b}
 
 / Private: trim a partition whose columns have different lengths back to the
 / shortest, the state a kill part way through an APPEND leaves (write_hdb
 / upserts column by column). Every column ends at the same row again, so the
 / partition can be read; the rows dropped belonged to a window that was
 / never covered, which the next run writes again. recover then queues it for
-/ finishing.
+/ finishing. A table with a column file missing is set aside instead
+/ (quarantine_incomplete), and is not "repaired": there is nothing left to finish.
 / @return 1b when it repaired something
 / @private
 .qetl.io.repair_torn:{[root;d;t]
     base:.qetl.io.part_path[root;d;t];
     if[()~key hsym `$base,"/.d"; :0b];
+    if[.qetl.io.quarantine_incomplete[root;d;t]; :0b];
     c:get hsym `$base,"/.d";
     n:{[base;c] count get hsym `$base,"/",string c}[base] each c;
     if[1=count distinct n; :0b];
@@ -501,10 +558,19 @@
     / Nothing to finish: and PeachQ throws 'nyi on each-both over empty lists.
     if[0=count todo; :0];
     {[root;d;t]
-        base:string .Q.par[root;d;t];
-        part:hsym `$base,"/";
-        c:get hsym `$base,"/.d";
+        / Gone since it was queued (quarantined by recover, or retired): nothing to finish.
+        if[()~key hsym `$.qetl.io.part_path[root;d;t],"/.d"; :(::)];
+        c:get hsym `$.qetl.io.part_path[root;d;t],"/.d";
         rule:.qetl.io.sort_rule[t;c];
+        / SORTED IN STAGING, NEVER IN PLACE (#2184). xasc rewrites a splayed
+        / table one column file at a time, so a kill part way through left some
+        / columns permuted and the rest not - every column the same length,
+        / nothing to detect - and the next finish then "finished" the scramble.
+        / The sort, the attributes and the compression run on a copy in staging;
+        / the swap puts the finished copy in with two renames. A kill leaves the
+        / old partition or the new one, and sweep_staging restores or discards.
+        base:.qetl.io.stage_copy[root;d;t];
+        part:hsym `$base,"/";
         / WRITE-TIME COMPRESSION (#2151), when the table's policy says `write or
         / `both. The sort is the write that touches every column file, so it is
         / what runs under .z.zd - the way TorQ's own end-of-day sort does
@@ -514,6 +580,8 @@
         zd:.qetl.io.write_triple[t;part];
         .qetl.compression.with_zd[zd;.qetl.io.sort_and_attribute;(part;rule)];
         if[(count zd) and count rule; .qetl.compression.apply_columns[t;part]];
+        .qetl.io.step`sorted;
+        .qetl.io.swap[root;d;t];
         }[root]'[todo`dt;todo`tbl];
     / Not over a native stack's root (io_hdb_scoped.q): it would fill dates and
     / tables nobody asked about.
@@ -569,10 +637,13 @@
     / below are the ones the HDB will map.
     restored:.qetl.io.sweep_staging[root;target];
     span:{[f;t] f+til 1+t-f}[`date$from_ts;`date$to_ts-1];
+    / A table with a column file missing is set aside first (#2185), so the trim
+    / below never meets a column it cannot read.
+    quarantined:span where .qetl.io.quarantine_incomplete[root;;target] each span;
     torn:span where .qetl.io.repair_torn[root;;target] each span;
-    if[(restored>0) or count torn;
+    if[(restored>0) or (count torn) or count quarantined;
         @[{.qetl.log.warn[`qetl.io;"repaired partitions a killed write left behind";x]};
-          `restored`trimmed!(restored;torn);{[e] (::)}]];
+          `restored`trimmed`quarantined!(restored;torn;quarantined);{[e] (::)}]];
     / A trimmed partition is queued whatever its attributes say: trimming
     / rewrote only the long columns, so p#sym can survive on a partition that
     / still needs re-sorting.

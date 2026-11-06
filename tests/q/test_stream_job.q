@@ -697,8 +697,8 @@
     rows:.qpipe.job.fx_trades_feed.fill_rows[0;1;1e6;0;`fx1];
     n:.qtorq.publish[.qt.qetl.job.stream.fake_handle;`trades;rows];
     .qunit.assertEquals[n;1;"one row, counted from the first column"];
-    .qunit.assertEquals[.qt.qetl.job.stream.sent 0;(`.u.upd;`trades;rows);
-        "the message is .u.upd's own shape, untouched"]};
+    .qunit.assertEquals[.qt.qetl.job.stream.sent 0;(.qtorq.accept_fn;`trades;rows);
+        "the message is .u.upd's own arguments, untouched"]};
 
 .qt.qetl.job.stream.test_the_adapter_reshapes_a_table_and_a_dict_to_u_upds_shape:{[t]
     / The invariants as_table exists for: a keyed table is unkeyed (2), a
