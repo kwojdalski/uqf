@@ -159,7 +159,8 @@ def _interfaces(text: str | None = None) -> dict[str, dict[str, str]]:
 
 def _wire_fields(model: str) -> dict[str, typing.Any]:
     """`name on the wire -> FieldInfo`: the alias where the model has one, so
-    `ProcessConfigRequest.field_name` is compared as the `field` it is sent as."""
+    CompareTable's `schema_` is compared as the `schema` it is sent as. No
+    request model has one (test_api_conventions.py, #2227)."""
     return {
         (info.alias or name): info for name, info in getattr(models, model).model_fields.items()
     }

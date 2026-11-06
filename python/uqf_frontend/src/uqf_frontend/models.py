@@ -871,12 +871,25 @@ class CommandResponse(BaseModel):
 
 
 class ProcessConfigRequest(BaseModel):
-    """One process.csv field override."""
+    """One process.csv field override.
 
-    field_name: str = Field(min_length=1, alias="field", description="a process.csv column")
+    `field` because it names a COLUMN of process.csv, one of
+    ControlStatusResponse.settable_fields; WorkerConfigRequest's `key` names a
+    `.qetl.cfg` KEY in a live process. Two stores, two words (#2227).
+    """
+
+    model_config = STRICT_REQUEST
+
+    field: str = Field(min_length=1, description="a process.csv column")
     value: str = Field(description='the new value; "" is legal and clears nothing')
 
-    model_config = ConfigDict(populate_by_name=True, extra="forbid")
+    @model_validator(mode="before")
+    @classmethod
+    def _renamed(cls, data: Any) -> Any:
+        """One wire name: the model once took its attribute name as well (#2227)."""
+        if isinstance(data, dict) and "field_name" in data:
+            raise ValueError("`field_name` is `field`: the process.csv column to set (#2227)")
+        return data
 
 
 class ProcessConfigResponse(BaseModel):
@@ -893,7 +906,8 @@ class ProcessConfigResponse(BaseModel):
 
 
 class WorkerConfigRequest(BaseModel):
-    """One `.qetl.cfg` override, set in a live process."""
+    """One `.qetl.cfg` override, set in a live process. `key` is a
+    `.qetl.cfg` key, not a process.csv column - ProcessConfigRequest's `field`."""
 
     model_config = STRICT_REQUEST
 
