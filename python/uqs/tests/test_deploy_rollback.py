@@ -162,6 +162,94 @@ def test_a_current_that_will_not_stop_is_restarted_and_nothing_else_runs():
     assert remote.ran("rm -rf /opt/uqf/deploy.lock"), "the lock is released"
 
 
+def _interrupt_at(remote: FakeRemote, *markers: str) -> None:
+    """Ctrl-C the first time a script holding each of `markers` runs."""
+    base = remote.run
+    pending = list(markers)
+
+    def run(script, timeout, stage, as_login=False):
+        hit = next((m for m in pending if m in script), None)
+        if hit is not None:
+            pending.remove(hit)
+            remote.scripts.append((stage, script))
+            raise KeyboardInterrupt
+        return base(script, timeout, stage, as_login)
+
+    setattr(remote, "run", run)  # noqa: B010 - an instance's own run, as a fake
+
+
+@pytest.mark.parametrize(
+    ("marker", "target_started"),
+    [
+        (".venv/bin/uqs stop rdb1 hdb1", False),  # current's stop
+        (".venv/bin/uqs start --profile fx", True),  # the target's start
+        ("uqs deploy verify --profile fx", True),  # the target's verify wait
+    ],
+)
+def test_an_interrupted_rollback_restores_current_and_goes_on(log_text, marker, target_started):
+    """A Ctrl-C after current's stop used to go straight to releasing the
+    lock: both releases down, and nothing said (#2175). As a push does
+    (#1664), what the target started is stopped, current is started and
+    verified again, and the interruption goes on to the caller."""
+    remote = _server()
+    _interrupt_at(remote, marker)
+    with pytest.raises(KeyboardInterrupt):
+        rollback.rollback(_cfg(), remote)
+    at = remote.index(marker)
+    stop_target = f"cd /opt/uqf/releases/{OLD}\n", ".venv/bin/uqs stop rdb1 piggy1"
+    assert remote.ran(*stop_target) is target_started
+    restart = remote.index(
+        f"cd /opt/uqf/releases/{NEW}\n", ".venv/bin/uqs start --profile essential"
+    )
+    assert at < restart < remote.index("uqs deploy verify --profile essential")
+    if target_started:
+        assert remote.index(*stop_target) < restart, "the target is stopped first"
+    assert not remote.ran(".current.new"), "current never moves"
+    assert remote.ran("rm -rf /opt/uqf/deploy.lock"), "the lock is released"
+    said = log_text()
+    assert "INTERRUPTED" in said and f"release {NEW} restored" in said
+    assert f"current still names {NEW}" in said
+
+
+def test_an_interrupted_rollback_whose_restore_fails_says_nothing_runs(log_text):
+    remote = _server()
+    remote.rules["uqs deploy verify --profile essential"] = _verified(False)
+    _interrupt_at(remote, "uqs deploy verify --profile fx")
+    with pytest.raises(KeyboardInterrupt):
+        rollback.rollback(_cfg(), remote)
+    assert remote.ran(f"cd /opt/uqf/releases/{OLD}\n", ".venv/bin/uqs stop rdb1 piggy1")
+    assert not remote.ran(".current.new")
+    said = log_text()
+    assert f"release {NEW} NOT restored" in said and "neither release may be running" in said
+    assert f"current still names {NEW}" in said
+
+
+def test_a_second_interrupt_while_current_is_restored_says_nothing_may_run(log_text):
+    remote = _server()
+    _interrupt_at(remote, "uqs deploy verify --profile fx", "uqs deploy verify --profile essential")
+    with pytest.raises(KeyboardInterrupt):
+        rollback.rollback(_cfg(), remote)
+    assert not remote.ran(".current.new") and remote.ran("rm -rf /opt/uqf/deploy.lock")
+    said = log_text()
+    assert "interrupted again while restoring" in said
+    assert f"current still names {NEW}, but neither release may be running" in said
+
+
+def test_an_interrupt_while_current_moves_leaves_the_verified_target_running(log_text):
+    """The target is up and verified: undoing it there would trade a running
+    release for a guess. What `current` names is read back and said."""
+    remote = _server()
+    _interrupt_at(remote, f"ln -sfn releases/{OLD}")
+    with pytest.raises(KeyboardInterrupt):
+        rollback.rollback(_cfg(), remote)
+    assert not remote.ran(".venv/bin/uqs stop rdb1 piggy1"), "the target keeps running"
+    assert not remote.ran(".venv/bin/uqs start --profile essential")
+    assert remote.ran("rm -rf /opt/uqf/deploy.lock")
+    said = log_text()
+    assert f"release {OLD}'s processes are running and verified" in said
+    assert f"current names {NEW}" in said, "the fake's readlink still answers NEW"
+
+
 def test_a_target_that_does_not_verify_is_stopped_by_name_never_by_all():
     """`stop all` would leave the target's startwithall=0 processes and its
     extra ones running beside the restored release (#1040)."""

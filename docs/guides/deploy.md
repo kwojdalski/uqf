@@ -1062,6 +1062,14 @@ processes, starts the target's from the target's own release, and moves
 verify is stopped, and the current release's processes are started and verified
 again, so the server ends where it began. Nothing is deleted.
 
+An interrupted rollback - Ctrl-C in the target's verify wait, say - is undone
+the same way before the command exits with the interruption (#2175), and its log
+says which way it ended: the current release restored, or not restored, in which
+case neither release may be running and `current` still names the release rolled
+back from. A second Ctrl-C during that restore stops it, and the log says so. An
+interruption while `current` moves leaves the verified target running, and the
+log names what `current` points to.
+
 `--dry-run` prints the plan - what it would stop and what it would start - and
 the dry-run note; with `--json`, the plan is the one document on stdout,
 `{ok, rollback: "planned", from, to, stop, start}`, and the note goes to stderr,
@@ -1109,7 +1117,11 @@ named like a release id is ever removed. A [bundled TorQ](#a-bundled-torq) or
 it. `--dry-run` lists the removals and removes nothing.
 `uqs deploy push --keep N` prunes the same way once the new release is current,
 while it still holds the lock. If that prune fails, the deployment still counts
-as a success, and its report records the failure.
+as a success, and its report records the failure. The same holds when the prune
+is interrupted (#2174): nothing is rolled back, the report says `deployed` with
+`pruned.prune: interrupted`, as does the deployment history, and the push then
+exits with the interruption. Its summary reads "deployed ...; prune incomplete"
+and names the `uqs deploy prune` that finishes it.
 
 ## Deploying as a service user
 
