@@ -41,10 +41,10 @@ it("coerces the int, short, date and time columns the scaffold can create (#1364
 it("rejects naive and reversed time ranges before requesting coverage", () => {
   const range = {
     dataset: "trades",
-    // The sentinel, not an omission: "" means the dataset has no partition
-    // dimension. validateRange must accept it, or every unpartitioned
-    // dataset becomes unqueryable (#185).
-    partition: "",
+    // The sentinel, not an omission: "" means the dataset has no slice
+    // dimension. validateRange must accept it, or every unsliced dataset
+    // becomes unqueryable (#185).
+    slice: "",
     source_version: "v1",
     range_from: "2026-09-16T00:00:00Z",
     range_to: "2026-09-17T00:00:00Z",
@@ -89,7 +89,7 @@ it("takes a timestamp to the nanosecond, and orders a range by it", () => {
   );
   const range = {
     dataset: "trades",
-    partition: "",
+    slice: "",
     source_version: "v1",
     range_from: "2026-10-14T10:00:00.000001234Z",
     range_to: "2026-10-14T12:00:00.000001999+02:00",

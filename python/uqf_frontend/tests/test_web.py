@@ -14,7 +14,7 @@ def test_browser_views_serve_their_poll_cadence(client):
     assert client.get("/health").json()["poll_seconds"] == POLL_SECONDS["health"]
     assert (
         client.get(
-            "/coverage", params={"dataset": "trades", "partition": "", "source_version": "v1"}
+            "/coverage", params={"dataset": "trades", "slice": "", "source_version": "v1"}
         ).json()["poll_seconds"]
         == POLL_SECONDS["coverage"]
     )

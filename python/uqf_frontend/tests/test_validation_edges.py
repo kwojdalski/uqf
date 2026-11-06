@@ -390,7 +390,7 @@ def test_a_coverage_window_with_one_bound_is_refused_naming_the_other(given, mis
     from uqf_frontend.app import create_app
     from uqf_frontend.gateway import FakeGateway
 
-    params = {"dataset": "fx_quotes", "partition": "", "source_version": "v1"}
+    params = {"dataset": "fx_quotes", "slice": "", "source_version": "v1"}
     resp = TestClient(create_app(gateway=FakeGateway())).get(
         "/coverage", params={**params, given: "2026-01-01T00:00:00Z"}
     )

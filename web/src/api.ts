@@ -39,12 +39,12 @@ export interface Catalog {
 }
 export interface CoverageRequest {
   dataset: string;
-  // The slice to ask about. "" is the sentinel for a dataset with no
-  // partition dimension - not "any partition". The gateway requires the
-  // field, because a coverage read that omits it aggregates across every
-  // partition and reports a range published for one symbol as covered for
-  // all of them (#185).
-  partition: string;
+  // The coverage slice to ask about. "" is the sentinel for a dataset with
+  // no slice dimension - not "any slice". The gateway requires the field,
+  // because a coverage read that omits it aggregates across every slice and
+  // reports a range published for one symbol as covered for all of them
+  // (#185). `slice`, as `uqs data diff --slice`: a partition is a date (#2261).
+  slice: string;
   source_version: string;
   range_from: string;
   range_to: string;
@@ -127,7 +127,7 @@ export interface CompareBody {
   filters: QueryFilter[];
   limit: number;
   source_version?: string | null;
-  partition?: string | null;
+  slice?: string | null;
 }
 /** The outcomes q reaches (.qetl.compare.outcomes), first that applies. */
 export type CompareOutcome =
@@ -182,9 +182,9 @@ export interface CompareResult {
   limit: number;
   /** The filters as they were sent. */
   filters: QueryFilter[];
-  /** null when no coverage was compared; partition "" is the no-partition slice. */
+  /** null when no coverage was compared; slice "" is the no-slice-dimension slice. */
   source_version: string | null;
-  partition: string | null;
+  slice: string | null;
   tables: CompareTable[];
 }
 /** The part of a Pydantic model's JSON Schema a parameter form reads. */

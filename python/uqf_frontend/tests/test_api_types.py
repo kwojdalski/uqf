@@ -270,7 +270,15 @@ def test_a_literal_field_offers_the_same_words_on_both_sides(interface, model):
 #: `role` means a component's role in `uqs attach` - neither names a field
 #: here, so a reader joining /ops/processes to /workspace or a tunnel plan
 #: never maps one key to the other.
-LOSING_KEYS = {"procname": "process", "reported_procname": "reported_process", "role": "proctype"}
+#:
+#: The coverage slice is `slice`, as `uqs data diff --slice` says (#2239,
+#: #2261): "partition" is only a date partition in this API, and names no field.
+LOSING_KEYS = {
+    "procname": "process",
+    "reported_procname": "reported_process",
+    "role": "proctype",
+    "partition": "slice",
+}
 
 
 def _api_models() -> dict[str, type[pydantic.BaseModel]]:
@@ -310,5 +318,14 @@ def test_no_route_takes_a_process_by_the_losing_name():
 def test_the_key_scan_catches_a_losing_key():
     """The gate itself, staged: TunnelMapping's old `role` field."""
     staged = API_TS.read_text().replace("  proctype: string;", "  role: string;", 1)
+    assert staged != API_TS.read_text()
+    assert any(_losing_keys(fields) for fields in _interfaces(staged).values())
+
+
+def test_the_key_scan_catches_the_coverage_slice_called_a_partition():
+    """The gate, staged: CompareBody's slice under its old name (#2261)."""
+    staged = API_TS.read_text().replace(
+        "  slice?: string | null;", "  partition?: string | null;", 1
+    )
     assert staged != API_TS.read_text()
     assert any(_losing_keys(fields) for fields in _interfaces(staged).values())
