@@ -246,3 +246,106 @@ def test_the_suite_records_through_the_root_conftest(tmp_path):
 def test_a_test_id_drops_the_group_xdist_adds():
     assert reach.test_id("a.py::t@grp", ["xdist_group"]) == "a.py::t"
     assert reach.test_id("a.py::t[x@y]", []) == "a.py::t[x@y]"
+
+
+def _work_tree(root: Path, linked: bool) -> Path:
+    """A work tree at `root`: its own .git directory, or - as a linked
+    worktree has - a .git file naming one elsewhere. Its git directory."""
+    root.mkdir(parents=True)
+    if not linked:
+        (root / ".git").mkdir()
+        return root / ".git"
+    gitdir = root.parent / "common" / "worktrees" / root.name
+    gitdir.mkdir(parents=True)
+    (root / ".git").write_text(f"gitdir: {gitdir}\n")
+    return gitdir
+
+
+@pytest.mark.parametrize("linked", [False, True])
+def test_the_record_is_written_whole_from_the_git_directory(tmp_path, linked):
+    """#2273: the copy that replaces the record is written in the git
+    directory, so a write cut short leaves no file in the work tree."""
+    tree = tmp_path / "wt"
+    gitdir = _work_tree(tree, linked)
+    record = tree / ".testreach.json"
+    assert reach.scratch_dir(record).resolve() == gitdir.resolve()
+    reach.write_whole(record, '{"version": 1}')
+    assert json.loads(record.read_text()) == {"version": 1}
+    assert sorted(p.name for p in tree.iterdir()) == [".git", ".testreach.json"]
+    assert list(gitdir.iterdir()) == [], "the copy became the record"
+
+
+def test_a_record_outside_a_work_tree_root_is_written_beside_itself(tmp_path):
+    assert reach.scratch_dir(tmp_path / "r.json") == tmp_path
+
+
+def test_an_interrupted_write_leaves_no_copy_behind(tmp_path, monkeypatch):
+    """A write that fails before the copy replaces the record removes the
+    copy, and the record it would have replaced is untouched."""
+    tree = tmp_path / "wt"
+    gitdir = _work_tree(tree, linked=True)
+    record = tree / ".testreach.json"
+    record.write_text("old")
+
+    def interrupted(src, dst):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(reach.os, "replace", interrupted)
+    with pytest.raises(KeyboardInterrupt):
+        reach.write_whole(record, "new")
+    assert record.read_text() == "old"
+    assert sorted(p.name for p in tree.iterdir()) == [".git", ".testreach.json"]
+    assert list(gitdir.iterdir()) == []
+
+
+def test_a_run_leaves_no_copy_of_the_record_in_the_work_tree(tmp_path):
+    """The recorder's own write, at the end of a run, goes through write_whole."""
+    tree = tmp_path / "wt"
+    _work_tree(tree, linked=True)
+    recorder = reach.Recorder(tree / ".testreach.json")
+    recorder.pytest_sessionfinish(None)
+    assert reach.load(tree / ".testreach.json") is not None
+    assert sorted(p.name for p in tree.iterdir()) == [".git", ".testreach.json"]
+
+
+def test_a_file_s_scan_is_its_kind_or_the_whole_tree_when_it_is_alone():
+    files = ["web/a.ts", "web/b.ts", "web/c.mjs"]
+    assert reach.scan_of("web/a.ts", files) == ["web/a.ts", "web/b.ts"]
+    assert reach.scan_of("web/c.mjs", files) == files
+
+
+def test_a_scan_recorded_before_a_file_was_added_is_stale_and_a_named_read_is_not():
+    """#2276: a test that listed web/ and read every .ts there, before d.ts
+    was added, is rerun before the record is judged; one that reads a single
+    file by name, though it lists the root too, is the judge's to find."""
+    record = {
+        "version": 1,
+        "owners": {
+            "t.py::scan": {"reads": ["web/a.ts", "web/b.ts", "web/c.ts"], "lists": ["web"]},
+            "t.py::named": {"reads": ["web/a.ts"], "lists": ["."]},
+            "t.py::whole": {"reads": ["web/a.ts", "web/b.ts", "web/c.ts", "web/d.ts"]},
+            "t.py::unlisted": {"reads": ["web/a.ts", "web/b.ts", "web/c.ts"]},
+        },
+        "tests": {t: [t] for t in ("t.py::scan", "t.py::named", "t.py::whole", "t.py::unlisted")},
+    }
+    files = ["web/a.ts", "web/b.ts", "web/c.ts", "web/d.ts"]
+    assert reach.stale_scans(record, files) == {"t.py::scan"}
+    assert reach.stale_scans(record, files[:3]) == set()
+
+
+def test_each_test_is_stamped_with_the_tree_whose_run_wrote_it(tmp_path):
+    """#2276: a merge keeps each test's stamp from the run that last ran it,
+    so a record seeded from another worktree says which entries are whose."""
+    old = {
+        "version": 1,
+        "owners": {"a": {"reads": ["x"]}, "b": {"reads": ["y"]}},
+        "tests": {"a": ["a"], "b": ["b"]},
+        "where": {"a": "/elsewhere", "b": "/elsewhere"},
+    }
+    recorder = reach.Recorder(tmp_path / "r.json")
+    recorder.tests = {"b": ["b"]}
+    merged = reach.merge(old, [recorder.data()])
+    here = str(reach.REPO.resolve())
+    assert merged["where"] == {"a": "/elsewhere", "b": here}
+    assert reach.recorded_here(merged) == {"b"}
+    assert reach.recorded_here({"tests": {"b": []}}) == set()
