@@ -1,6 +1,6 @@
 """Deleting runtime state the stack wrote, noun first (#1727):
 
-    uqs clean                       the runtime's data directory: logs, tplogs, wdb, sample data
+    uqs clean                       the data directory: the HDB, logs, tplogs, wdb, sample data
     uqs job checkpoint remove JOB   one bounded worker's resume point
 
 These were `uqs remove output` and `uqs remove checkpoint`: a verb with nouns
@@ -84,19 +84,41 @@ def _human_bytes(size: int) -> str:
 _CHECKPOINT = "resets this tree's bounded workers' checkpoints"
 
 
+def _list(targets: list[stack_clean.CleanTarget], verb: str) -> None:
+    total = sum(size for _entry, size in targets)
+    for entry, size in targets:
+        console.print(f"  {_human_bytes(size):>7}  {entry}", markup=False, highlight=False)
+    console.print(
+        f"[dim]{verb} {len(targets)} entr{'y' if len(targets) == 1 else 'ies'}, "
+        f"{_human_bytes(total)}[/]"
+    )
+
+
+def _question(targets: list[stack_clean.CleanTarget]) -> str:
+    total = _human_bytes(sum(size for _entry, size in targets))
+    n = len(targets)
+    return f"Remove {n} entr{'y' if n == 1 else 'ies'} ({total})? This cannot be undone"
+
+
 @app.command("clean", cls=ChangesState)
-def clean(match: MatchOpt = None, dry_run: DryRunOpt = False) -> None:
-    """Wipe the runtime's data directory (logs, tplogs, wdb, the copied sample data).
+def clean(match: MatchOpt = None, dry_run: DryRunOpt = False, yes: YesOpt = False) -> None:
+    """Wipe the runtime's data directory: the HDB, logs, tplogs, wdb, the sample data.
 
     `--match` narrows it to the entries whose path under that directory matches a
     regex - `clean --match '^logs$'` for the logs alone, `clean --match
     'out_rdb1'` for one process's files wherever they sit. A directory that
     matches goes whole; one that does not is descended into.
 
-    `--dry-run` lists what would go, with sizes, and removes nothing. Worth
-    doing first for anything but a full wipe, because this is not reversible.
+    Lists what would go, with sizes, and asks first, because this is not
+    reversible; `--yes` does not ask, and without a terminal it is
+    needed. `--dry-run` lists and removes nothing.
     """
     try:
+        if not dry_run and not yes:
+            planned = stack_clean.clean(_paths(), match=match, dry_run=True)
+            if planned:
+                _list(planned, "would remove")
+                safety.confirm(_question(planned), yes=False)
         targets = stack_clean.clean(_paths(), match=match, dry_run=dry_run)
     except UqsError as exc:
         _die(exc)
@@ -104,14 +126,7 @@ def clean(match: MatchOpt = None, dry_run: DryRunOpt = False) -> None:
     if not targets:
         console.print("[dim]nothing to remove[/]")
     else:
-        total = sum(size for _entry, size in targets)
-        verb = "would remove" if dry_run else "removed"
-        for entry, size in targets:
-            console.print(f"  {_human_bytes(size):>7}  {entry}", markup=False, highlight=False)
-        console.print(
-            f"[dim]{verb} {len(targets)} entr{'y' if len(targets) == 1 else 'ies'}, "
-            f"{_human_bytes(total)}[/]"
-        )
+        _list(targets, "would remove" if dry_run else "removed")
     if dry_run:
         console.print(dry_run_note())
 

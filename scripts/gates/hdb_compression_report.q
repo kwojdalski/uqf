@@ -2,24 +2,36 @@
 / .
 / Run as:  q scripts/gates/hdb_compression_report.q <hdb root> <sort.csv> <top n> <torq home>
 / .
+/ <sort.csv> is `-` when there is none to judge by (#2219): an HDB named by --hdb
+/ on a target has no sort.csv this side can know, and the local runtime's is not
+/ that HDB's. Sorting is then reported as not checked (sort_checked 0b), never as
+/ found valid. Run from the directory holding scripts/processes/torq_compress.q:
+/ the repository here, the helper's temporary copy on a target
+/ (python/uqs/src/uqs/stack/hdb_compression.py).
+/ .
 / Loads TorQ's own .cmp (common/compress.q) and its sort.csv reader
 / (common/dbwriteutils.q, .sort.getsortcsv) against stand-ins for the .lg and
 / .proc.getconfigfile a TorQ process would give them, then uqf's wrapper, and
 / prints .qtorq.compress.report as one line - report|<json> - then DONE. q
 / exits 0 whatever happens while a script runs, so the caller believes DONE,
-/ never the exit code. Reads only: nothing under the HDB is written.
+/ never the exit code. A refusal - no HDB, a file or directory q may not read
+/ (q's own "OS reports: Permission denied", naming it) - is one line, error|<why>,
+/ so the caller can say what to fix. Reads only: nothing under the HDB is written.
 / .
 / The HDB's enumeration domains (its root sym file, and any other symbol list
 / at the root) are loaded first, as \l would, so a partition sorted by sym is
 / judged in the order the wdb sorted it.
+fail:{[why] -1 "error|",why; exit 1};
 args:.z.x;
-if[4>count args; '"hdb_compression_report: usage - <hdb root> <sort.csv> <top n> <torq home>"];
+if[4>count args; fail "usage - <hdb root> <sort.csv or -> <top n> <torq home>"];
 hdb_root:hsym `$args 0;
+sort_checked:not (enlist "-")~args 1;
 sort_csv:hsym `$args 1;
 top_n:"J"$args 2;
 torq_home:args 3;
-if[()~key hdb_root; '"hdb_compression_report: no HDB at ",1_string hdb_root];
-if[()~key sort_csv; '"hdb_compression_report: no sort.csv at ",1_string sort_csv];
+if[()~listing:@[key;hdb_root;{[e] fail "cannot read ",(1_string hdb_root),": ",e}]; fail "no HDB at ",1_string hdb_root];
+if[-11h=type listing; fail (1_string hdb_root)," is a file, not an HDB directory"];
+if[sort_checked; if[()~key sort_csv; fail "no sort.csv at ",1_string sort_csv]];
 
 if[not `o in key `.lg; .lg.o:{[a;b]}];
 if[not `e in key `.lg; .lg.e:{[a;b]}];
@@ -27,14 +39,15 @@ if[not `getconfigfile in key `.proc; .proc.getconfigfile:{[n] enlist `:none.csv}
 system"l ",torq_home,"/code/common/compress.q";
 system"l ",torq_home,"/code/common/dbwriteutils.q";
 system"l scripts/processes/torq_compress.q";
-.sort.getsortcsv sort_csv;
+if[sort_checked; @[.sort.getsortcsv;sort_csv;{[e] fail "cannot read sort.csv: ",e}]];
 
 / A file at the root holding a symbol list is an enumeration domain.
 domains:{[root]
     fs:` sv/:root,/:k where not (k:key root) like "*.*";
     fs where 11h={@[{type get x};x;0h]} each fs}
-{[f] (last ` vs f) set get f} each domains hdb_root;
+@[{[r] {[f] (last ` vs f) set get f} each domains r};hdb_root;{[e] fail "cannot read the HDB's sym file: ",e}];
 
--1 "report|",.j.j .qtorq.compress.report[hdb_root;.sort.params;top_n];
+r:@[{[x] .qtorq.compress.report[hdb_root;.sort.params;top_n]};::;{[e] fail e}];
+-1 "report|",.j.j r,`sort_checked`sort_csv!(sort_checked;$[sort_checked;1_string sort_csv;::]);
 -1 "DONE";
 exit 0

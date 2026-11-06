@@ -42,7 +42,7 @@ from typing import Any
 
 from uqf_frontend import instants
 from uqf_frontend.config import Settings
-from uqf_frontend.errors import StackBusy, ValidationFailed, WritesDisabled
+from uqf_frontend.errors import FrontendError, StackBusy, ValidationFailed, WritesDisabled
 from uqs.generated.q_facts import CFG_ENV_LAYER, CFG_OVERRIDE_LAYER
 from uqs.model.qnames import config_env_var
 
@@ -67,6 +67,20 @@ def _acting() -> None:
     callback = _ACTING.get()
     if callback is not None:
         callback()
+
+
+class ActionNotFound(FrontendError):
+    """`/control/process/{action}` names no lifecycle action. 404 (#2224): an
+    unknown name in the path is a thing that is not there, not a bad body."""
+
+    status_code = 404
+
+
+class ProcessNotFound(FrontendError):
+    """`/control/process/{process}/config` names a process this runtime does
+    not declare. 404 (#2224), as an unknown target is."""
+
+    status_code = 404
 
 
 #: The three lifecycle verbs this seam exposes. `clean` is excluded on
@@ -170,7 +184,7 @@ def lifecycle(settings: Settings, action: str, procs: str) -> CommandResult:
     """
     require_writes(settings)
     if action not in LIFECYCLE_ACTIONS:
-        raise ValidationFailed(
+        raise ActionNotFound(
             f"unknown action {action!r} - expected one of {sorted(LIFECYCLE_ACTIONS)}"
         )
     from uqs.attach import live as _registers_live_check  # noqa: F401 - the start gate's (#1651)
@@ -317,7 +331,7 @@ def set_process_field(settings: Settings, procname: str, field: str, value: str)
             f"runs; set it with `uqs config set` on the host. Settable here: "
             f"{settable_fields(settings)}"
         )
-    from uqs.paths import UqsError
+    from uqs.paths import UqsError, UqsUnknownProcess
     from uqs.stack import procs as stack_procs
 
     paths = _paths(settings)
@@ -325,6 +339,8 @@ def set_process_field(settings: Settings, procname: str, field: str, value: str)
     try:
         stack_procs.set_process_config(paths, procname, field, value)
         return stack_procs.get_process_config(paths, procname, base_port=settings.facts().base_port)
+    except UqsUnknownProcess as exc:
+        raise ProcessNotFound(str(exc)) from None
     except UqsError as exc:
         raise ValidationFailed(str(exc)) from None
 

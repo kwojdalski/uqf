@@ -125,7 +125,11 @@ def test_the_target_is_read_from_the_global_options_only(argv, expected):
         (["setup", "odbc", "rollback"], True),
         (["config", "set", "rdb1", "port", "1"], True),
         (["config", "sources", "stub"], True),
-        (["data", "seed"], True),
+        # #2235: a dry run unless --apply, which asks on the server
+        (["data", "seed"], False),
+        (["data", "seed", "--apply"], False),
+        (["data", "replay"], False),
+        (["data", "replay", "--apply"], False),
         (["some-command-added-later"], True),
         (["stop", "--dry-run"], False),
         (["config", "set", "rdb1", "port", "1", "-n"], False),
@@ -620,3 +624,50 @@ def test_list_targets_refuses_labels_that_are_not_a_table(server, log_text):
     assert result.exit_code != 0
     assert not isinstance(result.exception, AttributeError), result.exception
     assert "target prod: labels must be a table" in log_text()
+
+
+# ------------------------------------------- one --yes, passed on (#2247)
+
+
+def _asking_leaves() -> list[tuple[str, ...]]:
+    """Every visible command that takes --yes, but `target ...`, which
+    --target refuses: it manages this machine's targets."""
+    found: list[tuple[str, ...]] = []
+
+    def walk(cmd, path: tuple[str, ...]) -> None:
+        subs = target_confirm.subcommands(cmd)
+        if not subs and path and target_confirm.takes_yes(cmd) and path[0] != "target":
+            found.append(path)
+        for name, sub in subs.items():
+            if not getattr(sub, "hidden", False):
+                walk(sub, (*path, name))
+
+    walk(target_confirm.root_command(), ())
+    return found
+
+
+def test_every_command_that_asks_is_found():
+    leaves = {" ".join(p) for p in _asking_leaves()}
+    assert {"data migrate", "data alter", "job remove", "job attachment add", "clean"} <= leaves
+
+
+@pytest.mark.parametrize("path", _asking_leaves(), ids=" ".join)
+def test_target_yes_reaches_every_command_that_takes_yes(server, monkeypatch, path):
+    """`uqs --target T --yes CMD` answered the local question only, unless CMD
+    confirmed on the server: `data migrate --apply`, `job remove` and the rest
+    asked again there, and without a terminal refused. One --yes answers it."""
+    sent: list[list[str]] = []
+    monkeypatch.setattr(control, "run", lambda r, args, **_: sent.append(list(args)) or 0)
+    assert target_cli.forward("uat", True, [*path], interactive=False) == 0
+    assert sent == [[*path, "--yes"]]
+    sent.clear()
+    assert target_cli.forward("uat", True, [*path, "-y"], interactive=False) == 0
+    assert sent == [[*path, "-y"]], "given once, it is not given twice"
+
+
+def test_target_yes_goes_before_a_double_dash(server, monkeypatch):
+    sent: list[list[str]] = []
+    monkeypatch.setattr(control, "run", lambda r, args, **_: sent.append(list(args)) or 0)
+    argv = ["data", "migrate", "--date", "2026.09.13", "--apply", "--", "quote"]
+    target_cli.forward("uat", True, argv, interactive=False)
+    assert sent == [["data", "migrate", "--date", "2026.09.13", "--apply", "--yes", "--", "quote"]]

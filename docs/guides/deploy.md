@@ -422,6 +422,8 @@ before anything reaches it, and `--yes` does not get past it:
 - `uqs deploy push`, `rollback` and `prune`, except with `--dry-run`. A list of
   targets with one inspection target in it pushes to none of them.
 - `uqs target config restore prd PUSH`, except with `-n`.
+- `uqs target adopt NAME --ssh ... --dest ... --apply`, under any new name: the
+  dry run without `--apply` still reports what the server holds.
 
 A server is matched by name **and** by its ssh destination and `dest`, so
 `--ssh deploy@prd --dest /srv/uqf` is refused too, and so is any other declared
@@ -734,10 +736,16 @@ uqs --target uat start piggybankgeneralledger1   # asks first; --yes skips the q
   this machine only: `--target` refuses them. See [Changing
   targets](#changing-targets).
 - **Confirmation.** A command that can change the server, such as `start`,
-  `stop`, `restart`, `exec`, `job backfill`, `config set` or `data seed`, asks
-  first and names the target. Without a terminal it needs `--yes`. So do
-  `query`, which can send any q, and `status -i`, whose browser starts and stops
-  processes. Read-only commands run directly: `status`, `logs`, `schema`,
+  `stop`, `restart`, `exec`, `job backfill` or `config set`, asks first and
+  names the target. Without a terminal it needs `--yes`. So do `query`, which
+  can send any q, and `status -i`, whose browser starts and stops processes. A
+  command that rewrites data with `--apply` - `data check`, `alter`, `compress`,
+  `migrate`, `replay`, `seed` - is not asked about here: it shows its plan on
+  the server and asks there. One `uqs --target T --yes` answers whichever
+  question the command asks, here or on the server: it is passed on to every
+  command that takes `--yes` (#2247), so
+  `uqs --target uat --yes data migrate quote --date 2026.09.13 --apply` needs no
+  second `--yes`. Read-only commands run directly: `status`, `logs`, `schema`,
   `list`, `graph`, `job gaps`, `job runs show` and `connector logs`, as does
   `--help` and a `--dry-run` (not `job backfill`'s, which starts a process).
   Each command declares which it is, and the command line is parsed as the

@@ -70,14 +70,13 @@ export function xValue(value: unknown, type: string): number | string | null {
 }
 
 /** What a result leaves out, in words for the chart, or "" when it is whole.
- *  The same two cases the table's note names: the server's own cap, and a
- *  result that filled the row limit asked for. */
-export function truncation(result: QueryResult, limit: number): string {
-  if (result.truncated)
-    return `Truncated: the server row cap was reached at ${result.row_count.toLocaleString()} rows`;
-  if (result.row_count >= limit)
-    return `Truncated: the first ${limit.toLocaleString()} rows; more may exist`;
-  return "";
+ *  The server says whether more rows existed and which bound cut them
+ *  (#2220): the server's own cap, or the row limit asked for. */
+export function truncation(result: QueryResult): string {
+  if (!result.truncated) return "";
+  return result.cut_by === "max_rows"
+    ? `Truncated: the server row cap was reached at ${result.row_count.toLocaleString()} rows`
+    : `Truncated: the first ${result.row_count.toLocaleString()} rows; more exist`;
 }
 
 /** The figure for `x` against each of `ys`.
@@ -87,14 +86,12 @@ export function truncation(result: QueryResult, limit: number): string {
  *  the subtitle. Every y keeps its gaps (connectgaps off). */
 export function figureFor({
   result,
-  limit,
   types,
   x,
   ys,
   mode,
 }: {
   result: QueryResult;
-  limit: number;
   types: Record<string, string>;
   x: string;
   ys: string[];
@@ -108,7 +105,7 @@ export function figureFor({
   const dropped = result.rows.length - placed.length;
   const temporal = xType !== "timespan" && TEMPORAL.has(xType);
   const notes = [
-    truncation(result, limit),
+    truncation(result),
     dropped
       ? `${dropped.toLocaleString()} row${dropped === 1 ? "" : "s"} without a ${x} not drawn`
       : "",
