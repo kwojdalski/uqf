@@ -80,6 +80,8 @@ MARKERS = (
     "pre-commit hook runs it at commit, so the python-tests hook leaves it out",
     "q_suite: runs the whole qUnit suite (minutes): the q-tests hook and CI's PeachQ q job "
     "run it, and CI's sharded Python job leaves it to that job",
+    "judges_reach_record: judges the reach record (.testreach.json) the other tests write; "
+    "the python-tests hook runs it after them, against the record they rewrote (#2273)",
 )
 
 #: Markers a test runs under only when asked for: such a test skips, saying
