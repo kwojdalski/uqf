@@ -25,8 +25,8 @@ import sys
 from collections.abc import Callable
 from typing import Annotated
 
-import click
 import typer
+from typer._click.exceptions import ClickException
 
 from uqs.cli import hdb_scope, safety
 from uqs.cli.concepts import LatestTargetArg, TargetArg, target_arg
@@ -336,10 +336,10 @@ def _report_here(name: str, args: list[str]) -> int | None:
     try:
         code = root_command().main(args=list(args), prog_name="uqs", standalone_mode=False)
         return int(code or 0)
-    except click.ClickException as exc:
+    except ClickException as exc:
         exc.show()
         return exc.exit_code
-    except click.exceptions.Exit as exc:
+    except typer.Exit as exc:
         return exc.exit_code
     finally:
         hdb_scope.ON_TARGET.reset(token)
