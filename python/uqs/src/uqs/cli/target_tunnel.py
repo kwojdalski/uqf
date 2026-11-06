@@ -62,11 +62,11 @@ Offset = Annotated[
 PlanJson = json_opt(
     '{"target", "ssh", "release", "mappings": [{process, proctype, remote_host, remote_port, '
     "local_host, local_port, production_endpoint, local_endpoint, query_command, state, "
-    'last_check, listening}], "launch_command", "launch_argv", "available"}'
+    'last_success, listening}], "launch_command", "launch_argv", "available"}'
 )
 CheckJson = json_opt(
     '{"ok", "target", "ssh", "release", "checked_at", "category", "error", "launch_command", '
-    '"endpoints": [{process, proctype, production_endpoint, local_endpoint, status, detail, '
+    '"endpoints": [{process, proctype, production_endpoint, local_endpoint, category, error, '
     'layers, connected, identity, gateway_servers, last_success}], "categories"}'
 )
 
@@ -102,10 +102,10 @@ def plan(
         emit(doc)
         return
     table = Table(title=f"tunnel plan for {p.target} ({p.ssh})")
-    for column in ("process", "proctype", "production", "local", "state", "last checked"):
+    for column in ("process", "proctype", "production", "local", "state", "last success"):
         table.add_column(column)
     for m in doc["mappings"]:
-        last = (m["last_check"] or {}).get("at") or "-"
+        last = (m["last_success"] or {}).get("at") or "-"
         table.add_row(m["process"], m["proctype"], m["production_endpoint"], m["local_endpoint"],
                       m["state"], last)  # fmt: skip
     console.print(table)
@@ -130,7 +130,7 @@ def check(
     ssh, the remote port, the q login, the process's identity, a gateway's
     servers, then the local port - each endpoint separately, so one failure
     hides no other. A mapping that passes is recorded with when, for the
-    plan's `last checked`. Exits non-zero when any endpoint fails."""
+    plan's `last success`. Exits non-zero when any endpoint fails."""
     try:
         passwd = q_password(password_env, None)
         pairs = tunnel_plan.parse_local(local or ())
@@ -148,7 +148,7 @@ def check(
 
 
 def _show(report: dict[str, Any]) -> None:
-    where = f"{report['target']}" + (f" ({report['ssh']})" if report["ssh"] else "")
+    where = f"{report['target']} ({report['ssh']})"
     if report["error"]:
         console.print(f"[red]✗[/] {where}: {report['category']}: {report['error']}",
                       highlight=False)  # fmt: skip
@@ -158,7 +158,7 @@ def _show(report: dict[str, Any]) -> None:
     for column in ("process", "production", "local", "status", "identity", "last success"):
         table.add_column(column)
     for e in report["endpoints"]:
-        status = "[green]ok[/]" if e["status"] == "ok" else f"[red]{e['status']}[/]"
+        status = "[green]ok[/]" if e["category"] is None else f"[red]{e['category']}[/]"
         if e["connected"]:
             status += " (connected)"
         last = (e["last_success"] or {}).get("at") or "never"
@@ -168,5 +168,5 @@ def _show(report: dict[str, Any]) -> None:
         )  # fmt: skip
     console.print(table)
     for e in report["endpoints"]:
-        if e["detail"]:
-            console.print(f"  {e['process']}: {e['detail']}", markup=False, highlight=False)
+        if e["error"]:
+            console.print(f"  {e['process']}: {e['error']}", markup=False, highlight=False)

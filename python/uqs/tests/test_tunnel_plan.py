@@ -265,8 +265,8 @@ def test_every_endpoint_passing_is_recorded_with_its_identity(root, server):
     report = _check(root, server)
     assert report["ok"] is True and report["release"] == "r7"
     ends = _by_process(report)
-    assert {p: e["status"] for p, e in ends.items()} == dict.fromkeys(
-        ["gateway1", "hdb1", "rdb1", "wdb1"], "ok"
+    assert {p: e["category"] for p, e in ends.items()} == dict.fromkeys(
+        ["gateway1", "hdb1", "rdb1", "wdb1"]
     )
     assert ends["gateway1"]["gateway_servers"] == ["hdb", "rdb"]
     assert ends["rdb1"]["identity"] == "rdb1"
@@ -282,7 +282,7 @@ def test_the_check_still_runs_on_an_inspection_target(root, server):
     assert targets.read(root)["prod"]["inspection"] is True
     report = _check(root, server)
     assert report["ok"] is True
-    assert {e["status"] for e in report["endpoints"]} == {"ok"}
+    assert {e["category"] for e in report["endpoints"]} == {None}
 
 
 def test_each_failure_is_told_apart_and_the_healthy_stay_visible(root, server):
@@ -293,14 +293,14 @@ def test_each_failure_is_told_apart_and_the_healthy_stay_visible(root, server):
     report = _check(root, server)
     assert report["ok"] is False
     ends = _by_process(report)
-    assert {p: e["status"] for p, e in ends.items()} == {
+    assert {p: e["category"] for p, e in ends.items()} == {
         "gateway1": "not_ready", "hdb1": "unreachable", "rdb1": "identity_mismatch",
         "wdb1": "auth_refused",
     }  # fmt: skip
     assert ends["hdb1"]["layers"]["destination"] == "failed"
     assert ends["wdb1"]["layers"]["destination"] == "ok"
     assert ends["wdb1"]["layers"]["auth"] == "failed"
-    assert "answered as 'rdb2', not rdb1" in ends["rdb1"]["detail"]
+    assert "answered as 'rdb2', not rdb1" in ends["rdb1"]["error"]
     assert ends["rdb1"]["identity"] == "rdb2"
 
 
@@ -315,7 +315,7 @@ def test_credentials_never_reach_the_report(root, server):
     server.refuses.add(6004)
     report = _check(root, server)
     assert SECRET not in json.dumps(report)
-    assert "***" in _by_process(report)["wdb1"]["detail"]
+    assert "***" in _by_process(report)["wdb1"]["error"]
 
 
 def test_a_failure_after_a_success_keeps_the_last_success_visible(root, server):
@@ -323,7 +323,7 @@ def test_a_failure_after_a_success_keeps_the_last_success_visible(root, server):
     server.open.discard(6002)
     second = _check(root, server)
     rdb = _by_process(second)["rdb1"]
-    assert rdb["status"] == "unreachable"
+    assert rdb["category"] == "unreachable"
     assert rdb["last_success"]["at"] == first["checked_at"]
 
 
@@ -343,11 +343,11 @@ def test_a_held_local_port_is_a_bind_conflict_and_our_own_tunnel_is_connected(ro
     server.local = {16002: "rdb1", 16003: "something_else"}
     report = _check(root, server, listening=lambda p: p in (16002, 16003, 16004))
     ends = _by_process(report)
-    assert (ends["rdb1"]["status"], ends["rdb1"]["connected"]) == ("ok", True)
-    assert ends["hdb1"]["status"] == "local_bind"
-    assert "answers as 'something_else'" in ends["hdb1"]["detail"]
-    assert ends["wdb1"]["status"] == "local_bind"  # held, and not q at all
-    assert "does not answer as q" in ends["wdb1"]["detail"]
+    assert (ends["rdb1"]["category"], ends["rdb1"]["connected"]) == (None, True)
+    assert ends["hdb1"]["category"] == "local_bind"
+    assert "answers as 'something_else'" in ends["hdb1"]["error"]
+    assert ends["wdb1"]["category"] == "local_bind"  # held, and not q at all
+    assert "does not answer as q" in ends["wdb1"]["error"]
 
 
 # ------------------------------------------------------------------ the CLI
@@ -420,19 +420,19 @@ def _plan_cli(root, monkeypatch, targets_doc):
 def test_plan_reads_a_malformed_check_record_as_unverified(root, monkeypatch, targets_doc):
     """A record nobody can trust is no record (#2064): never a crash, never verified."""
     rdb = _plan_cli(root, monkeypatch, targets_doc)
-    assert (rdb["state"], rdb["last_check"]) == ("unverified", None)
+    assert (rdb["state"], rdb["last_success"]) == ("unverified", None)
 
 
 def test_plan_still_reads_a_recent_check_record_as_verified(root, monkeypatch):
     record = {"at": datetime.now(UTC).isoformat(), "remote_port": 6002, "local_port": 16002}
     rdb = _plan_cli(root, monkeypatch, {"prod": {"rdb1": record}})
-    assert (rdb["state"], rdb["last_check"]) == ("verified", record)
+    assert (rdb["state"], rdb["last_success"]) == ("verified", record)
 
 
 @pytest.mark.parametrize("last", ["garbage", ["x"], {"at": "2026-11-04T10:00:00"}, {"at": 7}])
 def test_annotate_reads_a_malformed_record_as_unverified(last):
     doc = tunnel_plan.annotate(_plan(selected=["rdb1"]), {"rdb1": last}, listening=lambda _: False)
-    assert (doc["mappings"][0]["state"], doc["mappings"][0]["last_check"]) == ("unverified", None)
+    assert (doc["mappings"][0]["state"], doc["mappings"][0]["last_success"]) == ("unverified", None)
 
 
 @pytest.mark.parametrize("targets_doc", MALFORMED_CHECKS.values(), ids=list(MALFORMED_CHECKS))

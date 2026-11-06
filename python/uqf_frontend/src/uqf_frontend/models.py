@@ -469,7 +469,9 @@ class TunnelMappingOut(BaseModel):
         description="verified: a check in the last hour proved these ports; stale: proved "
         "longer ago or for other ports; unverified: never proved"
     )
-    last_check: TunnelCheckRecordOut | None
+    last_success: TunnelCheckRecordOut | None = Field(
+        description="the last check that proved this mapping; a failure never writes it"
+    )
     listening: bool = Field(
         description="something accepts on the local port now - a hint, not proof"
     )
@@ -496,8 +498,11 @@ class TunnelEndpointOut(BaseModel):
     local_endpoint: str
     remote_port: int
     local_port: int
-    status: str = Field(description="ok, or the category of the first layer that failed")
-    detail: str
+    category: str | None = Field(
+        description="None when it passed, else the first failing layer's category - a key of "
+        "`categories`, as the response's own `category`"
+    )
+    error: str | None = Field(description="what failed, when `category` is set")
     layers: dict[str, str] = Field(description="each layer: ok, failed or skipped")
     connected: bool = Field(description="the planned local port already serves this process")
     identity: str | None = Field(description="what the process answered as, when it answered")
@@ -511,7 +516,7 @@ class TunnelCheckResponse(BaseModel):
 
     ok: bool
     target: str
-    ssh: str | None
+    ssh: str
     release: str | None
     checked_at: AwareInstant
     category: str | None

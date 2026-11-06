@@ -438,7 +438,7 @@ export interface TunnelMapping {
   local_endpoint: string;
   query_command: string;
   state: "verified" | "stale" | "unverified";
-  last_check: TunnelCheckRecord | null;
+  last_success: TunnelCheckRecord | null;
   listening: boolean;
 }
 /** GET /services/{target}/tunnel - models.TunnelPlanResponse. Not polled:
@@ -460,8 +460,9 @@ export interface TunnelEndpoint {
   local_endpoint: string;
   remote_port: number;
   local_port: number;
-  status: string;
-  detail: string;
+  /** null when it passed, else a key of `categories` - the check's own `category`. */
+  category: string | null;
+  error: string | null;
   layers: Record<string, string>;
   connected: boolean;
   identity: string | null;
@@ -472,7 +473,7 @@ export interface TunnelEndpoint {
 export interface TunnelCheck {
   ok: boolean;
   target: string;
-  ssh: string | null;
+  ssh: string;
   release: string | null;
   checked_at: string;
   category: string | null;
