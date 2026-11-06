@@ -12,13 +12,13 @@ from typing import Any
 
 import pytest
 import typer
-from typer.testing import CliRunner
+from plain_cli import PlainRunner
 
 from uqs import cli
 from uqs.cli import lists, renames
 from uqs.stack import multitail as stack_multitail
 
-runner = CliRunner()
+runner = PlainRunner()  # CI renders usage errors in colour
 
 #: (command path, old spelling, new spelling): every rename #1729 made.
 RENAMED = [

@@ -39,6 +39,7 @@ from typing import Any
 
 import pytest
 import typer.main
+from plain_cli import PlainRunner
 from typer.testing import CliRunner
 
 import uqs.cli.entry  # noqa: F401 - registers every command on the app
@@ -1988,7 +1989,8 @@ def test_data_migrate_refuses_a_positional_date_naming_date(monkeypatch):
     from uqs.stack import hdb_migrate
 
     monkeypatch.setattr(hdb_migrate, "migrate", lambda *a, **k: pytest.fail("migrated"))
-    result = CliRunner().invoke(app, ["data", "migrate", "trade", "2026-01-02", "--cast", "px"])
+    argv = ["data", "migrate", "trade", "2026-01-02", "--cast", "px"]
+    result = PlainRunner().invoke(app, argv)  # CI renders usage errors in colour
     assert result.exit_code == 2
     said = " ".join(re.sub("[│╭╮╰╯─]", " ", result.output).split())
     assert "is now `data migrate TABLE --date D`" in said

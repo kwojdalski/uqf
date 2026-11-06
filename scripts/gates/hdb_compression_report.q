@@ -15,7 +15,7 @@
 / prints .qtorq.compress.report as one line - report|<json> - then DONE. q
 / exits 0 whatever happens while a script runs, so the caller believes DONE,
 / never the exit code. A refusal - no HDB, a file or directory q may not read
-/ (q's own "OS reports: Permission denied", naming it) - is one line, error|<why>,
+/ ("cannot read <file>: <q's error>", the file found by unreadable) - is one line, error|<why>,
 / so the caller can say what to fix. Reads only: nothing under the HDB is written.
 / .
 / The HDB's enumeration domains (its root sym file, and any other symbol list
@@ -47,7 +47,18 @@ domains:{[root]
     fs where 11h={@[{type get x};x;0h]} each fs}
 @[{[r] {[f] (last ` vs f) set get f} each domains r};hdb_root;{[e] fail "cannot read the HDB's sym file: ",e}];
 
-r:@[{[x] .qtorq.compress.report[hdb_root;.sort.params;top_n]};::;{[e] fail e}];
+/ The first path under p that q cannot list or read, or ` for none. Asked only
+/ once the report has failed, to name the file: KDB-X's error does ("<file>. OS
+/ reports: Permission denied"), PeachQ's ('io) does not (#2281).
+unreadable:{[p]
+    k:@[key;p;{[e] e}];
+    if[10h=type k; :p];
+    if[-11h=type k; :$[@[{read1 (x;0;1); 1b};p;{[e] 0b}];`;p]];
+    r:`; i:0;
+    while[(null r) and i<count k; r:unreadable ` sv p,k i; i+:1];
+    r}
+refuse:{[e] f:unreadable hdb_root; fail $[null f; e; "cannot read ",(1_string f),": ",e]};
+r:@[{[x] .qtorq.compress.report[hdb_root;.sort.params;top_n]};::;refuse];
 -1 "report|",.j.j r,`sort_checked`sort_csv!(sort_checked;$[sort_checked;1_string sort_csv;::]);
 -1 "DONE";
 exit 0
