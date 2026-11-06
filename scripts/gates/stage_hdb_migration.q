@@ -6,6 +6,12 @@
 / Names are comma-separated or "-". A rename maps old_names[i] to new_names[i].
 / A type change must name its target column in cast_names and round-trip
 / exactly through the original type. Existing columns are never guessed away.
+/ .
+/ An optional ninth argument selects the empty-partition reset (#2251):
+/   reset-check  verify every stored column is empty; print PLAN|old|new; write nothing
+/   reset        the same check, then stage the declaration's empty table
+/ Both ignore the rename/cast lists (the caller passes "-"). A reset never
+/ guesses: one populated, unreadable or unaccounted-for file refuses it.
 
 args:.z.x;
 if[8>count args; -2 "stage_hdb_migration: needs 8 arguments"; exit 2];
@@ -18,6 +24,8 @@ names:{[s] $[s~(),"-";`symbol$();`$"," vs s]};
 old_names:names args 5;
 new_names:names args 6;
 cast_names:names args 7;
+mode:$[8>count args;"migrate";args 8];
+if[not mode in ("migrate";"reset-check";"reset"); -2 "stage_hdb_migration: unknown mode ",mode; exit 2];
 
 fail:{[msg] -2 "stage_hdb_migration: ",msg; exit 1};
 if[()~key root; fail "no HDB at ",string root];
@@ -42,6 +50,31 @@ source_dir:.Q.par[root;part;table_name];
 dfile:` sv source_dir,`.d;
 if[()~key dfile; fail "no table at ",string source_dir];
 source_cols:get dfile;
+
+/ Reset: every stored column file must be readable and hold no rows. A file
+/ in .d that is missing or unreadable, or a file .d does not account for, is
+/ an inconsistent table and is refused rather than discarded.
+spec:{[names;t] "," sv {string[x],":",string y}'[names;t]};
+if[mode like "reset*";
+    if[count (names args 5),(names args 6),(names args 7); fail "--reset-empty takes no rename or cast"];
+    companions:raze {(x;`$string[x],"#";`$string[x],"##")} each source_cols;
+    stray:(key source_dir) except `.d,companions;
+    if[count stray; fail "table holds files .d does not list: ","," sv string stray];
+    rows_in:{[dir;c] @[{count get x};` sv dir,c;{-1}]}[source_dir] each source_cols;
+    if[any unreadable:rows_in<0; fail "unreadable column(s): ","," sv string source_cols where unreadable];
+    if[any populated:rows_in>0; fail "populated column(s): ","," sv string source_cols where populated];
+    old_types:{[dir;c] @[{type get x};` sv dir,c;{0Nh}]}[source_dir] each source_cols;
+    new_types:{type x} each want target_cols;
+    if[mode~"reset-check";
+        -1 "PLAN|",spec[source_cols;old_types],"|",spec[target_cols;new_types];
+        exit 0];
+    rebuilt:flip target_cols!{[w;c] a:attr w c; $[null a;0#w c;a#0#w c]}[want] each target_cols;
+    (hsym `$stage_dir,"/") set .Q.en[root;rebuilt];
+    staged:select from get hsym `$stage_dir,"/";
+    if[not target_cols~cols staged; fail "staged columns differ from the declaration"];
+    if[0<>count staged; fail "staged table is not empty"];
+    -1 "STAGED|0|",1_string source_dir;
+    exit 0];
 source_for:{[to;sources;c] $[c in to;sources to?c;c]}[new_names;old_names] each target_cols;
 if[(count distinct source_for)<>count source_for;
     fail "two target columns read the same source column"];

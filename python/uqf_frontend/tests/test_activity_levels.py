@@ -64,7 +64,7 @@ def _event(**over: Any) -> dict[str, Any]:
     return {
         "event_id": activity.new_id(),
         "session_id": SESSION,
-        "ts": "2026-11-03T10:00:00Z",
+        "time": "2026-11-03T10:00:00Z",
         "kind": "navigate",
         "action": "view.open",
         "subject": "Control",
@@ -76,10 +76,10 @@ def _event(**over: Any) -> dict[str, Any]:
 #: One event of every kind the browser sends, at a second apiece.
 def _one_of_each() -> list[dict[str, Any]]:
     return [
-        _event(ts="2026-11-03T10:00:01Z", kind="navigate", action="view.open", subject="Desk"),
-        _event(ts="2026-11-03T10:00:02Z", kind="interact", action="ui.click", subject="nav.Desk"),
+        _event(time="2026-11-03T10:00:01Z", kind="navigate", action="view.open", subject="Desk"),
+        _event(time="2026-11-03T10:00:02Z", kind="interact", action="ui.click", subject="nav.Desk"),
         _event(
-            ts="2026-11-03T10:00:03Z",
+            time="2026-11-03T10:00:03Z",
             kind="debug",
             action="request.finish",
             subject="GET /ops/queue",
@@ -159,7 +159,7 @@ def test_the_levels_are_ordered_and_documented_once():
 def test_the_server_default_is_served_on_health_and_in_the_history(tmp_path):
     c = _client(tmp_path, activity_level="debug")
     assert c.get("/health").json()["activity_level"] == "debug"
-    assert c.get("/activity").json()["default_level"] == "debug"
+    assert c.get("/activity").json()["activity_level"] == "debug"
 
 
 def test_the_environment_sets_the_default_and_refuses_a_level_that_is_not_one(monkeypatch):
@@ -206,7 +206,21 @@ def test_off_still_audits_a_write(tmp_path, monkeypatch):
     [("submit", "process.config"), ("interact", "ui.change"), ("debug", "request.finish")],
 )
 @pytest.mark.parametrize(
-    "key", ["value", "token", "authorization", "text", "content", "query", "body", "path"]
+    "key",
+    # `file_name`, `size_bytes` and `item_count` were renamed (#2246): the old
+    # keys are no longer kept either
+    [
+        "value",
+        "token",
+        "authorization",
+        "text",
+        "content",
+        "query",
+        "body",
+        "file_name",
+        "size_bytes",
+        "item_count",
+    ],  # fmt: skip
 )
 def test_a_detail_key_outside_the_allowlist_is_dropped_at_every_level(tmp_path, kind, action, key):
     c = _client(tmp_path)
@@ -273,11 +287,11 @@ def _correlated(c: TestClient, monkeypatch) -> str:
         "/activity/events",
         json={
             "events": [
-                _event(ts="2026-11-03T10:00:00Z", kind="interact", action="ui.click",
+                _event(time="2026-11-03T10:00:00Z", kind="interact", action="ui.click",
                        subject="nav.Control"),
-                _event(ts="2026-11-03T10:00:01Z", kind="submit", action="process.stop",
+                _event(time="2026-11-03T10:00:01Z", kind="submit", action="process.stop",
                        subject="rdb1", request_id=rid),
-                _event(ts="2026-11-03T10:00:02Z", kind="confirm", action="process.stop",
+                _event(time="2026-11-03T10:00:02Z", kind="confirm", action="process.stop",
                        subject="rdb1", request_id=rid),
             ]
         },
@@ -292,10 +306,10 @@ def _correlated(c: TestClient, monkeypatch) -> str:
         "/activity/events",
         json={
             "events": [
-                _event(ts=now, kind="result", action="process.stop", subject="rdb1",
+                _event(time=now, kind="result", action="process.stop", subject="rdb1",
                        request_id=rid, outcome="succeeded", duration_ms=40.5,
                        trigger="programmatic"),
-                _event(ts=now, kind="debug", action="request.finish", subject="GET /ops/queue",
+                _event(time=now, kind="debug", action="request.finish", subject="GET /ops/queue",
                        outcome="succeeded", duration_ms=3.0, trigger="programmatic"),
             ]
         },
@@ -371,7 +385,7 @@ def test_the_export_says_what_is_not_in_the_history(tmp_path):
     c = _client(tmp_path)
     c.post(
         "/activity/events",
-        json={"events": [], "dropped": [{"level": "debug", "reason": "sampled", "count": 7}]},
+        json={"events": [], "drops": [{"level": "debug", "reason": "sampled", "count": 7}]},
     )
     text = c.get("/activity/export", params={"format": "text"}).text
     assert "# not in the history (counted, not shown): debug sampled 7" in text
@@ -443,7 +457,7 @@ def test_what_the_browser_did_not_send_is_counted_and_reported(tmp_path):
             "/activity/events",
             json={
                 "events": [_event()],
-                "dropped": [
+                "drops": [
                     {"level": "debug", "reason": "sampled", "count": 40},
                     {"level": "interactions", "reason": "queue_overflow", "count": 3},
                 ],
@@ -456,7 +470,7 @@ def test_what_the_browser_did_not_send_is_counted_and_reported(tmp_path):
 def test_a_browser_may_not_report_a_server_reason(tmp_path):
     r = _client(tmp_path).post(
         "/activity/events",
-        json={"dropped": [{"level": "debug", "reason": "row_cap", "count": 1}]},
+        json={"drops": [{"level": "debug", "reason": "row_cap", "count": 1}]},
     )
     assert r.status_code == 422
 

@@ -54,7 +54,7 @@ export const HISTORY: ActivityHistory = {
   events: [
     {
       event_id: "e1",
-      ts: "2026-11-03T10:00:00.000000Z",
+      time: "2026-11-03T10:00:00.000000Z",
       recorded_at: "2026-11-03T10:00:00.000000Z",
       level: "actions",
       source: "server",
@@ -75,7 +75,7 @@ export const HISTORY: ActivityHistory = {
         { subject: "rdb2", outcome: "unknown" },
       ],
       detail: {},
-      dropped: 0,
+      dropped_detail: 0,
     },
   ],
   persistence: {
@@ -85,7 +85,7 @@ export const HISTORY: ActivityHistory = {
     last_error: "OperationalError: disk I/O error",
     last_failure_at: null,
   },
-  default_level: "actions",
+  activity_level: "actions",
   bounds: [
     { level: "actions", retention_days: 30, max_kept: 100000 },
     { level: "interactions", retention_days: 7, max_kept: 50000 },

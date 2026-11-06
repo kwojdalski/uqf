@@ -62,7 +62,6 @@
 # Switch on TorQ's .sub.AUTORECONNECT and call .sub.subscribe on a restarted plant:
 # entered by python/uqs/tests/test_stream_resubscribe_stack.py on a live stack (#2201).
 .qtorq.sub_arm_resubscribe
-.qtorq.sub_resubscribe
 .qtorq.subscribe_etl
 .qtorq.subscribe_tables
 .qtorq.wait_for_tickerplant

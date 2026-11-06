@@ -19,7 +19,7 @@ from uqs.attach import backfill_plan as planning
 from uqs.attach.backfill_policy import EOD_BYPASSED, EOD_FENCE, coordination_line, override_lines
 from uqs.cli import backfill_receive
 from uqs.cli.json_out import emit
-from uqs.cli.shared import _die, _paths, console, log
+from uqs.cli.shared import EXIT_PARTIAL, EXIT_REFUSED, _die, _paths, console, log
 from uqs.paths import UqsError, UqsUsageError
 from uqs.stack import backfill as stack_backfill
 from uqs.stack import run_modes
@@ -227,17 +227,35 @@ def _execute(
         console.print(
             f"[dim]following {worker} (pid {run_.pid}); Ctrl-C stops waiting, not the run[/]"
         )
-    code, result = backfill_run.follow(run_)
+    runner, result = backfill_run.follow(run_)
+    code = exit_code(runner)
     backfill_audit.outcome(
         run_.audit, run_.run_id, outcome=result.get("outcome") or result.get("state", "unknown"),
         exit_code=code, result=result,
     )  # fmt: skip
     _report(
-        {**info, "result": result, "exit_code": code},
+        {**info, "result": result, **outcome(result.get("state") or "unknown", code)},
         as_json,
         _outcome_text(worker, run_, code, result) + _bypass_note(plan, run_.audit),
     )
     raise typer.Exit(code=code)
+
+
+def exit_code(runner: int) -> int:
+    """The attached runner's exit code as the CLI's (#2226). The runner exits 2 for a
+    refusal - the q launchers' convention - where every `uqs` command's 2 is a usage
+    error, so a refusal and a failure are both EXIT_REFUSED; rows written and covered
+    that a reader has not reloaded are EXIT_PARTIAL."""
+    if runner == 0:
+        return 0
+    return EXIT_PARTIAL if runner == backfill_run.EXIT_NOT_QUERYABLE else EXIT_REFUSED
+
+
+def outcome(state: str, code: int) -> dict:
+    """What every `job backfill --wait --json` document says of how the run ended, locally,
+    with --attachment and with --writer alike (#2228): its `state`, the verdict `ok` - false
+    exactly when the command exits non-zero - and that `exit_code`."""
+    return {"state": state, "ok": code == 0, "exit_code": code}
 
 
 def _bypass_note(plan, audit=None) -> str:

@@ -664,6 +664,7 @@ OPTIONS = {
     "--release": Meaning("a release on the server, by name - not a path", r"^the release\b"),
     "--remote-user": Meaning("run as this account through sudo", r"sudo"),
     "--rename": Meaning("rename a column", r"rename"),
+    "--reset-empty": Meaning("rebuild an empty table from its declaration", r"^Rebuild a table"),
     "--reverse": Meaning("sort descending", r"descending"),
     "--schema": Meaning("tables' columns and their types", r"^its table's schema"),
     "--schema-file": Meaning("a tickerplant's schema file", r"^(load|pin) (this|the) schema file"),
@@ -1282,6 +1283,32 @@ def test_rule5c_every_irreversible_deletion_asks():
     assert not unnamed, f"the guide's rule does not name {sorted(unnamed)}"
 
 
+def test_rule5c_every_irreversible_deletion_asks_on_mcp_too():
+    """uqs-mcp has no terminal and no --yes, and its `uqs_clean` deleted the
+    data directory, the HDB with it, in one call (#2257). A tool mirroring an
+    IRREVERSIBLE command is a dry run unless confirm=true - required, never a
+    default - and takes no dry_run or yes beside it; no other tool takes it."""
+    from mcp_support import tools
+
+    from uqs import mcp, mcp_server
+
+    schemas = {t.name: t.input_schema for t in tools()}
+    mirrored = {path: name for name, path in mcp.MIRRORS.items()}
+    assert "clean" in mirrored, "uqs_clean is the tool #2257 is about"
+    wrong = {}
+    for path in IRREVERSIBLE & set(mirrored):
+        schema = schemas[mirrored[path]]
+        props = schema["properties"]
+        default = props.get(mcp_server.CONFIRM, {}).get("default")
+        if default is not False or {"dry_run", "yes"} & set(props):
+            wrong[path] = sorted(props)
+    assert not wrong, f"irreversible tools not a dry run unless {mcp_server.CONFIRM}=true: {wrong}"
+    confirming = {
+        mcp.MIRRORS[n] for n, s in schemas.items() if mcp_server.CONFIRM in s["properties"]
+    }
+    assert confirming <= IRREVERSIBLE, sorted(confirming - IRREVERSIBLE)
+
+
 def test_rule5c_the_commands_that_ask_are_the_known_ones():
     """Every question is asked through safety.ask, confirm or choose (#1885):
     one default (No), one refusal without a terminal, one exit code for a no.
@@ -1771,13 +1798,50 @@ def test_each_concept_completes_with_its_completer():
 
 def test_the_target_argument_is_one_definition():
     """#1884: a TARGET is TARGET everywhere and completes targets; a command
-    that only reads a server falls back to the latest deployment."""
+    that only reads a server falls back to the latest deployment. #2243: one
+    that changes a server never does - `deploy rollback` and `prune` take
+    --ssh/--dest in its place, so their TARGET is optional, but their help
+    claims no default and a bare call is refused."""
     for path in ("target check", "target shell", "deploy status"):
         param = next(p for p in LEAVES[path].command.params if p.metavar == "TARGET")
         assert not param.required, path
+        assert LATEST in _help(param), path
     for path in ("target set", "target unset", "target remove"):
         param = next(p for p in LEAVES[path].command.params if p.metavar == "TARGET")
         assert param.required, path
+    for path in ("deploy rollback", "deploy prune"):
+        param = next(p for p in LEAVES[path].command.params if p.metavar == "TARGET")
+        assert LATEST not in _help(param), path
+
+
+#: What a TARGET's help says when the command falls back to the latest deployment.
+LATEST = "default: the most recent deployment"
+
+
+def _help(param) -> str:
+    return getattr(param, "help", None) or ""
+
+
+#: Commands that change state and still fall back to the latest deployment, each with why.
+LATEST_THOUGH_IT_CHANGES = {
+    "target shell": "it does nothing by itself: it says which server it connected to, then a "
+    "person types - the shell is marked as changing state because what they type can",
+}
+
+
+def test_only_a_command_that_reads_a_server_falls_back_to_the_latest_deployment():
+    """#2243: `deploy rollback`'s help promised it would act on whichever server was
+    deployed last - a command that changes a server must be told which. Every TARGET
+    that claims the fallback is on a command that only reads."""
+    found = {
+        c.path
+        for c in TREE
+        if c.path in LEAVES
+        for p in c.command.params
+        if p.metavar == "TARGET" and LATEST in _help(p)
+        and effect_of(c.command) is not safety.Effect.READ_ONLY
+    }  # fmt: skip
+    _hold("a TARGET that changes a server falls back to nothing", found, LATEST_THOUGH_IT_CHANGES)
 
 
 def test_a_comma_separated_option_says_so_in_its_metavar():

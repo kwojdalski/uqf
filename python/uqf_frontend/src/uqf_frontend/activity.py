@@ -260,12 +260,22 @@ DETAIL_KEYS: dict[str, Callable[[object], bool]] = {
     "shadowed": _is_bool,
     "saved": _is_bool,
     "reason": _is_name,
-    # uploads (#1951) and deletions (#1953): metadata about a file, never its bytes
-    "file_name": _is_name,
-    "size_bytes": _is_count,
+    # uploads (#1951), deletions (#1953) and pushes (#2002): metadata about a
+    # file, never its bytes - named as the route's own request and response
+    # name them (#2246). `path` is the whole relative path, `size` one file's
+    # bytes, `total_bytes` a whole push's, and `file_count` how many files any
+    # of these touched. Rows recorded before #2246 keep `file_name`,
+    # `size_bytes` and `item_count`.
+    "path": _is_name,
+    "size": _is_count,
+    "total_bytes": _is_count,
+    "file_count": _is_count,
     "sha256": _is_hex,
     "content_type": _is_name,
-    "item_count": _is_count,
+    # `uqs compress apply` (#2148): the partitions compressed and the bytes
+    # saved, as its report names them
+    "partition_count": _is_count,
+    "bytes_saved": _is_count,
     # config pushes (#2002): the push a file belongs to, the hash of what it
     # replaced (None on create), the push a restore undoes, the directory
     # pushed to (config_dir), and how many old pushes retention pruned - never content
@@ -380,7 +390,7 @@ def clean_items(raw: Iterable[Mapping[str, object]] | None) -> list[dict[str, st
 LIFECYCLE_VERBS = frozenset(typing.get_args(LifecycleAction))
 
 SERVER_ACTIONS: dict[tuple[str, str], Callable[[Mapping[str, str]], str]] = {
-    ("POST", "/services/{target}/files/delete"): lambda _: "files.delete",
+    ("DELETE", "/services/{target}/files"): lambda _: "files.delete",
     # `process.<verb>`: the verb is the path's own segment, typed (#2230)
     ("POST", "/control/lifecycle/{action}"): lambda p: (
         f"process.{p['action']}" if p.get("action") in LIFECYCLE_VERBS else "process"
@@ -388,7 +398,7 @@ SERVER_ACTIONS: dict[tuple[str, str], Callable[[Mapping[str, str]], str]] = {
     ("PUT", "/control/processes/{process}/config"): lambda _: "process.config",
     ("PUT", "/control/worker/config"): lambda _: "worker.config",
     ("POST", "/control/backfill"): lambda _: "backfill.start",
-    ("PUT", "/services/{target}/files/content"): lambda _: "files.upload",
+    ("PUT", "/services/{target}/files"): lambda _: "files.upload",
     # config pushes (#2002): `config.push` is the summary row of a whole push,
     # written when it closes; a restore is a push of its own
     ("POST", "/services/{target}/config/pushes"): lambda _: "config.push.open",
@@ -502,6 +512,9 @@ class Bound:
             raise ValueError("activity retention needs positive days and rows")
 
 
+#: The table as a file starts, at `PRAGMA user_version` 0: _MIGRATIONS brings
+#: it, like any older file, to activity_log.SCHEMA_VERSION, so a new file and
+#: an upgraded one take the same steps and end the same.
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS activity (
     seq          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -586,6 +599,17 @@ _MIGRATIONS: tuple[tuple[str, ...], ...] = (
         "WHERE items != '[]'",
         "CREATE INDEX IF NOT EXISTS activity_subject ON activity (subject)",
     ),
+    # 3 (#2242): `dropped` counted the detail keys a row lost, beside a
+    # batch's `drops` of whole events.
+    ("ALTER TABLE activity RENAME COLUMN dropped TO dropped_detail",),
+    # 4 (#2254): when an event happened was `ts`, where `uqs activity list
+    # --json` and every log-line record say `time` (json_out.LINE_KEYS). Its
+    # index moves with it, under the column's new name.
+    (
+        "ALTER TABLE activity RENAME COLUMN ts TO time",
+        "DROP INDEX IF EXISTS activity_ts",
+        "CREATE INDEX IF NOT EXISTS activity_time ON activity (time)",
+    ),
 )
 
 
@@ -645,7 +669,11 @@ class ActivityStore:
                 # last writes to a power cut, which operational logging can
                 # afford and a click-rate history cannot afford to fsync for.
                 self._db.execute("PRAGMA synchronous=NORMAL")
-            self._db.executescript(_SCHEMA)
+            # _SCHEMA is version 0: a file past it has the table already, and
+            # its version-0 `activity_ts` index names a column since renamed.
+            (version,) = self._db.execute("PRAGMA user_version").fetchone()
+            if version == 0:
+                self._db.executescript(_SCHEMA)
             columns = {row[1] for row in self._db.execute("PRAGMA table_info(activity)")}
             if "level" not in columns:
                 self._db.execute(_LEVEL_COLUMN)
@@ -693,7 +721,7 @@ class ActivityStore:
         trigger = event.get("trigger")
         return (
             clean_id(event.get("event_id")) or new_id(),
-            stamp(event.get("ts") or now),
+            stamp(event.get("time") or now),
             stamp(now),
             LEVEL_OF_KIND[kind],
             source,
@@ -711,13 +739,13 @@ class ActivityStore:
             event.get("duration_ms"),
             json.dumps(clean_items(event.get("items"))),
             json.dumps(kept, sort_keys=True),
-            event.get("dropped", 0) + more,
+            more,
         )
 
     _INSERT = (
-        "INSERT OR IGNORE INTO activity (event_id, ts, recorded_at, level, source, kind, "
+        "INSERT OR IGNORE INTO activity (event_id, time, recorded_at, level, source, kind, "
         "action, target, subject, outcome, session_id, request_id, claimed_user, trigger, "
-        "method, status_code, duration_ms, items, detail, dropped) "
+        "method, status_code, duration_ms, items, detail, dropped_detail) "
         "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
     )
 
@@ -796,7 +824,7 @@ class ActivityStore:
             return True
         sets = ", ".join(f"{name} = ?" for name in fields)
         changed = self._write(
-            f"UPDATE activity SET {sets}, dropped = dropped + ? WHERE event_id = ?",  # noqa: S608 - names from `allowed`
+            f"UPDATE activity SET {sets}, dropped_detail = dropped_detail + ? WHERE event_id = ?",  # noqa: S608 - names from `allowed`
             (*fields.values(), dropped, event_id),
         )
         return changed == 1

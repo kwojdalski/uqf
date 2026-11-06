@@ -43,10 +43,10 @@ export function FileDelete({
       try {
         const token = writeToken.get();
         result = await request<RemoteDeleteResponse>(
-          `/services/${encodeURIComponent(target)}/files/delete`,
+          `/services/${encodeURIComponent(target)}/files`,
           new AbortController().signal,
           JSON.stringify({ paths: chosen, confirmed: true }),
-          "POST",
+          "DELETE",
           token ? `Bearer ${token}` : undefined,
         );
       } catch (failure) {

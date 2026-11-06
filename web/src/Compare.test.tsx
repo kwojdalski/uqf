@@ -51,7 +51,7 @@ function result(tables: CompareTable[]): CompareResult {
     limit: 50,
     filters: [{ column: "sym", op: "eq", value: "EURUSD" }],
     source_version: null,
-    partition: null,
+    slice: null,
     tables,
   };
 }
@@ -125,7 +125,7 @@ it("sends both sides, the window, filters and limit as typed", async () => {
     ],
     limit: 50,
     source_version: null,
-    partition: null,
+    slice: null,
   });
 });
 
@@ -242,7 +242,7 @@ it("refuses a form that does not state both sides and a zoned window", () => {
     filters: [],
     limit: "10",
     sourceVersion: "",
-    partition: "",
+    slice: "",
   };
   expect(() => compareBody({ ...base, right: " " })).toThrow("Name both sides");
   expect(() => compareBody({ ...base, tables: "" })).toThrow(
@@ -259,7 +259,7 @@ it("refuses a form that does not state both sides and a zoned window", () => {
   ]);
 });
 
-it("says the coverage slice: a blank partition with a source version is the no-partition slice", () => {
+it("says the coverage slice: a blank slice with a source version is the no-slice-dimension slice", () => {
   const base = {
     left: "local",
     right: "prod",
@@ -269,20 +269,20 @@ it("says the coverage slice: a blank partition with a source version is the no-p
     filters: [],
     limit: "10",
     sourceVersion: "",
-    partition: "",
+    slice: "",
   };
   const slice = (over: Partial<typeof base>) => {
     const body = compareBody({ ...base, ...over });
-    return [body.source_version, body.partition];
+    return [body.source_version, body.slice];
   };
   expect(slice({})).toEqual([null, null]);
   expect(slice({ sourceVersion: "v1" })).toEqual(["v1", ""]);
-  expect(slice({ sourceVersion: "v1", partition: " EURUSD " })).toEqual([
+  expect(slice({ sourceVersion: "v1", slice: " EURUSD " })).toEqual([
     "v1",
     "EURUSD",
   ]);
   // sent, so the server refuses it, rather than dropped here
-  expect(slice({ partition: "EURUSD" })).toEqual([null, "EURUSD"]);
+  expect(slice({ slice: "EURUSD" })).toEqual([null, "EURUSD"]);
 });
 
 it("shows the server's refusal", async () => {

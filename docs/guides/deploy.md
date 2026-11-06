@@ -124,15 +124,17 @@ first 12 characters of the revision:
 Inside the artifact:
 
 - **The tree.** The tracked files under an allowlist (`src`, `scripts`, the
-  three Python packages, `pyproject.toml`, `uv.lock`, and `lib/kx-dbmaint`), at
-  their repository paths, because the q loaders and `uqs` find each other by
-  layout. `lib/kx-dbmaint` is KX's `dbmaint.q` with its Apache-2.0 licence and
-  notice, the one part of `lib/` a release carries: the HDB repair below loads
-  it, offline, from `scripts/gates/fill_hdb_partitions.q`'s own location, and
-  the licence has to travel with the copy. Never shipped: the rest of `lib/`
-  (TorQ, the starter pack and the other vendored trees), `.env`, `.envrc`, keys
-  and licences, virtual environments, runtime data, logs, tests, build output,
-  and `scripts/torqconfig/permissions/gateway_users.csv`, which holds the demo
+  three Python packages, `pyproject.toml`, `uv.lock`, `lib/kx-dbmaint`, and one
+  file of `docs/`: `reference/surfaces/current/transports.csv`, which
+  `uqs config sources` and the backfill capabilities read at run time), at their
+  repository paths, because the q loaders and `uqs` find each other by layout.
+  `lib/kx-dbmaint` is KX's `dbmaint.q` with its Apache-2.0 licence and notice,
+  the one part of `lib/` a release carries: the HDB repair below loads it,
+  offline, from `scripts/gates/fill_hdb_partitions.q`'s own location, and the
+  licence has to travel with the copy. Never shipped: the rest of `lib/` (TorQ,
+  the starter pack and the other vendored trees), `.env`, `.envrc`, keys and
+  licences, virtual environments, runtime data, logs, tests, build output, and
+  `scripts/torqconfig/permissions/gateway_users.csv`, which holds the demo
   gateway passwords.
 - **`.release/`.** `requirements.txt`, the dependencies of `uqs` pinned with
   hashes from the committed `uv.lock`. `wheels/` holds the `uqs` wheel and a
@@ -180,9 +182,12 @@ manifest records. Building needs `uv`, and network access to fetch the wheels.
 
 `.github/workflows/release.yml` builds the artifacts for a tag `v*`, or for a
 tag given to its manual run. It builds them only after `ci.yml`'s checks pass on
-that commit, and never with `--override allow-dirty`. Each release gets two: the
-plain artifact, and one with its q converted for kdb+ 4.0 (`--q-version 4.0`).
-Each comes with its `.sha256` and `.manifest.json`. Deploy one by tag or by URL:
+that commit, and never with `--override allow-dirty`. The tag is resolved to one
+commit first and `ci.yml` checks out exactly that commit, whichever branch
+started the run; the build fails unless it is building the commit `ci.yml`
+checked. Each release gets two: the plain artifact, and one with its q converted
+for kdb+ 4.0 (`--q-version 4.0`). Each comes with its `.sha256` and
+`.manifest.json`. Deploy one by tag or by URL:
 
 ```bash
 uqs deploy push v1.4.0 --ssh uqf-server --dest /opt/uqf ... --dry-run
@@ -252,11 +257,14 @@ failure, and `status`, `rollback`, `prune` and `history TARGET`. `status`,
 `rollback` and `prune` also take a server a push from here registered (see
 `uqs deploy history`). `--ssh`, `--dest`, `--remote-user` and
 `--connect-timeout` remain for a server no target declares, and read the same on
-every command. Given beside a TARGET, they override its values.
-`push --target A,B`, the spelling before #1736, still works for one release and
-prints the new one. So does `--host`, the ssh destination's name before #1768:
-`--ssh` now, as `uqs target add` spells it, since every other command's `--host`
-is a q host.
+every command. Given beside a TARGET, they override its values. With neither,
+`status`, which only reads a server, reads the most recent deployment's, as
+`uqs target check` does, and exits 1 when nothing was deployed; `rollback` and
+`prune` change a server, so they are refused (exit 2) until one is named:
+`uqs deploy rollback TARGET` (#2243). `push --target A,B`, the spelling before
+#1736, still works for one release and prints the new one. So does `--host`, the
+ssh destination's name before #1768: `--ssh` now, as `uqs target add` spells it,
+since every other command's `--host` is a q host.
 
 - **The keys.** Each key is a `push` option, spelt as its parameter (`torq_home`
   for `--torq-home`). The values go through the same checks as the flags, and an
@@ -1037,6 +1045,7 @@ What a server runs, without ssh-ing in:
 
 ```bash
 uqs deploy status prod-a
+uqs deploy status                                           # the most recent deployment
 uqs deploy status prod-a --json                             # to script against
 uqs deploy status --ssh uqf-server --dest /opt/uqf          # a server no target declares
 ```

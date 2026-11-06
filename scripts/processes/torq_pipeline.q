@@ -506,6 +506,14 @@ sub_handle:`
 / How often a stream process asks .servers to retry its closed handles.
 sub_retry_period:0D00:00:15
 
+/ The longest a failing resubscription waits between attempts (#2214).
+sub_retry_cap:0D00:05:00
+
+/ Per table, the consecutive resubscriptions that failed and the earliest time
+/ the next may start. A table absent from both has nothing pending.
+sub_failures:(`symbol$())!`long$()
+sub_next_try:(`symbol$())!`timestamp$()
+
 / The latest plant `time` received per table: what a resubscription's replay
 / has already been given. Exact when the plant stamps a message once, as the
 / segmented tickerplant does; a second message in the same nanosecond as the
@@ -598,9 +606,47 @@ sub_resubscribe:{[row]
     `.qtorq.sub_since set (`symbol$())!`timestamp$();
     .qetl.job.stream.catching_up[sub_job;0b];
     if[not first r;
-        .qetl.log.err[sub_job;"resubscription failed - the job stays unsubscribed";enlist[`error]!enlist last r];
+        sub_note_failure t;
+        .qetl.log.err[sub_job;"resubscription failed - retrying with backoff";`error`failures`next_try!(last r;sub_failures t;sub_next_try t)];
         :()];
+    `.qtorq.sub_failures set sub_failures _ t;
+    `.qtorq.sub_next_try set sub_next_try _ t;
     last r}
+
+/ Record a failed resubscription: one more consecutive failure, and the next
+/ attempt a doubling wait away (capped at sub_retry_cap).
+/ @param t the table
+/ @private
+sub_note_failure:{[t]
+    n:1+0^sub_failures t;
+    wait:sub_retry_cap&sub_retry_period*`long$2 xexp (n-1)&20;
+    .qtorq.sub_failures[t]:n;
+    .qtorq.sub_next_try[t]:.z.p+wait;}
+
+/ Whether a table's resubscription may be attempted now. Half a period of
+/ slack, so a backoff of exactly one period is not pushed a whole tick later
+/ by the timer's jitter.
+/ @param t the table
+/ @return 1b when no backoff is pending or it has elapsed
+/ @private
+sub_due:{[t] $[t in key sub_next_try; .z.p>=sub_next_try[t]-`timespan$(`long$sub_retry_period) div 2; 1b]}
+
+/ TorQ's .servers.retry reopens a closed handle and .sub.autoreconnect then
+/ resubscribes once. If that resubscription fails the handle stays open, so
+/ nothing would try again (#2214): this, on the same tick, retries every table
+/ whose subscription is inactive while the plant handle is open, with backoff.
+/ @return the tables attempted
+/ @private
+sub_retry_tick:{[]
+    if[not handle_open get sub_handle; :`symbol$()];
+    h:get sub_handle;
+    rows:select from .sub.SUBSCRIPTIONS where not active;
+    rows:rows where sub_due each rows`table;
+    if[0=count rows; :`symbol$()];
+    / the plant handle as it is now, not the dead one the failed row remembers
+    rows[`w]:(count rows)#h;
+    sub_resubscribe each rows;
+    rows`table}
 
 / Turn on TorQ's resubscription for this process and point it at ours.
 / @param handle_name the global holding the plant handle, e.g. `.qproc.stream.h
@@ -613,7 +659,9 @@ sub_arm_resubscribe:{[handle_name]
     / registered when the process booted; that is how long a restarted plant
     / would go unnoticed. TorQ's own retry, run more often (.servers.retry
     / only touches closed handles).
-    safe_timer[`servers_retry;sub_retry_period;`.servers.retry;"Retry closed server handles, so a restarted tickerplant is resubscribed promptly"];}
+    safe_timer[`servers_retry;sub_retry_period;`.servers.retry;"Retry closed server handles, so a restarted tickerplant is resubscribed promptly"];
+    / and the same tick retries a resubscription that failed on an open handle (#2214)
+    safe_timer[`sub_retry;sub_retry_period;`.qtorq.sub_retry_tick;"Retry failed resubscriptions, with backoff"];}
 
 / ----------------------------------------------------------------- STATE
 

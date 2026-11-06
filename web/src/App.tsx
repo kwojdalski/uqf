@@ -307,7 +307,7 @@ function initialRange(): CoverageRequest {
   start.setUTCDate(start.getUTCDate() - 1);
   return {
     dataset: "trades",
-    partition: "",
+    slice: "",
     source_version: "",
     range_from: start.toISOString(),
     range_to: end.toISOString(),
@@ -325,7 +325,7 @@ function RangeFields({
       {(
         [
           ["dataset", "Dataset"],
-          ["partition", "Partition (blank = whole dataset)"],
+          ["slice", "Slice (blank = whole dataset)"],
           ["source_version", "Source version"],
           ["range_from", "From (inclusive, timezone required)"],
           ["range_to", "To (exclusive, timezone required)"],
@@ -335,16 +335,16 @@ function RangeFields({
           {label}
           <input
             data-activity={`range.${key}`}
-            // Every field but `partition` must be non-empty. Blank IS the
-            // partition's meaningful value - the sentinel for a dataset with
-            // no partition dimension - so marking it required would make the
+            // Every field but `slice` must be non-empty. Blank IS the
+            // slice's meaningful value - the sentinel for a dataset with no
+            // slice dimension - so marking it required would make the
             // commonest case unsubmittable.
-            required={key !== "partition"}
+            required={key !== "slice"}
             value={value[key]}
             placeholder={
               key === "source_version"
                 ? "e.g. v1"
-                : key === "partition"
+                : key === "slice"
                   ? "e.g. EURUSD"
                   : undefined
             }
@@ -1510,8 +1510,7 @@ function ControlView() {
         </label>
         <p className="sidebar-note">
           The server&rsquo;s <code>UQF_FRONTEND_WRITE_TOKEN</code>, sent with
-          every action below. Kept in this tab only. Not needed under{" "}
-          <code>npm run dev</code>, whose proxy adds it.
+          every action below. Kept in this tab only.
         </p>
       </div>
 

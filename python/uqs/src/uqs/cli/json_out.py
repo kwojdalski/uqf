@@ -17,8 +17,9 @@ whatever the row calls it; and a time is ISO-8601 with an explicit offset
 
 The contract holds at every depth, not only on a list's records (#2122):
 `emit` spells each key of every nested object as KEYS says, and refuses a
-document whose `ok` is anything but a bool or whose range is an object rather
-than `range_from`/`range_to`. What a document carries as data - a query's
+document whose `ok` is anything but a bool, whose range is an object rather
+than `range_from`/`range_to`, or whose exit code is `exit` rather than
+`exit_code` (#2228). What a document carries as data - a query's
 result, a table's rows - is wrapped in `Verbatim` and printed as it came.
 """
 
@@ -56,13 +57,22 @@ def json_opt(shape: str | None = None, note: str | None = None) -> Any:
 #: as the CLI flag does. A job is `job`, the argument's name on every command
 #: that takes one (the run ledger and a bounded job's state say `worker`), and
 #: a stack's base port is `base_port`, `--base-port`'s name (#1855), where an
-#: attached destination says `stack_id`.
+#: attached destination says `stack_id`. A log line's level is `level`, the
+#: name of the `--level` option that filters it on every command (#2241),
+#: where TorQ's log line calls it `loglevel`.
 KEYS = {
     "procname": "process",
     "startwithall": "start_with_all",
     "worker": "job",
     "stack_id": "base_port",
+    "loglevel": "level",
 }
+
+#: The keys a log line is a record of in every document that prints log lines,
+#: `logs` and `connector logs` (#2241): when, how severe, and what it said. A
+#: command adds its own keys beside them; `activity list`'s events say when and
+#: how severe under the same two, `time` and `level`.
+LINE_KEYS = ("time", "level", "message")
 
 
 @dataclasses.dataclass(frozen=True)
@@ -203,6 +213,8 @@ def _keyed(obj: Mapping[Any, Any]) -> dict[str, Any]:
         )
     if isinstance(out.get("range"), dict):
         raise ValueError("a range in a --json document is `range_from`/`range_to`, not `range`")
+    if "exit" in out:
+        raise ValueError("an exit code in a --json document is `exit_code`, not `exit` (#2228)")
     return out
 
 

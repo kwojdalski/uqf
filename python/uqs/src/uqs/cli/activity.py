@@ -106,9 +106,9 @@ FormatOpt = ChoiceOpt(
     default="text",
 )
 ListJson = json_opt(
-    '{"db": path, "events": [{event_id, ts, recorded_at, level, source, kind, action, target, '
+    '{"db": path, "events": [{event_id, time, recorded_at, level, source, kind, action, target, '
     "subject, outcome, session_id, request_id, claimed_user, trigger, method, status_code, "
-    'duration_ms, items, detail, dropped}], newest first, "drops": [{level, reason, count, '
+    'duration_ms, items, detail, dropped_detail}], newest first, "drops": [{level, reason, count, '
     "last_at}]}"
 )
 
@@ -196,16 +196,16 @@ def list_(
                "outcome": outcome, "recorded_by": recorded_by, "level": level}  # fmt: skip
     try:
         q = _query(range_from, range_to, day, last, filters, limit)
-        path, events, dropped = _read(db, q, activity_log.MAX_LIMIT)
+        path, events, drops = _read(db, q, activity_log.MAX_LIMIT)
         events = _sorted_items(events, sort, reverse)
     except UqsError as exc:
         _die(exc)
         return
     _export([activity_log.flat(e) for e in events], export)
     if as_json:
-        emit({"db": str(path), "events": events, "drops": dropped})
+        emit({"db": str(path), "events": events, "drops": drops})
         return
-    for d in dropped:
+    for d in drops:
         console.print(
             "[yellow]![/] "
             + escape(
@@ -223,7 +223,7 @@ def list_(
             *(
                 escape(cell)
                 for cell in (
-                    str(e["ts"]),
+                    str(e["time"]),
                     str(e["level"]),
                     str(e["source"]),
                     str(e["kind"]),
@@ -278,7 +278,7 @@ def export_(
                "outcome": outcome, "recorded_by": recorded_by, "level": level}  # fmt: skip
     try:
         q = _query(range_from, range_to, day, last, filters, limit)
-        _, events, dropped = _read(db, q, activity_log.EXPORT_MAX)
+        _, events, drops = _read(db, q, activity_log.EXPORT_MAX)
     except UqsError as exc:
         _die(exc)
         return
@@ -287,7 +287,7 @@ def export_(
         str(fmt),
         exported_at=dt.datetime.now(dt.UTC),
         filters=q.described(),
-        dropped=dropped,
+        drops=drops,
     )
     if output is None:
         sys.stdout.write(body)

@@ -269,9 +269,7 @@ def _deny_all(req: Request_) -> str | None:
 #: A well-formed request per guarded route, so the refusal is the policy's
 #: and not a 422 - valid before and after the seam moved into a dependency.
 SAMPLES: dict[tuple[str, str], dict] = {
-    ("POST", "/services/{target}/files/delete"): {
-        "json": {"paths": ["shared/file"], "confirmed": True}
-    },
+    ("DELETE", "/services/{target}/files"): {"json": {"paths": ["shared/file"], "confirmed": True}},
     ("GET", "/ops/queue"): {},
     ("GET", "/ops/connections"): {},
     ("GET", "/ops/usage"): {},
@@ -284,7 +282,7 @@ SAMPLES: dict[tuple[str, str], dict] = {
     ("GET", "/services/{target}/files"): {"params": {"path": "releases"}},
     ("GET", "/services/{target}/tunnel"): {"params": {"process": "rdb1"}},
     ("GET", "/services/{target}/tunnel/check"): {"params": {"process": "rdb1"}},
-    ("PUT", "/services/{target}/files/content"): {
+    ("PUT", "/services/{target}/files"): {
         "params": {"path": "shared/config/x.csv", "push_id": "20261104T000000000Z-00000000"},
         "content": b"a,b\n",
     },
@@ -303,9 +301,7 @@ SAMPLES: dict[tuple[str, str], dict] = {
     ("GET", "/services/{target}/config/pushes/{push_id}/diff"): {},
     ("GET", "/services/{target}/config/pushes/{push_id}/restore"): {},
     ("POST", "/services/{target}/config/pushes/{push_id}/restore"): {"json": {"confirmed": True}},
-    ("GET", "/coverage"): {
-        "params": {"dataset": "fx_quotes", "partition": "", "source_version": "v1"}
-    },
+    ("GET", "/coverage"): {"params": {"dataset": "fx_quotes", "slice": "", "source_version": "v1"}},
     ("POST", "/query"): {"json": {"table": "trades", "filters": []}},
     ("GET", "/charts"): {},
     ("POST", "/charts/{name}"): {"json": {}},
@@ -319,7 +315,7 @@ SAMPLES: dict[tuple[str, str], dict] = {
                 {
                     "event_id": "evt00000001",
                     "session_id": "session0001",
-                    "ts": "2026-01-01T00:00:00Z",
+                    "time": "2026-01-01T00:00:00Z",
                     "kind": "navigate",
                     "action": "view.open",
                     "subject": "Control",
@@ -414,7 +410,7 @@ def test_a_denied_table_is_refused_on_coverage_too():
     c, _ = client(policy=deny_tables({"fx_quotes"}))
     r = c.get(
         "/coverage",
-        params={"dataset": "fx_quotes", "partition": "", "source_version": "v1"},
+        params={"dataset": "fx_quotes", "slice": "", "source_version": "v1"},
     )
     assert r.status_code == 403, r.text
     assert "fx_quotes" in r.text
@@ -431,7 +427,7 @@ def test_a_denied_coverage_dataset_is_refused_on_query_too():
             "filters": [],
             "require_coverage": {
                 "dataset": "etl_coverage",
-                "partition": "",
+                "slice": "",
                 "source_version": "v1",
                 "range_from": "2026-09-13T00:00:00Z",
                 "range_to": "2026-09-16T00:00:00Z",

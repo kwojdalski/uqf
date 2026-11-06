@@ -270,6 +270,22 @@ def _compression_config(args: argparse.Namespace) -> int:
     )
 
 
+def _environment_tables(args: argparse.Namespace) -> int:
+    """The two variable tables in docs/reference/environment.md (#2169), between
+    their markers, from docs/reference/environment/read.csv and produced.csv -
+    the declarations the env-reference gate reads. Needs no q. Prose outside
+    the markers is untouched."""
+    tables = load("environment_tables")
+    try:
+        page = tables.render()
+    except tables.MarkerError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    return settle(
+        [text(tables.doc_path(), page)], check=args.check, hint=_hint("environment-tables")
+    )
+
+
 def _diagrams_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--require",
@@ -449,6 +465,12 @@ TARGETS: dict[str, Target] = {
             "scripts/torqconfig/compressionconfig.csv, TorQ's compression policy, from the "
             "declared policy (needs KDB-X)",
             _compression_config,
+        ),
+        Target(
+            "environment-tables",
+            "the variable tables in docs/reference/environment.md, from the CSVs the "
+            "env-reference gate reads",
+            _environment_tables,
         ),
         Target(
             "diagrams",

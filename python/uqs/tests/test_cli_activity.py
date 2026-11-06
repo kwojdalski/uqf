@@ -35,7 +35,7 @@ def _event(ts: str, kind: str, action: str, **over: object) -> dict:
     return {
         "event_id": activity.new_id(),
         "session_id": SESSION,
-        "ts": ts,
+        "time": ts,
         "kind": kind,
         "action": action,
         "trigger": "pointer",
@@ -61,7 +61,7 @@ def history(tmp_path) -> tuple[Path, TestClient]:
                 _event("2026-11-03T10:00:04Z", "debug", "request.finish",
                        subject="GET /ops/queue", outcome="succeeded", duration_ms=3.0),
             ],
-            "dropped": [{"level": "debug", "reason": "sampled", "count": 5}],
+            "drops": [{"level": "debug", "reason": "sampled", "count": 5}],
         },
     )  # fmt: skip
     store: activity.ActivityStore = client.app.state.activity  # ty: ignore[unresolved-attribute]
@@ -69,7 +69,7 @@ def history(tmp_path) -> tuple[Path, TestClient]:
         source="server",
         kind="request",
         action="process.stop",
-        ts=dt.datetime(2026, 11, 3, 10, 0, 3, tzinfo=dt.UTC),
+        time=dt.datetime(2026, 11, 3, 10, 0, 3, tzinfo=dt.UTC),
         subject="rdb1",
         outcome="refused",
         request_id=RID,
@@ -90,6 +90,9 @@ def test_list_reads_the_file_newest_first_as_json(history):
     doc = json.loads(_run("activity", "list", "--db", str(db), "--json"))
     assert doc["db"] == str(db)
     assert [e["action"] for e in doc["events"]][:2] == ["request.finish", "process.stop"]
+    # #2241: an event says when under `time`, as every log line's record does - never `ts`
+    assert all("time" in e and "ts" not in e and "level" in e for e in doc["events"])
+    assert doc["events"][0]["time"].startswith("2026-11-03T10:00:04")
     assert doc["drops"] == [
         {"level": "debug", "reason": "sampled", "count": 5, "last_at": doc["drops"][0]["last_at"]}
     ]
@@ -149,8 +152,9 @@ def test_the_text_export_groups_the_stop_under_its_request(history):
     text = _run("activity", "export", "--db", str(db), "--request", RID)
     lines = text.splitlines()
     assert lines[3] == "# not in the history (counted, not shown): debug sampled 5"
-    assert lines[4] == f"request {RID[:8]} · process.stop · refused"
-    assert [line.split(" · ")[3] for line in lines[5:]] == [
+    assert lines[4] == f"# {activity_log.RENAMED_DETAIL_NOTE}"
+    assert lines[5] == f"request {RID[:8]} · process.stop · refused"
+    assert [line.split(" · ")[3] for line in lines[6:]] == [
         "browser submit process.stop",
         "browser confirm process.stop",
         "server POST process.stop",

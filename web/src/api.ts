@@ -39,12 +39,12 @@ export interface Catalog {
 }
 export interface CoverageRequest {
   dataset: string;
-  // The slice to ask about. "" is the sentinel for a dataset with no
-  // partition dimension - not "any partition". The gateway requires the
-  // field, because a coverage read that omits it aggregates across every
-  // partition and reports a range published for one symbol as covered for
-  // all of them (#185).
-  partition: string;
+  // The coverage slice to ask about. "" is the sentinel for a dataset with
+  // no slice dimension - not "any slice". The gateway requires the field,
+  // because a coverage read that omits it aggregates across every slice and
+  // reports a range published for one symbol as covered for all of them
+  // (#185). `slice`, as `uqs data diff --slice`: a partition is a date (#2261).
+  slice: string;
   source_version: string;
   range_from: string;
   range_to: string;
@@ -127,7 +127,7 @@ export interface CompareBody {
   filters: QueryFilter[];
   limit: number;
   source_version?: string | null;
-  partition?: string | null;
+  slice?: string | null;
 }
 /** The outcomes q reaches (.qetl.compare.outcomes), first that applies. */
 export type CompareOutcome =
@@ -182,9 +182,9 @@ export interface CompareResult {
   limit: number;
   /** The filters as they were sent. */
   filters: QueryFilter[];
-  /** null when no coverage was compared; partition "" is the no-partition slice. */
+  /** null when no coverage was compared; slice "" is the no-slice-dimension slice. */
   source_version: string | null;
-  partition: string | null;
+  slice: string | null;
   tables: CompareTable[];
 }
 /** The part of a Pydantic model's JSON Schema a parameter form reads. */
@@ -442,7 +442,7 @@ export interface TunnelMapping {
   local_endpoint: string;
   query_command: string;
   state: "verified" | "stale" | "unverified";
-  last_check: TunnelCheckRecord | null;
+  last_success: TunnelCheckRecord | null;
   listening: boolean;
 }
 /** GET /services/{target}/tunnel - models.TunnelPlanResponse. Not polled:
@@ -464,8 +464,9 @@ export interface TunnelEndpoint {
   local_endpoint: string;
   remote_port: number;
   local_port: number;
-  status: string;
-  detail: string;
+  /** null when it passed, else a key of `categories` - the check's own `category`. */
+  category: string | null;
+  error: string | null;
   layers: Record<string, string>;
   connected: boolean;
   reported_process: string | null;
@@ -476,7 +477,7 @@ export interface TunnelEndpoint {
 export interface TunnelCheck {
   ok: boolean;
   target: string;
-  ssh: string | null;
+  ssh: string;
   release: string | null;
   checked_at: string;
   category: string | null;
@@ -590,8 +591,9 @@ export async function request<T>(
   body?: string,
   // Explicit only when it is not the obvious one. GET without a body and
   // POST with one cover every read in this app; the control routes need PUT,
-  // and inferring that from anything would be guessing.
-  method?: "GET" | "POST" | "PUT",
+  // deleting remote files DELETE (#2248), and inferring that from anything
+  // would be guessing.
+  method?: "GET" | "POST" | "PUT" | "DELETE",
   authorization?: string,
   extra?: Record<string, string>,
 ): Promise<T> {
@@ -873,8 +875,8 @@ export interface Correlation {
 
 /** The write token for the control routes (#631), when the operator typed it.
  *
- * Only the built app served at /ui/ needs it: under `npm run dev` the Vite
- * proxy adds it from the server's environment. Kept in sessionStorage - this
+ * The built app at /ui/ and `npm run dev` alike: the Vite proxy adds no
+ * credential (#2182), so the browser sends it. Kept in sessionStorage - this
  * tab only, gone when it closes - and every access is guarded, since storage
  * can be blocked outright. */
 const WRITE_TOKEN_KEY = "uqf.writeToken";
@@ -900,7 +902,7 @@ export const writeToken = {
   },
 };
 
-/** PUT /services/{target}/files/content - models.RemoteUploadResponse: one
+/** PUT /services/{target}/files - models.RemoteUploadResponse: one
  * file written below the target's shared/config, published atomically. */
 export interface RemoteUpload {
   target: string;
@@ -945,7 +947,7 @@ export function remoteUploadPath(
     overwrite: String(overwrite),
     push_id: pushId,
   });
-  return `/services/${encodeURIComponent(target)}/files/content?${query}`;
+  return `/services/${encodeURIComponent(target)}/files?${query}`;
 }
 
 /** Why `path` (relative to the upload root's parent, the deployment root)
@@ -1337,7 +1339,7 @@ export interface ActivityItem {
 export interface BrowserEvent {
   event_id: string;
   session_id: string;
-  ts: string;
+  time: string;
   kind: BrowserKind;
   action: string;
   /** what the event is about - a view, a control, a process selector */
@@ -1358,7 +1360,7 @@ export interface BrowserDrop {
 /** POST /activity/events - models.ActivityBatchRequest. */
 export interface ActivityBatch {
   events?: BrowserEvent[];
-  dropped?: BrowserDrop[];
+  drops?: BrowserDrop[];
 }
 export interface ActivityBatchResult {
   stored: number;
@@ -1370,7 +1372,7 @@ export interface ActivityBatchResult {
  *  anyone can set: shown as claimed, never as who it was. */
 export interface ActivityEvent {
   event_id: string;
-  ts: string;
+  time: string;
   recorded_at: string;
   level: ActivityLevel;
   source: ActivitySource;
@@ -1390,7 +1392,8 @@ export interface ActivityEvent {
   duration_ms: number | null;
   items: ActivityItem[];
   detail: Record<string, unknown>;
-  dropped: number;
+  /** `detail` keys dropped - the batch result's `dropped_detail`. */
+  dropped_detail: number;
 }
 export interface ActivityPersistence {
   persistent: boolean;
@@ -1418,7 +1421,7 @@ export interface ActivityHistory extends Pollable {
   /** More events matched than the `limit` returned (#2220). */
   truncated: boolean;
   persistence: ActivityPersistence;
-  default_level: SessionLevel;
+  activity_level: SessionLevel;
   bounds: ActivityBound[];
   drops: ActivityDrop[];
 }

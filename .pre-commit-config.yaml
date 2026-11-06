@@ -240,7 +240,7 @@ repos:
         entry: python3 scripts/gates/check.py env-reference
         language: system
         pass_filenames: false
-        files: '^(src|scripts|sidecars|web|python|lib|tests)/|^docs/reference/environment\.md$'
+        files: '^(src|scripts|sidecars|web|python|lib|tests)/|^docs/reference/environment(\.md|/[a-z]+\.csv)$'
 
       - id: declaration-reference
         name: Check the pipeline declaration reference lists every key
@@ -491,6 +491,17 @@ repos:
         language: system
         pass_filenames: false
         files: '^python/uqs/src/uqs/stack/housekeeping\.py$|^scripts/torqconfig/housekeeping(_schedule)?\.csv$|^scripts/generate/(derive|housekeeping_config)\.py$'
+
+      - id: environment-tables
+        name: Check the environment reference's tables match their declarations
+        # The two variable tables in docs/reference/environment.md are
+        # generated (#2169) from docs/reference/environment/*.csv, which the
+        # env-reference gate also reads. Needs no q. To accept an intended change:
+        #   uv run python scripts/generate/derive.py environment-tables
+        entry: python3 scripts/generate/derive.py environment-tables --check
+        language: system
+        pass_filenames: false
+        files: '^docs/reference/environment(\.md|/[a-z]+\.csv)$|^scripts/generate/(derive|environment_tables)\.py$|^scripts/gates/policy/env_reference\.py$'
 
       - id: compression-config
         # kdbx-only

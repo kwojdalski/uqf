@@ -44,15 +44,25 @@ TARGET_HELP = (
 )
 
 
-def target_arg(help: str = TARGET_HELP, *, latest: bool = False) -> Any:  # noqa: A002
+def target_arg(
+    help: str = TARGET_HELP,  # noqa: A002
+    *,
+    latest: bool = False,
+    flags: bool = False,
+) -> Any:
     """A TARGET argument. `latest`: optional, and without it the most recent
-    deployment - what every command that reads a server falls back to."""
+    deployment - what every command that reads a server falls back to. `flags`:
+    optional only because the connection flags may name the server instead -
+    a command that changes a server falls back to nothing (#2243), so its help
+    claims no default."""
+    if latest and flags:
+        raise ValueError("a TARGET falls back to the latest deployment or to nothing, not both")
     if latest:
         help = f"{help}; default: the most recent deployment"
     argument = typer.Argument(
         metavar="TARGET", help=help, autocompletion=completion.targets, show_default=False
     )
-    return Annotated[str | None, argument] if latest else Annotated[str, argument]
+    return Annotated[str | None, argument] if latest or flags else Annotated[str, argument]
 
 
 #: A TARGET a command needs named: one it changes.

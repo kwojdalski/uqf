@@ -84,7 +84,7 @@ def _event(**over: Any) -> dict[str, Any]:
     body = {
         "event_id": activity.new_id(),
         "session_id": SESSION,
-        "ts": "2026-11-03T10:00:00Z",
+        "time": "2026-11-03T10:00:00Z",
         "kind": "navigate",
         "action": "view.open",
         "subject": "Control",
@@ -132,7 +132,7 @@ def test_every_state_changing_route_is_named_in_server_actions():
 #: route of an area with a stray prefix (`file.upload` beside `files.delete`)
 #: would hide from it.
 _ACTION_AREAS = {
-    "/services/{target}/files/": "files",
+    "/services/{target}/files": "files",
     "/services/{target}/config/": "config",
     "/control/lifecycle/": "process",
     "/control/processes/": "process",
@@ -402,7 +402,7 @@ def test_a_detail_key_outside_the_allowlist_is_dropped_and_counted(tmp_path, key
     assert r.json()["dropped_detail"] == 1
     (row,) = _history(c)
     assert row["detail"] == {"view": "Control"}
-    assert row["dropped"] == 1
+    assert row["dropped_detail"] == 1
     assert "PRIVATE-VALUE" not in _dump(tmp_path / "activity.sqlite3")
 
 
@@ -411,7 +411,7 @@ def test_a_detail_key_outside_the_allowlist_is_dropped_and_counted(tmp_path, key
     [
         ("error", "ValidationFailed: unknown action 'secret'"),  # a message, not a type
         ("sha256", "not-a-hash"),
-        ("size_bytes", -1),
+        ("size", -1),
         ("range_from", "drop table"),
         ("dataset", 'x"; y'),
     ],
@@ -439,7 +439,7 @@ def test_a_subject_that_is_not_a_name_is_stored_as_invalid(tmp_path):
 
 def test_a_naive_browser_timestamp_is_refused(tmp_path):
     c = _client(_settings(tmp_path))
-    r = c.post("/activity/events", json={"events": [_event(ts="2026-11-03T10:00:00")]})
+    r = c.post("/activity/events", json={"events": [_event(time="2026-11-03T10:00:00")]})
     assert r.status_code == 422
 
 
@@ -456,9 +456,9 @@ def test_a_browser_timestamp_utc_cannot_hold_refuses_the_whole_batch(tmp_path, t
         create_app(gateway=FakeGateway(), settings=_settings(tmp_path)),
         raise_server_exceptions=False,
     )
-    r = c.post("/activity/events", json={"events": [_event(), _event(ts=ts)]})
+    r = c.post("/activity/events", json={"events": [_event(), _event(time=ts)]})
     assert r.status_code == 422, r.text
-    assert "ts" in r.text
+    assert "time" in r.text
     assert _history(c) == []
 
 
@@ -479,14 +479,14 @@ def test_an_upload_records_metadata_through_the_hook_never_contents():
     have no key to be kept under."""
     audit = activity.Audit()
     audit.note(
-        file_name="deals.csv",
-        size_bytes=1234,
+        path="deals.csv",
+        size=1234,
         sha256="a" * 64,
         content=b"secret,row\n",
         file_contents="secret,row",
     )
     kept, dropped = activity.clean_detail(audit.detail)
-    assert kept == {"file_name": "deals.csv", "size_bytes": 1234, "sha256": "a" * 64}
+    assert kept == {"path": "deals.csv", "size": 1234, "sha256": "a" * 64}
     assert dropped == 2
 
 
@@ -499,16 +499,16 @@ def test_events_are_filtered_by_session_action_subject_outcome_and_time(tmp_path
         "/activity/events",
         json={
             "events": [
-                _event(ts="2026-11-01T00:00:00Z", action="view.open", subject="Desk"),
+                _event(time="2026-11-01T00:00:00Z", action="view.open", subject="Desk"),
                 _event(
-                    ts="2026-11-02T00:00:00Z",
+                    time="2026-11-02T00:00:00Z",
                     kind="result",
                     action="process.stop",
                     subject="rdb1",
                     outcome="failed",
                 ),
                 _event(
-                    ts="2026-11-03T00:00:00Z",
+                    time="2026-11-03T00:00:00Z",
                     session_id="other-session-1",
                     action="process.start",
                     subject="rdb1",

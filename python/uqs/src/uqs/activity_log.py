@@ -88,7 +88,7 @@ EXTENSIONS = {"jsonl": "jsonl", "csv": "csv", "text": "txt"}
 #: The columns a reader gets back, in order.
 COLUMNS = (
     "event_id",
-    "ts",
+    "time",
     "recorded_at",
     "level",
     "source",
@@ -106,7 +106,15 @@ COLUMNS = (
     "duration_ms",
     "items",
     "detail",
-    "dropped",
+    "dropped_detail",
+)
+
+#: `detail` keys an audit row used before #2246, which named an upload's and a
+#: push's facts other than their routes do. Rows recorded before it keep them:
+#: an export says so, rather than rewriting what was recorded.
+RENAMED_DETAIL_NOTE = (
+    "detail keys before #2246, kept as recorded: file_name is path, size_bytes is size "
+    "(one file) or total_bytes (a push), item_count is file_count"
 )
 
 
@@ -189,10 +197,10 @@ def select(db: sqlite3.Connection, q: Query, *, max_limit: int = MAX_LIMIT) -> l
     where: list[str] = []
     args: list[Any] = []
     if q.since is not None:
-        where.append("ts >= ?")
+        where.append("time >= ?")
         args.append(stamp(q.since))
     if q.until is not None:
-        where.append("ts < ?")
+        where.append("time < ?")
         args.append(stamp(q.until))
     for column in ("session_id", "request_id", "target", "subject", "outcome", "source"):
         value = getattr(q, column)
@@ -211,7 +219,7 @@ def select(db: sqlite3.Connection, q: Query, *, max_limit: int = MAX_LIMIT) -> l
     sql = f"SELECT {', '.join(COLUMNS)} FROM activity"  # noqa: S608 - fixed names
     if where:
         sql += " WHERE " + " AND ".join(where)
-    sql += " ORDER BY ts DESC, seq DESC LIMIT ?"
+    sql += " ORDER BY time DESC, seq DESC LIMIT ?"
     args.append(max(1, min(q.limit, max_limit)))
     out = []
     for row in db.execute(sql, args).fetchall():
@@ -233,7 +241,7 @@ def drops(db: sqlite3.Connection) -> list[dict[str, Any]]:
 #: The `PRAGMA user_version` a history file this release reads has: the
 #: frontend API brings an older file up to it when it opens it
 #: (uqf_frontend/activity.py `_MIGRATIONS`), and a read-only reader cannot.
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 4
 
 
 def open_readonly(path: Path) -> sqlite3.Connection:
@@ -261,7 +269,7 @@ def render(
     *,
     exported_at: dt.datetime,
     filters: Mapping[str, str] | None = None,
-    dropped: Iterable[Mapping[str, Any]] = (),
+    drops: Iterable[Mapping[str, Any]] = (),
 ) -> str:
     """`rows` (newest first, as `select` returns them) written as `fmt`,
     oldest first: a history is read forwards."""
@@ -271,7 +279,7 @@ def render(
     if fmt == "csv":
         return _csv(forwards)
     if fmt == "text":
-        return _text(forwards, exported_at, filters or {}, list(dropped))
+        return _text(forwards, exported_at, filters or {}, list(drops))
     raise ValueError(f"unknown export format {fmt!r}: one of {', '.join(EXPORT_FORMATS)}")
 
 
@@ -322,9 +330,9 @@ _SEP = " · "
 _NONE = "—"
 
 
-def _when(ts: str | None) -> str:
+def _when(time: str | None) -> str:
     """Milliseconds are enough to read by: 2026-11-03T10:00:00.123Z."""
-    return f"{ts[:23]}Z" if ts and len(ts) >= 23 else (ts or _NONE)
+    return f"{time[:23]}Z" if time and len(time) >= 23 else (time or _NONE)
 
 
 def _duration(ms: float | None) -> str:
@@ -337,7 +345,7 @@ def _line(row: Mapping[str, Any]) -> str:
     how = row.get("method") if row.get("source") == "server" else row.get("kind")
     return _SEP.join(
         [
-            _when(row.get("ts")),
+            _when(row.get("time")),
             (row.get("session_id") or "-")[:8],
             str(row.get("level") or _NONE),
             f"{row.get('source')} {how} {row.get('action')}",
@@ -361,7 +369,7 @@ def _text(
     rows: Sequence[Mapping[str, Any]],
     exported_at: dt.datetime,
     filters: Mapping[str, str],
-    dropped: list[Mapping[str, Any]],
+    drops: list[Mapping[str, Any]],
 ) -> str:
     """A timeline a person can follow: one event a line, oldest first, and
     every event that shares a request id - the browser's submit, confirm and
@@ -373,9 +381,10 @@ def _text(
         f"# filters: {said}",
         f"# columns: {_SEP.join(TEXT_COLUMNS)}",
     ]
-    if dropped:
-        lost = ", ".join(f"{d['level']} {d['reason']} {d['count']}" for d in dropped)
+    if drops:
+        lost = ", ".join(f"{d['level']} {d['reason']} {d['count']}" for d in drops)
         lines.append(f"# not in the history (counted, not shown): {lost}")
+    lines.append(f"# {RENAMED_DETAIL_NOTE}")
     groups: dict[str, list[Mapping[str, Any]]] = {}
     for row in rows:
         if row.get("request_id"):
