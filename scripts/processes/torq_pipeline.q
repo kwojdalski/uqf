@@ -525,6 +525,7 @@ sub_load_schemas:{[h;tbls]
     recorded:exec schema from logs;
     {[h;recorded;t]
         c:(recorded where {[t;s] t in key s}[t] each recorded)@\:t;
+        if[0=count c; .qetl.log.warn[`qtorq;"no log of the day recorded a schema for this table - replayed messages are named from the plant's current table";enlist[`table]!enlist t]];
         .qtorq.sub_cands[t]:$[count c; c; enlist 0#h({value x};t)];
         .qtorq.sub_sch_at[t]:0}[h;recorded] each tbls;
     tbls}

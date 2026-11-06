@@ -111,3 +111,23 @@
     `.qtorq.sub_since set (`symbol$())!`timestamp$();
     .qunit.assertEquals[.qt.qetl.stream_replay_guard.got;1 2 3f;"the received message once, the missed ones once, the replayed duplicates not at all"];
     .qunit.assertEquals[.qtorq.sub_hwm`fills;tm 3;"and the high-water mark is the last message"]};
+
+/ The runner's own status directory, so a quarantine file and an uptime session are written somewhere writable.
+.qt.qetl.stream_replay_guard.beforeNamespace_isolate_status:{[] setenv[`UQF_STATUS_DIR;"build/test-status-stream-replay-guard"];}
+
+/ The schemas the plant recorded with the day's logs are what replayed messages are named by.
+.qt.qetl.stream_replay_guard.test_the_recorded_schemas_of_the_days_logs_are_loaded_oldest_first:{[t]
+    root:"build/test-stream-replay-guard";
+    day:root,"/stp1_2026.11.06";
+    system"mkdir -p ",day;
+    ds:{[tm] enlist[`fills]!enlist tm};
+    (hsym `$day,"/stpmeta") set ([] seq:1 2i; logname:`:a`:b; tbls:(enlist `fills;enlist `fills);
+        schema:(ds .qt.qetl.stream_replay_guard.old;ds .qt.qetl.stream_replay_guard.new));
+    plant:{[root;day;q] $[10h=type q; (hsym `$root;`stp1;hsym `$day); 0#.qt.qetl.stream_replay_guard.new]}[root;day];
+    .qtorq.sub_load_schemas[plant;enlist `fills];
+    .qunit.assertEquals[count each cols each .qtorq.sub_cands[`fills];3 4;"one schema per log, in the order the plant opened them"];
+    .qunit.assertEquals[.qtorq.sub_sch_at`fills;0;"and the search starts at the first"];
+    / a plant that cannot say falls back to its current table, as before
+    broken:{[q] '"no plant"};
+    .qtorq.sub_load_schemas[{[q] $[10h=type q; '"no plant"; 0#.qt.qetl.stream_replay_guard.new]};enlist `fills];
+    .qunit.assertEquals[count each cols each .qtorq.sub_cands[`fills];enlist 4;"the plant's current table when the logs' schemas cannot be read"]};
