@@ -368,14 +368,14 @@ def clean_items(raw: Iterable[Mapping[str, object]] | None) -> list[dict[str, st
 #: and test_activity.py fails until it is named - the hook #1951 and #1953
 #: add their upload and delete routes to.
 SERVER_ACTIONS: dict[tuple[str, str], Callable[[Mapping[str, str]], str]] = {
-    ("POST", "/services/{target}/files/delete"): lambda _: "files.delete",
+    ("DELETE", "/services/{target}/files"): lambda _: "files.delete",
     ("POST", "/control/process/{action}"): lambda p: (
         f"process.{p['action']}" if p.get("action") in ("start", "stop", "restart") else "process"
     ),
     ("PUT", "/control/process/{process}/config"): lambda _: "process.config",
     ("PUT", "/control/worker-config"): lambda _: "worker.config",
     ("POST", "/control/backfill"): lambda _: "backfill.start",
-    ("PUT", "/services/{target}/files/content"): lambda _: "files.upload",
+    ("PUT", "/services/{target}/files"): lambda _: "files.upload",
     # config pushes (#2002): `config.push` is the summary row of a whole push,
     # written when it closes; a restore is a push of its own
     ("POST", "/services/{target}/config/pushes"): lambda _: "config.push.open",

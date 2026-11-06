@@ -1,4 +1,4 @@
-"""PUT /services/{target}/files/content: uploads to a registered target (#1951).
+"""PUT /services/{target}/files: uploads to a registered target (#1951).
 
 ssh is stubbed as in test_remote_files.py: a Recorder answers with a canned
 result, for the gates that refuse before ssh and for each failure ssh or the
@@ -139,7 +139,7 @@ def _put(runner, path, data=b"a,b\n", target="box", overwrite=None, push=None, *
     if overwrite is not None:
         params["overwrite"] = overwrite
     client = kw.pop("client", None) or _client(runner)
-    return client.put(f"/services/{target}/files/content", params=params, content=data, **kw)
+    return client.put(f"/services/{target}/files", params=params, content=data, **kw)
 
 
 def _ok_answer(path, data, **over):
@@ -210,7 +210,7 @@ def test_unsafe_paths_and_unsupported_destinations_are_refused_before_ssh(served
 
 def test_a_path_is_required(served):
     runner = Recorder()
-    resp = _client(runner).put("/services/box/files/content", content=b"x")
+    resp = _client(runner).put("/services/box/files", content=b"x")
     assert resp.status_code == 422
     assert runner.calls == []
 

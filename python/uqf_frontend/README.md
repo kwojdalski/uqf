@@ -137,10 +137,14 @@ fields of its `deploy-report.json`, come back as `release`. A listing returns at
 most `limit` entries (500 by default, 5000 at most) and says when it was
 truncated; the call is held to 20 s.
 
-`POST /services/{target}/files/delete` removes named regular files and empty
-directories, never following a link or recursing (#1953). A deletion changes the
-server, so once ssh has started, a timeout, ssh exiting 255 (it may have dropped
-midway), a crashed helper or an answer that cannot be read is 504
+`DELETE /services/{target}/files`, with the body
+`{"paths": [...], "confirmed": true}`, removes named regular files and empty
+directories, never following a link or recursing (#1953). A remote file is one
+resource whose method is the operation (#2248): `GET` lists, `PUT` writes and
+`DELETE` removes. The old `POST .../files/delete` and `PUT .../files/content`
+answer 410 `RouteGone` naming the route that replaced them. A deletion changes
+the server, so once ssh has started, a timeout, ssh exiting 255 (it may have
+dropped midway), a crashed helper or an answer that cannot be read is 504
 `DeleteOutcomeUncertain` with `transient: false`: some paths may be gone, and
 you list the directory before deleting again. Only a browse's timeout is
 transient (#2023).
@@ -168,14 +172,13 @@ the same connection details for whichever target you choose.
 
 ### Uploading to a target's shared/config --- one file per request
 
-`PUT /services/{target}/files/content?path=&overwrite=false&push_id=` writes the
-request body to `path` below the target's `shared/config/` - the
-operator-supplied files every release links in - and nowhere else (#1951). It is
-gated like browsing: writes on, the token, an allowed Host, a registered target.
-The browser's file browser shows an upload queue in `shared/config/` and below
-it. You can choose files or a folder, or drag them in. Nested paths are kept.
-Nothing is sent until you confirm the destination. Each file has its own
-progress and its own outcome.
+`PUT /services/{target}/files?path=&overwrite=false&push_id=` writes the request
+body to `path` below the target's `shared/config/` - the operator-supplied files
+every release links in - and nowhere else (#1951). It is gated like browsing:
+writes on, the token, an allowed Host, a registered target. The browser's file
+browser shows an upload queue in `shared/config/` and below it. You can choose
+files or a folder, or drag them in. Nested paths are kept. Nothing is sent until
+you confirm the destination. Each file has its own progress and its own outcome.
 
 - **Limits.** 16 MiB a file, checked in the browser, again by the API before ssh
   (`Content-Length`, then while the body is read: 413), and again on the server.

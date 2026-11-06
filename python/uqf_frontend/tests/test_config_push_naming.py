@@ -182,7 +182,7 @@ def test_the_old_upload_parameter_is_refused_with_a_migration_message():
         headers={"Authorization": f"Bearer {'t' * 64}"},
     )
     resp = client.put(
-        "/services/box/files/content",
+        "/services/box/files",
         params={"path": "shared/config/x", "push": "20261104T000000000Z-00000000"},
         content=b"x",
     )

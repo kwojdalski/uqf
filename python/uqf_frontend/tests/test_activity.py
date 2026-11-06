@@ -132,7 +132,7 @@ def test_every_state_changing_route_is_named_in_server_actions():
 #: route of an area with a stray prefix (`file.upload` beside `files.delete`)
 #: would hide from it.
 _ACTION_AREAS = {
-    "/services/{target}/files/": "files",
+    "/services/{target}/files": "files",
     "/services/{target}/config/": "config",
     "/control/process": "process",
     "/control/worker-config": "worker",

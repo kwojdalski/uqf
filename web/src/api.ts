@@ -585,8 +585,9 @@ export async function request<T>(
   body?: string,
   // Explicit only when it is not the obvious one. GET without a body and
   // POST with one cover every read in this app; the control routes need PUT,
-  // and inferring that from anything would be guessing.
-  method?: "GET" | "POST" | "PUT",
+  // deleting remote files DELETE (#2248), and inferring that from anything
+  // would be guessing.
+  method?: "GET" | "POST" | "PUT" | "DELETE",
   authorization?: string,
   extra?: Record<string, string>,
 ): Promise<T> {
@@ -892,7 +893,7 @@ export const writeToken = {
   },
 };
 
-/** PUT /services/{target}/files/content - models.RemoteUploadResponse: one
+/** PUT /services/{target}/files - models.RemoteUploadResponse: one
  * file written below the target's shared/config, published atomically. */
 export interface RemoteUpload {
   target: string;
@@ -937,7 +938,7 @@ export function remoteUploadPath(
     overwrite: String(overwrite),
     push_id: pushId,
   });
-  return `/services/${encodeURIComponent(target)}/files/content?${query}`;
+  return `/services/${encodeURIComponent(target)}/files?${query}`;
 }
 
 /** Why `path` (relative to the upload root's parent, the deployment root)

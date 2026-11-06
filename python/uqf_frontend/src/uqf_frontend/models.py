@@ -562,7 +562,7 @@ class RemoteFilesResponse(BaseModel):
 
 
 class RemoteUploadResponse(BaseModel):
-    """PUT /services/{target}/files/content: one file written below the
+    """PUT /services/{target}/files: one file written below the
     target's shared/config, published in one atomic step (#1951)."""
 
     target: str

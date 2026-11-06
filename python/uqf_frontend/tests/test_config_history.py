@@ -107,7 +107,7 @@ def test_the_old_destination_key_is_refused_naming_config_dir(served, tmp_path):
 
 def _upload(c: TestClient, push: str, path: str, data: bytes, overwrite: bool = False):
     params = {"path": path, "push_id": push, "overwrite": str(overwrite).lower()}
-    return c.put("/services/box/files/content", params=params, content=data)
+    return c.put("/services/box/files", params=params, content=data)
 
 
 def _rows(c: TestClient, **filters) -> list[dict]:
@@ -162,7 +162,7 @@ def test_a_push_has_one_id_on_every_row_and_a_summary(served, tmp_path):
 def test_an_upload_must_name_its_push(served, tmp_path):
     runner = Loopback()
     c = _client(runner, tmp_path)
-    missing = c.put("/services/box/files/content", params={"path": "shared/config/x"},
+    missing = c.put("/services/box/files", params={"path": "shared/config/x"},
                     content=b"x")  # fmt: skip
     assert missing.status_code == 422
     malformed = _upload(c, "not-a-push", "shared/config/x", b"x")
@@ -350,7 +350,7 @@ def test_the_history_is_not_reachable_through_the_file_routes(served, tmp_path, 
     push = _open(c)
     calls = len(runner.calls)
     assert c.get("/services/box/files", params={"path": path}).status_code == 400
-    deleted = c.post("/services/box/files/delete", json={"paths": [path], "confirmed": True})
+    deleted = c.request("DELETE", "/services/box/files", json={"paths": [path], "confirmed": True})
     assert deleted.status_code == 400
     assert _upload(c, push, f"{path}/y", b"evil").status_code == 400
     assert len(runner.calls) == calls  # each refused before ssh
