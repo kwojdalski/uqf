@@ -11,8 +11,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any, cast
 
-import click
 import pytest
 import typer.main
 from typer.testing import CliRunner
@@ -101,11 +101,8 @@ def test_every_wait_document_says_its_outcome_under_the_same_keys(monkeypatch):
 
 def test_the_partial_code_is_the_clis_own_and_the_help_names_every_code():
     assert EXIT_PARTIAL not in (0, EXIT_REFUSED, EXIT_USAGE)
-    root = typer.main.get_command(cli.app)
-    assert isinstance(root, click.Group)
-    job = root.commands["job"]
-    assert isinstance(job, click.Group)
-    backfill = job.commands["backfill"]
+    # typer vendors its own click, so the group is reached by attribute, not class
+    backfill = cast(Any, typer.main.get_command(cli.app)).commands["job"].commands["backfill"]
     wait = next(p for p in backfill.params if p.name == "wait")
     for code in ("0 for completed", "1 for failed", f"{EXIT_PARTIAL} for rows written"):
-        assert code in " ".join((getattr(wait, "help", None) or "").split()), code
+        assert code in " ".join((wait.help or "").split()), code
