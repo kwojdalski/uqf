@@ -2,16 +2,13 @@ import { useEffect, useState } from "react";
 import { ConfigHistory } from "./ConfigHistory";
 import { FileDelete } from "./FileDelete";
 import { FileTable } from "./FileTable";
+import { ApiError, request, writeToken } from "./api/client";
+import type { HistoryOps, PushOps } from "./api/config_push";
 import {
-  ApiError,
-  type HistoryOps,
-  type PushOps,
   type RemoteEntry,
   type RemoteFiles,
   remoteFilesPath,
-  request,
-  writeToken,
-} from "./api";
+} from "./api/services";
 import { UploadPanel, type Uploader } from "./UploadPanel";
 
 /** The fields of the release's deploy report worth a glance, in order. */

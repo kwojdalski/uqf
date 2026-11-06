@@ -1,10 +1,6 @@
 import { useState } from "react";
-import {
-  ApiError,
-  request,
-  writeToken,
-  type RemoteDeleteResponse,
-} from "./api";
+import { ApiError, request, writeToken } from "./api/client";
+import type { RemoteDeleteResponse } from "./api/services";
 
 export function FileDelete({
   target,

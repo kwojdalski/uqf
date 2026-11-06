@@ -27,15 +27,29 @@ import typing
 from pathlib import Path
 
 import pytest
+from api_support import route_modules
 from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 from pydantic import BaseModel, ValidationError
 
-from uqf_frontend import access, activity, models
+from uqf_frontend import access, activity
 from uqf_frontend import app as app_module
 from uqf_frontend.app import RENAMED_ROUTES, create_app
 from uqf_frontend.config import Settings
 from uqf_frontend.gateway import FakeGateway
+from uqf_frontend.models.activity import (
+    ActivityBatchRequest,
+    ActivityBatchResponse,
+    ActivityEventOut,
+    ActivityResponse,
+    BrowserEventIn,
+)
+from uqf_frontend.models.services import (
+    TunnelCheckResponse,
+    TunnelEndpointOut,
+    TunnelMappingOut,
+    TunnelPlanResponse,
+)
 from uqs import activity_export, activity_log
 from uqs.cli import json_out
 from uqs.deploy import tunnel_check, tunnel_plan
@@ -55,20 +69,20 @@ def _verb(route: APIRoute) -> str:
 
 
 def test_a_tunnel_mapping_and_endpoint_name_their_last_success_alike():
-    for model in (models.TunnelMappingOut, models.TunnelEndpointOut):
+    for model in (TunnelMappingOut, TunnelEndpointOut):
         assert "last_success" in model.model_fields, model.__name__
         assert "last_check" not in model.model_fields, model.__name__
 
 
 def test_a_check_and_each_endpoint_name_a_failure_category_and_error():
-    endpoint, check = models.TunnelEndpointOut.model_fields, models.TunnelCheckResponse.model_fields
+    endpoint, check = TunnelEndpointOut.model_fields, TunnelCheckResponse.model_fields
     for name in ("category", "error"):
         assert endpoint[name].annotation == check[name].annotation, name
     assert not {"status", "detail"} & set(endpoint)
 
 
 def test_a_plan_and_a_check_type_the_ssh_destination_alike():
-    plan, check = models.TunnelPlanResponse.model_fields, models.TunnelCheckResponse.model_fields
+    plan, check = TunnelPlanResponse.model_fields, TunnelCheckResponse.model_fields
     assert plan["ssh"].annotation == check["ssh"].annotation
 
 
@@ -76,32 +90,30 @@ def test_uqs_writes_the_names_the_api_serves():
     """The names come from uqs's documents, passed through unchanged: the
     two packages are held to one set of keys."""
     endpoint = {f.name for f in dataclasses.fields(tunnel_check.EndpointCheck)}
-    assert endpoint == set(models.TunnelEndpointOut.model_fields)
+    assert endpoint == set(TunnelEndpointOut.model_fields)
     mapping = {f.name for f in dataclasses.fields(tunnel_plan.TunnelMapping)}
-    assert mapping | {"state", "last_success", "listening"} == set(
-        models.TunnelMappingOut.model_fields
-    )
+    assert mapping | {"state", "last_success", "listening"} == set(TunnelMappingOut.model_fields)
 
 
 # ------------------------------------------------------------------ drops (#2242)
 
 
 def test_events_not_sent_or_not_kept_are_drops_both_ways():
-    assert "drops" in models.ActivityBatchRequest.model_fields
-    assert "drops" in models.ActivityResponse.model_fields
-    for model in (models.ActivityBatchRequest, models.ActivityResponse, models.ActivityEventOut):
+    assert "drops" in ActivityBatchRequest.model_fields
+    assert "drops" in ActivityResponse.model_fields
+    for model in (ActivityBatchRequest, ActivityResponse, ActivityEventOut):
         assert "dropped" not in model.model_fields, model.__name__
 
 
 def test_detail_keys_dropped_are_dropped_detail_on_a_batch_and_an_event():
-    for model in (models.ActivityBatchResponse, models.ActivityEventOut):
+    for model in (ActivityBatchResponse, ActivityEventOut):
         assert model.model_fields["dropped_detail"].annotation is int, model.__name__
     assert "dropped_detail" in activity_log.COLUMNS and "dropped" not in activity_log.COLUMNS
 
 
 def test_a_batch_sending_dropped_is_refused_naming_drops():
     with pytest.raises(ValidationError, match="`dropped` is `drops`: the events this browser"):
-        models.ActivityBatchRequest.model_validate({"dropped": []})
+        ActivityBatchRequest.model_validate({"dropped": []})
 
 
 def test_the_api_refuses_dropped_rather_than_ignoring_it(tmp_path):
@@ -282,13 +294,13 @@ def test_the_cli_and_the_api_record_an_activity_event_under_the_same_keys(tmp_pa
     assert c.post("/activity/events", json={"events": [event]}).status_code == 200
     (api,) = c.get("/activity").json()["events"]
     (cli,) = _cli_events(db)
-    assert set(api) == set(cli) == set(models.ActivityEventOut.model_fields)
+    assert set(api) == set(cli) == set(ActivityEventOut.model_fields)
     assert "time" in api and "ts" not in api
     assert api["time"] == cli["time"]
 
 
 def test_when_an_event_happened_is_time_everywhere():
-    for model in (models.BrowserEventIn, models.ActivityEventOut):
+    for model in (BrowserEventIn, ActivityEventOut):
         assert "time" in model.model_fields and "ts" not in model.model_fields, model.__name__
     assert "time" in activity_log.COLUMNS and "ts" not in activity_log.COLUMNS
     assert json_out.LINE_KEYS[0] == "time", "the key every log-line record says when under"
@@ -353,7 +365,14 @@ def _flatten(annotation: object) -> list[object]:
 
 def _audit_notes() -> dict[str, set[str]]:
     """Each audited route function's name -> the keys its `audit.note` calls set."""
-    tree = ast.parse(Path(app_module.__file__).read_text(encoding="utf-8"))
+    tree = ast.Module(
+        body=[
+            node
+            for module in (app_module, *route_modules())
+            for node in ast.parse(Path(module.__file__ or "").read_text(encoding="utf-8")).body
+        ],
+        type_ignores=[],
+    )
     found: dict[str, set[str]] = {}
     for node in ast.walk(tree):
         if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):

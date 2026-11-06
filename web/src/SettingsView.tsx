@@ -15,16 +15,15 @@ import Form from "@rjsf/core";
 import type { IChangeEvent } from "@rjsf/core";
 import type { RJSFSchema } from "@rjsf/utils";
 import validator from "@rjsf/validator-ajv8";
-import {
-  type AccessChangeBody,
-  type FormData,
-  type RuntimeChangeBody,
-  type SettingChange,
-  type SettingsChangeResult,
-  type SettingsData,
-  mutate,
-  writeToken,
-} from "./api";
+import { mutate, writeToken } from "./api/client";
+import type {
+  AccessChangeBody,
+  FormData,
+  RuntimeChangeBody,
+  SettingChange,
+  SettingsChangeResult,
+  SettingsData,
+} from "./api/settings";
 import { INTERACTIVE, tracked, triggerOf } from "./activity";
 import { useCapabilities } from "./capabilities";
 import { useResource } from "./useResource";

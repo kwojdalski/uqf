@@ -221,7 +221,7 @@ def test_a_timestamp_reaches_the_browser_to_the_nanosecond(browse_port):
     """#1371: through real kola and _rows, two `.z.p` stamps 765 ns apart
     stay apart, and 0Wp/-0Wp go as infinities rather than as the dates of
     2262 and 1707 their bit patterns spell."""
-    from uqf_frontend.app import _rows
+    from uqf_frontend.routes.common import _rows
 
     gw = KolaGateway(Settings(port=browse_port))
     got = gw.call(
@@ -243,7 +243,7 @@ def test_infinities_reach_the_browser_as_infinities_not_nulls(browse_port):
     inf as null, so an infinite level showed as a missing one. Through
     .uqf.browse_infinite and _rows each comes out as INFINITY, signed, and a
     null stays null."""
-    from uqf_frontend.app import _rows
+    from uqf_frontend.routes.common import _rows
 
     gw = KolaGateway(Settings(port=browse_port))
     got = gw.call(
@@ -266,9 +266,9 @@ def test_a_guid_reaches_the_browser_as_its_text_and_goes_back_as_a_filter(browse
     JSON serialisation (a 500 for the whole response), and 0Ng went as 16 NUL
     characters. Now a guid goes as its canonical text - the form a filter
     takes back - and 0Ng as null."""
-    from uqf_frontend.app import _rows
     from uqf_frontend.catalog import QType
     from uqf_frontend.queries import coerce
+    from uqf_frontend.routes.common import _rows
 
     gw = KolaGateway(Settings(port=browse_port))
     got = gw.call(f'{{[unused] ([] g:("G"$"{GUID_TEXT}"),0Ng)}}', 0)
@@ -301,9 +301,9 @@ def test_a_time_reaches_the_browser_in_the_form_its_filter_takes(browse_port):
     and 0Wt as the clock time 23:59:59.999999. Now HH:MM:SS.fff, and 0Wt as
     INFINITY. (-0Wt reaches Python as 00:00:00, which kola makes of midnight
     too: it cannot be told apart here.)"""
-    from uqf_frontend.app import _rows
     from uqf_frontend.catalog import QType
     from uqf_frontend.queries import coerce
+    from uqf_frontend.routes.common import _rows
 
     gw = KolaGateway(Settings(port=browse_port))
     got = gw.call('{[unused] ([] t:"t"$(36000123;0;86399999;0W;0N))}', 0)
@@ -324,7 +324,7 @@ def test_a_date_infinity_is_infinity_not_a_500(browse_port):
     /query answered 500."""
     import datetime as dt
 
-    from uqf_frontend.app import _rows
+    from uqf_frontend.routes.common import _rows
 
     gw = KolaGateway(Settings(port=browse_port))
     got = gw.call("{[unused] ([] d:(2026.01.01;0Wd;-0Wd;0Nd))}", 0)

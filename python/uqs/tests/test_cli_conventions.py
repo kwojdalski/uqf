@@ -123,69 +123,18 @@ def _hold(rule: str, found: set, allowed: dict) -> None:
 
 # --------------------------------------------------------------------- vocabulary
 
-#: Rule 4's core verbs, each meaning one thing (#1733).
-CORE_VERBS = {
-    "status": "the state of something running or installed",
-    "check": "actively probe; exit non-zero on a problem",
-    "list": "many records",
-    "show": "one record",
-    "set": "change one setting",
-    "add": "create one thing",
-    "remove": "delete one thing",
-}
-
-#: Rule 4's domain verbs: the words a domain needs that the core does not cover,
-#: including the few nouns kept as views of a running stack (graph, schema, ...).
-DOMAIN_VERBS = {
-    "start": "the stack's lifecycle (also a connector's)",
-    "stop": "the stack's lifecycle (also a connector's)",
-    "restart": "the stack's lifecycle (also a connector's)",
-    "exec": "run any other torq.sh verb, passed straight through",
-    "logs": "read processes' logs",
-    "clean": "delete the runtime state the stack wrote",
-    "query": "run a q expression on a process",
-    "graph": "draw the process graph",
-    "schema": "describe a process's tables",
-    "new": "scaffold a job into the tree",
-    "install": "place files built elsewhere",
-    "backfill": "run a bounded worker over a range",
-    "preview": "fetch a feed's rows without publishing them",
-    "gaps": "a job's missing ranges",
-    "audit": "one window across runs",
-    "receive": "take an extractor's batches into an HDB",
-    "export": "write a record out for another machine",
-    "approve": "accept a record another machine exported",
-    "replay": "replay a tickerplant log into the HDB",
-    "seed": "copy another runtime's HDB",
-    "migrate": "migrate an HDB partition's schema",
-    "alter": "change one table in every HDB partition holding it",
-    "compress": "an HDB's compression: report it, plan it, or run TorQ's .cmp over it",
-    "upgrade": "bring a store an older uqs wrote up to today's layout",
-    "diff": "compare two runtimes, a config push's files before and after it, or a table "
-    "on two endpoints",
-    "prepare": "install the bundles a runtime declares",
-    "stub": "add a placeholder row",
-    "env": "print the environment to source",
-    "build": "build a release",
-    "push": "deploy a release onto a server",
-    "rollback": "return to the previous release or version",
-    "prune": "remove old releases",
-    "history": "what was deployed, or pushed to a target's config",
-    "shell": "open a shell on a target",
-    # a target's own changes (#1756): the core verbs cover add, set and remove
-    "unset": "remove a setting, so the layer beneath's value applies - `set` cannot say it",
-    "rename": "give a thing a new name, keeping what is recorded under the old one",
-    "edit": "change a file in $EDITOR, checked before it is saved",
-    "log": "a record's change history - `logs` is processes' output, `history` deployments",
-    "revert": "undo one recorded change, itself recorded - not `rollback`'s release",
-    "adopt": "take over what was installed by hand, so uqs can drive it",
-    # a target's config push history (#2002): `history` and `diff` read it
-    "restore": "put a recorded push's files back as they were before it, as a push of its own",
-    "plan": "what a tunnel to a target would forward, worked out without opening it",
-}
+# The verbs (CORE_VERBS, DOMAIN_VERBS) are declared in uqs/cli/vocabulary.py (#2170).
 
 #: Rule 1: a group named after one of these is a verb with nouns under it.
-GROUP_VERBS = set(CORE_VERBS) | {"start", "stop", "restart", "delete", "get", "create", "run"}
+GROUP_VERBS = set(vocabulary.CORE_VERBS) | {
+    "start",
+    "stop",
+    "restart",
+    "delete",
+    "get",
+    "create",
+    "run",
+}
 
 
 # ------------------------------------------------------------- rule 1: groups
@@ -272,7 +221,7 @@ RULE4_MISUSED: dict[str, str] = {}
 
 
 def test_rule4_every_leaf_is_named_by_a_vocabulary_verb():
-    verbs = set(CORE_VERBS) | set(DOMAIN_VERBS)
+    verbs = set(vocabulary.VERBS)
     found = {path for path in LEAVES if path.split()[-1] not in verbs}
     _hold("rule 4", found, RULE4_ALLOWLIST)
 
@@ -352,7 +301,7 @@ VERB_FLAGS = {
 
 
 def test_no_flag_turns_its_command_into_another_verb():
-    verbs = set(CORE_VERBS) | set(DOMAIN_VERBS)
+    verbs = set(vocabulary.VERBS)
     found = {
         (path, _long(p))
         for path, c in LEAVES.items()
@@ -544,7 +493,7 @@ def test_the_guide_lists_the_same_vocabulary():
     section = text.split("\n## CLI conventions\n", 1)[1].split("\n## ", 1)[0].split("\n### ", 1)[0]
     rows = re.findall(r"^\s*\|\s*(`[^|]*`)\s*\|", section, flags=re.M)
     documented = {w for row in rows for w in re.findall(r"`([a-z-]+)`", row)}
-    assert documented == set(CORE_VERBS) | set(DOMAIN_VERBS)
+    assert documented == set(vocabulary.VERBS)
 
 
 # ----------------------------------------------------- rule 3: option meaning

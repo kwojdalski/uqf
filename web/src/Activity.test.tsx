@@ -7,7 +7,8 @@ import {
 } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
 import App from "./App";
-import { ApiError, type BrowserEvent } from "./api";
+import type { BrowserEvent } from "./api/activity";
+import { ApiError } from "./api/client";
 import {
   configureActivity,
   flushActivity,

@@ -1,4 +1,4 @@
-"""The browser's API types (web/src/api.ts) against the models that define them.
+"""The browser's API types (web/src/api/) against the models that define them.
 
 `api.ts` is written by hand, and it had drifted: the server's `gateway` field
 could say `wrong_process`, the browser's type did not know the word, and the
@@ -26,14 +26,12 @@ from __future__ import annotations
 import re
 import types
 import typing
-from pathlib import Path
 
 import pydantic
 import pytest
+from api_support import api_text, defined_models, model_named
 
-from uqf_frontend import models
-
-API_TS = Path(__file__).resolve().parents[3] / "web" / "src" / "api.ts"
+from uqf_frontend.models.control import LifecycleRequest
 
 #: TypeScript interface -> the request model it is sent to (#1361).
 REQUESTS = {
@@ -153,7 +151,7 @@ def _declared(text: str) -> dict[str, dict[str, tuple[str, bool]]]:
 
 def _interfaces(text: str | None = None) -> dict[str, dict[str, str]]:
     """`name -> {field: TypeScript type}`, inherited Pollable fields included."""
-    declared = _declared(API_TS.read_text() if text is None else text)
+    declared = _declared(api_text() if text is None else text)
     return {name: {f: t for f, (t, _) in fields.items()} for name, fields in declared.items()}
 
 
@@ -161,9 +159,7 @@ def _wire_fields(model: str) -> dict[str, typing.Any]:
     """`name on the wire -> FieldInfo`: the alias where the model has one, so
     CompareTable's `schema_` is compared as the `schema` it is sent as. No
     request model has one (test_api_conventions.py, #2227)."""
-    return {
-        (info.alias or name): info for name, info in getattr(models, model).model_fields.items()
-    }
+    return {(info.alias or name): info for name, info in model_named(model).model_fields.items()}
 
 
 def _disagreement(interface: str, model: str, text: str | None = None) -> str | None:
@@ -173,7 +169,7 @@ def _disagreement(interface: str, model: str, text: str | None = None) -> str | 
     if ts_fields == py_fields:
         return None
     return (
-        f"{interface} (web/src/api.ts) and {model} (models.py) disagree: "
+        f"{interface} (web/src/api/) and {model} (models/) disagree: "
         f"only in TypeScript {sorted(ts_fields - py_fields)}, "
         f"only in the model {sorted(py_fields - ts_fields)}"
     )
@@ -183,7 +179,7 @@ def _type_aliases() -> dict[str, str]:
     """`name -> TypeScript type` for each `export type X = ...;` in api.ts, so a
     field typed by a named union (`tier: Tier`) is compared by its words, as an
     inline union is (#820)."""
-    return dict(re.findall(r"^export type (\w+) =\s*([^;]+);", API_TS.read_text(), re.M))
+    return dict(re.findall(r"^export type (\w+) =\s*([^;]+);", api_text(), re.M))
 
 
 def _literal_words(annotation: object) -> set[str] | None:
@@ -201,7 +197,7 @@ def _literal_words(annotation: object) -> set[str] | None:
 def test_every_pair_names_an_interface_and_a_model_that_exist():
     interfaces = _interfaces()
     assert set(PAIRS) <= set(interfaces), set(PAIRS) - set(interfaces)
-    assert all(hasattr(models, model) for model in PAIRS.values())
+    assert all(model_named(model) for model in PAIRS.values())
 
 
 @pytest.mark.parametrize(("interface", "model"), sorted(PAIRS.items()))
@@ -214,8 +210,8 @@ def test_a_field_renamed_in_a_request_type_is_caught():
     """The failure #1361 describes, staged: `procs` renamed in the browser's
     lifecycle body. Before requests were paired this compiled, passed, and
     the server read the missing field as "all"."""
-    renamed = API_TS.read_text().replace("  procs: string;", "  selector: string;")
-    assert renamed != API_TS.read_text(), "LifecycleBody.procs is not declared as expected"
+    renamed = api_text().replace("  procs: string;", "  selector: string;")
+    assert renamed != api_text(), "LifecycleBody.procs is not declared as expected"
     problem = _disagreement("LifecycleBody", "LifecycleRequest", renamed)
     assert problem is not None
     assert "only in TypeScript ['selector']" in problem
@@ -225,7 +221,7 @@ def test_a_field_renamed_in_a_request_type_is_caught():
 def test_an_activity_event_left_saying_ts_in_typescript_is_caught():
     """#2254 staged: the browser still sending, and reading, `ts` after the
     models said `time`, as `uqs activity list --json` does."""
-    text = API_TS.read_text()
+    text = api_text()
     assert text.count("  time: string;") >= 2, "BrowserEvent/ActivityEvent.time is not declared"
     stale = text.replace("  time: string;", "  ts: string;")
     for interface, model in (
@@ -242,7 +238,7 @@ def test_a_field_the_request_model_requires_is_not_optional_in_typescript(interf
     """A required request field the browser's type marks optional can be left
     out by a caller that compiles - the model then refuses, but only at run
     time. `?` is allowed only where the model has a default."""
-    declared = _declared(API_TS.read_text())[interface]
+    declared = _declared(api_text())[interface]
     for name, info in _wire_fields(model).items():
         if info.is_required():
             assert not declared[name][1], f"{interface}.{name} is optional; {model} requires it"
@@ -251,12 +247,12 @@ def test_a_field_the_request_model_requires_is_not_optional_in_typescript(interf
 @pytest.mark.parametrize("model", sorted(REQUESTS.values()))
 def test_every_request_model_refuses_a_key_it_does_not_know(model):
     """A stale field must be a 422, not silently dropped in favour of a default."""
-    assert getattr(models, model).model_config.get("extra") == "forbid", model
+    assert model_named(model).model_config.get("extra") == "forbid", model
 
 
 def test_a_lifecycle_request_has_no_default_selector():
     """A destructive action is never the default: no `procs`, no request."""
-    assert models.LifecycleRequest.model_fields["procs"].is_required()
+    assert LifecycleRequest.model_fields["procs"].is_required()
 
 
 @pytest.mark.parametrize(("interface", "model"), sorted(PAIRS.items()))
@@ -297,13 +293,7 @@ LOSING_KEYS = {
 
 
 def _api_models() -> dict[str, type[pydantic.BaseModel]]:
-    return {
-        name: obj
-        for name, obj in vars(models).items()
-        if isinstance(obj, type)
-        and issubclass(obj, pydantic.BaseModel)
-        and obj.__module__ == models.__name__
-    }
+    return defined_models()
 
 
 def _losing_keys(names: typing.Iterable[str]) -> list[str]:
@@ -332,15 +322,13 @@ def test_no_route_takes_a_process_by_the_losing_name():
 
 def test_the_key_scan_catches_a_losing_key():
     """The gate itself, staged: TunnelMapping's old `role` field."""
-    staged = API_TS.read_text().replace("  proctype: string;", "  role: string;", 1)
-    assert staged != API_TS.read_text()
+    staged = api_text().replace("  proctype: string;", "  role: string;", 1)
+    assert staged != api_text()
     assert any(_losing_keys(fields) for fields in _interfaces(staged).values())
 
 
 def test_the_key_scan_catches_the_coverage_slice_called_a_partition():
     """The gate, staged: CompareBody's slice under its old name (#2261)."""
-    staged = API_TS.read_text().replace(
-        "  slice?: string | null;", "  partition?: string | null;", 1
-    )
-    assert staged != API_TS.read_text()
+    staged = api_text().replace("  slice?: string | null;", "  partition?: string | null;", 1)
+    assert staged != api_text()
     assert any(_losing_keys(fields) for fields in _interfaces(staged).values())

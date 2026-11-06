@@ -1,7 +1,7 @@
 """The HTTP API's naming conventions, held so an inconsistency fixed once
 cannot come back (#2227, #2230, #2232, #2234, #2236, #2244).
 
-test_api_types.py holds web/src/api.ts to models.py field by field; this file
+test_api_types.py holds web/src/api/ to models.py field by field; this file
 holds the API to itself: one wire name per request field, one meaning per
 word, one shape per kind of route, and one rule for what must be confirmed.
 """
@@ -13,24 +13,28 @@ import typing
 
 import pydantic
 import pytest
+from api_support import defined_models, route_modules
 from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 
-from uqf_frontend import access, models
+from uqf_frontend import access
 from uqf_frontend.app import RENAMED_ROUTES, create_app
 from uqf_frontend.config import Settings
 from uqf_frontend.fleet import FakeFleet
 from uqf_frontend.gateway import FakeGateway
+from uqf_frontend.models.activity import ActivityItem, BrowserEventIn
+from uqf_frontend.models.base import CONFIRMATION_REQUIRED, ConfirmedRequest
+from uqf_frontend.models.control import (
+    CONFIRMED_LIFECYCLE,
+    CommandResponse,
+    LifecycleAction,
+    ProcessConfigRequest,
+)
+from uqf_frontend.models.ops import FleetHealthResponse, ProcessHealthOut
 
 
 def _models() -> dict[str, type[pydantic.BaseModel]]:
-    return {
-        name: obj
-        for name, obj in vars(models).items()
-        if isinstance(obj, type)
-        and issubclass(obj, pydantic.BaseModel)
-        and obj.__module__ == models.__name__
-    }
+    return defined_models()
 
 
 def _request_models() -> dict[str, type[pydantic.BaseModel]]:
@@ -61,10 +65,8 @@ def test_a_request_field_has_one_wire_name(name):
 
 def test_process_config_refuses_the_old_spelling_by_name():
     with pytest.raises(pydantic.ValidationError, match="`field_name` is `field`"):
-        models.ProcessConfigRequest.model_validate({"field_name": "port", "value": "1"})
-    assert (
-        models.ProcessConfigRequest.model_validate({"field": "port", "value": "1"}).field == "port"
-    )
+        ProcessConfigRequest.model_validate({"field_name": "port", "value": "1"})
+    assert ProcessConfigRequest.model_validate({"field": "port", "value": "1"}).field == "port"
 
 
 # --------------------------------------------------- route shapes (#2230)
@@ -112,7 +114,7 @@ def test_the_lifecycle_verb_is_validated_and_an_unknown_one_is_not_found(tmp_pat
     models.LifecycleAction's words. Anything else is a name that is not
     there: 404 naming its kind, as every unknown path name is (#2224) - and
     nothing runs, confirmed or not."""
-    assert set(typing.get_args(models.LifecycleAction)) == {"start", "stop", "restart"}
+    assert set(typing.get_args(LifecycleAction)) == {"start", "stop", "restart"}
     resp = _writer(tmp_path).post(f"/control/lifecycle/{verb}", json={"procs": "all"})
     assert resp.status_code == 404, resp.text
     assert resp.json()["error"] == "ActionNotFound"
@@ -180,11 +182,11 @@ def test_group_means_only_an_access_group():
 def test_a_process_row_reports_its_type_once():
     """Responses are not strict, so the row's fields are pinned: a `group`
     beside `proctype` showed the Fleet view one fact as two columns."""
-    assert set(models.ProcessHealthOut.model_fields) == {
+    assert set(ProcessHealthOut.model_fields) == {
         "process", "proctype", "host", "declared_port", "start_with_all", "up", "pid",
         "reported_port", "reported_process", "error", "identity_mismatch", "port_unresolved",
     }  # fmt: skip
-    assert "proctypes" in models.FleetHealthResponse.model_fields
+    assert "proctypes" in FleetHealthResponse.model_fields
 
 
 # ----------------------------------------------- `identity` is no field (#2236)
@@ -228,10 +230,10 @@ def test_target_names_a_deployment_target_and_nothing_else():
     and a browser event's were a file, a process or a view. Those are `procs`
     and `subject` now."""
     assert _fields_named("target") == DEPLOYMENT_TARGET_FIELDS
-    assert "procs" in models.CommandResponse.model_fields
+    assert "procs" in CommandResponse.model_fields
 
 
-@pytest.mark.parametrize("model", [models.ActivityItem, models.BrowserEventIn])
+@pytest.mark.parametrize("model", [ActivityItem, BrowserEventIn])
 def test_an_activity_target_is_refused_by_its_new_name(model):
     with pytest.raises(pydantic.ValidationError, match="`target` is `subject`"):
         model.model_validate({"target": "Desk"})
@@ -290,12 +292,12 @@ CONFIRMED_ROUTES = {
 
 
 def test_the_confirmed_models_are_the_ones_the_ui_confirms():
-    confirmed = {n for n, m in _models().items() if issubclass(m, models.ConfirmedRequest)}
+    confirmed = {n for n, m in _models().items() if issubclass(m, ConfirmedRequest)}
     assert confirmed - {"ConfirmedRequest"} == {
         "ConfirmedLifecycleRequest", "ConfigPushOpenRequest", "ConfigRestoreRequest",
         "RemoteDeleteRequest",
     }  # fmt: skip
-    assert models.CONFIRMED_LIFECYCLE == {"stop", "restart"}
+    assert CONFIRMED_LIFECYCLE == {"stop", "restart"}
 
 
 def test_only_the_rule_checks_confirmed():
@@ -303,13 +305,14 @@ def test_only_the_rule_checks_confirmed():
     to drift - LifecycleRequest's alone, which the route holds to the rule
     by its verb. No route body reads it."""
     holders = {n for n, m in _models().items() if "confirmed" in m.model_fields}
-    outside = {n for n in holders if not issubclass(_models()[n], models.ConfirmedRequest)}
+    outside = {n for n in holders if not issubclass(_models()[n], ConfirmedRequest)}
     assert outside == {"LifecycleRequest"}
     import inspect
 
     from uqf_frontend import app as app_module
 
-    assert ".confirmed" not in inspect.getsource(app_module)
+    for module in (app_module, *route_modules()):
+        assert ".confirmed" not in inspect.getsource(module), module.__name__
 
 
 def _writer(tmp_path) -> TestClient:
@@ -331,7 +334,7 @@ def test_an_unconfirmed_destructive_request_is_refused(tmp_path, route, body, co
     sent = body if confirmed is None else {**body, "confirmed": confirmed}
     resp = _writer(tmp_path).request(method, path, json=sent)
     assert resp.status_code == 422, resp.text
-    assert models.CONFIRMATION_REQUIRED in resp.json()["detail"]
+    assert CONFIRMATION_REQUIRED in resp.json()["detail"]
 
 
 def test_a_start_takes_no_confirmation(tmp_path, monkeypatch):

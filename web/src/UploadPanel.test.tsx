@@ -1,9 +1,8 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
+import { ApiError, writeToken } from "./api/client";
+import type { ConfigPushReport, PushOps } from "./api/config_push";
 import {
-  ApiError,
-  type ConfigPushReport,
-  type PushOps,
   type RemoteFiles,
   type RemoteUpload,
   UPLOAD_MAX_BYTES,
@@ -12,8 +11,7 @@ import {
   remoteUploadPath,
   uploadPathProblem,
   uploadRemoteFile,
-  writeToken,
-} from "./api";
+} from "./api/services";
 import { FileBrowser } from "./FileBrowser";
 import { UploadPanel, type Uploader, walkEntries } from "./UploadPanel";
 

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ApiError, request } from "./api";
+import { ApiError, request } from "./api/client";
 import { noteResource } from "./activity";
 import { useWorkspace } from "./workspace";
 

@@ -3,7 +3,7 @@
  * line or scatter, drawn from the result already loaded.
  */
 import { useState } from "react";
-import type { QueryResult } from "./api";
+import type { QueryResult } from "./api/query";
 import { PlotlyFigure } from "./Plotly";
 import {
   MAX_Y,

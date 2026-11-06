@@ -21,7 +21,7 @@ from pathlib import Path
 import pytest
 
 from uqf_frontend import remote_files, remote_helper
-from uqf_frontend.models import PrunedPushOut
+from uqf_frontend.models.config_push import PrunedPushOut
 from uqf_frontend.remote_helper import HISTORY_DIR, MANIFEST, handle
 
 UNUSUAL = [

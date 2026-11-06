@@ -93,8 +93,8 @@ def test_a_row_carries_a_timespan_as_nanoseconds_and_an_infinity_as_a_string():
     `f:0w -0w 0n`. Before: `PT1.5S`, `PT0.000001S` (#1329) and null, null
     (#1330) - a value cut to the microsecond in a unit the filter does not
     take, and an infinity indistinguishable from a missing value."""
-    from uqf_frontend.app import _rows
-    from uqf_frontend.models import QueryResponse
+    from uqf_frontend.models.query import QueryResponse
+    from uqf_frontend.routes.common import _rows
 
     frame = pl.DataFrame(
         {
@@ -125,8 +125,8 @@ def test_a_row_carries_a_timestamp_to_the_nanosecond_and_an_infinity_as_a_string
     past a microsecond, 0Wp, -0Wp and 0Np (#1371). Before, `to_dicts` made
     each a Python datetime - both rows `10:00:00.000001`, and the infinities
     `2262-04-11T23:47:16.854775` and `1707-09-22T00:12:43.145224`."""
-    from uqf_frontend.app import _rows
-    from uqf_frontend.models import QueryResponse
+    from uqf_frontend.models.query import QueryResponse
+    from uqf_frontend.routes.common import _rows
 
     base = int(dt.datetime(2026, 10, 14, 10, tzinfo=dt.UTC).timestamp()) * 10**9
     frame = pl.DataFrame(
@@ -153,7 +153,7 @@ def test_a_row_carries_a_timestamp_to_the_nanosecond_and_an_infinity_as_a_string
 
 
 def test_a_zoned_or_coarser_timestamp_column_is_sent_as_utc_nanoseconds():
-    from uqf_frontend.app import _rows
+    from uqf_frontend.routes.common import _rows
 
     when = dt.datetime(2026, 10, 14, 12, 0, 0, 5, tzinfo=dt.timezone(dt.timedelta(hours=2)))
     frame = pl.DataFrame({"t": pl.Series([when], dtype=pl.Datetime("us", "Europe/Warsaw"))})

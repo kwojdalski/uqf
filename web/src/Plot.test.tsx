@@ -6,7 +6,7 @@
  */
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
-import type { QueryResult } from "./api";
+import type { QueryResult } from "./api/query";
 import type { Figure } from "./Plotly";
 import { figureFor, plottableColumns, xValue, yValue } from "./plot";
 
