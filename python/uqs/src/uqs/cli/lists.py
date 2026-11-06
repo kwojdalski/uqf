@@ -35,11 +35,11 @@ from uqs.cli.shared import (
     _export,
     _paths,
     _show,
-    _sorted_items,
     app,
     console,
     job_app,
 )
+from uqs.cli.sorting import _sorted_items
 from uqs.cli.target import target_app
 from uqs.deploy import targets
 from uqs.paths import UqsError

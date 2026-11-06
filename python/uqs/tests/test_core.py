@@ -26,12 +26,14 @@ from uqs.model.pipeline import (
 )
 from uqs.model.pipelines import PIPELINE_OFFSETS, PROCESS_CSV_FIELDS
 from uqs.model.registry import PIPELINES
-from uqs.paths import UqsError, UqsPaths, check_data_dir_was_migrated, repo_root
+from uqs.paths import UqsError, UqsPaths, repo_root
 from uqs.stack import clean as stack_clean
 from uqs.stack import deployment, hdb_types, listing, monitor_budget, runtime
 from uqs.stack import logs as stack_logs
 from uqs.stack import multitail as stack_multitail
 from uqs.stack import procs as stack_procs
+from uqs.stack.placeholders import resolve_process_config
+from uqs.stack.prerequisites import check_data_dir_was_migrated
 from uqs.stack.procs import VENDORED_STARTWITHALL_OVERLAY
 
 #: Every pipeline by procname, for the tests that look one up.
@@ -257,7 +259,7 @@ def test_get_process_config_resolve_false_leaves_placeholders_literal(
 
 def test_resolve_process_config_leaves_unknown_var_literal():
     row = {"port": "{NOT_A_REAL_VAR}", "load": "${ALSO_NOT_REAL}/x.q"}
-    resolved = stack_procs.resolve_process_config(row, {"KDBBASEPORT": "6010"})
+    resolved = resolve_process_config(row, {"KDBBASEPORT": "6010"})
     assert resolved["port"] == "{NOT_A_REAL_VAR}"
     assert resolved["load"] == "${ALSO_NOT_REAL}/x.q"
 
@@ -637,9 +639,9 @@ def test_an_unknown_runtime_is_refused_naming_the_real_ones(monkeypatch):
 def test_a_fresh_torq_data_directory_is_not_a_missed_migration(tmp_path):
     """The former data directories only ever held the default runtime's."""
     (tmp_path / "scripts" / "output" / "uqs").mkdir(parents=True)
-    stack_paths.check_data_dir_was_migrated(stack_paths.paths_for_root(tmp_path, "torq"))
+    check_data_dir_was_migrated(stack_paths.paths_for_root(tmp_path, "torq"))
     with pytest.raises(UqsError, match="the data directory has moved"):
-        stack_paths.check_data_dir_was_migrated(stack_paths.paths_for_root(tmp_path, "uqf"))
+        check_data_dir_was_migrated(stack_paths.paths_for_root(tmp_path, "uqf"))
 
 
 def test_the_torq_runtime_has_no_service_layer_and_says_which_it_is(fake_paths: UqsPaths):

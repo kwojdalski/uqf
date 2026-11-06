@@ -16,11 +16,8 @@ edited - every run regenerates the merged copy from scratch."""
 from __future__ import annotations
 
 import csv
-import re
 from collections.abc import Iterable
-from string import Template
 
-from uqs import portexpr
 from uqs.logger import get_logger
 from uqs.model.pipelines import _pipeline_rows
 from uqs.model.runtime_members import pipeline_procnames
@@ -35,6 +32,7 @@ from uqs.stack.monitor_budget import (
     monitor_connection_extras,
     monitor_dropped,
 )
+from uqs.stack.placeholders import resolve_process_config
 from uqs.stack.site_fields import declared, refuse_unknown_field
 
 log = get_logger()
@@ -333,26 +331,6 @@ def list_process_choices(paths: UqsPaths) -> list[dict[str, str]]:
             }
         )
     return out
-
-
-# process.csv's two placeholder styles: `${VAR}` / `$VAR` (shell parameter
-# expansion, resolved via envsubst at runtime - handled here by
-# string.Template, which uses the same syntax) inside e.g. `load`/`U`/
-# `extras`; and the `port` grammar (`{VAR}`, `{VAR}+N`, `{VAR}-N`, a literal),
-# which uqs.portexpr owns and the occupancy check and the frontend share.
-_BRACE_PLACEHOLDER = re.compile(r"^\{\w+\}(?:[+-]\d+)?$")
-
-
-def _resolve_value(value: str, env: dict[str, str]) -> str:
-    if _BRACE_PLACEHOLDER.match(value):
-        port = portexpr.resolve(value, env)
-        # unknown/non-numeric var - leave the placeholder as-is
-        return value if port is None else str(port)
-    return Template(value).safe_substitute(env)
-
-
-def resolve_process_config(row: dict[str, str], env: dict[str, str]) -> dict[str, str]:
-    return {field: _resolve_value(value, env) for field, value in row.items()}
 
 
 def get_process_config(

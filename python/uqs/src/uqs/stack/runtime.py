@@ -17,7 +17,7 @@ from typing import Any
 
 from uqs.interpreter import q_command
 from uqs.logger import get_logger
-from uqs.paths import UqsError, UqsPaths, check_prerequisites
+from uqs.paths import UqsError, UqsPaths
 from uqs.stack import (
     alive,
     attached_publisher,
@@ -38,6 +38,7 @@ from uqs.stack.hdb_fill import fill_hdb_partitions
 from uqs.stack.hdb_types import declared_schema
 from uqs.stack.housekeeping import write_housekeeping_config
 from uqs.stack.launcher import torq_launcher
+from uqs.stack.prerequisites import check_prerequisites
 from uqs.stack.procs import effective_process_rows
 from uqs.stack.reporter import write_reporter_config
 
@@ -367,34 +368,3 @@ def query(
         return stack_render.text(q.sync(stack_render.wrap(expr, render)))
     finally:
         q.disconnect()
-
-
-def export_table(rows: Any, path: Path) -> None:
-    """Write *rows* to *path* as CSV or Parquet, format inferred from the
-    file extension. *rows* is either a list[dict] (list_items/config show's
-    own shape) or a polars.DataFrame (what kola's query() returns for a
-    table-shaped q result - kola is a Polars interface to q, so this is
-    already the native return type for `select ... from t`, no conversion
-    needed). Anything else (a q scalar/atom from query(), e.g. `count t`)
-    isn't rows, so it's rejected rather than silently wrapped into a bogus
-    one-cell table.
-    """
-    import polars as pl
-
-    if isinstance(rows, pl.DataFrame):
-        df = rows
-    elif isinstance(rows, list):
-        df = pl.DataFrame(rows)
-    else:
-        raise UqsError(
-            f"can't export a {type(rows).__name__} result to a table - --export needs "
-            "tabular output (a process/config list, or a query returning a table)"
-        )
-
-    suffix = path.suffix.lower()
-    if suffix == ".csv":
-        df.write_csv(path)
-    elif suffix == ".parquet":
-        df.write_parquet(path)
-    else:
-        raise UqsError(f"unsupported export extension {suffix!r} - use .csv or .parquet")

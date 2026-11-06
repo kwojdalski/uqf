@@ -230,7 +230,7 @@ def test_the_derived_leaves_equal_the_hand_kept_list_they_replaced():
     """The migration pin (#2170): the one deliberate copy, so that a module
     gaining or losing leaf status is noticed. mcp and mcp_server import cli."""
     assert LEAVES == {
-        "duration", "activity_log", "cells", "paths", "logger", "interpreter",
+        "duration", "activity_log", "activity_export", "cells", "paths", "logger", "interpreter",
         "runtimes", "timefmt", "timerange", "liveness", "portexpr", "guardrails",
         "renamed_env",
     }  # fmt: skip

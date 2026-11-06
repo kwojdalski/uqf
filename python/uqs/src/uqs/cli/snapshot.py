@@ -27,16 +27,14 @@ from uqs.cli.safety import ReadOnly
 from uqs.cli.shared import (
     ExportOpt,
     InteractiveOpt,
-    ReverseOpt,
-    SortOpt,
     _die,
     _export,
     _paths,
     _show,
-    _sorted_items,
     console,
     data_app,
 )
+from uqs.cli.sorting import ReverseOpt, SortOpt, _sorted_items
 from uqs.paths import UqsError
 from uqs.stack import snapshots
 
