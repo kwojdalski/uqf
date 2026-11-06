@@ -1510,8 +1510,7 @@ function ControlView() {
         </label>
         <p className="sidebar-note">
           The server&rsquo;s <code>UQF_FRONTEND_WRITE_TOKEN</code>, sent with
-          every action below. Kept in this tab only. Not needed under{" "}
-          <code>npm run dev</code>, whose proxy adds it.
+          every action below. Kept in this tab only.
         </p>
       </div>
 

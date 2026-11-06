@@ -873,8 +873,8 @@ export interface Correlation {
 
 /** The write token for the control routes (#631), when the operator typed it.
  *
- * Only the built app served at /ui/ needs it: under `npm run dev` the Vite
- * proxy adds it from the server's environment. Kept in sessionStorage - this
+ * The built app at /ui/ and `npm run dev` alike: the Vite proxy adds no
+ * credential (#2182), so the browser sends it. Kept in sessionStorage - this
  * tab only, gone when it closes - and every access is guarded, since storage
  * can be blocked outright. */
 const WRITE_TOKEN_KEY = "uqf.writeToken";

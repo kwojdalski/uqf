@@ -388,6 +388,65 @@ def test_a_file_changed_since_the_push_refuses_the_whole_restore(root):
     assert [p["step"] for p in plan] == ["write", "conflict"]
 
 
+def test_a_push_landing_between_a_restores_plan_and_its_write_refuses_it(root, monkeypatch):
+    # #2181: restore's conflict check ran once, unlocked, then it wrote with
+    # overwrite - so a push landing in between was silently overwritten.
+    config = root / "shared/config"
+    (config / "app.toml").write_bytes(b"v1\n")
+    pushed = _open(root)
+    assert _put(root, pushed, "shared/config/app.toml", b"v2\n", overwrite=True)["ok"]
+    pushes_before = sorted(p.name for p in _history(root).iterdir())
+    concurrent = remote_files.new_push_id()
+    planned = remote_helper._plan
+    calls = []
+
+    def plan_then_a_concurrent_push(root_, manifest):
+        plan = planned(root_, manifest)
+        calls.append([p["step"] for p in plan])
+        if len(calls) == 1:  # after restore's first look, before it writes
+            _open(root, concurrent)
+            assert _put(root, concurrent, "shared/config/app.toml", b"v3\n", overwrite=True)["ok"]
+        return plan
+
+    monkeypatch.setattr(remote_helper, "_plan", plan_then_a_concurrent_push)
+    refused = _restore(root, pushed)
+    assert refused["error"] == "conflict", refused
+    assert '"shared/config/app.toml"' in refused["detail"]
+    assert "nothing was written" in refused["detail"]
+    assert calls == [["write"], ["conflict"]]  # looked again before writing
+    assert (config / "app.toml").read_bytes() == b"v3\n"
+    # the refused restore leaves no push of its own, as a refusal at the plan does
+    assert sorted(p.name for p in _history(root).iterdir()) == sorted([*pushes_before, concurrent])
+
+
+def test_an_uploads_publishing_step_waits_for_the_write_lock(root):
+    # A restore holds WRITE_LOCK across its check and its writes; an upload
+    # must not publish while it is held, or the check proves nothing (#2181).
+    import fcntl
+    import threading
+
+    (root / "shared/config/a").write_bytes(b"0")
+    push_id = _open(root)
+    lock = os.open(_history(root) / ".lock", os.O_RDWR | os.O_CREAT, 0o600)
+    answers = []
+    try:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        uploading = threading.Thread(
+            target=lambda: answers.append(
+                _put(root, push_id, "shared/config/a", b"1", overwrite=True)
+            )
+        )
+        uploading.start()
+        uploading.join(timeout=0.5)
+        assert uploading.is_alive() and not answers
+        assert (root / "shared/config/a").read_bytes() == b"0"
+    finally:
+        os.close(lock)  # releases the lock
+    uploading.join(timeout=10)
+    assert answers and answers[0]["ok"], answers
+    assert (root / "shared/config/a").read_bytes() == b"1"
+
+
 def test_restoring_what_is_already_restored_is_refused(root):
     push_id = _open(root)
     _put(root, push_id, "shared/config/a", b"1")
