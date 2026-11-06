@@ -15,6 +15,7 @@ import os
 import socket
 import subprocess
 import time
+from datetime import date, timedelta
 
 import pytest
 from attach_backfill_support import (
@@ -606,3 +607,60 @@ def test_separate_processes_enumerating_one_sym_file_never_duplicate_or_misindex
     result = json.loads(check.stdout.strip().splitlines()[-1])
     assert result["size"] == result["distinct"] == 2 + iterations * 15, result
     assert result["bad"] == [0] * procs, "every index a writer was given names its symbol"
+
+
+# --- the stack's own calendar (#2193) ---------------------------------------------------------
+# A wdb rolling at 17:00 UTC with the partition named for the next day (rolltimeoffset -07:00):
+# at 19:00 UTC on 2026-11-05 it is filling 2026.11.06, which began at 17:00 UTC.
+
+ROLL_17 = {
+    "procname": "wdb1",
+    "proctype": "wdb",
+    "partition": "2026.11.06",
+    "now": "2026.11.05D19:00:00.000000000",
+    "next_roll": "2026.11.06D17:00:00.000000000",
+    "reloadcomplete": True,
+    "rolltimeoffset": str(-7 * 3600 * 10**9),
+    "rolltz_adj": "0",
+    "datatz_adj": "0",
+    "native_day": "2026.11.06",
+}
+
+
+def _fence_codes(state, days):
+    found: list = []
+    coordination.fence(state, days, timedelta(hours=1), found)
+    return [f.code for f in found]
+
+
+def test_a_window_inside_the_active_native_day_is_fenced_though_its_utc_date_is_earlier():
+    # the issue's reproduction: UTC 2026-11-05 is "yesterday" but 17:00-24:00 of it is the
+    # partition the wdb is writing now
+    assert "active-date" in _fence_codes(ROLL_17, [date(2026, 11, 5)])
+
+
+def test_a_window_wholly_before_the_active_native_day_is_admitted():
+    assert _fence_codes(ROLL_17, [date(2026, 11, 4)]) == []
+
+
+def test_without_a_calendar_the_utc_date_is_still_the_fence():
+    utc = {k: v for k, v in ROLL_17.items() if k not in ("rolltimeoffset", "native_day")}
+    utc |= {"partition": "2026.11.05", "next_roll": "2026.11.06D00:00:00.000000000"}
+    assert _fence_codes(utc, [date(2026, 11, 4)]) == []
+    assert "active-date" in _fence_codes(utc, [date(2026, 11, 5)])
+
+
+def test_a_data_timezone_the_backfill_does_not_stamp_is_refused_by_name():
+    zoned = {**ROLL_17, "datatz_adj": str(5 * 3600 * 10**9)}
+    assert "native-calendar" in _fence_codes(zoned, [date(2026, 11, 4)])
+
+
+def test_the_runner_is_given_the_calendar_in_a_form_that_is_not_a_flag():
+    from uqs.attach import writer_calendar
+
+    cal = writer_calendar.of(ROLL_17)
+    assert cal is not None
+    assert cal.runner_text == "off=-25200000000000,adj=0"
+    bare = writer_calendar.of({"proctype": "wdb"})
+    assert bare is not None
+    assert bare.runner_text == ""
