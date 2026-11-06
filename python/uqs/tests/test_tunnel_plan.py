@@ -275,6 +275,16 @@ def test_every_endpoint_passing_is_recorded_with_its_identity(root, server):
     assert tunnel_plan.read_checks(root)["prod"]["rdb1"]["identity"] == "rdb1"
 
 
+def test_the_check_still_runs_on_an_inspection_target(root, server):
+    """A fixed identity probe is a read, so inspection mode lets it through (#2179)."""
+    declared = root / "deploy_targets.toml"
+    declared.write_text(declared.read_text() + "inspection = true\n")
+    assert targets.read(root)["prod"]["inspection"] is True
+    report = _check(root, server)
+    assert report["ok"] is True
+    assert {e["status"] for e in report["endpoints"]} == {"ok"}
+
+
 def test_each_failure_is_told_apart_and_the_healthy_stay_visible(root, server):
     server.open.discard(6003)  # hdb1 down
     server.refuses.add(6004)  # wdb1 refuses the login

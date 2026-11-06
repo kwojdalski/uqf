@@ -28,6 +28,7 @@ from uqs.deploy import remote as remote_mod
 from uqs.deploy.config import Config, DeployError, make_config, redact
 from uqs.deploy.preflight import PREFLIGHT
 from uqs.deploy.remote import Remote, q
+from uqs.deploy.report import render
 from uqs.deploy.stages import Deployment
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -1089,6 +1090,77 @@ def test_a_failed_prune_does_not_undo_a_deployment_that_succeeded(tmp_path):
     code, _, report = _run(tmp_path, rules, args=["--keep", "1"])
     assert code == 0 and report["status"] == "deployed"
     assert report["pruned"]["prune"] == "failed"
+
+
+class InterruptedAfterActivation(FakeRemote):
+    """`exc` at the first script holding `marker` once `current` has moved."""
+
+    def __init__(self, rules, marker: str, exc: BaseException):
+        super().__init__(rules)
+        self.marker, self.exc = marker, exc
+
+    def run(self, script, timeout, stage, as_login=False):
+        if self.marker in script and self.ran(".current.new"):
+            self.scripts.append((stage, script))
+            raise self.exc
+        return super().run(script, timeout, stage, as_login)
+
+
+@pytest.mark.parametrize(
+    ("marker", "exc"),
+    [
+        ("/heartbeat; fi", KeyboardInterrupt()),  # the beat before the prune
+        ("import json, os, sys", KeyboardInterrupt()),  # listing the releases
+        ("rm -rf /opt/uqf/releases/2026100", KeyboardInterrupt()),  # removing them
+        ("rm -rf /opt/uqf/releases/2026100", RuntimeError("a bug")),
+    ],
+)
+def test_an_interrupted_prune_never_undoes_a_deployment_that_succeeded(tmp_path, marker, exc):
+    """Once `current` has moved, the push has succeeded: an interrupt in the
+    prune used to stop the new, current release and start the old one,
+    leaving `current` on the new release and a report saying otherwise (#2174)."""
+    previous = json.dumps({"profile": "fx", "processes": [{"process": "rdb1"}]})
+    old = ["20261001T000000Z-000000000001", "20261002T000000Z-000000000002"]
+    remote = InterruptedAfterActivation(
+        {
+            # first: the listing script also holds the markers below
+            "import json, os, sys": _listing(*old, "OLD", current="x"),
+            **_HEALTHY,
+            "uv python find": _done(SERVER + "data=present\ncurrent=OLD\n"),
+            "deploy-report.json\n": _done(previous),
+            "readlink": _done("current=OLD\n"),
+            "uqs deploy verify --profile": _verified(True),
+        },
+        marker,
+        exc,
+    )
+    seen: list[dict] = []
+    shown: list[dict] = []
+    cfg = parse_args(_args(_artifact(tmp_path), "--restart", "--keep", "1"))
+    with pytest.raises(type(exc)):
+        driver.deploy(
+            cfg,
+            remote,
+            out=io.StringIO(),
+            on_report=lambda r: seen.append(r.as_dict()),  # the history
+            on_result=lambda r: shown.append(r.as_dict()),  # the terminal
+        )
+    (report,) = seen
+    assert shown == seen, "the terminal is shown the same report before the interrupt goes on"
+    assert report["status"] == "deployed" and report["stage"] == "done"
+    assert report["rollback"] == "not needed" and report["error"] == ""
+    assert report["pruned"]["prune"] == "interrupted" and report["pruned"]["keep"] == 1
+    assert type(exc).__name__ in report["pruned"]["error"]
+    # the new release stays up and current: nothing stopped, nothing restarted
+    assert remote.stage("rollback") == []
+    assert sum(".current.new" in s for _, s in remote.scripts) == 1, "current moved once"
+    assert not any("uqs stop" in s for st, s in remote.scripts if st != "restart")
+    assert remote.scripts[-1][0] == "lock", "the lock is still released"
+    written = [s for _, s in remote.scripts if '"pruned"' in s and '"interrupted"' in s]
+    assert written and '"status": "deployed"' in written[-1], "the server's report agrees"
+    text = render(report)
+    assert text.startswith("deployed release") and "prune incomplete" in text
+    assert "`uqs deploy prune --keep 1` finishes it" in text
 
 
 def test_without_keep_nothing_is_pruned(tmp_path):
