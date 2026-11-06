@@ -36,7 +36,7 @@ from uqs.cli.shared import _die, app, console, log
 from uqs.cli.skip_options import forwarded
 from uqs.cli.target_confirm import (
     changes_the_server,
-    confirmed_on_server,
+    for_the_server,
     may_change_the_server,
     parse,
     root_command,
@@ -367,7 +367,7 @@ def forward(name: str, yes: bool, args: list[str], *, interactive: bool) -> int:
     if (code := _report_here(name, args)) is not None:
         return code
     # a --skip-<id> goes as its --override, which an older server's uqs takes (#1826)
-    args = confirmed_on_server(forwarded(args), yes)
+    args = for_the_server(forwarded(args), yes)
     r = control.remote_for(name, repo_root())
     shown = " ".join(["uqs", *args])
     if may_change_the_server(args):

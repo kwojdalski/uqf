@@ -13,7 +13,8 @@ While a target is in inspection mode, every uqs operation that would change
 it is refused before anything reaches the server: `uqs --target T <command>`
 for a command that may change state (start, stop, restart, a backfill, a
 confirms-on-server command with --apply), `uqs target shell`, `uqs deploy
-push`, `rollback` and `prune`, `uqs target config restore`, and `uqs query
+push`, `rollback` and `prune`, `uqs target config restore`, `uqs target adopt
+--apply` under any name (#2231), and `uqs query
 --tunnel T` (#2179) - a q expression or session is a change wherever it runs,
 as `uqs --target T query` is. Reads - a status, `uqs schema --tunnel`, `uqs
 data diff`, the tunnel check, a dry run, the config history, `uqs --target T

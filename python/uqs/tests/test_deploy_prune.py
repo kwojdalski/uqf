@@ -206,3 +206,24 @@ def test_prune_asks_with_what_would_go_and_removes_nothing_unless_told_yes(dest,
         assert code == 0 and result["prune"] == "done" and _left(dest) == [R1, R2, R4]
     else:
         assert code == 1 and result["prune"] == "declined" and _left(dest) == before
+
+
+def test_json_without_yes_is_refused_before_the_server_is_reached(dest, monkeypatch, terminal):
+    """#2229: `deploy prune --json` asked on the terminal, in the middle of a
+    --json run; it is refused, exit 1, as every --json command without --yes."""
+    from uqs.cli import deploy_server
+
+    def never(*_a, **_k):
+        raise AssertionError("the server was reached")
+
+    monkeypatch.setattr(deploy_server, "Remote", lambda *a, **k: LocalRemote())
+    monkeypatch.setattr(prune, "prune", never)
+    argv = ["deploy", "prune", "--ssh", "h", "--dest", str(dest), "--keep", "0", "--json"]
+    before = _left(dest)
+    monkeypatch.setattr("sys.argv", ["uqs", *argv])  # json_requested reads it
+    r = CliRunner().invoke(cli.app, argv, input="y\n")
+    assert r.exit_code == 1, r.output
+    doc = json.loads(r.stdout)
+    assert doc["ok"] is False
+    assert "--json cannot ask for confirmation: add --yes to remove releases" in doc["error"]
+    assert _left(dest) == before
