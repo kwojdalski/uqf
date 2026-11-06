@@ -36,6 +36,7 @@ platform: Linux-x86_64
 .qt.qetl.io.hdb_eod.test_after_eod_the_backfill_proceeds  # peachq-lacks: .Q.dpft, which the fixture uses to write the wdb's and the HDB's partitions; the fence under test runs on a KDB-X stack
 .qt.qetl.io.hdb_eod.test_finish_does_not_fill_a_partition_that_waits  # peachq-lacks: .Q.dpft, which the fixture uses to write the wdb's and the HDB's partitions; the fence under test runs on a KDB-X stack
 .qt.qetl.io.hdb_eod.test_the_plan_waits_for_eod_and_says_so  # peachq-lacks: .Q.dpft, which the fixture uses to write the wdb's and the HDB's partitions; the fence under test runs on a KDB-X stack
+.qt.qetl.io.hdb_eod.test_a_plan_clipped_for_eod_is_on_the_eod_channel  # peachq-lacks: .Q.dpft, which the fixture uses to write the wdb's and the HDB's partitions; the clip under test needs the waiting day it writes
 .qt.qpipe.job.demo_deals_backfill.test_an_idle_rerun_finishes_what_a_killed_run_left_unfinished  # peachq-lacks: on-disk attributes, so is_finished judges a partition by its order (src/etl/core/io_hdb.q) and a one-row partition is in order however it was written - the fixture writes one deal a day
 .qt.qpipe.job.demo_deals_backfill.test_a_dry_rerun_repairs_nothing  # peachq-lacks: on-disk attributes, so is_finished judges a partition by its order (src/etl/core/io_hdb.q) and a one-row partition is in order however it was written - the fixture writes one deal a day
 
@@ -154,6 +155,7 @@ platform: Linux-x86_64
 .qt.qetl.compress.primitives.test_select_reads_a_compressed_partitioned_database  # peachq-lacks: \l of a partitioned database defines none of its tables, compressed or not, so the child q's select signals the table's name (#2153)
 .qt.qetl.compress.primitives.test_a_file_kdbx_compressed_reads_back  # peachq-lacks: KDB-X's on-disk layout for a compressed file of more than one block - get and -21! throw 'corrupt on it; a one-block file is byte-identical between the two, and KDB-X in turn refuses PeachQ's multi-block files ('bad logicalBlockSize') (#2153)
 .qt.qetl.compression.write.test_a_column_override_is_applied_at_save  # peachq-lacks: PeachQ has no -19! and its set takes no compression triple or .z.zd (#2153), so the file is never compressed and -21! describes none
+.qt.qetl.compression.write.test_a_column_override_is_logged_on_the_storage_channel  # peachq-lacks: PeachQ has no -19! and its set takes no compression triple or .z.zd (#2153), so no column is rewritten and the line under test is never logged
 .qt.qetl.compression.write.test_a_compressed_partition_is_not_compressed_again_by_a_later_finish  # peachq-lacks: PeachQ has no -19! and its set takes no compression triple or .z.zd (#2153), so the file is never compressed and -21! describes none
 .qt.qetl.compression.write.test_both_mode_compresses_at_save_too  # peachq-lacks: PeachQ has no -19! and its set takes no compression triple or .z.zd (#2153), so the file is never compressed and -21! describes none
 .qt.qetl.compression.write.test_the_age_pass_finds_nothing_to_do_in_a_both_partition  # peachq-lacks: PeachQ has no -19! and its set takes no compression triple or .z.zd (#2153), so the file is never compressed and -21! describes none

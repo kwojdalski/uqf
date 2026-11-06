@@ -31,7 +31,7 @@ from uqs.logger import core as logcore
 from uqs.logger import floats
 from uqs.logger.highlight import highlight
 from uqs.paths import UqsPaths
-from uqs.stack import logs
+from uqs.stack import log_follow, logs
 
 if TYPE_CHECKING:
     # Not exported by loguru at runtime; see logger/core.py.
@@ -387,7 +387,7 @@ def test_follow_logs_shows_the_recent_lines_then_what_is_appended(tmp_path, monk
             f.write(LINE_ERR + "\n")
 
     threading.Thread(target=append_later, daemon=True).start()
-    logs.follow_logs(paths, "rdb1")
+    log_follow.follow_logs(paths, "rdb1")
 
     assert [rec["message"] for rec in seen] == ["started", "lost the tickerplant"]
 
@@ -404,7 +404,7 @@ def test_follow_logs_with_no_history_starts_at_the_end(tmp_path, monkeypatch):
             f.write(LINE_ERR + "\n")
 
     threading.Thread(target=append_later, daemon=True).start()
-    logs.follow_logs(paths, "rdb1", lines=0)
+    log_follow.follow_logs(paths, "rdb1", lines=0)
 
     assert [rec["message"] for rec in seen] == ["lost the tickerplant"]
 
@@ -426,7 +426,7 @@ def test_follow_logs_follows_the_alias_to_a_restarted_processs_new_file(tmp_path
         tmp.replace(log_dir / "out_rdb1.log")  # what `ln -sf` does
 
     threading.Thread(target=restart_later, daemon=True).start()
-    logs.follow_logs(paths, "rdb1", lines=0)
+    log_follow.follow_logs(paths, "rdb1", lines=0)
 
     assert [rec["message"] for rec in seen] == ["lost the tickerplant"]
 
@@ -447,7 +447,7 @@ def test_follow_during_reads_a_log_the_start_creates_from_its_first_line(tmp_pat
     seen: list[dict[str, str]] = []
     monkeypatch.setattr(logs, "emit", _stop_after_first(seen))
 
-    logs.follow_during(paths, ["rdb1"], lambda: target.write_text(LINE_INF + "\n"))
+    log_follow.follow_during(paths, ["rdb1"], lambda: target.write_text(LINE_INF + "\n"))
 
     assert [rec["message"] for rec in seen] == ["started"]
 
@@ -465,7 +465,7 @@ def test_follow_during_is_following_before_the_start_runs(tmp_path, monkeypatch)
         with target.open("a") as f:
             f.write(LINE_ERR + "\n")
 
-    logs.follow_during(paths, ["rdb1"], start)
+    log_follow.follow_during(paths, ["rdb1"], start)
 
     assert [rec["message"] for rec in seen] == ["lost the tickerplant"]
 
@@ -473,7 +473,7 @@ def test_follow_during_is_following_before_the_start_runs(tmp_path, monkeypatch)
 def test_follow_logs_refuses_when_there_is_nothing_to_follow(tmp_path, monkeypatch):
     paths = _paths_with_logs(tmp_path, monkeypatch, {})
     with pytest.raises(logs.UqsError, match="no log yet for rdb1 .* to follow"):
-        logs.follow_logs(paths, "rdb1")
+        log_follow.follow_logs(paths, "rdb1")
 
 
 def test_a_line_below_the_minimum_level_is_not_emitted(capsys):

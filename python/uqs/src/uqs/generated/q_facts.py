@@ -40,6 +40,18 @@ LOG_LEVELS: tuple[str, ...] = (
     "ERROR",
 )
 
+#: the log channels a record may carry in its id - .qetl.log.channels (#2274)
+LOG_CHANNELS: tuple[str, ...] = (
+    "lifecycle",
+    "ipc",
+    "source",
+    "transform",
+    "storage",
+    "coverage",
+    "eod",
+    "config",
+)
+
 #: the run ledger's columns - cols .qetl.run.init_runs[]
 ETL_RUNS_COLUMNS: tuple[str, ...] = (
     "run_id",

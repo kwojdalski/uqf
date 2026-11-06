@@ -307,3 +307,125 @@
     / `samples`, not `vs`: vs is a q builtin.
     samples:(300#"a";til 500;`a`b!1 2;"tab\there";([] x:til 50));
     .qunit.assertEquals[.qetl.log.value1 each samples;.qf.util.full each samples;"value1 and .qf.util.full agree"]};
+
+
+/ --- channels and process identity (#2274) -----------------------------
+/ A record's `proc` is the process that wrote it and its `id` the channel.
+/ Before, the worker or component name was in both, so a record from a source
+/ named the source as its process and nothing a reader could select on.
+
+.qt.qetl.log.test_a_channel_call_carries_the_channel_as_the_id:{[t]
+    .qetl.log.ch.info[`storage;"swapped";enlist[`rows]!enlist 3];
+    .qunit.assertEquals[.qt.qetl.log.captured;enlist (`INFO;`storage;"swapped rows=3");
+        "level, channel and rendered message - the worker is a field, not an argument"]};
+
+.qt.qetl.log.test_every_level_has_a_channel_call:{[t]
+    .qetl.log.debug[1b]; .qetl.log.trace[1b];
+    .qetl.log.ch.trc[`ipc;"a";()!()]; .qetl.log.ch.dbg[`ipc;"b";()!()]; .qetl.log.ch.info[`ipc;"c";()!()];
+    .qetl.log.ch.warn[`ipc;"d";()!()]; .qetl.log.ch.err[`ipc;"e";()!()];
+    .qunit.assertEquals[.qt.qetl.log.captured[;0];.qetl.log.levels;"TRACE to ERROR, each through the channel call"];
+    .qunit.assertEquals[distinct .qt.qetl.log.captured[;1];enlist `ipc;"all on the one channel"]};
+
+.qt.qetl.log.test_the_declared_channels_are_the_eight_in_the_issue:{[t]
+    .qunit.assertEquals[.qetl.log.channels;`lifecycle`ipc`source`transform`storage`coverage`eod`config;
+        "the one declared list - uqs's --channel and the docs table are held to it"]};
+
+.qt.qetl.log.test_an_undeclared_channel_is_refused_at_the_call:{[t]
+    .qunit.assertThrows[{.qetl.log.ch.info[`sourse;"typo";()!()]};::;"unknown log channel `sourse: one of lifecycle, ipc*";
+        "a misspelt channel is refused where the line is written, naming the declared list"];
+    .qunit.assertEquals[.qt.qetl.log.captured;();"and nothing was emitted"]};
+
+.qt.qetl.log.test_every_declared_channel_is_accepted:{[t]
+    {.qetl.log.ch.info[x;"ok";()!()]} each .qetl.log.channels;
+    .qunit.assertEquals[.qt.qetl.log.captured[;1];.qetl.log.channels;"each declared channel is carried as written"]};
+
+.qt.qetl.log.test_a_call_without_a_channel_passes_its_id_through:{[t]
+    .qetl.log.info[`demo_deals_backfill;"x";()!()];
+    .qunit.assertEquals[.qt.qetl.log.captured[0;1];`demo_deals_backfill;
+        "an unassigned call keeps its category, which a reader shows as it is"]};
+
+.qt.qetl.log.torq_stub:{[] `.qt.qetl.log.torq_got set ();
+    `.qetl.log.emit set .qt.qetl.log.real_emit;
+    `.lg.l set {[level;proctype;proc;id;message;dict] `.qt.qetl.log.torq_got set (proctype;proc;id)};
+    `.lg.outmap set `ERR`INFO`WARN!2 1 1;
+    `.lg.pubmap set `ERR`INFO`WARN!1 0 1;}
+
+.qt.qetl.log.test_under_torq_proc_is_the_process_and_id_the_channel:{[t]
+    .qt.qetl.log.torq_stub[];
+    `.proc.procname set `rdb1;
+    .qetl.log.ch.info[`source;"fetched";enlist[`source]!enlist `demo_deals];
+    got:.qt.qetl.log.torq_got;
+    ![`.lg;();0b;`l`outmap`pubmap]; ![`.proc;();0b;enlist `procname];
+    .qunit.assertEquals[got;(`etl;`rdb1;`source);
+        "proc is TorQ's procname, never the source; the source rides in the message"]};
+
+.qt.qetl.log.test_standalone_the_runner_names_the_process:{[t]
+    .qt.qetl.log.torq_stub[];
+    keep:.qetl.log.standalone_name;
+    .qetl.log.set_process`attached_backfill;
+    .qetl.log.ch.info[`lifecycle;"started";()!()];
+    got:.qt.qetl.log.torq_got;
+    .qetl.log.set_process keep;
+    ![`.lg;();0b;`l`outmap`pubmap];
+    .qunit.assertEquals[got;(`etl;`attached_backfill;`lifecycle);"outside TorQ the runner's own name, set once"]};
+
+.qt.qetl.log.test_a_worker_name_is_never_the_process:{[t]
+    .qt.qetl.log.torq_stub[];
+    keep:.qetl.log.standalone_name; .qetl.log.set_process`;
+    .qetl.log.info[`demo_deals_backfill;"x";()!()];
+    got:.qt.qetl.log.torq_got;
+    .qetl.log.set_process keep;
+    ![`.lg;();0b;`l`outmap`pubmap];
+    .qunit.assertTrue[not got[1]=`demo_deals_backfill;"a legacy call's id no longer doubles as the process"]};
+
+/ --- the channel survives TorQ's own formatting and publication --------
+/ TorQ's .lg.format and .lg.publish, taken from lib/torq/torq.q itself rather
+/ than copied here, so a TorQ update that changes how `id` is written fails
+/ this test instead of the reader. Loaded as a script (the only way to define
+/ into .lg without a context switch), once with -jsonlogs and once without.
+
+.qt.qetl.log.torq_text:{[json]
+    src:read0`:lib/torq/torq.q;
+    a:first where (9#'src)~\:"format:$[";
+    b:first where src like "*.ps.publish*";
+    f:hsym`$"build/test-torq-lg-",string[.z.i],".q";
+    f 0: enlist["\\d .lg"],src a+til 1+b-a;
+    f 0: (read0 f),enlist "\\d .";
+    `.proc.params set $[json;enlist[`jsonlogs]!enlist enlist "true";()!()];
+    `.proc.cp set {.z.p};
+    `.lg.outmap set `ERR`INFO`WARN!2 1 1;
+    `.lg.pubmap set `ERR`INFO`WARN!1 0 1;
+    `.ps.initialised set 1b;
+    `.ps.publish set {[t;rows] `.qt.qetl.log.published set (t;rows)};
+    system "l ",1_string f;
+    hdel f;}
+
+.qt.qetl.log.torq_text_cleanup:{[] ![`.lg;();0b;`format`publish`outmap`pubmap]; ![`.proc;();0b;`params`cp]; ![`.ps;();0b;`initialised`publish];}
+
+.qt.qetl.log.through_torq:{[json]
+    .qt.qetl.log.torq_text json;
+    `.qetl.log.emit set .qt.qetl.log.real_emit;
+    `.lg.l set {[level;proctype;proc;id;message;dict]
+        `.qt.qetl.log.text set .lg.format[level;proctype;proc;id;message]; .lg.publish[level;proctype;proc;id;message]};
+    .qetl.log.ch.warn[`coverage;"gap found";enlist[`dataset]!enlist `markouts];
+    out:(.qt.qetl.log.text;.qt.qetl.log.published);
+    ![`.lg;();0b;enlist `l];
+    .qt.qetl.log.torq_text_cleanup[];
+    out}
+
+.qt.qetl.log.test_the_channel_survives_torqs_text_log:{[t]
+    out:.qt.qetl.log.through_torq 0b;
+    fields:"|" vs first out;
+    .qunit.assertEquals[(fields 4;fields 5;fields 6);("WARNING";"coverage";"gap found dataset=`markouts");"id is the sixth field, as the reader parses it"];
+    .qunit.assertEquals[fields 3;string .qetl.log.process[];"and the fourth is the process"]};
+
+.qt.qetl.log.test_the_channel_survives_torqs_json_log:{[t]
+    out:.qt.qetl.log.through_torq 1b;
+    j:.j.k first out;
+    .qunit.assertEquals[(j`id;j`proc;j`loglevel);("coverage";string .qetl.log.process[];"WARNING");"the JSON line carries the channel under id"]};
+
+.qt.qetl.log.test_the_channel_survives_torqs_published_log:{[t]
+    out:.qt.qetl.log.through_torq 0b;
+    row:first (last out) 1;
+    .qunit.assertEquals[(row`id;row`sym;row`loglevel);(`coverage;.qetl.log.process[];`WARNING);
+        "the logmsg row has the channel as id and the process as sym - sym used to be the worker"]};

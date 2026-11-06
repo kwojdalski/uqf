@@ -569,6 +569,13 @@ OPTIONS = {
     "--json": Meaning("one JSON document on stdout", r"^Print (one )?JSON"),
     "--keep": Meaning("how many newest releases to keep", r"newest (n )?releases"),
     "--last": Meaning("a time range up to now", r"up to now"),
+    # a log record's id column IS its subsystem channel (#2274): `--channel` is the filter, the
+    # old `--id` is refused naming it, and the old `--channel` (subscribe) is `--subscribe`
+    "--channel": Meaning("a log channel to show, repeatable", r"^Only show lines on this channel"),
+    "--id": Meaning("retired: --channel, a log record's id is its channel (#2274)", None),
+    "--subscribe": Meaning(
+        "read the published log lines, not the files", r"^Subscribe to the lines"
+    ),
     "--level": Meaning("the lowest log level shown", r"this level and above"),
     "--limit": Meaning("show at most N records", r"(most recent|at most) N"),
     "--lines": Meaning("how many lines of a log to show", r"^lines (of|per)\b"),
@@ -2204,3 +2211,59 @@ def test_job_new_refuses_the_retired_output_options(old):
     result = CliRunner().invoke(app, ["job", "new", "x", old, "t", "--dry-run"])
     assert result.exit_code == 2
     assert "No such option" in result.output
+
+
+# ------------------------------------------- #2274: a log's id is its channel
+
+
+class _Said:
+    """What `_die` hands the log, kept: loguru does not write into CliRunner's output."""
+
+    def __init__(self) -> None:
+        self.messages: list[str] = []
+
+    def error(self, message: str, *args) -> None:
+        self.messages.append(str(message).format(*args))
+
+    def __getattr__(self, _name: str):
+        return lambda *a, **kw: None
+
+
+def _refusal(monkeypatch, *argv: str) -> str:
+    """What `uqs logs ARGV` says when it refuses (exit 2): Click's usage box or the
+    command's own error, whitespace and box lines folded."""
+    said = _Said()
+    monkeypatch.setattr(shared, "log", said)
+    result = CliRunner().invoke(app, ["logs", *argv])
+    assert result.exit_code == 2, result.output
+    box = re.sub("[│╭╰╮╯─]", " ", result.output)
+    return " ".join(" ".join([box, *said.messages]).split())
+
+
+def test_logs_id_is_refused_naming_channel_with_no_alias(monkeypatch):
+    """`--id` filtered TorQ's id column, which is the channel now: refused, not accepted
+    beside `--channel` (#2274, and the repo's no-aliases rule)."""
+    for argv in (["--id", "fx_positions"], ["--id=fx_positions"]):
+        assert "`--id` was renamed `--channel`" in _refusal(monkeypatch, *argv)
+    assert "--id" not in {o for p in _params(LEAVES["logs"]) for o in p.opts}
+
+
+def test_the_old_channel_meaning_is_refused_naming_subscribe(monkeypatch):
+    """`--channel` took no value and subscribed; it takes a channel now. The old use is
+    answered with where it went, whether it is last or followed by another option."""
+    for argv in (["--channel"], ["--channel", "--level", "ERROR"], ["rdb1", "--channel", "-f"]):
+        assert "renamed `--subscribe`" in _refusal(monkeypatch, *argv), argv
+
+
+def test_logs_channel_takes_only_the_declared_channels(monkeypatch):
+    from uqs.generated import q_facts
+
+    said = _refusal(monkeypatch, "--channel", "fx_positions")
+    assert "is not a channel" in said
+    assert all(channel in said for channel in q_facts.LOG_CHANNELS)
+
+
+def test_logs_subscribe_is_the_subscription_and_channel_the_filter():
+    options = {o: p for p in _params(LEAVES["logs"]) for o in p.opts}
+    assert options["--subscribe"].is_flag and not options["--channel"].is_flag
+    assert options["--channel"].multiple, "several channels match any of them"

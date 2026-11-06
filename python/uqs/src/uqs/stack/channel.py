@@ -1,4 +1,4 @@
-"""Log channels: subscribe to processes' log lines instead of tailing files (#1067).
+"""Log subscription: read processes' published log lines instead of tailing files (#1067).
 
 Every TorQ process already publishes its log. torq.q declares a `logmsg`
 table (`time sym proctype host loglevel id message`, sym = the process) and
@@ -9,12 +9,16 @@ WARNING and ERROR are published and INFO, DEBUG and TRACE are not. TorQ's
 own monitor subscribes to every process this way. Nothing is published
 unless something subscribes: `.ps` sends to subscribers only.
 
-A channel is a filter over those publications: which processes, which
-`id` (the worker or component - `.qetl.log`'s first argument), and a minimum
-level. Each process is subscribed to on its own connection
-(`.ps.subscribe[`logmsg;`]`, the monitor's call); `id` and level are
-filtered here, because a process publishes every logmsg row to every
-subscriber of the table.
+A subscription is a view over those publications: which processes, which
+channels (the `id` column, #2274), and a minimum level. Each process is
+subscribed to on its own connection (`.ps.subscribe[`logmsg;`]`, the
+monitor's call); channel and level are filtered here, because a process
+publishes every logmsg row to every subscriber of the table. That is a
+filter on what is SHOWN: the process still generates and publishes every
+row its own levels allow.
+
+`sym` of a published row is the emitting process, and `id` its channel
+(a native TorQ category, or an older line's worker name, is shown as it is).
 
 The client is kola, not a q script: a hand-run q subscriber received no
 async pushes from TorQ processes on this Mac, where kola does. One thread per
@@ -97,9 +101,9 @@ def records(message: Any) -> list[dict[str, str]]:
     ]
 
 
-def wanted(rec: dict[str, str], ids: Iterable[str]) -> bool:
-    """Whether a record is on the channel's ids - every id when none is given."""
-    chosen = set(ids)
+def wanted(rec: dict[str, str], channels: Iterable[str]) -> bool:
+    """Whether a record is on any of the channels - every record when none is given."""
+    chosen = set(channels)
     return not chosen or rec["id"] in chosen
 
 
@@ -139,26 +143,26 @@ def follow_channel(
     paths: UqsPaths,
     procs: str = "all",
     *,
-    ids: Iterable[str] = (),
+    channels: Iterable[str] = (),
     min_level: str | None = None,
     base_port: int | None = None,
     connect: Callable[[int], Any] = _connect,
     stop: threading.Event | None = None,
 ) -> None:
-    """Print, live, every log line the chosen processes publish that is on the
-    channel - its ids and at least `min_level` - until `stop` is set (the CLI
-    runs until Ctrl-C). Each process is subscribed on its own thread.
+    """Print, live, every log line the chosen processes publish that is on any
+    of the `channels` (all when none) and at least `min_level`, until `stop` is
+    set (the CLI runs until Ctrl-C). Each process is subscribed on its own thread.
 
-    Only what a process publishes reaches a channel: WARNING and ERROR by
+    Only what a process publishes reaches a subscription: WARNING and ERROR by
     default (.lg.pubmap); a process set to publish INFO sends that too.
     """
     procnames = stack_logs.resolve_procnames(paths, procs)
     stack_logs.min_level_name(min_level)  # refuse a bad --level before connecting
+    chosen = stack_logs.channel_names(channels)  # and a bad --channel
     ports = configured_ports(paths, base_port)
     unknown = [name for name in procnames if name not in ports]
     if unknown:
         raise UqsError(f"no port configured for {unknown} - is it in process.csv?")
-    chosen = tuple(ids)
     stop = stop or threading.Event()
     out: queue.Queue[tuple[str, str, Any]] = queue.Queue()
     for name in procnames:

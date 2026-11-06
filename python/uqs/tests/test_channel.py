@@ -1,4 +1,4 @@
-"""Log channels (#1067): turning a process's logmsg publications into the
+"""Log subscription (#1067): turning a process's logmsg publications into the
 records `uqs logs` prints, and the subscriber loop, against a fake
 connection - the live path was checked against a running stack."""
 
@@ -42,7 +42,7 @@ def _logmsg(*rows: tuple[str, str, str, str]) -> list[Any]:
 
 
 def test_a_publication_reads_as_the_records_uqs_logs_prints():
-    recs = channel.records(_logmsg(("rdb1", "WARN", "fx_positions", "book is stale")))
+    recs = channel.records(_logmsg(("rdb1", "WARN", "source", "book is stale")))
     assert recs == [
         {
             "time": "2026.10.10D12:00:00.123456",
@@ -50,7 +50,7 @@ def test_a_publication_reads_as_the_records_uqs_logs_prints():
             "proctype": "rdb",
             "procname": "rdb1",
             "loglevel": "WARNING",
-            "id": "fx_positions",
+            "id": "source",
             "message": "book is stale",
         }
     ]
@@ -76,11 +76,18 @@ def test_anything_but_a_logmsg_publication_gives_no_records(message):
     assert channel.records(message) == []
 
 
-def test_ids_filter_and_none_means_every_id():
-    rec = {"id": "fx_positions"}
+def test_channels_filter_and_none_means_every_record():
+    rec = {"id": "source"}
     assert channel.wanted(rec, [])
-    assert channel.wanted(rec, ["fx_positions", "posbook"])
-    assert not channel.wanted(rec, ["posbook"])
+    assert channel.wanted(rec, ["source", "ipc"])
+    assert not channel.wanted(rec, ["ipc"])
+
+
+def test_an_unfamiliar_id_is_a_record_but_never_a_channel():
+    """A native TorQ category reads as a record and matches no --channel."""
+    rec = {"id": "main"}
+    assert channel.wanted(rec, [])
+    assert not channel.wanted(rec, ["lifecycle"])
 
 
 class _FakeConn:
@@ -142,17 +149,18 @@ def test_lines_from_every_process_print_through_the_channel_filter(monkeypatch):
         1: _FakeConn(
             [
                 _logmsg(
-                    ("rdb1", "WARN", "fx_positions", "stale book"),
-                    ("rdb1", "WARN", "posbook", "other worker"),
+                    ("rdb1", "WARN", "source", "stale book"),
+                    ("rdb1", "WARN", "storage", "other subsystem"),
+                    ("rdb1", "WARN", "main", "a native category"),
                 )
             ]
         ),
-        2: _FakeConn([_logmsg(("stp1", "ERR", "fx_positions", "log write failed"))]),
+        2: _FakeConn([_logmsg(("stp1", "ERR", "ipc", "log write failed"))]),
     }
-    out = _run(monkeypatch, conns, ids=["fx_positions"])
-    assert "rdb1:WARNING:fx_positions:stale book" in out
-    assert "stp1:ERROR:fx_positions:log write failed" in out
-    assert "other worker" not in out
+    out = _run(monkeypatch, conns, channels=["source", "ipc"])
+    assert "rdb1:WARNING:source:stale book" in out
+    assert "stp1:ERROR:ipc:log write failed" in out
+    assert "other subsystem" not in out and "a native category" not in out
     assert conns[1].sent == [channel.SUBSCRIBE] and conns[2].sent == [channel.SUBSCRIBE]
 
 

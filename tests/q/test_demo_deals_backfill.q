@@ -1349,3 +1349,14 @@
     .qpipe.job.demo_deals_backfill.init[.qt.qpipe.job.demo_deals_backfill.spec_for[`v1;1;4]];
     .qpipe.job.demo_deals_backfill.run[];
     .qunit.assertEquals[()~key hsym `$.qetl.coverage.ready_path[];1b;"no watermark was written"]};
+
+/ --- #2274: the lifecycle lines are on the lifecycle channel -----------------
+
+.qt.qpipe.job.demo_deals_backfill.test_start_and_finish_are_on_the_lifecycle_channel:{[t]
+    lines:.qt.qpipe.job.demo_deals_backfill.logged {
+        .qpipe.job.demo_deals_backfill.init[.qt.qpipe.job.demo_deals_backfill.spec_for[`v1;1;3]];
+        .qpipe.job.demo_deals_backfill.run[]};
+    mine:lines where lines[;2] in ("initialised";"run finished");
+    .qunit.assertEquals[(mine[;2];mine[;1]);(("initialised";"run finished");`lifecycle`lifecycle);
+        "the run's start and its summary are lifecycle lines"];
+    .qunit.assertEquals[distinct mine[;3][;`worker];enlist `demo_deals_backfill;"the worker is a field of each"]};

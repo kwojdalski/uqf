@@ -51,7 +51,7 @@
     if[0=count needed; :worker];
     live:.qetl.job.bounded.runtime.connected[];
     missing:needed where not needed in live;
-    .[{.qetl.log.dbg[x;y;z]};(worker;"dependencies";`needed`connected`missing!(needed;live;missing));::];
+    .[{.qetl.log.ch.dbg[x;y;z]};(`ipc;"dependencies";`worker`needed`connected`missing!(worker;needed;live;missing));::];
     if[count missing;
         '"require_dependencies: ",string[worker]," cannot start - no connection to ",
          (", " sv string missing),

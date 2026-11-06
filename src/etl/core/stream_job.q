@@ -592,8 +592,8 @@
     d:.qetl.job.stream.def[job];
     replay:$[`replay in key d; d`replay; 0b];
     tbls:.qetl.job.stream.subscriptions[job];
-    .[{.qetl.log.info[x;y;z]};(job;"starting streaming job";
-        `subscribe_to`outputs`replay`timer!(tbls;d`outputs;replay;
+    .[{.qetl.log.ch.info[x;y;z]};(`lifecycle;"starting streaming job";
+        `job`subscribe_to`outputs`replay`timer!(job;tbls;d`outputs;replay;
             $[`period in key d; d`period; 0Nn]));::];
     if[`on_start in key d; (d`on_start)[]];
     tr[`connect][];
@@ -627,8 +627,8 @@
         `.qetl.cfg.audit.owner_here set job;
         tr[`timer][`$(string job),"_config";.qetl.cfg.audit.period;.qetl.cfg.audit.poll_and_publish]];
     `.qetl.job.stream.running set distinct .qetl.job.stream.running,job;
-    .[{.qetl.log.info[x;y;z]};(job;"streaming job wired - running";
-        `subscribe_to`outputs!(tbls;d`outputs));::];
+    .[{.qetl.log.ch.info[x;y;z]};(`lifecycle;"streaming job wired - running";
+        `job`subscribe_to`outputs!(job;tbls;d`outputs));::];
     job}
 
 / The jobs this process has started, in the order it started them: whom

@@ -439,4 +439,5 @@
     if[0=count ct; :`symbol$()];
     base:-1_string dir;
     {[base;c;t] .qetl.compression.recompress_column[hsym `$(base,"/"),string c;t]}[base]'[key ct;value ct];
+    .[{.qetl.log.ch.dbg[x;y;z]};(`storage;"column compression applied";`table`columns!(tbl;key ct));::];
     key ct}
