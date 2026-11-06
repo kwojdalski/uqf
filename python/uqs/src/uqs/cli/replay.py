@@ -18,11 +18,12 @@ import typer
 from rich.table import Table
 
 from uqs import timerange
-from uqs.cli import completion
+from uqs.cli import completion, safety
 from uqs.cli.hdb_scope import tables_given
+from uqs.cli.json_out import emit, json_opt
 from uqs.cli.range_options import DateOpt, LastOpt, RangeFromOpt, RangeToOpt
 from uqs.cli.renames import renamed
-from uqs.cli.safety import ChangesState, dry_run_note
+from uqs.cli.safety import ConfirmsOnServer, dry_run_note
 from uqs.cli.shared import (
     BasePortOpt,
     _die,
@@ -60,7 +61,13 @@ _RENAMES = {
 }
 
 
-@data_app.command("replay", cls=renamed(_RENAMES, ChangesState))
+ReplayJson = json_opt(
+    '{"ok", "plan": [{what, value, from}], "start", "applied", "exit_code"} - exit_code '
+    "null on the dry run"
+)
+
+
+@data_app.command("replay", cls=renamed(_RENAMES, ConfirmsOnServer))
 def replay(
     proc: Annotated[
         str | None,
@@ -102,12 +109,10 @@ def replay(
         ),
     ] = None,
     port: BasePortOpt = None,
-    dry_run: Annotated[
-        bool,
-        typer.Option(
-            "--dry-run", "-n", help="Print the resolved plan and the start line; run nothing"
-        ),
-    ] = False,
+    apply: safety.ApplyOpt = False,
+    yes: safety.ApplyYesOpt = False,
+    as_json: ReplayJson = False,
+    dry_run: safety.RefusedDryRunOpt = False,
 ) -> None:
     """Replay a tickerplant log into the HDB, aimed by what is running.
 
@@ -120,8 +125,9 @@ def replay(
 
     THIS EMPTIES WHAT IT WRITES. TorQ's replay defaults are kept whole, which
     means the tables being replayed are cleared in the partitions it touches
-    before it writes them. Run `--dry-run` first on anything you have not run
-    before.
+    before it writes them. So without --apply it prints the plan and the start
+    line and runs nothing; --apply shows the plan, asks, then replays; --yes
+    does not ask.
 
     The day is --date D, or --from D --to D+1: a log is one day's, so a
     range of anything else is refused. Default: the plant's newest day that
@@ -131,6 +137,7 @@ def replay(
     e.g. `uqs data replay --date 2026-09-22 --table quote --table trade`
     """
     try:
+        safety.refuse_dry_run("data replay", dry_run)
         plan = stack_replay.plan(
             procname=proc,
             date=_day(day, range_from, range_to, last),
@@ -146,6 +153,45 @@ def replay(
         _die(exc)
         return
 
+    line = " ".join([stack_replay.REPLAY_PROCNAME, "-extras", *plan.flags()])
+    doc = {
+        "plan": [{"what": w, "value": v, "from": f} for w, v, f in plan.rows()],
+        "start": line,
+        "applied": False,
+        "exit_code": None,
+    }
+    if not as_json:
+        _show(plan)
+    if not apply:
+        if as_json:
+            emit({"ok": True, **doc})
+            return
+        console.print(f"would start: {line}", markup=False, highlight=False)
+        console.print(dry_run_note("with --apply"))
+        return
+
+    tables = ", ".join(plan.tables) if plan.tables else "every table in the log"
+    try:
+        safety.json_needs_yes(as_json, yes, "replay")
+        safety.confirm(
+            f"Replay {tables} into {plan.hdb_dir}, emptying them first in the partitions "
+            "it touches?",
+            yes=yes,
+        )
+        result = stack_replay.start(_paths(), plan, capture=as_json)
+    except UqsError as exc:
+        _die(exc)
+        return
+    if as_json:
+        for said in (result.stdout, result.stderr):
+            if said:
+                typer.echo(said.rstrip("\n"), err=True)  # stdout is the document's
+        emit({**doc, "ok": result.returncode == 0, "applied": True,
+              "exit_code": result.returncode})  # fmt: skip
+    raise typer.Exit(code=result.returncode)
+
+
+def _show(plan: stack_replay.ReplayPlan) -> None:
     rendered = Table(title="replay plan")
     rendered.add_column("what")
     # Folded, not truncated: every value here is a path, and a path with its
@@ -156,16 +202,3 @@ def replay(
     for what, value, source in plan.rows():
         rendered.add_row(what, value, source)
     console.print(rendered)
-
-    if dry_run:
-        line = " ".join([stack_replay.REPLAY_PROCNAME, "-extras", *plan.flags()])
-        console.print(f"would start: {line}", markup=False, highlight=False)
-        console.print(dry_run_note())
-        return
-
-    try:
-        result = stack_replay.start(_paths(), plan)
-    except UqsError as exc:
-        _die(exc)
-        return
-    raise typer.Exit(code=result.returncode)

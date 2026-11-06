@@ -193,6 +193,12 @@ RENAMED_AFTER: dict[str, frozenset[str]] = {
             "uqs data migrate -n",
             "uqs target adopt --dry-run",
             "uqs target adopt -n",
+            # #2235: replay and seed wrote by default; a dry run is the default
+            # now, so their --dry-run is refused, naming --apply
+            "uqs data replay --dry-run",
+            "uqs data replay -n",
+            "uqs data seed --dry-run",
+            "uqs data seed -n",
             # #1852: a bypass is --override NAME --reason, never a bare flag
             "uqs deploy build --allow-dirty",
             "uqs deploy build --allow-computed-names",

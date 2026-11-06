@@ -107,6 +107,12 @@ CASES: dict[str, tuple[list[str], str]] = {
         ["data", "compress", "--report", "--hdb", "/nonexistent-2149"],
         "no such directory",
     ),
+    # #2235: dry runs unless --apply, with a document like their siblings'
+    "data replay": (
+        ["data", "replay", "--from", "2026-09-23", "--to", "2026-09-25"],
+        "replays one whole day",
+    ),
+    "data seed": (["data", "seed"], "name the runtime to copy from"),
     "runtime diff": (["runtime", "diff", "nosuch1", "nosuch2"], "is not a runtime"),
     "job receiver start": (
         ["job", "receiver", "start", "--attachment", "nosuch"],

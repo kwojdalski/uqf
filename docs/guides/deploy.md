@@ -736,15 +736,15 @@ uqs --target uat start piggybankgeneralledger1   # asks first; --yes skips the q
   this machine only: `--target` refuses them. See [Changing
   targets](#changing-targets).
 - **Confirmation.** A command that can change the server, such as `start`,
-  `stop`, `restart`, `exec`, `job backfill`, `config set` or `data seed`, asks
-  first and names the target. Without a terminal it needs `--yes`. So do
-  `query`, which can send any q, and `status -i`, whose browser starts and stops
-  processes. Read-only commands run directly: `status`, `logs`, `schema`,
-  `list`, `graph`, `job gaps`, `job runs show` and `connector logs`, as does
-  `--help` and a `--dry-run` (not `job backfill`'s, which starts a process).
-  Each command declares which it is, and the command line is parsed as the
-  server's `uqs` parses it: a word given as an option's value is not a flag. A
-  command, option or argument this machine's `uqs` does not know asks.
+  `stop`, `restart`, `exec`, `job backfill` or `config set`, asks first and
+  names the target. Without a terminal it needs `--yes`. So do `query`, which
+  can send any q, and `status -i`, whose browser starts and stops processes.
+  Read-only commands run directly: `status`, `logs`, `schema`, `list`, `graph`,
+  `job gaps`, `job runs show` and `connector logs`, as does `--help` and a
+  `--dry-run` (not `job backfill`'s, which starts a process). Each command
+  declares which it is, and the command line is parsed as the server's `uqs`
+  parses it: a word given as an option's value is not a flag. A command, option
+  or argument this machine's `uqs` does not know asks.
 - **ssh.** It runs with `BatchMode`, so a missing key or an unknown host key
   fails rather than prompts. Host-key checking is whatever your `ssh_config`
   says, and credentials stay on the server.

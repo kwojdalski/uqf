@@ -125,7 +125,11 @@ def test_the_target_is_read_from_the_global_options_only(argv, expected):
         (["setup", "odbc", "rollback"], True),
         (["config", "set", "rdb1", "port", "1"], True),
         (["config", "sources", "stub"], True),
-        (["data", "seed"], True),
+        # #2235: a dry run unless --apply, which asks on the server
+        (["data", "seed"], False),
+        (["data", "seed", "--apply"], False),
+        (["data", "replay"], False),
+        (["data", "replay", "--apply"], False),
         (["some-command-added-later"], True),
         (["stop", "--dry-run"], False),
         (["config", "set", "rdb1", "port", "1", "-n"], False),

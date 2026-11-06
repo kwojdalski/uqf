@@ -69,6 +69,23 @@ DefaultDryRunOpt = Annotated[
 ]
 
 
+#: `--dry-run`/`-n` on a command that wrote by default until it took --apply
+#: (#2235): there it meant "not this time", and now a dry run is the default,
+#: so it is refused, naming --apply, rather than kept as a second spelling.
+RefusedDryRunOpt = Annotated[
+    bool,
+    typer.Option(
+        "--dry-run", "-n", hidden=True, help="Refused: a dry run is the default; --apply writes"
+    ),
+]
+
+
+def refuse_dry_run(command: str, dry_run: bool) -> None:
+    """Refuse `RefusedDryRunOpt`, naming what replaced it."""
+    if dry_run:
+        raise UqsUsageError(f"`{command}` is a dry run unless --apply: drop --dry-run")
+
+
 def dry_unless_applied(dry_run: bool, apply: bool) -> None:
     """Refuse --dry-run with --apply, and warn that --dry-run alone is the default."""
     if dry_run and apply:
