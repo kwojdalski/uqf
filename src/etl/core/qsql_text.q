@@ -140,7 +140,7 @@
 / @return (lambda; its arguments in parameter order), or `::` for a function that is not a lambda underneath
 / @private
 .qetl.qsql.bind:{[f;args]
-    if[100h=type f; :(f;args)];
+    if[.qetl.declared.lambda f; :(f;args)];
     if[104h<>type f; :(::)];
     v:value f;
     fill:{[st;x] $[(::)~x; (1_st 0; (st 1),enlist first st 0); (st 0; (st 1),enlist x)]};
