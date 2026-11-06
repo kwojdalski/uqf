@@ -85,7 +85,7 @@ mk_timestamps:{[n;start_ts]
     std_gap:0D00:00:00.001;
     min_gap:0D00:00:00.0001;
     p:1e-9+(1-2e-9)*n?1.0;
-    .qetl.log.dbg[`reshape_wide_order_book;"running: .qf.math.inv_ncdf p";()!()];
+    .qetl.log.ch.dbg[`lifecycle;"running: .qf.math.inv_ncdf p";enlist[`example]!enlist `reshape_wide_order_book];
     shock:.qf.math.inv_ncdf p;
     gaps:min_gap|mean_gap+std_gap*shock;
     start_ts+sums gaps};
@@ -111,7 +111,7 @@ meta_table:flip `time`sym`venue`exchange`action`side!(
     sides);
 
 t:meta_table,'level_table;
-.qetl.log.info[`reshape_wide_order_book;"t - wide source table: ",.Q.s1[count t]," rows, ",.Q.s1[count cols t]," columns";()!()];
+.qetl.log.ch.info[`lifecycle;"t - wide source table: ",.Q.s1[count t]," rows, ",.Q.s1[count cols t]," columns";enlist[`example]!enlist `reshape_wide_order_book];
 show t;
 
 / Databento's own MBP-10 naming convention: bid_px_00.._09, bid_sz_00.._09,
@@ -122,9 +122,9 @@ level_prefix_targets:(
     ("bid_sz_";`bid_sizes);
     ("ask_px_";`ask_prices);
     ("ask_sz_";`ask_sizes));
-.qetl.log.dbg[`reshape_wide_order_book;"running: .qf.mkt.derive_level_groups[cols t;level_prefix_targets]";()!()];
+.qetl.log.ch.dbg[`lifecycle;"running: .qf.mkt.derive_level_groups[cols t;level_prefix_targets]";enlist[`example]!enlist `reshape_wide_order_book];
 level_groups:.qf.mkt.derive_level_groups[cols t;level_prefix_targets];
-.qetl.log.dbg[`reshape_wide_order_book;"level_groups - target_col -> ordered source_cols:";()!()];
+.qetl.log.ch.dbg[`lifecycle;"level_groups - target_col -> ordered source_cols:";enlist[`example]!enlist `reshape_wide_order_book];
 show level_groups;
 
 / Advisory only - inspect before deciding what to symbolize. Note action/side
@@ -132,38 +132,38 @@ show level_groups;
 / single-letter values ("A"/"B"/...) kdb+ collapses that column into a plain
 / char vector rather than a list of strings, so it isn't a "string column"
 / by candidate_symbol_columns's own type check.
-.qetl.log.dbg[`reshape_wide_order_book;"running: .qf.mkt.candidate_symbol_columns[t;`sym`venue`exchange`side;0.5]";()!()];
+.qetl.log.ch.dbg[`lifecycle;"running: .qf.mkt.candidate_symbol_columns[t;`sym`venue`exchange`side;0.5]";enlist[`example]!enlist `reshape_wide_order_book];
 candidates:.qf.mkt.candidate_symbol_columns[t;`sym`venue`exchange`side;0.5];
-.qetl.log.info[`reshape_wide_order_book;"candidates - columns to symbolize: ",.Q.s1[", " sv string candidates];()!()];
+.qetl.log.ch.info[`lifecycle;"candidates - columns to symbolize: ",.Q.s1[", " sv string candidates];enlist[`example]!enlist `reshape_wide_order_book];
 
 / Explicit final column order - edit this list to reorder (or drop) columns.
 / `col_order#out` selects/reorders out's columns and stays a table; plain
 / `out col_order` (or `out[col_order]`) does NOT - it returns the column
 / values as a list, same idiom forwards.q's cross_book_at_sizes relies on.
 col_order:`time`sym`venue`exchange`action`side`bid_prices`ask_prices`bid_sizes`ask_sizes;
-.qetl.log.dbg[`reshape_wide_order_book;"running: .qf.mkt.book_from_wide_levels[t;level_groups;candidates]";()!()];
+.qetl.log.ch.dbg[`lifecycle;"running: .qf.mkt.book_from_wide_levels[t;level_groups;candidates]";enlist[`example]!enlist `reshape_wide_order_book];
 out:col_order#.qf.mkt.book_from_wide_levels[t;level_groups;candidates];
-.qetl.log.info[`reshape_wide_order_book;"out - reshaped table: ",.Q.s1[count out]," rows, ",.Q.s1[count cols out]," columns";()!()];
+.qetl.log.ch.info[`lifecycle;"out - reshaped table: ",.Q.s1[count out]," rows, ",.Q.s1[count cols out]," columns";enlist[`example]!enlist `reshape_wide_order_book];
 show out;
-.qetl.log.dbg[`reshape_wide_order_book;"meta out - column types after reshaping:";()!()];
+.qetl.log.ch.dbg[`lifecycle;"meta out - column types after reshaping:";enlist[`example]!enlist `reshape_wide_order_book];
 show meta out;
 
 / Hand row 0's book straight to sweep_price, matching forwards.q's
 / `bid_prices`bid_sizes`ask_prices`ask_sizes convention.
 row:out 0;
-.qetl.log.dbg[`reshape_wide_order_book;"row - out's row 0 as a dict:";()!()];
+.qetl.log.ch.dbg[`lifecycle;"row - out's row 0 as a dict:";enlist[`example]!enlist `reshape_wide_order_book];
 show row;
 
 book:`bid_prices`bid_sizes`ask_prices`ask_sizes!(row`bid_prices;row`bid_sizes;row`ask_prices;row`ask_sizes);
-.qetl.log.dbg[`reshape_wide_order_book;"book - row 0's book dict, forwards.q's sweep_price/cross_book shape:";()!()];
+.qetl.log.ch.dbg[`lifecycle;"book - row 0's book dict, forwards.q's sweep_price/cross_book shape:";enlist[`example]!enlist `reshape_wide_order_book];
 show book;
 
-.qetl.log.dbg[`reshape_wide_order_book;"running: .qf.mkt.sweep_price[book`ask_prices;book`ask_sizes;250]";()!()];
+.qetl.log.ch.dbg[`lifecycle;"running: .qf.mkt.sweep_price[book`ask_prices;book`ask_sizes;250]";enlist[`example]!enlist `reshape_wide_order_book];
 sweep_result:.qf.mkt.sweep_price[book`ask_prices;book`ask_sizes;250];
-.qetl.log.info[`reshape_wide_order_book;"sweep_result - swept 250 units against row 0's ask side: avg_price=",.Q.s1[sweep_result`avg_price]," filled_size=",.Q.s1[sweep_result`filled_size]," fully_filled=",.Q.s1[sweep_result`fully_filled];()!()];
+.qetl.log.ch.info[`lifecycle;"sweep_result - swept 250 units against row 0's ask side: avg_price=",.Q.s1[sweep_result`avg_price]," filled_size=",.Q.s1[sweep_result`filled_size]," fully_filled=",.Q.s1[sweep_result`fully_filled];enlist[`example]!enlist `reshape_wide_order_book];
 show sweep_result;
 if[not sweep_result`fully_filled;
-    .qetl.log.err[`reshape_wide_order_book;"sweep did not fully fill - unexpected for this synthetic book's depth";()!()];
+    .qetl.log.ch.err[`lifecycle;"sweep did not fully fill - unexpected for this synthetic book's depth";enlist[`example]!enlist `reshape_wide_order_book];
     exit 1];
 
 // exit 0

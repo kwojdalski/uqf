@@ -109,10 +109,10 @@
     out:.qetl.transform.apply_as_of[`cross_quotes;enlist[`fx_orderbook]!enlist .qpipe.job.cross.fx_orderbook;now];
     missing:.qpipe.job.cross.cross_pairs except out`sym;
     if[count missing;
-        $[missing~.qpipe.job.cross.unpriced; .qetl.log.dbg; .qetl.log.warn][
-            `cross;"pairs could not be priced";enlist[`pairs]!enlist missing]];
+        $[missing~.qpipe.job.cross.unpriced; .qetl.log.ch.dbg; .qetl.log.ch.warn][
+            `transform;"pairs could not be priced";`job`pairs!(`cross;missing)]];
     if[count back:.qpipe.job.cross.unpriced except missing;
-        .qetl.log.info[`cross;"pairs priced again";enlist[`pairs]!enlist back]];
+        .qetl.log.ch.info[`transform;"pairs priced again";`job`pairs!(`cross;back)]];
     .qpipe.job.cross.unpriced:missing;
     if[count out; `.qpipe.job.cross.crosses insert out];
     out}

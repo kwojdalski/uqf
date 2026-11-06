@@ -260,7 +260,7 @@
     .qetl.job.stream.check_replay[job;decl]; .qetl.twin.check_live[job;decl];
     .qetl.job.stream.jobs[job]:enlist decl;
     .qetl.job.stream.procnames[decl`procname]:job;
-    .[{.qetl.log.dbg[x;y;z]};(job;"streaming job registered";
+    .[{.qetl.log.ch.dbg[`config;y;(enlist[`job]!enlist x),z]};(job;"streaming job registered";
         `procname`subscribe_to`outputs`timer!(decl`procname;decl`subscribe_to;decl`outputs;
             $[has_period; decl`period; 0Nn]));::];
     job}
@@ -333,7 +333,7 @@
     / The plant's contract sits under the check, at the transport (#1074).
     p:.qetl.job.stream.contracted[job;(),(d`outputs) inter .qetl.plant.names[];publisher];
     (` sv (d`ns),`publish) set $[`check in key d; .qetl.job.stream.checked[job;d`check;d`on_fail;p]; p];
-    .[{.qetl.log.dbg[x;y;z]};(job;"publish seam wired";enlist[`outputs]!enlist d`outputs);::];
+    .[{.qetl.log.ch.dbg[`config;y;(enlist[`job]!enlist x),z]};(job;"publish seam wired";enlist[`outputs]!enlist d`outputs);::];
     job}
 
 / Private: a publisher that holds every batch for a plant table to that
@@ -423,7 +423,7 @@
 / @private
 .qetl.job.stream.withhold:{[job;t;x;msg;f;n]
     .[.qetl.stream_health.record;(job;0b;msg);::];
-    .[{.qetl.log.err[x;y;z]};(job;"publish check withheld rows";
+    .[{.qetl.log.ch.err[`transform;y;(enlist[`job]!enlist x),z]};(job;"publish check withheld rows";
         `table`rows`withheld`failures!(t;.qetl.job.stream.row_count[t;x];n;$[.Q.qt f;300#.Q.s1 5#f;""]));::];
     .qetl.job.stream.withheld_n::.qetl.job.stream.withheld_n+1;
     ::}
@@ -556,7 +556,7 @@
 .qetl.job.stream.guarded:{[job;f;t;x]
     r:.[f;(t;x);{[job;t;e]
         .[.qetl.stream_health.record;(job;0b;e);::];
-        .[{.qetl.log.err[x;y;z]};(job;"on_batch failed";`table`error!(t;e));::];
+        .[{.qetl.log.ch.err[`lifecycle;y;(enlist[`job]!enlist x),z]};(job;"on_batch failed";`table`error!(t;e));::];
         'e}[job;t]];
     .[.qetl.stream_health.record;(job;1b;"");::];
     r}
@@ -619,9 +619,9 @@
         / Protected: a record that cannot be written must never stop the job
         / it records. Logged, so a missing session is explained.
         .[{[tr;job] .qetl.uptime.begin job;
-            tr[`timer][`$(string job),"_uptime";.qetl.uptime.period;{[job;tr;unused] .qetl.job.stream.watch_subscription[job;tr]; @[.qetl.uptime.beat;::;{[e] .qetl.log.warn[`uptime;"could not record a beat";enlist[`error]!enlist e];}]}[job;tr]]};
+            tr[`timer][`$(string job),"_uptime";.qetl.uptime.period;{[job;tr;unused] .qetl.job.stream.watch_subscription[job;tr]; @[.qetl.uptime.beat;::;{[e] .qetl.log.ch.warn[`lifecycle;"could not record a beat";enlist[`error]!enlist e];}]}[job;tr]]};
           (tr;job);
-          {[job;e] .qetl.log.warn[job;"could not open an uptime session - its gaps will read as down";enlist[`error]!enlist e];}[job]]];
+          {[job;e] .qetl.log.ch.warn[`lifecycle;"could not open an uptime session - its gaps will read as down";(enlist[`job]!enlist job),enlist[`error]!enlist e];}[job]]];
     if[`period in key d; tr[`timer][job;d`period;d`on_timer]];
     if[count .qetl.cfg.audit.watching job;
         `.qetl.cfg.audit.owner_here set job;
@@ -654,7 +654,7 @@
     .qetl.job.stream.carry_end_of_day[dt] each cs;
     js:.qetl.job.stream.running where {[j] `on_endofday in key .qetl.job.stream.def j} each .qetl.job.stream.running;
     ok:{[dt;j] @[{[dt;j] (.qetl.job.stream.def[j]`on_endofday) dt; 1b}[dt];j;
-        {[dt;j;e] .qetl.log.err[j;"on_endofday failed";`date`error!(dt;e)]; 0b}[dt;j]]}[dt] each js;
+        {[dt;j;e] .qetl.log.ch.err[`lifecycle;"on_endofday failed";(enlist[`job]!enlist j),`date`error!(dt;e)]; 0b}[dt;j]]}[dt] each js;
     js where ok}
 
 / ------------------------------------------------------------ CARRY
@@ -758,8 +758,8 @@
     r:$[job in key .qetl.job.stream.carry_log; .qetl.job.stream.carry_log job; (`recording;0;();0Np)];
     hwm:$[(`carried_to in cols x) and count x; max x`carried_to; 0Np];
     if[((r 0) in `full`restored_full) and (null hwm) or hwm<r 3;
-        .qetl.log.err[job;"carry snapshot arrived after its recording hit the cap - batches logged before it are not re-applied, so the restored state is missing them";
-            `table`held`cap!(c`table;r 1;.qetl.job.stream.carry_cap[job])]];
+        .qetl.log.ch.err[`eod;"carry snapshot arrived after its recording hit the cap - batches logged before it are not re-applied, so the restored state is missing them";
+            (enlist[`job]!enlist job),`table`held`cap!(c`table;r 1;.qetl.job.stream.carry_cap[job])]];
     v:` sv (.qetl.job.stream.def[job]`ns),c`state;
     cur:get v;
     rows:(cols 0!cur)#x;

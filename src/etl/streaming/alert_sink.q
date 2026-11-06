@@ -164,7 +164,7 @@
     if[count gave_up;
         `.qpipe.job.alert_sink.dead upsert update failed_at:now from gave_up;
         `.qpipe.job.alert_sink.alerts set (key[.qpipe.job.alert_sink.alerts] except gave_up`id)#.qpipe.job.alert_sink.alerts;
-        {[r] .qetl.log.err[`alert_sink;"breach not delivered - recorded in dead";`id`attempts`error!(r`id;r`attempts;r`error)]} each gave_up];
+        {[r] .qetl.log.ch.err[`ipc;"breach not delivered - recorded in dead";(enlist[`job]!enlist `alert_sink),`id`attempts`error!(r`id;r`attempts;r`error)]} each gave_up];
     `delivered`retrying`failed!(count where ok;count .qpipe.job.alert_sink.pending;count gave_up)}
 
 / A batch of breaches: dedupe, queue, and try to deliver.

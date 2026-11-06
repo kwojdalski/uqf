@@ -194,7 +194,7 @@
     fresh:$[count missing; .qetl.job.bounded.batching.read_keys[worker;w;missing]; ()];
     ev:$[reuse and count missing; .qetl.job.bounded.batching.put[sc;spec`reuse_rows;missing;fresh]; 0];
     `.qetl.job.bounded.batching.counts set .qetl.job.bounded.batching.counts + `hits`reads`queries`evicted!(count hit;count missing;0;ev);
-    .qetl.log.dbg[worker;"batch read";`keys`cached`read`evicted!(count want;count hit;count missing;ev)];
+    .qetl.log.ch.dbg[`source;"batch read";(enlist[`worker]!enlist worker),`keys`cached`read`evicted!(count want;count hit;count missing;ev)];
     byitem:hit,missing!fresh;
     given:enlist[table_name]!enlist rows;
     sup:{[src;br;byitem;want;nm]

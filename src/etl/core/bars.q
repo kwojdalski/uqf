@@ -185,7 +185,7 @@
     if[any out;
         gone:x where out;
         (` sv ns,`dropped) set -1000 sublist (get ` sv ns,`dropped),update reason:`late from gone;
-        .qetl.log.warn[name;"late row dropped - its bar is already out";`rows`first_window!(count gone;min gone`bar_start)]];
+        .qetl.log.ch.warn[`transform;"late row dropped - its bar is already out";(enlist[`transform]!enlist name),`rows`first_window!(count gone;min gone`bar_start)]];
     pq insert x where not out;
     }
 

@@ -48,12 +48,12 @@
 / @eg .qetl.job.stream.quarantine[`eg_job;`fills;3;"bad qty";([] qty:enlist 0n)]  / 1
 .qetl.job.stream.quarantine:{[job;t;position;err;rows]
     `.qetl.job.stream.quarantined insert (job;.z.p;t;position;err;rows);
-    .[{.qetl.log.err[x;y;z]};(job;"batch quarantined - replay continues";`table`position`error!(t;position;err));::];
+    .[{.qetl.log.ch.err[`transform;y;(enlist[`job]!enlist x),z]};(job;"batch quarantined - replay continues";`table`position`error!(t;position;err));::];
     / Never let keeping the evidence stop the catch-up it is evidence of.
     .[{[who] q:select from .qetl.job.stream.quarantined where job=who;
         / set makes the status directory if it is missing: no shell needed
         (hsym `$.qetl.status.status_dir[],"/stream_quarantine_",string who) set q};enlist job;
-        {[job;e] .qetl.log.warn[job;"could not write its quarantine file";enlist[`error]!enlist e];}[job]];
+        {[job;e] .qetl.log.ch.warn[`storage;"could not write its quarantine file";(enlist[`job]!enlist job),enlist[`error]!enlist e];}[job]];
     n:job;
     exec count i from .qetl.job.stream.quarantined where job=n}
 
@@ -108,7 +108,7 @@
     ok:$[first r; last r; 1b];
     if[not ok;
         .[.qetl.stream_health.record;(job;0b;"not subscribed: the tickerplant subscription is inactive");::];
-        .[{.qetl.log.warn[x;y;z]};(job;"subscription inactive - receiving nothing until it is re-established";()!());::]];
+        .[{.qetl.log.ch.warn[`ipc;y;(enlist[`job]!enlist x),z]};(job;"subscription inactive - receiving nothing until it is re-established";()!());::]];
     ok}
 
 \d .

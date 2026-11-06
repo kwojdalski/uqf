@@ -153,8 +153,8 @@
     latest:now+lead;
     ahead:select from x where source_time>latest;
     if[count ahead;
-        .qetl.log.warn[`superbook;"rows dated past the allowed clock lead refused";
-            `sources`rows`max_clock_lead!(distinct ahead`source;count ahead;lead)]];
+        .qetl.log.ch.warn[`transform;"rows dated past the allowed clock lead refused";
+            (enlist[`job]!enlist `superbook),`sources`rows`max_clock_lead!(distinct ahead`source;count ahead;lead)]];
     `.qpipe.job.superbook.books set .qpipe.job.superbook.replace_books[.qpipe.job.superbook.books;x;latest];
     .qpipe.job.superbook.refresh[now];
     }

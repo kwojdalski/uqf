@@ -295,7 +295,7 @@
     k:(),row_key;
     n:count[batch]-count distinct k#batch;
     if[n>0;
-        .[{.qetl.log.warn[x;y;z]};(`qetl.io;"a batch repeats a key - folded to one row per key";
+        .[{.qetl.log.ch.warn[x;y;z]};(`storage;"a batch repeats a key - folded to one row per key";
             `target`row_key`rows`folded!(target;k;count batch;n));::]];
     n}
 
@@ -398,6 +398,6 @@
 / @private
 .qetl.io.ready:{[mgr;status]
     if[not `on_ready in key mgr; :(::)];
-    @[mgr`on_ready;status;{[e] .[{.qetl.log.err[x;y;z]};(`qetl.io;"on_ready failed";enlist[`error]!enlist e);::]}]}
+    @[mgr`on_ready;status;{[e] .[{.qetl.log.ch.err[x;y;z]};(`storage;"on_ready failed";enlist[`error]!enlist e);::]}]}
 
 \d .

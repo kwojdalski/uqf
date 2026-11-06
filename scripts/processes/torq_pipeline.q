@@ -156,7 +156,7 @@ elapsed_ms:{[t0] `long$(.z.p-t0)%1000000}
 apply_verbose:{[]
     on:`verbose in key .Q.opt .z.x;
     if[on; .qetl.log.debug 1b];
-    .qetl.log.dbg[`qtorq;"debug logging on";
+    .qetl.log.ch.dbg[`config;"debug logging on";
         `procname`pid`port`cwd!(@[get;`.proc.procname;`];.z.i;system"p";first system"pwd")];
     on}
 
@@ -168,11 +168,11 @@ apply_verbose:{[]
 / @return the milliseconds it waited
 wait_for_tickerplant:{[nm]
     t0:.z.p;
-    .qetl.log.info[nm;"waiting for the tickerplant - if this is the last line, it is not running";
-        `proctype`retry_s`cycles!(tp_type;con_sleep;check_cycles)];
+    .qetl.log.ch.info[`ipc;"waiting for the tickerplant - if this is the last line, it is not running";
+        (enlist[`job]!enlist nm),`proctype`retry_s`cycles!(tp_type;con_sleep;check_cycles)];
     .servers.startupdepcycles[tp_type;con_sleep;check_cycles];
     ms:elapsed_ms t0;
-    .qetl.log.info[nm;"tickerplant is up";enlist[`waited_ms]!enlist ms];
+    .qetl.log.ch.info[`ipc;"tickerplant is up";(enlist[`job]!enlist nm),enlist[`waited_ms]!enlist ms];
     ms}
 
 / Rows published so far, per table, and batches received, per table - so
@@ -190,8 +190,8 @@ received:(`symbol$())!`long$()
 record_published:{[table_name;n]
     before:0^published table_name;
     .qtorq.published[table_name]:before+n;
-    if[0=before; .qetl.log.info[`qtorq;"first rows published";`table`rows!(table_name;n)]];
-    .qetl.log.dbg[`qtorq;"published";`table`rows`total!(table_name;n;before+n)];
+    if[0=before; .qetl.log.ch.info[`ipc;"first rows published";`table`rows!(table_name;n)]];
+    .qetl.log.ch.dbg[`ipc;"published";`table`rows`total!(table_name;n;before+n)];
     n}
 
 / Record one batch arriving from the tickerplant, the same way.
@@ -202,8 +202,8 @@ record_received:{[t;x]
     n:$[98h=type x; count x; count first x];
     before:0^received t;
     .qtorq.received[t]:before+n;
-    if[0=before; .qetl.log.info[`qtorq;"first batch received";`table`rows!(t;n)]];
-    .qetl.log.dbg[`qtorq;"batch received";`table`rows`total!(t;n;before+n)];
+    if[0=before; .qetl.log.ch.info[`ipc;"first batch received";`table`rows!(t;n)]];
+    .qetl.log.ch.dbg[`ipc;"batch received";`table`rows`total!(t;n;before+n)];
     n}
 
 / Bring this process up as a tickerplant subscriber and hand back a publish
@@ -230,7 +230,7 @@ subscribe_etl:{[nm;sub_tables]
 / @return the publish handle to the tickerplant
 connect_etl:{[nm]
     .servers.CONNECTIONS:tp_type;
-    .qetl.log.dbg[nm;"registering with discovery";()!()];
+    .qetl.log.ch.dbg[`ipc;"registering with discovery";enlist[`job]!enlist nm];
     .servers.startup[];
     wait_for_tickerplant nm;
     / safe to acquire now - wait_for_tickerplant above blocked until the
@@ -248,12 +248,12 @@ connect_etl:{[nm]
 / @throws error if no tickerplant can be found to subscribe to
 subscribe_tables:{[nm;sub_tables;replay]
     handles:.sub.getsubscriptionhandles[tp_type;();()!()];
-    .qetl.log.dbg[nm;"subscription handles";enlist[`count]!enlist count handles];
+    .qetl.log.ch.dbg[`ipc;"subscription handles";(enlist[`job]!enlist nm),enlist[`count]!enlist count handles];
     if[0=count handles; '"qtorq.subscribe_tables: no ",(string tp_type)," found to subscribe to"];
     subproc:first handles;
-    .qetl.log.info[`qtorq;"subscribing";`job`tables`publisher`replay!(nm;sub_tables;subproc`procname;replay)];
+    .qetl.log.ch.info[`ipc;"subscribing";`job`tables`publisher`replay!(nm;sub_tables;subproc`procname;replay)];
     r:.sub.subscribe[sub_tables;`;0b;replay;subproc];
-    .qetl.log.dbg[nm;"subscribed";enlist[`result]!enlist r];
+    .qetl.log.ch.dbg[`ipc;"subscribed";(enlist[`job]!enlist nm),enlist[`result]!enlist r];
     r}
 
 / The directory the segmented tickerplant keeps one day's logs in:
@@ -410,7 +410,7 @@ plant_loc:{[id;ask]
 plant_try:{[id;ask;what;degraded;f]
     r:.[{[id;ask;f] (1b;f plant_loc[id;ask])};(id;ask;f);{[e] (0b;e)}];
     if[first r; :last r];
-    .qetl.log.warn[`qtorq;"the plant could not say where its logs are - ",what;enlist[`error]!enlist last r];
+    .qetl.log.ch.warn[`ipc;"the plant could not say where its logs are - ",what;enlist[`error]!enlist last r];
     degraded}
 
 / The three recovery hooks a carrying job's transport needs of the plant's
@@ -478,7 +478,7 @@ assert_publishable:{[h;pub_tables]
     tbls:(),pub_tables;
     if[0=count tbls; :pub_tables];
     defined:h"tables[]";
-    .qetl.log.dbg[`qtorq;"tickerplant tables";`declared`defined!(tbls;defined)];
+    .qetl.log.ch.dbg[`ipc;"tickerplant tables";`declared`defined!(tbls;defined)];
     missing:tbls except defined;
     if[count missing;
         '"qtorq.assert_publishable: the tickerplant defines no table ",
@@ -539,12 +539,12 @@ sub_sch_at:(`symbol$())!`long$()
 sub_load_schemas:{[h;tbls]
     logs:.[{[h;tbls] loc:h"(.stplg.kdbtplog;.proc.procname;.stplg.dldir)";
             day_logs[day_dir[loc 0;loc 1;dir_day loc 2];tbls]};(h;tbls);
-        {[e] .qetl.log.warn[`qtorq;"could not read the logs' recorded schemas - naming replayed messages from the plant's current tables";enlist[`error]!enlist e];
+        {[e] .qetl.log.ch.warn[`storage;"could not read the logs' recorded schemas - naming replayed messages from the plant's current tables";enlist[`error]!enlist e];
             ([] seq:`int$(); logname:`symbol$(); schema:())}];
     recorded:exec schema from logs;
     {[h;recorded;t]
         c:(recorded where {[t;s] t in key s}[t] each recorded)@\:t;
-        if[0=count c; .qetl.log.warn[`qtorq;"no log of the day recorded a schema for this table - replayed messages are named from the plant's current table";enlist[`table]!enlist t]];
+        if[0=count c; .qetl.log.ch.warn[`storage;"no log of the day recorded a schema for this table - replayed messages are named from the plant's current table";enlist[`table]!enlist t]];
         .qtorq.sub_cands[t]:$[count c; c; enlist 0#h({value x};t)];
         .qtorq.sub_sch_at[t]:0}[h;recorded] each tbls;
     tbls}
@@ -596,7 +596,7 @@ sub_upd:{[job;h;t;x]
 / @private
 sub_resubscribe:{[row]
     t:row`table;
-    .qetl.log.info[`qtorq;"tickerplant is back - resubscribing and replaying what it logged since";`job`table`since!(sub_job;t;sub_hwm t)];
+    .qetl.log.ch.info[`ipc;"tickerplant is back - resubscribing and replaying what it logged since";`job`table`since!(sub_job;t;sub_hwm t)];
     if[not handle_open get sub_handle; sub_handle set row`w];
     sub_load_schemas[row`w;(),t];
     `.qtorq.sub_since set sub_hwm;
@@ -607,7 +607,7 @@ sub_resubscribe:{[row]
     .qetl.job.stream.catching_up[sub_job;0b];
     if[not first r;
         sub_note_failure t;
-        .qetl.log.err[sub_job;"resubscription failed - retrying with backoff";`error`failures`next_try!(last r;sub_failures t;sub_next_try t)];
+        .qetl.log.ch.err[`ipc;"resubscription failed - retrying with backoff";(enlist[`job]!enlist sub_job),`error`failures`next_try!(last r;sub_failures t;sub_next_try t)];
         :()];
     `.qtorq.sub_failures set sub_failures _ t;
     `.qtorq.sub_next_try set sub_next_try _ t;
@@ -729,12 +729,12 @@ install_period_handlers:{[]
     /   \d .ns  /  f:{`endofperiod set {..}}  ->  root type 100
     /   \d .ns  /  f:{`.endofday set {..}}    ->  root MISSING, .endofday 100
     `endofperiod set {[current_period;next_period;data] / noqa: QF016 TorQ endofperiod signature
-        .qetl.log.info[`qtorq;"end of period";`from`to!(current_period;next_period)];
+        .qetl.log.ch.info[`eod;"end of period";`from`to!(current_period;next_period)];
         };
     / end of day is the jobs' to act on (#943): each declares on_endofday
     / for the state it carries. The plant has already rolled its log.
     `endofday set {[dt;data] / noqa: QF016 TorQ endofday signature
-        .qetl.log.info[`qtorq;"end of day";enlist[`date]!enlist dt];
+        .qetl.log.ch.info[`eod;"end of day";enlist[`date]!enlist dt];
         .qetl.job.stream.end_of_day dt;
         };
     `endofperiod`endofday}
@@ -833,7 +833,7 @@ reopen:{[name]
     if[not $[-6h=type h; not null h; (type h) within 100 112h];
         '"qtorq.reopen: no ",string[tp_type]," could be reached through .servers - the handle stays closed and nothing was published"];
     name set h;
-    .qetl.log.warn[`qtorq;"tickerplant handle reopened";`proctype`handle!(tp_type;h)];
+    .qetl.log.ch.warn[`ipc;"tickerplant handle reopened";`proctype`handle!(tp_type;h)];
     h}
 
 / Run f on the tickerplant handle held in `name`, reopening it once when it
@@ -852,12 +852,12 @@ reopen:{[name]
 with_reconnect:{[name;what;f]
     h:get name;
     if[not handle_open h;
-        .qetl.log.warn[`qtorq;"tickerplant handle closed - reopening it before sending";`what`handle!(what;h)];
+        .qetl.log.ch.warn[`ipc;"tickerplant handle closed - reopening it before sending";`what`handle!(what;h)];
         :f reopen name];
     r:.[{[f;h] (1b;f h)};(f;h);{[e] (0b;e)}];
     if[first r; :last r];
     if[handle_open h; 'last r];
-    .qetl.log.warn[`qtorq;"tickerplant handle lost during the call - reopening it and sending again, possibly duplicated";
+    .qetl.log.ch.warn[`ipc;"tickerplant handle lost during the call - reopening it and sending again, possibly duplicated";
         `what`handle`error!(what;h;last r)];
     f reopen name}
 
@@ -945,10 +945,10 @@ safe_timer:{[name;interval;f;timer_desc]
     / `value` from inside a lambda throws 'nyi on this build (confirmed
     / live while writing this file); parsing a bare lambda and assigning it
     / with `set` is well-defined and does the same job.
-    body:"{[] @[get `",(string f),";::;{[e] .qetl.log.err[`",(string name),";\"timer function failed\";`fn`error!(`",(string f),";e)]}]}";
+    body:"{[] @[get `",(string f),";::;{[e] .qetl.log.ch.err[`lifecycle;\"timer function failed\";`job`fn`error!(`",(string name),";`",(string f),";e)]}]}";
     wrapper set value body;
     .timer.repeat[.proc.cp[];0Wp;interval;(wrapper;`);timer_desc];
-    .qetl.log.dbg[name;"timer installed";`fn`interval`wrapper!(f;interval;wrapper)];
+    .qetl.log.ch.dbg[`lifecycle;"timer installed";(enlist[`transform]!enlist name),`fn`interval`wrapper!(f;interval;wrapper)];
     wrapper}
 
 / The HDB process type to tell when a backfill has written into its
@@ -995,14 +995,14 @@ reload_hdb:{[]
 reload_handles:{[registered;hs]
     hs:hs where not null hs;
     if[registered>count hs;
-        .qetl.log.err[`qtorq;"hdb reload: could not open a handle to every registered hdb - refused (this process's outbound credential, TorQ's passwords/<proctype>.txt, is not on the hdb's access list) or unreachable; the rows are on disk, the hdb has not reloaded them";
+        .qetl.log.ch.err[`eod;"hdb reload: could not open a handle to every registered hdb - refused (this process's outbound credential, TorQ's passwords/<proctype>.txt, is not on the hdb's access list) or unreachable; the rows are on disk, the hdb has not reloaded them";
             `registered`opened!(registered;count hs)]];
-    ok:{[h] @[{[h] h(`reload;.z.d); 1b};h;{[e] .qetl.log.err[`qtorq;"hdb reload failed";enlist[`error]!enlist e]; 0b}]} each hs;
+    ok:{[h] @[{[h] h(`reload;.z.d); 1b};h;{[e] .qetl.log.ch.err[`eod;"hdb reload failed";enlist[`error]!enlist e]; 0b}]} each hs;
     / "j"$ before sum: `sum` over booleans is an INT (2i, not the 2 this
     / documents), and `each` over no handles gives a general empty list that
     / `sum` leaves as () - not the 0 "nothing to reload" should read as.
     r:`registered`opened`reloaded!("j"$registered;count hs;sum "j"$ok);
-    .qetl.log.info[`qtorq;"hdb reload requested";r];
+    .qetl.log.ch.info[`eod;"hdb reload requested";r];
     r}
 
 / The outbound identity a process should connect to the fleet with, when
@@ -1053,10 +1053,10 @@ load_source_settings:{[]
     / `first`, as torq.q takes process.csv's: getconfig enlists its answer.
     f:hsym first .proc.getconfigfile "sources.csv";
     if[()~key f;
-        .qetl.log.info[`qtorq;"no sources.csv in TorQ's config layers - sources use UQF_SOURCE_CRED_<SOURCE> or their fixtures";()!()];
+        .qetl.log.ch.info[`config;"no sources.csv in TorQ's config layers - sources use UQF_SOURCE_CRED_<SOURCE> or their fixtures";()!()];
         :0];
     n:.qetl.source.load_settings[f;source_settings_path_vars];
-    .qetl.log.info[`qtorq;"source settings loaded";`file`sources!(1_string f;n)];
+    .qetl.log.ch.info[`config;"source settings loaded";`file`sources!(1_string f;n)];
     n}
 
 \d .

@@ -60,7 +60,7 @@
     if[not .qetl.job.bounded.runtime.allows`pin_config; :`symbol$()];
     ids:(cfg`pin)[];
     if[not (11h=type ids) and not any null ids; '"pin_config: ",string[worker],"'s pin must return the snapshot ids it recorded, a list of symbols"];
-    .qetl.log.info[worker;"configuration pinned";enlist[`config_ids]!enlist ids];
+    .qetl.log.ch.info[`config;"configuration pinned";(enlist[`worker]!enlist worker),enlist[`config_ids]!enlist ids];
     ids}
 
 \d .

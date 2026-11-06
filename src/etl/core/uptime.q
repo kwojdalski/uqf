@@ -112,7 +112,7 @@
         (.qetl.uptime.mine except renew;renew;fresh;now)];
     `.qetl.uptime.mine set (.qetl.uptime.mine except renew),fresh;
     {[job;failing] .[.qetl.stream_health.write;(job;failing);{[job;e]
-        .qetl.log.warn[job;"could not write its stream_health file";enlist[`error]!enlist e];}[job]]}'[
+        .qetl.log.ch.warn[`storage;"could not write its stream_health file";(enlist[`job]!enlist job),enlist[`error]!enlist e];}[job]]}'[
         distinct jobs;(distinct jobs) in jobs where broken];
     count .qetl.uptime.mine}
 

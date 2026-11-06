@@ -42,12 +42,12 @@
         job:`$raw;
         if[not job in .qetl.job.stream.defined[];
             '"torq_stream: -job names ",raw,", which is not a registered streaming job - registered: ",", " sv string .qetl.job.stream.defined[]];
-        .qetl.log.info[`qproc;"job chosen by -job";enlist[`job]!enlist job];
+        .qetl.log.ch.info[`config;"job chosen by -job";enlist[`job]!enlist job];
         :job];
     if[()~key `.proc;
         '"torq_stream: not running under TorQ and no -job given - one of the two has to say which job this is"];
     job:.qetl.job.stream.for_procname .proc.procname;
-    .qetl.log.info[`qproc;"job chosen by procname";`procname`job!(.proc.procname;job)];
+    .qetl.log.ch.info[`config;"job chosen by procname";`procname`job!(.proc.procname;job)];
     job}
 
 / The TorQ transport for .qetl.job.stream.start: the tickerplant through

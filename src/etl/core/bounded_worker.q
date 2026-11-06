@@ -662,7 +662,7 @@
         '"advance_phase: ",string[worker]," cannot go from ",$[null was; "before init"; string was]," to ",string to];
     row:.qetl.job.bounded.phases to;
     call:$[`failed~to;
-        {[worker;f;a] .[f;a;{[worker;e] .qetl.log.err[worker;"could not record the failure";enlist[`error]!enlist e]}[worker]]}[worker];
+        {[worker;f;a] .[f;a;{[worker;e] .qetl.log.ch.err[`lifecycle;"could not record the failure";(enlist[`worker]!enlist worker),enlist[`error]!enlist e]}[worker]]}[worker];
         {[f;a] f . a}];
     if[(null was) and `ready~to; call[.qetl.job.bounded.record_orphan;enlist worker]];
     if[`begin~row`run_ledger; call[.qetl.job.bounded.begin_run;enlist worker]];
@@ -675,7 +675,7 @@
     / etl_runs row read `running forever. So it fails - the file then names
     / the open row's run_id and why. Already failing, it is only logged.
     if[not first closed;
-        .[{.qetl.log.err[x;y;z]};(worker;"the run ledger could not record this run's outcome";
+        .[{.qetl.log.ch.err[`coverage;y;(enlist[`worker]!enlist x),z]};(worker;"the run ledger could not record this run's outcome";
             `outcome`error!(to;last closed));::];
         if[not `failed~to;
             to:.qetl.job.bounded.advance_phase[worker;`failed;
@@ -703,7 +703,7 @@
 .qetl.job.bounded.fail_run:{[worker;e]
     msg:$[10h=type e; e; -11h=type e; string e; .Q.s1 e];
     @[{[a] .qetl.job.bounded.advance_phase . a};(worker;`failed;$[count msg; msg; "failed"]);
-      {[worker;e2] .qetl.log.err[worker;"could not record the failure";enlist[`error]!enlist e2]}[worker]]}
+      {[worker;e2] .qetl.log.ch.err[`lifecycle;"could not record the failure";(enlist[`worker]!enlist worker),enlist[`error]!enlist e2]}[worker]]}
 
 / Private: every check that needs neither a ledger nor the source - the
 / run's spec, the worker's contract, the source's fixture, the conflict
@@ -725,10 +725,10 @@
 
     .qetl.job.bounded.state.register[worker;cfg`ns];
     .qetl.job.bounded.state.require_contract worker;
-    .qetl.log.dbg[worker;"init: worker contract satisfied";enlist[`ns]!enlist cfg`ns];
+    .qetl.log.ch.dbg[`config;"init: worker contract satisfied";(enlist[`worker]!enlist worker),enlist[`ns]!enlist cfg`ns];
 
     .qetl.source.validate_fixture cfg`source;
-    .qetl.log.dbg[worker;"init: source fixture satisfies the contract";enlist[`source]!enlist cfg`source];
+    .qetl.log.ch.dbg[`config;"init: source fixture satisfies the contract";(enlist[`worker]!enlist worker),enlist[`source]!enlist cfg`source];
     .qetl.job.bounded.require_replaceable worker;
     .qetl.job.bounded.spec worker}
 
@@ -842,8 +842,8 @@
     live:.qetl.source.has_credentials cfg`source;
     if[not live;
         tr:.qetl.source.for_source cfg`source;
-        .qetl.log.warn[worker;"no credential - running on the source's fixture, not live data. To go live: give the source a row in sources.csv (`uqs config sources` shows which file is read), or export the variable below in the shell you run `uqs job backfill` from, then run it again. A secret is only ever read from the environment - a row names its variable - so a password stays out of this repository and off the command line";
-            `variable`settings_row`expects`example!(
+        .qetl.log.ch.warn[`source;"no credential - running on the source's fixture, not live data. To go live: give the source a row in sources.csv (`uqs config sources` shows which file is read), or export the variable below in the shell you run `uqs job backfill` from, then run it again. A secret is only ever read from the environment - a row names its variable - so a password stays out of this repository and off the command line";
+            (enlist[`worker]!enlist worker),`variable`settings_row`expects`example!(
                 .qetl.source.credential_var cfg`source;
                 "," sv (string cfg`source;string (.qetl.source.def cfg`source)`transport;.qetl.source.credential_example cfg`source;"");
                 tr`expects;
@@ -904,7 +904,7 @@
     / one set of windows per uncovered sub-range, then flattened - a gap in
     / the middle must not be bridged by a window spanning it.
     ws:raze {[width;w] .qetl.job.bounded.runtime.windows[w`range_from;w`range_to;width]}[cfg`width] each todo;
-    .qetl.log.dbg[worker;"planned";`gaps`windows`width!(count todo;count ws;cfg`width)];
+    .qetl.log.ch.dbg[`lifecycle;"planned";(enlist[`worker]!enlist worker),`gaps`windows`width!(count todo;count ws;cfg`width)];
     ws}
 
 / ------------------------------------------------------- FETCH / PUBLISH
@@ -933,8 +933,8 @@
         .qetl.job.bounded.runtime.with_retry;
         (.qetl.job.bounded.runtime.policy[];
          {[worker;h;from_ts;to_ts;unused] last .qetl.job.bounded.batching.fetch_window[worker;h;from_ts;to_ts]}[worker;h;from_ts;to_ts])];
-    .qetl.log.dbg[worker;"fetch attempted";
-        `range_from`range_to`state`attempts`rows!(from_ts;to_ts;r`state;r`attempts;
+    .qetl.log.ch.dbg[`lifecycle;"fetch attempted";
+        (enlist[`worker]!enlist worker),`range_from`range_to`state`attempts`rows!(from_ts;to_ts;r`state;r`attempts;
             $[`ok~r`state; count .qetl.source.primary[cfg`source;r`result]; 0N])];
     if[`failed~r`state; :r];
     .qetl.source.validate[cfg`source;r`result];
@@ -1020,8 +1020,8 @@
     s:.qetl.job.bounded.spec worker;
     n:.qetl.io.recover[.qetl.io.for_cfg .qetl.job.bounded.def worker;(.qetl.job.bounded.def worker)`dataset;s`range_from;s`range_to];
     if[n>0;
-        .qetl.log.warn[worker;"found partitions an earlier run wrote and never finished - finishing them with this run";
-            enlist[`partitions]!enlist n]];
+        .qetl.log.ch.warn[`storage;"found partitions an earlier run wrote and never finished - finishing them with this run";
+            (enlist[`worker]!enlist worker),enlist[`partitions]!enlist n]];
     n}
 
 / Private: the io manager's end-of-run step, behind the dry-run gate. A dry
@@ -1067,8 +1067,8 @@
         / no-op forever.
         / INFO, not DEBUG: "the run did nothing" is the question this answers.
         s:.qetl.job.bounded.spec worker;
-        .qetl.log.info[worker;"idle - every window in the range is already covered at this source_version";
-            `source_version`range_from`range_to!(s`source_version;s`range_from;s`range_to)];
+        .qetl.log.ch.info[`lifecycle;"idle - every window in the range is already covered at this source_version";
+            (enlist[`worker]!enlist worker),`source_version`range_from`range_to!(s`source_version;s`range_from;s`range_to)];
         / Finish what recover_unfinished found, which is the only thing an
         / idle run has to do - and only then, so an idle run with nothing to
         / repair does not ask the HDB to reload for nothing.
@@ -1178,7 +1178,7 @@
         .qetl.run.attach[];
         .qetl.run.begin[w;`dataset`source_version`range_from`range_to`width!
             (cfg`dataset;s`source_version;s`range_from;s`range_to;cfg`width)]};
-      worker;{[w;e] .qetl.log.warn[w;"could not open a run in the run ledger";enlist[`error]!enlist e];}[worker]]}
+      worker;{[w;e] .qetl.log.ch.warn[`coverage;"could not open a run in the run ledger";(enlist[`worker]!enlist w),enlist[`error]!enlist e];}[worker]]}
 
 / Private: close this execution's run with its outcome.
 / .
@@ -1288,7 +1288,7 @@
 / @private
 .qetl.job.bounded.window_body:{[worker;w]
     cfg:.qetl.job.bounded.def worker;
-    .qetl.log.dbg[worker;"window start";`range_from`range_to!(w`range_from;w`range_to)];
+    .qetl.log.ch.dbg[`lifecycle;"window start";(enlist[`worker]!enlist worker),`range_from`range_to!(w`range_from;w`range_to)];
     / The null key keeps the state a general dictionary whatever is added.
     s:{[worker;s;stage] $[`failed in key s; s; stage[worker;s]]}[worker]/[
         (``cfg`window)!(::;cfg;w);
@@ -1296,8 +1296,8 @@
     if[`failed in key s; :.qetl.job.bounded.window_failed[worker;w;s`failed]];
     out:s`batch;
     r:s`result;
-    .qetl.log.dbg[worker;"window published";
-        `range_from`range_to`rows`dry_run!(w`range_from;w`range_to;r`rows_published;r`dry_run)];
+    .qetl.log.ch.dbg[`lifecycle;"window published";
+        (enlist[`worker]!enlist worker),`range_from`range_to`rows`dry_run!(w`range_from;w`range_to;r`rows_published;r`dry_run)];
     / Materialisation metadata, recorded HERE rather than in
     / finish_window because this is the only place the batch itself is in
     / hand - finish_window receives a niladic publisher, not rows.
@@ -1350,7 +1350,7 @@
 / @return 0b, do_window's answer for a failed window
 / @private
 .qetl.job.bounded.window_failed:{[worker;w;f]
-    .qetl.log.err[worker;f`message;(`range_from`range_to!(w`range_from;w`range_to)),f`fields];
+    .qetl.log.ch.err[`lifecycle;f`message;(enlist[`worker]!enlist worker),(`range_from`range_to!(w`range_from;w`range_to)),f`fields];
     .qetl.job.bounded.write_state[worker;`progress;@[.qetl.job.bounded.read_state[worker;`progress];`windows_failed;+;1]];
     0b}
 
@@ -1456,18 +1456,18 @@
         ()!();
         @[{[f;b] f b}[cfg`facts;];batch;
           {[worker;w;e]
-            .qetl.log.err[worker;"facts function failed";
-                `range_from`range_to`error!(w`range_from;w`range_to;e)];
+            .qetl.log.ch.err[`lifecycle;"facts function failed";
+                (enlist[`worker]!enlist worker),`range_from`range_to`error!(w`range_from;w`range_to;e)];
             ()!()}[worker;w]]];
     if[not 99h=type declared;
-        .qetl.log.err[worker;"facts function returned a non-dictionary";
-            `range_from`range_to!(w`range_from;w`range_to)];
+        .qetl.log.ch.err[`lifecycle;"facts function returned a non-dictionary";
+            (enlist[`worker]!enlist worker),`range_from`range_to!(w`range_from;w`range_to)];
         declared:()!()];
     / A dry run computes the facts - "what would this window have recorded"
     / is worth seeing - and records none of them.
     if[not .qetl.job.bounded.runtime.allows`record_facts;
-        :.qetl.log.info[worker;"dry run - facts not recorded";
-            `range_from`range_to`facts!(w`range_from;w`range_to;framework,declared)]];
+        :.qetl.log.ch.info[`lifecycle;"dry run - facts not recorded";
+            (enlist[`worker]!enlist worker),`range_from`range_to`facts!(w`range_from;w`range_to;framework,declared)]];
     @[{[a] .qetl.run.record . a};
       (cfg`dataset;w`range_from;w`range_to;framework,declared);
       {[e] (::)}]}

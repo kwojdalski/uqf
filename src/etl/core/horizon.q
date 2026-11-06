@@ -436,7 +436,7 @@
                 .qetl.job.stream.horizons.why_not_ready[d;get hq;gone;now];
                 (count gone)#enlist "horizon has not elapsed"];
             xq insert update expired_at:now, reason:`$reasons from gone;
-            {[name;r] .qetl.log.warn[name;"event expired unresolved";enlist[`reason]!enlist r]}[name] each distinct reasons;
+            {[name;r] .qetl.log.ch.warn[`transform;"event expired unresolved";(enlist[`transform]!enlist name),enlist[`reason]!enlist r]}[name] each distinct reasons;
             .qetl.job.stream.evict[pq;lapsed]]];
     / every tick, scoring or not: a job whose events stop arriving must not
     / keep every reference row it is sent

@@ -182,7 +182,7 @@
 / Private: log, and never throw.
 / @private
 .qetl.kafka.diag.say:{[level;text;fields]
-    .[{[l;t;f] $[l=`err; .qetl.log.err[`kafka;t;f]; l=`warn; .qetl.log.warn[`kafka;t;f]; .qetl.log.info[`kafka;t;f]]};(level;text;fields);{[e] ::}];}
+    .[{[l;t;f] $[l=`err; .qetl.log.ch.err[`source;t;f]; l=`warn; .qetl.log.ch.warn[`source;t;f]; .qetl.log.ch.info[`source;t;f]]};(level;text;fields);{[e] ::}];}
 
 / Report a client error once per cause.
 / .

@@ -281,7 +281,7 @@
     / of that worker refused against a pid that had not existed for hours.
     if[rc<>0;
         if[.qetl.job.bounded.state.lock_is_stale[path];
-            .[{.qetl.log.info[x;y;z]};
+            .[{.qetl.log.ch.info[`lifecycle;y;(enlist[`worker]!enlist x),z]};
                 (worker;"breaking a stale lock - its holder is gone";
                  `path`holder!(path;.qetl.job.bounded.state.owner_desc[path]));::];
             .qetl.job.bounded.state.break_stale[path];
@@ -298,7 +298,7 @@
     / this process left behind. READ BACK by lock_is_stale above; it was
     / write-only until #490.
     .qetl.job.bounded.state.write_owner[path];
-    .[{.qetl.log.dbg[x;y;z]};(worker;"lock acquired";enlist[`path]!enlist path);::];
+    .[{.qetl.log.ch.dbg[`lifecycle;y;(enlist[`worker]!enlist x),z]};(worker;"lock acquired";enlist[`path]!enlist path);::];
     path}
 
 / Release the lock. Safe to call when not held, so it can sit in a cleanup
@@ -306,7 +306,7 @@
 .qetl.job.bounded.state.release_lock:{[worker]
     path:.qetl.job.bounded.state.lock_path[worker];
     .qetl.job.bounded.state.rm_lock[path];
-    .[{.qetl.log.dbg[x;y;z]};(worker;"lock released";enlist[`path]!enlist path);::];
+    .[{.qetl.log.ch.dbg[`lifecycle;y;(enlist[`worker]!enlist x),z]};(worker;"lock released";enlist[`path]!enlist path);::];
     path}
 
 / Is the lock currently held? For diagnostics and tests, not for gating -
@@ -534,7 +534,7 @@
     b:@[{(1b;x y)}[reader];bak;{(0b;x)}];
     if[not first b;
         'who,": ",path," is unreadable (",(last r),") and so is its .bak (",(last b),")"];
-    .[{.qetl.log.warn[x;y;z]};(`qetl.state;"state file unreadable - using the previous generation";
+    .[{.qetl.log.ch.warn[x;y;z]};(`storage;"state file unreadable - using the previous generation";
         `path`error!(path;last r));::];
     last b}
 
@@ -581,7 +581,7 @@
     payload:`source_version`range_from`range_to`cursor`saved_at!
             (spec`source_version;spec`range_from;spec`range_to;cursor;.z.p);
     .qetl.job.bounded.state.durable_lines[path;enlist .j.j payload];
-    .[{.qetl.log.dbg[x;y;z]};(worker;"checkpoint saved";enlist[`cursor]!enlist cursor);::];
+    .[{.qetl.log.ch.dbg[`coverage;y;(enlist[`worker]!enlist x),z]};(worker;"checkpoint saved";enlist[`cursor]!enlist cursor);::];
     path}
 
 / Load a cursor, but only if it belongs to THIS run specification.
@@ -598,7 +598,7 @@
 .qetl.job.bounded.state.load_checkpoint:{[worker;spec]
     path:.qetl.job.bounded.state.checkpoint_path[worker];
     if[()~key hsym `$path;
-        .[{.qetl.log.dbg[x;y;z]};(worker;"no checkpoint - starting from the beginning";enlist[`path]!enlist path);::];
+        .[{.qetl.log.ch.dbg[`coverage;y;(enlist[`worker]!enlist x),z]};(worker;"no checkpoint - starting from the beginning";enlist[`path]!enlist path);::];
         :0Np];
     / An unreadable checkpoint is NOT "no checkpoint". It falls back to the
     / previous generation - an earlier cursor of the same run, so a window is
@@ -620,11 +620,11 @@
     / Said at INFO: a run that silently restarted from the beginning, because
     / its range or version changed, looks exactly like one that lost its state.
     if[not matches;
-        .[{.qetl.log.info[x;y;z]};(worker;"checkpoint is for another run - starting from the beginning";
+        .[{.qetl.log.ch.info[`coverage;y;(enlist[`worker]!enlist x),z]};(worker;"checkpoint is for another run - starting from the beginning";
             `saved_version`saved_from`saved_to!(saved`source_version;saved`range_from;saved`range_to));::];
         :0Np];
     cursor:"P"$saved`cursor;
-    .[{.qetl.log.info[x;y;z]};(worker;"resuming from checkpoint";enlist[`cursor]!enlist cursor);::];
+    .[{.qetl.log.ch.info[`coverage;y;(enlist[`worker]!enlist x),z]};(worker;"resuming from checkpoint";enlist[`cursor]!enlist cursor);::];
     cursor}
 
 / Remove a worker's checkpoint, for a deliberate restart from the beginning.

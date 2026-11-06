@@ -167,7 +167,7 @@
 / @param facility its facility, e.g. "FAIL"
 / @param text the line
 .qpipe.job.kafka_feed.on_log:{[level;facility;text]
-    .[.qetl.log.dbg;(`kafka;"librdkafka";`level`facility`text!(level;facility;text));::];}
+    .[.qetl.log.ch.dbg;(`source;"librdkafka";`level`facility`text!(level;facility;text));::];}
 
 / The kfk calls, as functions over a client id. Bound late: `.kfk` exists only once load_library has run.
 / @return the api dictionary
@@ -250,7 +250,7 @@
     line:" " sv {string[x`stage],"=",string x`status} each r;
     if[not line~.qpipe.job.kafka_feed.last_readiness;
         `.qpipe.job.kafka_feed.last_readiness set line;
-        .qetl.log.info[`kafka_feed;"readiness";enlist[`stages]!enlist line]];
+        .qetl.log.ch.info[`source;"readiness";(enlist[`job]!enlist `kafka_feed),enlist[`stages]!enlist line]];
     }
 
 / The messages received since the last call, as the table kafka_ingest.q expects.
@@ -290,7 +290,7 @@
     tr:.qpipe.job.kafka_feed.transport[];
     r:.qetl.kafka.try[{[tr;st] .qetl.kafka.flush[tr;st]};(tr;.qpipe.job.kafka_feed.state)];
     if[first r; `.qpipe.job.kafka_feed.state set last r];
-    .[{.qpipe.job.kafka_feed.api[`close] x};enlist .qpipe.job.kafka_feed.client;{[e] .qetl.log.warn[`kafka;"close failed";enlist[`error]!enlist e]}];
+    .[{.qpipe.job.kafka_feed.api[`close] x};enlist .qpipe.job.kafka_feed.client;{[e] .qetl.log.ch.warn[`source;"close failed";enlist[`error]!enlist e]}];
     `.qpipe.job.kafka_feed.client set 0Ni;
     }
 
@@ -305,7 +305,7 @@
     .qpipe.job.kafka_feed.api[`subscribe][c;topics;.qpipe.job.kafka_feed.on_message];
     older:@[value;`.z.exit;{(::)}];
     `.z.exit set {[older;code] .qpipe.job.kafka_feed.shutdown[]; if[((type older) within 100 107h) and not older~(::); older code]}[older];
-    .qetl.log.info[`kafka_feed;"subscribed";`topics`group!(topics;cfg`group.id)];
+    .qetl.log.ch.info[`source;"subscribed";(enlist[`job]!enlist `kafka_feed),`topics`group!(topics;cfg`group.id)];
     }
 
 / Start: read the settings, load the library, subscribe. Throws, and so stops the

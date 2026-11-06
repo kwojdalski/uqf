@@ -122,12 +122,12 @@
 / @param r what .qetl.job.bounded.validate or plan_only returned
 / @return the report
 .qproc.backfill.report:{[worker;r]
-    .qetl.log.info[worker;string[r`state]," - nothing opened, nothing written";`plan _ r];
+    .qetl.log.ch.info[`lifecycle;string[r`state]," - nothing opened, nothing written";(enlist[`worker]!enlist worker),`plan _ r];
     if[not `plan in key r; :r];
     ws:r`plan;
     shown:50&count ws;
-    {[worker;w] .qetl.log.info[worker;"would fetch";w]}[worker] each shown#ws;
-    if[shown<count ws; .qetl.log.info[worker;"and more windows";enlist[`count]!enlist count[ws]-shown]];
+    {[worker;w] .qetl.log.ch.info[`lifecycle;"would fetch";(enlist[`worker]!enlist worker),w]}[worker] each shown#ws;
+    if[shown<count ws; .qetl.log.ch.info[`lifecycle;"and more windows";(enlist[`worker]!enlist worker),enlist[`count]!enlist count[ws]-shown]];
     r}
 
 / How many windows [range_from;range_to) cuts into at the worker's width, for
@@ -194,7 +194,7 @@
         / every running HDB has it, with nothing open: queryable now (#1094)
         if[not s`dirty; .qetl.coverage.release_ready asked];
         if[s[`dirty] and status`final;
-            .qetl.log.err[`backfill;"backfill finished with rows a running hdb has not reloaded - they are on disk and covered, and appear there when it reloads or restarts";r]]];
+            .qetl.log.ch.err[`storage;"backfill finished with rows a running hdb has not reloaded - they are on disk and covered, and appear there when it reloads or restarts";r]]];
     `.qproc.backfill.reload_state set s;
     d`act}
 
@@ -212,7 +212,7 @@
     if[count wdb:getenv `KDBWDB; .qetl.io.watch_eod[root;hsym `$wdb]];
     / coverage here means written; queryable once the HDBs reload (#1094)
     .qetl.coverage.defer_ready:1b;
-    .qetl.log.info[`backfill;"writing into the HDB";`root`partition_col!(root;col)];
+    .qetl.log.ch.info[`storage;"writing into the HDB";`root`partition_col!(root;col)];
     .qetl.io.default}
 
 / A run on a key whose coverage its HDBs may not show yet - an earlier run
@@ -227,7 +227,7 @@
     if[not .qetl.coverage.outstanding[cfg`dataset;cfg`partition;v]; :0b];
     `.qetl.coverage.unready set distinct .qetl.coverage.unready,([] dataset:enlist cfg`dataset; partition:enlist cfg`partition; source_version:enlist v);
     @[`.qproc.backfill.reload_state;`dirty;:;1b];
-    .qetl.log.info[worker;"coverage the hdb has not loaded yet - this run reloads it";`dataset`source_version!(cfg`dataset;v)];
+    .qetl.log.ch.info[`coverage;"coverage the hdb has not loaded yet - this run reloads it";(enlist[`worker]!enlist worker),`dataset`source_version!(cfg`dataset;v)];
     1b}
 
 / Run the worker named on the command line, and report what it did.
@@ -239,25 +239,25 @@
 / @return the run's result dictionary
 .qproc.backfill.run:{[]
     t0:.z.p;
-    .qetl.log.dbg[`backfill;"command line";enlist[`args]!enlist .z.x];
+    .qetl.log.ch.dbg[`config;"command line";enlist[`args]!enlist .z.x];
     s:.qetl.job.bounded.spec_from_flags .Q.opt .z.x;
     worker:s`worker;
     spec:s`spec;
-    .qetl.log.info[worker;"backfill process starting";spec];
+    .qetl.log.ch.info[`lifecycle;"backfill process starting";(enlist[`worker]!enlist worker),spec];
     decl:.qetl.job.bounded.def worker;
     ns:decl`ns;
-    .qetl.log.dbg[worker;"declaration";
-        `ns`source`dataset`width`partition!
+    .qetl.log.ch.dbg[`config;"declaration";
+        (enlist[`worker]!enlist worker),`ns`source`dataset`width`partition!
             (ns;decl`source;decl`dataset;decl`width;.qetl.job.bounded.partition_of worker)];
-    .qetl.log.info[worker;"range";
-        `range_from`range_to`span`width`windows!
+    .qetl.log.ch.info[`config;"range";
+        (enlist[`worker]!enlist worker),`range_from`range_to`span`width`windows!
             (spec`range_from;spec`range_to;spec[`range_to]-spec`range_from;
              decl`width;.qproc.backfill.window_count[spec;decl`width])];
     oc:.qproc.backfill.use_on_conflict .Q.opt .z.x;
-    if[not null oc; .qetl.log.info[worker;"on_conflict for this run";enlist[`on_conflict]!enlist oc]];
+    if[not null oc; .qetl.log.ch.info[`config;"on_conflict for this run";(enlist[`worker]!enlist worker),enlist[`on_conflict]!enlist oc]];
     md:.qproc.backfill.use_mode .Q.opt .z.x;
-    .qetl.log.info[worker;"mode";enlist[`mode]!enlist md];
-    if[.qproc.backfill.use_fixture .Q.opt .z.x; .qetl.log.info[worker;"fixture writes allowed for this run";enlist[`fixture_writes]!enlist 1b]];
+    .qetl.log.ch.info[`config;"mode";(enlist[`worker]!enlist worker),enlist[`mode]!enlist md];
+    if[.qproc.backfill.use_fixture .Q.opt .z.x; .qetl.log.ch.info[`config;"fixture writes allowed for this run";(enlist[`worker]!enlist worker),enlist[`fixture_writes]!enlist 1b]];
     / validate and plan stop here: no HDB, no ledger, no lock, no source.
     if[md~`validate; :.qproc.backfill.report[worker;.qetl.job.bounded.validate[worker;spec]]];
     if[md~`plan; :.qproc.backfill.report[worker;.qetl.job.bounded.plan_only[worker;spec]]];
@@ -272,7 +272,7 @@
     t1:.z.p;
     (` sv ns,`init)[spec];
     .qproc.backfill.catch_up worker;
-    .qetl.log.dbg[worker;"init done";enlist[`ms]!enlist .qtorq.elapsed_ms t1];
+    .qetl.log.ch.dbg[`lifecycle;"init done";(enlist[`worker]!enlist worker),enlist[`ms]!enlist .qtorq.elapsed_ms t1];
     t2:.z.p;
     r:(` sv ns,`run)[];
     / No reload here: the run's finish step called on_hdb_ready with final
@@ -283,8 +283,8 @@
     / is reloaded here; a run that wrote has already released or failed to.
     if[count .qetl.coverage.unready; .qproc.backfill.on_hdb_ready `finished`pending`final!(0;0;1b)];
     r:r,enlist[`hdb_unreloaded]!enlist .qproc.backfill.reload_state`dirty;
-    .qetl.log.info[worker;"backfill process finished";
-        r,`run_ms`total_ms!(.qtorq.elapsed_ms t2;.qtorq.elapsed_ms t0)];
+    .qetl.log.ch.info[`lifecycle;"backfill process finished";
+        (enlist[`worker]!enlist worker),r,`run_ms`total_ms!(.qtorq.elapsed_ms t2;.qtorq.elapsed_ms t0)];
     r}
 
 \d .
@@ -319,7 +319,7 @@ if[.qproc.backfill.verbose .Q.opt .z.x; .qetl.log.debug 1b];
 / read beside the window it was sent for, which only DEBUG logs. The two stay
 / separate switches in .qetl.log - only this flag ties them.
 if[.qproc.backfill.trace .Q.opt .z.x; .qetl.log.debug 1b; .qetl.log.trace 1b];
-.qetl.log.dbg[`backfill;"debug logging on";
+.qetl.log.ch.dbg[`lifecycle;"debug logging on";
     `procname`pid`port`cwd!(.proc.procname;.z.i;system"p";first system"pwd")];
 
 / Register with discovery before doing any work, so the fleet can see the
@@ -340,16 +340,16 @@ if[.qproc.backfill.trace .Q.opt .z.x; .qetl.log.debug 1b; .qetl.log.trace 1b];
     c:.qtorq.credential_from[specific;fallback];
     if[`adopted~c`source; .servers.USERPASS:c`userpass];
     $[`missing~c`source;
-        .qetl.log.warn[`backfill;"no outbound credential for this process type, and none to adopt - connections to the fleet will use TorQ's default and be refused";
+        .qetl.log.ch.warn[`config;"no outbound credential for this process type, and none to adopt - connections to the fleet will use TorQ's default and be refused";
             enlist[`looked_for]!enlist 1_string fallback];
-        .qetl.log.info[`backfill;"outbound credential";
+        .qetl.log.ch.info[`config;"outbound credential";
             `source`file!(c`source;$[`adopted~c`source; 1_string fallback; "this process type's own"])]];
  }[];
 
-.qetl.log.dbg[`backfill;"registering with discovery";()!()];
+.qetl.log.ch.dbg[`ipc;"registering with discovery";()!()];
 {[t0]
   .servers.startup[];
-  .qetl.log.dbg[`backfill;"registered with discovery";
+  .qetl.log.ch.dbg[`ipc;"registered with discovery";
       `ms`servers!(.qtorq.elapsed_ms t0;count .servers.SERVERS)];
  }[.z.p];
 
@@ -361,11 +361,11 @@ if[.qproc.backfill.trace .Q.opt .z.x; .qetl.log.debug 1b; .qetl.log.trace 1b];
 / backtrace is logged with the error, which is the one thing a bare message
 / like 'type cannot tell you after the process has gone.
 result:.Q.trp[{.qproc.backfill.run[]};::;{[e;bt]
-    .qetl.log.err[`backfill;"backfill process failed";enlist[`error]!enlist e];
-    .qetl.log.err[`backfill;"backtrace";enlist[`trace]!enlist .Q.sbt bt];
+    .qetl.log.ch.err[`lifecycle;"backfill process failed";enlist[`error]!enlist e];
+    .qetl.log.ch.err[`lifecycle;"backtrace";enlist[`trace]!enlist .Q.sbt bt];
     `state`error!(`failed;e)}];
 code:.qetl.job.bounded.exit_code result`state;
 / A non-zero exit is a run that did not do its job, so it is an ERROR line - at
 / INFO, `state=failed` read as routine in a log filtered for problems.
-$[0=code; .qetl.log.info; .qetl.log.err][`backfill;"exiting";`state`code!(result`state;code)];
+$[0=code; .qetl.log.ch.info; .qetl.log.ch.err][`lifecycle;"exiting";`state`code!(result`state;code)];
 exit code;

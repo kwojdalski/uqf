@@ -294,7 +294,7 @@
 .qt.qetl.job.stream.endofday.test_a_snapshot_after_the_cap_is_logged_as_an_error:{[t]
     e:.qt.qetl.job.stream.endofday.errors[.qt.support.captured_log[0b] .qt.qetl.job.stream.endofday.capped];
     .qunit.assertEquals[count e;1;"one error for the abandoned recording"];
-    .qunit.assertEquals[e[0;1];`eod_cap;"naming the job"];
+    .qunit.assertEquals[e[0;3]`job;`eod_cap;"naming the job"];
     .qunit.assertEquals[e[0;3]`cap;1;"and the cap it overran"]};
 
 / #1372: a recording that overflows between two snapshots has lost only the
@@ -325,7 +325,7 @@
 .qt.qetl.job.stream.endofday.test_a_dropped_batch_later_than_the_snapshot_is_still_an_error:{[t]
     e:.qt.qetl.job.stream.endofday.errors[.qt.support.captured_log[0b] {.qt.qetl.job.stream.endofday.capped2[1b]}];
     .qunit.assertEquals[count e;1;"a batch after the snapshot's carried_to was dropped: really missing"];
-    .qunit.assertEquals[e[0;1];`eod_cap2;"naming the job"]};
+    .qunit.assertEquals[e[0;3]`job;`eod_cap2;"naming the job"]};
 
 / #1384: past the cap, a dropped batch with no time column counts as latest
 / (0Wp), so any snapshot is short of it; an empty batch drops nothing (0Np).
@@ -582,7 +582,7 @@
 
 .qt.qetl.job.stream.endofday.test_a_carrying_transport_with_no_recovery_keys_logs_an_error_naming_the_job:{[t]
     e:.qt.qetl.job.stream.endofday.start_with {[tr] `earlier_days`plant_day`has_log _ tr};
-    errs:e where e[;1]=`fx_positions;
+    errs:e where `fx_positions=e[;3]@\:`job;
     .qunit.assertEquals[1<=count errs;1b;"an ERROR, not a WARN"];
     .qunit.assertEquals[any errs[;2] like "*restart across an end of day will lose the state this job carries*";1b;"saying what is lost"]};
 

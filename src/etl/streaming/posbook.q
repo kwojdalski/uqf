@@ -218,7 +218,7 @@
 .qpipe.job.posbook.note_unmarked:{[trades;marks]
     held:distinct (.qpipe.job.posbook.mid_history[`rows]`sym),.qpipe.job.posbook.crypto_tob[`rows]`sym;
     n:sum (null marks) & trades[`sym] in held;
-    if[n>0; .qetl.log.warn[`posbook;"fills older than the retained mid history were marked at their own price";`fills`retention!(n;.qpipe.job.posbook.history_retention)]];
+    if[n>0; .qetl.log.ch.warn[`transform;"fills older than the retained mid history were marked at their own price";(enlist[`job]!enlist `posbook),`fills`retention!(n;.qpipe.job.posbook.history_retention)]];
     }
 
 / Executions: apply every fill in the batch in arrival order, mark each to the

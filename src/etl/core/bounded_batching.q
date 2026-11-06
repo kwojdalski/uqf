@@ -302,8 +302,8 @@
     prim:$[sup; batch src`table_name; batch];
     plan:.qetl.job.bounded.batching.plan[spec;prim];
     if[0=count plan; :.qetl.job.bounded.transform_batch[worker;batch]];
-    .qetl.log.dbg[worker;"window planned into batches";
-        `batches`rows`max_rows`max_groups!(count plan;count prim;spec`max_rows;spec`max_groups)];
+    .qetl.log.ch.dbg[`lifecycle;"window planned into batches";
+        (enlist[`worker]!enlist worker),`batches`rows`max_rows`max_groups!(count plan;count prim;spec`max_rows;spec`max_groups)];
     bysrc:.qetl.job.bounded.batching.by_source[worker;spec];
     if[bysrc; .qetl.job.bounded.batching.begin_reads[worker]];
     / the values every batch shares, in one dictionary: a q lambda takes at most eight arguments

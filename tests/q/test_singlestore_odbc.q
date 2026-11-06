@@ -213,7 +213,7 @@
 
 .qt.qetl.io.odbc.test_run_sql_traces_the_statement_and_what_came_back:{[t]
     lines:.qt.qetl.io.odbc.logged {.qt.qetl.io.odbc.with_fake_driver[{.qetl.io.odbc.run_sql[7;"select 1"]}]};
-    .qunit.assertEquals[lines[;0 1 2];((`TRACE;`odbc;"sql sent");(`TRACE;`odbc;"sql returned"));
+    .qunit.assertEquals[lines[;0 1 2];((`TRACE;`source;"sql sent");(`TRACE;`source;"sql returned"));
         "one TRACE line before the statement is sent, one after"];
     .qunit.assertEquals[((lines 0)[3]`statement;(lines 1)[3]`rows);("select 1";1);
         "the exact statement, then the row count"]};
