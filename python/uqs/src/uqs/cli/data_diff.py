@@ -103,7 +103,9 @@ def reach(
     )  # refuses a target nobody declared
     with ExitStack() as stack:
         try:
-            via = stack.enter_context(via_target.connect(name, proc, None, None, user, passwd))
+            # change=None: compare.q only reads (#2179)
+            reached = via_target.connect(name, proc, None, None, user, passwd, change=None)
+            via = stack.enter_context(reached)
         except Exception as exc:  # ssh, the release's port list or the tunnel: all one outcome
             said = tunnel.scrub(str(exc), [passwd])
             yield data_diff.Endpoint(name, error=f"{proc} on target {name}: {said}")

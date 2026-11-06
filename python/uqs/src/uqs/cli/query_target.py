@@ -7,6 +7,14 @@ password.
 Not the global `uqs --target TARGET query`, which runs `uqs query` on the
 server (deploy/control.py). The two are refused together - cli/target.py -
 because each means a different machine runs the query.
+
+INSPECTION MODE (#2032, #2179). Every caller says what its tunnel is for:
+`change` names what it will do when that may change the server - an
+arbitrary q expression, or a q session - and `connect` then refuses an
+inspection-only target as `uqs --target TARGET query` is refused, matched
+by its (ssh, dest) as well as its name. `change=None` is a caller that sends
+only programs this tree wrote and that read; each one is listed, with why,
+in tests/test_tunnel_inspection.py, which fails on a caller it does not know.
 """
 
 from __future__ import annotations
@@ -20,7 +28,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 
 from uqs import runtimes
-from uqs.deploy import control, tunnel
+from uqs.deploy import control, inspection, tunnel
 from uqs.logger import get_logger
 from uqs.paths import UqsError, repo_root
 from uqs.stack import gateway as stack_gateway
@@ -64,9 +72,19 @@ def connect(
     base_port: int | None,
     user: str,
     passwd: str,
+    *,
+    change: str | None,
 ) -> Iterator[Via]:
-    """The tunnel to `proc` (or `port`) on target `name`, for the block."""
-    r = control.remote_for(name, repo_root())
+    """The tunnel to `proc` (or `port`) on target `name`, for the block.
+
+    `change` is what the caller will do through it, in words ("`uqs query
+    --tunnel prod`"), when that may change the server: an inspection-only
+    target is then refused before any ssh is opened. None for a caller that
+    only reads, by a program of its own."""
+    root = repo_root()
+    r = control.remote_for(name, root)
+    if change is not None:
+        inspection.refuse(root, change, name=r.name, ssh=r.host, dest=r.dest)
     if port is None:
         procname = proc or stack_gateway.DEFAULT_PROC
         chosen = os.environ.get(runtimes.RUNTIME_ENV) or None
