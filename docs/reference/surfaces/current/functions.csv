@@ -189,6 +189,7 @@ qetl.io,finish,function,1,mgr
 qetl.io,flush,function,2,mgr upto
 qetl.io,folded,function,3,target batch row_key
 qetl.io,for_cfg,function,1,cfg
+qetl.io,handed_over,function,2,root dates
 qetl.io,hdb,function,2,root partition_col
 qetl.io,hdb_lock,function,1,root
 qetl.io,hdb_lock_wait,value,,
@@ -201,6 +202,7 @@ qetl.io,optional,value,,
 qetl.io,recover,function,4,mgr target range_from range_to
 qetl.io,remote,dict,,
 qetl.io,require_eod_done,function,3,root target dates
+qetl.io,require_handed_over,function,3,root target days
 qetl.io,require_manager,function,1,mgr
 qetl.io,require_strategy,function,1,strategy
 qetl.io,required,value,,

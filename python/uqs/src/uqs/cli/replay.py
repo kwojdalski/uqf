@@ -113,8 +113,8 @@ def replay(
 
     With nothing passed it finds the tickerplant that is up, takes the log
     directory and schema file off that process's own start line, finds the
-    database the HDB process has open, and replays the plant's newest day into
-    it. Every one of those is an option, and an option that is given wins.
+    database the HDB process has open, and replays the plant's newest day that end of day has
+    handed over into it. Every one of those is an option, and an option that is given wins.
     `--base-port` defaults to the runtime's own, as on every command; a plant
     running under another is refused, naming the `--base-port` to give.
 
@@ -124,7 +124,9 @@ def replay(
     before.
 
     The day is --date D, or --from D --to D+1: a log is one day's, so a
-    range of anything else is refused. Default: the plant's newest.
+    range of anything else is refused. Default: the plant's newest day that
+    end of day has handed over; today (the live day) is refused, as is any day
+    the wdb still holds.
 
     e.g. `uqs data replay --date 2026-09-22 --table quote --table trade`
     """
@@ -138,6 +140,7 @@ def replay(
             tables=tables_given(table) or None,
             base_port=_paths().runtime_declaration.resolve_base_port(port),
             base_port_given=port is not None,
+            wdb_dir=_paths().torqdata / "wdbhdb",
         )
     except UqsError as exc:
         _die(exc)

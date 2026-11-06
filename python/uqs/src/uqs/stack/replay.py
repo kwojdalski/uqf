@@ -23,6 +23,15 @@ default - and the plant's `-stackid` is checked against it: a plant running
 under another base port is refused, naming the `--base-port` that replays it,
 rather than replayed under a port the operator never chose.
 
+WHICH DAYS MAY BE REPLAYED (#2196). Only a day end of day has handed to the
+HDB. The plant's live day is the rdb's and the wdb's to write: a replay of it
+puts a partial partition in hdb/D, and the wdb's `movetohdb` then aborts the
+move of the full day ("present in both location"). The rule is the backfill
+writer's own (`.qetl.io.require_handed_over`, #2186), asked of q rather than
+restated here: today and later, and any day the wdb's save directory still
+holds, are refused. So the default is the newest log day that IS handed over,
+not the newest log.
+
 WHAT IS DELIBERATELY NOT DECIDED HERE. `emptytables`, `clean`, `sortafterreplay`
 and the rest keep TorQ's defaults, which means the replay EMPTIES the tables it
 is about to write in the partitions it touches. That is what a tickerplant
@@ -35,11 +44,13 @@ from __future__ import annotations
 
 import re
 import subprocess
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
+from uqs.interpreter import q_interpreter
 from uqs.logger import get_logger
-from uqs.paths import UqsError, UqsPaths
+from uqs.paths import UqsError, UqsPaths, repo_root
 from uqs.stack import runtime
 from uqs.stack.alive import _command_lines
 
@@ -193,13 +204,22 @@ def log_dirs(plant: RunningPlant) -> list[Path]:
     return [entry for _date, entry in sorted(found)]
 
 
-def resolve_log_dir(plant: RunningPlant, date: str | None = None) -> Path:
-    """The log directory to replay: the plant's newest, or the day asked for.
+def _log_date(directory: Path) -> str | None:
+    """The `YYYY.MM.DD` a log directory is named for, or None."""
+    match = _LOG_DIR.match(directory.name)
+    return match["date"] if match else None
 
-    Newest rather than today's, because that IS today's while the plant is
-    writing and is still the right answer when it is not - a stack started
-    yesterday and left running has no directory for today until the first
-    message of the day lands in it.
+
+def resolve_log_dir(
+    plant: RunningPlant, date: str | None = None, replayable: frozenset[str] | None = None
+) -> Path:
+    """The log directory to replay: the day asked for, or the plant's newest
+    REPLAYABLE one.
+
+    The newest log is today's while the plant is writing, and today is not the
+    HDB's to take (#2196), so the default is the newest day in `replayable` -
+    the dates end of day has handed over. `replayable` None means "no
+    restriction", which is only right when nothing can be judged.
     """
     dirs = log_dirs(plant)
     if not dirs:
@@ -208,7 +228,15 @@ def resolve_log_dir(plant: RunningPlant, date: str | None = None) -> Path:
             f"{plant.procname}_<date>, and nothing there matches"
         )
     if date is None:
-        return dirs[-1]
+        eligible = [d for d in dirs if replayable is None or _log_date(d) in replayable]
+        if not eligible:
+            days = ", ".join(str(_log_date(d)) for d in dirs)
+            raise UqsError(
+                f"{plant.procname} has no log for a day end of day has handed over to the "
+                f"HDB (it has: {days}) - the live day is the rdb's and the wdb's to write. "
+                "Pass --date for a handed-over day, or --tplogdir for a log of your own"
+            )
+        return eligible[-1]
     wanted = plant.tplogdir / f"{plant.procname}_{date}"
     if wanted not in dirs:
         # Split rather than re-matched: every name here came back from
@@ -216,6 +244,75 @@ def resolve_log_dir(plant: RunningPlant, date: str | None = None) -> Path:
         days = ", ".join(d.name.rsplit("_", 1)[-1] for d in dirs)
         raise UqsError(f"{plant.procname} has no log for {date} - it has: {days}")
     return wanted
+
+
+#: The q that asks the ETL's own HDB fence (src/etl/core/io_hdb_eod.q), the one
+#: rule backfills write under, rather than restating it. Inputs come as
+#: command-line words (.z.x: mode, hdb, wdb or `none`, dates), never in the
+#: script text, so a path cannot become q.
+_FENCE_Q = r"""
+\l {eod}
+r:hsym `$.z.x 1;
+w:.z.x 2;
+if[not w~"none"; .qetl.io.watch_eod[r;hsym `$w]];
+d:"D"$" " vs .z.x 3;
+if[(.z.x 0)~"require";
+  -1 .[{.qetl.io.require_handed_over[x;`replay;y];"OK "};(r;d);{"ERR ",x}]; exit 0];
+-1 "OK ",{" " sv string x}.qetl.io.handed_over[r;d];
+exit 0
+"""
+
+
+def _ask_fence(mode: str, dates: list[str], hdb_dir: Path, wdb_dir: Path | None) -> str:
+    """Run the fence in a q of its own; the text after its `OK `, or a refusal."""
+    q = q_interpreter()
+    if q is None:
+        raise UqsError("no q interpreter to ask the end-of-day fence - set QCMD")
+    eod = repo_root() / "src" / "etl" / "core" / "io_hdb_eod.q"
+    with tempfile.TemporaryDirectory() as tmp:
+        script = Path(tmp) / "fence.q"
+        script.write_text(_FENCE_Q.replace("{eod}", str(eod)))
+        done = subprocess.run(
+            [
+                str(q),
+                str(script),
+                "-q",
+                mode,
+                f":{hdb_dir}",
+                str(wdb_dir or "none"),
+                " ".join(dates),
+            ],
+            capture_output=True,
+            text=True,
+            stdin=subprocess.DEVNULL,
+            timeout=60,
+        )
+    lines = [ln for ln in done.stdout.splitlines() if ln.startswith(("OK ", "ERR "))]
+    if not lines:
+        raise UqsError(
+            f"the end-of-day fence did not answer: {(done.stdout + done.stderr).strip()}"
+        )
+    return lines[-1]
+
+
+def replayable_days(dates: list[str], hdb_dir: Path, wdb_dir: Path | None) -> frozenset[str]:
+    """Which of these `YYYY.MM.DD` days end of day has handed over to the HDB."""
+    if not dates:
+        return frozenset()
+    answer = _ask_fence("handed", dates, hdb_dir, wdb_dir)
+    if not answer.startswith("OK "):
+        raise UqsError(f"the end-of-day fence failed: {answer}")
+    return frozenset(answer[3:].split())
+
+
+def require_handed_over(date: str, hdb_dir: Path, wdb_dir: Path | None) -> None:
+    """Refuse a day end of day has not handed over, with the fence's own error.
+
+    @throws UqsError naming the day, as `.qetl.io.require_handed_over` does
+    """
+    answer = _ask_fence("require", [date], hdb_dir, wdb_dir)
+    if answer.startswith("ERR "):
+        raise UqsError(answer[4:])
 
 
 #: What a value may contain before torq.sh puts it on a start line. Paths are
@@ -319,6 +416,7 @@ def plan(
     base_port: int | None = None,
     timeout: float | None = None,
     base_port_given: bool = True,
+    wdb_dir: Path | None = None,
 ) -> ReplayPlan:
     """Resolve what to replay, preferring what was asked for over what is up.
 
@@ -332,10 +430,7 @@ def plan(
     needs_plant = log_dir is None or schema_file is None or base_port is None or hdb_dir is None
     plant = resolve_plant(procname, timeout) if needs_plant else None
 
-    if log_dir is None:
-        assert plant is not None
-        log_dir = resolve_log_dir(plant, date)
-    elif date is not None:
+    if log_dir is not None and date is not None:
         raise UqsError(
             "--date picks a day out of a plant's log directory, so it cannot be used with "
             "--tplogdir"
@@ -352,6 +447,22 @@ def plan(
 
     if hdb_dir is None:
         hdb_dir = running_hdb_dir(resolved_port, timeout)
+
+    # Only a day end of day has handed over may be replayed (#2196): the live
+    # day is the rdb's and the wdb's, and a partial hdb/D makes movetohdb abort.
+    if log_dir is None:
+        assert plant is not None
+        if date is None:
+            days = [str(_log_date(d)) for d in log_dirs(plant)]
+            ok = replayable_days(days, hdb_dir, wdb_dir)
+            log_dir = resolve_log_dir(plant, None, ok)
+        else:
+            require_handed_over(date, hdb_dir, wdb_dir)
+            log_dir = resolve_log_dir(plant, date)
+    elif (named := _LOG_DIR.match(log_dir.name)) is not None:
+        # A directory named outright is judged by its name when it has one
+        # of a plant's; any other name cannot be dated, so it is the operator's.
+        require_handed_over(named["date"], hdb_dir, wdb_dir)
 
     if schema_file is None:
         assert plant is not None
