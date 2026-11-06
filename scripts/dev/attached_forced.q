@@ -15,20 +15,24 @@
 / Evaluated BY THE WRITER, before anything is written: refuse rows whose columns or column types are not
 / the partition's own (#2194). upsert onto a splayed table appends column by column, so a batch with one
 / column of another type fails part-way, leaving ragged columns - and a fallback that rewrote the
-/ table whole retyped the native rows too. The check reads the batch and the partition's meta, so it
-/ runs before .Q.en (which would extend the sym file) and before the first column file is touched.
-/ @param part the partition's directory, a file symbol with the trailing slash, or () when absent
+/ table whole retyped the native rows too. The check reads the partition's column files and the batch,
+/ so it runs before .Q.en (which would extend the sym file) and before the first column file is
+/ touched. It reads types from the files themselves rather than `meta` of the directory, which not
+/ every interpreter accepts, and treats an enumerated column as the symbol column it is.
+/ @param base the partition's directory, without a trailing slash (.Q.par)
 / @param rows the date's rows
 / @return 1b when the partition is absent or agrees with the rows
 / @throws error listing every column with its native type and its batch type
-.qdev.attached.forced_require_types:{[part;rows]
-    if[()~key part; :1b];
-    native:exec c!t from meta part;
-    batch:exec c!t from meta rows;
-    if[(key[native]~key batch) and native~batch; :1b];
-    names:distinct key[native],key batch;
-    show1:{[n;b;c] string[c],": native ",$[c in key n; n c; "(absent)"],", batch ",$[c in key b; b c; "(absent)"]};
-    '"attached_forced: the batch does not match the native table ",string[part]," - nothing was written; ",
+.qdev.attached.forced_require_types:{[base;rows]
+    if[()~key ` sv base,`.d; :1b];
+    kind:{[v] t:type v; $[t within 20 76; 11h; t]};
+    ncols:get ` sv base,`.d;
+    native:ncols!{[b;kind;c] kind get ` sv b,c}[base;kind] each ncols;
+    batch:(cols rows)!kind each value flip rows;
+    if[(ncols~cols rows) and native~batch; :1b];
+    names:distinct ncols,cols rows;
+    show1:{[n;b;c] string[c],": native ",$[c in key n; string .Q.t abs n c; "(absent)"],", batch ",$[c in key b; string .Q.t abs b c; "(absent)"]};
+    '"attached_forced: the batch does not match the native table ",string[base]," - nothing was written; ",
       "; " sv show1[native;batch] each names}
 
 / Evaluated BY THE WRITER: append one date's rows to <root>/<date>/<target>/ and return how many.
@@ -44,7 +48,7 @@
 .qdev.attached.forced_append:{[root;d;target;rows]
     db:$[null root; hsym .wdb.hdbdir; root];
     part:` sv .Q.par[db;d;target],`;
-    .qdev.attached.forced_require_types[part;rows];
+    .qdev.attached.forced_require_types[.Q.par[db;d;target];rows];
     data:.Q.en[db;rows];
     have:key part;
     if[`sym in have; @[{@[x;`sym;`#]};part;::]];

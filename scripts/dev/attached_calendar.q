@@ -27,7 +27,7 @@
 / @return the date or dates
 .qdev.calendar.day:{[times] .eodtime.getday times}
 
-.qetl.io.calendar_adopter:.qdev.calendar.adopt
-.qetl.io.native_day_fn:.qdev.calendar.day
+.qetl.io.calendar_adopter:{[offset_ns;adj_ns] .qdev.calendar.adopt[offset_ns;adj_ns]}
+.qetl.io.native_day_fn:{[times] .qdev.calendar.day times}
 
 \d .
