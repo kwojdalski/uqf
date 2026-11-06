@@ -12,7 +12,7 @@ import re
 from pathlib import Path
 
 import pytest
-from typer.testing import CliRunner
+from plain_cli import PlainRunner
 
 from uqs import cli
 from uqs.cli import create, create_backfill
@@ -27,7 +27,7 @@ UQF_ROOT = Path(__file__).resolve().parents[3]
 PROFILES_TEXT = (UQF_ROOT / profile.PROFILES_FILE).read_text()
 KNOWN = ("default", "fx", "crypto", "essential")
 
-runner = CliRunner()
+runner = PlainRunner()  # CI renders usage errors in colour
 
 
 def _body(plan: jobs.ScaffoldPlan, suffix: str) -> str:

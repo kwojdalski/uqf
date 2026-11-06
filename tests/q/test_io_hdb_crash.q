@@ -194,3 +194,29 @@
     repaired:lines where lines[;2]~\:"repaired partitions a killed write left behind";
     .qunit.assertEquals[(count repaired;distinct repaired[;1]);(1;enlist `storage);
         "one repair line, on the storage channel, not under a component name"]};
+
+/ --- #2285: one sym, at the HDB root -----------------------------------------
+
+/ Every file called sym anywhere under the root, as paths relative to it. A table with a symbol
+/ column named sym has a column file of that name, so those are excluded by looking only at the
+/ levels a sym FILE can wrongly sit at: the root itself and the date folders.
+.qt.qetl.hdb_crash.stray_syms:{[root]
+    r:1_string root;
+    all_found:system "find ",r," -name sym -type f";
+    rel:(1+count r)_/:all_found;
+    rel where 2>=count each "/" vs/: rel}
+
+/ After a first write and an append into the same date, the only sym FILE is the root's, and the
+/ symbols still decode to what was written. KDB-X refuses an HDB with a sym inside a partition.
+.qt.qetl.hdb_crash.test_a_write_leaves_one_sym_at_the_root_and_none_in_a_partition:{[t]
+    rm:.qt.qetl.hdb_crash.written[]; root:rm 0; m:rm 1;
+    base:.qt.qetl.hdb_crash.rows[];
+    more:base;
+    more[`id]:100+base`id;
+    more[`sym]:`$"t",/:string (base`id) mod 3;
+    m[`write][`hcrash;more];
+    m[`finish][::];
+    .qunit.assertEquals[.qt.qetl.hdb_crash.stray_syms root;enlist "sym";"the HDB root holds the only sym file"];
+    got:.qt.qetl.hdb_crash.read[root;`hcrash];
+    .qunit.assertEquals[count got;2*.qt.qetl.hdb_crash.n;"both writes are in the partition"];
+    .qunit.assertEquals[asc distinct got`sym;asc distinct (.qt.qetl.hdb_crash.rows[]`sym),more`sym;"the symbols decode to what was written"]};

@@ -128,6 +128,12 @@ VENDORED_LOAD_OVERLAY: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
 #: (scripts/torqcode/gateway/querypolicy.q). Each runtime is started with a
 #: copy holding only its own tables (stack/gateway_access.py).
 DATAACCESS_PROCTYPES = frozenset({"gateway", "rdb", "hdb"})
+#: On PeachQ an hdb maps no partitioned database (no .Q.pv/.Q.pd), so TorQ's
+#: `meta` there sees no table, .dataaccess.init finds every listed one
+#: "Missing table from HDB in schema" and the hdb exits 3 while loading -
+#: which `uqs start` then reports (#2180). It could serve none of them
+#: anyway, so a PeachQ runtime's hdb starts without the data-access API (#2281).
+PEACHQ_NO_DATAACCESS = frozenset({"hdb"})
 DATAACCESS_EXTRAS = "-dataaccess ${TORQDATA}/tableproperties.csv"
 
 #: Access lists (the `U` column, q's `-U`) written by bootstrap
@@ -166,7 +172,9 @@ def _composed_rows(paths: UqsPaths) -> list[dict[str, str]]:
             if row["procname"] in VENDORED_LOAD_OVERLAY:
                 before, after = VENDORED_LOAD_OVERLAY[row["procname"]]
                 row["load"] = " ".join(x for x in (*before, row["load"], *after) if x)
-            if row["proctype"] in DATAACCESS_PROCTYPES:
+            if row["proctype"] in DATAACCESS_PROCTYPES and not (
+                declared.interpreter == "peachq" and row["proctype"] in PEACHQ_NO_DATAACCESS
+            ):
                 row["extras"] = " ".join(x for x in (row["extras"], DATAACCESS_EXTRAS) if x)
             if row["procname"] in ACCESS_LIST_OVERLAY:
                 row["U"] = ACCESS_LIST_OVERLAY[row["procname"]]

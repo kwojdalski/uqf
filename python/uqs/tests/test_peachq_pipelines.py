@@ -32,6 +32,7 @@ from uqs.model.declarations import read_file_text
 from uqs.paths import UqsError, UqsPaths
 from uqs.runtimes import Runtime
 from uqs.stack import capabilities, gateway_access, qtree, runtime, runtime_bundles
+from uqs.stack import procs as stack_procs
 from uqs.stack.env import build_env
 
 REPO = Path(stack_paths.__file__).resolve().parents[4]
@@ -268,6 +269,32 @@ def test_each_runtime_is_started_with_only_its_own_data_access_tables(monkeypatc
     assert len(every) == 3 + len(schemas.table_names() - {"mkt_orderbook"}), (
         "and lists every other plant table too"
     )
+
+
+def test_a_peachq_hdb_starts_without_the_data_access_api(tmp_path: Path) -> None:
+    """#2281: PeachQ maps no partitioned database, so TorQ's .dataaccess.init in
+    an hdb finds every listed table missing and exits while loading. The rdb and
+    the gateway keep -dataaccess; a KDB-X runtime's hdb keeps it too."""
+    app = tmp_path / "lib" / "torq-finance-starter-pack" / "appconfig"
+    app.mkdir(parents=True)
+    (app / "process.csv").write_text(
+        "host,port,proctype,procname,U,localtime,g,T,w,load,startwithall,extras,qcmd\n"
+        "localhost,1,rdb,rdb1,,1,1,,,${KDBCODE}/processes/rdb.q,1,,q\n"
+        "localhost,2,hdb,hdb1,,1,1,,,${KDBHDB},1,-x 1,q\n"
+        "localhost,3,gateway,gateway1,,1,1,,,${KDBCODE}/processes/gateway.q,1,,q\n"
+    )
+
+    def extras(name: str) -> dict[str, str]:
+        rows = stack_procs._composed_rows(_paths(tmp_path, name))
+        return {
+            r["procname"]: r["extras"]
+            for r in rows
+            if r["procname"] in ("rdb1", "hdb1", "gateway1")
+        }
+
+    on = "-dataaccess ${TORQDATA}/tableproperties.csv"
+    assert extras("peachq-etl") == {"rdb1": on, "hdb1": "-x 1", "gateway1": on}
+    assert extras("uqf")["hdb1"] == f"-x 1 {on}"
 
 
 def test_every_held_plant_table_is_listed_for_getdata(tmp_path: Path, monkeypatch) -> None:
@@ -571,6 +598,10 @@ def test_a_bundles_jobs_run_on_peachq(peachq, stack_copy):
         [str(peachq), str(read), "-q"], capture_output=True, text=True, timeout=60, check=False
     ).stdout.splitlines()
     assert written == ["1 2 3 4 5", "101 102 103 104 105f"], "yesterday's partition, in order"
+    # one sym, at the HDB root: KDB-X refuses an HDB with one in a date folder (#2285)
+    hdb = part.parent.parent
+    stray = [p for p in hdb.glob("*/sym") if p.is_file()]
+    assert (hdb / "sym").is_file() and not stray, f"sym files inside partitions: {stray}"
 
 
 #: The starter pack's own tables, which a managed TorQ install need not have.
