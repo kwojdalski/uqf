@@ -204,13 +204,13 @@
 / Name this process in the records it writes outside TorQ.
 / @param name the runner's name, as a symbol
 / @return name
-/ @eg .qetl.log.set_process`attached_backfill -> `attached_backfill
+/ @eg .qetl.log.set_process`attached_backfill
 .qetl.log.set_process:{[name] .qetl.log.standalone_name::name; name}
 
 / The process a record is attributed to: TorQ's procname when there is one
 / (.qetl.run.proc_name, the one read of it in src/), else the runner's name.
 / @return a symbol
-/ @eg .qetl.log.process[] -> `run_backfill
+/ @eg .qetl.log.process[]
 .qetl.log.process:{[]
     n:@[.qetl.run.proc_name;::;{[e] `}];
     if[not null n; :n];

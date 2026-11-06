@@ -80,7 +80,7 @@ def test_the_docs_table_lists_every_channel_and_only_those():
     section = text.split("### Channels: which subsystem a line concerns", 1)[1].split("\n### ", 1)[
         0
     ]
-    rows = re.findall(r"^\| `(\w+)`\s+\|", section, re.M)
+    rows = re.findall(r"^\s*\| `(\w+)`\s+\|", section, re.M)
     assert rows == list(q_facts.LOG_CHANNELS)
 
 
