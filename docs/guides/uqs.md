@@ -230,8 +230,8 @@ is deliberately not.
 or changes one, stop the stack and migrate each affected date/table explicitly:
 
 ```
-uqs data migrate trade 2026-01-01 --rename old_price:price --cast price
-uqs data migrate trade 2026-01-01 --rename old_price:price --cast price --apply
+uqs data migrate trade --date 2026-01-01 --rename old_price:price --cast price
+uqs data migrate trade --date 2026-01-01 --rename old_price:price --cast price --apply
 uqs data check
 uqs restart hdb1
 ```
@@ -613,8 +613,8 @@ serves:
   `uqs job check` pairs them (a table nobody keys is matched row by whole row).
   `time` is stamped on receipt, so it is left out: two environments receive a
   row at different moments.
-- **coverage** - with `--source-version` (and `--partition`), the coverage
-  ledger's current claims for the window on each side, composed and gapped by
+- **coverage** - with `--source-version` (and `--slice`), the coverage ledger's
+  current claims for the window on each side, composed and gapped by
   `.qetl.coverage`.
 
 Each table reaches one outcome, the first that applies:
@@ -2258,6 +2258,18 @@ pairs of verbs stay apart on purpose: `clean` deletes what the stack wrote where
 rule, and `job runs upgrade` changes the ledger's layout where `data migrate`
 changes an HDB partition's schema. None of the hidden aliases has passed its one
 release yet (`cli/rename_expiry.py`), so none is removed.
+
+"Partition" is an HDB date partition (#2239), as kdb+ has it; the old spelling
+is refused naming the new one, with no alias:
+
+  | old                                      | new                                      |
+  | ---                                      | ---                                      |
+  | `data diff --partition KEY`              | `--slice KEY`, the coverage slice        |
+  | `job new --partition SYM`                | `--slice SYM`                            |
+  | `job new --partition-column COL`         | `--slice-column COL`                     |
+  | `data migrate TABLE PARTITION`           | `data migrate TABLE --date D`            |
+
+`data check --template DATE` keeps its name: it is a date partition.
 
 One meaning per word (#1855):
 

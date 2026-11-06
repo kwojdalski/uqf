@@ -50,7 +50,7 @@ def check_width(width: str) -> str:
 
 #: A bounded worker's window width when `job new --width` is not given.
 DEFAULT_WIDTH = "1D"
-#: The column holding a worker's --partition when `--partition-column` is not given.
+#: The column holding a worker's --slice when `--slice-column` is not given.
 DEFAULT_PARTITION_COLUMN = "sym"
 
 
@@ -131,15 +131,15 @@ def bounded_worker(
     _check_name(dataset, "dataset")
     if partition is not None and not _PARTITION.fullmatch(partition):
         raise UqsError(
-            f"--partition {partition!r} must be a q symbol - letters, digits and underscores, "
+            f"--slice {partition!r} must be a q symbol - letters, digits and underscores, "
             "e.g. EURUSD"
         )
     if partition_column is not None and partition is None:
-        raise UqsError("--partition-column needs --partition: it names the column holding it")
+        raise UqsError("--slice-column needs --slice: it names the column holding it")
     if partition is not None:
         partition_column = partition_column or DEFAULT_PARTITION_COLUMN
         if not _PARTITION.fullmatch(partition_column):
-            raise UqsError(f"--partition-column {partition_column!r} must be a q symbol")
+            raise UqsError(f"--slice-column {partition_column!r} must be a q symbol")
     worker = f"{name}_backfill"
     proc = _check_name(procname or f"{name}_backfill1", "procname")
     # Columns shape what is WRITTEN - a new source's fields, a new table - so
@@ -185,13 +185,13 @@ def bounded_worker(
     if partition_column and define_table and cols:
         if partition_column not in [c for c, _ in cols]:
             raise UqsError(
-                f"--partition-column {partition_column!r} is not among --schema "
+                f"--slice-column {partition_column!r} is not among --schema "
                 f"({', '.join(c for c, _ in cols)}) - name the column that holds the partition"
             )
     elif partition_column and target_columns is not None:
         if partition_column not in [c for c, _ in target_columns]:
             raise UqsError(
-                f"--partition-column {partition_column!r} is not a column of {dataset} "
+                f"--slice-column {partition_column!r} is not a column of {dataset} "
                 f"({', '.join(c for c, _ in target_columns)}) - name the one that holds "
                 "the partition"
             )

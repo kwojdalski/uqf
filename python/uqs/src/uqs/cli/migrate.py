@@ -8,21 +8,28 @@ import typer
 
 from uqs.cli import safety
 from uqs.cli.concepts import table_arg
+from uqs.cli.range_options import DateOpt
+from uqs.cli.renames import refused
 from uqs.cli.safety import ChangesState, dry_run_note
 from uqs.cli.shared import _die, _paths, console, data_app
-from uqs.paths import UqsError
+from uqs.paths import UqsError, UqsUsageError
 from uqs.stack import hdb_migrate
-from uqs.timerange import DAY_FORMS, parse_day
+from uqs.timerange import parse_day
 
 _TableOpt = table_arg("The declared HDB table")
 
+#: The day is `--date D`, the shared day option, as on `data replay` (#2239):
+#: the positional PARTITION it was is refused, naming `--date`.
+_POSITIONAL_DATE = (
+    "`data migrate TABLE PARTITION` is now `data migrate TABLE --date D`, the day option "
+    "every data command takes (#2239)"
+)
 
-@data_app.command("migrate", cls=ChangesState)
+
+@data_app.command("migrate", cls=refused({}, ChangesState, extra_argument=_POSITIONAL_DATE))
 def migrate(
     table: _TableOpt,
-    partition: Annotated[
-        str, typer.Argument(metavar="PARTITION", help=f"One partition's date, {DAY_FORMS}")
-    ],
+    day: DateOpt = None,
     rename: Annotated[
         list[str] | None,
         typer.Option("--rename", help="OLD:NEW - rename a column; repeatable"),
@@ -56,7 +63,9 @@ def migrate(
         _die(exc)
         return
     try:
-        day = parse_day("PARTITION", partition)
+        if day is None:
+            raise UqsUsageError("name the partition to migrate: --date D, e.g. --date 2026-09-13")
+        partition = parse_day("--date", day)
         renames: dict[str, str] = {}
         for pair in rename or []:
             old, sep, new = pair.partition(":")
@@ -65,14 +74,14 @@ def migrate(
             renames[old] = new
         casts = set(cast or [])
         if not apply or not yes:  # the plan: shown, and asked about before --apply writes
-            report = hdb_migrate.migrate(_paths(), table, day, renames, casts, apply=False)
+            report = hdb_migrate.migrate(_paths(), table, partition, renames, casts, apply=False)
         if apply and not yes:
             console.print(report, markup=False, highlight=False)
             safety.confirm(
-                f"Migrate {table} {partition} as above? (stop the stack first)", yes=False
+                f"Migrate {table} {partition:%Y.%m.%d} as above? (stop the stack first)", yes=False
             )
         if apply:
-            report = hdb_migrate.migrate(_paths(), table, day, renames, casts, apply=True)
+            report = hdb_migrate.migrate(_paths(), table, partition, renames, casts, apply=True)
     except UqsError as exc:
         _die(exc)
         return

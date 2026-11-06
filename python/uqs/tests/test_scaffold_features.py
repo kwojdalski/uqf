@@ -8,6 +8,7 @@ rather than on the next import.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
@@ -94,7 +95,7 @@ def test_a_period_is_a_duration_or_a_q_timespan(period, tick):
     assert f"\n    {tick};" in next(a.body for a in plan.actions if str(a.path).endswith("f.q"))
 
 
-# -------------------------------------------------------- --partition, --check
+# ------------------------------------------------------------ --slice, --check
 
 
 def test_a_partitioned_worker_declares_its_partition():
@@ -115,7 +116,7 @@ def test_a_partitioned_worker_declares_the_column_holding_its_partition():
 def test_a_partition_column_outside_the_columns_or_without_a_partition_is_refused():
     with pytest.raises(UqsError, match="not among --schema"):
         backfill.bounded_worker("fx", "fx_rates", "px:float", partition="EURUSD")
-    with pytest.raises(UqsError, match="needs --partition"):
+    with pytest.raises(UqsError, match="--slice-column needs --slice"):
         backfill.bounded_worker("fx", "fx_rates", "px:float", partition_column="sym")
 
 
@@ -287,7 +288,7 @@ def test_a_normalizer_takes_a_profile_too():
             ],
             "--period",
         ),
-        (["x", "--outputs", "x", "--schema", "a:float", "--partition", "EURUSD"], "--partition"),
+        (["x", "--outputs", "x", "--schema", "a:float", "--slice", "EURUSD"], "--slice"),
         (["x", "--outputs", "x", "--schema", "a:float", "--check"], "--check"),
         (["x", "--outputs", "x", "--schema", "a:float", "--width", "2D"], "--width"),
         (["x", "--outputs", "x", "--schema", "a:float", "--source", "s"], "--source"),
@@ -320,6 +321,18 @@ def test_an_option_for_another_kind_is_refused_by_name(argv, option, monkeypatch
     result = runner.invoke(cli.app, ["job", "new", *argv, "--dry-run"])
     assert result.exit_code == 1
     assert refused and refused[0].startswith(f"{option} does not apply to --kind")
+
+
+@pytest.mark.parametrize(
+    ("old", "new"), [("--partition", "`--slice`"), ("--partition-column", "`--slice-column`")]
+)
+def test_the_old_partition_spellings_are_refused_naming_slice(old, new):
+    """#2239: the coverage slice is `--slice`; "partition" is an HDB date."""
+    argv = ["job", "new", "x", "--kind", "backfill", "--outputs", "x", old, "EURUSD", "--dry-run"]
+    result = runner.invoke(cli.app, argv)
+    assert result.exit_code == 2
+    said = " ".join(re.sub("[│╭╮╰╯─]", " ", result.output).split())
+    assert f"`{old}` is now {new}" in said
 
 
 # ------------------------------------------------------------------ --twin-of

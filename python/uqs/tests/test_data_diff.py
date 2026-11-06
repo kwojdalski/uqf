@@ -12,6 +12,7 @@ from tables it was given. Every outcome is reached through them.
 from __future__ import annotations
 
 import json
+import re
 import socket
 import subprocess
 import time
@@ -88,7 +89,7 @@ def test_a_one_character_text_is_a_q_string():
         ({"limit": 0}, "--limit 0: expected 1 to"),
         ({"limit": data_diff.MAX_LIMIT + 1}, "expected 1 to"),
         ({"source_version": 'v1"; exit 1'}, "--source-version"),
-        ({"partition": "a b"}, "--partition"),
+        ({"partition": "a b"}, "--slice"),
     ],
 )
 def test_what_q_could_misread_is_refused_before_it_is_spliced(kw, said):
@@ -238,7 +239,7 @@ def test_filters_limit_and_coverage_reach_q(monkeypatch):
         monkeypatch,
         report("equal_in_sample"),
         "--filter", "sym=EURUSD", "--filter", "notional>=1000000", "--limit", "50",
-        "--source-version", "v1", "--partition", "EURUSD",
+        "--source-version", "v1", "--slice", "EURUSD",
     )  # fmt: skip
     assert '("sym=EURUSD";"notional>=1000000");50j;`$"v1";`$"EURUSD";' in sent["script"]
 
@@ -247,7 +248,7 @@ def test_filters_limit_and_coverage_reach_q(monkeypatch):
     ("extra", "said"),
     [
         (["--left", "prod", "--right", "prod"], "both name prod"),
-        (["--left", "a", "--right", "b", "--partition", "x"], "needs --source-version"),
+        (["--left", "a", "--right", "b", "--slice", "x"], "needs --source-version"),
     ],
 )
 def test_a_command_that_names_nothing_to_compare_is_refused(monkeypatch, extra, said):
@@ -459,3 +460,17 @@ def test_the_command_end_to_end_on_fixture_targets(fixture_targets, monkeypatch)
     doc = json.loads(r.stdout)
     assert (doc["outcome"], doc["left"], doc["right"]) == ("differs", "local", "prod")
     assert doc["range_to"] == "2026-09-16T00:00:00.000000000+00:00"
+
+
+def test_partition_is_refused_naming_slice(monkeypatch):
+    """#2239: "partition" is an HDB date partition; the coverage slice is
+    `--slice`, and the old spelling is refused - never read as a date."""
+    fake_q(monkeypatch, report("equal_in_sample"))
+    monkeypatch.setattr(diff_cli, "reach", _reached)
+    argv = ["data", "diff", "--table", "demo_deals", *WINDOW, "--partition", "2026.09.13"]
+    result = runner.invoke(cli.app, argv)
+    assert result.exit_code == 2
+    said = " ".join(re.sub("[│╭╮╰╯─]", " ", result.output).split())
+    assert (
+        "`--partition` is now `--slice` (the coverage slice); a date partition is `--date`" in said
+    )

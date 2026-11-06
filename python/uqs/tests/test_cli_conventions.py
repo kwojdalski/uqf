@@ -594,7 +594,7 @@ OPTIONS = {
     "--source-version": Meaning(
         "a source release coverage is recorded under", r"^the source_version\b"
     ),
-    "--partition": Meaning("the slice of a dataset", r"^the slice of\b"),
+    "--slice": Meaning("the coverage slice of a dataset", r"^the slice of\b"),
     "--start-with-all": Meaning("whether a `start all` starts the process", r"start all"),
     "--ssh": Meaning("the ssh destination of a target", r"ssh destination"),
     "--table": Meaning("one table to act on", r"this table"),
@@ -946,6 +946,12 @@ WORDS = {
     "runtime": Meaning("a uqs runtime: uqf, torq, peachq, ...", r"\buqf\b"),
     "attach": Meaning("retired: the noun is attachment (--attachment)", None),
     "stack-id": Meaning("retired: the stack's base port is --base-port", None),
+    # #2239: an HDB date partition, as kdb+ says it (`.Q.par`); the coverage
+    # slice a worker fills was `--partition` too, and is `--slice` now
+    "partition": Meaning("an HDB date partition", r"\b(date|day)\b"),
+    "slice": Meaning(
+        "a coverage slice of a dataset, never a date", r"\bslice\b.*\bnot a date\b|--slice\b"
+    ),
 }
 
 #: (command, option or metavar) -> the issue that renames it
@@ -1743,7 +1749,8 @@ def test_every_date_shaped_parameter_uses_the_shared_forms():
 
 @pytest.mark.parametrize("partition", ["2026-01-02", "2026.01.02"])
 def test_data_migrate_takes_both_day_forms(monkeypatch, partition):
-    """`data migrate TABLE PARTITION` refused 2026.01.02, the form on disk (#1884)."""
+    """`data migrate TABLE PARTITION` refused 2026.01.02, the form on disk (#1884);
+    the day is `--date` now (#2239)."""
     from datetime import date
 
     from typer.testing import CliRunner
@@ -1757,8 +1764,20 @@ def test_data_migrate_takes_both_day_forms(monkeypatch, partition):
         raise SystemExit(0)
 
     monkeypatch.setattr(hdb_migrate, "migrate", migrate)
-    CliRunner().invoke(app, ["data", "migrate", "trade", partition])
+    CliRunner().invoke(app, ["data", "migrate", "trade", "--date", partition])
     assert seen == [date(2026, 1, 2)]
+
+
+def test_data_migrate_refuses_a_positional_date_naming_date(monkeypatch):
+    """#2239: a positional PARTITION read as a slice key to anyone who knows
+    `--partition` from `job new`; the day is the shared `--date`."""
+    from uqs.stack import hdb_migrate
+
+    monkeypatch.setattr(hdb_migrate, "migrate", lambda *a, **k: pytest.fail("migrated"))
+    result = CliRunner().invoke(app, ["data", "migrate", "trade", "2026-01-02", "--cast", "px"])
+    assert result.exit_code == 2
+    said = " ".join(re.sub("[│╭╮╰╯─]", " ", result.output).split())
+    assert "is now `data migrate TABLE --date D`" in said
 
 
 def test_every_override_name_is_one_spelling():

@@ -1,7 +1,7 @@
 """Which `uqs job new` options shape which kind of job.
 
 An option that shapes one kind is refused on the others rather than ignored:
-`--partition` on a streaming job would otherwise be dropped in silence, and
+`--slice` on a streaming job would otherwise be dropped in silence, and
 the job scaffolded as though it had been honoured.
 """
 
@@ -56,8 +56,8 @@ _STANDING = ("streaming", "normalizer", "connector", "horizon")
 SHAPES: dict[str, tuple[str, ...]] = {
     "--transform": ("backfill", "streaming"),
     "--transport": _BACKFILL,
-    "--partition": _BACKFILL,
-    "--partition-column": _BACKFILL,
+    "--slice": _BACKFILL,
+    "--slice-column": _BACKFILL,
     "--check": _BACKFILL,
     "--source": _BACKFILL,
     "--width": _BACKFILL,
