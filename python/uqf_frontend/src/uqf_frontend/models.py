@@ -1383,8 +1383,11 @@ class CompareRequest(BaseModel):
     tables: list[str] = Field(min_length=1, max_length=20)
     range_from: AwareInstant
     range_to: AwareInstant
-    filters: list[str] = Field(default_factory=list, max_length=20,
-                               description="COLUMN OP VALUE, e.g. sym=EURUSD")  # fmt: skip
+    filters: list[Filter] = Field(
+        default_factory=list,
+        max_length=20,
+        description="{column, op, value} objects with /catalog's operators, as on /query",
+    )
     limit: int = limit_field(1000, 100_000, "rows read per side, at most")
     source_version: str | None = Field(
         default=None,
@@ -1397,6 +1400,19 @@ class CompareRequest(BaseModel):
         max_length=128,
         description='required with source_version; "" for a dataset with no partition dimension',
     )
+
+    @field_validator("filters", mode="before")
+    @classmethod
+    def _filters_are_objects(cls, value: Any) -> Any:
+        """The text grammar `uqs data diff --filter` takes is compare.py's to
+        render, not the API's to expose (#2223): a string is refused, saying
+        what it is now, rather than a pydantic "not a dictionary"."""
+        if isinstance(value, list) and any(isinstance(f, str) for f in value):
+            raise ValueError(
+                "filters are {column, op, value} objects, as on /query - `sym=EURUSD` is "
+                '{"column": "sym", "op": "eq", "value": "EURUSD"}'
+            )
+        return value
 
     @model_validator(mode="after")
     def _a_coverage_check_names_its_slice(self) -> CompareRequest:
@@ -1467,7 +1483,7 @@ class CompareResponse(BaseModel):
     range_from: AwareInstant
     range_to: AwareInstant
     limit: int
-    filters: list[str]
+    filters: list[Filter] = Field(description="the filters as they were sent")
     source_version: str | None = Field(description="null when no coverage was compared")
     partition: str | None = Field(description="null when no coverage was compared")
     tables: list[CompareTable]

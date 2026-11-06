@@ -36,7 +36,7 @@ BODY = {
     "tables": ["demo_deals"],
     "range_from": "2026-09-11T00:00:00Z",
     "range_to": "2026-09-16T00:00:00Z",
-    "filters": ["sym=EURUSD"],
+    "filters": [{"column": "sym", "op": "eq", "value": "EURUSD"}],
     "limit": 50,
 }
 
@@ -197,6 +197,112 @@ def test_a_usage_refusal_and_a_q_refusal_are_both_422(registry, asked):
     r = _client().post("/compare", json=BODY)
     assert r.status_code == 422 and r.json()["error"] == "CompareRefused"
     assert "expected COLUMN OP VALUE" in r.json()["detail"]
+
+
+# --------------------------------------------------- the filters' shape (#2223)
+
+
+def test_a_filter_is_the_object_query_takes_not_text(registry, asked):
+    """`filters` was COLUMN OP VALUE text here and {column, op, value} on
+    /query: the Desk's filters could not be handed to Compare."""
+    r = _client().post("/compare", json=BODY | {"filters": ["sym=EURUSD"]})
+    assert r.status_code == 422, r.text
+    assert r.json()["error"] == "RequestInvalid"
+    assert (
+        'filters are {column, op, value} objects, as on /query - `sym=EURUSD` is {"column": '
+        '"sym", "op": "eq", "value": "EURUSD"}'
+    ) in r.json()["detail"]
+    assert not asked[0]
+
+
+def test_the_response_echoes_the_filters_as_they_were_sent(registry, asked):
+    doc = _client().post("/compare", json=BODY).json()
+    assert doc["filters"] == BODY["filters"]
+
+
+@pytest.mark.parametrize(
+    ("sent", "text"),
+    [
+        ({"column": "sym", "op": "eq", "value": "EURUSD"}, "sym=EURUSD"),
+        ({"column": "sym", "op": "ne", "value": "EURUSD"}, "sym!=EURUSD"),
+        ({"column": "px", "op": "lt", "value": 1.5}, "px<1.5"),
+        ({"column": "px", "op": "le", "value": 2}, "px<=2"),
+        ({"column": "px", "op": "gt", "value": -1}, "px>-1"),
+        ({"column": "px", "op": "ge", "value": "1.1"}, "px>=1.1"),
+        ({"column": "live", "op": "eq", "value": True}, "live=1"),
+        ({"column": "sym", "op": "in", "value": ["EURUSD", "GBPUSD"]}, "sym=EURUSD,GBPUSD"),
+    ],
+)
+def test_each_operator_reaches_uqs_as_its_text(registry, asked, sent, text):
+    calls, _ = asked
+    r = _client().post("/compare", json=BODY | {"filters": [sent]})
+    assert r.status_code == 200, r.text
+    assert calls[0]["filters"] == [text]
+
+
+@pytest.mark.parametrize(
+    ("sent", "said"),
+    [
+        ({"column": "sym", "op": "eq", "value": "EURUSD,GBPUSD"}, "holds no comma"),
+        ({"column": "sym", "op": "eq", "value": ""}, "is not empty"),
+        ({"column": "sym", "op": "eq", "value": ["EURUSD"]}, "only `in` takes a list"),
+        ({"column": "sym", "op": "in", "value": []}, "`in` takes a non-empty list"),
+        ({"column": "sym", "op": "in", "value": "EURUSD"}, "`in` takes a non-empty list"),
+        ({"column": "sym", "op": "eq", "value": {"a": 1}}, "a string, a number or a boolean"),
+        ({"column": "sym=x", "op": "eq", "value": "y"}, "is not a column name"),
+    ],
+)
+def test_a_filter_that_cannot_be_rendered_is_refused_before_uqs(registry, asked, sent, said):
+    r = _client().post("/compare", json=BODY | {"filters": [sent]})
+    assert r.status_code == 422, r.text
+    assert r.json()["error"] == "ValidationFailed" and said in r.json()["detail"]
+    assert not asked[0]
+
+
+def test_every_query_operator_has_its_text():
+    """compare.TEXT_OPS is the one place /query's words become uqs's text:
+    an operator added to Filter.op without a text would reach uqs as a KeyError."""
+    import typing
+
+    from uqf_frontend import compare, models
+
+    ops = typing.get_args(models.Filter.model_fields["op"].annotation)
+    assert set(compare.TEXT_OPS) == set(ops)
+
+
+@pytest.mark.skipif(q_interpreter() is None, reason="no q interpreter")
+def test_q_reads_each_rendered_filter_back_as_the_operator_sent(tmp_path):
+    """The text is only right if q's own parser (.qetl.compare.parse_filter)
+    reads it back as the operator the API was sent."""
+    from uqf_frontend import compare
+    from uqf_frontend.models import Filter
+
+    sent = {
+        op: Filter.model_validate(
+            {"column": "sym", "op": op, "value": ["A", "B"] if op == "in" else "A"}
+        )
+        for op in compare.TEXT_OPS
+    }
+    texts = dict(zip(sent, compare.filter_texts(list(sent.values())), strict=True))
+    script = tmp_path / "parse.q"
+    script.write_text(
+        "\\l src/init.q\n\\l src/etl/init.q\n"
+        + "".join(
+            f'-1 "{op} ",string (.qetl.compare.parse_filter "{text}")`op;\n'
+            for op, text in texts.items()
+        )
+        + "exit 0\n"
+    )
+    out = subprocess.run(
+        [str(q_interpreter()), str(script), "-q"],
+        cwd=default_paths().repo_root,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        stdin=subprocess.DEVNULL,
+    ).stdout
+    read = dict(line.split() for line in out.splitlines() if line.strip())
+    assert read == {op: op for op in compare.TEXT_OPS}, out
 
 
 # --------------------------------------------- the coverage slice (#2221)

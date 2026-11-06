@@ -114,14 +114,14 @@ export interface ChartResult {
   notes: string[];
 }
 /** POST /compare's body (#2033): two explicit sides, an explicit window,
- *  filters as typed (COLUMN OP VALUE) and the rows read per side. */
+ *  filters as /query takes them (#2223) and the rows read per side. */
 export interface CompareBody {
   left: string;
   right: string;
   tables: string[];
   range_from: string;
   range_to: string;
-  filters: string[];
+  filters: QueryFilter[];
   limit: number;
   source_version?: string | null;
   partition?: string | null;
@@ -177,7 +177,8 @@ export interface CompareResult {
   range_from: string;
   range_to: string;
   limit: number;
-  filters: string[];
+  /** The filters as they were sent. */
+  filters: QueryFilter[];
   /** null when no coverage was compared; partition "" is the no-partition slice. */
   source_version: string | null;
   partition: string | null;

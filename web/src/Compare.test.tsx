@@ -4,9 +4,15 @@
  * back - an equal_in_sample result always with its label, which says whether
  * the sample was cut.
  */
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { expect, it, vi } from "vitest";
-import { CompareView, compareBody } from "./CompareView";
+import { CompareView, compareBody, compareFilter } from "./CompareView";
 import { writeToken } from "./api";
 import type { CompareResult, CompareTable } from "./api";
 
@@ -43,15 +49,24 @@ function result(tables: CompareTable[]): CompareResult {
     range_from: "2026-09-11T00:00:00.000000000+00:00",
     range_to: "2026-09-16T00:00:00.000000000+00:00",
     limit: 50,
-    filters: ["sym=EURUSD"],
+    filters: [{ column: "sym", op: "eq", value: "EURUSD" }],
     source_version: null,
     partition: null,
     tables,
   };
 }
 
+/** /catalog answers the operators the filter rows offer; every other path
+ *  answers `answer`. */
 function serve(answer: unknown) {
-  const fetcher = vi.fn(async () => answer);
+  const fetcher = vi.fn(async (path: string) =>
+    path === "/catalog"
+      ? ok({
+          tables: [],
+          operators: ["eq", "ne", "lt", "le", "gt", "ge", "in"],
+        })
+      : answer,
+  );
   vi.stubGlobal("fetch", fetcher);
   return fetcher;
 }
@@ -67,13 +82,30 @@ const FORM = {
   "From (included)": "2026-09-11T00:00:00Z",
   "To (excluded)": "2026-09-16T00:00:00Z",
   "Rows per side, at most": "50",
-  "Filters, one per line": "sym=EURUSD\n",
 };
+
+/** One filter row, typed into the form as the Desk's are. */
+async function addFilter(column: string, op: string, value: string) {
+  const add = screen.getByRole("button", { name: "Add filter" });
+  await waitFor(() => expect(add).toBeEnabled());
+  fireEvent.click(add);
+  const rows = screen.getAllByLabelText("Column");
+  const index = rows.length - 1;
+  fireEvent.change(rows[index], { target: { value: column } });
+  fireEvent.change(screen.getAllByLabelText("Operator")[index], {
+    target: { value: op },
+  });
+  fireEvent.change(screen.getAllByLabelText(/^Value/)[index], {
+    target: { value },
+  });
+}
 
 it("sends both sides, the window, filters and limit as typed", async () => {
   const fetcher = serve(ok(result([verdict()])));
   render(<CompareView />);
   fill(FORM);
+  await addFilter("sym", "eq", "EURUSD");
+  await addFilter("sym", "in", '["EURUSD", "GBPUSD"]');
   fireEvent.click(screen.getByRole("button", { name: "Compare" }));
   await screen.findByLabelText("Comparison of demo_deals");
   const [path, options] = fetcher.mock.calls.at(-1) as unknown as [
@@ -87,7 +119,10 @@ it("sends both sides, the window, filters and limit as typed", async () => {
     tables: ["demo_deals"],
     range_from: "2026-09-11T00:00:00Z",
     range_to: "2026-09-16T00:00:00Z",
-    filters: ["sym=EURUSD"],
+    filters: [
+      { column: "sym", op: "eq", value: "EURUSD" },
+      { column: "sym", op: "in", value: ["EURUSD", "GBPUSD"] },
+    ],
     limit: 50,
     source_version: null,
     partition: null,
@@ -204,7 +239,7 @@ it("refuses a form that does not state both sides and a zoned window", () => {
     tables: "t",
     from: "2026-09-11T00:00:00Z",
     to: "2026-09-12T00:00:00Z",
-    filters: "",
+    filters: [],
     limit: "10",
     sourceVersion: "",
     partition: "",
@@ -231,7 +266,7 @@ it("says the coverage slice: a blank partition with a source version is the no-p
     tables: "t",
     from: "2026-09-11T00:00:00Z",
     to: "2026-09-12T00:00:00Z",
-    filters: "",
+    filters: [],
     limit: "10",
     sourceVersion: "",
     partition: "",
@@ -266,4 +301,21 @@ it("shows the server's refusal", async () => {
   expect(await screen.findByRole("alert")).toHaveTextContent(
     "expected COLUMN OP VALUE",
   );
+});
+
+it("refuses a filter row it cannot send, before anything is sent", () => {
+  expect(() => compareFilter({ column: " ", op: "eq", raw: "x" })).toThrow(
+    "column",
+  );
+  expect(() => compareFilter({ column: "sym", op: "eq", raw: " " })).toThrow(
+    "a value",
+  );
+  expect(() =>
+    compareFilter({ column: "sym", op: "in", raw: "EURUSD" }),
+  ).toThrow("JSON list");
+  expect(compareFilter({ column: " px ", op: "ge", raw: "1.5" })).toEqual({
+    column: "px",
+    op: "ge",
+    value: "1.5",
+  });
 });

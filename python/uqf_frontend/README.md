@@ -591,26 +591,32 @@ policy.
 `POST /compare` (#2033) is the Compare view's one call. It names both sides
 explicitly - `local` for the stack this frontend serves, or a target in
 `deploy_targets.toml` - with an explicit window (`range_from`/`range_to`, each
-with its zone), filters as typed (`sym=EURUSD`), a row limit per side and,
-optionally, the `source_version` whose coverage to compare. With a
-`source_version`, `partition` is required as it is on `/coverage`, and `""` is
-the explicit answer for a dataset with no partition dimension: one omitted is a
-422, never the no-partition slice by default, and a `partition` without a
-`source_version` is refused too (#185, #2221). A comparison that checked no
-coverage answers `source_version` and `partition` as `null`. `compare.py` checks
-that a target side is registered and hands the rest to `uqs data diff`'s own
-function (`uqs.cli.data_diff.run`): uqs reaches each side's gateway - a target
-through an ssh tunnel - and q decides everything the answer says
-(src/etl/core/compare.q). A target side is held to what `/services/{target}` and
-a target workspace are (#2066): the write token while writes are on (401
-`WriteTokenRequired`), an allowed Host, `services:read` (403, audited like any
-refused read), and remote operations on - each checked before uqs is called. A
-comparison of `local` with itself needs none of these. Each table carries one
-outcome - `endpoint_unavailable`, `missing_table`, `differs`, `not_comparable`,
-`incomplete_coverage` or `equal_in_sample` - and the label q wrote for it, which
-for a sample cut at the row limit says it is not proof the tables are equal.
-Every table is put to the table policy like `/query`'s, and the route is the
-`compare` feature's read.
+with its zone), filters, a row limit per side and, optionally, the
+`source_version` whose coverage to compare. With a `source_version`, `partition`
+is required as it is on `/coverage`, and `""` is the explicit answer for a
+dataset with no partition dimension: one omitted is a 422, never the
+no-partition slice by default, and a `partition` without a `source_version` is
+refused too (#185, #2221). A comparison that checked no coverage answers
+`source_version` and `partition` as `null`. `filters` are the
+`{column, op, value}` objects `/query` takes, with `/catalog`'s operators (`in`
+takes a list): `compare.py` renders each to the `COLUMN OP VALUE` text
+`uqs data diff --filter` takes, and the API does not expose that grammar. A
+string filter is a 422 saying what it is now, and a value that cannot be
+rendered (a comma in a single value, a list for an operator other than `in`) is
+refused before uqs is called (#2223). The response echoes the filters as they
+were sent. `compare.py` checks that a target side is registered and hands the
+rest to `uqs data diff`'s own function (`uqs.cli.data_diff.run`): uqs reaches
+each side's gateway - a target through an ssh tunnel - and q decides everything
+the answer says (src/etl/core/compare.q). A target side is held to what
+`/services/{target}` and a target workspace are (#2066): the write token while
+writes are on (401 `WriteTokenRequired`), an allowed Host, `services:read` (403,
+audited like any refused read), and remote operations on - each checked before
+uqs is called. A comparison of `local` with itself needs none of these. Each
+table carries one outcome - `endpoint_unavailable`, `missing_table`, `differs`,
+`not_comparable`, `incomplete_coverage` or `equal_in_sample` - and the label q
+wrote for it, which for a sample cut at the row limit says it is not proof the
+tables are equal. Every table is put to the table policy like `/query`'s, and
+the route is the `compare` feature's read.
 
 ## Backfill status
 
