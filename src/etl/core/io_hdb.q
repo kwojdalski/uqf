@@ -124,18 +124,20 @@
     / the arguments, not projections of `locked`: a fully-applied projection
     / is a CALL, and would run the write before the lock is taken.
     / finish takes a second, ignored argument so it stays a function of one.
-    `write`write_keyed`flush`finish`recover!(
+    `write`write_keyed`flush`finish`recover`eod_waiting!(
         {[r;p;t;b] .qetl.io.locked[r;.qetl.io.write_hdb;(r;p;t;b)]}[root;partition_col];
         {[r;p;t;b;o] .qetl.io.locked[r;.qetl.io.write_hdb_keyed;(r;p;t;b;o)]}[root;partition_col];
         {[r;u] .qetl.io.locked[r;.qetl.io.flush_hdb;(r;u)]}[root];
         {[r;x] .qetl.io.locked[r;.qetl.io.finish_hdb;(r;x)]}[root];
-        {[r;a;b;c] .qetl.io.locked[r;.qetl.io.recover_hdb;(r;a;b;c)]}[root])}
+        {[r;a;b;c] .qetl.io.locked[r;.qetl.io.recover_hdb;(r;a;b;c)]}[root];
+        / which dates end of day has not yet handed over - the plan reads it (#2186)
+        .qetl.io.eod_waiting[root])}
 
 / Private: append one window into its date partitions.
 / @private
 .qetl.io.write_hdb:{[root;partition_col;target;batch]
     if[0=count batch; :0];
-    data:.Q.en[root;.qetl.io.hdb_rows[partition_col;target;batch]];
+    data:.Q.en[root;.qetl.io.hdb_rows[root;partition_col;target;batch]];
     days:`date$data`time;
     {[root;target;data;days;d]
         part:hsym `$(string .Q.par[root;d;target]),"/";
@@ -167,9 +169,10 @@
     flip c!{[base;x] v:get hsym `$base,"/",string x; $[type[v] within 20 76h; value v; v]}[base] each c}
 
 / Private: the batch with the plant's `time` column, refused when it cannot
-/ be partitioned or would land in the tickerplant's dates.
+/ be partitioned, would land in the tickerplant's dates, or would land in a
+/ date end of day has not yet handed over (io_hdb_eod.q).
 / @private
-.qetl.io.hdb_rows:{[partition_col;target;batch]
+.qetl.io.hdb_rows:{[root;partition_col;target;batch]
     tc:.qetl.plant.time_column;
     if[not any (tc;partition_col) in cols batch;
         '"hdb: ",string[target],"'s batch has neither time nor ",string[partition_col]," to partition by"];
@@ -187,6 +190,8 @@
          " - today and later belong to the tickerplant and end-of-day, not a backfill.",
          " Backfill a range ending on or before ",string[.z.d-1],
          ", or let today's rows arrive through the live path"];
+    / Yesterday is the backfill's only once end of day has moved it (#2186).
+    .qetl.io.require_eod_done[root;target;distinct days];
     data}
 
 / Private: write a batch under opts`on_conflict, one date partition at a time.
@@ -218,7 +223,7 @@
     if[`append=strategy; :.qetl.io.write_hdb[root;partition_col;target;batch]];
     / Shaped even when empty: a `replace of a day the source has emptied
     / still needs the target's columns to resolve against.
-    data:.Q.en[root;.qetl.io.hdb_rows[partition_col;target;batch]];
+    data:.Q.en[root;.qetl.io.hdb_rows[root;partition_col;target;batch]];
     days:`date$data`time;
     dates:distinct days;
     / NEW KEYS ARE APPENDED, not resolved into a rewrite (#1086). Every
@@ -251,7 +256,9 @@
     if[`replace=strategy;
         span:{[f;t] f+til 1+t-f}[`date$opts`range_from;`date$opts[`range_to]-1];
         dates:distinct dates,span where (span<.z.d) and
-            {[root;target;d] not ()~key hsym `$(string .Q.par[root;d;target]),"/"}[root;target] each span];
+            {[root;target;d] not ()~key hsym `$(string .Q.par[root;d;target]),"/"}[root;target] each span;
+        / a visited day is written too, rows or not (#2186)
+        .qetl.io.require_eod_done[root;target;dates]];
     / The window is cleared on opts`time_column - the column it was cut on, as
     / the output holds it (#972) - while the PARTITION is still by `time`. They
     / differ when a transform moves time (markouts: trade_time+horizon), and
@@ -510,7 +517,12 @@
         }[root]'[todo`dt;todo`tbl];
     / Not over a native stack's root (io_hdb_scoped.q): it would fill dates and
     / tables nobody asked about.
-    if[not .qetl.io.on_peachq or .qetl.io.is_scoped root; .Q.chk root];
+    / .Q.chk fills EVERY partition of the root, so it must not run while one
+    / waits for end of day: its empty tables there are what makes movetohdb abort (#2186).
+    if[not .qetl.io.on_peachq or .qetl.io.is_scoped root;
+        $[count w:.qetl.io.eod_waiting[root;.qetl.io.part_dates root];
+            .qetl.log.warn[`hdb;"not filling the HDB's missing tables - a partition is still waiting for end of day";enlist[`waiting]!enlist w];
+            .Q.chk root]];
     `.qetl.io.touched set .qetl.io.touched except ([] hdb_root:count[todo]#root),'todo;
     count todo}
 
