@@ -180,8 +180,8 @@ qetl.io,acknowledged,function,2,state result
 qetl.io,calendar,value,,
 qetl.io,calendar_adopter,function,2,offset_ns adj_ns
 qetl.io,calendar_bound,function,1,opts
-qetl.io,days_of,function,2,root times
 qetl.io,clip_to_eod,function,4,worker cfg range_from range_to
+qetl.io,days_of,function,2,root times
 qetl.io,default,dict,,
 qetl.io,default_strategy,value,,
 qetl.io,discard,dict,,

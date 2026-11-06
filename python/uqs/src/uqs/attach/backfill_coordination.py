@@ -46,7 +46,7 @@ from __future__ import annotations
 
 import dataclasses
 from collections.abc import Mapping
-from datetime import date, datetime, time, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any
 
 from uqs.attach import writer_calendar, writer_clock
@@ -91,9 +91,6 @@ def _blocker(code: str, component: str, message: str, **facts: object) -> Findin
         action=POLICY[code].action,
         facts={k: "" if v is None else str(v) for k, v in facts.items()},
     )
-
-
-UTC_CALENDAR = writer_calendar.Calendar()
 
 
 def _state(proc: Proc, ipc: Ipc, blockers: list[Finding]) -> dict[str, Any] | None:
@@ -212,23 +209,12 @@ def fence(
                 who,
                 f"{who} stamps `time` in a data zone other than UTC "
                 f"({cal.describe if cal else 'unreadable calendar'}): a backfill stamps no zone, "
-                "so "
-                "its rows would sit hours away from the live rows of the same table",
+                "so its rows would sit hours away from the live rows of the same table",
                 datatz_adj=state.get("datatz_adj"),
             )
         )
     if active is not None:
-        # a window is a UTC calendar day; the stack's day starts where its roll puts it (#2193)
-        start = writer_calendar.day_start(state, active, roll) if roll is not None else None
-        if start is None:
-            touched = [d for d in dates if d >= active]
-        else:
-            touched = [
-                d
-                for d in dates
-                if datetime.combine(d + timedelta(days=1), time.min, tzinfo=start.tzinfo) > start
-            ]
-        touched = [d.isoformat() for d in touched]
+        touched = [d.isoformat() for d in writer_calendar.touched_days(state, dates, active, roll)]
         if touched:
             blockers.append(
                 _blocker(
@@ -364,9 +350,7 @@ def examine(
             kind,
             sorted(answered),
             warnings,
-            calendar=(
-                writer_calendar.of(answered[wdbs[0]]) or writer_calendar.Calendar()
-            ).runner_text,
+            calendar=writer_calendar.runner_text_of(answered[wdbs[0]]),
         )
         if actives and nows and rolls and wdbs
         else None

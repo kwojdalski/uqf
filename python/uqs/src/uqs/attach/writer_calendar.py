@@ -12,7 +12,7 @@ fence.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from typing import Any
 
 from uqs.attach import writer_clock
@@ -74,3 +74,25 @@ def day_start(state: dict[str, Any], day: date, roll: datetime) -> datetime | No
     if today is None:
         return None
     return roll - timedelta(days=1 + (today - day).days)
+
+
+def touched_days(
+    state: dict[str, Any], dates: list[date], active: date, roll: datetime | None
+) -> list[date]:
+    """The window days that reach the partition the stack is filling.
+
+    A window is a UTC calendar day; the stack's day starts where its roll puts it.
+    """
+    start = day_start(state, active, roll) if roll is not None else None
+    if start is None:
+        return [d for d in dates if d >= active]
+    return [
+        d
+        for d in dates
+        if datetime.combine(d + timedelta(days=1), time.min, tzinfo=start.tzinfo) > start
+    ]
+
+
+def runner_text_of(state: dict[str, Any]) -> str:
+    """The runner's calendar text for a reported state; UTC when it reports none."""
+    return (of(state) or Calendar()).runner_text
