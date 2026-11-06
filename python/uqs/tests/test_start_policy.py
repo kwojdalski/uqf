@@ -1,7 +1,7 @@
 """Every front end refuses what `uqs start` refuses (#887).
 
 The refusals used to live in the CLI, so `uqs-mcp`'s `uqs_start` and the
-browser's `POST /control/process/start` started what the CLI refused: torq.sh
+browser's `POST /control/lifecycle/start` started what the CLI refused: torq.sh
 exits 0 on a name that is not a process, so a typo "succeeded" and the HTTP
 route answered `ok: true`. Here the real `runtime.start`/`stop`/`restart` are
 called through each front end against this checkout's own process table, with

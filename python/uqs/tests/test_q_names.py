@@ -8,7 +8,7 @@ that exercise it mock the gateway, so they still pass.
 
 That has happened. `control.SET_WORKER_CONFIG` read `.qetl.cfg.overrides`,
 `.qetl.cfg.yaml` and `.qetl.cfg.defaults`; the layers are `override_values`,
-`yaml_values` and `default_values`. `PUT /control/worker-config` could never
+`yaml_values` and `default_values`. `PUT /control/worker/config` could never
 have worked, and every test was green.
 
 So every `.q<ns>.<name>` in the Python sources - code, strings and comments

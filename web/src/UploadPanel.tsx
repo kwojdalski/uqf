@@ -266,6 +266,8 @@ export function UploadPanel({
     let opened: string;
     try {
       const answer = await pushes.open(target, {
+        // start() runs only from the confirmation's Push button (#2244)
+        confirmed: true,
         config_dir: configDir,
         file_count: queued.length,
         total_bytes: queuedBytes,

@@ -167,7 +167,7 @@ function CheckResult({ check }: { check: TunnelCheck }) {
             <tr>
               <th>process</th>
               <th>status</th>
-              <th>identity</th>
+              <th>reported process</th>
               <th>layers</th>
               <th>last success</th>
               <th>detail</th>
@@ -181,7 +181,7 @@ function CheckResult({ check }: { check: TunnelCheck }) {
                   <StateBadge value={endpoint.status} />
                   {endpoint.connected && <StateBadge value="connected" />}
                 </td>
-                <td>{endpoint.identity ?? "-"}</td>
+                <td>{endpoint.reported_process ?? "-"}</td>
                 <td>
                   {Object.entries(endpoint.layers)
                     .map(([layer, state]) => `${layer} ${state}`)

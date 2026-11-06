@@ -80,7 +80,7 @@ async function lifecycleBody(
   let body: unknown;
   await waitFor(() => {
     const call = fetcher.mock.calls.find(([path]) =>
-      path.startsWith(`/control/process/${action}`),
+      path.startsWith(`/control/lifecycle/${action}`),
     );
     expect(call).toBeTruthy();
     body = JSON.parse(call![1].body as string);
@@ -88,8 +88,8 @@ async function lifecycleBody(
   return body;
 }
 
-const command = (action: string, target: string) =>
-  ok({ action, target, exit_code: 0, ok: true, output: "done" });
+const command = (action: string, procs: string) =>
+  ok({ action, procs, exit_code: 0, ok: true, output: "done" });
 
 it("defaults to torq.sh's own “all”, sent as the word and not spelled out", async () => {
   // "all" means startwithall=1 to torq.sh. Sending every name instead would
@@ -115,7 +115,10 @@ it("lists every process the server declares, grouped by type, and sends the pick
   fireEvent.click(screen.getByRole("button", { name: "stop" }));
   // stop takes processes down, so it is confirmed first
   fireEvent.click(screen.getByRole("button", { name: "Confirm stop" }));
-  expect(await lifecycleBody(fetcher, "stop")).toEqual({ procs: "rdb1 rdb2" });
+  expect(await lifecycleBody(fetcher, "stop")).toEqual({
+    procs: "rdb1 rdb2",
+    confirmed: true,
+  });
 });
 
 it("marks a process “all” would not start, and shows liveness when the fleet is known", async () => {
@@ -150,7 +153,7 @@ it("reports a non-zero exit rather than showing success", async () => {
   mockApi(true, () =>
     ok({
       action: "start",
-      target: "all",
+      procs: "all",
       exit_code: 3,
       ok: false,
       output: "could not start rdb1",
@@ -318,11 +321,13 @@ it("sends the typed write token with an action, and keeps it out of reads", asyn
   fireEvent.click(screen.getByRole("button", { name: "start" }));
   await waitFor(() =>
     expect(
-      fetcher.mock.calls.some(([path]) => path.startsWith("/control/process/")),
+      fetcher.mock.calls.some(([path]) =>
+        path.startsWith("/control/lifecycle/"),
+      ),
     ).toBe(true),
   );
   const [, action] = fetcher.mock.calls.find(([path]) =>
-    path.startsWith("/control/process/"),
+    path.startsWith("/control/lifecycle/"),
   )!;
   expect((action.headers as Record<string, string>).Authorization).toBe(
     "Bearer tok-123",
@@ -421,7 +426,10 @@ it("confirms exactly the selection the confirmation opened for (#2009)", async (
     screen.getByRole("alertdialog", { name: "Confirm stop" }),
   ).toHaveTextContent("stop rdb1?");
   fireEvent.click(screen.getByRole("button", { name: "Confirm stop" }));
-  expect(await lifecycleBody(fetcher, "stop")).toEqual({ procs: "rdb1" });
+  expect(await lifecycleBody(fetcher, "stop")).toEqual({
+    procs: "rdb1",
+    confirmed: true,
+  });
 });
 
 it("sends a typed process as one encoded path segment (#2015)", async () => {
@@ -437,7 +445,7 @@ it("sends a typed process as one encoded path segment (#2015)", async () => {
   await waitFor(() =>
     expect(
       fetcher.mock.calls.map(([path]) => path).filter((p) => /config$/.test(p)),
-    ).toEqual(["/control/process/rdb1%3Fx%23y/config"]),
+    ).toEqual(["/control/processes/rdb1%3Fx%23y/config"]),
   );
 });
 

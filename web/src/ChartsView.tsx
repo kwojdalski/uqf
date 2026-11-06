@@ -108,7 +108,7 @@ function ChartPanel({ chart }: { chart: ChartInfo }) {
   function submit(event: FormEvent) {
     event.preventDefault();
     const next = JSON.stringify(body(chart, values));
-    record("submit", "charts.draw", { target: chart.name });
+    record("submit", "charts.draw", { subject: chart.name });
     if (next === sent) drawn.refresh();
     setSent(next);
   }

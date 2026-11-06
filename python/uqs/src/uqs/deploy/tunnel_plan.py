@@ -272,10 +272,21 @@ def read_checks(root: Path) -> dict[str, dict[str, dict[str, Any]]]:
     if not isinstance(found, dict):
         return {}
     return {
-        target: {proc: rec for proc, rec in records.items() if isinstance(rec, dict)}
+        target: {proc: _current(rec) for proc, rec in records.items() if isinstance(rec, dict)}
         for target, records in found.items()
         if isinstance(records, dict)
     }
+
+
+def _current(record: dict[str, Any]) -> dict[str, Any]:
+    """A record as this release writes it. One kept before #2236 named the
+    process the port answered as `identity`; the file is persisted, so it is
+    read under the new name and rewritten under it by the next check."""
+    if "identity" not in record:
+        return record
+    renamed = {k: v for k, v in record.items() if k != "identity"}
+    renamed.setdefault("reported_process", record["identity"])
+    return renamed
 
 
 def record_checks(root: Path, target: str, succeeded: Mapping[str, dict[str, Any]]) -> None:
