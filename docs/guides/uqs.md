@@ -438,13 +438,15 @@ message torn.
 
 ### Cleaning up
 
-`uqs clean` wipes `output/uqs/`. `--match REGEX` keeps only the entries whose
-path *under* `output/uqs/` the regex finds:
+`uqs clean` wipes `output/uqs/`, the HDB included. It lists what would go, with
+sizes, and asks first; `--yes` does not ask, and without a terminal it is
+needed. `--match REGEX` keeps only the entries whose path *under* `output/uqs/`
+the regex finds:
 
 ```
 uqs clean --dry-run                           # what a full wipe would remove
 uqs clean --match '^logs$' --dry-run          # the logs alone, still removing nothing
-uqs clean --match '^(logs|tplogs)$'           # and now actually remove them
+uqs clean --match '^(logs|tplogs)$'           # and now remove them, after asking
 uqs clean --match 'out_rdb1'                  # one process's files, wherever they sit
 uqs job checkpoint remove demo_deals_backfill # one backfill worker's resume point
 ```
@@ -2131,7 +2133,8 @@ run by default and writes only with `--apply`, which shows the plan and asks;
 nothing more than the default: it still parses for one release, hidden, and is
 refused beside `--apply`. `data migrate`'s default, which was to flip to
 writing, stays a dry run. Every deletion that cannot be undone asks first and
-takes `--yes`/`-y`: `deploy prune`, `job checkpoint remove`, `target remove`
+takes `--yes`/`-y`: `clean` (the whole data directory, the HDB with it, unless
+`--match` narrows it), `deploy prune`, `job checkpoint remove`, `target remove`
 (which `target revert` can undo), beside `job remove` and
 `job attachment remove`.
 

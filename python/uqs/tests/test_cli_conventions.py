@@ -1157,6 +1157,24 @@ def test_rule5c_yes_y_exactly_on_what_asks():
     _hold("rule 5c", found, RULE5C_ALLOWLIST)
 
 
+#: Every command whose deletion cannot be undone (docs/guides/uqs.md's rule):
+#: each asks first and takes --yes/-y. `clean`, which removes the HDB with the
+#: rest of the data directory, asked nothing (#2233).
+IRREVERSIBLE = {
+    "clean", "deploy prune", "job checkpoint remove", "target remove", "job remove",
+    "job attachment remove",
+}  # fmt: skip
+
+
+def test_rule5c_every_irreversible_deletion_asks():
+    missing = {p for p in IRREVERSIBLE if p not in ASKS or not _flag(LEAVES[p], "--yes", "-y")}
+    assert not missing, sorted(missing)
+    guide = (Path(__file__).resolve().parents[3] / "docs/guides/uqs.md").read_text()
+    rule = " ".join(guide[guide.index("Every deletion that cannot be undone") :].split()[:60])
+    unnamed = {p for p in IRREVERSIBLE if f"`{p}`" not in rule.replace("`uqs ", "`")}
+    assert not unnamed, f"the guide's rule does not name {sorted(unnamed)}"
+
+
 def test_rule5c_the_commands_that_ask_are_the_known_ones():
     """Every question is asked through safety.ask, confirm or choose (#1885):
     one default (No), one refusal without a terminal, one exit code for a no.
