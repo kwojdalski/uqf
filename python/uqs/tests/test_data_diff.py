@@ -294,7 +294,7 @@ def test_a_target_that_cannot_be_reached_is_an_unavailable_side_without_the_pass
     monkeypatch.setattr(diff_cli.control, "remote_for", lambda name, root: None)
 
     @contextmanager
-    def refused(*args):
+    def refused(*args, **_):
         raise UqsError("ssh: connect to host prod: password sekret rejected")
         yield
 
@@ -308,8 +308,8 @@ def test_a_reached_target_is_its_tunnels_local_end(monkeypatch):
     monkeypatch.setattr(diff_cli.control, "remote_for", lambda name, root: None)
 
     @contextmanager
-    def tunnelled(name, proc, port, base_port, user, passwd):
-        assert (name, proc) == ("prod", "gateway1")
+    def tunnelled(name, proc, port, base_port, user, passwd, *, change):
+        assert (name, proc, change) == ("prod", "gateway1", None)  # a read (#2179)
         yield diff_cli.via_target.Via(name, "prod.example", proc, 17007, 61234, passwd)
 
     monkeypatch.setattr(diff_cli.via_target, "connect", tunnelled)

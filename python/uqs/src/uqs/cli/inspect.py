@@ -119,7 +119,13 @@ def schema(
             if tunnel is not None:
                 via = scope.enter_context(
                     via_target.connect(
-                        tunnel, proc if port is None else None, port, base_port, user, passwd
+                        tunnel,
+                        proc if port is None else None,
+                        port,
+                        base_port,
+                        user,
+                        passwd,
+                        change=None,  # schema_view's own reads (#2179)
                     )  # fmt: skip
                 )
                 host, target = via_target.LOOPBACK, via.port
