@@ -123,6 +123,13 @@ CASES = {
         {"proctype": "compression"},
         "compress1 (compression) works on HDB partitions in place",
     ),
+    "native-calendar": (
+        _state(datatz_adj=str(5 * 3600 * 10**9)),
+        None,
+        "wdb1",
+        {"datatz_adj": "18000000000000"},
+        "wdb1 stamps `time` in a data zone other than UTC",
+    ),
     "active-date-unknown": (
         _state(partition=""),
         None,
@@ -287,6 +294,7 @@ def test_a_healthy_stack_is_admitted_with_the_same_coordination(world):
         "next_roll",
         "eod_guard_minutes",
         "writers",
+        "calendar",
         "warnings",
         # #1828: whether the end-of-day fence was waived, and the findings a waiver lifted
         "eod_fence_bypassed",

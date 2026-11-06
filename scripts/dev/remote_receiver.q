@@ -46,6 +46,7 @@ if[not all `contract`attachment in key opts:.Q.opt .z.x;
 .qetl.load.only:`symbol$()
 \l src/etl/init.q
 \l scripts/dev/attached_readers.q
+\l scripts/dev/attached_calendar.q
 
 \d .
 
@@ -88,7 +89,7 @@ if[not system"p"; -1 "remote_receiver: start it with -p PORT - the extractor con
 contract:@[.qetl.io.remote.contract.read;hsym `$first o`contract;{[e] -1 "remote_receiver: ",e; exit 2}];
 root:hsym `$first o`hdb;
 col:contract`time_column;
-bounds:`max_date`deadline`destination!("D"$first o`max_date;"P"$first o`deadline;`$first o`destid);
+bounds:(`max_date`deadline`destination!("D"$first o`max_date;"P"$first o`deadline;`$first o`destid)),.qetl.io.calendar_bound o;
 if[any null bounds`max_date`deadline; -1 "remote_receiver: bad -max_date or -deadline"; exit 2];
 mgr:.[.qetl.io.hdb_scoped;(root;col;bounds);{[e] -1 "remote_receiver: ",e; exit 2}];
 .qdev.attached.readers_named:.qdev.attached.readers o;

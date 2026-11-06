@@ -119,8 +119,10 @@
 .qetl.io.eod_waiting_for:{[cfg;range_from;range_to]
     m:.qetl.io.for_cfg cfg;
     if[not `eod_waiting in key m; :`date$()];
-    d:`date$range_from;
-    m[`eod_waiting] d+til 0|1+(`date$range_to-1)-d}
+    / The manager's own day calendar when it has one (a scoped root's, #2193).
+    f:$[`days_of in key m; m`days_of; {`date$x}];
+    d:f range_from;
+    m[`eod_waiting] d+til 0|1+(f range_to-1)-d}
 
 / Clip a plan's end to the first day end of day has not handed over, as
 / complete_through clips it to what the source can vouch for: the rest stays

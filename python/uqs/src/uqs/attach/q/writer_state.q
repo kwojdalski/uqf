@@ -18,6 +18,11 @@
 / (partitions: an empty list or a "" element) when unknown, and unknown is never read as
 / safe.
 / .
+/ The calendar the stack files its rows by (#2193): rolltimeoffset, the roll zone's adjustment and the
+/ data zone's adjustment, each in nanoseconds, and native_day, .eodtime.getday of this clock - the
+/ date the stack is filling, in ITS calendar. A process without .eodtime answers TorQ's defaults (0:
+/ UTC midnight), so an absent calendar reads as UTC.
+/ .
 / @param req JSON, ignored (kept so every operation takes one string)
 / @return JSON string
 {[req]
@@ -25,6 +30,11 @@
  s:{[v] $[(null v) or 0=count v;"";string v]};
  pt:g[`.proc.proctype;`];
  base:`procname`proctype`now`next_roll!(string g[`.proc.procname;`];string pt;s .z.p;s g[`.eodtime.nextroll;0Np]);
+ cal:`rolltimeoffset`rolltz_adj`datatz_adj`native_day!(
+  string "j"$g[`.eodtime.rolltimeoffset;0D];
+  string "j"$@[{.eodtime.adjtime .z.p};::;{0D}];
+  string "j"$g[`.eodtime.dailyadj;0D];
+  s @[{.eodtime.getday .z.p};::;{0Nd}]);
  ext:()!();
  if[pt~`wdb;
   gp:@[{.wdb.getpartition[]};::;{0Nd}];
@@ -35,4 +45,4 @@
   rp:@[{(),.rdb.getpartition[]};::;{0#0Nd}];
   ext:`hdbdir`savetables`reloadenabled`partitions!(string g[`.rdb.hdbdir;`];g[`.rdb.savetables;1b];g[`.rdb.reloadenabled;0b];
    $[14h=type rp;s each rp;enlist""]) ];
- .j.j base,ext}
+ .j.j base,cal,ext}
