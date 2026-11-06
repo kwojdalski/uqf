@@ -29,6 +29,8 @@
 \d .
 
 / Where unparse is, from the repository root like every other loader here.
+/ `load` below names the same path as a literal: a fixed, space-free path, so
+/ there is nothing to quote (test_etl_shell_quoting).
 .qetl.qsql.unparse_file:`:lib/unparse/unparse.q
 
 / Whether unparse is loaded.
@@ -41,7 +43,7 @@
 / @eg .qetl.qsql.load[]  ->  1b
 .qetl.qsql.load:{[]
     if[not .qetl.qsql.available[];
-        if[not ()~key .qetl.qsql.unparse_file; system "l ",1_string .qetl.qsql.unparse_file]];
+        if[not ()~key .qetl.qsql.unparse_file; system "l lib/unparse/unparse.q"]];
     .qetl.qsql.available[]}
 
 / Private: run `f x` with the console at its widest, and put it back even if
