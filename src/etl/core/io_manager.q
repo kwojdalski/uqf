@@ -179,6 +179,14 @@
          " already there by ",", " sv string kc];
     kept:existing where not (kc#existing) in kc#fresh;
     if[`replace=strategy;
+        / A replace clears a WINDOW, judged by the rows' own time column. With
+        / none to judge by, the only thing left is the key, which reaches rows
+        / outside the window (#2197) - so refuse rather than guess.
+        tcol:$[`time_column in key opts; opts`time_column; `];
+        if[(null tcol) or not tcol in cols existing;
+            '"on_conflict replace: ",string[opts`target]," has no time column to bound the window by (time_column ",
+             $[null tcol; "unset"; string tcol]," is not one of ",(" " sv string cols existing),
+             ") - replace clears a window, never a key across the table"];
         t:kept opts`time_column;
         inside:(t>=opts`range_from) and t<opts`range_to;
         / A partitioned worker clears its own rows only: the window holds its
