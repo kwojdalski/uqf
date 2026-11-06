@@ -132,7 +132,7 @@ def test_every_state_changing_route_is_named_in_server_actions():
 #: route of an area with a stray prefix (`file.upload` beside `files.delete`)
 #: would hide from it.
 _ACTION_AREAS = {
-    "/services/{target}/files/": "files",
+    "/services/{target}/files": "files",
     "/services/{target}/config/": "config",
     "/control/lifecycle/": "process",
     "/control/processes/": "process",
@@ -402,7 +402,7 @@ def test_a_detail_key_outside_the_allowlist_is_dropped_and_counted(tmp_path, key
     assert r.json()["dropped_detail"] == 1
     (row,) = _history(c)
     assert row["detail"] == {"view": "Control"}
-    assert row["dropped"] == 1
+    assert row["dropped_detail"] == 1
     assert "PRIVATE-VALUE" not in _dump(tmp_path / "activity.sqlite3")
 
 
@@ -411,7 +411,7 @@ def test_a_detail_key_outside_the_allowlist_is_dropped_and_counted(tmp_path, key
     [
         ("error", "ValidationFailed: unknown action 'secret'"),  # a message, not a type
         ("sha256", "not-a-hash"),
-        ("size_bytes", -1),
+        ("size", -1),
         ("range_from", "drop table"),
         ("dataset", 'x"; y'),
     ],
@@ -479,14 +479,14 @@ def test_an_upload_records_metadata_through_the_hook_never_contents():
     have no key to be kept under."""
     audit = activity.Audit()
     audit.note(
-        file_name="deals.csv",
-        size_bytes=1234,
+        path="deals.csv",
+        size=1234,
         sha256="a" * 64,
         content=b"secret,row\n",
         file_contents="secret,row",
     )
     kept, dropped = activity.clean_detail(audit.detail)
-    assert kept == {"file_name": "deals.csv", "size_bytes": 1234, "sha256": "a" * 64}
+    assert kept == {"path": "deals.csv", "size": 1234, "sha256": "a" * 64}
     assert dropped == 2
 
 

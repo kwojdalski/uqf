@@ -414,7 +414,7 @@ it("checks paths as the server does", () => {
 
 it("encodes the target, path, overwrite and push in the URL", () => {
   expect(remoteUploadPath("a/b", "shared/config/x?y", true, PUSH)).toBe(
-    `/services/a%2Fb/files/content?path=shared%2Fconfig%2Fx%3Fy&overwrite=true&push_id=${PUSH}`,
+    `/services/a%2Fb/files?path=shared%2Fconfig%2Fx%3Fy&overwrite=true&push_id=${PUSH}`,
   );
 });
 

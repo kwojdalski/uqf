@@ -75,6 +75,7 @@ from uqf_frontend.gateway import TIERS, Gateway, KolaGateway
 from uqf_frontend.instants import AwareInstant
 from uqf_frontend.models import (
     CONFIRMED_LIFECYCLE,
+    PARTITION_IS_SLICE,
     ActivityBatchRequest,
     ActivityBatchResponse,
     ActivityBound,
@@ -350,25 +351,41 @@ ScopeOf = typing.Annotated[workspaces.Scope, Depends(scope_of)]
 _AUDIT_OUTCOME = {"cancelled": "refused", "invalid": "refused"}
 
 
-#: Routes renamed by #2230, as (method, old path, old template, new
-#: template): the old path answers 410 naming the new one. One-way - never a
-#: route that still works - so a client is told, not served twice.
-RENAMED_ROUTES: tuple[tuple[str, re.Pattern[str], str, str], ...] = (
-    ("POST", re.compile(r"/control/process/[^/]+"),
-     "/control/process/{action}", "/control/lifecycle/{action}"),
-    ("PUT", re.compile(r"/control/process/[^/]+/config"),
-     "/control/process/{process}/config", "/control/processes/{process}/config"),
-    ("PUT", re.compile(r"/control/worker-config"),
-     "/control/worker-config", "/control/worker/config"),
+class RenamedRoute(typing.NamedTuple):
+    """A route renamed or moved, whose old path answers 410 naming the new
+    one. One-way - never a route that still works - so a client is told, not
+    served twice. A move can change the method as well as the path (#2248)."""
+
+    method: str
+    old_path: re.Pattern[str]
+    old: str
+    new_method: str
+    new: str
+    issue: int
+
+
+#: Routes renamed by #2230 and moved by #2248.
+RENAMED_ROUTES: tuple[RenamedRoute, ...] = (
+    RenamedRoute("POST", re.compile(r"/control/process/[^/]+"),
+                 "/control/process/{action}", "POST", "/control/lifecycle/{action}", 2230),
+    RenamedRoute("PUT", re.compile(r"/control/process/[^/]+/config"),
+                 "/control/process/{process}/config",
+                 "PUT", "/control/processes/{process}/config", 2230),
+    RenamedRoute("PUT", re.compile(r"/control/worker-config"),
+                 "/control/worker-config", "PUT", "/control/worker/config", 2230),
+    RenamedRoute("POST", re.compile(r"/services/[^/]+/files/delete"),
+                 "/services/{target}/files/delete", "DELETE", "/services/{target}/files", 2248),
+    RenamedRoute("PUT", re.compile(r"/services/[^/]+/files/content"),
+                 "/services/{target}/files/content", "PUT", "/services/{target}/files", 2248),
 )  # fmt: skip
 
 
 def renamed_route(method: str, path: str) -> str | None:
     """Why `method path` is gone and where it went, or None when it never
     was a route (RENAMED_ROUTES)."""
-    for verb, old_path, old, new in RENAMED_ROUTES:
-        if method.upper() == verb and old_path.fullmatch(path):
-            return f"`{verb} {old}` is `{verb} {new}` (#2230)"
+    for r in RENAMED_ROUTES:
+        if method.upper() == r.method and r.old_path.fullmatch(path):
+            return f"`{r.method} {r.old}` is `{r.new_method} {r.new}` (#{r.issue})"
     return None
 
 
@@ -398,6 +415,16 @@ def _renamed_query(**renamed: str) -> Callable[[Request], None]:
                 raise ValidationFailed(f"`{old}` is now `{new}`: send ?{new}=<id> (#2108)")
 
     return refuse
+
+
+def _refuse_partition_query(request: Request) -> None:
+    """`?partition=` named the coverage slice: it is `?slice=` now (#2261),
+    refused before the route's own parameters, so the old name is named even
+    though `slice` is required."""
+    if "partition" in request.query_params:
+        raise RequestValidationError(
+            [{"loc": ("query", "partition"), "msg": PARTITION_IS_SLICE, "type": "value_error"}]
+        )
 
 
 def _file_outcome(entry: dict[str, Any]) -> str:
@@ -712,7 +739,8 @@ def create_app(
     async def _handle_http(request: Request, exc: StarletteHTTPException) -> JSONResponse:
         """Starlette's own refusals - 404 for no such route, 405 for a method
         the route does not take - named by their status (`NotFound`,
-        `MethodNotAllowed`), keeping the headers they carry (405's `Allow`)."""
+        `MethodNotAllowed`), keeping the headers they carry (405's `Allow`).
+        A route that was renamed or moved is 410 `Gone`, naming where it went."""
         if exc.status_code in (404, 405) and (
             moved := renamed_route(request.method, write_guard.route_path(request.scope))
         ):
@@ -1107,7 +1135,7 @@ def create_app(
                             runner=request.app.state.remote_runner)  # fmt: skip
         return TunnelCheckResponse(**doc)
 
-    @app.post("/services/{target}/files/delete", response_model=RemoteDeleteResponse)
+    @app.delete("/services/{target}/files", response_model=RemoteDeleteResponse)
     def delete_remote_files(
         request: Request, target: str, req: RemoteDeleteRequest
     ) -> RemoteDeleteResponse:
@@ -1115,7 +1143,7 @@ def create_app(
             raise WritesDisabled("remote deletion requires remote operations to be enabled")
         audit = activity.audit_of(request)
         audit.set_target(target)
-        audit.note(item_count=len(req.paths))
+        audit.note(file_count=len(req.paths))
         answer = remote_files.delete(
             settings,
             target,
@@ -1133,7 +1161,7 @@ def create_app(
         return RemoteDeleteResponse(target=target, dest=answer["dest"], results=answer["results"])
 
     @app.put(
-        "/services/{target}/files/content",
+        "/services/{target}/files",
         response_model=RemoteUploadResponse,
         dependencies=[Depends(_renamed_query(push="push_id"))],
     )
@@ -1179,8 +1207,8 @@ def create_app(
                 raise remote_files.UploadTooLarge(too_large)
         data = bytes(body)
         audit.note(
-            file_name=path,
-            size_bytes=len(data),
+            path=path,
+            size=len(data),
             sha256=hashlib.sha256(data).hexdigest(),
             mode="overwrite" if overwrite else "create",
         )
@@ -1219,23 +1247,33 @@ def create_app(
             previous_sha256=answer["previous_sha256"],
         )
 
-    @app.get("/coverage", response_model=CoverageResponse)
+    @app.get(
+        "/coverage",
+        response_model=CoverageResponse,
+        dependencies=[Depends(_refuse_partition_query)],
+    )
     def get_coverage(
         request: Request,
         scope: ScopeOf,
         dataset: str,
-        partition: str,
+        slice_: Annotated[
+            str,
+            Query(
+                alias="slice",
+                description='the coverage slice to read; "" for a dataset with no slice dimension',
+            ),
+        ],
         source_version: str,
         range_from: AwareInstant | None = None,
         range_to: AwareInstant | None = None,
     ) -> CoverageResponse:
-        """Composed coverage for one dataset, partition and source release,
-        plus the gaps in a requested range if one is given.
+        """Composed coverage for one dataset, coverage slice and source
+        release, plus the gaps in a requested range if one is given.
 
-        `partition` has no default on purpose. FastAPI makes a parameter with
+        `slice` has no default on purpose. FastAPI makes a parameter with
         no default REQUIRED, so omitting it is a 422 naming the field rather
-        than a plausible answer computed across every partition (#185). Pass
-        `""` for a dataset with no partition dimension.
+        than a plausible answer computed across every slice (#185). Pass
+        `""` for a dataset with no slice dimension.
 
         The range is both bounds or neither (#2222), as on every route that
         names a coverage window: one bound alone was parsed and then dropped,
@@ -1245,7 +1283,7 @@ def create_app(
         # The dataset as the table: a policy refusing a table must refuse its
         # coverage too, or /coverage reads round what /query refuses.
         run_policy(request, table=dataset)
-        return _coverage(scope.gateway, dataset, partition, source_version, range_from, range_to)
+        return _coverage(scope.gateway, dataset, slice_, source_version, range_from, range_to)
 
     @app.post("/query", response_model=QueryResponse)
     def run_query(req: QueryRequest, request: Request, scope: ScopeOf) -> QueryResponse:
@@ -1401,8 +1439,8 @@ def create_app(
         here, each audited."""
         audit = activity.audit_of(request)
         audit.set_target(target)
-        audit.note(config_dir=req.config_dir, item_count=req.file_count,
-                   size_bytes=req.total_bytes)  # fmt: skip
+        audit.note(config_dir=req.config_dir, file_count=req.file_count,
+                   total_bytes=req.total_bytes)  # fmt: skip
         remote = _remote(target)
         audit.begin()
         answer = remote_files.open_push(
@@ -1446,8 +1484,8 @@ def create_app(
             audit.item(item["path"], outcome)
         published = [e for e in manifest["files"] if e["state"] != "failed"]
         audit.note(
-            config_dir=manifest["config_dir"], item_count=len(outcomes),
-            size_bytes=sum(e["size"] or 0 for e in published),
+            config_dir=manifest["config_dir"], file_count=len(outcomes),
+            total_bytes=sum(e["size"] or 0 for e in published),
         )  # fmt: skip
         audit.settle(
             "succeeded" if outcomes and all(o == "succeeded" for o in outcomes)
@@ -1535,7 +1573,7 @@ def create_app(
             raise
         for item in answer["results"]:
             audit.item(item["path"], item["outcome"])
-        audit.note(push_id=answer["push_id"], item_count=len(answer["results"]),
+        audit.note(push_id=answer["push_id"], file_count=len(answer["results"]),
                    pruned_count=len(answer["pruned"]))  # fmt: skip
         audit.settle(
             "succeeded" if all(i["outcome"] == "succeeded" for i in answer["results"])
@@ -1665,7 +1703,7 @@ def create_app(
                 "again in a few seconds"
             )
         claimed = audit_user(request)
-        dropped = sum(activity.clean_detail(event.detail)[1] for event in batch.events)
+        dropped_detail = sum(activity.clean_detail(event.detail)[1] for event in batch.events)
         stored, not_stored = history.add_many(
             {
                 "source": "browser",
@@ -1685,12 +1723,12 @@ def create_app(
             }
             for event in batch.events
         )
-        for lost in batch.dropped:
+        for lost in batch.drops:
             history.note_dropped(lost.level, lost.reason, lost.count)
         return ActivityBatchResponse(
             stored=stored,
             not_stored=not_stored,
-            dropped_detail=dropped,
+            dropped_detail=dropped_detail,
             persistent=history.persistence.persistent,
         )
 
@@ -1743,7 +1781,7 @@ def create_app(
                 last_error=state.last_error,
                 last_failure_at=state.last_failure_at,
             ),
-            default_level=typing.cast(Any, live().activity_level),
+            activity_level=typing.cast(Any, live().activity_level),
             bounds=[
                 ActivityBound(
                     level=typing.cast(Any, lvl),
@@ -1782,7 +1820,7 @@ def create_app(
             format,
             exported_at=now,
             filters=q.described(),
-            dropped=history.drops(),
+            drops=history.drops(),
         )
         name = f"uqf-activity-{now:%Y%m%dT%H%M%SZ}.{activity_log.EXTENSIONS[format]}"
         return Response(
@@ -1953,7 +1991,7 @@ def _refuse_a_lone_bound(range_from: object, range_to: object) -> None:
 def _coverage(
     gateway: Gateway,
     dataset: str,
-    partition: str,
+    slice_: str,
     source_version: str,
     range_from: str | None,
     range_to: str | None,
@@ -1970,7 +2008,9 @@ def _coverage(
     # nothing a backfill had recorded. Composed and gapped by .qetl.coverage
     # there too, not here: the rule a backfill trusts when it skips a covered
     # window has one implementation, and this reports what it says.
-    raw = gateway.call(claims, dataset, partition, source_version, as_of)
+    # The slice is the ledger's `partition` argument: the q column keeps its
+    # name on disk, and the API's `slice` is mapped onto it here (#2261).
+    raw = gateway.call(claims, dataset, slice_, source_version, as_of)
     covered = _rows(gateway.call(queries.COMPOSE, raw))
 
     requested = None
@@ -2006,7 +2046,7 @@ def _enforce_coverage(gateway: Gateway, req: CoverageRequirement) -> None:
     say *which* days are missing, or narrow its range to what exists.
     """
     result = _coverage(
-        gateway, req.dataset, req.partition, req.source_version, req.range_from, req.range_to
+        gateway, req.dataset, req.slice, req.source_version, req.range_from, req.range_to
     )
     if not result.complete:
         gaps = ", ".join(f"[{g.range_from}, {g.range_to})" for g in result.gaps)
@@ -2020,7 +2060,7 @@ def _enforce_coverage(gateway: Gateway, req: CoverageRequirement) -> None:
     ready = _coverage(
         gateway,
         req.dataset,
-        req.partition,
+        req.slice,
         req.source_version,
         req.range_from,
         req.range_to,

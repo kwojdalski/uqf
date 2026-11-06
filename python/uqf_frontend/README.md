@@ -158,8 +158,12 @@ fields of its `deploy-report.json`, come back as `release`. A listing returns at
 most `limit` entries (500 by default, 5000 at most) and says when it was
 truncated; the call is held to 20 s.
 
-`POST /services/{target}/files/delete` removes named regular files and empty
-directories, never following a link or recursing (#1953). A deletion changes the
+`DELETE /services/{target}/files`, with the body
+`{"paths": [...], "confirmed": true}`, removes named regular files and empty
+directories, never following a link or recursing (#1953). A remote file is one
+resource whose method is the operation (#2248): `GET` lists, `PUT` writes and
+`DELETE` removes. The old `POST .../files/delete` and `PUT .../files/content`
+answer 410 `Gone` naming the route that replaced them. A deletion changes the
 server, so once ssh has started, a timeout, ssh exiting 255 (it may have dropped
 midway), a crashed helper or an answer that cannot be read is 504
 `DeleteOutcomeUncertain` with `transient: false`: some paths may be gone, and
@@ -189,14 +193,13 @@ the same connection details for whichever target you choose.
 
 ### Uploading to a target's shared/config --- one file per request
 
-`PUT /services/{target}/files/content?path=&overwrite=false&push_id=` writes the
-request body to `path` below the target's `shared/config/` - the
-operator-supplied files every release links in - and nowhere else (#1951). It is
-gated like browsing: writes on, the token, an allowed Host, a registered target.
-The browser's file browser shows an upload queue in `shared/config/` and below
-it. You can choose files or a folder, or drag them in. Nested paths are kept.
-Nothing is sent until you confirm the destination. Each file has its own
-progress and its own outcome.
+`PUT /services/{target}/files?path=&overwrite=false&push_id=` writes the request
+body to `path` below the target's `shared/config/` - the operator-supplied files
+every release links in - and nowhere else (#1951). It is gated like browsing:
+writes on, the token, an allowed Host, a registered target. The browser's file
+browser shows an upload queue in `shared/config/` and below it. You can choose
+files or a folder, or drag them in. Nested paths are kept. Nothing is sent until
+you confirm the destination. Each file has its own progress and its own outcome.
 
 - **Limits.** 16 MiB a file, checked in the browser, again by the API before ssh
   (`Content-Length`, then while the body is read: 413), and again on the server.
@@ -424,7 +427,7 @@ and *names the missing ranges* when the requested window is not fully published:
 
 ```json
 {"table": "trades", "filters": [],
- "require_coverage": {"dataset": "trades", "source_version": "v1",
+ "require_coverage": {"dataset": "trades", "slice": "", "source_version": "v1",
                       "range_from": "2026-09-13T00:00:00Z",
                       "range_to":   "2026-09-16T00:00:00Z"}}
 ```
@@ -443,6 +446,16 @@ written.
 filter on it --- coverage under one source release says nothing about another.
 The filter is applied inside the q program rather than afterwards in Python, so
 a caller cannot omit it.
+
+`slice` is mandatory for the same reason, one dimension further out (#185): the
+slice of the dataset the coverage is recorded under, such as a symbol a worker
+fills, with `""` for a dataset with no slice dimension. It is `slice` on
+`GET /coverage`, `require_coverage` and `/compare`, as `--slice` is on
+`uqs data diff` (#2239); "partition" in this API means only a date partition of
+the HDB, and a request still sending `partition` is a 422 naming `slice`
+(#2261). The ledger itself still calls the column `partition`, as a worker's
+declaration does: the API maps `slice` onto it at the q boundary rather than
+rewriting the ledger file.
 
 A requested range on `GET /coverage` is both bounds or neither, as everywhere a
 coverage window is named: `range_from` alone, or `range_to` alone, is a 422
@@ -606,31 +619,31 @@ policy.
 explicitly - `local` for the stack this frontend serves, or a target in
 `deploy_targets.toml` - with an explicit window (`range_from`/`range_to`, each
 with its zone), filters, a row limit per side and, optionally, the
-`source_version` whose coverage to compare. With a `source_version`, `partition`
-is required as it is on `/coverage`, and `""` is the explicit answer for a
-dataset with no partition dimension: one omitted is a 422, never the
-no-partition slice by default, and a `partition` without a `source_version` is
-refused too (#185, #2221). A comparison that checked no coverage answers
-`source_version` and `partition` as `null`. `filters` are the
-`{column, op, value}` objects `/query` takes, with `/catalog`'s operators (`in`
-takes a list): `compare.py` renders each to the `COLUMN OP VALUE` text
-`uqs data diff --filter` takes, and the API does not expose that grammar. A
-string filter is a 422 saying what it is now, and a value that cannot be
-rendered (a comma in a single value, a list for an operator other than `in`) is
-refused before uqs is called (#2223). The response echoes the filters as they
-were sent. `compare.py` checks that a target side is registered and hands the
-rest to `uqs data diff`'s own function (`uqs.cli.data_diff.run`): uqs reaches
-each side's gateway - a target through an ssh tunnel - and q decides everything
-the answer says (src/etl/core/compare.q). A target side is held to what
-`/services/{target}` and a target workspace are (#2066): the write token while
-writes are on (401 `WriteTokenRequired`), an allowed Host, `services:read` (403,
-audited like any refused read), and remote operations on - each checked before
-uqs is called. A comparison of `local` with itself needs none of these. Each
-table carries one outcome - `endpoint_unavailable`, `missing_table`, `differs`,
-`not_comparable`, `incomplete_coverage` or `equal_in_sample` - and the label q
-wrote for it, which for a sample cut at the row limit says it is not proof the
-tables are equal. Every table is put to the table policy like `/query`'s, and
-the route is the `compare` feature's read.
+`source_version` whose coverage to compare. With a `source_version`, `slice` is
+required as it is on `/coverage`, and `""` is the explicit answer for a dataset
+with no slice dimension: one omitted is a 422, never the no-slice-dimension
+slice by default, and a `slice` without a `source_version` is refused too (#185,
+#2221). A comparison that checked no coverage answers `source_version` and
+`slice` as `null`. `filters` are the `{column, op, value}` objects `/query`
+takes, with `/catalog`'s operators (`in` takes a list): `compare.py` renders
+each to the `COLUMN OP VALUE` text `uqs data diff --filter` takes, and the API
+does not expose that grammar. A string filter is a 422 saying what it is now,
+and a value that cannot be rendered (a comma in a single value, a list for an
+operator other than `in`) is refused before uqs is called (#2223). The response
+echoes the filters as they were sent. `compare.py` checks that a target side is
+registered and hands the rest to `uqs data diff`'s own function
+(`uqs.cli.data_diff.run`): uqs reaches each side's gateway - a target through an
+ssh tunnel - and q decides everything the answer says (src/etl/core/compare.q).
+A target side is held to what `/services/{target}` and a target workspace are
+(#2066): the write token while writes are on (401 `WriteTokenRequired`), an
+allowed Host, `services:read` (403, audited like any refused read), and remote
+operations on - each checked before uqs is called. A comparison of `local` with
+itself needs none of these. Each table carries one outcome -
+`endpoint_unavailable`, `missing_table`, `differs`, `not_comparable`,
+`incomplete_coverage` or `equal_in_sample` - and the label q wrote for it, which
+for a sample cut at the row limit says it is not proof the tables are equal.
+Every table is put to the table policy like `/query`'s, and the route is the
+`compare` feature's read.
 
 ## Backfill status
 
@@ -697,7 +710,7 @@ string).
   |                         |                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
   | ---                     | ---                                                                                                                                                                                                                                                                                                                                                                                                                                              |
   | `GET /activity`         | The history, newest first. Filters: `since`, `until` (timezone required), `session_id`, `request_id`, `action` (exact, or a dotted prefix: `process` matches `process.stop`), `target` (a deployment target, or `local`), `subject` (what was acted on there), `outcome`, `source`, `limit` (at most 1000). Says whether it is persistent and whether writes have failed                                                                         |
-  | `POST /activity/events` | Up to 100 browser events, in one transaction, and the count of any the browser did not send (`dropped`). A repeated `event_id` is ignored, so a retried batch is stored once. A body of at most 1 MiB (413). It needs no token; without one, events are rate-limited across all callers (600 at once, 20 a second after; 429, transient). A `ts` UTC cannot hold is a 422                                                                        |
+  | `POST /activity/events` | Up to 100 browser events, in one transaction, and the count of any the browser did not send (`drops`). A repeated `event_id` is ignored, so a retried batch is stored once. A body of at most 1 MiB (413). It needs no token; without one, events are rate-limited across all callers (600 at once, 20 a second after; 429, transient). A `ts` UTC cannot hold is a 422                                                                          |
   | `GET /activity/export`  | The history as a file, oldest first, under the same filters plus `format`: `jsonl`, `csv`, or `text` - a timeline `UTC time · session · level · action · target · subject · outcome · duration`, each browser action grouped under the server request it caused (its request id). At most 100000 events                                                                                                                                          |
 
 `GET /activity` also takes `level`, the most detailed level shown:
@@ -792,7 +805,7 @@ Its handler then reports what the status code cannot:
 ```python
 audit = activity.audit_of(request)
 audit.set_subject(name)  # written at once: survives a crash mid-action
-audit.note(file_name=name, size_bytes=size, sha256=digest)  # never the bytes
+audit.note(path=path, size=size, sha256=digest)  # never the bytes
 audit.begin()  # past here, a failure is `unknown`
 ...
 audit.item(name, "succeeded")  # one per file, for a batch

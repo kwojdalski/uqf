@@ -112,15 +112,18 @@ def run(settings: Settings, req: Any) -> dict[str, Any]:
         doc = data_diff.run(
             control._paths(settings), req.left, req.right, list(req.tables), window,
             filters=filters, limit=req.limit, source_version=req.source_version,
-            partition=req.partition, **login,
+            partition=req.slice, **login,
         )  # fmt: skip
     except UqsUsageError as exc:
         raise ValidationFailed(str(exc)) from None
     except UqsError as exc:
         raise CompareRefused(str(exc)) from None
+    # The ledger's q column is `partition`; the API's word for it is `slice`,
+    # mapped here at the boundary rather than renamed on disk (#2261).
+    doc = {k: v for k, v in doc.items() if k != "partition"} | {"slice": doc.get("partition")}
     # q answers a slice it did not check as "" (the null symbol); the API says
-    # null, as it was asked, so "" means only the no-partition slice (#2221).
+    # null, as it was asked, so "" means only the no-slice-dimension slice (#2221).
     if req.source_version is None:
-        doc = {**doc, "source_version": None, "partition": None}
+        doc = {**doc, "source_version": None, "slice": None}
     # The filters as they were sent, not the text they were rendered to.
     return {**doc, "filters": [f.model_dump() for f in req.filters]}

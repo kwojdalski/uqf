@@ -60,6 +60,15 @@ def migrate(
             "(the target type is always the declared one, so it takes no :TYPE); repeatable",
         ),
     ] = None,
+    reset_empty: Annotated[
+        bool,
+        typer.Option(
+            "--reset-empty",
+            help="Rebuild a table whose every stored column is empty (obsolete columns "
+            "included) from its current declaration; refuses a populated, unreadable or "
+            "inconsistent table, and cannot be combined with --rename or --cast",
+        ),
+    ] = False,
     apply: safety.ApplyOpt = False,
     yes: safety.ApplyYesOpt = False,
     as_json: MigrateJson = False,
@@ -78,6 +87,10 @@ def migrate(
     nothing - the default, and it stays so. --apply shows the plan,
     asks, then writes; --yes does not ask. The old table is retained at the
     path reported after a successful atomic exchange.
+
+    With --reset-empty the table is rebuilt from its current declaration
+    instead, but only if q finds every stored column empty (checked again under
+    the writer lock before staging).
     """
     try:
         safety.dry_unless_applied(dry_run, apply)
@@ -99,7 +112,14 @@ def migrate(
         casts = set(cast or [])
         if not apply or not yes:  # the plan: shown, and asked about before --apply writes
             report = hdb_migrate.migrate(
-                _paths(), table, partition, renames, casts, apply=False, hdb=root
+                _paths(),
+                table,
+                partition,
+                renames,
+                casts,
+                apply=False,
+                hdb=root,
+                reset_empty=reset_empty,
             )
         if apply:
             safety.json_needs_yes(as_json, yes, "migrate")
@@ -110,7 +130,14 @@ def migrate(
             )
         if apply:
             report = hdb_migrate.migrate(
-                _paths(), table, partition, renames, casts, apply=True, hdb=root
+                _paths(),
+                table,
+                partition,
+                renames,
+                casts,
+                apply=True,
+                hdb=root,
+                reset_empty=reset_empty,
             )
     except UqsError as exc:
         _die(exc)

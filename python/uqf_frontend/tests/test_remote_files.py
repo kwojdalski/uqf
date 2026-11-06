@@ -412,16 +412,19 @@ def test_api_confirmation_and_auth_before_ssh(served):
         {"paths": ["shared/config/sources.csv"]},
         {"paths": ["shared/config/sources.csv"], "confirmed": False},
     ):
-        assert _client(runner).post("/services/box/files/delete", json=payload).status_code == 422
+        assert (
+            _client(runner).request("DELETE", "/services/box/files", json=payload).status_code
+            == 422
+        )
     assert (
         _client(runner, token=None)
-        .post("/services/box/files/delete", json={"paths": ["x"], "confirmed": True})
+        .request("DELETE", "/services/box/files", json={"paths": ["x"], "confirmed": True})
         .status_code
         == 401
     )
     assert (
         _client(runner, writes=False)
-        .post("/services/box/files/delete", json={"paths": ["x"], "confirmed": True})
+        .request("DELETE", "/services/box/files", json={"paths": ["x"], "confirmed": True})
         .status_code
         == 403
     )
@@ -429,8 +432,9 @@ def test_api_confirmation_and_auth_before_ssh(served):
 
 
 def test_api_loopback_reports_each_result(served):
-    response = _client(Loopback()).post(
-        "/services/box/files/delete",
+    response = _client(Loopback()).request(
+        "DELETE",
+        "/services/box/files",
         json={
             "paths": ["shared/config/sources.csv", "shared/config", "missing"],
             "confirmed": True,
@@ -448,8 +452,8 @@ def test_api_loopback_reports_each_result(served):
 @pytest.mark.parametrize("paths", [["../escape"], ["/etc/passwd"], [""], ["x"] * 101])
 def test_deletion_invalid_paths_are_refused_before_ssh(served, paths):
     runner = Recorder()
-    response = _client(runner).post(
-        "/services/box/files/delete", json={"paths": paths, "confirmed": True}
+    response = _client(runner).request(
+        "DELETE", "/services/box/files", json={"paths": paths, "confirmed": True}
     )
     assert response.status_code == 422
     assert runner.calls == []
@@ -457,8 +461,9 @@ def test_deletion_invalid_paths_are_refused_before_ssh(served, paths):
 
 def test_deletion_checks_host_before_ssh(served):
     runner = Recorder()
-    response = _client(runner).post(
-        "/services/box/files/delete",
+    response = _client(runner).request(
+        "DELETE",
+        "/services/box/files",
         json={"paths": ["x"], "confirmed": True},
         headers={"Host": "evil.example"},
     )
@@ -468,8 +473,9 @@ def test_deletion_checks_host_before_ssh(served):
 
 def test_deletion_audit_preserves_partial_results(served):
     client = _client(Loopback())
-    response = client.post(
-        "/services/box/files/delete",
+    response = client.request(
+        "DELETE",
+        "/services/box/files",
         json={"paths": ["shared/config/sources.csv", "missing"], "confirmed": True},
     )
     assert response.status_code == 200
@@ -500,8 +506,9 @@ def test_a_delete_that_may_have_run_is_uncertain_and_never_transient(served, run
     were both wrong (#2023). The outcome is uncertain, the caller is told to
     list before retrying, and nothing marks it safe to retry."""
     client = _client(runner)
-    response = client.post(
-        "/services/box/files/delete",
+    response = client.request(
+        "DELETE",
+        "/services/box/files",
         json={"paths": ["shared/config/sources.csv"], "confirmed": True},
     )
     body = response.json()
@@ -530,8 +537,9 @@ def test_deletion_timeout_is_audited_as_unknown_and_not_retried(served):
         raise subprocess.TimeoutExpired(argv, kwargs["timeout"])
 
     client = _client(timeout)
-    response = client.post(
-        "/services/box/files/delete",
+    response = client.request(
+        "DELETE",
+        "/services/box/files",
         json={"paths": ["shared/config/sources.csv"], "confirmed": True},
     )
     assert response.status_code == 504
