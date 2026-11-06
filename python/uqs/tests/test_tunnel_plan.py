@@ -138,9 +138,19 @@ def test_a_mapping_is_verified_only_by_a_recent_check_of_the_same_ports():
     recent = (now - timedelta(minutes=5)).isoformat()
     old = (now - timedelta(hours=3)).isoformat()
     checks = {
-        "rdb1": {"at": recent, "remote_port": 6002, "local_port": 16002, "identity": "rdb1"},
-        "hdb1": {"at": old, "remote_port": 6003, "local_port": 16003, "identity": "hdb1"},
-        "wdb1": {"at": recent, "remote_port": 6099, "local_port": 16004, "identity": "wdb1"},
+        "rdb1": {
+            "at": recent,
+            "remote_port": 6002,
+            "local_port": 16002,
+            "reported_process": "rdb1",
+        },
+        "hdb1": {"at": old, "remote_port": 6003, "local_port": 16003, "reported_process": "hdb1"},
+        "wdb1": {
+            "at": recent,
+            "remote_port": 6099,
+            "local_port": 16004,
+            "reported_process": "wdb1",
+        },
     }
     doc = tunnel_plan.annotate(p, checks, listening=lambda port: port == 16002, now=now)
     states = {m["process"]: (m["state"], m["listening"]) for m in doc["mappings"]}
@@ -269,10 +279,10 @@ def test_every_endpoint_passing_is_recorded_with_its_identity(root, server):
         ["gateway1", "hdb1", "rdb1", "wdb1"], "ok"
     )
     assert ends["gateway1"]["gateway_servers"] == ["hdb", "rdb"]
-    assert ends["rdb1"]["identity"] == "rdb1"
+    assert ends["rdb1"]["reported_process"] == "rdb1"
     assert set(ends["rdb1"]["layers"].values()) == {"ok"}
     assert ends["rdb1"]["last_success"]["at"] == report["checked_at"]
-    assert tunnel_plan.read_checks(root)["prod"]["rdb1"]["identity"] == "rdb1"
+    assert tunnel_plan.read_checks(root)["prod"]["rdb1"]["reported_process"] == "rdb1"
 
 
 def test_the_check_still_runs_on_an_inspection_target(root, server):
@@ -301,7 +311,7 @@ def test_each_failure_is_told_apart_and_the_healthy_stay_visible(root, server):
     assert ends["wdb1"]["layers"]["destination"] == "ok"
     assert ends["wdb1"]["layers"]["auth"] == "failed"
     assert "answered as 'rdb2', not rdb1" in ends["rdb1"]["detail"]
-    assert ends["rdb1"]["identity"] == "rdb2"
+    assert ends["rdb1"]["reported_process"] == "rdb2"
 
 
 def test_a_gateways_servers_are_read_from_a_polars_series_too():
@@ -440,7 +450,7 @@ def test_the_check_survives_a_malformed_record_beside_its_own(root, server, targ
     tunnel_plan.checks_path(root).write_text(json.dumps({"targets": targets_doc}))
     report = _check(root, server)
     assert report["ok"] is True
-    assert _by_process(report)["rdb1"]["last_success"]["identity"] == "rdb1"
+    assert _by_process(report)["rdb1"]["last_success"]["reported_process"] == "rdb1"
 
 
 def test_check_exits_non_zero_when_an_endpoint_fails(root, monkeypatch):
@@ -533,3 +543,14 @@ def test_the_check_document_round_trips(root, server, monkeypatch):
 def test_an_unknown_target_is_a_refusal_not_a_finding(root, server):
     with pytest.raises(tunnel_plan.UqsError, match="no target or deployed server nosuch - "):
         tunnel_check.run("nosuch", root, runner=server.run)
+
+
+def test_a_check_recorded_before_2236_is_read_as_reported_process(root):
+    """tunnel_checks.json is persisted: a record that named the answering
+    process `identity` reads under the one name the API now uses."""
+    doc = {"prod": {"rdb1": {"at": "2026-01-01T00:00:00+00:00", "identity": "rdb1",
+                             "remote_port": 6002, "local_port": 16002}}}  # fmt: skip
+    tunnel_plan.checks_path(root).write_text(json.dumps({"targets": doc}))
+    (record,) = tunnel_plan.read_checks(root)["prod"].values()
+    assert record["reported_process"] == "rdb1"
+    assert "identity" not in record

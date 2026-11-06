@@ -220,19 +220,31 @@ def changes_the_server(args: Sequence[str]) -> bool:
     return effect_of(p.command) not in _NO_ASK
 
 
-def confirmed_on_server(args: Sequence[str], yes: bool) -> list[str]:
-    """`args` for a confirms-on-server command under --target: --attachment and
-    --hdb refused (each names an HDB, and --target named the release's own),
-    and the global --yes passed on, so one --yes answers the server's question
-    (#1755)."""
+def takes_yes(command: Any) -> bool:
+    """Whether `command` asks before acting, so takes its own --yes."""
+    return any("--yes" in getattr(p, "opts", ()) for p in getattr(command, "params", ()))
+
+
+def for_the_server(args: Sequence[str], yes: bool) -> list[str]:
+    """`args` as `uqs --target` sends them. The global --yes is passed on to
+    every command that takes --yes, so one --yes answers one question about
+    one change wherever it is asked (#1755, #2247): it was passed only to a
+    confirms-on-server command, and `data migrate`, `job remove` and the rest
+    asked again on the server, refusing there without a terminal. And for a
+    confirms-on-server command --attachment and --hdb are refused: each names
+    an HDB, and --target named the release's own."""
     args = list(args)
     p = parse(args)
-    if p is None or p.help or effect_of(p.command) is not Effect.CONFIRMS_ON_SERVER:
+    if p is None or p.help or p.command is None:
         return args
-    if p.given("--attachment") is not None or p.given("--hdb") is not None:
+    if effect_of(p.command) is Effect.CONFIRMS_ON_SERVER and (
+        p.given("--attachment") is not None or p.given("--hdb") is not None
+    ):
         raise UqsUsageError(AMBIGUOUS)
-    if yes and p.given("--apply") and not p.given("--yes"):
-        args.append("--yes")
+    if yes and takes_yes(p.command) and not p.given("--yes"):
+        # before a `--`, after which every word is an argument
+        at = args.index("--") if "--" in args else len(args)
+        args.insert(at, "--yes")
     return args
 
 

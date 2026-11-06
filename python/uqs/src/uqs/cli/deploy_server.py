@@ -226,6 +226,11 @@ def prune_cmd(
             repo_root(), "`uqs deploy prune`",
             name=target, ssh=cfg.ssh, dest=cfg.dest, dry_run=dry_run,
         )  # fmt: skip
+        if not dry_run:
+            try:
+                safety.json_needs_yes(as_json, yes, "remove releases")
+            except UqsError as exc:  # before the server is reached: nothing was removed
+                raise config.DeployError("confirm", str(exc)) from None
         code, result = prune.prune(
             cfg, remote, keep=cfg.keep, dry_run=dry_run, confirm=None if yes else _confirm_prune
         )

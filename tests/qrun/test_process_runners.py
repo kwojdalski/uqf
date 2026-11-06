@@ -8,8 +8,9 @@ them). Each gets a fresh status directory under tmp_path, as each lane did: a
 stale lock left by an earlier run would make the single-instance check pass for
 the wrong reason. KDB-X, as the lanes were only ever run on.
 
-The two that start a second q pick a random port and refuse one that already
-answers, so two xdist workers cannot meet on one.
+The two that start a second q take a port the OS hands out
+(.qt.support.free_port), skipping one that already answers, so neither two
+xdist workers nor a TorQ stack on the same machine can meet them on one.
 """
 
 from __future__ import annotations

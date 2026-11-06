@@ -123,17 +123,17 @@ call goes through `.pm.req`, and a login can run only what its roles grant.
   never asks for more rows than the caller's policy allows, so a browser read is
   truncated to the policy's limit, never refused for size, whatever the
   frontend's `max_rows`. It returns the cap it read under with the rows, so
-  `/query` reports `truncated` for a cut the policy made too (#1255). A hidden
-  table has no policy and is refused. An open read covers the latest window its
-  policy allows; a `time` filter sets the window instead. Every plant table and
-  every dataset a bounded worker writes is listed for getdata
-  (`tableproperties.csv` is generated, one derived row each, from the columns q
-  declares each table is read by - `.qetl.plant.instrument_exceptions` in
-  `src/etl/plant_tables.q` names `order_quality`'s instrument column, `book`),
-  and listing a table grants nothing: the policies decide. A worker dataset that
-  is not a plant table is handed to a runtime only while its HDB's newest
-  partition holds it, because TorQ exits at start when the list names a table
-  the HDB lacks.
+  `/query` reports `truncated`, with `cut_by: "max_rows"`, for a cut the policy
+  made too (#1255, #2220). A hidden table has no policy and is refused. An open
+  read covers the latest window its policy allows; a `time` filter sets the
+  window instead. Every plant table and every dataset a bounded worker writes is
+  listed for getdata (`tableproperties.csv` is generated, one derived row each,
+  from the columns q declares each table is read by -
+  `.qetl.plant.instrument_exceptions` in `src/etl/plant_tables.q` names
+  `order_quality`'s instrument column, `book`), and listing a table grants
+  nothing: the policies decide. A worker dataset that is not a plant table is
+  handed to a runtime only while its HDB's newest partition holds it, because
+  TorQ exits at start when the list names a table the HDB lacks.
 - **Ordinary users.** Each user in
   [`permissions/gateway_users.csv`](../../scripts/torqconfig/permissions/gateway_users.csv)
   gets only the role named there. The roles are defined in

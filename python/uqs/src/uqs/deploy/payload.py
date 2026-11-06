@@ -16,6 +16,7 @@ from packaging.version import Version
 
 from uqs.deploy.artifact import RELEASE_DIR, ReleaseError, Target
 from uqs.logger import get_logger
+from uqs.model.transports import TRANSPORTS_FILE
 
 log = get_logger()
 
@@ -24,6 +25,11 @@ Runner = Callable[..., subprocess.CompletedProcess]
 #: What a release is made of: tracked files under these paths, and nothing
 #: else. The three Python packages are all here because uv's workspace lock
 #: needs every member's pyproject to resolve, though only uqs is installed.
+#: Of docs/, one file: the contract surface's transports.csv, which
+#: uqs.model.transports reads at run time - `uqs config sources`, `stub` and
+#: every backfill through stack/capabilities need it (#2199). It is already
+#: the generated, `derive.py check`ed home of q's transport registry, so the
+#: release ships that file rather than a second generated copy of it.
 ALLOWLIST = (
     "pyproject.toml",
     "uv.lock",
@@ -33,6 +39,7 @@ ALLOWLIST = (
     "python/uqf_frontend",
     "python/uqf_airflow_provider",
     "lib/kx-dbmaint",
+    TRANSPORTS_FILE.as_posix(),
 )
 
 #: The one directory of lib/ a release carries (#1423): KX's dbmaint.q, which

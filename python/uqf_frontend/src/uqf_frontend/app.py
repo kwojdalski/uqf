@@ -11,6 +11,7 @@ import datetime as dt
 import hashlib
 import http
 import math
+import re
 import subprocess
 import time
 import typing
@@ -20,6 +21,7 @@ from contextlib import asynccontextmanager
 from typing import Annotated, Any
 
 import polars as pl
+import pydantic
 from fastapi import Body, Depends, FastAPI, Query, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.exceptions import RequestValidationError
@@ -72,6 +74,7 @@ from uqf_frontend.fleet import Fleet, KolaFleet
 from uqf_frontend.gateway import TIERS, Gateway, KolaGateway
 from uqf_frontend.instants import AwareInstant
 from uqf_frontend.models import (
+    CONFIRMED_LIFECYCLE,
     ActivityBatchRequest,
     ActivityBatchResponse,
     ActivityBound,
@@ -106,6 +109,7 @@ from uqf_frontend.models import (
     ConfigPushSummaryOut,
     ConfigRestoreRequest,
     ConfigRestoreResponse,
+    ConfirmedLifecycleRequest,
     ConnectionsResponse,
     ControlStatusResponse,
     CoverageRequirement,
@@ -172,14 +176,14 @@ def identity_of(request: Request) -> identity.Identity:
 def audit_user(request: Request) -> str | None:
     """The user an activity row names: the verified user when there is one,
     else the x-uqf-user CLAIM as before (authz.IDENTITY_HEADER) - which the
-    row's `identity` detail says it is."""
+    row's `identity_source` detail says it is."""
     who = identity_of(request)
     if who.authenticated:
         return who.user
     return request.headers.get(authz.IDENTITY_HEADER)
 
 
-def identity_kind(request: Request) -> str:
+def identity_source(request: Request) -> str:
     """`verified`, `claimed` or `anonymous` - what `audit_user` is."""
     if identity_of(request).authenticated:
         return "verified"
@@ -210,14 +214,17 @@ def _refuse(
             # can never evict the audit of an authorised action (#2019).
             kind=activity.ATTEMPT_KIND,
             action=activity.REFUSED_ACTION,
-            target=getattr(route, "path", None) or "(unrouted)",
+            target=activity.server_target(
+                getattr(route, "path", None), request.scope.get("path_params", {})
+            ),
+            subject=getattr(route, "path", None) or "(unrouted)",
             outcome="refused",
             session_id=request.headers.get(activity.SESSION_ID_HEADER),
             request_id=request.headers.get(activity.REQUEST_ID_HEADER),
             claimed_user=audit_user(request),
             method=request.method.upper(),
             status_code=403,
-            detail={"permission": permission, "identity": identity_kind(request)},
+            detail={"permission": permission, "identity_source": identity_source(request)},
         )
     raise error(reason)
 
@@ -341,6 +348,42 @@ ScopeOf = typing.Annotated[workspaces.Scope, Depends(scope_of)]
 #: The FileOutcome words ActivityOutcome has no word for, as the audit
 #: records them: a file the browser never sent, or refused itself.
 _AUDIT_OUTCOME = {"cancelled": "refused", "invalid": "refused"}
+
+
+#: Routes renamed by #2230, as (method, old path, old template, new
+#: template): the old path answers 410 naming the new one. One-way - never a
+#: route that still works - so a client is told, not served twice.
+RENAMED_ROUTES: tuple[tuple[str, re.Pattern[str], str, str], ...] = (
+    ("POST", re.compile(r"/control/process/[^/]+"),
+     "/control/process/{action}", "/control/lifecycle/{action}"),
+    ("PUT", re.compile(r"/control/process/[^/]+/config"),
+     "/control/process/{process}/config", "/control/processes/{process}/config"),
+    ("PUT", re.compile(r"/control/worker-config"),
+     "/control/worker-config", "/control/worker/config"),
+)  # fmt: skip
+
+
+def renamed_route(method: str, path: str) -> str | None:
+    """Why `method path` is gone and where it went, or None when it never
+    was a route (RENAMED_ROUTES)."""
+    for verb, old_path, old, new in RENAMED_ROUTES:
+        if method.upper() == verb and old_path.fullmatch(path):
+            return f"`{verb} {old}` is `{verb} {new}` (#2230)"
+    return None
+
+
+def lifecycle_request(action: str, req: LifecycleRequest) -> LifecycleRequest:
+    """The lifecycle body, held to the confirmation rule when its verb takes
+    something down (models.CONFIRMED_LIFECYCLE, #2244): the check is
+    ConfirmedRequest's, refused as any other invalid body is."""
+    if action not in CONFIRMED_LIFECYCLE:
+        return req
+    try:
+        return ConfirmedLifecycleRequest.model_validate(req.model_dump(exclude_unset=True))
+    except pydantic.ValidationError as exc:
+        raise RequestValidationError(
+            [{**e, "loc": ("body", *e["loc"])} for e in exc.errors(include_input=False)]
+        ) from None
 
 
 def _renamed_query(**renamed: str) -> Callable[[Request], None]:
@@ -571,7 +614,8 @@ def create_app(
             source="server",
             kind=activity.SERVER_KIND if authorised else activity.ATTEMPT_KIND,
             action=activity.server_action(request.method, template, params),
-            target=activity.server_target(params),
+            target=activity.server_target(template, params),
+            subject=activity.server_subject(params),
             outcome="pending",
             session_id=request.headers.get(activity.SESSION_ID_HEADER),
             request_id=request_id,
@@ -582,8 +626,8 @@ def create_app(
         audit.store, audit.event_id = history, event_id
         # Whose name claimed_user is: `verified` or `claimed`; absent, the
         # caller was anonymous and named nobody.
-        if (kind := identity_kind(request)) != "anonymous":
-            audit.note(identity=kind)
+        if (source := identity_source(request)) != "anonymous":
+            audit.note(identity_source=source)
         try:
             response = await call_next(request)
         except Exception:
@@ -669,6 +713,10 @@ def create_app(
         """Starlette's own refusals - 404 for no such route, 405 for a method
         the route does not take - named by their status (`NotFound`,
         `MethodNotAllowed`), keeping the headers they carry (405's `Allow`)."""
+        if exc.status_code in (404, 405) and (
+            moved := renamed_route(request.method, write_guard.route_path(request.scope))
+        ):
+            return _error(request, 410, "Gone", moved)
         phrase = http.HTTPStatus(exc.status_code).phrase
         error = "".join(ch for ch in phrase.title() if ch.isalnum())
         return _error(request, exc.status_code, error, str(exc.detail), headers=exc.headers)
@@ -701,7 +749,7 @@ def create_app(
         # show: a caller who may not read it learns neither here.
         sees_targets = ("services", "read") in granted
         return CapabilitiesResponse(
-            identity=who.user,
+            user=who.user,
             authenticated=who.authenticated,
             groups=policies.groups(who),
             capabilities=[
@@ -832,10 +880,13 @@ def create_app(
         `unreachable` is part of the response rather than an error: one process
         being down must not blank the view for the other nine.
         """
-        rows, unreachable = ops.merge_usage(scope.fleet.per_process(ops.USAGE, limit))
+        # One row past the limit from each process: the merged log then holds
+        # more than `limit` rows exactly when the fleet does (#2220).
+        rows, unreachable = ops.merge_usage(scope.fleet.per_process(ops.USAGE, limit + 1))
         return UsageResponse(
             rows=rows[:limit],
             row_count=min(len(rows), limit),
+            truncated=len(rows) > limit,
             unreachable=unreachable,
             processes_configured=len(scope.fleet.processes),
             poll_seconds=ops.POLL_SECONDS["usage"],
@@ -866,6 +917,7 @@ def create_app(
         return UsageResponse(
             rows=rows[:limit],
             row_count=min(len(rows), limit),
+            truncated=len(rows) > limit,
             unreachable=unreachable,
             processes_configured=len(scope.fleet.processes),
             poll_seconds=ops.POLL_SECONDS["connections"],
@@ -1068,7 +1120,6 @@ def create_app(
             settings,
             target,
             req.paths,
-            req.confirmed,
             runner=request.app.state.remote_runner,
             on_begin=audit.begin,
         )
@@ -1185,7 +1236,12 @@ def create_app(
         no default REQUIRED, so omitting it is a 422 naming the field rather
         than a plausible answer computed across every partition (#185). Pass
         `""` for a dataset with no partition dimension.
+
+        The range is both bounds or neither (#2222), as on every route that
+        names a coverage window: one bound alone was parsed and then dropped,
+        answering 200 with no gaps for a question that was never asked.
         """
+        _refuse_a_lone_bound(range_from, range_to)
         # The dataset as the table: a policy refusing a table must refuse its
         # coverage too, or /coverage reads round what /query refuses.
         run_policy(request, table=dataset)
@@ -1210,18 +1266,25 @@ def create_app(
             _enforce_coverage(gateway, req.require_coverage)
 
         capped = min(req.limit, settings.max_rows)
-        # As the data login, through the gateway's query policy (#889).
-        read = gateway.browse(tbl.name, columns, operators, values, capped, TIERS[req.tier])
+        # As the data login, through the gateway's query policy (#889). One
+        # row past what is returned, so a full answer says whether more rows
+        # exist rather than leaving the caller to guess from row_count (#2220).
+        read = gateway.browse(tbl.name, columns, operators, values, capped + 1, TIERS[req.tier])
         rows = _rows(read.rows)
+        # read.cap is the row asked for lowered to the policy's maxrows where
+        # that is less (#928). A read that stopped at such a cap cannot see
+        # past it, so reaching it counts as cut (#1255).
+        policy_cut = read.cap <= capped and len(rows) >= read.cap
+        truncated = len(rows) > capped or policy_cut
+        server_cap = min(settings.max_rows, read.cap)
         return QueryResponse(
             poll_seconds=ops.POLL_SECONDS["query"],
             table=tbl.name,
             tier=req.tier,
-            rows=rows,
-            row_count=len(rows),
-            # read.cap is capped lowered to the policy's maxrows where that is
-            # less (#928), so a cut either one made is reported (#1255).
-            truncated=len(rows) >= read.cap < req.limit,
+            rows=rows[:capped],
+            row_count=min(len(rows), capped),
+            truncated=truncated,
+            cut_by=None if not truncated else "limit" if req.limit <= server_cap else "max_rows",
         )
 
     # ------------------------------------------------------ prepared charts
@@ -1325,7 +1388,7 @@ def create_app(
             request_id=request.headers.get(activity.REQUEST_ID_HEADER),
             claimed_user=audit_user(request),
             method=request.method.upper(),
-            items=[{"target": p["push_id"], "outcome": "succeeded"} for p in pruned],
+            items=[{"subject": p["push_id"], "outcome": "succeeded"} for p in pruned],
             detail={"pruned_count": len(pruned)},
         )
 
@@ -1455,8 +1518,6 @@ def create_app(
         audit = activity.audit_of(request)
         audit.set_target(target)
         audit.note(restores=push_id)
-        if req.confirmed is not True:
-            raise ValidationFailed("explicit confirmation is required")
         remote = _remote(target)
         try:
             answer = remote_files.restore(
@@ -1500,11 +1561,17 @@ def create_app(
             poll_seconds=ops.POLL_SECONDS["processes"],
         )
 
-    @app.post("/control/process/{action}", response_model=CommandResponse)
-    def control_lifecycle(action: str, req: LifecycleRequest, request: Request) -> CommandResponse:
+    @app.post("/control/lifecycle/{action}", response_model=CommandResponse)
+    def control_lifecycle(
+        # str, not LifecycleAction: an unknown verb is a thing that is not
+        # there, a 404 from control.lifecycle (#2224), never a 422
+        action: str,
+        req: Annotated[LifecycleRequest, Depends(lifecycle_request)],
+        request: Request,
+    ) -> CommandResponse:
         """Start, stop or restart processes (action is start|stop|restart)."""
         audit = activity.audit_of(request)
-        audit.set_target(req.procs)
+        audit.set_subject(req.procs)
         with control.reporting_acting(audit.begin):
             result = control.lifecycle(settings, action, req.procs)
         # torq.sh reports one exit code for the whole selector: success says
@@ -1515,33 +1582,33 @@ def create_app(
         audit.note(exit_code=result.exit_code)
         return CommandResponse(
             action=result.action,
-            target=result.target,
+            procs=result.procs,
             exit_code=result.exit_code,
             ok=result.ok,
             output=result.output,
         )
 
-    @app.put("/control/process/{process}/config", response_model=ProcessConfigResponse)
+    @app.put("/control/processes/{process}/config", response_model=ProcessConfigResponse)
     def control_process_config(
         process: str, req: ProcessConfigRequest, request: Request
     ) -> ProcessConfigResponse:
         """Persist one process.csv field override, applied on the next start."""
         audit = activity.audit_of(request)
         # The field, never the value: a value is whatever was typed.
-        audit.note(process=process, field=req.field_name)
+        audit.note(process=process, field=req.field)
         with control.reporting_acting(audit.begin):
-            row = control.set_process_field(settings, process, req.field_name, req.value)
+            row = control.set_process_field(settings, process, req.field, req.value)
         return ProcessConfigResponse(
             process=process,
             config=row,
             settable_fields=control.settable_fields(settings),
         )
 
-    @app.put("/control/worker-config", response_model=WorkerConfigResponse)
+    @app.put("/control/worker/config", response_model=WorkerConfigResponse)
     def control_worker_config(req: WorkerConfigRequest, request: Request) -> WorkerConfigResponse:
         """Set a `.qetl.cfg` override in the live process the gateway addresses."""
         audit = activity.audit_of(request)
-        audit.set_target(req.key)
+        audit.set_subject(req.key)
         audit.note(key=req.key)
         with control.reporting_acting(audit.begin):
             out = control.set_worker_config(gateway, settings, req.key, req.value)
@@ -1559,7 +1626,7 @@ def create_app(
     def control_backfill(req: BackfillRequest, request: Request) -> BackfillStartedResponse:
         """Launch a bounded worker over a range. Detached; watch /ops/backfill."""
         audit = activity.audit_of(request)
-        audit.set_target(req.worker)
+        audit.set_subject(req.worker)
         audit.note(
             worker=req.worker,
             source_version=req.source_version,
@@ -1606,7 +1673,7 @@ def create_app(
                 "action": event.action,
                 "ts": instants.to_datetime(event.ts),
                 "event_id": event.event_id,
-                "target": event.target,
+                "subject": event.subject,
                 "outcome": event.outcome,
                 "session_id": event.session_id,
                 "request_id": event.request_id,
@@ -1638,6 +1705,7 @@ def create_app(
             request_id=filters["request_id"] or None,
             action=filters["action"] or None,
             target=filters["target"] or None,
+            subject=filters["subject"] or None,
             outcome=filters["outcome"],
             source=filters["source"],
             level=level,
@@ -1652,6 +1720,7 @@ def create_app(
         request_id: str | None = None,
         action: str | None = None,
         target: str | None = None,
+        subject: str | None = None,
         outcome: ActivityOutcome | None = None,
         source: ActivitySource | None = None,
         level: ActivityLevel | None = None,
@@ -1661,10 +1730,12 @@ def create_app(
         much of each level is, and what was not. `level` is the most
         detailed level shown: `interactions` shows actions too."""
         filters = dict(locals())
-        rows = history.query(_activity_query(filters, level, limit))
+        # One event past the limit says whether more matched (#2220).
+        rows = history.query(_activity_query(filters, level, limit + 1))
         state = history.persistence
         return ActivityResponse(
-            events=[ActivityEventOut(**row) for row in rows],
+            events=[ActivityEventOut(**row) for row in rows[:limit]],
+            truncated=len(rows) > limit,
             persistence=ActivityPersistence(
                 persistent=state.persistent,
                 path=state.path,
@@ -1694,6 +1765,7 @@ def create_app(
         request_id: str | None = None,
         action: str | None = None,
         target: str | None = None,
+        subject: str | None = None,
         outcome: ActivityOutcome | None = None,
         source: ActivitySource | None = None,
         level: ActivityLevel | None = None,
@@ -1845,17 +1917,36 @@ def _iso(row: dict[str, Any]) -> IntervalOut:
 def _fleet_health(
     fleet: Fleet, declared: list[procfile.DeclaredProcess], source: str
 ) -> FleetHealthResponse:
-    """Each declared process probed, and the groups they fall in."""
+    """Each declared process probed, and how many there are of each proctype."""
     checked = health.check(fleet, declared)
-    groups: dict[str, int] = {}
+    proctypes: dict[str, int] = {}
     for proc in declared:
-        groups[proc.group] = groups.get(proc.group, 0) + 1
+        proctypes[proc.proctype] = proctypes.get(proc.proctype, 0) + 1
     return FleetHealthResponse(
         summary=health.summarise(checked),
         processes=[ProcessHealthOut(**vars(h)) for h in checked],
-        groups=dict(sorted(groups.items())),
+        proctypes=dict(sorted(proctypes.items())),
         source=source,
         poll_seconds=ops.POLL_SECONDS["processes"],
+    )
+
+
+def _refuse_a_lone_bound(range_from: object, range_to: object) -> None:
+    """A coverage window is both its bounds or neither: one alone is a 422
+    RequestInvalid naming the missing bound, in the shape FastAPI's own
+    validation has, so a form marks the field (#2222)."""
+    if (range_from is None) == (range_to is None):
+        return
+    given, missing = ("range_from", "range_to") if range_to is None else ("range_to", "range_from")
+    raise RequestValidationError(
+        [
+            {
+                "loc": ("query", missing),
+                "msg": f"{missing} is required with {given} - a coverage window is "
+                "half-open [range_from, range_to)",
+                "type": "missing",
+            }
+        ]
     )
 
 

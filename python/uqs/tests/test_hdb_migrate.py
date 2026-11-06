@@ -496,3 +496,61 @@ def test_the_cli_passes_reset_empty_through_and_keeps_the_dry_run_default(monkey
     )
     assert result.exit_code == 0, result.output
     assert seen == [("trade", DAY, {}, set(), {"apply": True, "reset_empty": True, "hdb": None})]
+
+
+# ----------------------------------------- the command: --json, --yes (#2229, #2247)
+
+
+@pytest.fixture
+def migrating(monkeypatch):
+    """Each hdb_migrate.migrate call's `apply`."""
+    calls: list[bool] = []
+
+    def migrate(paths, table, day, renames, casts, *, apply=False, hdb=None, reset_empty=False):
+        calls.append(apply)
+        return f"plan for {table}"
+
+    monkeypatch.setattr(hdb_migrate, "migrate", migrate)
+    return calls
+
+
+def _migrate(*argv: str, **kw):
+    from typer.testing import CliRunner
+
+    from uqs.cli import app
+
+    line = ["data", "migrate", "quote", "--date", "2026.09.13", "--rename", "bid:bid2", *argv]
+    return CliRunner().invoke(app, line, **kw)
+
+
+def test_the_json_document_is_the_plan(migrating):
+    import json
+
+    result = _migrate("--json")
+    assert result.exit_code == 0, result.output
+    assert json.loads(result.stdout) == {
+        "ok": True, "table": "quote", "partition": "2026.09.13", "applied": False,
+        "report": "plan for quote",
+    }  # fmt: skip
+    assert migrating == [False]
+
+
+def test_json_without_yes_apply_is_refused(migrating, terminal, monkeypatch):
+    """#2229: --json never asks, even at a terminal that would say y."""
+    import json
+
+    argv = ["data", "migrate", "quote", "--date", "2026.09.13", "--rename", "bid:bid2"]
+    argv += ["--apply", "--json"]
+    monkeypatch.setattr("sys.argv", ["uqs", *argv])  # json_requested reads it
+    result = _migrate("--apply", "--json", input="y\n")
+    assert result.exit_code == 1
+    doc = json.loads(result.stdout)
+    assert (
+        doc["ok"] is False and "cannot ask for confirmation: add --yes to migrate" in doc["error"]
+    )
+    assert True not in migrating
+
+
+def test_apply_yes_migrates_without_asking(migrating):
+    assert _migrate("--apply", "--yes").exit_code == 0
+    assert migrating == [True]

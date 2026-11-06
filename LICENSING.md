@@ -40,6 +40,15 @@ are listed, not accepted, in `lib/.vendored/<tree>.drift.tsv`.
   target platform before it could be loaded. KDB-X also bundles its own official
   parquet module at `~/.kx/mod/kx/pq/`, worth checking as a licensed alternative
   first.
+- `lib/unparse/`, vendored from
+  [patmok/unparse](https://github.com/patmok/unparse) at commit `079b8a2`,
+  unchanged. **Upstream has no LICENSE file** - no explicit grant of rights
+  exists, so ordinary copyright applies and **no redistribution right is granted
+  until upstream adds a licence**. Vendored here at the repo owner's explicit
+  choice (#2263); see `lib/unparse/NOTICE.md`. It is loaded only when present,
+  by `src/etl/core/qsql_text.q`, to print a source's query as qSQL in the TRACE
+  log. A release carries no `lib/` but `kx-dbmaint`, so a released tree never
+  ships it and falls back to the full parse tree.
 - `lib/torq/`, vendored from
   [DataIntellectTech/TorQ](https://github.com/DataIntellectTech/TorQ) at commit
   `a6cee6c`, distributed under the MIT License (full text at

@@ -343,23 +343,64 @@ def test_start_passes_the_flags_through_torq_sh_extras(monkeypatch):
     assert seen["kw"]["base_port"] == 6050
 
 
-def test_dry_run_prints_the_plan_and_starts_nothing(monkeypatch):
-    def explode(*a, **k):
-        raise AssertionError("--dry-run started the replay")
+AIMED = ["--port", "6050", "--tplogdir", TPLOGS, "--hdb", HDB, "--schema-file", SCHEMA]
 
-    monkeypatch.setattr(replay, "start", explode)
-    argv = ["data", "replay", "--dry-run", "--port", "6050"]
-    argv += ["--tplogdir", TPLOGS, "--hdb", HDB, "--schema-file", SCHEMA]
-    result = runner.invoke(cli.app, argv)
+
+def _explode(*a, **k):
+    raise AssertionError("the replay was started")
+
+
+def test_without_apply_it_prints_the_plan_and_starts_nothing(monkeypatch):
+    """#2235: a replay empties what it writes, so it is a dry run by default."""
+    monkeypatch.setattr(replay, "start", _explode)
+    result = runner.invoke(cli.app, ["data", "replay", *AIMED])
     assert result.exit_code == 0, result.output
-    assert "would start: tpreplay1 -extras" in result.output.replace("\n", "")
+    said = result.output.replace("\n", "")
+    assert "would start: tpreplay1 -extras" in said
+    assert "dry run: nothing was changed. Run it again with --apply" in said
+
+
+def test_dry_run_is_refused_naming_apply(monkeypatch, log_text):
+    monkeypatch.setattr(replay, "start", _explode)
+    result = runner.invoke(cli.app, ["data", "replay", "--dry-run", *AIMED])
+    assert result.exit_code == 2
+    assert "`data replay` is a dry run unless --apply: drop --dry-run" in log_text()
+
+
+def test_apply_asks_and_without_a_terminal_refuses_naming_yes(monkeypatch, log_text):
+    monkeypatch.setattr(replay, "start", _explode)
+    result = runner.invoke(cli.app, ["data", "replay", *AIMED, "--apply"])
+    assert result.exit_code == 1
+    assert "emptying them first in the partitions it touches? - there is no terminal" in (
+        log_text()
+    )
+
+
+def test_apply_a_no_starts_nothing(monkeypatch, terminal):
+    monkeypatch.setattr(replay, "start", _explode)
+    result = runner.invoke(cli.app, ["data", "replay", *AIMED, "--apply"], input="n\n")
+    assert result.exit_code == 1 and "Replay every table in the log into" in result.output
 
 
 def test_the_command_exits_with_what_the_replay_exited_with(monkeypatch):
     monkeypatch.setattr(replay, "start", lambda *a, **k: type("Completed", (), {"returncode": 3})())
-    argv = ["data", "replay", "--port", "6050"]
-    argv += ["--tplogdir", TPLOGS, "--hdb", HDB, "--schema-file", SCHEMA]
+    argv = ["data", "replay", *AIMED, "--apply", "--yes"]
     assert runner.invoke(cli.app, argv).exit_code == 3
+
+
+def test_json_is_the_plan_and_without_yes_apply_is_refused(monkeypatch, terminal):
+    """#2229: --json never asks, even at a terminal that would say y."""
+    import json
+
+    monkeypatch.setattr(replay, "start", _explode)
+    plan = json.loads(runner.invoke(cli.app, ["data", "replay", *AIMED, "--json"]).stdout)
+    assert plan["ok"] and not plan["applied"] and plan["start"].startswith("tpreplay1 -extras")
+    argv = ["data", "replay", *AIMED, "--apply", "--json"]
+    monkeypatch.setattr("sys.argv", ["uqs", *argv])  # json_requested reads it
+    refused = runner.invoke(cli.app, argv, input="y\n")
+    assert refused.exit_code == 1
+    doc = json.loads(refused.stdout)
+    assert doc["ok"] is False and "cannot ask for confirmation: add --yes to replay" in doc["error"]
 
 
 def test_a_refusal_exits_one_rather_than_raising(monkeypatch):

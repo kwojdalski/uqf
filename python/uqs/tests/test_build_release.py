@@ -8,7 +8,9 @@ from __future__ import annotations
 
 import io
 import json
+import os
 import subprocess
+import sys
 import tarfile
 from pathlib import Path
 
@@ -445,3 +447,58 @@ def test_the_artifact_goes_to_dist_at_the_repository_root_by_default(tmp_path):
     art = _built([], root=root, runner=tools)
     assert art.path.parent == root / "dist"
     assert payload.is_excluded("dist/" + art.path.name)
+
+
+# --- a release runs uqs from its own files (#2199) ----------------------------
+
+
+def _extracted_release(tmp_path: Path) -> Path:
+    """This checkout's real release files, packed by build_artifact as `uqs
+    deploy build` packs them and unpacked into a directory with nothing else
+    of the checkout beside it. No wheels: the commands run on this test's
+    environment, with uqs imported from the release."""
+    py = tmp_path / "py"
+    (py / "wheels").mkdir(parents=True)
+    (py / "requirements.txt").write_text("")
+    art = release_build.build_artifact(
+        ROOT, tmp_path / "dist", rid="20261106T000000Z-0123456789ab", rev=REV, dirty=True,
+        files=payload.tracked_files(ROOT), python_dir=py,
+        target=artifact.Target(os="linux", arch="x86_64", python="3.14"),
+    )  # fmt: skip
+    release = tmp_path / "release"
+    with tarfile.open(art.path) as tar:
+        tar.extractall(release, filter="data")
+    return release
+
+
+def _uqs_env(release: Path, home: Path) -> dict[str, str]:
+    env = {k: v for k, v in os.environ.items() if not k.startswith(("UQF_", "UQS_", "PYTHON"))}
+    return env | {"PYTHONPATH": str(release / "python" / "uqs" / "src"), "HOME": str(home)}
+
+
+def _uqs_from(release: Path, cwd: Path, *argv: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [sys.executable, "-m", "uqs", *argv],
+        cwd=cwd, env=_uqs_env(release, cwd),
+        capture_output=True, text=True, check=False, timeout=120,
+    )  # fmt: skip
+
+
+def test_an_extracted_release_runs_uqs_config_sources_from_its_own_files(tmp_path):
+    """transports.py reads the contract surface's transports.csv: a release
+    that did not ship it could not run `uqs config sources` or `stub`."""
+    release = _extracted_release(tmp_path)
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    # the uqs that runs is the release's, so its repo_root() is the release
+    where = _uqs_from(release, elsewhere, "--version")
+    assert where.returncode == 0, where.stdout + where.stderr
+    probe = subprocess.run(
+        [sys.executable, "-c", "import uqs.paths as p; print(p.repo_root())"],
+        cwd=elsewhere, env=_uqs_env(release, elsewhere), capture_output=True, text=True,
+        check=True,
+    )  # fmt: skip
+    assert Path(probe.stdout.strip()).resolve() == release.resolve()
+    shown = _uqs_from(release, elsewhere, "config", "sources")
+    assert shown.returncode == 0, shown.stdout + shown.stderr
+    assert "transports.csv" not in shown.stdout + shown.stderr

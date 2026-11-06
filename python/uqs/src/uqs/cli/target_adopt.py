@@ -19,6 +19,7 @@ from uqs.deploy import (
     adopt,
     control,
     history,
+    inspection,
     target_changelog,
     target_changes,
     target_file,
@@ -150,6 +151,13 @@ def adopt_(
         _die(UqsError(str(exc)))
     if not do_it:
         console.print(dry_run_note("with --apply to adopt it"))
+        return
+    try:
+        # #2231: the server is matched by its ssh and dest as well as by name, so
+        # adopting an inspection-only server under a new name is refused too
+        inspection.refuse(root, "`uqs target adopt --apply`", name=name, ssh=ssh, dest=dest)
+    except UqsError as exc:
+        _die(exc)
         return
     changes = adopt.server_changes(survey)
     if changes and not yes:

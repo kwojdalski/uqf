@@ -198,9 +198,8 @@ def attach(
         )
     confirmed = ""
     if not running:
-        if as_json and not yes:
-            out.fail("--json cannot ask for confirmation: add --yes to change the stack")
         try:
+            safety.json_needs_yes(as_json, yes, "change the stack")
             safety.confirm(
                 f"Attach {name} to stack {att.stack.id} as above? (no process is restarted)",
                 yes=yes,
@@ -301,8 +300,7 @@ def detach(
         att = config.load(name)
         out.secrets = secrets_of(att)
         if not dry_run:
-            if as_json and not yes:
-                out.fail("--json cannot ask for confirmation: add --yes to change the stack")
+            safety.json_needs_yes(as_json, yes, "change the stack")
             safety.confirm(
                 f"Stop {att.publisher.procname} and detach {name} from stack {att.stack.id}?",
                 yes=yes,

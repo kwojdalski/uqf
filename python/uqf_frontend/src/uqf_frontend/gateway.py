@@ -431,7 +431,10 @@ class FakeGateway:
         if self.raises is not None:
             raise self.raises
         cap = limit if self.policy_maxrows is None else min(limit, self.policy_maxrows)
-        return Browsed(rows=self._responses.get(queries.BROWSE), cap=cap)
+        rows = self._responses.get(queries.BROWSE)
+        # .uqf.browse returns at most `cap` rows: a canned list is the table,
+        # read as q would read it.
+        return Browsed(rows=rows[:cap] if isinstance(rows, list) else rows, cap=cap)
 
     @property
     def last_program(self) -> str:

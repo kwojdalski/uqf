@@ -93,3 +93,13 @@ local = ["NOTICE.md"]
 upstream_tree = "b9662249fc9dc5e68b965bea9024aafe28c43ae3"
 files = 3
 digest = "sha256:a10565b6637e3972e65489c8d8978c3abc0dd23deef51b9c1d684a47f782b546"
+
+[tree.unparse]
+upstream = "https://github.com/patmok/unparse"
+commit = "079b8a2ad1a18770677bd68ef31b5fa1d38c3864"
+license = "NONE"
+license_file = "NOTICE.md"
+local = ["NOTICE.md"]
+upstream_tree = "e02559e9a7f460e5a07986c68a2f682b277133c6"
+files = 3
+digest = "sha256:fddc5b4ef175757e0b5ea1580488feef102335d0976adf78417eea8b8287541e"

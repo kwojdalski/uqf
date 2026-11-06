@@ -305,9 +305,11 @@ def test_apply_runs_each_partition_oldest_first_and_audits_each(cli):
         "CLI",
     )
     assert json.loads(row["items"]) == [
-        {"target": "2026-10-20", "outcome": "succeeded"},
-        {"target": "2026-10-21", "outcome": "succeeded"},
+        {"subject": "2026-10-20", "outcome": "succeeded"},
+        {"subject": "2026-10-21", "outcome": "succeeded"},
     ]
+    # this stack's own HDB: target `local`, its directory the subject (#2234)
+    assert row["target"] == "local" and row["subject"]
     assert json.loads(row["detail"])["process"] == "housekeeping1"
 
 
@@ -331,7 +333,7 @@ def test_apply_stops_at_the_first_named_error(cli, monkeypatch):
     assert calls == ["2026-10-20"], "nothing after the failure is tried"
     (row,) = _audit(history)
     assert row["outcome"] == "failed"
-    assert json.loads(row["items"]) == [{"target": "2026-10-20", "outcome": "failed"}]
+    assert json.loads(row["items"]) == [{"subject": "2026-10-20", "outcome": "failed"}]
 
 
 def test_apply_is_refused_before_anything_when_the_disk_is_short(cli, monkeypatch):
@@ -347,10 +349,16 @@ def test_apply_is_refused_before_anything_when_the_disk_is_short(cli, monkeypatc
     assert not history.exists()
 
 
-def test_json_cannot_ask(cli):
-    run, asked, _, _ = cli
-    done = run("--apply", "--json")
-    assert done.exit_code == 2, "a usage refusal: --json cannot ask, and --yes was not given"
+def test_json_cannot_ask(cli, terminal, monkeypatch):
+    """#2229: a refusal (exit 1), as every --json command without --yes is."""
+    _, asked, _, _ = cli
+    argv = ["data", "compress", "--apply", "--json"]
+    monkeypatch.setattr("sys.argv", ["uqs", *argv])  # json_requested reads it
+    done = CliRunner().invoke(app, argv, input="y\n")
+    assert done.exit_code == 1, done.output
+    doc = json.loads(done.stdout)
+    assert doc["ok"] is False
+    assert "--json cannot ask for confirmation: add --yes to compress" in doc["error"]
     assert not any("apply_partition" in a for a in asked)
 
 

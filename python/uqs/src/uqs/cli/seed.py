@@ -9,12 +9,13 @@ from typing import Annotated
 import typer
 
 from uqs import timerange
-from uqs.cli import completion
+from uqs.cli import completion, safety
 from uqs.cli.choices import ChoiceOpt
 from uqs.cli.hdb_scope import AttachOpt, HdbOpt, local_hdb, tables_given
+from uqs.cli.json_out import emit, json_opt
 from uqs.cli.range_options import DateOpt, DayFromOpt, DayLastOpt, DayToOpt
 from uqs.cli.renames import old_spelling, renamed, warn_renamed
-from uqs.cli.safety import ChangesState, dry_run_note
+from uqs.cli.safety import ConfirmsOnServer, dry_run_note
 from uqs.cli.shared import (
     _die,
     _paths,
@@ -61,7 +62,10 @@ _NO_ATTACHMENT = (
 #: A conflict policy is `--on-conflict` on every command (#1857); `--overwrite`
 #: was this one's, and is `--on-conflict replace` now. Tables are chosen one
 #: way on every command: a repeatable `--table` (#1856).
-@data_app.command("seed", cls=renamed({"--tables": "--table"}, ChangesState))
+SeedJson = json_opt('{"ok", "from_runtime", "on_conflict", "applied", "report"}')
+
+
+@data_app.command("seed", cls=renamed({"--tables": "--table"}, ConfirmsOnServer))
 def seed(
     from_runtime: Annotated[
         str | None,
@@ -93,10 +97,10 @@ def seed(
     attach: AttachOpt = None,
     on_conflict: _OnConflictOpt = "ignore",
     overwrite: Annotated[bool, old_spelling("--on-conflict replace", "--overwrite")] = False,
-    dry_run: Annotated[
-        bool,
-        typer.Option("--dry-run", "-n", help="Name the partitions it would copy; write nothing"),
-    ] = False,
+    apply: safety.ApplyOpt = False,
+    yes: safety.ApplyYesOpt = False,
+    as_json: SeedJson = False,
+    dry_run: safety.RefusedDryRunOpt = False,
 ) -> None:
     """Copy another runtime's HDB partitions into this runtime's HDB.
 
@@ -111,12 +115,16 @@ def seed(
     a midnight is refused, not rounded, and `--last 3d` is the three days
     before today: today's live partition is never copied by --last.
 
+    Without --apply it names the partitions it would copy and writes nothing;
+    --apply shows them, asks, then copies; --yes does not ask.
+
     e.g. `uqs --runtime torq data seed --from-runtime uqf --from 2026-09-01 --to 2026-10-01`
     """
     if overwrite:
         warn_renamed("--overwrite", "--on-conflict replace")
         on_conflict = "replace"
     try:
+        safety.refuse_dry_run("data seed", dry_run)
         if from_runtime is None and range_from in RUNTIMES:
             warn_renamed(f"--from {range_from}", f"--from-runtime {range_from}")
             from_runtime, range_from = range_from, None
@@ -145,17 +153,34 @@ def seed(
         ).partition_dates("`data seed` copies")
         target = _paths()
         source = paths_for_root(target.repo_root, from_runtime)
-        if not dry_run:
-            runtime.bootstrap(target)
         wanted = tables_given(tables) or None
         replace = on_conflict == "replace"
-        report = hdb_seed.seed(target, source, wanted, first, last_day, replace, dry_run, hdb=dest)
+        into = f"{dest}" if dest is not None else f"{target.runtime}'s HDB"
+        if not apply or not yes:  # the plan: shown, and asked about before --apply writes
+            report = hdb_seed.seed(target, source, wanted, first, last_day, replace, True, hdb=dest)
+        if apply:
+            safety.json_needs_yes(as_json, yes, "seed")
+            if not yes:
+                console.print(report, markup=False, highlight=False)
+                what = "copying over the tables already here" if replace else "skipping any here"
+                safety.confirm(
+                    f"Copy these {from_runtime} partitions into {into}, {what}?",
+                    yes=False,
+                )
+            runtime.bootstrap(target)
+            report = hdb_seed.seed(
+                target, source, wanted, first, last_day, replace, False, hdb=dest
+            )
     except UqsError as exc:
         _die(exc)
         return
+    if as_json:
+        emit({"ok": True, "from_runtime": from_runtime, "on_conflict": on_conflict,
+              "applied": apply, "report": report})  # fmt: skip
+        return
     console.print(report, markup=False, highlight=False)
-    if dry_run:
-        console.print(dry_run_note())
+    if not apply:
+        console.print(dry_run_note("with --apply"))
         return
     if dest is not None:
         console.print(f"[dim]reload each HDB process serving {dest} to see them[/]")

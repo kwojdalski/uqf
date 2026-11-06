@@ -10,9 +10,10 @@ from uqs import timerange
 from uqs.cli import safety
 from uqs.cli.concepts import table_arg
 from uqs.cli.hdb_scope import AttachOpt, HdbOpt, local_hdb
+from uqs.cli.json_out import emit, json_opt
 from uqs.cli.range_options import DateOpt, DayFromOpt, DayLastOpt, DayToOpt
 from uqs.cli.renames import refused
-from uqs.cli.safety import ChangesState, dry_run_note
+from uqs.cli.safety import ConfirmsOnServer, dry_run_note
 from uqs.cli.shared import _die, _paths, console, data_app
 from uqs.paths import UqsError, UqsUsageError
 from uqs.stack import hdb_migrate
@@ -33,8 +34,12 @@ _NO_ATTACHMENT = (
     "stack's do not - stop that stack and migrate on its own host, with --hdb DIR"
 )
 
+MigrateJson = json_opt('{"ok", "table", "partition", "applied", "report"}')
 
-@data_app.command("migrate", cls=refused({}, ChangesState, extra_argument=_POSITIONAL_DATE))
+
+#: Confirms on the server, as its --apply siblings `data alter` and `data check`
+#: do (#2247): under `uqs --target` it shows its plan and asks there.
+@data_app.command("migrate", cls=refused({}, ConfirmsOnServer, extra_argument=_POSITIONAL_DATE))
 def migrate(
     table: _TableOpt,
     day: DateOpt = None,
@@ -66,6 +71,7 @@ def migrate(
     ] = False,
     apply: safety.ApplyOpt = False,
     yes: safety.ApplyYesOpt = False,
+    as_json: MigrateJson = False,
     dry_run: safety.DefaultDryRunOpt = False,
 ) -> None:
     """Migrate one HDB partition of a table to this release's schema.
@@ -115,6 +121,8 @@ def migrate(
                 hdb=root,
                 reset_empty=reset_empty,
             )
+        if apply:
+            safety.json_needs_yes(as_json, yes, "migrate")
         if apply and not yes:
             console.print(report, markup=False, highlight=False)
             safety.confirm(
@@ -133,6 +141,10 @@ def migrate(
             )
     except UqsError as exc:
         _die(exc)
+        return
+    if as_json:
+        emit({"ok": True, "table": table, "partition": f"{partition:%Y.%m.%d}",
+              "applied": apply, "report": report})  # fmt: skip
         return
     console.print(report, markup=False, highlight=False)
     if apply:

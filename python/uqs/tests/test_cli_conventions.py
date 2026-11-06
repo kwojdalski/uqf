@@ -444,7 +444,7 @@ def test_every_data_command_names_its_hdb_the_same_ways():
         ),
         (
             "seed",
-            ["data", "seed", "--from-runtime", "uqf", "-n"],
+            ["data", "seed", "--from-runtime", "uqf"],
             "data seed cannot take --attachment pb-uat: a seed",
         ),
         ("compress", ["data", "compress"], "--attachment is for --report"),
@@ -470,7 +470,7 @@ def test_hdb_and_attachment_together_are_refused_as_check_refuses_them(monkeypat
     argv = {
         "replay": ["data", "replay"],
         "migrate": ["data", "migrate", "trade", "--date", "2026-09-13", "--cast", "px"],
-        "seed": ["data", "seed", "--from-runtime", "uqf", "-n"],
+        "seed": ["data", "seed", "--from-runtime", "uqf"],
     }[module]
     CliRunner().invoke(app, [*argv, "--attachment", "pb-uat", "--hdb", "/tmp"])
     assert [str(e) for e in died] == [
@@ -1142,7 +1142,8 @@ ASKS = {c.path for c in TREE if c.path in LEAVES and _kind(c.path) == CONFIRMS} 
 #: give it --yes/-y, then list the module here.
 PROMPTING_MODULES = {
     "attach", "cleanup", "deploy_server", "hdb_scope", "install", "install_bundle", "migrate",
-    "remove", "target", "target_adopt", "target_config", "target_edit", "compress_plan",
+    "remove", "replay", "seed", "target", "target_adopt", "target_config", "target_edit",
+    "compress_plan",
 }  # fmt: skip
 
 #: leaf -> the issue that adds its --json. Empty since #1731: keep it so.
@@ -1264,6 +1265,24 @@ def test_rule5c_yes_y_exactly_on_what_asks():
     _hold("rule 5c", found, RULE5C_ALLOWLIST)
 
 
+#: Every command whose deletion cannot be undone (docs/guides/uqs.md's rule):
+#: each asks first and takes --yes/-y. `clean`, which removes the HDB with the
+#: rest of the data directory, asked nothing (#2233).
+IRREVERSIBLE = {
+    "clean", "deploy prune", "job checkpoint remove", "target remove", "job remove",
+    "job attachment remove",
+}  # fmt: skip
+
+
+def test_rule5c_every_irreversible_deletion_asks():
+    missing = {p for p in IRREVERSIBLE if p not in ASKS or not _flag(LEAVES[p], "--yes", "-y")}
+    assert not missing, sorted(missing)
+    guide = (Path(__file__).resolve().parents[3] / "docs/guides/uqs.md").read_text()
+    rule = " ".join(guide[guide.index("Every deletion that cannot be undone") :].split()[:60])
+    unnamed = {p for p in IRREVERSIBLE if f"`{p}`" not in rule.replace("`uqs ", "`")}
+    assert not unnamed, f"the guide's rule does not name {sorted(unnamed)}"
+
+
 def test_rule5c_the_commands_that_ask_are_the_known_ones():
     """Every question is asked through safety.ask, confirm or choose (#1885):
     one default (No), one refusal without a terminal, one exit code for a no.
@@ -1280,6 +1299,44 @@ def test_rule5c_the_commands_that_ask_are_the_known_ones():
         stem for stem, text in texts.items() if re.search(r"safety\.(ask|confirm|choose)\(", text)
     }
     assert asking == PROMPTING_MODULES
+
+
+#: Every leaf that takes --json and --yes -> the test that runs it with --json
+#: and no --yes, a terminal ready to answer y, and holds it to the one refusal
+#: (#2229): exit 1, `{"ok": false}` naming --yes, nothing asked or changed.
+#: Three behaviours were one mistake's: exit 2 (data check/alter/compress),
+#: exit 1 (job attachment add/remove) and a prompt mid-run (deploy prune).
+JSON_WITHOUT_YES = {
+    "data alter": "test_hdb_alter_cli.py::test_json_without_yes_is_refused_and_writes_nothing",
+    "data check": "test_hdb_alter_cli.py::test_json_without_yes_is_refused_and_writes_nothing",
+    "data compress": "test_data_compress.py::test_json_cannot_ask",
+    "data migrate": "test_hdb_migrate.py::test_json_without_yes_apply_is_refused",
+    "data replay": "test_replay.py::test_json_is_the_plan_and_without_yes_apply_is_refused",
+    "data seed": "test_hdb_seed.py::test_json_without_yes_apply_is_refused",
+    "deploy prune": (
+        "test_deploy_prune.py::test_json_without_yes_is_refused_before_the_server_is_reached"
+    ),
+    "job attachment add": (
+        "test_attach_cli.py::test_json_execution_without_yes_refuses_with_a_json_error"
+    ),
+    "job attachment remove": (
+        "test_attach_cli.py::test_json_execution_without_yes_refuses_with_a_json_error"
+    ),
+}
+
+
+def test_rule5f_json_without_yes_is_one_refusal():
+    both = {p for p, c in LEAVES.items() if _flag(c, "--json") and _flag(c, "--yes")}
+    assert both == set(JSON_WITHOUT_YES), "name the test that holds each to safety.json_needs_yes"
+    here = Path(__file__).parent
+    for path, test in JSON_WITHOUT_YES.items():
+        file, name = test.split("::")
+        assert re.search(rf"^def {name}\(", (here / file).read_text(), re.M), (path, test)
+    cli_dir = Path(shared.__file__).parent
+    worded = {
+        f.stem for f in cli_dir.glob("*.py") if "cannot ask for confirmation" in f.read_text()
+    }
+    assert worded == {"safety"}, "the refusal is safety.json_needs_yes's alone"
 
 
 def test_rule5e_one_write_model_per_kind_of_change():

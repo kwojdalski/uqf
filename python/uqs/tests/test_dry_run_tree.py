@@ -120,6 +120,10 @@ CASES = [
     Case("connector stop", ("kafka",)),
     Case("connector restart", ("kafka",)),
     Case("data migrate", ("quote", "--date", "2015-01-07", "--rename", "bid:bid2"), _hdb("uqs")),
+    # the --apply commands' defaults (#2235): each a dry run
+    Case("data check", (), _hdb("uqs")),
+    Case("data alter", ("quote", "--rename", "bid:bid2"), _hdb("uqs")),
+    Case("data compress", (), _hdb("uqs")),
     Case("data replay", ()),
     Case("data seed", ("--from-runtime", "torq", "--date", "2015-01-07"), _hdb("uqs-torq")),
     Case("deploy build", ()),
@@ -163,11 +167,13 @@ def _id(case: Case) -> str:
 
 @cache
 def _dry_by_default_commands() -> frozenset[str]:
-    """The changes-state commands that write only with --apply (#1854)."""
+    """The commands that write only with --apply (#1854): changes-state, and
+    confirms-on-server - `data replay` and `data seed` wrote by default until
+    #2235, so each --apply command's default is walked here, whatever its mark."""
     return frozenset(
         path
         for path, c in LEAVES.items()
-        if c.option("--apply") is not None and effect_of(c.command) is Effect.CHANGES_STATE
+        if c.option("--apply") is not None and effect_of(c.command) is not Effect.READ_ONLY
     )
 
 

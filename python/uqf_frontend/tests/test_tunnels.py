@@ -163,17 +163,17 @@ def test_the_chosen_processes_and_local_ports_pass_through(registry):
         ({"local": ["rdb1"]}, "give PROC:PORT"),
     ],
 )
-def test_a_plan_uqs_refuses_is_a_400_with_its_words(registry, params, said):
+def test_a_plan_uqs_refuses_is_a_422_with_its_words(registry, params, said):
     resp = _client(Ssh()).get("/services/box/tunnel", params=params)
-    assert resp.status_code == 400
+    assert resp.status_code == 422
     assert resp.json()["error"] == "TunnelPlanRefused"
     assert said in resp.json()["detail"]
 
 
-def test_a_local_port_in_non_ascii_digits_is_an_invalid_port_400(registry):
+def test_a_local_port_in_non_ascii_digits_is_an_invalid_port_422(registry):
     """'²' passes str.isdigit and fails int() - a refusal, never a 500 (#2064)."""
     resp = _client(Ssh()).get("/services/box/tunnel", params={"local": ["rdb1:\u00b2"]})
-    assert resp.status_code == 400, resp.text
+    assert resp.status_code == 422, resp.text
     assert resp.json()["error"] == "TunnelPlanRefused"
     assert "give PROC:PORT" in resp.json()["detail"]
 
@@ -197,7 +197,7 @@ def test_a_malformed_check_record_reads_as_unverified_not_a_500(registry, tmp_pa
 
 def test_a_recent_check_record_still_reads_as_verified(registry, tmp_path):
     at = datetime.now(UTC).isoformat()
-    record = {"at": at, "identity": "rdb1", "remote_port": 6002, "local_port": 16002,
+    record = {"at": at, "reported_process": "rdb1", "remote_port": 6002, "local_port": 16002,
               "release": "r9"}  # fmt: skip
     (tmp_path / "tunnel_checks.json").write_text(json.dumps({"targets": {"box": {"rdb1": record}}}))
     resp = _client(Ssh()).get("/services/box/tunnel")
@@ -238,7 +238,7 @@ def test_the_check_reports_each_endpoint_and_feeds_the_plan_its_states(registry,
     assert resp.status_code == 200, resp.text
     report = resp.json()
     by = {e["process"]: e for e in report["endpoints"]}
-    assert (by["rdb1"]["status"], by["rdb1"]["identity"]) == ("ok", "rdb1")
+    assert (by["rdb1"]["status"], by["rdb1"]["reported_process"]) == ("ok", "rdb1")
     assert by["gateway1"]["gateway_servers"] == ["rdb"]
     assert by["hdb1"]["status"] == "unreachable"  # healthy ones stay visible beside it
     assert report["ok"] is False and report["release"] == "r9"

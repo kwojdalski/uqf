@@ -372,7 +372,7 @@ function CoverageView() {
       setError("");
       resource.refresh();
       record("submit", "coverage.check", {
-        target: range.dataset,
+        subject: range.dataset,
         detail: {
           dataset: range.dataset,
           source_version: range.source_version,
@@ -594,7 +594,7 @@ function DeskView() {
       resource.refresh();
       // How many filters, never their values: those are whatever was typed.
       record("submit", "desk.apply", {
-        target: selected.name,
+        subject: selected.name,
         detail: {
           tier,
           limit,
@@ -605,7 +605,7 @@ function DeskView() {
     } catch (error) {
       setError((error as Error).message);
       record("submit", "desk.apply", {
-        target: selected.name,
+        subject: selected.name,
         outcome: "refused",
         detail: { reason: "invalid input" },
       });
@@ -636,7 +636,7 @@ function DeskView() {
               onClick={(event) => {
                 if (item.name !== selected?.name)
                   record("select", "desk.table", {
-                    target: item.name,
+                    subject: item.name,
                     trigger: triggerOf(event),
                   });
                 setTable(item.name);
@@ -673,18 +673,16 @@ function DeskView() {
                     {selected?.description}
                     {selected?.description ? " · " : ""}
                     {resource.data.row_count.toLocaleString()} rows returned
-                    {resource.data.truncated
-                      ? " · Server row cap reached"
-                      : resource.data.row_count >= applied.limit
-                        ? " · Showing the first " +
-                          applied.limit +
-                          "; more rows may exist"
-                        : ""}
+                    {resource.data.truncated &&
+                      (resource.data.cut_by === "max_rows"
+                        ? " · Server row cap reached; more rows exist"
+                        : " · Showing the first " +
+                          resource.data.row_count.toLocaleString() +
+                          "; more rows exist")}
                   </p>
                   {display === "Plot" ? (
                     <PlotPanel
                       result={resource.data}
-                      limit={applied.limit}
                       types={typesFor(catalog.data, resource.data.table)}
                     />
                   ) : (
@@ -713,7 +711,7 @@ function DeskView() {
                     onChange={(event) => {
                       setTier(event.target.value as Tier);
                       record("select", "desk.tier", {
-                        target: selected?.name,
+                        subject: selected?.name,
                         detail: { tier: event.target.value },
                       });
                     }}
@@ -1023,6 +1021,12 @@ function OpsView({
           {data.summary && <Summary values={data.summary} />}
           <section className="panel">
             <h2>{view}</h2>
+            {data.truncated && data.rows && (
+              <p className="notice pending" role="status">
+                Showing the newest {data.rows.length.toLocaleString()}; more
+                rows exist.
+              </p>
+            )}
             {data.processes_configured === 0 && (
               <p className="notice pending">
                 No processes configured for usage collection. This is not an
@@ -1304,7 +1308,9 @@ export function workerConfigOutcome(r: WorkerConfigResult): string {
   );
 }
 
-/** Lifecycle actions that take something down: each asks to be confirmed. */
+/** Lifecycle actions that take something down: each asks to be confirmed,
+ *  and the server refuses one sent without `confirmed: true`
+ *  (models.CONFIRMED_LIFECYCLE, #2244). */
 const DESTRUCTIVE = new Set(["stop", "restart"]);
 
 /** The outcome a worker-config response supports (#634): set is not in effect. */
@@ -1368,28 +1374,30 @@ function ControlView() {
     action: string,
     kind: "submit" | "confirm",
     trigger: ReturnType<typeof triggerOf>,
-    target = procs,
+    selector = procs,
     chosen = mode,
   ) {
     run(action, async () => {
       const r = await tracked(
         kind,
         `process.${action}`,
-        { target, trigger, detail: { mode: chosen } },
+        { subject: selector, trigger, detail: { mode: chosen } },
         (correlation) =>
           mutate<CommandResult>(
-            `/control/process/${encodeURIComponent(action)}`,
-            { procs: target } satisfies LifecycleBody,
+            `/control/lifecycle/${encodeURIComponent(action)}`,
+            (DESTRUCTIVE.has(action)
+              ? { procs: selector, confirmed: kind === "confirm" }
+              : { procs: selector }) satisfies LifecycleBody,
             "POST",
             correlation,
           ),
         (r) => (r.ok ? "succeeded" : "failed"),
       );
-      return `${r.action} ${r.target}: exit ${r.exit_code}\n${r.output}`;
+      return `${r.action} ${r.procs}: exit ${r.exit_code}\n${r.output}`;
     });
   }
   function cancel(trigger: ReturnType<typeof triggerOf>) {
-    record("cancel", `process.${confirming}`, { target: held.procs, trigger });
+    record("cancel", `process.${confirming}`, { subject: held.procs, trigger });
     setConfirming("");
   }
 
@@ -1548,7 +1556,7 @@ function ControlView() {
                   if (!DESTRUCTIVE.has(action))
                     return lifecycle(action, "submit", triggerOf(event));
                   record("submit", `process.${action}`, {
-                    target: procs,
+                    subject: procs,
                     trigger: triggerOf(event),
                     detail: { mode },
                   });
@@ -1614,13 +1622,13 @@ function ControlView() {
               "submit",
               "process.config",
               {
-                target: cfg.process,
+                subject: cfg.process,
                 trigger: triggerOf(),
                 detail: { process: cfg.process, field: cfg.field },
               },
               (correlation) =>
                 mutate<ProcessConfigResult>(
-                  `/control/process/${encodeURIComponent(cfg.process)}/config`,
+                  `/control/processes/${encodeURIComponent(cfg.process)}/config`,
                   {
                     field: cfg.field,
                     value: cfg.value,
@@ -1692,13 +1700,13 @@ function ControlView() {
               "submit",
               "worker.config",
               {
-                target: wcfg.key,
+                subject: wcfg.key,
                 trigger: triggerOf(),
                 detail: { key: wcfg.key },
               },
               (correlation) =>
                 mutate<WorkerConfigResult>(
-                  "/control/worker-config",
+                  "/control/worker/config",
                   wcfg,
                   "PUT",
                   correlation,
@@ -1750,7 +1758,7 @@ function ControlView() {
               "submit",
               "backfill.start",
               {
-                target: bf.worker,
+                subject: bf.worker,
                 trigger: triggerOf(),
                 detail: {
                   worker: bf.worker,
@@ -1870,7 +1878,7 @@ function Workspace() {
                 onClick={(event) => {
                   if (item !== view)
                     record("navigate", "view.open", {
-                      target: item,
+                      subject: item,
                       trigger: triggerOf(event),
                       detail: { from_view: view },
                     });
@@ -1886,7 +1894,7 @@ function Workspace() {
           </nav>
           <p className="sidebar-note">
             {access.authenticated
-              ? `Signed in as ${access.identity}`
+              ? `Signed in as ${access.user}`
               : "Local session"}
             <br />
             {access.inspection?.active

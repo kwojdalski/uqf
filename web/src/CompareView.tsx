@@ -12,13 +12,25 @@
 import { useState, type FormEvent } from "react";
 import {
   validateTime,
+  type Catalog,
   type CompareBody,
   type CompareResult,
   type CompareTable,
+  type FilterOp,
+  type QueryFilter,
   writeToken,
 } from "./api";
 import { useResource } from "./useResource";
 import { record } from "./activity";
+
+/** One filter as typed: the Desk's {column, op, value}, with the column
+ *  typed rather than chosen, since a side may be a target this stack's
+ *  catalog does not describe (#2223). */
+export interface FilterDraft {
+  column: string;
+  op: FilterOp;
+  raw: string;
+}
 
 /** What the form holds, as typed. */
 interface Form {
@@ -27,10 +39,32 @@ interface Form {
   tables: string;
   from: string;
   to: string;
-  filters: string;
+  filters: FilterDraft[];
   limit: string;
   sourceVersion: string;
   partition: string;
+}
+type TextField = Exclude<keyof Form, "filters">;
+
+/** A typed filter as /compare takes it: the value as text, which q types by
+ *  the column it names on each side; `in` a JSON list, as on the Desk. */
+export function compareFilter(draft: FilterDraft): QueryFilter {
+  const column = draft.column.trim();
+  if (!column) throw new Error("Name each filter's column.");
+  if (draft.op !== "in") {
+    if (!draft.raw.trim())
+      throw new Error(`Give the filter on ${column} a value.`);
+    return { column, op: draft.op, value: draft.raw.trim() };
+  }
+  let values: unknown;
+  try {
+    values = JSON.parse(draft.raw);
+  } catch {
+    values = null;
+  }
+  if (!Array.isArray(values) || values.length === 0)
+    throw new Error('Use a non-empty JSON list, e.g. ["EURUSD", "GBPUSD"].');
+  return { column, op: draft.op, value: values };
 }
 
 const START: Form = {
@@ -39,7 +73,7 @@ const START: Form = {
   tables: "",
   from: "",
   to: "",
-  filters: "",
+  filters: [],
   limit: "1000",
   sourceVersion: "",
   partition: "",
@@ -63,19 +97,24 @@ export function compareBody(form: Form): CompareBody {
   const limit = Number(form.limit);
   if (!Number.isInteger(limit) || limit < 1)
     throw new Error("The row limit is a whole number of rows, at least 1.");
+  const sourceVersion = form.sourceVersion.trim() || null;
   return {
     left,
     right,
     tables,
     range_from: form.from.trim(),
     range_to: form.to.trim(),
-    filters: form.filters
-      .split("\n")
-      .map((f) => f.trim())
-      .filter(Boolean),
+    filters: form.filters.map(compareFilter),
     limit,
-    source_version: form.sourceVersion.trim() || null,
-    partition: form.partition.trim() || null,
+    source_version: sourceVersion,
+    // With a source version the slice is always said, and a blank partition
+    // is "" - the dataset has no partition dimension - as on the Coverage
+    // view (#2221). Without one, a partition is sent as typed, so the server
+    // refuses it rather than this form dropping it.
+    partition:
+      sourceVersion !== null
+        ? form.partition.trim()
+        : form.partition.trim() || null,
   };
 }
 
@@ -87,7 +126,7 @@ function Input({
   placeholder,
   type = "text",
 }: {
-  name: keyof Form;
+  name: TextField;
   label: string;
   value: string;
   onChange: (value: string) => void;
@@ -234,8 +273,18 @@ export function CompareView() {
     false,
     token ? `Bearer ${token}` : undefined,
   );
-  const set = (name: keyof Form) => (value: string) =>
+  const set = (name: TextField) => (value: string) =>
     setForm((prev) => ({ ...prev, [name]: value }));
+  // The operators /query takes, as /catalog serves them - the Desk's list.
+  const catalog = useResource<Catalog>("/catalog", undefined, false);
+  const operators = (catalog.data?.operators ?? []) as FilterOp[];
+  const setFilter = (index: number, change: Partial<FilterDraft>) =>
+    setForm((prev) => ({
+      ...prev,
+      filters: prev.filters.map((f, i) =>
+        i === index ? { ...f, ...change } : f,
+      ),
+    }));
   function submit(event: FormEvent) {
     event.preventDefault();
     let body: CompareBody;
@@ -248,7 +297,7 @@ export function CompareView() {
     setProblem(null);
     const next = JSON.stringify(body);
     record("submit", "compare.run", {
-      target: `${body.left}..${body.right}`,
+      subject: `${body.left}..${body.right}`,
     });
     if (next === sent) result.refresh();
     setSent(next);
@@ -322,19 +371,77 @@ export function CompareView() {
               label="Slice (coverage)"
               value={form.partition}
               onChange={set("partition")}
-              placeholder="optional"
+              placeholder="blank: no partition dimension"
             />
-            <label>
-              Filters, one per line
-              <textarea
-                name="filters"
-                data-activity="compare.filters"
-                placeholder={"sym=EURUSD,GBPUSD\nnotional>=1000000"}
-                value={form.filters}
-                onChange={(event) => set("filters")(event.target.value)}
-              />
-            </label>
           </div>
+          <div className="section-heading">
+            <h3>Filters</h3>
+            <button
+              type="button"
+              data-activity="compare.filter.add"
+              disabled={!operators.length || form.filters.length >= 20}
+              onClick={() =>
+                setForm((prev) => ({
+                  ...prev,
+                  filters: [...prev.filters, { column: "", op: "eq", raw: "" }],
+                }))
+              }
+            >
+              Add filter
+            </button>
+          </div>
+          {form.filters.map((filter, index) => (
+            <div className="filter" key={index}>
+              <label>
+                Column
+                <input
+                  data-activity="compare.filter.column"
+                  placeholder="sym"
+                  value={filter.column}
+                  onChange={(event) =>
+                    setFilter(index, { column: event.target.value })
+                  }
+                />
+              </label>
+              <label>
+                Operator
+                <select
+                  data-activity="compare.filter.op"
+                  value={filter.op}
+                  onChange={(event) =>
+                    setFilter(index, { op: event.target.value as FilterOp })
+                  }
+                >
+                  {operators.map((op) => (
+                    <option key={op}>{op}</option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Value{filter.op === "in" ? " (JSON list)" : ""}
+                <input
+                  data-activity="compare.filter.value"
+                  value={filter.raw}
+                  onChange={(event) =>
+                    setFilter(index, { raw: event.target.value })
+                  }
+                />
+              </label>
+              <button
+                type="button"
+                data-activity="compare.filter.remove"
+                aria-label={`Remove filter ${index + 1}`}
+                onClick={() =>
+                  setForm((prev) => ({
+                    ...prev,
+                    filters: prev.filters.filter((_, i) => i !== index),
+                  }))
+                }
+              >
+                Remove
+              </button>
+            </div>
+          ))}
           <div className="form-footer">
             <span>{result.loading ? "Comparing…" : ""}</span>
             <button className="primary" data-activity="compare.run">
@@ -366,9 +473,10 @@ export function CompareView() {
             <p className="note mono">
               [{doc.range_from}, {doc.range_to}) · at most{" "}
               {doc.limit.toLocaleString()} rows per side
-              {doc.filters.length > 0 && ` · ${doc.filters.join(" and ")}`}
-              {doc.source_version &&
-                ` · coverage at ${doc.source_version}${doc.partition ? `/${doc.partition}` : ""}`}
+              {doc.filters.length > 0 &&
+                ` · ${doc.filters.map((f) => `${f.column} ${f.op} ${JSON.stringify(f.value)}`).join(" and ")}`}
+              {doc.source_version !== null &&
+                ` · coverage at ${doc.source_version}, ${doc.partition ? `partition ${doc.partition}` : "no partition dimension"}`}
             </p>
           </section>
           {doc.tables.map((t) => (

@@ -96,7 +96,7 @@ def test_the_identity_program_is_used_for_probing():
     assert fleet.calls[-1][1] == ops.IDENTITY
 
 
-def test_endpoint_reports_groups_and_summary(tmp_path):
+def test_endpoint_reports_proctypes_and_summary(tmp_path):
     path = tmp_path / "process.csv"
     path.write_text(
         HEADER
@@ -122,7 +122,8 @@ def test_endpoint_reports_groups_and_summary(tmp_path):
         "undetermined": 0,
         "identity_mismatches": 0,
     }
-    assert body["groups"] == {"hdb": 2, "rdb": 1}
+    assert body["proctypes"] == {"hdb": 2, "rdb": 1}
+    assert "groups" not in body
     assert body["poll_seconds"] > 0
 
 

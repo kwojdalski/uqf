@@ -37,12 +37,10 @@ check:{[label;ok]
 root:statusdir,"/hdb";
 system"mkdir -p ",root;
 (hsym `$root,"/sym") set `symbol$();
-/ q's rand starts from a fixed seed: seeded per process, so a leftover receiver on
-/ an earlier run's port never answers for this one, and a port in use is refused.
-system"S ",string .z.i;
-port:5510+`int$rand 400;
-if[not null @[{hopen (`$":localhost:",string x;200)};port;{0Ni}];
-    [-2 "run_remote_writer: port ",string[port]," is already in use - not this run's receiver"; exit 1]];
+/ The port is one the OS hands out (.qt.support.free_port), not a random draw
+/ from 5510+, where TorQ stacks run (#2259); one that already answers - a
+/ leftover receiver - is skipped, never tested as this run's receiver.
+port:.qt.support.free_port[];
 log_path:statusdir,"/remote_receiver.log";
 / the receiver contract the destination's operator approved, derived here from the worker's
 / declarations as `uqs job attachment contract export` derives it (#1717): the receiver loads no worker

@@ -15,11 +15,9 @@ import {
 
 export function PlotPanel({
   result,
-  limit,
   types,
 }: {
   result: QueryResult;
-  limit: number;
   types: Record<string, string> | undefined;
 }) {
   const offered = plottableColumns(result.rows, types);
@@ -41,7 +39,7 @@ export function PlotPanel({
         {offered.x.length ? "" : " and nothing to order it by"}.
       </p>
     );
-  const cut = truncation(result, limit);
+  const cut = truncation(result);
   return (
     <div className="plot-panel">
       <div className="fields plot-fields">
@@ -109,7 +107,6 @@ export function PlotPanel({
           name="desk.plot.figure"
           figure={figureFor({
             result,
-            limit,
             types: types ?? {},
             x: xColumn,
             ys: yColumns,

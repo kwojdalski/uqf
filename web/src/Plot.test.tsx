@@ -40,6 +40,7 @@ function result(rows: QueryResult["rows"], extra = {}): QueryResult {
     rows,
     row_count: rows.length,
     truncated: false,
+    cut_by: null,
     poll_seconds: 10,
     ...extra,
   };
@@ -98,7 +99,6 @@ it("leaves nulls and infinities as gaps, never 0", () => {
   expect(yValue(0)).toBe(0);
   const figure = figureFor({
     result: result(rows),
-    limit: 100,
     types,
     x: "time",
     ys: ["bid", "ask"],
@@ -128,30 +128,30 @@ it("reads every temporal x the server sends, and nothing else", () => {
 });
 
 it("labels a truncated result on the chart itself", () => {
-  const title = (r: QueryResult, limit: number) =>
+  const title = (r: QueryResult) =>
     JSON.stringify(
       figureFor({
         result: r,
-        limit,
         types,
         x: "size",
         ys: ["bid"],
         mode: "markers",
       }).layout,
     );
-  expect(title(result(rows, { truncated: true }), 100)).toContain(
-    "Truncated: the server row cap was reached at 3 rows",
+  // the server says which bound cut it (#2220); nothing is guessed here
+  expect(
+    title(result(rows, { truncated: true, cut_by: "max_rows" })),
+  ).toContain("Truncated: the server row cap was reached at 3 rows");
+  expect(title(result(rows, { truncated: true, cut_by: "limit" }))).toContain(
+    "Truncated: the first 3 rows; more exist",
   );
-  expect(title(result(rows), 3)).toContain(
-    "Truncated: the first 3 rows; more may exist",
-  );
-  expect(title(result(rows), 100)).not.toContain("Truncated");
+  expect(title(result(rows))).not.toContain("Truncated");
 });
 
 it("draws the chosen x against up to three y columns, as line or scatter", () => {
   const wide = { ...types, a: "float", b: "float" };
   const r = result(rows.map((row, i) => ({ ...row, a: i, b: i })));
-  render(<PlotPanel result={r} limit={100} types={wide} />);
+  render(<PlotPanel result={r} types={wide} />);
   expect(screen.getByTestId("figure")).toHaveAttribute(
     "data-name",
     "desk.plot.figure",
@@ -176,13 +176,7 @@ it("draws the chosen x against up to three y columns, as line or scatter", () =>
 });
 
 it("says so when there is nothing numeric to draw", () => {
-  render(
-    <PlotPanel
-      result={result([{ sym: "EURUSD" }])}
-      limit={100}
-      types={types}
-    />,
-  );
+  render(<PlotPanel result={result([{ sym: "EURUSD" }])} types={types} />);
   expect(screen.getByText(/no numeric column to plot/)).toBeInTheDocument();
   expect(screen.queryByTestId("figure")).toBeNull();
 });
@@ -210,7 +204,7 @@ it("switches a Desk result between its table and its plot", async () => {
               ],
               operators: ["eq"],
             })
-          : ok(result(rows, { truncated: true })),
+          : ok(result(rows, { truncated: true, cut_by: "max_rows" })),
     ),
   );
   render(<App />);

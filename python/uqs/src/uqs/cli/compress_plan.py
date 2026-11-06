@@ -38,7 +38,7 @@ from uqs.cli.hdb_scope import tables_given
 from uqs.cli.json_out import emit
 from uqs.cli.shared import _paths, console
 from uqs.logger import get_logger
-from uqs.paths import UqsError, UqsPaths, UqsUsageError
+from uqs.paths import UqsError, UqsPaths
 from uqs.stack import compress as stack_compress
 from uqs.stack import hdb_alter
 
@@ -106,13 +106,8 @@ def plan_and_apply(sc: stack_compress.Scope, *, apply: bool, yes: bool, as_json:
 
 def _confirm(paths: UqsPaths, todo: list[str], *, yes: bool, as_json: bool) -> None:
     """Ask once before the first partition; under --json, --yes or nothing."""
-    if yes:
-        return
-    if as_json:
-        raise UqsUsageError(
-            "--json cannot ask for confirmation: add --yes to compress. Nothing was changed."
-        )
-    safety.confirm(f"Compress {len(todo)} partition(s) of {paths.hdb_dir}?", yes=False)
+    safety.json_needs_yes(as_json, yes, "compress")
+    safety.confirm(f"Compress {len(todo)} partition(s) of {paths.hdb_dir}?", yes=yes)
 
 
 def run(paths: UqsPaths, sc: stack_compress.Scope, todo: list[str], *, as_json: bool) -> dict:
@@ -189,7 +184,10 @@ class Audit:
                 source="server",
                 kind=activity.SERVER_KIND,
                 action=ACTION,
-                target=str(paths.hdb_dir),
+                # this stack's own HDB: `local`, and the directory is what
+                # was acted on there (#2234)
+                target="local",
+                subject=str(paths.hdb_dir),
                 outcome="pending",
                 claimed_user=getpass.getuser(),
                 method="CLI",
@@ -207,9 +205,9 @@ class Audit:
     def _write(self, done: list[dict], failed: dict | None, **fields: Any) -> None:
         if self.store is None or self.event_id is None:
             return
-        items = [{"target": d["partition"], "outcome": "succeeded"} for d in done]
+        items = [{"subject": d["partition"], "outcome": "succeeded"} for d in done]
         if failed:
-            items.append({"target": failed["partition"], "outcome": "failed"})
+            items.append({"subject": failed["partition"], "outcome": "failed"})
         detail = {
             "process": stack_compress.PROCESS,
             "item_count": len(done),

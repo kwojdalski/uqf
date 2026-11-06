@@ -130,7 +130,8 @@ def test_the_list_carries_each_charts_schema_and_point_limit():
 
 def test_an_unknown_chart_is_refused_by_name():
     r = client().post("/charts/nope", json={})
-    assert r.status_code == 422
+    assert r.status_code == 404
+    assert r.json()["error"] == "ChartNotFound"
     assert "unknown chart 'nope'" in r.json()["detail"]
 
 

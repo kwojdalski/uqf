@@ -14,13 +14,13 @@ const NO_INSPECTION: Inspection = {
 };
 
 function capabilities(
-  identity: string,
+  user: string,
   groups: string[],
   granted: [string, "read" | "write"][],
   inspection: Inspection = NO_INSPECTION,
 ): Capabilities {
   return {
-    identity,
+    user,
     authenticated: true,
     groups,
     capabilities: granted.map(([feature, action]) => ({ feature, action })),
@@ -128,7 +128,7 @@ it("records no activity for a caller without activity:write", async () => {
   serve(VIEWER);
   render(<App />);
   await waitFor(() => expect(navNames()).toEqual(["Coverage", "Desk"]));
-  expect(record("navigate", "view.open", { target: "Desk" })).toBeNull();
+  expect(record("navigate", "view.open", { subject: "Desk" })).toBeNull();
   expect(queuedActivity()).toEqual([]);
 });
 

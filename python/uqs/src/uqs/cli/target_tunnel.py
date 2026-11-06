@@ -67,7 +67,7 @@ PlanJson = json_opt(
 CheckJson = json_opt(
     '{"ok", "target", "ssh", "release", "checked_at", "category", "error", "launch_command", '
     '"endpoints": [{process, proctype, production_endpoint, local_endpoint, status, detail, '
-    'layers, connected, identity, gateway_servers, last_success}], "categories"}'
+    'layers, connected, reported_process, gateway_servers, last_success}], "categories"}'
 )
 
 
@@ -155,7 +155,7 @@ def _show(report: dict[str, Any]) -> None:
         return
     console.print(f"{where} runs release {report['release']}")
     table = Table()
-    for column in ("process", "production", "local", "status", "identity", "last success"):
+    for column in ("process", "production", "local", "status", "reported", "last success"):
         table.add_column(column)
     for e in report["endpoints"]:
         status = "[green]ok[/]" if e["status"] == "ok" else f"[red]{e['status']}[/]"
@@ -164,7 +164,7 @@ def _show(report: dict[str, Any]) -> None:
         last = (e["last_success"] or {}).get("at") or "never"
         table.add_row(
             e["process"], e["production_endpoint"], e["local_endpoint"], status,
-            e["identity"] or "-", last,
+            e["reported_process"] or "-", last,
         )  # fmt: skip
     console.print(table)
     for e in report["endpoints"]:
