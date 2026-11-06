@@ -67,7 +67,9 @@
 / previous day's last half hour. Nothing is published at the roll; there is
 / no day to close. The cost is on RESTART: the plant's log is per day, so a
 / replay after midnight holds only today's rows. The job records `covered_from`,
-/ the plant's local midnight before the first clock it saw (the log begins at the roll),
+/ the instant the plant says its log began (the transport's plant_roll, #2191: run_stream's rolls
+/ at local midnight, the TorQ STP at its own roll zone, GMT by default) or, where it cannot say,
+/ the first clock it saw,
 / and publishes a window length only when its whole span is covered - a 1h
 / window restarted at 00:30 is withheld until 01:00, logged when the set of
 / withheld windows changes, rather than publishing a rate over half the hour.
@@ -93,6 +95,14 @@
 .qetl.job.stream.rolling.registry:(`symbol$())!();
 
 .qetl.job.stream.registries:distinct .qetl.job.stream.registries,`.qetl.job.stream.rolling.registry;
+
+/ job -> the transport's plant_roll (#2191), ENLISTED: a niladic function giving
+/ the UTC instant the plant's log began, or null. Recorded by .qetl.job.stream.start.
+/ The plant owns that fact - run_stream's rolls at the host's local midnight, the
+/ TorQ STP at .eodtime.rolltimezone - so no zone is assumed here. A transport
+/ without the key, or whose plant cannot say, leaves the job claiming only from
+/ the first clock it sees. A job not started through start has no entry.
+.qetl.job.stream.rolling.roll_hooks:(`symbol$())!()
 
 / What every rolling job declares.
 .qetl.job.stream.rolling.required_keys:`events`transform`outputs`windows`lateness`period
@@ -293,7 +303,7 @@
     pq insert x where not out;
     stamps:rcv where not null rcv;
     if[count stamps;
-        .qetl.job.stream.rolling.mark_covered[ns;min stamps];
+        .qetl.job.stream.rolling.mark_covered[name;ns;min stamps];
         span:(last d`windows)+d`lateness;
         / anchored on the grid point the next publication cuts at, as evaluate is:
         / a batch landing after a boundary but before the timer must not evict
@@ -302,12 +312,34 @@
         .qetl.job.stream.evict[pq;((get pq) tc)<=keep_from]];
     }
 
-/ Private: the buffer is complete from the start of the day of the first clock
-/ the job saw - the plant's log begins at the roll - and never earlier.
+/ Private: the instant the plant's log began, as the transport reports it
+/ (plant_roll, #2191), never the host's zone: the TorQ STP rolls at
+/ .eodtime.rolltimezone, run_stream's plant at the host's local midnight, and
+/ #1250 and #2191 each broke the other by assuming one. Null when the plant
+/ cannot say. A job not started through a transport (a test driving on_batch)
+/ has no hook and gets the in-process plant's convention, the local midnight.
+/ A failing hook is a warning and a null, never a stopped job.
 / @private
-.qetl.job.stream.rolling.mark_covered:{[ns;clock]
+.qetl.job.stream.rolling.plant_roll:{[name;clock]
+    h:.qetl.job.stream.rolling.roll_hooks;
+    if[not name in key h; :.qetl.job.stream.rolling.day_start clock];
+    r:@[{(1b;x[])};first h name;{(0b;x)}];
+    if[not first r;
+        .qetl.log.warn[name;"the plant could not say when its log began - covering from the first message";enlist[`error]!enlist last r];
+        :0Np];
+    $[-12h=type last r; last r; 0Np]}
+
+/ Private: the buffer is complete from the instant the plant's log began and
+/ never earlier. Where the plant cannot say, from the first clock the job saw:
+/ the first message is never before the log's start, so the claim can only
+/ under-state - a window withheld longer, never one published over part of
+/ its span. A roll the hook reports after the first clock is not believed.
+/ @private
+.qetl.job.stream.rolling.mark_covered:{[name;ns;clock]
     cf:` sv ns,`covered_from;
-    if[null get cf; cf set .qetl.job.stream.rolling.day_start clock];
+    if[null get cf;
+        roll:.qetl.job.stream.rolling.plant_roll[name;clock];
+        cf set $[null roll; clock; roll<=clock; roll; clock]];
     }
 
 / Private: grid points the log or the plant says are published.
@@ -330,7 +362,7 @@
     pq:` sv ns,`pending; lq:` sv ns,`last_as_of;
     as_of:(d`period) xbar now;
     if[$[null get lq; 0b; as_of<=get lq]; :0];
-    .qetl.job.stream.rolling.mark_covered[ns;now];
+    .qetl.job.stream.rolling.mark_covered[name;ns;now];
     cf:get ` sv ns,`covered_from;
     .qetl.job.stream.rolling.note_withheld[name;ns;as_of;cf];
     out:.qetl.job.stream.rolling.compute[name;get pq;as_of;cf];
@@ -351,7 +383,7 @@
     if[now_withheld~get wq; :()];
     wq set now_withheld;
     $[count now_withheld;
-        .qetl.log.warn[name;"windows withheld until the buffer covers them - the day's log begins at the roll";`windows`covered_from!(now_withheld;cf)];
+        .qetl.log.warn[name;"windows withheld until the buffer covers them - the replayed log began later than they reach";`windows`covered_from!(now_withheld;cf)];
         .qetl.log.info[name;"every window is covered";enlist[`covered_from]!enlist cf]];
     }
 

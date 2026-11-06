@@ -109,7 +109,9 @@
     if[not feed;
         hooks:.qtorq.plant_hooks[
             {[] .qproc.stream.h"(.stplg.kdbtplog;.proc.procname;.stplg.dldir)"};
-            .qetl.job.stream.subscriptions job]];
+            .qetl.job.stream.subscriptions job];
+        / the plant's own roll, for a rolling job's coverage claim (#2191)
+        hooks[`plant_roll]:{[] .qtorq.plant_roll .qproc.stream.h}];
     base,hooks}
 
 / What a polling feed's tick asks to know where a page went (#1651,

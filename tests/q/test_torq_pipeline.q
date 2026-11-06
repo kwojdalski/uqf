@@ -404,6 +404,10 @@
 .qt.qtorq.pipeline.test_the_day_a_plant_directory_is_for_is_the_date_it_ends_in:{[t]
     .qunit.assertEquals[.qtorq.dir_day `$":/data/tplogs/stp1_2026.10.09";2026.10.09;"the plant's own naming"]};
 
+.qt.qtorq.pipeline.test_plant_roll_is_a_day_before_the_plants_next_roll:{[t]
+    / the plant's own boundary, whatever zone the host or this process is in (#2191)
+    .qunit.assertEquals[.qtorq.plant_roll {[q] 2026.10.11D00:00:00};2026.10.10D00:00:00;"asked of the plant: its next roll less a day"]};
+
 .qt.qtorq.pipeline.test_plant_day_is_the_day_of_the_plants_current_log_directory:{[t]
     root:.qt.qtorq.pipeline.plant_root[];
     hooks:.qtorq.plant_hooks[.qt.qtorq.pipeline.ask[root;` sv root,`stp1_2026.10.08];`pos`fill];

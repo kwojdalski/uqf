@@ -413,6 +413,17 @@ plant_hooks:{[ask;want]
         {[id;ask;want;day]
             plant_try[id;ask;"has_log says no log";0b;{[want;day;loc] has_log[loc 0;loc 1;want;day]}[want;day]]}[id;ask;want])}
 
+/ The UTC instant the plant's current log began (#2191): the plant's own roll
+/ boundary, asked of it, never the job's zone or UTC midnight - the segmented
+/ STP rolls at .eodtime.rolltimezone (GMT by default), whatever the host's zone
+/ is. The plant keeps the NEXT roll (.eodtime.nextroll), so the log began a day
+/ before it. (On a roll zone with daylight saving, the two days a year of 23 or
+/ 25 hours put this an hour out; GMT, the default, has none.)
+/ @param h the handle to the plant
+/ @return a timestamp
+/ @eg .qtorq.plant_roll {[q] 2026.10.11D00:00:00}  / 2026.10.10D00:00:00.000000000
+plant_roll:{[h] (h".eodtime.nextroll")-1D}
+
 / Scratch for earlier_days: one log's messages, and the span's.
 collected:()
 got:()
