@@ -380,6 +380,20 @@ disk_cols:{[dir] get ` sv dir,`.d}
 / @return the missing columns, in declared order
 missing_cols:{[table_name;dir] (cols value table_name) except disk_cols dir}
 
+/ Write a table, already run through .Q.en against root, as a splayed table at dir. PeachQ's
+/ splayed `set` enumerates symbols again against a `sym` file it creates in dir's PARENT, the
+/ date folder, where KDB-X refuses one (#2285). Column by column puts them against root's.
+/ @param root the HDB root
+/ @param dir the table directory to write
+/ @param t the table
+/ @return the directory
+write_splay:{[root;dir;t]
+    `sym set get ` sv root,`sym;
+    c:cols t;
+    {[dir;c;v] (` sv dir,c) set v}[dir]'[c;{$[11h=type x; `sym$x; x]} each t c];
+    (` sv dir,`.d) set c;
+    dir}
+
 / Repair one table directory.
 / @return `table if it wrote an empty table, `skipped for a directory that
 /   exists with no .d, else the columns it added (empty when none was missing)
@@ -387,7 +401,7 @@ repair_dir:{[root;table_name;dir]
     if[()~key ` sv dir,`.d;
         / a directory that exists with no .d is not ours to write into
         if[not ()~key dir; :`skipped];
-        (` sv dir,`) set .Q.en[root;0#value table_name];
+        write_splay[root;dir;.Q.en[root;0#value table_name]];
         :`table];
     absent:missing_cols[table_name;dir];
     / a markout partition that already exists gets no config_id unless the migration was asked
