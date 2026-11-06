@@ -430,6 +430,10 @@ filter on it --- coverage under one source release says nothing about another.
 The filter is applied inside the q program rather than afterwards in Python, so
 a caller cannot omit it.
 
+A requested range on `GET /coverage` is both bounds or neither, as everywhere a
+coverage window is named: `range_from` alone, or `range_to` alone, is a 422
+naming the missing bound (#2222), never a 200 that ignored it.
+
 Interval composition: `[range_from, range_to)` is half-open and adjacent
 intervals compose **only at their common boundary**, so `[Mon,Tue)` and
 `[Tue,Wed)` merge while `[Mon,Tue)` and `[Wed,Thu)` leave Tuesday as a reported

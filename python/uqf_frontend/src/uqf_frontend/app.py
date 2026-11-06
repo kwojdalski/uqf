@@ -1185,7 +1185,12 @@ def create_app(
         no default REQUIRED, so omitting it is a 422 naming the field rather
         than a plausible answer computed across every partition (#185). Pass
         `""` for a dataset with no partition dimension.
+
+        The range is both bounds or neither (#2222), as on every route that
+        names a coverage window: one bound alone was parsed and then dropped,
+        answering 200 with no gaps for a question that was never asked.
         """
+        _refuse_a_lone_bound(range_from, range_to)
         # The dataset as the table: a policy refusing a table must refuse its
         # coverage too, or /coverage reads round what /query refuses.
         run_policy(request, table=dataset)
@@ -1856,6 +1861,25 @@ def _fleet_health(
         groups=dict(sorted(groups.items())),
         source=source,
         poll_seconds=ops.POLL_SECONDS["processes"],
+    )
+
+
+def _refuse_a_lone_bound(range_from: object, range_to: object) -> None:
+    """A coverage window is both its bounds or neither: one alone is a 422
+    RequestInvalid naming the missing bound, in the shape FastAPI's own
+    validation has, so a form marks the field (#2222)."""
+    if (range_from is None) == (range_to is None):
+        return
+    given, missing = ("range_from", "range_to") if range_to is None else ("range_to", "range_from")
+    raise RequestValidationError(
+        [
+            {
+                "loc": ("query", missing),
+                "msg": f"{missing} is required with {given} - a coverage window is "
+                "half-open [range_from, range_to)",
+                "type": "missing",
+            }
+        ]
     )
 
 
