@@ -101,6 +101,7 @@ from uqs.activity_log import (
     EVENT_LEVELS,
     EXPORT_MAX,
     OUTCOMES,
+    RENAMED_COLUMNS,
     SOURCES,
     Query,
     select,
@@ -252,12 +253,22 @@ DETAIL_KEYS: dict[str, Callable[[object], bool]] = {
     "shadowed": _is_bool,
     "saved": _is_bool,
     "reason": _is_name,
-    # uploads (#1951) and deletions (#1953): metadata about a file, never its bytes
-    "file_name": _is_name,
-    "size_bytes": _is_count,
+    # uploads (#1951), deletions (#1953) and pushes (#2002): metadata about a
+    # file, never its bytes - named as the route's own request and response
+    # name them (#2246). `path` is the whole relative path, `size` one file's
+    # bytes, `total_bytes` a whole push's, and `file_count` how many files any
+    # of these touched. Rows recorded before #2246 keep `file_name`,
+    # `size_bytes` and `item_count`.
+    "path": _is_name,
+    "size": _is_count,
+    "total_bytes": _is_count,
+    "file_count": _is_count,
     "sha256": _is_hex,
     "content_type": _is_name,
-    "item_count": _is_count,
+    # `uqs compress apply` (#2148): the partitions compressed and the bytes
+    # saved, as its report names them
+    "partition_count": _is_count,
+    "bytes_saved": _is_count,
     # config pushes (#2002): the push a file belongs to, the hash of what it
     # replaced (None on create), the push a restore undoes, the directory
     # pushed to (config_dir), and how many old pushes retention pruned - never content
@@ -368,14 +379,14 @@ def clean_items(raw: Iterable[Mapping[str, object]] | None) -> list[dict[str, st
 #: and test_activity.py fails until it is named - the hook #1951 and #1953
 #: add their upload and delete routes to.
 SERVER_ACTIONS: dict[tuple[str, str], Callable[[Mapping[str, str]], str]] = {
-    ("POST", "/services/{target}/files/delete"): lambda _: "files.delete",
+    ("DELETE", "/services/{target}/files"): lambda _: "files.delete",
     ("POST", "/control/process/{action}"): lambda p: (
         f"process.{p['action']}" if p.get("action") in ("start", "stop", "restart") else "process"
     ),
     ("PUT", "/control/process/{process}/config"): lambda _: "process.config",
     ("PUT", "/control/worker-config"): lambda _: "worker.config",
     ("POST", "/control/backfill"): lambda _: "backfill.start",
-    ("PUT", "/services/{target}/files/content"): lambda _: "files.upload",
+    ("PUT", "/services/{target}/files"): lambda _: "files.upload",
     # config pushes (#2002): `config.push` is the summary row of a whole push,
     # written when it closes; a restore is a push of its own
     ("POST", "/services/{target}/config/pushes"): lambda _: "config.push.open",
@@ -498,7 +509,7 @@ CREATE TABLE IF NOT EXISTS activity (
     acting       INTEGER NOT NULL DEFAULT 0,
     items        TEXT NOT NULL DEFAULT '[]',
     detail       TEXT NOT NULL DEFAULT '{}',
-    dropped      INTEGER NOT NULL DEFAULT 0
+    dropped_detail INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS activity_ts ON activity (ts);
 CREATE INDEX IF NOT EXISTS activity_recorded ON activity (recorded_at);
@@ -579,6 +590,9 @@ class ActivityStore:
             columns = {row[1] for row in self._db.execute("PRAGMA table_info(activity)")}
             if "level" not in columns:
                 self._db.execute(_LEVEL_COLUMN)
+            for old, new in RENAMED_COLUMNS.items():
+                if old in columns and new not in columns:
+                    self._db.execute(f"ALTER TABLE activity RENAME COLUMN {old} TO {new}")
             self._db.execute(_LEVEL_INDEX)
         except (sqlite3.Error, OSError) as exc:
             raise ValueError(
@@ -639,13 +653,13 @@ class ActivityStore:
             event.get("duration_ms"),
             json.dumps(clean_items(event.get("items"))),
             json.dumps(kept, sort_keys=True),
-            event.get("dropped", 0) + more,
+            more,
         )
 
     _INSERT = (
         "INSERT OR IGNORE INTO activity (event_id, ts, recorded_at, level, source, kind, "
         "action, target, outcome, session_id, request_id, claimed_user, trigger, method, "
-        "status_code, duration_ms, items, detail, dropped) "
+        "status_code, duration_ms, items, detail, dropped_detail) "
         "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
     )
 
@@ -720,7 +734,7 @@ class ActivityStore:
             return True
         sets = ", ".join(f"{name} = ?" for name in fields)
         changed = self._write(
-            f"UPDATE activity SET {sets}, dropped = dropped + ? WHERE event_id = ?",  # noqa: S608 - names from `allowed`
+            f"UPDATE activity SET {sets}, dropped_detail = dropped_detail + ? WHERE event_id = ?",  # noqa: S608 - names from `allowed`
             (*fields.values(), dropped, event_id),
         )
         return changed == 1

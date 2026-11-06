@@ -82,7 +82,7 @@ def check(
     runner: remote_files.Runner,
 ) -> dict[str, Any]:
     """`uqs target tunnel check NAME --json`'s document: never raises for
-    what it finds - each endpoint carries its own status."""
+    what it finds - each endpoint carries its own category."""
     from uqs.deploy import tunnel_check, tunnel_plan
 
     remote_files.target(settings, name)

@@ -61,7 +61,7 @@ def history(tmp_path) -> tuple[Path, TestClient]:
                 _event("2026-11-03T10:00:04Z", "debug", "request.finish",
                        target="GET /ops/queue", outcome="succeeded", duration_ms=3.0),
             ],
-            "dropped": [{"level": "debug", "reason": "sampled", "count": 5}],
+            "drops": [{"level": "debug", "reason": "sampled", "count": 5}],
         },
     )  # fmt: skip
     store: activity.ActivityStore = client.app.state.activity  # ty: ignore[unresolved-attribute]
@@ -149,8 +149,9 @@ def test_the_text_export_groups_the_stop_under_its_request(history):
     text = _run("activity", "export", "--db", str(db), "--request", RID)
     lines = text.splitlines()
     assert lines[3] == "# not in the history (counted, not shown): debug sampled 5"
-    assert lines[4] == f"request {RID[:8]} · process.stop · refused"
-    assert [line.split(" · ")[3] for line in lines[5:]] == [
+    assert lines[4] == f"# {activity_log.RENAMED_DETAIL_NOTE}"
+    assert lines[5] == f"request {RID[:8]} · process.stop · refused"
+    assert [line.split(" · ")[3] for line in lines[6:]] == [
         "browser submit process.stop",
         "browser confirm process.stop",
         "server POST process.stop",

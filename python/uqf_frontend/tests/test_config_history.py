@@ -107,7 +107,7 @@ def test_the_old_destination_key_is_refused_naming_config_dir(served, tmp_path):
 
 def _upload(c: TestClient, push: str, path: str, data: bytes, overwrite: bool = False):
     params = {"path": path, "push_id": push, "overwrite": str(overwrite).lower()}
-    return c.put("/services/box/files/content", params=params, content=data)
+    return c.put("/services/box/files", params=params, content=data)
 
 
 def _rows(c: TestClient, **filters) -> list[dict]:
@@ -139,7 +139,7 @@ def test_a_push_has_one_id_on_every_row_and_a_summary(served, tmp_path):
     rows = _by_action(c)
     (opened,) = rows["config.push.open"]
     assert opened["detail"]["push_id"] == push and opened["outcome"] == "succeeded"
-    uploads = {r["detail"]["file_name"]: r for r in rows["files.upload"]}
+    uploads = {r["detail"]["path"]: r for r in rows["files.upload"]}
     assert {r["detail"]["push_id"] for r in uploads.values()} == {push}
     assert uploads["shared/config/app.env"]["detail"]["previous_sha256"] == (
         hashlib.sha256(OLD_SECRET).hexdigest()
@@ -148,8 +148,8 @@ def test_a_push_has_one_id_on_every_row_and_a_summary(served, tmp_path):
     (summary,) = rows["config.push"]
     assert summary["target"] == "box" and summary["outcome"] == "succeeded"
     assert summary["detail"] == {
-        "push_id": push, "config_dir": "shared/config", "item_count": 2,
-        "size_bytes": len(NEW_SECRET) + 4,
+        "push_id": push, "config_dir": "shared/config", "file_count": 2,
+        "total_bytes": len(NEW_SECRET) + 4,
         # the x-uqf-user header is a claim, and the row says so (#2045)
         "identity": "claimed",
     }  # fmt: skip
@@ -162,7 +162,7 @@ def test_a_push_has_one_id_on_every_row_and_a_summary(served, tmp_path):
 def test_an_upload_must_name_its_push(served, tmp_path):
     runner = Loopback()
     c = _client(runner, tmp_path)
-    missing = c.put("/services/box/files/content", params={"path": "shared/config/x"},
+    missing = c.put("/services/box/files", params={"path": "shared/config/x"},
                     content=b"x")  # fmt: skip
     assert missing.status_code == 422
     malformed = _upload(c, "not-a-push", "shared/config/x", b"x")
@@ -350,7 +350,7 @@ def test_the_history_is_not_reachable_through_the_file_routes(served, tmp_path, 
     push = _open(c)
     calls = len(runner.calls)
     assert c.get("/services/box/files", params={"path": path}).status_code == 400
-    deleted = c.post("/services/box/files/delete", json={"paths": [path], "confirmed": True})
+    deleted = c.request("DELETE", "/services/box/files", json={"paths": [path], "confirmed": True})
     assert deleted.status_code == 400
     assert _upload(c, push, f"{path}/y", b"evil").status_code == 400
     assert len(runner.calls) == calls  # each refused before ssh

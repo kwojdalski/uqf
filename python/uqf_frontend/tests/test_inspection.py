@@ -153,8 +153,8 @@ def test_the_sweep_covers_every_kind_of_write_the_issue_names():
         ("POST", "/control/backfill"),
         ("PUT", "/control/process/{process}/config"),
         ("PUT", "/control/worker-config"),
-        ("PUT", "/services/{target}/files/content"),
-        ("POST", "/services/{target}/files/delete"),
+        ("PUT", "/services/{target}/files"),
+        ("DELETE", "/services/{target}/files"),
         ("POST", "/services/{target}/config/pushes"),
         ("POST", "/services/{target}/config/pushes/{push_id}/close"),
         ("POST", "/services/{target}/config/pushes/{push_id}/restore"),
@@ -339,7 +339,7 @@ def test_a_target_at_another_server_is_not_refused(tmp_path, registry, other):
         _settings(tmp_path),
         runner=lambda *a, **k: (_ for _ in ()).throw(OSError("no ssh in a test")),
     )
-    resp = c.post(f"/services/{other}/files/delete", json={"paths": ["a"]}, headers=AUTH)
+    resp = c.request("DELETE", f"/services/{other}/files", json={"paths": ["a"]}, headers=AUTH)
     assert not _is_inspection_refusal(resp), resp.text
 
 
@@ -354,7 +354,7 @@ def test_a_target_in_inspection_mode_leaves_the_local_stack_alone(tmp_path, regi
 def test_an_unreadable_registry_refuses_writes_naming_a_target(tmp_path, registry):
     registry.write_text("[targets.prod\n")
     c = _client(_settings(tmp_path))
-    resp = c.post("/services/uat/files/delete", json={"paths": ["a"]}, headers=AUTH)
+    resp = c.request("DELETE", "/services/uat/files", json={"paths": ["a"]}, headers=AUTH)
     assert _is_inspection_refusal(resp)
     assert "cannot be read" in resp.json()["detail"]
 

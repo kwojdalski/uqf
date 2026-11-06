@@ -26,6 +26,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.routing import compile_path
 
 from uqf_frontend import (
     access,
@@ -341,6 +342,25 @@ ScopeOf = typing.Annotated[workspaces.Scope, Depends(scope_of)]
 #: The FileOutcome words ActivityOutcome has no word for, as the audit
 #: records them: a file the browser never sent, or refused itself.
 _AUDIT_OUTCOME = {"cancelled": "refused", "invalid": "refused"}
+
+
+#: Routes that moved (#2248), as (method, old template) -> the route that
+#: replaced it. They are not routes that work: a request to one is answered
+#: 410 `RouteGone` naming its replacement, never served (no compatibility).
+MOVED_ROUTES: dict[tuple[str, str], str] = {
+    ("POST", "/services/{target}/files/delete"): "DELETE /services/{target}/files",
+    ("PUT", "/services/{target}/files/content"): "PUT /services/{target}/files",
+}
+_MOVED = [(method, compile_path(old)[0], old, new) for (method, old), new in MOVED_ROUTES.items()]
+
+
+def moved_to(method: str, path: str) -> str | None:
+    """Why `method path` is gone and what replaced it, or None when it never
+    was a route."""
+    for verb, pattern, old, new in _MOVED:
+        if verb == method.upper() and pattern.match(path):
+            return f"`{verb} {old}` is `{new}` (#2248)"
+    return None
 
 
 def _renamed_query(**renamed: str) -> Callable[[Request], None]:
@@ -668,7 +688,10 @@ def create_app(
     async def _handle_http(request: Request, exc: StarletteHTTPException) -> JSONResponse:
         """Starlette's own refusals - 404 for no such route, 405 for a method
         the route does not take - named by their status (`NotFound`,
-        `MethodNotAllowed`), keeping the headers they carry (405's `Allow`)."""
+        `MethodNotAllowed`), keeping the headers they carry (405's `Allow`).
+        A route that moved is 410 `RouteGone`, naming where it went."""
+        if exc.status_code == 404 and (moved := moved_to(request.method, request.url.path)):
+            return _error(request, 410, "RouteGone", moved)
         phrase = http.HTTPStatus(exc.status_code).phrase
         error = "".join(ch for ch in phrase.title() if ch.isalnum())
         return _error(request, exc.status_code, error, str(exc.detail), headers=exc.headers)
@@ -1055,7 +1078,7 @@ def create_app(
                             runner=request.app.state.remote_runner)  # fmt: skip
         return TunnelCheckResponse(**doc)
 
-    @app.post("/services/{target}/files/delete", response_model=RemoteDeleteResponse)
+    @app.delete("/services/{target}/files", response_model=RemoteDeleteResponse)
     def delete_remote_files(
         request: Request, target: str, req: RemoteDeleteRequest
     ) -> RemoteDeleteResponse:
@@ -1063,7 +1086,7 @@ def create_app(
             raise WritesDisabled("remote deletion requires remote operations to be enabled")
         audit = activity.audit_of(request)
         audit.set_target(target)
-        audit.note(item_count=len(req.paths))
+        audit.note(file_count=len(req.paths))
         answer = remote_files.delete(
             settings,
             target,
@@ -1082,7 +1105,7 @@ def create_app(
         return RemoteDeleteResponse(target=target, dest=answer["dest"], results=answer["results"])
 
     @app.put(
-        "/services/{target}/files/content",
+        "/services/{target}/files",
         response_model=RemoteUploadResponse,
         dependencies=[Depends(_renamed_query(push="push_id"))],
     )
@@ -1128,8 +1151,8 @@ def create_app(
                 raise remote_files.UploadTooLarge(too_large)
         data = bytes(body)
         audit.note(
-            file_name=path,
-            size_bytes=len(data),
+            path=path,
+            size=len(data),
             sha256=hashlib.sha256(data).hexdigest(),
             mode="overwrite" if overwrite else "create",
         )
@@ -1338,8 +1361,8 @@ def create_app(
         here, each audited."""
         audit = activity.audit_of(request)
         audit.set_target(target)
-        audit.note(config_dir=req.config_dir, item_count=req.file_count,
-                   size_bytes=req.total_bytes)  # fmt: skip
+        audit.note(config_dir=req.config_dir, file_count=req.file_count,
+                   total_bytes=req.total_bytes)  # fmt: skip
         remote = _remote(target)
         audit.begin()
         answer = remote_files.open_push(
@@ -1383,8 +1406,8 @@ def create_app(
             audit.item(item["path"], outcome)
         published = [e for e in manifest["files"] if e["state"] != "failed"]
         audit.note(
-            config_dir=manifest["config_dir"], item_count=len(outcomes),
-            size_bytes=sum(e["size"] or 0 for e in published),
+            config_dir=manifest["config_dir"], file_count=len(outcomes),
+            total_bytes=sum(e["size"] or 0 for e in published),
         )  # fmt: skip
         audit.settle(
             "succeeded" if outcomes and all(o == "succeeded" for o in outcomes)
@@ -1474,7 +1497,7 @@ def create_app(
             raise
         for item in answer["results"]:
             audit.item(item["path"], item["outcome"])
-        audit.note(push_id=answer["push_id"], item_count=len(answer["results"]),
+        audit.note(push_id=answer["push_id"], file_count=len(answer["results"]),
                    pruned_count=len(answer["pruned"]))  # fmt: skip
         audit.settle(
             "succeeded" if all(i["outcome"] == "succeeded" for i in answer["results"])
@@ -1598,7 +1621,7 @@ def create_app(
                 "again in a few seconds"
             )
         claimed = audit_user(request)
-        dropped = sum(activity.clean_detail(event.detail)[1] for event in batch.events)
+        dropped_detail = sum(activity.clean_detail(event.detail)[1] for event in batch.events)
         stored, not_stored = history.add_many(
             {
                 "source": "browser",
@@ -1618,12 +1641,12 @@ def create_app(
             }
             for event in batch.events
         )
-        for lost in batch.dropped:
+        for lost in batch.drops:
             history.note_dropped(lost.level, lost.reason, lost.count)
         return ActivityBatchResponse(
             stored=stored,
             not_stored=not_stored,
-            dropped_detail=dropped,
+            dropped_detail=dropped_detail,
             persistent=history.persistence.persistent,
         )
 
@@ -1672,7 +1695,7 @@ def create_app(
                 last_error=state.last_error,
                 last_failure_at=state.last_failure_at,
             ),
-            default_level=typing.cast(Any, live().activity_level),
+            activity_level=typing.cast(Any, live().activity_level),
             bounds=[
                 ActivityBound(
                     level=typing.cast(Any, lvl),
@@ -1710,7 +1733,7 @@ def create_app(
             format,
             exported_at=now,
             filters=q.described(),
-            dropped=history.drops(),
+            drops=history.drops(),
         )
         name = f"uqf-activity-{now:%Y%m%dT%H%M%SZ}.{activity_log.EXTENSIONS[format]}"
         return Response(

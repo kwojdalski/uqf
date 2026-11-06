@@ -469,7 +469,9 @@ class TunnelMappingOut(BaseModel):
         description="verified: a check in the last hour proved these ports; stale: proved "
         "longer ago or for other ports; unverified: never proved"
     )
-    last_check: TunnelCheckRecordOut | None
+    last_success: TunnelCheckRecordOut | None = Field(
+        description="the last check that proved this mapping; a failure never writes it"
+    )
     listening: bool = Field(
         description="something accepts on the local port now - a hint, not proof"
     )
@@ -496,8 +498,11 @@ class TunnelEndpointOut(BaseModel):
     local_endpoint: str
     remote_port: int
     local_port: int
-    status: str = Field(description="ok, or the category of the first layer that failed")
-    detail: str
+    category: str | None = Field(
+        description="None when it passed, else the first failing layer's category - a key of "
+        "`categories`, as the response's own `category`"
+    )
+    error: str | None = Field(description="what failed, when `category` is set")
     layers: dict[str, str] = Field(description="each layer: ok, failed or skipped")
     connected: bool = Field(description="the planned local port already serves this process")
     identity: str | None = Field(description="what the process answered as, when it answered")
@@ -511,7 +516,7 @@ class TunnelCheckResponse(BaseModel):
 
     ok: bool
     target: str
-    ssh: str | None
+    ssh: str
     release: str | None
     checked_at: AwareInstant
     category: str | None
@@ -557,7 +562,7 @@ class RemoteFilesResponse(BaseModel):
 
 
 class RemoteUploadResponse(BaseModel):
-    """PUT /services/{target}/files/content: one file written below the
+    """PUT /services/{target}/files: one file written below the
     target's shared/config, published in one atomic step (#1951)."""
 
     target: str
@@ -1079,7 +1084,16 @@ class ActivityBatchRequest(BaseModel):
     model_config = STRICT_REQUEST
 
     events: list[BrowserEventIn] = Field(default_factory=list, max_length=100)
-    dropped: list[BrowserDropIn] = Field(default_factory=list, max_length=16)
+    #: Events this browser did not send, by level and reason - the same
+    #: records GET /activity answers as `drops` (#2242).
+    drops: list[BrowserDropIn] = Field(default_factory=list, max_length=16)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _renamed(cls, data: Any) -> Any:
+        if isinstance(data, dict) and "dropped" in data:
+            raise ValueError("`dropped` is `drops`: the events this browser did not send (#2242)")
+        return data
 
 
 class ActivityBatchResponse(BaseModel):
@@ -1117,7 +1131,9 @@ class ActivityEventOut(BaseModel):
     duration_ms: float | None
     items: list[ActivityItem]
     detail: dict[str, Any]
-    dropped: int
+    #: `detail` keys dropped for being outside the allowlist or ill-formed,
+    #: named as the batch response names them (#2242).
+    dropped_detail: int
 
 
 class ActivityPersistence(BaseModel):
@@ -1152,8 +1168,9 @@ class ActivityResponse(BaseModel):
 
     events: list[ActivityEventOut]
     persistence: ActivityPersistence
-    #: The level a session records at unless its operator picks another.
-    default_level: SessionLevel
+    #: The level a session records at unless its operator picks another - the
+    #: `activity_level` setting, named as /health and /settings name it (#2240).
+    activity_level: SessionLevel
     bounds: list[ActivityBound]
     drops: list[ActivityDrop]
     poll_seconds: int

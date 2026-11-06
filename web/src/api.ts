@@ -438,7 +438,7 @@ export interface TunnelMapping {
   local_endpoint: string;
   query_command: string;
   state: "verified" | "stale" | "unverified";
-  last_check: TunnelCheckRecord | null;
+  last_success: TunnelCheckRecord | null;
   listening: boolean;
 }
 /** GET /services/{target}/tunnel - models.TunnelPlanResponse. Not polled:
@@ -460,8 +460,9 @@ export interface TunnelEndpoint {
   local_endpoint: string;
   remote_port: number;
   local_port: number;
-  status: string;
-  detail: string;
+  /** null when it passed, else a key of `categories` - the check's own `category`. */
+  category: string | null;
+  error: string | null;
   layers: Record<string, string>;
   connected: boolean;
   identity: string | null;
@@ -472,7 +473,7 @@ export interface TunnelEndpoint {
 export interface TunnelCheck {
   ok: boolean;
   target: string;
-  ssh: string | null;
+  ssh: string;
   release: string | null;
   checked_at: string;
   category: string | null;
@@ -584,8 +585,9 @@ export async function request<T>(
   body?: string,
   // Explicit only when it is not the obvious one. GET without a body and
   // POST with one cover every read in this app; the control routes need PUT,
-  // and inferring that from anything would be guessing.
-  method?: "GET" | "POST" | "PUT",
+  // deleting remote files DELETE (#2248), and inferring that from anything
+  // would be guessing.
+  method?: "GET" | "POST" | "PUT" | "DELETE",
   authorization?: string,
   extra?: Record<string, string>,
 ): Promise<T> {
@@ -891,7 +893,7 @@ export const writeToken = {
   },
 };
 
-/** PUT /services/{target}/files/content - models.RemoteUploadResponse: one
+/** PUT /services/{target}/files - models.RemoteUploadResponse: one
  * file written below the target's shared/config, published atomically. */
 export interface RemoteUpload {
   target: string;
@@ -936,7 +938,7 @@ export function remoteUploadPath(
     overwrite: String(overwrite),
     push_id: pushId,
   });
-  return `/services/${encodeURIComponent(target)}/files/content?${query}`;
+  return `/services/${encodeURIComponent(target)}/files?${query}`;
 }
 
 /** Why `path` (relative to the upload root's parent, the deployment root)
@@ -1346,7 +1348,7 @@ export interface BrowserDrop {
 /** POST /activity/events - models.ActivityBatchRequest. */
 export interface ActivityBatch {
   events?: BrowserEvent[];
-  dropped?: BrowserDrop[];
+  drops?: BrowserDrop[];
 }
 export interface ActivityBatchResult {
   stored: number;
@@ -1375,7 +1377,8 @@ export interface ActivityEvent {
   duration_ms: number | null;
   items: ActivityItem[];
   detail: Record<string, unknown>;
-  dropped: number;
+  /** `detail` keys dropped - the batch result's `dropped_detail`. */
+  dropped_detail: number;
 }
 export interface ActivityPersistence {
   persistent: boolean;
@@ -1401,7 +1404,7 @@ export interface ActivityDrop {
 export interface ActivityHistory extends Pollable {
   events: ActivityEvent[];
   persistence: ActivityPersistence;
-  default_level: SessionLevel;
+  activity_level: SessionLevel;
   bounds: ActivityBound[];
   drops: ActivityDrop[];
 }
