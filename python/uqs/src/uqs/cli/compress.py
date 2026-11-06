@@ -22,7 +22,7 @@ from uqs.cli import completion, compress_plan, safety
 from uqs.cli.compress_plan import AlgoOpt
 from uqs.cli.hdb_scope import HdbOpt, resolve
 from uqs.cli.json_out import Verbatim, emit, json_opt
-from uqs.cli.range_options import DateOpt, LastOpt, RangeFromOpt, RangeToOpt
+from uqs.cli.range_options import DateOpt, DayFromOpt, DayLastOpt, DayToOpt
 from uqs.cli.safety import ConfirmsOnServer
 from uqs.cli.shared import BasePortOpt, _die, console, data_app
 from uqs.cli.vocabulary import duration
@@ -121,10 +121,10 @@ def compress(
             "of the policy's own minimum age",
         ),
     ] = None,
-    range_from: RangeFromOpt = None,
-    range_to: RangeToOpt = None,
+    range_from: DayFromOpt = None,
+    range_to: DayToOpt = None,
     day: DateOpt = None,
-    last: LastOpt = None,
+    last: DayLastOpt = None,
     algo: AlgoOpt = None,
     blocksize: Annotated[
         int | None,
@@ -168,8 +168,9 @@ def compress(
     the partitions and columns and their state now, which policy each table
     takes, the saving estimated on a sample, the free disk the run needs.
     Partitions the coverage ledger says are still being written are held.
-    --date/--from/--to/--last name days, compressed whatever the policy's
-    minimum age; --algo/--blocksize/--gzip-level change this run alone. With
+    --date/--from/--to/--last name whole days, compressed whatever the
+    policy's minimum age - a bound off a midnight is refused, and --last 3d is
+    the three days before today; --algo/--blocksize/--gzip-level change this run alone. With
     --apply, after asking: one partition at a time, each checked, stopping at
     the first failure, then one HDB reload.
 

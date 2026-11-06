@@ -70,12 +70,13 @@ def scope_given(
     level: int | None,
 ) -> stack_compress.Scope:
     """The scope the command line names: days only when a range option was given
-    (the shared --from/--to/--date/--last, half-open), else the policy's."""
+    (the shared --from/--to/--date/--last, half-open and whole days), else the
+    policy's."""
     window = timerange.resolve(range_from, range_to, day, last, open_ended=True)
     named = any(v is not None for v in (range_from, range_to, day, last))
+    days = window.partition_dates("`data compress` compresses") if named else None
     return stack_compress.scope(
-        tables_given(table), older_than, base_port,
-        window.partition_dates() if named else None, algo, blocksize, level,
+        tables_given(table), older_than, base_port, days, algo, blocksize, level,
     )  # fmt: skip
 
 

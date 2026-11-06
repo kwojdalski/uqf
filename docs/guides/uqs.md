@@ -487,14 +487,14 @@ backfill wrote that its readers have not been released to see
 
 `--table` (repeatable) and `--older-than` (a DURATION in whole days, on top of
 the policy's own minimum age) narrow a run. **Named days** - `--date D`,
-`--from`/`--to` (half-open: `--to`'s day is not in) or `--last` - compress the
-partitions in them on demand, the policy's minimum age set aside; the plan says
-so for each ("compressing it although the policy's minage is 7"). `--algo`,
-`--blocksize` and `--gzip-level` change one run's algorithm, block size or gzip
-level. Every one of these selects or sets rows of `.cmp`'s own plan table
-(`.cmp.showcomp`), which `.cmp.compressfromtable` then compresses, so the plan
-shown and the run are the same rows; a one-off setting is checked by
-`.cmp.checkcsv` first.
+`--from`/`--to` (half-open: `--to`'s day is not in; whole days only) or `--last`
+(whole days before today) - compress the partitions in them on demand, the
+policy's minimum age set aside; the plan says so for each ("compressing it
+although the policy's minage is 7"). `--algo`, `--blocksize` and `--gzip-level`
+change one run's algorithm, block size or gzip level. Every one of these selects
+or sets rows of `.cmp`'s own plan table (`.cmp.showcomp`), which
+`.cmp.compressfromtable` then compresses, so the plan shown and the run are the
+same rows; a one-off setting is checked by `.cmp.checkcsv` first.
 
 `--apply` asks first (`--yes` answers), and is refused before anything is
 written when a filesystem is short of the space it needs. It then holds the HDB
@@ -1958,9 +1958,15 @@ A time range is given one way, on every command that takes one (`job backfill`,
   (seconds), `30s`, `1.5m`, `2h`, `7d`, `500ms` - the DURATION every span of
   time takes.
 
-A command whose unit is coarser takes the range in that unit: `data replay`
-replays one day's log, so its range must be one whole day; `data seed` copies
-the date partitions whose date lies in the range.
+A command that acts on whole HDB partitions - `data replay`, `data seed`,
+`data compress` - takes whole days only, and refuses rather than rounds anything
+else (#2245): a `--from` or `--to` that is not a UTC midnight is refused naming
+the days either side ("`data seed` copies whole partitions: --from
+2026-09-13T06:00:00 is not a day boundary; give --from 2026-09-13 or
+2026-09-14"), and `--last` must be whole days - `--last 3d` is the three days
+before today, so today's live partition is never in it. `data replay` replays
+one day's log, so its range must also be one day: `--date D`,
+`--from D --to D+1`, or `--last 1d` (yesterday).
 
 The verbs of rule 4:
 

@@ -40,3 +40,31 @@ LastOpt = Annotated[
         help="Up to now, a DURATION - the same as --from now-DURATION --to now",
     ),
 ]
+
+#: The same range on a command that acts on whole HDB partitions (`data
+#: replay`, `data seed`, `data compress`), which takes whole days only and
+#: refuses, never rounds, anything else (#2245, TimeRange.whole_days).
+DayFromOpt = Annotated[
+    str | None,
+    typer.Option(
+        "--from",
+        help="Start of the time range, included - whole days only: a date, "
+        f"{DAY_FORMS}, or a midnight",
+    ),
+]
+DayToOpt = Annotated[
+    str | None,
+    typer.Option(
+        "--to",
+        help="End of the time range, exclusive - whole days only, as --from",
+    ),
+]
+DayLastOpt = Annotated[
+    float | None,
+    duration(
+        "--last",
+        help="Up to now, a DURATION in whole days - --last 3d is the three days before "
+        "today; "
+        "today, the live day, is never in it",
+    ),
+]

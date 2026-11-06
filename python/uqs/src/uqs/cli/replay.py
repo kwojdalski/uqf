@@ -20,7 +20,7 @@ from rich.table import Table
 from uqs import timerange
 from uqs.cli import completion
 from uqs.cli.hdb_scope import tables_given
-from uqs.cli.range_options import DateOpt, LastOpt, RangeFromOpt, RangeToOpt
+from uqs.cli.range_options import DateOpt, DayFromOpt, DayLastOpt, DayToOpt
 from uqs.cli.renames import renamed
 from uqs.cli.safety import ChangesState, dry_run_note
 from uqs.cli.shared import (
@@ -42,7 +42,8 @@ def _day(
 ) -> str | None:
     """The one day to replay, as the log directories spell it (2026.09.23), or
     None for the plant's newest. A log is one day's, so the range must be one -
-    given any way a range is given, `--last` too (#1858)."""
+    given any way a range is given, `--last` too (#1858): `--last 1d` is
+    yesterday, as on every whole-partition command (#2245)."""
     if day is None and range_from is None and range_to is None and last is None:
         return None
     window = timerange.resolve(range_from, range_to, day, last)
@@ -72,9 +73,9 @@ def replay(
         ),
     ] = None,
     day: DateOpt = None,
-    range_from: RangeFromOpt = None,
-    range_to: RangeToOpt = None,
-    last: LastOpt = None,
+    range_from: DayFromOpt = None,
+    range_to: DayToOpt = None,
+    last: DayLastOpt = None,
     dir_: Annotated[
         str | None,
         typer.Option(
@@ -123,8 +124,8 @@ def replay(
     before it writes them. Run `--dry-run` first on anything you have not run
     before.
 
-    The day is --date D, or --from D --to D+1: a log is one day's, so a
-    range of anything else is refused. Default: the plant's newest day that
+    The day is --date D, --from D --to D+1, or --last 1d (yesterday): a log
+    is one day's, so a range of anything else is refused. Default: the plant's newest day that
     end of day has handed over; today (the live day) is refused, as is any day
     the wdb still holds.
 

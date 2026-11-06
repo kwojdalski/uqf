@@ -378,6 +378,29 @@ def test_a_command_taking_a_time_range_takes_all_of_it():
     assert not partial
 
 
+#: The commands that act on whole HDB partitions (#2245): each takes the range
+#: in whole days and refuses, never rounds, a bound off a midnight - data
+#: seed and data compress used to drop a partial first day and take a partial
+#: last one whole, past --to.
+WHOLE_DAY_COMMANDS = {"data replay", "data seed", "data compress"}
+
+
+def test_a_whole_partition_command_takes_whole_days_only():
+    whole = {
+        path
+        for path, c in LEAVES.items()
+        if c.option("--from") is not None and "whole days only" in (c.option("--from").help or "")
+    }
+    assert whole == WHOLE_DAY_COMMANDS
+    for path in WHOLE_DAY_COMMANDS:
+        days = LEAVES[path].option("--last").help or ""
+        assert "whole days" in days and "never in it" in days, path
+    # and each resolves it through the one refusal, never a rounding of its own
+    for module in ("compress_plan", "seed", "replay"):
+        text = inspect.getsource(__import__(f"uqs.cli.{module}", fromlist=["_"]))
+        assert ".partition_dates(" in text or ".day(" in text, module
+
+
 def test_schema_and_query_reach_a_process_the_same_ways():
     """`query --tunnel` with no `schema --tunnel` (#1858): the two read one
     process, and take the same options to find it."""

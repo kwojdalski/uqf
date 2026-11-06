@@ -224,16 +224,30 @@ def seeded(monkeypatch, tmp_path):
         (["--date", "2026-09-05"], (date(2026, 9, 5), date(2026, 9, 5))),
         (["--from", "2026-09-01"], (date(2026, 9, 1), None)),
         (["--to", "2026-09-03"], (None, date(2026, 9, 2))),
-        (
-            ["--from", "2026-09-01T06:00", "--to", "2026-09-03"],
-            (date(2026, 9, 2), date(2026, 9, 2)),
-        ),
     ],
 )
 def test_the_partitions_are_the_dates_in_the_range(seeded, argv, want):
     seen = seeded("--from-runtime", "uqf", *argv)
     assert (seen["source"], seen["first"], seen["last"]) == ("uqf", *want)
     assert seen["renamed"] == []
+
+
+@pytest.mark.parametrize(
+    ("argv", "said"),
+    [
+        # a partial first day was dropped, a partial last one copied whole past --to
+        (["--from", "2026-09-01T06:00"], "--from 2026-09-01T06:00:00 is not a day boundary"),
+        (["--to", "2026-09-03T06:00"], "give --to 2026-09-03 or 2026-09-04"),
+        (["--last", "36h"], "--last 36h is not a whole number of days"),
+    ],
+)
+def test_a_range_off_whole_days_is_refused_with_nothing_copied(seeded, argv, said):
+    """#2245: `data seed` rounded a partial day - and `--last 1d` replaced
+    today's live partition. It refuses instead, naming the whole days."""
+    seen = seeded("--from-runtime", "uqf", *argv)
+    assert "first" not in seen
+    assert seen["refused"].startswith("`data seed` copies whole partitions: ")
+    assert said in seen["refused"]
 
 
 def test_from_naming_a_runtime_is_the_old_spelling_and_says_the_new(seeded):
