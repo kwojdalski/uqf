@@ -25,6 +25,7 @@ from starlette.routing import Match
 from uqf_frontend import limits
 from uqf_frontend.app import create_app
 from uqf_frontend.config import Settings
+from uqf_frontend.errors import FrontendError
 from uqf_frontend.fleet import FakeFleet
 from uqf_frontend.gateway import FakeGateway
 
@@ -298,3 +299,49 @@ def test_row_limit_defaults_within_its_cap():
     assert inspect.signature(dependency).parameters["limit"].default.default == 10
     with pytest.raises(ValueError, match="at least 1"):
         limits.row_limit(5, 0)
+
+
+# ------------------------------------------------------- the status table (#2225)
+
+
+def _frontend_errors() -> dict[str, type[FrontendError]]:
+    """Every FrontendError subclass the package defines, by name."""
+    import importlib
+    import pkgutil
+
+    import uqf_frontend
+
+    for module in pkgutil.walk_packages(uqf_frontend.__path__, "uqf_frontend."):
+        importlib.import_module(module.name)
+
+    def walk(cls: type[FrontendError]) -> list[type[FrontendError]]:
+        return [found for sub in cls.__subclasses__() for found in (sub, *walk(sub))]
+
+    return {cls.__name__: cls for cls in walk(FrontendError)}
+
+
+def _documented_statuses() -> dict[str, int]:
+    """errors.py's table: `    Name   status  meaning`, one row per class."""
+    from uqf_frontend import errors
+
+    rows = re.findall(r"^ {4}([A-Z]\w+) +(\d{3}) ", errors.__doc__ or "", re.MULTILINE)
+    return {name: int(status) for name, status in rows}
+
+
+def test_every_frontend_error_answers_the_status_its_table_documents():
+    """A new error class is a row in errors.py's table, and its code there is
+    the one it answers - so a client's table of codes is the one in the docs."""
+    found = {name: cls.status_code for name, cls in _frontend_errors().items()}
+    assert found == _documented_statuses()
+
+
+def test_a_refusal_is_422_a_missing_name_404_and_400_only_a_q_failure():
+    """The three rules of #2224 and #2225, by the class's own name: the same
+    refusal of input must not be 400 on one route and 422 on another."""
+    for name, cls in _frontend_errors().items():
+        if name.endswith("Refused") or name == "ValidationFailed":
+            assert cls.status_code == 422, f"{name} refuses input, so it is 422"
+        if name.endswith("NotFound"):
+            assert cls.status_code == 404, f"{name} names a thing that is not there, so 404"
+        if cls.status_code == 400:
+            assert name == "QueryRejected", f"{name}: 400 is only q failing on valid input"

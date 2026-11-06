@@ -129,7 +129,7 @@ release without that interpreter is refused (409) with nothing else tried and
 nothing installed. The path travels base64-encoded, so it never reaches a shell.
 
 `path` is relative to the root: an absolute path, `..`, a NUL byte or a path
-through a symbolic link is refused (400) before ssh and again on the server,
+through a symbolic link is refused (422) before ssh and again on the server,
 which walks one directory descriptor at a time with `O_NOFOLLOW`. Links -
 `current` included - FIFOs, sockets, devices and names that are not UTF-8 are
 listed as blocked and cannot be entered; the release `current` names, and the
@@ -158,7 +158,7 @@ code of its own: `tunnels.py` calls `uqs.deploy.tunnel_plan` and
 Every value the routes return comes from uqs: the processes and their ports,
 each local endpoint, the launch command (which holds no credential), each
 mapping's `verified`, `stale` or `unverified` state, and each endpoint's
-diagnostic category. A refused plan returns 400, and a release that cannot be
+diagnostic category. A refused plan returns 422, and a release that cannot be
 asked for its processes returns 502.
 
 The check logs in to q with this API's gateway credential when one is
@@ -204,12 +204,14 @@ progress and its own outcome.
   that nothing was published (#2022). Only SIGKILL leaves a temp file behind,
   and the next upload to that directory sweeps any older than an hour.
 - **Uncertain outcomes.** An existing file without `overwrite` is 409. A refused
-  path is 400. Damaged bytes are 502 `UploadIncomplete`. In each of these,
-  nothing was written. A timeout (120 s), an ssh failure (255), a helper crash
-  or a lost answer is 504 `UploadOutcomeUncertain`, with `transient: false`. The
-  file may or may not be there, and neither the API nor the browser retries: the
-  queue shows "Outcome unknown", and you list the directory before uploading it
-  again. Cancelling an upload in flight is reported the same way.
+  path is 422, and a push the upload names that does not exist, or a deployment
+  root that is not there, is 404 `PathNotFound`. Damaged bytes are 502
+  `UploadIncomplete`. In each of these, nothing was written. A timeout (120 s),
+  an ssh failure (255), a helper crash or a lost answer is 504
+  `UploadOutcomeUncertain`, with `transient: false`. The file may or may not be
+  there, and neither the API nor the browser retries: the queue shows "Outcome
+  unknown", and you list the directory before uploading it again. Cancelling an
+  upload in flight is reported the same way.
 - **Audit.** Each upload is one `files.upload` row in the activity history
   (#1954). The row records the target, the file's path, size, sha256, and
   whether it was a create or an overwrite. It never records the file's bytes. An

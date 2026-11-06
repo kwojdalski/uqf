@@ -25,9 +25,10 @@ from uqf_frontend.errors import FrontendError, ValidationFailed
 
 class CompareRefused(FrontendError):
     """uqs or q refused the comparison as asked: a filter that is not COLUMN OP
-    VALUE, a value its column's type refuses, an empty window."""
+    VALUE, a value its column's type refuses, an empty window. 422, a refusal
+    of what the caller sent (#2225) - as /query's ValidationFailed is."""
 
-    status_code = 400
+    status_code = 422
 
 
 #: The side that is this frontend's own stack, as uqs spells it.

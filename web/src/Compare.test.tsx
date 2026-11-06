@@ -227,7 +227,7 @@ it("refuses a form that does not state both sides and a zoned window", () => {
 it("shows the server's refusal", async () => {
   serve({
     ok: false,
-    status: 400,
+    status: 422,
     json: async () => ({
       error: "CompareRefused",
       detail: "data diff: filter sym: expected COLUMN OP VALUE",

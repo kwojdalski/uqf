@@ -168,7 +168,7 @@ def test_an_upload_must_name_its_push(served, tmp_path):
     malformed = _upload(c, "not-a-push", "shared/config/x", b"x")
     assert malformed.status_code == 422
     unknown = _upload(c, "20261104T000000000Z-00000000", "shared/config/x", b"x")
-    assert unknown.status_code == 400 and "no push" in unknown.json()["detail"]
+    assert unknown.status_code == 404 and "no push" in unknown.json()["detail"]
     assert not (served / "shared/config/x").exists()
     assert len(runner.calls) == 1  # the two malformed requests never reached ssh
 
@@ -349,10 +349,10 @@ def test_the_history_is_not_reachable_through_the_file_routes(served, tmp_path, 
     c = _client(runner, tmp_path)
     push = _open(c)
     calls = len(runner.calls)
-    assert c.get("/services/box/files", params={"path": path}).status_code == 400
+    assert c.get("/services/box/files", params={"path": path}).status_code == 422
     deleted = c.post("/services/box/files/delete", json={"paths": [path], "confirmed": True})
-    assert deleted.status_code == 400
-    assert _upload(c, push, f"{path}/y", b"evil").status_code == 400
+    assert deleted.status_code == 422
+    assert _upload(c, push, f"{path}/y", b"evil").status_code == 422
     assert len(runner.calls) == calls  # each refused before ssh
     listing = c.get("/services/box/files", params={"path": "shared/config"}).json()
     (history,) = [e for e in listing["entries"] if e["name"] == ".uqf-history"]

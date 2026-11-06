@@ -188,14 +188,15 @@ def test_a_request_that_is_not_explicit_is_refused(registry, asked, change):
     assert not asked[0]
 
 
-def test_a_usage_refusal_is_422_and_a_q_refusal_400(registry, asked):
+def test_a_usage_refusal_and_a_q_refusal_are_both_422(registry, asked):
     _, answer = asked
     answer[0] = UqsUsageError("--left and --right both name box - compare two endpoints")
     r = _client().post("/compare", json=BODY)
     assert r.status_code == 422 and "both name box" in r.json()["detail"]
     answer[0] = UqsError("data diff: filter sym: expected COLUMN OP VALUE")
     r = _client().post("/compare", json=BODY)
-    assert r.status_code == 400 and "expected COLUMN OP VALUE" in r.json()["detail"]
+    assert r.status_code == 422 and r.json()["error"] == "CompareRefused"
+    assert "expected COLUMN OP VALUE" in r.json()["detail"]
 
 
 def test_a_policy_without_compare_refuses_it(registry, asked, tmp_path):
