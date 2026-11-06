@@ -112,6 +112,67 @@
     .qunit.assertEquals[.qt.qetl.stream_replay_guard.got;1 2 3f;"the received message once, the missed ones once, the replayed duplicates not at all"];
     .qunit.assertEquals[.qtorq.sub_hwm`fills;tm 3;"and the high-water mark is the last message"]};
 
+/ --- a failed resubscription is retried, with backoff (#2214) ---------------
+
+/ The plant handle, a function standing in for one: it cannot answer the schema query, so the schema falls back to the current table.
+.qt.qetl.stream_replay_guard.plant:{[q] $[10h=type q; '"no plant"; 0#.qt.qetl.stream_replay_guard.old]}
+
+/ TorQ's .sub, as far as the tick touches it: the subscriptions table and a subscribe that fails on its first call
+/ and then delivers the log (messages 0 to 3, 0 already received) and marks the subscription active.
+.qt.qetl.stream_replay_guard.sub_double:{[]
+    `.qt.qetl.stream_replay_guard.calls set 0;
+    `.sub.SUBSCRIPTIONS set ([] procname:enlist `stp1; proctype:enlist `segmentedtickerplant; w:enlist 7i; table:enlist `fills; instruments:enlist `; createdtime:enlist 2026.11.06D10:00:00; active:enlist 0b);
+    `.sub.subscribe set {[t;insts;setschema;replaylog;proc]
+        `.qt.qetl.stream_replay_guard.calls set 1+.qt.qetl.stream_replay_guard.calls;
+        if[1=.qt.qetl.stream_replay_guard.calls; '"plant not ready"];
+        tm:{[n] 2026.11.06D10:00:00+n*0D00:00:01};
+        {[tm;n] .qtorq.sub_upd[`rpg;{[t;x] `.qt.qetl.stream_replay_guard.got set .qt.qetl.stream_replay_guard.got,exec qty from x};`fills;(enlist tm n;enlist `EURUSD;enlist "f"$n)]}[tm] each 0 1 2 3;
+        update active:1b from `.sub.SUBSCRIPTIONS;
+        `ok};}
+
+.qt.qetl.stream_replay_guard.test_a_failed_resubscription_is_retried_until_it_succeeds_and_delivers_once:{[t]
+    .qt.qetl.stream_replay_guard.define[];
+    saved:@[get;`.sub.subscribe;{::}];
+    savedsubs:@[get;`.sub.SUBSCRIPTIONS;{::}];
+    .qt.qetl.stream_replay_guard.sub_double[];
+    `.qt.qetl.stream_replay_guard.got set ();
+    `.qtorq.sub_cands set (`symbol$())!();
+    `.qtorq.sub_sch_at set (`symbol$())!`long$();
+    `.qtorq.sub_job set `rpg;
+    `.qtorq.sub_handle set `.qt.qetl.stream_replay_guard.h;
+    `.qt.qetl.stream_replay_guard.h set .qt.qetl.stream_replay_guard.plant;
+    `.qtorq.sub_failures set (`symbol$())!`long$();
+    `.qtorq.sub_next_try set (`symbol$())!`timestamp$();
+    / message 0 was received before the outage
+    `.qtorq.sub_hwm set (enlist `fills)!enlist 2026.11.06D10:00:00;
+    beat:{[] .qetl.job.stream.watch_subscription[`rpgw;enlist[`subscribed]!enlist {[] all exec active from .sub.SUBSCRIPTIONS}]};
+    delete from `.qetl.stream_health.batches where job=`rpgw;
+    / the tick after the plant came back: the resubscription throws
+    .qunit.assertEquals[.qtorq.sub_retry_tick[];enlist `fills;"an inactive subscription on an open handle is attempted"];
+    .qunit.assertEquals[.qt.qetl.stream_replay_guard.calls;1;"once"];
+    .qunit.assertFalse[beat[];"the beat reports the job failing while the resubscription has not succeeded"];
+    .qunit.assertEquals[.qtorq.sub_failures`fills;1;"one failure recorded"];
+    / backoff: the very next tick does not hammer the plant
+    .qunit.assertEquals[.qtorq.sub_retry_tick[];`symbol$();"nothing is due inside the backoff"];
+    .qunit.assertEquals[.qt.qetl.stream_replay_guard.calls;1;"so no second attempt yet"];
+    / the backoff doubles, up to its cap
+    .qtorq.sub_note_failure `fills;
+    .qunit.assertEquals[.qtorq.sub_next_try[`fills]>.z.p+0D00:00:20;1b;"a second failure waits longer than a period"];
+    .qtorq.sub_next_try[`fills]:.z.p-0D00:00:01;
+    .qunit.assertEquals[.qtorq.sub_retry_tick[];enlist `fills;"once the backoff has elapsed it is attempted again"];
+    .qunit.assertEquals[.qt.qetl.stream_replay_guard.calls;2;"the second attempt"];
+    .qunit.assertTrue[beat[];"and the beat reports the subscription again"];
+    .qunit.assertEquals[.qt.qetl.stream_replay_guard.got;1 2 3f;"the outage's messages are delivered exactly once"];
+    .qunit.assertEquals[(count .qtorq.sub_failures;count .qtorq.sub_next_try);0 0;"success clears the backoff"];
+    .qunit.assertEquals[.qtorq.sub_retry_tick[];`symbol$();"an active subscription is left alone"];
+    / a closed handle is TorQ's .servers.retry's to reopen, not the tick's
+    update active:0b from `.sub.SUBSCRIPTIONS;
+    `.qt.qetl.stream_replay_guard.h set 999i;
+    .qunit.assertEquals[.qtorq.sub_retry_tick[];`symbol$();"nothing is attempted over a closed handle"];
+    $[saved~(::); delete subscribe from `.sub; `.sub.subscribe set saved];
+    $[savedsubs~(::); delete SUBSCRIPTIONS from `.sub; `.sub.SUBSCRIPTIONS set savedsubs];
+    .qt.qetl.stream_replay_guard.undefine[]};
+
 / The runner's own status directory, so a quarantine file and an uptime session are written somewhere writable.
 .qt.qetl.stream_replay_guard.beforeNamespace_isolate_status:{[] setenv[`UQF_STATUS_DIR;"build/test-status-stream-replay-guard"];}
 
