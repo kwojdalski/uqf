@@ -44,6 +44,7 @@ import pytest
 # command's own helpers live in the family module that registers it.
 import rename_support
 import typer
+from plain_cli import PlainRunner
 from typer.testing import CliRunner
 from which_support import fake_which
 
@@ -1847,7 +1848,9 @@ def test_logs_refuses_the_old_id_and_the_old_channel(monkeypatch, argv, said):
     errors = _error_log(monkeypatch)
     chan = _patch(monkeypatch, stack_channel, "follow_channel")
     recent = _patch(monkeypatch, stack_logs, "print_recent_logs")
-    result = runner.invoke(cli.app, ["logs", "rdb1", *argv])
+    result = PlainRunner().invoke(
+        cli.app, ["logs", "rdb1", *argv]
+    )  # CI renders usage errors in colour
     assert result.exit_code == 2
     box = re.sub("[│╭╰╮╯─]", " ", result.output)
     assert " ".join(said.split()) in " ".join(" ".join([box, *errors.messages]).split())

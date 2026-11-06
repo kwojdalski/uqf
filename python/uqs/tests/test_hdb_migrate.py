@@ -12,6 +12,7 @@ from pathlib import Path
 
 import pytest
 
+from uqs.interpreter import PEACHQ, q_impl
 from uqs.paths import UqsError, UqsPaths
 from uqs.stack import hdb_layout, hdb_migrate, hdb_types
 
@@ -370,7 +371,8 @@ def test_reset_empty_rebuilds_from_the_declaration_and_keeps_the_rest(empty_hdb,
     out = _run(q_binary, read, root).stdout
     assert "cols=`time`sym`price" in out and "rows=0" in out
     assert "types=`time`sym`price!12 20 9h" in out
-    assert "attr=g" in out
+    if q_impl() != PEACHQ:  # PeachQ keeps no attribute on a splayed column; KDB-X judges it
+        assert "attr=g" in out
     found = hdb_layout.inspect(empty_hdb, root).dirs
     assert hdb_types.type_changes(empty_hdb, empty_hdb.torqapphome / "database.q", found) == []
 
