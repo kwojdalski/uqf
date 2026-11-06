@@ -592,7 +592,12 @@ policy.
 explicitly - `local` for the stack this frontend serves, or a target in
 `deploy_targets.toml` - with an explicit window (`range_from`/`range_to`, each
 with its zone), filters as typed (`sym=EURUSD`), a row limit per side and,
-optionally, the `source_version` whose coverage to compare. `compare.py` checks
+optionally, the `source_version` whose coverage to compare. With a
+`source_version`, `partition` is required as it is on `/coverage`, and `""` is
+the explicit answer for a dataset with no partition dimension: one omitted is a
+422, never the no-partition slice by default, and a `partition` without a
+`source_version` is refused too (#185, #2221). A comparison that checked no
+coverage answers `source_version` and `partition` as `null`. `compare.py` checks
 that a target side is registered and hands the rest to `uqs data diff`'s own
 function (`uqs.cli.data_diff.run`): uqs reaches each side's gateway - a target
 through an ssh tunnel - and q decides everything the answer says

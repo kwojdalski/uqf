@@ -64,7 +64,7 @@ def run(settings: Settings, req: Any) -> dict[str, Any]:
         else {}
     )
     try:
-        return data_diff.run(
+        doc = data_diff.run(
             control._paths(settings), req.left, req.right, list(req.tables), window,
             filters=list(req.filters), limit=req.limit, source_version=req.source_version,
             partition=req.partition, **login,
@@ -73,3 +73,8 @@ def run(settings: Settings, req: Any) -> dict[str, Any]:
         raise ValidationFailed(str(exc)) from None
     except UqsError as exc:
         raise CompareRefused(str(exc)) from None
+    # q answers a slice it did not check as "" (the null symbol); the API says
+    # null, as it was asked, so "" means only the no-partition slice (#2221).
+    if req.source_version is None:
+        doc = {**doc, "source_version": None, "partition": None}
+    return doc

@@ -63,6 +63,7 @@ export function compareBody(form: Form): CompareBody {
   const limit = Number(form.limit);
   if (!Number.isInteger(limit) || limit < 1)
     throw new Error("The row limit is a whole number of rows, at least 1.");
+  const sourceVersion = form.sourceVersion.trim() || null;
   return {
     left,
     right,
@@ -74,8 +75,12 @@ export function compareBody(form: Form): CompareBody {
       .map((f) => f.trim())
       .filter(Boolean),
     limit,
-    source_version: form.sourceVersion.trim() || null,
-    partition: form.partition.trim() || null,
+    source_version: sourceVersion,
+    // With a source version the slice is always said, and a blank partition
+    // is "" - the dataset has no partition dimension - as on the Coverage
+    // view (#2221). Without one, a partition is sent as typed, so the server
+    // refuses it rather than this form dropping it.
+    partition: sourceVersion !== null ? form.partition.trim() : form.partition.trim() || null,
   };
 }
 
@@ -322,7 +327,7 @@ export function CompareView() {
               label="Partition (coverage)"
               value={form.partition}
               onChange={set("partition")}
-              placeholder="optional"
+              placeholder="blank: no partition dimension"
             />
             <label>
               Filters, one per line
@@ -367,8 +372,8 @@ export function CompareView() {
               [{doc.range_from}, {doc.range_to}) · at most{" "}
               {doc.limit.toLocaleString()} rows per side
               {doc.filters.length > 0 && ` · ${doc.filters.join(" and ")}`}
-              {doc.source_version &&
-                ` · coverage at ${doc.source_version}${doc.partition ? `/${doc.partition}` : ""}`}
+              {doc.source_version !== null &&
+                ` · coverage at ${doc.source_version}, ${doc.partition ? `partition ${doc.partition}` : "no partition dimension"}`}
             </p>
           </section>
           {doc.tables.map((t) => (

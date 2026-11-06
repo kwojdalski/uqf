@@ -1386,8 +1386,31 @@ class CompareRequest(BaseModel):
     filters: list[str] = Field(default_factory=list, max_length=20,
                                description="COLUMN OP VALUE, e.g. sym=EURUSD")  # fmt: skip
     limit: int = limit_field(1000, 100_000, "rows read per side, at most")
-    source_version: str | None = Field(default=None, max_length=128)
-    partition: str | None = Field(default=None, max_length=128)
+    source_version: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=128,
+        description="the release whose coverage to compare; null compares no coverage",
+    )
+    partition: str | None = Field(
+        default=None,
+        max_length=128,
+        description='required with source_version; "" for a dataset with no partition dimension',
+    )
+
+    @model_validator(mode="after")
+    def _a_coverage_check_names_its_slice(self) -> CompareRequest:
+        """/coverage's rule (#185, #2221): once coverage is asked for, the
+        slice is said - `""` is the explicit "no partition dimension" - and
+        never defaulted to the one nothing partitioned is recorded under."""
+        if self.source_version is not None and self.partition is None:
+            raise ValueError(
+                'partition is required with source_version - give "" for a dataset '
+                "with no partition dimension"
+            )
+        if self.partition is not None and self.source_version is None:
+            raise ValueError("partition reads coverage, which needs source_version")
+        return self
 
 
 class CompareInterval(BaseModel):
@@ -1445,6 +1468,6 @@ class CompareResponse(BaseModel):
     range_to: AwareInstant
     limit: int
     filters: list[str]
-    source_version: str
-    partition: str
+    source_version: str | None = Field(description="null when no coverage was compared")
+    partition: str | None = Field(description="null when no coverage was compared")
     tables: list[CompareTable]

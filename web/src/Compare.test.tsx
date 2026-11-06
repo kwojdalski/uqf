@@ -44,8 +44,8 @@ function result(tables: CompareTable[]): CompareResult {
     range_to: "2026-09-16T00:00:00.000000000+00:00",
     limit: 50,
     filters: ["sym=EURUSD"],
-    source_version: "",
-    partition: "",
+    source_version: null,
+    partition: null,
     tables,
   };
 }
@@ -222,6 +222,32 @@ it("refuses a form that does not state both sides and a zoned window", () => {
     "b",
     "c",
   ]);
+});
+
+it("says the coverage slice: a blank partition with a source version is the no-partition slice", () => {
+  const base = {
+    left: "local",
+    right: "prod",
+    tables: "t",
+    from: "2026-09-11T00:00:00Z",
+    to: "2026-09-12T00:00:00Z",
+    filters: "",
+    limit: "10",
+    sourceVersion: "",
+    partition: "",
+  };
+  const slice = (over: Partial<typeof base>) => {
+    const body = compareBody({ ...base, ...over });
+    return [body.source_version, body.partition];
+  };
+  expect(slice({})).toEqual([null, null]);
+  expect(slice({ sourceVersion: "v1" })).toEqual(["v1", ""]);
+  expect(slice({ sourceVersion: "v1", partition: " EURUSD " })).toEqual([
+    "v1",
+    "EURUSD",
+  ]);
+  // sent, so the server refuses it, rather than dropped here
+  expect(slice({ partition: "EURUSD" })).toEqual([null, "EURUSD"]);
 });
 
 it("shows the server's refusal", async () => {

@@ -178,8 +178,9 @@ export interface CompareResult {
   range_to: string;
   limit: number;
   filters: string[];
-  source_version: string;
-  partition: string;
+  /** null when no coverage was compared; partition "" is the no-partition slice. */
+  source_version: string | null;
+  partition: string | null;
   tables: CompareTable[];
 }
 /** The part of a Pydantic model's JSON Schema a parameter form reads. */
