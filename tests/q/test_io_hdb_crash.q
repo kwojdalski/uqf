@@ -80,7 +80,8 @@
     .qt.qetl.hdb_crash.window m;
     m[`finish][::];
     fin:.qt.qetl.hdb_crash.read[root;`hcrash];
-    (fired;ok_mid;ok_rec;fin~post;.qt.qetl.hdb_crash.aligned fin;attr fin`sym)}
+    / PeachQ keeps no attribute (.qetl.io.on_peachq), so the attribute is judged on KDB-X only
+    (fired;ok_mid;ok_rec;fin~post;.qt.qetl.hdb_crash.aligned fin;$[.qetl.io.on_peachq;`p;attr fin`sym])}
 
 .qt.qetl.hdb_crash.test_finish_killed_after_the_copy_is_staged:{[t]
     .qunit.assertEquals[.qt.qetl.hdb_crash.finish_killed_at`staged;(1b;1b;1b;1b;1b;`p);"old or new, aligned, finished"]};
