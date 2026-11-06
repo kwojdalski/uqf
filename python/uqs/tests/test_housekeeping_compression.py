@@ -1,7 +1,8 @@
 """housekeeping1 compresses the HDB by the declared policy (stack/housekeeping.py,
 #2150): one rule, `hdbcompress`, running TorQ's `.cmp` through
-`.qtorq.compress.run` - the checked apply, then the HDB reload - on the schedule
-declared beside the rules, with the tickerplant-log rules of #2155 unchanged.
+`.qtorq.compress.run_held` - the selection and hold `uqs data compress` makes,
+the checked apply, then the HDB reload - on the schedule declared beside the
+rules, with the tickerplant-log rules of #2155 unchanged.
 
 End to end: TorQ's housekeeping.q, unedited, loaded after the overlay files
 housekeeping1's composed `load` column names, runs `hkrun[]` over the generated
@@ -110,6 +111,18 @@ reloads:();
 -1 "INPUTCSV ",inputcsv;
 -1 "CMPCSV ",.cmp.inputcsv;
 -1 "CONNECTIONS ",-3!.servers.CONNECTIONS;
+/ HOLD: a backfill's coverage claim on TABLE's OLD day, as the writer leaves it -
+/ unreleased (no readiness watermark yet), or released (its readers caught up).
+if[count hold:getenv`HOLD;
+  tb:`$getenv`TABLE; d:.z.D-"J"$getenv`HOLD_DAYS;
+  system "mkdir -p \"",.qetl.job.bounded.state.lock_dir[],"\"";
+  claim:`dataset`partition`source_version`range_from`range_to!(tb;`;`v1;"p"$d;"p"$d+1);
+  claim,:`rows_published`recorded_at`superseded_at`run_id!(100;.z.p;0Wp;0Ng);
+  ledger:.qetl.coverage.empty_ledger[] upsert claim;
+  .qetl.job.bounded.state.durable_set[.qetl.coverage.ledger_path[];ledger];
+  key1:([] dataset:enlist tb; partition:enlist `; source_version:enlist `v1);
+  if["released"~hold; .qetl.coverage.mark_ready[key1;.z.p]];
+  -1 "UNRELEASED ",-3!.qetl.coverage.unreleased[.z.p]];
 hkrun[];
 -1 "RELOADS ",-3!reloads;
 root:hsym `$getenv`HDB;
@@ -178,9 +191,14 @@ def stack(q_binary, repo_root, tmp_path):
     script = tmp_path / "run.q"
     script.write_text(_RUN)
 
-    def run() -> list[str]:
+    def run(**extra: str) -> list[str]:
         out = subprocess.run(
-            [q, str(script)], capture_output=True, text=True, timeout=300, env=env, cwd=repo_root
+            [q, str(script)],
+            capture_output=True,
+            text=True,
+            timeout=300,
+            env={**env, **extra},
+            cwd=repo_root,
         )
         assert out.returncode == 0, out.stdout + out.stderr
         lines = [x for x in out.stdout.splitlines() if x.strip()]
@@ -325,6 +343,33 @@ def test_a_second_run_changes_nothing_and_reloads_nothing(stack):
     lines = run()
     assert set(_files(lines, OLD).values()) == {"2"}
     assert _reloads(lines) == "RELOADS ()", lines
+
+
+def test_a_partition_a_backfill_is_still_writing_is_never_compressed(stack):
+    """#2176: the coverage ledger claims TABLE's OLD day with no readiness
+    watermark - a backfill still writing it. `uqs data compress` holds that
+    partition, and so does the schedule: hkrun[] leaves every file of it as it
+    was, and with nothing else old enough, changes nothing and reloads nothing."""
+    run, paths, _tpold, _tprecent = stack
+    old_dir = paths.hdb_dir / _day(OLD) / TABLE
+    before = {p.name: (p.read_bytes(), p.stat().st_mtime) for p in old_dir.iterdir()}
+    lines = run(HOLD="unreleased", HOLD_DAYS=str(OLD))
+    assert any(x.startswith("UNRELEASED ") and _day(OLD) in x for x in lines), lines
+    assert set(_files(lines, OLD).values()) == {"-"}, lines
+    after = {p.name: (p.read_bytes(), p.stat().st_mtime) for p in old_dir.iterdir()}
+    assert after == before
+    assert _reloads(lines) == "RELOADS ()", lines
+
+
+def test_a_released_partition_is_compressed(stack):
+    """The same claim once its readers are released to see it: the day is
+    compressed as any other."""
+    run, _paths_, _tpold, _tprecent = stack
+    lines = run(HOLD="released", HOLD_DAYS=str(OLD))
+    unreleased = [x for x in lines if x.startswith("UNRELEASED ")]
+    assert len(unreleased) == 1 and _day(OLD) not in unreleased[0], lines
+    assert set(_files(lines, OLD).values()) == {"2"}, lines
+    assert _reloads(lines) == "RELOADS ,`reload", lines
 
 
 def test_tickerplant_log_and_process_log_rules_still_hold(stack):
