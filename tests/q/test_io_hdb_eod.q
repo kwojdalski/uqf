@@ -20,17 +20,22 @@
     .qetl.io.watch_eod[root;wdb];
     `root`wdb!(root;wdb)}
 
-/ Private: TorQ's movetohdb, verbatim, run for day D; returns the log lines it wrote.
+/ Private: TorQ's movetohdb, verbatim, run for day D in a child q so TorQ's .os
+/ and .lg never enter this process (other suites load their own); returns the
+/ ERR lines it logged.
 .qt.qetl.io.hdb_eod.torq_move:{[st]
     D:.qt.qetl.io.hdb_eod.D;
-    system"l lib/torq/code/common/os.q";
-    `.lg.o set {[a;b] ()}; `.lg.e set {[a;b] `.qt.qetl.io.hdb_eod.errs upsert enlist b; ()};
-    `.qt.qetl.io.hdb_eod.errs set `symbol$();
-    src:read0 `:lib/torq/code/processes/wdb.q;
-    i:first where src like "movetohdb:*"; j:i+first where (i _ src) like " }*";
-    `.wdb.movetohdb set value (count "movetohdb:")_"\n" sv src i+til 1+j-i;
-    .wdb.movetohdb[1_string ` sv st[`wdb],`$string D;1_string ` sv st[`root],`$string D;D];
-    .qt.qetl.io.hdb_eod.errs}
+    f:(first system"mktemp -d"),"/move.q";
+    hsym[`$f] 0: (
+        "\\l lib/torq/code/common/os.q";
+        ".lg.o:{[a;b] ()}; .lg.e:{[a;b] -1 \"ERR \",b};";
+        "src:read0 `:lib/torq/code/processes/wdb.q;";
+        "i:first where src like \"movetohdb:*\"; j:i+first where (i _ src) like \" }*\";";
+        "`.wdb.movetohdb set value (count \"movetohdb:\")_\"\\n\" sv src i+til 1+j-i;";
+        (".wdb.movetohdb[\"",(1_string ` sv st[`wdb],`$string D),"\";\"",(1_string ` sv st[`root],`$string D),"\";",string[D],"];");
+        "exit 0");
+    out:system (getenv`QCMD)," ",f," -q 2>&1";
+    out where out like "ERR *"}
 
 / Private: what end of day does after the move - the wdb opens the next day.
 .qt.qetl.io.hdb_eod.open_next:{[st]
