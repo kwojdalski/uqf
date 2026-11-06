@@ -11,6 +11,11 @@ startline). The procfile says which stack the process belongs to - each
 runtime has its own data directory - and its own row says which port it
 listens on. So this reads `ps` and the other stack's process.csv, and
 needs no connection to anything.
+
+A port can be held by something that is no TorQ process at all - a q started
+by hand in the checkout root, which answers like an empty stack (#2180). So a
+start also asks lsof who LISTENS on each port it needs, and refuses any
+listener that is not one of this stack's own processes.
 """
 
 from __future__ import annotations
@@ -86,6 +91,44 @@ def holders(
     return found
 
 
+@dataclass(frozen=True)
+class Squatter:
+    """A process that is not this stack's, listening on a port it needs."""
+
+    procname: str  #: this stack's process the port belongs to
+    port: int
+    pid: int
+    command: str
+
+
+def squatters(
+    paths: UqsPaths, base_port: int | None, procs: str = "all", timeout: float | None = 10
+) -> list[Squatter]:
+    """Listeners on a port `procs` of this stack would use that are not this
+    stack's own processes - another stack's, or anything else's (#2180)."""
+    base = paths.runtime_declaration.resolve_base_port(base_port)
+    named = None if procs.strip() in ("", "all") else set(procs.split())
+    local = alive._local_hosts()
+    wanted = {
+        int(row["port"]): row["procname"]
+        for row in alive._process_rows(paths, base)
+        if str(row.get("port", "")).isdigit()
+        and (named is None or row["procname"] in named)
+        and row.get("host", "localhost") in local
+    }
+    held = alive.listeners(wanted, timeout)
+    if not held:
+        return []
+    ours = {pid for pids in alive.instances(paths, base, timeout).values() for pid in pids}
+    commands = dict(alive._command_lines(timeout))
+    return [
+        Squatter(wanted[port], port, pid, commands.get(pid, "?"))
+        for port, pids in sorted(held.items())
+        for pid in pids
+        if pid not in ours
+    ]
+
+
 def describe(paths: UqsPaths, holder: Holder) -> tuple[str, str]:
     """(what the other stack is, how to stop it)."""
     for runtime in RUNTIMES.values():
@@ -105,22 +148,33 @@ def describe(paths: UqsPaths, holder: Holder) -> tuple[str, str]:
 
 
 def refuse_if_taken(paths: UqsPaths, base_port: int | None, procs: str = "all") -> None:
-    """Raise, naming the other stack, when it holds a port this start needs.
+    """Raise, naming the holder, when another stack - or any process that is
+    not this stack's (#2180) - holds a port this start needs.
 
     Advisory when it cannot look: a `ps` that fails or hangs is logged and
     the start goes ahead, which is how starts behaved before this check.
     """
     try:
         taken = holders(paths, base_port, procs)
+        foreign = [] if taken else squatters(paths, base_port, procs)
     except UqsError as exc:
         log.warning("could not check for another stack on these ports: {}", exc)
         return
-    if not taken:
-        return
-    what, stop = describe(paths, taken[0])
-    shown = ", ".join(f"{h.procname} :{h.port} (pid {h.pid})" for h in taken[:5])
-    more = f" and {len(taken) - 5} more" if len(taken) > 5 else ""
-    raise UqsError(
-        f"{what} is already using ports this start needs: {shown}{more}. "
-        f"{stop}, or start this one elsewhere with --base-port."
-    )
+    if taken:
+        what, stop = describe(paths, taken[0])
+        shown = ", ".join(f"{h.procname} :{h.port} (pid {h.pid})" for h in taken[:5])
+        more = f" and {len(taken) - 5} more" if len(taken) > 5 else ""
+        raise UqsError(
+            f"{what} is already using ports this start needs: {shown}{more}. "
+            f"{stop}, or start this one elsewhere with --base-port."
+        )
+    if foreign:
+        shown = "; ".join(
+            f"port {s.port} ({s.procname}) is held by pid {s.pid}: {s.command[:120]}"
+            for s in foreign[:5]
+        )
+        more = f" and {len(foreign) - 5} more" if len(foreign) > 5 else ""
+        raise UqsError(
+            f"ports this start needs are held by processes that are not this stack's: "
+            f"{shown}{more}. Stop them, or start this stack elsewhere with --base-port."
+        )
