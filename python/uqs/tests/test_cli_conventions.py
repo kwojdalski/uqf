@@ -664,6 +664,7 @@ OPTIONS = {
     "--release": Meaning("a release on the server, by name - not a path", r"^the release\b"),
     "--remote-user": Meaning("run as this account through sudo", r"sudo"),
     "--rename": Meaning("rename a column", r"rename"),
+    "--reset-empty": Meaning("rebuild an empty table from its declaration", r"^Rebuild a table"),
     "--reverse": Meaning("sort descending", r"descending"),
     "--schema": Meaning("tables' columns and their types", r"^its table's schema"),
     "--schema-file": Meaning("a tickerplant's schema file", r"^(load|pin) (this|the) schema file"),
