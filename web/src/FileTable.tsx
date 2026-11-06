@@ -7,7 +7,7 @@ import {
   createSortedRowModel,
   sortFns,
 } from "@tanstack/react-table";
-import type { RemoteEntry } from "./api";
+import type { RemoteEntry } from "./api/services";
 
 const features = tableFeatures({
   rowSortingFeature,

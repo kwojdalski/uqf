@@ -173,7 +173,7 @@ ERRORS = (
     "conflict",
 )
 #: Largest file one upload carries, in bytes. The API refuses a larger body
-#: before ssh, and the browser before sending (web/src/api.ts).
+#: before ssh, and the browser before sending (web/src/api/).
 MAX_UPLOAD = 16 * 1024 * 1024
 #: The one directory uploads may go below, relative to the deployment root:
 #: the operator-supplied files each release links in (uqs.deploy.config).
@@ -204,7 +204,7 @@ LOCK = ".lock"
 MANIFEST_VERSION = 1
 #: Largest manifest read, in bytes.
 MAX_MANIFEST = 4 * 1024 * 1024
-#: Most files one push records - the browser's own queue bound (web/src/api.ts).
+#: Most files one push records - the browser's own queue bound (web/src/api/).
 MAX_PUSH_FILES = 500
 #: The pruned pushes, one JSON object a line, at most PRUNED_LOG_MAX of them.
 PRUNED_LOG = "pruned.jsonl"

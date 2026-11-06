@@ -3,7 +3,8 @@
  * the traces they make. No request is made - this plots the rows already
  * loaded, as the server sent them (app.py's `_wire`).
  */
-import type { QueryResult, Row } from "./api";
+import type { Row } from "./api/client";
+import type { QueryResult } from "./api/query";
 import type { Figure } from "./Plotly";
 
 /** The most y columns one chart draws: more than this on one axis is a

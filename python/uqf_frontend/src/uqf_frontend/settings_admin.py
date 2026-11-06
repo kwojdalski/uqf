@@ -47,7 +47,7 @@ from fastapi import FastAPI, Request
 from uqf_frontend import access, activity, config, ops
 from uqf_frontend.config import Settings
 from uqf_frontend.errors import FrontendError, ValidationFailed, WritesDisabled
-from uqf_frontend.models import (
+from uqf_frontend.models.settings import (
     AccessChangeRequest,
     AccessPolicyBody,
     PolicyGrant,

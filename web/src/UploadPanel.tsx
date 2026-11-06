@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from "react";
+import { ApiError } from "./api/client";
 import {
-  ApiError,
   type ConfigPushReport,
   type PushOps,
   pushOps,
+} from "./api/config_push";
+import {
   type RemoteUpload,
   UPLOAD_MAX_BYTES,
   UPLOAD_MAX_FILES,
@@ -12,7 +14,7 @@ import {
   UploadFailed,
   uploadPathProblem,
   uploadRemoteFile,
-} from "./api";
+} from "./api/services";
 import { size } from "./FileTable";
 
 /** A file the operator picked, with its path relative to the destination:

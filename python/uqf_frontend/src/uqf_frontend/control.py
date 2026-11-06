@@ -44,7 +44,7 @@ from typing import Any
 from uqf_frontend import instants
 from uqf_frontend.config import Settings
 from uqf_frontend.errors import FrontendError, StackBusy, ValidationFailed, WritesDisabled
-from uqf_frontend.models import LifecycleAction
+from uqf_frontend.models.control import LifecycleAction
 from uqs.generated.q_facts import CFG_ENV_LAYER, CFG_OVERRIDE_LAYER
 from uqs.model.qnames import config_env_var
 

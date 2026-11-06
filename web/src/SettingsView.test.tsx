@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import App from "./App";
-import type { Capabilities } from "./api";
+import type { Capabilities } from "./api/access";
 import { configureActivity, INTERACTIVE } from "./activity";
 import { ok, SETTINGS } from "./testing/activityFixtures";
 

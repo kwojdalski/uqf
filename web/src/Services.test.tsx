@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import App from "./App";
-import type { Services } from "./api";
+import type { Services } from "./api/services";
 
 const ok = (body: unknown) => ({ ok: true, json: async () => body });
 const SOURCE = "/repo/deploy_targets.toml";

@@ -19,12 +19,13 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from uqf_frontend import models, status
+from uqf_frontend import status
 from uqf_frontend.app import create_app
 from uqf_frontend.config import Settings
 from uqf_frontend.errors import ValidationFailed
 from uqf_frontend.fleet import FakeFleet
 from uqf_frontend.gateway import FakeGateway
+from uqf_frontend.models.ops import RunState
 
 STATUS_Q = Path(__file__).resolve().parents[3] / "src" / "etl" / "core" / "status.q"
 
@@ -71,7 +72,7 @@ def test_the_api_states_are_the_reader_states():
     """models.RunState is what the browser's RunState is held to by
     test_api_types.py, and STATES is held to q above - so q, the reader, the
     API and the browser name one set of states (#820)."""
-    assert set(typing.get_args(models.RunState)) == set(status.STATES)
+    assert set(typing.get_args(RunState)) == set(status.STATES)
 
 
 def q_terminal_states() -> set[str]:

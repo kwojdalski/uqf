@@ -1,14 +1,14 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
-import {
-  ApiError,
-  type ConfigDiff,
-  type ConfigHistory as History,
-  type ConfigPushDetail,
-  type ConfigPushFile,
-  type ConfigRestore,
-  type HistoryOps,
-} from "./api";
+import { ApiError } from "./api/client";
+import type {
+  ConfigDiff,
+  ConfigHistory as History,
+  ConfigPushDetail,
+  ConfigPushFile,
+  ConfigRestore,
+  HistoryOps,
+} from "./api/config_push";
 import { ConfigHistory, shortHash } from "./ConfigHistory";
 
 const PUSH = "20261104T103442123Z-9aa36609";

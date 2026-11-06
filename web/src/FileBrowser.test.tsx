@@ -1,8 +1,8 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import App from "./App";
-import type { RemoteEntry, RemoteFiles, Services } from "./api";
-import { remoteFilesPath } from "./api";
+import type { RemoteEntry, RemoteFiles, Services } from "./api/services";
+import { remoteFilesPath } from "./api/services";
 import { size } from "./FileTable";
 
 const ok = (body: unknown) => ({ ok: true, json: async () => body });

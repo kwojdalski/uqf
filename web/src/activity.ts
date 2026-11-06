@@ -38,21 +38,19 @@
  * The authority on what happened is the server's own audit row for the same
  * `request_id`, written whether or not this app sent the request.
  */
-import {
-  ApiError,
-  observeRequests,
-  type ActivityItem,
-  type ActivityLevel,
-  type ActivityOutcome,
-  type ActivityTrigger,
-  type BrowserDrop,
-  type BrowserDropReason,
-  type BrowserEvent,
-  type BrowserKind,
-  type DetailValue,
-  type RequestNote,
-  type SessionLevel,
-} from "./api";
+import type {
+  ActivityItem,
+  ActivityLevel,
+  ActivityOutcome,
+  ActivityTrigger,
+  BrowserDrop,
+  BrowserDropReason,
+  BrowserEvent,
+  BrowserKind,
+  DetailValue,
+  SessionLevel,
+} from "./api/activity";
+import { ApiError, observeRequests, type RequestNote } from "./api/client";
 
 /** Every level a tab can record at, least detail first. */
 export const LEVELS: readonly SessionLevel[] = [

@@ -7,7 +7,7 @@
  * the views stay empty rather than showing the local stack in its place.
  */
 import { useEffect } from "react";
-import type { Workspaces, WorkspaceStatus } from "./api";
+import type { Workspaces, WorkspaceStatus } from "./api/services";
 import { useCapabilities } from "./capabilities";
 import { useResource } from "./useResource";
 import { LOCAL, selectWorkspace, useWorkspace } from "./workspace";

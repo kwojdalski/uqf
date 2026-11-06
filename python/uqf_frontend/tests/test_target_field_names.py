@@ -17,12 +17,13 @@ covered too.
 from __future__ import annotations
 
 import dataclasses
-import inspect
 
+from api_support import defined_models
 from pydantic import BaseModel
 
-from uqf_frontend import models, services
+from uqf_frontend import services
 from uqf_frontend.config import Settings
+from uqf_frontend.models.services import ServiceTargetOut
 from uqs.deploy import config, history, inspection, target_keys
 
 #: The Config fields that say which target, where it is, and where on it:
@@ -42,11 +43,7 @@ WRITES_FORMER = ("remote_operations_enabled", "enable_writes", "remote_operation
 
 
 def _models() -> list[type[BaseModel]]:
-    return [
-        m
-        for _, m in inspect.getmembers(models, inspect.isclass)
-        if issubclass(m, BaseModel) and m.__module__ == models.__name__
-    ]
+    return [m for m in defined_models().values() if issubclass(m, BaseModel)]
 
 
 def _describes_a_target(model: type[BaseModel]) -> bool:
@@ -101,7 +98,7 @@ def test_services_rows_are_target_list_rows_key_for_key(tmp_path, monkeypatch):
     ours = services.read(Settings(stack_root=tmp_path)).targets
     assert [set(r) for r in ours] == [set(r) for r in uqs_rows]
     assert {"environment", "inspection"} <= set(uqs_rows[0])  # every column is shown
-    assert set(models.ServiceTargetOut.model_fields) == set(uqs_rows[0])
+    assert set(ServiceTargetOut.model_fields) == set(uqs_rows[0])
     for row, theirs in zip(ours, uqs_rows, strict=True):
         assert row["target"] == theirs["target"]
         assert (row["ssh"], row["dest"]) == (theirs["ssh"], theirs["dest"])

@@ -265,9 +265,10 @@ def test_every_query_operator_has_its_text():
     an operator added to Filter.op without a text would reach uqs as a KeyError."""
     import typing
 
-    from uqf_frontend import compare, models
+    from uqf_frontend import compare
+    from uqf_frontend.models.query import Filter
 
-    ops = typing.get_args(models.Filter.model_fields["op"].annotation)
+    ops = typing.get_args(Filter.model_fields["op"].annotation)
     assert set(compare.TEXT_OPS) == set(ops)
 
 
@@ -276,7 +277,7 @@ def test_q_reads_each_rendered_filter_back_as_the_operator_sent(tmp_path):
     """The text is only right if q's own parser (.qetl.compare.parse_filter)
     reads it back as the operator the API was sent."""
     from uqf_frontend import compare
-    from uqf_frontend.models import Filter
+    from uqf_frontend.models.query import Filter
 
     sent = {
         op: Filter.model_validate(

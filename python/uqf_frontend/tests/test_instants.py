@@ -14,10 +14,11 @@ import types
 import typing
 
 import pytest
+from api_support import model_modules
 from fastapi.testclient import TestClient
 from pydantic import BaseModel
 
-from uqf_frontend import charts, instants, models
+from uqf_frontend import charts, instants
 from uqf_frontend.app import create_app
 from uqf_frontend.config import Settings
 from uqf_frontend.gateway import FakeGateway
@@ -175,7 +176,7 @@ WINDOW_SPELLINGS = {
 
 def _all_models() -> list[type[BaseModel]]:
     found = []
-    for module in (models, charts):
+    for module in (*model_modules(), charts):
         for _, cls in inspect.getmembers(module, inspect.isclass):
             if issubclass(cls, BaseModel) and cls.__module__ == module.__name__:
                 found.append(cls)

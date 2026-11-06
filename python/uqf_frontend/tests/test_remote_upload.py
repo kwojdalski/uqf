@@ -44,7 +44,7 @@ UNUSUAL = [
     "a&b|c>d",
 ]
 
-API_TS = Path(__file__).resolve().parents[3] / "web" / "src" / "api.ts"
+API_TS = Path(__file__).resolve().parents[3] / "web" / "src" / "api" / "services.ts"
 
 
 class Recorder:
