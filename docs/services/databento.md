@@ -54,6 +54,15 @@ columns into four level-0-first vectors with **the same `.qetl.transform`
 transform the backfill uses**. The fold exists once, in q, with its own worked
 examples; the Python side decides nothing about what a book is.
 
+**What the handler does translate is the wire format (#2190).** A real
+`MBP10Msg` carries prices as fixed-point integers (1e-9 units), `ts_event` as
+nanoseconds since 1970, `side`/`action` as enums, and no symbol, only an
+`instrument_id`. The handler reads prices through the record's own `pretty_*`
+converters, sends `ts_event` as an ns timestamp, stores the enums' letters, and
+names the instrument from the stream's `SymbolMappingMsg` (the live client's
+`symbology_map`). A record whose `instrument_id` has no mapping is refused and
+logged to `databento_feed.log`, never published with a null `sym`.
+
 **Equity books also reach `market_data` (#1939).** `databento1` maps each folded
 book onto the canonical `market_data` table as it publishes `eq_orderbook`:
 `market` is `equity`, `clock` is `venue`, `source` is `XNAS` (the dataset,

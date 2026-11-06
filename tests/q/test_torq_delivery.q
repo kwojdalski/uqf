@@ -37,13 +37,43 @@
     `.qt.qtorq.delivery.h set .qt.qtorq.delivery.closed;
     }
 
+/ --- a refused batch ---------------------------------------------------------
+
+/ A plant in error mode answers a refused batch with the error text (#2192).
+.qt.qtorq.delivery.test_a_batch_the_plant_refused_is_a_failed_publish:{[t]
+    refuser:{[msg] "length"};
+    .qunit.assertThrows[{[r] .qtorq.publish[r;`trades;([] sym:`a`b; px:1 2f)]};enlist refuser;
+        "qtorq.publish: the tickerplant refused a batch of 2 trades rows*length"]};
+
+/ accept_fn runs on the plant; here it runs on stand-ins for TorQ's own
+/ .stp.upd and .stplg.badmsg, put back afterwards.
+.qt.qtorq.delivery.badlog:()
+
+.qt.qtorq.delivery.test_accept_fn_returns_the_error_a_plant_in_error_mode_trapped:{[t]
+    `.qt.qtorq.delivery.badlog set ();
+    `.stp.upd set {[t;x] '"length"};
+    `.stplg.badmsg set {[e;t;x] `.qt.qtorq.delivery.badlog set enlist (e;t;x);};
+    r:.qtorq.accept_fn[`trades;enlist 1 2];
+    ![`.stp;();0b;enlist `upd]; ![`.stplg;();0b;enlist `badmsg];
+    .qunit.assertEquals[r;"length";"the refusal is the reply"];
+    .qunit.assertEquals[.qt.qtorq.delivery.badlog;enlist ("length";`trades;enlist 1 2);
+        "and it still reached TorQ's error log"]};
+
+.qt.qtorq.delivery.test_accept_fn_accepts_what_the_plant_stored:{[t]
+    `.qt.qtorq.delivery.badlog set ();
+    `.stp.upd set {[t;x] t};
+    `.stplg.badmsg set {[e;t;x] `.qt.qtorq.delivery.badlog set enlist (e;t;x);};
+    r:.qtorq.accept_fn[`trades;enlist 1 2];
+    ![`.stp;();0b;enlist `upd]; ![`.stplg;();0b;enlist `badmsg];
+    .qunit.assertEquals[(r;.qt.qtorq.delivery.badlog);(1b;());"accepted, and nothing logged as bad"]};
+
 / --- reconnecting -----------------------------------------------------------
 
 .qt.qtorq.delivery.test_a_closed_handle_is_reopened_and_the_publish_lands:{[t]
     r:.qt.qtorq.delivery.with_registry[.qt.qtorq.delivery.plant;
         {[unused] .qtorq.publish_reconnecting[`.qt.qtorq.delivery.h;`trades;([] sym:`a`b; px:1 2f)]}];
     .qunit.assertEquals[r;2;"the rows were published"];
-    .qunit.assertEquals[first .qt.qtorq.delivery.got;(`.u.upd;`trades;(`a`b;1 2f));"onto the reopened plant"];
+    .qunit.assertEquals[first .qt.qtorq.delivery.got;(.qtorq.accept_fn;`trades;(`a`b;1 2f));"onto the reopened plant"];
     .qunit.assertEquals[(.qt.qtorq.delivery.h;.qt.qtorq.delivery.lookups);(.qt.qtorq.delivery.plant;1);
         "through one registry lookup, and the global now holds the new handle"]};
 

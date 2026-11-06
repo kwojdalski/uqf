@@ -323,11 +323,12 @@ system "l scripts/dev/attached_calendar.q";
         "under the 17:00 roll it belongs to the partition the wdb is filling, and is refused"]};
 
 .qt.qetl.hdb_scoped.test_a_write_lands_in_the_native_partition:{[t]
+    / Dates well in the past: hdb_rows refuses today and later, and this test must not age into that.
     root:`$":",first system"mktemp -d";
-    bounds:`max_date`deadline`destination`calendar!(2026.11.06;2099.01.01D00:00:00.000000000;`dest_test;.qt.qetl.hdb_scoped.roll17);
+    bounds:`max_date`deadline`destination`calendar!(2026.03.11;2099.01.01D00:00:00.000000000;`dest_test;.qt.qetl.hdb_scoped.roll17);
     m:.qetl.io.hdb_scoped[root;`time;bounds];
-    n:.[{[m;b] m[`write][`iodeals;b]};(m;([] time:2026.11.05D16:00:00.000000000 2026.11.05D17:30:00.000000000; sym:`EURUSD`EURUSD; notional:1 2f));{[e] .qetl.io.use_calendar ""; 'e}];
+    n:.[{[m;b] m[`write][`iodeals;b]};(m;([] time:2026.03.10D16:00:00.000000000 2026.03.10D17:30:00.000000000; sym:`EURUSD`EURUSD; notional:1 2f));{[e] .qetl.io.use_calendar ""; 'e}];
     .qetl.io.use_calendar "";
     .qunit.assertEquals[n;2;"both rows written"];
-    .qunit.assertEquals[0<count each key each hsym each `$(string root),/:("/2026.11.05/iodeals";"/2026.11.06/iodeals");11b;"one row in each native partition"];
-    .qunit.assertEquals[count get hsym `$(string root),"/2026.11.06/iodeals/time";1;"and the 17:30 row is in the later one"]};
+    .qunit.assertEquals[0<count each key each hsym each `$(string root),/:("/2026.03.10/iodeals";"/2026.03.11/iodeals");11b;"one row in each native partition"];
+    .qunit.assertEquals[count get hsym `$(string root),"/2026.03.11/iodeals/time";1;"and the 17:30 row is in the later one"]};
