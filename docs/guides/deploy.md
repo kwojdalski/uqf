@@ -422,6 +422,8 @@ before anything reaches it, and `--yes` does not get past it:
 - `uqs deploy push`, `rollback` and `prune`, except with `--dry-run`. A list of
   targets with one inspection target in it pushes to none of them.
 - `uqs target config restore prd PUSH`, except with `-n`.
+- `uqs target adopt NAME --ssh ... --dest ... --apply`, under any new name: the
+  dry run without `--apply` still reports what the server holds.
 
 A server is matched by name **and** by its ssh destination and `dest`, so
 `--ssh deploy@prd --dest /srv/uqf` is refused too, and so is any other declared
