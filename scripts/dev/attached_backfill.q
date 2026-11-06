@@ -120,7 +120,8 @@ if[not `worker in key opts:.Q.opt .z.x;
     text:first opts`deadline;
     deadline:$["0Wp"~text; 0Wp; "P"$text];
     if[null deadline; '"-deadline ",text," is not a timestamp (0Wp for none)"];
-    `max_date`deadline`destination!("D"$first opts`max_date;deadline;`$first opts`destid),.qetl.io.calendar_bound opts}
+    base:`max_date`deadline`destination!("D"$first opts`max_date;deadline;`$first opts`destid);
+    base,.qetl.io.calendar_bound opts}
 
 / Record who is running into which destination.
 / @param opts the parsed command line
