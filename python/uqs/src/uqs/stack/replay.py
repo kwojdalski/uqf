@@ -355,7 +355,9 @@ def plan(
     )
 
 
-def start(paths: UqsPaths, replay: ReplayPlan) -> subprocess.CompletedProcess[str]:
+def start(
+    paths: UqsPaths, replay: ReplayPlan, *, capture: bool = False
+) -> subprocess.CompletedProcess[str]:
     """Start tpreplay1 on `replay`, through torq.sh's own `-extras`.
 
     The same channel `uqs job backfill` uses: the flags are appended to the one
@@ -371,4 +373,5 @@ def start(paths: UqsPaths, replay: ReplayPlan) -> subprocess.CompletedProcess[st
         paths,
         ["start", REPLAY_PROCNAME, "-extras", *flags],
         base_port=replay.base_port,
+        capture=capture,
     )

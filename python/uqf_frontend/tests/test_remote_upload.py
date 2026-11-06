@@ -203,7 +203,7 @@ def test_only_a_registered_target_takes_an_upload(served):
 def test_unsafe_paths_and_unsupported_destinations_are_refused_before_ssh(served, path, error):
     runner = Recorder()
     resp = _put(runner, path)
-    assert resp.status_code == 400, resp.text
+    assert resp.status_code == 422, resp.text
     assert resp.json()["error"] == error
     assert runner.calls == []
 
@@ -348,7 +348,7 @@ def test_a_link_out_of_the_root_is_refused_by_the_server(served, tmp_path):
     (tmp_path / "outside").mkdir()
     (served / "shared/config/out").symlink_to(tmp_path / "outside")
     resp = _put(Loopback(), "shared/config/out/x.csv")
-    assert resp.status_code == 400
+    assert resp.status_code == 422
     assert "symbolic link" in resp.json()["detail"]
     assert list((tmp_path / "outside").iterdir()) == []
 

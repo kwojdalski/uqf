@@ -673,18 +673,16 @@ function DeskView() {
                     {selected?.description}
                     {selected?.description ? " · " : ""}
                     {resource.data.row_count.toLocaleString()} rows returned
-                    {resource.data.truncated
-                      ? " · Server row cap reached"
-                      : resource.data.row_count >= applied.limit
-                        ? " · Showing the first " +
-                          applied.limit +
-                          "; more rows may exist"
-                        : ""}
+                    {resource.data.truncated &&
+                      (resource.data.cut_by === "max_rows"
+                        ? " · Server row cap reached; more rows exist"
+                        : " · Showing the first " +
+                          resource.data.row_count.toLocaleString() +
+                          "; more rows exist")}
                   </p>
                   {display === "Plot" ? (
                     <PlotPanel
                       result={resource.data}
-                      limit={applied.limit}
                       types={typesFor(catalog.data, resource.data.table)}
                     />
                   ) : (
@@ -1023,6 +1021,12 @@ function OpsView({
           {data.summary && <Summary values={data.summary} />}
           <section className="panel">
             <h2>{view}</h2>
+            {data.truncated && data.rows && (
+              <p className="notice pending" role="status">
+                Showing the newest {data.rows.length.toLocaleString()}; more
+                rows exist.
+              </p>
+            )}
             {data.processes_configured === 0 && (
               <p className="notice pending">
                 No processes configured for usage collection. This is not an

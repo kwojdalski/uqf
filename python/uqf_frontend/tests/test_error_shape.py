@@ -25,6 +25,7 @@ from starlette.routing import Match
 from uqf_frontend import limits
 from uqf_frontend.app import create_app
 from uqf_frontend.config import Settings
+from uqf_frontend.errors import FrontendError
 from uqf_frontend.fleet import FakeFleet
 from uqf_frontend.gateway import FakeGateway
 
@@ -292,9 +293,163 @@ def test_every_body_limit_is_at_least_one_and_capped(app):
     assert {"/query", "/compare"} <= set(seen)
 
 
+def _says_truncated(model: Any) -> bool:
+    """Whether a response model, or a model it holds, has `truncated`."""
+    fields = getattr(model, "model_fields", {})
+    if "truncated" in fields:
+        return fields["truncated"].annotation is bool
+    for info in fields.values():
+        inner = [info.annotation, *typing.get_args(info.annotation)]
+        if any(_says_truncated(t) for t in inner if hasattr(t, "model_fields")):
+            return True
+    return False
+
+
+def test_every_route_that_can_cut_its_answer_says_whether_it_did(app):
+    """#2220: /ops/usage, /ops/clients and /activity cut at `limit` with no
+    field saying so. Every route taking a `limit`, in its query or its body,
+    answers `truncated` - "more rows existed than were returned, whatever cut
+    them". A route answering a file (/activity/export) has no field to put it
+    in, and is held to its cap by the rule above instead."""
+    seen = []
+    for route in _routes(app):
+        takes_limit = any(p.name == "limit" for p in _params(route.dependant, "query_params"))
+        for param in _params(route.dependant, "body_params"):
+            takes_limit |= "limit" in getattr(param.field_info.annotation, "model_fields", {})
+        if not takes_limit or route.response_model is None:
+            continue
+        assert _says_truncated(route.response_model), f"{route.path} cuts at a limit silently"
+        seen.append(route.path)
+    assert {"/query", "/compare", "/ops/usage", "/ops/clients", "/activity"} <= set(seen), seen
+
+
 def test_row_limit_defaults_within_its_cap():
     dependency = limits.row_limit(500, 10).dependency
     assert getattr(dependency, limits.MARK) == 10
     assert inspect.signature(dependency).parameters["limit"].default.default == 10
     with pytest.raises(ValueError, match="at least 1"):
         limits.row_limit(5, 0)
+
+
+# ------------------------------------------------------- the status table (#2225)
+
+
+def _frontend_errors() -> dict[str, type[FrontendError]]:
+    """Every FrontendError subclass the package defines, by name."""
+    import importlib
+    import pkgutil
+
+    import uqf_frontend
+
+    for module in pkgutil.walk_packages(uqf_frontend.__path__, "uqf_frontend."):
+        importlib.import_module(module.name)
+
+    def walk(cls: type[FrontendError]) -> list[type[FrontendError]]:
+        return [found for sub in cls.__subclasses__() for found in (sub, *walk(sub))]
+
+    return {cls.__name__: cls for cls in walk(FrontendError)}
+
+
+def _documented_statuses() -> dict[str, int]:
+    """errors.py's table: `    Name   status  meaning`, one row per class."""
+    from uqf_frontend import errors
+
+    rows = re.findall(r"^ {4}([A-Z]\w+) +(\d{3}) ", errors.__doc__ or "", re.MULTILINE)
+    return {name: int(status) for name, status in rows}
+
+
+def test_every_frontend_error_answers_the_status_its_table_documents():
+    """A new error class is a row in errors.py's table, and its code there is
+    the one it answers - so a client's table of codes is the one in the docs."""
+    found = {name: cls.status_code for name, cls in _frontend_errors().items()}
+    assert found == _documented_statuses()
+
+
+def test_a_refusal_is_422_a_missing_name_404_and_400_only_a_q_failure():
+    """The three rules of #2224 and #2225, by the class's own name: the same
+    refusal of input must not be 400 on one route and 422 on another."""
+    for name, cls in _frontend_errors().items():
+        if name.endswith("Refused") or name == "ValidationFailed":
+            assert cls.status_code == 422, f"{name} refuses input, so it is 422"
+        if name.endswith("NotFound"):
+            assert cls.status_code == 404, f"{name} names a thing that is not there, so 404"
+        if cls.status_code == 400:
+            assert name == "QueryRejected", f"{name}: 400 is only q failing on valid input"
+
+
+# ------------------------------------------- an unknown name in the path (#2224)
+
+#: A well-formed value for each path parameter that names nothing that exists.
+#: A parameter added to a route must be given one here, or the sweep fails.
+UNKNOWN_IN_PATH = {
+    "target": "no-such-target-2224",
+    "name": "no-such-chart-2224",
+    "action": "no-such-action-2224",
+    "process": "no-such-process-2224",
+    "push_id": "20261104T000000000Z-00000000",
+}
+
+
+def _example(annotation: Any) -> Any:
+    """A value of `annotation` that validates, for a body the sweep sends."""
+    origin = typing.get_origin(annotation)
+    if origin is list:
+        return [_example(typing.get_args(annotation)[0])]
+    if origin is typing.Literal:
+        return typing.get_args(annotation)[0]
+    if annotation is bool:
+        return True
+    if annotation is int:
+        return 1
+    if hasattr(annotation, "model_fields"):
+        return _body(annotation)
+    return "x"
+
+
+#: Bodies the generic example cannot make valid: a model's own validator.
+BODY_FOR = {"ConfigPushCloseRequest": {"reported": []}}
+
+
+def _body(model: Any) -> dict[str, Any]:
+    if not hasattr(model, "model_fields"):
+        return {}  # a free-form body, such as a chart's parameters
+    if model.__name__ in BODY_FOR:
+        return BODY_FOR[model.__name__]
+    return {
+        info.alias or name: _example(info.annotation)
+        for name, info in model.model_fields.items()
+        if info.is_required()
+    }
+
+
+def test_every_route_answers_an_unknown_name_in_its_path_with_404(app, client):
+    """An unknown target, chart, action or process in the path is 404, with an
+    error naming the kind - never the 422 a body that fails validation gets,
+    which the same route also answers (#2224)."""
+    probed = 0
+    for route in _routes(app):
+        names = re.findall(r"\{(\w+)\}", route.path)
+        if not names:
+            continue
+        missing = [n for n in names if n not in UNKNOWN_IN_PATH]
+        assert not missing, f"{route.path}: give {missing} a value in UNKNOWN_IN_PATH"
+        path = route.path.format(**UNKNOWN_IN_PATH)
+        bodies = _params(route.dependant, "body_params")
+        kwargs: dict[str, Any] = {}
+        if bodies:
+            kwargs["json"] = _body(bodies[0].field_info.annotation)
+        required = [p.alias for p in _params(route.dependant, "query_params")
+                    if p.field_info.is_required()]  # fmt: skip
+        if required:  # the upload: a path and a push it belongs to
+            kwargs["params"] = {
+                "path": "shared/config/x.csv",
+                "push_id": UNKNOWN_IN_PATH["push_id"],
+            }
+            kwargs["content"] = b"x"
+        body = assert_shape(client.request(_method(route), path, **kwargs), 404)
+        assert body["error"].endswith("NotFound") and body["error"] != "NotFound", (
+            route.path,
+            body,
+        )
+        probed += 1
+    assert probed >= 10, probed

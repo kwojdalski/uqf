@@ -28,9 +28,10 @@ from uqf_frontend.errors import FrontendError
 
 class TunnelPlanRefused(FrontendError):
     """The choices cannot make a plan: a process not declared there, not a
-    forwarded proctype, a local port out of range or shared by two mappings."""
+    forwarded proctype, a local port out of range or shared by two mappings.
+    422, a refusal of what the caller sent (#2225)."""
 
-    status_code = 400
+    status_code = 422
 
 
 class TunnelDiscoveryFailed(FrontendError):

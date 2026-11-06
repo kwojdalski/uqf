@@ -69,6 +69,23 @@ DefaultDryRunOpt = Annotated[
 ]
 
 
+#: `--dry-run`/`-n` on a command that wrote by default until it took --apply
+#: (#2235): there it meant "not this time", and now a dry run is the default,
+#: so it is refused, naming --apply, rather than kept as a second spelling.
+RefusedDryRunOpt = Annotated[
+    bool,
+    typer.Option(
+        "--dry-run", "-n", hidden=True, help="Refused: a dry run is the default; --apply writes"
+    ),
+]
+
+
+def refuse_dry_run(command: str, dry_run: bool) -> None:
+    """Refuse `RefusedDryRunOpt`, naming what replaced it."""
+    if dry_run:
+        raise UqsUsageError(f"`{command}` is a dry run unless --apply: drop --dry-run")
+
+
 def dry_unless_applied(dry_run: bool, apply: bool) -> None:
     """Refuse --dry-run with --apply, and warn that --dry-run alone is the default."""
     if dry_run and apply:
@@ -175,6 +192,17 @@ def ask(question: str, *, default: bool = False) -> bool:
         return typer.confirm(question, default=default)
     except typer.Abort:
         return False
+
+
+def json_needs_yes(as_json: bool, yes: bool, what: str) -> None:
+    """Refuse a command that would ask, under --json without --yes (#2229):
+    --json is one document on stdout and nothing interactive, so it never
+    prompts. A refusal, exit 1 - nothing was changed, as `ask` refuses with no
+    terminal - not a usage error. `what` ends "add --yes to ..."."""
+    if as_json and not yes:
+        raise UqsError(
+            f"--json cannot ask for confirmation: add --yes to {what}. Nothing was changed."
+        )
 
 
 def confirm(question: str, *, yes: bool) -> None:

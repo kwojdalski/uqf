@@ -49,7 +49,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validat
 from uqf_frontend import ops, queries, status
 from uqf_frontend.catalog import Catalog, Table
 from uqf_frontend.config import Settings
-from uqf_frontend.errors import ValidationFailed
+from uqf_frontend.errors import FrontendError, ValidationFailed
 from uqf_frontend.fleet import Fleet
 from uqf_frontend.gateway import TIERS, Gateway
 from uqf_frontend.instants import AwareInstantOrBlank
@@ -798,9 +798,17 @@ CHARTS: dict[str, Chart] = {
 }
 
 
+class ChartNotFound(FrontendError):
+    """`/charts/{name}` names no prepared chart. 404, as an unknown target
+    is (#2224): a 422 from this route means the body failed the chart's own
+    schema, and the two must not be told apart only by reading `detail`."""
+
+    status_code = 404
+
+
 def chart(name: str) -> Chart:
     try:
         return CHARTS[name]
     except KeyError:
         known = ", ".join(sorted(CHARTS))
-        raise ValidationFailed(f"unknown chart {name!r}; charts are: {known}") from None
+        raise ChartNotFound(f"unknown chart {name!r}; charts are: {known}") from None

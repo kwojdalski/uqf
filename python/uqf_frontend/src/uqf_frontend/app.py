@@ -855,10 +855,13 @@ def create_app(
         `unreachable` is part of the response rather than an error: one process
         being down must not blank the view for the other nine.
         """
-        rows, unreachable = ops.merge_usage(scope.fleet.per_process(ops.USAGE, limit))
+        # One row past the limit from each process: the merged log then holds
+        # more than `limit` rows exactly when the fleet does (#2220).
+        rows, unreachable = ops.merge_usage(scope.fleet.per_process(ops.USAGE, limit + 1))
         return UsageResponse(
             rows=rows[:limit],
             row_count=min(len(rows), limit),
+            truncated=len(rows) > limit,
             unreachable=unreachable,
             processes_configured=len(scope.fleet.processes),
             poll_seconds=ops.POLL_SECONDS["usage"],
@@ -889,6 +892,7 @@ def create_app(
         return UsageResponse(
             rows=rows[:limit],
             row_count=min(len(rows), limit),
+            truncated=len(rows) > limit,
             unreachable=unreachable,
             processes_configured=len(scope.fleet.processes),
             poll_seconds=ops.POLL_SECONDS["connections"],
@@ -1208,7 +1212,12 @@ def create_app(
         no default REQUIRED, so omitting it is a 422 naming the field rather
         than a plausible answer computed across every partition (#185). Pass
         `""` for a dataset with no partition dimension.
+
+        The range is both bounds or neither (#2222), as on every route that
+        names a coverage window: one bound alone was parsed and then dropped,
+        answering 200 with no gaps for a question that was never asked.
         """
+        _refuse_a_lone_bound(range_from, range_to)
         # The dataset as the table: a policy refusing a table must refuse its
         # coverage too, or /coverage reads round what /query refuses.
         run_policy(request, table=dataset)
@@ -1233,18 +1242,25 @@ def create_app(
             _enforce_coverage(gateway, req.require_coverage)
 
         capped = min(req.limit, settings.max_rows)
-        # As the data login, through the gateway's query policy (#889).
-        read = gateway.browse(tbl.name, columns, operators, values, capped, TIERS[req.tier])
+        # As the data login, through the gateway's query policy (#889). One
+        # row past what is returned, so a full answer says whether more rows
+        # exist rather than leaving the caller to guess from row_count (#2220).
+        read = gateway.browse(tbl.name, columns, operators, values, capped + 1, TIERS[req.tier])
         rows = _rows(read.rows)
+        # read.cap is the row asked for lowered to the policy's maxrows where
+        # that is less (#928). A read that stopped at such a cap cannot see
+        # past it, so reaching it counts as cut (#1255).
+        policy_cut = read.cap <= capped and len(rows) >= read.cap
+        truncated = len(rows) > capped or policy_cut
+        server_cap = min(settings.max_rows, read.cap)
         return QueryResponse(
             poll_seconds=ops.POLL_SECONDS["query"],
             table=tbl.name,
             tier=req.tier,
-            rows=rows,
-            row_count=len(rows),
-            # read.cap is capped lowered to the policy's maxrows where that is
-            # less (#928), so a cut either one made is reported (#1255).
-            truncated=len(rows) >= read.cap < req.limit,
+            rows=rows[:capped],
+            row_count=min(len(rows), capped),
+            truncated=truncated,
+            cut_by=None if not truncated else "limit" if req.limit <= server_cap else "max_rows",
         )
 
     # ------------------------------------------------------ prepared charts
@@ -1684,10 +1700,12 @@ def create_app(
         much of each level is, and what was not. `level` is the most
         detailed level shown: `interactions` shows actions too."""
         filters = dict(locals())
-        rows = history.query(_activity_query(filters, level, limit))
+        # One event past the limit says whether more matched (#2220).
+        rows = history.query(_activity_query(filters, level, limit + 1))
         state = history.persistence
         return ActivityResponse(
-            events=[ActivityEventOut(**row) for row in rows],
+            events=[ActivityEventOut(**row) for row in rows[:limit]],
+            truncated=len(rows) > limit,
             persistence=ActivityPersistence(
                 persistent=state.persistent,
                 path=state.path,
@@ -1879,6 +1897,25 @@ def _fleet_health(
         groups=dict(sorted(groups.items())),
         source=source,
         poll_seconds=ops.POLL_SECONDS["processes"],
+    )
+
+
+def _refuse_a_lone_bound(range_from: object, range_to: object) -> None:
+    """A coverage window is both its bounds or neither: one alone is a 422
+    RequestInvalid naming the missing bound, in the shape FastAPI's own
+    validation has, so a form marks the field (#2222)."""
+    if (range_from is None) == (range_to is None):
+        return
+    given, missing = ("range_from", "range_to") if range_to is None else ("range_to", "range_from")
+    raise RequestValidationError(
+        [
+            {
+                "loc": ("query", missing),
+                "msg": f"{missing} is required with {given} - a coverage window is "
+                "half-open [range_from, range_to)",
+                "type": "missing",
+            }
+        ]
     )
 
 
