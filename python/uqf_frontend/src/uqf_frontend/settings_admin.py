@@ -157,9 +157,9 @@ def runtime_diff(before: Settings, after: Settings) -> list[SettingChange]:
     ]
 
 
-def _audited(request: Request, target: str, changes: list[SettingChange]) -> None:
+def _audited(request: Request, subject: str, changes: list[SettingChange]) -> None:
     audit = activity.audit_of(request)
-    audit.set_target(target)
+    audit.set_subject(subject)
     audit.note(
         changes=[c.model_dump() for c in changes[: activity.MAX_CHANGES]],
         change_count=len(changes),

@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import re
 import time
+import typing
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -43,6 +44,7 @@ from typing import Any
 from uqf_frontend import instants
 from uqf_frontend.config import Settings
 from uqf_frontend.errors import FrontendError, StackBusy, ValidationFailed, WritesDisabled
+from uqf_frontend.models import LifecycleAction
 from uqs.generated.q_facts import CFG_ENV_LAYER, CFG_OVERRIDE_LAYER
 from uqs.model.qnames import config_env_var
 
@@ -70,22 +72,23 @@ def _acting() -> None:
 
 
 class ActionNotFound(FrontendError):
-    """`/control/process/{action}` names no lifecycle action. 404 (#2224): an
+    """`/control/lifecycle/{action}` names no lifecycle action. 404 (#2224): an
     unknown name in the path is a thing that is not there, not a bad body."""
 
     status_code = 404
 
 
 class ProcessNotFound(FrontendError):
-    """`/control/process/{process}/config` names a process this runtime does
+    """`/control/processes/{process}/config` names a process this runtime does
     not declare. 404 (#2224), as an unknown target is."""
 
     status_code = 404
 
 
-#: The three lifecycle verbs this seam exposes. `clean` is excluded on
-#: purpose - see the module docstring.
-LIFECYCLE_ACTIONS = ("start", "stop", "restart")
+#: The three lifecycle verbs this seam exposes - models.LifecycleAction; any
+#: other verb in the path is ActionNotFound (404, #2224). `clean` is excluded
+#: on purpose - see the module docstring.
+LIFECYCLE_ACTIONS: tuple[str, ...] = typing.get_args(LifecycleAction)
 
 #: process.csv fields HTTP may NOT override, though `uqs config set` may.
 #: torq.sh composes `sline="$qcmd ..."` and evals it on the next start, so a
@@ -119,7 +122,7 @@ class CommandResult:
     """
 
     action: str
-    target: str
+    procs: str
     exit_code: int
     output: str
     problems: tuple[str, ...] = ()
@@ -228,7 +231,7 @@ def lifecycle(settings: Settings, action: str, procs: str) -> CommandResult:
             problems = _verify(paths, base_port, action, procs, before, output, deadline)
     return CommandResult(
         action=action,
-        target=procs,
+        procs=procs,
         exit_code=result.returncode,
         output="\n".join((output, *problems)).strip(),
         problems=problems,

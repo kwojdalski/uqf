@@ -290,7 +290,12 @@ SAMPLES: dict[tuple[str, str], dict] = {
     },
     # the config push history (#2002)
     ("POST", "/services/{target}/config/pushes"): {
-        "json": {"config_dir": "shared/config", "file_count": 1, "total_bytes": 4}
+        "json": {
+            "config_dir": "shared/config",
+            "file_count": 1,
+            "total_bytes": 4,
+            "confirmed": True,
+        }
     },
     ("POST", "/services/{target}/config/pushes/{push_id}/close"): {"json": {"reported": []}},
     ("GET", "/services/{target}/config/pushes"): {},
@@ -317,7 +322,7 @@ SAMPLES: dict[tuple[str, str], dict] = {
                     "ts": "2026-01-01T00:00:00Z",
                     "kind": "navigate",
                     "action": "view.open",
-                    "target": "Control",
+                    "subject": "Control",
                     "trigger": "pointer",
                 }
             ]
@@ -344,9 +349,9 @@ SAMPLES: dict[tuple[str, str], dict] = {
             },
         }
     },
-    ("POST", "/control/process/{action}"): {"json": {"procs": "rdb1"}},
-    ("PUT", "/control/process/{process}/config"): {"json": {"field": "port", "value": "1"}},
-    ("PUT", "/control/worker-config"): {"json": {"key": "k", "value": "v"}},
+    ("POST", "/control/lifecycle/{action}"): {"json": {"procs": "rdb1", "confirmed": True}},
+    ("PUT", "/control/processes/{process}/config"): {"json": {"field": "port", "value": "1"}},
+    ("PUT", "/control/worker/config"): {"json": {"key": "k", "value": "v"}},
     ("POST", "/control/backfill"): {
         "json": {
             "worker": "w",

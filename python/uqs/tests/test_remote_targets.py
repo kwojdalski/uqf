@@ -668,6 +668,6 @@ def test_target_yes_reaches_every_command_that_takes_yes(server, monkeypatch, pa
 def test_target_yes_goes_before_a_double_dash(server, monkeypatch):
     sent: list[list[str]] = []
     monkeypatch.setattr(control, "run", lambda r, args, **_: sent.append(list(args)) or 0)
-    target_cli.forward("uat", True, ["data", "migrate", "--apply", "--", "quote", "2026.09.13"],
-                       interactive=False)  # fmt: skip
-    assert sent == [["data", "migrate", "--apply", "--yes", "--", "quote", "2026.09.13"]]
+    argv = ["data", "migrate", "--date", "2026.09.13", "--apply", "--", "quote"]
+    target_cli.forward("uat", True, argv, interactive=False)
+    assert sent == [["data", "migrate", "--date", "2026.09.13", "--apply", "--yes", "--", "quote"]]

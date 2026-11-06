@@ -414,7 +414,7 @@ def test_a_target_side_refused_services_read_is_audited(registry, asked, tmp_pat
         conn.row_factory = sqlite3.Row
         (row,) = list(conn.execute("SELECT * FROM activity ORDER BY seq"))
     assert (row["action"], row["kind"], row["outcome"]) == ("authz.refused", "attempt", "refused")
-    assert (row["target"], row["status_code"], row["claimed_user"]) == ("/compare", 403, "bob")
+    assert (row["subject"], row["status_code"], row["claimed_user"]) == ("/compare", 403, "bob")
     assert json.loads(row["detail"])["permission"] == "services:read"
 
 

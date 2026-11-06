@@ -19,7 +19,7 @@ const requested = new Set<string>();
 for (const file of readdirSync(src)) {
   if (!/\.tsx?$/.test(file) || /\.test\.tsx?$/.test(file)) continue;
   const text = readFileSync(join(src, file), "utf8");
-  // "/health", `/coverage?...`, `/control/process/${action}`: the first
+  // "/health", `/coverage?...`, `/control/lifecycle/${action}`: the first
   // segment after the leading slash, in a string or template literal.
   for (const m of text.matchAll(/["`]\/([a-z][a-z_-]*)/g)) requested.add(m[1]);
 }
@@ -38,7 +38,7 @@ it("proxies nothing the app does not request", () => {
 it("matches a path exactly, with a sub-path or a query, and nothing else", () => {
   const re = new RegExp(`^/(${API_PATHS.join("|")})(/|\\?|$)`);
   expect(re.test("/control")).toBe(true);
-  expect(re.test("/control/process/start")).toBe(true);
+  expect(re.test("/control/lifecycle/start")).toBe(true);
   expect(re.test("/coverage?dataset=x")).toBe(true);
   expect(re.test("/controller")).toBe(false);
   expect(re.test("/ui/control")).toBe(false);

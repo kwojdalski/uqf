@@ -234,7 +234,7 @@ export default function SettingsView() {
     return tracked(
       "submit",
       action,
-      { target: path, trigger: triggerOf() },
+      { subject: path, trigger: triggerOf() },
       (correlation) =>
         mutate<SettingsChangeResult>(path, body, "PUT", correlation),
       () => "succeeded",

@@ -114,7 +114,7 @@ CASES: dict[str, tuple[list[str], str]] = {
     ),
     "data seed": (["data", "seed"], "name the runtime to copy from"),
     # #2247: confirms on the server, like data alter
-    "data migrate": (["data", "migrate", "quote", "not-a-day"], "PARTITION"),
+    "data migrate": (["data", "migrate", "quote", "--date", "not-a-day"], "--date"),
     "runtime diff": (["runtime", "diff", "nosuch1", "nosuch2"], "is not a runtime"),
     "job receiver start": (
         ["job", "receiver", "start", "--attachment", "nosuch"],

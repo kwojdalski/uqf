@@ -109,7 +109,7 @@ def script(
     req = (
         "`range_from`range_to`filters`limit`source_version`partition`login!("
         f"{runs.to_q_timestamp(start)};{runs.to_q_timestamp(end)};{_q_strings(filters)};{limit}j;"
-        f"{_q_symbol(source_version, '--source-version')};{_q_symbol(partition, '--partition')};"
+        f"{_q_symbol(source_version, '--source-version')};{_q_symbol(partition, '--slice')};"
         f'first read0 hsym `$"{login_file}")'
     )
     tabs = "(),`" + "`".join(tables)

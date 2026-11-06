@@ -88,8 +88,8 @@ input to the columns its mapping reads, and replace each example with a real row
 and the canonical row it becomes.
 
 `--period` sets a feed's tick (default one second), or adds an `on_timer` to an
-etl, as markout and fx_positions have. For a backfill, `--partition SYM` scopes
-the worker to one slice of its dataset - the only way two workers can fill one
+etl, as markout and fx_positions have. For a backfill, `--slice SYM` scopes the
+worker to one slice of its dataset - the only way two workers can fill one
 dataset - and `--check` scaffolds a quality check that throws until written.
 `--twin-of JOB` makes a backfill a streaming job's twin: its dataset and columns
 are read from JOB's published table, so `uqs job gaps JOB` names it with no

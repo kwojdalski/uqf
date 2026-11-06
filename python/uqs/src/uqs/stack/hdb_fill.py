@@ -6,6 +6,7 @@ command bootstraps through and which calls this on each one."""
 from __future__ import annotations
 
 import subprocess
+from pathlib import Path
 
 from uqs.interpreter import q_command, q_interpreter
 from uqs.logger import get_logger
@@ -36,7 +37,7 @@ FILL_HDB_TIMEOUT_S = 600
 MIGRATE_ARG = "migrate"
 
 
-def fill_hdb_partitions(paths: UqsPaths, *, migrate: bool = False) -> bool:
+def fill_hdb_partitions(paths: UqsPaths, *, migrate: bool = False, hdb: Path | None = None) -> bool:
     """Write an empty copy of every declared table into every partition
     that lacks one, and every declared column into every table that lacks
     one. Returns whether the filler ran at all.
@@ -55,13 +56,16 @@ def fill_hdb_partitions(paths: UqsPaths, *, migrate: bool = False) -> bool:
     columns are dropped. ``uqs data check --apply`` passes it after asking; the
     bootstrap does not, and leaves an existing markout partition as it was.
 
+    `hdb` is another HDB root to fill from this runtime's schema (`data seed
+    --hdb DIR`, #2237); None, this runtime's own.
+
     NEVER FAILS A BOOTSTRAP. Every `uqs` command bootstraps, so a
     problem here - no q on the path, an HDB mid-write, a permissions
     fault - must not stop an operator stopping the stack or reading a log.
     It is reported and stepped over; `uqs data check` says the same
     thing on demand, and the smoke lane says it about a running stack.
     """
-    hdb_root = paths.hdb_dir
+    hdb_root = hdb if hdb is not None else paths.hdb_dir
     if not hdb_root.is_dir():
         return False
     script = paths.scripts_dir / FILL_HDB_SCRIPT

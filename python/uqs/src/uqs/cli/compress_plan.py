@@ -70,12 +70,13 @@ def scope_given(
     level: int | None,
 ) -> stack_compress.Scope:
     """The scope the command line names: days only when a range option was given
-    (the shared --from/--to/--date/--last, half-open), else the policy's."""
+    (the shared --from/--to/--date/--last, half-open and whole days), else the
+    policy's."""
     window = timerange.resolve(range_from, range_to, day, last, open_ended=True)
     named = any(v is not None for v in (range_from, range_to, day, last))
+    days = window.partition_dates("`data compress` compresses") if named else None
     return stack_compress.scope(
-        tables_given(table), older_than, base_port,
-        window.partition_dates() if named else None, algo, blocksize, level,
+        tables_given(table), older_than, base_port, days, algo, blocksize, level,
     )  # fmt: skip
 
 
@@ -183,7 +184,10 @@ class Audit:
                 source="server",
                 kind=activity.SERVER_KIND,
                 action=ACTION,
-                target=str(paths.hdb_dir),
+                # this stack's own HDB: `local`, and the directory is what
+                # was acted on there (#2234)
+                target="local",
+                subject=str(paths.hdb_dir),
                 outcome="pending",
                 claimed_user=getpass.getuser(),
                 method="CLI",
@@ -201,9 +205,9 @@ class Audit:
     def _write(self, done: list[dict], failed: dict | None, **fields: Any) -> None:
         if self.store is None or self.event_id is None:
             return
-        items = [{"target": d["partition"], "outcome": "succeeded"} for d in done]
+        items = [{"subject": d["partition"], "outcome": "succeeded"} for d in done]
         if failed:
-            items.append({"target": failed["partition"], "outcome": "failed"})
+            items.append({"subject": failed["partition"], "outcome": "failed"})
         detail = {
             "process": stack_compress.PROCESS,
             "item_count": len(done),
