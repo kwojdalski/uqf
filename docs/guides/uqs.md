@@ -1852,6 +1852,10 @@ list of process names, `proc` one; `uqs_query` takes `password_env`, the name of
 the variable holding the password, never the password; `uqs_start` takes
 `profile`, and `dry_run=true` for the start lines alone. `uqs_start` refuses
 what `uqs start` refuses: an unknown process or an unrunnable profile.
+`uqs_clean` is a dry run: it returns each entry it would remove, with its bytes,
+and deletes nothing. MCP has no terminal to ask on, so `confirm=true` is
+`uqs clean`'s `--yes`, the only way it deletes (#2257); a call that still gives
+`dry_run` is refused, naming `confirm`.
 
 Every tool returns one JSON object - a list tool its noun's `--json` document,
 `uqs_query` `{"expression", "result"}` - and every failure is the CLI's one
@@ -2145,7 +2149,9 @@ default: it still parses for one release, hidden, and is refused beside
 run. Every deletion that cannot be undone asks first and takes `--yes`/`-y`:
 `clean` (the whole data directory, the HDB with it, unless `--match` narrows
 it), `deploy prune`, `job checkpoint remove`, `target remove` (which
-`target revert` can undo), beside `job remove` and `job attachment remove`.
+`target revert` can undo), beside `job remove` and `job attachment remove`. On
+`uqs-mcp`, which cannot ask, the tool for each is a dry run unless it is given
+`confirm=true`.
 
 Every bypass is a named override with a reason (#1852): the bare flags that
 lifted a refusal and recorded no reason are `--override NAME --reason TEXT`,
