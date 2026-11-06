@@ -315,7 +315,7 @@ SAMPLES: dict[tuple[str, str], dict] = {
                 {
                     "event_id": "evt00000001",
                     "session_id": "session0001",
-                    "ts": "2026-01-01T00:00:00Z",
+                    "time": "2026-01-01T00:00:00Z",
                     "kind": "navigate",
                     "action": "view.open",
                     "subject": "Control",

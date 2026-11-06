@@ -32,7 +32,8 @@ from collections.abc import Iterable
 from uqs.logger import get_logger
 from uqs.paths import UqsError, UqsPaths
 from uqs.stack.env import build_env
-from uqs.stack.procs import effective_process_rows, resolve_process_config
+from uqs.stack.placeholders import resolve_process_config
+from uqs.stack.procs import effective_process_rows
 
 log = get_logger()
 

@@ -13,17 +13,8 @@ from uqs.cli import completion
 from uqs.cli.deploy import deploy_app
 from uqs.cli.json_out import emit, json_opt, timestamp
 from uqs.cli.safety import ReadOnly
-from uqs.cli.shared import (
-    ExportOpt,
-    InteractiveOpt,
-    ReverseOpt,
-    SortOpt,
-    _die,
-    _export,
-    _show,
-    _sorted_items,
-    console,
-)
+from uqs.cli.shared import ExportOpt, InteractiveOpt, _die, _export, _show, console
+from uqs.cli.sorting import ReverseOpt, SortOpt, _sorted_items
 from uqs.deploy import history
 from uqs.deploy.config import DeployError
 from uqs.paths import UqsError, repo_root

@@ -1175,8 +1175,9 @@ class BrowserEventIn(BaseModel):
 
     event_id: str = Field(pattern=_ACTIVITY_ID)
     session_id: str = Field(pattern=_ACTIVITY_ID)
-    #: When it happened, by the browser's clock; must carry a timezone.
-    ts: AwareInstant
+    #: When it happened, by the browser's clock; must carry a timezone. `time`,
+    #: as `uqs activity list --json` and every log-line record say it (#2254).
+    time: AwareInstant
     kind: BrowserKind
     action: str = Field(pattern=r"^[a-z][a-z0-9_.-]{0,63}$")
     #: What the event is about: a view, a control, a process selector.
@@ -1191,15 +1192,17 @@ class BrowserEventIn(BaseModel):
     @model_validator(mode="before")
     @classmethod
     def _renamed(cls, data: Any) -> Any:
+        if isinstance(data, dict) and "ts" in data:
+            raise ValueError("`ts` is `time`: when it happened, by the browser's clock (#2254)")
         return _refuse_target(data)
 
-    @field_validator("ts")
+    @field_validator("time")
     @classmethod
-    def _held_in_utc(cls, ts: str) -> str:
+    def _held_in_utc(cls, time: str) -> str:
         """An instant UTC can hold, to the microsecond rows are stored at -
         else the whole batch is a 422 here, before any of it is written (#2021)."""
-        to_datetime(ts)
-        return ts
+        to_datetime(time)
+        return time
 
 
 class BrowserDropIn(BaseModel):
@@ -1250,7 +1253,7 @@ class ActivityEventOut(BaseModel):
     label, never an authenticated identity."""
 
     event_id: str
-    ts: AwareInstant
+    time: AwareInstant
     recorded_at: AwareInstant
     level: ActivityLevel
     source: ActivitySource

@@ -716,8 +716,8 @@ string).
 `GET /activity` also takes `level`, the most detailed level shown:
 `interactions` shows actions and interactions. `uqs activity list` and
 `uqs activity export` read the same file, read-only, with no API running,
-through the same `uqs.activity_log` the API reads it with - so the CLI's export
-is the API's, byte for byte.
+through the same `uqs.activity_log` and `uqs.activity_export` the API reads and
+writes it with - so the CLI's export is the API's, byte for byte.
 
 **Correlation.** The browser sends `X-UQF-Request-Id` and `X-UQF-Session-Id`
 with every write; the server stores both on its row and echoes the request id

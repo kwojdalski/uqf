@@ -59,6 +59,7 @@ from uqs.cli import (
     renames,
     safety,
     shared,
+    sorting,
     start_warnings,
     summary,
     summary_columns,
@@ -76,7 +77,15 @@ from uqs.external.crypto import (
 from uqs.model import profiles
 from uqs.model.pipeline_edges import LICENCE_CONNECTION_LIMIT
 from uqs.paths import UqsError, UqsPaths
-from uqs.stack import alive, deployment, listing, probe, runtime, stream_health
+from uqs.stack import (
+    alive,
+    deployment,
+    listing,
+    probe,
+    runtime,
+    stream_health,
+    table_export,
+)
 from uqs.stack import channel as stack_channel
 from uqs.stack import clean as stack_clean
 from uqs.stack import logs as stack_logs
@@ -968,7 +977,7 @@ def test_every_heartbeat_state_renders(monkeypatch, state):
 
 def test_export_writes_when_a_path_is_given(monkeypatch, tmp_path):
     _patch(monkeypatch, listing, "list_items", result=[{"procname": "rdb1"}])
-    rec = _patch(monkeypatch, runtime, "export_table")
+    rec = _patch(monkeypatch, table_export, "export_table")
     target = tmp_path / "out.csv"
     result = runner.invoke(cli.app, ["process", "list", "--export", str(target)])
     assert result.exit_code == 0
@@ -978,7 +987,7 @@ def test_export_writes_when_a_path_is_given(monkeypatch, tmp_path):
 
 def test_nothing_is_exported_without_the_option(monkeypatch):
     _patch(monkeypatch, listing, "list_items", result=[{"procname": "rdb1"}])
-    rec = _patch(monkeypatch, runtime, "export_table")
+    rec = _patch(monkeypatch, table_export, "export_table")
     runner.invoke(cli.app, ["process", "list"])
     assert rec.calls == []
 
@@ -988,7 +997,7 @@ def test_a_failed_export_reports_rather_than_losing_the_output(monkeypatch, tmp_
     unwritable path must say so, not take the whole command down with a
     traceback."""
     _patch(monkeypatch, listing, "list_items", result=[{"procname": "rdb1"}])
-    _patch(monkeypatch, runtime, "export_table", raises=UqsError("unsupported suffix"))
+    _patch(monkeypatch, table_export, "export_table", raises=UqsError("unsupported suffix"))
     result = runner.invoke(cli.app, ["process", "list", "--export", str(tmp_path / "x.txt")])
     assert result.exit_code == 1
 
@@ -1230,43 +1239,43 @@ def test_a_numeric_column_sorts_numerically_not_lexicographically():
     """`port` is a string like "6051". Sorted as text, "6100" comes before
     "659" - which looks like the sort silently did nothing on the one column
     most worth sorting."""
-    order = [i["port"] for i in shared._sorted_items(_procs(), "port", reverse=False)]
+    order = [i["port"] for i in sorting._sorted_items(_procs(), "port", reverse=False)]
     assert order == ["659", "6067", "6100"]
 
 
 def test_a_text_column_sorts_case_insensitively():
     """ "Arbitrage1" must not sort before every lowercase name just for its
     capital - the reader is looking up a name, not an ordinal."""
-    order = [i["procname"] for i in shared._sorted_items(_procs(), "procname", reverse=False)]
+    order = [i["procname"] for i in sorting._sorted_items(_procs(), "procname", reverse=False)]
     assert order == ["Arbitrage1", "sortworker2", "stp1"]
 
 
 def test_reverse_flips_the_order():
-    order = [i["port"] for i in shared._sorted_items(_procs(), "port", reverse=True)]
+    order = [i["port"] for i in sorting._sorted_items(_procs(), "port", reverse=True)]
     assert order == ["6100", "6067", "659"]
 
 
 def test_the_column_name_is_matched_case_insensitively():
-    assert shared._sorted_items(_procs(), "PORT", reverse=False)[0]["port"] == "659"
+    assert sorting._sorted_items(_procs(), "PORT", reverse=False)[0]["port"] == "659"
 
 
 def test_empty_cells_group_at_one_end_rather_than_sorting_as_empty_string():
     """A process with no override set is not "before aaa", it is absent -
     and a blank interleaved among real values reads as data."""
     items = [{"v": "b"}, {"v": ""}, {"v": "a"}]
-    assert [i["v"] for i in shared._sorted_items(items, "v", reverse=False)] == ["a", "b", ""]
+    assert [i["v"] for i in sorting._sorted_items(items, "v", reverse=False)] == ["a", "b", ""]
 
 
 def test_sorting_is_a_no_op_without_the_option():
     items = _procs()
-    assert shared._sorted_items(items, None, reverse=False) == items
+    assert sorting._sorted_items(items, None, reverse=False) == items
 
 
 def test_sorting_an_empty_listing_does_not_look_up_columns():
     """There is no first row to read column names from, and a kind with no
     items is a legitimate result - `overrides` is empty until something is
     set."""
-    assert shared._sorted_items([], "anything", reverse=False) == []
+    assert sorting._sorted_items([], "anything", reverse=False) == []
 
 
 def test_an_unsortable_column_names_the_real_ones(monkeypatch):
@@ -1282,7 +1291,7 @@ def test_the_sorted_order_reaches_the_export(monkeypatch):
     """An exported CSV that disagreed with what was on screen would be the
     worst of both."""
     _patch(monkeypatch, listing, "list_items", result=_procs())
-    rec = _patch(monkeypatch, runtime, "export_table", result=None)
+    rec = _patch(monkeypatch, table_export, "export_table", result=None)
     result = runner.invoke(cli.app, ["process", "list", "--sort", "port", "--export", "/tmp/x.csv"])
     assert result.exit_code == 0
     assert [i["port"] for i in rec.args[0]] == ["659", "6067", "6100"]
