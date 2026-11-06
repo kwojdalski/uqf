@@ -1,0 +1,356 @@
+"""The HTTP API's naming conventions, held so an inconsistency fixed once
+cannot come back (#2227, #2230, #2232, #2234, #2236, #2244).
+
+test_api_types.py holds web/src/api.ts to models.py field by field; this file
+holds the API to itself: one wire name per request field, one meaning per
+word, one shape per kind of route, and one rule for what must be confirmed.
+"""
+
+from __future__ import annotations
+
+import re
+import typing
+
+import pydantic
+import pytest
+from fastapi.routing import APIRoute
+from fastapi.testclient import TestClient
+
+from uqf_frontend import access, models
+from uqf_frontend.app import RENAMED_ROUTES, create_app
+from uqf_frontend.config import Settings
+from uqf_frontend.fleet import FakeFleet
+from uqf_frontend.gateway import FakeGateway
+
+
+def _models() -> dict[str, type[pydantic.BaseModel]]:
+    return {
+        name: obj
+        for name, obj in vars(models).items()
+        if isinstance(obj, type)
+        and issubclass(obj, pydantic.BaseModel)
+        and obj.__module__ == models.__name__
+    }
+
+
+def _request_models() -> dict[str, type[pydantic.BaseModel]]:
+    """Every model that refuses a key it does not know - the request models
+    (models.STRICT_REQUEST, #1361) and the Settings view's bodies."""
+    return {n: m for n, m in _models().items() if m.model_config.get("extra") == "forbid"}
+
+
+# --------------------------------------------------- one wire name (#2227)
+
+
+def test_the_scan_finds_the_request_models():
+    assert {"ProcessConfigRequest", "WorkerConfigRequest", "LifecycleRequest"} <= set(
+        _request_models()
+    )
+
+
+@pytest.mark.parametrize("name", sorted(_request_models()))
+def test_a_request_field_has_one_wire_name(name):
+    """An alias with populate_by_name accepted two spellings of one field -
+    the alias the repository rule forbids (#2227). A request field is sent
+    by its own name, and only by it."""
+    model = _request_models()[name]
+    assert not model.model_config.get("populate_by_name"), name
+    aliased = {f: i.alias for f, i in model.model_fields.items() if i.alias not in (None, f)}
+    assert aliased == {}, f"{name}: {aliased}"
+
+
+def test_process_config_refuses_the_old_spelling_by_name():
+    with pytest.raises(pydantic.ValidationError, match="`field_name` is `field`"):
+        models.ProcessConfigRequest.model_validate({"field_name": "port", "value": "1"})
+    assert (
+        models.ProcessConfigRequest.model_validate({"field": "port", "value": "1"}).field == "port"
+    )
+
+
+# --------------------------------------------------- route shapes (#2230)
+
+
+def _routes() -> list[APIRoute]:
+    app = create_app(gateway=FakeGateway({}), settings=Settings(), fleet=FakeFleet())
+    return [r for r in app.routes if isinstance(r, APIRoute)]
+
+
+def _segments(path: str) -> list[str]:
+    return [s for s in path.split("/") if s]
+
+
+def test_every_literal_segment_is_one_lowercase_word_or_snake_case():
+    """`worker-config` was the API's one hyphenated segment; a multi-word
+    path parameter was already snake_case (`{push_id}`)."""
+    bad = {
+        r.path
+        for r in _routes()
+        for s in _segments(r.path)
+        if not s.startswith("{") and not re.fullmatch(r"[a-z][a-z0-9_]*", s)
+    }
+    assert bad == set()
+
+
+def test_no_position_holds_a_verb_beside_a_resource_name():
+    """`/control/process/{action}` and `/control/process/{process}/config`
+    put a lifecycle verb and a process name in one position (#2230). A
+    path parameter that takes a verb is typed to its words, under a segment
+    of its own, and no other route's parameter shares its position."""
+    params: dict[tuple[str, ...], set[str]] = {}
+    for r in _routes():
+        parts = _segments(r.path)
+        for i, part in enumerate(parts):
+            if part.startswith("{"):
+                params.setdefault(tuple(parts[:i]), set()).add(part)
+    shared = {"/".join(k): v for k, v in params.items() if len(v) > 1}
+    assert shared == {}
+
+
+@pytest.mark.parametrize("verb", ["obliterate", "clean", "rdb1"])
+def test_the_lifecycle_verb_is_validated_and_an_unknown_one_is_not_found(tmp_path, verb):
+    """The verb sits under a segment of its own and takes only
+    models.LifecycleAction's words. Anything else is a name that is not
+    there: 404 naming its kind, as every unknown path name is (#2224) - and
+    nothing runs, confirmed or not."""
+    assert set(typing.get_args(models.LifecycleAction)) == {"start", "stop", "restart"}
+    resp = _writer(tmp_path).post(f"/control/lifecycle/{verb}", json={"procs": "all"})
+    assert resp.status_code == 404, resp.text
+    assert resp.json()["error"] == "ActionNotFound"
+    assert "unknown action" in resp.json()["detail"]
+
+
+def test_a_collection_of_processes_is_plural_as_on_ops():
+    paths = {r.path for r in _routes()}
+    assert "/ops/processes" in paths and "/control/processes/{process}/config" in paths
+    assert not [p for p in paths if "/process/" in p or p.endswith("/process")]
+
+
+@pytest.mark.parametrize(
+    ("method", "old", "new"),
+    [
+        ("post", "/control/process/stop", "/control/lifecycle/{action}"),
+        ("put", "/control/process/rdb1/config", "/control/processes/{process}/config"),
+        ("put", "/control/worker-config", "/control/worker/config"),
+    ],
+)
+def test_a_renamed_route_is_gone_and_names_its_new_path(method, old, new):
+    """One-way: the old path answers 410 with the new one and does nothing -
+    it is not a second route that still works."""
+    token = "s3cret-write-token"
+    settings = Settings(
+        enable_writes=True, write_token=token, allowed_hosts=("localhost", "testserver")
+    )
+    client = TestClient(
+        create_app(gateway=FakeGateway({}), settings=settings, fleet=FakeFleet()),
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    resp = getattr(client, method)(old, json={})
+    assert resp.status_code == 410, resp.text
+    assert resp.json()["error"] == "Gone"
+    assert new in resp.json()["detail"]
+
+
+def test_every_renamed_route_names_a_route_that_exists():
+    paths = {(m, r.path) for r in _routes() for m in r.methods or ()}
+    for r in RENAMED_ROUTES:
+        assert (r.new_method, r.new) in paths
+        assert (r.new_method, r.new) in access.ROUTE_PERMISSIONS
+
+
+# --------------------------------------------- one word, one meaning (#2232)
+
+#: `group`/`groups` is the access policy's word: the caller's groups and a
+#: membership's group. A process's type is `proctype`, TorQ's column.
+ACCESS_GROUP_FIELDS = {("CapabilitiesResponse", "groups"), ("PolicyMembership", "group")}
+
+
+def _fields_named(*names: str) -> set[tuple[str, str]]:
+    return {
+        (model, field)
+        for model, cls in _models().items()
+        for field, info in cls.model_fields.items()
+        if (info.alias or field) in names
+    }
+
+
+def test_group_means_only_an_access_group():
+    assert _fields_named("group", "groups") == ACCESS_GROUP_FIELDS
+
+
+def test_a_process_row_reports_its_type_once():
+    """Responses are not strict, so the row's fields are pinned: a `group`
+    beside `proctype` showed the Fleet view one fact as two columns."""
+    assert set(models.ProcessHealthOut.model_fields) == {
+        "process", "proctype", "host", "declared_port", "start_with_all", "up", "pid",
+        "reported_port", "reported_process", "error", "identity_mismatch", "port_unresolved",
+    }  # fmt: skip
+    assert "proctypes" in models.FleetHealthResponse.model_fields
+
+
+# ----------------------------------------------- `identity` is no field (#2236)
+
+
+def test_no_model_has_a_field_called_identity():
+    """It meant the caller's user, the process a port answered as, and how
+    the user was established. Those are `user`, `reported_process` and the
+    audit detail's `identity_source` now."""
+    assert _fields_named("identity") == set()
+    assert ("CapabilitiesResponse", "user") in _fields_named("user")
+    answering = {"TunnelEndpointOut", "ProcessHealthOut", "TunnelCheckRecordOut"}
+    assert {(m, "reported_process") for m in answering} <= _fields_named("reported_process")
+
+
+def test_the_audit_says_how_its_user_was_established_as_identity_source():
+    from uqf_frontend import activity
+
+    assert "identity_source" in activity.DETAIL_KEYS
+    assert "identity" not in activity.DETAIL_KEYS
+
+
+# ------------------------------------- `target` is a deployment target (#2234)
+
+#: Every model field called `target`: each one is a registered deployment
+#: target or `local`. A new one is added here only if it means the same.
+DEPLOYMENT_TARGET_FIELDS = {
+    (m, "target")
+    for m in (
+        "ActivityEventOut", "ConfigDiffResponse", "ConfigHistoryResponse",
+        "ConfigPushOpenResponse", "ConfigPushOut", "ConfigPushResponse",
+        "ConfigPushSummaryOut", "ConfigRestoreResponse", "RemoteDeleteResponse",
+        "RemoteFilesResponse", "RemoteUploadResponse", "ServiceTargetOut",
+        "TunnelCheckResponse", "TunnelPlanResponse", "WorkspaceOut", "WorkspaceResponse",
+    )
+}  # fmt: skip
+
+
+def test_target_names_a_deployment_target_and_nothing_else():
+    """CommandResponse's `target` was torq.sh's selector; an activity item's
+    and a browser event's were a file, a process or a view. Those are `procs`
+    and `subject` now."""
+    assert _fields_named("target") == DEPLOYMENT_TARGET_FIELDS
+    assert "procs" in models.CommandResponse.model_fields
+
+
+@pytest.mark.parametrize("model", [models.ActivityItem, models.BrowserEventIn])
+def test_an_activity_target_is_refused_by_its_new_name(model):
+    with pytest.raises(pydantic.ValidationError, match="`target` is `subject`"):
+        model.model_validate({"target": "Desk"})
+
+
+def test_every_audited_route_records_a_deployment_target():
+    """The audit row's `target` is the path's `{target}`, else `local`: what
+    a route acted on goes to `subject`, so `?target=prod` never matches a
+    process, a cfg key or a worker that happens to share the name."""
+    from uqf_frontend import activity
+
+    for (_method, template), _name in activity.SERVER_ACTIONS.items():
+        names = re.findall(r"\{(\w+)\}", template)
+        params = {n: {"target": "prod"}.get(n, "x") for n in names}
+        expected = "prod" if "{target}" in template else "local"
+        assert activity.server_target(template, params) == expected, template
+    assert activity.server_subject({"process": "rdb1"}) == "rdb1"
+
+
+def test_a_lifecycle_action_is_audited_on_local_about_its_selector(tmp_path, monkeypatch):
+    from uqf_frontend import control
+
+    token = "s3cret-write-token"
+    settings = Settings(
+        enable_writes=True, write_token=token, allowed_hosts=("localhost", "testserver"),
+        activity_db=tmp_path / "a.sqlite3",
+    )  # fmt: skip
+    done = control.CommandResult(action="start", procs="rdb1 rdb2", exit_code=0, output="")
+    monkeypatch.setattr(control, "lifecycle", lambda *a, **k: done)
+    client = TestClient(
+        create_app(gateway=FakeGateway({}), settings=settings, fleet=FakeFleet()),
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    resp = client.post("/control/lifecycle/start", json={"procs": "rdb1 rdb2"})
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["procs"] == "rdb1 rdb2" and "target" not in resp.json()
+    (row,) = client.get("/activity", params={"subject": "rdb1 rdb2"}).json()["events"]
+    assert (row["target"], row["subject"], row["action"]) == ("local", "rdb1 rdb2", "process.start")
+    assert client.get("/activity", params={"target": "rdb1 rdb2"}).json()["events"] == []
+
+
+# ------------------------------------------------- one confirmation rule (#2244)
+
+#: Every request the UI puts behind a confirmation dialog, as the route and
+#: a body that is otherwise valid. Each must be refused, with the one text,
+#: unless it says `confirmed: true`.
+CONFIRMED_ROUTES = {
+    ("post", "/control/lifecycle/stop"): {"procs": "all"},
+    ("post", "/control/lifecycle/restart"): {"procs": "rdb1"},
+    ("post", "/services/prod/config/pushes"): {
+        "config_dir": "shared/config", "file_count": 1, "total_bytes": 1,
+    },
+    ("post", "/services/prod/config/pushes/p1/restore"): {},
+    ("delete", "/services/prod/files"): {"paths": ["shared/config/x"]},
+}  # fmt: skip
+
+
+def test_the_confirmed_models_are_the_ones_the_ui_confirms():
+    confirmed = {n for n, m in _models().items() if issubclass(m, models.ConfirmedRequest)}
+    assert confirmed - {"ConfirmedRequest"} == {
+        "ConfirmedLifecycleRequest", "ConfigPushOpenRequest", "ConfigRestoreRequest",
+        "RemoteDeleteRequest",
+    }  # fmt: skip
+    assert models.CONFIRMED_LIFECYCLE == {"stop", "restart"}
+
+
+def test_only_the_rule_checks_confirmed():
+    """A `confirmed` field outside ConfirmedRequest is a second check waiting
+    to drift - LifecycleRequest's alone, which the route holds to the rule
+    by its verb. No route body reads it."""
+    holders = {n for n, m in _models().items() if "confirmed" in m.model_fields}
+    outside = {n for n in holders if not issubclass(_models()[n], models.ConfirmedRequest)}
+    assert outside == {"LifecycleRequest"}
+    import inspect
+
+    from uqf_frontend import app as app_module
+
+    assert ".confirmed" not in inspect.getsource(app_module)
+
+
+def _writer(tmp_path) -> TestClient:
+    token = "s3cret-write-token"
+    settings = Settings(
+        enable_writes=True, write_token=token, allowed_hosts=("localhost", "testserver"),
+        activity_db=tmp_path / "a.sqlite3",
+    )  # fmt: skip
+    return TestClient(
+        create_app(gateway=FakeGateway({}), settings=settings, fleet=FakeFleet()),
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+
+@pytest.mark.parametrize("confirmed", [None, False, "true", 1])
+@pytest.mark.parametrize(("route", "body"), sorted(CONFIRMED_ROUTES.items()))
+def test_an_unconfirmed_destructive_request_is_refused(tmp_path, route, body, confirmed):
+    method, path = route
+    sent = body if confirmed is None else {**body, "confirmed": confirmed}
+    resp = _writer(tmp_path).request(method, path, json=sent)
+    assert resp.status_code == 422, resp.text
+    assert models.CONFIRMATION_REQUIRED in resp.json()["detail"]
+
+
+def test_a_start_takes_no_confirmation(tmp_path, monkeypatch):
+    from uqf_frontend import control
+
+    done = control.CommandResult(action="start", procs="all", exit_code=0, output="")
+    monkeypatch.setattr(control, "lifecycle", lambda *a, **k: done)
+    resp = _writer(tmp_path).post("/control/lifecycle/start", json={"procs": "all"})
+    assert resp.status_code == 200, resp.text
+
+
+def test_a_confirmed_stop_runs(tmp_path, monkeypatch):
+    from uqf_frontend import control
+
+    calls = []
+    done = control.CommandResult(action="stop", procs="all", exit_code=0, output="")
+    monkeypatch.setattr(control, "lifecycle", lambda *a, **k: calls.append(a) or done)
+    resp = _writer(tmp_path).post(
+        "/control/lifecycle/stop", json={"procs": "all", "confirmed": True}
+    )
+    assert resp.status_code == 200, resp.text
+    assert len(calls) == 1

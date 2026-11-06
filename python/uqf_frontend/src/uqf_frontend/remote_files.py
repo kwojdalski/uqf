@@ -118,12 +118,16 @@ class TargetNotFound(FrontendError):
 
 
 class BrowseRefused(FrontendError):
-    """The helper refused the path: outside the root, a link, not a directory."""
+    """The helper refused the path: outside the root, a link, not a directory.
+    422, a refusal of what the caller sent (#2225)."""
 
-    status_code = 400
+    status_code = 422
 
 
 class PathNotFound(FrontendError):
+    """No such path below the target's root - on a browse and an upload alike
+    (#2225): a named thing that does not exist is 404."""
+
     status_code = 404
 
 
@@ -157,9 +161,10 @@ class DeleteOutcomeUncertain(FrontendError):
 
 class UploadRefused(FrontendError):
     """The destination is not one an upload may write: outside shared/config,
-    unsafe, a link, a directory - nothing was written."""
+    unsafe, a link, a directory - nothing was written. 422, a refusal of what
+    the caller sent (#2225)."""
 
-    status_code = 400
+    status_code = 422
 
 
 class UploadExists(FrontendError):
@@ -220,7 +225,7 @@ _UPLOAD_REFUSALS: dict[str, type[FrontendError]] = {
     "bad_request": ValidationFailed,
     "refused": UploadRefused,
     "unsupported": UploadRefused,
-    "not_found": UploadRefused,
+    "not_found": PathNotFound,
     "not_a_directory": UploadRefused,
     "denied": UploadRefused,
     "exists": UploadExists,
@@ -336,12 +341,12 @@ def delete(
     settings: Settings,
     name: str,
     paths: list[str],
-    confirmed: bool,
     runner: Runner = subprocess.run,
     on_begin: Callable[[], None] | None = None,
 ) -> dict[str, Any]:
-    if confirmed is not True:
-        raise ValidationFailed("explicit confirmation is required")
+    """Delete `paths` below a target's root. The request was confirmed:
+    models.RemoteDeleteRequest refuses one that is not (#2244), and the
+    helper on the server refuses an unconfirmed request again."""
     if not 1 <= len(paths) <= remote_helper.MAX_DELETE:
         raise ValidationFailed(f"select between 1 and {remote_helper.MAX_DELETE} paths")
     for path in paths:

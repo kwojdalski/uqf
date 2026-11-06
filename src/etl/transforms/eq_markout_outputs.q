@@ -45,8 +45,12 @@
 / finds no book and is unavailable for want of one rather than for the calendar, and a
 / fill of that afternoon cannot exist), and no extended hours: a fill outside
 / the regular session is `unavailable, not scored against a pre-market book. Outside
-/ calendar_from..calendar_to every fill is unavailable - loudly, in a status column,
-/ never a number. A site with another calendar declares its own sessions table in a
+/ calendar_from..calendar_to the declared table is data, but scoring does not stop at its end
+/ (#2183): the rule that generated it is applied on demand to the days a batch of fills
+/ reaches (available below), so a fill of 2029 or 2035 is in session at the right UTC
+/ instants. The rule has one hard horizon, calendar_horizon, past which scoring refuses
+/ the batch with a named error - a fill is never marked unavailable for want of a calendar.
+/ Holidays and early closes are still unknown (the paragraph above). A site with another calendar declares its own sessions table in a
 / spec of its own; this one is data, not logic.
 / .
 / THE MEASURE is markout_bps, 10000*move%price, the same figure the crypto dataset
@@ -69,6 +73,9 @@
 / The first and last date of the declared calendar, inclusive.
 .qpipe.transform.eq_markout_outputs.calendar_from:2026.01.01
 .qpipe.transform.eq_markout_outputs.calendar_to:2028.12.31
+
+/ The last date the US session rule is trusted to: scoring a fill past it throws (available).
+.qpipe.transform.eq_markout_outputs.calendar_horizon:2099.12.31
 
 / The US regular session of each weekday in a range, as UTC instants: 09:30 to 16:00
 / New York, which is 14:30 to 21:00 UTC in standard time and 13:30 to 20:00 in daylight
@@ -93,6 +100,29 @@
     open_off:?[dst;0D13:30:00;0D14:30:00];
     close_off:?[dst;0D20:00:00;0D21:00:00];
     ([] sym:(count d)#`; open_time:(`timestamp$d)+open_off; close_time:(`timestamp$d)+close_off)}
+
+/ The domain's availability rule over a calendar that reaches as far as the fills do: the declared
+/ sessions, plus regular_sessions for every date between the end of the declared table and the
+/ latest instant the frame reads. The declared table is untouched, so the spec and its snapshot id
+/ are what they were; for frames inside it the result is the domain's own.
+/ @param spec the validated spec, at least sessions and halts
+/ @param fr the core's frame: t0 and t1 are read
+/ @return a boolean per frame row
+/ @throws if a frame instant lies after calendar_horizon
+/ @eg .qpipe.transform.eq_markout_outputs.available[.qpipe.transform.markout_core.validate[.qpipe.transform.eq_domain.domain;.qpipe.transform.eq_markout_outputs.job_spec];([] sym:enlist `AAPL; t0:enlist 2035.03.12D13:30:00; t1:enlist 2035.03.12D13:30:05)]  ->  enlist 1b
+.qpipe.transform.eq_markout_outputs.available:{[spec;fr]
+    hi_t:max (fr`t0)|fr`t1;
+    hi_d:`date$hi_t;
+    hz:.qpipe.transform.eq_markout_outputs.calendar_horizon;
+    if[(not null hi_t) and hi_d>hz;
+        '"eq_markout_outputs: a fill at ",string[hi_t]," is past the session calendar horizon ",string[hz],": scoring it would mark it unavailable for want of a calendar"];
+    last_d:.qpipe.transform.eq_markout_outputs.calendar_to;
+    ext:$[(null hi_t) or hi_d<=last_d; 0#spec`sessions; .qpipe.transform.eq_markout_outputs.regular_sessions[last_d+1;hi_d]];
+    .qpipe.transform.eq_domain.available[@[spec;`sessions;,;ext];fr]}
+
+/ The equity domain as markout_core.calc takes it for scoring: eq_domain.domain with the
+/ calendar-extending availability rule above. Everything else about it is the domain's own.
+.qpipe.transform.eq_markout_outputs.scoring_domain:@[.qpipe.transform.eq_domain.domain;`available;:;.qpipe.transform.eq_markout_outputs.available]
 
 / The grid and policy the live job and its twin score with - one definition. COMPLETE: it carries
 / every key the core and the domain default (rates, and eq_domain's quote_ccy, quote_ccys, benchmark
@@ -196,7 +226,7 @@
 / @return eq_markout's rows, `time` first
 / @eg count .qpipe.transform.eq_markout_outputs.rows[0#.qpipe.transform.eq_markout_outputs.executions_in;0#.qpipe.transform.eq_markout_outputs.market_data_in]  ->  0
 .qpipe.transform.eq_markout_outputs.rows:{[exe;md]
-    dom:.qpipe.transform.eq_domain.domain;
+    dom:.qpipe.transform.eq_markout_outputs.scoring_domain;
     spec:.qpipe.transform.markout_core.validate[dom;.qpipe.transform.eq_markout_outputs.job_spec];
     exe:select from exe where venue in .qpipe.transform.eq_markout_outputs.venues;
     r:.qpipe.transform.eq_markout_outputs.measures[.qpipe.transform.markout_core.calc[dom;spec;exe;md]];

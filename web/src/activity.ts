@@ -28,7 +28,7 @@
  * The server's default comes with /health (`activity_level`); the operator
  * can pick another for this tab in the Activity view, kept in sessionStorage.
  *
- * Nothing typed is recorded at any level: a target names a view, a table, a
+ * Nothing typed is recorded at any level: a subject names a view, a table, a
  * process selector, a worker or a control, and `detail` carries only keys the
  * server allows (activity.DETAIL_KEYS) - a filter or config VALUE has no key
  * to go under, a field's change records that it changed, and the write token
@@ -280,7 +280,8 @@ function schedule() {
 }
 
 export interface RecordOptions {
-  target?: string;
+  /** what the event is about - never a deployment target (#2234) */
+  subject?: string;
   trigger?: ActivityTrigger;
   requestId?: string;
   outcome?: ActivityOutcome;
@@ -312,7 +313,7 @@ export function record(
     time: new Date().toISOString(),
     kind,
     action,
-    target: options.target || null,
+    subject: options.subject || null,
     trigger: options.trigger ?? lastInput,
     request_id: options.requestId ?? null,
     outcome: options.outcome ?? null,
@@ -402,7 +403,7 @@ function noteRequest(note: RequestNote) {
   if (note.path.startsWith("/activity/events")) return;
   const finished = note.phase === "finish";
   record("debug", `request.${note.phase}`, {
-    target: `${note.method} ${routeOf(note.path)}`,
+    subject: `${note.method} ${routeOf(note.path)}`,
     trigger: "programmatic",
     requestId: note.requestId,
     durationMs: finished ? note.durationMs : undefined,
@@ -426,7 +427,7 @@ export function noteResource(
   attempt?: number,
 ): void {
   record("debug", `resource.${why}`, {
-    target: `GET ${routeOf(path)}`,
+    subject: `GET ${routeOf(path)}`,
     trigger: "programmatic",
     detail: { attempt },
   });
@@ -459,7 +460,7 @@ export function installActivity(target: Document = document): () => void {
     if (tag === "summary") return;
     const download = tag === "a" && element.hasAttribute("download");
     record("interact", download ? "ui.download" : "ui.click", {
-      target: activityName(element),
+      subject: activityName(element),
       trigger: triggerOf(event),
       detail: { control: controlOf(element) },
     });
@@ -472,7 +473,7 @@ export function installActivity(target: Document = document): () => void {
     const control = controlOf(element);
     const input = element as HTMLInputElement;
     record("interact", "ui.change", {
-      target: activityName(element),
+      subject: activityName(element),
       detail: {
         control,
         checked:
@@ -490,7 +491,7 @@ export function installActivity(target: Document = document): () => void {
     if (details?.tagName?.toLowerCase() !== "details") return;
     const summary = details.querySelector(":scope > summary");
     record("interact", "ui.toggle", {
-      target: activityName(summary ?? details),
+      subject: activityName(summary ?? details),
       detail: { open: details.open },
     });
   };
@@ -500,7 +501,7 @@ export function installActivity(target: Document = document): () => void {
     const element = event.target as Element | null;
     const named = element?.closest?.("[data-activity]");
     record("interact", "ui.copy", {
-      target: named ? activityName(named) : "page",
+      subject: named ? activityName(named) : "page",
     });
   };
   const unobserve = observeRequests(noteRequest);
@@ -555,7 +556,7 @@ export async function tracked<T>(
   record(kind, action, { ...options, requestId });
   const result = (outcome: ActivityOutcome, status?: number) =>
     record("result", action, {
-      target: options.target,
+      subject: options.subject,
       trigger: "programmatic",
       requestId,
       outcome,

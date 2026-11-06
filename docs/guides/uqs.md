@@ -144,6 +144,7 @@ the pattern, or the shell will try to expand it against your filenames first.
 uqs data compress --report            # per table and column: algorithm, block size, ratio
 uqs data compress --report --json     # the same, as one document
 uqs --target uat data compress --report
+uqs --target kdb_prd data compress --report --hdb /data/hdb   # a TorQ server without uqf
 ```
 
 `--report` reads what the HDB holds now and changes nothing (#2149). It walks
@@ -159,7 +160,26 @@ the file, as TorQ reads it. The plant schema's `g#sym` is an in-memory index the
 tickerplant and RDB keep, not what a partition on disk carries, so it is not
 what this judges. Unsorted data compresses far worse - KX's whitepaper
 (<https://code.kx.com/q/wp/compress/>) measures 669x against 10x - but the
-report never re-sorts: it names the partitions, and the fix is the wdb's.
+report never re-sorts: it names the partitions, and the fix is the wdb's. It
+writes nothing, but on a large HDB reading every header and every partition's
+sort columns is still substantial read I/O.
+
+`--hdb DIR` names the directory instead. Under `--target`, DIR is on that target
+and nowhere is it checked against this machine (#2219): the command runs here,
+and reaches the target by its own declared `ssh`, account and connect timeout,
+with one ssh session that writes the report script, `torq_compress.q` and the
+two TorQ files they load into a temporary directory there, runs the target's q
+(its `q_cmd`, else the account's `$QCMD`, else `q` on its `PATH`, else
+`$QHOME`'s), and removes the directory however it ends. So the target needs q
+and the HDB - an existing TorQ deployment - and no uqf, release or `deploy.env`.
+Sorting is judged only against `--sort-csv FILE` (a path on the target); without
+it the report says "sorting not checked", and `--json` gives
+`sort_checked: false` and `unsorted: null`, never the empty list that means
+every partition is sorted. It is a read, so an inspection-only target runs it;
+`--apply` with `--hdb` under `--target` is refused before anything reaches the
+target, because compressing goes through a managed deployment's writer lock,
+policy and reload. Without `--hdb`, `--target` runs the release's own command on
+its configured HDB, as before.
 
 ### The `clock` column on `executions` and `market_data` (#1925)
 
@@ -230,8 +250,8 @@ is deliberately not.
 or changes one, stop the stack and migrate each affected date/table explicitly:
 
 ```
-uqs data migrate trade 2026-01-01 --rename old_price:price --cast price
-uqs data migrate trade 2026-01-01 --rename old_price:price --cast price --apply
+uqs data migrate trade --date 2026-01-01 --rename old_price:price --cast price
+uqs data migrate trade --date 2026-01-01 --rename old_price:price --cast price --apply
 uqs data check
 uqs restart hdb1
 ```
@@ -244,6 +264,20 @@ partition before exchanging it with the old one; it prints the old directory's
 backup path for rollback. A source column not named in the current schema must
 be mapped with `--rename` rather than silently dropped. The command refuses
 segmented HDBs.
+
+An empty table that kept an obsolete schema (so a backfill cannot publish into
+it) is rebuilt from its current declaration instead (#2251):
+
+```
+uqs data migrate trade --date 2026-01-01 --reset-empty          # eligibility and the schema change; writes nothing
+uqs data migrate trade --date 2026-01-01 --reset-empty --apply  # after asking; --yes does not ask
+```
+
+q refuses unless every stored column file, obsolete ones included, is readable
+and holds no rows, and checks again under the writer lock just before staging.
+It cannot be combined with `--rename` or `--cast`, uses the shared `sym` file,
+leaves other partitions alone, and keeps the old table at the reported backup
+path.
 
 ### One table, in any HDB
 
@@ -489,14 +523,14 @@ backfill wrote that its readers have not been released to see
 
 `--table` (repeatable) and `--older-than` (a DURATION in whole days, on top of
 the policy's own minimum age) narrow a run. **Named days** - `--date D`,
-`--from`/`--to` (half-open: `--to`'s day is not in) or `--last` - compress the
-partitions in them on demand, the policy's minimum age set aside; the plan says
-so for each ("compressing it although the policy's minage is 7"). `--algo`,
-`--blocksize` and `--gzip-level` change one run's algorithm, block size or gzip
-level. Every one of these selects or sets rows of `.cmp`'s own plan table
-(`.cmp.showcomp`), which `.cmp.compressfromtable` then compresses, so the plan
-shown and the run are the same rows; a one-off setting is checked by
-`.cmp.checkcsv` first.
+`--from`/`--to` (half-open: `--to`'s day is not in; whole days only) or `--last`
+(whole days before today) - compress the partitions in them on demand, the
+policy's minimum age set aside; the plan says so for each ("compressing it
+although the policy's minage is 7"). `--algo`, `--blocksize` and `--gzip-level`
+change one run's algorithm, block size or gzip level. Every one of these selects
+or sets rows of `.cmp`'s own plan table (`.cmp.showcomp`), which
+`.cmp.compressfromtable` then compresses, so the plan shown and the run are the
+same rows; a one-off setting is checked by `.cmp.checkcsv` first.
 
 `--apply` asks first (`--yes` answers), and is refused before anything is
 written when a filesystem is short of the space it needs. It then holds the HDB
@@ -619,8 +653,8 @@ serves:
   `uqs job check` pairs them (a table nobody keys is matched row by whole row).
   `time` is stamped on receipt, so it is left out: two environments receive a
   row at different moments.
-- **coverage** - with `--source-version` (and `--partition`), the coverage
-  ledger's current claims for the window on each side, composed and gapped by
+- **coverage** - with `--source-version` (and `--slice`), the coverage ledger's
+  current claims for the window on each side, composed and gapped by
   `.qetl.coverage`.
 
 Each table reaches one outcome, the first that applies:
@@ -1590,14 +1624,16 @@ uqs activity export --recorded-by server             # the audit alone, as a tim
 
 Both take the Activity view's filters - `--from/--to/--date/--last`,
 `--session`, `--request`, `--action` (a dotted prefix matches: `process` is
-every `process.*`), `--subject`, `--outcome`, `--recorded-by` - and `--level`,
-the most detailed level shown: `actions`, `interactions` (and actions) or
-`debug` (everything). `export` writes `--format text` (the default: one event a
-line, `UTC time · session · level · action · target · outcome · duration`, each
-browser action grouped under the server request it caused), `csv` or `jsonl`,
-oldest first - the document `GET /activity/export` serves, byte for byte. Events
-a level's bounds evicted, or the browser had to sample or drop, are counted, and
-both commands say how many.
+every `process.*`), `--subject` (what was acted on: a process selector, a cfg
+key, a worker, a view - not the deployment target), `--outcome`, `--recorded-by` -
+and `--level`, the most detailed level shown: `actions`, `interactions` (and
+actions) or `debug` (everything). `export` writes `--format text` (the default:
+one event a line,
+`UTC time · session · level · action · target · subject · outcome · duration`,
+each browser action grouped under the server request it caused), `csv` or
+`jsonl`, oldest first - the document `GET /activity/export` serves, byte for
+byte. Events a level's bounds evicted, or the browser had to sample or drop, are
+counted, and both commands say how many.
 
 ## Services
 
@@ -1967,8 +2003,10 @@ the default is no; an EOF or Ctrl-C is a no; and with no terminal to ask on it
 refuses at once, naming `--yes`, instead of prompting into the void.
 
 A time range is given one way, on every command that takes one (`job backfill`,
-`job gaps`, `job preview`, `job check`, `job runs audit`, `data seed`,
-`data replay`), and read by one parser, `uqs.timerange`:
+`job gaps`, `job preview`, `job check`, `job runs list`, `job runs audit`,
+`data seed`, `data replay`, `data compress`, `data migrate`, `data diff`,
+`activity list`, `activity export`, `config sources check`), all four options or
+none (#2249), and read by one parser, `uqs.timerange`:
 
 - `--from A --to B` is `[A, B)`: `B` is excluded. A bound is a date or a
   timestamp, ISO-8601 or a q literal - `2026-09-13`, `2026-09-13T06:00`,
@@ -1978,9 +2016,20 @@ A time range is given one way, on every command that takes one (`job backfill`,
   (seconds), `30s`, `1.5m`, `2h`, `7d`, `500ms` - the DURATION every span of
   time takes.
 
-A command whose unit is coarser takes the range in that unit: `data replay`
-replays one day's log, so its range must be one whole day; `data seed` copies
-the date partitions whose date lies in the range.
+A command that acts on whole HDB partitions - `data replay`, `data seed`,
+`data compress`, `data migrate` - takes whole days only, and refuses rather than
+rounds anything else (#2245): a `--from` or `--to` that is not a UTC midnight is
+refused naming the days either side ("`data seed` copies whole partitions:
+--from 2026-09-13T06:00:00 is not a day boundary; give --from 2026-09-13 or
+2026-09-14"), and `--last` must be whole days - `--last 3d` is the three days
+before today, so today's live partition is never in it. `data replay` replays
+one day's log, and `data migrate` rebuilds one partition, so each takes one day:
+`--date D`, `--from D --to D+1`, or `--last 1d` (yesterday).
+
+`config sources check` reads a bounded window over the same range, and only it
+has a default: with no range at all, `--last 1h`. A source quiet now - a
+weekend, out of hours - is checked over a window that had data with `--date D`
+or `--from`/`--to` (#2249).
 
 The verbs of rule 4:
 
@@ -2225,7 +2274,8 @@ One vocabulary (#1857):
   | `setup odbc ... --home DIR`                                   | `--odbc-home DIR`                     |
 
 A duration that was a bare number still is one - seconds - so only `--window`'s
-minutes changed meaning, and its old spelling is converted. `deploy push` asks
+minutes changed meaning; its old spelling was converted for one release, and is
+refused now, naming the time range that replaced it (#2249). `deploy push` asks
 the release it verifies which spelling its `deploy check` takes, so a push or a
 rollback to a release from before this still verifies.
 
@@ -2275,6 +2325,31 @@ pairs of verbs stay apart on purpose: `clean` deletes what the stack wrote where
 rule, and `job runs upgrade` changes the ledger's layout where `data migrate`
 changes an HDB partition's schema. None of the hidden aliases has passed its one
 release yet (`cli/rename_expiry.py`), so none is removed.
+
+"Partition" is an HDB date partition (#2239), as kdb+ has it; the old spelling
+is refused naming the new one, with no alias:
+
+  | old                                      | new                                      |
+  | ---                                      | ---                                      |
+  | `data diff --partition KEY`              | `--slice KEY`, the coverage slice        |
+  | `job new --partition SYM`                | `--slice SYM`                            |
+  | `job new --partition-column COL`         | `--slice-column COL`                     |
+  | `data migrate TABLE PARTITION`           | `data migrate TABLE --date D`            |
+
+`data check --template DATE` keeps its name: it is a date partition.
+
+Every `data` command that reads or writes one HDB names it the same ways
+(#2237): `--hdb DIR` (a directory on this machine), `--attachment NAME` (an
+attached stack's pinned HDB, else its live wdb's), `uqs --target TARGET` (a
+release's own), and otherwise this runtime's - one help each, from
+`cli/hdb_scope.py`. `data migrate --hdb` and `data seed --hdb` (the destination)
+are new. A command that cannot act on an attachment's HDB knows the option and
+refuses it saying why: `data replay`, `data migrate` and `data seed` cannot
+check or pause an attached stack's writers, as `data check` and `data alter` do,
+and `data compress` plans and runs through this stack's housekeeping1 (its
+`--report` reads an attachment's HDB when it is on this machine). `data diff`
+compares two endpoints, and `data snapshot` reads the configuration snapshots,
+so neither takes them.
 
 One meaning per word (#1855):
 
@@ -2451,13 +2526,13 @@ Each command's `--help` names its document. The commands #1731 added:
   | `deploy push`                               | `{ok, deployments: [{target, release, revision, artifact, ssh, dest, profile, status, stage, error, rollback, ...}]}`: a report per target, `status` `planned` on a dry run                                                                                                                                                                                                                                                                                                                                                                                                                                          |
   | `deploy rollback`                           | `{ok, rollback, from, to, stop, start, current}`: `rollback` is `planned`, `done` or `failed`, with `reason` and `restore` when it failed                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
   | `deploy prune`                              | `{ok, prune, kept: [{release, why}], removed, freed_bytes, runtimes}`: `prune` is `planned`, `done` or `declined`; ok false when declined                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-  | `activity list`                             | `{db, events: [{event_id, time, recorded_at, level, source, kind, action, target, outcome, session_id, request_id, claimed_user, trigger, method, status_code, duration_ms, items, detail, dropped_detail}], drops: [{level, reason, count, last_at}]}`, events newest first                                                                                                                                                                                                                                                                                                                                         |
+  | `activity list`                             | `{db, events: [{event_id, time, recorded_at, level, source, kind, action, target, subject, outcome, session_id, request_id, claimed_user, trigger, method, status_code, duration_ms, items, detail, dropped_detail}], drops: [{level, reason, count, last_at}]}`, events newest first                                                                                                                                                                                                                                                                                                                                |
   | `deploy history`                            | `{deployments: [{default, at, target, ssh, dest, release, profile, status, stage}]}`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
   | `target check`                              | `{ok, target, ssh, dest, remote_user, release}`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
   | `data check`                                | `{ok, hdb, present, segmented, partitions, missing_tables, missing_columns, types_checked, type_changes}`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
   | `config sources check SOURCE...`            | `{ok, sources: [{source, status, stage, rows, elapsed_ms, diagnostic}]}` - one document, not a line per source                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
   | `data check --table`, `data alter`          | `{ok, hdb, resolved_from, ssh, warnings, plan, result}`: `plan` and `result` are `scripts/gates/hdb_alter.q`'s own documents - partitions, shapes, steps, journal, final check                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-  | `data compress --report`                    | `{hdb, present, columns: [{table, column, files, compressed, algos, blocksizes, bytes, raw_bytes, ratio, compressed_ratio}], largest_uncompressed: [{table, partition, files, bytes}], unsorted: [{table, partition, rows, sort_by, sorted, missing_attr, declared_attr}]}`                                                                                                                                                                                                                                                                                                                                          |
+  | `data compress --report`                    | `{hdb, target, present, columns: [{table, column, files, compressed, algos, blocksizes, bytes, raw_bytes, ratio, compressed_ratio}], largest_uncompressed: [{table, partition, files, bytes}], sort_checked, sort_csv, unsorted: [{table, partition, rows, sort_by, sorted, missing_attr, declared_attr}]}`: `unsorted` is null when `sort_checked` is false                                                                                                                                                                                                                                                         |
   | `data compress`                             | `{ok, hdb, process, scope: {tables, older_than_days, days, change}, config, policies: [{table, policy, algo, blocksize, level, minage, columns}], held: [{dataset, date}], partitions: [{table, partition, age, status, policy_minage, early, dir, compress, decompress, skip, compressed, files, bytes_now, bytes_after, bytes_written}], sample, ratios, disk: [{filesystem, needed_bytes, free_bytes, ok}], totals, result}`: `result` is null without `--apply`, else `{partitions: [{partition, tables, files, bytes_before, bytes_after}], failed, reload, audit}`; ok false when a partition failed           |
 
 ## Installing

@@ -109,7 +109,7 @@ def test_a_row_carries_a_timespan_as_nanoseconds_and_an_infinity_as_a_string():
         {"s": None, "f": None},
     ]
     wire = QueryResponse(
-        poll_seconds=1, table="t", tier="rdb", rows=rows, row_count=3, truncated=False
+        poll_seconds=1, table="t", tier="rdb", rows=rows, row_count=3, truncated=False, cut_by=None
     ).model_dump_json()
     assert '"rows":[{"s":1500000000,"f":"inf"},{"s":1234,"f":"-inf"},{"s":null,"f":null}]' in wire
 
@@ -145,7 +145,7 @@ def test_a_row_carries_a_timestamp_to_the_nanosecond_and_an_infinity_as_a_string
         {"time": None},
     ]
     wire = QueryResponse(
-        poll_seconds=1, table="t", tier="rdb", rows=rows, row_count=5, truncated=False
+        poll_seconds=1, table="t", tier="rdb", rows=rows, row_count=5, truncated=False, cut_by=None
     ).model_dump_json()
     assert (
         '{"time":"2026-10-14T10:00:00.000001234Z"},{"time":"2026-10-14T10:00:00.000001999Z"}'
@@ -374,3 +374,29 @@ def test_int_narrows_without_guessing(value, out):
     """A value that cannot be an int is None - not an exception from a
     probe reply's unexpected shape, and not a wrong number."""
     assert health._int(value) == out
+
+
+# ------------------------------------------------------- /coverage's window (#2222)
+
+
+@pytest.mark.parametrize(
+    ("given", "missing"), [("range_from", "range_to"), ("range_to", "range_from")]
+)
+def test_a_coverage_window_with_one_bound_is_refused_naming_the_other(given, missing):
+    """One bound alone was parsed, then dropped: 200, `requested: null`, no
+    gaps - an answer to a question that was not asked."""
+    from fastapi.testclient import TestClient
+
+    from uqf_frontend.app import create_app
+    from uqf_frontend.gateway import FakeGateway
+
+    params = {"dataset": "fx_quotes", "slice": "", "source_version": "v1"}
+    resp = TestClient(create_app(gateway=FakeGateway())).get(
+        "/coverage", params={**params, given: "2026-01-01T00:00:00Z"}
+    )
+    assert resp.status_code == 422, resp.text
+    body = resp.json()
+    assert body["error"] == "RequestInvalid"
+    assert f"query.{missing}: {missing} is required with {given}" in body["detail"]
+    assert "half-open [range_from, range_to)" in body["detail"]
+    assert body["errors"][0]["loc"] == ["query", missing]

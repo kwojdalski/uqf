@@ -81,6 +81,7 @@
 \l src/etl/core/source_credentials.q
 \l src/etl/core/source_zones.q
 \l src/etl/core/source_local_hdb.q
+\l src/etl/core/qsql_text.q
 \l src/etl/core/source_fetch.q
 \l src/etl/core/source_csv.q
 \l src/etl/core/source_fills.q

@@ -26,6 +26,57 @@ RunState = Literal["starting", "running", "idle", "completed", "failed"]
 #: test_api_types.py holds every request model to it.
 STRICT_REQUEST = ConfigDict(extra="forbid")
 
+#: THE CONFIRMATION RULE (#2244). Every request the UI puts behind a
+#: confirmation dialog - a lifecycle stop or restart, opening a config push,
+#: a restore, a delete - carries `confirmed`, strictly a boolean, and is
+#: refused unless it is `true`. A script or a second client gets the same
+#: guard the browser's dialog stands for, and a body that lost the field (the
+#: #1361 case) is refused rather than read as consent. The check is
+#: `refuse_unconfirmed`, the one place it is made.
+CONFIRMATION_REQUIRED = "explicit confirmation is required - send confirmed: true"
+
+#: ONE NAME FOR THE COVERAGE SLICE (#2261). The slice of a dataset a coverage
+#: claim is recorded under - a symbol, say - is `slice` on every route, as it
+#: is `--slice` on `uqs data diff` and `uqs job new` (#2239). "Partition" in
+#: this API means only a date partition of the HDB. The ledger's q column is
+#: still `partition`: it is mapped at the q boundary (app._coverage and
+#: compare.run), not migrated on disk. A request still sending `partition` is
+#: refused with this text rather than read as a missing slice.
+PARTITION_IS_SLICE = (
+    '`partition` is now `slice`: the coverage slice, "" for a dataset with no slice '
+    "dimension - a partition in this API is only a date partition (#2261)"
+)
+
+
+def refuse_partition(data: Any) -> Any:
+    """A request body naming the coverage slice by its old name, refused."""
+    if isinstance(data, dict) and "partition" in data:
+        raise ValueError(PARTITION_IS_SLICE)
+    return data
+
+
+def refuse_unconfirmed(data: Any, *, required: bool = True) -> Any:
+    """The confirmation rule, on a request body before it is parsed: refused
+    unless `confirmed` is the JSON `true` - missing (when `required`), false,
+    1 and "true" alike, with the one text."""
+    if isinstance(data, dict) and (required or "confirmed" in data):
+        if data.get("confirmed") is not True:
+            raise ValueError(CONFIRMATION_REQUIRED)
+    return data
+
+
+class ConfirmedRequest(BaseModel):
+    """A request for something the operator must confirm (the rule above)."""
+
+    model_config = STRICT_REQUEST
+
+    confirmed: bool = Field(strict=True, description="must be true: the operator confirmed it")
+
+    @model_validator(mode="before")
+    @classmethod
+    def _confirmed(cls, data: Any) -> Any:
+        return refuse_unconfirmed(data)
+
 
 class Filter(BaseModel):
     """One validated predicate. ``value`` stays ``Any`` here on purpose: the
@@ -47,8 +98,8 @@ class CoverageRequirement(BaseModel):
     coverage consumers to filter on it - coverage under one source release
     says nothing about another.
 
-    ``partition`` is mandatory for the same reason and is NOT ``min_length=1``:
-    the empty string is the legitimate "this dataset has no partition
+    ``slice`` is mandatory for the same reason and is NOT ``min_length=1``:
+    the empty string is the legitimate "this dataset has no slice
     dimension" sentinel, which q records as the null symbol. Requiring the
     field while allowing it to be empty is the distinction that matters - the
     caller must say which slice they mean, and "the whole dataset" is one of
@@ -58,12 +109,17 @@ class CoverageRequirement(BaseModel):
     model_config = STRICT_REQUEST
 
     dataset: str = Field(min_length=1)
-    partition: str = Field(
-        description='the slice to check; "" for a dataset with no partition dimension'
+    slice: str = Field(
+        description='the coverage slice to check; "" for a dataset with no slice dimension'
     )
     source_version: str = Field(min_length=1)
     range_from: AwareInstant = Field(description="ISO-8601 with an explicit offset")
     range_to: AwareInstant = Field(description="ISO-8601 with an explicit offset, exclusive")
+
+    @model_validator(mode="before")
+    @classmethod
+    def _renamed(cls, data: Any) -> Any:
+        return refuse_partition(data)
 
 
 class QueryRequest(BaseModel):
@@ -89,7 +145,11 @@ class QueryResponse(BaseModel):
     rows: list[dict[str, Any]]
     row_count: int
     truncated: bool = Field(
-        description="True when the server's max_rows cap, not the caller's limit, cut the result"
+        description="more rows existed than were returned, whatever cut them (#2220)"
+    )
+    cut_by: Literal["limit", "max_rows"] | None = Field(
+        description="what cut a truncated result: the caller's `limit`, or a server row cap - "
+        "UQF_FRONTEND_MAX_ROWS or the query policy's maxrows (#928, #1255); null when nothing did"
     )
 
 
@@ -188,8 +248,9 @@ class CapabilitiesResponse(BaseModel):
     proxy vouches, and what the access policy lets them do. The browser hides
     or disables what is not here; the server refuses it either way."""
 
-    #: The verified user, or `anonymous`.
-    identity: str
+    #: The verified user, or `anonymous` - `claimed_user`'s and Casbin's
+    #: subject, so `user` (#2236).
+    user: str
     #: True only when a trusted proxy named the user.
     authenticated: bool
     #: The proxy's groups for the user, then the policy's.
@@ -241,6 +302,9 @@ class UsageResponse(BaseModel):
 
     rows: list[dict[str, Any]]
     row_count: int
+    truncated: bool = Field(
+        description="more rows existed than were returned: `limit` cut them (#2220)"
+    )
     unreachable: list[dict[str, str]] = Field(
         default_factory=list,
         description="Processes that could not be reached. Reported rather than raised, so one "
@@ -254,9 +318,12 @@ class UsageResponse(BaseModel):
 
 
 class ProcessHealthOut(BaseModel):
+    """One row of /ops/processes. The process's type is `proctype`, TorQ's
+    column, and only that: a `group` field repeated it under a word that means
+    an access group elsewhere (#2232)."""
+
     process: str
     proctype: str
-    group: str
     host: str
     declared_port: int | None
     start_with_all: bool
@@ -280,7 +347,7 @@ class FleetHealthResponse(BaseModel):
         "down is configured behaviour rather than a fault"
     )
     processes: list[ProcessHealthOut]
-    groups: dict[str, int] = Field(description="declared process count per proctype")
+    proctypes: dict[str, int] = Field(description="declared process count per proctype")
     source: str | None = Field(default=None, description="the process.csv that was read")
     poll_seconds: int
 
@@ -446,7 +513,7 @@ class TunnelCheckRecordOut(BaseModel):
     """A mapping's last successful check, as `uqs target tunnel check` recorded it."""
 
     at: AwareInstant
-    identity: str | None = None
+    reported_process: str | None = None
     remote_port: int | None = None
     local_port: int | None = None
     release: str | None = None
@@ -505,7 +572,10 @@ class TunnelEndpointOut(BaseModel):
     error: str | None = Field(description="what failed, when `category` is set")
     layers: dict[str, str] = Field(description="each layer: ok, failed or skipped")
     connected: bool = Field(description="the planned local port already serves this process")
-    identity: str | None = Field(description="what the process answered as, when it answered")
+    reported_process: str | None = Field(
+        description="the process the port answered as, when it answered - "
+        "ProcessHealthOut.reported_process's name for the same fact (#2236)"
+    )
     gateway_servers: list[str] | None
     last_success: TunnelCheckRecordOut | None
 
@@ -585,8 +655,9 @@ class RemoteUploadResponse(BaseModel):
 # ------------------------------------------------------------ config push history (#2002)
 
 
-class ConfigPushOpenRequest(BaseModel):
-    """POST /services/{target}/config/pushes: what the operator confirmed."""
+class ConfigPushOpenRequest(ConfirmedRequest):
+    """POST /services/{target}/config/pushes: what the operator confirmed -
+    the uploads overwrite server config, so `confirmed` is required (#2244)."""
 
     model_config = STRICT_REQUEST
     config_dir: str = Field(description="the directory pushed to, relative to dest")
@@ -791,9 +862,8 @@ class RestoreResultOut(BaseModel):
     error: str | None
 
 
-class ConfigRestoreRequest(BaseModel):
+class ConfigRestoreRequest(ConfirmedRequest):
     model_config = STRICT_REQUEST
-    confirmed: bool = Field(strict=True)
 
 
 class ConfigRestoreResponse(BaseModel):
@@ -843,6 +913,13 @@ class ControlStatusResponse(BaseModel):
     poll_seconds: int
 
 
+#: The lifecycle verbs `/control/lifecycle/{action}` takes (#2230). The path
+#: takes a str and control.lifecycle refuses any other verb 404 (#2224), so
+#: an unknown verb is a name that is not there. `clean` is left out on
+#: purpose - see control.py's docstring.
+LifecycleAction = Literal["start", "stop", "restart"]
+
+
 class LifecycleRequest(BaseModel):
     """Start, stop or restart processes.
 
@@ -858,6 +935,26 @@ class LifecycleRequest(BaseModel):
     model_config = STRICT_REQUEST
 
     procs: str = Field(min_length=1)
+    #: Required true for the verbs in CONFIRMED_LIFECYCLE (#2244), which the
+    #: route holds to ConfirmedLifecycleRequest; `start` needs none, and one
+    #: sent is held to the same rule.
+    confirmed: bool | None = Field(default=None, strict=True)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _confirmed_if_sent(cls, data: Any) -> Any:
+        return refuse_unconfirmed(data, required=False)
+
+
+#: The lifecycle verbs that take something down: the UI asks before each, so
+#: the API requires `confirmed: true` for them (the confirmation rule).
+CONFIRMED_LIFECYCLE: frozenset[str] = frozenset({"stop", "restart"})
+
+
+class ConfirmedLifecycleRequest(ConfirmedRequest, LifecycleRequest):
+    """A stop or a restart: LifecycleRequest, held to the confirmation rule."""
+
+    model_config = STRICT_REQUEST
 
 
 class CommandResponse(BaseModel):
@@ -869,19 +966,34 @@ class CommandResponse(BaseModel):
     """
 
     action: str
-    target: str
+    #: torq.sh's selector, as LifecycleRequest sent it. Not `target`, which is
+    #: a deployment target everywhere (#2234): control acts on `local` only.
+    procs: str
     exit_code: int
     ok: bool
     output: str
 
 
 class ProcessConfigRequest(BaseModel):
-    """One process.csv field override."""
+    """One process.csv field override.
 
-    field_name: str = Field(min_length=1, alias="field", description="a process.csv column")
+    `field` because it names a COLUMN of process.csv, one of
+    ControlStatusResponse.settable_fields; WorkerConfigRequest's `key` names a
+    `.qetl.cfg` KEY in a live process. Two stores, two words (#2227).
+    """
+
+    model_config = STRICT_REQUEST
+
+    field: str = Field(min_length=1, description="a process.csv column")
     value: str = Field(description='the new value; "" is legal and clears nothing')
 
-    model_config = ConfigDict(populate_by_name=True, extra="forbid")
+    @model_validator(mode="before")
+    @classmethod
+    def _renamed(cls, data: Any) -> Any:
+        """One wire name: the model once took its attribute name as well (#2227)."""
+        if isinstance(data, dict) and "field_name" in data:
+            raise ValueError("`field_name` is `field`: the process.csv column to set (#2227)")
+        return data
 
 
 class ProcessConfigResponse(BaseModel):
@@ -898,7 +1010,8 @@ class ProcessConfigResponse(BaseModel):
 
 
 class WorkerConfigRequest(BaseModel):
-    """One `.qetl.cfg` override, set in a live process."""
+    """One `.qetl.cfg` override, set in a live process. `key` is a
+    `.qetl.cfg` key, not a process.csv column - ProcessConfigRequest's `field`."""
 
     model_config = STRICT_REQUEST
 
@@ -970,10 +1083,9 @@ class BackfillStartedResponse(BaseModel):
     status_path: str
 
 
-class RemoteDeleteRequest(BaseModel):
+class RemoteDeleteRequest(ConfirmedRequest):
     model_config = STRICT_REQUEST
     paths: list[str] = Field(min_length=1, max_length=100)
-    confirmed: bool = Field(strict=True)
 
 
 class RemoteDeleteResult(BaseModel):
@@ -1024,13 +1136,31 @@ ActivityTrigger = Literal["pointer", "keyboard", "programmatic", "unknown"]
 _ACTIVITY_ID = r"^[A-Za-z0-9_-]{8,64}$"
 
 
+#: The refusal of an activity event's or item's old `target` (#2234).
+_SUBJECT_RENAMED = (
+    "`target` is `subject`: what the event is about - a view, a control, a process "
+    "selector. `target` names a deployment target (#2234)"
+)
+
+
+def _refuse_target(data: Any) -> Any:
+    if isinstance(data, dict) and "target" in data:
+        raise ValueError(_SUBJECT_RENAMED)
+    return data
+
+
 class ActivityItem(BaseModel):
     """One item's outcome, for an action over several things."""
 
     model_config = STRICT_REQUEST
 
-    target: str = Field(min_length=1, max_length=200)
+    subject: str = Field(min_length=1, max_length=200)
     outcome: ActivityOutcome
+
+    @model_validator(mode="before")
+    @classmethod
+    def _renamed(cls, data: Any) -> Any:
+        return _refuse_target(data)
 
 
 class BrowserEventIn(BaseModel):
@@ -1050,7 +1180,8 @@ class BrowserEventIn(BaseModel):
     time: AwareInstant
     kind: BrowserKind
     action: str = Field(pattern=r"^[a-z][a-z0-9_.-]{0,63}$")
-    target: str | None = Field(default=None, max_length=200)
+    #: What the event is about: a view, a control, a process selector.
+    subject: str | None = Field(default=None, max_length=200)
     trigger: ActivityTrigger
     request_id: str | None = Field(default=None, pattern=_ACTIVITY_ID)
     outcome: ActivityOutcome | None = None
@@ -1063,7 +1194,7 @@ class BrowserEventIn(BaseModel):
     def _renamed(cls, data: Any) -> Any:
         if isinstance(data, dict) and "ts" in data:
             raise ValueError("`ts` is `time`: when it happened, by the browser's clock (#2254)")
-        return data
+        return _refuse_target(data)
 
     @field_validator("time")
     @classmethod
@@ -1128,7 +1259,12 @@ class ActivityEventOut(BaseModel):
     source: ActivitySource
     kind: ActivityKind
     action: str
+    #: The deployment target a server row acted on, `local` for this
+    #: server's own stack; None for a browser row and an unrouted request.
     target: str | None
+    #: What it acted on: a process selector, a cfg key, a worker, a route, a
+    #: view or a control (#2234).
+    subject: str | None
     outcome: ActivityOutcome | None
     session_id: str | None
     request_id: str | None
@@ -1175,6 +1311,9 @@ class ActivityResponse(BaseModel):
     """The history, newest first, with how it is kept and what it lost."""
 
     events: list[ActivityEventOut]
+    truncated: bool = Field(
+        description="more events matched than were returned: `limit` cut them (#2220)"
+    )
     persistence: ActivityPersistence
     #: The level a session records at unless its operator picks another - the
     #: `activity_level` setting, named as /health and /settings name it (#2240).
@@ -1408,11 +1547,56 @@ class CompareRequest(BaseModel):
     tables: list[str] = Field(min_length=1, max_length=20)
     range_from: AwareInstant
     range_to: AwareInstant
-    filters: list[str] = Field(default_factory=list, max_length=20,
-                               description="COLUMN OP VALUE, e.g. sym=EURUSD")  # fmt: skip
+    filters: list[Filter] = Field(
+        default_factory=list,
+        max_length=20,
+        description="{column, op, value} objects with /catalog's operators, as on /query",
+    )
     limit: int = limit_field(1000, 100_000, "rows read per side, at most")
-    source_version: str | None = Field(default=None, max_length=128)
-    partition: str | None = Field(default=None, max_length=128)
+    source_version: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=128,
+        description="the release whose coverage to compare; null compares no coverage",
+    )
+    slice: str | None = Field(
+        default=None,
+        max_length=128,
+        description='the coverage slice, required with source_version; "" for a dataset '
+        "with no slice dimension",
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _renamed(cls, data: Any) -> Any:
+        return refuse_partition(data)
+
+    @field_validator("filters", mode="before")
+    @classmethod
+    def _filters_are_objects(cls, value: Any) -> Any:
+        """The text grammar `uqs data diff --filter` takes is compare.py's to
+        render, not the API's to expose (#2223): a string is refused, saying
+        what it is now, rather than a pydantic "not a dictionary"."""
+        if isinstance(value, list) and any(isinstance(f, str) for f in value):
+            raise ValueError(
+                "filters are {column, op, value} objects, as on /query - `sym=EURUSD` is "
+                '{"column": "sym", "op": "eq", "value": "EURUSD"}'
+            )
+        return value
+
+    @model_validator(mode="after")
+    def _a_coverage_check_names_its_slice(self) -> CompareRequest:
+        """/coverage's rule (#185, #2221): once coverage is asked for, the
+        slice is said - `""` is the explicit "no slice dimension" - and
+        never defaulted to the one nothing sliced is recorded under."""
+        if self.source_version is not None and self.slice is None:
+            raise ValueError(
+                'slice is required with source_version - give "" for a dataset '
+                "with no slice dimension"
+            )
+        if self.slice is not None and self.source_version is None:
+            raise ValueError("slice reads coverage, which needs source_version")
+        return self
 
 
 class CompareInterval(BaseModel):
@@ -1469,7 +1653,9 @@ class CompareResponse(BaseModel):
     range_from: AwareInstant
     range_to: AwareInstant
     limit: int
-    filters: list[str]
-    source_version: str
-    partition: str
+    filters: list[Filter] = Field(description="the filters as they were sent")
+    source_version: str | None = Field(description="null when no coverage was compared")
+    slice: str | None = Field(
+        description="the coverage slice compared; null when no coverage was compared"
+    )
     tables: list[CompareTable]

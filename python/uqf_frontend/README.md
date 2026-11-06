@@ -66,17 +66,38 @@ The q details this rests on, verified against a live KDB-X process:
 
 ### Control routes --- these CHANGE things
 
-  |                                                |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-  | ---                                            | ---                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-  | `GET /control`                                 | Whether writes are on, what can be set, and (with writes on) every process a selector may name — `process`, `proctype`, and whether `all` starts it — from the orchestrator's effective `process.csv`. Not itself gated: a UI needs this to decide whether to render controls, and finding out by provoking a 403 on a lifecycle route means having already stopped the fleet                                                                                                                                |
-  | `POST /control/process/{start\|stop\|restart}` | Lifecycle for a process selector — a name, several separated by spaces, or `all`, passed to `torq.sh` unreinterpreted                                                                                                                                                                                                                                                                                                                                                                                        |
-  | `PUT /control/process/{process}/config`        | One `process.csv` field override, persisted to `process_overrides.csv` and applied on the next start. Returns the effective row. `qcmd` and `host` are refused: they choose what program runs and where, so only `uqs config set` on the host sets them                                                                                                                                                                                                                                                      |
-  | `PUT /control/worker-config`                   | One `.qetl.cfg` override in the live process the gateway addresses, lost when it restarts. Returns `.qetl.cfg.explain`, and `shadowed` with the `UQF_<KEY>` variable when the environment outranks the override                                                                                                                                                                                                                                                                                              |
-  | `POST /control/backfill`                       | Launch a bounded worker over a range. **Detached** — watch `/ops/backfill` for the outcome                                                                                                                                                                                                                                                                                                                                                                                                                   |
+  |                                                  |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+  | ---                                              | ---                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+  | `GET /control`                                   | Whether writes are on, what can be set, and (with writes on) every process a selector may name — `process`, `proctype`, and whether `all` starts it — from the orchestrator's effective `process.csv`. Not itself gated: a UI needs this to decide whether to render controls, and finding out by provoking a 403 on a lifecycle route means having already stopped the fleet                                                                                                                                |
+  | `POST /control/lifecycle/{start\|stop\|restart}` | Lifecycle for a process selector — a name, several separated by spaces, or `all`, passed to `torq.sh` unreinterpreted                                                                                                                                                                                                                                                                                                                                                                                        |
+  | `PUT /control/processes/{process}/config`        | One `process.csv` field override, persisted to `process_overrides.csv` and applied on the next start. Returns the effective row. `qcmd` and `host` are refused: they choose what program runs and where, so only `uqs config set` on the host sets them                                                                                                                                                                                                                                                      |
+  | `PUT /control/worker/config`                     | One `.qetl.cfg` override in the live process the gateway addresses, lost when it restarts. Returns `.qetl.cfg.explain`, and `shadowed` with the `UQF_<KEY>` variable when the environment outranks the override                                                                                                                                                                                                                                                                                              |
+  | `POST /control/backfill`                         | Launch a bounded worker over a range. **Detached** — watch `/ops/backfill` for the outcome                                                                                                                                                                                                                                                                                                                                                                                                                   |
 
 Every request body is held to its model: a key the model does not know is a 422,
 never ignored, and the lifecycle body's `procs` is required. It once defaulted
 to `all`, so a body that lost the field stopped the whole fleet (#1361).
+
+**What the UI confirms, the API requires confirmed** (#2244). A stop or a
+restart, opening a config push, a restore and a file delete each need
+`"confirmed": true` in the body; anything else - missing, `false`, `1`, `"true"` -
+is a 422, "explicit confirmation is required - send confirmed: true", and
+nothing runs. A start takes none. The one check is `models.ConfirmedRequest`, so
+a script or a second client gets the guard the browser's dialog stands for.
+
+An unknown name in the path is 404, with an error naming the kind:
+`TargetNotFound`, `ChartNotFound`, `ActionNotFound`, `ProcessNotFound`. 422 is
+for a body or query that is refused, and 400 only for `QueryRejected`, where q
+failed on input that passed validation (#2224, #2225). `errors.py` tables the
+status of every error the API raises, and `test_error_shape.py` holds the code
+to that table.
+
+Every route that takes a `limit`, or applies a row cap, answers `truncated`:
+more rows existed than were returned, whatever cut them (#2220). Each reads one
+row past what it returns to know. `/query` also says which bound cut it in
+`cut_by`: `limit`, the caller's own, or `max_rows`, a server cap
+(`UQF_FRONTEND_MAX_ROWS` or the query policy's maxrows). A read that stops at
+the policy's cap cannot see past it, so reaching that cap counts as cut.
 
 **They are off by default, and that is the security posture rather than
 caution.** `UQF_FRONTEND_ENABLE_WRITES` must be set on the server or every one
@@ -129,7 +150,7 @@ release without that interpreter is refused (409) with nothing else tried and
 nothing installed. The path travels base64-encoded, so it never reaches a shell.
 
 `path` is relative to the root: an absolute path, `..`, a NUL byte or a path
-through a symbolic link is refused (400) before ssh and again on the server,
+through a symbolic link is refused (422) before ssh and again on the server,
 which walks one directory descriptor at a time with `O_NOFOLLOW`. Links -
 `current` included - FIFOs, sockets, devices and names that are not UTF-8 are
 listed as blocked and cannot be entered; the release `current` names, and the
@@ -142,9 +163,9 @@ truncated; the call is held to 20 s.
 directories, never following a link or recursing (#1953). A remote file is one
 resource whose method is the operation (#2248): `GET` lists, `PUT` writes and
 `DELETE` removes. The old `POST .../files/delete` and `PUT .../files/content`
-answer 410 `RouteGone` naming the route that replaced them. A deletion changes
-the server, so once ssh has started, a timeout, ssh exiting 255 (it may have
-dropped midway), a crashed helper or an answer that cannot be read is 504
+answer 410 `Gone` naming the route that replaced them. A deletion changes the
+server, so once ssh has started, a timeout, ssh exiting 255 (it may have dropped
+midway), a crashed helper or an answer that cannot be read is 504
 `DeleteOutcomeUncertain` with `transient: false`: some paths may be gone, and
 you list the directory before deleting again. Only a browse's timeout is
 transient (#2023).
@@ -162,7 +183,7 @@ code of its own: `tunnels.py` calls `uqs.deploy.tunnel_plan` and
 Every value the routes return comes from uqs: the processes and their ports,
 each local endpoint, the launch command (which holds no credential), each
 mapping's `verified`, `stale` or `unverified` state, and each endpoint's
-diagnostic category. A refused plan returns 400, and a release that cannot be
+diagnostic category. A refused plan returns 422, and a release that cannot be
 asked for its processes returns 502.
 
 The check logs in to q with this API's gateway credential when one is
@@ -207,12 +228,14 @@ you confirm the destination. Each file has its own progress and its own outcome.
   that nothing was published (#2022). Only SIGKILL leaves a temp file behind,
   and the next upload to that directory sweeps any older than an hour.
 - **Uncertain outcomes.** An existing file without `overwrite` is 409. A refused
-  path is 400. Damaged bytes are 502 `UploadIncomplete`. In each of these,
-  nothing was written. A timeout (120 s), an ssh failure (255), a helper crash
-  or a lost answer is 504 `UploadOutcomeUncertain`, with `transient: false`. The
-  file may or may not be there, and neither the API nor the browser retries: the
-  queue shows "Outcome unknown", and you list the directory before uploading it
-  again. Cancelling an upload in flight is reported the same way.
+  path is 422, and a push the upload names that does not exist, or a deployment
+  root that is not there, is 404 `PathNotFound`. Damaged bytes are 502
+  `UploadIncomplete`. In each of these, nothing was written. A timeout (120 s),
+  an ssh failure (255), a helper crash or a lost answer is 504
+  `UploadOutcomeUncertain`, with `transient: false`. The file may or may not be
+  there, and neither the API nor the browser retries: the queue shows "Outcome
+  unknown", and you list the directory before uploading it again. Cancelling an
+  upload in flight is reported the same way.
 - **Audit.** Each upload is one `files.upload` row in the activity history
   (#1954). The row records the target, the file's path, size, sha256, and
   whether it was a create or an overwrite. It never records the file's bytes. An
@@ -222,10 +245,10 @@ you confirm the destination. Each file has its own progress and its own outcome.
 ### Config pushes: one push id, history, diff and restore
 
 Every upload belongs to a push (#2002): a file selection, a folder or a drop,
-opened with `POST /services/{target}/config/pushes` when you confirm it. Each
-upload names it (`push=`), and `POST .../config/pushes/{id}/close` closes it
-with what the browser saw of each file. The server keeps, and only the server
-keeps, what the push changed:
+opened with `POST /services/{target}/config/pushes` when you confirm it, so the
+open carries `"confirmed": true`. Each upload names it (`push=`), and
+`POST .../config/pushes/{id}/close` closes it with what the browser saw of each
+file. The server keeps, and only the server keeps, what the push changed:
 
 ```text
 <dest>/shared/config/.uqf-history/<push-id>/      0o700, never browsable
@@ -404,7 +427,7 @@ and *names the missing ranges* when the requested window is not fully published:
 
 ```json
 {"table": "trades", "filters": [],
- "require_coverage": {"dataset": "trades", "source_version": "v1",
+ "require_coverage": {"dataset": "trades", "slice": "", "source_version": "v1",
                       "range_from": "2026-09-13T00:00:00Z",
                       "range_to":   "2026-09-16T00:00:00Z"}}
 ```
@@ -423,6 +446,20 @@ written.
 filter on it --- coverage under one source release says nothing about another.
 The filter is applied inside the q program rather than afterwards in Python, so
 a caller cannot omit it.
+
+`slice` is mandatory for the same reason, one dimension further out (#185): the
+slice of the dataset the coverage is recorded under, such as a symbol a worker
+fills, with `""` for a dataset with no slice dimension. It is `slice` on
+`GET /coverage`, `require_coverage` and `/compare`, as `--slice` is on
+`uqs data diff` (#2239); "partition" in this API means only a date partition of
+the HDB, and a request still sending `partition` is a 422 naming `slice`
+(#2261). The ledger itself still calls the column `partition`, as a worker's
+declaration does: the API maps `slice` onto it at the q boundary rather than
+rewriting the ledger file.
+
+A requested range on `GET /coverage` is both bounds or neither, as everywhere a
+coverage window is named: `range_from` alone, or `range_to` alone, is a 422
+naming the missing bound (#2222), never a 200 that ignored it.
 
 Interval composition: `[range_from, range_to)` is half-open and adjacent
 intervals compose **only at their common boundary**, so `[Mon,Tue)` and
@@ -581,17 +618,28 @@ policy.
 `POST /compare` (#2033) is the Compare view's one call. It names both sides
 explicitly - `local` for the stack this frontend serves, or a target in
 `deploy_targets.toml` - with an explicit window (`range_from`/`range_to`, each
-with its zone), filters as typed (`sym=EURUSD`), a row limit per side and,
-optionally, the `source_version` whose coverage to compare. `compare.py` checks
-that a target side is registered and hands the rest to `uqs data diff`'s own
-function (`uqs.cli.data_diff.run`): uqs reaches each side's gateway - a target
-through an ssh tunnel - and q decides everything the answer says
-(src/etl/core/compare.q). A target side is held to what `/services/{target}` and
-a target workspace are (#2066): the write token while writes are on (401
-`WriteTokenRequired`), an allowed Host, `services:read` (403, audited like any
-refused read), and remote operations on - each checked before uqs is called. A
-comparison of `local` with itself needs none of these. Each table carries one
-outcome - `endpoint_unavailable`, `missing_table`, `differs`, `not_comparable`,
+with its zone), filters, a row limit per side and, optionally, the
+`source_version` whose coverage to compare. With a `source_version`, `slice` is
+required as it is on `/coverage`, and `""` is the explicit answer for a dataset
+with no slice dimension: one omitted is a 422, never the no-slice-dimension
+slice by default, and a `slice` without a `source_version` is refused too (#185,
+#2221). A comparison that checked no coverage answers `source_version` and
+`slice` as `null`. `filters` are the `{column, op, value}` objects `/query`
+takes, with `/catalog`'s operators (`in` takes a list): `compare.py` renders
+each to the `COLUMN OP VALUE` text `uqs data diff --filter` takes, and the API
+does not expose that grammar. A string filter is a 422 saying what it is now,
+and a value that cannot be rendered (a comma in a single value, a list for an
+operator other than `in`) is refused before uqs is called (#2223). The response
+echoes the filters as they were sent. `compare.py` checks that a target side is
+registered and hands the rest to `uqs data diff`'s own function
+(`uqs.cli.data_diff.run`): uqs reaches each side's gateway - a target through an
+ssh tunnel - and q decides everything the answer says (src/etl/core/compare.q).
+A target side is held to what `/services/{target}` and a target workspace are
+(#2066): the write token while writes are on (401 `WriteTokenRequired`), an
+allowed Host, `services:read` (403, audited like any refused read), and remote
+operations on - each checked before uqs is called. A comparison of `local` with
+itself needs none of these. Each table carries one outcome -
+`endpoint_unavailable`, `missing_table`, `differs`, `not_comparable`,
 `incomplete_coverage` or `equal_in_sample` - and the label q wrote for it, which
 for a sample cut at the row limit says it is not proof the tables are equal.
 Every table is put to the table policy like `/query`'s, and the route is the
@@ -659,11 +707,11 @@ control's name and kind, a change whether a box is checked, a request its route
 (the first two path segments, a name in them replaced by `*`, never the query
 string).
 
-  |                         |                                                                                                                                                                                                                                                                                                                                                                           |
-  | ---                     | ---                                                                                                                                                                                                                                                                                                                                                                       |
-  | `GET /activity`         | The history, newest first. Filters: `since`, `until` (timezone required), `session_id`, `request_id`, `action` (exact, or a dotted prefix: `process` matches `process.stop`), `target`, `outcome`, `source`, `limit` (at most 1000). Says whether it is persistent and whether writes have failed                                                                         |
-  | `POST /activity/events` | Up to 100 browser events, in one transaction, and the count of any the browser did not send (`drops`). A repeated `event_id` is ignored, so a retried batch is stored once. A body of at most 1 MiB (413). It needs no token; without one, events are rate-limited across all callers (600 at once, 20 a second after; 429, transient). A `ts` UTC cannot hold is a 422   |
-  | `GET /activity/export`  | The history as a file, oldest first, under the same filters plus `format`: `jsonl`, `csv`, or `text` - a timeline `UTC time · session · level · action · target · outcome · duration`, each browser action grouped under the server request it caused (its request id). At most 100000 events                                                                             |
+  |                         |                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+  | ---                     | ---                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+  | `GET /activity`         | The history, newest first. Filters: `since`, `until` (timezone required), `session_id`, `request_id`, `action` (exact, or a dotted prefix: `process` matches `process.stop`), `target` (a deployment target, or `local`), `subject` (what was acted on there), `outcome`, `source`, `limit` (at most 1000). Says whether it is persistent and whether writes have failed                                                                         |
+  | `POST /activity/events` | Up to 100 browser events, in one transaction, and the count of any the browser did not send (`drops`). A repeated `event_id` is ignored, so a retried batch is stored once. A body of at most 1 MiB (413). It needs no token; without one, events are rate-limited across all callers (600 at once, 20 a second after; 429, transient). A `ts` UTC cannot hold is a 422                                                                          |
+  | `GET /activity/export`  | The history as a file, oldest first, under the same filters plus `format`: `jsonl`, `csv`, or `text` - a timeline `UTC time · session · level · action · target · subject · outcome · duration`, each browser action grouped under the server request it caused (its request id). At most 100000 events                                                                                                                                          |
 
 `GET /activity` also takes `level`, the most detailed level shown:
 `interactions` shows actions and interactions. `uqs activity list` and
@@ -675,8 +723,14 @@ is the API's, byte for byte.
 with every write; the server stores both on its row and echoes the request id
 (making one up when none, or a malformed one, is sent). The browser's `confirm`
 or `submit`, its `result` and the server row of one operation share that id.
-Every row has a UTC timestamp, its target, a duration and, for an action over
-several processes, per-item outcomes.
+Every row has a UTC timestamp, a duration and, for an action over several
+processes or files, per-item outcomes. `target` is only ever a deployment
+target: a server row's is the path's `{target}`, or `local` for a route that
+acts on this server's own stack (control, settings), and a browser row has none.
+What the action was on there - a process selector, a `.qetl.cfg` key, a worker,
+a view or a control - is its `subject`, and each item names its own `subject`
+(#2234). A history file kept before the split is rewritten once when the API
+opens it; `uqs activity` refuses one it has not yet opened.
 
 **Outcomes, including the uncertain ones.** `pending`, `succeeded`, `failed`,
 `refused` (nothing was acted on: 401, 403, a 422 before acting), `accepted` (a
@@ -698,9 +752,11 @@ message, which can quote the input back. `test_activity.py` searches the
 database for the write token and for typed values.
 
 **Identity.** `claimed_user` is the user a trusted proxy named, when one did
-(see the access policy below), and a server row's `identity` detail says
+(see the access policy below), and a server row's `identity_source` detail says
 `verified`. Otherwise it is the `x-uqf-user` header as sent --- a label anyone
-can set, stored with `identity: claimed` and never read as who called.
+can set, stored with `identity_source: claimed` and never read as who called. A
+history file kept before `identity_source` had that name is rewritten once when
+the API opens it.
 
 **Storage and retention.** SQLite, from the standard library: the filters need
 an index rather than a scan of every line, and retention needs a `DELETE` rather
@@ -748,7 +804,7 @@ Its handler then reports what the status code cannot:
 
 ```python
 audit = activity.audit_of(request)
-audit.set_target(name)  # written at once: survives a crash mid-action
+audit.set_subject(name)  # written at once: survives a crash mid-action
 audit.note(path=path, size=size, sha256=digest)  # never the bytes
 audit.begin()  # past here, a failure is `unknown`
 ...
@@ -798,9 +854,9 @@ The packaged default is `p, *, *, *`. A named policy file is read strictly and
 re-read when it changes, without a restart; an edit that does not parse is
 logged and the last good policy stays in force.
 
-**`GET /me/capabilities`** answers with the caller's identity, groups and
-granted features. The browser shows only the views the caller may read and
-disables what they may not change, through one context
+**`GET /me/capabilities`** answers with the caller's `user` (or `anonymous`),
+groups and granted features. The browser shows only the views the caller may
+read and disables what they may not change, through one context
 (`web/src/capabilities.tsx`). That is presentation: the server refuses whatever
 the policy does not grant, whether or not the button was on screen.
 

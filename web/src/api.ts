@@ -39,12 +39,12 @@ export interface Catalog {
 }
 export interface CoverageRequest {
   dataset: string;
-  // The slice to ask about. "" is the sentinel for a dataset with no
-  // partition dimension - not "any partition". The gateway requires the
-  // field, because a coverage read that omits it aggregates across every
-  // partition and reports a range published for one symbol as covered for
-  // all of them (#185).
-  partition: string;
+  // The coverage slice to ask about. "" is the sentinel for a dataset with
+  // no slice dimension - not "any slice". The gateway requires the field,
+  // because a coverage read that omits it aggregates across every slice and
+  // reports a range published for one symbol as covered for all of them
+  // (#185). `slice`, as `uqs data diff --slice`: a partition is a date (#2261).
+  slice: string;
   source_version: string;
   range_from: string;
   range_to: string;
@@ -89,7 +89,10 @@ export interface QueryResult extends Pollable {
   tier: Tier;
   rows: Row[];
   row_count: number;
+  /** More rows existed than were returned, whatever cut them (#2220). */
   truncated: boolean;
+  /** What cut them: the caller's `limit`, or a server row cap. */
+  cut_by: "limit" | "max_rows" | null;
 }
 /** One prepared chart (#2044): defined on the server, drawn here. */
 export interface ChartInfo {
@@ -114,17 +117,17 @@ export interface ChartResult {
   notes: string[];
 }
 /** POST /compare's body (#2033): two explicit sides, an explicit window,
- *  filters as typed (COLUMN OP VALUE) and the rows read per side. */
+ *  filters as /query takes them (#2223) and the rows read per side. */
 export interface CompareBody {
   left: string;
   right: string;
   tables: string[];
   range_from: string;
   range_to: string;
-  filters: string[];
+  filters: QueryFilter[];
   limit: number;
   source_version?: string | null;
-  partition?: string | null;
+  slice?: string | null;
 }
 /** The outcomes q reaches (.qetl.compare.outcomes), first that applies. */
 export type CompareOutcome =
@@ -177,9 +180,11 @@ export interface CompareResult {
   range_from: string;
   range_to: string;
   limit: number;
-  filters: string[];
-  source_version: string;
-  partition: string;
+  /** The filters as they were sent. */
+  filters: QueryFilter[];
+  /** null when no coverage was compared; slice "" is the no-slice-dimension slice. */
+  source_version: string | null;
+  slice: string | null;
   tables: CompareTable[];
 }
 /** The part of a Pydantic model's JSON Schema a parameter form reads. */
@@ -214,7 +219,7 @@ export interface Capability {
  *  vouches, and what the server's access policy lets them do. The browser
  *  hides what is not here; the server refuses it either way. */
 export interface Capabilities extends Pollable {
-  identity: string;
+  user: string;
   authenticated: boolean;
   groups: string[];
   capabilities: Capability[];
@@ -311,7 +316,6 @@ export interface Backfill extends Pollable {
 export interface ProcessHealth {
   process: string;
   proctype: string;
-  group: string;
   host: string;
   declared_port: number | null;
   start_with_all: boolean;
@@ -420,7 +424,7 @@ export function remoteFilesPath(target: string, path: string): string {
  * recorded it - models.TunnelCheckRecordOut. */
 export interface TunnelCheckRecord {
   at: string;
-  identity: string | null;
+  reported_process: string | null;
   remote_port: number | null;
   local_port: number | null;
   release: string | null;
@@ -465,7 +469,7 @@ export interface TunnelEndpoint {
   error: string | null;
   layers: Record<string, string>;
   connected: boolean;
-  identity: string | null;
+  reported_process: string | null;
   gateway_servers: string[] | null;
   last_success: TunnelCheckRecord | null;
 }
@@ -502,6 +506,8 @@ export interface OpsData extends Pollable {
   summary?: Record<string, number>;
   unreachable?: Row[];
   processes_configured?: number;
+  /** /ops/usage: more rows existed than the `limit` returned (#2220). */
+  truncated?: boolean;
 }
 
 /** Every error the API answers, in its one shape (app.py `_error`, #2106):
@@ -771,18 +777,20 @@ export interface ControlStatus extends Pollable {
   settable_fields: string[];
   processes: ControlProcess[];
 }
-/** POST /control/process/{action} - models.LifecycleRequest. `procs` is
+/** POST /control/lifecycle/{action} - models.LifecycleRequest. `procs` is
  * required on both sides: it once defaulted to "all" on the server, so a body
  * without it stopped the whole fleet (#1361). */
 export interface LifecycleBody {
   procs: string;
+  /** required true for stop and restart, which the UI confirms (#2244) */
+  confirmed?: boolean;
 }
-/** PUT /control/process/{process}/config - models.ProcessConfigRequest. */
+/** PUT /control/processes/{process}/config - models.ProcessConfigRequest. */
 export interface ProcessConfigBody {
   field: string;
   value: string;
 }
-/** PUT /control/worker-config - models.WorkerConfigRequest. */
+/** PUT /control/worker/config - models.WorkerConfigRequest. */
 export interface WorkerConfigBody {
   key: string;
   value: string;
@@ -796,7 +804,8 @@ export interface BackfillBody {
 }
 export interface CommandResult {
   action: string;
-  target: string;
+  /** torq.sh's selector, as sent - not a deployment target (#2234) */
+  procs: string;
   exit_code: number;
   ok: boolean;
   output: string;
@@ -866,8 +875,8 @@ export interface Correlation {
 
 /** The write token for the control routes (#631), when the operator typed it.
  *
- * Only the built app served at /ui/ needs it: under `npm run dev` the Vite
- * proxy adds it from the server's environment. Kept in sessionStorage - this
+ * The built app at /ui/ and `npm run dev` alike: the Vite proxy adds no
+ * credential (#2182), so the browser sends it. Kept in sessionStorage - this
  * tab only, gone when it closes - and every access is guarded, since storage
  * can be blocked outright. */
 const WRITE_TOKEN_KEY = "uqf.writeToken";
@@ -1058,6 +1067,8 @@ export type FileOutcome =
 
 /** POST /services/{target}/config/pushes - models.ConfigPushOpenRequest. */
 export interface ConfigPushOpenBody {
+  /** the operator confirmed the push: required true (#2244) */
+  confirmed: boolean;
   config_dir: string;
   file_count: number;
   total_bytes: number;
@@ -1321,7 +1332,7 @@ export type ActivityTrigger =
 /** A `detail` value. Only the keys activity.DETAIL_KEYS allows are kept. */
 export type DetailValue = string | number | boolean;
 export interface ActivityItem {
-  target: string;
+  subject: string;
   outcome: ActivityOutcome;
 }
 /** POST /activity/events, one event - models.BrowserEventIn. */
@@ -1331,7 +1342,8 @@ export interface BrowserEvent {
   time: string;
   kind: BrowserKind;
   action: string;
-  target?: string | null;
+  /** what the event is about - a view, a control, a process selector */
+  subject?: string | null;
   trigger: ActivityTrigger;
   request_id?: string | null;
   outcome?: ActivityOutcome | null;
@@ -1366,7 +1378,10 @@ export interface ActivityEvent {
   source: ActivitySource;
   kind: ActivityKind;
   action: string;
+  /** the deployment target a server row acted on, `local` for this stack */
   target: string | null;
+  /** what it acted on: a process selector, a cfg key, a worker, a view */
+  subject: string | null;
   outcome: ActivityOutcome | null;
   session_id: string | null;
   request_id: string | null;
@@ -1403,6 +1418,8 @@ export interface ActivityDrop {
 /** GET /activity - models.ActivityResponse. */
 export interface ActivityHistory extends Pollable {
   events: ActivityEvent[];
+  /** More events matched than the `limit` returned (#2220). */
+  truncated: boolean;
   persistence: ActivityPersistence;
   activity_level: SessionLevel;
   bounds: ActivityBound[];

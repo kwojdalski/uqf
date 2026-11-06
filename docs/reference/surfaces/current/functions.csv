@@ -177,7 +177,11 @@ qetl.hb,report,function,1,
 qetl.hb,require_schema,function,1,
 qetl.hb,stale,function,1,max_age
 qetl.io,acknowledged,function,2,state result
+qetl.io,calendar,value,,
+qetl.io,calendar_adopter,function,2,offset_ns adj_ns
+qetl.io,calendar_bound,function,1,opts
 qetl.io,clip_to_eod,function,4,worker cfg range_from range_to
+qetl.io,days_of,function,2,root times
 qetl.io,default,dict,,
 qetl.io,default_strategy,value,,
 qetl.io,discard,dict,,
@@ -196,6 +200,7 @@ qetl.io,hdb_lock_wait,value,,
 qetl.io,hdb_scoped,function,3,root partition_col bounds
 qetl.io,is_scoped,function,1,root
 qetl.io,memory,dict,,
+qetl.io,native_day_fn,function,1,times
 qetl.io,odbc,dict,,
 qetl.io,on_peachq,value,,
 qetl.io,optional,value,,
@@ -209,9 +214,11 @@ qetl.io,required,value,,
 qetl.io,resolve,function,4,strategy existing batch opts
 qetl.io,retire,function,3,root d t
 qetl.io,scoped_check_date,function,5,bounds partition_col target batch window_to
+qetl.io,scoped_day_of,function,1,times
 qetl.io,scoped_roots,value,,
 qetl.io,strategies,value,,
 qetl.io,touched,table,,
+qetl.io,use_calendar,function,1,text
 qetl.io,watch_eod,function,2,root wdb_dir
 qetl.io,write,function,3,mgr target batch
 qetl.io,write_keyed,function,4,mgr target batch opts
@@ -712,6 +719,13 @@ qetl.plant,undeclared,function,1,
 qetl.plant,vendored,value,,
 qetl.plant,vendored_path,value,,
 qetl.plant,wide_orderbook,table,,
+qetl.qsql,available,function,1,
+qetl.qsql,cut_at,value,,
+qetl.qsql,full,function,1,x
+qetl.qsql,load,function,1,
+qetl.qsql,of_call,function,2,f args
+qetl.qsql,render,function,1,tree
+qetl.qsql,unparse_file,value,,
 qetl.reaction,audit,function,1,
 qetl.reaction,dag_consumers,function,1,dataset
 qetl.reaction,draining,value,,
@@ -2142,7 +2156,9 @@ qpipe.transform.eq_domain,require_spec,function,1,spec
 qpipe.transform.eq_domain,resolve,function,2,spec syms
 qpipe.transform.eq_domain,revision,value,,
 qpipe.transform.eq_domain,rows_for,function,2,tbl s
+qpipe.transform.eq_markout_outputs,available,function,2,spec fr
 qpipe.transform.eq_markout_outputs,calendar_from,value,,
+qpipe.transform.eq_markout_outputs,calendar_horizon,value,,
 qpipe.transform.eq_markout_outputs,calendar_to,value,,
 qpipe.transform.eq_markout_outputs,config_id,value,,
 qpipe.transform.eq_markout_outputs,executions_in,table,,
@@ -2160,6 +2176,7 @@ qpipe.transform.eq_markout_outputs,pin,function,1,
 qpipe.transform.eq_markout_outputs,regular_sessions,function,2,from_d to_d
 qpipe.transform.eq_markout_outputs,remember,value,,
 qpipe.transform.eq_markout_outputs,rows,function,2,exe md
+qpipe.transform.eq_markout_outputs,scoring_domain,dict,,
 qpipe.transform.eq_markout_outputs,settle,value,,
 qpipe.transform.eq_markout_outputs,venues,value,,
 qpipe.transform.eq_markout_outputs,wait,function,1,

@@ -67,7 +67,7 @@ def _event(**over: Any) -> dict[str, Any]:
         "time": "2026-11-03T10:00:00Z",
         "kind": "navigate",
         "action": "view.open",
-        "target": "Control",
+        "subject": "Control",
         "trigger": "pointer",
         **over,
     }
@@ -76,13 +76,13 @@ def _event(**over: Any) -> dict[str, Any]:
 #: One event of every kind the browser sends, at a second apiece.
 def _one_of_each() -> list[dict[str, Any]]:
     return [
-        _event(time="2026-11-03T10:00:01Z", kind="navigate", action="view.open", target="Desk"),
-        _event(time="2026-11-03T10:00:02Z", kind="interact", action="ui.click", target="nav.Desk"),
+        _event(time="2026-11-03T10:00:01Z", kind="navigate", action="view.open", subject="Desk"),
+        _event(time="2026-11-03T10:00:02Z", kind="interact", action="ui.click", subject="nav.Desk"),
         _event(
             time="2026-11-03T10:00:03Z",
             kind="debug",
             action="request.finish",
-            target="GET /ops/queue",
+            subject="GET /ops/queue",
             outcome="succeeded",
             duration_ms=4.2,
         ),
@@ -188,7 +188,7 @@ def test_the_environment_bounds_each_level(monkeypatch):
 def test_off_still_audits_a_write(tmp_path, monkeypatch):
     _patch_start(monkeypatch)
     c = _client(tmp_path, activity_level="off")
-    assert c.post("/control/process/start", json={"procs": "rdb1"}).status_code == 200
+    assert c.post("/control/lifecycle/start", json={"procs": "rdb1"}).status_code == 200
     (row,) = c.get("/activity").json()["events"]
     assert (row["source"], row["action"], row["level"], row["outcome"]) == (
         "server",
@@ -239,14 +239,14 @@ def test_a_detail_key_outside_the_allowlist_is_dropped_at_every_level(tmp_path, 
 
 
 @pytest.mark.parametrize("kind", ["navigate", "interact", "debug"])
-def test_a_target_that_is_free_text_is_stored_as_invalid_at_every_level(tmp_path, kind):
+def test_a_subject_that_is_free_text_is_stored_as_invalid_at_every_level(tmp_path, kind):
     c = _client(tmp_path)
     c.post(
         "/activity/events",
-        json={"events": [_event(kind=kind, action="ui.click", target='{"q": "SELECT secret"}')]},
+        json={"events": [_event(kind=kind, action="ui.click", subject='{"q": "SELECT secret"}')]},
     )
     (row,) = c.get("/activity").json()["events"]
-    assert row["target"] == "(invalid)"
+    assert row["subject"] == "(invalid)"
     assert "SELECT secret" not in _dump(tmp_path / "activity.sqlite3")
 
 
@@ -254,9 +254,13 @@ def test_a_target_that_is_free_text_is_stored_as_invalid_at_every_level(tmp_path
 def test_the_write_token_never_reaches_the_history_at_any_level(tmp_path, monkeypatch, level):
     _patch_start(monkeypatch)
     c = _client(tmp_path, activity_level=level)
-    c.post("/control/process/start", json={"procs": "rdb1"})
+    c.post("/control/lifecycle/start", json={"procs": "rdb1"})
     c.post("/activity/events", json={"events": _one_of_each()})
-    c.post("/control/process/stop", json={"procs": "rdb1"}, headers={"Authorization": "Bearer x"})
+    c.post(
+        "/control/lifecycle/stop",
+        json={"procs": "rdb1", "confirmed": True},
+        headers={"Authorization": "Bearer x"},
+    )
     dump = _dump(tmp_path / "activity.sqlite3")
     assert TOKEN not in dump and "Bearer" not in dump
     for fmt in activity_log.EXPORT_FORMATS:
@@ -284,17 +288,17 @@ def _correlated(c: TestClient, monkeypatch) -> str:
         json={
             "events": [
                 _event(time="2026-11-03T10:00:00Z", kind="interact", action="ui.click",
-                       target="nav.Control"),
+                       subject="nav.Control"),
                 _event(time="2026-11-03T10:00:01Z", kind="submit", action="process.stop",
-                       target="rdb1", request_id=rid),
+                       subject="rdb1", request_id=rid),
                 _event(time="2026-11-03T10:00:02Z", kind="confirm", action="process.stop",
-                       target="rdb1", request_id=rid),
+                       subject="rdb1", request_id=rid),
             ]
         },
     )  # fmt: skip
     c.post(
-        "/control/process/stop",
-        json={"procs": "rdb1"},
+        "/control/lifecycle/stop",
+        json={"procs": "rdb1", "confirmed": True},
         headers={activity.REQUEST_ID_HEADER: rid, activity.SESSION_ID_HEADER: SESSION},
     )
     now = dt.datetime.now(dt.UTC).isoformat()
@@ -302,10 +306,10 @@ def _correlated(c: TestClient, monkeypatch) -> str:
         "/activity/events",
         json={
             "events": [
-                _event(time=now, kind="result", action="process.stop", target="rdb1",
+                _event(time=now, kind="result", action="process.stop", subject="rdb1",
                        request_id=rid, outcome="succeeded", duration_ms=40.5,
                        trigger="programmatic"),
-                _event(time=now, kind="debug", action="request.finish", target="GET /ops/queue",
+                _event(time=now, kind="debug", action="request.finish", subject="GET /ops/queue",
                        outcome="succeeded", duration_ms=3.0, trigger="programmatic"),
             ]
         },
@@ -361,7 +365,7 @@ def test_the_timeline_groups_each_browser_action_under_its_server_request(tmp_pa
     assert 'filename="uqf-activity-' in r.headers["content-disposition"]
     lines = r.text.splitlines()
     assert lines[2] == "# columns: " + " · ".join(
-        ["UTC time", "session", "level", "action", "target", "outcome", "duration"]
+        ["UTC time", "session", "level", "action", "target", "subject", "outcome", "duration"]
     )
     start = lines.index(f"request {rid[:8]} · process.stop · succeeded")
     group = lines[start + 1 : start + 5]
@@ -411,7 +415,7 @@ def _bounds(actions: int = 100, interactions: int = 100, debug: int = 100) -> di
 
 def _clicks(n: int, start: int = 0) -> list[dict[str, Any]]:
     return [
-        {"source": "browser", "kind": "interact", "action": "ui.click", "target": f"c{start + i}"}
+        {"source": "browser", "kind": "interact", "action": "ui.click", "subject": f"c{start + i}"}
         for i in range(n)
     ]
 
@@ -500,6 +504,84 @@ def test_a_file_from_before_levels_opens_and_its_rows_are_actions(tmp_path):
     assert row["level"] == "actions"
 
 
+#: The table as the release before #2236 and #2234 kept it: `level`, no
+#: `subject`, and `PRAGMA user_version` 0.
+_BEFORE_2234 = (
+    "CREATE TABLE activity (seq INTEGER PRIMARY KEY AUTOINCREMENT, event_id TEXT NOT NULL "
+    "UNIQUE, ts TEXT NOT NULL, recorded_at TEXT NOT NULL, source TEXT NOT NULL, kind TEXT "
+    "NOT NULL, action TEXT NOT NULL, target TEXT, outcome TEXT, session_id TEXT, "
+    "request_id TEXT, claimed_user TEXT, trigger TEXT, method TEXT, status_code INTEGER, "
+    "duration_ms REAL, acting INTEGER NOT NULL DEFAULT 0, items TEXT NOT NULL DEFAULT "
+    "'[]', detail TEXT NOT NULL DEFAULT '{}', dropped INTEGER NOT NULL DEFAULT 0, "
+    "level TEXT NOT NULL DEFAULT 'actions');"
+)
+
+
+def _kept_before_2234(path, *rows):
+    """A history file an earlier release wrote, holding `rows` as
+    (event_id, source, kind, action, target, items, detail)."""
+    stamp = activity_log.stamp(dt.datetime.now(dt.UTC))
+    with sqlite3.connect(path) as db:
+        db.executescript(_BEFORE_2234)
+        for row in rows:
+            db.execute(
+                "INSERT INTO activity (event_id, source, kind, action, target, items, detail, "
+                "ts, recorded_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (*row, stamp, stamp),
+            )
+    return {r["event_id"]: r for r in ActivityStore(path, bounds=_bounds()).query(Query())}
+
+
+def test_a_row_kept_before_2236_says_how_its_user_was_known_as_identity_source(tmp_path):
+    """The history is persisted, so the renamed detail key is rewritten in
+    the rows already kept - once, by the file's user_version - and never
+    read under both names."""
+    rows = _kept_before_2234(
+        tmp_path / "a.sqlite3",
+        ("old-event-1", "server", "request", "process.stop", "rdb1", "[]",
+         '{"identity": "claimed", "exit_code": 0}'),
+    )  # fmt: skip
+    assert rows["old-event-1"]["detail"] == {"identity_source": "claimed", "exit_code": 0}
+    with sqlite3.connect(tmp_path / "a.sqlite3") as db:
+        assert db.execute("PRAGMA user_version").fetchone()[0] == activity_log.SCHEMA_VERSION
+
+
+def test_a_row_kept_before_2234_keeps_target_for_the_deployment_target(tmp_path):
+    """`target` held a process selector, a cfg key, a worker, a route and a
+    view as well as a deployment target. Each old row is rewritten once:
+    what it acted on moves to `subject`, and a control action's target is
+    `local`, where it acted."""
+    items = '[{"target": "rdb1", "outcome": "succeeded"}]'
+    rows = _kept_before_2234(
+        tmp_path / "a.sqlite3",
+        ("stop-rdb1-1", "server", "request", "process.stop", "rdb1", items, "{}"),
+        ("cfg-key-001", "server", "request", "worker.config", "dry_run", "[]", "{}"),
+        ("upload-0001", "server", "request", "files.upload", "prod", "[]", "{}"),
+        ("refused-001", "server", "attempt", "authz.refused", "/ops/usage", "[]", "{}"),
+        ("browser-001", "browser", "navigate", "view.open", "Desk", "[]", "{}"),
+    )
+    said = {k: (r["target"], r["subject"]) for k, r in rows.items()}
+    assert said == {
+        "stop-rdb1-1": ("local", "rdb1"),
+        "cfg-key-001": ("local", "dry_run"),
+        "upload-0001": ("prod", None),
+        "refused-001": (None, "/ops/usage"),
+        "browser-001": (None, "Desk"),
+    }
+    assert rows["stop-rdb1-1"]["items"] == [{"subject": "rdb1", "outcome": "succeeded"}]
+    # opened again, nothing moves twice
+    again = ActivityStore(tmp_path / "a.sqlite3", bounds=_bounds()).query(Query())
+    assert {r["event_id"]: (r["target"], r["subject"]) for r in again} == said
+
+
+def test_a_read_only_reader_refuses_a_file_not_yet_upgraded(tmp_path):
+    path = tmp_path / "a.sqlite3"
+    with sqlite3.connect(path) as db:
+        db.executescript(_BEFORE_2234)
+    with pytest.raises(sqlite3.DatabaseError, match="start the frontend API once"):
+        activity_log.open_readonly(path)
+
+
 def test_storage_stops_growing_at_interactions(tmp_path):
     """A day of clicking, at the interactions cap: the row count is held to
     the cap plus one prune interval, and the file to the pages that many
@@ -546,6 +628,6 @@ def test_a_worker_config_change_is_still_audited_with_its_level(tmp_path):
         ),
         headers={"Authorization": f"Bearer {TOKEN}"},
     )
-    c.put("/control/worker-config", json={"key": "dry_run", "value": "1"})
+    c.put("/control/worker/config", json={"key": "dry_run", "value": "1"})
     (row,) = c.get("/activity", params={"level": "actions"}).json()["events"]
     assert (row["action"], row["level"]) == ("worker.config", "actions")

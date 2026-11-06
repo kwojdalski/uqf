@@ -124,15 +124,17 @@ first 12 characters of the revision:
 Inside the artifact:
 
 - **The tree.** The tracked files under an allowlist (`src`, `scripts`, the
-  three Python packages, `pyproject.toml`, `uv.lock`, and `lib/kx-dbmaint`), at
-  their repository paths, because the q loaders and `uqs` find each other by
-  layout. `lib/kx-dbmaint` is KX's `dbmaint.q` with its Apache-2.0 licence and
-  notice, the one part of `lib/` a release carries: the HDB repair below loads
-  it, offline, from `scripts/gates/fill_hdb_partitions.q`'s own location, and
-  the licence has to travel with the copy. Never shipped: the rest of `lib/`
-  (TorQ, the starter pack and the other vendored trees), `.env`, `.envrc`, keys
-  and licences, virtual environments, runtime data, logs, tests, build output,
-  and `scripts/torqconfig/permissions/gateway_users.csv`, which holds the demo
+  three Python packages, `pyproject.toml`, `uv.lock`, `lib/kx-dbmaint`, and one
+  file of `docs/`: `reference/surfaces/current/transports.csv`, which
+  `uqs config sources` and the backfill capabilities read at run time), at their
+  repository paths, because the q loaders and `uqs` find each other by layout.
+  `lib/kx-dbmaint` is KX's `dbmaint.q` with its Apache-2.0 licence and notice,
+  the one part of `lib/` a release carries: the HDB repair below loads it,
+  offline, from `scripts/gates/fill_hdb_partitions.q`'s own location, and the
+  licence has to travel with the copy. Never shipped: the rest of `lib/` (TorQ,
+  the starter pack and the other vendored trees), `.env`, `.envrc`, keys and
+  licences, virtual environments, runtime data, logs, tests, build output, and
+  `scripts/torqconfig/permissions/gateway_users.csv`, which holds the demo
   gateway passwords.
 - **`.release/`.** `requirements.txt`, the dependencies of `uqs` pinned with
   hashes from the committed `uv.lock`. `wheels/` holds the `uqs` wheel and a
@@ -180,9 +182,12 @@ manifest records. Building needs `uv`, and network access to fetch the wheels.
 
 `.github/workflows/release.yml` builds the artifacts for a tag `v*`, or for a
 tag given to its manual run. It builds them only after `ci.yml`'s checks pass on
-that commit, and never with `--override allow-dirty`. Each release gets two: the
-plain artifact, and one with its q converted for kdb+ 4.0 (`--q-version 4.0`).
-Each comes with its `.sha256` and `.manifest.json`. Deploy one by tag or by URL:
+that commit, and never with `--override allow-dirty`. The tag is resolved to one
+commit first and `ci.yml` checks out exactly that commit, whichever branch
+started the run; the build fails unless it is building the commit `ci.yml`
+checked. Each release gets two: the plain artifact, and one with its q converted
+for kdb+ 4.0 (`--q-version 4.0`). Each comes with its `.sha256` and
+`.manifest.json`. Deploy one by tag or by URL:
 
 ```bash
 uqs deploy push v1.4.0 --ssh uqf-server --dest /opt/uqf ... --dry-run
@@ -747,13 +752,13 @@ uqs --target uat start piggybankgeneralledger1   # asks first; --yes skips the q
   the server and asks there. One `uqs --target T --yes` answers whichever
   question the command asks, here or on the server: it is passed on to every
   command that takes `--yes` (#2247), so
-  `uqs --target uat --yes data migrate quote 2026.09.13 --apply` needs no second
-  `--yes`. Read-only commands run directly: `status`, `logs`, `schema`, `list`,
-  `graph`, `job gaps`, `job runs show` and `connector logs`, as does `--help`
-  and a `--dry-run` (not `job backfill`'s, which starts a process). Each command
-  declares which it is, and the command line is parsed as the server's `uqs`
-  parses it: a word given as an option's value is not a flag. A command, option
-  or argument this machine's `uqs` does not know asks.
+  `uqs --target uat --yes data migrate quote --date 2026.09.13 --apply` needs no
+  second `--yes`. Read-only commands run directly: `status`, `logs`, `schema`,
+  `list`, `graph`, `job gaps`, `job runs show` and `connector logs`, as does
+  `--help` and a `--dry-run` (not `job backfill`'s, which starts a process).
+  Each command declares which it is, and the command line is parsed as the
+  server's `uqs` parses it: a word given as an option's value is not a flag. A
+  command, option or argument this machine's `uqs` does not know asks.
 - **ssh.** It runs with `BatchMode`, so a missing key or an unknown host key
   fails rather than prompts. Host-key checking is whatever your `ssh_config`
   says, and credentials stay on the server.

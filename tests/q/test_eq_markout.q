@@ -197,6 +197,58 @@
     e:select from p where kind=`execution, horizon=0D00:00:05;
     .qunit.assertEquals[first e`move;0.25;"and the execution component: -(643.00 - 643.25), the 20:59:49 mid at the fill"]};
 
+/ --- the calendar reaches any date (#2183) ---------------------------------------------
+/ The declared table ends 2028.12.31; the rule that built it is applied on demand beyond it.
+
+/ The worked example (a fill at 15:00 on 2026.02.25) moved to the instant at, status of its total rows.
+.qt.qpipe.job.eq_markout.shifted_status:{[at]
+    d:at-2026.02.25D15:00:00;
+    e:update source_time:source_time+d from .qpipe.transform.eq_markout_outputs.sample_executions[];
+    b:update source_time:source_time+d from .qpipe.transform.eq_markout_outputs.sample_books[];
+    b:b,update source_time:source_time+0D00:01:10 from -1#b;
+    exec status from .qpipe.transform.eq_markout_outputs.rows[e;b] where kind=`total}
+
+/ A fill at 13:45 UTC is inside the session in daylight time (opens 13:30 UTC) and before it in
+/ standard time (opens 14:30 UTC); one at 20:30 UTC is the reverse (closes 20:00 / 21:00 UTC).
+.qt.qpipe.job.eq_markout.test_fills_in_2029_and_2035_are_in_session_at_the_right_utc_times_across_both_switches:{[tc]
+    f:.qt.qpipe.job.eq_markout.shifted_status;
+    ok:3#`ok;
+    un:3#`unavailable;
+    / 2029: daylight time begins Sunday 03-11 and ends Sunday 11-04
+    .qunit.assertEquals[f 2029.03.09D13:45:00;un;"2029-03-09 is standard time: 13:45 UTC is before the 14:30 open"];
+    .qunit.assertEquals[f 2029.03.09D20:30:00;ok;"2029-03-09 closes 21:00 UTC"];
+    .qunit.assertEquals[f 2029.03.12D13:45:00;ok;"2029-03-12 is daylight time: opens 13:30 UTC"];
+    .qunit.assertEquals[f 2029.03.12D20:30:00;un;"2029-03-12 closes 20:00 UTC"];
+    .qunit.assertEquals[f 2029.11.02D20:30:00;un;"2029-11-02 is still daylight time: closes 20:00 UTC"];
+    .qunit.assertEquals[f 2029.11.05D13:45:00;un;"2029-11-05 is standard time again: opens 14:30 UTC"];
+    .qunit.assertEquals[f 2029.11.05D20:30:00;ok;"2029-11-05 closes 21:00 UTC"];
+    / 2035: second Sunday of March is 03-11, first Sunday of November is 11-04
+    .qunit.assertEquals[f 2035.03.09D13:45:00;un;"2035-03-09 standard time"];
+    .qunit.assertEquals[f 2035.03.12D13:45:00;ok;"2035-03-12 daylight time"];
+    .qunit.assertEquals[f 2035.11.02D20:30:00;un;"2035-11-02 daylight time"];
+    .qunit.assertEquals[f 2035.11.05D20:30:00;ok;"2035-11-05 standard time"];
+    .qunit.assertEquals[f 2035.03.10D15:00:00;un;"a Saturday has no session"]};
+
+.qt.qpipe.job.eq_markout.test_the_extended_calendar_is_the_declared_rule_and_2026_to_2028_is_unchanged:{[tc]
+    s:.qpipe.transform.eq_markout_outputs.regular_sessions[2026.01.01;2028.12.31];
+    .qunit.assertEquals[count s;782;"every weekday of 2026-2028"];
+    .qunit.assertEquals[(sum `long$s`open_time;sum `long$s`close_time);-3863042327253409792 -3844743527253409792;"the sessions are the ones produced before #2183"];
+    .qunit.assertEquals[.qpipe.transform.eq_markout_outputs.job_spec`sessions;s;"the spec's table is unchanged, so is its snapshot id"];
+    / inside the declared table the extended rule is the domain's own
+    sp:.qpipe.transform.markout_core.validate[.qpipe.transform.eq_domain.domain;.qpipe.transform.eq_markout_outputs.job_spec];
+    fr:([] sym:4#`AAPL; t0:2026.03.06D14:00:00 2026.03.09D13:45:00 2028.12.29D20:30:00 2028.12.29D21:30:00; t1:(2026.03.06D14:00:05 2026.03.09D13:45:05 2028.12.29D20:30:05 2028.12.29D21:30:05));
+    .qunit.assertEquals[.qpipe.transform.eq_markout_outputs.available[sp;fr];.qpipe.transform.eq_domain.available[sp;fr];"identical to the domain's rule for 2026-2028"];
+    / and a generated 2035 day is the rule's output
+    .qunit.assertEquals[exec open_time from .qpipe.transform.eq_markout_outputs.regular_sessions[2035.03.12;2035.03.12];enlist 2035.03.12D13:30:00.000000000;"daylight open"]};
+
+.qt.qpipe.job.eq_markout.test_a_fill_past_the_calendar_horizon_is_refused_not_marked_unavailable:{[tc]
+    sp:.qpipe.transform.markout_core.validate[.qpipe.transform.eq_domain.domain;.qpipe.transform.eq_markout_outputs.job_spec];
+    fr:([] sym:enlist `AAPL; t0:enlist 2100.01.04D15:00:00; t1:enlist 2100.01.04D15:00:05);
+    f:{[a] .qpipe.transform.eq_markout_outputs.available[a 0;a 1]};
+    / like is not implemented on KDB-X for "prefix*mid*": one anchor each
+    .qunit.assertThrows[f;(sp;fr);"eq_markout_outputs: a fill at*";"named refusal"];
+    .qunit.assertThrows[f;(sp;fr);"*calendar horizon 2099.12.31*";"naming the horizon"]};
+
 / --- a live row is the row a refill writes ------------------------------------------------
 
 .qt.qpipe.job.eq_markout.key_order:{[t] `venue`fill_id`horizon`kind`step xasc t}

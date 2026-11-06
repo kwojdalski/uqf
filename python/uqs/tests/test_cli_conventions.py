@@ -365,7 +365,9 @@ def test_no_flag_turns_its_command_into_another_verb():
 
 
 #: A time range is given in full wherever one is taken (#1858): `data replay`
-#: had no --last.
+#: had no --last. Any one of the four brings the other three (#2249): `config
+#: sources check` took `--last` alone, with a default, and no --from it was
+#: held to.
 RANGE = ("--from", "--to", "--date", "--last")
 
 
@@ -373,9 +375,107 @@ def test_a_command_taking_a_time_range_takes_all_of_it():
     partial = {
         path: [o for o in RANGE if c.option(o) is None]
         for path, c in LEAVES.items()
-        if c.option("--from") is not None and any(c.option(o) is None for o in RANGE)
+        if any(c.option(o) is not None for o in RANGE) and any(c.option(o) is None for o in RANGE)
     }
     assert not partial
+
+
+#: The commands that act on whole HDB partitions (#2245): each takes the range
+#: in whole days and refuses, never rounds, a bound off a midnight - data
+#: seed and data compress used to drop a partial first day and take a partial
+#: last one whole, past --to.
+WHOLE_DAY_COMMANDS = {"data replay", "data seed", "data compress", "data migrate"}
+
+
+def test_a_whole_partition_command_takes_whole_days_only():
+    whole = {
+        path
+        for path, c in LEAVES.items()
+        if c.option("--from") is not None and "whole days only" in (c.option("--from").help or "")
+    }
+    assert whole == WHOLE_DAY_COMMANDS
+    for path in WHOLE_DAY_COMMANDS:
+        days = LEAVES[path].option("--last").help or ""
+        assert "whole days" in days and "never in it" in days, path
+    # and each resolves it through the one refusal, never a rounding of its own
+    for module in ("compress_plan", "seed", "replay", "migrate"):
+        text = inspect.getsource(__import__(f"uqs.cli.{module}", fromlist=["_"]))
+        assert ".partition_dates(" in text or ".day(" in text, module
+
+
+#: The `data` commands that do not act on one HDB (#2237): `diff` compares two
+#: endpoints' tables through their gateways; `snapshot`'s list and show read
+#: the markout configuration snapshots in the status directory.
+NOT_ONE_HDB = {"data diff", "data snapshot list", "data snapshot show"}
+
+
+def test_every_data_command_names_its_hdb_the_same_ways():
+    """#2237: check and alter took --hdb and --attachment, compress and replay
+    --hdb only (replay's with a help of its own), migrate and seed neither. A
+    `data` command that reads or writes one HDB takes both, with
+    cli/hdb_scope.py's one help each; one that cannot act on an attachment's
+    HDB refuses it saying why (hdb_scope.local_hdb), rather than not knowing it."""
+    from uqs.cli import hdb_scope
+
+    def helps(opt) -> str:
+        return opt.__metadata__[0].help if hasattr(opt, "__metadata__") else opt.help
+
+    want = {"--hdb": helps(hdb_scope.HdbOpt), "--attachment": helps(hdb_scope.AttachOpt)}
+    data = {path: c for path, c in LEAVES.items() if path.startswith("data ")}
+    assert NOT_ONE_HDB <= set(data)
+    wrong = {
+        (path, name): c.option(name) and c.option(name).help
+        for path, c in data.items()
+        if path not in NOT_ONE_HDB
+        for name, help_text in want.items()
+        if c.option(name) is None or c.option(name).help != help_text
+    }
+    assert not wrong, f"data commands naming their HDB another way: {wrong}"
+
+
+@pytest.mark.parametrize(
+    ("module", "argv", "said"),
+    [
+        ("replay", ["data", "replay"], "data replay cannot take --attachment pb-uat: a replay"),
+        (
+            "migrate",
+            ["data", "migrate", "trade", "--date", "2026-09-13", "--cast", "px"],
+            "data migrate cannot take --attachment pb-uat: a migration",
+        ),
+        (
+            "seed",
+            ["data", "seed", "--from-runtime", "uqf"],
+            "data seed cannot take --attachment pb-uat: a seed",
+        ),
+        ("compress", ["data", "compress"], "--attachment is for --report"),
+    ],
+)
+def test_a_data_command_that_cannot_reach_an_attachment_says_why(monkeypatch, module, argv, said):
+    """#2237: `No such option` was all an operator got for --attachment on
+    compress, migrate, replay and seed; each now knows it, and refuses it with
+    its reason before reaching anything."""
+    mod = __import__(f"uqs.cli.{module}", fromlist=["_"])
+    died: list[Exception] = []
+    monkeypatch.setattr(mod, "_die", died.append)
+    CliRunner().invoke(app, [*argv, "--attachment", "pb-uat"])
+    assert len(died) == 1 and isinstance(died[0], paths.UqsUsageError), died
+    assert said in str(died[0])
+
+
+@pytest.mark.parametrize("module", ["replay", "migrate", "seed"])
+def test_hdb_and_attachment_together_are_refused_as_check_refuses_them(monkeypatch, module):
+    mod = __import__(f"uqs.cli.{module}", fromlist=["_"])
+    died: list[Exception] = []
+    monkeypatch.setattr(mod, "_die", died.append)
+    argv = {
+        "replay": ["data", "replay"],
+        "migrate": ["data", "migrate", "trade", "--date", "2026-09-13", "--cast", "px"],
+        "seed": ["data", "seed", "--from-runtime", "uqf"],
+    }[module]
+    CliRunner().invoke(app, [*argv, "--attachment", "pb-uat", "--hdb", "/tmp"])
+    assert [str(e) for e in died] == [
+        "give one of --target, --attachment and --hdb: each names an HDB"
+    ]
 
 
 def test_schema_and_query_reach_a_process_the_same_ways():
@@ -564,6 +664,7 @@ OPTIONS = {
     "--release": Meaning("a release on the server, by name - not a path", r"^the release\b"),
     "--remote-user": Meaning("run as this account through sudo", r"sudo"),
     "--rename": Meaning("rename a column", r"rename"),
+    "--reset-empty": Meaning("rebuild an empty table from its declaration", r"^Rebuild a table"),
     "--reverse": Meaning("sort descending", r"descending"),
     "--schema": Meaning("tables' columns and their types", r"^its table's schema"),
     "--schema-file": Meaning("a tickerplant's schema file", r"^(load|pin) (this|the) schema file"),
@@ -571,7 +672,7 @@ OPTIONS = {
     "--source-version": Meaning(
         "a source release coverage is recorded under", r"^the source_version\b"
     ),
-    "--partition": Meaning("the slice of a dataset", r"^the slice of\b"),
+    "--slice": Meaning("the coverage slice of a dataset", r"^the slice of\b"),
     "--start-with-all": Meaning("whether a `start all` starts the process", r"start all"),
     "--ssh": Meaning("the ssh destination of a target", r"ssh destination"),
     "--table": Meaning("one table to act on", r"this table"),
@@ -923,6 +1024,12 @@ WORDS = {
     "runtime": Meaning("a uqs runtime: uqf, torq, peachq, ...", r"\buqf\b"),
     "attach": Meaning("retired: the noun is attachment (--attachment)", None),
     "stack-id": Meaning("retired: the stack's base port is --base-port", None),
+    # #2239: an HDB date partition, as kdb+ says it (`.Q.par`); the coverage
+    # slice a worker fills was `--partition` too, and is `--slice` now
+    "partition": Meaning("an HDB date partition", r"\b(date|day)\b"),
+    "slice": Meaning(
+        "a coverage slice of a dataset, never a date", r"\bslice\b.*\bnot a date\b|--slice\b"
+    ),
 }
 
 #: (command, option or metavar) -> the issue that renames it
@@ -1840,7 +1947,8 @@ def test_every_date_shaped_parameter_uses_the_shared_forms():
 
 @pytest.mark.parametrize("partition", ["2026-01-02", "2026.01.02"])
 def test_data_migrate_takes_both_day_forms(monkeypatch, partition):
-    """`data migrate TABLE PARTITION` refused 2026.01.02, the form on disk (#1884)."""
+    """`data migrate TABLE PARTITION` refused 2026.01.02, the form on disk (#1884);
+    the day is `--date` now (#2239)."""
     from datetime import date
 
     from typer.testing import CliRunner
@@ -1854,8 +1962,36 @@ def test_data_migrate_takes_both_day_forms(monkeypatch, partition):
         raise SystemExit(0)
 
     monkeypatch.setattr(hdb_migrate, "migrate", migrate)
-    CliRunner().invoke(app, ["data", "migrate", "trade", partition])
+    CliRunner().invoke(app, ["data", "migrate", "trade", "--date", partition])
     assert seen == [date(2026, 1, 2)]
+
+
+def test_data_migrate_hdb_names_the_root_it_migrates(monkeypatch, tmp_path):
+    """#2237: `data migrate` could only reach this runtime's HDB."""
+    from uqs.stack import hdb_migrate
+
+    seen = []
+
+    def migrate(*_a, hdb=None, **_k):
+        seen.append(hdb)
+        raise SystemExit(0)
+
+    monkeypatch.setattr(hdb_migrate, "migrate", migrate)
+    argv = ["data", "migrate", "trade", "--date", "2026-01-02", "--hdb", str(tmp_path)]
+    CliRunner().invoke(app, argv)
+    assert seen == [tmp_path]
+
+
+def test_data_migrate_refuses_a_positional_date_naming_date(monkeypatch):
+    """#2239: a positional PARTITION read as a slice key to anyone who knows
+    `--partition` from `job new`; the day is the shared `--date`."""
+    from uqs.stack import hdb_migrate
+
+    monkeypatch.setattr(hdb_migrate, "migrate", lambda *a, **k: pytest.fail("migrated"))
+    result = CliRunner().invoke(app, ["data", "migrate", "trade", "2026-01-02", "--cast", "px"])
+    assert result.exit_code == 2
+    said = " ".join(re.sub("[│╭╮╰╯─]", " ", result.output).split())
+    assert "is now `data migrate TABLE --date D`" in said
 
 
 def test_every_override_name_is_one_spelling():

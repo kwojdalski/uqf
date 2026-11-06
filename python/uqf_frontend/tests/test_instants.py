@@ -98,7 +98,7 @@ def _refusals(client: TestClient) -> dict[str, typing.Any]:
             "/coverage",
             params={
                 "dataset": "fx_markout",
-                "partition": "",
+                "slice": "",
                 "source_version": "v1",
                 "range_from": NAIVE,
                 "range_to": "2026-09-16T00:00:00Z",

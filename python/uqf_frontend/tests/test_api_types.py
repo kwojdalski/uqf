@@ -159,7 +159,8 @@ def _interfaces(text: str | None = None) -> dict[str, dict[str, str]]:
 
 def _wire_fields(model: str) -> dict[str, typing.Any]:
     """`name on the wire -> FieldInfo`: the alias where the model has one, so
-    `ProcessConfigRequest.field_name` is compared as the `field` it is sent as."""
+    CompareTable's `schema_` is compared as the `schema` it is sent as. No
+    request model has one (test_api_conventions.py, #2227)."""
     return {
         (info.alias or name): info for name, info in getattr(models, model).model_fields.items()
     }
@@ -284,7 +285,15 @@ def test_a_literal_field_offers_the_same_words_on_both_sides(interface, model):
 #: `role` means a component's role in `uqs attach` - neither names a field
 #: here, so a reader joining /ops/processes to /workspace or a tunnel plan
 #: never maps one key to the other.
-LOSING_KEYS = {"procname": "process", "reported_procname": "reported_process", "role": "proctype"}
+#:
+#: The coverage slice is `slice`, as `uqs data diff --slice` says (#2239,
+#: #2261): "partition" is only a date partition in this API, and names no field.
+LOSING_KEYS = {
+    "procname": "process",
+    "reported_procname": "reported_process",
+    "role": "proctype",
+    "partition": "slice",
+}
 
 
 def _api_models() -> dict[str, type[pydantic.BaseModel]]:
@@ -318,11 +327,20 @@ def test_no_route_takes_a_process_by_the_losing_name():
 
     bad = [route for route in access.ROUTE_PERMISSIONS if "{procname}" in route[1]]
     assert not bad, f"a path parameter naming a process is `{{process}}`: {bad}"
-    assert ("PUT", "/control/process/{process}/config") in access.ROUTE_PERMISSIONS
+    assert ("PUT", "/control/processes/{process}/config") in access.ROUTE_PERMISSIONS
 
 
 def test_the_key_scan_catches_a_losing_key():
     """The gate itself, staged: TunnelMapping's old `role` field."""
     staged = API_TS.read_text().replace("  proctype: string;", "  role: string;", 1)
+    assert staged != API_TS.read_text()
+    assert any(_losing_keys(fields) for fields in _interfaces(staged).values())
+
+
+def test_the_key_scan_catches_the_coverage_slice_called_a_partition():
+    """The gate, staged: CompareBody's slice under its old name (#2261)."""
+    staged = API_TS.read_text().replace(
+        "  slice?: string | null;", "  partition?: string | null;", 1
+    )
     assert staged != API_TS.read_text()
     assert any(_losing_keys(fields) for fields in _interfaces(staged).values())

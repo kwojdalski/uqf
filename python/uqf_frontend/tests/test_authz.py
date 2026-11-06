@@ -288,7 +288,12 @@ SAMPLES: dict[tuple[str, str], dict] = {
     },
     # the config push history (#2002)
     ("POST", "/services/{target}/config/pushes"): {
-        "json": {"config_dir": "shared/config", "file_count": 1, "total_bytes": 4}
+        "json": {
+            "config_dir": "shared/config",
+            "file_count": 1,
+            "total_bytes": 4,
+            "confirmed": True,
+        }
     },
     ("POST", "/services/{target}/config/pushes/{push_id}/close"): {"json": {"reported": []}},
     ("GET", "/services/{target}/config/pushes"): {},
@@ -296,9 +301,7 @@ SAMPLES: dict[tuple[str, str], dict] = {
     ("GET", "/services/{target}/config/pushes/{push_id}/diff"): {},
     ("GET", "/services/{target}/config/pushes/{push_id}/restore"): {},
     ("POST", "/services/{target}/config/pushes/{push_id}/restore"): {"json": {"confirmed": True}},
-    ("GET", "/coverage"): {
-        "params": {"dataset": "fx_quotes", "partition": "", "source_version": "v1"}
-    },
+    ("GET", "/coverage"): {"params": {"dataset": "fx_quotes", "slice": "", "source_version": "v1"}},
     ("POST", "/query"): {"json": {"table": "trades", "filters": []}},
     ("GET", "/charts"): {},
     ("POST", "/charts/{name}"): {"json": {}},
@@ -315,7 +318,7 @@ SAMPLES: dict[tuple[str, str], dict] = {
                     "time": "2026-01-01T00:00:00Z",
                     "kind": "navigate",
                     "action": "view.open",
-                    "target": "Control",
+                    "subject": "Control",
                     "trigger": "pointer",
                 }
             ]
@@ -342,9 +345,9 @@ SAMPLES: dict[tuple[str, str], dict] = {
             },
         }
     },
-    ("POST", "/control/process/{action}"): {"json": {"procs": "rdb1"}},
-    ("PUT", "/control/process/{process}/config"): {"json": {"field": "port", "value": "1"}},
-    ("PUT", "/control/worker-config"): {"json": {"key": "k", "value": "v"}},
+    ("POST", "/control/lifecycle/{action}"): {"json": {"procs": "rdb1", "confirmed": True}},
+    ("PUT", "/control/processes/{process}/config"): {"json": {"field": "port", "value": "1"}},
+    ("PUT", "/control/worker/config"): {"json": {"key": "k", "value": "v"}},
     ("POST", "/control/backfill"): {
         "json": {
             "worker": "w",
@@ -407,7 +410,7 @@ def test_a_denied_table_is_refused_on_coverage_too():
     c, _ = client(policy=deny_tables({"fx_quotes"}))
     r = c.get(
         "/coverage",
-        params={"dataset": "fx_quotes", "partition": "", "source_version": "v1"},
+        params={"dataset": "fx_quotes", "slice": "", "source_version": "v1"},
     )
     assert r.status_code == 403, r.text
     assert "fx_quotes" in r.text
@@ -424,7 +427,7 @@ def test_a_denied_coverage_dataset_is_refused_on_query_too():
             "filters": [],
             "require_coverage": {
                 "dataset": "etl_coverage",
-                "partition": "",
+                "slice": "",
                 "source_version": "v1",
                 "range_from": "2026-09-13T00:00:00Z",
                 "range_to": "2026-09-16T00:00:00Z",

@@ -9,7 +9,7 @@ const NAME = /^[A-Za-z0-9_.:/@ ,+-]{1,200}$/;
 
 function me(granted: [string, "read" | "write"][]): Capabilities {
   return {
-    identity: "alice",
+    user: "alice",
     authenticated: true,
     groups: [],
     capabilities: granted.map(([feature, action]) => ({ feature, action })),
