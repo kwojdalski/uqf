@@ -40,13 +40,12 @@ check:{[label;ok]
 
 / --- start the upstream, and wait until it answers -----------------------
 
-/ q's rand starts from a fixed seed: unseeded, this was the same port every run,
-/ and a leftover upstream on it answered for the one started below (#1657). Seeded
-/ per process, and a port that already answers is refused rather than tested.
-system"S ",string .z.i;
-port:5010+`int$rand 500;
-if[not null @[{hopen (`$":localhost:",string x;200)};port;{0Ni}];
-    [-2 "run_two_instances: port ",string[port]," is already in use - not this run's upstream"; exit 1]];
+/ The port is one the OS hands out (.qt.support.free_port), not a random draw
+/ from 5010+: TorQ stacks run there, so a busy machine kept failing this run on
+/ a taken port (#2259). A port that already answers is still never tested as
+/ this run's upstream - a leftover upstream once answered for this one (#1657) -
+/ it is skipped for another.
+port:.qt.support.free_port[];
 log_path:statusdir,"/upstream.log";
 child:"QHOME=",getenv[`QHOME]," ",Q," tests/q/upstream_instance.q -p ",string[port],
       " < /dev/null > ",log_path," 2>&1 & echo $!";

@@ -12,21 +12,47 @@
 / for an _own_ root, the TorQ wdb's .wdb.hdbdir. They stay in the root context so they serialise
 / as plain lambdas.
 
+/ Evaluated BY THE WRITER, before anything is written: refuse rows whose columns or column types are not
+/ the partition's own (#2194). upsert onto a splayed table appends column by column, so a batch with one
+/ column of another type fails part-way, leaving ragged columns - and a fallback that rewrote the
+/ table whole retyped the native rows too. The check reads the partition's column files and the batch,
+/ so it runs before .Q.en (which would extend the sym file) and before the first column file is
+/ touched. It reads types from the files themselves rather than `meta` of the directory, which not
+/ every interpreter accepts, and treats an enumerated column as the symbol column it is.
+/ @param base the partition's directory, without a trailing slash (.Q.par)
+/ @param rows the date's rows
+/ @return 1b when the partition is absent or agrees with the rows
+/ @throws error listing every column with its native type and its batch type
+.qdev.attached.forced_require_types:{[base;rows]
+    if[()~key ` sv base,`.d; :1b];
+    kind:{[v] t:type v; $[t within 20 76; 11h; t]};
+    ncols:get ` sv base,`.d;
+    native:ncols!{[b;kind;c] kind get ` sv b,c}[base;kind] each ncols;
+    batch:(cols rows)!kind each value flip rows;
+    if[(ncols~cols rows) and native~batch; :1b];
+    names:distinct ncols,cols rows;
+    show1:{[n;b;c] string[c],": native ",$[c in key n; string .Q.t abs n c; "(absent)"],", batch ",$[c in key b; string .Q.t abs b c; "(absent)"]};
+    '"attached_forced: the batch does not match the native table ",string[base]," - nothing was written; ",
+      "; " sv show1[native;batch] each names}
+
 / Evaluated BY THE WRITER: append one date's rows to <root>/<date>/<target>/ and return how many.
-/ `p# comes off sym first, as io_hdb.q's append does; forced_sort puts it back.
+/ `p# comes off sym first, as io_hdb.q's append does; forced_sort puts it back. Nothing is written
+/ unless forced_require_types accepts the batch, and there is no fallback after a failed upsert:
+/ with matching types upsert cannot fail part-way, and any other failure leaves the error to the caller.
 / @param root the HDB root, or ` for the writer's own .wdb.hdbdir
 / @param d the partition date
 / @param target the table
 / @param rows the date's rows, with a time column and no date column
 / @return the rows appended
+/ @throws error when the batch's columns or types differ from the partition's
 .qdev.attached.forced_append:{[root;d;target;rows]
     db:$[null root; hsym .wdb.hdbdir; root];
     part:` sv .Q.par[db;d;target],`;
+    .qdev.attached.forced_require_types[.Q.par[db;d;target];rows];
     data:.Q.en[db;rows];
     have:key part;
     if[`sym in have; @[{@[x;`sym;`#]};part;::]];
-    / an interpreter that cannot upsert onto a splayed table on disk rewrites it whole
-    $[()~have; part set data; .[upsert;(part;data);{[p;d;e] p set (get p),d}[part;data]]];
+    $[()~have; part set data; part upsert data];
     count data}
 
 / Evaluated BY THE WRITER at the end: sort each date's partition by sym then time and put `p# on
@@ -51,9 +77,11 @@
 / @param call the writer, as a function of one message
 / @param root the HDB root, or ` for the writer's own
 / @param partition_col the column `time copies when the batch has none (the source's time column)
-/ @param bounds dict with max_date (the last completed date) and destination (for the message)
+/ @param bounds dict with max_date (the last completed date) and destination (for the message), and optionally
+/   calendar (the stack's, .qetl.io.use_calendar): rows are then sent to the partition the stack files them in
 / @return a manager with write, write_keyed and finish
 .qdev.attached.forced_manager:{[call;root;partition_col;bounds]
+    if[`calendar in key bounds; .qetl.io.use_calendar bounds`calendar];
     write:{[call;root;bounds;pc;target;batch;opts]
         if[not `append~opts`on_conflict;
             '"attached_backfill: -force only appends - pass --on-conflict append (this run: ",string[opts`on_conflict],")"];
@@ -61,7 +89,7 @@
         .qetl.io.scoped_check_date[bounds;pc;target;batch;0Np];
         data:$[`time in cols batch; batch; `time xcols ![batch;();0b;enlist[`time]!enlist pc]];
         data:(cols[data] except `date)#data;
-        days:`date$data`time;
+        days:.qetl.io.scoped_day_of data`time;
         `.qdev.attached.forced_dates set distinct .qdev.attached.forced_dates,distinct days;
         sum {[call;root;target;data;days;d] call (.qdev.attached.forced_append;root;d;target;data where days=d)}[call;root;target;data;days] each distinct days}[call;root;bounds;partition_col];
     `write`write_keyed`finish!(

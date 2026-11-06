@@ -243,3 +243,30 @@ def test_the_clients_endpoint_reports_what_the_gateway_view_cannot():
     assert body["row_count"] == 1
     assert body["rows"][0]["u"] == "cryptorust"
     assert body["rows"][0]["source_process"] == "stp1"
+
+
+@pytest.mark.parametrize("path", ["/ops/usage", "/ops/clients"])
+def test_a_log_cut_at_the_limit_says_so(path):
+    """`rows[:limit]` cut the log with nothing saying so: a fleet with 2000
+    logged queries showed 500 as if they were all (#2220)."""
+    rows = [{"time": dt.datetime(2026, 9, 15, i), "u": f"c{i}"} for i in range(8)]
+    c = TestClient(
+        create_app(
+            gateway=FakeGateway(), settings=Settings(max_rows=10), fleet=FakeFleet({"a": rows})
+        )
+    )
+    cut = c.get(path, params={"limit": 5}).json()
+    assert (cut["row_count"], cut["truncated"]) == (5, True)
+    whole = c.get(path, params={"limit": 8}).json()
+    assert (whole["row_count"], whole["truncated"]) == (8, False)
+
+
+def test_usage_asks_each_process_for_one_row_past_the_limit():
+    """So the merged log holds more than `limit` rows exactly when the fleet
+    does: a process with limit+1 rows is a cut, one with `limit` is not."""
+    rows = [{"time": dt.datetime(2026, 9, 15, i)} for i in range(6)]
+    fleet = FakeFleet({"a": lambda lim: rows[:lim]})
+    c = TestClient(create_app(gateway=FakeGateway(), settings=Settings(max_rows=10), fleet=fleet))
+    assert c.get("/ops/usage", params={"limit": 5}).json()["truncated"] is True
+    assert fleet.calls[-1][2] == (6,)
+    assert c.get("/ops/usage", params={"limit": 6}).json()["truncated"] is False

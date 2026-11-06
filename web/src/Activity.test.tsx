@@ -268,3 +268,22 @@ it("reads a 4xx as refused and anything else as unknown", () => {
   expect(outcomeOfError(new ApiError("x", true, 503))).toBe("unknown");
   expect(outcomeOfError(new ApiError("timed out", true))).toBe("unknown");
 });
+
+it("says when the history shown is cut at the limit (#2220)", async () => {
+  const cut = { ...HISTORY, truncated: true };
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (path: string) =>
+      path === "/health"
+        ? ok({ ok: true, gateway: "up", poll_seconds: 5 })
+        : path.startsWith("/activity")
+          ? ok(cut)
+          : ok({ poll_seconds: 5 }),
+    ),
+  );
+  render(<App />);
+  fireEvent.click(screen.getByRole("button", { name: /Activity/ }));
+  expect(
+    await screen.findByText(/more events match these filters/),
+  ).toBeInTheDocument();
+});
