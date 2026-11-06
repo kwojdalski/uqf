@@ -787,7 +787,7 @@
     .qetl.job.bounded.write_state[worker;`live;was_live];
     if[not 98h=type r; 'last r];
     ws:r;
-    v,`state`planned`cursor`plan!(`planned;count ws;cursor;ws)}
+    v,`state`planned`cursor`plan`waiting_for_eod!(`planned;count ws;cursor;ws;.qetl.io.eod_waiting_for[.qetl.job.bounded.def worker;v`range_from;v`range_to])}
 
 / The initialisation itself. Never call this directly - `init` is what
 / releases the lock when this throws.
@@ -876,7 +876,7 @@
     s:.qetl.job.bounded.spec worker;
     / The range ends where the source can vouch for its data (#1187), rounded down to an `align` worker's
     / bar edge so a bar is never built from part of its fills (#1477, as #1303 refuses at the edges).
-    to:{[g;t] $[(not null g) and t>-0Wp; g xbar t; t]}[cfg`align] .qetl.source.clip_to_complete[worker;cfg`source;.qetl.job.bounded.read_state[worker;`handle];.qetl.job.bounded.read_state[worker;`live];s`range_to];
+    to:{[g;t] $[(not null g) and t>-0Wp; g xbar t; t]}[cfg`align] .qetl.source.clip_to_complete[worker;cfg`source;.qetl.job.bounded.read_state[worker;`handle];.qetl.job.bounded.read_state[worker;`live];.qetl.io.clip_to_eod[worker;cfg;s`range_from;s`range_to]];
     if[to<=s`range_from; :.qetl.job.bounded.empty_windows[]];
     / ONE as_of for the whole plan, captured once: a ledger superseded midway
     / would report a range both covered and uncovered in one pass.

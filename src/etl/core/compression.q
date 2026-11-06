@@ -422,10 +422,10 @@
     -19!(f;tmp;triple 0;triple 1;triple 2);
     ok:((get tmp)~get f) and (attr get tmp)~attr get f;
     if[not ok; hdel tmp; '"compression: ",string[f]," did not read back equal after rewriting it; the original is kept"];
-    system "mv ",(1_string tmp)," ",1_string f;
+    system "mv ",.qetl.job.bounded.state.shell_word[1_string tmp]," ",.qetl.job.bounded.state.shell_word 1_string f;
     {[tmp;f;suffix]
         h:hsym `$(string tmp),suffix;
-        if[not ()~key h; system "mv ",(1_string h)," ",1_string hsym `$(string f),suffix]}[tmp;f] each ("#";"##");
+        if[not ()~key h; system "mv ",.qetl.job.bounded.state.shell_word[1_string h]," ",.qetl.job.bounded.state.shell_word 1_string hsym `$(string f),suffix]}[tmp;f] each ("#";"##");
     f}
 
 / Apply a table's column overrides to a partition just written under the table's
