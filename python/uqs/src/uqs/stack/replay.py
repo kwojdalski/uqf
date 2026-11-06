@@ -44,15 +44,15 @@ from __future__ import annotations
 
 import re
 import subprocess
-import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
-from uqs.interpreter import q_interpreter
 from uqs.logger import get_logger
-from uqs.paths import UqsError, UqsPaths, repo_root
+from uqs.paths import UqsError, UqsPaths
 from uqs.stack import runtime
 from uqs.stack.alive import _command_lines
+from uqs.stack.replay_fence import replayable_days, require_handed_over
+from uqs.stack.replay_flags import replay_flags
 
 log = get_logger()
 
@@ -244,134 +244,6 @@ def resolve_log_dir(
         days = ", ".join(d.name.rsplit("_", 1)[-1] for d in dirs)
         raise UqsError(f"{plant.procname} has no log for {date} - it has: {days}")
     return wanted
-
-
-#: The q that asks the ETL's own HDB fence (src/etl/core/io_hdb_eod.q), the one
-#: rule backfills write under, rather than restating it. Inputs come as
-#: command-line words (.z.x: mode, hdb, wdb or `none`, dates), never in the
-#: script text, so a path cannot become q.
-_FENCE_Q = r"""
-\l {eod}
-r:hsym `$.z.x 1;
-w:.z.x 2;
-if[not w~"none"; .qetl.io.watch_eod[r;hsym `$w]];
-d:"D"$" " vs .z.x 3;
-if[(.z.x 0)~"require";
-  -1 .[{.qetl.io.require_handed_over[x;`replay;y];"OK "};(r;d);{"ERR ",x}]; exit 0];
--1 "OK ",{" " sv string x}.qetl.io.handed_over[r;d];
-exit 0
-"""
-
-
-def _ask_fence(mode: str, dates: list[str], hdb_dir: Path, wdb_dir: Path | None) -> str:
-    """Run the fence in a q of its own; the text after its `OK `, or a refusal."""
-    q = q_interpreter()
-    if q is None:
-        raise UqsError("no q interpreter to ask the end-of-day fence - set QCMD")
-    eod = repo_root() / "src" / "etl" / "core" / "io_hdb_eod.q"
-    with tempfile.TemporaryDirectory() as tmp:
-        script = Path(tmp) / "fence.q"
-        script.write_text(_FENCE_Q.replace("{eod}", str(eod)))
-        done = subprocess.run(
-            [
-                str(q),
-                str(script),
-                "-q",
-                mode,
-                f":{hdb_dir}",
-                str(wdb_dir or "none"),
-                " ".join(dates),
-            ],
-            capture_output=True,
-            text=True,
-            stdin=subprocess.DEVNULL,
-            timeout=60,
-        )
-    lines = [ln for ln in done.stdout.splitlines() if ln.startswith(("OK ", "ERR "))]
-    if not lines:
-        raise UqsError(
-            f"the end-of-day fence did not answer: {(done.stdout + done.stderr).strip()}"
-        )
-    return lines[-1]
-
-
-def replayable_days(dates: list[str], hdb_dir: Path, wdb_dir: Path | None) -> frozenset[str]:
-    """Which of these `YYYY.MM.DD` days end of day has handed over to the HDB."""
-    if not dates:
-        return frozenset()
-    answer = _ask_fence("handed", dates, hdb_dir, wdb_dir)
-    if not answer.startswith("OK "):
-        raise UqsError(f"the end-of-day fence failed: {answer}")
-    return frozenset(answer[3:].split())
-
-
-def require_handed_over(date: str, hdb_dir: Path, wdb_dir: Path | None) -> None:
-    """Refuse a day end of day has not handed over, with the fence's own error.
-
-    @throws UqsError naming the day, as `.qetl.io.require_handed_over` does
-    """
-    answer = _ask_fence("require", [date], hdb_dir, wdb_dir)
-    if answer.startswith("ERR "):
-        raise UqsError(answer[4:])
-
-
-#: What a value may contain before torq.sh puts it on a start line. Paths are
-#: what this passes, so `/` is in and a space is not: torq.sh builds the line
-#: into a string and `eval`s it, so a space would split one path into two
-#: words and a `;` or `$(...)` would run as shell. Same reasoning, and the
-#: same refusal, as stack/backfill._SAFE_VALUE - which cannot simply be reused
-#: because it predates any flag whose value is a path.
-_SAFE_VALUE = re.compile(r"[A-Za-z0-9_./:+-]+")
-
-#: torq.sh finds its own `-csv` and `-extras` flags by grepping every argument
-#: for those words, so a value containing either is mistaken for the flag and
-#: the whole command line is misparsed. A path is quite capable of holding
-#: "csv" - `output/uqs/csv/...` would - so this is checked, not assumed.
-_TORQ_SH_WORDS = ("csv", "extras")
-
-
-def _checked(name: str, value: str) -> str:
-    if not _SAFE_VALUE.fullmatch(value):
-        raise UqsError(
-            f"{name} {value!r} may contain only letters, digits and . _ / : + - "
-            "(torq.sh runs the start line through a shell)"
-        )
-    if any(word in value for word in _TORQ_SH_WORDS):
-        raise UqsError(
-            f"{name} {value!r} contains 'csv' or 'extras', which torq.sh reads as its "
-            "own flags wherever they appear"
-        )
-    return value
-
-
-def replay_flags(
-    log_dir: Path,
-    hdb_dir: Path,
-    schema_file: Path,
-    tables: list[str] | None = None,
-) -> list[str]:
-    """The `-.replay.*` switches tickerlogreplay.q reads, validated.
-
-    Plain paths, no leading `:`. The script hsyms `hdbdir` itself and hsyms
-    `tplogdir` on the way into `getlogdir`, while `schemafile` is loaded with
-    `system "l ",string ...` - which a leading colon would break.
-
-    `tablelist` is left off entirely for a whole-log replay rather than passed
-    as `all`: TorQ's default IS `` `all ``, and a switch that restates a
-    default is one more thing that can disagree with it.
-    """
-    flags = [
-        "-.replay.tplogdir",
-        _checked("the log directory", str(log_dir)),
-        "-.replay.hdbdir",
-        _checked("the hdb directory", str(hdb_dir)),
-        "-.replay.schemafile",
-        _checked("the schema file", str(schema_file)),
-    ]
-    if tables:
-        flags.append("-.replay.tablelist")
-        flags.extend(_checked("a table name", table) for table in tables)
-    return flags
 
 
 @dataclass(frozen=True)
