@@ -134,7 +134,7 @@ def test_what_is_judged_is_read_from_the_hooks_own_scopes():
 
 def test_an_attested_hook_without_a_scope_is_refused_not_guessed():
     config = "repos:\n  - repo: local\n    hooks:\n      - id: q-tests\n        files: 'x'\n"
-    with pytest.raises(SystemExit, match="no `files:` scope for q-coverage"):
+    with pytest.raises(SystemExit, match="no `files:` scope for .*q-coverage"):
         check.judged_scopes(config)
 
 
@@ -395,7 +395,13 @@ def test_attest_records_the_tree_only_when_every_hook_passes(repo, monkeypatch):
 ALL = sorted(attest.HOOKS)
 #: What a .q change outside the plant tables needs: every KDB-X hook but
 #: plant-schema, whose scope is plant_tables.q and what it generates.
-Q_HOOKS = [h for h in ALL if h not in ("plant-schema", "compression-config")]
+#: Derived: the hooks whose own `files:` scope takes an arbitrary .q file.
+Q_HOOKS = sorted(
+    h
+    for h, (files, exclude) in check.judged_scopes().items()
+    if files.search("src/foundation/stats.q")
+    and not (exclude and exclude.search("src/foundation/stats.q"))
+)
 
 
 @pytest.mark.parametrize(
@@ -553,21 +559,39 @@ def test_attest_needs_what_the_check_needs(repo, monkeypatch):
     assert attest.needed(base) == check.needed_hooks(check.changed_paths(base, head)) == Q_HOOKS
 
 
-def _ci_skips_without_q() -> list[str]:
-    """The hooks ci.yml's no-q branch adds to SKIP."""
+def test_the_kdbx_hooks_are_the_tagged_ones_and_ci_reads_them():
+    """One place (#2170): the `# kdbx-only` tags in .pre-commit-config.yaml.
+    HOOKS is read from them and ci.yml's no-q SKIP asks the same function -
+    it names no hook itself, so a hook CI forgot to SKIP cannot exist."""
+    import subprocess
+
+    out = subprocess.run(
+        [sys.executable, str(_ROOT / "scripts/gates/check_hook_scopes.py"), "--kdbx-only"],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+    assert out.split(",") == list(attest.HOOKS)
     ci = (_ROOT / ".github/workflows/ci.yml").read_text()
     skip = [line for line in ci.splitlines() if "SKIP=$SKIP," in line]
-    assert len(skip) == 1, "ci.yml should add the KDB-X hooks to SKIP in one place"
-    return skip[0].split("SKIP=$SKIP,")[1].split('"')[0].split(",")
+    assert len(skip) == 1 and "check_hook_scopes.py --kdbx-only" in skip[0], skip
 
 
-def test_ci_skips_exactly_the_attested_hooks_where_it_has_no_q():
-    """Both directions (#1794). A KDB-X hook CI forgot to SKIP would fail
-    every hosted run; a hook CI skips that attest_kdbx.HOOKS lacks runs
-    nowhere anything checks - plant-schema was one."""
-    named = _ci_skips_without_q()
-    assert len(named) == len(set(named))
-    assert set(named) == set(attest.HOOKS)
+def test_the_derived_hooks_equal_the_hand_kept_list_they_replaced():
+    """The migration pin (#2170): the one deliberate hand-written copy, so
+    that tagging or untagging a hook is noticed here too."""
+    assert sorted(attest.HOOKS) == sorted(
+        [
+            "q-tests",
+            "q-coverage",
+            "q-docs",
+            "contract-surface",
+            "q-facts",
+            "plant-schema",
+            "compression-config",
+        ]
+    )
+    assert Q_HOOKS == sorted(set(attest.HOOKS) - {"plant-schema", "compression-config"})
 
 
 def test_every_attested_hook_is_defined_in_the_pre_commit_config():

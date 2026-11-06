@@ -136,6 +136,27 @@ def doc_scope_drift(
     return problems
 
 
+#: The comment that marks a KDB-X-only hook: on the line right under its
+#: `- id:`. The one place the set is written (#2170): attest_kdbx.HOOKS, CI's
+#: no-q SKIP list and their tests all read it from here.
+KDBX_ONLY_TAG = "# kdbx-only"
+
+
+def kdbx_only_hooks(config_text: str) -> list[str]:
+    """The ids of the hooks tagged `# kdbx-only`, in file order - the hooks
+    that need a q and so run on a contributor's machine, not on hosted CI."""
+    ids: list[str] = []
+    current: str | None = None
+    for line in config_text.splitlines():
+        id_match = re.match(r"\s*-\s*id:\s*(\S+)", line)
+        if id_match:
+            current = id_match.group(1)
+        elif current and line.strip() == KDBX_ONLY_TAG:
+            ids.append(current)
+            current = None
+    return ids
+
+
 def scoped_hooks(config_text: str) -> list[tuple[str, str, str | None]]:
     """Every (hook id, files pattern, exclude pattern) triple, in file order.
 
@@ -180,6 +201,10 @@ def scoped_hooks(config_text: str) -> list[tuple[str, str, str | None]]:
 
 
 def main() -> int:
+    if sys.argv[1:] == ["--kdbx-only"]:
+        # comma-joined, for ci.yml's SKIP: `SKIP=$SKIP,$(... --kdbx-only)`
+        print(",".join(kdbx_only_hooks(CONFIG.read_text())))
+        return 0
     if not CONFIG.is_file():
         print(f"no pre-commit config at {CONFIG}", file=sys.stderr)
         return 1
