@@ -27,16 +27,44 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  revision:
+    name: The tag's commit
+    # The one commit this release is (#2200), resolved once: checks gets it as
+    # `ref`, since a called workflow's checkouts otherwise take the triggering
+    # ref - on workflow_dispatch, the dispatching branch's head, not the tag.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      sha: ${{ steps.resolve.outputs.sha }}
+    env:
+      TAG: ${{ github.event.inputs.tag || github.ref_name }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ env.TAG }}
+          persist-credentials: false
+      - name: Resolve the tag to its commit
+        id: resolve
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha=$(git rev-parse HEAD)
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "$TAG is $sha"
+
   checks:
     # An artifact exists only for a revision that passed ci.yml.
+    needs: revision
     uses: ./.github/workflows/ci.yml
+    with:
+      ref: ${{ needs.revision.outputs.sha }}
     permissions:
       contents: read
       issues: read
 
   build:
     name: Build and publish the release artifacts
-    needs: checks
+    needs: [revision, checks]
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
@@ -49,6 +77,21 @@ jobs:
         with:
           ref: ${{ env.TAG }}
           persist-credentials: false
+      - name: The commit built is the commit checked
+        # A tag moved after `revision` resolved it, or a ci.yml checkout that
+        # ignored its ref, would otherwise ship a tree no gate ran on.
+        shell: bash
+        env:
+          RESOLVED: ${{ needs.revision.outputs.sha }}
+          CHECKED: ${{ needs.checks.outputs.checked_sha }}
+        run: |
+          set -euo pipefail
+          built=$(git rev-parse HEAD)
+          echo "resolved $RESOLVED, checked $CHECKED, building $built"
+          if [ -z "$CHECKED" ] || [ "$built" != "$CHECKED" ] || [ "$built" != "$RESOLVED" ]; then
+            echo "::error::building $built, but ci.yml checked ${CHECKED:-nothing} (the tag was $RESOLVED)"
+            exit 1
+          fi
       - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
         with:
           version: "0.12.14"
