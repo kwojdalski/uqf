@@ -88,8 +88,9 @@ whose table this site lacks can't stop the check. The stages, in order:
 4. **schema:** the physical tables and columns the adapter reads are present,
    with their types. That's the source's `raw` contract when it declares one,
    and its own `columns` and `types` otherwise.
-5. **read:** the adapter's bounded read of the last hour (`--last`, default
-   `1h`) runs.
+5. **read:** the adapter's bounded read of the time range runs: the last hour
+   when no range is given, or `--last`, `--date`, `--from`/`--to` - a past
+   window, for a source with nothing in the last hour.
 6. **output:** the rows it returned have the declared `columns` and `types`.
 
 Declare `raw` when the adapter's output isn't its input. For example, it reads

@@ -97,6 +97,34 @@
     .qunit.assertEquals[r`status`stage;(`failed;`read);"the adapter's query itself failed"];
     .qunit.assertTrue[r[`diagnostic] like "the bounded read of the last*";"saying which step failed"]};
 
+/ --- a past window (#2249) ------------------------------------------------
+
+.qt.qetl.livecheck.test_a_past_window_is_read_between_its_bounds:{[t]
+    `.qt.qetl.livecheck.asked set ();
+    .qt.support.drop_rows[`.qetl.source.sources;`livetest_src];
+    d:.qt.qetl.livecheck.decl[];
+    d[`query]:{[h;a;b] `.qt.qetl.livecheck.asked set (a;b); 0#.qt.qetl.livecheck.rows};
+    .qetl.source.define[`livetest_src;d];
+    w:2026.09.13D00:00 2026.09.14D00:00;
+    r:.qetl.livecheck.check[`livetest_src;w];
+    .qunit.assertEquals[r`status`stage;(`empty;`done);"a window with nothing in it is empty"];
+    .qunit.assertEquals[.qt.qetl.livecheck.asked;w;"the adapter was asked for that window, not the last hour"]};
+
+.qt.qetl.livecheck.test_a_failed_read_of_a_past_window_names_the_window:{[t]
+    .qt.support.drop_rows[`.qetl.source.sources;`livetest_src];
+    .qetl.source.define[`livetest_src;@[.qt.qetl.livecheck.decl[];`query;:;{[h;a;b] '"no such table"}]];
+    r:.qetl.livecheck.check[`livetest_src;2026.09.13D00:00 2026.09.14D00:00];
+    .qunit.assertEquals[r`stage;`read;"the query failed"];
+    .qunit.assertTrue[r[`diagnostic] like "the bounded read of the window*";"saying it was a window"];
+    .qunit.assertTrue[0<count r[`diagnostic] ss "2026.09.13D00:00:00.000000000, 2026.09.14D00:00:00.000000000)";
+        "and naming the window it read"]};
+
+.qt.qetl.livecheck.test_a_window_that_is_neither_a_span_nor_two_timestamps_is_refused:{[t]
+    .qunit.assertThrows[.qetl.livecheck.bounds;2026.09.13;"livecheck: window is a timespan or (start;end) timestamps*";
+        "a date is not a window"];
+    .qunit.assertThrows[.qetl.livecheck.bounds;2026.09.14D00:00 2026.09.13D00:00;"livecheck: the window is empty*";
+        "nor a reversed one"]};
+
 / --- an adapter whose output is not its input (raw) ----------------------
 / .
 / The physical table holds CREATED_AT and a payload; the adapter returns ts

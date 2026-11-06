@@ -6,21 +6,21 @@ from typing import Annotated
 
 import typer
 
+from uqs import timerange
 from uqs.cli import safety
 from uqs.cli.concepts import table_arg
 from uqs.cli.hdb_scope import AttachOpt, HdbOpt, local_hdb
-from uqs.cli.range_options import DateOpt
+from uqs.cli.range_options import DateOpt, DayFromOpt, DayLastOpt, DayToOpt
 from uqs.cli.renames import refused
 from uqs.cli.safety import ChangesState, dry_run_note
 from uqs.cli.shared import _die, _paths, console, data_app
 from uqs.paths import UqsError, UqsUsageError
 from uqs.stack import hdb_migrate
-from uqs.timerange import parse_day
 
 _TableOpt = table_arg("The declared HDB table")
 
-#: The day is `--date D`, the shared day option, as on `data replay` (#2239):
-#: the positional PARTITION it was is refused, naming `--date`.
+#: The day is `--date D` - or any one-day range, as on `data replay` (#2239,
+#: #2249): the positional PARTITION it was is refused, naming `--date`.
 _POSITIONAL_DATE = (
     "`data migrate TABLE PARTITION` is now `data migrate TABLE --date D`, the day option "
     "every data command takes (#2239)"
@@ -38,6 +38,9 @@ _NO_ATTACHMENT = (
 def migrate(
     table: _TableOpt,
     day: DateOpt = None,
+    range_from: DayFromOpt = None,
+    range_to: DayToOpt = None,
+    last: DayLastOpt = None,
     hdb: HdbOpt = None,
     attach: AttachOpt = None,
     rename: Annotated[
@@ -58,7 +61,8 @@ def migrate(
 ) -> None:
     """Migrate one HDB partition of a table to this release's schema.
 
-    The HDB is this runtime's, or --hdb DIR on this machine.
+    The partition is one day: --date D, --from D --to D+1, or --last 1d
+    (yesterday). The HDB is this runtime's, or --hdb DIR on this machine.
 
     Stages, validates
     and replaces the table partition.
@@ -76,9 +80,10 @@ def migrate(
         return
     try:
         root = local_hdb(attach, hdb, command="data migrate", why=_NO_ATTACHMENT)
-        if day is None:
+        if all(v is None for v in (day, range_from, range_to, last)):
             raise UqsUsageError("name the partition to migrate: --date D, e.g. --date 2026-09-13")
-        partition = parse_day("--date", day)
+        window = timerange.resolve(range_from, range_to, day, last)
+        partition = window.day("data migrate migrates")
         renames: dict[str, str] = {}
         for pair in rename or []:
             old, sep, new = pair.partition(":")

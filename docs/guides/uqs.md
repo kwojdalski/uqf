@@ -1947,8 +1947,10 @@ the default is no; an EOF or Ctrl-C is a no; and with no terminal to ask on it
 refuses at once, naming `--yes`, instead of prompting into the void.
 
 A time range is given one way, on every command that takes one (`job backfill`,
-`job gaps`, `job preview`, `job check`, `job runs audit`, `data seed`,
-`data replay`), and read by one parser, `uqs.timerange`:
+`job gaps`, `job preview`, `job check`, `job runs list`, `job runs audit`,
+`data seed`, `data replay`, `data compress`, `data migrate`, `data diff`,
+`activity list`, `activity export`, `config sources check`), all four options or
+none (#2249), and read by one parser, `uqs.timerange`:
 
 - `--from A --to B` is `[A, B)`: `B` is excluded. A bound is a date or a
   timestamp, ISO-8601 or a q literal - `2026-09-13`, `2026-09-13T06:00`,
@@ -1959,14 +1961,19 @@ A time range is given one way, on every command that takes one (`job backfill`,
   time takes.
 
 A command that acts on whole HDB partitions - `data replay`, `data seed`,
-`data compress` - takes whole days only, and refuses rather than rounds anything
-else (#2245): a `--from` or `--to` that is not a UTC midnight is refused naming
-the days either side ("`data seed` copies whole partitions: --from
-2026-09-13T06:00:00 is not a day boundary; give --from 2026-09-13 or
+`data compress`, `data migrate` - takes whole days only, and refuses rather than
+rounds anything else (#2245): a `--from` or `--to` that is not a UTC midnight is
+refused naming the days either side ("`data seed` copies whole partitions:
+--from 2026-09-13T06:00:00 is not a day boundary; give --from 2026-09-13 or
 2026-09-14"), and `--last` must be whole days - `--last 3d` is the three days
 before today, so today's live partition is never in it. `data replay` replays
-one day's log, so its range must also be one day: `--date D`,
-`--from D --to D+1`, or `--last 1d` (yesterday).
+one day's log, and `data migrate` rebuilds one partition, so each takes one day:
+`--date D`, `--from D --to D+1`, or `--last 1d` (yesterday).
+
+`config sources check` reads a bounded window over the same range, and only it
+has a default: with no range at all, `--last 1h`. A source quiet now - a
+weekend, out of hours - is checked over a window that had data with `--date D`
+or `--from`/`--to` (#2249).
 
 The verbs of rule 4:
 
@@ -2208,7 +2215,8 @@ One vocabulary (#1857):
   | `setup odbc ... --home DIR`                                   | `--odbc-home DIR`                     |
 
 A duration that was a bare number still is one - seconds - so only `--window`'s
-minutes changed meaning, and its old spelling is converted. `deploy push` asks
+minutes changed meaning; its old spelling was converted for one release, and is
+refused now, naming the time range that replaced it (#2249). `deploy push` asks
 the release it verifies which spelling its `deploy check` takes, so a push or a
 rollback to a release from before this still verifies.
 

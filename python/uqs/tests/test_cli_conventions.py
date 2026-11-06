@@ -365,7 +365,9 @@ def test_no_flag_turns_its_command_into_another_verb():
 
 
 #: A time range is given in full wherever one is taken (#1858): `data replay`
-#: had no --last.
+#: had no --last. Any one of the four brings the other three (#2249): `config
+#: sources check` took `--last` alone, with a default, and no --from it was
+#: held to.
 RANGE = ("--from", "--to", "--date", "--last")
 
 
@@ -373,7 +375,7 @@ def test_a_command_taking_a_time_range_takes_all_of_it():
     partial = {
         path: [o for o in RANGE if c.option(o) is None]
         for path, c in LEAVES.items()
-        if c.option("--from") is not None and any(c.option(o) is None for o in RANGE)
+        if any(c.option(o) is not None for o in RANGE) and any(c.option(o) is None for o in RANGE)
     }
     assert not partial
 
@@ -382,7 +384,7 @@ def test_a_command_taking_a_time_range_takes_all_of_it():
 #: in whole days and refuses, never rounds, a bound off a midnight - data
 #: seed and data compress used to drop a partial first day and take a partial
 #: last one whole, past --to.
-WHOLE_DAY_COMMANDS = {"data replay", "data seed", "data compress"}
+WHOLE_DAY_COMMANDS = {"data replay", "data seed", "data compress", "data migrate"}
 
 
 def test_a_whole_partition_command_takes_whole_days_only():
@@ -396,7 +398,7 @@ def test_a_whole_partition_command_takes_whole_days_only():
         days = LEAVES[path].option("--last").help or ""
         assert "whole days" in days and "never in it" in days, path
     # and each resolves it through the one refusal, never a rounding of its own
-    for module in ("compress_plan", "seed", "replay"):
+    for module in ("compress_plan", "seed", "replay", "migrate"):
         text = inspect.getsource(__import__(f"uqs.cli.{module}", fromlist=["_"]))
         assert ".partition_dates(" in text or ".day(" in text, module
 
