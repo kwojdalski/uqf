@@ -87,6 +87,11 @@ class UqsUsageError(UqsError):
     """A command line wrong as given: exits 2, as Click's usage errors do (#1885)."""
 
 
+class UqsUnknownProcess(UqsError):
+    """A process name the runtime does not declare (procs.unknown_processes):
+    a type of its own so the frontend answers it 404, not 422 (#2224)."""
+
+
 def runtime_from_env() -> str:
     """The runtime UQS_RUNTIME names, or the default; an unknown one is refused."""
     name = os.environ.get(RUNTIME_ENV, "").strip() or DEFAULT_RUNTIME

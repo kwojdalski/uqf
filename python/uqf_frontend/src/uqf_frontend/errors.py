@@ -16,7 +16,10 @@ caller sent; 404 for a named thing that does not exist, path segment or not;
     Forbidden                403  a policy refused the caller
     InspectionMode           403  inspection mode refuses writes
     WritesDisabled           403  writes are off on this server
+    ActionNotFound           404  no such lifecycle action
+    ChartNotFound            404  no such prepared chart
     PathNotFound             404  no such path or push below a target
+    ProcessNotFound          404  no such process in this runtime
     TargetNotFound           404  no such deployment target
     CoverageIncomplete       409  the range is not fully published yet
     RestoreConflict          409  a file changed since the push

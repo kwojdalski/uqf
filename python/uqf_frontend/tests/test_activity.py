@@ -267,7 +267,7 @@ def test_a_lifecycle_that_times_out_after_starting_is_unknown_not_refused(tmp_pa
 
 def test_an_invalid_action_is_refused_before_acting(tmp_path):
     c = _client(_settings(tmp_path))
-    assert c.post("/control/process/obliterate", json={"procs": "all"}).status_code == 422
+    assert c.post("/control/process/obliterate", json={"procs": "all"}).status_code == 404
     (row,) = _history(c)
     assert (row["action"], row["outcome"]) == ("process", "refused")
 

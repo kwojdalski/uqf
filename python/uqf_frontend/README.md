@@ -78,6 +78,13 @@ Every request body is held to its model: a key the model does not know is a 422,
 never ignored, and the lifecycle body's `procs` is required. It once defaulted
 to `all`, so a body that lost the field stopped the whole fleet (#1361).
 
+An unknown name in the path is 404, with an error naming the kind:
+`TargetNotFound`, `ChartNotFound`, `ActionNotFound`, `ProcessNotFound`. 422 is
+for a body or query that is refused, and 400 only for `QueryRejected`, where q
+failed on input that passed validation (#2224, #2225). `errors.py` tables the
+status of every error the API raises, and `test_error_shape.py` holds the code
+to that table.
+
 **They are off by default, and that is the security posture rather than
 caution.** `UQF_FRONTEND_ENABLE_WRITES` must be set on the server or every one
 of them returns 403 naming that variable. The reason: this deployment has one

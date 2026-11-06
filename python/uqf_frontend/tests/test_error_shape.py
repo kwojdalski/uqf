@@ -345,3 +345,81 @@ def test_a_refusal_is_422_a_missing_name_404_and_400_only_a_q_failure():
             assert cls.status_code == 404, f"{name} names a thing that is not there, so 404"
         if cls.status_code == 400:
             assert name == "QueryRejected", f"{name}: 400 is only q failing on valid input"
+
+
+# ------------------------------------------- an unknown name in the path (#2224)
+
+#: A well-formed value for each path parameter that names nothing that exists.
+#: A parameter added to a route must be given one here, or the sweep fails.
+UNKNOWN_IN_PATH = {
+    "target": "no-such-target-2224",
+    "name": "no-such-chart-2224",
+    "action": "no-such-action-2224",
+    "process": "no-such-process-2224",
+    "push_id": "20261104T000000000Z-00000000",
+}
+
+
+def _example(annotation: Any) -> Any:
+    """A value of `annotation` that validates, for a body the sweep sends."""
+    origin = typing.get_origin(annotation)
+    if origin is list:
+        return [_example(typing.get_args(annotation)[0])]
+    if origin is typing.Literal:
+        return typing.get_args(annotation)[0]
+    if annotation is bool:
+        return True
+    if annotation is int:
+        return 1
+    if hasattr(annotation, "model_fields"):
+        return _body(annotation)
+    return "x"
+
+
+#: Bodies the generic example cannot make valid: a model's own validator.
+BODY_FOR = {"ConfigPushCloseRequest": {"reported": []}}
+
+
+def _body(model: Any) -> dict[str, Any]:
+    if not hasattr(model, "model_fields"):
+        return {}  # a free-form body, such as a chart's parameters
+    if model.__name__ in BODY_FOR:
+        return BODY_FOR[model.__name__]
+    return {
+        info.alias or name: _example(info.annotation)
+        for name, info in model.model_fields.items()
+        if info.is_required()
+    }
+
+
+def test_every_route_answers_an_unknown_name_in_its_path_with_404(app, client):
+    """An unknown target, chart, action or process in the path is 404, with an
+    error naming the kind - never the 422 a body that fails validation gets,
+    which the same route also answers (#2224)."""
+    probed = 0
+    for route in _routes(app):
+        names = re.findall(r"\{(\w+)\}", route.path)
+        if not names:
+            continue
+        missing = [n for n in names if n not in UNKNOWN_IN_PATH]
+        assert not missing, f"{route.path}: give {missing} a value in UNKNOWN_IN_PATH"
+        path = route.path.format(**UNKNOWN_IN_PATH)
+        bodies = _params(route.dependant, "body_params")
+        kwargs: dict[str, Any] = {}
+        if bodies:
+            kwargs["json"] = _body(bodies[0].field_info.annotation)
+        required = [p.alias for p in _params(route.dependant, "query_params")
+                    if p.field_info.is_required()]  # fmt: skip
+        if required:  # the upload: a path and a push it belongs to
+            kwargs["params"] = {
+                "path": "shared/config/x.csv",
+                "push_id": UNKNOWN_IN_PATH["push_id"],
+            }
+            kwargs["content"] = b"x"
+        body = assert_shape(client.request(_method(route), path, **kwargs), 404)
+        assert body["error"].endswith("NotFound") and body["error"] != "NotFound", (
+            route.path,
+            body,
+        )
+        probed += 1
+    assert probed >= 10, probed
