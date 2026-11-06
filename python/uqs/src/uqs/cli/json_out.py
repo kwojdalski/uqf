@@ -17,8 +17,9 @@ whatever the row calls it; and a time is ISO-8601 with an explicit offset
 
 The contract holds at every depth, not only on a list's records (#2122):
 `emit` spells each key of every nested object as KEYS says, and refuses a
-document whose `ok` is anything but a bool or whose range is an object rather
-than `range_from`/`range_to`. What a document carries as data - a query's
+document whose `ok` is anything but a bool, whose range is an object rather
+than `range_from`/`range_to`, or whose exit code is `exit` rather than
+`exit_code` (#2228). What a document carries as data - a query's
 result, a table's rows - is wrapped in `Verbatim` and printed as it came.
 """
 
@@ -203,6 +204,8 @@ def _keyed(obj: Mapping[Any, Any]) -> dict[str, Any]:
         )
     if isinstance(out.get("range"), dict):
         raise ValueError("a range in a --json document is `range_from`/`range_to`, not `range`")
+    if "exit" in out:
+        raise ValueError("an exit code in a --json document is `exit_code`, not `exit` (#2228)")
     return out
 
 

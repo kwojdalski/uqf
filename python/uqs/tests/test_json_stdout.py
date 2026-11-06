@@ -652,6 +652,7 @@ def test_verbatim_data_keeps_its_own_keys(capsys):
         ({"result": {"readers": [{"ok": "skipped"}]}}, "`ok` is a --json document's success flag"),
         ({"ok": True, "plan": {"range": {"from": "a", "to": "b"}}}, "range_from"),
         ({"rows": [{"procname": "a", "process": "b"}]}, "both 'procname' and 'process'"),
+        ({"ok": False, "result": {"exit": 1}}, "is `exit_code`, not `exit` (#2228)"),
     ],
 )
 def test_emit_refuses_a_document_that_breaks_the_contract_below_the_top(document, said):

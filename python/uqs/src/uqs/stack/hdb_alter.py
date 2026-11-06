@@ -90,7 +90,7 @@ def args(req: Request, *, apply: bool, schema_path: str | None = None) -> list[s
 
 
 def parse(result: subprocess.CompletedProcess[str], where: str) -> dict[str, Any]:
-    """The script's JSON document, with its exit code as `exit` - or a refusal
+    """The script's JSON document, with its exit code as `exit_code` (#2228) - or a refusal
     saying what it printed instead."""
     lines = [line for line in (result.stdout or "").splitlines() if line.startswith("{")]
     if not lines:
@@ -102,7 +102,7 @@ def parse(result: subprocess.CompletedProcess[str], where: str) -> dict[str, Any
         doc = json.loads(lines[-1])
     except ValueError:
         raise UqsError(f"hdb_alter.q {where} printed something other than JSON") from None
-    return {**doc, "exit": result.returncode}
+    return {**doc, "exit_code": result.returncode}
 
 
 def run_local(paths: UqsPaths, req: Request, *, apply: bool) -> dict[str, Any]:

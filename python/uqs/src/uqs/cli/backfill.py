@@ -163,9 +163,11 @@ def backfill(
         bool,
         typer.Option(
             "--wait",
-            help="Wait for the run's outcome and exit with it: 0 for completed or idle, "
-            "1 for failed or a process that died. Without it, the exit code says only "
-            "whether torq.sh started the process",
+            help="Wait for the run's outcome and exit with it: 0 for completed or idle; "
+            "1 for failed, partial, refused or a process that died; with --attachment, 3 "
+            "for rows written and covered that a reader has not reloaded - run the same "
+            "command again to ask the readers again. Without it, the exit code says only "
+            "whether the process started",
         ),
     ] = False,
     override: safety.OverrideOpt = None,
@@ -326,7 +328,7 @@ def backfill(
         _die(exc)
         return
     if as_json:
-        emit({**started, "state": state, "exit": code, "error": error})
+        emit({**started, **backfill_attached.outcome(state, code), "error": error})
         raise typer.Exit(code=code)
     colour = "green" if code == 0 else "red"
     console.print(f"[{colour}]{procname}: {state}[/] - `uqs logs {procname}` for its log")
