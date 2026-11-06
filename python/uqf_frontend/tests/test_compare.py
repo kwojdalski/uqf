@@ -69,6 +69,7 @@ def document(outcome: str = "equal_in_sample", **kw) -> dict:
         "limit": 50,
         "filters": ["sym=EURUSD"],
         "source_version": "",
+        # uqs data diff's document, which keeps the ledger's word (#2261)
         "partition": "",
         "tables": [table(outcome, **kw)],
     }
@@ -308,48 +309,70 @@ def test_q_reads_each_rendered_filter_back_as_the_operator_sent(tmp_path):
 # --------------------------------------------- the coverage slice (#2221)
 
 
-def test_a_coverage_check_without_a_partition_is_refused_naming_the_sentinel(registry, asked):
+def test_a_coverage_check_without_a_slice_is_refused_naming_the_sentinel(registry, asked):
     """/coverage's rule (#185): the slice is said, never defaulted. A blank
-    partition used to read the no-partition slice, which a partitioned dataset
+    slice used to read the no-slice-dimension slice, which a sliced dataset
     records nothing under, and report every window a gap."""
     r = _client().post("/compare", json=BODY | {"source_version": "v1"})
     assert r.status_code == 422, r.text
     assert r.json()["error"] == "RequestInvalid"
-    assert 'partition is required with source_version - give ""' in r.json()["detail"]
-    r = _client().post("/compare", json=BODY | {"source_version": "v1", "partition": None})
+    assert 'slice is required with source_version - give ""' in r.json()["detail"]
+    r = _client().post("/compare", json=BODY | {"source_version": "v1", "slice": None})
     assert r.status_code == 422, r.text
     assert not asked[0]
 
 
-def test_a_partition_without_a_source_version_is_refused(registry, asked):
-    r = _client().post("/compare", json=BODY | {"partition": "EURUSD"})
+def test_a_slice_without_a_source_version_is_refused(registry, asked):
+    r = _client().post("/compare", json=BODY | {"slice": "EURUSD"})
     assert r.status_code == 422, r.text
-    assert "partition reads coverage, which needs source_version" in r.json()["detail"]
-    r = _client().post("/compare", json=BODY | {"partition": ""})
+    assert "slice reads coverage, which needs source_version" in r.json()["detail"]
+    r = _client().post("/compare", json=BODY | {"slice": ""})
     assert r.status_code == 422, r.text
     assert not asked[0]
 
 
 def test_an_empty_source_version_is_refused_not_read_as_none(registry, asked):
-    r = _client().post("/compare", json=BODY | {"source_version": "", "partition": ""})
+    r = _client().post("/compare", json=BODY | {"source_version": "", "slice": ""})
     assert r.status_code == 422, r.text
     assert not asked[0]
 
 
-def test_the_no_partition_slice_is_asked_for_explicitly(registry, asked):
+def test_the_no_slice_dimension_slice_is_asked_for_explicitly(registry, asked):
     calls, answer = asked
     answer[0] = document() | {"source_version": "v1", "partition": ""}
-    r = _client().post("/compare", json=BODY | {"source_version": "v1", "partition": ""})
+    r = _client().post("/compare", json=BODY | {"source_version": "v1", "slice": ""})
     assert r.status_code == 200, r.text
     assert (calls[0]["source_version"], calls[0]["partition"]) == ("v1", "")
-    assert (r.json()["source_version"], r.json()["partition"]) == ("v1", "")
+    assert (r.json()["source_version"], r.json()["slice"]) == ("v1", "")
+    assert "partition" not in r.json()
+
+
+def test_a_named_slice_reaches_uqs_and_comes_back_as_slice(registry, asked):
+    """The API's `slice` is the ledger's `partition` at the uqs/q boundary,
+    both ways (#2261)."""
+    calls, answer = asked
+    answer[0] = document() | {"source_version": "v1", "partition": "EURUSD"}
+    r = _client().post("/compare", json=BODY | {"source_version": "v1", "slice": "EURUSD"})
+    assert r.status_code == 200, r.text
+    assert calls[0]["partition"] == "EURUSD"
+    assert r.json()["slice"] == "EURUSD"
+
+
+@pytest.mark.parametrize("body", [{"partition": ""}, {"source_version": "v1", "partition": ""}])
+def test_a_request_still_sending_partition_is_refused_naming_slice(registry, asked, body):
+    """No alias (#2261): `partition` is not read as the slice, and not
+    dropped as an unknown key either - the 422 says what it is now."""
+    r = _client().post("/compare", json=BODY | body)
+    assert r.status_code == 422, r.text
+    assert "`partition` is now `slice`" in r.json()["detail"]
+    assert not asked[0]
 
 
 def test_no_coverage_check_answers_null_not_the_empty_slice(registry, asked):
     """q answers an unchecked slice as "" (its null symbol); the API says null,
-    so "" in a response means only the no-partition slice."""
+    so "" in a response means only the no-slice-dimension slice."""
     doc = _client().post("/compare", json=BODY).json()
-    assert (doc["source_version"], doc["partition"]) == (None, None)
+    assert (doc["source_version"], doc["slice"]) == (None, None)
 
 
 def test_a_policy_without_compare_refuses_it(registry, asked, tmp_path):

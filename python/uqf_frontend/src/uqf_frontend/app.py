@@ -75,6 +75,7 @@ from uqf_frontend.gateway import TIERS, Gateway, KolaGateway
 from uqf_frontend.instants import AwareInstant
 from uqf_frontend.models import (
     CONFIRMED_LIFECYCLE,
+    PARTITION_IS_SLICE,
     ActivityBatchRequest,
     ActivityBatchResponse,
     ActivityBound,
@@ -398,6 +399,16 @@ def _renamed_query(**renamed: str) -> Callable[[Request], None]:
                 raise ValidationFailed(f"`{old}` is now `{new}`: send ?{new}=<id> (#2108)")
 
     return refuse
+
+
+def _refuse_partition_query(request: Request) -> None:
+    """`?partition=` named the coverage slice: it is `?slice=` now (#2261),
+    refused before the route's own parameters, so the old name is named even
+    though `slice` is required."""
+    if "partition" in request.query_params:
+        raise RequestValidationError(
+            [{"loc": ("query", "partition"), "msg": PARTITION_IS_SLICE, "type": "value_error"}]
+        )
 
 
 def _file_outcome(entry: dict[str, Any]) -> str:
@@ -1219,23 +1230,33 @@ def create_app(
             previous_sha256=answer["previous_sha256"],
         )
 
-    @app.get("/coverage", response_model=CoverageResponse)
+    @app.get(
+        "/coverage",
+        response_model=CoverageResponse,
+        dependencies=[Depends(_refuse_partition_query)],
+    )
     def get_coverage(
         request: Request,
         scope: ScopeOf,
         dataset: str,
-        partition: str,
+        slice_: Annotated[
+            str,
+            Query(
+                alias="slice",
+                description='the coverage slice to read; "" for a dataset with no slice dimension',
+            ),
+        ],
         source_version: str,
         range_from: AwareInstant | None = None,
         range_to: AwareInstant | None = None,
     ) -> CoverageResponse:
-        """Composed coverage for one dataset, partition and source release,
-        plus the gaps in a requested range if one is given.
+        """Composed coverage for one dataset, coverage slice and source
+        release, plus the gaps in a requested range if one is given.
 
-        `partition` has no default on purpose. FastAPI makes a parameter with
+        `slice` has no default on purpose. FastAPI makes a parameter with
         no default REQUIRED, so omitting it is a 422 naming the field rather
-        than a plausible answer computed across every partition (#185). Pass
-        `""` for a dataset with no partition dimension.
+        than a plausible answer computed across every slice (#185). Pass
+        `""` for a dataset with no slice dimension.
 
         The range is both bounds or neither (#2222), as on every route that
         names a coverage window: one bound alone was parsed and then dropped,
@@ -1245,7 +1266,7 @@ def create_app(
         # The dataset as the table: a policy refusing a table must refuse its
         # coverage too, or /coverage reads round what /query refuses.
         run_policy(request, table=dataset)
-        return _coverage(scope.gateway, dataset, partition, source_version, range_from, range_to)
+        return _coverage(scope.gateway, dataset, slice_, source_version, range_from, range_to)
 
     @app.post("/query", response_model=QueryResponse)
     def run_query(req: QueryRequest, request: Request, scope: ScopeOf) -> QueryResponse:
@@ -1953,7 +1974,7 @@ def _refuse_a_lone_bound(range_from: object, range_to: object) -> None:
 def _coverage(
     gateway: Gateway,
     dataset: str,
-    partition: str,
+    slice_: str,
     source_version: str,
     range_from: str | None,
     range_to: str | None,
@@ -1970,7 +1991,9 @@ def _coverage(
     # nothing a backfill had recorded. Composed and gapped by .qetl.coverage
     # there too, not here: the rule a backfill trusts when it skips a covered
     # window has one implementation, and this reports what it says.
-    raw = gateway.call(claims, dataset, partition, source_version, as_of)
+    # The slice is the ledger's `partition` argument: the q column keeps its
+    # name on disk, and the API's `slice` is mapped onto it here (#2261).
+    raw = gateway.call(claims, dataset, slice_, source_version, as_of)
     covered = _rows(gateway.call(queries.COMPOSE, raw))
 
     requested = None
@@ -2006,7 +2029,7 @@ def _enforce_coverage(gateway: Gateway, req: CoverageRequirement) -> None:
     say *which* days are missing, or narrow its range to what exists.
     """
     result = _coverage(
-        gateway, req.dataset, req.partition, req.source_version, req.range_from, req.range_to
+        gateway, req.dataset, req.slice, req.source_version, req.range_from, req.range_to
     )
     if not result.complete:
         gaps = ", ".join(f"[{g.range_from}, {g.range_to})" for g in result.gaps)
@@ -2020,7 +2043,7 @@ def _enforce_coverage(gateway: Gateway, req: CoverageRequirement) -> None:
     ready = _coverage(
         gateway,
         req.dataset,
-        req.partition,
+        req.slice,
         req.source_version,
         req.range_from,
         req.range_to,
