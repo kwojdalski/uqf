@@ -19,7 +19,7 @@ avoid. A reference is any of
   - `.qpipe.job.<name>`, `.qpipe.source.<name>` or `.qpipe.transform.<name>`
     (a shared transform's namespace, #884), outside a comment;
     - its helper namespace is a kind of its own, `transform_ns`: a job may
-      register transform `X` while `.qpipe.transform.X.*` lives in another
+      register transform `<name>` while `.qpipe.transform.<name>.*` lives in another
       file, and one key for both hid that file (#2177);
   - `.qetl.transform.apply[`X` (and its variants), or a declared `transform`;
     `.qetl.transform.define` and `.qetl.transform.passthrough` register one;
