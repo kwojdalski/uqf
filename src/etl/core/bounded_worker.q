@@ -852,9 +852,9 @@
     .qetl.job.bounded.write_state[worker;`live;live];
 
     .qetl.log.register[];
-    .qetl.log.info[worker;"initialised";
-        `source_version`range_from`range_to`live!
-        (.qetl.job.bounded.read_state[worker;`source_version];run_spec`range_from;run_spec`range_to;
+    .qetl.log.ch.info[`lifecycle;"initialised";
+        `worker`source_version`range_from`range_to`live!
+        (worker;.qetl.job.bounded.read_state[worker;`source_version];run_spec`range_from;run_spec`range_to;
          not null .qetl.job.bounded.read_state[worker;`handle])];
 
     .qetl.job.bounded.spec worker}
@@ -1103,7 +1103,7 @@
          p`windows_completed;p`windows_failed;p`rows_published;p`cursor;count owed);
     / one summary line per run at INFO - the aggregate a fleet view wants,
     / without the per-window noise that stays at DEBUG.
-    .qetl.log.info[worker;"run finished";result];
+    .qetl.log.ch.info[`lifecycle;"run finished";(enlist[`worker]!enlist worker),result];
     / The terminal move, so a finished worker does not read as wedged. The
     / per-window beat inside do_window is the one that catches a worker
     / stuck mid-window, which is the case a status file cannot show - it

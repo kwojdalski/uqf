@@ -18,12 +18,13 @@ from typing import Annotated
 
 import typer
 from rich.table import Table
+from typer._click.exceptions import UsageError
 
 from uqs.cli import completion
 from uqs.cli.choices import ChoiceOpt
 from uqs.cli.concepts import attach_opt
 from uqs.cli.json_out import emit, json_opt, records, timestamp
-from uqs.cli.renames import ATTACHMENT, alias_command, renamed, warn_renamed
+from uqs.cli.renames import ATTACHMENT, alias_command, refused, renamed, warn_renamed
 from uqs.cli.safety import ChangesState, ReadOnly, dry_run_note
 from uqs.cli.shared import (
     BasePortOpt,
@@ -189,16 +190,18 @@ def config_unset(
 
 
 LogsJson = json_opt(
-    '{"lines": [{time, host, process, proctype, level, id, message}]} - the history '
-    "only: not with --follow, --channel or --multitail; time ISO-8601 with its offset"
+    '{"lines": [{time, host, process, proctype, level, channel, message}]} - the history '
+    "only: not with --follow, --subscribe or --multitail; time ISO-8601 with its offset"
 )
+#: A log record's keys as `parse_log_line` reads them. TorQ's `id` column is the
+#: record's channel (#2274), and a document says so.
 _LINE_KEYS = ("time", "host", "procname", "proctype", "loglevel", "id", "message")
 
 
 def lines_document(rows: list[dict]) -> dict:
     """`logs --json`'s document for log records - uqs-mcp's `uqs_logs` returns it too.
     A time is q's local .z.P, given this machine's offset."""
-    lines = records([{k: r.get(k) for k in _LINE_KEYS} for r in rows])
+    lines = records([{("channel" if k == "id" else k): r.get(k) for k in _LINE_KEYS} for r in rows])
     return {"lines": [line | {"time": timestamp(line["time"])} for line in lines]}
 
 
@@ -209,6 +212,36 @@ def _json_lines(rows: list[dict]) -> None:
 _LevelOpt = ChoiceOpt(
     stack_logs.LEVEL_CHOICES, "--level", stack_logs.LEVEL_HELP, case_sensitive=False
 )
+#: `--id` was TorQ's `id` column, which is the channel now, and `--channel` was
+#: the subscription (#1067); neither is accepted in its old sense (#2274).
+_ID_MOVED = (
+    "`--id` was renamed `--channel` (#2274): the id column is the subsystem channel now, "
+    f"one of {', '.join(stack_logs.CHANNELS)}. Several `--channel` match any of them"
+)
+_CHANNEL_MOVED = (
+    "`--channel` now filters by subsystem channel (#2274), one of "
+    f"{', '.join(stack_logs.CHANNELS)}; subscribing to the published lines was renamed "
+    "`--subscribe`"
+)
+
+
+_LogsRefused = refused({"--id": _ID_MOVED}, ReadOnly)
+
+
+def _logs_parse_args(self, ctx, args):
+    """`logs`: a bare `--channel` - the old subscription flag, which took no value - is
+    answered with where it went, not with "requires an argument"."""
+    try:
+        return _LogsRefused.parse_args(self, ctx, args)
+    except UsageError as exc:
+        if "--channel" in exc.message and "requires an argument" in exc.message:
+            raise UsageError(_CHANNEL_MOVED, ctx=ctx) from None
+        raise
+
+
+_LogsCommand = type("LogsCommand", (_LogsRefused,), {"parse_args": _logs_parse_args})
+
+
 _StreamOpt = ChoiceOpt(
     stack_multitail.MULTITAIL_STREAMS,
     "--stream",
@@ -231,7 +264,7 @@ _AttachOpt = attach_opt(
             "--run": "--stamp",  # a log's stamp, not the run_id "run" means (#1890)
             **ATTACHMENT,
         },
-        ReadOnly,
+        _LogsCommand,
     )
 )
 def logs(
@@ -260,19 +293,17 @@ def logs(
             "--show-command", help="With --multitail: show its command without running it"
         ),
     ] = False,
-    channel: Annotated[
+    subscribe: Annotated[
         bool,
         typer.Option(
-            "--channel",
+            "--subscribe",
             help="Subscribe to the lines the processes publish (WARNING and up by default) "
             "instead of reading their files - live, until Ctrl-C",
         ),
     ] = False,
-    ids: Annotated[
+    channels: Annotated[
         list[str] | None,
-        typer.Option(
-            "--id", help="With --channel: only this worker or component's lines (repeatable)"
-        ),
+        typer.Option("--channel", help=stack_logs.CHANNEL_HELP),
     ] = None,
     attach: _AttachOpt = None,
     worker: Annotated[
@@ -301,9 +332,14 @@ def logs(
     `--multitail` follows the same files in the `multitail` binary, one pane
     each: `logs all --multitail --stream err --pane-columns 2`.
 
-    `--channel` subscribes instead of reading files: every line the processes
-    publish, filtered by `--id` and `--level` - e.g. `logs all --channel
-    --level ERROR`, `logs fxpositions1 --channel --id fx_positions`.
+    A line's channel is the subsystem it concerns (lifecycle, ipc, source, ...).
+    `--channel` shows only those, and repeats to match any - e.g. `logs rdb1 -f
+    --channel source --channel ipc --level DEBUG`. It filters what you VIEW; it
+    does not stop the lines being written, or save the cost of writing them.
+
+    `--subscribe` subscribes instead of reading files: every line the processes
+    publish, filtered by `--channel` and `--level` - e.g. `logs all --subscribe
+    --level ERROR`, `logs fxpositions1 --subscribe --channel source`.
 
     `--attachment` reads an attached backfill's or receiver's run instead, which is
     no TorQ process: `logs --attachment pb-uat --worker piggybank_ledger_backfill -f`.
@@ -312,13 +348,13 @@ def logs(
     What the options combine with: the PROCs are what is read, every
     option a filter on how. `--attachment ATTACHMENT` replaces PROC - one attachment's
     run, narrowed by `--worker` (a worker, or <dataset>.receiver) and `--stamp`,
-    which need it. `--channel` and `--multitail` each read PROC another way:
-    `--id` needs `--channel`; `--stream`, `--pane-columns` and `--show-command` need
-    `--multitail`. `--follow`, `--lines` and `--level` go with the files and
-    with `--attachment`.
+    which need it. `--subscribe` and `--multitail` each read PROC another way:
+    `--stream`, `--pane-columns` and `--show-command` need `--multitail`.
+    `--follow`, `--lines` and `--level` go with the files and with `--attachment`;
+    `--channel` goes with the files and `--subscribe`.
     """
     if as_json:
-        live = {"--follow": follow, "--channel": channel, "--multitail": multitail}
+        live = {"--follow": follow, "--subscribe": subscribe, "--multitail": multitail}
         for option, used in live.items():
             if used:
                 _die(UqsUsageError(f"--json prints the history: {option} does not apply with it"))
@@ -329,7 +365,12 @@ def logs(
                 _die(UqsUsageError(f"{option} needs --attachment"))
                 return
     else:
-        clash = {"a process name": bool(procs), "--channel": channel, "--multitail": multitail}
+        clash = {
+            "a process name": bool(procs),
+            "--subscribe": subscribe,
+            "--channel": bool(channels),
+            "--multitail": multitail,
+        }
         for option, used in clash.items():
             if used:
                 _die(
@@ -351,29 +392,39 @@ def logs(
         except UqsError as exc:
             _die(exc)
         return
-    if ids and not channel:
-        _die(UqsUsageError("--id needs --channel"))
-        return
-    if channel:
+    if subscribe:
         for option, used in {"--follow": follow, "--multitail": multitail}.items():
             if used:
-                _die(UqsUsageError(f"{option} does not apply with --channel, which is always live"))
+                _die(
+                    UqsUsageError(f"{option} does not apply with --subscribe, which is always live")
+                )
                 return
+    try:
+        channels = list(stack_logs.channel_names(channels))
+    except UqsError as exc:
+        _die(exc)
+        return
     given = {
         "--stream": stream is not None,
         "--pane-columns": pane_columns is not None,
         "--show-command": print_only,
     }
     if multitail:
-        given = {"--follow": follow, "--level": level is not None}
+        given = {
+            "--follow": follow,
+            "--level": level is not None,
+            "--channel": bool(channels),
+        }
     for option, used in given.items():
         if used:
             relation = "does not apply with" if multitail else "needs"
             _die(UqsError(f"{option} {relation} --multitail"))
             return
     try:
-        if channel:
-            stack_channel.follow_channel(_paths(), _procs(procs), ids=ids or (), min_level=level)
+        if subscribe:
+            stack_channel.follow_channel(
+                _paths(), _procs(procs), channels=channels or (), min_level=level
+            )
         elif multitail:
             argv = stack_multitail.multitail_command(
                 _paths(),
@@ -387,11 +438,15 @@ def logs(
                 return
             stack_multitail.run_multitail(argv)
         elif as_json:
-            _json_lines(stack_logs.get_recent_logs(_paths(), _procs(procs), lines, level))
+            _json_lines(stack_logs.get_recent_logs(_paths(), _procs(procs), lines, level, channels))
         elif follow:
-            stack_logs.follow_logs(_paths(), _procs(procs), min_level=level, lines=lines)
+            stack_logs.follow_logs(
+                _paths(), _procs(procs), min_level=level, lines=lines, channels=channels
+            )
         else:
-            stack_logs.print_recent_logs(_paths(), _procs(procs), lines=lines, min_level=level)
+            stack_logs.print_recent_logs(
+                _paths(), _procs(procs), lines=lines, min_level=level, channels=channels
+            )
     except UqsError as exc:
         _die(exc)
 

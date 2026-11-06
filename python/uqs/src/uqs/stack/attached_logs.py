@@ -26,7 +26,8 @@ from uqs.stack.backfill_status import STATE_SUBDIR
 _STATE = re.compile(r"^(?P<attachment>.+)-(?P<identity>[0-9a-f]{12})$")
 #: <worker>-<%Y%m%dT%H%M%S%f>.log: a run's log (uqs.attach.backfill_run, backfill_remote)
 _RUN = re.compile(r"^(?P<worker>.+)-(?P<stamp>\d{8}T\d{12})\.log$")
-#: `.qetl.log`'s line outside TorQ: time|level|id|message (src/etl/core/log.q)
+#: `.qetl.log`'s line outside TorQ: time|level|id|message (src/etl/core/log.q); the id is the
+#: channel, or an older line's worker or component
 _FIELDS = ("time", "loglevel", "id", "message")
 #: What a receiver's run is named after: `<dataset>.receiver`.
 RECEIVER_SUFFIX = ".receiver"
@@ -113,7 +114,7 @@ def parser(log: RunLog):
             rec = dict(zip(_FIELDS, parts, strict=True))
         else:
             rec = {"time": "", "loglevel": "INFO", "id": "", "message": text, "unleveled": "1"}
-        return rec | {"procname": log.worker, "proctype": rec["id"] or kind}
+        return rec | {"procname": log.worker, "proctype": kind}
 
     return parse
 

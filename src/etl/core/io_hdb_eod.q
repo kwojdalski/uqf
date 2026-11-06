@@ -137,6 +137,6 @@
 .qetl.io.clip_to_eod:{[worker;cfg;range_from;range_to]
     w:.qetl.io.eod_waiting_for[cfg;range_from;range_to];
     if[0=count w; :range_to];
-    .qetl.log.warn[worker;"range clipped to the last day end of day has handed over - the rest stays uncovered for the next run";
-        `waiting_for_eod`requested_to!(w;range_to)];
+    .qetl.log.ch.warn[`eod;"range clipped to the last day end of day has handed over - the rest stays uncovered for the next run";
+        `worker`waiting_for_eod`requested_to!(worker;w;range_to)];
     range_to&`timestamp$first w}

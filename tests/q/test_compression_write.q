@@ -206,3 +206,17 @@
         .qunit.assertEquals[exec minage from r where table=a;enlist .qetl.compression.never;"write: minage is the one nothing reaches"];
         .qunit.assertEquals[exec minage from r where table=b;enlist 5j;"both: its own minage"];
         .qunit.assertEquals[exec minage from r where table=`default;enlist 0j;"the stack default is age"]}};
+
+/ --- #2274: the column rewrite is reported on the storage channel -------------------------------
+
+.qt.qetl.compression.write.test_a_column_override_is_logged_on_the_storage_channel:{[t]
+    .qt.qetl.compression.write.sandboxed {[]
+        .qetl.compression.declare[`wt_cols;(enlist `mode)!enlist `write];
+        `.qetl.compression.column_policy upsert (`wt_cols;`flag;2j;17j;9j);
+        mgr:.qetl.io.hdb[.qt.qetl.compression.write.root[];`time];
+        .qetl.io.write[mgr;`wt_cols;.qt.qetl.compression.write.batch[2000]];
+        .qetl.log.debug[1b];
+        lines:.qt.support.captured_log[0b;{[mgr;u] .qetl.io.finish mgr}[mgr]];
+        .qetl.log.debug[0b];
+        mine:lines where lines[;2]~\:"column compression applied";
+        .qunit.assertEquals[(count mine;distinct mine[;1]);(1;enlist `storage);"the rewrite of a column is a storage line"]}};

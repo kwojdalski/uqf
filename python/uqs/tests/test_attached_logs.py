@@ -132,7 +132,7 @@ def test_four_field_lines_are_shown_as_the_workers_and_other_lines_are_kept(
     assert [r["message"] for r in seen] == [
         "q)'type", "window 1 of 3 fetched rows=12", "run failed error=\"'type\"", RESULT,
     ], "in the file's order: lines with no time are not sorted to the top"  # fmt: skip
-    assert seen[1]["procname"] == WORKER and seen[2]["proctype"] == "attached_backfill"
+    assert seen[1]["procname"] == WORKER and seen[2]["proctype"] == "backfill"
     assert seen[1]["loglevel"] == "INFO" and seen[2]["loglevel"] == "ERROR"
 
 
@@ -212,7 +212,11 @@ def _errors(monkeypatch) -> list[str]:
         (["--worker", WORKER], "--worker needs --attachment"),
         (["--stamp", "2026"], "--stamp needs --attachment"),
         (["rdb1", "--attachment", "pb-uat"], "a process name does not apply with --attachment"),
-        (["--attachment", "pb-uat", "--channel"], "--channel does not apply with --attachment"),
+        (
+            ["--attachment", "pb-uat", "--channel", "source"],
+            "--channel does not apply with --attachment",
+        ),
+        (["--attachment", "pb-uat", "--subscribe"], "--subscribe does not apply with --attachment"),
     ],
 )
 def test_the_cli_refuses_options_that_do_not_go_together(monkeypatch, argv, said):

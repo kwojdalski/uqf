@@ -81,7 +81,8 @@ USAGE = {
     "--yes before the command": ["--yes", "job", "remove", "x"],
     "--target after the root": ["--target", "uat", "status"],
     "query PROC and --port": ["query", "rdb1", "1+1", "--port", "6052"],
-    "logs --id without --channel": ["logs", "--id", "x"],
+    "logs --id (renamed --channel)": ["logs", "--id", "x"],
+    "logs --channel naming no channel": ["logs", "--channel", "nope"],
     "start --level without --follow": ["start", "--level", "INFO"],
     "--dry-run with --apply": ["data", "migrate", "trade", "--date", "2026-09-01", "--apply", "-n"],
 }

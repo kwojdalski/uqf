@@ -412,9 +412,9 @@
         .qetl.coverage.persist[]};
         enlist (dataset;partition;source_version;range_from;range_to;
                 "j"$rows_published;.z.p;.qetl.coverage.still_current;.qetl.coverage.current_run[])];
-    .[{.qetl.log.dbg[x;y;z]};(dataset;"coverage recorded";
-        `partition`source_version`range_from`range_to`rows!
-            (partition;source_version;range_from;range_to;"j"$rows_published));::];
+    .[{.qetl.log.ch.dbg[x;y;z]};(`coverage;"coverage recorded";
+        `dataset`partition`source_version`range_from`range_to`rows!
+            (dataset;partition;source_version;range_from;range_to;"j"$rows_published));::];
     count .qetl.coverage.ledger[]}
 
 / ------------------------------------------------------------------ READ
@@ -490,8 +490,8 @@
 / @throws error naming the missing ranges when not fully covered
 .qetl.coverage.require_covered:{[ds;part;version;as_of;from_ts;to_ts]
     m:.qetl.coverage.missing[ds;part;version;as_of;from_ts;to_ts];
-    .[{.qetl.log.dbg[x;y;z]};(ds;"upstream coverage check";
-        `partition`source_version`range_from`range_to`gaps!(part;version;from_ts;to_ts;count m));::];
+    .[{.qetl.log.ch.dbg[x;y;z]};(`coverage;"upstream coverage check";
+        `dataset`partition`source_version`range_from`range_to`gaps!(ds;part;version;from_ts;to_ts;count m));::];
     if[count m;
         '"require_covered: ",string[ds],"[",string[part],"] at source_version ",
          string[version]," is not fully published for [",

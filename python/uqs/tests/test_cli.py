@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import ModuleType
@@ -1750,8 +1751,8 @@ def test_logs_refuses_options_for_the_other_viewer(monkeypatch, argv, message):
     assert any(message in m for m in errors.messages), errors.messages
 
 
-def test_channel_subscribes_with_its_ids_and_level(monkeypatch):
-    """#1067: --channel reads what the processes publish, not their files."""
+def test_subscribe_reads_the_published_lines_with_its_channels_and_level(monkeypatch):
+    """#1067, renamed #2274: --subscribe reads what the processes publish, not their files."""
     recent = _patch(monkeypatch, stack_logs, "print_recent_logs")
     chan = _patch(monkeypatch, stack_channel, "follow_channel")
     result = runner.invoke(
@@ -1759,11 +1760,11 @@ def test_channel_subscribes_with_its_ids_and_level(monkeypatch):
         [
             "logs",
             "rdb1",
+            "--subscribe",
             "--channel",
-            "--id",
-            "fx_positions",
-            "--id",
-            "posbook",
+            "source",
+            "--channel",
+            "ipc",
             "--level",
             "ERROR",
         ],
@@ -1771,25 +1772,76 @@ def test_channel_subscribes_with_its_ids_and_level(monkeypatch):
     assert result.exit_code == 0, result.output
     assert recent.calls == []
     assert chan.args[1] == "rdb1"
-    assert list(chan.kwargs["ids"]) == ["fx_positions", "posbook"]
+    assert list(chan.kwargs["channels"]) == ["source", "ipc"]
     assert chan.kwargs["min_level"] == "ERROR"
 
 
 @pytest.mark.parametrize(
     ("argv", "message"),
     [
-        (["--id", "fx_positions"], "--id needs --channel"),
-        (["--channel", "-f"], "--follow does not apply with --channel"),
-        (["--channel", "--multitail"], "--multitail does not apply with --channel"),
+        (["--subscribe", "-f"], "--follow does not apply with --subscribe"),
+        (["--subscribe", "--multitail"], "--multitail does not apply with --subscribe"),
     ],
 )
-def test_logs_refuses_channel_options_out_of_place(monkeypatch, argv, message):
+def test_logs_refuses_subscribe_options_out_of_place(monkeypatch, argv, message):
     errors = _error_log(monkeypatch)
     chan = _patch(monkeypatch, stack_channel, "follow_channel")
     _patch(monkeypatch, stack_logs, "print_recent_logs")
     assert runner.invoke(cli.app, ["logs", *argv]).exit_code == 2, "a usage error (#1885)"
     assert chan.calls == []
     assert any(message in m for m in errors.messages), errors.messages
+
+
+def test_multitail_reads_files_itself_so_a_channel_does_not_apply(monkeypatch):
+    errors = _error_log(monkeypatch)
+    result = runner.invoke(cli.app, ["logs", "--multitail", "--channel", "source"])
+    assert result.exit_code == 1
+    assert any("--channel does not apply with --multitail" in m for m in errors.messages)
+
+
+def test_channels_filter_the_recent_lines_with_the_level_and_the_process(monkeypatch):
+    """#2274: --channel is the subsystem filter; it repeats, and combines with the rest."""
+    recent = _patch(monkeypatch, stack_logs, "print_recent_logs")
+    result = runner.invoke(
+        cli.app,
+        ["logs", "rdb1", "--channel", "source", "--channel", "storage", "--level", "WARNING"],
+    )
+    assert result.exit_code == 0, result.output
+    assert recent.args[1] == "rdb1"
+    assert recent.kwargs["min_level"] == "WARNING"
+    assert list(recent.kwargs["channels"]) == ["source", "storage"]
+
+
+def test_channels_filter_a_followed_log_too(monkeypatch):
+    follow = _patch(monkeypatch, stack_logs, "follow_logs")
+    result = runner.invoke(cli.app, ["logs", "rdb1", "-f", "--channel", "ipc", "--level", "DEBUG"])
+    assert result.exit_code == 0, result.output
+    assert list(follow.kwargs["channels"]) == ["ipc"] and follow.kwargs["min_level"] == "DEBUG"
+
+
+@pytest.mark.parametrize(
+    ("argv", "said"),
+    [
+        (["--id", "fx_positions"], "`--id` was renamed `--channel`"),
+        (["--id=fx_positions", "--subscribe"], "`--id` was renamed `--channel`"),
+        # the old flag took no value: it swallows the next option, or finds none
+        (
+            ["--channel", "--level", "ERROR"],
+            "subscribing to the published lines was renamed `--subscribe`",
+        ),
+        (["--channel"], "subscribing to the published lines was renamed `--subscribe`"),
+        (["--channel", "fx_positions"], "--channel 'fx_positions' is not a channel"),
+    ],
+)
+def test_logs_refuses_the_old_id_and_the_old_channel(monkeypatch, argv, said):
+    errors = _error_log(monkeypatch)
+    chan = _patch(monkeypatch, stack_channel, "follow_channel")
+    recent = _patch(monkeypatch, stack_logs, "print_recent_logs")
+    result = runner.invoke(cli.app, ["logs", "rdb1", *argv])
+    assert result.exit_code == 2
+    box = re.sub("[│╭╰╮╯─]", " ", result.output)
+    assert " ".join(said.split()) in " ".join(" ".join([box, *errors.messages]).split())
+    assert chan.calls == [] and recent.calls == []
 
 
 def test_a_logs_refusal_exits_one(monkeypatch):

@@ -10,12 +10,13 @@ import subprocess
 import sys
 import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from pathlib import Path
 from typing import Any
 
+from uqs.generated import q_facts
 from uqs.logger import get_logger
-from uqs.paths import UqsError, UqsPaths
+from uqs.paths import UqsError, UqsPaths, UqsUsageError
 from uqs.stack.procs import list_process_names, unknown_processes
 from uqs.stack.trace_render import render_query_trace
 
@@ -34,7 +35,11 @@ log = get_logger()
 
 # .lg.format's plain (non-jsonlogs) line shape, torq.q:203-206:
 # time|host|proctype|procname|loglevel|id|message - message itself may
-# contain "|", so split with maxsplit rather than a plain split.
+# contain "|", so split with maxsplit rather than a plain split. `id` is the
+# record's CHANNEL (#2274): the subsystem it concerns, one of CHANNELS for a
+# line .qetl.log wrote through a channel call. Any other id - a native TorQ
+# category such as `main`, or an older line's worker name - is shown as it is,
+# and never dropped; it is not a channel, so `--channel` does not select it.
 _LOG_FIELDS = ("time", "host", "proctype", "procname", "loglevel", "id", "message")
 
 # The five level names a log line carries, least to most severe. .qetl.log
@@ -51,6 +56,16 @@ LEGACY_LEVEL = {"ERR": "ERROR", "WARN": "WARNING", "INF": "INFO", "DBG": "DEBUG"
 # is never dropped for its label.
 _LOGURU_LEVEL = {**{name: name for name in _LEVEL_ORDER}, **LEGACY_LEVEL}
 
+#: `--channel`'s choices: the subsystems a record can concern - q's own declared
+#: list (`.qetl.log.channels`), generated, so a channel added in q reaches the
+#: option, its completion and its help without a second copy.
+CHANNELS: tuple[str, ...] = q_facts.LOG_CHANNELS
+CHANNEL_HELP = (
+    "Only show lines on this channel (repeatable, any of them): "
+    + ", ".join(CHANNELS)
+    + ". A view filter - it does not stop other lines being written"
+)
+
 #: `--level`'s choices, least to most severe - derived, so a level added to
 #: _LEVEL_ORDER reaches every command's completion and help without a third
 #: copy (#609).
@@ -63,6 +78,12 @@ LEVEL_HELP = "Only show this level and above"
 # what's actually informative, so they replace them entirely rather than
 # just prefixing the message.
 _KDB_LOG_FMT = (
+    "<green>{extra[kdb_time]}</green> | <level>{level: <8}</level> | "
+    "<cyan>{extra[procname]}</cyan>/<cyan>{extra[proctype]}</cyan> | "
+    "<magenta>{extra[channel]}</magenta> - <level>{message}</level>"
+)
+# The same without a channel, for a record bound by something that has none.
+_KDB_LOG_FMT_NO_CHANNEL = (
     "<green>{extra[kdb_time]}</green> | <level>{level: <8}</level> | "
     "<cyan>{extra[procname]}</cyan>/<cyan>{extra[proctype]}</cyan> - <level>{message}</level>"
 )
@@ -88,7 +109,10 @@ def _kdb_or_uqs_format(record: Any) -> str:
     Returns a TEMPLATE, not a line - _make_kv_format wraps this and keeps
     the key=value highlighting for both kinds.
     """
-    return _KDB_LOG_FMT if "kdb_time" in record["extra"] else _UQS_LOG_FMT
+    extra = record["extra"]
+    if "kdb_time" not in extra:
+        return _UQS_LOG_FMT
+    return _KDB_LOG_FMT if "channel" in extra else _KDB_LOG_FMT_NO_CHANNEL
 
 
 def _format_kdb_time(t: str) -> str:
@@ -200,6 +224,29 @@ def _passes_level(level: str, min_level: str | None) -> bool:
     return _LEVEL_ORDER.get(level, 0) >= _LEVEL_ORDER[wanted]
 
 
+def channel_names(channels: Iterable[str] | None) -> tuple[str, ...]:
+    """`--channel` as a tuple of channel names, each one declared, or UqsError.
+
+    A misspelt channel selects nothing, which reads as "that subsystem is
+    quiet"; so it is refused, naming the declared ones. `--channel` used to
+    mean "subscribe" (#1067), and its old use is the likelier mistake, so a value
+    that is not a name says where that went.
+    """
+    chosen = tuple(channels or ())
+    for name in chosen:
+        if name not in CHANNELS:
+            raise UqsUsageError(
+                f"--channel {name!r} is not a channel: one of {', '.join(CHANNELS)}; "
+                "subscribing to the published lines was renamed `--subscribe` (#2274)"
+            )
+    return chosen
+
+
+def _on_channels(rec: dict[str, str], channels: tuple[str, ...]) -> bool:
+    """Whether a record is on any of the channels - every record when none is chosen."""
+    return not channels or rec.get("id", "") in channels
+
+
 def emit(log: Any, rec: dict[str, str], min_level: str | None) -> None:
     level = _LOGURU_LEVEL.get(rec["loglevel"], "INFO")
     # a line with no level of its own (an attached run's RESULT, #1725) always shows
@@ -208,30 +255,41 @@ def emit(log: Any, rec: dict[str, str], min_level: str | None) -> None:
     # A query trace's code is shown as a block; every other message as it is.
     # Here, the one path both the recent and the follow modes print through.
     log.bind(
-        kdb_time=_format_kdb_time(rec["time"]), procname=rec["procname"], proctype=rec["proctype"]
+        kdb_time=_format_kdb_time(rec["time"]),
+        procname=rec["procname"],
+        proctype=rec["proctype"],
+        channel=rec.get("id") or "-",
     ).log(level, render_query_trace(rec["message"]))
 
 
 def get_recent_logs(
-    paths: UqsPaths, procs: str = "all", lines: int = 20, min_level: str | None = None
+    paths: UqsPaths,
+    procs: str = "all",
+    lines: int = 20,
+    min_level: str | None = None,
+    channels: Iterable[str] | None = None,
 ) -> list[dict[str, str]]:
     """The last *lines* lines of each matching process's out_/err_ log,
-    merged, sorted by timestamp, and filtered to min_level - the data
+    merged, sorted by timestamp, and filtered to min_level and to any of
+    `channels` (the lines are taken first, then filtered, as the level is) - the data
     print_recent_logs formats and prints through the shared loguru
     logger, and uqs.mcp's uqs_logs tool returns as-is for
     an MCP client to read directly.
     """
     procnames = resolve_procnames(paths, procs)
     min_level_name(min_level)
+    chosen = channel_names(channels)
     files = _log_files(paths, procnames)
     if not files:
         # Nothing written yet is an empty result, not a failure (#1885).
         log.info("no log yet for {} under {} - none of it has started", procs, paths.log_dir)
         return []
-    return _recent_records(files, lines, min_level)
+    return _recent_records(files, lines, min_level, chosen)
 
 
-def _recent_records(files: list[Path], lines: int, min_level: str | None) -> list[dict[str, str]]:
+def _recent_records(
+    files: list[Path], lines: int, min_level: str | None, channels: tuple[str, ...] = ()
+) -> list[dict[str, str]]:
     """The last *lines* parsed lines of each file, merged by timestamp."""
     records = []
     for f in files:
@@ -239,20 +297,25 @@ def _recent_records(files: list[Path], lines: int, min_level: str | None) -> lis
         records.extend(rec for line in tail if (rec := parse_log_line(line)) is not None)
     records.sort(key=lambda r: r["time"])
 
-    if min_level is None:
-        return records
     return [
-        r for r in records if _passes_level(_LOGURU_LEVEL.get(r["loglevel"], "INFO"), min_level)
+        r
+        for r in records
+        if (min_level is None or _passes_level(_LOGURU_LEVEL.get(r["loglevel"], "INFO"), min_level))
+        and _on_channels(r, channels)
     ]
 
 
 def print_recent_logs(
-    paths: UqsPaths, procs: str = "all", lines: int = 20, min_level: str | None = None
+    paths: UqsPaths,
+    procs: str = "all",
+    lines: int = 20,
+    min_level: str | None = None,
+    channels: Iterable[str] | None = None,
 ) -> None:
     """Print the last *lines* lines of each matching process's out_/err_
     log, merged and sorted by timestamp, through the shared loguru logger.
     """
-    records = get_recent_logs(paths, procs, lines, min_level)
+    records = get_recent_logs(paths, procs, lines, min_level, channels)
     log = log_sink()
     for rec in records:
         emit(log, rec, None)
@@ -264,7 +327,11 @@ def _pump(stream: Any, out_queue: Any) -> None:
 
 
 def follow_logs(
-    paths: UqsPaths, procs: str = "all", min_level: str | None = None, lines: int = 20
+    paths: UqsPaths,
+    procs: str = "all",
+    min_level: str | None = None,
+    lines: int = 20,
+    channels: Iterable[str] | None = None,
 ) -> None:
     """The last *lines* lines of each matching process's out_/err_ log, merged
     and sorted by time as `uqs logs` prints them, then every line appended,
@@ -281,7 +348,13 @@ def follow_logs(
     if not files:
         raise UqsError(f"no log yet for {procs} under {paths.log_dir} to follow - start it first")
     min_level_name(min_level)  # refuse a bad --level before following anything
-    _follow(files, min_level, history=lambda: _recent_records(files, lines, min_level))
+    chosen = channel_names(channels)
+    _follow(
+        files,
+        min_level,
+        history=lambda: _recent_records(files, lines, min_level, chosen),
+        channels=chosen,
+    )
 
 
 #: How long `follow_during` waits for a log file the start has not created
@@ -336,6 +409,7 @@ def _follow(
     before: Callable[[], None] | None = None,
     history: Callable[[], list[dict[str, str]]] | None = None,
     parse: Callable[[str], dict[str, str] | None] = parse_log_line,
+    channels: tuple[str, ...] = (),
 ) -> None:
     import queue
 
@@ -373,14 +447,15 @@ def _follow(
 
     try:
         for rec in history() if history is not None else []:
-            emit(log, rec, min_level)
+            if _on_channels(rec, channels):
+                emit(log, rec, min_level)
         if before is not None:
             before()
         if awaited:
             threading.Thread(target=await_new, args=(list(awaited),), daemon=True).start()
         while True:
             rec = parse(line_queue.get())
-            if rec is not None:
+            if rec is not None and _on_channels(rec, channels):
                 emit(log, rec, min_level)
     except KeyboardInterrupt:
         pass

@@ -724,3 +724,15 @@
     r:@[.qetl.coverage.unreleased;.z.p;{x}];
     setenv[`UQF_STATUS_DIR;saved];
     .qunit.assertEquals[r;([] dataset:`symbol$(); date:`date$());"no ledger, nothing being written"]};
+
+/ --- #2274: coverage lines are on the coverage channel ------------------------
+
+.qt.qetl.coverage.test_coverage_lines_are_on_the_coverage_channel:{[t]
+    lines:.qt.support.captured_log[0b;{
+        .qetl.log.debug[1b];
+        .qetl.coverage.stage_completion[`markouts;`;`v1;.qt.qetl.coverage.d[1];.qt.qetl.coverage.d[3];5];
+        .qetl.coverage.require_covered[`markouts;`;`v1;.z.p;.qt.qetl.coverage.d[1];.qt.qetl.coverage.d[3]];
+        .qetl.log.debug[0b]}];
+    .qunit.assertEquals[(lines[;1];lines[;2]);(`coverage`coverage;("coverage recorded";"upstream coverage check"));
+        "recording and checking coverage are the coverage channel's"];
+    .qunit.assertEquals[(first lines)[3]`dataset;`markouts;"the dataset is a field, not the id"]};

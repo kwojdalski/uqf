@@ -56,6 +56,7 @@ FACTS = {
         ".qetl.job.bounded.runtime.read_only_modes"
     ),
     "LOG_LEVELS": "the levels .qetl.log writes, least to most severe - .qetl.log.levels",
+    "LOG_CHANNELS": "the log channels a record may carry in its id - .qetl.log.channels (#2274)",
     "ETL_RUNS_COLUMNS": "the run ledger's columns - cols .qetl.run.init_runs[]",
     "ETL_RUN_META_COLUMNS": "the run facts ledger's columns - cols .qetl.run.init_meta[]",
     "STATUS_STATES": "every state a worker's status file may record - .qetl.status.status_states",
