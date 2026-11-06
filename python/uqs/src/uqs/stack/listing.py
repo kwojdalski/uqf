@@ -18,11 +18,8 @@ from uqs.model.registry import PIPELINES
 from uqs.paths import WORKER_DIR, UqsError, UqsPaths
 from uqs.stack import attach_state, backfill_status, runtime_report
 from uqs.stack.env import build_env, with_interpreter
-from uqs.stack.procs import (
-    _read_overrides,
-    effective_process_rows,
-    resolve_process_config,
-)
+from uqs.stack.placeholders import resolve_process_config
+from uqs.stack.procs import _read_overrides, effective_process_rows
 from uqs.stack.runtime import query
 from uqs.stack.site_fields import process_csv_fields
 

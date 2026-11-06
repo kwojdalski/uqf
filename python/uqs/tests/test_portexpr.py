@@ -14,7 +14,7 @@ import pytest
 
 from uqs import portexpr
 from uqs.stack import occupancy
-from uqs.stack.procs import _resolve_value
+from uqs.stack.placeholders import _resolve_value
 
 CELLS = [
     ("7000", 7000),

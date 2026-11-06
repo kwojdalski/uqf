@@ -135,11 +135,11 @@ to it.
 The two in this tree, both tested:
 
 - `_FORMER_DATA_DIR` / `check_data_dir_was_migrated` in
-  `python/uqs/src/uqs/paths.py`. Nothing reads the old directory. It is
-  recognised so the command can refuse: the data directory carries 6.5GB of HDB,
-  and bootstrap regenerates its contents on every command, so a missed rename
-  starts cleanly against an empty HDB and every historical query returns no
-  rows.
+  `python/uqs/src/uqs/stack/prerequisites.py`. Nothing reads the old directory.
+  It is recognised so the command can refuse: the data directory carries 6.5GB
+  of HDB, and bootstrap regenerates its contents on every command, so a missed
+  rename starts cleanly against an empty HDB and every historical query returns
+  no rows.
 - `FORMER_NAMES` in `install.sh`. It UNINSTALLS the old distributions rather
   than supporting them; `uv tool install` will not replace a tool registered
   under another name, so the old one goes on owning `uqs` on PATH and the

@@ -37,7 +37,7 @@ from uqf_frontend.activity import ActivityStore, Bound
 from uqf_frontend.app import create_app
 from uqf_frontend.config import Settings
 from uqf_frontend.gateway import FakeGateway
-from uqs import activity_log
+from uqs import activity_export, activity_log
 from uqs.activity_log import Query
 
 TOKEN = "s3cret-write-token-do-not-store"
@@ -393,7 +393,7 @@ def test_the_export_says_what_is_not_in_the_history(tmp_path):
 
 def test_a_csv_cell_a_spreadsheet_would_run_is_quoted():
     rows = [{c: None for c in activity_log.COLUMNS} | {"target": "+cmd", "items": [], "detail": {}}]
-    out = activity_log.render(rows, "csv", exported_at=dt.datetime.now(dt.UTC))
+    out = activity_export.render(rows, "csv", exported_at=dt.datetime.now(dt.UTC))
     (row,) = csv.DictReader(io.StringIO(out))
     assert row["target"] == "'+cmd"
 

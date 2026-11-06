@@ -30,17 +30,8 @@ from uqs.cli import safety
 from uqs.cli.concepts import TargetArg
 from uqs.cli.json_out import emit, json_opt
 from uqs.cli.safety import ChangesState, DryRunOpt, ReadOnly, YesOpt, dry_run_note
-from uqs.cli.shared import (
-    ExportOpt,
-    InteractiveOpt,
-    ReverseOpt,
-    SortOpt,
-    _die,
-    _export,
-    _show,
-    _sorted_items,
-    console,
-)
+from uqs.cli.shared import ExportOpt, InteractiveOpt, _die, _export, _show, console
+from uqs.cli.sorting import ReverseOpt, SortOpt, _sorted_items
 from uqs.cli.target import target_app
 from uqs.deploy import control, inspection, target_keys, targets
 from uqs.deploy.config import DeployError
