@@ -131,12 +131,20 @@
         {[r;x] .qetl.io.locked[r;.qetl.io.finish_hdb;(r;x)]}[root];
         {[r;a;b;c] .qetl.io.locked[r;.qetl.io.recover_hdb;(r;a;b;c)]}[root])}
 
+/ The partition date of each time: the calendar date, except in a root a scoped manager was made
+/ for, where it is the native stack's own (.qetl.io.scoped_day_of, #2193).
+/ @param root the HDB root
+/ @param times a timestamp or a list of them
+/ @return the date or dates
+/ @eg .qetl.io.days_of[`:/no/such/root;2026.01.02D10:00:00.000000000]  ->  2026.01.02
+.qetl.io.days_of:{[root;times] $[.qetl.io.is_scoped root; .qetl.io.scoped_day_of times; `date$times]}
+
 / Private: append one window into its date partitions.
 / @private
 .qetl.io.write_hdb:{[root;partition_col;target;batch]
     if[0=count batch; :0];
     data:.Q.en[root;.qetl.io.hdb_rows[partition_col;target;batch]];
-    days:`date$data`time;
+    days:.qetl.io.days_of[root;data`time];
     {[root;target;data;days;d]
         part:hsym `$(string .Q.par[root;d;target]),"/";
         rows:data where days=d;
@@ -219,7 +227,7 @@
     / Shaped even when empty: a `replace of a day the source has emptied
     / still needs the target's columns to resolve against.
     data:.Q.en[root;.qetl.io.hdb_rows[partition_col;target;batch]];
-    days:`date$data`time;
+    days:.qetl.io.days_of[root;data`time];
     dates:distinct days;
     / NEW KEYS ARE APPENDED, not resolved into a rewrite (#1086). Every
     / window used to read its date whole, resolve and swap it back, so a
@@ -249,7 +257,7 @@
             not any (kc#rows) in ?[part;();0b;kc!kc]}[root;target;kc]'[folds;dates];
         if[all clean; .qetl.io.write_hdb[root;partition_col;target;fold]; :count batch]];
     if[`replace=strategy;
-        span:{[f;t] f+til 1+t-f}[`date$opts`range_from;`date$opts[`range_to]-1];
+        span:{[f;t] f+til 1+t-f}[.qetl.io.days_of[root;opts`range_from];.qetl.io.days_of[root;opts[`range_to]-1]];
         dates:distinct dates,span where (span<.z.d) and
             {[root;target;d] not ()~key hsym `$(string .Q.par[root;d;target]),"/"}[root;target] each span];
     / The window is cleared on opts`time_column - the column it was cut on, as
@@ -297,7 +305,7 @@
 / @return () or one (part;date;rows) step, as write_hdb_keyed plans them
 / @private
 .qetl.io.spill:{[root;target;data;opts;dates]
-    d:`date$opts`range_to;
+    d:.qetl.io.days_of[root;opts`range_to];
     part:hsym `$(string .Q.par[root;d;target]),"/";
     if[(d in dates) or (d>=.z.d) or ()~key part; :()];
     kc:(),opts`row_key;

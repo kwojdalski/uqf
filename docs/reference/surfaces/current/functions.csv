@@ -177,6 +177,10 @@ qetl.hb,report,function,1,
 qetl.hb,require_schema,function,1,
 qetl.hb,stale,function,1,max_age
 qetl.io,acknowledged,function,2,state result
+qetl.io,calendar,value,,
+qetl.io,calendar_adopter,function,2,offset_ns adj_ns
+qetl.io,calendar_bound,function,1,opts
+qetl.io,days_of,function,2,root times
 qetl.io,default,dict,,
 qetl.io,default_strategy,value,,
 qetl.io,discard,dict,,
@@ -191,6 +195,7 @@ qetl.io,hdb_lock_wait,value,,
 qetl.io,hdb_scoped,function,3,root partition_col bounds
 qetl.io,is_scoped,function,1,root
 qetl.io,memory,dict,,
+qetl.io,native_day_fn,function,1,times
 qetl.io,odbc,dict,,
 qetl.io,on_peachq,value,,
 qetl.io,optional,value,,
@@ -202,9 +207,11 @@ qetl.io,required,value,,
 qetl.io,resolve,function,4,strategy existing batch opts
 qetl.io,retire,function,3,root d t
 qetl.io,scoped_check_date,function,5,bounds partition_col target batch window_to
+qetl.io,scoped_day_of,function,1,times
 qetl.io,scoped_roots,value,,
 qetl.io,strategies,value,,
 qetl.io,touched,table,,
+qetl.io,use_calendar,function,1,text
 qetl.io,write,function,3,mgr target batch
 qetl.io,write_keyed,function,4,mgr target batch opts
 qetl.io.odbc,available,function,1,
