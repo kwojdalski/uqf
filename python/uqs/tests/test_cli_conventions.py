@@ -39,6 +39,7 @@ from typing import Any
 
 import pytest
 import typer.main
+from plain_cli import PlainRunner
 from typer.testing import CliRunner
 
 import uqs.cli.entry  # noqa: F401 - registers every command on the app
@@ -1944,7 +1945,8 @@ def test_data_migrate_refuses_a_positional_date_naming_date(monkeypatch):
     from uqs.stack import hdb_migrate
 
     monkeypatch.setattr(hdb_migrate, "migrate", lambda *a, **k: pytest.fail("migrated"))
-    result = CliRunner().invoke(app, ["data", "migrate", "trade", "2026-01-02", "--cast", "px"])
+    argv = ["data", "migrate", "trade", "2026-01-02", "--cast", "px"]
+    result = PlainRunner().invoke(app, argv)  # CI renders usage errors in colour
     assert result.exit_code == 2
     said = " ".join(re.sub("[│╭╮╰╯─]", " ", result.output).split())
     assert "is now `data migrate TABLE --date D`" in said
@@ -2234,7 +2236,7 @@ def _refusal(monkeypatch, *argv: str) -> str:
     command's own error, whitespace and box lines folded."""
     said = _Said()
     monkeypatch.setattr(shared, "log", said)
-    result = CliRunner().invoke(app, ["logs", *argv])
+    result = PlainRunner().invoke(app, ["logs", *argv])  # CI renders usage errors in colour
     assert result.exit_code == 2, result.output
     box = re.sub("[│╭╰╮╯─]", " ", result.output)
     return " ".join(" ".join([box, *said.messages]).split())

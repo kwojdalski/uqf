@@ -231,7 +231,7 @@ def _unreadable(hdb: Path) -> str:
     ("target", "where", "expected"),
     [
         ("tp", "missing", "no directory"),
-        ("tp", "unreadable", "Permission denied"),
+        ("tp", "unreadable", "cannot read"),  # the script's words: PeachQ's error is 'io
         ("noq", "hdb", "no q for"),
         ("down", "hdb", "cannot reach target down (unreachable) over ssh"),
     ],
