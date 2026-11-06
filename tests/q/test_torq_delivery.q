@@ -37,13 +37,21 @@
     `.qt.qtorq.delivery.h set .qt.qtorq.delivery.closed;
     }
 
+/ --- a refused batch ---------------------------------------------------------
+
+/ A plant in error mode answers a refused batch with the error text (#2192).
+.qt.qtorq.delivery.test_a_batch_the_plant_refused_is_a_failed_publish:{[t]
+    refuser:{[msg] "length"};
+    .qunit.assertThrows[{[r] .qtorq.publish[r;`trades;([] sym:`a`b; px:1 2f)]};enlist refuser;
+        "qtorq.publish: the tickerplant refused a batch of 2 trades rows*length"]};
+
 / --- reconnecting -----------------------------------------------------------
 
 .qt.qtorq.delivery.test_a_closed_handle_is_reopened_and_the_publish_lands:{[t]
     r:.qt.qtorq.delivery.with_registry[.qt.qtorq.delivery.plant;
         {[unused] .qtorq.publish_reconnecting[`.qt.qtorq.delivery.h;`trades;([] sym:`a`b; px:1 2f)]}];
     .qunit.assertEquals[r;2;"the rows were published"];
-    .qunit.assertEquals[first .qt.qtorq.delivery.got;(`.u.upd;`trades;(`a`b;1 2f));"onto the reopened plant"];
+    .qunit.assertEquals[first .qt.qtorq.delivery.got;(.qtorq.accept_fn;`trades;(`a`b;1 2f));"onto the reopened plant"];
     .qunit.assertEquals[(.qt.qtorq.delivery.h;.qt.qtorq.delivery.lookups);(.qt.qtorq.delivery.plant;1);
         "through one registry lookup, and the global now holds the new handle"]};
 
