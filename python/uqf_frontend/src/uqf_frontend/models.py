@@ -89,7 +89,11 @@ class QueryResponse(BaseModel):
     rows: list[dict[str, Any]]
     row_count: int
     truncated: bool = Field(
-        description="True when the server's max_rows cap, not the caller's limit, cut the result"
+        description="more rows existed than were returned, whatever cut them (#2220)"
+    )
+    cut_by: Literal["limit", "max_rows"] | None = Field(
+        description="what cut a truncated result: the caller's `limit`, or a server row cap - "
+        "UQF_FRONTEND_MAX_ROWS or the query policy's maxrows (#928, #1255); null when nothing did"
     )
 
 
@@ -241,6 +245,9 @@ class UsageResponse(BaseModel):
 
     rows: list[dict[str, Any]]
     row_count: int
+    truncated: bool = Field(
+        description="more rows existed than were returned: `limit` cut them (#2220)"
+    )
     unreachable: list[dict[str, str]] = Field(
         default_factory=list,
         description="Processes that could not be reached. Reported rather than raised, so one "
@@ -1151,6 +1158,9 @@ class ActivityResponse(BaseModel):
     """The history, newest first, with how it is kept and what it lost."""
 
     events: list[ActivityEventOut]
+    truncated: bool = Field(
+        description="more events matched than were returned: `limit` cut them (#2220)"
+    )
     persistence: ActivityPersistence
     #: The level a session records at unless its operator picks another.
     default_level: SessionLevel
@@ -1383,11 +1393,50 @@ class CompareRequest(BaseModel):
     tables: list[str] = Field(min_length=1, max_length=20)
     range_from: AwareInstant
     range_to: AwareInstant
-    filters: list[str] = Field(default_factory=list, max_length=20,
-                               description="COLUMN OP VALUE, e.g. sym=EURUSD")  # fmt: skip
+    filters: list[Filter] = Field(
+        default_factory=list,
+        max_length=20,
+        description="{column, op, value} objects with /catalog's operators, as on /query",
+    )
     limit: int = limit_field(1000, 100_000, "rows read per side, at most")
-    source_version: str | None = Field(default=None, max_length=128)
-    partition: str | None = Field(default=None, max_length=128)
+    source_version: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=128,
+        description="the release whose coverage to compare; null compares no coverage",
+    )
+    partition: str | None = Field(
+        default=None,
+        max_length=128,
+        description='required with source_version; "" for a dataset with no partition dimension',
+    )
+
+    @field_validator("filters", mode="before")
+    @classmethod
+    def _filters_are_objects(cls, value: Any) -> Any:
+        """The text grammar `uqs data diff --filter` takes is compare.py's to
+        render, not the API's to expose (#2223): a string is refused, saying
+        what it is now, rather than a pydantic "not a dictionary"."""
+        if isinstance(value, list) and any(isinstance(f, str) for f in value):
+            raise ValueError(
+                "filters are {column, op, value} objects, as on /query - `sym=EURUSD` is "
+                '{"column": "sym", "op": "eq", "value": "EURUSD"}'
+            )
+        return value
+
+    @model_validator(mode="after")
+    def _a_coverage_check_names_its_slice(self) -> CompareRequest:
+        """/coverage's rule (#185, #2221): once coverage is asked for, the
+        slice is said - `""` is the explicit "no partition dimension" - and
+        never defaulted to the one nothing partitioned is recorded under."""
+        if self.source_version is not None and self.partition is None:
+            raise ValueError(
+                'partition is required with source_version - give "" for a dataset '
+                "with no partition dimension"
+            )
+        if self.partition is not None and self.source_version is None:
+            raise ValueError("partition reads coverage, which needs source_version")
+        return self
 
 
 class CompareInterval(BaseModel):
@@ -1444,7 +1493,7 @@ class CompareResponse(BaseModel):
     range_from: AwareInstant
     range_to: AwareInstant
     limit: int
-    filters: list[str]
-    source_version: str
-    partition: str
+    filters: list[Filter] = Field(description="the filters as they were sent")
+    source_version: str | None = Field(description="null when no coverage was compared")
+    partition: str | None = Field(description="null when no coverage was compared")
     tables: list[CompareTable]

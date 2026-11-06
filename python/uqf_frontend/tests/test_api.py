@@ -113,13 +113,14 @@ def test_query_returns_rows_from_the_gateway(gw):
 def test_limit_is_capped_by_server_max_rows(gw):
     c = TestClient(create_app(gateway=gw, settings=Settings(max_rows=50)))
     c.post("/query", json={"table": "trades", "filters": [], "limit": 999_999})
-    assert gw.last_args[-1] == 50, "the server cap must win over the caller's limit"
+    # the cap, and one row past it that says whether more exist (#2220)
+    assert gw.last_args[-1] == 51, "the server cap must win over the caller's limit"
 
 
 def test_caller_limit_is_respected_when_below_the_cap(gw):
     c = TestClient(create_app(gateway=gw, settings=Settings(max_rows=50)))
     c.post("/query", json={"table": "trades", "filters": [], "limit": 7})
-    assert gw.last_args[-1] == 7
+    assert gw.last_args[-1] == 8
 
 
 def _query_n_rows(gw, n: int, *, max_rows: int, limit: int) -> dict:
@@ -135,27 +136,35 @@ def test_a_cut_made_by_the_gateway_policy_is_reported_as_truncated(gw):
     cuts a 20000-row request to 10000. Comparing against the frontend's
     own cap alone, that read as a complete result."""
     gw.policy_maxrows = 10_000
-    body = _query_n_rows(gw, 10_000, max_rows=50_000, limit=20_000)
-    assert (body["row_count"], body["truncated"]) == (10_000, True)
+    body = _query_n_rows(gw, 10_001, max_rows=50_000, limit=20_000)
+    assert (body["row_count"], body["truncated"], body["cut_by"]) == (10_000, True, "max_rows")
 
 
 def test_a_cut_made_by_the_frontend_cap_is_reported_as_truncated(gw):
-    body = _query_n_rows(gw, 50, max_rows=50, limit=999)
-    assert body["truncated"] is True
+    body = _query_n_rows(gw, 60, max_rows=50, limit=999)
+    assert (body["row_count"], body["truncated"], body["cut_by"]) == (50, True, "max_rows")
 
 
-def test_a_result_that_fills_only_the_callers_own_limit_is_not_truncated(gw):
-    """The caller asked for 7 and got 7: that limit was theirs, not a cut -
-    even when the policy's cap is above it."""
+def test_a_cut_made_by_the_callers_own_limit_is_truncated_too(gw):
+    """#2220: `truncated` means more rows existed, whatever cut them - on
+    /query as on every other route. Which bound did is `cut_by`; the Desk
+    used to work the limit's half out for itself from row_count."""
     gw.policy_maxrows = 10_000
+    body = _query_n_rows(gw, 8, max_rows=50, limit=7)
+    assert (body["row_count"], body["truncated"], body["cut_by"]) == (7, True, "limit")
+
+
+def test_a_result_that_exactly_fills_the_callers_limit_is_not_truncated(gw):
+    """Seven rows asked for, seven exist: the row past the limit is not
+    there, so nothing was cut."""
     body = _query_n_rows(gw, 7, max_rows=50, limit=7)
-    assert body["truncated"] is False
+    assert (body["row_count"], body["truncated"], body["cut_by"]) == (7, False, None)
 
 
 def test_a_result_under_the_policy_cap_is_not_truncated(gw):
     gw.policy_maxrows = 10_000
     body = _query_n_rows(gw, 9_999, max_rows=50_000, limit=20_000)
-    assert body["truncated"] is False
+    assert (body["truncated"], body["cut_by"]) == (False, None)
 
 
 @pytest.mark.parametrize(

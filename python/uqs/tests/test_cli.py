@@ -55,6 +55,7 @@ from uqs.cli import (
     lists,
     pipelines,
     renames,
+    safety,
     shared,
     start_warnings,
     summary,
@@ -1395,17 +1396,17 @@ def test_raw_names_exec_and_is_hidden(monkeypatch):
 
 def test_remove_output_delegates(monkeypatch):
     rec = _patch(monkeypatch, stack_clean, "clean", result=[])
-    assert runner.invoke(cli.app, ["clean"]).exit_code == 0
+    assert runner.invoke(cli.app, ["clean", "--yes"]).exit_code == 0
     assert len(rec.calls) == 1
 
 
 @pytest.mark.parametrize(
     ("argv", "expected"),
     [
-        ([], {"match": None, "dry_run": False}),
+        (["--yes"], {"match": None, "dry_run": False}),
         (["--dry-run"], {"match": None, "dry_run": True}),
         (["-n"], {"match": None, "dry_run": True}),
-        (["--match", "^logs$"], {"match": "^logs$", "dry_run": False}),
+        (["--match", "^logs$", "-y"], {"match": "^logs$", "dry_run": False}),
         (["--match", "^logs$", "-n"], {"match": "^logs$", "dry_run": True}),
     ],
 )
@@ -1414,6 +1415,44 @@ def test_remove_output_passes_its_flags_through(monkeypatch, argv, expected):
     rec = _patch(monkeypatch, stack_clean, "clean", result=[])
     assert runner.invoke(cli.app, ["clean", *argv]).exit_code == 0
     assert rec.calls[-1][1] == expected
+
+
+@pytest.fixture
+def data_dir(tmp_path, monkeypatch):
+    """A data directory holding an HDB, which `uqs clean` would remove."""
+    from types import SimpleNamespace
+
+    from uqs.cli import cleanup
+
+    root = tmp_path / "torqdata"
+    (root / "hdb" / "2026.09.01").mkdir(parents=True)
+    (root / "hdb" / "2026.09.01" / "trade").write_bytes(b"x" * 900)
+    (root / "logs").mkdir()
+    monkeypatch.setattr(cleanup, "_paths", lambda: SimpleNamespace(torqdata=root))
+    return root
+
+
+def test_clean_without_a_terminal_refuses_naming_yes(data_dir, log_text):
+    """#2233: the HDB is in the data directory - nothing goes without asking."""
+    result = runner.invoke(cli.app, ["clean"])
+    assert result.exit_code == 1
+    assert "This cannot be undone? - there is no terminal to ask on: add --yes" in log_text()
+    assert (data_dir / "hdb" / "2026.09.01" / "trade").exists()
+
+
+def test_clean_lists_what_goes_and_a_no_removes_nothing(data_dir, terminal, log_text):
+    result = runner.invoke(cli.app, ["clean", "--match", "hdb"], input="n\n")
+    assert result.exit_code == safety.EXIT_DECLINED
+    assert "would remove 1 entry" in result.output
+    assert "Remove 1 entry (900B)? This cannot be undone" in result.output
+    assert (data_dir / "hdb").exists()
+
+
+def test_clean_a_yes_removes(data_dir, terminal):
+    result = runner.invoke(cli.app, ["clean", "--match", "^hdb$"], input="y\n")
+    assert result.exit_code == 0, result.output
+    assert "removed 1 entry" in result.output
+    assert not (data_dir / "hdb").exists() and (data_dir / "logs").exists()
 
 
 def test_remove_output_reports_what_it_removed(monkeypatch):

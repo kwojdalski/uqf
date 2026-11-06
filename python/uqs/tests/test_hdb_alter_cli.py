@@ -125,6 +125,20 @@ def test_the_plan_names_the_hdb_its_source_and_the_partitions(world):
     assert d["result"] is None
 
 
+def test_json_without_yes_is_refused_and_writes_nothing(world, terminal, monkeypatch):
+    """#2229: --json never asks - a refusal, exit 1 - though a terminal would say y."""
+    hdb = world.build()
+    before = digest(hdb)
+    for argv in (["alter", "pb", "--reorder", "n,amt,sym,time"], ["check", "--table", "pb"]):
+        line = ["data", *argv, "--hdb", str(hdb), "--apply", "--json"]
+        monkeypatch.setattr("sys.argv", ["uqs", *line])  # json_requested reads it
+        result = CliRunner().invoke(app, line, input="y\n")
+        assert result.exit_code == 1, (argv, result.output)
+        d = doc(result)
+        assert d["ok"] is False and "cannot ask for confirmation: add --yes to write" in d["error"]
+    assert digest(hdb) == before
+
+
 # ------------------------------------------------------------------ applying
 
 

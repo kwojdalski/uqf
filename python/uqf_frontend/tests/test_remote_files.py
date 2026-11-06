@@ -186,7 +186,7 @@ def test_no_registry_means_no_target(registry):
 def test_an_escaping_path_is_refused_before_ssh(served, path):
     runner = Recorder()
     resp = _get(runner, path=path)
-    assert resp.status_code == 400, resp.text
+    assert resp.status_code == 422, resp.text
     assert resp.json()["error"] == "BrowseRefused"
     assert runner.calls == []
 
@@ -321,7 +321,7 @@ def test_a_symlink_escape_is_refused_by_the_server(served, tmp_path):
     (tmp_path / "outside").mkdir()
     (served / "shared" / "out").symlink_to(tmp_path / "outside")
     resp = _get(Loopback(), path="shared/out")
-    assert resp.status_code == 400
+    assert resp.status_code == 422
     assert "symbolic link" in resp.json()["detail"]
 
 
@@ -412,10 +412,7 @@ def test_api_confirmation_and_auth_before_ssh(served):
         {"paths": ["shared/config/sources.csv"]},
         {"paths": ["shared/config/sources.csv"], "confirmed": False},
     ):
-        assert _client(runner).post("/services/box/files/delete", json=payload).status_code in (
-            400,
-            422,
-        )
+        assert _client(runner).post("/services/box/files/delete", json=payload).status_code == 422
     assert (
         _client(runner, token=None)
         .post("/services/box/files/delete", json={"paths": ["x"], "confirmed": True})
@@ -454,7 +451,7 @@ def test_deletion_invalid_paths_are_refused_before_ssh(served, paths):
     response = _client(runner).post(
         "/services/box/files/delete", json={"paths": paths, "confirmed": True}
     )
-    assert response.status_code in (400, 422)
+    assert response.status_code == 422
     assert runner.calls == []
 
 

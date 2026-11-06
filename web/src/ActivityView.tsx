@@ -391,6 +391,12 @@ export function ActivityView() {
                 .join(" · ")}
             </p>
           )}
+          {data.truncated && (
+            <p className="notice pending" role="status">
+              Showing the newest {data.events.length.toLocaleString()}; more
+              events match these filters.
+            </p>
+          )}
           {!data.events.length ? (
             <p className="empty">No activity matches these filters.</p>
           ) : (
