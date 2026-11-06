@@ -93,7 +93,15 @@ def render(r: dict) -> str:
         if downtime.get("seconds") is not None:
             lines.append(f"  downtime  {downtime['seconds']}s")
         pruned = r.get("pruned")
-        if pruned:
+        if pruned and pruned.get("prune") in ("failed", "interrupted"):
+            # deployed all the same: the prune ran after `current` moved (#2174)
+            lines[0] += "; prune incomplete"
+            keep = "" if pruned.get("keep") is None else f" --keep {pruned['keep']}"
+            lines.append(
+                f"  pruned    {pruned['prune']}: {redact(str(pruned.get('error')))} - "
+                f"`uqs deploy prune{keep}` finishes it"
+            )
+        elif pruned:
             gone = ", ".join(pruned.get("removed", [])) or "nothing"
             lines.append(f"  pruned    {pruned.get('prune')}: removed {gone}")
         return "\n".join(lines)
