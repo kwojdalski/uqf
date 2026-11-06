@@ -2271,6 +2271,19 @@ is refused naming the new one, with no alias:
 
 `data check --template DATE` keeps its name: it is a date partition.
 
+Every `data` command that reads or writes one HDB names it the same ways
+(#2237): `--hdb DIR` (a directory on this machine), `--attachment NAME` (an
+attached stack's pinned HDB, else its live wdb's), `uqs --target TARGET` (a
+release's own), and otherwise this runtime's - one help each, from
+`cli/hdb_scope.py`. `data migrate --hdb` and `data seed --hdb` (the destination)
+are new. A command that cannot act on an attachment's HDB knows the option and
+refuses it saying why: `data replay`, `data migrate` and `data seed` cannot
+check or pause an attached stack's writers, as `data check` and `data alter` do,
+and `data compress` plans and runs through this stack's housekeeping1 (its
+`--report` reads an attachment's HDB when it is on this machine). `data diff`
+compares two endpoints, and `data snapshot` reads the configuration snapshots,
+so neither takes them.
+
 One meaning per word (#1855):
 
   | old                                                                     | new                                    |

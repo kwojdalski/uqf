@@ -11,7 +11,7 @@ import typer
 from uqs import timerange
 from uqs.cli import completion
 from uqs.cli.choices import ChoiceOpt
-from uqs.cli.hdb_scope import tables_given
+from uqs.cli.hdb_scope import AttachOpt, HdbOpt, local_hdb, tables_given
 from uqs.cli.range_options import DateOpt, DayFromOpt, DayLastOpt, DayToOpt
 from uqs.cli.renames import old_spelling, renamed, warn_renamed
 from uqs.cli.safety import ChangesState, dry_run_note
@@ -51,6 +51,13 @@ _OnConflictOpt = ChoiceOpt(
 )
 
 
+#: Why `data seed --attachment` is refused (#2237).
+_NO_ATTACHMENT = (
+    "a seed re-enumerates against the destination's sym file on this machine, and cannot check "
+    "or pause an attached stack's writers - seed on that stack's own host, with --hdb DIR"
+)
+
+
 #: A conflict policy is `--on-conflict` on every command (#1857); `--overwrite`
 #: was this one's, and is `--on-conflict replace` now. Tables are chosen one
 #: way on every command: a repeatable `--table` (#1856).
@@ -82,6 +89,8 @@ def seed(
         str | None,
         typer.Option("--dates", hidden=True, help="Renamed: --from FIRST --to LAST+1"),
     ] = None,
+    hdb: HdbOpt = None,
+    attach: AttachOpt = None,
     on_conflict: _OnConflictOpt = "ignore",
     overwrite: Annotated[bool, old_spelling("--on-conflict replace", "--overwrite")] = False,
     dry_run: Annotated[
@@ -92,7 +101,7 @@ def seed(
     """Copy another runtime's HDB partitions into this runtime's HDB.
 
     Copies the partitions of the tables both declare into
-    this runtime's (`--runtime`), re-enumerating every symbol against this
+    this runtime's (`--runtime`) HDB, or --hdb DIR, re-enumerating every symbol against this
     runtime's sym file. The source is only read. A table this runtime does
     not declare, or a column whose type differs, is refused with nothing
     written; a partition already here is skipped unless --on-conflict replace.
@@ -130,6 +139,7 @@ def seed(
             )
         if on_conflict not in ("ignore", "replace"):
             raise UqsError(f"--on-conflict {on_conflict!r}: a seed can ignore or replace")
+        dest = local_hdb(attach, hdb, command="data seed", why=_NO_ATTACHMENT)
         first, last_day = timerange.resolve(
             range_from, range_to, day, last, open_ended=True
         ).partition_dates("`data seed` copies")
@@ -139,13 +149,16 @@ def seed(
             runtime.bootstrap(target)
         wanted = tables_given(tables) or None
         replace = on_conflict == "replace"
-        report = hdb_seed.seed(target, source, wanted, first, last_day, replace, dry_run)
+        report = hdb_seed.seed(target, source, wanted, first, last_day, replace, dry_run, hdb=dest)
     except UqsError as exc:
         _die(exc)
         return
     console.print(report, markup=False, highlight=False)
     if dry_run:
         console.print(dry_run_note())
+        return
+    if dest is not None:
+        console.print(f"[dim]reload each HDB process serving {dest} to see them[/]")
         return
     console.print(
         f"[dim]a running {target.runtime} HDB sees new partitions once reloaded - "

@@ -8,7 +8,9 @@ seed script on whatever q is configured (QCMD), skipping when none is.
 from __future__ import annotations
 
 import hashlib
+import shutil
 import subprocess
+from dataclasses import replace
 from datetime import date
 from pathlib import Path
 
@@ -164,6 +166,32 @@ def test_only_the_dates_asked_for_are_copied(hdbs, tmp_path):
     assert dates == {"2026.01.02", "2026.01.03"}
 
 
+def test_an_hdb_named_by_hdb_is_the_destination(hdbs, tmp_path):
+    """#2237: `data seed --hdb DIR` copies into DIR, re-enumerated against DIR's
+    sym file, and leaves this runtime's own HDB alone."""
+    src, dst, q = hdbs
+    own = dst.torqdata / "hdb"
+    other = tmp_path / "elsewhere" / "hdb"
+    other.parent.mkdir()
+    shutil.copytree(own, other)
+    before = _tree(own)
+    hdb_seed.seed(dst, src, hdb=other)
+    assert _tree(own) == before
+    moved = replace(dst, torqdata=other.parent)
+    assert {r.split(",")[0] for r in _rows(moved, q, tmp_path)} >= {"2026.01.01", "2026.01.02"}
+
+
+def test_an_hdb_that_is_not_a_directory_is_refused(hdbs, tmp_path):
+    src, dst, _ = hdbs
+    with pytest.raises(UqsError, match="--hdb .*: no such directory on this machine"):
+        hdb_seed.seed(dst, src, hdb=tmp_path / "nowhere")
+
+
+def test_the_command_hands_hdb_on_as_the_destination(seeded, tmp_path):
+    seen = seeded("--from-runtime", "uqf", "--hdb", str(tmp_path))
+    assert seen["hdb"] == tmp_path
+
+
 def test_a_column_whose_type_differs_is_refused_with_nothing_written(hdbs):
     src, dst, _ = hdbs
     dst.generated_schema.write_text(SCHEMA.replace("price:`float$()", "price:`long$()"))
@@ -203,8 +231,8 @@ def seeded(monkeypatch, tmp_path):
     )
     monkeypatch.setattr(cli_seed, "_die", lambda exc: seen.setdefault("refused", str(exc)))
 
-    def seed(target, source, tables, first, last, overwrite, dry_run=False):
-        seen.update(source=source.runtime, first=first, last=last)
+    def seed(target, source, tables, first, last, overwrite, dry_run=False, hdb=None):
+        seen.update(source=source.runtime, first=first, last=last, hdb=hdb)
         return "seeded"
 
     monkeypatch.setattr(cli_seed.hdb_seed, "seed", seed)

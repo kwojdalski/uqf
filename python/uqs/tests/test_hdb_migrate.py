@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 import signal
 import subprocess
 import sys
@@ -109,6 +110,24 @@ def test_rename_and_lossless_type_change_keep_rows_and_a_rollback_copy(hdb, q_bi
     assert "EURUSD`USDJPY" in result.stdout
     found = hdb_layout.inspect(hdb, hdb.hdb_dir).dirs
     assert hdb_types.type_changes(hdb, hdb.torqapphome / "database.q", found) == []
+
+
+def test_an_hdb_named_by_hdb_is_the_one_migrated_and_locked(hdb, tmp_path):
+    """#2237: `data migrate --hdb DIR` - the root it migrates, and the one whose
+    write lock it takes, is DIR, not this runtime's."""
+    other = tmp_path / "elsewhere" / "hdb"
+    other.parent.mkdir()
+    shutil.move(hdb.hdb_dir, other)
+    with pytest.raises(UqsError, match="no HDB at"):
+        hdb_migrate.migrate(hdb, "trade", DAY, {"px": "price"}, {"price"})
+    dry = hdb_migrate.migrate(hdb, "trade", DAY, {"px": "price"}, {"price"}, hdb=other)
+    assert dry.startswith("would migrate")
+    report = hdb_migrate.migrate(
+        hdb, "trade", DAY, {"px": "price"}, {"price"}, apply=True, hdb=other
+    )
+    backup = Path(report.split("previous table retained at ", 1)[1])
+    assert backup.is_relative_to(other.parent)
+    assert not hdb.hdb_dir.exists()
 
 
 def test_an_unmapped_source_column_is_refused_without_replacing_it(hdb):

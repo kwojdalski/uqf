@@ -20,7 +20,7 @@ from rich.table import Table
 
 from uqs.cli import completion, compress_plan, safety
 from uqs.cli.compress_plan import AlgoOpt
-from uqs.cli.hdb_scope import HdbOpt, resolve
+from uqs.cli.hdb_scope import AttachOpt, HdbOpt, resolve
 from uqs.cli.json_out import Verbatim, emit, json_opt
 from uqs.cli.range_options import DateOpt, DayFromOpt, DayLastOpt, DayToOpt
 from uqs.cli.safety import ConfirmsOnServer
@@ -160,6 +160,7 @@ def compress(
         ),
     ] = DEFAULT_LIMIT,
     hdb: HdbOpt = None,
+    attach: AttachOpt = None,
     as_json: CompressJson = False,
 ) -> None:
     """The HDB's compression, through TorQ's own `.cmp`: plan, run or report it.
@@ -179,14 +180,15 @@ def compress(
     the partitions that are not sorted, or lack the attribute, that sort.csv
     declares - the order and attribute the wdb gives a partition at end of
     day. It reads file headers and the sort columns and writes nothing.
-    Without --hdb: this runtime's HDB (`uqs --target TARGET data compress
+    Without --hdb or --attachment (an attachment whose HDB is on this
+    machine): this runtime's HDB (`uqs --target TARGET data compress
     --report` is a release's own).
     """
     try:
         if not report:
-            if hdb is not None:
+            if given := [f for f, v in (("--hdb", hdb), ("--attachment", attach)) if v]:
                 raise UqsUsageError(
-                    "--hdb is for --report: the plan and the run are housekeeping1's, on "
+                    f"{given[0]} is for --report: the plan and the run are housekeeping1's, on "
                     "this runtime's HDB (`uqs --target TARGET data compress` for a release's)"
                 )
             sc = compress_plan.scope_given(
@@ -204,7 +206,12 @@ def compress(
             raise UqsUsageError(
                 f"--report reads the whole HDB and changes nothing: not with {', '.join(given)}"
             )
-        handle = resolve(None, hdb)
+        handle = resolve(attach, hdb)
+        if handle.ssh:
+            raise UqsUsageError(
+                f"--report reads the HDB's files on this machine, and {attach}'s is on "
+                f"{handle.ssh}: run `uqs data compress --report --hdb {handle.hdb}` there"
+            )
         root = Path(handle.hdb)
         if not root.is_dir():
             if as_json:

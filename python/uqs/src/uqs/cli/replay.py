@@ -19,7 +19,7 @@ from rich.table import Table
 
 from uqs import timerange
 from uqs.cli import completion
-from uqs.cli.hdb_scope import tables_given
+from uqs.cli.hdb_scope import AttachOpt, HdbOpt, local_hdb, tables_given
 from uqs.cli.range_options import DateOpt, DayFromOpt, DayLastOpt, DayToOpt
 from uqs.cli.renames import renamed
 from uqs.cli.safety import ChangesState, dry_run_note
@@ -61,6 +61,13 @@ _RENAMES = {
 }
 
 
+#: Why `data replay --attachment` is refused (#2237).
+_NO_ATTACHMENT = (
+    "a replay runs this machine's TorQ tickerlogreplay over a log here, and cannot check or "
+    "pause an attached stack's writers - replay on that stack's own host"
+)
+
+
 @data_app.command("replay", cls=renamed(_RENAMES, ChangesState))
 def replay(
     proc: Annotated[
@@ -82,10 +89,8 @@ def replay(
             "--tplogdir", help="Replay this log directory, instead of resolving a running plant"
         ),
     ] = None,
-    hdb: Annotated[
-        Path | None,
-        typer.Option(help="Write into this database, instead of the running hdb process's"),
-    ] = None,
+    hdb: HdbOpt = None,
+    attach: AttachOpt = None,
     schema: Annotated[
         str | None,
         typer.Option(
@@ -114,8 +119,9 @@ def replay(
 
     With nothing passed it finds the tickerplant that is up, takes the log
     directory and schema file off that process's own start line, finds the
-    database the HDB process has open, and replays the plant's newest day that end of day has
-    handed over into it. Every one of those is an option, and an option that is given wins.
+    database the HDB process has open (`--hdb DIR` names another), and
+    replays the plant's newest day that end of day has handed over into it.
+    Every one of those is an option, and an option that is given wins.
     `--base-port` defaults to the runtime's own, as on every command; a plant
     running under another is refused, naming the `--base-port` to give.
 
@@ -132,11 +138,12 @@ def replay(
     e.g. `uqs data replay --date 2026-09-22 --table quote --table trade`
     """
     try:
+        hdb_dir = local_hdb(attach, hdb, command="data replay", why=_NO_ATTACHMENT)
         plan = stack_replay.plan(
             procname=proc,
             date=_day(day, range_from, range_to, last),
             log_dir=Path(dir_) if dir_ else None,
-            hdb_dir=hdb,
+            hdb_dir=hdb_dir,
             schema_file=Path(schema) if schema else None,
             tables=tables_given(table) or None,
             base_port=_paths().runtime_declaration.resolve_base_port(port),

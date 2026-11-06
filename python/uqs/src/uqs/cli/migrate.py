@@ -8,6 +8,7 @@ import typer
 
 from uqs.cli import safety
 from uqs.cli.concepts import table_arg
+from uqs.cli.hdb_scope import AttachOpt, HdbOpt, local_hdb
 from uqs.cli.range_options import DateOpt
 from uqs.cli.renames import refused
 from uqs.cli.safety import ChangesState, dry_run_note
@@ -26,10 +27,19 @@ _POSITIONAL_DATE = (
 )
 
 
+#: Why `data migrate --attachment` is refused (#2237).
+_NO_ATTACHMENT = (
+    "a migration takes the HDB write lock this machine's writers share, which an attached "
+    "stack's do not - stop that stack and migrate on its own host, with --hdb DIR"
+)
+
+
 @data_app.command("migrate", cls=refused({}, ChangesState, extra_argument=_POSITIONAL_DATE))
 def migrate(
     table: _TableOpt,
     day: DateOpt = None,
+    hdb: HdbOpt = None,
+    attach: AttachOpt = None,
     rename: Annotated[
         list[str] | None,
         typer.Option("--rename", help="OLD:NEW - rename a column; repeatable"),
@@ -48,6 +58,8 @@ def migrate(
 ) -> None:
     """Migrate one HDB partition of a table to this release's schema.
 
+    The HDB is this runtime's, or --hdb DIR on this machine.
+
     Stages, validates
     and replaces the table partition.
 
@@ -63,6 +75,7 @@ def migrate(
         _die(exc)
         return
     try:
+        root = local_hdb(attach, hdb, command="data migrate", why=_NO_ATTACHMENT)
         if day is None:
             raise UqsUsageError("name the partition to migrate: --date D, e.g. --date 2026-09-13")
         partition = parse_day("--date", day)
@@ -74,14 +87,18 @@ def migrate(
             renames[old] = new
         casts = set(cast or [])
         if not apply or not yes:  # the plan: shown, and asked about before --apply writes
-            report = hdb_migrate.migrate(_paths(), table, partition, renames, casts, apply=False)
+            report = hdb_migrate.migrate(
+                _paths(), table, partition, renames, casts, apply=False, hdb=root
+            )
         if apply and not yes:
             console.print(report, markup=False, highlight=False)
             safety.confirm(
                 f"Migrate {table} {partition:%Y.%m.%d} as above? (stop the stack first)", yes=False
             )
         if apply:
-            report = hdb_migrate.migrate(_paths(), table, partition, renames, casts, apply=True)
+            report = hdb_migrate.migrate(
+                _paths(), table, partition, renames, casts, apply=True, hdb=root
+            )
     except UqsError as exc:
         _die(exc)
         return
