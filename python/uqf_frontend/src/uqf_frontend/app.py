@@ -832,10 +832,13 @@ def create_app(
         `unreachable` is part of the response rather than an error: one process
         being down must not blank the view for the other nine.
         """
-        rows, unreachable = ops.merge_usage(scope.fleet.per_process(ops.USAGE, limit))
+        # One row past the limit from each process: the merged log then holds
+        # more than `limit` rows exactly when the fleet does (#2220).
+        rows, unreachable = ops.merge_usage(scope.fleet.per_process(ops.USAGE, limit + 1))
         return UsageResponse(
             rows=rows[:limit],
             row_count=min(len(rows), limit),
+            truncated=len(rows) > limit,
             unreachable=unreachable,
             processes_configured=len(scope.fleet.processes),
             poll_seconds=ops.POLL_SECONDS["usage"],
@@ -866,6 +869,7 @@ def create_app(
         return UsageResponse(
             rows=rows[:limit],
             row_count=min(len(rows), limit),
+            truncated=len(rows) > limit,
             unreachable=unreachable,
             processes_configured=len(scope.fleet.processes),
             poll_seconds=ops.POLL_SECONDS["connections"],
@@ -1215,18 +1219,25 @@ def create_app(
             _enforce_coverage(gateway, req.require_coverage)
 
         capped = min(req.limit, settings.max_rows)
-        # As the data login, through the gateway's query policy (#889).
-        read = gateway.browse(tbl.name, columns, operators, values, capped, TIERS[req.tier])
+        # As the data login, through the gateway's query policy (#889). One
+        # row past what is returned, so a full answer says whether more rows
+        # exist rather than leaving the caller to guess from row_count (#2220).
+        read = gateway.browse(tbl.name, columns, operators, values, capped + 1, TIERS[req.tier])
         rows = _rows(read.rows)
+        # read.cap is the row asked for lowered to the policy's maxrows where
+        # that is less (#928). A read that stopped at such a cap cannot see
+        # past it, so reaching it counts as cut (#1255).
+        policy_cut = read.cap <= capped and len(rows) >= read.cap
+        truncated = len(rows) > capped or policy_cut
+        server_cap = min(settings.max_rows, read.cap)
         return QueryResponse(
             poll_seconds=ops.POLL_SECONDS["query"],
             table=tbl.name,
             tier=req.tier,
-            rows=rows,
-            row_count=len(rows),
-            # read.cap is capped lowered to the policy's maxrows where that is
-            # less (#928), so a cut either one made is reported (#1255).
-            truncated=len(rows) >= read.cap < req.limit,
+            rows=rows[:capped],
+            row_count=min(len(rows), capped),
+            truncated=truncated,
+            cut_by=None if not truncated else "limit" if req.limit <= server_cap else "max_rows",
         )
 
     # ------------------------------------------------------ prepared charts
@@ -1666,10 +1677,12 @@ def create_app(
         much of each level is, and what was not. `level` is the most
         detailed level shown: `interactions` shows actions too."""
         filters = dict(locals())
-        rows = history.query(_activity_query(filters, level, limit))
+        # One event past the limit says whether more matched (#2220).
+        rows = history.query(_activity_query(filters, level, limit + 1))
         state = history.persistence
         return ActivityResponse(
-            events=[ActivityEventOut(**row) for row in rows],
+            events=[ActivityEventOut(**row) for row in rows[:limit]],
+            truncated=len(rows) > limit,
             persistence=ActivityPersistence(
                 persistent=state.persistent,
                 path=state.path,

@@ -85,6 +85,13 @@ failed on input that passed validation (#2224, #2225). `errors.py` tables the
 status of every error the API raises, and `test_error_shape.py` holds the code
 to that table.
 
+Every route that takes a `limit`, or applies a row cap, answers `truncated`:
+more rows existed than were returned, whatever cut them (#2220). Each reads one
+row past what it returns to know. `/query` also says which bound cut it in
+`cut_by`: `limit`, the caller's own, or `max_rows`, a server cap
+(`UQF_FRONTEND_MAX_ROWS` or the query policy's maxrows). A read that stops at
+the policy's cap cannot see past it, so reaching that cap counts as cut.
+
 **They are off by default, and that is the security posture rather than
 caution.** `UQF_FRONTEND_ENABLE_WRITES` must be set on the server or every one
 of them returns 403 naming that variable. The reason: this deployment has one

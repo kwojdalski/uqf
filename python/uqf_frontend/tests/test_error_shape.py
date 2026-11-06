@@ -293,6 +293,36 @@ def test_every_body_limit_is_at_least_one_and_capped(app):
     assert {"/query", "/compare"} <= set(seen)
 
 
+def _says_truncated(model: Any) -> bool:
+    """Whether a response model, or a model it holds, has `truncated`."""
+    fields = getattr(model, "model_fields", {})
+    if "truncated" in fields:
+        return fields["truncated"].annotation is bool
+    for info in fields.values():
+        inner = [info.annotation, *typing.get_args(info.annotation)]
+        if any(_says_truncated(t) for t in inner if hasattr(t, "model_fields")):
+            return True
+    return False
+
+
+def test_every_route_that_can_cut_its_answer_says_whether_it_did(app):
+    """#2220: /ops/usage, /ops/clients and /activity cut at `limit` with no
+    field saying so. Every route taking a `limit`, in its query or its body,
+    answers `truncated` - "more rows existed than were returned, whatever cut
+    them". A route answering a file (/activity/export) has no field to put it
+    in, and is held to its cap by the rule above instead."""
+    seen = []
+    for route in _routes(app):
+        takes_limit = any(p.name == "limit" for p in _params(route.dependant, "query_params"))
+        for param in _params(route.dependant, "body_params"):
+            takes_limit |= "limit" in getattr(param.field_info.annotation, "model_fields", {})
+        if not takes_limit or route.response_model is None:
+            continue
+        assert _says_truncated(route.response_model), f"{route.path} cuts at a limit silently"
+        seen.append(route.path)
+    assert {"/query", "/compare", "/ops/usage", "/ops/clients", "/activity"} <= set(seen), seen
+
+
 def test_row_limit_defaults_within_its_cap():
     dependency = limits.row_limit(500, 10).dependency
     assert getattr(dependency, limits.MARK) == 10

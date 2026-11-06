@@ -109,7 +109,7 @@ def test_a_row_carries_a_timespan_as_nanoseconds_and_an_infinity_as_a_string():
         {"s": None, "f": None},
     ]
     wire = QueryResponse(
-        poll_seconds=1, table="t", tier="rdb", rows=rows, row_count=3, truncated=False
+        poll_seconds=1, table="t", tier="rdb", rows=rows, row_count=3, truncated=False, cut_by=None
     ).model_dump_json()
     assert '"rows":[{"s":1500000000,"f":"inf"},{"s":1234,"f":"-inf"},{"s":null,"f":null}]' in wire
 
@@ -145,7 +145,7 @@ def test_a_row_carries_a_timestamp_to_the_nanosecond_and_an_infinity_as_a_string
         {"time": None},
     ]
     wire = QueryResponse(
-        poll_seconds=1, table="t", tier="rdb", rows=rows, row_count=5, truncated=False
+        poll_seconds=1, table="t", tier="rdb", rows=rows, row_count=5, truncated=False, cut_by=None
     ).model_dump_json()
     assert (
         '{"time":"2026-10-14T10:00:00.000001234Z"},{"time":"2026-10-14T10:00:00.000001999Z"}'

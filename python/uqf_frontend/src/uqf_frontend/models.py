@@ -89,7 +89,11 @@ class QueryResponse(BaseModel):
     rows: list[dict[str, Any]]
     row_count: int
     truncated: bool = Field(
-        description="True when the server's max_rows cap, not the caller's limit, cut the result"
+        description="more rows existed than were returned, whatever cut them (#2220)"
+    )
+    cut_by: Literal["limit", "max_rows"] | None = Field(
+        description="what cut a truncated result: the caller's `limit`, or a server row cap - "
+        "UQF_FRONTEND_MAX_ROWS or the query policy's maxrows (#928, #1255); null when nothing did"
     )
 
 
@@ -241,6 +245,9 @@ class UsageResponse(BaseModel):
 
     rows: list[dict[str, Any]]
     row_count: int
+    truncated: bool = Field(
+        description="more rows existed than were returned: `limit` cut them (#2220)"
+    )
     unreachable: list[dict[str, str]] = Field(
         default_factory=list,
         description="Processes that could not be reached. Reported rather than raised, so one "
@@ -1151,6 +1158,9 @@ class ActivityResponse(BaseModel):
     """The history, newest first, with how it is kept and what it lost."""
 
     events: list[ActivityEventOut]
+    truncated: bool = Field(
+        description="more events matched than were returned: `limit` cut them (#2220)"
+    )
     persistence: ActivityPersistence
     #: The level a session records at unless its operator picks another.
     default_level: SessionLevel

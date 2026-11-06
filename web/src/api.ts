@@ -89,7 +89,10 @@ export interface QueryResult extends Pollable {
   tier: Tier;
   rows: Row[];
   row_count: number;
+  /** More rows existed than were returned, whatever cut them (#2220). */
   truncated: boolean;
+  /** What cut them: the caller's `limit`, or a server row cap. */
+  cut_by: "limit" | "max_rows" | null;
 }
 /** One prepared chart (#2044): defined on the server, drawn here. */
 export interface ChartInfo {
@@ -503,6 +506,8 @@ export interface OpsData extends Pollable {
   summary?: Record<string, number>;
   unreachable?: Row[];
   processes_configured?: number;
+  /** /ops/usage: more rows existed than the `limit` returned (#2220). */
+  truncated?: boolean;
 }
 
 /** Every error the API answers, in its one shape (app.py `_error`, #2106):
@@ -1402,6 +1407,8 @@ export interface ActivityDrop {
 /** GET /activity - models.ActivityResponse. */
 export interface ActivityHistory extends Pollable {
   events: ActivityEvent[];
+  /** More events matched than the `limit` returned (#2220). */
+  truncated: boolean;
   persistence: ActivityPersistence;
   default_level: SessionLevel;
   bounds: ActivityBound[];
