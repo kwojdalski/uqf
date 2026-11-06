@@ -23,6 +23,15 @@ default - and the plant's `-stackid` is checked against it: a plant running
 under another base port is refused, naming the `--base-port` that replays it,
 rather than replayed under a port the operator never chose.
 
+WHICH DAYS MAY BE REPLAYED (#2196). Only a day end of day has handed to the
+HDB. The plant's live day is the rdb's and the wdb's to write: a replay of it
+puts a partial partition in hdb/D, and the wdb's `movetohdb` then aborts the
+move of the full day ("present in both location"). The rule is the backfill
+writer's own (`.qetl.io.require_handed_over`, #2186), asked of q rather than
+restated here: today and later, and any day the wdb's save directory still
+holds, are refused. So the default is the newest log day that IS handed over,
+not the newest log.
+
 WHAT IS DELIBERATELY NOT DECIDED HERE. `emptytables`, `clean`, `sortafterreplay`
 and the rest keep TorQ's defaults, which means the replay EMPTIES the tables it
 is about to write in the partitions it touches. That is what a tickerplant
@@ -42,6 +51,8 @@ from uqs.logger import get_logger
 from uqs.paths import UqsError, UqsPaths
 from uqs.stack import runtime
 from uqs.stack.alive import _command_lines
+from uqs.stack.replay_fence import replayable_days, require_handed_over
+from uqs.stack.replay_flags import replay_flags
 
 log = get_logger()
 
@@ -193,13 +204,22 @@ def log_dirs(plant: RunningPlant) -> list[Path]:
     return [entry for _date, entry in sorted(found)]
 
 
-def resolve_log_dir(plant: RunningPlant, date: str | None = None) -> Path:
-    """The log directory to replay: the plant's newest, or the day asked for.
+def _log_date(directory: Path) -> str | None:
+    """The `YYYY.MM.DD` a log directory is named for, or None."""
+    match = _LOG_DIR.match(directory.name)
+    return match["date"] if match else None
 
-    Newest rather than today's, because that IS today's while the plant is
-    writing and is still the right answer when it is not - a stack started
-    yesterday and left running has no directory for today until the first
-    message of the day lands in it.
+
+def resolve_log_dir(
+    plant: RunningPlant, date: str | None = None, replayable: frozenset[str] | None = None
+) -> Path:
+    """The log directory to replay: the day asked for, or the plant's newest
+    REPLAYABLE one.
+
+    The newest log is today's while the plant is writing, and today is not the
+    HDB's to take (#2196), so the default is the newest day in `replayable` -
+    the dates end of day has handed over. `replayable` None means "no
+    restriction", which is only right when nothing can be judged.
     """
     dirs = log_dirs(plant)
     if not dirs:
@@ -208,7 +228,15 @@ def resolve_log_dir(plant: RunningPlant, date: str | None = None) -> Path:
             f"{plant.procname}_<date>, and nothing there matches"
         )
     if date is None:
-        return dirs[-1]
+        eligible = [d for d in dirs if replayable is None or _log_date(d) in replayable]
+        if not eligible:
+            days = ", ".join(str(_log_date(d)) for d in dirs)
+            raise UqsError(
+                f"{plant.procname} has no log for a day end of day has handed over to the "
+                f"HDB (it has: {days}) - the live day is the rdb's and the wdb's to write. "
+                "Pass --date for a handed-over day, or --tplogdir for a log of your own"
+            )
+        return eligible[-1]
     wanted = plant.tplogdir / f"{plant.procname}_{date}"
     if wanted not in dirs:
         # Split rather than re-matched: every name here came back from
@@ -216,65 +244,6 @@ def resolve_log_dir(plant: RunningPlant, date: str | None = None) -> Path:
         days = ", ".join(d.name.rsplit("_", 1)[-1] for d in dirs)
         raise UqsError(f"{plant.procname} has no log for {date} - it has: {days}")
     return wanted
-
-
-#: What a value may contain before torq.sh puts it on a start line. Paths are
-#: what this passes, so `/` is in and a space is not: torq.sh builds the line
-#: into a string and `eval`s it, so a space would split one path into two
-#: words and a `;` or `$(...)` would run as shell. Same reasoning, and the
-#: same refusal, as stack/backfill._SAFE_VALUE - which cannot simply be reused
-#: because it predates any flag whose value is a path.
-_SAFE_VALUE = re.compile(r"[A-Za-z0-9_./:+-]+")
-
-#: torq.sh finds its own `-csv` and `-extras` flags by grepping every argument
-#: for those words, so a value containing either is mistaken for the flag and
-#: the whole command line is misparsed. A path is quite capable of holding
-#: "csv" - `output/uqs/csv/...` would - so this is checked, not assumed.
-_TORQ_SH_WORDS = ("csv", "extras")
-
-
-def _checked(name: str, value: str) -> str:
-    if not _SAFE_VALUE.fullmatch(value):
-        raise UqsError(
-            f"{name} {value!r} may contain only letters, digits and . _ / : + - "
-            "(torq.sh runs the start line through a shell)"
-        )
-    if any(word in value for word in _TORQ_SH_WORDS):
-        raise UqsError(
-            f"{name} {value!r} contains 'csv' or 'extras', which torq.sh reads as its "
-            "own flags wherever they appear"
-        )
-    return value
-
-
-def replay_flags(
-    log_dir: Path,
-    hdb_dir: Path,
-    schema_file: Path,
-    tables: list[str] | None = None,
-) -> list[str]:
-    """The `-.replay.*` switches tickerlogreplay.q reads, validated.
-
-    Plain paths, no leading `:`. The script hsyms `hdbdir` itself and hsyms
-    `tplogdir` on the way into `getlogdir`, while `schemafile` is loaded with
-    `system "l ",string ...` - which a leading colon would break.
-
-    `tablelist` is left off entirely for a whole-log replay rather than passed
-    as `all`: TorQ's default IS `` `all ``, and a switch that restates a
-    default is one more thing that can disagree with it.
-    """
-    flags = [
-        "-.replay.tplogdir",
-        _checked("the log directory", str(log_dir)),
-        "-.replay.hdbdir",
-        _checked("the hdb directory", str(hdb_dir)),
-        "-.replay.schemafile",
-        _checked("the schema file", str(schema_file)),
-    ]
-    if tables:
-        flags.append("-.replay.tablelist")
-        flags.extend(_checked("a table name", table) for table in tables)
-    return flags
 
 
 @dataclass(frozen=True)
@@ -319,6 +288,7 @@ def plan(
     base_port: int | None = None,
     timeout: float | None = None,
     base_port_given: bool = True,
+    wdb_dir: Path | None = None,
 ) -> ReplayPlan:
     """Resolve what to replay, preferring what was asked for over what is up.
 
@@ -332,10 +302,7 @@ def plan(
     needs_plant = log_dir is None or schema_file is None or base_port is None or hdb_dir is None
     plant = resolve_plant(procname, timeout) if needs_plant else None
 
-    if log_dir is None:
-        assert plant is not None
-        log_dir = resolve_log_dir(plant, date)
-    elif date is not None:
+    if log_dir is not None and date is not None:
         raise UqsError(
             "--date picks a day out of a plant's log directory, so it cannot be used with "
             "--tplogdir"
@@ -352,6 +319,22 @@ def plan(
 
     if hdb_dir is None:
         hdb_dir = running_hdb_dir(resolved_port, timeout)
+
+    # Only a day end of day has handed over may be replayed (#2196): the live
+    # day is the rdb's and the wdb's, and a partial hdb/D makes movetohdb abort.
+    if log_dir is None:
+        assert plant is not None
+        if date is None:
+            days = [str(_log_date(d)) for d in log_dirs(plant)]
+            ok = replayable_days(days, hdb_dir, wdb_dir)
+            log_dir = resolve_log_dir(plant, None, ok)
+        else:
+            require_handed_over(date, hdb_dir, wdb_dir)
+            log_dir = resolve_log_dir(plant, date)
+    elif (named := _LOG_DIR.match(log_dir.name)) is not None:
+        # A directory named outright is judged by its name when it has one
+        # of a plant's; any other name cannot be dated, so it is the operator's.
+        require_handed_over(named["date"], hdb_dir, wdb_dir)
 
     if schema_file is None:
         assert plant is not None

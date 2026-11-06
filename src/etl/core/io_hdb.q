@@ -184,18 +184,7 @@
     days:`date$data tc;
     if[any null days;
         '"hdb: ",string[target]," has rows with a null time - no partition to put them in"];
-    / Names the REMEDY, not only the refusal. The rule is a boundary - today
-    / is the plant's, yesterday and earlier are the backfill's, and
-    / end-of-day is the handover - but an operator meeting it for the first
-    / time meets it as a wall, after the fetch and the quality gate have both
-    / passed, which is a confusing place to learn a policy.
-    if[any days>=.z.d;
-        '"hdb: ",string[target]," has rows dated ",string[max days],
-         " - today and later belong to the tickerplant and end-of-day, not a backfill.",
-         " Backfill a range ending on or before ",string[.z.d-1],
-         ", or let today's rows arrive through the live path"];
-    / Yesterday is the backfill's only once end of day has moved it (#2186).
-    .qetl.io.require_eod_done[root;target;distinct days];
+    .qetl.io.require_handed_over[root;target;distinct days];
     data}
 
 / Private: write a batch under opts`on_conflict, one date partition at a time.
