@@ -577,7 +577,7 @@ _MIGRATIONS: tuple[tuple[str, ...], ...] = (
         "UPDATE activity SET subject = target, target = NULL WHERE source = 'browser'",
         "UPDATE activity SET subject = target, target = 'local' WHERE source = 'server' "
         "AND (action = 'process' OR action LIKE 'process.%' OR action LIKE 'worker.%' "
-        "OR action LIKE 'backfill.%' OR action LIKE 'settings.%')",
+        "OR action LIKE 'backfill.%' OR action LIKE 'settings.%' OR action LIKE 'hdb.%')",
         "UPDATE activity SET subject = target, target = NULL WHERE action = 'authz.refused'",
         # an item is {"target": <name>, "outcome": <word>}, json.dumps'd: a
         # name cannot hold a quote, so the key is the only `"target": ` there
