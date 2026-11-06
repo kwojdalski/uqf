@@ -2236,7 +2236,7 @@ def _refusal(monkeypatch, *argv: str) -> str:
     command's own error, whitespace and box lines folded."""
     said = _Said()
     monkeypatch.setattr(shared, "log", said)
-    result = CliRunner().invoke(app, ["logs", *argv])
+    result = PlainRunner().invoke(app, ["logs", *argv])  # CI renders usage errors in colour
     assert result.exit_code == 2, result.output
     box = re.sub("[│╭╰╮╯─]", " ", result.output)
     return " ".join(" ".join([box, *said.messages]).split())
