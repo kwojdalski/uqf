@@ -153,7 +153,7 @@
 .qpipe.transform.eq_markout_outputs.executions_in:.qetl.plant.columns[`executions;`source_time`venue`sym`side`size`price`fill_id`clock]
 
 / The market_data columns scoring reads: the books, one row per snapshot, and the clock each is stamped on.
-.qpipe.transform.eq_markout_outputs.market_data_in:.qetl.plant.columns[`market_data;`source_time`sym`source`bid_prices`bid_sizes`ask_prices`ask_sizes`clock]
+.qpipe.transform.eq_markout_outputs.market_data_in:.qetl.plant.columns[`market_data;`source_time`sym`source`bid`ask`clock]
 
 / The live output: the plant table, without `time`.
 .qpipe.transform.eq_markout_outputs.out:.qetl.plant.published `eq_markout
@@ -229,7 +229,7 @@
     dom:.qpipe.transform.eq_markout_outputs.scoring_domain;
     spec:.qpipe.transform.markout_core.validate[dom;.qpipe.transform.eq_markout_outputs.job_spec];
     exe:select from exe where venue in .qpipe.transform.eq_markout_outputs.venues;
-    r:.qpipe.transform.eq_markout_outputs.measures[.qpipe.transform.markout_core.calc[dom;spec;exe;md]];
+    r:.qpipe.transform.eq_markout_outputs.measures[.qpipe.transform.markout_core.score[dom;spec;exe;md]];
     (cols .qetl.plant.shape `eq_markout)#r}
 
 / The live job's scoring: the rows without `time`, which the plant stamps on publication.
@@ -256,8 +256,8 @@
 .qpipe.transform.eq_markout_outputs.sample_books:{[]
     ([] source_time:2026.02.25D15:00:00 2026.02.25D15:00:03 2026.02.25D15:00:20 2026.02.25D15:00:50;
         sym:4#`AAPL; source:4#`XNAS;
-        bid_prices:(enlist 271.25;enlist 271.5;enlist 271.75;enlist 272f); bid_sizes:4#enlist enlist 100f;
-        ask_prices:(enlist 271.5;enlist 271.75;enlist 272f;enlist 272.25); ask_sizes:4#enlist enlist 100f;
+        bid:271.25 271.5 271.75 272f;
+        ask:271.5 271.75 272 272.25f;
         clock:4#`venue)}
 
 / Its rows: a total and an execution component at each of the three horizons.

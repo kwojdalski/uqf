@@ -30,8 +30,7 @@
 
 / one source's single-level book for one sym at one instant on the venue clock
 .qt.qpipe.transform.fx_markout.conversion.bk:{[tm;sym;src;px]
-    ([] source_time:enlist tm; sym:enlist sym; source:enlist src; bid_prices:enlist enlist px; bid_sizes:enlist enlist 1e6;
-        ask_prices:enlist enlist px; ask_sizes:enlist enlist 1e6; clock:enlist `venue)}
+    ([] source_time:enlist tm; sym:enlist sym; source:enlist src; bid:enlist px; ask:enlist px; clock:enlist `venue)}
 
 .qt.qpipe.transform.fx_markout.conversion.fill:{[sym;px]
     ([] source_time:enlist .qt.qpipe.transform.fx_markout.conversion.t; venue:enlist `a; sym:enlist sym; side:enlist 1; size:enlist 1e6;
@@ -75,7 +74,7 @@
 .qt.qpipe.transform.fx_markout.conversion.test_a_quote_currency_equal_to_the_reporting_currency_has_rate_one:{[tc]
     t:.qt.qpipe.transform.fx_markout.conversion.t;
     m:.qt.qpipe.transform.fx_markout.conversion.bk[t-0D00:00:01;`EURUSD;`a;1.1],.qt.qpipe.transform.fx_markout.conversion.bk[t+0D00:00:09;`EURUSD;`a;1.1005];
-    r:.qt.qpipe.transform.fx_markout.conversion.total[.qpipe.transform.markout_core.calc[.qt.qpipe.transform.fx_markout.conversion.domain[];.qt.qpipe.transform.fx_markout.conversion.spec[()!()];.qt.qpipe.transform.fx_markout.conversion.fill[`EURUSD;1.1];m]];
+    r:.qt.qpipe.transform.fx_markout.conversion.total[.qpipe.transform.markout_core.score[.qt.qpipe.transform.fx_markout.conversion.domain[];.qt.qpipe.transform.fx_markout.conversion.spec[()!()];.qt.qpipe.transform.fx_markout.conversion.fill[`EURUSD;1.1];m]];
     .qunit.assertTrue[.qt.qpipe.transform.fx_markout.conversion.near[r`quote_amount;500f];"1e6 * 0.0005"];
     .qunit.assertEquals[r`rate;1f;"nothing to convert"];
     .qunit.assertTrue[.qt.qpipe.transform.fx_markout.conversion.near[r`report_amount;500f];"500 USD"];
@@ -83,7 +82,7 @@
     .qunit.assertEquals[r`status;`ok;"priced and converted"]};
 
 .qt.qpipe.transform.fx_markout.conversion.test_fx_execution_timing_converts_at_the_executions_book:{[tc]
-    r:.qt.qpipe.transform.fx_markout.conversion.total[.qpipe.transform.markout_core.calc[.qt.qpipe.transform.fx_markout.conversion.domain[];.qt.qpipe.transform.fx_markout.conversion.spec[()!()];.qt.qpipe.transform.fx_markout.conversion.fill[`USDJPY;150f];.qt.qpipe.transform.fx_markout.conversion.jpy_books[]]];
+    r:.qt.qpipe.transform.fx_markout.conversion.total[.qpipe.transform.markout_core.score[.qt.qpipe.transform.fx_markout.conversion.domain[];.qt.qpipe.transform.fx_markout.conversion.spec[()!()];.qt.qpipe.transform.fx_markout.conversion.fill[`USDJPY;150f];.qt.qpipe.transform.fx_markout.conversion.jpy_books[]]];
     .qunit.assertTrue[.qt.qpipe.transform.fx_markout.conversion.near[r`quote_amount;50000f];"50,000 JPY"];
     .qunit.assertTrue[.qt.qpipe.transform.fx_markout.conversion.near[r`rate;1f%150f];"the inverted USDJPY book at the execution"];
     .qunit.assertTrue[.qt.qpipe.transform.fx_markout.conversion.near[r`report_amount;50000%150f];"333.33 USD"];
@@ -94,8 +93,8 @@
     d:.qt.qpipe.transform.fx_markout.conversion.domain[];
     e:.qt.qpipe.transform.fx_markout.conversion.fill[`USDJPY;150f];
     m:.qt.qpipe.transform.fx_markout.conversion.jpy_books[];
-    base:.qt.qpipe.transform.fx_markout.conversion.total[.qpipe.transform.markout_core.calc[d;.qt.qpipe.transform.fx_markout.conversion.spec[()!()];e;m]];
-    h:.qt.qpipe.transform.fx_markout.conversion.total[.qpipe.transform.markout_core.calc[d;.qt.qpipe.transform.fx_markout.conversion.spec[enlist[`rate_timing]!enlist `horizon];e;m]];
+    base:.qt.qpipe.transform.fx_markout.conversion.total[.qpipe.transform.markout_core.score[d;.qt.qpipe.transform.fx_markout.conversion.spec[()!()];e;m]];
+    h:.qt.qpipe.transform.fx_markout.conversion.total[.qpipe.transform.markout_core.score[d;.qt.qpipe.transform.fx_markout.conversion.spec[enlist[`rate_timing]!enlist `horizon];e;m]];
     .qunit.assertTrue[.qt.qpipe.transform.fx_markout.conversion.near[h`report_amount;50000%150.05];"333.22 USD"];
     .qunit.assertEquals[h`rate_time;.qt.qpipe.transform.fx_markout.conversion.t+0D00:00:09;"the horizon's book"];
     translation:(base`report_amount)-h`report_amount;
@@ -103,7 +102,7 @@
     .qunit.assertTrue[(translation>0.111) and translation<0.1111;"0.1110 USD"]};
 
 .qt.qpipe.transform.fx_markout.conversion.test_fx_a_missing_rate_keeps_the_price_unit_measures:{[tc]
-    r:.qt.qpipe.transform.fx_markout.conversion.total[.qpipe.transform.markout_core.calc[.qt.qpipe.transform.fx_markout.conversion.domain[];
+    r:.qt.qpipe.transform.fx_markout.conversion.total[.qpipe.transform.markout_core.score[.qt.qpipe.transform.fx_markout.conversion.domain[];
         .qt.qpipe.transform.fx_markout.conversion.spec[enlist[`rates]!enlist (`symbol$())!()];.qt.qpipe.transform.fx_markout.conversion.fill[`USDJPY;150f];.qt.qpipe.transform.fx_markout.conversion.jpy_books[]]];
     .qunit.assertEquals[r`status;`no_rate;"JPY has no declared rate"];
     .qunit.assertTrue[.qt.qpipe.transform.fx_markout.conversion.near[r`move;0.05];"the move is kept"];

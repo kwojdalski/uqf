@@ -39,13 +39,14 @@ from uqs.cli.renames import ATTACHMENT, alias_command, renamed
 from uqs.cli.safety import ConfirmsOnServer
 from uqs.cli.shared import _die, _paths, console, data_app
 from uqs.paths import UqsError
-from uqs.stack import hdb_alter, hdb_fill, hdb_layout, hdb_shape, hdb_types
+from uqs.stack import hdb_alter, hdb_fill, hdb_layout, hdb_shape, hdb_sorting, hdb_types
 from uqs.stack.hdb_alter import Request
 from uqs.timerange import DAY_FORMS, parse_day
 
 CheckJson = json_opt(
     '{"ok", "hdb", "present", "segmented", "partitions", "missing_tables": {partition: [table]}, '
-    '"missing_columns": {partition: {table: [column]}}, "types_checked", "type_changes": [...]} '
+    '"missing_columns": {partition: {table: [column]}}, "types_checked", "type_changes": [...], '
+    '"unsorted": [{partition, table, why}]} '
     '- or, with --table, --attachment or --hdb, {"ok", "hdb", "resolved_from", "plan", '
     '"result", ...}'
 )
@@ -141,9 +142,12 @@ def _whole_runtime(*, apply: bool, yes: bool, as_json: bool) -> None:
     if apply:
         try:
             handle = resolve(None, None)
-            confirm(handle, "Write every missing declared table and column, and fold the markout "
+            confirm(handle, "Write every missing declared table and column, fold the markout "
                     "configuration columns (contract_version, rate_timing, report_ccy) into "
-                    "configuration snapshots, dropping them", yes=yes, as_json=as_json)  # fmt: skip
+                    "configuration snapshots, dropping them, and REWRITE each partition of a table "
+                    "with a declared sort order (market_data: sym, source, source_time, p# on sym) "
+                    "that is not in it, numbering its rows (rid) - stop the stack first",
+                    yes=yes, as_json=as_json)  # fmt: skip
         except UqsError as exc:
             _die(exc)
             return
@@ -167,9 +171,14 @@ def _whole_runtime(*, apply: bool, yes: bool, as_json: bool) -> None:
         except UqsError as exc:
             _die(exc)
             return
+    try:
+        unordered = hdb_sorting.unsorted(paths, hdb_root, layout.dirs)
+    except UqsError as exc:
+        _die(exc)
+        return
     if as_json:
         emit({
-            "ok": not (short or thin or changed),
+            "ok": not (short or thin or changed or unordered),
             "hdb": str(hdb_root),
             "present": True,
             "segmented": layout.segmented,
@@ -181,13 +190,14 @@ def _whole_runtime(*, apply: bool, yes: bool, as_json: bool) -> None:
             ),
             "types_checked": changed is not None,
             "type_changes": changed or [],
+            "unsorted": unordered or [],
         })  # fmt: skip
-        if short or thin or changed:
+        if short or thin or changed or unordered:
             raise typer.Exit(code=1)
         return
     if changed is None:
         console.print("[dim]column types not checked: no q interpreter[/]")
-    if not short and not thin and not changed:
+    if not short and not thin and not changed and not unordered:
         where = " in the segments par.txt names" if layout.segmented else ""
         console.print(
             f"[green]{hdb_shape.describe(short)}, "
@@ -203,6 +213,11 @@ def _whole_runtime(*, apply: bool, yes: bool, as_json: bool) -> None:
         console.print(
             f"[red]{c['partition']} {c['table']}.{c['column']}: stored as {c['on_disk']}, "
             f"declared {c['declared']}[/] - a migration, never filled"
+        )
+    for u in unordered or []:
+        console.print(
+            f"[yellow]{u['partition']} {u['table']}: {u['why']}[/] - `uqs data check --apply` "
+            "rewrites it in its declared order (stop the stack first)"
         )
     console.print(
         "\n[dim]`uqs data check --apply` writes an empty copy of each missing "

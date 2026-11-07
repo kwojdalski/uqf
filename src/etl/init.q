@@ -51,6 +51,9 @@
 \l src/etl/core/declared.q
 \l src/etl/core/intervals.q
 \l src/etl/core/materialisation.q
+\l src/etl/core/mapped_books.q
+\l src/etl/core/mapped_depth.q
+\l src/etl/core/reference_variant.q
 \l src/etl/core/compression.q
 \l src/etl/core/run.q
 \l src/etl/core/config_snapshot.q
@@ -115,6 +118,8 @@
 \l src/etl/core/kafka_diagnostics.q
 \l src/etl/core/kafka_decoder.q
 \l src/etl/core/horizon.q
+\l src/etl/core/horizon_reference.q
+\l src/etl/core/horizon_shared.q
 \l src/etl/core/bars.q
 \l src/etl/core/rolling.q
 \l src/etl/core/enrich.q

@@ -41,7 +41,7 @@
 .qpipe.transform.crypto_markout_outputs.executions_in:.qetl.plant.columns[`executions;`source_time`venue`sym`side`size`price`fee`fee_ccy`fill_id`clock]
 
 / The market_data columns scoring reads: the venues' books, one row per snapshot, and the clock each is stamped on.
-.qpipe.transform.crypto_markout_outputs.market_data_in:.qetl.plant.columns[`market_data;`source_time`sym`source`bid_prices`bid_sizes`ask_prices`ask_sizes`clock]
+.qpipe.transform.crypto_markout_outputs.market_data_in:.qetl.plant.columns[`market_data;`source_time`sym`source`bid`ask`clock]
 
 / The live output: the plant table, without `time`.
 .qpipe.transform.crypto_markout_outputs.out:.qetl.plant.published `crypto_markout
@@ -160,8 +160,8 @@
 .qpipe.transform.crypto_markout_outputs.sample_books:{[]
     ([] source_time:2026.09.17D10:00:00 2026.09.17D10:00:00 2026.09.17D10:00:09;
         sym:3#`$"BTC-USDT"; source:`a`b`a;
-        bid_prices:(enlist 62000f;enlist 62004f;enlist 62010f); bid_sizes:3#enlist enlist 1f;
-        ask_prices:(enlist 62010f;enlist 62008f;enlist 62020f); ask_sizes:3#enlist enlist 1f;
+        bid:62000 62004 62010f;
+        ask:62010 62008 62020f;
         clock:3#`venue)}
 
 / Its rows: a total and an execution component at each horizon.

@@ -72,7 +72,7 @@
 .qpipe.transform.fx_markout.executions_in:.qetl.plant.columns[`executions;`source_time`venue`sym`side`size`price`fill_id`clock]
 
 / The market_data columns it reads: the sources' books, one row per snapshot.
-.qpipe.transform.fx_markout.market_data_in:.qetl.plant.columns[`market_data;`source_time`sym`source`bid_prices`bid_sizes`ask_prices`ask_sizes`clock]
+.qpipe.transform.fx_markout.market_data_in:.qetl.plant.columns[`market_data;`source_time`sym`source`bid`ask`clock]
 
 / The calculation result: one row per (execution, horizon, component), see the header.
 .qpipe.transform.fx_markout.result:.qetl.plant.shape `fx_markout
@@ -179,14 +179,14 @@
 / differently - tests/q/test_fx_markout_calc.q holds them to each other.
 / @param spec dict horizons, convention, max_age, tolerance, report_ccy, rate_timing, rates (default_spec)
 / @param exe executions: source_time, venue, sym, side, size, price, fill_id, clock
-/ @param md market_data: source_time, sym, source, the four ladders and clock
+/ @param md the top of book: source_time, sym, source, bid, ask and clock
 / @return the calculation result, in execution order then horizon order then
 /   kind total, execution, leg (by step), residual
 / @throws error when the spec is malformed or an input lacks a column
 / @eg count .qpipe.transform.fx_markout.calc[.qpipe.transform.fx_markout.default_spec;0#.qpipe.transform.fx_markout.executions_in;0#.qpipe.transform.fx_markout.market_data_in]  ->  0
 .qpipe.transform.fx_markout.calc:{[spec;exe;md]
     spec:.qpipe.transform.fx_markout.require_spec[spec];
-    rows:.qpipe.transform.markout_core.calc[.qpipe.transform.fx_domain.domain;spec;exe;md];
+    rows:.qpipe.transform.markout_core.score[.qpipe.transform.fx_domain.domain;spec;exe;md];
     if[0=count rows; :0#.qpipe.transform.fx_markout.result];
     .qpipe.transform.fx_domain.long_rows[spec;rows]}
 
@@ -222,10 +222,8 @@
                 size:enlist 1e6; price:enlist 1.1001; fill_id:enlist `x1; clock:enlist `venue);
             ([] source_time:2026.09.17D09:59:59 2026.09.17D10:00:00.5 2026.09.17D10:00:05 2026.09.17D10:00:00.5 2026.09.17D10:00:08;
                 sym:5#`EURUSD; source:`a`a`a`b`b;
-                bid_prices:(enlist 1.0999;enlist 1.1004;enlist 1.1009;enlist 1.1003;enlist 1.1008);
-                bid_sizes:5#enlist enlist 1e6;
-                ask_prices:(enlist 1.1001;enlist 1.1006;enlist 1.1011;enlist 1.1007;enlist 1.1010);
-                ask_sizes:5#enlist enlist 1e6; clock:5#`venue));
+                bid:1.0999 1.1004 1.1009 1.1003 1.1008f;
+                ask:1.1001 1.1006 1.1011 1.1007 1.1010f; clock:5#`venue));
         ([] time:8#2026.09.17D10:00:10; source_time:8#2026.09.17D10:00:00; clock:8#`venue; venue:8#`a; fill_id:8#`x1; sym:8#`EURUSD; side:8#1; size:8#1e6;
             horizon:(4#0D00:00:01),4#0D00:00:10;
             kind:8#`total`execution`leg`residual; step:8#0 0 1 0; leg:8#``,`EURUSD,`;
@@ -241,8 +239,8 @@
                 size:enlist 1e6; price:enlist 3.99; fill_id:enlist `y1; clock:enlist `venue);
             ([] source_time:2026.09.17D09:59:59 2026.09.17D09:59:59 2026.09.17D10:00:00.5 2026.09.17D10:00:00.5 2026.09.17D10:00:08 2026.09.17D10:00:08;
                 sym:`EURUSD`EURPLN`EURUSD`EURPLN`EURUSD`EURPLN; source:6#`a;
-                bid_prices:(enlist 1.25;enlist 5.0;enlist 1.0;enlist 5.5;enlist 1.0;enlist 5.5); bid_sizes:6#enlist enlist 1e6;
-                ask_prices:(enlist 1.25;enlist 5.0;enlist 1.0;enlist 5.5;enlist 1.0;enlist 5.5); ask_sizes:6#enlist enlist 1e6; clock:6#`venue));
+                bid:1.25 5.0 1.0 5.5 1.0 5.5f;
+                ask:1.25 5.0 1.0 5.5 1.0 5.5f; clock:6#`venue));
         ([] time:10#2026.09.17D10:00:10; source_time:10#2026.09.17D10:00:00; clock:10#`venue; venue:10#`a; fill_id:10#`y1; sym:10#`USDPLN; side:10#-1; size:10#1e6;
             horizon:(5#0D00:00:01),5#0D00:00:10;
             kind:10#`total`execution`leg`leg`residual; step:10#0 0 1 2 0; leg:10#``,`EURUSD`EURPLN,`;

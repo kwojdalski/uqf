@@ -9,11 +9,14 @@
 /   `executions   the canonical executions end of day saved, with the fee and the clock
 /                 the crypto measures and the core's clock rule need. The PRIMARY input:
 /                 it owns the window and its rows are what a run counts
-/   `market_data  the books of every pair an execution's route needs, from the window's
-/                 start back by the reference's max_age to its end plus the furthest
-/                 horizon, AND each (pair, source)'s last snapshot before that - the book
-/                 an early execution is priced against when the market was quiet across
-/                 the window's start. A supporting input: context, never cut to the window
+/   `market_data  the TOP OF BOOK of every pair an execution's route needs, at exactly the instants the
+/                 scoring asks about: each leg at the execution and at every horizon, as the latest book of
+/                 each venue at or before the instant, looking back to the reference's age limit and across
+/                 midnight into the earlier partitions. A supporting input: context, never cut to the window
+/ .
+/ MEMORY STAYS PROPORTIONAL TO THE EXECUTIONS (#2288). The books are not selected into this process: the as-of
+/ join runs where the partitions are memory-mapped (the HDB, .qetl.mapped.tob_at) and only the matched books
+/ come back. No query here selects market_data with a where beyond the date, and none reads a depth column.
 / .
 / Nothing here knows a vendor: both tables are the canonical ones, and the scoring is the
 / worker's transform, the live job's own (src/etl/transforms/crypto_markout_outputs.q), so
@@ -45,7 +48,7 @@
 .qpipe.source.hdb_crypto_markouts.row_key:`venue`fill_id
 
 / The supporting input: the books, read by the transform as `market_data`.
-.qpipe.source.hdb_crypto_markouts.supporting:enlist[`market_data]!enlist .qetl.plant.columns[`market_data;`source_time`sym`source`bid_prices`bid_sizes`ask_prices`ask_sizes`clock]
+.qpipe.source.hdb_crypto_markouts.supporting:enlist[`market_data]!enlist .qetl.plant.columns[`market_data;`source_time`sym`source`bid`ask`clock]
 
 / .u.upd stamps `time` in UTC, and the sources' own stamps are UTC.
 .qpipe.source.hdb_crypto_markouts.tz:`UTC
@@ -72,12 +75,8 @@
 /   symbols       reference_symbols
 .qpipe.source.hdb_crypto_markouts.reference_read:`date_skew`lookback_cap`symbols!(1;7D;.qpipe.source.hdb_crypto_markouts.reference_symbols)
 
-/ The window's executions, and the books they are scored against, both from the HDB.
-/ Both tables are date-partitioned, so the partition is constrained first, and each is
-/ named as a symbol so it resolves at the HDB's root. The books read are the declared
-/ reference_read's: the symbols scoring needs, from the window's start back by the
-/ look-back the spec's max_age sets to its end plus the furthest horizon, and each
-/ (pair, source)'s last book before the earliest reference time.
+/ The window's executions, and the books they are scored against, both from the HDB: the executions of
+/ the window, then the top of book at the instants they are scored at (see the header).
 / @param h an open handle to the HDB
 / @param range_from inclusive lower bound
 / @param range_to exclusive upper bound
@@ -91,20 +90,11 @@
       }[skew];range_from;range_to];
     if[0=count deals; :`executions`market_data!(deals;0#.qpipe.source.hdb_crypto_markouts.supporting`market_data)];
     spec:.qpipe.transform.crypto_markout_outputs.job_spec;
-    syms:rr[`symbols][spec;deals];
     early:.qpipe.transform.crypto_markout_outputs.lookback[];
     lb:.qetl.source.reference_lookback[.qpipe.source.hdb_crypto_markouts.source_name;spec`max_age;early];
-    books:.qetl.source.ipc[h;{[syms;skew;read_from;from_ts;to_ts]
-        cand:`source_time xasc select source_time, sym, source, bid_prices, bid_sizes, ask_prices, ask_sizes, clock
-            from `market_data where date within (neg[skew],skew)+`date$(read_from;from_ts), source_time>=read_from, source_time<from_ts, sym in syms;
-        before:0!?[cand;();`sym`source!`sym`source;()];
-        inwin:select source_time, sym, source, bid_prices, bid_sizes, ask_prices, ask_sizes, clock from `market_data
-            where date within (neg[skew],skew)+`date$(from_ts;to_ts), source_time>=from_ts, source_time<to_ts, sym in syms;
-        `source_time xasc (cols before)#before,inwin
-      }[syms;skew;range_from-lb];
-      range_from-early;
-      range_to+.qpipe.transform.markout_core.reach spec];
-    `executions`market_data!(deals;books)}
+    legs:.qpipe.transform.markout_core.legs_of[.qpipe.transform.crypto_markout.domain;spec;deals];
+    probes:.qetl.mapped.probes[legs;deals`source_time;.qpipe.transform.markout_core.horizons_of spec];
+    `executions`market_data!(deals;.qetl.mapped.read_books[h;probes;range_from-lb;skew;`all])}
 
 / How far the HDB's crypto books reach, less the furthest horizon: a window ending at or
 / before this has every book its executions are scored against (#1927). The latest book is
@@ -115,7 +105,7 @@
 / @return the exclusive instant through which the books the scoring needs are present
 / @eg .qpipe.source.hdb_crypto_markouts.complete_through[{2026.09.17D10:00:25}]  ->  2026.09.17D10:00:15.000000000
 .qpipe.source.hdb_crypto_markouts.complete_through:{[h]
-    latest:.qetl.source.ipc_call[h;{[unused] exec max source_time from `market_data where date=max date, market=`crypto};enlist 0b];
+    latest:.qetl.source.ipc_call[h;{[a] .qetl.mapped.newest a};enlist enlist[`market]!enlist `crypto];
     / max of no rows is -0Wp, and arithmetic on it wraps to a far-future instant
     $[latest<=-0Wp; -0Wp; latest-.qpipe.transform.markout_core.reach .qpipe.transform.crypto_markout_outputs.job_spec]}
 
@@ -158,10 +148,8 @@
     ([] source_time:2026.09.17D10:00:00 2026.09.17D10:00:00 2026.09.17D10:00:09 2026.09.17D10:00:19 2026.09.17D10:00:19 2026.09.17D10:00:20 2026.09.17D10:00:21 2026.09.17D10:00:21 2026.09.17D10:00:28 2026.09.17D10:00:28 2026.09.17D10:00:30;
         sym:`$("BTC-USDT";"BTC-USDT";"BTC-USDT";"ETH-USDT";"ETH-USDT";"BTC-USDT";"ETH-USDT";"ETH-USDT";"ETH-USDT";"ETH-USDT";"BTC-USDT");
         source:`a`b`a`a`b`a`a`b`a`b`a;
-        bid_prices:(enlist 62000f;enlist 62004f;enlist 62010f;enlist 2999f;enlist 2998f;enlist 62005f;enlist 2997f;enlist 2996f;enlist 2990f;enlist 2989f;enlist 62005f);
-        bid_sizes:11#enlist enlist 1f;
-        ask_prices:(enlist 62010f;enlist 62008f;enlist 62020f;enlist 3001f;enlist 3002f;enlist 62015f;enlist 2999f;enlist 3000f;enlist 2992f;enlist 2993f;enlist 62015f);
-        ask_sizes:11#enlist enlist 1f;
+        bid:62000 62004 62010 2999 2998 62005 2997 2996 2990 2989 62005f;
+        ask:62010 62008 62020 3001 3002 62015 2999 3000 2992 2993 62015f;
         clock:11#`venue)}
 
 / What query returns for the fixture's day.

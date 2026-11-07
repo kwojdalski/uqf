@@ -24,10 +24,10 @@ contract](../architecture/markout-contract.md)) with FX's between them.
 
 Nothing new is invented: the existing contracts are sufficient.
 
-  | Input         | Columns the calculation reads                                                                                      | Clock         |
-  | ---           | ---                                                                                                                | ---           |
-  | `executions`  | `source_time`, `venue`, `sym`, `side` (+1 buy, -1 sell), `size`, `price`, `fill_id`, `clock`                       | `source_time` |
-  | `market_data` | `source_time`, `sym`, `source`, `bid_prices`, `bid_sizes`, `ask_prices`, `ask_sizes`, `clock` (a snapshot per row) | `source_time` |
+  | Input         | Columns the calculation reads                                                                                               | Clock         |
+  | ---           | ---                                                                                                                         | ---           |
+  | `executions`  | `source_time`, `venue`, `sym`, `side` (+1 buy, -1 sell), `size`, `price`, `fill_id`, `clock`                                | `source_time` |
+  | `market_data` | `source_time`, `sym`, `source`, `bid`, `ask`, `clock` (the flat top of a snapshot per row, arranged: see [Memory](#memory)) | `source_time` |
 
 The plant's receipt `time` is **not** an input, so it cannot leak into the
 clock. An execution is identified by `(venue; fill_id)`.
@@ -84,14 +84,16 @@ route is the chain available, and a test holds the calculation's allocation to
 `.qf.exec.cross_markout_attribution` there.
 
 **Reference price.** Per leg and per source, the latest snapshot at or before
-the instant; level 0 only (`.qf.mkt.top_sides`: sizes decide whether a level is
+the instant; level 0 only (the flat `bid` and `ask` market_data stores, which
+are `.qf.mkt.top_sides` taken at write time: sizes decide whether a level is
 usable, never what the price is, so there is no depth sweep). A source that has
 withdrawn a side contributes nothing on it, and does not fall back to an older
 book. Across sources, the best bid and best ask among those no older than
-`max_age` (`.qf.mkt.best_across_venues`). `max_age` defaults to
-`.qf.mkt.reference_max_age` (5s), the age `crypto_markout` and `posbook` use:
-one definition of how stale a reference may be. Both the live jobs and the
-`hdb_fx_markouts*` backfills score with the job spec's `max_age`
+`max_age` - reference variant #1 (`.qetl.reference`, equal bit for bit to
+`.qf.mkt.best_across_venues`; the spec's `reference` key names another).
+`max_age` defaults to `.qf.mkt.reference_max_age` (5s), the age `crypto_markout`
+and `posbook` use: one definition of how stale a reference may be. Both the live
+jobs and the `hdb_fx_markouts*` backfills score with the job spec's `max_age`
 (`.qpipe.transform.fx_markout_outputs.job_spec`), and the jobs pass the same
 value to their horizon declaration, so a source that stopped quoting neither
 sets a price nor is kept in the book history. A leg whose every source is older
@@ -307,3 +309,35 @@ fixture, each with its own status directory and destination HDB, and reads
    `` `your_table!`your_transform ``.
 3. Nothing else. The calculation, the layouts, the jobs and the horizon engine
    are unchanged.
+
+## Memory
+
+A twin's memory grows with its executions, never with the market. `market_data`
+can run to tens of terabytes, and the twin does not select it into its heap: the
+as-of join runs where the partitions are memory-mapped and only the books the
+executions are priced against come back.
+
+- **Flat top of book.** Every `market_data` row carries `bid` and `ask`, the
+  level-0 sides as plain floats (`.qetl.plant.with_flat`, written by every
+  mapping), and `rid`, its position in the partition. The depth columns stay on
+  disk, mapped and untouched: no markout reads a ladder.
+- **Sorted for an on-disk `aj`.** A partition is sorted by `sym`, `source`,
+  `source_time` with `p#` on `sym`: uqf's own finish and TorQ's end-of-day sort
+  (`scripts/torqconfig/sort.csv`, with `scripts/processes/uqs_row_ids.q`
+  numbering the rows after it) both write it, and `uqs data compress --report`
+  names a partition that is not.
+- **One date at a time.** `.qetl.mapped.tob_at`, run by the process that maps
+  the partitions (hdb1 loads it), reads each date with
+  `select ... from market_data where date=d` - the date and nothing else, so
+  every column stays mapped - and `aj`s the executions' probes (each leg at the
+  execution and at each horizon) against it, then against the earlier dates for
+  a source that was quiet across midnight. The result, one row per distinct
+  matched book, is what comes back to the worker.
+- **The core checks, it never sorts.** `markout_core.calc` refuses a top of book
+  that is not sorted and attributed (`.qetl.mapped.require_arranged`);
+  `markout_core.score` arranges a small in-memory buffer first (the live job's),
+  and passes an arranged table - what a source reads - through untouched.
+
+`scripts/gates/check.py markout-mapped` refuses a markout file that selects
+`market_data` with a `where` beyond the date, or names a depth column.
+`docs/architecture/markout-memory.md` has the design and the measurements.

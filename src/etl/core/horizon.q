@@ -92,7 +92,7 @@
 / it; the rest (#952) are each OFF unless declared, so a declaration that
 / names none of them behaves exactly as before.
 .qetl.job.stream.horizons.optional_keys:`procname`max_age`by`keep`ephemeral,.qetl.job.stream.passthrough_keys,
-    `event_time`reference_time`lookback`ready_on`legs`identity`remember`expire_after`retain_by
+    `event_time`reference_time`lookback`ready_on`legs`identity`remember`expire_after`retain_by`shared_reference
 
 / What define installs in .qpipe.job.<name>. They are the shell's, documented
 / here and in define, as a bounded worker's inherited methods are
@@ -170,6 +170,8 @@
         d[`identity]:idc];
     if[(`remember in key decl) and not `identity in key d; 'who," declares remember without identity - nothing would be remembered"];
     if[not $[-16h=type d`remember; 0D<d`remember; 0b]; 'who,"'s remember must be a positive timespan"];
+    if[(`shared_reference in key d) and not -1h=type d`shared_reference;
+        'who,"'s shared_reference must be a boolean: 1b to keep one reference buffer with the other jobs of the process that read the same table"];
     if[`expire_after in key d;
         if[not $[-16h=type d`expire_after; d[`expire_after]>d`horizon; 0b];
             'who,"'s expire_after must be a timespan longer than the horizon - an event cannot be late before it is due"]];
@@ -236,6 +238,7 @@
     ev0:0#first value ins;
     (` sv ns,`pending) set ev0;
     (` sv ns,`history) set 0#last value ins;
+    if[.qetl.job.stream.horizons.is_shared d; .qetl.job.stream.horizons.shared.join[d`reference;name;0#last value ins]];
     / Plain typed columns, built by update: a symbol id and a symbol reason
     / rather than joined tables and general columns, which PeachQ types
     / differently from KDB-X.
@@ -266,6 +269,13 @@
     .qetl.job.stream.horizons.registry[name]:enlist d;
     name}
 
+/ Does this job share its reference buffer with the other jobs of the process that read the same table?
+/ Declared with `shared_reference` (horizon_shared.q).
+/ @param d the job's declaration
+/ @return a boolean
+/ @eg .qetl.job.stream.horizons.is_shared enlist[`shared_reference]!enlist 1b  ->  1b
+.qetl.job.stream.horizons.is_shared:{[d] $[`shared_reference in key d; d`shared_reference; 0b]}
+
 / One horizon job's declaration, or a refusal naming it.
 / @param name the job
 / @return the declaration dict, with every default filled in
@@ -292,6 +302,8 @@
     d:.qetl.job.stream.horizons.def[name];
     which:$[t=d`events; `pending; t=d`reference; `history; `];
     if[null which; :()];
+    / one buffer, appended once for every member that reads it (horizon_shared.q)
+    if[(which=`history) and .qetl.job.stream.horizons.is_shared d; .qetl.job.stream.horizons.shared.add[name;x]; :()];
     if[`keep in key d; x:x where (d`keep) x];
     if[0=count x; :()];
     ns:.qetl.job.stream.namespace name;
@@ -315,94 +327,6 @@
 .qetl.job.stream.horizons.ids_of:{[d;t]
     idc:d`identity;
     `${raze string -8!value x} each idc#t}
-
-/ Private: per reference key, the earliest and latest reference time held -
-/ the anchor and how far the reference has advanced - and `ser`, the latest
-/ reference time of EACH series of the key (a series is the retain_by columns:
-/ a source's rows for the key, #1523). `hi` is the best of the series, so it
-/ says the key has advanced when ONE source has; `ser` says whether every
-/ source has.
-/ @private
-.qetl.job.stream.horizons.reach:{[d;hist]
-    k:hist first d`by; rt:hist d`reference_time;
-    g:group k;
-    sg:group d[`retain_by]#hist;
-    sk:(key sg) first d`by;
-    sh:max each rt value sg;
-    `lo`hi`ser!(min each rt g;max each rt g;(distinct sk)!{[sk;sh;k] sh where sk=k}[sk;sh] each distinct sk)}
-
-/ Private: each pending event's reference keys - its legs, or its own key.
-/ @private
-.qetl.job.stream.horizons.legs_of:{[d;pending] $[`legs in key d; (d`legs) pending; enlist each pending first d`by]}
-
-/ Private: why each event is not ready under `reference - "" when it is.
-/ An event is ready when every key it needs has an anchor at or before
-/ event_time and has advanced to event_time + horizon. Two requirements wait
-/ only until the wall-clock grace event_time + horizon + lateness, after
-/ which nothing stamped earlier can still arrive, so a source that never
-/ delivers cannot hold an event for ever:
-/   - the reach back to event_time - lookback (#1524): books that start inside
-/     the lookback leave the earlier, negative horizons unavailable, as the
-/     backfill does, instead of dropping the whole event; an anchor at or
-/     before event_time itself is still required
-/   - every series of a key that has a book within max_age of the horizon must
-/     have advanced to it (#1523), not just the best of them: a fast source
-/     passing the horizon says nothing of a slower one still in flight
-/ @private
-.qetl.job.stream.horizons.not_ready:{[d;r;et;legs;now]
-    lo:r`lo; hi:r`hi; ser:r`ser;
-    {[d;lo;hi;ser;now;t;ks]
-        ks:(),ks;
-        absent:ks where not ks in key lo;
-        if[count absent; :"no reference for ",", " sv string absent];
-        grace:now>=t+d[`horizon]+d`lateness;
-        need:$[grace; t; t-d`lookback];
-        early:ks where lo[ks]>need;
-        if[count early; :"no ",string[d`reference_time]," at or before ",string[need]," for ",", " sv string early];
-        short:ks where hi[ks]<t+d`horizon;
-        if[count short; :"reference has not reached ",string[t+d`horizon]," for ",", " sv string short];
-        / 0Wn is "however old": every series counts, and t+h-0Wn would be the 1734 floor
-        aged:$[`max_age in key d; d[`max_age]<0Wn; 0b];
-        oldest:$[aged; t+d[`horizon]-d`max_age; -0Wn];
-        behind:$[grace; `symbol$(); ks where {[o;h;s] any (s>=o) and s<h}[oldest;t+d`horizon] each ser ks];
-        if[count behind; :"a source has not reached ",string[t+d`horizon]," for ",", " sv string behind];
-        ""}[d;lo;hi;ser;now]'[et;legs]}
-
-/ Private: why each pending event is not ready under the job's rule - "" when
-/ it is. `wall` reads the plant clock, `reference` the reference's coverage,
-/ `both` the wall first (it is the cheaper to explain: nothing can have
-/ arrived yet) and then the coverage.
-/ @private
-.qetl.job.stream.horizons.why_not_ready:{[d;hist;pending;now]
-    et:pending d`event_time;
-    wall:{$[x;"";"horizon has not elapsed"]} each et<=now-d`horizon;
-    if[`wall=d`ready_on; :wall];
-    cover:.qetl.job.stream.horizons.not_ready[d;.qetl.job.stream.horizons.reach[d;hist];et;.qetl.job.stream.horizons.legs_of[d;pending];now];
-    $[`reference=d`ready_on; cover; {$[count x;x;y]}'[wall;cover]]}
-
-/ Private: the as-of-safe reference rows to keep, given the earliest instant
-/ any pending event can still ask about (see the header).
-/ @private
-.qetl.job.stream.horizons.retain:{[d;hist;earliest]
-    rt:hist d`reference_time;
-    / 0Wn is "as of however old" (fx_markout's spec), the same as no max_age:
-    / earliest-0Wn is the 1734 floor, which would evict nothing for ever (#1480)
-    aged:$[`max_age in key d; d[`max_age]<0Wn; 0b];
-    cutoff:$[aged; earliest-d`max_age; earliest];
-    old:where rt<cutoff;
-    if[0=count old; :hist];
-    / with max_age a row below the cutoff is never an answer - except as the
-    / anchor ready_on `reference needs (#959)
-    if[aged and not .qetl.job.stream.horizons.reads_reference[d`ready_on]; :hist where rt>=cutoff];
-    / the latest pre-cutoff row per key is still an as-of answer
-    / by reference time, not arrival: out-of-order rows must not evict the true as-of row (#1283)
-    o:old iasc rt old;
-    / a series' anchor is only an ANSWER while it is within max_age; with max_age the
-    / only anchor still needed is readiness's, one per `by` key, so a source that
-    / stopped quoting does not keep its last book for ever (#1410)
-    series:$[aged; (),d`by; d`retain_by];
-    latest:o last each value group series#hist o;
-    hist asc (til[count hist] except old),latest}
 
 / Private: score every event that is ready by `now`, publish the rows, then
 / evict them; give up on events past expire_after, with the reason; and,
@@ -441,10 +365,11 @@
     / every tick, scoring or not: a job whose events stop arriving must not
     / keep every reference row it is sent
     left:(get pq) d`event_time;
-    earliest:$[count left; min left; now-d`horizon];
-    / a late event may be older than everything pending, but not than now - lateness
-    if[d[`lateness]>0D; earliest:(earliest&now)-d`lateness];
-    hq set .qetl.job.stream.horizons.retain[d;get hq;earliest-d`lookback];
+    earliest:.qetl.job.stream.horizons.earliest_need[d;left;now];
+    / a shared buffer is trimmed to what every member can still need (horizon_shared.q)
+    $[.qetl.job.stream.horizons.is_shared d;
+        .qetl.job.stream.horizons.shared.trim[name;now];
+        hq set .qetl.job.stream.horizons.retain[d;get hq;earliest-d`lookback]];
     if[`identity in key d; cq set (get cq) where (get cq)[`at]>=now-d`remember];
     }
 

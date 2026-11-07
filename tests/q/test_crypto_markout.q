@@ -48,7 +48,7 @@
 / A book snapshot as the plant carries it.
 .qt.qpipe.job.crypto_markout.bk:{[st;sym;src;bid;ask;clk]
     ([] time:enlist st+0D00:00:00.1; sym:enlist sym; source:enlist src; market:enlist `crypto; source_time:enlist st;
-        bid_prices:enlist enlist bid; bid_sizes:enlist enlist 1f; ask_prices:enlist enlist ask; ask_sizes:enlist enlist 1f; clock:enlist clk)}
+        bid_prices:enlist enlist bid; bid_sizes:enlist enlist 1f; ask_prices:enlist enlist ask; ask_sizes:enlist enlist 1f; clock:enlist clk; bid:enlist bid; ask:enlist ask)}
 
 / The worked fill of crypto_markout_outputs.q, as the plant carries it.
 .qt.qpipe.job.crypto_markout.buy:{[]
@@ -211,8 +211,7 @@
 / Books for a pair on a venue, one a second from 10:00:00 for n seconds, a spread of ask less bid around the mid.
 .qt.qpipe.job.crypto_markout.grid:{[sym;src;mid;bidoff;askoff;n]
     ([] source_time:2026.09.17D10:00:00+1000000000*til n; sym:n#sym; source:n#src;
-        bid_prices:enlist each mid+bidoff; bid_sizes:n#enlist enlist 1f;
-        ask_prices:enlist each mid+askoff; ask_sizes:n#enlist enlist 1f; clock:n#`venue)}
+        bid:`float$mid+bidoff; ask:`float$mid+askoff; clock:n#`venue)}
 
 / Three venues quoting two pairs: a and b live throughout, with tops that differ so the best bid and the
 / best ask come from different venues at different seconds; c quotes better than both for three seconds and
@@ -239,8 +238,7 @@
 / The retired job's figure: its transform restated from the same library calls - the venues' tops of book,
 / the best mid across them within max_age of fill time + horizon, side*10000*(ref-price)%price.
 .qt.qpipe.job.crypto_markout.retired_bps:{[fl;books;hs]
-    s:.qf.mkt.top_sides books;
-    tob:([] time:books`source_time; sym:books`sym; venue:books`source; bid:s`bid; ask:s`ask);
+    tob:([] time:books`source_time; sym:books`sym; venue:books`source; bid:books`bid; ask:books`ask);
     n:count fl;
     m:count hs;
     f:fl "j"$raze m#'til n;

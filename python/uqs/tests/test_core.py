@@ -2289,6 +2289,9 @@ def test_hdb1_loads_the_metatables_after_its_database():
     assert composed["hdb1"]["load"].split() == [
         upstream["hdb1"],
         "${UQF_ROOT}/src/metadata/metatables.q",
+        # a markout's as-of join runs here, against the mapped partitions (#2288)
+        "${UQF_ROOT}/src/etl/core/mapped_books.q",
+        "${UQF_ROOT}/src/etl/core/mapped_depth.q",
     ]
 
 

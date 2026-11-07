@@ -244,6 +244,37 @@ mapping reads a null `source_time` as "no venue stamp" and puts the fill on the
 against venue-clock books. `clock` is the only column the fill derives; this one
 is deliberately not.
 
+### `market_data`: the flat top, the order and the row numbers (#2288)
+
+A markout joins against the memory-mapped `market_data` and must never copy it
+into a heap (`docs/architecture/markout-memory.md`), which needs three things of
+a partition that older ones lack:
+
+- `bid` and `ask`, the level-0 top as plain floats - what `.qf.mkt.top_sides`
+  takes from the ladders, null for a side the source withdrew or a level that is
+  no price;
+- `rid`, the row's position in its partition;
+- the rows sorted by `sym`, `source`, `source_time` with `p#` on `sym`.
+
+`uqs data check` lists, per partition, the columns it lacks and the partitions
+out of that order (`unsorted` in `--json`), and changes nothing.
+`uqs data check --apply` asks - **stop the stack first**, as for any migration -
+and then, per partition, derives `bid` and `ask` from the stored ladders (a
+chunk of rows at a time, so the ladders stay mapped), rewrites a partition that
+is not in order in the HDB writer's staging area and swaps it in whole under the
+write lock (a kill leaves the old partition or the new one, never a half-sorted
+one), and numbers its rows. A partition already in order with its numbers right
+is not touched, and a second run changes nothing. Memory needed is a partition's
+three key columns and the permutation, not its ladders.
+
+The bootstrap fill that runs with every `uqs` command **never** does this: a
+null `bid` would read as a withdrawn book, and deriving it reads every ladder.
+Partitions written from now on arrive in this shape: the mappings write `bid`
+and `ask`, and the sort that finishes a partition - uqf's own, or TorQ's
+end-of-day sort through `scripts/torqconfig/sort.csv` - writes the order and the
+numbers. `uqs data compress --report` reads the same `sort.csv`, so it names a
+partition that does not follow it.
+
 ### Renamed or retyped HDB columns
 
 `data check --apply` does not rewrite existing columns. When a release renames

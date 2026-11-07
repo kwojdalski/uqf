@@ -13,8 +13,7 @@
 
 / one source's book for one sym at one instant on one clock: a single level each side
 .qt.qpipe.transform.markout_core.bk:{[tm;sym;src;clk;bid;ask]
-    ([] source_time:enlist tm; sym:enlist sym; source:enlist src; bid_prices:enlist enlist bid; bid_sizes:enlist enlist 1e6;
-        ask_prices:enlist enlist ask; ask_sizes:enlist enlist 1e6; clock:enlist clk)}
+    ([] source_time:enlist tm; sym:enlist sym; source:enlist src; bid:enlist bid; ask:enlist ask; clock:enlist clk)}
 
 / one execution
 .qt.qpipe.transform.markout_core.fill:{[sym;side;size;px;id;clk]
@@ -34,7 +33,8 @@
 / the fixture spec with changes
 .qt.qpipe.transform.markout_core.sp:{[changes] .qpipe.transform.markout_core.fixture_spec,changes}
 
-.qt.qpipe.transform.markout_core.calc:{[spec;e;m] .qpipe.transform.markout_core.calc[.qt.qpipe.transform.markout_core.domain[];spec;e;m]}
+/ the books are built in time order, as a live buffer holds them: score arranges them, calc (the strict core) is tested on its own below
+.qt.qpipe.transform.markout_core.calc:{[spec;e;m] .qpipe.transform.markout_core.score[.qt.qpipe.transform.markout_core.domain[];spec;e;m]}
 
 / one component's column at one horizon
 .qt.qpipe.transform.markout_core.at:{[r;knd;hz;col] first (r col) where ((r`kind)=knd) and (r`horizon)=hz}
@@ -60,7 +60,7 @@
     sp:`horizons`report_ccy`rate_timing`rates!(enlist .qt.qpipe.transform.markout_core.ten_s;`USD;`execution;(enlist `XYZ)!enlist 2f);
     t:.qt.qpipe.transform.markout_core.t;
     m:.qt.qpipe.transform.markout_core.bk[t-0D00:00:01;`EURUSD;`a;`venue;1.5;1.5],.qt.qpipe.transform.markout_core.bk[t+0D00:00:09;`EURUSD;`a;`venue;1.75;1.75];
-    r:.qpipe.transform.markout_core.calc[dom;sp;.qt.qpipe.transform.markout_core.fill[`EURUSD;1;100f;1.5;`x;`venue];m];
+    r:.qpipe.transform.markout_core.score[dom;sp;.qt.qpipe.transform.markout_core.fill[`EURUSD;1;100f;1.5;`x;`venue];m];
     / the quote currency is XYZ, declared worth 2 USD: 100*(1.75-1.5) = 25 XYZ = 50 USD
     .qunit.assertEquals[first r`quote_ccy;`XYZ;"the quote currency is the resolver's"];
     .qunit.assertTrue[.qt.qpipe.transform.markout_core.near[.qt.qpipe.transform.markout_core.at[r;`total;.qt.qpipe.transform.markout_core.ten_s;`quote_amount];25f];"25 XYZ"];
@@ -220,7 +220,7 @@
     u:.qpipe.transform.markout_core.unscoreable[dom;sp;e];
     .qunit.assertEquals[u`reason;3#`no_clock;"unknown, null and anything else"];
     .qunit.assertEquals[u`fill_id;`u`n`z;"named by identity"];
-    .qunit.assertEquals[count .qpipe.transform.markout_core.calc[dom;sp;e;0#.qpipe.transform.markout_core.market_data_in];0;"and produce no rows"]};
+    .qunit.assertEquals[count .qpipe.transform.markout_core.score[dom;sp;e;0#.qpipe.transform.markout_core.market_data_in];0;"and produce no rows"]};
 
 / --- statuses and money -----------------------------------------------------------
 
@@ -268,7 +268,7 @@
 
 .qt.qpipe.transform.markout_core.test_money_is_size_times_move_and_report_is_quote_times_rate:{[tc]
     ex:.qpipe.transform.markout_core.fixture_examples[];
-    r:raze {[e] .qpipe.transform.markout_core.calc[.qpipe.transform.markout_core.fixture_domain;.qpipe.transform.markout_core.fixture_spec;(e`inputs) first .qpipe.transform.markout_core.input_names;(e`inputs) last .qpipe.transform.markout_core.input_names]} each ex;
+    r:raze {[e] .qpipe.transform.markout_core.score[.qpipe.transform.markout_core.fixture_domain;.qpipe.transform.markout_core.fixture_spec;(e`inputs) first .qpipe.transform.markout_core.input_names;(e`inputs) last .qpipe.transform.markout_core.input_names]} each ex;
     .qunit.assertEquals[count r;6;"three executions, two components"];
     .qunit.assertTrue[.qt.qpipe.transform.markout_core.near[r`quote_amount;(r`size)*r`move];"quote_amount = size * move"];
     .qunit.assertTrue[.qt.qpipe.transform.markout_core.near[r`report_amount;(r`quote_amount)*r`rate];"report_amount = quote_amount * rate"];
@@ -285,7 +285,7 @@
     t:.qt.qpipe.transform.markout_core.t;
     m:.qt.qpipe.transform.markout_core.bk[t-0D00:00:01;`ACME;`q;`receipt;49.75;50.25],.qt.qpipe.transform.markout_core.bk[t+0D00:00:09;`ACME;`q;`receipt;50.5;51f];
     e:.qt.qpipe.transform.markout_core.fill[`ACME;-1;100f;50.5;`e1;`receipt],.qt.qpipe.transform.markout_core.fill[`NOBK;1;100f;50f;`e2;`receipt];
-    r:.qpipe.transform.markout_core.calc[.qt.qpipe.transform.markout_core.attributing[];.qt.qpipe.transform.markout_core.sp[()!()];e;m];
+    r:.qpipe.transform.markout_core.score[.qt.qpipe.transform.markout_core.attributing[];.qt.qpipe.transform.markout_core.sp[()!()];e;m];
     a:select from r where fill_id=`e1;
     .qunit.assertEquals[a`kind;`total`execution`half;"the core's components, then the domain's"];
     .qunit.assertEquals[a`step;0 0 1;"step is the domain's"];
@@ -300,7 +300,7 @@
     t:.qt.qpipe.transform.markout_core.t;
     m:.qt.qpipe.transform.markout_core.bk[t-0D00:00:01;`ACME;`q;`receipt;49.75;50.25],.qt.qpipe.transform.markout_core.bk[t+0D00:00:09;`ACME;`q;`receipt;50.5;51f];
     d:.qt.qpipe.transform.markout_core.domain[],enlist[`available]!enlist {[spec;fr] (count fr)#0b};
-    r:.qpipe.transform.markout_core.calc[d;.qt.qpipe.transform.markout_core.sp[()!()];.qt.qpipe.transform.markout_core.fill[`ACME;1;1f;50f;`a1;`receipt];m];
+    r:.qpipe.transform.markout_core.score[d;.qt.qpipe.transform.markout_core.sp[()!()];.qt.qpipe.transform.markout_core.fill[`ACME;1;1f;50f;`a1;`receipt];m];
     .qunit.assertEquals[r`status;`unavailable`unavailable;"books exist, the domain says no"];
     .qunit.assertTrue[all null r`move;"no move"]};
 
@@ -331,12 +331,12 @@
 
 .qt.qpipe.transform.markout_core.test_an_empty_input_gives_an_empty_result_with_the_declared_schema:{[tc]
     d:.qt.qpipe.transform.markout_core.domain[];
-    r:.qpipe.transform.markout_core.calc[d;.qt.qpipe.transform.markout_core.sp[()!()];0#.qpipe.transform.markout_core.executions_in;0#.qpipe.transform.markout_core.market_data_in];
+    r:.qpipe.transform.markout_core.score[d;.qt.qpipe.transform.markout_core.sp[()!()];0#.qpipe.transform.markout_core.executions_in;0#.qpipe.transform.markout_core.market_data_in];
     .qunit.assertEquals[count r;0;"no rows"];
     .qunit.assertEquals[meta r;meta .qpipe.transform.markout_core.result;"the declared schema"];
     / every execution excluded is the same thing
     e:.qt.qpipe.transform.markout_core.fill[`ACME;0;1f;50f;`b1;`receipt];
-    r2:.qpipe.transform.markout_core.calc[d;.qt.qpipe.transform.markout_core.sp[()!()];e;0#.qpipe.transform.markout_core.market_data_in];
+    r2:.qpipe.transform.markout_core.score[d;.qt.qpipe.transform.markout_core.sp[()!()];e;0#.qpipe.transform.markout_core.market_data_in];
     .qunit.assertEquals[meta r2;meta .qpipe.transform.markout_core.result;"an input that is all excluded"]};
 
 .qt.qpipe.transform.markout_core.test_the_result_carries_the_contracts_core_columns_in_the_contracts_order:{[tc]
@@ -433,7 +433,7 @@
         .qt.qpipe.transform.markout_core.bk[t-0D00:00:00.100;`USDJPY;`a;`venue;150.01;150.01];
         .qt.qpipe.transform.markout_core.bk[t+0D00:00:00.400;`USDJPY;`a;`venue;150.02;150.02];
         .qt.qpipe.transform.markout_core.bk[t+0D00:00:01.900;`USDJPY;`a;`venue;150.03;150.03]);
-    r:.qpipe.transform.markout_core.calc[d;sp;.qt.qpipe.transform.markout_core.fill[`USDJPY;1;1e6;150f;`f1;`venue];m];
+    r:.qpipe.transform.markout_core.score[d;sp;.qt.qpipe.transform.markout_core.fill[`USDJPY;1;1e6;150f;`f1;`venue];m];
     tot:select from r where kind=`total;
     .qunit.assertEquals[tot`horizon;g;"one scored row per horizon, in the grid's order"];
     .qunit.assertTrue[.qt.qpipe.transform.markout_core.near[tot`ref_t1;150 150.01 150.02 150.03];"each read at its own instant"];

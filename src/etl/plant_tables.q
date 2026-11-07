@@ -425,8 +425,24 @@
 / guess. The column is LAST, so a partition filled afterwards has the same
 / column order as one written from this declaration, and a positional reader
 / of the older columns does not move.
-.qetl.plant.market_data:([]time:`timestamp$(); sym:`g#`symbol$(); source:`symbol$(); market:`symbol$(); source_time:`timestamp$(); bid_prices:(); bid_sizes:(); ask_prices:(); ask_sizes:(); clock:`symbol$())
+.qetl.plant.market_data:([]time:`timestamp$(); sym:`g#`symbol$(); source:`symbol$(); market:`symbol$(); source_time:`timestamp$(); bid_prices:(); bid_sizes:(); ask_prices:(); ask_sizes:(); clock:`symbol$(); bid:`float$(); ask:`float$(); rid:`long$())
 .qetl.plant.nested[`market_data;`bid_prices`bid_sizes`ask_prices`ask_sizes!"FFFF"];
+
+/ bid, ask and rid (#2288), after clock by the same convention: the book's level-0 top FLAT (null for a side the
+/ source withdrew or a level that is no price by .qf.mkt.level_ok - .qf.mkt.top_sides' rule, applied at write time)
+/ and the row's position in its partition as sorted (null until the sort that finishes the partition numbers it). A
+/ markout joins against the memory-mapped partition and a ladder is a nested column a select would copy, so it reads
+/ these and never a ladder (docs/architecture/markout-memory.md). Sorted by sym, source, source_time with p# on sym: uqf's finish reads that from here, TorQ's from scripts/torqconfig/sort.csv.
+.qetl.plant.sorting[`market_data;`sym`source`source_time!`p``];
+/ table -> the column holding a row's position once its partition is in final order: assigned by uqf's finish
+/ (io_hdb.q), by TorQ's end-of-day sort (scripts/processes/uqs_row_ids.q) and by `uqs data check --apply`.
+.qetl.plant.row_ids:enlist[`market_data]!enlist `rid
+
+/ The flat columns of market_data rows: the ladders' level 0 as bid and ask, and a null rid; the ONE place a mapping gets them.
+/ @param rows market_data rows with the four ladders
+/ @return the rows with bid, ask (float) and rid (long) as their last columns
+/ @eg .qetl.plant.with_flat[([] bid_prices:enlist 1.1 1.09; bid_sizes:enlist 1e6 1e6; ask_prices:enlist `float$(); ask_sizes:enlist `float$())]`bid  ->  enlist 1.1
+.qetl.plant.with_flat:{[rows] $[count rows; (rows,'.qf.mkt.top_sides rows),'([] rid:(count rows)#0N); update bid:`float$(), ask:`float$(), rid:`long$() from rows]}
 
 / Complete per-pair snapshots; level provenance stays aligned with prices and sizes.
 .qetl.plant.superbook:([]time:`timestamp$(); sym:`g#`symbol$(); as_of:`timestamp$(); bid_prices:(); bid_sizes:(); bid_sources:(); bid_times:(); ask_prices:(); ask_sizes:(); ask_sources:(); ask_times:())

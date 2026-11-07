@@ -85,7 +85,24 @@
 / than the columns has none to read: its rows are the contract's first version, with the
 / rate timing and reporting currency unknown.
 / .
-/ ADDITIVE, ALWAYS - but for that migration. A table directory that holds a `.d` is never emptied and a
+/ TWO MORE THINGS ARE MIGRATED, ONLY WHEN ASKED (#2288), for market_data. A markout runs its
+/ as-of join against the memory-mapped partitions and never copies them, which needs three things
+/ of a partition the older ones lack, and `migrate` brings them:
+/ .
+/   bid, ask   the flat level-0 top of each book, derived from the stored ladders by the plant's
+/              own rule (top_sides: a price someone could deal at, else null), a chunk of rows
+/              at a time so the ladders stay mapped. Held back without `migrate`, like config_id:
+/              a null there would read as a withdrawn book, and the bootstrap runs on every command
+/   the order  rows sorted by sym, source, source_time with p# on sym (the plant's declared
+/              `sorting`). A rewrite, so it is done in staging and swapped in whole under the HDB
+/              write lock (hdb_sort_lib.q) - stop the stack first, as for any migration
+/   rid        each row's position in that order, assigned with the sort (an older partition that
+/              is already in order only gets the column)
+/ .
+/ `uqs data check` (dry) lists the partitions that lack the columns or are not in order
+/ (scripts/gates/hdb_sort_order.q); `uqs data check --apply` asks, then runs this with `migrate`.
+/ .
+/ ADDITIVE, ALWAYS - but for those migrations. A table directory that holds a `.d` is never emptied and a
 / column that exists is never rewritten, whatever is in it. A table or a
 / column a partition holds and database.q no longer declares is left alone:
 / that is history, and deleting history is not this script's business. A
@@ -117,7 +134,7 @@ die:{[msg] -2 "fill_hdb_partitions: ",msg; exit 1}
 
 hdb_root:hsym `$first .z.x;
 schema_file:hsym `$.z.x 1;
-/ the markout configuration migration (#1999) runs only when asked
+/ the markout configuration migration (#1999) and the market_data one (#2288) run only when asked
 migrate:(2<count .z.x) and "migrate"~.z.x 2;
 
 if[()~key hdb_root; die "no HDB at ",string hdb_root];
@@ -132,6 +149,14 @@ script_dir:{[f] $[0=count i:where "/"=f; ""; (1+last i)#f]} string .z.f;
 dbmaint_file:hsym `$script_dir,"../../lib/kx-dbmaint/dbmaint.q";
 if[()~key dbmaint_file; die "no dbmaint.q at ",string[dbmaint_file]," - lib/kx-dbmaint ships with every release"];
 system"l ",1_string dbmaint_file;
+
+/ The sort migration's functions and what it reads of src/etl (the plant's sort rules and row-number
+/ columns, the HDB writer's staging and swap). Only a migration needs them.
+sorted_tables:(`symbol$())!();
+if[migrate;
+    system"l ",script_dir,"hdb_sort_lib.q";
+    load_etl[script_dir,"../../src/etl/"];
+    sorted_tables:sort_rules[]];
 
 / Load the definitions at ROOT and take the difference, rather than into a
 / namespace of their own. `\d .hdbfill` would be tidier to read and does
@@ -209,9 +234,35 @@ legacy_config_cols:`contract_version`rate_timing`report_ccy
 /   derived contract column of the FX markout tables
 derived_column:{[table_name;col]
     $[(table_name in markout_tables) and col=`config_id; 1b;
-      table_name in `executions`market_data; col=`clock;
+      table_name=`market_data; col in `clock`bid`ask`rid;
+      table_name=`executions; col=`clock;
       table_name in key fx_derived; col in fx_derived table_name;
       0b]}
+
+/ The columns an EXISTING partition of a table gets only when the migration is asked for, because they are
+/ derived from the partition's stored columns and the bootstrap runs on every command: a markout table's
+/ config_id (derived from the old configuration columns, which only the migration drops, #1999) and
+/ market_data's flat top and row number (#2288).
+/ @param table_name the table
+/ @return the held-back columns
+held_cols:{[table_name]
+    $[table_name in markout_tables; enlist `config_id;
+      table_name=`market_data; `bid`ask`rid;
+      `symbol$()]}
+
+/ One of market_data's flat columns, derived from the columns beside it. A partition that lacks the
+/ ladders keeps the declared null: nothing is guessed.
+/ @param root the HDB root
+/ @param dir a table directory that holds a `.d`
+/ @param col bid, ask or rid
+/ @return the column, one value per row
+derived_flat:{[root;dir;col]
+    have:disk_cols dir;
+    n:count get ` sv dir,first have;
+    if[col=`rid; :til n];
+    side:$[col=`bid; `bid_prices`bid_sizes; `ask_prices`ask_sizes];
+    if[not all side in have; :declared_default[root;`market_data;col]];
+    derived_side[dir;side 0;side 1]}
 
 / The stored columns the derivation of an FX markout column reads.
 / @param table_name fx_markout or fx_markout_wide
@@ -404,16 +455,21 @@ repair_dir:{[root;table_name;dir]
         write_splay[root;dir;.Q.en[root;0#value table_name]];
         :`table];
     absent:missing_cols[table_name;dir];
-    / a markout partition that already exists gets no config_id unless the migration was asked
-    / for: it is derived from the old configuration columns, which only the migration drops (#1999)
-    if[(not migrate) and table_name in markout_tables; absent:absent except `config_id];
+    / an existing partition gets the columns derived from its stored ones only when the migration is asked for
+    if[not migrate; absent:absent except held_cols table_name];
     {[root;table_name;dir;col]
         v:$[not derived_column[table_name;col]; declared_default[root;table_name;col];
             col=`config_id; derived_config[root;table_name;dir];
             table_name in key fx_derived; derived_fx[root;table_name;dir;col];
+            (table_name=`market_data) and col in `bid`ask`rid; derived_flat[root;dir;col];
             (.Q.en[root] flip enlist[`v]!enlist derived_clock[root;table_name;dir])`v];
         add1col[dir;col;v]}[root;table_name;dir] each absent;
     if[migrate and table_name in markout_tables; drop_legacy[table_name;dir]];
+    / the declared order of a table that has one, and its row numbers (#2288): a rewrite, in staging
+    if[migrate and table_name in key sorted_tables;
+        dt:"D"$partition_name dir;
+        if[sort_partition[root;dt;table_name;sorted_tables table_name];
+            -1 "  ",partition_name[dir],"/",string[table_name],": rewritten in ",(", " sv string key sorted_tables table_name)," order, rows numbered"]];
     absent}
 
 / What is still wrong, read back from disk rather than taken from what the
@@ -422,8 +478,8 @@ repair_dir:{[root;table_name;dir]
 / @return one line per problem, empty if the database is whole
 problems_in:{[table_name;dir]
     if[()~key ` sv dir,`.d; :enlist "no table at ",1_string dir];
-    / not migrating, an existing markout partition has no config_id by design
-    held:$[(not migrate) and table_name in markout_tables; enlist `config_id; `$()];
+    / not migrating, an existing partition lacks the columns the migration derives, by design
+    held:$[not migrate; held_cols table_name; `$()];
     lacks:missing_cols[table_name;dir] except held;
     if[count lacks; :enlist "columns not in .d of ",(1_string dir),": ",", " sv string lacks];
     declared_cols:(cols value table_name) except held;

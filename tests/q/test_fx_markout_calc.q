@@ -33,7 +33,8 @@
 
 .qt.qpipe.transform.fx_markout.near:{[a;b] (all (null a)=null b) and all (null a) or 1e-9>=abs a-b}
 
-.qt.qpipe.transform.fx_markout.calc:{[spec;e;m] .qpipe.transform.fx_markout.calc[spec;e;m]}
+/ the books are written as ladders, as the plant carried them before the flat top; the calculator reads their level 0
+.qt.qpipe.transform.fx_markout.calc:{[spec;e;m] .qpipe.transform.fx_markout.calc[spec;e;.qt.support.flat_books m]}
 
 / the pips of one component at one horizon (a leg by its step)
 .qt.qpipe.transform.fx_markout.at:{[r;hz;knd] first exec pips from r where horizon=hz, kind=knd}
@@ -52,7 +53,7 @@
 
 .qt.qpipe.transform.fx_markout.test_the_calculator_reads_the_two_canonical_contracts_and_no_plant_receipt_time:{[tc]
     .qunit.assertEquals[cols .qpipe.transform.fx_markout.executions_in;`source_time`venue`sym`side`size`price`fill_id`clock;"executions, on source_time, and whose clock it is"];
-    .qunit.assertEquals[cols .qpipe.transform.fx_markout.market_data_in;`source_time`sym`source`bid_prices`bid_sizes`ask_prices`ask_sizes`clock;"market_data, on source_time, and whose clock it is"];
+    .qunit.assertEquals[cols .qpipe.transform.fx_markout.market_data_in;`source_time`sym`source`bid`ask`clock;"market_data's top of book, on source_time, and whose clock it is"];
     both:(cols .qpipe.transform.fx_markout.executions_in),cols .qpipe.transform.fx_markout.market_data_in;
     .qunit.assertFalse[`time in both;
         "the plant's receipt time is not an input"]};
@@ -359,16 +360,16 @@
 
 .qt.qpipe.transform.fx_markout.test_empty_inputs_score_to_the_empty_result:{[tc]
     sp:.qt.qpipe.transform.fx_markout.spec_of[`horizons`tolerance!(enlist .qt.qpipe.transform.fx_markout.one_s;1e-6)];
-    .qunit.assertEquals[.qt.qpipe.transform.fx_markout.calc[sp;0#.qt.qpipe.transform.fx_markout.fill[.qt.qpipe.transform.fx_markout.t;`EURUSD;1;1.1;`x];.qt.qpipe.transform.fx_markout.direct_books[]];0#.qpipe.transform.fx_markout.result;"no executions"];
-    r:.qt.qpipe.transform.fx_markout.calc[sp;.qt.qpipe.transform.fx_markout.fill[.qt.qpipe.transform.fx_markout.t;`EURUSD;1;1.1;`x];0#.qt.qpipe.transform.fx_markout.direct_books[]];
+    .qunit.assertEquals[.qt.qpipe.transform.fx_markout.calc[sp;0#.qt.qpipe.transform.fx_markout.fill[.qt.qpipe.transform.fx_markout.t;`EURUSD;1;1.1;`x];.qt.support.flat_books .qt.qpipe.transform.fx_markout.direct_books[]];0#.qpipe.transform.fx_markout.result;"no executions"];
+    r:.qt.qpipe.transform.fx_markout.calc[sp;.qt.qpipe.transform.fx_markout.fill[.qt.qpipe.transform.fx_markout.t;`EURUSD;1;1.1;`x];0#.qt.support.flat_books .qt.qpipe.transform.fx_markout.direct_books[]];
     .qunit.assertTrue[all null exec pips from r;"no books: every component is null, none is dropped"]};
 
 .qt.qpipe.transform.fx_markout.test_a_malformed_input_or_spec_is_refused_by_name:{[tc]
     sp:.qt.qpipe.transform.fx_markout.spec_of[()!()];
-    .qunit.assertThrows[.qpipe.transform.fx_markout.calc[sp;;.qt.qpipe.transform.fx_markout.direct_books[]];delete price from .qt.qpipe.transform.fx_markout.fill[.qt.qpipe.transform.fx_markout.t;`EURUSD;1;1.1;`x];
+    .qunit.assertThrows[.qpipe.transform.fx_markout.calc[sp;;.qt.support.flat_books .qt.qpipe.transform.fx_markout.direct_books[]];delete price from .qt.qpipe.transform.fx_markout.fill[.qt.qpipe.transform.fx_markout.t;`EURUSD;1;1.1;`x];
         "*executions is missing required column(s) price*";"an executions column the contract needs"];
-    .qunit.assertThrows[.qpipe.transform.fx_markout.calc[sp;.qt.qpipe.transform.fx_markout.fill[.qt.qpipe.transform.fx_markout.t;`EURUSD;1;1.1;`x];];delete ask_prices from .qt.qpipe.transform.fx_markout.direct_books[];
-        "*market_data is missing required column(s) ask_prices*";"a market_data column"];
+    .qunit.assertThrows[.qpipe.transform.fx_markout.calc[sp;.qt.qpipe.transform.fx_markout.fill[.qt.qpipe.transform.fx_markout.t;`EURUSD;1;1.1;`x];];delete ask from .qt.support.flat_books .qt.qpipe.transform.fx_markout.direct_books[];
+        "*market_data is missing required column(s) ask*";"a market_data column"];
     .qunit.assertThrows[.qpipe.transform.fx_markout.require_spec;sp,enlist[`horizons]!enlist 0#0D;
         "*horizons must be a non-empty list of timespans*";"no horizons"];
     .qunit.assertThrows[.qpipe.transform.fx_markout.require_spec;sp,enlist[`horizons]!enlist 1 2;

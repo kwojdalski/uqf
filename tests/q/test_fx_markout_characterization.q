@@ -38,8 +38,7 @@
 / one source's book for one pair at one instant: a single level each side
 .qt.qpipe.transform.fx_markout.characterization.bk:{[tm;sym;src;bid;ask]
     ([] source_time:enlist tm; sym:enlist sym; source:enlist src;
-        bid_prices:enlist enlist bid; bid_sizes:enlist enlist 1e6;
-        ask_prices:enlist enlist ask; ask_sizes:enlist enlist 1e6; clock:enlist `venue)}
+        bid:enlist bid; ask:enlist ask; clock:enlist `venue)}
 
 / equal where both are null, within a tolerance elsewhere
 .qt.qpipe.transform.fx_markout.characterization.near:{[a;b] (all (null a)=null b) and all (null a) or 1e-9>=abs a-b}

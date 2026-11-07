@@ -43,7 +43,7 @@
 / A book snapshot as the plant carries it.
 .qt.qpipe.job.eq_markout.bk:{[st;sym;src;bid;ask;clk]
     ([] time:enlist st+0D00:00:00.1; sym:enlist sym; source:enlist src; market:enlist `equity; source_time:enlist st;
-        bid_prices:enlist enlist bid; bid_sizes:enlist enlist 100f; ask_prices:enlist enlist ask; ask_sizes:enlist enlist 100f; clock:enlist clk)}
+        bid_prices:enlist enlist bid; bid_sizes:enlist enlist 100f; ask_prices:enlist enlist ask; ask_sizes:enlist enlist 100f; clock:enlist clk; bid:enlist bid; ask:enlist ask)}
 
 / The worked fill of eq_markout_outputs.q, as the plant carries it.
 .qt.qpipe.job.eq_markout.buy:{[]
@@ -179,7 +179,7 @@
 
 .qt.qpipe.job.eq_markout.close_books:{[]
     b:.qpipe.source.hdb_eq_markouts.raw_market_data[];
-    update time:source_time+0D00:00:00.1 from select source_time, sym, source, market, bid_prices, bid_sizes, ask_prices, ask_sizes, clock from b where sym=`META}
+    update time:source_time+0D00:00:00.1 from select source_time, sym, source, market, bid, ask, clock from b where sym=`META}
 
 .qt.qpipe.job.eq_markout.test_a_horizon_across_the_close_is_unavailable_whatever_the_next_books_say:{[tc]
     / the 21:00:20 book (after the close) is published and would price +30s and +1min; the calendar rules them out

@@ -49,12 +49,16 @@ def fill_hdb_partitions(paths: UqsPaths, *, migrate: bool = False, hdb: Path | N
     declared TYPE changed is reported by `uqs data check`, not
     repaired here.
 
-    One exception, and only with ``migrate`` (#1999): the three configuration
+    Two exceptions, and only with ``migrate``. (#1999) The three configuration
     columns a markout row used to repeat (contract_version, rate_timing,
     report_ccy) are folded into legacy configuration snapshots, recorded in the
     status directory, a ``config_id`` column names each row's, and the three
-    columns are dropped. ``uqs data check --apply`` passes it after asking; the
-    bootstrap does not, and leaves an existing markout partition as it was.
+    columns are dropped. (#2288) market_data's older partitions get the flat
+    level-0 top (``bid``, ``ask``) derived from their ladders, are rewritten sorted
+    by sym, source, source_time with p# on sym, and get their row numbers
+    (``rid``) - what a markout's as-of join against the mapped partition needs.
+    ``uqs data check --apply`` passes it after asking; the bootstrap does not, and
+    leaves an existing partition as it was.
 
     `hdb` is another HDB root to fill from this runtime's schema (`data seed
     --hdb DIR`, #2237); None, this runtime's own.
@@ -118,7 +122,11 @@ def fill_hdb_partitions(paths: UqsPaths, *, migrate: bool = False, hdb: Path | N
         # "added" too, or the column half of the repair happens silently and
         # an operator reading the log believes the database was untouched; and
         # "dropped" and the legacy snapshots, which the markout migration reports
-        # (#1999) - a deleted column must never be silent.
-        if any(word in line for word in ("wrote", "filled", "added", "dropped", "legacy snapshot")):
+        # (#1999), and "rewritten", a partition put in its declared order (#2288) - a
+        # deleted column or a rewritten partition must never be silent.
+        if any(
+            word in line
+            for word in ("wrote", "filled", "added", "dropped", "legacy snapshot", "rewritten")
+        ):
             log.info("hdb: {}", line.strip())
     return True

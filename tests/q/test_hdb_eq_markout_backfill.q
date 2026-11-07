@@ -146,7 +146,7 @@
 .qt.qpipe.job.hdb_eq_markout_backfill.with_hdb:{[f]
     had:{[nm] $[nm in key `.; (1b;get nm); (0b;::)]} each `executions`market_data;
     `executions set update date:`date$source_time from .qpipe.source.hdb_eq_markouts.raw_executions[];
-    `market_data set update date:`date$source_time from .qpipe.source.hdb_eq_markouts.raw_market_data[];
+    `market_data set .qt.support.stand_in_market_data .qpipe.source.hdb_eq_markouts.raw_market_data[];
     `.qt.qpipe.job.hdb_eq_markout_backfill.sent set ();
     r:@[f;::;{[e] `threw,e}];
     {[nm;k] $[first k; nm set last k; ![`.;();0b;enlist nm]]}'[`executions`market_data;had];
@@ -158,7 +158,11 @@
     r:.qt.qpipe.job.hdb_eq_markout_backfill.with_hdb {.qpipe.source.hdb_eq_markouts.query[.qt.qpipe.job.hdb_eq_markout_backfill.hdb;.qt.qpipe.job.hdb_eq_markout_backfill.w 0;.qt.qpipe.job.hdb_eq_markout_backfill.w 1]};
     .qunit.assertEquals[count .qt.qpipe.job.hdb_eq_markout_backfill.sent;2;"one query for the executions, one for the books"];
     .qunit.assertEquals[.qt.qpipe.job.hdb_eq_markout_backfill.sent 0;w;"executions over the window itself"];
-    .qunit.assertEquals[.qt.qpipe.job.hdb_eq_markout_backfill.sent 1;(w 0;(w 1)+0D00:01:00);"books from the window's start to its end plus the furthest horizon (the grid has no negative horizon)"];
+    a:first .qt.qpipe.job.hdb_eq_markout_backfill.sent 1;
+    spec:.qpipe.transform.eq_markout_outputs.job_spec;
+    .qunit.assertEquals[a`read_from;(w 0)-spec`max_age;"no book older than the reference's max_age before the window's start (the grid has no negative horizon)"];
+    .qunit.assertEquals[(a`skew;a`venues);(1;.qpipe.transform.eq_markout_outputs.venues);"a day either side, the equity venues only"];
+    .qunit.assertEquals[asc distinct (a`probes)`sym;`AAPL`META;"only the symbols the executions trade"];
     .qunit.assertEquals[key r;`executions`market_data;"both inputs, raw - the scoring is the transform's"];
     .qunit.assertEquals[asc exec distinct fill_id from r`executions;`e1`e2`e3;"the equity venue's fills only: the FX fill of the shared table is not read"];
     .qunit.assertEquals[asc distinct (r`market_data)`source;enlist `XNAS;"and its books only"];
@@ -172,8 +176,8 @@
 .qt.qpipe.job.hdb_eq_markout_backfill.test_only_the_books_the_symbols_need_are_read:{[t]
     / AAPL and META fills need AAPL and META; an MSFT book on the same venue exists and is not read
     extra:{
-        `market_data set (update date:`date$source_time from .qpipe.source.hdb_eq_markouts.raw_market_data[]),
-            update date:`date$source_time, sym:`MSFT from 2#.qpipe.source.hdb_eq_markouts.raw_market_data[];
+        `market_data set .qt.support.stand_in_market_data (.qpipe.source.hdb_eq_markouts.raw_market_data[]),
+            update sym:`MSFT from 2#.qpipe.source.hdb_eq_markouts.raw_market_data[];
         `executions set update date:`date$source_time from .qpipe.source.hdb_eq_markouts.raw_executions[];
         .qpipe.source.hdb_eq_markouts.query[.qt.qpipe.job.hdb_eq_markout_backfill.hdb;2026.02.25D14:00:00;2026.02.25D21:00:00]};
     `.qt.qpipe.job.hdb_eq_markout_backfill.extra set extra;
@@ -184,9 +188,8 @@
 .qt.qpipe.job.hdb_eq_markout_backfill.early_query:{[times]
     `executions set ([] date:enlist 2026.02.25; source_time:enlist 2026.02.25D15:00:03; venue:enlist `XNAS; sym:enlist `AAPL;
         side:enlist 1; size:enlist 100f; price:enlist 271.5; fill_id:enlist `n1; clock:enlist `venue);
-    `market_data set ([] date:(count times)#2026.02.25; source_time:times; market:(count times)#`equity;
-        sym:(count times)#`AAPL; source:(count times)#`XNAS; bid_prices:(count times)#enlist enlist 271.25; bid_sizes:(count times)#enlist enlist 100f;
-        ask_prices:(count times)#enlist enlist 271.5; ask_sizes:(count times)#enlist enlist 100f; clock:(count times)#`venue);
+    `market_data set .qt.support.stand_in_market_data ([] source_time:times; market:(count times)#`equity;
+        sym:(count times)#`AAPL; source:(count times)#`XNAS; bid:(count times)#271.25; ask:(count times)#271.5; clock:(count times)#`venue);
     .qpipe.source.hdb_eq_markouts.query[.qt.qpipe.job.hdb_eq_markout_backfill.hdb;2026.02.25D15:00:00;2026.02.25D16:00:00]}
 
 .qt.qpipe.job.hdb_eq_markout_backfill.test_an_execution_early_in_a_window_is_priced_by_the_book_just_before_it:{[t]
@@ -258,16 +261,16 @@
     .qunit.assertEquals[r;2026.02.25D21:00:20-0D00:01:00;"the last equity book is at 21:00:20 and the furthest horizon is a minute"]};
 
 .qt.qpipe.job.hdb_eq_markout_backfill.test_a_newer_fx_book_does_not_vouch_for_equities:{[t]
-    f:{`market_data set (update date:`date$source_time from .qpipe.source.hdb_eq_markouts.raw_market_data[]),
-            ([] date:enlist 2026.02.25; source_time:enlist 2026.02.25D23:00:00; market:enlist `fx; sym:enlist `EURUSD; source:enlist `a;
-                bid_prices:enlist enlist 1.1; bid_sizes:enlist enlist 1e6; ask_prices:enlist enlist 1.2; ask_sizes:enlist enlist 1e6; clock:enlist `receipt);
+    f:{`market_data set .qt.support.stand_in_market_data (.qpipe.source.hdb_eq_markouts.raw_market_data[]),
+            ([] source_time:enlist 2026.02.25D23:00:00; market:enlist `fx; sym:enlist `EURUSD; source:enlist `a;
+                bid:enlist 1.1; ask:enlist 1.2; clock:enlist `receipt);
         .qpipe.source.hdb_eq_markouts.complete_through[.qt.qpipe.job.hdb_eq_markout_backfill.hdb]};
     `.qt.qpipe.job.hdb_eq_markout_backfill.fxnewer set f;
     r:.qt.qpipe.job.hdb_eq_markout_backfill.with_hdb {.qt.qpipe.job.hdb_eq_markout_backfill.fxnewer[]};
     .qunit.assertEquals[r;2026.02.25D21:00:20-0D00:01:00;"an FX book at 23:00 says nothing about whether the equity books have landed"]};
 
 .qt.qpipe.job.hdb_eq_markout_backfill.test_an_hdb_without_equity_books_vouches_for_nothing:{[t]
-    f:{`market_data set 0#update date:`date$source_time from .qpipe.source.hdb_eq_markouts.raw_market_data[];
+    f:{`market_data set 0#.qt.support.stand_in_market_data .qpipe.source.hdb_eq_markouts.raw_market_data[];
         .qpipe.source.hdb_eq_markouts.complete_through[.qt.qpipe.job.hdb_eq_markout_backfill.hdb]};
     `.qt.qpipe.job.hdb_eq_markout_backfill.empty set f;
     r:.qt.qpipe.job.hdb_eq_markout_backfill.with_hdb {.qt.qpipe.job.hdb_eq_markout_backfill.empty[]};

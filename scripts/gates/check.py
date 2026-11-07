@@ -139,6 +139,15 @@ def _declaration_reference(decl: ModuleType, root: Path) -> int:
     )
 
 
+def _markout_mapped(mapped: ModuleType, root: Path) -> int:
+    """A markout's path selects market_data by its date alone and reads no depth (#2288)."""
+    return report(
+        "markout-mapped",
+        mapped.problems(root),
+        f"{len(mapped.PATH)} markout files select market_data by date alone and read no depth",
+    )
+
+
 def _tool_pins(pins: ModuleType, root: Path) -> int:
     """Every copy of a tool's version pin agrees with its authority (#1838)."""
     return report(
@@ -196,6 +205,12 @@ CHECKS: dict[str, Check] = {
             "every write that adds to a q registry under src/ stores its value enlisted",
             "registry_enlist",
             _registry_enlist,
+        ),
+        Check(
+            "markout-mapped",
+            "a markout's path selects market_data by its date alone and reads no depth (#2288)",
+            "markout_mapped",
+            _markout_mapped,
         ),
         Check(
             "env-reference",

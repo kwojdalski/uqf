@@ -575,6 +575,29 @@
         {[part;col;a] if[not null a; @[part;col;#[a;]]]}[part]'[key rule;value rule]];
     }
 
+/ Private: give a finished partition its row numbers, for a table that declares a row-number column
+/ (.qetl.plant.row_ids): each row's position in the partition AS NOW SORTED. Written after the sort,
+/ never before, because the sort is what fixes a row's position; and in the staged copy with it, so
+/ the swap puts the sorted rows and their numbers in together.
+/ @param part the staged table directory, a file symbol with a trailing slash
+/ @param tbl the table
+/ @private
+.qetl.io.assign_row_ids:{[part;tbl]
+    if[not `row_ids in key `.qetl.plant; :(::)];
+    if[not tbl in key .qetl.plant.row_ids; :(::)];
+    col:.qetl.plant.row_ids tbl;
+    base:-1_string part;
+    c:get hsym `$base,"/.d";
+    others:c except col;
+    if[(not col in c) or 0=count others; :(::)];
+    (hsym `$base,"/",string col) set til count get hsym `$base,"/",string first others;}
+
+/ Private: sort a staged partition by its rule, put each attribute on, and number its rows.
+/ @private
+.qetl.io.order_partition:{[part;rule;tbl]
+    .qetl.io.sort_and_attribute[part;rule];
+    .qetl.io.assign_row_ids[part;tbl]}
+
 / Private: what this partition is compressed with when it is finished: the
 / table's write-time triple, or the empty list. Never on PeachQ, which has no
 / -19! and no .z.zd compression (#2153); and nothing where the policy module is
@@ -615,7 +638,7 @@
         / this process writes is compressed. A partition already compressed
         / gets no triple: it is not compressed again, and xasc leaves it as it is.
         zd:.qetl.io.write_triple[t;part];
-        .qetl.compression.with_zd[zd;.qetl.io.sort_and_attribute;(part;rule)];
+        .qetl.compression.with_zd[zd;.qetl.io.order_partition;(part;rule;t)];
         if[(count zd) and count rule; .qetl.compression.apply_columns[t;part]];
         .qetl.io.step`sorted;
         .qetl.io.swap[root;d;t];

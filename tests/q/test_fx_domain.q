@@ -66,7 +66,7 @@
 .qt.qpipe.transform.fx_domain.test_the_core_under_the_fx_domain_carries_the_legs_and_long_rows_add_the_pips:{[tc]
     ex:((.qetl.transform.def[`fx_markout_calc])`examples) 1;
     sp:.qpipe.transform.fx_markout.require_spec .qpipe.transform.fx_markout.default_spec;
-    got:.qpipe.transform.markout_core.calc[.qpipe.transform.fx_domain.domain;sp;ex[`inputs]`executions;ex[`inputs]`market_data];
+    got:.qpipe.transform.markout_core.score[.qpipe.transform.fx_domain.domain;sp;ex[`inputs]`executions;ex[`inputs]`market_data];
     h:got where (got`horizon)=0D00:00:01;
     .qunit.assertEquals[h`kind;`total`execution`leg`leg`residual;"components in order"];
     .qunit.assertEquals[h`leg;``,`EURUSD`EURPLN,`;"the legs ride on the leg rows"];

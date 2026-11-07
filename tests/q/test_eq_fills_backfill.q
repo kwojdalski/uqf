@@ -156,8 +156,7 @@
     ([] sym:enlist `; open_time:enlist 2026.02.25D14:30:00.000000000; close_time:enlist 2026.02.25D21:00:00.000000000)}
 
 .qt.qpipe.job.eq_fills_backfill.close_book:{[tm;bid;ask]
-    ([] source_time:enlist tm; sym:enlist `AAPL; source:enlist `XNAS; bid_prices:enlist enlist bid; bid_sizes:enlist enlist 100f;
-        ask_prices:enlist enlist ask; ask_sizes:enlist enlist 100f; clock:enlist `venue)}
+    ([] source_time:enlist tm; sym:enlist `AAPL; source:enlist `XNAS; bid:enlist bid; ask:enlist ask; clock:enlist `venue)}
 
 / The three AAPL books around the close.
 .qt.qpipe.job.eq_fills_backfill.books:{[]
@@ -172,7 +171,7 @@
     .qpipe.job.eq_fills_backfill.run[];
     spec:`horizons`report_ccy`rate_timing`max_age`sessions!(0D00:00:05 0D00:00:30;`USD;`execution;0D00:00:02;.qt.qpipe.job.eq_fills_backfill.session[]);
     exe:(cols .qpipe.transform.markout_core.executions_in)#value `executions;
-    .qpipe.transform.markout_core.calc[.qpipe.transform.eq_domain.domain;spec;exe;.qt.qpipe.job.eq_fills_backfill.books[]]}
+    .qpipe.transform.markout_core.score[.qpipe.transform.eq_domain.domain;spec;exe;.qt.qpipe.job.eq_fills_backfill.books[]]}
 
 .qt.qpipe.job.eq_fills_backfill.at:{[r;id;knd;hz;col]
     first (r col) where ((r`fill_id)=id) & ((r`kind)=knd) & (r`horizon)=hz}
