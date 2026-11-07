@@ -52,9 +52,25 @@ FX-only. The core does not call it: `.qf.exec.markout`
 (`src/execution/execution.q:24`) is `side*pip_factor*(ref-price)`, which is pips
 and therefore FX. The core may use the cross-asset book primitives in `.qf.mkt`
 that `fx_markout` and `crypto_markout` already share: `.qf.mkt.top_sides`
-(`src/market_data/book.q:268`), `.qf.mkt.best_across_venues`
-(`src/market_data/microstructure_venues.q:93`) and `.qf.mkt.reference_max_age`
+(`src/market_data/book.q:268`, taken at write time into `market_data`'s flat
+`bid` and `ask`, #2288), `.qf.mkt.best_across_venues`
+(`src/market_data/microstructure_venues.q:93`, restated over the flat top as
+reference variant #1, `.qetl.reference`) and `.qf.mkt.reference_max_age`
 (`microstructure_venues.q:61`).
+
+**The market input is the flat top of book** (#2288): `sym`, `source`,
+`source_time`, `bid`, `ask`, `clock`, sorted by `sym`, `source`, `source_time`
+with `p#` on `sym`. The core checks that order and reads the table as it is - it
+never sorts or copies it - so a twin can hand it a book read from a
+memory-mapped partition. A (`sym`, `source`) is on one clock.
+
+**The reference is a declared variant** (#2288): SELECT (venue set, staleness,
+offset) over the flat keys by `aj`, TRANSFORM of one book, COMBINE across
+venues. The spec's `reference` key names it (default `best_top`, variant #1:
+every venue, the latest book within `max_age`, level 0, the best bid and ask).
+Variant #1 is what `contract_version` 1 means, so it adds nothing to
+`config_id`; any other variant is recorded in full in the configuration
+snapshot.
 
 ## Datasets
 

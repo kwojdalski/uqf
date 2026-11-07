@@ -226,6 +226,13 @@ repos:
         pass_filenames: false
         files: '\.q$|^scripts/gates/(check|policy/q_module_size)\.py$'
 
+      - id: markout-mapped
+        name: Check a markout's path selects market_data by its date alone and reads no depth
+        entry: python3 scripts/gates/check.py markout-mapped
+        language: system
+        pass_filenames: false
+        files: '^src/etl/.*\.q$|^scripts/gates/(check|policy/markout_mapped)\.py$'
+
       - id: registry-enlist
         name: Check every q registry stores its values enlisted
         entry: python3 scripts/gates/check.py registry-enlist

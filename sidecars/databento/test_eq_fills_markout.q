@@ -31,12 +31,11 @@
     (cols .qpipe.transform.markout_core.market_data_in)#.qpipe.job.eq_orderbook.to_market_data (cols .qpipe.job.eq_orderbook.book_in)#folded}
 
 .qt.qpipe.source.eq_fills.close_book:{[tm;bid;ask]
-    ([] source_time:enlist tm; sym:enlist `AAPL; source:enlist `XNAS; bid_prices:enlist enlist bid; bid_sizes:enlist enlist 100f;
-        ask_prices:enlist enlist ask; ask_sizes:enlist enlist 100f; clock:enlist `venue)}
+    ([] source_time:enlist tm; sym:enlist `AAPL; source:enlist `XNAS; bid:enlist bid; ask:enlist ask; clock:enlist `venue)}
 
 .qt.qpipe.source.eq_fills.score:{[horizons;books]
     spec:`horizons`report_ccy`rate_timing`max_age`sessions!(horizons;`USD;`execution;0D00:00:02;.qt.qpipe.source.eq_fills.session[]);
-    .qpipe.transform.markout_core.calc[.qpipe.transform.eq_domain.domain;spec;.qt.qpipe.source.eq_fills.executions[];books]}
+    .qpipe.transform.markout_core.score[.qpipe.transform.eq_domain.domain;spec;.qt.qpipe.source.eq_fills.executions[];books]}
 
 .qt.qpipe.source.eq_fills.at:{[r;id;knd;hz;col]
     first (r col) where ((r`fill_id)=id) & ((r`kind)=knd) & (r`horizon)=hz}

@@ -10,11 +10,15 @@
 /                 (.qpipe.transform.eq_markout_outputs.venues), with the clock the core's clock
 /                 rule needs. The PRIMARY input: it owns the window and its rows are what a run
 /                 counts. The FX and crypto fills of the same table are not read
-/   `market_data  the equity venues' books of every symbol the executions need, from the window's
-/                 start back by the reference's max_age to its end plus the furthest horizon, AND
-/                 each (symbol, source)'s last snapshot before that - the book an early execution
-/                 is priced against when the stock was quiet across the window's start. A
-/                 supporting input: context, never cut to the window
+/   `market_data  the equity venues' TOP OF BOOK for every symbol the executions need, at exactly the
+/                 instants the scoring asks about: each symbol at the execution and at every horizon, as
+/                 the latest book of each venue at or before the instant, looking back to the reference's
+/                 age limit and across midnight into the earlier partitions. A supporting input: context,
+/                 never cut to the window
+/ .
+/ MEMORY STAYS PROPORTIONAL TO THE EXECUTIONS (#2288). The books are not selected into this process: the as-of
+/ join runs where the partitions are memory-mapped (the HDB, .qetl.mapped.tob_at) and only the matched books
+/ come back. No query here selects market_data with a where beyond the date, and none reads a depth column.
 / .
 / Nothing here knows a vendor: both tables are the canonical ones, and the scoring is the worker's
 / transform, the live job's own (src/etl/transforms/eq_markout_outputs.q), so a refilled row is the
@@ -43,7 +47,7 @@
 .qpipe.source.hdb_eq_markouts.row_key:`venue`fill_id
 
 / The supporting input: the books, read by the transform as `market_data`.
-.qpipe.source.hdb_eq_markouts.supporting:enlist[`market_data]!enlist .qetl.plant.columns[`market_data;`source_time`sym`source`bid_prices`bid_sizes`ask_prices`ask_sizes`clock]
+.qpipe.source.hdb_eq_markouts.supporting:enlist[`market_data]!enlist .qetl.plant.columns[`market_data;`source_time`sym`source`bid`ask`clock]
 
 / .u.upd stamps `time` in UTC, and the sources' own stamps are UTC.
 .qpipe.source.hdb_eq_markouts.tz:`UTC
@@ -70,12 +74,9 @@
 /   symbols       reference_symbols
 .qpipe.source.hdb_eq_markouts.reference_read:`date_skew`lookback_cap`symbols!(1;7D;.qpipe.source.hdb_eq_markouts.reference_symbols)
 
-/ The window's executions, and the books they are scored against, both from the HDB.
-/ Both tables are date-partitioned, so the partition is constrained first, and each is
-/ named as a symbol so it resolves at the HDB's root. The executions are the equity venues'
-/ alone. The books read are the declared reference_read's, of those venues: the symbols scoring
-/ needs, from the window's start back by the look-back the spec's max_age sets to its end plus the
-/ furthest horizon, and each (symbol, source)'s last book before the earliest reference time.
+/ The window's executions, and the books they are scored against, both from the HDB. The
+/ executions are the equity venues' alone, and so are the books. The books are the top of book at
+/ the instants the scoring asks about (see the header).
 / @param h an open handle to the HDB
 / @param range_from inclusive lower bound
 / @param range_to exclusive upper bound
@@ -90,20 +91,11 @@
       }[ven;skew];range_from;range_to];
     if[0=count deals; :`executions`market_data!(deals;0#.qpipe.source.hdb_eq_markouts.supporting`market_data)];
     spec:.qpipe.transform.eq_markout_outputs.job_spec;
-    syms:rr[`symbols][spec;deals];
     early:.qpipe.transform.eq_markout_outputs.lookback[];
     lb:.qetl.source.reference_lookback[.qpipe.source.hdb_eq_markouts.source_name;spec`max_age;early];
-    books:.qetl.source.ipc[h;{[ven;syms;skew;read_from;from_ts;to_ts]
-        cand:`source_time xasc select source_time, sym, source, bid_prices, bid_sizes, ask_prices, ask_sizes, clock
-            from `market_data where date within (neg[skew],skew)+`date$(read_from;from_ts), source_time>=read_from, source_time<from_ts, sym in syms, source in ven;
-        before:0!?[cand;();`sym`source!`sym`source;()];
-        inwin:select source_time, sym, source, bid_prices, bid_sizes, ask_prices, ask_sizes, clock from `market_data
-            where date within (neg[skew],skew)+`date$(from_ts;to_ts), source_time>=from_ts, source_time<to_ts, sym in syms, source in ven;
-        `source_time xasc (cols before)#before,inwin
-      }[ven;syms;skew;range_from-lb];
-      range_from-early;
-      range_to+.qpipe.transform.markout_core.reach spec];
-    `executions`market_data!(deals;books)}
+    legs:.qpipe.transform.markout_core.legs_of[.qpipe.transform.eq_domain.domain;spec;deals];
+    probes:.qetl.mapped.probes[legs;deals`source_time;.qpipe.transform.markout_core.horizons_of spec];
+    `executions`market_data!(deals;.qetl.mapped.read_books[h;probes;range_from-lb;skew;ven])}
 
 / How far the HDB's equity books reach, less the furthest horizon: a window ending at or
 / before this has every book its executions are scored against (#1927). The latest book is
@@ -114,7 +106,7 @@
 / @return the exclusive instant through which the books the scoring needs are present
 / @eg .qpipe.source.hdb_eq_markouts.complete_through[{2026.02.25D15:02:00}]  ->  2026.02.25D15:01:00.000000000
 .qpipe.source.hdb_eq_markouts.complete_through:{[h]
-    latest:.qetl.source.ipc_call[h;{[unused] exec max source_time from `market_data where date=max date, market=`equity};enlist 0b];
+    latest:.qetl.source.ipc_call[h;{[a] .qetl.mapped.newest a};enlist enlist[`market]!enlist `equity];
     / max of no rows is -0Wp, and arithmetic on it wraps to a far-future instant
     $[latest<=-0Wp; -0Wp; latest-.qpipe.transform.markout_core.reach .qpipe.transform.eq_markout_outputs.job_spec]}
 
@@ -154,10 +146,8 @@
         sym:`AAPL`AAPL`AAPL`AAPL`META`META`META`EURUSD;
         source:(7#`XNAS),`a;
         market:(7#`equity),`fx;
-        bid_prices:(enlist 271.25;enlist 271.5;enlist 271.75;enlist 272f;enlist 642.75;enlist 642.25;enlist 640.75;enlist 1.09);
-        bid_sizes:8#enlist enlist 100f;
-        ask_prices:(enlist 271.5;enlist 271.75;enlist 272f;enlist 272.25;enlist 643.25;enlist 642.75;enlist 641.25;enlist 1.11);
-        ask_sizes:8#enlist enlist 100f;
+        bid:271.25 271.5 271.75 272 642.75 642.25 640.75 1.09f;
+        ask:271.5 271.75 272 272.25 643.25 642.75 641.25 1.11f;
         clock:(7#`venue),`receipt)}
 
 / What query returns for the fixture's day: the equity venue's fills and books, not the EURUSD ones.
@@ -166,7 +156,7 @@
 .qpipe.source.hdb_eq_markouts.fixture:{[]
     ven:.qpipe.transform.eq_markout_outputs.venues;
     e:select source_time, venue, sym, side, size, price, fill_id, clock from .qpipe.source.hdb_eq_markouts.raw_executions[] where venue in ven;
-    b:select source_time, sym, source, bid_prices, bid_sizes, ask_prices, ask_sizes, clock from .qpipe.source.hdb_eq_markouts.raw_market_data[] where source in ven;
+    b:select source_time, sym, source, bid, ask, clock from .qpipe.source.hdb_eq_markouts.raw_market_data[] where source in ven;
     `executions`market_data!(e;b)}
 
 .qetl.source.define[.qpipe.source.hdb_eq_markouts.source_name;

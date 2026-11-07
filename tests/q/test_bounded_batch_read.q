@@ -29,7 +29,7 @@
 .qt.qetl.job.bounded.batch_read.hdb:{[msg]
     n:1+count .qt.qetl.job.bounded.batch_read.sent;
     r:value msg;
-    k:$[not 98h=type r; `other; `bid_prices in cols r; `books; `executions];
+    k:$[not 98h=type r; `other; `bid in cols r; `books; `executions];
     .qt.qetl.job.bounded.batch_read.sent,:enlist (k;count r;$[k=`books; asc distinct r`sym; `symbol$()]);
     if[n=.qt.qetl.job.bounded.batch_read.fail_at; '.qt.qetl.job.bounded.batch_read.fail_with];
     r}
@@ -37,7 +37,7 @@
 / The tables the stand-in serves: the fixture's day, optionally without the books of some pairs.
 .qt.qetl.job.bounded.batch_read.serve:{[without]
     `executions set update date:`date$source_time from .qpipe.source.hdb_fx_markouts.raw_executions[];
-    `market_data set update date:`date$source_time from select from .qpipe.source.hdb_fx_markouts.raw_market_data[] where not sym in without;
+    `market_data set .qt.support.stand_in_market_data select from .qpipe.source.hdb_fx_markouts.raw_market_data[] where not sym in without;
     `.qt.qetl.job.bounded.batch_read.sent set ();
     `.qt.qetl.job.bounded.batch_read.fail_at set 0}
 
@@ -165,8 +165,8 @@
     .qt.qetl.job.bounded.batch_read.serve[`symbol$()];
     summary:.qpipe.source.hdb_fx_markouts.window[.qt.qetl.job.bounded.batch_read.hdb;h`range_from;h`range_to];
     .qunit.assertEquals[summary`executions;whole`executions;"the primary rows are the query's"];
-    .qunit.assertEquals[asc (summary[`market_data]`sym),'(summary[`market_data]`source);asc (`EURPLN`a;`EURUSD`a;`EURUSD`b);"a book for each (pair, source) the window's executions need"];
-        .qunit.assertEquals[asc cols summary`market_data;asc cols whole`market_data;"and it keeps the input's columns, so it satisfies the same contract"];
+    .qunit.assertEquals[asc distinct (summary[`market_data]`sym),'(summary[`market_data]`source);asc (`EURPLN`a;`EURUSD`a;`EURUSD`b);"a book for each (pair, source) the window's executions need"];
+    .qunit.assertEquals[asc cols summary`market_data;asc cols whole`market_data;"and it keeps the input's columns, so it satisfies the same contract"];
     .qunit.assertTrue[.qetl.source.validate[`hdb_fx_markouts;summary];"the summary satisfies the contract"]};
 
 .qt.qetl.job.bounded.batch_read.test_ready_answers_the_same_on_the_summary_as_on_the_whole_window:{[t]
@@ -199,9 +199,9 @@
     .qunit.assertEquals[count plain;36;"including USDPLN's legs: EURUSD inverted and EURPLN"];
     .qunit.assertEquals[whole_read[;0];`executions`books;"unbatched: the executions, then every book at once"];
     sent:.qt.qetl.job.bounded.batch_read.sent;
-    .qunit.assertEquals[sent[;0];`executions`books`books`books;"batched: the executions, the presence summary, then a read for each batch that needs books"];
-    .qunit.assertEquals[sent[2 3;2];(enlist `EURUSD;`EURPLN`EURUSD);"EURUSD's batch reads EURUSD, USDPLN's reads both of its legs; the crypto fill reads nothing"];
-    .qunit.assertTrue[(sent[2;1])<(whole_read[1;1]);"EURUSD's batch reads fewer rows than the whole window holds"];
+    .qunit.assertEquals[sent[;0];`executions`books`executions`books`executions`books;"batched: the window's executions and books (the presence summary), then for each batch that needs books its executions again (they are small) and its own books"];
+    .qunit.assertEquals[sent[3 5;2];(enlist `EURUSD;`EURPLN`EURUSD);"EURUSD's batch reads EURUSD, USDPLN's reads both of its legs; the crypto fill reads nothing"];
+    .qunit.assertTrue[(sent[3;1])<(whole_read[1;1]);"EURUSD's batch reads fewer rows than the whole window holds"];
     .qunit.assertEquals[.qetl.job.bounded.batching.counts`reads;3;"three keys were asked for across the batches"];
     .qunit.assertEquals[.qt.qetl.job.bounded.batch_read.claimed[];1b;"and the window is claimed once all its batches passed"]};
 
@@ -209,7 +209,7 @@
     .qt.qetl.job.bounded.batch_read.set_batching[.qt.qetl.job.bounded.batch_read.declare[1;`batch;1000]];
     .qt.qetl.job.bounded.batch_read.window_run[];
     sent:.qt.qetl.job.bounded.batch_read.sent;
-    .qunit.assertEquals[sent[2 3;2];(enlist `EURUSD;enlist `EURPLN);"USDPLN's batch reads only EURPLN: EURUSD was read for the batch before"];
+    .qunit.assertEquals[sent[3 5;2];(enlist `EURUSD;enlist `EURPLN);"USDPLN's batch reads only EURPLN: EURUSD was read for the batch before"];
     c:.qetl.job.bounded.batching.counts;
     .qunit.assertEquals[(c`hits;c`reads;c`evicted);1 2 0;"one key served from the cache, two read, none evicted"];
     held:.qetl.job.bounded.batching.cache;
@@ -218,12 +218,12 @@
     .qt.qetl.job.bounded.batch_read.serve[`symbol$()];
     .qt.qetl.job.bounded.batch_read.set_batching[.qt.qetl.job.bounded.batch_read.declare[1;`batch;0]];
     .qt.qetl.job.bounded.batch_read.window_run[];
-    plain_reads:sum .qt.qetl.job.bounded.batch_read.sent[;1];
+    plain_reads:sum .qt.qetl.job.bounded.batch_read.sent[where .qt.qetl.job.bounded.batch_read.sent[;0]=`books;1];
     .qt.qetl.job.bounded.batch_read.fresh_window[];
     .qt.qetl.job.bounded.batch_read.serve[`symbol$()];
     .qt.qetl.job.bounded.batch_read.set_batching[.qt.qetl.job.bounded.batch_read.declare[1;`batch;1000]];
     .qt.qetl.job.bounded.batch_read.window_run[];
-    .qunit.assertTrue[(sum .qt.qetl.job.bounded.batch_read.sent[;1])<plain_reads;"reuse reads fewer rows from the source"]};
+    .qunit.assertTrue[(sum .qt.qetl.job.bounded.batch_read.sent[where .qt.qetl.job.bounded.batch_read.sent[;0]=`books;1])<plain_reads;"reuse reads fewer rows from the source"]};
 
 .qt.qetl.job.bounded.batch_read.test_reuse_is_identical_to_no_reuse:{[t]
     .qt.qetl.job.bounded.batch_read.set_batching[.qt.qetl.job.bounded.batch_read.declare[1;`batch;0]];
@@ -288,8 +288,8 @@
 
 .qt.qetl.job.bounded.batch_read.test_a_failing_read_fails_the_window_naming_the_batch_with_nothing_written_or_covered:{[t]
     .qt.qetl.job.bounded.batch_read.set_batching[.qt.qetl.job.bounded.batch_read.declare[1;`batch;1000]];
-    / queries: 1 executions, 2 presence, 3 EURUSD's batch, 4 USDPLN's
-    `.qt.qetl.job.bounded.batch_read.fail_at set 4;
+    / queries: 1-2 the window (executions, presence), 3-4 EURUSD's batch, 5-6 USDPLN's
+    `.qt.qetl.job.bounded.batch_read.fail_at set 6;
     .qt.qetl.job.bounded.batch_read.start[];
     r:.qetl.job.bounded.do_window[.qt.qetl.job.bounded.batch_read.worker;.qt.qetl.job.bounded.batch_read.hour[]];
     .qunit.assertEquals[r;0b;"the window failed"];
@@ -302,7 +302,7 @@
 .qt.qetl.job.bounded.batch_read.test_a_read_that_fails_in_transit_is_retried_as_the_window_fetch_is:{[t]
     .qetl.cfg.set_override[`retry_base_delay_ms;"0"];
     .qt.qetl.job.bounded.batch_read.set_batching[.qt.qetl.job.bounded.batch_read.declare[1;`batch;0]];
-    `.qt.qetl.job.bounded.batch_read.fail_at set 3;
+    `.qt.qetl.job.bounded.batch_read.fail_at set 4;
     `.qt.qetl.job.bounded.batch_read.fail_with set "connection refused";
     r:.qt.qetl.job.bounded.batch_read.window_run[];
     `.qt.qetl.job.bounded.batch_read.fail_with set "boom";
@@ -311,7 +311,7 @@
 
 .qt.qetl.job.bounded.batch_read.test_a_failed_window_retry_reads_books_that_arrived_after_the_failure:{[t]
     .qt.qetl.job.bounded.batch_read.set_batching[.qt.qetl.job.bounded.batch_read.declare[1;`batch;1000]];
-    `.qt.qetl.job.bounded.batch_read.fail_at set 4;
+    `.qt.qetl.job.bounded.batch_read.fail_at set 6;
     .qt.qetl.job.bounded.batch_read.start[];
     worker:.qt.qetl.job.bounded.batch_read.worker;
     h:.qt.qetl.job.bounded.batch_read.hour[];
@@ -319,9 +319,8 @@
     .qunit.assertEquals[.qetl.job.bounded.batching.cache`item;enlist `EURUSD;"the failed attempt left a book"];
     .qunit.assertEquals[(count get `fx_markout;.qt.qetl.job.bounded.batch_read.claimed[]);(0;0b);"nothing published or covered"];
     late:0!select by sym,source from `source_time xasc select from market_data where sym=`EURUSD;
-    late:update source_time:h[`range_from]+0D00:00:00.5,
-        bid_prices:bid_prices+0.01,ask_prices:ask_prices+0.01 from late;
-    `market_data set market_data,late;
+    late:update source_time:h[`range_from]+0D00:00:00.5, bid:bid+0.01, ask:ask+0.01 from late;
+    `market_data set .qt.support.stand_in_market_data market_data,late;
     `.qt.qetl.job.bounded.batch_read.fail_at set 0;
     before:count .qt.qetl.job.bounded.batch_read.sent;
     .qunit.assertTrue[.qetl.job.bounded.do_window[worker;h];"the same window and version now succeeds"];

@@ -396,7 +396,7 @@
     sym:`$"BTC-USDT";
     / a venue-clock book at the fill and a closing one past the furthest horizon, so the reference covers both
     .qpipe.job.crypto_markout.on_batch[`market_data;([] time:2#t0; source_time:t0,t0+0D00:00:11; sym:2#sym; source:2#`a; market:2#`crypto;
-        bid_prices:2#enlist enlist 62000f; bid_sizes:2#enlist enlist 1f; ask_prices:2#enlist enlist 62010f; ask_sizes:2#enlist enlist 1f; clock:2#`venue)];
+        bid_prices:2#enlist enlist 62000f; bid_sizes:2#enlist enlist 1f; ask_prices:2#enlist enlist 62010f; ask_sizes:2#enlist enlist 1f; clock:2#`venue; bid:2#62000f; ask:2#62010f; rid:2#0N)];
     .qpipe.job.crypto_markout.on_batch[`executions;([] time:enlist t0; source_time:enlist t0; sym:enlist sym; venue:enlist `a; side:enlist 1;
         size:enlist 0.5; price:enlist 62000f; fee:enlist 0f; fee_ccy:enlist `USDT; fill_id:enlist `f1; book:enlist `; product:enlist `; clock:enlist `venue)]}
 
@@ -1601,7 +1601,7 @@
     `.qpipe.job.superbook.books set 0#.qpipe.job.superbook.books;
     .qetl.job.stream.wire[`superbook;{[t;x]}];
     row:([] sym:enlist `EURUSD; source:enlist `LP_A; market:enlist `fx; source_time:enlist .z.p+0D00:00:00.600;
-        bid_prices:enlist enlist 1.10; bid_sizes:enlist enlist 1e6; ask_prices:enlist enlist 1.12; ask_sizes:enlist enlist 1e6; clock:enlist `receipt);
+        bid_prices:enlist enlist 1.10; bid_sizes:enlist enlist 1e6; ask_prices:enlist enlist 1.12; ask_sizes:enlist enlist 1e6; clock:enlist `receipt; bid:enlist 1.10; ask:enlist 1.12; rid:enlist 0N);
     r:@[{.qpipe.job.superbook.on_batch[`market_data;x]; count .qpipe.job.superbook.books};row;{x}];
     `.qf.mkt.max_clock_lead set saved;
     `.qpipe.job.superbook.books set 0#.qpipe.job.superbook.books;

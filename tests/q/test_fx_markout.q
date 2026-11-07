@@ -40,7 +40,7 @@
 / A book snapshot, as the plant carries it.
 .qt.qpipe.job.fx_markout.bk:{[st;sym;src;bid;ask]
     ([] time:enlist st+0D00:00:00.1; sym:enlist sym; source:enlist src; market:enlist `fx; source_time:enlist st;
-        bid_prices:enlist enlist bid; bid_sizes:enlist enlist 1e6; ask_prices:enlist enlist ask; ask_sizes:enlist enlist 1e6; clock:enlist `venue)}
+        bid_prices:enlist enlist bid; bid_sizes:enlist enlist 1e6; ask_prices:enlist enlist ask; ask_sizes:enlist enlist 1e6; clock:enlist `venue; bid:enlist bid; ask:enlist ask)}
 
 / The worked books of fx_markout_outputs.q, as the plant carries them
 .qt.qpipe.job.fx_markout.books:{[] update time:source_time+0D00:00:00.1, market:`fx from .qpipe.transform.fx_markout_outputs.sample_books[]}
@@ -145,7 +145,7 @@
     callback:.qpipe.job.fx_markout.legs e;
     m:raze (.qt.qpipe.job.fx_markout.bk[.qt.qpipe.job.fx_markout.t-0D00:00:02;`EURPLN;`a;4f;4f];.qt.qpipe.job.fx_markout.bk[.qt.qpipe.job.fx_markout.t-0D00:00:02;`EURUSD;`a;1.25;1.25];.qt.qpipe.job.fx_markout.bk[.qt.qpipe.job.fx_markout.t-0D00:00:02;`USDTRY;`a;40f;40f]);
     scored:exec distinct leg by fill_id from .qpipe.transform.fx_markout.calc[sp;select source_time, venue, sym, side, size, price, fill_id, clock from e;
-        select source_time, sym, source, bid_prices, bid_sizes, ask_prices, ask_sizes, clock from m] where kind=`leg;
+        select source_time, sym, source, bid, ask, clock from m] where kind=`leg;
     .qunit.assertEquals[callback 0;scored`c1;"PLNTRY: three legs"];
     .qunit.assertEquals[callback 1;scored`c2;"USDPLN: two"];
     .qunit.assertEquals[callback 2;scored`c3;"EURUSD: itself"]};
@@ -338,7 +338,7 @@
     f:.qpipe.source.hdb_fx_markouts.fixture[];
     / the reference covers an instant only once a later row has arrived: one closing book per pair, for both
     closing:raze (.qt.qpipe.job.fx_markout.bk[2026.09.17D11:00:00;`EURUSD;`a;1.2;1.2002];.qt.qpipe.job.fx_markout.bk[2026.09.17D11:00:00;`EURPLN;`a;5.2;5.2002]);
-    f[`market_data]:f[`market_data],select source_time, sym, source, bid_prices, bid_sizes, ask_prices, ask_sizes, clock from closing;
+    f[`market_data]:f[`market_data],select source_time, sym, source, bid, ask, clock from closing;
     .qt.qpipe.job.fx_markout.feed[`fx_markout;`market_data;update time:source_time+0D00:00:00.1, market:`fx from f`market_data];
     .qt.qpipe.job.fx_markout.feed[`fx_markout;`executions;update time:source_time+0D00:00:00.2, fee:0f, fee_ccy:`, book:`, product:` from f`executions];
     .qt.qpipe.job.fx_markout.tick[`fx_markout;2026.09.17D11:00:30];
@@ -382,7 +382,7 @@
 
 .qt.qpipe.job.fx_markout.test_the_bounded_twin_ignores_the_dead_source_as_the_live_job_does:{[tc]
     b:.qt.qpipe.job.fx_markout.dead_source_books[];
-    f:`executions`market_data!(select source_time, venue, sym, side, size, price, fill_id, clock from .qt.qpipe.job.fx_markout.buy[];select source_time, sym, source, bid_prices, bid_sizes, ask_prices, ask_sizes, clock from b);
+    f:`executions`market_data!(select source_time, venue, sym, side, size, price, fill_id, clock from .qt.qpipe.job.fx_markout.buy[];select source_time, sym, source, bid, ask, clock from b);
     .qt.qpipe.job.fx_markout.feed[`fx_markout;`market_data;update time:source_time+0D00:00:00.1, market:`fx from b];
     .qt.qpipe.job.fx_markout.feed[`fx_markout;`executions;.qt.qpipe.job.fx_markout.buy[]];
     .qt.qpipe.job.fx_markout.tick[`fx_markout;.qt.qpipe.job.fx_markout.t+0D00:00:10];
@@ -418,7 +418,7 @@
 
 / The bounded twin over the same rows the live job was fed, without the plant's receipt time.
 .qt.qpipe.job.fx_markout.twin_of:{[b]
-    f:`executions`market_data!(select source_time, venue, sym, side, size, price, fill_id, clock from .qt.qpipe.job.fx_markout.buy[];select source_time, sym, source, bid_prices, bid_sizes, ask_prices, ask_sizes, clock from b);
+    f:`executions`market_data!(select source_time, venue, sym, side, size, price, fill_id, clock from .qt.qpipe.job.fx_markout.buy[];select source_time, sym, source, bid, ask, clock from b);
     delete time from .qetl.transform.apply[`hdb_fx_markouts_long;f]}
 
 / Source a quotes 1.1000/1.1010 through T+11s. Source b quotes a better 1.1006/1.1008 at T-2s and T+8s:

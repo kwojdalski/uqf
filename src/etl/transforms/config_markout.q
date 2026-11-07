@@ -16,6 +16,7 @@
 /                      list --dataset` filters on)
 /   horizons, max_age, report_ccy, rate_timing, rates
 /                      the core's validated parameters, the rates as declared
+/   reference          the reference variant, when it is not variant #1 (reference_variant.q)
 /   domain_spec        the domain's own spec keys (an FX convention, a tolerance)
 / .
 / THE CALCULATION STAYS PURE. `id` is a function of the domain and the spec, so
@@ -69,9 +70,15 @@
     nm:$[`name in key domain; domain`name; .qpipe.transform.config_markout.default_name];
     rv:$[`revision in key domain; domain`revision; .qpipe.transform.config_markout.default_revision];
     ds:$[`datasets in key domain; `symbol$domain`datasets; `symbol$()];
-    `contract_version`code_revision`domain`domain_revision`datasets`horizons`max_age`report_ccy`rate_timing`rates`domain_spec!(
+    base:`contract_version`code_revision`domain`domain_revision`datasets`horizons`max_age`report_ccy`rate_timing`rates`domain_spec!(
         .qpipe.transform.config_markout.contract_version;.qpipe.transform.config_markout.code_revision;nm;rv;ds;
-        asc spec`horizons;spec`max_age;spec`report_ccy;spec`rate_timing;spec`rates;dk!spec dk)}
+        asc spec`horizons;spec`max_age;spec`report_ccy;spec`rate_timing;spec`rates;dk!spec dk);
+    / The reference variant (#2288) is part of the configuration. Variant #1 is the contract's own rule, so it is
+    / implied by contract_version and adds nothing: the ids of every result scored before variants existed, and of
+    / every result scored under it since, are the same. Any other variant is recorded IN FULL, so a result
+    / scored against another reference can never share a config_id with one scored against the default.
+    ref:$[`reference in key spec; spec`reference; .qetl.reference.default];
+    $[ref~.qetl.reference.default; base; base,enlist[`reference]!enlist .qetl.reference.describe ref]}
 
 / The configuration a markout runs under, as a snapshot records it.
 / .

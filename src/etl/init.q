@@ -51,6 +51,9 @@
 \l src/etl/core/declared.q
 \l src/etl/core/intervals.q
 \l src/etl/core/materialisation.q
+\l src/etl/core/mapped_books.q
+\l src/etl/core/mapped_depth.q
+\l src/etl/core/reference_variant.q
 \l src/etl/core/compression.q
 \l src/etl/core/run.q
 \l src/etl/core/config_snapshot.q

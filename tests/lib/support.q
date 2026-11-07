@@ -20,6 +20,26 @@
 // assertThat wrapper for approximate numeric equality.
 .qt.support.assertApprox:{[actual;expected;tol;msg] .qunit.assertThat[actual;.qt.support.approx[tol];expected;msg]};
 
+// The top of book of some market_data rows (#2288), in the shape the markout core takes:
+// sym, source, source_time, bid, ask and clock, arranged - sorted by sym, source, source_time with
+// p# on sym. The ladders are folded to their level 0 by the plant's own rule (.qetl.plant.with_flat),
+// so a fixture written as ladders prices exactly as the normalizers' flat columns would.
+// A table that already carries bid and ask is only arranged.
+// @param rows market_data rows with source_time, sym, source, the four ladders (or bid and ask) and clock
+// @return the arranged top of book
+.qt.support.flat_books:{[rows]
+    flat:$[`bid in cols rows; rows; .qetl.plant.with_flat rows];
+    .qetl.mapped.arrange select source_time, sym, source, bid, ask, clock from flat}
+
+// market_data rows as an HDB holds them (#2288), for a stand-in that runs queries in this process:
+// sorted by sym, source, source_time, a `date` column in place of the partition, and `rid`, each row's
+// position in its date's partition. Tests that stand a table in for the mapped HDB build it with this.
+// @param rows market_data rows with source_time, sym, source, bid, ask and clock
+// @return the rows in the order and with the columns a partition has
+.qt.support.stand_in_market_data:{[rows]
+    t:`sym`source`source_time xasc update date:`date$source_time from rows;
+    update rid:til count i by date from t}
+
 // A genuinely empty etl_coverage ledger, whatever shape it currently has.
 //
 // The DELETE is the point. `.qetl.coverage.init_ledger` creates the table only when

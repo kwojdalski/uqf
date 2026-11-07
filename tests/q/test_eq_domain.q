@@ -25,8 +25,7 @@
     base,changes}
 
 .qt.qpipe.transform.eq_domain.bk:{[tm;sym;bid;ask]
-    ([] source_time:enlist tm; sym:enlist sym; source:enlist `XNAS; bid_prices:enlist enlist bid; bid_sizes:enlist enlist 100f;
-        ask_prices:enlist enlist ask; ask_sizes:enlist enlist 100f; clock:enlist `venue)}
+    ([] source_time:enlist tm; sym:enlist sym; source:enlist `XNAS; bid:enlist bid; ask:enlist ask; clock:enlist `venue)}
 
 .qt.qpipe.transform.eq_domain.fill:{[tm;sym;id]
     ([] source_time:enlist tm; venue:enlist `n; sym:enlist sym; side:enlist -1; size:enlist 100f; price:enlist 50.5; fill_id:enlist id; clock:enlist `venue)}
@@ -38,7 +37,7 @@
           .qt.qpipe.transform.eq_domain.bk[t+0D00:00:04;`ACME;50.5;51f];
           .qt.qpipe.transform.eq_domain.bk[t+0D00:00:29;`ACME;50.25;50.75])}
 
-.qt.qpipe.transform.eq_domain.score:{[spec;e;m] .qpipe.transform.markout_core.calc[.qpipe.transform.eq_domain.domain;spec;e;m]}
+.qt.qpipe.transform.eq_domain.score:{[spec;e;m] .qpipe.transform.markout_core.score[.qpipe.transform.eq_domain.domain;spec;e;m]}
 
 .qt.qpipe.transform.eq_domain.at:{[r;knd;hz;col] first (r col) where ((r`kind)=knd) and (r`horizon)=hz}
 
@@ -54,7 +53,7 @@
 .qt.qpipe.transform.eq_domain.test_without_the_calendar_the_after_hours_book_would_have_scored_it:{[t]
     / the same call through a domain with no availability rule: the after-hours mid 50.50 is within max_age
     bare:`resolve`convert`keys`validate!(.qpipe.transform.eq_domain.domain`resolve;.qpipe.transform.eq_domain.domain`convert;.qpipe.transform.eq_domain.domain`keys;.qpipe.transform.eq_domain.domain`validate);
-    r:.qpipe.transform.markout_core.calc[bare;.qt.qpipe.transform.eq_domain.spec[()!()];.qt.qpipe.transform.eq_domain.fill[.qt.qpipe.transform.eq_domain.t;`ACME;`e1];.qt.qpipe.transform.eq_domain.books[]];
+    r:.qpipe.transform.markout_core.score[bare;.qt.qpipe.transform.eq_domain.spec[()!()];.qt.qpipe.transform.eq_domain.fill[.qt.qpipe.transform.eq_domain.t;`ACME;`e1];.qt.qpipe.transform.eq_domain.books[]];
     .qunit.assertEquals[.qt.qpipe.transform.eq_domain.at[r;`total;0D00:00:30;`move];0f;"-(50.50-50.50): scored, and wrongly - the calendar is what refuses it"]};
 
 .qt.qpipe.transform.eq_domain.test_a_horizon_landing_exactly_on_the_close_is_unavailable:{[t]

@@ -652,6 +652,22 @@ qetl.log.ch,err,function,3,channel text fields
 qetl.log.ch,info,function,3,channel text fields
 qetl.log.ch,trc,function,3,channel text fields
 qetl.log.ch,warn,function,3,channel text fields
+qetl.mapped,arrange,function,1,tob
+qetl.mapped,arranged,function,1,tob
+qetl.mapped,asof,function,2,tob probes
+qetl.mapped,columns,value,,
+qetl.mapped,depth_at,function,1,arg
+qetl.mapped,full_check_rows,value,,
+qetl.mapped,newest,function,1,arg
+qetl.mapped,order,value,,
+qetl.mapped,plain,function,1,x
+qetl.mapped,probes,function,3,legs t0 horizons
+qetl.mapped,read_books,function,5,h probes read_from skew venues
+qetl.mapped,require_arranged,function,2,who tob
+qetl.mapped,runs,function,2,tob syms
+qetl.mapped,sample_pairs,value,,
+qetl.mapped,sources_for,function,2,tob syms
+qetl.mapped,tob_at,function,1,arg
 qetl.plant,adopt_vendored,function,1,path
 qetl.plant,arbitrage,table,,
 qetl.plant,bases,value,,
@@ -767,6 +783,16 @@ qetl.reaction,rows_now,value,,
 qetl.reaction,run_one,function,3,item nm h
 qetl.reaction,window_now,value,,
 qetl.reaction,write,function,3,target row_key rows
+qetl.reference,at,function,6,variant tob max_age syms times clocks
+qetl.reference,book_at,function,6,tob max_age src sy times clocks
+qetl.reference,combines,dict,,
+qetl.reference,def,function,1,name
+qetl.reference,default,value,,
+qetl.reference,describe,function,1,name
+qetl.reference,keys,value,,
+qetl.reference,register,function,2,name def
+qetl.reference,transforms,dict,,
+qetl.reference,variants,dict,,
 qetl.retention,declared,function,1,
 qetl.retention,decls,dict,,
 qetl.retention,define,function,2,name decl
@@ -2023,7 +2049,6 @@ qpipe.source.hdb_executions,time_column,value,,
 qpipe.source.hdb_executions,types,value,,
 qpipe.source.hdb_executions,tz,value,,
 qpipe.source.hdb_fx_markouts,batch_read,dict,,
-qpipe.source.hdb_fx_markouts,book_bounds,function,2,range_from range_to
 qpipe.source.hdb_fx_markouts,columns,value,,
 qpipe.source.hdb_fx_markouts,complete_through,function,1,h
 qpipe.source.hdb_fx_markouts,conversion_pairs,function,2,spec rows
@@ -2033,8 +2058,9 @@ qpipe.source.hdb_fx_markouts,query,function,3,h range_from range_to
 qpipe.source.hdb_fx_markouts,raw_executions,function,1,
 qpipe.source.hdb_fx_markouts,raw_market_data,function,1,
 qpipe.source.hdb_fx_markouts,read_batch,function,4,h range_from range_to syms
-qpipe.source.hdb_fx_markouts,read_books,function,4,h syms range_from range_to
+qpipe.source.hdb_fx_markouts,read_books,function,4,h deals range_from only
 qpipe.source.hdb_fx_markouts,read_executions,function,3,h range_from range_to
+qpipe.source.hdb_fx_markouts,read_from,function,1,range_from
 qpipe.source.hdb_fx_markouts,ready,function,3,batch range_from range_to
 qpipe.source.hdb_fx_markouts,reference_read,dict,,
 qpipe.source.hdb_fx_markouts,reference_symbols,function,2,spec rows
@@ -2252,6 +2278,7 @@ qpipe.transform.fx_source_adapters,spot_codes,value,,
 qpipe.transform.fx_source_adapters,tape_sides,value,,
 qpipe.transform.kafka_client_flow,map,function,1,m
 qpipe.transform.kafka_client_flow,message,table,,
+qpipe.transform.markout_core,arranged,function,1,md
 qpipe.transform.markout_core,calc,function,4,domain spec exe md
 qpipe.transform.markout_core,chain_mid,function,1,books
 qpipe.transform.markout_core,clocks,value,,
@@ -2270,12 +2297,12 @@ qpipe.transform.markout_core,horizon_labels,function,1,horizons
 qpipe.transform.markout_core,horizons_of,function,1,spec
 qpipe.transform.markout_core,input_names,value,,
 qpipe.transform.markout_core,last_delivery,function,1,exe
-qpipe.transform.markout_core,leg_at,function,5,tob max_age syms inverted times
 qpipe.transform.markout_core,legs_of,function,3,domain spec pending
 qpipe.transform.markout_core,long_key_cols,value,,
 qpipe.transform.markout_core,lookback,function,1,spec
 qpipe.transform.markout_core,market_data_in,table,,
 qpipe.transform.markout_core,mismatch_status,value,,
+qpipe.transform.markout_core,orient,function,3,syms inverted r
 qpipe.transform.markout_core,rate_kind,function,1,entry
 qpipe.transform.markout_core,rate_max_age,function,1,spec
 qpipe.transform.markout_core,rate_same_clock,value,,
@@ -2284,9 +2311,9 @@ qpipe.transform.markout_core,refuse_undeclared,value,,
 qpipe.transform.markout_core,require_horizons,function,1,hs
 qpipe.transform.markout_core,required_keys,value,,
 qpipe.transform.markout_core,result,table,,
+qpipe.transform.markout_core,score,function,4,domain spec exe md
 qpipe.transform.markout_core,spec_defaults,dict,,
 qpipe.transform.markout_core,table_domain,function,2,inst conv
-qpipe.transform.markout_core,tops,function,1,md
 qpipe.transform.markout_core,unmet,function,4,domain spec exe md
 qpipe.transform.markout_core,unscoreable,function,3,domain spec exe
 qpipe.transform.markout_core,validate,function,2,domain spec

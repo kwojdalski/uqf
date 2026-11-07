@@ -176,11 +176,10 @@
     inst:([] sym:enlist `USDJPY; quote_ccy:enlist `JPY; legs:enlist enlist `USDJPY; invert:enlist enlist 0b);
     conv:([] quote_ccy:enlist `JPY; report_ccy:enlist `USD; leg:enlist `USDJPY; invert:enlist 1b);
     dom:.qpipe.transform.markout_core.table_domain[inst;conv];
-    bk:{[tm;bid;ask] ([] source_time:enlist tm; sym:enlist `USDJPY; source:enlist `a; bid_prices:enlist enlist bid; bid_sizes:enlist enlist 1e6;
-        ask_prices:enlist enlist ask; ask_sizes:enlist enlist 1e6; clock:enlist `venue)};
+    bk:{[tm;bid;ask] ([] source_time:enlist tm; sym:enlist `USDJPY; source:enlist `a; bid:enlist bid; ask:enlist ask; clock:enlist `venue)};
     md:raze (bk[t-0D00:00:01;150f;150f];bk[t+0D00:00:09;150.05;150.05]);
     ex:([] source_time:enlist t; venue:enlist `a; sym:enlist `USDJPY; side:enlist 1; size:enlist 1e6; price:enlist 150f; fill_id:enlist `f1; clock:enlist `venue);
-    res:.qpipe.transform.markout_core.calc[dom;.qpipe.transform.markout_core.fixture_spec;ex;md];
+    res:.qpipe.transform.markout_core.score[dom;.qpipe.transform.markout_core.fixture_spec;ex;md];
     sp:.qpipe.transform.markout_layouts.core_spec[cols res;([] kind:enlist `execution; step:enlist 0);`symbol$()];
     w:.qpipe.transform.markout_layouts.wide[sp;res];
     .qunit.assertEquals[count w;count distinct res`horizon;"a row per horizon"];

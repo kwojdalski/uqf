@@ -161,7 +161,7 @@
 .qt.qpipe.job.hdb_fx_markouts_backfill.with_hdb:{[f]
     had:{[nm] $[nm in key `.; (1b;get nm); (0b;::)]} each `executions`market_data;
     `executions set update date:`date$source_time from .qpipe.source.hdb_fx_markouts.raw_executions[];
-    `market_data set update date:`date$source_time from .qpipe.source.hdb_fx_markouts.raw_market_data[];
+    `market_data set .qt.support.stand_in_market_data .qpipe.source.hdb_fx_markouts.raw_market_data[];
     `.qt.qpipe.job.hdb_fx_markouts_backfill.sent set ();
     r:@[f;::;{[e] `threw,e}];
     {[nm;k] $[first k; nm set last k; ![`.;();0b;enlist nm]]}'[`executions`market_data;had];
@@ -173,7 +173,12 @@
     r:.qt.qpipe.job.hdb_fx_markouts_backfill.with_hdb {.qpipe.source.hdb_fx_markouts.query[.qt.qpipe.job.hdb_fx_markouts_backfill.hdb;.qt.qpipe.job.hdb_fx_markouts_backfill.w 0;.qt.qpipe.job.hdb_fx_markouts_backfill.w 1]};
     .qunit.assertEquals[count .qt.qpipe.job.hdb_fx_markouts_backfill.sent;2;"one query for the executions, one for the books"];
     .qunit.assertEquals[.qt.qpipe.job.hdb_fx_markouts_backfill.sent 0;w;"executions over the window itself"];
-    .qunit.assertEquals[.qt.qpipe.job.hdb_fx_markouts_backfill.sent 1;((w 0)-0D00:00:01;(w 1)+0D00:00:10);"books from the window's start less the job's lookback, to its end plus the furthest horizon"];
+    a:first .qt.qpipe.job.hdb_fx_markouts_backfill.sent 1;
+    spec:.qpipe.transform.fx_markout_outputs.job_spec;
+    .qunit.assertEquals[a`read_from;(w 0)-spec[`max_age]+.qpipe.transform.fx_markout.lookback spec;"books no older than the window's start less the job's lookback"];
+    .qunit.assertEquals[(a`skew;a`venues);(1;`all);"a day either side, every venue"];
+    .qunit.assertEquals[asc distinct (a`probes)`sym;`EURPLN`EURUSD;"only the pairs the executions' routes need"];
+    .qunit.assertEquals[min (a`probes)`time;(w 0)-.qpipe.transform.fx_markout.lookback spec;"and the instants the scoring asks about: the first execution's own, then each horizon from it"];
     .qunit.assertEquals[key r;`executions`market_data;"both inputs, raw - the scoring is the transform's"];
     .qunit.assertEquals[count .qt.qpipe.job.hdb_fx_markouts_backfill.scored r;36;"the window's two routable executions, scored"]};
 
@@ -185,8 +190,8 @@
 .qt.qpipe.job.hdb_fx_markouts_backfill.test_only_the_books_the_routes_need_are_read:{[t]
     / USDPLN needs EURUSD and EURPLN; a GBPJPY book exists and is not read
     extra:{
-        `market_data set (update date:`date$source_time from .qpipe.source.hdb_fx_markouts.raw_market_data[]),
-            update date:`date$source_time, sym:`GBPJPY from 2#.qpipe.source.hdb_fx_markouts.raw_market_data[];
+        `market_data set .qt.support.stand_in_market_data (.qpipe.source.hdb_fx_markouts.raw_market_data[]),
+            update sym:`GBPJPY from 2#.qpipe.source.hdb_fx_markouts.raw_market_data[];
         `executions set update date:`date$source_time from .qpipe.source.hdb_fx_markouts.raw_executions[];
         .qpipe.source.hdb_fx_markouts.query[.qt.qpipe.job.hdb_fx_markouts_backfill.hdb;2026.09.17D10:00:00;2026.09.17D11:00:00]};
     `.qt.qpipe.job.hdb_fx_markouts_backfill.extra set extra;
@@ -198,9 +203,8 @@
     f:{
         `executions set ([] date:enlist 2026.09.17; source_time:enlist 2026.09.17D10:00:03; venue:enlist `a; sym:enlist `EURUSD;
             side:enlist 1; size:enlist 1e6; price:enlist 1.1; fill_id:enlist `e1; clock:enlist `venue);
-        `market_data set ([] date:2026.09.17 2026.09.17; source_time:2026.09.17D09:50:00 2026.09.17D11:30:00;
-            sym:2#`EURUSD; source:2#`a; bid_prices:(enlist 1.1;enlist 1.2); bid_sizes:2#enlist enlist 1e6;
-            ask_prices:(enlist 1.1002;enlist 1.2002); ask_sizes:2#enlist enlist 1e6; clock:2#`venue);
+        `market_data set .qt.support.stand_in_market_data ([] source_time:2026.09.17D09:50:00 2026.09.17D11:30:00;
+            sym:2#`EURUSD; source:2#`a; bid:1.1 1.2; ask:1.1002 1.2002; clock:2#`venue);
         .qpipe.source.hdb_fx_markouts.query[.qt.qpipe.job.hdb_fx_markouts_backfill.hdb;2026.09.17D10:00:00;2026.09.17D11:00:00]};
     `.qt.qpipe.job.hdb_fx_markouts_backfill.early set f;
     r:.qt.qpipe.job.hdb_fx_markouts_backfill.with_hdb {.qt.qpipe.job.hdb_fx_markouts_backfill.early[]};
@@ -211,8 +215,8 @@
     f:{
         `executions set ([] date:enlist 2026.09.17; source_time:enlist 2026.09.17D10:00:03; venue:enlist `a; sym:enlist `EURUSD;
             side:enlist 1; size:enlist 1e6; price:enlist 1.1; fill_id:enlist `e1; clock:enlist `venue);
-        `market_data set ([] date:enlist 2026.09.01; source_time:enlist 2026.09.01D10:00; sym:enlist `EURUSD; source:enlist `a;
-            bid_prices:enlist enlist 1.1; bid_sizes:enlist enlist 1e6; ask_prices:enlist enlist 1.1002; ask_sizes:enlist enlist 1e6; clock:enlist `venue);
+        `market_data set .qt.support.stand_in_market_data ([] source_time:enlist 2026.09.01D10:00; sym:enlist `EURUSD; source:enlist `a;
+            bid:enlist 1.1; ask:enlist 1.1002; clock:enlist `venue);
         .qpipe.source.hdb_fx_markouts.query[.qt.qpipe.job.hdb_fx_markouts_backfill.hdb;2026.09.17D10:00:00;2026.09.17D11:00:00]};
     `.qt.qpipe.job.hdb_fx_markouts_backfill.stale set f;
     r:.qt.qpipe.job.hdb_fx_markouts_backfill.with_hdb {.qt.qpipe.job.hdb_fx_markouts_backfill.stale[]};
@@ -311,7 +315,7 @@
     .qunit.assertEquals[r;2026.09.17D10:00:25-0D00:00:10;"the last book is at 10:00:25 and the furthest horizon is 10s"]};
 
 .qt.qpipe.job.hdb_fx_markouts_backfill.test_an_hdb_without_books_vouches_for_nothing:{[t]
-    f:{`market_data set 0#update date:`date$source_time from .qpipe.source.hdb_fx_markouts.raw_market_data[];
+    f:{`market_data set 0#.qt.support.stand_in_market_data .qpipe.source.hdb_fx_markouts.raw_market_data[];
         .qpipe.source.hdb_fx_markouts.complete_through[.qt.qpipe.job.hdb_fx_markouts_backfill.hdb]};
     `.qt.qpipe.job.hdb_fx_markouts_backfill.empty set f;
     r:.qt.qpipe.job.hdb_fx_markouts_backfill.with_hdb {.qt.qpipe.job.hdb_fx_markouts_backfill.empty[]};

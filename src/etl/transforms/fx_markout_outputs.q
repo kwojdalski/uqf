@@ -191,10 +191,8 @@
 .qpipe.transform.fx_markout_outputs.sample_books:{[]
     ([] source_time:2026.09.17D09:59:59 2026.09.17D10:00:00.5 2026.09.17D10:00:05 2026.09.17D10:00:00.5 2026.09.17D10:00:08;
         sym:5#`EURUSD; source:`a`a`a`b`b;
-        bid_prices:(enlist 1.0999;enlist 1.1004;enlist 1.1009;enlist 1.1003;enlist 1.1008);
-        bid_sizes:5#enlist enlist 1e6;
-        ask_prices:(enlist 1.1001;enlist 1.1006;enlist 1.1011;enlist 1.1007;enlist 1.1010);
-        ask_sizes:5#enlist enlist 1e6; clock:5#`venue)}
+        bid:1.0999 1.1004 1.1009 1.1003 1.1008f;
+        ask:1.1001 1.1006 1.1011 1.1007 1.1010f; clock:5#`venue)}
 
 / Its long rows under the job grid: the markout, the execution residual, the one
 / leg and the residual at -1s, 0s, +1s and +10s. 1e6 EURUSD is 100 USD a pip, and
