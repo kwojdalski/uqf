@@ -90,7 +90,7 @@ def _q(q_binary, script: str, *args: str, tmp: Path) -> str:
 
 
 @pytest.fixture
-def runtime(tmp_path: Path, q_binary, monkeypatch) -> UqsPaths:
+def runtime(tmp_path: Path, q_binary, kdbx, monkeypatch) -> UqsPaths:
     """A runtime whose HDB holds the old-shape partitions."""
     data = tmp_path / "data"
     hdb = data / "hdb"

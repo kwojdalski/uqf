@@ -442,7 +442,7 @@
 / @param rows market_data rows with the four ladders
 / @return the rows with bid, ask (float) and rid (long) as their last columns
 / @eg .qetl.plant.with_flat[([] bid_prices:enlist 1.1 1.09; bid_sizes:enlist 1e6 1e6; ask_prices:enlist `float$(); ask_sizes:enlist `float$())]`bid  ->  enlist 1.1
-.qetl.plant.with_flat:{[rows] (rows,'.qf.mkt.top_sides rows),'([] rid:(count rows)#0N)}
+.qetl.plant.with_flat:{[rows] $[count rows; (rows,'.qf.mkt.top_sides rows),'([] rid:(count rows)#0N); update bid:`float$(), ask:`float$(), rid:`long$() from rows]}
 
 / Complete per-pair snapshots; level provenance stays aligned with prices and sizes.
 .qetl.plant.superbook:([]time:`timestamp$(); sym:`g#`symbol$(); as_of:`timestamp$(); bid_prices:(); bid_sizes:(); bid_sources:(); bid_times:(); ask_prices:(); ask_sizes:(); ask_sources:(); ask_times:())

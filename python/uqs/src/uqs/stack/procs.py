@@ -93,10 +93,8 @@ VENDORED_STARTWITHALL_OVERLAY = {"monitor1": "1", "feed1": "0"}
 #: after its own script, and uqs_dqe_config.q BEFORE it, because dqe.q reads
 #: `.dqe.configcsv` once as it loads (stack/dqe.py). hdb2 is not a DQE target.
 #:
-#: hdb1 also loads src/etl/core/mapped_books.q: a markout's as-of join runs where the partitions are
-#: mapped and returns only the matched books (#2288). wdb1, sort1, sortworker1/2 load
-#: scripts/processes/uqs_row_ids.q after wdb.q, which numbers market_data's rows once the
-#: end-of-day sort has fixed their order.
+#: hdb1 also loads mapped_books.q and mapped_depth.q (a markout's as-of join runs where the
+#: partitions are mapped); wdb1, sort1, sortworker1/2 load uqs_row_ids.q (#2288).
 #:
 #: reporter1, housekeeping1 - uqs_reporter_config.q / housekeeping.LOAD_BEFORE (#2150) BEFORE
 #: reporter.q / housekeeping.q, each reading `.rp.inputcsv` / `.hk.inputcsv` once as it loads,
@@ -117,7 +115,6 @@ VENDORED_LOAD_OVERLAY: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
         (),
         (
             "${UQF_ROOT}/src/metadata/metatables.q",
-            # the as-of join of a markout runs HERE, against the mapped partitions (#2288)
             "${UQF_ROOT}/src/etl/core/mapped_books.q",
             "${UQF_ROOT}/src/etl/core/mapped_depth.q",
         ),
@@ -127,11 +124,7 @@ VENDORED_LOAD_OVERLAY: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
         ("${UQF_ROOT}/src/metadata/metatables.q", "${UQF_SCRIPTS}/processes/torq_metatables.q"),
     ),
     "reporter1": (("${UQF_SCRIPTS}/processes/uqs_reporter_config.q",), ()),
-    # the processes that run TorQ's end-of-day sort number market_data's rows after it (#2288)
-    "wdb1": ((), (ROW_IDS_LOAD,)),
-    "sort1": ((), (ROW_IDS_LOAD,)),
-    "sortworker1": ((), (ROW_IDS_LOAD,)),
-    "sortworker2": ((), (ROW_IDS_LOAD,)),
+    **{p: ((), (ROW_IDS_LOAD,)) for p in ("wdb1", "sort1", "sortworker1", "sortworker2")},
     "housekeeping1": with_cmp((housekeeping.LOAD_BEFORE, ())),
 }
 

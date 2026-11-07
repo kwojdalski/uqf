@@ -54,7 +54,7 @@ def test_the_overlay_names_exactly_the_files_this_runs(q_binary, tmp_path: Path)
     assert "${UQF_ROOT}/src/etl/core/mapped_depth.q" in after
 
 
-def test_the_two_files_stand_alone_on_a_partitioned_database(q_binary, tmp_path: Path):
+def test_the_two_files_stand_alone_on_a_partitioned_database(q_binary, kdbx, tmp_path: Path):
     q, env = q_binary
     script = tmp_path / "standalone.q"
     script.write_text(SCRIPT)

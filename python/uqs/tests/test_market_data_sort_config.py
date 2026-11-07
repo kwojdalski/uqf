@@ -130,7 +130,7 @@ exit 0
 """
 
 
-def test_torqs_end_of_day_sort_is_followed_by_the_row_numbers(tmp_path, q_binary):
+def test_torqs_end_of_day_sort_is_followed_by_the_row_numbers(tmp_path, q_binary, kdbx):
     q, env = q_binary
     script = tmp_path / "rowids.q"
     script.write_text(ROWID_Q)
@@ -159,7 +159,7 @@ def test_torqs_end_of_day_sort_is_followed_by_the_row_numbers(tmp_path, q_binary
 
 
 @pytest.fixture
-def hdb(q_binary, tmp_path) -> Path:
+def hdb(q_binary, kdbx, tmp_path) -> Path:
     """Two market_data days: one in the declared order with p#, one as the old sort left it."""
     q, env = q_binary
     root = tmp_path / "hdb"
