@@ -76,11 +76,10 @@ def quarto() -> str | None:
 
 
 def render(exe: str, out_dir: str) -> tuple[int, list[str]]:
-    """Render docs/ to a throwaway directory, returning (code, clean lines).
+    """Render docs/ to `out_dir`, returning (code, clean lines).
 
-    A temp output dir rather than docs/_site: a gate that leaves build
-    artifacts behind teaches people to add them to .gitignore and then to
-    ignore them.
+    The caller normally supplies a temporary directory. CI keeps the checked
+    build outside the checkout instead, for reuse and publication.
     """
     proc = subprocess.run(
         [exe, "render", "--output-dir", out_dir],
@@ -174,14 +173,19 @@ def broken_anchors(docs: Path = DOCS) -> list[tuple[str, str]]:
     return out
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument(
+        "--output-dir",
+        type=Path,
+        help="keep the validated site here instead of deleting a temporary render",
+    )
     ap.add_argument(
         "--allow-missing",
         action="store_true",
         help="warn instead of failing when Quarto is not installed",
     )
-    args = ap.parse_args()
+    args = ap.parse_args(argv)
 
     exe = quarto()
     if exe is None:
@@ -201,7 +205,8 @@ def main() -> int:
         )
         return 1
 
-    with tempfile.TemporaryDirectory(prefix="uqf-doclinks-") as out_dir:
+    with tempfile.TemporaryDirectory(prefix="uqf-doclinks-") as temporary:
+        out_dir = str(args.output_dir.resolve()) if args.output_dir else temporary
         code, lines = render(exe, out_dir)
         broken = findings(lines) + broken_anchors()
         rendered = sum(1 for line in lines if PROGRESS.match(line))
