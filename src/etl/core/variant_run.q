@@ -30,6 +30,13 @@
 / How far past the spec's max_age a variant's own staleness may reach back, at most, when the books are read.
 .qetl.variant.reach_cap:7D
 
+/ A symbol that tells one value from every other: the digest of its serialisation. Lists of dictionaries, which a plan
+/ must tell apart, are not safely compared with find on every q, so the plan compares these.
+/ @param x any value
+/ @return a symbol of 32 hex digits
+/ @eg count string .qetl.variant.key_of enlist[`qty]!enlist 1e5  ->  32
+.qetl.variant.key_of:{[x] `$raze string md5 "c"$-8!x}
+
 / The variants as a plan: one row each, with the SELECT and TRANSFORM it asks for, and the ids of the distinct
 / SELECT group and TRANSFORM it shares with others.
 / @param names registered variant names
@@ -40,8 +47,8 @@
 .qetl.variant.plan:{[names;max_age]
     defs:.qetl.reference.def each names;
     lim:{[ma;d] $[`spec~d`stale; ma; d`stale]}[max_age] each defs;
-    sk:{[d;l] (d`venues;l;d`offset)}'[defs;lim];
-    tk:{[d] (d`transform;d`params)} each defs;
+    sk:.qetl.variant.key_of each {[d;l] (d`venues;l;d`offset)}'[defs;lim];
+    tk:.qetl.variant.key_of each {[d] (d`transform;d`params)} each defs;
     / the parameters stay in the definitions: a column of same-keyed dictionaries would be flipped into a table
     ([] name:names; venues:defs@\:`venues; limit:lim; offset:defs@\:`offset; transform:defs@\:`transform;
         needs:{[t] .qetl.reference.transforms[t]`needs} each defs@\:`transform; select_id:(distinct sk)?sk; transform_id:(distinct tk)?tk)}
@@ -52,8 +59,9 @@
 / @return table venues, offset
 / @eg count .qetl.variant.mapped_groups .qetl.variant.plan[`best_top`best_top;0D00:00:05]  ->  1
 .qetl.variant.mapped_groups:{[plan]
-    u:distinct {(x;y)}'[plan`venues;plan`offset];
-    ([] venues:u[;0]; offset:`timespan$u[;1])}
+    kk:.qetl.variant.key_of each {(x;y)}'[plan`venues;plan`offset];
+    ix:kk?distinct kk;
+    ([] venues:(plan`venues) ix; offset:(plan`offset) ix)}
 
 / The oldest book any variant of the list can use, given the oldest the spec's own would: a variant whose staleness
 / is longer than the spec's reaches further back (to at most reach_cap further).
@@ -101,8 +109,8 @@
 / @private
 .qetl.variant.over_slice:{[tob;names;defs;t;r]
     if[not `depth=.qetl.reference.transforms[t]`needs; :()];
-    .qetl.reference.require_slice[names r;tob];
-    .qetl.reference.transforms[t][`fn][tob;(defs r)`params]}
+    books:.qetl.reference.require_slice[names r;tob];
+    .qetl.reference.transforms[t][`fn][books;(defs r)`params]}
 
 / Private: one flat transform over the books one SELECT matched - or () where it matched nothing or the transform reads depth.
 / @private
@@ -135,15 +143,17 @@
     / 4 TRANSFORM: a depth one once over the slice, a flat one once per SELECT that uses it
     tr:.qetl.variant.reps p`transform_id;
     dpx:{[tob;names;defs;p;r] .qetl.variant.over_slice[tob;names;defs;p[`transform] r;r]}[tob;names;defs;p] each tr;
-    pairs:distinct flip (p`select_id;p`transform_id);
-    fpx:{[js;defs;p;pr] r:first where (p[`select_id]=pr 0) & p[`transform_id]=pr 1; .qetl.variant.over_matched[js pr 0;defs;p[`transform] r;r]}[js;defs;p] each pairs;
+    / one flat transform per (SELECT; TRANSFORM) pair, the pair being one number
+    pid:(p`select_id)+(1+max p`select_id)*p`transform_id;
+    pairs:distinct pid;
+    fpx:{[js;defs;p;pid;q] r:first where pid=q; .qetl.variant.over_matched[js p[`select_id] r;defs;p[`transform] r;r]}[js;defs;p;pid] each pairs;
     / 5 COMBINE, per variant
-    c:`js`dpx`fpx`pairs`defs`p`none`n!(js;dpx;fpx;pairs;defs;p;none;n);
+    c:`js`dpx`fpx`pairs`pid`defs`p`none`n!(js;dpx;fpx;pairs;pid;defs;p;none;n);
     one:{[c;i]
         p:c`p;
         j:(c`js) p[`select_id] i;
         if[() ~ j; :c`none];
-        px:$[`depth=p[`needs] i; (c`dpx)[p[`transform_id] i] j`rid; (c`fpx) (c`pairs)?(p[`select_id] i;p[`transform_id] i)];
+        px:$[`depth=p[`needs] i; (c`dpx)[p[`transform_id] i] j`rid; (c`fpx) (c`pairs)?(c`pid) i];
         .qetl.reference.folded[(c`defs) i;j;px;c`n]}[c];
     names!one each til count names}
 

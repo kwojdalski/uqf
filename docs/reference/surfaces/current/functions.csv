@@ -1055,6 +1055,7 @@ qetl.uptime,twins,function,1,job
 qetl.variant,depth_cols,value,,
 qetl.variant,evaluate,function,6,names tob max_age syms times clocks
 qetl.variant,flat,function,2,name slice
+qetl.variant,key_of,function,1,x
 qetl.variant,live,function,6,names buffer max_age syms times clocks
 qetl.variant,long,function,1,res
 qetl.variant,mapped_groups,function,1,plan

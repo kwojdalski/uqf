@@ -175,9 +175,8 @@
     j:.qetl.reference.chosen[def;tob;max_age;syms;times;clocks];
     if[() ~ j; :`same`any!(none;none)];
     t:.qetl.reference.transforms def`transform;
-    px:$[`depth~t`needs;
-        (t[`fn][.qetl.reference.require_slice[variant;tob];def`params]) j`rid;
-        t[`fn][j;def`params]];
+    books:$[`depth~t`needs; .qetl.reference.require_slice[variant;tob]; ()];
+    px:$[`depth~t`needs; (t[`fn][books;def`params]) j`rid; t[`fn][j;def`params]];
     .qetl.reference.folded[def;j;px;n]}
 
 / One source's book at each instant, for a conversion rate: no combine, the source is named. The latest book
