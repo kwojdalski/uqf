@@ -657,6 +657,8 @@
     together:.qt.qetl.job.stream.horizons.pair[1b;n];
     .qunit.assertEquals[apart 1 2;n,n;"unshared, each job holds the rows"];
     .qunit.assertEquals[together 1 2;n,n;"shared, each job still reads them all - as its own history"];
+    / PeachQ's .Q.w[] counts the heap in whole blocks (12.5MB for either), so the bytes are measured on KDB-X
+    if[.qetl.io.on_peachq; :.qunit.assertTrue[1b;"PeachQ's .Q.w[] does not resolve a heap delta: measured on KDB-X"]];
     .qunit.assertTrue[(together 0)<0.7*apart 0;"but the heap holds them once: ",string[together 0]," bytes against ",string apart 0]};
 
 .qt.qetl.job.stream.horizons.test_the_first_member_to_see_a_batch_appends_it_and_the_rest_add_nothing:{[t]

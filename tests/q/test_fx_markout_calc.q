@@ -360,8 +360,8 @@
 
 .qt.qpipe.transform.fx_markout.test_empty_inputs_score_to_the_empty_result:{[tc]
     sp:.qt.qpipe.transform.fx_markout.spec_of[`horizons`tolerance!(enlist .qt.qpipe.transform.fx_markout.one_s;1e-6)];
-    .qunit.assertEquals[.qt.qpipe.transform.fx_markout.calc[sp;0#.qt.qpipe.transform.fx_markout.fill[.qt.qpipe.transform.fx_markout.t;`EURUSD;1;1.1;`x];.qt.qpipe.transform.fx_markout.direct_books[]];0#.qpipe.transform.fx_markout.result;"no executions"];
-    r:.qt.qpipe.transform.fx_markout.calc[sp;.qt.qpipe.transform.fx_markout.fill[.qt.qpipe.transform.fx_markout.t;`EURUSD;1;1.1;`x];0#.qt.qpipe.transform.fx_markout.direct_books[]];
+    .qunit.assertEquals[.qt.qpipe.transform.fx_markout.calc[sp;0#.qt.qpipe.transform.fx_markout.fill[.qt.qpipe.transform.fx_markout.t;`EURUSD;1;1.1;`x];.qt.support.flat_books .qt.qpipe.transform.fx_markout.direct_books[]];0#.qpipe.transform.fx_markout.result;"no executions"];
+    r:.qt.qpipe.transform.fx_markout.calc[sp;.qt.qpipe.transform.fx_markout.fill[.qt.qpipe.transform.fx_markout.t;`EURUSD;1;1.1;`x];0#.qt.support.flat_books .qt.qpipe.transform.fx_markout.direct_books[]];
     .qunit.assertTrue[all null exec pips from r;"no books: every component is null, none is dropped"]};
 
 .qt.qpipe.transform.fx_markout.test_a_malformed_input_or_spec_is_refused_by_name:{[tc]

@@ -230,9 +230,10 @@
     skew:arg`skew;
     lo:(`date$arg`read_from)-skew;
     hi:(`date$max p`time)+skew;
-    have:asc exec distinct date from select date from market_data where date within (lo;hi);
+    / `market_data, quoted: the coverage tool re-evaluates a function in its own namespace, where a bare name is not the global
+    have:asc exec distinct date from select date from `market_data where date within (lo;hi);
     if[0=count have; :update `p#sym from empty];
-    part:{select sym,source,source_time,quoted:source_time,bid,ask,clock,rid from market_data where date=x};
+    part:{select sym,source,source_time,quoted:source_time,bid,ask,clock,rid from `market_data where date=x};
     pairs:distinct raze {[part;syms;d] .qetl.mapped.sources_for[part d;syms]}[part;distinct p`sym] each have;
     if[not `all~arg`venues; pairs:select from pairs where source in arg`venues];
     sp:exec source by sym from pairs;
@@ -264,9 +265,9 @@
 / @return the newest source_time, or -0Wp when the partition holds none
 / @eg .qetl.mapped.newest[enlist[`market]!enlist `crypto]
 .qetl.mapped.newest:{[arg]
-    d:exec max date from select distinct date from market_data;
+    d:exec max date from select distinct date from `market_data;
     if[null d; :-0Wp];
-    t:$[null arg`market; select sym,source,source_time from market_data where date=d; select sym,source,source_time,market from market_data where date=d];
+    t:$[null arg`market; select sym,source,source_time from `market_data where date=d; select sym,source,source_time,market from `market_data where date=d];
     r:.qetl.mapped.runs[t;`];
     if[0=count r; :-0Wp];
     if[not null arg`market; r:r where (.qetl.mapped.plain (t`market) r`lo)=arg`market];

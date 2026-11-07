@@ -144,8 +144,7 @@
 / @param range_to exclusive upper bound
 / @return `executions`market_data!(the window's executions; the books they need)
 .qpipe.source.hdb_fx_markouts.query:{[h;range_from;range_to]
-    rr:.qetl.source.reference_read .qpipe.source.hdb_fx_markouts.source_name;
-    deals:.qetl.source.ipc[h;.qpipe.source.hdb_fx_markouts.deals_remote[rr`date_skew];range_from;range_to];
+    deals:.qpipe.source.hdb_fx_markouts.read_executions[h;range_from;range_to];
     if[0=count deals; :`executions`market_data!(deals;0#.qpipe.source.hdb_fx_markouts.supporting`market_data)];
     `executions`market_data!(deals;.qpipe.source.hdb_fx_markouts.read_books[h;deals;range_from;`])}
 
@@ -167,8 +166,7 @@
 / @param syms the market_data syms
 / @return enlist[`market_data]!enlist books
 .qpipe.source.hdb_fx_markouts.read_batch:{[h;range_from;range_to;syms]
-    rr:.qetl.source.reference_read .qpipe.source.hdb_fx_markouts.source_name;
-    deals:.qetl.source.ipc[h;.qpipe.source.hdb_fx_markouts.deals_remote[rr`date_skew];range_from;range_to];
+    deals:.qpipe.source.hdb_fx_markouts.read_executions[h;range_from;range_to];
     if[0=count deals; :enlist[`market_data]!enlist 0#.qpipe.source.hdb_fx_markouts.supporting`market_data];
     enlist[`market_data]!enlist .qpipe.source.hdb_fx_markouts.read_books[h;deals;range_from;syms]}
 
