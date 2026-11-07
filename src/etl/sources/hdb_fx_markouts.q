@@ -144,7 +144,7 @@
 / @param range_to exclusive upper bound
 / @return `executions`market_data!(the window's executions; the books they need)
 .qpipe.source.hdb_fx_markouts.query:{[h;range_from;range_to]
-    deals:.qpipe.source.hdb_fx_markouts.read_executions[h;range_from;range_to];
+    deals:.qetl.source.ipc[h;.qpipe.source.hdb_fx_markouts.deals_remote[(.qetl.source.reference_read .qpipe.source.hdb_fx_markouts.source_name)`date_skew];range_from;range_to];
     if[0=count deals; :`executions`market_data!(deals;0#.qpipe.source.hdb_fx_markouts.supporting`market_data)];
     `executions`market_data!(deals;.qpipe.source.hdb_fx_markouts.read_books[h;deals;range_from;`])}
 
