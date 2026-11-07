@@ -42,7 +42,7 @@
 / (it is run ONCE over the whole gathered slice, which must carry them). `defaults` is the parameter dictionary a
 / variant's `params` completes; `fn` is {[rows;params] ...} returning a table bid, ask and optionally w (a weight the
 / combine may use), one row per book. `top` is the book's own level 0, stored flat: a price is read from bid and ask.
-.qetl.reference.transforms:(enlist `top)!enlist `needs`defaults`fn!(`top;(`symbol$())!();{[rows;params] ([] bid:rows`bid; ask:rows`ask)})
+.qetl.reference.transforms:(`symbol$())!()
 
 / Register a transform.
 / @param name the transform's name
@@ -55,8 +55,17 @@
 .qetl.reference.add_transform:{[name;needs;defaults;fn]
     if[not needs in `top`depth; '"reference: a transform needs `top or `depth"];
     if[not (99h=type defaults) and 11h=abs type key defaults; '"reference: a transform's defaults must be a dictionary of symbol to value"];
-    `.qetl.reference.transforms set .qetl.reference.transforms,(enlist name)!enlist `needs`defaults`fn!(needs;defaults;fn);
+    / enlisted: a bare dictionary stored under a key would be flipped, with its peers, into a table
+    .qetl.reference.transforms[name]:enlist `needs`defaults`fn!(needs;defaults;fn);
     name}
+
+.qetl.reference.add_transform[`top;`top;(`symbol$())!();{[rows;params] ([] bid:rows`bid; ask:rows`ask)}];
+
+/ A registered transform's definition.
+/ @param name a registered transform
+/ @return a dictionary: needs, defaults, fn
+/ @eg (.qetl.reference.transform `top)`needs  ->  `top
+.qetl.reference.transform:{[name] first .qetl.reference.transforms name}
 
 / COMBINES: name -> {[tid;px;n] ...} returning a table bid, ask, mid of n rows, the price of each of the n instants
 / from the books matched to it (tid is the instant each book belongs to; px is the transform's table, bid, ask and w
@@ -86,7 +95,7 @@
     if[not $[-16h=type def`offset; def[`offset]>=0D; 0b]; '"reference: ",string[name],"'s offset must be a timespan of zero or more"];
     if[not (def`transform) in key .qetl.reference.transforms; '"reference: ",string[name],"'s transform ",string[def`transform]," is not registered"];
     if[not (def`combine) in key .qetl.reference.combines; '"reference: ",string[name],"'s combine ",string[def`combine]," is not registered"];
-    want:.qetl.reference.transforms[def`transform]`defaults;
+    want:(.qetl.reference.transform def`transform)`defaults;
     given:$[`params in key def; def`params; (`symbol$())!()];
     / an empty dictionary of any key type is no parameters
     if[(99h=type given) and 0=count given; given:(`symbol$())!()];
@@ -174,7 +183,7 @@
     none:([] bid:n#0n; ask:n#0n; mid:n#0n);
     j:.qetl.reference.chosen[def;tob;max_age;syms;times;clocks];
     if[() ~ j; :`same`any!(none;none)];
-    t:.qetl.reference.transforms def`transform;
+    t:.qetl.reference.transform def`transform;
     books:$[`depth~t`needs; .qetl.reference.require_slice[variant;tob]; ()];
     px:$[`depth~t`needs; (t[`fn][books;def`params]) j`rid; t[`fn][j;def`params]];
     .qetl.reference.folded[def;j;px;n]}

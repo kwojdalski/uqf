@@ -51,7 +51,7 @@
     tk:.qetl.variant.key_of each {[d] (d`transform;d`params)} each defs;
     / the parameters stay in the definitions: a column of same-keyed dictionaries would be flipped into a table
     ([] name:names; venues:defs@\:`venues; limit:lim; offset:defs@\:`offset; transform:defs@\:`transform;
-        needs:{[t] .qetl.reference.transforms[t]`needs} each defs@\:`transform; select_id:(distinct sk)?sk; transform_id:(distinct tk)?tk)}
+        needs:{[t] (.qetl.reference.transform t)`needs} each defs@\:`transform; select_id:(distinct sk)?sk; transform_id:(distinct tk)?tk)}
 
 / The SELECT groups the market is asked about: one per distinct (venue set; offset). The staleness does not
 / change WHICH book is the latest at an instant, only whether it is used, so it is not a group of the mapped read.
@@ -108,15 +108,15 @@
 / Private: one depth transform, once, over the whole slice - or () for a transform of the flat top.
 / @private
 .qetl.variant.over_slice:{[tob;names;defs;t;r]
-    if[not `depth=.qetl.reference.transforms[t]`needs; :()];
+    if[not `depth=.qetl.reference.transform[t]`needs; :()];
     books:.qetl.reference.require_slice[names r;tob];
-    .qetl.reference.transforms[t][`fn][books;(defs r)`params]}
+    .qetl.reference.transform[t][`fn][books;(defs r)`params]}
 
 / Private: one flat transform over the books one SELECT matched - or () where it matched nothing or the transform reads depth.
 / @private
 .qetl.variant.over_matched:{[j;defs;t;r]
-    if[(() ~ j) or `depth=.qetl.reference.transforms[t]`needs; :()];
-    .qetl.reference.transforms[t][`fn][j;(defs r)`params]}
+    if[(() ~ j) or `depth=.qetl.reference.transform[t]`needs; :()];
+    .qetl.reference.transform[t][`fn][j;(defs r)`params]}
 
 / Every variant of a list at each target (sym; time), over books already in memory.
 / .
@@ -182,7 +182,7 @@
 / @eg (.qetl.variant.flat[`best_top;.qetl.variant.slice ([] sym:enlist `a; source:enlist `x; source_time:enlist 2026.09.17D10:00:00; bid:enlist 1f; ask:enlist 2f; clock:enlist `venue)])`w  ->  enlist 1f
 .qetl.variant.flat:{[name;slice]
     d:.qetl.reference.def name;
-    t:.qetl.reference.transforms d`transform;
+    t:.qetl.reference.transform d`transform;
     if[`depth~t`needs; .qetl.reference.require_slice[name;slice]];
     px:t[`fn][slice;d`params];
     keep:(cols slice) except .qetl.variant.depth_cols,`bid`ask`w;

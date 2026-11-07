@@ -811,6 +811,7 @@ qetl.reference,register,function,2,name def
 qetl.reference,require_slice,function,2,variant tob
 qetl.reference,stored,value,,
 qetl.reference,top_size,function,1,slice
+qetl.reference,transform,function,1,name
 qetl.reference,transforms,dict,,
 qetl.reference,variants,dict,,
 qetl.retention,declared,function,1,

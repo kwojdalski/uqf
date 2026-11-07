@@ -34,6 +34,10 @@
     system "S ",string seed;
     ([] sym:m?`EURUSD`GBPUSD`USDJPY`NOBOOK; time:2026.09.17D10:00:00+m?700000000000; clock:m?`venue`receipt)}
 
+/ The variants a list may be evaluated over the plain books: every registered one but the promoted forms, which read
+/ stored columns (a documented example registers one and leaves it).
+.qt.qetl.variant.declared:{[] n where not (string each n:key .qetl.reference.variants) like "*_flat"}
+
 / Take test variants out of the registry again.
 .qt.qetl.variant.forget:{[names] `.qetl.reference.variants set names _ .qetl.reference.variants}
 
@@ -55,7 +59,7 @@
     tg:.qt.qetl.variant.targets[1500;22];
     sl:.qetl.variant.slice md;
     extra:.qt.qetl.variant.grid[];
-    names:key .qetl.reference.variants;
+    names:.qt.qetl.variant.declared[];
     {[names;sl;tg;ma]
         all_:.qetl.variant.evaluate[names;sl;ma;tg`sym;tg`time;tg`clock];
         {[all_;sl;tg;ma;n]
@@ -71,7 +75,7 @@
     tg:.qt.qetl.variant.targets[1500;24];
     sl:.qetl.variant.slice md;
     flat:.qetl.mapped.arrange select sym, source, source_time, bid, ask, clock from md;
-    in_list:(.qetl.variant.evaluate[key .qetl.reference.variants;sl;0D00:00:05;tg`sym;tg`time;tg`clock])`best_top;
+    in_list:(.qetl.variant.evaluate[.qt.qetl.variant.declared[];sl;0D00:00:05;tg`sym;tg`time;tg`clock])`best_top;
     alone:.qetl.reference.at[`best_top;flat;0D00:00:05;tg`sym;tg`time;tg`clock];
     .qunit.assertEquals[in_list;alone;"variant #1 over the gathered slice equals variant #1 over the bare flat top"]};
 
@@ -112,13 +116,13 @@
         .qunit.assertFalse[all null (a`same)`mid;string[n]," prices something, so the comparison is not null against null"]}[sl;tg];
     check each names;
     .qt.qetl.variant.forget (`$(string each names),\:"_flat"),enlist `vwap_small;
-    .qunit.assertEquals[(.qetl.variant.flat[`depth3_wmean;sl]) `bid;{x} (.qetl.reference.transforms[`topn_w][`fn][sl;enlist[`n]!enlist 3])`bid;"the stored column IS the transform's answer"]};
+    .qunit.assertEquals[(.qetl.variant.flat[`depth3_wmean;sl]) `bid;{x} (.qetl.reference.transform[`topn_w][`fn][sl;enlist[`n]!enlist 3])`bid;"the stored column IS the transform's answer"]};
 
 .qt.qetl.variant.test_the_live_path_evaluates_the_same_variants_over_a_buffer_in_arrival_order:{[t]
     md:.qt.qetl.variant.books[2000;27];
     tg:.qt.qetl.variant.targets[800;28];
     arrival:`source_time xasc md;
-    names:key .qetl.reference.variants;
+    names:.qt.qetl.variant.declared[];
     live:.qetl.variant.live[names;arrival;0D00:01:00;tg`sym;tg`time;tg`clock];
     gathered:.qetl.variant.evaluate[names;.qetl.variant.slice md;0D00:01:00;tg`sym;tg`time;tg`clock];
     .qunit.assertEquals[live;gathered;"a buffer in arrival order and the gathered slice price every declared variant alike"]};
@@ -141,7 +145,7 @@
 .qt.qetl.variant.test_each_variant_has_its_own_config_id_and_variant_one_keeps_the_id_it_had:{[t]
     dom:.qpipe.transform.markout_core.fixture_domain;
     sp:.qpipe.transform.markout_core.fixture_spec;
-    names:key .qetl.reference.variants;
+    names:.qt.qetl.variant.declared[];
     ids:.qpipe.transform.markout_variants.ids[dom;sp;names];
     plain:.qpipe.transform.config_markout.id[dom;.qpipe.transform.markout_core.validate[dom;sp]];
     .qunit.assertEquals[ids`best_top;plain;"variant #1's id is the id the spec had before variants existed"];
