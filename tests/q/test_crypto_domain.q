@@ -9,12 +9,11 @@
 .qt.qpipe.transform.crypto_markout.t0:2026.09.17D10:00:00.000000000
 .qt.qpipe.transform.crypto_markout.btc:`$"BTC-USDT"
 
-/ books on the receipt clock: a quotes 62000/62010 and b 62004/62008 at t0; a again, 62010/62020, 9s later
+/ the flat top of the books (#2288), on the receipt clock: a quotes 62000/62010 and b 62004/62008 at t0; a again, 62010/62020, 9s later
 .qt.qpipe.transform.crypto_markout.books:{[]
     t0:.qt.qpipe.transform.crypto_markout.t0;
     ([] source_time:t0,t0,t0+0D00:00:09; clock:3#`receipt; sym:3#.qt.qpipe.transform.crypto_markout.btc; source:`a`b`a;
-        bid_prices:(enlist 62000f;enlist 62004f;enlist 62010f); bid_sizes:3#enlist enlist 1f;
-        ask_prices:(enlist 62010f;enlist 62008f;enlist 62020f); ask_sizes:3#enlist enlist 1f)}
+        bid:62000 62004 62010f; ask:62010 62008 62020f)}
 
 / one buy on the same clock as the books
 .qt.qpipe.transform.crypto_markout.fill:{[side;fee;ccy]

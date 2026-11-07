@@ -602,7 +602,7 @@
 / mapped HDB - is returned untouched, so nothing a partition holds is ever copied here.
 / @param md a top-of-book table
 / @return md itself when arranged, else its rows sorted by sym, source, source_time with p# on sym
-/ @eg attr .qpipe.transform.markout_core.arranged[.qpipe.transform.markout_core.market_data_in]`sym  ->  `p
+/ @eg attr .qpipe.transform.markout_core.arranged[([] source_time:2#2026.09.17D10:00:00.000000000; sym:`GBPUSD`EURUSD; source:2#`a; bid:2#1f; ask:2#2f; clock:2#`venue)]`sym  ->  `p
 .qpipe.transform.markout_core.arranged:{[md]
     $[count .qetl.mapped.arranged md; .qetl.mapped.arrange md; md]}
 

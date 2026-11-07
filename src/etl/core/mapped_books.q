@@ -262,7 +262,7 @@
 / Run in the process that maps market_data, like tob_at.
 / @param arg a dictionary: market (a symbol, or ` for every market)
 / @return the newest source_time, or -0Wp when the partition holds none
-/ @eg .qetl.mapped.newest[enlist[`market]!enlist `crypto]  ->  -0Wp
+/ @eg .qetl.mapped.newest[enlist[`market]!enlist `crypto]
 .qetl.mapped.newest:{[arg]
     d:exec max date from select distinct date from market_data;
     if[null d; :-0Wp];
