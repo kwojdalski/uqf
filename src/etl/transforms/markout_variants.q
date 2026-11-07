@@ -29,7 +29,7 @@
 / @param names the variants
 / @return a dictionary variant -> config_id; variant #1's is the spec's own without a reference
 / @throws error when the core refuses the spec or a variant is not registered
-/ @eg (.qpipe.transform.markout_variants.ids[.qpipe.transform.markout_core.fixture_domain;.qpipe.transform.markout_core.fixture_spec;enlist `best_top])`best_top like "markout_*"  ->  1b
+/ @eg ((.qpipe.transform.markout_variants.ids[.qpipe.transform.markout_core.fixture_domain;.qpipe.transform.markout_core.fixture_spec;enlist `best_top])`best_top) like "markout_*"  ->  1b
 .qpipe.transform.markout_variants.ids:{[domain;spec;names]
     names:distinct (),names;
     names!{[domain;spec;n] .qpipe.transform.config_markout.id[domain;.qpipe.transform.markout_core.validate[domain;.qpipe.transform.markout_variants.under[spec;n]]]}[domain;spec] each names}
