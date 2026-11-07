@@ -159,7 +159,8 @@
 / @return `same`any!(table bid, ask, mid; table bid, ask, mid), one row per target
 / @eg (.qetl.reference.folded[.qetl.reference.def `best_top;([] tid:enlist 0; clock:enlist `venue; tclock:enlist `venue);([] bid:enlist 1.5; ask:enlist 2.5);1]`same)`mid  ->  enlist 2f
 .qetl.reference.folded:{[def;j;px;n]
-    rows:([] tid:j`tid; clock:j`clock; target:j`tclock),'px;
+    rows:([] tid:j`tid; clock:j`clock; target:j`tclock; bid:px`bid; ask:px`ask);
+    if[`w in cols px; rows:update w:px`w from rows];
     comb:.qetl.reference.combines def`combine;
     same:select from rows where clock=target;
     `same`any!(comb[same`tid;same;n];comb[rows`tid;rows;n])}

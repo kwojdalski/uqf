@@ -14,7 +14,7 @@
 \d .
 
 / The core's result with the variant that scored each row, first.
-.qpipe.transform.markout_variants.result:([] variant:`symbol$()) ,' 0#.qpipe.transform.markout_core.result
+.qpipe.transform.markout_variants.result:`variant xcols update variant:`symbol$() from 0#.qpipe.transform.markout_core.result
 
 / The spec a variant scores under: the spec, naming it.
 / @param spec the markout spec
@@ -59,7 +59,7 @@
     names:distinct (),names;
     one:{[domain;spec;exe;md;n]
         r:.qpipe.transform.markout_core.calc[domain;.qpipe.transform.markout_variants.under[spec;n];exe;md];
-        ([] variant:(count r)#n) ,' r}[domain;spec;exe;md];
+        `variant xcols update variant:(count r)#n from r}[domain;spec;exe;md];
     raze one each names}
 
 \d .
