@@ -280,7 +280,8 @@
     tm:.qt.qpipe.transform.fx_source_adapters.t+0D00:00:03;
     a:.qetl.job.stream.normalizer.normalize[`fxa_md;`book_levels;raze (.qt.qpipe.transform.fx_source_adapters.lvl[tm;.qt.qpipe.transform.fx_source_adapters.eurusd;`LPA;`FULL_AMOUNT;`SP;`bid;0;(0n;0f)];.qt.qpipe.transform.fx_source_adapters.lvl[tm;.qt.qpipe.transform.fx_source_adapters.eurusd;`LPA;`FULL_AMOUNT;`SP;`ask;0;(1.1012;1e6)])];
     b:.qetl.job.stream.normalizer.normalize[`fxa_md;`quote;([] time:enlist tm; sym:`EURUSD; bid:enlist 0n; ask:enlist 1.1012; bsize:enlist 0; asize:enlist 1000000; src:`LPA)];
-    ta:.qpipe.transform.markout_core.tops[a];
-    tb:.qpipe.transform.markout_core.tops[b];
-    .qunit.assertEquals[delete clock from ta;delete clock from tb;"no bid, an ask of 1.1012, from both"];
+    / the flat top the mapping writes (.qetl.plant.with_flat): what the markout core reads
+    ta:select time:source_time, sym, venue:source, bid, ask from a;
+    tb:select time:source_time, sym, venue:source, bid, ask from b;
+    .qunit.assertEquals[ta;tb;"no bid, an ask of 1.1012, from both"];
     .qunit.assertTrue[null first ta`bid;"and the missing bid is null, not a price"]};

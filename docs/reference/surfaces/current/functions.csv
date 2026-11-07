@@ -711,6 +711,7 @@ qetl.plant,read_instrument_column,function,1,t
 qetl.plant,read_time_column,function,1,t
 qetl.plant,reference_data,table,,
 qetl.plant,require_clock,function,2,table_name rows
+qetl.plant,row_ids,dict,,
 qetl.plant,schema,function,1,t
 qetl.plant,shape,function,1,t
 qetl.plant,sort_rules,dict,,
@@ -724,6 +725,7 @@ qetl.plant,undeclared,function,1,
 qetl.plant,vendored,value,,
 qetl.plant,vendored_path,value,,
 qetl.plant,wide_orderbook,table,,
+qetl.plant,with_flat,function,1,rows
 qetl.qsql,available,function,1,
 qetl.qsql,cut_at,value,,
 qetl.qsql,full,function,1,x

@@ -35,7 +35,7 @@
 / @eg count .qpipe.job.market_data.from_quote[.qpipe.job.market_data.quote] -> 0
 .qpipe.job.market_data.from_quote:{[batch]
     fx:batch where .qf.px.is_ccy_pair each batch`sym;
-    select sym, source:src, market:`fx, source_time:time,
+    .qetl.plant.with_flat select sym, source:src, market:`fx, source_time:time,
         bid_prices:enlist each bid, bid_sizes:enlist each `float$bsize,
         ask_prices:enlist each ask, ask_sizes:enlist each `float$asize, clock:`receipt from fx}
 
@@ -47,7 +47,7 @@
 / @eg count .qpipe.job.market_data.from_fx_orderbook[.qpipe.job.market_data.fx_orderbook] -> 0
 .qpipe.job.market_data.from_fx_orderbook:{[batch]
     fx:batch where .qf.px.is_ccy_pair each batch`sym;
-    select sym, source:`UQFDEPTH, market:`fx, source_time:time,
+    .qetl.plant.with_flat select sym, source:`UQFDEPTH, market:`fx, source_time:time,
         bid_prices, bid_sizes, ask_prices, ask_sizes, clock:`receipt from fx}
 
 / A crypto venue's ladder, already level-0-first, with the venue as source.
@@ -63,7 +63,7 @@
 / @return complete market_data snapshots, one per venue and sym
 / @eg count .qpipe.job.market_data.from_crypto_book[.qpipe.job.market_data.crypto_book] -> 0
 .qpipe.job.market_data.from_crypto_book:{[batch]
-    select sym, source:venue, market:`crypto, source_time,
+    .qetl.plant.with_flat select sym, source:venue, market:`crypto, source_time,
         bid_prices, bid_sizes, ask_prices, ask_sizes, clock:`venue from batch}
 
 / The rows market_data is about to publish, held to the .qf.mkt checks (#944):
@@ -136,7 +136,8 @@
         ([] sym:enlist `EURUSD; source:enlist `LP_A; market:enlist `fx;
             source_time:enlist 2026.09.19D10:00:00.000000000;
             bid_prices:enlist enlist 1.1; bid_sizes:enlist enlist 1000f;
-            ask_prices:enlist enlist 1.2; ask_sizes:enlist enlist 2000f; clock:enlist `receipt)))];
+            ask_prices:enlist enlist 1.2; ask_sizes:enlist enlist 2000f; clock:enlist `receipt;
+            bid:enlist 1.1; ask:enlist 1.2; rid:enlist 0N)))];
 
 .qetl.transform.define[`market_data_from_fx_orderbook;`inputs`output`fn`examples!(
     (enlist `fx_orderbook)!enlist .qpipe.job.market_data.fx_orderbook;
@@ -149,7 +150,8 @@
         ([] sym:enlist `EURUSD; source:enlist `UQFDEPTH; market:enlist `fx;
             source_time:enlist 2026.09.19D10:00:00.000000000;
             bid_prices:enlist 1.1 1.09; bid_sizes:enlist 1000 2000f;
-            ask_prices:enlist 1.2 1.21; ask_sizes:enlist 3000 4000f; clock:enlist `receipt)))];
+            ask_prices:enlist 1.2 1.21; ask_sizes:enlist 3000 4000f; clock:enlist `receipt;
+            bid:enlist 1.1; ask:enlist 1.2; rid:enlist 0N)))];
 
 .qetl.transform.define[`market_data_from_crypto_book;`inputs`output`fn`examples!(
     (enlist `crypto_book)!enlist .qpipe.job.market_data.crypto_book;
@@ -164,7 +166,8 @@
         ([] sym:enlist `$"BTC-USDT"; source:enlist `binance_spot; market:enlist `crypto;
             source_time:enlist 2026.09.17D10:00:01.000000000;
             bid_prices:enlist 61999 61998f; bid_sizes:enlist 0.5 1f;
-            ask_prices:enlist 62001 62002f; ask_sizes:enlist 0.5 1f; clock:enlist `venue)))];
+            ask_prices:enlist 62001 62002f; ask_sizes:enlist 0.5 1f; clock:enlist `venue;
+            bid:enlist 61999f; ask:enlist 62001f; rid:enlist 0N)))];
 
 / on_fail `drop, not `hold: market_data is every venue's book in one stream,
 / and a batch is whatever the plant delivered together. One venue's crossed

@@ -257,7 +257,8 @@
 .qt.qetl.plant.tables.test_both_canonical_tables_end_in_a_symbol_clock_column:{[t]
     / LAST, so a partition the history fill appended `clock to has the same column
     / order as one written from this declaration, and no positional read moves.
-    {[tbl] s:.qetl.plant.schema tbl;
-        .qunit.assertEquals[last cols s;`clock;string[tbl]," ends in clock"];
-        .qunit.assertEquals[type s`clock;11h;string[tbl],"'s clock is a symbol"]} each `executions`market_data;
+    / market_data gained the flat top after it (#2288), in the same convention: appended, so nothing before it moves
+    .qunit.assertEquals[last cols .qetl.plant.schema `executions;`clock;"executions ends in clock"];
+    .qunit.assertEquals[-4#cols .qetl.plant.schema `market_data;`clock`bid`ask`rid;"market_data's clock is followed only by the columns added after it: the flat top and the row number"];
+    {[tbl] .qunit.assertEquals[type (.qetl.plant.schema tbl)`clock;11h;string[tbl],"'s clock is a symbol"]} each `executions`market_data;
     .qunit.assertEquals[.qetl.plant.clocks;`venue`receipt;"the two clocks a source_time can be on; `unknown is the history fill's, and is refused"]};

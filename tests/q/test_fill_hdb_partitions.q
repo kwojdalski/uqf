@@ -513,3 +513,75 @@
     r:.qt.qproc.fillhdb.run_script[root;"book:([] time:`timestamp$(); sym:`symbol$(); px:`float$())\nnewtab:([] time:`timestamp$())\n";tree,"/scripts/gates/fill_hdb_partitions.q"];
     .qunit.assertEquals[r 1;0;"a release-shaped tree repairs"];
     .qunit.assertEquals[.qt.qproc.fillhdb.cols_of[root;2026.01.01;`newtab];enlist `time;"and writes the table dbmaint's allpaths named"]};
+
+/ --- market_data: the flat top, the order and the row numbers (#2288) ----------------------------
+
+/ market_data as the plant declares it now: the flat top and the row number after clock.
+.qt.qproc.fillhdb.md_schema:
+    "market_data:([] time:`timestamp$(); sym:`g#`symbol$(); source:`symbol$(); market:`symbol$(); source_time:`timestamp$(); bid_prices:(); bid_sizes:(); ask_prices:(); ask_sizes:(); clock:`symbol$(); bid:`float$(); ask:`float$(); rid:`long$())\n"
+
+/ An HDB as it was before the flat top: market_data in arrival order with no bid, ask or rid. Three sources
+/ across two syms, in time order, so within a sym the sources interleave - not the declared order. One book has
+/ a withdrawn bid, one a zero-size ask level (no price), and one a level that is a price.
+.qt.qproc.fillhdb.old_market_data:{[]
+    root:.qt.qproc.fillhdb.scratch[];
+    t0:2026.01.01D10:00:00.000000000;
+    n:9;
+    rows:([] time:t0+1000000000*til n; sym:`EURUSD`GBPUSD`EURUSD`EURUSD`GBPUSD`EURUSD`GBPUSD`EURUSD`GBPUSD;
+        source:`b`a`a`b`b`a`a`b`a; market:n#`fx; source_time:t0+1000000000*(n-til n);
+        bid_prices:(1.1 1.09;1.25 1.24;1.2;`float$();1.3;1.4 1.39;1.5;1.6;1.7);
+        bid_sizes:(1e6 2e6;1e6 2e6;1e6;`float$();1e6;1e6 2e6;1e6;1e6;1e6);
+        ask_prices:(1.2 1.21;1.26;1.3;1.4;1.31;1.5;1.6;1.7;1.8);
+        ask_sizes:(1e6 2e6;1e6;1e6;1e6;0f;1e6;1e6;1e6;1e6);
+        clock:n#`venue);
+    .qt.qproc.fillhdb.put[root;2026.01.01;`market_data;rows];
+    root}
+
+/ The market_data columns of one partition, enumerations resolved.
+.qt.qproc.fillhdb.md_cols:{[root;part]
+    dir:.qt.qproc.fillhdb.dir[root;part;`market_data];
+    `sym set get ` sv (hsym `$root),`sym;
+    c:get ` sv dir,`.d;
+    c!{[dir;c] v:get ` sv dir,c; $[(type v) within 20 76h; value v; v]}[dir] each c}
+
+.qt.qproc.fillhdb.test_the_flat_top_the_order_and_the_row_numbers_come_only_when_asked_for:{[t]
+    root:.qt.qproc.fillhdb.old_market_data[];
+    before:.qt.qproc.fillhdb.snapshot[root,"/2026.01.01"];
+    r:.qt.qproc.fillhdb.run[root;.qt.qproc.fillhdb.md_schema];
+    .qunit.assertEquals[r 1;0;"the bootstrap fill runs clean"];
+    .qunit.assertEquals[last .qt.qproc.fillhdb.cols_of[root;2026.01.01;`market_data];`clock;"and leaves the partition as it was: no bid, ask or rid, which a null would misstate"];
+    .qunit.assertEquals[.qt.qproc.fillhdb.snapshot[root,"/2026.01.01"];before;"byte for byte"];
+    m:.qt.qproc.fillhdb.run_migrating[root;.qt.qproc.fillhdb.md_schema;root,".status"];
+    .qunit.assertEquals[m 1;0;"the migration runs clean"];
+    c:.qt.qproc.fillhdb.md_cols[root;2026.01.01];
+    .qunit.assertEquals[key[c] except `time`sym`source`market`source_time`bid_prices`bid_sizes`ask_prices`ask_sizes`clock;`bid`ask`rid;"the flat top and the row number are added, after clock"];
+    .qunit.assertEquals[last key c;`rid;"and the row number is last"];
+    n:count c`sym;
+    .qunit.assertEquals[n;9;"no row lost"];
+    o:`sym`source`source_time xasc flip `sym`source`source_time!c`sym`source`source_time;
+    .qunit.assertEquals[flip `sym`source`source_time!c`sym`source`source_time;o;"sorted by sym, source, source_time"];
+    .qunit.assertEquals[c`rid;til n;"each row numbered by its position in that order"];
+    dir:.qt.qproc.fillhdb.dir[root;2026.01.01;`market_data];
+    .qunit.assertEquals[attr get ` sv dir,`sym;`p;"with p# on sym"];
+    / the flat top is the plant's rule: the first level, when it is a price someone could deal at
+    ok:{[px;sz] $[(count px)&count sz; (0<first px)&(0w>first px)&(0<first sz)&0w>first sz; 0b]};
+    bids:{$[x[2]; x 0; 0n]}each flip (first each c`bid_prices;first each c`bid_sizes;ok'[c`bid_prices;c`bid_sizes]);
+    asks:{$[x[2]; x 0; 0n]}each flip (first each c`ask_prices;first each c`ask_sizes;ok'[c`ask_prices;c`ask_sizes]);
+    .qunit.assertEquals[c`bid;"f"$bids;"bid is the first bid level where it is a price, null where the side is withdrawn"];
+    .qunit.assertEquals[c`ask;"f"$asks;"ask likewise, and a zero-size level is no price"];
+    .qunit.assertTrue[any null c`bid;"the fixture holds a withdrawn bid"];
+    .qunit.assertTrue[any null c`ask;"and a zero-size ask level"];
+    again:.qt.qproc.fillhdb.snapshot[root,"/2026.01.01"];
+    m2:.qt.qproc.fillhdb.run_migrating[root;.qt.qproc.fillhdb.md_schema;root,".status"];
+    .qunit.assertEquals[m2 1;0;"a second migration runs clean"];
+    .qunit.assertEquals[.qt.qproc.fillhdb.snapshot[root,"/2026.01.01"];again;"and changes not one byte: the migration is idempotent"]};
+
+.qt.qproc.fillhdb.test_a_partition_in_order_with_the_columns_is_not_rewritten:{[t]
+    root:.qt.qproc.fillhdb.old_market_data[];
+    .qt.qproc.fillhdb.run_migrating[root;.qt.qproc.fillhdb.md_schema;root,".status"];
+    dir:.qt.qproc.fillhdb.dir[root;2026.01.01;`market_data];
+    before:.qt.qproc.fillhdb.snapshot[1_string dir];
+    / staging is empty between runs: a rewrite leaves its dated directories, so none appearing is a pass
+    r:.qt.qproc.fillhdb.run_migrating[root;.qt.qproc.fillhdb.md_schema;root,".status"];
+    .qunit.assertEquals[(r 1;any (r 0) like "*rewritten in*");(0;0b);"the output says nothing was rewritten"];
+    .qunit.assertEquals[.qt.qproc.fillhdb.snapshot[1_string dir];before;"and no file changed"]};
