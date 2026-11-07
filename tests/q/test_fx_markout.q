@@ -18,6 +18,14 @@
     system"mkdir -p build/test-status-fx-markout-job";
     .qt.support.reset_snapshots[];
     .qpipe.transform.fx_markout_outputs.pin[];
+    / the crypto and equity jobs share market_data's buffer with these two in a process that loads them all
+    / (#2288); these tests are about the FX pair's history alone, so the others step out for the suite
+    `.qt.qpipe.job.fx_markout.others set .qetl.job.stream.horizons.shared.members;
+    {.qetl.job.stream.horizons.shared.leave x} each `crypto_markout`eq_markout;
+    }
+
+.qt.qpipe.job.fx_markout.afterNamespace_restore:{[]
+    `.qetl.job.stream.horizons.shared.members set .qt.qpipe.job.fx_markout.others;
     }
 
 .qt.qpipe.job.fx_markout.sent:()

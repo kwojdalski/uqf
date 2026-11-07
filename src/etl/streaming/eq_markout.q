@@ -63,7 +63,7 @@
 
 \d .
 
-.qetl.job.stream.at_horizons[`eq_markout;`procname`events`reference`transform`outputs`horizon`period`event_time`reference_time`ready_on`legs`lookback`max_age`by`retain_by`identity`remember`lateness`expire_after`keep`note`ephemeral`on_start`check`on_fail!(
+.qetl.job.stream.at_horizons[`eq_markout;`procname`events`reference`transform`outputs`horizon`period`event_time`reference_time`ready_on`legs`lookback`max_age`by`retain_by`identity`remember`lateness`expire_after`keep`note`ephemeral`on_start`check`on_fail`shared_reference!(
     `eq_markout1;
     `executions;
     `market_data;
@@ -88,4 +88,5 @@
     "fills waiting for their horizons at a restart are not scored, and the book history is rebuilt from the next books; the job publishes scores, it holds no book of record - hdb_eq_markout_backfill re-derives any window from the HDB";
     {[] .qpipe.transform.eq_markout_outputs.pin[]; (::)};
     .qpipe.transform.config_markout.check_pinned;
-    `hold)];
+    `hold;
+    1b)];

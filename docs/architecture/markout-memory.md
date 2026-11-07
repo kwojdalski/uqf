@@ -96,8 +96,15 @@ calling `.qetl.reference.at` with each; the core assumes nothing else.
 
 A live horizon job buffers its reference as the transform declares it, and the
 transform's market input is now the flat top, so the buffer holds `source_time`,
-`sym`, `source`, `bid`, `ask`, `clock` and no depth: it is bounded by what the
-pending executions can still need, and nothing in it is a ladder.
+`sym`, `source`, `bid`, `ask`, `clock` and no depth, bounded by what the pending
+executions can still need. Jobs that declare `shared_reference` and read the
+same table in one process keep **one** buffer: the first to see a batch appends
+the rows any of them keeps and hands the buffer on - q shares it by reference -
+and a trim keeps the union of what each member's pending events can still need
+(`src/etl/core/horizon_shared.q`). The stack runs one job to a process, so this
+takes effect where jobs are loaded together (a single-process run, the test
+suite); `fx_markout_wide` can be removed later without touching the others - it
+leaves the group and nothing else changes.
 
 ## Migrating an HDB
 

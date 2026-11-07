@@ -621,3 +621,74 @@
     .qunit.assertEquals[.qt.qetl.job.stream.horizons.why[start;12];"no time at or before 2026.10.09D09:59:58.000000000 for a";"an older book could still arrive"];
     .qunit.assertEquals[.qt.qetl.job.stream.horizons.why[start;40];"";"waived at the grace"];
     .qunit.assertEquals[.qt.qetl.job.stream.horizons.why[enlist (`a;11);40];"no time at or before 2026.10.09D10:00:00.000000000 for a";"but an anchor at the event itself is still required"]};
+
+/ --- jobs of one process share one reference buffer (#2288) ------------------------------------------------
+
+/ The reference input with a column the shared job's transform does not read, to meet a shape mismatch.
+.qt.qetl.job.stream.horizons.define_wide_transform:{[]
+    if[`horizontest_wide in .qetl.transform.defined[]; :()];
+    wide:update extra:`float$() from .qt.qetl.job.stream.horizons.refs;
+    .qetl.transform.define[`horizontest_wide;`inputs`output`fn`examples!(
+        `events`refs!(.qt.qetl.job.stream.horizons.events;wide);
+        .qt.qetl.job.stream.horizons.priced;
+        {[e;r] .qt.qetl.job.stream.horizons.price[e;select time, sym, mid from r]};
+        enlist `inputs`expected!(
+            `events`refs!(([] time:enlist .qt.qetl.job.stream.horizons.t0; sym:enlist `a; px:enlist 1f);
+                ([] time:.qt.qetl.job.stream.horizons.t0+0D00:00:00.5 0D00:00:05; sym:`a`a; mid:1.5 9f; extra:2#0n));
+            ([] sym:enlist `a; event_time:enlist .qt.qetl.job.stream.horizons.t0; px:enlist 1f; ref:enlist 1.5)))]}
+
+/ Two jobs reading hz_refs, shared or not, and the heap holding n reference rows adds to each.
+.qt.qetl.job.stream.horizons.pair:{[shared;n]
+    ex:$[shared; enlist[`shared_reference]!enlist 1b; ()!()];
+    sfx:$[shared; "_s"; "_u"];
+    a:.qt.qetl.job.stream.horizons.job[`$"hz_pa",sfx;ex];
+    b:.qt.qetl.job.stream.horizons.job[`$"hz_pb",sfx;ex];
+    big:.qt.qetl.job.stream.horizons.rf[`a;.qt.qetl.job.stream.horizons.t0+til n;n#1f];
+    .Q.gc[];
+    u0:(.Q.w[])`used;
+    (.qt.qetl.job.stream.horizons.ns[a;`on_batch])[`hz_refs;big];
+    (.qt.qetl.job.stream.horizons.ns[b;`on_batch])[`hz_refs;big];
+    u1:(.Q.w[])`used;
+    (u1-u0;count .qt.qetl.job.stream.horizons.ns[a;`history];count .qt.qetl.job.stream.horizons.ns[b;`history])}
+
+.qt.qetl.job.stream.horizons.test_jobs_that_share_a_reference_hold_it_once:{[t]
+    n:200000;
+    apart:.qt.qetl.job.stream.horizons.pair[0b;n];
+    together:.qt.qetl.job.stream.horizons.pair[1b;n];
+    .qunit.assertEquals[apart 1 2;n,n;"unshared, each job holds the rows"];
+    .qunit.assertEquals[together 1 2;n,n;"shared, each job still reads them all - as its own history"];
+    .qunit.assertTrue[(together 0)<0.7*apart 0;"but the heap holds them once: ",string[together 0]," bytes against ",string apart 0]};
+
+.qt.qetl.job.stream.horizons.test_the_first_member_to_see_a_batch_appends_it_and_the_rest_add_nothing:{[t]
+    a:.qt.qetl.job.stream.horizons.job[`hz_qa;enlist[`shared_reference]!enlist 1b];
+    b:.qt.qetl.job.stream.horizons.job[`hz_qb;enlist[`shared_reference]!enlist 1b];
+    batch:.qt.qetl.job.stream.horizons.rf[`a;.qt.qetl.job.stream.horizons.t0+0D00:00:01*til 3;1 2 3f];
+    (.qt.qetl.job.stream.horizons.ns[b;`on_batch])[`hz_refs;batch];
+    (.qt.qetl.job.stream.horizons.ns[a;`on_batch])[`hz_refs;batch];
+    (.qt.qetl.job.stream.horizons.ns[b;`on_batch])[`hz_refs;batch];
+    h:{.qt.qetl.job.stream.horizons.ns[x;`history]} each a,b;
+    .qunit.assertEquals[(count h 0;(h 0)~h 1);(3;1b);"three rows however many members saw the batch, and the same rows in both"]};
+
+.qt.qetl.job.stream.horizons.test_a_tick_of_one_member_keeps_what_another_still_needs:{[t]
+    t0:.qt.qetl.job.stream.horizons.t0;
+    ex:`shared_reference`max_age!(1b;0D00:00:30);
+    a:.qt.qetl.job.stream.horizons.job[`hz_ra;ex];
+    b:.qt.qetl.job.stream.horizons.job[`hz_rb;ex];
+    / a's event waits for its second; b has nothing pending
+    (.qt.qetl.job.stream.horizons.ns[a;`on_batch])[`hz_events;.qt.qetl.job.stream.horizons.ev[`a;t0]];
+    (.qt.qetl.job.stream.horizons.ns[a;`on_batch])[`hz_refs;.qt.qetl.job.stream.horizons.rf[`a;t0+0D00:00:00.5 0D00:01:00;1.5 9f]];
+    / b ticks long after: alone it would drop everything older than its own floor
+    (.qt.qetl.job.stream.horizons.ns[b;`score_ready]) t0+0D00:00:00.9;
+    (.qt.qetl.job.stream.horizons.ns[b;`score_ready]) t0+0D00:00:00.9;
+    kept:exec time from .qt.qetl.job.stream.horizons.ns[a;`history];
+    .qunit.assertTrue[(t0+0D00:00:00.5) in kept;"the book a's pending event is priced by survives b's tick"];
+    (.qt.qetl.job.stream.horizons.ns[a;`score_ready]) t0+0D00:00:01;
+    .qunit.assertEquals[exec ref from last last .qt.qetl.job.stream.horizons.sent;enlist 1.5;"and a scores against it"];
+    .qunit.assertEquals[.qt.qetl.job.stream.horizons.ns[a;`history]~.qt.qetl.job.stream.horizons.ns[b;`history];1b;"the members still hold one value"]};
+
+.qt.qetl.job.stream.horizons.test_a_member_that_reads_the_table_in_another_shape_is_refused:{[t]
+    .qt.qetl.job.stream.horizons.define_wide_transform[];
+    .qt.qetl.job.stream.horizons.job[`hz_wa;enlist[`shared_reference]!enlist 1b];
+    d:@[.qt.qetl.job.stream.horizons.decl_for[`hz_pw];`transform;:;`horizontest_wide],enlist[`shared_reference]!enlist 1b;
+    .qunit.assertThrows[.qetl.job.stream.at_horizons[`hz_pw;];d;"*shared_reference: hz_pw reads hz_refs as time, sym, mid, extra, but hz_wa shares that buffer as time, sym, mid*";"one buffer has one shape"];
+    .qunit.assertThrows[.qetl.job.stream.at_horizons[`hz_pq;];.qt.qetl.job.stream.horizons.decl_for[`hz_pq],enlist[`shared_reference]!enlist 1;"*shared_reference must be a boolean*";"and the key is a flag"]};

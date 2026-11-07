@@ -521,11 +521,21 @@ qetl.job.stream.delivery,wire,function,2,job hooks
 qetl.job.stream.horizons,def,function,1,name
 qetl.job.stream.horizons,define,function,2,name decl
 qetl.job.stream.horizons,defined,function,1,
+qetl.job.stream.horizons,earliest_need,function,3,d left now
 qetl.job.stream.horizons,installed,value,,
+qetl.job.stream.horizons,is_shared,function,1,d
 qetl.job.stream.horizons,optional_keys,value,,
 qetl.job.stream.horizons,ready_rules,value,,
 qetl.job.stream.horizons,registry,dict,,
 qetl.job.stream.horizons,required_keys,value,,
+qetl.job.stream.horizons,shared,dict,,
+qetl.job.stream.horizons.shared,add,function,2,name x
+qetl.job.stream.horizons.shared,join,function,3,ref job schema
+qetl.job.stream.horizons.shared,leave,function,1,job
+qetl.job.stream.horizons.shared,members,table,,
+qetl.job.stream.horizons.shared,names,function,1,ref
+qetl.job.stream.horizons.shared,refresh,function,2,ref from
+qetl.job.stream.horizons.shared,trim,function,2,name now
 qetl.job.stream.normalizer,def,function,1,name
 qetl.job.stream.normalizer,define,function,2,name decl
 qetl.job.stream.normalizer,defined,function,1,

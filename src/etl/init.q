@@ -118,6 +118,8 @@
 \l src/etl/core/kafka_diagnostics.q
 \l src/etl/core/kafka_decoder.q
 \l src/etl/core/horizon.q
+\l src/etl/core/horizon_reference.q
+\l src/etl/core/horizon_shared.q
 \l src/etl/core/bars.q
 \l src/etl/core/rolling.q
 \l src/etl/core/enrich.q
