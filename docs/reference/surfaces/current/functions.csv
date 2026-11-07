@@ -667,7 +667,9 @@ qetl.mapped,arranged,function,1,tob
 qetl.mapped,asof,function,2,tob probes
 qetl.mapped,columns,value,,
 qetl.mapped,depth_at,function,1,arg
+qetl.mapped,depth_reads,value,,
 qetl.mapped,full_check_rows,value,,
+qetl.mapped,gather,function,1,arg
 qetl.mapped,newest,function,1,arg
 qetl.mapped,order,value,,
 qetl.mapped,plain,function,1,x
@@ -793,14 +795,22 @@ qetl.reaction,rows_now,value,,
 qetl.reaction,run_one,function,3,item nm h
 qetl.reaction,window_now,value,,
 qetl.reaction,write,function,3,target row_key rows
+qetl.reference,add_transform,function,4,name needs defaults fn
 qetl.reference,at,function,6,variant tob max_age syms times clocks
 qetl.reference,book_at,function,6,tob max_age src sy times clocks
+qetl.reference,chosen,function,6,def tob max_age syms times clocks
 qetl.reference,combines,dict,,
 qetl.reference,def,function,1,name
 qetl.reference,default,value,,
 qetl.reference,describe,function,1,name
+qetl.reference,fill_price,function,3,qty prices sizes
+qetl.reference,folded,function,4,def j px n
 qetl.reference,keys,value,,
+qetl.reference,level_price,function,3,n prices sizes
 qetl.reference,register,function,2,name def
+qetl.reference,require_slice,function,2,variant tob
+qetl.reference,stored,value,,
+qetl.reference,top_size,function,1,slice
 qetl.reference,transforms,dict,,
 qetl.reference,variants,dict,,
 qetl.retention,declared,function,1,
@@ -1042,6 +1052,18 @@ qetl.uptime,mine,value,,
 qetl.uptime,period,value,,
 qetl.uptime,sessions,function,1,
 qetl.uptime,twins,function,1,job
+qetl.variant,depth_cols,value,,
+qetl.variant,evaluate,function,6,names tob max_age syms times clocks
+qetl.variant,flat,function,2,name slice
+qetl.variant,live,function,6,names buffer max_age syms times clocks
+qetl.variant,long,function,1,res
+qetl.variant,mapped_groups,function,1,plan
+qetl.variant,plan,function,2,names max_age
+qetl.variant,promote,function,1,name
+qetl.variant,reach_cap,value,,
+qetl.variant,read,function,6,h probes read_from skew names max_age
+qetl.variant,reads_from,function,3,plan max_age read_from
+qetl.variant,slice,function,1,books
 qetl.verify,armed,value,,
 qetl.verify,basis,function,1,dataset
 qetl.verify,behaviour_gaps,function,1,producers
@@ -2337,6 +2359,11 @@ qpipe.transform.markout_layouts,nested,function,2,spec lng
 qpipe.transform.markout_layouts,require_spec,function,1,spec
 qpipe.transform.markout_layouts,unnest,function,1,nst
 qpipe.transform.markout_layouts,wide,function,2,spec lng
+qpipe.transform.markout_variants,calc,function,5,domain spec exe md names
+qpipe.transform.markout_variants,ids,function,3,domain spec names
+qpipe.transform.markout_variants,pin,function,4,domain spec names reason
+qpipe.transform.markout_variants,result,table,,
+qpipe.transform.markout_variants,under,function,2,spec name
 qpipe.transform.order_outcome,dimensions,value,,
 qpipe.transform.order_outcome,outcomes,value,,
 qpipe.transform.order_outcome,status_map,function,2,codes outs

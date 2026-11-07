@@ -33,6 +33,7 @@ PATH = (
     "src/etl/core/reference_variant.q",
     "src/etl/transforms/markout_core.q",
     "src/etl/transforms/config_markout.q",
+    "src/etl/transforms/markout_variants.q",
     "src/etl/transforms/fx_markout.q",
     "src/etl/transforms/fx_markout_outputs.q",
     "src/etl/transforms/fx_domain.q",

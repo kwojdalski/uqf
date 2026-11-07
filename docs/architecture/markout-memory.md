@@ -88,9 +88,81 @@ a variant other than #1 goes into the run's configuration snapshot and so its
 already means, so every result scored before variants existed, and every one
 scored under #1 since, keeps its id.
 
-A run uses one variant. Evaluating many at once - gathering the books once and
-folding a list of variants over them - plugs in by registering variants and
-calling `.qetl.reference.at` with each; the core assumes nothing else.
+A markout run uses the spec's one variant; a LIST of them is `.qetl.variant`
+(`src/etl/core/variant_run.q`) and `markout_variants.calc`.
+
+### Reference variants at scale (#2289)
+
+Reference prices may be wanted in a thousand ways, and a stored column per way
+is impossible at the size market data runs to. A variant is a declaration, so a
+list of them factors, and the market is touched once:
+
+1. **SELECT** - per distinct (venue set, offset) the as-of search over the flat
+   keys (`tob_at`); the staleness only filters the matched books afterwards. It
+   returns the books and their `rid`s.
+2. **DEDUPE** - the distinct books across every variant.
+3. **GATHER ONCE** - `.qetl.mapped.gather` (in the process that maps
+   `market_data`) reads the ladders of those books in one `depth_at` call,
+   through their `rid`s: a slice of k rows x depth. `.qetl.mapped.depth_reads`
+   counts the rows read and the gather refuses to return unless the count equals
+   the distinct books; `scripts/gates/check.py variant-gather` refuses variant
+   code that names `market_data`, a second ladder reader, and a gather that
+   stops deduping or counting.
+4. **TRANSFORM** - each distinct (transform, parameters) once over the slice.
+5. **COMBINE** - each variant's, across the books matched to each instant.
+
+The cost is (fills x horizons x venues) x (depth + distinct transforms) and does
+not depend on the size of the market or on the number of variants beyond the
+transforms and combines themselves.
+
+**Declaring a variant** is one file under `src/etl/variants/` (globbed; nothing
+else changes) and a test:
+
+```q
+.qetl.reference.register[`vwap_5m_best;`venues`stale`offset`transform`combine`params!(
+    `all;`spec;0D;`vwap;`best;enlist[`qty]!enlist 5000000f)];
+```
+
+The registry validates the spec (venues, staleness, offset, a registered
+transform and combine, parameters of the transform's own names and types). The
+starter set, beside #1 `best_top`: `micro_median` (micro-price, median across
+venues), `vwap_1m_best` (`vwap[1,000,000]`, best across venues), `sizew_mid`
+(size-weighted mid across venues), `median_top` (median across venues) and
+`depth3_wmean` (top-3 depth-weighted). Each has a hand-computed test in
+`tests/q/test_reference_starter.q`. New transforms and combines are
+`.qetl.reference.add_transform` / an entry in `.qetl.reference.combines`
+(`reference_library.q`).
+
+**Configuration.** Each variant has its own `config_id`: the id of the snapshot
+`config_markout` records for the spec naming it
+(`.qpipe.transform.markout_variants.ids`, `pin`). Variant #1 adds nothing to its
+snapshot, so its id is the id the spec had before variants existed.
+`markout_variants.calc` stacks one `markout_core.calc` per variant under a
+`variant` key; each row carries its variant's `config_id`. The long layout's
+`variant` key is in the in-memory result; persisting it is a table declaration
+with that key.
+
+**Tier 1.** A hot variant can be stored: `.qetl.variant.flat` writes the
+transform's answer as flat columns (`bid`, `ask`, `w`) from the variant's own
+transform function, and `.qetl.variant.promote` registers the same SELECT and
+COMBINE over the `stored` transform. `tests/q/test_variant_run.q` holds the two
+bit-identical.
+
+**Measured** (`tests/q/run_mapped_heap.q measure_variants`, KDB-X, 500
+executions priced against a market of 200,000 rows a day with three-level
+ladders, one SELECT group):
+
+  | variants | books gathered | ladder rows read | heap after gather | evaluate     |
+  | ---      | ---            | ---              | ---               | ---          |
+  | 1        | 1,624          | 1,624            | 598,832 B         | 2 ms         |
+  | 10       | 1,624          | 1,624            | 598,832 B         | 17 ms        |
+  | 100      | 1,624          | 1,624            | 598,832 B         | 164 ms       |
+  | 1,000    | 1,624          | 1,624            | 598,832 B         | 1,638 ms     |
+
+With ten times the market (2,000,000 rows a day) the gather is 1,959 books and
+684,592 B at every variant count. With three distinct offsets (three SELECT
+groups) it is 1,800 books at every count: the gather grows with the distinct
+SELECTs, never with the variants.
 
 ## The live path
 
@@ -105,6 +177,13 @@ and a trim keeps the union of what each member's pending events can still need
 takes effect where jobs are loaded together (a single-process run, the test
 suite); `fx_markout_wide` can be removed later without touching the others - it
 leaves the group and nothing else changes.
+
+The same declared variants run over that bounded buffer: `.qetl.variant.live`
+arranges and numbers the buffer exactly as the gathered slice is, then
+evaluates, so a live job and a bounded run price a variant alike
+(`tests/q/test_variant_run.q` holds them equal). Variants of the flat top work
+on today's buffer; a variant that reads depth needs the buffer to carry the
+ladders, and says so by name when it does not.
 
 ## Migrating an HDB
 

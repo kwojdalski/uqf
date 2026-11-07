@@ -148,6 +148,15 @@ def _markout_mapped(mapped: ModuleType, root: Path) -> int:
     )
 
 
+def _variant_gather(gather: ModuleType, root: Path) -> int:
+    """The reference-variant gather reads the deduped rids once and nothing else (#2289)."""
+    return report(
+        "variant-gather",
+        gather.problems(root),
+        "the variant gather reads the deduped rids once; no variant code touches the market",
+    )
+
+
 def _tool_pins(pins: ModuleType, root: Path) -> int:
     """Every copy of a tool's version pin agrees with its authority (#1838)."""
     return report(
@@ -211,6 +220,12 @@ CHECKS: dict[str, Check] = {
             "a markout's path selects market_data by its date alone and reads no depth (#2288)",
             "markout_mapped",
             _markout_mapped,
+        ),
+        Check(
+            "variant-gather",
+            "the reference-variant gather reads the deduped rids once and nothing else (#2289)",
+            "variant_gather",
+            _variant_gather,
         ),
         Check(
             "env-reference",
