@@ -1,4 +1,4 @@
-/ test_reference_starter.q - the starter reference variants, each against a price worked by hand (src/etl/variants/reference_starter.q, #2289).
+/ test_reference_starter.q - the starter reference variants, each against a price worked by hand (src/etl/core/variants/reference_starter.q, #2289).
 / .
 / Two venues quote EURUSD at 10:00:00, and the instant priced is 10:00:01:
 / .

@@ -115,8 +115,8 @@ The cost is (fills x horizons x venues) x (depth + distinct transforms) and does
 not depend on the size of the market or on the number of variants beyond the
 transforms and combines themselves.
 
-**Declaring a variant** is one file under `src/etl/variants/` (globbed; nothing
-else changes) and a test:
+**Declaring a variant** is one file under `src/etl/core/variants/` (globbed;
+nothing else changes) and a test:
 
 ```q
 .qetl.reference.register[`vwap_5m_best;`venues`stale`offset`transform`combine`params!(

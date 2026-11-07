@@ -22,7 +22,7 @@
 / MANY VARIANTS AT ONCE. `at` prices one. A list of them - the books gathered once, every distinct transform run
 / once over the gathered slice, each variant's combine on its own SELECT - is .qetl.variant (variant_run.q); the
 / transforms and combines beyond `top` and `best` that read a book's DEPTH are reference_library.q, and the variants
-/ declared with them are src/etl/variants/*.q. This file is the registry and the single-variant pricing both build on.
+/ declared with them are src/etl/core/variants/*.q. This file is the registry and the single-variant pricing both build on.
 
 \d .
 

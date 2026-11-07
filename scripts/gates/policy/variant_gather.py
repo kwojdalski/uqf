@@ -7,7 +7,7 @@ thousand variants the cost of one gather. Three things would break it, and each 
 the text of the code:
 
 * variant code that reaches the market. The variant engine, the transform library and the
-  declarations in src/etl/variants/ receive a slice and never name `market_data`: a variant
+  declarations in src/etl/core/variants/ receive a slice and never name `market_data`: a variant
   that selected from it would read the market once per variant, not once per batch.
 * a ladder read that does not go through the gather. `depth_at` is the one reader of
   ladders; outside mapped_depth.q only `gather` may reach it (the twin side calls `gather`).
@@ -31,7 +31,7 @@ NO_MARKET = (
     "src/etl/transforms/markout_variants.q",
 )
 #: Directories whose every .q file is a variant declaration.
-DECLARATIONS = ("src/etl/variants",)
+DECLARATIONS = ("src/etl/core/variants",)
 
 DEPTH_READER = "src/etl/core/mapped_depth.q"
 

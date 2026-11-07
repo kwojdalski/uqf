@@ -56,7 +56,7 @@ def test_the_command_runs_and_passes():
 
 def test_a_variant_that_selects_the_market_is_refused(tmp_path):
     root = _tree(tmp_path)
-    (root / "src/etl/variants/greedy.q").write_text(
+    (root / "src/etl/core/variants/greedy.q").write_text(
         "x:select bid_prices from market_data where date=d;\n"
     )
     out = vg.problems(root)
@@ -65,7 +65,7 @@ def test_a_variant_that_selects_the_market_is_refused(tmp_path):
 
 def test_a_comment_naming_the_market_is_not_code(tmp_path):
     root = _tree(tmp_path)
-    (root / "src/etl/variants/quiet.q").write_text(
+    (root / "src/etl/core/variants/quiet.q").write_text(
         "/ never reads market_data\nx:1; / nor market_data\n"
     )
     assert vg.problems(root) == []

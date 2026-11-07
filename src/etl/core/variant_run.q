@@ -20,7 +20,7 @@
 / whole slice is read for the books a variant matched by indexing it with their rids. A live job's bounded buffer is the
 / same table by another road (`live`), so the live path evaluates the same declared variants.
 / .
-/ A variant is added by declaring it (src/etl/variants/*.q): nothing here changes.
+/ A variant is added by declaring it (src/etl/core/variants/*.q): nothing here changes.
 
 \d .
 
