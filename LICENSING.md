@@ -53,13 +53,13 @@ are listed, not accepted, in `lib/.vendored/<tree>.drift.tsv`.
   [DataIntellectTech/kdb-fix-adaptor](https://github.com/DataIntellectTech/kdb-fix-adaptor)
   (originally AquaQ Analytics') at commit `1194145`, distributed under the MIT
   License (full text at `lib/kdb-fix-adaptor/LICENSE-kdb-fix-adaptor`). A
-  QuickFIX-based FIX engine for kdb+, a native `2:` library; it ships
-  pugixml (MIT) and KX's `k.h`, and builds against QuickFIX, which is not
-  included (QuickFIX Software License). Upstream calls it alpha and unused in
-  production. Four compiled executables upstream committed and its
-  `.gitignore` were not copied (#2292); see `lib/kdb-fix-adaptor/NOTICE.md`.
-  Not loaded by `src/` or anything else in this repo, and not built or
-  verified here: it needs KDB-X, since PeachQ has no `2:`.
+  QuickFIX-based FIX engine for kdb+, a native `2:` library; it ships pugixml
+  (MIT) and KX's `k.h`, and builds against QuickFIX, which is not included
+  (QuickFIX Software License). Upstream calls it alpha and unused in production.
+  Four compiled executables upstream committed and its `.gitignore` were not
+  copied (#2292); see `lib/kdb-fix-adaptor/NOTICE.md`. Not loaded by `src/` or
+  anything else in this repo, and not built or verified here: it needs KDB-X,
+  since PeachQ has no `2:`.
 - `lib/torq/`, vendored from
   [DataIntellectTech/TorQ](https://github.com/DataIntellectTech/TorQ) at commit
   `a6cee6c`, distributed under the MIT License (full text at
