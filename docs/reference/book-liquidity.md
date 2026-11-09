@@ -95,6 +95,6 @@ groups are `(sym, source)`; `settlement`, `category` and `req_size` are columns
 of the result.
 
 Process: `book_liquidity_1m1`, in no profile and not in `uqs start`
-(`python/uqs/src/uqs/model/profiles.py`, `UNPROFILED`): a new standing process
+(`python/uqs/src/uqs/model/unprofiled.py`, `UNPROFILED`): a new standing process
 costs one plant connection against the community licence's sixteen, and the fx
 profile that runs `marketdata1` already holds them all.

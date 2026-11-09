@@ -78,8 +78,8 @@ how you get a process that is `up`, heartbeating, and publishing nothing.
 
 A streaming job also lands in **no profile**, so `uqs start --profile` cannot
 reach it. The scaffold says so; `test_profiles.py` fails until it is in one or
-in `UNPROFILED` with a reason. Backfills are exempt --- see
-[backfill.md](backfill.md).
+in `UNPROFILED` (`model/unprofiled.py`) with a reason. Backfills are exempt ---
+see [backfill.md](backfill.md).
 
 ## Table columns
 

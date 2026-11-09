@@ -174,7 +174,7 @@ def _appended(existing: str, action: FileAction) -> str:
     """
     if action.path == STACK_TABLES_TEST:
         return _with_expected_table(existing, action.body)
-    if action.path == profile.PROFILES_FILE:
+    if action.path in (profile.PROFILES_FILE, profile.UNPROFILED_FILE):
         return profile.apply(existing, action)
     if action.path == SHOWCASE_PAGE:
         return with_card(existing, action.body, action.anchor)

@@ -163,8 +163,9 @@ So after scaffolding, the tree is in a known state:
   tests/qrun/test_worked_examples.py runs it.
 - A new streaming job or normalizer is in **no profile** unless you said which:
   `--profile NAME` adds it to one in `python/uqs/src/uqs/model/profiles.py`, and
-  `--unprofiled "REASON"` exempts it in `UNPROFILED`. Ask the user which - it is
-  a judgement about what runs together. Without either, `test_profiles.py` fails
+  `--unprofiled "REASON"` exempts it in `UNPROFILED`
+  (`python/uqs/src/uqs/model/unprofiled.py`). Ask the user which - it is a
+  judgement about what runs together. Without either, `test_profiles.py` fails
   until one is written. Bounded workers are exempt - a backfill is triggered,
   not started with the stack.
 - For a job that defines a NEW table, the scaffold appends a SCAFFOLDED
