@@ -47,7 +47,7 @@ push() {
   [ "$(git ls-remote origin "refs/heads/$branch" | cut -f1)" = "$(git rev-parse HEAD)" ] \
     || { echo "$pr: push exited 0 but origin/$branch is not HEAD"; return 1; }
 }
-gate_ok() { python3 scripts/gates/check_kdbx_attestation.py origin/master HEAD > "$logs/gate.log" 2>&1; }
+gate_ok() { uv run python scripts/gates/check_kdbx_attestation.py origin/master HEAD > "$logs/gate.log" 2>&1; }
 # merge-tree exits 1 for a conflict, 0 for a clean merge, >1 for an error
 conflicted() {
   local rc=0
@@ -67,14 +67,16 @@ ci_state() {
 
 # The whole-suite coverage run on master's new tip (#1719), in the background:
 # an attestation judges coverage only in the modules its change reaches, and
-# this is where the rest of the tree is judged. Started with python3, from the
-# git directory, so it outlives this worktree; --if-new and its lock keep two
-# merges from running it twice. attest_kdbx.py prints its last verdict.
+# this is where the rest of the tree is judged. Started on the project's
+# interpreter, not PATH's python3, which may be too old to parse it (#2540);
+# its state lives in the git directory, so it outlives this worktree; --if-new
+# and its lock keep two merges from running it twice. attest_kdbx.py prints
+# its last verdict.
 master_coverage() {
   local state
   state="$(git rev-parse --path-format=absolute --git-common-dir)/uqf-master-coverage"
   mkdir -p "$state"
-  nohup python3 "$wt/scripts/dev/master_coverage.py" --if-new >> "$state/log" 2>&1 < /dev/null &
+  nohup uv run --project "$wt" python "$wt/scripts/dev/master_coverage.py" --if-new >> "$state/log" 2>&1 < /dev/null &
   echo "$pr: whole-suite coverage of master started in the background (log: $state/log)"
 }
 
