@@ -146,10 +146,22 @@
     .qunit.assertEquals[count .qt.qpipe.job.kafka_flow.all_rows[];8;"offsets 2-4 again, after 0-7: dropped, not mistaken for a restart"];
     .qunit.assertEquals[.qt.qpipe.job.kafka_flow.mark[.qt.qpipe.job.kafka_flow.topic;0j];7j;"and the mark did not move"]};
 
+/ #2320: a recreated topic's first page runs 0..6, past the old mark 4; kafka_flow's mark dropped 0..4 of it.
+.qt.qpipe.job.kafka_flow.test_a_new_generation_crossing_the_mark_is_decoded:{[t]
+    .qt.qpipe.job.kafka_flow.drive_ready[];
+    .qt.qpipe.job.kafka_flow.push[5#0j;til 5];
+    .qt.qpipe.job.kafka_flow.push_later[7#0j;til 7];
+    .qunit.assertEquals[count .qt.qpipe.job.kafka_flow.all_rows[];12;"five old records, then all seven of the new generation"];
+    .qunit.assertEquals[.qt.qpipe.job.kafka_flow.mark[.qt.qpipe.job.kafka_flow.topic;0j];6j;"the mark is the new generation's top"];
+    .qt.qpipe.job.kafka_flow.push_later[7#0j;til 7];
+    .qunit.assertEquals[count .qt.qpipe.job.kafka_flow.all_rows[];12;"a redelivery of the new page is dropped"]};
+
 .qt.qpipe.job.kafka_flow.test_a_restart_on_one_partition_does_not_touch_another:{[t]
     .qt.qpipe.job.kafka_flow.drive_ready[];
     .qt.qpipe.job.kafka_flow.push[(3#0j),3#1j;0 1 2 0 1 2j];
-    .qt.qpipe.job.kafka_flow.push_later[(2#0j),1#1j;0 1 2j];
+    / partition 1's redelivered 2 carries its own time; only partition 0's records are new (#2320: a later time at the mark is a new generation)
+    b:.qt.qpipe.job.kafka_flow.batch[(2#0j),1#1j;0 1 2j];
+    .qpipe.job.kafka_flow.on_batch[`kafka_message;update broker_time:broker_time+0D01:00:00 from b where partition=0];
     .qunit.assertEquals[count .qt.qpipe.job.kafka_flow.all_rows[];8;"partition 0 restarted; partition 1's 2 is only a redelivery"]};
 
 / The log of a run in which partition 0 went 0 1 2, then restarted with new records 0 1 (a later broker_time), and kafka_flow decoded only the new 0 before going down.
