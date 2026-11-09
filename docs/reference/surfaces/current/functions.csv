@@ -16,9 +16,7 @@ qetl.cfg,errors,value,,
 qetl.cfg,explain,function,1,k
 qetl.cfg,falsy,value,,
 qetl.cfg,get_flag,function,1,k
-qetl.cfg,get_positive,function,1,k
-qetl.cfg,get_symbol,function,1,k
-qetl.cfg,get_timestamp,function,1,k
+qetl.cfg,get_long,function,2,k default
 qetl.cfg,override_layer,value,,
 qetl.cfg,raw,function,1,k
 qetl.cfg,require_valid,function,1,
@@ -367,6 +365,7 @@ qetl.job.bounded.runtime,require_aligned,function,4,worker cfg range_from range_
 qetl.job.bounded.runtime,require_dependencies,function,1,worker
 qetl.job.bounded.runtime,require_revision,function,2,worker decl
 qetl.job.bounded.runtime,require_upstream,function,6,upstream upstream_part version as_of from_ts to_ts
+qetl.job.bounded.runtime,require_valid_config,function,1,
 qetl.job.bounded.runtime,retire_fixture_claims,function,2,worker rows
 qetl.job.bounded.runtime,retry_boundary,value,,
 qetl.job.bounded.runtime,retryable,function,1,err

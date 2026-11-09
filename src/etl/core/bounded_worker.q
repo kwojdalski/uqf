@@ -523,10 +523,10 @@
 / @param run_spec the run specification - source_version, range_from, range_to
 / @return whatever init_body returns
 .qetl.job.bounded.init:{[worker;run_spec]
-    / First of all: a live source whose transport this process cannot reach (ODBC
-    / on a static build) is refused before the process is claimed or anything
-    / is locked (#1865).
+    / First of all (#1865, #2654): a live source whose transport this process cannot reach, and a
+    / malformed setting, are refused before the process is claimed or anything is locked.
     .qetl.source.preflight (.qetl.job.bounded.def worker)`source;
+    .qetl.job.bounded.runtime.require_valid_config[];
     / Before the guard below, not inside it: a refusal must write nothing,
     / and the guard's failure path writes the status file - the file this
     / refusal exists to keep the first worker's. The lock's refusal too: in
