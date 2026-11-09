@@ -463,6 +463,18 @@
     wrapper:{[q] .qf.mkt.cross_book_at[q;`AUDUSD;2025.12.31D00:00:00.000000000;enlist 500000;`mid]};
     .qunit.assertError[wrapper;quotes;"no quote exists yet at or before the requested time"]};
 
+/ #2391: "no row" was told by an empty bid ladder, so an offers-only book was
+/ "no quote" while the bids-only mirror priced its live side.
+.qt.qf.px.forwards.test_leg_book_as_of_bid_empty_book_is_a_quote:{[t]
+    q:([] time:enlist 2026.01.01D11; sym:enlist `EURUSD; bid_prices:enlist `float$(); bid_sizes:enlist `float$(); ask_prices:enlist 1.1002 1.1004; ask_sizes:enlist 1e6 1e6);
+    r:.qf.mkt.cross_book_at[q;`EURUSD;2026.01.01D12;enlist 1e6;enlist `ask];
+    .qunit.assertEquals[first r`ask;1.1002;"offers-only book prices its ask side"];
+    .qunit.assertEquals[.qf.mkt.leg_book_as_of[q;2026.01.01D12;`EURUSD]`ask_prices;1.1002 1.1004;"its row is returned, empty bid ladder and all"];
+    .qunit.assertThrows[{[q] .qf.mkt.cross_book_at[q;`EURUSD;2026.01.01D10;enlist 1e6;enlist `ask]};q;
+        "leg_book_as_of: no quote for*";"before the first row is still no quote"];
+    .qunit.assertThrows[{[q] .qf.mkt.cross_book_at[q;`USDJPY;2026.01.01D12;enlist 1e6;enlist `ask]};update sym:`GBPUSD from q;
+        "cross_book_at: no chain*";"a pair not in quotes is still refused"]};
+
 .qt.qf.px.forwards.test_cross_book_at_rejects_unsorted_quotes:{[t]
     / mk_quotes_table already sorts `sym`time xasc; deliberately reverse the
     / row order here to prove cross_book_at catches this rather than

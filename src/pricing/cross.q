@@ -409,11 +409,12 @@
 / @throws error if quotes has no row for target_sym at or before as_of
 .qf.mkt.leg_book_as_of:{[quotes;as_of;target_sym]
     lookup:([] sym:enlist target_sym; time:enlist as_of);
-    joined:aj[`sym`time;lookup;quotes];
-    / no match is an empty ladder on KDB-X but a null atom on PeachQ (#1034)
-    if[$[0>type b:first joined`bid_prices; 1b; 0=count b];
-        '"leg_book_as_of: no quote for ",(string target_sym)," at or before ",string as_of];
-    `bid_prices`bid_sizes`ask_prices`ask_sizes!(first joined`bid_prices;first joined`bid_sizes;first joined`ask_prices;first joined`ask_sizes)};
+    / aj a row index, not the ladders: "no row" was told by an empty bid
+    / ladder (KDB-X fills a miss with one, PeachQ with a null, #1034), which
+    / called an offers-only book no quote (#2391). Either side may be empty.
+    row:first aj[`sym`time;lookup;([] sym:quotes`sym; time:quotes`time; row:til count quotes)]`row;
+    if[null row; '"leg_book_as_of: no quote for ",(string target_sym)," at or before ",string as_of];
+    `bid_prices`bid_sizes`ask_prices`ask_sizes#quotes row};
 
 / Bid, ask and mid for a single already-available leg at one
 / size - the 1-leg-chain analogue of cross_book_at_one_size, used by
