@@ -72,7 +72,8 @@ The request is held to the table's row in
 ordinary user's is. A table can be subscribed to from outside only if it is in
 the catalog (`.qcat.describe`, see
 [`uqs_catalog.q`](../../scripts/processes/uqs_catalog.q)) and has a policy row.
-Today that is `crypto_markout`.
+Today that is `mkt_orderbook`, `crypto_markout`, `duckdb_deals` and
+`last_value`.
 
 cryptorust's `kdb_subscriber.tables` defaults to `crypto_execution_quality`, the
 table `crypto_markout` replaced (#1936): a terminal pointed at this plant lists
