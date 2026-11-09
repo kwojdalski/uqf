@@ -274,7 +274,9 @@
             / unreleased before the cut, or this would release data the deployment has not
             / yet made visible.
             if[count ready; .qetl.coverage.mark_ready[ready;.z.p]]];
-        .qetl.io.retire[decl`root;"D"$string r`item;r`target];
+        / under the root's write lock, as every writer is (#1083, #2302): unlocked, this could
+        / remove a partition mid-write and share a writer's staging path for the swap
+        .qetl.io.locked[decl`root;.qetl.io.retire;(decl`root;"D"$string r`item;r`target)];
         .qetl.retention.record[id;enlist r;n]}[id;decl] each p;
     }
 

@@ -92,6 +92,30 @@
     delete etl_retention from `.;
     .qunit.assertEquals[count .qetl.retention.history[];2;"the record survives the process"]};
 
+/ #2302: retention removes partitions under the root's write lock, as every writer does, so it
+/ cannot delete a partition a backfill is writing, or share its staging path mid-swap.
+.qt.qetl.retention.test_retention_waits_for_the_roots_write_lock_and_removes_nothing_while_it_is_held:{[t]
+    root:.qt.qetl.retention.hdb[];
+    .qt.qetl.retention.declare[`rt_locked;root];
+    held:.qetl.io.hdb_lock root;
+    system"mkdir -p ",held;
+    .qetl.job.bounded.state.write_owner held;
+    saved:.qetl.io.hdb_lock_wait;
+    `.qetl.io.hdb_lock_wait set 0D00:00:00.050;
+    r:@[{.qetl.retention.run[`rt_locked;.qt.qetl.retention.as_at;enlist[`apply]!enlist 1b]; `removed};::;{x}];
+    `.qetl.io.hdb_lock_wait set saved;
+    system"rm -rf ",held;
+    .qunit.assertTrue[r like "*could not take the lock at*";"refused while another writer holds the root"];
+    .qunit.assertEquals[.qt.qetl.retention.held[root];2026.01.02 2026.01.03 2026.02.20;"and every partition is still on disk"];
+    .qunit.assertEquals[count .qetl.retention.history[];0;"with nothing recorded as removed"]};
+
+.qt.qetl.retention.test_retention_releases_the_roots_write_lock_after_removing:{[t]
+    root:.qt.qetl.retention.hdb[];
+    .qt.qetl.retention.declare[`rt_unlocked;root];
+    .qetl.retention.run[`rt_unlocked;.qt.qetl.retention.as_at;enlist[`apply]!enlist 1b];
+    .qunit.assertEquals[.qt.qetl.retention.held[root];enlist 2026.02.20;"the old days are gone"];
+    .qunit.assertEquals[()~key hsym `$.qetl.io.hdb_lock root;1b;"and the lock is released for the next writer"]};
+
 .qt.qetl.retention.test_a_second_applied_run_finds_nothing_left:{[t]
     root:.qt.qetl.retention.hdb[];
     .qt.qetl.retention.declare[`rt_twice;root];
