@@ -30,6 +30,7 @@ from uqs.deploy.preflight import PREFLIGHT
 from uqs.deploy.remote import Remote, q
 from uqs.deploy.report import render
 from uqs.deploy.stages import Deployment
+from uqs.interpreter import q_interpreter
 
 ROOT = Path(__file__).resolve().parents[3]
 
@@ -1370,3 +1371,45 @@ def test_a_remote_failure_keeps_the_refusal_behind_ssh_warnings():
         remote_mod._checked(r, "start", "starting the profile")
     assert "Nothing was started" in str(exc.value)
     assert "Permanently added" not in str(exc.value)
+
+
+def _smoke(tmp_path: Path, breakage: str) -> subprocess.CompletedProcess[str]:
+    """scripts/deploy_smoke.q, for real, on a release whose src/init.q loads
+    this tree's library and then applies `breakage`."""
+    qbin = q_interpreter(os.environ)
+    if qbin is None:
+        pytest.skip("no q interpreter - set $QCMD, or put q on PATH")
+    rel = tmp_path / "release"
+    (rel / "scripts").mkdir(parents=True)
+    (rel / "src").mkdir()
+    (rel / "scripts" / "deploy_smoke.q").write_bytes(
+        (ROOT / "scripts" / "deploy_smoke.q").read_bytes()
+    )
+    (rel / "src" / "init.q").write_text(
+        f'system "cd {ROOT}"; system "l src/init.q"; system "cd {rel}";\n{breakage}\n'
+    )
+    env = {**os.environ, "QHOME": os.environ.get("QHOME", str(Path.home() / ".kx"))}
+    return subprocess.run(
+        [str(qbin), "scripts/deploy_smoke.q", "-q"],
+        cwd=rel, stdin=subprocess.DEVNULL, capture_output=True, text=True, env=env,
+        timeout=120, check=False,
+    )  # fmt: skip
+
+
+def test_the_deploy_smoke_passes_the_real_library(tmp_path):
+    r = _smoke(tmp_path, "")
+    assert r.returncode == 0 and "DEPLOY_SMOKE_OK" in r.stdout, r.stdout + r.stderr
+
+
+def test_the_deploy_smoke_fails_a_null_result(tmp_path):
+    """#2441: `1e-6>abs 0n-want` is 1b, so a null passed every check."""
+    r = _smoke(tmp_path, ".qf.px.gk_call:{[s;k;r;q;v;t] 0n};\n.qf.px.pip_factor:{[p] 0N};")
+    assert r.returncode == 1 and "DEPLOY_SMOKE_OK" not in r.stdout
+    assert "DEPLOY_SMOKE_FAILED: gk_call at the money" in r.stderr
+    assert "DEPLOY_SMOKE_FAILED: pip_factor USDJPY" in r.stderr
+
+
+def test_the_deploy_smoke_fails_a_list_result_with_a_message(tmp_path):
+    r = _smoke(tmp_path, ".qf.math.ncdf:{[x] 0.5 0.5};")
+    assert r.returncode == 1 and "DEPLOY_SMOKE_OK" not in r.stdout
+    assert "DEPLOY_SMOKE_FAILED: ncdf at 0" in r.stderr
