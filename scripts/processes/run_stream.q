@@ -236,12 +236,19 @@ if[`verbose in key .qproc.standalone.opts; .qetl.log.debug 1b];
 / declaring replay 1b used to be warned and started without it, so
 / fx_positions rebuilt its book with the plant in its own process and started
 / flat with the plant in another.
+/ .
+/ A plant that goes away is SEEN (#2493): .z.pc nulls the handle when it
+/ closes, and `subscribed` answers 0b from then on, so the uptime beat's
+/ subscription watch records the job failing and its outage reads as a gap -
+/ not a healthy job that receives nothing. It does not reconnect: a
+/ restarted plant has to be met by restarting the job, which replays.
 / @param tp the plant's port
 / @return the transport dictionary
 .qproc.standalone.remote_transport:{[tp]
-    `connect`publisher`subscribe`timer`earlier_days`plant_day`has_log`plant_roll!(
+    `connect`publisher`subscribe`timer`earlier_days`plant_day`has_log`plant_roll`subscribed!(
         {[tp]
             if[not null .qproc.standalone.h; :()];
+            `.z.pc set {[h] if[h=.qproc.standalone.h; `.qproc.standalone.h set 0Ni];};
             .qetl.log.ch.info[`ipc;"connecting to the plant";enlist[`port]!enlist tp];
             `.qproc.standalone.h set @[hopen;tp;{[tp;e]
                 '"run_stream: cannot connect to the plant on port ",string[tp]," (",e,") - is it running? start one with -plant ",string tp}[tp]];}[tp];
@@ -260,7 +267,8 @@ if[`verbose in key .qproc.standalone.opts; .qetl.log.debug 1b];
         {[tbls;first_day;last_day] .qproc.standalone.h({[w;a;b] .qetl.tick.earlier_days[w;a;b]};tbls;first_day;last_day)};
         {[] .qproc.standalone.h({[] .qetl.tick.plant_day[]};())};
         {[dt] .qproc.standalone.h({[d] .qetl.tick.has_log d};dt)};
-        {[] .qproc.standalone.roll_of .qproc.standalone.h({[] .qetl.tick.plant_day[]};())})}
+        {[] .qproc.standalone.roll_of .qproc.standalone.h({[] .qetl.tick.plant_day[]};())};
+        {[] not null .qproc.standalone.h})}
 
 / The jobs to run for `jobs` with the plant in this process: every in-tree
 / producer upstream of them, producers first, then `jobs` themselves.

@@ -296,6 +296,76 @@ def test_every_job_on_a_remote_plant_gets_its_own_batches_once(tmp_path: Path) -
             proc.wait(timeout=10)
 
 
+_BEAT_AFTER_PLANT_DIES = """h:@[hopen;{port};{{0N}}];
+if[null h; -1 "FAILED:unreachable"; exit 0];
+-1 "BEFORE:",string h"(.qetl.stream_health.of `fx_positions)`failed";
+system "sleep 0.5";
+h".qproc.standalone.timers:{{x[3]:0Np; x}} each .qproc.standalone.timers; .qproc.standalone.tick[]";
+-1 "FAILED:",string h"(.qetl.stream_health.of `fx_positions)`failed";
+exit 0
+"""
+
+
+def test_a_job_whose_remote_plant_dies_beats_as_not_subscribed(tmp_path: Path) -> None:
+    """#2493: the remote transport had no `subscribed` answer and never saw the
+    plant's handle close, so a job whose plant had gone kept beating as up and
+    subscribed while it received nothing - its outage was not a gap."""
+    import socket
+    import time
+
+    q, env = _kdbx()
+    if identify(Path(q), env) != KDBX:
+        pytest.skip("the multi-process run needs KDB-X")
+    env = {**env, "UQF_STATUS_DIR": str(tmp_path / "status")}
+    plant_port, job_port = _free_port(), _free_port()
+    beat = tmp_path / "beat.q"
+    beat.write_text(_BEAT_AFTER_PLANT_DIES.format(port=job_port))
+
+    def start(*args: str) -> subprocess.Popen[bytes]:
+        return subprocess.Popen(
+            [q, "scripts/processes/run_stream.q", "-q", *args],
+            cwd=UQF_ROOT,
+            env=env,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+
+    plant = start("-plant", str(plant_port), "-logdir", str(tmp_path / "tplog"))
+    job = None
+    try:
+        for _ in range(50):
+            with socket.socket() as probe:
+                if probe.connect_ex(("localhost", plant_port)) == 0:
+                    break
+            time.sleep(0.2)
+        job = start("-job", "fx_positions", "-tp", str(plant_port), "-port", str(job_port))
+        for _ in range(50):
+            with socket.socket() as probe:
+                if probe.connect_ex(("localhost", job_port)) == 0:
+                    break
+            time.sleep(0.2)
+        plant.kill()
+        plant.wait(timeout=10)
+        out = subprocess.run(
+            [q, str(beat), "-q"],
+            cwd=UQF_ROOT,
+            env=env,
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        ).stdout
+        assert _value(out, "BEFORE") == "0", out
+        assert _value(out, "FAILED") != "0", out
+    finally:
+        for proc in (job, plant):
+            if proc is not None:
+                proc.kill()
+                proc.wait(timeout=10)
+
+
 _PUBLISHER = """\\l scripts/processes/run_stream.q
 tr:.qproc.standalone.remote_transport {port};
 tr[`connect][];
