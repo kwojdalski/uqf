@@ -32,6 +32,10 @@
 .qt.qf.px.calendar.test_weekday_maps_date_mod_7:{[t]
     .qunit.assertEquals[.qf.px.weekday 2026.09.18 2026.09.19 2026.09.20 2026.09.21;`fri`sat`sun`mon;"Fri, Sat, Sun, Mon"]};
 
+.qt.qf.px.calendar.test_weekday_of_a_timestamp_is_its_dates:{[t]
+    / `long$ of a timestamp is nanoseconds: a Friday noon read `tue (#2559).
+    .qunit.assertEquals[.qf.px.weekday 2026.09.18D12:00 2026.09.19D00:00;`fri`sat;"a timestamp's weekday is its date's"]};
+
 .qt.qf.px.calendar.test_friday_trade_settles_tuesday:{[t]
     r:.qf.px.spot_date[2026.09.18;`EURUSD;.qt.qf.px.calendar.no_holidays[];.qt.qf.px.calendar.conventions[2]];
     .qunit.assertEquals[r`date;2026.09.22;"Fri T+2 skips the weekend"];

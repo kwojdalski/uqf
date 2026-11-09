@@ -47,10 +47,11 @@
 .qf.px.convention_defaults:enlist[`settle_via]!enlist `USD
 
 / The weekday of a date, as a symbol.
-/ @param d a date, or a list of dates
+/ @param d a date, or a list of dates - a timestamp or datetime counts as its
+/   date: cast first, since `long$ of a timestamp is nanoseconds (#2559)
 / @return `sat`sun`mon`tue`wed`thu`fri - one per date for a list
 / @eg .qf.px.weekday 2026.09.18  -> `fri
-.qf.px.weekday:{[d] .qf.px.weekdays (`long$d) mod 7}
+.qf.px.weekday:{[d] .qf.px.weekdays (`long$`date$d) mod 7}
 
 / Private: the holidays of `ccys`, refusing a currency the calendars lack.
 / @param ccys the currencies, a symbol list
