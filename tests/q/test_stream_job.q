@@ -542,6 +542,19 @@
     .qunit.assertEquals[count .qt.qetl.job.stream.last_rows[];2;
         "every fill in the batch produces a position row"]};
 
+/ #2565: one unapplicable fill threw out the whole batch, good fills too.
+.qt.qetl.job.stream.test_posbook_drops_a_bad_fill_and_keeps_the_rest:{[t]
+    .qt.qetl.job.stream.reset[];
+    saved:.qetl.log.ch.warn;
+    `.qetl.log.ch.warn set {[channel;text;fields] `.qt.qetl.job.stream.pb_warned set (channel;text;fields);};
+    ex:.qt.qetl.job.stream.an_execution;
+    b:ex[.qt.qetl.job.stream.d 0;`EURUSD;1;1.1;1e6],ex[.qt.qetl.job.stream.d 1;`EURUSD;1;0n;1e6],ex[.qt.qetl.job.stream.d 2;`GBPUSD;-1;1.27;1e6];
+    r:@[{.qpipe.job.posbook.on_batch[`executions;x]; 1b};b;{[saved;e] `.qetl.log.ch.warn set saved; 'e}[saved]];
+    `.qetl.log.ch.warn set saved;
+    .qunit.assertEquals[r;1b;"a null-priced fill does not throw the batch away"];
+    .qunit.assertEquals[(.qt.qetl.job.stream.pb_warned 2)`fills;1j;"it is dropped and counted"];
+    .qunit.assertEquals[exec qty from 0!.qpipe.job.posbook.book;1e6 -1e6;"and both good fills are in the book"]};
+
 .qt.qetl.job.stream.test_posbook_publishes_nothing_for_a_book:{[t]
     .qt.qetl.job.stream.reset[];
     .qpipe.job.posbook.on_batch[`market_data;.qt.qetl.job.stream.a_book[`EURUSD;1.1001]];

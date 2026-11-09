@@ -195,6 +195,14 @@
 / @return nothing
 .qpipe.job.posbook.apply_fills:{[x]
     trades:.qpipe.job.posbook.as_trades[x];
+    / apply_fill refuses a fill it cannot apply (#2380, #2533), and a throw
+    / here loses the whole batch for good - it is not redelivered. So the
+    / bad row is dropped and said out loud, as fx_positions does (#2565).
+    bad:(null trades`trade_price) or (null trades`size) or (0>trades`size) or not (trades`side) in -1 1;
+    if[any bad;
+        .qetl.log.ch.warn[`transform;"dropped fills with a null size or price, a side that is not 1 or -1, or a negative size - they cannot be applied";
+            (enlist[`job]!enlist `posbook),enlist[`fills]!enlist `long$sum bad];
+        trades:trades where not bad];
     fx:.qpipe.job.posbook.fx_marks[.qpipe.job.posbook.mid_history;trades];
     cr:.qpipe.job.posbook.crypto_marks[.qpipe.job.posbook.crypto_tob;trades];
     / a crypto sym has no FX history (own_book_mids skips it), so the
