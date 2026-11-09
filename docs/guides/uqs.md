@@ -734,7 +734,9 @@ The stack's own tables:
   publishes, or for a backfill worker the dataset it fills. Declared, not
   running: `uqs status` asks the fleet what is up
 - `uqs config field list` - `process.csv`'s valid columns (what `config set`'s
-  `FIELD` accepts)
+  `FIELD` accepts). A value is held to its field's domain too: `port` 1-65535 or
+  `{KDBBASEPORT}+N`, `T`/`w`/`g`/`localtime` a whole number, `startwithall` 0 or
+  1
 - `uqs config env` - `build_env()`'s resolved `KDBBASEPORT`/`KDBHDB`/... values
   (the same env `config show`'s placeholder resolution and `torq.sh` use)
 - `uqs config housekeeping show` - `housekeeping1`'s effective schedule: when it
