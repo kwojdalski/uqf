@@ -232,10 +232,12 @@ def coerce(value: Any, qtype: QType, column: str, *, as_list: bool) -> Any:
     raise ValidationFailed(f"column {column!r} has unsupported type {qtype}")  # pragma: no cover
 
 
-#: The widest int and short q holds, less the infinity and null it reserves
-#: at each end (0Wi, 0Ni): a filter value there would match a sentinel.
-_INT_LIMIT = 2**31 - 1
-_SHORT_LIMIT = 2**15 - 1
+#: The widest finite int and short q holds. q reserves the null at the
+#: bottom (0Ni is -2^31) and the infinities next to it at each end (0Wi is
+#: 2^31-1, -0Wi is -(2^31-1)): a filter value there would match a sentinel,
+#: so the finite range stops one short of each infinity (#2414).
+_INT_LIMIT = 2**31 - 2
+_SHORT_LIMIT = 2**15 - 2
 
 
 def _bounded_integer(value: Any, column: str, name: str, limit: int) -> int:
