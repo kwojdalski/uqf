@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import datetime as dt
 
+import polars as pl
 import pytest
 from fastapi.testclient import TestClient
 
@@ -150,6 +151,36 @@ def test_a_limit_of_one_is_one_row_and_one_over_max_rows_is_refused(path):
     body = c.get(path, params={"limit": 5}).json()
     assert body["row_count"] == len(body["rows"]) == 5
     assert c.get(path, params={"limit": 6}).status_code == 422
+
+
+def _stamped(column: str) -> pl.DataFrame:
+    """Two `.z.p` stamps 210 ns apart, as kola hands a q table over, one row
+    with a float 0w (#2470)."""
+    base = dt.datetime(2026, 11, 9, 10, 0, 0)
+    ns = int(base.replace(tzinfo=dt.UTC).timestamp()) * 10**9 + 123_456_000
+    return pl.DataFrame(
+        {
+            column: pl.Series([ns + 789, ns + 999]).cast(pl.Datetime("ns")),
+            "id": [1, 2],
+            "lat": [1.5, float("inf")],
+        }
+    )
+
+
+@pytest.mark.parametrize(
+    ("merge", "column"),
+    [(ops.merge_usage, "time"), (ops.merge_process_clients, "lastp")],
+)
+def test_a_merged_fleet_row_is_wired_as_every_other_q_row(merge, column):
+    """/ops/usage and /ops/clients send a timestamp as UTC text to the
+    nanosecond and an infinity as "inf", as _rows does (#2470) - not a
+    naive datetime cut to the microsecond, or null."""
+    rows, _ = merge([ProcessResult(process="rdb1", ok=True, value=_stamped(column))])
+    assert [r[column] for r in rows] == [
+        "2026-11-09T10:00:00.123456999Z",
+        "2026-11-09T10:00:00.123456789Z",
+    ]
+    assert [r["lat"] for r in rows] == ["inf", 1.5]
 
 
 def test_merge_usage_tolerates_a_row_without_a_timestamp():
