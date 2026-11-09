@@ -288,6 +288,36 @@ def test_an_invalid_action_is_refused_before_acting(tmp_path):
     assert (row["action"], row["outcome"]) == ("process", "refused")
 
 
+@pytest.mark.parametrize(
+    ("method", "path", "body", "status"),
+    [
+        (
+            "post",
+            "/control/backfill",
+            {
+                "worker": "demo_deals_backfill",
+                "source_version": "v1",
+                "range_from": "2026-01-02T00:00:00Z",
+                "range_to": "2026-01-01T00:00:00Z",
+            },
+            422,
+        ),
+        ("put", "/control/processes/nosuchproc/config", {"field": "port", "value": "1"}, 404),
+        ("put", "/control/processes/rdb1/config", {"field": "nosuchfield", "value": "1"}, 422),
+    ],
+)
+def test_a_write_refused_by_validation_before_it_acted_is_refused(
+    tmp_path, method, path, body, status
+):
+    """uqs refuses these before any file is written or process started, so
+    the audit says `refused`, not `unknown` (#2477)."""
+    c = _client(_settings(tmp_path))
+    r = getattr(c, method)(path, json=body)
+    assert r.status_code == status, r.text
+    (row,) = _history(c)
+    assert row["outcome"] == "refused"
+
+
 def test_a_detached_backfill_is_accepted_not_succeeded(tmp_path, monkeypatch):
     def fake(settings, **kw):
         control._acting()
@@ -386,7 +416,7 @@ def test_a_typed_config_value_is_never_stored(tmp_path, monkeypatch):
     """The field is recorded; the value - whatever was typed - is not."""
     _patch_core(
         monkeypatch,
-        set_process_config=lambda p, n, f, v: None,
+        set_process_config=lambda p, n, f, v, dry_run=False: None,
         get_process_config=lambda p, n, base_port=6050: {"procname": n},
     )
     gw = FakeGateway()

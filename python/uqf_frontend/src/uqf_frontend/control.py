@@ -338,8 +338,11 @@ def set_process_field(settings: Settings, procname: str, field: str, value: str)
     from uqs.stack import procs as stack_procs
 
     paths = _paths(settings)
-    _acting()
     try:
+        # Every check uqs makes, and nothing written: a request refused here
+        # changed nothing, and is audited `refused`, not `unknown` (#2477).
+        stack_procs.set_process_config(paths, procname, field, value, dry_run=True)
+        _acting()
         stack_procs.set_process_config(paths, procname, field, value)
         return stack_procs.get_process_config(paths, procname, base_port=settings.facts().base_port)
     except UqsUnknownProcess as exc:
@@ -497,7 +500,8 @@ def start_backfill(
     from uqf_frontend.errors import BackfillNotStarted
     from uqs.attach import live as _registers_live_check  # noqa: F401 - the start gate's (#1651)
     from uqs.paths import UqsError
-    from uqs.stack.backfill import procname_for
+    from uqs.stack import capabilities
+    from uqs.stack.backfill import backfill_flags, procname_for
     from uqs.stack.backfill import start as start_backfill
 
     # Through torq.sh, exactly as `uqs job backfill` starts it. Running the q
@@ -507,6 +511,10 @@ def start_backfill(
     paths = _paths(settings)
     try:
         procname = procname_for(worker)
+        # start's own checks, before anything is acted on: a request refused
+        # by them changed nothing, and is audited `refused` (#2477).
+        capabilities.refuse_unsupported(paths, worker, None)
+        backfill_flags(worker, source_version, bound_from, bound_to)
         # Refused, like a lifecycle action, while another holds the stack (#2028).
         with _holding(paths):
             _acting()
